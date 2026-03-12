@@ -1,10 +1,11 @@
-// Handler for `aid review <task-id>` — show worktree diff and task events.
-// Prints task summary, diff stat, event timeline, and full diff for manual review.
+// Handler for `aid review <task-id>` — show task artifacts and events.
+// Prefers worktree diffs, then falls back to output files or raw logs.
 
 use anyhow::Result;
 use std::process::Command;
 use std::sync::Arc;
 
+use crate::cmd::output;
 use crate::store::Store;
 use crate::types::EventKind;
 
@@ -21,15 +22,6 @@ pub fn review_text(store: &Arc<Store>, task_id: &str) -> Result<String> {
     let task = store
         .get_task(task_id)?
         .ok_or_else(|| anyhow::anyhow!("Task '{}' not found", task_id))?;
-    let wt_path = task
-        .worktree_path
-        .as_deref()
-        .ok_or_else(|| anyhow::anyhow!("Task has no worktree — nothing to review"))?;
-
-    let wt = std::path::Path::new(wt_path);
-    if !wt.exists() {
-        anyhow::bail!("Worktree no longer exists: {wt_path}");
-    }
 
     let mut out = String::new();
     out.push_str(&format!("=== Review: {} ===\n", task.id));
@@ -42,9 +34,6 @@ pub fn review_text(store: &Arc<Store>, task_id: &str) -> Result<String> {
     if let Some(ref model) = task.model {
         out.push_str(&format!("Model: {model}\n"));
     }
-
-    out.push_str("\n--- Diff Stat ---\n");
-    out.push_str(&diff_stat_text(wt_path));
 
     let events = store.get_events(task_id)?;
     if !events.is_empty() {
@@ -59,9 +48,33 @@ pub fn review_text(store: &Arc<Store>, task_id: &str) -> Result<String> {
         }
     }
 
-    out.push_str("\n--- Full Diff ---\n");
-    out.push_str(&full_diff_text(wt_path));
-    out.push_str(&format!("\nWorktree: {wt_path}\n"));
+    if let Some(ref worktree_path) = task.worktree_path {
+        let wt = std::path::Path::new(worktree_path);
+        if wt.exists() {
+            out.push_str("\n--- Diff Stat ---\n");
+            out.push_str(&diff_stat_text(worktree_path));
+            out.push_str("\n--- Full Diff ---\n");
+            out.push_str(&full_diff_text(worktree_path));
+            out.push_str(&format!("\nWorktree: {worktree_path}\n"));
+            return Ok(out);
+        }
+    }
+
+    if let Ok(task_output) = output::read_task_output(&task) {
+        out.push_str("\n--- Output ---\n");
+        out.push_str(&task_output);
+        return Ok(out);
+    }
+
+    if let Some(ref log_path) = task.log_path {
+        if let Ok(log) = std::fs::read_to_string(log_path) {
+            out.push_str("\n--- Log ---\n");
+            out.push_str(&log);
+            return Ok(out);
+        }
+    }
+
+    out.push_str("\n--- Artifacts ---\n  (no worktree diff or output file available)\n");
     Ok(out)
 }
 

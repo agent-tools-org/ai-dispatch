@@ -1,0 +1,298 @@
+// Usage and cost snapshots built from task history plus config budgets.
+// Exports collect_usage() and render_usage() for the `aid usage` command.
+
+use anyhow::Result;
+use chrono::{DateTime, Duration, Local};
+
+use crate::config::{AidConfig, UsageBudget};
+use crate::cost;
+use crate::paths;
+use crate::store::Store;
+use crate::types::{AgentKind, Task, TaskFilter};
+
+pub struct UsageSnapshot {
+    generated_at: DateTime<Local>,
+    agent_rows: Vec<AgentUsageRow>,
+    budget_rows: Vec<BudgetUsageRow>,
+}
+
+struct AgentUsageRow {
+    name: &'static str,
+    tasks: usize,
+    tokens: i64,
+    cost_usd: f64,
+    last_task_at: Option<DateTime<Local>>,
+}
+
+struct BudgetUsageRow {
+    name: String,
+    plan: Option<String>,
+    window: Option<String>,
+    tasks: u32,
+    task_limit: Option<u32>,
+    tokens: i64,
+    token_limit: Option<i64>,
+    cost_usd: f64,
+    cost_limit_usd: Option<f64>,
+    requests: u32,
+    request_limit: Option<u32>,
+    resets_at: Option<String>,
+    notes: Option<String>,
+}
+
+pub fn collect_usage(store: &Store, config: &AidConfig) -> Result<UsageSnapshot> {
+    let tasks = store.list_tasks(TaskFilter::All)?;
+    Ok(UsageSnapshot {
+        generated_at: Local::now(),
+        agent_rows: collect_agent_rows(&tasks),
+        budget_rows: collect_budget_rows(&tasks, &config.usage.budgets),
+    })
+}
+
+pub fn render_usage(snapshot: &UsageSnapshot) -> String {
+    let mut out = String::new();
+    out.push_str(&format!(
+        "Usage snapshot at {}\n",
+        snapshot.generated_at.format("%Y-%m-%d %H:%M:%S %:z"),
+    ));
+
+    if !snapshot.agent_rows.is_empty() {
+        out.push_str("\nTracked Task History\n");
+        out.push_str(&format!(
+            "{:<12} {:<8} {:<10} {:<10} {}\n",
+            "Agent", "Tasks", "Tokens", "Cost", "Last Task"
+        ));
+        out.push_str(&"-".repeat(58));
+        out.push('\n');
+        for row in &snapshot.agent_rows {
+            out.push_str(&format!(
+                "{:<12} {:<8} {:<10} {:<10} {}\n",
+                row.name,
+                row.tasks,
+                format_tokens(row.tokens),
+                cost::format_cost(Some(row.cost_usd)),
+                row.last_task_at
+                    .map(format_last_seen)
+                    .unwrap_or_else(|| "-".to_string()),
+            ));
+        }
+    }
+
+    if snapshot.budget_rows.is_empty() {
+        out.push_str(&format!(
+            "\nNo budgets configured. Add `[[usage.budget]]` entries to {}.\n",
+            paths::config_path().display(),
+        ));
+        return out;
+    }
+
+    out.push_str("\nConfigured Budgets\n");
+    out.push_str(&format!(
+        "{:<16} {:<8} {:<8} {:<12} {:<14} {:<14} {:<14} {}\n",
+        "Name", "Plan", "Window", "Tasks", "Tokens", "Cost", "Requests", "Resets"
+    ));
+    out.push_str(&"-".repeat(118));
+    out.push('\n');
+    for row in &snapshot.budget_rows {
+        out.push_str(&format!(
+            "{:<16} {:<8} {:<8} {:<12} {:<14} {:<14} {:<14} {}\n",
+            row.name,
+            row.plan.as_deref().unwrap_or("-"),
+            row.window.as_deref().unwrap_or("-"),
+            format_ratio_u32(row.tasks, row.task_limit),
+            format_ratio_i64(row.tokens, row.token_limit, format_tokens),
+            format_ratio_f64(row.cost_usd, row.cost_limit_usd),
+            format_ratio_u32(row.requests, row.request_limit),
+            row.resets_at.as_deref().unwrap_or("-"),
+        ));
+        if let Some(notes) = row.notes.as_deref() {
+            out.push_str(&format!("  note: {notes}\n"));
+        }
+    }
+    out
+}
+
+fn collect_agent_rows(tasks: &[Task]) -> Vec<AgentUsageRow> {
+    let mut rows = Vec::new();
+    for agent in [
+        AgentKind::Codex,
+        AgentKind::Gemini,
+        AgentKind::OpenCode,
+        AgentKind::Cursor,
+    ] {
+        let agent_tasks: Vec<&Task> = tasks.iter().filter(|task| task.agent == agent).collect();
+        if agent_tasks.is_empty() {
+            continue;
+        }
+
+        let tokens = agent_tasks.iter().filter_map(|task| task.tokens).sum();
+        let cost_usd = agent_tasks.iter().filter_map(|task| task.cost_usd).sum();
+        let last_task_at = agent_tasks.iter().map(|task| task.created_at).max();
+        rows.push(AgentUsageRow {
+            name: agent.as_str(),
+            tasks: agent_tasks.len(),
+            tokens,
+            cost_usd,
+            last_task_at,
+        });
+    }
+    rows
+}
+
+fn collect_budget_rows(tasks: &[Task], budgets: &[UsageBudget]) -> Vec<BudgetUsageRow> {
+    budgets
+        .iter()
+        .map(|budget| {
+            let budget_tasks = filter_budget_tasks(tasks, budget);
+            let tasks_used = budget_tasks.len() as u32 + budget.external_tasks;
+            let tokens_used = budget_tasks.iter().filter_map(|task| task.tokens).sum::<i64>()
+                + budget.external_tokens;
+            let cost_used = budget_tasks.iter().filter_map(|task| task.cost_usd).sum::<f64>()
+                + budget.external_cost_usd;
+            BudgetUsageRow {
+                name: budget.name.clone(),
+                plan: budget.plan.clone(),
+                window: budget.window.clone(),
+                tasks: tasks_used,
+                task_limit: budget.task_limit,
+                tokens: tokens_used,
+                token_limit: budget.token_limit,
+                cost_usd: cost_used,
+                cost_limit_usd: budget.cost_limit_usd,
+                requests: budget.external_requests,
+                request_limit: budget.request_limit,
+                resets_at: budget.resets_at.clone(),
+                notes: budget.notes.clone(),
+            }
+        })
+        .collect()
+}
+
+fn filter_budget_tasks<'a>(tasks: &'a [Task], budget: &UsageBudget) -> Vec<&'a Task> {
+    let window_start = budget.window.as_deref().and_then(parse_window)
+        .map(|window| Local::now() - window);
+
+    tasks
+        .iter()
+        .filter(|task| {
+            let agent_matches = budget.agent.as_deref()
+                .map(|name| task.agent.as_str() == name)
+                .unwrap_or(false);
+            let window_matches = window_start.map(|start| task.created_at >= start).unwrap_or(true);
+            agent_matches && window_matches
+        })
+        .collect()
+}
+
+fn parse_window(value: &str) -> Option<Duration> {
+    let trimmed = value.trim();
+    if let Some(hours) = trimmed.strip_suffix('h') {
+        return hours.parse::<i64>().ok().map(Duration::hours);
+    }
+    if let Some(days) = trimmed.strip_suffix('d') {
+        return days.parse::<i64>().ok().map(Duration::days);
+    }
+    if let Some(minutes) = trimmed.strip_suffix('m') {
+        return minutes.parse::<i64>().ok().map(Duration::minutes);
+    }
+    None
+}
+
+fn format_last_seen(timestamp: DateTime<Local>) -> String {
+    let elapsed = Local::now() - timestamp;
+    let secs = elapsed.num_seconds();
+    if secs < 60 {
+        format!("{secs}s ago")
+    } else if secs < 3600 {
+        format!("{}m ago", secs / 60)
+    } else {
+        format!("{}h ago", secs / 3600)
+    }
+}
+
+fn format_tokens(tokens: i64) -> String {
+    if tokens >= 1_000_000 {
+        format!("{:.1}M", tokens as f64 / 1_000_000.0)
+    } else if tokens >= 1_000 {
+        format!("{:.1}k", tokens as f64 / 1_000.0)
+    } else {
+        tokens.to_string()
+    }
+}
+
+fn format_ratio_u32(current: u32, limit: Option<u32>) -> String {
+    limit.map(|limit| format!("{current}/{limit}"))
+        .unwrap_or_else(|| current.to_string())
+}
+
+fn format_ratio_i64(
+    current: i64,
+    limit: Option<i64>,
+    formatter: fn(i64) -> String,
+) -> String {
+    limit
+        .map(|limit| format!("{}/{}", formatter(current), formatter(limit)))
+        .unwrap_or_else(|| formatter(current))
+}
+
+fn format_ratio_f64(current: f64, limit: Option<f64>) -> String {
+    limit
+        .map(|limit| format!("{}/{}", cost::format_cost(Some(current)), cost::format_cost(Some(limit))))
+        .unwrap_or_else(|| cost::format_cost(Some(current)))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{collect_usage, render_usage};
+    use crate::config::AidConfig;
+    use crate::store::Store;
+    use crate::types::{AgentKind, Task, TaskId, TaskStatus};
+    use chrono::Local;
+
+    fn make_task(id: &str, agent: AgentKind, tokens: i64, cost_usd: f64) -> Task {
+        Task {
+            id: TaskId(id.to_string()),
+            agent,
+            prompt: "prompt".to_string(),
+            status: TaskStatus::Done,
+            parent_task_id: None,
+            caller_kind: None,
+            caller_session_id: None,
+            worktree_path: None,
+            worktree_branch: None,
+            log_path: None,
+            output_path: None,
+            tokens: Some(tokens),
+            duration_ms: Some(1000),
+            model: None,
+            cost_usd: Some(cost_usd),
+            created_at: Local::now(),
+            completed_at: None,
+        }
+    }
+
+    #[test]
+    fn renders_configured_budget_usage() {
+        let store = Store::open_memory().unwrap();
+        store.insert_task(&make_task("t-1", AgentKind::Codex, 12_000, 0.45)).unwrap();
+        let config: AidConfig = toml::from_str(
+            r#"
+            [[usage.budget]]
+            name = "codex-dev"
+            agent = "codex"
+            window = "24h"
+            task_limit = 5
+            token_limit = 50000
+            cost_limit_usd = 2.0
+            "#,
+        )
+        .unwrap();
+
+        let snapshot = collect_usage(&store, &config).unwrap();
+        let rendered = render_usage(&snapshot);
+        assert!(rendered.contains("Tracked Task History"));
+        assert!(rendered.contains("Configured Budgets"));
+        assert!(rendered.contains("1/5"));
+        assert!(rendered.contains("12.0k/50.0k"));
+    }
+}

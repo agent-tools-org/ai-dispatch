@@ -5,14 +5,18 @@ use anyhow::{Result, Context};
 use chrono::Local;
 use std::sync::Arc;
 use tokio::process::Command;
+use tokio::time::{sleep, Duration};
 
 use crate::agent::{self, RunOpts};
+use crate::background::{self, BackgroundRunSpec};
 use crate::cost;
 use crate::paths;
+use crate::session;
 use crate::store::Store;
 use crate::types::*;
 use crate::watcher;
 
+#[derive(Clone)]
 pub struct RunArgs {
     pub agent_name: String,
     pub prompt: String,
@@ -21,8 +25,10 @@ pub struct RunArgs {
     pub model: Option<String>,
     pub worktree: Option<String>,
     pub verify: Option<String>,
+    pub retry: u32,
     pub context: Vec<String>,
     pub background: bool,
+    pub parent_task_id: Option<String>,
 }
 
 pub async fn run(store: Arc<Store>, args: RunArgs) -> Result<()> {
@@ -48,12 +54,15 @@ pub async fn run(store: Arc<Store>, args: RunArgs) -> Result<()> {
         (None, None, args.dir.clone())
     };
 
+    let caller = session::current_caller();
     let task = Task {
         id: task_id.clone(),
         agent: agent_kind,
         prompt: args.prompt.clone(),
         status: TaskStatus::Pending,
-        parent_task_id: None,
+        parent_task_id: args.parent_task_id.clone(),
+        caller_kind: caller.as_ref().map(|item| item.kind.clone()),
+        caller_session_id: caller.as_ref().map(|item| item.session_id.clone()),
         worktree_path: wt_path,
         worktree_branch: wt_branch,
         log_path: Some(log_path.to_string_lossy().to_string()),
@@ -82,45 +91,32 @@ pub async fn run(store: Arc<Store>, args: RunArgs) -> Result<()> {
         model: args.model.clone(),
     };
 
-    // Build the OS command via the agent adapter
-    let std_cmd = agent.build_command(&effective_prompt, &opts)
-        .context("Failed to build agent command")?;
-
-    // Convert std::process::Command to tokio::process::Command
-    let mut tokio_cmd = Command::from(std_cmd);
-    tokio_cmd.stdout(std::process::Stdio::piped());
-    tokio_cmd.stderr(std::process::Stdio::piped());
-
     if args.background {
-        // Background mode: spawn and return immediately
         store.update_task_status(task_id.as_str(), TaskStatus::Running)?;
-        let store_bg = store.clone();
-        let task_id_bg = task_id.clone();
-        let is_streaming = agent.streaming();
-        let model = args.model.clone();
-        let verify_bg = args.verify.clone();
-        let dir_bg = effective_dir.clone();
+        let spec = BackgroundRunSpec {
+            task_id: task_id.as_str().to_string(),
+            agent_name: agent_kind.as_str().to_string(),
+            prompt: effective_prompt,
+            dir: effective_dir,
+            output: args.output.clone(),
+            model: args.model.clone(),
+            verify: args.verify.clone(),
+            retry: args.retry,
+        };
+        background::save_spec(&spec)?;
+        if let Err(err) = background::spawn_worker(task_id.as_str()) {
+            store.update_task_status(task_id.as_str(), TaskStatus::Failed)?;
+            return Err(err);
+        }
 
         println!("Task {} started in background ({}: {})",
             task_id, agent_kind, truncate(&args.prompt, 50));
-
-        tokio::spawn(async move {
-            let result = run_agent_process(
-                &*agent, tokio_cmd, &task_id_bg, &store_bg, &log_path,
-                args.output.as_deref(), model.as_deref(), is_streaming,
-            ).await;
-            match result {
-                Err(e) => {
-                    eprintln!("Background task {} failed: {}", task_id_bg, e);
-                    let _ = store_bg.update_task_status(task_id_bg.as_str(), TaskStatus::Failed);
-                }
-                Ok(()) => {
-                    maybe_verify(&store_bg, &task_id_bg, verify_bg.as_deref(), dir_bg.as_deref());
-                }
-            }
-        });
     } else {
-        // Foreground mode: run and wait
+        let std_cmd = agent.build_command(&effective_prompt, &opts)
+            .context("Failed to build agent command")?;
+        let mut tokio_cmd = Command::from(std_cmd);
+        tokio_cmd.stdout(std::process::Stdio::piped());
+        tokio_cmd.stderr(std::process::Stdio::piped());
         store.update_task_status(task_id.as_str(), TaskStatus::Running)?;
         println!("Task {} started ({}: {})",
             task_id, agent_kind, truncate(&args.prompt, 50));
@@ -132,12 +128,58 @@ pub async fn run(store: Arc<Store>, args: RunArgs) -> Result<()> {
         ).await?;
 
         maybe_verify(&store, &task_id, args.verify.as_deref(), effective_dir.as_deref());
+        retry_if_needed(store.clone(), &task_id, &args).await?;
     }
 
     Ok(())
 }
 
-async fn run_agent_process(
+pub(crate) async fn retry_if_needed(
+    store: Arc<Store>,
+    task_id: &TaskId,
+    args: &RunArgs,
+) -> Result<()> {
+    if args.retry == 0 {
+        return Ok(());
+    }
+
+    let Some(task) = store.get_task(task_id.as_str())? else {
+        return Ok(());
+    };
+    if task.status != TaskStatus::Failed {
+        return Ok(());
+    }
+
+    let stderr_tail = read_stderr_tail(task_id.as_str(), 5);
+    if let Some(parent_id) = args.parent_task_id.as_deref() {
+        if stderr_tail == read_stderr_tail(parent_id, 5) {
+            println!("Retry stopped: identical stderr to previous attempt.");
+            return Ok(());
+        }
+    }
+
+    let depth = retry_depth(&store, args.parent_task_id.as_deref())?;
+    let attempt = depth + 1;
+    let max_attempts = depth + args.retry;
+    let backoff_secs = backoff_for_attempt(attempt);
+    println!("Retry {attempt}/{max_attempts}: re-dispatching after {backoff_secs}s...");
+    sleep(Duration::from_secs(backoff_secs)).await;
+    let original_prompt = root_prompt(&store, &task).unwrap_or_else(|| args.prompt.clone());
+
+    let retry_prompt = format!(
+        "[Previous attempt failed]\nError: {stderr_tail}\n\n[Original task]\n{prompt}",
+        prompt = original_prompt,
+    );
+    let mut retry_args = args.clone();
+    retry_args.prompt = retry_prompt;
+    retry_args.retry = args.retry.saturating_sub(1);
+    retry_args.background = false;
+    retry_args.parent_task_id = Some(task_id.as_str().to_string());
+    Box::pin(run(store, retry_args)).await?;
+    Ok(())
+}
+
+pub(crate) async fn run_agent_process(
     agent: &dyn crate::agent::Agent,
     mut cmd: Command,
     task_id: &TaskId,
@@ -197,7 +239,12 @@ fn truncate(s: &str, max: usize) -> String {
 }
 
 /// Run verification if --verify was set and a working dir exists.
-fn maybe_verify(store: &Store, task_id: &TaskId, verify: Option<&str>, dir: Option<&str>) {
+pub(crate) fn maybe_verify(
+    store: &Store,
+    task_id: &TaskId,
+    verify: Option<&str>,
+    dir: Option<&str>,
+) {
     let Some(verify_arg) = verify else { return };
     let Some(dir_path) = dir else {
         println!("Verify skipped: no working directory");
@@ -227,4 +274,51 @@ fn maybe_verify(store: &Store, task_id: &TaskId, verify: Option<&str>, dir: Opti
             eprintln!("Verify error: {e}");
         }
     }
+}
+
+fn read_stderr_tail(task_id: &str, lines: usize) -> String {
+    let stderr_path = paths::stderr_path(task_id);
+    let Ok(stderr) = std::fs::read_to_string(stderr_path) else {
+        return "stderr unavailable".to_string();
+    };
+    let tail: Vec<&str> = stderr.lines().rev().take(lines).collect();
+    if tail.is_empty() {
+        "stderr unavailable".to_string()
+    } else {
+        tail.into_iter().rev().collect::<Vec<_>>().join("\n")
+    }
+}
+
+fn retry_depth(store: &Store, parent_task_id: Option<&str>) -> Result<u32> {
+    let mut depth = 0u32;
+    let mut current = parent_task_id.map(str::to_string);
+    while let Some(task_id) = current {
+        let Some(task) = store.get_task(&task_id)? else {
+            break;
+        };
+        depth += 1;
+        current = task.parent_task_id;
+    }
+    Ok(depth)
+}
+
+fn backoff_for_attempt(attempt: u32) -> u64 {
+    match attempt {
+        0 | 1 => 5,
+        2 => 15,
+        _ => 45,
+    }
+}
+
+fn root_prompt(store: &Store, task: &Task) -> Option<String> {
+    let mut prompt = task.prompt.clone();
+    let mut current = task.parent_task_id.clone();
+    while let Some(task_id) = current {
+        let Some(parent) = store.get_task(&task_id).ok().flatten() else {
+            break;
+        };
+        prompt = parent.prompt;
+        current = parent.parent_task_id;
+    }
+    Some(prompt)
 }

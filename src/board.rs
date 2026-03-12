@@ -2,6 +2,7 @@
 // Pure functions — no I/O, easy to test.
 
 use crate::cost;
+use crate::session;
 use crate::types::*;
 
 /// Render a summary table of tasks (for `aid board`)
@@ -30,10 +31,10 @@ pub fn render_board(tasks: &[Task]) -> String {
 
     // Header
     out.push_str(&format!(
-        "{:<10} {:<10} {:<6} {:<10} {:<10} {:<8} {}\n",
-        "ID", "Agent", "Status", "Duration", "Tokens", "Cost", "Model"
+        "{:<10} {:<10} {:<6} {:<10} {:<10} {:<8} {:<10} {:<16} {}\n",
+        "ID", "Agent", "Status", "Duration", "Tokens", "Cost", "Parent", "Caller", "Model"
     ));
-    out.push_str(&"-".repeat(78));
+    out.push_str(&"-".repeat(108));
     out.push('\n');
 
     for task in tasks {
@@ -44,18 +45,22 @@ pub fn render_board(tasks: &[Task]) -> String {
             .map(format_tokens)
             .unwrap_or_else(|| "-".to_string());
         let cost_str = cost::format_cost(task.cost_usd);
+        let parent = short_parent(task.parent_task_id.as_deref());
+        let caller = session::display(task);
         let model = task.model
             .as_deref()
             .unwrap_or("-");
 
         out.push_str(&format!(
-            "{:<10} {:<10} {:<6} {:<10} {:<10} {:<8} {}\n",
+            "{:<10} {:<10} {:<6} {:<10} {:<10} {:<8} {:<10} {:<16} {}\n",
             task.id.as_str(),
             task.agent.as_str(),
             task.status.label(),
             duration,
             tokens,
             cost_str,
+            parent,
+            caller,
             model,
         ));
     }
@@ -75,6 +80,12 @@ pub fn render_task_detail(task: &Task, events: &[TaskEvent]) -> String {
         .map(format_duration)
         .unwrap_or_else(|| elapsed_since(task.created_at));
     out.push_str(&format!("Status: {}  Duration: {}\n", task.status.label(), duration));
+    if let Some(parent) = task.parent_task_id.as_deref() {
+        out.push_str(&format!("Parent: {parent}\n"));
+    }
+    if task.caller_kind.is_some() || task.caller_session_id.is_some() {
+        out.push_str(&format!("Caller: {}\n", session::display(task)));
+    }
 
     if let Some(tokens) = task.tokens {
         out.push_str(&format!("Tokens: {}", format_tokens(tokens)));
@@ -169,6 +180,10 @@ fn truncate(s: &str, max: usize) -> String {
     }
 }
 
+fn short_parent(parent: Option<&str>) -> String {
+    parent.unwrap_or("-").to_string()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -181,6 +196,8 @@ mod tests {
             prompt: "test prompt".to_string(),
             status,
             parent_task_id: None,
+            caller_kind: None,
+            caller_session_id: None,
             worktree_path: None,
             worktree_branch: Some("feat/test".to_string()),
             log_path: None,
@@ -212,6 +229,7 @@ mod tests {
         assert!(output.contains("RUN"));
         assert!(output.contains("2 total"));
         assert!(output.contains("Cost"));
+        assert!(output.contains("Caller"));
     }
 
     #[test]

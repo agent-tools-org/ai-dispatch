@@ -163,6 +163,8 @@ pub struct Task {
     pub prompt: String,
     pub status: TaskStatus,
     pub parent_task_id: Option<String>,
+    pub caller_kind: Option<String>,
+    pub caller_session_id: Option<String>,
     pub worktree_path: Option<String>,
     pub worktree_branch: Option<String>,
     pub log_path: Option<String>,

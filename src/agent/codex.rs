@@ -41,6 +41,7 @@ impl super::Agent for CodexAgent {
                 timestamp: now,
                 event_kind: EventKind::NoOp,
                 detail: extract_noop_reason(line),
+                metadata: None,
             });
         }
 
@@ -54,7 +55,7 @@ impl super::Agent for CodexAgent {
 
     fn parse_completion(&self, _output: &str) -> CompletionInfo {
         // Codex is streaming — completion is detected via parse_event
-        CompletionInfo { tokens: None, status: TaskStatus::Done }
+        CompletionInfo { tokens: None, status: TaskStatus::Done, model: None, cost_usd: None }
     }
 }
 
@@ -75,7 +76,7 @@ fn parse_response_item(
                 .unwrap_or_default();
             let detail = format!("{name}: {args}");
             let event_kind = classify_tool_call(name, &args);
-            Some(TaskEvent { task_id: task_id.clone(), timestamp: now, event_kind, detail })
+            Some(TaskEvent { task_id: task_id.clone(), timestamp: now, event_kind, detail, metadata: None })
         }
         "function_call_output" => {
             let output = payload.get("output")
@@ -88,6 +89,7 @@ fn parse_response_item(
                     timestamp: now,
                     event_kind: event_kind.unwrap(),
                     detail: truncate_detail(output, 80),
+                    metadata: None,
                 })
             } else {
                 None
@@ -104,6 +106,7 @@ fn parse_response_item(
                 timestamp: now,
                 event_kind: EventKind::Reasoning,
                 detail: truncate_detail(text, 80),
+                metadata: None,
             })
         }
         _ => None,
@@ -127,6 +130,7 @@ fn parse_event_msg(
                 timestamp: now,
                 event_kind: EventKind::Completion,
                 detail: format!("tokens: {} in + {} out = {}", input, output, input + output),
+                metadata: None,
             })
         }
         "task_started" | "user_message" => None, // Skip noise
@@ -140,6 +144,7 @@ fn parse_event_msg(
                 timestamp: now,
                 event_kind: EventKind::Reasoning,
                 detail: truncate_detail(text, 80),
+                metadata: None,
             })
         }
         _ => None,
@@ -156,10 +161,17 @@ fn classify_tool_call(name: &str, args: &str) -> EventKind {
                 EventKind::Build
             } else if args.contains("git commit") {
                 EventKind::Commit
+            } else if args.contains("cargo fmt") || args.contains("prettier") {
+                EventKind::Format
+            } else if args.contains("cargo clippy") || args.contains("eslint") {
+                EventKind::Lint
             } else {
                 EventKind::ToolCall
             }
         }
+        "write_file" | "create_file" | "patch_file" => EventKind::FileWrite,
+        "read_file" => EventKind::FileRead,
+        "web_search" => EventKind::WebSearch,
         _ => EventKind::ToolCall,
     }
 }

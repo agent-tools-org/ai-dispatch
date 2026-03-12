@@ -4,6 +4,7 @@
 mod agent;
 mod board;
 mod cmd;
+mod cost;
 mod paths;
 mod store;
 mod templates;

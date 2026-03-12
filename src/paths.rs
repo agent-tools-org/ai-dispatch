@@ -20,6 +20,10 @@ pub fn log_path(task_id: &str) -> PathBuf {
     logs_dir().join(format!("{task_id}.jsonl"))
 }
 
+pub fn stderr_path(task_id: &str) -> PathBuf {
+    logs_dir().join(format!("{task_id}.stderr"))
+}
+
 pub fn ensure_dirs() -> Result<()> {
     std::fs::create_dir_all(logs_dir())?;
     Ok(())

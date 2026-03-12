@@ -42,6 +42,8 @@ impl super::Agent for GeminiAgent {
         CompletionInfo {
             tokens,
             status: TaskStatus::Done,
+            model: None,
+            cost_usd: None,
         }
     }
 }
@@ -96,5 +98,6 @@ pub fn make_completion_event(task_id: &TaskId, info: &CompletionInfo) -> TaskEve
         timestamp: Local::now(),
         event_kind: EventKind::Completion,
         detail,
+        metadata: None,
     }
 }

@@ -3,6 +3,7 @@
 
 pub mod codex;
 pub mod gemini;
+pub mod opencode;
 
 use anyhow::Result;
 use std::process::Command;
@@ -54,7 +55,7 @@ pub fn get_agent(kind: AgentKind) -> Box<dyn Agent> {
     match kind {
         AgentKind::Codex => Box::new(codex::CodexAgent),
         AgentKind::Gemini => Box::new(gemini::GeminiAgent),
-        AgentKind::OpenCode => todo!("OpenCode adapter not yet implemented"),
+        AgentKind::OpenCode => Box::new(opencode::OpenCodeAgent),
     }
 }
 

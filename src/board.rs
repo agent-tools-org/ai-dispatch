@@ -1,6 +1,7 @@
 // Text rendering for task board and task detail views.
 // Pure functions — no I/O, easy to test.
 
+use crate::cost;
 use crate::types::*;
 
 /// Render a summary table of tasks (for `aid board`)
@@ -11,6 +12,7 @@ pub fn render_board(tasks: &[Task]) -> String {
 
     let (done, running, failed) = count_statuses(tasks);
     let total_tokens: i64 = tasks.iter().filter_map(|t| t.tokens).sum();
+    let total_cost: f64 = tasks.iter().filter_map(|t| t.cost_usd).sum();
 
     let mut out = String::new();
     out.push_str(&format!(
@@ -18,16 +20,20 @@ pub fn render_board(tasks: &[Task]) -> String {
         tasks.len(), done, running, failed,
     ));
     if total_tokens > 0 {
-        out.push_str(&format!("Total tokens: {}\n", format_tokens(total_tokens)));
+        out.push_str(&format!("Total tokens: {}", format_tokens(total_tokens)));
+        if total_cost > 0.0 {
+            out.push_str(&format!("  Cost: {}", cost::format_cost(Some(total_cost))));
+        }
+        out.push('\n');
     }
     out.push('\n');
 
     // Header
     out.push_str(&format!(
-        "{:<10} {:<10} {:<6} {:<10} {:<10} {}\n",
-        "ID", "Agent", "Status", "Duration", "Tokens", "Branch"
+        "{:<10} {:<10} {:<6} {:<10} {:<10} {:<8} {}\n",
+        "ID", "Agent", "Status", "Duration", "Tokens", "Cost", "Model"
     ));
-    out.push_str(&"-".repeat(70));
+    out.push_str(&"-".repeat(78));
     out.push('\n');
 
     for task in tasks {
@@ -36,19 +42,21 @@ pub fn render_board(tasks: &[Task]) -> String {
             .unwrap_or_else(|| elapsed_since(task.created_at));
         let tokens = task.tokens
             .map(format_tokens)
-            .unwrap_or_else(|| "—".to_string());
-        let branch = task.worktree_branch
+            .unwrap_or_else(|| "-".to_string());
+        let cost_str = cost::format_cost(task.cost_usd);
+        let model = task.model
             .as_deref()
-            .unwrap_or("—");
+            .unwrap_or("-");
 
         out.push_str(&format!(
-            "{:<10} {:<10} {:<6} {:<10} {:<10} {}\n",
+            "{:<10} {:<10} {:<6} {:<10} {:<10} {:<8} {}\n",
             task.id.as_str(),
             task.agent.as_str(),
             task.status.label(),
             duration,
             tokens,
-            branch,
+            cost_str,
+            model,
         ));
     }
     out
@@ -69,7 +77,14 @@ pub fn render_task_detail(task: &Task, events: &[TaskEvent]) -> String {
     out.push_str(&format!("Status: {}  Duration: {}\n", task.status.label(), duration));
 
     if let Some(tokens) = task.tokens {
-        out.push_str(&format!("Tokens: {}\n", format_tokens(tokens)));
+        out.push_str(&format!("Tokens: {}", format_tokens(tokens)));
+        if let Some(c) = task.cost_usd {
+            out.push_str(&format!("  Cost: {}", cost::format_cost(Some(c))));
+        }
+        out.push('\n');
+    }
+    if let Some(ref model) = task.model {
+        out.push_str(&format!("Model: {}\n", model));
     }
     if let Some(ref wt) = task.worktree_path {
         out.push_str(&format!("Worktree: {}", wt));
@@ -171,6 +186,8 @@ mod tests {
             output_path: None,
             tokens: Some(45000),
             duration_ms: Some(227000),
+            model: None,
+            cost_usd: None,
             created_at: Local::now(),
             completed_at: None,
         }
@@ -193,6 +210,7 @@ mod tests {
         assert!(output.contains("DONE"));
         assert!(output.contains("RUN"));
         assert!(output.contains("2 total"));
+        assert!(output.contains("Cost"));
     }
 
     #[test]
@@ -203,6 +221,7 @@ mod tests {
             timestamp: Local::now(),
             event_kind: EventKind::ToolCall,
             detail: "exec: cargo test".to_string(),
+            metadata: None,
         }];
         let output = render_task_detail(&task, &events);
         assert!(output.contains("t-0001"));

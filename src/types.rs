@@ -106,6 +106,11 @@ pub enum EventKind {
     Completion,
     Error,
     NoOp,
+    FileWrite,
+    FileRead,
+    WebSearch,
+    Lint,
+    Format,
 }
 
 impl EventKind {
@@ -119,6 +124,11 @@ impl EventKind {
             Self::Completion => "completion",
             Self::Error => "error",
             Self::NoOp => "noop",
+            Self::FileWrite => "file_write",
+            Self::FileRead => "file_read",
+            Self::WebSearch => "web_search",
+            Self::Lint => "lint",
+            Self::Format => "format",
         }
     }
 
@@ -132,6 +142,11 @@ impl EventKind {
             "completion" => Some(Self::Completion),
             "error" => Some(Self::Error),
             "noop" => Some(Self::NoOp),
+            "file_write" => Some(Self::FileWrite),
+            "file_read" => Some(Self::FileRead),
+            "web_search" => Some(Self::WebSearch),
+            "lint" => Some(Self::Lint),
+            "format" => Some(Self::Format),
             _ => None,
         }
     }
@@ -149,6 +164,8 @@ pub struct Task {
     pub output_path: Option<String>,
     pub tokens: Option<i64>,
     pub duration_ms: Option<i64>,
+    pub model: Option<String>,
+    pub cost_usd: Option<f64>,
     pub created_at: DateTime<Local>,
     pub completed_at: Option<DateTime<Local>>,
 }
@@ -159,6 +176,7 @@ pub struct TaskEvent {
     pub timestamp: DateTime<Local>,
     pub event_kind: EventKind,
     pub detail: String,
+    pub metadata: Option<serde_json::Value>,
 }
 
 /// Filter for listing tasks
@@ -174,4 +192,6 @@ pub enum TaskFilter {
 pub struct CompletionInfo {
     pub tokens: Option<i64>,
     pub status: TaskStatus,
+    pub model: Option<String>,
+    pub cost_usd: Option<f64>,
 }

@@ -49,6 +49,8 @@ impl Store {
                 output_path TEXT,
                 tokens INTEGER,
                 duration_ms INTEGER,
+                model TEXT,
+                cost_usd REAL,
                 created_at TEXT NOT NULL,
                 completed_at TEXT
             );
@@ -57,17 +59,29 @@ impl Store {
                 task_id TEXT NOT NULL REFERENCES tasks(id),
                 timestamp TEXT NOT NULL,
                 event_type TEXT NOT NULL,
-                detail TEXT NOT NULL
+                detail TEXT NOT NULL,
+                metadata TEXT
             );",
         )?;
+        self.migrate()?;
+        Ok(())
+    }
+
+    /// Idempotent schema migrations for v0.2 columns
+    fn migrate(&self) -> Result<()> {
+        let conn = self.db();
+        // Add columns if missing (ALTER TABLE ADD COLUMN is idempotent when wrapped in try)
+        let _ = conn.execute_batch("ALTER TABLE tasks ADD COLUMN model TEXT;");
+        let _ = conn.execute_batch("ALTER TABLE tasks ADD COLUMN cost_usd REAL;");
+        let _ = conn.execute_batch("ALTER TABLE events ADD COLUMN metadata TEXT;");
         Ok(())
     }
 
     pub fn insert_task(&self, task: &Task) -> Result<()> {
         self.db().execute(
             "INSERT INTO tasks (id, agent, prompt, status, worktree_path, worktree_branch,
-             log_path, output_path, tokens, duration_ms, created_at, completed_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
+             log_path, output_path, tokens, duration_ms, model, cost_usd, created_at, completed_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)",
             params![
                 task.id.as_str(),
                 task.agent.as_str(),
@@ -79,6 +93,8 @@ impl Store {
                 task.output_path,
                 task.tokens,
                 task.duration_ms,
+                task.model,
+                task.cost_usd,
                 task.created_at.to_rfc3339(),
                 task.completed_at.map(|t| t.to_rfc3339()),
             ],
@@ -100,25 +116,29 @@ impl Store {
         status: TaskStatus,
         tokens: Option<i64>,
         duration_ms: i64,
+        model: Option<&str>,
+        cost_usd: Option<f64>,
     ) -> Result<()> {
         let now = Local::now().to_rfc3339();
         self.db().execute(
-            "UPDATE tasks SET status = ?1, tokens = ?2, duration_ms = ?3, completed_at = ?4
-             WHERE id = ?5",
-            params![status.as_str(), tokens, duration_ms, now, id],
+            "UPDATE tasks SET status = ?1, tokens = ?2, duration_ms = ?3, completed_at = ?4,
+             model = ?5, cost_usd = ?6 WHERE id = ?7",
+            params![status.as_str(), tokens, duration_ms, now, model, cost_usd, id],
         )?;
         Ok(())
     }
 
     pub fn insert_event(&self, event: &TaskEvent) -> Result<()> {
+        let metadata_str = event.metadata.as_ref().map(|m| m.to_string());
         self.db().execute(
-            "INSERT INTO events (task_id, timestamp, event_type, detail)
-             VALUES (?1, ?2, ?3, ?4)",
+            "INSERT INTO events (task_id, timestamp, event_type, detail, metadata)
+             VALUES (?1, ?2, ?3, ?4, ?5)",
             params![
                 event.task_id.as_str(),
                 event.timestamp.to_rfc3339(),
                 event.event_kind.as_str(),
                 event.detail,
+                metadata_str,
             ],
         )?;
         Ok(())
@@ -128,7 +148,7 @@ impl Store {
         let conn = self.db();
         let mut stmt = conn.prepare(
             "SELECT id, agent, prompt, status, worktree_path, worktree_branch,
-             log_path, output_path, tokens, duration_ms, created_at, completed_at
+             log_path, output_path, tokens, duration_ms, model, cost_usd, created_at, completed_at
              FROM tasks WHERE id = ?1",
         )?;
         let mut rows = stmt.query_map(params![id], row_to_task)?;
@@ -143,19 +163,19 @@ impl Store {
         let (sql, filter_params): (&str, Vec<String>) = match filter {
             TaskFilter::All => (
                 "SELECT id, agent, prompt, status, worktree_path, worktree_branch,
-                 log_path, output_path, tokens, duration_ms, created_at, completed_at
+                 log_path, output_path, tokens, duration_ms, model, cost_usd, created_at, completed_at
                  FROM tasks ORDER BY created_at DESC",
                 vec![],
             ),
             TaskFilter::Running => (
                 "SELECT id, agent, prompt, status, worktree_path, worktree_branch,
-                 log_path, output_path, tokens, duration_ms, created_at, completed_at
+                 log_path, output_path, tokens, duration_ms, model, cost_usd, created_at, completed_at
                  FROM tasks WHERE status = ?1 ORDER BY created_at DESC",
                 vec!["running".to_string()],
             ),
             TaskFilter::Today => (
                 "SELECT id, agent, prompt, status, worktree_path, worktree_branch,
-                 log_path, output_path, tokens, duration_ms, created_at, completed_at
+                 log_path, output_path, tokens, duration_ms, model, cost_usd, created_at, completed_at
                  FROM tasks WHERE date(created_at) = date('now', 'localtime')
                  ORDER BY created_at DESC",
                 vec![],
@@ -171,16 +191,20 @@ impl Store {
     pub fn get_events(&self, task_id: &str) -> Result<Vec<TaskEvent>> {
         let conn = self.db();
         let mut stmt = conn.prepare(
-            "SELECT task_id, timestamp, event_type, detail
+            "SELECT task_id, timestamp, event_type, detail, metadata
              FROM events WHERE task_id = ?1 ORDER BY timestamp ASC",
         )?;
         let rows = stmt.query_map(params![task_id], |row| {
+            let metadata_str: Option<String> = row.get(4)?;
+            let metadata = metadata_str
+                .and_then(|s| serde_json::from_str(&s).ok());
             Ok(TaskEvent {
                 task_id: TaskId(row.get::<_, String>(0)?),
                 timestamp: parse_dt(&row.get::<_, String>(1)?),
                 event_kind: EventKind::from_str(&row.get::<_, String>(2)?)
                     .unwrap_or(EventKind::Reasoning),
                 detail: row.get(3)?,
+                metadata,
             })
         })?;
         rows.map(|r| r.map_err(Into::into)).collect()
@@ -201,8 +225,10 @@ fn row_to_task(row: &rusqlite::Row) -> rusqlite::Result<Result<Task>> {
         output_path: row.get(7)?,
         tokens: row.get(8)?,
         duration_ms: row.get(9)?,
-        created_at: parse_dt(&row.get::<_, String>(10)?),
-        completed_at: row.get::<_, Option<String>>(11)?
+        model: row.get(10)?,
+        cost_usd: row.get(11)?,
+        created_at: parse_dt(&row.get::<_, String>(12)?),
+        completed_at: row.get::<_, Option<String>>(13)?
             .map(|s| parse_dt(&s)),
     }))
 }
@@ -229,6 +255,8 @@ mod tests {
             output_path: None,
             tokens: None,
             duration_ms: None,
+            model: None,
+            cost_usd: None,
             created_at: Local::now(),
             completed_at: None,
         }
@@ -251,12 +279,17 @@ mod tests {
         let store = Store::open_memory().unwrap();
         let task = make_task("t-0002", AgentKind::Gemini, TaskStatus::Running);
         store.insert_task(&task).unwrap();
-        store.update_task_completion("t-0002", TaskStatus::Done, Some(3000), 47000).unwrap();
+        store.update_task_completion(
+            "t-0002", TaskStatus::Done, Some(3000), 47000,
+            Some("gemini-2.5-flash"), Some(0.0038),
+        ).unwrap();
 
         let loaded = store.get_task("t-0002").unwrap().unwrap();
         assert_eq!(loaded.status, TaskStatus::Done);
         assert_eq!(loaded.tokens, Some(3000));
         assert_eq!(loaded.duration_ms, Some(47000));
+        assert_eq!(loaded.model.as_deref(), Some("gemini-2.5-flash"));
+        assert!((loaded.cost_usd.unwrap() - 0.0038).abs() < 0.0001);
         assert!(loaded.completed_at.is_some());
     }
 
@@ -281,11 +314,13 @@ mod tests {
             timestamp: Local::now(),
             event_kind: EventKind::ToolCall,
             detail: "exec: cargo test".to_string(),
+            metadata: Some(serde_json::json!({"tool": "exec_command"})),
         };
         store.insert_event(&event).unwrap();
 
         let events = store.get_events("t-0020").unwrap();
         assert_eq!(events.len(), 1);
         assert_eq!(events[0].event_kind, EventKind::ToolCall);
+        assert!(events[0].metadata.is_some());
     }
 }

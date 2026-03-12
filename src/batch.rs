@@ -22,7 +22,7 @@ pub struct BatchTask {
     pub output: Option<String>,
     pub model: Option<String>,
     pub worktree: Option<String>,
-    pub verify: Option<bool>,
+    pub verify: Option<String>,
 }
 pub fn parse_batch_file(path: &Path) -> Result<BatchConfig> {
     let content = std::fs::read_to_string(path)

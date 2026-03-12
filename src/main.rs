@@ -5,11 +5,13 @@ mod agent;
 mod batch;
 mod board;
 mod cmd;
+mod context;
 mod cost;
 mod paths;
 mod store;
 mod templates;
 mod types;
+mod verify;
 mod watcher;
 mod worktree;
 
@@ -44,6 +46,12 @@ enum Commands {
         /// Run in a git worktree branch
         #[arg(short, long)]
         worktree: Option<String>,
+        /// Verify command (or auto-detect if flag given without value)
+        #[arg(long, num_args = 0..=1, default_missing_value = "auto")]
+        verify: Option<String>,
+        /// Context files to inject
+        #[arg(long)]
+        context: Vec<String>,
         /// Run in background
         #[arg(long)]
         bg: bool,
@@ -75,6 +83,16 @@ enum Commands {
         /// Task ID to audit
         task_id: String,
     },
+    /// Review worktree diff and events for a task
+    Review {
+        task_id: String,
+    },
+    /// Retry a failed task with feedback
+    Retry {
+        task_id: String,
+        #[arg(short, long)]
+        feedback: String,
+    },
     /// Show detected agents
     Agents,
 }
@@ -87,7 +105,17 @@ async fn main() -> Result<()> {
     let store = Arc::new(store::Store::open(&paths::db_path())?);
 
     match cli.command {
-        Commands::Run { agent, prompt, dir, output, model, worktree, bg } => {
+        Commands::Run {
+            agent,
+            prompt,
+            dir,
+            output,
+            model,
+            worktree,
+            verify,
+            context,
+            bg,
+        } => {
             cmd::run::run(store, cmd::run::RunArgs {
                 agent_name: agent,
                 prompt,
@@ -95,6 +123,8 @@ async fn main() -> Result<()> {
                 output,
                 model,
                 worktree,
+                verify,
+                context,
                 background: bg,
             }).await?;
         }
@@ -109,6 +139,12 @@ async fn main() -> Result<()> {
         }
         Commands::Audit { task_id } => {
             cmd::audit::run(&store, &task_id)?;
+        }
+        Commands::Review { task_id } => {
+            cmd::review::run(&store, cmd::review::ReviewArgs { task_id })?;
+        }
+        Commands::Retry { task_id, feedback } => {
+            cmd::retry::run(store, cmd::retry::RetryArgs { task_id, feedback }).await?;
         }
         Commands::Agents => {
             let agents = agent::detect_agents();

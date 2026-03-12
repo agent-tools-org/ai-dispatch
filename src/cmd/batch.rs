@@ -62,6 +62,8 @@ fn task_to_run_args(task: &batch::BatchTask, background: bool) -> RunArgs {
         output: task.output.clone(),
         model: task.model.clone(),
         worktree: task.worktree.clone(),
+        verify: task.verify.clone(),
+        context: vec![],
         background,
     }
 }

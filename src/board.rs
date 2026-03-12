@@ -31,10 +31,10 @@ pub fn render_board(tasks: &[Task]) -> String {
 
     // Header
     out.push_str(&format!(
-        "{:<10} {:<10} {:<6} {:<10} {:<10} {:<8} {:<10} {:<16} {}\n",
-        "ID", "Agent", "Status", "Duration", "Tokens", "Cost", "Parent", "Caller", "Model"
+        "{:<10} {:<10} {:<6} {:<10} {:<10} {:<8} {:<10} {:<10} {:<16} {}\n",
+        "ID", "Agent", "Status", "Duration", "Tokens", "Cost", "Parent", "Group", "Caller", "Model"
     ));
-    out.push_str(&"-".repeat(108));
+    out.push_str(&"-".repeat(120));
     out.push('\n');
 
     for task in tasks {
@@ -46,13 +46,14 @@ pub fn render_board(tasks: &[Task]) -> String {
             .unwrap_or_else(|| "-".to_string());
         let cost_str = cost::format_cost(task.cost_usd);
         let parent = short_parent(task.parent_task_id.as_deref());
+        let group = short_group(task.workgroup_id.as_deref());
         let caller = session::display(task);
         let model = task.model
             .as_deref()
             .unwrap_or("-");
 
         out.push_str(&format!(
-            "{:<10} {:<10} {:<6} {:<10} {:<10} {:<8} {:<10} {:<16} {}\n",
+            "{:<10} {:<10} {:<6} {:<10} {:<10} {:<8} {:<10} {:<10} {:<16} {}\n",
             task.id.as_str(),
             task.agent.as_str(),
             task.status.label(),
@@ -60,6 +61,7 @@ pub fn render_board(tasks: &[Task]) -> String {
             tokens,
             cost_str,
             parent,
+            group,
             caller,
             model,
         ));
@@ -82,6 +84,9 @@ pub fn render_task_detail(task: &Task, events: &[TaskEvent]) -> String {
     out.push_str(&format!("Status: {}  Duration: {}\n", task.status.label(), duration));
     if let Some(parent) = task.parent_task_id.as_deref() {
         out.push_str(&format!("Parent: {parent}\n"));
+    }
+    if let Some(group_id) = task.workgroup_id.as_deref() {
+        out.push_str(&format!("Workgroup: {group_id}\n"));
     }
     if task.caller_kind.is_some() || task.caller_session_id.is_some() {
         out.push_str(&format!("Caller: {}\n", session::display(task)));
@@ -184,6 +189,10 @@ fn short_parent(parent: Option<&str>) -> String {
     parent.unwrap_or("-").to_string()
 }
 
+fn short_group(group: Option<&str>) -> String {
+    group.unwrap_or("-").to_string()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -196,6 +205,7 @@ mod tests {
             prompt: "test prompt".to_string(),
             status,
             parent_task_id: None,
+            workgroup_id: None,
             caller_kind: None,
             caller_session_id: None,
             worktree_path: None,
@@ -230,6 +240,7 @@ mod tests {
         assert!(output.contains("2 total"));
         assert!(output.contains("Cost"));
         assert!(output.contains("Caller"));
+        assert!(output.contains("Group"));
     }
 
     #[test]

@@ -24,6 +24,7 @@ pub struct RunArgs {
     pub output: Option<String>,
     pub model: Option<String>,
     pub worktree: Option<String>,
+    pub group: Option<String>,
     pub verify: Option<String>,
     pub retry: u32,
     pub context: Vec<String>,
@@ -42,6 +43,7 @@ pub async fn run(store: Arc<Store>, args: RunArgs) -> Result<TaskId> {
     let agent = agent::get_agent(agent_kind);
     let task_id = TaskId::generate();
     let log_path = paths::log_path(task_id.as_str());
+    let workgroup = load_workgroup(&store, args.group.as_deref())?;
 
     // Create worktree if requested, override dir to point into it
     let (wt_path, wt_branch, effective_dir) = if let Some(ref branch) = args.worktree {
@@ -60,6 +62,7 @@ pub async fn run(store: Arc<Store>, args: RunArgs) -> Result<TaskId> {
         prompt: args.prompt.clone(),
         status: TaskStatus::Pending,
         parent_task_id: args.parent_task_id.clone(),
+        workgroup_id: args.group.clone(),
         caller_kind: caller.as_ref().map(|item| item.kind.clone()),
         caller_session_id: caller.as_ref().map(|item| item.session_id.clone()),
         worktree_path: wt_path,
@@ -75,14 +78,17 @@ pub async fn run(store: Arc<Store>, args: RunArgs) -> Result<TaskId> {
     };
     store.insert_task(&task)?;
 
-    // Inject context into prompt if specified
-    let effective_prompt = if !args.context.is_empty() {
+    let file_context = if !args.context.is_empty() {
         let specs = crate::context::parse_context_specs(&args.context)?;
-        let ctx = crate::context::resolve_context(&specs)?;
-        crate::context::inject_context(&args.prompt, &ctx)
+        Some(crate::context::resolve_context(&specs)?)
     } else {
-        args.prompt.clone()
+        None
     };
+    let effective_prompt = crate::workgroup::compose_prompt(
+        &args.prompt,
+        file_context.as_deref(),
+        workgroup.as_ref(),
+    );
 
     let opts = RunOpts {
         dir: effective_dir.clone(),
@@ -101,6 +107,7 @@ pub async fn run(store: Arc<Store>, args: RunArgs) -> Result<TaskId> {
             model: args.model.clone(),
             verify: args.verify.clone(),
             retry: args.retry,
+            group: args.group.clone(),
         };
         background::save_spec(&spec)?;
         if let Err(err) = background::spawn_worker(task_id.as_str()) {
@@ -361,4 +368,14 @@ fn root_prompt(store: &Store, task: &Task) -> Option<String> {
         current = parent.parent_task_id;
     }
     Some(prompt)
+}
+
+fn load_workgroup(store: &Store, group_id: Option<&str>) -> Result<Option<Workgroup>> {
+    let Some(group_id) = group_id else {
+        return Ok(None);
+    };
+    store
+        .get_workgroup(group_id)?
+        .ok_or_else(|| anyhow::anyhow!("Workgroup '{}' not found", group_id))
+        .map(Some)
 }

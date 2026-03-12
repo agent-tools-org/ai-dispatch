@@ -7,6 +7,7 @@ Implemented in the current release:
 - `aid run` with background workers, worktrees, context injection, and `--retry`
 - `aid watch --tui` plus the original text watch mode
 - `aid wait` and `batch --wait` for blocking orchestration flows
+- `aid group` plus `aid run --group` for shared caller-injected context
 - `aid board --mine` for caller-session filtering
 - `aid audit`, `aid review`, and `aid output` for artifact inspection
 - deterministic usage extraction from streaming agent events
@@ -91,6 +92,9 @@ aid run opencode "Add type annotations to src/lib.rs" --model mimo-v2-flash-free
 # Retry failed runs with exponential backoff
 aid run codex "Fix the retry path" --dir ./ --verify auto --retry 2
 
+# Reuse shared context from a workgroup
+aid run codex "Implement the TUI filter row" --group wg-a3f1 --dir ./
+
 # Background dispatch (returns task ID immediately)
 aid run codex "Add tests for quote handler" --bg --worktree feat/quote-tests --dir ./
 # => Task t-3a7f started in background
@@ -105,6 +109,17 @@ aid run codex "Add tests for quote handler" --bg --worktree feat/quote-tests --d
 3. Launches the agent process, capturing full stdout+stderr to `~/.aid/logs/<task_id>.jsonl`
 4. If `--bg` is set, persists a detached worker spec under `~/.aid/jobs/`
 5. Records task metadata in SQLite
+
+### `aid group` — Reuse shared context
+
+```bash
+aid group create dispatch --context "Shared repo rules, API constraints, and rollout notes"
+aid group list
+aid group show wg-a3f1
+```
+
+Each workgroup stores caller-injected context once. Tasks launched with `aid run --group <id>`
+inherit that shared context before any per-task file context is injected.
 
 ### `aid watch` — Live progress dashboard
 

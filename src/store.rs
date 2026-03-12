@@ -1,4 +1,4 @@
-// SQLite persistence for tasks and events.
+// SQLite persistence for tasks, workgroups, and events.
 // Uses WAL mode for concurrent read/write. Single file at ~/.aid/aid.db.
 
 use anyhow::{Result, Context};
@@ -44,6 +44,7 @@ impl Store {
                 prompt TEXT NOT NULL,
                 status TEXT NOT NULL DEFAULT 'pending',
                 parent_task_id TEXT,
+                workgroup_id TEXT,
                 caller_kind TEXT,
                 caller_session_id TEXT,
                 worktree_path TEXT,
@@ -56,6 +57,13 @@ impl Store {
                 cost_usd REAL,
                 created_at TEXT NOT NULL,
                 completed_at TEXT
+            );
+            CREATE TABLE IF NOT EXISTS workgroups (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                shared_context TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
             );
             CREATE TABLE IF NOT EXISTS events (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -77,25 +85,36 @@ impl Store {
         let _ = conn.execute_batch("ALTER TABLE tasks ADD COLUMN model TEXT;");
         let _ = conn.execute_batch("ALTER TABLE tasks ADD COLUMN cost_usd REAL;");
         let _ = conn.execute_batch("ALTER TABLE tasks ADD COLUMN parent_task_id TEXT;");
+        let _ = conn.execute_batch("ALTER TABLE tasks ADD COLUMN workgroup_id TEXT;");
         let _ = conn.execute_batch("ALTER TABLE tasks ADD COLUMN caller_kind TEXT;");
         let _ = conn.execute_batch("ALTER TABLE tasks ADD COLUMN caller_session_id TEXT;");
+        let _ = conn.execute_batch(
+            "CREATE TABLE IF NOT EXISTS workgroups (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                shared_context TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            );",
+        );
         let _ = conn.execute_batch("ALTER TABLE events ADD COLUMN metadata TEXT;");
         Ok(())
     }
 
     pub fn insert_task(&self, task: &Task) -> Result<()> {
         self.db().execute(
-            "INSERT INTO tasks (id, agent, prompt, status, parent_task_id, caller_kind,
-             caller_session_id, worktree_path, worktree_branch, log_path, output_path,
-             tokens, duration_ms, model, cost_usd, created_at, completed_at)
+            "INSERT INTO tasks (id, agent, prompt, status, parent_task_id, workgroup_id,
+             caller_kind, caller_session_id, worktree_path, worktree_branch, log_path,
+             output_path, tokens, duration_ms, model, cost_usd, created_at, completed_at)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15,
-             ?16, ?17)",
+             ?16, ?17, ?18)",
             params![
                 task.id.as_str(),
                 task.agent.as_str(),
                 task.prompt,
                 task.status.as_str(),
                 task.parent_task_id,
+                task.workgroup_id,
                 task.caller_kind,
                 task.caller_session_id,
                 task.worktree_path,
@@ -111,6 +130,52 @@ impl Store {
             ],
         )?;
         Ok(())
+    }
+
+    pub fn create_workgroup(&self, name: &str, shared_context: &str) -> Result<Workgroup> {
+        let now = Local::now();
+        let workgroup = Workgroup {
+            id: WorkgroupId::generate(),
+            name: name.to_string(),
+            shared_context: shared_context.to_string(),
+            created_at: now,
+            updated_at: now,
+        };
+        self.db().execute(
+            "INSERT INTO workgroups (id, name, shared_context, created_at, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5)",
+            params![
+                workgroup.id.as_str(),
+                workgroup.name,
+                workgroup.shared_context,
+                workgroup.created_at.to_rfc3339(),
+                workgroup.updated_at.to_rfc3339(),
+            ],
+        )?;
+        Ok(workgroup)
+    }
+
+    pub fn get_workgroup(&self, id: &str) -> Result<Option<Workgroup>> {
+        let conn = self.db();
+        let mut stmt = conn.prepare(
+            "SELECT id, name, shared_context, created_at, updated_at
+             FROM workgroups WHERE id = ?1",
+        )?;
+        let mut rows = stmt.query_map(params![id], row_to_workgroup)?;
+        match rows.next() {
+            Some(row) => Ok(Some(row??)),
+            None => Ok(None),
+        }
+    }
+
+    pub fn list_workgroups(&self) -> Result<Vec<Workgroup>> {
+        let conn = self.db();
+        let mut stmt = conn.prepare(
+            "SELECT id, name, shared_context, created_at, updated_at
+             FROM workgroups ORDER BY created_at DESC",
+        )?;
+        let rows = stmt.query_map([], row_to_workgroup)?;
+        rows.map(|row| row?.map_err(Into::into)).collect()
     }
 
     pub fn update_task_status(&self, id: &str, status: TaskStatus) -> Result<()> {
@@ -158,7 +223,7 @@ impl Store {
     pub fn get_task(&self, id: &str) -> Result<Option<Task>> {
         let conn = self.db();
         let mut stmt = conn.prepare(
-            "SELECT id, agent, prompt, status, parent_task_id, caller_kind,
+            "SELECT id, agent, prompt, status, parent_task_id, workgroup_id, caller_kind,
              caller_session_id, worktree_path, worktree_branch, log_path, output_path,
              tokens, duration_ms, model, cost_usd, created_at, completed_at
              FROM tasks WHERE id = ?1",
@@ -174,21 +239,21 @@ impl Store {
         let conn = self.db();
         let (sql, filter_params): (&str, Vec<String>) = match filter {
             TaskFilter::All => (
-                "SELECT id, agent, prompt, status, parent_task_id, caller_kind,
+                "SELECT id, agent, prompt, status, parent_task_id, workgroup_id, caller_kind,
                  caller_session_id, worktree_path, worktree_branch, log_path, output_path,
                  tokens, duration_ms, model, cost_usd, created_at, completed_at
                  FROM tasks ORDER BY created_at DESC",
                 vec![],
             ),
             TaskFilter::Running => (
-                "SELECT id, agent, prompt, status, parent_task_id, caller_kind,
+                "SELECT id, agent, prompt, status, parent_task_id, workgroup_id, caller_kind,
                  caller_session_id, worktree_path, worktree_branch, log_path, output_path,
                  tokens, duration_ms, model, cost_usd, created_at, completed_at
                  FROM tasks WHERE status = ?1 ORDER BY created_at DESC",
                 vec!["running".to_string()],
             ),
             TaskFilter::Today => (
-                "SELECT id, agent, prompt, status, parent_task_id, caller_kind,
+                "SELECT id, agent, prompt, status, parent_task_id, workgroup_id, caller_kind,
                  caller_session_id, worktree_path, worktree_branch, log_path, output_path,
                  tokens, duration_ms, model, cost_usd, created_at, completed_at
                  FROM tasks ORDER BY created_at DESC",
@@ -239,19 +304,30 @@ fn row_to_task(row: &rusqlite::Row) -> rusqlite::Result<Result<Task>> {
         status: TaskStatus::from_str(&row.get::<_, String>(3)?)
             .unwrap_or(TaskStatus::Pending),
         parent_task_id: row.get(4)?,
-        caller_kind: row.get(5)?,
-        caller_session_id: row.get(6)?,
-        worktree_path: row.get(7)?,
-        worktree_branch: row.get(8)?,
-        log_path: row.get(9)?,
-        output_path: row.get(10)?,
-        tokens: row.get(11)?,
-        duration_ms: row.get(12)?,
-        model: row.get(13)?,
-        cost_usd: row.get(14)?,
-        created_at: parse_dt(&row.get::<_, String>(15)?),
-        completed_at: row.get::<_, Option<String>>(16)?
+        workgroup_id: row.get(5)?,
+        caller_kind: row.get(6)?,
+        caller_session_id: row.get(7)?,
+        worktree_path: row.get(8)?,
+        worktree_branch: row.get(9)?,
+        log_path: row.get(10)?,
+        output_path: row.get(11)?,
+        tokens: row.get(12)?,
+        duration_ms: row.get(13)?,
+        model: row.get(14)?,
+        cost_usd: row.get(15)?,
+        created_at: parse_dt(&row.get::<_, String>(16)?),
+        completed_at: row.get::<_, Option<String>>(17)?
             .map(|s| parse_dt(&s)),
+    }))
+}
+
+fn row_to_workgroup(row: &rusqlite::Row) -> rusqlite::Result<Result<Workgroup>> {
+    Ok(Ok(Workgroup {
+        id: WorkgroupId(row.get::<_, String>(0)?),
+        name: row.get(1)?,
+        shared_context: row.get(2)?,
+        created_at: parse_dt(&row.get::<_, String>(3)?),
+        updated_at: parse_dt(&row.get::<_, String>(4)?),
     }))
 }
 
@@ -272,6 +348,7 @@ mod tests {
             prompt: "test prompt".to_string(),
             status,
             parent_task_id: None,
+            workgroup_id: None,
             caller_kind: None,
             caller_session_id: None,
             worktree_path: None,
@@ -347,5 +424,21 @@ mod tests {
         assert_eq!(events.len(), 1);
         assert_eq!(events[0].event_kind, EventKind::ToolCall);
         assert!(events[0].metadata.is_some());
+    }
+
+    #[test]
+    fn create_and_get_workgroup() {
+        let store = Store::open_memory().unwrap();
+        let workgroup = store
+            .create_workgroup("dispatch", "Shared API contract context.")
+            .unwrap();
+
+        let loaded = store
+            .get_workgroup(workgroup.id.as_str())
+            .unwrap()
+            .unwrap();
+        assert_eq!(loaded.id, workgroup.id);
+        assert_eq!(loaded.name, "dispatch");
+        assert!(loaded.shared_context.contains("API contract"));
     }
 }

@@ -43,6 +43,7 @@ pub async fn run(
             output,
             model,
             worktree: None,
+            group: None,
             verify: None,
             retry: 0,
             context: vec![],

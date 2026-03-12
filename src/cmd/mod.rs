@@ -6,6 +6,7 @@ pub mod batch;
 pub mod board;
 pub mod config;
 pub mod explore;
+pub mod group;
 pub mod mcp;
 pub mod output;
 pub mod review;

@@ -26,7 +26,7 @@ State is stored under `~/.aid` by default, or `AID_HOME` when overridden.
 
 ### v0.8 next
 
-- add workgroup lifecycle commands such as update/delete and extend group-aware views
+- extend workgroup-aware views into the TUI and richer task dashboards
 - add optional AI-assisted log explanation and failure summarization as a cached layer
 - introduce task dependency DAGs for explicit scheduling beyond retry chains
 - surface resource telemetry in the TUI, starting with CPU and memory

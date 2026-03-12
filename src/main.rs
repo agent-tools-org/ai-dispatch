@@ -14,6 +14,7 @@ mod paths;
 mod select;
 mod session;
 mod store;
+mod store_workgroups;
 mod templates;
 mod tui;
 mod types;
@@ -192,6 +193,18 @@ enum GroupAction {
     Show {
         group_id: String,
     },
+    /// Update a workgroup name and/or shared context
+    Update {
+        group_id: String,
+        #[arg(long)]
+        name: Option<String>,
+        #[arg(long)]
+        context: Option<String>,
+    },
+    /// Delete a workgroup definition
+    Delete {
+        group_id: String,
+    },
 }
 
 #[tokio::main]
@@ -296,6 +309,12 @@ async fn main() -> Result<()> {
             GroupAction::Create { name, context } => cmd::group::create(&store, &name, &context)?,
             GroupAction::List => cmd::group::list(&store)?,
             GroupAction::Show { group_id } => cmd::group::show(&store, &group_id)?,
+            GroupAction::Update {
+                group_id,
+                name,
+                context,
+            } => cmd::group::update(&store, &group_id, name.as_deref(), context.as_deref())?,
+            GroupAction::Delete { group_id } => cmd::group::delete(&store, &group_id)?,
         },
         Commands::Agents => {
             let agents = agent::detect_agents();

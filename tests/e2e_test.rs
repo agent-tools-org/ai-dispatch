@@ -122,3 +122,66 @@ fn group_create_list_and_show_work() {
     assert!(show_stdout.contains("Shared repo rules."));
     assert!(show_stdout.contains("(none)"));
 }
+
+#[test]
+fn group_update_and_delete_work() {
+    let temp_dir = TempDir::new().unwrap();
+    let create_output = aid_cmd_in(temp_dir.path())
+        .args(["group", "create", "dispatch", "--context", "Shared repo rules."])
+        .output()
+        .unwrap();
+    assert!(create_output.status.success());
+    let create_stdout = String::from_utf8_lossy(&create_output.stdout);
+    let group_id = create_stdout.split_whitespace().nth(1).unwrap().to_string();
+
+    let update_output = aid_cmd_in(temp_dir.path())
+        .args([
+            "group",
+            "update",
+            &group_id,
+            "--name",
+            "dispatch-core",
+            "--context",
+            "Updated rollout notes.",
+        ])
+        .output()
+        .unwrap();
+    assert!(update_output.status.success());
+    let update_stdout = String::from_utf8_lossy(&update_output.stdout);
+    assert!(update_stdout.contains("dispatch-core"));
+    assert!(update_stdout.contains("Updated rollout notes."));
+
+    let show_output = aid_cmd_in(temp_dir.path())
+        .args(["group", "show", &group_id])
+        .output()
+        .unwrap();
+    assert!(show_output.status.success());
+    let show_stdout = String::from_utf8_lossy(&show_output.stdout);
+    assert!(show_stdout.contains("dispatch-core"));
+    assert!(show_stdout.contains("Updated rollout notes."));
+
+    let delete_output = aid_cmd_in(temp_dir.path())
+        .args(["group", "delete", &group_id])
+        .output()
+        .unwrap();
+    assert!(delete_output.status.success());
+    let delete_stdout = String::from_utf8_lossy(&delete_output.stdout);
+    assert!(delete_stdout.contains("deleted"));
+    assert!(delete_stdout.contains("Historical tasks still tagged: 0"));
+
+    let list_output = aid_cmd_in(temp_dir.path())
+        .args(["group", "list"])
+        .output()
+        .unwrap();
+    assert!(list_output.status.success());
+    let list_stdout = String::from_utf8_lossy(&list_output.stdout);
+    assert!(!list_stdout.contains("dispatch-core"));
+
+    let deleted_show = aid_cmd_in(temp_dir.path())
+        .args(["group", "show", &group_id])
+        .output()
+        .unwrap();
+    assert!(!deleted_show.status.success());
+    let deleted_stderr = String::from_utf8_lossy(&deleted_show.stderr);
+    assert!(deleted_stderr.contains("not found"));
+}

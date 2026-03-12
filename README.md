@@ -29,6 +29,8 @@ aid run codex "implement retry logic" --worktree feat/retry --verify auto --retr
 aid watch --tui
 aid wait
 aid group create dispatch --context "Shared repo constraints and API contract"
+aid group update wg-a3f1 --context "Updated rollout notes"
+aid group delete wg-a3f1
 aid watch --group wg-a3f1
 aid board --today
 aid board --group wg-a3f1
@@ -47,7 +49,7 @@ aid batch work.toml --parallel --wait
 - Parent retry chains with exponential backoff via `--retry`
 - Session-aware task attribution and `aid board --mine`
 - `aid explore` with prompt-based file auto-detection
-- Workgroups with caller-injected shared context via `aid group`, `aid run --group`, and batch `group = "..."`
+- Workgroups with caller-injected shared context and lifecycle commands via `aid group`
 - Workgroup-aware filtering in `aid board --group` and `aid watch --group`
 - `aid watch --tui` dashboard built with `ratatui`
 - `aid wait` and `aid batch --wait` for blocking orchestration flows
@@ -84,5 +86,6 @@ notes = "Track Claude Code separately from aid task history."
 - `aid review` falls back to output files or raw logs when a task has no worktree.
 - `aid output` prints the recorded output artifact for research-style tasks.
 - Batch tasks can opt into a shared workgroup context with `group = "wg-..."`.
+- Deleting a workgroup removes the shared-context definition but keeps historical task tags.
 - Raw logs remain the source of truth; AI-based log explanation is planned as an optional layer.
 - The project design and architecture notes are in [DESIGN.md](DESIGN.md).

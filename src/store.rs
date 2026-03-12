@@ -32,7 +32,7 @@ impl Store {
         Ok(store)
     }
 
-    fn db(&self) -> std::sync::MutexGuard<'_, Connection> {
+    pub(crate) fn db(&self) -> std::sync::MutexGuard<'_, Connection> {
         self.conn.lock().unwrap()
     }
 

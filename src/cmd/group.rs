@@ -71,6 +71,34 @@ pub fn show(store: &Arc<Store>, workgroup_id: &str) -> Result<()> {
     Ok(())
 }
 
+pub fn update(
+    store: &Arc<Store>,
+    workgroup_id: &str,
+    name: Option<&str>,
+    context: Option<&str>,
+) -> Result<()> {
+    if name.is_none() && context.is_none() {
+        anyhow::bail!("Provide --name and/or --context");
+    }
+
+    let workgroup = store
+        .update_workgroup(workgroup_id, name, context)?
+        .ok_or_else(|| anyhow::anyhow!("Workgroup '{}' not found", workgroup_id))?;
+    println!("Workgroup {} updated", workgroup.id);
+    println!("Name: {}", workgroup.name);
+    println!("Shared context:\n{}", workgroup.shared_context);
+    Ok(())
+}
+
+pub fn delete(store: &Arc<Store>, workgroup_id: &str) -> Result<()> {
+    let tagged_tasks = store
+        .delete_workgroup(workgroup_id)?
+        .ok_or_else(|| anyhow::anyhow!("Workgroup '{}' not found", workgroup_id))?;
+    println!("Workgroup {} deleted", workgroup_id);
+    println!("Historical tasks still tagged: {}", tagged_tasks);
+    Ok(())
+}
+
 fn truncate(value: &str, max: usize) -> String {
     if value.len() <= max {
         value.to_string()

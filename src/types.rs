@@ -31,6 +31,7 @@ pub enum AgentKind {
     Gemini,
     Codex,
     OpenCode,
+    Cursor,
 }
 
 impl AgentKind {
@@ -39,6 +40,7 @@ impl AgentKind {
             "gemini" => Some(Self::Gemini),
             "codex" => Some(Self::Codex),
             "opencode" => Some(Self::OpenCode),
+            "cursor" => Some(Self::Cursor),
             _ => None,
         }
     }
@@ -48,6 +50,7 @@ impl AgentKind {
             Self::Gemini => "gemini",
             Self::Codex => "codex",
             Self::OpenCode => "opencode",
+            Self::Cursor => "cursor",
         }
     }
 }

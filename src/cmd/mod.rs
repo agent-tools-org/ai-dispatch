@@ -2,6 +2,7 @@
 // Each module implements one subcommand.
 
 pub mod audit;
+pub mod batch;
 pub mod board;
 pub mod run;
 pub mod watch;

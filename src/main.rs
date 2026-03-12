@@ -2,6 +2,7 @@
 // Dispatches tasks to gemini/codex/opencode, watches progress, audits results.
 
 mod agent;
+mod batch;
 mod board;
 mod cmd;
 mod cost;
@@ -10,6 +11,7 @@ mod store;
 mod templates;
 mod types;
 mod watcher;
+mod worktree;
 
 use anyhow::Result;
 use clap::{Parser, Subcommand};
@@ -26,7 +28,7 @@ struct Cli {
 enum Commands {
     /// Dispatch a task to an AI agent
     Run {
-        /// Agent to use (gemini, codex, opencode)
+        /// Agent to use (gemini, codex, opencode, cursor)
         agent: String,
         /// Prompt / task description
         prompt: String,
@@ -39,9 +41,20 @@ enum Commands {
         /// Model override (for opencode)
         #[arg(short, long)]
         model: Option<String>,
+        /// Run in a git worktree branch
+        #[arg(short, long)]
+        worktree: Option<String>,
         /// Run in background
         #[arg(long)]
         bg: bool,
+    },
+    /// Dispatch tasks from a TOML batch file
+    Batch {
+        /// Path to the batch TOML file
+        file: String,
+        /// Dispatch tasks in parallel
+        #[arg(long)]
+        parallel: bool,
     },
     /// Live progress dashboard
     Watch {
@@ -74,15 +87,19 @@ async fn main() -> Result<()> {
     let store = Arc::new(store::Store::open(&paths::db_path())?);
 
     match cli.command {
-        Commands::Run { agent, prompt, dir, output, model, bg } => {
+        Commands::Run { agent, prompt, dir, output, model, worktree, bg } => {
             cmd::run::run(store, cmd::run::RunArgs {
                 agent_name: agent,
                 prompt,
                 dir,
                 output,
                 model,
+                worktree,
                 background: bg,
             }).await?;
+        }
+        Commands::Batch { file, parallel } => {
+            cmd::batch::run(store, cmd::batch::BatchArgs { file, parallel }).await?;
         }
         Commands::Watch { task_id } => {
             cmd::watch::run(&store, task_id.as_deref()).await?;

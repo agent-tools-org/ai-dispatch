@@ -19,6 +19,7 @@ pub struct RunArgs {
     pub dir: Option<String>,
     pub output: Option<String>,
     pub model: Option<String>,
+    pub worktree: Option<String>,
     pub background: bool,
 }
 
@@ -33,13 +34,25 @@ pub async fn run(store: Arc<Store>, args: RunArgs) -> Result<()> {
     let task_id = TaskId::generate();
     let log_path = paths::log_path(task_id.as_str());
 
+    // Create worktree if requested, override dir to point into it
+    let (wt_path, wt_branch, effective_dir) = if let Some(ref branch) = args.worktree {
+        let repo_dir = args.dir.as_deref().unwrap_or(".");
+        let info = crate::worktree::create_worktree(
+            std::path::Path::new(repo_dir), branch,
+        )?;
+        let p = info.path.to_string_lossy().to_string();
+        (Some(p.clone()), Some(info.branch), Some(p))
+    } else {
+        (None, None, args.dir.clone())
+    };
+
     let task = Task {
         id: task_id.clone(),
         agent: agent_kind,
         prompt: args.prompt.clone(),
         status: TaskStatus::Pending,
-        worktree_path: None,
-        worktree_branch: None,
+        worktree_path: wt_path,
+        worktree_branch: wt_branch,
         log_path: Some(log_path.to_string_lossy().to_string()),
         output_path: args.output.clone(),
         tokens: None,
@@ -52,7 +65,7 @@ pub async fn run(store: Arc<Store>, args: RunArgs) -> Result<()> {
     store.insert_task(&task)?;
 
     let opts = RunOpts {
-        dir: args.dir,
+        dir: effective_dir,
         output: args.output.clone(),
         model: args.model.clone(),
     };

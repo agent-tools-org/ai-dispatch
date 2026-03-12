@@ -2,6 +2,7 @@
 // Each agent knows how to build its CLI command and parse its output.
 
 pub mod codex;
+pub mod cursor;
 pub mod gemini;
 pub mod opencode;
 
@@ -42,6 +43,7 @@ pub fn detect_agents() -> Vec<AgentKind> {
         ("gemini", AgentKind::Gemini),
         ("codex", AgentKind::Codex),
         ("opencode", AgentKind::OpenCode),
+        ("cursor", AgentKind::Cursor),
     ] {
         if which_exists(name) {
             found.push(kind);
@@ -54,6 +56,7 @@ pub fn detect_agents() -> Vec<AgentKind> {
 pub fn get_agent(kind: AgentKind) -> Box<dyn Agent> {
     match kind {
         AgentKind::Codex => Box::new(codex::CodexAgent),
+        AgentKind::Cursor => Box::new(cursor::CursorAgent),
         AgentKind::Gemini => Box::new(gemini::GeminiAgent),
         AgentKind::OpenCode => Box::new(opencode::OpenCodeAgent),
     }

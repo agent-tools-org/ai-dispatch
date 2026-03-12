@@ -36,6 +36,7 @@ fn resolve_pricing(model: Option<&str>, agent: AgentKind) -> Option<ModelPricing
         AgentKind::Gemini => model_pricing("gemini-2.5-flash"),
         AgentKind::Codex => model_pricing("gpt-4.1"),
         AgentKind::OpenCode => None, // Unknown without model
+        AgentKind::Cursor => None,
     }
 }
 

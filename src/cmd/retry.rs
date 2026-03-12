@@ -47,7 +47,7 @@ pub async fn run(store: Arc<Store>, args: RetryArgs) -> Result<()> {
 
     println!("Retrying {} with feedback: {}", task.id, truncate(&args.feedback, 60));
 
-    run::run(
+    let _ = run::run(
         store,
         RunArgs {
             agent_name: task.agent.as_str().to_string(),

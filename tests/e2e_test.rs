@@ -19,6 +19,7 @@ fn help_shows_subcommands() {
     assert!(output.status.success());
     assert!(stdout.contains("run"));
     assert!(stdout.contains("watch"));
+    assert!(stdout.contains("wait"));
     assert!(stdout.contains("board"));
     assert!(stdout.contains("audit"));
     assert!(stdout.contains("output"));
@@ -33,6 +34,15 @@ fn board_works_with_empty_db() {
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("No tasks found") || stdout.contains("Tasks:"));
+}
+
+#[test]
+fn wait_works_with_empty_db() {
+    let (mut cmd, _tmp) = aid_cmd();
+    let output = cmd.arg("wait").output().unwrap();
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("No running tasks"));
 }
 
 #[test]

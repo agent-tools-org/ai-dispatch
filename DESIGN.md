@@ -6,6 +6,7 @@ Implemented in the current release:
 
 - `aid run` with background workers, worktrees, context injection, and `--retry`
 - `aid watch --tui` plus the original text watch mode
+- `aid wait` and `batch --wait` for blocking orchestration flows
 - `aid board --mine` for caller-session filtering
 - `aid audit`, `aid review`, and `aid output` for artifact inspection
 - `aid usage` for task-history cost reporting and configured budget windows
@@ -94,6 +95,8 @@ aid run codex "Add tests for quote handler" --bg --worktree feat/quote-tests --d
 aid watch            # Text mode for running tasks
 aid watch t-3a7f     # Follow a specific task
 aid watch --tui      # Interactive ratatui dashboard
+aid wait             # Block until current running tasks finish
+aid wait t-3a7f      # Block until one task finishes
 ```
 
 ```

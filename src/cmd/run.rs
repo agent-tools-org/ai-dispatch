@@ -31,7 +31,7 @@ pub struct RunArgs {
     pub parent_task_id: Option<String>,
 }
 
-pub async fn run(store: Arc<Store>, args: RunArgs) -> Result<()> {
+pub async fn run(store: Arc<Store>, args: RunArgs) -> Result<TaskId> {
     let agent_kind = AgentKind::from_str(&args.agent_name)
         .ok_or_else(|| anyhow::anyhow!(
             "Unknown agent '{}'. Available: gemini, codex, opencode, cursor",
@@ -131,7 +131,7 @@ pub async fn run(store: Arc<Store>, args: RunArgs) -> Result<()> {
         retry_if_needed(store.clone(), &task_id, &args).await?;
     }
 
-    Ok(())
+    Ok(task_id)
 }
 
 pub(crate) async fn retry_if_needed(

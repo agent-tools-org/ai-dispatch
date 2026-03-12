@@ -12,4 +12,5 @@ pub mod review;
 pub mod retry;
 pub mod run;
 pub mod usage;
+pub mod wait;
 pub mod watch;

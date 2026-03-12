@@ -2,12 +2,13 @@
 
 ## Current Status
 
-Implemented in v0.7.0:
+Implemented in v0.8.0:
 
 - `aid run` with background workers, worktrees, context injection, and `--retry`
 - `aid watch --tui` plus the original text watch mode
 - `aid wait` and `batch --wait` for blocking orchestration flows
 - `aid group` plus `aid run --group` for shared caller-injected context
+- `aid group update` and `aid group delete` for workgroup lifecycle management
 - workgroup-aware filtering across `board`, `watch`, and `batch`
 - `aid board --mine` for caller-session filtering
 - `aid audit`, `aid review`, and `aid output` for artifact inspection
@@ -18,13 +19,14 @@ State is stored under `~/.aid` by default, or `AID_HOME` when overridden.
 
 ## Roadmap
 
-### v0.7 delivered
+### v0.8 delivered
 
 - add caller-injected workgroups with `aid group` and `aid run --group`
 - wire workgroup filtering into `board`, `watch`, and batch task dispatch
 - preserve shared context across retries, background runs, and artifact inspection
+- add workgroup lifecycle commands while keeping historical task tags on old tasks
 
-### v0.8 next
+### v0.9 next
 
 - extend workgroup-aware views into the TUI and richer task dashboards
 - add optional AI-assisted log explanation and failure summarization as a cached layer

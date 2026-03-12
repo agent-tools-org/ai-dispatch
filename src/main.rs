@@ -73,6 +73,9 @@ enum Commands {
         /// Dispatch tasks in parallel
         #[arg(long)]
         parallel: bool,
+        /// Wait for dispatched tasks to finish
+        #[arg(long)]
+        wait: bool,
     },
     /// Live progress dashboard
     Watch {
@@ -80,6 +83,10 @@ enum Commands {
         task_id: Option<String>,
         #[arg(long)]
         tui: bool,
+    },
+    /// Block until a task or the current running set finishes
+    Wait {
+        task_id: Option<String>,
     },
     /// List all tasks with status
     Board {
@@ -183,7 +190,7 @@ async fn main() -> Result<()> {
             } else {
                 agent
             };
-            cmd::run::run(store, cmd::run::RunArgs {
+            let _ = cmd::run::run(store, cmd::run::RunArgs {
                 agent_name,
                 prompt,
                 dir,
@@ -197,8 +204,12 @@ async fn main() -> Result<()> {
                 parent_task_id: None,
             }).await?;
         }
-        Commands::Batch { file, parallel } => {
-            cmd::batch::run(store, cmd::batch::BatchArgs { file, parallel }).await?;
+        Commands::Batch {
+            file,
+            parallel,
+            wait,
+        } => {
+            cmd::batch::run(store, cmd::batch::BatchArgs { file, parallel, wait }).await?;
         }
         Commands::Watch { task_id, tui } => {
             if tui {
@@ -206,6 +217,9 @@ async fn main() -> Result<()> {
             } else {
                 cmd::watch::run(&store, task_id.as_deref()).await?;
             }
+        }
+        Commands::Wait { task_id } => {
+            cmd::wait::run(&store, task_id.as_deref()).await?;
         }
         Commands::Board {
             running,

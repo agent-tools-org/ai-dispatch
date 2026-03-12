@@ -27,12 +27,14 @@ All runtime state lives under `$AID_HOME` or `~/.aid`:
 aid run auto "research ratatui table selection"
 aid run codex "implement retry logic" --worktree feat/retry --verify auto --retry 2
 aid watch --tui
+aid wait
 aid board --today
 aid board --mine --running
 aid audit t-1234
 aid review t-1234
 aid output t-1234
 aid usage
+aid batch work.toml --parallel --wait
 ```
 
 ## Current Features
@@ -43,6 +45,8 @@ aid usage
 - Session-aware task attribution and `aid board --mine`
 - `aid explore` with prompt-based file auto-detection
 - `aid watch --tui` dashboard built with `ratatui`
+- `aid wait` and `aid batch --wait` for blocking orchestration flows
+- Deterministic usage extraction from streaming agent JSONL events
 - Usage and budget reporting through `aid usage`
 
 ## Budget Configuration
@@ -74,4 +78,5 @@ notes = "Track Claude Code separately from aid task history."
 
 - `aid review` falls back to output files or raw logs when a task has no worktree.
 - `aid output` prints the recorded output artifact for research-style tasks.
+- Raw logs remain the source of truth; AI-based log explanation is planned as an optional layer.
 - The project design and architecture notes are in [DESIGN.md](DESIGN.md).

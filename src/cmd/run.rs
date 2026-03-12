@@ -1,11 +1,11 @@
 // Handler for `aid run <agent> <prompt>` — dispatch a task to an AI CLI.
 // Creates task record, spawns agent process, wires watcher, records completion.
 
-use anyhow::{Result, Context};
+use anyhow::{Context, Result};
 use chrono::Local;
 use std::sync::Arc;
 use tokio::process::Command;
-use tokio::time::{sleep, Duration};
+use tokio::time::{Duration, sleep};
 
 use crate::agent::{self, RunOpts};
 use crate::background::{self, BackgroundRunSpec};
@@ -31,12 +31,13 @@ pub struct RunArgs {
     pub parent_task_id: Option<String>,
 }
 
-pub async fn run(store: Arc<Store>, args: RunArgs) -> Result<()> {
-    let agent_kind = AgentKind::from_str(&args.agent_name)
-        .ok_or_else(|| anyhow::anyhow!(
+pub async fn run(store: Arc<Store>, args: RunArgs) -> Result<TaskId> {
+    let agent_kind = AgentKind::from_str(&args.agent_name).ok_or_else(|| {
+        anyhow::anyhow!(
             "Unknown agent '{}'. Available: gemini, codex, opencode, cursor",
             args.agent_name
-        ))?;
+        )
+    })?;
 
     let agent = agent::get_agent(agent_kind);
     let task_id = TaskId::generate();
@@ -45,9 +46,7 @@ pub async fn run(store: Arc<Store>, args: RunArgs) -> Result<()> {
     // Create worktree if requested, override dir to point into it
     let (wt_path, wt_branch, effective_dir) = if let Some(ref branch) = args.worktree {
         let repo_dir = args.dir.as_deref().unwrap_or(".");
-        let info = crate::worktree::create_worktree(
-            std::path::Path::new(repo_dir), branch,
-        )?;
+        let info = crate::worktree::create_worktree(std::path::Path::new(repo_dir), branch)?;
         let p = info.path.to_string_lossy().to_string();
         (Some(p.clone()), Some(info.branch), Some(p))
     } else {
@@ -109,29 +108,50 @@ pub async fn run(store: Arc<Store>, args: RunArgs) -> Result<()> {
             return Err(err);
         }
 
-        println!("Task {} started in background ({}: {})",
-            task_id, agent_kind, truncate(&args.prompt, 50));
+        println!(
+            "Task {} started in background ({}: {})",
+            task_id,
+            agent_kind,
+            truncate(&args.prompt, 50)
+        );
     } else {
-        let std_cmd = agent.build_command(&effective_prompt, &opts)
+        let std_cmd = agent
+            .build_command(&effective_prompt, &opts)
             .context("Failed to build agent command")?;
         let mut tokio_cmd = Command::from(std_cmd);
         tokio_cmd.stdout(std::process::Stdio::piped());
         tokio_cmd.stderr(std::process::Stdio::piped());
         store.update_task_status(task_id.as_str(), TaskStatus::Running)?;
-        println!("Task {} started ({}: {})",
-            task_id, agent_kind, truncate(&args.prompt, 50));
+        println!(
+            "Task {} started ({}: {})",
+            task_id,
+            agent_kind,
+            truncate(&args.prompt, 50)
+        );
 
         let is_streaming = agent.streaming();
         run_agent_process(
-            &*agent, tokio_cmd, &task_id, &store, &log_path,
-            args.output.as_deref(), args.model.as_deref(), is_streaming,
-        ).await?;
+            &*agent,
+            tokio_cmd,
+            &task_id,
+            &store,
+            &log_path,
+            args.output.as_deref(),
+            args.model.as_deref(),
+            is_streaming,
+        )
+        .await?;
 
-        maybe_verify(&store, &task_id, args.verify.as_deref(), effective_dir.as_deref());
+        maybe_verify(
+            &store,
+            &task_id,
+            args.verify.as_deref(),
+            effective_dir.as_deref(),
+        );
         retry_if_needed(store.clone(), &task_id, &args).await?;
     }
 
-    Ok(())
+    Ok(task_id)
 }
 
 pub(crate) async fn retry_if_needed(
@@ -190,8 +210,7 @@ pub(crate) async fn run_agent_process(
     streaming: bool,
 ) -> Result<()> {
     let start = std::time::Instant::now();
-    let mut child = cmd.spawn()
-        .context("Failed to spawn agent process")?;
+    let mut child = cmd.spawn().context("Failed to spawn agent process")?;
 
     let info = if streaming {
         watcher::watch_streaming(agent, &mut child, task_id, store, log_path).await?
@@ -201,20 +220,24 @@ pub(crate) async fn run_agent_process(
     };
 
     let duration_ms = start.elapsed().as_millis() as i64;
-    let cost_usd = info.tokens
-        .and_then(|t| cost::estimate_cost(t, model, agent.kind()));
+    let final_model = info.model.as_deref().or(model);
+    let cost_usd = info.cost_usd.or_else(|| {
+        info.tokens
+            .and_then(|tokens| cost::estimate_cost(tokens, final_model, agent.kind()))
+    });
     store.update_task_completion(
         task_id.as_str(),
         info.status,
         info.tokens,
         duration_ms,
-        model,
+        final_model,
         cost_usd,
     )?;
 
     // Print summary
     let duration_str = format_duration(duration_ms);
-    let tokens_str = info.tokens
+    let tokens_str = info
+        .tokens
         .map(|t| format!(", {} tokens", t))
         .unwrap_or_default();
     let cost_str = if cost_usd.is_some() {
@@ -222,20 +245,33 @@ pub(crate) async fn run_agent_process(
     } else {
         String::new()
     };
-    println!("Task {} {} ({}{}{})", task_id, info.status.label(), duration_str, tokens_str, cost_str);
+    println!(
+        "Task {} {} ({}{}{})",
+        task_id,
+        info.status.label(),
+        duration_str,
+        tokens_str,
+        cost_str
+    );
 
     Ok(())
 }
 
 fn format_duration(ms: i64) -> String {
     let secs = ms / 1000;
-    if secs < 60 { format!("{secs}s") }
-    else { format!("{}m {:02}s", secs / 60, secs % 60) }
+    if secs < 60 {
+        format!("{secs}s")
+    } else {
+        format!("{}m {:02}s", secs / 60, secs % 60)
+    }
 }
 
 fn truncate(s: &str, max: usize) -> String {
-    if s.len() <= max { s.to_string() }
-    else { format!("{}...", &s[..max.saturating_sub(3)]) }
+    if s.len() <= max {
+        s.to_string()
+    } else {
+        format!("{}...", &s[..max.saturating_sub(3)])
+    }
 }
 
 /// Run verification if --verify was set and a working dir exists.
@@ -251,7 +287,11 @@ pub(crate) fn maybe_verify(
         return;
     };
 
-    let command = if verify_arg == "auto" { None } else { Some(verify_arg) };
+    let command = if verify_arg == "auto" {
+        None
+    } else {
+        Some(verify_arg)
+    };
     let path = std::path::Path::new(dir_path);
 
     match crate::verify::run_verify(path, command) {

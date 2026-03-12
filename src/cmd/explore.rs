@@ -34,7 +34,7 @@ pub async fn run(
         crate::context::inject_context(&prompt, &context)
     };
 
-    run::run(
+    let _ = run::run(
         store,
         RunArgs {
             agent_name,
@@ -50,5 +50,6 @@ pub async fn run(
             parent_task_id: None,
         },
     )
-    .await
+    .await?;
+    Ok(())
 }

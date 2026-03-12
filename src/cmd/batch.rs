@@ -11,6 +11,7 @@ use crate::store::Store;
 pub struct BatchArgs {
     pub file: String,
     pub parallel: bool,
+    pub wait: bool,
 }
 
 pub async fn run(store: Arc<Store>, args: BatchArgs) -> Result<()> {
@@ -20,6 +21,7 @@ pub async fn run(store: Arc<Store>, args: BatchArgs) -> Result<()> {
     let total = config.tasks.len();
 
     println!("Batch: dispatching {total} task(s) from {}", path.display());
+    let mut task_ids = Vec::new();
     if args.parallel {
         let handles: Vec<_> = config
             .tasks
@@ -33,7 +35,7 @@ pub async fn run(store: Arc<Store>, args: BatchArgs) -> Result<()> {
         let mut first_err = None;
         for handle in handles {
             match handle.await.context("Batch task join failure") {
-                Ok(Ok(())) => {}
+                Ok(Ok(task_id)) => task_ids.push(task_id.to_string()),
                 Ok(Err(err)) if first_err.is_none() => first_err = Some(err),
                 Err(err) if first_err.is_none() => first_err = Some(err),
                 _ => {}
@@ -44,10 +46,17 @@ pub async fn run(store: Arc<Store>, args: BatchArgs) -> Result<()> {
         }
     } else {
         for task in &config.tasks {
-            if let Err(err) = run::run(store.clone(), task_to_run_args(task, false)).await {
+            match run::run(store.clone(), task_to_run_args(task, false)).await {
+                Ok(task_id) => task_ids.push(task_id.to_string()),
+                Err(err) => {
                 eprintln!("Batch task failed ({}): {err}", task.agent);
+                }
             }
         }
+    }
+
+    if args.wait && !task_ids.is_empty() {
+        crate::cmd::wait::wait_for_task_ids(&store, &task_ids).await?;
     }
 
     println!("Batch: {total} task(s) dispatched");

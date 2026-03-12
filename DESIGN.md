@@ -6,11 +6,29 @@ Implemented in the current release:
 
 - `aid run` with background workers, worktrees, context injection, and `--retry`
 - `aid watch --tui` plus the original text watch mode
+- `aid wait` and `batch --wait` for blocking orchestration flows
 - `aid board --mine` for caller-session filtering
 - `aid audit`, `aid review`, and `aid output` for artifact inspection
+- deterministic usage extraction from streaming agent events
 - `aid usage` for task-history cost reporting and configured budget windows
 
 State is stored under `~/.aid` by default, or `AID_HOME` when overridden.
+
+## Roadmap
+
+### v0.6 delivered
+
+- complete deterministic token, model, and cost extraction for each supported CLI
+- tighten `board`, `audit`, and `usage` fidelity around non-worktree and retried tasks
+- keep `wait` and `batch --wait` as the blocking orchestration primitives
+
+### v0.7 next
+
+- add optional AI-assisted log explanation and failure summarization as a cached layer
+- introduce task dependency DAGs for explicit scheduling beyond retry chains
+- surface resource telemetry in the TUI, starting with CPU and memory
+- support configurable prompt registry references instead of hard-coded prompt text only
+- expand provider quota reporting beyond task history into plan-window awareness
 
 ## Problem
 
@@ -94,6 +112,8 @@ aid run codex "Add tests for quote handler" --bg --worktree feat/quote-tests --d
 aid watch            # Text mode for running tasks
 aid watch t-3a7f     # Follow a specific task
 aid watch --tui      # Interactive ratatui dashboard
+aid wait             # Block until current running tasks finish
+aid wait t-3a7f      # Block until one task finishes
 ```
 
 ```
@@ -208,12 +228,17 @@ Quirks:  stderr "Loaded cached credentials" must be suppressed
 
 ### Codex Adapter
 ```
-Command: codex exec "{prompt}" -C {dir}
-Log patterns: "^exec" (tool call), "^codex" (reasoning), "^tokens used" (done)
+Command: codex exec --json "{prompt}" -C {dir}
+Stream:
+  - item.started / item.completed for tool calls and agent messages
+  - turn.completed for usage totals
+Extract:
+  - command_execution.command / aggregated_output
+  - usage.input_tokens / usage.cached_input_tokens / usage.output_tokens
 Prompt injection:
   - Append: "\nIMPORTANT: If no changes are needed, do NOT commit. Print 'NO_CHANGES_NEEDED: <reason>'."
   - Append: "\nCommit with message: '{conventional_commit_msg}'"
-Quirks: Must NOT pipe through tail; must capture full stdout to log file
+Quirks: Must capture the full JSONL stream; usage only arrives at turn completion
 ```
 
 ### OpenCode Adapter
@@ -228,21 +253,19 @@ Quirks: --dir must point to git repo for file writes
 The watcher runs as a background thread per task, monitoring the agent's log file:
 
 ```
-Log file → Pattern matcher → Event stream → Board writer
-                                         → SQLite store
+Log file → JSON / text classifier → Event stream → Board writer
+                                             → SQLite store
 ```
 
 **Patterns detected:**
-| Pattern | Event | Agent |
-|---------|-------|-------|
-| `^exec` | Tool call (shell) | codex |
-| `^codex` | Reasoning step | codex |
-| `^tokens used` + next line | Completion | codex |
-| `test result:` | Test results | codex |
-| `Finished` | Build success | codex |
-| `\[.*\] feat:\|fix:` | Git commit | codex |
+| Signal | Event | Agent |
+|--------|-------|-------|
+| `item.started` + `command_execution.command` | Tool, build, test, commit | codex |
+| `item.completed` + `agent_message.text` | Reasoning | codex |
+| `turn.completed.usage.*_tokens` | Completion usage | codex |
+| `test result:` / `Finished` / `error[` | Build, test, error | codex, opencode |
+| JSON `.stats.models[].tokens.total` | Completion usage | gemini |
 | `NO_CHANGES_NEEDED` | No-op detected | codex |
-| JSON `.response` | Completion | gemini |
 
 ## Storage
 
@@ -263,6 +286,8 @@ CREATE TABLE tasks (
     output_path TEXT,
     tokens INTEGER,
     duration_ms INTEGER,
+    model TEXT,
+    cost_usd REAL,
     created_at DATETIME,
     completed_at DATETIME
 );
@@ -271,7 +296,8 @@ CREATE TABLE events (
     task_id TEXT REFERENCES tasks(id),
     timestamp DATETIME,
     event_type TEXT,  -- tool_call, reasoning, build, test, commit, completion, error
-    detail TEXT
+    detail TEXT,
+    metadata TEXT
 );
 ```
 

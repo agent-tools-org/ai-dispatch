@@ -3,6 +3,7 @@
 
 use anyhow::Result;
 use chrono::Local;
+use serde_json::json;
 use std::process::Command;
 
 use super::RunOpts;
@@ -57,7 +58,8 @@ pub fn extract_response(output: &str) -> Option<String> {
         return Some(resp.to_string());
     }
     // Fallback: try .candidates[0].content.parts[0].text
-    if let Some(text) = v.pointer("/candidates/0/content/parts/0/text")
+    if let Some(text) = v
+        .pointer("/candidates/0/content/parts/0/text")
         .and_then(|t| t.as_str())
     {
         return Some(text.to_string());
@@ -74,7 +76,8 @@ fn extract_tokens(v: &serde_json::Value) -> Option<i64> {
     // Try .stats.models[].tokens.total
     if let Some(models) = v.pointer("/stats/models") {
         if let Some(arr) = models.as_array() {
-            let total: i64 = arr.iter()
+            let total: i64 = arr
+                .iter()
                 .filter_map(|m| m.pointer("/tokens/total").and_then(|t| t.as_i64()))
                 .sum();
             if total > 0 {
@@ -93,11 +96,12 @@ pub fn make_completion_event(task_id: &TaskId, info: &CompletionInfo) -> TaskEve
         Some(t) => format!("completed with {} tokens", t),
         None => "completed".to_string(),
     };
+    let metadata = info.tokens.map(|tokens| json!({ "tokens": tokens }));
     TaskEvent {
         task_id: task_id.clone(),
         timestamp: Local::now(),
         event_kind: EventKind::Completion,
         detail,
-        metadata: None,
+        metadata,
     }
 }

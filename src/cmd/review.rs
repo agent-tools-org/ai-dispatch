@@ -1,10 +1,11 @@
-// Handler for `aid review <task-id>` — show worktree diff and task events.
-// Prints task summary, diff stat, event timeline, and full diff for manual review.
+// Handler for `aid review <task-id>` — show task artifacts and events.
+// Prefers worktree diffs, then falls back to output files or raw logs.
 
 use anyhow::Result;
 use std::process::Command;
 use std::sync::Arc;
 
+use crate::cmd::output;
 use crate::store::Store;
 use crate::types::EventKind;
 
@@ -13,91 +14,99 @@ pub struct ReviewArgs {
 }
 
 pub fn run(store: &Arc<Store>, args: ReviewArgs) -> Result<()> {
+    print!("{}", review_text(store, &args.task_id)?);
+    Ok(())
+}
+
+pub fn review_text(store: &Arc<Store>, task_id: &str) -> Result<String> {
     let task = store
-        .get_task(&args.task_id)?
-        .ok_or_else(|| anyhow::anyhow!("Task '{}' not found", args.task_id))?;
+        .get_task(task_id)?
+        .ok_or_else(|| anyhow::anyhow!("Task '{}' not found", task_id))?;
 
-    println!("=== Review: {} ===", task.id);
-    println!("Agent: {}  Status: {}  Prompt: {}", task.agent, task.status.label(), truncate(&task.prompt, 60));
+    let mut out = String::new();
+    out.push_str(&format!("=== Review: {} ===\n", task.id));
+    out.push_str(&format!(
+        "Agent: {}  Status: {}  Prompt: {}\n",
+        task.agent,
+        task.status.label(),
+        truncate(&task.prompt, 60),
+    ));
     if let Some(ref model) = task.model {
-        println!("Model: {model}");
+        out.push_str(&format!("Model: {model}\n"));
     }
 
-    // Worktree diff
-    let wt_path = task
-        .worktree_path
-        .as_deref()
-        .ok_or_else(|| anyhow::anyhow!("Task has no worktree — nothing to review"))?;
-
-    let wt = std::path::Path::new(wt_path);
-    if !wt.exists() {
-        anyhow::bail!("Worktree no longer exists: {wt_path}");
-    }
-
-    // Diff stat
-    println!("\n--- Diff Stat ---");
-    let stat_out = Command::new("git")
-        .args(["-C", wt_path, "diff", "--stat"])
-        .output();
-    match stat_out {
-        Ok(o) if o.status.success() => {
-            let s = String::from_utf8_lossy(&o.stdout);
-            if s.trim().is_empty() {
-                // Try against base branch
-                let stat_base = Command::new("git")
-                    .args(["-C", wt_path, "diff", "--stat", "HEAD~1"])
-                    .output();
-                match stat_base {
-                    Ok(o2) if o2.status.success() => print!("{}", String::from_utf8_lossy(&o2.stdout)),
-                    _ => println!("  (no changes detected)"),
-                }
-            } else {
-                print!("{s}");
-            }
-        }
-        _ => println!("  (could not read git diff)"),
-    }
-
-    // Event timeline (last 10)
-    let events = store.get_events(&args.task_id)?;
+    let events = store.get_events(task_id)?;
     if !events.is_empty() {
-        println!("\n--- Events (last 10) ---");
+        out.push_str("\n--- Events (last 10) ---\n");
         let start = events.len().saturating_sub(10);
         for event in &events[start..] {
             let kind = event.event_kind.as_str();
             let time = event.timestamp.format("%H:%M:%S");
             let detail = truncate(&event.detail, 80);
             let marker = if event.event_kind == EventKind::Error { "!" } else { " " };
-            println!("{marker} [{time}] {kind}: {detail}");
+            out.push_str(&format!("{marker} [{time}] {kind}: {detail}\n"));
         }
     }
 
-    // Full diff
-    println!("\n--- Full Diff ---");
-    let diff_out = Command::new("git")
-        .args(["-C", wt_path, "diff"])
-        .output();
-    match diff_out {
-        Ok(o) if o.status.success() => {
-            let s = String::from_utf8_lossy(&o.stdout);
-            if s.trim().is_empty() {
-                // Try committed changes
-                let diff_base = Command::new("git")
-                    .args(["-C", wt_path, "diff", "HEAD~1"])
-                    .output();
-                match diff_base {
-                    Ok(o2) if o2.status.success() => print!("{}", String::from_utf8_lossy(&o2.stdout)),
-                    _ => println!("  (no diff available)"),
-                }
-            } else {
-                print!("{s}");
-            }
+    if let Some(ref worktree_path) = task.worktree_path {
+        let wt = std::path::Path::new(worktree_path);
+        if wt.exists() {
+            out.push_str("\n--- Diff Stat ---\n");
+            out.push_str(&diff_stat_text(worktree_path));
+            out.push_str("\n--- Full Diff ---\n");
+            out.push_str(&full_diff_text(worktree_path));
+            out.push_str(&format!("\nWorktree: {worktree_path}\n"));
+            return Ok(out);
         }
-        _ => println!("  (could not read git diff)"),
     }
 
-    println!("\nWorktree: {wt_path}");
-    Ok(())
+    if let Ok(task_output) = output::read_task_output(&task) {
+        out.push_str("\n--- Output ---\n");
+        out.push_str(&task_output);
+        return Ok(out);
+    }
+
+    if let Some(ref log_path) = task.log_path {
+        if let Ok(log) = std::fs::read_to_string(log_path) {
+            out.push_str("\n--- Log ---\n");
+            out.push_str(&log);
+            return Ok(out);
+        }
+    }
+
+    out.push_str("\n--- Artifacts ---\n  (no worktree diff or output file available)\n");
+    Ok(out)
+}
+
+fn diff_stat_text(wt_path: &str) -> String {
+    match git_output(wt_path, &["diff", "--stat"]) {
+        Some(output) if !output.trim().is_empty() => output,
+        Some(_) => git_output(wt_path, &["diff", "--stat", "HEAD~1"])
+            .unwrap_or_else(|| "  (no changes detected)\n".to_string()),
+        None => "  (could not read git diff)\n".to_string(),
+    }
+}
+
+fn full_diff_text(wt_path: &str) -> String {
+    match git_output(wt_path, &["diff"]) {
+        Some(output) if !output.trim().is_empty() => output,
+        Some(_) => git_output(wt_path, &["diff", "HEAD~1"])
+            .unwrap_or_else(|| "  (no diff available)\n".to_string()),
+        None => "  (could not read git diff)\n".to_string(),
+    }
+}
+
+fn git_output(wt_path: &str, args: &[&str]) -> Option<String> {
+    let output = Command::new("git")
+        .arg("-C")
+        .arg(wt_path)
+        .args(args)
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    Some(String::from_utf8_lossy(&output.stdout).into())
 }
 
 fn truncate(s: &str, max: usize) -> String {

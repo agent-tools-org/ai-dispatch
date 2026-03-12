@@ -2,15 +2,22 @@
 // Dispatches tasks to gemini/codex/opencode, watches progress, audits results.
 
 mod agent;
+mod background;
 mod batch;
 mod board;
 mod cmd;
+mod config;
 mod context;
 mod cost;
+mod explore;
 mod paths;
+mod select;
+mod session;
 mod store;
 mod templates;
+mod tui;
 mod types;
+mod usage;
 mod verify;
 mod watcher;
 mod worktree;
@@ -30,7 +37,7 @@ struct Cli {
 enum Commands {
     /// Dispatch a task to an AI agent
     Run {
-        /// Agent to use (gemini, codex, opencode, cursor)
+        /// Agent to use (auto, gemini, codex, opencode, cursor)
         agent: String,
         /// Prompt / task description
         prompt: String,
@@ -49,6 +56,9 @@ enum Commands {
         /// Verify command (or auto-detect if flag given without value)
         #[arg(long, num_args = 0..=1, default_missing_value = "auto")]
         verify: Option<String>,
+        /// Max retry attempts on failure
+        #[arg(long, default_value = "0")]
+        retry: u32,
         /// Context files to inject
         #[arg(long)]
         context: Vec<String>,
@@ -68,6 +78,8 @@ enum Commands {
     Watch {
         /// Watch a specific task ID
         task_id: Option<String>,
+        #[arg(long)]
+        tui: bool,
     },
     /// List all tasks with status
     Board {
@@ -77,24 +89,71 @@ enum Commands {
         /// Show only today's tasks
         #[arg(long)]
         today: bool,
+        /// Show only tasks from the current caller session
+        #[arg(long)]
+        mine: bool,
     },
     /// Show detailed task audit
     Audit {
         /// Task ID to audit
         task_id: String,
     },
+    /// Print the output file for a task
+    Output {
+        task_id: String,
+    },
     /// Review worktree diff and events for a task
     Review {
         task_id: String,
     },
+    /// Show task-history usage and configured cost budgets
+    Usage,
     /// Retry a failed task with feedback
     Retry {
         task_id: String,
         #[arg(short, long)]
         feedback: String,
     },
+    /// Explore codebase via cheap AI CLIs
+    Explore {
+        prompt: String,
+        #[arg(long)]
+        agent: Option<String>,
+        #[arg(short, long)]
+        model: Option<String>,
+        #[arg(long)]
+        files: Vec<String>,
+        #[arg(short, long)]
+        output: Option<String>,
+    },
+    /// Start MCP server (stdio)
+    Mcp,
+    /// Manage agent configuration
+    Config {
+        #[command(subcommand)]
+        action: ConfigAction,
+    },
     /// Show detected agents
     Agents,
+    #[command(hide = true, name = "__run-task")]
+    InternalRunTask {
+        task_id: String,
+    },
+}
+
+#[derive(Subcommand)]
+enum ConfigAction {
+    /// List configured agents
+    Agents,
+    /// Register custom agent
+    AddAgent {
+        name: String,
+        command: String,
+        #[arg(long)]
+        streaming: bool,
+    },
+    /// Show pricing table
+    Pricing,
 }
 
 #[tokio::main]
@@ -113,38 +172,77 @@ async fn main() -> Result<()> {
             model,
             worktree,
             verify,
+            retry,
             context,
             bg,
         } => {
+            let agent_name = if agent == "auto" {
+                let selected = select::select_agent(&prompt, worktree.is_some());
+                println!("Selected agent: {}", selected);
+                selected.as_str().to_string()
+            } else {
+                agent
+            };
             cmd::run::run(store, cmd::run::RunArgs {
-                agent_name: agent,
+                agent_name,
                 prompt,
                 dir,
                 output,
                 model,
                 worktree,
                 verify,
+                retry,
                 context,
                 background: bg,
+                parent_task_id: None,
             }).await?;
         }
         Commands::Batch { file, parallel } => {
             cmd::batch::run(store, cmd::batch::BatchArgs { file, parallel }).await?;
         }
-        Commands::Watch { task_id } => {
-            cmd::watch::run(&store, task_id.as_deref()).await?;
+        Commands::Watch { task_id, tui } => {
+            if tui {
+                tui::run(&store)?;
+            } else {
+                cmd::watch::run(&store, task_id.as_deref()).await?;
+            }
         }
-        Commands::Board { running, today } => {
-            cmd::board::run(&store, running, today)?;
+        Commands::Board {
+            running,
+            today,
+            mine,
+        } => {
+            cmd::board::run(&store, running, today, mine)?;
         }
         Commands::Audit { task_id } => {
             cmd::audit::run(&store, &task_id)?;
         }
+        Commands::Output { task_id } => {
+            cmd::output::run(&store, &task_id)?;
+        }
         Commands::Review { task_id } => {
             cmd::review::run(&store, cmd::review::ReviewArgs { task_id })?;
         }
+        Commands::Usage => {
+            cmd::usage::run(&store)?;
+        }
         Commands::Retry { task_id, feedback } => {
             cmd::retry::run(store, cmd::retry::RetryArgs { task_id, feedback }).await?;
+        }
+        Commands::Explore {
+            prompt,
+            agent,
+            model,
+            files,
+            output,
+        } => {
+            cmd::explore::run(store, prompt, agent, model, files, output).await?;
+        }
+        Commands::Mcp => {
+            cmd::mcp::run(store).await?;
+        }
+        Commands::Config { action } => {
+            cmd::config::run(&store, action)?;
         }
         Commands::Agents => {
             let agents = agent::detect_agents();
@@ -156,6 +254,9 @@ async fn main() -> Result<()> {
                     println!("  - {}", a.as_str());
                 }
             }
+        }
+        Commands::InternalRunTask { task_id } => {
+            background::run_task(store, &task_id).await?;
         }
     }
 

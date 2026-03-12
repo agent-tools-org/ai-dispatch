@@ -1,5 +1,17 @@
 # ai-dispatch — Multi-AI CLI Team Orchestrator
 
+## Current Status
+
+Implemented in the current release:
+
+- `aid run` with background workers, worktrees, context injection, and `--retry`
+- `aid watch --tui` plus the original text watch mode
+- `aid board --mine` for caller-session filtering
+- `aid audit`, `aid review`, and `aid output` for artifact inspection
+- `aid usage` for task-history cost reporting and configured budget windows
+
+State is stored under `~/.aid` by default, or `AID_HOME` when overridden.
+
 ## Problem
 
 When using a primary AI (Claude Code) as a dispatcher to coordinate multiple AI CLI tools (Gemini, Codex, OpenCode, Cursor Agent), the workflow suffers from:
@@ -28,7 +40,7 @@ A single CLI binary that wraps all AI CLI tools behind a unified dispatch/watch/
 ┌─────────────────────────────────────┐
 │           aid (CLI binary)          │
 ├──────┬──────┬──────┬───────┬────────┤
-│ run  │ watch│ audit│ board │ config │  ← subcommands
+│ run  │ watch│ audit│ board │ usage  │  ← subcommands
 ├──────┴──────┴──────┴───────┴────────┤
 │           Task Manager              │
 │  ┌────────┐ ┌────────┐ ┌────────┐  │
@@ -58,6 +70,9 @@ aid run codex "Implement DODO calldata encoding" --worktree feat/dodo-calldata -
 # Code task with free model (opencode)
 aid run opencode "Add type annotations to src/lib.rs" --model mimo-v2-flash-free --dir ./
 
+# Retry failed runs with exponential backoff
+aid run codex "Fix the retry path" --dir ./ --verify auto --retry 2
+
 # Background dispatch (returns task ID immediately)
 aid run codex "Add tests for quote handler" --bg --worktree feat/quote-tests --dir ./
 # => Task t-3a7f started in background
@@ -69,15 +84,16 @@ aid run codex "Add tests for quote handler" --bg --worktree feat/quote-tests --d
    - Codex: no-op guard, commit message format
    - Gemini: nothing (prompt passthrough)
    - OpenCode: model selection
-3. Launches the agent process, capturing full stdout+stderr to `~/.aid/logs/<task_id>.log`
-4. Starts the watcher thread
+3. Launches the agent process, capturing full stdout+stderr to `~/.aid/logs/<task_id>.jsonl`
+4. If `--bg` is set, persists a detached worker spec under `~/.aid/jobs/`
 5. Records task metadata in SQLite
 
 ### `aid watch` — Live progress dashboard
 
 ```bash
-aid watch          # TUI showing all running tasks
-aid watch t-3a7f   # Follow a specific task
+aid watch            # Text mode for running tasks
+aid watch t-3a7f     # Follow a specific task
+aid watch --tui      # Interactive ratatui dashboard
 ```
 
 ```
@@ -135,7 +151,7 @@ Watcher Events:
 aid board                    # All tasks
 aid board --today            # Today's tasks
 aid board --running          # Only running
-aid board --cost             # Cost summary
+aid board --mine             # Only tasks from the current caller session
 ```
 
 ```
@@ -149,6 +165,26 @@ t-c8e9   opencode DONE    1m 02s    FREE     feat/type-annotations
 t-d4f1   codex    RUN     2m 13s    ~28,000  feat/dodo-calldata
 t-e5g2   codex    FAIL    1m 30s    22,105   fix/parse-error
 ```
+
+### `aid output` — Print task artifacts
+
+```bash
+aid output t-3a7f
+```
+
+Reads the task's recorded `output_path` and prints it to stdout.
+
+### `aid usage` — Cost and budget visibility
+
+```bash
+aid usage
+```
+
+Shows:
+
+- task-history usage by agent
+- configured budget windows from `~/.aid/config.toml`
+- external counters for tools such as Claude Code
 
 ### `aid config` — Manage agent registry
 
@@ -218,6 +254,9 @@ CREATE TABLE tasks (
     agent TEXT NOT NULL,           -- gemini, codex, opencode
     prompt TEXT NOT NULL,
     status TEXT DEFAULT 'pending', -- pending, running, done, failed
+    parent_task_id TEXT,
+    caller_kind TEXT,
+    caller_session_id TEXT,
     worktree_path TEXT,
     worktree_branch TEXT,
     log_path TEXT,
@@ -234,6 +273,26 @@ CREATE TABLE events (
     event_type TEXT,  -- tool_call, reasoning, build, test, commit, completion, error
     detail TEXT
 );
+```
+
+## Budget Config
+
+`aid usage` reads `~/.aid/config.toml`:
+
+```toml
+[[usage.budget]]
+name = "codex-dev"
+agent = "codex"
+window = "24h"
+token_limit = 1000000
+cost_limit_usd = 15.0
+
+[[usage.budget]]
+name = "claude-code"
+plan = "max"
+window = "5h"
+request_limit = 200
+external_requests = 120
 ```
 
 ## Prompt Templates

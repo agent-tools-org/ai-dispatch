@@ -58,7 +58,9 @@ pub async fn run(store: Arc<Store>, args: RetryArgs) -> Result<()> {
             worktree: worktree_arg,
             background: false,
             verify: None,
+            retry: 0,
             context: vec![],
+            parent_task_id: Some(task.id.as_str().to_string()),
         },
     )
     .await?;

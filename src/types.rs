@@ -3,10 +3,11 @@
 
 use chrono::{DateTime, Local};
 use rand::Rng;
+use serde::Serialize;
 use std::fmt;
 
 /// Short hex ID prefixed with "t-", e.g. "t-a3f1"
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct TaskId(pub String);
 
 impl TaskId {
@@ -26,7 +27,7 @@ impl fmt::Display for TaskId {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 pub enum AgentKind {
     Gemini,
     Codex,
@@ -61,7 +62,7 @@ impl fmt::Display for AgentKind {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 pub enum TaskStatus {
     Pending,
     Running,
@@ -99,7 +100,7 @@ impl TaskStatus {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 pub enum EventKind {
     ToolCall,
     Reasoning,
@@ -155,12 +156,15 @@ impl EventKind {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct Task {
     pub id: TaskId,
     pub agent: AgentKind,
     pub prompt: String,
     pub status: TaskStatus,
+    pub parent_task_id: Option<String>,
+    pub caller_kind: Option<String>,
+    pub caller_session_id: Option<String>,
     pub worktree_path: Option<String>,
     pub worktree_branch: Option<String>,
     pub log_path: Option<String>,
@@ -173,7 +177,7 @@ pub struct Task {
     pub completed_at: Option<DateTime<Local>>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct TaskEvent {
     pub task_id: TaskId,
     pub timestamp: DateTime<Local>,

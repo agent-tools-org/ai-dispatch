@@ -63,7 +63,32 @@ fn task_to_run_args(task: &batch::BatchTask, background: bool) -> RunArgs {
         model: task.model.clone(),
         worktree: task.worktree.clone(),
         verify: task.verify.clone(),
+        retry: 0,
         context: vec![],
         background,
+        parent_task_id: None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::task_to_run_args;
+    use crate::batch::BatchTask;
+
+    #[test]
+    fn passes_verify_through_to_run_args() {
+        let task = BatchTask {
+            agent: "codex".to_string(),
+            prompt: "prompt".to_string(),
+            dir: Some(".".to_string()),
+            output: None,
+            model: None,
+            worktree: Some("feat/demo".to_string()),
+            verify: Some("auto".to_string()),
+        };
+
+        let run_args = task_to_run_args(&task, true);
+        assert_eq!(run_args.verify.as_deref(), Some("auto"));
+        assert!(run_args.background);
     }
 }

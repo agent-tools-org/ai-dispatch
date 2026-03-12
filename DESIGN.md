@@ -2,7 +2,7 @@
 
 ## Current Status
 
-Implemented in the current release:
+Implemented in v0.7.0:
 
 - `aid run` with background workers, worktrees, context injection, and `--retry`
 - `aid watch --tui` plus the original text watch mode
@@ -18,14 +18,15 @@ State is stored under `~/.aid` by default, or `AID_HOME` when overridden.
 
 ## Roadmap
 
-### v0.6 delivered
+### v0.7 delivered
 
-- complete deterministic token, model, and cost extraction for each supported CLI
-- tighten `board`, `audit`, and `usage` fidelity around non-worktree and retried tasks
-- keep `wait` and `batch --wait` as the blocking orchestration primitives
+- add caller-injected workgroups with `aid group` and `aid run --group`
+- wire workgroup filtering into `board`, `watch`, and batch task dispatch
+- preserve shared context across retries, background runs, and artifact inspection
 
-### v0.7 next
+### v0.8 next
 
+- add workgroup lifecycle commands such as update/delete and extend group-aware views
 - add optional AI-assisted log explanation and failure summarization as a cached layer
 - introduce task dependency DAGs for explicit scheduling beyond retry chains
 - surface resource telemetry in the TUI, starting with CPU and memory

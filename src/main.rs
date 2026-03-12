@@ -145,6 +145,16 @@ enum Commands {
         #[arg(short, long)]
         output: Option<String>,
     },
+    /// Explain a task's execution via cheap AI
+    Explain {
+        task_id: String,
+        #[arg(long)]
+        agent: Option<String>,
+        #[arg(short, long)]
+        model: Option<String>,
+        #[arg(short, long)]
+        output: Option<String>,
+    },
     /// Start MCP server (stdio)
     Mcp,
     /// Manage agent configuration
@@ -263,6 +273,23 @@ async fn main() -> Result<()> {
             output,
         } => {
             cmd::explore::run(store, prompt, agent, model, files, output).await?;
+        }
+        Commands::Explain {
+            task_id,
+            agent,
+            model,
+            output,
+        } => {
+            cmd::explain::run(
+                store,
+                cmd::explain::ExplainArgs {
+                    task_id,
+                    agent,
+                    model,
+                    output,
+                },
+            )
+            .await?;
         }
         Commands::Mcp => cmd::mcp::run(store).await?,
         Commands::Config { action } => {

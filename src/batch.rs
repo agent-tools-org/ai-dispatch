@@ -22,6 +22,7 @@ pub struct BatchTask {
     pub output: Option<String>,
     pub model: Option<String>,
     pub worktree: Option<String>,
+    pub group: Option<String>,
     pub verify: Option<String>,
 }
 pub fn parse_batch_file(path: &Path) -> Result<BatchConfig> {
@@ -67,12 +68,13 @@ mod tests {
     fn parse_valid_batch() {
         let cfg = parse_batch_file(write_temp(concat!(
             "[[task]]\nagent = \"gemini\"\nprompt = \"research X\"\nworktree = \"feat/x\"\n",
-            "[[task]]\nagent = \"codex\"\nprompt = \"implement Y\"\ndir = \"src\"\nmodel = \"gpt-4\""
+            "[[task]]\nagent = \"codex\"\nprompt = \"implement Y\"\ndir = \"src\"\nmodel = \"gpt-4\"\ngroup = \"wg-demo\""
         )).path()).unwrap();
         assert_eq!(cfg.tasks.len(), 2);
         assert_eq!(cfg.tasks[0].agent, "gemini");
         assert_eq!(cfg.tasks[0].worktree, Some("feat/x".into()));
         assert_eq!(cfg.tasks[1].dir, Some("src".into()));
+        assert_eq!(cfg.tasks[1].group.as_deref(), Some("wg-demo"));
     }
     #[test]
     fn rejects_unknown_agent() {

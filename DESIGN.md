@@ -8,6 +8,7 @@ Implemented in the current release:
 - `aid watch --tui` plus the original text watch mode
 - `aid wait` and `batch --wait` for blocking orchestration flows
 - `aid group` plus `aid run --group` for shared caller-injected context
+- workgroup-aware filtering across `board`, `watch`, and `batch`
 - `aid board --mine` for caller-session filtering
 - `aid audit`, `aid review`, and `aid output` for artifact inspection
 - deterministic usage extraction from streaming agent events
@@ -119,13 +120,15 @@ aid group show wg-a3f1
 ```
 
 Each workgroup stores caller-injected context once. Tasks launched with `aid run --group <id>`
-inherit that shared context before any per-task file context is injected.
+inherit that shared context before any per-task file context is injected. Batch tasks can also
+set `group = "wg-a3f1"` in TOML, and both `aid board` and `aid watch` can filter to that group.
 
 ### `aid watch` — Live progress dashboard
 
 ```bash
 aid watch            # Text mode for running tasks
 aid watch t-3a7f     # Follow a specific task
+aid watch --group wg-a3f1
 aid watch --tui      # Interactive ratatui dashboard
 aid wait             # Block until current running tasks finish
 aid wait t-3a7f      # Block until one task finishes
@@ -186,6 +189,7 @@ Watcher Events:
 aid board                    # All tasks
 aid board --today            # Today's tasks
 aid board --running          # Only running
+aid board --group wg-a3f1    # Only tasks in one workgroup
 aid board --mine             # Only tasks from the current caller session
 ```
 

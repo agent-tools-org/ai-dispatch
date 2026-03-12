@@ -71,7 +71,7 @@ fn task_to_run_args(task: &batch::BatchTask, background: bool) -> RunArgs {
         output: task.output.clone(),
         model: task.model.clone(),
         worktree: task.worktree.clone(),
-        group: None,
+        group: task.group.clone(),
         verify: task.verify.clone(),
         retry: 0,
         context: vec![],
@@ -94,11 +94,13 @@ mod tests {
             output: None,
             model: None,
             worktree: Some("feat/demo".to_string()),
+            group: Some("wg-demo".to_string()),
             verify: Some("auto".to_string()),
         };
 
         let run_args = task_to_run_args(&task, true);
         assert_eq!(run_args.verify.as_deref(), Some("auto"));
+        assert_eq!(run_args.group.as_deref(), Some("wg-demo"));
         assert!(run_args.background);
     }
 }

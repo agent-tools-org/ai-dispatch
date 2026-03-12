@@ -85,6 +85,9 @@ enum Commands {
     Watch {
         /// Watch a specific task ID
         task_id: Option<String>,
+        /// Restrict to one workgroup in multi-task mode
+        #[arg(long)]
+        group: Option<String>,
         #[arg(long)]
         tui: bool,
     },
@@ -93,17 +96,20 @@ enum Commands {
         task_id: Option<String>,
     },
     /// List all tasks with status
-    Board {
-        /// Show only running tasks
-        #[arg(long)]
-        running: bool,
+        Board {
+            /// Show only running tasks
+            #[arg(long)]
+            running: bool,
         /// Show only today's tasks
         #[arg(long)]
         today: bool,
-        /// Show only tasks from the current caller session
-        #[arg(long)]
-        mine: bool,
-    },
+            /// Show only tasks from the current caller session
+            #[arg(long)]
+            mine: bool,
+            /// Show only tasks for one workgroup
+            #[arg(long)]
+            group: Option<String>,
+        },
     /// Show detailed task audit
     Audit {
         /// Task ID to audit
@@ -238,11 +244,11 @@ async fn main() -> Result<()> {
         } => {
             cmd::batch::run(store, cmd::batch::BatchArgs { file, parallel, wait }).await?;
         }
-        Commands::Watch { task_id, tui } => {
+        Commands::Watch { task_id, group, tui } => {
             if tui {
                 tui::run(&store)?;
             } else {
-                cmd::watch::run(&store, task_id.as_deref()).await?;
+                cmd::watch::run(&store, task_id.as_deref(), group.as_deref()).await?;
             }
         }
         Commands::Wait { task_id } => {
@@ -252,8 +258,9 @@ async fn main() -> Result<()> {
             running,
             today,
             mine,
+            group,
         } => {
-            cmd::board::run(&store, running, today, mine)?;
+            cmd::board::run(&store, running, today, mine, group.as_deref())?;
         }
         Commands::Audit { task_id } => {
             cmd::audit::run(&store, &task_id)?;

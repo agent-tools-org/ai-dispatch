@@ -29,7 +29,9 @@ aid run codex "implement retry logic" --worktree feat/retry --verify auto --retr
 aid watch --tui
 aid wait
 aid group create dispatch --context "Shared repo constraints and API contract"
+aid watch --group wg-a3f1
 aid board --today
+aid board --group wg-a3f1
 aid board --mine --running
 aid audit t-1234
 aid review t-1234
@@ -46,6 +48,7 @@ aid batch work.toml --parallel --wait
 - Session-aware task attribution and `aid board --mine`
 - `aid explore` with prompt-based file auto-detection
 - Workgroups with caller-injected shared context via `aid group` and `aid run --group`
+- Workgroup-aware filtering in `aid board --group` and `aid watch --group`
 - `aid watch --tui` dashboard built with `ratatui`
 - `aid wait` and `aid batch --wait` for blocking orchestration flows
 - Deterministic usage extraction from streaming agent JSONL events

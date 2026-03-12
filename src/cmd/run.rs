@@ -28,7 +28,7 @@ pub struct RunArgs {
 pub async fn run(store: Arc<Store>, args: RunArgs) -> Result<()> {
     let agent_kind = AgentKind::from_str(&args.agent_name)
         .ok_or_else(|| anyhow::anyhow!(
-            "Unknown agent '{}'. Available: gemini, codex, opencode",
+            "Unknown agent '{}'. Available: gemini, codex, opencode, cursor",
             args.agent_name
         ))?;
 
@@ -53,6 +53,7 @@ pub async fn run(store: Arc<Store>, args: RunArgs) -> Result<()> {
         agent: agent_kind,
         prompt: args.prompt.clone(),
         status: TaskStatus::Pending,
+        parent_task_id: None,
         worktree_path: wt_path,
         worktree_branch: wt_branch,
         log_path: Some(log_path.to_string_lossy().to_string()),

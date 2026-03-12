@@ -16,6 +16,10 @@ pub fn db_path() -> PathBuf {
     aid_dir().join("aid.db")
 }
 
+pub fn config_path() -> PathBuf {
+    aid_dir().join("config.toml")
+}
+
 pub fn log_path(task_id: &str) -> PathBuf {
     logs_dir().join(format!("{task_id}.jsonl"))
 }
@@ -43,6 +47,7 @@ mod tests {
     fn paths_are_under_aid_dir() {
         let base = aid_dir();
         assert!(db_path().starts_with(&base));
+        assert!(config_path().starts_with(&base));
         assert!(logs_dir().starts_with(&base));
         assert!(log_path("t-1234").starts_with(&base));
     }

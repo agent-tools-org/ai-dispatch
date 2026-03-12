@@ -6,7 +6,7 @@ description = "Multi-AI CLI team orchestrator"
 
 [dependencies]
 anyhow = "1"
-chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
+chrono = { version = "0.4", default-features = false, features = ["clock", "serde", "std"] }
 clap = { version = "4", features = ["derive"] }
 crossterm = { version = "0.28", default-features = false, features = ["events"] }
 rand = { version = "0.9", default-features = false, features = ["thread_rng"] }

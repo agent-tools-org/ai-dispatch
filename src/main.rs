@@ -5,11 +5,15 @@ mod agent;
 mod batch;
 mod board;
 mod cmd;
+mod config;
 mod context;
 mod cost;
+mod explore;
 mod paths;
+mod select;
 mod store;
 mod templates;
+mod tui;
 mod types;
 mod verify;
 mod watcher;
@@ -30,7 +34,7 @@ struct Cli {
 enum Commands {
     /// Dispatch a task to an AI agent
     Run {
-        /// Agent to use (gemini, codex, opencode, cursor)
+        /// Agent to use (auto, gemini, codex, opencode, cursor)
         agent: String,
         /// Prompt / task description
         prompt: String,
@@ -93,8 +97,42 @@ enum Commands {
         #[arg(short, long)]
         feedback: String,
     },
+    /// Explore codebase via cheap AI CLIs
+    Explore {
+        prompt: String,
+        #[arg(long)]
+        agent: Option<String>,
+        #[arg(short, long)]
+        model: Option<String>,
+        #[arg(long)]
+        files: Vec<String>,
+        #[arg(short, long)]
+        output: Option<String>,
+    },
+    /// Start MCP server (stdio)
+    Mcp,
+    /// Manage agent configuration
+    Config {
+        #[command(subcommand)]
+        action: ConfigAction,
+    },
     /// Show detected agents
     Agents,
+}
+
+#[derive(Subcommand)]
+enum ConfigAction {
+    /// List configured agents
+    Agents,
+    /// Register custom agent
+    AddAgent {
+        name: String,
+        command: String,
+        #[arg(long)]
+        streaming: bool,
+    },
+    /// Show pricing table
+    Pricing,
 }
 
 #[tokio::main]
@@ -116,8 +154,15 @@ async fn main() -> Result<()> {
             context,
             bg,
         } => {
+            let agent_name = if agent == "auto" {
+                let selected = select::select_agent(&prompt, worktree.is_some());
+                println!("Selected agent: {}", selected);
+                selected.as_str().to_string()
+            } else {
+                agent
+            };
             cmd::run::run(store, cmd::run::RunArgs {
-                agent_name: agent,
+                agent_name,
                 prompt,
                 dir,
                 output,
@@ -145,6 +190,21 @@ async fn main() -> Result<()> {
         }
         Commands::Retry { task_id, feedback } => {
             cmd::retry::run(store, cmd::retry::RetryArgs { task_id, feedback }).await?;
+        }
+        Commands::Explore {
+            prompt,
+            agent,
+            model,
+            files,
+            output,
+        } => {
+            cmd::explore::run(store, prompt, agent, model, files, output).await?;
+        }
+        Commands::Mcp => {
+            cmd::mcp::run(store).await?;
+        }
+        Commands::Config { action } => {
+            cmd::config::run(&store, action)?;
         }
         Commands::Agents => {
             let agents = agent::detect_agents();

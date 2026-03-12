@@ -73,6 +73,7 @@ impl Store {
         // Add columns if missing (ALTER TABLE ADD COLUMN is idempotent when wrapped in try)
         let _ = conn.execute_batch("ALTER TABLE tasks ADD COLUMN model TEXT;");
         let _ = conn.execute_batch("ALTER TABLE tasks ADD COLUMN cost_usd REAL;");
+        let _ = conn.execute_batch("ALTER TABLE tasks ADD COLUMN parent_task_id TEXT;");
         let _ = conn.execute_batch("ALTER TABLE events ADD COLUMN metadata TEXT;");
         Ok(())
     }
@@ -80,8 +81,9 @@ impl Store {
     pub fn insert_task(&self, task: &Task) -> Result<()> {
         self.db().execute(
             "INSERT INTO tasks (id, agent, prompt, status, worktree_path, worktree_branch,
-             log_path, output_path, tokens, duration_ms, model, cost_usd, created_at, completed_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)",
+             log_path, output_path, tokens, duration_ms, model, cost_usd, created_at,
+             completed_at, parent_task_id)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)",
             params![
                 task.id.as_str(),
                 task.agent.as_str(),
@@ -97,6 +99,7 @@ impl Store {
                 task.cost_usd,
                 task.created_at.to_rfc3339(),
                 task.completed_at.map(|t| t.to_rfc3339()),
+                task.parent_task_id,
             ],
         )?;
         Ok(())
@@ -148,7 +151,8 @@ impl Store {
         let conn = self.db();
         let mut stmt = conn.prepare(
             "SELECT id, agent, prompt, status, worktree_path, worktree_branch,
-             log_path, output_path, tokens, duration_ms, model, cost_usd, created_at, completed_at
+             log_path, output_path, tokens, duration_ms, model, cost_usd, parent_task_id,
+             created_at, completed_at
              FROM tasks WHERE id = ?1",
         )?;
         let mut rows = stmt.query_map(params![id], row_to_task)?;
@@ -163,19 +167,22 @@ impl Store {
         let (sql, filter_params): (&str, Vec<String>) = match filter {
             TaskFilter::All => (
                 "SELECT id, agent, prompt, status, worktree_path, worktree_branch,
-                 log_path, output_path, tokens, duration_ms, model, cost_usd, created_at, completed_at
+                 log_path, output_path, tokens, duration_ms, model, cost_usd, parent_task_id,
+                 created_at, completed_at
                  FROM tasks ORDER BY created_at DESC",
                 vec![],
             ),
             TaskFilter::Running => (
                 "SELECT id, agent, prompt, status, worktree_path, worktree_branch,
-                 log_path, output_path, tokens, duration_ms, model, cost_usd, created_at, completed_at
+                 log_path, output_path, tokens, duration_ms, model, cost_usd, parent_task_id,
+                 created_at, completed_at
                  FROM tasks WHERE status = ?1 ORDER BY created_at DESC",
                 vec!["running".to_string()],
             ),
             TaskFilter::Today => (
                 "SELECT id, agent, prompt, status, worktree_path, worktree_branch,
-                 log_path, output_path, tokens, duration_ms, model, cost_usd, created_at, completed_at
+                 log_path, output_path, tokens, duration_ms, model, cost_usd, parent_task_id,
+                 created_at, completed_at
                  FROM tasks WHERE date(created_at) = date('now', 'localtime')
                  ORDER BY created_at DESC",
                 vec![],
@@ -219,6 +226,7 @@ fn row_to_task(row: &rusqlite::Row) -> rusqlite::Result<Result<Task>> {
         prompt: row.get(2)?,
         status: TaskStatus::from_str(&row.get::<_, String>(3)?)
             .unwrap_or(TaskStatus::Pending),
+        parent_task_id: row.get(12)?,
         worktree_path: row.get(4)?,
         worktree_branch: row.get(5)?,
         log_path: row.get(6)?,
@@ -227,8 +235,8 @@ fn row_to_task(row: &rusqlite::Row) -> rusqlite::Result<Result<Task>> {
         duration_ms: row.get(9)?,
         model: row.get(10)?,
         cost_usd: row.get(11)?,
-        created_at: parse_dt(&row.get::<_, String>(12)?),
-        completed_at: row.get::<_, Option<String>>(13)?
+        created_at: parse_dt(&row.get::<_, String>(13)?),
+        completed_at: row.get::<_, Option<String>>(14)?
             .map(|s| parse_dt(&s)),
     }))
 }
@@ -249,6 +257,7 @@ mod tests {
             agent,
             prompt: "test prompt".to_string(),
             status,
+            parent_task_id: None,
             worktree_path: None,
             worktree_branch: None,
             log_path: None,

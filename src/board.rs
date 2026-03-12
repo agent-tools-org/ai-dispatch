@@ -180,6 +180,7 @@ mod tests {
             agent,
             prompt: "test prompt".to_string(),
             status,
+            parent_task_id: None,
             worktree_path: None,
             worktree_branch: Some("feat/test".to_string()),
             log_path: None,

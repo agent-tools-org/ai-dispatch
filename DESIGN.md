@@ -16,13 +16,13 @@ State is stored under `~/.aid` by default, or `AID_HOME` when overridden.
 
 ## Roadmap
 
-### v0.6 focus
+### v0.6 delivered
 
 - complete deterministic token, model, and cost extraction for each supported CLI
 - tighten `board`, `audit`, and `usage` fidelity around non-worktree and retried tasks
 - keep `wait` and `batch --wait` as the blocking orchestration primitives
 
-### v0.7 plan
+### v0.7 next
 
 - add optional AI-assisted log explanation and failure summarization as a cached layer
 - introduce task dependency DAGs for explicit scheduling beyond retry chains

@@ -32,6 +32,7 @@ aid group create dispatch --context "Shared repo constraints and API contract"
 aid group update wg-a3f1 --context "Updated rollout notes"
 aid group delete wg-a3f1
 aid watch --group wg-a3f1
+aid watch --tui --group wg-a3f1
 aid board --today
 aid board --group wg-a3f1
 aid board --mine --running
@@ -51,7 +52,7 @@ aid batch work.toml --parallel --wait
 - `aid explore` with prompt-based file auto-detection
 - Workgroups with caller-injected shared context and full lifecycle commands via `aid group`
 - Workgroup-aware filtering in `aid board --group` and `aid watch --group`
-- `aid watch --tui` dashboard built with `ratatui`
+- `aid watch --tui` dashboard built with `ratatui`, scoped by task or workgroup
 - `aid wait` and `aid batch --wait` for blocking orchestration flows
 - Deterministic usage extraction from streaming agent JSONL events
 - Usage and budget reporting through `aid usage`

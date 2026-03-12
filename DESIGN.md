@@ -2,11 +2,13 @@
 
 ## Current Status
 
-Implemented in the current release:
+Implemented in v0.7.0:
 
 - `aid run` with background workers, worktrees, context injection, and `--retry`
 - `aid watch --tui` plus the original text watch mode
 - `aid wait` and `batch --wait` for blocking orchestration flows
+- `aid group` plus `aid run --group` for shared caller-injected context
+- workgroup-aware filtering across `board`, `watch`, and `batch`
 - `aid board --mine` for caller-session filtering
 - `aid audit`, `aid review`, and `aid output` for artifact inspection
 - deterministic usage extraction from streaming agent events
@@ -16,14 +18,15 @@ State is stored under `~/.aid` by default, or `AID_HOME` when overridden.
 
 ## Roadmap
 
-### v0.6 delivered
+### v0.7 delivered
 
-- complete deterministic token, model, and cost extraction for each supported CLI
-- tighten `board`, `audit`, and `usage` fidelity around non-worktree and retried tasks
-- keep `wait` and `batch --wait` as the blocking orchestration primitives
+- add caller-injected workgroups with `aid group` and `aid run --group`
+- wire workgroup filtering into `board`, `watch`, and batch task dispatch
+- preserve shared context across retries, background runs, and artifact inspection
 
-### v0.7 next
+### v0.8 next
 
+- add workgroup lifecycle commands such as update/delete and extend group-aware views
 - add optional AI-assisted log explanation and failure summarization as a cached layer
 - introduce task dependency DAGs for explicit scheduling beyond retry chains
 - surface resource telemetry in the TUI, starting with CPU and memory
@@ -91,6 +94,9 @@ aid run opencode "Add type annotations to src/lib.rs" --model mimo-v2-flash-free
 # Retry failed runs with exponential backoff
 aid run codex "Fix the retry path" --dir ./ --verify auto --retry 2
 
+# Reuse shared context from a workgroup
+aid run codex "Implement the TUI filter row" --group wg-a3f1 --dir ./
+
 # Background dispatch (returns task ID immediately)
 aid run codex "Add tests for quote handler" --bg --worktree feat/quote-tests --dir ./
 # => Task t-3a7f started in background
@@ -106,11 +112,24 @@ aid run codex "Add tests for quote handler" --bg --worktree feat/quote-tests --d
 4. If `--bg` is set, persists a detached worker spec under `~/.aid/jobs/`
 5. Records task metadata in SQLite
 
+### `aid group` — Reuse shared context
+
+```bash
+aid group create dispatch --context "Shared repo rules, API constraints, and rollout notes"
+aid group list
+aid group show wg-a3f1
+```
+
+Each workgroup stores caller-injected context once. Tasks launched with `aid run --group <id>`
+inherit that shared context before any per-task file context is injected. Batch tasks can also
+set `group = "wg-a3f1"` in TOML, and both `aid board` and `aid watch` can filter to that group.
+
 ### `aid watch` — Live progress dashboard
 
 ```bash
 aid watch            # Text mode for running tasks
 aid watch t-3a7f     # Follow a specific task
+aid watch --group wg-a3f1
 aid watch --tui      # Interactive ratatui dashboard
 aid wait             # Block until current running tasks finish
 aid wait t-3a7f      # Block until one task finishes
@@ -171,6 +190,7 @@ Watcher Events:
 aid board                    # All tasks
 aid board --today            # Today's tasks
 aid board --running          # Only running
+aid board --group wg-a3f1    # Only tasks in one workgroup
 aid board --mine             # Only tasks from the current caller session
 ```
 

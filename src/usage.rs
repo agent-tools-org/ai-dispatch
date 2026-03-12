@@ -256,6 +256,7 @@ mod tests {
             prompt: "prompt".to_string(),
             status: TaskStatus::Done,
             parent_task_id: None,
+            workgroup_id: None,
             caller_kind: None,
             caller_session_id: None,
             worktree_path: None,

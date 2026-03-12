@@ -56,6 +56,7 @@ pub async fn run(store: Arc<Store>, args: RetryArgs) -> Result<()> {
             output: task.output_path.clone(),
             model: task.model.clone(),
             worktree: worktree_arg,
+            group: task.workgroup_id.clone(),
             background: false,
             verify: None,
             retry: 0,

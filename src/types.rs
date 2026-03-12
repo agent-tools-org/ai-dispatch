@@ -1,5 +1,5 @@
-// Domain types for aid: TaskId, AgentKind, TaskStatus, EventKind, Task, TaskEvent.
-// All types are serializable and use strong typing over raw strings.
+// Domain types for aid tasks, workgroups, and event metadata.
+// All types are serializable and keep IDs explicit rather than using raw strings.
 
 use chrono::{DateTime, Local};
 use rand::Rng;
@@ -22,6 +22,27 @@ impl TaskId {
 }
 
 impl fmt::Display for TaskId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
+/// Short hex ID prefixed with "wg-", e.g. "wg-a3f1"
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct WorkgroupId(pub String);
+
+impl WorkgroupId {
+    pub fn generate() -> Self {
+        let val: u16 = rand::rng().random();
+        Self(format!("wg-{val:04x}"))
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl fmt::Display for WorkgroupId {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(&self.0)
     }
@@ -163,6 +184,7 @@ pub struct Task {
     pub prompt: String,
     pub status: TaskStatus,
     pub parent_task_id: Option<String>,
+    pub workgroup_id: Option<String>,
     pub caller_kind: Option<String>,
     pub caller_session_id: Option<String>,
     pub worktree_path: Option<String>,
@@ -175,6 +197,15 @@ pub struct Task {
     pub cost_usd: Option<f64>,
     pub created_at: DateTime<Local>,
     pub completed_at: Option<DateTime<Local>>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct Workgroup {
+    pub id: WorkgroupId,
+    pub name: String,
+    pub shared_context: String,
+    pub created_at: DateTime<Local>,
+    pub updated_at: DateTime<Local>,
 }
 
 #[derive(Debug, Clone, Serialize)]

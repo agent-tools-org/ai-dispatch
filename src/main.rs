@@ -20,6 +20,7 @@ mod types;
 mod usage;
 mod verify;
 mod watcher;
+mod workgroup;
 mod worktree;
 
 use anyhow::Result;
@@ -53,6 +54,9 @@ enum Commands {
         /// Run in a git worktree branch
         #[arg(short, long)]
         worktree: Option<String>,
+        /// Reuse shared context from a workgroup
+        #[arg(long)]
+        group: Option<String>,
         /// Verify command (or auto-detect if flag given without value)
         #[arg(long, num_args = 0..=1, default_missing_value = "auto")]
         verify: Option<String>,
@@ -81,6 +85,9 @@ enum Commands {
     Watch {
         /// Watch a specific task ID
         task_id: Option<String>,
+        /// Restrict to one workgroup in multi-task mode
+        #[arg(long)]
+        group: Option<String>,
         #[arg(long)]
         tui: bool,
     },
@@ -89,17 +96,20 @@ enum Commands {
         task_id: Option<String>,
     },
     /// List all tasks with status
-    Board {
-        /// Show only running tasks
-        #[arg(long)]
-        running: bool,
+        Board {
+            /// Show only running tasks
+            #[arg(long)]
+            running: bool,
         /// Show only today's tasks
         #[arg(long)]
         today: bool,
-        /// Show only tasks from the current caller session
-        #[arg(long)]
-        mine: bool,
-    },
+            /// Show only tasks from the current caller session
+            #[arg(long)]
+            mine: bool,
+            /// Show only tasks for one workgroup
+            #[arg(long)]
+            group: Option<String>,
+        },
     /// Show detailed task audit
     Audit {
         /// Task ID to audit
@@ -140,6 +150,11 @@ enum Commands {
         #[command(subcommand)]
         action: ConfigAction,
     },
+    /// Manage shared-context workgroups
+    Group {
+        #[command(subcommand)]
+        action: GroupAction,
+    },
     /// Show detected agents
     Agents,
     #[command(hide = true, name = "__run-task")]
@@ -163,6 +178,22 @@ enum ConfigAction {
     Pricing,
 }
 
+#[derive(Subcommand)]
+enum GroupAction {
+    /// Create a workgroup with shared context
+    Create {
+        name: String,
+        #[arg(long)]
+        context: String,
+    },
+    /// List workgroups
+    List,
+    /// Show one workgroup and its member tasks
+    Show {
+        group_id: String,
+    },
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     let cli = Cli::parse();
@@ -178,6 +209,7 @@ async fn main() -> Result<()> {
             output,
             model,
             worktree,
+            group,
             verify,
             retry,
             context,
@@ -197,6 +229,7 @@ async fn main() -> Result<()> {
                 output,
                 model,
                 worktree,
+                group,
                 verify,
                 retry,
                 context,
@@ -211,11 +244,11 @@ async fn main() -> Result<()> {
         } => {
             cmd::batch::run(store, cmd::batch::BatchArgs { file, parallel, wait }).await?;
         }
-        Commands::Watch { task_id, tui } => {
+        Commands::Watch { task_id, group, tui } => {
             if tui {
                 tui::run(&store)?;
             } else {
-                cmd::watch::run(&store, task_id.as_deref()).await?;
+                cmd::watch::run(&store, task_id.as_deref(), group.as_deref()).await?;
             }
         }
         Commands::Wait { task_id } => {
@@ -225,8 +258,9 @@ async fn main() -> Result<()> {
             running,
             today,
             mine,
+            group,
         } => {
-            cmd::board::run(&store, running, today, mine)?;
+            cmd::board::run(&store, running, today, mine, group.as_deref())?;
         }
         Commands::Audit { task_id } => {
             cmd::audit::run(&store, &task_id)?;
@@ -258,6 +292,11 @@ async fn main() -> Result<()> {
         Commands::Config { action } => {
             cmd::config::run(&store, action)?;
         }
+        Commands::Group { action } => match action {
+            GroupAction::Create { name, context } => cmd::group::create(&store, &name, &context)?,
+            GroupAction::List => cmd::group::list(&store)?,
+            GroupAction::Show { group_id } => cmd::group::show(&store, &group_id)?,
+        },
         Commands::Agents => {
             let agents = agent::detect_agents();
             if agents.is_empty() {

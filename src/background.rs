@@ -22,6 +22,7 @@ pub struct BackgroundRunSpec {
     pub model: Option<String>,
     pub verify: Option<String>,
     pub retry: u32,
+    pub group: Option<String>,
 }
 
 pub fn save_spec(spec: &BackgroundRunSpec) -> Result<()> {
@@ -101,6 +102,7 @@ async fn run_task_inner(store: &Arc<Store>, spec: &BackgroundRunSpec) -> Result<
             output: spec.output.clone(),
             model: spec.model.clone(),
             worktree: None,
+            group: spec.group.clone(),
             verify: spec.verify.clone(),
             retry: spec.retry,
             context: vec![],
@@ -158,6 +160,7 @@ mod tests {
             model: None,
             verify: Some("auto".to_string()),
             retry: 2,
+            group: Some("wg-demo".to_string()),
         };
 
         let content = serde_json::to_string_pretty(&spec).unwrap();

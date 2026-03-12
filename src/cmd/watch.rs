@@ -10,7 +10,7 @@ use crate::store::Store;
 use crate::types::TaskFilter;
 
 /// Run the watch dashboard, refreshing every second
-pub async fn run(store: &Arc<Store>, task_id: Option<&str>) -> Result<()> {
+pub async fn run(store: &Arc<Store>, task_id: Option<&str>, group: Option<&str>) -> Result<()> {
     loop {
         // Clear terminal
         print!("\x1b[2J\x1b[H");
@@ -37,11 +37,17 @@ pub async fn run(store: &Arc<Store>, task_id: Option<&str>) -> Result<()> {
             }
         } else {
             // All running tasks mode
-            let running = store.list_tasks(TaskFilter::Running)?;
+            let mut running = store.list_tasks(TaskFilter::Running)?;
+            if let Some(group_id) = group {
+                running.retain(|task| task.workgroup_id.as_deref() == Some(group_id));
+            }
             if running.is_empty() {
                 println!("No running tasks.");
                 // Also show recent completed tasks
-                let all = store.list_tasks(TaskFilter::Today)?;
+                let mut all = store.list_tasks(TaskFilter::Today)?;
+                if let Some(group_id) = group {
+                    all.retain(|task| task.workgroup_id.as_deref() == Some(group_id));
+                }
                 if !all.is_empty() {
                     println!();
                     print!("{}", render_board(&all));

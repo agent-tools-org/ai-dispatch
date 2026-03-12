@@ -20,6 +20,8 @@ pub struct RunArgs {
     pub output: Option<String>,
     pub model: Option<String>,
     pub worktree: Option<String>,
+    pub verify: Option<String>,
+    pub context: Vec<String>,
     pub background: bool,
 }
 
@@ -64,14 +66,23 @@ pub async fn run(store: Arc<Store>, args: RunArgs) -> Result<()> {
     };
     store.insert_task(&task)?;
 
+    // Inject context into prompt if specified
+    let effective_prompt = if !args.context.is_empty() {
+        let specs = crate::context::parse_context_specs(&args.context)?;
+        let ctx = crate::context::resolve_context(&specs)?;
+        crate::context::inject_context(&args.prompt, &ctx)
+    } else {
+        args.prompt.clone()
+    };
+
     let opts = RunOpts {
-        dir: effective_dir,
+        dir: effective_dir.clone(),
         output: args.output.clone(),
         model: args.model.clone(),
     };
 
     // Build the OS command via the agent adapter
-    let std_cmd = agent.build_command(&args.prompt, &opts)
+    let std_cmd = agent.build_command(&effective_prompt, &opts)
         .context("Failed to build agent command")?;
 
     // Convert std::process::Command to tokio::process::Command
@@ -86,6 +97,8 @@ pub async fn run(store: Arc<Store>, args: RunArgs) -> Result<()> {
         let task_id_bg = task_id.clone();
         let is_streaming = agent.streaming();
         let model = args.model.clone();
+        let verify_bg = args.verify.clone();
+        let dir_bg = effective_dir.clone();
 
         println!("Task {} started in background ({}: {})",
             task_id, agent_kind, truncate(&args.prompt, 50));
@@ -95,9 +108,14 @@ pub async fn run(store: Arc<Store>, args: RunArgs) -> Result<()> {
                 &*agent, tokio_cmd, &task_id_bg, &store_bg, &log_path,
                 args.output.as_deref(), model.as_deref(), is_streaming,
             ).await;
-            if let Err(e) = result {
-                eprintln!("Background task {} failed: {}", task_id_bg, e);
-                let _ = store_bg.update_task_status(task_id_bg.as_str(), TaskStatus::Failed);
+            match result {
+                Err(e) => {
+                    eprintln!("Background task {} failed: {}", task_id_bg, e);
+                    let _ = store_bg.update_task_status(task_id_bg.as_str(), TaskStatus::Failed);
+                }
+                Ok(()) => {
+                    maybe_verify(&store_bg, &task_id_bg, verify_bg.as_deref(), dir_bg.as_deref());
+                }
             }
         });
     } else {
@@ -111,6 +129,8 @@ pub async fn run(store: Arc<Store>, args: RunArgs) -> Result<()> {
             &*agent, tokio_cmd, &task_id, &store, &log_path,
             args.output.as_deref(), args.model.as_deref(), is_streaming,
         ).await?;
+
+        maybe_verify(&store, &task_id, args.verify.as_deref(), effective_dir.as_deref());
     }
 
     Ok(())
@@ -173,4 +193,37 @@ fn format_duration(ms: i64) -> String {
 fn truncate(s: &str, max: usize) -> String {
     if s.len() <= max { s.to_string() }
     else { format!("{}...", &s[..max.saturating_sub(3)]) }
+}
+
+/// Run verification if --verify was set and a working dir exists.
+fn maybe_verify(store: &Store, task_id: &TaskId, verify: Option<&str>, dir: Option<&str>) {
+    let Some(verify_arg) = verify else { return };
+    let Some(dir_path) = dir else {
+        println!("Verify skipped: no working directory");
+        return;
+    };
+
+    let command = if verify_arg == "auto" { None } else { Some(verify_arg) };
+    let path = std::path::Path::new(dir_path);
+
+    match crate::verify::run_verify(path, command) {
+        Ok(result) => {
+            let report = crate::verify::format_verify_report(&result);
+            println!("{report}");
+            if !result.success {
+                let _ = store.update_task_status(task_id.as_str(), TaskStatus::Failed);
+                let event = TaskEvent {
+                    task_id: task_id.clone(),
+                    timestamp: chrono::Local::now(),
+                    event_kind: EventKind::Error,
+                    detail: format!("Verification failed: {}", result.command),
+                    metadata: None,
+                };
+                let _ = store.insert_event(&event);
+            }
+        }
+        Err(e) => {
+            eprintln!("Verify error: {e}");
+        }
+    }
 }

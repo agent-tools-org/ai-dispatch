@@ -3,9 +3,9 @@
 
 use anyhow::Result;
 use chrono::Local;
+use std::sync::Arc;
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::Child;
-use std::sync::Arc;
 
 use crate::agent::Agent;
 use crate::paths;
@@ -20,14 +20,21 @@ pub async fn watch_streaming(
     store: &Arc<Store>,
     log_path: &std::path::Path,
 ) -> Result<CompletionInfo> {
-    let stdout = child.stdout.take()
+    let stdout = child
+        .stdout
+        .take()
         .ok_or_else(|| anyhow::anyhow!("No stdout on child process"))?;
     let reader = BufReader::new(stdout);
     let mut lines = reader.lines();
 
     // Open log file for raw output
     let mut log_file = tokio::fs::File::create(log_path).await?;
-    let mut last_tokens: Option<i64> = None;
+    let mut info = CompletionInfo {
+        tokens: None,
+        status: TaskStatus::Done,
+        model: None,
+        cost_usd: None,
+    };
     let mut event_count = 0u32;
 
     // Spawn stderr capture in background
@@ -41,10 +48,7 @@ pub async fn watch_streaming(
 
         // Parse event
         if let Some(event) = agent.parse_event(task_id, &line) {
-            // Track token count from completion events
-            if event.event_kind == EventKind::Completion {
-                last_tokens = crate::agent::codex::extract_tokens_from_detail(&event.detail);
-            }
+            apply_completion_event(&mut info, &event);
             store.insert_event(&event)?;
             event_count += 1;
         }
@@ -84,12 +88,17 @@ pub async fn watch_streaming(
     store.insert_event(&TaskEvent {
         task_id: task_id.clone(),
         timestamp: Local::now(),
-        event_kind: if status == TaskStatus::Done { EventKind::Completion } else { EventKind::Error },
+        event_kind: if status == TaskStatus::Done {
+            EventKind::Completion
+        } else {
+            EventKind::Error
+        },
         detail,
         metadata: None,
     })?;
 
-    Ok(CompletionInfo { tokens: last_tokens, status, model: None, cost_usd: None })
+    info.status = status;
+    Ok(info)
 }
 
 /// Watch a non-streaming agent: buffer all output, parse at end
@@ -101,7 +110,9 @@ pub async fn watch_buffered(
     log_path: &std::path::Path,
     output_path: Option<&std::path::Path>,
 ) -> Result<CompletionInfo> {
-    let stdout = child.stdout.take()
+    let stdout = child
+        .stdout
+        .take()
         .ok_or_else(|| anyhow::anyhow!("No stdout on child process"))?;
     let mut reader = BufReader::new(stdout);
     let mut buffer = String::new();
@@ -136,7 +147,12 @@ pub async fn watch_buffered(
     let info = if exit_status.success() {
         agent.parse_completion(&buffer)
     } else {
-        CompletionInfo { tokens: None, status: TaskStatus::Failed, model: None, cost_usd: None }
+        CompletionInfo {
+            tokens: None,
+            status: TaskStatus::Failed,
+            model: None,
+            cost_usd: None,
+        }
     };
 
     // Record completion event
@@ -165,4 +181,81 @@ fn spawn_stderr_capture(
             let _ = tokio::fs::write(&stderr_path, &collected).await;
         }
     }))
+}
+
+fn apply_completion_event(info: &mut CompletionInfo, event: &TaskEvent) {
+    if event.event_kind != EventKind::Completion {
+        return;
+    }
+    let Some(metadata) = event.metadata.as_ref() else {
+        return;
+    };
+
+    if let Some(tokens) = metadata.get("tokens").and_then(|value| value.as_i64()) {
+        info.tokens = Some(tokens);
+    }
+    if let Some(model) = metadata.get("model").and_then(|value| value.as_str()) {
+        info.model = Some(model.to_string());
+    }
+    if let Some(cost_usd) = metadata.get("cost_usd").and_then(|value| value.as_f64()) {
+        info.cost_usd = Some(cost_usd);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::apply_completion_event;
+    use crate::types::{CompletionInfo, EventKind, TaskEvent, TaskId, TaskStatus};
+    use chrono::Local;
+    use serde_json::json;
+
+    #[test]
+    fn completion_metadata_updates_summary_fields() {
+        let mut info = CompletionInfo {
+            tokens: None,
+            status: TaskStatus::Done,
+            model: None,
+            cost_usd: None,
+        };
+        let event = TaskEvent {
+            task_id: TaskId("t-usage".to_string()),
+            timestamp: Local::now(),
+            event_kind: EventKind::Completion,
+            detail: "completed".to_string(),
+            metadata: Some(json!({
+                "tokens": 12345,
+                "model": "gpt-4.1",
+                "cost_usd": 0.12
+            })),
+        };
+
+        apply_completion_event(&mut info, &event);
+
+        assert_eq!(info.tokens, Some(12345));
+        assert_eq!(info.model.as_deref(), Some("gpt-4.1"));
+        assert_eq!(info.cost_usd, Some(0.12));
+    }
+
+    #[test]
+    fn non_completion_events_do_not_change_summary_fields() {
+        let mut info = CompletionInfo {
+            tokens: Some(10),
+            status: TaskStatus::Done,
+            model: Some("gpt-4.1".to_string()),
+            cost_usd: Some(0.01),
+        };
+        let event = TaskEvent {
+            task_id: TaskId("t-ignore".to_string()),
+            timestamp: Local::now(),
+            event_kind: EventKind::Reasoning,
+            detail: "thinking".to_string(),
+            metadata: Some(json!({ "tokens": 999 })),
+        };
+
+        apply_completion_event(&mut info, &event);
+
+        assert_eq!(info.tokens, Some(10));
+        assert_eq!(info.model.as_deref(), Some("gpt-4.1"));
+        assert_eq!(info.cost_usd, Some(0.01));
+    }
 }

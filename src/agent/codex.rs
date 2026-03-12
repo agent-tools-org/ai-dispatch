@@ -1,8 +1,10 @@
-// Codex CLI adapter: builds `codex exec` commands, parses JSONL event stream.
-// Codex outputs streaming JSONL with event types for tool calls, reasoning, and tokens.
+// Codex CLI adapter: builds `codex exec` commands and parses JSONL event streams.
+// Exports CodexAgent for streaming runs plus helpers for tool and usage events.
+// Depends on serde_json for metadata-rich completion events.
 
 use anyhow::Result;
 use chrono::Local;
+use serde_json::{Map, Value, json};
 use std::process::Command;
 
 use super::RunOpts;
@@ -47,60 +49,43 @@ impl super::Agent for CodexAgent {
 
         let event_type = v.get("type")?.as_str()?;
         match event_type {
-            "response_item" => parse_response_item(task_id, &v, now),
-            "event_msg" => parse_event_msg(task_id, &v, now),
+            "item.started" | "item.completed" => parse_item_event(task_id, &v, now),
+            "turn.completed" => parse_turn_completed(task_id, &v, now),
+            "error" => parse_error_event(task_id, &v, now),
             _ => None,
         }
     }
 
     fn parse_completion(&self, _output: &str) -> CompletionInfo {
-        // Codex is streaming — completion is detected via parse_event
-        CompletionInfo { tokens: None, status: TaskStatus::Done, model: None, cost_usd: None }
+        // Codex is streaming — usage arrives in turn.completed events.
+        CompletionInfo {
+            tokens: None,
+            status: TaskStatus::Done,
+            model: None,
+            cost_usd: None,
+        }
     }
 }
 
-fn parse_response_item(
+fn parse_item_event(
     task_id: &TaskId,
-    v: &serde_json::Value,
+    v: &Value,
     now: chrono::DateTime<Local>,
 ) -> Option<TaskEvent> {
-    let payload = v.get("payload")?;
-    let item_type = payload.get("type")?.as_str()?;
+    let event_type = v.get("type")?.as_str()?;
+    let item = v.get("item")?;
+    let item_type = item.get("type")?.as_str()?;
 
     match item_type {
-        "function_call" => {
-            let name = payload.get("name").and_then(|n| n.as_str()).unwrap_or("unknown");
-            let args = payload.get("arguments")
-                .and_then(|a| a.as_str())
-                .map(|a| truncate_detail(a, 80))
-                .unwrap_or_default();
-            let detail = format!("{name}: {args}");
-            let event_kind = classify_tool_call(name, &args);
-            Some(TaskEvent { task_id: task_id.clone(), timestamp: now, event_kind, detail, metadata: None })
-        }
-        "function_call_output" => {
-            let output = payload.get("output")
-                .and_then(|o| o.as_str())
-                .unwrap_or("");
-            let event_kind = classify_output(output);
-            if event_kind.is_some() {
-                Some(TaskEvent {
-                    task_id: task_id.clone(),
-                    timestamp: now,
-                    event_kind: event_kind.unwrap(),
-                    detail: truncate_detail(output, 80),
-                    metadata: None,
-                })
-            } else {
-                None
-            }
-        }
-        "message" | "reasoning" => {
-            let text = payload.get("text")
-                .or_else(|| payload.get("content"))
+        "agent_message" => {
+            let text = item
+                .get("text")
+                .or_else(|| item.get("content"))
                 .and_then(|t| t.as_str())
                 .unwrap_or("");
-            if text.is_empty() { return None; }
+            if text.is_empty() {
+                return None;
+            }
             Some(TaskEvent {
                 task_id: task_id.clone(),
                 timestamp: now,
@@ -109,70 +94,176 @@ fn parse_response_item(
                 metadata: None,
             })
         }
+        "command_execution" => parse_command_event(task_id, item, event_type, now),
         _ => None,
     }
 }
 
-fn parse_event_msg(
+fn parse_command_event(
     task_id: &TaskId,
-    v: &serde_json::Value,
+    item: &Value,
+    event_type: &str,
     now: chrono::DateTime<Local>,
 ) -> Option<TaskEvent> {
-    let payload = v.get("payload")?;
-    let msg_type = payload.get("type")?.as_str()?;
-
-    match msg_type {
-        "token_count" => {
-            let input = payload.get("input_tokens").and_then(|t| t.as_i64()).unwrap_or(0);
-            let output = payload.get("output_tokens").and_then(|t| t.as_i64()).unwrap_or(0);
-            Some(TaskEvent {
-                task_id: task_id.clone(),
-                timestamp: now,
-                event_kind: EventKind::Completion,
-                detail: format!("tokens: {} in + {} out = {}", input, output, input + output),
-                metadata: None,
-            })
-        }
-        "task_started" | "user_message" => None, // Skip noise
-        "agent_message" => {
-            let text = payload.get("content")
-                .and_then(|c| c.as_str())
-                .unwrap_or("");
-            if text.is_empty() { return None; }
-            Some(TaskEvent {
-                task_id: task_id.clone(),
-                timestamp: now,
-                event_kind: EventKind::Reasoning,
-                detail: truncate_detail(text, 80),
-                metadata: None,
-            })
-        }
-        _ => None,
+    let command = item.get("command").and_then(|v| v.as_str()).unwrap_or("");
+    if command.is_empty() {
+        return None;
     }
+
+    if event_type == "item.started" {
+        return Some(TaskEvent {
+            task_id: task_id.clone(),
+            timestamp: now,
+            event_kind: classify_command(command),
+            detail: truncate_detail(command, 80),
+            metadata: Some(json!({ "command": command, "status": "in_progress" })),
+        });
+    }
+
+    let exit_code = item.get("exit_code").and_then(|v| v.as_i64());
+    if matches!(exit_code, Some(code) if code != 0) {
+        return Some(TaskEvent {
+            task_id: task_id.clone(),
+            timestamp: now,
+            event_kind: EventKind::Error,
+            detail: format!(
+                "command failed ({}) {}",
+                exit_code.unwrap_or(-1),
+                truncate_detail(command, 60)
+            ),
+            metadata: Some(json!({ "command": command, "exit_code": exit_code })),
+        });
+    }
+
+    let output = item
+        .get("aggregated_output")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+    let event_kind = classify_output(output)?;
+    Some(TaskEvent {
+        task_id: task_id.clone(),
+        timestamp: now,
+        event_kind,
+        detail: truncate_detail(output, 80),
+        metadata: Some(json!({ "command": command, "exit_code": exit_code })),
+    })
 }
 
-/// Classify tool calls into semantic event kinds
-fn classify_tool_call(name: &str, args: &str) -> EventKind {
-    match name {
-        "exec_command" => {
-            if args.contains("cargo test") || args.contains("npm test") {
-                EventKind::Test
-            } else if args.contains("cargo build") || args.contains("cargo check") {
-                EventKind::Build
-            } else if args.contains("git commit") {
-                EventKind::Commit
-            } else if args.contains("cargo fmt") || args.contains("prettier") {
-                EventKind::Format
-            } else if args.contains("cargo clippy") || args.contains("eslint") {
-                EventKind::Lint
-            } else {
-                EventKind::ToolCall
-            }
-        }
-        "write_file" | "create_file" | "patch_file" => EventKind::FileWrite,
-        "read_file" => EventKind::FileRead,
-        "web_search" => EventKind::WebSearch,
-        _ => EventKind::ToolCall,
+fn parse_turn_completed(
+    task_id: &TaskId,
+    v: &Value,
+    now: chrono::DateTime<Local>,
+) -> Option<TaskEvent> {
+    let usage = v.get("usage")?;
+    let input_tokens = usage
+        .get("input_tokens")
+        .and_then(|v| v.as_i64())
+        .unwrap_or(0);
+    let cached_input_tokens = usage
+        .get("cached_input_tokens")
+        .and_then(|v| v.as_i64())
+        .unwrap_or(0);
+    let output_tokens = usage
+        .get("output_tokens")
+        .and_then(|v| v.as_i64())
+        .unwrap_or(0);
+    let total_tokens = input_tokens + output_tokens;
+    let detail = if cached_input_tokens > 0 {
+        format!(
+            "tokens: {} in + {} out = {} ({} cached)",
+            input_tokens, output_tokens, total_tokens, cached_input_tokens
+        )
+    } else {
+        format!(
+            "tokens: {} in + {} out = {}",
+            input_tokens, output_tokens, total_tokens
+        )
+    };
+
+    Some(TaskEvent {
+        task_id: task_id.clone(),
+        timestamp: now,
+        event_kind: EventKind::Completion,
+        detail,
+        metadata: Some(completion_metadata(
+            total_tokens,
+            input_tokens,
+            output_tokens,
+            cached_input_tokens,
+            extract_model(v),
+        )),
+    })
+}
+
+fn parse_error_event(
+    task_id: &TaskId,
+    v: &Value,
+    now: chrono::DateTime<Local>,
+) -> Option<TaskEvent> {
+    let detail = v
+        .get("message")
+        .or_else(|| v.pointer("/error/message"))
+        .and_then(|value| value.as_str())
+        .filter(|message| !message.is_empty())?;
+
+    Some(TaskEvent {
+        task_id: task_id.clone(),
+        timestamp: now,
+        event_kind: EventKind::Error,
+        detail: truncate_detail(detail, 80),
+        metadata: None,
+    })
+}
+
+fn completion_metadata(
+    total_tokens: i64,
+    input_tokens: i64,
+    output_tokens: i64,
+    cached_input_tokens: i64,
+    model: Option<String>,
+) -> Value {
+    let mut map = Map::from_iter([
+        ("tokens".to_string(), json!(total_tokens)),
+        ("input_tokens".to_string(), json!(input_tokens)),
+        ("output_tokens".to_string(), json!(output_tokens)),
+        (
+            "cached_input_tokens".to_string(),
+            json!(cached_input_tokens),
+        ),
+    ]);
+    if let Some(value) = model {
+        map.insert("model".to_string(), json!(value));
+    }
+    Value::Object(map)
+}
+
+fn extract_model(v: &Value) -> Option<String> {
+    [
+        "/model",
+        "/assistant/model",
+        "/session/model",
+        "/turn/model",
+        "/usage/model",
+        "/item/model",
+    ]
+    .iter()
+    .find_map(|pointer| v.pointer(pointer).and_then(|value| value.as_str()))
+    .map(ToOwned::to_owned)
+}
+
+fn classify_command(command: &str) -> EventKind {
+    if command.contains("cargo test") || command.contains("npm test") {
+        EventKind::Test
+    } else if command.contains("cargo build") || command.contains("cargo check") {
+        EventKind::Build
+    } else if command.contains("git commit") {
+        EventKind::Commit
+    } else if command.contains("cargo fmt") || command.contains("prettier") {
+        EventKind::Format
+    } else if command.contains("cargo clippy") || command.contains("eslint") {
+        EventKind::Lint
+    } else {
+        EventKind::ToolCall
     }
 }
 
@@ -207,9 +298,38 @@ fn truncate_detail(s: &str, max: usize) -> String {
     }
 }
 
-/// Extract token count from a completion event detail string
-pub fn extract_tokens_from_detail(detail: &str) -> Option<i64> {
-    // Format: "tokens: X in + Y out = Z"
-    detail.rsplit("= ").next()
-        .and_then(|s| s.trim().parse::<i64>().ok())
+#[cfg(test)]
+mod tests {
+    use super::CodexAgent;
+    use crate::agent::Agent;
+    use crate::types::{EventKind, TaskId};
+
+    #[test]
+    fn parses_agent_message_items() {
+        let agent = CodexAgent;
+        let line = r#"{"type":"item.completed","item":{"id":"item_0","type":"agent_message","text":"Planning the next edit."}}"#;
+        let event = agent
+            .parse_event(&TaskId("t-msg".to_string()), line)
+            .unwrap();
+        assert_eq!(event.event_kind, EventKind::Reasoning);
+        assert!(event.detail.contains("Planning"));
+    }
+
+    #[test]
+    fn parses_turn_completed_usage_metadata() {
+        let agent = CodexAgent;
+        let line = r#"{"type":"turn.completed","usage":{"input_tokens":232452,"cached_input_tokens":211968,"output_tokens":5988}}"#;
+        let event = agent
+            .parse_event(&TaskId("t-usage".to_string()), line)
+            .unwrap();
+        assert_eq!(event.event_kind, EventKind::Completion);
+        assert_eq!(
+            event
+                .metadata
+                .unwrap()
+                .get("tokens")
+                .and_then(|v| v.as_i64()),
+            Some(238440)
+        );
+    }
 }

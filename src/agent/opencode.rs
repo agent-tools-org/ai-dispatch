@@ -3,6 +3,7 @@
 
 use anyhow::Result;
 use chrono::Local;
+use serde_json::json;
 use std::process::Command;
 
 use super::RunOpts;
@@ -60,7 +61,12 @@ impl super::Agent for OpenCodeAgent {
     fn parse_completion(&self, output: &str) -> CompletionInfo {
         // Try to extract token count from output
         let tokens = extract_tokens_from_output(output);
-        CompletionInfo { tokens, status: TaskStatus::Done, model: None, cost_usd: None }
+        CompletionInfo {
+            tokens,
+            status: TaskStatus::Done,
+            model: None,
+            cost_usd: None,
+        }
     }
 }
 
@@ -70,24 +76,29 @@ fn parse_json_event(
     now: chrono::DateTime<Local>,
 ) -> Option<TaskEvent> {
     let event_type = v.get("type").and_then(|t| t.as_str())?;
-    let detail = match event_type {
+    let (detail, metadata) = match event_type {
         "tool_call" | "function_call" => {
             let name = v.get("name").and_then(|n| n.as_str()).unwrap_or("unknown");
             let args = v.get("arguments").and_then(|a| a.as_str()).unwrap_or("");
-            format!("{name}: {}", truncate(args, 60))
+            (format!("{name}: {}", truncate(args, 60)), None)
         }
         "message" | "text" => {
-            v.get("content").or(v.get("text"))
+            let detail = v
+                .get("content")
+                .or(v.get("text"))
                 .and_then(|t| t.as_str())
                 .unwrap_or("")
-                .to_string()
+                .to_string();
+            (detail, None)
         }
         "completion" | "done" => {
             let tokens = v.get("tokens").and_then(|t| t.as_i64());
-            match tokens {
+            let detail = match tokens {
                 Some(t) => format!("completed with {} tokens", t),
                 None => "completed".to_string(),
-            }
+            };
+            let metadata = tokens.map(|value| json!({ "tokens": value }));
+            (detail, metadata)
         }
         _ => return None,
     };
@@ -108,7 +119,7 @@ fn parse_json_event(
         timestamp: now,
         event_kind,
         detail: truncate(&detail, 80),
-        metadata: None,
+        metadata,
     })
 }
 

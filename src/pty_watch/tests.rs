@@ -29,6 +29,7 @@ fn stores_recent_question_as_awaiting_prompt_metadata() {
         duration_ms: None,
         model: None,
         cost_usd: None,
+        resolved_prompt: None,
         created_at: Local::now(),
         completed_at: None,
     };

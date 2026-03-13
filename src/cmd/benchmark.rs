@@ -39,6 +39,7 @@ pub async fn run(store: Arc<Store>, prompt: String, agents: String, dir: Option<
                 template: None,
 repo: None,
             read_only: false,
+            budget: false,
             session_id: None,
         },
     )

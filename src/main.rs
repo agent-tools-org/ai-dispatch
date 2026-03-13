@@ -343,6 +343,7 @@ async fn main() -> Result<()> {
                     on_done,
                     fallback,
                     read_only,
+                    budget,
                     session_id: None,
                 },
             )

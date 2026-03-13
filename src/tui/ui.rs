@@ -55,7 +55,18 @@ fn render_multipane_view(frame: &mut ratatui::Frame<'_>, app: &App) {
                     )
                 })
                 .collect();
-            let elapsed = {
+            let elapsed = if let Some(ms) = task.duration_ms {
+                // Completed task: show final duration
+                let secs = ms / 1000;
+                if secs < 60 {
+                    format!("{secs}s")
+                } else if secs < 3600 {
+                    format!("{}m {:02}s", secs / 60, secs % 60)
+                } else {
+                    format!("{}h {:02}m", secs / 3600, (secs % 3600) / 60)
+                }
+            } else {
+                // Running task: show live elapsed
                 let secs = (chrono::Local::now() - task.created_at).num_seconds();
                 if secs < 60 {
                     format!("{secs}s")

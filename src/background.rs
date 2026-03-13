@@ -193,6 +193,7 @@ async fn run_task_inner(store: &Arc<Store>, spec: &BackgroundRunSpec) -> Result<
             on_done: None,
             fallback: None,
             read_only: false,
+            budget: false,
             session_id: None,
         },
     )

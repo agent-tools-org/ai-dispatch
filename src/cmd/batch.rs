@@ -98,7 +98,8 @@ fn task_to_run_args(task: &batch::BatchTask, background: bool) -> RunArgs {
         parent_task_id: None,
         on_done: None,
         fallback: task.fallback.clone(),
-        read_only: false,
+        read_only: task.read_only,
+        budget: task.budget,
         session_id: None,
     }
 }
@@ -496,6 +497,8 @@ mod tests {
             skills: None,
             depends_on: depends_on.map(|d| d.into_iter().map(String::from).collect()),
             fallback: None,
+            read_only: false,
+            budget: false,
         }
     }
 

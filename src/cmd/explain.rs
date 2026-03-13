@@ -43,6 +43,7 @@ pub(crate) async fn run_explain(store: Arc<Store>, task_id: &str, agent: Option<
             on_done: None,
             fallback: None,
             read_only: false,
+            budget: false,
             session_id: None,
         },
     )

@@ -69,6 +69,7 @@ pub async fn retry_task(store: Arc<Store>, args: RetryArgs, announce: bool) -> R
             on_done: None,
             fallback: None,
             read_only: false,
+            budget: false,
             session_id,
         },
     )

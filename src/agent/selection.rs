@@ -36,6 +36,20 @@ const FRONTEND_TERMS: &[&str] = &[
     "responsive",
 ];
 const COMPLEX_TERMS: &[&str] = &["implement", "create", "build", "refactor", "test suite"];
+const LOW_VALUE_TERMS: &[&str] = &[
+    "run test",
+    "cargo test",
+    "cargo fmt",
+    "cargo clippy",
+    "format code",
+    "lint",
+    "update docs",
+    "update readme",
+    "update changelog",
+    "add comment",
+    "add docstring",
+    "type annotation",
+];
 const FILE_SUFFIXES: &[&str] = &[
     ".rs", ".toml", ".md", ".json", ".yaml", ".yml", ".ts", ".tsx", ".js", ".jsx", ".css", ".html",
 ];
@@ -66,7 +80,8 @@ fn select_agent_from(
     let prompt_len = prompt.chars().count();
     let file_count = count_file_mentions(&normalized);
     let has_workspace = opts.dir.is_some();
-    let budget = opts.budget;
+    let auto_budget = contains_any(&normalized, LOW_VALUE_TERMS);
+    let budget = opts.budget || auto_budget;
     let history_map: std::collections::HashMap<AgentKind, (f64, usize)> = history
         .iter()
         .map(|(kind, rate, count)| (*kind, (*rate, *count)))
@@ -109,7 +124,9 @@ fn select_agent_from(
     } else {
         format!("{}; {} unavailable", primary.reason, primary.kind.as_str())
     };
-    if budget {
+    if auto_budget {
+        reason.push_str("; auto-budget: low-value task detected");
+    } else if opts.budget {
         reason.push_str("; budget mode: preferring cheaper agent");
     }
     if rate_limit::is_rate_limited(&AgentKind::Codex) && selected.kind != AgentKind::Codex {

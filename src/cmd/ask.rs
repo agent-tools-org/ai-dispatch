@@ -120,6 +120,7 @@ async fn dispatch(store: Arc<Store>, request: AskRequest, announce: bool) -> Res
             on_done: None,
             fallback: None,
             read_only: false,
+            budget: false,
             session_id: None,
         },
     )

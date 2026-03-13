@@ -47,6 +47,7 @@ pub struct RunArgs {
     pub on_done: Option<String>,
     pub fallback: Option<String>,
     pub read_only: bool,
+    pub budget: bool,
     pub session_id: Option<String>,
 }
 
@@ -149,7 +150,7 @@ pub async fn run(store: Arc<Store>, args: RunArgs) -> Result<TaskId> {
         false
     };
 
-    let budget_active = auto_budget || cfg.selection.budget_mode;
+    let budget_active = args.budget || auto_budget || cfg.selection.budget_mode;
     let effective_model = if budget_active && args.model.is_none() {
         if let Some(bm) = cmd_config::budget_model(&agent_kind) {
             eprintln!("[aid] Budget mode: using model {}", bm);
@@ -598,6 +599,7 @@ mod tests {
             on_done: None,
             fallback: None,
             read_only: false,
+            budget: false,
             session_id: None,
         }
     }

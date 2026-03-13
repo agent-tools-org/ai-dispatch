@@ -57,6 +57,10 @@ pub struct BatchTask {
     pub skills: Option<Vec<String>>,
     pub depends_on: Option<Vec<String>>,
     pub fallback: Option<String>,
+    #[serde(default)]
+    pub read_only: bool,
+    #[serde(default)]
+    pub budget: bool,
 }
 
 pub fn parse_batch_file(path: &Path) -> Result<BatchConfig> {
@@ -210,6 +214,8 @@ mod tests {
             depends_on: (!depends_on.is_empty())
                 .then(|| depends_on.iter().map(|item| item.to_string()).collect()),
             fallback: None,
+            read_only: false,
+            budget: false,
         }
     }
     #[test]

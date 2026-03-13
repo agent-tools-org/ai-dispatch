@@ -5,8 +5,8 @@ mod agent;
 mod background;
 mod batch;
 mod board;
-mod cmd;
 mod cli_actions;
+mod cmd;
 mod config;
 mod context;
 mod cost;
@@ -24,10 +24,10 @@ mod verify;
 mod watcher;
 mod workgroup;
 mod worktree;
+use crate::cli_actions::{ConfigAction, GroupAction};
 use anyhow::Result;
 use clap::{Parser, Subcommand};
 use std::sync::Arc;
-use crate::cli_actions::{ConfigAction, GroupAction};
 
 #[derive(Parser)]
 #[command(name = "aid", version, about = "Multi-AI CLI team orchestrator")]
@@ -168,9 +168,7 @@ enum Commands {
         action: GroupAction,
     },
     #[command(hide = true, name = "__run-task")]
-    InternalRunTask {
-        task_id: String,
-    },
+    InternalRunTask { task_id: String },
 }
 
 #[tokio::main]
@@ -201,27 +199,40 @@ async fn main() -> Result<()> {
             } else {
                 agent
             };
-            let _ = cmd::run::run(store, cmd::run::RunArgs {
-                agent_name,
-                prompt,
-                dir,
-                output,
-                model,
-                worktree,
-                group,
-                verify,
-                retry,
-                context,
-                background: bg,
-                parent_task_id: None,
-            }).await?;
+            let _ = cmd::run::run(
+                store,
+                cmd::run::RunArgs {
+                    agent_name,
+                    prompt,
+                    dir,
+                    output,
+                    model,
+                    worktree,
+                    group,
+                    verify,
+                    retry,
+                    context,
+                    background: bg,
+                    announce: true,
+                    parent_task_id: None,
+                },
+            )
+            .await?;
         }
         Commands::Batch {
             file,
             parallel,
             wait,
         } => {
-            cmd::batch::run(store, cmd::batch::BatchArgs { file, parallel, wait }).await?;
+            cmd::batch::run(
+                store,
+                cmd::batch::BatchArgs {
+                    file,
+                    parallel,
+                    wait,
+                },
+            )
+            .await?;
         }
         Commands::Watch {
             task_id,

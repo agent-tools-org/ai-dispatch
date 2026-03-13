@@ -119,6 +119,7 @@ async fn run_task_inner(store: &Arc<Store>, spec: &BackgroundRunSpec) -> Result<
             retry: spec.retry,
             context: vec![],
             background: false,
+            announce: false,
             parent_task_id: None,
         },
     )

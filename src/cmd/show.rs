@@ -22,21 +22,39 @@ pub struct ShowArgs {
     pub model: Option<String>,
 }
 
+#[derive(Clone, Copy)]
+pub enum ShowMode {
+    Summary,
+    Diff,
+    Output,
+    Log,
+}
+
 pub async fn run(store: Arc<Store>, args: ShowArgs) -> Result<()> {
     if args.explain {
         return run_explain(store, &args.task_id, args.agent, args.model).await;
     }
-    let text = if args.diff {
-        diff_text(&store, &args.task_id)?
+    let mode = if args.diff {
+        ShowMode::Diff
     } else if args.output {
-        output_text(&store, &args.task_id)?
+        ShowMode::Output
     } else if args.log {
-        log_text(&args.task_id)?
+        ShowMode::Log
     } else {
-        audit_text(&store, &args.task_id)?
+        ShowMode::Summary
     };
+    let text = render_mode_text(&store, &args.task_id, mode)?;
     print!("{text}");
     Ok(())
+}
+
+pub fn render_mode_text(store: &Arc<Store>, task_id: &str, mode: ShowMode) -> Result<String> {
+    match mode {
+        ShowMode::Summary => audit_text(store, task_id),
+        ShowMode::Diff => diff_text(store, task_id),
+        ShowMode::Output => output_text(store, task_id),
+        ShowMode::Log => log_text(task_id),
+    }
 }
 
 // --- Default mode: events + stderr + diff stat ---
@@ -65,7 +83,7 @@ pub fn audit_text(store: &Arc<Store>, task_id: &str) -> Result<String> {
 
 // --- Diff mode: full worktree diff ---
 
-fn diff_text(store: &Arc<Store>, task_id: &str) -> Result<String> {
+pub fn diff_text(store: &Arc<Store>, task_id: &str) -> Result<String> {
     let task = load_task(store, task_id)?;
     let mut out = String::new();
     out.push_str(&format!("=== Review: {} ===\n", task.id));
@@ -127,7 +145,7 @@ fn diff_text(store: &Arc<Store>, task_id: &str) -> Result<String> {
 
 // --- Output mode ---
 
-fn output_text(store: &Arc<Store>, task_id: &str) -> Result<String> {
+pub fn output_text(store: &Arc<Store>, task_id: &str) -> Result<String> {
     let task = load_task(store, task_id)?;
     read_task_output(&task)
 }
@@ -142,7 +160,7 @@ pub fn read_task_output(task: &Task) -> Result<String> {
 
 // --- Log mode ---
 
-fn log_text(task_id: &str) -> Result<String> {
+pub fn log_text(task_id: &str) -> Result<String> {
     let path = paths::log_path(task_id);
     std::fs::read_to_string(&path)
         .with_context(|| format!("Failed to read log file {}", path.display()))
@@ -179,6 +197,7 @@ async fn run_explain(
             retry: 0,
             context: vec![],
             background: false,
+            announce: true,
             parent_task_id: Some(task_id.to_string()),
         },
     )
@@ -263,10 +282,7 @@ fn format_task_info(task: &Task) -> String {
             "Stderr Path: {}",
             paths::stderr_path(task.id.as_str()).display()
         ),
-        format!(
-            "Log Path: {}",
-            paths::log_path(task.id.as_str()).display()
-        ),
+        format!("Log Path: {}", paths::log_path(task.id.as_str()).display()),
     ]
     .join("\n")
 }

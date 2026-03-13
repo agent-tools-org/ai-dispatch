@@ -29,6 +29,7 @@ pub struct RunArgs {
     pub retry: u32,
     pub context: Vec<String>,
     pub background: bool,
+    pub announce: bool,
     pub parent_task_id: Option<String>,
 }
 
@@ -123,12 +124,14 @@ pub async fn run(store: Arc<Store>, args: RunArgs) -> Result<TaskId> {
             return Err(err);
         }
 
-        println!(
-            "Task {} started in background ({}: {})",
-            task_id,
-            agent_kind,
-            truncate(&args.prompt, 50)
-        );
+        if args.announce {
+            println!(
+                "Task {} started in background ({}: {})",
+                task_id,
+                agent_kind,
+                truncate(&args.prompt, 50)
+            );
+        }
     } else {
         let std_cmd = agent
             .build_command(&effective_prompt, &opts)
@@ -142,12 +145,14 @@ pub async fn run(store: Arc<Store>, args: RunArgs) -> Result<TaskId> {
         tokio_cmd.stdout(std::process::Stdio::piped());
         tokio_cmd.stderr(std::process::Stdio::piped());
         store.update_task_status(task_id.as_str(), TaskStatus::Running)?;
-        println!(
-            "Task {} started ({}: {})",
-            task_id,
-            agent_kind,
-            truncate(&args.prompt, 50)
-        );
+        if args.announce {
+            println!(
+                "Task {} started ({}: {})",
+                task_id,
+                agent_kind,
+                truncate(&args.prompt, 50)
+            );
+        }
 
         let is_streaming = agent.streaming();
         run_agent_process(
@@ -214,6 +219,7 @@ pub(crate) async fn retry_if_needed(
     retry_args.prompt = retry_prompt;
     retry_args.retry = args.retry.saturating_sub(1);
     retry_args.background = false;
+    retry_args.announce = args.announce;
     retry_args.parent_task_id = Some(task_id.as_str().to_string());
     Box::pin(run(store, retry_args)).await?;
     Ok(())

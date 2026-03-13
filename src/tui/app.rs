@@ -214,6 +214,7 @@ mod tests {
             id: TaskId(id.to_string()),
             agent: AgentKind::Codex,
             prompt: format!("prompt for {id}"),
+            resolved_prompt: None,
             status: TaskStatus::Done,
             parent_task_id: None,
             workgroup_id: group_id.map(str::to_string),

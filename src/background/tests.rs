@@ -104,6 +104,7 @@ fn make_task(task_id: &str, status: TaskStatus) -> Task {
         id: TaskId(task_id.to_string()),
         agent: AgentKind::Codex,
         prompt: "prompt".to_string(),
+        resolved_prompt: None,
         status,
         parent_task_id: None,
         workgroup_id: None,

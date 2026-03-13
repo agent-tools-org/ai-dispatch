@@ -82,6 +82,7 @@ mod tests {
             id: TaskId("t-1234".to_string()),
             agent: AgentKind::Codex,
             prompt: "prompt".to_string(),
+            resolved_prompt: None,
             status: TaskStatus::Running,
             parent_task_id: None,
             workgroup_id: None,

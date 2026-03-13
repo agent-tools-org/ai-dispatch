@@ -195,6 +195,7 @@ pub struct Task {
     pub id: TaskId,
     pub agent: AgentKind,
     pub prompt: String,
+    pub resolved_prompt: Option<String>,
     pub status: TaskStatus,
     pub parent_task_id: Option<String>,
     pub workgroup_id: Option<String>,

@@ -134,29 +134,26 @@ async fn dispatch_parallel_with_dependencies(
     tasks: &[batch::BatchTask],
 ) -> Result<Vec<String>> {
     let dependencies = batch::dependency_indices(tasks)?;
-    let levels = batch::topo_levels(tasks)?;
+    let mut started = vec![false; tasks.len()];
+    let mut active: Vec<(usize, String)> = Vec::new();
     let mut outcomes = vec![None; tasks.len()];
     let mut task_ids = Vec::new();
-    for (level_idx, level) in levels.iter().enumerate() {
-        let ready = select_dispatchable_tasks(tasks, level, &dependencies, &mut outcomes);
-        println!(
-            "[batch] Level {level_idx}: dispatching {} tasks",
-            ready.len()
-        );
-        if ready.is_empty() {
-            continue;
+    while outcomes.iter().any(Option::is_none) {
+        let ready = find_ready_tasks(tasks, &dependencies, &started, &mut outcomes);
+        for dispatch in dispatch_level(store.clone(), tasks, &ready).await? {
+            started[dispatch.index] = true;
+            match dispatch.task_id {
+                Some(task_id) => {
+                    task_ids.push(task_id.clone());
+                    active.push((dispatch.index, task_id));
+                }
+                None => outcomes[dispatch.index] = Some(BatchTaskOutcome::Failed),
+            }
         }
-
-        let dispatches = dispatch_level(store.clone(), tasks, &ready).await?;
-        let level_ids: Vec<String> = dispatches
-            .iter()
-            .filter_map(|dispatch| dispatch.task_id.clone())
-            .collect();
-        if !level_ids.is_empty() {
-            crate::cmd::wait::wait_for_task_ids(&store, &level_ids).await?;
-            task_ids.extend(level_ids.iter().cloned());
+        if active.is_empty() {
+            break;
         }
-        record_dispatch_outcomes(&store, &dispatches, &mut outcomes)?;
+        wait_for_any_completion(&store, &mut active, &mut outcomes)?;
     }
     Ok(task_ids)
 }
@@ -230,22 +227,51 @@ async fn dispatch_level(
     }
     Ok(dispatches)
 }
-fn select_dispatchable_tasks(
+fn find_ready_tasks(
     tasks: &[batch::BatchTask],
-    level: &[usize],
     dependencies: &[Vec<usize>],
+    started: &[bool],
     outcomes: &mut [Option<BatchTaskOutcome>],
 ) -> Vec<usize> {
     let mut ready = Vec::new();
-    for &task_idx in level {
+    for task_idx in 0..tasks.len() {
+        if started[task_idx] || outcomes[task_idx].is_some() {
+            continue;
+        }
         if let Some(dep_idx) = failed_dependency(task_idx, dependencies, outcomes) {
             log_skipped_task(tasks, task_idx, dep_idx);
             outcomes[task_idx] = Some(BatchTaskOutcome::Skipped);
             continue;
         }
-        ready.push(task_idx);
+        if pending_dependency(task_idx, dependencies, outcomes).is_none() {
+            ready.push(task_idx);
+        }
     }
     ready
+}
+fn wait_for_any_completion(
+    store: &Arc<Store>,
+    active: &mut Vec<(usize, String)>,
+    outcomes: &mut [Option<BatchTaskOutcome>],
+) -> Result<()> {
+    loop {
+        let mut completed = Vec::new();
+        for (i, (_, task_id)) in active.iter().enumerate() {
+            if let Some(task) = store.get_task(task_id)? {
+                if matches!(task.status, TaskStatus::Done | TaskStatus::Failed) {
+                    completed.push(i);
+                }
+            }
+        }
+        if !completed.is_empty() {
+            for &i in completed.iter().rev() {
+                let (task_idx, task_id) = active.remove(i);
+                outcomes[task_idx] = Some(load_task_outcome(store, &task_id)?);
+            }
+            return Ok(());
+        }
+        std::thread::sleep(std::time::Duration::from_secs(2));
+    }
 }
 fn failed_dependency(
     task_idx: usize,
@@ -276,19 +302,6 @@ fn log_skipped_task(tasks: &[batch::BatchTask], task_idx: usize, dep_idx: usize)
         task_label(&tasks[dep_idx], dep_idx)
     );
 }
-fn record_dispatch_outcomes(
-    store: &Arc<Store>,
-    dispatches: &[DispatchedTask],
-    outcomes: &mut [Option<BatchTaskOutcome>],
-) -> Result<()> {
-    for dispatch in dispatches {
-        outcomes[dispatch.index] = Some(match dispatch.task_id.as_deref() {
-            Some(task_id) => load_task_outcome(store, task_id)?,
-            None => BatchTaskOutcome::Failed,
-        });
-    }
-    Ok(())
-}
 fn load_task_outcome(store: &Arc<Store>, task_id: &str) -> Result<BatchTaskOutcome> {
     let Some(task) = store.get_task(task_id)? else {
         anyhow::bail!("batch task not found after dispatch: {task_id}");
@@ -297,4 +310,90 @@ fn load_task_outcome(store: &Arc<Store>, task_id: &str) -> Result<BatchTaskOutco
         TaskStatus::Done => BatchTaskOutcome::Done,
         TaskStatus::Pending | TaskStatus::Running | TaskStatus::AwaitingInput | TaskStatus::Failed => BatchTaskOutcome::Failed,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn stub_task(name: &str, depends_on: Option<Vec<&str>>) -> batch::BatchTask {
+        batch::BatchTask {
+            name: Some(name.to_string()),
+            agent: "codex".to_string(),
+            prompt: "test".to_string(),
+            dir: None,
+            output: None,
+            model: None,
+            worktree: None,
+            group: None,
+            verify: None,
+            skills: None,
+            depends_on: depends_on.map(|d| d.into_iter().map(String::from).collect()),
+        }
+    }
+
+    #[test]
+    fn find_ready_dispatches_when_individual_dep_satisfied() {
+        // Diamond DAG: A -> B, A -> C, B -> D, C -> D
+        let tasks = vec![
+            stub_task("A", None),
+            stub_task("B", Some(vec!["A"])),
+            stub_task("C", Some(vec!["A"])),
+            stub_task("D", Some(vec!["B", "C"])),
+        ];
+        let deps = vec![
+            vec![],        // A: no deps
+            vec![0],       // B: depends on A
+            vec![0],       // C: depends on A
+            vec![1, 2],    // D: depends on B and C
+        ];
+
+        // Round 1: nothing started, A is ready
+        let mut outcomes: Vec<Option<BatchTaskOutcome>> = vec![None; 4];
+        let started = vec![false; 4];
+        let ready = find_ready_tasks(&tasks, &deps, &started, &mut outcomes);
+        assert_eq!(ready, vec![0]); // only A
+
+        // Round 2: A done, B and C become ready simultaneously
+        let mut outcomes = vec![Some(BatchTaskOutcome::Done), None, None, None];
+        let started = vec![true, false, false, false];
+        let ready = find_ready_tasks(&tasks, &deps, &started, &mut outcomes);
+        assert_eq!(ready, vec![1, 2]); // B and C ready together
+
+        // Round 3: B done, C still running — D not ready yet
+        let mut outcomes = vec![
+            Some(BatchTaskOutcome::Done),
+            Some(BatchTaskOutcome::Done),
+            None,
+            None,
+        ];
+        let started = vec![true, true, true, false];
+        let ready = find_ready_tasks(&tasks, &deps, &started, &mut outcomes);
+        assert!(ready.is_empty()); // D blocked on C
+
+        // Round 4: both B and C done — D ready
+        let mut outcomes = vec![
+            Some(BatchTaskOutcome::Done),
+            Some(BatchTaskOutcome::Done),
+            Some(BatchTaskOutcome::Done),
+            None,
+        ];
+        let started = vec![true, true, true, false];
+        let ready = find_ready_tasks(&tasks, &deps, &started, &mut outcomes);
+        assert_eq!(ready, vec![3]); // D ready
+    }
+
+    #[test]
+    fn find_ready_skips_tasks_with_failed_deps() {
+        let tasks = vec![
+            stub_task("A", None),
+            stub_task("B", Some(vec!["A"])),
+        ];
+        let deps = vec![vec![], vec![0]];
+        let mut outcomes = vec![Some(BatchTaskOutcome::Failed), None];
+        let started = vec![true, false];
+        let ready = find_ready_tasks(&tasks, &deps, &started, &mut outcomes);
+        assert!(ready.is_empty()); // B skipped
+        assert_eq!(outcomes[1], Some(BatchTaskOutcome::Skipped));
+    }
 }

@@ -2,6 +2,7 @@
 // Boots ratatui+crossterm, runs the app loop, and restores the terminal on exit.
 
 pub mod app;
+pub mod dashboard;
 pub mod metrics;
 pub mod ui;
 
@@ -55,5 +56,23 @@ fn run_loop(
         if app.should_quit {
             return Ok(());
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+
+    #[test]
+    fn toggles_dashboard_mode_with_d_key() {
+        let store = Arc::new(Store::open_memory().unwrap());
+        let mut app = app::App::new(store, RunOptions::default()).unwrap();
+
+        assert!(!app.dashboard_mode);
+        app.handle_key(KeyEvent::new(KeyCode::Char('d'), KeyModifiers::NONE)).unwrap();
+        assert!(app.dashboard_mode);
+        app.handle_key(KeyEvent::new(KeyCode::Char('d'), KeyModifiers::NONE)).unwrap();
+        assert!(!app.dashboard_mode);
     }
 }

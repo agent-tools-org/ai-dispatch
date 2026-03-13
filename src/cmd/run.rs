@@ -297,6 +297,8 @@ pub async fn run(store: Arc<Store>, args: RunArgs) -> Result<TaskId> {
             args.verify.as_deref(),
             effective_dir.as_deref(),
         );
+        if let Some(task) = store.get_task(task_id.as_str())? {maybe_cleanup_fast_fail(&store, &task_id, &task);
+        }
         notify_task_completion(&store, &task_id)?;
         crate::webhook::fire_task_webhooks(&store, task_id.as_str()).await;
         if let Some(mut retry_args) = retry_logic::prepare_retry(store.clone(), &task_id, &args).await?
@@ -411,6 +413,33 @@ fn format_duration(ms: i64) -> String {
     } else {
         format!("{}m {:02}s", secs / 60, secs % 60)
     }
+}
+
+pub(crate) fn maybe_cleanup_fast_fail(store: &Store, task_id: &TaskId, task: &Task) {
+    let Some(ref wt_path) = task.worktree_path else { return };
+    let path = std::path::Path::new(wt_path);
+    if !path.exists() { return }
+
+    // Only cleanup if task failed
+    let Some(task) = store.get_task(task_id.as_str()).ok().flatten() else { return };
+    if task.status != TaskStatus::Failed { return }
+
+    // Only cleanup fast failures (< 10 seconds)
+    let Some(duration_ms) = task.duration_ms else { return };
+    if duration_ms > 10_000 { return }
+
+    // Only cleanup if no commits ahead of main
+    if crate::worktree::branch_has_commits_ahead_of_main(
+        path, task.worktree_branch.as_deref().unwrap_or("unknown")
+    ).unwrap_or(true) {
+        return;
+    }
+
+    // Safe to cleanup
+    let _ = std::process::Command::new("git")
+        .args(["worktree", "remove", "--force", wt_path])
+        .output();
+    eprintln!("[aid] Cleaned up worktree for fast-failed task {}", task_id);
 }
 
 fn notify_task_completion(store: &Store, task_id: &TaskId) -> Result<()> {

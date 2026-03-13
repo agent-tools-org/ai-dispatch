@@ -38,6 +38,7 @@ pub async fn run(store: Arc<Store>, prompt: String, agents: String, dir: Option<
                 fallback: None,
                 template: None,
                 repo: None,
+                read_only: false,
             },
         )
         .await?;

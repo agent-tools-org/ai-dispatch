@@ -112,6 +112,7 @@ async fn run_task_inner(store: &Arc<Store>, spec: &BackgroundRunSpec) -> Result<
         output: spec.output.clone(),
         model: spec.model.clone(),
         budget: false,
+        read_only: false,
     };
     let mut std_cmd = agent
         .build_command(&spec.prompt, &opts)
@@ -186,6 +187,7 @@ async fn run_task_inner(store: &Arc<Store>, spec: &BackgroundRunSpec) -> Result<
             parent_task_id: spec.parent_task_id.clone(),
             on_done: None,
             fallback: None,
+            read_only: false,
         },
     )
     .await?

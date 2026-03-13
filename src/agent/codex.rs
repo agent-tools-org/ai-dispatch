@@ -25,7 +25,15 @@ impl super::Agent for CodexAgent {
     }
 
     fn build_command(&self, prompt: &str, opts: &RunOpts) -> Result<Command> {
-        let injected = templates::inject_codex_prompt(prompt, None);
+        let effective_prompt = if opts.read_only {
+            format!(
+                "IMPORTANT: READ-ONLY MODE. Do NOT modify, create, or delete any files. Only read and analyze.\n\n{}",
+                prompt
+            )
+        } else {
+            prompt.to_string()
+        };
+        let injected = templates::inject_codex_prompt(&effective_prompt, None);
         let mut cmd = Command::new("codex");
         cmd.args(["exec", "--json", "--skip-git-repo-check", &injected]);
         if let Some(ref dir) = opts.dir {

@@ -282,6 +282,7 @@ mod tests {
             output: None,
             model: None,
             budget: true,
+            read_only: false,
         };
         let (kind, reason) = select_agent_from(prompt, &opts, &available_agents());
         assert_ne!(kind, AgentKind::Codex);
@@ -294,6 +295,7 @@ mod tests {
             output: None,
             model: None,
             budget: false,
+            read_only: false,
         };
         select_agent_from(prompt, &opts, available)
     }

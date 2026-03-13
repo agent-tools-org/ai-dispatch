@@ -23,7 +23,26 @@ impl super::Agent for CursorAgent {
 
     fn build_command(&self, prompt: &str, opts: &RunOpts) -> Result<Command> {
         let mut cmd = Command::new("cursor");
-        cmd.args(["agent", "-p", prompt, "--trust", "--output-format", "stream-json"]);
+        if opts.read_only {
+            cmd.args([
+                "agent",
+                "-p",
+                prompt,
+                "--mode",
+                "plan",
+                "--output-format",
+                "stream-json",
+            ]);
+        } else {
+            cmd.args([
+                "agent",
+                "-p",
+                prompt,
+                "--trust",
+                "--output-format",
+                "stream-json",
+            ]);
+        }
         if let Some(ref dir) = opts.dir {
             cmd.args(["--workspace", dir]);
         }
@@ -69,7 +88,10 @@ fn parse_json_event(
     let event_type = v.get("type").and_then(|value| value.as_str())?;
     let (event_kind, detail, metadata) = match event_type {
         "system" => {
-            let subtype = v.get("subtype").and_then(|value| value.as_str()).unwrap_or("system");
+            let subtype = v
+                .get("subtype")
+                .and_then(|value| value.as_str())
+                .unwrap_or("system");
             let detail = v
                 .get("model")
                 .and_then(|value| value.as_str())

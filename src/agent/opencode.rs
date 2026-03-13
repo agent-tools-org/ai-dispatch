@@ -22,6 +22,14 @@ impl super::Agent for OpenCodeAgent {
     }
 
     fn build_command(&self, prompt: &str, opts: &RunOpts) -> Result<Command> {
+        let effective_prompt = if opts.read_only {
+            format!(
+                "IMPORTANT: READ-ONLY MODE. Do NOT modify, create, or delete any files. Only read and analyze.\n\n{}",
+                prompt
+            )
+        } else {
+            prompt.to_string()
+        };
         let mut cmd = Command::new("opencode");
         cmd.arg("run");
         cmd.args(["--format", "json"]);
@@ -31,7 +39,7 @@ impl super::Agent for OpenCodeAgent {
         if let Some(ref dir) = opts.dir {
             cmd.args(["--dir", dir]);
         }
-        cmd.arg(prompt);
+        cmd.arg(&effective_prompt);
         Ok(cmd)
     }
 

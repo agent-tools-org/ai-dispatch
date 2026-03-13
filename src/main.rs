@@ -101,6 +101,9 @@ enum Commands {
         /// Fallback agent if primary agent fails
         #[arg(long)]
         fallback: Option<String>,
+        /// Run in read-only mode (no file writes)
+        #[arg(long)]
+        read_only: bool,
     },
     /// Dispatch tasks from a TOML batch file
     Batch {
@@ -272,6 +275,7 @@ async fn main() -> Result<()> {
             bg,
             on_done,
             fallback,
+            read_only,
         } => {
             let config = config::load_config().unwrap_or_default();
             let budget = budget || config.selection.budget_mode;
@@ -284,6 +288,7 @@ async fn main() -> Result<()> {
                     output: output.clone(),
                     model: model.clone(),
                     budget,
+                    read_only,
                 };
                 let (selected, reason) = agent::select_agent_with_reason(&prompt, &selection_opts);
                 eprintln!("[aid] Auto-selected agent: {selected} (reason: {reason})");
@@ -319,6 +324,7 @@ async fn main() -> Result<()> {
                     parent_task_id: None,
                     on_done,
                     fallback,
+                    read_only,
                 },
             )
             .await?;

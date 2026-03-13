@@ -2,12 +2,13 @@
 // Supports sequential and parallel (background) dispatch modes.
 
 use anyhow::{Context, Result};
+use chrono::Local;
 use std::{path::Path, sync::Arc};
 
 use crate::batch;
 use crate::cmd::run::{self, RunArgs};
 use crate::store::Store;
-use crate::types::TaskStatus;
+use crate::types::{AgentKind, Task, TaskId, TaskStatus};
 
 pub struct BatchArgs {
     pub file: String,
@@ -143,7 +144,7 @@ async fn dispatch_parallel_with_dependencies(
     let mut outcomes = vec![None; tasks.len()];
     let mut task_ids = Vec::new();
     while outcomes.iter().any(Option::is_none) {
-        let ready = find_ready_tasks(tasks, &dependencies, &started, &mut outcomes);
+        let ready = find_ready_tasks(&store, tasks, &dependencies, &started, &mut outcomes)?;
         for dispatch in dispatch_level(store.clone(), tasks, &ready).await? {
             started[dispatch.index] = true;
             match dispatch.task_id {
@@ -170,7 +171,7 @@ async fn dispatch_sequential_with_dependencies(
     let mut task_ids = Vec::new();
     for (task_idx, task) in tasks.iter().enumerate() {
         if let Some(dep_idx) = failed_dependency(task_idx, &dependencies, &outcomes) {
-            log_skipped_task(tasks, task_idx, dep_idx);
+            record_skipped_task(&store, tasks, task_idx, dep_idx)?;
             outcomes[task_idx] = Some(BatchTaskOutcome::Skipped);
             continue;
         }
@@ -232,18 +233,19 @@ async fn dispatch_level(
     Ok(dispatches)
 }
 fn find_ready_tasks(
+    store: &Arc<Store>,
     tasks: &[batch::BatchTask],
     dependencies: &[Vec<usize>],
     started: &[bool],
     outcomes: &mut [Option<BatchTaskOutcome>],
-) -> Vec<usize> {
+) -> Result<Vec<usize>> {
     let mut ready = Vec::new();
     for task_idx in 0..tasks.len() {
         if started[task_idx] || outcomes[task_idx].is_some() {
             continue;
         }
         if let Some(dep_idx) = failed_dependency(task_idx, dependencies, outcomes) {
-            log_skipped_task(tasks, task_idx, dep_idx);
+            record_skipped_task(store, tasks, task_idx, dep_idx)?;
             outcomes[task_idx] = Some(BatchTaskOutcome::Skipped);
             continue;
         }
@@ -251,7 +253,7 @@ fn find_ready_tasks(
             ready.push(task_idx);
         }
     }
-    ready
+    Ok(ready)
 }
 fn wait_for_any_completion(
     store: &Arc<Store>,
@@ -262,7 +264,7 @@ fn wait_for_any_completion(
         let mut completed = Vec::new();
         for (i, (_, task_id)) in active.iter().enumerate() {
             if let Some(task) = store.get_task(task_id)? {
-                if matches!(task.status, TaskStatus::Done | TaskStatus::Failed) {
+                if task.status.is_terminal() {
                     completed.push(i);
                 }
             }
@@ -299,12 +301,48 @@ fn pending_dependency(
         .copied()
         .find(|&dep_idx| outcomes[dep_idx].is_none())
 }
-fn log_skipped_task(tasks: &[batch::BatchTask], task_idx: usize, dep_idx: usize) {
+fn record_skipped_task(
+    store: &Arc<Store>,
+    tasks: &[batch::BatchTask],
+    task_idx: usize,
+    dep_idx: usize,
+) -> Result<()> {
+    let task_id = insert_skipped_task(store, &tasks[task_idx])?;
     eprintln!(
-        "[batch] Skipping task {} because dependency {} failed",
+        "[batch] Skipping task {} ({}) because dependency {} failed",
         task_label(&tasks[task_idx], task_idx),
+        task_id,
         task_label(&tasks[dep_idx], dep_idx)
     );
+    Ok(())
+}
+fn insert_skipped_task(store: &Arc<Store>, task: &batch::BatchTask) -> Result<TaskId> {
+    let task_id = TaskId::generate();
+    let now = Local::now();
+    let agent = AgentKind::parse_str(&task.agent)
+        .ok_or_else(|| anyhow::anyhow!("Unknown agent '{}'", task.agent))?;
+    store.insert_task(&Task {
+        id: task_id.clone(),
+        agent,
+        prompt: task.prompt.clone(),
+        status: TaskStatus::Skipped,
+        parent_task_id: None,
+        workgroup_id: task.group.clone(),
+        caller_kind: None,
+        caller_session_id: None,
+        repo_path: None,
+        worktree_path: None,
+        worktree_branch: None,
+        log_path: None,
+        output_path: None,
+        tokens: None,
+        duration_ms: Some(0),
+        model: None,
+        cost_usd: None,
+        created_at: now,
+        completed_at: Some(now),
+    })?;
+    Ok(task_id)
 }
 fn load_task_outcome(store: &Arc<Store>, task_id: &str) -> Result<BatchTaskOutcome> {
     let Some(task) = store.get_task(task_id)? else {
@@ -312,6 +350,7 @@ fn load_task_outcome(store: &Arc<Store>, task_id: &str) -> Result<BatchTaskOutco
     };
     Ok(match task.status {
         TaskStatus::Done => BatchTaskOutcome::Done,
+        TaskStatus::Skipped => BatchTaskOutcome::Skipped,
         TaskStatus::Pending | TaskStatus::Running | TaskStatus::AwaitingInput | TaskStatus::Failed => BatchTaskOutcome::Failed,
     })
 }
@@ -319,6 +358,8 @@ fn load_task_outcome(store: &Arc<Store>, task_id: &str) -> Result<BatchTaskOutco
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::store::Store;
+    use std::sync::Arc;
 
     fn stub_task(name: &str, depends_on: Option<Vec<&str>>) -> batch::BatchTask {
         batch::BatchTask {
@@ -339,6 +380,7 @@ mod tests {
 
     #[test]
     fn find_ready_dispatches_when_individual_dep_satisfied() {
+        let store = Arc::new(Store::open_memory().unwrap());
         // Diamond DAG: A -> B, A -> C, B -> D, C -> D
         let tasks = vec![
             stub_task("A", None),
@@ -356,13 +398,13 @@ mod tests {
         // Round 1: nothing started, A is ready
         let mut outcomes: Vec<Option<BatchTaskOutcome>> = vec![None; 4];
         let started = vec![false; 4];
-        let ready = find_ready_tasks(&tasks, &deps, &started, &mut outcomes);
+        let ready = find_ready_tasks(&store, &tasks, &deps, &started, &mut outcomes).unwrap();
         assert_eq!(ready, vec![0]); // only A
 
         // Round 2: A done, B and C become ready simultaneously
         let mut outcomes = vec![Some(BatchTaskOutcome::Done), None, None, None];
         let started = vec![true, false, false, false];
-        let ready = find_ready_tasks(&tasks, &deps, &started, &mut outcomes);
+        let ready = find_ready_tasks(&store, &tasks, &deps, &started, &mut outcomes).unwrap();
         assert_eq!(ready, vec![1, 2]); // B and C ready together
 
         // Round 3: B done, C still running — D not ready yet
@@ -373,7 +415,7 @@ mod tests {
             None,
         ];
         let started = vec![true, true, true, false];
-        let ready = find_ready_tasks(&tasks, &deps, &started, &mut outcomes);
+        let ready = find_ready_tasks(&store, &tasks, &deps, &started, &mut outcomes).unwrap();
         assert!(ready.is_empty()); // D blocked on C
 
         // Round 4: both B and C done — D ready
@@ -384,12 +426,13 @@ mod tests {
             None,
         ];
         let started = vec![true, true, true, false];
-        let ready = find_ready_tasks(&tasks, &deps, &started, &mut outcomes);
+        let ready = find_ready_tasks(&store, &tasks, &deps, &started, &mut outcomes).unwrap();
         assert_eq!(ready, vec![3]); // D ready
     }
 
     #[test]
     fn find_ready_skips_tasks_with_failed_deps() {
+        let store = Arc::new(Store::open_memory().unwrap());
         let tasks = vec![
             stub_task("A", None),
             stub_task("B", Some(vec!["A"])),
@@ -397,7 +440,7 @@ mod tests {
         let deps = vec![vec![], vec![0]];
         let mut outcomes = vec![Some(BatchTaskOutcome::Failed), None];
         let started = vec![true, false];
-        let ready = find_ready_tasks(&tasks, &deps, &started, &mut outcomes);
+        let ready = find_ready_tasks(&store, &tasks, &deps, &started, &mut outcomes).unwrap();
         assert!(ready.is_empty()); // B skipped
         assert_eq!(outcomes[1], Some(BatchTaskOutcome::Skipped));
     }

@@ -265,3 +265,68 @@ fn mcp_tools_list_works_over_stdio_jsonrpc() {
     assert!(stdout.contains("aid_run"));
     assert!(stdout.contains("aid_usage"));
 }
+
+#[cfg(unix)]
+#[test]
+fn board_shows_skipped_batch_task_when_dependency_fails() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let temp_dir = TempDir::new().unwrap();
+    let bin_dir = temp_dir.path().join("bin");
+    std::fs::create_dir(&bin_dir).unwrap();
+
+    let codex_path = bin_dir.join("codex");
+    std::fs::write(&codex_path, "#!/bin/sh\nexit 1\n").unwrap();
+    let mut perms = std::fs::metadata(&codex_path).unwrap().permissions();
+    perms.set_mode(0o755);
+    std::fs::set_permissions(&codex_path, perms).unwrap();
+
+    let batch_path = temp_dir.path().join("batch.toml");
+    std::fs::write(
+        &batch_path,
+        concat!(
+            "[[task]]\n",
+            "name = \"A\"\n",
+            "agent = \"codex\"\n",
+            "prompt = \"task A\"\n",
+            "\n",
+            "[[task]]\n",
+            "name = \"B\"\n",
+            "agent = \"codex\"\n",
+            "prompt = \"task B\"\n",
+            "depends_on = [\"A\"]\n",
+        ),
+    )
+    .unwrap();
+
+    let path = std::env::var("PATH").unwrap_or_default();
+    let test_path = format!("{}:{}", bin_dir.display(), path);
+
+    let batch_output = aid_cmd_in(temp_dir.path())
+        .env("PATH", &test_path)
+        .args(["batch", batch_path.to_str().unwrap()])
+        .output()
+        .unwrap();
+    assert!(batch_output.status.success());
+
+    let stderr = String::from_utf8_lossy(&batch_output.stderr);
+    let skip_line = stderr
+        .lines()
+        .find(|line| line.contains("[batch] Skipping task B ("))
+        .unwrap();
+    let skipped_task_id = skip_line
+        .split('(')
+        .nth(1)
+        .and_then(|part| part.split(')').next())
+        .unwrap();
+
+    let board_output = aid_cmd_in(temp_dir.path())
+        .args(["board"])
+        .output()
+        .unwrap();
+    assert!(board_output.status.success());
+
+    let stdout = String::from_utf8_lossy(&board_output.stdout);
+    assert!(stdout.contains(skipped_task_id));
+    assert!(stdout.contains("SKIP"));
+}

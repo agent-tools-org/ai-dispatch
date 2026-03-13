@@ -203,6 +203,14 @@ where
             continue;
         };
         let Some(worker_pid) = spec.worker_pid else {
+            if let Some(task) = store.get_task(task_id)? {
+                if let Some(ref path) = task.worktree_path {
+                    if std::path::Path::new(path).exists() && crate::commit::has_uncommitted_changes(path).unwrap_or(false) {
+                        let _ = crate::commit::auto_commit(path, task_id, &task.prompt);
+                        eprintln!("[aid] Preserved uncommitted changes for zombie task {task_id}");
+                    }
+                }
+            }
             record_failure(store, task_id, ZOMBIE_FAILURE_DETAIL, ZOMBIE_FAILURE_DETAIL)?;
             cleaned.push(task_id.to_string());
             continue;
@@ -211,6 +219,14 @@ where
             continue;
         }
 
+        if let Some(task) = store.get_task(task_id)? {
+            if let Some(ref path) = task.worktree_path {
+                if std::path::Path::new(path).exists() && crate::commit::has_uncommitted_changes(path).unwrap_or(false) {
+                    let _ = crate::commit::auto_commit(path, task_id, &task.prompt);
+                    eprintln!("[aid] Preserved uncommitted changes for zombie task {task_id}");
+                }
+            }
+        }
         record_failure(store, task_id, ZOMBIE_FAILURE_DETAIL, ZOMBIE_FAILURE_DETAIL)?;
         cleaned.push(task_id.to_string());
     }

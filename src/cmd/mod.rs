@@ -7,6 +7,8 @@ pub mod board;
 pub mod config;
 pub mod group;
 pub mod mcp;
+mod mcp_schema;
+mod mcp_tools;
 pub mod retry;
 pub mod run;
 pub mod show;

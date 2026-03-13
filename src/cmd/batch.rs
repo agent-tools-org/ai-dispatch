@@ -38,7 +38,11 @@ pub async fn run(store: Arc<Store>, args: BatchArgs) -> Result<()> {
     Ok(())
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum BatchTaskOutcome { Done, Failed, Skipped }
+enum BatchTaskOutcome {
+    Done,
+    Failed,
+    Skipped,
+}
 struct DispatchedTask {
     index: usize,
     task_id: Option<String>,
@@ -57,6 +61,7 @@ fn task_to_run_args(task: &batch::BatchTask, background: bool) -> RunArgs {
         context: vec![],
         skills: task.skills.clone().unwrap_or_default(),
         background,
+        announce: true,
         parent_task_id: None,
     }
 }
@@ -112,7 +117,10 @@ async fn dispatch_parallel_with_dependencies(
     let mut task_ids = Vec::new();
     for (level_idx, level) in levels.iter().enumerate() {
         let ready = select_dispatchable_tasks(tasks, level, &dependencies, &mut outcomes);
-        println!("[batch] Level {level_idx}: dispatching {} tasks", ready.len());
+        println!(
+            "[batch] Level {level_idx}: dispatching {} tasks",
+            ready.len()
+        );
         if ready.is_empty() {
             continue;
         }
@@ -150,16 +158,18 @@ async fn dispatch_sequential_with_dependencies(
                 task_label(&tasks[dep_idx], dep_idx)
             );
         }
-        outcomes[task_idx] = Some(match run::run(store.clone(), task_to_run_args(task, false)).await {
-            Ok(task_id) => {
-                task_ids.push(task_id.to_string());
-                load_task_outcome(&store, task_id.as_str())?
-            }
-            Err(err) => {
-                eprintln!("Batch task failed ({}): {err}", task_label(task, task_idx));
-                BatchTaskOutcome::Failed
-            }
-        });
+        outcomes[task_idx] = Some(
+            match run::run(store.clone(), task_to_run_args(task, false)).await {
+                Ok(task_id) => {
+                    task_ids.push(task_id.to_string());
+                    load_task_outcome(&store, task_id.as_str())?
+                }
+                Err(err) => {
+                    eprintln!("Batch task failed ({}): {err}", task_label(task, task_idx));
+                    BatchTaskOutcome::Failed
+                }
+            },
+        );
     }
     Ok(task_ids)
 }
@@ -185,7 +195,10 @@ async fn dispatch_level(
                 task_id: Some(task_id.to_string()),
             }),
             Err(err) => {
-                eprintln!("Batch task failed ({}): {err}", task_label(&tasks[task_idx], task_idx));
+                eprintln!(
+                    "Batch task failed ({}): {err}",
+                    task_label(&tasks[task_idx], task_idx)
+                );
                 dispatches.push(DispatchedTask {
                     index: task_idx,
                     task_id: None,

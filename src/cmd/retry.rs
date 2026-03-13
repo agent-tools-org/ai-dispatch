@@ -1,11 +1,12 @@
-// Handler for `aid retry <task-id> --feedback "msg"` — re-dispatch with feedback.
-// Builds augmented prompt from original task + feedback, reuses worktree if available.
+// Handler for `aid retry` plus a silent helper that returns the new task id.
+// Reuses the original task config and dispatches a child task with feedback.
 
 use anyhow::Result;
 use std::sync::Arc;
 
 use crate::cmd::run::{self, RunArgs};
 use crate::store::Store;
+use crate::types::TaskId;
 
 pub struct RetryArgs {
     pub task_id: String,
@@ -13,51 +14,42 @@ pub struct RetryArgs {
 }
 
 pub async fn run(store: Arc<Store>, args: RetryArgs) -> Result<()> {
+    let _ = retry_task(store, args, true).await?;
+    Ok(())
+}
+
+pub async fn retry_task(store: Arc<Store>, args: RetryArgs, announce: bool) -> Result<TaskId> {
     let task = store
         .get_task(&args.task_id)?
         .ok_or_else(|| anyhow::anyhow!("Task '{}' not found", args.task_id))?;
-
-    // Build augmented prompt with feedback
-    let augmented_prompt = format!(
+    let prompt = format!(
         "[Previous attempt feedback]\n{feedback}\n\n[Original task]\n{prompt}",
         feedback = args.feedback,
         prompt = task.prompt,
     );
+    let worktree = reusable_worktree(&task);
+    let (dir, worktree_arg) = resolve_retry_target(&task, worktree);
 
-    // Reuse worktree if it exists
-    let worktree = task.worktree_path.as_ref().and_then(|wt| {
-        if std::path::Path::new(wt).exists() {
-            // Extract branch name from worktree path for display
-            task.worktree_branch.clone()
-        } else {
-            None
-        }
-    });
+    if announce {
+        println!(
+            "Retrying {} with feedback: {}",
+            task.id,
+            truncate(&args.feedback, 60)
+        );
+    }
 
-    // For retry, if worktree exists we pass it as dir directly (skip re-creating)
-    let (dir, worktree_arg) = if let Some(ref wt) = task.worktree_path {
-        if std::path::Path::new(wt).exists() {
-            (Some(wt.clone()), None)
-        } else {
-            (None, worktree)
-        }
-    } else {
-        (None, None)
-    };
-
-    println!("Retrying {} with feedback: {}", task.id, truncate(&args.feedback, 60));
-
-    let _ = run::run(
+    run::run(
         store,
         RunArgs {
             agent_name: task.agent.as_str().to_string(),
-            prompt: augmented_prompt,
+            prompt,
             dir,
             output: task.output_path.clone(),
             model: task.model.clone(),
             worktree: worktree_arg,
             group: task.workgroup_id.clone(),
             background: false,
+            announce,
             verify: None,
             retry: 0,
             context: vec![],
@@ -65,9 +57,28 @@ pub async fn run(store: Arc<Store>, args: RetryArgs) -> Result<()> {
             parent_task_id: Some(task.id.as_str().to_string()),
         },
     )
-    .await?;
+    .await
+}
 
-    Ok(())
+fn reusable_worktree(task: &crate::types::Task) -> Option<String> {
+    task.worktree_path.as_ref().and_then(|path| {
+        if std::path::Path::new(path).exists() {
+            task.worktree_branch.clone()
+        } else {
+            None
+        }
+    })
+}
+
+fn resolve_retry_target(
+    task: &crate::types::Task,
+    worktree: Option<String>,
+) -> (Option<String>, Option<String>) {
+    match task.worktree_path.as_ref() {
+        Some(path) if std::path::Path::new(path).exists() => (Some(path.clone()), None),
+        Some(_) => (None, worktree),
+        None => (None, None),
+    }
 }
 
 fn truncate(s: &str, max: usize) -> String {

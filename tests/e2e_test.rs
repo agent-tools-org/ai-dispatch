@@ -1,8 +1,10 @@
 // E2E tests for aid CLI.
 // Tests the binary as a subprocess to verify full command flow.
 
-use std::process::Command;
+use std::io::Write;
 use std::path::Path;
+use std::process::Command;
+use std::process::Stdio;
 use tempfile::TempDir;
 
 fn aid_cmd_in(aid_home: &Path) -> Command {
@@ -59,15 +61,20 @@ fn config_agents_detects_installed_clis() {
     let stdout = String::from_utf8_lossy(&output.stdout);
     // At least one of these should be detected in the dev environment
     assert!(
-        stdout.contains("gemini") || stdout.contains("codex")
-            || stdout.contains("opencode") || stdout.contains("No AI CLI agents"),
+        stdout.contains("gemini")
+            || stdout.contains("codex")
+            || stdout.contains("opencode")
+            || stdout.contains("No AI CLI agents"),
     );
 }
 
 #[test]
 fn run_unknown_agent_fails() {
     let (mut cmd, _tmp) = aid_cmd();
-    let output = cmd.args(["run", "nonexistent", "test prompt"]).output().unwrap();
+    let output = cmd
+        .args(["run", "nonexistent", "test prompt"])
+        .output()
+        .unwrap();
     assert!(!output.status.success());
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(stderr.contains("Unknown agent"));
@@ -95,7 +102,13 @@ fn version_flag_works() {
 fn group_create_list_and_show_work() {
     let temp_dir = TempDir::new().unwrap();
     let output = aid_cmd_in(temp_dir.path())
-        .args(["group", "create", "dispatch", "--context", "Shared repo rules."])
+        .args([
+            "group",
+            "create",
+            "dispatch",
+            "--context",
+            "Shared repo rules.",
+        ])
         .output()
         .unwrap();
     assert!(output.status.success());
@@ -126,7 +139,13 @@ fn group_create_list_and_show_work() {
 fn group_update_and_delete_work() {
     let temp_dir = TempDir::new().unwrap();
     let create_output = aid_cmd_in(temp_dir.path())
-        .args(["group", "create", "dispatch", "--context", "Shared repo rules."])
+        .args([
+            "group",
+            "create",
+            "dispatch",
+            "--context",
+            "Shared repo rules.",
+        ])
         .output()
         .unwrap();
     assert!(create_output.status.success());
@@ -183,4 +202,28 @@ fn group_update_and_delete_work() {
     assert!(!deleted_show.status.success());
     let deleted_stderr = String::from_utf8_lossy(&deleted_show.stderr);
     assert!(deleted_stderr.contains("not found"));
+}
+
+#[test]
+fn mcp_tools_list_works_over_stdio_jsonrpc() {
+    let temp_dir = TempDir::new().unwrap();
+    let mut child = aid_cmd_in(temp_dir.path())
+        .arg("mcp")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .spawn()
+        .unwrap();
+
+    let stdin = child.stdin.as_mut().unwrap();
+    stdin
+        .write_all(br#"{"jsonrpc":"2.0","id":1,"method":"tools/list"}"#)
+        .unwrap();
+    drop(child.stdin.take());
+
+    let output = child.wait_with_output().unwrap();
+    assert!(output.status.success());
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("aid_run"));
+    assert!(stdout.contains("aid_usage"));
 }

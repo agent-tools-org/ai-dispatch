@@ -126,6 +126,7 @@ async fn run_task_inner(store: &Arc<Store>, spec: &BackgroundRunSpec) -> Result<
             context: vec![],
             skills: spec.skills.clone(),
             background: false,
+            announce: false,
             parent_task_id: None,
         },
     )

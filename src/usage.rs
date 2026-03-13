@@ -3,6 +3,7 @@
 
 use anyhow::Result;
 use chrono::{DateTime, Duration, Local};
+use serde::Serialize;
 
 use crate::config::{AidConfig, UsageBudget};
 use crate::cost;
@@ -10,12 +11,14 @@ use crate::paths;
 use crate::store::Store;
 use crate::types::{AgentKind, Task, TaskFilter};
 
+#[derive(Serialize)]
 pub struct UsageSnapshot {
     generated_at: DateTime<Local>,
     agent_rows: Vec<AgentUsageRow>,
     budget_rows: Vec<BudgetUsageRow>,
 }
 
+#[derive(Serialize)]
 struct AgentUsageRow {
     name: &'static str,
     tasks: usize,
@@ -24,6 +27,7 @@ struct AgentUsageRow {
     last_task_at: Option<DateTime<Local>>,
 }
 
+#[derive(Serialize)]
 struct BudgetUsageRow {
     name: String,
     plan: Option<String>,
@@ -145,9 +149,15 @@ fn collect_budget_rows(tasks: &[Task], budgets: &[UsageBudget]) -> Vec<BudgetUsa
         .map(|budget| {
             let budget_tasks = filter_budget_tasks(tasks, budget);
             let tasks_used = budget_tasks.len() as u32 + budget.external_tasks;
-            let tokens_used = budget_tasks.iter().filter_map(|task| task.tokens).sum::<i64>()
+            let tokens_used = budget_tasks
+                .iter()
+                .filter_map(|task| task.tokens)
+                .sum::<i64>()
                 + budget.external_tokens;
-            let cost_used = budget_tasks.iter().filter_map(|task| task.cost_usd).sum::<f64>()
+            let cost_used = budget_tasks
+                .iter()
+                .filter_map(|task| task.cost_usd)
+                .sum::<f64>()
                 + budget.external_cost_usd;
             BudgetUsageRow {
                 name: budget.name.clone(),
@@ -169,16 +179,23 @@ fn collect_budget_rows(tasks: &[Task], budgets: &[UsageBudget]) -> Vec<BudgetUsa
 }
 
 fn filter_budget_tasks<'a>(tasks: &'a [Task], budget: &UsageBudget) -> Vec<&'a Task> {
-    let window_start = budget.window.as_deref().and_then(parse_window)
+    let window_start = budget
+        .window
+        .as_deref()
+        .and_then(parse_window)
         .map(|window| Local::now() - window);
 
     tasks
         .iter()
         .filter(|task| {
-            let agent_matches = budget.agent.as_deref()
+            let agent_matches = budget
+                .agent
+                .as_deref()
                 .map(|name| task.agent.as_str() == name)
                 .unwrap_or(false);
-            let window_matches = window_start.map(|start| task.created_at >= start).unwrap_or(true);
+            let window_matches = window_start
+                .map(|start| task.created_at >= start)
+                .unwrap_or(true);
             agent_matches && window_matches
         })
         .collect()
@@ -221,15 +238,12 @@ fn format_tokens(tokens: i64) -> String {
 }
 
 fn format_ratio_u32(current: u32, limit: Option<u32>) -> String {
-    limit.map(|limit| format!("{current}/{limit}"))
+    limit
+        .map(|limit| format!("{current}/{limit}"))
         .unwrap_or_else(|| current.to_string())
 }
 
-fn format_ratio_i64(
-    current: i64,
-    limit: Option<i64>,
-    formatter: fn(i64) -> String,
-) -> String {
+fn format_ratio_i64(current: i64, limit: Option<i64>, formatter: fn(i64) -> String) -> String {
     limit
         .map(|limit| format!("{}/{}", formatter(current), formatter(limit)))
         .unwrap_or_else(|| formatter(current))
@@ -237,7 +251,13 @@ fn format_ratio_i64(
 
 fn format_ratio_f64(current: f64, limit: Option<f64>) -> String {
     limit
-        .map(|limit| format!("{}/{}", cost::format_cost(Some(current)), cost::format_cost(Some(limit))))
+        .map(|limit| {
+            format!(
+                "{}/{}",
+                cost::format_cost(Some(current)),
+                cost::format_cost(Some(limit))
+            )
+        })
         .unwrap_or_else(|| cost::format_cost(Some(current)))
 }
 
@@ -275,7 +295,9 @@ mod tests {
     #[test]
     fn renders_configured_budget_usage() {
         let store = Store::open_memory().unwrap();
-        store.insert_task(&make_task("t-1", AgentKind::Codex, 12_000, 0.45)).unwrap();
+        store
+            .insert_task(&make_task("t-1", AgentKind::Codex, 12_000, 0.45))
+            .unwrap();
         let config: AidConfig = toml::from_str(
             r#"
             [[usage.budget]]

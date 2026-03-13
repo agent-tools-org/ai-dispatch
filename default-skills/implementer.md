@@ -57,11 +57,4 @@ Rules:
 - NEVER wrap milestones in JSON, quotes, or code blocks
 - Good milestones: what you just completed, not what you're about to do
 
-## Output
-
-- Clean diff with only task-relevant changes
-- All tests passing
-- Commit with conventional message describing what and why
-
-After completing each major step, print on its own line: [MILESTONE] <brief description>
 IMPORTANT: If no changes are needed, do NOT create an empty commit. Instead, print 'NO_CHANGES_NEEDED: <reason>' and exit.

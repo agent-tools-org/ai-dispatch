@@ -86,7 +86,8 @@ fn retry_schema() -> Value {
         "type": "object",
         "properties": {
             "task_id": { "type": "string" },
-            "feedback": { "type": "string" }
+            "feedback": { "type": "string" },
+            "agent": { "type": "string", "description": "Override agent for retry" }
         },
         "required": ["task_id", "feedback"],
         "additionalProperties": false

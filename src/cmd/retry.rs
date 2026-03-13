@@ -11,6 +11,7 @@ use crate::types::TaskId;
 pub struct RetryArgs {
     pub task_id: String,
     pub feedback: String,
+    pub agent: Option<String>,
 }
 
 pub async fn run(store: Arc<Store>, args: RetryArgs) -> Result<()> {
@@ -38,10 +39,11 @@ pub async fn retry_task(store: Arc<Store>, args: RetryArgs, announce: bool) -> R
         );
     }
 
+    let agent_name = args.agent.unwrap_or_else(|| task.agent.as_str().to_string());
     run::run(
         store,
         RunArgs {
-            agent_name: task.agent.as_str().to_string(),
+            agent_name,
             prompt,
             repo: task.repo_path.clone(),
             dir,

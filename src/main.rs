@@ -200,6 +200,9 @@ enum Commands {
         task_id: String,
         #[arg(short, long)]
         feedback: String,
+        /// Override agent for this retry
+        #[arg(long)]
+        agent: Option<String>,
     },
     /// Mark a task as merged
     Merge {
@@ -417,8 +420,8 @@ async fn main() -> Result<()> {
         Commands::Usage { session } => {
             cmd::usage::run(&store, session)?;
         }
-        Commands::Retry { task_id, feedback } => {
-            cmd::retry::run(store, cmd::retry::RetryArgs { task_id, feedback }).await?;
+        Commands::Retry { task_id, feedback, agent } => {
+            cmd::retry::run(store, cmd::retry::RetryArgs { task_id, feedback, agent }).await?;
         }
         Commands::Merge { task_id } => {
             cmd::merge::run(store, &task_id)?;

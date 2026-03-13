@@ -125,6 +125,13 @@ async fn run_task_inner(store: &Arc<Store>, spec: &BackgroundRunSpec) -> Result<
         spec.verify.as_deref(),
         spec.dir.as_deref(),
     );
+    if let Some(worktree_dir) = spec.dir.as_deref() {
+        if crate::commit::has_uncommitted_changes(worktree_dir).unwrap_or(false) {
+            if let Err(e) = crate::commit::auto_commit(worktree_dir, &spec.task_id, &spec.prompt) {
+                eprintln!("[aid] auto-commit failed: {e}");
+            }
+        }
+    }
     crate::cmd::run::retry_if_needed(
         store.clone(),
         &TaskId(spec.task_id.clone()),

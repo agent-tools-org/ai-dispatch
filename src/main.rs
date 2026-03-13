@@ -7,6 +7,7 @@ mod batch;
 mod board;
 mod cli_actions;
 mod cmd;
+mod commit;
 mod config;
 mod context;
 mod cost;

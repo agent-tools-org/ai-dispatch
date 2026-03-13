@@ -87,6 +87,7 @@ impl fmt::Display for AgentKind {
 pub enum TaskStatus {
     Pending,
     Running,
+    AwaitingInput,
     Done,
     Failed,
 }
@@ -96,6 +97,7 @@ impl TaskStatus {
         match self {
             Self::Pending => "pending",
             Self::Running => "running",
+            Self::AwaitingInput => "awaiting_input",
             Self::Done => "done",
             Self::Failed => "failed",
         }
@@ -105,6 +107,7 @@ impl TaskStatus {
         match s {
             "pending" => Some(Self::Pending),
             "running" => Some(Self::Running),
+            "awaiting_input" => Some(Self::AwaitingInput),
             "done" => Some(Self::Done),
             "failed" => Some(Self::Failed),
             _ => None,
@@ -115,9 +118,16 @@ impl TaskStatus {
         match self {
             Self::Pending => "PEND",
             Self::Running => "RUN",
+            Self::AwaitingInput => "AWAIT",
             Self::Done => "DONE",
             Self::Failed => "FAIL",
         }
+    }
+}
+
+impl fmt::Display for TaskStatus {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
     }
 }
 

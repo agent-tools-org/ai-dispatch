@@ -11,7 +11,12 @@ mod config;
 mod context;
 mod cost;
 mod explore;
+mod input_signal;
 mod paths;
+mod prompt;
+mod pty_bridge;
+mod pty_runner;
+mod pty_watch;
 mod session;
 mod skills;
 mod store;
@@ -145,6 +150,11 @@ enum Commands {
         task_id: String,
         #[arg(short, long)]
         feedback: String,
+    },
+    /// Send interactive input to a background task
+    Respond {
+        task_id: String,
+        input: String,
     },
     /// Research/explore via cheap AI CLIs
     Ask {
@@ -298,6 +308,9 @@ async fn main() -> Result<()> {
         }
         Commands::Retry { task_id, feedback } => {
             cmd::retry::run(store, cmd::retry::RetryArgs { task_id, feedback }).await?;
+        }
+        Commands::Respond { task_id, input } => {
+            cmd::respond::run(&task_id, &input)?;
         }
         Commands::Ask {
             prompt,

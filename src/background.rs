@@ -28,6 +28,8 @@ pub struct BackgroundRunSpec {
     pub group: Option<String>,
     #[serde(default)]
     pub skills: Vec<String>,
+    #[serde(default)]
+    pub interactive: bool,
 }
 
 pub fn save_spec(spec: &BackgroundRunSpec) -> Result<()> {
@@ -55,6 +57,7 @@ pub async fn run_task(store: Arc<Store>, task_id: &str) -> Result<()> {
     let spec = load_spec(task_id)?;
     let result = run_task_inner(&store, &spec).await;
     let _ = remove_spec(task_id);
+    let _ = crate::input_signal::clear_response(task_id);
 
     if let Err(err) = result {
         record_worker_failure(&store, task_id, &err)?;
@@ -81,29 +84,41 @@ async fn run_task_inner(store: &Arc<Store>, spec: &BackgroundRunSpec) -> Result<
         output: spec.output.clone(),
         model: spec.model.clone(),
     };
-    let std_cmd = agent
+    let mut std_cmd = agent
         .build_command(&spec.prompt, &opts)
         .context("Failed to build agent command")?;
-    let mut tokio_cmd = tokio::process::Command::from(std_cmd);
     if agent::is_rust_project(spec.dir.as_deref())
         && let Some(target_dir) = agent::shared_target_dir()
     {
-        tokio_cmd.env("CARGO_TARGET_DIR", &target_dir);
+        std_cmd.env("CARGO_TARGET_DIR", &target_dir);
     }
-    tokio_cmd.stdout(Stdio::piped());
-    tokio_cmd.stderr(Stdio::piped());
-
-    crate::cmd::run::run_agent_process(
-        &*agent,
-        tokio_cmd,
-        &TaskId(spec.task_id.clone()),
-        store,
-        &paths::log_path(&spec.task_id),
-        spec.output.as_deref(),
-        spec.model.as_deref(),
-        agent.streaming(),
-    )
-    .await?;
+    if spec.interactive {
+        crate::pty_runner::run_agent_process(
+            &*agent,
+            &std_cmd,
+            &TaskId(spec.task_id.clone()),
+            store,
+            &paths::log_path(&spec.task_id),
+            spec.output.as_deref(),
+            spec.model.as_deref(),
+            agent.streaming(),
+        )?;
+    } else {
+        let mut tokio_cmd = tokio::process::Command::from(std_cmd);
+        tokio_cmd.stdout(Stdio::piped());
+        tokio_cmd.stderr(Stdio::piped());
+        crate::cmd::run::run_agent_process(
+            &*agent,
+            tokio_cmd,
+            &TaskId(spec.task_id.clone()),
+            store,
+            &paths::log_path(&spec.task_id),
+            spec.output.as_deref(),
+            spec.model.as_deref(),
+            agent.streaming(),
+        )
+        .await?;
+    }
     crate::cmd::run::maybe_verify(
         store,
         &TaskId(spec.task_id.clone()),

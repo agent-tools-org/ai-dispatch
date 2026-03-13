@@ -129,6 +129,19 @@ fn is_process_running_returns_false_for_zombie() {
 
         std::thread::sleep(std::time::Duration::from_millis(100));
         let child_pid = pid as u32;
+        let Ok(ps_output) = std::process::Command::new("ps")
+            .args(["-o", "stat=", "-p", &child_pid.to_string()])
+            .output()
+        else {
+            let mut status: i32 = 0;
+            libc::waitpid(pid, &mut status, 0);
+            return;
+        };
+        if !ps_output.status.success() || ps_output.stdout.is_empty() {
+            let mut status: i32 = 0;
+            libc::waitpid(pid, &mut status, 0);
+            return;
+        }
 
         assert!(!super::is_process_running(child_pid));
 

@@ -97,6 +97,7 @@ mod tests {
 
     #[test]
     fn paths_are_under_aid_dir() {
+        let _lock = AID_HOME_LOCK.lock().unwrap();
         let base = aid_dir();
         assert!(db_path().starts_with(&base));
         assert!(config_path().starts_with(&base));

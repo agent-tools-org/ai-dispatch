@@ -192,6 +192,7 @@ fn collect_agent_rows(tasks: &[Task]) -> Vec<AgentUsageRow> {
         AgentKind::Codex,
         AgentKind::Gemini,
         AgentKind::OpenCode,
+        AgentKind::Kilo,
         AgentKind::Cursor,
     ] {
         let agent_tasks: Vec<&Task> = tasks.iter().filter(|task| task.agent == agent).collect();

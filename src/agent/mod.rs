@@ -87,6 +87,10 @@ pub fn get_agent(kind: AgentKind) -> Box<dyn Agent> {
     }
 }
 
+pub fn agent_has_fs_access(kind: &AgentKind) -> bool {
+    !matches!(kind, AgentKind::Gemini)
+}
+
 pub fn shared_target_dir() -> Option<String> {
     if let Some(target_dir) = std::env::var_os(CARGO_TARGET_DIR_ENV) {
         return Some(target_dir.to_string_lossy().into_owned());

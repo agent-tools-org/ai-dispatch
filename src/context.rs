@@ -15,10 +15,17 @@ pub fn parse_context_specs(specs: &[String]) -> Result<Vec<ContextSpec>> {
         .iter()
         .map(|s| {
             if let Some((file, items_str)) = s.split_once(':') {
-                let items: Vec<String> = items_str.split(',').map(|i| i.trim().to_string()).collect();
-                Ok(ContextSpec { file: file.to_string(), items: Some(items) })
+                let items: Vec<String> =
+                    items_str.split(',').map(|i| i.trim().to_string()).collect();
+                Ok(ContextSpec {
+                    file: file.to_string(),
+                    items: Some(items),
+                })
             } else {
-                Ok(ContextSpec { file: s.to_string(), items: None })
+                Ok(ContextSpec {
+                    file: s.to_string(),
+                    items: None,
+                })
             }
         })
         .collect()
@@ -34,12 +41,21 @@ pub fn resolve_context(specs: &[ContextSpec]) -> Result<String> {
 
         match &spec.items {
             None => {
-                parts.push(format!("### {}\n```rust\n{}\n```", spec.file, content.trim()));
+                parts.push(format!(
+                    "### {}\n```rust\n{}\n```",
+                    spec.file,
+                    content.trim()
+                ));
             }
             Some(items) => {
                 let extracted = extract_items(&content, items);
                 if !extracted.is_empty() {
-                    parts.push(format!("### {} ({})\n```rust\n{}\n```", spec.file, items.join(", "), extracted.trim()));
+                    parts.push(format!(
+                        "### {} ({})\n```rust\n{}\n```",
+                        spec.file,
+                        items.join(", "),
+                        extracted.trim()
+                    ));
                 }
             }
         }
@@ -51,6 +67,18 @@ pub fn resolve_context(specs: &[ContextSpec]) -> Result<String> {
 /// Prepend context block before the user's prompt.
 pub fn inject_context(prompt: &str, context: &str) -> String {
     format!("[Context]\n{context}\n\n[Task]\n{prompt}")
+}
+
+/// Generate pointer-based context for agents that can read files themselves.
+pub fn resolve_context_pointers(specs: &[ContextSpec]) -> String {
+    let mut lines = vec!["[Context Files - read these before starting]".to_string()];
+    for spec in specs {
+        match &spec.items {
+            None => lines.push(format!("- {}: read entire file", spec.file)),
+            Some(items) => lines.push(format!("- {}: focus on {}", spec.file, items.join(", "))),
+        }
+    }
+    lines.join("\n")
 }
 
 /// Extract blocks starting with `pub struct/trait/fn/enum <name>` until the next blank line
@@ -68,18 +96,27 @@ fn extract_items(content: &str, items: &[String]) -> String {
             if !capturing {
                 // Match `pub struct X`, `pub trait X`, `pub fn X`, `pub enum X`
                 let trimmed = line.trim();
-                let is_match = ["pub struct ", "pub trait ", "pub fn ", "pub enum ", "pub type "]
-                    .iter()
-                    .any(|prefix| {
-                        trimmed.starts_with(prefix) && trimmed[prefix.len()..].starts_with(item_name.as_str())
-                    });
+                let is_match = [
+                    "pub struct ",
+                    "pub trait ",
+                    "pub fn ",
+                    "pub enum ",
+                    "pub type ",
+                ]
+                .iter()
+                .any(|prefix| {
+                    trimmed.starts_with(prefix)
+                        && trimmed[prefix.len()..].starts_with(item_name.as_str())
+                });
                 if is_match {
                     capturing = true;
                     brace_depth = 0;
                     block.push(*line);
                     brace_depth += line.chars().filter(|&c| c == '{').count() as i32;
                     brace_depth -= line.chars().filter(|&c| c == '}').count() as i32;
-                    if brace_depth <= 0 && (line.contains(';') || (line.contains('{') && line.contains('}'))) {
+                    if brace_depth <= 0
+                        && (line.contains(';') || (line.contains('{') && line.contains('}')))
+                    {
                         capturing = false;
                         result.push(block.join("\n"));
                         block.clear();
@@ -128,7 +165,10 @@ mod tests {
     fn resolve_whole_file() {
         let mut f = NamedTempFile::new().unwrap();
         writeln!(f, "pub struct Foo {{\n    x: i32,\n}}").unwrap();
-        let specs = vec![ContextSpec { file: f.path().to_string_lossy().to_string(), items: None }];
+        let specs = vec![ContextSpec {
+            file: f.path().to_string_lossy().to_string(),
+            items: None,
+        }];
         let ctx = resolve_context(&specs).unwrap();
         assert!(ctx.contains("pub struct Foo"));
     }
@@ -136,7 +176,11 @@ mod tests {
     #[test]
     fn resolve_with_item_extraction() {
         let mut f = NamedTempFile::new().unwrap();
-        writeln!(f, "pub struct Foo {{\n    x: i32,\n}}\n\npub struct Bar {{\n    y: i32,\n}}").unwrap();
+        writeln!(
+            f,
+            "pub struct Foo {{\n    x: i32,\n}}\n\npub struct Bar {{\n    y: i32,\n}}"
+        )
+        .unwrap();
         let specs = vec![ContextSpec {
             file: f.path().to_string_lossy().to_string(),
             items: Some(vec!["Foo".to_string()]),
@@ -152,5 +196,43 @@ mod tests {
         assert!(result.starts_with("[Context]"));
         assert!(result.contains("[Task]"));
         assert!(result.contains("do something"));
+    }
+
+    #[test]
+    fn resolve_context_pointers_whole_file() {
+        let specs = vec![ContextSpec {
+            file: "src/types.rs".to_string(),
+            items: None,
+        }];
+        let result = resolve_context_pointers(&specs);
+        assert!(result.starts_with("[Context Files - read these before starting]"));
+        assert!(result.contains("- src/types.rs: read entire file"));
+    }
+
+    #[test]
+    fn resolve_context_pointers_with_items() {
+        let specs = vec![ContextSpec {
+            file: "src/types.rs".to_string(),
+            items: Some(vec!["AgentKind".to_string(), "TaskId".to_string()]),
+        }];
+        let result = resolve_context_pointers(&specs);
+        assert!(result.contains("- src/types.rs: focus on AgentKind, TaskId"));
+    }
+
+    #[test]
+    fn resolve_context_pointers_multiple_files() {
+        let specs = vec![
+            ContextSpec {
+                file: "src/lib.rs".to_string(),
+                items: None,
+            },
+            ContextSpec {
+                file: "src/types.rs".to_string(),
+                items: Some(vec!["Task".to_string()]),
+            },
+        ];
+        let result = resolve_context_pointers(&specs);
+        assert!(result.contains("- src/lib.rs: read entire file"));
+        assert!(result.contains("- src/types.rs: focus on Task"));
     }
 }

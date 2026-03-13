@@ -338,21 +338,33 @@ fn stderr_tail(task_id: &str) -> Option<String> {
 }
 
 fn diff_stat(wt_path: &str) -> String {
-    match git_output(wt_path, &["diff", "--stat"]) {
-        Some(s) if !s.trim().is_empty() => s,
-        Some(_) => git_output(wt_path, &["diff", "--stat", "HEAD~1"])
-            .unwrap_or_else(|| "  (no changes detected)\n".to_string()),
-        None => "  (could not read git diff)\n".to_string(),
+    if let Some(s) = git_output(wt_path, &["diff", "main...HEAD", "--stat"]) {
+        if !s.trim().is_empty() {
+            return s;
+        }
     }
+    if let Some(s) = git_output(wt_path, &["diff", "--stat"]) {
+        if !s.trim().is_empty() {
+            return s;
+        }
+    }
+    git_output(wt_path, &["diff", "--stat", "HEAD~1"])
+        .unwrap_or_else(|| "  (no changes detected)\n".to_string())
 }
 
 fn full_diff(wt_path: &str) -> String {
-    match git_output(wt_path, &["diff"]) {
-        Some(s) if !s.trim().is_empty() => s,
-        Some(_) => git_output(wt_path, &["diff", "HEAD~1"])
-            .unwrap_or_else(|| "  (no diff available)\n".to_string()),
-        None => "  (could not read git diff)\n".to_string(),
+    if let Some(s) = git_output(wt_path, &["diff", "main...HEAD"]) {
+        if !s.trim().is_empty() {
+            return s;
+        }
     }
+    if let Some(s) = git_output(wt_path, &["diff"]) {
+        if !s.trim().is_empty() {
+            return s;
+        }
+    }
+    git_output(wt_path, &["diff", "HEAD~1"])
+        .unwrap_or_else(|| "  (no diff available)\n".to_string())
 }
 
 fn git_output(wt_path: &str, args: &[&str]) -> Option<String> {

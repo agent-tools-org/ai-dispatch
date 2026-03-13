@@ -28,6 +28,7 @@ mod types;
 mod usage;
 mod verify;
 mod watcher;
+mod webhook;
 mod workgroup;
 mod worktree;
 use crate::cli_actions::{ConfigAction, GroupAction};

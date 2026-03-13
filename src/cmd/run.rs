@@ -228,6 +228,7 @@ pub async fn run(store: Arc<Store>, args: RunArgs) -> Result<TaskId> {
             args.verify.as_deref(),
             effective_dir.as_deref(),
         );
+        crate::webhook::fire_task_webhooks(&store, task_id.as_str()).await;
         if let Some(mut retry_args) = retry_logic::prepare_retry(store.clone(), &task_id, &args).await?
         {
             if let Some(task) = store.get_task(task_id.as_str())? {

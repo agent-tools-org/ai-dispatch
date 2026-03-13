@@ -12,6 +12,8 @@ pub struct AidConfig {
     pub usage: UsageConfig,
     #[serde(default)]
     pub background: BackgroundConfig,
+    #[serde(default, rename = "webhook")]
+    pub webhooks: Vec<WebhookConfig>,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -46,6 +48,18 @@ pub struct UsageBudget {
 pub struct BackgroundConfig {
     #[serde(default = "default_max_duration")]
     pub max_task_duration_mins: i64,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct WebhookConfig {
+    pub name: String,
+    pub url: String,
+    #[serde(default)]
+    pub on_done: bool,
+    #[serde(default)]
+    pub on_failed: bool,
+    #[serde(default)]
+    pub headers: Vec<(String, String)>,
 }
 
 fn default_max_duration() -> i64 {
@@ -121,5 +135,28 @@ mod tests {
         .unwrap();
 
         assert_eq!(config.background.max_task_duration_mins, 120);
+    }
+
+    #[test]
+    fn parses_webhook_config() {
+        let config: AidConfig = toml::from_str(
+            r#"
+            [[webhook]]
+            name = "slack-notify"
+            url = "https://hooks.slack.com/services/test"
+            on_done = true
+            headers = [["Authorization", "Bearer token"]]
+            "#,
+        )
+        .unwrap();
+
+        assert_eq!(config.webhooks.len(), 1);
+        assert_eq!(config.webhooks[0].name, "slack-notify");
+        assert!(config.webhooks[0].on_done);
+        assert!(!config.webhooks[0].on_failed);
+        assert_eq!(
+            config.webhooks[0].headers[0],
+            ("Authorization".to_string(), "Bearer token".to_string())
+        );
     }
 }

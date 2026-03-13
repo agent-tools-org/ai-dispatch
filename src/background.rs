@@ -66,18 +66,27 @@ pub async fn run_task(store: Arc<Store>, task_id: &str) -> Result<()> {
     let _ = remove_spec(task_id);
     let _ = crate::input_signal::clear_response(task_id);
 
+    if let Err(err) = result {
+        record_worker_failure(&store, task_id, &err)?;
+        crate::webhook::fire_task_webhooks(&store, task_id).await;
+        if let Some(ref cmd) = spec.on_done {
+            let _ = std::process::Command::new("sh")
+                .args(["-c", cmd])
+                .env("AID_TASK_ID", task_id)
+                .env("AID_TASK_STATUS", "failed")
+                .spawn();
+        }
+        return Err(err);
+    }
+
+    crate::webhook::fire_task_webhooks(&store, task_id).await;
+
     if let Some(ref cmd) = spec.on_done {
-        let status = if result.is_ok() { "done" } else { "failed" };
         let _ = std::process::Command::new("sh")
             .args(["-c", cmd])
             .env("AID_TASK_ID", task_id)
-            .env("AID_TASK_STATUS", status)
+            .env("AID_TASK_STATUS", "done")
             .spawn();
-    }
-
-    if let Err(err) = result {
-        record_worker_failure(&store, task_id, &err)?;
-        return Err(err);
     }
 
     Ok(())

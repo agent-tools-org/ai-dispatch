@@ -52,17 +52,112 @@ const AGENT_PROFILES: &[(AgentKind, &str, &str, &str, bool)] = &[
     ),
 ];
 
-const MODEL_PRICING: &[(&str, f64, f64, &str)] = &[
-    ("gpt-4.1", 2.0, 8.0, "Codex default"),
-    ("gpt-4.1-mini", 0.4, 1.6, "Codex cheap"),
-    ("gpt-4.1-nano", 0.1, 0.4, "Codex ultra-cheap"),
-    ("gemini-2.5-flash", 0.15, 0.60, "Gemini default"),
-    ("gemini-2.5-pro", 1.25, 10.0, "Gemini pro"),
-    ("glm-5", 0.5, 2.0, "OpenCode (paid)"),
-    ("kimi-k2.5", 0.5, 2.0, "OpenCode (paid)"),
-    ("mimo-v2-flash-free", 0.0, 0.0, "OpenCode free"),
-    ("nemotron-3-super-free", 0.0, 0.0, "OpenCode free"),
-    ("minimax-m2.5-free", 0.0, 0.0, "OpenCode free"),
+pub struct AgentModel {
+    pub agent: AgentKind,
+    pub model: &'static str,
+    pub input_per_m: f64,
+    pub output_per_m: f64,
+    pub tier: &'static str,
+    pub description: &'static str,
+}
+
+pub const AGENT_MODELS: &[AgentModel] = &[
+    AgentModel {
+        agent: AgentKind::Codex,
+        model: "gpt-4.1",
+        input_per_m: 2.0,
+        output_per_m: 8.0,
+        tier: "standard",
+        description: "Default, best quality",
+    },
+    AgentModel {
+        agent: AgentKind::Codex,
+        model: "gpt-4.1-mini",
+        input_per_m: 0.4,
+        output_per_m: 1.6,
+        tier: "cheap",
+        description: "Balanced cost/quality",
+    },
+    AgentModel {
+        agent: AgentKind::Codex,
+        model: "gpt-4.1-nano",
+        input_per_m: 0.1,
+        output_per_m: 0.4,
+        tier: "cheap",
+        description: "Ultra-cheap, simple tasks",
+    },
+    AgentModel {
+        agent: AgentKind::Gemini,
+        model: "gemini-2.5-flash",
+        input_per_m: 0.15,
+        output_per_m: 0.60,
+        tier: "cheap",
+        description: "Default, fast",
+    },
+    AgentModel {
+        agent: AgentKind::Gemini,
+        model: "gemini-2.5-pro",
+        input_per_m: 1.25,
+        output_per_m: 10.0,
+        tier: "premium",
+        description: "Deep reasoning",
+    },
+    AgentModel {
+        agent: AgentKind::OpenCode,
+        model: "glm-5",
+        input_per_m: 0.5,
+        output_per_m: 2.0,
+        tier: "cheap",
+        description: "Paid, good quality",
+    },
+    AgentModel {
+        agent: AgentKind::OpenCode,
+        model: "kimi-k2.5",
+        input_per_m: 0.5,
+        output_per_m: 2.0,
+        tier: "cheap",
+        description: "Paid, good quality",
+    },
+    AgentModel {
+        agent: AgentKind::OpenCode,
+        model: "mimo-v2-flash-free",
+        input_per_m: 0.0,
+        output_per_m: 0.0,
+        tier: "free",
+        description: "Free tier",
+    },
+    AgentModel {
+        agent: AgentKind::OpenCode,
+        model: "nemotron-3-super-free",
+        input_per_m: 0.0,
+        output_per_m: 0.0,
+        tier: "free",
+        description: "Free tier",
+    },
+    AgentModel {
+        agent: AgentKind::OpenCode,
+        model: "minimax-m2.5-free",
+        input_per_m: 0.0,
+        output_per_m: 0.0,
+        tier: "free",
+        description: "Free tier",
+    },
+    AgentModel {
+        agent: AgentKind::Kilo,
+        model: "default",
+        input_per_m: 0.0,
+        output_per_m: 0.0,
+        tier: "free",
+        description: "Free tier",
+    },
+    AgentModel {
+        agent: AgentKind::Cursor,
+        model: "default",
+        input_per_m: 0.0,
+        output_per_m: 0.0,
+        tier: "standard",
+        description: "Cursor default",
+    },
 ];
 
 pub fn run(store: &Arc<Store>, action: ConfigAction) -> Result<()> {
@@ -109,16 +204,28 @@ pub fn run(store: &Arc<Store>, action: ConfigAction) -> Result<()> {
         }
         ConfigAction::Pricing => {
             println!(
-                "{:<25} {:>12} {:>12} {:>12} Description",
-                "Model", "Input/M", "Output/M", "Blended/M"
+                "{:<10} {:<25} {:>10} {:>10} {:>10} {}",
+                "Agent", "Model", "Tier", "Input/M", "Output/M", "Description"
             );
-            println!("{}", "-".repeat(75));
-            for (model, input, output, desc) in MODEL_PRICING {
-                let blended = input * 0.7 + output * 0.3;
-                println!(
-                    "{:<25} ${:>11.2} ${:>11.2} ${:>11.4} {}",
-                    model, input, output, blended, desc
-                );
+            println!("{}", "-".repeat(85));
+            for agent in [
+                AgentKind::Codex,
+                AgentKind::Gemini,
+                AgentKind::OpenCode,
+                AgentKind::Kilo,
+                AgentKind::Cursor,
+            ] {
+                for am in AGENT_MODELS.iter().filter(|m| m.agent == agent) {
+                    println!(
+                        "{:<10} {:<25} {:>10} ${:>9.2} ${:>9.2} {}",
+                        agent.as_str(),
+                        am.model,
+                        am.tier,
+                        am.input_per_m,
+                        am.output_per_m,
+                        am.description
+                    );
+                }
             }
         }
         ConfigAction::AddAgent { .. } => {
@@ -149,6 +256,21 @@ fn agent_profile(kind: AgentKind, installed: bool, history: Option<&AgentHistory
         ),
         None => "  History:   no tasks yet\n".to_string(),
     };
+    let models_line = {
+        let agent_models: Vec<_> = AGENT_MODELS.iter().filter(|m| m.agent == kind).collect();
+        if agent_models.is_empty() {
+            "  Models:    none configured\n".to_string()
+        } else {
+            let mut lines = "  Models:\n".to_string();
+            for am in &agent_models {
+                lines.push_str(&format!(
+                    "    {:<15} {:<8} ${:>5.2}/${:<5.2}  {}\n",
+                    am.model, am.tier, am.input_per_m, am.output_per_m, am.description
+                ));
+            }
+            lines
+        }
+    };
     let rate_limit_line = match rate_limit::get_rate_limit_info(&kind) {
         Some(info) if info.recovery_at.is_some() => {
             format!(
@@ -159,8 +281,8 @@ fn agent_profile(kind: AgentKind, installed: bool, history: Option<&AgentHistory
         _ => "".to_string(),
     };
     format!(
-        "  Strengths: {}\n  Cost:      {}\n{}{}  Mode:      {} ({})\n",
-        strengths, cost, history_line, rate_limit_line, mode, install_status
+        "  Strengths: {}\n  Cost:      {}\n{}{}{}  Mode:      {} ({})\n",
+        strengths, cost, history_line, rate_limit_line, models_line, mode, install_status
     )
 }
 
@@ -200,4 +322,28 @@ fn compute_agent_history(tasks: &[crate::types::Task]) -> HashMap<AgentKind, Age
         );
     }
     history
+}
+
+pub fn models_for_agent(agent: &AgentKind) -> Vec<&'static AgentModel> {
+    AGENT_MODELS.iter().filter(|m| m.agent == *agent).collect()
+}
+
+pub fn budget_model(agent: &AgentKind) -> Option<&'static str> {
+    let models = models_for_agent(agent);
+    if models.is_empty() {
+        return None;
+    }
+    let non_free: Vec<_> = models.iter().filter(|m| m.tier != "free").collect();
+    if non_free.is_empty() {
+        models.first().map(|m| m.model)
+    } else {
+        non_free
+            .iter()
+            .min_by(|a, b| {
+                let cost_a = a.input_per_m + a.output_per_m;
+                let cost_b = b.input_per_m + b.output_per_m;
+                cost_a.partial_cmp(&cost_b).unwrap()
+            })
+            .map(|m| m.model)
+    }
 }

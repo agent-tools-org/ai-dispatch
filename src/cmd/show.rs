@@ -152,7 +152,15 @@ pub fn diff_text(store: &Arc<Store>, task_id: &str) -> Result<String> {
 
 pub fn output_text_for_task(store: &Store, task_id: &str) -> Result<String> {
     let task = load_task_for_output(task_id, store)?;
-    read_task_output(&task)
+    if let Ok(content) = read_task_output(&task) {
+        return Ok(content);
+    }
+    if let Some(ref log_path) = task.log_path {
+        let path = Path::new(log_path);
+        return Ok(read_tail(path, 50, "No output or log available"));
+    }
+    let path = paths::log_path(task_id);
+    Ok(read_tail(&path, 50, "No output or log available"))
 }
 
 fn load_task_for_output(task_id: &str, store: &Store) -> Result<Task> {
@@ -163,7 +171,15 @@ fn load_task_for_output(task_id: &str, store: &Store) -> Result<Task> {
 
 pub fn output_text(store: &Arc<Store>, task_id: &str) -> Result<String> {
     let task = load_task(store, task_id)?;
-    read_task_output(&task)
+    if let Ok(content) = read_task_output(&task) {
+        return Ok(content);
+    }
+    if let Some(ref log_path) = task.log_path {
+        let path = Path::new(log_path);
+        return Ok(read_tail(path, 50, "No output or log available"));
+    }
+    let path = paths::log_path(task_id);
+    Ok(read_tail(&path, 50, "No output or log available"))
 }
 
 pub fn read_task_output(task: &Task) -> Result<String> {

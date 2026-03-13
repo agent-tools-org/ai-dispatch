@@ -32,6 +32,8 @@ pub struct BackgroundRunSpec {
     #[serde(default)]
     pub skills: Vec<String>,
     #[serde(default)]
+    pub template: Option<String>,
+    #[serde(default)]
     pub interactive: bool,
     #[serde(default)]
     pub on_done: Option<String>,
@@ -165,6 +167,7 @@ async fn run_task_inner(store: &Arc<Store>, spec: &BackgroundRunSpec) -> Result<
             retry: spec.retry,
             context: vec![],
             skills: spec.skills.clone(),
+            template: spec.template.clone(),
             background: false,
             announce: false,
             parent_task_id: spec.parent_task_id.clone(),

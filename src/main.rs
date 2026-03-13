@@ -77,6 +77,9 @@ enum Commands {
         /// Methodology skills to inject
         #[arg(long)]
         skill: Vec<String>,
+        /// Prompt template to wrap around the task
+        #[arg(long)]
+        template: Option<String>,
         /// Disable automatic skill injection
         #[arg(long, conflicts_with = "skill")]
         no_skill: bool,
@@ -220,6 +223,7 @@ async fn main() -> Result<()> {
             retry,
             context,
             skill,
+            template,
             no_skill,
             bg,
             on_done,
@@ -259,6 +263,7 @@ async fn main() -> Result<()> {
                     retry,
                     context,
                     skills,
+                    template,
                     background: bg,
                     announce: true,
                     parent_task_id: None,

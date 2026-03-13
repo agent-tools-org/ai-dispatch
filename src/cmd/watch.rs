@@ -1,5 +1,5 @@
-// Handler for `aid watch` — live-updating text dashboard.
-// Polls store and redraws terminal every second. No TUI framework needed.
+// Handler for `aid watch` — live-updating text dashboard with optional quiet mode.
+// Polls store and redraws terminal every second. --quiet delegates to wait logic.
 
 use anyhow::Result;
 use std::sync::Arc;
@@ -9,8 +9,13 @@ use crate::board::{render_board, render_task_detail};
 use crate::store::Store;
 use crate::types::TaskFilter;
 
-/// Run the watch dashboard, refreshing every second
-pub async fn run(store: &Arc<Store>, task_id: Option<&str>, group: Option<&str>) -> Result<()> {
+/// Run the watch dashboard, refreshing every second.
+/// With `quiet`, delegates to wait logic (silent blocking).
+pub async fn run(store: &Arc<Store>, task_id: Option<&str>, group: Option<&str>, quiet: bool) -> Result<()> {
+    if quiet {
+        return crate::cmd::wait::run(store, task_id).await;
+    }
+
     loop {
         // Clear terminal
         print!("\x1b[2J\x1b[H");

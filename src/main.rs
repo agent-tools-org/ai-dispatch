@@ -83,47 +83,57 @@ enum Commands {
         #[arg(long)]
         wait: bool,
     },
-    /// Live progress dashboard
+    /// Live progress / blocking wait (--quiet)
     Watch {
         /// Watch a specific task ID
         task_id: Option<String>,
         /// Restrict to one workgroup in multi-task mode
         #[arg(long)]
         group: Option<String>,
+        /// Interactive TUI mode
         #[arg(long)]
         tui: bool,
-    },
-    /// Block until a task or the current running set finishes
-    Wait {
-        task_id: Option<String>,
+        /// Silent blocking wait (replaces `aid wait`)
+        #[arg(long)]
+        quiet: bool,
     },
     /// List all tasks with status
-        Board {
-            /// Show only running tasks
-            #[arg(long)]
-            running: bool,
+    Board {
+        /// Show only running tasks
+        #[arg(long)]
+        running: bool,
         /// Show only today's tasks
         #[arg(long)]
         today: bool,
-            /// Show only tasks from the current caller session
-            #[arg(long)]
-            mine: bool,
-            /// Show only tasks for one workgroup
-            #[arg(long)]
-            group: Option<String>,
-        },
-    /// Show detailed task audit
-    Audit {
-        /// Task ID to audit
-        task_id: String,
+        /// Show only tasks from the current caller session
+        #[arg(long)]
+        mine: bool,
+        /// Show only tasks for one workgroup
+        #[arg(long)]
+        group: Option<String>,
     },
-    /// Print the output file for a task
-    Output {
+    /// Inspect task artifacts (events, diff, output, explain)
+    Show {
+        /// Task ID to inspect
         task_id: String,
-    },
-    /// Review worktree diff and events for a task
-    Review {
-        task_id: String,
+        /// Show full worktree diff
+        #[arg(long)]
+        diff: bool,
+        /// Print output file
+        #[arg(long)]
+        output: bool,
+        /// Dispatch AI explanation (creates child task)
+        #[arg(long)]
+        explain: bool,
+        /// Print raw log file
+        #[arg(long)]
+        log: bool,
+        /// Agent for --explain (default: gemini)
+        #[arg(long)]
+        agent: Option<String>,
+        /// Model override for --explain
+        #[arg(short, long)]
+        model: Option<String>,
     },
     /// Show task-history usage and configured cost budgets
     Usage,
@@ -133,8 +143,8 @@ enum Commands {
         #[arg(short, long)]
         feedback: String,
     },
-    /// Explore codebase via cheap AI CLIs
-    Explore {
+    /// Research/explore via cheap AI CLIs
+    Ask {
         prompt: String,
         #[arg(long)]
         agent: Option<String>,
@@ -145,19 +155,9 @@ enum Commands {
         #[arg(short, long)]
         output: Option<String>,
     },
-    /// Explain a task's execution via cheap AI
-    Explain {
-        task_id: String,
-        #[arg(long)]
-        agent: Option<String>,
-        #[arg(short, long)]
-        model: Option<String>,
-        #[arg(short, long)]
-        output: Option<String>,
-    },
     /// Start MCP server (stdio)
     Mcp,
-    /// Manage agent configuration
+    /// Manage agent configuration and detection
     Config {
         #[command(subcommand)]
         action: ConfigAction,
@@ -167,8 +167,6 @@ enum Commands {
         #[command(subcommand)]
         action: GroupAction,
     },
-    /// Show detected agents
-    Agents,
     #[command(hide = true, name = "__run-task")]
     InternalRunTask {
         task_id: String,
@@ -229,6 +227,7 @@ async fn main() -> Result<()> {
             task_id,
             group,
             tui: true,
+            ..
         } => {
             tui::run(&store, tui::RunOptions { task_id, group })?;
         }
@@ -236,11 +235,9 @@ async fn main() -> Result<()> {
             task_id,
             group,
             tui: false,
+            quiet,
         } => {
-            cmd::watch::run(&store, task_id.as_deref(), group.as_deref()).await?;
-        }
-        Commands::Wait { task_id } => {
-            cmd::wait::run(&store, task_id.as_deref()).await?;
+            cmd::watch::run(&store, task_id.as_deref(), group.as_deref(), quiet).await?;
         }
         Commands::Board {
             running,
@@ -250,14 +247,28 @@ async fn main() -> Result<()> {
         } => {
             cmd::board::run(&store, running, today, mine, group.as_deref())?;
         }
-        Commands::Audit { task_id } => {
-            cmd::audit::run(&store, &task_id)?;
-        }
-        Commands::Output { task_id } => {
-            cmd::output::run(&store, &task_id)?;
-        }
-        Commands::Review { task_id } => {
-            cmd::review::run(&store, cmd::review::ReviewArgs { task_id })?;
+        Commands::Show {
+            task_id,
+            diff,
+            output,
+            explain,
+            log,
+            agent,
+            model,
+        } => {
+            cmd::show::run(
+                store,
+                cmd::show::ShowArgs {
+                    task_id,
+                    diff,
+                    output,
+                    explain,
+                    log,
+                    agent,
+                    model,
+                },
+            )
+            .await?;
         }
         Commands::Usage => {
             cmd::usage::run(&store)?;
@@ -265,31 +276,14 @@ async fn main() -> Result<()> {
         Commands::Retry { task_id, feedback } => {
             cmd::retry::run(store, cmd::retry::RetryArgs { task_id, feedback }).await?;
         }
-        Commands::Explore {
+        Commands::Ask {
             prompt,
             agent,
             model,
             files,
             output,
         } => {
-            cmd::explore::run(store, prompt, agent, model, files, output).await?;
-        }
-        Commands::Explain {
-            task_id,
-            agent,
-            model,
-            output,
-        } => {
-            cmd::explain::run(
-                store,
-                cmd::explain::ExplainArgs {
-                    task_id,
-                    agent,
-                    model,
-                    output,
-                },
-            )
-            .await?;
+            cmd::ask::run(store, prompt, agent, model, files, output).await?;
         }
         Commands::Mcp => cmd::mcp::run(store).await?,
         Commands::Config { action } => {
@@ -306,17 +300,6 @@ async fn main() -> Result<()> {
             } => cmd::group::update(&store, &group_id, name.as_deref(), context.as_deref())?,
             GroupAction::Delete { group_id } => cmd::group::delete(&store, &group_id)?,
         },
-        Commands::Agents => {
-            let agents = agent::detect_agents();
-            if agents.is_empty() {
-                println!("No AI CLI agents detected.");
-            } else {
-                println!("Detected agents:");
-                for a in &agents {
-                    println!("  - {}", a.as_str());
-                }
-            }
-        }
         Commands::InternalRunTask { task_id } => {
             background::run_task(store, &task_id).await?;
         }

@@ -1,4 +1,4 @@
-// Handler for `aid explore` foundation wiring.
+// Handler for `aid ask` — research/explore via cheap AI CLIs.
 // Detects likely context files, injects them into the prompt, then dispatches.
 
 use anyhow::Result;
@@ -22,9 +22,9 @@ pub async fn run(
     };
     let agent_name = agent.unwrap_or_else(|| "gemini".to_string());
     if context_files.is_empty() {
-        println!("[explore] Using files: (none)");
+        println!("[ask] Using files: (none)");
     } else {
-        println!("[explore] Using files: {}", context_files.join(", "));
+        println!("[ask] Using files: {}", context_files.join(", "));
     }
     let effective_prompt = if context_files.is_empty() {
         prompt

@@ -2,20 +2,19 @@
 
 ## Current Status
 
-Implemented in v0.9.0:
+Implemented in v1.0.0:
 
 - `aid run` with background workers, worktrees, context injection, and `--retry`
-- `aid watch --tui` plus the original text watch mode
-- `aid wait` and `batch --wait` for blocking orchestration flows
+- `aid show` — unified task inspection (events, `--diff`, `--output`, `--explain`, `--log`)
+- `aid watch` with `--tui` and `--quiet` (absorbs former `aid wait`)
+- `aid ask` — research/explore via cheap AI CLIs (renamed from `aid explore`)
+- `aid batch` with `--wait` and task dependency DAGs
+- `aid config agents` — agent detection (absorbs former `aid agents`)
 - `aid group` plus `aid run --group` for shared caller-injected context
-- `aid group update` and `aid group delete` for workgroup lifecycle management
 - workgroup-aware filtering across `board`, `watch`, and `batch`
 - `aid board --mine` for caller-session filtering
-- `aid audit`, `aid review`, and `aid output` for artifact inspection
 - deterministic usage extraction from streaming agent events
 - `aid usage` for task-history cost reporting and configured budget windows
-- `aid explain` for AI-assisted task log explanation
-- task dependency DAGs in `aid batch` with topological sort and level-based parallel dispatch
 
 State is stored under `~/.aid` by default, or `AID_HOME` when overridden.
 
@@ -35,13 +34,13 @@ State is stored under `~/.aid` by default, or `AID_HOME` when overridden.
 - task dependency DAGs in batch files (`depends_on` + topological sort + level-based parallel dispatch)
 - clippy-clean codebase, 129 tests passing
 
-### v1.0 next
+### v1.0 delivered
 
 - fix worktree branch reuse bug (stale branches checked out at old commit)
 - fix zombie background tasks (dead processes shown as Running forever)
 - fix UTF-8 boundary panic in codex/opencode adapters (multi-byte chars)
 - shared CARGO_TARGET_DIR for worktree tasks (build cache reuse)
-- MCP server mode (expose aid as MCP tools for Claude)
+- CLI consolidation: 17 commands → 11 (`show`, `ask`, `watch --quiet`, `config agents`)
 
 ## Problem
 
@@ -141,8 +140,8 @@ aid watch            # Text mode for running tasks
 aid watch t-3a7f     # Follow a specific task
 aid watch --group wg-a3f1
 aid watch --tui      # Interactive ratatui dashboard
-aid wait             # Block until current running tasks finish
-aid wait t-3a7f      # Block until one task finishes
+aid watch --quiet    # Block until current running tasks finish
+aid watch --quiet t-3a7f  # Block until one task finishes
 ```
 
 ```
@@ -165,13 +164,17 @@ aid wait t-3a7f      # Block until one task finishes
 └──────────────────────────────────────────────────┘
 ```
 
-### `aid audit` — Review completed task
+### `aid show` — Inspect task artifacts
 
 ```bash
-aid audit t-3a7f
+aid show t-3a7f             # Default: events + stderr + diff stat
+aid show t-3a7f --diff      # Full worktree diff
+aid show t-3a7f --output    # Print output file
+aid show t-3a7f --log       # Print raw log file
+aid show t-3a7f --explain   # Dispatch AI summary (creates child task)
 ```
 
-Output:
+Default output:
 ```
 Task: t-3a7f — codex: Add tests for quote handler
 Duration: 3m 47s
@@ -215,14 +218,6 @@ t-c8e9   opencode DONE    1m 02s    FREE     feat/type-annotations
 t-d4f1   codex    RUN     2m 13s    ~28,000  feat/dodo-calldata
 t-e5g2   codex    FAIL    1m 30s    22,105   fix/parse-error
 ```
-
-### `aid output` — Print task artifacts
-
-```bash
-aid output t-3a7f
-```
-
-Reads the task's recorded `output_path` and prints it to stdout.
 
 ### `aid usage` — Cost and budget visibility
 

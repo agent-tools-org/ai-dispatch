@@ -25,13 +25,12 @@ fn help_shows_subcommands() {
     assert!(output.status.success());
     assert!(stdout.contains("run"));
     assert!(stdout.contains("watch"));
-    assert!(stdout.contains("wait"));
     assert!(stdout.contains("board"));
-    assert!(stdout.contains("audit"));
-    assert!(stdout.contains("output"));
+    assert!(stdout.contains("show"));
+    assert!(stdout.contains("ask"));
     assert!(stdout.contains("group"));
     assert!(stdout.contains("usage"));
-    assert!(stdout.contains("agents"));
+    assert!(stdout.contains("config"));
 }
 
 #[test]
@@ -44,18 +43,18 @@ fn board_works_with_empty_db() {
 }
 
 #[test]
-fn wait_works_with_empty_db() {
+fn watch_quiet_works_with_empty_db() {
     let (mut cmd, _tmp) = aid_cmd();
-    let output = cmd.arg("wait").output().unwrap();
+    let output = cmd.args(["watch", "--quiet"]).output().unwrap();
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("No running tasks"));
 }
 
 #[test]
-fn agents_detects_installed_clis() {
+fn config_agents_detects_installed_clis() {
     let (mut cmd, _tmp) = aid_cmd();
-    let output = cmd.arg("agents").output().unwrap();
+    let output = cmd.args(["config", "agents"]).output().unwrap();
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
     // At least one of these should be detected in the dev environment
@@ -75,9 +74,9 @@ fn run_unknown_agent_fails() {
 }
 
 #[test]
-fn audit_missing_task_fails() {
+fn show_missing_task_fails() {
     let (mut cmd, _tmp) = aid_cmd();
-    let output = cmd.args(["audit", "t-9999"]).output().unwrap();
+    let output = cmd.args(["show", "t-9999"]).output().unwrap();
     assert!(!output.status.success());
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(stderr.contains("not found"));

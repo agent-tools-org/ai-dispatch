@@ -8,6 +8,7 @@ pub fn compose_prompt(
     prompt: &str,
     file_context: Option<&str>,
     workgroup: Option<&Workgroup>,
+    milestones: &[(String, String)],
 ) -> String {
     let mut sections = Vec::new();
 
@@ -20,6 +21,14 @@ pub fn compose_prompt(
     }
     if let Some(context) = file_context.filter(|context| !context.trim().is_empty()) {
         sections.push(format!("[Context]\n{}", context.trim()));
+    }
+    if !milestones.is_empty() {
+        let findings = milestones
+            .iter()
+            .map(|(task_id, detail)| format!("- [{task_id}] {detail}"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        sections.push(format!("--- Shared Findings ---\n{findings}"));
     }
     if sections.is_empty() {
         return prompt.to_string();
@@ -47,7 +56,7 @@ mod tests {
 
     #[test]
     fn returns_prompt_when_no_context_exists() {
-        assert_eq!(compose_prompt("ship it", None, None), "ship it");
+        assert_eq!(compose_prompt("ship it", None, None, &[]), "ship it");
     }
 
     #[test]
@@ -56,10 +65,25 @@ mod tests {
             "ship it",
             Some("fn main() {}"),
             Some(&make_group("Rust workspace with shared target dir.")),
+            &[],
         );
         assert!(prompt.contains("[Shared Context: dispatch]"));
         assert!(prompt.contains("[Context]"));
         assert!(prompt.contains("[Task]"));
         assert!(prompt.contains("ship it"));
+    }
+
+    #[test]
+    fn includes_shared_findings() {
+        let milestones = vec![
+            ("t-1000".to_string(), "finding one".to_string()),
+            ("t-1001".to_string(), "finding two".to_string()),
+        ];
+        let prompt = compose_prompt("ship it", None, None, &milestones);
+
+        assert!(prompt.contains("--- Shared Findings ---"));
+        assert!(prompt.contains("- [t-1000] finding one"));
+        assert!(prompt.contains("- [t-1001] finding two"));
+        assert!(prompt.contains("[Task]"));
     }
 }

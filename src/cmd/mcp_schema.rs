@@ -22,6 +22,11 @@ pub fn tool_definitions() -> Vec<Value> {
             "Show tracked usage and budget status.",
             empty_schema(),
         ),
+        tool(
+            "aid_get_findings",
+            "List milestone findings shared within a workgroup.",
+            get_findings_schema(),
+        ),
         tool("aid_ask", "Run a quick research query.", ask_schema()),
     ]
 }
@@ -95,6 +100,17 @@ fn ask_schema() -> Value {
             "agent": { "type": "string", "default": "gemini" }
         },
         "required": ["question"],
+        "additionalProperties": false
+    })
+}
+
+fn get_findings_schema() -> Value {
+    json!({
+        "type": "object",
+        "properties": {
+            "group": { "type": "string" }
+        },
+        "required": ["group"],
         "additionalProperties": false
     })
 }

@@ -29,6 +29,7 @@ pub async fn call_tool(store: Arc<Store>, name: &str, arguments: Value) -> Resul
         "aid_show" => show_tool(store, arguments),
         "aid_retry" => retry_tool(store, arguments).await,
         "aid_usage" => usage_tool(store),
+        "aid_get_findings" => get_findings_tool(store, arguments),
         "aid_ask" => ask_tool(store, arguments).await,
         _ => Ok(error_payload(format!("Unknown tool '{name}'"))),
     } {
@@ -73,6 +74,11 @@ struct RetryToolArgs {
 struct AskToolArgs {
     question: String,
     agent: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct GetFindingsToolArgs {
+    group: String,
 }
 
 async fn run_tool(store: Arc<Store>, arguments: Value) -> Result<Value> {
@@ -157,6 +163,16 @@ fn usage_tool(store: Arc<Store>) -> Result<Value> {
     let snapshot = usage::collect_usage(store.as_ref(), &config)?;
     let rendered = usage::render_usage(&snapshot);
     Ok(json!({ "snapshot": snapshot, "rendered": rendered }))
+}
+
+fn get_findings_tool(store: Arc<Store>, arguments: Value) -> Result<Value> {
+    let args: GetFindingsToolArgs = parse_args(arguments, "aid_get_findings")?;
+    let findings = store
+        .get_workgroup_milestones(&args.group)?
+        .into_iter()
+        .map(|(task_id, finding)| json!({ "task_id": task_id, "finding": finding }))
+        .collect::<Vec<_>>();
+    Ok(json!(findings))
 }
 
 async fn ask_tool(store: Arc<Store>, arguments: Value) -> Result<Value> {

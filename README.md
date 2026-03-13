@@ -1,6 +1,6 @@
 # ai-dispatch (aid)
 
-![Version](https://img.shields.io/badge/version-1.7.0-blue)
+![Version](https://img.shields.io/badge/version-2.0.0-blue)
 ![Rust](https://img.shields.io/badge/rust-2024-orange)
 ![License](https://img.shields.io/badge/license-not%20specified-lightgrey)
 
@@ -31,6 +31,20 @@ cargo install --path .
 aid config agents
 aid config skills
 ```
+
+### Setup for Claude Code
+
+`aid` ships with a recommended Claude Code prompt that enables orchestrator-first workflows. Copy it into your project or global CLAUDE.md:
+
+```bash
+# Project-level (recommended)
+cat claude-prompt.md >> CLAUDE.md
+
+# Or global (applies to all projects)
+cat claude-prompt.md >> ~/.claude/CLAUDE.md
+```
+
+See [claude-prompt.md](claude-prompt.md) for the full recommended prompt with agent selection guide, batch file format, and completion notification pattern.
 
 If you want an isolated state directory while testing:
 
@@ -208,6 +222,8 @@ Expected milestone format:
 | `aid usage` | Render task-history usage plus configured budget windows. Use `--session` for current session only. | `aid usage`, `aid usage --session` |
 | `aid retry` | Re-dispatch a failed task with explicit feedback. | `aid retry t-1234 --feedback "Reproduce the failure before editing."` |
 | `aid respond` | Send interactive input to a running background task. | `aid respond t-1234 "yes"` |
+| `aid benchmark` | Dispatch the same task to multiple agents and compare results. | `aid benchmark "Fix the bug" --agents codex,opencode --dir .` |
+| `aid output` | Show task output directly. | `aid output t-1234` |
 | `aid ask` | Run a quick research or exploration task, optionally with file context. | `aid ask "What changed in src/main.rs?" --files src/main.rs` |
 | `aid mcp` | Start the stdio MCP server so another tool can call `aid` natively. | `aid mcp` |
 | `aid config` | Inspect agent capability profiles, available skills, and model pricing. | `aid config agents`, `aid config skills`, `aid config pricing` |
@@ -221,8 +237,9 @@ The most effective `aid` workflow is:
 
 1. Plan the work.
 2. Dispatch specialized agents.
-3. Review artifacts and milestones.
-4. Iterate with retries or follow-up tasks.
+3. Monitor with background watch (auto-notifies on completion).
+4. Review artifacts and milestones.
+5. Iterate with retries or follow-up tasks.
 
 A practical sequence looks like this:
 
@@ -243,10 +260,12 @@ aid run codex "Rewrite README.md around the current CLI surface" \
   --skill implementer \
   --verify auto
 
-aid watch --group wg-a3f1
+aid watch --quiet --group wg-a3f1   # blocks until all tasks complete
 aid show t-1234 --diff
 aid retry t-1234 --feedback "Trim unsupported claims and improve MCP setup guidance."
 ```
+
+**For AI orchestrators (Claude Code, etc.)**: Use `aid watch --quiet --group <wg-id>` as a background command to get automatic completion callbacks instead of polling `aid board`.
 
 This pattern keeps planning cheap, execution specialized, and review artifact-driven.
 
@@ -325,6 +344,10 @@ This works well for incident response, release prep, and cross-cutting refactors
 - Reuse workgroups so shared context is stored once instead of repeated in every prompt.
 - Use `--model` only when you need a specific backend behavior or cost profile.
 - Use `--on-done "command"` to get notified when a background task completes (sets `AID_TASK_ID` and `AID_TASK_STATUS` env vars).
+- Use `--template <name>` to wrap prompts with structured methodology (bug-fix, feature, refactor).
+- Use `--repo /path/to/other-project` to dispatch tasks to a different git repository.
+- Use `aid benchmark` to compare agent quality/speed/cost on the same task.
+- Configure webhooks in `config.toml` for Slack/Discord notifications on task completion.
 
 ## Built-in Skills
 
@@ -430,9 +453,10 @@ What lives there:
 - `jobs/`: detached background worker specs
 - `batches/`: archived batch TOML files (auto-saved after dispatch)
 - `skills/`: methodology files loaded by `--skill` (auto-injected by default)
+- `templates/`: prompt templates loaded by `--template` (see default-templates/ for examples)
 - `cargo-target/`: shared Rust build cache for worktree-based tasks
 
-Configure budgets in `~/.aid/config.toml`:
+Configure budgets and webhooks in `~/.aid/config.toml`:
 
 ```toml
 [[usage.budget]]
@@ -461,6 +485,20 @@ aid usage
 
 `aid usage` combines tracked task history with any external counters you record in `config.toml`.
 
+### Webhooks
+
+Configure webhooks to receive notifications when tasks complete:
+
+```toml
+[[webhook]]
+name = "slack-notify"
+url = "https://hooks.slack.com/services/..."
+on_done = true
+on_failed = true
+```
+
+Webhooks fire automatically when background tasks reach a terminal state. Custom headers can be added via `headers`.
+
 ## Reliability
 
 `aid` includes several mechanisms to keep long-running multi-agent workflows healthy:
@@ -480,8 +518,8 @@ The diagram below is adapted from `DESIGN.md` to reflect the current `show` comm
 ```text
 ┌─────────────────────────────────────┐
 │           aid (CLI binary)          │
-├──────┬──────┬──────┬───────┬────────┤
-│ run  │ watch│ show │ board │ usage  │  ← user-facing commands
+├──────┬──────┬──────┬───────┬────────┬───────────┤
+│ run  │ watch│ show │ board │ usage  │ benchmark │  ← user-facing commands
 ├──────┴──────┴──────┴───────┴────────┤
 │           Task Manager              │
 │  ┌────────┐ ┌────────┐ ┌────────┐  │

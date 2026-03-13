@@ -3,6 +3,7 @@
 
 use crate::paths::aid_dir;
 use crate::types::AgentKind;
+use chrono::{Local, NaiveDateTime};
 use std::fs;
 use std::path::PathBuf;
 
@@ -35,13 +36,7 @@ pub fn clear_rate_limit(agent: &AgentKind) -> bool {
 
 pub fn is_rate_limited(agent: &AgentKind) -> bool {
     if let Some(info) = get_rate_limit_info(agent) {
-        // If we have recovery_at info, check if it's still in the future
-        if let Some(recovery_str) = info.recovery_at {
-            // Simple check: if recovery_at is not empty, consider it still rate limited
-            // In a real implementation, you'd parse the date and compare with current time
-            !recovery_str.is_empty()
-        } else {
-            // Fall back to mtime-based 1h window
+        let within_window = || {
             let path = marker_path(agent);
             let Ok(metadata) = fs::metadata(&path) else {
                 return false;
@@ -53,6 +48,18 @@ pub fn is_rate_limited(agent: &AgentKind) -> bool {
                 return false;
             };
             elapsed.as_secs() < RATE_LIMIT_WINDOW_SECS
+        };
+        // If we have recovery_at info, check if it's still in the future
+        if let Some(recovery_str) = info.recovery_at {
+            if let Some(recovery_at) = parse_recovery_datetime(&recovery_str) {
+                recovery_at > Local::now().naive_local()
+            } else {
+                // Fall back to mtime-based 1h window
+                within_window()
+            }
+        } else {
+            // Fall back to mtime-based 1h window
+            within_window()
         }
     } else {
         false
@@ -79,6 +86,28 @@ fn parse_recovery_time(message: &str) -> Option<String> {
     } else {
         None
     }
+}
+
+fn parse_recovery_datetime(s: &str) -> Option<NaiveDateTime> {
+    let mut parts: Vec<String> = s.split(' ').map(|part| part.to_string()).collect();
+    if parts.len() < 2 {
+        return None;
+    }
+
+    let day_token = &parts[1];
+    let day_without_comma = day_token.strip_suffix(',').unwrap_or(day_token);
+    let day_without_suffix = day_without_comma
+        .strip_suffix("st")
+        .or_else(|| day_without_comma.strip_suffix("nd"))
+        .or_else(|| day_without_comma.strip_suffix("rd"))
+        .or_else(|| day_without_comma.strip_suffix("th"))
+        .unwrap_or(day_without_comma);
+    let day_number: u32 = day_without_suffix.parse().ok()?;
+    let day_with_comma = if day_token.ends_with(',') { "," } else { "" };
+    parts[1] = format!("{:02}{}", day_number, day_with_comma);
+
+    let cleaned = parts.join(" ");
+    NaiveDateTime::parse_from_str(&cleaned, "%b %d, %Y %I:%M %p").ok()
 }
 
 #[derive(Debug, PartialEq)]
@@ -155,6 +184,52 @@ mod tests {
             parse_recovery_time("try again at tomorrow morning."),
             Some("tomorrow morning".to_string())
         );
+    }
+
+    #[test]
+    fn test_parse_recovery_datetime() {
+        let parsed = parse_recovery_datetime("Mar 19th, 2026 2:27 PM").unwrap();
+        let expected =
+            NaiveDateTime::parse_from_str("Mar 19, 2026 2:27 PM", "%b %d, %Y %I:%M %p")
+                .unwrap();
+        assert_eq!(parsed, expected);
+
+        let first = parse_recovery_datetime("Mar 1st, 2026 2:27 PM").unwrap();
+        let expected_first =
+            NaiveDateTime::parse_from_str("Mar 01, 2026 2:27 PM", "%b %d, %Y %I:%M %p")
+                .unwrap();
+        assert_eq!(first, expected_first);
+
+        let second = parse_recovery_datetime("Mar 2nd, 2026 2:27 PM").unwrap();
+        let expected_second =
+            NaiveDateTime::parse_from_str("Mar 02, 2026 2:27 PM", "%b %d, %Y %I:%M %p")
+                .unwrap();
+        assert_eq!(second, expected_second);
+
+        let third = parse_recovery_datetime("Mar 3rd, 2026 2:27 PM").unwrap();
+        let expected_third =
+            NaiveDateTime::parse_from_str("Mar 03, 2026 2:27 PM", "%b %d, %Y %I:%M %p")
+                .unwrap();
+        assert_eq!(third, expected_third);
+
+        assert!(parse_recovery_datetime("not a date").is_none());
+    }
+
+    #[test]
+    fn test_is_rate_limited_expired() {
+        let temp_dir = std::env::temp_dir().join("aid-rate-limit-test-expired");
+        let _guard = paths::AidHomeGuard::set(&temp_dir);
+        std::fs::create_dir_all(paths::aid_dir()).ok();
+
+        let past = Local::now().naive_local() - chrono::Duration::minutes(5);
+        let recovery_at = past.format("%b %d, %Y %I:%M %p").to_string();
+        let content = format!("recovery_at: {}\nmessage: test\n", recovery_at);
+        let path = marker_path(&AgentKind::Codex);
+        let _ = std::fs::write(&path, content);
+
+        assert!(!is_rate_limited(&AgentKind::Codex));
+
+        let _ = std::fs::remove_file(path);
     }
 
     #[test]

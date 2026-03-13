@@ -24,6 +24,7 @@ fn serializes_spec_to_json() {
         skills: vec![],
         interactive: true,
         on_done: None,
+        parent_task_id: None,
     };
 
     let content = serde_json::to_string_pretty(&spec).unwrap();
@@ -90,6 +91,7 @@ fn make_spec(task_id: &str) -> BackgroundRunSpec {
         skills: vec![],
         interactive: true,
         on_done: None,
+        parent_task_id: None,
     }
 }
 

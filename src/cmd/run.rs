@@ -154,6 +154,7 @@ pub async fn run(store: Arc<Store>, args: RunArgs) -> Result<TaskId> {
             skills: args.skills.clone(),
             interactive: true,
             on_done: args.on_done.clone(),
+            parent_task_id: args.parent_task_id.clone(),
         };
         background::save_spec(&spec)?;
         let mut worker = match background::spawn_worker(task_id.as_str()) {

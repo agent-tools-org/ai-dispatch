@@ -33,6 +33,8 @@ pub struct BackgroundRunSpec {
     pub interactive: bool,
     #[serde(default)]
     pub on_done: Option<String>,
+    #[serde(default)]
+    pub parent_task_id: Option<String>,
 }
 
 pub fn save_spec(spec: &BackgroundRunSpec) -> Result<()> {
@@ -161,7 +163,7 @@ async fn run_task_inner(store: &Arc<Store>, spec: &BackgroundRunSpec) -> Result<
             skills: spec.skills.clone(),
             background: false,
             announce: false,
-            parent_task_id: None,
+            parent_task_id: spec.parent_task_id.clone(),
             on_done: None,
         },
     )

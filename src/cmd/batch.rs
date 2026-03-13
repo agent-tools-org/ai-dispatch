@@ -401,6 +401,7 @@ fn insert_skipped_task(store: &Arc<Store>, task: &batch::BatchTask) -> Result<Ta
         log_path: None,
         output_path: None,
         tokens: None,
+        prompt_tokens: None,
         duration_ms: Some(0),
         model: None,
         cost_usd: None,

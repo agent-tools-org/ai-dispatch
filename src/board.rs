@@ -189,6 +189,10 @@ pub fn render_task_detail(task: &Task, events: &[TaskEvent], retry_chain: Option
         }
         out.push('\n');
     }
+    if let Some(prompt_tokens) = task.prompt_tokens {
+        let bytes = task.resolved_prompt.as_deref().map(|p| p.len()).unwrap_or(0);
+        out.push_str(&format!("Prompt: ~{} tokens ({} bytes)\n", prompt_tokens, bytes));
+    }
     if let Some(ref model) = task.model {
         out.push_str(&format!("Model: {}\n", model));
     }
@@ -342,6 +346,7 @@ mod tests {
             log_path: None,
             output_path: None,
             tokens: Some(45000),
+            prompt_tokens: None,
             duration_ms: Some(227000),
             model: None,
             cost_usd: None,

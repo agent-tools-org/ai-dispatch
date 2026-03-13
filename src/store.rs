@@ -107,6 +107,7 @@ impl Store {
             );",
         );
         let _ = conn.execute_batch("ALTER TABLE events ADD COLUMN metadata TEXT;");
+        let _ = conn.execute_batch("ALTER TABLE tasks ADD COLUMN prompt_tokens INTEGER;");
         Ok(())
     }
 
@@ -114,10 +115,10 @@ impl Store {
         self.db().execute(
             "INSERT INTO tasks (id, agent, prompt, resolved_prompt, status, parent_task_id, workgroup_id,
              caller_kind, caller_session_id, agent_session_id, repo_path, worktree_path, worktree_branch,
-             log_path, output_path, tokens, duration_ms, model, cost_usd, created_at,
+             log_path, output_path, tokens, prompt_tokens, duration_ms, model, cost_usd, created_at,
              completed_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16,
-             ?17, ?18, ?19, ?20, ?21)",
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17,
+             ?18, ?19, ?20, ?21, ?22)",
             params![
                 task.id.as_str(),
                 task.agent.as_str(),
@@ -135,6 +136,7 @@ impl Store {
                 task.log_path,
                 task.output_path,
                 task.tokens,
+                task.prompt_tokens,
                 task.duration_ms,
                 task.model,
                 task.cost_usd,
@@ -203,6 +205,14 @@ impl Store {
         self.db().execute(
             "UPDATE tasks SET resolved_prompt = ?1 WHERE id = ?2",
             params![resolved_prompt, id],
+        )?;
+        Ok(())
+    }
+
+    pub fn update_prompt_tokens(&self, id: &str, tokens: i64) -> Result<()> {
+        self.db().execute(
+            "UPDATE tasks SET prompt_tokens = ?1 WHERE id = ?2",
+            params![tokens, id],
         )?;
         Ok(())
     }
@@ -289,7 +299,7 @@ impl Store {
         let mut stmt = conn.prepare(
             "SELECT id, agent, prompt, resolved_prompt, status, parent_task_id, workgroup_id,
              caller_kind, caller_session_id, agent_session_id, repo_path, worktree_path, worktree_branch,
-             log_path, output_path, tokens, duration_ms, model, cost_usd, created_at,
+             log_path, output_path, tokens, prompt_tokens, duration_ms, model, cost_usd, created_at,
              completed_at
              FROM tasks WHERE id = ?1",
         )?;
@@ -321,7 +331,7 @@ impl Store {
             TaskFilter::All => (
                 "SELECT id, agent, prompt, resolved_prompt, status, parent_task_id, workgroup_id,
                  caller_kind, caller_session_id, agent_session_id, repo_path, worktree_path, worktree_branch,
-                 log_path, output_path, tokens, duration_ms, model, cost_usd, created_at,
+                 log_path, output_path, tokens, prompt_tokens, duration_ms, model, cost_usd, created_at,
                  completed_at
                  FROM tasks ORDER BY created_at DESC",
                 vec![],
@@ -329,7 +339,7 @@ impl Store {
             TaskFilter::Running => (
                 "SELECT id, agent, prompt, resolved_prompt, status, parent_task_id, workgroup_id,
                  caller_kind, caller_session_id, agent_session_id, repo_path, worktree_path, worktree_branch,
-                 log_path, output_path, tokens, duration_ms, model, cost_usd, created_at,
+                 log_path, output_path, tokens, prompt_tokens, duration_ms, model, cost_usd, created_at,
                  completed_at
                  FROM tasks WHERE status IN (?1, ?2) ORDER BY created_at DESC",
                 vec!["running".to_string(), "awaiting_input".to_string()],
@@ -337,7 +347,7 @@ impl Store {
             TaskFilter::Today => (
                 "SELECT id, agent, prompt, resolved_prompt, status, parent_task_id, workgroup_id,
                  caller_kind, caller_session_id, agent_session_id, repo_path, worktree_path, worktree_branch,
-                 log_path, output_path, tokens, duration_ms, model, cost_usd, created_at,
+                 log_path, output_path, tokens, prompt_tokens, duration_ms, model, cost_usd, created_at,
                  completed_at
                  FROM tasks ORDER BY created_at DESC",
                 vec![],
@@ -362,7 +372,7 @@ impl Store {
         let mut stmt = conn.prepare(
             "SELECT id, agent, prompt, resolved_prompt, status, parent_task_id, workgroup_id,
              caller_kind, caller_session_id, agent_session_id, repo_path, worktree_path, worktree_branch,
-             log_path, output_path, tokens, duration_ms, model, cost_usd, created_at,
+             log_path, output_path, tokens, prompt_tokens, duration_ms, model, cost_usd, created_at,
              completed_at
              FROM tasks WHERE caller_session_id = ?1 ORDER BY created_at DESC",
         )?;
@@ -410,11 +420,12 @@ fn row_to_task(row: &rusqlite::Row) -> rusqlite::Result<Result<Task>> {
         log_path: row.get(13)?,
         output_path: row.get(14)?,
         tokens: row.get(15)?,
-        duration_ms: row.get(16)?,
-        model: row.get(17)?,
-        cost_usd: row.get(18)?,
-        created_at: parse_dt(&row.get::<_, String>(19)?),
-        completed_at: row.get::<_, Option<String>>(20)?.map(|s| parse_dt(&s)),
+        prompt_tokens: row.get(16)?,
+        duration_ms: row.get(17)?,
+        model: row.get(18)?,
+        cost_usd: row.get(19)?,
+        created_at: parse_dt(&row.get::<_, String>(20)?),
+        completed_at: row.get::<_, Option<String>>(21)?.map(|s| parse_dt(&s)),
     }))
 }
 
@@ -480,6 +491,7 @@ mod tests {
             log_path: None,
             output_path: None,
             tokens: None,
+            prompt_tokens: None,
             duration_ms: None,
             model: None,
             cost_usd: None,

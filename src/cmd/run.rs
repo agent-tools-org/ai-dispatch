@@ -186,6 +186,7 @@ pub async fn run(store: Arc<Store>, args: RunArgs) -> Result<TaskId> {
         log_path: Some(log_path.to_string_lossy().to_string()),
         output_path: args.output.clone(),
         tokens: None,
+        prompt_tokens: None,
         duration_ms: None,
         model: args.model.clone(),
         cost_usd: None,
@@ -239,6 +240,8 @@ pub async fn run(store: Arc<Store>, args: RunArgs) -> Result<TaskId> {
         effective_prompt = format!("{guard}{effective_prompt}");
     }
     store.update_resolved_prompt(task_id.as_str(), &effective_prompt)?;
+    let prompt_tokens = templates::estimate_tokens(&effective_prompt) as i64;
+    store.update_prompt_tokens(task_id.as_str(), prompt_tokens)?;
 
     let opts = RunOpts {
         dir: effective_dir.clone(),

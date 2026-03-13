@@ -391,6 +391,7 @@ mod tests {
             log_path: None,
             output_path: None,
             tokens: Some(tokens),
+            prompt_tokens: None,
             duration_ms: Some(1000),
             model: None,
             cost_usd: Some(cost_usd),

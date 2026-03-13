@@ -285,6 +285,7 @@ mod tests {
             log_path: None,
             output_path: None,
             tokens: Some(42),
+            prompt_tokens: None,
             duration_ms: Some(1_500),
             model: Some("gpt-5".to_string()),
             cost_usd: Some(0.01),

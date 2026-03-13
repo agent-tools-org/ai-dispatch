@@ -64,8 +64,8 @@ impl Store {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use chrono::Local;
     use crate::types::{AgentKind, Task, TaskId, TaskStatus};
+    use chrono::Local;
 
     fn make_task(id: &str, group_id: &str) -> Task {
         Task {
@@ -85,6 +85,7 @@ mod tests {
             log_path: None,
             output_path: None,
             tokens: None,
+            prompt_tokens: None,
             duration_ms: None,
             model: None,
             cost_usd: None,
@@ -129,6 +130,9 @@ mod tests {
 
         assert_eq!(tagged_tasks, Some(1));
         assert_eq!(task.workgroup_id.as_deref(), Some(workgroup.id.as_str()));
-        assert!(store.get_workgroup(workgroup.id.as_str()).unwrap().is_none());
+        assert!(store
+            .get_workgroup(workgroup.id.as_str())
+            .unwrap()
+            .is_none());
     }
 }

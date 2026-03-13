@@ -35,6 +35,10 @@ pub fn load_template(name: &str) -> Result<String> {
 pub fn apply_template(template_content: &str, user_prompt: &str) -> String {
     template_content.replace("{{prompt}}", user_prompt)
 }
+
+pub fn estimate_tokens(text: &str) -> usize {
+    text.len() / 4
+}
 pub fn milestone_instruction() -> &'static str { "\nAfter completing each major step, print on its own line: [MILESTONE] <brief description>" }
 pub fn inject_milestone_prompt(raw: &str) -> String { format!("{raw}{}", milestone_instruction()) }
 pub fn codex_guard() -> &'static str { "\nIMPORTANT: If no changes are needed, do NOT create an empty commit. Instead, print 'NO_CHANGES_NEEDED: <reason>' and exit." }

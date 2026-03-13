@@ -27,6 +27,7 @@ fn stores_recent_question_as_awaiting_prompt_metadata() {
         log_path: None,
         output_path: None,
         tokens: None,
+        prompt_tokens: None,
         duration_ms: None,
         model: None,
         cost_usd: None,

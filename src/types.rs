@@ -230,6 +230,7 @@ pub struct Task {
     pub log_path: Option<String>,
     pub output_path: Option<String>,
     pub tokens: Option<i64>,
+    pub prompt_tokens: Option<i64>,
     pub duration_ms: Option<i64>,
     pub model: Option<String>,
     pub cost_usd: Option<f64>,

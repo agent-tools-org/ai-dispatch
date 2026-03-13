@@ -22,7 +22,10 @@ pub fn matches_current(task: &Task) -> bool {
 }
 
 pub fn display(task: &Task) -> String {
-    match (task.caller_kind.as_deref(), task.caller_session_id.as_deref()) {
+    match (
+        task.caller_kind.as_deref(),
+        task.caller_session_id.as_deref(),
+    ) {
         (Some(kind), Some(session_id)) => {
             format!("{kind}:{}", shorten(session_id))
         }
@@ -95,6 +98,7 @@ mod tests {
             log_path: None,
             output_path: None,
             tokens: None,
+            prompt_tokens: None,
             duration_ms: None,
             model: None,
             cost_usd: None,

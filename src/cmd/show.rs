@@ -145,6 +145,17 @@ pub fn diff_text(store: &Arc<Store>, task_id: &str) -> Result<String> {
 
 // --- Output mode ---
 
+pub fn output_text_for_task(store: &Store, task_id: &str) -> Result<String> {
+    let task = load_task_for_output(task_id, store)?;
+    read_task_output(&task)
+}
+
+fn load_task_for_output(task_id: &str, store: &Store) -> Result<Task> {
+    store
+        .get_task(task_id)?
+        .ok_or_else(|| anyhow::anyhow!("Task '{task_id}' not found"))
+}
+
 pub fn output_text(store: &Arc<Store>, task_id: &str) -> Result<String> {
     let task = load_task(store, task_id)?;
     read_task_output(&task)

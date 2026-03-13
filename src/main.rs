@@ -193,6 +193,11 @@ enum Commands {
     },
     #[command(hide = true, name = "__run-task")]
     InternalRunTask { task_id: String },
+/// Print task output (shortcut for `show --output`)
+    Output {
+        /// Task ID
+        task_id: String,
+    },
 }
 
 #[tokio::main]
@@ -321,6 +326,11 @@ async fn main() -> Result<()> {
                 },
             )
             .await?;
+        }
+        Commands::Output { task_id } => {
+            let store = store::Store::open(&paths::db_path())?;
+            let text = cmd::show::output_text_for_task(&store, &task_id)?;
+            print!("{text}");
         }
         Commands::Usage { session } => {
             cmd::usage::run(&store, session)?;

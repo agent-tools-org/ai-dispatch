@@ -25,7 +25,7 @@ pub fn validate_git_repo(path: &Path) -> Result<()> {
 fn sync_cargo_lock(repo_dir: &Path, wt_path: &Path) {
     let src = repo_dir.join("Cargo.lock");
     let dst = wt_path.join("Cargo.lock");
-    if src.exists() && !dst.exists() {
+    if src.exists() {
         let _ = std::fs::copy(&src, &dst);
     }
 }
@@ -220,6 +220,12 @@ mod tests {
         let branch = unique_branch("cargo-lock-test");
         let info = create_worktree(repo.path(), branch.as_str(), None).unwrap();
         assert!(info.path.join("Cargo.lock").exists());
+        std::fs::write(repo.path().join("Cargo.lock"), "# updated lock\n").unwrap();
+        let info = create_worktree(repo.path(), branch.as_str(), None).unwrap();
+        assert_eq!(
+            std::fs::read_to_string(info.path.join("Cargo.lock")).unwrap(),
+            "# updated lock\n"
+        );
 
         git(
             repo.path(),

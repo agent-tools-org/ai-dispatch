@@ -22,11 +22,24 @@ pub fn validate_git_repo(path: &Path) -> Result<()> {
     Ok(())
 }
 
-pub fn create_worktree(repo_dir: &Path, branch: &str, base_branch: Option<&str>) -> Result<WorktreeInfo> {
+fn sync_cargo_lock(repo_dir: &Path, wt_path: &Path) {
+    let src = repo_dir.join("Cargo.lock");
+    let dst = wt_path.join("Cargo.lock");
+    if src.exists() && !dst.exists() {
+        let _ = std::fs::copy(&src, &dst);
+    }
+}
+
+pub fn create_worktree(
+    repo_dir: &Path,
+    branch: &str,
+    base_branch: Option<&str>,
+) -> Result<WorktreeInfo> {
     validate_git_repo(repo_dir)?;
     let wt_path = PathBuf::from(format!("/tmp/aid-wt-{branch}"));
 
     if wt_path.exists() {
+        sync_cargo_lock(repo_dir, &wt_path);
         return Ok(WorktreeInfo {
             path: wt_path,
             branch: branch.to_string(),
@@ -42,6 +55,7 @@ pub fn create_worktree(repo_dir: &Path, branch: &str, base_branch: Option<&str>)
         .context("Failed to run git worktree add")?;
 
     if out.status.success() {
+        sync_cargo_lock(repo_dir, &wt_path);
         return Ok(WorktreeInfo {
             path: wt_path,
             branch: branch.to_string(),
@@ -70,6 +84,7 @@ pub fn create_worktree(repo_dir: &Path, branch: &str, base_branch: Option<&str>)
         "git worktree add failed: {}",
         String::from_utf8_lossy(&out.stderr)
     );
+    sync_cargo_lock(repo_dir, &wt_path);
     Ok(WorktreeInfo {
         path: wt_path,
         branch: branch.to_string(),
@@ -79,7 +94,13 @@ pub fn create_worktree(repo_dir: &Path, branch: &str, base_branch: Option<&str>)
 pub fn branch_has_commits_ahead_of_main(repo_dir: &Path, branch: &str) -> Result<bool> {
     validate_git_repo(repo_dir)?;
     let status = Command::new("git")
-        .args(["-C", &repo_dir.to_string_lossy(), "rev-parse", "--verify", branch])
+        .args([
+            "-C",
+            &repo_dir.to_string_lossy(),
+            "rev-parse",
+            "--verify",
+            branch,
+        ])
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())
         .status()
@@ -101,7 +122,11 @@ pub fn branch_has_commits_ahead_of_main(repo_dir: &Path, branch: &str) -> Result
     if !out.status.success() {
         return Ok(false);
     }
-    Ok(String::from_utf8_lossy(&out.stdout).trim().parse::<u32>().unwrap_or(0) > 0)
+    Ok(String::from_utf8_lossy(&out.stdout)
+        .trim()
+        .parse::<u32>()
+        .unwrap_or(0)
+        > 0)
 }
 
 #[cfg(test)]
@@ -112,14 +137,22 @@ mod tests {
 
     fn git(repo_dir: &Path, args: &[&str]) {
         let repo_dir = repo_dir.to_string_lossy().to_string();
-        assert!(Command::new("git").args(["-C", repo_dir.as_str()]).args(args).status().unwrap().success());
+        assert!(Command::new("git")
+            .args(["-C", repo_dir.as_str()])
+            .args(args)
+            .status()
+            .unwrap()
+            .success());
     }
 
     fn unique_branch(prefix: &str) -> String {
         format!(
             "{prefix}-{}-{}",
             std::process::id(),
-            SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos()
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
         )
     }
 
@@ -151,9 +184,51 @@ mod tests {
         git(repo.path(), &["checkout", "main"]);
 
         let retry_branch = unique_branch("retry");
-        let info = create_worktree(repo.path(), retry_branch.as_str(), Some(base_branch.as_str())).unwrap();
+        let info = create_worktree(
+            repo.path(),
+            retry_branch.as_str(),
+            Some(base_branch.as_str()),
+        )
+        .unwrap();
 
-        assert_eq!(std::fs::read_to_string(info.path.join("inherited.txt")).unwrap(), "from base\n");
-        git(repo.path(), &["worktree", "remove", "--force", &info.path.to_string_lossy()]);
+        assert_eq!(
+            std::fs::read_to_string(info.path.join("inherited.txt")).unwrap(),
+            "from base\n"
+        );
+        git(
+            repo.path(),
+            &[
+                "worktree",
+                "remove",
+                "--force",
+                &info.path.to_string_lossy(),
+            ],
+        );
+    }
+
+    #[test]
+    fn create_worktree_syncs_cargo_lock() {
+        let repo = TempDir::new().unwrap();
+        git(repo.path(), &["init", "-b", "main"]);
+        git(repo.path(), &["config", "user.email", "test@example.com"]);
+        git(repo.path(), &["config", "user.name", "Test User"]);
+        std::fs::write(repo.path().join("file.txt"), "hello\n").unwrap();
+        std::fs::write(repo.path().join("Cargo.lock"), "# lock content\n").unwrap();
+        git(repo.path(), &["add", "."]);
+        git(repo.path(), &["commit", "-m", "init"]);
+
+        let branch = unique_branch("cargo-lock-test");
+        let info = create_worktree(repo.path(), branch.as_str(), None).unwrap();
+        assert!(info.path.join("Cargo.lock").exists());
+
+        git(
+            repo.path(),
+            &[
+                "worktree",
+                "remove",
+                "--force",
+                &info.path.to_string_lossy(),
+            ],
+        );
     }
 }

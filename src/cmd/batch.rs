@@ -14,9 +14,13 @@ pub struct BatchArgs {
     pub file: String,
     pub parallel: bool,
     pub wait: bool,
+    pub max_concurrent: Option<usize>,
 }
 
 pub async fn run(store: Arc<Store>, args: BatchArgs) -> Result<()> {
+    if args.max_concurrent == Some(0) {
+        anyhow::bail!("--max-concurrent must be at least 1");
+    }
     let path = Path::new(&args.file);
     let mut config = batch::parse_batch_file(path)
         .with_context(|| format!("Failed to load batch file {}", path.display()))?;
@@ -33,11 +37,11 @@ pub async fn run(store: Arc<Store>, args: BatchArgs) -> Result<()> {
     }
     println!("Batch: dispatching {total} task(s) from {}", path.display());
     let task_ids = if has_dependencies && args.parallel {
-        dispatch_parallel_with_dependencies(store.clone(), &config.tasks).await?
+        dispatch_parallel_with_dependencies(store.clone(), &config.tasks, args.max_concurrent).await?
     } else if has_dependencies {
         dispatch_sequential_with_dependencies(store.clone(), &config.tasks).await?
     } else if args.parallel {
-        dispatch_parallel(store.clone(), &config.tasks).await?
+        dispatch_parallel(store.clone(), &config.tasks, args.max_concurrent).await?
     } else {
         dispatch_sequential(store.clone(), &config.tasks).await?
     };
@@ -69,6 +73,7 @@ struct DispatchedTask {
     index: usize,
     task_id: Option<String>,
 }
+type BatchJob<T> = std::pin::Pin<Box<dyn std::future::Future<Output = Result<T>> + Send>>;
 fn task_to_run_args(task: &batch::BatchTask, background: bool) -> RunArgs {
     RunArgs {
         agent_name: task.agent.clone(),
@@ -100,20 +105,60 @@ fn task_has_dependencies(task: &batch::BatchTask) -> bool {
 fn task_label(task: &batch::BatchTask, task_idx: usize) -> String {
     task.name.clone().unwrap_or_else(|| format!("#{task_idx}"))
 }
-async fn dispatch_parallel(store: Arc<Store>, tasks: &[batch::BatchTask]) -> Result<Vec<String>> {
-    let handles: Vec<_> = tasks
+async fn dispatch_parallel(
+    store: Arc<Store>,
+    tasks: &[batch::BatchTask],
+    max_concurrent: Option<usize>,
+) -> Result<Vec<String>> {
+    let throttled = max_concurrent.is_some();
+    let jobs = tasks
         .iter()
         .map(|task| {
             let store = store.clone();
             let run_args = task_to_run_args(task, true);
-            tokio::spawn(async move { run::run(store, run_args).await })
+            Box::pin(async move {
+                let task_id = run::run(store.clone(), run_args).await?;
+                if throttled {
+                    wait_for_background_completion(&store, task_id.as_str()).await?;
+                }
+                Ok(task_id)
+            }) as BatchJob<_>
+        })
+        .collect();
+    let task_ids: Vec<TaskId> = run_parallel_jobs(jobs, max_concurrent).await?;
+    Ok(task_ids.into_iter().map(|task_id| task_id.to_string()).collect())
+}
+async fn run_parallel_jobs<T>(
+    jobs: Vec<BatchJob<T>>,
+    max_concurrent: Option<usize>,
+) -> Result<Vec<T>>
+where
+    T: Send + 'static,
+{
+    let semaphore = max_concurrent.map(tokio::sync::Semaphore::new).map(Arc::new);
+    let handles: Vec<_> = jobs
+        .into_iter()
+        .map(|job| {
+            let semaphore = semaphore.clone();
+            tokio::spawn(async move {
+                let _permit = match semaphore {
+                    Some(semaphore) => Some(
+                        semaphore
+                            .acquire_owned()
+                            .await
+                            .context("Batch task semaphore closed")?,
+                    ),
+                    None => None,
+                };
+                job.await
+            })
         })
         .collect();
     let mut first_err = None;
-    let mut task_ids = Vec::new();
+    let mut results = Vec::new();
     for handle in handles {
         match handle.await.context("Batch task join failure") {
-            Ok(Ok(task_id)) => task_ids.push(task_id.to_string()),
+            Ok(Ok(result)) => results.push(result),
             Ok(Err(err)) if first_err.is_none() => first_err = Some(err),
             Err(err) if first_err.is_none() => first_err = Some(err),
             _ => {}
@@ -122,7 +167,18 @@ async fn dispatch_parallel(store: Arc<Store>, tasks: &[batch::BatchTask]) -> Res
     if let Some(err) = first_err {
         return Err(err);
     }
-    Ok(task_ids)
+    Ok(results)
+}
+async fn wait_for_background_completion(store: &Arc<Store>, task_id: &str) -> Result<()> {
+    loop {
+        let Some(task) = store.get_task(task_id)? else {
+            return Ok(());
+        };
+        if matches!(task.status, TaskStatus::Done | TaskStatus::Failed) {
+            return Ok(());
+        }
+        tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+    }
 }
 async fn dispatch_sequential(store: Arc<Store>, tasks: &[batch::BatchTask]) -> Result<Vec<String>> {
     let mut task_ids = Vec::new();
@@ -137,22 +193,27 @@ async fn dispatch_sequential(store: Arc<Store>, tasks: &[batch::BatchTask]) -> R
 async fn dispatch_parallel_with_dependencies(
     store: Arc<Store>,
     tasks: &[batch::BatchTask],
+    max_concurrent: Option<usize>,
 ) -> Result<Vec<String>> {
     let dependencies = batch::dependency_indices(tasks)?;
     let mut started = vec![false; tasks.len()];
     let mut active: Vec<(usize, String)> = Vec::new();
     let mut outcomes = vec![None; tasks.len()];
     let mut task_ids = Vec::new();
+    let max_active = max_concurrent.unwrap_or(tasks.len());
     while outcomes.iter().any(Option::is_none) {
         let ready = find_ready_tasks(&store, tasks, &dependencies, &started, &mut outcomes)?;
-        for dispatch in dispatch_level(store.clone(), tasks, &ready).await? {
-            started[dispatch.index] = true;
-            match dispatch.task_id {
-                Some(task_id) => {
-                    task_ids.push(task_id.clone());
-                    active.push((dispatch.index, task_id));
+        let available = max_active.saturating_sub(active.len());
+        if available > 0 {
+            for dispatch in dispatch_level(store.clone(), tasks, &ready[..ready.len().min(available)]).await? {
+                started[dispatch.index] = true;
+                match dispatch.task_id {
+                    Some(task_id) => {
+                        task_ids.push(task_id.clone());
+                        active.push((dispatch.index, task_id));
+                    }
+                    None => outcomes[dispatch.index] = Some(BatchTaskOutcome::Failed),
                 }
-                None => outcomes[dispatch.index] = Some(BatchTaskOutcome::Failed),
             }
         }
         if active.is_empty() {
@@ -443,5 +504,24 @@ mod tests {
         let ready = find_ready_tasks(&store, &tasks, &deps, &started, &mut outcomes).unwrap();
         assert!(ready.is_empty()); // B skipped
         assert_eq!(outcomes[1], Some(BatchTaskOutcome::Skipped));
+    }
+
+    #[tokio::test]
+    async fn run_parallel_jobs_with_max_concurrent_one_runs_sequentially() {
+        let jobs: Vec<BatchJob<(std::time::Instant, std::time::Instant)>> = (0..3)
+            .map(|_| {
+                Box::pin(async move {
+                    let start = std::time::Instant::now();
+                    tokio::time::sleep(tokio::time::Duration::from_millis(40)).await;
+                    Ok((start, std::time::Instant::now()))
+                }) as BatchJob<_>
+            })
+            .collect();
+
+        let mut spans = run_parallel_jobs(jobs, Some(1)).await.unwrap();
+        spans.sort_by_key(|(start, _)| *start);
+
+        assert_eq!(spans.len(), 3);
+        assert!(spans.windows(2).all(|window| window[1].0 >= window[0].1));
     }
 }

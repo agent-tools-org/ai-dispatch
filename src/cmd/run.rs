@@ -88,8 +88,17 @@ pub async fn run(store: Arc<Store>, args: RunArgs) -> Result<TaskId> {
     } else {
         None
     };
-    let mut effective_prompt =
-        crate::workgroup::compose_prompt(&args.prompt, file_context.as_deref(), workgroup.as_ref());
+    let milestones = if let Some(group_id) = args.group.as_deref() {
+        store.get_workgroup_milestones(group_id)?
+    } else {
+        vec![]
+    };
+    let mut effective_prompt = crate::workgroup::compose_prompt(
+        &args.prompt,
+        file_context.as_deref(),
+        workgroup.as_ref(),
+        &milestones,
+    );
     if !args.skills.is_empty() {
         let skill_text = skills::load_skills(&args.skills)?;
         effective_prompt = format!("{effective_prompt}\n\n--- Methodology ---\n{skill_text}");

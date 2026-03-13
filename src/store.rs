@@ -235,6 +235,20 @@ impl Store {
         Ok(milestone)
     }
 
+    pub fn get_workgroup_milestones(&self, workgroup_id: &str) -> Result<Vec<(String, String)>> {
+        let conn = self.db();
+        let mut stmt = conn.prepare(
+            "SELECT e.task_id, e.detail FROM events e
+             JOIN tasks t ON e.task_id = t.id
+             WHERE t.workgroup_id = ?1 AND e.event_type = 'milestone'
+             ORDER BY e.timestamp ASC",
+        )?;
+        let rows = stmt.query_map(params![workgroup_id], |row| {
+            Ok((row.get(0)?, row.get(1)?))
+        })?;
+        rows.map(|row| Ok(row?)).collect()
+    }
+
     pub fn get_task(&self, id: &str) -> Result<Option<Task>> {
         let conn = self.db();
         let mut stmt = conn.prepare(
@@ -486,5 +500,65 @@ mod tests {
 
         let milestone = store.latest_milestone("t-0030").unwrap();
         assert_eq!(milestone.as_deref(), Some("tests passing"));
+    }
+
+    #[test]
+    fn gets_workgroup_milestones() {
+        let store = Store::open_memory().unwrap();
+        let workgroup = store
+            .create_workgroup("dispatch", "Shared API contract context.")
+            .unwrap();
+
+        let mut first = make_task("t-0040", AgentKind::Codex, TaskStatus::Running);
+        first.workgroup_id = Some(workgroup.id.as_str().to_string());
+        store.insert_task(&first).unwrap();
+
+        let mut second = make_task("t-0041", AgentKind::Gemini, TaskStatus::Running);
+        second.workgroup_id = Some(workgroup.id.as_str().to_string());
+        store.insert_task(&second).unwrap();
+
+        let mut other = make_task("t-0042", AgentKind::Cursor, TaskStatus::Running);
+        other.workgroup_id = Some("wg-other".to_string());
+        store.insert_task(&other).unwrap();
+
+        store.insert_event(&TaskEvent {
+            task_id: TaskId("t-0040".to_string()),
+            timestamp: Local::now() - chrono::Duration::seconds(3),
+            event_kind: EventKind::Milestone,
+            detail: "finding one".to_string(),
+            metadata: None,
+        }).unwrap();
+        store.insert_event(&TaskEvent {
+            task_id: TaskId("t-0040".to_string()),
+            timestamp: Local::now() - chrono::Duration::seconds(2),
+            event_kind: EventKind::ToolCall,
+            detail: "ignored".to_string(),
+            metadata: None,
+        }).unwrap();
+        store.insert_event(&TaskEvent {
+            task_id: TaskId("t-0041".to_string()),
+            timestamp: Local::now() - chrono::Duration::seconds(1),
+            event_kind: EventKind::Milestone,
+            detail: "finding two".to_string(),
+            metadata: None,
+        }).unwrap();
+        store.insert_event(&TaskEvent {
+            task_id: TaskId("t-0042".to_string()),
+            timestamp: Local::now(),
+            event_kind: EventKind::Milestone,
+            detail: "other group".to_string(),
+            metadata: None,
+        }).unwrap();
+
+        let milestones = store
+            .get_workgroup_milestones(workgroup.id.as_str())
+            .unwrap();
+        assert_eq!(
+            milestones,
+            vec![
+                ("t-0040".to_string(), "finding one".to_string()),
+                ("t-0041".to_string(), "finding two".to_string()),
+            ]
+        );
     }
 }

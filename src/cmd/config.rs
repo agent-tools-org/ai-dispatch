@@ -103,10 +103,10 @@ pub fn run(_store: &Arc<Store>, action: ConfigAction) -> Result<()> {
 fn agent_profile(kind: AgentKind, installed: bool) -> String {
     let profile = AGENT_PROFILES.iter().find(|(k, _, _, _, _)| *k == kind);
     let (strengths, cost, best_for, streaming) = match profile {
-        Some((_, s, c, b, st)) => (s, c, b, st),
-        None => ("unknown", "unknown", "unknown", &false),
+        Some((_, s, c, b, st)) => (*s, *c, *b, *st),
+        None => ("unknown", "unknown", "unknown", false),
     };
-    let mode = if *streaming { "streaming" } else { "buffered" };
+    let mode = if streaming { "streaming" } else { "buffered" };
     let install_status = if installed {
         "installed"
     } else {

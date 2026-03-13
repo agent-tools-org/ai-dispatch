@@ -200,6 +200,7 @@ async fn run_explain(
             background: false,
             announce: true,
             parent_task_id: Some(task_id.to_string()),
+            on_done: None,
         },
     )
     .await?;

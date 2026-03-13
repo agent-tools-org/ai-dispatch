@@ -30,6 +30,8 @@ pub struct BackgroundRunSpec {
     pub skills: Vec<String>,
     #[serde(default)]
     pub interactive: bool,
+    #[serde(default)]
+    pub on_done: Option<String>,
 }
 
 pub fn save_spec(spec: &BackgroundRunSpec) -> Result<()> {
@@ -58,6 +60,15 @@ pub async fn run_task(store: Arc<Store>, task_id: &str) -> Result<()> {
     let result = run_task_inner(&store, &spec).await;
     let _ = remove_spec(task_id);
     let _ = crate::input_signal::clear_response(task_id);
+
+    if let Some(ref cmd) = spec.on_done {
+        let status = if result.is_ok() { "done" } else { "failed" };
+        let _ = std::process::Command::new("sh")
+            .args(["-c", cmd])
+            .env("AID_TASK_ID", task_id)
+            .env("AID_TASK_STATUS", status)
+            .spawn();
+    }
 
     if let Err(err) = result {
         record_worker_failure(&store, task_id, &err)?;
@@ -150,6 +161,7 @@ async fn run_task_inner(store: &Arc<Store>, spec: &BackgroundRunSpec) -> Result<
             background: false,
             announce: false,
             parent_task_id: None,
+            on_done: None,
         },
     )
     .await?;

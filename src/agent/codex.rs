@@ -32,6 +32,9 @@ impl super::Agent for CodexAgent {
         } else {
             cmd.args(["exec", "--json", "--full-auto", &injected]);
         }
+        if let Some(ref output) = opts.output {
+            cmd.args(["-o", output]);
+        }
         if let Some(ref dir) = opts.dir {
             cmd.args(["-C", dir]);
         }

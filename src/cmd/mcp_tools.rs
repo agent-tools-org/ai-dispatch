@@ -50,6 +50,8 @@ struct RunToolArgs {
     model: Option<String>,
     group: Option<String>,
     verify: Option<String>,
+    #[serde(default)]
+    skills: Vec<String>,
 }
 
 #[derive(Deserialize)]
@@ -96,7 +98,7 @@ async fn run_tool(store: Arc<Store>, arguments: Value) -> Result<Value> {
             verify: args.verify,
             retry: 0,
             context: vec![],
-            skills: vec![],
+            skills: args.skills,
             background: args.background,
             announce: false,
             parent_task_id: None,

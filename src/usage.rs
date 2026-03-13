@@ -46,10 +46,14 @@ struct BudgetUsageRow {
 
 pub fn collect_usage(store: &Store, config: &AidConfig) -> Result<UsageSnapshot> {
     let tasks = store.list_tasks(TaskFilter::All)?;
+    collect_usage_from_tasks(&tasks, config)
+}
+
+pub fn collect_usage_from_tasks(tasks: &[Task], config: &AidConfig) -> Result<UsageSnapshot> {
     Ok(UsageSnapshot {
         generated_at: Local::now(),
-        agent_rows: collect_agent_rows(&tasks),
-        budget_rows: collect_budget_rows(&tasks, &config.usage.budgets),
+        agent_rows: collect_agent_rows(tasks),
+        budget_rows: collect_budget_rows(tasks, &config.usage.budgets),
     })
 }
 

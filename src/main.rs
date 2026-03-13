@@ -148,7 +148,11 @@ enum Commands {
         model: Option<String>,
     },
     /// Show task-history usage and configured cost budgets
-    Usage,
+    Usage {
+        /// Filter to current caller session
+        #[arg(long)]
+        session: bool,
+    },
     /// Retry a failed task with feedback
     Retry {
         task_id: String,
@@ -313,8 +317,8 @@ async fn main() -> Result<()> {
             )
             .await?;
         }
-        Commands::Usage => {
-            cmd::usage::run(&store)?;
+        Commands::Usage { session } => {
+            cmd::usage::run(&store, session)?;
         }
         Commands::Retry { task_id, feedback } => {
             cmd::retry::run(store, cmd::retry::RetryArgs { task_id, feedback }).await?;

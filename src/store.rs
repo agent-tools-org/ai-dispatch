@@ -301,6 +301,18 @@ impl Store {
         Ok(tasks)
     }
 
+    pub fn list_tasks_by_session(&self, session_id: &str) -> Result<Vec<Task>> {
+        let conn = self.db();
+        let mut stmt = conn.prepare(
+            "SELECT id, agent, prompt, status, parent_task_id, workgroup_id, caller_kind,
+             caller_session_id, worktree_path, worktree_branch, log_path, output_path,
+             tokens, duration_ms, model, cost_usd, created_at, completed_at
+             FROM tasks WHERE caller_session_id = ?1 ORDER BY created_at DESC",
+        )?;
+        let rows = stmt.query_map(params![session_id], row_to_task)?;
+        rows.map(|row| row?).collect()
+    }
+
     pub fn get_events(&self, task_id: &str) -> Result<Vec<TaskEvent>> {
         let conn = self.db();
         let mut stmt = conn.prepare(

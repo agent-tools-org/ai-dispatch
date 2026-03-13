@@ -10,6 +10,7 @@ use crate::agent::{self, RunOpts};
 use crate::background::{self, BackgroundRunSpec};
 use crate::cmd::retry_logic;
 use crate::cost;
+use crate::notify;
 use crate::paths;
 use crate::session;
 use crate::skills;
@@ -229,6 +230,7 @@ pub async fn run(store: Arc<Store>, args: RunArgs) -> Result<TaskId> {
             Err(err) => {
                 let _ = background::clear_spec(task_id.as_str());
                 store.update_task_status(task_id.as_str(), TaskStatus::Failed)?;
+                notify_task_completion(&store, &task_id)?;
                 return Err(err);
             }
         };
@@ -236,6 +238,7 @@ pub async fn run(store: Arc<Store>, args: RunArgs) -> Result<TaskId> {
             let _ = worker.kill();
             let _ = background::clear_spec(task_id.as_str());
             store.update_task_status(task_id.as_str(), TaskStatus::Failed)?;
+            notify_task_completion(&store, &task_id)?;
             return Err(err);
         }
 
@@ -288,6 +291,7 @@ pub async fn run(store: Arc<Store>, args: RunArgs) -> Result<TaskId> {
             args.verify.as_deref(),
             effective_dir.as_deref(),
         );
+        notify_task_completion(&store, &task_id)?;
         crate::webhook::fire_task_webhooks(&store, task_id.as_str()).await;
         if let Some(mut retry_args) = retry_logic::prepare_retry(store.clone(), &task_id, &args).await?
         {
@@ -387,6 +391,13 @@ fn format_duration(ms: i64) -> String {
     } else {
         format!("{}m {:02}s", secs / 60, secs % 60)
     }
+}
+
+fn notify_task_completion(store: &Store, task_id: &TaskId) -> Result<()> {
+    if let Some(task) = store.get_task(task_id.as_str())? {
+        notify::notify_completion(&task);
+    }
+    Ok(())
 }
 
 /// Run verification if --verify was set and a working dir exists.

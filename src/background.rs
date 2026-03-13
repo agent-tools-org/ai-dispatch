@@ -9,6 +9,7 @@ use std::sync::Arc;
 
 use crate::agent::{self, RunOpts};
 use crate::config;
+use crate::notify;
 use crate::paths;
 use crate::store::Store;
 use crate::types::{AgentKind, EventKind, TaskEvent, TaskFilter, TaskId, TaskStatus};
@@ -152,6 +153,7 @@ async fn run_task_inner(store: &Arc<Store>, spec: &BackgroundRunSpec) -> Result<
         spec.verify.as_deref(),
         spec.dir.as_deref(),
     );
+    notify_task_completion(store, &spec.task_id)?;
     if let Some(worktree_dir) = spec.dir.as_deref() {
         if crate::commit::has_uncommitted_changes(worktree_dir).unwrap_or(false) {
             if let Err(e) = crate::commit::auto_commit(worktree_dir, &spec.task_id, &spec.prompt) {
@@ -313,6 +315,14 @@ fn record_failure(
         detail: event_detail.to_string(),
         metadata: None,
     })?;
+    notify_task_completion(store, task_id)?;
+    Ok(())
+}
+
+fn notify_task_completion(store: &Store, task_id: &str) -> Result<()> {
+    if let Some(task) = store.get_task(task_id)? {
+        notify::notify_completion(&task);
+    }
     Ok(())
 }
 

@@ -78,6 +78,28 @@ fn marks_running_background_tasks_failed_when_worker_is_missing() {
     assert_eq!(stderr.trim(), ZOMBIE_FAILURE_DETAIL);
 }
 
+#[test]
+fn completion_notifications_are_written_as_jsonl() {
+    let temp = tempfile::tempdir().unwrap();
+    let _aid_home = paths::AidHomeGuard::set(temp.path());
+    let mut task = make_task("t-note", TaskStatus::Done);
+    task.duration_ms = Some(1_500);
+    task.cost_usd = Some(0.25);
+    task.prompt = "x".repeat(120);
+
+    crate::notify::notify_completion(&task);
+
+    let line = crate::notify::read_recent(20).unwrap();
+    let value: serde_json::Value = serde_json::from_str(&line).unwrap();
+    assert_eq!(value["task_id"], "t-note");
+    assert_eq!(value["agent"], "codex");
+    assert_eq!(value["status"], "DONE");
+    assert_eq!(value["duration_ms"], 1_500);
+    assert_eq!(value["cost_usd"], 0.25);
+    assert_eq!(value["prompt"], "x".repeat(100));
+    assert!(value["timestamp"].as_str().is_some());
+}
+
 fn make_spec(task_id: &str) -> BackgroundRunSpec {
     BackgroundRunSpec {
         task_id: task_id.to_string(),

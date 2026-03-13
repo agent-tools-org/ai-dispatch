@@ -13,6 +13,7 @@ mod context;
 mod cost;
 mod explore;
 mod input_signal;
+mod notify;
 mod paths;
 mod prompt;
 mod pty_bridge;
@@ -148,6 +149,8 @@ enum Commands {
         #[arg(long)]
         group: Option<String>,
     },
+    /// Print the most recent completion notifications
+    Completions,
     /// Inspect task artifacts (events, diff, output, explain)
     Show {
         /// Task ID to inspect
@@ -339,6 +342,12 @@ async fn main() -> Result<()> {
             group,
         } => {
             cmd::board::run(&store, running, today, mine, group.as_deref())?;
+        }
+        Commands::Completions => {
+            let text = notify::read_recent(20)?;
+            if !text.is_empty() {
+                println!("{text}");
+            }
         }
         Commands::Show {
             task_id,

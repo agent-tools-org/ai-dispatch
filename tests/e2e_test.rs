@@ -46,6 +46,26 @@ fn board_works_with_empty_db() {
 }
 
 #[test]
+fn completions_prints_recent_lines() {
+    let temp_dir = TempDir::new().unwrap();
+    std::fs::write(
+        temp_dir.path().join("completions.jsonl"),
+        "{\"task_id\":\"t-1\"}\n{\"task_id\":\"t-2\"}\n",
+    )
+    .unwrap();
+
+    let output = aid_cmd_in(temp_dir.path())
+        .arg("completions")
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+    assert_eq!(
+        String::from_utf8_lossy(&output.stdout),
+        "{\"task_id\":\"t-1\"}\n{\"task_id\":\"t-2\"}\n",
+    );
+}
+
+#[test]
 fn watch_quiet_works_with_empty_db() {
     let (mut cmd, _tmp) = aid_cmd();
     let output = cmd.args(["watch", "--quiet"]).output().unwrap();

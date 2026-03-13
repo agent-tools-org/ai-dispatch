@@ -264,6 +264,21 @@ impl Store {
         }
     }
 
+    pub fn get_retry_chain(&self, task_id: &str) -> Result<Vec<Task>> {
+        let mut chain = Vec::new();
+        let mut current = self.get_task(task_id)?;
+        while let Some(task) = current {
+            let parent_task_id = task.parent_task_id.clone();
+            chain.push(task);
+            current = match parent_task_id {
+                Some(parent_id) => self.get_task(&parent_id)?,
+                None => None,
+            };
+        }
+        chain.reverse();
+        Ok(chain)
+    }
+
     pub fn list_tasks(&self, filter: TaskFilter) -> Result<Vec<Task>> {
         let conn = self.db();
         let (sql, filter_params): (&str, Vec<String>) = match filter {
@@ -448,6 +463,24 @@ mod tests {
         let ids = running.into_iter().map(|task| task.id.0).collect::<Vec<_>>();
         assert!(ids.contains(&"t-0010".to_string()));
         assert!(ids.contains(&"t-0012".to_string()));
+    }
+
+    #[test]
+    fn gets_retry_chain_from_root_to_current() {
+        let store = Store::open_memory().unwrap();
+        let root = make_task("t-1001", AgentKind::Codex, TaskStatus::Done);
+        let mut retry_1 = make_task("t-1002", AgentKind::Codex, TaskStatus::Failed);
+        retry_1.parent_task_id = Some("t-1001".to_string());
+        let mut retry_2 = make_task("t-1003", AgentKind::Codex, TaskStatus::Done);
+        retry_2.parent_task_id = Some("t-1002".to_string());
+
+        store.insert_task(&root).unwrap();
+        store.insert_task(&retry_1).unwrap();
+        store.insert_task(&retry_2).unwrap();
+
+        let chain = store.get_retry_chain("t-1003").unwrap();
+        let ids = chain.iter().map(|task| task.id.as_str()).collect::<Vec<_>>();
+        assert_eq!(ids, vec!["t-1001", "t-1002", "t-1003"]);
     }
 
     #[test]

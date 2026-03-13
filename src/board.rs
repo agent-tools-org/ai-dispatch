@@ -74,7 +74,7 @@ pub fn render_board(tasks: &[Task], store: &Store) -> Result<String> {
 }
 
 /// Render detailed view of a single task (for `aid audit`)
-pub fn render_task_detail(task: &Task, events: &[TaskEvent]) -> String {
+pub fn render_task_detail(task: &Task, events: &[TaskEvent], retry_chain: Option<Vec<Task>>) -> String {
     let mut out = String::new();
 
     out.push_str(&format!(
@@ -88,6 +88,30 @@ pub fn render_task_detail(task: &Task, events: &[TaskEvent]) -> String {
     out.push_str(&format!("Status: {}  Duration: {}\n", task.status.label(), duration));
     if let Some(parent) = task.parent_task_id.as_deref() {
         out.push_str(&format!("Parent: {parent}\n"));
+        if let Some(retry_chain) = retry_chain.as_deref()
+            && retry_chain.len() > 1
+        {
+            out.push_str("Retry chain:\n");
+            for retry_task in retry_chain {
+                let duration = retry_task.duration_ms
+                    .map(format_duration)
+                    .unwrap_or_else(|| elapsed_since(retry_task.created_at));
+                let current = if retry_task.id == task.id {
+                    "  ← current"
+                } else {
+                    ""
+                };
+                out.push_str(&format!(
+                    "  {} ({})  → {:<7} {:>5}  {}{}\n",
+                    retry_task.id,
+                    retry_kind(retry_task),
+                    retry_status(retry_task.status),
+                    duration,
+                    cost::format_cost(retry_task.cost_usd),
+                    current,
+                ));
+            }
+        }
     }
     if let Some(group_id) = task.workgroup_id.as_deref() {
         out.push_str(&format!("Workgroup: {group_id}\n"));
@@ -206,6 +230,24 @@ fn task_status(task: &Task, milestone: Option<String>) -> String {
     task.status.label().to_string()
 }
 
+fn retry_kind(task: &Task) -> &'static str {
+    if task.parent_task_id.is_some() {
+        "retry"
+    } else {
+        "root"
+    }
+}
+
+fn retry_status(status: TaskStatus) -> &'static str {
+    match status {
+        TaskStatus::Pending => "Pending",
+        TaskStatus::Running => "Running",
+        TaskStatus::AwaitingInput => "Await",
+        TaskStatus::Done => "Done",
+        TaskStatus::Failed => "Failed",
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -286,8 +328,30 @@ mod tests {
             detail: "exec: cargo test".to_string(),
             metadata: None,
         }];
-        let output = render_task_detail(&task, &events);
+        let output = render_task_detail(&task, &events, None);
         assert!(output.contains("t-0001"));
         assert!(output.contains("cargo test"));
+    }
+
+    #[test]
+    fn task_detail_shows_retry_chain() {
+        let mut root = make_task("t-1001", AgentKind::Codex, TaskStatus::Done);
+        root.duration_ms = Some(12_000);
+        root.cost_usd = Some(0.03);
+        let mut retry_1 = make_task("t-1002", AgentKind::Codex, TaskStatus::Failed);
+        retry_1.parent_task_id = Some("t-1001".to_string());
+        retry_1.duration_ms = Some(8_000);
+        retry_1.cost_usd = Some(0.02);
+        let mut retry_2 = make_task("t-1003", AgentKind::Codex, TaskStatus::Done);
+        retry_2.parent_task_id = Some("t-1002".to_string());
+        retry_2.duration_ms = Some(15_000);
+        retry_2.cost_usd = Some(0.04);
+
+        let output = render_task_detail(&retry_2, &[], Some(vec![root, retry_1, retry_2.clone()]));
+        assert!(output.contains("Retry chain:"));
+        assert!(output.contains("t-1001 (root)  → Done"));
+        assert!(output.contains("t-1002 (retry)  → Failed"));
+        assert!(output.contains("t-1003 (retry)  → Done"));
+        assert!(output.contains("← current"));
     }
 }

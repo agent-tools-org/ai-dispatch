@@ -62,7 +62,12 @@ pub fn render_mode_text(store: &Arc<Store>, task_id: &str, mode: ShowMode) -> Re
 pub fn audit_text(store: &Arc<Store>, task_id: &str) -> Result<String> {
     let task = load_task(store, task_id)?;
     let events = store.get_events(task_id)?;
-    let mut out = render_task_detail(&task, &events);
+    let retry_chain = if task.parent_task_id.is_some() {
+        Some(store.get_retry_chain(task_id)?)
+    } else {
+        None
+    };
+    let mut out = render_task_detail(&task, &events, retry_chain);
 
     if task.status == TaskStatus::Failed
         && let Some(stderr) = stderr_tail(task_id)

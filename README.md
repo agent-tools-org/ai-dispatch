@@ -1,6 +1,6 @@
 # ai-dispatch (aid)
 
-![Version](https://img.shields.io/badge/version-1.5.0-blue)
+![Version](https://img.shields.io/badge/version-1.7.0-blue)
 ![Rust](https://img.shields.io/badge/rust-2024-orange)
 ![License](https://img.shields.io/badge/license-not%20specified-lightgrey)
 

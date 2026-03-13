@@ -43,7 +43,13 @@ fn render_multipane_view(frame: &mut ratatui::Frame<'_>, app: &App) {
                 .get(task.id.as_str())
                 .map(|evts| {
                     evts.iter()
-                        .map(|e| format!("{} {}", e.event_kind.as_str(), e.detail))
+                        .map(|e| {
+                            (
+                                e.timestamp.format("%H:%M:%S").to_string(),
+                                e.event_kind.as_str().to_string(),
+                                e.detail.clone(),
+                            )
+                        })
                         .collect()
                 })
                 .unwrap_or_default();

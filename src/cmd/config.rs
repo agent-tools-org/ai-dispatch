@@ -2,14 +2,16 @@
 // Manages agent registry and displays detected AI CLIs.
 
 use anyhow::Result;
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use crate::agent;
 use crate::cli_actions::ConfigAction;
+use crate::cost;
 use crate::skills;
 use crate::store::Store;
 use crate::templates;
-use crate::types::AgentKind;
+use crate::types::{AgentKind, TaskFilter, TaskStatus};
 
 const AGENT_PROFILES: &[(AgentKind, &str, &str, &str, bool)] = &[
     (
@@ -62,17 +64,21 @@ const MODEL_PRICING: &[(&str, f64, f64, &str)] = &[
     ("minimax-m2.5-free", 0.0, 0.0, "OpenCode free"),
 ];
 
-pub fn run(_store: &Arc<Store>, action: ConfigAction) -> Result<()> {
+pub fn run(store: &Arc<Store>, action: ConfigAction) -> Result<()> {
     match action {
         ConfigAction::Agents => {
             let installed = agent::detect_agents();
+            let history = match store.list_tasks(TaskFilter::All) {
+                Ok(tasks) => compute_agent_history(&tasks),
+                Err(_) => HashMap::new(),
+            };
             for (kind, _, _, _, _) in AGENT_PROFILES {
                 let status = if installed.contains(kind) {
                     "✓"
                 } else {
                     "✗"
                 };
-                let profile = agent_profile(*kind, installed.contains(kind));
+                let profile = agent_profile(*kind, installed.contains(kind), history.get(kind));
                 println!("{} {}\n{}", status, kind.as_str(), profile);
             }
         }
@@ -121,9 +127,9 @@ pub fn run(_store: &Arc<Store>, action: ConfigAction) -> Result<()> {
     Ok(())
 }
 
-fn agent_profile(kind: AgentKind, installed: bool) -> String {
+fn agent_profile(kind: AgentKind, installed: bool, history: Option<&AgentHistory>) -> String {
     let profile = AGENT_PROFILES.iter().find(|(k, _, _, _, _)| *k == kind);
-    let (strengths, cost, best_for, streaming) = match profile {
+    let (strengths, cost, _best_for, streaming) = match profile {
         Some((_, s, c, b, st)) => (*s, *c, *b, *st),
         None => ("unknown", "unknown", "unknown", false),
     };
@@ -133,8 +139,55 @@ fn agent_profile(kind: AgentKind, installed: bool) -> String {
     } else {
         "not installed"
     };
+    let history_line = match history {
+        Some(h) => format!(
+            "  History:   {} tasks, {:.1}% success, avg {}/task\n",
+            h.task_count,
+            h.success_rate,
+            cost::format_cost(Some(h.avg_cost))
+        ),
+        None => "  History:   no tasks yet\n".to_string(),
+    };
     format!(
-        "  Strengths: {}\n  Cost:      {}\n  Best for:  {}\n  Mode:      {} ({})\n",
-        strengths, cost, best_for, mode, install_status
+        "  Strengths: {}\n  Cost:      {}\n{}  Mode:      {} ({})\n",
+        strengths, cost, history_line, mode, install_status
     )
+}
+
+struct AgentHistory {
+    task_count: usize,
+    success_rate: f64,
+    avg_cost: f64,
+}
+
+fn compute_agent_history(tasks: &[crate::types::Task]) -> HashMap<AgentKind, AgentHistory> {
+    let mut history = HashMap::new();
+    for agent in [
+        AgentKind::Codex,
+        AgentKind::Gemini,
+        AgentKind::OpenCode,
+        AgentKind::Cursor,
+        AgentKind::Kilo,
+    ] {
+        let agent_tasks: Vec<_> = tasks.iter().filter(|t| t.agent == agent).collect();
+        if agent_tasks.is_empty() {
+            continue;
+        }
+        let done_count = agent_tasks
+            .iter()
+            .filter(|t| matches!(t.status, TaskStatus::Done | TaskStatus::Merged))
+            .count();
+        let success_rate = (done_count as f64 / agent_tasks.len() as f64) * 100.0;
+        let total_cost: f64 = agent_tasks.iter().filter_map(|t| t.cost_usd).sum();
+        let avg_cost = total_cost / agent_tasks.len() as f64;
+        history.insert(
+            agent,
+            AgentHistory {
+                task_count: agent_tasks.len(),
+                success_rate,
+                avg_cost,
+            },
+        );
+    }
+    history
 }

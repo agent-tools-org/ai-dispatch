@@ -48,7 +48,7 @@ impl fmt::Display for WorkgroupId {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize)]
 pub enum AgentKind {
     Gemini,
     Codex,

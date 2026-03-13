@@ -9,6 +9,7 @@ use tokio::process::Command;
 use crate::agent::{self, RunOpts};
 use crate::background::{self, BackgroundRunSpec};
 use crate::cmd::retry_logic;
+use crate::config;
 use crate::cost;
 use crate::notify;
 use crate::paths;
@@ -17,6 +18,7 @@ use crate::skills;
 use crate::store::Store;
 use crate::templates;
 use crate::types::*;
+use crate::usage;
 use crate::watcher;
 
 pub const NO_SKILL_SENTINEL: &str = "__aid_no_skill__";
@@ -111,6 +113,24 @@ pub async fn run(store: Arc<Store>, args: RunArgs) -> Result<TaskId> {
             eprintln!("[aid] Auto-applied skill: {skill}");
         }
     }
+
+    let cfg = config::load_config()?;
+    let budget_status = usage::check_budget_status(&store, &cfg)?;
+    if budget_status.over_limit {
+        if let Some(msg) = budget_status.message {
+            anyhow::bail!("Budget limit exceeded:\n{msg}");
+        } else {
+            anyhow::bail!("Budget limit exceeded");
+        }
+    }
+    let auto_budget = if budget_status.near_limit && !cfg.selection.budget_mode {
+        if let Some(ref msg) = budget_status.message {
+            eprintln!("[aid] Warning: {}\n[aid] Auto-enabling budget mode", msg);
+        }
+        true
+    } else {
+        false
+    };
 
     let agent = agent::get_agent(agent_kind);
     let task_id = TaskId::generate();
@@ -224,7 +244,7 @@ pub async fn run(store: Arc<Store>, args: RunArgs) -> Result<TaskId> {
         dir: effective_dir.clone(),
         output: args.output.clone(),
         model: args.model.clone(),
-        budget: false,
+        budget: auto_budget || cfg.selection.budget_mode,
         read_only: args.read_only,
         context_files,
         session_id: args.session_id.clone(),

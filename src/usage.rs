@@ -11,6 +11,12 @@ use crate::paths;
 use crate::store::Store;
 use crate::types::{AgentKind, Task, TaskFilter, TaskStatus};
 
+pub struct BudgetStatus {
+    pub over_limit: bool,
+    pub near_limit: bool,
+    pub message: Option<String>,
+}
+
 #[derive(Serialize)]
 pub struct UsageSnapshot {
     generated_at: DateTime<Local>,
@@ -57,6 +63,60 @@ pub fn collect_usage_from_tasks(tasks: &[Task], config: &AidConfig) -> Result<Us
         generated_at: Local::now(),
         agent_rows: collect_agent_rows(tasks),
         budget_rows: collect_budget_rows(tasks, &config.usage.budgets),
+    })
+}
+
+pub fn check_budget_status(store: &Store, config: &AidConfig) -> Result<BudgetStatus> {
+    let tasks = store.list_tasks(TaskFilter::All)?;
+    let budget_rows = collect_budget_rows(&tasks, &config.usage.budgets);
+
+    let mut over_limit = false;
+    let mut near_limit = false;
+    let mut messages: Vec<String> = Vec::new();
+
+    for row in &budget_rows {
+        if let Some(limit) = row.task_limit {
+            if row.tasks >= limit {
+                over_limit = true;
+                messages.push(format!(
+                    "Budget '{}': task limit reached ({}/{})",
+                    row.name, row.tasks, limit
+                ));
+            } else if row.tasks as f64 / limit as f64 > 0.8 {
+                near_limit = true;
+                messages.push(format!(
+                    "Budget '{}': task usage at {}%",
+                    row.name,
+                    (row.tasks as f64 / limit as f64 * 100.0) as u32
+                ));
+            }
+        }
+        if let Some(limit) = row.cost_limit_usd {
+            if row.cost_usd >= limit {
+                over_limit = true;
+                messages.push(format!(
+                    "Budget '{}': cost limit reached (${:.2}/${:.2})",
+                    row.name, row.cost_usd, limit
+                ));
+            } else if row.cost_usd / limit > 0.8 {
+                near_limit = true;
+                messages.push(format!(
+                    "Budget '{}': cost usage at {}%",
+                    row.name,
+                    (row.cost_usd / limit * 100.0) as u32
+                ));
+            }
+        }
+    }
+
+    Ok(BudgetStatus {
+        over_limit,
+        near_limit,
+        message: if messages.is_empty() {
+            None
+        } else {
+            Some(messages.join("\n"))
+        },
     })
 }
 
@@ -156,7 +216,9 @@ fn collect_agent_rows(tasks: &[Task]) -> Vec<AgentUsageRow> {
         let avg_duration_secs = if completed_durations.is_empty() {
             0.0
         } else {
-            completed_durations.iter().sum::<i64>() as f64 / completed_durations.len() as f64 / 1000.0
+            completed_durations.iter().sum::<i64>() as f64
+                / completed_durations.len() as f64
+                / 1000.0
         };
         let tokens = agent_tasks.iter().filter_map(|task| task.tokens).sum();
         let cost_usd = agent_tasks.iter().filter_map(|task| task.cost_usd).sum();

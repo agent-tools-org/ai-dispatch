@@ -5,8 +5,8 @@ use anyhow::Result;
 use chrono::Local;
 use serde_json::json;
 use std::io::Write;
-use std::sync::Arc;
 use std::sync::mpsc::{self, RecvTimeoutError};
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use crate::agent::Agent;
@@ -69,7 +69,13 @@ impl MonitorState {
         }
         if let Some(prompt) = self.prompt_detector.push_chunk(&chunk, Instant::now()) {
             let awaiting_prompt = extract_awaiting_prompt(&self.full_output, &prompt);
-            mark_awaiting_input(store, task_id, &prompt, &awaiting_prompt, &mut self.awaiting_input)?;
+            mark_awaiting_input(
+                store,
+                task_id,
+                &prompt,
+                &awaiting_prompt,
+                &mut self.awaiting_input,
+            )?;
         }
         Ok(())
     }
@@ -77,7 +83,13 @@ impl MonitorState {
     fn handle_timeout(&mut self, store: &Arc<Store>, task_id: &TaskId) -> Result<()> {
         if let Some(prompt) = self.prompt_detector.poll_idle(Instant::now()) {
             let awaiting_prompt = extract_awaiting_prompt(&self.full_output, &prompt);
-            mark_awaiting_input(store, task_id, &prompt, &awaiting_prompt, &mut self.awaiting_input)?;
+            mark_awaiting_input(
+                store,
+                task_id,
+                &prompt,
+                &awaiting_prompt,
+                &mut self.awaiting_input,
+            )?;
         }
         Ok(())
     }
@@ -207,7 +219,10 @@ fn finalize_buffered(
             cost_usd: None,
         }
     };
-    store.insert_event(&crate::agent::gemini::make_completion_event(task_id, &state.info))?;
+    store.insert_event(&crate::agent::gemini::make_completion_event(
+        task_id,
+        &state.info,
+    ))?;
     Ok(())
 }
 
@@ -227,17 +242,67 @@ fn flush_stream_lines(
     Ok(())
 }
 
+fn strip_ansi(s: &str) -> String {
+    let mut result = String::with_capacity(s.len());
+    let bytes = s.as_bytes();
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == 0x1b && i + 1 < bytes.len() && bytes[i + 1] == b'[' {
+            let mut j = i + 2;
+            while j < bytes.len() && (bytes[j].is_ascii_digit() || bytes[j] == b';') {
+                j += 1;
+            }
+            if j < bytes.len() && bytes[j].is_ascii_alphabetic() {
+                i = j + 1;
+                continue;
+            }
+        }
+        result.push(bytes[i] as char);
+        i += 1;
+    }
+    result
+}
+
 fn extract_awaiting_prompt(output: &str, prompt: &str) -> String {
     let prompt = prompt.trim();
-    output
+    let cleaned = strip_ansi(output);
+    let lines: Vec<&str> = cleaned
         .lines()
         .rev()
         .map(str::trim)
         .filter(|line| !line.is_empty())
-        .take(6)
-        .find(|line| line.ends_with('?') || line.ends_with("(y/n)"))
-        .unwrap_or(prompt)
-        .to_string()
+        .take(20)
+        .collect();
+
+    let question_match = lines.iter().find(|line| line.ends_with('?'));
+    if let Some(q) = question_match {
+        return q.to_string();
+    }
+
+    let patterns = [
+        "(y/n)",
+        "(Y/n)",
+        "(yes/no)",
+        "(Yes/No)",
+        "Do you want",
+        "Would you like",
+        "Shall I",
+        "Should I",
+        "Please confirm",
+        "Continue?",
+    ];
+    for line in &lines {
+        if line.starts_with('>') || line.starts_with('?') {
+            return line.to_string();
+        }
+        for pattern in &patterns {
+            if line.contains(pattern) {
+                return line.to_string();
+            }
+        }
+    }
+
+    prompt.to_string()
 }
 
 fn mark_awaiting_input(

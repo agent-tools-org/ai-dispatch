@@ -9,7 +9,7 @@ use crate::config::{AidConfig, UsageBudget};
 use crate::cost;
 use crate::paths;
 use crate::store::Store;
-use crate::types::{AgentKind, Task, TaskFilter};
+use crate::types::{AgentKind, Task, TaskFilter, TaskStatus};
 
 #[derive(Serialize)]
 pub struct UsageSnapshot {
@@ -24,6 +24,9 @@ struct AgentUsageRow {
     tasks: usize,
     tokens: i64,
     cost_usd: f64,
+    success_rate: f64,
+    avg_duration_secs: f64,
+    retry_count: usize,
     last_task_at: Option<DateTime<Local>>,
 }
 
@@ -67,18 +70,21 @@ pub fn render_usage(snapshot: &UsageSnapshot) -> String {
     if !snapshot.agent_rows.is_empty() {
         out.push_str("\nTracked Task History\n");
         out.push_str(&format!(
-            "{:<12} {:<8} {:<10} {:<10} {}\n",
-            "Agent", "Tasks", "Tokens", "Cost", "Last Task"
+            "{:<12} {:<8} {:<10} {:<10} {:<6} {:<8} {:<7} {}\n",
+            "Agent", "Tasks", "Tokens", "Cost", "Success%", "Avg Time", "Retries", "Last Task"
         ));
-        out.push_str(&"-".repeat(58));
+        out.push_str(&"-".repeat(80));
         out.push('\n');
         for row in &snapshot.agent_rows {
             out.push_str(&format!(
-                "{:<12} {:<8} {:<10} {:<10} {}\n",
+                "{:<12} {:<8} {:<10} {:<10} {:<6} {:<8} {:<7} {}\n",
                 row.name,
                 row.tasks,
                 format_tokens(row.tokens),
                 cost::format_cost(Some(row.cost_usd)),
+                format!("{:.1}%", row.success_rate),
+                format_duration_secs(row.avg_duration_secs),
+                row.retry_count,
                 row.last_task_at
                     .map(format_last_seen)
                     .unwrap_or_else(|| "-".to_string()),
@@ -133,6 +139,25 @@ fn collect_agent_rows(tasks: &[Task]) -> Vec<AgentUsageRow> {
             continue;
         }
 
+        let done_count = agent_tasks
+            .iter()
+            .filter(|task| task.status == TaskStatus::Done)
+            .count();
+        let retry_count = agent_tasks
+            .iter()
+            .filter(|task| task.parent_task_id.is_some())
+            .count();
+        let completed_durations: Vec<i64> = agent_tasks
+            .iter()
+            .filter(|task| matches!(task.status, TaskStatus::Done | TaskStatus::Failed))
+            .filter_map(|task| task.duration_ms)
+            .collect();
+        let success_rate = (done_count as f64 * 100.0) / agent_tasks.len() as f64;
+        let avg_duration_secs = if completed_durations.is_empty() {
+            0.0
+        } else {
+            completed_durations.iter().sum::<i64>() as f64 / completed_durations.len() as f64 / 1000.0
+        };
         let tokens = agent_tasks.iter().filter_map(|task| task.tokens).sum();
         let cost_usd = agent_tasks.iter().filter_map(|task| task.cost_usd).sum();
         let last_task_at = agent_tasks.iter().map(|task| task.created_at).max();
@@ -141,6 +166,9 @@ fn collect_agent_rows(tasks: &[Task]) -> Vec<AgentUsageRow> {
             tasks: agent_tasks.len(),
             tokens,
             cost_usd,
+            success_rate,
+            avg_duration_secs,
+            retry_count,
             last_task_at,
         });
     }
@@ -231,6 +259,15 @@ fn format_last_seen(timestamp: DateTime<Local>) -> String {
     }
 }
 
+fn format_duration_secs(seconds: f64) -> String {
+    let secs = seconds.round() as i64;
+    if secs < 60 {
+        format!("{secs}s")
+    } else {
+        format!("{}m {:02}s", secs / 60, secs % 60)
+    }
+}
+
 fn format_tokens(tokens: i64) -> String {
     if tokens >= 1_000_000 {
         format!("{:.1}M", tokens as f64 / 1_000_000.0)
@@ -267,7 +304,7 @@ fn format_ratio_f64(current: f64, limit: Option<f64>) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{collect_usage, render_usage};
+    use super::{collect_usage, collect_usage_from_tasks, render_usage};
     use crate::config::AidConfig;
     use crate::store::Store;
     use crate::types::{AgentKind, Task, TaskId, TaskStatus};
@@ -321,5 +358,38 @@ mod tests {
         assert!(rendered.contains("Configured Budgets"));
         assert!(rendered.contains("1/5"));
         assert!(rendered.contains("12.0k/50.0k"));
+    }
+
+    #[test]
+    fn calculates_agent_execution_stats() {
+        let mut done_task = make_task("t-done", AgentKind::Codex, 12_000, 0.45);
+        done_task.duration_ms = Some(30_000);
+
+        let mut failed_task = make_task("t-failed", AgentKind::Codex, 1_000, 0.05);
+        failed_task.status = TaskStatus::Failed;
+        failed_task.duration_ms = Some(90_000);
+
+        let mut pending_retry = make_task("t-retry", AgentKind::Codex, 0, 0.0);
+        pending_retry.status = TaskStatus::Pending;
+        pending_retry.tokens = None;
+        pending_retry.cost_usd = None;
+        pending_retry.duration_ms = None;
+        pending_retry.parent_task_id = Some("t-failed".to_string());
+
+        let snapshot = collect_usage_from_tasks(
+            &[done_task, failed_task, pending_retry],
+            &AidConfig::default(),
+        )
+        .unwrap();
+        let row = snapshot
+            .agent_rows
+            .iter()
+            .find(|row| row.name == AgentKind::Codex.as_str())
+            .unwrap();
+
+        assert_eq!(row.tasks, 3);
+        assert_eq!(row.retry_count, 1);
+        assert!((row.success_rate - 33.333333333333336).abs() < 0.0001);
+        assert_eq!(row.avg_duration_secs, 60.0);
     }
 }

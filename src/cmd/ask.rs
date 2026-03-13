@@ -112,6 +112,7 @@ async fn dispatch(store: Arc<Store>, request: AskRequest, announce: bool) -> Res
             retry: 0,
             context: vec![],
             skills: vec![],
+            template: None,
             background: false,
             announce,
             parent_task_id: None,

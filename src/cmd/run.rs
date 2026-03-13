@@ -35,6 +35,7 @@ pub struct RunArgs {
     pub retry: u32,
     pub context: Vec<String>,
     pub skills: Vec<String>,
+    pub template: Option<String>,
     pub background: bool,
     pub announce: bool,
     pub parent_task_id: Option<String>,
@@ -126,8 +127,14 @@ pub async fn run(store: Arc<Store>, args: RunArgs) -> Result<TaskId> {
     } else {
         vec![]
     };
+    let prompt = if let Some(template) = args.template.as_deref() {
+        let template_content = templates::load_template(template)?;
+        templates::apply_template(&template_content, &args.prompt)
+    } else {
+        args.prompt.clone()
+    };
     let mut effective_prompt = crate::workgroup::compose_prompt(
-        &args.prompt,
+        &prompt,
         file_context.as_deref(),
         workgroup.as_ref(),
         &milestones,
@@ -159,6 +166,7 @@ pub async fn run(store: Arc<Store>, args: RunArgs) -> Result<TaskId> {
             retry: args.retry,
             group: args.group.clone(),
             skills: args.skills.clone(),
+            template: args.template.clone(),
             interactive: true,
             on_done: args.on_done.clone(),
             parent_task_id: args.parent_task_id.clone(),
@@ -388,6 +396,7 @@ mod tests {
             retry: 0,
             context: vec![],
             skills,
+            template: None,
             background: false,
             announce: false,
             parent_task_id: None,

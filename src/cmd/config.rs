@@ -8,6 +8,7 @@ use crate::agent;
 use crate::cli_actions::ConfigAction;
 use crate::skills;
 use crate::store::Store;
+use crate::templates;
 use crate::types::AgentKind;
 
 const AGENT_PROFILES: &[(AgentKind, &str, &str, &str, bool)] = &[
@@ -76,6 +77,17 @@ pub fn run(_store: &Arc<Store>, action: ConfigAction) -> Result<()> {
                 println!("Available skills:");
                 for skill in &skills {
                     println!("  - {skill}");
+                }
+            }
+        }
+        ConfigAction::Templates => {
+            let templates = templates::list_templates();
+            if templates.is_empty() {
+                println!("No templates found in ~/.aid/templates/.");
+            } else {
+                println!("Available templates:");
+                for template in &templates {
+                    println!("  - {template}");
                 }
             }
         }

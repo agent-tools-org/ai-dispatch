@@ -101,6 +101,7 @@ async fn run_tool(store: Arc<Store>, arguments: Value) -> Result<Value> {
             retry: 0,
             context: vec![],
             skills: args.skills,
+            template: None,
             background: args.background,
             announce: false,
             parent_task_id: None,

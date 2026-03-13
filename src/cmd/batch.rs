@@ -83,6 +83,7 @@ fn task_to_run_args(task: &batch::BatchTask, background: bool) -> RunArgs {
         retry: 0,
         context: vec![],
         skills: task.skills.clone().unwrap_or_default(),
+        template: None,
         background,
         announce: true,
         parent_task_id: None,

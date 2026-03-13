@@ -19,6 +19,8 @@ pub enum ConfigAction {
     Pricing,
     /// List available skills
     Skills,
+    /// List available templates
+    Templates,
 }
 
 #[derive(Subcommand)]

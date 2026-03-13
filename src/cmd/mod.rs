@@ -2,6 +2,7 @@
 // Each module implements one subcommand.
 
 pub mod ask;
+pub mod benchmark;
 pub mod batch;
 pub mod board;
 pub mod config;

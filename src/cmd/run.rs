@@ -44,6 +44,7 @@ pub struct RunArgs {
     pub on_done: Option<String>,
     pub fallback: Option<String>,
     pub read_only: bool,
+    pub session_id: Option<String>,
 }
 
 fn effective_skills(agent_kind: &AgentKind, args: &RunArgs) -> Vec<String> {
@@ -158,6 +159,7 @@ pub async fn run(store: Arc<Store>, args: RunArgs) -> Result<TaskId> {
         workgroup_id: args.group.clone(),
         caller_kind: caller.as_ref().map(|item| item.kind.clone()),
         caller_session_id: caller.as_ref().map(|item| item.session_id.clone()),
+        agent_session_id: None,
         repo_path: repo_path.clone(),
         worktree_path: wt_path,
         worktree_branch: wt_branch,
@@ -225,6 +227,7 @@ pub async fn run(store: Arc<Store>, args: RunArgs) -> Result<TaskId> {
         budget: false,
         read_only: args.read_only,
         context_files,
+        session_id: args.session_id.clone(),
     };
 
     if args.background {
@@ -540,6 +543,7 @@ mod tests {
             on_done: None,
             fallback: None,
             read_only: false,
+            session_id: None,
         }
     }
 

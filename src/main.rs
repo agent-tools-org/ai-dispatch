@@ -293,6 +293,7 @@ async fn main() -> Result<()> {
                     budget,
                     read_only,
                     context_files: vec![],
+                    session_id: None,
                 };
                 let (selected, reason) = agent::select_agent_with_reason(&prompt, &selection_opts);
                 eprintln!("[aid] Auto-selected agent: {selected} (reason: {reason})");
@@ -329,6 +330,7 @@ async fn main() -> Result<()> {
                     on_done,
                     fallback,
                     read_only,
+                    session_id: None,
                 },
             )
             .await?;

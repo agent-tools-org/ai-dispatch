@@ -33,6 +33,10 @@ impl super::Agent for OpenCodeAgent {
         let mut cmd = Command::new("opencode");
         cmd.arg("run");
         cmd.args(["--format", "json"]);
+        if let Some(ref session_id) = opts.session_id {
+            cmd.args(["--session", session_id]);
+            cmd.arg("--continue");
+        }
         if let Some(ref model) = opts.model {
             cmd.args(["-m", model]);
         }
@@ -88,6 +92,7 @@ fn parse_json_event(
     now: chrono::DateTime<Local>,
 ) -> Option<TaskEvent> {
     let event_type = v.get("type").and_then(|t| t.as_str())?;
+    let session_id = v.get("sessionID").and_then(|s| s.as_str());
     let (detail, metadata) = match event_type {
         "tool_call" | "function_call" => {
             let name = v.get("name").and_then(|n| n.as_str()).unwrap_or("unknown");
@@ -148,6 +153,20 @@ fn parse_json_event(
         "message" | "text" => EventKind::Reasoning,
         "step_finish" | "completion" | "done" => EventKind::Completion,
         _ => EventKind::Reasoning,
+    };
+
+    let metadata = if let Some(sid) = session_id {
+        match metadata {
+            Some(mut m) => {
+                if let Some(obj) = m.as_object_mut() {
+                    obj.insert("agent_session_id".to_string(), json!(sid));
+                }
+                Some(m)
+            }
+            None => Some(json!({ "agent_session_id": sid })),
+        }
+    } else {
+        metadata
     };
 
     Some(TaskEvent {
@@ -272,6 +291,7 @@ mod tests {
             budget: false,
             read_only: false,
             context_files: vec!["src/types.rs".to_string(), "src/lib.rs".to_string()],
+            session_id: None,
         };
         let cmd = OpenCodeAgent.build_command("test prompt", &opts).unwrap();
         let args: Vec<String> = cmd
@@ -289,5 +309,73 @@ mod tests {
         assert_eq!(args[f_indices[0] + 1], "src/types.rs");
         assert_eq!(args[f_indices[1] + 1], "src/lib.rs");
         assert!(args.contains(&"test prompt".to_string()));
+    }
+
+    #[test]
+    fn extracts_session_id_from_json_event() {
+        let task_id = TaskId("t-sess".to_string());
+        let event = parse_json_event(
+            &task_id,
+            &serde_json::json!({
+                "type": "message",
+                "content": "test",
+                "sessionID": "ses_abc123"
+            }),
+            Local::now(),
+        )
+        .unwrap();
+
+        assert_eq!(
+            event
+                .metadata
+                .as_ref()
+                .and_then(|m| m.get("agent_session_id").and_then(|s| s.as_str())),
+            Some("ses_abc123")
+        );
+    }
+
+    #[test]
+    fn session_flags_appear_in_command() {
+        let agent = OpenCodeAgent;
+        let opts = RunOpts {
+            dir: None,
+            output: None,
+            model: None,
+            budget: false,
+            read_only: false,
+            context_files: vec![],
+            session_id: Some("ses_test123".to_string()),
+        };
+        let cmd = agent.build_command("test prompt", &opts).unwrap();
+        let args: Vec<String> = cmd
+            .get_args()
+            .map(|a| a.to_string_lossy().to_string())
+            .collect();
+
+        assert!(args.contains(&"--session".to_string()));
+        assert!(args.contains(&"ses_test123".to_string()));
+        assert!(args.contains(&"--continue".to_string()));
+    }
+
+    #[test]
+    fn no_session_flags_when_session_id_absent() {
+        let agent = OpenCodeAgent;
+        let opts = RunOpts {
+            dir: None,
+            output: None,
+            model: None,
+            budget: false,
+            read_only: false,
+            context_files: vec![],
+            session_id: None,
+        };
+        let cmd = agent.build_command("test prompt", &opts).unwrap();
+        let args: Vec<String> = cmd
+            .get_args()
+            .map(|a| a.to_string_lossy().to_string())
+            .collect();
+
+        assert!(!args.contains(&"--session".to_string()));
+        assert!(!args.contains(&"--continue".to_string()));
     }
 }

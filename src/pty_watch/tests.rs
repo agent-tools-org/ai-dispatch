@@ -20,6 +20,7 @@ fn stores_recent_question_as_awaiting_prompt_metadata() {
         workgroup_id: None,
         caller_kind: None,
         caller_session_id: None,
+        agent_session_id: None,
         repo_path: None,
         worktree_path: None,
         worktree_branch: None,

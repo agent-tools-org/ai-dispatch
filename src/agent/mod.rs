@@ -44,6 +44,7 @@ pub struct RunOpts {
     pub budget: bool,
     pub read_only: bool,
     pub context_files: Vec<String>,
+    pub session_id: Option<String>,
 }
 
 /// Detect which agents are installed on the system

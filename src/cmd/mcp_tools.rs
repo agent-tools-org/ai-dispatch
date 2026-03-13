@@ -110,6 +110,7 @@ async fn run_tool(store: Arc<Store>, arguments: Value) -> Result<Value> {
             on_done: None,
             fallback: None,
             read_only: false,
+            session_id: None,
         },
     )
     .await;

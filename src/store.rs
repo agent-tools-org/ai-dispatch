@@ -1,9 +1,9 @@
 // SQLite persistence for tasks, workgroups, and events.
 // Uses WAL mode for concurrent read/write. Single file at ~/.aid/aid.db.
 
-use anyhow::{Result, Context};
+use anyhow::{Context, Result};
 use chrono::{DateTime, Local};
-use rusqlite::{Connection, OptionalExtension, params};
+use rusqlite::{params, Connection, OptionalExtension};
 use std::path::Path;
 use std::sync::Mutex;
 
@@ -18,7 +18,9 @@ impl Store {
         let conn = Connection::open(path)
             .with_context(|| format!("Failed to open database at {}", path.display()))?;
         conn.execute_batch("PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON;")?;
-        let store = Self { conn: Mutex::new(conn) };
+        let store = Self {
+            conn: Mutex::new(conn),
+        };
         store.create_tables()?;
         Ok(store)
     }
@@ -27,7 +29,9 @@ impl Store {
     pub fn open_memory() -> Result<Self> {
         let conn = Connection::open_in_memory()?;
         conn.execute_batch("PRAGMA foreign_keys=ON;")?;
-        let store = Self { conn: Mutex::new(conn) };
+        let store = Self {
+            conn: Mutex::new(conn),
+        };
         store.create_tables()?;
         Ok(store)
     }
@@ -90,6 +94,7 @@ impl Store {
         let _ = conn.execute_batch("ALTER TABLE tasks ADD COLUMN workgroup_id TEXT;");
         let _ = conn.execute_batch("ALTER TABLE tasks ADD COLUMN caller_kind TEXT;");
         let _ = conn.execute_batch("ALTER TABLE tasks ADD COLUMN caller_session_id TEXT;");
+        let _ = conn.execute_batch("ALTER TABLE tasks ADD COLUMN agent_session_id TEXT;");
         let _ = conn.execute_batch("ALTER TABLE tasks ADD COLUMN repo_path TEXT;");
         let _ = conn.execute_batch("ALTER TABLE tasks ADD COLUMN resolved_prompt TEXT;");
         let _ = conn.execute_batch(
@@ -108,11 +113,11 @@ impl Store {
     pub fn insert_task(&self, task: &Task) -> Result<()> {
         self.db().execute(
             "INSERT INTO tasks (id, agent, prompt, resolved_prompt, status, parent_task_id, workgroup_id,
-             caller_kind, caller_session_id, repo_path, worktree_path, worktree_branch,
+             caller_kind, caller_session_id, agent_session_id, repo_path, worktree_path, worktree_branch,
              log_path, output_path, tokens, duration_ms, model, cost_usd, created_at,
              completed_at)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16,
-             ?17, ?18, ?19, ?20)",
+             ?17, ?18, ?19, ?20, ?21)",
             params![
                 task.id.as_str(),
                 task.agent.as_str(),
@@ -123,6 +128,7 @@ impl Store {
                 task.workgroup_id,
                 task.caller_kind,
                 task.caller_session_id,
+                task.agent_session_id,
                 task.repo_path,
                 task.worktree_path,
                 task.worktree_branch,
@@ -201,6 +207,14 @@ impl Store {
         Ok(())
     }
 
+    pub fn update_agent_session_id(&self, id: &str, session_id: &str) -> Result<()> {
+        self.db().execute(
+            "UPDATE tasks SET agent_session_id = ?1 WHERE id = ?2",
+            params![session_id, id],
+        )?;
+        Ok(())
+    }
+
     pub fn update_task_completion(
         &self,
         id: &str,
@@ -214,7 +228,15 @@ impl Store {
         self.db().execute(
             "UPDATE tasks SET status = ?1, tokens = ?2, duration_ms = ?3, completed_at = ?4,
              model = ?5, cost_usd = ?6 WHERE id = ?7",
-            params![status.as_str(), tokens, duration_ms, now, model, cost_usd, id],
+            params![
+                status.as_str(),
+                tokens,
+                duration_ms,
+                now,
+                model,
+                cost_usd,
+                id
+            ],
         )?;
         Ok(())
     }
@@ -258,9 +280,7 @@ impl Store {
              WHERE t.workgroup_id = ?1 AND e.event_type = 'milestone'
              ORDER BY e.timestamp ASC",
         )?;
-        let rows = stmt.query_map(params![workgroup_id], |row| {
-            Ok((row.get(0)?, row.get(1)?))
-        })?;
+        let rows = stmt.query_map(params![workgroup_id], |row| Ok((row.get(0)?, row.get(1)?)))?;
         rows.map(|row| Ok(row?)).collect()
     }
 
@@ -268,7 +288,7 @@ impl Store {
         let conn = self.db();
         let mut stmt = conn.prepare(
             "SELECT id, agent, prompt, resolved_prompt, status, parent_task_id, workgroup_id,
-             caller_kind, caller_session_id, repo_path, worktree_path, worktree_branch,
+             caller_kind, caller_session_id, agent_session_id, repo_path, worktree_path, worktree_branch,
              log_path, output_path, tokens, duration_ms, model, cost_usd, created_at,
              completed_at
              FROM tasks WHERE id = ?1",
@@ -300,7 +320,7 @@ impl Store {
         let (sql, filter_params): (&str, Vec<String>) = match filter {
             TaskFilter::All => (
                 "SELECT id, agent, prompt, resolved_prompt, status, parent_task_id, workgroup_id,
-                 caller_kind, caller_session_id, repo_path, worktree_path, worktree_branch,
+                 caller_kind, caller_session_id, agent_session_id, repo_path, worktree_path, worktree_branch,
                  log_path, output_path, tokens, duration_ms, model, cost_usd, created_at,
                  completed_at
                  FROM tasks ORDER BY created_at DESC",
@@ -308,7 +328,7 @@ impl Store {
             ),
             TaskFilter::Running => (
                 "SELECT id, agent, prompt, resolved_prompt, status, parent_task_id, workgroup_id,
-                 caller_kind, caller_session_id, repo_path, worktree_path, worktree_branch,
+                 caller_kind, caller_session_id, agent_session_id, repo_path, worktree_path, worktree_branch,
                  log_path, output_path, tokens, duration_ms, model, cost_usd, created_at,
                  completed_at
                  FROM tasks WHERE status IN (?1, ?2) ORDER BY created_at DESC",
@@ -316,7 +336,7 @@ impl Store {
             ),
             TaskFilter::Today => (
                 "SELECT id, agent, prompt, resolved_prompt, status, parent_task_id, workgroup_id,
-                 caller_kind, caller_session_id, repo_path, worktree_path, worktree_branch,
+                 caller_kind, caller_session_id, agent_session_id, repo_path, worktree_path, worktree_branch,
                  log_path, output_path, tokens, duration_ms, model, cost_usd, created_at,
                  completed_at
                  FROM tasks ORDER BY created_at DESC",
@@ -324,8 +344,10 @@ impl Store {
             ),
         };
         let mut stmt = conn.prepare(sql)?;
-        let params: Vec<&dyn rusqlite::ToSql> =
-            filter_params.iter().map(|s| s as &dyn rusqlite::ToSql).collect();
+        let params: Vec<&dyn rusqlite::ToSql> = filter_params
+            .iter()
+            .map(|s| s as &dyn rusqlite::ToSql)
+            .collect();
         let rows = stmt.query_map(params.as_slice(), row_to_task)?;
         let mut tasks = rows.map(|r| r?).collect::<Result<Vec<_>>>()?;
         if matches!(filter, TaskFilter::Today) {
@@ -339,7 +361,7 @@ impl Store {
         let conn = self.db();
         let mut stmt = conn.prepare(
             "SELECT id, agent, prompt, resolved_prompt, status, parent_task_id, workgroup_id,
-             caller_kind, caller_session_id, repo_path, worktree_path, worktree_branch,
+             caller_kind, caller_session_id, agent_session_id, repo_path, worktree_path, worktree_branch,
              log_path, output_path, tokens, duration_ms, model, cost_usd, created_at,
              completed_at
              FROM tasks WHERE caller_session_id = ?1 ORDER BY created_at DESC",
@@ -356,8 +378,7 @@ impl Store {
         )?;
         let rows = stmt.query_map(params![task_id], |row| {
             let metadata_str: Option<String> = row.get(4)?;
-            let metadata = metadata_str
-                .and_then(|s| serde_json::from_str(&s).ok());
+            let metadata = metadata_str.and_then(|s| serde_json::from_str(&s).ok());
             Ok(TaskEvent {
                 task_id: TaskId(row.get::<_, String>(0)?),
                 timestamp: parse_dt(&row.get::<_, String>(1)?),
@@ -374,28 +395,26 @@ impl Store {
 fn row_to_task(row: &rusqlite::Row) -> rusqlite::Result<Result<Task>> {
     Ok(Ok(Task {
         id: TaskId(row.get::<_, String>(0)?),
-        agent: AgentKind::parse_str(&row.get::<_, String>(1)?)
-            .unwrap_or(AgentKind::Codex),
+        agent: AgentKind::parse_str(&row.get::<_, String>(1)?).unwrap_or(AgentKind::Codex),
         prompt: row.get(2)?,
         resolved_prompt: row.get(3)?,
-        status: TaskStatus::parse_str(&row.get::<_, String>(4)?)
-            .unwrap_or(TaskStatus::Pending),
+        status: TaskStatus::parse_str(&row.get::<_, String>(4)?).unwrap_or(TaskStatus::Pending),
         parent_task_id: row.get(5)?,
         workgroup_id: row.get(6)?,
         caller_kind: row.get(7)?,
         caller_session_id: row.get(8)?,
-        repo_path: row.get(9)?,
-        worktree_path: row.get(10)?,
-        worktree_branch: row.get(11)?,
-        log_path: row.get(12)?,
-        output_path: row.get(13)?,
-        tokens: row.get(14)?,
-        duration_ms: row.get(15)?,
-        model: row.get(16)?,
-        cost_usd: row.get(17)?,
-        created_at: parse_dt(&row.get::<_, String>(18)?),
-        completed_at: row.get::<_, Option<String>>(19)?
-            .map(|s| parse_dt(&s)),
+        agent_session_id: row.get(9)?,
+        repo_path: row.get(10)?,
+        worktree_path: row.get(11)?,
+        worktree_branch: row.get(12)?,
+        log_path: row.get(13)?,
+        output_path: row.get(14)?,
+        tokens: row.get(15)?,
+        duration_ms: row.get(16)?,
+        model: row.get(17)?,
+        cost_usd: row.get(18)?,
+        created_at: parse_dt(&row.get::<_, String>(19)?),
+        completed_at: row.get::<_, Option<String>>(20)?.map(|s| parse_dt(&s)),
     }))
 }
 
@@ -430,6 +449,7 @@ mod tests {
             workgroup_id: None,
             caller_kind: None,
             caller_session_id: None,
+            agent_session_id: None,
             repo_path: None,
             worktree_path: None,
             worktree_branch: None,
@@ -505,10 +525,16 @@ mod tests {
         let store = Store::open_memory().unwrap();
         let task = make_task("t-0002", AgentKind::Gemini, TaskStatus::Running);
         store.insert_task(&task).unwrap();
-        store.update_task_completion(
-            "t-0002", TaskStatus::Done, Some(3000), 47000,
-            Some("gemini-2.5-flash"), Some(0.0038),
-        ).unwrap();
+        store
+            .update_task_completion(
+                "t-0002",
+                TaskStatus::Done,
+                Some(3000),
+                47000,
+                Some("gemini-2.5-flash"),
+                Some(0.0038),
+            )
+            .unwrap();
 
         let loaded = store.get_task("t-0002").unwrap().unwrap();
         assert_eq!(loaded.status, TaskStatus::Done);
@@ -536,13 +562,26 @@ mod tests {
     #[test]
     fn list_running_filter() {
         let store = Store::open_memory().unwrap();
-        store.insert_task(&make_task("t-0010", AgentKind::Codex, TaskStatus::Running)).unwrap();
-        store.insert_task(&make_task("t-0012", AgentKind::Cursor, TaskStatus::AwaitingInput)).unwrap();
-        store.insert_task(&make_task("t-0011", AgentKind::Gemini, TaskStatus::Done)).unwrap();
+        store
+            .insert_task(&make_task("t-0010", AgentKind::Codex, TaskStatus::Running))
+            .unwrap();
+        store
+            .insert_task(&make_task(
+                "t-0012",
+                AgentKind::Cursor,
+                TaskStatus::AwaitingInput,
+            ))
+            .unwrap();
+        store
+            .insert_task(&make_task("t-0011", AgentKind::Gemini, TaskStatus::Done))
+            .unwrap();
 
         let running = store.list_tasks(TaskFilter::Running).unwrap();
         assert_eq!(running.len(), 2);
-        let ids = running.into_iter().map(|task| task.id.0).collect::<Vec<_>>();
+        let ids = running
+            .into_iter()
+            .map(|task| task.id.0)
+            .collect::<Vec<_>>();
         assert!(ids.contains(&"t-0010".to_string()));
         assert!(ids.contains(&"t-0012".to_string()));
     }
@@ -561,14 +600,19 @@ mod tests {
         store.insert_task(&retry_2).unwrap();
 
         let chain = store.get_retry_chain("t-1003").unwrap();
-        let ids = chain.iter().map(|task| task.id.as_str()).collect::<Vec<_>>();
+        let ids = chain
+            .iter()
+            .map(|task| task.id.as_str())
+            .collect::<Vec<_>>();
         assert_eq!(ids, vec!["t-1001", "t-1002", "t-1003"]);
     }
 
     #[test]
     fn insert_and_get_events() {
         let store = Store::open_memory().unwrap();
-        store.insert_task(&make_task("t-0020", AgentKind::Codex, TaskStatus::Running)).unwrap();
+        store
+            .insert_task(&make_task("t-0020", AgentKind::Codex, TaskStatus::Running))
+            .unwrap();
 
         let event = TaskEvent {
             task_id: TaskId("t-0020".to_string()),
@@ -592,10 +636,7 @@ mod tests {
             .create_workgroup("dispatch", "Shared API contract context.")
             .unwrap();
 
-        let loaded = store
-            .get_workgroup(workgroup.id.as_str())
-            .unwrap()
-            .unwrap();
+        let loaded = store.get_workgroup(workgroup.id.as_str()).unwrap().unwrap();
         assert_eq!(loaded.id, workgroup.id);
         assert_eq!(loaded.name, "dispatch");
         assert!(loaded.shared_context.contains("API contract"));
@@ -604,29 +645,37 @@ mod tests {
     #[test]
     fn gets_latest_milestone() {
         let store = Store::open_memory().unwrap();
-        store.insert_task(&make_task("t-0030", AgentKind::Codex, TaskStatus::Running)).unwrap();
+        store
+            .insert_task(&make_task("t-0030", AgentKind::Codex, TaskStatus::Running))
+            .unwrap();
 
-        store.insert_event(&TaskEvent {
-            task_id: TaskId("t-0030".to_string()),
-            timestamp: Local::now() - chrono::Duration::seconds(2),
-            event_kind: EventKind::Milestone,
-            detail: "types defined".to_string(),
-            metadata: None,
-        }).unwrap();
-        store.insert_event(&TaskEvent {
-            task_id: TaskId("t-0030".to_string()),
-            timestamp: Local::now() - chrono::Duration::seconds(1),
-            event_kind: EventKind::ToolCall,
-            detail: "cargo check".to_string(),
-            metadata: None,
-        }).unwrap();
-        store.insert_event(&TaskEvent {
-            task_id: TaskId("t-0030".to_string()),
-            timestamp: Local::now(),
-            event_kind: EventKind::Milestone,
-            detail: "tests passing".to_string(),
-            metadata: None,
-        }).unwrap();
+        store
+            .insert_event(&TaskEvent {
+                task_id: TaskId("t-0030".to_string()),
+                timestamp: Local::now() - chrono::Duration::seconds(2),
+                event_kind: EventKind::Milestone,
+                detail: "types defined".to_string(),
+                metadata: None,
+            })
+            .unwrap();
+        store
+            .insert_event(&TaskEvent {
+                task_id: TaskId("t-0030".to_string()),
+                timestamp: Local::now() - chrono::Duration::seconds(1),
+                event_kind: EventKind::ToolCall,
+                detail: "cargo check".to_string(),
+                metadata: None,
+            })
+            .unwrap();
+        store
+            .insert_event(&TaskEvent {
+                task_id: TaskId("t-0030".to_string()),
+                timestamp: Local::now(),
+                event_kind: EventKind::Milestone,
+                detail: "tests passing".to_string(),
+                metadata: None,
+            })
+            .unwrap();
 
         let milestone = store.latest_milestone("t-0030").unwrap();
         assert_eq!(milestone.as_deref(), Some("tests passing"));
@@ -651,34 +700,42 @@ mod tests {
         other.workgroup_id = Some("wg-other".to_string());
         store.insert_task(&other).unwrap();
 
-        store.insert_event(&TaskEvent {
-            task_id: TaskId("t-0040".to_string()),
-            timestamp: Local::now() - chrono::Duration::seconds(3),
-            event_kind: EventKind::Milestone,
-            detail: "finding one".to_string(),
-            metadata: None,
-        }).unwrap();
-        store.insert_event(&TaskEvent {
-            task_id: TaskId("t-0040".to_string()),
-            timestamp: Local::now() - chrono::Duration::seconds(2),
-            event_kind: EventKind::ToolCall,
-            detail: "ignored".to_string(),
-            metadata: None,
-        }).unwrap();
-        store.insert_event(&TaskEvent {
-            task_id: TaskId("t-0041".to_string()),
-            timestamp: Local::now() - chrono::Duration::seconds(1),
-            event_kind: EventKind::Milestone,
-            detail: "finding two".to_string(),
-            metadata: None,
-        }).unwrap();
-        store.insert_event(&TaskEvent {
-            task_id: TaskId("t-0042".to_string()),
-            timestamp: Local::now(),
-            event_kind: EventKind::Milestone,
-            detail: "other group".to_string(),
-            metadata: None,
-        }).unwrap();
+        store
+            .insert_event(&TaskEvent {
+                task_id: TaskId("t-0040".to_string()),
+                timestamp: Local::now() - chrono::Duration::seconds(3),
+                event_kind: EventKind::Milestone,
+                detail: "finding one".to_string(),
+                metadata: None,
+            })
+            .unwrap();
+        store
+            .insert_event(&TaskEvent {
+                task_id: TaskId("t-0040".to_string()),
+                timestamp: Local::now() - chrono::Duration::seconds(2),
+                event_kind: EventKind::ToolCall,
+                detail: "ignored".to_string(),
+                metadata: None,
+            })
+            .unwrap();
+        store
+            .insert_event(&TaskEvent {
+                task_id: TaskId("t-0041".to_string()),
+                timestamp: Local::now() - chrono::Duration::seconds(1),
+                event_kind: EventKind::Milestone,
+                detail: "finding two".to_string(),
+                metadata: None,
+            })
+            .unwrap();
+        store
+            .insert_event(&TaskEvent {
+                task_id: TaskId("t-0042".to_string()),
+                timestamp: Local::now(),
+                event_kind: EventKind::Milestone,
+                detail: "other group".to_string(),
+                metadata: None,
+            })
+            .unwrap();
 
         let milestones = store
             .get_workgroup_milestones(workgroup.id.as_str())

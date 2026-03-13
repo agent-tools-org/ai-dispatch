@@ -114,6 +114,7 @@ async fn run_task_inner(store: &Arc<Store>, spec: &BackgroundRunSpec) -> Result<
         budget: false,
         read_only: false,
         context_files: vec![],
+        session_id: None,
     };
     let mut std_cmd = agent
         .build_command(&spec.prompt, &opts)
@@ -192,6 +193,7 @@ async fn run_task_inner(store: &Arc<Store>, spec: &BackgroundRunSpec) -> Result<
             on_done: None,
             fallback: None,
             read_only: false,
+            session_id: None,
         },
     )
     .await?

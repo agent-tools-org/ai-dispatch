@@ -97,6 +97,7 @@ fn task_to_run_args(task: &batch::BatchTask, background: bool) -> RunArgs {
         on_done: None,
         fallback: task.fallback.clone(),
         read_only: false,
+        session_id: None,
     }
 }
 fn task_has_dependencies(task: &batch::BatchTask) -> bool {
@@ -393,6 +394,7 @@ fn insert_skipped_task(store: &Arc<Store>, task: &batch::BatchTask) -> Result<Ta
         workgroup_id: task.group.clone(),
         caller_kind: None,
         caller_session_id: None,
+        agent_session_id: None,
         repo_path: None,
         worktree_path: None,
         worktree_branch: None,

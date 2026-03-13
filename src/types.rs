@@ -137,7 +137,10 @@ impl TaskStatus {
     }
 
     pub fn is_terminal(&self) -> bool {
-        matches!(self, Self::Done | Self::Merged | Self::Failed | Self::Skipped)
+        matches!(
+            self,
+            Self::Done | Self::Merged | Self::Failed | Self::Skipped
+        )
     }
 }
 
@@ -217,6 +220,7 @@ pub struct Task {
     pub workgroup_id: Option<String>,
     pub caller_kind: Option<String>,
     pub caller_session_id: Option<String>,
+    pub agent_session_id: Option<String>,
     pub repo_path: Option<String>,
     pub worktree_path: Option<String>,
     pub worktree_branch: Option<String>,

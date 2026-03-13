@@ -26,10 +26,11 @@ pub(crate) struct MonitorState {
     event_count: u32,
     prompt_detector: PromptDetector,
     awaiting_input: bool,
+    streaming: bool,
 }
 
 impl MonitorState {
-    pub(crate) fn new() -> Self {
+    pub(crate) fn new(streaming: bool) -> Self {
         Self {
             info: CompletionInfo {
                 tokens: None,
@@ -42,6 +43,7 @@ impl MonitorState {
             event_count: 0,
             prompt_detector: PromptDetector::default(),
             awaiting_input: false,
+            streaming,
         }
     }
 
@@ -67,29 +69,33 @@ impl MonitorState {
                 &mut self.line_buffer,
             )?;
         }
-        if let Some(prompt) = self.prompt_detector.push_chunk(&chunk, Instant::now()) {
-            let awaiting_prompt = extract_awaiting_prompt(&self.full_output, &prompt);
-            mark_awaiting_input(
-                store,
-                task_id,
-                &prompt,
-                &awaiting_prompt,
-                &mut self.awaiting_input,
-            )?;
+        if !self.streaming {
+            if let Some(prompt) = self.prompt_detector.push_chunk(&chunk, Instant::now()) {
+                let awaiting_prompt = extract_awaiting_prompt(&self.full_output, &prompt);
+                mark_awaiting_input(
+                    store,
+                    task_id,
+                    &prompt,
+                    &awaiting_prompt,
+                    &mut self.awaiting_input,
+                )?;
+            }
         }
         Ok(())
     }
 
     fn handle_timeout(&mut self, store: &Arc<Store>, task_id: &TaskId) -> Result<()> {
-        if let Some(prompt) = self.prompt_detector.poll_idle(Instant::now()) {
-            let awaiting_prompt = extract_awaiting_prompt(&self.full_output, &prompt);
-            mark_awaiting_input(
-                store,
-                task_id,
-                &prompt,
-                &awaiting_prompt,
-                &mut self.awaiting_input,
-            )?;
+        if !self.streaming {
+            if let Some(prompt) = self.prompt_detector.poll_idle(Instant::now()) {
+                let awaiting_prompt = extract_awaiting_prompt(&self.full_output, &prompt);
+                mark_awaiting_input(
+                    store,
+                    task_id,
+                    &prompt,
+                    &awaiting_prompt,
+                    &mut self.awaiting_input,
+                )?;
+            }
         }
         Ok(())
     }

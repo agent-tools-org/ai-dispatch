@@ -29,7 +29,7 @@ pub fn run_agent_process(
     let mut bridge = spawn_bridge(cmd)?;
     let rx = spawn_reader_thread(bridge.take_reader()?);
     let mut log_file = std::fs::File::create(log_path)?;
-    let mut state = MonitorState::new();
+    let mut state = MonitorState::new(streaming);
     monitor_bridge(
         agent,
         task_id,

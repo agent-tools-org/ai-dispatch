@@ -94,6 +94,7 @@ async fn run_tool(store: Arc<Store>, arguments: Value) -> Result<Value> {
             output: None,
             model: args.model,
             worktree: args.worktree,
+            base_branch: None,
             group: args.group,
             verify: args.verify,
             max_duration_mins: None,

@@ -148,7 +148,7 @@ async fn run_task_inner(store: &Arc<Store>, spec: &BackgroundRunSpec) -> Result<
             }
         }
     }
-    if let Some(retry_args) = crate::cmd::retry_logic::prepare_retry(
+    if let Some(mut retry_args) = crate::cmd::retry_logic::prepare_retry(
         store.clone(),
         &TaskId(spec.task_id.clone()),
         &crate::cmd::run::RunArgs {
@@ -158,6 +158,7 @@ async fn run_task_inner(store: &Arc<Store>, spec: &BackgroundRunSpec) -> Result<
             output: spec.output.clone(),
             model: spec.model.clone(),
             worktree: None,
+            base_branch: None,
             group: spec.group.clone(),
             verify: spec.verify.clone(),
             max_duration_mins: spec.max_duration_mins,
@@ -172,6 +173,9 @@ async fn run_task_inner(store: &Arc<Store>, spec: &BackgroundRunSpec) -> Result<
     )
     .await?
     {
+        if let Some(task) = store.get_task(&spec.task_id)? {
+            crate::cmd::run::inherit_retry_base_branch(spec.dir.as_deref(), &task, &mut retry_args);
+        }
         Box::pin(crate::cmd::run::run(store.clone(), retry_args)).await?;
     }
 

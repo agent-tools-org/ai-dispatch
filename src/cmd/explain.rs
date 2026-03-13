@@ -28,6 +28,7 @@ pub(crate) async fn run_explain(store: Arc<Store>, task_id: &str, agent: Option<
             output: None,
             model,
             worktree: None,
+            base_branch: None,
             group: None,
             verify: None,
             max_duration_mins: None,

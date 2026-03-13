@@ -252,6 +252,7 @@ async fn main() -> Result<()> {
                     output,
                     model,
                     worktree,
+                    base_branch: None,
                     group,
                     verify,
                     max_duration_mins: None,

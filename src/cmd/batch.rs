@@ -76,6 +76,7 @@ fn task_to_run_args(task: &batch::BatchTask, background: bool) -> RunArgs {
         output: task.output.clone(),
         model: task.model.clone(),
         worktree: task.worktree.clone(),
+        base_branch: None,
         group: task.group.clone(),
         verify: task.verify.clone(),
         max_duration_mins: task.max_duration_mins.map(|value| value as i64),

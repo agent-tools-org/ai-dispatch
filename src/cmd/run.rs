@@ -28,6 +28,7 @@ pub struct RunArgs {
     pub output: Option<String>,
     pub model: Option<String>,
     pub worktree: Option<String>,
+    pub base_branch: Option<String>,
     pub group: Option<String>,
     pub verify: Option<String>,
     pub max_duration_mins: Option<i64>,
@@ -80,7 +81,11 @@ pub async fn run(store: Arc<Store>, args: RunArgs) -> Result<TaskId> {
     // Create worktree if requested, override dir to point into it
     let (wt_path, wt_branch, effective_dir) = if let Some(ref branch) = args.worktree {
         let repo_dir = args.dir.as_deref().unwrap_or(".");
-        let info = crate::worktree::create_worktree(std::path::Path::new(repo_dir), branch)?;
+        let info = crate::worktree::create_worktree(
+            std::path::Path::new(repo_dir),
+            branch,
+            args.base_branch.as_deref(),
+        )?;
         let p = info.path.to_string_lossy().to_string();
         (Some(p.clone()), Some(info.branch), Some(p))
     } else {
@@ -223,13 +228,30 @@ pub async fn run(store: Arc<Store>, args: RunArgs) -> Result<TaskId> {
             args.verify.as_deref(),
             effective_dir.as_deref(),
         );
-        if let Some(retry_args) = retry_logic::prepare_retry(store.clone(), &task_id, &args).await?
+        if let Some(mut retry_args) = retry_logic::prepare_retry(store.clone(), &task_id, &args).await?
         {
+            if let Some(task) = store.get_task(task_id.as_str())? {
+                inherit_retry_base_branch(args.dir.as_deref(), &task, &mut retry_args);
+            }
             Box::pin(run(store, retry_args)).await?;
         }
     }
 
     Ok(task_id)
+}
+
+pub(crate) fn inherit_retry_base_branch(repo_dir: Option<&str>, task: &Task, retry_args: &mut RunArgs) {
+    if retry_args.base_branch.is_some() || retry_args.worktree.is_none() {
+        return;
+    }
+    let Some(branch) = task.worktree_branch.as_deref() else { return };
+    if retry_args.worktree.as_deref() == Some(branch) {
+        return;
+    }
+    let repo_dir = std::path::Path::new(repo_dir.unwrap_or("."));
+    if let Ok(true) = crate::worktree::branch_has_commits_ahead_of_main(repo_dir, branch) {
+        retry_args.base_branch = Some(branch.to_string());
+    }
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -358,6 +380,7 @@ mod tests {
             output: None,
             model: None,
             worktree: None,
+            base_branch: None,
             group: None,
             verify: None,
             max_duration_mins: None,

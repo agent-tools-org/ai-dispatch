@@ -86,7 +86,7 @@ impl super::Agent for OpenCodeAgent {
     }
 }
 
-fn parse_json_event(
+pub(crate) fn parse_json_event(
     task_id: &TaskId,
     v: &serde_json::Value,
     now: chrono::DateTime<Local>,
@@ -178,7 +178,7 @@ fn parse_json_event(
     })
 }
 
-fn classify_text_line(line: &str) -> (Option<EventKind>, &str) {
+pub(crate) fn classify_text_line(line: &str) -> (Option<EventKind>, &str) {
     if line.contains("error[") || line.contains("FAILED") || line.starts_with("Error:") {
         (Some(EventKind::Error), line)
     } else if line.contains("test result:") || line.contains("running") && line.contains("test") {
@@ -201,7 +201,7 @@ fn classify_text_line(line: &str) -> (Option<EventKind>, &str) {
     }
 }
 
-fn classify_tool_detail(detail: &str) -> EventKind {
+pub(crate) fn classify_tool_detail(detail: &str) -> EventKind {
     if detail.contains("cargo test") || detail.contains("npm test") {
         EventKind::Test
     } else if detail.contains("cargo build") || detail.contains("cargo check") {
@@ -213,7 +213,7 @@ fn classify_tool_detail(detail: &str) -> EventKind {
     }
 }
 
-fn extract_tokens_from_output(output: &str) -> (Option<i64>, Option<f64>) {
+pub(crate) fn extract_tokens_from_output(output: &str) -> (Option<i64>, Option<f64>) {
     let mut total_tokens: i64 = 0;
     let mut total_cost: f64 = 0.0;
     let mut found_any = false;

@@ -54,6 +54,7 @@ pub enum AgentKind {
     Codex,
     OpenCode,
     Cursor,
+    Kilo,
 }
 
 impl AgentKind {
@@ -63,6 +64,7 @@ impl AgentKind {
             "codex" => Some(Self::Codex),
             "opencode" => Some(Self::OpenCode),
             "cursor" => Some(Self::Cursor),
+            "kilo" => Some(Self::Kilo),
             _ => None,
         }
     }
@@ -73,6 +75,7 @@ impl AgentKind {
             Self::Codex => "codex",
             Self::OpenCode => "opencode",
             Self::Cursor => "cursor",
+            Self::Kilo => "kilo",
         }
     }
 }

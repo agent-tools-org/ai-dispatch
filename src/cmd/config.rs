@@ -34,6 +34,13 @@ const AGENT_PROFILES: &[(AgentKind, &str, &str, &str, bool)] = &[
         true,
     ),
     (
+        AgentKind::Kilo,
+        "Simple edits, renames, type annotations (free tier)",
+        "free",
+        "rename, change, update, fix typo, add type",
+        true,
+    ),
+    (
         AgentKind::Cursor,
         "Frontend, UI components, responsive layouts",
         "varies",

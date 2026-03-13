@@ -101,7 +101,7 @@ fn resolve_dir_in_target(base_dir: &str, dir: Option<&str>, repo_dir: Option<&st
 pub async fn run(store: Arc<Store>, args: RunArgs) -> Result<TaskId> {
     let agent_kind = AgentKind::parse_str(&args.agent_name).ok_or_else(|| {
         anyhow::anyhow!(
-            "Unknown agent '{}'. Available: gemini, codex, opencode, cursor",
+            "Unknown agent '{}'. Available: gemini, codex, opencode, cursor, kilo",
             args.agent_name
         )
     })?;
@@ -177,7 +177,7 @@ pub async fn run(store: Arc<Store>, args: RunArgs) -> Result<TaskId> {
     let (file_context, context_files) = if !args.context.is_empty() {
         let specs = crate::context::parse_context_specs(&args.context)?;
         let paths: Vec<String> = specs.iter().map(|s| s.file.clone()).collect();
-        if agent_kind == AgentKind::OpenCode {
+        if agent_kind == AgentKind::OpenCode || agent_kind == AgentKind::Kilo {
             let hints: Vec<String> = specs
                 .iter()
                 .filter_map(|s| {

@@ -68,6 +68,11 @@ fn select_agent_from(prompt: &str, opts: &RunOpts, available: &[AgentKind]) -> (
             reason: "simple edit task",
         },
         Candidate {
+            kind: AgentKind::Kilo,
+            score: score_kilo(&normalized, file_count, prompt_len, budget),
+            reason: "simple edit task (free)",
+        },
+        Candidate {
             kind: AgentKind::Cursor,
             score: score_cursor(&normalized),
             reason: "frontend/UI task",
@@ -149,6 +154,23 @@ fn score_opencode(prompt: &str, file_count: usize, prompt_len: usize, budget: bo
     score
 }
 
+fn score_kilo(prompt: &str, file_count: usize, prompt_len: usize, budget: bool) -> i32 {
+    let mut score = 0;
+    if contains_any(prompt, SIMPLE_EDIT_TERMS) {
+        score += 4;
+        if file_count == 1 {
+            score += 2;
+        }
+        if prompt_len < 200 {
+            score += 2;
+        }
+    }
+    if budget {
+        score += 6;
+    }
+    score
+}
+
 fn score_cursor(prompt: &str) -> i32 {
     if contains_any(prompt, FRONTEND_TERMS) {
         7
@@ -206,6 +228,7 @@ fn contains_any(prompt: &str, terms: &[&str]) -> bool {
 fn priority(kind: AgentKind) -> i32 {
     match kind {
         AgentKind::Gemini => 0,
+        AgentKind::Kilo => 0,
         AgentKind::OpenCode => 1,
         AgentKind::Cursor => 2,
         AgentKind::Codex => 3,
@@ -291,6 +314,23 @@ mod tests {
         assert!(reason.contains("budget"));
     }
 
+    #[test]
+    fn budget_mode_prefers_kilo_for_simple_edits() {
+        let prompt = "rename src/types.rs field name";
+        let opts = RunOpts {
+            dir: Some("src".to_string()),
+            output: None,
+            model: None,
+            budget: true,
+            read_only: false,
+            context_files: vec![],
+            session_id: None,
+        };
+        let (kind, reason) = select_agent_from(prompt, &opts, &[AgentKind::Kilo, AgentKind::Codex]);
+        assert_eq!(kind, AgentKind::Kilo);
+        assert!(reason.contains("budget"));
+    }
+
     fn select(prompt: &str, dir: &[&str], available: &[AgentKind]) -> (AgentKind, String) {
         let opts = RunOpts {
             dir: dir.first().map(|value| value.to_string()),
@@ -304,10 +344,11 @@ mod tests {
         select_agent_from(prompt, &opts, available)
     }
 
-    fn available_agents() -> [AgentKind; 4] {
+    fn available_agents() -> [AgentKind; 5] {
         [
             AgentKind::Gemini,
             AgentKind::OpenCode,
+            AgentKind::Kilo,
             AgentKind::Cursor,
             AgentKind::Codex,
         ]

@@ -37,6 +37,10 @@ fn resolve_pricing(model: Option<&str>, agent: AgentKind) -> Option<ModelPricing
         AgentKind::Codex => model_pricing("gpt-4.1"),
         AgentKind::OpenCode => None, // Unknown without model
         AgentKind::Cursor => None,
+        AgentKind::Kilo => Some(ModelPricing {
+            input_per_m: 0.0,
+            output_per_m: 0.0,
+        }),
     }
 }
 
@@ -44,19 +48,45 @@ fn model_pricing(model: &str) -> Option<ModelPricing> {
     // Normalize model name for matching
     let m = model.to_lowercase();
     let p = if m.contains("gpt-4.1") && !m.contains("mini") && !m.contains("nano") {
-        ModelPricing { input_per_m: 2.0, output_per_m: 8.0 }
+        ModelPricing {
+            input_per_m: 2.0,
+            output_per_m: 8.0,
+        }
     } else if m.contains("gpt-4.1-mini") {
-        ModelPricing { input_per_m: 0.4, output_per_m: 1.6 }
+        ModelPricing {
+            input_per_m: 0.4,
+            output_per_m: 1.6,
+        }
     } else if m.contains("gpt-4.1-nano") {
-        ModelPricing { input_per_m: 0.1, output_per_m: 0.4 }
+        ModelPricing {
+            input_per_m: 0.1,
+            output_per_m: 0.4,
+        }
     } else if m.contains("gemini-2.5-flash") {
-        ModelPricing { input_per_m: 0.15, output_per_m: 0.60 }
+        ModelPricing {
+            input_per_m: 0.15,
+            output_per_m: 0.60,
+        }
     } else if m.contains("gemini-2.5-pro") {
-        ModelPricing { input_per_m: 1.25, output_per_m: 10.0 }
-    } else if m.contains("free") && (m.contains("mimo") || m.contains("nemotron") || m.contains("minimax")) {
-        return Some(ModelPricing { input_per_m: 0.0, output_per_m: 0.0 });
+        ModelPricing {
+            input_per_m: 1.25,
+            output_per_m: 10.0,
+        }
+    } else if m.contains("free")
+        && (m.contains("mimo")
+            || m.contains("nemotron")
+            || m.contains("minimax")
+            || m.contains("kilo"))
+    {
+        return Some(ModelPricing {
+            input_per_m: 0.0,
+            output_per_m: 0.0,
+        });
     } else if m.contains("glm-5") || m.contains("kimi-k2.5") {
-        ModelPricing { input_per_m: 0.5, output_per_m: 2.0 }
+        ModelPricing {
+            input_per_m: 0.5,
+            output_per_m: 2.0,
+        }
     } else {
         return None;
     };
@@ -69,7 +99,23 @@ mod tests {
 
     #[test]
     fn free_model_costs_zero() {
-        let cost = estimate_cost(100_000, Some("opencode/mimo-v2-flash-free"), AgentKind::OpenCode);
+        let cost = estimate_cost(
+            100_000,
+            Some("opencode/mimo-v2-flash-free"),
+            AgentKind::OpenCode,
+        );
+        assert_eq!(cost, Some(0.0));
+    }
+
+    #[test]
+    fn kilo_default_is_free() {
+        let cost = estimate_cost(100_000, None, AgentKind::Kilo);
+        assert_eq!(cost, Some(0.0));
+    }
+
+    #[test]
+    fn kilo_free_model_costs_zero() {
+        let cost = estimate_cost(100_000, Some("kilo/kilo/auto-free"), AgentKind::Kilo);
         assert_eq!(cost, Some(0.0));
     }
 

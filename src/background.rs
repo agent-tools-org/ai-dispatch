@@ -13,6 +13,7 @@ use crate::store::Store;
 use crate::types::{AgentKind, EventKind, TaskEvent, TaskFilter, TaskId, TaskStatus};
 
 const ZOMBIE_FAILURE_DETAIL: &str = "Background worker died unexpectedly";
+const DEFAULT_MAX_TASK_DURATION_MINS: i64 = 60;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BackgroundRunSpec {
@@ -228,6 +229,13 @@ where
             continue;
         };
         if is_worker_alive(worker_pid) {
+            let elapsed_mins = (Local::now() - task.created_at).num_minutes();
+            if elapsed_mins > DEFAULT_MAX_TASK_DURATION_MINS {
+                kill_process(worker_pid);
+                let detail = format!("Task exceeded max duration ({}m > {}m)", elapsed_mins, DEFAULT_MAX_TASK_DURATION_MINS);
+                record_failure(store, task_id, &detail, &detail)?;
+                cleaned.push(task_id.to_string());
+            }
             continue;
         }
 
@@ -275,6 +283,20 @@ fn record_failure(
     })?;
     Ok(())
 }
+
+#[cfg(unix)]
+fn kill_process(pid: u32) {
+    if pid > i32::MAX as u32 {
+        return;
+    }
+    unsafe extern "C" {
+        fn kill(pid: i32, sig: i32) -> i32;
+    }
+    unsafe { kill(pid as i32, 15) };
+}
+
+#[cfg(not(unix))]
+fn kill_process(_pid: u32) {}
 
 #[cfg(unix)]
 fn is_process_running(pid: u32) -> bool {

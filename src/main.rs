@@ -186,7 +186,10 @@ enum Commands {
     /// Send interactive input to a background task
     Respond {
         task_id: String,
-        input: String,
+        /// Response text (if omitted, reads from stdin)
+        input: Option<String>,
+        #[arg(long, short)]
+        file: Option<String>,
     },
     /// Research/explore via cheap AI CLIs
     Ask {
@@ -374,8 +377,12 @@ async fn main() -> Result<()> {
         Commands::Retry { task_id, feedback } => {
             cmd::retry::run(store, cmd::retry::RetryArgs { task_id, feedback }).await?;
         }
-        Commands::Respond { task_id, input } => {
-            cmd::respond::run(&task_id, &input)?;
+        Commands::Respond {
+            task_id,
+            input,
+            file,
+        } => {
+            cmd::respond::run(&task_id, input.as_deref(), file.as_deref())?;
         }
         Commands::Ask {
             prompt,

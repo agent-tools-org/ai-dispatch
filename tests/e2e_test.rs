@@ -6,6 +6,7 @@ use std::path::Path;
 use std::process::Command;
 use std::process::Stdio;
 use rusqlite::params;
+use tempfile::NamedTempFile;
 use tempfile::TempDir;
 
 fn aid_cmd_in(aid_home: &Path) -> Command {
@@ -264,4 +265,25 @@ fn mcp_tools_list_works_over_stdio_jsonrpc() {
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("aid_run"));
     assert!(stdout.contains("aid_usage"));
+}
+
+#[test]
+fn respond_reads_response_text_from_file() {
+    let temp_dir = TempDir::new().unwrap();
+    let mut response_file = NamedTempFile::new().unwrap();
+    write!(response_file, "text with `backticks` and {{braces}}").unwrap();
+
+    let output = aid_cmd_in(temp_dir.path())
+        .args([
+            "respond",
+            "t-respond",
+            "--file",
+            response_file.path().to_str().unwrap(),
+        ])
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+
+    let queued = std::fs::read_to_string(temp_dir.path().join("jobs/t-respond.input")).unwrap();
+    assert_eq!(queued, "text with `backticks` and {braces}");
 }

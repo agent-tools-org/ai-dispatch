@@ -68,14 +68,16 @@ impl MonitorState {
             )?;
         }
         if let Some(prompt) = self.prompt_detector.push_chunk(&chunk, Instant::now()) {
-            mark_awaiting_input(store, task_id, &prompt, &mut self.awaiting_input)?;
+            let awaiting_prompt = extract_awaiting_prompt(&self.full_output, &prompt);
+            mark_awaiting_input(store, task_id, &prompt, &awaiting_prompt, &mut self.awaiting_input)?;
         }
         Ok(())
     }
 
     fn handle_timeout(&mut self, store: &Arc<Store>, task_id: &TaskId) -> Result<()> {
         if let Some(prompt) = self.prompt_detector.poll_idle(Instant::now()) {
-            mark_awaiting_input(store, task_id, &prompt, &mut self.awaiting_input)?;
+            let awaiting_prompt = extract_awaiting_prompt(&self.full_output, &prompt);
+            mark_awaiting_input(store, task_id, &prompt, &awaiting_prompt, &mut self.awaiting_input)?;
         }
         Ok(())
     }
@@ -225,10 +227,24 @@ fn flush_stream_lines(
     Ok(())
 }
 
+fn extract_awaiting_prompt(output: &str, prompt: &str) -> String {
+    let prompt = prompt.trim();
+    output
+        .lines()
+        .rev()
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+        .take(6)
+        .find(|line| line.ends_with('?') || line.ends_with("(y/n)"))
+        .unwrap_or(prompt)
+        .to_string()
+}
+
 fn mark_awaiting_input(
     store: &Arc<Store>,
     task_id: &TaskId,
     prompt: &str,
+    awaiting_prompt: &str,
     awaiting_input: &mut bool,
 ) -> Result<()> {
     if *awaiting_input {
@@ -240,7 +256,7 @@ fn mark_awaiting_input(
         timestamp: Local::now(),
         event_kind: EventKind::Reasoning,
         detail: prompt.to_string(),
-        metadata: Some(json!({ "awaiting_input": true })),
+        metadata: Some(json!({ "awaiting_input": true, "awaiting_prompt": awaiting_prompt })),
     })?;
     *awaiting_input = true;
     Ok(())
@@ -254,3 +270,6 @@ fn write_output_file(path: &str, buffer: &str) -> Result<()> {
     }
     Ok(())
 }
+
+#[cfg(test)]
+mod tests;

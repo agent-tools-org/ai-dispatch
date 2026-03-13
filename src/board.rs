@@ -60,7 +60,10 @@ pub fn render_board(tasks: &[Task], store: &Store) -> Result<String> {
                         .and_then(|m| m.get("awaiting_input"))
                         .and_then(|v| v.as_bool())
                         .unwrap_or(false))
-                    .map(|e| e.detail.clone()));
+                    .and_then(|e| e.metadata.as_ref()
+                        .and_then(|m| m.get("awaiting_prompt"))
+                        .and_then(|v| v.as_str())
+                        .map(|s| s.to_string())));
             match reason {
                 Some(r) => truncate(&format!("AWAIT — {}", r), 30),
                 None => task.status.label().to_string(),
@@ -396,12 +399,13 @@ mod tests {
             task_id: task.id.clone(),
             timestamp: Local::now(),
             event_kind: EventKind::Reasoning,
-            detail: "Continue with fix?".to_string(),
-            metadata: Some(json!({ "awaiting_input": true })),
+            detail: "115:    use super::board::render_board;".to_string(),
+            metadata: Some(json!({ "awaiting_input": true, "awaiting_prompt": "Continue with fix?" })),
         }).unwrap();
 
         let output = render_board(&[task], &store).unwrap();
         assert!(output.contains("AWAIT — Continue with fix?"));
+        assert!(!output.contains("115:    use super::board::render_board;"));
     }
 
     #[test]

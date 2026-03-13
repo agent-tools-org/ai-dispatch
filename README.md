@@ -22,7 +22,7 @@ Without an orchestrator, a multi-agent CLI workflow breaks down fast:
 
 ### Prerequisites
 
-Install Rust and whichever AI CLIs you want `aid` to orchestrate. `aid` auto-detects supported agents on your `PATH`: `gemini`, `codex`, `opencode`, `cursor`, and `auto`.
+Install Rust (1.85 or later, required for edition 2024) and whichever AI CLIs you want `aid` to orchestrate. `aid` auto-detects supported agents on your `PATH`: `gemini`, `codex`, `opencode`, `cursor`, and `auto`.
 
 ### Install From Source
 

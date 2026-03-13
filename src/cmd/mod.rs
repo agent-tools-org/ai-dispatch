@@ -8,6 +8,7 @@ pub mod board;
 pub mod config;
 pub mod explain;
 pub mod group;
+pub mod init;
 pub mod mcp;
 pub mod merge;
 mod mcp_schema;

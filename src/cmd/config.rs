@@ -73,6 +73,7 @@ pub fn run(_store: &Arc<Store>, action: ConfigAction) -> Result<()> {
             let skills = skills::list_skills()?;
             if skills.is_empty() {
                 println!("No skills found in ~/.aid/skills/.");
+                println!("  Run `aid init` to install default skills.");
             } else {
                 println!("Available skills:");
                 for skill in &skills {
@@ -84,6 +85,7 @@ pub fn run(_store: &Arc<Store>, action: ConfigAction) -> Result<()> {
             let templates = templates::list_templates();
             if templates.is_empty() {
                 println!("No templates found in ~/.aid/templates/.");
+                println!("  Run `aid init` to install default templates.");
             } else {
                 println!("Available templates:");
                 for template in &templates {

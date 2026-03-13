@@ -230,9 +230,11 @@ enum Commands {
         #[command(subcommand)]
         action: GroupAction,
     },
+    /// Initialize default skills and templates
+    Init,
     #[command(hide = true, name = "__run-task")]
     InternalRunTask { task_id: String },
-/// Print task output (shortcut for `show --output`)
+    /// Print task output (shortcut for `show --output`)
     Output {
         /// Task ID
         task_id: String,
@@ -440,6 +442,7 @@ async fn main() -> Result<()> {
             } => cmd::group::update(&store, &group_id, name.as_deref(), context.as_deref())?,
             GroupAction::Delete { group_id } => cmd::group::delete(&store, &group_id)?,
         },
+        Commands::Init => cmd::init::run()?,
         Commands::InternalRunTask { task_id } => {
             background::run_task(store, &task_id).await?;
         }

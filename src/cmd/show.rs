@@ -181,6 +181,15 @@ pub fn diff_text(store: &Arc<Store>, task_id: &str) -> Result<String> {
         return Ok(out);
     }
 
+    if task.output_path.is_none() {
+        let log_path = paths::log_path(task_id);
+        if let Ok(log) = std::fs::read_to_string(&log_path) {
+            out.push_str("\n--- Output ---\n");
+            out.push_str(&log);
+            return Ok(out);
+        }
+    }
+
     out.push_str("\n--- Artifacts ---\n  (no worktree diff or output file available)\n");
     Ok(out)
 }
@@ -485,5 +494,43 @@ mod tests {
         assert!(text.contains("=== Injected Skills ===\n# Implementer"));
         assert!(text.contains("=== Resolved Prompt ===\nraw prompt"));
         assert!(text.contains("[MILESTONE] <brief description>"));
+    }
+
+    #[test]
+    fn diff_text_falls_back_to_default_log_output() {
+        let temp = tempfile::tempdir().unwrap();
+        let _aid_home = crate::paths::AidHomeGuard::set(temp.path());
+        std::fs::create_dir_all(crate::paths::logs_dir()).unwrap();
+        std::fs::write(crate::paths::log_path("t-log-fallback"), "log output\n").unwrap();
+
+        let store = Arc::new(Store::open_memory().unwrap());
+        let task = Task {
+            id: TaskId("t-log-fallback".to_string()),
+            agent: AgentKind::Codex,
+            prompt: "prompt".to_string(),
+            resolved_prompt: None,
+            status: TaskStatus::Done,
+            parent_task_id: None,
+            workgroup_id: None,
+            caller_kind: None,
+            caller_session_id: None,
+            repo_path: None,
+            worktree_path: None,
+            worktree_branch: None,
+            log_path: None,
+            output_path: None,
+            tokens: None,
+            duration_ms: None,
+            model: None,
+            cost_usd: None,
+            created_at: Local::now(),
+            completed_at: None,
+        };
+        store.insert_task(&task).unwrap();
+
+        let text = diff_text(&store, "t-log-fallback").unwrap();
+
+        assert!(text.contains("\n--- Output ---\nlog output\n"));
+        assert!(!text.contains("no worktree diff or output file available"));
     }
 }

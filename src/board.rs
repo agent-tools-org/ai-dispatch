@@ -52,9 +52,6 @@ pub fn render_board(tasks: &[Task], store: &Store) -> Result<String> {
     }
 
     for task in tasks {
-        let duration = task.duration_ms
-            .map(format_duration)
-            .unwrap_or_else(|| elapsed_since(task.created_at));
         let status = if task.status == TaskStatus::AwaitingInput {
             let reason = store.get_events(task.id.as_str())
                 .ok()
@@ -71,10 +68,25 @@ pub fn render_board(tasks: &[Task], store: &Store) -> Result<String> {
         } else {
             task_status(task, store.latest_milestone(task.id.as_str())?)
         };
-        let tokens = task.tokens
-            .map(format_tokens)
-            .unwrap_or_else(|| "-".to_string());
-        let cost_str = cost::format_cost(task.cost_usd);
+        let duration = if task.status == TaskStatus::Skipped {
+            "-".to_string()
+        } else {
+            task.duration_ms
+                .map(format_duration)
+                .unwrap_or_else(|| elapsed_since(task.created_at))
+        };
+        let tokens = if task.status == TaskStatus::Skipped {
+            "-".to_string()
+        } else {
+            task.tokens
+                .map(format_tokens)
+                .unwrap_or_else(|| "-".to_string())
+        };
+        let cost_str = if task.status == TaskStatus::Skipped {
+            "-".to_string()
+        } else {
+            cost::format_cost(task.cost_usd)
+        };
         let parent = short_parent(task.parent_task_id.as_deref());
         let group = short_group(task.workgroup_id.as_deref());
         let repo = short_repo(task.repo_path.as_deref());
@@ -215,7 +227,7 @@ fn count_statuses(tasks: &[Task]) -> (usize, usize, usize) {
             TaskStatus::Done => done += 1,
             TaskStatus::Running | TaskStatus::AwaitingInput => running += 1,
             TaskStatus::Failed => failed += 1,
-            TaskStatus::Pending => {}
+            TaskStatus::Pending | TaskStatus::Skipped => {}
         }
     }
     (done, running, failed)
@@ -297,6 +309,7 @@ fn retry_status(status: TaskStatus) -> &'static str {
         TaskStatus::AwaitingInput => "Await",
         TaskStatus::Done => "Done",
         TaskStatus::Failed => "Failed",
+        TaskStatus::Skipped => "Skipped",
     }
 }
 

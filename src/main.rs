@@ -164,6 +164,9 @@ enum Commands {
         /// Show only tasks for one workgroup
         #[arg(long)]
         group: Option<String>,
+        /// Stream task status updates to stdout
+        #[arg(short, long)]
+        stream: bool,
     },
     /// Print the most recent completion notifications
     Completions,
@@ -396,8 +399,13 @@ async fn main() -> Result<()> {
             today,
             mine,
             group,
+            stream,
         } => {
-            cmd::board::run(&store, running, today, mine, group.as_deref())?;
+            if stream {
+                cmd::board_stream::run(&store, running, today, mine, group.as_deref()).await?;
+            } else {
+                cmd::board::run(&store, running, today, mine, group.as_deref())?;
+            }
         }
         Commands::Completions => {
             let text = notify::read_recent(20)?;

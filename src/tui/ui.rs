@@ -155,12 +155,14 @@ fn render_board(frame: &mut ratatui::Frame<'_>, app: &App) {
 
     let done = app.tasks.iter().filter(|task| matches!(task.status, TaskStatus::Done | TaskStatus::Merged)).count();
     let running = app.tasks.iter().filter(|task| matches!(task.status, TaskStatus::Running | TaskStatus::AwaitingInput)).count();
+    let failed = app.tasks.iter().filter(|task| matches!(task.status, TaskStatus::Failed)).count();
     let status = format!(
-        "Scope: {} | Tasks: {} | Done: {} | Running: {} | d=dashboard m=multipane j/k=nav Enter=detail q=quit",
+        "Scope: {} | Tasks: {} | Done: {} | Running: {} | Failed: {} | d=dashboard m=multipane j/k=nav Enter=detail q=quit",
         app.scope_label(),
         app.tasks.len(),
         done,
         running,
+        failed,
     );
     frame.render_widget(Paragraph::new(status), chunks[2]);
 }
@@ -204,10 +206,16 @@ fn render_detail(frame: &mut ratatui::Frame<'_>, app: &App) {
 }
 
 fn task_row(app: &App, task: &Task) -> Row<'static> {
+    let status = match task.status {
+        TaskStatus::Running => format!("▶ {}", task.status.label()),
+        TaskStatus::Done | TaskStatus::Merged => format!("✓ {}", task.status.label()),
+        TaskStatus::Failed => format!("✗ {}", task.status.label()),
+        _ => task.status.label().to_string(),
+    };
     Row::new(vec![
         Cell::from(task.id.as_str().to_string()),
         Cell::from(task.agent.as_str().to_string()),
-        Cell::from(task.status.label().to_string()),
+        Cell::from(status),
         Cell::from(task_progress(app, task)),
         Cell::from(task_cpu(app, task)),
         Cell::from(task_memory(app, task)),
@@ -302,10 +310,10 @@ fn task_progress(app: &App, task: &Task) -> String {
 
 fn status_style(status: TaskStatus) -> Style {
     match status {
-        TaskStatus::Done | TaskStatus::Merged => Style::default().fg(Color::Green),
-        TaskStatus::Running => Style::default().fg(Color::Yellow),
-        TaskStatus::AwaitingInput => Style::default().fg(Color::Magenta),
-        TaskStatus::Failed => Style::default().fg(Color::Red),
+        TaskStatus::Done | TaskStatus::Merged => Style::default().fg(Color::DarkGray),
+        TaskStatus::Running => Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD),
+        TaskStatus::AwaitingInput => Style::default().fg(Color::Magenta).add_modifier(Modifier::BOLD),
+        TaskStatus::Failed => Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
         TaskStatus::Pending => Style::default().fg(Color::Gray),
         TaskStatus::Skipped => Style::default().fg(Color::Blue),
     }

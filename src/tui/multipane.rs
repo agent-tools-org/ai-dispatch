@@ -1,7 +1,7 @@
 // Multi-pane renderer for simultaneous task event stream display.
 // Exports render_multipane for split-pane layouts; depends on ratatui Layout.
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
-use ratatui::prelude::{Color, Style};
+use ratatui::prelude::{Color, Modifier, Style};
 use ratatui::widgets::{Block, Borders, List, ListItem, Paragraph};
 
 pub struct PaneData {
@@ -112,13 +112,22 @@ fn compute_pane_layout(area: Rect, count: usize) -> Vec<Rect> {
 }
 
 fn render_pane(pane: &PaneData, is_active: bool) -> List<'static> {
-    let border_color = if is_active {
+    let is_done = matches!(pane.status.as_str(), "done" | "merged");
+    let is_running = pane.status == "running";
+    let is_failed = pane.status == "failed";
+    let border_color = if is_done {
+        Color::DarkGray
+    } else if is_running {
+        Color::Yellow
+    } else if is_failed {
+        Color::Red
+    } else if is_active {
         Color::Cyan
     } else {
         Color::DarkGray
     };
     let status_color = match pane.status.as_str() {
-        "done" | "merged" => Color::Green,
+        "done" | "merged" => Color::DarkGray,
         "running" => Color::Yellow,
         "awaiting_input" => Color::Magenta,
         "failed" => Color::Red,
@@ -126,7 +135,12 @@ fn render_pane(pane: &PaneData, is_active: bool) -> List<'static> {
         "skipped" => Color::Blue,
         _ => Color::White,
     };
-    let title = format!(" {} {} [{}] ", pane.task_id, pane.agent, pane.status);
+    let title_status = match pane.status.as_str() {
+        "done" | "merged" => format!("✓ {}", pane.status),
+        "failed" => format!("✗ {}", pane.status),
+        _ => pane.status.clone(),
+    };
+    let title = format!(" {} {} [{}] ", pane.task_id, pane.agent, title_status);
     let bottom_title = {
         let mut parts = vec![];
         if !pane.workgroup.is_empty() {
@@ -139,9 +153,30 @@ fn render_pane(pane: &PaneData, is_active: bool) -> List<'static> {
             parts.push(pane.model.clone());
         }
         if !pane.elapsed.is_empty() {
-            parts.push(pane.elapsed.clone());
+            let elapsed = if is_done {
+                format!("Done in {}", pane.elapsed)
+            } else if is_running {
+                format!("▶ {}", pane.elapsed)
+            } else {
+                pane.elapsed.clone()
+            };
+            parts.push(elapsed);
         }
         format!(" {} ", parts.join(" | "))
+    };
+    let content_style = if is_done {
+        Style::default()
+            .fg(Color::DarkGray)
+            .add_modifier(Modifier::DIM)
+    } else {
+        Style::default()
+    };
+    let title_style = if is_running {
+        Style::default()
+            .fg(status_color)
+            .add_modifier(Modifier::BOLD)
+    } else {
+        Style::default().fg(status_color)
     };
     let prompt = if pane.prompt.len() <= 60 {
         pane.prompt.clone()
@@ -185,11 +220,11 @@ fn render_pane(pane: &PaneData, is_active: bool) -> List<'static> {
         );
         items.push(ListItem::new(pos).style(Style::default().fg(Color::DarkGray)));
     }
-    List::new(items).block(
+    List::new(items).style(content_style).block(
         Block::default()
             .title(title)
             .title_bottom(bottom_title)
-            .title_style(Style::default().fg(status_color))
+            .title_style(title_style)
             .borders(Borders::ALL)
             .border_style(Style::default().fg(border_color)),
     )

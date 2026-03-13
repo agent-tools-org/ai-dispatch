@@ -1,0 +1,213 @@
+// Prompt and run helpers for `aid run`.
+// Exports: build_prompt_bundle(), resolve_prompt(), build_context_flags(), run_agent_process_impl().
+// Deps: context, templates, workgroup, skills, watcher, store.
+use anyhow::{Context, Result};
+use chrono::Local;
+use std::sync::Arc;
+use tokio::process::Command;
+use crate::{agent, skills, store::Store, templates, types::*, watcher};
+use super::RunArgs;
+
+pub(super) struct PromptBundle { pub effective_prompt: String, pub context_files: Vec<String>, pub prompt_tokens: i64 }
+
+#[allow(dead_code)]
+pub(super) enum PromptSource<'a> { Inline(&'a str), File(&'a str) }
+
+pub(super) fn build_prompt_bundle(store: &Store, args: &RunArgs, agent_kind: &AgentKind, workgroup: Option<&Workgroup>, requested_skills: &[String]) -> Result<PromptBundle> {
+    let (file_context, context_files) = build_context_flags(agent_kind, &args.context)?;
+    let milestones = if let Some(group_id) = args.group.as_deref() { store.get_workgroup_milestones(group_id)? } else { vec![] };
+    let prompt = resolve_prompt(PromptSource::Inline(&args.prompt), args.template.as_deref())?;
+    let mut effective_prompt = crate::workgroup::compose_prompt(&prompt, file_context.as_deref(), workgroup, &milestones);
+    let (edit_guard, milestone_instr) = templates::shared_system_fragments(&prompt);
+    if let Some(guard) = edit_guard { effective_prompt = format!("{guard}{effective_prompt}"); }
+    effective_prompt.push_str(milestone_instr);
+    let effective_prompt = inject_skill(&effective_prompt, requested_skills)?;
+    let prompt_tokens = templates::estimate_tokens(&effective_prompt) as i64;
+    Ok(PromptBundle { effective_prompt, context_files, prompt_tokens })
+}
+
+pub(super) fn resolve_prompt(source: PromptSource<'_>, template: Option<&str>) -> Result<String> {
+    let raw = match source { PromptSource::Inline(prompt) => prompt.to_string(), PromptSource::File(path) => read_context_file(path)?, };
+    if let Some(template) = template {
+        let template_content = templates::load_template(template)?;
+        Ok(templates::apply_template(&template_content, &raw))
+    } else { Ok(raw) }
+}
+
+pub(super) fn inject_skill(prompt: &str, requested_skills: &[String]) -> Result<String> {
+    if requested_skills.is_empty() { return Ok(prompt.to_string()); }
+    let skill_text = skills::load_skills(requested_skills)?;
+    Ok(format!("{prompt}\n\n--- Methodology ---\n{skill_text}"))
+}
+
+pub(super) fn build_context_flags(agent_kind: &AgentKind, context_args: &[String]) -> Result<(Option<String>, Vec<String>)> {
+    if context_args.is_empty() { return Ok((None, vec![])); }
+    let specs = crate::context::parse_context_specs(context_args)?;
+    let context_files = expand_context_paths(&specs);
+    if *agent_kind == AgentKind::OpenCode || *agent_kind == AgentKind::Kilo {
+        let hints: Vec<String> = specs.iter().filter_map(|spec| spec.items.as_ref().map(|items| format!("Focus on: {} in {}", items.join(", "), spec.file))).collect();
+        let file_context = (!hints.is_empty()).then(|| hints.join("\n"));
+        return Ok((file_context, context_files));
+    }
+    if agent::agent_has_fs_access(agent_kind) { return Ok((Some(crate::context::resolve_context_pointers(&specs)), vec![])); }
+    let file_context = if specs.iter().all(|spec| spec.items.is_none()) {
+        let mut blocks = Vec::new();
+        for spec in &specs { let content = read_context_file(&spec.file)?; blocks.push(format_context_block(&spec.file, &content)); }
+        blocks.join("\n\n")
+    } else { crate::context::resolve_context(&specs)? };
+    Ok((Some(file_context), vec![]))
+}
+
+pub(super) fn expand_context_paths(specs: &[crate::context::ContextSpec]) -> Vec<String> { specs.iter().map(|spec| spec.file.clone()).collect() }
+
+pub(super) fn read_context_file(path: &str) -> Result<String> { std::fs::read_to_string(path).with_context(|| format!("Failed to read context file: {}", path)) }
+
+pub(super) fn format_context_block(path: &str, content: &str) -> String { format!("### {}\n```rust\n{}\n```", path, content.trim()) }
+
+pub(super) fn effective_skills(agent_kind: &AgentKind, args: &RunArgs) -> Vec<String> {
+    let manual_skills: Vec<String> = args.skills.iter().filter(|skill| skill.as_str() != super::NO_SKILL_SENTINEL).cloned().collect();
+    if !manual_skills.is_empty() || args.skills.iter().any(|skill| skill.as_str() == super::NO_SKILL_SENTINEL) { return manual_skills; }
+    skills::auto_skills(agent_kind, args.worktree.is_some())
+}
+
+pub(super) fn resolve_repo_path(path: &str) -> Result<String> {
+    let out = std::process::Command::new("git").args(["-C", path, "rev-parse", "--show-toplevel"]).output().context("Failed to run git")?;
+    anyhow::ensure!(out.status.success(), "Not a git repository: {path}");
+    Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
+}
+
+pub(super) fn resolve_dir_in_target(base_dir: &str, dir: Option<&str>, repo_dir: Option<&str>) -> String {
+    let Some(dir) = dir else { return base_dir.to_string() };
+    let dir_path = std::path::Path::new(dir);
+    if dir_path == std::path::Path::new(".") { return base_dir.to_string(); }
+    if dir_path.is_absolute() && let Some(repo_dir) = repo_dir && let Ok(relative_dir) = dir_path.strip_prefix(repo_dir) {
+        return std::path::Path::new(base_dir).join(relative_dir).to_string_lossy().to_string();
+    }
+    if dir_path.is_absolute() { return dir.to_string(); }
+    std::path::Path::new(base_dir).join(dir_path).to_string_lossy().to_string()
+}
+
+pub(super) fn resolve_worktree_paths(args: &RunArgs, repo_path: Option<&str>) -> Result<(Option<String>, Option<String>, Option<String>)> {
+    if let Some(ref branch) = args.worktree {
+        let repo_dir = repo_path.map(|path| path.to_string()).unwrap_or(resolve_repo_path(args.dir.as_deref().unwrap_or("."))?);
+        let info = crate::worktree::create_worktree(std::path::Path::new(&repo_dir), branch, args.base_branch.as_deref())?;
+        let p = info.path.to_string_lossy().to_string();
+        return Ok((Some(p.clone()), Some(info.branch), Some(resolve_dir_in_target(&p, args.dir.as_deref(), Some(&repo_dir)))));
+    }
+    if let Some(repo_dir) = repo_path {
+        return Ok((None, None, Some(resolve_dir_in_target(repo_dir, args.dir.as_deref(), Some(repo_dir)))));
+    }
+    Ok((None, None, args.dir.clone()))
+}
+
+pub(super) fn load_workgroup(store: &Store, group_id: Option<&str>) -> Result<Option<Workgroup>> {
+    let Some(group_id) = group_id else { return Ok(None) };
+    store.get_workgroup(group_id)?.ok_or_else(|| anyhow::anyhow!("Workgroup '{}' not found", group_id)).map(Some)
+}
+
+pub(super) async fn run_agent_process_impl(
+    agent: &dyn crate::agent::Agent,
+    mut cmd: Command,
+    task_id: &TaskId,
+    store: &Arc<Store>,
+    log_path: &std::path::Path,
+    output_path: Option<&str>,
+    model: Option<&str>,
+    streaming: bool,
+) -> Result<()> {
+    let start = std::time::Instant::now();
+    let mut child = cmd.spawn().context("Failed to spawn agent process")?;
+    let info = if streaming {
+        watcher::watch_streaming(agent, &mut child, task_id, store, log_path).await?
+    } else {
+        let out = output_path.map(std::path::Path::new);
+        watcher::watch_buffered(agent, &mut child, task_id, store, log_path, out).await?
+    };
+    let duration_ms = start.elapsed().as_millis() as i64;
+    let final_model = info.model.as_deref().or(model);
+    let cost_usd = info.cost_usd.or_else(|| info.tokens.and_then(|tokens| crate::cost::estimate_cost(tokens, final_model, agent.kind())));
+    store.update_task_completion(task_id.as_str(), info.status, info.tokens, duration_ms, final_model, cost_usd)?;
+    let duration_str = format_duration(duration_ms);
+    let tokens_str = info.tokens.map(|t| format!(", {} tokens", t)).unwrap_or_default();
+    let cost_str = if cost_usd.is_some() { format!(", {}", crate::cost::format_cost(cost_usd)) } else { String::new() };
+    println!("Task {} {} ({}{}{})", task_id, info.status.label(), duration_str, tokens_str, cost_str);
+    Ok(())
+}
+
+pub(super) fn maybe_cleanup_fast_fail_impl(store: &Store, task_id: &TaskId, task: &Task) {
+    let Some(ref wt_path) = task.worktree_path else { return };
+    let path = std::path::Path::new(wt_path);
+    if !path.exists() { return }
+    let Some(task) = store.get_task(task_id.as_str()).ok().flatten() else { return };
+    if task.status != TaskStatus::Failed { return }
+    let Some(duration_ms) = task.duration_ms else { return };
+    if duration_ms > 10_000 { return }
+    if crate::worktree::branch_has_commits_ahead_of_main(path, task.worktree_branch.as_deref().unwrap_or("unknown")).unwrap_or(true) { return; }
+    let _ = std::process::Command::new("git").args(["worktree", "remove", "--force", wt_path]).output();
+    eprintln!("[aid] Cleaned up worktree for fast-failed task {}", task_id);
+}
+
+pub(super) fn maybe_verify_impl(store: &Store, task_id: &TaskId, verify: Option<&str>, dir: Option<&str>) {
+    let Some(verify_arg) = verify else { return };
+    let Some(dir_path) = dir else { println!("Verify skipped: no working directory"); return; };
+    let command = if verify_arg == "auto" { None } else { Some(verify_arg) };
+    let path = std::path::Path::new(dir_path);
+    match crate::verify::run_verify(path, command) {
+        Ok(result) => {
+            let report = crate::verify::format_verify_report(&result);
+            println!("{report}");
+            if !result.success {
+                let _ = store.update_task_status(task_id.as_str(), TaskStatus::Failed);
+                let event = TaskEvent { task_id: task_id.clone(), timestamp: Local::now(), event_kind: EventKind::Error, detail: format!("Verification failed: {}", result.command), metadata: None };
+                let _ = store.insert_event(&event);
+            }
+        }
+        Err(e) => eprintln!("Verify error: {e}"),
+    }
+}
+
+pub(super) fn notify_task_completion(store: &Store, task_id: &TaskId) -> Result<()> {
+    if let Some(task) = store.get_task(task_id.as_str())? { crate::notify::notify_completion(&task); }
+    Ok(())
+}
+
+pub(super) fn inherit_retry_base_branch_impl(repo_dir: Option<&str>, task: &Task, retry_args: &mut RunArgs) {
+    if retry_args.base_branch.is_some() || retry_args.worktree.is_none() { return; }
+    let Some(branch) = task.worktree_branch.as_deref() else { return };
+    if retry_args.worktree.as_deref() == Some(branch) { return; }
+    let repo_dir = std::path::Path::new(task.repo_path.as_deref().or(retry_args.repo.as_deref()).or(repo_dir).unwrap_or("."));
+    if let Ok(true) = crate::worktree::branch_has_commits_ahead_of_main(repo_dir, branch) { retry_args.base_branch = Some(branch.to_string()); }
+}
+
+fn format_duration(ms: i64) -> String {
+    let secs = ms / 1000;
+    if secs < 60 { format!("{secs}s") } else { format!("{}m {:02}s", secs / 60, secs % 60) }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    fn run_args(skills: Vec<String>) -> RunArgs {
+        RunArgs { agent_name: "codex".to_string(), prompt: "prompt".to_string(), repo: None, dir: None, output: None, model: None, worktree: None, base_branch: None, group: None, verify: None, max_duration_mins: None, retry: 0, context: vec![], skills, template: None, background: false, announce: false, parent_task_id: None, on_done: None, fallback: None, read_only: false, budget: false, session_id: None }
+    }
+
+    #[test]
+    fn effective_skills_auto_apply_defaults() {
+        let temp = tempfile::tempdir().unwrap();
+        let _aid_home = crate::paths::AidHomeGuard::set(temp.path());
+        let dir = crate::paths::aid_dir().join("skills");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("implementer.md"), "# Implementer").unwrap();
+        assert_eq!(effective_skills(&AgentKind::Codex, &run_args(vec![])), vec!["implementer"]);
+    }
+
+    #[test]
+    fn effective_skills_respect_no_skill_sentinel() {
+        let temp = tempfile::tempdir().unwrap();
+        let _aid_home = crate::paths::AidHomeGuard::set(temp.path());
+        let dir = crate::paths::aid_dir().join("skills");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("implementer.md"), "# Implementer").unwrap();
+        assert!(effective_skills(&AgentKind::Codex, &run_args(vec![super::super::NO_SKILL_SENTINEL.to_string()])).is_empty());
+    }
+}

@@ -5,6 +5,7 @@ use std::io::Write;
 use std::path::Path;
 use std::process::Command;
 use std::process::Stdio;
+use rusqlite::params;
 use tempfile::TempDir;
 
 fn aid_cmd_in(aid_home: &Path) -> Command {
@@ -87,6 +88,43 @@ fn show_missing_task_fails() {
     assert!(!output.status.success());
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(stderr.contains("not found"));
+}
+
+#[test]
+fn show_displays_retry_chain_history() {
+    let temp_dir = TempDir::new().unwrap();
+    let init = aid_cmd_in(temp_dir.path()).arg("board").output().unwrap();
+    assert!(init.status.success());
+
+    let conn = rusqlite::Connection::open(temp_dir.path().join("aid.db")).unwrap();
+    let created_at = "2026-03-13T00:00:00+00:00";
+    conn.execute(
+        "INSERT INTO tasks (id, agent, prompt, status, parent_task_id, duration_ms, cost_usd, created_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+        params!["t-1001", "codex", "root task", "done", Option::<String>::None, 12000, 0.03, created_at],
+    ).unwrap();
+    conn.execute(
+        "INSERT INTO tasks (id, agent, prompt, status, parent_task_id, duration_ms, cost_usd, created_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+        params!["t-1002", "codex", "retry task", "failed", "t-1001", 8000, 0.02, created_at],
+    ).unwrap();
+    conn.execute(
+        "INSERT INTO tasks (id, agent, prompt, status, parent_task_id, duration_ms, cost_usd, created_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+        params!["t-1003", "codex", "current task", "done", "t-1002", 15000, 0.04, created_at],
+    ).unwrap();
+
+    let output = aid_cmd_in(temp_dir.path())
+        .args(["show", "t-1003"])
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("Retry chain:"));
+    assert!(stdout.contains("t-1001 (root)  → Done"));
+    assert!(stdout.contains("t-1002 (retry)  → Failed"));
+    assert!(stdout.contains("t-1003 (retry)  → Done"));
+    assert!(stdout.contains("← current"));
 }
 
 #[test]

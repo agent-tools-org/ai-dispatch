@@ -25,7 +25,12 @@ pub async fn run(store: &Arc<Store>, task_id: Option<&str>, group: Option<&str>,
             match store.get_task(id)? {
                 Some(task) => {
                     let events = store.get_events(id)?;
-                    print!("{}", render_task_detail(&task, &events));
+                    let retry_chain = if task.parent_task_id.is_some() {
+                        Some(store.get_retry_chain(id)?)
+                    } else {
+                        None
+                    };
+                    print!("{}", render_task_detail(&task, &events, retry_chain));
 
                     // Exit when task is done
                     if task.status == crate::types::TaskStatus::Done

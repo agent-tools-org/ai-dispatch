@@ -61,6 +61,7 @@ pub async fn run(store: Arc<Store>, args: RetryArgs) -> Result<()> {
             verify: None,
             retry: 0,
             context: vec![],
+            skills: vec![],
             parent_task_id: Some(task.id.as_str().to_string()),
         },
     )

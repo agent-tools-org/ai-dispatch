@@ -2,7 +2,11 @@
 // Centralizes all path logic so nothing hardcodes paths.
 
 use anyhow::Result;
+#[cfg(test)]
+use std::ffi::OsString;
 use std::path::PathBuf;
+#[cfg(test)]
+use std::sync::{LazyLock, Mutex};
 
 pub fn aid_dir() -> PathBuf {
     if let Ok(custom) = std::env::var("AID_HOME") {
@@ -49,6 +53,38 @@ fn dirs_home() -> PathBuf {
     std::env::var("HOME")
         .map(PathBuf::from)
         .unwrap_or_else(|_| PathBuf::from("."))
+}
+
+#[cfg(test)]
+pub static AID_HOME_LOCK: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
+
+#[cfg(test)]
+pub struct AidHomeGuard {
+    _lock: std::sync::MutexGuard<'static, ()>,
+    previous: Option<OsString>,
+}
+
+#[cfg(test)]
+impl AidHomeGuard {
+    pub fn set(path: &std::path::Path) -> Self {
+        let lock = AID_HOME_LOCK.lock().unwrap();
+        let previous = std::env::var_os("AID_HOME");
+        unsafe { std::env::set_var("AID_HOME", path) };
+        Self {
+            _lock: lock,
+            previous,
+        }
+    }
+}
+
+#[cfg(test)]
+impl Drop for AidHomeGuard {
+    fn drop(&mut self) {
+        match &self.previous {
+            Some(path) => unsafe { std::env::set_var("AID_HOME", path) },
+            None => unsafe { std::env::remove_var("AID_HOME") },
+        }
+    }
 }
 
 #[cfg(test)]

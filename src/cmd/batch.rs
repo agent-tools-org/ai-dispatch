@@ -55,6 +55,7 @@ fn task_to_run_args(task: &batch::BatchTask, background: bool) -> RunArgs {
         verify: task.verify.clone(),
         retry: 0,
         context: vec![],
+        skills: task.skills.clone().unwrap_or_default(),
         background,
         parent_task_id: None,
     }

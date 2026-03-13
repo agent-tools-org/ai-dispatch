@@ -2,15 +2,11 @@
 // Covers spec serialization and store reconciliation side effects.
 
 use chrono::Local;
-use std::ffi::OsString;
-use std::sync::{LazyLock, Mutex};
 
 use super::{BackgroundRunSpec, ZOMBIE_FAILURE_DETAIL, check_zombie_tasks_with, save_spec};
 use crate::paths;
 use crate::store::Store;
 use crate::types::{AgentKind, EventKind, Task, TaskId, TaskStatus};
-
-static AID_HOME_LOCK: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
 
 #[test]
 fn serializes_spec_to_json() {
@@ -25,6 +21,7 @@ fn serializes_spec_to_json() {
         verify: Some("auto".to_string()),
         retry: 2,
         group: Some("wg-demo".to_string()),
+        skills: vec![],
     };
 
     let content = serde_json::to_string_pretty(&spec).unwrap();
@@ -35,7 +32,7 @@ fn serializes_spec_to_json() {
 #[test]
 fn marks_running_background_tasks_failed_when_worker_is_missing() {
     let temp = tempfile::tempdir().unwrap();
-    let _aid_home = AidHomeGuard::set(temp.path());
+    let _aid_home = paths::AidHomeGuard::set(temp.path());
     paths::ensure_dirs().unwrap();
 
     let store = Store::open_memory().unwrap();
@@ -88,6 +85,7 @@ fn make_spec(task_id: &str) -> BackgroundRunSpec {
         verify: None,
         retry: 0,
         group: None,
+        skills: vec![],
     }
 }
 
@@ -111,31 +109,5 @@ fn make_task(task_id: &str, status: TaskStatus) -> Task {
         cost_usd: None,
         created_at: Local::now(),
         completed_at: None,
-    }
-}
-
-struct AidHomeGuard {
-    _lock: std::sync::MutexGuard<'static, ()>,
-    previous: Option<OsString>,
-}
-
-impl AidHomeGuard {
-    fn set(path: &std::path::Path) -> Self {
-        let lock = AID_HOME_LOCK.lock().unwrap();
-        let previous = std::env::var_os("AID_HOME");
-        unsafe { std::env::set_var("AID_HOME", path) };
-        Self {
-            _lock: lock,
-            previous,
-        }
-    }
-}
-
-impl Drop for AidHomeGuard {
-    fn drop(&mut self) {
-        match &self.previous {
-            Some(path) => unsafe { std::env::set_var("AID_HOME", path) },
-            None => unsafe { std::env::remove_var("AID_HOME") },
-        }
     }
 }

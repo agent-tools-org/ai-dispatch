@@ -14,6 +14,7 @@ mod explore;
 mod paths;
 mod select;
 mod session;
+mod skills;
 mod store;
 mod store_workgroups;
 mod templates;
@@ -68,6 +69,9 @@ enum Commands {
         /// Context files to inject
         #[arg(long)]
         context: Vec<String>,
+        /// Methodology skills to inject
+        #[arg(long)]
+        skill: Vec<String>,
         /// Run in background
         #[arg(long)]
         bg: bool,
@@ -192,6 +196,7 @@ async fn main() -> Result<()> {
             verify,
             retry,
             context,
+            skill,
             bg,
         } => {
             let agent_name = if agent == "auto" {
@@ -212,6 +217,7 @@ async fn main() -> Result<()> {
                 verify,
                 retry,
                 context,
+                skills: skill,
                 background: bg,
                 parent_task_id: None,
             }).await?;

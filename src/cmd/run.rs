@@ -12,6 +12,7 @@ use crate::background::{self, BackgroundRunSpec};
 use crate::cost;
 use crate::paths;
 use crate::session;
+use crate::skills;
 use crate::store::Store;
 use crate::types::*;
 use crate::watcher;
@@ -28,6 +29,7 @@ pub struct RunArgs {
     pub verify: Option<String>,
     pub retry: u32,
     pub context: Vec<String>,
+    pub skills: Vec<String>,
     pub background: bool,
     pub parent_task_id: Option<String>,
 }
@@ -84,8 +86,12 @@ pub async fn run(store: Arc<Store>, args: RunArgs) -> Result<TaskId> {
     } else {
         None
     };
-    let effective_prompt =
+    let mut effective_prompt =
         crate::workgroup::compose_prompt(&args.prompt, file_context.as_deref(), workgroup.as_ref());
+    if !args.skills.is_empty() {
+        let skill_text = skills::load_skills(&args.skills)?;
+        effective_prompt = format!("{effective_prompt}\n\n--- Methodology ---\n{skill_text}");
+    }
 
     let opts = RunOpts {
         dir: effective_dir.clone(),
@@ -106,6 +112,7 @@ pub async fn run(store: Arc<Store>, args: RunArgs) -> Result<TaskId> {
             verify: args.verify.clone(),
             retry: args.retry,
             group: args.group.clone(),
+            skills: args.skills.clone(),
         };
         background::save_spec(&spec)?;
         let mut worker = match background::spawn_worker(task_id.as_str()) {

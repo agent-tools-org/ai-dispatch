@@ -26,6 +26,8 @@ pub struct BackgroundRunSpec {
     pub verify: Option<String>,
     pub retry: u32,
     pub group: Option<String>,
+    #[serde(default)]
+    pub skills: Vec<String>,
 }
 
 pub fn save_spec(spec: &BackgroundRunSpec) -> Result<()> {
@@ -118,6 +120,7 @@ async fn run_task_inner(store: &Arc<Store>, spec: &BackgroundRunSpec) -> Result<
             verify: spec.verify.clone(),
             retry: spec.retry,
             context: vec![],
+            skills: spec.skills.clone(),
             background: false,
             parent_task_id: None,
         },

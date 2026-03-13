@@ -25,6 +25,7 @@ pub struct BatchTask {
     pub worktree: Option<String>,
     pub group: Option<String>,
     pub verify: Option<String>,
+    pub skills: Option<Vec<String>>,
     pub depends_on: Option<Vec<String>>,
 }
 
@@ -207,6 +208,7 @@ mod tests {
             worktree: None,
             group: None,
             verify: None,
+            skills: None,
             depends_on: (!depends_on.is_empty())
                 .then(|| depends_on.iter().map(|item| item.to_string()).collect()),
         }

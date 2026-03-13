@@ -3,10 +3,11 @@
 
 use anyhow::{Context, Result};
 use chrono::Local;
-use std::{path::Path, sync::Arc};
+use std::{collections::HashSet, path::Path, sync::Arc};
 
 use crate::batch;
 use crate::cmd::run::{self, RunArgs};
+use crate::rate_limit;
 use crate::store::Store;
 use crate::types::{AgentKind, Task, TaskId, TaskStatus};
 
@@ -26,6 +27,7 @@ pub async fn run(store: Arc<Store>, args: BatchArgs) -> Result<()> {
         .with_context(|| format!("Failed to load batch file {}", path.display()))?;
     let total = config.tasks.len();
     let has_dependencies = config.tasks.iter().any(task_has_dependencies);
+    rate_limit_precheck(&config.tasks);
     let no_groups_set = config.tasks.iter().all(|t| t.group.is_none());
     if total >= 2 && no_groups_set {
         let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("batch");
@@ -107,6 +109,51 @@ fn task_has_dependencies(task: &batch::BatchTask) -> bool {
 }
 fn task_label(task: &batch::BatchTask, task_idx: usize) -> String {
     task.name.clone().unwrap_or_else(|| format!("#{task_idx}"))
+}
+fn rate_limit_precheck(tasks: &[batch::BatchTask]) {
+    let mut unique_agents = HashSet::new();
+    for task in tasks {
+        if let Some(kind) = AgentKind::parse_str(&task.agent) {
+            unique_agents.insert(kind);
+        }
+    }
+    let mut rate_limited = HashSet::new();
+    for agent_kind in unique_agents {
+        if let Some(info) = rate_limit::get_rate_limit_info(&agent_kind) {
+            let recovery_info = info
+                .recovery_at
+                .as_ref()
+                .map(|time| format!(" (try again at {time})"))
+                .unwrap_or_default();
+            eprintln!(
+                "[aid] Warning: agent '{}' is rate-limited{}",
+                agent_kind.as_str(),
+                recovery_info
+            );
+            rate_limited.insert(agent_kind);
+        }
+    }
+    let mut rate_limited_tasks = 0;
+    for (task_idx, task) in tasks.iter().enumerate() {
+        let Some(kind) = AgentKind::parse_str(&task.agent) else {
+            continue;
+        };
+        if rate_limited.contains(&kind) {
+            rate_limited_tasks += 1;
+            if let Some(ref fallback) = task.fallback {
+                eprintln!(
+                    "[aid] Task {} will use fallback agent: {}",
+                    task_label(task, task_idx),
+                    fallback
+                );
+            }
+        }
+    }
+    eprintln!(
+        "[aid] {}/{} task(s) use rate-limited agents",
+        rate_limited_tasks,
+        tasks.len()
+    );
 }
 async fn dispatch_parallel(
     store: Arc<Store>,
@@ -425,8 +472,11 @@ fn load_task_outcome(store: &Arc<Store>, task_id: &str) -> Result<BatchTaskOutco
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::paths::AidHomeGuard;
+    use crate::rate_limit;
     use crate::store::Store;
     use std::sync::Arc;
+    use tempfile::TempDir;
 
     fn stub_task(name: &str, depends_on: Option<Vec<&str>>) -> batch::BatchTask {
         batch::BatchTask {
@@ -443,6 +493,55 @@ mod tests {
             skills: None,
             depends_on: depends_on.map(|d| d.into_iter().map(String::from).collect()),
             fallback: None,
+        }
+    }
+    fn stub_task_with_fallback(name: &str, agent: &str, fallback: Option<&str>) -> batch::BatchTask {
+        batch::BatchTask {
+            name: Some(name.to_string()),
+            agent: agent.to_string(),
+            prompt: "test".to_string(),
+            dir: None,
+            output: None,
+            model: None,
+            worktree: None,
+            group: None,
+            verify: None,
+            max_duration_mins: None,
+            skills: None,
+            depends_on: None,
+            fallback: fallback.map(|value| value.to_string()),
+        }
+    }
+    fn capture_stderr<F: FnOnce()>(func: F) -> String {
+        unsafe {
+            let mut fds = [0; 2];
+            if libc::pipe(fds.as_mut_ptr()) != 0 {
+                panic!("pipe failed");
+            }
+            let stderr_fd = libc::STDERR_FILENO;
+            let saved = libc::dup(stderr_fd);
+            if saved < 0 {
+                panic!("dup failed");
+            }
+            if libc::dup2(fds[1], stderr_fd) < 0 {
+                panic!("dup2 failed");
+            }
+            libc::close(fds[1]);
+            func();
+            libc::fflush(std::ptr::null_mut());
+            libc::dup2(saved, stderr_fd);
+            libc::close(saved);
+            let mut buf = Vec::new();
+            let mut tmp = [0u8; 1024];
+            loop {
+                let n = libc::read(fds[0], tmp.as_mut_ptr() as *mut _, tmp.len());
+                if n <= 0 {
+                    break;
+                }
+                buf.extend_from_slice(&tmp[..n as usize]);
+            }
+            libc::close(fds[0]);
+            String::from_utf8_lossy(&buf).to_string()
         }
     }
 
@@ -511,6 +610,25 @@ mod tests {
         let ready = find_ready_tasks(&store, &tasks, &deps, &started, &mut outcomes).unwrap();
         assert!(ready.is_empty()); // B skipped
         assert_eq!(outcomes[1], Some(BatchTaskOutcome::Skipped));
+    }
+
+    #[test]
+    fn test_rate_limit_precheck_warns() {
+        let temp = TempDir::new().unwrap();
+        let _guard = AidHomeGuard::set(temp.path());
+        rate_limit::mark_rate_limited(
+            &AgentKind::Codex,
+            "rate limit exceeded; try again at Mar 19th, 2026 2:27 PM.",
+        );
+        let tasks = vec![stub_task_with_fallback("first", "codex", Some("gemini"))];
+        let output = capture_stderr(|| rate_limit_precheck(&tasks));
+        assert!(
+            output.contains(
+                "[aid] Warning: agent 'codex' is rate-limited (try again at Mar 19th, 2026 2:27 PM)"
+            )
+        );
+        assert!(output.contains("[aid] Task first will use fallback agent: gemini"));
+        assert!(output.contains("[aid] 1/1 task(s) use rate-limited agents"));
     }
 
     #[tokio::test]

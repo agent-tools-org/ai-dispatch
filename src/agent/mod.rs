@@ -5,6 +5,7 @@ pub mod codex;
 pub mod cursor;
 pub mod gemini;
 pub mod opencode;
+mod selection;
 mod truncate;
 
 use anyhow::Result;
@@ -56,6 +57,16 @@ pub fn detect_agents() -> Vec<AgentKind> {
         }
     }
     found
+}
+
+pub fn select_agent(prompt: &str, opts: &RunOpts) -> AgentKind {
+    selection::select_agent_with_reason(prompt, opts).0
+}
+
+pub(crate) fn select_agent_with_reason(prompt: &str, opts: &RunOpts) -> (AgentKind, String) {
+    let selection = selection::select_agent_with_reason(prompt, opts);
+    debug_assert_eq!(select_agent(prompt, opts), selection.0);
+    selection
 }
 
 /// Get an agent adapter by kind

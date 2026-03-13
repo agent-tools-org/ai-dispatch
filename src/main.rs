@@ -12,7 +12,6 @@ mod context;
 mod cost;
 mod explore;
 mod paths;
-mod select;
 mod session;
 mod store;
 mod store_workgroups;
@@ -195,8 +194,15 @@ async fn main() -> Result<()> {
             bg,
         } => {
             let agent_name = if agent == "auto" {
-                let selected = select::select_agent(&prompt, worktree.is_some());
-                println!("Selected agent: {}", selected);
+                let selection_opts = agent::RunOpts {
+                    dir: dir
+                        .clone()
+                        .or_else(|| worktree.as_ref().map(|_| ".".to_string())),
+                    output: output.clone(),
+                    model: model.clone(),
+                };
+                let (selected, reason) = agent::select_agent_with_reason(&prompt, &selection_opts);
+                eprintln!("[aid] Auto-selected agent: {selected} (reason: {reason})");
                 selected.as_str().to_string()
             } else {
                 agent

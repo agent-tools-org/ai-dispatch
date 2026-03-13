@@ -1,0 +1,108 @@
+## v1.5 — reliability fixes and dead code cleanup
+
+[[task]]
+name = "remove-topo-levels"
+agent = "opencode"
+skills = ["implementer"]
+prompt = """
+Remove the dead `topo_levels()` function from src/batch.rs.
+
+It was replaced by dependency-based scheduling in v1.4 and now triggers a dead_code warning.
+
+STEPS:
+1. Delete the `topo_levels()` function (lines 69-104 approximately)
+2. Delete any helper types it uses that are now also dead (VisitState is still used by validate_dag, keep it)
+3. cargo check must pass with NO warnings about dead code in batch.rs
+
+CONSTRAINTS:
+- Only modify src/batch.rs
+- Do NOT delete validate_dag(), dependency_indices(), or VisitState — those are still used
+- Do NOT reformat existing code
+- cargo check and cargo test must pass
+"""
+dir = "."
+worktree = "fix/remove-topo-levels"
+verify = "auto"
+
+[[task]]
+name = "fix-truncate-utf8"
+agent = "opencode"
+skills = ["implementer"]
+prompt = """
+Fix unsafe byte-level string slicing in src/cmd/show.rs truncate() function.
+
+BUG: Line ~413 does `&s[..max.saturating_sub(3)]` which panics on multi-byte UTF-8 characters (e.g., Chinese, emoji, curly quotes).
+
+FIX: Use `s.floor_char_boundary(max.saturating_sub(3))` for safe truncation, matching the pattern already used in src/agent/truncate.rs.
+
+Change from:
+```rust
+fn truncate(s: &str, max: usize) -> String {
+    if s.len() <= max {
+        s.to_string()
+    } else {
+        format!("{}...", &s[..max.saturating_sub(3)])
+    }
+}
+```
+
+To:
+```rust
+fn truncate(s: &str, max: usize) -> String {
+    if s.len() <= max {
+        s.to_string()
+    } else {
+        let end = s.floor_char_boundary(max.saturating_sub(3));
+        format!("{}...", &s[..end])
+    }
+}
+```
+
+CONSTRAINTS:
+- Only modify src/cmd/show.rs
+- Only change the truncate() function
+- Do NOT reformat existing code
+- cargo check and cargo test must pass
+"""
+dir = "."
+worktree = "fix/truncate-utf8"
+verify = "auto"
+
+[[task]]
+name = "max-task-duration"
+agent = "opencode"
+skills = ["implementer"]
+prompt = """
+Add max task duration auto-fail to zombie detection.
+
+GOAL: Tasks running longer than a configurable maximum are automatically marked as failed during zombie checks.
+
+EXISTING CODE:
+- src/background.rs has check_zombie_tasks_with() at ~line 207
+- It checks if worker process is alive and marks dead workers as zombies
+- crate::paths::aid_dir() returns ~/.aid
+
+IMPLEMENTATION:
+
+1. Add a constant DEFAULT_MAX_TASK_DURATION_MINS at top of background.rs:
+   const DEFAULT_MAX_TASK_DURATION_MINS: i64 = 60;
+
+2. In check_zombie_tasks_with(), after the existing worker-alive check, add a duration check:
+   For each running task, compute elapsed time:
+   let elapsed_mins = (Local::now() - task.created_at).num_minutes();
+   If elapsed_mins > DEFAULT_MAX_TASK_DURATION_MINS:
+   - Kill the worker process if it exists (kill SIGTERM)
+   - Record failure with detail "Task exceeded max duration ({elapsed_mins}m > {DEFAULT_MAX_TASK_DURATION_MINS}m)"
+   - Add to cleaned list
+
+3. The check should happen AFTER the zombie process check (so zombie processes are caught first, then long-running processes).
+
+CONSTRAINTS:
+- Only modify src/background.rs
+- ~15 lines of new code
+- Do NOT reformat existing code
+- cargo check and cargo test must pass
+"""
+dir = "."
+worktree = "fix/max-duration"
+verify = "auto"

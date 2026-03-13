@@ -1,0 +1,486 @@
+## v2.1 — Robustness & Visibility
+
+[[task]]
+name = "skipped-batch-tasks"
+agent = "codex"
+skills = ["implementer"]
+prompt = """
+When a batch dependency fails and downstream tasks are skipped, create a task record with status=Skipped so they appear in `aid board`.
+
+CURRENT BEHAVIOR: In src/cmd/batch.rs, when a dependency fails, the code prints `[batch] Skipping task X because dependency Y failed` to stderr but never inserts a task record. The task is invisible in `aid board`.
+
+IMPLEMENTATION:
+
+1. In src/types.rs TaskStatus enum, add a `Skipped` variant:
+   Skipped,
+
+   Update label() to return "skipped", from_str() to handle "skipped", is_terminal() to return true.
+
+2. In src/cmd/batch.rs, in the dependency resolution logic (look for where BatchTaskOutcome::Skipped is used), when a task is skipped:
+   - Generate a task ID via store.next_task_id()
+   - Create a minimal Task record with status=Skipped, the original prompt, agent, and group
+   - Insert it via store.insert_task()
+   - Print the task ID in the skip message
+
+3. In src/board.rs render_board(), handle the Skipped status:
+   - Show "SKIP" as the status label
+   - Use a distinct color/formatting (no duration, no tokens — just show the skip)
+
+4. Add a test in tests/e2e_test.rs: create a batch with 2 tasks where task B depends_on task A, make task A fail, verify that task B appears in the board with status "skipped".
+
+CONSTRAINTS:
+- Modify: src/types.rs, src/cmd/batch.rs, src/board.rs, tests/e2e_test.rs
+- Do NOT reformat existing code
+- cargo check and cargo test must pass
+"""
+dir = "."
+worktree = "feat/skipped-tasks"
+verify = "auto"
+
+[[task]]
+name = "batch-max-concurrent"
+agent = "codex"
+skills = ["implementer"]
+prompt = """
+Add `--max-concurrent` flag to `aid batch` to limit how many tasks run in parallel simultaneously.
+
+PROBLEM: When dispatching many codex tasks in parallel, they can crash due to resource contention (bug #6). Need to throttle concurrent execution.
+
+IMPLEMENTATION:
+
+1. In src/cmd/batch.rs BatchArgs, add:
+   pub max_concurrent: Option<usize>,
+
+2. In src/main.rs Commands::Batch, add:
+   #[arg(long)]
+   max_concurrent: Option<usize>,
+
+3. In src/cmd/batch.rs dispatch_parallel(), implement semaphore-based throttling:
+   - If max_concurrent is set, use a tokio::sync::Semaphore to limit concurrent spawns
+   - Refactor dispatch_parallel to accept max_concurrent parameter
+   - When semaphore is acquired, spawn the task; release when task completes
+   - If max_concurrent is None, run all tasks concurrently (current behavior)
+
+4. Thread max_concurrent through:
+   - dispatch_parallel() signature
+   - dispatch_parallel_with_dependencies() signature (also respect the limit there)
+   - The run() function in batch.rs where dispatch methods are called
+
+5. Add a unit test: verify that with max_concurrent=1, tasks run sequentially (check that task start times are ordered).
+
+CONSTRAINTS:
+- Modify: src/cmd/batch.rs, src/main.rs
+- Use tokio::sync::Semaphore (already in tokio dependency with "sync" feature)
+- Do NOT reformat existing code
+- cargo check and cargo test must pass
+"""
+dir = "."
+worktree = "feat/max-concurrent"
+verify = "auto"
+
+[[task]]
+name = "transparent-context"
+agent = "codex"
+skills = ["implementer"]
+prompt = """
+Add `aid show --context <task-id>` to display the full prompt that was sent to the agent, including all injected skills and context.
+
+GOAL: Users need to debug what actually entered the agent's prompt window. This flag shows the fully resolved prompt with all skill injections, context files, and template applications.
+
+IMPLEMENTATION:
+
+1. In src/cmd/show.rs ShowArgs, add:
+   pub context: bool,
+
+2. In src/cmd/show.rs ShowMode enum, add:
+   Context,
+
+3. In src/main.rs Commands::Show, add:
+   #[arg(long, help = "Show the full resolved prompt sent to the agent")]
+   context: bool,
+
+4. In src/cmd/show.rs run(), handle the context flag (check it before other flags).
+
+5. Create the context_text() function in show.rs:
+   fn context_text(store: &Arc<Store>, task_id: &str) -> Result<String>
+
+   This should:
+   a. Load the task
+   b. Get the original prompt from task.prompt
+   c. Re-resolve what skills would have been injected (call skills::resolve_skill_content for each skill in the task)
+   d. Show: "=== Original Prompt ===\n{prompt}\n\n=== Injected Skills ===\n{skill_content}\n"
+
+   Note: We cannot perfectly reconstruct the full prompt post-hoc because context files may have changed. So this is a best-effort reconstruction. Show a note: "(reconstructed — context files may have changed since dispatch)"
+
+6. To make this more accurate in the future, also store the resolved prompt:
+   - In src/types.rs Task, add: pub resolved_prompt: Option<String>
+   - In src/store.rs create_tables, add: resolved_prompt TEXT to the tasks table
+   - In src/cmd/run.rs, after building the effective prompt (after skill injection and template application), store it in the task record via a new store method: store.update_resolved_prompt(task_id, &resolved_prompt)
+   - In context_text(), prefer resolved_prompt if available, fall back to reconstruction
+
+CONSTRAINTS:
+- Modify: src/cmd/show.rs, src/main.rs, src/types.rs, src/store.rs, src/cmd/run.rs
+- Do NOT reformat existing code
+- cargo check and cargo test must pass
+"""
+dir = "."
+worktree = "feat/context-view"
+verify = "auto"
+
+[[task]]
+name = "completion-fifo"
+agent = "codex"
+skills = ["implementer"]
+prompt = """
+Add a completion notification mechanism: when tasks finish, write a JSON event to a well-known file so external tools can watch for completions.
+
+GOAL: Enable orchestrators (like Claude Code) to `tail -f ~/.aid/completions.jsonl` instead of polling `aid board`.
+
+IMPLEMENTATION:
+
+1. Create src/notify.rs (~40 lines):
+
+   use std::io::Write;
+   use std::fs::OpenOptions;
+   use crate::types::Task;
+   use crate::paths;
+
+   pub fn notify_completion(task: &Task) {
+       let path = paths::aid_dir().join("completions.jsonl");
+       let event = serde_json::json!({
+           "task_id": task.id.as_str(),
+           "agent": task.agent.as_str(),
+           "status": task.status.label(),
+           "duration_ms": task.duration_ms,
+           "cost_usd": task.cost_usd,
+           "prompt": truncate_prompt(&task.prompt, 100),
+           "timestamp": chrono::Local::now().to_rfc3339(),
+       });
+       if let Ok(mut file) = OpenOptions::new().create(true).append(true).open(&path) {
+           let _ = writeln!(file, "{}", event);
+       }
+   }
+
+   fn truncate_prompt(s: &str, max: usize) -> &str {
+       let end = s.floor_char_boundary(max.min(s.len()));
+       &s[..end]
+   }
+
+2. In src/watcher.rs, after recording task completion (where status is set to Done or Failed), call notify::notify_completion(&task).
+
+3. In src/background.rs, after task completion recording, also call notify::notify_completion(&task).
+
+4. In src/main.rs, add `mod notify;`
+
+5. Add `aid completions` command that tails the completions file:
+   - In src/main.rs Commands enum, add: Completions
+   - In the match block: read and print the last 20 lines of completions.jsonl
+   - This is a simple convenience; the real value is external tools tailing the file
+
+6. Add test: write a notification, read it back, verify JSON structure.
+
+CONSTRAINTS:
+- Create: src/notify.rs (under 50 lines)
+- Modify: src/main.rs, src/watcher.rs, src/background.rs
+- Do NOT reformat existing code
+- cargo check and cargo test must pass
+"""
+dir = "."
+worktree = "feat/completion-notify"
+verify = "auto"
+
+[[task]]
+name = "opencode-token-extraction"
+agent = "opencode"
+prompt = """
+Fix OpenCode agent token/cost extraction in aid. Currently `aid board` shows `-` for tokens and cost on OpenCode tasks.
+
+CONTEXT: The file src/agent/opencode.rs has an extract_tokens_from_output() function that tries to parse "tokens:" from output, but it doesn't match OpenCode's actual output format.
+
+STEPS:
+1. Run `opencode run -m "opencode/mimo-v2-flash-free" --dir /tmp "echo hello"` and capture the FULL output (stdout + stderr) to understand the actual format
+2. Look for any token count, cost, or model information in the output
+3. Update src/agent/opencode.rs:
+   - Fix extract_tokens_from_output() to match the actual output pattern
+   - Add model extraction if the output contains model info
+   - Update parse_completion() to return the extracted values
+4. Run cargo check && cargo test to verify
+
+IMPORTANT: Only modify src/agent/opencode.rs. Do NOT reformat existing code.
+"""
+dir = "."
+worktree = "fix/opencode-tokens"
+verify = "auto"
+
+[[task]]
+name = "codex-scope-enforcement"
+agent = "codex"
+skills = ["implementer"]
+prompt = """
+Strengthen the implementer skill to prevent codex from modifying files outside the specified scope.
+
+PROBLEM: Codex tasks sometimes over-refactor — e.g., asked to create 1 test file but modified 32 files (bug #8). The implementer skill text says "ONLY create/modify files listed" but codex ignores it.
+
+IMPLEMENTATION:
+
+1. Read the current implementer skill file. It's in the skills directory — check src/skills.rs to find where skills are loaded from.
+
+2. In the implementer skill content, add a MUCH stronger constraint section at the TOP (before any other instructions):
+
+   ```
+   ## CRITICAL FILE SCOPE CONSTRAINT
+
+   You MUST ONLY create or modify files explicitly listed in the CONSTRAINTS section below.
+   If no files are listed, you may only modify files directly related to the task prompt.
+
+   FORBIDDEN actions:
+   - Refactoring files not mentioned in the task
+   - Adding documentation to unrelated files
+   - Reformatting or linting files you didn't need to change
+   - Modifying test files unless the task explicitly asks for tests
+   - Touching README, CHANGELOG, or config files unless asked
+
+   VERIFICATION: Before committing, run `git diff --stat` and confirm EVERY changed file is justified by the task prompt. If you see unexpected files, `git checkout` them before committing.
+   ```
+
+3. Also add a post-commit verification step to the skill:
+   ```
+   ## POST-COMMIT VERIFICATION
+   After your final commit, run `git diff --stat HEAD~1` and list every changed file with a one-line justification. If any file cannot be justified, amend the commit to remove it.
+   ```
+
+CONSTRAINTS:
+- Modify: the implementer skill file (find its location via src/skills.rs)
+- Do NOT modify any Rust source code
+- This is a prompt/skill content change only
+"""
+dir = "."
+worktree = "fix/scope-enforcement"
+verify = "auto"
+
+[[task]]
+name = "cursor-token-extraction"
+agent = "opencode"
+prompt = """
+Fix Cursor agent token/cost extraction in aid. Currently `aid board` shows `-` for tokens and cost on Cursor tasks.
+
+CONTEXT: The file src/agent/cursor.rs has parse_completion() that returns None for everything. We need to investigate what Cursor actually outputs.
+
+STEPS:
+1. Check if `cursor agent` CLI has any output format options (--format json, --verbose, etc.)
+2. Run `cursor agent -p "echo hello" --trust` in a temp dir and capture ALL output to understand the format
+3. If token/cost data is available, update src/agent/cursor.rs:
+   - Add extraction logic to parse_completion()
+   - Add model extraction if available
+4. If cursor doesn't output token/cost data at all, document this limitation in a code comment and leave parse_completion as-is
+5. Run cargo check && cargo test to verify
+
+IMPORTANT: Only modify src/agent/cursor.rs. Do NOT reformat existing code.
+"""
+dir = "."
+worktree = "fix/cursor-tokens"
+verify = "auto"
+
+[[task]]
+name = "fix-await-reason"
+agent = "codex"
+skills = ["implementer"]
+prompt = """
+Fix the AWAIT reason display in `aid board`. Currently it shows code snippets instead of the agent's actual question.
+
+BUG: In src/board.rs lines 47-59, the code looks for events with `awaiting_input: true` in metadata, then uses `e.detail` as the reason. But `e.detail` often contains code context (e.g. "115:    use super...") instead of the agent's actual question text.
+
+ROOT CAUSE: The pty_watch.rs or input_signal.rs records the event with whatever text was being processed at the time, not the agent's question. The detail field captures output context, not the awaiting prompt.
+
+FIX:
+
+1. In the event that records the awaiting_input state, the agent's question text should be stored in the metadata (e.g. `metadata.awaiting_prompt`), not in the detail field.
+
+2. Find where awaiting_input events are created — search for "awaiting_input" in src/. It's likely in src/pty_watch.rs or src/input_signal.rs.
+
+3. When creating the awaiting event, extract the agent's actual question from the PTY output. The question is typically the last few lines before the input prompt appears. Store it as `metadata.awaiting_prompt`.
+
+4. In src/board.rs, change the AWAIT reason extraction (lines 47-59) to read from `metadata.awaiting_prompt` instead of `e.detail`:
+   ```rust
+   let reason = store.get_events(task.id.as_str())
+       .ok()
+       .and_then(|evs| evs.into_iter().rev()
+           .find(|e| e.metadata.as_ref()
+               .and_then(|m| m.get("awaiting_input"))
+               .and_then(|v| v.as_bool())
+               .unwrap_or(false))
+           .and_then(|e| e.metadata.as_ref()
+               .and_then(|m| m.get("awaiting_prompt"))
+               .and_then(|v| v.as_str())
+               .map(|s| s.to_string())));
+   ```
+
+5. Add a test verifying that the AWAIT status renders the prompt text, not code context.
+
+CONSTRAINTS:
+- Modify: src/board.rs, and the file where awaiting_input events are created (likely src/pty_watch.rs)
+- Do NOT reformat existing code
+- cargo check and cargo test must pass
+"""
+dir = "."
+worktree = "fix/await-reason"
+verify = "auto"
+
+[[task]]
+name = "respond-stdin"
+agent = "codex"
+skills = ["implementer"]
+prompt = """
+Make `aid respond` accept input from stdin or a file, not just command-line arguments.
+
+PROBLEM: `aid respond <id> "text with backticks and {braces}"` causes shell parse errors. Complex response text is fragile as CLI arguments.
+
+IMPLEMENTATION:
+
+1. In src/main.rs Commands::Respond, make the input argument optional and add a --file flag:
+   Respond {
+       task_id: String,
+       /// Response text (if omitted, reads from stdin)
+       input: Option<String>,
+       #[arg(long, short)]
+       file: Option<String>,
+   },
+
+2. In src/cmd/respond.rs, update run() to resolve input from three sources (priority order):
+   a. --file <path>: read file contents
+   b. positional argument: use as-is (current behavior)
+   c. neither: read from stdin
+
+   ```rust
+   pub fn run(task_id: &str, input: Option<&str>, file: Option<&str>) -> Result<()> {
+       let text = if let Some(path) = file {
+           std::fs::read_to_string(path)
+               .with_context(|| format!("Failed to read response file: {path}"))?
+       } else if let Some(text) = input {
+           text.to_string()
+       } else {
+           use std::io::Read;
+           let mut buf = String::new();
+           std::io::stdin().read_to_string(&mut buf)
+               .context("Failed to read from stdin")?;
+           buf
+       };
+       input_signal::write_response(task_id, &text)?;
+       println!("Queued input for {task_id}");
+       Ok(())
+   }
+   ```
+
+3. Update the match block in main.rs to pass the new parameters.
+
+4. Add test: write response to a temp file, call respond with --file, verify it queues.
+
+CONSTRAINTS:
+- Modify: src/cmd/respond.rs, src/main.rs
+- Do NOT reformat existing code
+- cargo check and cargo test must pass
+"""
+dir = "."
+worktree = "feat/respond-stdin"
+verify = "auto"
+
+[[task]]
+name = "output-fallback-log"
+agent = "opencode"
+prompt = """
+Fix `aid show --output` to fallback to log tail when no output file exists.
+
+PROBLEM: Codex tasks use JSONL logs, not output files. `aid show --output <codex-task>` returns "Task has no output file" which is unhelpful.
+
+FIX in src/cmd/show.rs:
+
+1. In the `output_text()` function, when `read_task_output()` fails (no output_path), fallback to:
+   a. Try reading the log file (task.log_path) and show the last 50 lines
+   b. If no log file either, return the current error
+
+2. Change `output_text()`:
+   ```rust
+   pub fn output_text(store: &Arc<Store>, task_id: &str) -> Result<String> {
+       let task = load_task(store, task_id)?;
+       if let Ok(content) = read_task_output(&task) {
+           return Ok(content);
+       }
+       // Fallback: show log tail
+       if let Some(ref log_path) = task.log_path {
+           let path = std::path::Path::new(log_path);
+           return Ok(read_tail(path, 50, "No output or log available"));
+       }
+       // Final fallback: try default log path
+       let path = paths::log_path(task_id);
+       Ok(read_tail(&path, 50, "No output or log available"))
+   }
+   ```
+
+3. Also fix `output_text_for_task()` the same way.
+
+CONSTRAINTS:
+- Modify only: src/cmd/show.rs
+- Do NOT reformat existing code
+- cargo check and cargo test must pass
+"""
+dir = "."
+worktree = "fix/output-fallback"
+verify = "auto"
+
+[[task]]
+name = "merged-status"
+agent = "codex"
+skills = ["implementer"]
+prompt = """
+Add `aid merge <task-id>` command that marks a completed task as "merged" in the board.
+
+GOAL: After merging a task's branch, the orchestrator runs `aid merge <id>` to update the status. Board then shows "MERGED" instead of "DONE".
+
+IMPLEMENTATION:
+
+1. In src/types.rs TaskStatus enum, add: Merged
+
+   Update label() → "merged", from_str() → handle "merged", is_terminal() → true.
+
+2. In src/main.rs Commands enum, add:
+   /// Mark a task as merged
+   Merge {
+       task_id: String,
+   },
+
+3. In src/cmd/mod.rs, add `pub mod merge;`
+
+4. Create src/cmd/merge.rs (~20 lines):
+   ```rust
+   use anyhow::{Result, anyhow};
+   use std::sync::Arc;
+   use crate::store::Store;
+   use crate::types::TaskStatus;
+
+   pub fn run(store: Arc<Store>, task_id: &str) -> Result<()> {
+       let task = store.get_task(task_id)?
+           .ok_or_else(|| anyhow!("Task '{task_id}' not found"))?;
+       if task.status != TaskStatus::Done {
+           return Err(anyhow!("Task '{task_id}' is {} — only DONE tasks can be marked as merged", task.status.label()));
+       }
+       store.update_task_status(task_id, TaskStatus::Merged)?;
+       println!("Marked {task_id} as merged");
+       Ok(())
+   }
+   ```
+
+5. Wire in main.rs match block.
+
+6. In src/board.rs, render "MERGED" with the merged status (no special handling needed — status label is enough).
+
+7. Add e2e test: insert a done task, run `aid merge <id>`, verify board shows "merged".
+
+CONSTRAINTS:
+- Create: src/cmd/merge.rs (under 25 lines)
+- Modify: src/types.rs, src/main.rs, src/cmd/mod.rs
+- Do NOT reformat existing code
+- cargo check and cargo test must pass
+"""
+dir = "."
+worktree = "feat/merged-status"
+verify = "auto"

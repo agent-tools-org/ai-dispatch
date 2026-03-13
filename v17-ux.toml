@@ -1,0 +1,310 @@
+## v1.7 — UX polish + remaining v1.6 test coverage
+
+[[task]]
+name = "test-retry-logic"
+agent = "opencode"
+skills = ["implementer", "test-writer"]
+prompt = """
+Add tests for the retry logic in src/cmd/retry_logic.rs.
+
+EXISTING CODE: src/cmd/retry_logic.rs has these functions:
+- prepare_retry(store, task_id, args) -> Result<Option<RunArgs>> — returns retry args or None
+- read_stderr_tail(task_id, lines) -> String — reads last N lines of stderr file
+- retry_depth(store, parent_task_id) -> Result<u32> — walks parent chain
+- backoff_for_attempt(attempt) -> u64 — returns backoff seconds
+- root_prompt(store, task) -> Option<String> — finds original prompt via parent chain
+
+There are already 2 basic tests (backoff_for_attempt_increases, retry_depth_is_zero_without_parent).
+
+ADD these tests to the existing #[cfg(test)] block in src/cmd/retry_logic.rs:
+
+1. test_retry_depth_with_chain:
+   - Create 3 tasks in Store::open_memory(): t-root (no parent), t-r1 (parent=t-root), t-r2 (parent=t-r1)
+   - Assert retry_depth(store, Some("t-r1")) == 1
+   - Assert retry_depth(store, Some("t-r2")) == 2
+
+2. test_root_prompt_walks_chain:
+   - Create 3 tasks: root prompt="original", r1 prompt="retry1" parent=root, r2 prompt="retry2" parent=r1
+   - Call root_prompt(store, &r2_task)
+   - Assert result == Some("original")
+
+3. test_backoff_capped:
+   - Assert backoff_for_attempt(10) == backoff_for_attempt(3) (capped at max value)
+
+CONSTRAINTS:
+- Only modify src/cmd/retry_logic.rs
+- Use Store::open_memory() for in-memory DB
+- Reuse the existing task() helper function in the test module
+- cargo check and cargo test must pass
+"""
+dir = "."
+worktree = "test/retry-logic"
+verify = "auto"
+
+[[task]]
+name = "configurable-max-duration"
+agent = "codex"
+skills = ["implementer"]
+prompt = """
+Make max task duration configurable via config.toml and per-task override.
+
+CURRENT: src/background.rs line 16 has `const DEFAULT_MAX_TASK_DURATION_MINS: i64 = 60;`
+Used at line ~232 in check_zombie_tasks_with() to auto-fail long-running tasks.
+
+IMPLEMENTATION:
+
+1. In src/config.rs, add a new section to AidConfig:
+   #[serde(default)]
+   pub background: BackgroundConfig,
+
+   #[derive(Debug, Clone, Deserialize)]
+   pub struct BackgroundConfig {
+       #[serde(default = "default_max_duration")]
+       pub max_task_duration_mins: i64,
+   }
+   fn default_max_duration() -> i64 { 60 }
+   impl Default for BackgroundConfig { ... }
+
+   Config.toml usage:
+   [background]
+   max_task_duration_mins = 120
+
+2. In src/background.rs BackgroundRunSpec, add:
+   #[serde(default)]
+   pub max_duration_mins: Option<i64>,
+
+3. In src/batch.rs BatchTask, add:
+   #[serde(default)]
+   pub max_duration_mins: Option<u64>,
+
+4. Wire max_duration_mins from BatchTask → RunArgs → BackgroundRunSpec in the relevant constructors.
+   In src/cmd/run.rs RunArgs, add: pub max_duration_mins: Option<i64>,
+
+5. In src/background.rs check_zombie_tasks_with(), change the hardcoded constant:
+   - Load config via config::load_config() (already imported? if not, add import)
+   - For each task, check if its spec has max_duration_mins override
+   - Use: spec.max_duration_mins.unwrap_or(config.background.max_task_duration_mins)
+   - The spec is already loaded at ~line 215 via load_spec_if_exists()
+
+6. Remove the DEFAULT_MAX_TASK_DURATION_MINS constant.
+
+7. Add test: verify BackgroundConfig defaults to 60, verify override from TOML works.
+
+CONSTRAINTS:
+- Modify: src/config.rs, src/background.rs, src/batch.rs, src/cmd/run.rs
+- Optionally modify src/main.rs if a --max-duration CLI flag is desired (nice to have, not required)
+- Do NOT reformat existing code
+- cargo check and cargo test must pass
+"""
+dir = "."
+worktree = "feat/config-duration"
+verify = "auto"
+
+[[task]]
+name = "retry-chain-display"
+agent = "codex"
+skills = ["implementer"]
+prompt = """
+Add retry chain visualization to `aid show` so users can see full retry history.
+
+CURRENT STATE:
+- src/board.rs render_task_detail() shows `Parent: <id>` as a single line (line 89-91)
+- src/types.rs Task has parent_task_id: Option<String>
+- src/store.rs has get_task(id) that can walk the chain
+- src/cmd/run.rs has retry_depth() that walks parent chain but is private to run module
+
+IMPLEMENTATION:
+
+1. In src/store.rs, add a method to walk the full retry chain:
+   pub fn get_retry_chain(&self, task_id: &str) -> Result<Vec<Task>> {
+       // Walk parent_task_id links backward to find root
+       // Then collect forward chain from root to current task
+       // Return ordered list: [root, retry1, retry2, ..., current]
+   }
+
+2. In src/board.rs render_task_detail(), after the existing Parent line,
+   if the task has a parent_task_id, call store.get_retry_chain() and display:
+
+   Retry chain:
+     t-1001 (root)  → Done     12s  $0.03
+     t-1002 (retry) → Failed    8s  $0.02
+     t-1003 (retry) → Done     15s  $0.04  ← current
+
+3. In src/cmd/show.rs, the audit_text() function calls render_task_detail().
+   It already passes `store` to this function (or the events). Make sure the store
+   reference is available for the chain query. If render_task_detail doesn't have
+   store access, add an optional chain parameter: retry_chain: Option<Vec<Task>>.
+
+4. Keep it concise: only show the chain if there IS a parent (single-task = no chain display).
+
+CONSTRAINTS:
+- Modify: src/store.rs (add get_retry_chain), src/board.rs (display chain)
+- Optionally modify src/cmd/show.rs if needed to pass data
+- Do NOT reformat existing code
+- Add test for get_retry_chain with 3-task chain in memory store
+- cargo check and cargo test must pass
+"""
+dir = "."
+worktree = "feat/retry-chain"
+verify = "auto"
+
+[[task]]
+name = "aid-output-command"
+agent = "opencode"
+skills = ["implementer"]
+prompt = """
+Add `aid output <task-id>` as a shortcut for `aid show --output <task-id>`.
+
+CURRENT: There is no `aid output` command. Users must use `aid show --output <task-id>`.
+
+IMPLEMENTATION:
+
+1. In src/main.rs Commands enum, add a new variant:
+   /// Print task output (shortcut for `show --output`)
+   Output {
+       /// Task ID
+       task_id: String,
+   },
+
+2. In the match block in main(), handle Commands::Output:
+   Commands::Output { task_id } => {
+       let store = Store::open()?;
+       let text = cmd::show::output_text_for_task(&store, &task_id)?;
+       print!("{text}");
+   }
+
+3. In src/cmd/show.rs, extract the output logic into a standalone pub function:
+   pub fn output_text_for_task(store: &Store, task_id: &str) -> Result<String> {
+       let task = load_task(store, task_id)?;
+       read_task_output(&task)
+   }
+
+   Make sure load_task and read_task_output are accessible (they should already be pub(crate) or can be made so).
+
+CONSTRAINTS:
+- Modify: src/main.rs (add Output variant), src/cmd/show.rs (extract function)
+- ~15 lines of new code total
+- Do NOT reformat existing code
+- cargo check and cargo test must pass
+"""
+dir = "."
+worktree = "feat/output-cmd"
+verify = "auto"
+
+[[task]]
+name = "agent-stats"
+agent = "codex"
+skills = ["implementer"]
+prompt = """
+Add per-agent execution statistics to `aid usage` output.
+
+CURRENT: src/usage.rs AgentUsageRow has: name, tasks, tokens, cost_usd, last_task_at.
+The data for richer stats already exists in the tasks table: status, duration_ms, parent_task_id.
+
+IMPLEMENTATION:
+
+1. In src/usage.rs AgentUsageRow, add these fields:
+   success_rate: f64,        // percentage 0.0-100.0
+   avg_duration_secs: f64,   // average task duration
+   retry_count: usize,       // tasks that are retries (have parent_task_id)
+
+2. In collect_agent_rows() (~line 123), compute the new fields from the task list:
+   - success_rate = (done_count * 100.0) / total_count
+   - avg_duration_secs = sum(duration_ms) / count / 1000.0 (only completed tasks)
+   - retry_count = count where parent_task_id.is_some()
+
+3. Update render_usage() to display the new columns in the agent table.
+   Add columns: "Success%" (6 wide), "Avg Time" (8 wide), "Retries" (7 wide).
+   Format success_rate as "95.0%", avg_duration as "1m 23s" or "45s", retries as plain number.
+
+4. Add test: create tasks with mixed statuses and verify stats calculation.
+
+CONSTRAINTS:
+- Only modify src/usage.rs
+- Do NOT reformat existing code outside the changed sections
+- cargo check and cargo test must pass
+"""
+dir = "."
+worktree = "feat/agent-stats"
+verify = "auto"
+
+[[task]]
+name = "await-reason-display"
+agent = "opencode"
+skills = ["implementer"]
+prompt = """
+Show the awaiting-input prompt in `aid board` when a task is in AWAIT status.
+
+CURRENT: board.rs renders AWAIT tasks identically to RUN tasks — just shows "AWAIT" with no context.
+But the awaiting prompt IS stored: pty_watch.rs mark_awaiting_input() saves it as an event with
+metadata { "awaiting_input": true } and the prompt text in the event detail field.
+
+FIX:
+
+1. In src/board.rs task_status() function (which generates the status column string),
+   when task.status == TaskStatus::AwaitingInput:
+   - Query the latest event with metadata containing "awaiting_input": true
+   - Use that event's `detail` field as the reason
+   - Display as: "AWAIT — {truncated_reason}"
+
+2. The function signature of task_status already takes the latest milestone.
+   Option A: Add a second parameter for the latest await-reason
+   Option B: Inside task_status, if AwaitingInput, format with a placeholder and let the caller fill it in
+
+   Simplest approach: In render_board() where task_status() is called (line ~47),
+   add a special case: if task.status == AwaitingInput, query store for the latest
+   awaiting_input event and append its detail to the status string.
+
+3. Truncate the reason to fit the 30-char status column.
+
+CONSTRAINTS:
+- Only modify src/board.rs
+- ~10 lines of new code
+- Do NOT reformat existing code
+- cargo check and cargo test must pass
+"""
+dir = "."
+worktree = "feat/await-reason"
+verify = "auto"
+
+[[task]]
+name = "retry-context-inherit"
+agent = "codex"
+skills = ["implementer"]
+prompt = """
+Enable retry tasks to inherit the previous attempt's worktree changes instead of starting from scratch.
+
+CURRENT: src/cmd/run.rs retry_if_needed() (line ~229) creates a brand new worktree for each retry.
+The previous attempt's code changes are lost unless auto-commit preserved them.
+
+IMPROVEMENT: When retrying a worktree task, if the previous attempt's worktree exists and has commits,
+use that branch as the base for the new worktree instead of starting from main.
+
+IMPLEMENTATION:
+
+1. In src/cmd/run.rs retry_if_needed(), after constructing retry_args (line ~265):
+   - If the original task had a worktree_branch, check if that branch exists and has commits ahead of main
+   - If yes, set a new field on retry_args: base_branch = Some(original_worktree_branch)
+   - The retry will still create its OWN new worktree, but branched from the previous attempt's branch
+     instead of from main
+
+2. In src/cmd/run.rs RunArgs, add:
+   pub base_branch: Option<String>,
+
+3. In src/worktree.rs create_worktree(), accept an optional base_branch parameter:
+   - If Some(base), use `git worktree add <path> -b <new_branch> <base>` instead of branching from HEAD
+   - If None, keep current behavior
+
+4. Wire base_branch through the run() flow where create_worktree is called.
+
+5. Add test: verify that create_worktree with base_branch creates a worktree with the base's content.
+
+CONSTRAINTS:
+- Modify: src/cmd/run.rs, src/worktree.rs
+- ~20 lines of new logic
+- Do NOT reformat existing code
+- cargo check and cargo test must pass
+"""
+dir = "."
+worktree = "feat/retry-inherit"
+verify = "auto"

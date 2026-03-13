@@ -1,0 +1,215 @@
+## v1.3 — 5 features with dependency DAG and shared workgroup
+
+[[task]]
+name = "skill-auto-apply"
+agent = "codex"
+group = "wg-9618"
+skills = ["implementer"]
+prompt = """
+Add automatic skill injection based on task type so users don't need --skill for common patterns.
+
+GOAL: Code tasks auto-inject implementer skill. Research tasks auto-inject researcher skill. No --skill flag needed for these defaults.
+
+EXISTING CODE:
+- src/agent/selection.rs has select_agent_with_reason() that classifies tasks
+- src/cmd/run.rs has RunArgs with skills: Vec<String>, and injects skills before dispatch
+- src/skills.rs has load_skills() and list_skills()
+
+IMPLEMENTATION:
+
+1. In src/skills.rs, add:
+   ```rust
+   pub fn auto_skills(agent: &AgentKind, has_worktree: bool) -> Vec<String> {
+       let mut skills = Vec::new();
+       match agent {
+           AgentKind::Codex | AgentKind::OpenCode | AgentKind::Cursor => {
+               skills.push("implementer".to_string());
+           }
+           AgentKind::Gemini => {
+               skills.push("researcher".to_string());
+           }
+       }
+       skills
+   }
+   ```
+   Only include skills that actually exist in ~/.aid/skills/ (check with list_skills).
+
+2. In src/cmd/run.rs, after resolving the agent but before skill loading:
+   - If args.skills is empty AND no --skill was explicitly passed, call auto_skills() and use those
+   - If user explicitly passed --skill, use only their skills (don't mix auto + manual)
+   - Print to stderr: "[aid] Auto-applied skill: implementer" (so user knows)
+
+3. Add a --no-skill flag to disable auto-application for cases where user wants raw prompts.
+   Add to Commands::Run in main.rs and RunArgs.
+
+CONSTRAINTS:
+- Only modify src/skills.rs, src/cmd/run.rs, src/main.rs
+- Do NOT reformat existing code
+- Add test for auto_skills() returning correct defaults
+- cargo check and cargo test must pass
+"""
+dir = "."
+worktree = "feat/skill-auto-apply"
+verify = "auto"
+
+[[task]]
+name = "commit-enforcement"
+agent = "codex"
+group = "wg-9618"
+skills = ["implementer"]
+prompt = """
+Add post-task commit enforcement for worktree tasks so agents always commit their work.
+
+GOAL: After a worktree task finishes, check if there are uncommitted changes. If yes, auto-commit with a generated message OR mark the task as incomplete.
+
+EXISTING CODE:
+- src/watcher.rs handles task completion (watch_streaming, watch_buffered)
+- src/worktree.rs has create_worktree()
+- src/verify.rs runs post-task verification
+- src/background.rs has run_task_inner() which orchestrates the full task lifecycle
+
+IMPLEMENTATION:
+
+1. Create src/commit.rs (~40 lines):
+   ```rust
+   /// Check if a directory has uncommitted changes
+   pub fn has_uncommitted_changes(dir: &str) -> Result<bool>
+   // Run: git -C {dir} status --porcelain
+   // If output is non-empty, return true
+
+   /// Auto-commit all changes in a directory
+   pub fn auto_commit(dir: &str, task_id: &str, prompt: &str) -> Result<()>
+   // Run: git -C {dir} add -A
+   // Run: git -C {dir} commit -m "feat: {truncated_prompt}\n\nTask: {task_id}"
+   ```
+
+2. In src/background.rs run_task_inner(), after the agent finishes and verify runs:
+   - If task has a worktree_path, call has_uncommitted_changes()
+   - If yes, call auto_commit()
+   - Log the commit action as an event (EventKind::Commit)
+
+CONSTRAINTS:
+- Only create src/commit.rs, modify src/background.rs
+- Keep commit.rs under 50 lines
+- Add test for has_uncommitted_changes (use tempdir with git init)
+- cargo check and cargo test must pass
+"""
+dir = "."
+worktree = "feat/commit-enforce"
+verify = "auto"
+
+[[task]]
+name = "batch-auto-workgroup"
+agent = "codex"
+group = "wg-9618"
+skills = ["implementer"]
+prompt = """
+Auto-create a workgroup when running aid batch with 2+ tasks and no explicit group.
+
+GOAL: `aid batch tasks.toml --parallel` auto-creates a workgroup named after the batch file, so tasks can share findings via the message bus.
+
+EXISTING CODE:
+- src/cmd/batch.rs has run() that dispatches tasks from a parsed BatchConfig
+- src/store_workgroups.rs has Store::create_workgroup(name, context)
+- src/batch.rs has BatchTask with optional group field
+
+IMPLEMENTATION:
+
+1. In src/cmd/batch.rs run(), before dispatching tasks:
+   - If there are 2+ tasks AND none of them have a group field set:
+     - Auto-create a workgroup: store.create_workgroup(batch_file_stem, "Auto-created for batch dispatch")?
+     - Set the workgroup_id on all tasks
+     - Print to stderr: "[aid] Auto-created workgroup {wg_id} for batch '{filename}'"
+
+2. Extract the batch file stem from the path (e.g., "v13-features" from "v13-features.toml")
+
+CONSTRAINTS:
+- Only modify src/cmd/batch.rs
+- Do NOT reformat existing code
+- Add test that verifies workgroup auto-creation for multi-task batches
+- cargo check and cargo test must pass
+"""
+dir = "."
+worktree = "feat/batch-workgroup"
+verify = "auto"
+depends_on = ["commit-enforcement"]
+
+[[task]]
+name = "mcp-skill-support"
+agent = "codex"
+group = "wg-9618"
+skills = ["implementer"]
+prompt = """
+Add skills parameter to the aid_run MCP tool so Claude Code can inject skills via MCP.
+
+GOAL: The aid_run MCP tool accepts an optional `skills` array parameter.
+
+EXISTING CODE:
+- src/cmd/mcp_tools.rs has RunToolArgs struct and run_tool() function
+- src/cmd/mcp_schema.rs has tool_definitions() returning JSON schemas
+- RunArgs in src/cmd/run.rs already has skills: Vec<String>
+
+IMPLEMENTATION:
+
+1. In src/cmd/mcp_tools.rs RunToolArgs:
+   - Add: `#[serde(default)] skills: Vec<String>`
+
+2. In run_tool(), pass args.skills to RunArgs:
+   - Change `skills: vec![]` to `skills: args.skills`
+
+3. In src/cmd/mcp_schema.rs, update the aid_run tool schema:
+   - Add to properties: `"skills": {"type": "array", "items": {"type": "string"}, "default": []}`
+
+CONSTRAINTS:
+- Only modify src/cmd/mcp_tools.rs and src/cmd/mcp_schema.rs
+- 3 lines of actual logic change
+- cargo check and cargo test must pass
+"""
+dir = "."
+worktree = "feat/mcp-skills"
+verify = "auto"
+
+[[task]]
+name = "session-cost"
+agent = "codex"
+group = "wg-9618"
+skills = ["implementer"]
+prompt = """
+Add session-scoped cost reporting with `aid usage --session`.
+
+GOAL: `aid usage --session` shows cost summary filtered to the current caller session, so users know how much THIS session cost.
+
+EXISTING CODE:
+- src/usage.rs has collect_usage() and render_usage()
+- src/store.rs has list_tasks(filter) with TaskFilter enum
+- src/types.rs has Task with caller_session_id field
+- src/session.rs has detect_caller() returning session info
+- src/main.rs Commands::Usage currently takes no args
+
+IMPLEMENTATION:
+
+1. In src/main.rs Commands::Usage:
+   - Add: `#[arg(long)] session: bool`
+
+2. In src/store.rs, add:
+   ```rust
+   pub fn list_tasks_by_session(&self, session_id: &str) -> Result<Vec<Task>>
+   ```
+   Query with WHERE caller_session_id = ?1
+
+3. In src/usage.rs:
+   - Add a function: pub fn collect_session_usage(store, session_id) -> UsageSnapshot
+   - Filter tasks by session_id instead of all tasks
+   - Reuse the same rendering
+
+4. Wire it: when --session flag is set, detect current session, call collect_session_usage, render.
+
+CONSTRAINTS:
+- Only modify src/main.rs, src/store.rs, src/usage.rs, src/cmd/usage.rs (if exists, otherwise inline in main)
+- Add test for list_tasks_by_session
+- cargo check and cargo test must pass
+"""
+dir = "."
+worktree = "feat/session-cost"
+verify = "auto"
+depends_on = ["skill-auto-apply"]

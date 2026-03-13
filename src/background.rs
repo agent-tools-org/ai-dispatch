@@ -252,7 +252,30 @@ fn is_process_running(pid: u32) -> bool {
     }
 
     let result = unsafe { kill(pid as i32, 0) };
-    result == 0 || std::io::Error::last_os_error().raw_os_error() == Some(1)
+    if result != 0 && std::io::Error::last_os_error().raw_os_error() != Some(1) {
+        return false;
+    }
+
+    if !is_process_not_zombie(pid) {
+        return false;
+    }
+
+    true
+}
+
+#[cfg(unix)]
+fn is_process_not_zombie(pid: u32) -> bool {
+    use std::process::Command;
+    let output = Command::new("ps")
+        .args(["-o", "stat=", "-p", &pid.to_string()])
+        .output();
+    match output {
+        Ok(output) => {
+            let stat = String::from_utf8_lossy(&output.stdout);
+            !stat.trim().starts_with('Z')
+        }
+        Err(_) => true,
+    }
 }
 
 #[cfg(not(unix))]

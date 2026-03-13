@@ -3,7 +3,7 @@
 
 use chrono::Local;
 
-use super::{BackgroundRunSpec, ZOMBIE_FAILURE_DETAIL, check_zombie_tasks_with, save_spec};
+use super::{check_zombie_tasks_with, save_spec, BackgroundRunSpec, ZOMBIE_FAILURE_DETAIL};
 use crate::paths;
 use crate::store::Store;
 use crate::types::{AgentKind, EventKind, Task, TaskId, TaskStatus};
@@ -111,5 +111,24 @@ fn make_task(task_id: &str, status: TaskStatus) -> Task {
         cost_usd: None,
         created_at: Local::now(),
         completed_at: None,
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn is_process_running_returns_false_for_zombie() {
+    unsafe {
+        let pid = libc::fork();
+        if pid == 0 {
+            libc::_exit(0);
+        }
+
+        std::thread::sleep(std::time::Duration::from_millis(100));
+        let child_pid = pid as u32;
+
+        assert!(!super::is_process_running(child_pid));
+
+        let mut status: i32 = 0;
+        libc::waitpid(pid, &mut status, 0);
     }
 }

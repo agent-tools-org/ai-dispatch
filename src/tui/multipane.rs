@@ -10,13 +10,17 @@ pub struct PaneData {
     pub status: String,
     pub prompt: String,
     pub events: Vec<(String, String, String)>,
-    pub duration: String,
     pub tokens: String,
     pub cost: String,
     pub model: String,
     pub milestone: String,
     pub cpu: String,
     pub memory: String,
+    pub workgroup: String,
+    pub worktree_branch: String,
+    pub elapsed: String,
+    pub scroll_offset: usize,
+    pub total_events: usize,
 }
 
 pub fn render_multipane(frame: &mut ratatui::Frame<'_>, panes: &[PaneData], active_pane: usize) {
@@ -36,9 +40,9 @@ pub fn render_multipane(frame: &mut ratatui::Frame<'_>, panes: &[PaneData], acti
     }
     let extra = panes.len().saturating_sub(6);
     let footer = if extra > 0 {
-        format!("m=board Tab=next pane q=quit | +{extra} more")
+        format!("Tab=pane j/k=scroll Enter=detail Esc=board q=quit | +{extra} more")
     } else {
-        "m=board Tab=next pane q=quit".into()
+        "Tab=pane j/k=scroll Enter=detail Esc=board q=quit".into()
     };
     frame.render_widget(Paragraph::new(footer), chunks[1]);
 }
@@ -122,7 +126,23 @@ fn render_pane(pane: &PaneData, is_active: bool) -> List<'static> {
         "skipped" => Color::Blue,
         _ => Color::White,
     };
-    let title = format!(" {} {} {} ", pane.task_id, pane.agent, pane.status);
+    let title = format!(" {} {} [{}] ", pane.task_id, pane.agent, pane.status);
+    let bottom_title = {
+        let mut parts = vec![];
+        if !pane.workgroup.is_empty() {
+            parts.push(pane.workgroup.clone());
+        }
+        if !pane.worktree_branch.is_empty() {
+            parts.push(pane.worktree_branch.clone());
+        }
+        if !pane.model.is_empty() && pane.model != "-" {
+            parts.push(pane.model.clone());
+        }
+        if !pane.elapsed.is_empty() {
+            parts.push(pane.elapsed.clone());
+        }
+        format!(" {} ", parts.join(" | "))
+    };
     let prompt = if pane.prompt.len() <= 60 {
         pane.prompt.clone()
     } else {
@@ -130,26 +150,24 @@ fn render_pane(pane: &PaneData, is_active: bool) -> List<'static> {
     };
     let mut items = vec![ListItem::new(format!("Prompt: {prompt}"))];
     let summary = format!(
-        "Duration: {}  Tokens: {}  Cost: {}  Model: {}  CPU: {}  Mem: {}",
-        pane.duration, pane.tokens, pane.cost, pane.model, pane.cpu, pane.memory
+        "Tokens: {}  Cost: {}  CPU: {}  Mem: {}",
+        pane.tokens, pane.cost, pane.cpu, pane.memory
     );
-    items.insert(
-        1,
-        ListItem::new(summary).style(Style::default().fg(Color::DarkGray)),
-    );
+    items.push(ListItem::new(summary).style(Style::default().fg(Color::DarkGray)));
     if !pane.milestone.is_empty() {
-        items.insert(
-            2,
+        items.push(
             ListItem::new(format!("Progress: {}", pane.milestone))
                 .style(Style::default().fg(Color::Green)),
         );
     }
-    let recent_events = if pane.events.len() > 20 {
-        &pane.events[pane.events.len() - 20..]
-    } else {
-        &pane.events
-    };
-    for (ts, kind, detail) in recent_events {
+    // Scrollable event window
+    let header_lines = items.len();
+    let pane_height: usize = 12;
+    let visible_count = pane_height.saturating_sub(header_lines + 1); // +1 for scroll indicator
+    let end = pane.events.len().saturating_sub(pane.scroll_offset);
+    let start = end.saturating_sub(visible_count);
+    let visible = &pane.events[start..end];
+    for (ts, kind, detail) in visible {
         let event_style = match kind.as_str() {
             "milestone" => Style::default().fg(Color::Green),
             "error" => Style::default().fg(Color::Red),
@@ -159,9 +177,18 @@ fn render_pane(pane: &PaneData, is_active: bool) -> List<'static> {
         };
         items.push(ListItem::new(format!("{ts} [{kind}] {detail}")).style(event_style));
     }
+    if pane.total_events > visible_count {
+        let pos = format!(
+            "[{}/{}]",
+            pane.total_events.saturating_sub(pane.scroll_offset),
+            pane.total_events
+        );
+        items.push(ListItem::new(pos).style(Style::default().fg(Color::DarkGray)));
+    }
     List::new(items).block(
         Block::default()
             .title(title)
+            .title_bottom(bottom_title)
             .title_style(Style::default().fg(status_color))
             .borders(Borders::ALL)
             .border_style(Style::default().fg(border_color)),

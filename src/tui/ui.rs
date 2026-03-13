@@ -34,38 +34,54 @@ pub fn render(frame: &mut ratatui::Frame<'_>, app: &App) {
 }
 
 fn render_multipane_view(frame: &mut ratatui::Frame<'_>, app: &App) {
-    let running_tasks = app.running_tasks();
-    let panes: Vec<multipane::PaneData> = running_tasks
+    let tasks = app.multipane_tasks();
+    let panes: Vec<multipane::PaneData> = tasks
         .iter()
-        .map(|task| {
-            let events = app
+        .enumerate()
+        .map(|(index, task)| {
+            let events_raw = app
                 .events_cache
                 .get(task.id.as_str())
-                .map(|evts| {
-                    evts.iter()
-                        .map(|e| {
-                            (
-                                e.timestamp.format("%H:%M:%S").to_string(),
-                                e.event_kind.as_str().to_string(),
-                                e.detail.clone(),
-                            )
-                        })
-                        .collect()
-                })
+                .cloned()
                 .unwrap_or_default();
+            let total_events = events_raw.len();
+            let events = events_raw
+                .iter()
+                .map(|e| {
+                    (
+                        e.timestamp.format("%H:%M:%S").to_string(),
+                        e.event_kind.as_str().to_string(),
+                        e.detail.clone(),
+                    )
+                })
+                .collect();
+            let elapsed = {
+                let secs = (chrono::Local::now() - task.created_at).num_seconds();
+                if secs < 60 {
+                    format!("{secs}s")
+                } else if secs < 3600 {
+                    format!("{}m {:02}s", secs / 60, secs % 60)
+                } else {
+                    format!("{}h {:02}m", secs / 3600, (secs % 3600) / 60)
+                }
+            };
             multipane::PaneData {
                 task_id: task.id.as_str().to_string(),
                 agent: task.agent.to_string(),
                 status: task.status.label().to_string(),
                 prompt: task.prompt.clone(),
                 events,
-                duration: task_duration(task),
                 tokens: task_tokens(task),
                 cost: cost::format_cost(task.cost_usd),
                 model: task.model.as_deref().unwrap_or("-").to_string(),
                 milestone: app.get_milestone(task.id.as_str()).unwrap_or("").to_string(),
                 cpu: task_cpu(app, task),
                 memory: task_memory(app, task),
+                workgroup: task.workgroup_id.clone().unwrap_or_default(),
+                worktree_branch: task.worktree_branch.clone().unwrap_or_default(),
+                elapsed,
+                scroll_offset: app.pane_scroll_offsets.get(index).copied().unwrap_or(0),
+                total_events,
             }
         })
         .collect();

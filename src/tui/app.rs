@@ -9,7 +9,7 @@ use std::sync::Arc;
 use super::metrics::{get_process_metrics, ProcessMetrics};
 use crate::background;
 use crate::store::Store;
-use crate::types::{EventKind, Task, TaskEvent, TaskFilter};
+use crate::types::{EventKind, Task, TaskEvent, TaskFilter, TaskStatus};
 
 pub struct App {
     pub tasks: Vec<Task>,
@@ -21,6 +21,7 @@ pub struct App {
     pub dashboard_mode: bool,
     pub multipane_mode: bool,
     pub active_pane: usize,
+    pub pane_scroll_offsets: Vec<usize>,
     pub should_quit: bool,
     task_id_filter: Option<String>,
     group_filter: Option<String>,
@@ -39,6 +40,7 @@ impl App {
             dashboard_mode: false,
             multipane_mode: false,
             active_pane: 0,
+            pane_scroll_offsets: Vec::new(),
             should_quit: false,
             task_id_filter: options.task_id,
             group_filter: options.group,
@@ -54,7 +56,9 @@ impl App {
             self.load_dashboard_events()?;
         }
         if self.multipane_mode {
-            self.load_dashboard_events()?;
+            self.load_multipane_events()?;
+            let count = self.multipane_tasks().len();
+            self.pane_scroll_offsets.resize(count, 0);
         }
         if self.detail_mode {
             self.load_selected_events()?;
@@ -70,6 +74,7 @@ impl App {
                 self.multipane_mode = !self.multipane_mode;
                 if self.multipane_mode {
                     self.active_pane = 0;
+                    self.pane_scroll_offsets.clear();
                 }
             }
             KeyCode::Tab if self.multipane_mode => {
@@ -87,6 +92,33 @@ impl App {
                         self.active_pane - 1
                     };
                 }
+            }
+            KeyCode::Down | KeyCode::Char('j') if self.multipane_mode => {
+                if self.active_pane < self.pane_scroll_offsets.len() {
+                    let offset = &mut self.pane_scroll_offsets[self.active_pane];
+                    if *offset > 0 {
+                        *offset -= 1;
+                    }
+                }
+            }
+            KeyCode::Up | KeyCode::Char('k') if self.multipane_mode => {
+                if self.active_pane < self.pane_scroll_offsets.len() {
+                    self.pane_scroll_offsets[self.active_pane] += 1;
+                }
+            }
+            KeyCode::Enter if self.multipane_mode => {
+                let tasks = self.multipane_tasks();
+                if let Some(task) = tasks.get(self.active_pane) {
+                    if let Some(idx) = self.tasks.iter().position(|t| t.id == task.id) {
+                        self.selected = idx;
+                        self.multipane_mode = false;
+                        self.detail_mode = true;
+                        self.load_selected_events()?;
+                    }
+                }
+            }
+            KeyCode::Esc if self.multipane_mode => {
+                self.multipane_mode = false;
             }
             KeyCode::Down | KeyCode::Char('j') if !self.detail_mode => self.next(),
             KeyCode::Up | KeyCode::Char('k') if !self.detail_mode => self.previous(),
@@ -131,20 +163,33 @@ impl App {
             .unwrap_or_default()
     }
 
-    pub fn running_tasks(&self) -> Vec<&Task> {
-        self.tasks
+    pub fn multipane_tasks(&self) -> Vec<&Task> {
+        let mut tasks: Vec<&Task> = self
+            .tasks
             .iter()
-            .filter(|task| {
+            .filter(|t| {
                 matches!(
-                    task.status,
-                    crate::types::TaskStatus::Running | crate::types::TaskStatus::AwaitingInput
+                    t.status,
+                    TaskStatus::Running
+                        | TaskStatus::AwaitingInput
+                        | TaskStatus::Done
+                        | TaskStatus::Merged
+                        | TaskStatus::Failed
                 )
             })
-            .collect()
+            .collect();
+        tasks.sort_by(|a, b| {
+            let running_a = matches!(a.status, TaskStatus::Running | TaskStatus::AwaitingInput);
+            let running_b = matches!(b.status, TaskStatus::Running | TaskStatus::AwaitingInput);
+            running_b
+                .cmp(&running_a)
+                .then(b.created_at.cmp(&a.created_at))
+        });
+        tasks
     }
 
     pub fn pane_count(&self) -> usize {
-        self.running_tasks().len().min(6)
+        self.multipane_tasks().len().min(6)
     }
 
     pub fn scope_label(&self) -> String {
@@ -179,13 +224,33 @@ impl App {
             .filter(|task| {
                 matches!(
                     task.status,
-                    crate::types::TaskStatus::Running | crate::types::TaskStatus::AwaitingInput
+                    TaskStatus::Running | TaskStatus::AwaitingInput
                 )
             })
             .map(|task| task.id.as_str().to_string())
         {
             self.events_cache
                 .insert(task_id.clone(), self.store.get_events(&task_id)?);
+        }
+        Ok(())
+    }
+
+    fn load_multipane_events(&mut self) -> Result<()> {
+        let task_ids: Vec<String> = self
+            .multipane_tasks()
+            .iter()
+            .map(|t| t.id.as_str().to_string())
+            .collect();
+        for task_id in task_ids {
+            // Always refresh running tasks, cache completed ones
+            let is_running = self.tasks.iter().any(|t| {
+                t.id.as_str() == task_id
+                    && matches!(t.status, TaskStatus::Running | TaskStatus::AwaitingInput)
+            });
+            if is_running || !self.events_cache.contains_key(&task_id) {
+                self.events_cache
+                    .insert(task_id.clone(), self.store.get_events(&task_id)?);
+            }
         }
         Ok(())
     }

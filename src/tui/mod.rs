@@ -2,6 +2,7 @@
 // Boots ratatui+crossterm, runs the app loop, and restores the terminal on exit.
 
 pub mod app;
+pub mod metrics;
 pub mod ui;
 
 use anyhow::Result;

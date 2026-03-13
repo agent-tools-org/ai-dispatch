@@ -66,6 +66,10 @@ pub fn check_zombie_tasks(store: &Store) -> Result<Vec<String>> {
     check_zombie_tasks_with(store, is_process_running)
 }
 
+pub(crate) fn load_worker_pid(task_id: &str) -> Result<Option<u32>> {
+    Ok(load_spec_if_exists(task_id)?.and_then(|spec| spec.worker_pid))
+}
+
 async fn run_task_inner(store: &Arc<Store>, spec: &BackgroundRunSpec) -> Result<()> {
     let agent_kind = AgentKind::parse_str(&spec.agent_name)
         .ok_or_else(|| anyhow::anyhow!("Unknown agent '{}'", spec.agent_name))?;

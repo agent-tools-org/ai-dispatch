@@ -6,12 +6,15 @@ use crossterm::event::{KeyCode, KeyEvent};
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use super::metrics::{ProcessMetrics, get_process_metrics};
+use crate::background;
 use crate::store::Store;
 use crate::types::{Task, TaskEvent, TaskFilter};
 
 pub struct App {
     pub tasks: Vec<Task>,
     pub events_cache: HashMap<String, Vec<TaskEvent>>,
+    pub metrics: HashMap<String, ProcessMetrics>,
     pub selected: usize,
     pub detail_mode: bool,
     pub should_quit: bool,
@@ -25,6 +28,7 @@ impl App {
         let mut app = Self {
             tasks: Vec::new(),
             events_cache: HashMap::new(),
+            metrics: HashMap::new(),
             selected: 0,
             detail_mode: false,
             should_quit: false,
@@ -70,6 +74,10 @@ impl App {
             .unwrap_or_default()
     }
 
+    pub fn get_metrics(&self, task_id: &str) -> Option<&ProcessMetrics> {
+        self.metrics.get(task_id)
+    }
+
     pub fn scope_label(&self) -> String {
         match (self.task_id_filter.as_deref(), self.group_filter.as_deref()) {
             (Some(task_id), Some(group_id)) => format!("task {task_id} | group {group_id}"),
@@ -93,7 +101,9 @@ impl App {
     }
 
     fn reload_tasks(&mut self) -> Result<()> {
-        self.tasks = self.load_tasks()?;
+        let tasks = self.load_tasks()?;
+        self.metrics = self.load_metrics(&tasks);
+        self.tasks = tasks;
         if self.selected >= self.tasks.len() && !self.tasks.is_empty() {
             self.selected = self.tasks.len() - 1;
         }
@@ -120,6 +130,23 @@ impl App {
         if let Some(group_id) = self.group_filter.as_deref() {
             tasks.retain(|task| task.workgroup_id.as_deref() == Some(group_id));
         }
+    }
+
+    fn load_metrics(&self, tasks: &[Task]) -> HashMap<String, ProcessMetrics> {
+        let mut metrics = HashMap::new();
+        for task in tasks
+            .iter()
+            .filter(|task| matches!(task.status, crate::types::TaskStatus::Running))
+        {
+            let Ok(Some(pid)) = background::load_worker_pid(task.id.as_str()) else {
+                continue;
+            };
+            let Some(process_metrics) = get_process_metrics(pid) else {
+                continue;
+            };
+            metrics.insert(task.id.as_str().to_string(), process_metrics);
+        }
+        metrics
     }
 
     fn next(&mut self) {

@@ -45,16 +45,19 @@ fn render_board(frame: &mut ratatui::Frame<'_>, app: &App) {
     );
 
     let header = Row::new(vec![
-        "ID", "Agent", "Status", "Duration", "Tokens", "Cost", "Model", "Group", "Prompt",
+        "ID", "Agent", "Status", "CPU", "Mem", "Duration", "Tokens", "Cost", "Model", "Group",
+        "Prompt",
     ])
     .style(Style::default().add_modifier(Modifier::BOLD));
-    let rows = app.tasks.iter().map(task_row);
+    let rows = app.tasks.iter().map(|task| task_row(app, task));
     let table = Table::new(
         rows,
         [
             Constraint::Length(10),
             Constraint::Length(10),
             Constraint::Length(8),
+            Constraint::Length(7),
+            Constraint::Length(7),
             Constraint::Length(10),
             Constraint::Length(10),
             Constraint::Length(10),
@@ -127,11 +130,13 @@ fn render_detail(frame: &mut ratatui::Frame<'_>, app: &App) {
     frame.render_widget(Paragraph::new("Esc=back q=quit"), chunks[2]);
 }
 
-fn task_row(task: &Task) -> Row<'static> {
+fn task_row(app: &App, task: &Task) -> Row<'static> {
     Row::new(vec![
         Cell::from(task.id.as_str().to_string()),
         Cell::from(task.agent.as_str().to_string()),
         Cell::from(task.status.label().to_string()),
+        Cell::from(task_cpu(app, task)),
+        Cell::from(task_memory(app, task)),
         Cell::from(task_duration(task)),
         Cell::from(task_tokens(task)),
         Cell::from(cost::format_cost(task.cost_usd)),
@@ -190,6 +195,18 @@ fn task_tokens(task: &Task) -> String {
             }
         })
         .unwrap_or_else(|| "-".to_string())
+}
+
+fn task_cpu(app: &App, task: &Task) -> String {
+    app.get_metrics(task.id.as_str())
+        .map(|metrics| format!("{:.1}%", metrics.cpu_percent))
+        .unwrap_or_else(|| "—".to_string())
+}
+
+fn task_memory(app: &App, task: &Task) -> String {
+    app.get_metrics(task.id.as_str())
+        .map(|metrics| format!("{:.0}M", metrics.memory_mb))
+        .unwrap_or_else(|| "—".to_string())
 }
 
 fn status_style(status: TaskStatus) -> Style {

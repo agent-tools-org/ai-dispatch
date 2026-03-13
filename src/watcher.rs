@@ -6,6 +6,9 @@ use chrono::Local;
 use std::sync::Arc;
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::Child;
+use tokio::time::{timeout, Duration};
+
+const HUNG_TIMEOUT: Duration = Duration::from_secs(300);
 
 use crate::agent::Agent;
 use crate::paths;
@@ -42,13 +45,42 @@ pub async fn watch_streaming(
     // Spawn stderr capture in background
     let stderr_handle = spawn_stderr_capture(child, task_id);
 
-    while let Some(line) = lines.next_line().await? {
-        // Write raw line to log
+    loop {
+        let line = match timeout(HUNG_TIMEOUT, lines.next_line()).await {
+            Ok(Ok(Some(line))) => line,
+            Ok(Ok(None)) => break,
+            Ok(Err(e)) => return Err(e.into()),
+            Err(_) => {
+                let _ = child.kill().await;
+                let event = TaskEvent {
+                    task_id: task_id.clone(),
+                    timestamp: Local::now(),
+                    event_kind: EventKind::Error,
+                    detail: format!(
+                        "Agent hung: no output for {} seconds",
+                        HUNG_TIMEOUT.as_secs()
+                    ),
+                    metadata: None,
+                };
+                let _ = store.insert_event(&event);
+                info.status = TaskStatus::Failed;
+                break;
+            }
+        };
+
         use tokio::io::AsyncWriteExt;
         log_file.write_all(line.as_bytes()).await?;
         log_file.write_all(b"\n").await?;
 
-        handle_streaming_line_with_session(agent, task_id, store, &mut info, &mut event_count, &line, &mut session_saved)?;
+        handle_streaming_line_with_session(
+            agent,
+            task_id,
+            store,
+            &mut info,
+            &mut event_count,
+            &line,
+            &mut session_saved,
+        )?;
     }
 
     // Wait for stderr to finish

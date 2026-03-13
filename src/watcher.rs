@@ -9,6 +9,7 @@ use tokio::process::Child;
 
 use crate::agent::Agent;
 use crate::paths;
+use crate::rate_limit;
 use crate::store::Store;
 use crate::types::*;
 
@@ -66,6 +67,14 @@ pub async fn watch_streaming(
     let stderr_note = if status == TaskStatus::Failed {
         let stderr_path = paths::stderr_path(task_id.as_str());
         if stderr_path.exists() {
+            if let Ok(stderr_content) = std::fs::read_to_string(&stderr_path) {
+                for line in stderr_content.lines() {
+                    if rate_limit::is_rate_limit_error(line) {
+                        rate_limit::mark_rate_limited(&agent.kind());
+                        break;
+                    }
+                }
+            }
             format!(" — stderr: {}", stderr_path.display())
         } else {
             String::new()

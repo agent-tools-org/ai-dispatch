@@ -2,7 +2,8 @@
 // Scores prompt signals, respects installed CLIs, and returns a concise reason.
 // Exports select_agent() helpers; deps: super::detect_agents, super::RunOpts.
 
-use super::{RunOpts, detect_agents};
+use super::{detect_agents, RunOpts};
+use crate::rate_limit;
 use crate::types::AgentKind;
 
 const RESEARCH_PREFIXES: &[&str] = &[
@@ -91,6 +92,9 @@ fn select_agent_from(prompt: &str, opts: &RunOpts, available: &[AgentKind]) -> (
     if budget {
         reason.push_str("; budget mode: preferring cheaper agent");
     }
+    if rate_limit::is_rate_limited(&AgentKind::Codex) && selected.kind != AgentKind::Codex {
+        reason.push_str("; codex rate-limited");
+    }
     (selected.kind, reason)
 }
 
@@ -166,6 +170,9 @@ fn score_codex(prompt: &str, file_count: usize, prompt_len: usize, budget: bool)
     }
     if budget {
         score = (score - 8).max(0);
+    }
+    if rate_limit::is_rate_limited(&AgentKind::Codex) {
+        score = (score - 10).max(0);
     }
     score
 }

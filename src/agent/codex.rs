@@ -4,11 +4,12 @@
 
 use anyhow::Result;
 use chrono::Local;
-use serde_json::{Map, Value, json};
+use serde_json::{json, Map, Value};
 use std::process::Command;
 
-use super::RunOpts;
 use super::truncate::truncate_text;
+use super::RunOpts;
+use crate::rate_limit;
 use crate::templates;
 use crate::types::*;
 
@@ -206,6 +207,10 @@ fn parse_error_event(
         .or_else(|| v.pointer("/error/message"))
         .and_then(|value| value.as_str())
         .filter(|message| !message.is_empty())?;
+
+    if rate_limit::is_rate_limit_error(detail) {
+        rate_limit::mark_rate_limited(&AgentKind::Codex);
+    }
 
     Some(TaskEvent {
         task_id: task_id.clone(),

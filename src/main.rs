@@ -19,6 +19,7 @@ mod prompt;
 mod pty_bridge;
 mod pty_runner;
 mod pty_watch;
+mod rate_limit;
 mod session;
 mod skills;
 mod store;

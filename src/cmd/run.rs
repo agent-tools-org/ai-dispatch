@@ -176,7 +176,7 @@ pub async fn run(store: Arc<Store>, args: RunArgs) -> Result<TaskId> {
                 "Task {} started in background ({}: {})",
                 task_id,
                 agent_kind,
-                truncate(&args.prompt, 50)
+                crate::agent::truncate::truncate_text(&args.prompt, 50)
             );
         }
     } else {
@@ -197,7 +197,7 @@ pub async fn run(store: Arc<Store>, args: RunArgs) -> Result<TaskId> {
                 "Task {} started ({}: {})",
                 task_id,
                 agent_kind,
-                truncate(&args.prompt, 50)
+                crate::agent::truncate::truncate_text(&args.prompt, 50)
             );
         }
 
@@ -337,14 +337,6 @@ fn format_duration(ms: i64) -> String {
         format!("{secs}s")
     } else {
         format!("{}m {:02}s", secs / 60, secs % 60)
-    }
-}
-
-fn truncate(s: &str, max: usize) -> String {
-    if s.len() <= max {
-        s.to_string()
-    } else {
-        format!("{}...", &s[..max.saturating_sub(3)])
     }
 }
 

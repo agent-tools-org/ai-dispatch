@@ -6,7 +6,7 @@ pub mod cursor;
 pub mod gemini;
 pub mod opencode;
 mod selection;
-mod truncate;
+pub(crate) mod truncate;
 
 use anyhow::Result;
 use std::path::PathBuf;

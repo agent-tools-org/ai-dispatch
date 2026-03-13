@@ -164,9 +164,9 @@ pub fn run(store: &Arc<Store>, action: ConfigAction) -> Result<()> {
     match action {
         ConfigAction::Agents => {
             let installed = agent::detect_agents();
-            let history = match store.list_tasks(TaskFilter::All) {
-                Ok(tasks) => compute_agent_history(&tasks),
-                Err(_) => HashMap::new(),
+            let (history, model_history) = match store.list_tasks(TaskFilter::All) {
+                Ok(tasks) => (compute_agent_history(&tasks), compute_model_history(&tasks)),
+                Err(_) => (HashMap::new(), HashMap::new()),
             };
             for (kind, _, _, _, _) in AGENT_PROFILES {
                 let status = if installed.contains(kind) {
@@ -174,7 +174,7 @@ pub fn run(store: &Arc<Store>, action: ConfigAction) -> Result<()> {
                 } else {
                     "✗"
                 };
-                let profile = agent_profile(*kind, installed.contains(kind), history.get(kind));
+                let profile = agent_profile(*kind, installed.contains(kind), history.get(kind), &model_history);
                 println!("{} {}\n{}", status, kind.as_str(), profile);
             }
         }
@@ -235,7 +235,12 @@ pub fn run(store: &Arc<Store>, action: ConfigAction) -> Result<()> {
     Ok(())
 }
 
-fn agent_profile(kind: AgentKind, installed: bool, history: Option<&AgentHistory>) -> String {
+fn agent_profile(
+    kind: AgentKind,
+    installed: bool,
+    history: Option<&AgentHistory>,
+    model_history: &HashMap<(AgentKind, String), ModelHistory>,
+) -> String {
     let profile = AGENT_PROFILES.iter().find(|(k, _, _, _, _)| *k == kind);
     let (strengths, cost, _best_for, streaming) = match profile {
         Some((_, s, c, b, st)) => (*s, *c, *b, *st),
@@ -263,9 +268,19 @@ fn agent_profile(kind: AgentKind, installed: bool, history: Option<&AgentHistory
         } else {
             let mut lines = "  Models:\n".to_string();
             for am in &agent_models {
+                let history_key = (kind, am.model.to_string());
+                let history_suffix = match model_history.get(&history_key) {
+                    Some(h) => format!(
+                        "  [{} tasks, {:.0}% success, {}/task]",
+                        h.task_count,
+                        h.success_rate,
+                        cost::format_cost(Some(h.avg_cost))
+                    ),
+                    None => String::new(),
+                };
                 lines.push_str(&format!(
-                    "    {:<15} {:<8} ${:>5.2}/${:<5.2}  {}\n",
-                    am.model, am.tier, am.input_per_m, am.output_per_m, am.description
+                    "    {:<15} {:<8} ${:>5.2}/${:<5.2}  {}{}\n",
+                    am.model, am.tier, am.input_per_m, am.output_per_m, am.description, history_suffix
                 ));
             }
             lines
@@ -287,6 +302,12 @@ fn agent_profile(kind: AgentKind, installed: bool, history: Option<&AgentHistory
 }
 
 struct AgentHistory {
+    task_count: usize,
+    success_rate: f64,
+    avg_cost: f64,
+}
+
+struct ModelHistory {
     task_count: usize,
     success_rate: f64,
     avg_cost: f64,
@@ -322,6 +343,36 @@ fn compute_agent_history(tasks: &[crate::types::Task]) -> HashMap<AgentKind, Age
         );
     }
     history
+}
+
+fn compute_model_history(
+    tasks: &[crate::types::Task],
+) -> HashMap<(AgentKind, String), ModelHistory> {
+    let mut accum: HashMap<(AgentKind, String), (usize, usize, f64)> = HashMap::new();
+    for task in tasks {
+        let model = task.model.clone().unwrap_or_else(|| "default".to_string());
+        let entry = accum.entry((task.agent, model)).or_insert((0, 0, 0.0));
+        entry.0 += 1;
+        if matches!(task.status, TaskStatus::Done | TaskStatus::Merged) {
+            entry.1 += 1;
+        }
+        if let Some(c) = task.cost_usd {
+            entry.2 += c;
+        }
+    }
+    accum
+        .into_iter()
+        .map(|(key, (count, done, total_cost))| {
+            (
+                key,
+                ModelHistory {
+                    task_count: count,
+                    success_rate: (done as f64 / count as f64) * 100.0,
+                    avg_cost: total_cost / count as f64,
+                },
+            )
+        })
+        .collect()
 }
 
 pub fn models_for_agent(agent: &AgentKind) -> Vec<&'static AgentModel> {

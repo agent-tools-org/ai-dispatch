@@ -8,7 +8,7 @@ use tokio::process::Command;
 
 use crate::agent::{self, RunOpts};
 use crate::background::{self, BackgroundRunSpec};
-use crate::cmd::retry_logic;
+use crate::cmd::{config as cmd_config, retry_logic};
 use crate::config;
 use crate::cost;
 use crate::notify;
@@ -132,6 +132,18 @@ pub async fn run(store: Arc<Store>, args: RunArgs) -> Result<TaskId> {
         false
     };
 
+    let budget_active = auto_budget || cfg.selection.budget_mode;
+    let effective_model = if budget_active && args.model.is_none() {
+        if let Some(bm) = cmd_config::budget_model(&agent_kind) {
+            eprintln!("[aid] Budget mode: using model {}", bm);
+            Some(bm.to_string())
+        } else {
+            args.model.clone()
+        }
+    } else {
+        args.model.clone()
+    };
+
     let agent = agent::get_agent(agent_kind);
     let task_id = TaskId::generate();
     let log_path = paths::log_path(task_id.as_str());
@@ -188,7 +200,7 @@ pub async fn run(store: Arc<Store>, args: RunArgs) -> Result<TaskId> {
         tokens: None,
         prompt_tokens: None,
         duration_ms: None,
-        model: args.model.clone(),
+        model: effective_model.clone(),
         cost_usd: None,
         created_at: Local::now(),
         completed_at: None,
@@ -249,8 +261,8 @@ pub async fn run(store: Arc<Store>, args: RunArgs) -> Result<TaskId> {
     let opts = RunOpts {
         dir: effective_dir.clone(),
         output: args.output.clone(),
-        model: args.model.clone(),
-        budget: auto_budget || cfg.selection.budget_mode,
+        model: effective_model.clone(),
+        budget: budget_active,
         read_only: args.read_only,
         context_files,
         session_id: args.session_id.clone(),
@@ -265,7 +277,7 @@ pub async fn run(store: Arc<Store>, args: RunArgs) -> Result<TaskId> {
             prompt: effective_prompt,
             dir: effective_dir,
             output: args.output.clone(),
-            model: args.model.clone(),
+            model: effective_model.clone(),
             verify: args.verify.clone(),
             max_duration_mins: args.max_duration_mins,
             retry: args.retry,
@@ -332,7 +344,7 @@ pub async fn run(store: Arc<Store>, args: RunArgs) -> Result<TaskId> {
             &store,
             &log_path,
             args.output.as_deref(),
-            args.model.as_deref(),
+            effective_model.as_deref(),
             is_streaming,
         )
         .await?;

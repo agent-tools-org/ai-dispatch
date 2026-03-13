@@ -198,12 +198,14 @@ enum Commands {
         #[arg(long)]
         session: bool,
     },
-    /// Retry a failed task with feedback
+    /// Retry a failed task with feedback (optionally switch agent)
     Retry {
+        /// Task ID to retry
         task_id: String,
+        /// Feedback or correction for the agent
         #[arg(short, long)]
         feedback: String,
-        /// Override agent for this retry
+        /// Switch to a different agent (e.g. --agent opencode when codex is rate-limited)
         #[arg(long)]
         agent: Option<String>,
     },

@@ -53,15 +53,9 @@ fn model_pricing(model: &str) -> Option<ModelPricing> {
         ModelPricing { input_per_m: 0.15, output_per_m: 0.60 }
     } else if m.contains("gemini-2.5-pro") {
         ModelPricing { input_per_m: 1.25, output_per_m: 10.0 }
-    } else if m.contains("mimo") && m.contains("free") {
+    } else if m.contains("free") && (m.contains("mimo") || m.contains("nemotron") || m.contains("minimax")) {
         return Some(ModelPricing { input_per_m: 0.0, output_per_m: 0.0 });
-    } else if m.contains("nemotron") && m.contains("free") {
-        return Some(ModelPricing { input_per_m: 0.0, output_per_m: 0.0 });
-    } else if m.contains("minimax") && m.contains("free") {
-        return Some(ModelPricing { input_per_m: 0.0, output_per_m: 0.0 });
-    } else if m.contains("glm-5") {
-        ModelPricing { input_per_m: 0.5, output_per_m: 2.0 }
-    } else if m.contains("kimi-k2.5") {
+    } else if m.contains("glm-5") || m.contains("kimi-k2.5") {
         ModelPricing { input_per_m: 0.5, output_per_m: 2.0 }
     } else {
         return None;

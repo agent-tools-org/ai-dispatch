@@ -49,10 +49,10 @@ pub fn parse_batch_file(path: &Path) -> Result<BatchConfig> {
 pub fn validate_no_file_overlap(tasks: &[BatchTask]) -> Result<()> {
     let mut seen: HashSet<&str> = HashSet::new();
     for task in tasks {
-        if let Some(ref wt) = task.worktree {
-            if !seen.insert(wt.as_str()) {
-                anyhow::bail!("duplicate worktree: {}", wt);
-            }
+        if let Some(ref wt) = task.worktree
+            && !seen.insert(wt.as_str())
+        {
+            anyhow::bail!("duplicate worktree: {}", wt);
         }
     }
     Ok(())

@@ -45,10 +45,10 @@ fn run_loop(
 ) -> Result<()> {
     loop {
         terminal.draw(|frame| ui::render(frame, &app))?;
-        if event::poll(Duration::from_millis(250))? {
-            if let Event::Key(key) = event::read()? {
-                app.handle_key(key)?;
-            }
+        if event::poll(Duration::from_millis(250))?
+            && let Event::Key(key) = event::read()?
+        {
+            app.handle_key(key)?;
         }
         app.tick()?;
         if app.should_quit {

@@ -12,10 +12,6 @@ pub fn codex_commit_msg(msg: &str) -> String {
     format!("\nCommit with message: '{msg}'")
 }
 
-/// Verification command instruction
-pub fn codex_verify(cmd: &str) -> String {
-    format!("\nAfter changes, run: {cmd}. Fix any errors before committing.")
-}
 
 /// Inject all codex templates into a raw prompt
 pub fn inject_codex_prompt(raw: &str, commit_msg: Option<&str>) -> String {

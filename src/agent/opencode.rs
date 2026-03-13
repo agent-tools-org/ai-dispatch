@@ -163,10 +163,10 @@ fn extract_tokens_from_output(output: &str) -> Option<i64> {
     for line in output.lines().rev() {
         if let Some(pos) = line.find("tokens:") {
             let after = &line[pos + 7..];
-            if let Some(num) = after.trim().split_whitespace().next() {
-                if let Ok(n) = num.replace(',', "").parse::<i64>() {
-                    return Some(n);
-                }
+            if let Some(num) = after.split_whitespace().next()
+                && let Ok(n) = num.replace(',', "").parse::<i64>()
+            {
+                return Some(n);
             }
         }
     }

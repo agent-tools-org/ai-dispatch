@@ -66,12 +66,12 @@ pub fn review_text(store: &Arc<Store>, task_id: &str) -> Result<String> {
         return Ok(out);
     }
 
-    if let Some(ref log_path) = task.log_path {
-        if let Ok(log) = std::fs::read_to_string(log_path) {
-            out.push_str("\n--- Log ---\n");
-            out.push_str(&log);
-            return Ok(out);
-        }
+    if let Some(ref log_path) = task.log_path
+        && let Ok(log) = std::fs::read_to_string(log_path)
+    {
+        out.push_str("\n--- Log ---\n");
+        out.push_str(&log);
+        return Ok(out);
     }
 
     out.push_str("\n--- Artifacts ---\n  (no worktree diff or output file available)\n");

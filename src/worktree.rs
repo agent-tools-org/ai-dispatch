@@ -56,22 +56,6 @@ pub fn create_worktree(repo_dir: &Path, branch: &str) -> Result<WorktreeInfo> {
     Ok(WorktreeInfo { path: wt_path, branch: branch.to_string() })
 }
 
-pub fn remove_worktree(repo_dir: &Path, worktree_path: &Path) -> Result<()> {
-    let _ = Command::new("git")
-        .args(["-C", &repo_dir.to_string_lossy()])
-        .args(["worktree", "remove", "--force", &worktree_path.to_string_lossy()])
-        .output();
-    Ok(())
-}
-
-pub fn worktree_diff_stat(worktree_path: &Path) -> Result<String> {
-    let out = Command::new("git")
-        .args(["-C", &worktree_path.to_string_lossy()])
-        .args(["diff", "--stat", "HEAD~1"])
-        .output()
-        .context("Failed to run git diff --stat")?;
-    Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
-}
 
 #[cfg(test)]
 mod tests {

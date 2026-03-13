@@ -197,19 +197,21 @@ pub async fn run(store: Arc<Store>, args: RunArgs) -> Result<TaskId> {
     let (file_context, context_files) = if !args.context.is_empty() {
         let specs = crate::context::parse_context_specs(&args.context)?;
         let paths: Vec<String> = specs.iter().map(|s| s.file.clone()).collect();
-        if agent_kind == AgentKind::OpenCode || agent_kind == AgentKind::Kilo {
-            let hints: Vec<String> = specs
-                .iter()
-                .filter_map(|s| {
-                    s.items.as_ref().map(|items| {
-                        format!("Focus on: {} in {}", items.join(", "), s.file)
-                    })
+if agent_kind == AgentKind::OpenCode || agent_kind == AgentKind::Kilo {
+        let hints: Vec<String> = specs
+            .iter()
+            .filter_map(|s| {
+                s.items.as_ref().map(|items| {
+                    format!("Focus on: {} in {}", items.join(", "), s.file)
                 })
-                .collect();
-            (if hints.is_empty() { None } else { Some(hints.join("\n")) }, paths)
-        } else {
-            (Some(crate::context::resolve_context(&specs)?), vec![])
-        }
+            })
+            .collect();
+        (if hints.is_empty() { None } else { Some(hints.join("\n")) }, paths)
+    } else if agent::agent_has_fs_access(&agent_kind) {
+        (Some(crate::context::resolve_context_pointers(&specs)), vec![])
+    } else {
+        (Some(crate::context::resolve_context(&specs)?), vec![])
+    }
     } else {
         (None, vec![])
     };

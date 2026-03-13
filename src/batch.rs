@@ -45,6 +45,13 @@ pub fn parse_batch_file(path: &Path) -> Result<BatchConfig> {
             anyhow::bail!("unknown agent: {}", task.agent);
         }
     }
+    for task in &config.tasks {
+        if let Some(ref fallback) = task.fallback {
+            if !VALID_AGENTS.contains(&fallback.to_lowercase().as_str()) {
+                anyhow::bail!("unknown fallback agent: {}", fallback);
+            }
+        }
+    }
     validate_no_file_overlap(&config.tasks)?;
     validate_dag(&config.tasks)?;
     Ok(config)
@@ -235,5 +242,21 @@ mod tests {
         ];
         let err = validate_dag(&tasks).unwrap_err().to_string();
         assert!(err.contains("cycle"));
+    }
+    #[test]
+    fn rejects_unknown_fallback_agent() {
+        let f = write_temp(concat!(
+            "[[task]]\nagent = \"codex\"\nprompt = \"do something\"\n",
+            "fallback = \"unknown-agent\""
+        ));
+        assert!(parse_batch_file(f.path()).unwrap_err().to_string().contains("unknown fallback agent"));
+    }
+    #[test]
+    fn accepts_valid_fallback_agent() {
+        let f = write_temp(concat!(
+            "[[task]]\nagent = \"codex\"\nprompt = \"do something\"\n",
+            "fallback = \"opencode\""
+        ));
+        assert!(parse_batch_file(f.path()).is_ok());
     }
 }

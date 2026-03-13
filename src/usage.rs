@@ -141,7 +141,7 @@ fn collect_agent_rows(tasks: &[Task]) -> Vec<AgentUsageRow> {
 
         let done_count = agent_tasks
             .iter()
-            .filter(|task| task.status == TaskStatus::Done)
+            .filter(|task| matches!(task.status, TaskStatus::Done | TaskStatus::Merged))
             .count();
         let retry_count = agent_tasks
             .iter()
@@ -149,7 +149,7 @@ fn collect_agent_rows(tasks: &[Task]) -> Vec<AgentUsageRow> {
             .count();
         let completed_durations: Vec<i64> = agent_tasks
             .iter()
-            .filter(|task| matches!(task.status, TaskStatus::Done | TaskStatus::Failed))
+            .filter(|task| task.status.is_terminal())
             .filter_map(|task| task.duration_ms)
             .collect();
         let success_rate = (done_count as f64 * 100.0) / agent_tasks.len() as f64;

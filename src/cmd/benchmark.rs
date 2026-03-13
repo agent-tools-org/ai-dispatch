@@ -8,7 +8,7 @@ use tokio::time::{Duration, sleep};
 use crate::cmd::run::{self, RunArgs};
 use crate::cost;
 use crate::store::Store;
-use crate::types::{TaskId, TaskStatus};
+use crate::types::TaskId;
 
 pub async fn run(store: Arc<Store>, prompt: String, agents: String, dir: Option<String>, verify: Option<String>) -> Result<()> {
     let agent_list = parse_agents(&agents)?;
@@ -67,7 +67,7 @@ async fn wait_for_completion(store: &Arc<Store>, task_ids: &[(String, TaskId)]) 
                 all_done = false;
                 break;
             };
-            if !matches!(task.status, TaskStatus::Done | TaskStatus::Failed) {
+            if !task.status.is_terminal() {
                 all_done = false;
                 break;
             }

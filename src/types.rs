@@ -89,6 +89,7 @@ pub enum TaskStatus {
     Running,
     AwaitingInput,
     Done,
+    Merged,
     Failed,
 }
 
@@ -99,16 +100,22 @@ impl TaskStatus {
             Self::Running => "running",
             Self::AwaitingInput => "awaiting_input",
             Self::Done => "done",
+            Self::Merged => "merged",
             Self::Failed => "failed",
         }
     }
 
     pub fn parse_str(s: &str) -> Option<Self> {
+        Self::from_str(s)
+    }
+
+    pub fn from_str(s: &str) -> Option<Self> {
         match s {
             "pending" => Some(Self::Pending),
             "running" => Some(Self::Running),
             "awaiting_input" => Some(Self::AwaitingInput),
             "done" => Some(Self::Done),
+            "merged" => Some(Self::Merged),
             "failed" => Some(Self::Failed),
             _ => None,
         }
@@ -120,8 +127,13 @@ impl TaskStatus {
             Self::Running => "RUN",
             Self::AwaitingInput => "AWAIT",
             Self::Done => "DONE",
+            Self::Merged => "MERGED",
             Self::Failed => "FAIL",
         }
+    }
+
+    pub fn is_terminal(&self) -> bool {
+        matches!(self, Self::Done | Self::Merged | Self::Failed)
     }
 }
 

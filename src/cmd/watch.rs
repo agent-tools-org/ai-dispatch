@@ -33,9 +33,7 @@ pub async fn run(store: &Arc<Store>, task_id: Option<&str>, group: Option<&str>,
                     print!("{}", render_task_detail(&task, &events, retry_chain));
 
                     // Exit when task is done
-                    if task.status == crate::types::TaskStatus::Done
-                        || task.status == crate::types::TaskStatus::Failed
-                    {
+                    if task.status.is_terminal() {
                         println!("\nTask completed. Exiting watch.");
                         return Ok(());
                     }

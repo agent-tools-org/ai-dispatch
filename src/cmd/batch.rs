@@ -262,7 +262,7 @@ fn wait_for_any_completion(
         let mut completed = Vec::new();
         for (i, (_, task_id)) in active.iter().enumerate() {
             if let Some(task) = store.get_task(task_id)? {
-                if matches!(task.status, TaskStatus::Done | TaskStatus::Failed) {
+                if task.status.is_terminal() {
                     completed.push(i);
                 }
             }
@@ -311,7 +311,7 @@ fn load_task_outcome(store: &Arc<Store>, task_id: &str) -> Result<BatchTaskOutco
         anyhow::bail!("batch task not found after dispatch: {task_id}");
     };
     Ok(match task.status {
-        TaskStatus::Done => BatchTaskOutcome::Done,
+        TaskStatus::Done | TaskStatus::Merged => BatchTaskOutcome::Done,
         TaskStatus::Pending | TaskStatus::Running | TaskStatus::AwaitingInput | TaskStatus::Failed => BatchTaskOutcome::Failed,
     })
 }

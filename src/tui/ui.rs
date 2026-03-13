@@ -84,7 +84,7 @@ fn render_board(frame: &mut ratatui::Frame<'_>, app: &App) {
     }
     frame.render_stateful_widget(table, chunks[1], &mut state);
 
-    let done = app.tasks.iter().filter(|task| task.status == TaskStatus::Done).count();
+    let done = app.tasks.iter().filter(|task| matches!(task.status, TaskStatus::Done | TaskStatus::Merged)).count();
     let running = app.tasks.iter().filter(|task| matches!(task.status, TaskStatus::Running | TaskStatus::AwaitingInput)).count();
     let status = format!(
         "Scope: {} | Tasks: {} | Done: {} | Running: {} | d=dashboard j/k=nav Enter=detail q=quit",
@@ -233,7 +233,7 @@ fn task_progress(app: &App, task: &Task) -> String {
 
 fn status_style(status: TaskStatus) -> Style {
     match status {
-        TaskStatus::Done => Style::default().fg(Color::Green),
+        TaskStatus::Done | TaskStatus::Merged => Style::default().fg(Color::Green),
         TaskStatus::Running => Style::default().fg(Color::Yellow),
         TaskStatus::AwaitingInput => Style::default().fg(Color::Magenta),
         TaskStatus::Failed => Style::default().fg(Color::Red),

@@ -12,8 +12,16 @@ pub struct AidConfig {
     pub usage: UsageConfig,
     #[serde(default)]
     pub background: BackgroundConfig,
+    #[serde(default)]
+    pub selection: SelectionConfig,
     #[serde(default, rename = "webhook")]
     pub webhooks: Vec<WebhookConfig>,
+}
+
+#[derive(Debug, Clone, Default, Deserialize)]
+pub struct SelectionConfig {
+    #[serde(default)]
+    pub budget_mode: bool,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -158,5 +166,18 @@ mod tests {
             config.webhooks[0].headers[0],
             ("Authorization".to_string(), "Bearer token".to_string())
         );
+    }
+
+    #[test]
+    fn parses_selection_budget_mode() {
+        let config: AidConfig = toml::from_str(
+            r#"
+            [selection]
+            budget_mode = true
+            "#,
+        )
+        .unwrap();
+
+        assert!(config.selection.budget_mode);
     }
 }

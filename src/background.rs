@@ -111,6 +111,7 @@ async fn run_task_inner(store: &Arc<Store>, spec: &BackgroundRunSpec) -> Result<
         dir: spec.dir.clone(),
         output: spec.output.clone(),
         model: spec.model.clone(),
+        budget: false,
     };
     let mut std_cmd = agent
         .build_command(&spec.prompt, &opts)

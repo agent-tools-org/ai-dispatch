@@ -54,6 +54,7 @@ fn select_agent_from(prompt: &str, opts: &RunOpts, available: &[AgentKind]) -> (
     let prompt_len = prompt.chars().count();
     let file_count = count_file_mentions(&normalized);
     let has_workspace = opts.dir.is_some();
+    let budget = opts.budget;
     let candidates = [
         Candidate {
             kind: AgentKind::Gemini,
@@ -62,7 +63,7 @@ fn select_agent_from(prompt: &str, opts: &RunOpts, available: &[AgentKind]) -> (
         },
         Candidate {
             kind: AgentKind::OpenCode,
-            score: score_opencode(&normalized, file_count, prompt_len),
+            score: score_opencode(&normalized, file_count, prompt_len, budget),
             reason: "simple edit task",
         },
         Candidate {
@@ -72,7 +73,7 @@ fn select_agent_from(prompt: &str, opts: &RunOpts, available: &[AgentKind]) -> (
         },
         Candidate {
             kind: AgentKind::Codex,
-            score: score_codex(&normalized, file_count, prompt_len),
+            score: score_codex(&normalized, file_count, prompt_len, budget),
             reason: codex_reason(&normalized, file_count, prompt_len),
         },
     ];
@@ -82,11 +83,14 @@ fn select_agent_from(prompt: &str, opts: &RunOpts, available: &[AgentKind]) -> (
     } else {
         best_candidate(&candidates, Some(available))
     };
-    let reason = if selected.kind == primary.kind {
+    let mut reason = if selected.kind == primary.kind {
         selected.reason.to_string()
     } else {
         format!("{}; {} unavailable", primary.reason, primary.kind.as_str())
     };
+    if budget {
+        reason.push_str("; budget mode: preferring cheaper agent");
+    }
     (selected.kind, reason)
 }
 
@@ -124,16 +128,19 @@ fn score_gemini(prompt: &str, has_workspace: bool) -> i32 {
     score
 }
 
-fn score_opencode(prompt: &str, file_count: usize, prompt_len: usize) -> i32 {
-    if !contains_any(prompt, SIMPLE_EDIT_TERMS) {
-        return 0;
+fn score_opencode(prompt: &str, file_count: usize, prompt_len: usize, budget: bool) -> i32 {
+    let mut score = 0;
+    if contains_any(prompt, SIMPLE_EDIT_TERMS) {
+        score += 4;
+        if file_count == 1 {
+            score += 2;
+        }
+        if prompt_len < 200 {
+            score += 2;
+        }
     }
-    let mut score = 4;
-    if file_count == 1 {
-        score += 2;
-    }
-    if prompt_len < 200 {
-        score += 2;
+    if budget {
+        score += 4;
     }
     score
 }
@@ -146,7 +153,7 @@ fn score_cursor(prompt: &str) -> i32 {
     }
 }
 
-fn score_codex(prompt: &str, file_count: usize, prompt_len: usize) -> i32 {
+fn score_codex(prompt: &str, file_count: usize, prompt_len: usize, budget: bool) -> i32 {
     let mut score = 1;
     if contains_any(prompt, COMPLEX_TERMS) {
         score += 4;
@@ -156,6 +163,9 @@ fn score_codex(prompt: &str, file_count: usize, prompt_len: usize) -> i32 {
     }
     if file_count > 1 || prompt.contains(" modules") || prompt.contains(" files") {
         score += 2;
+    }
+    if budget {
+        score = (score - 8).max(0);
     }
     score
 }
@@ -256,11 +266,27 @@ mod tests {
         assert_eq!(reason, "simple edit task; opencode unavailable");
     }
 
+    #[test]
+    fn budget_mode_avoids_codex_for_complex_tasks() {
+        let prompt =
+            "Implement a retry-aware test suite across src/main.rs and src/cmd/run.rs. Add validation coverage.";
+        let opts = RunOpts {
+            dir: Some("src".to_string()),
+            output: None,
+            model: None,
+            budget: true,
+        };
+        let (kind, reason) = select_agent_from(prompt, &opts, &available_agents());
+        assert_ne!(kind, AgentKind::Codex);
+        assert!(reason.contains("budget"));
+    }
+
     fn select(prompt: &str, dir: &[&str], available: &[AgentKind]) -> (AgentKind, String) {
         let opts = RunOpts {
             dir: dir.first().map(|value| value.to_string()),
             output: None,
             model: None,
+            budget: false,
         };
         select_agent_from(prompt, &opts, available)
     }

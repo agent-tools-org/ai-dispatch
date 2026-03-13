@@ -64,6 +64,9 @@ enum Commands {
         /// Model override (for opencode)
         #[arg(short, long)]
         model: Option<String>,
+        /// Prefer cheaper agents (avoid codex when quota is low)
+        #[arg(long)]
+        budget: bool,
         /// Run in a git worktree branch
         #[arg(short, long)]
         worktree: Option<String>,
@@ -251,6 +254,7 @@ async fn main() -> Result<()> {
             dir,
             output,
             model,
+            budget,
             worktree,
             group,
             verify,
@@ -262,6 +266,8 @@ async fn main() -> Result<()> {
             bg,
             on_done,
         } => {
+            let config = config::load_config().unwrap_or_default();
+            let budget = budget || config.selection.budget_mode;
             let agent_name = if agent == "auto" {
                 let selection_opts = agent::RunOpts {
                     dir: dir
@@ -270,6 +276,7 @@ async fn main() -> Result<()> {
                         .or_else(|| worktree.as_ref().map(|_| ".".to_string())),
                     output: output.clone(),
                     model: model.clone(),
+                    budget,
                 };
                 let (selected, reason) = agent::select_agent_with_reason(&prompt, &selection_opts);
                 eprintln!("[aid] Auto-selected agent: {selected} (reason: {reason})");

@@ -41,6 +41,7 @@ pub struct RunOpts {
     pub dir: Option<String>,
     pub output: Option<String>,
     pub model: Option<String>,
+    pub budget: bool,
 }
 
 /// Detect which agents are installed on the system

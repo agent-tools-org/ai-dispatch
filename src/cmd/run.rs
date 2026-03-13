@@ -204,6 +204,7 @@ pub async fn run(store: Arc<Store>, args: RunArgs) -> Result<TaskId> {
         dir: effective_dir.clone(),
         output: args.output.clone(),
         model: args.model.clone(),
+        budget: false,
     };
 
     if args.background {

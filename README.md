@@ -1,12 +1,12 @@
 # ai-dispatch (aid)
 
-![Version](https://img.shields.io/badge/version-2.1.0-blue)
+![Version](https://img.shields.io/badge/version-2.2.0-blue)
 ![Rust](https://img.shields.io/badge/rust-2024-orange)
-![License](https://img.shields.io/badge/license-not%20specified-lightgrey)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
 `aid` is a Multi-AI CLI Team Orchestrator written in Rust. It lets a human dispatcher or a primary AI such as Claude Code delegate work to multiple AI CLI tools, track progress, inspect artifacts, enforce methodology, and iterate through one consistent interface.
 
-The current repository snapshot does not declare a license file or license metadata in `Cargo.toml`, so the badge above intentionally reports `not specified`.
+Licensed under the [MIT License](LICENSE).
 
 ## Why aid?
 

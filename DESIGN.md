@@ -423,12 +423,12 @@ ai-dispatch/
 - Skill injection (`aid run --skill implementer` — methodology from `~/.aid/skills/`)
 - Milestone reporting (agent progress stages visible in `aid watch`)
 
-### v1.2 in progress
+### v1.2 delivered
 
 - Session-scoped message bus (workgroup milestones auto-injected into new task prompts)
 - Interactive input forwarding (PTY-based, `aid respond` command)
 
-### v1.3 planned
+### v1.3 delivered
 
 - Skill auto-apply (auto-inject implementer for code tasks, researcher for ask tasks)
 - Enforce commit for worktree tasks (auto-commit or mark incomplete if uncommitted changes)
@@ -436,10 +436,11 @@ ai-dispatch/
 - MCP skill support (expose `skills` param in aid_run MCP tool)
 - Session cost summary (`aid usage --session`)
 
-### Future
+### v2.0+ delivered
 
 - Task completion hooks (`--on-done "command"` callback for event-driven orchestration)
 - Batch file auto-archive (save to ~/.aid/batches/ after dispatch)
 - Max task duration with auto-fail (aggressive zombie cleanup)
-- Auto-retry on failure with exponential backoff
 - Cost tracking with configurable per-model pricing
+- Budget-aware agent selection
+- Completion notification feed

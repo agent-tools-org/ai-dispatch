@@ -106,4 +106,50 @@ mod tests {
         store.insert_task(&task("t-root")).unwrap();
         assert_eq!(retry_depth(&store, None).unwrap(), 0);
     }
+
+    #[test]
+    fn test_retry_depth_with_chain() {
+        let store = Store::open_memory().unwrap();
+        let mut t_root = task("t-root");
+        t_root.parent_task_id = None;
+        store.insert_task(&t_root).unwrap();
+
+        let mut t_r1 = task("t-r1");
+        t_r1.parent_task_id = Some("t-root".to_string());
+        store.insert_task(&t_r1).unwrap();
+
+        let mut t_r2 = task("t-r2");
+        t_r2.parent_task_id = Some("t-r1".to_string());
+        store.insert_task(&t_r2).unwrap();
+
+        assert_eq!(retry_depth(&store, Some("t-root")).unwrap(), 1);
+        assert_eq!(retry_depth(&store, Some("t-r1")).unwrap(), 2);
+    }
+
+    #[test]
+    fn test_root_prompt_walks_chain() {
+        let store = Store::open_memory().unwrap();
+        let mut t_root = task("root");
+        t_root.prompt = "original".to_string();
+        t_root.parent_task_id = None;
+        store.insert_task(&t_root).unwrap();
+
+        let mut t_r1 = task("r1");
+        t_r1.prompt = "retry1".to_string();
+        t_r1.parent_task_id = Some("root".to_string());
+        store.insert_task(&t_r1).unwrap();
+
+        let mut t_r2 = task("r2");
+        t_r2.prompt = "retry2".to_string();
+        t_r2.parent_task_id = Some("r1".to_string());
+        store.insert_task(&t_r2).unwrap();
+
+        let r2_task = store.get_task("r2").unwrap().unwrap();
+        assert_eq!(root_prompt(&store, &r2_task), Some("original".to_string()));
+    }
+
+    #[test]
+    fn test_backoff_capped() {
+        assert_eq!(backoff_for_attempt(10), backoff_for_attempt(3));
+    }
 }

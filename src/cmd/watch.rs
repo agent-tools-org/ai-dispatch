@@ -11,9 +11,9 @@ use crate::types::TaskFilter;
 
 /// Run the watch dashboard, refreshing every second.
 /// With `quiet`, delegates to wait logic (silent blocking).
-pub async fn run(store: &Arc<Store>, task_id: Option<&str>, group: Option<&str>, quiet: bool) -> Result<()> {
+pub async fn run(store: &Arc<Store>, task_id: Option<&str>, group: Option<&str>, quiet: bool, exit_on_await: bool) -> Result<()> {
     if quiet {
-        return crate::cmd::wait::run(store, task_id).await;
+        return crate::cmd::wait::run(store, task_id, exit_on_await).await;
     }
 
     loop {

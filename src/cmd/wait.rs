@@ -9,7 +9,7 @@ use tokio::time::{sleep, Duration};
 use crate::store::Store;
 use crate::types::{TaskFilter, TaskStatus};
 
-pub async fn run(store: &Arc<Store>, task_id: Option<&str>) -> Result<()> {
+pub async fn run(store: &Arc<Store>, task_id: Option<&str>, exit_on_await: bool) -> Result<()> {
     let task_ids = match task_id {
         Some(task_id) => vec![task_id.to_string()],
         None => current_running_ids(store)?,
@@ -21,10 +21,10 @@ pub async fn run(store: &Arc<Store>, task_id: Option<&str>) -> Result<()> {
     }
 
     println!("Waiting for {} task(s): {}", task_ids.len(), task_ids.join(", "));
-    wait_for_task_ids(store, &task_ids).await
+    wait_for_task_ids(store, &task_ids, exit_on_await).await
 }
 
-pub async fn wait_for_task_ids(store: &Arc<Store>, task_ids: &[String]) -> Result<()> {
+pub async fn wait_for_task_ids(store: &Arc<Store>, task_ids: &[String], exit_on_await: bool) -> Result<()> {
     let mut last_seen = HashMap::new();
 
     loop {
@@ -40,6 +40,23 @@ pub async fn wait_for_task_ids(store: &Arc<Store>, task_ids: &[String]) -> Resul
             let changed = last_seen.insert(task_id.clone(), status_text.clone()) != Some(status_text);
             if changed {
                 println!("{} {}", task_id, task.status.label());
+            }
+
+            if exit_on_await && status == TaskStatus::AwaitingInput && changed {
+                let events = store.get_events(task_id)?;
+                let prompt = events
+                    .iter()
+                    .rev()
+                    .find_map(|e| {
+                        e.metadata
+                            .as_ref()
+                            .and_then(|m| m.get("awaiting_prompt"))
+                            .and_then(|v| v.as_str())
+                    })
+                    .unwrap_or("");
+                println!("{} {}", task_id, prompt);
+                println!("Use: aid respond {} \"your answer\"", task_id);
+                return Ok(());
             }
 
             if matches!(status, TaskStatus::Pending | TaskStatus::Running | TaskStatus::AwaitingInput) {

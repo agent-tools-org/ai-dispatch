@@ -145,6 +145,9 @@ enum Commands {
         /// Silent blocking wait (replaces `aid wait`)
         #[arg(long)]
         quiet: bool,
+        /// Exit when task enters AwaitingInput, print task ID and prompt
+        #[arg(long)]
+        exit_on_await: bool,
     },
     /// List all tasks with status
     Board {
@@ -373,8 +376,9 @@ async fn main() -> Result<()> {
             group,
             tui: false,
             quiet,
+            exit_on_await,
         } => {
-            cmd::watch::run(&store, task_id.as_deref(), group.as_deref(), quiet).await?;
+            cmd::watch::run(&store, task_id.as_deref(), group.as_deref(), quiet, exit_on_await).await?;
         }
         Commands::Board {
             running,

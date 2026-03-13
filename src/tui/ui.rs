@@ -16,12 +16,15 @@ use ratatui::widgets::{
 };
 
 use super::app::App;
+use super::dashboard;
 use crate::cost;
 use crate::types::{Task, TaskStatus};
 
 pub fn render(frame: &mut ratatui::Frame<'_>, app: &App) {
     if app.detail_mode {
         render_detail(frame, app);
+    } else if app.dashboard_mode {
+        dashboard::render_dashboard(frame, app);
     } else {
         render_board(frame, app);
     }
@@ -84,7 +87,7 @@ fn render_board(frame: &mut ratatui::Frame<'_>, app: &App) {
     let done = app.tasks.iter().filter(|task| task.status == TaskStatus::Done).count();
     let running = app.tasks.iter().filter(|task| matches!(task.status, TaskStatus::Running | TaskStatus::AwaitingInput)).count();
     let status = format!(
-        "Scope: {} | Tasks: {} | Done: {} | Running: {} | q=quit j/k=nav Enter=detail",
+        "Scope: {} | Tasks: {} | Done: {} | Running: {} | d=dashboard j/k=nav Enter=detail q=quit",
         app.scope_label(),
         app.tasks.len(),
         done,

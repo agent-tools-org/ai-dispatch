@@ -9,7 +9,7 @@ use std::sync::Arc;
 use super::metrics::{ProcessMetrics, get_process_metrics};
 use crate::background;
 use crate::store::Store;
-use crate::types::{Task, TaskEvent, TaskFilter};
+use crate::types::{EventKind, Task, TaskEvent, TaskFilter};
 
 pub struct App {
     pub tasks: Vec<Task>,
@@ -18,6 +18,7 @@ pub struct App {
     pub milestones: HashMap<String, String>,
     pub selected: usize,
     pub detail_mode: bool,
+    pub dashboard_mode: bool,
     pub should_quit: bool,
     task_id_filter: Option<String>,
     group_filter: Option<String>,
@@ -33,6 +34,7 @@ impl App {
             milestones: HashMap::new(),
             selected: 0,
             detail_mode: false,
+            dashboard_mode: false,
             should_quit: false,
             task_id_filter: options.task_id,
             group_filter: options.group,
@@ -44,6 +46,9 @@ impl App {
 
     pub fn tick(&mut self) -> Result<()> {
         self.reload_tasks()?;
+        if self.dashboard_mode {
+            self.load_dashboard_events()?;
+        }
         if self.detail_mode {
             self.load_selected_events()?;
         }
@@ -53,6 +58,7 @@ impl App {
     pub fn handle_key(&mut self, key: KeyEvent) -> Result<()> {
         match key.code {
             KeyCode::Char('q') => self.should_quit = true,
+            KeyCode::Char('d') => self.dashboard_mode = !self.dashboard_mode,
             KeyCode::Down | KeyCode::Char('j') if !self.detail_mode => self.next(),
             KeyCode::Up | KeyCode::Char('k') if !self.detail_mode => self.previous(),
             KeyCode::Enter if !self.detail_mode => {
@@ -83,6 +89,9 @@ impl App {
     pub fn get_milestone(&self, task_id: &str) -> Option<&str> {
         self.milestones.get(task_id).map(String::as_str)
     }
+    pub fn task_milestones(&self, task_id: &str) -> Vec<String> {
+        self.events_cache.get(task_id).map(|events| events.iter().filter(|event| event.event_kind == EventKind::Milestone).map(|event| event.detail.clone()).collect()).unwrap_or_default()
+    }
 
     pub fn scope_label(&self) -> String {
         match (self.task_id_filter.as_deref(), self.group_filter.as_deref()) {
@@ -103,6 +112,13 @@ impl App {
         };
         let events = self.store.get_events(&task_id)?;
         self.events_cache.insert(task_id, events);
+        Ok(())
+    }
+
+    fn load_dashboard_events(&mut self) -> Result<()> {
+        for task_id in self.tasks.iter().filter(|task| matches!(task.status, crate::types::TaskStatus::Running | crate::types::TaskStatus::AwaitingInput)).map(|task| task.id.as_str().to_string()) {
+            self.events_cache.insert(task_id.clone(), self.store.get_events(&task_id)?);
+        }
         Ok(())
     }
 

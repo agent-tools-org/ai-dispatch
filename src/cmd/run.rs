@@ -18,6 +18,8 @@ use crate::templates;
 use crate::types::*;
 use crate::watcher;
 
+pub const NO_SKILL_SENTINEL: &str = "__aid_no_skill__";
+
 #[derive(Clone)]
 pub struct RunArgs {
     pub agent_name: String,
@@ -36,6 +38,24 @@ pub struct RunArgs {
     pub parent_task_id: Option<String>,
 }
 
+fn effective_skills(agent_kind: &AgentKind, args: &RunArgs) -> Vec<String> {
+    let manual_skills: Vec<String> = args
+        .skills
+        .iter()
+        .filter(|skill| skill.as_str() != NO_SKILL_SENTINEL)
+        .cloned()
+        .collect();
+    if !manual_skills.is_empty()
+        || args
+            .skills
+            .iter()
+            .any(|skill| skill.as_str() == NO_SKILL_SENTINEL)
+    {
+        return manual_skills;
+    }
+    skills::auto_skills(agent_kind, args.worktree.is_some())
+}
+
 pub async fn run(store: Arc<Store>, args: RunArgs) -> Result<TaskId> {
     let agent_kind = AgentKind::parse_str(&args.agent_name).ok_or_else(|| {
         anyhow::anyhow!(
@@ -43,6 +63,12 @@ pub async fn run(store: Arc<Store>, args: RunArgs) -> Result<TaskId> {
             args.agent_name
         )
     })?;
+    let requested_skills = effective_skills(&agent_kind, &args);
+    if args.skills.is_empty() {
+        for skill in &requested_skills {
+            eprintln!("[aid] Auto-applied skill: {skill}");
+        }
+    }
 
     let agent = agent::get_agent(agent_kind);
     let task_id = TaskId::generate();
@@ -99,8 +125,8 @@ pub async fn run(store: Arc<Store>, args: RunArgs) -> Result<TaskId> {
         workgroup.as_ref(),
         &milestones,
     );
-    if !args.skills.is_empty() {
-        let skill_text = skills::load_skills(&args.skills)?;
+    if !requested_skills.is_empty() {
+        let skill_text = skills::load_skills(&requested_skills)?;
         effective_prompt = format!("{effective_prompt}\n\n--- Methodology ---\n{skill_text}");
     }
     effective_prompt = templates::inject_milestone_prompt(&effective_prompt);
@@ -417,4 +443,59 @@ fn load_workgroup(store: &Store, group_id: Option<&str>) -> Result<Option<Workgr
         .get_workgroup(group_id)?
         .ok_or_else(|| anyhow::anyhow!("Workgroup '{}' not found", group_id))
         .map(Some)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn run_args(skills: Vec<String>) -> RunArgs {
+        RunArgs {
+            agent_name: "codex".to_string(),
+            prompt: "prompt".to_string(),
+            dir: None,
+            output: None,
+            model: None,
+            worktree: None,
+            group: None,
+            verify: None,
+            retry: 0,
+            context: vec![],
+            skills,
+            background: false,
+            announce: false,
+            parent_task_id: None,
+        }
+    }
+
+    #[test]
+    fn effective_skills_auto_apply_defaults() {
+        let temp = tempfile::tempdir().unwrap();
+        let _aid_home = crate::paths::AidHomeGuard::set(temp.path());
+        let dir = crate::paths::aid_dir().join("skills");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("implementer.md"), "# Implementer").unwrap();
+
+        assert_eq!(
+            effective_skills(&AgentKind::Codex, &run_args(vec![])),
+            vec!["implementer"]
+        );
+    }
+
+    #[test]
+    fn effective_skills_respect_no_skill_sentinel() {
+        let temp = tempfile::tempdir().unwrap();
+        let _aid_home = crate::paths::AidHomeGuard::set(temp.path());
+        let dir = crate::paths::aid_dir().join("skills");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("implementer.md"), "# Implementer").unwrap();
+
+        assert!(
+            effective_skills(
+                &AgentKind::Codex,
+                &run_args(vec![NO_SKILL_SENTINEL.to_string()])
+            )
+            .is_empty()
+        );
+    }
 }

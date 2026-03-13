@@ -1,8 +1,9 @@
 // Skill loading for methodology prompt injection.
-// Exports: load_skill(), load_skills(), list_skills().
-// Deps: crate::paths, anyhow, std::fs.
+// Exports: load_skill(), load_skills(), list_skills(), auto_skills().
+// Deps: crate::paths, crate::types, anyhow, std::fs.
 
 use anyhow::{Context, Result};
+use crate::types::AgentKind;
 
 fn skills_dir() -> std::path::PathBuf {
     crate::paths::aid_dir().join("skills")
@@ -47,6 +48,22 @@ pub fn list_skills() -> Result<Vec<String>> {
     Ok(skills)
 }
 
+pub fn auto_skills(agent: &AgentKind, has_worktree: bool) -> Vec<String> {
+    let _ = has_worktree;
+    let available = list_skills().unwrap_or_default();
+    let mut skills = Vec::new();
+    match agent {
+        AgentKind::Codex | AgentKind::OpenCode | AgentKind::Cursor => {
+            skills.push("implementer".to_string());
+        }
+        AgentKind::Gemini => {
+            skills.push("researcher".to_string());
+        }
+    }
+    skills.retain(|skill| available.iter().any(|available_skill| available_skill == skill));
+    skills
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -62,5 +79,31 @@ mod tests {
 
         assert_eq!(load_skill("test-writer").unwrap(), "# Test Writer");
         assert_eq!(list_skills().unwrap(), vec!["reviewer", "test-writer"]);
+    }
+
+    #[test]
+    fn auto_skills_returns_agent_defaults_when_installed() {
+        let temp = tempfile::tempdir().unwrap();
+        let _aid_home = crate::paths::AidHomeGuard::set(temp.path());
+        let dir = skills_dir();
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("implementer.md"), "# Implementer").unwrap();
+        std::fs::write(dir.join("researcher.md"), "# Researcher").unwrap();
+
+        assert_eq!(auto_skills(&AgentKind::Codex, false), vec!["implementer"]);
+        assert_eq!(auto_skills(&AgentKind::OpenCode, false), vec!["implementer"]);
+        assert_eq!(auto_skills(&AgentKind::Cursor, true), vec!["implementer"]);
+        assert_eq!(auto_skills(&AgentKind::Gemini, false), vec!["researcher"]);
+    }
+
+    #[test]
+    fn auto_skills_skips_missing_defaults() {
+        let temp = tempfile::tempdir().unwrap();
+        let _aid_home = crate::paths::AidHomeGuard::set(temp.path());
+        let dir = skills_dir();
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("implementer.md"), "# Implementer").unwrap();
+
+        assert!(auto_skills(&AgentKind::Gemini, false).is_empty());
     }
 }

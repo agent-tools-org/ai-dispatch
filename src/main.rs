@@ -76,6 +76,9 @@ enum Commands {
         /// Methodology skills to inject
         #[arg(long)]
         skill: Vec<String>,
+        /// Disable automatic skill injection
+        #[arg(long, conflicts_with = "skill")]
+        no_skill: bool,
         /// Run in background
         #[arg(long)]
         bg: bool,
@@ -204,6 +207,7 @@ async fn main() -> Result<()> {
             retry,
             context,
             skill,
+            no_skill,
             bg,
         } => {
             let agent_name = if agent == "auto" {
@@ -220,6 +224,11 @@ async fn main() -> Result<()> {
             } else {
                 agent
             };
+            let skills = if no_skill {
+                vec![cmd::run::NO_SKILL_SENTINEL.to_string()]
+            } else {
+                skill
+            };
             let _ = cmd::run::run(
                 store,
                 cmd::run::RunArgs {
@@ -233,7 +242,7 @@ async fn main() -> Result<()> {
                     verify,
                     retry,
                     context,
-                    skills: skill,
+                    skills,
                     background: bg,
                     announce: true,
                     parent_task_id: None,

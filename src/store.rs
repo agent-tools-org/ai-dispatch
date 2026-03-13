@@ -264,8 +264,8 @@ impl Store {
                 "SELECT id, agent, prompt, status, parent_task_id, workgroup_id, caller_kind,
                  caller_session_id, worktree_path, worktree_branch, log_path, output_path,
                  tokens, duration_ms, model, cost_usd, created_at, completed_at
-                 FROM tasks WHERE status = ?1 ORDER BY created_at DESC",
-                vec!["running".to_string()],
+                 FROM tasks WHERE status IN (?1, ?2) ORDER BY created_at DESC",
+                vec!["running".to_string(), "awaiting_input".to_string()],
             ),
             TaskFilter::Today => (
                 "SELECT id, agent, prompt, status, parent_task_id, workgroup_id, caller_kind,
@@ -414,11 +414,14 @@ mod tests {
     fn list_running_filter() {
         let store = Store::open_memory().unwrap();
         store.insert_task(&make_task("t-0010", AgentKind::Codex, TaskStatus::Running)).unwrap();
+        store.insert_task(&make_task("t-0012", AgentKind::Cursor, TaskStatus::AwaitingInput)).unwrap();
         store.insert_task(&make_task("t-0011", AgentKind::Gemini, TaskStatus::Done)).unwrap();
 
         let running = store.list_tasks(TaskFilter::Running).unwrap();
-        assert_eq!(running.len(), 1);
-        assert_eq!(running[0].id.as_str(), "t-0010");
+        assert_eq!(running.len(), 2);
+        let ids = running.into_iter().map(|task| task.id.0).collect::<Vec<_>>();
+        assert!(ids.contains(&"t-0010".to_string()));
+        assert!(ids.contains(&"t-0012".to_string()));
     }
 
     #[test]

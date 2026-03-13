@@ -142,7 +142,7 @@ fn count_statuses(tasks: &[Task]) -> (usize, usize, usize) {
     for t in tasks {
         match t.status {
             TaskStatus::Done => done += 1,
-            TaskStatus::Running => running += 1,
+            TaskStatus::Running | TaskStatus::AwaitingInput => running += 1,
             TaskStatus::Failed => failed += 1,
             TaskStatus::Pending => {}
         }

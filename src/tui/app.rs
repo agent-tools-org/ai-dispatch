@@ -143,7 +143,7 @@ impl App {
         let mut metrics = HashMap::new();
         for task in tasks
             .iter()
-            .filter(|task| matches!(task.status, crate::types::TaskStatus::Running))
+            .filter(|task| matches!(task.status, crate::types::TaskStatus::Running | crate::types::TaskStatus::AwaitingInput))
         {
             let Ok(Some(pid)) = background::load_worker_pid(task.id.as_str()) else {
                 continue;
@@ -160,7 +160,7 @@ impl App {
         let mut milestones = HashMap::new();
         for task in tasks
             .iter()
-            .filter(|task| matches!(task.status, crate::types::TaskStatus::Running))
+            .filter(|task| matches!(task.status, crate::types::TaskStatus::Running | crate::types::TaskStatus::AwaitingInput))
         {
             if let Some(milestone) = self.store.latest_milestone(task.id.as_str())? {
                 milestones.insert(task.id.as_str().to_string(), milestone);

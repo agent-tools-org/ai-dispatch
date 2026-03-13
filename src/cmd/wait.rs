@@ -42,7 +42,7 @@ pub async fn wait_for_task_ids(store: &Arc<Store>, task_ids: &[String]) -> Resul
                 println!("{} {}", task_id, task.status.label());
             }
 
-            if matches!(status, TaskStatus::Pending | TaskStatus::Running) {
+            if matches!(status, TaskStatus::Pending | TaskStatus::Running | TaskStatus::AwaitingInput) {
                 remaining += 1;
             }
         }

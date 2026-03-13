@@ -43,6 +43,10 @@ pub fn job_path(task_id: &str) -> PathBuf {
     jobs_dir().join(format!("{task_id}.json"))
 }
 
+pub fn job_input_path(task_id: &str) -> PathBuf {
+    jobs_dir().join(format!("{task_id}.input"))
+}
+
 pub fn ensure_dirs() -> Result<()> {
     std::fs::create_dir_all(logs_dir())?;
     std::fs::create_dir_all(jobs_dir())?;
@@ -99,6 +103,7 @@ mod tests {
         assert!(jobs_dir().starts_with(&base));
         assert!(logs_dir().starts_with(&base));
         assert!(job_path("t-1234").starts_with(&base));
+        assert!(job_input_path("t-1234").starts_with(&base));
         assert!(log_path("t-1234").starts_with(&base));
     }
 }

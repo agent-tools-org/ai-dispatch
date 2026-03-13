@@ -46,17 +46,7 @@ pub async fn watch_streaming(
         log_file.write_all(line.as_bytes()).await?;
         log_file.write_all(b"\n").await?;
 
-        // Parse event
-        if let Some(event) = parse_milestone_event(task_id, &line) {
-            store.insert_event(&event)?;
-            event_count += 1;
-            continue;
-        }
-        if let Some(event) = agent.parse_event(task_id, &line) {
-            apply_completion_event(&mut info, &event);
-            store.insert_event(&event)?;
-            event_count += 1;
-        }
+        handle_streaming_line(agent, task_id, store, &mut info, &mut event_count, &line)?;
     }
 
     // Wait for stderr to finish
@@ -205,6 +195,27 @@ fn apply_completion_event(info: &mut CompletionInfo, event: &TaskEvent) {
     if let Some(cost_usd) = metadata.get("cost_usd").and_then(|value| value.as_f64()) {
         info.cost_usd = Some(cost_usd);
     }
+}
+
+pub(crate) fn handle_streaming_line(
+    agent: &dyn Agent,
+    task_id: &TaskId,
+    store: &Arc<Store>,
+    info: &mut CompletionInfo,
+    event_count: &mut u32,
+    line: &str,
+) -> Result<()> {
+    if let Some(event) = parse_milestone_event(task_id, line) {
+        store.insert_event(&event)?;
+        *event_count += 1;
+        return Ok(());
+    }
+    if let Some(event) = agent.parse_event(task_id, line) {
+        apply_completion_event(info, &event);
+        store.insert_event(&event)?;
+        *event_count += 1;
+    }
+    Ok(())
 }
 
 fn parse_milestone_event(task_id: &TaskId, line: &str) -> Option<TaskEvent> {

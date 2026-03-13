@@ -273,6 +273,6 @@ fn load_task_outcome(store: &Arc<Store>, task_id: &str) -> Result<BatchTaskOutco
     };
     Ok(match task.status {
         TaskStatus::Done => BatchTaskOutcome::Done,
-        TaskStatus::Pending | TaskStatus::Running | TaskStatus::Failed => BatchTaskOutcome::Failed,
+        TaskStatus::Pending | TaskStatus::Running | TaskStatus::AwaitingInput | TaskStatus::Failed => BatchTaskOutcome::Failed,
     })
 }

@@ -82,7 +82,7 @@ fn render_board(frame: &mut ratatui::Frame<'_>, app: &App) {
     frame.render_stateful_widget(table, chunks[1], &mut state);
 
     let done = app.tasks.iter().filter(|task| task.status == TaskStatus::Done).count();
-    let running = app.tasks.iter().filter(|task| task.status == TaskStatus::Running).count();
+    let running = app.tasks.iter().filter(|task| matches!(task.status, TaskStatus::Running | TaskStatus::AwaitingInput)).count();
     let status = format!(
         "Scope: {} | Tasks: {} | Done: {} | Running: {} | q=quit j/k=nav Enter=detail",
         app.scope_label(),
@@ -104,8 +104,8 @@ fn render_detail(frame: &mut ratatui::Frame<'_>, app: &App) {
         .split(frame.area());
 
     if let Some(task) = app.selected_task() {
-        frame.render_widget(task_header(task), chunks[0]);
         let events = app.selected_events();
+        frame.render_widget(task_header(task, &events), chunks[0]);
         let items: Vec<ListItem<'_>> = events
             .iter()
             .map(|event| {
@@ -149,7 +149,7 @@ fn task_row(app: &App, task: &Task) -> Row<'static> {
     .style(status_style(task.status))
 }
 
-fn task_header(task: &Task) -> Paragraph<'static> {
+fn task_header(task: &Task, events: &[crate::types::TaskEvent]) -> Paragraph<'static> {
     let mut lines = vec![
         format!("{}  {}  {}", task.id, task.agent, task.status.label()),
         format!("Prompt: {}", truncate(&task.prompt, 120)),
@@ -161,6 +161,11 @@ fn task_header(task: &Task) -> Paragraph<'static> {
             task.model.as_deref().unwrap_or("-"),
         ),
     ];
+    if task.status == TaskStatus::AwaitingInput
+        && let Some(prompt) = pending_prompt(events)
+    {
+        lines.push(format!("Awaiting: {}", truncate(prompt, 120)));
+    }
     if let Some(group) = task.workgroup_id.as_deref() {
         lines.push(format!("Group: {group}"));
     }
@@ -212,6 +217,9 @@ fn task_memory(app: &App, task: &Task) -> String {
 }
 
 fn task_progress(app: &App, task: &Task) -> String {
+    if task.status == TaskStatus::AwaitingInput {
+        return "awaiting input".to_string();
+    }
     if task.status != TaskStatus::Running {
         return "—".to_string();
     }
@@ -224,9 +232,21 @@ fn status_style(status: TaskStatus) -> Style {
     match status {
         TaskStatus::Done => Style::default().fg(Color::Green),
         TaskStatus::Running => Style::default().fg(Color::Yellow),
+        TaskStatus::AwaitingInput => Style::default().fg(Color::Magenta),
         TaskStatus::Failed => Style::default().fg(Color::Red),
         TaskStatus::Pending => Style::default().fg(Color::Gray),
     }
+}
+
+fn pending_prompt(events: &[crate::types::TaskEvent]) -> Option<&str> {
+    events.iter().rev().find_map(|event| {
+        let metadata = event.metadata.as_ref()?;
+        metadata
+            .get("awaiting_input")
+            .and_then(|value| value.as_bool())
+            .filter(|value| *value)
+            .map(|_| event.detail.as_str())
+    })
 }
 
 fn truncate(value: &str, max: usize) -> String {

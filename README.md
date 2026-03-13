@@ -1,6 +1,6 @@
 # ai-dispatch (aid)
 
-![Version](https://img.shields.io/badge/version-1.1.1-blue)
+![Version](https://img.shields.io/badge/version-1.5.0-blue)
 ![Rust](https://img.shields.io/badge/rust-2024-orange)
 ![License](https://img.shields.io/badge/license-not%20specified-lightgrey)
 
@@ -61,8 +61,7 @@ Dispatch a coding task into its own git worktree and ask `aid` to verify automat
 aid run codex "Document the MCP server workflow in README.md" \
   --dir . \
   --worktree docs/mcp-readme \
-  --verify auto \
-  --skill implementer
+  --verify auto
 ```
 
 ### Watch, Inspect, Iterate
@@ -169,6 +168,8 @@ aid group show wg-a3f1
 
 Skills are methodology files loaded from `~/.aid/skills/` and appended to the effective prompt under a `--- Methodology ---` section. They make agent behavior more consistent across runs.
 
+Skills are auto-injected by default: coding agents (`codex`, `opencode`, `cursor`) get the `implementer` skill, and `gemini` gets the `researcher` skill. Use `--skill` to add extras or `--no-skill` to disable auto-injection.
+
 Examples:
 
 ```bash
@@ -177,9 +178,10 @@ aid config skills
 aid run codex "Refactor the retry code path" \
   --dir . \
   --skill code-scout \
-  --skill implementer \
   --skill test-writer \
   --verify auto
+
+aid run opencode "Rename TaskRow to BoardRow" --dir . --no-skill
 ```
 
 ### Milestones
@@ -198,16 +200,17 @@ Expected milestone format:
 
 | Command | Purpose | Typical use |
 | --- | --- | --- |
-| `aid run` | Dispatch one task to an agent. | `aid run codex "Implement retry logic" --dir . --worktree feat/retry --verify auto` |
-| `aid batch` | Dispatch a TOML batch file, optionally in parallel and optionally waiting for completion. | `aid batch tasks.toml --parallel --wait` |
+| `aid run` | Dispatch one task to an agent. Supports `--bg`, `--verify`, `--worktree`, `--on-done`, `--no-skill`, `--retry`, `--context`, and `--skill`. | `aid run codex "Implement retry logic" --dir . --worktree feat/retry --verify auto` |
+| `aid batch` | Dispatch a TOML batch file with DAG dependency scheduling. Auto-creates a workgroup and archives the file to `~/.aid/batches/`. | `aid batch tasks.toml --parallel --wait` |
 | `aid watch` | Follow live progress in text mode, quiet wait mode, or the TUI. | `aid watch --tui`, `aid watch t-1234`, `aid watch --quiet --group wg-a3f1` |
-| `aid board` | List tracked tasks with filters for running, today, mine, or one workgroup. | `aid board --today`, `aid board --mine`, `aid board --group wg-a3f1` |
-| `aid show` | Inspect one task's summary, diff, output, raw log, or AI-generated explanation. | `aid show t-1234 --diff`, `aid show t-1234 --output`, `aid show t-1234 --explain` |
-| `aid usage` | Render task-history usage plus configured budget windows. | `aid usage` |
+| `aid board` | List tracked tasks with filters. Auto-detects zombie tasks. | `aid board --today`, `aid board --mine`, `aid board --group wg-a3f1` |
+| `aid show` | Inspect one task's summary, diff, output, raw log, or AI-generated explanation. Diffs show changes vs main branch. | `aid show t-1234 --diff`, `aid show t-1234 --output`, `aid show t-1234 --explain` |
+| `aid usage` | Render task-history usage plus configured budget windows. Use `--session` for current session only. | `aid usage`, `aid usage --session` |
 | `aid retry` | Re-dispatch a failed task with explicit feedback. | `aid retry t-1234 --feedback "Reproduce the failure before editing."` |
+| `aid respond` | Send interactive input to a running background task. | `aid respond t-1234 "yes"` |
 | `aid ask` | Run a quick research or exploration task, optionally with file context. | `aid ask "What changed in src/main.rs?" --files src/main.rs` |
 | `aid mcp` | Start the stdio MCP server so another tool can call `aid` natively. | `aid mcp` |
-| `aid config` | Inspect detected agents and available local skills. | `aid config agents`, `aid config skills` |
+| `aid config` | Inspect agent capability profiles, available skills, and model pricing. | `aid config agents`, `aid config skills`, `aid config pricing` |
 | `aid group` | Create, list, show, update, and delete shared-context workgroups. | `aid group create dispatch --context "Shared rollout notes"` |
 
 ## Best Practices / Methodology
@@ -281,14 +284,13 @@ aid run codex "Fix the MCP framing bug and add regression coverage" \
 
 A workgroup lets several agents collaborate without repeating the same shared context in every prompt.
 
-For larger investigations, pair a workgroup with a batch file:
+For larger investigations, pair a workgroup with a batch file. Batch files support DAG dependencies via `depends_on` — tasks dispatch as soon as their individual dependencies complete, not when an entire level finishes:
 
 ```toml
 [[task]]
 name = "research"
 agent = "gemini"
 prompt = "Summarize DESIGN.md and note MCP constraints"
-group = "wg-a3f1"
 output = "/tmp/mcp-notes.md"
 
 [[task]]
@@ -297,7 +299,6 @@ agent = "codex"
 prompt = "Update README.md with MCP setup guidance"
 dir = "."
 worktree = "docs/mcp-guide"
-group = "wg-a3f1"
 skills = ["implementer"]
 depends_on = ["research"]
 verify = "cargo test"
@@ -307,9 +308,11 @@ Dispatch it like this:
 
 ```bash
 aid batch tasks.toml --parallel --wait
-aid board --group wg-a3f1
+aid board
 aid show t-1234
 ```
+
+Batch dispatches with 2+ tasks auto-create a workgroup. The batch file is archived to `~/.aid/batches/` after dispatch.
 
 This works well for incident response, release prep, and cross-cutting refactors where one agent researches while another edits.
 
@@ -321,6 +324,7 @@ This works well for incident response, release prep, and cross-cutting refactors
 - Set `[[usage.budget]]` entries and check `aid usage` before long coding sessions.
 - Reuse workgroups so shared context is stored once instead of repeated in every prompt.
 - Use `--model` only when you need a specific backend behavior or cost profile.
+- Use `--on-done "command"` to get notified when a background task completes (sets `AID_TASK_ID` and `AID_TASK_STATUS` env vars).
 
 ## Built-in Skills
 
@@ -408,6 +412,8 @@ Typical directory layout:
 │   └── t-1234.stderr
 ├── jobs/
 │   └── t-1234.json
+├── batches/
+│   └── 20260313-112850-v15-fixes.toml
 ├── skills/
 │   ├── code-scout.md
 │   ├── debugger.md
@@ -422,7 +428,8 @@ What lives there:
 - `aid.db`: SQLite task, workgroup, and event store
 - `logs/`: raw agent output plus stderr capture
 - `jobs/`: detached background worker specs
-- `skills/`: methodology files loaded by `--skill`
+- `batches/`: archived batch TOML files (auto-saved after dispatch)
+- `skills/`: methodology files loaded by `--skill` (auto-injected by default)
 - `cargo-target/`: shared Rust build cache for worktree-based tasks
 
 Configure budgets in `~/.aid/config.toml`:
@@ -453,6 +460,16 @@ aid usage
 ```
 
 `aid usage` combines tracked task history with any external counters you record in `config.toml`.
+
+## Reliability
+
+`aid` includes several mechanisms to keep long-running multi-agent workflows healthy:
+
+- **Zombie detection**: `aid board` automatically detects dead worker processes (including defunct/zombie state) and marks their tasks as FAILED.
+- **Max task duration**: Tasks running longer than 60 minutes are automatically killed and marked FAILED.
+- **Auto-commit enforcement**: Background worktree tasks auto-commit uncommitted changes after completion, preventing lost work.
+- **Zombie recovery**: When a zombie task is detected in a worktree with uncommitted changes, those changes are preserved via auto-commit before marking the task as failed.
+- **Shared build cache**: Rust worktree tasks share `CARGO_TARGET_DIR` to avoid redundant recompilation across parallel dispatches.
 
 ## Architecture
 

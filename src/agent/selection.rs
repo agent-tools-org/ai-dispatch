@@ -283,6 +283,7 @@ mod tests {
             model: None,
             budget: true,
             read_only: false,
+            context_files: vec![],
         };
         let (kind, reason) = select_agent_from(prompt, &opts, &available_agents());
         assert_ne!(kind, AgentKind::Codex);
@@ -296,6 +297,7 @@ mod tests {
             model: None,
             budget: false,
             read_only: false,
+            context_files: vec![],
         };
         select_agent_from(prompt, &opts, available)
     }

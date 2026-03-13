@@ -172,11 +172,24 @@ pub async fn run(store: Arc<Store>, args: RunArgs) -> Result<TaskId> {
     };
     store.insert_task(&task)?;
 
-    let file_context = if !args.context.is_empty() {
+    let (file_context, context_files) = if !args.context.is_empty() {
         let specs = crate::context::parse_context_specs(&args.context)?;
-        Some(crate::context::resolve_context(&specs)?)
+        let paths: Vec<String> = specs.iter().map(|s| s.file.clone()).collect();
+        if agent_kind == AgentKind::OpenCode {
+            let hints: Vec<String> = specs
+                .iter()
+                .filter_map(|s| {
+                    s.items.as_ref().map(|items| {
+                        format!("Focus on: {} in {}", items.join(", "), s.file)
+                    })
+                })
+                .collect();
+            (if hints.is_empty() { None } else { Some(hints.join("\n")) }, paths)
+        } else {
+            (Some(crate::context::resolve_context(&specs)?), vec![])
+        }
     } else {
-        None
+        (None, vec![])
     };
     let milestones = if let Some(group_id) = args.group.as_deref() {
         store.get_workgroup_milestones(group_id)?
@@ -211,6 +224,7 @@ pub async fn run(store: Arc<Store>, args: RunArgs) -> Result<TaskId> {
         model: args.model.clone(),
         budget: false,
         read_only: args.read_only,
+        context_files,
     };
 
     if args.background {

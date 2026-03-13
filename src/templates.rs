@@ -55,6 +55,10 @@ pub fn text_edit_guard(prompt: &str) -> Option<&'static str> {
     }
 }
 
+pub fn shared_system_fragments(prompt: &str) -> (Option<&'static str>, &'static str) {
+    (text_edit_guard(prompt), milestone_instruction())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

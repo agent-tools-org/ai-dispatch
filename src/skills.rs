@@ -1,5 +1,5 @@
 // Skill loading for methodology prompt injection.
-// Exports: load_skill(), load_skills(), list_skills(), auto_skills().
+// Exports: load_skill(), resolve_skill_content(), load_skills(), list_skills(), auto_skills().
 // Deps: crate::paths, crate::types, anyhow, std::fs.
 
 use anyhow::{Context, Result};
@@ -18,6 +18,10 @@ pub fn load_skill(name: &str) -> Result<String> {
         }
         Err(err) => Err(err).with_context(|| format!("Failed to read skill {}", path.display())),
     }
+}
+
+pub fn resolve_skill_content(name: &str) -> Result<String> {
+    load_skill(name)
 }
 
 pub fn load_skills(names: &[String]) -> Result<String> {

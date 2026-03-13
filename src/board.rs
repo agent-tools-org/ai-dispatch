@@ -325,6 +325,7 @@ mod tests {
             id: TaskId(id.to_string()),
             agent,
             prompt: "test prompt".to_string(),
+            resolved_prompt: None,
             status,
             parent_task_id: None,
             workgroup_id: None,

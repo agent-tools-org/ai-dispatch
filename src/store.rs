@@ -42,6 +42,7 @@ impl Store {
                 id TEXT PRIMARY KEY,
                 agent TEXT NOT NULL,
                 prompt TEXT NOT NULL,
+                resolved_prompt TEXT,
                 status TEXT NOT NULL DEFAULT 'pending',
                 parent_task_id TEXT,
                 workgroup_id TEXT,
@@ -90,6 +91,7 @@ impl Store {
         let _ = conn.execute_batch("ALTER TABLE tasks ADD COLUMN caller_kind TEXT;");
         let _ = conn.execute_batch("ALTER TABLE tasks ADD COLUMN caller_session_id TEXT;");
         let _ = conn.execute_batch("ALTER TABLE tasks ADD COLUMN repo_path TEXT;");
+        let _ = conn.execute_batch("ALTER TABLE tasks ADD COLUMN resolved_prompt TEXT;");
         let _ = conn.execute_batch(
             "CREATE TABLE IF NOT EXISTS workgroups (
                 id TEXT PRIMARY KEY,
@@ -105,16 +107,17 @@ impl Store {
 
     pub fn insert_task(&self, task: &Task) -> Result<()> {
         self.db().execute(
-            "INSERT INTO tasks (id, agent, prompt, status, parent_task_id, workgroup_id,
+            "INSERT INTO tasks (id, agent, prompt, resolved_prompt, status, parent_task_id, workgroup_id,
              caller_kind, caller_session_id, repo_path, worktree_path, worktree_branch,
              log_path, output_path, tokens, duration_ms, model, cost_usd, created_at,
              completed_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15,
-             ?16, ?17, ?18, ?19)",
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16,
+             ?17, ?18, ?19, ?20)",
             params![
                 task.id.as_str(),
                 task.agent.as_str(),
                 task.prompt,
+                task.resolved_prompt,
                 task.status.as_str(),
                 task.parent_task_id,
                 task.workgroup_id,
@@ -190,6 +193,14 @@ impl Store {
         Ok(())
     }
 
+    pub fn update_resolved_prompt(&self, id: &str, resolved_prompt: &str) -> Result<()> {
+        self.db().execute(
+            "UPDATE tasks SET resolved_prompt = ?1 WHERE id = ?2",
+            params![resolved_prompt, id],
+        )?;
+        Ok(())
+    }
+
     pub fn update_task_completion(
         &self,
         id: &str,
@@ -256,9 +267,10 @@ impl Store {
     pub fn get_task(&self, id: &str) -> Result<Option<Task>> {
         let conn = self.db();
         let mut stmt = conn.prepare(
-            "SELECT id, agent, prompt, status, parent_task_id, workgroup_id, caller_kind,
-             caller_session_id, repo_path, worktree_path, worktree_branch, log_path,
-             output_path, tokens, duration_ms, model, cost_usd, created_at, completed_at
+            "SELECT id, agent, prompt, resolved_prompt, status, parent_task_id, workgroup_id,
+             caller_kind, caller_session_id, repo_path, worktree_path, worktree_branch,
+             log_path, output_path, tokens, duration_ms, model, cost_usd, created_at,
+             completed_at
              FROM tasks WHERE id = ?1",
         )?;
         let mut rows = stmt.query_map(params![id], row_to_task)?;
@@ -287,23 +299,26 @@ impl Store {
         let conn = self.db();
         let (sql, filter_params): (&str, Vec<String>) = match filter {
             TaskFilter::All => (
-                "SELECT id, agent, prompt, status, parent_task_id, workgroup_id, caller_kind,
-                 caller_session_id, repo_path, worktree_path, worktree_branch, log_path,
-                 output_path, tokens, duration_ms, model, cost_usd, created_at, completed_at
+                "SELECT id, agent, prompt, resolved_prompt, status, parent_task_id, workgroup_id,
+                 caller_kind, caller_session_id, repo_path, worktree_path, worktree_branch,
+                 log_path, output_path, tokens, duration_ms, model, cost_usd, created_at,
+                 completed_at
                  FROM tasks ORDER BY created_at DESC",
                 vec![],
             ),
             TaskFilter::Running => (
-                "SELECT id, agent, prompt, status, parent_task_id, workgroup_id, caller_kind,
-                 caller_session_id, repo_path, worktree_path, worktree_branch, log_path,
-                 output_path, tokens, duration_ms, model, cost_usd, created_at, completed_at
+                "SELECT id, agent, prompt, resolved_prompt, status, parent_task_id, workgroup_id,
+                 caller_kind, caller_session_id, repo_path, worktree_path, worktree_branch,
+                 log_path, output_path, tokens, duration_ms, model, cost_usd, created_at,
+                 completed_at
                  FROM tasks WHERE status IN (?1, ?2) ORDER BY created_at DESC",
                 vec!["running".to_string(), "awaiting_input".to_string()],
             ),
             TaskFilter::Today => (
-                "SELECT id, agent, prompt, status, parent_task_id, workgroup_id, caller_kind,
-                 caller_session_id, repo_path, worktree_path, worktree_branch, log_path,
-                 output_path, tokens, duration_ms, model, cost_usd, created_at, completed_at
+                "SELECT id, agent, prompt, resolved_prompt, status, parent_task_id, workgroup_id,
+                 caller_kind, caller_session_id, repo_path, worktree_path, worktree_branch,
+                 log_path, output_path, tokens, duration_ms, model, cost_usd, created_at,
+                 completed_at
                  FROM tasks ORDER BY created_at DESC",
                 vec![],
             ),
@@ -323,9 +338,10 @@ impl Store {
     pub fn list_tasks_by_session(&self, session_id: &str) -> Result<Vec<Task>> {
         let conn = self.db();
         let mut stmt = conn.prepare(
-            "SELECT id, agent, prompt, status, parent_task_id, workgroup_id, caller_kind,
-             caller_session_id, repo_path, worktree_path, worktree_branch, log_path,
-             output_path, tokens, duration_ms, model, cost_usd, created_at, completed_at
+            "SELECT id, agent, prompt, resolved_prompt, status, parent_task_id, workgroup_id,
+             caller_kind, caller_session_id, repo_path, worktree_path, worktree_branch,
+             log_path, output_path, tokens, duration_ms, model, cost_usd, created_at,
+             completed_at
              FROM tasks WHERE caller_session_id = ?1 ORDER BY created_at DESC",
         )?;
         let rows = stmt.query_map(params![session_id], row_to_task)?;
@@ -361,23 +377,24 @@ fn row_to_task(row: &rusqlite::Row) -> rusqlite::Result<Result<Task>> {
         agent: AgentKind::parse_str(&row.get::<_, String>(1)?)
             .unwrap_or(AgentKind::Codex),
         prompt: row.get(2)?,
-        status: TaskStatus::parse_str(&row.get::<_, String>(3)?)
+        resolved_prompt: row.get(3)?,
+        status: TaskStatus::parse_str(&row.get::<_, String>(4)?)
             .unwrap_or(TaskStatus::Pending),
-        parent_task_id: row.get(4)?,
-        workgroup_id: row.get(5)?,
-        caller_kind: row.get(6)?,
-        caller_session_id: row.get(7)?,
-        repo_path: row.get(8)?,
-        worktree_path: row.get(9)?,
-        worktree_branch: row.get(10)?,
-        log_path: row.get(11)?,
-        output_path: row.get(12)?,
-        tokens: row.get(13)?,
-        duration_ms: row.get(14)?,
-        model: row.get(15)?,
-        cost_usd: row.get(16)?,
-        created_at: parse_dt(&row.get::<_, String>(17)?),
-        completed_at: row.get::<_, Option<String>>(18)?
+        parent_task_id: row.get(5)?,
+        workgroup_id: row.get(6)?,
+        caller_kind: row.get(7)?,
+        caller_session_id: row.get(8)?,
+        repo_path: row.get(9)?,
+        worktree_path: row.get(10)?,
+        worktree_branch: row.get(11)?,
+        log_path: row.get(12)?,
+        output_path: row.get(13)?,
+        tokens: row.get(14)?,
+        duration_ms: row.get(15)?,
+        model: row.get(16)?,
+        cost_usd: row.get(17)?,
+        created_at: parse_dt(&row.get::<_, String>(18)?),
+        completed_at: row.get::<_, Option<String>>(19)?
             .map(|s| parse_dt(&s)),
     }))
 }
@@ -407,6 +424,7 @@ mod tests {
             id: TaskId(id.to_string()),
             agent,
             prompt: "test prompt".to_string(),
+            resolved_prompt: None,
             status,
             parent_task_id: None,
             workgroup_id: None,
@@ -479,6 +497,7 @@ mod tests {
             .map(|row| row.unwrap())
             .collect::<Vec<_>>();
         assert!(columns.contains(&"repo_path".to_string()));
+        assert!(columns.contains(&"resolved_prompt".to_string()));
     }
 
     #[test]
@@ -498,6 +517,20 @@ mod tests {
         assert_eq!(loaded.model.as_deref(), Some("gemini-2.5-flash"));
         assert!((loaded.cost_usd.unwrap() - 0.0038).abs() < 0.0001);
         assert!(loaded.completed_at.is_some());
+    }
+
+    #[test]
+    fn update_resolved_prompt_persists() {
+        let store = Store::open_memory().unwrap();
+        let task = make_task("t-0003", AgentKind::Codex, TaskStatus::Pending);
+        store.insert_task(&task).unwrap();
+
+        store
+            .update_resolved_prompt("t-0003", "resolved prompt")
+            .unwrap();
+
+        let loaded = store.get_task("t-0003").unwrap().unwrap();
+        assert_eq!(loaded.resolved_prompt.as_deref(), Some("resolved prompt"));
     }
 
     #[test]

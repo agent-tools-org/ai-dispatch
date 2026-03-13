@@ -149,6 +149,7 @@ pub async fn run(store: Arc<Store>, args: RunArgs) -> Result<TaskId> {
         id: task_id.clone(),
         agent: agent_kind,
         prompt: args.prompt.clone(),
+        resolved_prompt: None,
         status: TaskStatus::Pending,
         parent_task_id: args.parent_task_id.clone(),
         workgroup_id: args.group.clone(),
@@ -196,6 +197,7 @@ pub async fn run(store: Arc<Store>, args: RunArgs) -> Result<TaskId> {
         effective_prompt = format!("{effective_prompt}\n\n--- Methodology ---\n{skill_text}");
     }
     effective_prompt = templates::inject_milestone_prompt(&effective_prompt);
+    store.update_resolved_prompt(task_id.as_str(), &effective_prompt)?;
 
     let opts = RunOpts {
         dir: effective_dir.clone(),

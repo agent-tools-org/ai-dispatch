@@ -154,6 +154,9 @@ enum Commands {
     Show {
         /// Task ID to inspect
         task_id: String,
+        /// Show the full resolved prompt sent to the agent
+        #[arg(long, help = "Show the full resolved prompt sent to the agent")]
+        context: bool,
         /// Show full worktree diff
         #[arg(long)]
         diff: bool,
@@ -346,6 +349,7 @@ async fn main() -> Result<()> {
         }
         Commands::Show {
             task_id,
+            context,
             diff,
             output,
             explain,
@@ -357,6 +361,7 @@ async fn main() -> Result<()> {
                 store,
                 cmd::show::ShowArgs {
                     task_id,
+                    context,
                     diff,
                     output,
                     explain,

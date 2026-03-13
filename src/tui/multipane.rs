@@ -10,6 +10,13 @@ pub struct PaneData {
     pub status: String,
     pub prompt: String,
     pub events: Vec<(String, String, String)>,
+    pub duration: String,
+    pub tokens: String,
+    pub cost: String,
+    pub model: String,
+    pub milestone: String,
+    pub cpu: String,
+    pub memory: String,
 }
 
 pub fn render_multipane(frame: &mut ratatui::Frame<'_>, panes: &[PaneData], active_pane: usize) {
@@ -122,8 +129,35 @@ fn render_pane(pane: &PaneData, is_active: bool) -> List<'static> {
         format!("{}...", &pane.prompt[..57])
     };
     let mut items = vec![ListItem::new(format!("Prompt: {prompt}"))];
-    for (ts, kind, detail) in &pane.events {
-        items.push(ListItem::new(format!("{ts} [{kind}] {detail}")));
+    let summary = format!(
+        "Duration: {}  Tokens: {}  Cost: {}  Model: {}  CPU: {}  Mem: {}",
+        pane.duration, pane.tokens, pane.cost, pane.model, pane.cpu, pane.memory
+    );
+    items.insert(
+        1,
+        ListItem::new(summary).style(Style::default().fg(Color::DarkGray)),
+    );
+    if !pane.milestone.is_empty() {
+        items.insert(
+            2,
+            ListItem::new(format!("Progress: {}", pane.milestone))
+                .style(Style::default().fg(Color::Green)),
+        );
+    }
+    let recent_events = if pane.events.len() > 20 {
+        &pane.events[pane.events.len() - 20..]
+    } else {
+        &pane.events
+    };
+    for (ts, kind, detail) in recent_events {
+        let event_style = match kind.as_str() {
+            "milestone" => Style::default().fg(Color::Green),
+            "error" => Style::default().fg(Color::Red),
+            "reasoning" => Style::default().fg(Color::Cyan),
+            "completion" => Style::default().fg(Color::DarkGray),
+            _ => Style::default(),
+        };
+        items.push(ListItem::new(format!("{ts} [{kind}] {detail}")).style(event_style));
     }
     List::new(items).block(
         Block::default()

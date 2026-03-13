@@ -36,6 +36,9 @@ impl super::Agent for CodexAgent {
         let injected = templates::inject_codex_prompt(&effective_prompt, None);
         let mut cmd = Command::new("codex");
         cmd.args(["exec", "--json", "--skip-git-repo-check", &injected]);
+        if let Some(ref output) = opts.output {
+            cmd.args(["-o", output]);
+        }
         if let Some(ref dir) = opts.dir {
             cmd.args(["-C", dir]);
         }

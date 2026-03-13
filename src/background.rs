@@ -8,12 +8,12 @@ use std::process::{Child, Command, Stdio};
 use std::sync::Arc;
 
 use crate::agent::{self, RunOpts};
+use crate::config;
 use crate::paths;
 use crate::store::Store;
 use crate::types::{AgentKind, EventKind, TaskEvent, TaskFilter, TaskId, TaskStatus};
 
 const ZOMBIE_FAILURE_DETAIL: &str = "Background worker died unexpectedly";
-const DEFAULT_MAX_TASK_DURATION_MINS: i64 = 60;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BackgroundRunSpec {
@@ -25,6 +25,8 @@ pub struct BackgroundRunSpec {
     pub output: Option<String>,
     pub model: Option<String>,
     pub verify: Option<String>,
+    #[serde(default)]
+    pub max_duration_mins: Option<i64>,
     pub retry: u32,
     pub group: Option<String>,
     #[serde(default)]
@@ -158,6 +160,7 @@ async fn run_task_inner(store: &Arc<Store>, spec: &BackgroundRunSpec) -> Result<
             worktree: None,
             group: spec.group.clone(),
             verify: spec.verify.clone(),
+            max_duration_mins: spec.max_duration_mins,
             retry: spec.retry,
             context: vec![],
             skills: spec.skills.clone(),
@@ -214,6 +217,7 @@ fn check_zombie_tasks_with<F>(store: &Store, is_worker_alive: F) -> Result<Vec<S
 where
     F: Fn(u32) -> bool,
 {
+    let config = config::load_config()?;
     let mut cleaned = Vec::new();
     for task in store.list_tasks(TaskFilter::Running)? {
         let task_id = task.id.as_str();
@@ -235,9 +239,15 @@ where
         };
         if is_worker_alive(worker_pid) {
             let elapsed_mins = (Local::now() - task.created_at).num_minutes();
-            if elapsed_mins > DEFAULT_MAX_TASK_DURATION_MINS {
+            let max_duration_mins = spec
+                .max_duration_mins
+                .unwrap_or(config.background.max_task_duration_mins);
+            if elapsed_mins > max_duration_mins {
                 kill_process(worker_pid);
-                let detail = format!("Task exceeded max duration ({}m > {}m)", elapsed_mins, DEFAULT_MAX_TASK_DURATION_MINS);
+                let detail = format!(
+                    "Task exceeded max duration ({}m > {}m)",
+                    elapsed_mins, max_duration_mins
+                );
                 record_failure(store, task_id, &detail, &detail)?;
                 cleaned.push(task_id.to_string());
             }

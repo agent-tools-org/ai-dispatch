@@ -10,6 +10,8 @@ use crate::paths;
 pub struct AidConfig {
     #[serde(default)]
     pub usage: UsageConfig,
+    #[serde(default)]
+    pub background: BackgroundConfig,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -38,6 +40,24 @@ pub struct UsageBudget {
     pub external_requests: u32,
     pub resets_at: Option<String>,
     pub notes: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct BackgroundConfig {
+    #[serde(default = "default_max_duration")]
+    pub max_task_duration_mins: i64,
+}
+
+fn default_max_duration() -> i64 {
+    60
+}
+
+impl Default for BackgroundConfig {
+    fn default() -> Self {
+        Self {
+            max_task_duration_mins: default_max_duration(),
+        }
+    }
 }
 
 pub fn load_config() -> Result<AidConfig> {
@@ -81,5 +101,25 @@ mod tests {
         assert_eq!(config.usage.budgets.len(), 2);
         assert_eq!(config.usage.budgets[0].agent.as_deref(), Some("codex"));
         assert_eq!(config.usage.budgets[1].external_requests, 120);
+    }
+
+    #[test]
+    fn background_config_defaults_to_sixty_minutes() {
+        let config = AidConfig::default();
+
+        assert_eq!(config.background.max_task_duration_mins, 60);
+    }
+
+    #[test]
+    fn parses_background_max_task_duration_override() {
+        let config: AidConfig = toml::from_str(
+            r#"
+            [background]
+            max_task_duration_mins = 120
+            "#,
+        )
+        .unwrap();
+
+        assert_eq!(config.background.max_task_duration_mins, 120);
     }
 }

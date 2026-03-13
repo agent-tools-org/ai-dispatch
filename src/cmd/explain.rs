@@ -30,6 +30,7 @@ pub(crate) async fn run_explain(store: Arc<Store>, task_id: &str, agent: Option<
             worktree: None,
             group: None,
             verify: None,
+            max_duration_mins: None,
             retry: 0,
             context: vec![],
             skills: vec![],

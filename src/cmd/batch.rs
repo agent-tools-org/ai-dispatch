@@ -78,6 +78,7 @@ fn task_to_run_args(task: &batch::BatchTask, background: bool) -> RunArgs {
         worktree: task.worktree.clone(),
         group: task.group.clone(),
         verify: task.verify.clone(),
+        max_duration_mins: task.max_duration_mins.map(|value| value as i64),
         retry: 0,
         context: vec![],
         skills: task.skills.clone().unwrap_or_default(),
@@ -327,6 +328,7 @@ mod tests {
             worktree: None,
             group: None,
             verify: None,
+            max_duration_mins: None,
             skills: None,
             depends_on: depends_on.map(|d| d.into_iter().map(String::from).collect()),
         }

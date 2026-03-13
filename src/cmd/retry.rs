@@ -51,6 +51,7 @@ pub async fn retry_task(store: Arc<Store>, args: RetryArgs, announce: bool) -> R
             background: false,
             announce,
             verify: None,
+            max_duration_mins: None,
             retry: 0,
             context: vec![],
             skills: vec![],

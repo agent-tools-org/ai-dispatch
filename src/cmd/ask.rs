@@ -107,6 +107,7 @@ async fn dispatch(store: Arc<Store>, request: AskRequest, announce: bool) -> Res
             worktree: None,
             group: None,
             verify: None,
+            max_duration_mins: None,
             retry: 0,
             context: vec![],
             skills: vec![],

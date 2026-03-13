@@ -254,6 +254,7 @@ async fn main() -> Result<()> {
                     worktree,
                     group,
                     verify,
+                    max_duration_mins: None,
                     retry,
                     context,
                     skills,

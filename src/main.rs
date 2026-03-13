@@ -104,6 +104,8 @@ enum Commands {
         /// Wait for dispatched tasks to finish
         #[arg(long)]
         wait: bool,
+        #[arg(long)]
+        max_concurrent: Option<usize>,
     },
     /// Benchmark a task across multiple agents
     Benchmark {
@@ -297,6 +299,7 @@ async fn main() -> Result<()> {
             file,
             parallel,
             wait,
+            max_concurrent,
         } => {
             cmd::batch::run(
                 store,
@@ -304,6 +307,7 @@ async fn main() -> Result<()> {
                     file,
                     parallel,
                     wait,
+                    max_concurrent,
                 },
             )
             .await?;

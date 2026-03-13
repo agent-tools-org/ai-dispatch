@@ -43,6 +43,18 @@ pub async fn run(store: Arc<Store>, args: BatchArgs) -> Result<()> {
     if args.wait && args.parallel && !has_dependencies && !task_ids.is_empty() {
         crate::cmd::wait::wait_for_task_ids(&store, &task_ids).await?;
     }
+    let archive_dir = crate::paths::aid_dir().join("batches");
+    if let Err(e) = std::fs::create_dir_all(&archive_dir) {
+        eprintln!("[aid] Failed to create batch archive dir: {e}");
+    } else {
+        let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("batch");
+        let timestamp = chrono::Local::now().format("%Y%m%d-%H%M%S");
+        let dest = archive_dir.join(format!("{timestamp}-{stem}.toml"));
+        match std::fs::copy(path, &dest) {
+            Ok(_) => eprintln!("[aid] Archived batch to {}", dest.display()),
+            Err(e) => eprintln!("[aid] Failed to archive batch: {e}"),
+        }
+    }
     println!("Batch: {total} task(s) dispatched");
     Ok(())
 }

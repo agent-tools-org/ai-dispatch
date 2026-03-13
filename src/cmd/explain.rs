@@ -24,6 +24,7 @@ pub(crate) async fn run_explain(store: Arc<Store>, task_id: &str, agent: Option<
         RunArgs {
             agent_name,
             prompt,
+            repo: None,
             dir: None,
             output: None,
             model,

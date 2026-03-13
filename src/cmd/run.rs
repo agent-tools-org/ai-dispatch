@@ -24,6 +24,7 @@ pub const NO_SKILL_SENTINEL: &str = "__aid_no_skill__";
 pub struct RunArgs {
     pub agent_name: String,
     pub prompt: String,
+    pub repo: Option<String>,
     pub dir: Option<String>,
     pub output: Option<String>,
     pub model: Option<String>,
@@ -60,6 +61,39 @@ fn effective_skills(agent_kind: &AgentKind, args: &RunArgs) -> Vec<String> {
     skills::auto_skills(agent_kind, args.worktree.is_some())
 }
 
+fn resolve_repo_path(path: &str) -> Result<String> {
+    let out = std::process::Command::new("git")
+        .args(["-C", path, "rev-parse", "--show-toplevel"])
+        .output()
+        .context("Failed to run git")?;
+    anyhow::ensure!(out.status.success(), "Not a git repository: {path}");
+    Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
+}
+
+fn resolve_dir_in_target(base_dir: &str, dir: Option<&str>, repo_dir: Option<&str>) -> String {
+    let Some(dir) = dir else { return base_dir.to_string() };
+    let dir_path = std::path::Path::new(dir);
+    if dir_path == std::path::Path::new(".") {
+        return base_dir.to_string();
+    }
+    if dir_path.is_absolute()
+        && let Some(repo_dir) = repo_dir
+        && let Ok(relative_dir) = dir_path.strip_prefix(repo_dir)
+    {
+        return std::path::Path::new(base_dir)
+            .join(relative_dir)
+            .to_string_lossy()
+            .to_string();
+    }
+    if dir_path.is_absolute() {
+        return dir.to_string();
+    }
+    std::path::Path::new(base_dir)
+        .join(dir_path)
+        .to_string_lossy()
+        .to_string()
+}
+
 pub async fn run(store: Arc<Store>, args: RunArgs) -> Result<TaskId> {
     let agent_kind = AgentKind::parse_str(&args.agent_name).ok_or_else(|| {
         anyhow::anyhow!(
@@ -78,17 +112,34 @@ pub async fn run(store: Arc<Store>, args: RunArgs) -> Result<TaskId> {
     let task_id = TaskId::generate();
     let log_path = paths::log_path(task_id.as_str());
     let workgroup = load_workgroup(&store, args.group.as_deref())?;
+    let repo_path = args
+        .repo
+        .as_deref()
+        .map(resolve_repo_path)
+        .transpose()?;
 
     // Create worktree if requested, override dir to point into it
     let (wt_path, wt_branch, effective_dir) = if let Some(ref branch) = args.worktree {
-        let repo_dir = args.dir.as_deref().unwrap_or(".");
+        let repo_dir = repo_path
+            .clone()
+            .unwrap_or(resolve_repo_path(args.dir.as_deref().unwrap_or("."))?);
         let info = crate::worktree::create_worktree(
-            std::path::Path::new(repo_dir),
+            std::path::Path::new(&repo_dir),
             branch,
             args.base_branch.as_deref(),
         )?;
         let p = info.path.to_string_lossy().to_string();
-        (Some(p.clone()), Some(info.branch), Some(p))
+        (
+            Some(p.clone()),
+            Some(info.branch),
+            Some(resolve_dir_in_target(&p, args.dir.as_deref(), Some(&repo_dir))),
+        )
+    } else if let Some(ref repo_dir) = repo_path {
+        (
+            None,
+            None,
+            Some(resolve_dir_in_target(repo_dir, args.dir.as_deref(), Some(repo_dir))),
+        )
     } else {
         (None, None, args.dir.clone())
     };
@@ -103,6 +154,7 @@ pub async fn run(store: Arc<Store>, args: RunArgs) -> Result<TaskId> {
         workgroup_id: args.group.clone(),
         caller_kind: caller.as_ref().map(|item| item.kind.clone()),
         caller_session_id: caller.as_ref().map(|item| item.session_id.clone()),
+        repo_path: repo_path.clone(),
         worktree_path: wt_path,
         worktree_branch: wt_branch,
         log_path: Some(log_path.to_string_lossy().to_string()),
@@ -257,7 +309,13 @@ pub(crate) fn inherit_retry_base_branch(repo_dir: Option<&str>, task: &Task, ret
     if retry_args.worktree.as_deref() == Some(branch) {
         return;
     }
-    let repo_dir = std::path::Path::new(repo_dir.unwrap_or("."));
+    let repo_dir = std::path::Path::new(
+        task.repo_path
+            .as_deref()
+            .or(retry_args.repo.as_deref())
+            .or(repo_dir)
+            .unwrap_or("."),
+    );
     if let Ok(true) = crate::worktree::branch_has_commits_ahead_of_main(repo_dir, branch) {
         retry_args.base_branch = Some(branch.to_string());
     }
@@ -385,6 +443,7 @@ mod tests {
         RunArgs {
             agent_name: "codex".to_string(),
             prompt: "prompt".to_string(),
+            repo: None,
             dir: None,
             output: None,
             model: None,

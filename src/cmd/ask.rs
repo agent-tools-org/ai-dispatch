@@ -101,6 +101,7 @@ async fn dispatch(store: Arc<Store>, request: AskRequest, announce: bool) -> Res
         RunArgs {
             agent_name: request.agent_name,
             prompt: request.prompt,
+            repo: None,
             dir: None,
             output: request.output,
             model: request.model,

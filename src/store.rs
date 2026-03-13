@@ -47,6 +47,7 @@ impl Store {
                 workgroup_id TEXT,
                 caller_kind TEXT,
                 caller_session_id TEXT,
+                repo_path TEXT,
                 worktree_path TEXT,
                 worktree_branch TEXT,
                 log_path TEXT,
@@ -88,6 +89,7 @@ impl Store {
         let _ = conn.execute_batch("ALTER TABLE tasks ADD COLUMN workgroup_id TEXT;");
         let _ = conn.execute_batch("ALTER TABLE tasks ADD COLUMN caller_kind TEXT;");
         let _ = conn.execute_batch("ALTER TABLE tasks ADD COLUMN caller_session_id TEXT;");
+        let _ = conn.execute_batch("ALTER TABLE tasks ADD COLUMN repo_path TEXT;");
         let _ = conn.execute_batch(
             "CREATE TABLE IF NOT EXISTS workgroups (
                 id TEXT PRIMARY KEY,
@@ -104,10 +106,11 @@ impl Store {
     pub fn insert_task(&self, task: &Task) -> Result<()> {
         self.db().execute(
             "INSERT INTO tasks (id, agent, prompt, status, parent_task_id, workgroup_id,
-             caller_kind, caller_session_id, worktree_path, worktree_branch, log_path,
-             output_path, tokens, duration_ms, model, cost_usd, created_at, completed_at)
+             caller_kind, caller_session_id, repo_path, worktree_path, worktree_branch,
+             log_path, output_path, tokens, duration_ms, model, cost_usd, created_at,
+             completed_at)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15,
-             ?16, ?17, ?18)",
+             ?16, ?17, ?18, ?19)",
             params![
                 task.id.as_str(),
                 task.agent.as_str(),
@@ -117,6 +120,7 @@ impl Store {
                 task.workgroup_id,
                 task.caller_kind,
                 task.caller_session_id,
+                task.repo_path,
                 task.worktree_path,
                 task.worktree_branch,
                 task.log_path,
@@ -253,8 +257,8 @@ impl Store {
         let conn = self.db();
         let mut stmt = conn.prepare(
             "SELECT id, agent, prompt, status, parent_task_id, workgroup_id, caller_kind,
-             caller_session_id, worktree_path, worktree_branch, log_path, output_path,
-             tokens, duration_ms, model, cost_usd, created_at, completed_at
+             caller_session_id, repo_path, worktree_path, worktree_branch, log_path,
+             output_path, tokens, duration_ms, model, cost_usd, created_at, completed_at
              FROM tasks WHERE id = ?1",
         )?;
         let mut rows = stmt.query_map(params![id], row_to_task)?;
@@ -284,22 +288,22 @@ impl Store {
         let (sql, filter_params): (&str, Vec<String>) = match filter {
             TaskFilter::All => (
                 "SELECT id, agent, prompt, status, parent_task_id, workgroup_id, caller_kind,
-                 caller_session_id, worktree_path, worktree_branch, log_path, output_path,
-                 tokens, duration_ms, model, cost_usd, created_at, completed_at
+                 caller_session_id, repo_path, worktree_path, worktree_branch, log_path,
+                 output_path, tokens, duration_ms, model, cost_usd, created_at, completed_at
                  FROM tasks ORDER BY created_at DESC",
                 vec![],
             ),
             TaskFilter::Running => (
                 "SELECT id, agent, prompt, status, parent_task_id, workgroup_id, caller_kind,
-                 caller_session_id, worktree_path, worktree_branch, log_path, output_path,
-                 tokens, duration_ms, model, cost_usd, created_at, completed_at
+                 caller_session_id, repo_path, worktree_path, worktree_branch, log_path,
+                 output_path, tokens, duration_ms, model, cost_usd, created_at, completed_at
                  FROM tasks WHERE status IN (?1, ?2) ORDER BY created_at DESC",
                 vec!["running".to_string(), "awaiting_input".to_string()],
             ),
             TaskFilter::Today => (
                 "SELECT id, agent, prompt, status, parent_task_id, workgroup_id, caller_kind,
-                 caller_session_id, worktree_path, worktree_branch, log_path, output_path,
-                 tokens, duration_ms, model, cost_usd, created_at, completed_at
+                 caller_session_id, repo_path, worktree_path, worktree_branch, log_path,
+                 output_path, tokens, duration_ms, model, cost_usd, created_at, completed_at
                  FROM tasks ORDER BY created_at DESC",
                 vec![],
             ),
@@ -320,8 +324,8 @@ impl Store {
         let conn = self.db();
         let mut stmt = conn.prepare(
             "SELECT id, agent, prompt, status, parent_task_id, workgroup_id, caller_kind,
-             caller_session_id, worktree_path, worktree_branch, log_path, output_path,
-             tokens, duration_ms, model, cost_usd, created_at, completed_at
+             caller_session_id, repo_path, worktree_path, worktree_branch, log_path,
+             output_path, tokens, duration_ms, model, cost_usd, created_at, completed_at
              FROM tasks WHERE caller_session_id = ?1 ORDER BY created_at DESC",
         )?;
         let rows = stmt.query_map(params![session_id], row_to_task)?;
@@ -363,16 +367,17 @@ fn row_to_task(row: &rusqlite::Row) -> rusqlite::Result<Result<Task>> {
         workgroup_id: row.get(5)?,
         caller_kind: row.get(6)?,
         caller_session_id: row.get(7)?,
-        worktree_path: row.get(8)?,
-        worktree_branch: row.get(9)?,
-        log_path: row.get(10)?,
-        output_path: row.get(11)?,
-        tokens: row.get(12)?,
-        duration_ms: row.get(13)?,
-        model: row.get(14)?,
-        cost_usd: row.get(15)?,
-        created_at: parse_dt(&row.get::<_, String>(16)?),
-        completed_at: row.get::<_, Option<String>>(17)?
+        repo_path: row.get(8)?,
+        worktree_path: row.get(9)?,
+        worktree_branch: row.get(10)?,
+        log_path: row.get(11)?,
+        output_path: row.get(12)?,
+        tokens: row.get(13)?,
+        duration_ms: row.get(14)?,
+        model: row.get(15)?,
+        cost_usd: row.get(16)?,
+        created_at: parse_dt(&row.get::<_, String>(17)?),
+        completed_at: row.get::<_, Option<String>>(18)?
             .map(|s| parse_dt(&s)),
     }))
 }
@@ -407,6 +412,7 @@ mod tests {
             workgroup_id: None,
             caller_kind: None,
             caller_session_id: None,
+            repo_path: None,
             worktree_path: None,
             worktree_branch: None,
             log_path: None,
@@ -430,6 +436,49 @@ mod tests {
         assert_eq!(loaded.id, task.id);
         assert_eq!(loaded.agent, AgentKind::Codex);
         assert_eq!(loaded.status, TaskStatus::Running);
+    }
+
+    #[test]
+    fn migrate_adds_repo_path_column() {
+        let conn = rusqlite::Connection::open_in_memory().unwrap();
+        conn.execute_batch(
+            "CREATE TABLE tasks (
+                id TEXT PRIMARY KEY,
+                agent TEXT NOT NULL,
+                prompt TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'pending',
+                worktree_path TEXT,
+                worktree_branch TEXT,
+                log_path TEXT,
+                output_path TEXT,
+                tokens INTEGER,
+                duration_ms INTEGER,
+                created_at TEXT NOT NULL,
+                completed_at TEXT
+            );
+            CREATE TABLE events (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                task_id TEXT NOT NULL,
+                timestamp TEXT NOT NULL,
+                event_type TEXT NOT NULL,
+                detail TEXT NOT NULL
+            );",
+        )
+        .unwrap();
+        let store = Store {
+            conn: std::sync::Mutex::new(conn),
+        };
+
+        store.migrate().unwrap();
+
+        let conn = store.db();
+        let mut stmt = conn.prepare("PRAGMA table_info(tasks)").unwrap();
+        let columns = stmt
+            .query_map([], |row| row.get::<_, String>(1))
+            .unwrap()
+            .map(|row| row.unwrap())
+            .collect::<Vec<_>>();
+        assert!(columns.contains(&"repo_path".to_string()));
     }
 
     #[test]

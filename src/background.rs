@@ -165,6 +165,7 @@ async fn run_task_inner(store: &Arc<Store>, spec: &BackgroundRunSpec) -> Result<
         &crate::cmd::run::RunArgs {
             agent_name: spec.agent_name.clone(),
             prompt: spec.prompt.clone(),
+            repo: None,
             dir: spec.dir.clone(),
             output: spec.output.clone(),
             model: spec.model.clone(),

@@ -43,6 +43,7 @@ pub async fn retry_task(store: Arc<Store>, args: RetryArgs, announce: bool) -> R
         RunArgs {
             agent_name: task.agent.as_str().to_string(),
             prompt,
+            repo: task.repo_path.clone(),
             dir,
             output: task.output_path.clone(),
             model: task.model.clone(),

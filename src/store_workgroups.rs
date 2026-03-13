@@ -77,6 +77,7 @@ mod tests {
             workgroup_id: Some(group_id.to_string()),
             caller_kind: None,
             caller_session_id: None,
+            repo_path: None,
             worktree_path: None,
             worktree_branch: None,
             log_path: None,

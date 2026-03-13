@@ -200,6 +200,9 @@ pub async fn run(store: Arc<Store>, args: RunArgs) -> Result<TaskId> {
         effective_prompt = format!("{effective_prompt}\n\n--- Methodology ---\n{skill_text}");
     }
     effective_prompt = templates::inject_milestone_prompt(&effective_prompt);
+    if let Some(guard) = templates::text_edit_guard(&effective_prompt) {
+        effective_prompt = format!("{guard}{effective_prompt}");
+    }
     store.update_resolved_prompt(task_id.as_str(), &effective_prompt)?;
 
     let opts = RunOpts {

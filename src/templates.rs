@@ -41,6 +41,16 @@ pub fn codex_guard() -> &'static str { "\nIMPORTANT: If no changes are needed, d
 pub fn codex_commit_msg(msg: &str) -> String { format!("\nCommit with message: '{msg}'") }
 pub fn inject_codex_prompt(raw: &str, commit_msg: Option<&str>) -> String { format!("{raw}{}{}", codex_guard(), commit_msg.map(codex_commit_msg).unwrap_or_default()) }
 
+pub fn text_edit_guard(prompt: &str) -> Option<&'static str> {
+    let text_extensions = [".md", ".txt", ".toml", ".yaml", ".yml", ".json", ".cfg", ".ini", ".csv"];
+    let lower = prompt.to_lowercase();
+    if text_extensions.iter().any(|ext| lower.contains(ext)) {
+        Some("\nIMPORTANT: When editing text/config files, make targeted edits only. Do NOT rewrite or regenerate entire files. Preserve existing content and structure.\n")
+    } else {
+        None
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -48,5 +58,20 @@ mod tests {
     #[test]
     fn apply_template_replaces_placeholder() {
         assert_eq!(apply_template("Task:\n{{prompt}}", "fix the failing test"), "Task:\nfix the failing test");
+    }
+
+    #[test]
+    fn text_edit_guard_triggers_for_md_files() {
+        assert!(text_edit_guard("Edit README.md to add a section").is_some());
+    }
+
+    #[test]
+    fn text_edit_guard_does_not_trigger_for_code() {
+        assert!(text_edit_guard("Refactor the login function in auth.rs").is_none());
+    }
+
+    #[test]
+    fn text_edit_guard_triggers_for_toml() {
+        assert!(text_edit_guard("Update Cargo.toml version").is_some());
     }
 }

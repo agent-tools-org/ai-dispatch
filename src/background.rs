@@ -4,17 +4,20 @@
 use anyhow::{Context, Result};
 use chrono::Local;
 use serde::{Deserialize, Serialize};
-use std::process::{Command, Stdio};
+use std::process::{Child, Command, Stdio};
 use std::sync::Arc;
 
 use crate::agent::{self, RunOpts};
 use crate::paths;
 use crate::store::Store;
-use crate::types::{AgentKind, EventKind, TaskEvent, TaskId, TaskStatus};
+use crate::types::{AgentKind, EventKind, TaskEvent, TaskFilter, TaskId, TaskStatus};
+
+const ZOMBIE_FAILURE_DETAIL: &str = "Background worker died unexpectedly";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BackgroundRunSpec {
     pub task_id: String,
+    pub worker_pid: Option<u32>,
     pub agent_name: String,
     pub prompt: String,
     pub dir: Option<String>,
@@ -35,7 +38,7 @@ pub fn save_spec(spec: &BackgroundRunSpec) -> Result<()> {
     Ok(())
 }
 
-pub fn spawn_worker(task_id: &str) -> Result<()> {
+pub fn spawn_worker(task_id: &str) -> Result<Child> {
     let exe = std::env::current_exe().context("Failed to resolve current aid binary")?;
     Command::new(exe)
         .args(["__run-task", task_id])
@@ -43,8 +46,7 @@ pub fn spawn_worker(task_id: &str) -> Result<()> {
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .spawn()
-        .context("Failed to spawn detached background worker")?;
-    Ok(())
+        .context("Failed to spawn detached background worker")
 }
 
 pub async fn run_task(store: Arc<Store>, task_id: &str) -> Result<()> {
@@ -60,6 +62,10 @@ pub async fn run_task(store: Arc<Store>, task_id: &str) -> Result<()> {
     Ok(())
 }
 
+pub fn check_zombie_tasks(store: &Store) -> Result<Vec<String>> {
+    check_zombie_tasks_with(store, is_process_running)
+}
+
 async fn run_task_inner(store: &Arc<Store>, spec: &BackgroundRunSpec) -> Result<()> {
     let agent_kind = AgentKind::parse_str(&spec.agent_name)
         .ok_or_else(|| anyhow::anyhow!("Unknown agent '{}'", spec.agent_name))?;
@@ -69,9 +75,15 @@ async fn run_task_inner(store: &Arc<Store>, spec: &BackgroundRunSpec) -> Result<
         output: spec.output.clone(),
         model: spec.model.clone(),
     };
-    let std_cmd = agent.build_command(&spec.prompt, &opts)
+    let std_cmd = agent
+        .build_command(&spec.prompt, &opts)
         .context("Failed to build agent command")?;
     let mut tokio_cmd = tokio::process::Command::from(std_cmd);
+    if agent::is_rust_project(spec.dir.as_deref())
+        && let Some(target_dir) = agent::shared_target_dir()
+    {
+        tokio_cmd.env("CARGO_TARGET_DIR", &target_dir);
+    }
     tokio_cmd.stdout(Stdio::piped());
     tokio_cmd.stderr(Stdio::piped());
 
@@ -131,40 +143,99 @@ fn remove_spec(task_id: &str) -> Result<()> {
     Ok(())
 }
 
+pub(crate) fn clear_spec(task_id: &str) -> Result<()> {
+    remove_spec(task_id)
+}
+
+pub(crate) fn update_worker_pid(task_id: &str, worker_pid: u32) -> Result<()> {
+    let mut spec = load_spec(task_id)?;
+    spec.worker_pid = Some(worker_pid);
+    save_spec(&spec)
+}
+
 fn record_worker_failure(store: &Store, task_id: &str, err: &anyhow::Error) -> Result<()> {
+    record_failure(
+        store,
+        task_id,
+        &format!("{err:#}"),
+        &format!("Background worker failed: {err}"),
+    )
+}
+
+fn check_zombie_tasks_with<F>(store: &Store, is_worker_alive: F) -> Result<Vec<String>>
+where
+    F: Fn(u32) -> bool,
+{
+    let mut cleaned = Vec::new();
+    for task in store.list_tasks(TaskFilter::Running)? {
+        let task_id = task.id.as_str();
+        let Some(spec) = load_spec_if_exists(task_id)? else {
+            continue;
+        };
+        let Some(worker_pid) = spec.worker_pid else {
+            record_failure(store, task_id, ZOMBIE_FAILURE_DETAIL, ZOMBIE_FAILURE_DETAIL)?;
+            cleaned.push(task_id.to_string());
+            continue;
+        };
+        if is_worker_alive(worker_pid) {
+            continue;
+        }
+
+        record_failure(store, task_id, ZOMBIE_FAILURE_DETAIL, ZOMBIE_FAILURE_DETAIL)?;
+        cleaned.push(task_id.to_string());
+    }
+    Ok(cleaned)
+}
+
+fn load_spec_if_exists(task_id: &str) -> Result<Option<BackgroundRunSpec>> {
+    let path = paths::job_path(task_id);
+    if !path.exists() {
+        return Ok(None);
+    }
+    let content = std::fs::read_to_string(&path)
+        .with_context(|| format!("Failed to read background spec {}", path.display()))?;
+    let spec = serde_json::from_str(&content)
+        .with_context(|| format!("Failed to parse background spec {}", path.display()))?;
+    Ok(Some(spec))
+}
+
+fn record_failure(
+    store: &Store,
+    task_id: &str,
+    stderr_detail: &str,
+    event_detail: &str,
+) -> Result<()> {
     let stderr_path = paths::stderr_path(task_id);
-    std::fs::write(&stderr_path, format!("{err:#}\n"))?;
+    std::fs::write(&stderr_path, format!("{stderr_detail}\n"))?;
     store.update_task_status(task_id, TaskStatus::Failed)?;
     store.insert_event(&TaskEvent {
         task_id: TaskId(task_id.to_string()),
         timestamp: Local::now(),
         event_kind: EventKind::Error,
-        detail: format!("Background worker failed: {err}"),
+        detail: event_detail.to_string(),
         metadata: None,
     })?;
     Ok(())
 }
 
-#[cfg(test)]
-mod tests {
-    use super::BackgroundRunSpec;
-
-    #[test]
-    fn serializes_spec_to_json() {
-        let spec = BackgroundRunSpec {
-            task_id: "t-save".to_string(),
-            agent_name: "codex".to_string(),
-            prompt: "prompt".to_string(),
-            dir: Some(".".to_string()),
-            output: None,
-            model: None,
-            verify: Some("auto".to_string()),
-            retry: 2,
-            group: Some("wg-demo".to_string()),
-        };
-
-        let content = serde_json::to_string_pretty(&spec).unwrap();
-        assert!(content.contains("\"agent_name\""));
-        assert!(content.contains("\"codex\""));
+#[cfg(unix)]
+fn is_process_running(pid: u32) -> bool {
+    if pid > i32::MAX as u32 {
+        return false;
     }
+
+    unsafe extern "C" {
+        fn kill(pid: i32, sig: i32) -> i32;
+    }
+
+    let result = unsafe { kill(pid as i32, 0) };
+    result == 0 || std::io::Error::last_os_error().raw_os_error() == Some(1)
 }
+
+#[cfg(not(unix))]
+fn is_process_running(_pid: u32) -> bool {
+    false
+}
+
+#[cfg(test)]
+mod tests;

@@ -84,11 +84,8 @@ pub async fn run(store: Arc<Store>, args: RunArgs) -> Result<TaskId> {
     } else {
         None
     };
-    let effective_prompt = crate::workgroup::compose_prompt(
-        &args.prompt,
-        file_context.as_deref(),
-        workgroup.as_ref(),
-    );
+    let effective_prompt =
+        crate::workgroup::compose_prompt(&args.prompt, file_context.as_deref(), workgroup.as_ref());
 
     let opts = RunOpts {
         dir: effective_dir.clone(),
@@ -100,6 +97,7 @@ pub async fn run(store: Arc<Store>, args: RunArgs) -> Result<TaskId> {
         store.update_task_status(task_id.as_str(), TaskStatus::Running)?;
         let spec = BackgroundRunSpec {
             task_id: task_id.as_str().to_string(),
+            worker_pid: None,
             agent_name: agent_kind.as_str().to_string(),
             prompt: effective_prompt,
             dir: effective_dir,
@@ -110,7 +108,17 @@ pub async fn run(store: Arc<Store>, args: RunArgs) -> Result<TaskId> {
             group: args.group.clone(),
         };
         background::save_spec(&spec)?;
-        if let Err(err) = background::spawn_worker(task_id.as_str()) {
+        let mut worker = match background::spawn_worker(task_id.as_str()) {
+            Ok(worker) => worker,
+            Err(err) => {
+                let _ = background::clear_spec(task_id.as_str());
+                store.update_task_status(task_id.as_str(), TaskStatus::Failed)?;
+                return Err(err);
+            }
+        };
+        if let Err(err) = background::update_worker_pid(task_id.as_str(), worker.id()) {
+            let _ = worker.kill();
+            let _ = background::clear_spec(task_id.as_str());
             store.update_task_status(task_id.as_str(), TaskStatus::Failed)?;
             return Err(err);
         }
@@ -126,6 +134,11 @@ pub async fn run(store: Arc<Store>, args: RunArgs) -> Result<TaskId> {
             .build_command(&effective_prompt, &opts)
             .context("Failed to build agent command")?;
         let mut tokio_cmd = Command::from(std_cmd);
+        if agent::is_rust_project(effective_dir.as_deref())
+            && let Some(target_dir) = agent::shared_target_dir()
+        {
+            tokio_cmd.env("CARGO_TARGET_DIR", &target_dir);
+        }
         tokio_cmd.stdout(std::process::Stdio::piped());
         tokio_cmd.stderr(std::process::Stdio::piped());
         store.update_task_status(task_id.as_str(), TaskStatus::Running)?;

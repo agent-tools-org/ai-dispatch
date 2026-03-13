@@ -8,6 +8,7 @@ use serde_json::{Map, Value, json};
 use std::process::Command;
 
 use super::RunOpts;
+use super::truncate::truncate_text;
 use crate::templates;
 use crate::types::*;
 
@@ -90,7 +91,7 @@ fn parse_item_event(
                 task_id: task_id.clone(),
                 timestamp: now,
                 event_kind: EventKind::Reasoning,
-                detail: truncate_detail(text, 80),
+                detail: truncate_text(text, 80),
                 metadata: None,
             })
         }
@@ -115,7 +116,7 @@ fn parse_command_event(
             task_id: task_id.clone(),
             timestamp: now,
             event_kind: classify_command(command),
-            detail: truncate_detail(command, 80),
+            detail: truncate_text(command, 80),
             metadata: Some(json!({ "command": command, "status": "in_progress" })),
         });
     }
@@ -129,7 +130,7 @@ fn parse_command_event(
             detail: format!(
                 "command failed ({}) {}",
                 exit_code.unwrap_or(-1),
-                truncate_detail(command, 60)
+                truncate_text(command, 60)
             ),
             metadata: Some(json!({ "command": command, "exit_code": exit_code })),
         });
@@ -144,7 +145,7 @@ fn parse_command_event(
         task_id: task_id.clone(),
         timestamp: now,
         event_kind,
-        detail: truncate_detail(output, 80),
+        detail: truncate_text(output, 80),
         metadata: Some(json!({ "command": command, "exit_code": exit_code })),
     })
 }
@@ -210,7 +211,7 @@ fn parse_error_event(
         task_id: task_id.clone(),
         timestamp: now,
         event_kind: EventKind::Error,
-        detail: truncate_detail(detail, 80),
+        detail: truncate_text(detail, 80),
         metadata: None,
     })
 }
@@ -286,15 +287,6 @@ fn extract_noop_reason(line: &str) -> String {
         format!("NO_CHANGES_NEEDED:{}", reason.trim().trim_matches('"'))
     } else {
         "NO_CHANGES_NEEDED".to_string()
-    }
-}
-
-fn truncate_detail(s: &str, max: usize) -> String {
-    let s = s.replace('\n', " ");
-    if s.len() <= max {
-        s
-    } else {
-        format!("{}...", &s[..max.saturating_sub(3)])
     }
 }
 

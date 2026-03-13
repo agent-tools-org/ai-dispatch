@@ -7,6 +7,7 @@ use serde_json::json;
 use std::process::Command;
 
 use super::RunOpts;
+use super::truncate::truncate_text;
 use crate::types::*;
 
 pub struct OpenCodeAgent;
@@ -53,7 +54,7 @@ impl super::Agent for OpenCodeAgent {
             task_id: task_id.clone(),
             timestamp: now,
             event_kind: k,
-            detail: truncate(detail, 80),
+            detail: truncate_text(detail, 80),
             metadata: None,
         })
     }
@@ -80,7 +81,7 @@ fn parse_json_event(
         "tool_call" | "function_call" => {
             let name = v.get("name").and_then(|n| n.as_str()).unwrap_or("unknown");
             let args = v.get("arguments").and_then(|a| a.as_str()).unwrap_or("");
-            (format!("{name}: {}", truncate(args, 60)), None)
+            (format!("{name}: {}", truncate_text(args, 60)), None)
         }
         "message" | "text" => {
             let detail = v
@@ -118,7 +119,7 @@ fn parse_json_event(
         task_id: task_id.clone(),
         timestamp: now,
         event_kind,
-        detail: truncate(&detail, 80),
+        detail: truncate_text(&detail, 80),
         metadata,
     })
 }
@@ -171,13 +172,4 @@ fn extract_tokens_from_output(output: &str) -> Option<i64> {
         }
     }
     None
-}
-
-fn truncate(s: &str, max: usize) -> String {
-    let s = s.replace('\n', " ");
-    if s.len() <= max {
-        s
-    } else {
-        format!("{}...", &s[..max.saturating_sub(3)])
-    }
 }

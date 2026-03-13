@@ -27,7 +27,10 @@ pub fn create_worktree(repo_dir: &Path, branch: &str) -> Result<WorktreeInfo> {
     let wt_path = PathBuf::from(format!("/tmp/aid-wt-{branch}"));
 
     if wt_path.exists() {
-        return Ok(WorktreeInfo { path: wt_path, branch: branch.to_string() });
+        return Ok(WorktreeInfo {
+            path: wt_path,
+            branch: branch.to_string(),
+        });
     }
 
     // Try new branch first
@@ -38,10 +41,16 @@ pub fn create_worktree(repo_dir: &Path, branch: &str) -> Result<WorktreeInfo> {
         .context("Failed to run git worktree add")?;
 
     if out.status.success() {
-        return Ok(WorktreeInfo { path: wt_path, branch: branch.to_string() });
+        return Ok(WorktreeInfo {
+            path: wt_path,
+            branch: branch.to_string(),
+        });
     }
 
-    // Fallback: existing branch
+    // Fallback: existing branch — reset it to HEAD first to avoid stale checkout
+    let _ = Command::new("git")
+        .args(["-C", &repo_dir.to_string_lossy(), "branch", "-f", branch, "HEAD"])
+        .output();
     let out = Command::new("git")
         .args(["-C", &repo_dir.to_string_lossy()])
         .args(["worktree", "add", &wt_path.to_string_lossy(), branch])
@@ -53,9 +62,11 @@ pub fn create_worktree(repo_dir: &Path, branch: &str) -> Result<WorktreeInfo> {
         "git worktree add failed: {}",
         String::from_utf8_lossy(&out.stderr)
     );
-    Ok(WorktreeInfo { path: wt_path, branch: branch.to_string() })
+    Ok(WorktreeInfo {
+        path: wt_path,
+        branch: branch.to_string(),
+    })
 }
-
 
 #[cfg(test)]
 mod tests {

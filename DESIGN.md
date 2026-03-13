@@ -2,7 +2,7 @@
 
 ## Current Status
 
-Implemented in v0.8.0:
+Implemented in v0.9.0:
 
 - `aid run` with background workers, worktrees, context injection, and `--retry`
 - `aid watch --tui` plus the original text watch mode
@@ -14,6 +14,8 @@ Implemented in v0.8.0:
 - `aid audit`, `aid review`, and `aid output` for artifact inspection
 - deterministic usage extraction from streaming agent events
 - `aid usage` for task-history cost reporting and configured budget windows
+- `aid explain` for AI-assisted task log explanation
+- task dependency DAGs in `aid batch` with topological sort and level-based parallel dispatch
 
 State is stored under `~/.aid` by default, or `AID_HOME` when overridden.
 
@@ -26,14 +28,20 @@ State is stored under `~/.aid` by default, or `AID_HOME` when overridden.
 - preserve shared context across retries, background runs, and artifact inspection
 - add workgroup lifecycle commands while keeping historical task tags on old tasks
 
-### v0.9 next
+### v0.9 delivered
 
-- extend workgroup-aware views into the TUI and richer task dashboards
-- add optional AI-assisted log explanation and failure summarization as a cached layer
-- introduce task dependency DAGs for explicit scheduling beyond retry chains
-- surface resource telemetry in the TUI, starting with CPU and memory
-- support configurable prompt registry references instead of hard-coded prompt text only
-- expand provider quota reporting beyond task history into plan-window awareness
+- TUI scoped by task ID and workgroup (`aid watch --tui t-xxxx`, `aid watch --tui --group wg-xxxx`)
+- `aid explain <task-id>` — dispatch task logs to cheap AI for failure summarization
+- task dependency DAGs in batch files (`depends_on` + topological sort + level-based parallel dispatch)
+- clippy-clean codebase, 129 tests passing
+
+### v1.0 next
+
+- fix worktree branch reuse bug (stale branches checked out at old commit)
+- fix zombie background tasks (dead processes shown as Running forever)
+- fix UTF-8 boundary panic in codex/opencode adapters (multi-byte chars)
+- shared CARGO_TARGET_DIR for worktree tasks (build cache reuse)
+- MCP server mode (expose aid as MCP tools for Claude)
 
 ## Problem
 

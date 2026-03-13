@@ -5,6 +5,7 @@ use anyhow::Result;
 use chrono::Local;
 use std::process::Command;
 
+use super::truncate::truncate_text;
 use super::RunOpts;
 use crate::types::*;
 
@@ -39,13 +40,18 @@ impl super::Agent for CursorAgent {
             task_id: task_id.clone(),
             timestamp: now,
             event_kind: k,
-            detail: truncate(detail, 80),
+            detail: truncate_text(detail, 80),
             metadata: None,
         })
     }
 
     fn parse_completion(&self, _output: &str) -> CompletionInfo {
-        CompletionInfo { tokens: None, status: TaskStatus::Done, model: None, cost_usd: None }
+        CompletionInfo {
+            tokens: None,
+            status: TaskStatus::Done,
+            model: None,
+            cost_usd: None,
+        }
     }
 }
 
@@ -58,7 +64,8 @@ fn classify_line(line: &str) -> (Option<EventKind>, &str) {
         (Some(EventKind::Build), line)
     } else if line.contains("git commit") {
         (Some(EventKind::Commit), line)
-    } else if line.starts_with("Writing") || line.starts_with("Creating") || line.contains("wrote") {
+    } else if line.starts_with("Writing") || line.starts_with("Creating") || line.contains("wrote")
+    {
         (Some(EventKind::FileWrite), line)
     } else if line.starts_with("Reading") {
         (Some(EventKind::FileRead), line)
@@ -69,7 +76,3 @@ fn classify_line(line: &str) -> (Option<EventKind>, &str) {
     }
 }
 
-fn truncate(s: &str, max: usize) -> String {
-    let s = s.replace('\n', " ");
-    if s.len() <= max { s } else { format!("{}...", &s[..max.saturating_sub(3)]) }
-}

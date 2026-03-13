@@ -4,6 +4,7 @@
 use anyhow::Result;
 use std::sync::Arc;
 
+use crate::background;
 use crate::board::render_board;
 use crate::session;
 use crate::store::Store;
@@ -24,6 +25,7 @@ pub fn run(
         TaskFilter::All
     };
 
+    background::check_zombie_tasks(store)?;
     let mut tasks = store.list_tasks(filter)?;
     if mine {
         tasks.retain(session::matches_current);

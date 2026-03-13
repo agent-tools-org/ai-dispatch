@@ -72,6 +72,7 @@ fn task_to_run_args(task: &batch::BatchTask, background: bool) -> RunArgs {
         background,
         announce: true,
         parent_task_id: None,
+        on_done: None,
     }
 }
 fn task_has_dependencies(task: &batch::BatchTask) -> bool {

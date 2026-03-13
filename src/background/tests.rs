@@ -23,6 +23,7 @@ fn serializes_spec_to_json() {
         group: Some("wg-demo".to_string()),
         skills: vec![],
         interactive: true,
+        on_done: None,
     };
 
     let content = serde_json::to_string_pretty(&spec).unwrap();
@@ -88,6 +89,7 @@ fn make_spec(task_id: &str) -> BackgroundRunSpec {
         group: None,
         skills: vec![],
         interactive: true,
+        on_done: None,
     }
 }
 

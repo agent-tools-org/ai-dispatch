@@ -36,6 +36,7 @@ pub struct RunArgs {
     pub background: bool,
     pub announce: bool,
     pub parent_task_id: Option<String>,
+    pub on_done: Option<String>,
 }
 
 fn effective_skills(agent_kind: &AgentKind, args: &RunArgs) -> Vec<String> {
@@ -152,6 +153,7 @@ pub async fn run(store: Arc<Store>, args: RunArgs) -> Result<TaskId> {
             group: args.group.clone(),
             skills: args.skills.clone(),
             interactive: true,
+            on_done: args.on_done.clone(),
         };
         background::save_spec(&spec)?;
         let mut worker = match background::spawn_worker(task_id.as_str()) {
@@ -465,6 +467,7 @@ mod tests {
             background: false,
             announce: false,
             parent_task_id: None,
+            on_done: None,
         }
     }
 

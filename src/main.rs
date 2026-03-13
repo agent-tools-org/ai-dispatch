@@ -83,6 +83,9 @@ enum Commands {
         /// Run in background
         #[arg(long)]
         bg: bool,
+        /// Command to run on task completion
+        #[arg(long)]
+        on_done: Option<String>,
     },
     /// Dispatch tasks from a TOML batch file
     Batch {
@@ -214,6 +217,7 @@ async fn main() -> Result<()> {
             skill,
             no_skill,
             bg,
+            on_done,
         } => {
             let agent_name = if agent == "auto" {
                 let selection_opts = agent::RunOpts {
@@ -251,6 +255,7 @@ async fn main() -> Result<()> {
                     background: bg,
                     announce: true,
                     parent_task_id: None,
+                    on_done,
                 },
             )
             .await?;

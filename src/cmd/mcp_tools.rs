@@ -102,6 +102,7 @@ async fn run_tool(store: Arc<Store>, arguments: Value) -> Result<Value> {
             background: args.background,
             announce: false,
             parent_task_id: None,
+            on_done: None,
         },
     )
     .await;

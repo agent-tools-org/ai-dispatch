@@ -113,6 +113,7 @@ async fn dispatch(store: Arc<Store>, request: AskRequest, announce: bool) -> Res
             background: false,
             announce,
             parent_task_id: None,
+            on_done: None,
         },
     )
     .await

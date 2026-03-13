@@ -55,6 +55,7 @@ pub async fn retry_task(store: Arc<Store>, args: RetryArgs, announce: bool) -> R
             context: vec![],
             skills: vec![],
             parent_task_id: Some(task.id.as_str().to_string()),
+            on_done: None,
         },
     )
     .await

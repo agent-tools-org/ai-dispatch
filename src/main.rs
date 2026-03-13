@@ -98,6 +98,20 @@ enum Commands {
         #[arg(long)]
         wait: bool,
     },
+    /// Benchmark a task across multiple agents
+    Benchmark {
+        /// Task prompt
+        prompt: String,
+        /// Comma-separated agents to compare
+        #[arg(long)]
+        agents: String,
+        /// Working directory
+        #[arg(short, long)]
+        dir: Option<String>,
+        /// Verify command
+        #[arg(long, num_args = 0..=1, default_missing_value = "auto")]
+        verify: Option<String>,
+    },
     /// Live progress / blocking wait (--quiet)
     Watch {
         /// Watch a specific task ID
@@ -281,6 +295,14 @@ async fn main() -> Result<()> {
                 },
             )
             .await?;
+        }
+        Commands::Benchmark {
+            prompt,
+            agents,
+            dir,
+            verify,
+        } => {
+            cmd::benchmark::run(store, prompt, agents, dir, verify).await?;
         }
         Commands::Watch {
             task_id,

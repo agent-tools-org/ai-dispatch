@@ -47,6 +47,7 @@ pub async fn run(
             verify: None,
             retry: 0,
             context: vec![],
+            skills: vec![],
             background: false,
             parent_task_id: None,
         },

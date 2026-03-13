@@ -6,6 +6,7 @@ use std::sync::Arc;
 
 use crate::agent;
 use crate::cli_actions::ConfigAction;
+use crate::skills;
 use crate::store::Store;
 
 pub fn run(_store: &Arc<Store>, action: ConfigAction) -> Result<()> {
@@ -18,6 +19,17 @@ pub fn run(_store: &Arc<Store>, action: ConfigAction) -> Result<()> {
                 println!("Detected agents:");
                 for a in &agents {
                     println!("  - {}", a.as_str());
+                }
+            }
+        }
+        ConfigAction::Skills => {
+            let skills = skills::list_skills()?;
+            if skills.is_empty() {
+                println!("No skills found in ~/.aid/skills/.");
+            } else {
+                println!("Available skills:");
+                for skill in &skills {
+                    println!("  - {skill}");
                 }
             }
         }

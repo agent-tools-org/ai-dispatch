@@ -178,6 +178,7 @@ async fn run_explain(
             verify: None,
             retry: 0,
             context: vec![],
+            skills: vec![],
             background: false,
             parent_task_id: Some(task_id.to_string()),
         },

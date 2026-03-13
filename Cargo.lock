@@ -3,7 +3,7 @@
 version = 4
 
 [[package]]
-name = "aid"
+name = "ai-dispatch"
 version = "2.8.0"
 dependencies = [
  "anyhow",

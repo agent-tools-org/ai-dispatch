@@ -8,6 +8,7 @@ use std::sync::Arc;
 use crate::agent;
 use crate::cli_actions::ConfigAction;
 use crate::cost;
+use crate::rate_limit;
 use crate::skills;
 use crate::store::Store;
 use crate::templates;
@@ -148,9 +149,18 @@ fn agent_profile(kind: AgentKind, installed: bool, history: Option<&AgentHistory
         ),
         None => "  History:   no tasks yet\n".to_string(),
     };
+    let rate_limit_line = match rate_limit::get_rate_limit_info(&kind) {
+        Some(info) if info.recovery_at.is_some() => {
+            format!(
+                "  Status:    rate-limited (try again at {})\n",
+                info.recovery_at.unwrap()
+            )
+        }
+        _ => "".to_string(),
+    };
     format!(
-        "  Strengths: {}\n  Cost:      {}\n{}  Mode:      {} ({})\n",
-        strengths, cost, history_line, mode, install_status
+        "  Strengths: {}\n  Cost:      {}\n{}{}  Mode:      {} ({})\n",
+        strengths, cost, history_line, rate_limit_line, mode, install_status
     )
 }
 

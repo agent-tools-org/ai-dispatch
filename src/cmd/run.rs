@@ -43,6 +43,7 @@ pub struct RunArgs {
     pub parent_task_id: Option<String>,
     pub on_done: Option<String>,
     pub fallback: Option<String>,
+    pub read_only: bool,
 }
 
 fn effective_skills(agent_kind: &AgentKind, args: &RunArgs) -> Vec<String> {
@@ -206,6 +207,7 @@ pub async fn run(store: Arc<Store>, args: RunArgs) -> Result<TaskId> {
         output: args.output.clone(),
         model: args.model.clone(),
         budget: false,
+        read_only: args.read_only,
     };
 
     if args.background {
@@ -490,6 +492,7 @@ mod tests {
             parent_task_id: None,
             on_done: None,
             fallback: None,
+            read_only: false,
         }
     }
 

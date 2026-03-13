@@ -2,7 +2,7 @@
 // Scores prompt signals, respects installed CLIs, and returns a concise reason.
 // Exports select_agent() helpers; deps: super::detect_agents, super::RunOpts.
 
-use super::{RunOpts, detect_agents};
+use super::{detect_agents, RunOpts};
 use crate::types::AgentKind;
 
 const RESEARCH_PREFIXES: &[&str] = &[
@@ -275,6 +275,7 @@ mod tests {
             output: None,
             model: None,
             budget: true,
+            read_only: false,
         };
         let (kind, reason) = select_agent_from(prompt, &opts, &available_agents());
         assert_ne!(kind, AgentKind::Codex);
@@ -287,6 +288,7 @@ mod tests {
             output: None,
             model: None,
             budget: false,
+            read_only: false,
         };
         select_agent_from(prompt, &opts, available)
     }

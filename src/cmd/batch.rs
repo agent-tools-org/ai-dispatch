@@ -96,6 +96,7 @@ fn task_to_run_args(task: &batch::BatchTask, background: bool) -> RunArgs {
         parent_task_id: None,
         on_done: None,
         fallback: task.fallback.clone(),
+        read_only: false,
     }
 }
 fn task_has_dependencies(task: &batch::BatchTask) -> bool {

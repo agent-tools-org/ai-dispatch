@@ -155,7 +155,8 @@ async fn run_task_inner(store: &Arc<Store>, spec: &BackgroundRunSpec) -> Result<
         spec.verify.as_deref(),
         spec.dir.as_deref(),
     );
-    if let Some(task) = store.get_task(&spec.task_id)? {crate::cmd::run::maybe_cleanup_fast_fail(store, &TaskId(spec.task_id.clone()), &task);
+    if let Some(task) = store.get_task(&spec.task_id)? {
+        crate::cmd::run::maybe_cleanup_fast_fail(store, &TaskId(spec.task_id.clone()), &task);
     }
     notify_task_completion(store, &spec.task_id)?;
     if let Some(worktree_dir) = spec.dir.as_deref() {

@@ -300,7 +300,8 @@ pub async fn run(store: Arc<Store>, args: RunArgs) -> Result<TaskId> {
             args.verify.as_deref(),
             effective_dir.as_deref(),
         );
-        if let Some(task) = store.get_task(task_id.as_str())? {maybe_cleanup_fast_fail(&store, &task_id, &task);
+        if let Some(task) = store.get_task(task_id.as_str())? {
+            maybe_cleanup_fast_fail(&store, &task_id, &task);
         }
         notify_task_completion(&store, &task_id)?;
         crate::webhook::fire_task_webhooks(&store, task_id.as_str()).await;

@@ -415,8 +415,18 @@ ai-dispatch/
 - TUI dashboard with ratatui
 - OpenCode adapter (once installed)
 - Cursor Agent adapter
+### v1.1 in progress
+
+- MCP server mode (`aid mcp` — stdio JSON-RPC for Claude Code native tool calls)
+- Smart agent auto-selection (`aid run auto "prompt"` — scoring-based heuristic)
+- Process monitoring in TUI (CPU% and memory for running tasks)
+- Skill injection (`aid run --skill implementer` — methodology from `~/.aid/skills/`)
+- Milestone reporting (agent progress stages visible in `aid watch`)
+
+### Future
+
+- Interactive input forwarding (let orchestrator answer agent prompts mid-execution)
 - Auto-retry on failure with exponential backoff
 - Cost tracking with configurable per-model pricing
-- MCP server mode (expose dispatch as MCP tools for Claude)
 - Parallel dispatch: `aid run-parallel tasks.toml` (batch file)
-- Smart agent selection: analyze task → pick best agent automatically
+- Session-scoped agent message bus (agents share findings within a workgroup)

@@ -6,8 +6,8 @@ use chrono::Local;
 use serde_json::json;
 use std::process::Command;
 
-use super::RunOpts;
 use super::truncate::truncate_text;
+use super::RunOpts;
 use crate::types::*;
 
 pub struct OpenCodeAgent;
@@ -60,13 +60,12 @@ impl super::Agent for OpenCodeAgent {
     }
 
     fn parse_completion(&self, output: &str) -> CompletionInfo {
-        // Try to extract token count from output
-        let tokens = extract_tokens_from_output(output);
+        let (tokens, cost_usd) = extract_tokens_from_output(output);
         CompletionInfo {
             tokens,
             status: TaskStatus::Done,
             model: None,
-            cost_usd: None,
+            cost_usd,
         }
     }
 }
@@ -159,17 +158,32 @@ fn classify_tool_detail(detail: &str) -> EventKind {
     }
 }
 
-fn extract_tokens_from_output(output: &str) -> Option<i64> {
-    // Look for common token reporting patterns
-    for line in output.lines().rev() {
-        if let Some(pos) = line.find("tokens:") {
-            let after = &line[pos + 7..];
-            if let Some(num) = after.split_whitespace().next()
-                && let Ok(n) = num.replace(',', "").parse::<i64>()
-            {
-                return Some(n);
+fn extract_tokens_from_output(output: &str) -> (Option<i64>, Option<f64>) {
+    let mut total_tokens: i64 = 0;
+    let mut total_cost: f64 = 0.0;
+    let mut found_any = false;
+
+    for line in output.lines() {
+        if let Ok(v) = serde_json::from_str::<serde_json::Value>(line) {
+            if v.get("type").and_then(|t| t.as_str()) == Some("step_finish") {
+                if let Some(part) = v.get("part") {
+                    if let Some(tokens) = part.get("tokens").and_then(|t| t.get("total")) {
+                        if let Some(n) = tokens.as_i64() {
+                            total_tokens += n;
+                            found_any = true;
+                        }
+                    }
+                    if let Some(cost) = part.get("cost").and_then(|c| c.as_f64()) {
+                        total_cost += cost;
+                    }
+                }
             }
         }
     }
-    None
+
+    if found_any {
+        (Some(total_tokens), Some(total_cost))
+    } else {
+        (None, None)
+    }
 }

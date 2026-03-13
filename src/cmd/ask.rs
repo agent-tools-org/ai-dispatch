@@ -105,6 +105,7 @@ async fn dispatch(store: Arc<Store>, request: AskRequest, announce: bool) -> Res
             output: request.output,
             model: request.model,
             worktree: None,
+            base_branch: None,
             group: None,
             verify: None,
             retry: 0,

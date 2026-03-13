@@ -5,6 +5,7 @@ pub mod ask;
 pub mod batch;
 pub mod board;
 pub mod config;
+pub mod explain;
 pub mod group;
 pub mod mcp;
 mod mcp_schema;

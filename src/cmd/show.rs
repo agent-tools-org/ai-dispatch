@@ -7,11 +7,10 @@ use std::process::Command;
 use std::sync::Arc;
 
 use crate::board::render_task_detail;
-use crate::cmd::retry_logic;
-use crate::cmd::run::{self, RunArgs};
+use crate::cmd;
 use crate::paths;
 use crate::store::Store;
-use crate::types::{EventKind, Task, TaskEvent, TaskStatus};
+use crate::types::{EventKind, Task, TaskStatus};
 
 pub struct ShowArgs {
     pub task_id: String,
@@ -33,7 +32,7 @@ pub enum ShowMode {
 
 pub async fn run(store: Arc<Store>, args: ShowArgs) -> Result<()> {
     if args.explain {
-        return run_explain(store, &args.task_id, args.agent, args.model).await;
+        return cmd::explain::run_explain(store, &args.task_id, args.agent, args.model).await;
     }
     let mode = if args.diff {
         ShowMode::Diff
@@ -167,156 +166,9 @@ pub fn log_text(task_id: &str) -> Result<String> {
         .with_context(|| format!("Failed to read log file {}", path.display()))
 }
 
-// --- Explain mode ---
-
-async fn run_explain(
-    store: Arc<Store>,
-    task_id: &str,
-    agent: Option<String>,
-    model: Option<String>,
-) -> Result<()> {
-    let task = load_task(&store, task_id)?;
-    let events = store.get_events(task_id)?;
-    let stderr = retry_logic::read_stderr_tail(task_id, 30);
-    let log = read_tail(&paths::log_path(task_id), 50, "log unavailable");
-    let context = build_explain_context(&task, &events, &stderr, &log);
-    let prompt = build_explain_prompt(&context);
-    let agent_name = agent.unwrap_or_else(|| "gemini".to_string());
-
-    println!("[explain] Analyzing task {task_id} via {agent_name}...");
-    let _ = run::run(
-        store,
-        RunArgs {
-            agent_name,
-            prompt,
-            dir: None,
-            output: None,
-            model,
-            worktree: None,
-            group: None,
-            verify: None,
-            retry: 0,
-            context: vec![],
-            skills: vec![],
-            background: false,
-            announce: true,
-            parent_task_id: Some(task_id.to_string()),
-            on_done: None,
-        },
-    )
-    .await?;
-    Ok(())
-}
-
-fn build_explain_context(
-    task: &Task,
-    events: &[TaskEvent],
-    stderr_tail: &str,
-    log_tail: &str,
-) -> String {
-    format!(
-        "[Task Info]\n{}\n\n[Events Timeline]\n{}\n\n[Stderr Tail]\n{}\n\n[Log Tail]\n{}",
-        format_task_info(task),
-        format_events(events),
-        stderr_tail,
-        log_tail,
-    )
-}
-
-fn build_explain_prompt(context: &str) -> String {
-    format!(
-        concat!(
-            "You are explaining a prior `aid` task execution.\n",
-            "Analyze the context and answer with these sections:\n",
-            "1. Summary: exactly one sentence.\n",
-            "2. Intent: what the task tried to do.\n",
-            "3. What Happened: concise timeline of execution.\n",
-            "4. Root Cause: likely reason for failure, or say that no failure is evident.\n",
-            "Be concrete, use the evidence in the artifacts, and say when evidence is missing.\n\n",
-            "[Execution Context]\n",
-            "{}"
-        ),
-        context,
-    )
-}
-
-fn format_task_info(task: &Task) -> String {
-    let completed = task
-        .completed_at
-        .map(|v| v.to_rfc3339())
-        .unwrap_or_else(|| "(not completed)".to_string());
-    let duration = task
-        .duration_ms
-        .map(|v| format!("{v} ms"))
-        .unwrap_or_else(|| "(unknown)".to_string());
-    let tokens = task
-        .tokens
-        .map(|v| v.to_string())
-        .unwrap_or_else(|| "(unknown)".to_string());
-    let cost = task
-        .cost_usd
-        .map(|v| format!("{v:.4}"))
-        .unwrap_or_else(|| "(unknown)".to_string());
-
-    [
-        format!("Task ID: {}", task.id),
-        format!("Agent: {}", task.agent),
-        format!("Status: {}", task.status.label()),
-        format!("Prompt: {}", task.prompt),
-        format!(
-            "Parent Task ID: {}",
-            task.parent_task_id.as_deref().unwrap_or("(none)")
-        ),
-        format!("Model: {}", task.model.as_deref().unwrap_or("(none)")),
-        format!("Created At: {}", task.created_at.to_rfc3339()),
-        format!("Completed At: {completed}"),
-        format!("Duration: {duration}"),
-        format!("Tokens: {tokens}"),
-        format!("Cost USD: {cost}"),
-        format!(
-            "Worktree: {}",
-            task.worktree_path.as_deref().unwrap_or("(none)")
-        ),
-        format!(
-            "Output Path: {}",
-            task.output_path.as_deref().unwrap_or("(none)")
-        ),
-        format!(
-            "Stderr Path: {}",
-            paths::stderr_path(task.id.as_str()).display()
-        ),
-        format!("Log Path: {}", paths::log_path(task.id.as_str()).display()),
-    ]
-    .join("\n")
-}
-
-fn format_events(events: &[TaskEvent]) -> String {
-    if events.is_empty() {
-        return "(no events recorded)".to_string();
-    }
-    events
-        .iter()
-        .map(|e| {
-            let metadata = e
-                .metadata
-                .as_ref()
-                .map(|v| format!(" metadata={v}"))
-                .unwrap_or_default();
-            format!(
-                "{} {} {}{}",
-                e.timestamp.to_rfc3339(),
-                e.event_kind.as_str(),
-                e.detail,
-                metadata,
-            )
-        })
-        .collect::<Vec<_>>()
-        .join("\n")
-}
-
 // --- Shared helpers ---
 
-fn load_task(store: &Arc<Store>, task_id: &str) -> Result<Task> {
+pub(crate) fn load_task(store: &Arc<Store>, task_id: &str) -> Result<Task> {
     store
         .get_task(task_id)?
         .ok_or_else(|| anyhow::anyhow!("Task '{task_id}' not found"))
@@ -382,7 +234,7 @@ fn git_output(wt_path: &str, args: &[&str]) -> Option<String> {
     Some(String::from_utf8_lossy(&output.stdout).into())
 }
 
-fn read_tail(path: &Path, limit: usize, unavailable: &str) -> String {
+pub(crate) fn read_tail(path: &Path, limit: usize, unavailable: &str) -> String {
     let Ok(bytes) = std::fs::read(path) else {
         return unavailable.to_string();
     };
@@ -453,12 +305,5 @@ mod tests {
     #[test]
     fn tail_lines_keeps_only_requested_suffix() {
         assert_eq!(tail_lines("a\nb\nc\nd", 2), "c\nd");
-    }
-
-    #[test]
-    fn explain_prompt_embeds_execution_context() {
-        let prompt = build_explain_prompt("task context");
-        assert!(prompt.contains("Summary: exactly one sentence."));
-        assert!(prompt.contains("[Execution Context]\ntask context"));
     }
 }

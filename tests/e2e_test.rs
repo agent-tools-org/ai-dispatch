@@ -1,11 +1,11 @@
 // E2E tests for aid CLI.
 // Tests the binary as a subprocess to verify full command flow.
 
+use rusqlite::params;
 use std::io::Write;
 use std::path::Path;
 use std::process::Command;
 use std::process::Stdio;
-use rusqlite::params;
 use tempfile::NamedTempFile;
 use tempfile::TempDir;
 
@@ -124,7 +124,8 @@ fn merge_marks_done_task_as_merged() {
         "INSERT INTO tasks (id, agent, prompt, status, created_at)
          VALUES (?1, ?2, ?3, ?4, ?5)",
         params!["t-2001", "codex", "merge me", "done", created_at],
-    ).unwrap();
+    )
+    .unwrap();
 
     let merge_output = aid_cmd_in(temp_dir.path())
         .args(["merge", "t-2001"])
@@ -401,4 +402,26 @@ fn respond_reads_response_text_from_file() {
 
     let queued = std::fs::read_to_string(temp_dir.path().join("jobs/t-respond.input")).unwrap();
     assert_eq!(queued, "text with `backticks` and {braces}");
+}
+
+#[test]
+fn test_clear_limit_unknown_agent() {
+    let (mut cmd, _tmp) = aid_cmd();
+    let output = cmd
+        .args(["config", "clear-limit", "unknown_agent_xyz"])
+        .output()
+        .unwrap();
+    assert!(!output.status.success());
+}
+
+#[test]
+fn test_clear_limit_codex() {
+    let (mut cmd, _tmp) = aid_cmd();
+    let output = cmd
+        .args(["config", "clear-limit", "codex"])
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("not rate-limited"));
 }

@@ -32,6 +32,9 @@ impl super::Agent for CodexAgent {
         } else {
             cmd.args(["exec", "--json", "--full-auto", &injected]);
         }
+        if let Some(ref model) = opts.model {
+            cmd.args(["-c", &format!("model=\"{model}\"")]);
+        }
         if let Some(ref output) = opts.output {
             cmd.args(["-o", output]);
         }

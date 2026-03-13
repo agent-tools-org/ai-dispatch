@@ -28,6 +28,11 @@ pub fn mark_rate_limited(agent: &AgentKind, message: &str) {
     let _ = fs::write(&path, content);
 }
 
+pub fn clear_rate_limit(agent: &AgentKind) -> bool {
+    let path = marker_path(agent);
+    fs::remove_file(&path).is_ok()
+}
+
 pub fn is_rate_limited(agent: &AgentKind) -> bool {
     if let Some(info) = get_rate_limit_info(agent) {
         // If we have recovery_at info, check if it's still in the future

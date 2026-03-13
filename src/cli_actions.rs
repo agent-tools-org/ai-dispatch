@@ -15,6 +15,11 @@ pub enum ConfigAction {
         #[arg(long)]
         streaming: bool,
     },
+    /// Clear rate-limit marker for an agent (or "all")
+    ClearLimit {
+        /// Agent name (e.g. codex, gemini) or "all"
+        agent: String,
+    },
     /// Show pricing table
     Pricing,
     /// List available skills

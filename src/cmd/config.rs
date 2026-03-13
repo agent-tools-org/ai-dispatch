@@ -64,11 +64,19 @@ pub struct AgentModel {
 pub const AGENT_MODELS: &[AgentModel] = &[
     AgentModel {
         agent: AgentKind::Codex,
+        model: "gpt-5.4",
+        input_per_m: 2.0,
+        output_per_m: 8.0,
+        tier: "premium",
+        description: "Latest, best quality",
+    },
+    AgentModel {
+        agent: AgentKind::Codex,
         model: "gpt-4.1",
         input_per_m: 2.0,
         output_per_m: 8.0,
         tier: "standard",
-        description: "Default, best quality",
+        description: "Reliable, good quality",
     },
     AgentModel {
         agent: AgentKind::Codex,
@@ -225,6 +233,24 @@ pub fn run(store: &Arc<Store>, action: ConfigAction) -> Result<()> {
                         am.output_per_m,
                         am.description
                     );
+                }
+            }
+        }
+        ConfigAction::ClearLimit { agent } => {
+            if agent == "all" {
+                for (kind, _, _, _, _) in AGENT_PROFILES {
+                    if rate_limit::clear_rate_limit(kind) {
+                        println!("Cleared rate-limit for {}", kind.as_str());
+                    }
+                }
+            } else {
+                let Some(kind) = AgentKind::parse_str(&agent) else {
+                    anyhow::bail!("Unknown agent: {agent}");
+                };
+                if rate_limit::clear_rate_limit(&kind) {
+                    println!("Cleared rate-limit for {}", kind.as_str());
+                } else {
+                    println!("{} is not rate-limited", agent);
                 }
             }
         }

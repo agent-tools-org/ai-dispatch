@@ -90,6 +90,7 @@ async fn run_tool(store: Arc<Store>, arguments: Value) -> Result<Value> {
         RunArgs {
             agent_name: args.agent,
             prompt: args.prompt,
+            repo: None,
             dir: args.dir,
             output: None,
             model: args.model,

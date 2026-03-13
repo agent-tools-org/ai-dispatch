@@ -72,6 +72,7 @@ fn task_to_run_args(task: &batch::BatchTask, background: bool) -> RunArgs {
     RunArgs {
         agent_name: task.agent.clone(),
         prompt: task.prompt.clone(),
+        repo: None,
         dir: task.dir.clone(),
         output: task.output.clone(),
         model: task.model.clone(),

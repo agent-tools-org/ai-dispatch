@@ -32,13 +32,24 @@ pub fn render_board(tasks: &[Task], store: &Store) -> Result<String> {
     }
     out.push('\n');
 
+    let show_repo = tasks.iter().any(|task| task.repo_path.is_some());
+
     // Header
-    out.push_str(&format!(
-        "{:<10} {:<10} {:<30} {:<10} {:<10} {:<8} {:<10} {:<10} {:<16} {}\n",
-        "ID", "Agent", "Status", "Duration", "Tokens", "Cost", "Parent", "Group", "Caller", "Model"
-    ));
-    out.push_str(&"-".repeat(144));
-    out.push('\n');
+    if show_repo {
+        out.push_str(&format!(
+            "{:<10} {:<10} {:<30} {:<10} {:<10} {:<8} {:<10} {:<10} {:<20} {:<16} {}\n",
+            "ID", "Agent", "Status", "Duration", "Tokens", "Cost", "Parent", "Group", "Repo", "Caller", "Model"
+        ));
+        out.push_str(&"-".repeat(165));
+        out.push('\n');
+    } else {
+        out.push_str(&format!(
+            "{:<10} {:<10} {:<30} {:<10} {:<10} {:<8} {:<10} {:<10} {:<16} {}\n",
+            "ID", "Agent", "Status", "Duration", "Tokens", "Cost", "Parent", "Group", "Caller", "Model"
+        ));
+        out.push_str(&"-".repeat(144));
+        out.push('\n');
+    }
 
     for task in tasks {
         let duration = task.duration_ms
@@ -66,24 +77,42 @@ pub fn render_board(tasks: &[Task], store: &Store) -> Result<String> {
         let cost_str = cost::format_cost(task.cost_usd);
         let parent = short_parent(task.parent_task_id.as_deref());
         let group = short_group(task.workgroup_id.as_deref());
+        let repo = short_repo(task.repo_path.as_deref());
         let caller = session::display(task);
         let model = task.model
             .as_deref()
             .unwrap_or("-");
 
-        out.push_str(&format!(
-            "{:<10} {:<10} {:<30} {:<10} {:<10} {:<8} {:<10} {:<10} {:<16} {}\n",
-            task.id.as_str(),
-            task.agent.as_str(),
-            status,
-            duration,
-            tokens,
-            cost_str,
-            parent,
-            group,
-            caller,
-            model,
-        ));
+        if show_repo {
+            out.push_str(&format!(
+                "{:<10} {:<10} {:<30} {:<10} {:<10} {:<8} {:<10} {:<10} {:<20} {:<16} {}\n",
+                task.id.as_str(),
+                task.agent.as_str(),
+                status,
+                duration,
+                tokens,
+                cost_str,
+                parent,
+                group,
+                repo,
+                caller,
+                model,
+            ));
+        } else {
+            out.push_str(&format!(
+                "{:<10} {:<10} {:<30} {:<10} {:<10} {:<8} {:<10} {:<10} {:<16} {}\n",
+                task.id.as_str(),
+                task.agent.as_str(),
+                status,
+                duration,
+                tokens,
+                cost_str,
+                parent,
+                group,
+                caller,
+                model,
+            ));
+        }
     }
     Ok(out)
 }
@@ -130,6 +159,9 @@ pub fn render_task_detail(task: &Task, events: &[TaskEvent], retry_chain: Option
     }
     if let Some(group_id) = task.workgroup_id.as_deref() {
         out.push_str(&format!("Workgroup: {group_id}\n"));
+    }
+    if let Some(repo_path) = task.repo_path.as_deref() {
+        out.push_str(&format!("Repo: {repo_path}\n"));
     }
     if task.caller_kind.is_some() || task.caller_session_id.is_some() {
         out.push_str(&format!("Caller: {}\n", session::display(task)));
@@ -236,6 +268,11 @@ fn short_group(group: Option<&str>) -> String {
     group.unwrap_or("-").to_string()
 }
 
+fn short_repo(repo: Option<&str>) -> String {
+    repo.map(|path| truncate(path, 20))
+        .unwrap_or_else(|| "-".to_string())
+}
+
 fn task_status(task: &Task, milestone: Option<String>) -> String {
     if task.status == TaskStatus::Running
         && let Some(milestone) = milestone
@@ -280,6 +317,7 @@ mod tests {
             workgroup_id: None,
             caller_kind: None,
             caller_session_id: None,
+            repo_path: None,
             worktree_path: None,
             worktree_branch: Some("feat/test".to_string()),
             log_path: None,
@@ -349,6 +387,17 @@ mod tests {
 
         let output = render_board(&[task], &store).unwrap();
         assert!(output.contains("AWAIT — Continue with fix?"));
+    }
+
+    #[test]
+    fn board_shows_repo_column_when_present() {
+        let store = Store::open_memory().unwrap();
+        let mut task = make_task("t-0005", AgentKind::Codex, TaskStatus::Done);
+        task.repo_path = Some("/tmp/example-repo".to_string());
+
+        let output = render_board(&[task], &store).unwrap();
+        assert!(output.contains("Repo"));
+        assert!(output.contains("/tmp/example-repo"));
     }
 
     #[test]

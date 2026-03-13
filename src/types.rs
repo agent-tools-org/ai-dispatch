@@ -200,6 +200,7 @@ pub struct Task {
     pub workgroup_id: Option<String>,
     pub caller_kind: Option<String>,
     pub caller_session_id: Option<String>,
+    pub repo_path: Option<String>,
     pub worktree_path: Option<String>,
     pub worktree_branch: Option<String>,
     pub log_path: Option<String>,

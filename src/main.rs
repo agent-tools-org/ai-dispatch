@@ -50,6 +50,9 @@ enum Commands {
         agent: String,
         /// Prompt / task description
         prompt: String,
+        /// Target repository path (defaults to current dir's git root)
+        #[arg(long)]
+        repo: Option<String>,
         /// Working directory for the agent
         #[arg(short, long)]
         dir: Option<String>,
@@ -211,6 +214,7 @@ async fn main() -> Result<()> {
         Commands::Run {
             agent,
             prompt,
+            repo,
             dir,
             output,
             model,
@@ -228,6 +232,7 @@ async fn main() -> Result<()> {
                 let selection_opts = agent::RunOpts {
                     dir: dir
                         .clone()
+                        .or_else(|| repo.clone())
                         .or_else(|| worktree.as_ref().map(|_| ".".to_string())),
                     output: output.clone(),
                     model: model.clone(),
@@ -248,6 +253,7 @@ async fn main() -> Result<()> {
                 cmd::run::RunArgs {
                     agent_name,
                     prompt,
+                    repo,
                     dir,
                     output,
                     model,

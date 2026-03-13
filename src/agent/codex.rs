@@ -216,7 +216,7 @@ fn parse_error_event(
         .filter(|message| !message.is_empty())?;
 
     if rate_limit::is_rate_limit_error(detail) {
-        rate_limit::mark_rate_limited(&AgentKind::Codex);
+        rate_limit::mark_rate_limited(&AgentKind::Codex, detail);
     }
 
     Some(TaskEvent {

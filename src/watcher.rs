@@ -71,7 +71,7 @@ pub async fn watch_streaming(
             if let Ok(stderr_content) = std::fs::read_to_string(&stderr_path) {
                 for line in stderr_content.lines() {
                     if rate_limit::is_rate_limit_error(line) {
-                        rate_limit::mark_rate_limited(&agent.kind());
+                        rate_limit::mark_rate_limited(&agent.kind(), line);
                         break;
                     }
                 }

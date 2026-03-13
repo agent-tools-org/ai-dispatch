@@ -66,46 +66,6 @@ pub fn validate_dag(tasks: &[BatchTask]) -> Result<()> {
     }
     Ok(())
 }
-pub fn topo_levels(tasks: &[BatchTask]) -> Result<Vec<Vec<usize>>> {
-    let dependencies = dependency_indices(tasks)?;
-    let mut indegree = vec![0usize; tasks.len()];
-    let mut dependents = vec![Vec::new(); tasks.len()];
-
-    for (task_idx, deps) in dependencies.iter().enumerate() {
-        indegree[task_idx] = deps.len();
-        for &dep_idx in deps {
-            dependents[dep_idx].push(task_idx);
-        }
-    }
-
-    let mut ready: Vec<usize> = indegree
-        .iter()
-        .enumerate()
-        .filter_map(|(task_idx, &count)| (count == 0).then_some(task_idx))
-        .collect();
-    let mut levels = Vec::new();
-    let mut processed = 0usize;
-
-    while !ready.is_empty() {
-        levels.push(ready.clone());
-        processed += ready.len();
-
-        let mut next = Vec::new();
-        for task_idx in ready {
-            for &dependent_idx in &dependents[task_idx] {
-                indegree[dependent_idx] -= 1;
-                if indegree[dependent_idx] == 0 {
-                    next.push(dependent_idx);
-                }
-            }
-        }
-        next.sort_unstable();
-        ready = next;
-    }
-
-    anyhow::ensure!(processed == tasks.len(), "dependency cycle detected");
-    Ok(levels)
-}
 pub(crate) fn dependency_indices(tasks: &[BatchTask]) -> Result<Vec<Vec<usize>>> {
     let name_to_index = task_name_map(tasks)?;
     tasks.iter().enumerate().map(|(task_idx, task)| {
@@ -270,16 +230,5 @@ mod tests {
         ];
         let err = validate_dag(&tasks).unwrap_err().to_string();
         assert!(err.contains("cycle"));
-    }
-    #[test]
-    fn topo_levels_group_parallel_work() {
-        let tasks = vec![
-            make_task(Some("foundation"), &[]),
-            make_task(Some("feature-a"), &["foundation"]),
-            make_task(Some("feature-b"), &["foundation"]),
-            make_task(Some("integration"), &["feature-a", "feature-b"]),
-        ];
-        let levels = topo_levels(&tasks).unwrap();
-        assert_eq!(levels, vec![vec![0], vec![1, 2], vec![3]]);
     }
 }

@@ -17,17 +17,46 @@ use ratatui::widgets::{
 
 use super::app::App;
 use super::dashboard;
+use super::multipane;
 use crate::cost;
 use crate::types::{Task, TaskStatus};
 
 pub fn render(frame: &mut ratatui::Frame<'_>, app: &App) {
-    if app.detail_mode {
+    if app.multipane_mode {
+        render_multipane_view(frame, app);
+    } else if app.detail_mode {
         render_detail(frame, app);
     } else if app.dashboard_mode {
         dashboard::render_dashboard(frame, app);
     } else {
         render_board(frame, app);
     }
+}
+
+fn render_multipane_view(frame: &mut ratatui::Frame<'_>, app: &App) {
+    let running_tasks = app.running_tasks();
+    let panes: Vec<multipane::PaneData> = running_tasks
+        .iter()
+        .map(|task| {
+            let events = app
+                .events_cache
+                .get(task.id.as_str())
+                .map(|evts| {
+                    evts.iter()
+                        .map(|e| format!("{} {}", e.event_kind.as_str(), e.detail))
+                        .collect()
+                })
+                .unwrap_or_default();
+            multipane::PaneData {
+                task_id: task.id.as_str().to_string(),
+                agent: task.agent.to_string(),
+                status: task.status.label().to_string(),
+                prompt: task.prompt.clone(),
+                events,
+            }
+        })
+        .collect();
+    multipane::render_multipane(frame, &panes, app.active_pane);
 }
 
 fn render_board(frame: &mut ratatui::Frame<'_>, app: &App) {
@@ -87,7 +116,7 @@ fn render_board(frame: &mut ratatui::Frame<'_>, app: &App) {
     let done = app.tasks.iter().filter(|task| matches!(task.status, TaskStatus::Done | TaskStatus::Merged)).count();
     let running = app.tasks.iter().filter(|task| matches!(task.status, TaskStatus::Running | TaskStatus::AwaitingInput)).count();
     let status = format!(
-        "Scope: {} | Tasks: {} | Done: {} | Running: {} | d=dashboard j/k=nav Enter=detail q=quit",
+        "Scope: {} | Tasks: {} | Done: {} | Running: {} | d=dashboard m=multipane j/k=nav Enter=detail q=quit",
         app.scope_label(),
         app.tasks.len(),
         done,

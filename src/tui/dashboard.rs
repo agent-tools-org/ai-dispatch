@@ -1,24 +1,33 @@
 // Dashboard card rendering for the aid TUI.
 // Exports the checklist-style dashboard view; depends on ratatui and App state.
-use ratatui::layout::{Constraint, Direction, Layout, Rect};
-use ratatui::prelude::{Alignment, Color, Modifier, Style};
-use ratatui::widgets::{Block, Borders, List, ListItem, Paragraph};
 use super::app::App;
 use super::metrics::ProcessMetrics;
 use crate::types::{EventKind, Task, TaskStatus};
-const FOOTER_HINT: &str = "d=dashboard j/k=nav Enter=detail q=quit";
+use ratatui::layout::{Constraint, Direction, Layout, Rect};
+use ratatui::prelude::{Alignment, Color, Modifier, Style};
+use ratatui::widgets::{Block, Borders, List, ListItem, Paragraph};
+const FOOTER_HINT: &str = "d=dashboard m=multipane j/k=nav Enter=detail q=quit";
 const ACTIVITY_KINDS: &[(EventKind, &str, &str)] = &[
-    (EventKind::ToolCall, "tool call", "tool calls"), (EventKind::Build, "build", "builds"),
-    (EventKind::Test, "test", "tests"), (EventKind::FileWrite, "file write", "file writes"),
-    (EventKind::FileRead, "file read", "file reads"), (EventKind::WebSearch, "web search", "web searches"),
-    (EventKind::Lint, "lint", "lints"), (EventKind::Format, "format", "formats"),
-    (EventKind::Commit, "commit", "commits"), (EventKind::Completion, "completion", "completions"),
+    (EventKind::ToolCall, "tool call", "tool calls"),
+    (EventKind::Build, "build", "builds"),
+    (EventKind::Test, "test", "tests"),
+    (EventKind::FileWrite, "file write", "file writes"),
+    (EventKind::FileRead, "file read", "file reads"),
+    (EventKind::WebSearch, "web search", "web searches"),
+    (EventKind::Lint, "lint", "lints"),
+    (EventKind::Format, "format", "formats"),
+    (EventKind::Commit, "commit", "commits"),
+    (EventKind::Completion, "completion", "completions"),
     (EventKind::Error, "error", "errors"),
 ];
 pub fn render_dashboard(frame: &mut ratatui::Frame<'_>, app: &App) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([Constraint::Length(1), Constraint::Min(5), Constraint::Length(1)])
+        .constraints([
+            Constraint::Length(1),
+            Constraint::Min(5),
+            Constraint::Length(1),
+        ])
         .split(frame.area());
     frame.render_widget(
         Paragraph::new(format!("aid dashboard [{}]", app.scope_label()))
@@ -28,14 +37,23 @@ pub fn render_dashboard(frame: &mut ratatui::Frame<'_>, app: &App) {
     );
     if app.tasks.is_empty() {
         frame.render_widget(
-            Paragraph::new(app.empty_message()).block(Block::default().title("Tasks").borders(Borders::ALL)),
+            Paragraph::new(app.empty_message())
+                .block(Block::default().title("Tasks").borders(Borders::ALL)),
             chunks[1],
         );
     } else {
         render_cards(frame, app, chunks[1]);
     }
-    let done = app.tasks.iter().filter(|task| matches!(task.status, TaskStatus::Done | TaskStatus::Merged)).count();
-    let running = app.tasks.iter().filter(|task| matches!(task.status, TaskStatus::Running | TaskStatus::AwaitingInput)).count();
+    let done = app
+        .tasks
+        .iter()
+        .filter(|task| matches!(task.status, TaskStatus::Done | TaskStatus::Merged))
+        .count();
+    let running = app
+        .tasks
+        .iter()
+        .filter(|task| matches!(task.status, TaskStatus::Running | TaskStatus::AwaitingInput))
+        .count();
     let status = format!(
         "Scope: {} | Tasks: {} | Done: {} | Running: {} | {}",
         app.scope_label(),
@@ -56,22 +74,45 @@ fn render_cards(frame: &mut ratatui::Frame<'_>, app: &App, area: Rect) {
         .direction(Direction::Vertical)
         .constraints(constraints)
         .split(area);
-    for (index, (task, task_area)) in app.tasks[start..end].iter().zip(task_areas.iter()).enumerate() {
+    for (index, (task, task_area)) in app.tasks[start..end]
+        .iter()
+        .zip(task_areas.iter())
+        .enumerate()
+    {
         let selected = start + index == app.selected;
         let milestones = app.task_milestones(task.id.as_str());
         let activity = task_activity_summary(app, task.id.as_str());
         frame.render_widget(
-            render_task_card(task, milestones, app.get_metrics(task.id.as_str()).copied(), activity, selected),
+            render_task_card(
+                task,
+                milestones,
+                app.get_metrics(task.id.as_str()).copied(),
+                activity,
+                selected,
+            ),
             *task_area,
         );
     }
 }
-pub fn render_task_card(task: &Task, milestones: Vec<String>, metrics: Option<ProcessMetrics>, activity: String, selected: bool) -> List<'static> {
-    let cpu = metrics.map(|value| format!("{:.1}%", value.cpu_percent)).unwrap_or_else(|| "—".to_string());
-    let memory = metrics.map(|value| format!("{:.0}M", value.memory_mb)).unwrap_or_else(|| "—".to_string());
+pub fn render_task_card(
+    task: &Task,
+    milestones: Vec<String>,
+    metrics: Option<ProcessMetrics>,
+    activity: String,
+    selected: bool,
+) -> List<'static> {
+    let cpu = metrics
+        .map(|value| format!("{:.1}%", value.cpu_percent))
+        .unwrap_or_else(|| "—".to_string());
+    let memory = metrics
+        .map(|value| format!("{:.0}M", value.memory_mb))
+        .unwrap_or_else(|| "—".to_string());
     let mut items = vec![
         ListItem::new(format!("Prompt: {}", truncate(&task.prompt, 56))),
-        ListItem::new(format!("System: CPU {cpu}  MEM {memory}  Status {}", task.status.label())),
+        ListItem::new(format!(
+            "System: CPU {cpu}  MEM {memory}  Status {}",
+            task.status.label()
+        )),
         ListItem::new(format!("Activity: {}", truncate(&activity, 56))),
     ];
     let active = matches!(task.status, TaskStatus::Running | TaskStatus::AwaitingInput);
@@ -83,7 +124,10 @@ pub fn render_task_card(task: &Task, milestones: Vec<String>, metrics: Option<Pr
             let current = active && index == last;
             let marker = if current { "[ ]" } else { "[x]" };
             let suffix = if current { " <- current" } else { "" };
-            items.push(ListItem::new(format!("{marker} {}{suffix}", truncate(milestone, 52))));
+            items.push(ListItem::new(format!(
+                "{marker} {}{suffix}",
+                truncate(milestone, 52)
+            )));
         }
     }
     let mut style = status_style(task.status);
@@ -93,7 +137,13 @@ pub fn render_task_card(task: &Task, milestones: Vec<String>, metrics: Option<Pr
     List::new(items)
         .block(
             Block::default()
-                .title(format!(" {} {} {} {} ", task.id, task.agent.as_str(), task.status.label(), milestone_progress(task, milestones.len())))
+                .title(format!(
+                    " {} {} {} {} ",
+                    task.id,
+                    task.agent.as_str(),
+                    task.status.label(),
+                    milestone_progress(task, milestones.len())
+                ))
                 .borders(Borders::ALL)
                 .border_style(style),
         )
@@ -132,7 +182,10 @@ fn task_activity_summary(app: &App, task_id: &str) -> String {
     let parts = ACTIVITY_KINDS
         .iter()
         .filter_map(|(kind, singular, plural)| {
-            let count = events.iter().filter(|event| event.event_kind == *kind).count();
+            let count = events
+                .iter()
+                .filter(|event| event.event_kind == *kind)
+                .count();
             (count > 0).then(|| format!("{count} {}", if count == 1 { *singular } else { *plural }))
         })
         .collect::<Vec<_>>();

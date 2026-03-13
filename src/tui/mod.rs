@@ -76,4 +76,17 @@ mod tests {
         app.handle_key(KeyEvent::new(KeyCode::Char('d'), KeyModifiers::NONE)).unwrap();
         assert!(!app.dashboard_mode);
     }
+
+    #[test]
+    fn toggles_multipane_mode_with_m_key() {
+        let store = Arc::new(Store::open_memory().unwrap());
+        let mut app = app::App::new(store, RunOptions::default()).unwrap();
+
+        assert!(!app.multipane_mode);
+        app.handle_key(KeyEvent::new(KeyCode::Char('m'), KeyModifiers::NONE)).unwrap();
+        assert!(app.multipane_mode);
+        assert_eq!(app.active_pane, 0);
+        app.handle_key(KeyEvent::new(KeyCode::Char('m'), KeyModifiers::NONE)).unwrap();
+        assert!(!app.multipane_mode);
+    }
 }

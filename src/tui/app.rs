@@ -6,7 +6,7 @@ use crossterm::event::{KeyCode, KeyEvent};
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use super::metrics::{ProcessMetrics, get_process_metrics};
+use super::metrics::{get_process_metrics, ProcessMetrics};
 use crate::background;
 use crate::store::Store;
 use crate::types::{EventKind, Task, TaskEvent, TaskFilter};
@@ -19,6 +19,8 @@ pub struct App {
     pub selected: usize,
     pub detail_mode: bool,
     pub dashboard_mode: bool,
+    pub multipane_mode: bool,
+    pub active_pane: usize,
     pub should_quit: bool,
     task_id_filter: Option<String>,
     group_filter: Option<String>,
@@ -35,6 +37,8 @@ impl App {
             selected: 0,
             detail_mode: false,
             dashboard_mode: false,
+            multipane_mode: false,
+            active_pane: 0,
             should_quit: false,
             task_id_filter: options.task_id,
             group_filter: options.group,
@@ -49,6 +53,9 @@ impl App {
         if self.dashboard_mode {
             self.load_dashboard_events()?;
         }
+        if self.multipane_mode {
+            self.load_dashboard_events()?;
+        }
         if self.detail_mode {
             self.load_selected_events()?;
         }
@@ -59,6 +66,28 @@ impl App {
         match key.code {
             KeyCode::Char('q') => self.should_quit = true,
             KeyCode::Char('d') => self.dashboard_mode = !self.dashboard_mode,
+            KeyCode::Char('m') => {
+                self.multipane_mode = !self.multipane_mode;
+                if self.multipane_mode {
+                    self.active_pane = 0;
+                }
+            }
+            KeyCode::Tab if self.multipane_mode => {
+                let pane_count = self.pane_count();
+                if pane_count > 0 {
+                    self.active_pane = (self.active_pane + 1) % pane_count;
+                }
+            }
+            KeyCode::BackTab if self.multipane_mode => {
+                let pane_count = self.pane_count();
+                if pane_count > 0 {
+                    self.active_pane = if self.active_pane == 0 {
+                        pane_count - 1
+                    } else {
+                        self.active_pane - 1
+                    };
+                }
+            }
             KeyCode::Down | KeyCode::Char('j') if !self.detail_mode => self.next(),
             KeyCode::Up | KeyCode::Char('k') if !self.detail_mode => self.previous(),
             KeyCode::Enter if !self.detail_mode => {
@@ -90,7 +119,32 @@ impl App {
         self.milestones.get(task_id).map(String::as_str)
     }
     pub fn task_milestones(&self, task_id: &str) -> Vec<String> {
-        self.events_cache.get(task_id).map(|events| events.iter().filter(|event| event.event_kind == EventKind::Milestone).map(|event| event.detail.clone()).collect()).unwrap_or_default()
+        self.events_cache
+            .get(task_id)
+            .map(|events| {
+                events
+                    .iter()
+                    .filter(|event| event.event_kind == EventKind::Milestone)
+                    .map(|event| event.detail.clone())
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    pub fn running_tasks(&self) -> Vec<&Task> {
+        self.tasks
+            .iter()
+            .filter(|task| {
+                matches!(
+                    task.status,
+                    crate::types::TaskStatus::Running | crate::types::TaskStatus::AwaitingInput
+                )
+            })
+            .collect()
+    }
+
+    pub fn pane_count(&self) -> usize {
+        self.running_tasks().len().min(6)
     }
 
     pub fn scope_label(&self) -> String {
@@ -107,7 +161,10 @@ impl App {
     }
 
     fn load_selected_events(&mut self) -> Result<()> {
-        let Some(task_id) = self.selected_task().map(|task| task.id.as_str().to_string()) else {
+        let Some(task_id) = self
+            .selected_task()
+            .map(|task| task.id.as_str().to_string())
+        else {
             return Ok(());
         };
         let events = self.store.get_events(&task_id)?;
@@ -116,8 +173,19 @@ impl App {
     }
 
     fn load_dashboard_events(&mut self) -> Result<()> {
-        for task_id in self.tasks.iter().filter(|task| matches!(task.status, crate::types::TaskStatus::Running | crate::types::TaskStatus::AwaitingInput)).map(|task| task.id.as_str().to_string()) {
-            self.events_cache.insert(task_id.clone(), self.store.get_events(&task_id)?);
+        for task_id in self
+            .tasks
+            .iter()
+            .filter(|task| {
+                matches!(
+                    task.status,
+                    crate::types::TaskStatus::Running | crate::types::TaskStatus::AwaitingInput
+                )
+            })
+            .map(|task| task.id.as_str().to_string())
+        {
+            self.events_cache
+                .insert(task_id.clone(), self.store.get_events(&task_id)?);
         }
         Ok(())
     }
@@ -144,7 +212,11 @@ impl App {
     }
 
     fn load_task_scope(&self, task_id: &str) -> Result<Vec<Task>> {
-        let mut tasks = self.store.get_task(task_id)?.into_iter().collect::<Vec<_>>();
+        let mut tasks = self
+            .store
+            .get_task(task_id)?
+            .into_iter()
+            .collect::<Vec<_>>();
         self.apply_group_filter(&mut tasks);
         Ok(tasks)
     }
@@ -157,10 +229,12 @@ impl App {
 
     fn load_metrics(&self, tasks: &[Task]) -> HashMap<String, ProcessMetrics> {
         let mut metrics = HashMap::new();
-        for task in tasks
-            .iter()
-            .filter(|task| matches!(task.status, crate::types::TaskStatus::Running | crate::types::TaskStatus::AwaitingInput))
-        {
+        for task in tasks.iter().filter(|task| {
+            matches!(
+                task.status,
+                crate::types::TaskStatus::Running | crate::types::TaskStatus::AwaitingInput
+            )
+        }) {
             let Ok(Some(pid)) = background::load_worker_pid(task.id.as_str()) else {
                 continue;
             };
@@ -174,10 +248,12 @@ impl App {
 
     fn load_milestones(&self, tasks: &[Task]) -> Result<HashMap<String, String>> {
         let mut milestones = HashMap::new();
-        for task in tasks
-            .iter()
-            .filter(|task| matches!(task.status, crate::types::TaskStatus::Running | crate::types::TaskStatus::AwaitingInput))
-        {
+        for task in tasks.iter().filter(|task| {
+            matches!(
+                task.status,
+                crate::types::TaskStatus::Running | crate::types::TaskStatus::AwaitingInput
+            )
+        }) {
             if let Some(milestone) = self.store.latest_milestone(task.id.as_str())? {
                 milestones.insert(task.id.as_str().to_string(), milestone);
             }
@@ -238,8 +314,12 @@ mod tests {
     #[test]
     fn filters_today_view_by_group() {
         let store = Arc::new(Store::open_memory().unwrap());
-        store.insert_task(&make_task("t-1000", Some("wg-a"))).unwrap();
-        store.insert_task(&make_task("t-1001", Some("wg-b"))).unwrap();
+        store
+            .insert_task(&make_task("t-1000", Some("wg-a")))
+            .unwrap();
+        store
+            .insert_task(&make_task("t-1001", Some("wg-b")))
+            .unwrap();
 
         let app = App::new(
             store,
@@ -258,8 +338,12 @@ mod tests {
     #[test]
     fn filters_specific_task_scope() {
         let store = Arc::new(Store::open_memory().unwrap());
-        store.insert_task(&make_task("t-1000", Some("wg-a"))).unwrap();
-        store.insert_task(&make_task("t-1001", Some("wg-b"))).unwrap();
+        store
+            .insert_task(&make_task("t-1000", Some("wg-a")))
+            .unwrap();
+        store
+            .insert_task(&make_task("t-1001", Some("wg-b")))
+            .unwrap();
 
         let app = App::new(
             store,
@@ -281,13 +365,15 @@ mod tests {
         let mut task = make_task("t-1002", Some("wg-a"));
         task.status = TaskStatus::Running;
         store.insert_task(&task).unwrap();
-        store.insert_event(&TaskEvent {
-            task_id: task.id.clone(),
-            timestamp: Local::now(),
-            event_kind: crate::types::EventKind::Milestone,
-            detail: "types defined".to_string(),
-            metadata: None,
-        }).unwrap();
+        store
+            .insert_event(&TaskEvent {
+                task_id: task.id.clone(),
+                timestamp: Local::now(),
+                event_kind: crate::types::EventKind::Milestone,
+                detail: "types defined".to_string(),
+                metadata: None,
+            })
+            .unwrap();
 
         let app = App::new(
             store,

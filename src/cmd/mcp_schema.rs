@@ -1,7 +1,7 @@
 // MCP tool schema definitions for the `aid mcp` stdio server.
 // Exports tool_definitions() so transport and handlers stay compact.
 
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 
 pub fn tool_definitions() -> Vec<Value> {
     vec![
@@ -50,7 +50,8 @@ fn run_schema() -> Value {
             "background": { "type": "boolean", "default": true },
             "model": { "type": "string" },
             "group": { "type": "string" },
-            "verify": { "type": "string" }
+            "verify": { "type": "string" },
+            "skills": { "type": "array", "items": { "type": "string" }, "description": "Methodology skills to inject" }
         },
         "required": ["agent", "prompt"],
         "additionalProperties": false

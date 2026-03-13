@@ -4,6 +4,7 @@
 pub mod app;
 pub mod dashboard;
 pub mod metrics;
+pub mod multipane;
 pub mod ui;
 
 use anyhow::Result;

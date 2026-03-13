@@ -1,6 +1,6 @@
 # ai-dispatch (aid)
 
-![Version](https://img.shields.io/badge/version-2.2.0-blue)
+![Version](https://img.shields.io/badge/version-3.8.0-blue)
 ![Rust](https://img.shields.io/badge/rust-2024-orange)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
@@ -22,7 +22,7 @@ Without an orchestrator, a multi-agent CLI workflow breaks down fast:
 
 ### Prerequisites
 
-Install Rust (1.85 or later, required for edition 2024) and whichever AI CLIs you want `aid` to orchestrate. `aid` auto-detects supported agents on your `PATH`: `gemini`, `codex`, `opencode`, `cursor`, and `auto`.
+Install Rust (1.85 or later, required for edition 2024) and whichever AI CLIs you want `aid` to orchestrate. `aid` auto-detects supported agents on your `PATH`: `gemini`, `codex`, `opencode`, `cursor`, `kilo`, and `auto`.
 
 ### Install From Source
 
@@ -217,7 +217,7 @@ Expected milestone format:
 | `aid run` | Dispatch one task to an agent. Supports `--bg`, `--verify`, `--worktree`, `--on-done`, `--no-skill`, `--retry`, `--context`, and `--skill`. | `aid run codex "Implement retry logic" --dir . --worktree feat/retry --verify auto` |
 | `aid batch` | Dispatch a TOML batch file with DAG dependency scheduling. Auto-creates a workgroup and archives the file to `~/.aid/batches/`. | `aid batch tasks.toml --parallel --wait` |
 | `aid watch` | Follow live progress in text mode, quiet wait mode, or the TUI. | `aid watch --tui`, `aid watch t-1234`, `aid watch --quiet --group wg-a3f1` |
-| `aid board` | List tracked tasks with filters. Auto-detects zombie tasks. | `aid board --today`, `aid board --mine`, `aid board --group wg-a3f1` |
+| `aid board` | List tracked tasks with filters. Auto-detects zombie tasks. Use `--stream` for scrollback-preserving output. | `aid board --today`, `aid board --stream --group wg-a3f1` |
 | `aid show` | Inspect one task's summary, diff, output, raw log, or AI-generated explanation. Diffs show changes vs main branch. | `aid show t-1234 --diff`, `aid show t-1234 --output`, `aid show t-1234 --explain` |
 | `aid usage` | Render task-history usage plus configured budget windows. Use `--session` for current session only. | `aid usage`, `aid usage --session` |
 | `aid retry` | Re-dispatch a failed task with explicit feedback. | `aid retry t-1234 --feedback "Reproduce the failure before editing."` |
@@ -279,6 +279,7 @@ Use the agent that matches the shape of the work:
 | `codex` | complex implementation, multi-file changes, deep repo work | Best default for substantial code modifications and iterative verification |
 | `opencode` | simple edits, rename passes, light cleanup | Good fit for smaller coding tasks where a cheaper tool is enough |
 | `cursor` | frontend, UI, layout, visual polish | Best when the prompt clearly targets UI structure or responsiveness |
+| `kilo` | simple edits (free tier) | Free models for budget-conscious simple edits |
 | `auto` | mixed or uncertain tasks | Scores the prompt and picks the best installed agent automatically |
 
 If you are unsure, start with `aid ask` or `aid run auto`, then escalate to a more expensive agent only when the task scope is clear.
@@ -311,6 +312,7 @@ name = "research"
 agent = "gemini"
 prompt = "Summarize DESIGN.md and note MCP constraints"
 output = "/tmp/mcp-notes.md"
+read_only = true
 
 [[task]]
 name = "implementation"
@@ -321,6 +323,13 @@ worktree = "docs/mcp-guide"
 skills = ["implementer"]
 depends_on = ["research"]
 verify = "cargo test"
+
+[[task]]
+name = "formatting"
+agent = "opencode"
+prompt = "Run cargo fmt and fix any clippy warnings"
+dir = "."
+budget = true
 ```
 
 Dispatch it like this:
@@ -346,6 +355,9 @@ This works well for incident response, release prep, and cross-cutting refactors
 - Use `--on-done "command"` to get notified when a background task completes (sets `AID_TASK_ID` and `AID_TASK_STATUS` env vars).
 - Use `--template <name>` to wrap prompts with structured methodology (bug-fix, feature, refactor).
 - Use `--repo /path/to/other-project` to dispatch tasks to a different git repository.
+- Use `--budget` to force cheaper agent/model selection for low-priority tasks.
+- Low-value tasks (tests, formatting, linting, docs) auto-detect as budget mode.
+- Use `read_only = true` in batch tasks for research/review that should not modify files.
 - Use `aid benchmark` to compare agent quality/speed/cost on the same task.
 - Configure webhooks in `config.toml` for Slack/Discord notifications on task completion.
 
@@ -530,15 +542,15 @@ The diagram below is adapted from `DESIGN.md` to reflect the current `show` comm
 ├───────┴──────────┴──────────┴───────┤
 │         Agent Adapters              │
 │  ┌──────┐ ┌─────┐ ┌────────┐ ┌──────┐
-│  │Gemini│ │Codex│ │OpenCode│ │Cursor│
-│  └──────┘ └─────┘ └────────┘ └──────┘
+│  │Gemini│ │Codex│ │OpenCode│ │Cursor│ │Kilo│
+│  └──────┘ └─────┘ └────────┘ └──────┘ └────┘
 └─────────────────────────────────────┘
 ```
 
 How the pieces fit together:
 
 - The CLI entrypoint parses commands and routes them to task-oriented handlers such as `run`, `watch`, `show`, `usage`, and `mcp`.
-- The agent registry selects and instantiates adapters for `gemini`, `codex`, `opencode`, and `cursor`.
+- The agent registry selects and instantiates adapters for `gemini`, `codex`, `opencode`, `cursor`, and `kilo`.
 - The watcher parses streamed or buffered output into milestones, tool activity, usage totals, and completion events.
 - SQLite keeps task history, workgroups, and events queryable for `board`, `show`, `watch`, `usage`, and MCP clients.
 - Artifact files under `~/.aid/` preserve the raw execution trail so the dispatcher can review what actually happened.

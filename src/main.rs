@@ -292,6 +292,7 @@ async fn main() -> Result<()> {
                     model: model.clone(),
                     budget,
                     read_only,
+                    context_files: vec![],
                 };
                 let (selected, reason) = agent::select_agent_with_reason(&prompt, &selection_opts);
                 eprintln!("[aid] Auto-selected agent: {selected} (reason: {reason})");

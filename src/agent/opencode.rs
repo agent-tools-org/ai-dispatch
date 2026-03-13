@@ -39,6 +39,9 @@ impl super::Agent for OpenCodeAgent {
         if let Some(ref dir) = opts.dir {
             cmd.args(["--dir", dir]);
         }
+        for file in &opts.context_files {
+            cmd.args(["-f", file]);
+        }
         cmd.arg(&effective_prompt);
         Ok(cmd)
     }
@@ -223,6 +226,7 @@ fn extract_tokens_from_output(output: &str) -> (Option<i64>, Option<f64>) {
 
 #[cfg(test)]
 mod tests {
+    use super::super::Agent;
     use super::*;
 
     #[test]
@@ -257,5 +261,33 @@ mod tests {
                 "cost_usd": 0.0
             }))
         );
+    }
+
+    #[test]
+    fn build_command_includes_file_flags_for_context_files() {
+        let opts = RunOpts {
+            dir: Some("/project".to_string()),
+            output: None,
+            model: Some("test-model".to_string()),
+            budget: false,
+            read_only: false,
+            context_files: vec!["src/types.rs".to_string(), "src/lib.rs".to_string()],
+        };
+        let cmd = OpenCodeAgent.build_command("test prompt", &opts).unwrap();
+        let args: Vec<String> = cmd
+            .get_args()
+            .map(|s: &std::ffi::OsStr| s.to_string_lossy().to_string())
+            .collect();
+        assert!(args.contains(&"-f".to_string()));
+        let f_indices: Vec<usize> = args
+            .iter()
+            .enumerate()
+            .filter(|(_, a)| *a == "-f")
+            .map(|(i, _)| i)
+            .collect();
+        assert_eq!(f_indices.len(), 2);
+        assert_eq!(args[f_indices[0] + 1], "src/types.rs");
+        assert_eq!(args[f_indices[1] + 1], "src/lib.rs");
+        assert!(args.contains(&"test prompt".to_string()));
     }
 }

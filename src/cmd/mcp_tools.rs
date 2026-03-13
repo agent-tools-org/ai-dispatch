@@ -70,6 +70,7 @@ struct ShowToolArgs {
 struct RetryToolArgs {
     task_id: String,
     feedback: String,
+    agent: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -157,6 +158,7 @@ async fn retry_tool(store: Arc<Store>, arguments: Value) -> Result<Value> {
         RetryArgs {
             task_id: args.task_id,
             feedback: args.feedback,
+            agent: args.agent,
         },
         false,
     )

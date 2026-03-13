@@ -49,7 +49,7 @@ struct Cli {
 enum Commands {
     /// Dispatch a task to an AI agent
     Run {
-        /// Agent to use (auto, gemini, codex, opencode, cursor)
+        /// Agent to use (auto, gemini, codex, opencode, cursor, kilo)
         agent: String,
         /// Prompt / task description
         prompt: String,

@@ -4,6 +4,7 @@
 
 use super::{detect_agents, RunOpts};
 use crate::rate_limit;
+use crate::store::Store;
 use crate::types::AgentKind;
 
 const RESEARCH_PREFIXES: &[&str] = &[
@@ -46,16 +47,30 @@ struct Candidate {
     reason: &'static str,
 }
 
-pub(crate) fn select_agent_with_reason(prompt: &str, opts: &RunOpts) -> (AgentKind, String) {
-    select_agent_from(prompt, opts, &detect_agents())
+pub(crate) fn select_agent_with_reason(
+    prompt: &str,
+    opts: &RunOpts,
+    store: &Store,
+) -> (AgentKind, String) {
+    let history = store.agent_success_rates().unwrap_or_default();
+    select_agent_from(prompt, opts, &detect_agents(), &history)
 }
 
-fn select_agent_from(prompt: &str, opts: &RunOpts, available: &[AgentKind]) -> (AgentKind, String) {
+fn select_agent_from(
+    prompt: &str,
+    opts: &RunOpts,
+    available: &[AgentKind],
+    history: &[(AgentKind, f64, usize)],
+) -> (AgentKind, String) {
     let normalized = prompt.trim().to_lowercase();
     let prompt_len = prompt.chars().count();
     let file_count = count_file_mentions(&normalized);
     let has_workspace = opts.dir.is_some();
     let budget = opts.budget;
+    let history_map: std::collections::HashMap<AgentKind, (f64, usize)> = history
+        .iter()
+        .map(|(kind, rate, count)| (*kind, (*rate, *count)))
+        .collect();
     let candidates = [
         Candidate {
             kind: AgentKind::Gemini,
@@ -83,11 +98,11 @@ fn select_agent_from(prompt: &str, opts: &RunOpts, available: &[AgentKind]) -> (
             reason: codex_reason(&normalized, file_count, prompt_len),
         },
     ];
-    let primary = best_candidate(&candidates, None);
+    let primary = best_candidate(&candidates, None, &history_map);
     let selected = if available.is_empty() {
         primary
     } else {
-        best_candidate(&candidates, Some(available))
+        best_candidate(&candidates, Some(available), &history_map)
     };
     let mut reason = if selected.kind == primary.kind {
         selected.reason.to_string()
@@ -100,10 +115,20 @@ fn select_agent_from(prompt: &str, opts: &RunOpts, available: &[AgentKind]) -> (
     if rate_limit::is_rate_limited(&AgentKind::Codex) && selected.kind != AgentKind::Codex {
         reason.push_str("; codex rate-limited");
     }
+    if let Some((rate, count)) = history_map.get(&selected.kind) {
+        if *count >= 5 {
+            let percent = (*rate * 100.0).round() as i32;
+            reason.push_str(&format!("; history: {}% success", percent));
+        }
+    }
     (selected.kind, reason)
 }
 
-fn best_candidate(candidates: &[Candidate], available: Option<&[AgentKind]>) -> Candidate {
+fn best_candidate(
+    candidates: &[Candidate],
+    available: Option<&[AgentKind]>,
+    history: &std::collections::HashMap<AgentKind, (f64, usize)>,
+) -> Candidate {
     candidates
         .iter()
         .copied()
@@ -111,7 +136,21 @@ fn best_candidate(candidates: &[Candidate], available: Option<&[AgentKind]>) -> 
             Some(items) => items.contains(&candidate.kind),
             None => true,
         })
-        .max_by_key(|candidate| (candidate.score, priority(candidate.kind)))
+        .map(|candidate| {
+            let mut score = candidate.score;
+            if let Some((rate, count)) = history.get(&candidate.kind) {
+                if *count >= 5 {
+                    if *rate < 0.65 {
+                        score -= 3;
+                    } else if *rate >= 0.90 {
+                        score += 2;
+                    }
+                }
+            }
+            (candidate, score)
+        })
+        .max_by_key(|(candidate, score)| (*score, priority(candidate.kind)))
+        .map(|(candidate, _)| candidate)
         .unwrap_or(Candidate {
             kind: AgentKind::Codex,
             score: 1,
@@ -309,7 +348,7 @@ mod tests {
             context_files: vec![],
             session_id: None,
         };
-        let (kind, reason) = select_agent_from(prompt, &opts, &available_agents());
+        let (kind, reason) = select_agent_from(prompt, &opts, &available_agents(), &[]);
         assert_ne!(kind, AgentKind::Codex);
         assert!(reason.contains("budget"));
     }
@@ -326,7 +365,8 @@ mod tests {
             context_files: vec![],
             session_id: None,
         };
-        let (kind, reason) = select_agent_from(prompt, &opts, &[AgentKind::Kilo, AgentKind::Codex]);
+        let (kind, reason) =
+            select_agent_from(prompt, &opts, &[AgentKind::Kilo, AgentKind::Codex], &[]);
         assert_eq!(kind, AgentKind::Kilo);
         assert!(reason.contains("budget"));
     }
@@ -341,7 +381,7 @@ mod tests {
             context_files: vec![],
             session_id: None,
         };
-        select_agent_from(prompt, &opts, available)
+        select_agent_from(prompt, &opts, available, &[])
     }
 
     fn available_agents() -> [AgentKind; 5] {
@@ -352,5 +392,93 @@ mod tests {
             AgentKind::Cursor,
             AgentKind::Codex,
         ]
+    }
+
+    #[test]
+    fn history_penalty_for_low_success_rate() {
+        let history = vec![(AgentKind::Codex, 0.50, 10)];
+        let opts = RunOpts {
+            dir: Some("src".to_string()),
+            output: None,
+            model: None,
+            budget: false,
+            read_only: false,
+            context_files: vec![],
+            session_id: None,
+        };
+        let prompt = "add type annotation to field";
+        let available = [AgentKind::OpenCode, AgentKind::Codex];
+        let (kind, _) = select_agent_from(prompt, &opts, &available, &history);
+        assert_eq!(kind, AgentKind::OpenCode);
+    }
+
+    #[test]
+    fn history_penalty_overrides_default_codex_selection() {
+        let history = vec![(AgentKind::Codex, 0.50, 10)];
+        let opts = RunOpts {
+            dir: None,
+            output: None,
+            model: None,
+            budget: false,
+            read_only: false,
+            context_files: vec![],
+            session_id: None,
+        };
+        let prompt = "some random task";
+        let available = [AgentKind::Codex, AgentKind::Gemini];
+        let (kind, _) = select_agent_from(prompt, &opts, &available, &history);
+        assert_eq!(kind, AgentKind::Gemini);
+    }
+
+    #[test]
+    fn history_bonus_for_high_success_rate() {
+        let history = vec![(AgentKind::Codex, 0.95, 10)];
+        let (kind, _) = select_with_history("implement auth flow", &history);
+        assert_eq!(kind, AgentKind::Codex);
+    }
+
+    #[test]
+    fn history_ignored_for_low_task_count() {
+        let history = vec![(AgentKind::Gemini, 0.10, 3)];
+        let (kind, _) = select_with_history("research: what is MVP?", &history);
+        assert_eq!(kind, AgentKind::Gemini);
+    }
+
+    #[test]
+    fn history_appears_in_reason() {
+        let history = vec![(AgentKind::Gemini, 0.80, 10)];
+        let opts = RunOpts {
+            dir: None,
+            output: None,
+            model: None,
+            budget: false,
+            read_only: false,
+            context_files: vec![],
+            session_id: None,
+        };
+        let (_, reason) = select_agent_from(
+            "research: what is MVP?",
+            &opts,
+            &available_agents(),
+            &history,
+        );
+        assert!(reason.contains("history:"));
+        assert!(reason.contains("80% success"));
+    }
+
+    fn select_with_history(
+        prompt: &str,
+        history: &[(AgentKind, f64, usize)],
+    ) -> (AgentKind, String) {
+        let opts = RunOpts {
+            dir: None,
+            output: None,
+            model: None,
+            budget: false,
+            read_only: false,
+            context_files: vec![],
+            session_id: None,
+        };
+        select_agent_from(prompt, &opts, &available_agents(), history)
     }
 }

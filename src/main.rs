@@ -295,7 +295,7 @@ async fn main() -> Result<()> {
                     context_files: vec![],
                     session_id: None,
                 };
-                let (selected, reason) = agent::select_agent_with_reason(&prompt, &selection_opts);
+                let (selected, reason) = agent::select_agent_with_reason(&prompt, &selection_opts, &store);
                 eprintln!("[aid] Auto-selected agent: {selected} (reason: {reason})");
                 selected.as_str().to_string()
             } else {

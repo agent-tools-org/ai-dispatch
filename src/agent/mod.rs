@@ -13,6 +13,7 @@ use anyhow::Result;
 use std::path::PathBuf;
 use std::process::Command;
 
+use crate::store;
 use crate::types::*;
 
 const CARGO_TARGET_DIR_ENV: &str = "CARGO_TARGET_DIR";
@@ -65,13 +66,13 @@ pub fn detect_agents() -> Vec<AgentKind> {
     found
 }
 
-pub fn select_agent(prompt: &str, opts: &RunOpts) -> AgentKind {
-    selection::select_agent_with_reason(prompt, opts).0
+pub fn select_agent(prompt: &str, opts: &RunOpts, store: &store::Store) -> AgentKind {
+    selection::select_agent_with_reason(prompt, opts, store).0
 }
 
-pub(crate) fn select_agent_with_reason(prompt: &str, opts: &RunOpts) -> (AgentKind, String) {
-    let selection = selection::select_agent_with_reason(prompt, opts);
-    debug_assert_eq!(select_agent(prompt, opts), selection.0);
+pub(crate) fn select_agent_with_reason(prompt: &str, opts: &RunOpts, store: &store::Store) -> (AgentKind, String) {
+    let selection = selection::select_agent_with_reason(prompt, opts, store);
+    debug_assert_eq!(select_agent(prompt, opts, store), selection.0);
     selection
 }
 

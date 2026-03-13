@@ -20,13 +20,19 @@ use std::time::Duration;
 
 use crate::store::Store;
 
-pub fn run(store: &Arc<Store>) -> Result<()> {
+#[derive(Debug, Default)]
+pub struct RunOptions {
+    pub task_id: Option<String>,
+    pub group: Option<String>,
+}
+
+pub fn run(store: &Arc<Store>, options: RunOptions) -> Result<()> {
     enable_raw_mode()?;
     let mut stdout = stdout();
     crossterm::execute!(stdout, EnterAlternateScreen)?;
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
-    let result = run_loop(&mut terminal, app::App::new(store.clone())?);
+    let result = run_loop(&mut terminal, app::App::new(store.clone(), options)?);
     disable_raw_mode()?;
     crossterm::execute!(terminal.backend_mut(), LeaveAlternateScreen)?;
     terminal.show_cursor()?;
@@ -39,10 +45,10 @@ fn run_loop(
 ) -> Result<()> {
     loop {
         terminal.draw(|frame| ui::render(frame, &app))?;
-        if event::poll(Duration::from_millis(250))? {
-            if let Event::Key(key) = event::read()? {
-                app.handle_key(key)?;
-            }
+        if event::poll(Duration::from_millis(250))?
+            && let Event::Key(key) = event::read()?
+        {
+            app.handle_key(key)?;
         }
         app.tick()?;
         if app.should_quit {

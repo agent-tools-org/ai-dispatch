@@ -38,14 +38,14 @@ fn render_board(frame: &mut ratatui::Frame<'_>, app: &App) {
         .split(frame.area());
 
     frame.render_widget(
-        Paragraph::new("aid dashboard")
+        Paragraph::new(format!("aid dashboard [{}]", app.scope_label()))
             .alignment(Alignment::Center)
             .style(Style::default().add_modifier(Modifier::BOLD)),
         chunks[0],
     );
 
     let header = Row::new(vec![
-        "ID", "Agent", "Status", "Duration", "Tokens", "Cost", "Model", "Prompt",
+        "ID", "Agent", "Status", "Duration", "Tokens", "Cost", "Model", "Group", "Prompt",
     ])
     .style(Style::default().add_modifier(Modifier::BOLD));
     let rows = app.tasks.iter().map(task_row);
@@ -58,7 +58,8 @@ fn render_board(frame: &mut ratatui::Frame<'_>, app: &App) {
             Constraint::Length(10),
             Constraint::Length(10),
             Constraint::Length(10),
-            Constraint::Length(16),
+            Constraint::Length(14),
+            Constraint::Length(10),
             Constraint::Min(20),
         ],
     )
@@ -79,7 +80,8 @@ fn render_board(frame: &mut ratatui::Frame<'_>, app: &App) {
     let done = app.tasks.iter().filter(|task| task.status == TaskStatus::Done).count();
     let running = app.tasks.iter().filter(|task| task.status == TaskStatus::Running).count();
     let status = format!(
-        "Tasks: {} | Done: {} | Running: {} | q=quit j/k=nav Enter=detail",
+        "Scope: {} | Tasks: {} | Done: {} | Running: {} | q=quit j/k=nav Enter=detail",
+        app.scope_label(),
         app.tasks.len(),
         done,
         running,
@@ -116,7 +118,7 @@ fn render_detail(frame: &mut ratatui::Frame<'_>, app: &App) {
         frame.render_widget(list, chunks[1]);
     } else {
         frame.render_widget(
-            Paragraph::new("No task selected")
+            Paragraph::new(app.empty_message())
                 .block(Block::default().title("Task").borders(Borders::ALL)),
             chunks[0],
         );
@@ -133,7 +135,8 @@ fn task_row(task: &Task) -> Row<'static> {
         Cell::from(task_duration(task)),
         Cell::from(task_tokens(task)),
         Cell::from(cost::format_cost(task.cost_usd)),
-        Cell::from(task.model.clone().unwrap_or_else(|| "-".to_string())),
+        Cell::from(truncate(task.model.as_deref().unwrap_or("-"), 14)),
+        Cell::from(task.workgroup_id.clone().unwrap_or_else(|| "-".to_string())),
         Cell::from(truncate(&task.prompt, 60)),
     ])
     .style(status_style(task.status))
@@ -151,6 +154,9 @@ fn task_header(task: &Task) -> Paragraph<'static> {
             task.model.as_deref().unwrap_or("-"),
         ),
     ];
+    if let Some(group) = task.workgroup_id.as_deref() {
+        lines.push(format!("Group: {group}"));
+    }
     if let Some(worktree) = task.worktree_path.as_deref() {
         lines.push(format!("Worktree: {worktree}"));
     }

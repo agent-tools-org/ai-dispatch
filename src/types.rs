@@ -57,7 +57,7 @@ pub enum AgentKind {
 }
 
 impl AgentKind {
-    pub fn from_str(s: &str) -> Option<Self> {
+    pub fn parse_str(s: &str) -> Option<Self> {
         match s.to_lowercase().as_str() {
             "gemini" => Some(Self::Gemini),
             "codex" => Some(Self::Codex),
@@ -101,7 +101,7 @@ impl TaskStatus {
         }
     }
 
-    pub fn from_str(s: &str) -> Option<Self> {
+    pub fn parse_str(s: &str) -> Option<Self> {
         match s {
             "pending" => Some(Self::Pending),
             "running" => Some(Self::Running),
@@ -157,7 +157,7 @@ impl EventKind {
         }
     }
 
-    pub fn from_str(s: &str) -> Option<Self> {
+    pub fn parse_str(s: &str) -> Option<Self> {
         match s {
             "tool_call" => Some(Self::ToolCall),
             "reasoning" => Some(Self::Reasoning),

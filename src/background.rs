@@ -61,7 +61,7 @@ pub async fn run_task(store: Arc<Store>, task_id: &str) -> Result<()> {
 }
 
 async fn run_task_inner(store: &Arc<Store>, spec: &BackgroundRunSpec) -> Result<()> {
-    let agent_kind = AgentKind::from_str(&spec.agent_name)
+    let agent_kind = AgentKind::parse_str(&spec.agent_name)
         .ok_or_else(|| anyhow::anyhow!("Unknown agent '{}'", spec.agent_name))?;
     let agent = agent::get_agent(agent_kind);
     let opts = RunOpts {

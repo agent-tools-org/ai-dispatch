@@ -175,7 +175,7 @@ impl Store {
              FROM workgroups ORDER BY created_at DESC",
         )?;
         let rows = stmt.query_map([], row_to_workgroup)?;
-        rows.map(|row| row?.map_err(Into::into)).collect()
+        rows.map(|row| row?).collect()
     }
 
     pub fn update_task_status(&self, id: &str, status: TaskStatus) -> Result<()> {
@@ -264,7 +264,7 @@ impl Store {
         let params: Vec<&dyn rusqlite::ToSql> =
             filter_params.iter().map(|s| s as &dyn rusqlite::ToSql).collect();
         let rows = stmt.query_map(params.as_slice(), row_to_task)?;
-        let mut tasks = rows.map(|r| r?.map_err(Into::into)).collect::<Result<Vec<_>>>()?;
+        let mut tasks = rows.map(|r| r?).collect::<Result<Vec<_>>>()?;
         if matches!(filter, TaskFilter::Today) {
             let today = Local::now().date_naive();
             tasks.retain(|task| task.created_at.date_naive() == today);
@@ -285,23 +285,23 @@ impl Store {
             Ok(TaskEvent {
                 task_id: TaskId(row.get::<_, String>(0)?),
                 timestamp: parse_dt(&row.get::<_, String>(1)?),
-                event_kind: EventKind::from_str(&row.get::<_, String>(2)?)
+                event_kind: EventKind::parse_str(&row.get::<_, String>(2)?)
                     .unwrap_or(EventKind::Reasoning),
                 detail: row.get(3)?,
                 metadata,
             })
         })?;
-        rows.map(|r| r.map_err(Into::into)).collect()
+        rows.map(|r| Ok(r?)).collect()
     }
 }
 
 fn row_to_task(row: &rusqlite::Row) -> rusqlite::Result<Result<Task>> {
     Ok(Ok(Task {
         id: TaskId(row.get::<_, String>(0)?),
-        agent: AgentKind::from_str(&row.get::<_, String>(1)?)
+        agent: AgentKind::parse_str(&row.get::<_, String>(1)?)
             .unwrap_or(AgentKind::Codex),
         prompt: row.get(2)?,
-        status: TaskStatus::from_str(&row.get::<_, String>(3)?)
+        status: TaskStatus::parse_str(&row.get::<_, String>(3)?)
             .unwrap_or(TaskStatus::Pending),
         parent_task_id: row.get(4)?,
         workgroup_id: row.get(5)?,

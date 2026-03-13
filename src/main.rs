@@ -6,6 +6,7 @@ mod background;
 mod batch;
 mod board;
 mod cmd;
+mod cli_actions;
 mod config;
 mod context;
 mod cost;
@@ -23,10 +24,10 @@ mod verify;
 mod watcher;
 mod workgroup;
 mod worktree;
-
 use anyhow::Result;
 use clap::{Parser, Subcommand};
 use std::sync::Arc;
+use crate::cli_actions::{ConfigAction, GroupAction};
 
 #[derive(Parser)]
 #[command(name = "aid", version, about = "Multi-AI CLI team orchestrator")]
@@ -144,6 +145,16 @@ enum Commands {
         #[arg(short, long)]
         output: Option<String>,
     },
+    /// Explain a task's execution via cheap AI
+    Explain {
+        task_id: String,
+        #[arg(long)]
+        agent: Option<String>,
+        #[arg(short, long)]
+        model: Option<String>,
+        #[arg(short, long)]
+        output: Option<String>,
+    },
     /// Start MCP server (stdio)
     Mcp,
     /// Manage agent configuration
@@ -161,49 +172,6 @@ enum Commands {
     #[command(hide = true, name = "__run-task")]
     InternalRunTask {
         task_id: String,
-    },
-}
-
-#[derive(Subcommand)]
-enum ConfigAction {
-    /// List configured agents
-    Agents,
-    /// Register custom agent
-    AddAgent {
-        name: String,
-        command: String,
-        #[arg(long)]
-        streaming: bool,
-    },
-    /// Show pricing table
-    Pricing,
-}
-
-#[derive(Subcommand)]
-enum GroupAction {
-    /// Create a workgroup with shared context
-    Create {
-        name: String,
-        #[arg(long)]
-        context: String,
-    },
-    /// List workgroups
-    List,
-    /// Show one workgroup and its member tasks
-    Show {
-        group_id: String,
-    },
-    /// Update a workgroup name and/or shared context
-    Update {
-        group_id: String,
-        #[arg(long)]
-        name: Option<String>,
-        #[arg(long)]
-        context: Option<String>,
-    },
-    /// Delete a workgroup definition
-    Delete {
-        group_id: String,
     },
 }
 
@@ -257,12 +225,19 @@ async fn main() -> Result<()> {
         } => {
             cmd::batch::run(store, cmd::batch::BatchArgs { file, parallel, wait }).await?;
         }
-        Commands::Watch { task_id, group, tui } => {
-            if tui {
-                tui::run(&store)?;
-            } else {
-                cmd::watch::run(&store, task_id.as_deref(), group.as_deref()).await?;
-            }
+        Commands::Watch {
+            task_id,
+            group,
+            tui: true,
+        } => {
+            tui::run(&store, tui::RunOptions { task_id, group })?;
+        }
+        Commands::Watch {
+            task_id,
+            group,
+            tui: false,
+        } => {
+            cmd::watch::run(&store, task_id.as_deref(), group.as_deref()).await?;
         }
         Commands::Wait { task_id } => {
             cmd::wait::run(&store, task_id.as_deref()).await?;
@@ -299,9 +274,24 @@ async fn main() -> Result<()> {
         } => {
             cmd::explore::run(store, prompt, agent, model, files, output).await?;
         }
-        Commands::Mcp => {
-            cmd::mcp::run(store).await?;
+        Commands::Explain {
+            task_id,
+            agent,
+            model,
+            output,
+        } => {
+            cmd::explain::run(
+                store,
+                cmd::explain::ExplainArgs {
+                    task_id,
+                    agent,
+                    model,
+                    output,
+                },
+            )
+            .await?;
         }
+        Commands::Mcp => cmd::mcp::run(store).await?,
         Commands::Config { action } => {
             cmd::config::run(&store, action)?;
         }

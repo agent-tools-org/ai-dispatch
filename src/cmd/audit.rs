@@ -20,18 +20,18 @@ pub fn audit_text(store: &Arc<Store>, task_id: &str) -> Result<String> {
     let events = store.get_events(task_id)?;
     let mut out = render_task_detail(&task, &events);
 
-    if task.status == TaskStatus::Failed {
-        if let Some(stderr) = stderr_text(task_id) {
-            out.push_str("\nStderr:\n");
-            out.push_str(&stderr);
-        }
+    if task.status == TaskStatus::Failed
+        && let Some(stderr) = stderr_text(task_id)
+    {
+        out.push_str("\nStderr:\n");
+        out.push_str(&stderr);
     }
 
-    if let Some(ref wt_path) = task.worktree_path {
-        if std::path::Path::new(wt_path).exists() {
-            out.push_str("\nChanges:\n");
-            out.push_str(&git_diff_text(wt_path));
-        }
+    if let Some(ref wt_path) = task.worktree_path
+        && std::path::Path::new(wt_path).exists()
+    {
+        out.push_str("\nChanges:\n");
+        out.push_str(&git_diff_text(wt_path));
     }
 
     Ok(out)

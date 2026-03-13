@@ -33,7 +33,7 @@ pub struct RunArgs {
 }
 
 pub async fn run(store: Arc<Store>, args: RunArgs) -> Result<TaskId> {
-    let agent_kind = AgentKind::from_str(&args.agent_name).ok_or_else(|| {
+    let agent_kind = AgentKind::parse_str(&args.agent_name).ok_or_else(|| {
         anyhow::anyhow!(
             "Unknown agent '{}'. Available: gemini, codex, opencode, cursor",
             args.agent_name
@@ -178,11 +178,11 @@ pub(crate) async fn retry_if_needed(
     }
 
     let stderr_tail = read_stderr_tail(task_id.as_str(), 5);
-    if let Some(parent_id) = args.parent_task_id.as_deref() {
-        if stderr_tail == read_stderr_tail(parent_id, 5) {
-            println!("Retry stopped: identical stderr to previous attempt.");
-            return Ok(());
-        }
+    if let Some(parent_id) = args.parent_task_id.as_deref()
+        && stderr_tail == read_stderr_tail(parent_id, 5)
+    {
+        println!("Retry stopped: identical stderr to previous attempt.");
+        return Ok(());
     }
 
     let depth = retry_depth(&store, args.parent_task_id.as_deref())?;
@@ -206,6 +206,7 @@ pub(crate) async fn retry_if_needed(
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(crate) async fn run_agent_process(
     agent: &dyn crate::agent::Agent,
     mut cmd: Command,

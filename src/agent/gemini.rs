@@ -22,11 +22,13 @@ impl super::Agent for GeminiAgent {
 
     fn build_command(&self, prompt: &str, opts: &RunOpts) -> Result<Command> {
         let mut cmd = Command::new("gemini");
-        cmd.args(["-o", "json", "-p", prompt]);
-        // Suppress stderr (cached credentials noise)
+        if opts.read_only {
+            cmd.args(["-o", "json", "--approval-mode", "plan", "-p", prompt]);
+        } else {
+            cmd.args(["-o", "json", "-y", "-p", prompt]);
+        }
         cmd.stderr(std::process::Stdio::null());
         if let Some(ref output) = opts.output {
-            // Gemini doesn't have a native output flag; we handle file writing ourselves
             let _ = output;
         }
         Ok(cmd)

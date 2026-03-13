@@ -89,6 +89,7 @@ pub enum TaskStatus {
     Running,
     AwaitingInput,
     Done,
+    Merged,
     Failed,
     Skipped,
 }
@@ -100,6 +101,7 @@ impl TaskStatus {
             Self::Running => "running",
             Self::AwaitingInput => "awaiting_input",
             Self::Done => "done",
+            Self::Merged => "merged",
             Self::Failed => "failed",
             Self::Skipped => "skipped",
         }
@@ -115,6 +117,7 @@ impl TaskStatus {
             "running" => Some(Self::Running),
             "awaiting_input" => Some(Self::AwaitingInput),
             "done" => Some(Self::Done),
+            "merged" => Some(Self::Merged),
             "failed" => Some(Self::Failed),
             "skipped" => Some(Self::Skipped),
             _ => None,
@@ -127,13 +130,14 @@ impl TaskStatus {
             Self::Running => "RUN",
             Self::AwaitingInput => "AWAIT",
             Self::Done => "DONE",
+            Self::Merged => "MERGED",
             Self::Failed => "FAIL",
             Self::Skipped => "SKIP",
         }
     }
 
     pub fn is_terminal(&self) -> bool {
-        matches!(self, Self::Done | Self::Failed | Self::Skipped)
+        matches!(self, Self::Done | Self::Merged | Self::Failed | Self::Skipped)
     }
 }
 

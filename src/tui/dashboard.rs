@@ -34,7 +34,7 @@ pub fn render_dashboard(frame: &mut ratatui::Frame<'_>, app: &App) {
     } else {
         render_cards(frame, app, chunks[1]);
     }
-    let done = app.tasks.iter().filter(|task| task.status == TaskStatus::Done).count();
+    let done = app.tasks.iter().filter(|task| matches!(task.status, TaskStatus::Done | TaskStatus::Merged)).count();
     let running = app.tasks.iter().filter(|task| matches!(task.status, TaskStatus::Running | TaskStatus::AwaitingInput)).count();
     let status = format!(
         "Scope: {} | Tasks: {} | Done: {} | Running: {} | {}",
@@ -156,7 +156,7 @@ fn milestone_progress(task: &Task, count: usize) -> String {
 }
 fn status_style(status: TaskStatus) -> Style {
     match status {
-        TaskStatus::Done => Style::default().fg(Color::Green),
+        TaskStatus::Done | TaskStatus::Merged => Style::default().fg(Color::Green),
         TaskStatus::Running => Style::default().fg(Color::Yellow),
         TaskStatus::AwaitingInput => Style::default().fg(Color::Magenta),
         TaskStatus::Failed => Style::default().fg(Color::Red),

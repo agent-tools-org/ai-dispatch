@@ -401,6 +401,7 @@ fn insert_skipped_task(store: &Arc<Store>, task: &batch::BatchTask) -> Result<Ta
         model: None,
         cost_usd: None,
         created_at: now,
+        resolved_prompt: None,
         completed_at: Some(now),
     })?;
     Ok(task_id)
@@ -410,7 +411,7 @@ fn load_task_outcome(store: &Arc<Store>, task_id: &str) -> Result<BatchTaskOutco
         anyhow::bail!("batch task not found after dispatch: {task_id}");
     };
     Ok(match task.status {
-        TaskStatus::Done => BatchTaskOutcome::Done,
+        TaskStatus::Done | TaskStatus::Merged => BatchTaskOutcome::Done,
         TaskStatus::Skipped => BatchTaskOutcome::Skipped,
         TaskStatus::Pending | TaskStatus::Running | TaskStatus::AwaitingInput | TaskStatus::Failed => BatchTaskOutcome::Failed,
     })

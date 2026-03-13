@@ -188,6 +188,10 @@ enum Commands {
         #[arg(short, long)]
         feedback: String,
     },
+    /// Mark a task as merged
+    Merge {
+        task_id: String,
+    },
     /// Send interactive input to a background task
     Respond {
         task_id: String,
@@ -382,6 +386,9 @@ async fn main() -> Result<()> {
         }
         Commands::Retry { task_id, feedback } => {
             cmd::retry::run(store, cmd::retry::RetryArgs { task_id, feedback }).await?;
+        }
+        Commands::Merge { task_id } => {
+            cmd::merge::run(store, &task_id)?;
         }
         Commands::Respond { task_id, input } => {
             cmd::respond::run(&task_id, &input)?;

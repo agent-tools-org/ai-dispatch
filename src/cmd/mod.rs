@@ -9,6 +9,7 @@ pub mod config;
 pub mod explain;
 pub mod group;
 pub mod mcp;
+pub mod merge;
 mod mcp_schema;
 mod mcp_tools;
 pub mod respond;

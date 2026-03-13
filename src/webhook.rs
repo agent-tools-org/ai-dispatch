@@ -15,7 +15,7 @@ pub async fn fire_task_webhooks(store: &Store, task_id: &str) {
         Err(err) => return eprintln!("[aid] failed to load task {task_id} for webhooks: {err}"),
     };
     let status = match task.status {
-        TaskStatus::Done => "done",
+        TaskStatus::Done | TaskStatus::Merged => "done",
         TaskStatus::Failed => "failed",
         _ => return,
     };

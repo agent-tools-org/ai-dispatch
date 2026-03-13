@@ -32,6 +32,7 @@ fn help_shows_subcommands() {
     assert!(stdout.contains("show"));
     assert!(stdout.contains("ask"));
     assert!(stdout.contains("group"));
+    assert!(stdout.contains("merge"));
     assert!(stdout.contains("usage"));
     assert!(stdout.contains("config"));
 }
@@ -88,6 +89,35 @@ fn show_missing_task_fails() {
     assert!(!output.status.success());
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(stderr.contains("not found"));
+}
+
+#[test]
+fn merge_marks_done_task_as_merged() {
+    let temp_dir = TempDir::new().unwrap();
+    let init = aid_cmd_in(temp_dir.path()).arg("board").output().unwrap();
+    assert!(init.status.success());
+
+    let conn = rusqlite::Connection::open(temp_dir.path().join("aid.db")).unwrap();
+    let created_at = "2026-03-13T00:00:00+00:00";
+    conn.execute(
+        "INSERT INTO tasks (id, agent, prompt, status, created_at)
+         VALUES (?1, ?2, ?3, ?4, ?5)",
+        params!["t-2001", "codex", "merge me", "done", created_at],
+    ).unwrap();
+
+    let merge_output = aid_cmd_in(temp_dir.path())
+        .args(["merge", "t-2001"])
+        .output()
+        .unwrap();
+    assert!(merge_output.status.success());
+    let merge_stdout = String::from_utf8_lossy(&merge_output.stdout);
+    assert!(merge_stdout.contains("Marked t-2001 as merged"));
+
+    let board_output = aid_cmd_in(temp_dir.path()).arg("board").output().unwrap();
+    assert!(board_output.status.success());
+    let board_stdout = String::from_utf8_lossy(&board_output.stdout);
+    assert!(board_stdout.contains("t-2001"));
+    assert!(board_stdout.contains("MERGED"));
 }
 
 #[test]

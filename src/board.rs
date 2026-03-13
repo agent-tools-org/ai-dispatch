@@ -224,7 +224,7 @@ fn count_statuses(tasks: &[Task]) -> (usize, usize, usize) {
     let mut failed = 0;
     for t in tasks {
         match t.status {
-            TaskStatus::Done => done += 1,
+            TaskStatus::Done | TaskStatus::Merged => done += 1,
             TaskStatus::Running | TaskStatus::AwaitingInput => running += 1,
             TaskStatus::Failed => failed += 1,
             TaskStatus::Pending | TaskStatus::Skipped => {}
@@ -308,6 +308,7 @@ fn retry_status(status: TaskStatus) -> &'static str {
         TaskStatus::Running => "Running",
         TaskStatus::AwaitingInput => "Await",
         TaskStatus::Done => "Done",
+        TaskStatus::Merged => "Merged",
         TaskStatus::Failed => "Failed",
         TaskStatus::Skipped => "Skipped",
     }

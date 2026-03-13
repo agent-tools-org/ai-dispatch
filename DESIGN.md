@@ -415,7 +415,7 @@ ai-dispatch/
 - TUI dashboard with ratatui
 - OpenCode adapter (once installed)
 - Cursor Agent adapter
-### v1.1 in progress
+### v1.1 delivered
 
 - MCP server mode (`aid mcp` — stdio JSON-RPC for Claude Code native tool calls)
 - Smart agent auto-selection (`aid run auto "prompt"` — scoring-based heuristic)
@@ -423,10 +423,23 @@ ai-dispatch/
 - Skill injection (`aid run --skill implementer` — methodology from `~/.aid/skills/`)
 - Milestone reporting (agent progress stages visible in `aid watch`)
 
+### v1.2 in progress
+
+- Session-scoped message bus (workgroup milestones auto-injected into new task prompts)
+- Interactive input forwarding (PTY-based, `aid respond` command)
+
+### v1.3 planned
+
+- Skill auto-apply (auto-inject implementer for code tasks, researcher for ask tasks)
+- Enforce commit for worktree tasks (auto-commit or mark incomplete if uncommitted changes)
+- Batch auto-workgroup (auto-create workgroup for parallel batch dispatches)
+- MCP skill support (expose `skills` param in aid_run MCP tool)
+- Session cost summary (`aid usage --session`)
+
 ### Future
 
-- Interactive input forwarding (let orchestrator answer agent prompts mid-execution)
+- Task completion hooks (`--on-done "command"` callback for event-driven orchestration)
+- Batch file auto-archive (save to ~/.aid/batches/ after dispatch)
+- Max task duration with auto-fail (aggressive zombie cleanup)
 - Auto-retry on failure with exponential backoff
 - Cost tracking with configurable per-model pricing
-- Parallel dispatch: `aid run-parallel tasks.toml` (batch file)
-- Session-scoped agent message bus (agents share findings within a workgroup)

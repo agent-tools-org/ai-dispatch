@@ -1,14 +1,17 @@
 // Text rendering for task board and task detail views.
-// Pure functions — no I/O, easy to test.
+// Board rows can enrich output with stored milestone events.
+
+use anyhow::Result;
 
 use crate::cost;
 use crate::session;
+use crate::store::Store;
 use crate::types::*;
 
 /// Render a summary table of tasks (for `aid board`)
-pub fn render_board(tasks: &[Task]) -> String {
+pub fn render_board(tasks: &[Task], store: &Store) -> Result<String> {
     if tasks.is_empty() {
-        return "No tasks found.".to_string();
+        return Ok("No tasks found.".to_string());
     }
 
     let (done, running, failed) = count_statuses(tasks);
@@ -31,16 +34,17 @@ pub fn render_board(tasks: &[Task]) -> String {
 
     // Header
     out.push_str(&format!(
-        "{:<10} {:<10} {:<6} {:<10} {:<10} {:<8} {:<10} {:<10} {:<16} {}\n",
+        "{:<10} {:<10} {:<30} {:<10} {:<10} {:<8} {:<10} {:<10} {:<16} {}\n",
         "ID", "Agent", "Status", "Duration", "Tokens", "Cost", "Parent", "Group", "Caller", "Model"
     ));
-    out.push_str(&"-".repeat(120));
+    out.push_str(&"-".repeat(144));
     out.push('\n');
 
     for task in tasks {
         let duration = task.duration_ms
             .map(format_duration)
             .unwrap_or_else(|| elapsed_since(task.created_at));
+        let status = task_status(task, store.latest_milestone(task.id.as_str())?);
         let tokens = task.tokens
             .map(format_tokens)
             .unwrap_or_else(|| "-".to_string());
@@ -53,10 +57,10 @@ pub fn render_board(tasks: &[Task]) -> String {
             .unwrap_or("-");
 
         out.push_str(&format!(
-            "{:<10} {:<10} {:<6} {:<10} {:<10} {:<8} {:<10} {:<10} {:<16} {}\n",
+            "{:<10} {:<10} {:<30} {:<10} {:<10} {:<8} {:<10} {:<10} {:<16} {}\n",
             task.id.as_str(),
             task.agent.as_str(),
-            task.status.label(),
+            status,
             duration,
             tokens,
             cost_str,
@@ -66,7 +70,7 @@ pub fn render_board(tasks: &[Task]) -> String {
             model,
         ));
     }
-    out
+    Ok(out)
 }
 
 /// Render detailed view of a single task (for `aid audit`)
@@ -193,10 +197,20 @@ fn short_group(group: Option<&str>) -> String {
     group.unwrap_or("-").to_string()
 }
 
+fn task_status(task: &Task, milestone: Option<String>) -> String {
+    if task.status == TaskStatus::Running
+        && let Some(milestone) = milestone
+    {
+        return truncate(&format!("{} — {}", task.status.label(), milestone), 30);
+    }
+    task.status.label().to_string()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use chrono::Local;
+    use crate::store::Store;
 
     fn make_task(id: &str, agent: AgentKind, status: TaskStatus) -> Task {
         Task {
@@ -223,16 +237,18 @@ mod tests {
 
     #[test]
     fn empty_board() {
-        assert_eq!(render_board(&[]), "No tasks found.");
+        let store = Store::open_memory().unwrap();
+        assert_eq!(render_board(&[], &store).unwrap(), "No tasks found.");
     }
 
     #[test]
     fn board_with_tasks() {
+        let store = Store::open_memory().unwrap();
         let tasks = vec![
             make_task("t-0001", AgentKind::Codex, TaskStatus::Done),
             make_task("t-0002", AgentKind::Gemini, TaskStatus::Running),
         ];
-        let output = render_board(&tasks);
+        let output = render_board(&tasks, &store).unwrap();
         assert!(output.contains("t-0001"));
         assert!(output.contains("codex"));
         assert!(output.contains("DONE"));
@@ -241,6 +257,23 @@ mod tests {
         assert!(output.contains("Cost"));
         assert!(output.contains("Caller"));
         assert!(output.contains("Group"));
+    }
+
+    #[test]
+    fn board_shows_running_task_milestone() {
+        let store = Store::open_memory().unwrap();
+        let task = make_task("t-0003", AgentKind::Codex, TaskStatus::Running);
+        store.insert_task(&task).unwrap();
+        store.insert_event(&TaskEvent {
+            task_id: task.id.clone(),
+            timestamp: Local::now(),
+            event_kind: EventKind::Milestone,
+            detail: "types defined".to_string(),
+            metadata: None,
+        }).unwrap();
+
+        let output = render_board(&[task], &store).unwrap();
+        assert!(output.contains("RUN — types defined"));
     }
 
     #[test]

@@ -3,7 +3,7 @@
 
 use anyhow::{Result, Context};
 use chrono::{DateTime, Local};
-use rusqlite::{Connection, params};
+use rusqlite::{Connection, OptionalExtension, params};
 use std::path::Path;
 use std::sync::Mutex;
 
@@ -218,6 +218,21 @@ impl Store {
             ],
         )?;
         Ok(())
+    }
+
+    pub fn latest_milestone(&self, task_id: &str) -> Result<Option<String>> {
+        let conn = self.db();
+        let milestone = conn
+            .query_row(
+                "SELECT detail FROM events
+                 WHERE task_id = ?1 AND event_type = 'milestone'
+                 ORDER BY timestamp DESC
+                 LIMIT 1",
+                params![task_id],
+                |row| row.get(0),
+            )
+            .optional()?;
+        Ok(milestone)
     }
 
     pub fn get_task(&self, id: &str) -> Result<Option<Task>> {
@@ -440,5 +455,36 @@ mod tests {
         assert_eq!(loaded.id, workgroup.id);
         assert_eq!(loaded.name, "dispatch");
         assert!(loaded.shared_context.contains("API contract"));
+    }
+
+    #[test]
+    fn gets_latest_milestone() {
+        let store = Store::open_memory().unwrap();
+        store.insert_task(&make_task("t-0030", AgentKind::Codex, TaskStatus::Running)).unwrap();
+
+        store.insert_event(&TaskEvent {
+            task_id: TaskId("t-0030".to_string()),
+            timestamp: Local::now() - chrono::Duration::seconds(2),
+            event_kind: EventKind::Milestone,
+            detail: "types defined".to_string(),
+            metadata: None,
+        }).unwrap();
+        store.insert_event(&TaskEvent {
+            task_id: TaskId("t-0030".to_string()),
+            timestamp: Local::now() - chrono::Duration::seconds(1),
+            event_kind: EventKind::ToolCall,
+            detail: "cargo check".to_string(),
+            metadata: None,
+        }).unwrap();
+        store.insert_event(&TaskEvent {
+            task_id: TaskId("t-0030".to_string()),
+            timestamp: Local::now(),
+            event_kind: EventKind::Milestone,
+            detail: "tests passing".to_string(),
+            metadata: None,
+        }).unwrap();
+
+        let milestone = store.latest_milestone("t-0030").unwrap();
+        assert_eq!(milestone.as_deref(), Some("tests passing"));
     }
 }

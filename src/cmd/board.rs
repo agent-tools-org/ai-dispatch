@@ -33,6 +33,6 @@ pub fn run(
     if let Some(group_id) = group {
         tasks.retain(|task| task.workgroup_id.as_deref() == Some(group_id));
     }
-    print!("{}", render_board(&tasks));
+    print!("{}", render_board(&tasks, store)?);
     Ok(())
 }

@@ -125,6 +125,7 @@ impl TaskStatus {
 pub enum EventKind {
     ToolCall,
     Reasoning,
+    Milestone,
     Build,
     Test,
     Commit,
@@ -143,6 +144,7 @@ impl EventKind {
         match self {
             Self::ToolCall => "tool_call",
             Self::Reasoning => "reasoning",
+            Self::Milestone => "milestone",
             Self::Build => "build",
             Self::Test => "test",
             Self::Commit => "commit",
@@ -161,6 +163,7 @@ impl EventKind {
         match s {
             "tool_call" => Some(Self::ToolCall),
             "reasoning" => Some(Self::Reasoning),
+            "milestone" => Some(Self::Milestone),
             "build" => Some(Self::Build),
             "test" => Some(Self::Test),
             "commit" => Some(Self::Commit),

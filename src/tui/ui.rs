@@ -45,7 +45,7 @@ fn render_board(frame: &mut ratatui::Frame<'_>, app: &App) {
     );
 
     let header = Row::new(vec![
-        "ID", "Agent", "Status", "CPU", "Mem", "Duration", "Tokens", "Cost", "Model", "Group",
+        "ID", "Agent", "Status", "Progress", "CPU", "Mem", "Duration", "Tokens", "Cost", "Model", "Group",
         "Prompt",
     ])
     .style(Style::default().add_modifier(Modifier::BOLD));
@@ -56,6 +56,7 @@ fn render_board(frame: &mut ratatui::Frame<'_>, app: &App) {
             Constraint::Length(10),
             Constraint::Length(10),
             Constraint::Length(8),
+            Constraint::Length(32),
             Constraint::Length(7),
             Constraint::Length(7),
             Constraint::Length(10),
@@ -135,6 +136,7 @@ fn task_row(app: &App, task: &Task) -> Row<'static> {
         Cell::from(task.id.as_str().to_string()),
         Cell::from(task.agent.as_str().to_string()),
         Cell::from(task.status.label().to_string()),
+        Cell::from(task_progress(app, task)),
         Cell::from(task_cpu(app, task)),
         Cell::from(task_memory(app, task)),
         Cell::from(task_duration(task)),
@@ -206,6 +208,15 @@ fn task_cpu(app: &App, task: &Task) -> String {
 fn task_memory(app: &App, task: &Task) -> String {
     app.get_metrics(task.id.as_str())
         .map(|metrics| format!("{:.0}M", metrics.memory_mb))
+        .unwrap_or_else(|| "—".to_string())
+}
+
+fn task_progress(app: &App, task: &Task) -> String {
+    if task.status != TaskStatus::Running {
+        return "—".to_string();
+    }
+    app.get_milestone(task.id.as_str())
+        .map(|milestone| truncate(milestone, 30))
         .unwrap_or_else(|| "—".to_string())
 }
 

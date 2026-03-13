@@ -47,6 +47,11 @@ pub async fn watch_streaming(
         log_file.write_all(b"\n").await?;
 
         // Parse event
+        if let Some(event) = parse_milestone_event(task_id, &line) {
+            store.insert_event(&event)?;
+            event_count += 1;
+            continue;
+        }
         if let Some(event) = agent.parse_event(task_id, &line) {
             apply_completion_event(&mut info, &event);
             store.insert_event(&event)?;
@@ -202,9 +207,53 @@ fn apply_completion_event(info: &mut CompletionInfo, event: &TaskEvent) {
     }
 }
 
+fn parse_milestone_event(task_id: &TaskId, line: &str) -> Option<TaskEvent> {
+    let detail = extract_milestone_detail(line)?;
+    Some(TaskEvent {
+        task_id: task_id.clone(),
+        timestamp: Local::now(),
+        event_kind: EventKind::Milestone,
+        detail,
+        metadata: None,
+    })
+}
+
+fn extract_milestone_detail(line: &str) -> Option<String> {
+    if !line.contains("[MILESTONE]") {
+        return None;
+    }
+    if let Ok(value) = serde_json::from_str::<serde_json::Value>(line)
+        && let Some(detail) = extract_milestone_from_json(&value)
+    {
+        return Some(detail);
+    }
+    extract_milestone_from_text(line)
+}
+
+fn extract_milestone_from_json(value: &serde_json::Value) -> Option<String> {
+    match value {
+        serde_json::Value::String(text) => extract_milestone_from_text(text),
+        serde_json::Value::Array(items) => items.iter().find_map(extract_milestone_from_json),
+        serde_json::Value::Object(map) => map.values().find_map(extract_milestone_from_json),
+        _ => None,
+    }
+}
+
+fn extract_milestone_from_text(text: &str) -> Option<String> {
+    text.lines().find_map(|line| {
+        let (_, detail) = line.split_once("[MILESTONE]")?;
+        let detail = detail.trim().trim_start_matches(':').trim();
+        if detail.is_empty() {
+            None
+        } else {
+            Some(detail.to_string())
+        }
+    })
+}
+
 #[cfg(test)]
 mod tests {
-    use super::apply_completion_event;
+    use super::{apply_completion_event, parse_milestone_event};
     use crate::types::{CompletionInfo, EventKind, TaskEvent, TaskId, TaskStatus};
     use chrono::Local;
     use serde_json::json;
@@ -257,5 +306,26 @@ mod tests {
         assert_eq!(info.tokens, Some(10));
         assert_eq!(info.model.as_deref(), Some("gpt-4.1"));
         assert_eq!(info.cost_usd, Some(0.01));
+    }
+
+    #[test]
+    fn milestone_event_parses_plain_text_lines() {
+        let event = parse_milestone_event(
+            &TaskId("t-m1".to_string()),
+            "[MILESTONE] types defined",
+        )
+        .unwrap();
+
+        assert_eq!(event.event_kind, EventKind::Milestone);
+        assert_eq!(event.detail, "types defined");
+    }
+
+    #[test]
+    fn milestone_event_parses_json_lines() {
+        let line = r#"{"type":"item.completed","item":{"type":"agent_message","text":"[MILESTONE] tests passing\nnext"}} "#;
+        let event = parse_milestone_event(&TaskId("t-m2".to_string()), line).unwrap();
+
+        assert_eq!(event.event_kind, EventKind::Milestone);
+        assert_eq!(event.detail, "tests passing");
     }
 }

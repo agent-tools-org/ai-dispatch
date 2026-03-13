@@ -1,5 +1,18 @@
 // Prompt templates injected into agent prompts.
-// Codex-specific guards and commit message formatting.
+// Shared milestone guidance plus codex-specific guard strings.
+
+/// Milestone instruction appended to all agent prompts
+pub fn milestone_instruction() -> &'static str {
+    "\nAfter completing each major step, print on its own line: \
+     [MILESTONE] <brief description>"
+}
+
+/// Inject milestone guidance into a raw prompt
+pub fn inject_milestone_prompt(raw: &str) -> String {
+    let mut prompt = raw.to_string();
+    prompt.push_str(milestone_instruction());
+    prompt
+}
 
 /// No-op guard appended to codex prompts
 pub fn codex_guard() -> &'static str {

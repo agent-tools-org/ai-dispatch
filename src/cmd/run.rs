@@ -14,6 +14,7 @@ use crate::paths;
 use crate::session;
 use crate::skills;
 use crate::store::Store;
+use crate::templates;
 use crate::types::*;
 use crate::watcher;
 
@@ -93,6 +94,7 @@ pub async fn run(store: Arc<Store>, args: RunArgs) -> Result<TaskId> {
         let skill_text = skills::load_skills(&args.skills)?;
         effective_prompt = format!("{effective_prompt}\n\n--- Methodology ---\n{skill_text}");
     }
+    effective_prompt = templates::inject_milestone_prompt(&effective_prompt);
 
     let opts = RunOpts {
         dir: effective_dir.clone(),

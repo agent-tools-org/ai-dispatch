@@ -15,6 +15,7 @@ pub struct App {
     pub tasks: Vec<Task>,
     pub events_cache: HashMap<String, Vec<TaskEvent>>,
     pub metrics: HashMap<String, ProcessMetrics>,
+    pub milestones: HashMap<String, String>,
     pub selected: usize,
     pub detail_mode: bool,
     pub should_quit: bool,
@@ -29,6 +30,7 @@ impl App {
             tasks: Vec::new(),
             events_cache: HashMap::new(),
             metrics: HashMap::new(),
+            milestones: HashMap::new(),
             selected: 0,
             detail_mode: false,
             should_quit: false,
@@ -78,6 +80,10 @@ impl App {
         self.metrics.get(task_id)
     }
 
+    pub fn get_milestone(&self, task_id: &str) -> Option<&str> {
+        self.milestones.get(task_id).map(String::as_str)
+    }
+
     pub fn scope_label(&self) -> String {
         match (self.task_id_filter.as_deref(), self.group_filter.as_deref()) {
             (Some(task_id), Some(group_id)) => format!("task {task_id} | group {group_id}"),
@@ -103,6 +109,7 @@ impl App {
     fn reload_tasks(&mut self) -> Result<()> {
         let tasks = self.load_tasks()?;
         self.metrics = self.load_metrics(&tasks);
+        self.milestones = self.load_milestones(&tasks)?;
         self.tasks = tasks;
         if self.selected >= self.tasks.len() && !self.tasks.is_empty() {
             self.selected = self.tasks.len() - 1;
@@ -147,6 +154,19 @@ impl App {
             metrics.insert(task.id.as_str().to_string(), process_metrics);
         }
         metrics
+    }
+
+    fn load_milestones(&self, tasks: &[Task]) -> Result<HashMap<String, String>> {
+        let mut milestones = HashMap::new();
+        for task in tasks
+            .iter()
+            .filter(|task| matches!(task.status, crate::types::TaskStatus::Running))
+        {
+            if let Some(milestone) = self.store.latest_milestone(task.id.as_str())? {
+                milestones.insert(task.id.as_str().to_string(), milestone);
+            }
+        }
+        Ok(milestones)
     }
 
     fn next(&mut self) {
@@ -234,5 +254,31 @@ mod tests {
         assert_eq!(app.tasks.len(), 1);
         assert_eq!(app.tasks[0].id.as_str(), "t-1001");
         assert_eq!(app.scope_label(), "task t-1001 | group wg-b");
+    }
+
+    #[test]
+    fn loads_running_task_milestone() {
+        let store = Arc::new(Store::open_memory().unwrap());
+        let mut task = make_task("t-1002", Some("wg-a"));
+        task.status = TaskStatus::Running;
+        store.insert_task(&task).unwrap();
+        store.insert_event(&TaskEvent {
+            task_id: task.id.clone(),
+            timestamp: Local::now(),
+            event_kind: crate::types::EventKind::Milestone,
+            detail: "types defined".to_string(),
+            metadata: None,
+        }).unwrap();
+
+        let app = App::new(
+            store,
+            super::super::RunOptions {
+                task_id: None,
+                group: Some("wg-a".to_string()),
+            },
+        )
+        .unwrap();
+
+        assert_eq!(app.get_milestone("t-1002"), Some("types defined"));
     }
 }

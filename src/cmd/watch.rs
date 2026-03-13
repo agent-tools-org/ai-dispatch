@@ -55,11 +55,11 @@ pub async fn run(store: &Arc<Store>, task_id: Option<&str>, group: Option<&str>,
                 }
                 if !all.is_empty() {
                     println!();
-                    print!("{}", render_board(&all));
+                    print!("{}", render_board(&all, store)?);
                 }
                 return Ok(());
             }
-            print!("{}", render_board(&running));
+            print!("{}", render_board(&running, store)?);
         }
 
         sleep(Duration::from_secs(1)).await;

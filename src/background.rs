@@ -146,7 +146,7 @@ async fn run_task_inner(store: &Arc<Store>, spec: &BackgroundRunSpec) -> Result<
             }
         }
     }
-    crate::cmd::run::retry_if_needed(
+    if let Some(retry_args) = crate::cmd::retry_logic::prepare_retry(
         store.clone(),
         &TaskId(spec.task_id.clone()),
         &crate::cmd::run::RunArgs {
@@ -167,7 +167,10 @@ async fn run_task_inner(store: &Arc<Store>, spec: &BackgroundRunSpec) -> Result<
             on_done: None,
         },
     )
-    .await?;
+    .await?
+    {
+        Box::pin(crate::cmd::run::run(store.clone(), retry_args)).await?;
+    }
 
     Ok(())
 }
@@ -325,16 +328,23 @@ fn is_process_running(pid: u32) -> bool {
 #[cfg(unix)]
 fn is_process_not_zombie(pid: u32) -> bool {
     use std::process::Command;
-    let output = Command::new("ps")
-        .args(["-o", "stat=", "-p", &pid.to_string()])
-        .output();
-    match output {
-        Ok(output) => {
-            let stat = String::from_utf8_lossy(&output.stdout);
-            !stat.trim().starts_with('Z')
-        }
-        Err(_) => true,
+    const WNOHANG: i32 = 1;
+
+    unsafe extern "C" {
+        fn waitpid(pid: i32, status: *mut i32, options: i32) -> i32;
     }
+
+    if let Ok(output) = Command::new("ps")
+        .args(["-o", "stat=", "-p", &pid.to_string()])
+        .output()
+    {
+        let stat = String::from_utf8_lossy(&output.stdout);
+        if !stat.trim().is_empty() {
+            return !stat.trim().starts_with('Z');
+        }
+    }
+    let mut status = 0;
+    unsafe { waitpid(pid as i32, &mut status, WNOHANG) <= 0 }
 }
 
 #[cfg(not(unix))]

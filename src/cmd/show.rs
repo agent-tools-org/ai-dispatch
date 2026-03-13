@@ -7,6 +7,7 @@ use std::process::Command;
 use std::sync::Arc;
 
 use crate::board::render_task_detail;
+use crate::cmd::retry_logic;
 use crate::cmd::run::{self, RunArgs};
 use crate::paths;
 use crate::store::Store;
@@ -176,7 +177,7 @@ async fn run_explain(
 ) -> Result<()> {
     let task = load_task(&store, task_id)?;
     let events = store.get_events(task_id)?;
-    let stderr = read_tail(&paths::stderr_path(task_id), 30, "stderr unavailable");
+    let stderr = retry_logic::read_stderr_tail(task_id, 30);
     let log = read_tail(&paths::log_path(task_id), 50, "log unavailable");
     let context = build_explain_context(&task, &events, &stderr, &log);
     let prompt = build_explain_prompt(&context);

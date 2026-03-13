@@ -11,6 +11,7 @@ mod mcp_schema;
 mod mcp_tools;
 pub mod respond;
 pub mod retry;
+pub mod retry_logic;
 pub mod run;
 pub mod show;
 pub mod usage;

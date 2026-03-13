@@ -5,10 +5,10 @@ use anyhow::{Context, Result};
 use chrono::Local;
 use std::sync::Arc;
 use tokio::process::Command;
-use tokio::time::{Duration, sleep};
 
 use crate::agent::{self, RunOpts};
 use crate::background::{self, BackgroundRunSpec};
+use crate::cmd::retry_logic;
 use crate::cost;
 use crate::paths;
 use crate::session;
@@ -221,56 +221,13 @@ pub async fn run(store: Arc<Store>, args: RunArgs) -> Result<TaskId> {
             args.verify.as_deref(),
             effective_dir.as_deref(),
         );
-        retry_if_needed(store.clone(), &task_id, &args).await?;
+        if let Some(retry_args) = retry_logic::prepare_retry(store.clone(), &task_id, &args).await?
+        {
+            Box::pin(run(store, retry_args)).await?;
+        }
     }
 
     Ok(task_id)
-}
-
-pub(crate) async fn retry_if_needed(
-    store: Arc<Store>,
-    task_id: &TaskId,
-    args: &RunArgs,
-) -> Result<()> {
-    if args.retry == 0 {
-        return Ok(());
-    }
-
-    let Some(task) = store.get_task(task_id.as_str())? else {
-        return Ok(());
-    };
-    if task.status != TaskStatus::Failed {
-        return Ok(());
-    }
-
-    let stderr_tail = read_stderr_tail(task_id.as_str(), 5);
-    if let Some(parent_id) = args.parent_task_id.as_deref()
-        && stderr_tail == read_stderr_tail(parent_id, 5)
-    {
-        println!("Retry stopped: identical stderr to previous attempt.");
-        return Ok(());
-    }
-
-    let depth = retry_depth(&store, args.parent_task_id.as_deref())?;
-    let attempt = depth + 1;
-    let max_attempts = depth + args.retry;
-    let backoff_secs = backoff_for_attempt(attempt);
-    println!("Retry {attempt}/{max_attempts}: re-dispatching after {backoff_secs}s...");
-    sleep(Duration::from_secs(backoff_secs)).await;
-    let original_prompt = root_prompt(&store, &task).unwrap_or_else(|| args.prompt.clone());
-
-    let retry_prompt = format!(
-        "[Previous attempt failed]\nError: {stderr_tail}\n\n[Original task]\n{prompt}",
-        prompt = original_prompt,
-    );
-    let mut retry_args = args.clone();
-    retry_args.prompt = retry_prompt;
-    retry_args.retry = args.retry.saturating_sub(1);
-    retry_args.background = false;
-    retry_args.announce = args.announce;
-    retry_args.parent_task_id = Some(task_id.as_str().to_string());
-    Box::pin(run(store, retry_args)).await?;
-    Ok(())
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -354,11 +311,7 @@ pub(crate) fn maybe_verify(
         return;
     };
 
-    let command = if verify_arg == "auto" {
-        None
-    } else {
-        Some(verify_arg)
-    };
+    let command = if verify_arg == "auto" { None } else { Some(verify_arg) };
     let path = std::path::Path::new(dir_path);
 
     match crate::verify::run_verify(path, command) {
@@ -383,57 +336,8 @@ pub(crate) fn maybe_verify(
     }
 }
 
-fn read_stderr_tail(task_id: &str, lines: usize) -> String {
-    let stderr_path = paths::stderr_path(task_id);
-    let Ok(stderr) = std::fs::read_to_string(stderr_path) else {
-        return "stderr unavailable".to_string();
-    };
-    let tail: Vec<&str> = stderr.lines().rev().take(lines).collect();
-    if tail.is_empty() {
-        "stderr unavailable".to_string()
-    } else {
-        tail.into_iter().rev().collect::<Vec<_>>().join("\n")
-    }
-}
-
-fn retry_depth(store: &Store, parent_task_id: Option<&str>) -> Result<u32> {
-    let mut depth = 0u32;
-    let mut current = parent_task_id.map(str::to_string);
-    while let Some(task_id) = current {
-        let Some(task) = store.get_task(&task_id)? else {
-            break;
-        };
-        depth += 1;
-        current = task.parent_task_id;
-    }
-    Ok(depth)
-}
-
-fn backoff_for_attempt(attempt: u32) -> u64 {
-    match attempt {
-        0 | 1 => 5,
-        2 => 15,
-        _ => 45,
-    }
-}
-
-fn root_prompt(store: &Store, task: &Task) -> Option<String> {
-    let mut prompt = task.prompt.clone();
-    let mut current = task.parent_task_id.clone();
-    while let Some(task_id) = current {
-        let Some(parent) = store.get_task(&task_id).ok().flatten() else {
-            break;
-        };
-        prompt = parent.prompt;
-        current = parent.parent_task_id;
-    }
-    Some(prompt)
-}
-
 fn load_workgroup(store: &Store, group_id: Option<&str>) -> Result<Option<Workgroup>> {
-    let Some(group_id) = group_id else {
-        return Ok(None);
-    };
+    let Some(group_id) = group_id else { return Ok(None) };
     store
         .get_workgroup(group_id)?
         .ok_or_else(|| anyhow::anyhow!("Workgroup '{}' not found", group_id))

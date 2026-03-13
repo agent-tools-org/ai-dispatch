@@ -14,6 +14,8 @@ use std::process::Command;
 
 use crate::types::*;
 
+pub(crate) use truncate::truncate_text;
+
 const CARGO_TARGET_DIR_ENV: &str = "CARGO_TARGET_DIR";
 const CARGO_MANIFEST_NAME: &str = "Cargo.toml";
 const SHARED_TARGET_DIR_NAME: &str = "cargo-target";

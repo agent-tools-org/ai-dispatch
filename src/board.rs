@@ -44,7 +44,22 @@ pub fn render_board(tasks: &[Task], store: &Store) -> Result<String> {
         let duration = task.duration_ms
             .map(format_duration)
             .unwrap_or_else(|| elapsed_since(task.created_at));
-        let status = task_status(task, store.latest_milestone(task.id.as_str())?);
+        let status = if task.status == TaskStatus::AwaitingInput {
+            let reason = store.get_events(task.id.as_str())
+                .ok()
+                .and_then(|evs| evs.into_iter().rev()
+                    .find(|e| e.metadata.as_ref()
+                        .and_then(|m| m.get("awaiting_input"))
+                        .and_then(|v| v.as_bool())
+                        .unwrap_or(false))
+                    .map(|e| e.detail.clone()));
+            match reason {
+                Some(r) => truncate(&format!("AWAIT — {}", r), 30),
+                None => task.status.label().to_string(),
+            }
+        } else {
+            task_status(task, store.latest_milestone(task.id.as_str())?)
+        };
         let tokens = task.tokens
             .map(format_tokens)
             .unwrap_or_else(|| "-".to_string());
@@ -211,6 +226,7 @@ mod tests {
     use super::*;
     use chrono::Local;
     use crate::store::Store;
+    use serde_json::json;
 
     fn make_task(id: &str, agent: AgentKind, status: TaskStatus) -> Task {
         Task {
@@ -274,6 +290,23 @@ mod tests {
 
         let output = render_board(&[task], &store).unwrap();
         assert!(output.contains("RUN — types defined"));
+    }
+
+    #[test]
+    fn board_shows_awaiting_input_reason() {
+        let store = Store::open_memory().unwrap();
+        let task = make_task("t-0004", AgentKind::Codex, TaskStatus::AwaitingInput);
+        store.insert_task(&task).unwrap();
+        store.insert_event(&TaskEvent {
+            task_id: task.id.clone(),
+            timestamp: Local::now(),
+            event_kind: EventKind::Reasoning,
+            detail: "Continue with fix?".to_string(),
+            metadata: Some(json!({ "awaiting_input": true })),
+        }).unwrap();
+
+        let output = render_board(&[task], &store).unwrap();
+        assert!(output.contains("AWAIT — Continue with fix?"));
     }
 
     #[test]

@@ -1,65 +1,431 @@
-# aid
+# ai-dispatch (aid)
 
-`aid` is a local multi-agent CLI orchestrator for Gemini, Codex, OpenCode, and Cursor.
-It wraps task dispatch, logging, worktrees, retries, and usage tracking behind one binary.
+![Version](https://img.shields.io/badge/version-1.1.1-blue)
+![Rust](https://img.shields.io/badge/rust-2024-orange)
+![License](https://img.shields.io/badge/license-not%20specified-lightgrey)
 
-## Install
+`aid` is a Multi-AI CLI Team Orchestrator written in Rust. It lets a human dispatcher or a primary AI such as Claude Code delegate work to multiple AI CLI tools, track progress, inspect artifacts, enforce methodology, and iterate through one consistent interface.
+
+The current repository snapshot does not declare a license file or license metadata in `Cargo.toml`, so the badge above intentionally reports `not specified`.
+
+## Why aid?
+
+Without an orchestrator, a multi-agent CLI workflow breaks down fast:
+
+- Managing multiple AI CLIs is chaotic because every tool has different flags, output formats, and calling conventions.
+- No unified progress visibility means background work is mostly blind until a process exits.
+- No cost tracking across tools makes token usage and spend hard to monitor over time.
+- Manual worktree management for parallel code tasks adds friction to every implementation run.
+- No methodology enforcement means prompt discipline, testing standards, and review habits drift between agents.
+
+## Quick Start
+
+### Prerequisites
+
+Install Rust and whichever AI CLIs you want `aid` to orchestrate. `aid` auto-detects supported agents on your `PATH`: `gemini`, `codex`, `opencode`, `cursor`, and `auto`.
+
+### Install From Source
 
 ```bash
 cargo install --path .
+aid config agents
+aid config skills
 ```
 
-For isolated testing or multiple local sandboxes, set `AID_HOME`:
+If you want an isolated state directory while testing:
 
 ```bash
 export AID_HOME=/tmp/aid-dev
 ```
 
-All runtime state lives under `$AID_HOME` or `~/.aid`:
+### First Research Task
 
-- `aid.db` for task metadata and events
-- `logs/` for task stdout and stderr
-- `jobs/` for detached background worker specs
-
-## Core Commands
+Run a lightweight research task and write the answer to a file:
 
 ```bash
-aid run auto "research ratatui table selection"
-aid run codex "implement retry logic" --worktree feat/retry --verify auto --retry 2
-aid watch --tui
-aid wait
-aid group create dispatch --context "Shared repo constraints and API contract"
-aid group update wg-a3f1 --context "Updated rollout notes"
-aid group delete wg-a3f1
-aid watch --group wg-a3f1
-aid watch --tui --group wg-a3f1
-aid board --today
-aid board --group wg-a3f1
-aid board --mine --running
-aid audit t-1234
-aid review t-1234
-aid output t-1234
-aid usage
-aid batch work.toml --parallel --wait
+aid run gemini "Summarize the design principles in DESIGN.md" \
+  -o /tmp/aid-design-summary.md
 ```
 
-## Current Features
+For quick ad hoc exploration, use `aid ask`:
 
-- Detached background execution for `--bg` tasks
-- Worktree-aware task dispatch for parallel code changes
-- Parent retry chains with exponential backoff via `--retry`
-- Session-aware task attribution and `aid board --mine`
-- `aid explore` with prompt-based file auto-detection
-- Workgroups with caller-injected shared context and full lifecycle commands via `aid group`
-- Workgroup-aware filtering in `aid board --group` and `aid watch --group`
-- `aid watch --tui` dashboard built with `ratatui`, scoped by task or workgroup
-- `aid wait` and `aid batch --wait` for blocking orchestration flows
-- Deterministic usage extraction from streaming agent JSONL events
-- Usage and budget reporting through `aid usage`
+```bash
+aid ask "How does the retry flow work in this repo?"
+```
 
-## Budget Configuration
+### First Coding Task
 
-Create `~/.aid/config.toml`:
+Dispatch a coding task into its own git worktree and ask `aid` to verify automatically:
+
+```bash
+aid run codex "Document the MCP server workflow in README.md" \
+  --dir . \
+  --worktree docs/mcp-readme \
+  --verify auto \
+  --skill implementer
+```
+
+### Watch, Inspect, Iterate
+
+Track progress while the agent runs, then inspect the artifacts:
+
+```bash
+aid watch --tui
+aid board --today
+aid show t-1234
+aid show t-1234 --diff
+aid retry t-1234 --feedback "Tighten the configuration example and keep it source-accurate."
+```
+
+### Run With Auto Agent Selection
+
+Let `aid` choose the best available agent from the prompt shape:
+
+```bash
+aid run auto "Create a responsive settings UI for the usage dashboard" --dir .
+```
+
+`auto` currently prefers:
+
+- `gemini` for research and question-heavy prompts
+- `opencode` for simple edits
+- `cursor` for frontend or UI work
+- `codex` for complex or multi-file implementation tasks
+
+## Core Concepts
+
+### Agents
+
+An agent is the CLI backend that actually performs work. `aid` normalizes command construction, logging, usage extraction, and completion handling behind one adapter trait.
+
+Examples:
+
+```bash
+aid run gemini "Compare SQLite and Postgres for local task state" \
+  -o /tmp/storage-notes.md
+
+aid run codex "Implement retry-aware board filtering" \
+  --dir . \
+  --worktree feat/board-filter
+
+aid run opencode "Rename TaskRow to BoardRow in src/board.rs" \
+  --dir .
+
+aid run cursor "Refine the TUI layout for narrow terminals" \
+  --dir .
+
+aid run auto "Explain the best agent for a multi-file refactor in this repo" \
+  --dir .
+```
+
+### Tasks
+
+Every dispatch becomes a tracked task with a stable ID like `t-1234`. Tasks can run in the foreground, in the background, or as retries with feedback.
+
+Examples:
+
+```bash
+aid run codex "Add MCP schema regression tests" \
+  --dir . \
+  --bg \
+  --worktree feat/mcp-tests
+
+aid watch t-1234
+
+aid retry t-1234 \
+  --feedback "The parser still fails on framed messages. Reproduce first and add coverage."
+
+aid run codex "Harden transient subprocess handling" \
+  --dir . \
+  --retry 2 \
+  --verify auto
+```
+
+### Workgroups
+
+Workgroups are shared context containers. Create a workgroup once, then dispatch multiple tasks that inherit the same background constraints and notes.
+
+Examples:
+
+```bash
+aid group create dispatch \
+  --context "Repo rules: English docs only, keep diffs minimal, prefer source-backed claims."
+
+aid run gemini "Summarize open design questions in DESIGN.md" \
+  --group wg-a3f1 \
+  -o /tmp/open-questions.md
+
+aid run codex "Update README.md with the orchestrator workflow" \
+  --group wg-a3f1 \
+  --dir . \
+  --worktree docs/readme
+
+aid watch --group wg-a3f1
+aid board --group wg-a3f1
+aid group show wg-a3f1
+```
+
+### Skills
+
+Skills are methodology files loaded from `~/.aid/skills/` and appended to the effective prompt under a `--- Methodology ---` section. They make agent behavior more consistent across runs.
+
+Examples:
+
+```bash
+aid config skills
+
+aid run codex "Refactor the retry code path" \
+  --dir . \
+  --skill code-scout \
+  --skill implementer \
+  --skill test-writer \
+  --verify auto
+```
+
+### Milestones
+
+`aid` injects milestone guidance into prompts so agents emit progress markers that the watcher can parse and surface in `aid watch`, `aid board`, and the TUI.
+
+Expected milestone format:
+
+```text
+[MILESTONE] mapped the failing code path
+[MILESTONE] implemented the fix
+[MILESTONE] verified tests and summarized the diff
+```
+
+## Command Reference
+
+| Command | Purpose | Typical use |
+| --- | --- | --- |
+| `aid run` | Dispatch one task to an agent. | `aid run codex "Implement retry logic" --dir . --worktree feat/retry --verify auto` |
+| `aid batch` | Dispatch a TOML batch file, optionally in parallel and optionally waiting for completion. | `aid batch tasks.toml --parallel --wait` |
+| `aid watch` | Follow live progress in text mode, quiet wait mode, or the TUI. | `aid watch --tui`, `aid watch t-1234`, `aid watch --quiet --group wg-a3f1` |
+| `aid board` | List tracked tasks with filters for running, today, mine, or one workgroup. | `aid board --today`, `aid board --mine`, `aid board --group wg-a3f1` |
+| `aid show` | Inspect one task's summary, diff, output, raw log, or AI-generated explanation. | `aid show t-1234 --diff`, `aid show t-1234 --output`, `aid show t-1234 --explain` |
+| `aid usage` | Render task-history usage plus configured budget windows. | `aid usage` |
+| `aid retry` | Re-dispatch a failed task with explicit feedback. | `aid retry t-1234 --feedback "Reproduce the failure before editing."` |
+| `aid ask` | Run a quick research or exploration task, optionally with file context. | `aid ask "What changed in src/main.rs?" --files src/main.rs` |
+| `aid mcp` | Start the stdio MCP server so another tool can call `aid` natively. | `aid mcp` |
+| `aid config` | Inspect detected agents and available local skills. | `aid config agents`, `aid config skills` |
+| `aid group` | Create, list, show, update, and delete shared-context workgroups. | `aid group create dispatch --context "Shared rollout notes"` |
+
+## Best Practices / Methodology
+
+### The Orchestrator Pattern
+
+The most effective `aid` workflow is:
+
+1. Plan the work.
+2. Dispatch specialized agents.
+3. Review artifacts and milestones.
+4. Iterate with retries or follow-up tasks.
+
+A practical sequence looks like this:
+
+```bash
+aid ask "Break this feature into research, implementation, and validation steps."
+
+aid group create release-docs \
+  --context "Keep the README user-facing, source-accurate, and aligned with current commands."
+
+aid run gemini "Summarize DESIGN.md and call out the user-visible features" \
+  --group wg-a3f1 \
+  -o /tmp/design-notes.md
+
+aid run codex "Rewrite README.md around the current CLI surface" \
+  --group wg-a3f1 \
+  --dir . \
+  --worktree docs/readme \
+  --skill implementer \
+  --verify auto
+
+aid watch --group wg-a3f1
+aid show t-1234 --diff
+aid retry t-1234 --feedback "Trim unsupported claims and improve MCP setup guidance."
+```
+
+This pattern keeps planning cheap, execution specialized, and review artifact-driven.
+
+### Agent Selection Guide
+
+Use the agent that matches the shape of the work:
+
+| Agent | Best for | Why |
+| --- | --- | --- |
+| `gemini` | research, questions, comparison, documentation discovery | Low-friction prompt/answer loop for exploration-heavy tasks |
+| `codex` | complex implementation, multi-file changes, deep repo work | Best default for substantial code modifications and iterative verification |
+| `opencode` | simple edits, rename passes, light cleanup | Good fit for smaller coding tasks where a cheaper tool is enough |
+| `cursor` | frontend, UI, layout, visual polish | Best when the prompt clearly targets UI structure or responsiveness |
+| `auto` | mixed or uncertain tasks | Scores the prompt and picks the best installed agent automatically |
+
+If you are unsure, start with `aid ask` or `aid run auto`, then escalate to a more expensive agent only when the task scope is clear.
+
+### Use Skills To Enforce Quality
+
+Skills give you repeatable task methodology instead of relying on ad hoc prompt wording. In practice: use `code-scout` for unfamiliar code, `researcher` for fact-heavy work, `implementer` for minimal diffs, `test-writer` for regression coverage, and `debugger` when the task starts with a failure.
+
+Example:
+
+```bash
+aid run codex "Fix the MCP framing bug and add regression coverage" \
+  --dir . \
+  --skill code-scout \
+  --skill debugger \
+  --skill implementer \
+  --skill test-writer \
+  --verify auto
+```
+
+### Workgroup-Based Collaborative Investigation
+
+A workgroup lets several agents collaborate without repeating the same shared context in every prompt.
+
+For larger investigations, pair a workgroup with a batch file:
+
+```toml
+[[task]]
+name = "research"
+agent = "gemini"
+prompt = "Summarize DESIGN.md and note MCP constraints"
+group = "wg-a3f1"
+output = "/tmp/mcp-notes.md"
+
+[[task]]
+name = "implementation"
+agent = "codex"
+prompt = "Update README.md with MCP setup guidance"
+dir = "."
+worktree = "docs/mcp-guide"
+group = "wg-a3f1"
+skills = ["implementer"]
+depends_on = ["research"]
+verify = "cargo test"
+```
+
+Dispatch it like this:
+
+```bash
+aid batch tasks.toml --parallel --wait
+aid board --group wg-a3f1
+aid show t-1234
+```
+
+This works well for incident response, release prep, and cross-cutting refactors where one agent researches while another edits.
+
+### Cost Optimization Tips
+
+- Use `aid ask` or `gemini` first when the task is still exploratory.
+- Prefer `opencode` for straightforward single-file edits or rename work.
+- Use `auto` when you want a reasonable default without thinking about the agent first.
+- Set `[[usage.budget]]` entries and check `aid usage` before long coding sessions.
+- Reuse workgroups so shared context is stored once instead of repeated in every prompt.
+- Use `--model` only when you need a specific backend behavior or cost profile.
+
+## Built-in Skills
+
+The default skill directory is `~/.aid/skills/`.
+
+| Skill | Description |
+| --- | --- |
+| `test-writer` | Writes tests that target real failure modes, boundary cases, and integration seams instead of mirroring the implementation. |
+| `code-scout` | Maps the entry point, call chain, relevant files, patterns, and risks before a change is made. |
+| `researcher` | Collects verified information from primary sources, records confidence, and extracts facts that are safe to use downstream. |
+| `implementer` | Makes the requested change with a minimal diff, matches the local style, and verifies the result. |
+| `debugger` | Reproduces issues, traces execution, isolates the root cause, and validates the fix with evidence. |
+
+## MCP Integration
+
+`aid` can run as a stdio MCP server so Claude Code or another MCP client can call it without shell parsing.
+
+Start the server directly:
+
+```bash
+aid mcp
+```
+
+The server exposes these tools:
+
+- `aid_run`
+- `aid_board`
+- `aid_show`
+- `aid_retry`
+- `aid_usage`
+- `aid_ask`
+
+To connect from Claude Code, register `aid` as a stdio MCP server in your Claude Code MCP configuration. The exact config file location depends on your Claude Code setup, but the server definition itself looks like this:
+
+```json
+{
+  "mcpServers": {
+    "aid": {
+      "command": "aid",
+      "args": ["mcp"]
+    }
+  }
+}
+```
+
+If you are developing from source instead of using an installed binary, point Claude Code at `cargo run`:
+
+```json
+{
+  "mcpServers": {
+    "aid-dev": {
+      "command": "cargo",
+      "args": [
+        "run",
+        "--manifest-path",
+        "/absolute/path/to/aid/Cargo.toml",
+        "--",
+        "mcp"
+      ]
+    }
+  }
+}
+```
+
+Once connected, Claude Code can call `aid_board` to list tasks, `aid_show` to inspect artifacts, `aid_run` to dispatch new work, and `aid_retry` to iterate on failures.
+
+## Configuration
+
+By default, `aid` stores state in `~/.aid/`. Override it with `AID_HOME` when you want a disposable sandbox or separate environment.
+
+Example:
+
+```bash
+export AID_HOME=/tmp/aid-dev
+```
+
+Typical directory layout:
+
+```text
+~/.aid/
+├── aid.db
+├── config.toml
+├── logs/
+│   ├── t-1234.jsonl
+│   └── t-1234.stderr
+├── jobs/
+│   └── t-1234.json
+├── skills/
+│   ├── code-scout.md
+│   ├── debugger.md
+│   ├── implementer.md
+│   ├── researcher.md
+│   └── test-writer.md
+└── cargo-target/
+```
+
+What lives there:
+
+- `aid.db`: SQLite task, workgroup, and event store
+- `logs/`: raw agent output plus stderr capture
+- `jobs/`: detached background worker specs
+- `skills/`: methodology files loaded by `--skill`
+- `cargo-target/`: shared Rust build cache for worktree-based tasks
+
+Configure budgets in `~/.aid/config.toml`:
 
 ```toml
 [[usage.budget]]
@@ -80,13 +446,46 @@ resets_at = "2026-03-13T02:00:00+07:00"
 notes = "Track Claude Code separately from aid task history."
 ```
 
-`aid usage` combines local task history with these external counters.
+Then inspect usage and budget status:
 
-## Notes
+```bash
+aid usage
+```
 
-- `aid review` falls back to output files or raw logs when a task has no worktree.
-- `aid output` prints the recorded output artifact for research-style tasks.
-- Batch tasks can opt into a shared workgroup context with `group = "wg-..."`.
-- Deleting a workgroup removes the shared-context definition but keeps historical task tags.
-- Raw logs remain the source of truth; AI-based log explanation is planned as an optional layer.
-- The project design and architecture notes are in [DESIGN.md](DESIGN.md).
+`aid usage` combines tracked task history with any external counters you record in `config.toml`.
+
+## Architecture
+
+At a high level, `aid` is a CLI front end over a task manager, a watcher pipeline, persistent storage, and agent-specific adapters.
+
+The diagram below is adapted from `DESIGN.md` to reflect the current `show` command name:
+
+```text
+┌─────────────────────────────────────┐
+│           aid (CLI binary)          │
+├──────┬──────┬──────┬───────┬────────┤
+│ run  │ watch│ show │ board │ usage  │  ← user-facing commands
+├──────┴──────┴──────┴───────┴────────┤
+│           Task Manager              │
+│  ┌────────┐ ┌────────┐ ┌────────┐  │
+│  │ Agent  │ │ Watch  │ │ Store  │  │
+│  │Registry│ │ Engine │ │(SQLite)│  │
+│  └────┬───┘ └────┬───┘ └────┬───┘  │
+│       │          │          │       │
+├───────┴──────────┴──────────┴───────┤
+│         Agent Adapters              │
+│  ┌──────┐ ┌─────┐ ┌────────┐ ┌──────┐
+│  │Gemini│ │Codex│ │OpenCode│ │Cursor│
+│  └──────┘ └─────┘ └────────┘ └──────┘
+└─────────────────────────────────────┘
+```
+
+How the pieces fit together:
+
+- The CLI entrypoint parses commands and routes them to task-oriented handlers such as `run`, `watch`, `show`, `usage`, and `mcp`.
+- The agent registry selects and instantiates adapters for `gemini`, `codex`, `opencode`, and `cursor`.
+- The watcher parses streamed or buffered output into milestones, tool activity, usage totals, and completion events.
+- SQLite keeps task history, workgroups, and events queryable for `board`, `show`, `watch`, `usage`, and MCP clients.
+- Artifact files under `~/.aid/` preserve the raw execution trail so the dispatcher can review what actually happened.
+
+That combination is the core value of `aid`: one binary that turns a pile of incompatible AI CLIs into a trackable, reviewable, and methodology-aware team workflow.

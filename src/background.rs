@@ -185,6 +185,7 @@ async fn run_task_inner(store: &Arc<Store>, spec: &BackgroundRunSpec) -> Result<
             announce: false,
             parent_task_id: spec.parent_task_id.clone(),
             on_done: None,
+            fallback: None,
         },
     )
     .await?

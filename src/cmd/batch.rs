@@ -95,6 +95,7 @@ fn task_to_run_args(task: &batch::BatchTask, background: bool) -> RunArgs {
         announce: true,
         parent_task_id: None,
         on_done: None,
+        fallback: task.fallback.clone(),
     }
 }
 fn task_has_dependencies(task: &batch::BatchTask) -> bool {
@@ -437,6 +438,7 @@ mod tests {
             max_duration_mins: None,
             skills: None,
             depends_on: depends_on.map(|d| d.into_iter().map(String::from).collect()),
+            fallback: None,
         }
     }
 

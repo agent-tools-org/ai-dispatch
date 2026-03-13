@@ -42,6 +42,7 @@ pub struct RunArgs {
     pub announce: bool,
     pub parent_task_id: Option<String>,
     pub on_done: Option<String>,
+    pub fallback: Option<String>,
 }
 
 fn effective_skills(agent_kind: &AgentKind, args: &RunArgs) -> Vec<String> {
@@ -302,6 +303,20 @@ pub async fn run(store: Arc<Store>, args: RunArgs) -> Result<TaskId> {
                 inherit_retry_base_branch(args.dir.as_deref(), &task, &mut retry_args);
             }
             Box::pin(run(store, retry_args)).await?;
+        } else if let Some(ref fallback_agent) = args.fallback {
+            if let Some(task) = store.get_task(task_id.as_str())?
+                && task.status == TaskStatus::Failed
+            {
+                eprintln!(
+                    "[aid] Primary agent {} failed, falling back to {fallback_agent}",
+                    args.agent_name
+                );
+                let mut fallback_args = args.clone();
+                fallback_args.agent_name = fallback_agent.clone();
+                fallback_args.fallback = None;
+                fallback_args.parent_task_id = Some(task_id.as_str().to_string());
+                Box::pin(run(store, fallback_args)).await?;
+            }
         }
     }
 
@@ -474,6 +489,7 @@ mod tests {
             announce: false,
             parent_task_id: None,
             on_done: None,
+            fallback: None,
         }
     }
 

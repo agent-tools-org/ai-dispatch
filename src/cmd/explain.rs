@@ -41,6 +41,7 @@ pub(crate) async fn run_explain(store: Arc<Store>, task_id: &str, agent: Option<
             announce: true,
             parent_task_id: Some(task_id.to_string()),
             on_done: None,
+            fallback: None,
         },
     )
     .await?;

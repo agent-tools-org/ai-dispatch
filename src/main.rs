@@ -97,6 +97,9 @@ enum Commands {
         /// Command to run on task completion
         #[arg(long)]
         on_done: Option<String>,
+        /// Fallback agent if primary agent fails
+        #[arg(long)]
+        fallback: Option<String>,
     },
     /// Dispatch tasks from a TOML batch file
     Batch {
@@ -267,6 +270,7 @@ async fn main() -> Result<()> {
             no_skill,
             bg,
             on_done,
+            fallback,
         } => {
             let config = config::load_config().unwrap_or_default();
             let budget = budget || config.selection.budget_mode;
@@ -313,6 +317,7 @@ async fn main() -> Result<()> {
                     announce: true,
                     parent_task_id: None,
                     on_done,
+                    fallback,
                 },
             )
             .await?;

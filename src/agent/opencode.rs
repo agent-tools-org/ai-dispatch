@@ -24,6 +24,7 @@ impl super::Agent for OpenCodeAgent {
     fn build_command(&self, prompt: &str, opts: &RunOpts) -> Result<Command> {
         let mut cmd = Command::new("opencode");
         cmd.arg("run");
+        cmd.args(["--format", "json"]);
         if let Some(ref model) = opts.model {
             cmd.args(["-m", model]);
         }
@@ -82,7 +83,7 @@ fn parse_json_event(
             let args = v.get("arguments").and_then(|a| a.as_str()).unwrap_or("");
             (format!("{name}: {}", truncate_text(args, 60)), None)
         }
-        "message" | "text" => {
+        "message" => {
             let detail = v
                 .get("content")
                 .or(v.get("text"))
@@ -90,6 +91,30 @@ fn parse_json_event(
                 .unwrap_or("")
                 .to_string();
             (detail, None)
+        }
+        "text" => {
+            let detail = v
+                .pointer("/part/text")
+                .and_then(|t| t.as_str())
+                .unwrap_or("")
+                .to_string();
+            (detail, None)
+        }
+        "step_start" => return None,
+        "step_finish" => {
+            let total = v.pointer("/part/tokens/total").and_then(|t| t.as_i64())?;
+            let input = v.pointer("/part/tokens/input").and_then(|t| t.as_i64())?;
+            let output = v.pointer("/part/tokens/output").and_then(|t| t.as_i64())?;
+            let cost = v.pointer("/part/cost").and_then(|c| c.as_f64())?;
+            (
+                format!("tokens: {} in + {} out = {}", input, output, total),
+                Some(json!({
+                    "tokens": total,
+                    "input_tokens": input,
+                    "output_tokens": output,
+                    "cost_usd": cost,
+                })),
+            )
         }
         "completion" | "done" => {
             let tokens = v.get("tokens").and_then(|t| t.as_i64());
@@ -110,7 +135,7 @@ fn parse_json_event(
     let event_kind = match event_type {
         "tool_call" | "function_call" => classify_tool_detail(&detail),
         "message" | "text" => EventKind::Reasoning,
-        "completion" | "done" => EventKind::Completion,
+        "step_finish" | "completion" | "done" => EventKind::Completion,
         _ => EventKind::Reasoning,
     };
 
@@ -185,5 +210,44 @@ fn extract_tokens_from_output(output: &str) -> (Option<i64>, Option<f64>) {
         (Some(total_tokens), Some(total_cost))
     } else {
         (None, None)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parses_step_finish_token_event() {
+        let task_id = TaskId("t-step".to_string());
+        let event = parse_json_event(
+            &task_id,
+            &serde_json::json!({
+                "type": "step_finish",
+                "part": {
+                    "tokens": {
+                        "total": 16125,
+                        "input": 14040,
+                        "output": 2,
+                        "reasoning": 0
+                    },
+                    "cost": 0.0
+                }
+            }),
+            Local::now(),
+        )
+        .unwrap();
+
+        assert_eq!(event.event_kind, EventKind::Completion);
+        assert_eq!(event.detail, "tokens: 14040 in + 2 out = 16125");
+        assert_eq!(
+            event.metadata,
+            Some(serde_json::json!({
+                "tokens": 16125,
+                "input_tokens": 14040,
+                "output_tokens": 2,
+                "cost_usd": 0.0
+            }))
+        );
     }
 }

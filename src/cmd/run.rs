@@ -13,6 +13,7 @@ use crate::config;
 use crate::cost;
 use crate::notify;
 use crate::paths;
+use crate::rate_limit;
 use crate::session;
 use crate::skills;
 use crate::store::Store;
@@ -107,6 +108,22 @@ pub async fn run(store: Arc<Store>, args: RunArgs) -> Result<TaskId> {
             args.agent_name
         )
     })?;
+
+    if let Some(info) = rate_limit::get_rate_limit_info(&agent_kind) {
+        if let Some(ref recovery) = info.recovery_at {
+            eprintln!(
+                "[aid] Warning: {} is rate-limited (try again at {})",
+                agent_kind.as_str(),
+                recovery
+            );
+            if let Some(ref fallback_name) = args.fallback {
+                eprintln!("[aid] Switching to fallback agent: {}", fallback_name);
+            } else {
+                eprintln!("[aid] Tip: use --fallback <agent> or --agent with `aid retry`");
+            }
+        }
+    }
+
     let requested_skills = effective_skills(&agent_kind, &args);
     if args.skills.is_empty() {
         for skill in &requested_skills {

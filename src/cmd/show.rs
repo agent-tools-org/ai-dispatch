@@ -302,33 +302,42 @@ fn stderr_tail(task_id: &str) -> Option<String> {
     Some(out)
 }
 
+const DIFF_EXCLUDE: &[&str] = &[":(exclude)*.lock", ":(exclude)package-lock.json"];
+
+fn diff_args<'a>(base_args: &'a [&'a str]) -> Vec<&'a str> {
+    let mut args = base_args.to_vec();
+    args.extend_from_slice(&["--", "."]);
+    args.extend_from_slice(DIFF_EXCLUDE);
+    args
+}
+
 fn diff_stat(wt_path: &str) -> String {
-    if let Some(s) = git_output(wt_path, &["diff", "main...HEAD", "--stat"]) {
+    if let Some(s) = git_output(wt_path, &diff_args(&["diff", "main...HEAD", "--stat"])) {
         if !s.trim().is_empty() {
             return s;
         }
     }
-    if let Some(s) = git_output(wt_path, &["diff", "--stat"]) {
+    if let Some(s) = git_output(wt_path, &diff_args(&["diff", "--stat"])) {
         if !s.trim().is_empty() {
             return s;
         }
     }
-    git_output(wt_path, &["diff", "--stat", "HEAD~1"])
+    git_output(wt_path, &diff_args(&["diff", "--stat", "HEAD~1"]))
         .unwrap_or_else(|| "  (no changes detected)\n".to_string())
 }
 
 fn full_diff(wt_path: &str) -> String {
-    if let Some(s) = git_output(wt_path, &["diff", "main...HEAD"]) {
+    if let Some(s) = git_output(wt_path, &diff_args(&["diff", "main...HEAD"])) {
         if !s.trim().is_empty() {
             return s;
         }
     }
-    if let Some(s) = git_output(wt_path, &["diff"]) {
+    if let Some(s) = git_output(wt_path, &diff_args(&["diff"])) {
         if !s.trim().is_empty() {
             return s;
         }
     }
-    git_output(wt_path, &["diff", "HEAD~1"])
+    git_output(wt_path, &diff_args(&["diff", "HEAD~1"]))
         .unwrap_or_else(|| "  (no diff available)\n".to_string())
 }
 

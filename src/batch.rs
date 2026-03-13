@@ -6,7 +6,33 @@ use serde::Deserialize;
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
 
-const VALID_AGENTS: &[&str] = &["gemini", "codex", "opencode", "cursor"];
+const VALID_AGENTS: &[&str] = &["gemini", "codex", "opencode", "cursor", "kilo"];
+
+fn deserialize_verify<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> Result<Option<String>, D::Error> {
+    use serde::de;
+    struct VerifyVisitor;
+    impl<'de> de::Visitor<'de> for VerifyVisitor {
+        type Value = Option<String>;
+        fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+            f.write_str("a string or boolean")
+        }
+        fn visit_bool<E: de::Error>(self, v: bool) -> Result<Self::Value, E> {
+            Ok(if v { Some("auto".to_string()) } else { None })
+        }
+        fn visit_str<E: de::Error>(self, v: &str) -> Result<Self::Value, E> {
+            Ok(Some(v.to_string()))
+        }
+        fn visit_none<E: de::Error>(self) -> Result<Self::Value, E> {
+            Ok(None)
+        }
+        fn visit_unit<E: de::Error>(self) -> Result<Self::Value, E> {
+            Ok(None)
+        }
+    }
+    deserializer.deserialize_any(VerifyVisitor)
+}
 
 #[derive(Debug, Deserialize)]
 pub struct BatchConfig {
@@ -24,6 +50,7 @@ pub struct BatchTask {
     pub model: Option<String>,
     pub worktree: Option<String>,
     pub group: Option<String>,
+    #[serde(default, deserialize_with = "deserialize_verify")]
     pub verify: Option<String>,
     #[serde(default)]
     pub max_duration_mins: Option<u64>,

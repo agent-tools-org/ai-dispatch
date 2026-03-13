@@ -115,6 +115,7 @@ enum Commands {
         /// Wait for dispatched tasks to finish
         #[arg(long)]
         wait: bool,
+        /// Limit number of concurrent tasks
         #[arg(long)]
         max_concurrent: Option<usize>,
     },
@@ -211,10 +212,12 @@ enum Commands {
     },
     /// Mark a task as merged
     Merge {
+        /// Task ID to mark as merged
         task_id: String,
     },
     /// Send interactive input to a background task
     Respond {
+        /// Task ID of the background task
         task_id: String,
         /// Response text (if omitted, reads from stdin)
         input: Option<String>,
@@ -223,13 +226,18 @@ enum Commands {
     },
     /// Research/explore via cheap AI CLIs
     Ask {
+        /// Question or research prompt
         prompt: String,
+        /// Agent to use (default: gemini)
         #[arg(long)]
         agent: Option<String>,
+        /// Model override
         #[arg(short, long)]
         model: Option<String>,
+        /// Files to include as context
         #[arg(long)]
         files: Vec<String>,
+        /// Output file for the response
         #[arg(short, long)]
         output: Option<String>,
     },

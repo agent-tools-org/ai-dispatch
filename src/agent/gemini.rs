@@ -22,7 +22,11 @@ impl super::Agent for GeminiAgent {
 
     fn build_command(&self, prompt: &str, opts: &RunOpts) -> Result<Command> {
         let mut cmd = Command::new("gemini");
-        cmd.args(["-o", "stream-json", "-y", "-p", prompt]);
+        if opts.read_only {
+            cmd.args(["-o", "stream-json", "--approval-mode", "plan", "-p", prompt]);
+        } else {
+            cmd.args(["-o", "stream-json", "-y", "-p", prompt]);
+        }
         if let Some(ref output) = opts.output {
             let _ = output;
         }

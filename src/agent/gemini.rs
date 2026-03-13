@@ -40,10 +40,11 @@ impl super::Agent for GeminiAgent {
     fn parse_completion(&self, output: &str) -> CompletionInfo {
         let v: serde_json::Value = serde_json::from_str(output).unwrap_or_default();
         let tokens = extract_tokens(&v);
+        let model = extract_model(&v);
         CompletionInfo {
             tokens,
             status: TaskStatus::Done,
-            model: None,
+            model,
             cost_usd: None,
         }
     }
@@ -90,6 +91,15 @@ fn extract_tokens(v: &serde_json::Value) -> Option<i64> {
         .and_then(|t| t.as_i64())
 }
 
+fn extract_model(v: &serde_json::Value) -> Option<String> {
+    for path in ["/modelVersion", "/model", "/stats/models/0/model"] {
+        if let Some(m) = v.pointer(path).and_then(|v| v.as_str()) {
+            return Some(m.to_string());
+        }
+    }
+    None
+}
+
 /// Create a completion event for gemini tasks
 pub fn make_completion_event(task_id: &TaskId, info: &CompletionInfo) -> TaskEvent {
     let detail = match info.tokens {
@@ -103,5 +113,29 @@ pub fn make_completion_event(task_id: &TaskId, info: &CompletionInfo) -> TaskEve
         event_kind: EventKind::Completion,
         detail,
         metadata,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_extract_model() {
+        let json = serde_json::json!({
+            "modelVersion": "gemini-2.5-pro",
+            "response": "test"
+        });
+        assert_eq!(extract_model(&json), Some("gemini-2.5-pro".to_string()));
+
+        let json2 = serde_json::json!({
+            "stats": {
+                "models": [{"model": "gemini-1.5-flash"}]
+            }
+        });
+        assert_eq!(extract_model(&json2), Some("gemini-1.5-flash".to_string()));
+
+        let json3 = serde_json::json!({ "response": "test" });
+        assert_eq!(extract_model(&json3), None);
     }
 }

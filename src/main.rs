@@ -134,8 +134,8 @@ enum Commands {
     },
     /// Live progress / blocking wait (--quiet)
     Watch {
-        /// Watch a specific task ID
-        task_id: Option<String>,
+        /// Watch specific task IDs (multiple allowed)
+        task_ids: Vec<String>,
         /// Restrict to one workgroup in multi-task mode
         #[arg(long)]
         group: Option<String>,
@@ -364,21 +364,21 @@ async fn main() -> Result<()> {
             cmd::benchmark::run(store, prompt, agents, dir, verify).await?;
         }
         Commands::Watch {
-            task_id,
+            task_ids,
             group,
             tui: true,
             ..
         } => {
-            tui::run(&store, tui::RunOptions { task_id, group })?;
+            tui::run(&store, tui::RunOptions { task_id: task_ids.first().cloned(), group })?;
         }
         Commands::Watch {
-            task_id,
+            task_ids,
             group,
             tui: false,
             quiet,
             exit_on_await,
         } => {
-            cmd::watch::run(&store, task_id.as_deref(), group.as_deref(), quiet, exit_on_await).await?;
+            cmd::watch::run(&store, &task_ids, group.as_deref(), quiet, exit_on_await).await?;
         }
         Commands::Board {
             running,

@@ -11,17 +11,18 @@ use crate::types::TaskFilter;
 
 /// Run the watch dashboard, refreshing every second.
 /// With `quiet`, delegates to wait logic (silent blocking).
-pub async fn run(store: &Arc<Store>, task_id: Option<&str>, group: Option<&str>, quiet: bool, exit_on_await: bool) -> Result<()> {
+pub async fn run(store: &Arc<Store>, task_ids: &[String], group: Option<&str>, quiet: bool, exit_on_await: bool) -> Result<()> {
     if quiet {
-        return crate::cmd::wait::run(store, task_id, exit_on_await).await;
+        return crate::cmd::wait::run(store, task_ids, exit_on_await).await;
     }
 
     loop {
         // Clear terminal
         print!("\x1b[2J\x1b[H");
 
-        if let Some(id) = task_id {
+        if task_ids.len() == 1 {
             // Single task mode
+            let id = &task_ids[0];
             match store.get_task(id)? {
                 Some(task) => {
                     let events = store.get_events(id)?;
@@ -43,7 +44,7 @@ pub async fn run(store: &Arc<Store>, task_id: Option<&str>, group: Option<&str>,
                     return Ok(());
                 }
             }
-        } else {
+        } else if task_ids.is_empty() {
             // All running tasks mode
             let mut running = store.list_tasks(TaskFilter::Running)?;
             if let Some(group_id) = group {
@@ -63,6 +64,25 @@ pub async fn run(store: &Arc<Store>, task_id: Option<&str>, group: Option<&str>,
                 return Ok(());
             }
             print!("{}", render_board(&running, store)?);
+        } else {
+            // Multiple specified tasks mode
+            let mut tasks = Vec::new();
+            for id in task_ids {
+                if let Some(task) = store.get_task(id)? {
+                    tasks.push(task);
+                }
+            }
+            if tasks.is_empty() {
+                println!("No tasks found.");
+                return Ok(());
+            }
+            print!("{}", render_board(&tasks, store)?);
+
+            // Exit when all tasks are terminal
+            if tasks.iter().all(|t| t.status.is_terminal()) {
+                println!("\nAll tasks completed. Exiting watch.");
+                return Ok(());
+            }
         }
 
         sleep(Duration::from_secs(1)).await;

@@ -9,10 +9,11 @@ use tokio::time::{sleep, Duration};
 use crate::store::Store;
 use crate::types::{TaskFilter, TaskStatus};
 
-pub async fn run(store: &Arc<Store>, task_id: Option<&str>, exit_on_await: bool) -> Result<()> {
-    let task_ids = match task_id {
-        Some(task_id) => vec![task_id.to_string()],
-        None => current_running_ids(store)?,
+pub async fn run(store: &Arc<Store>, task_ids: &[String], exit_on_await: bool) -> Result<()> {
+    let task_ids = if task_ids.is_empty() {
+        current_running_ids(store)?
+    } else {
+        task_ids.to_vec()
     };
 
     if task_ids.is_empty() {

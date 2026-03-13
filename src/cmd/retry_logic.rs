@@ -88,7 +88,7 @@ mod tests {
         Task {
             id: TaskId(id.to_string()), agent: AgentKind::Codex, prompt: "prompt".to_string(),
             resolved_prompt: None, status: TaskStatus::Failed, parent_task_id: None, workgroup_id: None,
-            caller_kind: None, caller_session_id: None, repo_path: None, worktree_path: None,
+            caller_kind: None, caller_session_id: None, agent_session_id: None, repo_path: None, worktree_path: None,
             worktree_branch: None, log_path: None, output_path: None, tokens: None,
             duration_ms: None, model: None, cost_usd: None, created_at: Local::now(),
             completed_at: None,

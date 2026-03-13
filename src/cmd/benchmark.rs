@@ -37,11 +37,12 @@ pub async fn run(store: Arc<Store>, prompt: String, agents: String, dir: Option<
                 on_done: None,
                 fallback: None,
                 template: None,
-                repo: None,
-                read_only: false,
-            },
-        )
-        .await?;
+repo: None,
+            read_only: false,
+            session_id: None,
+        },
+    )
+    .await?;
         task_ids.push((agent_name.clone(), task_id));
     }
 

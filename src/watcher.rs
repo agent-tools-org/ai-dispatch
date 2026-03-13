@@ -37,6 +37,7 @@ pub async fn watch_streaming(
         cost_usd: None,
     };
     let mut event_count = 0u32;
+    let mut session_saved = false;
 
     // Spawn stderr capture in background
     let stderr_handle = spawn_stderr_capture(child, task_id);
@@ -47,7 +48,7 @@ pub async fn watch_streaming(
         log_file.write_all(line.as_bytes()).await?;
         log_file.write_all(b"\n").await?;
 
-        handle_streaming_line(agent, task_id, store, &mut info, &mut event_count, &line)?;
+        handle_streaming_line_with_session(agent, task_id, store, &mut info, &mut event_count, &line, &mut session_saved)?;
     }
 
     // Wait for stderr to finish
@@ -221,6 +222,36 @@ pub(crate) fn handle_streaming_line(
     }
     if let Some(event) = agent.parse_event(task_id, line) {
         apply_completion_event(info, &event);
+        store.insert_event(&event)?;
+        *event_count += 1;
+    }
+    Ok(())
+}
+
+pub(crate) fn handle_streaming_line_with_session(
+    agent: &dyn Agent,
+    task_id: &TaskId,
+    store: &Arc<Store>,
+    info: &mut CompletionInfo,
+    event_count: &mut u32,
+    line: &str,
+    session_saved: &mut bool,
+) -> Result<()> {
+    if let Some(event) = parse_milestone_event(task_id, line) {
+        store.insert_event(&event)?;
+        *event_count += 1;
+        return Ok(());
+    }
+    if let Some(event) = agent.parse_event(task_id, line) {
+        apply_completion_event(info, &event);
+        if !*session_saved {
+            if let Some(metadata) = &event.metadata {
+                if let Some(session_id) = metadata.get("agent_session_id").and_then(|s| s.as_str()) {
+                    store.update_agent_session_id(task_id.as_str(), session_id)?;
+                    *session_saved = true;
+                }
+            }
+        }
         store.insert_event(&event)?;
         *event_count += 1;
     }

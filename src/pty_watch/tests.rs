@@ -20,6 +20,7 @@ fn stores_recent_question_as_awaiting_prompt_metadata() {
         workgroup_id: None,
         caller_kind: None,
         caller_session_id: None,
+        agent_session_id: None,
         repo_path: None,
         worktree_path: None,
         worktree_branch: None,
@@ -36,15 +37,28 @@ fn stores_recent_question_as_awaiting_prompt_metadata() {
     store.insert_task(&task).unwrap();
 
     let prompt = "115:    use super::board::render_board;";
-    let awaiting_prompt =
-        extract_awaiting_prompt("Should I update board.rs?\n115:    use super::board::render_board;", prompt);
+    let awaiting_prompt = extract_awaiting_prompt(
+        "Should I update board.rs?\n115:    use super::board::render_board;",
+        prompt,
+    );
     let mut awaiting_input = false;
-    mark_awaiting_input(&store, &task.id, prompt, &awaiting_prompt, &mut awaiting_input).unwrap();
+    mark_awaiting_input(
+        &store,
+        &task.id,
+        prompt,
+        &awaiting_prompt,
+        &mut awaiting_input,
+    )
+    .unwrap();
 
     let event = store.get_events(task.id.as_str()).unwrap().pop().unwrap();
     assert_eq!(event.detail, prompt);
     assert_eq!(
-        event.metadata.as_ref().and_then(|m| m.get("awaiting_prompt")).and_then(|v| v.as_str()),
+        event
+            .metadata
+            .as_ref()
+            .and_then(|m| m.get("awaiting_prompt"))
+            .and_then(|v| v.as_str()),
         Some("Should I update board.rs?")
     );
 }

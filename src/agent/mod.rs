@@ -43,6 +43,7 @@ pub struct RunOpts {
     pub model: Option<String>,
     pub budget: bool,
     pub read_only: bool,
+    pub session_id: Option<String>,
 }
 
 /// Detect which agents are installed on the system

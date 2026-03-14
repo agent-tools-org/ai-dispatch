@@ -1,5 +1,6 @@
 // Handler for `aid board` — list all tasks with status summary.
-// Queries store and renders text table.
+// Detects repeated calls with no status changes and warns callers.
+// Deps: crate::store, crate::board, crate::background, crate::session
 
 use anyhow::Result;
 use std::sync::Arc;
@@ -33,6 +34,27 @@ pub fn run(
     if let Some(group_id) = group {
         tasks.retain(|task| task.workgroup_id.as_deref() == Some(group_id));
     }
+
+    // Detect repeated calls with no changes — warn caller to use watch instead
+    let fingerprint = task_fingerprint(&tasks);
+    let marker_path = crate::paths::aid_dir().join("board-last.txt");
+    if let Ok(prev) = std::fs::read_to_string(&marker_path) {
+        if prev.trim() == fingerprint {
+            eprintln!("[aid] No status changes since last check. Use `aid watch --quiet` for automatic notification instead of polling.");
+        }
+    }
+    let _ = std::fs::write(&marker_path, &fingerprint);
+
     print!("{}", render_board(&tasks, store)?);
     Ok(())
+}
+
+/// Compact fingerprint of task statuses for change detection.
+fn task_fingerprint(tasks: &[crate::types::Task]) -> String {
+    let mut parts: Vec<String> = tasks
+        .iter()
+        .map(|t| format!("{}:{}", t.id, t.status.label()))
+        .collect();
+    parts.sort();
+    parts.join(",")
 }

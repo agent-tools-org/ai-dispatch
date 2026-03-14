@@ -257,6 +257,7 @@ fn agent_color(agent: AgentKind) -> Color {
         AgentKind::Kilo => Color::Blue,
         AgentKind::Ob1 => Color::White,
         AgentKind::Codebuff => Color::LightCyan,
+        AgentKind::Custom => Color::Gray,
     }
 }
 fn success_color(rate: u64) -> Color { if rate >= 80 { Color::Green } else if rate >= 50 { Color::Yellow } else { Color::Red } }

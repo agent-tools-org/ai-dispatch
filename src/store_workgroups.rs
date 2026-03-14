@@ -71,6 +71,7 @@ mod tests {
         Task {
             id: TaskId(id.to_string()),
             agent: AgentKind::Codex,
+            custom_agent_name: None,
             prompt: "test prompt".to_string(),
             resolved_prompt: None,
             status: TaskStatus::Done,

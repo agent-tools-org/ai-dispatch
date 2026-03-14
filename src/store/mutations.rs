@@ -11,16 +11,21 @@ use crate::types::*;
 
 impl Store {
     pub fn insert_task(&self, task: &Task) -> Result<()> {
+        let agent_value = if task.agent == AgentKind::Custom {
+            task.custom_agent_name.as_deref().unwrap_or("custom")
+        } else {
+            task.agent.as_str()
+        };
         self.db().execute(
             "INSERT INTO tasks (id, agent, prompt, resolved_prompt, status, parent_task_id, workgroup_id,
              caller_kind, caller_session_id, agent_session_id, repo_path, worktree_path, worktree_branch,
              log_path, output_path, tokens, prompt_tokens, duration_ms, model, cost_usd, created_at,
-             completed_at, verify, read_only, budget)
+             completed_at, verify, read_only, budget, custom_agent_name)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17,
-             ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25)",
+             ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26)",
             params![
                 task.id.as_str(),
-                task.agent.as_str(),
+                agent_value,
                 task.prompt,
                 task.resolved_prompt,
                 task.status.as_str(),
@@ -44,6 +49,7 @@ impl Store {
                 task.verify,
                 task.read_only,
                 task.budget,
+                task.custom_agent_name,
             ],
         )?;
         Ok(())

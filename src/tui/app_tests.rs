@@ -11,6 +11,7 @@ fn make_task(id: &str, group_id: Option<&str>) -> Task {
     Task {
         id: TaskId(id.to_string()),
         agent: AgentKind::Codex,
+        custom_agent_name: None,
         prompt: format!("prompt for {id}"),
         resolved_prompt: None,
         status: TaskStatus::Done,

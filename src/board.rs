@@ -332,6 +332,7 @@ mod tests {
         Task {
             id: TaskId(id.to_string()),
             agent,
+            custom_agent_name: None,
             prompt: "test prompt".to_string(),
             resolved_prompt: None,
             status,

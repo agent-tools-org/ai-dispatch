@@ -207,6 +207,7 @@ mod tests {
         let task = Task {
             id: TaskId("t-context".to_string()),
             agent: AgentKind::Codex,
+            custom_agent_name: None,
             prompt: "raw prompt".to_string(),
             resolved_prompt: Some("resolved prompt".to_string()),
             status: TaskStatus::Done,
@@ -252,6 +253,7 @@ mod tests {
         let task = Task {
             id: TaskId("t-reconstruct".to_string()),
             agent: AgentKind::Codex,
+            custom_agent_name: None,
             prompt: "raw prompt".to_string(),
             resolved_prompt: None,
             status: TaskStatus::Done,

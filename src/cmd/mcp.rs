@@ -271,6 +271,7 @@ mod tests {
         Task {
             id: TaskId("t-1234".to_string()),
             agent: AgentKind::Codex,
+            custom_agent_name: None,
             prompt: "Investigate the failing MCP test".to_string(),
             resolved_prompt: None,
             status: TaskStatus::Done,

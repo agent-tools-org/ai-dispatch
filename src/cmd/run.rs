@@ -114,6 +114,7 @@ pub async fn run(store: Arc<Store>, args: RunArgs) -> Result<TaskId> {
     let task = Task {
         id: task_id.clone(),
         agent: agent_kind,
+        custom_agent_name: None,
         prompt: args.prompt.clone(),
         resolved_prompt: None,
         status: TaskStatus::Pending,

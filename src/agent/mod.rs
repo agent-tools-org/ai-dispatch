@@ -91,6 +91,7 @@ pub fn get_agent(kind: AgentKind) -> Box<dyn Agent> {
         AgentKind::Kilo => Box::new(kilo::KiloAgent),
         AgentKind::Ob1 => Box::new(ob1::Ob1Agent),
         AgentKind::Codebuff => Box::new(codebuff::CodebuffAgent),
+        AgentKind::Custom => panic!("use registry::resolve_agent for custom agents"),
     }
 }
 

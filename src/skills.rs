@@ -63,6 +63,7 @@ pub fn auto_skills(agent: &AgentKind, has_worktree: bool) -> Vec<String> {
         AgentKind::Gemini => {
             skills.push("researcher".to_string());
         }
+        AgentKind::Custom => {}
     }
     skills.retain(|skill| available.iter().any(|available_skill| available_skill == skill));
     skills

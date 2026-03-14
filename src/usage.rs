@@ -375,10 +375,11 @@ mod tests {
     use chrono::Local;
 
     fn make_task(id: &str, agent: AgentKind, tokens: i64, cost_usd: f64) -> Task {
-        Task {
-            id: TaskId(id.to_string()),
-            agent,
-            prompt: "prompt".to_string(),
+    Task {
+        id: TaskId(id.to_string()),
+        agent,
+        custom_agent_name: None,
+        prompt: "prompt".to_string(),
             resolved_prompt: None,
             status: TaskStatus::Done,
             parent_task_id: None,

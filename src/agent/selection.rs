@@ -66,6 +66,7 @@ fn priority(kind: AgentKind) -> i32 {
     match kind {
         AgentKind::Gemini | AgentKind::Kilo | AgentKind::Ob1 => 0,
         AgentKind::OpenCode => 1, AgentKind::Cursor | AgentKind::Codebuff => 2, AgentKind::Codex => 3,
+        AgentKind::Custom => 1,
     }
 }
 

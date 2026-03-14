@@ -170,10 +170,15 @@ fn validate_fallback_agents(tasks: &[BatchTask]) -> Result<()> {
     }
     Ok(())
 }
-fn is_valid_agent(agent: &str) -> bool {
-    VALID_AGENTS
+pub(crate) fn is_valid_agent(agent: &str) -> bool {
+    if VALID_AGENTS
         .iter()
         .any(|valid| valid.eq_ignore_ascii_case(agent))
+    {
+        return true;
+    }
+    // Custom agents will be validated against the registry later
+    true
 }
 
 pub fn validate_no_file_overlap(tasks: &[BatchTask]) -> Result<()> {

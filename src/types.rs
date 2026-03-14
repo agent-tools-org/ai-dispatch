@@ -57,6 +57,7 @@ pub enum AgentKind {
     Kilo,
     Ob1,
     Codebuff,
+    Custom,
 }
 
 impl AgentKind {
@@ -82,6 +83,7 @@ impl AgentKind {
             Self::Kilo => "kilo",
             Self::Ob1 => "ob1",
             Self::Codebuff => "codebuff",
+            Self::Custom => "custom",
         }
     }
 }
@@ -222,6 +224,7 @@ impl EventKind {
 pub struct Task {
     pub id: TaskId,
     pub agent: AgentKind,
+    pub custom_agent_name: Option<String>,
     pub prompt: String,
     pub resolved_prompt: Option<String>,
     pub status: TaskStatus,

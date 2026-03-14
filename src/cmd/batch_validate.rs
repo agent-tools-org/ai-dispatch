@@ -111,14 +111,14 @@ pub(super) fn load_task_outcome(store: &Arc<Store>, task_id: &str) -> Result<Bat
 fn validate_task_agents(tasks: &[batch::BatchTask]) -> Result<()> {
     for (task_idx, task) in tasks.iter().enumerate() {
         anyhow::ensure!(
-            AgentKind::parse_str(&task.agent).is_some(),
+            batch::is_valid_agent(&task.agent),
             "Unknown agent '{}' for task {}",
             task.agent,
             task_label(task, task_idx)
         );
         if let Some(ref fallback) = task.fallback {
             anyhow::ensure!(
-                AgentKind::parse_str(fallback).is_some(),
+                batch::is_valid_agent(fallback),
                 "Unknown fallback agent '{}' for task {}",
                 fallback,
                 task_label(task, task_idx)
@@ -130,11 +130,14 @@ fn validate_task_agents(tasks: &[batch::BatchTask]) -> Result<()> {
 fn insert_skipped_task(store: &Arc<Store>, task: &batch::BatchTask) -> Result<TaskId> {
     let task_id = TaskId::generate();
     let now = Local::now();
-    let agent = AgentKind::parse_str(&task.agent)
-        .ok_or_else(|| anyhow::anyhow!("Unknown agent '{}'", task.agent))?;
+    let (agent, custom_agent_name) = match AgentKind::parse_str(&task.agent) {
+        Some(kind) => (kind, None),
+        None => (AgentKind::Custom, Some(task.agent.clone())),
+    };
     store.insert_task(&Task {
         id: task_id.clone(),
         agent,
+        custom_agent_name,
         prompt: task.prompt.clone(),
         status: TaskStatus::Skipped,
         parent_task_id: None,

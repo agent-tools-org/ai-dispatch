@@ -122,10 +122,11 @@ fn make_spec(task_id: &str) -> BackgroundRunSpec {
 }
 
 fn make_task(task_id: &str, status: TaskStatus) -> Task {
-    Task {
-        id: TaskId(task_id.to_string()),
-        agent: AgentKind::Codex,
-        prompt: "prompt".to_string(),
+        Task {
+            id: TaskId(task_id.to_string()),
+            agent: AgentKind::Codex,
+            custom_agent_name: None,
+            prompt: "prompt".to_string(),
         resolved_prompt: None,
         status,
         parent_task_id: None,

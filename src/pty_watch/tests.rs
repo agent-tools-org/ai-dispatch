@@ -14,6 +14,7 @@ fn stores_recent_question_as_awaiting_prompt_metadata() {
     let task = Task {
         id: TaskId("t-pty1".to_string()),
         agent: AgentKind::Codex,
+        custom_agent_name: None,
         prompt: "prompt".to_string(),
         status: TaskStatus::Running,
         parent_task_id: None,

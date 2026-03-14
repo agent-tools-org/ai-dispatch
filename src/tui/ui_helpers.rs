@@ -247,6 +247,7 @@ mod tests {
         Task {
             id: TaskId("t-ui".to_string()),
             agent: AgentKind::Codex,
+            custom_agent_name: None,
             prompt: "prompt".to_string(),
             resolved_prompt: None,
             status: TaskStatus::Done,

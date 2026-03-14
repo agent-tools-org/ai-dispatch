@@ -23,3 +23,4 @@ pub mod show;
 pub mod usage;
 pub mod wait;
 pub mod watch;
+pub mod worktree;

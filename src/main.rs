@@ -33,7 +33,7 @@ mod watcher;
 mod webhook;
 mod workgroup;
 mod worktree;
-use crate::cli_actions::{ConfigAction, GroupAction};
+use crate::cli_actions::{ConfigAction, GroupAction, WorktreeAction};
 use anyhow::Result;
 use clap::{Parser, Subcommand};
 use std::sync::Arc;
@@ -310,6 +310,16 @@ Batch TOML format:
         #[command(subcommand)]
         action: GroupAction,
     },
+    #[command(after_help = r#"Examples:
+  aid worktree create feat/my-feature
+  aid worktree create fix/bug --base develop
+  aid worktree list
+  aid worktree remove feat/my-feature"#)]
+    /// Manage git worktrees for isolated task execution
+    Worktree {
+        #[command(subcommand)]
+        action: WorktreeAction,
+    },
     /// Initialize default skills and templates
     Init,
     #[command(hide = true, name = "__run-task")]
@@ -545,6 +555,17 @@ async fn main() -> Result<()> {
                 context,
             } => cmd::group::update(&store, &group_id, name.as_deref(), context.as_deref())?,
             GroupAction::Delete { group_id } => cmd::group::delete(&store, &group_id)?,
+        },
+        Commands::Worktree { action } => match action {
+            WorktreeAction::Create { branch, base, repo } => {
+                cmd::worktree::create(&branch, base.as_deref(), repo.as_deref())?;
+            }
+            WorktreeAction::List { repo } => {
+                cmd::worktree::list(repo.as_deref())?;
+            }
+            WorktreeAction::Remove { branch, repo } => {
+                cmd::worktree::remove(&branch, repo.as_deref())?;
+            }
         },
         Commands::Init => cmd::init::run()?,
         Commands::InternalRunTask { task_id } => {

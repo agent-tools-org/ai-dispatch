@@ -15,7 +15,8 @@ pub struct RetryArgs {
 }
 
 pub async fn run(store: Arc<Store>, args: RetryArgs) -> Result<()> {
-    let _ = retry_task(store, args, true).await?;
+    let retry_id = retry_task(store, args, true).await?;
+    eprintln!("[aid] Watch: aid watch --quiet {}", retry_id);
     Ok(())
 }
 

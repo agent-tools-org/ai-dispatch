@@ -15,5 +15,10 @@ pub fn run(store: Arc<Store>, task_id: &str) -> Result<()> {
     }
     store.update_task_status(task_id, TaskStatus::Merged)?;
     println!("Marked {task_id} as merged");
+    if let Some(wt) = task.worktree_path.as_deref() {
+        if std::path::Path::new(wt).exists() {
+            eprintln!("[aid] Tip: worktree still exists at {wt}");
+        }
+    }
     Ok(())
 }

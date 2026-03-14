@@ -59,6 +59,12 @@ pub async fn run(store: Arc<Store>, args: ShowArgs) -> Result<()> {
     };
     let text = render_mode_text(&store, &args.task_id, mode)?;
     print!("{text}");
+    if matches!(mode, ShowMode::Diff) {
+        eprintln!(
+            "[aid] Actions: aid merge {} | aid retry {} -f \"feedback\"",
+            args.task_id, args.task_id
+        );
+    }
     Ok(())
 }
 

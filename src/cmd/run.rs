@@ -237,6 +237,24 @@ pub async fn run(store: Arc<Store>, args: RunArgs) -> Result<TaskId> {
         }
         run_prompt::notify_task_completion(&store, &task_id)?;
         crate::webhook::fire_task_webhooks(&store, task_id.as_str()).await;
+        if args.announce {
+            let status_hint = if let Some(task) = store.get_task(task_id.as_str())? {
+                match task.status {
+                    TaskStatus::Done => {
+                        format!("[aid] Next: aid show {task_id} --diff | aid merge {task_id}")
+                    }
+                    TaskStatus::Failed => format!(
+                        "[aid] Next: aid show {task_id} | aid retry {task_id} -f \"feedback\""
+                    ),
+                    _ => String::new(),
+                }
+            } else {
+                String::new()
+            };
+            if !status_hint.is_empty() {
+                eprintln!("{status_hint}");
+            }
+        }
         if let Some(retry_id) =
             maybe_auto_retry_after_verify_failure(&store, &task_id, &args, pre_verify_status)
                 .await?

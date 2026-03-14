@@ -35,6 +35,7 @@ impl super::Agent for CodebuffAgent {
         cmd.arg(prompt);
         if let Some(ref dir) = opts.dir {
             cmd.args(["--cwd", dir]);
+            cmd.current_dir(dir);
         }
         if let Some(ref model) = opts.model {
             cmd.args(["--model", model]);

@@ -45,6 +45,7 @@ impl super::Agent for CursorAgent {
         }
         if let Some(ref dir) = opts.dir {
             cmd.args(["--workspace", dir]);
+            cmd.current_dir(dir);
         }
         if let Some(ref model) = opts.model {
             cmd.args(["--model", model]);

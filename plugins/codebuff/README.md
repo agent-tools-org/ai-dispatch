@@ -19,6 +19,8 @@ aid-codebuff "Refactor the CLI runner" --cwd . --mode DEFAULT --model "anthropic
 ```
 `aid run` will transparently use this command when `AgentKind::Codebuff` is selected.
 
+By default `aid-codebuff` operates in `free` cost mode (agent `base2-free`) for cost savings; switch to `normal` or `max` when you need higher quality and can absorb the higher cost.
+
 ## Supported modes
 - `DEFAULT` → agent `base2`, cost mode `normal`
 - `FREE` → agent `base2-free`, cost mode `free`

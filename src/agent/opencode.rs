@@ -42,6 +42,7 @@ impl super::Agent for OpenCodeAgent {
         }
         if let Some(ref dir) = opts.dir {
             cmd.args(["--dir", dir]);
+            cmd.current_dir(dir);
         }
         for file in &opts.context_files {
             cmd.args(["-f", file]);

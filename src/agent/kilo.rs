@@ -41,6 +41,7 @@ impl super::Agent for KiloAgent {
         }
         if let Some(ref dir) = opts.dir {
             cmd.args(["--dir", dir]);
+            cmd.current_dir(dir);
         }
         for file in &opts.context_files {
             cmd.args(["-f", file]);
@@ -144,5 +145,21 @@ mod tests {
             .collect();
         assert!(args.contains(&"-f".to_string()));
         assert!(args.contains(&"src/main.rs".to_string()));
+    }
+
+    #[test]
+    fn build_command_sets_current_dir_when_dir_provided() {
+        let opts = RunOpts {
+            dir: Some("/tmp/wt".to_string()),
+            output: None,
+            model: None,
+            budget: false,
+            read_only: false,
+            context_files: vec![],
+            session_id: None,
+        };
+        let cmd = KiloAgent.build_command("test", &opts).unwrap();
+        let dir = cmd.get_current_dir().unwrap();
+        assert_eq!(dir, std::path::Path::new("/tmp/wt"));
     }
 }

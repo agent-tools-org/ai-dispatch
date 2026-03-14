@@ -128,7 +128,7 @@ fn render_pane(pane: &PaneData, is_active: bool) -> List<'static> {
     } else if is_failed {
         Color::Red
     } else if is_done {
-        Color::Indexed(240)
+        Color::Indexed(236)
     } else {
         Color::Indexed(240)
     };
@@ -171,7 +171,9 @@ fn render_pane(pane: &PaneData, is_active: bool) -> List<'static> {
         format!(" {} ", parts.join(" | "))
     };
     let content_style = if is_done {
-        Style::default().fg(Color::Indexed(245))
+        Style::default()
+            .fg(Color::Indexed(240))
+            .add_modifier(Modifier::DIM)
     } else {
         Style::default()
     };
@@ -179,6 +181,10 @@ fn render_pane(pane: &PaneData, is_active: bool) -> List<'static> {
         Style::default()
             .fg(status_color)
             .add_modifier(Modifier::BOLD)
+    } else if is_done {
+        Style::default()
+            .fg(Color::Indexed(240))
+            .add_modifier(Modifier::DIM)
     } else {
         Style::default().fg(status_color)
     };
@@ -207,12 +213,16 @@ fn render_pane(pane: &PaneData, is_active: bool) -> List<'static> {
     let start = end.saturating_sub(visible_count);
     let visible = &pane.events[start..end];
     for (ts, kind, detail) in visible {
-        let event_style = match kind.as_str() {
-            "milestone" => Style::default().fg(Color::Green),
-            "error" => Style::default().fg(Color::Red),
-            "reasoning" => Style::default().fg(Color::Cyan),
-            "completion" => Style::default().fg(Color::Indexed(243)),
-            _ => Style::default(),
+        let event_style = if is_done {
+            content_style
+        } else {
+            match kind.as_str() {
+                "milestone" => Style::default().fg(Color::Green),
+                "error" => Style::default().fg(Color::Red),
+                "reasoning" => Style::default().fg(Color::Cyan),
+                "completion" => Style::default().fg(Color::Indexed(243)),
+                _ => Style::default(),
+            }
         };
         items.push(ListItem::new(format!("{ts} [{kind}] {detail}")).style(event_style));
     }

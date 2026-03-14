@@ -2,10 +2,9 @@
 /**
  * Headless Codebuff bridge that streams SDK events as codex JSONL.
  * Exports: CLI `aid-codebuff` with prompt, cwd, model, mode, and read-only flags.
- * Deps: @codebuff/sdk plus node:util/parseArgs for argument parsing.
+ * Deps: @codebuff/sdk (>=0.10) plus node:util/parseArgs for argument parsing.
  */
-import pkg from '@codebuff/sdk';
-const { CodebuffClient } = pkg;
+import { CodebuffClient } from '@codebuff/sdk';
 import { parseArgs } from 'node:util';
 
 const args = parseArgs({
@@ -13,14 +12,14 @@ const args = parseArgs({
   options: {
     cwd: { type: 'string' },
     model: { type: 'string' },
-    mode: { type: 'string', default: 'DEFAULT' },
+    mode: { type: 'string', default: 'normal' },
     'read-only': { type: 'boolean', default: false },
   },
 });
 
 const prompt = args.positionals.join(' ').trim();
 if (!prompt) {
-  console.error('Usage: aid-codebuff <prompt> [--cwd <dir>] [--model <model>] [--mode <DEFAULT|FREE|MAX>]');
+  console.error('Usage: aid-codebuff <prompt> [--cwd <dir>] [--model <model>] [--mode <free|normal|max>]');
   process.exit(1);
 }
 const apiKey = process.env.CODEBUFF_API_KEY;
@@ -30,15 +29,10 @@ if (!apiKey) {
 }
 
 const cwd = args.values.cwd || process.cwd();
+const costMode = args.values.mode || 'normal';
 const emit = (payload) => process.stdout.write(`${JSON.stringify(payload)}\n`);
 
-const client = new CodebuffClient({
-  apiKey,
-  cwd,
-  onError: (err) => {
-    emit({ type: 'error', message: err?.message ?? String(err) });
-  },
-});
+const client = new CodebuffClient({ apiKey, cwd });
 
 const usageTotals = { inputTokens: 0, outputTokens: 0 };
 
@@ -49,7 +43,6 @@ const handleEvent = (event) => {
       emit({ type: 'item.started', item: { type: 'agent_message', text: `[codebuff] agent started` } });
       break;
     case 'text':
-    case 'reasoning_delta':
       if (event.text) emit({ type: 'item.completed', item: { type: 'agent_message', text: event.text } });
       break;
     case 'tool_call': {
@@ -74,7 +67,13 @@ const handleEvent = (event) => {
       emit({ type: 'error', message: event.message || 'unknown error' });
       break;
     case 'finish':
-      if (event.output) emit({ type: 'item.completed', item: { type: 'agent_message', text: `[codebuff] done` } });
+      emit({ type: 'item.completed', item: { type: 'agent_message', text: `[codebuff] done (cost: $${event.totalCost?.toFixed(4) ?? '?'})` } });
+      break;
+    case 'subagent_start':
+      emit({ type: 'item.started', item: { type: 'agent_message', text: `[codebuff] subagent: ${event.displayName}` } });
+      break;
+    case 'subagent_finish':
+      emit({ type: 'item.completed', item: { type: 'agent_message', text: `[codebuff] subagent done: ${event.displayName}` } });
       break;
   }
 };
@@ -82,9 +81,10 @@ const handleEvent = (event) => {
 (async () => {
   try {
     const result = await client.run({
-      agent: 'codebuff/base@latest',
+      agent: 'base',
       prompt,
       handleEvent,
+      costMode,
       maxAgentSteps: 50,
     });
     emit({
@@ -95,11 +95,9 @@ const handleEvent = (event) => {
       const out = typeof result.output === 'string' ? result.output : JSON.stringify(result.output);
       process.stderr.write(`[aid-codebuff] Output: ${out.slice(0, 300)}\n`);
     }
-    client.closeConnection?.();
     process.exit(0);
   } catch (err) {
     emit({ type: 'error', message: err?.message ?? String(err) });
-    client.closeConnection?.();
     process.exit(1);
   }
 })();

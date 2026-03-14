@@ -22,6 +22,8 @@ impl super::Agent for CodebuffAgent {
 
     fn build_command(&self, prompt: &str, opts: &RunOpts) -> Result<Command> {
         let mut cmd = Command::new("aid-codebuff");
+        // SDK v0.10+ runs agent locally — needs extra heap for tokenizer + file scanning
+        cmd.env("NODE_OPTIONS", "--max-old-space-size=8192");
         cmd.arg(prompt);
         if let Some(ref dir) = opts.dir {
             cmd.args(["--cwd", dir]);
@@ -33,7 +35,7 @@ impl super::Agent for CodebuffAgent {
             cmd.arg("--read-only");
         }
         if opts.budget {
-            cmd.args(["--mode", "FREE"]);
+            cmd.args(["--mode", "free"]);
         }
         Ok(cmd)
     }

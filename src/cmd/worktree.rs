@@ -5,6 +5,11 @@
 use anyhow::Result;
 use std::path::Path;
 
+/// Check if a path is an aid-managed worktree (handles macOS /tmp → /private/tmp).
+fn is_aid_worktree(path: &str) -> bool {
+    path.starts_with("/tmp/aid-wt-") || path.starts_with("/private/tmp/aid-wt-")
+}
+
 /// Create a worktree, print its path to stdout for capture.
 pub fn create(branch: &str, base: Option<&str>, repo: Option<&str>) -> Result<()> {
     let repo_dir = repo.unwrap_or(".");
@@ -37,7 +42,7 @@ pub fn list(repo: Option<&str>) -> Result<()> {
             current_path = path.to_string();
         } else if let Some(branch) = line.strip_prefix("branch refs/heads/") {
             current_branch = branch.to_string();
-        } else if line.is_empty() && current_path.starts_with("/tmp/aid-wt-") {
+        } else if line.is_empty() && is_aid_worktree(&current_path) {
             println!("{:<50} {}", current_path, current_branch);
             count += 1;
             current_path.clear();
@@ -47,7 +52,7 @@ pub fn list(repo: Option<&str>) -> Result<()> {
             current_branch.clear();
         }
     }
-    if current_path.starts_with("/tmp/aid-wt-") && !current_path.is_empty() {
+    if is_aid_worktree(&current_path) && !current_path.is_empty() {
         println!("{:<50} {}", current_path, current_branch);
         count += 1;
     }

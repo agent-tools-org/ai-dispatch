@@ -190,6 +190,7 @@ pub async fn run(store: Arc<Store>, args: RunArgs) -> Result<TaskId> {
                 agent_kind,
                 crate::agent::truncate::truncate_text(&args.prompt, 50)
             );
+            eprintln!("[aid] Watch: aid watch --quiet {task_id}");
         }
     } else {
         let std_cmd = agent

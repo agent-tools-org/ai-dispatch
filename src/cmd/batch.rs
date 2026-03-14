@@ -56,6 +56,13 @@ pub async fn run(store: Arc<Store>, args: BatchArgs) -> Result<()> {
         }
     }
     println!("Batch: {total} task(s) dispatched");
+    // Print watch hint for the caller
+    let group_id = config.tasks.first().and_then(|t| t.group.as_deref());
+    if let Some(gid) = group_id {
+        eprintln!("[aid] Watch: aid watch --quiet --group {gid}");
+    } else if task_ids.len() == 1 {
+        eprintln!("[aid] Watch: aid watch --quiet {}", task_ids[0]);
+    }
     Ok(())
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

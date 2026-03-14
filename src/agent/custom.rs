@@ -1,6 +1,7 @@
 //! CLI adapter for user-defined agents loaded from TOML.
 //! Exports: CustomAgentConfig, CustomAgent, parse_config.
 //! Deps: serde, toml, serde_json, chrono, std::process::Command, crate::types.
+#![allow(dead_code)]
 
 use anyhow::Result;
 use chrono::Local;

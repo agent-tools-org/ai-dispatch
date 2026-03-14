@@ -1,6 +1,7 @@
 // Subcommand handlers for aid CLI.
 // Each module implements one subcommand.
 
+pub mod agent;
 pub mod ask;
 pub mod benchmark;
 pub mod batch;

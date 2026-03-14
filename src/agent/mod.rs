@@ -8,6 +8,8 @@ pub mod gemini;
 pub mod kilo;
 pub mod ob1;
 pub mod opencode;
+pub(crate) mod custom;
+pub(crate) mod registry;
 pub mod classifier;
 pub(crate) mod selection;
 pub(crate) mod truncate;

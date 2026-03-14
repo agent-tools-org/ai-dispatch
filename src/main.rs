@@ -197,6 +197,16 @@ Batch TOML format:
     },
     /// Print the most recent completion notifications
     Completions,
+    #[command(after_help = r#"Examples:
+  aid agent list
+  aid agent show aider
+  aid agent add my-agent
+  aid agent remove my-agent"#)]
+    /// Manage custom agent definitions
+    Agent {
+        #[command(subcommand)]
+        action: AgentCommands,
+    },
     /// Clean up old tasks and orphaned worktrees
     Clean {
         /// Only clean tasks older than N days (default: 7)
@@ -329,6 +339,18 @@ Batch TOML format:
         /// Task ID
         task_id: String,
     },
+}
+
+#[derive(Subcommand)]
+enum AgentCommands {
+    /// List all agents (built-in + custom)
+    List,
+    /// Show agent details and configuration
+    Show { name: String },
+    /// Create a new custom agent definition
+    Add { name: String },
+    /// Remove a custom agent definition
+    Remove { name: String },
 }
 
 #[tokio::main]
@@ -490,6 +512,16 @@ async fn main() -> Result<()> {
             if !text.is_empty() {
                 println!("{text}");
             }
+        }
+        Commands::Agent { action } => {
+            use cmd::agent::{AgentAction, run_agent_command};
+            let action = match action {
+                AgentCommands::List => AgentAction::List,
+                AgentCommands::Show { name } => AgentAction::Show { name },
+                AgentCommands::Add { name } => AgentAction::Add { name },
+                AgentCommands::Remove { name } => AgentAction::Remove { name },
+            };
+            run_agent_command(action)?;
         }
         Commands::Clean {
             older_than,

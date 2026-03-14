@@ -1,6 +1,7 @@
 // Custom agent registry: loads agent definitions from ~/.aid/agents/*.toml.
 // Exports: load_custom_agents, resolve_custom_agent, list_custom_agents.
 // Deps: crate::paths, super::custom.
+#![allow(dead_code)]
 
 use std::collections::HashMap;
 use std::fs;
@@ -144,4 +145,4 @@ model = "gpt-4.1"
             .collect();
         assert_eq!(ids, vec!["a", "b"]);
     }
-}\n*** End Patch```
+}

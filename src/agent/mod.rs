@@ -97,15 +97,6 @@ pub fn get_agent(kind: AgentKind) -> Box<dyn Agent> {
     }
 }
 
-/// Resolve any agent by name — checks built-in first, then custom registry
-pub fn resolve_agent(name: &str) -> Option<Box<dyn Agent>> {
-    if let Some(kind) = AgentKind::parse_str(name) {
-        Some(get_agent(kind))
-    } else {
-        registry::resolve_custom_agent(name)
-    }
-}
-
 pub fn agent_has_fs_access(_kind: &AgentKind) -> bool {
     true // all supported agents have file system access
 }

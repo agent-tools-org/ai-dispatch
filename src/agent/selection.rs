@@ -235,12 +235,8 @@ mod tests {
         }
     }
     fn select(prompt: &str, dir: &[&str], available: &[AgentKind]) -> (String, String) {
-        let _home_guard = if std::env::var("AID_HOME").is_err() {
-            let temp = tempfile::tempdir().unwrap();
-            Some((paths::AidHomeGuard::set(temp.path()), temp))
-        } else {
-            None
-        };
+        let temp = tempfile::tempdir().unwrap();
+        let _guard = paths::AidHomeGuard::set(temp.path());
         select_agent_from(prompt, &opts(dir.first().copied(), false), available, &[])
     }
     fn all() -> [AgentKind; 6] {
@@ -248,12 +244,8 @@ mod tests {
          AgentKind::Cursor, AgentKind::Codex, AgentKind::Ob1]
     }
     fn with_history(prompt: &str, h: &[(AgentKind, f64, usize)]) -> (String, String) {
-        let _home_guard = if std::env::var("AID_HOME").is_err() {
-            let temp = tempfile::tempdir().unwrap();
-            Some((paths::AidHomeGuard::set(temp.path()), temp))
-        } else {
-            None
-        };
+        let temp = tempfile::tempdir().unwrap();
+        let _guard = paths::AidHomeGuard::set(temp.path());
         select_agent_from(prompt, &opts(None, false), &all(), h)
     }
 

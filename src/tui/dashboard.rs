@@ -145,14 +145,14 @@ pub fn render_task_card(
     }
     List::new(items)
         .block(
-                Block::default()
-                    .title(format!(
-                        " {} {} {} {} ",
-                        task.id,
-                        task.agent_display_name(),
-                        task.status.label(),
-                        milestone_progress(task, milestones.len())
-                    ))
+            Block::default()
+                .title(format!(
+                    " {} {} {} {} ",
+                    task.id,
+                    task.agent_display_name(),
+                    task.status.label(),
+                    milestone_progress(task, milestones.len())
+                ))
                 .borders(Borders::ALL)
                 .border_style(style),
         )

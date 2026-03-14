@@ -317,10 +317,10 @@ pub fn run(store: &Arc<Store>, action: ConfigAction) -> Result<()> {
                 "{:<10} {:<25} {:>10} {:>10} {:>10} {}",
                 "Agent", "Model", "Tier", "Input/M", "Output/M", "Description"
             );
-                println!("{}", "-".repeat(85));
-                for agent in [
-                    AgentKind::Codex,
-                    AgentKind::Gemini,
+            println!("{}", "-".repeat(85));
+            for agent in [
+                AgentKind::Codex,
+                AgentKind::Gemini,
                 AgentKind::OpenCode,
                 AgentKind::Kilo,
                 AgentKind::Cursor,

@@ -1,0 +1,7 @@
+name = "aid-store-website"
+main = "src/index.ts"
+compatibility_date = "2025-12-01"
+
+[[routes]]
+pattern = "store.agent-tools.org"
+custom_domain = true

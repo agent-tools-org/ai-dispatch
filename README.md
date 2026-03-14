@@ -1,6 +1,6 @@
 # ai-dispatch (aid)
 
-![Version](https://img.shields.io/badge/version-4.6.0-blue)
+![Version](https://img.shields.io/badge/version-4.7.0-blue)
 ![Rust](https://img.shields.io/badge/rust-2024-orange)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
@@ -220,12 +220,22 @@ aid run codex "Implement feature" --worktree feat/my-feature --dir .
 `codebuff` is an optional agent that requires separate installation. It bridges the [Codebuff SDK](https://www.codebuff.com/docs/advanced/sdk) to `aid`'s event protocol via a Node.js wrapper.
 
 ```bash
+# 1. Install the plugin
 cd plugins/codebuff && npm install && npm install -g .
+
+# 2. Get an API key at https://www.codebuff.com/api-keys
 export CODEBUFF_API_KEY=cb-pat-...
+
+# 3. Add to your shell profile to persist across sessions
+echo 'export CODEBUFF_API_KEY=cb-pat-...' >> ~/.zshrc
+
+# 4. Run a task
 aid run codebuff "Refactor the auth module" --dir .
 ```
 
-The plugin outputs codex-compatible JSONL events, so `aid show`, `aid watch`, and the TUI work seamlessly. Get an API key at [codebuff.com/api-keys](https://www.codebuff.com/api-keys).
+The plugin outputs codex-compatible JSONL events, so `aid show`, `aid watch`, and the TUI work seamlessly. If `CODEBUFF_API_KEY` is not set, `aid` will show setup instructions instead of failing silently.
+
+**Cost note**: Codebuff SDK v0.10 runs sub-agents (Context Pruner, Nit Pick Nick) automatically, which can make even simple tasks expensive. Use `--mode free` via `--budget` flag for cost-sensitive work.
 
 ### TUI Stats View
 
@@ -426,6 +436,7 @@ This works well for incident response, release prep, and cross-cutting refactors
 - Low-value tasks (tests, formatting, linting, docs) auto-detect as budget mode.
 - Use `read_only = true` in batch tasks for research/review that should not modify files.
 - Use `aid benchmark` to compare agent quality/speed/cost on the same task.
+- Use `codebuff` with `--budget` for cost-sensitive tasks — the SDK's sub-agents can make simple tasks expensive in normal mode.
 - Configure webhooks in `config.toml` for Slack/Discord notifications on task completion.
 
 ## Built-in Skills

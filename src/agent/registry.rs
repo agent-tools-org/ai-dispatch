@@ -6,12 +6,8 @@
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::sync::OnceLock;
-
 use super::custom::{CustomAgent, CustomAgentConfig, parse_config};
 use crate::paths;
-
-static REGISTRY: OnceLock<HashMap<String, CustomAgentConfig>> = OnceLock::new();
 
 fn agents_dir() -> PathBuf {
     paths::aid_dir().join("agents")
@@ -44,8 +40,8 @@ fn load_from_dir(dir: &Path) -> HashMap<String, CustomAgentConfig> {
     agents
 }
 
-fn get_registry() -> &'static HashMap<String, CustomAgentConfig> {
-    REGISTRY.get_or_init(|| load_from_dir(&agents_dir()))
+fn load_registry() -> HashMap<String, CustomAgentConfig> {
+    load_from_dir(&agents_dir())
 }
 
 pub fn load_custom_agents() -> HashMap<String, CustomAgentConfig> {
@@ -64,7 +60,8 @@ fn resolve_from_registry(
 }
 
 pub fn resolve_custom_agent(name: &str) -> Option<Box<dyn super::Agent>> {
-    resolve_from_registry(get_registry(), name)
+    let registry = load_registry();
+    resolve_from_registry(&registry, name)
 }
 
 fn list_from_registry(registry: &HashMap<String, CustomAgentConfig>) -> Vec<CustomAgentConfig> {
@@ -74,11 +71,13 @@ fn list_from_registry(registry: &HashMap<String, CustomAgentConfig>) -> Vec<Cust
 }
 
 pub fn list_custom_agents() -> Vec<CustomAgentConfig> {
-    list_from_registry(get_registry())
+    let registry = load_registry();
+    list_from_registry(&registry)
 }
 
 pub fn custom_agent_exists(name: &str) -> bool {
-    agents_dir().join(format!("{name}.toml")).is_file() || get_registry().contains_key(name)
+    let custom_file = agents_dir().join(format!("{name}.toml"));
+    custom_file.is_file() || load_registry().contains_key(name)
 }
 
 #[cfg(test)]

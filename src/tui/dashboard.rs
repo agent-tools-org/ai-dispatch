@@ -30,9 +30,14 @@ pub fn render_dashboard(frame: &mut ratatui::Frame<'_>, app: &App) {
         ])
         .split(frame.area());
     frame.render_widget(
-        Paragraph::new(format!("aid dashboard [{}]", app.scope_label()))
-            .alignment(Alignment::Center)
-            .style(Style::default().add_modifier(Modifier::BOLD)),
+        Paragraph::new(ratatui::text::Line::from(vec![
+            ratatui::text::Span::styled("aid ", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+            ratatui::text::Span::styled(
+                format!("dashboard [{}]", app.scope_label()),
+                Style::default().fg(Color::Indexed(250)),
+            ),
+        ]))
+        .alignment(Alignment::Center),
         chunks[0],
     );
     if app.tasks.is_empty() {
@@ -54,15 +59,19 @@ pub fn render_dashboard(frame: &mut ratatui::Frame<'_>, app: &App) {
         .iter()
         .filter(|task| matches!(task.status, TaskStatus::Running | TaskStatus::AwaitingInput))
         .count();
-    let status = format!(
-        "Scope: {} | Tasks: {} | Done: {} | Running: {} | {}",
-        app.scope_label(),
-        app.tasks.len(),
-        done,
-        running,
-        FOOTER_HINT,
-    );
-    frame.render_widget(Paragraph::new(status), chunks[2]);
+    let footer_line = ratatui::text::Line::from(vec![
+        ratatui::text::Span::styled(
+            format!(" {} tasks ", app.tasks.len()),
+            Style::default().fg(Color::Indexed(250)),
+        ),
+        ratatui::text::Span::styled(format!("{}✓ ", done), Style::default().fg(Color::Green)),
+        ratatui::text::Span::styled(format!("{}▶ ", running), Style::default().fg(Color::Yellow)),
+        ratatui::text::Span::styled(
+            format!("│ {FOOTER_HINT}"),
+            Style::default().fg(Color::Indexed(243)),
+        ),
+    ]);
+    frame.render_widget(Paragraph::new(footer_line), chunks[2]);
 }
 fn render_cards(frame: &mut ratatui::Frame<'_>, app: &App, area: Rect) {
     let (start, end) = visible_task_indices(app, area.height);
@@ -132,7 +141,7 @@ pub fn render_task_card(
     }
     let mut style = status_style(task.status);
     if selected {
-        style = style.bg(Color::DarkGray).add_modifier(Modifier::BOLD);
+        style = style.bg(Color::Indexed(237)).add_modifier(Modifier::BOLD);
     }
     List::new(items)
         .block(

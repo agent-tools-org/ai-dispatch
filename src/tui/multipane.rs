@@ -44,7 +44,13 @@ pub fn render_multipane(frame: &mut ratatui::Frame<'_>, panes: &[PaneData], acti
     } else {
         "Tab=pane j/k=scroll Enter=detail Esc=board q=quit".into()
     };
-    frame.render_widget(Paragraph::new(footer), chunks[1]);
+    frame.render_widget(
+        Paragraph::new(ratatui::text::Line::from(ratatui::text::Span::styled(
+            footer,
+            Style::default().fg(Color::Indexed(243)),
+        ))),
+        chunks[1],
+    );
 }
 
 fn compute_pane_layout(area: Rect, count: usize) -> Vec<Rect> {
@@ -115,23 +121,23 @@ fn render_pane(pane: &PaneData, is_active: bool) -> List<'static> {
     let is_done = matches!(pane.status.as_str(), "done" | "merged");
     let is_running = pane.status == "running";
     let is_failed = pane.status == "failed";
-    let border_color = if is_done {
-        Color::DarkGray
+    let border_color = if is_active {
+        Color::Cyan
     } else if is_running {
         Color::Yellow
     } else if is_failed {
         Color::Red
-    } else if is_active {
-        Color::Cyan
+    } else if is_done {
+        Color::Indexed(240)
     } else {
-        Color::DarkGray
+        Color::Indexed(240)
     };
     let status_color = match pane.status.as_str() {
-        "done" | "merged" => Color::DarkGray,
+        "done" | "merged" => Color::Green,
         "running" => Color::Yellow,
         "awaiting_input" => Color::Magenta,
         "failed" => Color::Red,
-        "pending" => Color::Gray,
+        "pending" => Color::Indexed(250),
         "skipped" => Color::Blue,
         _ => Color::White,
     };
@@ -165,9 +171,7 @@ fn render_pane(pane: &PaneData, is_active: bool) -> List<'static> {
         format!(" {} ", parts.join(" | "))
     };
     let content_style = if is_done {
-        Style::default()
-            .fg(Color::DarkGray)
-            .add_modifier(Modifier::DIM)
+        Style::default().fg(Color::Indexed(245))
     } else {
         Style::default()
     };
@@ -188,7 +192,7 @@ fn render_pane(pane: &PaneData, is_active: bool) -> List<'static> {
         "Tokens: {}  Cost: {}  CPU: {}  Mem: {}",
         pane.tokens, pane.cost, pane.cpu, pane.memory
     );
-    items.push(ListItem::new(summary).style(Style::default().fg(Color::DarkGray)));
+    items.push(ListItem::new(summary).style(Style::default().fg(Color::Indexed(243))));
     if !pane.milestone.is_empty() {
         items.push(
             ListItem::new(format!("Progress: {}", pane.milestone))
@@ -207,7 +211,7 @@ fn render_pane(pane: &PaneData, is_active: bool) -> List<'static> {
             "milestone" => Style::default().fg(Color::Green),
             "error" => Style::default().fg(Color::Red),
             "reasoning" => Style::default().fg(Color::Cyan),
-            "completion" => Style::default().fg(Color::DarkGray),
+            "completion" => Style::default().fg(Color::Indexed(243)),
             _ => Style::default(),
         };
         items.push(ListItem::new(format!("{ts} [{kind}] {detail}")).style(event_style));
@@ -218,7 +222,7 @@ fn render_pane(pane: &PaneData, is_active: bool) -> List<'static> {
             pane.total_events.saturating_sub(pane.scroll_offset),
             pane.total_events
         );
-        items.push(ListItem::new(pos).style(Style::default().fg(Color::DarkGray)));
+        items.push(ListItem::new(pos).style(Style::default().fg(Color::Indexed(243))));
     }
     List::new(items).style(content_style).block(
         Block::default()

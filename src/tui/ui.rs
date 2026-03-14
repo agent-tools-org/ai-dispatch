@@ -112,9 +112,14 @@ fn render_board(frame: &mut ratatui::Frame<'_>, app: &App) {
         .split(frame.area());
 
     frame.render_widget(
-        Paragraph::new(format!("aid dashboard [{}]", app.scope_label()))
-            .alignment(Alignment::Center)
-            .style(Style::default().add_modifier(Modifier::BOLD)),
+        Paragraph::new(Line::from(vec![
+            Span::styled("aid ", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+            Span::styled(
+                format!("[{}]", app.scope_label()),
+                Style::default().fg(Color::Indexed(250)),
+            ),
+        ]))
+        .alignment(Alignment::Center),
         chunks[0],
     );
 
@@ -145,7 +150,7 @@ fn render_board(frame: &mut ratatui::Frame<'_>, app: &App) {
     .block(Block::default().title("Tasks").borders(Borders::ALL))
     .row_highlight_style(
         Style::default()
-            .bg(Color::DarkGray)
+            .bg(Color::Indexed(237))
             .add_modifier(Modifier::BOLD),
     );
 
@@ -158,15 +163,29 @@ fn render_board(frame: &mut ratatui::Frame<'_>, app: &App) {
     let done = app.tasks.iter().filter(|task| matches!(task.status, TaskStatus::Done | TaskStatus::Merged)).count();
     let running = app.tasks.iter().filter(|task| matches!(task.status, TaskStatus::Running | TaskStatus::AwaitingInput)).count();
     let failed = app.tasks.iter().filter(|task| matches!(task.status, TaskStatus::Failed)).count();
-    let status = format!(
-        "Scope: {} | Tasks: {} | Done: {} | Running: {} | Failed: {} | d=dashboard m=multipane j/k=nav Enter=detail q=quit",
-        app.scope_label(),
-        app.tasks.len(),
-        done,
-        running,
-        failed,
-    );
-    frame.render_widget(Paragraph::new(status), chunks[2]);
+    let status_line = Line::from(vec![
+        Span::styled(
+            format!(" {} tasks ", app.tasks.len()),
+            Style::default().fg(Color::Indexed(250)),
+        ),
+        Span::styled(
+            format!("{}✓ ", done),
+            Style::default().fg(Color::Green),
+        ),
+        Span::styled(
+            format!("{}▶ ", running),
+            Style::default().fg(Color::Yellow),
+        ),
+        Span::styled(
+            format!("{}✗ ", failed),
+            Style::default().fg(Color::Red),
+        ),
+        Span::styled(
+            "│ d=dashboard m=multipane j/k=nav Enter=detail q=quit",
+            Style::default().fg(Color::Indexed(243)),
+        ),
+    ]);
+    frame.render_widget(Paragraph::new(status_line), chunks[2]);
 }
 
 fn render_detail(frame: &mut ratatui::Frame<'_>, app: &App) {
@@ -199,7 +218,10 @@ fn render_detail(frame: &mut ratatui::Frame<'_>, app: &App) {
     }
 
     frame.render_widget(
-        Paragraph::new("e=events p=prompt o=output Tab=next Esc=back q=quit"),
+        Paragraph::new(Line::from(Span::styled(
+            "e=events p=prompt o=output Tab=next Esc=back q=quit",
+            Style::default().fg(Color::Indexed(243)),
+        ))),
         chunks[1],
     );
 }
@@ -240,12 +262,27 @@ fn render_detail_content(
             let items: Vec<ListItem<'_>> = events
                 .iter()
                 .map(|event| {
-                    ListItem::new(format!(
-                        "{} [{}] {}",
-                        event.timestamp.format("%H:%M:%S"),
-                        event.event_kind.as_str(),
-                        event.detail,
-                    ))
+                    let kind_color = match event.event_kind {
+                        crate::types::EventKind::Milestone => Color::Green,
+                        crate::types::EventKind::Error => Color::Red,
+                        crate::types::EventKind::Completion => Color::Cyan,
+                        crate::types::EventKind::ToolCall => Color::Yellow,
+                        crate::types::EventKind::Build | crate::types::EventKind::Test => Color::Blue,
+                        _ => Color::Indexed(245),
+                    };
+                    ListItem::new(Line::from(vec![
+                        Span::styled(
+                            event.timestamp.format("%H:%M:%S").to_string(),
+                            Style::default().fg(Color::Indexed(243)),
+                        ),
+                        Span::raw(" "),
+                        Span::styled(
+                            format!("[{}]", event.event_kind.as_str()),
+                            Style::default().fg(kind_color),
+                        ),
+                        Span::raw(" "),
+                        Span::raw(event.detail.clone()),
+                    ]))
                 })
                 .collect();
             frame.render_widget(
@@ -275,28 +312,47 @@ fn render_detail_content(
 }
 
 fn task_header(task: &Task, events: &[crate::types::TaskEvent]) -> Paragraph<'static> {
-    let awaiting = if task.status == TaskStatus::AwaitingInput {
-        pending_prompt(events)
-            .map(|prompt| format!("Awaiting: {}", truncate(prompt, 120)))
-            .unwrap_or_default()
-    } else {
-        String::new()
+    let status_color = match task.status {
+        TaskStatus::Done | TaskStatus::Merged => Color::Green,
+        TaskStatus::Running => Color::Yellow,
+        TaskStatus::AwaitingInput => Color::Magenta,
+        TaskStatus::Failed => Color::Red,
+        _ => Color::Indexed(250),
     };
-    Paragraph::new(
-        [
-            format!("{}  {}  {}", task.id, task.agent, task.status.label()),
-            format!(
-                "Duration: {}  Tokens: {}  Cost: {}  Model: {}",
-                task_duration(task),
-                task_tokens(task),
-                cost::format_cost(task.cost_usd),
-                task.model.as_deref().unwrap_or("-"),
-            ),
-            task_scope_line(task),
-            awaiting,
-        ]
-        .join("\n"),
-    )
+    let line1 = Line::from(vec![
+        Span::styled(
+            task.id.as_str().to_string(),
+            Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD),
+        ),
+        Span::raw("  "),
+        Span::styled(task.agent.to_string(), Style::default().fg(Color::Indexed(250))),
+        Span::raw("  "),
+        Span::styled(task.status.label().to_string(), Style::default().fg(status_color).add_modifier(Modifier::BOLD)),
+    ]);
+    let line2 = Line::from(vec![
+        Span::styled("Duration: ", Style::default().fg(Color::Indexed(243))),
+        Span::raw(task_duration(task)),
+        Span::styled("  Tokens: ", Style::default().fg(Color::Indexed(243))),
+        Span::raw(task_tokens(task)),
+        Span::styled("  Cost: ", Style::default().fg(Color::Indexed(243))),
+        Span::raw(cost::format_cost(task.cost_usd)),
+        Span::styled("  Model: ", Style::default().fg(Color::Indexed(243))),
+        Span::raw(task.model.as_deref().unwrap_or("-").to_string()),
+    ]);
+    let scope = task_scope_line(task);
+    let mut lines = vec![line1, line2];
+    if !scope.is_empty() {
+        lines.push(Line::from(Span::styled(scope, Style::default().fg(Color::Indexed(243)))));
+    }
+    if task.status == TaskStatus::AwaitingInput {
+        if let Some(prompt) = pending_prompt(events) {
+            lines.push(Line::from(Span::styled(
+                format!("Awaiting: {}", truncate(prompt, 120)),
+                Style::default().fg(Color::Magenta),
+            )));
+        }
+    }
+    Paragraph::new(lines)
 }
 
 fn tab_bar(active: DetailTab) -> Paragraph<'static> {
@@ -313,7 +369,7 @@ fn tab_bar(active: DetailTab) -> Paragraph<'static> {
                     .fg(Color::Cyan)
                     .add_modifier(Modifier::BOLD | Modifier::UNDERLINED)
             } else {
-                Style::default().fg(Color::DarkGray)
+                Style::default().fg(Color::Indexed(245))
             };
             [Span::styled(format!(" {label} "), style), Span::raw(" ")]
         })
@@ -431,11 +487,11 @@ fn task_progress(app: &App, task: &Task) -> String {
 
 fn status_style(status: TaskStatus) -> Style {
     match status {
-        TaskStatus::Done | TaskStatus::Merged => Style::default().fg(Color::DarkGray),
+        TaskStatus::Done | TaskStatus::Merged => Style::default().fg(Color::Indexed(245)),
         TaskStatus::Running => Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD),
         TaskStatus::AwaitingInput => Style::default().fg(Color::Magenta).add_modifier(Modifier::BOLD),
         TaskStatus::Failed => Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
-        TaskStatus::Pending => Style::default().fg(Color::Gray),
+        TaskStatus::Pending => Style::default().fg(Color::Indexed(250)),
         TaskStatus::Skipped => Style::default().fg(Color::Blue),
     }
 }

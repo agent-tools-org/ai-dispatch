@@ -363,7 +363,7 @@ async fn main() -> Result<()> {
         } => {
             let config = config::load_config().unwrap_or_default();
             let budget = budget || config.selection.budget_mode;
-            let agent_name = if agent == "auto" {
+            let (agent_name, auto_model) = if agent == "auto" {
                 let selection_opts = agent::RunOpts {
                     dir: dir
                         .clone()
@@ -378,9 +378,21 @@ async fn main() -> Result<()> {
                 };
                 let (selected, reason) = agent::select_agent_with_reason(&prompt, &selection_opts, &store);
                 eprintln!("[aid] Auto-selected agent: {selected} (reason: {reason})");
-                selected.as_str().to_string()
+                let rec = if model.is_none() && !budget {
+                    let norm = prompt.trim().to_lowercase();
+                    let fc = agent::classifier::count_file_mentions(&norm);
+                    let profile = agent::classifier::classify(&prompt, fc, prompt.len());
+                    let m = agent::selection::recommend_model(&selected, &profile.complexity, false);
+                    if let Some(name) = m {
+                        eprintln!("[aid] Auto-selected model: {name} (complexity: {})", profile.complexity.label());
+                    }
+                    m.map(|s| s.to_string())
+                } else {
+                    None
+                };
+                (selected.as_str().to_string(), rec)
             } else {
-                agent
+                (agent, None)
             };
             let skills = if no_skill {
                 vec![cmd::run::NO_SKILL_SENTINEL.to_string()]
@@ -395,7 +407,7 @@ async fn main() -> Result<()> {
                     repo,
                     dir,
                     output,
-                    model,
+                    model: model.or(auto_model),
                     worktree,
                     base_branch: None,
                     group: resolve_group(group),

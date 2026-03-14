@@ -1,6 +1,6 @@
 # ai-dispatch (aid)
 
-![Version](https://img.shields.io/badge/version-4.3.0-blue)
+![Version](https://img.shields.io/badge/version-4.4.0-blue)
 ![Rust](https://img.shields.io/badge/rust-2024-orange)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
@@ -92,19 +92,17 @@ aid retry t-1234 --feedback "Tighten the configuration example and keep it sourc
 
 ### Run With Auto Agent Selection
 
-Let `aid` choose the best available agent from the prompt shape:
+Let `aid` choose the best available agent using its task classifier and capability matrix:
 
 ```bash
 aid run auto "Create a responsive settings UI for the usage dashboard" --dir .
+# [aid] Auto-selected agent: cursor (reason: frontend task (medium) → cursor (score: 9))
+# [aid] Auto-selected model: auto (complexity: medium)
 ```
 
-`auto` currently prefers:
+`auto` classifies each prompt into one of eight task categories — research, simple-edit, complex-impl, frontend, debugging, testing, refactoring, documentation — estimates complexity (low/medium/high), then scores every installed agent against a capability matrix. The best-scoring agent wins, with adjustments for budget mode, rate limits, and historical success rates.
 
-- `gemini` for research and question-heavy prompts
-- `ob1` for multi-model research and coding (300+ models)
-- `opencode` for simple edits
-- `cursor` for general-purpose coding with strong model selection
-- `codex` for complex or multi-file implementation tasks
+The model tier is auto-selected based on complexity: low → cheap/free models, medium → standard, high → premium.
 
 ## Core Concepts
 
@@ -311,17 +309,18 @@ This pattern keeps planning cheap, execution specialized, and review artifact-dr
 
 ### Agent Selection Guide
 
-Use the agent that matches the shape of the work:
+`auto` uses a capability matrix to match agents to task types. The scores below reflect relative strengths (higher = better fit):
 
-| Agent | Best for | Why |
-| --- | --- | --- |
-| `gemini` | research, questions, comparison, documentation discovery | Low-friction prompt/answer loop for exploration-heavy tasks |
-| `codex` | complex implementation, multi-file changes, deep repo work | Best default for substantial code modifications and iterative verification |
-| `opencode` | simple edits, rename passes, light cleanup | Good fit for smaller coding tasks where a cheaper tool is enough |
-| `cursor` | general-purpose coding, frontend, UI, model selection | Strong model selection (47+ models), general-purpose with UI strength |
-| `kilo` | simple edits (free tier) | Free models for budget-conscious simple edits |
-| `ob1` | multi-model research and coding | 300+ models, auto-routing, $10/day budget tier |
-| `auto` | mixed or uncertain tasks | Scores the prompt and picks the best installed agent automatically |
+| Agent | Research | Simple Edit | Complex Impl | Frontend | Debugging | Testing | Refactoring | Documentation |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `gemini` | **9** | 2 | 3 | 2 | 5 | 3 | 3 | 6 |
+| `codex` | 1 | 4 | **9** | 4 | 7 | 7 | **8** | 3 |
+| `opencode` | 1 | **8** | 3 | 2 | 4 | 4 | 4 | 5 |
+| `kilo` | 1 | 7 | 2 | 2 | 3 | 3 | 3 | 4 |
+| `cursor` | 2 | 4 | 7 | **9** | 5 | 5 | 6 | 4 |
+| `ob1` | 5 | 3 | 5 | 3 | 4 | 4 | 4 | 3 |
+
+Additional scoring adjustments: budget mode boosts cheap agents (+4) and penalizes expensive ones (-6); high-complexity tasks boost codex/cursor (+2); rate-limited agents get -10; historical success rates apply ±2-3.
 
 If you are unsure, start with `aid ask` or `aid run auto`, then escalate to a more expensive agent only when the task scope is clear.
 
@@ -580,8 +579,9 @@ The diagram below is adapted from `DESIGN.md` to reflect the current `show` comm
 ├──────┴──────┴──────┴───────┴────────┤
 │           Task Manager              │
 │  ┌────────┐ ┌────────┐ ┌────────┐  │
-│  │ Agent  │ │ Watch  │ │ Store  │  │
-│  │Registry│ │ Engine │ │(SQLite)│  │
+│  │Classif.│ │ Watch  │ │ Store  │  │
+│  │+ Agent │ │ Engine │ │(SQLite)│  │
+│  │Registry│ │        │ │        │  │
 │  └────┬───┘ └────┬───┘ └────┬───┘  │
 │       │          │          │       │
 ├───────┴──────────┴──────────┴───────┤
@@ -595,6 +595,7 @@ The diagram below is adapted from `DESIGN.md` to reflect the current `show` comm
 How the pieces fit together:
 
 - The CLI entrypoint parses commands and routes them to task-oriented handlers such as `run`, `watch`, `show`, `usage`, and `mcp`.
+- The task classifier categorizes prompts into eight task types and estimates complexity, then the capability matrix scores each agent to pick the best fit.
 - The agent registry selects and instantiates adapters for `gemini`, `codex`, `opencode`, `cursor`, `kilo`, and `ob1`.
 - The watcher parses streamed or buffered output into milestones, tool activity, usage totals, and completion events.
 - SQLite keeps task history, workgroups, and events queryable for `board`, `show`, `watch`, `usage`, and MCP clients.

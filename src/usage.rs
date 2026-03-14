@@ -832,7 +832,7 @@ mod tests {
         assert_eq!(analytics.stats.tasks, 1);
         assert_eq!(analytics.stats.success_count, 1);
         assert!(analytics.cost_per_success.is_some());
-        let trend = analytics.trend.unwrap();
+        let trend = analytics.trend.as_ref().unwrap();
         assert_eq!(trend.previous.tasks, 1);
         assert_eq!(trend.previous.cost_usd, previous.cost_usd.unwrap());
         assert_eq!(analytics.top_tasks.len(), 1);

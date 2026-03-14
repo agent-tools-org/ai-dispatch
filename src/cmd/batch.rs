@@ -73,6 +73,7 @@ fn task_to_run_args(task: &batch::BatchTask, background: bool) -> RunArgs {
         group: task.group.clone(),
         verify: task.verify.clone(),
         max_duration_mins: task.max_duration_mins.map(|value| value as i64),
+        context: task.context.clone().unwrap_or_default(),
         skills: task.skills.clone().unwrap_or_default(),
         background,
         announce: true,
@@ -275,6 +276,7 @@ fn wait_for_any_completion(store: &Arc<Store>, active: &mut Vec<(usize, String)>
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::batch;
 
     #[tokio::test]
     async fn run_parallel_jobs_with_max_concurrent_one_runs_sequentially() {
@@ -289,5 +291,35 @@ mod tests {
         spans.sort_by_key(|(start, _)| *start);
         assert_eq!(spans.len(), 3);
         assert!(spans.windows(2).all(|window| window[1].0 >= window[0].1));
+    }
+
+    #[test]
+    fn task_to_run_args_copies_context() {
+        let run_args = task_to_run_args(
+            &batch::BatchTask {
+                name: None,
+                agent: "codex".to_string(),
+                prompt: "test".to_string(),
+                dir: None,
+                output: None,
+                model: None,
+                worktree: None,
+                group: None,
+                verify: None,
+                max_duration_mins: None,
+                context: Some(vec!["src/lib.rs".to_string(), "src/main.rs:run".to_string()]),
+                skills: None,
+                depends_on: None,
+                fallback: None,
+                read_only: false,
+                budget: false,
+            },
+            true,
+        );
+
+        assert_eq!(
+            run_args.context,
+            vec!["src/lib.rs".to_string(), "src/main.rs:run".to_string()]
+        );
     }
 }

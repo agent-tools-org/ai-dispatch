@@ -52,6 +52,7 @@ pub struct BatchDefaults {
     pub verify: Option<String>,
     #[serde(default)]
     pub max_duration_mins: Option<u64>,
+    pub context: Option<Vec<String>>,
     pub skills: Option<Vec<String>>,
     pub fallback: Option<String>,
     #[serde(default)]
@@ -75,6 +76,7 @@ pub struct BatchTask {
     pub verify: Option<String>,
     #[serde(default)]
     pub max_duration_mins: Option<u64>,
+    pub context: Option<Vec<String>>,
     pub skills: Option<Vec<String>>,
     pub depends_on: Option<Vec<String>>,
     pub fallback: Option<String>,
@@ -125,6 +127,9 @@ fn apply_task_defaults(task: &mut BatchTask, defaults: &BatchDefaults) {
     }
     if task.max_duration_mins.is_none() {
         task.max_duration_mins = defaults.max_duration_mins;
+    }
+    if task.context.is_none() {
+        task.context = defaults.context.clone();
     }
     if task.skills.is_none() {
         task.skills = defaults.skills.clone();

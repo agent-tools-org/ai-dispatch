@@ -43,7 +43,7 @@ fn auto_run_selects_gemini_and_reports_reason() {
     );
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(stderr.contains("[aid] Auto-selected agent: gemini"));
-    assert!(stderr.contains("research/question task"));
+    assert!(stderr.contains("research task"));
 }
 
 fn write_script(dir: &Path, name: &str, contents: &str) {

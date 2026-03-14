@@ -1,0 +1,14 @@
+{
+  "name": "aid-codebuff",
+  "version": "1.0.0",
+  "description": "Codebuff agent plugin for aid - headless bridge via @codebuff/sdk",
+  "type": "module",
+  "bin": {
+    "aid-codebuff": "./aid-codebuff.mjs"
+  },
+  "dependencies": {
+    "@codebuff/sdk": "^0.1.0"
+  },
+  "keywords": ["aid", "codebuff", "ai-agent", "plugin"],
+  "license": "MIT"
+}

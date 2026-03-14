@@ -45,6 +45,12 @@ const CAPABILITY: &[(AgentKind, &[(TaskCategory, i32)])] = &[
         (TaskCategory::SimpleEdit, 3), (TaskCategory::Frontend, 3),
         (TaskCategory::Refactoring, 4), (TaskCategory::Documentation, 3),
     ]),
+    (AgentKind::Codebuff, &[
+        (TaskCategory::ComplexImpl, 8), (TaskCategory::Refactoring, 7),
+        (TaskCategory::Frontend, 7), (TaskCategory::Testing, 6),
+        (TaskCategory::Debugging, 6), (TaskCategory::SimpleEdit, 5),
+        (TaskCategory::Research, 2), (TaskCategory::Documentation, 4),
+    ]),
 ];
 
 fn base_score(agent: AgentKind, category: TaskCategory) -> i32 {
@@ -59,7 +65,7 @@ fn is_cheap(agent: &AgentKind) -> bool {
 fn priority(kind: AgentKind) -> i32 {
     match kind {
         AgentKind::Gemini | AgentKind::Kilo | AgentKind::Ob1 => 0,
-        AgentKind::OpenCode => 1, AgentKind::Cursor => 2, AgentKind::Codex => 3,
+        AgentKind::OpenCode => 1, AgentKind::Cursor | AgentKind::Codebuff => 2, AgentKind::Codex => 3,
     }
 }
 

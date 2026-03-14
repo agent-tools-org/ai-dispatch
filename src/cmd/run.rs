@@ -46,7 +46,7 @@ pub struct RunArgs {
 pub async fn run(store: Arc<Store>, args: RunArgs) -> Result<TaskId> {
     let agent_kind = AgentKind::parse_str(&args.agent_name).ok_or_else(|| {
         anyhow::anyhow!(
-            "Unknown agent '{}'. Available: gemini, codex, opencode, cursor, kilo, ob1",
+            "Unknown agent '{}'. Available: gemini, codex, opencode, cursor, kilo, ob1, codebuff",
             args.agent_name
         )
     })?;

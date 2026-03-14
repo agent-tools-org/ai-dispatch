@@ -70,13 +70,14 @@ pub async fn retry_task(store: Arc<Store>, args: RetryArgs, announce: bool) -> R
 }
 
 fn reusable_worktree(task: &crate::types::Task) -> Option<String> {
-    task.worktree_path.as_ref().and_then(|path| {
-        if std::path::Path::new(path).exists() {
-            task.worktree_branch.clone()
-        } else {
-            None
-        }
-    })
+    // Always return branch name if the original task used a worktree,
+    // even if the worktree was auto-cleaned after failure.
+    // The retry will reuse the existing worktree or recreate it.
+    if task.worktree_path.is_some() {
+        task.worktree_branch.clone()
+    } else {
+        None
+    }
 }
 
 fn resolve_retry_target(
@@ -84,8 +85,15 @@ fn resolve_retry_target(
     worktree: Option<String>,
 ) -> (Option<String>, Option<String>) {
     match task.worktree_path.as_ref() {
-        Some(path) if std::path::Path::new(path).exists() => (Some(path.clone()), None),
-        Some(_) => (None, worktree),
+        Some(path) if std::path::Path::new(path).exists() => {
+            // Worktree still exists — run inside it directly, no need to recreate
+            (Some(path.clone()), None)
+        }
+        Some(_) => {
+            // Worktree was cleaned up (e.g. auto-cleanup after failure) —
+            // pass branch name so run::run recreates a fresh worktree
+            (None, worktree)
+        }
         None => (None, None),
     }
 }

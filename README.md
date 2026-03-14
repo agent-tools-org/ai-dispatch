@@ -1,6 +1,6 @@
 # ai-dispatch (aid)
 
-![Version](https://img.shields.io/badge/version-4.4.0-blue)
+![Version](https://img.shields.io/badge/version-4.5.0-blue)
 ![Rust](https://img.shields.io/badge/rust-2024-orange)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
@@ -22,7 +22,7 @@ Without an orchestrator, a multi-agent CLI workflow breaks down fast:
 
 ### Prerequisites
 
-Install Rust (1.85 or later, required for edition 2024) and whichever AI CLIs you want `aid` to orchestrate. `aid` auto-detects supported agents on your `PATH`: `gemini`, `codex`, `opencode`, `cursor`, `kilo`, `ob1`, and `auto`.
+Install Rust (1.85 or later, required for edition 2024) and whichever AI CLIs you want `aid` to orchestrate. `aid` auto-detects supported agents on your `PATH`: `gemini`, `codex`, `opencode`, `cursor`, `kilo`, `ob1`, `codebuff`, and `auto`.
 
 ### Install From Source
 
@@ -129,6 +129,9 @@ aid run cursor "Refine the TUI layout for narrow terminals" \
 aid run ob1 "Analyze the cost structure of this codebase" \
   --dir . --read-only
 
+aid run codebuff "Refactor the auth module into separate files" \
+  --dir .
+
 aid run auto "Explain the best agent for a multi-file refactor in this repo" \
   --dir .
 ```
@@ -212,11 +215,34 @@ aid run codex "Implement feature" --worktree feat/my-feature --dir .
 
 `aid merge` auto-merges the worktree branch into the current branch and cleans up the worktree directory. Failed tasks auto-cleanup their worktrees. Worktree escape detection warns if an agent accidentally modifies the main repo.
 
+### Codebuff Plugin (Optional)
+
+`codebuff` is an optional agent that requires separate installation. It bridges the [Codebuff SDK](https://www.codebuff.com/docs/advanced/sdk) to `aid`'s event protocol via a Node.js wrapper.
+
+```bash
+cd plugins/codebuff && npm install && npm install -g .
+export CODEBUFF_API_KEY=cb-pat-...
+aid run codebuff "Refactor the auth module" --dir .
+```
+
+The plugin outputs codex-compatible JSONL events, so `aid show`, `aid watch`, and the TUI work seamlessly. Get an API key at [codebuff.com/api-keys](https://www.codebuff.com/api-keys).
+
+### TUI Stats View
+
+Press `s` in the TUI to toggle the stats/charts view, which shows:
+
+- **Cost by Agent** — horizontal bar chart of spend per agent
+- **Success Rate** — bar chart of done/merged percentage per agent
+- **Budget Usage** — gauge bars for configured budget windows
+- **Summary** — task counts, total/today cost, token totals, and a cost sparkline
+
+Press `a` to toggle between today-only and all-time task views.
+
 ### Skills
 
 Skills are methodology files loaded from `~/.aid/skills/` and appended to the effective prompt under a `--- Methodology ---` section. They make agent behavior more consistent across runs.
 
-Skills are auto-injected by default: coding agents (`codex`, `opencode`, `cursor`, `kilo`, `ob1`) get the `implementer` skill, and `gemini` gets the `researcher` skill. Use `--skill` to add extras or `--no-skill` to disable auto-injection.
+Skills are auto-injected by default: coding agents (`codex`, `opencode`, `cursor`, `kilo`, `ob1`, `codebuff`) get the `implementer` skill, and `gemini` gets the `researcher` skill. Use `--skill` to add extras or `--no-skill` to disable auto-injection.
 
 Examples:
 
@@ -319,6 +345,7 @@ This pattern keeps planning cheap, execution specialized, and review artifact-dr
 | `kilo` | 1 | 7 | 2 | 2 | 3 | 3 | 3 | 4 |
 | `cursor` | 2 | 4 | 7 | **9** | 5 | 5 | 6 | 4 |
 | `ob1` | 5 | 3 | 5 | 3 | 4 | 4 | 4 | 3 |
+| `codebuff` | 2 | 5 | 8 | 7 | 6 | 6 | 7 | 4 |
 
 Additional scoring adjustments: budget mode boosts cheap agents (+4) and penalizes expensive ones (-6); high-complexity tasks boost codex/cursor (+2); rate-limited agents get -10; historical success rates apply ±2-3.
 
@@ -564,6 +591,7 @@ Webhooks fire automatically when background tasks reach a terminal state. Custom
 - **Auto merge on `aid merge`**: Merges the worktree branch into the current branch, runs pre-merge verification, and cleans up the worktree directory.
 - **SQLite concurrency**: `busy_timeout=5000` prevents "database is locked" errors under parallel task access.
 - **Fallback chain**: When an agent is rate-limited, `aid` suggests the next capable alternative (codex → cursor → opencode → kilo).
+- **Retry worktree preservation**: When a failed task's worktree is auto-cleaned, retries recreate a fresh worktree on the same branch instead of falling back to the main repo.
 
 ## Architecture
 
@@ -586,9 +614,9 @@ The diagram below is adapted from `DESIGN.md` to reflect the current `show` comm
 │       │          │          │       │
 ├───────┴──────────┴──────────┴───────┤
 │         Agent Adapters              │
-│  ┌──────┐ ┌─────┐ ┌────────┐ ┌──────┐ ┌────┐ ┌───┐
-│  │Gemini│ │Codex│ │OpenCode│ │Cursor│ │Kilo│ │OB1│
-│  └──────┘ └─────┘ └────────┘ └──────┘ └────┘ └───┘
+│  ┌──────┐ ┌─────┐ ┌────────┐ ┌──────┐ ┌────┐ ┌───┐ ┌────────┐
+│  │Gemini│ │Codex│ │OpenCode│ │Cursor│ │Kilo│ │OB1│ │Codebuff│
+│  └──────┘ └─────┘ └────────┘ └──────┘ └────┘ └───┘ └────────┘
 └─────────────────────────────────────┘
 ```
 
@@ -596,7 +624,7 @@ How the pieces fit together:
 
 - The CLI entrypoint parses commands and routes them to task-oriented handlers such as `run`, `watch`, `show`, `usage`, and `mcp`.
 - The task classifier categorizes prompts into eight task types and estimates complexity, then the capability matrix scores each agent to pick the best fit.
-- The agent registry selects and instantiates adapters for `gemini`, `codex`, `opencode`, `cursor`, `kilo`, and `ob1`.
+- The agent registry selects and instantiates adapters for `gemini`, `codex`, `opencode`, `cursor`, `kilo`, `ob1`, and `codebuff`.
 - The watcher parses streamed or buffered output into milestones, tool activity, usage totals, and completion events.
 - SQLite keeps task history, workgroups, and events queryable for `board`, `show`, `watch`, `usage`, and MCP clients.
 - Artifact files under `~/.aid/` preserve the raw execution trail so the dispatcher can review what actually happened.

@@ -1,6 +1,7 @@
 // Agent trait and registry for AI CLI adapters.
 // Each agent knows how to build its CLI command and parse its output.
 
+pub mod codebuff;
 pub mod codex;
 pub mod cursor;
 pub mod gemini;
@@ -61,6 +62,7 @@ pub fn detect_agents() -> Vec<AgentKind> {
         ("cursor", AgentKind::Cursor),
         ("kilo", AgentKind::Kilo),
         ("ob1", AgentKind::Ob1),
+        ("aid-codebuff", AgentKind::Codebuff),
     ] {
         if which_exists(name) {
             found.push(kind);
@@ -88,6 +90,7 @@ pub fn get_agent(kind: AgentKind) -> Box<dyn Agent> {
         AgentKind::OpenCode => Box::new(opencode::OpenCodeAgent),
         AgentKind::Kilo => Box::new(kilo::KiloAgent),
         AgentKind::Ob1 => Box::new(ob1::Ob1Agent),
+        AgentKind::Codebuff => Box::new(codebuff::CodebuffAgent),
     }
 }
 

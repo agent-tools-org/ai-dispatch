@@ -57,7 +57,7 @@ pub fn auto_skills(agent: &AgentKind, has_worktree: bool) -> Vec<String> {
     let available = list_skills().unwrap_or_default();
     let mut skills = Vec::new();
     match agent {
-        AgentKind::Codex | AgentKind::OpenCode | AgentKind::Cursor | AgentKind::Kilo | AgentKind::Ob1 => {
+        AgentKind::Codex | AgentKind::OpenCode | AgentKind::Cursor | AgentKind::Kilo | AgentKind::Ob1 | AgentKind::Codebuff => {
             skills.push("implementer".to_string());
         }
         AgentKind::Gemini => {

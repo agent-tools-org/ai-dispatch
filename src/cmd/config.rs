@@ -50,6 +50,13 @@ const AGENT_PROFILES: &[(AgentKind, &str, &str, &str, bool)] = &[
         "implement, create, build, refactor, ui, frontend, css",
         true,
     ),
+    (
+        AgentKind::Ob1,
+        "Multi-model coding, research, 300+ models",
+        "$10/day budget",
+        "research, explain, implement, create, analyze, build",
+        true,
+    ),
 ];
 
 pub struct AgentModel {
@@ -198,6 +205,38 @@ pub const AGENT_MODELS: &[AgentModel] = &[
         tier: "standard",
         description: "Gemini 3.1 Pro",
     },
+    AgentModel {
+        agent: AgentKind::Ob1,
+        model: "auto",
+        input_per_m: 0.15,
+        output_per_m: 0.60,
+        tier: "standard",
+        description: "Auto-select best model (default)",
+    },
+    AgentModel {
+        agent: AgentKind::Ob1,
+        model: "auto-gemini-2.5",
+        input_per_m: 0.15,
+        output_per_m: 0.60,
+        tier: "standard",
+        description: "Gemini 2.5 family",
+    },
+    AgentModel {
+        agent: AgentKind::Ob1,
+        model: "auto-claude",
+        input_per_m: 3.0,
+        output_per_m: 15.0,
+        tier: "premium",
+        description: "Claude family",
+    },
+    AgentModel {
+        agent: AgentKind::Ob1,
+        model: "auto-gpt",
+        input_per_m: 2.0,
+        output_per_m: 8.0,
+        tier: "premium",
+        description: "GPT family",
+    },
 ];
 
 pub fn run(store: &Arc<Store>, action: ConfigAction) -> Result<()> {
@@ -254,6 +293,7 @@ pub fn run(store: &Arc<Store>, action: ConfigAction) -> Result<()> {
                 AgentKind::OpenCode,
                 AgentKind::Kilo,
                 AgentKind::Cursor,
+                AgentKind::Ob1,
             ] {
                 for am in AGENT_MODELS.iter().filter(|m| m.agent == agent) {
                     println!(
@@ -383,6 +423,7 @@ fn compute_agent_history(tasks: &[crate::types::Task]) -> HashMap<AgentKind, Age
         AgentKind::OpenCode,
         AgentKind::Cursor,
         AgentKind::Kilo,
+        AgentKind::Ob1,
     ] {
         let agent_tasks: Vec<_> = tasks.iter().filter(|t| t.agent == agent).collect();
         if agent_tasks.is_empty() {

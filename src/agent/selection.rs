@@ -112,6 +112,11 @@ fn select_agent_from(
             score: score_codex(&normalized, file_count, prompt_len, budget),
             reason: codex_reason(&normalized, file_count, prompt_len),
         },
+        Candidate {
+            kind: AgentKind::Ob1,
+            score: score_ob1(&normalized, has_workspace),
+            reason: "multi-model research/coding task",
+        },
     ];
     let primary = best_candidate(&candidates, None, &history_map);
     let selected = if available.is_empty() {
@@ -227,6 +232,27 @@ fn score_kilo(prompt: &str, file_count: usize, prompt_len: usize, budget: bool) 
     score
 }
 
+fn score_ob1(prompt: &str, has_workspace: bool) -> i32 {
+    let starts_like_research = RESEARCH_PREFIXES
+        .iter()
+        .any(|term| prompt.starts_with(term));
+    let has_research_terms = contains_any(prompt, RESEARCH_TERMS);
+    let mut score = 0;
+    if starts_like_research {
+        score += 4;
+    }
+    if has_research_terms {
+        score += 3;
+    }
+    if contains_any(prompt, COMPLEX_TERMS) {
+        score += 2;
+    }
+    if score > 0 && !has_workspace {
+        score += 1;
+    }
+    score
+}
+
 fn score_cursor(prompt: &str) -> i32 {
     let mut score = 1; // baseline: general-purpose coding agent
     if contains_any(prompt, FRONTEND_TERMS) {
@@ -291,6 +317,7 @@ fn priority(kind: AgentKind) -> i32 {
     match kind {
         AgentKind::Gemini => 0,
         AgentKind::Kilo => 0,
+        AgentKind::Ob1 => 0,
         AgentKind::OpenCode => 1,
         AgentKind::Cursor => 2,
         AgentKind::Codex => 3,
@@ -304,6 +331,7 @@ const CODING_FALLBACK_CHAIN: &[AgentKind] = &[
     AgentKind::Cursor,
     AgentKind::OpenCode,
     AgentKind::Kilo,
+    AgentKind::Ob1,
 ];
 
 pub(crate) fn coding_fallback_for(agent: &AgentKind) -> Option<AgentKind> {
@@ -434,13 +462,14 @@ mod tests {
         select_agent_from(prompt, &opts, available, &[])
     }
 
-    fn available_agents() -> [AgentKind; 5] {
+    fn available_agents() -> [AgentKind; 6] {
         [
             AgentKind::Gemini,
             AgentKind::OpenCode,
             AgentKind::Kilo,
             AgentKind::Cursor,
             AgentKind::Codex,
+            AgentKind::Ob1,
         ]
     }
 

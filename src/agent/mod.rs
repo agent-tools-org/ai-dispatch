@@ -5,6 +5,7 @@ pub mod codex;
 pub mod cursor;
 pub mod gemini;
 pub mod kilo;
+pub mod ob1;
 pub mod opencode;
 pub(crate) mod selection;
 pub(crate) mod truncate;
@@ -58,6 +59,7 @@ pub fn detect_agents() -> Vec<AgentKind> {
         ("opencode", AgentKind::OpenCode),
         ("cursor", AgentKind::Cursor),
         ("kilo", AgentKind::Kilo),
+        ("ob1", AgentKind::Ob1),
     ] {
         if which_exists(name) {
             found.push(kind);
@@ -84,6 +86,7 @@ pub fn get_agent(kind: AgentKind) -> Box<dyn Agent> {
         AgentKind::Gemini => Box::new(gemini::GeminiAgent),
         AgentKind::OpenCode => Box::new(opencode::OpenCodeAgent),
         AgentKind::Kilo => Box::new(kilo::KiloAgent),
+        AgentKind::Ob1 => Box::new(ob1::Ob1Agent),
     }
 }
 

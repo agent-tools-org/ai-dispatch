@@ -40,6 +40,7 @@ impl super::Agent for CodexAgent {
         }
         if let Some(ref dir) = opts.dir {
             cmd.args(["-C", dir]);
+            cmd.current_dir(dir);
         }
         Ok(cmd)
     }

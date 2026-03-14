@@ -3,9 +3,12 @@
 
 use anyhow::Result;
 use std::collections::HashMap;
+use std::process::Command;
 use std::sync::Arc;
 
 use crate::agent;
+use crate::agent::custom::CapabilityScores;
+use crate::agent::registry;
 use crate::cli_actions::ConfigAction;
 use crate::cost;
 use crate::rate_limit;
@@ -264,6 +267,26 @@ pub fn run(store: &Arc<Store>, action: ConfigAction) -> Result<()> {
                 let profile = agent_profile(*kind, installed.contains(kind), history.get(kind), &model_history);
                 println!("{} {}\n{}", status, kind.as_str(), profile);
             }
+            let custom_agents = registry::list_custom_agents();
+            if custom_agents.is_empty() {
+                println!("\nCustom agents: none found.");
+            } else {
+                println!("\nCustom agents:");
+                for agent in custom_agents {
+                    let install_status = if command_installed(&agent.command) {
+                        "installed"
+                    } else {
+                        "not installed"
+                    };
+                    println!("  - Name: {}", agent.id);
+                    println!("    Display name: {}", agent.display_name);
+                    println!("    Command: {} ({})", agent.command, install_status);
+                    println!(
+                        "    Capabilities: {}",
+                        format_capabilities(&agent.capabilities)
+                    );
+                }
+            }
         }
         ConfigAction::Skills => {
             let skills = skills::list_skills()?;
@@ -294,10 +317,10 @@ pub fn run(store: &Arc<Store>, action: ConfigAction) -> Result<()> {
                 "{:<10} {:<25} {:>10} {:>10} {:>10} {}",
                 "Agent", "Model", "Tier", "Input/M", "Output/M", "Description"
             );
-            println!("{}", "-".repeat(85));
-            for agent in [
-                AgentKind::Codex,
-                AgentKind::Gemini,
+                println!("{}", "-".repeat(85));
+                for agent in [
+                    AgentKind::Codex,
+                    AgentKind::Gemini,
                 AgentKind::OpenCode,
                 AgentKind::Kilo,
                 AgentKind::Cursor,
@@ -339,6 +362,35 @@ pub fn run(store: &Arc<Store>, action: ConfigAction) -> Result<()> {
         }
     }
     Ok(())
+}
+
+fn command_installed(command: &str) -> bool {
+    let binary = command.split_whitespace().next().unwrap_or_default();
+    if binary.is_empty() {
+        return false;
+    }
+    Command::new("which")
+        .arg(binary)
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false)
+}
+
+fn format_capabilities(cap: &CapabilityScores) -> String {
+    [
+        ("research", cap.research),
+        ("simple_edit", cap.simple_edit),
+        ("complex_impl", cap.complex_impl),
+        ("frontend", cap.frontend),
+        ("debugging", cap.debugging),
+        ("testing", cap.testing),
+        ("refactoring", cap.refactoring),
+        ("documentation", cap.documentation),
+    ]
+    .into_iter()
+    .map(|(label, value)| format!("{label}={value}"))
+    .collect::<Vec<_>>()
+    .join(", ")
 }
 
 fn agent_profile(

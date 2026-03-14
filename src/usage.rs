@@ -2,8 +2,9 @@
 // Exports collect_usage() and render_usage() for the `aid usage` command.
 
 use anyhow::Result;
-use chrono::{DateTime, Duration, Local};
+use chrono::{DateTime, Duration, Local, LocalResult, TimeZone};
 use serde::Serialize;
+use std::cmp::Ordering;
 
 use crate::config::{AidConfig, UsageBudget};
 use crate::cost;
@@ -22,6 +23,127 @@ pub struct UsageSnapshot {
     generated_at: DateTime<Local>,
     agent_rows: Vec<AgentUsageRow>,
     budget_rows: Vec<BudgetUsageRow>,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
+pub enum UsageWindow {
+    All,
+    Today,
+    Days(u32),
+}
+
+impl Default for UsageWindow {
+    fn default() -> Self {
+        UsageWindow::All
+    }
+}
+
+impl UsageWindow {
+    pub fn parse(value: &str) -> Result<Self> {
+        match value.trim().to_lowercase().as_str() {
+            "all" => Ok(Self::All),
+            "today" => Ok(Self::Today),
+            "7d" => Ok(Self::Days(7)),
+            "30d" => Ok(Self::Days(30)),
+            other => anyhow::bail!("Unknown period '{}'", other),
+        }
+    }
+
+    pub fn range(&self, now: DateTime<Local>) -> Option<(DateTime<Local>, DateTime<Local>)> {
+        match self {
+            Self::All => None,
+            Self::Today => Some((start_of_day(now), now)),
+            Self::Days(days) => {
+                let duration = Duration::days(*days as i64);
+                Some((now - duration, now))
+            }
+        }
+    }
+
+    pub fn previous_range(&self, now: DateTime<Local>) -> Option<(DateTime<Local>, DateTime<Local>)> {
+        if let Some(duration) = self.duration() {
+            let (start, _) = self.range(now)?;
+            Some((start - duration, start))
+        } else {
+            None
+        }
+    }
+
+    fn duration(&self) -> Option<Duration> {
+        match self {
+            Self::All => None,
+            Self::Today => Some(Duration::days(1)),
+            Self::Days(days) => Some(Duration::days(*days as i64)),
+        }
+    }
+
+    pub fn description(&self) -> &'static str {
+        match self {
+            Self::All => "all time",
+            Self::Today => "today",
+            Self::Days(7) => "last 7 days",
+            Self::Days(30) => "last 30 days",
+            Self::Days(_) => "custom window",
+        }
+    }
+
+    pub fn previous_label(&self) -> String {
+        format!("previous {}", self.description())
+    }
+}
+
+#[derive(Serialize)]
+pub struct AgentAnalytics {
+    pub agent_name: String,
+    pub window: UsageWindow,
+    pub stats: AgentPeriodStats,
+    pub cost_per_success: Option<f64>,
+    pub trend: Option<AgentTrend>,
+    pub top_tasks: Vec<TaskSummary>,
+}
+
+#[derive(Serialize)]
+pub struct AgentPeriodStats {
+    pub tasks: usize,
+    pub success_count: usize,
+    pub fail_count: usize,
+    pub retry_count: usize,
+    pub tokens: i64,
+    pub cost_usd: f64,
+    pub avg_duration_secs: f64,
+}
+
+#[derive(Serialize)]
+pub struct AgentTrend {
+    pub label: String,
+    pub current: AgentTrendStats,
+    pub previous: AgentTrendStats,
+}
+
+#[derive(Serialize)]
+pub struct AgentTrendStats {
+    pub tasks: usize,
+    pub cost_usd: f64,
+}
+
+#[derive(Serialize)]
+pub struct TaskSummary {
+    pub id: String,
+    pub prompt_snippet: String,
+    pub cost_usd: f64,
+    pub duration_secs: Option<f64>,
+}
+
+#[derive(Serialize)]
+#[serde(tag = "view", rename_all = "snake_case")]
+pub enum UsageReport {
+    Summary {
+        window: UsageWindow,
+        snapshot: UsageSnapshot,
+    },
+    Agent {
+        analytics: AgentAnalytics,
+    },
 }
 
 #[derive(Serialize)]
@@ -59,9 +181,19 @@ pub fn collect_usage(store: &Store, config: &AidConfig) -> Result<UsageSnapshot>
 }
 
 pub fn collect_usage_from_tasks(tasks: &[Task], config: &AidConfig) -> Result<UsageSnapshot> {
+    collect_usage_snapshot(tasks, config, UsageWindow::All, Local::now())
+}
+
+pub fn collect_usage_snapshot(
+    tasks: &[Task],
+    config: &AidConfig,
+    window: UsageWindow,
+    now: DateTime<Local>,
+) -> Result<UsageSnapshot> {
+    let filtered_tasks = filter_tasks_by_window(tasks, window, now);
     Ok(UsageSnapshot {
-        generated_at: Local::now(),
-        agent_rows: collect_agent_rows(tasks),
+        generated_at: now,
+        agent_rows: collect_agent_rows(&filtered_tasks),
         budget_rows: collect_budget_rows(tasks, &config.usage.budgets),
     })
 }
@@ -186,6 +318,188 @@ pub fn render_usage(snapshot: &UsageSnapshot) -> String {
     out
 }
 
+pub fn agent_analytics(
+    tasks: &[Task],
+    agent_filter: &str,
+    window: UsageWindow,
+    now: DateTime<Local>,
+) -> AgentAnalytics {
+    let agent_key = agent_filter.trim();
+    let matching_tasks: Vec<&Task> = tasks
+        .iter()
+        .filter(|task| task.agent_display_name().eq_ignore_ascii_case(agent_key))
+        .collect();
+    let display_name = matching_tasks
+        .first()
+        .map(|task| task.agent_display_name().to_string())
+        .unwrap_or_else(|| agent_key.to_lowercase());
+    let current_range = window.range(now);
+    let current_tasks = filter_tasks_in_range(&matching_tasks, current_range);
+    let stats = summarize_agent_period(&current_tasks);
+    let cost_per_success = (stats.success_count > 0)
+        .then(|| stats.cost_usd / stats.success_count as f64);
+    let trend = window.previous_range(now).and_then(|range| {
+        let previous_tasks = filter_tasks_in_range(&matching_tasks, Some(range));
+        let previous_stats = summarize_agent_period(&previous_tasks);
+        Some(AgentTrend {
+            label: window.previous_label(),
+            current: AgentTrendStats {
+                tasks: stats.tasks,
+                cost_usd: stats.cost_usd,
+            },
+            previous: AgentTrendStats {
+                tasks: previous_stats.tasks,
+                cost_usd: previous_stats.cost_usd,
+            },
+        })
+    });
+    let top_tasks = select_top_tasks(&current_tasks);
+    AgentAnalytics {
+        agent_name: display_name,
+        window,
+        stats,
+        cost_per_success,
+        trend,
+        top_tasks,
+    }
+}
+
+pub fn render_agent_analytics(analytics: &AgentAnalytics) -> String {
+    let mut out = String::new();
+    out.push_str(&format!(
+        "Agent '{agent}' usage ({period})\n",
+        agent = analytics.agent_name,
+        period = analytics.window.description()
+    ));
+    out.push_str(&format!(
+        "Tasks: {} (success {}, fail {}, retries {})\n",
+        analytics.stats.tasks,
+        analytics.stats.success_count,
+        analytics.stats.fail_count,
+        analytics.stats.retry_count
+    ));
+    out.push_str(&format!(
+        "Tokens: {} | Cost: {} | Avg duration: {}\n",
+        format_tokens(analytics.stats.tokens),
+        cost::format_cost(Some(analytics.stats.cost_usd)),
+        format_duration_secs(analytics.stats.avg_duration_secs)
+    ));
+    let cost_per_success = analytics
+        .cost_per_success
+        .map(|cost| cost::format_cost(Some(cost)))
+        .unwrap_or_else(|| "-".to_string());
+    out.push_str(&format!("Cost per success: {}\n", cost_per_success));
+    if let Some(trend) = &analytics.trend {
+        let task_delta = trend.current.tasks as isize - trend.previous.tasks as isize;
+        let cost_delta = trend.current.cost_usd - trend.previous.cost_usd;
+        let cost_delta_label = format!(
+            "{}{}",
+            if cost_delta >= 0.0 { '+' } else { '-' },
+            cost::format_cost(Some(cost_delta.abs()))
+        );
+        out.push_str(&format!(
+            "Trend vs {}: tasks {:+}, cost {}\n",
+            trend.label, task_delta, cost_delta_label
+        ));
+    }
+    out.push_str("Top 5 most expensive tasks:\n");
+    if analytics.top_tasks.is_empty() {
+        out.push_str("  (no tasks recorded in this period)\n");
+    } else {
+        for task in &analytics.top_tasks {
+            let duration = task
+                .duration_secs
+                .map(format_duration_secs)
+                .unwrap_or_else(|| "-".to_string());
+            out.push_str(&format!(
+                "  {} | {} | {} | {}\n",
+                task.id,
+                cost::format_cost(Some(task.cost_usd)),
+                duration,
+                task.prompt_snippet
+            ));
+        }
+    }
+    out
+}
+
+fn summarize_agent_period(tasks: &[&Task]) -> AgentPeriodStats {
+    let success_count = tasks
+        .iter()
+        .filter(|task| matches!(task.status, TaskStatus::Done | TaskStatus::Merged))
+        .count();
+    let fail_count = tasks
+        .iter()
+        .filter(|task| matches!(task.status, TaskStatus::Failed))
+        .count();
+    let retry_count = tasks.iter().filter(|task| task.parent_task_id.is_some()).count();
+    let tokens = tasks.iter().map(|task| task.tokens.unwrap_or(0)).sum();
+    let cost_usd = tasks.iter().map(|task| task.cost_usd.unwrap_or(0.0)).sum();
+    let durations: Vec<i64> = tasks
+        .iter()
+        .filter(|task| task.status.is_terminal())
+        .filter_map(|task| task.duration_ms)
+        .collect();
+    let avg_duration_secs = if durations.is_empty() {
+        0.0
+    } else {
+        durations.iter().sum::<i64>() as f64 / durations.len() as f64 / 1000.0
+    };
+    AgentPeriodStats {
+        tasks: tasks.len(),
+        success_count,
+        fail_count,
+        retry_count,
+        tokens,
+        cost_usd,
+        avg_duration_secs,
+    }
+}
+
+fn filter_tasks_in_range<'a>(
+    tasks: &'a [&'a Task],
+    range: Option<(DateTime<Local>, DateTime<Local>)>,
+) -> Vec<&'a Task> {
+    match range {
+        Some((start, end)) => tasks
+            .iter()
+            .copied()
+            .filter(|task| task.created_at >= start && task.created_at <= end)
+            .collect(),
+        None => tasks.to_vec(),
+    }
+}
+
+fn select_top_tasks(tasks: &[&Task]) -> Vec<TaskSummary> {
+    let mut top: Vec<&Task> = tasks.to_vec();
+    top.sort_by(|a, b| {
+        let a_cost = a.cost_usd.unwrap_or(0.0);
+        let b_cost = b.cost_usd.unwrap_or(0.0);
+        b_cost
+            .partial_cmp(&a_cost)
+            .unwrap_or(Ordering::Equal)
+    });
+    top.truncate(5);
+    top.into_iter()
+        .map(|task| TaskSummary {
+            id: task.id.to_string(),
+            prompt_snippet: prompt_snippet(task),
+            cost_usd: task.cost_usd.unwrap_or(0.0),
+            duration_secs: task.duration_ms.map(|ms| ms as f64 / 1000.0),
+        })
+        .collect()
+}
+
+fn prompt_snippet(task: &Task) -> String {
+    let source = task.resolved_prompt.as_deref().unwrap_or(&task.prompt);
+    let trimmed = source.lines().next().unwrap_or("").trim();
+    if trimmed.chars().count() <= 80 {
+        trimmed.to_string()
+    } else {
+        trimmed.chars().take(77).collect::<String>() + "..."
+    }
+}
+
 fn collect_agent_rows(tasks: &[Task]) -> Vec<AgentUsageRow> {
     let mut rows = Vec::new();
     for agent in [
@@ -274,6 +588,17 @@ fn collect_budget_rows(tasks: &[Task], budgets: &[UsageBudget]) -> Vec<BudgetUsa
         .collect()
 }
 
+fn filter_tasks_by_window(tasks: &[Task], window: UsageWindow, now: DateTime<Local>) -> Vec<Task> {
+    match window.range(now) {
+        None => tasks.to_vec(),
+        Some((start, end)) => tasks
+            .iter()
+            .filter(|task| task.created_at >= start && task.created_at <= end)
+            .cloned()
+            .collect(),
+    }
+}
+
 fn filter_budget_tasks<'a>(tasks: &'a [Task], budget: &UsageBudget) -> Vec<&'a Task> {
     let window_start = budget
         .window
@@ -309,6 +634,16 @@ fn parse_window(value: &str) -> Option<Duration> {
         return minutes.parse::<i64>().ok().map(Duration::minutes);
     }
     None
+}
+
+fn start_of_day(now: DateTime<Local>) -> DateTime<Local> {
+    let date = now.date_naive();
+    let naive = date.and_hms_opt(0, 0, 0).unwrap();
+    match Local.from_local_datetime(&naive) {
+        LocalResult::Single(dt) => dt,
+        LocalResult::Ambiguous(dt, _) => dt,
+        LocalResult::None => Local.from_utc_datetime(&naive),
+    }
 }
 
 fn format_last_seen(timestamp: DateTime<Local>) -> String {
@@ -368,11 +703,14 @@ fn format_ratio_f64(current: f64, limit: Option<f64>) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{collect_usage, collect_usage_from_tasks, render_usage};
+    use super::{
+        agent_analytics, collect_usage, collect_usage_from_tasks, render_agent_analytics,
+        render_usage, UsageWindow,
+    };
     use crate::config::AidConfig;
     use crate::store::Store;
     use crate::types::{AgentKind, Task, TaskId, TaskStatus};
-    use chrono::Local;
+    use chrono::{Duration, Local};
 
     fn make_task(id: &str, agent: AgentKind, tokens: i64, cost_usd: f64) -> Task {
     Task {
@@ -463,5 +801,42 @@ mod tests {
         assert_eq!(row.retry_count, 1);
         assert!((row.success_rate - 33.333333333333336).abs() < 0.0001);
         assert_eq!(row.avg_duration_secs, 60.0);
+    }
+
+    #[test]
+    fn usage_window_parses_last_days() {
+        let window = UsageWindow::parse("7d").unwrap();
+        let now = Local::now();
+        let range = window.range(now).unwrap();
+        assert_eq!(range.1, now);
+        assert_eq!(now - range.0, Duration::days(7));
+    }
+
+    #[test]
+    fn agent_analytics_trend_and_top_tasks() {
+        let now = Local::now();
+        let mut current = make_task("t-current", AgentKind::Codex, 1_000, 0.55);
+        current.status = TaskStatus::Done;
+        current.duration_ms = Some(60_000);
+        current.created_at = now - Duration::days(1);
+
+        let mut previous = make_task("t-previous", AgentKind::Codex, 2_000, 1.25);
+        previous.status = TaskStatus::Done;
+        previous.duration_ms = Some(90_000);
+        previous.created_at = now - Duration::days(8);
+
+        let tasks = vec![current.clone(), previous.clone()];
+        let window = UsageWindow::parse("7d").unwrap();
+        let analytics = agent_analytics(&tasks, "codex", window, now);
+
+        assert_eq!(analytics.stats.tasks, 1);
+        assert_eq!(analytics.stats.success_count, 1);
+        assert!(analytics.cost_per_success.is_some());
+        let trend = analytics.trend.as_ref().unwrap();
+        assert_eq!(trend.previous.tasks, 1);
+        assert_eq!(trend.previous.cost_usd, previous.cost_usd.unwrap());
+        assert_eq!(analytics.top_tasks.len(), 1);
+        let rendered = render_agent_analytics(&analytics);
+        assert!(rendered.contains("Top 5 most expensive tasks"));
     }
 }

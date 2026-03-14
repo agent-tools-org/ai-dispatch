@@ -11,7 +11,7 @@ use crate::agent::custom::CustomAgentConfig;
 use crate::agent::registry::load_custom_agents;
 use std::process::Command;
 
-const CAPABILITY: &[(AgentKind, &[(TaskCategory, i32)])] = &[
+pub(crate) const AGENT_CAPABILITIES: &[(AgentKind, &[(TaskCategory, i32)])] = &[
     (AgentKind::Gemini, &[
         (TaskCategory::Research, 9), (TaskCategory::Documentation, 6),
         (TaskCategory::Debugging, 5), (TaskCategory::SimpleEdit, 2),
@@ -57,7 +57,7 @@ const CAPABILITY: &[(AgentKind, &[(TaskCategory, i32)])] = &[
 ];
 
 fn base_score(agent: AgentKind, category: TaskCategory) -> i32 {
-    CAPABILITY.iter()
+    AGENT_CAPABILITIES.iter()
         .find(|(k, _)| *k == agent)
         .and_then(|(_, scores)| scores.iter().find(|(c, _)| *c == category))
         .map(|(_, s)| *s).unwrap_or(1)
@@ -251,8 +251,6 @@ mod tests {
 
     #[test]
     fn research_tasks_go_to_gemini() {
-        let temp = tempfile::tempdir().unwrap();
-        let _guard = paths::AidHomeGuard::set(temp.path());
         let (kind, reason) = select(
             "Explain the authentication flow and compare the docs?", &[], &all(),
         );
@@ -262,8 +260,6 @@ mod tests {
     }
     #[test]
     fn simple_edits_go_to_opencode() {
-        let temp = tempfile::tempdir().unwrap();
-        let _guard = paths::AidHomeGuard::set(temp.path());
         let (kind, reason) = select(
             "rename src/types.rs field name to task_name", &[], &all(),
         );
@@ -272,8 +268,6 @@ mod tests {
     }
     #[test]
     fn frontend_tasks_go_to_cursor() {
-        let temp = tempfile::tempdir().unwrap();
-        let _guard = paths::AidHomeGuard::set(temp.path());
         let (kind, reason) = select(
             "Create a responsive React component layout for the settings UI",
             &["web/app.tsx"], &all(),
@@ -299,16 +293,14 @@ research = 12
 "#,
         )
         .unwrap();
-        let (kind, _) = select(
+        let (kind, _) = select_agent_from(
             "Explain the authentication flow and compare the docs?",
-            &[], &all(),
+            &opts(None, false), &all(), &[],
         );
         assert_eq!(kind, "researcher");
     }
     #[test]
     fn complex_tasks_go_to_codex() {
-        let temp = tempfile::tempdir().unwrap();
-        let _guard = paths::AidHomeGuard::set(temp.path());
         let prompt = format!(
             "Implement a retry-aware test suite across src/main.rs and src/cmd/run.rs. {}",
             "Add validation coverage and refactor the task dispatch flow. ".repeat(12)

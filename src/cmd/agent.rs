@@ -5,9 +5,12 @@ use anyhow::{bail, Context, Result};
 use std::fs;
 use std::path::{Path, PathBuf};
 
+use crate::agent::classifier::TaskCategory;
 use crate::agent::custom::{CapabilityScores, CustomAgentConfig, parse_config};
 use crate::agent::registry;
+use crate::agent::selection::AGENT_CAPABILITIES;
 use crate::paths;
+use crate::types::AgentKind;
 
 const AGENT_TEMPLATE: &str = r#"[agent]
 id = "{name}"
@@ -44,6 +47,7 @@ documentation = 3
 
 struct BuiltinAgentProfile {
     name: &'static str,
+    command: &'static str,
     description: &'static str,
     cost: &'static str,
     best_for: &'static str,
@@ -53,6 +57,7 @@ struct BuiltinAgentProfile {
 const BUILTIN_AGENT_PROFILES: &[BuiltinAgentProfile] = &[
     BuiltinAgentProfile {
         name: "gemini",
+        command: "gemini",
         description: "Research, coding, web search, file editing",
         cost: "$0.10-$10/M blended",
         best_for: "research, explain, implement, create, analyze, build",
@@ -60,6 +65,7 @@ const BUILTIN_AGENT_PROFILES: &[BuiltinAgentProfile] = &[
     },
     BuiltinAgentProfile {
         name: "codex",
+        command: "codex",
         description: "Complex implementation, multi-file refactors",
         cost: "$0.10-$8/M blended",
         best_for: "implement, create, build, refactor, test",
@@ -67,6 +73,7 @@ const BUILTIN_AGENT_PROFILES: &[BuiltinAgentProfile] = &[
     },
     BuiltinAgentProfile {
         name: "opencode",
+        command: "opencode",
         description: "Simple edits, renames, type annotations",
         cost: "free-$2/M blended",
         best_for: "rename, change, update, fix typo, add type",
@@ -74,6 +81,7 @@ const BUILTIN_AGENT_PROFILES: &[BuiltinAgentProfile] = &[
     },
     BuiltinAgentProfile {
         name: "cursor",
+        command: "cursor",
         description: "General coding, strong model selection, frontend",
         cost: "$20/mo subscription",
         best_for: "implement, create, build, refactor, ui, frontend, css",
@@ -81,6 +89,7 @@ const BUILTIN_AGENT_PROFILES: &[BuiltinAgentProfile] = &[
     },
     BuiltinAgentProfile {
         name: "kilo",
+        command: "kilo",
         description: "Simple edits (free tier)",
         cost: "free",
         best_for: "rename, change, update, fix typo, add type",
@@ -88,6 +97,7 @@ const BUILTIN_AGENT_PROFILES: &[BuiltinAgentProfile] = &[
     },
     BuiltinAgentProfile {
         name: "ob1",
+        command: "ob1",
         description: "Multi-model coding, 300+ models",
         cost: "$10/day budget",
         best_for: "research, explain, implement, create, analyze, build",
@@ -95,6 +105,7 @@ const BUILTIN_AGENT_PROFILES: &[BuiltinAgentProfile] = &[
     },
     BuiltinAgentProfile {
         name: "codebuff",
+        command: "aid-codebuff",
         description: "Complex implementation, frontend",
         cost: "SDK-managed",
         best_for: "complex coding, frontend",
@@ -107,6 +118,7 @@ pub enum AgentAction {
     Show { name: String },
     Add { name: String },
     Remove { name: String },
+    Fork { name: String, new_name: Option<String> },
 }
 
 pub fn run_agent_command(action: AgentAction) -> Result<()> {
@@ -115,6 +127,7 @@ pub fn run_agent_command(action: AgentAction) -> Result<()> {
         AgentAction::Show { name } => show_agent(&name),
         AgentAction::Add { name } => add_agent(&name),
         AgentAction::Remove { name } => remove_agent(&name),
+        AgentAction::Fork { name, new_name } => fork_agent(&name, new_name.as_deref()),
     }
 }
 
@@ -179,6 +192,41 @@ fn remove_agent(name: &str) -> Result<()> {
     }
     fs::remove_file(&target)?;
     println!("Removed {}", target.display());
+    Ok(())
+}
+
+fn fork_agent(name: &str, new_name: Option<&str>) -> Result<()> {
+    let target_name = new_name
+        .map(|value| value.to_string())
+        .unwrap_or_else(|| format!("{name}-custom"));
+    if is_builtin(&target_name) {
+        bail!("Cannot fork into '{target_name}' because it conflicts with a built-in agent");
+    }
+
+    let dir = agent_dir();
+    fs::create_dir_all(&dir)?;
+    let target = custom_agent_path(&target_name);
+    if target.exists() {
+        bail!("Agent '{target_name}' already exists at {}", target.display());
+    }
+
+    if let Some(profile) = builtin_profile(name) {
+        let contents = build_builtin_agent_toml(&target_name, profile);
+        fs::write(&target, contents)
+            .with_context(|| format!("Failed to write {}", target.display()))?;
+        println!("Created {}", target.display());
+        println!("Edit the file to configure the agent.");
+        return Ok(());
+    }
+
+    let source = custom_agent_path(name);
+    if !source.is_file() {
+        bail!("Custom agent '{name}' not found (expected at {})", source.display());
+    }
+    fs::copy(&source, &target)
+        .with_context(|| format!("Failed to copy {} to {}", source.display(), target.display()))?;
+    println!("Created {}", target.display());
+    println!("Edit the file to configure the agent.");
     Ok(())
 }
 
@@ -256,6 +304,67 @@ fn agent_dir() -> PathBuf {
 
 fn custom_agent_path(name: &str) -> PathBuf {
     agent_dir().join(format!("{name}.toml"))
+}
+
+fn build_builtin_agent_toml(target_name: &str, profile: &BuiltinAgentProfile) -> String {
+    let display_name = title_case(target_name);
+    let kind = AgentKind::parse_str(profile.name).unwrap_or(AgentKind::Codex);
+    let caps = capability_scores_for(kind);
+    let mut toml = String::new();
+    toml.push_str(&format!(
+        "# Forked from the built-in `{}` agent. Edit the entries below to customize this clone.\n",
+        profile.name
+    ));
+    toml.push_str("[agent]\n");
+    toml.push_str(&format!("id = \"{target_name}\"\n"));
+    toml.push_str(&format!("display_name = \"{display_name}\"\n"));
+    toml.push_str(&format!(
+        "command = \"{}\"  # CLI binary invoked by this agent\n",
+        profile.command
+    ));
+    toml.push_str("\n# How prompts reach the CLI\n");
+    toml.push_str("prompt_mode = \"arg\"  # options: arg | flag | stdin\n");
+    toml.push_str("# prompt_flag = \"--message\"  # enable when prompt_mode = \"flag\"\n\n");
+    toml.push_str("# Optional CLI flags for directory, model, and output\n");
+    toml.push_str("dir_flag = \"\"  # e.g. --dir or --workspace\n");
+    toml.push_str("model_flag = \"\"  # e.g. --model\n");
+    toml.push_str("output_flag = \"\"  # e.g. --output\n\n");
+    toml.push_str("# Arguments that always run with this agent\n");
+    toml.push_str("fixed_args = []\n\n");
+    toml.push_str("# Streaming controls whether aid expects live JSONL events\n");
+    toml.push_str(&format!("streaming = {}\n", profile.streaming));
+    toml.push_str("output_format = \"text\"  # text | jsonl\n\n");
+    toml.push_str("# Capability scores (0-10) guide auto-selection\n");
+    toml.push_str("[agent.capabilities]\n");
+    toml.push_str(&format!("research = {}\n", caps.research));
+    toml.push_str(&format!("simple_edit = {}\n", caps.simple_edit));
+    toml.push_str(&format!("complex_impl = {}\n", caps.complex_impl));
+    toml.push_str(&format!("frontend = {}\n", caps.frontend));
+    toml.push_str(&format!("debugging = {}\n", caps.debugging));
+    toml.push_str(&format!("testing = {}\n", caps.testing));
+    toml.push_str(&format!("refactoring = {}\n", caps.refactoring));
+    toml.push_str(&format!("documentation = {}\n", caps.documentation));
+    toml.push('\n');
+    toml
+}
+
+fn capability_scores_for(kind: AgentKind) -> CapabilityScores {
+    let mut scores = CapabilityScores::default();
+    if let Some((_, entries)) = AGENT_CAPABILITIES.iter().find(|(k, _)| *k == kind) {
+        for &(category, value) in *entries {
+            match category {
+                TaskCategory::Research => scores.research = value,
+                TaskCategory::SimpleEdit => scores.simple_edit = value,
+                TaskCategory::ComplexImpl => scores.complex_impl = value,
+                TaskCategory::Frontend => scores.frontend = value,
+                TaskCategory::Debugging => scores.debugging = value,
+                TaskCategory::Testing => scores.testing = value,
+                TaskCategory::Refactoring => scores.refactoring = value,
+                TaskCategory::Documentation => scores.documentation = value,
+            }
+        }
+    }
+    scores
 }
 
 fn title_case(name: &str) -> String {

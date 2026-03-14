@@ -257,6 +257,15 @@ Batch TOML format:
         /// Filter to current caller session
         #[arg(long)]
         session: bool,
+        /// Show analytics for a specific agent (e.g. codex, gemini)
+        #[arg(long)]
+        agent: Option<String>,
+        /// Time window to summarize (today, 7d, 30d, all)
+        #[arg(long, default_value = "all")]
+        period: String,
+        /// Output raw JSON for automation
+        #[arg(long)]
+        json: bool,
     },
     #[command(after_help = r#"Examples:
   aid retry t-1234 -f "Fix the compilation error in parser.rs"
@@ -361,6 +370,14 @@ enum AgentCommands {
     Add { name: String },
     /// Remove a custom agent definition
     Remove { name: String },
+    /// Fork a built-in or custom agent definition for local editing
+    Fork {
+        /// Name of the agent to fork (built-in or custom)
+        name: String,
+        /// Override the new agent name (defaults to `<name>-custom`)
+        #[arg(long = "as")]
+        new_name: Option<String>,
+    },
 }
 
 #[derive(Subcommand)]
@@ -544,6 +561,7 @@ async fn main() -> Result<()> {
                 AgentCommands::Show { name } => AgentAction::Show { name },
                 AgentCommands::Add { name } => AgentAction::Add { name },
                 AgentCommands::Remove { name } => AgentAction::Remove { name },
+                AgentCommands::Fork { name, new_name } => AgentAction::Fork { name, new_name },
             };
             run_agent_command(action)?;
         }
@@ -584,8 +602,8 @@ async fn main() -> Result<()> {
             let text = cmd::show::output_text_for_task(&store, &task_id)?;
             print!("{text}");
         }
-        Commands::Usage { session } => {
-            cmd::usage::run(&store, session)?;
+        Commands::Usage { session, agent, period, json } => {
+            cmd::usage::run(&store, session, agent, period, json)?;
         }
         Commands::Retry { task_id, feedback, agent } => {
             cmd::retry::run(store, cmd::retry::RetryArgs { task_id, feedback, agent }).await?;

@@ -257,6 +257,15 @@ Batch TOML format:
         /// Filter to current caller session
         #[arg(long)]
         session: bool,
+        /// Show analytics for a specific agent (e.g. codex, gemini)
+        #[arg(long)]
+        agent: Option<String>,
+        /// Time window to summarize (today, 7d, 30d, all)
+        #[arg(long, default_value = "all")]
+        period: String,
+        /// Output raw JSON for automation
+        #[arg(long)]
+        json: bool,
     },
     #[command(after_help = r#"Examples:
   aid retry t-1234 -f "Fix the compilation error in parser.rs"
@@ -593,8 +602,8 @@ async fn main() -> Result<()> {
             let text = cmd::show::output_text_for_task(&store, &task_id)?;
             print!("{text}");
         }
-        Commands::Usage { session } => {
-            cmd::usage::run(&store, session)?;
+        Commands::Usage { session, agent, period, json } => {
+            cmd::usage::run(&store, session, agent, period, json)?;
         }
         Commands::Retry { task_id, feedback, agent } => {
             cmd::retry::run(store, cmd::retry::RetryArgs { task_id, feedback, agent }).await?;

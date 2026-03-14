@@ -1,6 +1,6 @@
 const VERSION = "5.3.0";
 const SITE_URL = "https://aid.agent-tools.org";
-const REPO_URL = "https://github.com/sunoj/ai-dispatch";
+const REPO_URL = "https://github.com/agent-tools-org/ai-dispatch";
 const META_DESCRIPTION = "Multi-AI CLI team orchestrator that dispatches work to gemini, codex, opencode, cursor, kilo, ob1, codebuff, auto, and custom agents defined via ~/.aid/agents/.";
 const JSON_LD_DATA = JSON.stringify({
   "@context": "https://schema.org",
@@ -11,7 +11,7 @@ const JSON_LD_DATA = JSON.stringify({
   operatingSystem: "Cross-platform",
   softwareVersion: VERSION,
   url: SITE_URL,
-  developer: { name: "sunoj", url: REPO_URL },
+  developer: { name: "agent-tools-org", url: REPO_URL },
   genre: "Productivity"
 });
 const COMMANDS = [
@@ -49,11 +49,11 @@ const AGENT_MATRIX: Record<string, Record<string, number>> = {
 const MCP_TOOLS = ["aid_run", "aid_board", "aid_show", "aid_retry", "aid_usage", "aid_ask"];
 async function fetchReadme(): Promise<string> {
   try {
-    const res = await fetch("https://raw.githubusercontent.com/sunoj/ai-dispatch/main/README.md");
-    if (!res.ok) return buildLLMSText() + "\n\n(Full README unavailable — see https://github.com/sunoj/ai-dispatch)";
+    const res = await fetch("https://raw.githubusercontent.com/agent-tools-org/ai-dispatch/main/README.md");
+    if (!res.ok) return buildLLMSText() + "\n\n(Full README unavailable — see https://github.com/agent-tools-org/ai-dispatch)";
     return res.text();
   } catch {
-    return buildLLMSText() + "\n\n(Full README unavailable — see https://github.com/sunoj/ai-dispatch)";
+    return buildLLMSText() + "\n\n(Full README unavailable — see https://github.com/agent-tools-org/ai-dispatch)";
   }
 }
 function baseHeaders(contentType: string) {

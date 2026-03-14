@@ -1,6 +1,6 @@
 # ai-dispatch (aid)
 
-![Version](https://img.shields.io/badge/version-4.0.0-blue)
+![Version](https://img.shields.io/badge/version-4.2.0-blue)
 ![Rust](https://img.shields.io/badge/rust-2024-orange)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
@@ -22,7 +22,7 @@ Without an orchestrator, a multi-agent CLI workflow breaks down fast:
 
 ### Prerequisites
 
-Install Rust (1.85 or later, required for edition 2024) and whichever AI CLIs you want `aid` to orchestrate. `aid` auto-detects supported agents on your `PATH`: `gemini`, `codex`, `opencode`, `cursor`, `kilo`, and `auto`.
+Install Rust (1.85 or later, required for edition 2024) and whichever AI CLIs you want `aid` to orchestrate. `aid` auto-detects supported agents on your `PATH`: `gemini`, `codex`, `opencode`, `cursor`, `kilo`, `ob1`, and `auto`.
 
 ### Install From Source
 
@@ -101,8 +101,9 @@ aid run auto "Create a responsive settings UI for the usage dashboard" --dir .
 `auto` currently prefers:
 
 - `gemini` for research and question-heavy prompts
+- `ob1` for multi-model research and coding (300+ models)
 - `opencode` for simple edits
-- `cursor` for frontend or UI work
+- `cursor` for general-purpose coding with strong model selection
 - `codex` for complex or multi-file implementation tasks
 
 ## Core Concepts
@@ -126,6 +127,9 @@ aid run opencode "Rename TaskRow to BoardRow in src/board.rs" \
 
 aid run cursor "Refine the TUI layout for narrow terminals" \
   --dir .
+
+aid run ob1 "Analyze the cost structure of this codebase" \
+  --dir . --read-only
 
 aid run auto "Explain the best agent for a multi-file refactor in this repo" \
   --dir .
@@ -178,11 +182,43 @@ aid board --group wg-a3f1
 aid group show wg-a3f1
 ```
 
+### Workspace Isolation (AID_GROUP)
+
+Set `AID_GROUP` to automatically scope all commands to a workgroup without passing `--group` everywhere:
+
+```bash
+export AID_GROUP=$(aid group create my-feature --context "Feature implementation context")
+
+aid run codex "Implement the parser" --dir . --worktree feat/parser
+aid run codex "Add parser tests" --dir . --worktree feat/parser-tests
+aid board          # only shows tasks in this group
+aid watch --quiet  # only watches tasks in this group
+aid merge --group  # merges all done tasks in this group
+```
+
+### Worktree Management
+
+`aid` manages git worktrees for parallel conflict-free task execution. Worktrees can be created automatically with `--worktree` or managed explicitly:
+
+```bash
+# Explicit worktree lifecycle
+WT=$(aid worktree create feat/my-feature)
+aid run codex "Implement feature" --dir $WT
+aid run codex "Add tests" --dir $WT
+aid worktree list
+aid worktree remove feat/my-feature
+
+# Automatic worktree (created per-task)
+aid run codex "Implement feature" --worktree feat/my-feature --dir .
+```
+
+`aid merge` auto-merges the worktree branch into the current branch and cleans up the worktree directory. Failed tasks auto-cleanup their worktrees. Worktree escape detection warns if an agent accidentally modifies the main repo.
+
 ### Skills
 
 Skills are methodology files loaded from `~/.aid/skills/` and appended to the effective prompt under a `--- Methodology ---` section. They make agent behavior more consistent across runs.
 
-Skills are auto-injected by default: coding agents (`codex`, `opencode`, `cursor`) get the `implementer` skill, and `gemini` gets the `researcher` skill. Use `--skill` to add extras or `--no-skill` to disable auto-injection.
+Skills are auto-injected by default: coding agents (`codex`, `opencode`, `cursor`, `kilo`) get the `implementer` skill, and research agents (`gemini`, `ob1`) get the `researcher` skill. Use `--skill` to add extras or `--no-skill` to disable auto-injection.
 
 Examples:
 
@@ -229,7 +265,9 @@ Expected milestone format:
 | `aid merge` | Mark done task(s) as merged. Supports `--group` for bulk workgroup merge with worktree cleanup. | `aid merge t-1234`, `aid merge --group wg-a3f1` |
 | `aid clean` | Remove old tasks/events and orphaned worktrees/logs. Supports `--dry-run`. | `aid clean --older-than 7 --worktrees` |
 | `aid config` | Inspect agent capability profiles, available skills, and model pricing. | `aid config agents`, `aid config skills`, `aid config pricing` |
+| `aid worktree` | Explicit worktree lifecycle management: create, list, remove. | `aid worktree create feat/x`, `aid worktree list`, `aid worktree remove feat/x` |
 | `aid group` | Create, list, show, update, and delete shared-context workgroups. | `aid group create dispatch --context "Shared rollout notes"` |
+| `aid init` | Initialize default skills and templates. | `aid init` |
 
 ## Best Practices / Methodology
 
@@ -280,8 +318,9 @@ Use the agent that matches the shape of the work:
 | `gemini` | research, questions, comparison, documentation discovery | Low-friction prompt/answer loop for exploration-heavy tasks |
 | `codex` | complex implementation, multi-file changes, deep repo work | Best default for substantial code modifications and iterative verification |
 | `opencode` | simple edits, rename passes, light cleanup | Good fit for smaller coding tasks where a cheaper tool is enough |
-| `cursor` | frontend, UI, layout, visual polish | Best when the prompt clearly targets UI structure or responsiveness |
+| `cursor` | general-purpose coding, frontend, UI, model selection | Strong model selection (47+ models), general-purpose with UI strength |
 | `kilo` | simple edits (free tier) | Free models for budget-conscious simple edits |
+| `ob1` | multi-model research and coding | 300+ models, auto-routing, $10/day budget tier |
 | `auto` | mixed or uncertain tasks | Scores the prompt and picks the best installed agent automatically |
 
 If you are unsure, start with `aid ask` or `aid run auto`, then escalate to a more expensive agent only when the task scope is clear.
@@ -522,6 +561,10 @@ Webhooks fire automatically when background tasks reach a terminal state. Custom
 - **Auto-commit enforcement**: Background worktree tasks auto-commit uncommitted changes after completion, preventing lost work.
 - **Zombie recovery**: When a zombie task is detected in a worktree with uncommitted changes, those changes are preserved via auto-commit before marking the task as failed.
 - **Shared build cache**: Rust worktree tasks share `CARGO_TARGET_DIR` to avoid redundant recompilation across parallel dispatches.
+- **Worktree escape detection**: After each worktree task, `aid` checks if the agent accidentally modified the main repo and warns with a file list.
+- **Auto merge on `aid merge`**: Merges the worktree branch into the current branch, runs pre-merge verification, and cleans up the worktree directory.
+- **SQLite concurrency**: `busy_timeout=5000` prevents "database is locked" errors under parallel task access.
+- **Fallback chain**: When an agent is rate-limited, `aid` suggests the next capable alternative (codex → cursor → opencode → kilo).
 
 ## Architecture
 
@@ -543,16 +586,16 @@ The diagram below is adapted from `DESIGN.md` to reflect the current `show` comm
 │       │          │          │       │
 ├───────┴──────────┴──────────┴───────┤
 │         Agent Adapters              │
-│  ┌──────┐ ┌─────┐ ┌────────┐ ┌──────┐
-│  │Gemini│ │Codex│ │OpenCode│ │Cursor│ │Kilo│
-│  └──────┘ └─────┘ └────────┘ └──────┘ └────┘
+│  ┌──────┐ ┌─────┐ ┌────────┐ ┌──────┐ ┌────┐ ┌───┐
+│  │Gemini│ │Codex│ │OpenCode│ │Cursor│ │Kilo│ │OB1│
+│  └──────┘ └─────┘ └────────┘ └──────┘ └────┘ └───┘
 └─────────────────────────────────────┘
 ```
 
 How the pieces fit together:
 
 - The CLI entrypoint parses commands and routes them to task-oriented handlers such as `run`, `watch`, `show`, `usage`, and `mcp`.
-- The agent registry selects and instantiates adapters for `gemini`, `codex`, `opencode`, `cursor`, and `kilo`.
+- The agent registry selects and instantiates adapters for `gemini`, `codex`, `opencode`, `cursor`, `kilo`, and `ob1`.
 - The watcher parses streamed or buffered output into milestones, tool activity, usage totals, and completion events.
 - SQLite keeps task history, workgroups, and events queryable for `board`, `show`, `watch`, `usage`, and MCP clients.
 - Artifact files under `~/.aid/` preserve the raw execution trail so the dispatcher can review what actually happened.

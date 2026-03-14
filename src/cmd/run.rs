@@ -218,7 +218,7 @@ pub async fn run(store: Arc<Store>, args: RunArgs) -> Result<TaskId> {
             .context("Failed to build agent command")?;
         let mut tokio_cmd = Command::from(std_cmd);
         if agent::is_rust_project(effective_dir.as_deref())
-            && let Some(target_dir) = agent::shared_target_dir()
+            && let Some(target_dir) = agent::target_dir_for_worktree(args.worktree.as_deref())
         {
             tokio_cmd.env("CARGO_TARGET_DIR", &target_dir);
         }

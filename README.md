@@ -1,6 +1,6 @@
 # ai-dispatch (aid)
 
-![Version](https://img.shields.io/badge/version-3.8.0-blue)
+![Version](https://img.shields.io/badge/version-4.0.0-blue)
 ![Rust](https://img.shields.io/badge/rust-2024-orange)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
@@ -226,6 +226,8 @@ Expected milestone format:
 | `aid output` | Show task output directly. | `aid output t-1234` |
 | `aid ask` | Run a quick research or exploration task, optionally with file context. | `aid ask "What changed in src/main.rs?" --files src/main.rs` |
 | `aid mcp` | Start the stdio MCP server so another tool can call `aid` natively. | `aid mcp` |
+| `aid merge` | Mark done task(s) as merged. Supports `--group` for bulk workgroup merge with worktree cleanup. | `aid merge t-1234`, `aid merge --group wg-a3f1` |
+| `aid clean` | Remove old tasks/events and orphaned worktrees/logs. Supports `--dry-run`. | `aid clean --older-than 7 --worktrees` |
 | `aid config` | Inspect agent capability profiles, available skills, and model pricing. | `aid config agents`, `aid config skills`, `aid config pricing` |
 | `aid group` | Create, list, show, update, and delete shared-context workgroups. | `aid group create dispatch --context "Shared rollout notes"` |
 

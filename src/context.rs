@@ -2,6 +2,7 @@
 // Supports whole-file injection or targeted extraction of pub struct/trait/fn/enum.
 
 use anyhow::{Context, Result};
+use crate::skills;
 
 #[derive(Debug, Clone)]
 pub struct ContextSpec {
@@ -34,6 +35,7 @@ pub fn parse_context_specs(specs: &[String]) -> Result<Vec<ContextSpec>> {
 /// Read files and optionally extract matching pub items, formatted as markdown.
 pub fn resolve_context(specs: &[ContextSpec]) -> Result<String> {
     let mut parts = Vec::new();
+    let file_count = specs.len();
 
     for spec in specs {
         let content = std::fs::read_to_string(&spec.file)
@@ -61,7 +63,10 @@ pub fn resolve_context(specs: &[ContextSpec]) -> Result<String> {
         }
     }
 
-    Ok(parts.join("\n\n"))
+    let context = parts.join("\n\n");
+    let tokens = skills::estimate_tokens(&context);
+    eprintln!("[aid] Context injected: {} files, ~{} tokens", file_count, tokens);
+    Ok(context)
 }
 
 /// Prepend context block before the user's prompt.

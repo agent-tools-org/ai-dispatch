@@ -11,9 +11,9 @@ use crate::cost;
 use crate::store::Store;
 use crate::types::{TaskFilter, TaskStatus};
 
-pub async fn run(store: &Arc<Store>, task_ids: &[String], exit_on_await: bool) -> Result<()> {
+pub async fn run(store: &Arc<Store>, task_ids: &[String], group: Option<&str>, exit_on_await: bool) -> Result<()> {
     let task_ids = if task_ids.is_empty() {
-        current_running_ids(store)?
+        current_running_ids(store, group)?
     } else {
         task_ids.to_vec()
     };
@@ -109,10 +109,10 @@ pub async fn wait_for_task_ids(store: &Arc<Store>, task_ids: &[String], exit_on_
     }
 }
 
-fn current_running_ids(store: &Arc<Store>) -> Result<Vec<String>> {
-    Ok(store
-        .list_tasks(TaskFilter::Running)?
-        .into_iter()
-        .map(|task| task.id.to_string())
-        .collect())
+fn current_running_ids(store: &Arc<Store>, group: Option<&str>) -> Result<Vec<String>> {
+    let mut tasks = store.list_tasks(TaskFilter::Running)?;
+    if let Some(group_id) = group {
+        tasks.retain(|t| t.workgroup_id.as_deref() == Some(group_id));
+    }
+    Ok(tasks.into_iter().map(|task| task.id.to_string()).collect())
 }

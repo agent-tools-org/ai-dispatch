@@ -50,6 +50,28 @@ fn merge_single(store: &Store, task_id: &str) -> Result<()> {
             }
         }
     }
+    // Auto cherry-pick worktree branch into current branch
+    if let Some(ref branch) = task.worktree_branch {
+        let repo_dir = task.repo_path.as_deref().unwrap_or(".");
+        let output = std::process::Command::new("git")
+            .args(["merge", branch, "--no-edit"])
+            .current_dir(repo_dir)
+            .output();
+        match output {
+            Ok(o) if o.status.success() => {
+                eprintln!("[aid] Merged branch {branch} into current branch");
+            }
+            Ok(o) => {
+                let stderr = String::from_utf8_lossy(&o.stderr);
+                eprintln!("[aid] Warning: git merge {branch} failed:");
+                for line in stderr.lines().take(5) {
+                    eprintln!("  {}", line);
+                }
+                eprintln!("[aid] Manual merge needed: git merge {branch}");
+            }
+            Err(e) => eprintln!("[aid] Warning: could not run git merge: {e}"),
+        }
+    }
     store.update_task_status(task_id, TaskStatus::Merged)?;
     println!("Marked {task_id} as merged");
     if let Some(wt) = task.worktree_path.as_deref() {
@@ -76,11 +98,31 @@ fn merge_group(store: &Store, group_id: &str) -> Result<()> {
     }
     let mut merged = 0;
     let mut skipped = Vec::new();
+    let repo_dir = tasks.first().and_then(|t| t.repo_path.as_deref()).unwrap_or(".");
     for task in &tasks {
         if task.status == TaskStatus::Done {
+            // Auto cherry-pick worktree branch
+            if let Some(ref branch) = task.worktree_branch {
+                let output = std::process::Command::new("git")
+                    .args(["merge", branch, "--no-edit"])
+                    .current_dir(repo_dir)
+                    .output();
+                match output {
+                    Ok(o) if o.status.success() => {
+                        eprintln!("[aid] Merged branch {branch}");
+                    }
+                    Ok(_) => {
+                        eprintln!("[aid] Warning: git merge {branch} failed, skipping {}", task.id);
+                        skipped.push(format!("{} (merge conflict)", task.id));
+                        continue;
+                    }
+                    Err(e) => {
+                        eprintln!("[aid] Warning: could not run git merge: {e}");
+                    }
+                }
+            }
             store.update_task_status(task.id.as_str(), TaskStatus::Merged)?;
             merged += 1;
-            // Clean up worktree if it exists
             if let Some(wt) = task.worktree_path.as_deref() {
                 if std::path::Path::new(wt).exists() {
                     match std::fs::remove_dir_all(wt) {

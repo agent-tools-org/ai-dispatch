@@ -1,4 +1,4 @@
-const VERSION = "5.0.1";
+const VERSION = "5.1.0";
 const SITE_URL = "https://aid.agent-tools.org";
 const REPO_URL = "https://github.com/sunoj/ai-dispatch";
 const META_DESCRIPTION = "Multi-AI CLI team orchestrator that dispatches work to gemini, codex, opencode, cursor, kilo, ob1, codebuff, auto, and custom agents defined via ~/.aid/agents/.";
@@ -32,7 +32,8 @@ const COMMANDS = [
   { name: "config", purpose: "Inspect agent profiles, skills, pricing, and webhook settings.", example: "aid config agents" },
   { name: "worktree", purpose: "Manage worktree lifecycle (create/list/remove).", example: "aid worktree create --dir feat/parser" },
   { name: "group", purpose: "Workgroup CRUD with shared context and constraints.", example: "aid group create dispatch --context \"Docs only, cite sources\"" },
-  { name: "init", purpose: "Initialize default skills and templates for a fresh project.", example: "aid init" }
+  { name: "init", purpose: "Initialize default skills and templates for a fresh project.", example: "aid init" },
+  { name: "store", purpose: "Browse, search, and install community agent definitions from the GitHub-backed store.", example: "aid store browse coding" }
 ];
 const AGENT_CATEGORIES = ["Research", "Simple Edit", "Complex Impl", "Frontend", "Debugging", "Testing", "Refactoring", "Documentation"] as const;
 const AGENT_MATRIX: Record<string, Record<string, number>> = {
@@ -95,6 +96,10 @@ function buildLLMSText() {
   lines.push(`research = 6`);
   lines.push(`complex_impl = 4`);
   lines.push(`\`\`\``);
+  lines.push(``);
+  lines.push(`## Agent Store`);
+  lines.push(`Browse and install community agents from the GitHub-backed store (sunoj/aid-agents).`);
+  lines.push(`Commands: aid store browse [query], aid store show <publisher/name>, aid store install <publisher/name>`);
   lines.push(``);
   lines.push(`## Skills`);
   lines.push(`Methodology files under ~/.aid/skills/ (code-scout, implementer, researcher, test-writer, debugger, etc.) inject repeatable behavior per agent and can be extended with --skill or disabled with --no-skill.`);
@@ -231,6 +236,14 @@ function buildHTML() {
       <h2>Custom Agents</h2>
       <p>v5.0 lets you define custom agents via TOML files under ~/.aid/agents/, so wrappers and legacy CLIs can join the orchestrator.</p>
       <pre style="background:#040b16;padding:1rem;border-radius:8px;margin:0;"><code>[agent]&#10;id = "ops-bot"&#10;display_name = "Ops Bot"&#10;command = "ops-agent"&#10;prompt_mode = "flag"&#10;prompt_flag = "--task"&#10;&#10;[agent.capabilities]&#10;research = 6&#10;complex_impl = 4</code></pre>
+    </section>
+    <section>
+      <h2>Agent Store</h2>
+      <p>Discover and install community agent definitions with <code>aid store</code>. The store is backed by <a href="https://github.com/sunoj/aid-agents" style="color:#7dd3fc;">sunoj/aid-agents</a> on GitHub.</p>
+      <pre style="background:#040b16;padding:1rem;border-radius:8px;margin:0;"><code>aid store browse              # list all agents
+aid store browse coding       # search by keyword
+aid store show community/aider  # preview config
+aid store install community/aider  # install</code></pre>
     </section>
     <section>
       <h2>Skills</h2>

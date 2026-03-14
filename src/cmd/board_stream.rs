@@ -68,7 +68,7 @@ fn init_stream(
         println!(
             "{} | {} | {} | {} | {}",
             task.id.as_str(),
-            task.agent.as_str(),
+            task.agent_display_name(),
             colored_status(task.status),
             duration_for_task(task),
             prompt_snippet(task),
@@ -122,7 +122,7 @@ fn poll_and_print(
                 "[{}] {} {} {} {} {}",
                 Local::now().format("%H:%M:%S"),
                 task.id.as_str(),
-                task.agent.as_str(),
+                task.agent_display_name(),
                 colored_status(task.status),
                 duration_for_task(task),
                 prompt_snippet(task),

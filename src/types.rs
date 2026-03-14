@@ -250,6 +250,17 @@ pub struct Task {
     pub budget: bool,
 }
 
+impl Task {
+    /// Display name for the agent — uses custom_agent_name for custom agents.
+    pub fn agent_display_name(&self) -> &str {
+        if self.agent == AgentKind::Custom {
+            self.custom_agent_name.as_deref().unwrap_or("custom")
+        } else {
+            self.agent.as_str()
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct Workgroup {
     pub id: WorkgroupId,
@@ -283,4 +294,59 @@ pub struct CompletionInfo {
     pub status: TaskStatus,
     pub model: Option<String>,
     pub cost_usd: Option<f64>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use chrono::Local;
+
+    fn sample_task(agent: AgentKind, custom_agent_name: Option<&str>) -> Task {
+        Task {
+            id: TaskId("t-test".to_string()),
+            agent,
+            custom_agent_name: custom_agent_name.map(|name| name.to_string()),
+            prompt: "prompt".to_string(),
+            resolved_prompt: None,
+            status: TaskStatus::Pending,
+            parent_task_id: None,
+            workgroup_id: None,
+            caller_kind: None,
+            caller_session_id: None,
+            agent_session_id: None,
+            repo_path: None,
+            worktree_path: None,
+            worktree_branch: None,
+            log_path: None,
+            output_path: None,
+            tokens: None,
+            prompt_tokens: None,
+            duration_ms: None,
+            model: None,
+            cost_usd: None,
+            created_at: Local::now(),
+            completed_at: None,
+            verify: None,
+            read_only: false,
+            budget: false,
+        }
+    }
+
+    #[test]
+    fn agent_display_name_returns_custom_name() {
+        let task = sample_task(AgentKind::Custom, Some("claude-code"));
+        assert_eq!(task.agent_display_name(), "claude-code");
+    }
+
+    #[test]
+    fn agent_display_name_defaults_for_custom() {
+        let task = sample_task(AgentKind::Custom, None);
+        assert_eq!(task.agent_display_name(), "custom");
+    }
+
+    #[test]
+    fn agent_display_name_for_built_in_agents() {
+        let task = sample_task(AgentKind::Codex, None);
+        assert_eq!(task.agent_display_name(), "codex");
+    }
 }

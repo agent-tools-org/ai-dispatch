@@ -216,7 +216,7 @@ fn parse_show_mode(mode: Option<&str>) -> Result<ShowMode> {
 fn render_board_task(task: Task) -> Value {
     json!({
         "id": task.id,
-        "agent": task.agent.as_str(),
+        "agent": task.agent_display_name(),
         "status": task.status.as_str(),
         "duration": task_duration(&task),
         "tokens": task.tokens,

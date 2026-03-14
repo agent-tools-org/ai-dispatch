@@ -56,6 +56,9 @@ pub async fn run(store: Arc<Store>, args: RunArgs) -> Result<TaskId> {
         }
         anyhow::bail!("Unknown agent '{}'. Available: {}", args.agent_name, available);
     };
+    let agent_display_name = custom_agent_name
+        .as_deref()
+        .unwrap_or_else(|| agent_kind.as_str());
     if let Some(info) = rate_limit::get_rate_limit_info(&agent_kind) {
         if let Some(ref recovery) = info.recovery_at {
             eprintln!(
@@ -168,7 +171,7 @@ pub async fn run(store: Arc<Store>, args: RunArgs) -> Result<TaskId> {
         let spec = BackgroundRunSpec {
             task_id: task_id.as_str().to_string(),
             worker_pid: None,
-            agent_name: agent_kind.as_str().to_string(),
+            agent_name: agent_display_name.to_string(),
             prompt: prompt_bundle.effective_prompt,
             dir: effective_dir,
             output: args.output.clone(),
@@ -204,7 +207,7 @@ pub async fn run(store: Arc<Store>, args: RunArgs) -> Result<TaskId> {
             println!(
                 "Task {} started in background ({}: {})",
                 task_id,
-                agent_kind,
+                agent_display_name,
                 crate::agent::truncate::truncate_text(&args.prompt, 50)
             );
             eprintln!("[aid] Watch: aid watch --quiet {task_id}");
@@ -226,7 +229,7 @@ pub async fn run(store: Arc<Store>, args: RunArgs) -> Result<TaskId> {
             println!(
                 "Task {} started ({}: {})",
                 task_id,
-                agent_kind,
+                agent_display_name,
                 crate::agent::truncate::truncate_text(&args.prompt, 50)
             );
         }

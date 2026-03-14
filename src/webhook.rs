@@ -46,7 +46,7 @@ async fn send_webhook(webhook: &WebhookConfig, task: &Task, status: &str) {
     }
     let body = json!({
         "task_id": task.id.as_str(),
-        "agent": task.agent.as_str(),
+        "agent": task.agent_display_name(),
         "status": status,
         "prompt": task.prompt.as_str(),
         "duration_ms": task.duration_ms,

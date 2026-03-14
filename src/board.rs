@@ -102,7 +102,7 @@ pub fn render_board(tasks: &[Task], store: &Store) -> Result<String> {
             out.push_str(&format!(
                 "{:<10} {:<10} {:<30} {:<10} {:<10} {:<8} {:<10} {:<10} {:<20} {:<16} {}\n",
                 task.id.as_str(),
-                task.agent.as_str(),
+                task.agent_display_name(),
                 status,
                 duration,
                 tokens,
@@ -117,7 +117,7 @@ pub fn render_board(tasks: &[Task], store: &Store) -> Result<String> {
             out.push_str(&format!(
                 "{:<10} {:<10} {:<30} {:<10} {:<10} {:<8} {:<10} {:<10} {:<16} {}\n",
                 task.id.as_str(),
-                task.agent.as_str(),
+                task.agent_display_name(),
                 status,
                 duration,
                 tokens,
@@ -138,7 +138,9 @@ pub fn render_task_detail(task: &Task, events: &[TaskEvent], retry_chain: Option
 
     out.push_str(&format!(
         "Task: {} — {}: {}\n",
-        task.id, task.agent, truncate(&task.prompt, 60)
+        task.id,
+        task.agent_display_name(),
+        truncate(&task.prompt, 60),
     ));
 
     let duration = task.duration_ms

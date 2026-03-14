@@ -9,7 +9,7 @@ pub fn notify_completion(task: &Task) {
     let path = paths::aid_dir().join("completions.jsonl");
     let event = serde_json::json!({
         "task_id": task.id.as_str(),
-        "agent": task.agent.as_str(),
+        "agent": task.agent_display_name(),
         "status": task.status.label(),
         "duration_ms": task.duration_ms,
         "cost_usd": task.cost_usd,

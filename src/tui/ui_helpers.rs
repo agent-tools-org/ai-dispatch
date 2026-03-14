@@ -18,7 +18,7 @@ pub fn task_row(app: &App, task: &Task) -> Row<'static> {
     };
     Row::new(vec![
         Cell::from(task.id.as_str().to_string()),
-        Cell::from(task.agent.as_str().to_string()),
+        Cell::from(task.agent_display_name().to_string()),
         Cell::from(status),
         Cell::from(task_progress(app, task)),
         Cell::from(task_cpu(app, task)),
@@ -47,7 +47,7 @@ pub fn task_header(task: &Task, events: &[crate::types::TaskEvent]) -> Paragraph
             Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD),
         ),
         Span::raw("  "),
-        Span::styled(task.agent.to_string(), Style::default().fg(Color::Indexed(250))),
+        Span::styled(task.agent_display_name().to_string(), Style::default().fg(Color::Indexed(250))),
         Span::raw("  "),
         Span::styled(task.status.label().to_string(), Style::default().fg(status_color).add_modifier(Modifier::BOLD)),
     ]);

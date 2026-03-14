@@ -232,7 +232,10 @@ pub fn truncate(value: &str, max: usize) -> String {
     if value.len() <= max {
         value.to_string()
     } else {
-        format!("{}...", &value[..max.saturating_sub(3)])
+        let end = max.saturating_sub(3);
+        // Find a valid UTF-8 char boundary at or before `end`
+        let safe = value.floor_char_boundary(end);
+        format!("{}...", &value[..safe])
     }
 }
 

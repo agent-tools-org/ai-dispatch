@@ -187,6 +187,7 @@ mod tests {
             max_duration_mins: None,
             context: None,
             skills: None,
+            hooks: None,
             depends_on: depends_on.map(|d| d.into_iter().map(String::from).collect()),
             fallback: None,
             read_only: false,

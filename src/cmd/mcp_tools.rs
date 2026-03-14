@@ -285,6 +285,7 @@ fn truncate(value: &str, max: usize) -> String {
     if value.len() <= max {
         value.to_string()
     } else {
-        format!("{}...", &value[..max.saturating_sub(3)])
+        let safe = value.floor_char_boundary(max.saturating_sub(3));
+        format!("{}...", &value[..safe])
     }
 }

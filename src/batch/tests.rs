@@ -27,6 +27,7 @@ fn make_task(name: Option<&str>, depends_on: &[&str]) -> BatchTask {
         max_duration_mins: None,
         context: None,
         skills: None,
+        hooks: None,
         depends_on: (!depends_on.is_empty())
             .then(|| depends_on.iter().map(|item| item.to_string()).collect()),
         fallback: None,

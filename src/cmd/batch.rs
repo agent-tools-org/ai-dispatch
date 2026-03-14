@@ -324,6 +324,7 @@ mod tests {
                 max_duration_mins: None,
                 context: Some(vec!["src/lib.rs".to_string(), "src/main.rs:run".to_string()]),
                 skills: None,
+                hooks: None,
                 depends_on: None,
                 fallback: None,
                 read_only: false,

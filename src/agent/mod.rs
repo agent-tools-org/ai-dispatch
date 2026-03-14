@@ -93,7 +93,16 @@ pub fn get_agent(kind: AgentKind) -> Box<dyn Agent> {
         AgentKind::Kilo => Box::new(kilo::KiloAgent),
         AgentKind::Ob1 => Box::new(ob1::Ob1Agent),
         AgentKind::Codebuff => Box::new(codebuff::CodebuffAgent),
-        AgentKind::Custom => panic!("use registry::resolve_agent for custom agents"),
+        AgentKind::Custom => panic!("Custom agents must be resolved via resolve_agent()"),
+    }
+}
+
+/// Resolve any agent by name — checks built-in first, then custom registry
+pub fn resolve_agent(name: &str) -> Option<Box<dyn Agent>> {
+    if let Some(kind) = AgentKind::parse_str(name) {
+        Some(get_agent(kind))
+    } else {
+        registry::resolve_custom_agent(name)
     }
 }
 

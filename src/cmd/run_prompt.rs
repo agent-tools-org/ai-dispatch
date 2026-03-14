@@ -93,7 +93,10 @@ pub(super) fn resolve_dir_in_target(base_dir: &str, dir: Option<&str>, repo_dir:
 pub(super) fn resolve_worktree_paths(args: &RunArgs, repo_path: Option<&str>) -> Result<(Option<String>, Option<String>, Option<String>)> {
     if let Some(ref branch) = args.worktree {
         let repo_dir = repo_path.map(|path| path.to_string()).unwrap_or(resolve_repo_path(args.dir.as_deref().unwrap_or("."))?);
-        let info = crate::worktree::create_worktree(std::path::Path::new(&repo_dir), branch, args.base_branch.as_deref())?;
+        // Use explicit base_branch, or default to current branch (not just HEAD)
+        // so worktrees inherit the latest state of whatever branch the user is on
+        let base = args.base_branch.clone().or_else(|| current_branch(std::path::Path::new(&repo_dir)));
+        let info = crate::worktree::create_worktree(std::path::Path::new(&repo_dir), branch, base.as_deref())?;
         let p = info.path.to_string_lossy().to_string();
         return Ok((Some(p.clone()), Some(info.branch), Some(resolve_dir_in_target(&p, args.dir.as_deref(), Some(&repo_dir)))));
     }
@@ -218,6 +221,18 @@ pub(super) async fn maybe_auto_retry_after_verify_failure_impl(
 pub(super) fn notify_task_completion(store: &Store, task_id: &TaskId) -> Result<()> {
     if let Some(task) = store.get_task(task_id.as_str())? { crate::notify::notify_completion(&task); }
     Ok(())
+}
+
+/// Get the current branch name of a git repo (None if detached HEAD or error)
+fn current_branch(repo_dir: &std::path::Path) -> Option<String> {
+    let out = std::process::Command::new("git")
+        .args(["-C", &repo_dir.to_string_lossy(), "rev-parse", "--abbrev-ref", "HEAD"])
+        .output()
+        .ok()?;
+    if !out.status.success() { return None; }
+    let branch = String::from_utf8(out.stdout).ok()?.trim().to_string();
+    if branch == "HEAD" { return None; } // detached HEAD
+    Some(branch)
 }
 
 pub(super) fn inherit_retry_base_branch_impl(repo_dir: Option<&str>, task: &Task, retry_args: &mut RunArgs) {

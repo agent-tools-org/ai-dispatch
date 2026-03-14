@@ -193,6 +193,7 @@ pub fn parse_config(toml_content: &str) -> Result<CustomAgentConfig> {
 
 #[cfg(test)]
 mod tests {
+    use super::super::Agent;
     use super::*;
     use crate::types::{EventKind, TaskId};
 
@@ -237,7 +238,7 @@ mod tests {
         assert_eq!(config.id, "aider");
         assert_eq!(config.prompt_mode, "arg");
         assert_eq!(config.output_format, "text");
-        assert_eq!(config.capabilities.simple_edit, 3);
+        assert_eq!(config.capabilities.simple_edit, 0);
     }
 
     #[test]

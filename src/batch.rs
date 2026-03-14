@@ -177,8 +177,7 @@ pub(crate) fn is_valid_agent(agent: &str) -> bool {
     {
         return true;
     }
-    // Custom agents will be validated against the registry later
-    true
+    crate::agent::registry::custom_agent_exists(agent)
 }
 
 pub fn validate_no_file_overlap(tasks: &[BatchTask]) -> Result<()> {

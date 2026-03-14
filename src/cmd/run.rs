@@ -44,12 +44,18 @@ pub struct RunArgs {
     pub session_id: Option<String>,
 }
 pub async fn run(store: Arc<Store>, args: RunArgs) -> Result<TaskId> {
-    let agent_kind = AgentKind::parse_str(&args.agent_name).ok_or_else(|| {
-        anyhow::anyhow!(
-            "Unknown agent '{}'. Available: gemini, codex, opencode, cursor, kilo, ob1, codebuff",
-            args.agent_name
-        )
-    })?;
+    let (agent_kind, custom_agent_name) = if let Some(kind) = AgentKind::parse_str(&args.agent_name) {
+        (kind, None)
+    } else if agent::registry::custom_agent_exists(&args.agent_name) {
+        (AgentKind::Custom, Some(args.agent_name.clone()))
+    } else {
+        let custom = agent::registry::list_custom_agents();
+        let mut available = "gemini, codex, opencode, cursor, kilo, ob1, codebuff".to_string();
+        for ca in &custom {
+            available.push_str(&format!(", {}", ca.id));
+        }
+        anyhow::bail!("Unknown agent '{}'. Available: {}", args.agent_name, available);
+    };
     if let Some(info) = rate_limit::get_rate_limit_info(&agent_kind) {
         if let Some(ref recovery) = info.recovery_at {
             eprintln!(
@@ -103,7 +109,12 @@ pub async fn run(store: Arc<Store>, args: RunArgs) -> Result<TaskId> {
     } else {
         args.model.clone()
     };
-    let agent = agent::get_agent(agent_kind);
+    let agent: Box<dyn agent::Agent> = if agent_kind == AgentKind::Custom {
+        agent::registry::resolve_custom_agent(custom_agent_name.as_deref().unwrap_or(""))
+            .ok_or_else(|| anyhow::anyhow!("Custom agent '{}' not found in registry", args.agent_name))?
+    } else {
+        agent::get_agent(agent_kind)
+    };
     let task_id = TaskId::generate();
     let log_path = paths::log_path(task_id.as_str());
     let workgroup = run_prompt::load_workgroup(&store, args.group.as_deref())?;
@@ -114,7 +125,7 @@ pub async fn run(store: Arc<Store>, args: RunArgs) -> Result<TaskId> {
     let task = Task {
         id: task_id.clone(),
         agent: agent_kind,
-        custom_agent_name: None,
+        custom_agent_name: custom_agent_name.clone(),
         prompt: args.prompt.clone(),
         resolved_prompt: None,
         status: TaskStatus::Pending,

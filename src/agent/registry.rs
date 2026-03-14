@@ -96,11 +96,10 @@ mod tests {
 
     fn sample_agent_toml(id: &str) -> String {
         format!(
-            r#"
+            r#"[agent]
 id = "{id}"
 display_name = "{id} agent"
-command = ["{id}"]
-model = "gpt-4.1"
+command = "{id}"
 "#,
             id = id
         )
@@ -139,10 +138,8 @@ model = "gpt-4.1"
         write_agent(dir.path(), "b.toml", &sample_agent_toml("b"));
         write_agent(dir.path(), "a.toml", &sample_agent_toml("a"));
         let map = load_from_dir(dir.path());
-        let ids: Vec<_> = list_from_registry(&map)
-            .iter()
-            .map(|config| config.id.as_str())
-            .collect();
+        let list = list_from_registry(&map);
+        let ids: Vec<_> = list.iter().map(|c| c.id.as_str()).collect();
         assert_eq!(ids, vec!["a", "b"]);
     }
 }

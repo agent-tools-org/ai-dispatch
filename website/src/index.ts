@@ -99,7 +99,7 @@ function buildLLMSText() {
   lines.push(`\`\`\``);
   lines.push(``);
   lines.push(`## Agent Store`);
-  lines.push(`Browse and install community agents from the GitHub-backed store (sunoj/aid-agents).`);
+  lines.push(`Browse and install community agents from the GitHub-backed store (agent-tools-org/aid-agents).`);
   lines.push(`Commands: aid store browse [query], aid store show <publisher/name>, aid store install <publisher/name>`);
   lines.push(``);
   lines.push(`## Task Lifecycle Hooks`);
@@ -247,7 +247,7 @@ function buildHTML() {
     </section>
     <section>
       <h2>Agent Store</h2>
-      <p>Discover and install community agent definitions with <code>aid store</code>. The store is backed by <a href="https://github.com/sunoj/aid-agents" style="color:#7dd3fc;">sunoj/aid-agents</a> on GitHub.</p>
+      <p>Discover and install community agent definitions with <code>aid store</code>. The store is backed by <a href="https://github.com/agent-tools-org/aid-agents" style="color:#7dd3fc;">agent-tools-org/aid-agents</a> on GitHub.</p>
       <pre style="background:#040b16;padding:1rem;border-radius:8px;margin:0;"><code>aid store browse              # list all agents
 aid store browse coding       # search by keyword
 aid store show community/aider  # preview config

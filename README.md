@@ -286,7 +286,7 @@ aid store show community/aider
 aid store install community/aider
 ```
 
-Installed agents appear in `aid config agents` and participate in auto-selection via their capability scores. The store is backed by [sunoj/aid-agents](https://github.com/sunoj/aid-agents) — community contributions welcome.
+Installed agents appear in `aid config agents` and participate in auto-selection via their capability scores. The store is backed by [agent-tools-org/aid-agents](https://github.com/agent-tools-org/aid-agents) — community contributions welcome.
 
 ### Task Lifecycle Hooks
 

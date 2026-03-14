@@ -331,6 +331,15 @@ Batch TOML format:
         #[command(subcommand)]
         action: WorktreeAction,
     },
+    #[command(after_help = r#"Examples:
+  aid store browse
+  aid store install sunoj/aider
+  aid store show sunoj/aider"#)]
+    /// Browse and install agents from the community store
+    Store {
+        #[command(subcommand)]
+        action: StoreCommands,
+    },
     /// Initialize default skills and templates
     Init,
     #[command(hide = true, name = "__run-task")]
@@ -352,6 +361,16 @@ enum AgentCommands {
     Add { name: String },
     /// Remove a custom agent definition
     Remove { name: String },
+}
+
+#[derive(Subcommand)]
+enum StoreCommands {
+    /// Browse available agents in the store
+    Browse,
+    /// Install an agent from the store (publisher/name)
+    Install { name: String },
+    /// Show agent TOML from the store (publisher/name)
+    Show { name: String },
 }
 
 #[tokio::main]
@@ -614,6 +633,15 @@ async fn main() -> Result<()> {
                 cmd::worktree::remove(&branch, repo.as_deref())?;
             }
         },
+        Commands::Store { action } => {
+            use cmd::store::{StoreAction, run_store};
+            let action = match action {
+                StoreCommands::Browse => StoreAction::Browse,
+                StoreCommands::Install { name } => StoreAction::Install { name },
+                StoreCommands::Show { name } => StoreAction::Show { name },
+            };
+            run_store(action)?;
+        }
         Commands::Init => cmd::init::run()?,
         Commands::InternalRunTask { task_id } => {
             background::run_task(store, &task_id).await?;

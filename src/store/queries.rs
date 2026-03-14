@@ -147,6 +147,19 @@ impl Store {
         rows.map(|row| row?).collect()
     }
 
+    pub fn list_tasks_by_group(&self, group_id: &str) -> Result<Vec<Task>> {
+        let conn = self.db();
+        let mut stmt = conn.prepare(
+            "SELECT id, agent, prompt, resolved_prompt, status, parent_task_id, workgroup_id,
+             caller_kind, caller_session_id, agent_session_id, repo_path, worktree_path, worktree_branch,
+             log_path, output_path, tokens, prompt_tokens, duration_ms, model, cost_usd, created_at,
+             completed_at, verify, read_only, budget
+             FROM tasks WHERE workgroup_id = ?1 ORDER BY created_at DESC",
+        )?;
+        let rows = stmt.query_map(params![group_id], row_to_task)?;
+        rows.map(|row| row?).collect()
+    }
+
     pub fn get_events(&self, task_id: &str) -> Result<Vec<TaskEvent>> {
         let conn = self.db();
         let mut stmt = conn.prepare(

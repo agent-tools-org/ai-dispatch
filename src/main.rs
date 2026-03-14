@@ -256,10 +256,13 @@ Batch TOML format:
         #[arg(long)]
         agent: Option<String>,
     },
-    /// Mark a task as merged
+    /// Mark task(s) as merged
     Merge {
         /// Task ID to mark as merged
-        task_id: String,
+        task_id: Option<String>,
+        /// Mark all done tasks in a workgroup as merged
+        #[arg(long)]
+        group: Option<String>,
     },
     /// Send interactive input to a background task
     Respond {
@@ -501,8 +504,8 @@ async fn main() -> Result<()> {
         Commands::Retry { task_id, feedback, agent } => {
             cmd::retry::run(store, cmd::retry::RetryArgs { task_id, feedback, agent }).await?;
         }
-        Commands::Merge { task_id } => {
-            cmd::merge::run(store, &task_id)?;
+        Commands::Merge { task_id, group } => {
+            cmd::merge::run(store, task_id.as_deref(), group.as_deref())?;
         }
         Commands::Respond {
             task_id,

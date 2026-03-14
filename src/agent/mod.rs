@@ -6,7 +6,7 @@ pub mod cursor;
 pub mod gemini;
 pub mod kilo;
 pub mod opencode;
-mod selection;
+pub(crate) mod selection;
 pub(crate) mod truncate;
 
 use anyhow::Result;
@@ -87,8 +87,8 @@ pub fn get_agent(kind: AgentKind) -> Box<dyn Agent> {
     }
 }
 
-pub fn agent_has_fs_access(kind: &AgentKind) -> bool {
-    !matches!(kind, AgentKind::Gemini)
+pub fn agent_has_fs_access(_kind: &AgentKind) -> bool {
+    true // all supported agents have file system access
 }
 
 pub fn shared_target_dir() -> Option<String> {

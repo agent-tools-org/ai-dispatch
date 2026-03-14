@@ -17,10 +17,10 @@ use crate::types::{AgentKind, TaskFilter, TaskStatus};
 const AGENT_PROFILES: &[(AgentKind, &str, &str, &str, bool)] = &[
     (
         AgentKind::Gemini,
-        "Research, fact-checking, documentation, web search",
+        "Research, coding, web search, file editing",
         "$0.10-$10/M blended",
-        "research, explain, what is, how does, find, analyze",
-        false,
+        "research, explain, implement, create, analyze, build",
+        true,
     ),
     (
         AgentKind::Codex,
@@ -45,9 +45,9 @@ const AGENT_PROFILES: &[(AgentKind, &str, &str, &str, bool)] = &[
     ),
     (
         AgentKind::Cursor,
-        "Frontend, UI components, responsive layouts",
-        "varies",
-        "ui, frontend, css, html, react, component, layout",
+        "General coding, strong model selection, frontend",
+        "subscription",
+        "implement, create, build, refactor, ui, frontend, css",
         true,
     ),
 ];
@@ -96,19 +96,27 @@ pub const AGENT_MODELS: &[AgentModel] = &[
     },
     AgentModel {
         agent: AgentKind::Gemini,
-        model: "gemini-2.5-flash",
+        model: "flash",
         input_per_m: 0.15,
         output_per_m: 0.60,
         tier: "cheap",
-        description: "Default, fast",
+        description: "Fast, balanced (default)",
     },
     AgentModel {
         agent: AgentKind::Gemini,
-        model: "gemini-2.5-pro",
+        model: "pro",
         input_per_m: 1.25,
         output_per_m: 10.0,
         tier: "premium",
-        description: "Deep reasoning",
+        description: "Complex reasoning",
+    },
+    AgentModel {
+        agent: AgentKind::Gemini,
+        model: "flash-lite",
+        input_per_m: 0.0,
+        output_per_m: 0.0,
+        tier: "cheap",
+        description: "Fastest, simple tasks",
     },
     AgentModel {
         agent: AgentKind::OpenCode,
@@ -160,11 +168,35 @@ pub const AGENT_MODELS: &[AgentModel] = &[
     },
     AgentModel {
         agent: AgentKind::Cursor,
-        model: "default",
+        model: "opus-4.6-thinking",
+        input_per_m: 0.0,
+        output_per_m: 0.0,
+        tier: "premium",
+        description: "Default, strongest reasoning",
+    },
+    AgentModel {
+        agent: AgentKind::Cursor,
+        model: "sonnet-4.6",
         input_per_m: 0.0,
         output_per_m: 0.0,
         tier: "standard",
-        description: "Cursor default",
+        description: "Fast, good quality",
+    },
+    AgentModel {
+        agent: AgentKind::Cursor,
+        model: "gpt-5.4-medium",
+        input_per_m: 0.0,
+        output_per_m: 0.0,
+        tier: "standard",
+        description: "GPT-5.4, reliable",
+    },
+    AgentModel {
+        agent: AgentKind::Cursor,
+        model: "gemini-3.1-pro",
+        input_per_m: 0.0,
+        output_per_m: 0.0,
+        tier: "standard",
+        description: "Gemini 3.1 Pro",
     },
 ];
 
@@ -314,9 +346,13 @@ fn agent_profile(
     };
     let rate_limit_line = match rate_limit::get_rate_limit_info(&kind) {
         Some(info) if info.recovery_at.is_some() => {
+            let fallback_hint = crate::agent::selection::coding_fallback_for(&kind)
+                .map(|fb| format!(" → use --fallback {}", fb.as_str()))
+                .unwrap_or_default();
             format!(
-                "  Status:    rate-limited (try again at {})\n",
-                info.recovery_at.unwrap()
+                "  Status:    rate-limited (try again at {}){}\n",
+                info.recovery_at.as_ref().unwrap(),
+                fallback_hint,
             )
         }
         _ => "".to_string(),

@@ -59,6 +59,11 @@ pub async fn run(store: Arc<Store>, args: RunArgs) -> Result<TaskId> {
             );
             if let Some(ref fallback_name) = args.fallback {
                 eprintln!("[aid] Switching to fallback agent: {}", fallback_name);
+            } else if let Some(suggested) = crate::agent::selection::coding_fallback_for(&agent_kind) {
+                eprintln!(
+                    "[aid] Suggested fallback: --fallback {} (similar capability)",
+                    suggested.as_str()
+                );
             } else {
                 eprintln!("[aid] Tip: use --fallback <agent> or --agent with `aid retry`");
             }

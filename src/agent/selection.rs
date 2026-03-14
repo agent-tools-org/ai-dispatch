@@ -228,11 +228,17 @@ fn score_kilo(prompt: &str, file_count: usize, prompt_len: usize, budget: bool) 
 }
 
 fn score_cursor(prompt: &str) -> i32 {
+    let mut score = 1; // baseline: general-purpose coding agent
     if contains_any(prompt, FRONTEND_TERMS) {
-        7
-    } else {
-        0
+        score += 6;
     }
+    if contains_any(prompt, COMPLEX_TERMS) {
+        score += 2;
+    }
+    if rate_limit::is_rate_limited(&AgentKind::Cursor) {
+        score = (score - 10).max(0);
+    }
+    score
 }
 
 fn score_codex(prompt: &str, file_count: usize, prompt_len: usize, budget: bool) -> i32 {
@@ -289,6 +295,24 @@ fn priority(kind: AgentKind) -> i32 {
         AgentKind::Cursor => 2,
         AgentKind::Codex => 3,
     }
+}
+
+/// Coding capability fallback chain: codex → cursor → opencode → kilo.
+/// Returns the best available agent with similar coding capabilities.
+const CODING_FALLBACK_CHAIN: &[AgentKind] = &[
+    AgentKind::Codex,
+    AgentKind::Cursor,
+    AgentKind::OpenCode,
+    AgentKind::Kilo,
+];
+
+pub(crate) fn coding_fallback_for(agent: &AgentKind) -> Option<AgentKind> {
+    let available = detect_agents();
+    let start = CODING_FALLBACK_CHAIN.iter().position(|k| k == agent)?;
+    CODING_FALLBACK_CHAIN[start + 1..]
+        .iter()
+        .find(|k| available.contains(k) && !rate_limit::is_rate_limited(k))
+        .copied()
 }
 
 #[cfg(test)]

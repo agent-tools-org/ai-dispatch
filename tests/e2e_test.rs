@@ -92,6 +92,24 @@ fn config_agents_detects_installed_clis() {
 }
 
 #[test]
+fn agent_fork_creates_builtin_toml() {
+    let temp_dir = TempDir::new().unwrap();
+    let output = aid_cmd_in(temp_dir.path())
+        .args(["agent", "fork", "codex"])
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+
+    let agent_path = temp_dir.path().join("agents").join("codex-custom.toml");
+    let contents = std::fs::read_to_string(&agent_path).unwrap();
+    assert!(contents.contains("command = \"codex\""));
+    assert!(contents.contains("prompt_mode = \"arg\""));
+    assert!(contents.contains("[agent.capabilities]"));
+    assert!(contents.contains("research = 1"));
+    assert!(contents.contains("complex_impl = 9"));
+}
+
+#[test]
 fn run_unknown_agent_fails() {
     let (mut cmd, _tmp) = aid_cmd();
     let output = cmd

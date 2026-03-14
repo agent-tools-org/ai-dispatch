@@ -182,6 +182,7 @@ mod tests {
             group: None,
             verify: None,
             max_duration_mins: None,
+            context: None,
             skills: None,
             depends_on: depends_on.map(|d| d.into_iter().map(String::from).collect()),
             fallback: None,

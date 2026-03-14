@@ -25,6 +25,7 @@ fn make_task(name: Option<&str>, depends_on: &[&str]) -> BatchTask {
         group: None,
         verify: None,
         max_duration_mins: None,
+        context: None,
         skills: None,
         depends_on: (!depends_on.is_empty())
             .then(|| depends_on.iter().map(|item| item.to_string()).collect()),
@@ -77,6 +78,7 @@ fn applies_defaults_to_tasks() {
         write_temp(concat!(
             "[defaults]\nagent = \"gemini\"\ndir = \"src\"\nmodel = \"gpt-5\"\n",
             "worktree_prefix = \"feat\"\nverify = true\nmax_duration_mins = 25\n",
+            "context = [\"src/lib.rs\", \"src/main.rs:run\"]\n",
             "skills = [\"rust\", \"cli\"]\nfallback = \"cursor\"\nread_only = true\nbudget = true\n",
             "[[task]]\nname = \"impl\"\nprompt = \"build it\"\n"
         ))
@@ -92,6 +94,10 @@ fn applies_defaults_to_tasks() {
     assert_eq!(task.verify.as_deref(), Some("auto"));
     assert_eq!(task.max_duration_mins, Some(25));
     assert_eq!(
+        task.context.as_deref(),
+        Some(&["src/lib.rs".to_string(), "src/main.rs:run".to_string()][..])
+    );
+    assert_eq!(
         task.skills.as_deref(),
         Some(&["rust".to_string(), "cli".to_string()][..])
     );
@@ -106,10 +112,11 @@ fn task_values_override_defaults() {
         write_temp(concat!(
             "[defaults]\nagent = \"gemini\"\ndir = \"src\"\nmodel = \"gpt-5\"\n",
             "worktree_prefix = \"feat\"\nverify = true\nmax_duration_mins = 25\n",
-            "skills = [\"rust\"]\nfallback = \"cursor\"\n",
+            "context = [\"src/default.rs\"]\nskills = [\"rust\"]\nfallback = \"cursor\"\n",
             "[[task]]\nname = \"impl\"\nagent = \"codex\"\nprompt = \"build it\"\n",
             "dir = \"custom\"\nmodel = \"gpt-4\"\nworktree = \"manual/impl\"\n",
-            "verify = \"manual\"\nmax_duration_mins = 5\nskills = [\"own\"]\nfallback = \"opencode\"\n"
+            "verify = \"manual\"\nmax_duration_mins = 5\n",
+            "context = [\"src/task.rs\"]\nskills = [\"own\"]\nfallback = \"opencode\"\n"
         ))
         .path(),
     )
@@ -122,6 +129,10 @@ fn task_values_override_defaults() {
     assert_eq!(task.worktree.as_deref(), Some("manual/impl"));
     assert_eq!(task.verify.as_deref(), Some("manual"));
     assert_eq!(task.max_duration_mins, Some(5));
+    assert_eq!(
+        task.context.as_deref(),
+        Some(&["src/task.rs".to_string()][..])
+    );
     assert_eq!(task.skills.as_deref(), Some(&["own".to_string()][..]));
     assert_eq!(task.fallback.as_deref(), Some("opencode"));
 }

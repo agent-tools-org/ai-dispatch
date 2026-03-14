@@ -337,6 +337,7 @@ async fn main() -> Result<()> {
 
     paths::ensure_dirs()?;
     let store = Arc::new(store::Store::open(&paths::db_path())?);
+    let _ = background::check_zombie_tasks(&store);
 
     match cli.command {
         Commands::Run {

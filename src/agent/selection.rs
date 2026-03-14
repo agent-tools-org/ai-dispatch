@@ -237,18 +237,21 @@ fn score_ob1(prompt: &str, has_workspace: bool) -> i32 {
         .iter()
         .any(|term| prompt.starts_with(term));
     let has_research_terms = contains_any(prompt, RESEARCH_TERMS);
-    let mut score = 0;
+    let mut score = 1; // baseline: multi-model coding agent
     if starts_like_research {
-        score += 4;
+        score += 2; // can research, but gemini is preferred (scores 4)
     }
     if has_research_terms {
-        score += 3;
+        score += 1;
     }
     if contains_any(prompt, COMPLEX_TERMS) {
         score += 2;
     }
-    if score > 0 && !has_workspace {
-        score += 1;
+    if has_workspace {
+        score += 1; // coding boost with workspace
+    }
+    if rate_limit::is_rate_limited(&AgentKind::Ob1) {
+        score = (score - 10).max(0);
     }
     score
 }

@@ -34,6 +34,7 @@ mod webhook;
 mod workgroup;
 mod worktree;
 use crate::cli_actions::{ConfigAction, GroupAction, WorktreeAction};
+use crate::types::AgentKind;
 use anyhow::Result;
 use clap::{Parser, Subcommand};
 use std::sync::Arc;
@@ -404,7 +405,8 @@ async fn main() -> Result<()> {
                     let norm = prompt.trim().to_lowercase();
                     let fc = agent::classifier::count_file_mentions(&norm);
                     let profile = agent::classifier::classify(&prompt, fc, prompt.len());
-                    let m = agent::selection::recommend_model(&selected, &profile.complexity, false);
+                    let m = AgentKind::parse_str(&selected)
+                        .and_then(|kind| agent::selection::recommend_model(&kind, &profile.complexity, false));
                     if let Some(name) = m {
                         eprintln!("[aid] Auto-selected model: {name} (complexity: {})", profile.complexity.label());
                     }
@@ -412,7 +414,7 @@ async fn main() -> Result<()> {
                 } else {
                     None
                 };
-                (selected.as_str().to_string(), rec)
+                (selected.clone(), rec)
             } else {
                 (agent, None)
             };

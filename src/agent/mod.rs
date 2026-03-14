@@ -73,11 +73,11 @@ pub fn detect_agents() -> Vec<AgentKind> {
     found
 }
 
-pub fn select_agent(prompt: &str, opts: &RunOpts, store: &store::Store) -> AgentKind {
+pub fn select_agent(prompt: &str, opts: &RunOpts, store: &store::Store) -> String {
     selection::select_agent_with_reason(prompt, opts, store).0
 }
 
-pub(crate) fn select_agent_with_reason(prompt: &str, opts: &RunOpts, store: &store::Store) -> (AgentKind, String) {
+pub(crate) fn select_agent_with_reason(prompt: &str, opts: &RunOpts, store: &store::Store) -> (String, String) {
     let selection = selection::select_agent_with_reason(prompt, opts, store);
     debug_assert_eq!(select_agent(prompt, opts, store), selection.0);
     selection

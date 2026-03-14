@@ -7,6 +7,9 @@ use super::{detect_agents, RunOpts};
 use crate::rate_limit;
 use crate::store::Store;
 use crate::types::AgentKind;
+use crate::agent::custom::CustomAgentConfig;
+use crate::agent::registry::load_custom_agents;
+use std::process::Command;
 
 const CAPABILITY: &[(AgentKind, &[(TaskCategory, i32)])] = &[
     (AgentKind::Gemini, &[
@@ -70,9 +73,31 @@ fn priority(kind: AgentKind) -> i32 {
     }
 }
 
+fn custom_category_score(config: &CustomAgentConfig, category: TaskCategory) -> i32 {
+    let caps = &config.capabilities;
+    match category {
+        TaskCategory::Research => caps.research,
+        TaskCategory::SimpleEdit => caps.simple_edit,
+        TaskCategory::ComplexImpl => caps.complex_impl,
+        TaskCategory::Frontend => caps.frontend,
+        TaskCategory::Debugging => caps.debugging,
+        TaskCategory::Testing => caps.testing,
+        TaskCategory::Refactoring => caps.refactoring,
+        TaskCategory::Documentation => caps.documentation,
+    }
+}
+
+fn custom_command_installed(command: &str) -> bool {
+    Command::new("which")
+        .arg(command)
+        .output()
+        .map(|output| output.status.success())
+        .unwrap_or(false)
+}
+
 pub(crate) fn select_agent_with_reason(
     prompt: &str, opts: &RunOpts, store: &Store,
-) -> (AgentKind, String) {
+) -> (String, String) {
     let history = store.agent_success_rates().unwrap_or_default();
     select_agent_from(prompt, opts, &detect_agents(), &history)
 }
@@ -80,7 +105,7 @@ pub(crate) fn select_agent_with_reason(
 fn select_agent_from(
     prompt: &str, opts: &RunOpts, available: &[AgentKind],
     history: &[(AgentKind, f64, usize)],
-) -> (AgentKind, String) {
+) -> (String, String) {
     let normalized = prompt.trim().to_lowercase();
     let prompt_len = prompt.chars().count();
     let file_count = classifier::count_file_mentions(&normalized);
@@ -115,34 +140,59 @@ fn select_agent_from(
             .unwrap_or((AgentKind::Codex, 1))
     };
     let (primary_kind, _) = pick_best(&all_agents);
-    let (sel_kind, sel_score) = if available.is_empty() {
+    let (available_kind, available_score) = if available.is_empty() {
         pick_best(&all_agents)
     } else {
         pick_best(available)
     };
+    let mut selected_name = available_kind.as_str().to_string();
+    let mut selected_score = available_score;
+    let mut selected_builtin = Some(available_kind);
+    if let Some((custom_name, custom_score)) = load_custom_agents()
+        .into_values()
+        .filter(|config| AgentKind::parse_str(&config.id).is_none())
+        .filter(|config| custom_command_installed(&config.command))
+        .map(|config| {
+            let score = custom_category_score(&config, profile.category);
+            (config.id, score)
+        })
+        .max_by_key(|(_, score)| *score)
+    {
+        let custom_priority = priority(AgentKind::Custom);
+        let available_priority = priority(available_kind);
+        if (custom_score, custom_priority) > (available_score, available_priority) {
+            selected_name = custom_name;
+            selected_score = custom_score;
+            selected_builtin = None;
+        }
+    }
     let mut reason = format!(
         "{} task ({}) \u{2192} {} (score: {})",
         profile.category.label(), profile.complexity.label(),
-        sel_kind.as_str(), sel_score,
+        selected_name, selected_score,
     );
-    if sel_kind != primary_kind {
-        reason.push_str(&format!("; {} unavailable", primary_kind.as_str()));
+    if let Some(sel_kind) = selected_builtin {
+        if sel_kind != primary_kind {
+            reason.push_str(&format!("; {} unavailable", primary_kind.as_str()));
+        }
     }
     if auto_budget {
         reason.push_str("; auto-budget: low-value task");
     } else if opts.budget {
         reason.push_str("; budget mode");
     }
-    if rate_limit::is_rate_limited(&AgentKind::Codex) && sel_kind != AgentKind::Codex {
+    if rate_limit::is_rate_limited(&AgentKind::Codex) && selected_name != AgentKind::Codex.as_str() {
         reason.push_str("; codex rate-limited");
     }
-    if let Some((rate, count)) = history_map.get(&sel_kind) {
-        if *count >= 5 {
-            let percent = (*rate * 100.0).round() as i32;
-            reason.push_str(&format!("; history: {}% success", percent));
+    if let Some(sel_kind) = selected_builtin {
+        if let Some((rate, count)) = history_map.get(&sel_kind) {
+            if *count >= 5 {
+                let percent = (*rate * 100.0).round() as i32;
+                reason.push_str(&format!("; history: {}% success", percent));
+            }
         }
     }
-    (sel_kind, reason)
+    (selected_name, reason)
 }
 
 pub(crate) fn recommend_model(
@@ -176,6 +226,7 @@ mod tests {
     use crate::agent::RunOpts;
     use crate::paths;
     use crate::types::AgentKind;
+    use std::fs;
 
     fn opts(dir: Option<&str>, budget: bool) -> RunOpts {
         RunOpts {
@@ -183,14 +234,26 @@ mod tests {
             budget, read_only: false, context_files: vec![], session_id: None,
         }
     }
-    fn select(prompt: &str, dir: &[&str], available: &[AgentKind]) -> (AgentKind, String) {
+    fn select(prompt: &str, dir: &[&str], available: &[AgentKind]) -> (String, String) {
+        let _home_guard = if std::env::var("AID_HOME").is_err() {
+            let temp = tempfile::tempdir().unwrap();
+            Some((paths::AidHomeGuard::set(temp.path()), temp))
+        } else {
+            None
+        };
         select_agent_from(prompt, &opts(dir.first().copied(), false), available, &[])
     }
     fn all() -> [AgentKind; 6] {
         [AgentKind::Gemini, AgentKind::OpenCode, AgentKind::Kilo,
          AgentKind::Cursor, AgentKind::Codex, AgentKind::Ob1]
     }
-    fn with_history(prompt: &str, h: &[(AgentKind, f64, usize)]) -> (AgentKind, String) {
+    fn with_history(prompt: &str, h: &[(AgentKind, f64, usize)]) -> (String, String) {
+        let _home_guard = if std::env::var("AID_HOME").is_err() {
+            let temp = tempfile::tempdir().unwrap();
+            Some((paths::AidHomeGuard::set(temp.path()), temp))
+        } else {
+            None
+        };
         select_agent_from(prompt, &opts(None, false), &all(), h)
     }
 
@@ -201,7 +264,7 @@ mod tests {
         let (kind, reason) = select(
             "Explain the authentication flow and compare the docs?", &[], &all(),
         );
-        assert_eq!(kind, AgentKind::Gemini);
+        assert_eq!(kind, AgentKind::Gemini.as_str());
         assert!(reason.contains("research"));
         assert!(reason.contains("gemini"));
     }
@@ -212,7 +275,7 @@ mod tests {
         let (kind, reason) = select(
             "rename src/types.rs field name to task_name", &[], &all(),
         );
-        assert_eq!(kind, AgentKind::OpenCode);
+        assert_eq!(kind, AgentKind::OpenCode.as_str());
         assert!(reason.contains("simple-edit"));
     }
     #[test]
@@ -223,8 +286,32 @@ mod tests {
             "Create a responsive React component layout for the settings UI",
             &["web/app.tsx"], &all(),
         );
-        assert_eq!(kind, AgentKind::Cursor);
+        assert_eq!(kind, AgentKind::Cursor.as_str());
         assert!(reason.contains("frontend"));
+    }
+
+    #[test]
+    fn custom_agent_scores_are_considered() {
+        let temp = tempfile::tempdir().unwrap();
+        let _guard = paths::AidHomeGuard::set(temp.path());
+        let agents_dir = paths::aid_dir().join("agents");
+        fs::create_dir_all(&agents_dir).unwrap();
+        fs::write(
+            agents_dir.join("researcher.toml"),
+            r#"[agent]
+id = "researcher"
+display_name = "Researcher Agent"
+command = "true"
+[agent.capabilities]
+research = 12
+"#,
+        )
+        .unwrap();
+        let (kind, _) = select(
+            "Explain the authentication flow and compare the docs?",
+            &[], &all(),
+        );
+        assert_eq!(kind, "researcher");
     }
     #[test]
     fn complex_tasks_go_to_codex() {
@@ -235,7 +322,7 @@ mod tests {
             "Add validation coverage and refactor the task dispatch flow. ".repeat(12)
         );
         let (kind, reason) = select(&prompt, &["src"], &all());
-        assert_eq!(kind, AgentKind::Codex);
+        assert_eq!(kind, AgentKind::Codex.as_str());
         assert!(reason.contains("complex-impl"));
         assert!(reason.contains("codex"));
     }
@@ -245,7 +332,7 @@ mod tests {
             "rename src/types.rs field name to task_name",
             &[], &[AgentKind::Gemini, AgentKind::Codex],
         );
-        assert_eq!(kind, AgentKind::Codex);
+        assert_eq!(kind, AgentKind::Codex.as_str());
         assert!(reason.contains("simple-edit"));
         assert!(reason.contains("opencode unavailable"));
     }
@@ -253,7 +340,7 @@ mod tests {
     fn budget_mode_avoids_codex_for_complex_tasks() {
         let prompt = "Implement a retry-aware test suite across src/main.rs and src/cmd/run.rs. Add validation coverage.";
         let (kind, reason) = select_agent_from(prompt, &opts(Some("src"), true), &all(), &[]);
-        assert_ne!(kind, AgentKind::Codex);
+        assert_ne!(kind, AgentKind::Codex.as_str());
         assert!(reason.contains("budget"));
     }
     #[test]
@@ -262,7 +349,7 @@ mod tests {
             "rename src/types.rs field name",
             &opts(Some("src"), true), &[AgentKind::Kilo, AgentKind::Codex], &[],
         );
-        assert_eq!(kind, AgentKind::Kilo);
+        assert_eq!(kind, AgentKind::Kilo.as_str());
         assert!(reason.contains("budget"));
     }
     #[test]
@@ -272,7 +359,7 @@ mod tests {
             "add type annotation to field",
             &opts(Some("src"), false), &[AgentKind::OpenCode, AgentKind::Codex], &h,
         );
-        assert_eq!(kind, AgentKind::OpenCode);
+        assert_eq!(kind, AgentKind::OpenCode.as_str());
     }
     #[test]
     fn history_penalty_overrides_default_codex_selection() {
@@ -281,17 +368,17 @@ mod tests {
             "some random task", &opts(None, false),
             &[AgentKind::Codex, AgentKind::Gemini], &h,
         );
-        assert_eq!(kind, AgentKind::Gemini);
+        assert_eq!(kind, AgentKind::Gemini.as_str());
     }
     #[test]
     fn history_bonus_for_high_success_rate() {
         let (kind, _) = with_history("implement auth flow", &[(AgentKind::Codex, 0.95, 10)]);
-        assert_eq!(kind, AgentKind::Codex);
+        assert_eq!(kind, AgentKind::Codex.as_str());
     }
     #[test]
     fn history_ignored_for_low_task_count() {
         let (kind, _) = with_history("research: what is MVP?", &[(AgentKind::Gemini, 0.10, 3)]);
-        assert_eq!(kind, AgentKind::Gemini);
+        assert_eq!(kind, AgentKind::Gemini.as_str());
     }
     #[test]
     fn history_appears_in_reason() {

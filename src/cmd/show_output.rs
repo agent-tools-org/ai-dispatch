@@ -35,7 +35,7 @@ fn format_diff_header(task: &Task) -> String {
     out.push_str(&format!("=== Review: {} ===\n", task.id));
     out.push_str(&format!(
         "Agent: {}  Status: {}  Prompt: {}\n",
-        task.agent,
+        task.agent_display_name(),
         task.status.label(),
         truncate(&task.prompt, 60),
     ));

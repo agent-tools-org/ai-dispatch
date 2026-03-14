@@ -76,7 +76,7 @@ fn render_multipane_view(frame: &mut ratatui::Frame<'_>, app: &App) {
             };
             multipane::PaneData {
                 task_id: task.id.as_str().to_string(),
-                agent: task.agent.to_string(),
+                agent: task.agent_display_name().to_string(),
                 status: task.status.label().to_string(),
                 prompt: task.prompt.clone(),
                 events,

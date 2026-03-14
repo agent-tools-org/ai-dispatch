@@ -287,7 +287,7 @@ fn filter_budget_tasks<'a>(tasks: &'a [Task], budget: &UsageBudget) -> Vec<&'a T
             let agent_matches = budget
                 .agent
                 .as_deref()
-                .map(|name| task.agent.as_str() == name)
+                .map(|name| task.agent_display_name() == name)
                 .unwrap_or(false);
             let window_matches = window_start
                 .map(|start| task.created_at >= start)

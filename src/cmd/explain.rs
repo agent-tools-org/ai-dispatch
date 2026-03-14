@@ -79,7 +79,7 @@ fn format_task_info(task: &Task) -> String {
 
     [
         format!("Task ID: {}", task.id),
-        format!("Agent: {}", task.agent),
+        format!("Agent: {}", task.agent_display_name()),
         format!("Status: {}", task.status.label()),
         format!("Prompt: {}", task.prompt),
         format!("Parent Task ID: {}", task.parent_task_id.as_deref().unwrap_or("(none)")),

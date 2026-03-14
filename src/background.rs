@@ -104,9 +104,13 @@ pub(crate) fn load_worker_pid(task_id: &str) -> Result<Option<u32>> {
 }
 
 async fn run_task_inner(store: &Arc<Store>, spec: &BackgroundRunSpec) -> Result<()> {
-    let agent_kind = AgentKind::parse_str(&spec.agent_name)
-        .ok_or_else(|| anyhow::anyhow!("Unknown agent '{}'", spec.agent_name))?;
-    let agent = agent::get_agent(agent_kind);
+    let agent: Box<dyn agent::Agent> = if let Some(kind) = AgentKind::parse_str(&spec.agent_name) {
+        agent::get_agent(kind)
+    } else if let Some(custom) = agent::registry::resolve_custom_agent(&spec.agent_name) {
+        custom
+    } else {
+        anyhow::bail!("Unknown agent '{}'", spec.agent_name);
+    };
     let opts = RunOpts {
         dir: spec.dir.clone(),
         output: spec.output.clone(),

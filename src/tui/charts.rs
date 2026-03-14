@@ -219,7 +219,7 @@ fn filter_budget_tasks<'a>(tasks: &'a [Task], agent: Option<&str>, window: Optio
     let window_start = window.and_then(parse_window).map(|value| Local::now() - value);
     tasks
         .iter()
-        .filter(|task| agent.map(|name| task.agent.as_str() == name).unwrap_or(false))
+        .filter(|task| agent.map(|name| task.agent_display_name() == name).unwrap_or(false))
         .filter(|task| window_start.map(|start| task.created_at >= start).unwrap_or(true))
         .collect()
 }

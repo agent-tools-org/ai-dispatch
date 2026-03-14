@@ -1,6 +1,6 @@
 # ai-dispatch (aid)
 
-![Version](https://img.shields.io/badge/version-4.2.0-blue)
+![Version](https://img.shields.io/badge/version-4.3.0-blue)
 ![Rust](https://img.shields.io/badge/rust-2024-orange)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
@@ -218,7 +218,7 @@ aid run codex "Implement feature" --worktree feat/my-feature --dir .
 
 Skills are methodology files loaded from `~/.aid/skills/` and appended to the effective prompt under a `--- Methodology ---` section. They make agent behavior more consistent across runs.
 
-Skills are auto-injected by default: coding agents (`codex`, `opencode`, `cursor`, `kilo`) get the `implementer` skill, and research agents (`gemini`, `ob1`) get the `researcher` skill. Use `--skill` to add extras or `--no-skill` to disable auto-injection.
+Skills are auto-injected by default: coding agents (`codex`, `opencode`, `cursor`, `kilo`, `ob1`) get the `implementer` skill, and `gemini` gets the `researcher` skill. Use `--skill` to add extras or `--no-skill` to disable auto-injection.
 
 Examples:
 

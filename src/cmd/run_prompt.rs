@@ -8,6 +8,9 @@ use tokio::process::Command;
 use crate::{agent, skills, store::Store, templates, types::*, watcher};
 use super::RunArgs;
 
+const VERIFY_RETRY_FEEDBACK: &str =
+    "Verification failed. Please fix the compilation/test errors and try again.";
+
 pub(super) struct PromptBundle { pub effective_prompt: String, pub context_files: Vec<String>, pub prompt_tokens: i64 }
 
 #[allow(dead_code)]
@@ -166,6 +169,52 @@ pub(super) fn maybe_verify_impl(store: &Store, task_id: &TaskId, verify: Option<
     }
 }
 
+pub(super) async fn maybe_auto_retry_after_verify_failure_impl(
+    store: &Arc<Store>,
+    task_id: &TaskId,
+    args: &RunArgs,
+    pre_verify_status: TaskStatus,
+) -> Result<Option<TaskId>> {
+    if args.verify.is_none() || args.retry == 0 || pre_verify_status != TaskStatus::Done {
+        return Ok(None);
+    }
+    let Some(task) = store.get_task(task_id.as_str())? else { return Ok(None) };
+    if task.status != TaskStatus::Failed {
+        return Ok(None);
+    }
+
+    eprintln!(
+        "[aid] Verify failed, auto-retrying ({} retries left)",
+        args.retry - 1
+    );
+
+    let mut retry_args = args.clone();
+    retry_args.prompt = format!(
+        "[Previous attempt feedback]\n{VERIFY_RETRY_FEEDBACK}\n\n[Original task]\n{}",
+        task.prompt
+    );
+    retry_args.retry = args.retry.saturating_sub(1);
+    retry_args.parent_task_id = Some(task_id.as_str().to_string());
+    retry_args.repo = task.repo_path.clone().or_else(|| retry_args.repo.clone());
+    retry_args.output = task
+        .output_path
+        .clone()
+        .or_else(|| retry_args.output.clone());
+    retry_args.model = task.model.clone().or_else(|| retry_args.model.clone());
+    retry_args.verify = task.verify.clone();
+    retry_args.read_only = task.read_only;
+    retry_args.budget = task.budget;
+    retry_args.background = false;
+    let (dir, worktree) = retry_target(&task);
+    retry_args.dir = dir.or_else(|| retry_args.dir.clone());
+    retry_args.worktree = worktree.or_else(|| retry_args.worktree.clone());
+    if task.agent == AgentKind::OpenCode {
+        retry_args.session_id = task.agent_session_id.clone();
+    }
+
+    Box::pin(super::run(store.clone(), retry_args)).await.map(Some)
+}
+
 pub(super) fn notify_task_completion(store: &Store, task_id: &TaskId) -> Result<()> {
     if let Some(task) = store.get_task(task_id.as_str())? { crate::notify::notify_completion(&task); }
     Ok(())
@@ -179,40 +228,19 @@ pub(super) fn inherit_retry_base_branch_impl(repo_dir: Option<&str>, task: &Task
     if let Ok(true) = crate::worktree::branch_has_commits_ahead_of_main(repo_dir, branch) { retry_args.base_branch = Some(branch.to_string()); }
 }
 
+fn retry_target(task: &Task) -> (Option<String>, Option<String>) {
+    match task.worktree_path.as_ref() {
+        Some(path) if std::path::Path::new(path).exists() => (Some(path.clone()), None),
+        Some(_) => (None, task.worktree_branch.clone()),
+        None => (None, None),
+    }
+}
+
 fn format_duration(ms: i64) -> String {
     let secs = ms / 1000;
     if secs < 60 { format!("{secs}s") } else { format!("{}m {:02}s", secs / 60, secs % 60) }
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    fn run_args(skills: Vec<String>) -> RunArgs {
-        RunArgs {
-            agent_name: "codex".to_string(),
-            prompt: "prompt".to_string(),
-            skills,
-            ..Default::default()
-        }
-    }
-
-    #[test]
-    fn effective_skills_auto_apply_defaults() {
-        let temp = tempfile::tempdir().unwrap();
-        let _aid_home = crate::paths::AidHomeGuard::set(temp.path());
-        let dir = crate::paths::aid_dir().join("skills");
-        std::fs::create_dir_all(&dir).unwrap();
-        std::fs::write(dir.join("implementer.md"), "# Implementer").unwrap();
-        assert_eq!(effective_skills(&AgentKind::Codex, &run_args(vec![])), vec!["implementer"]);
-    }
-
-    #[test]
-    fn effective_skills_respect_no_skill_sentinel() {
-        let temp = tempfile::tempdir().unwrap();
-        let _aid_home = crate::paths::AidHomeGuard::set(temp.path());
-        let dir = crate::paths::aid_dir().join("skills");
-        std::fs::create_dir_all(&dir).unwrap();
-        std::fs::write(dir.join("implementer.md"), "# Implementer").unwrap();
-        assert!(effective_skills(&AgentKind::Codex, &run_args(vec![super::super::NO_SKILL_SENTINEL.to_string()])).is_empty());
-    }
-}
+#[path = "run_prompt/tests.rs"]
+mod tests;

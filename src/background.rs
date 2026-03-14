@@ -151,6 +151,25 @@ async fn run_task_inner(store: &Arc<Store>, spec: &BackgroundRunSpec) -> Result<
         )
         .await?;
     }
+    let retry_args = crate::cmd::run::RunArgs {
+        agent_name: spec.agent_name.clone(),
+        prompt: spec.prompt.clone(),
+        dir: spec.dir.clone(),
+        output: spec.output.clone(),
+        model: spec.model.clone(),
+        group: spec.group.clone(),
+        verify: spec.verify.clone(),
+        max_duration_mins: spec.max_duration_mins,
+        retry: spec.retry,
+        skills: spec.skills.clone(),
+        template: spec.template.clone(),
+        parent_task_id: spec.parent_task_id.clone(),
+        ..Default::default()
+    };
+    let pre_verify_status = store
+        .get_task(&spec.task_id)?
+        .map(|task| task.status)
+        .unwrap_or(TaskStatus::Done);
     crate::cmd::run::maybe_verify(
         store,
         &TaskId(spec.task_id.clone()),
@@ -168,24 +187,21 @@ async fn run_task_inner(store: &Arc<Store>, spec: &BackgroundRunSpec) -> Result<
             }
         }
     }
+    if crate::cmd::run::maybe_auto_retry_after_verify_failure(
+        store,
+        &TaskId(spec.task_id.clone()),
+        &retry_args,
+        pre_verify_status,
+    )
+    .await?
+    .is_some()
+    {
+        return Ok(());
+    }
     if let Some(mut retry_args) = crate::cmd::retry_logic::prepare_retry(
         store.clone(),
         &TaskId(spec.task_id.clone()),
-        &crate::cmd::run::RunArgs {
-            agent_name: spec.agent_name.clone(),
-            prompt: spec.prompt.clone(),
-            dir: spec.dir.clone(),
-            output: spec.output.clone(),
-            model: spec.model.clone(),
-            group: spec.group.clone(),
-            verify: spec.verify.clone(),
-            max_duration_mins: spec.max_duration_mins,
-            retry: spec.retry,
-            skills: spec.skills.clone(),
-            template: spec.template.clone(),
-            parent_task_id: spec.parent_task_id.clone(),
-            ..Default::default()
-        },
+        &retry_args,
     )
     .await?
     {

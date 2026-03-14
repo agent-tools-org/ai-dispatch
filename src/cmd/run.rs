@@ -224,6 +224,8 @@ pub async fn run(store: Arc<Store>, args: RunArgs) -> Result<TaskId> {
             is_streaming,
         )
         .await?;
+        let pre_verify_status =
+            store.get_task(task_id.as_str())?.map(|task| task.status).unwrap_or(TaskStatus::Done);
         maybe_verify(
             &store,
             &task_id,
@@ -235,6 +237,12 @@ pub async fn run(store: Arc<Store>, args: RunArgs) -> Result<TaskId> {
         }
         run_prompt::notify_task_completion(&store, &task_id)?;
         crate::webhook::fire_task_webhooks(&store, task_id.as_str()).await;
+        if let Some(retry_id) =
+            maybe_auto_retry_after_verify_failure(&store, &task_id, &args, pre_verify_status)
+                .await?
+        {
+            return Ok(retry_id);
+        }
         if let Some(mut retry_args) = retry_logic::prepare_retry(store.clone(), &task_id, &args).await?
         {
             if let Some(task) = store.get_task(task_id.as_str())? {
@@ -259,9 +267,7 @@ pub async fn run(store: Arc<Store>, args: RunArgs) -> Result<TaskId> {
     }
     Ok(task_id)
 }
-pub(crate) fn inherit_retry_base_branch(repo_dir: Option<&str>, task: &Task, retry_args: &mut RunArgs) {
-    run_prompt::inherit_retry_base_branch_impl(repo_dir, task, retry_args);
-}
+pub(crate) fn inherit_retry_base_branch(repo_dir: Option<&str>, task: &Task, retry_args: &mut RunArgs) { run_prompt::inherit_retry_base_branch_impl(repo_dir, task, retry_args); }
 #[allow(clippy::too_many_arguments)]
 pub(crate) async fn run_agent_process(
     agent: &dyn crate::agent::Agent,
@@ -272,28 +278,10 @@ pub(crate) async fn run_agent_process(
     output_path: Option<&str>,
     model: Option<&str>,
     streaming: bool,
-) -> Result<()> {
-    run_prompt::run_agent_process_impl(
-        agent,
-        cmd,
-        task_id,
-        store,
-        log_path,
-        output_path,
-        model,
-        streaming,
-    )
-    .await
-}
-pub(crate) fn maybe_cleanup_fast_fail(store: &Store, task_id: &TaskId, task: &Task) {
-    run_prompt::maybe_cleanup_fast_fail_impl(store, task_id, task);
-}
+) -> Result<()> { run_prompt::run_agent_process_impl(agent, cmd, task_id, store, log_path, output_path, model, streaming).await }
+pub(crate) fn maybe_cleanup_fast_fail(store: &Store, task_id: &TaskId, task: &Task) { run_prompt::maybe_cleanup_fast_fail_impl(store, task_id, task); }
 /// Run verification if --verify was set and a working dir exists.
-pub(crate) fn maybe_verify(
-    store: &Store,
-    task_id: &TaskId,
-    verify: Option<&str>,
-    dir: Option<&str>,
-) {
-    run_prompt::maybe_verify_impl(store, task_id, verify, dir);
+pub(crate) fn maybe_verify(store: &Store, task_id: &TaskId, verify: Option<&str>, dir: Option<&str>) { run_prompt::maybe_verify_impl(store, task_id, verify, dir); }
+pub(crate) async fn maybe_auto_retry_after_verify_failure(store: &Arc<Store>, task_id: &TaskId, args: &RunArgs, pre_verify_status: TaskStatus) -> Result<Option<TaskId>> {
+    run_prompt::maybe_auto_retry_after_verify_failure_impl(store, task_id, args, pre_verify_status).await
 }

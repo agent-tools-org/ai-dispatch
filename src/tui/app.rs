@@ -11,6 +11,35 @@ use crate::background;
 use crate::store::Store;
 use crate::types::{EventKind, Task, TaskEvent, TaskFilter, TaskStatus};
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum DetailTab {
+    Events,
+    Prompt,
+    Output,
+}
+
+impl DetailTab {
+    fn next(self) -> Self {
+        match self {
+            Self::Events => Self::Prompt,
+            Self::Prompt => Self::Output,
+            Self::Output => Self::Events,
+        }
+    }
+
+    fn previous(self) -> Self {
+        match self {
+            Self::Events => Self::Output,
+            Self::Prompt => Self::Events,
+            Self::Output => Self::Prompt,
+        }
+    }
+
+    fn is_text_view(self) -> bool {
+        matches!(self, Self::Prompt | Self::Output)
+    }
+}
+
 pub struct App {
     pub tasks: Vec<Task>,
     pub events_cache: HashMap<String, Vec<TaskEvent>>,
@@ -18,6 +47,8 @@ pub struct App {
     pub milestones: HashMap<String, String>,
     pub selected: usize,
     pub detail_mode: bool,
+    pub detail_tab: DetailTab,
+    pub detail_scroll: usize,
     pub dashboard_mode: bool,
     pub multipane_mode: bool,
     pub active_pane: usize,
@@ -37,6 +68,8 @@ impl App {
             milestones: HashMap::new(),
             selected: 0,
             detail_mode: false,
+            detail_tab: DetailTab::Events,
+            detail_scroll: 0,
             dashboard_mode: false,
             multipane_mode: false,
             active_pane: 0,
@@ -68,65 +101,34 @@ impl App {
 
     pub fn handle_key(&mut self, key: KeyEvent) -> Result<()> {
         match key.code {
-            KeyCode::Char('q') => self.should_quit = true,
-            KeyCode::Char('d') => self.dashboard_mode = !self.dashboard_mode,
+            KeyCode::Char('q') => {
+                self.should_quit = true;
+                return Ok(());
+            }
+            KeyCode::Char('d') => {
+                self.dashboard_mode = !self.dashboard_mode;
+                return Ok(());
+            }
             KeyCode::Char('m') => {
                 self.multipane_mode = !self.multipane_mode;
                 if self.multipane_mode {
                     self.active_pane = 0;
                     self.pane_scroll_offsets.clear();
                 }
+                return Ok(());
             }
-            KeyCode::Tab if self.multipane_mode => {
-                let pane_count = self.pane_count();
-                if pane_count > 0 {
-                    self.active_pane = (self.active_pane + 1) % pane_count;
-                }
-            }
-            KeyCode::BackTab if self.multipane_mode => {
-                let pane_count = self.pane_count();
-                if pane_count > 0 {
-                    self.active_pane = if self.active_pane == 0 {
-                        pane_count - 1
-                    } else {
-                        self.active_pane - 1
-                    };
-                }
-            }
-            KeyCode::Down | KeyCode::Char('j') if self.multipane_mode => {
-                if self.active_pane < self.pane_scroll_offsets.len() {
-                    let offset = &mut self.pane_scroll_offsets[self.active_pane];
-                    if *offset > 0 {
-                        *offset -= 1;
-                    }
-                }
-            }
-            KeyCode::Up | KeyCode::Char('k') if self.multipane_mode => {
-                if self.active_pane < self.pane_scroll_offsets.len() {
-                    self.pane_scroll_offsets[self.active_pane] += 1;
-                }
-            }
-            KeyCode::Enter if self.multipane_mode => {
-                let tasks = self.multipane_tasks();
-                if let Some(task) = tasks.get(self.active_pane) {
-                    if let Some(idx) = self.tasks.iter().position(|t| t.id == task.id) {
-                        self.selected = idx;
-                        self.multipane_mode = false;
-                        self.detail_mode = true;
-                        self.load_selected_events()?;
-                    }
-                }
-            }
-            KeyCode::Esc if self.multipane_mode => {
-                self.multipane_mode = false;
-            }
-            KeyCode::Down | KeyCode::Char('j') if !self.detail_mode => self.next(),
-            KeyCode::Up | KeyCode::Char('k') if !self.detail_mode => self.previous(),
-            KeyCode::Enter if !self.detail_mode => {
-                self.detail_mode = true;
-                self.load_selected_events()?;
-            }
-            KeyCode::Esc if self.detail_mode => self.detail_mode = false,
+            _ => {}
+        }
+        if self.multipane_mode {
+            return self.handle_multipane_key(key);
+        }
+        if self.detail_mode {
+            return self.handle_detail_key(key);
+        }
+        match key.code {
+            KeyCode::Down | KeyCode::Char('j') => self.next(),
+            KeyCode::Up | KeyCode::Char('k') => self.previous(),
+            KeyCode::Enter => self.enter_detail_mode()?,
             _ => {}
         }
         Ok(())
@@ -203,6 +205,93 @@ impl App {
 
     pub fn empty_message(&self) -> String {
         format!("No tasks matched scope: {}", self.scope_label())
+    }
+
+    fn handle_multipane_key(&mut self, key: KeyEvent) -> Result<()> {
+        match key.code {
+            KeyCode::Tab => {
+                let pane_count = self.pane_count();
+                if pane_count > 0 {
+                    self.active_pane = (self.active_pane + 1) % pane_count;
+                }
+            }
+            KeyCode::BackTab => {
+                let pane_count = self.pane_count();
+                if pane_count > 0 {
+                    self.active_pane = if self.active_pane == 0 {
+                        pane_count - 1
+                    } else {
+                        self.active_pane - 1
+                    };
+                }
+            }
+            KeyCode::Down | KeyCode::Char('j') => {
+                if self.active_pane < self.pane_scroll_offsets.len() {
+                    let offset = &mut self.pane_scroll_offsets[self.active_pane];
+                    if *offset > 0 {
+                        *offset -= 1;
+                    }
+                }
+            }
+            KeyCode::Up | KeyCode::Char('k') => {
+                if self.active_pane < self.pane_scroll_offsets.len() {
+                    self.pane_scroll_offsets[self.active_pane] += 1;
+                }
+            }
+            KeyCode::Enter => {
+                let tasks = self.multipane_tasks();
+                if let Some(task) = tasks.get(self.active_pane) {
+                    if let Some(idx) = self.tasks.iter().position(|t| t.id == task.id) {
+                        self.selected = idx;
+                        self.multipane_mode = false;
+                        self.enter_detail_mode()?;
+                    }
+                }
+            }
+            KeyCode::Esc => {
+                self.multipane_mode = false;
+            }
+            _ => {}
+        }
+        Ok(())
+    }
+
+    fn handle_detail_key(&mut self, key: KeyEvent) -> Result<()> {
+        match key.code {
+            KeyCode::Char('e') => self.set_detail_tab(DetailTab::Events),
+            KeyCode::Char('p') => self.set_detail_tab(DetailTab::Prompt),
+            KeyCode::Char('o') => self.set_detail_tab(DetailTab::Output),
+            KeyCode::Tab => self.set_detail_tab(self.detail_tab.next()),
+            KeyCode::BackTab => self.set_detail_tab(self.detail_tab.previous()),
+            KeyCode::Down | KeyCode::Char('j') if self.detail_tab.is_text_view() => {
+                self.detail_scroll = self.detail_scroll.saturating_add(1);
+            }
+            KeyCode::Up | KeyCode::Char('k') if self.detail_tab.is_text_view() => {
+                self.detail_scroll = self.detail_scroll.saturating_sub(1);
+            }
+            KeyCode::Esc => {
+                self.detail_mode = false;
+                self.reset_detail_state();
+            }
+            _ => {}
+        }
+        Ok(())
+    }
+
+    fn enter_detail_mode(&mut self) -> Result<()> {
+        self.detail_mode = true;
+        self.reset_detail_state();
+        self.load_selected_events()
+    }
+
+    fn reset_detail_state(&mut self) {
+        self.detail_tab = DetailTab::Events;
+        self.detail_scroll = 0;
+    }
+
+    fn set_detail_tab(&mut self, tab: DetailTab) {
+        self.detail_tab = tab;
+        self.detail_scroll = 0;
     }
 
     fn load_selected_events(&mut self) -> Result<()> {
@@ -347,6 +436,7 @@ impl App {
 mod tests {
     use super::*;
     use chrono::Local;
+    use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
     use crate::types::{AgentKind, TaskId, TaskStatus};
 
@@ -454,5 +544,77 @@ mod tests {
         .unwrap();
 
         assert_eq!(app.get_milestone("t-1002"), Some("types defined"));
+    }
+
+    #[test]
+    fn detail_mode_cycles_tabs_and_resets_scroll() {
+        let store = Arc::new(Store::open_memory().unwrap());
+        store.insert_task(&make_task("t-1003", None)).unwrap();
+        let mut app = App::new(
+            store,
+            super::super::RunOptions {
+                task_id: None,
+                group: None,
+            },
+        )
+        .unwrap();
+
+        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
+            .unwrap();
+        assert!(app.detail_mode);
+        assert!(app.detail_tab == DetailTab::Events);
+
+        app.handle_key(KeyEvent::new(KeyCode::Char('p'), KeyModifiers::NONE))
+            .unwrap();
+        app.handle_key(KeyEvent::new(KeyCode::Char('j'), KeyModifiers::NONE))
+            .unwrap();
+        assert!(app.detail_tab == DetailTab::Prompt);
+        assert_eq!(app.detail_scroll, 1);
+
+        app.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE))
+            .unwrap();
+        assert!(app.detail_tab == DetailTab::Output);
+        assert_eq!(app.detail_scroll, 0);
+
+        app.handle_key(KeyEvent::new(KeyCode::BackTab, KeyModifiers::SHIFT))
+            .unwrap();
+        assert!(app.detail_tab == DetailTab::Prompt);
+    }
+
+    #[test]
+    fn detail_mode_keeps_selection_stable_and_resets_on_escape() {
+        let store = Arc::new(Store::open_memory().unwrap());
+        store.insert_task(&make_task("t-1004", None)).unwrap();
+        store.insert_task(&make_task("t-1005", None)).unwrap();
+        let mut app = App::new(
+            store,
+            super::super::RunOptions {
+                task_id: None,
+                group: None,
+            },
+        )
+        .unwrap();
+
+        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
+            .unwrap();
+        app.handle_key(KeyEvent::new(KeyCode::Char('j'), KeyModifiers::NONE))
+            .unwrap();
+        assert_eq!(app.selected, 0);
+        assert_eq!(app.detail_scroll, 0);
+
+        app.handle_key(KeyEvent::new(KeyCode::Char('o'), KeyModifiers::NONE))
+            .unwrap();
+        app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE))
+            .unwrap();
+        app.handle_key(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE))
+            .unwrap();
+        assert_eq!(app.selected, 0);
+        assert_eq!(app.detail_scroll, 0);
+
+        app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE))
+            .unwrap();
+        assert!(!app.detail_mode);
+        assert!(app.detail_tab == DetailTab::Events);
+        assert_eq!(app.detail_scroll, 0);
     }
 }

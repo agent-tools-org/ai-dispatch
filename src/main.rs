@@ -47,6 +47,10 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
+    #[command(after_help = r#"Examples:
+  aid run codex "Add unit tests" --verify
+  aid run gemini "Research topic" -o notes.md
+  aid run codex "Refactor" -w feat/refactor --verify --retry 1 --bg"#)]
     /// Dispatch a task to an AI agent
     Run {
         /// Agent to use (auto, gemini, codex, opencode, cursor, kilo)
@@ -105,6 +109,19 @@ enum Commands {
         #[arg(long)]
         read_only: bool,
     },
+    #[command(after_help = r#"Examples:
+  aid batch tasks.toml --parallel
+  aid batch tasks.toml --parallel --max-concurrent 3
+
+Batch TOML format:
+  [defaults]
+  verify = true
+  agent = "codex"
+
+  [[task]]
+  name = "types"
+  prompt = "Create shared types"
+  worktree = "feat/types""#)]
     /// Dispatch tasks from a TOML batch file
     Batch {
         /// Path to the batch TOML file
@@ -133,6 +150,11 @@ enum Commands {
         #[arg(long, num_args = 0..=1, default_missing_value = "auto")]
         verify: Option<String>,
     },
+    #[command(after_help = r#"Examples:
+  aid watch t-1234               # Live TUI for one task
+  aid watch --quiet t-1234       # Block until done (for scripts)
+  aid watch --quiet --group wg-a # Block until group finishes
+  aid watch --tui                # Full dashboard TUI"#)]
     /// Live progress / blocking wait (--quiet)
     Watch {
         /// Watch specific task IDs (multiple allowed)
@@ -170,6 +192,12 @@ enum Commands {
     },
     /// Print the most recent completion notifications
     Completions,
+    #[command(after_help = r#"Examples:
+  aid show t-1234              # Events timeline
+  aid show t-1234 --diff       # Full worktree diff
+  aid show t-1234 --output     # Task output
+  aid show t-1234 --context    # Resolved prompt
+  aid show t-1234 --explain    # AI explanation"#)]
     /// Inspect task artifacts (events, diff, output, explain)
     Show {
         /// Task ID to inspect
@@ -202,6 +230,9 @@ enum Commands {
         #[arg(long)]
         session: bool,
     },
+    #[command(after_help = r#"Examples:
+  aid retry t-1234 -f "Fix the compilation error in parser.rs"
+  aid retry t-1234 -f "Use HashMap instead" --agent opencode"#)]
     /// Retry a failed task with feedback (optionally switch agent)
     Retry {
         /// Task ID to retry
@@ -227,6 +258,9 @@ enum Commands {
         #[arg(long, short)]
         file: Option<String>,
     },
+    #[command(after_help = r#"Examples:
+  aid ask "What is the latest Rust edition?"
+  aid ask "Explain this error" --files src/main.rs -o explanation.md"#)]
     /// Research/explore via cheap AI CLIs
     Ask {
         /// Question or research prompt

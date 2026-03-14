@@ -6,6 +6,7 @@ pub mod benchmark;
 pub mod batch;
 pub mod board;
 pub mod board_stream;
+pub mod clean;
 pub mod config;
 pub mod explain;
 pub mod group;

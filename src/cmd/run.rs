@@ -129,6 +129,9 @@ pub async fn run(store: Arc<Store>, args: RunArgs) -> Result<TaskId> {
         cost_usd: None,
         created_at: Local::now(),
         completed_at: None,
+        verify: args.verify.clone(),
+        read_only: args.read_only,
+        budget: args.budget,
     };
     store.insert_task(&task)?;
     let prompt_bundle = run_prompt::build_prompt_bundle(&store, &args, &agent_kind, workgroup.as_ref(), &requested_skills)?;

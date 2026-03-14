@@ -67,7 +67,7 @@ impl Store {
             "SELECT id, agent, prompt, resolved_prompt, status, parent_task_id, workgroup_id,
              caller_kind, caller_session_id, agent_session_id, repo_path, worktree_path, worktree_branch,
              log_path, output_path, tokens, prompt_tokens, duration_ms, model, cost_usd, created_at,
-             completed_at
+             completed_at, verify, read_only, budget
              FROM tasks WHERE id = ?1",
         )?;
         let mut rows = stmt.query_map(params![id], row_to_task)?;
@@ -99,7 +99,7 @@ impl Store {
                 "SELECT id, agent, prompt, resolved_prompt, status, parent_task_id, workgroup_id,
                  caller_kind, caller_session_id, agent_session_id, repo_path, worktree_path, worktree_branch,
                  log_path, output_path, tokens, prompt_tokens, duration_ms, model, cost_usd, created_at,
-                 completed_at
+                 completed_at, verify, read_only, budget
                  FROM tasks ORDER BY created_at DESC",
                 vec![],
             ),
@@ -107,7 +107,7 @@ impl Store {
                 "SELECT id, agent, prompt, resolved_prompt, status, parent_task_id, workgroup_id,
                  caller_kind, caller_session_id, agent_session_id, repo_path, worktree_path, worktree_branch,
                  log_path, output_path, tokens, prompt_tokens, duration_ms, model, cost_usd, created_at,
-                 completed_at
+                 completed_at, verify, read_only, budget
                  FROM tasks WHERE status IN (?1, ?2) ORDER BY created_at DESC",
                 vec!["running".to_string(), "awaiting_input".to_string()],
             ),
@@ -115,7 +115,7 @@ impl Store {
                 "SELECT id, agent, prompt, resolved_prompt, status, parent_task_id, workgroup_id,
                  caller_kind, caller_session_id, agent_session_id, repo_path, worktree_path, worktree_branch,
                  log_path, output_path, tokens, prompt_tokens, duration_ms, model, cost_usd, created_at,
-                 completed_at
+                 completed_at, verify, read_only, budget
                  FROM tasks ORDER BY created_at DESC",
                 vec![],
             ),
@@ -140,7 +140,7 @@ impl Store {
             "SELECT id, agent, prompt, resolved_prompt, status, parent_task_id, workgroup_id,
              caller_kind, caller_session_id, agent_session_id, repo_path, worktree_path, worktree_branch,
              log_path, output_path, tokens, prompt_tokens, duration_ms, model, cost_usd, created_at,
-             completed_at
+             completed_at, verify, read_only, budget
              FROM tasks WHERE caller_session_id = ?1 ORDER BY created_at DESC",
         )?;
         let rows = stmt.query_map(params![session_id], row_to_task)?;

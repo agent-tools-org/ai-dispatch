@@ -17,6 +17,21 @@ fn insert_and_get_task() {
 }
 
 #[test]
+fn insert_and_get_task_persists_dispatch_flags() {
+    let store = Store::open_memory().unwrap();
+    let mut task = make_task("t-0004", AgentKind::Codex, TaskStatus::Pending);
+    task.verify = Some("cargo test".to_string());
+    task.read_only = true;
+    task.budget = true;
+    store.insert_task(&task).unwrap();
+
+    let loaded = store.get_task("t-0004").unwrap().unwrap();
+    assert_eq!(loaded.verify.as_deref(), Some("cargo test"));
+    assert!(loaded.read_only);
+    assert!(loaded.budget);
+}
+
+#[test]
 fn migrate_adds_repo_path_column() {
     let conn = rusqlite::Connection::open_in_memory().unwrap();
     conn.execute_batch(
@@ -58,6 +73,9 @@ fn migrate_adds_repo_path_column() {
         .collect::<Vec<_>>();
     assert!(columns.contains(&"repo_path".to_string()));
     assert!(columns.contains(&"resolved_prompt".to_string()));
+    assert!(columns.contains(&"verify".to_string()));
+    assert!(columns.contains(&"read_only".to_string()));
+    assert!(columns.contains(&"budget".to_string()));
 }
 
 #[test]

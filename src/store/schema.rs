@@ -76,6 +76,9 @@ pub(super) fn migrate(store: &Store) -> Result<()> {
     let _ = conn.execute_batch(CREATE_WORKGROUPS_SQL);
     let _ = conn.execute_batch("ALTER TABLE events ADD COLUMN metadata TEXT;");
     let _ = conn.execute_batch("ALTER TABLE tasks ADD COLUMN prompt_tokens INTEGER;");
+    let _ = conn.execute_batch("ALTER TABLE tasks ADD COLUMN verify TEXT;");
+    let _ = conn.execute_batch("ALTER TABLE tasks ADD COLUMN read_only INTEGER NOT NULL DEFAULT 0;");
+    let _ = conn.execute_batch("ALTER TABLE tasks ADD COLUMN budget INTEGER NOT NULL DEFAULT 0;");
     Ok(())
 }
 
@@ -103,6 +106,9 @@ pub(super) fn row_to_task(row: &Row) -> rusqlite::Result<Result<Task>> {
         cost_usd: row.get(19)?,
         created_at: parse_dt(&row.get::<_, String>(20)?),
         completed_at: row.get::<_, Option<String>>(21)?.map(|s| parse_dt(&s)),
+        verify: row.get(22)?,
+        read_only: row.get(23)?,
+        budget: row.get(24)?,
     }))
 }
 

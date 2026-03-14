@@ -145,6 +145,9 @@ fn make_task(task_id: &str, status: TaskStatus) -> Task {
         cost_usd: None,
         created_at: Local::now(),
         completed_at: None,
+        verify: None,
+        read_only: false,
+        budget: false,
     }
 }
 

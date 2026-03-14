@@ -291,6 +291,9 @@ mod tests {
             cost_usd: Some(0.01),
             created_at: Local::now(),
             completed_at: Some(Local::now()),
+            verify: None,
+            read_only: false,
+            budget: false,
         }
     }
 }

@@ -56,8 +56,11 @@ pub async fn retry_task(store: Arc<Store>, args: RetryArgs, announce: bool) -> R
             model: task.model.clone(),
             worktree: worktree_arg,
             group: task.workgroup_id.clone(),
+            verify: task.verify.clone(),
             announce,
             parent_task_id: Some(task.id.as_str().to_string()),
+            read_only: task.read_only,
+            budget: task.budget,
             session_id,
             ..Default::default()
         },

@@ -236,6 +236,9 @@ pub struct Task {
     pub cost_usd: Option<f64>,
     pub created_at: DateTime<Local>,
     pub completed_at: Option<DateTime<Local>>,
+    pub verify: Option<String>,
+    pub read_only: bool,
+    pub budget: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]

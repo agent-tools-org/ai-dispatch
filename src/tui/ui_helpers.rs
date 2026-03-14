@@ -25,7 +25,7 @@ pub fn task_row(app: &App, task: &Task) -> Row<'static> {
         Cell::from(task_memory(app, task)),
         Cell::from(task_duration(task)),
         Cell::from(task_tokens(task)),
-        Cell::from(cost::format_cost(task.cost_usd)),
+        Cell::from(cost::format_cost_label(task.cost_usd, task.agent)),
         Cell::from(truncate(task.model.as_deref().unwrap_or("-"), 14)),
         Cell::from(task.workgroup_id.clone().unwrap_or_else(|| "-".to_string())),
         Cell::from(truncate(&task.prompt, 60)),
@@ -57,7 +57,7 @@ pub fn task_header(task: &Task, events: &[crate::types::TaskEvent]) -> Paragraph
         Span::styled("  Tokens: ", Style::default().fg(Color::Indexed(243))),
         Span::raw(task_tokens(task)),
         Span::styled("  Cost: ", Style::default().fg(Color::Indexed(243))),
-        Span::raw(cost::format_cost(task.cost_usd)),
+        Span::raw(cost::format_cost_label(task.cost_usd, task.agent)),
         Span::styled("  Model: ", Style::default().fg(Color::Indexed(243))),
         Span::raw(task.model.as_deref().unwrap_or("-").to_string()),
     ]);

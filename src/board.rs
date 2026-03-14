@@ -88,7 +88,7 @@ pub fn render_board(tasks: &[Task], store: &Store) -> Result<String> {
         let cost_str = if task.status == TaskStatus::Skipped {
             "-".to_string()
         } else {
-            cost::format_cost(task.cost_usd)
+            cost::format_cost_label(task.cost_usd, task.agent)
         };
         let parent = short_parent(task.parent_task_id.as_deref());
         let group = short_group(task.workgroup_id.as_deref());

@@ -25,7 +25,6 @@ pub fn format_cost(cost_usd: Option<f64>) -> String {
     }
 }
 
-#[allow(dead_code)]
 pub fn format_cost_label(cost_usd: Option<f64>, agent: AgentKind) -> String {
     match agent {
         AgentKind::Cursor => "subscription".to_string(),
@@ -36,9 +35,6 @@ pub fn format_cost_label(cost_usd: Option<f64>, agent: AgentKind) -> String {
 }
 fn resolve_pricing(model: Option<&str>, agent: AgentKind) -> Option<ModelPricing> {
     if let Some(m) = model {
-        if agent == AgentKind::Ob1 && m.to_lowercase().contains("gemini-2.5-pro") {
-            return model_pricing("gemini-2.5-pro");
-        }
         return model_pricing(m);
     }
     // Default pricing by agent
@@ -68,11 +64,6 @@ fn model_pricing(model: &str) -> Option<ModelPricing> {
             output_per_m: 8.0,
         }
     } else if m.contains("gpt-5") && !m.contains("mini") && !m.contains("nano") {
-        ModelPricing {
-            input_per_m: 2.0,
-            output_per_m: 8.0,
-        }
-    } else if m.contains("gpt-5.1") && !m.contains("mini") && !m.contains("nano") {
         ModelPricing {
             input_per_m: 2.0,
             output_per_m: 8.0,

@@ -7,6 +7,7 @@ pub mod gemini;
 pub mod kilo;
 pub mod ob1;
 pub mod opencode;
+pub mod classifier;
 pub(crate) mod selection;
 pub(crate) mod truncate;
 

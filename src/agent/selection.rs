@@ -1,342 +1,159 @@
 // Auto-selection heuristics for `aid run auto`.
-// Scores prompt signals, respects installed CLIs, and returns a concise reason.
+// Scores prompt signals via capability matrix, respects installed CLIs, returns concise reason.
 // Exports select_agent() helpers; deps: super::detect_agents, super::RunOpts.
 
+use super::classifier::{self, Complexity, TaskCategory};
 use super::{detect_agents, RunOpts};
 use crate::rate_limit;
 use crate::store::Store;
 use crate::types::AgentKind;
 
-const RESEARCH_PREFIXES: &[&str] = &[
-    "research:",
-    "what is",
-    "how does",
-    "explain",
-    "find",
-    "list",
-];
-const RESEARCH_TERMS: &[&str] = &["?", "documentation", "compare", "analyze"];
-const SIMPLE_EDIT_TERMS: &[&str] = &[
-    "rename",
-    "change",
-    "update",
-    "fix typo",
-    "add type",
-    "annotation",
-];
-const FRONTEND_TERMS: &[&str] = &[
-    "ui",
-    "frontend",
-    "css",
-    "html",
-    "react",
-    "component",
-    "layout",
-    "design",
-    "responsive",
-];
-const COMPLEX_TERMS: &[&str] = &["implement", "create", "build", "refactor", "test suite"];
-const LOW_VALUE_TERMS: &[&str] = &[
-    "run test",
-    "cargo test",
-    "cargo fmt",
-    "cargo clippy",
-    "format code",
-    "lint",
-    "update docs",
-    "update readme",
-    "update changelog",
-    "add comment",
-    "add docstring",
-    "type annotation",
-];
-const FILE_SUFFIXES: &[&str] = &[
-    ".rs", ".toml", ".md", ".json", ".yaml", ".yml", ".ts", ".tsx", ".js", ".jsx", ".css", ".html",
+const CAPABILITY: &[(AgentKind, &[(TaskCategory, i32)])] = &[
+    (AgentKind::Gemini, &[
+        (TaskCategory::Research, 9), (TaskCategory::Documentation, 6),
+        (TaskCategory::Debugging, 5), (TaskCategory::SimpleEdit, 2),
+        (TaskCategory::ComplexImpl, 3), (TaskCategory::Frontend, 2),
+        (TaskCategory::Testing, 3), (TaskCategory::Refactoring, 3),
+    ]),
+    (AgentKind::Codex, &[
+        (TaskCategory::ComplexImpl, 9), (TaskCategory::Refactoring, 8),
+        (TaskCategory::Testing, 7), (TaskCategory::Debugging, 7),
+        (TaskCategory::SimpleEdit, 4), (TaskCategory::Research, 1),
+        (TaskCategory::Frontend, 4), (TaskCategory::Documentation, 3),
+    ]),
+    (AgentKind::OpenCode, &[
+        (TaskCategory::SimpleEdit, 8), (TaskCategory::Documentation, 5),
+        (TaskCategory::Testing, 4), (TaskCategory::Debugging, 4),
+        (TaskCategory::ComplexImpl, 3), (TaskCategory::Research, 1),
+        (TaskCategory::Frontend, 2), (TaskCategory::Refactoring, 4),
+    ]),
+    (AgentKind::Kilo, &[
+        (TaskCategory::SimpleEdit, 7), (TaskCategory::Documentation, 4),
+        (TaskCategory::Testing, 3), (TaskCategory::Debugging, 3),
+        (TaskCategory::ComplexImpl, 2), (TaskCategory::Research, 1),
+        (TaskCategory::Frontend, 2), (TaskCategory::Refactoring, 3),
+    ]),
+    (AgentKind::Cursor, &[
+        (TaskCategory::Frontend, 9), (TaskCategory::ComplexImpl, 7),
+        (TaskCategory::Refactoring, 6), (TaskCategory::Testing, 5),
+        (TaskCategory::Debugging, 5), (TaskCategory::SimpleEdit, 4),
+        (TaskCategory::Research, 2), (TaskCategory::Documentation, 4),
+    ]),
+    (AgentKind::Ob1, &[
+        (TaskCategory::Research, 5), (TaskCategory::ComplexImpl, 5),
+        (TaskCategory::Debugging, 4), (TaskCategory::Testing, 4),
+        (TaskCategory::SimpleEdit, 3), (TaskCategory::Frontend, 3),
+        (TaskCategory::Refactoring, 4), (TaskCategory::Documentation, 3),
+    ]),
 ];
 
-#[derive(Clone, Copy)]
-struct Candidate {
-    kind: AgentKind,
-    score: i32,
-    reason: &'static str,
+fn base_score(agent: AgentKind, category: TaskCategory) -> i32 {
+    CAPABILITY.iter()
+        .find(|(k, _)| *k == agent)
+        .and_then(|(_, scores)| scores.iter().find(|(c, _)| *c == category))
+        .map(|(_, s)| *s).unwrap_or(1)
+}
+fn is_cheap(agent: &AgentKind) -> bool {
+    matches!(agent, AgentKind::Kilo | AgentKind::OpenCode | AgentKind::Gemini)
+}
+fn priority(kind: AgentKind) -> i32 {
+    match kind {
+        AgentKind::Gemini | AgentKind::Kilo | AgentKind::Ob1 => 0,
+        AgentKind::OpenCode => 1, AgentKind::Cursor => 2, AgentKind::Codex => 3,
+    }
 }
 
 pub(crate) fn select_agent_with_reason(
-    prompt: &str,
-    opts: &RunOpts,
-    store: &Store,
+    prompt: &str, opts: &RunOpts, store: &Store,
 ) -> (AgentKind, String) {
     let history = store.agent_success_rates().unwrap_or_default();
     select_agent_from(prompt, opts, &detect_agents(), &history)
 }
 
 fn select_agent_from(
-    prompt: &str,
-    opts: &RunOpts,
-    available: &[AgentKind],
+    prompt: &str, opts: &RunOpts, available: &[AgentKind],
     history: &[(AgentKind, f64, usize)],
 ) -> (AgentKind, String) {
     let normalized = prompt.trim().to_lowercase();
     let prompt_len = prompt.chars().count();
-    let file_count = count_file_mentions(&normalized);
-    let has_workspace = opts.dir.is_some();
-    let auto_budget = contains_any(&normalized, LOW_VALUE_TERMS);
+    let file_count = classifier::count_file_mentions(&normalized);
+    let profile = classifier::classify(prompt, file_count, prompt_len);
+    let auto_budget = classifier::contains_any(&normalized, classifier::LOW_VALUE_TERMS);
     let budget = opts.budget || auto_budget;
     let history_map: std::collections::HashMap<AgentKind, (f64, usize)> = history
-        .iter()
-        .map(|(kind, rate, count)| (*kind, (*rate, *count)))
-        .collect();
-    let candidates = [
-        Candidate {
-            kind: AgentKind::Gemini,
-            score: score_gemini(&normalized, has_workspace),
-            reason: "research/question task",
-        },
-        Candidate {
-            kind: AgentKind::OpenCode,
-            score: score_opencode(&normalized, file_count, prompt_len, budget),
-            reason: "simple edit task",
-        },
-        Candidate {
-            kind: AgentKind::Kilo,
-            score: score_kilo(&normalized, file_count, prompt_len, budget),
-            reason: "simple edit task (free)",
-        },
-        Candidate {
-            kind: AgentKind::Cursor,
-            score: score_cursor(&normalized),
-            reason: "frontend/UI task",
-        },
-        Candidate {
-            kind: AgentKind::Codex,
-            score: score_codex(&normalized, file_count, prompt_len, budget),
-            reason: codex_reason(&normalized, file_count, prompt_len),
-        },
-        Candidate {
-            kind: AgentKind::Ob1,
-            score: score_ob1(&normalized, has_workspace),
-            reason: "multi-model research/coding task",
-        },
+        .iter().map(|(k, r, c)| (*k, (*r, *c))).collect();
+    let all_agents = [
+        AgentKind::Gemini, AgentKind::OpenCode, AgentKind::Kilo,
+        AgentKind::Cursor, AgentKind::Codex, AgentKind::Ob1,
     ];
-    let primary = best_candidate(&candidates, None, &history_map);
-    let selected = if available.is_empty() {
-        primary
-    } else {
-        best_candidate(&candidates, Some(available), &history_map)
+    let score_for = |kind: AgentKind| -> i32 {
+        let mut s = base_score(kind, profile.category);
+        if budget {
+            if is_cheap(&kind) { s += 4; } else { s -= 6; }
+        }
+        if rate_limit::is_rate_limited(&kind) { s -= 10; }
+        if let Some((rate, count)) = history_map.get(&kind) {
+            if *count >= 5 {
+                if *rate < 0.65 { s -= 3; } else if *rate >= 0.90 { s += 2; }
+            }
+        }
+        if matches!(profile.complexity, Complexity::High)
+            && matches!(kind, AgentKind::Codex | AgentKind::Cursor)
+        { s += 2; }
+        s
     };
-    let mut reason = if selected.kind == primary.kind {
-        selected.reason.to_string()
-    } else {
-        format!("{}; {} unavailable", primary.reason, primary.kind.as_str())
+    let pick_best = |agents: &[AgentKind]| -> (AgentKind, i32) {
+        agents.iter().map(|&k| (k, score_for(k)))
+            .max_by_key(|&(k, s)| (s, priority(k)))
+            .unwrap_or((AgentKind::Codex, 1))
     };
-    if auto_budget {
-        reason.push_str("; auto-budget: low-value task detected");
-    } else if opts.budget {
-        reason.push_str("; budget mode: preferring cheaper agent");
+    let (primary_kind, _) = pick_best(&all_agents);
+    let (sel_kind, sel_score) = if available.is_empty() {
+        pick_best(&all_agents)
+    } else {
+        pick_best(available)
+    };
+    let mut reason = format!(
+        "{} task ({}) \u{2192} {} (score: {})",
+        profile.category.label(), profile.complexity.label(),
+        sel_kind.as_str(), sel_score,
+    );
+    if sel_kind != primary_kind {
+        reason.push_str(&format!("; {} unavailable", primary_kind.as_str()));
     }
-    if rate_limit::is_rate_limited(&AgentKind::Codex) && selected.kind != AgentKind::Codex {
+    if auto_budget {
+        reason.push_str("; auto-budget: low-value task");
+    } else if opts.budget {
+        reason.push_str("; budget mode");
+    }
+    if rate_limit::is_rate_limited(&AgentKind::Codex) && sel_kind != AgentKind::Codex {
         reason.push_str("; codex rate-limited");
     }
-    if let Some((rate, count)) = history_map.get(&selected.kind) {
+    if let Some((rate, count)) = history_map.get(&sel_kind) {
         if *count >= 5 {
             let percent = (*rate * 100.0).round() as i32;
             reason.push_str(&format!("; history: {}% success", percent));
         }
     }
-    (selected.kind, reason)
+    (sel_kind, reason)
 }
 
-fn best_candidate(
-    candidates: &[Candidate],
-    available: Option<&[AgentKind]>,
-    history: &std::collections::HashMap<AgentKind, (f64, usize)>,
-) -> Candidate {
-    candidates
-        .iter()
-        .copied()
-        .filter(|candidate| match available {
-            Some(items) => items.contains(&candidate.kind),
-            None => true,
-        })
-        .map(|candidate| {
-            let mut score = candidate.score;
-            if let Some((rate, count)) = history.get(&candidate.kind) {
-                if *count >= 5 {
-                    if *rate < 0.65 {
-                        score -= 3;
-                    } else if *rate >= 0.90 {
-                        score += 2;
-                    }
-                }
-            }
-            (candidate, score)
-        })
-        .max_by_key(|(candidate, score)| (*score, priority(candidate.kind)))
-        .map(|(candidate, _)| candidate)
-        .unwrap_or(Candidate {
-            kind: AgentKind::Codex,
-            score: 1,
-            reason: "general coding task",
-        })
+pub(crate) fn recommend_model(
+    agent: &AgentKind, complexity: &Complexity, budget: bool,
+) -> Option<&'static str> {
+    use crate::cmd::config::{budget_model, models_for_agent};
+    if budget { return budget_model(agent); }
+    let models = models_for_agent(agent);
+    if models.is_empty() { return None; }
+    let tier = match complexity {
+        Complexity::Low => "cheap", Complexity::Medium => "standard", Complexity::High => "premium",
+    };
+    models.iter().find(|m| m.tier == tier).or_else(|| models.first()).map(|m| m.model)
 }
 
-fn score_gemini(prompt: &str, has_workspace: bool) -> i32 {
-    let starts_like_research = RESEARCH_PREFIXES
-        .iter()
-        .any(|term| prompt.starts_with(term));
-    let has_research_terms = contains_any(prompt, RESEARCH_TERMS);
-    let mut score = 0;
-    if starts_like_research {
-        score += 4;
-    }
-    if has_research_terms {
-        score += 3;
-    }
-    if score > 0 && !has_workspace {
-        score += 2;
-    }
-    score
-}
-
-fn score_opencode(prompt: &str, file_count: usize, prompt_len: usize, budget: bool) -> i32 {
-    let mut score = 0;
-    if contains_any(prompt, SIMPLE_EDIT_TERMS) {
-        score += 4;
-        if file_count == 1 {
-            score += 2;
-        }
-        if prompt_len < 200 {
-            score += 2;
-        }
-    }
-    if budget {
-        score += 4;
-    }
-    score
-}
-
-fn score_kilo(prompt: &str, file_count: usize, prompt_len: usize, budget: bool) -> i32 {
-    let mut score = 0;
-    if contains_any(prompt, SIMPLE_EDIT_TERMS) {
-        score += 4;
-        if file_count == 1 {
-            score += 2;
-        }
-        if prompt_len < 200 {
-            score += 2;
-        }
-    }
-    if budget {
-        score += 6;
-    }
-    score
-}
-
-fn score_ob1(prompt: &str, has_workspace: bool) -> i32 {
-    let starts_like_research = RESEARCH_PREFIXES
-        .iter()
-        .any(|term| prompt.starts_with(term));
-    let has_research_terms = contains_any(prompt, RESEARCH_TERMS);
-    let mut score = 1; // baseline: multi-model coding agent
-    if starts_like_research {
-        score += 2; // can research, but gemini is preferred (scores 4)
-    }
-    if has_research_terms {
-        score += 1;
-    }
-    if contains_any(prompt, COMPLEX_TERMS) {
-        score += 2;
-    }
-    if has_workspace {
-        score += 1; // coding boost with workspace
-    }
-    if rate_limit::is_rate_limited(&AgentKind::Ob1) {
-        score = (score - 10).max(0);
-    }
-    score
-}
-
-fn score_cursor(prompt: &str) -> i32 {
-    let mut score = 1; // baseline: general-purpose coding agent
-    if contains_any(prompt, FRONTEND_TERMS) {
-        score += 6;
-    }
-    if contains_any(prompt, COMPLEX_TERMS) {
-        score += 2;
-    }
-    if rate_limit::is_rate_limited(&AgentKind::Cursor) {
-        score = (score - 10).max(0);
-    }
-    score
-}
-
-fn score_codex(prompt: &str, file_count: usize, prompt_len: usize, budget: bool) -> i32 {
-    let mut score = 1;
-    if contains_any(prompt, COMPLEX_TERMS) {
-        score += 4;
-    }
-    if prompt_len > 500 {
-        score += 2;
-    }
-    if file_count > 1 || prompt.contains(" modules") || prompt.contains(" files") {
-        score += 2;
-    }
-    if budget {
-        score = (score - 8).max(0);
-    }
-    if rate_limit::is_rate_limited(&AgentKind::Codex) {
-        score = (score - 10).max(0);
-    }
-    score
-}
-
-fn codex_reason(prompt: &str, file_count: usize, prompt_len: usize) -> &'static str {
-    if contains_any(prompt, COMPLEX_TERMS) || prompt_len > 500 || file_count > 1 {
-        "complex implementation task"
-    } else {
-        "general coding task"
-    }
-}
-
-fn count_file_mentions(prompt: &str) -> usize {
-    prompt
-        .split_whitespace()
-        .map(trim_token)
-        .filter(|token| {
-            token.contains('/') || FILE_SUFFIXES.iter().any(|suffix| token.ends_with(suffix))
-        })
-        .count()
-}
-
-fn trim_token(token: &str) -> &str {
-    token.trim_matches(|ch: char| !ch.is_alphanumeric() && ch != '.' && ch != '_' && ch != '/')
-}
-
-fn contains_any(prompt: &str, terms: &[&str]) -> bool {
-    terms.iter().any(|term| prompt.contains(term))
-}
-
-fn priority(kind: AgentKind) -> i32 {
-    match kind {
-        AgentKind::Gemini => 0,
-        AgentKind::Kilo => 0,
-        AgentKind::Ob1 => 0,
-        AgentKind::OpenCode => 1,
-        AgentKind::Cursor => 2,
-        AgentKind::Codex => 3,
-    }
-}
-
-/// Coding capability fallback chain: codex → cursor → opencode → kilo.
-/// Returns the best available agent with similar coding capabilities.
 const CODING_FALLBACK_CHAIN: &[AgentKind] = &[
-    AgentKind::Codex,
-    AgentKind::Cursor,
-    AgentKind::OpenCode,
-    AgentKind::Kilo,
-    AgentKind::Ob1,
+    AgentKind::Codex, AgentKind::Cursor, AgentKind::OpenCode, AgentKind::Kilo, AgentKind::Ob1,
 ];
-
 pub(crate) fn coding_fallback_for(agent: &AgentKind) -> Option<AgentKind> {
     let available = detect_agents();
     let start = CODING_FALLBACK_CHAIN.iter().position(|k| k == agent)?;
@@ -353,45 +170,55 @@ mod tests {
     use crate::paths;
     use crate::types::AgentKind;
 
+    fn opts(dir: Option<&str>, budget: bool) -> RunOpts {
+        RunOpts {
+            dir: dir.map(|s| s.to_string()), output: None, model: None,
+            budget, read_only: false, context_files: vec![], session_id: None,
+        }
+    }
+    fn select(prompt: &str, dir: &[&str], available: &[AgentKind]) -> (AgentKind, String) {
+        select_agent_from(prompt, &opts(dir.first().copied(), false), available, &[])
+    }
+    fn all() -> [AgentKind; 6] {
+        [AgentKind::Gemini, AgentKind::OpenCode, AgentKind::Kilo,
+         AgentKind::Cursor, AgentKind::Codex, AgentKind::Ob1]
+    }
+    fn with_history(prompt: &str, h: &[(AgentKind, f64, usize)]) -> (AgentKind, String) {
+        select_agent_from(prompt, &opts(None, false), &all(), h)
+    }
+
     #[test]
     fn research_tasks_go_to_gemini() {
         let temp = tempfile::tempdir().unwrap();
         let _guard = paths::AidHomeGuard::set(temp.path());
         let (kind, reason) = select(
-            "Explain the authentication flow and compare the docs?",
-            &[],
-            &available_agents(),
+            "Explain the authentication flow and compare the docs?", &[], &all(),
         );
         assert_eq!(kind, AgentKind::Gemini);
-        assert_eq!(reason, "research/question task");
+        assert!(reason.contains("research"));
+        assert!(reason.contains("gemini"));
     }
-
     #[test]
     fn simple_edits_go_to_opencode() {
         let temp = tempfile::tempdir().unwrap();
         let _guard = paths::AidHomeGuard::set(temp.path());
         let (kind, reason) = select(
-            "rename src/types.rs field name to task_name",
-            &[],
-            &available_agents(),
+            "rename src/types.rs field name to task_name", &[], &all(),
         );
         assert_eq!(kind, AgentKind::OpenCode);
-        assert_eq!(reason, "simple edit task");
+        assert!(reason.contains("simple-edit"));
     }
-
     #[test]
     fn frontend_tasks_go_to_cursor() {
         let temp = tempfile::tempdir().unwrap();
         let _guard = paths::AidHomeGuard::set(temp.path());
         let (kind, reason) = select(
             "Create a responsive React component layout for the settings UI",
-            &["web/app.tsx"],
-            &available_agents(),
+            &["web/app.tsx"], &all(),
         );
         assert_eq!(kind, AgentKind::Cursor);
-        assert_eq!(reason, "frontend/UI task");
+        assert!(reason.contains("frontend"));
     }
-
     #[test]
     fn complex_tasks_go_to_codex() {
         let temp = tempfile::tempdir().unwrap();
@@ -400,167 +227,72 @@ mod tests {
             "Implement a retry-aware test suite across src/main.rs and src/cmd/run.rs. {}",
             "Add validation coverage and refactor the task dispatch flow. ".repeat(12)
         );
-        let (kind, reason) = select(&prompt, &["src"], &available_agents());
+        let (kind, reason) = select(&prompt, &["src"], &all());
         assert_eq!(kind, AgentKind::Codex);
-        assert_eq!(reason, "complex implementation task");
+        assert!(reason.contains("complex-impl"));
+        assert!(reason.contains("codex"));
     }
-
     #[test]
     fn unavailable_primary_agent_falls_back_to_next_best() {
         let (kind, reason) = select(
             "rename src/types.rs field name to task_name",
-            &[],
-            &[AgentKind::Gemini, AgentKind::Codex],
+            &[], &[AgentKind::Gemini, AgentKind::Codex],
         );
         assert_eq!(kind, AgentKind::Codex);
-        assert_eq!(reason, "simple edit task; opencode unavailable");
+        assert!(reason.contains("simple-edit"));
+        assert!(reason.contains("opencode unavailable"));
     }
-
     #[test]
     fn budget_mode_avoids_codex_for_complex_tasks() {
-        let prompt =
-            "Implement a retry-aware test suite across src/main.rs and src/cmd/run.rs. Add validation coverage.";
-        let opts = RunOpts {
-            dir: Some("src".to_string()),
-            output: None,
-            model: None,
-            budget: true,
-            read_only: false,
-            context_files: vec![],
-            session_id: None,
-        };
-        let (kind, reason) = select_agent_from(prompt, &opts, &available_agents(), &[]);
+        let prompt = "Implement a retry-aware test suite across src/main.rs and src/cmd/run.rs. Add validation coverage.";
+        let (kind, reason) = select_agent_from(prompt, &opts(Some("src"), true), &all(), &[]);
         assert_ne!(kind, AgentKind::Codex);
         assert!(reason.contains("budget"));
     }
-
     #[test]
     fn budget_mode_prefers_kilo_for_simple_edits() {
-        let prompt = "rename src/types.rs field name";
-        let opts = RunOpts {
-            dir: Some("src".to_string()),
-            output: None,
-            model: None,
-            budget: true,
-            read_only: false,
-            context_files: vec![],
-            session_id: None,
-        };
-        let (kind, reason) =
-            select_agent_from(prompt, &opts, &[AgentKind::Kilo, AgentKind::Codex], &[]);
+        let (kind, reason) = select_agent_from(
+            "rename src/types.rs field name",
+            &opts(Some("src"), true), &[AgentKind::Kilo, AgentKind::Codex], &[],
+        );
         assert_eq!(kind, AgentKind::Kilo);
         assert!(reason.contains("budget"));
     }
-
-    fn select(prompt: &str, dir: &[&str], available: &[AgentKind]) -> (AgentKind, String) {
-        let opts = RunOpts {
-            dir: dir.first().map(|value| value.to_string()),
-            output: None,
-            model: None,
-            budget: false,
-            read_only: false,
-            context_files: vec![],
-            session_id: None,
-        };
-        select_agent_from(prompt, &opts, available, &[])
-    }
-
-    fn available_agents() -> [AgentKind; 6] {
-        [
-            AgentKind::Gemini,
-            AgentKind::OpenCode,
-            AgentKind::Kilo,
-            AgentKind::Cursor,
-            AgentKind::Codex,
-            AgentKind::Ob1,
-        ]
-    }
-
     #[test]
     fn history_penalty_for_low_success_rate() {
-        let history = vec![(AgentKind::Codex, 0.50, 10)];
-        let opts = RunOpts {
-            dir: Some("src".to_string()),
-            output: None,
-            model: None,
-            budget: false,
-            read_only: false,
-            context_files: vec![],
-            session_id: None,
-        };
-        let prompt = "add type annotation to field";
-        let available = [AgentKind::OpenCode, AgentKind::Codex];
-        let (kind, _) = select_agent_from(prompt, &opts, &available, &history);
+        let h = vec![(AgentKind::Codex, 0.50, 10)];
+        let (kind, _) = select_agent_from(
+            "add type annotation to field",
+            &opts(Some("src"), false), &[AgentKind::OpenCode, AgentKind::Codex], &h,
+        );
         assert_eq!(kind, AgentKind::OpenCode);
     }
-
     #[test]
     fn history_penalty_overrides_default_codex_selection() {
-        let history = vec![(AgentKind::Codex, 0.50, 10)];
-        let opts = RunOpts {
-            dir: None,
-            output: None,
-            model: None,
-            budget: false,
-            read_only: false,
-            context_files: vec![],
-            session_id: None,
-        };
-        let prompt = "some random task";
-        let available = [AgentKind::Codex, AgentKind::Gemini];
-        let (kind, _) = select_agent_from(prompt, &opts, &available, &history);
+        let h = vec![(AgentKind::Codex, 0.50, 10)];
+        let (kind, _) = select_agent_from(
+            "some random task", &opts(None, false),
+            &[AgentKind::Codex, AgentKind::Gemini], &h,
+        );
         assert_eq!(kind, AgentKind::Gemini);
     }
-
     #[test]
     fn history_bonus_for_high_success_rate() {
-        let history = vec![(AgentKind::Codex, 0.95, 10)];
-        let (kind, _) = select_with_history("implement auth flow", &history);
+        let (kind, _) = with_history("implement auth flow", &[(AgentKind::Codex, 0.95, 10)]);
         assert_eq!(kind, AgentKind::Codex);
     }
-
     #[test]
     fn history_ignored_for_low_task_count() {
-        let history = vec![(AgentKind::Gemini, 0.10, 3)];
-        let (kind, _) = select_with_history("research: what is MVP?", &history);
+        let (kind, _) = with_history("research: what is MVP?", &[(AgentKind::Gemini, 0.10, 3)]);
         assert_eq!(kind, AgentKind::Gemini);
     }
-
     #[test]
     fn history_appears_in_reason() {
-        let history = vec![(AgentKind::Gemini, 0.80, 10)];
-        let opts = RunOpts {
-            dir: None,
-            output: None,
-            model: None,
-            budget: false,
-            read_only: false,
-            context_files: vec![],
-            session_id: None,
-        };
+        let h = vec![(AgentKind::Gemini, 0.80, 10)];
         let (_, reason) = select_agent_from(
-            "research: what is MVP?",
-            &opts,
-            &available_agents(),
-            &history,
+            "research: what is MVP?", &opts(None, false), &all(), &h,
         );
         assert!(reason.contains("history:"));
         assert!(reason.contains("80% success"));
-    }
-
-    fn select_with_history(
-        prompt: &str,
-        history: &[(AgentKind, f64, usize)],
-    ) -> (AgentKind, String) {
-        let opts = RunOpts {
-            dir: None,
-            output: None,
-            model: None,
-            budget: false,
-            read_only: false,
-            context_files: vec![],
-            session_id: None,
-        };
-        select_agent_from(prompt, &opts, &available_agents(), history)
     }
 }

@@ -1,27 +1,22 @@
 // ratatui rendering for the aid dashboard board and detail screens.
 // Draws table/list widgets from App state with simple status coloring.
 
+#[path = "ui_helpers.rs"]
+mod ui_helpers;
+use ui_helpers::*;
+
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::prelude::{Alignment, Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{
-    Block,
-    Borders,
-    Cell,
-    List,
-    ListItem,
-    Paragraph,
-    Row,
-    Table,
-    TableState,
-    Wrap,
+    Block, Borders, List, ListItem, Paragraph, Row, Table, TableState, Wrap,
 };
 
 use super::app::{App, DetailTab};
 use super::dashboard;
 use super::multipane;
 use crate::cost;
-use crate::types::{Task, TaskStatus};
+use crate::types::TaskStatus;
 
 pub fn render(frame: &mut ratatui::Frame<'_>, app: &App) {
     if app.multipane_mode {
@@ -58,7 +53,6 @@ fn render_multipane_view(frame: &mut ratatui::Frame<'_>, app: &App) {
                 })
                 .collect();
             let elapsed = if let Some(ms) = task.duration_ms {
-                // Completed task: show final duration
                 let secs = ms / 1000;
                 if secs < 60 {
                     format!("{secs}s")
@@ -68,7 +62,6 @@ fn render_multipane_view(frame: &mut ratatui::Frame<'_>, app: &App) {
                     format!("{}h {:02}m", secs / 3600, (secs % 3600) / 60)
                 }
             } else {
-                // Running task: show live elapsed
                 let secs = (chrono::Local::now() - task.created_at).num_seconds();
                 if secs < 60 {
                     format!("{secs}s")
@@ -226,35 +219,11 @@ fn render_detail(frame: &mut ratatui::Frame<'_>, app: &App) {
     );
 }
 
-fn task_row(app: &App, task: &Task) -> Row<'static> {
-    let status = match task.status {
-        TaskStatus::Running => format!("▶ {}", task.status.label()),
-        TaskStatus::Done | TaskStatus::Merged => format!("✓ {}", task.status.label()),
-        TaskStatus::Failed => format!("✗ {}", task.status.label()),
-        _ => task.status.label().to_string(),
-    };
-    Row::new(vec![
-        Cell::from(task.id.as_str().to_string()),
-        Cell::from(task.agent.as_str().to_string()),
-        Cell::from(status),
-        Cell::from(task_progress(app, task)),
-        Cell::from(task_cpu(app, task)),
-        Cell::from(task_memory(app, task)),
-        Cell::from(task_duration(task)),
-        Cell::from(task_tokens(task)),
-        Cell::from(cost::format_cost(task.cost_usd)),
-        Cell::from(truncate(task.model.as_deref().unwrap_or("-"), 14)),
-        Cell::from(task.workgroup_id.clone().unwrap_or_else(|| "-".to_string())),
-        Cell::from(truncate(&task.prompt, 60)),
-    ])
-    .style(status_style(task.status))
-}
-
 fn render_detail_content(
     frame: &mut ratatui::Frame<'_>,
     area: Rect,
     app: &App,
-    task: &Task,
+    task: &crate::types::Task,
     events: &[crate::types::TaskEvent],
 ) {
     match app.detail_tab {
@@ -308,271 +277,5 @@ fn render_detail_content(
                 area,
             );
         }
-    }
-}
-
-fn task_header(task: &Task, events: &[crate::types::TaskEvent]) -> Paragraph<'static> {
-    let status_color = match task.status {
-        TaskStatus::Done | TaskStatus::Merged => Color::Green,
-        TaskStatus::Running => Color::Yellow,
-        TaskStatus::AwaitingInput => Color::Magenta,
-        TaskStatus::Failed => Color::Red,
-        _ => Color::Indexed(250),
-    };
-    let line1 = Line::from(vec![
-        Span::styled(
-            task.id.as_str().to_string(),
-            Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD),
-        ),
-        Span::raw("  "),
-        Span::styled(task.agent.to_string(), Style::default().fg(Color::Indexed(250))),
-        Span::raw("  "),
-        Span::styled(task.status.label().to_string(), Style::default().fg(status_color).add_modifier(Modifier::BOLD)),
-    ]);
-    let line2 = Line::from(vec![
-        Span::styled("Duration: ", Style::default().fg(Color::Indexed(243))),
-        Span::raw(task_duration(task)),
-        Span::styled("  Tokens: ", Style::default().fg(Color::Indexed(243))),
-        Span::raw(task_tokens(task)),
-        Span::styled("  Cost: ", Style::default().fg(Color::Indexed(243))),
-        Span::raw(cost::format_cost(task.cost_usd)),
-        Span::styled("  Model: ", Style::default().fg(Color::Indexed(243))),
-        Span::raw(task.model.as_deref().unwrap_or("-").to_string()),
-    ]);
-    let scope = task_scope_line(task);
-    let mut lines = vec![line1, line2];
-    if !scope.is_empty() {
-        lines.push(Line::from(Span::styled(scope, Style::default().fg(Color::Indexed(243)))));
-    }
-    if task.status == TaskStatus::AwaitingInput {
-        if let Some(prompt) = pending_prompt(events) {
-            lines.push(Line::from(Span::styled(
-                format!("Awaiting: {}", truncate(prompt, 120)),
-                Style::default().fg(Color::Magenta),
-            )));
-        }
-    }
-    Paragraph::new(lines)
-}
-
-fn tab_bar(active: DetailTab) -> Paragraph<'static> {
-    let tabs = [
-        ("Events", DetailTab::Events),
-        ("Prompt", DetailTab::Prompt),
-        ("Output", DetailTab::Output),
-    ];
-    let spans: Vec<Span<'static>> = tabs
-        .iter()
-        .flat_map(|(label, tab)| {
-            let style = if *tab == active {
-                Style::default()
-                    .fg(Color::Cyan)
-                    .add_modifier(Modifier::BOLD | Modifier::UNDERLINED)
-            } else {
-                Style::default().fg(Color::Indexed(245))
-            };
-            [Span::styled(format!(" {label} "), style), Span::raw(" ")]
-        })
-        .collect();
-    Paragraph::new(Line::from(spans))
-}
-
-fn detail_content_block(title: &'static str) -> Block<'static> {
-    Block::default().title(title).borders(Borders::TOP)
-}
-
-fn task_scope_line(task: &Task) -> String {
-    match (task.workgroup_id.as_deref(), task.worktree_path.as_deref()) {
-        (Some(group), Some(worktree)) => {
-            format!("Group: {group}  Worktree: {}", truncate(worktree, 80))
-        }
-        (Some(group), None) => format!("Group: {group}"),
-        (None, Some(worktree)) => format!("Worktree: {}", truncate(worktree, 96)),
-        (None, None) => String::new(),
-    }
-}
-
-fn prompt_text(task: &Task) -> String {
-    if let Some(resolved) = &task.resolved_prompt {
-        format!(
-            "--- Original Prompt ---\n{}\n\n--- Resolved Prompt ---\n{}",
-            task.prompt, resolved
-        )
-    } else {
-        task.prompt.clone()
-    }
-}
-
-fn read_task_output_for_tui(task: &Task) -> String {
-    if let Some(path) = task.output_path.as_deref()
-        && let Ok(content) = std::fs::read_to_string(path)
-    {
-        return content;
-    }
-    if let Some(path) = task.log_path.as_deref()
-        && let Ok(content) = std::fs::read_to_string(path)
-    {
-        let output = content
-            .lines()
-            .filter_map(|line| serde_json::from_str::<serde_json::Value>(line).ok())
-            .filter_map(|value| {
-                value
-                    .get("content")
-                    .and_then(|content| content.as_str())
-                    .map(String::from)
-            })
-            .collect::<Vec<_>>()
-            .join("");
-        if !output.is_empty() {
-            return output;
-        }
-    }
-    "No output available".to_string()
-}
-
-fn detail_scroll_offset(detail_scroll: usize) -> u16 {
-    detail_scroll.min(u16::MAX as usize) as u16
-}
-
-fn task_duration(task: &Task) -> String {
-    task.duration_ms
-        .map(|ms| {
-            let secs = ms / 1000;
-            if secs < 60 {
-                format!("{secs}s")
-            } else {
-                format!("{}m {:02}s", secs / 60, secs % 60)
-            }
-        })
-        .unwrap_or_else(|| "-".to_string())
-}
-
-fn task_tokens(task: &Task) -> String {
-    task.tokens
-        .map(|tokens| {
-            if tokens >= 1_000_000 {
-                format!("{:.1}M", tokens as f64 / 1_000_000.0)
-            } else if tokens >= 1_000 {
-                format!("{:.1}k", tokens as f64 / 1_000.0)
-            } else {
-                tokens.to_string()
-            }
-        })
-        .unwrap_or_else(|| "-".to_string())
-}
-
-fn task_cpu(app: &App, task: &Task) -> String {
-    app.get_metrics(task.id.as_str())
-        .map(|metrics| format!("{:.1}%", metrics.cpu_percent))
-        .unwrap_or_else(|| "—".to_string())
-}
-
-fn task_memory(app: &App, task: &Task) -> String {
-    app.get_metrics(task.id.as_str())
-        .map(|metrics| format!("{:.0}M", metrics.memory_mb))
-        .unwrap_or_else(|| "—".to_string())
-}
-
-fn task_progress(app: &App, task: &Task) -> String {
-    if task.status == TaskStatus::AwaitingInput {
-        return "awaiting input".to_string();
-    }
-    if task.status != TaskStatus::Running {
-        return "—".to_string();
-    }
-    app.get_milestone(task.id.as_str())
-        .map(|milestone| truncate(milestone, 30))
-        .unwrap_or_else(|| "—".to_string())
-}
-
-fn status_style(status: TaskStatus) -> Style {
-    match status {
-        TaskStatus::Done | TaskStatus::Merged => Style::default().fg(Color::Indexed(245)),
-        TaskStatus::Running => Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD),
-        TaskStatus::AwaitingInput => Style::default().fg(Color::Magenta).add_modifier(Modifier::BOLD),
-        TaskStatus::Failed => Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
-        TaskStatus::Pending => Style::default().fg(Color::Indexed(250)),
-        TaskStatus::Skipped => Style::default().fg(Color::Blue),
-    }
-}
-
-fn pending_prompt(events: &[crate::types::TaskEvent]) -> Option<&str> {
-    events.iter().rev().find_map(|event| {
-        let metadata = event.metadata.as_ref()?;
-        metadata
-            .get("awaiting_input")
-            .and_then(|value| value.as_bool())
-            .filter(|value| *value)
-            .map(|_| event.detail.as_str())
-    })
-}
-
-fn truncate(value: &str, max: usize) -> String {
-    if value.len() <= max {
-        value.to_string()
-    } else {
-        format!("{}...", &value[..max.saturating_sub(3)])
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::types::{AgentKind, TaskId};
-    use chrono::Local;
-    use tempfile::NamedTempFile;
-
-    fn make_task() -> Task {
-        Task {
-            id: TaskId("t-ui".to_string()),
-            agent: AgentKind::Codex,
-            prompt: "prompt".to_string(),
-            resolved_prompt: None,
-            status: TaskStatus::Done,
-            parent_task_id: None,
-            workgroup_id: None,
-            caller_kind: None,
-            caller_session_id: None,
-            agent_session_id: None,
-            repo_path: None,
-            worktree_path: None,
-            worktree_branch: None,
-            log_path: None,
-            output_path: None,
-            tokens: None,
-            prompt_tokens: None,
-            duration_ms: None,
-            model: None,
-            cost_usd: None,
-            created_at: Local::now(),
-            completed_at: None,
-            verify: None,
-            read_only: false,
-            budget: false,
-        }
-    }
-
-    #[test]
-    fn detail_output_prefers_output_file() {
-        let output_file = NamedTempFile::new().unwrap();
-        std::fs::write(output_file.path(), "stdout\n").unwrap();
-        let mut task = make_task();
-        task.output_path = Some(output_file.path().display().to_string());
-
-        assert_eq!(read_task_output_for_tui(&task), "stdout\n");
-    }
-
-    #[test]
-    fn detail_output_parses_log_jsonl_content() {
-        let log_file = NamedTempFile::new().unwrap();
-        std::fs::write(
-            log_file.path(),
-            "{\"content\":\"hello\\n\"}\n{\"content\":\"world\"}\n",
-        )
-        .unwrap();
-        let mut task = make_task();
-        task.log_path = Some(log_file.path().display().to_string());
-
-        assert_eq!(read_task_output_for_tui(&task), "hello\nworld");
     }
 }

@@ -1,6 +1,6 @@
 # ai-dispatch (aid)
 
-![Version](https://img.shields.io/badge/version-4.7.0-blue)
+![Version](https://img.shields.io/badge/version-5.1.0-blue)
 ![Rust](https://img.shields.io/badge/rust-2024-orange)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
@@ -268,6 +268,26 @@ aid run codex "Refactor the retry code path" \
 aid run opencode "Rename TaskRow to BoardRow" --dir . --no-skill
 ```
 
+## Agent Store
+
+`aid` includes a GitHub-backed community agent store for discovering and installing custom agent definitions.
+
+```bash
+# Browse all available agents
+aid store browse
+
+# Search for specific agents
+aid store browse coding
+
+# Preview an agent's configuration
+aid store show community/aider
+
+# Install an agent
+aid store install community/aider
+```
+
+Installed agents appear in `aid config agents` and participate in auto-selection via their capability scores. The store is backed by [sunoj/aid-agents](https://github.com/sunoj/aid-agents) — community contributions welcome.
+
 ### Milestones
 
 `aid` injects milestone guidance into prompts so agents emit progress markers that the watcher can parse and surface in `aid watch`, `aid board`, and the TUI.
@@ -301,6 +321,7 @@ Expected milestone format:
 | `aid config` | Inspect agent capability profiles, available skills, and model pricing. | `aid config agents`, `aid config skills`, `aid config pricing` |
 | `aid worktree` | Explicit worktree lifecycle management: create, list, remove. | `aid worktree create feat/x`, `aid worktree list`, `aid worktree remove feat/x` |
 | `aid group` | Create, list, show, update, and delete shared-context workgroups. | `aid group create dispatch --context "Shared rollout notes"` |
+| `aid store` | Browse, search, preview, and install community agent definitions. | `aid store browse`, `aid store install community/aider` |
 | `aid init` | Initialize default skills and templates. | `aid init` |
 
 ## Best Practices / Methodology
@@ -625,9 +646,9 @@ The diagram below is adapted from `DESIGN.md` to reflect the current `show` comm
 │       │          │          │       │
 ├───────┴──────────┴──────────┴───────┤
 │         Agent Adapters              │
-│  ┌──────┐ ┌─────┐ ┌────────┐ ┌──────┐ ┌────┐ ┌───┐ ┌────────┐
-│  │Gemini│ │Codex│ │OpenCode│ │Cursor│ │Kilo│ │OB1│ │Codebuff│
-│  └──────┘ └─────┘ └────────┘ └──────┘ └────┘ └───┘ └────────┘
+│  ┌──────┐ ┌─────┐ ┌────────┐ ┌──────┐ ┌────┐ ┌───┐ ┌────────┐ ┌──────┐
+│  │Gemini│ │Codex│ │OpenCode│ │Cursor│ │Kilo│ │OB1│ │Codebuff│ │Custom│
+│  └──────┘ └─────┘ └────────┘ └──────┘ └────┘ └───┘ └────────┘ └──────┘
 └─────────────────────────────────────┘
 ```
 

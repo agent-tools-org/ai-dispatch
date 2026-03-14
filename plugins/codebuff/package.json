@@ -7,8 +7,13 @@
     "aid-codebuff": "./aid-codebuff.mjs"
   },
   "dependencies": {
-    "@codebuff/sdk": "^0.1.0"
+    "@codebuff/sdk": "^0.10.7"
   },
-  "keywords": ["aid", "codebuff", "ai-agent", "plugin"],
+  "keywords": [
+    "aid",
+    "codebuff",
+    "ai-agent",
+    "plugin"
+  ],
   "license": "MIT"
 }

@@ -192,6 +192,7 @@ fn parse_turn_completed(
         )
     };
 
+    let cost_usd = v.get("cost_usd").and_then(|c| c.as_f64());
     Some(TaskEvent {
         task_id: task_id.clone(),
         timestamp: now,
@@ -203,6 +204,7 @@ fn parse_turn_completed(
             output_tokens,
             cached_input_tokens,
             extract_model(v),
+            cost_usd,
         )),
     })
 }
@@ -237,6 +239,7 @@ fn completion_metadata(
     output_tokens: i64,
     cached_input_tokens: i64,
     model: Option<String>,
+    cost_usd: Option<f64>,
 ) -> Value {
     let mut map = Map::from_iter([
         ("tokens".to_string(), json!(total_tokens)),
@@ -249,6 +252,9 @@ fn completion_metadata(
     ]);
     if let Some(value) = model {
         map.insert("model".to_string(), json!(value));
+    }
+    if let Some(cost) = cost_usd {
+        map.insert("cost_usd".to_string(), json!(cost));
     }
     Value::Object(map)
 }

@@ -34,7 +34,7 @@ const emit = (payload) => process.stdout.write(`${JSON.stringify(payload)}\n`);
 
 const client = new CodebuffClient({ apiKey, cwd });
 
-const usageTotals = { inputTokens: 0, outputTokens: 0 };
+const usageTotals = { inputTokens: 0, outputTokens: 0, totalCost: null };
 
 const handleEvent = (event) => {
   if (!event || typeof event.type !== 'string') return;
@@ -67,6 +67,7 @@ const handleEvent = (event) => {
       emit({ type: 'error', message: event.message || 'unknown error' });
       break;
     case 'finish':
+      if (event.totalCost != null) usageTotals.totalCost = event.totalCost;
       emit({ type: 'item.completed', item: { type: 'agent_message', text: `[codebuff] done (cost: $${event.totalCost?.toFixed(4) ?? '?'})` } });
       break;
     case 'subagent_start':
@@ -87,10 +88,12 @@ const handleEvent = (event) => {
       costMode,
       maxAgentSteps: 50,
     });
-    emit({
+    const turnEvent = {
       type: 'turn.completed',
       usage: { input_tokens: usageTotals.inputTokens, output_tokens: usageTotals.outputTokens, cached_input_tokens: 0 },
-    });
+    };
+    if (usageTotals.totalCost != null) turnEvent.cost_usd = usageTotals.totalCost;
+    emit(turnEvent);
     if (result?.output) {
       const out = typeof result.output === 'string' ? result.output : JSON.stringify(result.output);
       process.stderr.write(`[aid-codebuff] Output: ${out.slice(0, 300)}\n`);

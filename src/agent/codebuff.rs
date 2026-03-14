@@ -21,6 +21,14 @@ impl super::Agent for CodebuffAgent {
     }
 
     fn build_command(&self, prompt: &str, opts: &RunOpts) -> Result<Command> {
+        if std::env::var("CODEBUFF_API_KEY").unwrap_or_default().is_empty() {
+            anyhow::bail!(
+                "CODEBUFF_API_KEY not set.\n\
+                 1. Get an API key at: https://www.codebuff.com/api-keys\n\
+                 2. Export it: export CODEBUFF_API_KEY=cb-pat-...\n\
+                 3. Add to your shell profile (~/.zshrc) to persist across sessions"
+            );
+        }
         let mut cmd = Command::new("aid-codebuff");
         // SDK v0.10+ runs agent locally — needs extra heap for tokenizer + file scanning
         cmd.env("NODE_OPTIONS", "--max-old-space-size=8192");

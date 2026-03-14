@@ -203,7 +203,7 @@ fn group_create_list_and_show_work() {
         .unwrap();
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
-    let group_id = stdout.split_whitespace().nth(1).unwrap().to_string();
+    let group_id = stdout.trim().to_string();
     assert!(group_id.starts_with("wg-"));
 
     let list_output = aid_cmd_in(temp_dir.path())
@@ -240,7 +240,7 @@ fn group_update_and_delete_work() {
         .unwrap();
     assert!(create_output.status.success());
     let create_stdout = String::from_utf8_lossy(&create_output.stdout);
-    let group_id = create_stdout.split_whitespace().nth(1).unwrap().to_string();
+    let group_id = create_stdout.trim().to_string();
 
     let update_output = aid_cmd_in(temp_dir.path())
         .args([

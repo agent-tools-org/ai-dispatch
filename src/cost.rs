@@ -63,10 +63,25 @@ fn model_pricing(model: &str) -> Option<ModelPricing> {
             input_per_m: 2.0,
             output_per_m: 8.0,
         }
-    } else if m.contains("gpt-5") && !m.contains("mini") && !m.contains("nano") {
+    } else if m.contains("gpt-5.4") {
         ModelPricing {
-            input_per_m: 2.0,
-            output_per_m: 8.0,
+            input_per_m: 2.5,
+            output_per_m: 15.0,
+        }
+    } else if m.contains("gpt-5") && m.contains("mini") {
+        ModelPricing {
+            input_per_m: 0.25,
+            output_per_m: 2.0,
+        }
+    } else if m.contains("gpt-5") && m.contains("nano") {
+        ModelPricing {
+            input_per_m: 0.05,
+            output_per_m: 0.40,
+        }
+    } else if m.contains("gpt-5") {
+        ModelPricing {
+            input_per_m: 1.25,
+            output_per_m: 10.0,
         }
     } else if m.contains("gpt-4.1-mini") {
         ModelPricing {
@@ -177,13 +192,24 @@ mod tests {
     }
 
     #[test]
+    fn format_cost_label_codebuff() {
+        assert_eq!(format_cost_label(Some(1.5), AgentKind::Codebuff), "$1.50");
+    }
+
+    #[test]
     fn new_model_pricing_entries() {
         let pricing = model_pricing("claude-sonnet-4").unwrap();
         assert_eq!(pricing.input_per_m, 3.0);
         assert_eq!(pricing.output_per_m, 15.0);
         let pricing = model_pricing("gpt-5").unwrap();
-        assert_eq!(pricing.input_per_m, 2.0);
-        assert_eq!(pricing.output_per_m, 8.0);
+        assert_eq!(pricing.input_per_m, 1.25);
+        assert_eq!(pricing.output_per_m, 10.0);
+        let pricing = model_pricing("gpt-5.4").unwrap();
+        assert_eq!(pricing.input_per_m, 2.5);
+        assert_eq!(pricing.output_per_m, 15.0);
+        let pricing = model_pricing("gpt-5-mini").unwrap();
+        assert_eq!(pricing.input_per_m, 0.25);
+        assert_eq!(pricing.output_per_m, 2.0);
         let pricing = model_pricing("o3-mini").unwrap();
         assert_eq!(pricing.input_per_m, 1.10);
         assert_eq!(pricing.output_per_m, 4.40);

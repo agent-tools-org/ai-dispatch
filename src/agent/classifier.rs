@@ -1,5 +1,5 @@
 // Prompt classification for intelligent task routing.
-// Categorizes prompts by type and estimates complexity from signals.
+// Categorizes prompts by type and estimates complexity.
 // Exports: TaskCategory, Complexity, TaskProfile, classify()
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -24,7 +24,6 @@ pub enum Complexity {
 pub struct TaskProfile {
     pub category: TaskCategory,
     pub complexity: Complexity,
-    pub signals: Vec<&'static str>,
 }
 
 impl TaskCategory {
@@ -52,26 +51,85 @@ impl Complexity {
     }
 }
 
-const RESEARCH_PREFIXES: &[&str] = &["research:", "what is", "how does", "explain", "find", "list"];
+const RESEARCH_PREFIXES: &[&str] = &[
+    "research:",
+    "what is",
+    "how does",
+    "explain",
+    "find",
+    "list",
+];
 const RESEARCH_TERMS: &[&str] = &["?", "documentation", "compare", "analyze"];
-const SIMPLE_EDIT_TERMS: &[&str] =
-    &["rename", "change", "update", "fix typo", "add type", "annotation"];
+const SIMPLE_EDIT_TERMS: &[&str] = &[
+    "rename",
+    "change",
+    "update",
+    "fix typo",
+    "add type",
+    "annotation",
+];
 const FRONTEND_TERMS: &[&str] = &[
-    "ui", "frontend", "css", "html", "react", "component", "layout", "design", "responsive",
+    "ui",
+    "frontend",
+    "css",
+    "html",
+    "react",
+    "component",
+    "layout",
+    "design",
+    "responsive",
 ];
 const COMPLEX_IMPL_TERMS: &[&str] = &["implement", "create", "build"];
-const DEBUGGING_TERMS: &[&str] =
-    &["debug", "fix bug", "investigate", "error", "crash", "panic", "trace", "root cause"];
-const TESTING_TERMS: &[&str] =
-    &["test", "spec", "coverage", "assertion", "mock", "fixture", "benchmark"];
-const REFACTORING_TERMS: &[&str] =
-    &["refactor", "restructure", "extract", "split", "reorganize", "decouple", "modularize"];
-const DOCUMENTATION_TERMS: &[&str] =
-    &["document", "readme", "changelog", "comment", "docstring", "api doc", "jsdoc"];
+const DEBUGGING_TERMS: &[&str] = &[
+    "debug",
+    "fix bug",
+    "investigate",
+    "error",
+    "crash",
+    "panic",
+    "trace",
+    "root cause",
+];
+const TESTING_TERMS: &[&str] = &[
+    "test",
+    "spec",
+    "coverage",
+    "assertion",
+    "mock",
+    "fixture",
+    "benchmark",
+];
+const REFACTORING_TERMS: &[&str] = &[
+    "refactor",
+    "restructure",
+    "extract",
+    "split",
+    "reorganize",
+    "decouple",
+    "modularize",
+];
+const DOCUMENTATION_TERMS: &[&str] = &[
+    "document",
+    "readme",
+    "changelog",
+    "comment",
+    "docstring",
+    "api doc",
+    "jsdoc",
+];
 
 pub(crate) const LOW_VALUE_TERMS: &[&str] = &[
-    "run test", "cargo test", "cargo fmt", "cargo clippy", "format code", "lint",
-    "update docs", "update readme", "update changelog", "add comment", "add docstring",
+    "run test",
+    "cargo test",
+    "cargo fmt",
+    "cargo clippy",
+    "format code",
+    "lint",
+    "update docs",
+    "update readme",
+    "update changelog",
+    "add comment",
+    "add docstring",
     "type annotation",
 ];
 const FILE_SUFFIXES: &[&str] = &[
@@ -80,39 +138,28 @@ const FILE_SUFFIXES: &[&str] = &[
 
 pub fn classify(prompt: &str, file_count: usize, prompt_len: usize) -> TaskProfile {
     let norm = prompt.trim().to_lowercase();
-    let mut signals = Vec::new();
 
     let category = if contains_any_word(&norm, FRONTEND_TERMS) {
-        signals.push("frontend-keywords");
         TaskCategory::Frontend
     } else if RESEARCH_PREFIXES.iter().any(|p| norm.starts_with(p))
         || contains_any(&norm, RESEARCH_TERMS)
     {
-        signals.push("research-keywords");
         TaskCategory::Research
     } else if contains_any(&norm, SIMPLE_EDIT_TERMS) {
-        signals.push("simple-edit-keywords");
         TaskCategory::SimpleEdit
     } else if contains_any(&norm, COMPLEX_IMPL_TERMS) {
-        signals.push("complex-impl-keywords");
         TaskCategory::ComplexImpl
     } else if contains_any(&norm, TESTING_TERMS) {
-        signals.push("testing-keywords");
         TaskCategory::Testing
     } else if contains_any(&norm, DEBUGGING_TERMS) {
-        signals.push("debugging-keywords");
         TaskCategory::Debugging
     } else if contains_any(&norm, DOCUMENTATION_TERMS) {
-        signals.push("documentation-keywords");
         TaskCategory::Documentation
     } else if contains_any(&norm, REFACTORING_TERMS) {
-        signals.push("refactoring-keywords");
         TaskCategory::Refactoring
     } else if file_count > 0 {
-        signals.push("workspace-default");
         TaskCategory::ComplexImpl
     } else {
-        signals.push("fallback");
         TaskCategory::Research
     };
 
@@ -125,7 +172,10 @@ pub fn classify(prompt: &str, file_count: usize, prompt_len: usize) -> TaskProfi
         Complexity::Medium
     };
 
-    TaskProfile { category, complexity, signals }
+    TaskProfile {
+        category,
+        complexity,
+    }
 }
 
 pub(crate) fn count_file_mentions(prompt: &str) -> usize {

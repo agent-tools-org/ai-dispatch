@@ -1,8 +1,11 @@
 /target
+.cargo-target/
 *.swp
 *.swo
 *~
 .DS_Store
 .env
 .env.*
-v38-tasks.toml
+node_modules/
+website/node_modules/
+website/.wrangler/

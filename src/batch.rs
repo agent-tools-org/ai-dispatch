@@ -54,6 +54,8 @@ pub struct BatchDefaults {
     pub max_duration_mins: Option<u64>,
     pub context: Option<Vec<String>>,
     pub skills: Option<Vec<String>>,
+    #[serde(default)]
+    pub hooks: Option<Vec<String>>,
     pub fallback: Option<String>,
     #[serde(default)]
     pub read_only: Option<bool>,
@@ -78,6 +80,8 @@ pub struct BatchTask {
     pub max_duration_mins: Option<u64>,
     pub context: Option<Vec<String>>,
     pub skills: Option<Vec<String>>,
+    #[serde(default)]
+    pub hooks: Option<Vec<String>>,
     pub depends_on: Option<Vec<String>>,
     pub fallback: Option<String>,
     #[serde(default)]
@@ -133,6 +137,9 @@ fn apply_task_defaults(task: &mut BatchTask, defaults: &BatchDefaults) {
     }
     if task.skills.is_none() {
         task.skills = defaults.skills.clone();
+    }
+    if task.hooks.is_none() {
+        task.hooks = defaults.hooks.clone();
     }
     if task.fallback.is_none() {
         task.fallback = defaults.fallback.clone();

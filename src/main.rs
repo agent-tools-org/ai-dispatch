@@ -12,6 +12,7 @@ mod config;
 mod context;
 mod cost;
 mod explore;
+mod hooks;
 mod input_signal;
 mod notify;
 mod paths;
@@ -111,6 +112,9 @@ enum Commands {
         /// Fallback agent if primary agent fails
         #[arg(long)]
         fallback: Option<String>,
+        /// Hook specs to run for the dispatched task
+        #[arg(long)]
+        hook: Vec<String>,
         /// Run in read-only mode (no file writes)
         #[arg(long)]
         read_only: bool,
@@ -421,6 +425,7 @@ async fn main() -> Result<()> {
             bg,
             on_done,
             fallback,
+            hook,
             read_only,
         } => {
             let config = config::load_config().unwrap_or_default();
@@ -478,9 +483,10 @@ async fn main() -> Result<()> {
                     max_duration_mins: None,
                     retry,
                     context,
-                    skills,
-                    template,
-                    background: bg,
+                skills,
+                hooks: hook,
+                template,
+                background: bg,
                     announce: true,
                     on_done,
                     fallback,

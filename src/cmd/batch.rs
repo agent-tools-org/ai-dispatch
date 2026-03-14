@@ -89,6 +89,7 @@ fn task_to_run_args(task: &batch::BatchTask, background: bool) -> RunArgs {
         max_duration_mins: task.max_duration_mins.map(|value| value as i64),
         context: task.context.clone().unwrap_or_default(),
         skills: task.skills.clone().unwrap_or_default(),
+        hooks: task.hooks.clone().unwrap_or_default(),
         background,
         announce: true,
         fallback: task.fallback.clone(),

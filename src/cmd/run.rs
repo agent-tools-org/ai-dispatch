@@ -2,12 +2,14 @@
 // Creates task record, spawns agent process, wires watcher, records completion.
 use anyhow::{Context, Result};
 use chrono::Local;
+use serde_json::json;
 use std::sync::Arc;
 use tokio::process::Command;
 use crate::agent::{self, RunOpts};
 use crate::background::{self, BackgroundRunSpec};
 use crate::cmd::{config as cmd_config, retry_logic};
 use crate::config;
+use crate::hooks;
 use crate::paths;
 use crate::rate_limit;
 use crate::session;
@@ -33,6 +35,7 @@ pub struct RunArgs {
     pub retry: u32,
     pub context: Vec<String>,
     pub skills: Vec<String>,
+    pub hooks: Vec<String>,
     pub template: Option<String>,
     pub background: bool,
     pub announce: bool,
@@ -154,6 +157,7 @@ pub async fn run(store: Arc<Store>, args: RunArgs) -> Result<TaskId> {
         budget: args.budget,
     };
     store.insert_task(&task)?;
+    let before_worktree = task.worktree_path.clone();
     let prompt_bundle = run_prompt::build_prompt_bundle(&store, &args, &agent_kind, workgroup.as_ref(), &requested_skills)?;
     store.update_resolved_prompt(task_id.as_str(), &prompt_bundle.effective_prompt)?;
     store.update_prompt_tokens(task_id.as_str(), prompt_bundle.prompt_tokens)?;
@@ -166,8 +170,28 @@ pub async fn run(store: Arc<Store>, args: RunArgs) -> Result<TaskId> {
         context_files: prompt_bundle.context_files,
         session_id: args.session_id.clone(),
     };
+    let mut runtime_hooks = hooks::load_hooks()?;
+    runtime_hooks.extend(hooks::parse_cli_hooks(&args.hooks)?);
+    store.update_task_status(task_id.as_str(), TaskStatus::Running)?;
+    let before_payload = build_task_json(
+        &task_id,
+        agent_display_name,
+        TaskStatus::Running,
+        &args.prompt,
+        before_worktree.as_deref(),
+        effective_dir.as_deref(),
+    );
+    if let Err(err) = hooks::run_hooks_with(
+        "before_run",
+        &before_payload,
+        Some(agent_display_name),
+        &runtime_hooks,
+        true,
+    ) {
+        store.update_task_status(task_id.as_str(), TaskStatus::Failed)?;
+        return Err(err);
+    }
     if args.background {
-        store.update_task_status(task_id.as_str(), TaskStatus::Running)?;
         let spec = BackgroundRunSpec {
             task_id: task_id.as_str().to_string(),
             worker_pid: None,
@@ -224,7 +248,6 @@ pub async fn run(store: Arc<Store>, args: RunArgs) -> Result<TaskId> {
         }
         tokio_cmd.stdout(std::process::Stdio::piped());
         tokio_cmd.stderr(std::process::Stdio::piped());
-        store.update_task_status(task_id.as_str(), TaskStatus::Running)?;
         if args.announce {
             println!(
                 "Task {} started ({}: {})",
@@ -261,6 +284,23 @@ pub async fn run(store: Arc<Store>, args: RunArgs) -> Result<TaskId> {
             maybe_cleanup_fast_fail(&store, &task_id, &task);
             // Auto-cleanup worktree for failed tasks (no useful changes to preserve)
             if task.status == TaskStatus::Failed {
+                let fail_payload = build_task_json(
+                    &task_id,
+                    agent_display_name,
+                    TaskStatus::Failed,
+                    &task.prompt,
+                    task.worktree_path.as_deref(),
+                    effective_dir.as_deref(),
+                );
+                if let Err(err) = hooks::run_hooks_with(
+                    "on_fail",
+                    &fail_payload,
+                    Some(agent_display_name),
+                    &runtime_hooks,
+                    false,
+                ) {
+                    eprintln!("[aid] Hook on_fail failed: {err}");
+                }
                 if let Some(wt) = task.worktree_path.as_deref() {
                     if std::path::Path::new(wt).exists() {
                         match std::fs::remove_dir_all(wt) {
@@ -272,6 +312,25 @@ pub async fn run(store: Arc<Store>, args: RunArgs) -> Result<TaskId> {
             }
         }
         run_prompt::notify_task_completion(&store, &task_id)?;
+        if let Some(task) = store.get_task(task_id.as_str())? {
+            let done_payload = build_task_json(
+                &task_id,
+                agent_display_name,
+                task.status,
+                &task.prompt,
+                task.worktree_path.as_deref(),
+                effective_dir.as_deref(),
+            );
+            if let Err(err) = hooks::run_hooks_with(
+                "after_complete",
+                &done_payload,
+                Some(agent_display_name),
+                &runtime_hooks,
+                false,
+            ) {
+                eprintln!("[aid] Hook after_complete failed: {err}");
+            }
+        }
         crate::webhook::fire_task_webhooks(&store, task_id.as_str()).await;
         if args.announce {
             let status_hint = if let Some(task) = store.get_task(task_id.as_str())? {
@@ -342,6 +401,24 @@ fn check_worktree_escape(repo_dir: Option<&str>) {
             eprintln!("[aid] Run `git checkout .` to discard, or review with `git diff`");
         }
     }
+}
+
+fn build_task_json(
+    task_id: &TaskId,
+    agent: &str,
+    status: TaskStatus,
+    prompt: &str,
+    worktree: Option<&str>,
+    dir: Option<&str>,
+) -> serde_json::Value {
+    json!({
+        "task_id": task_id.as_str(),
+        "agent": agent,
+        "status": status.as_str(),
+        "prompt": prompt,
+        "worktree": worktree,
+        "dir": dir,
+    })
 }
 
 pub(crate) fn inherit_retry_base_branch(repo_dir: Option<&str>, task: &Task, retry_args: &mut RunArgs) { run_prompt::inherit_retry_base_branch_impl(repo_dir, task, retry_args); }

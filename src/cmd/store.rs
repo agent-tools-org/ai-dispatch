@@ -30,26 +30,46 @@ struct AgentEntry {
 }
 
 pub enum StoreAction {
-    Browse,
+    Browse { query: Option<String> },
     Install { name: String },
     Show { name: String },
 }
 
 pub fn run_store(action: StoreAction) -> Result<()> {
     match action {
-        StoreAction::Browse => browse(),
+        StoreAction::Browse { query } => browse(query.as_deref()),
         StoreAction::Install { name } => install(&name),
         StoreAction::Show { name } => show(&name),
     }
 }
 
-fn browse() -> Result<()> {
+fn browse(query: Option<&str>) -> Result<()> {
     let body = curl_fetch(INDEX_URL)?;
     let index: AgentIndex =
         serde_json::from_str(&body).context("Failed to parse store index")?;
 
-    if index.agents.is_empty() {
-        println!("Store is empty.");
+    let agents: Vec<&AgentEntry> = match query {
+        Some(q) => {
+            let q = q.to_lowercase();
+            index
+                .agents
+                .iter()
+                .filter(|a| {
+                    a.id.to_lowercase().contains(&q)
+                        || a.display_name.to_lowercase().contains(&q)
+                        || a.description.to_lowercase().contains(&q)
+                })
+                .collect()
+        }
+        None => index.agents.iter().collect(),
+    };
+
+    if agents.is_empty() {
+        if let Some(q) = query {
+            println!("No agents matching \"{q}\".");
+        } else {
+            println!("Store is empty.");
+        }
         return Ok(());
     }
 
@@ -58,7 +78,7 @@ fn browse() -> Result<()> {
         "Name", "Description", "Version", "Command"
     );
     println!("{}", "-".repeat(85));
-    for a in &index.agents {
+    for a in &agents {
         println!(
             "{:<25} {:<40} {:<10} {}",
             a.id, a.description, a.version, a.command

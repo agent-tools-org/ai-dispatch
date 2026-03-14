@@ -366,7 +366,10 @@ enum AgentCommands {
 #[derive(Subcommand)]
 enum StoreCommands {
     /// Browse available agents in the store
-    Browse,
+    Browse {
+        /// Optional search query to filter agents
+        query: Option<String>,
+    },
     /// Install an agent from the store (publisher/name)
     Install { name: String },
     /// Show agent TOML from the store (publisher/name)
@@ -636,7 +639,7 @@ async fn main() -> Result<()> {
         Commands::Store { action } => {
             use cmd::store::{StoreAction, run_store};
             let action = match action {
-                StoreCommands::Browse => StoreAction::Browse,
+                StoreCommands::Browse { query } => StoreAction::Browse { query },
                 StoreCommands::Install { name } => StoreAction::Install { name },
                 StoreCommands::Show { name } => StoreAction::Show { name },
             };

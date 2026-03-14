@@ -71,7 +71,7 @@ pub struct AidHomeGuard {
 #[cfg(test)]
 impl AidHomeGuard {
     pub fn set(path: &std::path::Path) -> Self {
-        let lock = AID_HOME_LOCK.lock().unwrap();
+        let lock = AID_HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let previous = std::env::var_os("AID_HOME");
         unsafe { std::env::set_var("AID_HOME", path) };
         Self {

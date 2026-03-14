@@ -82,7 +82,7 @@ pub fn classify(prompt: &str, file_count: usize, prompt_len: usize) -> TaskProfi
     let norm = prompt.trim().to_lowercase();
     let mut signals = Vec::new();
 
-    let category = if contains_any(&norm, FRONTEND_TERMS) {
+    let category = if contains_any_word(&norm, FRONTEND_TERMS) {
         signals.push("frontend-keywords");
         TaskCategory::Frontend
     } else if RESEARCH_PREFIXES.iter().any(|p| norm.starts_with(p))
@@ -142,6 +142,19 @@ fn trim_token(token: &str) -> &str {
 
 pub(crate) fn contains_any(prompt: &str, terms: &[&str]) -> bool {
     terms.iter().any(|term| prompt.contains(term))
+}
+
+/// Word-boundary aware match: "ui" matches " ui " but not "suite".
+fn contains_any_word(text: &str, terms: &[&str]) -> bool {
+    let bytes = text.as_bytes();
+    terms.iter().any(|term| {
+        text.match_indices(term).any(|(i, _)| {
+            let before = i == 0 || !bytes[i - 1].is_ascii_alphanumeric();
+            let end = i + term.len();
+            let after = end >= bytes.len() || !bytes[end].is_ascii_alphanumeric();
+            before && after
+        })
+    })
 }
 
 #[cfg(test)]

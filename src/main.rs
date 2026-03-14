@@ -170,6 +170,18 @@ enum Commands {
     },
     /// Print the most recent completion notifications
     Completions,
+    /// Clean up old tasks and orphaned worktrees
+    Clean {
+        /// Only clean tasks older than N days (default: 7)
+        #[arg(long, default_value = "7")]
+        older_than: u64,
+        /// Also remove orphaned worktrees from /tmp/aid-wt-*
+        #[arg(long)]
+        worktrees: bool,
+        /// Dry run — show what would be cleaned without deleting
+        #[arg(long)]
+        dry_run: bool,
+    },
     /// Inspect task artifacts (events, diff, output, explain)
     Show {
         /// Task ID to inspect
@@ -411,6 +423,13 @@ async fn main() -> Result<()> {
             if !text.is_empty() {
                 println!("{text}");
             }
+        }
+        Commands::Clean {
+            older_than,
+            worktrees,
+            dry_run,
+        } => {
+            cmd::clean::run(store, older_than, worktrees, dry_run)?;
         }
         Commands::Show {
             task_id,

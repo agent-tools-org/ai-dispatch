@@ -123,6 +123,20 @@ pub fn shared_target_dir() -> Option<String> {
     )
 }
 
+/// Returns a target directory isolated per worktree branch.
+/// Worktree tasks get `{base}/{sanitized_branch}` to avoid lock contention.
+/// Non-worktree tasks share the base directory.
+pub fn target_dir_for_worktree(worktree_branch: Option<&str>) -> Option<String> {
+    let base = shared_target_dir()?;
+    match worktree_branch {
+        Some(branch) => {
+            let sanitized = branch.replace('/', "-");
+            Some(format!("{base}/{sanitized}"))
+        }
+        None => Some(base),
+    }
+}
+
 pub fn is_rust_project(dir: Option<&str>) -> bool {
     resolve_project_dir(dir).join(CARGO_MANIFEST_NAME).is_file()
 }
@@ -143,7 +157,7 @@ fn which_exists(name: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::{is_rust_project, shared_target_dir};
+    use super::{is_rust_project, shared_target_dir, target_dir_for_worktree};
     use std::ffi::OsStr;
     use std::path::{Path, PathBuf};
     use std::process::Command;
@@ -256,6 +270,15 @@ mod tests {
             "SHARED_TARGET_DIR={}",
             shared_target_dir().unwrap_or_default()
         );
+    }
+
+    #[test]
+    fn target_dir_for_worktree_isolates_branches() {
+        let base = shared_target_dir().unwrap();
+        let isolated = target_dir_for_worktree(Some("feat/my-feature")).unwrap();
+        assert_eq!(isolated, format!("{base}/feat-my-feature"));
+        let shared = target_dir_for_worktree(None).unwrap();
+        assert_eq!(shared, base);
     }
 
     fn run_helper(

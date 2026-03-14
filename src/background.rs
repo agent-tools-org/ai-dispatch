@@ -119,8 +119,12 @@ async fn run_task_inner(store: &Arc<Store>, spec: &BackgroundRunSpec) -> Result<
     let mut std_cmd = agent
         .build_command(&spec.prompt, &opts)
         .context("Failed to build agent command")?;
+    let worktree_branch = store
+        .get_task(&spec.task_id)?
+        .and_then(|task| task.worktree_branch);
     if agent::is_rust_project(spec.dir.as_deref())
-        && let Some(target_dir) = agent::shared_target_dir()
+        && let Some(target_dir) =
+            agent::target_dir_for_worktree(worktree_branch.as_deref())
     {
         std_cmd.env("CARGO_TARGET_DIR", &target_dir);
     }

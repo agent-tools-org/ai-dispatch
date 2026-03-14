@@ -1,8 +1,9 @@
 // ratatui rendering for the aid dashboard board and detail screens.
 // Draws table/list widgets from App state with simple status coloring.
 
-use ratatui::layout::{Constraint, Direction, Layout};
+use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::prelude::{Alignment, Color, Modifier, Style};
+use ratatui::text::{Line, Span};
 use ratatui::widgets::{
     Block,
     Borders,
@@ -13,9 +14,10 @@ use ratatui::widgets::{
     Row,
     Table,
     TableState,
+    Wrap,
 };
 
-use super::app::App;
+use super::app::{App, DetailTab};
 use super::dashboard;
 use super::multipane;
 use crate::cost;
@@ -170,39 +172,36 @@ fn render_board(frame: &mut ratatui::Frame<'_>, app: &App) {
 fn render_detail(frame: &mut ratatui::Frame<'_>, app: &App) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Length(7),
-            Constraint::Min(5),
-            Constraint::Length(1),
-        ])
+        .constraints([Constraint::Min(5), Constraint::Length(1)])
         .split(frame.area());
+    let detail_block = Block::default().title("Task").borders(Borders::ALL);
+    let inner = detail_block.inner(chunks[0]);
+    frame.render_widget(detail_block, chunks[0]);
 
     if let Some(task) = app.selected_task() {
         let events = app.selected_events();
-        frame.render_widget(task_header(task, &events), chunks[0]);
-        let items: Vec<ListItem<'_>> = events
-            .iter()
-            .map(|event| {
-                ListItem::new(format!(
-                    "{} [{}] {}",
-                    event.timestamp.format("%H:%M:%S"),
-                    event.event_kind.as_str(),
-                    event.detail,
-                ))
-            })
-            .collect();
-        let list = List::new(items)
-            .block(Block::default().title("Events").borders(Borders::ALL));
-        frame.render_widget(list, chunks[1]);
+        let detail_chunks = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([
+                Constraint::Length(4),
+                Constraint::Length(1),
+                Constraint::Min(1),
+            ])
+            .split(inner);
+        frame.render_widget(task_header(task, &events), detail_chunks[0]);
+        frame.render_widget(tab_bar(app.detail_tab), detail_chunks[1]);
+        render_detail_content(frame, detail_chunks[2], app, task, &events);
     } else {
         frame.render_widget(
-            Paragraph::new(app.empty_message())
-                .block(Block::default().title("Task").borders(Borders::ALL)),
-            chunks[0],
+            Paragraph::new(app.empty_message()),
+            inner,
         );
     }
 
-    frame.render_widget(Paragraph::new("Esc=back q=quit"), chunks[2]);
+    frame.render_widget(
+        Paragraph::new("e=events p=prompt o=output Tab=next Esc=back q=quit"),
+        chunks[1],
+    );
 }
 
 fn task_row(app: &App, task: &Task) -> Row<'static> {
@@ -229,32 +228,154 @@ fn task_row(app: &App, task: &Task) -> Row<'static> {
     .style(status_style(task.status))
 }
 
-fn task_header(task: &Task, events: &[crate::types::TaskEvent]) -> Paragraph<'static> {
-    let mut lines = vec![
-        format!("{}  {}  {}", task.id, task.agent, task.status.label()),
-        format!("Prompt: {}", truncate(&task.prompt, 120)),
-        format!(
-            "Duration: {}  Tokens: {}  Cost: {}  Model: {}",
-            task_duration(task),
-            task_tokens(task),
-            cost::format_cost(task.cost_usd),
-            task.model.as_deref().unwrap_or("-"),
-        ),
-    ];
-    if task.status == TaskStatus::AwaitingInput
-        && let Some(prompt) = pending_prompt(events)
-    {
-        lines.push(format!("Awaiting: {}", truncate(prompt, 120)));
+fn render_detail_content(
+    frame: &mut ratatui::Frame<'_>,
+    area: Rect,
+    app: &App,
+    task: &Task,
+    events: &[crate::types::TaskEvent],
+) {
+    match app.detail_tab {
+        DetailTab::Events => {
+            let items: Vec<ListItem<'_>> = events
+                .iter()
+                .map(|event| {
+                    ListItem::new(format!(
+                        "{} [{}] {}",
+                        event.timestamp.format("%H:%M:%S"),
+                        event.event_kind.as_str(),
+                        event.detail,
+                    ))
+                })
+                .collect();
+            frame.render_widget(
+                List::new(items).block(detail_content_block("Events")),
+                area,
+            );
+        }
+        DetailTab::Prompt => {
+            frame.render_widget(
+                Paragraph::new(prompt_text(task))
+                    .wrap(Wrap { trim: false })
+                    .scroll((detail_scroll_offset(app.detail_scroll), 0))
+                    .block(detail_content_block("Prompt")),
+                area,
+            );
+        }
+        DetailTab::Output => {
+            frame.render_widget(
+                Paragraph::new(read_task_output_for_tui(task))
+                    .wrap(Wrap { trim: false })
+                    .scroll((detail_scroll_offset(app.detail_scroll), 0))
+                    .block(detail_content_block("Output")),
+                area,
+            );
+        }
     }
-    if let Some(group) = task.workgroup_id.as_deref() {
-        lines.push(format!("Group: {group}"));
-    }
-    if let Some(worktree) = task.worktree_path.as_deref() {
-        lines.push(format!("Worktree: {worktree}"));
-    }
+}
 
-    Paragraph::new(lines.join("\n"))
-        .block(Block::default().title("Task").borders(Borders::ALL))
+fn task_header(task: &Task, events: &[crate::types::TaskEvent]) -> Paragraph<'static> {
+    let awaiting = if task.status == TaskStatus::AwaitingInput {
+        pending_prompt(events)
+            .map(|prompt| format!("Awaiting: {}", truncate(prompt, 120)))
+            .unwrap_or_default()
+    } else {
+        String::new()
+    };
+    Paragraph::new(
+        [
+            format!("{}  {}  {}", task.id, task.agent, task.status.label()),
+            format!(
+                "Duration: {}  Tokens: {}  Cost: {}  Model: {}",
+                task_duration(task),
+                task_tokens(task),
+                cost::format_cost(task.cost_usd),
+                task.model.as_deref().unwrap_or("-"),
+            ),
+            task_scope_line(task),
+            awaiting,
+        ]
+        .join("\n"),
+    )
+}
+
+fn tab_bar(active: DetailTab) -> Paragraph<'static> {
+    let tabs = [
+        ("Events", DetailTab::Events),
+        ("Prompt", DetailTab::Prompt),
+        ("Output", DetailTab::Output),
+    ];
+    let spans: Vec<Span<'static>> = tabs
+        .iter()
+        .flat_map(|(label, tab)| {
+            let style = if *tab == active {
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD | Modifier::UNDERLINED)
+            } else {
+                Style::default().fg(Color::DarkGray)
+            };
+            [Span::styled(format!(" {label} "), style), Span::raw(" ")]
+        })
+        .collect();
+    Paragraph::new(Line::from(spans))
+}
+
+fn detail_content_block(title: &'static str) -> Block<'static> {
+    Block::default().title(title).borders(Borders::TOP)
+}
+
+fn task_scope_line(task: &Task) -> String {
+    match (task.workgroup_id.as_deref(), task.worktree_path.as_deref()) {
+        (Some(group), Some(worktree)) => {
+            format!("Group: {group}  Worktree: {}", truncate(worktree, 80))
+        }
+        (Some(group), None) => format!("Group: {group}"),
+        (None, Some(worktree)) => format!("Worktree: {}", truncate(worktree, 96)),
+        (None, None) => String::new(),
+    }
+}
+
+fn prompt_text(task: &Task) -> String {
+    if let Some(resolved) = &task.resolved_prompt {
+        format!(
+            "--- Original Prompt ---\n{}\n\n--- Resolved Prompt ---\n{}",
+            task.prompt, resolved
+        )
+    } else {
+        task.prompt.clone()
+    }
+}
+
+fn read_task_output_for_tui(task: &Task) -> String {
+    if let Some(path) = task.output_path.as_deref()
+        && let Ok(content) = std::fs::read_to_string(path)
+    {
+        return content;
+    }
+    if let Some(path) = task.log_path.as_deref()
+        && let Ok(content) = std::fs::read_to_string(path)
+    {
+        let output = content
+            .lines()
+            .filter_map(|line| serde_json::from_str::<serde_json::Value>(line).ok())
+            .filter_map(|value| {
+                value
+                    .get("content")
+                    .and_then(|content| content.as_str())
+                    .map(String::from)
+            })
+            .collect::<Vec<_>>()
+            .join("");
+        if !output.is_empty() {
+            return output;
+        }
+    }
+    "No output available".to_string()
+}
+
+fn detail_scroll_offset(detail_scroll: usize) -> u16 {
+    detail_scroll.min(u16::MAX as usize) as u16
 }
 
 fn task_duration(task: &Task) -> String {
@@ -335,5 +456,67 @@ fn truncate(value: &str, max: usize) -> String {
         value.to_string()
     } else {
         format!("{}...", &value[..max.saturating_sub(3)])
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::types::{AgentKind, TaskId};
+    use chrono::Local;
+    use tempfile::NamedTempFile;
+
+    fn make_task() -> Task {
+        Task {
+            id: TaskId("t-ui".to_string()),
+            agent: AgentKind::Codex,
+            prompt: "prompt".to_string(),
+            resolved_prompt: None,
+            status: TaskStatus::Done,
+            parent_task_id: None,
+            workgroup_id: None,
+            caller_kind: None,
+            caller_session_id: None,
+            agent_session_id: None,
+            repo_path: None,
+            worktree_path: None,
+            worktree_branch: None,
+            log_path: None,
+            output_path: None,
+            tokens: None,
+            prompt_tokens: None,
+            duration_ms: None,
+            model: None,
+            cost_usd: None,
+            created_at: Local::now(),
+            completed_at: None,
+            verify: None,
+            read_only: false,
+            budget: false,
+        }
+    }
+
+    #[test]
+    fn detail_output_prefers_output_file() {
+        let output_file = NamedTempFile::new().unwrap();
+        std::fs::write(output_file.path(), "stdout\n").unwrap();
+        let mut task = make_task();
+        task.output_path = Some(output_file.path().display().to_string());
+
+        assert_eq!(read_task_output_for_tui(&task), "stdout\n");
+    }
+
+    #[test]
+    fn detail_output_parses_log_jsonl_content() {
+        let log_file = NamedTempFile::new().unwrap();
+        std::fs::write(
+            log_file.path(),
+            "{\"content\":\"hello\\n\"}\n{\"content\":\"world\"}\n",
+        )
+        .unwrap();
+        let mut task = make_task();
+        task.log_path = Some(log_file.path().display().to_string());
+
+        assert_eq!(read_task_output_for_tui(&task), "hello\nworld");
     }
 }

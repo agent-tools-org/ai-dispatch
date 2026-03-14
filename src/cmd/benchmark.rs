@@ -21,29 +21,14 @@ pub async fn run(store: Arc<Store>, prompt: String, agents: String, dir: Option<
                 agent_name: agent_name.clone(),
                 prompt: prompt.clone(),
                 dir: dir.clone(),
-                output: None,
-                model: None,
                 worktree: Some(format!("bench/{agent_name}")),
-                base_branch: None,
-                group: None,
                 verify: verify.clone(),
-                max_duration_mins: None,
-                retry: 0,
-                context: vec![],
-                skills: vec![],
                 background: true,
                 announce: true,
-                parent_task_id: None,
-                on_done: None,
-                fallback: None,
-                template: None,
-repo: None,
-            read_only: false,
-            budget: false,
-            session_id: None,
-        },
-    )
-    .await?;
+                ..Default::default()
+            },
+        )
+        .await?;
         task_ids.push((agent_name.clone(), task_id));
     }
 

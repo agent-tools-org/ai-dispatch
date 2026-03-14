@@ -24,27 +24,10 @@ pub(crate) async fn run_explain(store: Arc<Store>, task_id: &str, agent: Option<
         RunArgs {
             agent_name,
             prompt,
-            repo: None,
-            dir: None,
-            output: None,
             model,
-            worktree: None,
-            base_branch: None,
-            group: None,
-            verify: None,
-            max_duration_mins: None,
-            retry: 0,
-            context: vec![],
-            skills: vec![],
-            template: None,
-            background: false,
             announce: true,
             parent_task_id: Some(task_id.to_string()),
-            on_done: None,
-            fallback: None,
-            read_only: false,
-            budget: false,
-            session_id: None,
+            ..Default::default()
         },
     )
     .await?;

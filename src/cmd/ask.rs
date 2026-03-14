@@ -101,27 +101,10 @@ async fn dispatch(store: Arc<Store>, request: AskRequest, announce: bool) -> Res
         RunArgs {
             agent_name: request.agent_name,
             prompt: request.prompt,
-            repo: None,
-            dir: None,
             output: request.output,
             model: request.model,
-            worktree: None,
-            base_branch: None,
-            group: None,
-            verify: None,
-            max_duration_mins: None,
-            retry: 0,
-            context: vec![],
-            skills: vec![],
-            template: None,
-            background: false,
             announce,
-            parent_task_id: None,
-            on_done: None,
-            fallback: None,
-            read_only: false,
-            budget: false,
-            session_id: None,
+            ..Default::default()
         },
     )
     .await

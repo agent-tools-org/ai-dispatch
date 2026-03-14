@@ -91,27 +91,14 @@ async fn run_tool(store: Arc<Store>, arguments: Value) -> Result<Value> {
         RunArgs {
             agent_name: args.agent,
             prompt: args.prompt,
-            repo: None,
             dir: args.dir,
-            output: None,
             model: args.model,
             worktree: args.worktree,
-            base_branch: None,
             group: args.group,
             verify: args.verify,
-            max_duration_mins: None,
-            retry: 0,
-            context: vec![],
             skills: args.skills,
-            template: None,
             background: args.background,
-            announce: false,
-            parent_task_id: None,
-            on_done: None,
-            fallback: None,
-            read_only: false,
-            budget: false,
-            session_id: None,
+            ..Default::default()
         },
     )
     .await;

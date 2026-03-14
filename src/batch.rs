@@ -36,13 +36,34 @@ fn deserialize_verify<'de, D: serde::Deserializer<'de>>(
 
 #[derive(Debug, Deserialize)]
 pub struct BatchConfig {
+    #[serde(default)]
+    pub defaults: BatchDefaults,
     #[serde(rename = "task")]
     pub tasks: Vec<BatchTask>,
+}
+
+#[derive(Debug, Deserialize, Default)]
+pub struct BatchDefaults {
+    pub agent: Option<String>,
+    pub dir: Option<String>,
+    pub model: Option<String>,
+    pub worktree_prefix: Option<String>,
+    #[serde(default, deserialize_with = "deserialize_verify")]
+    pub verify: Option<String>,
+    #[serde(default)]
+    pub max_duration_mins: Option<u64>,
+    pub skills: Option<Vec<String>>,
+    pub fallback: Option<String>,
+    #[serde(default)]
+    pub read_only: Option<bool>,
+    #[serde(default)]
+    pub budget: Option<bool>,
 }
 
 #[derive(Debug, Deserialize)]
 pub struct BatchTask {
     pub name: Option<String>,
+    #[serde(default)]
     pub agent: String,
     pub prompt: String,
     pub dir: Option<String>,
@@ -66,26 +87,88 @@ pub struct BatchTask {
 pub fn parse_batch_file(path: &Path) -> Result<BatchConfig> {
     let content = std::fs::read_to_string(path)
         .with_context(|| format!("failed to read batch file: {}", path.display()))?;
-    let config: BatchConfig = toml::from_str(&content)
+    let mut config: BatchConfig = toml::from_str(&content)
         .with_context(|| format!("failed to parse TOML in {}", path.display()))?;
     if config.tasks.is_empty() {
         anyhow::bail!("batch file contains no tasks");
     }
-    for task in &config.tasks {
-        if !VALID_AGENTS.contains(&task.agent.to_lowercase().as_str()) {
+    apply_defaults(&mut config.tasks, &config.defaults);
+    validate_agents(&config.tasks)?;
+    validate_fallback_agents(&config.tasks)?;
+    validate_no_file_overlap(&config.tasks)?;
+    validate_dag(&config.tasks)?;
+    Ok(config)
+}
+
+fn apply_defaults(tasks: &mut [BatchTask], defaults: &BatchDefaults) {
+    for task in tasks {
+        apply_task_defaults(task, defaults);
+    }
+}
+fn apply_task_defaults(task: &mut BatchTask, defaults: &BatchDefaults) {
+    if task.agent.is_empty() {
+        if let Some(agent) = defaults.agent.as_ref() {
+            task.agent = agent.clone();
+        }
+    }
+    if task.dir.is_none() {
+        task.dir = defaults.dir.clone();
+    }
+    if task.model.is_none() {
+        task.model = defaults.model.clone();
+    }
+    if task.worktree.is_none() {
+        task.worktree = default_worktree(task, defaults);
+    }
+    if task.verify.is_none() {
+        task.verify = defaults.verify.clone();
+    }
+    if task.max_duration_mins.is_none() {
+        task.max_duration_mins = defaults.max_duration_mins;
+    }
+    if task.skills.is_none() {
+        task.skills = defaults.skills.clone();
+    }
+    if task.fallback.is_none() {
+        task.fallback = defaults.fallback.clone();
+    }
+    if !task.read_only && matches!(defaults.read_only, Some(true)) {
+        task.read_only = true;
+    }
+    if !task.budget && matches!(defaults.budget, Some(true)) {
+        task.budget = true;
+    }
+}
+fn default_worktree(task: &BatchTask, defaults: &BatchDefaults) -> Option<String> {
+    let prefix = defaults.worktree_prefix.as_deref()?;
+    let name = task.name.as_deref()?.trim();
+    (!name.is_empty()).then(|| format!("{prefix}/{name}"))
+}
+fn validate_agents(tasks: &[BatchTask]) -> Result<()> {
+    for (task_idx, task) in tasks.iter().enumerate() {
+        if task.agent.trim().is_empty() {
+            anyhow::bail!("task {} is missing agent", task_label(task, task_idx));
+        }
+        if !is_valid_agent(&task.agent) {
             anyhow::bail!("unknown agent: {}", task.agent);
         }
     }
-    for task in &config.tasks {
-        if let Some(ref fallback) = task.fallback {
-            if !VALID_AGENTS.contains(&fallback.to_lowercase().as_str()) {
+    Ok(())
+}
+fn validate_fallback_agents(tasks: &[BatchTask]) -> Result<()> {
+    for task in tasks {
+        if let Some(fallback) = task.fallback.as_deref() {
+            if !is_valid_agent(fallback) {
                 anyhow::bail!("unknown fallback agent: {}", fallback);
             }
         }
     }
-    validate_no_file_overlap(&config.tasks)?;
-    validate_dag(&config.tasks)?;
-    Ok(config)
+    Ok(())
+}
+fn is_valid_agent(agent: &str) -> bool {
+    VALID_AGENTS
+        .iter()
+        .any(|valid| valid.eq_ignore_ascii_case(agent))
 }
 
 pub fn validate_no_file_overlap(tasks: &[BatchTask]) -> Result<()> {
@@ -109,9 +192,11 @@ pub fn validate_dag(tasks: &[BatchTask]) -> Result<()> {
 }
 pub(crate) fn dependency_indices(tasks: &[BatchTask]) -> Result<Vec<Vec<usize>>> {
     let name_to_index = task_name_map(tasks)?;
-    tasks.iter().enumerate().map(|(task_idx, task)| {
-        resolve_dependencies(task_idx, task, &name_to_index)
-    }).collect()
+    tasks
+        .iter()
+        .enumerate()
+        .map(|(task_idx, task)| resolve_dependencies(task_idx, task, &name_to_index))
+        .collect()
 }
 fn task_name_map(tasks: &[BatchTask]) -> Result<HashMap<&str, usize>> {
     let mut name_to_index = HashMap::new();
@@ -161,7 +246,11 @@ fn task_label(task: &BatchTask, task_idx: usize) -> String {
     task.name.clone().unwrap_or_else(|| format!("#{task_idx}"))
 }
 #[derive(Clone, Copy, PartialEq, Eq)]
-enum VisitState { Pending, Visiting, Visited }
+enum VisitState {
+    Pending,
+    Visiting,
+    Visited,
+}
 fn visit_task(
     task_idx: usize,
     tasks: &[BatchTask],
@@ -186,110 +275,4 @@ fn visit_task(
     Ok(())
 }
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use std::io::Write;
-    use tempfile::NamedTempFile;
-
-    fn write_temp(content: &str) -> NamedTempFile {
-        let mut f = NamedTempFile::new().unwrap();
-        f.write_all(content.as_bytes()).unwrap();
-        f.flush().unwrap();
-        f
-    }
-
-    fn make_task(name: Option<&str>, depends_on: &[&str]) -> BatchTask {
-        BatchTask {
-            name: name.map(str::to_string),
-            agent: "codex".to_string(),
-            prompt: "prompt".to_string(),
-            dir: None,
-            output: None,
-            model: None,
-            worktree: None,
-            group: None,
-            verify: None,
-            max_duration_mins: None,
-            skills: None,
-            depends_on: (!depends_on.is_empty())
-                .then(|| depends_on.iter().map(|item| item.to_string()).collect()),
-            fallback: None,
-            read_only: false,
-            budget: false,
-        }
-    }
-    #[test]
-    fn parse_valid_batch() {
-        let cfg = parse_batch_file(write_temp(concat!(
-            "[[task]]\nagent = \"gemini\"\nprompt = \"research X\"\nworktree = \"feat/x\"\n",
-            "[[task]]\nagent = \"codex\"\nprompt = \"implement Y\"\ndir = \"src\"\nmodel = \"gpt-4\"\ngroup = \"wg-demo\""
-        )).path()).unwrap();
-        assert_eq!(cfg.tasks.len(), 2);
-        assert_eq!(cfg.tasks[0].agent, "gemini");
-        assert_eq!(cfg.tasks[0].worktree, Some("feat/x".into()));
-        assert_eq!(cfg.tasks[1].dir, Some("src".into()));
-        assert_eq!(cfg.tasks[1].group.as_deref(), Some("wg-demo"));
-    }
-    #[test]
-    fn parses_batch_with_dependencies() {
-        let cfg = parse_batch_file(write_temp(concat!(
-            "[[task]]\nname = \"foundation\"\nagent = \"codex\"\nprompt = \"shared types\"\n",
-            "[[task]]\nname = \"feature-a\"\nagent = \"codex\"\nprompt = \"feature a\"\n",
-            "depends_on = [\"foundation\"]\n"
-        )).path()).unwrap();
-        assert_eq!(cfg.tasks[0].name.as_deref(), Some("foundation"));
-        assert_eq!(cfg.tasks[1].depends_on.as_deref(), Some(&["foundation".to_string()][..]));
-    }
-    #[test]
-    fn rejects_unknown_agent() {
-        let f = write_temp("[[task]]\nagent = \"gpt-3\"\nprompt = \"do something\"");
-        assert!(parse_batch_file(f.path()).unwrap_err().to_string().contains("unknown agent"));
-    }
-    #[test]
-    fn rejects_duplicate_worktree() {
-        let f = write_temp(concat!(
-            "[[task]]\nagent = \"gemini\"\nprompt = \"a\"\nworktree = \"feat/x\"\n",
-            "[[task]]\nagent = \"codex\"\nprompt = \"b\"\nworktree = \"feat/x\""
-        ));
-        assert!(parse_batch_file(f.path()).unwrap_err().to_string().contains("duplicate worktree"));
-    }
-    #[test]
-    fn rejects_empty_batch() {
-        let err = parse_batch_file(write_temp("").path())
-            .unwrap_err()
-            .to_string();
-        assert!(err.contains("parse TOML") || err.contains("no tasks"));
-    }
-    #[test]
-    fn rejects_invalid_dependency_reference() {
-        let err = validate_dag(&[make_task(Some("feature"), &["missing"])])
-            .unwrap_err()
-            .to_string();
-        assert!(err.contains("unknown task"));
-    }
-    #[test]
-    fn rejects_dependency_cycles() {
-        let tasks = vec![
-            make_task(Some("foundation"), &["integration"]),
-            make_task(Some("integration"), &["foundation"]),
-        ];
-        let err = validate_dag(&tasks).unwrap_err().to_string();
-        assert!(err.contains("cycle"));
-    }
-    #[test]
-    fn rejects_unknown_fallback_agent() {
-        let f = write_temp(concat!(
-            "[[task]]\nagent = \"codex\"\nprompt = \"do something\"\n",
-            "fallback = \"unknown-agent\""
-        ));
-        assert!(parse_batch_file(f.path()).unwrap_err().to_string().contains("unknown fallback agent"));
-    }
-    #[test]
-    fn accepts_valid_fallback_agent() {
-        let f = write_temp(concat!(
-            "[[task]]\nagent = \"codex\"\nprompt = \"do something\"\n",
-            "fallback = \"opencode\""
-        ));
-        assert!(parse_batch_file(f.path()).is_ok());
-    }
-}
+mod tests;

@@ -2,6 +2,7 @@
 // Boots ratatui+crossterm, runs the app loop, and restores the terminal on exit.
 
 pub mod app;
+pub mod charts;
 pub mod dashboard;
 pub mod metrics;
 pub mod multipane;
@@ -88,5 +89,29 @@ mod tests {
         assert_eq!(app.active_pane, 0);
         app.handle_key(KeyEvent::new(KeyCode::Char('m'), KeyModifiers::NONE)).unwrap();
         assert!(!app.multipane_mode);
+    }
+
+    #[test]
+    fn toggles_show_all_with_a_key() {
+        let store = Arc::new(Store::open_memory().unwrap());
+        let mut app = app::App::new(store, RunOptions::default()).unwrap();
+
+        assert!(!app.show_all);
+        app.handle_key(KeyEvent::new(KeyCode::Char('a'), KeyModifiers::NONE)).unwrap();
+        assert!(app.show_all);
+        app.handle_key(KeyEvent::new(KeyCode::Char('a'), KeyModifiers::NONE)).unwrap();
+        assert!(!app.show_all);
+    }
+
+    #[test]
+    fn toggles_stats_mode_with_s_key() {
+        let store = Arc::new(Store::open_memory().unwrap());
+        let mut app = app::App::new(store, RunOptions::default()).unwrap();
+
+        assert!(!app.stats_mode);
+        app.handle_key(KeyEvent::new(KeyCode::Char('s'), KeyModifiers::NONE)).unwrap();
+        assert!(app.stats_mode);
+        app.handle_key(KeyEvent::new(KeyCode::Char('s'), KeyModifiers::NONE)).unwrap();
+        assert!(!app.stats_mode);
     }
 }

@@ -13,6 +13,7 @@ use ratatui::widgets::{
 };
 
 use super::app::{App, DetailTab};
+use super::charts;
 use super::dashboard;
 use super::multipane;
 use crate::cost;
@@ -23,6 +24,8 @@ pub fn render(frame: &mut ratatui::Frame<'_>, app: &App) {
         render_multipane_view(frame, app);
     } else if app.detail_mode {
         render_detail(frame, app);
+    } else if app.stats_mode {
+        charts::render_stats(frame, app);
     } else if app.dashboard_mode {
         dashboard::render_dashboard(frame, app);
     } else {
@@ -174,7 +177,7 @@ fn render_board(frame: &mut ratatui::Frame<'_>, app: &App) {
             Style::default().fg(Color::Red),
         ),
         Span::styled(
-            "│ d=dashboard m=multipane j/k=nav Enter=detail q=quit",
+            "│ a=all/today s=stats d=dashboard m=multipane j/k=nav Enter=detail q=quit",
             Style::default().fg(Color::Indexed(243)),
         ),
     ]);

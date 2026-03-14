@@ -6,7 +6,7 @@ use crate::types::{EventKind, Task, TaskStatus};
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::prelude::{Alignment, Color, Modifier, Style};
 use ratatui::widgets::{Block, Borders, List, ListItem, Paragraph};
-const FOOTER_HINT: &str = "d=dashboard m=multipane j/k=nav Enter=detail q=quit";
+const FOOTER_HINT: &str = "a=all/today s=stats d=dashboard m=multipane j/k=nav Enter=detail q=quit";
 const ACTIVITY_KINDS: &[(EventKind, &str, &str)] = &[
     (EventKind::ToolCall, "tool call", "tool calls"),
     (EventKind::Build, "build", "builds"),

@@ -14,6 +14,15 @@ impl App {
                 self.dashboard_mode = !self.dashboard_mode;
                 return Ok(());
             }
+            KeyCode::Char('a') => {
+                self.show_all = !self.show_all;
+                self.reload_tasks()?;
+                return Ok(());
+            }
+            KeyCode::Char('s') => {
+                self.stats_mode = !self.stats_mode;
+                return Ok(());
+            }
             KeyCode::Char('m') => {
                 self.multipane_mode = !self.multipane_mode;
                 if self.multipane_mode {

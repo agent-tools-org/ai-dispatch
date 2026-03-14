@@ -174,27 +174,17 @@ async fn run_task_inner(store: &Arc<Store>, spec: &BackgroundRunSpec) -> Result<
         &crate::cmd::run::RunArgs {
             agent_name: spec.agent_name.clone(),
             prompt: spec.prompt.clone(),
-            repo: None,
             dir: spec.dir.clone(),
             output: spec.output.clone(),
             model: spec.model.clone(),
-            worktree: None,
-            base_branch: None,
             group: spec.group.clone(),
             verify: spec.verify.clone(),
             max_duration_mins: spec.max_duration_mins,
             retry: spec.retry,
-            context: vec![],
             skills: spec.skills.clone(),
             template: spec.template.clone(),
-            background: false,
-            announce: false,
             parent_task_id: spec.parent_task_id.clone(),
-            on_done: None,
-            fallback: None,
-            read_only: false,
-            budget: false,
-            session_id: None,
+            ..Default::default()
         },
     )
     .await?

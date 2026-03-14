@@ -66,27 +66,20 @@ fn task_to_run_args(task: &batch::BatchTask, background: bool) -> RunArgs {
     RunArgs {
         agent_name: task.agent.clone(),
         prompt: task.prompt.clone(),
-        repo: None,
         dir: task.dir.clone(),
         output: task.output.clone(),
         model: task.model.clone(),
         worktree: task.worktree.clone(),
-        base_branch: None,
         group: task.group.clone(),
         verify: task.verify.clone(),
         max_duration_mins: task.max_duration_mins.map(|value| value as i64),
-        retry: 0,
-        context: vec![],
         skills: task.skills.clone().unwrap_or_default(),
-        template: None,
         background,
         announce: true,
-        parent_task_id: None,
-        on_done: None,
         fallback: task.fallback.clone(),
         read_only: task.read_only,
         budget: task.budget,
-        session_id: None,
+        ..Default::default()
     }
 }
 async fn dispatch_parallel(store: Arc<Store>, tasks: &[batch::BatchTask], max_concurrent: Option<usize>) -> Result<Vec<String>> {

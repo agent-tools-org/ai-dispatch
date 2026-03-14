@@ -55,22 +55,11 @@ pub async fn retry_task(store: Arc<Store>, args: RetryArgs, announce: bool) -> R
             output: task.output_path.clone(),
             model: task.model.clone(),
             worktree: worktree_arg,
-            base_branch: None,
             group: task.workgroup_id.clone(),
-            background: false,
             announce,
-            verify: None,
-            max_duration_mins: None,
-            retry: 0,
-            context: vec![],
-            skills: vec![],
-            template: None,
             parent_task_id: Some(task.id.as_str().to_string()),
-            on_done: None,
-            fallback: None,
-            read_only: false,
-            budget: false,
             session_id,
+            ..Default::default()
         },
     )
     .await

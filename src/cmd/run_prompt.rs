@@ -188,7 +188,12 @@ fn format_duration(ms: i64) -> String {
 mod tests {
     use super::*;
     fn run_args(skills: Vec<String>) -> RunArgs {
-        RunArgs { agent_name: "codex".to_string(), prompt: "prompt".to_string(), repo: None, dir: None, output: None, model: None, worktree: None, base_branch: None, group: None, verify: None, max_duration_mins: None, retry: 0, context: vec![], skills, template: None, background: false, announce: false, parent_task_id: None, on_done: None, fallback: None, read_only: false, budget: false, session_id: None }
+        RunArgs {
+            agent_name: "codex".to_string(),
+            prompt: "prompt".to_string(),
+            skills,
+            ..Default::default()
+        }
     }
 
     #[test]

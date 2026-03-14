@@ -17,7 +17,7 @@ use crate::usage;
 #[path = "run_prompt.rs"]
 mod run_prompt;
 pub const NO_SKILL_SENTINEL: &str = "__aid_no_skill__";
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct RunArgs {
     pub agent_name: String,
     pub prompt: String,

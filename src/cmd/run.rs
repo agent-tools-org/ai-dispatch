@@ -230,6 +230,10 @@ pub async fn run(store: Arc<Store>, args: RunArgs) -> Result<TaskId> {
             is_streaming,
         )
         .await?;
+        // Detect worktree escape: warn if agent modified files in main repo
+        if args.worktree.is_some() {
+            check_worktree_escape(repo_path.as_deref());
+        }
         let pre_verify_status =
             store.get_task(task_id.as_str())?.map(|task| task.status).unwrap_or(TaskStatus::Done);
         maybe_verify(
@@ -302,6 +306,29 @@ pub async fn run(store: Arc<Store>, args: RunArgs) -> Result<TaskId> {
     }
     Ok(task_id)
 }
+/// Detect if an agent working in a worktree accidentally modified the main repo.
+fn check_worktree_escape(repo_dir: Option<&str>) {
+    let dir = repo_dir.unwrap_or(".");
+    let output = std::process::Command::new("git")
+        .args(["status", "--porcelain"])
+        .current_dir(dir)
+        .output();
+    if let Ok(o) = output {
+        let stdout = String::from_utf8_lossy(&o.stdout);
+        let dirty: Vec<&str> = stdout.lines().filter(|l| !l.is_empty()).collect();
+        if !dirty.is_empty() {
+            eprintln!("[aid] ⚠ Worktree escape detected! Agent modified {} file(s) in main repo:", dirty.len());
+            for line in dirty.iter().take(10) {
+                eprintln!("  {line}");
+            }
+            if dirty.len() > 10 {
+                eprintln!("  ... and {} more", dirty.len() - 10);
+            }
+            eprintln!("[aid] Run `git checkout .` to discard, or review with `git diff`");
+        }
+    }
+}
+
 pub(crate) fn inherit_retry_base_branch(repo_dir: Option<&str>, task: &Task, retry_args: &mut RunArgs) { run_prompt::inherit_retry_base_branch_impl(repo_dir, task, retry_args); }
 #[allow(clippy::too_many_arguments)]
 pub(crate) async fn run_agent_process(

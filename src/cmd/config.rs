@@ -46,7 +46,7 @@ const AGENT_PROFILES: &[(AgentKind, &str, &str, &str, bool)] = &[
     (
         AgentKind::Cursor,
         "General coding, strong model selection, frontend",
-        "subscription",
+        "$20/mo subscription",
         "implement, create, build, refactor, ui, frontend, css",
         true,
     ),
@@ -172,6 +172,14 @@ pub const AGENT_MODELS: &[AgentModel] = &[
         output_per_m: 0.0,
         tier: "free",
         description: "Free tier",
+    },
+    AgentModel {
+        agent: AgentKind::Cursor,
+        model: "auto",
+        input_per_m: 0.10,
+        output_per_m: 0.40,
+        tier: "standard",
+        description: "Auto-select (cheapest, recommended for most tasks)",
     },
     AgentModel {
         agent: AgentKind::Cursor,

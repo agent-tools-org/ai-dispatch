@@ -300,6 +300,23 @@ pub fn run(store: &Arc<Store>, action: ConfigAction) -> Result<()> {
                 }
             }
         }
+        ConfigAction::PromptBudget => {
+            let skills = skills::list_skills()?;
+            if skills.is_empty() {
+                println!("No skills found in ~/.aid/skills/.");
+                println!("  Run `aid init` to install default skills.");
+            } else {
+                println!("Skill Token Budget:");
+                let mut total_tokens = 0usize;
+                for skill in &skills {
+                    let (_, tokens) = skills::measure_skill_tokens(skill)?;
+                    total_tokens += tokens;
+                    println!("  {:14} ~{} tokens", skill, tokens);
+                }
+                println!("  ─────────────────────");
+                println!("  Total:         ~{} tokens", total_tokens);
+            }
+        }
         ConfigAction::Templates => {
             let templates = templates::list_templates();
             if templates.is_empty() {

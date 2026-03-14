@@ -24,6 +24,8 @@ pub enum ConfigAction {
     Pricing,
     /// List available skills
     Skills,
+    /// Display skill token estimates for prompt budgeting
+    PromptBudget,
     /// List available templates
     Templates,
 }

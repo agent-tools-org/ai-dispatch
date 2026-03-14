@@ -24,12 +24,88 @@ pub fn resolve_skill_content(name: &str) -> Result<String> {
     load_skill(name)
 }
 
+pub fn estimate_tokens(text: &str) -> usize {
+    text.len() / 4
+}
+
+pub fn measure_skill_tokens(name: &str) -> Result<(String, usize)> {
+    let content = load_skill(name)?;
+    let tokens = estimate_tokens(&content);
+    Ok((content, tokens))
+}
+
+#[allow(dead_code)]
+pub fn compact_skill(content: &str, max_tokens: usize) -> String {
+    if max_tokens == 0 {
+        return "...".to_string();
+    }
+    if estimate_tokens(content) <= max_tokens {
+        return content.to_string();
+    }
+
+    let mut collapsed_lines = Vec::new();
+    let mut last_blank = false;
+    for line in content.lines() {
+        if line.trim().is_empty() {
+            if last_blank {
+                continue;
+            }
+            collapsed_lines.push(String::new());
+            last_blank = true;
+        } else {
+            collapsed_lines.push(line.to_string());
+            last_blank = false;
+        }
+    }
+
+    let processed_lines: Vec<String> = collapsed_lines
+        .into_iter()
+        .map(|line| {
+            if line.trim().is_empty() {
+                return String::new();
+            }
+            let mut working = line.trim_start().to_string();
+            working = working.trim_start_matches('#').trim_start().to_string();
+            if let Some(stripped) = working.strip_prefix("- ") {
+                working = stripped.to_string();
+            }
+            working.trim_start().to_string()
+        })
+        .collect();
+
+    let compacted = processed_lines.join("\n");
+    let char_limit = max_tokens.saturating_mul(4);
+    if char_limit == 0 {
+        return "...".to_string();
+    }
+    if compacted.len() <= char_limit {
+        return compacted;
+    }
+
+    let mut end = 0;
+    for (idx, ch) in compacted.char_indices() {
+        if idx >= char_limit {
+            break;
+        }
+        end = idx + ch.len_utf8();
+    }
+    if end == 0 {
+        return "...".to_string();
+    }
+    let truncated = &compacted[..end];
+    format!("{truncated}...")
+}
+
 pub fn load_skills(names: &[String]) -> Result<String> {
-    names
-        .iter()
-        .map(|name| load_skill(name))
-        .collect::<Result<Vec<_>>>()
-        .map(|skills| skills.join("\n\n"))
+    let mut contents = Vec::new();
+    let mut total_tokens = 0usize;
+    for name in names {
+        let (content, tokens) = measure_skill_tokens(name)?;
+        contents.push(content);
+        total_tokens += tokens;
+    }
+    eprintln!("[aid] Skills loaded: {} skills, ~{} tokens", contents.len(), total_tokens);
+    Ok(contents.join("\n\n"))
 }
 
 pub fn list_skills() -> Result<Vec<String>> {
@@ -112,5 +188,28 @@ mod tests {
         std::fs::write(dir.join("implementer.md"), "# Implementer").unwrap();
 
         assert!(auto_skills(&AgentKind::Gemini, false).is_empty());
+    }
+
+    #[test]
+    fn estimate_tokens_uses_length_divided_by_four() {
+        assert_eq!(estimate_tokens("abcd"), 1);
+        assert_eq!(estimate_tokens("abc"), 0);
+        assert_eq!(estimate_tokens(""), 0);
+    }
+
+    #[test]
+    fn compact_skill_truncates_and_cleans_content() {
+        let input = "\n# Topic\n\n- bullet one\n- bullet two\nDetail line\nMore detail\n";
+        let compacted = compact_skill(input, 2);
+        assert!(compacted.contains("Topic"));
+        assert!(!compacted.contains('#'));
+        assert!(!compacted.contains("- "));
+        assert!(compacted.ends_with("..."));
+    }
+
+    #[test]
+    fn compact_skill_returns_same_when_under_limit() {
+        let input = "ok";
+        assert_eq!(compact_skill(input, 1), input);
     }
 }

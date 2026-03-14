@@ -85,14 +85,15 @@ function buildLLMSText() {
   lines.push(`Example definition:`);
   lines.push(`\`\`\`toml`);
   lines.push(`[agent]`);
-  lines.push(`name = "ops-bot"`);
+  lines.push(`id = "ops-bot"`);
+  lines.push(`display_name = "Ops Bot"`);
   lines.push(`command = "ops-agent"`);
   lines.push(`prompt_mode = "flag"`);
   lines.push(`prompt_flag = "--task"`);
   lines.push(``);
   lines.push(`[agent.capabilities]`);
   lines.push(`research = 6`);
-  lines.push(`frontend = 4`);
+  lines.push(`complex_impl = 4`);
   lines.push(`\`\`\``);
   lines.push(``);
   lines.push(`## Skills`);
@@ -229,7 +230,7 @@ function buildHTML() {
     <section>
       <h2>Custom Agents</h2>
       <p>v5.0 lets you define custom agents via TOML files under ~/.aid/agents/, so wrappers and legacy CLIs can join the orchestrator.</p>
-      <pre style="background:#040b16;padding:1rem;border-radius:8px;margin:0;"><code>[agent]&#10;name = "ops-bot"&#10;command = "ops-agent"&#10;prompt_mode = "flag"&#10;prompt_flag = "--task"&#10;&#10;[agent.capabilities]&#10;research = 6&#10;frontend = 4</code></pre>
+      <pre style="background:#040b16;padding:1rem;border-radius:8px;margin:0;"><code>[agent]&#10;id = "ops-bot"&#10;display_name = "Ops Bot"&#10;command = "ops-agent"&#10;prompt_mode = "flag"&#10;prompt_flag = "--task"&#10;&#10;[agent.capabilities]&#10;research = 6&#10;complex_impl = 4</code></pre>
     </section>
     <section>
       <h2>Skills</h2>

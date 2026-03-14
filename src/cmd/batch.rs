@@ -22,13 +22,20 @@ pub async fn run(store: Arc<Store>, args: BatchArgs) -> Result<()> {
     validate_batch_config(&config.tasks)?;
     let has_dependencies = config.tasks.iter().any(task_has_dependencies);
     let no_groups_set = config.tasks.iter().all(|t| t.group.is_none());
-    if total >= 2 && no_groups_set {
-        let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("batch");
-        let wg = store.create_workgroup(stem, "Auto-created for batch dispatch")?;
-        for task in &mut config.tasks {
-            task.group = Some(wg.id.to_string());
+    if no_groups_set {
+        if let Ok(env_group) = std::env::var("AID_GROUP") {
+            for task in &mut config.tasks {
+                task.group = Some(env_group.clone());
+            }
+            eprintln!("[aid] Using workspace {env_group} from AID_GROUP");
+        } else if total >= 2 {
+            let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("batch");
+            let wg = store.create_workgroup(stem, "Auto-created for batch dispatch")?;
+            for task in &mut config.tasks {
+                task.group = Some(wg.id.to_string());
+            }
+            eprintln!("[aid] Auto-created workgroup {} for batch {stem}", wg.id);
         }
-        eprintln!("[aid] Auto-created workgroup {} for batch {stem}", wg.id);
     }
     println!("Batch: dispatching {total} task(s) from {}", path.display());
     let task_ids = if has_dependencies && args.parallel {

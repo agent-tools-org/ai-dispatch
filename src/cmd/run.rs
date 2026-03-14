@@ -240,6 +240,17 @@ pub async fn run(store: Arc<Store>, args: RunArgs) -> Result<TaskId> {
         );
         if let Some(task) = store.get_task(task_id.as_str())? {
             maybe_cleanup_fast_fail(&store, &task_id, &task);
+            // Auto-cleanup worktree for failed tasks (no useful changes to preserve)
+            if task.status == TaskStatus::Failed {
+                if let Some(wt) = task.worktree_path.as_deref() {
+                    if std::path::Path::new(wt).exists() {
+                        match std::fs::remove_dir_all(wt) {
+                            Ok(()) => eprintln!("[aid] Cleaned up failed task worktree: {wt}"),
+                            Err(e) => eprintln!("[aid] Warning: failed to remove {wt}: {e}"),
+                        }
+                    }
+                }
+            }
         }
         run_prompt::notify_task_completion(&store, &task_id)?;
         crate::webhook::fire_task_webhooks(&store, task_id.as_str()).await;

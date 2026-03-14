@@ -38,6 +38,11 @@ use anyhow::Result;
 use clap::{Parser, Subcommand};
 use std::sync::Arc;
 
+/// Resolve group: CLI flag takes precedence, then AID_GROUP env var.
+fn resolve_group(flag: Option<String>) -> Option<String> {
+    flag.or_else(|| std::env::var("AID_GROUP").ok())
+}
+
 #[derive(Parser)]
 #[command(name = "aid", version, about = "Multi-AI CLI team orchestrator")]
 struct Cli {
@@ -382,7 +387,7 @@ async fn main() -> Result<()> {
                     model,
                     worktree,
                     base_branch: None,
-                    group,
+                    group: resolve_group(group),
                     verify,
                     max_duration_mins: None,
                     retry,
@@ -431,7 +436,7 @@ async fn main() -> Result<()> {
             tui: true,
             ..
         } => {
-            tui::run(&store, tui::RunOptions { task_id: task_ids.first().cloned(), group })?;
+            tui::run(&store, tui::RunOptions { task_id: task_ids.first().cloned(), group: resolve_group(group) })?;
         }
         Commands::Watch {
             task_ids,
@@ -440,6 +445,7 @@ async fn main() -> Result<()> {
             quiet,
             exit_on_await,
         } => {
+            let group = resolve_group(group);
             cmd::watch::run(&store, &task_ids, group.as_deref(), quiet, exit_on_await).await?;
         }
         Commands::Board {
@@ -449,6 +455,7 @@ async fn main() -> Result<()> {
             group,
             stream,
         } => {
+            let group = resolve_group(group);
             if stream {
                 cmd::board_stream::run(&store, running, today, mine, group.as_deref()).await?;
             } else {
@@ -505,6 +512,7 @@ async fn main() -> Result<()> {
             cmd::retry::run(store, cmd::retry::RetryArgs { task_id, feedback, agent }).await?;
         }
         Commands::Merge { task_id, group } => {
+            let group = resolve_group(group);
             cmd::merge::run(store, task_id.as_deref(), group.as_deref())?;
         }
         Commands::Respond {

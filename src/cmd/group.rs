@@ -10,9 +10,9 @@ use crate::types::TaskFilter;
 
 pub fn create(store: &Arc<Store>, name: &str, context: &str) -> Result<()> {
     let workgroup = store.create_workgroup(name, context)?;
-    println!("Workgroup {} created", workgroup.id);
-    println!("Name: {}", workgroup.name);
-    println!("Shared context:\n{}", workgroup.shared_context);
+    println!("{}", workgroup.id);
+    eprintln!("[aid] Created workgroup '{}' ({})", workgroup.name, workgroup.id);
+    eprintln!("[aid] Scope all commands: export AID_GROUP={}", workgroup.id);
     Ok(())
 }
 

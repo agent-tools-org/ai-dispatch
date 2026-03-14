@@ -1,6 +1,6 @@
 # ai-dispatch (aid)
 
-![Version](https://img.shields.io/badge/version-5.1.0-blue)
+![Version](https://img.shields.io/badge/version-5.3.0-blue)
 ![Rust](https://img.shields.io/badge/rust-2024-orange)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
@@ -288,6 +288,73 @@ aid store install community/aider
 
 Installed agents appear in `aid config agents` and participate in auto-selection via their capability scores. The store is backed by [sunoj/aid-agents](https://github.com/sunoj/aid-agents) — community contributions welcome.
 
+### Task Lifecycle Hooks
+
+Define shell hooks that run at key points in the task lifecycle. Hooks receive task JSON on stdin.
+
+Configure hooks in `~/.aid/hooks.toml`:
+
+```toml
+[[hook]]
+event = "before_run"
+command = "~/.aid/hooks/validate.sh"
+
+[[hook]]
+event = "after_complete"
+command = "~/.aid/hooks/notify.sh"
+agent = "codex"
+
+[[hook]]
+event = "on_fail"
+command = "~/.aid/hooks/alert.sh"
+```
+
+Or pass hooks per-task via CLI:
+
+```bash
+aid run codex "Implement feature" --hook before_run:./validate.sh --hook on_fail:./alert.sh
+```
+
+Batch files support hooks in `[defaults]` and per-task:
+
+```toml
+[defaults]
+hooks = ["before_run:./validate.sh"]
+
+[[task]]
+agent = "codex"
+prompt = "Implement feature"
+hooks = ["after_complete:./notify.sh"]
+```
+
+Hook events:
+- `before_run` — runs after task creation, before agent starts. Fails the task if hook exits non-zero.
+- `after_complete` — runs after task completes (after verify). Best-effort.
+- `on_fail` — runs when task fails. Best-effort.
+
+### Prompt Budget
+
+Check skill token overhead with `aid config prompt-budget`:
+
+```bash
+$ aid config prompt-budget
+Skill Token Budget:
+  code-scout     ~195 tokens
+  debugger       ~219 tokens
+  implementer    ~323 tokens
+  researcher     ~209 tokens
+  test-writer    ~199 tokens
+  ─────────────────────
+  Total:         ~1145 tokens
+```
+
+Token usage is also logged during dispatch:
+
+```
+[aid] Skills loaded: 1 skills, ~323 tokens
+[aid] Context injected: 2 files, ~450 tokens
+```
+
 ### Milestones
 
 `aid` injects milestone guidance into prompts so agents emit progress markers that the watcher can parse and surface in `aid watch`, `aid board`, and the TUI.
@@ -309,7 +376,7 @@ Expected milestone format:
 | `aid watch` | Follow live progress in text mode, quiet wait mode, or the TUI. | `aid watch --tui`, `aid watch t-1234`, `aid watch --quiet --group wg-a3f1` |
 | `aid board` | List tracked tasks with filters. Auto-detects zombie tasks. Use `--stream` for scrollback-preserving output. | `aid board --today`, `aid board --stream --group wg-a3f1` |
 | `aid show` | Inspect one task's summary, diff, output, raw log, or AI-generated explanation. Diffs show changes vs main branch. | `aid show t-1234 --diff`, `aid show t-1234 --output`, `aid show t-1234 --explain` |
-| `aid usage` | Render task-history usage plus configured budget windows. Use `--session` for current session only. | `aid usage`, `aid usage --session` |
+| `aid usage` | Render task-history usage plus configured budget windows. Supports `--agent`, `--period`, and `--json`. | `aid usage`, `aid usage --agent codex --period 7d --json` |
 | `aid retry` | Re-dispatch a failed task with explicit feedback. | `aid retry t-1234 --feedback "Reproduce the failure before editing."` |
 | `aid respond` | Send interactive input to a running background task. | `aid respond t-1234 "yes"` |
 | `aid benchmark` | Dispatch the same task to multiple agents and compare results. | `aid benchmark "Fix the bug" --agents codex,opencode --dir .` |
@@ -318,10 +385,11 @@ Expected milestone format:
 | `aid mcp` | Start the stdio MCP server so another tool can call `aid` natively. | `aid mcp` |
 | `aid merge` | Mark done task(s) as merged. Supports `--group` for bulk workgroup merge with worktree cleanup. | `aid merge t-1234`, `aid merge --group wg-a3f1` |
 | `aid clean` | Remove old tasks/events and orphaned worktrees/logs. Supports `--dry-run`. | `aid clean --older-than 7 --worktrees` |
-| `aid config` | Inspect agent capability profiles, available skills, and model pricing. | `aid config agents`, `aid config skills`, `aid config pricing` |
+| `aid config` | Inspect agent profiles, skills, pricing, and prompt token budget. | `aid config agents`, `aid config prompt-budget`, `aid config pricing` |
 | `aid worktree` | Explicit worktree lifecycle management: create, list, remove. | `aid worktree create feat/x`, `aid worktree list`, `aid worktree remove feat/x` |
 | `aid group` | Create, list, show, update, and delete shared-context workgroups. | `aid group create dispatch --context "Shared rollout notes"` |
 | `aid store` | Browse, search, preview, and install community agent definitions. | `aid store browse`, `aid store install community/aider` |
+| `aid agent` | Manage custom agent definitions: list, show, add, remove, fork. | `aid agent list`, `aid agent fork codex --as codex-fast` |
 | `aid init` | Initialize default skills and templates. | `aid init` |
 
 ## Best Practices / Methodology
@@ -548,12 +616,15 @@ Typical directory layout:
 │   └── t-1234.json
 ├── batches/
 │   └── 20260313-112850-v15-fixes.toml
+├── hooks.toml
 ├── skills/
 │   ├── code-scout.md
 │   ├── debugger.md
 │   ├── implementer.md
 │   ├── researcher.md
 │   └── test-writer.md
+├── agents/
+│   └── *.toml
 └── cargo-target/
 ```
 
@@ -563,8 +634,10 @@ What lives there:
 - `logs/`: raw agent output plus stderr capture
 - `jobs/`: detached background worker specs
 - `batches/`: archived batch TOML files (auto-saved after dispatch)
+- `hooks.toml`: task lifecycle hooks (before_run, after_complete, on_fail)
 - `skills/`: methodology files loaded by `--skill` (auto-injected by default)
 - `templates/`: prompt templates loaded by `--template` (see default-templates/ for examples)
+- `agents/`: custom agent TOML definitions
 - `cargo-target/`: shared Rust build cache for worktree-based tasks
 
 Configure budgets and webhooks in `~/.aid/config.toml`:

@@ -1,4 +1,4 @@
-const VERSION = "5.1.0";
+const VERSION = "5.3.0";
 const SITE_URL = "https://aid.agent-tools.org";
 const REPO_URL = "https://github.com/sunoj/ai-dispatch";
 const META_DESCRIPTION = "Multi-AI CLI team orchestrator that dispatches work to gemini, codex, opencode, cursor, kilo, ob1, codebuff, auto, and custom agents defined via ~/.aid/agents/.";
@@ -20,7 +20,7 @@ const COMMANDS = [
   { name: "watch", purpose: "Follow live progress in text, quiet, or TUI mode.", example: "aid watch --tui" },
   { name: "board", purpose: "List tracked tasks with filters and zombie detection.", example: "aid board --today" },
   { name: "show", purpose: "Inspect task summary, diff, output, log, or AI explanation.", example: "aid show t-1234 --diff" },
-  { name: "usage", purpose: "View task history usage plus configured budget windows.", example: "aid usage --today" },
+  { name: "usage", purpose: "View task history, per-agent analytics, and budget windows.", example: "aid usage --agent codex --period 7d" },
   { name: "retry", purpose: "Re-dispatch a failed task with feedback.", example: "aid retry t-1234 --feedback \"Tighten the configuration example\"" },
   { name: "respond", purpose: "Send interactive input to a running background task.", example: "aid respond t-1234 \"Please rerun with logging enabled\"" },
   { name: "benchmark", purpose: "Compare the same task across multiple agents.", example: "aid benchmark --agents codex,cursor \"Implement new parsing\"" },
@@ -29,7 +29,8 @@ const COMMANDS = [
   { name: "mcp", purpose: "Start the stdio MCP server for Claude Code or other MCP clients.", example: "aid mcp" },
   { name: "merge", purpose: "Mark done tasks as merged or perform bulk workgroup merges.", example: "aid merge --group wg-a3f1" },
   { name: "clean", purpose: "Remove old tasks, orphaned worktrees, and logs.", example: "aid clean --days 30" },
-  { name: "config", purpose: "Inspect agent profiles, skills, pricing, and webhook settings.", example: "aid config agents" },
+  { name: "agent", purpose: "Manage custom agent definitions: list, show, add, remove, fork.", example: "aid agent fork codex --as codex-fast" },
+  { name: "config", purpose: "Inspect agent profiles, skills, pricing, prompt token budget.", example: "aid config prompt-budget" },
   { name: "worktree", purpose: "Manage worktree lifecycle (create/list/remove).", example: "aid worktree create --dir feat/parser" },
   { name: "group", purpose: "Workgroup CRUD with shared context and constraints.", example: "aid group create dispatch --context \"Docs only, cite sources\"" },
   { name: "init", purpose: "Initialize default skills and templates for a fresh project.", example: "aid init" },
@@ -100,6 +101,13 @@ function buildLLMSText() {
   lines.push(`## Agent Store`);
   lines.push(`Browse and install community agents from the GitHub-backed store (sunoj/aid-agents).`);
   lines.push(`Commands: aid store browse [query], aid store show <publisher/name>, aid store install <publisher/name>`);
+  lines.push(``);
+  lines.push(`## Task Lifecycle Hooks`);
+  lines.push(`Define shell hooks in ~/.aid/hooks.toml that run at before_run (fail-on-error), after_complete, or on_fail.`);
+  lines.push(`Hooks receive task JSON on stdin. Pass per-task via --hook event:command or batch [defaults] hooks.`);
+  lines.push(``);
+  lines.push(`## Prompt Budget`);
+  lines.push(`Run \`aid config prompt-budget\` to see per-skill token estimates. Skills and context injection log token counts during dispatch.`);
   lines.push(``);
   lines.push(`## Skills`);
   lines.push(`Methodology files under ~/.aid/skills/ (code-scout, implementer, researcher, test-writer, debugger, etc.) inject repeatable behavior per agent and can be extended with --skill or disabled with --no-skill.`);
@@ -244,6 +252,14 @@ function buildHTML() {
 aid store browse coding       # search by keyword
 aid store show community/aider  # preview config
 aid store install community/aider  # install</code></pre>
+    </section>
+    <section>
+      <h2>Task Lifecycle Hooks</h2>
+      <p>Define shell hooks in <code>~/.aid/hooks.toml</code> that run at <code>before_run</code> (blocks on failure), <code>after_complete</code>, or <code>on_fail</code>. Hooks receive task JSON on stdin. Per-task overrides via <code>--hook event:command</code> or batch <code>[defaults] hooks</code>.</p>
+    </section>
+    <section>
+      <h2>Prompt Budget</h2>
+      <p>Run <code>aid config prompt-budget</code> to see per-skill token estimates. Skills and context injection log token counts during dispatch for visibility into prompt overhead.</p>
     </section>
     <section>
       <h2>Skills</h2>

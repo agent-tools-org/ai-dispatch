@@ -361,6 +361,14 @@ enum AgentCommands {
     Add { name: String },
     /// Remove a custom agent definition
     Remove { name: String },
+    /// Fork a built-in or custom agent definition for local editing
+    Fork {
+        /// Name of the agent to fork (built-in or custom)
+        name: String,
+        /// Override the new agent name (defaults to `<name>-custom`)
+        #[arg(long = "as")]
+        new_name: Option<String>,
+    },
 }
 
 #[derive(Subcommand)]
@@ -544,6 +552,7 @@ async fn main() -> Result<()> {
                 AgentCommands::Show { name } => AgentAction::Show { name },
                 AgentCommands::Add { name } => AgentAction::Add { name },
                 AgentCommands::Remove { name } => AgentAction::Remove { name },
+                AgentCommands::Fork { name, new_name } => AgentAction::Fork { name, new_name },
             };
             run_agent_command(action)?;
         }

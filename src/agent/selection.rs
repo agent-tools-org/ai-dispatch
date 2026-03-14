@@ -11,7 +11,7 @@ use crate::agent::custom::CustomAgentConfig;
 use crate::agent::registry::load_custom_agents;
 use std::process::Command;
 
-const CAPABILITY: &[(AgentKind, &[(TaskCategory, i32)])] = &[
+pub(crate) const AGENT_CAPABILITIES: &[(AgentKind, &[(TaskCategory, i32)])] = &[
     (AgentKind::Gemini, &[
         (TaskCategory::Research, 9), (TaskCategory::Documentation, 6),
         (TaskCategory::Debugging, 5), (TaskCategory::SimpleEdit, 2),
@@ -57,7 +57,7 @@ const CAPABILITY: &[(AgentKind, &[(TaskCategory, i32)])] = &[
 ];
 
 fn base_score(agent: AgentKind, category: TaskCategory) -> i32 {
-    CAPABILITY.iter()
+    AGENT_CAPABILITIES.iter()
         .find(|(k, _)| *k == agent)
         .and_then(|(_, scores)| scores.iter().find(|(c, _)| *c == category))
         .map(|(_, s)| *s).unwrap_or(1)

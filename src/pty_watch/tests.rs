@@ -34,6 +34,9 @@ fn stores_recent_question_as_awaiting_prompt_metadata() {
         resolved_prompt: None,
         created_at: Local::now(),
         completed_at: None,
+        verify: None,
+        read_only: false,
+        budget: false,
     };
     store.insert_task(&task).unwrap();
 

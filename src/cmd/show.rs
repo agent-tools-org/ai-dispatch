@@ -221,6 +221,9 @@ mod tests {
             cost_usd: None,
             created_at: Local::now(),
             completed_at: None,
+            verify: None,
+            read_only: false,
+            budget: false,
         };
         store.insert_task(&task).unwrap();
 
@@ -263,6 +266,9 @@ mod tests {
             cost_usd: None,
             created_at: Local::now(),
             completed_at: None,
+            verify: None,
+            read_only: false,
+            budget: false,
         };
         store.insert_task(&task).unwrap();
 

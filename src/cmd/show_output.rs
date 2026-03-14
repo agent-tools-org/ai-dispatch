@@ -248,6 +248,9 @@ mod tests {
             cost_usd: None,
             created_at: Local::now(),
             completed_at: None,
+            verify: None,
+            read_only: false,
+            budget: false,
         };
         assert_eq!(read_task_output(&task).unwrap(), "hello\n");
     }
@@ -286,6 +289,9 @@ mod tests {
             cost_usd: None,
             created_at: Local::now(),
             completed_at: None,
+            verify: None,
+            read_only: false,
+            budget: false,
         };
         store.insert_task(&task).unwrap();
 

@@ -15,9 +15,9 @@ impl Store {
             "INSERT INTO tasks (id, agent, prompt, resolved_prompt, status, parent_task_id, workgroup_id,
              caller_kind, caller_session_id, agent_session_id, repo_path, worktree_path, worktree_branch,
              log_path, output_path, tokens, prompt_tokens, duration_ms, model, cost_usd, created_at,
-             completed_at)
+             completed_at, verify, read_only, budget)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17,
-             ?18, ?19, ?20, ?21, ?22)",
+             ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25)",
             params![
                 task.id.as_str(),
                 task.agent.as_str(),
@@ -41,6 +41,9 @@ impl Store {
                 task.cost_usd,
                 task.created_at.to_rfc3339(),
                 task.completed_at.map(|t| t.to_rfc3339()),
+                task.verify,
+                task.read_only,
+                task.budget,
             ],
         )?;
         Ok(())

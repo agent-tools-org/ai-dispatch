@@ -12,14 +12,14 @@ const args = parseArgs({
   options: {
     cwd: { type: 'string' },
     model: { type: 'string' },
-    mode: { type: 'string', default: 'normal' },
+    mode: { type: 'string', default: 'free' },
     'read-only': { type: 'boolean', default: false },
   },
 });
 
 const prompt = args.positionals.join(' ').trim();
 if (!prompt) {
-  console.error('Usage: aid-codebuff <prompt> [--cwd <dir>] [--model <model>] [--mode <free|normal|max>]');
+  console.error('Usage: aid-codebuff <prompt> [--cwd <dir>] [--model <model>] [--mode <free|normal|max>] (default: free)');
   process.exit(1);
 }
 const apiKey = process.env.CODEBUFF_API_KEY;
@@ -29,7 +29,7 @@ if (!apiKey) {
 }
 
 const cwd = args.values.cwd || process.cwd();
-const costMode = args.values.mode || 'normal';
+const costMode = args.values.mode || 'free';
 const emit = (payload) => process.stdout.write(`${JSON.stringify(payload)}\n`);
 
 const client = new CodebuffClient({ apiKey, cwd });
@@ -86,7 +86,7 @@ const handleEvent = (event) => {
       prompt,
       handleEvent,
       costMode,
-      maxAgentSteps: 50,
+      maxAgentSteps: 25,
     });
     const turnEvent = {
       type: 'turn.completed',

@@ -31,6 +31,7 @@ mod compaction;
 mod tui;
 mod types;
 mod usage;
+pub mod usage_report;
 mod verify;
 mod watcher;
 mod webhook;

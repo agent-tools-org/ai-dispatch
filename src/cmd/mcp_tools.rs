@@ -17,6 +17,7 @@ use crate::config;
 use crate::store::Store;
 use crate::types::{Task, TaskFilter};
 use crate::usage;
+use crate::usage_report;
 
 pub fn tool_definitions() -> Vec<Value> {
     mcp_schema::tool_definitions()
@@ -162,7 +163,7 @@ async fn retry_tool(store: Arc<Store>, arguments: Value) -> Result<Value> {
 fn usage_tool(store: Arc<Store>) -> Result<Value> {
     let config = config::load_config()?;
     let snapshot = usage::collect_usage(store.as_ref(), &config)?;
-    let rendered = usage::render_usage(&snapshot);
+    let rendered = usage_report::render_usage(&snapshot);
     Ok(json!({ "snapshot": snapshot, "rendered": rendered }))
 }
 

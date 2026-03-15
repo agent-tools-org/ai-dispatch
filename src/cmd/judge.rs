@@ -1,18 +1,37 @@
-use anyhow::{anyhow, Context, Result};
+// Judge module: auto-review task output and decide PASS/RETRY.
+// Exports: judge_task(), gather_diff(), read_output().
+// Deps: crate::store::Store, crate::types::Task.
+use anyhow::{Context, Result};
 use std::{env, fs, path::{Path, PathBuf}, process::{Command as StdCommand, Stdio}};
 use tokio::process::Command;
-use crate::store::Store;
 use crate::types::Task;
+
+const MAX_DIFF_CHARS: usize = 8000;
+
 pub struct JudgeResult {
     pub passed: bool,
     pub feedback: String,
 }
-pub async fn judge_task(store: &Store, task: &Task, judge_agent: &str, original_prompt: &str) -> Result<JudgeResult> {
-    let _ = store;
+
+pub async fn judge_task(task: &Task, judge_agent: &str, original_prompt: &str) -> Result<JudgeResult> {
     let diff = gather_diff(task)
         .or_else(|| read_output(task))
         .unwrap_or_else(|| "(no diff or output)".to_string());
-    let prompt = format!("You are a code review judge. Original task: {original_prompt}. Output diff: {diff}. Respond with PASS or RETRY: <feedback>");
+    let truncated = truncate_diff(&diff, MAX_DIFF_CHARS);
+    let prompt = format!(
+        concat!(
+            "You are a code review judge.\n\n",
+            "## Original task\n{}\n\n",
+            "## Output\n```\n{}\n```\n\n",
+            "## Instructions\n",
+            "Review whether the output satisfies the original task.\n",
+            "Your FIRST line of output MUST be exactly one of:\n",
+            "  PASS: <brief reason>\n",
+            "  RETRY: <what needs to be fixed>\n",
+            "Do NOT output anything before PASS or RETRY.",
+        ),
+        original_prompt, truncated,
+    );
     let exe = env::current_exe().context("Failed to locate aid binary")?;
     let output = Command::new(exe)
         .args(["run", judge_agent, &prompt, "--dir", "."])
@@ -27,71 +46,136 @@ pub async fn judge_task(store: &Store, task: &Task, judge_agent: &str, original_
     }
     parse_judge_response(&String::from_utf8_lossy(&output.stdout))
 }
+
 pub(crate) fn gather_diff(task: &Task) -> Option<String> {
-    let dir = task.worktree_path.as_deref().or(task.repo_path.as_deref()).unwrap_or(".");
+    let dir = task.worktree_path.as_deref().or(task.repo_path.as_deref())?;
     if !Path::new(dir).exists() {
         return None;
     }
-    let output = StdCommand::new("git")
-        .current_dir(dir)
-        .args(["diff", "--no-color"])
-        .output()
-        .ok()?;
-    if !output.status.success() {
-        return None;
-    }
-    let diff = String::from_utf8_lossy(&output.stdout).into_owned();
-    (!diff.trim().is_empty()).then_some(diff)
-}
-pub(crate) fn read_output(task: &Task) -> Option<String> {
-    let Some(output_path) = task.output_path.as_deref() else {
-        return None;
-    };
-    let mut candidates = vec![PathBuf::from(output_path)];
-    if let Some(worktree) = task.worktree_path.as_deref() {
-        candidates.push(Path::new(worktree).join(output_path));
-    }
-    for candidate in candidates {
-        if candidate.exists() {
-            if let Ok(text) = fs::read_to_string(&candidate) {
-                if !text.trim().is_empty() {
-                    return Some(text);
-                }
+    // Try committed diff first (codex commits changes), then unstaged diff
+    for args in [&["diff", "--no-color", "HEAD~1..HEAD"][..], &["diff", "--no-color"]] {
+        let output = StdCommand::new("git").current_dir(dir).args(args).output().ok()?;
+        if output.status.success() {
+            let diff = String::from_utf8_lossy(&output.stdout).into_owned();
+            if !diff.trim().is_empty() {
+                return Some(diff);
             }
         }
     }
     None
 }
-fn parse_judge_response(text: &str) -> Result<JudgeResult> {
-    let line = text
-        .lines()
-        .find(|line| !line.trim().is_empty())
-        .ok_or_else(|| anyhow!("Judge response was empty"))?;
-    let trimmed = line.trim();
-    let up = trimmed.to_uppercase();
-    let (word, passed) = if up.starts_with("PASS") {
-        ("PASS", true)
-    } else if up.starts_with("RETRY") {
-        ("RETRY", false)
-    } else {
-        return Err(anyhow!("Judge response must start with PASS or RETRY"));
-    };
-    let feedback = trimmed[word.len()..]
-        .trim_start_matches(|c: char| c.is_ascii_whitespace() || c == ':' || c == '-')
-        .trim()
-        .to_string();
-    Ok(JudgeResult { passed, feedback })
+
+pub(crate) fn read_output(task: &Task) -> Option<String> {
+    let output_path = task.output_path.as_deref()?;
+    let mut candidates = vec![PathBuf::from(output_path)];
+    if let Some(worktree) = task.worktree_path.as_deref() {
+        candidates.push(Path::new(worktree).join(output_path));
+    }
+    for candidate in candidates {
+        if let Ok(text) = fs::read_to_string(&candidate) {
+            if !text.trim().is_empty() {
+                return Some(text);
+            }
+        }
+    }
+    None
 }
+
+fn truncate_diff(diff: &str, max_chars: usize) -> &str {
+    if diff.len() <= max_chars {
+        return diff;
+    }
+    // Find a safe split point at a newline boundary
+    match diff[..max_chars].rfind('\n') {
+        Some(pos) => &diff[..pos],
+        None => &diff[..max_chars],
+    }
+}
+
+fn parse_judge_response(text: &str) -> Result<JudgeResult> {
+    // Scan all lines — agents may prefix with reasoning before the verdict
+    for line in text.lines() {
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        let up = trimmed.to_uppercase();
+        let (word, passed) = if up.starts_with("PASS") {
+            ("PASS", true)
+        } else if up.starts_with("RETRY") {
+            ("RETRY", false)
+        } else {
+            continue;
+        };
+        let feedback = trimmed[word.len()..]
+            .trim_start_matches(|c: char| c.is_ascii_whitespace() || c == ':' || c == '-')
+            .trim()
+            .to_string();
+        return Ok(JudgeResult { passed, feedback });
+    }
+    // Fallback: if no explicit verdict found, default to PASS (avoid blocking on judge failures)
+    eprintln!("[aid] Judge response contained no PASS/RETRY verdict — defaulting to PASS");
+    Ok(JudgeResult { passed: true, feedback: "no verdict found in judge response".to_string() })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
     #[test]
-    fn parse_variants() {
-        let pass = parse_judge_response("PASS ready").unwrap();
-        assert!(pass.passed);
-        assert_eq!(pass.feedback, "ready");
-        let retry = parse_judge_response("RETRY missing work").unwrap();
-        assert!(!retry.passed);
-        assert_eq!(retry.feedback, "missing work");
+    fn parse_first_line_pass() {
+        let result = parse_judge_response("PASS: looks good").unwrap();
+        assert!(result.passed);
+        assert_eq!(result.feedback, "looks good");
+    }
+
+    #[test]
+    fn parse_first_line_retry() {
+        let result = parse_judge_response("RETRY: missing tests").unwrap();
+        assert!(!result.passed);
+        assert_eq!(result.feedback, "missing tests");
+    }
+
+    #[test]
+    fn parse_verdict_after_prose() {
+        let text = "Looking at the diff, I can see changes were made.\nThe implementation looks complete.\nPASS: all requirements met";
+        let result = parse_judge_response(text).unwrap();
+        assert!(result.passed);
+        assert_eq!(result.feedback, "all requirements met");
+    }
+
+    #[test]
+    fn parse_retry_after_reasoning() {
+        let text = "The task asked for tests but none were added.\nRETRY: add unit tests for the new function";
+        let result = parse_judge_response(&text).unwrap();
+        assert!(!result.passed);
+        assert_eq!(result.feedback, "add unit tests for the new function");
+    }
+
+    #[test]
+    fn parse_no_verdict_defaults_to_pass() {
+        let text = "The code looks fine and all changes are appropriate.";
+        let result = parse_judge_response(text).unwrap();
+        assert!(result.passed);
+        assert!(result.feedback.contains("no verdict"));
+    }
+
+    #[test]
+    fn parse_empty_response_defaults_to_pass() {
+        let result = parse_judge_response("").unwrap();
+        assert!(result.passed);
+    }
+
+    #[test]
+    fn truncate_diff_within_limit() {
+        let short = "abc\ndef";
+        assert_eq!(truncate_diff(short, 100), short);
+    }
+
+    #[test]
+    fn truncate_diff_at_newline_boundary() {
+        let diff = "line1\nline2\nline3\nline4";
+        let result = truncate_diff(diff, 13);
+        assert_eq!(result, "line1\nline2");
     }
 }

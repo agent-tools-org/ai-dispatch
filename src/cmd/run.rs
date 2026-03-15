@@ -749,7 +749,7 @@ pub(crate) async fn maybe_judge_retry(store: &Arc<Store>, args: &RunArgs, task_i
     if task.status != TaskStatus::Done {
         return Ok(None);
     }
-    let judge_result = judge::judge_task(store, &task, judge_agent, &args.prompt).await?;
+    let judge_result = judge::judge_task(&task, judge_agent, &args.prompt).await?;
     if judge_result.passed {
         println!("[aid] Judge approved");
         return Ok(None);

@@ -420,6 +420,8 @@ Batch TOML format:
     },
     /// Initialize default skills and templates
     Init,
+    /// Interactive setup wizard
+    Setup,
     #[command(hide = true, name = "__run-task")]
     InternalRunTask { task_id: String },
     /// Show task retry tree
@@ -864,6 +866,7 @@ async fn main() -> Result<()> {
             cmd::broadcast::run(&store, &group, &message)?;
         }
         Commands::Init => cmd::init::run()?,
+        Commands::Setup => cmd::setup::run()?,
         Commands::InternalRunTask { task_id } => {
             background::run_task(store, &task_id).await?;
         }

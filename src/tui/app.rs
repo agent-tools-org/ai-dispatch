@@ -266,9 +266,6 @@ impl App {
                 task.status,
                 crate::types::TaskStatus::Running
                     | crate::types::TaskStatus::AwaitingInput
-                    | crate::types::TaskStatus::Done
-                    | crate::types::TaskStatus::Merged
-                    | crate::types::TaskStatus::Failed
             )
         }) {
             let Ok(Some(pid)) = background::load_worker_pid(task.id.as_str()) else {

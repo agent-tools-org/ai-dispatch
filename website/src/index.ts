@@ -1,4 +1,4 @@
-const VERSION = "5.6.2";
+const VERSION = "5.7.0";
 const SITE_URL = "https://aid.agent-tools.org";
 const REPO_URL = "https://github.com/agent-tools-org/ai-dispatch";
 const META_DESCRIPTION = "Multi-AI CLI team orchestrator that dispatches work to gemini, codex, opencode, cursor, kilo, ob1, codebuff, auto, and custom agents defined via ~/.aid/agents/.";
@@ -385,6 +385,30 @@ async function handleLLMSFull(request: Request) {
   const text = await fetchReadme();
   return respondText(text, "text/plain; charset=utf-8");
 }
+function buildInstallScript() {
+  return `#!/bin/sh
+set -e
+
+echo "Installing aid (ai-dispatch) v${VERSION}..."
+
+if ! command -v cargo >/dev/null 2>&1; then
+  echo "Error: cargo not found. Install Rust first:"
+  echo "  curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh"
+  exit 1
+fi
+
+RUST_VER=$(rustc --version | grep -oE '[0-9]+\\.[0-9]+' | head -1)
+if [ "$(echo "$RUST_VER < 1.85" | bc)" = "1" ] 2>/dev/null; then
+  echo "Warning: Rust 1.85+ recommended (you have $RUST_VER). Run: rustup update"
+fi
+
+cargo install ai-dispatch
+echo ""
+echo "Done! Run 'aid --version' to verify."
+echo "Quick start: https://aid.agent-tools.org"
+`;
+}
+
 function buildRobots() {
   return [
     "User-agent: *",
@@ -428,7 +452,7 @@ async function handleRequest(request: Request) {
         description: META_DESCRIPTION,
         repository: REPO_URL,
         license: "MIT",
-        install: "cargo install --path .",
+        install: "curl -fsSL https://aid.agent-tools.org/install.sh | sh",
         agents: Object.keys(AGENT_MATRIX),
         commands: COMMANDS.map((cmd) => ({ name: cmd.name, purpose: cmd.purpose }))
       });
@@ -436,6 +460,8 @@ async function handleRequest(request: Request) {
       return respondJSON(COMMANDS.map((cmd) => ({ name: cmd.name, purpose: cmd.purpose, example: cmd.example })));
     case "/api/agents":
       return respondJSON(AGENT_MATRIX);
+    case "/install.sh":
+      return respondText(buildInstallScript(), "text/plain; charset=utf-8");
     case "/robots.txt":
       return respondText(buildRobots(), "text/plain; charset=utf-8");
     case "/.well-known/ai-plugin.json":

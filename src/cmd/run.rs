@@ -2,6 +2,7 @@
 // Creates task record, spawns agent process, wires watcher, records completion.
 use anyhow::{Context, Result};
 use chrono::Local;
+use std::path::Path;
 use std::sync::Arc;
 use tokio::process::Command;
 use crate::agent::{self, RunOpts};
@@ -288,6 +289,7 @@ pub async fn run(store: Arc<Store>, args: RunArgs) -> Result<TaskId> {
             effective_dir.as_deref(),
         );
         if let Some(task) = store.get_task(task_id.as_str())? {
+            maybe_flag_empty_worktree_diff(store.as_ref(), &task_id, &task);
             maybe_cleanup_fast_fail(&store, &task_id, &task);
             // Auto-cleanup worktree for failed tasks (no useful changes to preserve)
             if task.status == TaskStatus::Failed {
@@ -407,6 +409,82 @@ fn check_worktree_escape(repo_dir: Option<&str>) {
             }
             eprintln!("[aid] Run `git checkout .` to discard, or review with `git diff`");
         }
+    }
+}
+
+fn maybe_flag_empty_worktree_diff(store: &Store, task_id: &TaskId, task: &Task) {
+    if task.status != TaskStatus::Done || task.verify_status != VerifyStatus::Skipped {
+        return;
+    }
+    let Some(wt_path) = task.worktree_path.as_deref() else {
+        return;
+    };
+    let path = Path::new(wt_path);
+    if !path.exists() {
+        return;
+    }
+    if let Some(true) = worktree_is_empty_diff(path) {
+        eprintln!("[aid] Warning: agent completed but made no code changes in worktree");
+        if let Err(err) = store.update_verify_status(task_id.as_str(), VerifyStatus::EmptyDiff) {
+            eprintln!("[aid] Failed to record empty diff status: {err}");
+        }
+    }
+}
+
+fn worktree_is_empty_diff(worktree_dir: &Path) -> Option<bool> {
+    let head = git_diff_stat_output(worktree_dir, &["diff", "--stat", "HEAD"])?;
+    let staged = git_diff_stat_output(worktree_dir, &["diff", "--cached", "--stat"])?;
+    Some(head.trim().is_empty() && staged.trim().is_empty())
+}
+
+fn git_diff_stat_output(dir: &Path, args: &[&str]) -> Option<String> {
+    let output = std::process::Command::new("git")
+        .current_dir(dir)
+        .args(args)
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    Some(String::from_utf8_lossy(&output.stdout).to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::process::Command;
+    use tempfile::TempDir;
+
+    fn git(dir: &std::path::Path, args: &[&str]) {
+        let output = Command::new("git")
+            .current_dir(dir)
+            .args(args)
+            .output()
+            .expect("git command failed");
+        assert!(
+            output.status.success(),
+            "git {:?} failed: {}",
+            args,
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+
+    #[test]
+    fn empty_diff_detection_respects_worktree_state() {
+        let dir = TempDir::new().unwrap();
+        git(dir.path(), &["init"]);
+        git(dir.path(), &["config", "user.email", "aid@example.com"]);
+        git(dir.path(), &["config", "user.name", "Aid Tester"]);
+        let file = dir.path().join("file.txt");
+        std::fs::write(&file, "initial").unwrap();
+        git(dir.path(), &["add", "file.txt"]);
+        git(dir.path(), &["commit", "-m", "initial"]);
+
+        assert_eq!(worktree_is_empty_diff(dir.path()), Some(true));
+
+        std::fs::write(&file, "updated").unwrap();
+
+        assert_eq!(worktree_is_empty_diff(dir.path()), Some(false));
     }
 }
 

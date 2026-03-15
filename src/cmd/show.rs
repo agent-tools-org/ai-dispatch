@@ -10,7 +10,7 @@ use crate::board::render_task_detail;
 use crate::cmd;
 use crate::paths;
 use crate::store::Store;
-use crate::types::{Task, TaskId, TaskStatus};
+use crate::types::{Task, TaskId, TaskStatus, VerifyStatus};
 
 #[path = "show_output.rs"]
 mod show_output;
@@ -148,7 +148,9 @@ pub fn audit_text(store: &Arc<Store>, task_id: &str) -> Result<String> {
         out.push_str(&stderr);
     }
 
-    if let Some(ref wt_path) = task.worktree_path
+    if task.verify_status == VerifyStatus::EmptyDiff {
+        out.push_str("\nChanges:\n[no changes]\n");
+    } else if let Some(ref wt_path) = task.worktree_path
         && Path::new(wt_path).exists()
     {
         out.push_str("\nChanges:\n");

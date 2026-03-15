@@ -9,4 +9,5 @@
 node_modules/
 website/node_modules/
 website/.wrangler/
-v73-code-health.toml
+v7*-*.toml
+evermemos-batch.toml

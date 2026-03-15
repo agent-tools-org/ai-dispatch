@@ -1,9 +1,9 @@
 // Summarizes workgroup tasks for the aid CLI.
 // Exports: run.
 // Deps: anyhow, crate::store, crate::types.
-use anyhow::{anyhow, Result};
 use crate::store::Store;
-use crate::types::{Task, TaskStatus, Workgroup};
+use crate::types::{Finding, Task, TaskStatus, Workgroup};
+use anyhow::{anyhow, Result};
 use std::collections::HashMap;
 
 pub fn run(store: &Store, group_id: &str) -> Result<()> {
@@ -12,22 +12,30 @@ pub fn run(store: &Store, group_id: &str) -> Result<()> {
         .get_workgroup(group_id)?
         .ok_or_else(|| anyhow!("Workgroup {group_id} not found"))?;
     let milestone_map = group_milestones(store.get_workgroup_milestones(group_id)?);
-    let done = tasks.iter().filter(|task| is_success_status(task.status)).count();
-    let failed = tasks.iter().filter(|task| task.status == TaskStatus::Failed).count();
+    let done = tasks
+        .iter()
+        .filter(|task| is_success_status(task.status))
+        .count();
+    let failed = tasks
+        .iter()
+        .filter(|task| task.status == TaskStatus::Failed)
+        .count();
 
     print_header(&workgroup, total_tasks(&tasks), done, failed);
     print_results(&tasks);
     print_milestones(&tasks, &milestone_map);
+    let findings = store.list_findings(group_id)?;
+    if !findings.is_empty() {
+        print_findings(&findings);
+    }
     Ok(())
 }
-fn total_tasks(tasks: &[Task]) -> usize { tasks.len() }
+fn total_tasks(tasks: &[Task]) -> usize {
+    tasks.len()
+}
 
 fn print_header(workgroup: &Workgroup, total: usize, done: usize, failed: usize) {
-    println!(
-        "Workgroup: {} ({})",
-        workgroup.name,
-        workgroup.id.as_str()
-    );
+    println!("Workgroup: {} ({})", workgroup.name, workgroup.id.as_str());
     println!("Tasks: {} total, {} done, {} failed", total, done, failed);
     println!();
 }
@@ -61,6 +69,15 @@ fn print_milestones(tasks: &[Task], milestones: &HashMap<String, Vec<String>>) {
     }
     if !printed {
         println!("- (none)");
+    }
+}
+
+fn print_findings(findings: &[Finding]) {
+    println!();
+    println!("Findings:");
+    for finding in findings {
+        let source = finding.source_task_id.as_deref().unwrap_or("manual");
+        println!("  [{}] {}", source, finding.content);
     }
 }
 

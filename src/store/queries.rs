@@ -6,7 +6,7 @@ use anyhow::Result;
 use chrono::Local;
 use rusqlite::{params, OptionalExtension};
 
-use super::schema::{parse_dt, row_to_event, row_to_memory, row_to_task};
+use super::schema::{parse_dt, row_to_event, row_to_finding, row_to_memory, row_to_task};
 use super::Store;
 use crate::types::*;
 
@@ -242,6 +242,16 @@ impl Store {
         )?;
         let memories = rows.map(|row| row?).collect::<Result<Vec<_>>>()?;
         Ok(memories)
+    }
+
+    pub fn list_findings(&self, workgroup_id: &str) -> Result<Vec<Finding>> {
+        let conn = self.db();
+        let mut stmt = conn.prepare(
+            "SELECT id, workgroup_id, source_task_id, content, created_at
+             FROM findings WHERE workgroup_id = ?1 ORDER BY created_at ASC",
+        )?;
+        let rows = stmt.query_map(params![workgroup_id], row_to_finding)?;
+        rows.map(|row| row?).collect()
     }
 }
 

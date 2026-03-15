@@ -1,0 +1,383 @@
+[defaults]
+verify = "auto"
+
+[[task]]
+name = "findings-store"
+agent = "codex"
+prompt = """
+Add a `findings` table and Store CRUD methods for workgroup-scoped findings.
+
+## Schema (src/store/schema.rs)
+
+Add to CREATE_TABLES_SQL (after the memories table):
+```sql
+CREATE TABLE IF NOT EXISTS findings (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    workgroup_id TEXT NOT NULL,
+    content TEXT NOT NULL,
+    source_task_id TEXT,
+    created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_findings_workgroup ON findings(workgroup_id);
+```
+
+Also add a migrate call in the `migrate()` function (idempotent, same pattern as other migrations):
+```rust
+let _ = conn.execute_batch("CREATE TABLE IF NOT EXISTS findings (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    workgroup_id TEXT NOT NULL,
+    content TEXT NOT NULL,
+    source_task_id TEXT,
+    created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_findings_workgroup ON findings(workgroup_id);");
+```
+
+## Types (src/types.rs)
+
+Add a Finding struct (after the Memory struct):
+```rust
+#[derive(Debug, Clone)]
+pub struct Finding {
+    pub id: i64,
+    pub workgroup_id: String,
+    pub content: String,
+    pub source_task_id: Option<String>,
+    pub created_at: DateTime<Local>,
+}
+```
+
+## Store methods (src/store/mutations.rs)
+
+Add `insert_finding`:
+```rust
+pub fn insert_finding(&self, workgroup_id: &str, content: &str, source_task_id: Option<&str>) -> Result<()> {
+    let now = Local::now().to_rfc3339();
+    self.db().execute(
+        "INSERT INTO findings (workgroup_id, content, source_task_id, created_at) VALUES (?1, ?2, ?3, ?4)",
+        params![workgroup_id, content, source_task_id, now],
+    )?;
+    Ok(())
+}
+```
+
+## Store methods (src/store/queries.rs)
+
+Add `list_findings`:
+```rust
+pub fn list_findings(&self, workgroup_id: &str) -> Result<Vec<Finding>> {
+    let conn = self.db();
+    let mut stmt = conn.prepare(
+        "SELECT id, workgroup_id, content, source_task_id, created_at FROM findings WHERE workgroup_id = ?1 ORDER BY created_at ASC"
+    )?;
+    let rows = stmt.query_map(params![workgroup_id], |row| {
+        Ok(Finding {
+            id: row.get(0)?,
+            workgroup_id: row.get(1)?,
+            content: row.get(2)?,
+            source_task_id: row.get(3)?,
+            created_at: super::schema::parse_dt(&row.get::<_, String>(4)?),
+        })
+    })?;
+    rows.map(|r| Ok(r?)).collect()
+}
+```
+
+IMPORTANT: Use `super::schema::parse_dt` (not `crate::store::schema::parse_dt`). Follow existing patterns exactly. Add `use crate::types::Finding;` where needed.
+
+[MILESTONE] findings table + CRUD done
+"""
+worktree = "feat/findings-store"
+context = ["src/store/schema.rs", "src/store/mutations.rs:insert_memory,insert_event", "src/store/queries.rs:list_tasks_by_group,get_workgroup_milestones", "src/types.rs:Memory,Finding"]
+
+[[task]]
+name = "findings-watcher"
+agent = "codex"
+prompt = """
+Add [FINDING] tag capture to the watcher, similar to how [MILESTONE] is captured.
+
+## src/watcher.rs
+
+The watcher already parses `[MILESTONE]` tags from agent output. Add the same for `[FINDING]` tags.
+
+1. In `handle_streaming_line()` and `handle_streaming_line_with_session()`, add finding extraction BEFORE milestone parsing:
+```rust
+if let Some(finding) = extract_finding_detail(line) {
+    if let Some(group_id) = workgroup_id {
+        let _ = store.insert_finding(group_id, &finding, Some(task_id.as_str()));
+    }
+}
+```
+
+2. Both `handle_streaming_line` and `handle_streaming_line_with_session` need a new parameter `workgroup_id: Option<&str>`.
+
+3. Add the extraction function (similar to `extract_milestone_detail`):
+```rust
+fn extract_finding_detail(line: &str) -> Option<String> {
+    if !line.contains("[FINDING]") {
+        return None;
+    }
+    if let Ok(value) = serde_json::from_str::<serde_json::Value>(line)
+        && let Some(detail) = extract_finding_from_json(&value)
+    {
+        return Some(detail);
+    }
+    extract_finding_from_text(line)
+}
+
+fn extract_finding_from_json(value: &serde_json::Value) -> Option<String> {
+    match value {
+        serde_json::Value::String(text) => extract_finding_from_text(text),
+        serde_json::Value::Array(items) => items.iter().find_map(extract_finding_from_json),
+        serde_json::Value::Object(map) => map.values().find_map(extract_finding_from_json),
+        _ => None,
+    }
+}
+
+fn extract_finding_from_text(text: &str) -> Option<String> {
+    text.lines().find_map(|line| {
+        let (_, detail) = line.split_once("[FINDING]")?;
+        let detail = detail.trim().trim_start_matches(':').trim();
+        if detail.is_empty() { None } else { Some(detail.to_string()) }
+    })
+}
+```
+
+4. Update callers in `watch_streaming` and `watch_buffered` to pass `workgroup_id`. The workgroup_id is not currently available in these functions — add it as a new parameter:
+   - `watch_streaming(agent, child, task_id, store, log_path, workgroup_id: Option<&str>)`
+   - `watch_buffered(agent, child, task_id, store, log_path, output_path, workgroup_id: Option<&str>)`
+
+5. Update the call sites in `src/cmd/run_prompt.rs` (`run_agent_process_impl`):
+   - The function already has access to the task via parameters. Add `workgroup_id: Option<&str>` parameter and pass it through to `watch_streaming`/`watch_buffered`.
+   - Update the two call sites in run_prompt.rs.
+
+6. Update the call site in `src/background.rs` — search for `watch_streaming` and `watch_buffered` calls and pass the task's `workgroup_id.as_deref()`.
+
+7. Add a test for `extract_finding_detail`:
+```rust
+#[test]
+fn finding_event_parses_plain_text_lines() {
+    let detail = super::extract_finding_detail("[FINDING] gamma can be zero in tricrypto");
+    assert_eq!(detail.as_deref(), Some("gamma can be zero in tricrypto"));
+}
+```
+
+CRITICAL: You must update ALL call sites of `handle_streaming_line`, `handle_streaming_line_with_session`, `watch_streaming`, `watch_buffered`, and `run_agent_process_impl` to pass the new workgroup_id parameter. Search for every usage of these functions and update them. If you miss a call site, the build will fail.
+
+[MILESTONE] watcher captures [FINDING] tags
+"""
+worktree = "feat/findings-watcher"
+context = ["src/watcher.rs", "src/cmd/run_prompt.rs:run_agent_process_impl", "src/background.rs"]
+
+[[task]]
+name = "findings-inject"
+agent = "codex"
+prompt = """
+Inject workgroup findings into agent prompts alongside milestones.
+
+## src/workgroup.rs
+
+Update `compose_prompt()` to accept findings parameter:
+```rust
+pub fn compose_prompt(
+    prompt: &str,
+    file_context: Option<&str>,
+    workgroup: Option<&Workgroup>,
+    milestones: &[(String, String)],
+    findings: &[Finding],
+) -> String {
+```
+
+Add a findings section BEFORE milestones section (findings are more important as shared evidence):
+```rust
+if !findings.is_empty() {
+    let finding_lines = findings
+        .iter()
+        .map(|f| {
+            let source = f.source_task_id.as_deref().unwrap_or("manual");
+            format!("- [{}] {}", source, f.content)
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    sections.push(format!("[Shared Findings]\n{finding_lines}"));
+}
+```
+
+## src/cmd/run_prompt.rs — build_prompt_bundle
+
+In `build_prompt_bundle`, after loading milestones, also load findings:
+```rust
+let findings = if let Some(group_id) = args.group.as_deref() {
+    store.list_findings(group_id)?
+} else {
+    vec![]
+};
+```
+
+Then pass `&findings` to `compose_prompt()`.
+
+## Update all callers of compose_prompt
+
+Search for all calls to `crate::workgroup::compose_prompt` and add `&[]` for the findings parameter where findings aren't available. There may be callers in retry logic or other places.
+
+## Update tests in workgroup.rs
+
+Update existing tests to pass `&[]` for the new findings parameter. Add a test for findings injection:
+```rust
+#[test]
+fn includes_findings_from_investigation() {
+    use crate::types::Finding;
+    let findings = vec![
+        Finding { id: 1, workgroup_id: "wg-1".to_string(), content: "gamma can be zero".to_string(), source_task_id: Some("t-100".to_string()), created_at: Local::now() },
+    ];
+    let prompt = compose_prompt("investigate", None, None, &[], &findings);
+    assert!(prompt.contains("[Shared Findings]"));
+    assert!(prompt.contains("gamma can be zero"));
+}
+```
+
+Add `use crate::types::Finding;` where needed.
+
+[MILESTONE] findings injected into prompts
+"""
+worktree = "feat/findings-inject"
+context = ["src/workgroup.rs", "src/cmd/run_prompt.rs:build_prompt_bundle,compose_prompt", "src/types.rs:Finding"]
+
+[[task]]
+name = "findings-cli"
+agent = "codex"
+prompt = """
+Add `aid finding` CLI command to post and list findings for a workgroup.
+
+## src/cmd/finding.rs (NEW FILE, < 80 lines)
+
+```rust
+// CLI handler for `aid finding` — post and list workgroup findings.
+// Exports: add, list.
+// Deps: store::Store.
+
+use anyhow::Result;
+use crate::store::Store;
+
+pub fn add(store: &Store, group_id: &str, content: &str, task_id: Option<&str>) -> Result<()> {
+    // Verify workgroup exists
+    store.get_workgroup(group_id)?
+        .ok_or_else(|| anyhow::anyhow!("Workgroup '{}' not found", group_id))?;
+    store.insert_finding(group_id, content, task_id)?;
+    println!("Finding posted to {}", group_id);
+    Ok(())
+}
+
+pub fn list(store: &Store, group_id: &str) -> Result<()> {
+    let findings = store.list_findings(group_id)?;
+    if findings.is_empty() {
+        println!("No findings for {}.", group_id);
+        return Ok(());
+    }
+    println!("Findings for {}:", group_id);
+    for finding in &findings {
+        let source = finding.source_task_id.as_deref().unwrap_or("manual");
+        let age = format_age(&finding.created_at);
+        println!("  [{}] ({}) {}", source, age, finding.content);
+    }
+    Ok(())
+}
+
+fn format_age(created_at: &chrono::DateTime<chrono::Local>) -> String {
+    let duration = chrono::Local::now().signed_duration_since(*created_at);
+    let mins = duration.num_minutes();
+    if mins <= 0 { format!("{}s", duration.num_seconds().max(0)) }
+    else if mins < 60 { format!("{}m", mins) }
+    else if mins < 24 * 60 { format!("{}h", duration.num_hours()) }
+    else { format!("{}d", duration.num_days()) }
+}
+```
+
+## src/cmd/mod.rs
+
+Add `pub mod finding;`
+
+## src/main.rs
+
+Add Finding command with two subcommands:
+```rust
+/// Post or list workgroup findings
+#[command(after_help = r#"Examples:
+  aid finding add wg-abc1 "gamma can be zero in tricrypto"
+  aid finding list wg-abc1"#)]
+Finding {
+    #[command(subcommand)]
+    action: FindingCommands,
+},
+```
+
+FindingCommands enum:
+```rust
+#[derive(Subcommand)]
+enum FindingCommands {
+    /// Post a finding to a workgroup
+    Add {
+        /// Workgroup ID
+        group: String,
+        /// Finding content
+        content: String,
+        /// Source task ID (optional)
+        #[arg(long)]
+        task: Option<String>,
+    },
+    /// List findings for a workgroup
+    List {
+        /// Workgroup ID
+        group: String,
+    },
+}
+```
+
+Match handler:
+```rust
+Commands::Finding { action } => match action {
+    FindingCommands::Add { group, content, task } => {
+        cmd::finding::add(&store, &group, &content, task.as_deref())?;
+    }
+    FindingCommands::List { group } => {
+        cmd::finding::list(&store, &group)?;
+    }
+},
+```
+
+[MILESTONE] aid finding CLI complete
+"""
+worktree = "feat/findings-cli"
+context = ["src/cmd/mod.rs", "src/cmd/memory.rs:add,list,format_age"]
+
+[[task]]
+name = "findings-in-summary"
+agent = "opencode"
+prompt = """
+In src/cmd/summary.rs, add a findings section to the workgroup summary output.
+
+After the milestones section (after the `print_milestones` call in the `run` function), add:
+
+```rust
+let findings = store.list_findings(group_id)?;
+if !findings.is_empty() {
+    print_findings(&findings);
+}
+```
+
+Add the helper function:
+```rust
+fn print_findings(findings: &[crate::types::Finding]) {
+    println!();
+    println!("Findings:");
+    for finding in findings {
+        let source = finding.source_task_id.as_deref().unwrap_or("manual");
+        println!("  [{}] {}", source, finding.content);
+    }
+}
+```
+
+The `list_findings` method is on `Store` and returns `Result<Vec<Finding>>`.
+Add `use crate::types::Finding;` if needed, or just use `crate::types::Finding` inline.
+"""
+dir = "."

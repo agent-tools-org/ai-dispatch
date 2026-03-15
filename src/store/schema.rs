@@ -85,6 +85,15 @@ CREATE INDEX IF NOT EXISTS idx_memories_project ON memories(project_path);
 CREATE INDEX IF NOT EXISTS idx_memories_type ON memories(memory_type);
 CREATE INDEX IF NOT EXISTS idx_memories_hash ON memories(content_hash);";
 
+const CREATE_FINDINGS_SQL: &str = "CREATE TABLE IF NOT EXISTS findings (
+    id TEXT PRIMARY KEY,
+    workgroup_id TEXT NOT NULL,
+    source_task_id TEXT,
+    content TEXT NOT NULL,
+    created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_findings_workgroup ON findings(workgroup_id);";
+
 pub(super) fn create_tables(store: &Store) -> Result<()> {
     store.db().execute_batch(CREATE_TABLES_SQL)?;
     Ok(())
@@ -108,10 +117,14 @@ pub(super) fn migrate(store: &Store) -> Result<()> {
     let _ = conn.execute_batch("ALTER TABLE events ADD COLUMN metadata TEXT;");
     let _ = conn.execute_batch("ALTER TABLE tasks ADD COLUMN prompt_tokens INTEGER;");
     let _ = conn.execute_batch("ALTER TABLE tasks ADD COLUMN verify TEXT;");
-    let _ = conn.execute_batch("ALTER TABLE tasks ADD COLUMN read_only INTEGER NOT NULL DEFAULT 0;");
+    let _ =
+        conn.execute_batch("ALTER TABLE tasks ADD COLUMN read_only INTEGER NOT NULL DEFAULT 0;");
     let _ = conn.execute_batch("ALTER TABLE tasks ADD COLUMN budget INTEGER NOT NULL DEFAULT 0;");
     let _ = conn.execute_batch("ALTER TABLE tasks ADD COLUMN custom_agent_name TEXT;");
-    let _ = conn.execute_batch("ALTER TABLE tasks ADD COLUMN verify_status TEXT NOT NULL DEFAULT 'skipped';");
+    let _ = conn.execute_batch(
+        "ALTER TABLE tasks ADD COLUMN verify_status TEXT NOT NULL DEFAULT 'skipped';",
+    );
+    let _ = conn.execute_batch(CREATE_FINDINGS_SQL);
     Ok(())
 }
 
@@ -141,7 +154,10 @@ pub(super) fn row_to_task(row: &Row) -> rusqlite::Result<Result<Task>> {
         created_at: parse_dt(&row.get::<_, String>(20)?),
         completed_at: row.get::<_, Option<String>>(21)?.map(|s| parse_dt(&s)),
         verify: row.get(22)?,
-        verify_status: row.get::<_, Option<String>>(26)?.and_then(|s| VerifyStatus::parse_str(&s)).unwrap_or(VerifyStatus::Skipped),
+        verify_status: row
+            .get::<_, Option<String>>(26)?
+            .and_then(|s| VerifyStatus::parse_str(&s))
+            .unwrap_or(VerifyStatus::Skipped),
         read_only: row.get(23)?,
         budget: row.get(24)?,
     }))
@@ -153,8 +169,7 @@ pub(super) fn row_to_event(row: &Row) -> rusqlite::Result<TaskEvent> {
     Ok(TaskEvent {
         task_id: TaskId(row.get::<_, String>(0)?),
         timestamp: parse_dt(&row.get::<_, String>(1)?),
-        event_kind: EventKind::parse_str(&row.get::<_, String>(2)?)
-            .unwrap_or(EventKind::Reasoning),
+        event_kind: EventKind::parse_str(&row.get::<_, String>(2)?).unwrap_or(EventKind::Reasoning),
         detail: row.get(3)?,
         metadata,
     })
@@ -171,6 +186,16 @@ pub(super) fn row_to_memory(row: &Row) -> rusqlite::Result<Result<Memory>> {
         content_hash: row.get(6)?,
         created_at: parse_dt(&row.get::<_, String>(7)?),
         expires_at: row.get::<_, Option<String>>(8)?.map(|s| parse_dt(&s)),
+    }))
+}
+
+pub(super) fn row_to_finding(row: &Row) -> rusqlite::Result<Result<Finding>> {
+    Ok(Ok(Finding {
+        id: row.get(0)?,
+        workgroup_id: row.get(1)?,
+        source_task_id: row.get(2)?,
+        content: row.get(3)?,
+        created_at: parse_dt(&row.get::<_, String>(4)?),
     }))
 }
 

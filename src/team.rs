@@ -121,21 +121,15 @@ pub struct KnowledgeEntry {
     pub content: Option<String>,
 }
 
-/// Read team knowledge index content (returns None if missing or empty).
-pub fn read_knowledge(team_id: &str) -> Option<String> {
-    let path = knowledge_index(team_id);
-    let content = fs::read_to_string(path).ok()?;
-    if content.trim().is_empty() { return None; }
-    Some(content)
-}
-
 pub fn read_knowledge_entries(team_id: &str) -> Vec<KnowledgeEntry> {
     let index_path = knowledge_index(team_id);
     let raw = match fs::read_to_string(&index_path) {
         Ok(body) => body,
         Err(_) => return Vec::new(),
     };
-    if raw.trim().is_empty() { return Vec::new(); }
+    if raw.trim().is_empty() {
+        return Vec::new();
+    }
     let base = teams_dir().join(team_id);
     raw.lines()
         .filter_map(|line| parse_knowledge_line(line, &base))
@@ -144,11 +138,17 @@ pub fn read_knowledge_entries(team_id: &str) -> Vec<KnowledgeEntry> {
 
 fn parse_knowledge_line(line: &str, base_dir: &PathBuf) -> Option<KnowledgeEntry> {
     let trimmed = line.trim();
-    if !trimmed.starts_with('-') { return None; }
+    if !trimmed.starts_with('-') {
+        return None;
+    }
     let rest = trimmed[1..].trim_start();
-    if !rest.starts_with('[') { return None; }
+    if !rest.starts_with('[') {
+        return None;
+    }
     let closing = rest.find(']')?;
-    if closing <= 1 { return None; }
+    if closing <= 1 {
+        return None;
+    }
     let topic = rest[1..closing].trim().to_string();
     let mut remainder = rest[closing + 1..].trim_start();
     let mut path = None;
@@ -164,23 +164,33 @@ fn parse_knowledge_line(line: &str, base_dir: &PathBuf) -> Option<KnowledgeEntry
         }
     }
     let description = remainder.split_once('—')?.1.trim();
-    if description.is_empty() { return None; }
+    if description.is_empty() {
+        return None;
+    }
     let content = path.as_ref().and_then(|relative| {
         let target = base_dir.join(relative);
-        fs::read_to_string(&target).ok().map(|text| text.trim().to_string()).filter(|t| !t.is_empty())
+        fs::read_to_string(&target)
+            .ok()
+            .map(|text| text.trim().to_string())
+            .filter(|t| !t.is_empty())
     });
-    Some(KnowledgeEntry { topic, path, description: description.to_string(), content })
+    Some(KnowledgeEntry {
+        topic,
+        path,
+        description: description.to_string(),
+        content,
+    })
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::paths;
     use std::path::{Path, PathBuf};
     use tempfile::TempDir;
-    use crate::paths;
 
     fn knowledge_dir_for(team_id: &str) -> PathBuf {
-        paths::teams_dir().join(team_id)
+        teams_dir().join(team_id)
     }
 
     fn write_team(dir: &Path, file: &str, contents: &str) {
@@ -264,16 +274,26 @@ preferred_agents = ["codex", "opencode"]
         let team_id = "alpha";
         let base = knowledge_dir_for(team_id);
         fs::create_dir_all(base.join("knowledge")).unwrap();
-        fs::write(base.join("KNOWLEDGE.md"), "- [Topic A](knowledge/guide.md) — Useful guide\n- [Topic B] — General note\n").unwrap();
+        fs::write(
+            base.join("KNOWLEDGE.md"),
+            "- [Topic A](knowledge/guide.md) — Useful guide\n- [Topic B] — General note\n",
+        )
+        .unwrap();
         fs::write(base.join("knowledge/guide.md"), "Guide content\n").unwrap();
 
         let entries = read_knowledge_entries(team_id);
         assert_eq!(entries.len(), 2);
-        let guide = entries.iter().find(|entry| entry.topic == "Topic A").unwrap();
+        let guide = entries
+            .iter()
+            .find(|entry| entry.topic == "Topic A")
+            .unwrap();
         assert_eq!(guide.path.as_deref(), Some("knowledge/guide.md"));
         assert_eq!(guide.description, "Useful guide");
         assert_eq!(guide.content.as_deref(), Some("Guide content"));
-        let note = entries.iter().find(|entry| entry.topic == "Topic B").unwrap();
+        let note = entries
+            .iter()
+            .find(|entry| entry.topic == "Topic B")
+            .unwrap();
         assert!(note.path.is_none());
         assert!(note.content.is_none());
     }

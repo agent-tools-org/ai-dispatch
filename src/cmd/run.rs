@@ -124,9 +124,11 @@ pub async fn run(store: Arc<Store>, args: RunArgs) -> Result<TaskId> {
     let task_id = TaskId::generate();
     let log_path = paths::log_path(task_id.as_str());
     let workgroup = run_prompt::load_workgroup(&store, args.group.as_deref())?;
-    let repo_path = args.repo.as_deref().map(run_prompt::resolve_repo_path).transpose()?;
+    let explicit_repo_path = args.repo.as_deref().map(run_prompt::resolve_repo_path).transpose()?;
     // Create worktree if requested, override dir to point into it
-    let (wt_path, wt_branch, effective_dir) = run_prompt::resolve_worktree_paths(&args, repo_path.as_deref())?;
+    let (wt_path, wt_branch, effective_dir, resolved_repo) = run_prompt::resolve_worktree_paths(&args, explicit_repo_path.as_deref())?;
+    // Use resolved repo_path (always set when worktree is created, even without --repo)
+    let repo_path = resolved_repo.or(explicit_repo_path);
     let caller = session::current_caller();
     let task = Task {
         id: task_id.clone(),
@@ -305,10 +307,8 @@ pub async fn run(store: Arc<Store>, args: RunArgs) -> Result<TaskId> {
                 }
                 if let Some(wt) = task.worktree_path.as_deref() {
                     if std::path::Path::new(wt).exists() {
-                        match std::fs::remove_dir_all(wt) {
-                            Ok(()) => eprintln!("[aid] Cleaned up failed task worktree: {wt}"),
-                            Err(e) => eprintln!("[aid] Warning: failed to remove {wt}: {e}"),
-                        }
+                        let repo = repo_path.as_deref().unwrap_or(".");
+                        crate::cmd::merge::remove_worktree(repo, wt);
                     }
                 }
             }

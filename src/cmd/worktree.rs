@@ -68,12 +68,7 @@ pub fn remove(branch: &str, repo: Option<&str>) -> Result<()> {
     if !Path::new(&wt_path).exists() {
         anyhow::bail!("Worktree not found: {wt_path}");
     }
-    std::fs::remove_dir_all(&wt_path)?;
-    eprintln!("[aid] Removed worktree {wt_path}");
     let repo_dir = repo.unwrap_or(".");
-    let _ = std::process::Command::new("git")
-        .args(["-C", repo_dir, "worktree", "prune"])
-        .output();
-    eprintln!("[aid] Pruned stale worktree references");
+    super::merge::remove_worktree(repo_dir, &wt_path);
     Ok(())
 }

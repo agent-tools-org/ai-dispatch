@@ -156,7 +156,9 @@ pub(super) fn resolve_dir_in_target(base_dir: &str, dir: Option<&str>, repo_dir:
     std::path::Path::new(base_dir).join(dir_path).to_string_lossy().to_string()
 }
 
-pub(super) fn resolve_worktree_paths(args: &RunArgs, repo_path: Option<&str>) -> Result<(Option<String>, Option<String>, Option<String>)> {
+/// Returns (wt_path, wt_branch, effective_dir, resolved_repo_path).
+/// The resolved_repo_path is always populated when a worktree is created, even if --repo wasn't passed.
+pub(super) fn resolve_worktree_paths(args: &RunArgs, repo_path: Option<&str>) -> Result<(Option<String>, Option<String>, Option<String>, Option<String>)> {
     if let Some(ref branch) = args.worktree {
         let repo_dir = repo_path.map(|path| path.to_string()).unwrap_or(resolve_repo_path(args.dir.as_deref().unwrap_or("."))?);
         // Use explicit base_branch, or default to current branch (not just HEAD)
@@ -164,12 +166,12 @@ pub(super) fn resolve_worktree_paths(args: &RunArgs, repo_path: Option<&str>) ->
         let base = args.base_branch.clone().or_else(|| current_branch(std::path::Path::new(&repo_dir)));
         let info = crate::worktree::create_worktree(std::path::Path::new(&repo_dir), branch, base.as_deref())?;
         let p = info.path.to_string_lossy().to_string();
-        return Ok((Some(p.clone()), Some(info.branch), Some(resolve_dir_in_target(&p, args.dir.as_deref(), Some(&repo_dir)))));
+        return Ok((Some(p.clone()), Some(info.branch), Some(resolve_dir_in_target(&p, args.dir.as_deref(), Some(&repo_dir))), Some(repo_dir)));
     }
     if let Some(repo_dir) = repo_path {
-        return Ok((None, None, Some(resolve_dir_in_target(repo_dir, args.dir.as_deref(), Some(repo_dir)))));
+        return Ok((None, None, Some(resolve_dir_in_target(repo_dir, args.dir.as_deref(), Some(repo_dir))), Some(repo_dir.to_string())));
     }
-    Ok((None, None, args.dir.clone()))
+    Ok((None, None, args.dir.clone(), None))
 }
 
 pub(super) fn load_workgroup(store: &Store, group_id: Option<&str>) -> Result<Option<Workgroup>> {

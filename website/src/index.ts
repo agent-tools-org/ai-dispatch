@@ -1,4 +1,4 @@
-const VERSION = "5.7.0";
+const VERSION = "5.8.0";
 const SITE_URL = "https://aid.agent-tools.org";
 const REPO_URL = "https://github.com/agent-tools-org/ai-dispatch";
 const META_DESCRIPTION = "Multi-AI CLI team orchestrator that dispatches work to gemini, codex, opencode, cursor, kilo, ob1, codebuff, auto, and custom agents defined via ~/.aid/agents/.";
@@ -39,7 +39,10 @@ const COMMANDS = [
   { name: "finding", purpose: "Post or list workgroup findings for shared investigation evidence.", example: "aid finding add wg-abc1 \"gamma can be zero in tricrypto\"" },
   { name: "tree", purpose: "Show retry chain as an ASCII tree.", example: "aid tree t-1234" },
   { name: "summary", purpose: "Summarize workgroup results with milestones, findings, and costs.", example: "aid summary wg-abc1" },
-  { name: "export", purpose: "Export a task with full context in markdown or JSON.", example: "aid export t-1234 --format json" }
+  { name: "export", purpose: "Export a task with full context in markdown or JSON.", example: "aid export t-1234 --format json" },
+  { name: "query", purpose: "Fast LLM query via OpenRouter (no agent startup). Free and auto tiers.", example: "aid query \"question\", aid query --auto \"question\"" },
+  { name: "setup", purpose: "Interactive configuration wizard. Detects agents, sets API keys.", example: "aid setup" },
+  { name: "broadcast", purpose: "Send a message to a workgroup's broadcast channel.", example: "aid broadcast wg-abc1 \"update\"" }
 ];
 const AGENT_CATEGORIES = ["Research", "Simple Edit", "Complex Impl", "Frontend", "Debugging", "Testing", "Refactoring", "Documentation"] as const;
 const AGENT_MATRIX: Record<string, Record<string, number>> = {
@@ -126,6 +129,11 @@ function buildLLMSText() {
   lines.push(`Workgroup-scoped ephemeral evidence for investigation collaboration. Agents emit [FINDING] tags, auto-captured and injected into subsequent task prompts.`);
   lines.push(`Commands: aid finding add <wg-id> "content", aid finding list <wg-id>. Also shown in aid summary.`);
   lines.push(``);
+  lines.push(`## Fast Query (v5.8)`);
+  lines.push(`Instant LLM queries via OpenRouter — no agent subprocess startup. Two tiers: free (openrouter/free, $0) and auto (openrouter/auto, paid).`);
+  lines.push(`Commands: aid query "question" (free), aid query --auto "question" (paid), aid query -m model "question" (explicit).`);
+  lines.push(`Configure via aid setup or ~/.aid/config.toml [query] section.`);
+  lines.push(``);
   lines.push(`## Workgroups`);
   lines.push(`Shared context containers created via aid group create keep prompts, constraints, and notes in sync across multiple tasks.`);
   lines.push(`Use --group/-g or set AID_GROUP so watch, board, run, and merge commands automatically stay scoped to the same workspace.`);
@@ -151,10 +159,10 @@ function buildLLMSText() {
   lines.push(`Cost tips: use aid ask or gemini for research, prefer opencode for single-file edits, reuse workgroups, set budgets, and run low-value work with --budget.`);
   lines.push(``);
   lines.push(`## Quick Start`);
-  lines.push(`1. Install Rust 1.85+ and the CLI agents (gemini, codex, opencode, cursor, kilo, ob1, codebuff, auto).`);
-  lines.push(`2. Run \`cargo install --path .\`, then \`aid config agents\` and \`aid config skills\`.`);
-  lines.push(`3. Optionally append \`claude-prompt.md\` to your CLAUDE.md and set \`AID_HOME\` for sandboxed runs.`);
-  lines.push(`4. Dispatch tasks with \`aid run\`, monitor with \`aid watch\`, inspect with \`aid show\`, and retry via \`aid retry\`.`);
+  lines.push(`1. Install: \`curl -fsSL https://aid.agent-tools.org/install.sh | sh\` or \`cargo install ai-dispatch\`.`);
+  lines.push(`2. Run \`aid setup\` to configure API keys and detect installed agents.`);
+  lines.push(`3. Optionally run \`aid init\` for default skills and templates, append \`claude-prompt.md\` to CLAUDE.md.`);
+  lines.push(`4. Dispatch tasks with \`aid run\`, query with \`aid query\`, monitor with \`aid watch\`, inspect with \`aid show\`.`);
   lines.push(``);
   lines.push(`## Commands`);
   COMMANDS.forEach((cmd) => {
@@ -291,6 +299,13 @@ aid memory search "auth"</code></pre>
       <p>Workgroup-scoped evidence for investigation collaboration. Agents emit <code>[FINDING]</code> tags that are auto-captured and injected into subsequent task prompts within the same workgroup.</p>
       <pre style="background:#040b16;padding:1rem;border-radius:8px;margin:0;"><code>aid finding add wg-abc1 "gamma can be zero in tricrypto"
 aid finding list wg-abc1</code></pre>
+    </section>
+    <section>
+      <h2>Fast Query <span style="color:#94a3b8;font-size:.8em;">(v5.8)</span></h2>
+      <p>Instant LLM queries via OpenRouter — no agent startup overhead. Free and paid auto tiers.</p>
+      <pre style="background:#040b16;padding:1rem;border-radius:8px;margin:0;"><code>aid query "What does gamma=0 mean?"         # free
+aid query --auto "Explain this error"        # paid, better
+aid setup                                    # configure API key</code></pre>
     </section>
     <section>
       <h2>Workgroups</h2>

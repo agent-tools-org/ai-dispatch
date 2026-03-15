@@ -1,6 +1,6 @@
 # ai-dispatch (aid)
 
-![Version](https://img.shields.io/badge/version-5.6.2-blue)
+![Version](https://img.shields.io/badge/version-5.8.0-blue)
 ![Rust](https://img.shields.io/badge/rust-2024-orange)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
@@ -24,12 +24,28 @@ Without an orchestrator, a multi-agent CLI workflow breaks down fast:
 
 Install Rust (1.85 or later, required for edition 2024) and whichever AI CLIs you want `aid` to orchestrate. `aid` auto-detects supported agents on your `PATH`: `gemini`, `codex`, `opencode`, `cursor`, `kilo`, `ob1`, `codebuff`, and `auto`.
 
+### Install
+
+```bash
+# From crates.io (recommended)
+cargo install ai-dispatch
+
+# Or one-liner
+curl -fsSL https://aid.agent-tools.org/install.sh | sh
+```
+
+Then run the interactive setup wizard:
+
+```bash
+aid setup
+```
+
+This detects installed agents, configures your OpenRouter API key (for `aid query`), and shows your ready-to-use configuration.
+
 ### Install From Source
 
 ```bash
 cargo install --path .
-aid config agents
-aid config skills
 ```
 
 ### Setup for Claude Code
@@ -216,6 +232,33 @@ aid finding list wg-abc1
 
 # Findings also appear in workgroup summaries
 aid summary wg-abc1
+```
+
+### Fast Query (v5.8)
+
+Instant LLM queries via OpenRouter — no agent subprocess startup. Two tiers:
+
+```bash
+# Free tier (default) — $0, uses openrouter/free
+aid query "What does gamma=0 mean in CryptoSwap?"
+
+# Auto tier — paid, OpenRouter selects best model
+aid query --auto "Explain this error trace"
+
+# Explicit model
+aid query -m google/gemini-2.0-flash-001 "Summarize this"
+
+# Save response as workgroup finding
+aid query "Key insight about pool state" -g wg-abc1 --finding
+```
+
+Configure models and API key via `aid setup` or `~/.aid/config.toml`:
+
+```toml
+[query]
+free_model = "openrouter/free"
+auto_model = "openrouter/auto"
+api_key = "sk-or-v1-..."
 ```
 
 ### Workspace Isolation (AID_GROUP)
@@ -465,6 +508,9 @@ The board displays `[VFAIL]` next to tasks that completed but failed verificatio
 | `aid finding` | Post or list workgroup findings for investigation collaboration. | `aid finding add wg-abc1 "key insight"`, `aid finding list wg-abc1` |
 | `aid tree` | Show retry chain as an ASCII tree with agent/status/cost per node. | `aid tree t-1234` |
 | `aid summary` | Summarize workgroup results with tasks, milestones, findings, costs. | `aid summary wg-abc1` |
+| `aid query` | Fast LLM query via OpenRouter (no agent startup). Free and auto tiers. | `aid query "question"`, `aid query --auto "question"` |
+| `aid setup` | Interactive configuration wizard. Detects agents, sets API keys. | `aid setup` |
+| `aid broadcast` | Send a message to a workgroup's broadcast channel. | `aid broadcast wg-abc1 "status update"` |
 | `aid init` | Initialize default skills and templates. | `aid init` |
 
 ## Best Practices / Methodology

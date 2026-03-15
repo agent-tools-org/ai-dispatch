@@ -11,6 +11,7 @@ pub mod clean;
 pub mod config;
 pub mod explain;
 pub mod group;
+pub mod memory;
 pub mod init;
 pub mod mcp;
 pub mod merge;

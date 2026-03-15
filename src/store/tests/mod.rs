@@ -44,3 +44,4 @@ mod agent_tests;
 mod event_tests;
 mod task_tests;
 mod workgroup_tests;
+mod memory_tests;

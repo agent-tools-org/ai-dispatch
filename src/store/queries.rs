@@ -224,11 +224,14 @@ impl Store {
         let type_value = memory_type.map(|mt| mt.as_str().to_string());
         let mut stmt = conn.prepare(
             "SELECT id, memory_type, content, source_task_id, agent, project_path, content_hash,
-             created_at, expires_at
+             created_at, expires_at, supersedes, version, inject_count, last_injected_at, success_count
              FROM memories
              WHERE (?1 IS NULL OR project_path = ?1)
                AND (?2 IS NULL OR memory_type = ?2)
                AND (expires_at IS NULL OR expires_at > ?3)
+               AND id NOT IN (
+                   SELECT DISTINCT supersedes FROM memories WHERE supersedes IS NOT NULL
+               )
              ORDER BY created_at DESC",
         )?;
         let rows = stmt.query_map(
@@ -237,6 +240,33 @@ impl Store {
         )?;
         let memories = rows.map(|row| row?).collect::<Result<Vec<_>>>()?;
         Ok(memories)
+    }
+
+    pub fn list_memory_history(&self, id: &str) -> Result<Vec<Memory>> {
+        let conn = self.db();
+        let mut stmt = conn.prepare(
+            "SELECT id, memory_type, content, source_task_id, agent, project_path, content_hash,
+             created_at, expires_at, supersedes, version, inject_count, last_injected_at, success_count
+             FROM memories WHERE id = ?1",
+        )?;
+        let mut history = Vec::new();
+        let mut current_id = Some(id.to_string());
+        while let Some(curr) = current_id {
+            match stmt.query_row(params![curr], |row| row_to_memory(row)) {
+                Ok(row) => {
+                    let memory = row?;
+                    current_id = memory
+                        .supersedes
+                        .as_ref()
+                        .map(|sup: &MemoryId| sup.as_str().to_string());
+                    history.push(memory);
+                }
+                Err(rusqlite::Error::QueryReturnedNoRows) => break,
+                Err(err) => return Err(err.into()),
+            }
+        }
+        history.reverse();
+        Ok(history)
     }
 
     pub fn search_memories(
@@ -250,7 +280,7 @@ impl Store {
         let pattern = format!("%{}%", query);
         let mut stmt = conn.prepare(
             "SELECT id, memory_type, content, source_task_id, agent, project_path, content_hash,
-             created_at, expires_at
+             created_at, expires_at, supersedes, version, inject_count, last_injected_at, success_count
              FROM memories
              WHERE content LIKE ?1
                AND (?2 IS NULL OR project_path = ?2)

@@ -410,6 +410,11 @@ pub struct Memory {
     pub content_hash: String,
     pub created_at: DateTime<Local>,
     pub expires_at: Option<DateTime<Local>>,
+    pub supersedes: Option<MemoryId>,
+    pub version: i64,
+    pub inject_count: i64,
+    pub last_injected_at: Option<DateTime<Local>>,
+    pub success_count: i64,
 }
 
 #[cfg(test)]

@@ -30,6 +30,11 @@ pub fn add(store: &Store, memory_type: &str, content: &str, project_path: Option
         content_hash: hash_content(content),
         created_at: Local::now(),
         expires_at: None,
+        supersedes: None,
+        version: 1,
+        inject_count: 0,
+        last_injected_at: None,
+        success_count: 0,
     };
     store.insert_memory(&memory)?;
     println!("Memory {} saved ({})", display_id, type_label);

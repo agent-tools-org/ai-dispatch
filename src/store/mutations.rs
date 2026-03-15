@@ -173,6 +173,18 @@ impl Store {
         Ok(())
     }
 
+    pub fn update_memory(&self, id: &str, content: &str) -> Result<bool> {
+        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        std::hash::Hash::hash(content, &mut hasher);
+        let hash = format!("{:016x}", std::hash::Hasher::finish(&hasher));
+        let now = chrono::Local::now().to_rfc3339();
+        let rows = self.db().execute(
+            "UPDATE memories SET content = ?1, content_hash = ?2, created_at = ?3 WHERE id = ?4",
+            params![content, hash, now, id],
+        )?;
+        Ok(rows > 0)
+    }
+
     pub fn delete_memory(&self, id: &str) -> Result<()> {
         self.db()
             .execute("DELETE FROM memories WHERE id = ?1", params![id])?;

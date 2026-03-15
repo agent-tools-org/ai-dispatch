@@ -63,6 +63,15 @@ pub fn search(store: &Store, query: &str, project_path: Option<&str>) -> Result<
     Ok(())
 }
 
+pub fn update(store: &Store, id: &str, content: &str) -> Result<()> {
+    if store.update_memory(id, content)? {
+        println!("Memory {} updated", id);
+    } else {
+        anyhow::bail!("Memory '{id}' not found");
+    }
+    Ok(())
+}
+
 pub fn forget(store: &Store, id: &str) -> Result<()> {
     store.delete_memory(id)?;
     println!("Memory {} forgotten", id);

@@ -446,6 +446,13 @@ enum MemoryCommands {
         /// Search query
         query: String,
     },
+    /// Update a memory's content
+    Update {
+        /// Memory ID (e.g. m-a3f1)
+        id: String,
+        /// New content
+        content: String,
+    },
     /// Delete a memory entry
     Forget {
         /// Memory ID (e.g. m-a3f1)
@@ -753,6 +760,9 @@ async fn main() -> Result<()> {
             }
             MemoryCommands::Search { query } => {
                 cmd::memory::search(&store, &query, None)?;
+            }
+            MemoryCommands::Update { id, content } => {
+                cmd::memory::update(&store, &id, &content)?;
             }
             MemoryCommands::Forget { id } => {
                 cmd::memory::forget(&store, &id)?;

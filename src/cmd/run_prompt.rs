@@ -52,14 +52,27 @@ fn inject_memories(store: &Store, prompt: &str, max_memories: usize) -> Result<O
         return Ok(None);
     }
 
-    // Format memories as a context block
+    // Format memories as a context block with age for AI to gauge relevance
     let mut lines = vec!["[Agent Memory — knowledge from past tasks]".to_string()];
+    let now = Local::now();
     for mem in &memories {
-        lines.push(format!("- [{}] {}", mem.memory_type.label(), mem.content));
+        let age = format_memory_age(now.signed_duration_since(mem.created_at));
+        lines.push(format!("- [{}] ({}) {}", mem.memory_type.label(), age, mem.content));
     }
     let token_count = crate::templates::estimate_tokens(&lines.join("\n"));
     eprintln!("[aid] Injected {} memories (~{} tokens)", memories.len(), token_count);
     Ok(Some(lines.join("\n")))
+}
+
+fn format_memory_age(duration: chrono::Duration) -> String {
+    let days = duration.num_days();
+    if days >= 30 { format!("{}mo ago", days / 30) }
+    else if days >= 1 { format!("{}d ago", days) }
+    else {
+        let hours = duration.num_hours();
+        if hours >= 1 { format!("{}h ago", hours) }
+        else { format!("{}m ago", duration.num_minutes().max(1)) }
+    }
 }
 
 fn detect_project_path() -> Option<String> {

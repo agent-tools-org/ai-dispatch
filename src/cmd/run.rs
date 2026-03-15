@@ -438,6 +438,42 @@ fn maybe_flag_empty_worktree_diff(store: &Store, task_id: &TaskId, task: &Task) 
     }
 }
 
+/// Extract the final assistant message from a streaming JSONL log and write to output file.
+fn write_streaming_output(log_path: &std::path::Path, out_path: &Path) {
+    let Ok(log_content) = std::fs::read_to_string(log_path) else { return };
+    let mut last_message = String::new();
+    for line in log_content.lines() {
+        let Ok(v) = serde_json::from_str::<serde_json::Value>(line) else { continue };
+        // Accumulate assistant message deltas (gemini/codex stream format)
+        if v.get("type").and_then(|t| t.as_str()) == Some("message")
+            && v.get("role").and_then(|r| r.as_str()) == Some("assistant")
+        {
+            if let Some(content) = v.get("content").and_then(|c| c.as_str()) {
+                if v.get("delta").and_then(|d| d.as_bool()) == Some(true) {
+                    last_message.push_str(content);
+                } else {
+                    last_message = content.to_string();
+                }
+            }
+        }
+        // Codex agent_message format
+        if v.get("type").and_then(|t| t.as_str()) == Some("item.completed") {
+            if let Some(item) = v.get("item") {
+                if item.get("type").and_then(|t| t.as_str()) == Some("agent_message") {
+                    if let Some(text) = item.get("text").and_then(|t| t.as_str()) {
+                        last_message = text.to_string();
+                    }
+                }
+            }
+        }
+    }
+    if !last_message.is_empty() {
+        if let Err(err) = std::fs::write(out_path, &last_message) {
+            eprintln!("[aid] Failed to write output file: {err}");
+        }
+    }
+}
+
 fn take_next_cascade_agent(args: &RunArgs) -> Option<(String, Vec<String>)> {
     let mut cascade = args.cascade.clone();
     if cascade.is_empty() {
@@ -592,6 +628,12 @@ async fn run_agent_process_with_timeout(
 
     match timeout(deadline, watch_future).await {
         Ok(Ok(info)) => {
+            // Write output file for streaming agents (buffered agents handle this in watch_buffered)
+            if streaming {
+                if let Some(out_path) = output_path {
+                    write_streaming_output(log_path, std::path::Path::new(out_path));
+                }
+            }
             let duration_ms = start.elapsed().as_millis() as i64;
             let final_model = info.model.as_deref().or(model);
             let cost_usd = info.cost_usd.or_else(|| {

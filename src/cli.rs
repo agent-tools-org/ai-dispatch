@@ -202,6 +202,9 @@ Batch TOML format:
     Show {
         /// Task ID to inspect
         task_id: String,
+        /// Show events timeline (default behavior)
+        #[arg(long)]
+        events: bool,
         /// Show the full resolved prompt sent to the agent
         #[arg(long, help = "Show the full resolved prompt sent to the agent")]
         context: bool,

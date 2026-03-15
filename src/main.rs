@@ -242,6 +242,7 @@ async fn main() -> Result<()> {
         }
         Commands::Show {
             task_id,
+            events: _,
             context,
             diff,
             output,

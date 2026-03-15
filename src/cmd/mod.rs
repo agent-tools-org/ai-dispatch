@@ -33,6 +33,7 @@ pub mod store_lock;
 pub mod team;
 pub mod usage;
 pub mod summary;
+pub mod summary_cli;
 pub mod upgrade;
 pub mod wait;
 pub mod watch;

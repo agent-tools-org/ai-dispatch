@@ -298,7 +298,7 @@ async fn main() -> Result<()> {
             cmd::usage::run(&store, session, agent, team_flag, period, json)?;
         }
         Commands::Summary { group } => {
-            cmd::summary::run(&store, &group)?;
+            cmd::summary_cli::run(&store, &group)?;
         }
         Commands::Retry { task_id, feedback, agent, dir } => {
             cmd::retry::run(store, cmd::retry::RetryArgs { task_id, feedback, agent, dir }).await?;

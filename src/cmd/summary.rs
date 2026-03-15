@@ -1,166 +1,146 @@
-// Summarizes workgroup tasks for the aid CLI.
-// Exports: run.
-// Deps: anyhow, crate::store, crate::types.
-use crate::store::Store;
-use crate::types::{Finding, Task, TaskStatus, Workgroup};
-use anyhow::{anyhow, Result};
-use std::collections::HashMap;
+// Generate structured completion summaries for finished tasks.
+// Exports: generate_summary(), CompletionSummary.
+// Deps: crate::store::Store, crate::types::Task, crate::cmd::judge (for gather_diff).
+use crate::cmd::judge;
+use crate::types::Task;
+use std::collections::HashSet;
 
-pub fn run(store: &Store, group_id: &str) -> Result<()> {
-    let tasks = store.list_tasks_by_group(group_id)?;
-    let workgroup = store
-        .get_workgroup(group_id)?
-        .ok_or_else(|| anyhow!("Workgroup {group_id} not found"))?;
-    let milestone_map = group_milestones(store.get_workgroup_milestones(group_id)?);
-    let done = tasks
-        .iter()
-        .filter(|task| is_success_status(task.status))
-        .count();
-    let failed = tasks
-        .iter()
-        .filter(|task| task.status == TaskStatus::Failed)
-        .count();
-
-    print_header(&workgroup, total_tasks(&tasks), done, failed);
-    print_results(&tasks);
-    print_milestones(&tasks, &milestone_map);
-    let findings = store.list_findings(group_id)?;
-    if !findings.is_empty() {
-        print_findings(&findings);
-    }
-    Ok(())
-}
-fn total_tasks(tasks: &[Task]) -> usize {
-    tasks.len()
+pub struct CompletionSummary {
+    pub task_id: String,
+    pub agent: String,
+    pub status: String,
+    pub files_changed: Vec<String>,
+    pub summary_text: String,
+    pub duration_secs: Option<i64>,
+    #[allow(dead_code)]
+    pub token_count: Option<i64>,
 }
 
-fn print_header(workgroup: &Workgroup, total: usize, done: usize, failed: usize) {
-    println!("Workgroup: {} ({})", workgroup.name, workgroup.id.as_str());
-    println!("Tasks: {} total, {} done, {} failed", total, done, failed);
-    println!();
-}
+pub fn generate_summary(task: &Task) -> CompletionSummary {
+    let files_changed = judge::gather_diff(task)
+        .map(|diff| extract_files_from_diff(&diff))
+        .unwrap_or_default();
+    let file_list = format_file_list(&files_changed);
+    let duration_secs = task.duration_ms.map(|ms| ms / 1_000);
+    let duration_label = format_duration(duration_secs);
+    let summary_text = format!(
+        "{} {}: {} files changed ({}). Duration: {}.",
+        task.agent_display_name(),
+        task.status.as_str(),
+        files_changed.len(),
+        file_list,
+        duration_label
+    );
 
-fn print_results(tasks: &[Task]) {
-    println!("Results:");
-    for task in tasks {
-        let symbol = status_symbol(task.status);
-        let snippet = prompt_snippet(&task.prompt);
-        let attrs = format_result_attrs(task);
-        println!(
-            "{} {} {} — \"{}\" ({})",
-            symbol,
-            task.id.as_str(),
-            task.agent_display_name(),
-            snippet,
-            attrs
-        );
+    CompletionSummary {
+        task_id: task.id.as_str().to_string(),
+        agent: task.agent_display_name().to_string(),
+        status: task.status.as_str().to_string(),
+        files_changed,
+        summary_text,
+        duration_secs,
+        token_count: task.tokens,
     }
 }
 
-fn print_milestones(tasks: &[Task], milestones: &HashMap<String, Vec<String>>) {
-    println!();
-    println!("Milestones:");
-    let mut printed = false;
-    for task in tasks {
-        if let Some(details) = milestones.get(task.id.as_str()) {
-            println!("- {}: {}", task.id.as_str(), details.join(" → "));
-            printed = true;
+pub fn format_summary_for_injection(summary: &CompletionSummary) -> String {
+    let duration = format_duration(summary.duration_secs);
+    let files = format_file_list(&summary.files_changed);
+    format!(
+        "## Parent Task Context ({})\nAgent: {} | Status: {} | Duration: {}\nFiles changed: {}",
+        summary.task_id, summary.agent, summary.status, duration, files
+    )
+}
+
+fn format_file_list(files: &[String]) -> String {
+    if files.is_empty() {
+        "no changes detected".to_string()
+    } else {
+        files.join(", ")
+    }
+}
+
+fn format_duration(duration_secs: Option<i64>) -> String {
+    match duration_secs {
+        Some(secs) => format!("{}s", secs),
+        None => "unknown".to_string(),
+    }
+}
+
+fn extract_files_from_diff(diff: &str) -> Vec<String> {
+    let mut seen = HashSet::new();
+    let mut files = Vec::new();
+    for line in diff.lines() {
+        if let Some(rest) = line.strip_prefix("diff --git ") {
+            if let Some((a_path, _)) = rest.split_once(' ') {
+                let normalized = a_path.strip_prefix("a/").unwrap_or(a_path);
+                if seen.insert(normalized.to_string()) {
+                    files.push(normalized.to_string());
+                }
+            }
         }
     }
-    if !printed {
-        println!("- (none)");
-    }
+    files
 }
 
-fn print_findings(findings: &[Finding]) {
-    println!();
-    println!("Findings:");
-    for finding in findings {
-        let source = finding.source_task_id.as_deref().unwrap_or("manual");
-        println!("  [{}] {}", source, finding.content);
-    }
-}
-
-fn group_milestones(entries: Vec<(String, String)>) -> HashMap<String, Vec<String>> {
-    let mut map: HashMap<String, Vec<String>> = HashMap::new();
-    for (task_id, detail) in entries {
-        map.entry(task_id).or_default().push(detail);
-    }
-    map
-}
-
-fn status_symbol(status: TaskStatus) -> &'static str {
-    match status {
-        TaskStatus::Done | TaskStatus::Merged => "✓",
-        TaskStatus::Failed => "✗",
-        _ => "•",
-    }
-}
-
-fn is_success_status(status: TaskStatus) -> bool {
-    matches!(status, TaskStatus::Done | TaskStatus::Merged)
-}
-
-fn format_result_attrs(task: &Task) -> String {
-    let mut parts = Vec::new();
-    if let Some(duration) = task.duration_ms {
-        parts.push(format_duration(duration));
-    }
-    if task.status == TaskStatus::Failed {
-        parts.push("FAILED".to_string());
-    } else if is_success_status(task.status) {
-        if let Some(tokens) = task.tokens {
-            parts.push(format!("{} tokens", format_tokens(tokens)));
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::types::{AgentKind, Task, TaskId, TaskStatus, VerifyStatus};
+    use chrono::Local;
+    fn build_task() -> Task {
+        Task {
+            id: TaskId("t-summary".into()), agent: AgentKind::Codex, custom_agent_name: None,
+            prompt: "test".into(), resolved_prompt: None,
+            status: TaskStatus::Done, parent_task_id: None, workgroup_id: None,
+            caller_kind: None, caller_session_id: None, agent_session_id: None,
+            repo_path: None, worktree_path: None, worktree_branch: None,
+            log_path: None, output_path: None,
+            tokens: Some(42),
+            prompt_tokens: Some(5),
+            duration_ms: Some(2_500),
+            model: None,
+            cost_usd: None,
+            exit_code: Some(0),
+            created_at: Local::now(), completed_at: None,
+            verify: None, verify_status: VerifyStatus::Pending,
+            read_only: false,
+            budget: false,
         }
-        parts.push(format_cost_label(task.cost_usd));
     }
-    if parts.is_empty() {
-        parts.push("pending".to_string());
+    #[test]
+    fn generates_summary_from_task() {
+        let task = build_task();
+        let summary = generate_summary(&task);
+        assert_eq!(summary.task_id, "t-summary");
+        assert_eq!(summary.agent, "codex");
+        assert_eq!(summary.status, "done");
+        assert_eq!(summary.duration_secs, Some(2));
+        assert!(summary.summary_text.contains("codex done")); assert!(summary.summary_text.contains("(no changes detected)"));
     }
-    parts.join(", ")
-}
-
-fn prompt_snippet(prompt: &str) -> String {
-    let compact = prompt.split_whitespace().collect::<Vec<_>>().join(" ");
-    let char_count = compact.chars().count();
-    if char_count <= 60 {
-        compact
-    } else {
-        let snippet: String = compact.chars().take(60).collect();
-        format!("{}…", snippet)
+    #[test]
+    fn format_summary_produces_readable_output() {
+        let summary = CompletionSummary {
+            task_id: "t0".into(),
+            agent: "agent".into(),
+            status: "done".into(),
+            files_changed: vec!["src/lib.rs".into()],
+            summary_text: String::new(),
+            duration_secs: Some(3),
+            token_count: None,
+        };
+        let formatted = format_summary_for_injection(&summary);
+        assert_eq!(formatted, "## Parent Task Context (t0)\nAgent: agent | Status: done | Duration: 3s\nFiles changed: src/lib.rs");
     }
-}
-
-fn format_duration(ms: i64) -> String {
-    let secs = ms / 1_000;
-    if secs >= 60 {
-        let mins = secs / 60;
-        let rem = secs % 60;
-        if rem == 0 {
-            format!("{}m", mins)
-        } else {
-            format!("{}m {}s", mins, rem)
-        }
-    } else if secs > 0 {
-        format!("{}s", secs)
-    } else {
-        "0s".to_string()
+    #[test]
+    fn handles_no_diff_gracefully() {
+        let summary = generate_summary(&build_task());
+        assert!(summary.summary_text.contains("no changes detected")); assert!(summary.files_changed.is_empty());
     }
-}
-
-fn format_tokens(tokens: i64) -> String {
-    if tokens >= 1_000_000 {
-        format!("{:.1}M", tokens as f64 / 1_000_000.0)
-    } else if tokens >= 1_000 {
-        format!("{:.1}k", tokens as f64 / 1_000.0)
-    } else {
-        tokens.to_string()
-    }
-}
-
-fn format_cost_label(cost: Option<f64>) -> String {
-    match cost {
-        Some(c) if c > 0.0 => format!("${:.2}", c),
-        _ => "free".to_string(),
+    #[test]
+    fn extracts_files_from_diff() {
+        let diff = "diff --git a/src/main.rs b/src/main.rs\ndiff --git a/tests/helpers.rs b/tests/helpers.rs";
+        let files = extract_files_from_diff(diff);
+        assert_eq!(files, vec!["src/main.rs", "tests/helpers.rs"]);
     }
 }

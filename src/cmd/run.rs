@@ -4,7 +4,9 @@ use anyhow::{Context, Result};
 use chrono::Local;
 use std::path::Path;
 use std::sync::Arc;
+use std::time::Instant;
 use tokio::process::Command;
+use tokio::time::{timeout, Duration};
 use crate::agent::{self, RunOpts};
 use crate::background::{self, BackgroundRunSpec};
 use crate::cmd::{config as cmd_config, retry_logic, show};
@@ -16,9 +18,12 @@ use crate::session;
 use crate::store::Store;
 use crate::types::*;
 use crate::usage;
+use crate::watcher;
 #[path = "run_prompt.rs"]
 mod run_prompt;
 pub const NO_SKILL_SENTINEL: &str = "__aid_no_skill__";
+// Foreground runs get a default 30m cap unless --max-duration-mins overrides it.
+pub const DEFAULT_FOREGROUND_TIMEOUT_MINS: u64 = 30;
 #[derive(Clone, Default)]
 pub struct RunArgs {
     pub agent_name: String,
@@ -264,7 +269,7 @@ pub async fn run(store: Arc<Store>, args: RunArgs) -> Result<TaskId> {
             );
         }
         let is_streaming = agent.streaming();
-        run_agent_process(
+        run_agent_process_with_timeout(
             &*agent,
             tokio_cmd,
             &task_id,
@@ -274,6 +279,7 @@ pub async fn run(store: Arc<Store>, args: RunArgs) -> Result<TaskId> {
             effective_model.as_deref(),
             is_streaming,
             task.workgroup_id.as_deref(),
+            args.max_duration_mins,
         )
         .await?;
         // Detect worktree escape: warn if agent modified files in main repo
@@ -514,6 +520,121 @@ pub(crate) async fn run_agent_process(
         workgroup_id,
     )
     .await
+}
+
+#[allow(clippy::too_many_arguments)]
+async fn run_agent_process_with_timeout(
+    agent: &dyn crate::agent::Agent,
+    mut cmd: Command,
+    task_id: &TaskId,
+    store: &Arc<Store>,
+    log_path: &std::path::Path,
+    output_path: Option<&str>,
+    model: Option<&str>,
+    streaming: bool,
+    workgroup_id: Option<&str>,
+    max_duration_mins: Option<i64>,
+) -> Result<()> {
+    let timeout_mins = max_duration_mins
+        .filter(|m| *m > 0)
+        .map(|m| m as u64)
+        .unwrap_or(DEFAULT_FOREGROUND_TIMEOUT_MINS);
+    let deadline = Duration::from_secs(timeout_mins * 60);
+    let start = Instant::now();
+    let mut child = cmd.spawn().context("Failed to spawn agent process")?;
+    let watch_future = async {
+        let info = if streaming {
+            watcher::watch_streaming(agent, &mut child, task_id, store, log_path, workgroup_id)
+                .await?
+        } else {
+            let output_path = output_path.map(std::path::Path::new);
+            watcher::watch_buffered(
+                agent,
+                &mut child,
+                task_id,
+                store,
+                log_path,
+                output_path,
+                workgroup_id,
+            )
+            .await?
+        };
+        Ok::<CompletionInfo, anyhow::Error>(info)
+    };
+
+    match timeout(deadline, watch_future).await {
+        Ok(Ok(info)) => {
+            let duration_ms = start.elapsed().as_millis() as i64;
+            let final_model = info.model.as_deref().or(model);
+            let cost_usd = info.cost_usd.or_else(|| {
+                info.tokens
+                    .and_then(|tokens| crate::cost::estimate_cost(tokens, final_model, agent.kind()))
+            });
+            store.update_task_completion(
+                task_id.as_str(),
+                info.status,
+                info.tokens,
+                duration_ms,
+                final_model,
+                cost_usd,
+                info.exit_code,
+            )?;
+            let duration_str = format_duration(duration_ms);
+            let tokens_str = info
+                .tokens
+                .map(|t| format!(", {} tokens", t))
+                .unwrap_or_default();
+            let cost_str = if cost_usd.is_some() {
+                format!(", {}", crate::cost::format_cost(cost_usd))
+            } else {
+                String::new()
+            };
+            println!(
+                "Task {} {} ({}{}{})",
+                task_id,
+                info.status.label(),
+                duration_str,
+                tokens_str,
+                cost_str
+            );
+            Ok(())
+        }
+        Ok(Err(err)) => Err(err),
+        Err(_) => {
+            let _ = child.kill().await;
+            let _ = child.wait().await;
+            let duration_ms = start.elapsed().as_millis() as i64;
+            store.update_task_completion(
+                task_id.as_str(),
+                TaskStatus::Failed,
+                None,
+                duration_ms,
+                model,
+                None,
+                None,
+            )?;
+            let detail = format!("Task killed: exceeded {timeout_mins}m timeout");
+            let event = TaskEvent {
+                task_id: task_id.clone(),
+                timestamp: Local::now(),
+                event_kind: EventKind::Error,
+                detail: detail.clone(),
+                metadata: None,
+            };
+            let _ = store.insert_event(&event);
+            eprintln!("[aid] {detail}");
+            Err(anyhow::anyhow!(detail))
+        }
+    }
+}
+
+fn format_duration(ms: i64) -> String {
+    let secs = ms / 1000;
+    if secs < 60 {
+        format!("{secs}s")
+    } else {
+        format!("{}m {:02}s", secs / 60, secs % 60)
+    }
 }
 pub(crate) fn maybe_cleanup_fast_fail(store: &Store, task_id: &TaskId, task: &Task) { run_prompt::maybe_cleanup_fast_fail_impl(store, task_id, task); }
 /// Run verification if --verify was set and a working dir exists.

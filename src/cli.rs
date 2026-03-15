@@ -95,6 +95,9 @@ pub enum Commands {
         /// Dispatch to N budget-friendly agents and judge the best output
         #[arg(long, value_name = "N")]
         best_of: Option<usize>,
+        /// Link this task as a child of an existing task (thread composition)
+        #[arg(long, value_name = "TASK_ID")]
+        parent: Option<String>,
     },
     #[command(after_help = r#"Examples:
   aid batch tasks.toml --parallel
@@ -575,6 +578,23 @@ mod tests {
         match cli.command {
             Commands::Run { best_of, .. } => assert_eq!(best_of, Some(3)),
             _ => panic!("expected Run command"),
+        }
+    }
+
+    #[test]
+    fn run_parent_flag_parses() {
+        let cli = Cli::try_parse_from([
+            "aid",
+            "run",
+            "codex",
+            "do stuff",
+            "--parent",
+            "t-abc123",
+        ])
+        .unwrap();
+        match cli.command {
+            Commands::Run { parent, .. } => assert_eq!(parent, Some("t-abc123".to_string())),
+            _ => panic!("expected Run"),
         }
     }
 }

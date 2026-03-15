@@ -93,6 +93,7 @@ pub struct BatchTask {
     #[serde(default)]
     pub hooks: Option<Vec<String>>,
     pub depends_on: Option<Vec<String>>,
+    pub parent: Option<String>,
     pub context_from: Option<Vec<String>>,
     pub fallback: Option<String>,
     #[serde(default)]

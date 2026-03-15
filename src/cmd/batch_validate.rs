@@ -204,6 +204,7 @@ mod tests {
             skills: None,
             hooks: None,
             depends_on: depends_on.map(|d| d.into_iter().map(String::from).collect()),
+            parent: None,
             context_from: None,
             fallback: None,
             read_only: false,

@@ -80,6 +80,7 @@ async fn main() -> Result<()> {
             read_only,
             judge,
             best_of,
+            parent,
         } => {
             let config = config::load_config().unwrap_or_default();
             let budget = budget || config.selection.budget_mode;
@@ -153,6 +154,7 @@ async fn main() -> Result<()> {
                     best_of,
                     team: team_flag,
                     context_from: extras.context_from,
+                    parent_task_id: parent,
                     ..Default::default()
                 },
             )

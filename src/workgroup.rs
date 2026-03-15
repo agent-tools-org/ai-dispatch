@@ -2,13 +2,14 @@
 // Exports compose_prompt() so runs can reuse one group context across tasks.
 // Depends on crate::types::Workgroup for the shared-context payload.
 
-use crate::types::Workgroup;
+use crate::types::{Finding, Workgroup};
 
 pub fn compose_prompt(
     prompt: &str,
     file_context: Option<&str>,
     workgroup: Option<&Workgroup>,
     milestones: &[(String, String)],
+    findings: &[Finding],
 ) -> String {
     let mut sections = Vec::new();
 
@@ -21,6 +22,17 @@ pub fn compose_prompt(
     }
     if let Some(context) = file_context.filter(|context| !context.trim().is_empty()) {
         sections.push(format!("[Context]\n{}", context.trim()));
+    }
+    if !findings.is_empty() {
+        let finding_lines = findings
+            .iter()
+            .map(|f| {
+                let source = f.source_task_id.as_deref().unwrap_or("manual");
+                format!("- [{source}] {}", f.content)
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+        sections.push(format!("[Shared Findings]\n{finding_lines}"));
     }
     if !milestones.is_empty() {
         let findings = milestones
@@ -41,7 +53,7 @@ pub fn compose_prompt(
 #[cfg(test)]
 mod tests {
     use super::compose_prompt;
-    use crate::types::{Workgroup, WorkgroupId};
+    use crate::types::{Finding, Workgroup, WorkgroupId};
     use chrono::Local;
 
     fn make_group(shared_context: &str) -> Workgroup {
@@ -56,7 +68,7 @@ mod tests {
 
     #[test]
     fn returns_prompt_when_no_context_exists() {
-        assert_eq!(compose_prompt("ship it", None, None, &[]), "ship it");
+        assert_eq!(compose_prompt("ship it", None, None, &[], &[]), "ship it");
     }
 
     #[test]
@@ -65,6 +77,7 @@ mod tests {
             "ship it",
             Some("fn main() {}"),
             Some(&make_group("Rust workspace with shared target dir.")),
+            &[],
             &[],
         );
         assert!(prompt.contains("[Shared Context: dispatch]"));
@@ -79,11 +92,25 @@ mod tests {
             ("t-1000".to_string(), "finding one".to_string()),
             ("t-1001".to_string(), "finding two".to_string()),
         ];
-        let prompt = compose_prompt("ship it", None, None, &milestones);
+        let prompt = compose_prompt("ship it", None, None, &milestones, &[]);
 
         assert!(prompt.contains("--- Shared Findings ---"));
         assert!(prompt.contains("- [t-1000] finding one"));
         assert!(prompt.contains("- [t-1001] finding two"));
         assert!(prompt.contains("[Task]"));
+    }
+
+    #[test]
+    fn includes_findings_from_investigation() {
+        let findings = vec![Finding {
+            id: 1,
+            workgroup_id: "wg-1".to_string(),
+            content: "gamma can be zero".to_string(),
+            source_task_id: Some("t-100".to_string()),
+            created_at: Local::now(),
+        }];
+        let prompt = compose_prompt("investigate", None, None, &[], &findings);
+        assert!(prompt.contains("[Shared Findings]"));
+        assert!(prompt.contains("gamma can be zero"));
     }
 }

@@ -46,6 +46,13 @@ CREATE TABLE IF NOT EXISTS events (
     detail TEXT NOT NULL,
     metadata TEXT
 );
+CREATE TABLE IF NOT EXISTS findings (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    workgroup_id TEXT NOT NULL,
+    content TEXT NOT NULL,
+    source_task_id TEXT,
+    created_at TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS memories (
     id TEXT PRIMARY KEY,
     memory_type TEXT NOT NULL,
@@ -94,10 +101,10 @@ CREATE INDEX IF NOT EXISTS idx_memories_type ON memories(memory_type);
 CREATE INDEX IF NOT EXISTS idx_memories_hash ON memories(content_hash);";
 
 const CREATE_FINDINGS_SQL: &str = "CREATE TABLE IF NOT EXISTS findings (
-    id TEXT PRIMARY KEY,
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
     workgroup_id TEXT NOT NULL,
-    source_task_id TEXT,
     content TEXT NOT NULL,
+    source_task_id TEXT,
     created_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_findings_workgroup ON findings(workgroup_id);";

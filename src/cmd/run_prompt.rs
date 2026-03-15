@@ -18,9 +18,24 @@ pub(super) enum PromptSource<'a> { Inline(&'a str), File(&'a str) }
 
 pub(super) fn build_prompt_bundle(store: &Store, args: &RunArgs, agent_kind: &AgentKind, workgroup: Option<&Workgroup>, requested_skills: &[String]) -> Result<PromptBundle> {
     let (file_context, context_files) = build_context_flags(agent_kind, &args.context)?;
-    let milestones = if let Some(group_id) = args.group.as_deref() { store.get_workgroup_milestones(group_id)? } else { vec![] };
+    let milestones = if let Some(group_id) = args.group.as_deref() {
+        store.get_workgroup_milestones(group_id)?
+    } else {
+        vec![]
+    };
+    let findings = if let Some(group_id) = args.group.as_deref() {
+        store.list_findings(group_id)?
+    } else {
+        vec![]
+    };
     let prompt = resolve_prompt(PromptSource::Inline(&args.prompt), args.template.as_deref())?;
-    let mut effective_prompt = crate::workgroup::compose_prompt(&prompt, file_context.as_deref(), workgroup, &milestones);
+    let mut effective_prompt = crate::workgroup::compose_prompt(
+        &prompt,
+        file_context.as_deref(),
+        workgroup,
+        &milestones,
+        &findings,
+    );
     let (edit_guard, milestone_instr) = templates::shared_system_fragments(&prompt);
     if let Some(guard) = edit_guard { effective_prompt = format!("{guard}{effective_prompt}"); }
     effective_prompt.push_str(milestone_instr);

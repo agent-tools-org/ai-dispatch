@@ -54,6 +54,27 @@ pub(super) fn build_prompt_bundle(store: &Store, args: &RunArgs, agent_kind: &Ag
             effective_prompt = format!("[Team Knowledge — {team_id}]\n{knowledge}\n\n{effective_prompt}");
         }
     }
+
+    // Inject output from previous tasks (--context-from)
+    if !args.context_from.is_empty() {
+        if let Some(block) = resolve_context_from(store, &args.context_from)? {
+            let token_count = templates::estimate_tokens(&block);
+            eprintln!("[aid] Injected context from {} task(s) (~{token_count} tokens)", args.context_from.len());
+            effective_prompt = format!("{block}\n\n{effective_prompt}");
+        }
+    }
+
+    // Inject workspace path if workgroup has one
+    if let Some(ref group_id) = args.group {
+        let workspace = crate::paths::workspace_dir(group_id);
+        if workspace.is_dir() {
+            effective_prompt = format!(
+                "[Shared Workspace]\nPath: {}\nUse this directory for intermediate artifacts, shared files, and inter-agent communication.\n\n{effective_prompt}",
+                workspace.display()
+            );
+        }
+    }
+
     let prompt_tokens = templates::estimate_tokens(&effective_prompt) as i64;
     Ok(PromptBundle { effective_prompt, context_files, prompt_tokens })
 }
@@ -102,6 +123,50 @@ fn detect_project_path() -> Option<String> {
         } else {
             None
         })
+}
+
+/// Resolve --context-from task IDs: read output/diff from completed tasks.
+fn resolve_context_from(store: &Store, task_ids: &[String]) -> Result<Option<String>> {
+    let mut blocks = Vec::new();
+    for task_id in task_ids {
+        let Some(task) = store.get_task(task_id)? else {
+            eprintln!("[aid] Warning: --context-from task '{task_id}' not found, skipping");
+            continue;
+        };
+        let mut content = String::new();
+        // Try output file first
+        if let Some(ref path) = task.output_path {
+            if let Ok(text) = std::fs::read_to_string(path) {
+                content = text;
+            }
+        }
+        // Fall back to log file
+        if content.is_empty() {
+            if let Some(ref log_path) = task.log_path {
+                if let Ok(text) = std::fs::read_to_string(log_path) {
+                    // Take last 200 lines to avoid huge context
+                    let lines: Vec<&str> = text.lines().collect();
+                    let start = lines.len().saturating_sub(200);
+                    content = lines[start..].join("\n");
+                }
+            }
+        }
+        if content.is_empty() {
+            eprintln!("[aid] Warning: --context-from task '{task_id}' has no output, skipping");
+            continue;
+        }
+        blocks.push(format!(
+            "[Prior Task Result — {} ({}, {})]\n{}",
+            task_id,
+            task.agent_display_name(),
+            task.status.as_str(),
+            content.trim()
+        ));
+    }
+    if blocks.is_empty() {
+        return Ok(None);
+    }
+    Ok(Some(blocks.join("\n\n")))
 }
 
 pub(super) fn resolve_prompt(source: PromptSource<'_>, template: Option<&str>) -> Result<String> {

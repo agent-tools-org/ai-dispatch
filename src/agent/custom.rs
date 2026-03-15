@@ -40,6 +40,13 @@ pub struct CustomAgentConfig {
     pub output_format: String,
     #[serde(default)]
     pub capabilities: CapabilityScores,
+    /// Trust tier: "local" (runs locally), "api" (sends prompts to third-party API)
+    #[serde(default = "default_trust_tier")]
+    pub trust_tier: String,
+}
+
+fn default_trust_tier() -> String {
+    "api".to_string()
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -223,6 +230,7 @@ mod tests {
             streaming: false,
             output_format: default_output_format(),
             capabilities: CapabilityScores::default(),
+            trust_tier: default_trust_tier(),
         }
     }
 

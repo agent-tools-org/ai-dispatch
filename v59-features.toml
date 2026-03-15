@@ -1,0 +1,273 @@
+# v5.9 — Store v2 + Skill Packages + Graceful Upgrade
+# Three independent M-sized features, dispatched in parallel.
+
+[defaults]
+verify = true
+agent = "codex"
+
+[[task]]
+name = "store-v2-versioning"
+prompt = """
+Add version pinning and update checking to `aid store`.
+
+## Current state
+- src/cmd/store.rs: StoreAction enum (Browse/Install/Show), fetch from GitHub raw URLs
+- src/main.rs: StoreCommands enum with Browse/Install/Show subcommands (lines 459-470)
+- Store index is at https://raw.githubusercontent.com/agent-tools-org/aid-agents/main/index.json
+- AgentEntry already has a `version` field
+
+## What to build
+
+### 1. Version pinning in install (src/cmd/store.rs)
+
+Change `install()` to support `publisher/name@version` syntax:
+- Parse `@version` suffix from name: `parse_versioned_id(name) -> (publisher, agent_name, Option<version>)`
+- If version specified, fetch `agents/{publisher}/{agent_name}@{version}.toml` (fallback to `agents/{publisher}/{agent_name}.toml` if versioned file doesn't exist)
+- After install, record to lockfile
+
+### 2. Lockfile at ~/.aid/store.lock (TOML format)
+
+Create a simple TOML lockfile that tracks installed packages:
+```toml
+[[package]]
+id = "community/aider"
+version = "1.0.0"
+installed_at = "2026-03-15T12:00:00Z"
+
+[[package]]
+id = "community/nanobanana"
+version = "0.2.0"
+installed_at = "2026-03-15T12:30:00Z"
+```
+
+Functions:
+- `read_lockfile() -> Vec<LockEntry>` — parse ~/.aid/store.lock, return empty vec if missing
+- `write_lockfile(entries: &[LockEntry])` — write back
+- `add_lock_entry(id, version)` — add or update entry
+- `LockEntry { id: String, version: String, installed_at: String }`
+
+Update `install()` to call `add_lock_entry()` after successful install.
+
+### 3. `aid store update` subcommand
+
+Add `Update` variant to StoreAction and StoreCommands:
+- Fetch current index
+- Compare each lockfile entry's version against index version
+- Print table: `Name  Installed  Available  Status`
+- If `--apply` flag: reinstall packages where available > installed
+- Use simple string comparison for versions (semver-like, good enough)
+
+### 4. CLI changes in src/main.rs
+
+Add to StoreCommands enum:
+```rust
+/// Check for updates to installed store packages
+Update {
+    /// Apply available updates
+    #[arg(long)]
+    apply: bool,
+},
+```
+
+Wire it to `StoreAction::Update { apply }` in the match.
+
+### Constraints
+- Keep store.rs under 250 lines total
+- Use chrono::Local::now() for installed_at timestamp
+- Don't add new dependencies — use existing toml, serde, chrono
+- Lockfile path: `crate::paths::aid_dir().join("store.lock")`
+"""
+worktree = "v59-store-v2"
+context = ["src/cmd/store.rs", "src/main.rs:StoreCommands,Commands::Store"]
+
+[[task]]
+name = "skill-packages"
+prompt = """
+Extend `aid store` to support skill packages — bundles that install skills, hooks, and agent configs together.
+
+## Current state
+- src/cmd/store.rs: installs agent TOML + optional scripts from GitHub store
+- src/cmd/init.rs: installs bundled default skills from compiled-in strings
+- ~/.aid/skills/*.md: methodology files auto-injected into agent prompts
+- ~/.aid/hooks.toml: task lifecycle hooks
+- ~/.aid/agents/*.toml: custom agent definitions
+- Store index at GitHub: index.json with AgentEntry { id, display_name, description, version, command, scripts }
+
+## What to build
+
+### 1. Extend index format to support packages
+
+Add optional fields to AgentEntry in store.rs:
+```rust
+struct AgentEntry {
+    id: String,
+    display_name: String,
+    description: String,
+    version: String,
+    command: String,
+    #[serde(default)]
+    scripts: Vec<String>,
+    #[serde(default)]
+    skills: Vec<String>,      // NEW: skill filenames to install
+    #[serde(default)]
+    hooks: Vec<HookEntry>,    // NEW: hook definitions to merge
+    #[serde(default)]
+    kind: PackageKind,        // NEW: "agent" (default) or "package"
+}
+
+#[derive(Deserialize, Default)]
+#[serde(rename_all = "lowercase")]
+enum PackageKind {
+    #[default]
+    Agent,
+    Package,
+}
+
+#[derive(Deserialize)]
+struct HookEntry {
+    event: String,
+    command: String,
+}
+```
+
+### 2. Extend install() to handle skills and hooks
+
+After installing the agent TOML (or skipping it for pure packages):
+
+**Skills**: For each entry in `skills`:
+- Fetch from `{REPO_RAW}/skills/{publisher}/{skill_filename}`
+- Save to `~/.aid/skills/{skill_filename}`
+- Print `  Skill: ~/.aid/skills/{filename}`
+
+**Hooks**: For each entry in `hooks`:
+- Read existing `~/.aid/hooks.toml`
+- Check if a hook with same event+command already exists
+- If not, append the new hook entry
+- Print `  Hook: {event} -> {command}`
+
+For PackageKind::Package, skip the agent TOML install step (there's no command).
+
+### 3. Update browse output
+
+In `browse()`, show package kind:
+- For PackageKind::Agent: show command as before
+- For PackageKind::Package: show "package" instead of command
+
+### Constraints
+- Keep store.rs under 300 lines total (currently 154)
+- Hooks TOML append: read existing file, parse as `Vec<Hook>`, check for duplicates, re-serialize
+- Use existing `serde` and `toml` crates for hooks.toml parsing
+- The HookEntry struct for deserialization should match the format in hooks.rs
+- Don't create a separate hooks.toml parser — just use toml::from_str and toml::to_string (add `serialize` feature to toml if needed)
+"""
+worktree = "v59-skill-packages"
+context = ["src/cmd/store.rs", "src/cmd/init.rs", "src/hooks.rs:Hook"]
+
+[[task]]
+name = "graceful-upgrade"
+prompt = """
+Add `aid upgrade` command that safely replaces the aid binary.
+
+## Current state
+- src/main.rs: CLI entrypoint with Commands enum (line 48-870+)
+- aid is installed at ~/.cargo/bin/aid (primary) or /opt/homebrew/bin/aid
+- `cargo install ai-dispatch` installs from crates.io
+- On macOS, after cp we must `codesign --force --sign -` to clear provenance cache
+
+## What to build
+
+### 1. New file: src/cmd/upgrade.rs (~100 lines)
+
+```rust
+pub fn run(force: bool) -> Result<()> {
+    // 1. Check for running tasks
+    let store = Store::open(&paths::db_path())?;
+    let running = store.list_running_tasks()?;
+    if !running.is_empty() && !force {
+        eprintln!("[aid] {} task(s) still running:", running.len());
+        for t in &running {
+            eprintln!("  {} — {} ({})", t.id, t.agent_display_name(), t.status.label());
+        }
+        eprintln!();
+        eprintln!("[aid] Use --force to upgrade anyway, or wait for tasks to complete.");
+        std::process::exit(1);
+    }
+
+    // 2. Get current version
+    let current = env!("CARGO_PKG_VERSION");
+    eprintln!("[aid] Current version: {current}");
+
+    // 3. Run cargo install
+    eprintln!("[aid] Installing latest from crates.io...");
+    let status = std::process::Command::new("cargo")
+        .args(["install", "ai-dispatch"])
+        .status()?;
+    if !status.success() {
+        anyhow::bail!("cargo install failed");
+    }
+
+    // 4. macOS codesign fix
+    if cfg!(target_os = "macos") {
+        let aid_path = home_cargo_bin().join("aid");
+        if aid_path.exists() {
+            let _ = std::process::Command::new("codesign")
+                .args(["--force", "--sign", "-", &aid_path.display().to_string()])
+                .status();
+        }
+    }
+
+    // 5. Verify
+    let output = std::process::Command::new("aid")
+        .arg("--version")
+        .output()?;
+    let new_version = String::from_utf8_lossy(&output.stdout);
+    eprintln!("[aid] Upgraded: {current} -> {}", new_version.trim());
+
+    Ok(())
+}
+
+fn home_cargo_bin() -> std::path::PathBuf {
+    dirs::home_dir()
+        .unwrap_or_else(|| std::path::PathBuf::from("."))
+        .join(".cargo/bin")
+}
+```
+
+Use `std::env::var("HOME")` instead of adding a `dirs` crate — construct the path as `PathBuf::from(env::var("HOME").unwrap_or_else(|_| ".".to_string())).join(".cargo/bin")`.
+
+### 2. Store method: list_running_tasks
+
+In src/store.rs, add:
+```rust
+pub fn list_running_tasks(&self) -> Result<Vec<Task>> {
+    // SELECT * FROM tasks WHERE status = 'running'
+    // Use existing task loading pattern from list_tasks
+}
+```
+
+Check if this method already exists — it might be `list_tasks` with a filter. If so, just use the existing method.
+
+### 3. CLI in src/main.rs
+
+Add to Commands enum:
+```rust
+/// Upgrade aid to the latest version from crates.io
+Upgrade {
+    /// Force upgrade even if tasks are running
+    #[arg(long)]
+    force: bool,
+},
+```
+
+Wire: `Commands::Upgrade { force } => cmd::upgrade::run(force)?;`
+
+Add to cmd/mod.rs: `pub mod upgrade;`
+
+### Constraints
+- Do NOT add `dirs` or `home` crate — use `std::env::var("HOME")`
+- Keep upgrade.rs under 80 lines
+- The running task check uses existing Store — import it via `crate::store::Store` and `crate::paths`
+- Check if `list_running_tasks` or equivalent already exists in store.rs before creating it
+"""
+worktree = "v59-graceful-upgrade"
+context = ["src/main.rs:Commands", "src/store.rs:list_tasks,TaskFilter", "src/types.rs:TaskStatus"]

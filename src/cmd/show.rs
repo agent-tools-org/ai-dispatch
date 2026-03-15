@@ -26,6 +26,7 @@ pub struct ShowArgs {
     pub output: bool,
     pub explain: bool,
     pub log: bool,
+    pub json: bool,
     pub agent: Option<String>,
     pub model: Option<String>,
 }
@@ -40,6 +41,11 @@ pub enum ShowMode {
 }
 
 pub async fn run(store: Arc<Store>, args: ShowArgs) -> Result<()> {
+    if args.json {
+        let text = task_json(&store, &args.task_id)?;
+        println!("{text}");
+        return Ok(());
+    }
     if args.context {
         let text = render_mode_text(&store, &args.task_id, ShowMode::Context)?;
         print!("{text}");
@@ -66,6 +72,49 @@ pub async fn run(store: Arc<Store>, args: ShowArgs) -> Result<()> {
         );
     }
     Ok(())
+}
+
+/// Serialize task as JSON with events and metrics.
+fn task_json(store: &Arc<Store>, task_id: &str) -> Result<String> {
+    let task = load_task(store, task_id)?;
+    let events = store.get_events(task_id)?;
+    let event_list: Vec<serde_json::Value> = events
+        .iter()
+        .map(|e| {
+            serde_json::json!({
+                "timestamp": e.timestamp.to_rfc3339(),
+                "type": e.event_kind.as_str(),
+                "detail": e.detail,
+                "metadata": e.metadata,
+            })
+        })
+        .collect();
+    let payload = serde_json::json!({
+        "id": task.id.as_str(),
+        "agent": task.agent_display_name(),
+        "custom_agent": task.custom_agent_name,
+        "status": task.status.as_str(),
+        "prompt": task.prompt,
+        "model": task.model,
+        "tokens": task.tokens,
+        "prompt_tokens": task.prompt_tokens,
+        "duration_ms": task.duration_ms,
+        "cost_usd": task.cost_usd,
+        "workgroup_id": task.workgroup_id,
+        "parent_task_id": task.parent_task_id,
+        "worktree_branch": task.worktree_branch,
+        "worktree_path": task.worktree_path,
+        "repo_path": task.repo_path,
+        "output_path": task.output_path,
+        "verify": task.verify,
+        "verify_status": task.verify_status.as_str(),
+        "read_only": task.read_only,
+        "budget": task.budget,
+        "created_at": task.created_at.to_rfc3339(),
+        "completed_at": task.completed_at.map(|dt| dt.to_rfc3339()),
+        "events": event_list,
+    });
+    serde_json::to_string(&payload).map_err(Into::into)
 }
 
 pub fn render_mode_text(store: &Arc<Store>, task_id: &str, mode: ShowMode) -> Result<String> {

@@ -46,6 +46,7 @@ pub struct RunArgs {
     pub budget: bool,
     pub session_id: Option<String>,
     pub team: Option<String>,
+    pub context_from: Vec<String>,
 }
 pub async fn run(store: Arc<Store>, args: RunArgs) -> Result<TaskId> {
     let (agent_kind, custom_agent_name) = if let Some(kind) = AgentKind::parse_str(&args.agent_name) {

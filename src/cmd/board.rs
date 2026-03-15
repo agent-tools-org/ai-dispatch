@@ -18,6 +18,7 @@ pub fn run(
     today: bool,
     mine: bool,
     group: Option<&str>,
+    json: bool,
 ) -> Result<()> {
     let filter = if running {
         TaskFilter::Running
@@ -62,6 +63,30 @@ pub fn run(
     let content = format!("{}\n{}", Local::now().timestamp(), fingerprint);
     let _ = std::fs::write(&marker_path, &content);
 
+    if json {
+        let payload: Vec<serde_json::Value> = tasks
+            .iter()
+            .map(|t| {
+                serde_json::json!({
+                    "id": t.id.as_str(),
+                    "agent": t.agent_display_name(),
+                    "status": t.status.as_str(),
+                    "prompt": t.prompt,
+                    "model": t.model,
+                    "tokens": t.tokens,
+                    "duration_ms": t.duration_ms,
+                    "cost_usd": t.cost_usd,
+                    "workgroup_id": t.workgroup_id,
+                    "worktree_branch": t.worktree_branch,
+                    "verify_status": t.verify_status.as_str(),
+                    "created_at": t.created_at.to_rfc3339(),
+                    "completed_at": t.completed_at.map(|dt| dt.to_rfc3339()),
+                })
+            })
+            .collect();
+        println!("{}", serde_json::to_string(&payload)?);
+        return Ok(());
+    }
     print!("{}", render_board(&tasks, store)?);
     Ok(())
 }

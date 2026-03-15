@@ -6,8 +6,11 @@ use anyhow::Result;
 use std::io::{self, BufRead, Write};
 
 pub fn run() -> Result<()> {
-    println!("aid setup — interactive configuration");
-    println!("Press Enter to skip any step.\n");
+    println!();
+    println!("  aid setup");
+    println!("  ─────────────────────────────────");
+    println!("  Press Enter to skip any step.");
+    println!();
 
     let config_path = crate::paths::config_path();
     let mut existing = if config_path.exists() {
@@ -17,30 +20,38 @@ pub fn run() -> Result<()> {
     };
 
     // 1. OpenRouter API key
+    section("OpenRouter API Key");
     let current_key = std::env::var("OPENROUTER_API_KEY").ok();
     if existing.contains("api_key") {
-        println!("[query] API key already configured in config.toml");
-    } else if current_key.is_some() {
-        println!("[query] Using OPENROUTER_API_KEY from environment");
+        println!("  Already configured in config.toml");
+    } else if let Some(k) = &current_key {
+        println!("  Using OPENROUTER_API_KEY from environment");
+        println!("  {}", mask_key(k));
     } else {
-        print!("OpenRouter API key (get one at https://openrouter.ai/keys): ");
+        println!("  Enables `aid query` — fast LLM queries without agent startup.");
+        println!("  Get a key at: https://openrouter.ai/keys\n");
+        print!("  Key: ");
         io::stdout().flush()?;
         let key = read_line()?;
         if !key.is_empty() {
+            eprint!("  Verifying... ");
+            io::stderr().flush()?;
             if test_openrouter_key(&key) {
-                println!("  ✓ Key verified");
+                eprintln!("OK");
+                println!("  ✓ Key verified ({})", mask_key(&key));
                 append_query_section(&mut existing, &key);
             } else {
-                println!("  ✗ Key test failed — saving anyway, check it later");
+                eprintln!("failed");
+                println!("  ✗ Could not verify — saved anyway, check it later");
                 append_query_section(&mut existing, &key);
             }
         } else {
-            println!("  Skipped (set OPENROUTER_API_KEY env var later)");
+            println!("  Skipped");
         }
     }
 
     // 2. Detect installed agents
-    println!("\nDetecting agents...");
+    section("Agents");
     let builtin = [
         ("gemini", "gemini"),
         ("codex", "codex"),
@@ -50,13 +61,20 @@ pub fn run() -> Result<()> {
         ("ob1", "ob1"),
         ("codebuff", "codebuff"),
     ];
+    let mut installed = 0;
+    let mut missing = Vec::new();
     for (name, cmd) in builtin {
         let found = std::process::Command::new("which")
             .arg(cmd)
             .output()
             .map(|o| o.status.success())
             .unwrap_or(false);
-        println!("  {} {name}", if found { "✓" } else { "·" });
+        if found {
+            installed += 1;
+            println!("  ✓ {name}");
+        } else {
+            missing.push(name);
+        }
     }
     // Custom agents from ~/.aid/agents/
     let agents_dir = crate::paths::aid_dir().join("agents");
@@ -65,25 +83,46 @@ pub fn run() -> Result<()> {
             for entry in entries.flatten() {
                 if entry.path().extension().is_some_and(|e| e == "toml") {
                     let name = entry.path().file_stem().unwrap().to_string_lossy().to_string();
+                    installed += 1;
                     println!("  ✓ {name} (custom)");
                 }
             }
         }
     }
+    if !missing.is_empty() {
+        println!("  · not found: {}", missing.join(", "));
+    }
+    println!("  {installed} agent(s) ready");
 
     // 3. Write config
     let dir = config_path.parent().unwrap();
     std::fs::create_dir_all(dir)?;
     std::fs::write(&config_path, &existing)?;
-    println!("\nConfig saved to {}", config_path.display());
 
     // 4. Summary
-    println!("\nQuick start:");
-    println!("  aid query \"your question\"        # free LLM query");
-    println!("  aid query --auto \"question\"       # paid, better quality");
-    println!("  aid run codex \"task\" --worktree x  # dispatch agent");
-    println!("  aid init                           # install skills & templates");
+    section("Done");
+    println!("  Config: {}", config_path.display());
+    println!();
+    println!("  Quick start:");
+    println!("    aid query \"your question\"          free LLM query");
+    println!("    aid query --auto \"question\"         paid, better quality");
+    println!("    aid run codex \"task\" --worktree x   dispatch agent");
+    println!("    aid init                            install skills & templates");
+    println!();
     Ok(())
+}
+
+fn section(title: &str) {
+    println!();
+    println!("  [{title}]");
+}
+
+fn mask_key(key: &str) -> String {
+    if key.len() > 12 {
+        format!("{}...{}", &key[..8], &key[key.len()-4..])
+    } else {
+        "****".to_string()
+    }
 }
 
 fn read_line() -> Result<String> {

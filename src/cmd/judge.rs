@@ -72,10 +72,10 @@ pub(crate) fn read_output(task: &Task) -> Option<String> {
         candidates.push(Path::new(worktree).join(output_path));
     }
     for candidate in candidates {
-        if let Ok(text) = fs::read_to_string(&candidate) {
-            if !text.trim().is_empty() {
-                return Some(text);
-            }
+        if let Ok(text) = fs::read_to_string(&candidate)
+            && !text.trim().is_empty()
+        {
+            return Some(text);
         }
     }
     None

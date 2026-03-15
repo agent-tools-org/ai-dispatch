@@ -293,10 +293,10 @@ fn wait_for_any_completion(
     loop {
         let mut completed = Vec::new();
         for (i, (_, task_id)) in active.iter().enumerate() {
-            if let Some(task) = store.get_task(task_id)? {
-                if task.status.is_terminal() {
-                    completed.push(i);
-                }
+            if let Some(task) = store.get_task(task_id)?
+                && task.status.is_terminal()
+            {
+                completed.push(i);
             }
         }
         if !completed.is_empty() {

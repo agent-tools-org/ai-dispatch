@@ -171,14 +171,15 @@ pub(super) async fn run_agent_process_impl(
     output_path: Option<&str>,
     model: Option<&str>,
     streaming: bool,
+    workgroup_id: Option<&str>,
 ) -> Result<()> {
     let start = std::time::Instant::now();
     let mut child = cmd.spawn().context("Failed to spawn agent process")?;
     let info = if streaming {
-        watcher::watch_streaming(agent, &mut child, task_id, store, log_path).await?
+        watcher::watch_streaming(agent, &mut child, task_id, store, log_path, workgroup_id).await?
     } else {
         let out = output_path.map(std::path::Path::new);
-        watcher::watch_buffered(agent, &mut child, task_id, store, log_path, out).await?
+        watcher::watch_buffered(agent, &mut child, task_id, store, log_path, out, workgroup_id).await?
     };
     let duration_ms = start.elapsed().as_millis() as i64;
     let final_model = info.model.as_deref().or(model);

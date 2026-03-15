@@ -151,6 +151,7 @@ pub(crate) fn monitor_bridge(
             store,
             &mut state.info,
             &mut state.event_count,
+            None,
             state.line_buffer.trim_end_matches(['\r', '\n']),
         )?;
     }
@@ -242,7 +243,7 @@ fn flush_stream_lines(
 ) -> Result<()> {
     while let Some(pos) = line_buffer.find('\n') {
         let line = line_buffer[..pos].trim_end_matches('\r').to_string();
-        watcher::handle_streaming_line(agent, task_id, store, info, event_count, &line)?;
+        watcher::handle_streaming_line(agent, task_id, store, info, event_count, None, &line)?;
         line_buffer.drain(..=pos);
     }
     Ok(())

@@ -156,6 +156,7 @@ async fn run_task_inner(store: &Arc<Store>, spec: &BackgroundRunSpec) -> Result<
             spec.output.as_deref(),
             spec.model.as_deref(),
             agent.streaming(),
+            spec.group.as_deref(),
         )
         .await?;
     }

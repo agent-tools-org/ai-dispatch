@@ -23,6 +23,7 @@ pub async fn watch_streaming(
     task_id: &TaskId,
     store: &Arc<Store>,
     log_path: &std::path::Path,
+    workgroup_id: Option<&str>,
 ) -> Result<CompletionInfo> {
     let stdout = child
         .stdout
@@ -78,6 +79,7 @@ pub async fn watch_streaming(
             store,
             &mut info,
             &mut event_count,
+            workgroup_id,
             &line,
             &mut session_saved,
         )?;
@@ -146,6 +148,7 @@ pub async fn watch_buffered(
     store: &Arc<Store>,
     log_path: &std::path::Path,
     output_path: Option<&std::path::Path>,
+    _workgroup_id: Option<&str>,
 ) -> Result<CompletionInfo> {
     let stdout = child
         .stdout
@@ -245,8 +248,14 @@ pub(crate) fn handle_streaming_line(
     store: &Arc<Store>,
     info: &mut CompletionInfo,
     event_count: &mut u32,
+    workgroup_id: Option<&str>,
     line: &str,
 ) -> Result<()> {
+    if let Some(finding) = extract_finding_detail(line) {
+        if let Some(group_id) = workgroup_id {
+            let _ = store.insert_finding(group_id, &finding, Some(task_id.as_str()));
+        }
+    }
     if let Some(event) = parse_milestone_event(task_id, line) {
         store.insert_event(&event)?;
         *event_count += 1;
@@ -266,9 +275,15 @@ pub(crate) fn handle_streaming_line_with_session(
     store: &Arc<Store>,
     info: &mut CompletionInfo,
     event_count: &mut u32,
+    workgroup_id: Option<&str>,
     line: &str,
     session_saved: &mut bool,
 ) -> Result<()> {
+    if let Some(finding) = extract_finding_detail(line) {
+        if let Some(group_id) = workgroup_id {
+            let _ = store.insert_finding(group_id, &finding, Some(task_id.as_str()));
+        }
+    }
     if let Some(event) = parse_milestone_event(task_id, line) {
         store.insert_event(&event)?;
         *event_count += 1;
@@ -331,6 +346,35 @@ fn extract_milestone_from_text(text: &str) -> Option<String> {
         } else {
             Some(detail.to_string())
         }
+    })
+}
+
+fn extract_finding_detail(line: &str) -> Option<String> {
+    if !line.contains("[FINDING]") {
+        return None;
+    }
+    if let Ok(value) = serde_json::from_str::<serde_json::Value>(line)
+        && let Some(detail) = extract_finding_from_json(&value)
+    {
+        return Some(detail);
+    }
+    extract_finding_from_text(line)
+}
+
+fn extract_finding_from_json(value: &serde_json::Value) -> Option<String> {
+    match value {
+        serde_json::Value::String(text) => extract_finding_from_text(text),
+        serde_json::Value::Array(items) => items.iter().find_map(extract_finding_from_json),
+        serde_json::Value::Object(map) => map.values().find_map(extract_finding_from_json),
+        _ => None,
+    }
+}
+
+fn extract_finding_from_text(text: &str) -> Option<String> {
+    text.lines().find_map(|line| {
+        let (_, detail) = line.split_once("[FINDING]")?;
+        let detail = detail.trim().trim_start_matches(':').trim();
+        if detail.is_empty() { None } else { Some(detail.to_string()) }
     })
 }
 
@@ -410,5 +454,11 @@ mod tests {
 
         assert_eq!(event.event_kind, EventKind::Milestone);
         assert_eq!(event.detail, "tests passing");
+    }
+
+    #[test]
+    fn finding_event_parses_plain_text_lines() {
+        let detail = super::extract_finding_detail("[FINDING] gamma can be zero in tricrypto");
+        assert_eq!(detail.as_deref(), Some("gamma can be zero in tricrypto"));
     }
 }

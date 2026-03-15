@@ -267,6 +267,7 @@ pub async fn run(store: Arc<Store>, args: RunArgs) -> Result<TaskId> {
             args.output.as_deref(),
             effective_model.as_deref(),
             is_streaming,
+            task.workgroup_id.as_deref(),
         )
         .await?;
         // Detect worktree escape: warn if agent modified files in main repo
@@ -433,7 +434,21 @@ pub(crate) async fn run_agent_process(
     output_path: Option<&str>,
     model: Option<&str>,
     streaming: bool,
-) -> Result<()> { run_prompt::run_agent_process_impl(agent, cmd, task_id, store, log_path, output_path, model, streaming).await }
+    workgroup_id: Option<&str>,
+) -> Result<()> {
+    run_prompt::run_agent_process_impl(
+        agent,
+        cmd,
+        task_id,
+        store,
+        log_path,
+        output_path,
+        model,
+        streaming,
+        workgroup_id,
+    )
+    .await
+}
 pub(crate) fn maybe_cleanup_fast_fail(store: &Store, task_id: &TaskId, task: &Task) { run_prompt::maybe_cleanup_fast_fail_impl(store, task_id, task); }
 /// Run verification if --verify was set and a working dir exists.
 pub(crate) fn maybe_verify(store: &Store, task_id: &TaskId, verify: Option<&str>, dir: Option<&str>) { run_prompt::maybe_verify_impl(store, task_id, verify, dir); }

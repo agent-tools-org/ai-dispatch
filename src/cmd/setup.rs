@@ -18,22 +18,55 @@ pub fn run() -> Result<()> {
     } else {
         String::new()
     };
+    let config = crate::config::load_config().unwrap_or_default();
+    let qc = &config.query;
+    let current_env_key = std::env::var("OPENROUTER_API_KEY").ok();
+    let has_key = qc.api_key.as_deref().filter(|k| !k.is_empty()).is_some()
+        || current_env_key.is_some();
 
     // 1. OpenRouter API key
     section("OpenRouter API Key");
-    let current_key = std::env::var("OPENROUTER_API_KEY").ok();
-    // Show current config status
-    let config = crate::config::load_config().unwrap_or_default();
-    let qc = &config.query;
     println!("  Free model:  {}", qc.free_model);
     println!("  Auto model:  {}", qc.auto_model);
 
     if let Some(k) = qc.api_key.as_deref().filter(|k| !k.is_empty()) {
         println!("  API key:     {} (config.toml)", mask_key(k));
-    } else if let Some(k) = &current_key {
+        print!("\n  Update key? Enter new key or press Enter to keep: ");
+        io::stdout().flush()?;
+        let key = read_line()?;
+        if !key.is_empty() {
+            eprint!("  Verifying... ");
+            io::stderr().flush()?;
+            if test_openrouter_key(&key) {
+                eprintln!("OK");
+                println!("  ✓ Key updated ({})", mask_key(&key));
+                replace_api_key(&mut existing, &key);
+            } else {
+                eprintln!("failed");
+                println!("  ✗ Could not verify — saved anyway");
+                replace_api_key(&mut existing, &key);
+            }
+        }
+    } else if let Some(k) = &current_env_key {
         println!("  API key:     {} (env)", mask_key(k));
+        print!("\n  Save to config? Enter key or press Enter to keep using env: ");
+        io::stdout().flush()?;
+        let key = read_line()?;
+        if !key.is_empty() {
+            eprint!("  Verifying... ");
+            io::stderr().flush()?;
+            if test_openrouter_key(&key) {
+                eprintln!("OK");
+                println!("  ✓ Key saved ({})", mask_key(&key));
+            } else {
+                eprintln!("failed");
+                println!("  ✗ Could not verify — saved anyway");
+            }
+            append_query_section(&mut existing, &key);
+        }
     } else {
-        println!("  Enables `aid query` — fast LLM queries without agent startup.");
+        println!("  API key:     not set");
+        println!("\n  Enables `aid query` — fast LLM queries without agent startup.");
         println!("  Get a key at: https://openrouter.ai/keys\n");
         print!("  Key: ");
         io::stdout().flush()?;
@@ -44,12 +77,11 @@ pub fn run() -> Result<()> {
             if test_openrouter_key(&key) {
                 eprintln!("OK");
                 println!("  ✓ Key verified ({})", mask_key(&key));
-                append_query_section(&mut existing, &key);
             } else {
                 eprintln!("failed");
-                println!("  ✗ Could not verify — saved anyway, check it later");
-                append_query_section(&mut existing, &key);
+                println!("  ✗ Could not verify — saved anyway");
             }
+            append_query_section(&mut existing, &key);
         } else {
             println!("  Skipped");
         }
@@ -81,7 +113,6 @@ pub fn run() -> Result<()> {
             missing.push(name);
         }
     }
-    // Custom agents from ~/.aid/agents/
     let agents_dir = crate::paths::aid_dir().join("agents");
     if agents_dir.is_dir() {
         if let Ok(entries) = std::fs::read_dir(&agents_dir) {
@@ -104,15 +135,21 @@ pub fn run() -> Result<()> {
     std::fs::create_dir_all(dir)?;
     std::fs::write(&config_path, &existing)?;
 
-    // 4. Summary
-    section("Done");
-    println!("  Config: {}", config_path.display());
-    println!();
-    println!("  Quick start:");
-    println!("    aid query \"your question\"          free LLM query");
-    println!("    aid query --auto \"question\"         paid, better quality");
-    println!("    aid run codex \"task\" --worktree x   dispatch agent");
-    println!("    aid init                            install skills & templates");
+    // 4. Summary — different for first-time vs returning
+    if has_key {
+        section("Status");
+        println!("  Config: {}", config_path.display());
+        println!("  Ready to use.");
+    } else {
+        section("Done");
+        println!("  Config: {}", config_path.display());
+        println!();
+        println!("  Quick start:");
+        println!("    aid query \"your question\"          free LLM query");
+        println!("    aid query --auto \"question\"         paid, better quality");
+        println!("    aid run codex \"task\" --worktree x   dispatch agent");
+        println!("    aid init                            install skills & templates");
+    }
     println!();
     Ok(())
 }
@@ -124,7 +161,7 @@ fn section(title: &str) {
 
 fn mask_key(key: &str) -> String {
     if key.len() > 12 {
-        format!("{}...{}", &key[..8], &key[key.len()-4..])
+        format!("{}...{}", &key[..8], &key[key.len() - 4..])
     } else {
         "****".to_string()
     }
@@ -154,5 +191,18 @@ fn append_query_section(config: &mut String, key: &str) {
             config.push('\n');
         }
         config.push_str(&format!("\n[query]\napi_key = \"{key}\"\n"));
+    }
+}
+
+fn replace_api_key(config: &mut String, new_key: &str) {
+    if let Some(start) = config.find("api_key") {
+        if let Some(eq) = config[start..].find('=') {
+            let val_start = start + eq + 1;
+            let line_end = config[val_start..]
+                .find('\n')
+                .map(|p| val_start + p)
+                .unwrap_or(config.len());
+            config.replace_range(val_start..line_end, &format!(" \"{new_key}\""));
+        }
     }
 }

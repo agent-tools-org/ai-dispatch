@@ -166,6 +166,7 @@ pub enum VerifyStatus {
     Pending,
     Passed,
     Failed,
+    EmptyDiff,
     Skipped,
 }
 
@@ -175,6 +176,7 @@ impl VerifyStatus {
             Self::Pending => "pending",
             Self::Passed => "passed",
             Self::Failed => "failed",
+            Self::EmptyDiff => "empty_diff",
             Self::Skipped => "skipped",
         }
     }
@@ -184,6 +186,7 @@ impl VerifyStatus {
             "pending" => Some(Self::Pending),
             "passed" => Some(Self::Passed),
             "failed" => Some(Self::Failed),
+            "empty_diff" => Some(Self::EmptyDiff),
             "skipped" => Some(Self::Skipped),
             _ => None,
         }

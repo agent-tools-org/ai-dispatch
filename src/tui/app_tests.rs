@@ -103,6 +103,20 @@ fn loads_running_task_milestone() {
         })
         .unwrap();
 
+    let mut completed_task = make_task("t-1003", Some("wg-a"));
+    completed_task.status = TaskStatus::Done;
+    store.insert_task(&completed_task).unwrap();
+    store
+        .insert_event(&TaskEvent {
+            task_id: completed_task.id.clone(),
+            timestamp: Local::now(),
+            event_kind: crate::types::EventKind::Milestone,
+            detail: "finished milestone".to_string(),
+            metadata: None,
+        })
+        .unwrap();
+    let completed_task_id = completed_task.id.clone();
+
     let app = App::new(
         store,
         super::super::RunOptions {
@@ -113,6 +127,7 @@ fn loads_running_task_milestone() {
     .unwrap();
 
     assert_eq!(app.get_milestone("t-1002"), Some("types defined"));
+    assert_eq!(app.get_milestone(completed_task_id.as_str()), Some("finished milestone"));
 }
 
 #[test]

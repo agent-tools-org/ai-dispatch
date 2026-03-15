@@ -76,6 +76,8 @@ impl Store {
                 workgroup.updated_at.to_rfc3339(),
             ],
         )?;
+        let workspace_dir = crate::paths::workspace_dir(workgroup.id.as_str());
+        let _ = std::fs::create_dir_all(&workspace_dir);
         Ok(workgroup)
     }
 

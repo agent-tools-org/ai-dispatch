@@ -48,6 +48,8 @@ impl Store {
         if deleted == 0 {
             return Ok(None);
         }
+        let workspace_dir = crate::paths::workspace_dir(id);
+        let _ = std::fs::remove_dir_all(&workspace_dir);
         Ok(Some(tagged_tasks))
     }
 

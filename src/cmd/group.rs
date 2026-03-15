@@ -13,6 +13,10 @@ pub fn create(store: &Arc<Store>, name: &str, context: &str) -> Result<()> {
     println!("{}", workgroup.id);
     eprintln!("[aid] Created workgroup '{}' ({})", workgroup.name, workgroup.id);
     eprintln!("[aid] Scope all commands: export AID_GROUP={}", workgroup.id);
+    eprintln!(
+        "[aid] Workspace: {}",
+        crate::paths::workspace_dir(workgroup.id.as_str()).display()
+    );
     Ok(())
 }
 

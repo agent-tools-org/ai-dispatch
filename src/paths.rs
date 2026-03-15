@@ -47,6 +47,11 @@ pub fn job_input_path(task_id: &str) -> PathBuf {
     jobs_dir().join(format!("{task_id}.input"))
 }
 
+/// Returns /tmp/aid-wg-{id}/ as the workspace directory for a workgroup.
+pub fn workspace_dir(workgroup_id: &str) -> PathBuf {
+    std::path::PathBuf::from(format!("/tmp/aid-wg-{workgroup_id}"))
+}
+
 pub fn ensure_dirs() -> Result<()> {
     std::fs::create_dir_all(logs_dir())?;
     std::fs::create_dir_all(jobs_dir())?;
@@ -94,6 +99,12 @@ impl Drop for AidHomeGuard {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn workspace_dir_uses_tmp() {
+        let path = workspace_dir("wg-test");
+        assert_eq!(path.to_str().unwrap(), "/tmp/aid-wg-wg-test");
+    }
 
     #[test]
     fn paths_are_under_aid_dir() {

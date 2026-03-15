@@ -27,6 +27,26 @@ impl fmt::Display for TaskId {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct MemoryId(pub String);
+
+impl MemoryId {
+    pub fn generate() -> Self {
+        let val: u32 = rand::rng().random();
+        Self(format!("m-{val:08x}"))
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl fmt::Display for MemoryId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
 /// Short hex ID prefixed with "wg-", e.g. "wg-a3f1"
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct WorkgroupId(pub String);
@@ -218,6 +238,57 @@ impl EventKind {
             _ => None,
         }
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize)]
+pub enum MemoryType {
+    Discovery,
+    Lesson,
+    Insight,
+    Fact,
+    Decision,
+}
+
+impl MemoryType {
+    pub fn parse_str(s: &str) -> Option<Self> {
+        match s.trim().to_lowercase().as_str() {
+            "discovery" => Some(Self::Discovery),
+            "lesson" => Some(Self::Lesson),
+            "insight" => Some(Self::Insight),
+            "fact" => Some(Self::Fact),
+            "decision" => Some(Self::Decision),
+            _ => None,
+        }
+    }
+
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Discovery => "discovery",
+            Self::Lesson => "lesson",
+            Self::Insight => "insight",
+            Self::Fact => "fact",
+            Self::Decision => "decision",
+        }
+    }
+}
+
+impl fmt::Display for MemoryType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct Memory {
+    pub id: MemoryId,
+    pub memory_type: MemoryType,
+    pub content: String,
+    pub source_task_id: Option<String>,
+    pub agent: Option<String>,
+    pub project_path: Option<String>,
+    pub content_hash: String,
+    pub created_at: DateTime<Local>,
+    pub expires_at: Option<DateTime<Local>>,
 }
 
 #[derive(Debug, Clone, Serialize)]

@@ -46,6 +46,17 @@ CREATE TABLE IF NOT EXISTS events (
     detail TEXT NOT NULL,
     metadata TEXT
 );";
+const CREATE_MEMORIES_SQL: &str = "CREATE TABLE IF NOT EXISTS memories (
+    id TEXT PRIMARY KEY,
+    memory_type TEXT NOT NULL,
+    content TEXT NOT NULL,
+    source_task_id TEXT REFERENCES tasks(id),
+    agent TEXT,
+    project_path TEXT,
+    content_hash TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    expires_at TEXT
+);";
 
 const CREATE_WORKGROUPS_SQL: &str = "CREATE TABLE IF NOT EXISTS workgroups (
     id TEXT PRIMARY KEY,
@@ -57,6 +68,7 @@ const CREATE_WORKGROUPS_SQL: &str = "CREATE TABLE IF NOT EXISTS workgroups (
 
 pub(super) fn create_tables(store: &Store) -> Result<()> {
     store.db().execute_batch(CREATE_TABLES_SQL)?;
+    store.db().execute_batch(CREATE_MEMORIES_SQL)?;
     Ok(())
 }
 
@@ -80,6 +92,7 @@ pub(super) fn migrate(store: &Store) -> Result<()> {
     let _ = conn.execute_batch("ALTER TABLE tasks ADD COLUMN read_only INTEGER NOT NULL DEFAULT 0;");
     let _ = conn.execute_batch("ALTER TABLE tasks ADD COLUMN budget INTEGER NOT NULL DEFAULT 0;");
     let _ = conn.execute_batch("ALTER TABLE tasks ADD COLUMN custom_agent_name TEXT;");
+    let _ = conn.execute_batch(CREATE_MEMORIES_SQL);
     Ok(())
 }
 

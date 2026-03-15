@@ -13,6 +13,7 @@ mod context;
 mod cost;
 mod explore;
 mod hooks;
+mod memory;
 mod input_signal;
 mod notify;
 mod paths;

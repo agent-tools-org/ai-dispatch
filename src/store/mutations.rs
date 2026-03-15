@@ -151,4 +151,25 @@ impl Store {
         )?;
         Ok(())
     }
+
+    pub fn insert_memory(&self, memory: &Memory) -> Result<()> {
+        let expires_at = memory.expires_at.map(|dt| dt.to_rfc3339());
+        self.db().execute(
+            "INSERT INTO memories (id, memory_type, content, source_task_id, agent, project_path,
+             content_hash, created_at, expires_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+            params![
+                memory.id.as_str(),
+                memory.memory_type.as_str(),
+                memory.content,
+                memory.source_task_id,
+                memory.agent,
+                memory.project_path,
+                memory.content_hash,
+                memory.created_at.to_rfc3339(),
+                expires_at,
+            ],
+        )?;
+        Ok(())
+    }
 }

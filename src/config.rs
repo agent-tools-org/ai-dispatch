@@ -85,7 +85,7 @@ pub struct QueryConfig {
 }
 
 fn default_free_model() -> String {
-    "qwen/qwen3-coder:free".to_string()
+    "openrouter/free".to_string()
 }
 
 fn default_auto_model() -> String {

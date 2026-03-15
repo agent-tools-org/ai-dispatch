@@ -58,16 +58,6 @@ pub fn list(store: &Store, memory_type: Option<&str>, project_path: Option<&str>
     Ok(())
 }
 
-pub fn history(store: &Store, id: &str) -> Result<()> {
-    let history = store.list_memory_history(id)?;
-    if history.is_empty() {
-        println!("Memory {} not found.", id);
-        return Ok(());
-    }
-    print_memory_history(&history);
-    Ok(())
-}
-
 pub fn search(store: &Store, query: &str, project_path: Option<&str>) -> Result<()> {
     let project = project_path.map(str::to_string).or_else(|| detect_git_root().ok().flatten());
     if project.is_none() {
@@ -179,19 +169,6 @@ fn print_memory_table(memories: &[Memory], stats: bool) {
                 memory.project_path.as_deref().unwrap_or("-"),
             );
         }
-    }
-}
-
-fn print_memory_history(history: &[Memory]) {
-    println!("{:<8} {:<20} {}", "VERSION", "CREATED", "CONTENT");
-    println!("{}", "-".repeat(100));
-    for memory in history {
-        println!(
-            "{:<8} {:<20} {}",
-            memory.version,
-            memory.created_at.format("%Y-%m-%d %H:%M"),
-            truncate(&memory.content, 60),
-        );
     }
 }
 

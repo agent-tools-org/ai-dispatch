@@ -473,6 +473,12 @@ enum StoreCommands {
     Install { name: String },
     /// Show agent TOML from the store (publisher/name)
     Show { name: String },
+    /// Check for updates to installed store packages
+    Update {
+        /// Apply available updates
+        #[arg(long)]
+        apply: bool,
+    },
 }
 
 #[derive(Subcommand)]
@@ -836,6 +842,7 @@ async fn main() -> Result<()> {
                 StoreCommands::Browse { query } => StoreAction::Browse { query },
                 StoreCommands::Install { name } => StoreAction::Install { name },
                 StoreCommands::Show { name } => StoreAction::Show { name },
+                StoreCommands::Update { apply } => StoreAction::Update { apply },
             };
             run_store(action)?;
         }

@@ -234,9 +234,19 @@ fn merge_single(store: &Store, task_id: &str) -> Result<()> {
             }
         }
     } else {
-        eprintln!(
-            "[aid] No worktree branch — agent edited files in-place. Nothing to merge."
-        );
+        // In-place edit: check if there are uncommitted changes
+        let has_changes = Command::new("git")
+            .args(["-C", &repo_dir, "status", "--porcelain"])
+            .output()
+            .ok()
+            .map(|o| o.status.success() && !o.stdout.is_empty())
+            .unwrap_or(false);
+        if has_changes {
+            eprintln!("[aid] In-place edit — changes are in your working tree.");
+            eprintln!("[aid] Review: git diff | Revert: git checkout .");
+        } else {
+            eprintln!("[aid] In-place edit — no uncommitted changes (may already be committed).");
+        }
     }
     store.update_task_status(task_id, TaskStatus::Merged)?;
     println!("Marked {task_id} as merged");

@@ -25,9 +25,24 @@ pub fn diff_text(store: &Arc<Store>, task_id: &str) -> Result<String> {
     }
     if let Some(fallback) = diff_artifact_fallback(&task, task_id)? {
         out.push_str(&fallback);
+        if task.worktree_branch.is_none() {
+            out.push_str("\n[aid] In-place edit — use `git diff` to see working tree changes\n");
+        }
         return Ok(out);
     }
-    out.push_str("\n--- Artifacts ---\n  (no worktree diff or output file available)\n");
+    if task.worktree_branch.is_none() {
+        // In-place task: show working tree diff from repo_path
+        let repo = task.repo_path.as_deref().unwrap_or(".");
+        let wt_diff = inplace_working_diff(repo);
+        if !wt_diff.is_empty() {
+            out.push_str("\n--- Working Tree Changes (in-place edit) ---\n");
+            out.push_str(&wt_diff);
+            return Ok(out);
+        }
+        out.push_str("\n--- Artifacts ---\n  (in-place edit — no uncommitted changes detected, may already be committed)\n");
+    } else {
+        out.push_str("\n--- Artifacts ---\n  (worktree removed or diff unavailable)\n");
+    }
     Ok(out)
 }
 
@@ -180,6 +195,21 @@ fn extract_edits_from_log(log_path: &Path) -> Option<String> {
     }
     Some(out)
 }
+/// For in-place tasks: show `git diff` from the repo directory.
+fn inplace_working_diff(repo_path: &str) -> String {
+    let output = Command::new("git")
+        .args(["-C", repo_path, "diff", "--", "."])
+        .args(DIFF_EXCLUDE)
+        .output()
+        .ok();
+    match output {
+        Some(o) if o.status.success() && !o.stdout.is_empty() => {
+            String::from_utf8_lossy(&o.stdout).into()
+        }
+        _ => String::new(),
+    }
+}
+
 fn format_artifact_block(title: &str, content: &str) -> String {
     let mut out = String::new();
     out.push_str(&format!("\n--- {title} ---\n"));

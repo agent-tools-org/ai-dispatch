@@ -102,6 +102,15 @@ pub fn audit_text(store: &Arc<Store>, task_id: &str) -> Result<String> {
     {
         out.push_str("\nChanges:\n");
         out.push_str(&diff_stat(wt_path));
+    } else if task.worktree_branch.is_none()
+        && matches!(task.status, TaskStatus::Done | TaskStatus::Merged)
+    {
+        // In-place task: show working tree diff stat from repo
+        let repo = task.repo_path.as_deref().unwrap_or(".");
+        if let Some(stat) = inplace_diff_stat(repo) {
+            out.push_str("\nWorking tree changes (in-place edit):\n");
+            out.push_str(&stat);
+        }
     }
 
     Ok(out)
@@ -176,6 +185,18 @@ fn reconstruct_context(store: &Arc<Store>, task: &Task) -> Result<(String, Strin
     }
     resolved_prompt = crate::templates::inject_milestone_prompt(&resolved_prompt);
     Ok((skill_content, resolved_prompt))
+}
+
+fn inplace_diff_stat(repo_path: &str) -> Option<String> {
+    let output = std::process::Command::new("git")
+        .args(["-C", repo_path, "diff", "--stat"])
+        .output()
+        .ok()?;
+    if output.status.success() && !output.stdout.is_empty() {
+        Some(String::from_utf8_lossy(&output.stdout).into_owned())
+    } else {
+        None
+    }
 }
 
 fn stderr_tail(task_id: &str) -> Option<String> {

@@ -334,10 +334,10 @@ mod tests {
             model: None,
             worktree: None,
             group: None,
-            judge: None,
             best_of: None,
             max_duration_mins: None,
-
+            verify: None,
+            judge: None,
             context: None,
             skills: None,
             hooks: None,
@@ -346,12 +346,12 @@ mod tests {
             fallback: None,
             read_only: false,
             budget: false,
-            judge: None,
             on_success: on_success.map(str::to_string),
             on_fail: None,
             conditional,
         }
     }
+
 
     #[test]
     fn trigger_success_marks_target() {
@@ -423,6 +423,7 @@ mod tests {
                 read_only: false,
                 budget: false,
                 judge: None,
+                best_of: None,
                 on_success: None,
                 on_fail: None,
                 conditional: false,

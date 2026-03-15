@@ -269,7 +269,7 @@ impl Store {
         let conn = self.db();
         let mut stmt = conn.prepare(
             "SELECT id, agent, status, prompt FROM tasks
-             WHERE status IN ('done', 'failed')
+             WHERE status IN ('done', 'failed', 'merged')
              ORDER BY created_at DESC
              LIMIT 200",
         )?;
@@ -487,6 +487,24 @@ mod tests {
         assert_eq!(results[0].1, AgentKind::Gemini);
         assert_eq!(results[1].0, "t-routing");
         assert_eq!(results[1].1, AgentKind::Codex);
+    }
+
+    #[test]
+    fn includes_merged_tasks_in_results() {
+        let store = Store::open_memory().unwrap();
+        insert_task(
+            &store,
+            "t-merged",
+            AgentKind::Codex,
+            TaskStatus::Merged,
+            "Implement routing hints for budget selection",
+        );
+        let results = store
+            .find_similar_tasks("Add routing hints for selection", 5)
+            .unwrap();
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].0, "t-merged");
+        assert_eq!(results[0].2, TaskStatus::Merged);
     }
 
     #[test]

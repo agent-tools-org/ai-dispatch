@@ -32,6 +32,8 @@ fixed_args = []
 # Output parsing
 streaming = false
 output_format = "text"  # "text" or "jsonl"
+# Strength categories for simple boosts (match TaskCategory strings, e.g. "research")
+strengths = []
 
 # Trust tier: "local" (runs locally) or "api" (sends prompts to third-party)
 trust_tier = "api"
@@ -273,11 +275,14 @@ fn print_custom_summary(config: &CustomAgentConfig, path: &Path) {
     if config.fixed_args.is_empty() {
         println!("  Fixed args: (none)");
     } else {
-        println!("  Fixed args: {}", config.fixed_args.join(" "));
+    println!("  Fixed args: {}", config.fixed_args.join(" "));
     }
     println!("  Streaming: {}", config.streaming);
     println!("  Output format: {}", config.output_format);
     println!("  Trust tier: {}", config.trust_tier);
+    if !config.strengths.is_empty() {
+        println!("  Strengths: {}", config.strengths.join(", "));
+    }
     println!("  Capabilities:");
     print_capabilities(&config.capabilities);
 }
@@ -345,6 +350,8 @@ fn build_builtin_agent_toml(target_name: &str, profile: &BuiltinAgentProfile) ->
     toml.push_str("output_format = \"text\"  # text | jsonl\n\n");
     toml.push_str("# Trust tier: \"local\" (runs locally) or \"api\" (sends prompts to third-party)\n");
     toml.push_str(&format!("trust_tier = \"{}\"\n\n", profile.trust_tier));
+    toml.push_str("# Strength categories for auto-selection boosts\n");
+    toml.push_str("strengths = []\n\n");
     toml.push_str("# Capability scores (0-10) guide auto-selection\n");
     toml.push_str("[agent.capabilities]\n");
     toml.push_str(&format!("research = {}\n", caps.research));

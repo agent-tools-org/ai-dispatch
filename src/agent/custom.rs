@@ -43,6 +43,8 @@ pub struct CustomAgentConfig {
     /// Trust tier: "local" (runs locally), "api" (sends prompts to third-party API)
     #[serde(default = "default_trust_tier")]
     pub trust_tier: String,
+    #[serde(default)]
+    pub strengths: Vec<String>,
 }
 
 fn default_trust_tier() -> String {
@@ -231,6 +233,7 @@ mod tests {
             output_format: default_output_format(),
             capabilities: CapabilityScores::default(),
             trust_tier: default_trust_tier(),
+            strengths: Vec::new(),
         }
     }
 

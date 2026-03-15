@@ -178,6 +178,7 @@ mod tests {
         batch::BatchTask {
             name: Some(name.to_string()),
             agent: "codex".to_string(),
+            team: None,
             prompt: "test".to_string(),
             dir: None,
             output: None,

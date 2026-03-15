@@ -17,6 +17,7 @@ fn make_task(name: Option<&str>, depends_on: &[&str]) -> BatchTask {
     BatchTask {
         name: name.map(str::to_string),
         agent: "codex".to_string(),
+        team: None,
         prompt: "prompt".to_string(),
         dir: None,
         output: None,

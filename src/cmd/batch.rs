@@ -76,9 +76,31 @@ pub async fn run(store: Arc<Store>, args: BatchArgs) -> Result<()> {
 enum BatchTaskOutcome { Done, Failed, Skipped }
 struct DispatchedTask { index: usize, task_id: Option<String> }
 type BatchJob<T> = std::pin::Pin<Box<dyn std::future::Future<Output = Result<T>> + Send>>;
-fn task_to_run_args(task: &batch::BatchTask, background: bool) -> RunArgs {
+fn task_to_run_args(task: &batch::BatchTask, background: bool, store: &Arc<Store>) -> RunArgs {
+    // If team is set and agent is empty/auto, auto-select from team members
+    let agent_name = if (task.agent.is_empty() || task.agent == "auto") && task.team.is_some() {
+        let team_config = task.team.as_deref().and_then(crate::team::resolve_team);
+        let selection_opts = crate::agent::RunOpts {
+            dir: task.dir.clone(),
+            output: task.output.clone(),
+            model: task.model.clone(),
+            budget: task.budget,
+            read_only: task.read_only,
+            context_files: vec![],
+            session_id: None,
+        };
+        let (selected, reason) = crate::agent::select_agent_with_reason(
+            &task.prompt, &selection_opts, store, team_config.as_ref(),
+        );
+        eprintln!("[aid] Batch auto-selected: {selected} (reason: {reason})");
+        selected
+    } else if task.agent.is_empty() {
+        "auto".to_string()
+    } else {
+        task.agent.clone()
+    };
     RunArgs {
-        agent_name: task.agent.clone(),
+        agent_name,
         prompt: task.prompt.clone(),
         dir: task.dir.clone(),
         output: task.output.clone(),
@@ -104,7 +126,7 @@ async fn dispatch_parallel(store: Arc<Store>, tasks: &[batch::BatchTask], max_co
         .iter()
         .map(|task| {
             let store = store.clone();
-            let run_args = task_to_run_args(task, true);
+            let run_args = task_to_run_args(task, true, &store);
             Box::pin(async move {
                 let task_id = run::run(store.clone(), run_args).await?;
                 if throttled {
@@ -169,7 +191,7 @@ async fn wait_for_background_completion(store: &Arc<Store>, task_id: &str) -> Re
 async fn dispatch_sequential(store: Arc<Store>, tasks: &[batch::BatchTask]) -> Result<Vec<String>> {
     let mut task_ids = Vec::new();
     for (task_idx, task) in tasks.iter().enumerate() {
-        match run::run(store.clone(), task_to_run_args(task, false)).await {
+        match run::run(store.clone(), task_to_run_args(task, false, &store)).await {
             Ok(task_id) => task_ids.push(task_id.to_string()),
             Err(err) => eprintln!("Batch task failed ({}): {err}", task_label(task, task_idx)),
         }
@@ -223,7 +245,7 @@ async fn dispatch_sequential_with_dependencies(store: Arc<Store>, tasks: &[batch
             );
         }
         outcomes[task_idx] = Some(
-            match run::run(store.clone(), task_to_run_args(task, false)).await {
+            match run::run(store.clone(), task_to_run_args(task, false, &store)).await {
                 Ok(task_id) => {
                     task_ids.push(task_id.to_string());
                     load_task_outcome(&store, task_id.as_str())?
@@ -242,7 +264,7 @@ async fn dispatch_level(store: Arc<Store>, tasks: &[batch::BatchTask], task_indi
         .iter()
         .map(|&task_idx| {
             let store = store.clone();
-            let run_args = task_to_run_args(&tasks[task_idx], true);
+            let run_args = task_to_run_args(&tasks[task_idx], true, &store);
             tokio::spawn(async move { (task_idx, run::run(store, run_args).await) })
         })
         .collect();
@@ -310,10 +332,12 @@ mod tests {
 
     #[test]
     fn task_to_run_args_copies_context() {
+        let store = Arc::new(Store::open_memory().unwrap());
         let run_args = task_to_run_args(
             &batch::BatchTask {
                 name: None,
                 agent: "codex".to_string(),
+                team: None,
                 prompt: "test".to_string(),
                 dir: None,
                 output: None,
@@ -331,6 +355,7 @@ mod tests {
                 budget: false,
             },
             true,
+            &store,
         );
 
         assert_eq!(

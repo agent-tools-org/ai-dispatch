@@ -74,13 +74,14 @@ pub fn detect_agents() -> Vec<AgentKind> {
 }
 
 pub fn select_agent(prompt: &str, opts: &RunOpts, store: &store::Store) -> String {
-    selection::select_agent_with_reason(prompt, opts, store).0
+    selection::select_agent_with_reason(prompt, opts, store, None).0
 }
 
-pub(crate) fn select_agent_with_reason(prompt: &str, opts: &RunOpts, store: &store::Store) -> (String, String) {
-    let selection = selection::select_agent_with_reason(prompt, opts, store);
-    debug_assert_eq!(select_agent(prompt, opts, store), selection.0);
-    selection
+pub(crate) fn select_agent_with_reason(
+    prompt: &str, opts: &RunOpts, store: &store::Store,
+    team: Option<&crate::team::TeamConfig>,
+) -> (String, String) {
+    selection::select_agent_with_reason(prompt, opts, store, team)
 }
 
 /// Get an agent adapter by kind

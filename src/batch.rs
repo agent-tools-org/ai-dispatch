@@ -45,6 +45,7 @@ pub struct BatchConfig {
 #[derive(Debug, Deserialize, Default)]
 pub struct BatchDefaults {
     pub agent: Option<String>,
+    pub team: Option<String>,
     pub dir: Option<String>,
     pub model: Option<String>,
     pub worktree_prefix: Option<String>,
@@ -68,6 +69,7 @@ pub struct BatchTask {
     pub name: Option<String>,
     #[serde(default)]
     pub agent: String,
+    pub team: Option<String>,
     pub prompt: String,
     pub dir: Option<String>,
     pub output: Option<String>,
@@ -117,6 +119,9 @@ fn apply_task_defaults(task: &mut BatchTask, defaults: &BatchDefaults) {
             task.agent = agent.clone();
         }
     }
+    if task.team.is_none() {
+        task.team = defaults.team.clone();
+    }
     if task.dir.is_none() {
         task.dir = defaults.dir.clone();
     }
@@ -159,9 +164,13 @@ fn default_worktree(task: &BatchTask, defaults: &BatchDefaults) -> Option<String
 fn validate_agents(tasks: &[BatchTask]) -> Result<()> {
     for (task_idx, task) in tasks.iter().enumerate() {
         if task.agent.trim().is_empty() {
+            // Allow empty agent when team is set (will auto-select from team)
+            if task.team.is_some() {
+                continue;
+            }
             anyhow::bail!("task {} is missing agent", task_label(task, task_idx));
         }
-        if !is_valid_agent(&task.agent) {
+        if task.agent != "auto" && !is_valid_agent(&task.agent) {
             anyhow::bail!("unknown agent: {}", task.agent);
         }
     }

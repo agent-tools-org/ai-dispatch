@@ -9,12 +9,20 @@ use std::sync::Arc;
 use crate::config;
 use crate::session;
 use crate::store::Store;
+use crate::team;
 use crate::types::TaskFilter;
 use crate::usage;
 
-pub fn run(store: &Arc<Store>, session: bool, agent: Option<String>, period: String, json: bool) -> Result<()> {
+pub fn run(
+    store: &Arc<Store>,
+    session: bool,
+    agent: Option<String>,
+    team_filter: Option<String>,
+    period: String,
+    json: bool,
+) -> Result<()> {
     let config = config::load_config()?;
-    let tasks = if session {
+    let mut tasks = if session {
         let Some(caller) = session::current_caller() else {
             eprintln!("[aid] No active session detected");
             return Ok(());
@@ -23,6 +31,16 @@ pub fn run(store: &Arc<Store>, session: bool, agent: Option<String>, period: Str
     } else {
         store.list_tasks(TaskFilter::All)?
     };
+    // Filter tasks to team members if --team is set
+    if let Some(ref team_name) = team_filter {
+        if let Some(tc) = team::resolve_team(team_name) {
+            let members: Vec<String> = tc.agents.iter().map(|a| a.to_lowercase()).collect();
+            tasks.retain(|t| members.iter().any(|m| t.agent_display_name().eq_ignore_ascii_case(m)));
+            eprintln!("[aid] Filtering usage to team '{}' ({} agents)", team_name, tc.agents.len());
+        } else {
+            eprintln!("[aid] Warning: team '{team_name}' not found, showing all usage");
+        }
+    }
     let window = usage::UsageWindow::parse(&period)?;
     let now = Local::now();
     if let Some(agent_name) = agent {

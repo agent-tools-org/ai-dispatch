@@ -25,6 +25,7 @@ mod session;
 mod skills;
 mod store;
 mod store_workgroups;
+mod team;
 mod templates;
 mod tui;
 mod types;
@@ -34,7 +35,7 @@ mod watcher;
 mod webhook;
 mod workgroup;
 mod worktree;
-use crate::cli_actions::{ConfigAction, GroupAction, WorktreeAction};
+use crate::cli_actions::{ConfigAction, GroupAction, TeamAction, WorktreeAction};
 use crate::types::AgentKind;
 use anyhow::Result;
 use clap::{Parser, Subcommand};
@@ -82,6 +83,9 @@ enum Commands {
         /// Run in a git worktree branch
         #[arg(short, long)]
         worktree: Option<String>,
+        /// Restrict auto-selection to a team's agents
+        #[arg(long)]
+        team: Option<String>,
         /// Reuse shared context from a workgroup
         #[arg(long, short = 'g')]
         group: Option<String>,
@@ -278,6 +282,9 @@ Batch TOML format:
         /// Show analytics for a specific agent (e.g. codex, gemini)
         #[arg(long)]
         agent: Option<String>,
+        /// Filter usage to a specific team's agents
+        #[arg(long)]
+        team: Option<String>,
         /// Time window to summarize (today, 7d, 30d, all)
         #[arg(long, default_value = "all")]
         period: String,
@@ -392,6 +399,15 @@ Batch TOML format:
     Store {
         #[command(subcommand)]
         action: StoreCommands,
+    },
+    #[command(after_help = r#"Examples:
+  aid team list
+  aid team show dev
+  aid team create dev"#)]
+    /// Manage team definitions (agent groups for role-based selection)
+    Team {
+        #[command(subcommand)]
+        action: TeamAction,
     },
     #[command(after_help = r#"Examples:
   aid memory add discovery \"The auth module uses bcrypt not argon2\"
@@ -565,6 +581,7 @@ async fn main() -> Result<()> {
             model,
             budget,
             worktree,
+            team: team_flag,
             group,
             verify,
             retry,
@@ -593,7 +610,10 @@ async fn main() -> Result<()> {
                     context_files: vec![],
                     session_id: None,
                 };
-                let (selected, reason) = agent::select_agent_with_reason(&prompt, &selection_opts, &store);
+                let team_config = team_flag.as_deref().and_then(team::resolve_team);
+                let (selected, reason) = agent::select_agent_with_reason(
+                    &prompt, &selection_opts, &store, team_config.as_ref(),
+                );
                 eprintln!("[aid] Auto-selected agent: {selected} (reason: {reason})");
                 let rec = if model.is_none() && !budget {
                     let norm = prompt.trim().to_lowercase();
@@ -777,8 +797,8 @@ async fn main() -> Result<()> {
             let text = cmd::show::output_text_for_task(&store, &task_id)?;
             print!("{text}");
         }
-        Commands::Usage { session, agent, period, json } => {
-            cmd::usage::run(&store, session, agent, period, json)?;
+        Commands::Usage { session, agent, team: team_flag, period, json } => {
+            cmd::usage::run(&store, session, agent, team_flag, period, json)?;
         }
         Commands::Summary { group } => {
             cmd::summary::run(&store, &group)?;
@@ -845,6 +865,16 @@ async fn main() -> Result<()> {
                 StoreCommands::Update { apply } => StoreAction::Update { apply },
             };
             run_store(action)?;
+        }
+        Commands::Team { action } => {
+            use cmd::team::{TeamAction as TA, run_team_command};
+            let action = match action {
+                TeamAction::List => TA::List,
+                TeamAction::Show { name } => TA::Show { name },
+                TeamAction::Create { name } => TA::Create { name },
+                TeamAction::Delete { name } => TA::Delete { name },
+            };
+            run_team_command(action)?;
         }
         Commands::Memory { action } => match action {
             MemoryCommands::Add {

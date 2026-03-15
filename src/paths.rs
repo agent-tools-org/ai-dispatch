@@ -47,6 +47,10 @@ pub fn job_input_path(task_id: &str) -> PathBuf {
     jobs_dir().join(format!("{task_id}.input"))
 }
 
+pub fn teams_dir() -> PathBuf {
+    aid_dir().join("teams")
+}
+
 /// Returns /tmp/aid-wg-{id}/ as the workspace directory for a workgroup.
 pub fn workspace_dir(workgroup_id: &str) -> PathBuf {
     std::path::PathBuf::from(format!("/tmp/aid-wg-{workgroup_id}"))

@@ -61,6 +61,27 @@ pub enum GroupAction {
 }
 
 #[derive(Subcommand)]
+pub enum TeamAction {
+    /// List all teams
+    List,
+    /// Show team details and members
+    Show {
+        /// Team name
+        name: String,
+    },
+    /// Create a new team definition
+    Create {
+        /// Team name
+        name: String,
+    },
+    /// Remove a team definition
+    Delete {
+        /// Team name
+        name: String,
+    },
+}
+
+#[derive(Subcommand)]
 pub enum WorktreeAction {
     /// Create a worktree for a branch (prints path to stdout)
     Create {

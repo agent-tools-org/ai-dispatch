@@ -9,6 +9,7 @@ use crate::store::Store;
 use crate::types::AgentKind;
 use crate::agent::custom::CustomAgentConfig;
 use crate::agent::registry::load_custom_agents;
+use crate::team::TeamConfig;
 use std::process::Command;
 
 pub(crate) const AGENT_CAPABILITIES: &[(AgentKind, &[(TaskCategory, i32)])] = &[
@@ -97,14 +98,26 @@ fn custom_command_installed(command: &str) -> bool {
 
 pub(crate) fn select_agent_with_reason(
     prompt: &str, opts: &RunOpts, store: &Store,
+    team: Option<&TeamConfig>,
 ) -> (String, String) {
     let history = store.agent_success_rates().unwrap_or_default();
-    select_agent_from(prompt, opts, &detect_agents(), &history)
+    let detected = detect_agents();
+    let available: Vec<AgentKind> = if let Some(team) = &team {
+        detected
+            .iter()
+            .filter(|k| team.agents.iter().any(|a| a.eq_ignore_ascii_case(k.as_str())))
+            .copied()
+            .collect()
+    } else {
+        detected
+    };
+    select_agent_from(prompt, opts, &available, &history, team)
 }
 
 fn select_agent_from(
     prompt: &str, opts: &RunOpts, available: &[AgentKind],
     history: &[(AgentKind, f64, usize)],
+    team: Option<&TeamConfig>,
 ) -> (String, String) {
     let normalized = prompt.trim().to_lowercase();
     let prompt_len = prompt.chars().count();
@@ -119,7 +132,12 @@ fn select_agent_from(
         AgentKind::Cursor, AgentKind::Codex, AgentKind::Ob1,
     ];
     let score_for = |kind: AgentKind| -> i32 {
-        let mut s = base_score(kind, profile.category);
+        let mut s = if let Some(tc) = &team {
+            team_override_score(tc, kind.as_str(), profile.category)
+                .unwrap_or_else(|| base_score(kind, profile.category))
+        } else {
+            base_score(kind, profile.category)
+        };
         if budget {
             if is_cheap(&kind) { s += 4; } else { s -= 6; }
         }
@@ -134,9 +152,16 @@ fn select_agent_from(
         { s += 2; }
         s
     };
+    let team_default = team.and_then(|t| t.default_agent.as_deref())
+        .and_then(AgentKind::parse_str);
     let pick_best = |agents: &[AgentKind]| -> (AgentKind, i32) {
-        agents.iter().map(|&k| (k, score_for(k)))
-            .max_by_key(|&(k, s)| (s, priority(k)))
+        agents.iter().map(|&k| {
+            let s = score_for(k);
+            let is_default = team_default == Some(k);
+            (k, s, is_default)
+        })
+            .max_by_key(|&(k, s, is_default)| (s, is_default as i32, priority(k)))
+            .map(|(k, s, _)| (k, s))
             .unwrap_or((AgentKind::Codex, 1))
     };
     let (primary_kind, _) = pick_best(&all_agents);
@@ -152,6 +177,9 @@ fn select_agent_from(
         .into_values()
         .filter(|config| AgentKind::parse_str(&config.id).is_none())
         .filter(|config| custom_command_installed(&config.command))
+        .filter(|config| {
+            team.map_or(true, |t| t.agents.iter().any(|a| a.eq_ignore_ascii_case(&config.id)))
+        })
         .map(|config| {
             let score = custom_category_score(&config, profile.category);
             (config.id, score)
@@ -220,6 +248,20 @@ pub(crate) fn coding_fallback_for(agent: &AgentKind) -> Option<AgentKind> {
         .copied()
 }
 
+fn team_override_score(team: &TeamConfig, agent_name: &str, category: TaskCategory) -> Option<i32> {
+    let overrides = team.overrides.get(agent_name)?;
+    match category {
+        TaskCategory::Research => overrides.research,
+        TaskCategory::SimpleEdit => overrides.simple_edit,
+        TaskCategory::ComplexImpl => overrides.complex_impl,
+        TaskCategory::Frontend => overrides.frontend,
+        TaskCategory::Debugging => overrides.debugging,
+        TaskCategory::Testing => overrides.testing,
+        TaskCategory::Refactoring => overrides.refactoring,
+        TaskCategory::Documentation => overrides.documentation,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::select_agent_from;
@@ -243,7 +285,7 @@ mod tests {
     }
     fn select(prompt: &str, dir: &[&str], available: &[AgentKind]) -> (String, String) {
         let (_temp, _guard) = isolated();
-        select_agent_from(prompt, &opts(dir.first().copied(), false), available, &[])
+        select_agent_from(prompt, &opts(dir.first().copied(), false), available, &[], None)
     }
     fn all() -> [AgentKind; 6] {
         [AgentKind::Gemini, AgentKind::OpenCode, AgentKind::Kilo,
@@ -251,7 +293,7 @@ mod tests {
     }
     fn with_history(prompt: &str, h: &[(AgentKind, f64, usize)]) -> (String, String) {
         let (_temp, _guard) = isolated();
-        select_agent_from(prompt, &opts(None, false), &all(), h)
+        select_agent_from(prompt, &opts(None, false), &all(), h, None)
     }
 
     #[test]
@@ -299,7 +341,7 @@ research = 12
         .unwrap();
         let (kind, _) = select_agent_from(
             "Explain the authentication flow and compare the docs?",
-            &opts(None, false), &all(), &[],
+            &opts(None, false), &all(), &[], None,
         );
         assert_eq!(kind, "researcher");
     }
@@ -328,7 +370,7 @@ research = 12
     fn budget_mode_avoids_codex_for_complex_tasks() {
         let prompt = "Implement a retry-aware test suite across src/main.rs and src/cmd/run.rs. Add validation coverage.";
         let (_temp, _guard) = isolated();
-        let (kind, reason) = select_agent_from(prompt, &opts(Some("src"), true), &all(), &[]);
+        let (kind, reason) = select_agent_from(prompt, &opts(Some("src"), true), &all(), &[], None);
         assert_ne!(kind, AgentKind::Codex.as_str());
         assert!(reason.contains("budget"));
     }
@@ -337,7 +379,7 @@ research = 12
         let (_temp, _guard) = isolated();
         let (kind, reason) = select_agent_from(
             "rename src/types.rs field name",
-            &opts(Some("src"), true), &[AgentKind::Kilo, AgentKind::Codex], &[],
+            &opts(Some("src"), true), &[AgentKind::Kilo, AgentKind::Codex], &[], None,
         );
         assert_eq!(kind, AgentKind::Kilo.as_str());
         assert!(reason.contains("budget"));
@@ -348,7 +390,7 @@ research = 12
         let h = vec![(AgentKind::Codex, 0.50, 10)];
         let (kind, _) = select_agent_from(
             "add type annotation to field",
-            &opts(Some("src"), false), &[AgentKind::OpenCode, AgentKind::Codex], &h,
+            &opts(Some("src"), false), &[AgentKind::OpenCode, AgentKind::Codex], &h, None,
         );
         assert_eq!(kind, AgentKind::OpenCode.as_str());
     }
@@ -358,7 +400,7 @@ research = 12
         let h = vec![(AgentKind::Codex, 0.50, 10)];
         let (kind, _) = select_agent_from(
             "some random task", &opts(None, false),
-            &[AgentKind::Codex, AgentKind::Gemini], &h,
+            &[AgentKind::Codex, AgentKind::Gemini], &h, None,
         );
         assert_eq!(kind, AgentKind::Gemini.as_str());
     }
@@ -377,7 +419,7 @@ research = 12
         let (_temp, _guard) = isolated();
         let h = vec![(AgentKind::Gemini, 0.80, 10)];
         let (_, reason) = select_agent_from(
-            "research: what is MVP?", &opts(None, false), &all(), &h,
+            "research: what is MVP?", &opts(None, false), &all(), &h, None,
         );
         assert!(reason.contains("history:"));
         assert!(reason.contains("80% success"));

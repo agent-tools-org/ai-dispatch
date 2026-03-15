@@ -29,6 +29,7 @@ pub mod show;
 pub mod export;
 pub mod store;
 pub mod store_lock;
+pub mod team;
 pub mod usage;
 pub mod summary;
 pub mod upgrade;

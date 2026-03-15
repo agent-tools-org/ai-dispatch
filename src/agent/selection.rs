@@ -224,9 +224,10 @@ pub(crate) fn coding_fallback_for(agent: &AgentKind) -> Option<AgentKind> {
 mod tests {
     use super::select_agent_from;
     use crate::agent::RunOpts;
-    use crate::paths;
+    use crate::paths::{self, AidHomeGuard};
     use crate::types::AgentKind;
     use std::fs;
+    use tempfile::TempDir;
 
     fn opts(dir: Option<&str>, budget: bool) -> RunOpts {
         RunOpts {
@@ -234,9 +235,14 @@ mod tests {
             budget, read_only: false, context_files: vec![], session_id: None,
         }
     }
+    fn isolated() -> (TempDir, AidHomeGuard) {
+        let temp = TempDir::new().unwrap();
+        let guard = AidHomeGuard::set(temp.path());
+        std::fs::create_dir_all(paths::aid_dir()).ok();
+        (temp, guard)
+    }
     fn select(prompt: &str, dir: &[&str], available: &[AgentKind]) -> (String, String) {
-        let temp = tempfile::tempdir().unwrap();
-        let _guard = paths::AidHomeGuard::set(temp.path());
+        let (_temp, _guard) = isolated();
         select_agent_from(prompt, &opts(dir.first().copied(), false), available, &[])
     }
     fn all() -> [AgentKind; 6] {
@@ -244,8 +250,7 @@ mod tests {
          AgentKind::Cursor, AgentKind::Codex, AgentKind::Ob1]
     }
     fn with_history(prompt: &str, h: &[(AgentKind, f64, usize)]) -> (String, String) {
-        let temp = tempfile::tempdir().unwrap();
-        let _guard = paths::AidHomeGuard::set(temp.path());
+        let (_temp, _guard) = isolated();
         select_agent_from(prompt, &opts(None, false), &all(), h)
     }
 
@@ -278,8 +283,7 @@ mod tests {
 
     #[test]
     fn custom_agent_scores_are_considered() {
-        let temp = tempfile::tempdir().unwrap();
-        let _guard = paths::AidHomeGuard::set(temp.path());
+        let (_temp, _guard) = isolated();
         let agents_dir = paths::aid_dir().join("agents");
         fs::create_dir_all(&agents_dir).unwrap();
         fs::write(
@@ -323,12 +327,14 @@ research = 12
     #[test]
     fn budget_mode_avoids_codex_for_complex_tasks() {
         let prompt = "Implement a retry-aware test suite across src/main.rs and src/cmd/run.rs. Add validation coverage.";
+        let (_temp, _guard) = isolated();
         let (kind, reason) = select_agent_from(prompt, &opts(Some("src"), true), &all(), &[]);
         assert_ne!(kind, AgentKind::Codex.as_str());
         assert!(reason.contains("budget"));
     }
     #[test]
     fn budget_mode_prefers_kilo_for_simple_edits() {
+        let (_temp, _guard) = isolated();
         let (kind, reason) = select_agent_from(
             "rename src/types.rs field name",
             &opts(Some("src"), true), &[AgentKind::Kilo, AgentKind::Codex], &[],
@@ -338,6 +344,7 @@ research = 12
     }
     #[test]
     fn history_penalty_for_low_success_rate() {
+        let (_temp, _guard) = isolated();
         let h = vec![(AgentKind::Codex, 0.50, 10)];
         let (kind, _) = select_agent_from(
             "add type annotation to field",
@@ -347,6 +354,7 @@ research = 12
     }
     #[test]
     fn history_penalty_overrides_default_codex_selection() {
+        let (_temp, _guard) = isolated();
         let h = vec![(AgentKind::Codex, 0.50, 10)];
         let (kind, _) = select_agent_from(
             "some random task", &opts(None, false),
@@ -366,6 +374,7 @@ research = 12
     }
     #[test]
     fn history_appears_in_reason() {
+        let (_temp, _guard) = isolated();
         let h = vec![(AgentKind::Gemini, 0.80, 10)];
         let (_, reason) = select_agent_from(
             "research: what is MVP?", &opts(None, false), &all(), &h,

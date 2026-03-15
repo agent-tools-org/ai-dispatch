@@ -41,6 +41,14 @@ pub(crate) async fn prepare_retry(
     retry_args.retry = args.retry.saturating_sub(1);
     retry_args.background = false;
     retry_args.parent_task_id = Some(task_id.as_str().to_string());
+    // Reuse existing worktree instead of creating a duplicate
+    if let Some(ref wt) = task.worktree_path {
+        retry_args.worktree = None;
+        if std::path::Path::new(wt).is_dir() {
+            eprintln!("[aid] Retry reusing worktree: {wt}");
+            retry_args.dir = Some(wt.clone());
+        }
+    }
     Ok(Some(retry_args))
 }
 

@@ -108,6 +108,7 @@ fn task_json(store: &Arc<Store>, task_id: &str) -> Result<String> {
         "repo_path": task.repo_path,
         "output_path": task.output_path,
         "verify": task.verify,
+        "exit_code": task.exit_code,
         "verify_status": task.verify_status.as_str(),
         "read_only": task.read_only,
         "budget": task.budget,

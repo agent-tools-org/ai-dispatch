@@ -491,6 +491,9 @@ pub enum MemoryCommands {
         /// Show all memories across all projects
         #[arg(long)]
         all: bool,
+        /// Include usage stats in the output
+        #[arg(long)]
+        stats: bool,
         /// Project path (defaults to current git root)
         #[arg(long)]
         project: Option<String>,
@@ -512,6 +515,11 @@ pub enum MemoryCommands {
     },
     /// Delete a memory entry
     Forget {
+        /// Memory ID (e.g. m-a3f1)
+        id: String,
+    },
+    /// Show the version history for a memory chain
+    History {
         /// Memory ID (e.g. m-a3f1)
         id: String,
     },

@@ -13,7 +13,6 @@ mod context;
 mod cost;
 mod explore;
 mod hooks;
-mod memory;
 mod input_signal;
 mod notify;
 mod paths;
@@ -431,6 +430,9 @@ enum MemoryCommands {
         memory_type: String,
         /// Content to remember
         content: String,
+        /// Project path (defaults to current git root)
+        #[arg(long)]
+        project: Option<String>,
     },
     /// List memories (project-scoped by default)
     List {
@@ -440,11 +442,17 @@ enum MemoryCommands {
         /// Show all memories across all projects
         #[arg(long)]
         all: bool,
+        /// Project path (defaults to current git root)
+        #[arg(long)]
+        project: Option<String>,
     },
     /// Search memories by keyword
     Search {
         /// Search query
         query: String,
+        /// Project path (defaults to current git root)
+        #[arg(long)]
+        project: Option<String>,
     },
     /// Update a memory's content
     Update {
@@ -752,14 +760,15 @@ async fn main() -> Result<()> {
             MemoryCommands::Add {
                 memory_type,
                 content,
+                project,
             } => {
-                cmd::memory::add(&store, &memory_type, &content, None)?;
+                cmd::memory::add(&store, &memory_type, &content, project.as_deref())?;
             }
-            MemoryCommands::List { memory_type, all } => {
-                cmd::memory::list(&store, memory_type.as_deref(), None, all)?;
+            MemoryCommands::List { memory_type, all, project } => {
+                cmd::memory::list(&store, memory_type.as_deref(), project.as_deref(), all)?;
             }
-            MemoryCommands::Search { query } => {
-                cmd::memory::search(&store, &query, None)?;
+            MemoryCommands::Search { query, project } => {
+                cmd::memory::search(&store, &query, project.as_deref())?;
             }
             MemoryCommands::Update { id, content } => {
                 cmd::memory::update(&store, &id, &content)?;

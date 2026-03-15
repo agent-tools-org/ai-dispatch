@@ -4,7 +4,6 @@
 use anyhow::Result;
 use chrono::Local;
 use std::sync::Arc;
-use std::path::Path;
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::Child;
 use tokio::time::{timeout, Duration};
@@ -16,7 +15,6 @@ use crate::paths;
 use crate::rate_limit;
 use crate::store::Store;
 use crate::types::*;
-use crate::memory;
 
 /// Watch a child process, parse output, store events, return completion info
 pub async fn watch_streaming(
@@ -137,19 +135,6 @@ pub async fn watch_streaming(
     })?;
 
     info.status = status;
-    drop(log_file);
-    if let Err(err) = try_extract_memories(
-        store.as_ref(),
-        task_id,
-        Some(agent.kind().as_str()),
-        None,
-        log_path,
-        None,
-    )
-    .await
-    {
-        eprintln!("[aid] Memory extraction failed for task {}: {err}", task_id);
-    }
     Ok(info)
 }
 
@@ -211,48 +196,7 @@ pub async fn watch_buffered(
     let event = crate::agent::gemini::make_completion_event(task_id, &info);
     store.insert_event(&event)?;
 
-    if let Err(err) = try_extract_memories(
-        store.as_ref(),
-        task_id,
-        Some(agent.kind().as_str()),
-        None,
-        log_path,
-        output_path,
-    )
-    .await
-    {
-        eprintln!("[aid] Memory extraction failed for task {}: {err}", task_id);
-    }
-
     Ok(info)
-}
-
-async fn try_extract_memories(
-    store: &Store,
-    task_id: &TaskId,
-    agent_name: Option<&str>,
-    project_path: Option<&str>,
-    log_path: &Path,
-    output_path: Option<&Path>,
-) -> Result<()> {
-    let output = load_task_output(log_path, output_path).await?;
-    memory::extract_and_save_memories(
-        store,
-        &output,
-        task_id.as_str(),
-        agent_name,
-        project_path,
-    )?;
-    Ok(())
-}
-
-async fn load_task_output(log_path: &Path, output_path: Option<&Path>) -> Result<String> {
-    if let Some(path) = output_path {
-        if let Ok(content) = tokio::fs::read_to_string(path).await {
-            return Ok(content);
-        }
-    }
-    tokio::fs::read_to_string(log_path).await.map_err(Into::into)
 }
 
 /// Spawn a background task to capture stderr to a file

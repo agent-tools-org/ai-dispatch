@@ -24,13 +24,6 @@ pub(super) fn build_prompt_bundle(store: &Store, args: &RunArgs, agent_kind: &Ag
     let (edit_guard, milestone_instr) = templates::shared_system_fragments(&prompt);
     if let Some(guard) = edit_guard { effective_prompt = format!("{guard}{effective_prompt}"); }
     effective_prompt.push_str(milestone_instr);
-    let memory_instr = "
-
-To save knowledge for future tasks, write on its own line: [MEMORY: type] content
-Valid types: discovery, convention, lesson, fact
-Example: [MEMORY: discovery] The auth module uses bcrypt, not argon2
-";
-    effective_prompt.push_str(memory_instr);
     let mut effective_prompt = inject_skill(&effective_prompt, requested_skills)?;
 
     // Inject relevant memories from past tasks

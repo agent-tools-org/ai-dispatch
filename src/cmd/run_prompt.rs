@@ -12,6 +12,7 @@ use super::RunArgs;
 
 const VERIFY_RETRY_FEEDBACK: &str =
     "Verification failed. Please fix the compilation/test errors and try again.";
+const PROMPT_TOKEN_LIMIT: usize = 30_000;
 
 pub(super) struct PromptBundle { pub effective_prompt: String, pub context_files: Vec<String>, pub prompt_tokens: i64 }
 
@@ -82,6 +83,8 @@ pub(super) fn build_prompt_bundle(store: &Store, args: &RunArgs, agent_kind: &Ag
         }
     }
 
+    // Compact prompt if it exceeds token budget
+    let effective_prompt = maybe_compact_prompt(&effective_prompt, PROMPT_TOKEN_LIMIT);
     let prompt_tokens = templates::estimate_tokens(&effective_prompt) as i64;
     Ok(PromptBundle { effective_prompt, context_files, prompt_tokens })
 }
@@ -457,6 +460,40 @@ fn retry_target(task: &Task) -> (Option<String>, Option<String>) {
 fn format_duration(ms: i64) -> String {
     let secs = ms / 1000;
     if secs < 60 { format!("{secs}s") } else { format!("{}m {:02}s", secs / 60, secs % 60) }
+}
+
+fn maybe_compact_prompt(prompt: &str, max_tokens: usize) -> String {
+    let before = templates::estimate_tokens(prompt);
+    if before <= max_tokens {
+        return prompt.to_string();
+    }
+    let candidate = prompt
+        .split("\n\n")
+        .filter_map(|section| {
+            let trimmed = section.trim_start();
+            if trimmed.is_empty() || trimmed.starts_with("[Task]") {
+                return None;
+            }
+            if trimmed.starts_with('[') || trimmed.starts_with("---") {
+                Some((section, templates::estimate_tokens(section)))
+            } else {
+                None
+            }
+        })
+        .max_by_key(|(_, tokens)| *tokens);
+    let Some((section, section_tokens)) = candidate else {
+        return prompt.to_string();
+    };
+    let excess = before.saturating_sub(max_tokens);
+    let target_tokens = section_tokens.saturating_sub(excess);
+    let compacted = crate::compaction::compact_text(section, target_tokens);
+    if compacted == section {
+        return prompt.to_string();
+    }
+    let result = prompt.replacen(section, &compacted, 1);
+    let after = templates::estimate_tokens(&result);
+    eprintln!("[aid] Compacted prompt from ~{before} to ~{after} tokens");
+    result
 }
 
 #[cfg(test)]

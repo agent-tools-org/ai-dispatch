@@ -27,6 +27,7 @@ mod store;
 mod store_workgroups;
 mod team;
 mod templates;
+mod compaction;
 mod tui;
 mod types;
 mod usage;

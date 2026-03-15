@@ -353,6 +353,16 @@ Batch TOML format:
         #[command(subcommand)]
         action: StoreCommands,
     },
+    #[command(after_help = r#"Examples:
+  aid memory add discovery \"The auth module uses bcrypt not argon2\"
+  aid memory list --type convention
+  aid memory search \"auth\"
+  aid memory forget m-a3f1"#)]
+    /// Manage agent shared memory (discoveries, conventions, lessons)
+    Memory {
+        #[command(subcommand)]
+        action: MemoryCommands,
+    },
     /// Initialize default skills and templates
     Init,
     #[command(hide = true, name = "__run-task")]
@@ -395,6 +405,34 @@ enum StoreCommands {
     Install { name: String },
     /// Show agent TOML from the store (publisher/name)
     Show { name: String },
+}
+
+#[derive(Subcommand)]
+enum MemoryCommands {
+    /// Add a memory entry
+    Add {
+        /// Memory type: discovery, convention, lesson, fact
+        #[arg(name = "TYPE")]
+        memory_type: String,
+        /// Content to remember
+        content: String,
+    },
+    /// List memories
+    List {
+        /// Filter by type
+        #[arg(long = "type")]
+        memory_type: Option<String>,
+    },
+    /// Search memories by keyword
+    Search {
+        /// Search query
+        query: String,
+    },
+    /// Delete a memory entry
+    Forget {
+        /// Memory ID (e.g. m-a3f1)
+        id: String,
+    },
 }
 
 #[tokio::main]
@@ -669,6 +707,23 @@ async fn main() -> Result<()> {
             };
             run_store(action)?;
         }
+        Commands::Memory { action } => match action {
+            MemoryCommands::Add {
+                memory_type,
+                content,
+            } => {
+                cmd::memory::add(&store, &memory_type, &content, None)?;
+            }
+            MemoryCommands::List { memory_type } => {
+                cmd::memory::list(&store, memory_type.as_deref(), None)?;
+            }
+            MemoryCommands::Search { query } => {
+                cmd::memory::search(&store, &query, None)?;
+            }
+            MemoryCommands::Forget { id } => {
+                cmd::memory::forget(&store, &id)?;
+            }
+        },
         Commands::Init => cmd::init::run()?,
         Commands::InternalRunTask { task_id } => {
             background::run_task(store, &task_id).await?;

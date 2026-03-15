@@ -38,7 +38,7 @@ fn deserialize_verify<'de, D: serde::Deserializer<'de>>(
 pub struct BatchConfig {
     #[serde(default)]
     pub defaults: BatchDefaults,
-    #[serde(rename = "task")]
+    #[serde(alias = "task", alias = "tasks")]
     pub tasks: Vec<BatchTask>,
 }
 

@@ -243,3 +243,13 @@ fn accepts_valid_fallback_agent() {
     ));
     assert!(parse_batch_file(file.path()).is_ok());
 }
+
+#[test]
+fn accepts_tasks_plural_alias() {
+    let file = write_temp(concat!(
+        "[[tasks]]\nagent = \"gemini\"\nprompt = \"research\"\n",
+        "[[tasks]]\nagent = \"codex\"\nprompt = \"implement\""
+    ));
+    let cfg = parse_batch_file(file.path()).unwrap();
+    assert_eq!(cfg.tasks.len(), 2);
+}

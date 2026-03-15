@@ -12,6 +12,7 @@ mod config;
 mod context;
 mod cost;
 mod explore;
+mod evermemos;
 mod hooks;
 mod input_signal;
 mod notify;

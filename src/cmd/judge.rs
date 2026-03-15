@@ -27,7 +27,7 @@ pub async fn judge_task(store: &Store, task: &Task, judge_agent: &str, original_
     }
     parse_judge_response(&String::from_utf8_lossy(&output.stdout))
 }
-fn gather_diff(task: &Task) -> Option<String> {
+pub(crate) fn gather_diff(task: &Task) -> Option<String> {
     let dir = task.worktree_path.as_deref().or(task.repo_path.as_deref()).unwrap_or(".");
     if !Path::new(dir).exists() {
         return None;
@@ -43,7 +43,7 @@ fn gather_diff(task: &Task) -> Option<String> {
     let diff = String::from_utf8_lossy(&output.stdout).into_owned();
     (!diff.trim().is_empty()).then_some(diff)
 }
-fn read_output(task: &Task) -> Option<String> {
+pub(crate) fn read_output(task: &Task) -> Option<String> {
     let Some(output_path) = task.output_path.as_deref() else {
         return None;
     };

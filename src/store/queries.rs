@@ -10,6 +10,31 @@ use super::schema::{parse_dt, row_to_event, row_to_memory, row_to_task};
 use super::Store;
 use crate::types::*;
 
+const SIMILAR_TASK_STOPWORDS: &[&str] = &[
+    "the", "and", "for", "with", "from", "that", "this", "have", "your", "task", "code",
+    "into", "using", "while", "when", "then", "which",
+];
+
+fn extract_similar_keywords(prompt: &str) -> Vec<String> {
+    let mut candidates: Vec<(String, usize)> = prompt
+        .split_whitespace()
+        .filter_map(|word| {
+            let cleaned = word.trim_matches(|c: char| !c.is_alphanumeric());
+            if cleaned.len() < 4 {
+                return None;
+            }
+            let lower = cleaned.to_lowercase();
+            if SIMILAR_TASK_STOPWORDS.contains(&lower.as_str()) {
+                return None;
+            }
+            Some((lower, cleaned.len()))
+        })
+        .collect();
+    candidates.sort_unstable_by(|a, b| b.1.cmp(&a.1));
+    candidates.truncate(3);
+    candidates.into_iter().map(|(word, _)| word).collect()
+}
+
 impl Store {
     pub fn get_workgroup(&self, id: &str) -> Result<Option<Workgroup>> {
         let conn = self.db();
@@ -232,6 +257,51 @@ impl Store {
         rows.map(|row| Ok(row?)).collect()
     }
 
+    pub fn find_similar_tasks(
+        &self,
+        prompt: &str,
+        limit: usize,
+    ) -> Result<Vec<(String, AgentKind, TaskStatus)>> {
+        let keywords = extract_similar_keywords(prompt);
+        if limit == 0 || keywords.is_empty() {
+            return Ok(vec![]);
+        }
+        let conn = self.db();
+        let mut stmt = conn.prepare(
+            "SELECT id, agent, status, prompt FROM tasks
+             WHERE status IN ('done', 'failed')
+             ORDER BY created_at DESC
+             LIMIT 200",
+        )?;
+        let rows = stmt.query_map([], |row| {
+            let id: String = row.get(0)?;
+            let agent_str: String = row.get(1)?;
+            let status_str: String = row.get(2)?;
+            let prompt_text: String = row.get(3)?;
+            let agent = AgentKind::parse_str(&agent_str).unwrap_or(AgentKind::Custom);
+            let status = TaskStatus::parse_str(&status_str).unwrap_or(TaskStatus::Failed);
+            Ok((id, agent, status, prompt_text))
+        })?;
+        let mut scored = Vec::new();
+        for row in rows {
+            let (id, agent, status, task_prompt) = row?;
+            let lower_prompt = task_prompt.to_lowercase();
+            let score: usize = keywords
+                .iter()
+                .map(|keyword| lower_prompt.matches(keyword).count())
+                .sum();
+            if score > 0 {
+                scored.push((score, id, agent, status));
+            }
+        }
+        scored.sort_unstable_by(|a, b| b.0.cmp(&a.0));
+        scored.truncate(limit);
+        Ok(scored
+            .into_iter()
+            .map(|(_, id, agent, status)| (id, agent, status))
+            .collect())
+    }
+
     pub fn list_memories(
         &self,
         project_path: Option<&str>,
@@ -360,4 +430,76 @@ fn row_to_workgroup(row: &rusqlite::Row) -> rusqlite::Result<Result<Workgroup>> 
         created_at: parse_dt(&row.get::<_, String>(3)?),
         updated_at: parse_dt(&row.get::<_, String>(4)?),
     }))
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::store::Store;
+    use crate::types::{AgentKind, TaskStatus};
+    use rusqlite::params;
+
+    fn insert_task(
+        store: &Store,
+        id: &str,
+        agent: AgentKind,
+        status: TaskStatus,
+        prompt: &str,
+    ) {
+        let conn = store.db();
+        conn.execute(
+            "INSERT INTO tasks (id, agent, prompt, status, created_at)
+             VALUES (?1, ?2, ?3, ?4, ?5)",
+            params![id, agent.as_str(), prompt, status.as_str(), "2026-03-15T00:00:00Z"],
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn finds_matching_tasks_with_keyword_scores() {
+        let store = Store::open_memory().unwrap();
+        insert_task(
+            &store,
+            "t-routing",
+            AgentKind::Codex,
+            TaskStatus::Done,
+            "Implement cross-session hints for agent selection",
+        );
+        insert_task(
+            &store,
+            "t-gemini",
+            AgentKind::Gemini,
+            TaskStatus::Done,
+            "Document routing hints and selection strategy",
+        );
+        insert_task(
+            &store,
+            "t-cursor",
+            AgentKind::Cursor,
+            TaskStatus::Failed,
+            "Cleanup the build pipeline wiring",
+        );
+
+        let results = store
+            .find_similar_tasks("Add routing hints for agent selection", 5)
+            .unwrap();
+        assert_eq!(results.len(), 2);
+        assert_eq!(results[0].0, "t-gemini");
+        assert_eq!(results[0].1, AgentKind::Gemini);
+        assert_eq!(results[1].0, "t-routing");
+        assert_eq!(results[1].1, AgentKind::Codex);
+    }
+
+    #[test]
+    fn limits_results_to_positive_scores() {
+        let store = Store::open_memory().unwrap();
+        insert_task(
+            &store,
+            "t-empty",
+            AgentKind::Kilo,
+            TaskStatus::Done,
+            "Refactor the logging toolchain",
+        );
+        let results = store.find_similar_tasks("Short", 3).unwrap();
+        assert!(results.is_empty());
+    }
 }

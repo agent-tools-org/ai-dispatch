@@ -13,6 +13,11 @@ use crate::types::{Memory, MemoryId, MemoryType};
 
 pub fn add(store: &Store, memory_type: &str, content: &str, project_path: Option<&str>) -> Result<()> {
     let parsed_type = parse_memory_type(memory_type)?;
+    if !is_surprising(content, parsed_type.as_str()) {
+        let preview: String = content.chars().take(50).collect();
+        eprintln!("[aid] Skipping trivial memory: {preview}...");
+        return Ok(());
+    }
     let type_label = parsed_type.label();
     let project = match project_path {
         Some(path) => Some(path.to_string()),
@@ -198,3 +203,94 @@ fn format_age(created_at: &DateTime<Local>) -> String {
         format!("{}d", duration.num_days())
     }
 }
+
+pub fn is_surprising(content: &str, memory_type: &str) -> bool {
+    let trimmed = content.trim();
+    if trimmed.chars().count() < 20 {
+        return false;
+    }
+    let normalized = trimmed.to_lowercase();
+    if matches_common_boilerplate(&normalized) {
+        return false;
+    }
+    if memory_type.eq_ignore_ascii_case("discovery") && looks_like_signature(trimmed) {
+        return false;
+    }
+    if contains_relevant_keyword(&normalized) {
+        return true;
+    }
+    true
+}
+
+fn matches_common_boilerplate(normalized: &str) -> bool {
+    const PREFIXES: [&str; 6] = [
+        "the code uses ",
+        "this code uses ",
+        "the project uses ",
+        "this project uses ",
+        "we use ",
+        "it uses ",
+    ];
+    PREFIXES.iter().any(|prefix| normalized.starts_with(prefix))
+}
+
+fn contains_relevant_keyword(normalized: &str) -> bool {
+    const KEYWORDS: [&str; 20] = [
+        "bug",
+        "workaround",
+        "gotcha",
+        "unexpected",
+        "non-obvious",
+        "non obvious",
+        "performance",
+        "latency",
+        "throughput",
+        "rate limit",
+        "retry",
+        "error",
+        "leak",
+        "throttl",
+        "api ",
+        "api.",
+        "endpoint",
+        "external api",
+        "third-party",
+        "external service",
+    ];
+    KEYWORDS.iter().any(|keyword| normalized.contains(keyword))
+}
+
+fn looks_like_signature(text: &str) -> bool {
+    let trimmed = text.trim();
+    if trimmed.contains('\n') {
+        return false;
+    }
+    let lower = trimmed.to_lowercase();
+    const SIG_PREFIXES: [&str; 8] = [
+        "fn ",
+        "pub fn ",
+        "struct ",
+        "pub struct ",
+        "enum ",
+        "pub enum ",
+        "impl ",
+        "trait ",
+    ];
+    if SIG_PREFIXES.iter().any(|prefix| lower.starts_with(prefix)) {
+        return true;
+    }
+    if trimmed.contains("::") && trimmed.split_whitespace().count() <= 3 {
+        return true;
+    }
+    let is_single_word = trimmed.split_whitespace().count() == 1;
+    if is_single_word && trimmed.chars().all(|c| {
+        c.is_ascii_alphanumeric() || matches!(c, ':' | '_' | '<' | '>' | '-' | '.' | ',')
+    }) {
+        return true;
+    }
+    false
+}
+
+#[cfg(test)]
+#[path = "memory_tests.rs"]
+mod tests;

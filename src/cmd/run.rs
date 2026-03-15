@@ -5,7 +5,9 @@ use anyhow::{Context, Result};
 use chrono::Local;
 use std::path::Path;
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::process::Command;
+use tokio::time::sleep;
 use crate::agent::{self, RunOpts};
 use crate::background::{self, BackgroundRunSpec};
 use crate::cmd::{config as cmd_config, judge, retry_logic, show};
@@ -16,6 +18,7 @@ use crate::rate_limit;
 use crate::session;
 use crate::store::Store;
 use crate::types::*;
+use crate::team;
 use crate::usage;
 #[path = "run_prompt.rs"]
 mod run_prompt;
@@ -49,12 +52,17 @@ pub struct RunArgs {
     pub cascade: Vec<String>,
     pub read_only: bool,
     pub budget: bool,
+    pub best_of: Option<usize>,
     pub session_id: Option<String>,
     pub team: Option<String>,
     pub context_from: Vec<String>,
     pub judge_retry: bool,
 }
 pub async fn run(store: Arc<Store>, args: RunArgs) -> Result<TaskId> {
+    if let Some(n) = args.best_of {
+        return Box::pin(run_best_of(store, args, n)).await;
+    }
+
     let (agent_kind, custom_agent_name) = if let Some(kind) = AgentKind::parse_str(&args.agent_name) {
         (kind, None)
     } else if agent::registry::custom_agent_exists(&args.agent_name) {
@@ -416,6 +424,155 @@ pub async fn run(store: Arc<Store>, args: RunArgs) -> Result<TaskId> {
     }
     Ok(task_id)
 }
+
+struct BestOfDispatch {
+    agent_hint: String,
+    task_id: TaskId,
+}
+
+#[derive(Clone)]
+struct CandidateResult {
+    task_id: TaskId,
+    agent_label: String,
+    status: TaskStatus,
+    diff_line_count: usize,
+}
+
+impl CandidateResult {
+    fn from_task(task: Task) -> Self {
+        let agent_label = task
+            .custom_agent_name
+            .clone()
+            .unwrap_or_else(|| task.agent.as_str().to_string());
+        let diff_line_count = if task.status == TaskStatus::Done {
+            judge::gather_diff(&task)
+                .or_else(|| judge::read_output(&task))
+                .map(|text| text.lines().count())
+                .unwrap_or(0)
+        } else {
+            0
+        };
+        CandidateResult {
+            task_id: task.id.clone(),
+            agent_label,
+            status: task.status,
+            diff_line_count,
+        }
+    }
+}
+
+fn pick_best_result(results: &[CandidateResult]) -> Option<&CandidateResult> {
+    let mut successes: Vec<&CandidateResult> = results
+        .iter()
+        .filter(|candidate| candidate.status == TaskStatus::Done)
+        .collect();
+    successes.sort_by(|a, b| b.diff_line_count.cmp(&a.diff_line_count));
+    successes.first().copied()
+}
+
+fn validate_best_of_count(n: usize) -> Result<()> {
+    if (2..=5).contains(&n) {
+        Ok(())
+    } else {
+        anyhow::bail!("--best-of must be between 2 and 5");
+    }
+}
+
+async fn run_best_of(store: Arc<Store>, args: RunArgs, n: usize) -> Result<TaskId> {
+    validate_best_of_count(n)?;
+    let team_config = args.team.as_deref().and_then(team::resolve_team);
+    let selection_opts = RunOpts {
+        dir: args.dir.clone(),
+        output: args.output.clone(),
+        model: args.model.clone(),
+        budget: true,
+        read_only: args.read_only,
+        context_files: Vec::new(),
+        session_id: args.session_id.clone(),
+    };
+    let agents = agent::selection::budget_ranked_agents(
+        &args.prompt,
+        &selection_opts,
+        &store,
+        team_config.as_ref(),
+    );
+    if agents.is_empty() {
+        anyhow::bail!("best-of-{n}: no budget agents available");
+    }
+    let mut plan: Vec<AgentKind> = agents.into_iter().take(n).collect();
+    while plan.len() < n {
+        plan.push(plan[0]);
+    }
+    let mut dispatches = Vec::new();
+    for kind in plan {
+        let agent_label = kind.as_str().to_string();
+        let mut child_args = args.clone();
+        child_args.agent_name = agent_label.clone();
+        child_args.background = true;
+        child_args.judge = None;
+        child_args.announce = false;
+        child_args.best_of = None;
+        let store = store.clone();
+        match run(store, child_args).await {
+            Ok(task_id) => dispatches.push(BestOfDispatch {
+                agent_hint: agent_label,
+                task_id,
+            }),
+            Err(err) => {
+                eprintln!("[aid] best-of-{n}: dispatch to {agent_label} failed: {err}");
+            }
+        }
+    }
+    if dispatches.is_empty() {
+        anyhow::bail!("best-of-{n}: all dispatch attempts failed");
+    }
+    let mut pending = dispatches;
+    let mut completed = Vec::new();
+    while !pending.is_empty() {
+        let mut done = Vec::new();
+        for (idx, dispatch) in pending.iter().enumerate() {
+            if let Some(task) = store.get_task(dispatch.task_id.as_str())? {
+                if task.status.is_terminal() {
+                    done.push(idx);
+                    completed.push(CandidateResult::from_task(task));
+                }
+            } else {
+                eprintln!(
+                    "[aid] best-of-{n}: task {} (agent {}) missing from store",
+                    dispatch.task_id, dispatch.agent_hint
+                );
+                done.push(idx);
+            }
+        }
+        for idx in done.into_iter().rev() {
+            pending.remove(idx);
+        }
+        if !pending.is_empty() {
+            sleep(Duration::from_secs(2)).await;
+        }
+    }
+    let best = pick_best_result(&completed)
+        .ok_or_else(|| anyhow::anyhow!("best-of-{n}: no successful tasks"))?;
+    let others = completed
+        .iter()
+        .filter(|candidate| candidate.task_id != best.task_id)
+        .map(|candidate| format!("{} ({})", candidate.task_id, candidate.agent_label))
+        .collect::<Vec<_>>()
+        .join(", ");
+    if others.is_empty() {
+        println!(
+            "[aid] best-of-{n}: picked {} ({})",
+            best.task_id, best.agent_label
+        );
+    } else {
+        println!(
+            "[aid] best-of-{n}: picked {} ({}) over {}",
+            best.task_id, best.agent_label, others
+        );
+    }
+    Ok(best.task_id.clone())
+}
+
 fn maybe_flag_empty_worktree_diff(store: &Store, task_id: &TaskId, task: &Task) {
     if task.status != TaskStatus::Done || task.verify_status != VerifyStatus::Skipped {
         return;
@@ -515,6 +672,50 @@ mod tests {
     fn take_next_cascade_agent_returns_none_when_empty() {
         let args = RunArgs { cascade: vec![], ..Default::default() };
         assert!(take_next_cascade_agent(&args).is_none());
+    }
+
+    #[test]
+    fn pick_best_result_prefers_longest_diff() {
+        let winner = CandidateResult {
+            task_id: TaskId::generate(),
+            agent_label: "kilo".to_string(),
+            status: TaskStatus::Done,
+            diff_line_count: 12,
+        };
+        let runner = CandidateResult {
+            task_id: TaskId::generate(),
+            agent_label: "cursor".to_string(),
+            status: TaskStatus::Done,
+            diff_line_count: 3,
+        };
+        let failed = CandidateResult {
+            task_id: TaskId::generate(),
+            agent_label: "gemini".to_string(),
+            status: TaskStatus::Failed,
+            diff_line_count: 0,
+        };
+        let results = vec![winner.clone(), runner, failed];
+        let best = pick_best_result(&results).unwrap();
+        assert_eq!(best.task_id, winner.task_id);
+    }
+
+    #[test]
+    fn pick_best_result_none_when_no_done() {
+        let failed = CandidateResult {
+            task_id: TaskId::generate(),
+            agent_label: "opencode".to_string(),
+            status: TaskStatus::Failed,
+            diff_line_count: 0,
+        };
+        assert!(pick_best_result(&[failed]).is_none());
+    }
+
+    #[test]
+    fn best_of_count_validation() {
+        assert!(validate_best_of_count(2).is_ok());
+        assert!(validate_best_of_count(5).is_ok());
+        assert!(validate_best_of_count(1).is_err());
+        assert!(validate_best_of_count(0).is_err());
     }
 }
 

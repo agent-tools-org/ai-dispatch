@@ -116,6 +116,7 @@ fn task_to_run_args(task: &batch::BatchTask, background: bool, store: &Arc<Store
         cascade: task.fallback.as_deref().map(|f| vec![f.to_string()]).unwrap_or_default(),
         read_only: task.read_only,
         budget: task.budget,
+        best_of: task.best_of,
         team: task.team.clone(),
         context_from: task.context_from.clone().unwrap_or_default(),
         ..Default::default()
@@ -333,8 +334,10 @@ mod tests {
             model: None,
             worktree: None,
             group: None,
-            verify: None,
+            judge: None,
+            best_of: None,
             max_duration_mins: None,
+
             context: None,
             skills: None,
             hooks: None,

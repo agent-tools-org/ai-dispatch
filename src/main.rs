@@ -84,6 +84,7 @@ async fn main() -> Result<()> {
             hook,
             read_only,
             judge,
+            best_of,
         } => {
             let config = config::load_config().unwrap_or_default();
             let budget = budget || config.selection.budget_mode;
@@ -153,6 +154,7 @@ async fn main() -> Result<()> {
                     read_only,
                     budget,
                     judge,
+                    best_of,
                     team: team_flag,
                     context_from,
                     ..Default::default()

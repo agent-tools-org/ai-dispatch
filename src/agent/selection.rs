@@ -6,7 +6,7 @@ use super::classifier::{self, Complexity, TaskCategory};
 use super::{detect_agents, RunOpts};
 use crate::rate_limit;
 use crate::store::Store;
-use crate::types::AgentKind;
+use crate::types::{AgentKind, TaskStatus};
 use crate::agent::custom::CustomAgentConfig;
 use crate::agent::registry::load_custom_agents;
 use crate::team::TeamConfig;
@@ -115,6 +115,112 @@ fn custom_command_installed(command: &str) -> bool {
         .unwrap_or(false)
 }
 
+const BUILTIN_AGENTS: &[AgentKind] = &[
+    AgentKind::Gemini,
+    AgentKind::OpenCode,
+    AgentKind::Kilo,
+    AgentKind::Cursor,
+    AgentKind::Codex,
+    AgentKind::Codebuff,
+];
+
+#[derive(Clone)]
+struct Candidate {
+    kind: AgentKind,
+    quality: i32,
+    efficiency: f64,
+    is_default: bool,
+    priority: i32,
+}
+
+struct CandidateContext<'a> {
+    profile: &'a classifier::TaskProfile,
+    team: Option<&'a TeamConfig>,
+    history_map: &'a HashMap<AgentKind, (f64, usize)>,
+    avg_cost_map: &'a HashMap<AgentKind, f64>,
+    team_default: Option<AgentKind>,
+}
+
+fn score_for(ctx: &CandidateContext<'_>, kind: AgentKind) -> i32 {
+    let mut s = if let Some(tc) = ctx.team {
+        team_override_score(tc, kind.as_str(), ctx.profile.category)
+            .unwrap_or_else(|| base_score(kind, ctx.profile.category))
+    } else {
+        base_score(kind, ctx.profile.category)
+    };
+    if rate_limit::is_rate_limited(&kind) {
+        s -= 10;
+    }
+    if let Some((rate, count)) = ctx.history_map.get(&kind) {
+        if *count >= 5 {
+            let bonus = ((*rate - 0.75) * 16.0).round() as i32;
+            let bonus = bonus.clamp(-5, 4);
+            s += bonus;
+        }
+    }
+    if matches!(ctx.profile.complexity, Complexity::High)
+        && matches!(kind, AgentKind::Codex | AgentKind::Cursor)
+    {
+        s += 2;
+    }
+    // Boost preferred agents from team (soft preference, not hard filter)
+    if let Some(tc) = ctx.team {
+        if tc
+            .preferred_agents
+            .iter()
+            .any(|a| a.eq_ignore_ascii_case(kind.as_str()))
+        {
+            s += 3;
+        }
+    }
+    s
+}
+
+fn candidate_for(kind: AgentKind, ctx: &CandidateContext<'_>) -> Candidate {
+    let quality = score_for(ctx, kind);
+    let avg_cost = ctx.avg_cost_map.get(&kind).copied().unwrap_or(0.0);
+    Candidate {
+        kind,
+        quality,
+        efficiency: cost_efficiency(quality as f64, avg_cost),
+        is_default: ctx.team_default == Some(kind),
+        priority: priority(kind),
+    }
+}
+
+fn compare_candidates(a: &Candidate, b: &Candidate, budget: bool) -> Ordering {
+    let primary = if budget {
+        a.efficiency.partial_cmp(&b.efficiency).unwrap_or(Ordering::Equal)
+    } else {
+        a.quality.cmp(&b.quality)
+    };
+    let mut ord = primary;
+    if ord == Ordering::Equal {
+        ord = if budget {
+            a.quality.cmp(&b.quality)
+        } else {
+            a.efficiency
+                .partial_cmp(&b.efficiency)
+                .unwrap_or(Ordering::Equal)
+        };
+    }
+    if ord == Ordering::Equal {
+        ord = a.is_default.cmp(&b.is_default);
+    }
+    if ord == Ordering::Equal {
+        ord = a.priority.cmp(&b.priority);
+    }
+    ord
+}
+
+fn pick_best_candidate(agents: &[AgentKind], ctx: &CandidateContext<'_>, budget: bool) -> Candidate {
+    agents
+        .iter()
+        .map(|&kind| candidate_for(kind, ctx))
+        .max_by(|a, b| compare_candidates(a, b, budget))
+        .unwrap_or_else(|| candidate_for(AgentKind::Codex, ctx))
+}
+
 pub(crate) fn select_agent_with_reason(
     prompt: &str, opts: &RunOpts, store: &Store,
     team: Option<&TeamConfig>,
@@ -145,91 +251,20 @@ fn select_agent_from(
         .unwrap_or_default()
         .into_iter()
         .collect();
-    let all_agents = [
-        AgentKind::Gemini, AgentKind::OpenCode, AgentKind::Kilo,
-        AgentKind::Cursor, AgentKind::Codex,
-    ];
     let team_default = team.and_then(|t| t.default_agent.as_deref())
         .and_then(AgentKind::parse_str);
-    let score_for = |kind: AgentKind| -> i32 {
-        let mut s = if let Some(tc) = &team {
-            team_override_score(tc, kind.as_str(), profile.category)
-                .unwrap_or_else(|| base_score(kind, profile.category))
-        } else {
-            base_score(kind, profile.category)
-        };
-        if rate_limit::is_rate_limited(&kind) { s -= 10; }
-        if let Some((rate, count)) = history_map.get(&kind) {
-            if *count >= 5 {
-                let bonus = ((*rate - 0.75) * 16.0).round() as i32;
-                let bonus = bonus.clamp(-5, 4);
-                s += bonus;
-            }
-        }
-        if matches!(profile.complexity, Complexity::High)
-            && matches!(kind, AgentKind::Codex | AgentKind::Cursor)
-        { s += 2; }
-        // Boost preferred agents from team (soft preference, not hard filter)
-        if let Some(tc) = &team {
-            if tc.preferred_agents.iter().any(|a| a.eq_ignore_ascii_case(kind.as_str())) {
-                s += 3;
-            }
-        }
-        s
+    let ctx = CandidateContext {
+        profile: &profile,
+        team,
+        history_map: &history_map,
+        avg_cost_map: &avg_cost_map,
+        team_default,
     };
-    #[derive(Clone, Copy)]
-    struct Candidate {
-        kind: AgentKind,
-        quality: i32,
-        efficiency: f64,
-        is_default: bool,
-        priority: i32,
-    }
-    let candidate_for = |kind: AgentKind| {
-        let quality = score_for(kind);
-        let avg_cost = avg_cost_map.get(&kind).copied().unwrap_or(0.0);
-        Candidate {
-            kind,
-            quality,
-            efficiency: cost_efficiency(quality as f64, avg_cost),
-            is_default: team_default == Some(kind),
-            priority: priority(kind),
-        }
-    };
-    let compare_candidates = |a: &Candidate, b: &Candidate| -> Ordering {
-        let primary = if budget {
-            a.efficiency.partial_cmp(&b.efficiency).unwrap_or(Ordering::Equal)
-        } else {
-            a.quality.cmp(&b.quality)
-        };
-        let mut ord = primary;
-        if ord == Ordering::Equal {
-            ord = if budget {
-                a.quality.cmp(&b.quality)
-            } else {
-                a.efficiency.partial_cmp(&b.efficiency).unwrap_or(Ordering::Equal)
-            };
-        }
-        if ord == Ordering::Equal {
-            ord = a.is_default.cmp(&b.is_default);
-        }
-        if ord == Ordering::Equal {
-            ord = a.priority.cmp(&b.priority);
-        }
-        ord
-    };
-    let pick_best = |agents: &[AgentKind]| -> Candidate {
-        agents
-            .iter()
-            .map(|&kind| candidate_for(kind))
-            .max_by(|a, b| compare_candidates(a, b))
-            .unwrap_or_else(|| candidate_for(AgentKind::Codex))
-    };
-    let primary_candidate = pick_best(&all_agents);
+    let primary_candidate = pick_best_candidate(BUILTIN_AGENTS, &ctx, budget);
     let available_candidate = if available.is_empty() {
-        pick_best(&all_agents)
+        pick_best_candidate(BUILTIN_AGENTS, &ctx, budget)
     } else {
-        pick_best(available)
+        pick_best_candidate(available, &ctx, budget)
     };
     let mut selected_name = available_candidate.kind.as_str().to_string();
     let mut selected_score = available_candidate.quality;
@@ -298,7 +333,67 @@ fn select_agent_from(
             }
         }
     }
+    if let Ok(similar_tasks) = store.find_similar_tasks(prompt, 5) {
+        let mut stats: HashMap<AgentKind, (usize, usize)> = HashMap::new();
+        for (_, agent, status) in similar_tasks {
+            let entry = stats.entry(agent).or_insert((0, 0));
+            entry.1 += 1;
+            if matches!(status, TaskStatus::Done | TaskStatus::Merged) {
+                entry.0 += 1;
+            }
+        }
+        if let Some((&agent, &(successes, total))) = stats.iter().max_by(|a, b| {
+            a.1 .0.cmp(&b.1 .0).then(a.1 .1.cmp(&b.1 .1))
+        }) {
+            if successes >= 3 {
+                reason.push_str(&format!(
+                    "; similar tasks: {} {}/{} success",
+                    agent.as_str(),
+                    successes,
+                    total,
+                ));
+            }
+        }
+    }
     (selected_name, reason)
+}
+
+pub(crate) fn budget_ranked_agents(
+    prompt: &str,
+    _opts: &RunOpts,
+    store: &Store,
+    team: Option<&TeamConfig>,
+) -> Vec<AgentKind> {
+    let normalized = prompt.trim().to_lowercase();
+    let prompt_len = prompt.chars().count();
+    let file_count = classifier::count_file_mentions(&normalized);
+    let profile = classifier::classify(prompt, file_count, prompt_len);
+    let history_map: HashMap<AgentKind, (f64, usize)> = store
+        .agent_success_rates()
+        .unwrap_or_default()
+        .into_iter()
+        .map(|(kind, rate, count)| (kind, (rate, count)))
+        .collect();
+    let avg_cost_map: HashMap<AgentKind, f64> = store
+        .agent_avg_costs()
+        .unwrap_or_default()
+        .into_iter()
+        .collect();
+    let team_default = team.and_then(|t| t.default_agent.as_deref())
+        .and_then(AgentKind::parse_str);
+    let ctx = CandidateContext {
+        profile: &profile,
+        team,
+        history_map: &history_map,
+        avg_cost_map: &avg_cost_map,
+        team_default,
+    };
+    let mut candidates: Vec<Candidate> = BUILTIN_AGENTS
+        .iter()
+        .map(|&kind| candidate_for(kind, &ctx))
+        .collect();
+    candidates.sort_by(|a, b| compare_candidates(a, b, true).reverse());
+    candidates.into_iter().map(|c| c.kind).collect()
 }
 
 pub(crate) fn recommend_model(
@@ -377,6 +472,21 @@ mod tests {
         conn.execute(
             "INSERT INTO tasks (id, agent, prompt, status, created_at, cost_usd) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
             params![id, agent.as_str(), "history", status, "2026-03-15T00:00:00Z", cost],
+        )
+        .unwrap();
+    }
+    fn insert_task_with_prompt(store: &Store, id: &str, agent: AgentKind, status: &str, prompt: &str) {
+        let conn = store.db();
+        conn.execute(
+            "INSERT INTO tasks (id, agent, prompt, status, created_at, cost_usd) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            params![
+                id,
+                agent.as_str(),
+                prompt,
+                status,
+                "2026-03-15T00:00:00Z",
+                Option::<f64>::None
+            ],
         )
         .unwrap();
     }
@@ -599,11 +709,46 @@ research = 6
         let (_temp, _guard) = isolated();
         let store = Store::open_memory().unwrap();
         seed_history(&store, AgentKind::Gemini, 8, 2);
-        let (_, reason) = select_agent_from(
-            "research: what is MVP?", &opts(None, false), &all(), &store, None,
-        );
-        assert!(reason.contains("history:"));
+        let (_, reason) = select_agent_from("research: what is MVP?", &opts(None, false), &all(), &store, None);
         assert!(reason.contains("80% success"));
+    }
+    #[test]
+    fn similar_tasks_hint_appended() {
+        let (_temp, _guard) = isolated();
+        let store = Store::open_memory().unwrap();
+        let prompt = "Add routing hints for agent selection";
+        for i in 0..3 {
+            insert_task_with_prompt(
+                &store,
+                &format!("hint-done-{i}"),
+                AgentKind::Codex,
+                "done",
+                "Implement routing hints for agent selection",
+            );
+        }
+        insert_task_with_prompt(
+            &store,
+            "hint-fail",
+            AgentKind::Codex,
+            "failed",
+            "Implement routing hints for agent selection",
+        );
+        let (_, reason) = select_agent_from(prompt, &opts(None, false), &all(), &store, None);
+        assert!(reason.contains("similar tasks"));
+        assert!(reason.contains("codex 3/4 success"));
+    }
+    #[test]
+    fn similar_tasks_hint_absent_without_history() {
+        let (_temp, _guard) = isolated();
+        let store = Store::open_memory().unwrap();
+        let (_, reason) = select_agent_from(
+            "Add routing hints for agent selection",
+            &opts(None, false),
+            &all(),
+            &store,
+            None,
+        );
+        assert!(!reason.contains("similar tasks"));
     }
     #[test]
     fn cost_efficiency_calculates_ratio() {

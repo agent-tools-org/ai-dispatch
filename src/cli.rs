@@ -86,6 +86,9 @@ pub enum Commands {
         /// Run in read-only mode (no file writes)
         #[arg(long)]
         read_only: bool,
+        /// Dispatch to N budget-friendly agents and judge the best output
+        #[arg(long, value_name = "N")]
+        best_of: Option<usize>,
     },
     #[command(after_help = r#"Examples:
   aid batch tasks.toml --parallel
@@ -545,4 +548,27 @@ pub enum FindingCommands {
         /// Workgroup ID
         group: String,
     },
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Commands, Cli};
+    use clap::Parser;
+
+    #[test]
+    fn run_best_of_flag_parses() {
+        let cli = Cli::try_parse_from([
+            "aid",
+            "run",
+            "auto",
+            "add tests",
+            "--best-of",
+            "3",
+        ])
+        .unwrap();
+        match cli.command {
+            Commands::Run { best_of, .. } => assert_eq!(best_of, Some(3)),
+            _ => panic!("expected Run command"),
+        }
+    }
 }

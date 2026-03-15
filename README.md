@@ -1,6 +1,6 @@
 # ai-dispatch (aid)
 
-![Version](https://img.shields.io/badge/version-5.8.2-blue)
+![Version](https://img.shields.io/badge/version-5.9.0-blue)
 ![Rust](https://img.shields.io/badge/rust-2024-orange)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
@@ -360,9 +360,16 @@ aid store browse coding
 # Preview an agent's configuration
 aid store show community/aider
 
-# Install an agent
+# Install an agent (with optional version pinning)
 aid store install community/aider
+aid store install community/aider@1.2.0
+
+# Check for updates
+aid store update
+aid store update --apply
 ```
+
+Packages can bundle agent configs, skills, and hooks together. Installing a package installs all components and records versions in `~/.aid/store.lock`.
 
 Installed agents appear in `aid config agents` and participate in auto-selection via their capability scores. The store is backed by [agent-tools-org/aid-agents](https://github.com/agent-tools-org/aid-agents) — community contributions welcome.
 
@@ -501,7 +508,8 @@ The board displays `[VFAIL]` next to tasks that completed but failed verificatio
 | `aid config` | Inspect agent profiles, skills, pricing, and prompt token budget. | `aid config agents`, `aid config prompt-budget`, `aid config pricing` |
 | `aid worktree` | Explicit worktree lifecycle management: create, list, remove. | `aid worktree create feat/x`, `aid worktree list`, `aid worktree remove feat/x` |
 | `aid group` | Create, list, show, update, and delete shared-context workgroups. | `aid group create dispatch -c "Shared rollout notes"` |
-| `aid store` | Browse, search, preview, and install community agent definitions. | `aid store browse`, `aid store install community/aider` |
+| `aid store` | Browse, install (with version pinning), update community agent/skill packages. | `aid store install community/aider@1.0.0`, `aid store update --apply` |
+| `aid upgrade` | Upgrade aid to latest crates.io version (checks for running tasks). | `aid upgrade`, `aid upgrade --force` |
 | `aid agent` | Manage custom agent definitions: list, show, add, remove, fork. | `aid agent list`, `aid agent fork codex --as codex-fast` |
 | `aid export` | Export a task with full context (prompt, events, output, diff). Supports markdown and JSON. | `aid export t-1234`, `aid export t-1234 --format json --output task.json` |
 | `aid memory` | Manage shared agent memory: add, list, search, update, forget. | `aid memory add discovery "Finding"`, `aid memory search "query"` |

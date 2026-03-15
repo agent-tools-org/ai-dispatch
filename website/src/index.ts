@@ -1,4 +1,4 @@
-const VERSION = "5.8.2";
+const VERSION = "5.9.0";
 const SITE_URL = "https://aid.agent-tools.org";
 const REPO_URL = "https://github.com/agent-tools-org/ai-dispatch";
 const META_DESCRIPTION = "Multi-AI CLI team orchestrator that dispatches work to gemini, codex, opencode, cursor, kilo, ob1, codebuff, auto, and custom agents defined via ~/.aid/agents/.";
@@ -34,7 +34,8 @@ const COMMANDS = [
   { name: "worktree", purpose: "Manage worktree lifecycle (create/list/remove).", example: "aid worktree create --dir feat/parser" },
   { name: "group", purpose: "Workgroup CRUD with shared context and constraints.", example: "aid group create dispatch --context \"Docs only, cite sources\"" },
   { name: "init", purpose: "Initialize default skills and templates for a fresh project.", example: "aid init" },
-  { name: "store", purpose: "Browse, search, and install community agent definitions from the GitHub-backed store.", example: "aid store browse coding" },
+  { name: "store", purpose: "Browse, install (with version pinning), and update community agent/skill packages.", example: "aid store install community/aider@1.0.0" },
+  { name: "upgrade", purpose: "Upgrade aid to latest version from crates.io (checks for running tasks).", example: "aid upgrade" },
   { name: "memory", purpose: "Manage project-scoped agent memory (discoveries, conventions, lessons, facts).", example: "aid memory add discovery \"Auth uses bcrypt not argon2\"" },
   { name: "finding", purpose: "Post or list workgroup findings for shared investigation evidence.", example: "aid finding add wg-abc1 \"gamma can be zero in tricrypto\"" },
   { name: "tree", purpose: "Show retry chain as an ASCII tree.", example: "aid tree t-1234" },

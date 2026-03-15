@@ -14,7 +14,7 @@ const VERIFY_RETRY_FEEDBACK: &str =
     "Verification failed. Please fix the compilation/test errors and try again.";
 const PROMPT_TOKEN_LIMIT: usize = 30_000;
 
-pub(super) struct PromptBundle { pub effective_prompt: String, pub context_files: Vec<String>, pub prompt_tokens: i64 }
+pub(super) struct PromptBundle { pub effective_prompt: String, pub context_files: Vec<String>, pub prompt_tokens: i64, pub injected_memory_ids: Vec<String> }
 
 #[allow(dead_code)]
 pub(super) enum PromptSource<'a> { Inline(&'a str), File(&'a str) }
@@ -43,10 +43,12 @@ pub(super) fn build_prompt_bundle(store: &Store, args: &RunArgs, agent_kind: &Ag
     if let Some(guard) = edit_guard { effective_prompt = format!("{guard}{effective_prompt}"); }
     effective_prompt.push_str(milestone_instr);
     let mut effective_prompt = inject_skill(&effective_prompt, requested_skills)?;
+    let mut injected_memory_ids = Vec::new();
 
     // Inject relevant memories from past tasks
-    if let Some(memory_block) = inject_memories(store, &args.prompt, 10)? {
+    if let Some((memory_block, memory_ids)) = inject_memories(store, &args.prompt, 10)? {
         effective_prompt = format!("{memory_block}\n\n{effective_prompt}");
+        injected_memory_ids = memory_ids;
     }
 
     // Inject team knowledge if --team was specified
@@ -86,11 +88,11 @@ pub(super) fn build_prompt_bundle(store: &Store, args: &RunArgs, agent_kind: &Ag
     // Compact prompt if it exceeds token budget
     let effective_prompt = maybe_compact_prompt(&effective_prompt, PROMPT_TOKEN_LIMIT);
     let prompt_tokens = templates::estimate_tokens(&effective_prompt) as i64;
-    Ok(PromptBundle { effective_prompt, context_files, prompt_tokens })
+    Ok(PromptBundle { effective_prompt, context_files, prompt_tokens, injected_memory_ids })
 }
 
 /// Query relevant memories and inject them into the prompt.
-fn inject_memories(store: &Store, prompt: &str, max_memories: usize) -> Result<Option<String>> {
+fn inject_memories(store: &Store, prompt: &str, max_memories: usize) -> Result<Option<(String, Vec<String>)>> {
     // Detect project path from current git root
     let project_path = detect_project_path();
 
@@ -107,9 +109,10 @@ fn inject_memories(store: &Store, prompt: &str, max_memories: usize) -> Result<O
         let age = format_memory_age(now.signed_duration_since(mem.created_at));
         lines.push(format!("- [{}] ({}) {}", mem.memory_type.label(), age, mem.content));
     }
+    let memory_ids = memories.iter().map(|mem| mem.id.as_str().to_string()).collect();
     let token_count = crate::templates::estimate_tokens(&lines.join("\n"));
     eprintln!("[aid] Injected {} memories (~{} tokens)", memories.len(), token_count);
-    Ok(Some(lines.join("\n")))
+    Ok(Some((lines.join("\n"), memory_ids)))
 }
 
 fn format_memory_age(duration: chrono::Duration) -> String {

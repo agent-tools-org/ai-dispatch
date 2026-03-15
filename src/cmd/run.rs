@@ -294,6 +294,13 @@ pub async fn run(store: Arc<Store>, args: RunArgs) -> Result<TaskId> {
             effective_dir.as_deref(),
         );
         if let Some(task) = store.get_task(task_id.as_str())? {
+            if task.status == TaskStatus::Done && !prompt_bundle.injected_memory_ids.is_empty() {
+                for memory_id in &prompt_bundle.injected_memory_ids {
+                    if let Err(err) = store.increment_memory_success(memory_id) {
+                        eprintln!("[aid] Failed to record memory success for {memory_id}: {err}");
+                    }
+                }
+            }
             maybe_flag_empty_worktree_diff(store.as_ref(), &task_id, &task);
             maybe_cleanup_fast_fail(&store, &task_id, &task);
             // Auto-cleanup worktree for failed tasks (no useful changes to preserve)

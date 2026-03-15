@@ -257,6 +257,20 @@ Batch TOML format:
         #[arg(short, long)]
         model: Option<String>,
     },
+    #[command(after_help = r#"Examples:
+  aid export t-1234
+  aid export t-1234 --format json --output task.json"#)]
+    /// Export a task with full context
+    Export {
+        /// Task ID to export
+        task_id: String,
+        /// Output format (md or json)
+        #[arg(long, default_value = "md")]
+        format: String,
+        /// Write export to a file
+        #[arg(long)]
+        output: Option<String>,
+    },
     /// Show task-history usage and configured cost budgets
     Usage {
         /// Filter to current caller session
@@ -638,6 +652,22 @@ async fn main() -> Result<()> {
                     log,
                     agent,
                     model,
+                },
+            )
+            .await?;
+        }
+        Commands::Export {
+            task_id,
+            format,
+            output,
+        } => {
+            let format = cmd::export::ExportFormat::parse(&format)?;
+            cmd::export::run(
+                store.clone(),
+                cmd::export::ExportArgs {
+                    task_id,
+                    format,
+                    output,
                 },
             )
             .await?;

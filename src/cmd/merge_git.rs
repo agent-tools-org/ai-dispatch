@@ -164,9 +164,7 @@ pub(crate) fn run_verify_in_worktree(wt: &str, verify: Option<&str>) {
         Some("auto") | None => "cargo check",
         Some(cmd) => cmd,
     };
-    let parts: Vec<&str> = verify_cmd.split_whitespace().collect();
-    let Some((cmd, args)) = parts.split_first() else { return };
-    let output = Command::new(cmd).args(args).current_dir(wt).output();
+    let output = Command::new("sh").args(["-c", verify_cmd]).current_dir(wt).output();
     match output {
         Ok(o) if !o.status.success() => {
             eprintln!("[aid] Warning: `{verify_cmd}` failed in worktree {wt}");

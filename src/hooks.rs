@@ -3,7 +3,7 @@
 // Deps: anyhow, serde, serde_json, std::process, crate::paths.
 
 use anyhow::{Context, Result};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::fs;
 use std::io::{self, Write};
@@ -11,7 +11,7 @@ use std::process::{Command, Stdio};
 
 use crate::paths;
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Hook {
     pub event: String,
     pub command: String,

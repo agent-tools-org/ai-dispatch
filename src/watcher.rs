@@ -337,10 +337,39 @@ fn extract_milestone_from_json(value: &serde_json::Value) -> Option<String> {
     }
 }
 
+const MILESTONE_TAG: &str = "[MILESTONE]";
+const FINDING_TAG: &str = "[FINDING]";
+
+fn tag_is_inside_code_string(line: &str, tag_pos: usize) -> bool {
+    let before = &line[..tag_pos];
+    let single_quotes = before.chars().filter(|&c| c == '\'').count();
+    let double_quotes = before.chars().filter(|&c| c == '"').count();
+    if single_quotes % 2 == 1 || double_quotes % 2 == 1 {
+        return true;
+    }
+    let trimmed = line.trim_start();
+    if trimmed.starts_with("```") || trimmed.starts_with("///") {
+        return true;
+    }
+    if trimmed.starts_with("println!")
+        || trimmed.starts_with("eprintln!")
+        || trimmed.starts_with("console.log")
+    {
+        return true;
+    }
+    false
+}
+
 fn extract_milestone_from_text(text: &str) -> Option<String> {
     text.lines().find_map(|line| {
-        let (_, detail) = line.split_once("[MILESTONE]")?;
-        let detail = detail.trim().trim_start_matches(':').trim();
+        let tag_pos = line.find(MILESTONE_TAG)?;
+        if tag_is_inside_code_string(line, tag_pos) {
+            return None;
+        }
+        let detail = line[tag_pos + MILESTONE_TAG.len()..]
+            .trim()
+            .trim_start_matches(':')
+            .trim();
         if detail.is_empty() {
             None
         } else {
@@ -372,9 +401,19 @@ fn extract_finding_from_json(value: &serde_json::Value) -> Option<String> {
 
 fn extract_finding_from_text(text: &str) -> Option<String> {
     text.lines().find_map(|line| {
-        let (_, detail) = line.split_once("[FINDING]")?;
-        let detail = detail.trim().trim_start_matches(':').trim();
-        if detail.is_empty() { None } else { Some(detail.to_string()) }
+        let tag_pos = line.find(FINDING_TAG)?;
+        if tag_is_inside_code_string(line, tag_pos) {
+            return None;
+        }
+        let detail = line[tag_pos + FINDING_TAG.len()..]
+            .trim()
+            .trim_start_matches(':')
+            .trim();
+        if detail.is_empty() {
+            None
+        } else {
+            Some(detail.to_string())
+        }
     })
 }
 
@@ -460,5 +499,35 @@ mod tests {
     fn finding_event_parses_plain_text_lines() {
         let detail = super::extract_finding_detail("[FINDING] gamma can be zero in tricrypto");
         assert_eq!(detail.as_deref(), Some("gamma can be zero in tricrypto"));
+    }
+
+    #[test]
+    fn milestone_inside_string_literal_is_rejected() {
+        let line = r#"println!("[MILESTONE] tests passing");"#;
+        assert!(super::extract_milestone_detail(line).is_none());
+    }
+
+    #[test]
+    fn milestone_inside_json_string_value_is_rejected() {
+        let line = r#"{"text": "assert_eq!(detail, "[MILESTONE] done")"}"#;
+        assert!(super::extract_milestone_detail(line).is_none());
+    }
+
+    #[test]
+    fn finding_inside_string_literal_is_rejected() {
+        let line = r#"let s = "[FINDING] gamma can be zero";"#;
+        assert!(super::extract_finding_detail(line).is_none());
+    }
+
+    #[test]
+    fn real_milestone_still_extracted() {
+        let detail = super::extract_milestone_detail("[MILESTONE] implementation complete");
+        assert_eq!(detail.as_deref(), Some("implementation complete"));
+    }
+
+    #[test]
+    fn real_finding_still_extracted() {
+        let detail = super::extract_finding_detail("[FINDING] pool has degenerate state");
+        assert_eq!(detail.as_deref(), Some("pool has degenerate state"));
     }
 }

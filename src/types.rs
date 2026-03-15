@@ -296,6 +296,79 @@ pub struct CompletionInfo {
     pub cost_usd: Option<f64>,
 }
 
+/// Unique ID for a memory entry, prefixed with "m-"
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct MemoryId(pub String);
+
+impl MemoryId {
+    pub fn generate() -> Self {
+        let val: u16 = rand::rng().random();
+        Self(format!("m-{val:04x}"))
+    }
+    pub fn as_str(&self) -> &str { &self.0 }
+}
+
+impl fmt::Display for MemoryId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+pub enum MemoryType {
+    Discovery,   // Bug patterns, API behaviors, gotchas
+    Convention,  // Code style, naming, architecture decisions
+    Lesson,      // What worked/failed in past tasks
+    Fact,        // Version, config, endpoint facts
+}
+
+impl MemoryType {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Discovery => "discovery",
+            Self::Convention => "convention",
+            Self::Lesson => "lesson",
+            Self::Fact => "fact",
+        }
+    }
+    pub fn parse_str(s: &str) -> Option<Self> {
+        match s {
+            "discovery" => Some(Self::Discovery),
+            "convention" => Some(Self::Convention),
+            "lesson" => Some(Self::Lesson),
+            "fact" => Some(Self::Fact),
+            _ => None,
+        }
+    }
+    pub fn label(&self) -> &'static str {
+        match self {
+            Self::Discovery => "DISC",
+            Self::Convention => "CONV",
+            Self::Lesson => "LSSN",
+            Self::Fact => "FACT",
+        }
+    }
+}
+
+impl fmt::Display for MemoryType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct Memory {
+    pub id: MemoryId,
+    pub memory_type: MemoryType,
+    pub content: String,
+    pub source_task_id: Option<String>,
+    pub agent: Option<String>,
+    pub project_path: Option<String>,
+    pub content_hash: String,
+    pub created_at: DateTime<Local>,
+    pub expires_at: Option<DateTime<Local>>,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -348,5 +421,18 @@ mod tests {
     fn agent_display_name_for_built_in_agents() {
         let task = sample_task(AgentKind::Codex, None);
         assert_eq!(task.agent_display_name(), "codex");
+    }
+
+    #[test]
+    fn memory_type_parse_str_roundtrip() {
+        for memory_type in [
+            MemoryType::Discovery,
+            MemoryType::Convention,
+            MemoryType::Lesson,
+            MemoryType::Fact,
+        ] {
+            let s = memory_type.as_str();
+            assert_eq!(MemoryType::parse_str(s), Some(memory_type));
+        }
     }
 }

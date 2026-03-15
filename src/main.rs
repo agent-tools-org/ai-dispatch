@@ -341,6 +341,27 @@ Batch TOML format:
         #[arg(short, long)]
         output: Option<String>,
     },
+    #[command(after_help = r#"Examples:
+  aid query "What does gamma=0 mean in CryptoSwap?"
+  aid query "Explain this" --auto
+  aid query "Key insight" -g wg-abc1 --finding"#)]
+    /// Fast LLM query via OpenRouter (no agent startup)
+    Query {
+        /// Question to ask
+        prompt: String,
+        /// Use auto-tier model (paid, better quality)
+        #[arg(short, long)]
+        auto: bool,
+        /// Explicit model override
+        #[arg(short, long)]
+        model: Option<String>,
+        /// Workgroup ID for context
+        #[arg(short, long)]
+        group: Option<String>,
+        /// Save response as a workgroup finding
+        #[arg(long)]
+        finding: bool,
+    },
     /// Start MCP server (stdio)
     Mcp,
     /// Manage agent configuration and detection
@@ -770,6 +791,10 @@ async fn main() -> Result<()> {
             output,
         } => {
             cmd::ask::run(store, prompt, agent, model, files, output).await?;
+        }
+        Commands::Query { prompt, auto, model, group, finding } => {
+            let group = group.or_else(|| resolve_group(None));
+            cmd::query::run(&store, &prompt, model.as_deref(), auto, group.as_deref(), finding)?;
         }
         Commands::Mcp => cmd::mcp::run(store).await?,
         Commands::Config { action } => {

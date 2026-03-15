@@ -19,6 +19,7 @@ pub mod mcp;
 pub mod merge;
 mod mcp_schema;
 mod mcp_tools;
+pub mod query;
 pub mod respond;
 pub mod retry;
 pub mod retry_logic;

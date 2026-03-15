@@ -16,6 +16,8 @@ pub struct AidConfig {
     pub selection: SelectionConfig,
     #[serde(default, rename = "webhook")]
     pub webhooks: Vec<WebhookConfig>,
+    #[serde(default)]
+    pub query: QueryConfig,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -68,6 +70,36 @@ pub struct WebhookConfig {
     pub on_failed: bool,
     #[serde(default)]
     pub headers: Vec<(String, String)>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct QueryConfig {
+    /// Free-tier model (default)
+    #[serde(default = "default_free_model")]
+    pub free_model: String,
+    /// Auto-tier model (--auto flag)
+    #[serde(default = "default_auto_model")]
+    pub auto_model: String,
+    /// OpenRouter API key (overrides OPENROUTER_API_KEY env var)
+    pub api_key: Option<String>,
+}
+
+fn default_free_model() -> String {
+    "qwen/qwen3-coder:free".to_string()
+}
+
+fn default_auto_model() -> String {
+    "openrouter/auto".to_string()
+}
+
+impl Default for QueryConfig {
+    fn default() -> Self {
+        Self {
+            free_model: default_free_model(),
+            auto_model: default_auto_model(),
+            api_key: None,
+        }
+    }
 }
 
 fn default_max_duration() -> i64 {

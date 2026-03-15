@@ -112,7 +112,7 @@ fn task_to_run_args(task: &batch::BatchTask, background: bool, store: &Arc<Store
         hooks: task.hooks.clone().unwrap_or_default(),
         background,
         announce: true,
-        fallback: task.fallback.clone(),
+        cascade: task.fallback.as_deref().map(|f| vec![f.to_string()]).unwrap_or_default(),
         read_only: task.read_only,
         budget: task.budget,
         team: task.team.clone(),

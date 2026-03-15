@@ -117,9 +117,9 @@ enum Commands {
         /// Command to run on task completion
         #[arg(long)]
         on_done: Option<String>,
-        /// Fallback agent if primary agent fails
-        #[arg(long)]
-        fallback: Option<String>,
+        /// Agent cascade: comma-separated list of agents to try on failure (e.g. opencode,codex,cursor)
+        #[arg(long, value_delimiter = ',')]
+        cascade: Vec<String>,
         /// Hook specs to run for the dispatched task
         #[arg(long)]
         hook: Vec<String>,
@@ -602,7 +602,7 @@ async fn main() -> Result<()> {
             no_skill,
             bg,
             on_done,
-            fallback,
+            cascade,
             hook,
             read_only,
         } => {
@@ -670,7 +670,7 @@ async fn main() -> Result<()> {
                     background: bg,
                     announce: true,
                     on_done,
-                    fallback,
+                    cascade,
                     read_only,
                     budget,
                     team: team_flag,

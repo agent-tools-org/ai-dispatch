@@ -1,7 +1,7 @@
-const VERSION = "6.0.0";
+const VERSION = "7.4.0";
 const SITE_URL = "https://aid.agent-tools.org";
 const REPO_URL = "https://github.com/agent-tools-org/ai-dispatch";
-const META_DESCRIPTION = "Multi-AI CLI team orchestrator that dispatches work to gemini, codex, opencode, cursor, kilo, ob1, codebuff, auto, and custom agents defined via ~/.aid/agents/.";
+const META_DESCRIPTION = "Multi-AI CLI team orchestrator that dispatches work to gemini, codex, opencode, cursor, kilo, codebuff, auto, and custom agents defined via ~/.aid/agents/.";
 const JSON_LD_DATA = JSON.stringify({
   "@context": "https://schema.org",
   "@type": "SoftwareApplication",
@@ -21,7 +21,7 @@ const COMMANDS = [
   { name: "board", purpose: "List tracked tasks with filters and zombie detection.", example: "aid board --today" },
   { name: "show", purpose: "Inspect task summary, diff, output, log, or AI explanation.", example: "aid show t-1234 --diff" },
   { name: "usage", purpose: "View task history, per-agent analytics, and budget windows.", example: "aid usage --agent codex --period 7d" },
-  { name: "retry", purpose: "Re-dispatch a failed task with feedback.", example: "aid retry t-1234 --feedback \"Tighten the configuration example\"" },
+  { name: "retry", purpose: "Re-dispatch a failed task with feedback, optionally switching agent or dir.", example: "aid retry t-1234 -f \"Fix the compilation error\" --agent opencode" },
   { name: "respond", purpose: "Send interactive input to a running background task.", example: "aid respond t-1234 \"Please rerun with logging enabled\"" },
   { name: "benchmark", purpose: "Compare the same task across multiple agents.", example: "aid benchmark --agents codex,cursor \"Implement new parsing\"" },
   { name: "output", purpose: "Show task output directly without additional metadata.", example: "aid output t-1234" },
@@ -53,7 +53,6 @@ const AGENT_MATRIX: Record<string, Record<string, number>> = {
   opencode: { Research: 1, "Simple Edit": 8, "Complex Impl": 3, Frontend: 2, Debugging: 4, Testing: 4, Refactoring: 4, Documentation: 5 },
   kilo: { Research: 1, "Simple Edit": 7, "Complex Impl": 2, Frontend: 2, Debugging: 3, Testing: 3, Refactoring: 3, Documentation: 4 },
   cursor: { Research: 2, "Simple Edit": 4, "Complex Impl": 7, Frontend: 9, Debugging: 5, Testing: 5, Refactoring: 6, Documentation: 4 },
-  ob1: { Research: 5, "Simple Edit": 3, "Complex Impl": 5, Frontend: 3, Debugging: 4, Testing: 4, Refactoring: 4, Documentation: 3 },
   codebuff: { Research: 2, "Simple Edit": 5, "Complex Impl": 8, Frontend: 7, Debugging: 6, Testing: 6, Refactoring: 7, Documentation: 4 }
 };
 const MCP_TOOLS = ["aid_run", "aid_board", "aid_show", "aid_retry", "aid_usage", "aid_ask"];
@@ -152,6 +151,18 @@ function buildLLMSText() {
   lines.push(`simple_edit = 10`);
   lines.push(`\`\`\``);
   lines.push(``);
+  lines.push(`## Structured Output & JSON (v7.0)`);
+  lines.push(`\`--json\` flag on show/board for machine-parseable output. Exit codes captured per task. \`--context-from\` forwards results between tasks. Shared workspace with knowledge compaction (30K token threshold).`);
+  lines.push(``);
+  lines.push(`## Reliability & Intelligence (v7.1–v7.2)`);
+  lines.push(`Empty diff guard detects agent hallucination (claims DONE but no actual changes). Foreground task timeout (30m default, auto-kill). \`--cascade opencode,codex,cursor\` tries next agent on failure. Conditional batch chains (\`on_success\`/\`on_fail\` in TOML).`);
+  lines.push(``);
+  lines.push(`## Code Health & UX (v7.3)`);
+  lines.push(`Modular architecture: cli.rs, usage_report.rs, merge_git.rs, run_agent.rs extracted for AI-friendly file sizes. Success-weighted agent routing (continuous scoring from history). Shell-safe verify commands. Fast-fail diagnostics with stderr hint.`);
+  lines.push(``);
+  lines.push(`## Episodic Memory (v7.4)`);
+  lines.push(`Append-only memory versioning with \`supersedes\` chains — never lose history. Usage tracking: inject_count, success_count, last_injected_at. Priority-based injection (high-success memories injected first, cap at top 10). Multi-query memory search with keyword extraction. \`aid memory list --stats\`, \`aid memory history <id>\`.`);
+  lines.push(``);
   lines.push(`## Workgroups`);
   lines.push(`Shared context containers created via aid group create keep prompts, constraints, and notes in sync across multiple tasks.`);
   lines.push(`Use --group/-g or set AID_GROUP so watch, board, run, and merge commands automatically stay scoped to the same workspace.`);
@@ -195,7 +206,7 @@ function buildLLMSText() {
   lines.push(``);
   lines.push(`## Installation`);
   lines.push(`1. Install Rust 1.85 or later (Edition 2024).`);
-  lines.push(`2. Ensure the agent CLIs are on your PATH (gemini, codex, opencode, cursor, kilo, ob1, codebuff).`);
+  lines.push(`2. Ensure the agent CLIs are on your PATH (gemini, codex, opencode, cursor, kilo, codebuff).`);
   lines.push(`3. Run \`cargo install --path .\` and use \`aid config agents\` / \`aid config skills\`.`);
   lines.push(``);
   lines.push(`## Architecture`);
@@ -215,8 +226,8 @@ function buildLLMSText() {
   lines.push(`├───────┴──────────┴──────────┴───────┤`);
   lines.push(`│         Agent Adapters              │`);
   lines.push(`│  ┌──────┐ ┌─────┐ ┌────────┐ ┌──────┐ ┌────┐ ┌───┐ ┌────────┐`);
-  lines.push(`│  │Gemini│ │Codex│ │OpenCode│ │Cursor│ │Kilo│ │OB1│ │Codebuff│`);
-  lines.push(`│  └──────┘ └─────┘ └────────┘ └──────┘ └────┘ └───┘ └────────┘`);
+  lines.push(`│  │Gemini│ │Codex│ │OpenCode│ │Cursor│ │Kilo│ │Codebuff│`);
+  lines.push(`│  └──────┘ └─────┘ └────────┘ └──────┘ └────┘ └────────┘`);
   lines.push(`└─────────────────────────────────────┘`);
   lines.push(`\`\`\``);
   lines.push(``);
@@ -239,7 +250,7 @@ function buildHTML() {
     })
     .join("");
   const quickList = [
-    "Install Rust 1.85+ and agent CLIs (gemini, codex, opencode, cursor, kilo, ob1, codebuff, auto).",
+    "Install Rust 1.85+ and agent CLIs (gemini, codex, opencode, cursor, kilo, codebuff, auto).",
     "Run `cargo install --path .` then `aid config agents` and `aid config skills`.",
     "Use `aid run` for tasks, `aid watch` for progress, `aid board` to inspect the queue, `aid show` to review artifacts, and `aid retry` to iterate.",
     "For MCP workflows, start `aid mcp` and call MCP tools from another client."
@@ -268,7 +279,7 @@ function buildHTML() {
   <main>
     <section>
       <h2>What it is</h2>
-      <p>Multi-AI CLI orchestrator that dispatches work to gemini, codex, opencode, cursor, kilo, ob1, codebuff, auto, and custom agents defined via ~/.aid/agents/ while tracking progress, enforcing methodology, and tracking cost.</p>
+      <p>Multi-AI CLI orchestrator that dispatches work to gemini, codex, opencode, cursor, kilo, codebuff, auto, and custom agents defined via ~/.aid/agents/ while tracking progress, enforcing methodology, and tracking cost.</p>
     </section>
     <section>
       <h2>Why aid?</h2>
@@ -330,6 +341,33 @@ aid setup                                    # configure API key</code></pre>
       <p>Teams group agents into role-specific sets for constrained auto-selection. Define teams in <code>~/.aid/teams/*.toml</code> with member lists, default agent, and per-agent capability overrides.</p>
       <pre style="background:#040b16;padding:1rem;border-radius:8px;margin:0;"><code>[team]&#10;id = "dev"&#10;display_name = "Development Team"&#10;agents = ["codex", "opencode", "cursor", "kilo"]&#10;default_agent = "codex"&#10;&#10;[team.overrides.opencode]&#10;simple_edit = 10</code></pre>
       <p style="margin-top:.5rem;">Use <code>--team dev</code> on <code>aid run auto</code> to restrict selection. Set <code>team = "dev"</code> in batch TOML defaults. Filter usage with <code>aid usage --team dev</code>.</p>
+    </section>
+    <section>
+      <h2>Structured Output & JSON <span style="color:#94a3b8;font-size:.8em;">(v7.0)</span></h2>
+      <p><code>--json</code> flag on <code>aid show</code> and <code>aid board</code> for machine-parseable output. Exit codes captured per task. <code>--context-from</code> forwards results between tasks. Shared workspace with knowledge compaction (30K token threshold).</p>
+    </section>
+    <section>
+      <h2>Reliability & Intelligence <span style="color:#94a3b8;font-size:.8em;">(v7.1–v7.2)</span></h2>
+      <ul>
+        <li>Empty diff guard detects agent hallucination (claims DONE but made no changes).</li>
+        <li>Foreground task timeout (30m default, auto-kill).</li>
+        <li><code>--cascade opencode,codex,cursor</code> — tries the next agent on failure.</li>
+        <li>Conditional batch chains: <code>on_success</code>, <code>on_fail</code>, <code>conditional</code> in TOML.</li>
+      </ul>
+    </section>
+    <section>
+      <h2>Code Health & UX <span style="color:#94a3b8;font-size:.8em;">(v7.3)</span></h2>
+      <p>Modular architecture with AI-friendly file sizes. Success-weighted agent routing using continuous scoring from task history. Shell-safe verify commands. Fast-fail diagnostics with stderr hints.</p>
+    </section>
+    <section>
+      <h2>Episodic Memory <span style="color:#94a3b8;font-size:.8em;">(v7.4)</span></h2>
+      <ul>
+        <li>Append-only memory versioning with <code>supersedes</code> chains — full history preserved.</li>
+        <li>Usage tracking: inject_count, success_count, last_injected_at.</li>
+        <li>Priority-based injection: high-success memories injected first, capped at top 10.</li>
+        <li>Multi-query memory search with keyword extraction.</li>
+        <li><code>aid memory list --stats</code> and <code>aid memory history &lt;id&gt;</code>.</li>
+      </ul>
     </section>
     <section>
       <h2>Workgroups</h2>
@@ -395,7 +433,7 @@ aid setup                                    # configure API key</code></pre>
     </section>
     <section>
       <h2>Architecture</h2>
-      <pre style="background:#040b16;padding:1rem;border-radius:8px;margin:0;font-family:inherit;"><code>┌─────────────────────────────────────┐&#10;│           aid (CLI binary)          │&#10;├──────┬──────┬──────┬───────┬────────┬───────────┤&#10;│ run  │ watch│ show │ board │ usage  │ benchmark │  ← user-facing commands&#10;├──────┴──────┴──────┴───────┴────────┤&#10;│           Task Manager              │&#10;│  ┌────────┐ ┌────────┐ ┌────────┐  │&#10;│  │Classif.│ │ Watch  │ │ Store  │  │&#10;│  │+ Agent │ │ Engine │ │(SQLite)│  │&#10;│  │Registry│ │        │ │        │  │&#10;│  └────┬───┘ └────┬───┘ └────┬───┘  │&#10;│       │          │          │       │&#10;├───────┴──────────┴──────────┴───────┤&#10;│         Agent Adapters              │&#10;│  ┌──────┐ ┌─────┐ ┌────────┐ ┌──────┐ ┌────┐ ┌───┐ ┌────────┐&#10;│  │Gemini│ │Codex│ │OpenCode│ │Cursor│ │Kilo│ │OB1│ │Codebuff│&#10;│  └──────┘ └─────┘ └────────┘ └──────┘ └────┘ └───┘ └────────┘&#10;└─────────────────────────────────────┘</code></pre>
+      <pre style="background:#040b16;padding:1rem;border-radius:8px;margin:0;font-family:inherit;"><code>┌─────────────────────────────────────┐&#10;│           aid (CLI binary)          │&#10;├──────┬──────┬──────┬───────┬────────┬───────────┤&#10;│ run  │ watch│ show │ board │ usage  │ benchmark │  ← user-facing commands&#10;├──────┴──────┴──────┴───────┴────────┤&#10;│           Task Manager              │&#10;│  ┌────────┐ ┌────────┐ ┌────────┐  │&#10;│  │Classif.│ │ Watch  │ │ Store  │  │&#10;│  │+ Agent │ │ Engine │ │(SQLite)│  │&#10;│  │Registry│ │        │ │        │  │&#10;│  └────┬───┘ └────┬───┘ └────┬───┘  │&#10;│       │          │          │       │&#10;├───────┴──────────┴──────────┴───────┤&#10;│         Agent Adapters              │&#10;│  ┌──────┐ ┌─────┐ ┌────────┐ ┌──────┐ ┌────┐ ┌───┐ ┌────────┐&#10;│  │Gemini│ │Codex│ │OpenCode│ │Cursor│ │Kilo│ │Codebuff│&#10;│  └──────┘ └─────┘ └────────┘ └──────┘ └────┘ └────────┘&#10;└─────────────────────────────────────┘</code></pre>
     </section>
     <section>
       <h2>MCP integration</h2>

@@ -151,7 +151,9 @@ fn select_agent_from(
         if rate_limit::is_rate_limited(&kind) { s -= 10; }
         if let Some((rate, count)) = history_map.get(&kind) {
             if *count >= 5 {
-                if *rate < 0.65 { s -= 3; } else if *rate >= 0.90 { s += 2; }
+                let bonus = ((*rate - 0.75) * 16.0).round() as i32;
+                let bonus = bonus.clamp(-5, 4);
+                s += bonus;
             }
         }
         if matches!(profile.complexity, Complexity::High)
@@ -233,7 +235,8 @@ fn select_agent_from(
         if let Some((rate, count)) = history_map.get(&sel_kind) {
             if *count >= 5 {
                 let percent = (*rate * 100.0).round() as i32;
-                reason.push_str(&format!("; history: {}% success", percent));
+                let success_label = format!("{:.0}%", rate * 100.0);
+                reason.push_str(&format!("; history: {}% success (success: {})", percent, success_label));
             }
         }
     }
@@ -475,6 +478,18 @@ research = 6
     fn history_bonus_for_high_success_rate() {
         let (kind, _) = with_history("implement auth flow", &[(AgentKind::Codex, 0.95, 10)]);
         assert_eq!(kind, AgentKind::Codex.as_str());
+    }
+    #[test]
+    fn history_prefers_high_success_rate_over_base_score() {
+        let prompt = "Implement a retry-aware test suite across src/main.rs and src/cmd/run.rs. Add validation coverage.";
+        let history = vec![
+            (AgentKind::Codex, 0.60, 10),
+            (AgentKind::Cursor, 0.95, 10),
+        ];
+        let (kind, _) = select_agent_from(
+            prompt, &opts(None, false), &[AgentKind::Cursor, AgentKind::Codex], &history, None,
+        );
+        assert_eq!(kind, AgentKind::Cursor.as_str());
     }
     #[test]
     fn history_ignored_for_low_task_count() {

@@ -1,20 +1,18 @@
 # ai-dispatch — Multi-AI CLI Team Orchestrator
 
-## Current Status
+## Current Status (v7.5.0)
 
-Implemented in v1.0.0:
+**Foundation (v1.x–v3.x):** Task dispatch, batch parallel, worktree isolation, retry chains, webhook notifications, prompt templates, TUI multipane with charts, modular architecture, agent benchmark, zombie cleanup, UTF-8 safety, task classifier with capability matrix.
 
-- `aid run` with background workers, worktrees, context injection, and `--retry`
-- `aid show` — unified task inspection (events, `--diff`, `--output`, `--explain`, `--log`)
-- `aid watch` with `--tui` and `--quiet` (absorbs former `aid wait`)
-- `aid ask` — research/explore via cheap AI CLIs (renamed from `aid explore`)
-- `aid batch` with `--wait` and task dependency DAGs
-- `aid config agents` — agent detection (absorbs former `aid agents`)
-- `aid group` plus `aid run --group` for shared caller-injected context
-- workgroup-aware filtering across `board`, `watch`, and `batch`
-- `aid board --mine` for caller-session filtering
-- deterministic usage extraction from streaming agent events
-- `aid usage` for task-history cost reporting and configured budget windows
+**Agent Ecosystem (v4.x–v5.x):** Custom agent TOML format + registry, agent store with versioning, per-agent analytics, hook system, prompt compaction, agent memory (blackboard), task tree, workgroup summary, investigation lead, shared findings, broadcast, fast query, setup wizard, skill packages, merge safety.
+
+**Intelligent Routing (v7.0–v7.5):**
+- `--json` for show/board, trust tiers, strengths scoring, knowledge relevance filtering
+- `--context-from` result forwarding, shared workspace, knowledge compaction
+- Empty diff guard, foreground task timeout, `--cascade` model cascade
+- Conditional batch chains (`on_success`/`on_fail`/`conditional` in TOML)
+- Episodic memory with append-only versioning, success-weighted injection, multi-query search
+- **v7.5:** Budget-aware cost-efficiency routing (PILOT-inspired `quality/(1+avg_cost)` formula), `--judge` flag for automatic AI review with auto-retry
 
 State is stored under `~/.aid` by default, or `AID_HOME` when overridden.
 
@@ -410,37 +408,26 @@ ai-dispatch/
 6. SQLite storage
 7. Built-in codex prompt templates (no-op guard, commit format)
 
-## Future (v0.2+)
+## Roadmap
 
-- TUI dashboard with ratatui
-- OpenCode adapter (once installed)
-- Cursor Agent adapter
-### v1.1 delivered
+### v7.5 P1 (next)
+- Entity resolution on memory extract (self-contained searchable memories)
+- Surprise-based memory filtering (skip trivial memories)
+- Best-of-n cheap dispatch (`--best-of 3`)
+- Structured state deltas (parsed agent output)
+- Cross-session learning (routing hints from history)
 
-- MCP server mode (`aid mcp` — stdio JSON-RPC for Claude Code native tool calls)
-- Smart agent auto-selection (`aid run auto "prompt"` — scoring-based heuristic)
-- Process monitoring in TUI (CPU% and memory for running tasks)
-- Skill injection (`aid run --skill implementer` — methodology from `~/.aid/skills/`)
-- Milestone reporting (agent progress stages visible in `aid watch`)
+### v7.6 — Shared Context Threads
+- `aid run --parent <task-id>` sub-threads with result flow
+- Auto-generated thread completion summaries
 
-### v1.2 delivered
+### v7.7 — Programmable Orchestration
+- Scripted batch dispatch (TypeScript/Rhai)
+- `aid steer <task-id>` mid-flight course correction
+- Dynamic topology selection, pre-dispatch validation
 
-- Session-scoped message bus (workgroup milestones auto-injected into new task prompts)
-- Interactive input forwarding (PTY-based, `aid respond` command)
+### v7.8 — Autonomous Experiment Loop
+- `aid experiment --metric --command --direction` with auto-commit/revert
 
-### v1.3 delivered
-
-- Skill auto-apply (auto-inject implementer for code tasks, researcher for ask tasks)
-- Enforce commit for worktree tasks (auto-commit or mark incomplete if uncommitted changes)
-- Batch auto-workgroup (auto-create workgroup for parallel batch dispatches)
-- MCP skill support (expose `skills` param in aid_run MCP tool)
-- Session cost summary (`aid usage --session`)
-
-### v2.0+ delivered
-
-- Task completion hooks (`--on-done "command"` callback for event-driven orchestration)
-- Batch file auto-archive (save to ~/.aid/batches/ after dispatch)
-- Max task duration with auto-fail (aggressive zombie cleanup)
-- Cost tracking with configurable per-model pricing
-- Budget-aware agent selection
-- Completion notification feed
+### v8.0 — Ecosystem Maturity
+- `aid store publish`, daemon mode, agent protocol v2

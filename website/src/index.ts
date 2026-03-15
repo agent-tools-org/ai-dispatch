@@ -1,4 +1,4 @@
-const VERSION = "5.3.0";
+const VERSION = "5.6.2";
 const SITE_URL = "https://aid.agent-tools.org";
 const REPO_URL = "https://github.com/agent-tools-org/ai-dispatch";
 const META_DESCRIPTION = "Multi-AI CLI team orchestrator that dispatches work to gemini, codex, opencode, cursor, kilo, ob1, codebuff, auto, and custom agents defined via ~/.aid/agents/.";
@@ -34,7 +34,12 @@ const COMMANDS = [
   { name: "worktree", purpose: "Manage worktree lifecycle (create/list/remove).", example: "aid worktree create --dir feat/parser" },
   { name: "group", purpose: "Workgroup CRUD with shared context and constraints.", example: "aid group create dispatch --context \"Docs only, cite sources\"" },
   { name: "init", purpose: "Initialize default skills and templates for a fresh project.", example: "aid init" },
-  { name: "store", purpose: "Browse, search, and install community agent definitions from the GitHub-backed store.", example: "aid store browse coding" }
+  { name: "store", purpose: "Browse, search, and install community agent definitions from the GitHub-backed store.", example: "aid store browse coding" },
+  { name: "memory", purpose: "Manage project-scoped agent memory (discoveries, conventions, lessons, facts).", example: "aid memory add discovery \"Auth uses bcrypt not argon2\"" },
+  { name: "finding", purpose: "Post or list workgroup findings for shared investigation evidence.", example: "aid finding add wg-abc1 \"gamma can be zero in tricrypto\"" },
+  { name: "tree", purpose: "Show retry chain as an ASCII tree.", example: "aid tree t-1234" },
+  { name: "summary", purpose: "Summarize workgroup results with milestones, findings, and costs.", example: "aid summary wg-abc1" },
+  { name: "export", purpose: "Export a task with full context in markdown or JSON.", example: "aid export t-1234 --format json" }
 ];
 const AGENT_CATEGORIES = ["Research", "Simple Edit", "Complex Impl", "Frontend", "Debugging", "Testing", "Refactoring", "Documentation"] as const;
 const AGENT_MATRIX: Record<string, Record<string, number>> = {
@@ -112,9 +117,18 @@ function buildLLMSText() {
   lines.push(`## Skills`);
   lines.push(`Methodology files under ~/.aid/skills/ (code-scout, implementer, researcher, test-writer, debugger, etc.) inject repeatable behavior per agent and can be extended with --skill or disabled with --no-skill.`);
   lines.push(``);
+  lines.push(`## Agent Memory (v5.4)`);
+  lines.push(`Project-scoped persistent knowledge. Memories are auto-injected into agent prompts based on project and age.`);
+  lines.push(`Types: discovery (bugs, API behaviors), convention (code style), lesson (what worked/failed, 30-day TTL), fact (versions, configs).`);
+  lines.push(`Commands: aid memory add <type> "content", aid memory list, aid memory search "query", aid memory update <id> "new", aid memory forget <id>.`);
+  lines.push(``);
+  lines.push(`## Shared Findings (v5.6)`);
+  lines.push(`Workgroup-scoped ephemeral evidence for investigation collaboration. Agents emit [FINDING] tags, auto-captured and injected into subsequent task prompts.`);
+  lines.push(`Commands: aid finding add <wg-id> "content", aid finding list <wg-id>. Also shown in aid summary.`);
+  lines.push(``);
   lines.push(`## Workgroups`);
   lines.push(`Shared context containers created via aid group create keep prompts, constraints, and notes in sync across multiple tasks.`);
-  lines.push(`Use --group or set AID_GROUP so watch, board, run, and merge commands automatically stay scoped to the same workspace.`);
+  lines.push(`Use --group/-g or set AID_GROUP so watch, board, run, and merge commands automatically stay scoped to the same workspace.`);
   lines.push(``);
   lines.push(`## Worktree Management`);
   lines.push(`aid auto-creates per-task worktrees when you pass --worktree, or manage them explicitly with aid worktree create/list/remove.`);
@@ -266,8 +280,21 @@ aid store install community/aider  # install</code></pre>
       <p>Methodology files under ~/.aid/skills/ (code-scout, implementer, researcher, test-writer, debugger, etc.) inject repeatable behavior per agent; use --skill to add extras or --no-skill to opt out.</p>
     </section>
     <section>
+      <h2>Agent Memory <span style="color:#94a3b8;font-size:.8em;">(v5.4)</span></h2>
+      <p>Project-scoped persistent knowledge that auto-injects into agent prompts. Four types: discovery, convention, lesson (30-day TTL), fact.</p>
+      <pre style="background:#040b16;padding:1rem;border-radius:8px;margin:0;"><code>aid memory add discovery "Auth module uses bcrypt not argon2"
+aid memory list --type convention
+aid memory search "auth"</code></pre>
+    </section>
+    <section>
+      <h2>Shared Findings <span style="color:#94a3b8;font-size:.8em;">(v5.6)</span></h2>
+      <p>Workgroup-scoped evidence for investigation collaboration. Agents emit <code>[FINDING]</code> tags that are auto-captured and injected into subsequent task prompts within the same workgroup.</p>
+      <pre style="background:#040b16;padding:1rem;border-radius:8px;margin:0;"><code>aid finding add wg-abc1 "gamma can be zero in tricrypto"
+aid finding list wg-abc1</code></pre>
+    </section>
+    <section>
       <h2>Workgroups</h2>
-      <p>Workgroups share context and constraints. Create one with <code>aid group create</code> and scope tasks via <code>--group</code> or the <code>AID_GROUP</code> environment variable.</p>
+      <p>Workgroups share context and constraints. Create one with <code>aid group create</code> and scope tasks via <code>--group</code>/<code>-g</code> or the <code>AID_GROUP</code> environment variable.</p>
     </section>
     <section>
       <h2>Worktree Management</h2>

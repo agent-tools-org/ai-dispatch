@@ -1,6 +1,6 @@
 # ai-dispatch (aid)
 
-![Version](https://img.shields.io/badge/version-5.4.1-blue)
+![Version](https://img.shields.io/badge/version-5.6.2-blue)
 ![Rust](https://img.shields.io/badge/rust-2024-orange)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
@@ -167,7 +167,7 @@ Examples:
 
 ```bash
 aid group create dispatch \
-  --context "Repo rules: English docs only, keep diffs minimal, prefer source-backed claims."
+  -c "Repo rules: English docs only, keep diffs minimal, prefer source-backed claims."
 
 aid run gemini "Summarize open design questions in DESIGN.md" \
   --group wg-a3f1 \
@@ -183,12 +183,47 @@ aid board --group wg-a3f1
 aid group show wg-a3f1
 ```
 
+### Agent Memory
+
+Project-scoped persistent knowledge that auto-injects into agent prompts. Four types:
+
+- **Discovery** — bug patterns, API behaviors, gotchas
+- **Convention** — code style, naming, architecture decisions
+- **Lesson** — what worked/failed (30-day TTL)
+- **Fact** — versions, configs, endpoints
+
+```bash
+aid memory add discovery "Auth module uses bcrypt not argon2"
+aid memory list --type convention
+aid memory search "auth"
+aid memory update m-a3f1 "Auth now uses argon2 after migration"
+aid memory forget m-a3f1
+```
+
+### Shared Findings
+
+Workgroup-scoped ephemeral evidence for investigation collaboration. Agents emit `[FINDING]` tags in their output, which are auto-captured and injected into subsequent task prompts within the same workgroup.
+
+```bash
+# Manual posting
+aid finding add wg-abc1 "gamma can be zero in tricrypto pool"
+
+# Agent auto-capture: any agent output containing [FINDING] is saved
+# Example agent output: "[FINDING] WBTC as input causes all outputs to panic"
+
+# List findings
+aid finding list wg-abc1
+
+# Findings also appear in workgroup summaries
+aid summary wg-abc1
+```
+
 ### Workspace Isolation (AID_GROUP)
 
 Set `AID_GROUP` to automatically scope all commands to a workgroup without passing `--group` everywhere:
 
 ```bash
-export AID_GROUP=$(aid group create my-feature --context "Feature implementation context")
+export AID_GROUP=$(aid group create my-feature -c "Feature implementation context")
 
 aid run codex "Implement the parser" --dir . --worktree feat/parser
 aid run codex "Add parser tests" --dir . --worktree feat/parser-tests
@@ -422,11 +457,14 @@ The board displays `[VFAIL]` next to tasks that completed but failed verificatio
 | `aid clean` | Remove old tasks/events and orphaned worktrees/logs. Supports `--dry-run`. | `aid clean --older-than 7 --worktrees` |
 | `aid config` | Inspect agent profiles, skills, pricing, and prompt token budget. | `aid config agents`, `aid config prompt-budget`, `aid config pricing` |
 | `aid worktree` | Explicit worktree lifecycle management: create, list, remove. | `aid worktree create feat/x`, `aid worktree list`, `aid worktree remove feat/x` |
-| `aid group` | Create, list, show, update, and delete shared-context workgroups. | `aid group create dispatch --context "Shared rollout notes"` |
+| `aid group` | Create, list, show, update, and delete shared-context workgroups. | `aid group create dispatch -c "Shared rollout notes"` |
 | `aid store` | Browse, search, preview, and install community agent definitions. | `aid store browse`, `aid store install community/aider` |
 | `aid agent` | Manage custom agent definitions: list, show, add, remove, fork. | `aid agent list`, `aid agent fork codex --as codex-fast` |
 | `aid export` | Export a task with full context (prompt, events, output, diff). Supports markdown and JSON. | `aid export t-1234`, `aid export t-1234 --format json --output task.json` |
-| `aid memory` | Manage shared agent memory: add, list, search, forget. | `aid memory add discovery "Finding"`, `aid memory search "query"` |
+| `aid memory` | Manage shared agent memory: add, list, search, update, forget. | `aid memory add discovery "Finding"`, `aid memory search "query"` |
+| `aid finding` | Post or list workgroup findings for investigation collaboration. | `aid finding add wg-abc1 "key insight"`, `aid finding list wg-abc1` |
+| `aid tree` | Show retry chain as an ASCII tree with agent/status/cost per node. | `aid tree t-1234` |
+| `aid summary` | Summarize workgroup results with tasks, milestones, findings, costs. | `aid summary wg-abc1` |
 | `aid init` | Initialize default skills and templates. | `aid init` |
 
 ## Best Practices / Methodology

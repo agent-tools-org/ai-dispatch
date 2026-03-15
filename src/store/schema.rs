@@ -123,6 +123,11 @@ pub(super) fn migrate(store: &Store) -> Result<()> {
     let _ = conn.execute_batch("ALTER TABLE tasks ADD COLUMN resolved_prompt TEXT;");
     let _ = conn.execute_batch(CREATE_WORKGROUPS_SQL);
     let _ = conn.execute_batch(CREATE_MEMORIES_SQL);
+    let _ = conn.execute_batch("ALTER TABLE memories ADD COLUMN supersedes TEXT;");
+    let _ = conn.execute_batch("ALTER TABLE memories ADD COLUMN version INTEGER NOT NULL DEFAULT 1;");
+    let _ = conn.execute_batch("ALTER TABLE memories ADD COLUMN inject_count INTEGER NOT NULL DEFAULT 0;");
+    let _ = conn.execute_batch("ALTER TABLE memories ADD COLUMN last_injected_at TEXT;");
+    let _ = conn.execute_batch("ALTER TABLE memories ADD COLUMN success_count INTEGER NOT NULL DEFAULT 0;");
     let _ = conn.execute_batch("ALTER TABLE events ADD COLUMN metadata TEXT;");
     let _ = conn.execute_batch("ALTER TABLE tasks ADD COLUMN prompt_tokens INTEGER;");
     let _ = conn.execute_batch("ALTER TABLE tasks ADD COLUMN verify TEXT;");
@@ -196,6 +201,15 @@ pub(super) fn row_to_memory(row: &Row) -> rusqlite::Result<Result<Memory>> {
         content_hash: row.get(6)?,
         created_at: parse_dt(&row.get::<_, String>(7)?),
         expires_at: row.get::<_, Option<String>>(8)?.map(|s| parse_dt(&s)),
+        supersedes: row
+            .get::<_, Option<String>>(9)?
+            .map(|s| MemoryId(s)),
+        version: row.get::<_, i64>(10)?,
+        inject_count: row.get::<_, i64>(11)?,
+        last_injected_at: row
+            .get::<_, Option<String>>(12)?
+            .map(|s| parse_dt(&s)),
+        success_count: row.get::<_, i64>(13)?,
     }))
 }
 

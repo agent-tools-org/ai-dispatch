@@ -6,10 +6,9 @@ use anyhow::Result;
 use chrono::Local;
 use rusqlite::{params, OptionalExtension};
 
-use super::schema::{parse_dt, row_to_event, row_to_finding, row_to_memory, row_to_task};
+use super::schema::{parse_dt, row_to_event, row_to_memory, row_to_task};
 use super::Store;
 use crate::types::*;
-use crate::types::Finding;
 
 impl Store {
     pub fn get_workgroup(&self, id: &str) -> Result<Option<Workgroup>> {

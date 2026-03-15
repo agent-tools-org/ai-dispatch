@@ -383,6 +383,14 @@ Batch TOML format:
         #[command(subcommand)]
         action: MemoryCommands,
     },
+    #[command(after_help = r#"Examples:
+  aid finding add wg-abc1 "gamma can be zero in tricrypto"
+  aid finding list wg-abc1"#)]
+    /// Post or list workgroup findings
+    Finding {
+        #[command(subcommand)]
+        action: FindingCommands,
+    },
     /// Initialize default skills and templates
     Init,
     #[command(hide = true, name = "__run-task")]
@@ -476,6 +484,25 @@ enum MemoryCommands {
     Forget {
         /// Memory ID (e.g. m-a3f1)
         id: String,
+    },
+}
+
+#[derive(Subcommand)]
+enum FindingCommands {
+    /// Post a finding to a workgroup
+    Add {
+        /// Workgroup ID
+        group: String,
+        /// Finding content
+        content: String,
+        /// Source task ID (optional)
+        #[arg(long)]
+        task: Option<String>,
+    },
+    /// List findings for a workgroup
+    List {
+        /// Workgroup ID
+        group: String,
     },
 }
 
@@ -792,6 +819,14 @@ async fn main() -> Result<()> {
             }
             MemoryCommands::Forget { id } => {
                 cmd::memory::forget(&store, &id)?;
+            }
+        },
+        Commands::Finding { action } => match action {
+            FindingCommands::Add { group, content, task } => {
+                cmd::finding::add(&store, &group, &content, task.as_deref())?;
+            }
+            FindingCommands::List { group } => {
+                cmd::finding::list(&store, &group)?;
             }
         },
         Commands::Init => cmd::init::run()?,

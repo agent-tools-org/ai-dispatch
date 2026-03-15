@@ -216,8 +216,8 @@ pub(super) fn row_to_finding(row: &Row) -> rusqlite::Result<Result<Finding>> {
     Ok(Ok(Finding {
         id: row.get(0)?,
         workgroup_id: row.get(1)?,
-        source_task_id: row.get(2)?,
-        content: row.get(3)?,
+        content: row.get(2)?,
+        source_task_id: row.get(3)?,
         created_at: parse_dt(&row.get::<_, String>(4)?),
     }))
 }

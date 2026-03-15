@@ -71,6 +71,10 @@ fn merge_single(store: &Store, task_id: &str) -> Result<()> {
             }
             Err(e) => eprintln!("[aid] Warning: could not run git merge: {e}"),
         }
+    } else {
+        eprintln!(
+            "[aid] No worktree branch — agent edited files in-place. Nothing to merge."
+        );
     }
     store.update_task_status(task_id, TaskStatus::Merged)?;
     println!("Marked {task_id} as merged");
@@ -120,6 +124,8 @@ fn merge_group(store: &Store, group_id: &str) -> Result<()> {
                         eprintln!("[aid] Warning: could not run git merge: {e}");
                     }
                 }
+            } else {
+                eprintln!("[aid] {} — no worktree, edits applied in-place", task.id);
             }
             store.update_task_status(task.id.as_str(), TaskStatus::Merged)?;
             merged += 1;

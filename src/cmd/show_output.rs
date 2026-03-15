@@ -85,18 +85,100 @@ fn diff_artifact_fallback(task: &Task, task_id: &str) -> Result<Option<String>> 
     if let Ok(task_output) = read_task_output(task) {
         return Ok(Some(format_artifact_block("Output", &task_output)));
     }
-    if let Some(ref log_path) = task.log_path
-        && let Ok(log) = std::fs::read_to_string(log_path)
-    {
-        return Ok(Some(format_artifact_block("Log", &log)));
+    // Try structured edit extraction from JSONL log before raw fallback
+    let log_path = task
+        .log_path
+        .as_ref()
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|| paths::log_path(task_id));
+    if let Some(edits) = extract_edits_from_log(&log_path) {
+        return Ok(Some(edits));
     }
-    if task.output_path.is_none() {
-        let log_path = paths::log_path(task_id);
-        if let Ok(log) = std::fs::read_to_string(&log_path) {
-            return Ok(Some(format_artifact_block("Output", &log)));
-        }
+    // Raw log fallback (last resort)
+    if let Ok(log) = std::fs::read_to_string(&log_path) {
+        return Ok(Some(format_artifact_block("Output", &log)));
     }
     Ok(None)
+}
+
+/// Parse JSONL log for tool_use edit/write events, return formatted diff.
+fn extract_edits_from_log(log_path: &Path) -> Option<String> {
+    let content = std::fs::read_to_string(log_path).ok()?;
+    let mut edits: Vec<(String, String, String, String)> = Vec::new(); // (file, tool, old, new)
+    for line in content.lines() {
+        let Ok(obj) = serde_json::from_str::<serde_json::Value>(line) else {
+            continue;
+        };
+        let Some("tool_use") = obj.get("type").and_then(|v| v.as_str()) else {
+            continue;
+        };
+        let Some(part) = obj.get("part") else { continue };
+        let Some(tool) = part.get("tool").and_then(|v| v.as_str()) else {
+            continue;
+        };
+        if !matches!(tool, "edit" | "write" | "apply_diff" | "replace") {
+            continue;
+        }
+        let Some(input) = part.get("state").and_then(|s| s.get("input")) else {
+            continue;
+        };
+        let file_path = input
+            .get("filePath")
+            .or_else(|| input.get("file_path"))
+            .and_then(|v| v.as_str())
+            .unwrap_or("(unknown)")
+            .to_string();
+        let old = input
+            .get("oldString")
+            .or_else(|| input.get("old_string"))
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string();
+        let new = input
+            .get("newString")
+            .or_else(|| input.get("new_string"))
+            .or_else(|| input.get("content"))
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string();
+        edits.push((file_path, tool.to_string(), old, new));
+    }
+    if edits.is_empty() {
+        return None;
+    }
+    let mut out = String::new();
+    out.push_str("\n--- File Changes (from agent log) ---\n");
+    // File summary
+    let mut files: Vec<&str> = edits.iter().map(|(f, ..)| f.as_str()).collect();
+    files.dedup();
+    out.push_str(&format!("  {} edit(s) across {} file(s):\n", edits.len(), files.len()));
+    for f in &files {
+        // Show short path (last 3 components)
+        let short: String = f.rsplit('/').take(3).collect::<Vec<_>>().into_iter().rev().collect::<Vec<_>>().join("/");
+        out.push_str(&format!("    {short}\n"));
+    }
+    // Inline diffs
+    for (file, tool, old, new) in &edits {
+        let short: String = file.rsplit('/').take(2).collect::<Vec<_>>().into_iter().rev().collect::<Vec<_>>().join("/");
+        out.push_str(&format!("\n  [{tool}] {short}\n"));
+        if !old.is_empty() {
+            for line in old.lines().take(10) {
+                out.push_str(&format!("  - {line}\n"));
+            }
+            if old.lines().count() > 10 {
+                out.push_str(&format!("  ... ({} more lines)\n", old.lines().count() - 10));
+            }
+        }
+        if !new.is_empty() {
+            for line in new.lines().take(10) {
+                out.push_str(&format!("  + {line}\n"));
+            }
+            if new.lines().count() > 10 {
+                out.push_str(&format!("  ... ({} more lines)\n", new.lines().count() - 10));
+            }
+        }
+    }
+    Some(out)
 }
 fn format_artifact_block(title: &str, content: &str) -> String {
     let mut out = String::new();

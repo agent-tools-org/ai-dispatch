@@ -107,15 +107,6 @@ const BUILTIN_AGENT_PROFILES: &[BuiltinAgentProfile] = &[
         trust_tier: "api",
     },
     BuiltinAgentProfile {
-        name: "ob1",
-        command: "ob1",
-        description: "Multi-model coding, 300+ models",
-        cost: "$10/day budget",
-        best_for: "research, explain, implement, create, analyze, build",
-        streaming: true,
-        trust_tier: "api",
-    },
-    BuiltinAgentProfile {
         name: "codebuff",
         command: "aid-codebuff",
         description: "Complex implementation, frontend",

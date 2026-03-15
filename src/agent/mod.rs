@@ -6,7 +6,6 @@ pub mod codex;
 pub mod cursor;
 pub mod gemini;
 pub mod kilo;
-pub mod ob1;
 pub mod opencode;
 pub(crate) mod custom;
 pub(crate) mod registry;
@@ -63,7 +62,6 @@ pub fn detect_agents() -> Vec<AgentKind> {
         ("opencode", AgentKind::OpenCode),
         ("cursor", AgentKind::Cursor),
         ("kilo", AgentKind::Kilo),
-        ("ob1", AgentKind::Ob1),
         ("aid-codebuff", AgentKind::Codebuff),
     ] {
         if which_exists(name) {
@@ -88,7 +86,6 @@ pub fn get_agent(kind: AgentKind) -> Box<dyn Agent> {
         AgentKind::Gemini => Box::new(gemini::GeminiAgent),
         AgentKind::OpenCode => Box::new(opencode::OpenCodeAgent),
         AgentKind::Kilo => Box::new(kilo::KiloAgent),
-        AgentKind::Ob1 => Box::new(ob1::Ob1Agent),
         AgentKind::Codebuff => Box::new(codebuff::CodebuffAgent),
         AgentKind::Custom => panic!("Custom agents must be resolved via resolve_agent()"),
     }

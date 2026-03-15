@@ -133,7 +133,7 @@ pub fn auto_skills(agent: &AgentKind, has_worktree: bool) -> Vec<String> {
     let available = list_skills().unwrap_or_default();
     let mut skills = Vec::new();
     match agent {
-        AgentKind::Codex | AgentKind::OpenCode | AgentKind::Cursor | AgentKind::Kilo | AgentKind::Ob1 | AgentKind::Codebuff => {
+        AgentKind::Codex | AgentKind::OpenCode | AgentKind::Cursor | AgentKind::Kilo | AgentKind::Codebuff => {
             skills.push("implementer".to_string());
         }
         AgentKind::Gemini => {
@@ -176,7 +176,6 @@ mod tests {
         assert_eq!(auto_skills(&AgentKind::Cursor, true), vec!["implementer"]);
         assert_eq!(auto_skills(&AgentKind::Gemini, false), vec!["researcher"]);
         assert_eq!(auto_skills(&AgentKind::Kilo, false), vec!["implementer"]);
-        assert_eq!(auto_skills(&AgentKind::Ob1, false), vec!["implementer"]);
     }
 
     #[test]

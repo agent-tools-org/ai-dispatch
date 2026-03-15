@@ -95,7 +95,6 @@ pub fn run() -> Result<()> {
         ("opencode", "opencode"),
         ("cursor", "cursor"),
         ("kilo", "kilo"),
-        ("ob1", "ob1"),
         ("codebuff", "codebuff"),
     ];
     let mut installed = 0;

@@ -50,7 +50,6 @@ fn resolve_pricing(model: Option<&str>, agent: AgentKind) -> Option<ModelPricing
             input_per_m: 0.0,
             output_per_m: 0.0,
         }),
-        AgentKind::Ob1 => model_pricing("gemini-2.5-flash"),
         AgentKind::Codebuff => None, // Cost tracked by codebuff SDK
         AgentKind::Custom => None,
     }

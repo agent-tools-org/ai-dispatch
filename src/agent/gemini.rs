@@ -60,28 +60,6 @@ impl super::Agent for GeminiAgent {
     }
 }
 
-pub(super) fn parse_gemini_event(task_id: &TaskId, line: &str) -> Option<TaskEvent> {
-    let trimmed = line.trim();
-    if trimmed.is_empty() {
-        return None;
-    }
-    let v: serde_json::Value = serde_json::from_str(trimmed).ok()?;
-    parse_stream_event(task_id, &v, Local::now())
-}
-
-pub(super) fn extract_gemini_tokens(output: &str) -> CompletionInfo {
-    let v: serde_json::Value = serde_json::from_str(output).unwrap_or_default();
-    let tokens = extract_tokens(&v);
-    let model = extract_model(&v);
-    CompletionInfo {
-        tokens,
-        status: TaskStatus::Done,
-        model,
-        cost_usd: None,
-        exit_code: None,
-    }
-}
-
 fn parse_stream_event(task_id: &TaskId, v: &serde_json::Value, now: chrono::DateTime<Local>) -> Option<TaskEvent> {
     let event_type = v.get("type")?.as_str()?;
     match event_type {

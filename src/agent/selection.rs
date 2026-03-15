@@ -43,12 +43,6 @@ pub(crate) const AGENT_CAPABILITIES: &[(AgentKind, &[(TaskCategory, i32)])] = &[
         (TaskCategory::Debugging, 5), (TaskCategory::SimpleEdit, 4),
         (TaskCategory::Research, 2), (TaskCategory::Documentation, 4),
     ]),
-    (AgentKind::Ob1, &[
-        (TaskCategory::Research, 5), (TaskCategory::ComplexImpl, 5),
-        (TaskCategory::Debugging, 4), (TaskCategory::Testing, 4),
-        (TaskCategory::SimpleEdit, 3), (TaskCategory::Frontend, 3),
-        (TaskCategory::Refactoring, 4), (TaskCategory::Documentation, 3),
-    ]),
     (AgentKind::Codebuff, &[
         (TaskCategory::ComplexImpl, 8), (TaskCategory::Refactoring, 7),
         (TaskCategory::Frontend, 7), (TaskCategory::Testing, 6),
@@ -68,7 +62,7 @@ fn is_cheap(agent: &AgentKind) -> bool {
 }
 fn priority(kind: AgentKind) -> i32 {
     match kind {
-        AgentKind::Gemini | AgentKind::Kilo | AgentKind::Ob1 => 0,
+        AgentKind::Gemini | AgentKind::Kilo => 0,
         AgentKind::OpenCode => 1, AgentKind::Cursor | AgentKind::Codebuff => 2, AgentKind::Codex => 3,
         AgentKind::Custom => 1,
     }
@@ -142,7 +136,7 @@ fn select_agent_from(
         .iter().map(|(k, r, c)| (*k, (*r, *c))).collect();
     let all_agents = [
         AgentKind::Gemini, AgentKind::OpenCode, AgentKind::Kilo,
-        AgentKind::Cursor, AgentKind::Codex, AgentKind::Ob1,
+        AgentKind::Cursor, AgentKind::Codex,
     ];
     let score_for = |kind: AgentKind| -> i32 {
         let mut s = if let Some(tc) = &team {
@@ -260,7 +254,7 @@ pub(crate) fn recommend_model(
 }
 
 const CODING_FALLBACK_CHAIN: &[AgentKind] = &[
-    AgentKind::Codex, AgentKind::Cursor, AgentKind::OpenCode, AgentKind::Kilo, AgentKind::Ob1,
+    AgentKind::Codex, AgentKind::Cursor, AgentKind::OpenCode, AgentKind::Kilo,
 ];
 pub(crate) fn coding_fallback_for(agent: &AgentKind) -> Option<AgentKind> {
     let available = detect_agents();
@@ -310,9 +304,9 @@ mod tests {
         let (_temp, _guard) = isolated();
         select_agent_from(prompt, &opts(dir.first().copied(), false), available, &[], None)
     }
-    fn all() -> [AgentKind; 6] {
+    fn all() -> [AgentKind; 5] {
         [AgentKind::Gemini, AgentKind::OpenCode, AgentKind::Kilo,
-         AgentKind::Cursor, AgentKind::Codex, AgentKind::Ob1]
+         AgentKind::Cursor, AgentKind::Codex]
     }
     fn with_history(prompt: &str, h: &[(AgentKind, f64, usize)]) -> (String, String) {
         let (_temp, _guard) = isolated();

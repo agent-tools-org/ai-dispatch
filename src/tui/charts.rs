@@ -10,7 +10,7 @@ use ratatui::widgets::{Bar, BarChart, BarGroup, Block, Borders, Gauge, Paragraph
 use super::app::App;
 use crate::cost;
 use crate::types::{AgentKind, Task, TaskStatus};
-const AGENTS: &[AgentKind] = &[AgentKind::Codex, AgentKind::Gemini, AgentKind::OpenCode, AgentKind::Cursor, AgentKind::Kilo, AgentKind::Ob1, AgentKind::Codebuff];
+const AGENTS: &[AgentKind] = &[AgentKind::Codex, AgentKind::Gemini, AgentKind::OpenCode, AgentKind::Cursor, AgentKind::Kilo, AgentKind::Codebuff];
 const FOOTER_HINT: &str = "a=all/today s=stats d=dashboard m=multipane q=quit";
 struct BudgetUsage { name: String, used: f64, limit: f64 }
 
@@ -255,7 +255,6 @@ fn agent_color(agent: AgentKind) -> Color {
         AgentKind::OpenCode => Color::Yellow,
         AgentKind::Cursor => Color::Magenta,
         AgentKind::Kilo => Color::Blue,
-        AgentKind::Ob1 => Color::White,
         AgentKind::Codebuff => Color::LightCyan,
         AgentKind::Custom => Color::Gray,
     }

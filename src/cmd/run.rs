@@ -60,7 +60,7 @@ pub async fn run(store: Arc<Store>, args: RunArgs) -> Result<TaskId> {
         (AgentKind::Custom, Some(args.agent_name.clone()))
     } else {
         let custom = agent::registry::list_custom_agents();
-        let mut available = "gemini, codex, opencode, cursor, kilo, ob1, codebuff".to_string();
+        let mut available = "gemini, codex, opencode, cursor, kilo, codebuff".to_string();
         for ca in &custom {
             available.push_str(&format!(", {}", ca.id));
         }

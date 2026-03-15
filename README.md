@@ -1,6 +1,6 @@
 # ai-dispatch (aid)
 
-![Version](https://img.shields.io/badge/version-5.3.0-blue)
+![Version](https://img.shields.io/badge/version-5.4.0-blue)
 ![Rust](https://img.shields.io/badge/rust-2024-orange)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
@@ -367,6 +367,41 @@ Expected milestone format:
 [MILESTONE] verified tests and summarized the diff
 ```
 
+### Agent Memory (Blackboard)
+
+`aid` includes a shared memory system that lets agents build up knowledge across tasks. Memories are stored in SQLite alongside tasks and automatically injected into agent prompts when relevant.
+
+Memory types:
+- **Discovery** — new findings about the codebase or environment
+- **Convention** — patterns, naming rules, or style decisions
+- **Lesson** — mistakes to avoid (auto-expires after 30 days)
+- **Fact** — verified constants (addresses, versions, config values)
+
+Agents can emit memories by including `[MEMORY: type] content` tags in their output. These are automatically extracted and deduplicated after task completion.
+
+```bash
+# Manual memory management
+aid memory add discovery "The retry module uses exponential backoff capped at 45s"
+aid memory add convention "All SQL migrations use ALTER TABLE with DEFAULT values"
+aid memory list
+aid memory list --type lesson
+aid memory search "retry"
+aid memory forget mem-a1b2
+```
+
+Memories are auto-injected into prompts during dispatch. Agents see a `--- Relevant Memories ---` section with matching memories from previous tasks.
+
+### Verify Status
+
+Tasks now track verification outcome separately from execution status via `verify_status`:
+
+- **Skipped** — no `--verify` was set
+- **Pending** — verify hasn't run yet
+- **Passed** — verify command succeeded
+- **Failed** — verify command failed (task may still be marked Done)
+
+The board displays `[VFAIL]` next to tasks that completed but failed verification, making it easy to distinguish "agent crashed" from "code doesn't pass checks".
+
 ## Command Reference
 
 | Command | Purpose | Typical use |
@@ -390,6 +425,7 @@ Expected milestone format:
 | `aid group` | Create, list, show, update, and delete shared-context workgroups. | `aid group create dispatch --context "Shared rollout notes"` |
 | `aid store` | Browse, search, preview, and install community agent definitions. | `aid store browse`, `aid store install community/aider` |
 | `aid agent` | Manage custom agent definitions: list, show, add, remove, fork. | `aid agent list`, `aid agent fork codex --as codex-fast` |
+| `aid memory` | Manage shared agent memory: add, list, search, forget. | `aid memory add discovery "Finding"`, `aid memory search "query"` |
 | `aid init` | Initialize default skills and templates. | `aid init` |
 
 ## Best Practices / Methodology
@@ -630,7 +666,7 @@ Typical directory layout:
 
 What lives there:
 
-- `aid.db`: SQLite task, workgroup, and event store
+- `aid.db`: SQLite task, workgroup, event, and memory store
 - `logs/`: raw agent output plus stderr capture
 - `jobs/`: detached background worker specs
 - `batches/`: archived batch TOML files (auto-saved after dispatch)

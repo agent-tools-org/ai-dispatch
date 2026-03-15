@@ -34,6 +34,7 @@ pub(crate) struct RunExtrasArgs {
 }
 
 #[derive(Subcommand)]
+#[allow(clippy::large_enum_variant)]
 pub enum Commands {
     #[command(after_help = r#"Examples:
   aid run codex "Add unit tests" --verify

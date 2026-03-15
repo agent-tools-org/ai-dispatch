@@ -3,8 +3,10 @@
 // Deps: crate::store::Store, crate::types::Task, crate::cmd::judge (for gather_diff).
 use crate::cmd::judge;
 use crate::types::Task;
+use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CompletionSummary {
     pub task_id: String,
     pub agent: String,
@@ -71,12 +73,12 @@ fn extract_files_from_diff(diff: &str) -> Vec<String> {
     let mut seen = HashSet::new();
     let mut files = Vec::new();
     for line in diff.lines() {
-        if let Some(rest) = line.strip_prefix("diff --git ") {
-            if let Some((a_path, _)) = rest.split_once(' ') {
-                let normalized = a_path.strip_prefix("a/").unwrap_or(a_path);
-                if seen.insert(normalized.to_string()) {
-                    files.push(normalized.to_string());
-                }
+        if let Some(rest) = line.strip_prefix("diff --git ")
+            && let Some((a_path, _)) = rest.split_once(' ')
+        {
+            let normalized = a_path.strip_prefix("a/").unwrap_or(a_path);
+            if seen.insert(normalized.to_string()) {
+                files.push(normalized.to_string());
             }
         }
     }

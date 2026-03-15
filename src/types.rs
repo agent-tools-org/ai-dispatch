@@ -188,15 +188,6 @@ impl VerifyStatus {
             _ => None,
         }
     }
-
-    pub fn label(&self) -> &'static str {
-        match self {
-            Self::Pending => "PEND",
-            Self::Passed => "PASS",
-            Self::Failed => "VFAIL",
-            Self::Skipped => "-",
-        }
-    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -344,7 +335,9 @@ impl MemoryId {
         let val: u16 = rand::rng().random();
         Self(format!("m-{val:04x}"))
     }
-    pub fn as_str(&self) -> &str { &self.0 }
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
 }
 
 impl fmt::Display for MemoryId {
@@ -355,10 +348,10 @@ impl fmt::Display for MemoryId {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 pub enum MemoryType {
-    Discovery,   // Bug patterns, API behaviors, gotchas
-    Convention,  // Code style, naming, architecture decisions
-    Lesson,      // What worked/failed in past tasks
-    Fact,        // Version, config, endpoint facts
+    Discovery,  // Bug patterns, API behaviors, gotchas
+    Convention, // Code style, naming, architecture decisions
+    Lesson,     // What worked/failed in past tasks
+    Fact,       // Version, config, endpoint facts
 }
 
 impl MemoryType {

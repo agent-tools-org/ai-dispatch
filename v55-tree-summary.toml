@@ -1,0 +1,96 @@
+[defaults]
+verify = "auto"
+
+[[task]]
+agent = "codex"
+prompt = """
+Create `src/cmd/tree.rs` — a new CLI subcommand `aid tree <task-id>` that displays the retry chain of a task as a visual tree.
+
+Requirements:
+1. Query the retry chain using `store.get_retry_chain(task_id)` (returns Vec<Task> from root to current, already in src/store/queries.rs)
+2. Also find all tasks where `parent_task_id = <any task in chain>` to show sibling retries (fan-out)
+3. Display as an ASCII tree with these columns per node:
+   - Task ID, Agent, Status (with verify_status if not Skipped), Duration, Tokens
+   - Example output:
+     ```
+     t-0134 codex DONE (5m 12s, 1.4M tokens)
+     └── t-83a1 gemini DONE [retry] (22s)
+         └── t-9ecb codex DONE [retry] (9m 59s, 2.1M tokens)
+     ```
+4. Use box-drawing characters: └──, ├──, │ for the tree lines
+5. Handle the case where task_id is not found (print error and exit)
+6. Keep file under 120 lines
+
+Store API available:
+- `store.get_retry_chain(task_id)` → Vec<Task> (root → current chain)
+- `store.get_task(id)` → Option<Task>
+- `store.list_tasks(TaskFilter::All)` → Vec<Task> (for finding siblings via parent_task_id)
+
+Types (from src/types.rs): Task has fields: id (TaskId), agent (AgentKind), status (TaskStatus), verify_status (VerifyStatus), parent_task_id (Option<String>), duration_ms (Option<i64>), tokens (Option<i64>)
+
+Register the module in src/cmd/mod.rs: add `pub mod tree;`
+
+Wire up in src/main.rs:
+- Add `Tree { task_id: String }` variant to Commands enum, with help text `/// Show task retry tree`
+- In main match: `Commands::Tree { task_id } => cmd::tree::run(&store, &task_id)?;`
+
+[MILESTONE] tree command created and wired
+"""
+worktree = "feat/tree"
+context = ["src/store/queries.rs:get_retry_chain,get_task,list_tasks", "src/types.rs:Task,TaskStatus,TaskId,VerifyStatus", "src/cmd/mod.rs"]
+
+[[task]]
+agent = "codex"
+prompt = """
+Create `src/cmd/summary.rs` — a new CLI subcommand `aid summary --group <wg-id>` that generates a compressed summary of all tasks in a workgroup.
+
+Requirements:
+1. Query tasks: `store.list_tasks_by_group(group_id)` → Vec<Task>
+2. Query workgroup info: `store.get_workgroup(group_id)` → Option<Workgroup>
+3. Output a structured summary:
+   ```
+   Workgroup: <name> (<wg-id>)
+   Tasks: X total, Y done, Z failed
+
+   Results:
+   ✓ t-abc1 codex — "prompt snippet..." (5m, 1.4M tokens, $5.15)
+   ✗ t-abc2 opencode — "prompt snippet..." (2m, FAILED)
+   ✓ t-abc3 gemini — "prompt snippet..." (1m, free)
+
+   Milestones:
+   - t-abc1: types defined → tests passing → implementation complete
+   - t-abc3: research done
+   ```
+4. Truncate prompt display to 60 chars
+5. Show milestones per task using `store.get_workgroup_milestones(group_id)` which returns Vec<(task_id, detail)>
+6. Group milestones by task_id
+7. Keep file under 150 lines
+
+Store API:
+- `store.list_tasks_by_group(group_id)` → Vec<Task>
+- `store.get_workgroup(group_id)` → Option<Workgroup> (from src/store_workgroups.rs)
+- `store.get_workgroup_milestones(group_id)` → Vec<(String, String)>
+
+Types: Task, Workgroup (id, name, shared_context, created_at, updated_at), TaskStatus, AgentKind
+
+Register in src/cmd/mod.rs: add `pub mod summary;`
+
+Wire up in src/main.rs:
+- Add Summary subcommand with `#[arg(long)] group: String` and help `/// Summarize workgroup results`
+- In main match: `Commands::Summary { group } => cmd::summary::run(&store, &group)?;`
+
+[MILESTONE] summary command created and wired
+"""
+worktree = "feat/summary"
+context = ["src/store/queries.rs:list_tasks_by_group,get_workgroup_milestones", "src/types.rs:Task,TaskStatus,Workgroup,WorkgroupId,AgentKind", "src/cmd/mod.rs"]
+
+[[task]]
+agent = "opencode"
+prompt = """
+In src/store/queries.rs, the method `get_memory` (around line 242) is never used. Delete it entirely.
+
+In src/types.rs, the method `VerifyStatus::label` (in the `impl VerifyStatus` block) is never used. Delete it entirely.
+
+Both generate dead_code warnings. Remove them completely — no _unused rename, no comments. Just delete.
+"""
+dir = "."

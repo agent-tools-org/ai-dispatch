@@ -217,7 +217,12 @@ impl Store {
         Ok(memories)
     }
 
-    pub fn search_memories(&self, query: &str, project_path: Option<&str>, limit: usize) -> Result<Vec<Memory>> {
+    pub fn search_memories(
+        &self,
+        query: &str,
+        project_path: Option<&str>,
+        limit: usize,
+    ) -> Result<Vec<Memory>> {
         let conn = self.db();
         let now = Local::now().to_rfc3339();
         let pattern = format!("%{}%", query);
@@ -237,20 +242,6 @@ impl Store {
         )?;
         let memories = rows.map(|row| row?).collect::<Result<Vec<_>>>()?;
         Ok(memories)
-    }
-
-    pub fn get_memory(&self, id: &str) -> Result<Option<Memory>> {
-        let conn = self.db();
-        let mut stmt = conn.prepare(
-            "SELECT id, memory_type, content, source_task_id, agent, project_path, content_hash,
-             created_at, expires_at
-             FROM memories WHERE id = ?1",
-        )?;
-        let mut rows = stmt.query_map(params![id], row_to_memory)?;
-        match rows.next() {
-            Some(row) => Ok(Some(row??)),
-            None => Ok(None),
-        }
     }
 }
 

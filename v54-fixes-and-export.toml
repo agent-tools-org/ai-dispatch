@@ -1,0 +1,108 @@
+# v5.4.1 — Bug fixes + task export feature
+# Dogfooding: all tasks use --verify to test verify_status
+
+[[task]]
+name = "fix-tui-progress"
+agent = "codex"
+prompt = """Fix the TUI Progress column to show the last milestone for completed tasks.
+
+Current behavior: `task_progress()` in `src/tui/ui_helpers.rs` returns "—" for all non-Running tasks.
+This makes the Progress column useless for Done/Failed tasks.
+
+Required changes:
+
+1. In `src/tui/ui_helpers.rs`, modify `task_progress()`:
+   - For Done/Failed tasks: look up `app.get_milestone(task.id.as_str())` and show it (dimmed or prefixed) instead of "—"
+   - Keep "—" only for Pending/Skipped tasks that never ran
+   - Keep "awaiting input" for AwaitingInput
+
+2. In `src/tui/app.rs`, modify `load_milestones()`:
+   - Currently only loads milestones for Running|AwaitingInput tasks (line 282-286)
+   - Also load milestones for Done|Failed|Merged tasks so completed tasks show their last milestone
+
+3. Update the test in `src/tui/app_tests.rs` `loads_running_task_milestone` to also verify that a Done task shows its milestone.
+
+Context files: src/tui/ui_helpers.rs, src/tui/app.rs, src/tui/app_tests.rs
+Acceptance: cargo test passes, Progress column shows milestones for completed tasks."""
+dir = "."
+worktree = "fix/tui-progress"
+verify = "cargo test"
+
+[[task]]
+name = "fix-selection-test"
+agent = "codex"
+prompt = """Fix the test `history_penalty_overrides_default_codex_selection` in `src/agent/selection.rs`.
+
+Root cause: `select_agent_from()` at line 151 calls `load_custom_agents()` which scans `~/.aid/agents/`. When a custom agent like "researcher" is installed, it can outscore the expected built-in agent, breaking the test assertion.
+
+Fix: The test helper functions (like `opts()`, `with_history()`) and the test itself need AID_HOME isolation. Use the pattern already established in other test files:
+```rust
+use tempfile::TempDir;
+use crate::paths::AidHomeGuard;
+
+let temp = TempDir::new().unwrap();
+let _guard = AidHomeGuard::set(temp.path());
+std::fs::create_dir_all(crate::paths::aid_dir()).ok();
+```
+
+Add this isolation to every test function in the `tests` module of `src/agent/selection.rs` that calls `select_agent_from()` (there are ~15 of them). Create a helper like `fn isolated() -> (TempDir, AidHomeGuard)` to reduce boilerplate.
+
+Also need to add `tempfile` to the test's use list and `crate::paths::AidHomeGuard`.
+
+Context files: src/agent/selection.rs, src/paths.rs (for AidHomeGuard)
+Acceptance: `cargo test selection` passes consistently regardless of installed custom agents."""
+dir = "."
+worktree = "fix/selection-test-isolation"
+verify = "cargo test selection"
+
+[[task]]
+name = "task-export"
+agent = "codex"
+prompt = """Implement `aid export <task-id>` command that exports a task with its full context.
+
+Create a new file `src/cmd/export.rs` (< 150 lines) that:
+
+1. Loads the task from store by ID
+2. Loads events for the task
+3. Reads output file content (if output_path exists)
+4. Reads the diff (reuse `src/cmd/show.rs` diff logic — call `worktree_diff()`)
+5. Formats into one of: markdown (default), json
+
+Output format (markdown):
+```
+# Task {id}
+- Agent: {agent}
+- Status: {status}
+- Duration: {duration}
+- Cost: {cost}
+- Created: {created_at}
+
+## Prompt
+{prompt}
+
+## Events
+{events as timeline}
+
+## Output
+{output content}
+
+## Diff
+```diff
+{diff}
+```
+```
+
+JSON format: serialize all the above as a JSON object.
+
+CLI integration in `src/main.rs`:
+- Add `Export` variant to Commands enum
+- Subcommand: `aid export <TASK_ID> [--format md|json]` (default: md)
+- `--output <file>` flag to write to file instead of stdout
+
+Add `pub mod export;` to `src/cmd/mod.rs`.
+
+Context files: src/cmd/show.rs (for diff logic), src/types.rs (Task, TaskEvent), src/store/queries.rs (get_task, get_events)
+Acceptance: cargo check passes, `aid export --help` works."""
+dir = "."
+worktree = "feat/task-export"
+verify = "cargo check"

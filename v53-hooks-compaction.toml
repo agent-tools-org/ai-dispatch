@@ -1,0 +1,165 @@
+# v5.3 — Hook System + Prompt Compaction
+# Three tasks: hooks system (with CLI), prompt compaction, skill audit
+# Inspired by pi-mono's extension hooks and sub-1K prompt philosophy.
+
+[defaults]
+verify = true
+
+[[task]]
+name = "hooks"
+agent = "codex"
+prompt = """
+Add a task lifecycle hooks system to aid. This allows users to define shell scripts that run at key points in the task lifecycle.
+
+## What to build
+
+### 1. New module: src/hooks.rs (~120 lines)
+
+Hook config lives in `~/.aid/hooks.toml` with this format:
+```toml
+[[hook]]
+event = "before_run"     # before_run | after_complete | on_fail
+command = "~/.aid/hooks/validate.sh"
+# Optional filters:
+agent = "codex"          # only trigger for this agent (optional)
+```
+
+Functions to implement:
+- `load_hooks() -> Result<Vec<Hook>>` — parse ~/.aid/hooks.toml, return empty vec if file missing
+- `run_hooks(event: &str, task_json: &serde_json::Value, agent: Option<&str>) -> Result<()>` — run matching hooks, pass task JSON to stdin, log stderr to eprintln, fail if hook exits non-zero (only for before_run — after_complete and on_fail hooks are best-effort)
+- Hook struct: `{ event: String, command: String, agent: Option<String> }`
+
+### 2. Integrate into run pipeline: src/cmd/run.rs
+
+In the `run()` function:
+- **before_run**: After task is inserted into store (line ~156) but before spawning agent, call `hooks::run_hooks("before_run", &task_json, Some(agent_display_name))`. If it fails, mark task as Failed and return error.
+- **after_complete**: After task completes (after verify, before webhook fire at line ~275), call `hooks::run_hooks("after_complete", &task_json, Some(agent_display_name))`. Best-effort — log errors but don't fail.
+- **on_fail**: When task status is Failed (inside the `if task.status == TaskStatus::Failed` block around line ~263), call `hooks::run_hooks("on_fail", &task_json, Some(agent_display_name))`. Best-effort.
+
+Build the task JSON with: `{ "task_id": "t-xxxx", "agent": "codex", "status": "running", "prompt": "...", "worktree": "...", "dir": "..." }` — use serde_json::json! macro.
+
+### 3. Add --hook CLI flag: src/main.rs + RunArgs
+
+- Add `--hook` flag to Run command: `#[arg(long)] hook: Vec<String>` — format: "event:command" (e.g. "before_run:./check.sh")
+- Add `hooks: Vec<String>` field to RunArgs (in src/cmd/run.rs)
+- In run(), parse --hook values and merge with loaded hooks from hooks.toml
+- In hooks.rs, add `parse_cli_hooks(specs: &[String]) -> Result<Vec<Hook>>` that splits on first ":"
+
+### 4. Add hooks to batch defaults: src/batch.rs
+
+- Add `hooks: Option<Vec<String>>` to BatchDefaults and BatchTask
+- In apply_task_defaults(), inherit hooks from defaults if task has none
+- In task_to_run_args(), copy hooks to RunArgs
+
+### 5. Register module in src/main.rs
+
+Add `mod hooks;` to the module list. Wire the --hook arg into RunArgs construction.
+
+### Important constraints:
+- Keep hooks.rs under 150 lines
+- Do NOT modify prompt.rs (that's the prompt detector, unrelated)
+- Hook execution must be synchronous (std::process::Command, not tokio)
+- Use `home::home_dir()` or `crate::paths::aid_dir()` for ~/.aid path resolution
+- Add the `home` crate to Cargo.toml ONLY if not already present — check first
+"""
+worktree = "v53-hooks"
+context = ["src/cmd/run.rs:RunArgs,run", "src/types.rs:Task,TaskStatus", "src/batch.rs:BatchConfig,BatchDefaults,BatchTask,apply_task_defaults", "src/main.rs:Commands"]
+
+[[task]]
+name = "compaction"
+agent = "codex"
+prompt = """
+Add prompt token measurement and compaction to aid's skill/context injection system.
+
+## Background
+
+Currently aid injects skills and context into prompts without measuring or optimizing token usage. Pi-mono keeps its system prompt under 1K tokens. We want to measure and compress.
+
+## What to build
+
+### 1. Add token estimation to src/skills.rs
+
+Add a function `estimate_tokens(text: &str) -> usize` that uses the simple heuristic: `text.len() / 4` (average 4 chars per token for English/code). This is good enough for budgeting — we don't need tiktoken.
+
+Add `pub fn measure_skill_tokens(name: &str) -> Result<(String, usize)>` that loads a skill and returns (content, estimated_tokens).
+
+Add `pub fn compact_skill(content: &str, max_tokens: usize) -> String` that:
+1. If content is under max_tokens, return as-is
+2. Otherwise, apply these compressions in order:
+   a. Remove blank lines (collapse multiple newlines to single)
+   b. Remove markdown headers (lines starting with #) — keep their text inline
+   c. Remove bullet prefixes ("- " → "")
+   d. Truncate to max_tokens * 4 chars with "..." suffix
+3. Return the compacted string
+
+### 2. Add prompt budget tracking to skill injection
+
+In the existing `load_skills()` function, after loading all skills, add a summary line to eprintln:
+`[aid] Skills loaded: {count} skills, ~{total_tokens} tokens`
+
+This gives visibility into prompt overhead without changing behavior.
+
+### 3. Add `aid config prompt-budget` command
+
+In src/cmd/config.rs (or wherever config subcommands live), add a `prompt-budget` action that:
+- Lists all available skills with their token counts
+- Shows total token budget
+- Output format:
+```
+Skill Token Budget:
+  implementer    ~324 tokens
+  researcher     ~209 tokens
+  debugger       ~219 tokens
+  code-scout     ~196 tokens
+  test-writer    ~200 tokens
+  ─────────────────────
+  Total:         ~1,148 tokens
+```
+
+This is a read-only diagnostic — no actual budget enforcement yet.
+
+### 4. Apply compaction to context injection: src/context.rs
+
+In `resolve_context()`, after building the context string, add a token estimate line:
+`[aid] Context injected: {file_count} files, ~{tokens} tokens`
+
+### Important constraints:
+- Keep all changes under 100 new lines total across files
+- Do NOT use any external tokenizer crate — the len/4 heuristic is fine
+- Do NOT change the actual prompt content or behavior — this is measurement + optional compaction only
+- The compact_skill function should be pure (no side effects)
+- Add unit tests for estimate_tokens and compact_skill in skills.rs
+"""
+worktree = "v53-compaction"
+context = ["src/skills.rs", "src/context.rs"]
+
+[[task]]
+name = "skill-audit"
+agent = "gemini"
+prompt = """
+Audit the skill files in ~/.aid/skills/ for redundancy, overlap, and compression opportunities.
+
+Read each skill file:
+- ~/.aid/skills/implementer.md
+- ~/.aid/skills/debugger.md
+- ~/.aid/skills/researcher.md
+- ~/.aid/skills/code-scout.md
+- ~/.aid/skills/test-writer.md
+
+For each skill, measure:
+1. Character count and estimated token count (chars / 4)
+2. Identify duplicated instructions across skills (e.g. "keep changes minimal", "verify with cargo check")
+3. Identify verbose sections that could be compressed without losing meaning
+4. Suggest a compressed version of each skill (target: 30% reduction)
+
+Output a report to /tmp/aid-skill-audit.md with:
+- Current token budget per skill
+- Overlap analysis (which instructions appear in 2+ skills)
+- Specific compression suggestions
+- Proposed shared preamble (common instructions extracted into a single prefix)
+- Estimated savings
+
+This is research only — do NOT modify any files.
+"""
+read_only = true
+output = "/tmp/aid-skill-audit.md"

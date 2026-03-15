@@ -66,6 +66,20 @@ fn effective_skills_respect_no_skill_sentinel() {
     );
 }
 
+#[test]
+fn extract_words_normalizes_keywords() {
+    let text = "Refactor Foo::Bar and update src/lib.rs to fix Config::load().";
+    let words = extract_words(text);
+    assert!(words.contains("refactor"));
+    assert!(words.contains("foo"));
+    assert!(words.contains("bar"));
+    assert!(words.contains("src"));
+    assert!(words.contains("lib"));
+    assert!(words.contains("rs"));
+    assert!(words.contains("config"));
+    assert!(words.contains("load"));
+}
+
 #[tokio::test]
 async fn run_auto_retries_after_verify_failure() {
     let temp = tempfile::tempdir().unwrap();

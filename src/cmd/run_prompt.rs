@@ -3,7 +3,7 @@
 // Deps: context, templates, workgroup, skills, watcher, store.
 use anyhow::{Context, Result};
 use chrono::Local;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use tokio::process::Command;
 use crate::{agent, skills, store::Store, templates, team, types::*, watcher};
@@ -91,16 +91,36 @@ pub(super) fn build_prompt_bundle(store: &Store, args: &RunArgs, agent_kind: &Ag
 
 /// Query relevant memories and inject them into the prompt.
 fn inject_memories(store: &Store, prompt: &str, max_memories: usize) -> Result<Option<String>> {
-    // Detect project path from current git root
     let project_path = detect_project_path();
-
-    // Search memories relevant to this prompt (keyword match)
-    let memories = store.search_memories(prompt, project_path.as_deref(), max_memories)?;
-    if memories.is_empty() {
+    let keywords = extract_words(prompt);
+    let queries = build_memory_queries(prompt, &keywords);
+    if queries.is_empty() {
         return Ok(None);
     }
 
-    // Format memories as a context block with age for AI to gauge relevance
+    let mut scored: HashMap<String, (Memory, usize)> = HashMap::new();
+    for query in queries {
+        for memory in store.search_memories(&query, project_path.as_deref(), max_memories)? {
+            let entry = scored
+                .entry(memory.id.as_str().to_string())
+                .or_insert((memory.clone(), 0));
+            entry.1 += 1;
+        }
+    }
+
+    let mut scored: Vec<_> = scored.into_values().collect();
+    scored.sort_by(|a, b| {
+        b.1.cmp(&a.1)
+            .then_with(|| b.0.created_at.cmp(&a.0.created_at))
+    });
+    let memories: Vec<_> = scored.into_iter().take(max_memories).map(|(mem, _)| mem).collect();
+    if memories.is_empty() {
+        return Ok(None);
+    }
+    for memory in &memories {
+        store.increment_memory_inject(memory.id.as_str())?;
+    }
+
     let mut lines = vec!["[Agent Memory — knowledge from past tasks]".to_string()];
     let now = Local::now();
     for mem in &memories {
@@ -110,6 +130,91 @@ fn inject_memories(store: &Store, prompt: &str, max_memories: usize) -> Result<O
     let token_count = crate::templates::estimate_tokens(&lines.join("\n"));
     eprintln!("[aid] Injected {} memories (~{} tokens)", memories.len(), token_count);
     Ok(Some(lines.join("\n")))
+}
+
+fn build_memory_queries(prompt: &str, keywords: &HashSet<String>) -> Vec<String> {
+    let mut seen = HashSet::new();
+    let mut queries = Vec::new();
+
+    let trimmed = prompt.trim();
+    if !trimmed.is_empty() {
+        let truncated = trimmed.chars().take(200).collect::<String>();
+        if seen.insert(truncated.clone()) {
+            queries.push(truncated);
+        }
+    }
+
+    let top_words = top_significant_words(prompt, keywords, 5);
+    if !top_words.is_empty() {
+        let joined = top_words.join(" ");
+        if seen.insert(joined.clone()) {
+            queries.push(joined);
+        }
+    }
+
+    let paths = extract_path_tokens(prompt);
+    if !paths.is_empty() {
+        let joined = paths.join(" ");
+        if seen.insert(joined.clone()) {
+            queries.push(joined);
+        }
+    }
+
+    let idents = extract_type_or_function_names(prompt);
+    if !idents.is_empty() {
+        let joined = idents.join(" ");
+        if seen.insert(joined.clone()) {
+            queries.push(joined);
+        }
+    }
+
+    queries
+}
+
+fn top_significant_words(text: &str, keywords: &HashSet<String>, limit: usize) -> Vec<String> {
+    let mut counts = HashMap::new();
+    for token in text.split(|c: char| !c.is_alphanumeric()) {
+        let normalized = token.to_lowercase();
+        if normalized.is_empty() || !keywords.contains(&normalized) {
+            continue;
+        }
+        *counts.entry(normalized).or_insert(0) += 1;
+    }
+    let mut entries: Vec<_> = counts.into_iter().collect();
+    entries.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
+    entries.into_iter().take(limit).map(|(word, _)| word).collect()
+}
+
+fn extract_path_tokens(prompt: &str) -> Vec<String> {
+    let mut seen = HashSet::new();
+    prompt
+        .split_whitespace()
+        .filter_map(|token| {
+            let trimmed = token.trim_matches(|c: char| matches!(c, ',' | ';' | '.' | '?' | '!' | '"' | '\'' | '[' | ']' | '{' | '}' | '(' | ')'));
+            if trimmed.is_empty() || (!trimmed.contains('/') && !trimmed.contains('\\')) {
+                return None;
+            }
+            let candidate = trimmed.to_string();
+            if seen.insert(candidate.clone()) { Some(candidate) } else { None }
+        })
+        .collect()
+}
+
+fn extract_type_or_function_names(prompt: &str) -> Vec<String> {
+    let mut seen = HashSet::new();
+    let mut names = Vec::new();
+    for token in prompt.split_whitespace() {
+        let trimmed = token.trim_matches(|c: char| matches!(c, ',' | ';' | '.' | '?' | '!' | '"' | '\'' | '[' | ']' | '{' | '}'));
+        if trimmed.is_empty() {
+            continue;
+        }
+        let key = trimmed.strip_suffix("()").unwrap_or(trimmed).to_string();
+        let qualifies = trimmed.contains("::") || trimmed.ends_with("()") || key.chars().any(|c| c.is_ascii_uppercase());
+        if qualifies && seen.insert(key.clone()) {
+            names.push(key);
+        }
+    }
+    names
 }
 
 fn format_memory_age(duration: chrono::Duration) -> String {

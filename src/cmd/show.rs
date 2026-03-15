@@ -249,7 +249,7 @@ fn inplace_diff_stat(repo_path: &str) -> Option<String> {
     }
 }
 
-pub(crate) fn task_json(
+pub(crate) fn task_hook_json(
     task_id: &TaskId,
     agent: &str,
     status: TaskStatus,

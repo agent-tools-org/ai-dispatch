@@ -178,7 +178,7 @@ pub async fn run(store: Arc<Store>, args: RunArgs) -> Result<TaskId> {
     let mut runtime_hooks = hooks::load_hooks()?;
     runtime_hooks.extend(hooks::parse_cli_hooks(&args.hooks)?);
     store.update_task_status(task_id.as_str(), TaskStatus::Running)?;
-    let before_payload = show::task_json(
+    let before_payload = show::task_hook_json(
         &task_id,
         agent_display_name,
         TaskStatus::Running,
@@ -291,7 +291,7 @@ pub async fn run(store: Arc<Store>, args: RunArgs) -> Result<TaskId> {
             maybe_cleanup_fast_fail(&store, &task_id, &task);
             // Auto-cleanup worktree for failed tasks (no useful changes to preserve)
             if task.status == TaskStatus::Failed {
-                let fail_payload = show::task_json(
+                let fail_payload = show::task_hook_json(
                     &task_id,
                     agent_display_name,
                     TaskStatus::Failed,
@@ -319,7 +319,7 @@ pub async fn run(store: Arc<Store>, args: RunArgs) -> Result<TaskId> {
         }
         run_prompt::notify_task_completion(&store, &task_id)?;
         if let Some(task) = store.get_task(task_id.as_str())? {
-            let done_payload = show::task_json(
+            let done_payload = show::task_hook_json(
                 &task_id,
                 agent_display_name,
                 task.status,

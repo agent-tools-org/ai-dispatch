@@ -91,6 +91,10 @@ pub struct BatchTask {
     pub read_only: bool,
     #[serde(default)]
     pub budget: bool,
+    pub on_success: Option<String>,
+    pub on_fail: Option<String>,
+    #[serde(default)]
+    pub conditional: bool,
 }
 
 pub fn parse_batch_file(path: &Path) -> Result<BatchConfig> {
@@ -106,6 +110,7 @@ pub fn parse_batch_file(path: &Path) -> Result<BatchConfig> {
     validate_fallback_agents(&config.tasks)?;
     validate_no_file_overlap(&config.tasks)?;
     validate_dag(&config.tasks)?;
+    validate_conditional_hooks(&config.tasks)?;
     Ok(config)
 }
 
@@ -216,6 +221,42 @@ pub fn validate_dag(tasks: &[BatchTask]) -> Result<()> {
     }
     Ok(())
 }
+
+fn validate_conditional_hooks(tasks: &[BatchTask]) -> Result<()> {
+    let name_to_index = task_name_map(tasks)?;
+    for (task_idx, task) in tasks.iter().enumerate() {
+        if let Some(target) = task.on_success.as_deref() {
+            validate_conditional_hook(target, "on_success", task_idx, tasks, &name_to_index)?;
+        }
+        if let Some(target) = task.on_fail.as_deref() {
+            validate_conditional_hook(target, "on_fail", task_idx, tasks, &name_to_index)?;
+        }
+    }
+    Ok(())
+}
+
+fn validate_conditional_hook(
+    target: &str,
+    hook_name: &str,
+    task_idx: usize,
+    tasks: &[BatchTask],
+    name_to_index: &HashMap<&str, usize>,
+) -> Result<()> {
+    let trimmed = target.trim();
+    anyhow::ensure!(!trimmed.is_empty(), "task {} has empty {} reference", task_label(&tasks[task_idx], task_idx), hook_name);
+    let Some(&target_idx) = name_to_index.get(trimmed) else {
+        anyhow::bail!("task {} references unknown task '{}' via {}", task_label(&tasks[task_idx], task_idx), trimmed, hook_name);
+    };
+    if !tasks[target_idx].conditional {
+        anyhow::bail!(
+            "task {} references {} via {} but target is not conditional",
+            task_label(&tasks[task_idx], task_idx),
+            task_label(&tasks[target_idx], target_idx),
+            hook_name,
+        );
+    }
+    Ok(())
+}
 pub(crate) fn dependency_indices(tasks: &[BatchTask]) -> Result<Vec<Vec<usize>>> {
     let name_to_index = task_name_map(tasks)?;
     tasks
@@ -224,7 +265,7 @@ pub(crate) fn dependency_indices(tasks: &[BatchTask]) -> Result<Vec<Vec<usize>>>
         .map(|(task_idx, task)| resolve_dependencies(task_idx, task, &name_to_index))
         .collect()
 }
-fn task_name_map(tasks: &[BatchTask]) -> Result<HashMap<&str, usize>> {
+pub(crate) fn task_name_map(tasks: &[BatchTask]) -> Result<HashMap<&str, usize>> {
     let mut name_to_index = HashMap::new();
     for (task_idx, task) in tasks.iter().enumerate() {
         let Some(name) = task.name.as_deref() else {

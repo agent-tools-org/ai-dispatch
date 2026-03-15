@@ -14,29 +14,32 @@ fn write_temp(content: &str) -> NamedTempFile {
 }
 
 fn make_task(name: Option<&str>, depends_on: &[&str]) -> BatchTask {
-    BatchTask {
-        name: name.map(str::to_string),
-        agent: "codex".to_string(),
-        team: None,
-        prompt: "prompt".to_string(),
-        dir: None,
-        output: None,
-        model: None,
-        worktree: None,
-        group: None,
-        verify: None,
-        max_duration_mins: None,
-        context: None,
-        skills: None,
-        hooks: None,
-        depends_on: (!depends_on.is_empty())
-            .then(|| depends_on.iter().map(|item| item.to_string()).collect()),
-        context_from: None,
-        fallback: None,
-        read_only: false,
-        budget: false,
+        BatchTask {
+            name: name.map(str::to_string),
+            agent: "codex".to_string(),
+            team: None,
+            prompt: "prompt".to_string(),
+            dir: None,
+            output: None,
+            model: None,
+            worktree: None,
+            group: None,
+            verify: None,
+            max_duration_mins: None,
+            context: None,
+            skills: None,
+            hooks: None,
+            depends_on: (!depends_on.is_empty())
+                .then(|| depends_on.iter().map(|item| item.to_string()).collect()),
+            context_from: None,
+            fallback: None,
+            read_only: false,
+            budget: false,
+            on_success: None,
+            on_fail: None,
+            conditional: false,
+        }
     }
-}
 
 #[test]
 fn parse_valid_batch() {

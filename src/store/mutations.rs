@@ -151,4 +151,30 @@ impl Store {
         )?;
         Ok(())
     }
+
+    pub fn insert_memory(&self, memory: &Memory) -> Result<()> {
+        self.db().execute(
+            "INSERT OR IGNORE INTO memories (id, memory_type, content, source_task_id, agent,
+              project_path, content_hash, created_at, expires_at)
+              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+            params![
+                memory.id.as_str(),
+                memory.memory_type.as_str(),
+                memory.content,
+                memory.source_task_id,
+                memory.agent,
+                memory.project_path,
+                memory.content_hash,
+                memory.created_at.to_rfc3339(),
+                memory.expires_at.map(|dt| dt.to_rfc3339()),
+            ],
+        )?;
+        Ok(())
+    }
+
+    pub fn delete_memory(&self, id: &str) -> Result<()> {
+        self.db()
+            .execute("DELETE FROM memories WHERE id = ?1", params![id])?;
+        Ok(())
+    }
 }

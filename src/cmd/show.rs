@@ -169,6 +169,7 @@ fn reconstruct_context(store: &Arc<Store>, task: &Task) -> Result<(String, Strin
         None,
         workgroup.as_ref(),
         &milestones,
+        &[],
     );
     if !skill_content.is_empty() {
         resolved_prompt = format!("{resolved_prompt}\n\n--- Methodology ---\n{skill_content}");

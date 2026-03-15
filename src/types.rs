@@ -301,6 +301,15 @@ pub struct Workgroup {
 }
 
 #[derive(Debug, Clone, Serialize)]
+pub struct Finding {
+    pub id: i64,
+    pub workgroup_id: String,
+    pub content: String,
+    pub source_task_id: Option<String>,
+    pub created_at: DateTime<Local>,
+}
+
+#[derive(Debug, Clone, Serialize)]
 pub struct TaskEvent {
     pub task_id: TaskId,
     pub timestamp: DateTime<Local>,

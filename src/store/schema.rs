@@ -46,6 +46,13 @@ CREATE TABLE IF NOT EXISTS events (
     detail TEXT NOT NULL,
     metadata TEXT
 );
+CREATE TABLE IF NOT EXISTS findings (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    workgroup_id TEXT NOT NULL,
+    content TEXT NOT NULL,
+    source_task_id TEXT,
+    created_at TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS memories (
     id TEXT PRIMARY KEY,
     memory_type TEXT NOT NULL,
@@ -85,6 +92,14 @@ CREATE INDEX IF NOT EXISTS idx_memories_project ON memories(project_path);
 CREATE INDEX IF NOT EXISTS idx_memories_type ON memories(memory_type);
 CREATE INDEX IF NOT EXISTS idx_memories_hash ON memories(content_hash);";
 
+const CREATE_FINDINGS_SQL: &str = "CREATE TABLE IF NOT EXISTS findings (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    workgroup_id TEXT NOT NULL,
+    content TEXT NOT NULL,
+    source_task_id TEXT,
+    created_at TEXT NOT NULL
+);";
+
 pub(super) fn create_tables(store: &Store) -> Result<()> {
     store.db().execute_batch(CREATE_TABLES_SQL)?;
     Ok(())
@@ -112,6 +127,7 @@ pub(super) fn migrate(store: &Store) -> Result<()> {
     let _ = conn.execute_batch("ALTER TABLE tasks ADD COLUMN budget INTEGER NOT NULL DEFAULT 0;");
     let _ = conn.execute_batch("ALTER TABLE tasks ADD COLUMN custom_agent_name TEXT;");
     let _ = conn.execute_batch("ALTER TABLE tasks ADD COLUMN verify_status TEXT NOT NULL DEFAULT 'skipped';");
+    let _ = conn.execute_batch(CREATE_FINDINGS_SQL);
     Ok(())
 }
 

@@ -61,6 +61,26 @@ impl Store {
         rows.map(|row| Ok(row?)).collect()
     }
 
+    pub fn list_findings(&self, workgroup_id: &str) -> Result<Vec<Finding>> {
+        let conn = self.db();
+        let mut stmt = conn.prepare(
+            "SELECT id, workgroup_id, content, source_task_id, created_at
+             FROM findings
+             WHERE workgroup_id = ?1
+             ORDER BY created_at ASC",
+        )?;
+        let rows = stmt.query_map(params![workgroup_id], |row| {
+            Ok(Finding {
+                id: row.get(0)?,
+                workgroup_id: row.get(1)?,
+                content: row.get(2)?,
+                source_task_id: row.get(3)?,
+                created_at: parse_dt(&row.get::<_, String>(4)?),
+            })
+        })?;
+        rows.map(|row| Ok(row?)).collect()
+    }
+
     pub fn get_task(&self, id: &str) -> Result<Option<Task>> {
         let conn = self.db();
         let mut stmt = conn.prepare(

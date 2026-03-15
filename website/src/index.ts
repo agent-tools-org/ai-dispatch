@@ -1,4 +1,4 @@
-const VERSION = "5.9.2";
+const VERSION = "6.0.0";
 const SITE_URL = "https://aid.agent-tools.org";
 const REPO_URL = "https://github.com/agent-tools-org/ai-dispatch";
 const META_DESCRIPTION = "Multi-AI CLI team orchestrator that dispatches work to gemini, codex, opencode, cursor, kilo, ob1, codebuff, auto, and custom agents defined via ~/.aid/agents/.";
@@ -43,7 +43,8 @@ const COMMANDS = [
   { name: "export", purpose: "Export a task with full context in markdown or JSON.", example: "aid export t-1234 --format json" },
   { name: "query", purpose: "Fast LLM query via OpenRouter (no agent startup). Free and auto tiers.", example: "aid query \"question\", aid query --auto \"question\"" },
   { name: "setup", purpose: "Interactive configuration wizard. Detects agents, sets API keys.", example: "aid setup" },
-  { name: "broadcast", purpose: "Send a message to a workgroup's broadcast channel.", example: "aid broadcast wg-abc1 \"update\"" }
+  { name: "broadcast", purpose: "Send a message to a workgroup's broadcast channel.", example: "aid broadcast wg-abc1 \"update\"" },
+  { name: "team", purpose: "Manage team definitions (agent groups for role-based auto-selection).", example: "aid team list, aid team show dev, aid team create dev" }
 ];
 const AGENT_CATEGORIES = ["Research", "Simple Edit", "Complex Impl", "Frontend", "Debugging", "Testing", "Refactoring", "Documentation"] as const;
 const AGENT_MATRIX: Record<string, Record<string, number>> = {
@@ -134,6 +135,22 @@ function buildLLMSText() {
   lines.push(`Instant LLM queries via OpenRouter — no agent subprocess startup. Two tiers: free (openrouter/free, $0) and auto (openrouter/auto, paid).`);
   lines.push(`Commands: aid query "question" (free), aid query --auto "question" (paid), aid query -m model "question" (explicit).`);
   lines.push(`Configure via aid setup or ~/.aid/config.toml [query] section.`);
+  lines.push(``);
+  lines.push(`## Teams (v6.0)`);
+  lines.push(`Teams group agents into role-specific sets defined in ~/.aid/teams/*.toml. Use --team on aid run auto to constrain auto-selection to team members, or set team in batch TOML defaults.`);
+  lines.push(`Teams support capability score overrides and default_agent tiebreaking. Use aid usage --team to filter stats.`);
+  lines.push(`Commands: aid team list, aid team show <name>, aid team create <name>, aid team delete <name>.`);
+  lines.push(`Example:`);
+  lines.push(`\`\`\`toml`);
+  lines.push(`[team]`);
+  lines.push(`id = "dev"`);
+  lines.push(`display_name = "Development Team"`);
+  lines.push(`agents = ["codex", "opencode", "cursor", "kilo"]`);
+  lines.push(`default_agent = "codex"`);
+  lines.push(``);
+  lines.push(`[team.overrides.opencode]`);
+  lines.push(`simple_edit = 10`);
+  lines.push(`\`\`\``);
   lines.push(``);
   lines.push(`## Workgroups`);
   lines.push(`Shared context containers created via aid group create keep prompts, constraints, and notes in sync across multiple tasks.`);
@@ -307,6 +324,12 @@ aid finding list wg-abc1</code></pre>
       <pre style="background:#040b16;padding:1rem;border-radius:8px;margin:0;"><code>aid query "What does gamma=0 mean?"         # free
 aid query --auto "Explain this error"        # paid, better
 aid setup                                    # configure API key</code></pre>
+    </section>
+    <section>
+      <h2>Teams <span style="color:#94a3b8;font-size:.8em;">(v6.0)</span></h2>
+      <p>Teams group agents into role-specific sets for constrained auto-selection. Define teams in <code>~/.aid/teams/*.toml</code> with member lists, default agent, and per-agent capability overrides.</p>
+      <pre style="background:#040b16;padding:1rem;border-radius:8px;margin:0;"><code>[team]&#10;id = "dev"&#10;display_name = "Development Team"&#10;agents = ["codex", "opencode", "cursor", "kilo"]&#10;default_agent = "codex"&#10;&#10;[team.overrides.opencode]&#10;simple_edit = 10</code></pre>
+      <p style="margin-top:.5rem;">Use <code>--team dev</code> on <code>aid run auto</code> to restrict selection. Set <code>team = "dev"</code> in batch TOML defaults. Filter usage with <code>aid usage --team dev</code>.</p>
     </section>
     <section>
       <h2>Workgroups</h2>

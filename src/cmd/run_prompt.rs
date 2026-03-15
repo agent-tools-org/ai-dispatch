@@ -52,6 +52,7 @@ pub(super) fn build_prompt_bundle(store: &Store, args: &RunArgs, agent_kind: &Ag
     }
 
     // Inject EverMemOS cloud memories (semantic search)
+    #[cfg(feature = "evermemos")]
     if let Some(cloud_block) = inject_evermemos_memories(&args.prompt)? {
         effective_prompt = format!("{cloud_block}\n\n{effective_prompt}");
     }
@@ -140,6 +141,7 @@ fn inject_memories(store: &Store, prompt: &str, max_memories: usize) -> Result<O
     Ok(Some((lines.join("\n"), memory_ids)))
 }
 
+#[cfg(feature = "evermemos")]
 fn inject_evermemos_memories(prompt: &str) -> Result<Option<String>> {
     let config = crate::config::load_config()?;
     let client = match crate::evermemos::EverMemosClient::from_config(&config.evermemos) {

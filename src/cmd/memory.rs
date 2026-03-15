@@ -8,6 +8,7 @@ use std::collections::hash_map::DefaultHasher;
 use std::env;
 use std::hash::{Hash, Hasher};
 
+#[cfg(feature = "evermemos")]
 use crate::config;
 use crate::store::Store;
 use crate::types::{Memory, MemoryId, MemoryType};
@@ -105,6 +106,7 @@ pub fn history(store: &Store, id: &str) -> Result<()> {
     Ok(())
 }
 
+#[cfg(feature = "evermemos")]
 pub fn cloud_status() -> Result<()> {
     let config = config::load_config()?;
     if !config.evermemos.enabled {
@@ -125,6 +127,7 @@ pub fn cloud_status() -> Result<()> {
     Ok(())
 }
 
+#[cfg(feature = "evermemos")]
 pub fn cloud_search(query: &str, limit: usize) -> Result<()> {
     let config = config::load_config()?;
     let client = crate::evermemos::EverMemosClient::from_config(&config.evermemos)
@@ -142,6 +145,7 @@ pub fn cloud_search(query: &str, limit: usize) -> Result<()> {
     Ok(())
 }
 
+#[cfg(feature = "evermemos")]
 pub fn cloud_push(store: &Store, memory_type: Option<&str>) -> Result<()> {
     let config = config::load_config()?;
     let client = crate::evermemos::EverMemosClient::from_config(&config.evermemos)

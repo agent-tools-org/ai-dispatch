@@ -27,6 +27,10 @@ toml = { version = "0.8", default-features = false, features = ["parse", "displa
 portable-pty = { version = "0.8", default-features = false }
 ureq = { version = "3", default-features = false, features = ["rustls", "json"] }
 
+[features]
+default = []
+evermemos = []  # EverMemOS cloud memory integration (optional plugin)
+
 [dev-dependencies]
 tempfile = "3"
 libc = "0.2"

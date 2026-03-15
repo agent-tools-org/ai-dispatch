@@ -18,6 +18,7 @@ pub struct AidConfig {
     pub webhooks: Vec<WebhookConfig>,
     #[serde(default)]
     pub query: QueryConfig,
+    #[cfg(feature = "evermemos")]
     #[serde(default)]
     pub evermemos: crate::evermemos::EverMemosConfig,
 }

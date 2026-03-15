@@ -12,6 +12,7 @@ mod config;
 mod context;
 mod cost;
 mod explore;
+#[cfg(feature = "evermemos")]
 mod evermemos;
 mod hooks;
 mod input_signal;
@@ -395,9 +396,18 @@ async fn main() -> Result<()> {
             MemoryCommands::History { id } => {
                 cmd::memory::history(&store, &id)?;
             }
-            MemoryCommands::CloudStatus => cmd::memory::cloud_status(),
-            MemoryCommands::CloudSearch { query, limit } => cmd::memory::cloud_search(&query, limit),
-            MemoryCommands::CloudPush { memory_type } => cmd::memory::cloud_push(&store, memory_type.as_deref()),
+            #[cfg(feature = "evermemos")]
+            MemoryCommands::CloudStatus => {
+                cmd::memory::cloud_status()?;
+            }
+            #[cfg(feature = "evermemos")]
+            MemoryCommands::CloudSearch { query, limit } => {
+                cmd::memory::cloud_search(&query, limit)?;
+            }
+            #[cfg(feature = "evermemos")]
+            MemoryCommands::CloudPush { memory_type } => {
+                cmd::memory::cloud_push(&store, memory_type.as_deref())?;
+            }
         },
         Commands::Finding { action } => match action {
             FindingCommands::Add { group, content, task } => {

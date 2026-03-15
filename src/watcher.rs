@@ -39,6 +39,7 @@ pub async fn watch_streaming(
         status: TaskStatus::Done,
         model: None,
         cost_usd: None,
+        exit_code: None,
     };
     let mut event_count = 0u32;
     let mut session_saved = false;
@@ -184,7 +185,7 @@ pub async fn watch_buffered(
     // Wait for process exit
     let exit_status = child.wait().await?;
 
-    let info = if exit_status.success() {
+    let mut info = if exit_status.success() {
         agent.parse_completion(&buffer)
     } else {
         CompletionInfo {
@@ -192,8 +193,10 @@ pub async fn watch_buffered(
             status: TaskStatus::Failed,
             model: None,
             cost_usd: None,
+            exit_code: None,
         }
     };
+    info.exit_code = exit_status.code();
 
     // Record completion event
     let event = crate::agent::gemini::make_completion_event(task_id, &info);
@@ -455,6 +458,7 @@ mod tests {
             status: TaskStatus::Done,
             model: None,
             cost_usd: None,
+            exit_code: None,
         };
         let event = TaskEvent {
             task_id: TaskId("t-usage".to_string()),
@@ -482,6 +486,7 @@ mod tests {
             status: TaskStatus::Done,
             model: Some("gpt-4.1".to_string()),
             cost_usd: Some(0.01),
+            exit_code: None,
         };
         let event = TaskEvent {
             task_id: TaskId("t-ignore".to_string()),

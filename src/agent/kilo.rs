@@ -76,6 +76,7 @@ impl super::Agent for KiloAgent {
             status: TaskStatus::Done,
             model: None,
             cost_usd,
+            exit_code: None,
         }
     }
 }

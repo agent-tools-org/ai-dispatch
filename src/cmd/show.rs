@@ -2,6 +2,7 @@
 // Combines events, diff, output, log, and AI explanation into one command.
 
 use anyhow::Result;
+use serde_json::json;
 use std::path::Path;
 use std::sync::Arc;
 
@@ -9,7 +10,7 @@ use crate::board::render_task_detail;
 use crate::cmd;
 use crate::paths;
 use crate::store::Store;
-use crate::types::{Task, TaskStatus};
+use crate::types::{Task, TaskId, TaskStatus};
 
 #[path = "show_output.rs"]
 mod show_output;
@@ -199,6 +200,26 @@ fn inplace_diff_stat(repo_path: &str) -> Option<String> {
     }
 }
 
+pub(crate) fn task_json(
+    task_id: &TaskId,
+    agent: &str,
+    status: TaskStatus,
+    prompt: &str,
+    worktree: Option<&str>,
+    dir: Option<&str>,
+    exit_code: Option<i32>,
+) -> serde_json::Value {
+    json!({
+        "task_id": task_id.as_str(),
+        "agent": agent,
+        "status": status.as_str(),
+        "prompt": prompt,
+        "worktree": worktree,
+        "dir": dir,
+        "exit_code": exit_code,
+    })
+}
+
 fn stderr_tail(task_id: &str) -> Option<String> {
     let content = std::fs::read_to_string(paths::stderr_path(task_id)).ok()?;
     if content.is_empty() {
@@ -248,6 +269,7 @@ mod tests {
             duration_ms: None,
             model: None,
             cost_usd: None,
+            exit_code: None,
             created_at: Local::now(),
             completed_at: None,
             verify: None,
@@ -295,6 +317,7 @@ mod tests {
             duration_ms: None,
             model: None,
             cost_usd: None,
+            exit_code: None,
             created_at: Local::now(),
             completed_at: None,
             verify: None,

@@ -210,7 +210,7 @@ pub(super) async fn run_agent_process_impl(
     let duration_ms = start.elapsed().as_millis() as i64;
     let final_model = info.model.as_deref().or(model);
     let cost_usd = info.cost_usd.or_else(|| info.tokens.and_then(|tokens| crate::cost::estimate_cost(tokens, final_model, agent.kind())));
-    store.update_task_completion(task_id.as_str(), info.status, info.tokens, duration_ms, final_model, cost_usd)?;
+    store.update_task_completion(task_id.as_str(), info.status, info.tokens, duration_ms, final_model, cost_usd, info.exit_code)?;
     let duration_str = format_duration(duration_ms);
     let tokens_str = info.tokens.map(|t| format!(", {} tokens", t)).unwrap_or_default();
     let cost_str = if cost_usd.is_some() { format!(", {}", crate::cost::format_cost(cost_usd)) } else { String::new() };

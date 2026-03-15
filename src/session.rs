@@ -103,6 +103,7 @@ mod tests {
             duration_ms: None,
             model: None,
             cost_usd: None,
+            exit_code: None,
             created_at: Local::now(),
             completed_at: None,
             verify: None,

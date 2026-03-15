@@ -55,6 +55,7 @@ impl super::Agent for GeminiAgent {
             status: TaskStatus::Done,
             model,
             cost_usd: None,
+            exit_code: None,
         }
     }
 }
@@ -77,6 +78,7 @@ pub(super) fn extract_gemini_tokens(output: &str) -> CompletionInfo {
         status: TaskStatus::Done,
         model,
         cost_usd: None,
+        exit_code: None,
     }
 }
 

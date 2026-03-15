@@ -290,6 +290,7 @@ mod tests {
             duration_ms: Some(1_500),
             model: Some("gpt-5".to_string()),
             cost_usd: Some(0.01),
+            exit_code: None,
             created_at: Local::now(),
             completed_at: Some(Local::now()),
             verify: None,

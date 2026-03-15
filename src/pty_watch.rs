@@ -37,6 +37,7 @@ impl MonitorState {
                 status: TaskStatus::Done,
                 model: None,
                 cost_usd: None,
+                exit_code: None,
             },
             full_output: String::new(),
             line_buffer: String::new(),
@@ -186,6 +187,7 @@ fn finalize_streaming(
         TaskStatus::Failed
     };
     state.info.status = status;
+    state.info.exit_code = i32::try_from(exit_status.exit_code()).ok();
     store.insert_event(&TaskEvent {
         task_id: task_id.clone(),
         timestamp: Local::now(),
@@ -224,8 +226,10 @@ fn finalize_buffered(
             status: TaskStatus::Failed,
             model: None,
             cost_usd: None,
+            exit_code: None,
         }
     };
+    state.info.exit_code = i32::try_from(exit_status.exit_code()).ok();
     store.insert_event(&crate::agent::gemini::make_completion_event(
         task_id,
         &state.info,

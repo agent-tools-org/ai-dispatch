@@ -40,21 +40,35 @@ pub fn run() -> Result<()> {
     }
 
     // 2. Detect installed agents
-    println!("\nDetecting installed agents...");
-    let agents = [
+    println!("\nDetecting agents...");
+    let builtin = [
         ("gemini", "gemini"),
         ("codex", "codex"),
         ("opencode", "opencode"),
         ("cursor", "cursor"),
         ("kilo", "kilo"),
+        ("ob1", "ob1"),
+        ("codebuff", "codebuff"),
     ];
-    for (name, cmd) in agents {
+    for (name, cmd) in builtin {
         let found = std::process::Command::new("which")
             .arg(cmd)
             .output()
             .map(|o| o.status.success())
             .unwrap_or(false);
-        println!("  {} {name}", if found { "✓" } else { "✗" });
+        println!("  {} {name}", if found { "✓" } else { "·" });
+    }
+    // Custom agents from ~/.aid/agents/
+    let agents_dir = crate::paths::aid_dir().join("agents");
+    if agents_dir.is_dir() {
+        if let Ok(entries) = std::fs::read_dir(&agents_dir) {
+            for entry in entries.flatten() {
+                if entry.path().extension().is_some_and(|e| e == "toml") {
+                    let name = entry.path().file_stem().unwrap().to_string_lossy().to_string();
+                    println!("  ✓ {name} (custom)");
+                }
+            }
+        }
     }
 
     // 3. Write config

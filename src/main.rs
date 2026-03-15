@@ -432,11 +432,14 @@ enum MemoryCommands {
         /// Content to remember
         content: String,
     },
-    /// List memories
+    /// List memories (project-scoped by default)
     List {
         /// Filter by type
         #[arg(long = "type")]
         memory_type: Option<String>,
+        /// Show all memories across all projects
+        #[arg(long)]
+        all: bool,
     },
     /// Search memories by keyword
     Search {
@@ -745,8 +748,8 @@ async fn main() -> Result<()> {
             } => {
                 cmd::memory::add(&store, &memory_type, &content, None)?;
             }
-            MemoryCommands::List { memory_type } => {
-                cmd::memory::list(&store, memory_type.as_deref(), None)?;
+            MemoryCommands::List { memory_type, all } => {
+                cmd::memory::list(&store, memory_type.as_deref(), None, all)?;
             }
             MemoryCommands::Search { query } => {
                 cmd::memory::search(&store, &query, None)?;

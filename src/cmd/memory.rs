@@ -36,9 +36,18 @@ pub fn add(store: &Store, memory_type: &str, content: &str, project_path: Option
     Ok(())
 }
 
-pub fn list(store: &Store, memory_type: Option<&str>, project_path: Option<&str>) -> Result<()> {
+pub fn list(store: &Store, memory_type: Option<&str>, project_path: Option<&str>, all: bool) -> Result<()> {
     let kind = parse_optional_memory_type(memory_type)?;
+    if all {
+        let memories = store.list_memories(None, kind)?;
+        print_memory_table(&memories);
+        return Ok(());
+    }
     let project = project_path.map(str::to_string).or_else(|| detect_git_root().ok().flatten());
+    if project.is_none() {
+        eprintln!("[aid] Not in a git repo. Use --all to list memories across all projects.");
+        return Ok(());
+    }
     let memories = store.list_memories(project.as_deref(), kind)?;
     print_memory_table(&memories);
     Ok(())
@@ -46,6 +55,9 @@ pub fn list(store: &Store, memory_type: Option<&str>, project_path: Option<&str>
 
 pub fn search(store: &Store, query: &str, project_path: Option<&str>) -> Result<()> {
     let project = project_path.map(str::to_string).or_else(|| detect_git_root().ok().flatten());
+    if project.is_none() {
+        eprintln!("[aid] Not in a git repo. Searching across all projects.");
+    }
     let memories = store.search_memories(query, project.as_deref(), 20)?;
     print_memory_table(&memories);
     Ok(())

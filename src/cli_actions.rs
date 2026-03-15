@@ -32,11 +32,13 @@ pub enum ConfigAction {
 
 #[derive(Subcommand)]
 pub enum GroupAction {
-    /// Create a workgroup with shared context
+    /// Create a workgroup
     Create {
+        /// Workgroup name
         name: String,
-        #[arg(long)]
-        context: String,
+        /// Shared context files (e.g. src/types.rs)
+        #[arg(long, short)]
+        context: Option<String>,
     },
     /// List workgroups
     List,

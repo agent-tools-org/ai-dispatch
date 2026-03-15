@@ -83,7 +83,7 @@ enum Commands {
         #[arg(short, long)]
         worktree: Option<String>,
         /// Reuse shared context from a workgroup
-        #[arg(long)]
+        #[arg(long, short = 'g')]
         group: Option<String>,
         /// Verify command (or auto-detect if flag given without value)
         #[arg(long, num_args = 0..=1, default_missing_value = "auto")]
@@ -288,7 +288,6 @@ Batch TOML format:
     /// Summarize workgroup results
     Summary {
         /// Workgroup ID (e.g. wg-abc1)
-        #[arg(long)]
         group: String,
     },
     #[command(after_help = r#"Examples:
@@ -770,7 +769,7 @@ async fn main() -> Result<()> {
             cmd::config::run(&store, action)?;
         }
         Commands::Group { action } => match action {
-            GroupAction::Create { name, context } => cmd::group::create(&store, &name, &context)?,
+            GroupAction::Create { name, context } => cmd::group::create(&store, &name, context.as_deref().unwrap_or(""))?,
             GroupAction::List => cmd::group::list(&store)?,
             GroupAction::Show { group_id } => cmd::group::show(&store, &group_id)?,
             GroupAction::Update {

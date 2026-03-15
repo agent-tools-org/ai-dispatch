@@ -117,9 +117,11 @@ async fn run_auto_retries_after_verify_failure() {
         .unwrap();
 
     assert_eq!(all_tasks.len(), 2);
-    assert_eq!(original.status, TaskStatus::Failed);
+    assert_eq!(original.status, TaskStatus::Done);
+    assert_eq!(original.verify_status, VerifyStatus::Failed);
     assert_eq!(retried.parent_task_id.as_deref(), Some(original.id.as_str()));
     assert_eq!(retried.verify.as_deref(), Some("false"));
-    assert_eq!(retried.status, TaskStatus::Failed);
+    assert_eq!(retried.status, TaskStatus::Done);
+    assert_eq!(retried.verify_status, VerifyStatus::Failed);
     assert!(retried.prompt.contains(VERIFY_RETRY_FEEDBACK));
 }

@@ -83,6 +83,7 @@ impl super::Agent for OpenCodeAgent {
             status: TaskStatus::Done,
             model: None,
             cost_usd,
+            exit_code: None,
         }
     }
 }

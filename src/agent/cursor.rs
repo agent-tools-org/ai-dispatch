@@ -80,6 +80,7 @@ impl super::Agent for CursorAgent {
             status: TaskStatus::Done,
             model: None,
             cost_usd: None,
+            exit_code: None,
         }
     }
 }

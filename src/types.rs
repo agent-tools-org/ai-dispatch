@@ -272,6 +272,7 @@ pub struct Task {
     pub duration_ms: Option<i64>,
     pub model: Option<String>,
     pub cost_usd: Option<f64>,
+    pub exit_code: Option<i32>,
     pub created_at: DateTime<Local>,
     pub completed_at: Option<DateTime<Local>>,
     pub verify: Option<String>,
@@ -333,6 +334,7 @@ pub struct CompletionInfo {
     pub status: TaskStatus,
     pub model: Option<String>,
     pub cost_usd: Option<f64>,
+    pub exit_code: Option<i32>,
 }
 
 /// Unique ID for a memory entry, prefixed with "m-"
@@ -438,6 +440,7 @@ mod tests {
             duration_ms: None,
             model: None,
             cost_usd: None,
+            exit_code: None,
             created_at: Local::now(),
             completed_at: None,
             verify: None,

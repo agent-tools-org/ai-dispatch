@@ -2,12 +2,11 @@
 // Creates task record, spawns agent process, wires watcher, records completion.
 use anyhow::{Context, Result};
 use chrono::Local;
-use serde_json::json;
 use std::sync::Arc;
 use tokio::process::Command;
 use crate::agent::{self, RunOpts};
 use crate::background::{self, BackgroundRunSpec};
-use crate::cmd::{config as cmd_config, retry_logic};
+use crate::cmd::{config as cmd_config, retry_logic, show};
 use crate::config;
 use crate::hooks;
 use crate::paths;
@@ -151,10 +150,11 @@ pub async fn run(store: Arc<Store>, args: RunArgs) -> Result<TaskId> {
         output_path: args.output.clone(),
         tokens: None,
         prompt_tokens: None,
-        duration_ms: None,
-        model: effective_model.clone(),
-        cost_usd: None,
-        created_at: Local::now(),
+            duration_ms: None,
+            model: effective_model.clone(),
+            cost_usd: None,
+            exit_code: None,
+            created_at: Local::now(),
         completed_at: None,
         verify: args.verify.clone(),
         verify_status: VerifyStatus::Skipped,
@@ -178,13 +178,14 @@ pub async fn run(store: Arc<Store>, args: RunArgs) -> Result<TaskId> {
     let mut runtime_hooks = hooks::load_hooks()?;
     runtime_hooks.extend(hooks::parse_cli_hooks(&args.hooks)?);
     store.update_task_status(task_id.as_str(), TaskStatus::Running)?;
-    let before_payload = build_task_json(
+    let before_payload = show::task_json(
         &task_id,
         agent_display_name,
         TaskStatus::Running,
         &args.prompt,
         before_worktree.as_deref(),
         effective_dir.as_deref(),
+        None,
     );
     if let Err(err) = hooks::run_hooks_with(
         "before_run",
@@ -290,13 +291,14 @@ pub async fn run(store: Arc<Store>, args: RunArgs) -> Result<TaskId> {
             maybe_cleanup_fast_fail(&store, &task_id, &task);
             // Auto-cleanup worktree for failed tasks (no useful changes to preserve)
             if task.status == TaskStatus::Failed {
-                let fail_payload = build_task_json(
+                let fail_payload = show::task_json(
                     &task_id,
                     agent_display_name,
                     TaskStatus::Failed,
                     &task.prompt,
                     task.worktree_path.as_deref(),
                     effective_dir.as_deref(),
+                    task.exit_code,
                 );
                 if let Err(err) = hooks::run_hooks_with(
                     "on_fail",
@@ -317,13 +319,14 @@ pub async fn run(store: Arc<Store>, args: RunArgs) -> Result<TaskId> {
         }
         run_prompt::notify_task_completion(&store, &task_id)?;
         if let Some(task) = store.get_task(task_id.as_str())? {
-            let done_payload = build_task_json(
+            let done_payload = show::task_json(
                 &task_id,
                 agent_display_name,
                 task.status,
                 &task.prompt,
                 task.worktree_path.as_deref(),
                 effective_dir.as_deref(),
+                task.exit_code,
             );
             if let Err(err) = hooks::run_hooks_with(
                 "after_complete",
@@ -407,23 +410,6 @@ fn check_worktree_escape(repo_dir: Option<&str>) {
     }
 }
 
-fn build_task_json(
-    task_id: &TaskId,
-    agent: &str,
-    status: TaskStatus,
-    prompt: &str,
-    worktree: Option<&str>,
-    dir: Option<&str>,
-) -> serde_json::Value {
-    json!({
-        "task_id": task_id.as_str(),
-        "agent": agent,
-        "status": status.as_str(),
-        "prompt": prompt,
-        "worktree": worktree,
-        "dir": dir,
-    })
-}
 
 pub(crate) fn inherit_retry_base_branch(repo_dir: Option<&str>, task: &Task, retry_args: &mut RunArgs) { run_prompt::inherit_retry_base_branch_impl(repo_dir, task, retry_args); }
 #[allow(clippy::too_many_arguments)]

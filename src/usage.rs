@@ -735,6 +735,7 @@ mod tests {
             duration_ms: Some(1000),
             model: None,
             cost_usd: Some(cost_usd),
+            exit_code: None,
             created_at: Local::now(),
             completed_at: None,
             verify: None,

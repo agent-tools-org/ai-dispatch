@@ -121,11 +121,12 @@ impl Store {
         duration_ms: i64,
         model: Option<&str>,
         cost_usd: Option<f64>,
+        exit_code: Option<i32>,
     ) -> Result<()> {
         let now = Local::now().to_rfc3339();
         self.db().execute(
             "UPDATE tasks SET status = ?1, tokens = ?2, duration_ms = ?3, completed_at = ?4,
-             model = ?5, cost_usd = ?6 WHERE id = ?7",
+             model = ?5, cost_usd = ?6, exit_code = ?7 WHERE id = ?8",
             params![
                 status.as_str(),
                 tokens,
@@ -133,6 +134,7 @@ impl Store {
                 now,
                 model,
                 cost_usd,
+                exit_code,
                 id
             ],
         )?;

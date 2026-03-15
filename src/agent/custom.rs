@@ -191,6 +191,7 @@ impl super::Agent for CustomAgent {
             status: TaskStatus::Done,
             model: None,
             cost_usd: None,
+            exit_code: None,
         }
     }
 }

@@ -92,6 +92,7 @@ fn record_completion(
         duration_ms,
         final_model,
         cost_usd,
+        info.exit_code,
     )?;
     println!(
         "Task {} {} ({}{}{})",

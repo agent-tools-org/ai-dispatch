@@ -113,6 +113,7 @@ pub(super) fn migrate(store: &Store) -> Result<()> {
     // Add columns if missing (ALTER TABLE ADD COLUMN is idempotent when wrapped in try)
     let _ = conn.execute_batch("ALTER TABLE tasks ADD COLUMN model TEXT;");
     let _ = conn.execute_batch("ALTER TABLE tasks ADD COLUMN cost_usd REAL;");
+    let _ = conn.execute_batch("ALTER TABLE tasks ADD COLUMN exit_code INTEGER;");
     let _ = conn.execute_batch("ALTER TABLE tasks ADD COLUMN parent_task_id TEXT;");
     let _ = conn.execute_batch("ALTER TABLE tasks ADD COLUMN workgroup_id TEXT;");
     let _ = conn.execute_batch("ALTER TABLE tasks ADD COLUMN caller_kind TEXT;");
@@ -159,6 +160,7 @@ pub(super) fn row_to_task(row: &Row) -> rusqlite::Result<Result<Task>> {
         duration_ms: row.get(17)?,
         model: row.get(18)?,
         cost_usd: row.get(19)?,
+        exit_code: row.get(27).ok().flatten(),
         created_at: parse_dt(&row.get::<_, String>(20)?),
         completed_at: row.get::<_, Option<String>>(21)?.map(|s| parse_dt(&s)),
         verify: row.get(22)?,

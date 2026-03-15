@@ -81,7 +81,7 @@ fn render_children(
 fn format_task_line(task: &Task) -> String {
     let mut status = task.status.label().to_string();
     if task.verify_status != VerifyStatus::Skipped {
-        status.push_str(&format!(" [{}]", task.verify_status.label()));
+        status.push_str(&format!(" [{}]", task.verify_status.as_str()));
     }
     let duration = format_duration(task.duration_ms);
     let mut parts = vec![duration];

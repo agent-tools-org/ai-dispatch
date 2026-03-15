@@ -146,6 +146,14 @@ impl Store {
         Ok(())
     }
 
+    pub fn save_completion_summary(&self, task_id: &str, summary_json: &str) -> Result<()> {
+        self.db().execute(
+            "UPDATE tasks SET completion_summary = ?1 WHERE id = ?2",
+            params![summary_json, task_id],
+        )?;
+        Ok(())
+    }
+
     pub fn insert_event(&self, event: &TaskEvent) -> Result<()> {
         let metadata_str = event.metadata.as_ref().map(|m| m.to_string());
         self.db().execute(

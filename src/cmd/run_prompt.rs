@@ -3,10 +3,14 @@
 // Deps: context, templates, workgroup, skills, watcher, store.
 use anyhow::{Context, Result};
 use chrono::Local;
+use serde_json;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use tokio::process::Command;
-use crate::{agent, skills, store::Store, templates, team, types::*, watcher};
+use crate::{
+    agent, skills, store::Store, templates, team, types::*, watcher,
+};
+use crate::cmd::summary::{format_summary_for_injection, CompletionSummary};
 use crate::store::TaskCompletionUpdate;
 use crate::team::KnowledgeEntry;
 use super::RunArgs;
@@ -43,6 +47,21 @@ pub(super) fn build_prompt_bundle(store: &Store, args: &RunArgs, agent_kind: &Ag
     let (edit_guard, milestone_instr) = templates::shared_system_fragments(&prompt);
     if let Some(guard) = edit_guard { effective_prompt = format!("{guard}{effective_prompt}"); }
     effective_prompt.push_str(milestone_instr);
+
+    if let Some(parent_id) = args.parent_task_id.as_deref() {
+        if let Some(parent) = store.get_task(parent_id)? {
+            if parent.status == TaskStatus::Done {
+                if let Some(summary_json) = store.get_completion_summary(parent_id)? {
+                    if let Ok(summary) =
+                        serde_json::from_str::<CompletionSummary>(&summary_json)
+                    {
+                        let summary_block = format_summary_for_injection(&summary);
+                        effective_prompt = format!("{summary_block}\n\n{effective_prompt}");
+                    }
+                }
+            }
+        }
+    }
     let mut effective_prompt = inject_skill(&effective_prompt, requested_skills)?;
     let mut injected_memory_ids = Vec::new();
 

@@ -6,6 +6,7 @@ use chrono::Local;
 use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
+use serde_json;
 use tokio::process::Command;
 use tokio::time::sleep;
 use crate::agent::{self, RunOpts};
@@ -346,6 +347,9 @@ pub async fn run(store: Arc<Store>, args: RunArgs) -> Result<TaskId> {
             return Ok(retry_id);
         }
         run_prompt::notify_task_completion(&store, &task_id)?;
+        let summary = crate::cmd::summary::generate_summary(&store.get_task(task_id.as_str())?.unwrap());
+        let summary_json = serde_json::to_string(&summary).unwrap_or_default();
+        let _ = store.save_completion_summary(task_id.as_str(), &summary_json);
         if let Some(task) = store.get_task(task_id.as_str())? {
             let done_payload = show::task_hook_json(
                 &task_id,

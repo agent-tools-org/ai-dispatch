@@ -120,6 +120,18 @@ impl Store {
         }
     }
 
+    pub fn get_completion_summary(&self, task_id: &str) -> Result<Option<String>> {
+        let conn = self.db();
+        let summary = conn
+            .query_row(
+                "SELECT completion_summary FROM tasks WHERE id = ?1",
+                params![task_id],
+                |row| row.get::<_, String>(0),
+            )
+            .optional()?;
+        Ok(summary.filter(|s| !s.is_empty()))
+    }
+
     pub fn get_retry_chain(&self, task_id: &str) -> Result<Vec<Task>> {
         let mut chain = Vec::new();
         let mut current = self.get_task(task_id)?;

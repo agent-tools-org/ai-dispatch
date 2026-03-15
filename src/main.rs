@@ -381,6 +381,11 @@ Batch TOML format:
     Init,
     #[command(hide = true, name = "__run-task")]
     InternalRunTask { task_id: String },
+    /// Show task retry tree
+    Tree {
+        /// Task ID
+        task_id: String,
+    },
     /// Print task output (shortcut for `show --output`)
     Output {
         /// Task ID
@@ -689,6 +694,9 @@ async fn main() -> Result<()> {
                 },
             )
             .await?;
+        }
+        Commands::Tree { task_id } => {
+            cmd::tree::run(&store, &task_id)?;
         }
         Commands::Output { task_id } => {
             let store = store::Store::open(&paths::db_path())?;

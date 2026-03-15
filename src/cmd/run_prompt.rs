@@ -24,9 +24,54 @@ pub(super) fn build_prompt_bundle(store: &Store, args: &RunArgs, agent_kind: &Ag
     let (edit_guard, milestone_instr) = templates::shared_system_fragments(&prompt);
     if let Some(guard) = edit_guard { effective_prompt = format!("{guard}{effective_prompt}"); }
     effective_prompt.push_str(milestone_instr);
-    let effective_prompt = inject_skill(&effective_prompt, requested_skills)?;
+    let memory_instr = "
+
+To save knowledge for future tasks, write on its own line: [MEMORY: type] content
+Valid types: discovery, convention, lesson, fact
+Example: [MEMORY: discovery] The auth module uses bcrypt, not argon2
+";
+    effective_prompt.push_str(memory_instr);
+    let mut effective_prompt = inject_skill(&effective_prompt, requested_skills)?;
+
+    // Inject relevant memories from past tasks
+    if let Some(memory_block) = inject_memories(store, &args.prompt, 10)? {
+        effective_prompt = format!("{memory_block}\n\n{effective_prompt}");
+    }
     let prompt_tokens = templates::estimate_tokens(&effective_prompt) as i64;
     Ok(PromptBundle { effective_prompt, context_files, prompt_tokens })
+}
+
+/// Query relevant memories and inject them into the prompt.
+fn inject_memories(store: &Store, prompt: &str, max_memories: usize) -> Result<Option<String>> {
+    // Detect project path from current git root
+    let project_path = detect_project_path();
+
+    // Search memories relevant to this prompt (keyword match)
+    let memories = store.search_memories(prompt, project_path.as_deref(), max_memories)?;
+    if memories.is_empty() {
+        return Ok(None);
+    }
+
+    // Format memories as a context block
+    let mut lines = vec!["[Agent Memory — knowledge from past tasks]".to_string()];
+    for mem in &memories {
+        lines.push(format!("- [{}] {}", mem.memory_type.label(), mem.content));
+    }
+    let token_count = crate::templates::estimate_tokens(&lines.join("\n"));
+    eprintln!("[aid] Injected {} memories (~{} tokens)", memories.len(), token_count);
+    Ok(Some(lines.join("\n")))
+}
+
+fn detect_project_path() -> Option<String> {
+    std::process::Command::new("git")
+        .args(["rev-parse", "--show-toplevel"])
+        .output()
+        .ok()
+        .and_then(|o| if o.status.success() {
+            String::from_utf8(o.stdout).ok().map(|s| s.trim().to_string())
+        } else {
+            None
+        })
 }
 
 pub(super) fn resolve_prompt(source: PromptSource<'_>, template: Option<&str>) -> Result<String> {

@@ -46,7 +46,7 @@ pub struct RunArgs {
     pub announce: bool,
     pub parent_task_id: Option<String>,
     pub on_done: Option<String>,
-    pub fallback: Option<String>,
+    pub cascade: Vec<String>,
     pub read_only: bool,
     pub budget: bool,
     pub session_id: Option<String>,
@@ -76,15 +76,15 @@ pub async fn run(store: Arc<Store>, args: RunArgs) -> Result<TaskId> {
                 agent_kind.as_str(),
                 recovery
             );
-            if let Some(ref fallback_name) = args.fallback {
-                eprintln!("[aid] Switching to fallback agent: {}", fallback_name);
+            if let Some(next_agent) = args.cascade.first() {
+                eprintln!("[aid] Switching to cascade agent: {}", next_agent);
             } else if let Some(suggested) = crate::agent::selection::coding_fallback_for(&agent_kind) {
                 eprintln!(
-                    "[aid] Suggested fallback: --fallback {} (similar capability)",
+                    "[aid] Suggested fallback: --cascade {} (similar capability)",
                     suggested.as_str()
                 );
             } else {
-                eprintln!("[aid] Tip: use --fallback <agent> or --agent with `aid retry`");
+                eprintln!("[aid] Tip: use --cascade <agent> or --agent with `aid retry`");
             }
         }
     }
@@ -377,19 +377,20 @@ pub async fn run(store: Arc<Store>, args: RunArgs) -> Result<TaskId> {
                 inherit_retry_base_branch(args.dir.as_deref(), &task, &mut retry_args);
             }
             Box::pin(run(store, retry_args)).await?;
-        } else if let Some(ref fallback_agent) = args.fallback {
-            if let Some(task) = store.get_task(task_id.as_str())?
-                && task.status == TaskStatus::Failed
-            {
+        } else if let Some(task) = store.get_task(task_id.as_str())?
+            && task.status == TaskStatus::Failed
+        {
+            if let Some((next_agent, remaining_cascade)) = take_next_cascade_agent(&args) {
                 eprintln!(
-                    "[aid] Primary agent {} failed, falling back to {fallback_agent}",
+                    "[aid] Cascade: trying {} after {} failed",
+                    next_agent,
                     args.agent_name
                 );
-                let mut fallback_args = args.clone();
-                fallback_args.agent_name = fallback_agent.clone();
-                fallback_args.fallback = None;
-                fallback_args.parent_task_id = Some(task_id.as_str().to_string());
-                Box::pin(run(store, fallback_args)).await?;
+                let mut cascade_args = args.clone();
+                cascade_args.agent_name = next_agent;
+                cascade_args.cascade = remaining_cascade;
+                cascade_args.parent_task_id = Some(task_id.as_str().to_string());
+                Box::pin(run(store, cascade_args)).await?;
             }
         }
     }
@@ -434,6 +435,16 @@ fn maybe_flag_empty_worktree_diff(store: &Store, task_id: &TaskId, task: &Task) 
         if let Err(err) = store.update_verify_status(task_id.as_str(), VerifyStatus::EmptyDiff) {
             eprintln!("[aid] Failed to record empty diff status: {err}");
         }
+    }
+}
+
+fn take_next_cascade_agent(args: &RunArgs) -> Option<(String, Vec<String>)> {
+    let mut cascade = args.cascade.clone();
+    if cascade.is_empty() {
+        None
+    } else {
+        let next_agent = cascade.remove(0);
+        Some((next_agent, cascade))
     }
 }
 
@@ -491,6 +502,23 @@ mod tests {
         std::fs::write(&file, "updated").unwrap();
 
         assert_eq!(worktree_is_empty_diff(dir.path()), Some(false));
+    }
+
+    #[test]
+    fn take_next_cascade_agent_consumes_first_entry() {
+        let args = RunArgs {
+            agent_name: "primary".to_string(),
+            cascade: vec!["codex".to_string(), "cursor".to_string()],
+            ..Default::default()
+        };
+        let result = take_next_cascade_agent(&args);
+        assert_eq!(result, Some(("codex".to_string(), vec!["cursor".to_string()])));
+    }
+
+    #[test]
+    fn take_next_cascade_agent_returns_none_when_empty() {
+        let args = RunArgs { cascade: vec![], ..Default::default() };
+        assert!(take_next_cascade_agent(&args).is_none());
     }
 }
 

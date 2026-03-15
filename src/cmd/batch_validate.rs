@@ -62,10 +62,20 @@ pub(super) fn rate_limit_precheck(tasks: &[batch::BatchTask]) {
         tasks.len()
     );
 }
-pub(super) fn find_ready_tasks(store: &Arc<Store>, tasks: &[batch::BatchTask], dependencies: &[Vec<usize>], started: &[bool], outcomes: &mut [Option<BatchTaskOutcome>]) -> Result<Vec<usize>> {
+pub(super) fn find_ready_tasks(
+    store: &Arc<Store>,
+    tasks: &[batch::BatchTask],
+    dependencies: &[Vec<usize>],
+    started: &[bool],
+    outcomes: &mut [Option<BatchTaskOutcome>],
+    triggered: &[bool],
+) -> Result<Vec<usize>> {
     let mut ready = Vec::new();
     for task_idx in 0..tasks.len() {
         if started[task_idx] || outcomes[task_idx].is_some() {
+            continue;
+        }
+        if !triggered[task_idx] {
             continue;
         }
         if let Some(dep_idx) = failed_dependency(task_idx, dependencies, outcomes) {
@@ -196,6 +206,9 @@ mod tests {
             fallback: None,
             read_only: false,
             budget: false,
+            on_success: None,
+            on_fail: None,
+            conditional: false,
         }
     }
 
@@ -206,19 +219,20 @@ mod tests {
         let deps = vec![vec![], vec![0], vec![0], vec![1, 2]];
         let mut outcomes: Vec<Option<BatchTaskOutcome>> = vec![None; 4];
         let started = vec![false; 4];
-        let ready = find_ready_tasks(&store, &tasks, &deps, &started, &mut outcomes).unwrap();
+        let triggered = vec![true; tasks.len()];
+        let ready = find_ready_tasks(&store, &tasks, &deps, &started, &mut outcomes, &triggered).unwrap();
         assert_eq!(ready, vec![0]);
         let mut outcomes = vec![Some(BatchTaskOutcome::Done), None, None, None];
         let started = vec![true, false, false, false];
-        let ready = find_ready_tasks(&store, &tasks, &deps, &started, &mut outcomes).unwrap();
+        let ready = find_ready_tasks(&store, &tasks, &deps, &started, &mut outcomes, &triggered).unwrap();
         assert_eq!(ready, vec![1, 2]);
         let mut outcomes = vec![Some(BatchTaskOutcome::Done), Some(BatchTaskOutcome::Done), None, None];
         let started = vec![true, true, true, false];
-        let ready = find_ready_tasks(&store, &tasks, &deps, &started, &mut outcomes).unwrap();
+        let ready = find_ready_tasks(&store, &tasks, &deps, &started, &mut outcomes, &triggered).unwrap();
         assert!(ready.is_empty());
         let mut outcomes = vec![Some(BatchTaskOutcome::Done), Some(BatchTaskOutcome::Done), Some(BatchTaskOutcome::Done), None];
         let started = vec![true, true, true, false];
-        let ready = find_ready_tasks(&store, &tasks, &deps, &started, &mut outcomes).unwrap();
+        let ready = find_ready_tasks(&store, &tasks, &deps, &started, &mut outcomes, &triggered).unwrap();
         assert_eq!(ready, vec![3]);
     }
 
@@ -229,7 +243,8 @@ mod tests {
         let deps = vec![vec![], vec![0]];
         let mut outcomes = vec![Some(BatchTaskOutcome::Failed), None];
         let started = vec![true, false];
-        let ready = find_ready_tasks(&store, &tasks, &deps, &started, &mut outcomes).unwrap();
+        let triggered = vec![true; tasks.len()];
+        let ready = find_ready_tasks(&store, &tasks, &deps, &started, &mut outcomes, &triggered).unwrap();
         assert!(ready.is_empty());
         assert_eq!(outcomes[1], Some(BatchTaskOutcome::Skipped));
     }

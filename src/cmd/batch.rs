@@ -1,15 +1,14 @@
 // Batch dispatch command for running tasks from a TOML file.
 // Exports: BatchArgs, run()
 // Deps: crate::batch, crate::cmd::run, crate::cmd::batch_validate, crate::store::Store
-use anyhow::{Context, Result};
-use std::{path::Path, sync::Arc};
+use anyhow::{anyhow, Context, Result};
+use std::{collections::HashMap, path::Path, sync::Arc};
 use crate::batch;
 use crate::cmd::run::{self, RunArgs};
 use crate::store::Store;
-use crate::types::{TaskId, TaskStatus};
 #[path = "batch_validate.rs"]
 mod batch_validate;
-use batch_validate::{failed_dependency, find_ready_tasks, load_task_outcome, pending_dependency, record_skipped_task, resolve_dependencies, task_has_dependencies, task_label, validate_batch_config};
+use batch_validate::{find_ready_tasks, load_task_outcome, resolve_dependencies, task_has_dependencies, task_label, validate_batch_config};
 pub struct BatchArgs { pub file: String, pub parallel: bool, pub wait: bool, pub max_concurrent: Option<usize> }
 pub async fn run(store: Arc<Store>, args: BatchArgs) -> Result<()> {
     if args.max_concurrent == Some(0) {
@@ -75,7 +74,6 @@ pub async fn run(store: Arc<Store>, args: BatchArgs) -> Result<()> {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum BatchTaskOutcome { Done, Failed, Skipped }
 struct DispatchedTask { index: usize, task_id: Option<String> }
-type BatchJob<T> = std::pin::Pin<Box<dyn std::future::Future<Output = Result<T>> + Send>>;
 fn task_to_run_args(task: &batch::BatchTask, background: bool, store: &Arc<Store>) -> RunArgs {
     // If team is set and agent is empty/auto, auto-select from team members
     let agent_name = if (task.agent.is_empty() || task.agent == "auto") && task.team.is_some() {
@@ -114,7 +112,7 @@ fn task_to_run_args(task: &batch::BatchTask, background: bool, store: &Arc<Store
         hooks: task.hooks.clone().unwrap_or_default(),
         background,
         announce: true,
-        fallback: task.fallback.clone(),
+        cascade: task.fallback.as_deref().map(|f| vec![f.to_string()]).unwrap_or_default(),
         read_only: task.read_only,
         budget: task.budget,
         team: task.team.clone(),
@@ -123,143 +121,133 @@ fn task_to_run_args(task: &batch::BatchTask, background: bool, store: &Arc<Store
     }
 }
 async fn dispatch_parallel(store: Arc<Store>, tasks: &[batch::BatchTask], max_concurrent: Option<usize>) -> Result<Vec<String>> {
-    let throttled = max_concurrent.is_some();
-    let jobs = tasks
-        .iter()
-        .map(|task| {
-            let store = store.clone();
-            let run_args = task_to_run_args(task, true, &store);
-            Box::pin(async move {
-                let task_id = run::run(store.clone(), run_args).await?;
-                if throttled {
-                    wait_for_background_completion(&store, task_id.as_str()).await?;
-                }
-                Ok(task_id)
-            }) as BatchJob<_>
-        })
-        .collect();
-    let task_ids: Vec<TaskId> = run_parallel_jobs(jobs, max_concurrent).await?;
-    Ok(task_ids.into_iter().map(|task_id| task_id.to_string()).collect())
-}
-async fn run_parallel_jobs<T>(jobs: Vec<BatchJob<T>>, max_concurrent: Option<usize>) -> Result<Vec<T>>
-where
-    T: Send + 'static,
-{
-    let semaphore = max_concurrent.map(tokio::sync::Semaphore::new).map(Arc::new);
-    let handles: Vec<_> = jobs
-        .into_iter()
-        .map(|job| {
-            let semaphore = semaphore.clone();
-            tokio::spawn(async move {
-                let _permit = match semaphore {
-                    Some(semaphore) => Some(
-                        semaphore
-                            .acquire_owned()
-                            .await
-                            .context("Batch task semaphore closed")?,
-                    ),
-                    None => None,
-                };
-                job.await
-            })
-        })
-        .collect();
-    let mut first_err = None;
-    let mut results = Vec::new();
-    for handle in handles {
-        match handle.await.context("Batch task join failure") {
-            Ok(Ok(result)) => results.push(result),
-            Ok(Err(err)) if first_err.is_none() => first_err = Some(err),
-            Err(err) if first_err.is_none() => first_err = Some(err),
-            _ => {}
-        }
-    }
-    if let Some(err) = first_err {
-        return Err(err);
-    }
-    Ok(results)
-}
-async fn wait_for_background_completion(store: &Arc<Store>, task_id: &str) -> Result<()> {
-    loop {
-        let Some(task) = store.get_task(task_id)? else {
-            return Ok(());
-        };
-        if matches!(task.status, TaskStatus::Done | TaskStatus::Failed) {
-            return Ok(());
-        }
-        tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
-    }
+    let dependencies = vec![Vec::new(); tasks.len()];
+    let max_active = max_concurrent.unwrap_or(tasks.len()).max(1);
+    dispatch_with_dependencies(store, tasks, &dependencies, max_active).await
 }
 async fn dispatch_sequential(store: Arc<Store>, tasks: &[batch::BatchTask]) -> Result<Vec<String>> {
-    let mut task_ids = Vec::new();
-    for (task_idx, task) in tasks.iter().enumerate() {
-        match run::run(store.clone(), task_to_run_args(task, false, &store)).await {
-            Ok(task_id) => task_ids.push(task_id.to_string()),
-            Err(err) => eprintln!("Batch task failed ({}): {err}", task_label(task, task_idx)),
-        }
-    }
-    Ok(task_ids)
+    let dependencies = vec![Vec::new(); tasks.len()];
+    dispatch_with_dependencies(store, tasks, &dependencies, 1).await
 }
 async fn dispatch_parallel_with_dependencies(store: Arc<Store>, tasks: &[batch::BatchTask], max_concurrent: Option<usize>) -> Result<Vec<String>> {
     let dependencies = resolve_dependencies(tasks)?;
+    let max_active = max_concurrent.unwrap_or(tasks.len()).max(1);
+    dispatch_with_dependencies(store, tasks, &dependencies, max_active).await
+}
+async fn dispatch_sequential_with_dependencies(store: Arc<Store>, tasks: &[batch::BatchTask]) -> Result<Vec<String>> {
+    let dependencies = resolve_dependencies(tasks)?;
+    dispatch_with_dependencies(store, tasks, &dependencies, 1).await
+}
+
+async fn dispatch_with_dependencies(
+    store: Arc<Store>,
+    tasks: &[batch::BatchTask],
+    dependencies: &[Vec<usize>],
+    max_active: usize,
+) -> Result<Vec<String>> {
+    if tasks.is_empty() {
+        return Ok(Vec::new());
+    }
+    let name_map = batch::task_name_map(tasks)?;
+    let success_targets = resolve_hook_targets(tasks, &name_map, |task| task.on_success.as_deref())?;
+    let failure_targets = resolve_hook_targets(tasks, &name_map, |task| task.on_fail.as_deref())?;
     let mut started = vec![false; tasks.len()];
-    let mut active: Vec<(usize, String)> = Vec::new();
     let mut outcomes = vec![None; tasks.len()];
+    let mut triggered: Vec<bool> = tasks.iter().map(|task| !task.conditional).collect();
+    let mut active: Vec<(usize, String)> = Vec::new();
     let mut task_ids = Vec::new();
-    let max_active = max_concurrent.unwrap_or(tasks.len());
+    let max_active = max_active.max(1);
     while outcomes.iter().any(Option::is_none) {
-        let ready = find_ready_tasks(&store, tasks, &dependencies, &started, &mut outcomes)?;
+        let ready = find_ready_tasks(
+            &store,
+            tasks,
+            dependencies,
+            &started,
+            &mut outcomes,
+            &triggered,
+        )?;
         let available = max_active.saturating_sub(active.len());
-        if available > 0 {
-            for dispatch in dispatch_level(store.clone(), tasks, &ready[..ready.len().min(available)]).await? {
+        if available > 0 && !ready.is_empty() {
+            let dispatch_group: Vec<_> = ready.into_iter().take(available).collect();
+            for dispatch in dispatch_level(store.clone(), tasks, &dispatch_group).await? {
                 started[dispatch.index] = true;
                 match dispatch.task_id {
                     Some(task_id) => {
                         task_ids.push(task_id.clone());
                         active.push((dispatch.index, task_id));
                     }
-                    None => outcomes[dispatch.index] = Some(BatchTaskOutcome::Failed),
+                    None => {
+                        outcomes[dispatch.index] = Some(BatchTaskOutcome::Failed);
+                        trigger_conditional(
+                            BatchTaskOutcome::Failed,
+                            dispatch.index,
+                            &mut triggered,
+                            &success_targets,
+                            &failure_targets,
+                        );
+                    }
                 }
             }
         }
         if active.is_empty() {
             break;
         }
-        wait_for_any_completion(&store, &mut active, &mut outcomes)?;
+        wait_for_any_completion(
+            &store,
+            &mut active,
+            &mut outcomes,
+            &mut triggered,
+            &success_targets,
+            &failure_targets,
+        )?;
     }
     Ok(task_ids)
 }
-async fn dispatch_sequential_with_dependencies(store: Arc<Store>, tasks: &[batch::BatchTask]) -> Result<Vec<String>> {
-    let dependencies = resolve_dependencies(tasks)?;
-    let mut outcomes = vec![None; tasks.len()];
-    let mut task_ids = Vec::new();
-    for (task_idx, task) in tasks.iter().enumerate() {
-        if let Some(dep_idx) = failed_dependency(task_idx, &dependencies, &outcomes) {
-            record_skipped_task(&store, tasks, task_idx, dep_idx)?;
-            outcomes[task_idx] = Some(BatchTaskOutcome::Skipped);
-            continue;
+
+fn resolve_hook_targets<F>(
+    tasks: &[batch::BatchTask],
+    name_map: &HashMap<&str, usize>,
+    selector: F,
+) -> Result<Vec<Option<usize>>>
+where
+    F: Fn(&batch::BatchTask) -> Option<&str>,
+{
+    tasks
+        .iter()
+        .map(|task| {
+            if let Some(reference) = selector(task) {
+                let trimmed = reference.trim();
+                let &target_idx = name_map
+                    .get(trimmed)
+                    .ok_or_else(|| anyhow!("unknown hook target: {trimmed}"))?;
+                Ok(Some(target_idx))
+            } else {
+                Ok(None)
+            }
+        })
+        .collect()
+}
+
+fn trigger_conditional(
+    outcome: BatchTaskOutcome,
+    task_idx: usize,
+    triggered: &mut [bool],
+    success_targets: &[Option<usize>],
+    failure_targets: &[Option<usize>],
+) {
+    match outcome {
+        BatchTaskOutcome::Done => {
+            if let Some(target_idx) = success_targets[task_idx] {
+                triggered[target_idx] = true;
+            }
         }
-        if let Some(dep_idx) = pending_dependency(task_idx, &dependencies, &outcomes) {
-            anyhow::bail!(
-                "task {} depends on {} which has not run yet; reorder the batch or use --parallel",
-                task_label(task, task_idx),
-                task_label(&tasks[dep_idx], dep_idx)
-            );
+        BatchTaskOutcome::Failed => {
+            if let Some(target_idx) = failure_targets[task_idx] {
+                triggered[target_idx] = true;
+            }
         }
-        outcomes[task_idx] = Some(
-            match run::run(store.clone(), task_to_run_args(task, false, &store)).await {
-                Ok(task_id) => {
-                    task_ids.push(task_id.to_string());
-                    load_task_outcome(&store, task_id.as_str())?
-                }
-                Err(err) => {
-                    eprintln!("Batch task failed ({}): {err}", task_label(task, task_idx));
-                    BatchTaskOutcome::Failed
-                }
-            },
-        );
+        BatchTaskOutcome::Skipped => {}
     }
-    Ok(task_ids)
 }
 async fn dispatch_level(store: Arc<Store>, tasks: &[batch::BatchTask], task_indices: &[usize]) -> Result<Vec<DispatchedTask>> {
     let handles: Vec<_> = task_indices
@@ -292,7 +280,14 @@ async fn dispatch_level(store: Arc<Store>, tasks: &[batch::BatchTask], task_indi
     }
     Ok(dispatches)
 }
-fn wait_for_any_completion(store: &Arc<Store>, active: &mut Vec<(usize, String)>, outcomes: &mut [Option<BatchTaskOutcome>]) -> Result<()> {
+fn wait_for_any_completion(
+    store: &Arc<Store>,
+    active: &mut Vec<(usize, String)>,
+    outcomes: &mut [Option<BatchTaskOutcome>],
+    triggered: &mut [bool],
+    success_targets: &[Option<usize>],
+    failure_targets: &[Option<usize>],
+) -> Result<()> {
     loop {
         let mut completed = Vec::new();
         for (i, (_, task_id)) in active.iter().enumerate() {
@@ -306,6 +301,13 @@ fn wait_for_any_completion(store: &Arc<Store>, active: &mut Vec<(usize, String)>
             for &i in completed.iter().rev() {
                 let (task_idx, task_id) = active.remove(i);
                 outcomes[task_idx] = Some(load_task_outcome(store, &task_id)?);
+                trigger_conditional(
+                    outcomes[task_idx].unwrap(),
+                    task_idx,
+                    triggered,
+                    success_targets,
+                    failure_targets,
+                );
             }
             return Ok(());
         }
@@ -316,20 +318,79 @@ fn wait_for_any_completion(store: &Arc<Store>, active: &mut Vec<(usize, String)>
 mod tests {
     use super::*;
     use crate::batch;
+    use crate::store::Store;
+    use std::sync::Arc;
 
-    #[tokio::test]
-    async fn run_parallel_jobs_with_max_concurrent_one_runs_sequentially() {
-        let jobs: Vec<BatchJob<(std::time::Instant, std::time::Instant)>> = (0..3).map(|_| {
-            Box::pin(async move {
-                let start = std::time::Instant::now();
-                tokio::time::sleep(tokio::time::Duration::from_millis(40)).await;
-                Ok((start, std::time::Instant::now()))
-            }) as BatchJob<_>
-        }).collect();
-        let mut spans = run_parallel_jobs(jobs, Some(1)).await.unwrap();
-        spans.sort_by_key(|(start, _)| *start);
-        assert_eq!(spans.len(), 3);
-        assert!(spans.windows(2).all(|window| window[1].0 >= window[0].1));
+    fn make_task(name: &str, conditional: bool, on_success: Option<&str>) -> batch::BatchTask {
+        batch::BatchTask {
+            name: Some(name.to_string()),
+            agent: "codex".to_string(),
+            team: None,
+            prompt: "prompt".to_string(),
+            dir: None,
+            output: None,
+            model: None,
+            worktree: None,
+            group: None,
+            verify: None,
+            max_duration_mins: None,
+            context: None,
+            skills: None,
+            hooks: None,
+            depends_on: None,
+            context_from: None,
+            fallback: None,
+            read_only: false,
+            budget: false,
+            on_success: on_success.map(str::to_string),
+            on_fail: None,
+            conditional,
+        }
+    }
+
+    #[test]
+    fn trigger_success_marks_target() {
+        let mut triggered = vec![true, false];
+        let success_targets = vec![Some(1), None];
+        let failure_targets = vec![None, None];
+        trigger_conditional(
+            BatchTaskOutcome::Done,
+            0,
+            &mut triggered,
+            &success_targets,
+            &failure_targets,
+        );
+        assert!(triggered[1]);
+    }
+
+    #[test]
+    fn trigger_failure_marks_target() {
+        let mut triggered = vec![true, false];
+        let success_targets = vec![None, None];
+        let failure_targets = vec![Some(1), None];
+        trigger_conditional(
+            BatchTaskOutcome::Failed,
+            0,
+            &mut triggered,
+            &success_targets,
+            &failure_targets,
+        );
+        assert!(triggered[1]);
+    }
+
+    #[test]
+    fn conditional_task_stays_dormant_until_triggered() {
+        let store = Arc::new(Store::open_memory().unwrap());
+        let tasks = vec![make_task("first", false, Some("second")), make_task("second", true, None)];
+        let deps = vec![Vec::new(), Vec::new()];
+        let started = vec![false; 2];
+        let mut outcomes = vec![None; 2];
+        let triggered = vec![true, false];
+        let ready = find_ready_tasks(&store, &tasks, &deps, &started, &mut outcomes, &triggered).unwrap();
+        assert_eq!(ready, vec![0]);
+        let triggered = vec![true, true];
+        let ready = find_ready_tasks(&store, &tasks, &deps, &started, &mut outcomes, &triggered).unwrap();
+        assert_eq!(ready, vec![0, 1]);
     }
 
     #[test]
@@ -356,6 +417,9 @@ mod tests {
                 fallback: None,
                 read_only: false,
                 budget: false,
+                on_success: None,
+                on_fail: None,
+                conditional: false,
             },
             true,
             &store,

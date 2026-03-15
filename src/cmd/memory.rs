@@ -93,6 +93,27 @@ pub fn forget(store: &Store, id: &str) -> Result<()> {
     Ok(())
 }
 
+pub fn history(store: &Store, id: &str) -> Result<()> {
+    let chain = store.memory_history(id)?;
+    if chain.is_empty() {
+        println!("Memory {} not found.", id);
+        return Ok(());
+    }
+    let entries: Vec<String> = chain
+        .iter()
+        .map(|memory| {
+            format!(
+                "v{} ({}) {}",
+                memory.version,
+                format_age(&memory.created_at),
+                truncate(&memory.content, 60),
+            )
+        })
+        .collect();
+    println!("{}", entries.join(" -> "));
+    Ok(())
+}
+
 fn parse_optional_memory_type(value: Option<&str>) -> Result<Option<MemoryType>> {
     match value {
         Some(value) => Ok(Some(parse_memory_type(value)?)),

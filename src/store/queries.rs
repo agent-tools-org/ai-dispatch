@@ -242,30 +242,66 @@ impl Store {
         Ok(memories)
     }
 
-    pub fn list_memory_history(&self, id: &str) -> Result<Vec<Memory>> {
+    pub fn memory_history(&self, id: &str) -> Result<Vec<Memory>> {
         let conn = self.db();
         let mut stmt = conn.prepare(
             "SELECT id, memory_type, content, source_task_id, agent, project_path, content_hash,
              created_at, expires_at, supersedes, version, inject_count, last_injected_at, success_count
              FROM memories WHERE id = ?1",
         )?;
+        let mut child_stmt = conn.prepare(
+            "SELECT id, memory_type, content, source_task_id, agent, project_path, content_hash,
+             created_at, expires_at, supersedes, version, inject_count, last_injected_at, success_count
+             FROM memories WHERE supersedes = ?1
+             ORDER BY version ASC
+             LIMIT 1",
+        )?;
+        let base_memory = match stmt.query_row(params![id], |row| row_to_memory(row)) {
+            Ok(row) => row?,
+            Err(rusqlite::Error::QueryReturnedNoRows) => return Ok(vec![]),
+            Err(err) => return Err(err.into()),
+        };
         let mut history = Vec::new();
-        let mut current_id = Some(id.to_string());
-        while let Some(curr) = current_id {
-            match stmt.query_row(params![curr], |row| row_to_memory(row)) {
+        history.push(base_memory.clone());
+
+        let mut previous_id = base_memory
+            .supersedes
+            .as_ref()
+            .map(|sup| sup.as_str().to_string());
+        for _ in 0..50 {
+            let prev = match previous_id {
+                Some(ref prev) => prev.clone(),
+                None => break,
+            };
+            match stmt.query_row(params![prev], |row| row_to_memory(row)) {
                 Ok(row) => {
                     let memory = row?;
-                    current_id = memory
-                        .supersedes
-                        .as_ref()
-                        .map(|sup: &MemoryId| sup.as_str().to_string());
+                    previous_id = memory.supersedes.as_ref().map(|sup| sup.as_str().to_string());
                     history.push(memory);
                 }
                 Err(rusqlite::Error::QueryReturnedNoRows) => break,
                 Err(err) => return Err(err.into()),
             }
         }
-        history.reverse();
+
+        let mut next_id = Some(base_memory.id.as_str().to_string());
+        for _ in 0..50 {
+            let curr = match next_id {
+                Some(ref value) => value.clone(),
+                None => break,
+            };
+            match child_stmt.query_row(params![curr], |row| row_to_memory(row)) {
+                Ok(row) => {
+                    let memory = row?;
+                    next_id = Some(memory.id.as_str().to_string());
+                    history.push(memory);
+                }
+                Err(rusqlite::Error::QueryReturnedNoRows) => break,
+                Err(err) => return Err(err.into()),
+            }
+        }
+
+        history.sort_by(|a, b| b.version.cmp(&a.version));
         Ok(history)
     }
 

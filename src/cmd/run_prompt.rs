@@ -3,9 +3,11 @@
 // Deps: context, templates, workgroup, skills, watcher, store.
 use anyhow::{Context, Result};
 use chrono::Local;
+use std::collections::HashSet;
 use std::sync::Arc;
 use tokio::process::Command;
-use crate::{agent, skills, store::Store, templates, types::*, watcher};
+use crate::{agent, skills, store::Store, templates, team, types::*, watcher};
+use crate::team::KnowledgeEntry;
 use super::RunArgs;
 
 const VERIFY_RETRY_FEEDBACK: &str =
@@ -48,10 +50,15 @@ pub(super) fn build_prompt_bundle(store: &Store, args: &RunArgs, agent_kind: &Ag
 
     // Inject team knowledge if --team was specified
     if let Some(ref team_id) = args.team {
-        if let Some(knowledge) = crate::team::read_knowledge(team_id) {
-            let token_count = templates::estimate_tokens(&knowledge);
-            eprintln!("[aid] Injected team '{team_id}' knowledge (~{token_count} tokens)");
-            effective_prompt = format!("[Team Knowledge — {team_id}]\n{knowledge}\n\n{effective_prompt}");
+        let entries = team::read_knowledge_entries(team_id);
+        let total_entries = entries.len();
+        if total_entries > 0 {
+            let relevant = select_relevant_entries(&entries, &args.prompt);
+            eprintln!("[aid] Injected {}/{} knowledge entries (relevance-filtered)", relevant.len(), total_entries);
+            if !relevant.is_empty() {
+                let knowledge_block = format_knowledge_block(team_id, &relevant);
+                effective_prompt = format!("{knowledge_block}\n\n{effective_prompt}");
+            }
         }
     }
     let prompt_tokens = templates::estimate_tokens(&effective_prompt) as i64;
@@ -90,6 +97,59 @@ fn format_memory_age(duration: chrono::Duration) -> String {
         if hours >= 1 { format!("{}h ago", hours) }
         else { format!("{}m ago", duration.num_minutes().max(1)) }
     }
+}
+
+fn format_knowledge_block(team_id: &str, entries: &[&KnowledgeEntry]) -> String {
+    let blocks: Vec<String> = entries.iter().map(|entry| format_entry_block(entry)).collect();
+    format!("[Team Knowledge — {team_id}]\n{}", blocks.join("\n\n"))
+}
+
+fn format_entry_block(entry: &KnowledgeEntry) -> String {
+    let mut line = String::new();
+    line.push_str("- [");
+    line.push_str(&entry.topic);
+    line.push(']');
+    if let Some(path) = &entry.path {
+        line.push('(');
+        line.push_str(path);
+        line.push(')');
+    }
+    line.push_str(" — ");
+    line.push_str(&entry.description);
+    if let Some(content) = &entry.content {
+        line.push('\n');
+        line.push_str(content);
+    }
+    line
+}
+
+fn select_relevant_entries<'a>(entries: &'a [KnowledgeEntry], prompt: &str) -> Vec<&'a KnowledgeEntry> {
+    let prompt_words = extract_words(prompt);
+    let mut scored: Vec<(usize, &KnowledgeEntry)> = entries
+        .iter()
+        .map(|entry| {
+            let entry_words = extract_words(&format!("{} {}", entry.topic, entry.description));
+            let score = entry_words.iter().filter(|word| prompt_words.contains(*word)).count();
+            (score, entry)
+        })
+        .collect();
+    scored.sort_by(|a, b| b.0.cmp(&a.0));
+    scored
+        .into_iter()
+        .filter(|(score, _)| *score > 0)
+        .take(5)
+        .map(|(_, entry)| entry)
+        .collect()
+}
+
+fn extract_words(value: &str) -> HashSet<String> {
+    value
+        .split(|c: char| !c.is_alphanumeric())
+        .filter_map(|token| {
+            let normalized = token.to_lowercase();
+            if normalized.is_empty() { None } else { Some(normalized) }
+        })
+        .collect()
 }
 
 fn detect_project_path() -> Option<String> {

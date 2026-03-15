@@ -209,7 +209,6 @@ pub(super) fn maybe_verify_impl(store: &Store, task_id: &TaskId, verify: Option<
             println!("{report}");
             crate::verify::record_verify_status(store, task_id, &result);
             if !result.success {
-                let _ = store.update_task_status(task_id.as_str(), TaskStatus::Failed);
                 let event = TaskEvent { task_id: task_id.clone(), timestamp: Local::now(), event_kind: EventKind::Error, detail: format!("Verification failed: {}", result.command), metadata: None };
                 let _ = store.insert_event(&event);
             }
@@ -228,7 +227,7 @@ pub(super) async fn maybe_auto_retry_after_verify_failure_impl(
         return Ok(None);
     }
     let Some(task) = store.get_task(task_id.as_str())? else { return Ok(None) };
-    if task.status != TaskStatus::Failed {
+    if task.verify_status != crate::types::VerifyStatus::Failed {
         return Ok(None);
     }
 

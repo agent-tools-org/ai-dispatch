@@ -395,6 +395,9 @@ async fn main() -> Result<()> {
             MemoryCommands::History { id } => {
                 cmd::memory::history(&store, &id)?;
             }
+            MemoryCommands::CloudStatus => cmd::memory::cloud_status(),
+            MemoryCommands::CloudSearch { query, limit } => cmd::memory::cloud_search(&query, limit),
+            MemoryCommands::CloudPush { memory_type } => cmd::memory::cloud_push(&store, memory_type.as_deref()),
         },
         Commands::Finding { action } => match action {
             FindingCommands::Add { group, content, task } => {

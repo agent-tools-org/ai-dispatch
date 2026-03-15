@@ -8,6 +8,7 @@ use std::collections::hash_map::DefaultHasher;
 use std::env;
 use std::hash::{Hash, Hasher};
 
+use crate::config;
 use crate::store::Store;
 use crate::types::{Memory, MemoryId, MemoryType};
 
@@ -101,6 +102,67 @@ pub fn history(store: &Store, id: &str) -> Result<()> {
         })
         .collect();
     println!("{}", entries.join(" -> "));
+    Ok(())
+}
+
+pub fn cloud_status() -> Result<()> {
+    let config = config::load_config()?;
+    if !config.evermemos.enabled {
+        println!("EverMemOS: disabled");
+        println!("Enable in ~/.aid/config.toml:");
+        println!("  [evermemos]");
+        println!("  enabled = true");
+        println!("  base_url = \"http://localhost:1995/api/v1\"");
+        return Ok(());
+    }
+    let client = crate::evermemos::EverMemosClient::from_config(&config.evermemos)
+        .ok_or_else(|| anyhow!("EverMemOS not configured"))?;
+    match client.health_check() {
+        Ok(true) => println!("EverMemOS: connected ({})", config.evermemos.base_url),
+        Ok(false) => println!("EverMemOS: unhealthy ({})", config.evermemos.base_url),
+        Err(e) => println!("EverMemOS: error — {e}"),
+    }
+    Ok(())
+}
+
+pub fn cloud_search(query: &str, limit: usize) -> Result<()> {
+    let config = config::load_config()?;
+    let client = crate::evermemos::EverMemosClient::from_config(&config.evermemos)
+        .ok_or_else(|| anyhow!("EverMemOS not enabled. Set [evermemos] enabled=true in ~/.aid/config.toml"))?;
+    let memories = client.search_memories(query, limit)?;
+    if memories.is_empty() {
+        println!("No cloud memories found.");
+        return Ok(());
+    }
+    println!("{:<8} {}", "SCORE", "CONTENT");
+    println!("{}", "-".repeat(80));
+    for mem in &memories {
+        println!("{:<8.2} {}", mem.score, truncate(&mem.content, 70));
+    }
+    Ok(())
+}
+
+pub fn cloud_push(store: &Store, memory_type: Option<&str>) -> Result<()> {
+    let config = config::load_config()?;
+    let client = crate::evermemos::EverMemosClient::from_config(&config.evermemos)
+        .ok_or_else(|| anyhow!("EverMemOS not enabled"))?;
+    let kind = parse_optional_memory_type(memory_type)?;
+    let memories = store.list_memories(None, kind)?;
+    let mut pushed = 0;
+    for memory in &memories {
+        let metadata = crate::evermemos::MemoryMetadata {
+            task_id: memory.source_task_id.clone(),
+            agent: memory.agent.clone(),
+            project: memory.project_path.clone(),
+            memory_type: memory.memory_type.label().to_string(),
+        };
+        if let Err(e) = client.store_memory(&memory.content, &metadata) {
+            eprintln!("[aid] Failed to push {}: {e}", memory.id);
+        } else {
+            pushed += 1;
+        }
+    }
+    println!("Pushed {}/{} memories to EverMemOS cloud", pushed, memories.len());
     Ok(())
 }
 

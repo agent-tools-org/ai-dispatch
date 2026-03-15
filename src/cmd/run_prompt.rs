@@ -51,6 +51,11 @@ pub(super) fn build_prompt_bundle(store: &Store, args: &RunArgs, agent_kind: &Ag
         injected_memory_ids = memory_ids;
     }
 
+    // Inject EverMemOS cloud memories (semantic search)
+    if let Some(cloud_block) = inject_evermemos_memories(&args.prompt)? {
+        effective_prompt = format!("{cloud_block}\n\n{effective_prompt}");
+    }
+
     // Inject team knowledge if --team was specified
     if let Some(ref team_id) = args.team {
         let entries = team::read_knowledge_entries(team_id);
@@ -133,6 +138,32 @@ fn inject_memories(store: &Store, prompt: &str, max_memories: usize) -> Result<O
     let token_count = crate::templates::estimate_tokens(&lines.join("\n"));
     eprintln!("[aid] Injected {} memories (~{} tokens)", memories.len(), token_count);
     Ok(Some((lines.join("\n"), memory_ids)))
+}
+
+fn inject_evermemos_memories(prompt: &str) -> Result<Option<String>> {
+    let config = crate::config::load_config()?;
+    let client = match crate::evermemos::EverMemosClient::from_config(&config.evermemos) {
+        Some(c) => c,
+        None => return Ok(None),
+    };
+    let memories = match client.search_memories(prompt, 5) {
+        Ok(mems) => mems,
+        Err(e) => {
+            eprintln!("[aid] EverMemOS search failed: {e}");
+            return Ok(None);
+        }
+    };
+    if memories.is_empty() {
+        return Ok(None);
+    }
+    let mut lines = vec!["[Cloud Memory — EverMemOS semantic recall]".to_string()];
+    for mem in &memories {
+        lines.push(format!("- (score:{:.2}) {}", mem.score, mem.content));
+    }
+    let block = lines.join("\n");
+    let token_count = crate::templates::estimate_tokens(&block);
+    eprintln!("[aid] Injected {} cloud memories (~{} tokens)", memories.len(), token_count);
+    Ok(Some(block))
 }
 
 fn build_memory_queries(prompt: &str, keywords: &HashSet<String>) -> Vec<String> {

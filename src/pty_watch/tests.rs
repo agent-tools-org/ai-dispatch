@@ -4,7 +4,7 @@
 
 use super::{extract_awaiting_prompt, mark_awaiting_input, strip_ansi};
 use crate::store::Store;
-use crate::types::{AgentKind, Task, TaskId, TaskStatus};
+use crate::types::{AgentKind, Task, TaskId, TaskStatus, VerifyStatus};
 use chrono::Local;
 use std::sync::Arc;
 
@@ -36,6 +36,7 @@ fn stores_recent_question_as_awaiting_prompt_metadata() {
         created_at: Local::now(),
         completed_at: None,
         verify: None,
+            verify_status: VerifyStatus::Skipped,
         read_only: false,
         budget: false,
     };

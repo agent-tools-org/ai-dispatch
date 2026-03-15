@@ -197,7 +197,7 @@ fn stderr_tail(task_id: &str) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::types::{AgentKind, TaskId};
+    use crate::types::{AgentKind, TaskId, VerifyStatus};
     use chrono::Local;
     use std::sync::Arc;
 
@@ -229,6 +229,7 @@ mod tests {
             created_at: Local::now(),
             completed_at: None,
             verify: None,
+            verify_status: VerifyStatus::Skipped,
             read_only: false,
             budget: false,
         };
@@ -275,6 +276,7 @@ mod tests {
             created_at: Local::now(),
             completed_at: None,
             verify: None,
+            verify_status: VerifyStatus::Skipped,
             read_only: false,
             budget: false,
         };

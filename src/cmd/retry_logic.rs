@@ -82,7 +82,7 @@ fn root_prompt(store: &Store, task: &Task) -> Option<String> {
 mod tests {
     use super::*;
     use chrono::Local;
-    use crate::types::AgentKind;
+    use crate::types::{AgentKind, VerifyStatus};
 
     fn task(id: &str) -> Task {
         Task {
@@ -92,7 +92,7 @@ mod tests {
             caller_kind: None, caller_session_id: None, agent_session_id: None, repo_path: None, worktree_path: None,
             worktree_branch: None, log_path: None, output_path: None, tokens: None, prompt_tokens: None,
             duration_ms: None, model: None, cost_usd: None, created_at: Local::now(),
-            completed_at: None, verify: None, read_only: false, budget: false,
+            completed_at: None, verify: None, verify_status: VerifyStatus::Skipped, read_only: false, budget: false,
         }
     }
 

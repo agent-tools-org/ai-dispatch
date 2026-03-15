@@ -242,7 +242,7 @@ pub fn truncate(value: &str, max: usize) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::types::{AgentKind, TaskId};
+    use crate::types::{AgentKind, TaskId, VerifyStatus};
     use chrono::Local;
     use tempfile::NamedTempFile;
 
@@ -272,6 +272,7 @@ mod tests {
             created_at: Local::now(),
             completed_at: None,
             verify: None,
+            verify_status: VerifyStatus::Skipped,
             read_only: false,
             budget: false,
         }

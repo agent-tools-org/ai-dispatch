@@ -217,7 +217,7 @@ fn truncate(s: &str, max: usize) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::types::{AgentKind, TaskId, TaskStatus};
+    use crate::types::{AgentKind, TaskId, TaskStatus, VerifyStatus};
     use chrono::Local;
     use std::sync::Arc;
     use tempfile::NamedTempFile;
@@ -250,6 +250,7 @@ mod tests {
             created_at: Local::now(),
             completed_at: None,
             verify: None,
+            verify_status: VerifyStatus::Skipped,
             read_only: false,
             budget: false,
         };
@@ -292,6 +293,7 @@ mod tests {
             created_at: Local::now(),
             completed_at: None,
             verify: None,
+            verify_status: VerifyStatus::Skipped,
             read_only: false,
             budget: false,
         };

@@ -20,9 +20,9 @@ impl Store {
             "INSERT INTO tasks (id, agent, prompt, resolved_prompt, status, parent_task_id, workgroup_id,
              caller_kind, caller_session_id, agent_session_id, repo_path, worktree_path, worktree_branch,
              log_path, output_path, tokens, prompt_tokens, duration_ms, model, cost_usd, created_at,
-             completed_at, verify, read_only, budget, custom_agent_name)
+             completed_at, verify, verify_status, read_only, budget, custom_agent_name)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17,
-             ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26)",
+             ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27)",
             params![
                 task.id.as_str(),
                 agent_value,
@@ -47,6 +47,7 @@ impl Store {
                 task.created_at.to_rfc3339(),
                 task.completed_at.map(|t| t.to_rfc3339()),
                 task.verify,
+                task.verify_status.as_str(),
                 task.read_only,
                 task.budget,
                 task.custom_agent_name,
@@ -175,6 +176,14 @@ impl Store {
     pub fn delete_memory(&self, id: &str) -> Result<()> {
         self.db()
             .execute("DELETE FROM memories WHERE id = ?1", params![id])?;
+        Ok(())
+    }
+
+    pub fn update_verify_status(&self, id: &str, verify_status: VerifyStatus) -> Result<()> {
+        self.db().execute(
+            "UPDATE tasks SET verify_status = ?1 WHERE id = ?2",
+            params![verify_status.as_str(), id],
+        )?;
         Ok(())
     }
 }

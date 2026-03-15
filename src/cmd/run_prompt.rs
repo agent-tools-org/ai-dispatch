@@ -207,6 +207,7 @@ pub(super) fn maybe_verify_impl(store: &Store, task_id: &TaskId, verify: Option<
         Ok(result) => {
             let report = crate::verify::format_verify_report(&result);
             println!("{report}");
+            crate::verify::record_verify_status(store, task_id, &result);
             if !result.success {
                 let _ = store.update_task_status(task_id.as_str(), TaskStatus::Failed);
                 let event = TaskEvent { task_id: task_id.clone(), timestamp: Local::now(), event_kind: EventKind::Error, detail: format!("Verification failed: {}", result.command), metadata: None };

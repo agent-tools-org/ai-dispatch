@@ -69,7 +69,12 @@ pub fn render_board(tasks: &[Task], store: &Store) -> Result<String> {
                 None => task.status.label().to_string(),
             }
         } else {
-            task_status(task, store.latest_milestone(task.id.as_str())?)
+            let base = task_status(task, store.latest_milestone(task.id.as_str())?);
+            if task.verify_status == VerifyStatus::Failed {
+                format!("{} [VFAIL]", base)
+            } else {
+                base
+            }
         };
         let duration = if task.status == TaskStatus::Skipped {
             "-".to_string()
@@ -357,6 +362,7 @@ mod tests {
             created_at: Local::now(),
             completed_at: None,
             verify: None,
+            verify_status: VerifyStatus::Skipped,
             read_only: false,
             budget: false,
         }

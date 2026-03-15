@@ -33,6 +33,7 @@ fn make_task(id: &str, agent: AgentKind, status: TaskStatus) -> Task {
         created_at: Local::now(),
         completed_at: None,
         verify: None,
+            verify_status: VerifyStatus::Skipped,
         read_only: false,
         budget: false,
     }

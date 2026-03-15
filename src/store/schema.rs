@@ -111,6 +111,7 @@ pub(super) fn migrate(store: &Store) -> Result<()> {
     let _ = conn.execute_batch("ALTER TABLE tasks ADD COLUMN read_only INTEGER NOT NULL DEFAULT 0;");
     let _ = conn.execute_batch("ALTER TABLE tasks ADD COLUMN budget INTEGER NOT NULL DEFAULT 0;");
     let _ = conn.execute_batch("ALTER TABLE tasks ADD COLUMN custom_agent_name TEXT;");
+    let _ = conn.execute_batch("ALTER TABLE tasks ADD COLUMN verify_status TEXT NOT NULL DEFAULT 'skipped';");
     Ok(())
 }
 
@@ -140,6 +141,7 @@ pub(super) fn row_to_task(row: &Row) -> rusqlite::Result<Result<Task>> {
         created_at: parse_dt(&row.get::<_, String>(20)?),
         completed_at: row.get::<_, Option<String>>(21)?.map(|s| parse_dt(&s)),
         verify: row.get(22)?,
+        verify_status: row.get::<_, Option<String>>(26)?.and_then(|s| VerifyStatus::parse_str(&s)).unwrap_or(VerifyStatus::Skipped),
         read_only: row.get(23)?,
         budget: row.get(24)?,
     }))

@@ -5,7 +5,7 @@ use super::*;
 use chrono::Local;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
-use crate::types::{AgentKind, TaskId, TaskStatus};
+use crate::types::{AgentKind, TaskId, TaskStatus, VerifyStatus};
 
 fn make_task(id: &str, group_id: Option<&str>) -> Task {
     Task {
@@ -33,6 +33,7 @@ fn make_task(id: &str, group_id: Option<&str>) -> Task {
         created_at: Local::now(),
         completed_at: None,
         verify: None,
+            verify_status: VerifyStatus::Skipped,
         read_only: false,
         budget: false,
     }

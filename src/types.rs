@@ -162,6 +162,44 @@ impl fmt::Display for TaskStatus {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+pub enum VerifyStatus {
+    Pending,
+    Passed,
+    Failed,
+    Skipped,
+}
+
+impl VerifyStatus {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Pending => "pending",
+            Self::Passed => "passed",
+            Self::Failed => "failed",
+            Self::Skipped => "skipped",
+        }
+    }
+
+    pub fn parse_str(s: &str) -> Option<Self> {
+        match s {
+            "pending" => Some(Self::Pending),
+            "passed" => Some(Self::Passed),
+            "failed" => Some(Self::Failed),
+            "skipped" => Some(Self::Skipped),
+            _ => None,
+        }
+    }
+
+    pub fn label(&self) -> &'static str {
+        match self {
+            Self::Pending => "PEND",
+            Self::Passed => "PASS",
+            Self::Failed => "VFAIL",
+            Self::Skipped => "-",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 pub enum EventKind {
     ToolCall,
     Reasoning,
@@ -246,6 +284,7 @@ pub struct Task {
     pub created_at: DateTime<Local>,
     pub completed_at: Option<DateTime<Local>>,
     pub verify: Option<String>,
+    pub verify_status: VerifyStatus,
     pub read_only: bool,
     pub budget: bool,
 }
@@ -400,6 +439,7 @@ mod tests {
             created_at: Local::now(),
             completed_at: None,
             verify: None,
+            verify_status: VerifyStatus::Skipped,
             read_only: false,
             budget: false,
         }

@@ -22,11 +22,16 @@ pub fn run() -> Result<()> {
     // 1. OpenRouter API key
     section("OpenRouter API Key");
     let current_key = std::env::var("OPENROUTER_API_KEY").ok();
-    if existing.contains("api_key") {
-        println!("  Already configured in config.toml");
+    // Show current config status
+    let config = crate::config::load_config().unwrap_or_default();
+    let qc = &config.query;
+    println!("  Free model:  {}", qc.free_model);
+    println!("  Auto model:  {}", qc.auto_model);
+
+    if let Some(k) = qc.api_key.as_deref().filter(|k| !k.is_empty()) {
+        println!("  API key:     {} (config.toml)", mask_key(k));
     } else if let Some(k) = &current_key {
-        println!("  Using OPENROUTER_API_KEY from environment");
-        println!("  {}", mask_key(k));
+        println!("  API key:     {} (env)", mask_key(k));
     } else {
         println!("  Enables `aid query` — fast LLM queries without agent startup.");
         println!("  Get a key at: https://openrouter.ai/keys\n");

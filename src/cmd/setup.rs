@@ -6,7 +6,8 @@ use anyhow::Result;
 use std::io::{self, BufRead, Write};
 
 pub fn run() -> Result<()> {
-    println!("aid setup — interactive configuration\n");
+    println!("aid setup — interactive configuration");
+    println!("Press Enter to skip any step.\n");
 
     let config_path = crate::paths::config_path();
     let mut existing = if config_path.exists() {

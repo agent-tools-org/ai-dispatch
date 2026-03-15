@@ -353,9 +353,17 @@ pub async fn run(store: Arc<Store>, args: RunArgs) -> Result<TaskId> {
                     TaskStatus::Done => {
                         format!("[aid] Next: aid show {task_id} --diff | aid merge {task_id}")
                     }
-                    TaskStatus::Failed => format!(
-                        "[aid] Next: aid show {task_id} | aid retry {task_id} -f \"feedback\""
-                    ),
+                    TaskStatus::Failed => {
+                        let base = format!(
+                            "[aid] Next: aid show {task_id} | aid retry {task_id} -f \"feedback\""
+                        );
+                        if task.duration_ms.unwrap_or(i64::MAX) < 5000 {
+                            let stderr = retry_logic::read_stderr_tail(task_id.as_str(), 3);
+                            format!("{base}\n[aid] Hint: task failed in <5s — check agent binary is installed and --dir points to a valid repo\n[aid] stderr: {stderr}")
+                        } else {
+                            base
+                        }
+                    }
                     _ => String::new(),
                 }
             } else {

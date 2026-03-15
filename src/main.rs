@@ -320,6 +320,9 @@ Batch TOML format:
         /// Switch to a different agent (e.g. --agent opencode when codex is rate-limited)
         #[arg(long)]
         agent: Option<String>,
+        /// Override working directory for this retry
+        #[arg(long)]
+        dir: Option<String>,
     },
     /// Mark task(s) as merged
     Merge {
@@ -819,8 +822,8 @@ async fn main() -> Result<()> {
         Commands::Summary { group } => {
             cmd::summary::run(&store, &group)?;
         }
-        Commands::Retry { task_id, feedback, agent } => {
-            cmd::retry::run(store, cmd::retry::RetryArgs { task_id, feedback, agent }).await?;
+        Commands::Retry { task_id, feedback, agent, dir } => {
+            cmd::retry::run(store, cmd::retry::RetryArgs { task_id, feedback, agent, dir }).await?;
         }
         Commands::Merge { task_id, group } => {
             let group = resolve_group(group);

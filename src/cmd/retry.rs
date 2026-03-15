@@ -12,6 +12,7 @@ pub struct RetryArgs {
     pub task_id: String,
     pub feedback: String,
     pub agent: Option<String>,
+    pub dir: Option<String>,
 }
 
 pub async fn run(store: Arc<Store>, args: RetryArgs) -> Result<()> {
@@ -30,7 +31,11 @@ pub async fn retry_task(store: Arc<Store>, args: RetryArgs, announce: bool) -> R
         prompt = task.prompt,
     );
     let worktree = reusable_worktree(&task);
-    let (dir, worktree_arg) = resolve_retry_target(&task, worktree);
+    let (dir, worktree_arg) = if args.dir.is_some() {
+        (args.dir, None) // --dir override takes precedence
+    } else {
+        resolve_retry_target(&task, worktree)
+    };
 
     if announce {
         println!(

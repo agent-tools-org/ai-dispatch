@@ -285,6 +285,12 @@ Batch TOML format:
         #[arg(long)]
         json: bool,
     },
+    /// Summarize workgroup results
+    Summary {
+        /// Workgroup ID (e.g. wg-abc1)
+        #[arg(long)]
+        group: String,
+    },
     #[command(after_help = r#"Examples:
   aid retry t-1234 -f "Fix the compilation error in parser.rs"
   aid retry t-1234 -f "Use HashMap instead" --agent opencode"#)]
@@ -697,6 +703,9 @@ async fn main() -> Result<()> {
         }
         Commands::Usage { session, agent, period, json } => {
             cmd::usage::run(&store, session, agent, period, json)?;
+        }
+        Commands::Summary { group } => {
+            cmd::summary::run(&store, &group)?;
         }
         Commands::Retry { task_id, feedback, agent } => {
             cmd::retry::run(store, cmd::retry::RetryArgs { task_id, feedback, agent }).await?;

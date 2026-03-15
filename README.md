@@ -1,6 +1,6 @@
 # ai-dispatch (aid)
 
-![Version](https://img.shields.io/badge/version-5.4.0-blue)
+![Version](https://img.shields.io/badge/version-5.4.1-blue)
 ![Rust](https://img.shields.io/badge/rust-2024-orange)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
@@ -425,6 +425,7 @@ The board displays `[VFAIL]` next to tasks that completed but failed verificatio
 | `aid group` | Create, list, show, update, and delete shared-context workgroups. | `aid group create dispatch --context "Shared rollout notes"` |
 | `aid store` | Browse, search, preview, and install community agent definitions. | `aid store browse`, `aid store install community/aider` |
 | `aid agent` | Manage custom agent definitions: list, show, add, remove, fork. | `aid agent list`, `aid agent fork codex --as codex-fast` |
+| `aid export` | Export a task with full context (prompt, events, output, diff). Supports markdown and JSON. | `aid export t-1234`, `aid export t-1234 --format json --output task.json` |
 | `aid memory` | Manage shared agent memory: add, list, search, forget. | `aid memory add discovery "Finding"`, `aid memory search "query"` |
 | `aid init` | Initialize default skills and templates. | `aid init` |
 

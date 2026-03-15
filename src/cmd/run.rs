@@ -1,12 +1,11 @@
 // Handler for `aid run <agent> <prompt>` — dispatch a task to an AI CLI.
-// Creates task record, spawns agent process, wires watcher, records completion.
+// Orchestrates RunArgs, prompt construction, verification hooks, and retry logic.
+// Depends on agents, hooks, store, and run_agent helpers for process lifecycle work.
 use anyhow::{Context, Result};
 use chrono::Local;
 use std::path::Path;
 use std::sync::Arc;
-use std::time::Instant;
 use tokio::process::Command;
-use tokio::time::{timeout, Duration};
 use crate::agent::{self, RunOpts};
 use crate::background::{self, BackgroundRunSpec};
 use crate::cmd::{config as cmd_config, retry_logic, show};
@@ -18,12 +17,12 @@ use crate::session;
 use crate::store::Store;
 use crate::types::*;
 use crate::usage;
-use crate::watcher;
 #[path = "run_prompt.rs"]
 mod run_prompt;
+#[path = "run_agent.rs"]
+mod run_agent;
+use self::run_agent::{check_worktree_escape, run_agent_process_with_timeout};
 pub const NO_SKILL_SENTINEL: &str = "__aid_no_skill__";
-// Foreground runs get a default 30m cap unless --max-duration-mins overrides it.
-pub const DEFAULT_FOREGROUND_TIMEOUT_MINS: u64 = 30;
 #[derive(Clone, Default)]
 pub struct RunArgs {
     pub agent_name: String,
@@ -404,29 +403,6 @@ pub async fn run(store: Arc<Store>, args: RunArgs) -> Result<TaskId> {
     }
     Ok(task_id)
 }
-/// Detect if an agent working in a worktree accidentally modified the main repo.
-fn check_worktree_escape(repo_dir: Option<&str>) {
-    let dir = repo_dir.unwrap_or(".");
-    let output = std::process::Command::new("git")
-        .args(["status", "--porcelain"])
-        .current_dir(dir)
-        .output();
-    if let Ok(o) = output {
-        let stdout = String::from_utf8_lossy(&o.stdout);
-        let dirty: Vec<&str> = stdout.lines().filter(|l| !l.is_empty()).collect();
-        if !dirty.is_empty() {
-            eprintln!("[aid] ⚠ Worktree escape detected! Agent modified {} file(s) in main repo:", dirty.len());
-            for line in dirty.iter().take(10) {
-                eprintln!("  {line}");
-            }
-            if dirty.len() > 10 {
-                eprintln!("  ... and {} more", dirty.len() - 10);
-            }
-            eprintln!("[aid] Run `git checkout .` to discard, or review with `git diff`");
-        }
-    }
-}
-
 fn maybe_flag_empty_worktree_diff(store: &Store, task_id: &TaskId, task: &Task) {
     if task.status != TaskStatus::Done || task.verify_status != VerifyStatus::Skipped {
         return;
@@ -445,43 +421,6 @@ fn maybe_flag_empty_worktree_diff(store: &Store, task_id: &TaskId, task: &Task) 
         }
     }
 }
-
-/// Extract the final assistant message from a streaming JSONL log and write to output file.
-fn write_streaming_output(log_path: &std::path::Path, out_path: &Path) {
-    let Ok(log_content) = std::fs::read_to_string(log_path) else { return };
-    let mut last_message = String::new();
-    for line in log_content.lines() {
-        let Ok(v) = serde_json::from_str::<serde_json::Value>(line) else { continue };
-        // Accumulate assistant message deltas (gemini/codex stream format)
-        if v.get("type").and_then(|t| t.as_str()) == Some("message")
-            && v.get("role").and_then(|r| r.as_str()) == Some("assistant")
-        {
-            if let Some(content) = v.get("content").and_then(|c| c.as_str()) {
-                if v.get("delta").and_then(|d| d.as_bool()) == Some(true) {
-                    last_message.push_str(content);
-                } else {
-                    last_message = content.to_string();
-                }
-            }
-        }
-        // Codex agent_message format
-        if v.get("type").and_then(|t| t.as_str()) == Some("item.completed") {
-            if let Some(item) = v.get("item") {
-                if item.get("type").and_then(|t| t.as_str()) == Some("agent_message") {
-                    if let Some(text) = item.get("text").and_then(|t| t.as_str()) {
-                        last_message = text.to_string();
-                    }
-                }
-            }
-        }
-    }
-    if !last_message.is_empty() {
-        if let Err(err) = std::fs::write(out_path, &last_message) {
-            eprintln!("[aid] Failed to write output file: {err}");
-        }
-    }
-}
-
 fn take_next_cascade_agent(args: &RunArgs) -> Option<(String, Vec<String>)> {
     let mut cascade = args.cascade.clone();
     if cascade.is_empty() {
@@ -568,152 +507,8 @@ mod tests {
 
 
 pub(crate) fn inherit_retry_base_branch(repo_dir: Option<&str>, task: &Task, retry_args: &mut RunArgs) { run_prompt::inherit_retry_base_branch_impl(repo_dir, task, retry_args); }
-#[allow(clippy::too_many_arguments)]
-pub(crate) async fn run_agent_process(
-    agent: &dyn crate::agent::Agent,
-    cmd: Command,
-    task_id: &TaskId,
-    store: &Arc<Store>,
-    log_path: &std::path::Path,
-    output_path: Option<&str>,
-    model: Option<&str>,
-    streaming: bool,
-    workgroup_id: Option<&str>,
-) -> Result<()> {
-    run_prompt::run_agent_process_impl(
-        agent,
-        cmd,
-        task_id,
-        store,
-        log_path,
-        output_path,
-        model,
-        streaming,
-        workgroup_id,
-    )
-    .await
-}
+pub(crate) use run_agent::run_agent_process;
 
-#[allow(clippy::too_many_arguments)]
-async fn run_agent_process_with_timeout(
-    agent: &dyn crate::agent::Agent,
-    mut cmd: Command,
-    task_id: &TaskId,
-    store: &Arc<Store>,
-    log_path: &std::path::Path,
-    output_path: Option<&str>,
-    model: Option<&str>,
-    streaming: bool,
-    workgroup_id: Option<&str>,
-    max_duration_mins: Option<i64>,
-) -> Result<()> {
-    let timeout_mins = max_duration_mins
-        .filter(|m| *m > 0)
-        .map(|m| m as u64)
-        .unwrap_or(DEFAULT_FOREGROUND_TIMEOUT_MINS);
-    let deadline = Duration::from_secs(timeout_mins * 60);
-    let start = Instant::now();
-    let mut child = cmd.spawn().context("Failed to spawn agent process")?;
-    let watch_future = async {
-        let info = if streaming {
-            watcher::watch_streaming(agent, &mut child, task_id, store, log_path, workgroup_id)
-                .await?
-        } else {
-            let output_path = output_path.map(std::path::Path::new);
-            watcher::watch_buffered(
-                agent,
-                &mut child,
-                task_id,
-                store,
-                log_path,
-                output_path,
-                workgroup_id,
-            )
-            .await?
-        };
-        Ok::<CompletionInfo, anyhow::Error>(info)
-    };
-
-    match timeout(deadline, watch_future).await {
-        Ok(Ok(info)) => {
-            // Write output file for streaming agents (buffered agents handle this in watch_buffered)
-            if streaming {
-                if let Some(out_path) = output_path {
-                    write_streaming_output(log_path, std::path::Path::new(out_path));
-                }
-            }
-            let duration_ms = start.elapsed().as_millis() as i64;
-            let final_model = info.model.as_deref().or(model);
-            let cost_usd = info.cost_usd.or_else(|| {
-                info.tokens
-                    .and_then(|tokens| crate::cost::estimate_cost(tokens, final_model, agent.kind()))
-            });
-            store.update_task_completion(
-                task_id.as_str(),
-                info.status,
-                info.tokens,
-                duration_ms,
-                final_model,
-                cost_usd,
-                info.exit_code,
-            )?;
-            let duration_str = format_duration(duration_ms);
-            let tokens_str = info
-                .tokens
-                .map(|t| format!(", {} tokens", t))
-                .unwrap_or_default();
-            let cost_str = if cost_usd.is_some() {
-                format!(", {}", crate::cost::format_cost(cost_usd))
-            } else {
-                String::new()
-            };
-            println!(
-                "Task {} {} ({}{}{})",
-                task_id,
-                info.status.label(),
-                duration_str,
-                tokens_str,
-                cost_str
-            );
-            Ok(())
-        }
-        Ok(Err(err)) => Err(err),
-        Err(_) => {
-            let _ = child.kill().await;
-            let _ = child.wait().await;
-            let duration_ms = start.elapsed().as_millis() as i64;
-            store.update_task_completion(
-                task_id.as_str(),
-                TaskStatus::Failed,
-                None,
-                duration_ms,
-                model,
-                None,
-                None,
-            )?;
-            let detail = format!("Task killed: exceeded {timeout_mins}m timeout");
-            let event = TaskEvent {
-                task_id: task_id.clone(),
-                timestamp: Local::now(),
-                event_kind: EventKind::Error,
-                detail: detail.clone(),
-                metadata: None,
-            };
-            let _ = store.insert_event(&event);
-            eprintln!("[aid] {detail}");
-            Err(anyhow::anyhow!(detail))
-        }
-    }
-}
-
-fn format_duration(ms: i64) -> String {
-    let secs = ms / 1000;
-    if secs < 60 {
-        format!("{secs}s")
-    } else {
-        format!("{}m {:02}s", secs / 60, secs % 60)
-    }
-}
 pub(crate) fn maybe_cleanup_fast_fail(store: &Store, task_id: &TaskId, task: &Task) { run_prompt::maybe_cleanup_fast_fail_impl(store, task_id, task); }
 /// Run verification if --verify was set and a working dir exists.
 pub(crate) fn maybe_verify(store: &Store, task_id: &TaskId, verify: Option<&str>, dir: Option<&str>) { run_prompt::maybe_verify_impl(store, task_id, verify, dir); }

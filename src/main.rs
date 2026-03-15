@@ -379,8 +379,8 @@ async fn main() -> Result<()> {
             } => {
                 cmd::memory::add(&store, &memory_type, &content, project.as_deref())?;
             }
-            MemoryCommands::List { memory_type, all, project } => {
-                cmd::memory::list(&store, memory_type.as_deref(), project.as_deref(), all)?;
+            MemoryCommands::List { memory_type, all, project, stats } => {
+                cmd::memory::list(&store, memory_type.as_deref(), project.as_deref(), all, stats)?;
             }
             MemoryCommands::Search { query, project } => {
                 cmd::memory::search(&store, &query, project.as_deref())?;
@@ -390,6 +390,9 @@ async fn main() -> Result<()> {
             }
             MemoryCommands::Forget { id } => {
                 cmd::memory::forget(&store, &id)?;
+            }
+            MemoryCommands::History { id } => {
+                cmd::memory::history(&store, &id)?;
             }
         },
         Commands::Finding { action } => match action {

@@ -41,11 +41,11 @@ pub fn add(store: &Store, memory_type: &str, content: &str, project_path: Option
     Ok(())
 }
 
-pub fn list(store: &Store, memory_type: Option<&str>, project_path: Option<&str>, all: bool) -> Result<()> {
+pub fn list(store: &Store, memory_type: Option<&str>, project_path: Option<&str>, all: bool, stats: bool) -> Result<()> {
     let kind = parse_optional_memory_type(memory_type)?;
     if all {
         let memories = store.list_memories(None, kind)?;
-        print_memory_table(&memories);
+        print_memory_table(&memories, stats);
         return Ok(());
     }
     let project = project_path.map(str::to_string).or_else(|| detect_git_root().ok().flatten());
@@ -54,7 +54,17 @@ pub fn list(store: &Store, memory_type: Option<&str>, project_path: Option<&str>
         return Ok(());
     }
     let memories = store.list_memories(project.as_deref(), kind)?;
-    print_memory_table(&memories);
+    print_memory_table(&memories, stats);
+    Ok(())
+}
+
+pub fn history(store: &Store, id: &str) -> Result<()> {
+    let history = store.list_memory_history(id)?;
+    if history.is_empty() {
+        println!("Memory {} not found.", id);
+        return Ok(());
+    }
+    print_memory_history(&history);
     Ok(())
 }
 
@@ -64,7 +74,7 @@ pub fn search(store: &Store, query: &str, project_path: Option<&str>) -> Result<
         eprintln!("[aid] Not in a git repo. Searching across all projects.");
     }
     let memories = store.search_memories(query, project.as_deref(), 20)?;
-    print_memory_table(&memories);
+    print_memory_table(&memories, false);
     Ok(())
 }
 
@@ -113,23 +123,59 @@ fn detect_git_root() -> Result<Option<String>> {
     }
 }
 
-fn print_memory_table(memories: &[Memory]) {
+fn print_memory_table(memories: &[Memory], stats: bool) {
     if memories.is_empty() {
         println!("No memories found.");
         return;
     }
-    println!("{:<10} {:<10} {:<60} {:<8} {}", "ID", "TYPE", "CONTENT", "AGE", "SOURCE");
-    println!("{}", "-".repeat(94));
-    for memory in memories {
+    if stats {
         println!(
-            "{:<10} {:<10} {:<60} {:<8} {}",
-            memory.id,
-            memory.memory_type.label(),
+            "{:<10} {:<10} {:<8} {:<9} {:<19} {}",
+            "ID", "TYPE", "INJECTS", "SUCCESS", "LAST USED", "CONTENT"
+        );
+        println!("{}", "-".repeat(120));
+        for memory in memories {
+            println!(
+                "{:<10} {:<10} {:<8} {:<9} {:<19} {}",
+                memory.id,
+                memory.memory_type.label(),
+                memory.inject_count,
+                memory.success_count,
+                format_last_used(memory.last_injected_at.as_ref()),
+                truncate(&memory.content, 60),
+            );
+        }
+    } else {
+        println!("{:<10} {:<10} {:<60} {:<8} {}", "ID", "TYPE", "CONTENT", "AGE", "SOURCE");
+        println!("{}", "-".repeat(94));
+        for memory in memories {
+            println!(
+                "{:<10} {:<10} {:<60} {:<8} {}",
+                memory.id,
+                memory.memory_type.label(),
+                truncate(&memory.content, 60),
+                format_age(&memory.created_at),
+                memory.project_path.as_deref().unwrap_or("-"),
+            );
+        }
+    }
+}
+
+fn print_memory_history(history: &[Memory]) {
+    println!("{:<8} {:<20} {}", "VERSION", "CREATED", "CONTENT");
+    println!("{}", "-".repeat(100));
+    for memory in history {
+        println!(
+            "{:<8} {:<20} {}",
+            memory.version,
+            memory.created_at.format("%Y-%m-%d %H:%M"),
             truncate(&memory.content, 60),
-            format_age(&memory.created_at),
-            memory.project_path.as_deref().unwrap_or("-"),
         );
     }
+}
+
+fn format_last_used(last: Option<&DateTime<Local>>) -> String {
+    last.map(|dt| format_age(dt)).unwrap_or_else(|| "-".to_string())
 }
 
 fn truncate(value: &str, max: usize) -> String {

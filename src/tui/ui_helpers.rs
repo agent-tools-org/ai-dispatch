@@ -198,12 +198,18 @@ pub fn task_progress(app: &App, task: &Task) -> String {
     if task.status == TaskStatus::AwaitingInput {
         return "awaiting input".to_string();
     }
-    if task.status != TaskStatus::Running {
-        return "—".to_string();
+    let milestone_or_dash = || {
+        app.get_milestone(task.id.as_str())
+            .map(|milestone| truncate(milestone, 30))
+            .unwrap_or_else(|| "—".to_string())
+    };
+    match task.status {
+        TaskStatus::Running
+        | TaskStatus::Done
+        | TaskStatus::Merged
+        | TaskStatus::Failed => milestone_or_dash(),
+        _ => "—".to_string(),
     }
-    app.get_milestone(task.id.as_str())
-        .map(|milestone| truncate(milestone, 30))
-        .unwrap_or_else(|| "—".to_string())
 }
 
 pub fn status_style(status: TaskStatus) -> Style {

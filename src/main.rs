@@ -391,6 +391,9 @@ async fn main() -> Result<()> {
             MemoryCommands::Forget { id } => {
                 cmd::memory::forget(&store, &id)?;
             }
+            MemoryCommands::History { id } => {
+                cmd::memory::history(&store, &id)?;
+            }
         },
         Commands::Finding { action } => match action {
             FindingCommands::Add { group, content, task } => {

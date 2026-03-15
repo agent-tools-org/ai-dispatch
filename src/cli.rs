@@ -386,7 +386,8 @@ Batch TOML format:
   aid memory add discovery "The auth module uses bcrypt not argon2"
   aid memory list --type convention
   aid memory search "auth"
-  aid memory forget m-a3f1"#)]
+  aid memory forget m-a3f1
+  aid memory history m-a3f1"#)]
     /// Manage agent shared memory (discoveries, conventions, lessons)
     Memory {
         #[command(subcommand)]
@@ -512,6 +513,11 @@ pub enum MemoryCommands {
     },
     /// Delete a memory entry
     Forget {
+        /// Memory ID (e.g. m-a3f1)
+        id: String,
+    },
+    /// Show the version chain for a memory
+    History {
         /// Memory ID (e.g. m-a3f1)
         id: String,
     },

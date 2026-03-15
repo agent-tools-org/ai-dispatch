@@ -76,7 +76,7 @@ fn increment_memory_counters_updates_usage() {
 }
 
 #[test]
-fn list_memory_history_returns_complete_chain() {
+fn memory_history_returns_full_chain_from_mid_version() {
     let store = Store::open_memory().unwrap();
     let origin = make_memory("m-4000", "origin");
     store.insert_memory(&origin).unwrap();
@@ -91,18 +91,13 @@ fn list_memory_history_returns_complete_chain() {
         .clone();
 
     assert!(store.update_memory(second_id.as_str(), "third").unwrap());
-    let final_id = store
-        .list_memories(None, None)
-        .unwrap()
-        .first()
-        .unwrap()
-        .id
-        .clone();
 
-    let history = store.list_memory_history(final_id.as_str()).unwrap();
+    let history = store.memory_history(second_id.as_str()).unwrap();
     assert_eq!(history.len(), 3);
-    assert_eq!(history[0].version, 1);
-    assert_eq!(history[1].version, 2);
-    assert_eq!(history[2].version, 3);
-    assert_eq!(history[2].content, "third");
+    assert_eq!(
+        history.iter().map(|mem| mem.version).collect::<Vec<_>>(),
+        vec![3, 2, 1]
+    );
+    assert_eq!(history[0].content, "third");
+    assert_eq!(history[2].content, "origin");
 }

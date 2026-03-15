@@ -226,7 +226,7 @@ fn parse_content_length(line: &str) -> Result<usize> {
 mod tests {
     use super::{TransportMode, handle_message, read_message};
     use crate::store::Store;
-    use crate::types::{AgentKind, Task, TaskId, TaskStatus};
+    use crate::types::{AgentKind, Task, TaskId, TaskStatus, VerifyStatus};
     use chrono::Local;
     use std::io::Cursor;
     use std::sync::Arc;
@@ -293,6 +293,7 @@ mod tests {
             created_at: Local::now(),
             completed_at: Some(Local::now()),
             verify: None,
+            verify_status: VerifyStatus::Skipped,
             read_only: false,
             budget: false,
         }

@@ -8,7 +8,7 @@ use std::sync::Arc;
 use crate::batch;
 use crate::rate_limit;
 use crate::store::Store;
-use crate::types::{AgentKind, Task, TaskId, TaskStatus};
+use crate::types::{AgentKind, Task, TaskId, TaskStatus, VerifyStatus};
 use super::BatchTaskOutcome;
 pub(super) fn validate_batch_config(tasks: &[batch::BatchTask]) -> Result<()> { validate_task_agents(tasks)?; rate_limit_precheck(tasks); Ok(()) }
 pub(super) fn resolve_dependencies(tasks: &[batch::BatchTask]) -> Result<Vec<Vec<usize>>> { batch::dependency_indices(tasks) }
@@ -156,6 +156,7 @@ fn insert_skipped_task(store: &Arc<Store>, task: &batch::BatchTask) -> Result<Ta
         model: None,
         cost_usd: None,
         verify: task.verify.clone(),
+        verify_status: VerifyStatus::Skipped,
         read_only: task.read_only,
         budget: task.budget,
         created_at: now,

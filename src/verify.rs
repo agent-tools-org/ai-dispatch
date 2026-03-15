@@ -5,6 +5,9 @@ use anyhow::{Context, Result};
 use std::path::Path;
 use std::process::Command;
 
+use crate::store::Store;
+use crate::types::{TaskId, VerifyStatus};
+
 #[derive(Debug, Clone)]
 pub struct VerifyResult {
     pub success: bool,
@@ -63,6 +66,19 @@ pub fn format_verify_report(result: &VerifyResult) -> String {
         }
     }
     report
+}
+
+/// Update the task's verify_status based on the latest verify result.
+pub fn record_verify_status(store: &Store, task_id: &TaskId, result: &VerifyResult) {
+    if result.command == "skip" {
+        return;
+    }
+    let status = if result.success {
+        VerifyStatus::Passed
+    } else {
+        VerifyStatus::Failed
+    };
+    let _ = store.update_verify_status(task_id.as_str(), status);
 }
 
 fn auto_detect_command(path: &Path) -> String {

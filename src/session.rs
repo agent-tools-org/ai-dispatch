@@ -76,7 +76,7 @@ fn shorten(session_id: &str) -> &str {
 #[cfg(test)]
 mod tests {
     use super::display;
-    use crate::types::{AgentKind, Task, TaskId, TaskStatus};
+    use crate::types::{AgentKind, Task, TaskId, TaskStatus, VerifyStatus};
     use chrono::Local;
 
     #[test]
@@ -106,6 +106,7 @@ mod tests {
             created_at: Local::now(),
             completed_at: None,
             verify: None,
+            verify_status: VerifyStatus::Skipped,
             read_only: false,
             budget: false,
         };

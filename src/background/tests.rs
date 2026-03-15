@@ -6,7 +6,7 @@ use chrono::Local;
 use super::{check_zombie_tasks_with, save_spec, BackgroundRunSpec, ZOMBIE_FAILURE_DETAIL};
 use crate::paths;
 use crate::store::Store;
-use crate::types::{AgentKind, EventKind, Task, TaskId, TaskStatus};
+use crate::types::{AgentKind, EventKind, Task, TaskId, TaskStatus, VerifyStatus};
 
 #[test]
 fn serializes_spec_to_json() {
@@ -147,6 +147,7 @@ fn make_task(task_id: &str, status: TaskStatus) -> Task {
         created_at: Local::now(),
         completed_at: None,
         verify: None,
+        verify_status: VerifyStatus::Skipped,
         read_only: false,
         budget: false,
     }

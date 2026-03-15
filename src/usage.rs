@@ -709,7 +709,7 @@ mod tests {
     };
     use crate::config::AidConfig;
     use crate::store::Store;
-    use crate::types::{AgentKind, Task, TaskId, TaskStatus};
+    use crate::types::{AgentKind, Task, TaskId, TaskStatus, VerifyStatus};
     use chrono::{Duration, Local};
 
     fn make_task(id: &str, agent: AgentKind, tokens: i64, cost_usd: f64) -> Task {
@@ -738,6 +738,7 @@ mod tests {
             created_at: Local::now(),
             completed_at: None,
             verify: None,
+            verify_status: VerifyStatus::Skipped,
             read_only: false,
             budget: false,
         }

@@ -418,6 +418,12 @@ Batch TOML format:
         /// Message to broadcast
         message: String,
     },
+    /// Upgrade aid to the latest version from crates.io
+    Upgrade {
+        /// Force upgrade even if tasks are running
+        #[arg(long)]
+        force: bool,
+    },
     /// Initialize default skills and templates
     Init,
     /// Interactive setup wizard
@@ -864,6 +870,9 @@ async fn main() -> Result<()> {
         },
         Commands::Broadcast { group, message } => {
             cmd::broadcast::run(&store, &group, &message)?;
+        }
+        Commands::Upgrade { force } => {
+            cmd::upgrade::run(force)?;
         }
         Commands::Init => cmd::init::run()?,
         Commands::Setup => cmd::setup::run()?,

@@ -30,6 +30,7 @@ pub mod export;
 pub mod store;
 pub mod usage;
 pub mod summary;
+pub mod upgrade;
 pub mod wait;
 pub mod watch;
 pub mod worktree;

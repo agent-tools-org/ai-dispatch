@@ -152,6 +152,10 @@ impl Store {
         Ok(tasks)
     }
 
+    pub fn list_running_tasks(&self) -> Result<Vec<Task>> {
+        self.list_tasks(TaskFilter::Running)
+    }
+
     pub fn list_tasks_by_session(&self, session_id: &str) -> Result<Vec<Task>> {
         let conn = self.db();
         let mut stmt = conn.prepare(

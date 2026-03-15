@@ -83,7 +83,7 @@ enum Commands {
         /// Run in a git worktree branch
         #[arg(short, long)]
         worktree: Option<String>,
-        /// Restrict auto-selection to a team's agents
+        /// Boost preferred agents and inject team knowledge
         #[arg(long)]
         team: Option<String>,
         /// Reuse shared context from a workgroup
@@ -662,6 +662,7 @@ async fn main() -> Result<()> {
                     fallback,
                     read_only,
                     budget,
+                    team: team_flag,
                     ..Default::default()
                 },
             )

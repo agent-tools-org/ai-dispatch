@@ -117,6 +117,7 @@ fn task_to_run_args(task: &batch::BatchTask, background: bool, store: &Arc<Store
         fallback: task.fallback.clone(),
         read_only: task.read_only,
         budget: task.budget,
+        team: task.team.clone(),
         ..Default::default()
     }
 }

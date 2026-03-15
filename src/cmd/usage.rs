@@ -34,9 +34,9 @@ pub fn run(
     // Filter tasks to team members if --team is set
     if let Some(ref team_name) = team_filter {
         if let Some(tc) = team::resolve_team(team_name) {
-            let members: Vec<String> = tc.agents.iter().map(|a| a.to_lowercase()).collect();
+            let members: Vec<String> = tc.preferred_agents.iter().map(|a| a.to_lowercase()).collect();
             tasks.retain(|t| members.iter().any(|m| t.agent_display_name().eq_ignore_ascii_case(m)));
-            eprintln!("[aid] Filtering usage to team '{}' ({} agents)", team_name, tc.agents.len());
+            eprintln!("[aid] Filtering usage to team '{}' ({} preferred agents)", team_name, tc.preferred_agents.len());
         } else {
             eprintln!("[aid] Warning: team '{team_name}' not found, showing all usage");
         }

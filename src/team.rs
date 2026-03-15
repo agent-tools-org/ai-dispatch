@@ -20,7 +20,10 @@ pub struct TeamConfig {
     pub display_name: String,
     #[serde(default)]
     pub description: String,
-    pub agents: Vec<String>,
+    /// Soft preference for auto-selection — NOT a hard filter.
+    /// All agents remain available; these just get a scoring boost.
+    #[serde(alias = "agents")]
+    pub preferred_agents: Vec<String>,
     pub default_agent: Option<String>,
     #[serde(default)]
     pub overrides: HashMap<String, CapabilityOverrides>,
@@ -101,6 +104,24 @@ pub fn team_exists(name: &str) -> bool {
     teams_dir().join(format!("{name}.toml")).is_file() || load_teams().contains_key(name)
 }
 
+/// Directory for team-specific knowledge files.
+pub fn knowledge_dir(team_id: &str) -> PathBuf {
+    teams_dir().join(team_id).join("knowledge")
+}
+
+/// Path to team KNOWLEDGE.md index file.
+pub fn knowledge_index(team_id: &str) -> PathBuf {
+    teams_dir().join(team_id).join("KNOWLEDGE.md")
+}
+
+/// Read team knowledge index content (returns None if missing or empty).
+pub fn read_knowledge(team_id: &str) -> Option<String> {
+    let path = knowledge_index(team_id);
+    let content = fs::read_to_string(path).ok()?;
+    if content.trim().is_empty() { return None; }
+    Some(content)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -116,7 +137,7 @@ mod tests {
             r#"[team]
 id = "{id}"
 display_name = "{id} team"
-agents = ["codex", "opencode"]
+preferred_agents = ["codex", "opencode"]
 "#,
         )
     }
@@ -133,7 +154,7 @@ agents = ["codex", "opencode"]
         write_team(dir.path(), "dev.toml", &sample_team_toml("dev"));
         let map = load_from_dir(&dir.path().to_path_buf());
         assert!(map.contains_key("dev"));
-        assert_eq!(map["dev"].agents, vec!["codex", "opencode"]);
+        assert_eq!(map["dev"].preferred_agents, vec!["codex", "opencode"]);
     }
 
     #[test]
@@ -150,7 +171,7 @@ agents = ["codex", "opencode"]
             id = "dev"
             display_name = "Development Team"
             description = "Feature development"
-            agents = ["codex", "opencode", "kilo"]
+            preferred_agents = ["codex", "opencode", "kilo"]
             default_agent = "codex"
 
             [team.overrides.opencode]
@@ -162,7 +183,7 @@ agents = ["codex", "opencode"]
         "#;
         let config = parse_team(toml_data).unwrap();
         assert_eq!(config.id, "dev");
-        assert_eq!(config.agents.len(), 3);
+        assert_eq!(config.preferred_agents.len(), 3);
         assert_eq!(config.default_agent, Some("codex".to_string()));
         assert_eq!(config.overrides.len(), 2);
         assert_eq!(config.overrides["opencode"].simple_edit, Some(10));

@@ -101,16 +101,7 @@ pub(crate) fn select_agent_with_reason(
     team: Option<&TeamConfig>,
 ) -> (String, String) {
     let history = store.agent_success_rates().unwrap_or_default();
-    let detected = detect_agents();
-    let available: Vec<AgentKind> = if let Some(team) = &team {
-        detected
-            .iter()
-            .filter(|k| team.agents.iter().any(|a| a.eq_ignore_ascii_case(k.as_str())))
-            .copied()
-            .collect()
-    } else {
-        detected
-    };
+    let available = detect_agents();
     select_agent_from(prompt, opts, &available, &history, team)
 }
 
@@ -150,6 +141,12 @@ fn select_agent_from(
         if matches!(profile.complexity, Complexity::High)
             && matches!(kind, AgentKind::Codex | AgentKind::Cursor)
         { s += 2; }
+        // Boost preferred agents from team (soft preference, not hard filter)
+        if let Some(tc) = &team {
+            if tc.preferred_agents.iter().any(|a| a.eq_ignore_ascii_case(kind.as_str())) {
+                s += 3;
+            }
+        }
         s
     };
     let team_default = team.and_then(|t| t.default_agent.as_deref())
@@ -177,11 +174,14 @@ fn select_agent_from(
         .into_values()
         .filter(|config| AgentKind::parse_str(&config.id).is_none())
         .filter(|config| custom_command_installed(&config.command))
-        .filter(|config| {
-            team.map_or(true, |t| t.agents.iter().any(|a| a.eq_ignore_ascii_case(&config.id)))
-        })
         .map(|config| {
-            let score = custom_category_score(&config, profile.category);
+            let mut score = custom_category_score(&config, profile.category);
+            // Boost preferred custom agents from team
+            if let Some(tc) = &team {
+                if tc.preferred_agents.iter().any(|a| a.eq_ignore_ascii_case(&config.id)) {
+                    score += 3;
+                }
+            }
             (config.id, score)
         })
         .max_by_key(|(_, score)| *score)

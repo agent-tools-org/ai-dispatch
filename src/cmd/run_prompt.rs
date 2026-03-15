@@ -45,6 +45,15 @@ pub(super) fn build_prompt_bundle(store: &Store, args: &RunArgs, agent_kind: &Ag
     if let Some(memory_block) = inject_memories(store, &args.prompt, 10)? {
         effective_prompt = format!("{memory_block}\n\n{effective_prompt}");
     }
+
+    // Inject team knowledge if --team was specified
+    if let Some(ref team_id) = args.team {
+        if let Some(knowledge) = crate::team::read_knowledge(team_id) {
+            let token_count = templates::estimate_tokens(&knowledge);
+            eprintln!("[aid] Injected team '{team_id}' knowledge (~{token_count} tokens)");
+            effective_prompt = format!("[Team Knowledge — {team_id}]\n{knowledge}\n\n{effective_prompt}");
+        }
+    }
     let prompt_tokens = templates::estimate_tokens(&effective_prompt) as i64;
     Ok(PromptBundle { effective_prompt, context_files, prompt_tokens })
 }

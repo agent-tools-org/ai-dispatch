@@ -11,7 +11,7 @@
 
 ## Teams
 
-Teams group agents into role-specific sets for constrained auto-selection. Team definitions live in `~/.aid/teams/*.toml`.
+Teams provide **knowledge context and soft agent preferences** — not hard restrictions. All agents remain available; `--team` boosts preferred agents in auto-selection and injects team knowledge into prompts.
 
 ### TOML format
 
@@ -20,7 +20,7 @@ Teams group agents into role-specific sets for constrained auto-selection. Team 
 id = "dev"
 display_name = "Development Team"
 description = "Feature development and code quality"
-agents = ["codex", "opencode", "cursor", "claude-code", "codebuff", "ob1", "kilo"]
+preferred_agents = ["codex", "opencode", "cursor"]  # soft boost, not hard filter
 default_agent = "codex"
 
 [team.overrides.opencode]
@@ -28,26 +28,40 @@ simple_edit = 10
 debugging = 6
 ```
 
+### Knowledge
+
+Each team has a knowledge directory auto-created on `aid team create`:
+
+```
+~/.aid/teams/<id>/
+  KNOWLEDGE.md          # index — auto-injected into prompts with --team
+  knowledge/            # individual knowledge files
+```
+
+When `--team dev` is used, `KNOWLEDGE.md` content is prepended to the agent's prompt.
+
 ### CLI
 
 ```
 aid team list                    # list all teams
-aid team show <name>             # show team details + members
-aid team create <name>           # scaffold team TOML
+aid team show <name>             # show team details + knowledge
+aid team create <name>           # scaffold team TOML + knowledge dir
 aid team delete <name>           # remove team TOML
 ```
 
 ### Usage with run and batch
 
 ```bash
-# Auto-select only from dev team members
+# Boost dev team agents + inject dev knowledge
 aid run auto "implement feature" --team dev
 
+# Any agent can still be used explicitly with team knowledge
+aid run gemini "research API design" --team dev
+
 # Batch with team-level defaults
-# In batch TOML:
 # [defaults]
 # team = "dev"
 
-# Usage filtered to a team
+# Usage filtered to preferred agents
 aid usage --team dev
 ```

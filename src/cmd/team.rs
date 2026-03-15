@@ -11,7 +11,9 @@ const TEAM_TEMPLATE: &str = r#"[team]
 id = "{name}"
 display_name = "{display_name}"
 description = ""
-agents = []
+
+# Soft preference for auto-selection (all agents remain available)
+preferred_agents = []
 # default_agent = "codex"
 
 # Optional: override capability scores for agents within this team context
@@ -44,16 +46,27 @@ fn list_teams() -> Result<()> {
         return Ok(());
     }
     println!(
-        "{:<12} {:<24} {:<8} {}",
-        "ID", "Name", "Agents", "Default"
+        "{:<12} {:<24} {:<10} {:<8} {}",
+        "ID", "Name", "Preferred", "Knowledge", "Default"
     );
-    println!("{}", "-".repeat(60));
+    println!("{}", "-".repeat(72));
     for t in &teams {
+        let knowledge_count = team::knowledge_index(&t.id)
+            .is_file()
+            .then(|| {
+                std::fs::read_to_string(team::knowledge_index(&t.id))
+                    .unwrap_or_default()
+                    .lines()
+                    .filter(|l| l.starts_with("- "))
+                    .count()
+            })
+            .unwrap_or(0);
         println!(
-            "{:<12} {:<24} {:<8} {}",
+            "{:<12} {:<24} {:<10} {:<8} {}",
             t.id,
             t.display_name,
-            t.agents.len(),
+            t.preferred_agents.len(),
+            knowledge_count,
             t.default_agent.as_deref().unwrap_or("-"),
         );
     }
@@ -69,9 +82,24 @@ fn show_team(name: &str) -> Result<()> {
     if !config.description.is_empty() {
         println!("  Description: {}", config.description);
     }
-    println!("  Agents: {}", config.agents.join(", "));
+    if !config.preferred_agents.is_empty() {
+        println!("  Preferred agents: {}", config.preferred_agents.join(", "));
+    }
     if let Some(ref default) = config.default_agent {
         println!("  Default agent: {}", default);
+    }
+    // Knowledge info
+    let knowledge_dir = team::knowledge_dir(name);
+    let knowledge_index = team::knowledge_index(name);
+    if knowledge_index.is_file() {
+        let entry_count = std::fs::read_to_string(&knowledge_index)
+            .unwrap_or_default()
+            .lines()
+            .filter(|l| l.starts_with("- "))
+            .count();
+        println!("  Knowledge: {} entries ({})", entry_count, knowledge_index.display());
+    } else {
+        println!("  Knowledge: (none — create {}/KNOWLEDGE.md)", knowledge_dir.parent().unwrap_or(&knowledge_dir).display());
     }
     if !config.overrides.is_empty() {
         println!("  Overrides:");
@@ -103,8 +131,18 @@ fn create_team(name: &str) -> Result<()> {
         .replace("{name}", name)
         .replace("{display_name}", &display_name);
     fs::write(&target, contents)?;
+
+    // Scaffold knowledge directory and index
+    let knowledge_dir = team::knowledge_dir(name);
+    fs::create_dir_all(&knowledge_dir)?;
+    let knowledge_index = team::knowledge_index(name);
+    fs::write(
+        &knowledge_index,
+        format!("# {display_name} — Team Knowledge\n\n<!-- Add knowledge entries as: - [topic](knowledge/file.md) — description -->\n"),
+    )?;
+
     println!("Created {}", target.display());
-    println!("Edit the file to add agents to the team.");
+    println!("Knowledge: {}", knowledge_index.display());
     Ok(())
 }
 

@@ -383,6 +383,13 @@ mod tests {
         (wt, branch)
     }
 
+    fn create_empty_worktree_branch(repo: &Path) -> (TempDir, String) {
+        let branch = unique("empty-branch");
+        let wt = TempDir::new().unwrap();
+        git(repo, &["worktree", "add", &wt.path().to_string_lossy(), "-b", &branch]);
+        (wt, branch)
+    }
+
     fn make_task_with_worktree(id: &str, repo: &Path, wt: &Path, branch: &str) -> Task {
         Task {
             id: TaskId(id.to_string()),
@@ -696,6 +703,38 @@ mod tests {
         let result = merge_single(&store, "t-no-repo");
         assert!(result.is_ok(), "merge should resolve repo from worktree: {result:?}");
         assert!(repo.path().join("agent-work.txt").exists());
+    }
+
+    #[test]
+    fn merge_group_skips_empty_branches() {
+        let repo = init_repo();
+        let (committed_wt, committed_branch) = create_worktree_with_commit(repo.path());
+        let (empty_wt, empty_branch) = create_empty_worktree_branch(repo.path());
+
+        let store = Store::open_memory().unwrap();
+        let group_id = "wg-merge-group";
+
+        let mut committed_task =
+            make_task_with_worktree("t-merge-group", repo.path(), committed_wt.path(), &committed_branch);
+        committed_task.workgroup_id = Some(group_id.to_string());
+        store.insert_task(&committed_task).unwrap();
+
+        let mut empty_task =
+            make_task_with_worktree("t-empty-branch", repo.path(), empty_wt.path(), &empty_branch);
+        empty_task.workgroup_id = Some(group_id.to_string());
+        store.insert_task(&empty_task).unwrap();
+
+        let result = merge_group(&store, group_id);
+        assert!(result.is_ok(), "merge_group failed: {result:?}");
+
+        let loaded_committed = store.get_task("t-merge-group").unwrap().unwrap();
+        assert_eq!(loaded_committed.status, TaskStatus::Merged);
+        assert!(repo.path().join("agent-work.txt").exists());
+
+        let loaded_empty = store.get_task("t-empty-branch").unwrap().unwrap();
+        assert_eq!(loaded_empty.status, TaskStatus::Done);
+
+        git(repo.path(), &["worktree", "remove", "--force", &empty_wt.path().to_string_lossy()]);
     }
 
     // --- Integration test for remove_worktree ---

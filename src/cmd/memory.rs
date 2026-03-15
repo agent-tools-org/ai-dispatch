@@ -24,11 +24,14 @@ pub fn add(store: &Store, memory_type: &str, content: &str, project_path: Option
         id,
         memory_type: parsed_type,
         content: content.to_string(),
-        content_hash: hash_content(content),
+        source_task_id: None,
+        agent: None,
         project_path: project.clone(),
+        content_hash: hash_content(content),
         created_at: Local::now(),
+        expires_at: None,
     };
-    store.insert_memory(memory)?;
+    store.insert_memory(&memory)?;
     println!("Memory {} saved ({})", display_id, type_label);
     Ok(())
 }
@@ -36,7 +39,7 @@ pub fn add(store: &Store, memory_type: &str, content: &str, project_path: Option
 pub fn list(store: &Store, memory_type: Option<&str>, project_path: Option<&str>) -> Result<()> {
     let kind = parse_optional_memory_type(memory_type)?;
     let project = project_path.map(str::to_string);
-    let memories = store.list_memories(kind, project.as_deref())?;
+    let memories = store.list_memories(project.as_deref(), kind)?;
     print_memory_table(&memories);
     Ok(())
 }

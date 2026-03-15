@@ -296,6 +296,71 @@ pub struct CompletionInfo {
     pub cost_usd: Option<f64>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct MemoryId(pub String);
+
+impl MemoryId {
+    pub fn generate() -> Self {
+        let val: u16 = rand::rng().random();
+        Self(format!("m-{val:04x}"))
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl fmt::Display for MemoryId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+pub enum MemoryType {
+    Fact,
+    Insight,
+    Instruction,
+}
+
+impl MemoryType {
+    pub fn parse_str(s: &str) -> Option<Self> {
+        match s.to_lowercase().as_str() {
+            "fact" => Some(Self::Fact),
+            "insight" => Some(Self::Insight),
+            "instruction" => Some(Self::Instruction),
+            _ => None,
+        }
+    }
+
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Fact => "fact",
+            Self::Insight => "insight",
+            Self::Instruction => "instruction",
+        }
+    }
+}
+
+impl fmt::Display for MemoryType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct Memory {
+    pub id: MemoryId,
+    pub memory_type: MemoryType,
+    pub content: String,
+    pub source_task_id: Option<String>,
+    pub agent: Option<String>,
+    pub project_path: Option<String>,
+    pub content_hash: String,
+    pub created_at: DateTime<Local>,
+    pub expires_at: Option<DateTime<Local>>,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

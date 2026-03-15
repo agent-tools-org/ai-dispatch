@@ -6,7 +6,7 @@ use anyhow::Result;
 use chrono::Local;
 use rusqlite::{params, OptionalExtension};
 
-use super::schema::{parse_dt, row_to_event, row_to_task};
+use super::schema::{parse_dt, row_to_event, row_to_memory, row_to_task};
 use super::Store;
 use crate::types::*;
 
@@ -190,6 +190,67 @@ impl Store {
             Ok((agent, rate, total as usize))
         })?;
         rows.map(|row| Ok(row?)).collect()
+    }
+
+    pub fn list_memories(
+        &self,
+        project_path: Option<&str>,
+        memory_type: Option<MemoryType>,
+    ) -> Result<Vec<Memory>> {
+        let conn = self.db();
+        let now = Local::now().to_rfc3339();
+        let type_value = memory_type.map(|mt| mt.as_str().to_string());
+        let mut stmt = conn.prepare(
+            "SELECT id, memory_type, content, source_task_id, agent, project_path, content_hash,
+             created_at, expires_at
+             FROM memories
+             WHERE (?1 IS NULL OR project_path = ?1)
+               AND (?2 IS NULL OR memory_type = ?2)
+               AND (expires_at IS NULL OR expires_at > ?3)
+             ORDER BY created_at DESC",
+        )?;
+        let rows = stmt.query_map(
+            params![project_path, type_value.as_deref(), now],
+            row_to_memory,
+        )?;
+        let memories = rows.map(|row| row?).collect::<Result<Vec<_>>>()?;
+        Ok(memories)
+    }
+
+    pub fn search_memories(&self, query: &str, project_path: Option<&str>, limit: usize) -> Result<Vec<Memory>> {
+        let conn = self.db();
+        let now = Local::now().to_rfc3339();
+        let pattern = format!("%{}%", query);
+        let mut stmt = conn.prepare(
+            "SELECT id, memory_type, content, source_task_id, agent, project_path, content_hash,
+             created_at, expires_at
+             FROM memories
+             WHERE content LIKE ?1
+               AND (?2 IS NULL OR project_path = ?2)
+               AND (expires_at IS NULL OR expires_at > ?3)
+             ORDER BY created_at DESC
+             LIMIT ?4",
+        )?;
+        let rows = stmt.query_map(
+            params![pattern, project_path, now, limit as i64],
+            row_to_memory,
+        )?;
+        let memories = rows.map(|row| row?).collect::<Result<Vec<_>>>()?;
+        Ok(memories)
+    }
+
+    pub fn get_memory(&self, id: &str) -> Result<Option<Memory>> {
+        let conn = self.db();
+        let mut stmt = conn.prepare(
+            "SELECT id, memory_type, content, source_task_id, agent, project_path, content_hash,
+             created_at, expires_at
+             FROM memories WHERE id = ?1",
+        )?;
+        let mut rows = stmt.query_map(params![id], row_to_memory)?;
+        match rows.next() {
+            Some(row) => Ok(Some(row??)),
+            None => Ok(None),
+        }
     }
 }
 

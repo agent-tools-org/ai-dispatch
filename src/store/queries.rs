@@ -262,15 +262,6 @@ impl Store {
         Ok(memories)
     }
 
-    pub fn list_findings(&self, workgroup_id: &str) -> Result<Vec<Finding>> {
-        let conn = self.db();
-        let mut stmt = conn.prepare(
-            "SELECT id, workgroup_id, source_task_id, content, created_at
-             FROM findings WHERE workgroup_id = ?1 ORDER BY created_at ASC",
-        )?;
-        let rows = stmt.query_map(params![workgroup_id], row_to_finding)?;
-        rows.map(|row| row?).collect()
-    }
 }
 
 fn row_to_workgroup(row: &rusqlite::Row) -> rusqlite::Result<Result<Workgroup>> {

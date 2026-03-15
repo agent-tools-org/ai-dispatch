@@ -53,6 +53,7 @@ CREATE TABLE IF NOT EXISTS findings (
     source_task_id TEXT,
     created_at TEXT NOT NULL
 );
+CREATE INDEX IF NOT EXISTS idx_findings_workgroup ON findings(workgroup_id);
 CREATE TABLE IF NOT EXISTS memories (
     id TEXT PRIMARY KEY,
     memory_type TEXT NOT NULL,
@@ -67,14 +68,6 @@ CREATE TABLE IF NOT EXISTS memories (
 CREATE INDEX IF NOT EXISTS idx_memories_project ON memories(project_path);
 CREATE INDEX IF NOT EXISTS idx_memories_type ON memories(memory_type);
 CREATE INDEX IF NOT EXISTS idx_memories_hash ON memories(content_hash);
-CREATE TABLE IF NOT EXISTS findings (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    workgroup_id TEXT NOT NULL,
-    content TEXT NOT NULL,
-    source_task_id TEXT,
-    created_at TEXT NOT NULL
-);
-CREATE INDEX IF NOT EXISTS idx_findings_workgroup ON findings(workgroup_id);
 ";
 
 const CREATE_WORKGROUPS_SQL: &str = "CREATE TABLE IF NOT EXISTS workgroups (
@@ -129,14 +122,6 @@ pub(super) fn migrate(store: &Store) -> Result<()> {
     let _ = conn.execute_batch("ALTER TABLE tasks ADD COLUMN resolved_prompt TEXT;");
     let _ = conn.execute_batch(CREATE_WORKGROUPS_SQL);
     let _ = conn.execute_batch(CREATE_MEMORIES_SQL);
-    let _ = conn.execute_batch("CREATE TABLE IF NOT EXISTS findings (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        workgroup_id TEXT NOT NULL,
-        content TEXT NOT NULL,
-        source_task_id TEXT,
-        created_at TEXT NOT NULL
-    );
-    CREATE INDEX IF NOT EXISTS idx_findings_workgroup ON findings(workgroup_id);");
     let _ = conn.execute_batch("ALTER TABLE events ADD COLUMN metadata TEXT;");
     let _ = conn.execute_batch("ALTER TABLE tasks ADD COLUMN prompt_tokens INTEGER;");
     let _ = conn.execute_batch("ALTER TABLE tasks ADD COLUMN verify TEXT;");
@@ -212,15 +197,6 @@ pub(super) fn row_to_memory(row: &Row) -> rusqlite::Result<Result<Memory>> {
     }))
 }
 
-pub(super) fn row_to_finding(row: &Row) -> rusqlite::Result<Result<Finding>> {
-    Ok(Ok(Finding {
-        id: row.get(0)?,
-        workgroup_id: row.get(1)?,
-        content: row.get(2)?,
-        source_task_id: row.get(3)?,
-        created_at: parse_dt(&row.get::<_, String>(4)?),
-    }))
-}
 
 pub(super) fn parse_dt(s: &str) -> DateTime<Local> {
     DateTime::parse_from_rfc3339(s)

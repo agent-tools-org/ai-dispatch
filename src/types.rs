@@ -401,6 +401,15 @@ pub struct Memory {
     pub expires_at: Option<DateTime<Local>>,
 }
 
+#[derive(Debug, Clone)]
+pub struct Finding {
+    pub id: i64,
+    pub workgroup_id: String,
+    pub content: String,
+    pub source_task_id: Option<String>,
+    pub created_at: DateTime<Local>,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

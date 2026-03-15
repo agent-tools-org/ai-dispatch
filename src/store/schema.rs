@@ -60,6 +60,14 @@ CREATE TABLE IF NOT EXISTS memories (
 CREATE INDEX IF NOT EXISTS idx_memories_project ON memories(project_path);
 CREATE INDEX IF NOT EXISTS idx_memories_type ON memories(memory_type);
 CREATE INDEX IF NOT EXISTS idx_memories_hash ON memories(content_hash);
+CREATE TABLE IF NOT EXISTS findings (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    workgroup_id TEXT NOT NULL,
+    content TEXT NOT NULL,
+    source_task_id TEXT,
+    created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_findings_workgroup ON findings(workgroup_id);
 ";
 
 const CREATE_WORKGROUPS_SQL: &str = "CREATE TABLE IF NOT EXISTS workgroups (
@@ -114,6 +122,14 @@ pub(super) fn migrate(store: &Store) -> Result<()> {
     let _ = conn.execute_batch("ALTER TABLE tasks ADD COLUMN resolved_prompt TEXT;");
     let _ = conn.execute_batch(CREATE_WORKGROUPS_SQL);
     let _ = conn.execute_batch(CREATE_MEMORIES_SQL);
+    let _ = conn.execute_batch("CREATE TABLE IF NOT EXISTS findings (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        workgroup_id TEXT NOT NULL,
+        content TEXT NOT NULL,
+        source_task_id TEXT,
+        created_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_findings_workgroup ON findings(workgroup_id);");
     let _ = conn.execute_batch("ALTER TABLE events ADD COLUMN metadata TEXT;");
     let _ = conn.execute_batch("ALTER TABLE tasks ADD COLUMN prompt_tokens INTEGER;");
     let _ = conn.execute_batch("ALTER TABLE tasks ADD COLUMN verify TEXT;");

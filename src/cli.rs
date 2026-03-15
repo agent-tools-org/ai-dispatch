@@ -50,6 +50,9 @@ pub enum Commands {
         /// Verify command (or auto-detect if flag given without value)
         #[arg(long, num_args = 0..=1, default_missing_value = "auto")]
         verify: Option<String>,
+        /// Judge agent to auto-review the task output (default gemini if omitted)
+        #[arg(long, value_name = "AGENT", num_args = 0..=1, default_missing_value = "gemini")]
+        judge: Option<String>,
         /// Max retry attempts on failure
         #[arg(long, default_value = "0")]
         retry: u32,

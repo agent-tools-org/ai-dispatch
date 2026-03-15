@@ -23,6 +23,7 @@ pub mod query;
 pub mod respond;
 pub mod setup;
 pub mod retry;
+pub mod judge;
 pub mod retry_logic;
 pub mod run;
 pub mod show;

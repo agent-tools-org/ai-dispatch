@@ -27,6 +27,8 @@ pub struct BackgroundRunSpec {
     pub model: Option<String>,
     pub verify: Option<String>,
     #[serde(default)]
+    pub judge: Option<String>,
+    #[serde(default)]
     pub max_duration_mins: Option<i64>,
     pub retry: u32,
     pub group: Option<String>,
@@ -168,6 +170,7 @@ async fn run_task_inner(store: &Arc<Store>, spec: &BackgroundRunSpec) -> Result<
         model: spec.model.clone(),
         group: spec.group.clone(),
         verify: spec.verify.clone(),
+        judge: spec.judge.clone(),
         max_duration_mins: spec.max_duration_mins,
         retry: spec.retry,
         skills: spec.skills.clone(),
@@ -187,6 +190,12 @@ async fn run_task_inner(store: &Arc<Store>, spec: &BackgroundRunSpec) -> Result<
     );
     if let Some(task) = store.get_task(&spec.task_id)? {
         crate::cmd::run::maybe_cleanup_fast_fail(store, &TaskId(spec.task_id.clone()), &task);
+    }
+    if crate::cmd::run::maybe_judge_retry(store, &retry_args, &TaskId(spec.task_id.clone()))
+        .await?
+        .is_some()
+    {
+        return Ok(());
     }
     notify_task_completion(store, &spec.task_id)?;
     if let Some(worktree_dir) = spec.dir.as_deref() {

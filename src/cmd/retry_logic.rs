@@ -75,7 +75,7 @@ fn backoff_for_attempt(attempt: u32) -> u64 {
     match attempt { 0 | 1 => 5, 2 => 15, _ => 45 }
 }
 
-fn root_prompt(store: &Store, task: &Task) -> Option<String> {
+pub(crate) fn root_prompt(store: &Store, task: &Task) -> Option<String> {
     let mut prompt = task.prompt.clone();
     let mut current = task.parent_task_id.clone();
     while let Some(task_id) = current {

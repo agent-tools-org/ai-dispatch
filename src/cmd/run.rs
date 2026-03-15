@@ -8,7 +8,7 @@ use std::sync::Arc;
 use tokio::process::Command;
 use crate::agent::{self, RunOpts};
 use crate::background::{self, BackgroundRunSpec};
-use crate::cmd::{config as cmd_config, retry_logic, show};
+use crate::cmd::{config as cmd_config, judge, retry_logic, show};
 use crate::config;
 use crate::hooks;
 use crate::paths;
@@ -35,6 +35,7 @@ pub struct RunArgs {
     pub base_branch: Option<String>,
     pub group: Option<String>,
     pub verify: Option<String>,
+    pub judge: Option<String>,
     pub max_duration_mins: Option<i64>,
     pub retry: u32,
     pub context: Vec<String>,
@@ -51,6 +52,7 @@ pub struct RunArgs {
     pub session_id: Option<String>,
     pub team: Option<String>,
     pub context_from: Vec<String>,
+    pub judge_retry: bool,
 }
 pub async fn run(store: Arc<Store>, args: RunArgs) -> Result<TaskId> {
     let (agent_kind, custom_agent_name) = if let Some(kind) = AgentKind::parse_str(&args.agent_name) {
@@ -212,6 +214,7 @@ pub async fn run(store: Arc<Store>, args: RunArgs) -> Result<TaskId> {
             output: args.output.clone(),
             model: effective_model.clone(),
             verify: args.verify.clone(),
+            judge: args.judge.clone(),
             max_duration_mins: args.max_duration_mins,
             retry: args.retry,
             group: args.group.clone(),
@@ -330,6 +333,9 @@ pub async fn run(store: Arc<Store>, args: RunArgs) -> Result<TaskId> {
                     }
                 }
             }
+        }
+        if let Some(retry_id) = maybe_judge_retry(&store, &args, &task_id).await? {
+            return Ok(retry_id);
         }
         run_prompt::notify_task_completion(&store, &task_id)?;
         if let Some(task) = store.get_task(task_id.as_str())? {
@@ -521,4 +527,48 @@ pub(crate) fn maybe_cleanup_fast_fail(store: &Store, task_id: &TaskId, task: &Ta
 pub(crate) fn maybe_verify(store: &Store, task_id: &TaskId, verify: Option<&str>, dir: Option<&str>) { run_prompt::maybe_verify_impl(store, task_id, verify, dir); }
 pub(crate) async fn maybe_auto_retry_after_verify_failure(store: &Arc<Store>, task_id: &TaskId, args: &RunArgs, pre_verify_status: TaskStatus) -> Result<Option<TaskId>> {
     run_prompt::maybe_auto_retry_after_verify_failure_impl(store, task_id, args, pre_verify_status).await
+}
+pub(crate) async fn maybe_judge_retry(store: &Arc<Store>, args: &RunArgs, task_id: &TaskId) -> Result<Option<TaskId>> {
+    if args.judge_retry {
+        return Ok(None);
+    }
+    let judge_agent = match args
+        .judge
+        .as_deref()
+        .map(str::trim)
+        .filter(|agent| !agent.is_empty())
+    {
+        Some(agent) => agent,
+        None => return Ok(None),
+    };
+    let task = match store.get_task(task_id.as_str())? {
+        Some(task) => task,
+        None => return Ok(None),
+    };
+    if task.status != TaskStatus::Done {
+        return Ok(None);
+    }
+    let judge_result = judge::judge_task(store, &task, judge_agent, &args.prompt).await?;
+    if judge_result.passed {
+        println!("[aid] Judge approved");
+        return Ok(None);
+    }
+    let feedback = judge_result.feedback.trim();
+    eprintln!(
+        "[aid] Judge requested retry: {}",
+        if feedback.is_empty() { "no feedback provided" } else { feedback }
+    );
+    let mut retry_args = args.clone();
+    let root_prompt = retry_logic::root_prompt(store, &task).unwrap_or_else(|| args.prompt.clone());
+    retry_args.prompt = format!(
+        "[Judge feedback]\n{}\n\n[Original task]\n{root_prompt}",
+        if feedback.is_empty() {
+            "Judge requested retry without feedback"
+        } else {
+            feedback
+        }
+    );
+    retry_args.judge_retry = true;
+    let retry_id = Box::pin(run(store.clone(), retry_args)).await?;
+    Ok(Some(retry_id))
 }

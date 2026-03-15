@@ -49,6 +49,8 @@ pub struct BatchDefaults {
     pub dir: Option<String>,
     pub model: Option<String>,
     pub worktree_prefix: Option<String>,
+    #[serde(default)]
+    pub judge: Option<String>,
     #[serde(default, deserialize_with = "deserialize_verify")]
     pub verify: Option<String>,
     #[serde(default)]
@@ -78,6 +80,8 @@ pub struct BatchTask {
     pub group: Option<String>,
     #[serde(default, deserialize_with = "deserialize_verify")]
     pub verify: Option<String>,
+    #[serde(default)]
+    pub judge: Option<String>,
     #[serde(default)]
     pub max_duration_mins: Option<u64>,
     pub context: Option<Vec<String>>,
@@ -140,6 +144,9 @@ fn apply_task_defaults(task: &mut BatchTask, defaults: &BatchDefaults) {
     if task.verify.is_none() {
         task.verify = defaults.verify.clone();
     }
+    if task.judge.is_none() {
+        task.judge = defaults.judge.clone();
+    }
     if task.max_duration_mins.is_none() {
         task.max_duration_mins = defaults.max_duration_mins;
     }
@@ -178,6 +185,11 @@ fn validate_agents(tasks: &[BatchTask]) -> Result<()> {
         }
         if task.agent != "auto" && !is_valid_agent(&task.agent) {
             anyhow::bail!("unknown agent: {}", task.agent);
+        }
+        if let Some(judge_agent) = task.judge.as_deref() {
+            if !judge_agent.trim().is_empty() && !is_valid_agent(judge_agent) {
+                anyhow::bail!("unknown judge agent: {}", judge_agent);
+            }
         }
     }
     Ok(())

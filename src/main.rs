@@ -83,6 +83,7 @@ async fn main() -> Result<()> {
             cascade,
             hook,
             read_only,
+            judge,
         } => {
             let config = config::load_config().unwrap_or_default();
             let budget = budget || config.selection.budget_mode;
@@ -151,6 +152,7 @@ async fn main() -> Result<()> {
                     cascade,
                     read_only,
                     budget,
+                    judge,
                     team: team_flag,
                     context_from,
                     ..Default::default()

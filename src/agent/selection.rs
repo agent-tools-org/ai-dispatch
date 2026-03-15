@@ -519,6 +519,11 @@ research = 6
         let prompt = "Implement a retry-aware test suite across src/main.rs and src/cmd/run.rs. Add validation coverage.";
         let (_temp, _guard) = isolated();
         let store = Store::open_memory().unwrap();
+        // Seed cost data: codex is expensive, cursor is cheap
+        for i in 0..5 {
+            insert_task(&store, &format!("cost-codex-{i}"), AgentKind::Codex, "done", Some(2.50));
+            insert_task(&store, &format!("cost-cursor-{i}"), AgentKind::Cursor, "done", Some(0.10));
+        }
         let (kind, reason) = select_agent_from(prompt, &opts(Some("src"), true), &all(), &store, None);
         assert_ne!(kind, AgentKind::Codex.as_str());
         assert!(reason.contains("budget"));

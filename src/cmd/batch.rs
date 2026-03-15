@@ -97,16 +97,17 @@ fn task_to_run_args(task: &batch::BatchTask, background: bool, store: &Arc<Store
     } else {
         task.agent.clone()
     };
-    RunArgs {
-        agent_name,
-        prompt: task.prompt.clone(),
-        dir: task.dir.clone(),
-        output: task.output.clone(),
-        model: task.model.clone(),
-        worktree: task.worktree.clone(),
-        group: task.group.clone(),
-        verify: task.verify.clone(),
-        max_duration_mins: task.max_duration_mins.map(|value| value as i64),
+        RunArgs {
+            agent_name,
+            prompt: task.prompt.clone(),
+            dir: task.dir.clone(),
+            output: task.output.clone(),
+            model: task.model.clone(),
+            worktree: task.worktree.clone(),
+            group: task.group.clone(),
+            verify: task.verify.clone(),
+            judge: task.judge.clone(),
+            max_duration_mins: task.max_duration_mins.map(|value| value as i64),
         context: task.context.clone().unwrap_or_default(),
         skills: task.skills.clone().unwrap_or_default(),
         hooks: task.hooks.clone().unwrap_or_default(),
@@ -342,6 +343,7 @@ mod tests {
             fallback: None,
             read_only: false,
             budget: false,
+            judge: None,
             on_success: on_success.map(str::to_string),
             on_fail: None,
             conditional,
@@ -417,6 +419,7 @@ mod tests {
                 fallback: None,
                 read_only: false,
                 budget: false,
+                judge: None,
                 on_success: None,
                 on_fail: None,
                 conditional: false,

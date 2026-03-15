@@ -206,6 +206,7 @@ mod tests {
             fallback: None,
             read_only: false,
             budget: false,
+            judge: None,
             on_success: None,
             on_fail: None,
             conditional: false,

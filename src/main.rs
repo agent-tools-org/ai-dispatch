@@ -390,6 +390,13 @@ Batch TOML format:
         #[command(subcommand)]
         action: FindingCommands,
     },
+    /// Send a message to a workgroup's broadcast channel
+    Broadcast {
+        /// Workgroup ID
+        group: String,
+        /// Message to broadcast
+        message: String,
+    },
     /// Initialize default skills and templates
     Init,
     #[command(hide = true, name = "__run-task")]
@@ -828,6 +835,9 @@ async fn main() -> Result<()> {
                 cmd::finding::list(&store, &group)?;
             }
         },
+        Commands::Broadcast { group, message } => {
+            cmd::broadcast::run(&store, &group, &message)?;
+        }
         Commands::Init => cmd::init::run()?,
         Commands::InternalRunTask { task_id } => {
             background::run_task(store, &task_id).await?;

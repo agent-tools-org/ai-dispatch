@@ -523,6 +523,22 @@ pub enum MemoryCommands {
         /// Memory ID (e.g. m-a3f1)
         id: String,
     },
+    /// Check EverMemOS cloud connection status
+    CloudStatus,
+    /// Search EverMemOS cloud memories
+    CloudSearch {
+        /// Search query
+        query: String,
+        /// Max results
+        #[arg(long, default_value = "10")]
+        limit: usize,
+    },
+    /// Push local memories to EverMemOS cloud
+    CloudPush {
+        /// Only push memories of this type
+        #[arg(long = "type")]
+        memory_type: Option<String>,
+    },
 }
 
 #[derive(Subcommand)]

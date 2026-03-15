@@ -12,6 +12,7 @@ use crate::store::Store;
 use crate::team;
 use crate::types::TaskFilter;
 use crate::usage;
+use crate::usage_report;
 
 pub fn run(
     store: &Arc<Store>,
@@ -49,7 +50,7 @@ pub fn run(
             let report = usage::UsageReport::Agent { analytics };
             println!("{}", to_string(&report)?);
         } else {
-            print!("{}", usage::render_agent_analytics(&analytics));
+            print!("{}", usage_report::render_agent_analytics(&analytics));
         }
     } else {
         let snapshot = usage::collect_usage_snapshot(&tasks, &config, window, now)?;
@@ -57,7 +58,7 @@ pub fn run(
             let report = usage::UsageReport::Summary { window, snapshot };
             println!("{}", to_string(&report)?);
         } else {
-            print!("{}", usage::render_usage(&snapshot));
+            print!("{}", usage_report::render_usage(&snapshot));
         }
     }
     Ok(())

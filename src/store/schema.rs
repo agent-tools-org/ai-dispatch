@@ -203,7 +203,7 @@ pub(super) fn row_to_memory(row: &Row) -> rusqlite::Result<Result<Memory>> {
         expires_at: row.get::<_, Option<String>>(8)?.map(|s| parse_dt(&s)),
         supersedes: row
             .get::<_, Option<String>>(9)?
-            .map(|s| MemoryId(s)),
+                .map(MemoryId),
         version: row.get::<_, i64>(10)?,
         inject_count: row.get::<_, i64>(11)?,
         last_injected_at: row

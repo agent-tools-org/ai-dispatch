@@ -74,14 +74,9 @@ async fn main() -> Result<()> {
             verify,
             retry,
             context,
-            context_from,
-            skill,
-            template,
+            run_extras,
             no_skill,
             bg,
-            on_done,
-            cascade,
-            hook,
             read_only,
             judge,
             best_of,
@@ -123,10 +118,11 @@ async fn main() -> Result<()> {
             } else {
                 (agent, None)
             };
+            let extras = *run_extras;
             let skills = if no_skill {
                 vec![cmd::run::NO_SKILL_SENTINEL.to_string()]
             } else {
-                skill
+                extras.skill
             };
             let _ = cmd::run::run(
                 store,
@@ -145,18 +141,18 @@ async fn main() -> Result<()> {
                     retry,
                     context,
                     skills,
-                    hooks: hook,
-                    template,
+                    hooks: extras.hook,
+                    template: extras.template,
                     background: bg,
                     announce: true,
-                    on_done,
-                    cascade,
+                    on_done: extras.on_done,
+                    cascade: extras.cascade,
                     read_only,
                     budget,
                     judge,
                     best_of,
                     team: team_flag,
-                    context_from,
+                    context_from: extras.context_from,
                     ..Default::default()
                 },
             )

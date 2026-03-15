@@ -146,8 +146,8 @@ fn print_memory_table(memories: &[Memory], stats: bool) {
     }
     if stats {
         println!(
-            "{:<10} {:<10} {:<8} {:<9} {:<19} {}",
-            "ID", "TYPE", "INJECTS", "SUCCESS", "LAST USED", "CONTENT"
+            "{:<10} {:<10} {:<8} {:<9} {:<19} CONTENT",
+            "ID", "TYPE", "INJECTS", "SUCCESS", "LAST USED"
         );
         println!("{}", "-".repeat(120));
         for memory in memories {
@@ -162,7 +162,7 @@ fn print_memory_table(memories: &[Memory], stats: bool) {
             );
         }
     } else {
-        println!("{:<10} {:<10} {:<60} {:<8} {}", "ID", "TYPE", "CONTENT", "AGE", "SOURCE");
+        println!("{:<10} {:<10} {:<60} {:<8} SOURCE", "ID", "TYPE", "CONTENT", "AGE");
         println!("{}", "-".repeat(94));
         for memory in memories {
             println!(
@@ -178,7 +178,7 @@ fn print_memory_table(memories: &[Memory], stats: bool) {
 }
 
 fn format_last_used(last: Option<&DateTime<Local>>) -> String {
-    last.map(|dt| format_age(dt)).unwrap_or_else(|| "-".to_string())
+    last.map(format_age).unwrap_or_else(|| "-".to_string())
 }
 
 fn truncate(value: &str, max: usize) -> String {

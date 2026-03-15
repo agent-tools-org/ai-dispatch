@@ -110,16 +110,16 @@ impl super::Agent for CustomAgent {
             cmd.current_dir(dir);
         }
 
-        if let Some(ref model) = opts.model {
-            if !self.config.model_flag.is_empty() {
-                cmd.args([&self.config.model_flag, model]);
-            }
+        if let Some(ref model) = opts.model
+            && !self.config.model_flag.is_empty()
+        {
+            cmd.args([&self.config.model_flag, model]);
         }
 
-        if let Some(ref output) = opts.output {
-            if !self.config.output_flag.is_empty() {
-                cmd.args([&self.config.output_flag, output]);
-            }
+        if let Some(ref output) = opts.output
+            && !self.config.output_flag.is_empty()
+        {
+            cmd.args([&self.config.output_flag, output]);
         }
 
         match self.config.prompt_mode.as_str() {
@@ -145,34 +145,34 @@ impl super::Agent for CustomAgent {
             return None;
         }
 
-        if self.config.output_format == "jsonl" {
-            if let Ok(value) = serde_json::from_str::<Value>(trimmed) {
-                let event_type = value
-                    .get("type")
-                    .or_else(|| value.get("event"))
-                    .or_else(|| value.get("kind"))
-                    .and_then(|v| v.as_str());
-                if let Some(et) = event_type {
-                    let detail = value
-                        .get("message")
-                        .or_else(|| value.get("text"))
-                        .or_else(|| value.get("detail"))
-                        .and_then(|v| v.as_str())
-                        .unwrap_or(et);
-                    let kind = match et {
-                        t if t.contains("error") => EventKind::Error,
-                        t if t.contains("tool") => EventKind::ToolCall,
-                        t if t.contains("complet") => EventKind::Completion,
-                        _ => EventKind::Reasoning,
-                    };
-                    return Some(TaskEvent {
-                        task_id: task_id.clone(),
-                        timestamp: Local::now(),
-                        event_kind: kind,
-                        detail: super::truncate::truncate_text(detail, 120),
-                        metadata: None,
-                    });
-                }
+        if self.config.output_format == "jsonl"
+            && let Ok(value) = serde_json::from_str::<Value>(trimmed)
+        {
+            let event_type = value
+                .get("type")
+                .or_else(|| value.get("event"))
+                .or_else(|| value.get("kind"))
+                .and_then(|v| v.as_str());
+            if let Some(et) = event_type {
+                let detail = value
+                    .get("message")
+                    .or_else(|| value.get("text"))
+                    .or_else(|| value.get("detail"))
+                    .and_then(|v| v.as_str())
+                    .unwrap_or(et);
+                let kind = match et {
+                    t if t.contains("error") => EventKind::Error,
+                    t if t.contains("tool") => EventKind::ToolCall,
+                    t if t.contains("complet") => EventKind::Completion,
+                    _ => EventKind::Reasoning,
+                };
+                return Some(TaskEvent {
+                    task_id: task_id.clone(),
+                    timestamp: Local::now(),
+                    event_kind: kind,
+                    detail: super::truncate::truncate_text(detail, 120),
+                    metadata: None,
+                });
             }
         }
 

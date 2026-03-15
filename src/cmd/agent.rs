@@ -137,7 +137,7 @@ pub fn run_agent_command(action: AgentAction) -> Result<()> {
 
 fn list_agents() -> Result<()> {
     println!("Built-in agents:");
-    println!("  {:<10} {:<6} {}", "NAME", "TRUST", "DESCRIPTION");
+    println!("  {:<10} {:<6} DESCRIPTION", "NAME", "TRUST");
     for profile in BUILTIN_AGENT_PROFILES {
         println!("  {:<10} {:<6} {}", profile.name, profile.trust_tier, profile.description);
     }
@@ -147,7 +147,7 @@ fn list_agents() -> Result<()> {
         println!("  (none installed — use `aid agent add <name>` to create one)");
         return Ok(());
     }
-    println!("  {:<10} {:<6} {}", "NAME", "TRUST", "DISPLAY NAME");
+    println!("  {:<10} {:<6} DISPLAY NAME", "NAME", "TRUST");
     for config in custom {
         println!("  {:<10} {:<6} {}", config.id, config.trust_tier, config.display_name);
     }

@@ -128,10 +128,10 @@ fn apply_defaults(tasks: &mut [BatchTask], defaults: &BatchDefaults) {
     }
 }
 fn apply_task_defaults(task: &mut BatchTask, defaults: &BatchDefaults) {
-    if task.agent.is_empty() {
-        if let Some(agent) = defaults.agent.as_ref() {
-            task.agent = agent.clone();
-        }
+    if task.agent.is_empty()
+        && let Some(agent) = defaults.agent.as_ref()
+    {
+        task.agent = agent.clone();
     }
     if task.team.is_none() {
         task.team = defaults.team.clone();
@@ -193,20 +193,21 @@ fn validate_agents(tasks: &[BatchTask]) -> Result<()> {
         if task.agent != "auto" && !is_valid_agent(&task.agent) {
             anyhow::bail!("unknown agent: {}", task.agent);
         }
-        if let Some(judge_agent) = task.judge.as_deref() {
-            if !judge_agent.trim().is_empty() && !is_valid_agent(judge_agent) {
-                anyhow::bail!("unknown judge agent: {}", judge_agent);
-            }
+        if let Some(judge_agent) = task.judge.as_deref()
+            && !judge_agent.trim().is_empty()
+            && !is_valid_agent(judge_agent)
+        {
+            anyhow::bail!("unknown judge agent: {}", judge_agent);
         }
     }
     Ok(())
 }
 fn validate_fallback_agents(tasks: &[BatchTask]) -> Result<()> {
     for task in tasks {
-        if let Some(fallback) = task.fallback.as_deref() {
-            if !is_valid_agent(fallback) {
-                anyhow::bail!("unknown fallback agent: {}", fallback);
-            }
+        if let Some(fallback) = task.fallback.as_deref()
+            && !is_valid_agent(fallback)
+        {
+            anyhow::bail!("unknown fallback agent: {}", fallback);
         }
     }
     Ok(())

@@ -151,12 +151,12 @@ fn score_for(ctx: &CandidateContext<'_>, kind: AgentKind) -> i32 {
     if rate_limit::is_rate_limited(&kind) {
         s -= 10;
     }
-    if let Some((rate, count)) = ctx.history_map.get(&kind) {
-        if *count >= 5 {
-            let bonus = ((*rate - 0.75) * 16.0).round() as i32;
-            let bonus = bonus.clamp(-5, 4);
-            s += bonus;
-        }
+    if let Some((rate, count)) = ctx.history_map.get(&kind)
+        && *count >= 5
+    {
+        let bonus = ((*rate - 0.75) * 16.0).round() as i32;
+        let bonus = bonus.clamp(-5, 4);
+        s += bonus;
     }
     if matches!(ctx.profile.complexity, Complexity::High)
         && matches!(kind, AgentKind::Codex | AgentKind::Cursor)
@@ -164,14 +164,13 @@ fn score_for(ctx: &CandidateContext<'_>, kind: AgentKind) -> i32 {
         s += 2;
     }
     // Boost preferred agents from team (soft preference, not hard filter)
-    if let Some(tc) = ctx.team {
-        if tc
+    if let Some(tc) = ctx.team
+        && tc
             .preferred_agents
             .iter()
             .any(|a| a.eq_ignore_ascii_case(kind.as_str()))
-        {
-            s += 3;
-        }
+    {
+        s += 3;
     }
     s
 }
@@ -277,10 +276,10 @@ fn select_agent_from(
             let mut score = custom_category_score(&config, profile.category);
             score += custom_strength_bonus(&config, profile.category);
             // Boost preferred custom agents from team
-            if let Some(tc) = &team {
-                if tc.preferred_agents.iter().any(|a| a.eq_ignore_ascii_case(&config.id)) {
-                    score += 3;
-                }
+            if let Some(tc) = &team
+                && tc.preferred_agents.iter().any(|a| a.eq_ignore_ascii_case(&config.id))
+            {
+                score += 3;
             }
             (config.id, score)
         })
@@ -311,10 +310,10 @@ fn select_agent_from(
         profile.category.label(), profile.complexity.label(),
         selected_label,
     );
-    if let Some(sel_kind) = selected_builtin {
-        if sel_kind != primary_candidate.kind {
-            reason.push_str(&format!("; {} unavailable", primary_candidate.kind.as_str()));
-        }
+    if let Some(sel_kind) = selected_builtin
+        && sel_kind != primary_candidate.kind
+    {
+        reason.push_str(&format!("; {} unavailable", primary_candidate.kind.as_str()));
     }
     if auto_budget {
         reason.push_str("; auto-budget: low-value task");
@@ -324,14 +323,13 @@ fn select_agent_from(
     if rate_limit::is_rate_limited(&AgentKind::Codex) && selected_name != AgentKind::Codex.as_str() {
         reason.push_str("; codex rate-limited");
     }
-    if let Some(sel_kind) = selected_builtin {
-        if let Some((rate, count)) = history_map.get(&sel_kind) {
-            if *count >= 5 {
-                let percent = (*rate * 100.0).round() as i32;
-                let success_label = format!("{:.0}%", rate * 100.0);
-                reason.push_str(&format!("; history: {}% success (success: {})", percent, success_label));
-            }
-        }
+    if let Some(sel_kind) = selected_builtin
+        && let Some((rate, count)) = history_map.get(&sel_kind)
+        && *count >= 5
+    {
+        let percent = (*rate * 100.0).round() as i32;
+        let success_label = format!("{:.0}%", rate * 100.0);
+        reason.push_str(&format!("; history: {}% success (success: {})", percent, success_label));
     }
     if let Ok(similar_tasks) = store.find_similar_tasks(prompt, 5) {
         let mut stats: HashMap<AgentKind, (usize, usize)> = HashMap::new();
@@ -344,15 +342,15 @@ fn select_agent_from(
         }
         if let Some((&agent, &(successes, total))) = stats.iter().max_by(|a, b| {
             a.1 .0.cmp(&b.1 .0).then(a.1 .1.cmp(&b.1 .1))
-        }) {
-            if successes >= 3 {
-                reason.push_str(&format!(
-                    "; similar tasks: {} {}/{} success",
-                    agent.as_str(),
-                    successes,
-                    total,
-                ));
-            }
+        })
+            && successes >= 3
+        {
+            reason.push_str(&format!(
+                "; similar tasks: {} {}/{} success",
+                agent.as_str(),
+                successes,
+                total,
+            ));
         }
     }
     (selected_name, reason)

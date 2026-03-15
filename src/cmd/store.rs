@@ -98,8 +98,8 @@ fn browse(query: Option<&str>) -> Result<()> {
     }
 
     println!(
-        "{:<25} {:<40} {:<10} {}",
-        "Name", "Description", "Version", "Command"
+        "{:<25} {:<40} {:<10} Command",
+        "Name", "Description", "Version"
     );
     println!("{}", "-".repeat(85));
     for a in &agents {
@@ -161,8 +161,8 @@ fn update(apply: bool) -> Result<()> {
 
     let index = fetch_index()?;
     println!(
-        "{:<25} {:<12} {:<12} {}",
-        "Name", "Installed", "Available", "Status"
+        "{:<25} {:<12} {:<12} Status",
+        "Name", "Installed", "Available"
     );
     println!("{}", "-".repeat(65));
 

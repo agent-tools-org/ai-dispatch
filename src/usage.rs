@@ -23,17 +23,12 @@ pub struct UsageSnapshot {
     pub(crate) budget_rows: Vec<BudgetUsageRow>,
 }
 
-#[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
+#[derive(Default, Debug, Clone, Copy, Serialize, PartialEq, Eq)]
 pub enum UsageWindow {
+    #[default]
     All,
     Today,
     Days(u32),
-}
-
-impl Default for UsageWindow {
-    fn default() -> Self {
-        UsageWindow::All
-    }
 }
 
 impl UsageWindow {
@@ -270,10 +265,10 @@ pub fn agent_analytics(
     let stats = summarize_agent_period(&current_tasks);
     let cost_per_success = (stats.success_count > 0)
         .then(|| stats.cost_usd / stats.success_count as f64);
-    let trend = window.previous_range(now).and_then(|range| {
+    let trend = window.previous_range(now).map(|range| {
         let previous_tasks = filter_tasks_in_range(&matching_tasks, Some(range));
         let previous_stats = summarize_agent_period(&previous_tasks);
-        Some(AgentTrend {
+        AgentTrend {
             label: window.previous_label(),
             current: AgentTrendStats {
                 tasks: stats.tasks,
@@ -283,7 +278,7 @@ pub fn agent_analytics(
                 tasks: previous_stats.tasks,
                 cost_usd: previous_stats.cost_usd,
             },
-        })
+        }
     });
     let top_tasks = select_top_tasks(&current_tasks);
     AgentAnalytics {

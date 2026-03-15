@@ -46,21 +46,21 @@ fn list_teams() -> Result<()> {
         return Ok(());
     }
     println!(
-        "{:<12} {:<24} {:<10} {:<8} {}",
-        "ID", "Name", "Preferred", "Knowledge", "Default"
+        "{:<12} {:<24} {:<10} {:<8} Default",
+        "ID", "Name", "Preferred", "Knowledge"
     );
     println!("{}", "-".repeat(72));
     for t in &teams {
-        let knowledge_count = team::knowledge_index(&t.id)
-            .is_file()
-            .then(|| {
-                std::fs::read_to_string(team::knowledge_index(&t.id))
-                    .unwrap_or_default()
-                    .lines()
-                    .filter(|l| l.starts_with("- "))
-                    .count()
-            })
-            .unwrap_or(0);
+        let knowledge_index = team::knowledge_index(&t.id);
+        let knowledge_count = if knowledge_index.is_file() {
+            std::fs::read_to_string(&knowledge_index)
+                .unwrap_or_default()
+                .lines()
+                .filter(|l| l.starts_with("- "))
+                .count()
+        } else {
+            0
+        };
         println!(
             "{:<12} {:<24} {:<10} {:<8} {}",
             t.id,

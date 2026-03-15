@@ -7,6 +7,7 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use tokio::process::Command;
 use crate::{agent, skills, store::Store, templates, team, types::*, watcher};
+use crate::store::TaskCompletionUpdate;
 use crate::team::KnowledgeEntry;
 use super::RunArgs;
 
@@ -66,12 +67,12 @@ pub(super) fn build_prompt_bundle(store: &Store, args: &RunArgs, agent_kind: &Ag
     }
 
     // Inject output from previous tasks (--context-from)
-    if !args.context_from.is_empty() {
-        if let Some(block) = resolve_context_from(store, &args.context_from)? {
-            let token_count = templates::estimate_tokens(&block);
-            eprintln!("[aid] Injected context from {} task(s) (~{token_count} tokens)", args.context_from.len());
-            effective_prompt = format!("{block}\n\n{effective_prompt}");
-        }
+    if !args.context_from.is_empty()
+        && let Some(block) = resolve_context_from(store, &args.context_from)?
+    {
+        let token_count = templates::estimate_tokens(&block);
+        eprintln!("[aid] Injected context from {} task(s) (~{token_count} tokens)", args.context_from.len());
+        effective_prompt = format!("{block}\n\n{effective_prompt}");
     }
 
     // Inject workspace path if workgroup has one
@@ -306,21 +307,20 @@ fn resolve_context_from(store: &Store, task_ids: &[String]) -> Result<Option<Str
         };
         let mut content = String::new();
         // Try output file first
-        if let Some(ref path) = task.output_path {
-            if let Ok(text) = std::fs::read_to_string(path) {
-                content = text;
-            }
+        if let Some(ref path) = task.output_path
+            && let Ok(text) = std::fs::read_to_string(path)
+        {
+            content = text;
         }
         // Fall back to log file
-        if content.is_empty() {
-            if let Some(ref log_path) = task.log_path {
-                if let Ok(text) = std::fs::read_to_string(log_path) {
-                    // Take last 200 lines to avoid huge context
-                    let lines: Vec<&str> = text.lines().collect();
-                    let start = lines.len().saturating_sub(200);
-                    content = lines[start..].join("\n");
-                }
-            }
+        if content.is_empty()
+            && let Some(ref log_path) = task.log_path
+            && let Ok(text) = std::fs::read_to_string(log_path)
+        {
+            // Take last 200 lines to avoid huge context
+            let lines: Vec<&str> = text.lines().collect();
+            let start = lines.len().saturating_sub(200);
+            content = lines[start..].join("\n");
         }
         if content.is_empty() {
             eprintln!("[aid] Warning: --context-from task '{task_id}' has no output, skipping");
@@ -403,7 +403,8 @@ pub(super) fn resolve_dir_in_target(base_dir: &str, dir: Option<&str>, repo_dir:
 
 /// Returns (wt_path, wt_branch, effective_dir, resolved_repo_path).
 /// The resolved_repo_path is always populated when a worktree is created, even if --repo wasn't passed.
-pub(super) fn resolve_worktree_paths(args: &RunArgs, repo_path: Option<&str>) -> Result<(Option<String>, Option<String>, Option<String>, Option<String>)> {
+type WorktreePaths = (Option<String>, Option<String>, Option<String>, Option<String>);
+pub(super) fn resolve_worktree_paths(args: &RunArgs, repo_path: Option<&str>) -> Result<WorktreePaths> {
     if let Some(ref branch) = args.worktree {
         let repo_dir = repo_path.map(|path| path.to_string()).unwrap_or(resolve_repo_path(args.dir.as_deref().unwrap_or("."))?);
         // Use explicit base_branch, or default to current branch (not just HEAD)
@@ -424,17 +425,30 @@ pub(super) fn load_workgroup(store: &Store, group_id: Option<&str>) -> Result<Op
     store.get_workgroup(group_id)?.ok_or_else(|| anyhow::anyhow!("Workgroup '{}' not found", group_id)).map(Some)
 }
 
-pub(super) async fn run_agent_process_impl(
-    agent: &dyn crate::agent::Agent,
-    mut cmd: Command,
-    task_id: &TaskId,
-    store: &Arc<Store>,
-    log_path: &std::path::Path,
-    output_path: Option<&str>,
-    model: Option<&str>,
-    streaming: bool,
-    workgroup_id: Option<&str>,
-) -> Result<()> {
+pub(super) struct RunProcessArgs<'a> {
+    pub agent: &'a dyn crate::agent::Agent,
+    pub cmd: Command,
+    pub task_id: &'a TaskId,
+    pub store: &'a Arc<Store>,
+    pub log_path: &'a std::path::Path,
+    pub output_path: Option<&'a str>,
+    pub model: Option<&'a str>,
+    pub streaming: bool,
+    pub workgroup_id: Option<&'a str>,
+}
+
+pub(super) async fn run_agent_process_impl(args: RunProcessArgs<'_>) -> Result<()> {
+    let RunProcessArgs {
+        agent,
+        mut cmd,
+        task_id,
+        store,
+        log_path,
+        output_path,
+        model,
+        streaming,
+        workgroup_id,
+    } = args;
     let start = std::time::Instant::now();
     let mut child = cmd.spawn().context("Failed to spawn agent process")?;
     let info = if streaming {
@@ -446,7 +460,15 @@ pub(super) async fn run_agent_process_impl(
     let duration_ms = start.elapsed().as_millis() as i64;
     let final_model = info.model.as_deref().or(model);
     let cost_usd = info.cost_usd.or_else(|| info.tokens.and_then(|tokens| crate::cost::estimate_cost(tokens, final_model, agent.kind())));
-    store.update_task_completion(task_id.as_str(), info.status, info.tokens, duration_ms, final_model, cost_usd, info.exit_code)?;
+    store.update_task_completion(TaskCompletionUpdate {
+        id: task_id.as_str(),
+        status: info.status,
+        tokens: info.tokens,
+        duration_ms,
+        model: final_model,
+        cost_usd,
+        exit_code: info.exit_code,
+    })?;
     let duration_str = format_duration(duration_ms);
     let tokens_str = info.tokens.map(|t| format!(", {} tokens", t)).unwrap_or_default();
     let cost_str = if cost_usd.is_some() { format!(", {}", crate::cost::format_cost(cost_usd)) } else { String::new() };

@@ -287,10 +287,10 @@ fn full_diff(wt_path: &str) -> String {
 }
 fn generate_diff(wt_path: &str, args_sets: &[&[&str]], fallback: &str) -> String {
     for args in args_sets {
-        if let Some(output) = run_git_diff(wt_path, &diff_args(args)) {
-            if !output.trim().is_empty() {
-                return output;
-            }
+        if let Some(output) = run_git_diff(wt_path, &diff_args(args))
+            && !output.trim().is_empty()
+        {
+            return output;
         }
     }
     fallback.to_string()

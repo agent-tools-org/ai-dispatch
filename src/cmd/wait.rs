@@ -68,13 +68,13 @@ pub async fn wait_for_task_ids(store: &Arc<Store>, task_ids: &[String], exit_on_
             }
 
             // Print milestone progress for running tasks
-            if matches!(status, TaskStatus::Running | TaskStatus::AwaitingInput) {
-                if let Some(milestone) = store.latest_milestone(task_id)? {
-                    let is_new = last_milestone.insert(task_id.clone(), milestone.clone()) != Some(milestone.clone());
-                    if is_new {
-                        let truncated = if milestone.len() > 80 { format!("{}...", &milestone[..77]) } else { milestone };
-                        println!("[progress] {} — {}", task_id, truncated);
-                    }
+            if matches!(status, TaskStatus::Running | TaskStatus::AwaitingInput)
+                && let Some(milestone) = store.latest_milestone(task_id)?
+            {
+                let is_new = last_milestone.insert(task_id.clone(), milestone.clone()) != Some(milestone.clone());
+                if is_new {
+                    let truncated = if milestone.len() > 80 { format!("{}...", &milestone[..77]) } else { milestone };
+                    println!("[progress] {} — {}", task_id, truncated);
                 }
             }
 

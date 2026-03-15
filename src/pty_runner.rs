@@ -12,6 +12,7 @@ use crate::cost;
 use crate::pty_bridge::PtyBridge;
 use crate::pty_watch::{MonitorState, finalize_output, monitor_bridge};
 use crate::store::Store;
+use crate::store::TaskCompletionUpdate;
 use crate::types::{CompletionInfo, TaskId};
 
 #[allow(clippy::too_many_arguments)]
@@ -85,15 +86,15 @@ fn record_completion(
         info.tokens
             .and_then(|tokens| cost::estimate_cost(tokens, final_model, agent.kind()))
     });
-    store.update_task_completion(
-        task_id.as_str(),
-        info.status,
-        info.tokens,
+    store.update_task_completion(TaskCompletionUpdate {
+        id: task_id.as_str(),
+        status: info.status,
+        tokens: info.tokens,
         duration_ms,
-        final_model,
+        model: final_model,
         cost_usd,
-        info.exit_code,
-    )?;
+        exit_code: info.exit_code,
+    })?;
     println!(
         "Task {} {} ({}{}{})",
         task_id,

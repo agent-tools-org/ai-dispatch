@@ -221,19 +221,18 @@ pub(crate) fn extract_tokens_from_output(output: &str) -> (Option<i64>, Option<f
     let mut found_any = false;
 
     for line in output.lines() {
-        if let Ok(v) = serde_json::from_str::<serde_json::Value>(line) {
-            if v.get("type").and_then(|t| t.as_str()) == Some("step_finish") {
-                if let Some(part) = v.get("part") {
-                    if let Some(tokens) = part.get("tokens").and_then(|t| t.get("total")) {
-                        if let Some(n) = tokens.as_i64() {
-                            total_tokens += n;
-                            found_any = true;
-                        }
-                    }
-                    if let Some(cost) = part.get("cost").and_then(|c| c.as_f64()) {
-                        total_cost += cost;
-                    }
-                }
+        if let Ok(v) = serde_json::from_str::<serde_json::Value>(line)
+            && v.get("type").and_then(|t| t.as_str()) == Some("step_finish")
+            && let Some(part) = v.get("part")
+        {
+            if let Some(tokens) = part.get("tokens").and_then(|t| t.get("total"))
+                && let Some(n) = tokens.as_i64()
+            {
+                total_tokens += n;
+                found_any = true;
+            }
+            if let Some(cost) = part.get("cost").and_then(|c| c.as_f64()) {
+                total_cost += cost;
             }
         }
     }

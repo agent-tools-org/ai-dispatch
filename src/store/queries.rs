@@ -344,7 +344,7 @@ impl Store {
              ORDER BY version ASC
              LIMIT 1",
         )?;
-        let base_memory = match stmt.query_row(params![id], |row| row_to_memory(row)) {
+        let base_memory = match stmt.query_row(params![id], row_to_memory) {
             Ok(row) => row?,
             Err(rusqlite::Error::QueryReturnedNoRows) => return Ok(vec![]),
             Err(err) => return Err(err.into()),
@@ -361,7 +361,7 @@ impl Store {
                 Some(ref prev) => prev.clone(),
                 None => break,
             };
-            match stmt.query_row(params![prev], |row| row_to_memory(row)) {
+            match stmt.query_row(params![prev], row_to_memory) {
                 Ok(row) => {
                     let memory = row?;
                     previous_id = memory.supersedes.as_ref().map(|sup| sup.as_str().to_string());
@@ -378,7 +378,7 @@ impl Store {
                 Some(ref value) => value.clone(),
                 None => break,
             };
-            match child_stmt.query_row(params![curr], |row| row_to_memory(row)) {
+            match child_stmt.query_row(params![curr], row_to_memory) {
                 Ok(row) => {
                     let memory = row?;
                     next_id = Some(memory.id.as_str().to_string());

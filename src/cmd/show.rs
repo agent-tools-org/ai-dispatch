@@ -174,12 +174,12 @@ pub fn context_text(store: &Arc<Store>, task_id: &str) -> Result<String> {
     let mut out = String::new();
     out.push_str("=== Original Prompt ===\n");
     out.push_str(&task.prompt);
-    out.push_str("\n");
+    out.push('\n');
 
     if let Some(resolved_prompt) = task.resolved_prompt.as_deref() {
         out.push_str("\n=== Resolved Prompt ===\n");
         out.push_str(resolved_prompt);
-        out.push_str("\n");
+        out.push('\n');
         return Ok(out);
     }
 
@@ -190,11 +190,11 @@ pub fn context_text(store: &Arc<Store>, task_id: &str) -> Result<String> {
         out.push_str("(none)\n");
     } else {
         out.push_str(&skill_content);
-        out.push_str("\n");
+        out.push('\n');
     }
     out.push_str("\n=== Resolved Prompt ===\n");
     out.push_str(&resolved_prompt);
-    out.push_str("\n");
+    out.push('\n');
     Ok(out)
 }
 

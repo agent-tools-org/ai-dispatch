@@ -300,8 +300,8 @@ pub fn run(store: &Arc<Store>, action: ConfigAction) -> Result<()> {
         }
         ConfigAction::Pricing => {
             println!(
-                "{:<10} {:<25} {:>10} {:>10} {:>10} {}",
-                "Agent", "Model", "Tier", "Input/M", "Output/M", "Description"
+                "{:<10} {:<25} {:>10} {:>10} {:>10} Description",
+                "Agent", "Model", "Tier", "Input/M", "Output/M"
             );
             println!("{}", "-".repeat(85));
             for agent in [

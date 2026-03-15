@@ -23,7 +23,7 @@ pub fn mark_rate_limited(agent: &AgentKind, message: &str) {
     };
     let content = format!(
         "recovery_at: {}\nmessage: {}\n",
-        recovery_at.unwrap_or_else(|| "".to_string()),
+        recovery_at.unwrap_or_default(),
         truncated_message
     );
     let _ = fs::write(&path, content);

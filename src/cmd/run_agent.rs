@@ -11,6 +11,7 @@ use std::time::Instant;
 use tokio::process::Command;
 use tokio::time::{timeout, Duration};
 use crate::store::Store;
+use crate::store::TaskCompletionUpdate;
 use crate::types::{CompletionInfo, EventKind, TaskEvent, TaskId, TaskStatus};
 use crate::watcher;
 const DEFAULT_FOREGROUND_TIMEOUT_MINS: u64 = 30;
@@ -29,7 +30,7 @@ pub(crate) async fn run_agent_process(
     streaming: bool,
     workgroup_id: Option<&str>,
 ) -> Result<()> {
-    run_prompt::run_agent_process_impl(
+    run_prompt::run_agent_process_impl(run_prompt::RunProcessArgs {
         agent,
         cmd,
         task_id,
@@ -39,7 +40,7 @@ pub(crate) async fn run_agent_process(
         model,
         streaming,
         workgroup_id,
-    )
+    })
     .await
 }
 
@@ -85,10 +86,10 @@ pub(crate) async fn run_agent_process_with_timeout(
 
     match timeout(deadline, watch_future).await {
         Ok(Ok(info)) => {
-            if streaming {
-                if let Some(out_path) = output_path {
-                    write_streaming_output(log_path, Path::new(out_path));
-                }
+            if streaming
+                && let Some(out_path) = output_path
+            {
+                write_streaming_output(log_path, Path::new(out_path));
             }
             let duration_ms = start.elapsed().as_millis() as i64;
             let final_model = info.model.as_deref().or(model);
@@ -96,15 +97,15 @@ pub(crate) async fn run_agent_process_with_timeout(
                 info.tokens
                     .and_then(|tokens| crate::cost::estimate_cost(tokens, final_model, agent.kind()))
             });
-            store.update_task_completion(
-                task_id.as_str(),
-                info.status,
-                info.tokens,
+            store.update_task_completion(TaskCompletionUpdate {
+                id: task_id.as_str(),
+                status: info.status,
+                tokens: info.tokens,
                 duration_ms,
-                final_model,
+                model: final_model,
                 cost_usd,
-                info.exit_code,
-            )?;
+                exit_code: info.exit_code,
+            })?;
             let duration_str = format_duration(duration_ms);
             let tokens_str = info
                 .tokens
@@ -130,15 +131,15 @@ pub(crate) async fn run_agent_process_with_timeout(
             let _ = child.kill().await;
             let _ = child.wait().await;
             let duration_ms = start.elapsed().as_millis() as i64;
-            store.update_task_completion(
-                task_id.as_str(),
-                TaskStatus::Failed,
-                None,
+            store.update_task_completion(TaskCompletionUpdate {
+                id: task_id.as_str(),
+                status: TaskStatus::Failed,
+                tokens: None,
                 duration_ms,
                 model,
-                None,
-                None,
-            )?;
+                cost_usd: None,
+                exit_code: None,
+            })?;
             let detail = format!("Task killed: exceeded {timeout_mins}m timeout");
             let event = TaskEvent {
                 task_id: task_id.clone(),
@@ -161,30 +162,27 @@ fn write_streaming_output(log_path: &Path, out_path: &Path) {
         if let Ok(v) = serde_json::from_str::<Value>(line) {
             if v.get("type").and_then(|t| t.as_str()) == Some("message")
                 && v.get("role").and_then(|r| r.as_str()) == Some("assistant")
+                && let Some(content) = v.get("content").and_then(|c| c.as_str())
             {
-                if let Some(content) = v.get("content").and_then(|c| c.as_str()) {
-                    if v.get("delta").and_then(|d| d.as_bool()) == Some(true) {
-                        last_message.push_str(content);
-                    } else {
-                        last_message = content.to_string();
-                    }
+                if v.get("delta").and_then(|d| d.as_bool()) == Some(true) {
+                    last_message.push_str(content);
+                } else {
+                    last_message = content.to_string();
                 }
             }
-            if v.get("type").and_then(|t| t.as_str()) == Some("item.completed") {
-                if let Some(item) = v.get("item") {
-                    if item.get("type").and_then(|t| t.as_str()) == Some("agent_message") {
-                        if let Some(text) = item.get("text").and_then(|t| t.as_str()) {
-                            last_message = text.to_string();
-                        }
-                    }
-                }
+            if v.get("type").and_then(|t| t.as_str()) == Some("item.completed")
+                && let Some(item) = v.get("item")
+                && item.get("type").and_then(|t| t.as_str()) == Some("agent_message")
+                && let Some(text) = item.get("text").and_then(|t| t.as_str())
+            {
+                last_message = text.to_string();
             }
         }
     }
-    if !last_message.is_empty() {
-        if let Err(err) = std::fs::write(out_path, &last_message) {
-            eprintln!("[aid] Failed to write output file: {err}");
-        }
+    if !last_message.is_empty()
+        && let Err(err) = std::fs::write(out_path, &last_message)
+    {
+        eprintln!("[aid] Failed to write output file: {err}");
     }
 }
 

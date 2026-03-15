@@ -81,12 +81,12 @@ impl App {
             }
             KeyCode::Enter => {
                 let tasks = self.multipane_tasks();
-                if let Some(task) = tasks.get(self.active_pane) {
-                    if let Some(idx) = self.tasks.iter().position(|t| t.id == task.id) {
-                        self.selected = idx;
-                        self.multipane_mode = false;
-                        self.enter_detail_mode()?;
-                    }
+                if let Some(task) = tasks.get(self.active_pane)
+                    && let Some(idx) = self.tasks.iter().position(|t| t.id == task.id)
+                {
+                    self.selected = idx;
+                    self.multipane_mode = false;
+                    self.enter_detail_mode()?;
                 }
             }
             KeyCode::Esc => {

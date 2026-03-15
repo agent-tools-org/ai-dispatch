@@ -70,33 +70,33 @@ impl MonitorState {
                 &mut self.line_buffer,
             )?;
         }
-        if !self.streaming {
-            if let Some(prompt) = self.prompt_detector.push_chunk(&chunk, Instant::now()) {
-                let awaiting_prompt = extract_awaiting_prompt(&self.full_output, &prompt);
-                mark_awaiting_input(
-                    store,
-                    task_id,
-                    &prompt,
-                    &awaiting_prompt,
-                    &mut self.awaiting_input,
-                )?;
-            }
+        if !self.streaming
+            && let Some(prompt) = self.prompt_detector.push_chunk(&chunk, Instant::now())
+        {
+            let awaiting_prompt = extract_awaiting_prompt(&self.full_output, &prompt);
+            mark_awaiting_input(
+                store,
+                task_id,
+                &prompt,
+                &awaiting_prompt,
+                &mut self.awaiting_input,
+            )?;
         }
         Ok(())
     }
 
     fn handle_timeout(&mut self, store: &Arc<Store>, task_id: &TaskId) -> Result<()> {
-        if !self.streaming {
-            if let Some(prompt) = self.prompt_detector.poll_idle(Instant::now()) {
-                let awaiting_prompt = extract_awaiting_prompt(&self.full_output, &prompt);
-                mark_awaiting_input(
-                    store,
-                    task_id,
-                    &prompt,
-                    &awaiting_prompt,
-                    &mut self.awaiting_input,
-                )?;
-            }
+        if !self.streaming
+            && let Some(prompt) = self.prompt_detector.poll_idle(Instant::now())
+        {
+            let awaiting_prompt = extract_awaiting_prompt(&self.full_output, &prompt);
+            mark_awaiting_input(
+                store,
+                task_id,
+                &prompt,
+                &awaiting_prompt,
+                &mut self.awaiting_input,
+            )?;
         }
         Ok(())
     }

@@ -78,23 +78,23 @@ pub async fn run(store: Arc<Store>, args: RunArgs) -> Result<TaskId> {
     let agent_display_name = custom_agent_name
         .as_deref()
         .unwrap_or_else(|| agent_kind.as_str());
-    if let Some(info) = rate_limit::get_rate_limit_info(&agent_kind) {
-        if let Some(ref recovery) = info.recovery_at {
+    if let Some(info) = rate_limit::get_rate_limit_info(&agent_kind)
+        && let Some(ref recovery) = info.recovery_at
+    {
+        eprintln!(
+            "[aid] Warning: {} is rate-limited (try again at {})",
+            agent_kind.as_str(),
+            recovery
+        );
+        if let Some(next_agent) = args.cascade.first() {
+            eprintln!("[aid] Switching to cascade agent: {}", next_agent);
+        } else if let Some(suggested) = crate::agent::selection::coding_fallback_for(&agent_kind) {
             eprintln!(
-                "[aid] Warning: {} is rate-limited (try again at {})",
-                agent_kind.as_str(),
-                recovery
+                "[aid] Suggested fallback: --cascade {} (similar capability)",
+                suggested.as_str()
             );
-            if let Some(next_agent) = args.cascade.first() {
-                eprintln!("[aid] Switching to cascade agent: {}", next_agent);
-            } else if let Some(suggested) = crate::agent::selection::coding_fallback_for(&agent_kind) {
-                eprintln!(
-                    "[aid] Suggested fallback: --cascade {} (similar capability)",
-                    suggested.as_str()
-                );
-            } else {
-                eprintln!("[aid] Tip: use --cascade <agent> or --agent with `aid retry`");
-            }
+        } else {
+            eprintln!("[aid] Tip: use --cascade <agent> or --agent with `aid retry`");
         }
     }
     let requested_skills = run_prompt::effective_skills(&agent_kind, &args);
@@ -334,11 +334,11 @@ pub async fn run(store: Arc<Store>, args: RunArgs) -> Result<TaskId> {
                 ) {
                     eprintln!("[aid] Hook on_fail failed: {err}");
                 }
-                if let Some(wt) = task.worktree_path.as_deref() {
-                    if std::path::Path::new(wt).exists() {
-                        let repo = repo_path.as_deref().unwrap_or(".");
-                        crate::cmd::merge::remove_worktree(repo, wt);
-                    }
+                if let Some(wt) = task.worktree_path.as_deref()
+                    && std::path::Path::new(wt).exists()
+                {
+                    let repo = repo_path.as_deref().unwrap_or(".");
+                    crate::cmd::merge::remove_worktree(repo, wt);
                 }
             }
         }
@@ -399,27 +399,25 @@ pub async fn run(store: Arc<Store>, args: RunArgs) -> Result<TaskId> {
         {
             return Ok(retry_id);
         }
-        if let Some(mut retry_args) = retry_logic::prepare_retry(store.clone(), &task_id, &args).await?
-        {
+        if let Some(mut retry_args) = retry_logic::prepare_retry(store.clone(), &task_id, &args).await? {
             if let Some(task) = store.get_task(task_id.as_str())? {
                 inherit_retry_base_branch(args.dir.as_deref(), &task, &mut retry_args);
             }
             Box::pin(run(store, retry_args)).await?;
         } else if let Some(task) = store.get_task(task_id.as_str())?
             && task.status == TaskStatus::Failed
+            && let Some((next_agent, remaining_cascade)) = take_next_cascade_agent(&args)
         {
-            if let Some((next_agent, remaining_cascade)) = take_next_cascade_agent(&args) {
-                eprintln!(
-                    "[aid] Cascade: trying {} after {} failed",
-                    next_agent,
-                    args.agent_name
-                );
-                let mut cascade_args = args.clone();
-                cascade_args.agent_name = next_agent;
-                cascade_args.cascade = remaining_cascade;
-                cascade_args.parent_task_id = Some(task_id.as_str().to_string());
-                Box::pin(run(store, cascade_args)).await?;
-            }
+            eprintln!(
+                "[aid] Cascade: trying {} after {} failed",
+                next_agent,
+                args.agent_name
+            );
+            let mut cascade_args = args.clone();
+            cascade_args.agent_name = next_agent;
+            cascade_args.cascade = remaining_cascade;
+            cascade_args.parent_task_id = Some(task_id.as_str().to_string());
+            Box::pin(run(store, cascade_args)).await?;
         }
     }
     Ok(task_id)

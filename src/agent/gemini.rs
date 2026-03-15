@@ -175,14 +175,14 @@ pub fn extract_response(output: &str) -> Option<String> {
         if trimmed.is_empty() {
             continue;
         }
-        if let Ok(v) = serde_json::from_str::<serde_json::Value>(trimmed) {
-            if v.get("type").and_then(|t| t.as_str()) == Some("text") {
-                if let Some(content) = v.get("content").and_then(|c| c.as_str()) {
-                    return Some(content.to_string());
-                }
-                if let Some(text) = v.get("text").and_then(|t| t.as_str()) {
-                    return Some(text.to_string());
-                }
+        if let Ok(v) = serde_json::from_str::<serde_json::Value>(trimmed)
+            && v.get("type").and_then(|t| t.as_str()) == Some("text")
+        {
+            if let Some(content) = v.get("content").and_then(|c| c.as_str()) {
+                return Some(content.to_string());
+            }
+            if let Some(text) = v.get("text").and_then(|t| t.as_str()) {
+                return Some(text.to_string());
             }
         }
     }

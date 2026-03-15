@@ -198,12 +198,11 @@ async fn run_task_inner(store: &Arc<Store>, spec: &BackgroundRunSpec) -> Result<
         return Ok(());
     }
     notify_task_completion(store, &spec.task_id)?;
-    if let Some(worktree_dir) = spec.dir.as_deref() {
-        if crate::commit::has_uncommitted_changes(worktree_dir).unwrap_or(false) {
-            if let Err(e) = crate::commit::auto_commit(worktree_dir, &spec.task_id, &spec.prompt) {
-                eprintln!("[aid] auto-commit failed: {e}");
-            }
-        }
+    if let Some(worktree_dir) = spec.dir.as_deref()
+        && crate::commit::has_uncommitted_changes(worktree_dir).unwrap_or(false)
+        && let Err(e) = crate::commit::auto_commit(worktree_dir, &spec.task_id, &spec.prompt)
+    {
+        eprintln!("[aid] auto-commit failed: {e}");
     }
     if crate::cmd::run::maybe_auto_retry_after_verify_failure(
         store,
@@ -279,13 +278,13 @@ where
             continue;
         };
         let Some(worker_pid) = spec.worker_pid else {
-            if let Some(task) = store.get_task(task_id)? {
-                if let Some(ref path) = task.worktree_path {
-                    if std::path::Path::new(path).exists() && crate::commit::has_uncommitted_changes(path).unwrap_or(false) {
-                        let _ = crate::commit::auto_commit(path, task_id, &task.prompt);
-                        eprintln!("[aid] Preserved uncommitted changes for zombie task {task_id}");
-                    }
-                }
+            if let Some(task) = store.get_task(task_id)?
+                && let Some(ref path) = task.worktree_path
+                && std::path::Path::new(path).exists()
+                && crate::commit::has_uncommitted_changes(path).unwrap_or(false)
+            {
+                let _ = crate::commit::auto_commit(path, task_id, &task.prompt);
+                eprintln!("[aid] Preserved uncommitted changes for zombie task {task_id}");
             }
             record_failure(store, task_id, ZOMBIE_FAILURE_DETAIL, ZOMBIE_FAILURE_DETAIL)?;
             cleaned.push(task_id.to_string());
@@ -308,13 +307,13 @@ where
             continue;
         }
 
-        if let Some(task) = store.get_task(task_id)? {
-            if let Some(ref path) = task.worktree_path {
-                if std::path::Path::new(path).exists() && crate::commit::has_uncommitted_changes(path).unwrap_or(false) {
-                    let _ = crate::commit::auto_commit(path, task_id, &task.prompt);
-                    eprintln!("[aid] Preserved uncommitted changes for zombie task {task_id}");
-                }
-            }
+        if let Some(task) = store.get_task(task_id)?
+            && let Some(ref path) = task.worktree_path
+            && std::path::Path::new(path).exists()
+            && crate::commit::has_uncommitted_changes(path).unwrap_or(false)
+        {
+            let _ = crate::commit::auto_commit(path, task_id, &task.prompt);
+            eprintln!("[aid] Preserved uncommitted changes for zombie task {task_id}");
         }
         record_failure(store, task_id, ZOMBIE_FAILURE_DETAIL, ZOMBIE_FAILURE_DETAIL)?;
         cleaned.push(task_id.to_string());

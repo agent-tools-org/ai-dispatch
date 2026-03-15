@@ -10,6 +10,16 @@ use super::schema::row_to_memory;
 use super::Store;
 use crate::types::*;
 
+pub struct TaskCompletionUpdate<'a> {
+    pub id: &'a str,
+    pub status: TaskStatus,
+    pub tokens: Option<i64>,
+    pub duration_ms: i64,
+    pub model: Option<&'a str>,
+    pub cost_usd: Option<f64>,
+    pub exit_code: Option<i32>,
+}
+
 impl Store {
     pub fn insert_task(&self, task: &Task) -> Result<()> {
         let agent_value = if task.agent == AgentKind::Custom {
@@ -116,27 +126,21 @@ impl Store {
 
     pub fn update_task_completion(
         &self,
-        id: &str,
-        status: TaskStatus,
-        tokens: Option<i64>,
-        duration_ms: i64,
-        model: Option<&str>,
-        cost_usd: Option<f64>,
-        exit_code: Option<i32>,
+        payload: TaskCompletionUpdate<'_>,
     ) -> Result<()> {
         let now = Local::now().to_rfc3339();
         self.db().execute(
             "UPDATE tasks SET status = ?1, tokens = ?2, duration_ms = ?3, completed_at = ?4,
              model = ?5, cost_usd = ?6, exit_code = ?7 WHERE id = ?8",
             params![
-                status.as_str(),
-                tokens,
-                duration_ms,
+                payload.status.as_str(),
+                payload.tokens,
+                payload.duration_ms,
                 now,
-                model,
-                cost_usd,
-                exit_code,
-                id
+                payload.model,
+                payload.cost_usd,
+                payload.exit_code,
+                payload.id
             ],
         )?;
         Ok(())
@@ -211,7 +215,7 @@ impl Store {
              created_at, expires_at, supersedes, version, inject_count, last_injected_at, success_count
              FROM memories WHERE id = ?1",
             params![id],
-            |row| row_to_memory(row),
+            row_to_memory,
         ) {
             Ok(row) => row?,
             Err(rusqlite::Error::QueryReturnedNoRows) => return Ok(false),

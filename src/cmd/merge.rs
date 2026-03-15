@@ -35,28 +35,28 @@ fn merge_single(store: &Store, task_id: &str) -> Result<()> {
     let repo_dir = resolve_repo_dir(task.repo_path.as_deref(), task.worktree_path.as_deref());
 
     // Pre-merge verification: run verify command in worktree
-    if let Some(wt) = task.worktree_path.as_deref() {
-        if std::path::Path::new(wt).exists() {
-            run_verify_in_worktree(wt, task.verify.as_deref());
-        }
+    if let Some(wt) = task.worktree_path.as_deref()
+        && std::path::Path::new(wt).exists()
+    {
+        run_verify_in_worktree(wt, task.verify.as_deref());
     }
     // Auto cherry-pick worktree branch into current branch
     if let Some(ref branch) = task.worktree_branch {
         // Auto-commit any uncommitted changes before merge
-        if let Some(wt) = task.worktree_path.as_deref() {
-            if std::path::Path::new(wt).exists() {
-                auto_commit_uncommitted(wt, branch);
-            }
+        if let Some(wt) = task.worktree_path.as_deref()
+            && std::path::Path::new(wt).exists()
+        {
+            auto_commit_uncommitted(wt, branch);
         }
         // Pre-check: verify branch has commits to merge
         let ahead = commits_ahead(&repo_dir, branch);
         if ahead == 0 {
             eprintln!("[aid] Error: branch {branch} has 0 commits ahead — nothing to merge");
             eprintln!("[aid] The agent may not have committed its changes.");
-            if let Some(wt) = task.worktree_path.as_deref() {
-                if std::path::Path::new(wt).exists() {
-                    eprintln!("[aid] Worktree preserved at {wt} for manual recovery");
-                }
+            if let Some(wt) = task.worktree_path.as_deref()
+                && std::path::Path::new(wt).exists()
+            {
+                eprintln!("[aid] Worktree preserved at {wt} for manual recovery");
             }
             return Err(anyhow!("No commits to merge from {branch}"));
         }
@@ -99,10 +99,10 @@ fn merge_single(store: &Store, task_id: &str) -> Result<()> {
     store.update_task_status(task_id, TaskStatus::Merged)?;
     println!("Marked {task_id} as merged");
     // Clean up worktree only after successful merge
-    if let Some(wt) = task.worktree_path.as_deref() {
-        if std::path::Path::new(wt).exists() {
-            remove_worktree(&repo_dir, wt);
-        }
+    if let Some(wt) = task.worktree_path.as_deref()
+        && std::path::Path::new(wt).exists()
+    {
+        remove_worktree(&repo_dir, wt);
     }
     Ok(())
 }
@@ -126,11 +126,11 @@ fn merge_group(store: &Store, group_id: &str) -> Result<()> {
         let repo_dir = resolve_repo_dir(task.repo_path.as_deref(), task.worktree_path.as_deref());
         if let Some(ref branch) = task.worktree_branch {
             // Auto-commit uncommitted changes
-            if let Some(wt) = task.worktree_path.as_deref() {
-                if std::path::Path::new(wt).exists() {
-                    auto_commit_uncommitted(wt, branch);
-                }
-            }
+        if let Some(wt) = task.worktree_path.as_deref()
+            && std::path::Path::new(wt).exists()
+        {
+            auto_commit_uncommitted(wt, branch);
+        }
             let ahead = commits_ahead(&repo_dir, branch);
             if ahead == 0 {
                 eprintln!("[aid] Warning: {} — branch {branch} has 0 commits, skipping", task.id);
@@ -158,10 +158,10 @@ fn merge_group(store: &Store, group_id: &str) -> Result<()> {
         store.update_task_status(task.id.as_str(), TaskStatus::Merged)?;
         merged += 1;
         // Clean up worktree after successful merge
-        if let Some(wt) = task.worktree_path.as_deref() {
-            if std::path::Path::new(wt).exists() {
-                remove_worktree(&repo_dir, wt);
-            }
+        if let Some(wt) = task.worktree_path.as_deref()
+            && std::path::Path::new(wt).exists()
+        {
+            remove_worktree(&repo_dir, wt);
         }
     }
     println!("Merged {merged} task(s) in group {group_id}");

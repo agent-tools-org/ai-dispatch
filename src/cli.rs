@@ -1,7 +1,7 @@
 // aid CLI definitions.
 // Exports parser structs and subcommands; depends on clap derive.
 
-use clap::{Parser, Subcommand};
+use clap::{Args, Parser, Subcommand};
 use crate::cli_actions::{ConfigAction, GroupAction, TeamAction, WorktreeAction};
 
 #[derive(Parser)]
@@ -9,6 +9,28 @@ use crate::cli_actions::{ConfigAction, GroupAction, TeamAction, WorktreeAction};
 pub struct Cli {
     #[command(subcommand)]
     pub command: Commands,
+}
+
+#[derive(Args)]
+pub(crate) struct RunExtrasArgs {
+    /// Inject output from previous task(s) as context
+    #[arg(long)]
+    pub(crate) context_from: Vec<String>,
+    /// Methodology skills to inject
+    #[arg(long)]
+    pub(crate) skill: Vec<String>,
+    /// Prompt template to wrap around the task
+    #[arg(long)]
+    pub(crate) template: Option<String>,
+    /// Command to run on task completion
+    #[arg(long)]
+    pub(crate) on_done: Option<String>,
+    /// Agent cascade: comma-separated list of agents to try on failure (e.g. opencode,codex,cursor)
+    #[arg(long, value_delimiter = ',')]
+    pub(crate) cascade: Vec<String>,
+    /// Hook specs to run for the dispatched task
+    #[arg(long)]
+    pub(crate) hook: Vec<String>,
 }
 
 #[derive(Subcommand)]
@@ -59,30 +81,14 @@ pub enum Commands {
         /// Context files to inject
         #[arg(long)]
         context: Vec<String>,
-        /// Inject output from previous task(s) as context
-        #[arg(long)]
-        context_from: Vec<String>,
-        /// Methodology skills to inject
-        #[arg(long)]
-        skill: Vec<String>,
-        /// Prompt template to wrap around the task
-        #[arg(long)]
-        template: Option<String>,
+        #[command(flatten)]
+        run_extras: Box<RunExtrasArgs>,
         /// Disable automatic skill injection
         #[arg(long, conflicts_with = "skill")]
         no_skill: bool,
         /// Run in background
         #[arg(long)]
         bg: bool,
-        /// Command to run on task completion
-        #[arg(long)]
-        on_done: Option<String>,
-        /// Agent cascade: comma-separated list of agents to try on failure (e.g. opencode,codex,cursor)
-        #[arg(long, value_delimiter = ',')]
-        cascade: Vec<String>,
-        /// Hook specs to run for the dispatched task
-        #[arg(long)]
-        hook: Vec<String>,
         /// Run in read-only mode (no file writes)
         #[arg(long)]
         read_only: bool,

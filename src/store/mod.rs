@@ -3,6 +3,7 @@
 // Deps: rusqlite, anyhow.
 
 mod mutations;
+pub use mutations::TaskCompletionUpdate;
 mod queries;
 mod schema;
 

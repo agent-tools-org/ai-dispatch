@@ -46,11 +46,11 @@ pub fn run(
     eprintln!("[query] {model} {:.1}s (${:.6})", elapsed, cost);
     println!("{content}");
 
-    if finding {
-        if let Some(gid) = group {
-            store.insert_finding(gid, &content, None)?;
-            eprintln!("[query] Finding saved to {gid}");
-        }
+    if finding
+        && let Some(gid) = group
+    {
+        store.insert_finding(gid, &content, None)?;
+        eprintln!("[query] Finding saved to {gid}");
     }
 
     std::io::stdout().flush()?;

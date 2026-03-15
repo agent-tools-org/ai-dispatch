@@ -14,15 +14,15 @@ pub fn run(store: &Store, task_id: &str) -> Result<()> {
     let chain_ids: HashSet<&str> = chain.iter().map(|task| task.id.as_str()).collect();
     let mut children_by_parent: HashMap<String, Vec<Task>> = HashMap::new();
     for task in store.list_tasks(TaskFilter::All)? {
-        if let Some(parent_id) = task.parent_task_id.as_deref() {
-            if chain_ids.contains(parent_id) {
-                children_by_parent.entry(parent_id.to_string()).or_default().push(task);
-            }
+        if let Some(parent_id) = task.parent_task_id.as_deref()
+            && chain_ids.contains(parent_id)
+        {
+            children_by_parent.entry(parent_id.to_string()).or_default().push(task);
         }
     }
     let mut chain_child_idx: HashMap<String, usize> = HashMap::new();
-    for i in 0..chain.len().saturating_sub(1) {
-        chain_child_idx.insert(chain[i].id.as_str().to_string(), i + 1);
+    for (i, task) in chain.iter().enumerate().take(chain.len().saturating_sub(1)) {
+        chain_child_idx.insert(task.id.as_str().to_string(), i + 1);
     }
     println!("{}", format_task_line(&chain[0]));
     render_children(
@@ -48,8 +48,7 @@ fn render_children(
     let mut entries: Vec<(Task, Option<usize>)> = Vec::new();
     if let Some(children) = children_by_parent.get(parent_id) {
         for child in children {
-            let is_chain_child = chain_child_id
-                .map_or(false, |id| id == &child.id);
+            let is_chain_child = chain_child_id == Some(&child.id);
             if !is_chain_child {
                 entries.push((child.clone(), None));
             }

@@ -3,6 +3,7 @@
 // Deps: Store, rusqlite.
 
 use super::*;
+use crate::store::TaskCompletionUpdate;
 
 #[test]
 fn insert_and_get_task() {
@@ -84,16 +85,16 @@ fn update_completion() {
     let task = make_task("t-0002", AgentKind::Gemini, TaskStatus::Running);
     store.insert_task(&task).unwrap();
     store
-        .update_task_completion(
-            "t-0002",
-        TaskStatus::Done,
-        Some(3000),
-        47000,
-        Some("gemini-2.5-flash"),
-        Some(0.0038),
-        None,
-    )
-    .unwrap();
+        .update_task_completion(TaskCompletionUpdate {
+            id: "t-0002",
+            status: TaskStatus::Done,
+            tokens: Some(3000),
+            duration_ms: 47000,
+            model: Some("gemini-2.5-flash"),
+            cost_usd: Some(0.0038),
+            exit_code: None,
+        })
+        .unwrap();
 
     let loaded = store.get_task("t-0002").unwrap().unwrap();
     assert_eq!(loaded.status, TaskStatus::Done);

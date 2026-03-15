@@ -66,13 +66,13 @@ pub fn task_header(task: &Task, events: &[crate::types::TaskEvent]) -> Paragraph
     if !scope.is_empty() {
         lines.push(Line::from(Span::styled(scope, Style::default().fg(Color::Indexed(243)))));
     }
-    if task.status == TaskStatus::AwaitingInput {
-        if let Some(prompt) = pending_prompt(events) {
-            lines.push(Line::from(Span::styled(
-                format!("Awaiting: {}", truncate(prompt, 120)),
-                Style::default().fg(Color::Magenta),
-            )));
-        }
+    if task.status == TaskStatus::AwaitingInput
+        && let Some(prompt) = pending_prompt(events)
+    {
+        lines.push(Line::from(Span::styled(
+            format!("Awaiting: {}", truncate(prompt, 120)),
+            Style::default().fg(Color::Magenta),
+        )));
     }
     Paragraph::new(lines)
 }

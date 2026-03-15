@@ -113,14 +113,14 @@ pub fn run() -> Result<()> {
         }
     }
     let agents_dir = crate::paths::aid_dir().join("agents");
-    if agents_dir.is_dir() {
-        if let Ok(entries) = std::fs::read_dir(&agents_dir) {
-            for entry in entries.flatten() {
-                if entry.path().extension().is_some_and(|e| e == "toml") {
-                    let name = entry.path().file_stem().unwrap().to_string_lossy().to_string();
-                    installed += 1;
-                    println!("  ✓ {name} (custom)");
-                }
+    if agents_dir.is_dir()
+        && let Ok(entries) = std::fs::read_dir(&agents_dir)
+    {
+        for entry in entries.flatten() {
+            if entry.path().extension().is_some_and(|e| e == "toml") {
+                let name = entry.path().file_stem().unwrap().to_string_lossy().to_string();
+                installed += 1;
+                println!("  ✓ {name} (custom)");
             }
         }
     }
@@ -194,14 +194,14 @@ fn append_query_section(config: &mut String, key: &str) {
 }
 
 fn replace_api_key(config: &mut String, new_key: &str) {
-    if let Some(start) = config.find("api_key") {
-        if let Some(eq) = config[start..].find('=') {
-            let val_start = start + eq + 1;
-            let line_end = config[val_start..]
-                .find('\n')
-                .map(|p| val_start + p)
-                .unwrap_or(config.len());
-            config.replace_range(val_start..line_end, &format!(" \"{new_key}\""));
-        }
+    if let Some(start) = config.find("api_key")
+        && let Some(eq) = config[start..].find('=')
+    {
+        let val_start = start + eq + 1;
+        let line_end = config[val_start..]
+            .find('\n')
+            .map(|p| val_start + p)
+            .unwrap_or(config.len());
+        config.replace_range(val_start..line_end, &format!(" \"{new_key}\""));
     }
 }

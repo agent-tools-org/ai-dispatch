@@ -75,12 +75,14 @@ pub async fn watch_streaming(
         log_file.write_all(b"\n").await?;
 
         handle_streaming_line_with_session(
-            agent,
-            task_id,
-            store,
+            StreamLineContext {
+                agent,
+                task_id,
+                store,
+                workgroup_id,
+            },
             &mut info,
             &mut event_count,
-            workgroup_id,
             &line,
             &mut session_saved,
         )?;
@@ -245,6 +247,13 @@ fn apply_completion_event(info: &mut CompletionInfo, event: &TaskEvent) {
     }
 }
 
+pub(crate) struct StreamLineContext<'a> {
+    pub agent: &'a dyn Agent,
+    pub task_id: &'a TaskId,
+    pub store: &'a Arc<Store>,
+    pub workgroup_id: Option<&'a str>,
+}
+
 pub(crate) fn handle_streaming_line(
     agent: &dyn Agent,
     task_id: &TaskId,
@@ -254,11 +263,11 @@ pub(crate) fn handle_streaming_line(
     workgroup_id: Option<&str>,
     line: &str,
 ) -> Result<()> {
-    if let Some(finding) = extract_finding_detail(line) {
-        if let Some(group_id) = workgroup_id {
-            let _ = store.insert_finding(group_id, &finding, Some(task_id.as_str()));
-            append_to_broadcast(group_id, task_id.as_str(), &finding);
-        }
+    if let Some(finding) = extract_finding_detail(line)
+        && let Some(group_id) = workgroup_id
+    {
+        let _ = store.insert_finding(group_id, &finding, Some(task_id.as_str()));
+        append_to_broadcast(group_id, task_id.as_str(), &finding);
     }
     if let Some(event) = parse_milestone_event(task_id, line) {
         store.insert_event(&event)?;
@@ -274,20 +283,23 @@ pub(crate) fn handle_streaming_line(
 }
 
 pub(crate) fn handle_streaming_line_with_session(
-    agent: &dyn Agent,
-    task_id: &TaskId,
-    store: &Arc<Store>,
+    ctx: StreamLineContext<'_>,
     info: &mut CompletionInfo,
     event_count: &mut u32,
-    workgroup_id: Option<&str>,
     line: &str,
     session_saved: &mut bool,
 ) -> Result<()> {
-    if let Some(finding) = extract_finding_detail(line) {
-        if let Some(group_id) = workgroup_id {
-            let _ = store.insert_finding(group_id, &finding, Some(task_id.as_str()));
-            append_to_broadcast(group_id, task_id.as_str(), &finding);
-        }
+    let StreamLineContext {
+        agent,
+        task_id,
+        store,
+        workgroup_id,
+    } = ctx;
+    if let Some(finding) = extract_finding_detail(line)
+        && let Some(group_id) = workgroup_id
+    {
+        let _ = store.insert_finding(group_id, &finding, Some(task_id.as_str()));
+        append_to_broadcast(group_id, task_id.as_str(), &finding);
     }
     if let Some(event) = parse_milestone_event(task_id, line) {
         store.insert_event(&event)?;
@@ -296,13 +308,12 @@ pub(crate) fn handle_streaming_line_with_session(
     }
     if let Some(event) = agent.parse_event(task_id, line) {
         apply_completion_event(info, &event);
-        if !*session_saved {
-            if let Some(metadata) = &event.metadata {
-                if let Some(session_id) = metadata.get("agent_session_id").and_then(|s| s.as_str()) {
-                    store.update_agent_session_id(task_id.as_str(), session_id)?;
-                    *session_saved = true;
-                }
-            }
+        if !*session_saved
+            && let Some(metadata) = &event.metadata
+            && let Some(session_id) = metadata.get("agent_session_id").and_then(|s| s.as_str())
+        {
+            store.update_agent_session_id(task_id.as_str(), session_id)?;
+            *session_saved = true;
         }
         store.insert_event(&event)?;
         *event_count += 1;

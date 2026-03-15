@@ -10,31 +10,28 @@ pub(crate) fn resolve_repo_dir(repo_path: Option<&str>, worktree_path: Option<&s
     if let Some(repo) = repo_path {
         return repo.to_string();
     }
-    if let Some(wt) = worktree_path {
-        if let Ok(out) = Command::new("git")
+    if let Some(wt) = worktree_path
+        && let Ok(out) = Command::new("git")
             .args(["-C", wt, "rev-parse", "--show-toplevel"])
             .output()
+        && out.status.success()
+    {
+        let toplevel = String::from_utf8_lossy(&out.stdout).trim().to_string();
+        if let Ok(common) = Command::new("git")
+            .args(["-C", wt, "rev-parse", "--git-common-dir"])
+            .output()
+            && common.status.success()
         {
-            if out.status.success() {
-                let toplevel = String::from_utf8_lossy(&out.stdout).trim().to_string();
-                if let Ok(common) = Command::new("git")
-                    .args(["-C", wt, "rev-parse", "--git-common-dir"])
-                    .output()
-                {
-                    if common.status.success() {
-                        let common_dir =
-                            String::from_utf8_lossy(&common.stdout).trim().to_string();
-                        let common_path = Path::new(&common_dir);
-                        if let Some(parent) = common_path.parent() {
-                            if parent.join(".git").exists() {
-                                return parent.to_string_lossy().to_string();
-                            }
-                        }
-                    }
-                }
-                return toplevel;
+            let common_dir =
+                String::from_utf8_lossy(&common.stdout).trim().to_string();
+            let common_path = Path::new(&common_dir);
+            if let Some(parent) = common_path.parent()
+                && parent.join(".git").exists()
+            {
+                return parent.to_string_lossy().to_string();
             }
         }
+        return toplevel;
     }
     ".".to_string()
 }

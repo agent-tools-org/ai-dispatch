@@ -40,6 +40,8 @@ pub struct CustomAgentConfig {
     pub output_format: String,
     #[serde(default)]
     pub capabilities: CapabilityScores,
+    #[serde(default)]
+    pub strengths: Vec<String>,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -223,6 +225,7 @@ mod tests {
             streaming: false,
             output_format: default_output_format(),
             capabilities: CapabilityScores::default(),
+            strengths: Vec::new(),
         }
     }
 

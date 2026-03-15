@@ -32,6 +32,8 @@ fixed_args = []
 # Output parsing
 streaming = false
 output_format = "text"  # "text" or "jsonl"
+# Strength categories for simple boosts (match TaskCategory strings, e.g. "research")
+strengths = []
 
 # Capability scores for auto-selection (0-10)
 [agent.capabilities]
@@ -150,6 +152,11 @@ fn list_agents() -> Result<()> {
             config.display_name,
             path.display()
         );
+        if config.strengths.is_empty() {
+            println!("    Strengths: (none)");
+        } else {
+            println!("    Strengths: {}", config.strengths.join(", "));
+        }
     }
     Ok(())
 }
@@ -265,10 +272,15 @@ fn print_custom_summary(config: &CustomAgentConfig, path: &Path) {
     if config.fixed_args.is_empty() {
         println!("  Fixed args: (none)");
     } else {
-        println!("  Fixed args: {}", config.fixed_args.join(" "));
+    println!("  Fixed args: {}", config.fixed_args.join(" "));
     }
     println!("  Streaming: {}", config.streaming);
     println!("  Output format: {}", config.output_format);
+    if config.strengths.is_empty() {
+        println!("  Strengths: (none)");
+    } else {
+        println!("  Strengths: {}", config.strengths.join(", "));
+    }
     println!("  Capabilities:");
     print_capabilities(&config.capabilities);
 }
@@ -334,6 +346,8 @@ fn build_builtin_agent_toml(target_name: &str, profile: &BuiltinAgentProfile) ->
     toml.push_str("# Streaming controls whether aid expects live JSONL events\n");
     toml.push_str(&format!("streaming = {}\n", profile.streaming));
     toml.push_str("output_format = \"text\"  # text | jsonl\n\n");
+    toml.push_str("# Strength categories for auto-selection boosts\n");
+    toml.push_str("strengths = []\n\n");
     toml.push_str("# Capability scores (0-10) guide auto-selection\n");
     toml.push_str("[agent.capabilities]\n");
     toml.push_str(&format!("research = {}\n", caps.research));

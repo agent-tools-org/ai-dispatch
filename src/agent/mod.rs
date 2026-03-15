@@ -73,10 +73,6 @@ pub fn detect_agents() -> Vec<AgentKind> {
     found
 }
 
-pub fn select_agent(prompt: &str, opts: &RunOpts, store: &store::Store) -> String {
-    selection::select_agent_with_reason(prompt, opts, store, None).0
-}
-
 pub(crate) fn select_agent_with_reason(
     prompt: &str, opts: &RunOpts, store: &store::Store,
     team: Option<&crate::team::TeamConfig>,

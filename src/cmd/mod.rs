@@ -12,6 +12,7 @@ pub mod config;
 pub mod explain;
 pub mod group;
 pub mod memory;
+pub mod finding;
 pub mod init;
 pub mod mcp;
 pub mod merge;

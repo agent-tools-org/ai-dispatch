@@ -60,6 +60,14 @@ CREATE TABLE IF NOT EXISTS memories (
 CREATE INDEX IF NOT EXISTS idx_memories_project ON memories(project_path);
 CREATE INDEX IF NOT EXISTS idx_memories_type ON memories(memory_type);
 CREATE INDEX IF NOT EXISTS idx_memories_hash ON memories(content_hash);
+CREATE TABLE IF NOT EXISTS findings (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    workgroup_id TEXT NOT NULL REFERENCES workgroups(id),
+    content TEXT NOT NULL,
+    source_task_id TEXT,
+    created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_findings_workgroup ON findings(workgroup_id);
 ";
 
 const CREATE_WORKGROUPS_SQL: &str = "CREATE TABLE IF NOT EXISTS workgroups (
@@ -84,6 +92,15 @@ const CREATE_MEMORIES_SQL: &str = "CREATE TABLE IF NOT EXISTS memories (
 CREATE INDEX IF NOT EXISTS idx_memories_project ON memories(project_path);
 CREATE INDEX IF NOT EXISTS idx_memories_type ON memories(memory_type);
 CREATE INDEX IF NOT EXISTS idx_memories_hash ON memories(content_hash);";
+
+const CREATE_FINDINGS_SQL: &str = "CREATE TABLE IF NOT EXISTS findings (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    workgroup_id TEXT NOT NULL REFERENCES workgroups(id),
+    content TEXT NOT NULL,
+    source_task_id TEXT,
+    created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_findings_workgroup ON findings(workgroup_id);";
 
 pub(super) fn create_tables(store: &Store) -> Result<()> {
     store.db().execute_batch(CREATE_TABLES_SQL)?;
@@ -112,6 +129,7 @@ pub(super) fn migrate(store: &Store) -> Result<()> {
     let _ = conn.execute_batch("ALTER TABLE tasks ADD COLUMN budget INTEGER NOT NULL DEFAULT 0;");
     let _ = conn.execute_batch("ALTER TABLE tasks ADD COLUMN custom_agent_name TEXT;");
     let _ = conn.execute_batch("ALTER TABLE tasks ADD COLUMN verify_status TEXT NOT NULL DEFAULT 'skipped';");
+    let _ = conn.execute_batch(CREATE_FINDINGS_SQL);
     Ok(())
 }
 
@@ -172,6 +190,16 @@ pub(super) fn row_to_memory(row: &Row) -> rusqlite::Result<Result<Memory>> {
         created_at: parse_dt(&row.get::<_, String>(7)?),
         expires_at: row.get::<_, Option<String>>(8)?.map(|s| parse_dt(&s)),
     }))
+}
+
+pub(super) fn row_to_finding(row: &Row) -> rusqlite::Result<Finding> {
+    Ok(Finding {
+        id: row.get(0)?,
+        workgroup_id: WorkgroupId(row.get::<_, String>(1)?),
+        content: row.get(2)?,
+        source_task_id: row.get(3)?,
+        created_at: parse_dt(&row.get::<_, String>(4)?),
+    })
 }
 
 pub(super) fn parse_dt(s: &str) -> DateTime<Local> {

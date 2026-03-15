@@ -153,6 +153,21 @@ impl Store {
         Ok(())
     }
 
+    pub fn insert_finding(
+        &self,
+        workgroup_id: &str,
+        content: &str,
+        source_task_id: Option<&str>,
+    ) -> Result<()> {
+        let now = Local::now().to_rfc3339();
+        self.db().execute(
+            "INSERT INTO findings (workgroup_id, content, source_task_id, created_at)
+             VALUES (?1, ?2, ?3, ?4)",
+            params![workgroup_id, content, source_task_id, now],
+        )?;
+        Ok(())
+    }
+
     pub fn insert_memory(&self, memory: &Memory) -> Result<()> {
         self.db().execute(
             "INSERT OR IGNORE INTO memories (id, memory_type, content, source_task_id, agent,

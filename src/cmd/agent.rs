@@ -32,6 +32,11 @@ fixed_args = []
 # Output parsing
 streaming = false
 output_format = "text"  # "text" or "jsonl"
+# Strength categories for simple boosts (match TaskCategory strings, e.g. "research")
+strengths = []
+
+# Trust tier: "local" (runs locally) or "api" (sends prompts to third-party)
+trust_tier = "api"
 
 # Capability scores for auto-selection (0-10)
 [agent.capabilities]
@@ -52,6 +57,7 @@ struct BuiltinAgentProfile {
     cost: &'static str,
     best_for: &'static str,
     streaming: bool,
+    trust_tier: &'static str,
 }
 
 const BUILTIN_AGENT_PROFILES: &[BuiltinAgentProfile] = &[
@@ -62,6 +68,7 @@ const BUILTIN_AGENT_PROFILES: &[BuiltinAgentProfile] = &[
         cost: "$0.10-$10/M blended",
         best_for: "research, explain, implement, create, analyze, build",
         streaming: true,
+        trust_tier: "api",
     },
     BuiltinAgentProfile {
         name: "codex",
@@ -70,6 +77,7 @@ const BUILTIN_AGENT_PROFILES: &[BuiltinAgentProfile] = &[
         cost: "$0.10-$8/M blended",
         best_for: "implement, create, build, refactor, test",
         streaming: true,
+        trust_tier: "local",
     },
     BuiltinAgentProfile {
         name: "opencode",
@@ -78,6 +86,7 @@ const BUILTIN_AGENT_PROFILES: &[BuiltinAgentProfile] = &[
         cost: "free-$2/M blended",
         best_for: "rename, change, update, fix typo, add type",
         streaming: true,
+        trust_tier: "api",
     },
     BuiltinAgentProfile {
         name: "cursor",
@@ -86,6 +95,7 @@ const BUILTIN_AGENT_PROFILES: &[BuiltinAgentProfile] = &[
         cost: "$20/mo subscription",
         best_for: "implement, create, build, refactor, ui, frontend, css",
         streaming: true,
+        trust_tier: "api",
     },
     BuiltinAgentProfile {
         name: "kilo",
@@ -94,6 +104,7 @@ const BUILTIN_AGENT_PROFILES: &[BuiltinAgentProfile] = &[
         cost: "free",
         best_for: "rename, change, update, fix typo, add type",
         streaming: true,
+        trust_tier: "api",
     },
     BuiltinAgentProfile {
         name: "ob1",
@@ -102,6 +113,7 @@ const BUILTIN_AGENT_PROFILES: &[BuiltinAgentProfile] = &[
         cost: "$10/day budget",
         best_for: "research, explain, implement, create, analyze, build",
         streaming: true,
+        trust_tier: "api",
     },
     BuiltinAgentProfile {
         name: "codebuff",
@@ -110,6 +122,7 @@ const BUILTIN_AGENT_PROFILES: &[BuiltinAgentProfile] = &[
         cost: "SDK-managed",
         best_for: "complex coding, frontend",
         streaming: true,
+        trust_tier: "local",
     },
 ];
 
@@ -133,8 +146,9 @@ pub fn run_agent_command(action: AgentAction) -> Result<()> {
 
 fn list_agents() -> Result<()> {
     println!("Built-in agents:");
+    println!("  {:<10} {:<6} {}", "NAME", "TRUST", "DESCRIPTION");
     for profile in BUILTIN_AGENT_PROFILES {
-        println!("  {:<10} {}", profile.name, profile.description);
+        println!("  {:<10} {:<6} {}", profile.name, profile.trust_tier, profile.description);
     }
     println!("\nCustom agents:");
     let custom = registry::list_custom_agents();
@@ -142,14 +156,9 @@ fn list_agents() -> Result<()> {
         println!("  (none installed — use `aid agent add <name>` to create one)");
         return Ok(());
     }
+    println!("  {:<10} {:<6} {}", "NAME", "TRUST", "DISPLAY NAME");
     for config in custom {
-        let path = custom_agent_path(&config.id);
-        println!(
-            "  {:<10} {:<40}{}",
-            config.id,
-            config.display_name,
-            path.display()
-        );
+        println!("  {:<10} {:<6} {}", config.id, config.trust_tier, config.display_name);
     }
     Ok(())
 }
@@ -236,6 +245,7 @@ fn show_builtin_profile(profile: &BuiltinAgentProfile) {
     println!("  Cost: {}", profile.cost);
     println!("  Best for: {}", profile.best_for);
     println!("  Mode: {}", if profile.streaming { "streaming" } else { "buffered" });
+    println!("  Trust tier: {}", profile.trust_tier);
 }
 
 fn show_custom_agent(name: &str) -> Result<()> {
@@ -265,10 +275,14 @@ fn print_custom_summary(config: &CustomAgentConfig, path: &Path) {
     if config.fixed_args.is_empty() {
         println!("  Fixed args: (none)");
     } else {
-        println!("  Fixed args: {}", config.fixed_args.join(" "));
+    println!("  Fixed args: {}", config.fixed_args.join(" "));
     }
     println!("  Streaming: {}", config.streaming);
     println!("  Output format: {}", config.output_format);
+    println!("  Trust tier: {}", config.trust_tier);
+    if !config.strengths.is_empty() {
+        println!("  Strengths: {}", config.strengths.join(", "));
+    }
     println!("  Capabilities:");
     print_capabilities(&config.capabilities);
 }
@@ -334,6 +348,10 @@ fn build_builtin_agent_toml(target_name: &str, profile: &BuiltinAgentProfile) ->
     toml.push_str("# Streaming controls whether aid expects live JSONL events\n");
     toml.push_str(&format!("streaming = {}\n", profile.streaming));
     toml.push_str("output_format = \"text\"  # text | jsonl\n\n");
+    toml.push_str("# Trust tier: \"local\" (runs locally) or \"api\" (sends prompts to third-party)\n");
+    toml.push_str(&format!("trust_tier = \"{}\"\n\n", profile.trust_tier));
+    toml.push_str("# Strength categories for auto-selection boosts\n");
+    toml.push_str("strengths = []\n\n");
     toml.push_str("# Capability scores (0-10) guide auto-selection\n");
     toml.push_str("[agent.capabilities]\n");
     toml.push_str(&format!("research = {}\n", caps.research));

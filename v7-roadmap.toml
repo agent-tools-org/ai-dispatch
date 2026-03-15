@@ -1,0 +1,173 @@
+# v7.0 Roadmap — Horizon 1+2 remaining items
+# Dispatched by 老张/张远
+
+[defaults]
+dir = "/Users/mingsun/Develop/ai/ai-dispatch"
+verify = "cargo check"
+worktree_prefix = "feat/v7"
+
+# ─── H1.4: Simplify capability scoring ───
+# Replace 8-dimension CapabilityScores with simpler `strengths: Vec<String>`
+# This affects: agent/custom.rs, agent/selection.rs, cmd/agent.rs, team.rs
+[[task]]
+name = "simplify-scoring"
+agent = "codex"
+prompt = """
+Simplify the agent capability scoring system in this Rust codebase.
+
+CURRENT STATE:
+- `src/agent/custom.rs` has `CapabilityScores` with 8 fields (research, simple_edit, complex_impl, frontend, debugging, testing, refactoring, documentation), each i32
+- `src/agent/selection.rs` has `AGENT_CAPABILITIES` array mapping AgentKind to (TaskCategory, i32) tuples
+- `src/agent/classifier.rs` classifies prompts into `TaskCategory` enum
+- Auto-selection scores each agent by matching prompt category to capability score
+
+DESIRED CHANGE:
+1. In `src/agent/custom.rs`: Add a new field `strengths: Vec<String>` to `CustomAgentConfig` (serde default = empty). This is a simple list like `strengths = ["research", "complex_impl", "debugging"]`
+2. In `src/agent/selection.rs`: When scoring custom agents, give +5 if the detected TaskCategory name is in the agent's `strengths` list. This supplements (not replaces) the existing numeric scores — keep backward compat.
+3. In `src/cmd/agent.rs`: Show `strengths` in agent show/list output. Add `strengths = []` to the AGENT_TEMPLATE.
+4. Keep ALL existing CapabilityScores code working — this is an additive change, not a replacement.
+
+CONSTRAINTS:
+- Do NOT remove CapabilityScores — it must remain for backward compatibility
+- All existing tests must pass
+- Add 1-2 tests for the new strengths matching in selection.rs
+- cargo check must pass
+"""
+context = ["src/agent/custom.rs", "src/agent/selection.rs", "src/agent/classifier.rs:TaskCategory", "src/cmd/agent.rs:AGENT_TEMPLATE"]
+
+# ─── H1.5: Knowledge relevance scoring ───
+# Score team knowledge entries against task prompt before injection
+[[task]]
+name = "knowledge-scoring"
+agent = "codex"
+prompt = """
+Add knowledge relevance scoring to the team knowledge injection system.
+
+CURRENT STATE:
+- `src/team.rs` has `read_knowledge(team_id)` which reads the entire KNOWLEDGE.md file
+- `src/cmd/run_prompt.rs` (around line 50) injects ALL team knowledge into the prompt when --team is set
+- Knowledge files are markdown with entries like: `- [topic](knowledge/file.md) — description`
+
+DESIRED CHANGE:
+1. In `src/team.rs`: Add `read_knowledge_entries(team_id) -> Vec<KnowledgeEntry>` that parses KNOWLEDGE.md into structured entries:
+   ```rust
+   pub struct KnowledgeEntry {
+       pub topic: String,
+       pub path: Option<String>,
+       pub description: String,
+       pub content: Option<String>,  // loaded from the linked file if it exists
+   }
+   ```
+   Parse lines matching `- [topic](path) — description` or `- [topic] — description`
+   For entries with a path, try to read the linked file content.
+
+2. In `src/cmd/run_prompt.rs`: Replace the raw knowledge injection with scored injection:
+   - Score each entry by keyword overlap with the task prompt (case-insensitive word intersection)
+   - Sort by score descending
+   - Inject only entries with score > 0, up to a max of 5 entries (or all if <= 5 total)
+   - Log: `[aid] Injected {n}/{total} knowledge entries (relevance-filtered)`
+
+3. Add tests in `src/team.rs` for `read_knowledge_entries` parsing.
+
+CONSTRAINTS:
+- Keep `read_knowledge()` function as-is for backward compatibility
+- The scoring is intentionally simple (keyword overlap) — don't over-engineer
+- cargo check and cargo test must pass
+"""
+context = ["src/team.rs:read_knowledge,knowledge_index", "src/cmd/run_prompt.rs:team_id"]
+
+# ─── H1.1: Structured agent output ───
+# Parse agent completion for structured data, store in new DB columns
+[[task]]
+name = "structured-output"
+agent = "codex"
+prompt = """
+Add structured output fields to task completion data.
+
+CURRENT STATE:
+- `src/types.rs` has `CompletionInfo { tokens, status, model, cost_usd }`
+- `src/types.rs` has `Task` struct with those fields
+- `src/store/schema.rs` has the tasks table schema and `row_to_task()` mapper
+- `src/store/mutations.rs` has `update_task_completion()` that saves tokens/duration/model/cost
+- Each agent's `parse_completion()` extracts basic metrics from output
+
+DESIRED CHANGE:
+1. In `src/types.rs`: Add to `CompletionInfo`:
+   ```rust
+   pub exit_code: Option<i32>,
+   ```
+   Add to `Task`:
+   ```rust
+   pub exit_code: Option<i32>,
+   ```
+
+2. In `src/store/schema.rs`:
+   - Add migration in `migrate()`: `ALTER TABLE tasks ADD COLUMN exit_code INTEGER;`
+   - Update `row_to_task()` to read the new column (add it AFTER the last column index)
+
+3. In `src/store/mutations.rs`: Update `update_task_completion()` to accept and store `exit_code`
+
+4. In `src/cmd/run_prompt.rs`: After the agent process finishes, capture the exit code from the process status and pass it to `update_task_completion()`. Look for `run_agent_process_impl` — the exit status is available from the child process.
+
+5. In `src/cmd/show.rs`: Include `exit_code` in the `task_json()` output.
+
+CONSTRAINTS:
+- This is a schema migration — use the existing `ALTER TABLE ... ADD COLUMN` pattern in migrate()
+- Don't break existing row_to_task() — new column should be read with `.ok().flatten()` pattern
+- All existing tests must pass
+- cargo check must pass
+"""
+context = ["src/types.rs:CompletionInfo,Task", "src/store/schema.rs:migrate,row_to_task", "src/store/mutations.rs:update_task_completion"]
+depends_on = []
+
+# ─── H2.4: Knowledge compaction ───
+# Compress knowledge when context is too large
+[[task]]
+name = "knowledge-compaction"
+agent = "codex"
+prompt = """
+Add a knowledge compaction utility that summarizes long knowledge content.
+
+CURRENT STATE:
+- `src/templates.rs` has `estimate_tokens(text)` that estimates token count
+- Team knowledge and memories can be large and waste context window
+- `src/cmd/run_prompt.rs` injects knowledge, memories, context-from, etc.
+
+DESIRED CHANGE:
+1. Create `src/compaction.rs` (new file, < 100 lines):
+   ```rust
+   // Knowledge compaction: truncate or summarize long context blocks.
+   // Exports: compact_text, compact_to_budget.
+
+   /// Truncate text to fit within a token budget, preserving structure.
+   /// Keeps the first `budget` tokens worth of content, adding a truncation marker.
+   pub fn compact_to_budget(text: &str, max_tokens: usize) -> String {
+       let estimated = crate::templates::estimate_tokens(text);
+       if estimated <= max_tokens {
+           return text.to_string();
+       }
+       // Approximate: keep proportional number of lines
+       let lines: Vec<&str> = text.lines().collect();
+       let keep_ratio = max_tokens as f64 / estimated as f64;
+       let keep_lines = ((lines.len() as f64) * keep_ratio).ceil() as usize;
+       let kept = lines[..keep_lines.min(lines.len())].join("\n");
+       format!("{kept}\n\n[... truncated — {estimated} tokens compressed to ~{max_tokens} ...]")
+   }
+   ```
+
+2. In `src/main.rs`: Add `mod compaction;`
+
+3. In `src/cmd/run_prompt.rs`: After all context injections (memories, knowledge, context-from, workspace), check total prompt tokens. If > 30000 tokens, apply compaction to the largest injected block:
+   - Add a function `maybe_compact_prompt(prompt: &str, max_tokens: usize) -> String`
+   - Log: `[aid] Compacted prompt from ~{before} to ~{after} tokens`
+
+4. Add tests in `src/compaction.rs` for `compact_to_budget`.
+
+CONSTRAINTS:
+- Keep it simple — just truncation with markers, not AI summarization
+- The 30000 token threshold should be a const, not hardcoded inline
+- File must be < 100 lines
+- cargo check and cargo test must pass
+"""
+context = ["src/templates.rs:estimate_tokens", "src/cmd/run_prompt.rs:prompt_tokens"]
+depends_on = ["knowledge-scoring"]

@@ -27,6 +27,7 @@ mod store;
 mod store_workgroups;
 mod team;
 mod templates;
+mod compaction;
 mod tui;
 mod types;
 mod usage;
@@ -98,6 +99,9 @@ enum Commands {
         /// Context files to inject
         #[arg(long)]
         context: Vec<String>,
+        /// Inject output from previous task(s) as context
+        #[arg(long)]
+        context_from: Vec<String>,
         /// Methodology skills to inject
         #[arg(long)]
         skill: Vec<String>,
@@ -203,6 +207,9 @@ Batch TOML format:
         /// Stream task status updates to stdout
         #[arg(short, long)]
         stream: bool,
+        /// Output as JSON (machine-parseable)
+        #[arg(long)]
+        json: bool,
     },
     /// Print the most recent completion notifications
     Completions,
@@ -253,6 +260,9 @@ Batch TOML format:
         /// Print raw log file
         #[arg(long)]
         log: bool,
+        /// Output as JSON (machine-parseable)
+        #[arg(long)]
+        json: bool,
         /// Agent for --explain (default: gemini)
         #[arg(long)]
         agent: Option<String>,
@@ -586,6 +596,7 @@ async fn main() -> Result<()> {
             verify,
             retry,
             context,
+            context_from,
             skill,
             template,
             no_skill,
@@ -663,6 +674,7 @@ async fn main() -> Result<()> {
                     read_only,
                     budget,
                     team: team_flag,
+                    context_from,
                     ..Default::default()
                 },
             )
@@ -717,12 +729,13 @@ async fn main() -> Result<()> {
             mine,
             group,
             stream,
+            json,
         } => {
             let group = resolve_group(group);
             if stream {
                 cmd::board_stream::run(&store, running, today, mine, group.as_deref()).await?;
             } else {
-                cmd::board::run(&store, running, today, mine, group.as_deref())?;
+                cmd::board::run(&store, running, today, mine, group.as_deref(), json)?;
             }
         }
         Commands::Completions => {
@@ -756,6 +769,7 @@ async fn main() -> Result<()> {
             output,
             explain,
             log,
+            json,
             agent,
             model,
         } => {
@@ -768,6 +782,7 @@ async fn main() -> Result<()> {
                     output,
                     explain,
                     log,
+                    json,
                     agent,
                     model,
                 },

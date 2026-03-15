@@ -88,6 +88,28 @@ fn custom_category_score(config: &CustomAgentConfig, category: TaskCategory) -> 
     }
 }
 
+fn category_strength_key(category: TaskCategory) -> &'static str {
+    match category {
+        TaskCategory::Research => "research",
+        TaskCategory::SimpleEdit => "simple_edit",
+        TaskCategory::ComplexImpl => "complex_impl",
+        TaskCategory::Frontend => "frontend",
+        TaskCategory::Debugging => "debugging",
+        TaskCategory::Testing => "testing",
+        TaskCategory::Refactoring => "refactoring",
+        TaskCategory::Documentation => "documentation",
+    }
+}
+
+fn custom_strength_bonus(config: &CustomAgentConfig, category: TaskCategory) -> i32 {
+    let key = category_strength_key(category);
+    if config.strengths.iter().any(|s| s.eq_ignore_ascii_case(key)) {
+        5
+    } else {
+        0
+    }
+}
+
 fn custom_command_installed(command: &str) -> bool {
     Command::new("which")
         .arg(command)
@@ -176,6 +198,7 @@ fn select_agent_from(
         .filter(|config| custom_command_installed(&config.command))
         .map(|config| {
             let mut score = custom_category_score(&config, profile.category);
+            score += custom_strength_bonus(&config, profile.category);
             // Boost preferred custom agents from team
             if let Some(tc) = &team {
                 if tc.preferred_agents.iter().any(|a| a.eq_ignore_ascii_case(&config.id)) {
@@ -344,6 +367,56 @@ research = 12
             &opts(None, false), &all(), &[], None,
         );
         assert_eq!(kind, "researcher");
+    }
+
+    #[test]
+    fn custom_agent_strengths_boost_score() {
+        let (_temp, _guard) = isolated();
+        let agents_dir = paths::aid_dir().join("agents");
+        fs::create_dir_all(&agents_dir).unwrap();
+        fs::write(
+            agents_dir.join("strengthy.toml"),
+            r#"[agent]
+id = "strengthy"
+display_name = "Strengthy Agent"
+command = "true"
+strengths = ["research"]
+
+[agent.capabilities]
+research = 6
+"#,
+        )
+        .unwrap();
+        let (kind, _) = select_agent_from(
+            "Explain the authentication flow and compare the docs?",
+            &opts(None, false), &all(), &[], None,
+        );
+        assert_eq!(kind, "strengthy");
+    }
+
+    #[test]
+    fn custom_strengths_not_matching_category() {
+        let (_temp, _guard) = isolated();
+        let agents_dir = paths::aid_dir().join("agents");
+        fs::create_dir_all(&agents_dir).unwrap();
+        fs::write(
+            agents_dir.join("docy.toml"),
+            r#"[agent]
+id = "docy"
+display_name = "Doc Agent"
+command = "true"
+strengths = ["documentation"]
+
+[agent.capabilities]
+research = 6
+"#,
+        )
+        .unwrap();
+        let (kind, _) = select_agent_from(
+            "Explain the authentication flow and compare the docs?",
+            &opts(None, false), &all(), &[], None,
+        );
+        assert_eq!(kind, AgentKind::Gemini.as_str());
     }
     #[test]
     fn complex_tasks_go_to_codex() {

@@ -41,6 +41,14 @@ pub(crate) async fn prepare_retry(
     retry_args.retry = args.retry.saturating_sub(1);
     retry_args.background = false;
     retry_args.parent_task_id = Some(task_id.as_str().to_string());
+    // Reuse existing worktree instead of creating a duplicate
+    if let Some(ref wt) = task.worktree_path {
+        retry_args.worktree = None;
+        if std::path::Path::new(wt).is_dir() {
+            eprintln!("[aid] Retry reusing worktree: {wt}");
+            retry_args.dir = Some(wt.clone());
+        }
+    }
     Ok(Some(retry_args))
 }
 
@@ -91,7 +99,7 @@ mod tests {
             resolved_prompt: None, status: TaskStatus::Failed, parent_task_id: None, workgroup_id: None,
             caller_kind: None, caller_session_id: None, agent_session_id: None, repo_path: None, worktree_path: None,
             worktree_branch: None, log_path: None, output_path: None, tokens: None, prompt_tokens: None,
-            duration_ms: None, model: None, cost_usd: None, created_at: Local::now(),
+            duration_ms: None, model: None, cost_usd: None, exit_code: None, created_at: Local::now(),
             completed_at: None, verify: None, verify_status: VerifyStatus::Skipped, read_only: false, budget: false,
         }
     }

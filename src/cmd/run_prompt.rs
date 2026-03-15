@@ -3,13 +3,16 @@
 // Deps: context, templates, workgroup, skills, watcher, store.
 use anyhow::{Context, Result};
 use chrono::Local;
+use std::collections::HashSet;
 use std::sync::Arc;
 use tokio::process::Command;
-use crate::{agent, skills, store::Store, templates, types::*, watcher};
+use crate::{agent, skills, store::Store, templates, team, types::*, watcher};
+use crate::team::KnowledgeEntry;
 use super::RunArgs;
 
 const VERIFY_RETRY_FEEDBACK: &str =
     "Verification failed. Please fix the compilation/test errors and try again.";
+const PROMPT_TOKEN_LIMIT: usize = 30_000;
 
 pub(super) struct PromptBundle { pub effective_prompt: String, pub context_files: Vec<String>, pub prompt_tokens: i64 }
 
@@ -48,12 +51,40 @@ pub(super) fn build_prompt_bundle(store: &Store, args: &RunArgs, agent_kind: &Ag
 
     // Inject team knowledge if --team was specified
     if let Some(ref team_id) = args.team {
-        if let Some(knowledge) = crate::team::read_knowledge(team_id) {
-            let token_count = templates::estimate_tokens(&knowledge);
-            eprintln!("[aid] Injected team '{team_id}' knowledge (~{token_count} tokens)");
-            effective_prompt = format!("[Team Knowledge — {team_id}]\n{knowledge}\n\n{effective_prompt}");
+        let entries = team::read_knowledge_entries(team_id);
+        let total_entries = entries.len();
+        if total_entries > 0 {
+            let relevant = select_relevant_entries(&entries, &args.prompt);
+            eprintln!("[aid] Injected {}/{} knowledge entries (relevance-filtered)", relevant.len(), total_entries);
+            if !relevant.is_empty() {
+                let knowledge_block = format_knowledge_block(team_id, &relevant);
+                effective_prompt = format!("{knowledge_block}\n\n{effective_prompt}");
+            }
         }
     }
+
+    // Inject output from previous tasks (--context-from)
+    if !args.context_from.is_empty() {
+        if let Some(block) = resolve_context_from(store, &args.context_from)? {
+            let token_count = templates::estimate_tokens(&block);
+            eprintln!("[aid] Injected context from {} task(s) (~{token_count} tokens)", args.context_from.len());
+            effective_prompt = format!("{block}\n\n{effective_prompt}");
+        }
+    }
+
+    // Inject workspace path if workgroup has one
+    if let Some(ref group_id) = args.group {
+        let workspace = crate::paths::workspace_dir(group_id);
+        if workspace.is_dir() {
+            effective_prompt = format!(
+                "[Shared Workspace]\nPath: {}\nUse this directory for intermediate artifacts, shared files, and inter-agent communication.\n\n{effective_prompt}",
+                workspace.display()
+            );
+        }
+    }
+
+    // Compact prompt if it exceeds token budget
+    let effective_prompt = maybe_compact_prompt(&effective_prompt, PROMPT_TOKEN_LIMIT);
     let prompt_tokens = templates::estimate_tokens(&effective_prompt) as i64;
     Ok(PromptBundle { effective_prompt, context_files, prompt_tokens })
 }
@@ -92,6 +123,59 @@ fn format_memory_age(duration: chrono::Duration) -> String {
     }
 }
 
+fn format_knowledge_block(team_id: &str, entries: &[&KnowledgeEntry]) -> String {
+    let blocks: Vec<String> = entries.iter().map(|entry| format_entry_block(entry)).collect();
+    format!("[Team Knowledge — {team_id}]\n{}", blocks.join("\n\n"))
+}
+
+fn format_entry_block(entry: &KnowledgeEntry) -> String {
+    let mut line = String::new();
+    line.push_str("- [");
+    line.push_str(&entry.topic);
+    line.push(']');
+    if let Some(path) = &entry.path {
+        line.push('(');
+        line.push_str(path);
+        line.push(')');
+    }
+    line.push_str(" — ");
+    line.push_str(&entry.description);
+    if let Some(content) = &entry.content {
+        line.push('\n');
+        line.push_str(content);
+    }
+    line
+}
+
+fn select_relevant_entries<'a>(entries: &'a [KnowledgeEntry], prompt: &str) -> Vec<&'a KnowledgeEntry> {
+    let prompt_words = extract_words(prompt);
+    let mut scored: Vec<(usize, &KnowledgeEntry)> = entries
+        .iter()
+        .map(|entry| {
+            let entry_words = extract_words(&format!("{} {}", entry.topic, entry.description));
+            let score = entry_words.iter().filter(|word| prompt_words.contains(*word)).count();
+            (score, entry)
+        })
+        .collect();
+    scored.sort_by(|a, b| b.0.cmp(&a.0));
+    scored
+        .into_iter()
+        .filter(|(score, _)| *score > 0)
+        .take(5)
+        .map(|(_, entry)| entry)
+        .collect()
+}
+
+fn extract_words(value: &str) -> HashSet<String> {
+    value
+        .split(|c: char| !c.is_alphanumeric())
+        .filter_map(|token| {
+            let normalized = token.to_lowercase();
+            if normalized.is_empty() { None } else { Some(normalized) }
+        })
+        .collect()
+}
+
 fn detect_project_path() -> Option<String> {
     std::process::Command::new("git")
         .args(["rev-parse", "--show-toplevel"])
@@ -102,6 +186,50 @@ fn detect_project_path() -> Option<String> {
         } else {
             None
         })
+}
+
+/// Resolve --context-from task IDs: read output/diff from completed tasks.
+fn resolve_context_from(store: &Store, task_ids: &[String]) -> Result<Option<String>> {
+    let mut blocks = Vec::new();
+    for task_id in task_ids {
+        let Some(task) = store.get_task(task_id)? else {
+            eprintln!("[aid] Warning: --context-from task '{task_id}' not found, skipping");
+            continue;
+        };
+        let mut content = String::new();
+        // Try output file first
+        if let Some(ref path) = task.output_path {
+            if let Ok(text) = std::fs::read_to_string(path) {
+                content = text;
+            }
+        }
+        // Fall back to log file
+        if content.is_empty() {
+            if let Some(ref log_path) = task.log_path {
+                if let Ok(text) = std::fs::read_to_string(log_path) {
+                    // Take last 200 lines to avoid huge context
+                    let lines: Vec<&str> = text.lines().collect();
+                    let start = lines.len().saturating_sub(200);
+                    content = lines[start..].join("\n");
+                }
+            }
+        }
+        if content.is_empty() {
+            eprintln!("[aid] Warning: --context-from task '{task_id}' has no output, skipping");
+            continue;
+        }
+        blocks.push(format!(
+            "[Prior Task Result — {} ({}, {})]\n{}",
+            task_id,
+            task.agent_display_name(),
+            task.status.as_str(),
+            content.trim()
+        ));
+    }
+    if blocks.is_empty() {
+        return Ok(None);
+    }
+    Ok(Some(blocks.join("\n\n")))
 }
 
 pub(super) fn resolve_prompt(source: PromptSource<'_>, template: Option<&str>) -> Result<String> {
@@ -210,7 +338,7 @@ pub(super) async fn run_agent_process_impl(
     let duration_ms = start.elapsed().as_millis() as i64;
     let final_model = info.model.as_deref().or(model);
     let cost_usd = info.cost_usd.or_else(|| info.tokens.and_then(|tokens| crate::cost::estimate_cost(tokens, final_model, agent.kind())));
-    store.update_task_completion(task_id.as_str(), info.status, info.tokens, duration_ms, final_model, cost_usd)?;
+    store.update_task_completion(task_id.as_str(), info.status, info.tokens, duration_ms, final_model, cost_usd, info.exit_code)?;
     let duration_str = format_duration(duration_ms);
     let tokens_str = info.tokens.map(|t| format!(", {} tokens", t)).unwrap_or_default();
     let cost_str = if cost_usd.is_some() { format!(", {}", crate::cost::format_cost(cost_usd)) } else { String::new() };
@@ -332,6 +460,40 @@ fn retry_target(task: &Task) -> (Option<String>, Option<String>) {
 fn format_duration(ms: i64) -> String {
     let secs = ms / 1000;
     if secs < 60 { format!("{secs}s") } else { format!("{}m {:02}s", secs / 60, secs % 60) }
+}
+
+fn maybe_compact_prompt(prompt: &str, max_tokens: usize) -> String {
+    let before = templates::estimate_tokens(prompt);
+    if before <= max_tokens {
+        return prompt.to_string();
+    }
+    let candidate = prompt
+        .split("\n\n")
+        .filter_map(|section| {
+            let trimmed = section.trim_start();
+            if trimmed.is_empty() || trimmed.starts_with("[Task]") {
+                return None;
+            }
+            if trimmed.starts_with('[') || trimmed.starts_with("---") {
+                Some((section, templates::estimate_tokens(section)))
+            } else {
+                None
+            }
+        })
+        .max_by_key(|(_, tokens)| *tokens);
+    let Some((section, section_tokens)) = candidate else {
+        return prompt.to_string();
+    };
+    let excess = before.saturating_sub(max_tokens);
+    let target_tokens = section_tokens.saturating_sub(excess);
+    let compacted = crate::compaction::compact_text(section, target_tokens);
+    if compacted == section {
+        return prompt.to_string();
+    }
+    let result = prompt.replacen(section, &compacted, 1);
+    let after = templates::estimate_tokens(&result);
+    eprintln!("[aid] Compacted prompt from ~{before} to ~{after} tokens");
+    result
 }
 
 #[cfg(test)]

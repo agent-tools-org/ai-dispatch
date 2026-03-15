@@ -86,21 +86,23 @@ fn update_completion() {
     store
         .update_task_completion(
             "t-0002",
-            TaskStatus::Done,
-            Some(3000),
-            47000,
-            Some("gemini-2.5-flash"),
-            Some(0.0038),
-        )
-        .unwrap();
+        TaskStatus::Done,
+        Some(3000),
+        47000,
+        Some("gemini-2.5-flash"),
+        Some(0.0038),
+        None,
+    )
+    .unwrap();
 
     let loaded = store.get_task("t-0002").unwrap().unwrap();
     assert_eq!(loaded.status, TaskStatus::Done);
-    assert_eq!(loaded.tokens, Some(3000));
-    assert_eq!(loaded.duration_ms, Some(47000));
-    assert_eq!(loaded.model.as_deref(), Some("gemini-2.5-flash"));
-    assert!((loaded.cost_usd.unwrap() - 0.0038).abs() < 0.0001);
-    assert!(loaded.completed_at.is_some());
+        assert_eq!(loaded.tokens, Some(3000));
+        assert_eq!(loaded.duration_ms, Some(47000));
+        assert_eq!(loaded.model.as_deref(), Some("gemini-2.5-flash"));
+        assert!((loaded.cost_usd.unwrap() - 0.0038).abs() < 0.0001);
+        assert_eq!(loaded.exit_code, None);
+        assert!(loaded.completed_at.is_some());
 }
 
 #[test]

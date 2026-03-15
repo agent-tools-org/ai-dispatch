@@ -76,6 +76,7 @@ impl super::Agent for CodexAgent {
             status: TaskStatus::Done,
             model: None,
             cost_usd: None,
+            exit_code: None,
         }
     }
 }

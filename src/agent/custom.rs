@@ -40,6 +40,15 @@ pub struct CustomAgentConfig {
     pub output_format: String,
     #[serde(default)]
     pub capabilities: CapabilityScores,
+    /// Trust tier: "local" (runs locally), "api" (sends prompts to third-party API)
+    #[serde(default = "default_trust_tier")]
+    pub trust_tier: String,
+    #[serde(default)]
+    pub strengths: Vec<String>,
+}
+
+fn default_trust_tier() -> String {
+    "api".to_string()
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -182,6 +191,7 @@ impl super::Agent for CustomAgent {
             status: TaskStatus::Done,
             model: None,
             cost_usd: None,
+            exit_code: None,
         }
     }
 }
@@ -223,6 +233,8 @@ mod tests {
             streaming: false,
             output_format: default_output_format(),
             capabilities: CapabilityScores::default(),
+            trust_tier: default_trust_tier(),
+            strengths: Vec::new(),
         }
     }
 

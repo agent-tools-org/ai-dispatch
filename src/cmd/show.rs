@@ -2,6 +2,7 @@
 // Combines events, diff, output, log, and AI explanation into one command.
 
 use anyhow::Result;
+use serde_json::json;
 use std::path::Path;
 use std::sync::Arc;
 
@@ -9,7 +10,7 @@ use crate::board::render_task_detail;
 use crate::cmd;
 use crate::paths;
 use crate::store::Store;
-use crate::types::{Task, TaskStatus};
+use crate::types::{Task, TaskId, TaskStatus};
 
 #[path = "show_output.rs"]
 mod show_output;
@@ -26,6 +27,7 @@ pub struct ShowArgs {
     pub output: bool,
     pub explain: bool,
     pub log: bool,
+    pub json: bool,
     pub agent: Option<String>,
     pub model: Option<String>,
 }
@@ -40,6 +42,11 @@ pub enum ShowMode {
 }
 
 pub async fn run(store: Arc<Store>, args: ShowArgs) -> Result<()> {
+    if args.json {
+        let text = task_json(&store, &args.task_id)?;
+        println!("{text}");
+        return Ok(());
+    }
     if args.context {
         let text = render_mode_text(&store, &args.task_id, ShowMode::Context)?;
         print!("{text}");
@@ -66,6 +73,50 @@ pub async fn run(store: Arc<Store>, args: ShowArgs) -> Result<()> {
         );
     }
     Ok(())
+}
+
+/// Serialize task as JSON with events and metrics.
+fn task_json(store: &Arc<Store>, task_id: &str) -> Result<String> {
+    let task = load_task(store, task_id)?;
+    let events = store.get_events(task_id)?;
+    let event_list: Vec<serde_json::Value> = events
+        .iter()
+        .map(|e| {
+            serde_json::json!({
+                "timestamp": e.timestamp.to_rfc3339(),
+                "type": e.event_kind.as_str(),
+                "detail": e.detail,
+                "metadata": e.metadata,
+            })
+        })
+        .collect();
+    let payload = serde_json::json!({
+        "id": task.id.as_str(),
+        "agent": task.agent_display_name(),
+        "custom_agent": task.custom_agent_name,
+        "status": task.status.as_str(),
+        "prompt": task.prompt,
+        "model": task.model,
+        "tokens": task.tokens,
+        "prompt_tokens": task.prompt_tokens,
+        "duration_ms": task.duration_ms,
+        "cost_usd": task.cost_usd,
+        "workgroup_id": task.workgroup_id,
+        "parent_task_id": task.parent_task_id,
+        "worktree_branch": task.worktree_branch,
+        "worktree_path": task.worktree_path,
+        "repo_path": task.repo_path,
+        "output_path": task.output_path,
+        "verify": task.verify,
+        "exit_code": task.exit_code,
+        "verify_status": task.verify_status.as_str(),
+        "read_only": task.read_only,
+        "budget": task.budget,
+        "created_at": task.created_at.to_rfc3339(),
+        "completed_at": task.completed_at.map(|dt| dt.to_rfc3339()),
+        "events": event_list,
+    });
+    serde_json::to_string(&payload).map_err(Into::into)
 }
 
 pub fn render_mode_text(store: &Arc<Store>, task_id: &str, mode: ShowMode) -> Result<String> {
@@ -199,6 +250,26 @@ fn inplace_diff_stat(repo_path: &str) -> Option<String> {
     }
 }
 
+pub(crate) fn task_hook_json(
+    task_id: &TaskId,
+    agent: &str,
+    status: TaskStatus,
+    prompt: &str,
+    worktree: Option<&str>,
+    dir: Option<&str>,
+    exit_code: Option<i32>,
+) -> serde_json::Value {
+    json!({
+        "task_id": task_id.as_str(),
+        "agent": agent,
+        "status": status.as_str(),
+        "prompt": prompt,
+        "worktree": worktree,
+        "dir": dir,
+        "exit_code": exit_code,
+    })
+}
+
 fn stderr_tail(task_id: &str) -> Option<String> {
     let content = std::fs::read_to_string(paths::stderr_path(task_id)).ok()?;
     if content.is_empty() {
@@ -248,6 +319,7 @@ mod tests {
             duration_ms: None,
             model: None,
             cost_usd: None,
+            exit_code: None,
             created_at: Local::now(),
             completed_at: None,
             verify: None,
@@ -295,6 +367,7 @@ mod tests {
             duration_ms: None,
             model: None,
             cost_usd: None,
+            exit_code: None,
             created_at: Local::now(),
             completed_at: None,
             verify: None,

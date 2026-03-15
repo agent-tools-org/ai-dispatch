@@ -118,6 +118,7 @@ fn task_to_run_args(task: &batch::BatchTask, background: bool, store: &Arc<Store
         read_only: task.read_only,
         budget: task.budget,
         team: task.team.clone(),
+        context_from: task.context_from.clone().unwrap_or_default(),
         ..Default::default()
     }
 }
@@ -351,6 +352,7 @@ mod tests {
                 skills: None,
                 hooks: None,
                 depends_on: None,
+                context_from: None,
                 fallback: None,
                 read_only: false,
                 budget: false,

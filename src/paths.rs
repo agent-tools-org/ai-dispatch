@@ -15,10 +15,6 @@ pub fn aid_dir() -> PathBuf {
     dirs_home().join(".aid")
 }
 
-pub fn workspace_dir(group_id: &str) -> PathBuf {
-    aid_dir().join("workgroups").join(group_id)
-}
-
 pub fn logs_dir() -> PathBuf {
     aid_dir().join("logs")
 }

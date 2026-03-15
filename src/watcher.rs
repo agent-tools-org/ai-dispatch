@@ -254,6 +254,7 @@ pub(crate) fn handle_streaming_line(
     if let Some(finding) = extract_finding_detail(line) {
         if let Some(group_id) = workgroup_id {
             let _ = store.insert_finding(group_id, &finding, Some(task_id.as_str()));
+            append_to_broadcast(group_id, task_id.as_str(), &finding);
         }
     }
     if let Some(event) = parse_milestone_event(task_id, line) {
@@ -282,6 +283,7 @@ pub(crate) fn handle_streaming_line_with_session(
     if let Some(finding) = extract_finding_detail(line) {
         if let Some(group_id) = workgroup_id {
             let _ = store.insert_finding(group_id, &finding, Some(task_id.as_str()));
+            append_to_broadcast(group_id, task_id.as_str(), &finding);
         }
     }
     if let Some(event) = parse_milestone_event(task_id, line) {
@@ -324,6 +326,11 @@ fn extract_milestone_detail(line: &str) -> Option<String> {
         && let Some(detail) = extract_milestone_from_json(&value)
     {
         return Some(detail);
+    }
+    // If line looks like JSON but failed parsing, tag is inside a string value — skip
+    let trimmed = line.trim();
+    if trimmed.starts_with('{') && trimmed.ends_with('}') {
+        return None;
     }
     extract_milestone_from_text(line)
 }
@@ -387,7 +394,24 @@ fn extract_finding_detail(line: &str) -> Option<String> {
     {
         return Some(detail);
     }
+    let trimmed = line.trim();
+    if trimmed.starts_with('{') && trimmed.ends_with('}') {
+        return None;
+    }
     extract_finding_from_text(line)
+}
+
+fn append_to_broadcast(workgroup_id: &str, task_id: &str, content: &str) {
+    let broadcast_path = crate::paths::workspace_dir(workgroup_id).join("broadcast.md");
+    if let Ok(mut file) = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&broadcast_path)
+    {
+        use std::io::Write;
+        let timestamp = Local::now().format("%H:%M:%S");
+        let _ = writeln!(file, "- [{timestamp}] ({task_id}) {content}");
+    }
 }
 
 fn extract_finding_from_json(value: &serde_json::Value) -> Option<String> {

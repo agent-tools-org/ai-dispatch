@@ -17,7 +17,7 @@ mod show_output;
 pub use show_output::{diff_text, log_text, output_text, output_text_for_task};
 #[allow(unused_imports)]
 pub use show_output::read_task_output;
-pub(crate) use show_output::{diff_stat, read_tail};
+pub(crate) use show_output::{diff_stat, read_tail, worktree_diff};
 
 pub struct ShowArgs {
     pub task_id: String,

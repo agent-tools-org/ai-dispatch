@@ -30,6 +30,18 @@ pub fn diff_text(store: &Arc<Store>, task_id: &str) -> Result<String> {
     out.push_str("\n--- Artifacts ---\n  (no worktree diff or output file available)\n");
     Ok(out)
 }
+
+pub(crate) fn worktree_diff(task: &Task, task_id: &str) -> Result<String> {
+    if let Some(ref worktree_path) = task.worktree_path
+        && Path::new(worktree_path).exists()
+    {
+        return Ok(format_diff_output(worktree_path));
+    }
+    if let Some(fallback) = diff_artifact_fallback(task, task_id)? {
+        return Ok(fallback);
+    }
+    Ok("\n--- Artifacts ---\n  (no worktree diff or output file available)\n".to_string())
+}
 fn format_diff_header(task: &Task) -> String {
     let mut out = String::new();
     out.push_str(&format!("=== Review: {} ===\n", task.id));

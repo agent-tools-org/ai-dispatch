@@ -22,6 +22,7 @@ pub mod retry;
 pub mod retry_logic;
 pub mod run;
 pub mod show;
+pub mod export;
 pub mod store;
 pub mod usage;
 pub mod wait;

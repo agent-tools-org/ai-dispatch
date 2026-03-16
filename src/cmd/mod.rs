@@ -39,3 +39,4 @@ pub mod wait;
 pub mod watch;
 pub mod worktree;
 pub mod tree;
+pub mod experiment_types;

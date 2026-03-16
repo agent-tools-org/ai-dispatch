@@ -27,6 +27,9 @@ pub struct TeamConfig {
     pub default_agent: Option<String>,
     #[serde(default)]
     pub overrides: HashMap<String, CapabilityOverrides>,
+    /// Always-injected behavioral constraints — no relevance filtering.
+    #[serde(default)]
+    pub rules: Vec<String>,
 }
 
 #[derive(Debug, Clone, Deserialize, Default)]

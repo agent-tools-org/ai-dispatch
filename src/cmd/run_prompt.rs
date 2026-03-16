@@ -73,8 +73,18 @@ pub(super) fn build_prompt_bundle(store: &Store, args: &RunArgs, agent_kind: &Ag
         injected_memory_ids = memory_ids;
     }
 
-    // Inject team knowledge if --team was specified
+    // Inject team rules + knowledge if --team was specified
     if let Some(ref team_id) = args.team {
+        if let Some(tc) = team::resolve_team(team_id) {
+            if !tc.rules.is_empty() {
+                let rules_block = tc.rules.iter()
+                    .map(|r| format!("- {r}"))
+                    .collect::<Vec<_>>()
+                    .join("\n");
+                effective_prompt = format!("<aid-team-rules>\n{rules_block}\n</aid-team-rules>\n\n{effective_prompt}");
+                eprintln!("[aid] Injected {} team rule(s)", tc.rules.len());
+            }
+        }
         let entries = team::read_knowledge_entries(team_id);
         let total_entries = entries.len();
         if total_entries > 0 {

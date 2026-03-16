@@ -235,10 +235,14 @@ pub(crate) fn coding_fallback_for(agent: &AgentKind) -> Option<AgentKind> {
 #[cfg(test)]
 mod tests {
     use super::select_agent_from;
+    use super::selection_scoring::{CandidateContext, score_for};
     use crate::agent::RunOpts;
+    use crate::agent::classifier;
     use crate::paths::{self, AidHomeGuard};
     use crate::store::Store;
+    use crate::team::{CapabilityOverrides, TeamConfig};
     use crate::types::AgentKind;
+    use std::collections::HashMap;
     use std::fs;
     use rusqlite::params;
     use tempfile::TempDir;
@@ -547,6 +551,185 @@ research = 6
         );
         assert!(!reason.contains("similar tasks"));
     }
+
+    #[test]
+    fn team_override_boosts_score() {
+        let prompt = "rename src/types.rs field name to task_name";
+        let normalized = prompt.trim().to_lowercase();
+        let profile = classifier::classify(
+            prompt,
+            classifier::count_file_mentions(&normalized),
+            prompt.chars().count(),
+        );
+        let history_map: HashMap<AgentKind, (f64, usize)> = HashMap::new();
+        let avg_cost_map: HashMap<AgentKind, f64> = HashMap::new();
+        let base_context = CandidateContext {
+            profile: &profile,
+            team: None,
+            history_map: &history_map,
+            avg_cost_map: &avg_cost_map,
+            team_default: None,
+            budget: false,
+        };
+        let mut overrides = HashMap::new();
+        overrides.insert(
+            "opencode".to_string(),
+            CapabilityOverrides {
+                simple_edit: Some(10),
+                ..Default::default()
+            },
+        );
+        let team = TeamConfig {
+            id: "override".to_string(),
+            display_name: "Override".to_string(),
+            description: String::new(),
+            preferred_agents: vec![],
+            default_agent: None,
+            overrides,
+        };
+        let team_context = CandidateContext {
+            profile: &profile,
+            team: Some(&team),
+            history_map: &history_map,
+            avg_cost_map: &avg_cost_map,
+            team_default: None,
+            budget: false,
+        };
+        let base_score = score_for(&base_context, AgentKind::OpenCode);
+        let overridden_score = score_for(&team_context, AgentKind::OpenCode);
+        assert!(overridden_score > base_score);
+    }
+
+    #[test]
+    fn team_preferred_agents_boost() {
+        let prompt = "rename src/types.rs field name to task_name";
+        let normalized = prompt.trim().to_lowercase();
+        let profile = classifier::classify(
+            prompt,
+            classifier::count_file_mentions(&normalized),
+            prompt.chars().count(),
+        );
+        let history_map: HashMap<AgentKind, (f64, usize)> = HashMap::new();
+        let avg_cost_map: HashMap<AgentKind, f64> = HashMap::new();
+        let base_context = CandidateContext {
+            profile: &profile,
+            team: None,
+            history_map: &history_map,
+            avg_cost_map: &avg_cost_map,
+            team_default: None,
+            budget: false,
+        };
+        let team = TeamConfig {
+            id: "preferred".to_string(),
+            display_name: "Preferred".to_string(),
+            description: String::new(),
+            preferred_agents: vec!["kilo".to_string()],
+            default_agent: None,
+            overrides: HashMap::new(),
+        };
+        let preferred_context = CandidateContext {
+            profile: &profile,
+            team: Some(&team),
+            history_map: &history_map,
+            avg_cost_map: &avg_cost_map,
+            team_default: None,
+            budget: false,
+        };
+        let base_score = score_for(&base_context, AgentKind::Kilo);
+        let boosted_score = score_for(&preferred_context, AgentKind::Kilo);
+        assert!((boosted_score - base_score - 3.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn team_default_agent_tiebreaker() {
+        let (_temp, _guard) = isolated();
+        let store = Store::open_memory().unwrap();
+        let mut overrides = HashMap::new();
+        overrides.insert(
+            "cursor".to_string(),
+            CapabilityOverrides {
+                simple_edit: Some(5),
+                ..Default::default()
+            },
+        );
+        overrides.insert(
+            "codex".to_string(),
+            CapabilityOverrides {
+                simple_edit: Some(5),
+                ..Default::default()
+            },
+        );
+        let team = TeamConfig {
+            id: "default".to_string(),
+            display_name: "Default".to_string(),
+            description: String::new(),
+            preferred_agents: vec![],
+            default_agent: Some("cursor".to_string()),
+            overrides,
+        };
+        let (kind, _) = select_agent_from(
+            "rename src/types.rs field name to task_name",
+            &opts(None, false),
+            &[AgentKind::Cursor, AgentKind::Codex],
+            &store,
+            Some(&team),
+        );
+        assert_eq!(kind, AgentKind::Cursor.as_str());
+    }
+
+    #[test]
+    fn team_does_not_block_non_preferred() {
+        let (_temp, _guard) = isolated();
+        let store = Store::open_memory().unwrap();
+        let team = TeamConfig {
+            id: "preferred".to_string(),
+            display_name: "Preferred".to_string(),
+            description: String::new(),
+            preferred_agents: vec!["kilo".to_string()],
+            default_agent: None,
+            overrides: HashMap::new(),
+        };
+        let prompt = "Implement a retry-aware test suite across src/main.rs and src/cmd/run.rs. Add validation coverage.";
+        let (kind, _) = select_agent_from(
+            prompt,
+            &opts(Some("src"), false),
+            &[AgentKind::Codex, AgentKind::Cursor],
+            &store,
+            Some(&team),
+        );
+        assert_eq!(kind, AgentKind::Codex.as_str());
+    }
+
+    #[test]
+    fn team_override_overrides_base_score() {
+        let (_temp, _guard) = isolated();
+        let store = Store::open_memory().unwrap();
+        let mut overrides = HashMap::new();
+        overrides.insert(
+            "gemini".to_string(),
+            CapabilityOverrides {
+                simple_edit: Some(10),
+                ..Default::default()
+            },
+        );
+        let team = TeamConfig {
+            id: "override-gemini".to_string(),
+            display_name: "Override Gemini".to_string(),
+            description: String::new(),
+            preferred_agents: vec![],
+            default_agent: None,
+            overrides,
+        };
+        let (kind, _) = select_agent_from(
+            "rename src/types.rs field name to task_name",
+            &opts(None, false),
+            &[AgentKind::Gemini, AgentKind::OpenCode],
+            &store,
+            Some(&team),
+        );
+        assert_eq!(kind, AgentKind::Gemini.as_str());
+    }
+
     #[test]
     fn cost_efficiency_calculates_ratio() {
         let value = super::cost_efficiency(9.0, 1.5);

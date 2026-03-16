@@ -6,6 +6,7 @@ pub mod charts;
 pub mod dashboard;
 pub mod metrics;
 pub mod multipane;
+pub mod tree_data;
 pub mod ui;
 
 use anyhow::Result;

@@ -2,13 +2,23 @@
 // Centralizes all path logic so nothing hardcodes paths.
 
 use anyhow::Result;
-#[cfg(test)]
-use std::ffi::OsString;
 use std::path::PathBuf;
 #[cfg(test)]
-use std::sync::{LazyLock, Mutex};
+use std::cell::RefCell;
+
+#[cfg(test)]
+thread_local! {
+    static AID_HOME_OVERRIDE: RefCell<Option<PathBuf>> = const { RefCell::new(None) };
+}
 
 pub fn aid_dir() -> PathBuf {
+    #[cfg(test)]
+    {
+        let maybe = AID_HOME_OVERRIDE.with(|cell| cell.borrow().clone());
+        if let Some(p) = maybe {
+            return p;
+        }
+    }
     if let Ok(custom) = std::env::var("AID_HOME") {
         return PathBuf::from(custom);
     }
@@ -69,34 +79,23 @@ fn dirs_home() -> PathBuf {
 }
 
 #[cfg(test)]
-pub static AID_HOME_LOCK: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
-
-#[cfg(test)]
 pub struct AidHomeGuard {
-    _lock: std::sync::MutexGuard<'static, ()>,
-    previous: Option<OsString>,
+    previous: Option<PathBuf>,
 }
 
 #[cfg(test)]
 impl AidHomeGuard {
     pub fn set(path: &std::path::Path) -> Self {
-        let lock = AID_HOME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
-        let previous = std::env::var_os("AID_HOME");
-        unsafe { std::env::set_var("AID_HOME", path) };
-        Self {
-            _lock: lock,
-            previous,
-        }
+        let previous = AID_HOME_OVERRIDE.with(|cell| cell.borrow().clone());
+        AID_HOME_OVERRIDE.with(|cell| *cell.borrow_mut() = Some(path.to_path_buf()));
+        Self { previous }
     }
 }
 
 #[cfg(test)]
 impl Drop for AidHomeGuard {
     fn drop(&mut self) {
-        match &self.previous {
-            Some(path) => unsafe { std::env::set_var("AID_HOME", path) },
-            None => unsafe { std::env::remove_var("AID_HOME") },
-        }
+        AID_HOME_OVERRIDE.with(|cell| *cell.borrow_mut() = self.previous.take());
     }
 }
 
@@ -112,7 +111,6 @@ mod tests {
 
     #[test]
     fn paths_are_under_aid_dir() {
-        let _lock = AID_HOME_LOCK.lock().unwrap();
         let base = aid_dir();
         assert!(db_path().starts_with(&base));
         assert!(config_path().starts_with(&base));
@@ -126,7 +124,6 @@ mod tests {
 
     #[test]
     fn steer_signal_path_in_jobs() {
-        let _lock = AID_HOME_LOCK.lock().unwrap();
         let _guard = AidHomeGuard::set(std::path::Path::new("/tmp/aid-test"));
         let path = steer_signal_path("t-steer");
         assert!(path.ends_with("jobs/t-steer.steer"));

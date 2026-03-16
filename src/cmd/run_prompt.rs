@@ -8,7 +8,7 @@ use std::path::{Component, Path, PathBuf};
 use std::sync::Arc;
 use tokio::process::Command;
 use crate::{
-    agent, skills, store::Store, templates, team, types::*, watcher, worktree,
+    agent, project, skills, store::Store, templates, team, types::*, watcher, worktree,
 };
 use crate::cmd::summary::{format_summary_for_injection, CompletionSummary};
 use crate::store::TaskCompletionUpdate;
@@ -94,6 +94,32 @@ pub(super) fn build_prompt_bundle(store: &Store, args: &RunArgs, agent_kind: &Ag
                 let knowledge_block = prompt_context::format_knowledge_block(team_id, &relevant);
                 effective_prompt = format!("{knowledge_block}\n\n{effective_prompt}");
             }
+        }
+    }
+
+    // Inject project rules + knowledge if a project was detected
+    if let Some(pc) = project::detect_project() {
+        let rules_count = pc.rules.len();
+        if !pc.rules.is_empty() {
+            let rules_block = pc.rules.iter()
+                .map(|r| format!("- {r}"))
+                .collect::<Vec<_>>()
+                .join("\n");
+            effective_prompt = format!("<aid-project-rules>\n{rules_block}\n</aid-project-rules>\n\n{effective_prompt}");
+        }
+        let knowledge_entries = prompt_context::detect_project_path()
+            .map(|path| project::read_project_knowledge(std::path::Path::new(&path)))
+            .unwrap_or_default();
+        let total_knowledge = knowledge_entries.len();
+        if total_knowledge > 0 {
+            let relevant = prompt_context::select_relevant_entries(&knowledge_entries, &args.prompt);
+            if !relevant.is_empty() {
+                let knowledge_block = prompt_context::format_knowledge_block(&pc.id, &relevant);
+                effective_prompt = format!("{knowledge_block}\n\n{effective_prompt}");
+            }
+            eprintln!("[aid] Project '{}' detected: {} rule(s), {}/{} knowledge entries", pc.id, rules_count, relevant.len(), total_knowledge);
+        } else if rules_count > 0 {
+            eprintln!("[aid] Project '{}' detected: {} rule(s)", pc.id, rules_count);
         }
     }
 

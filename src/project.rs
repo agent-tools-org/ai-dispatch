@@ -4,8 +4,8 @@
 
 use anyhow::{Context, Result};
 use serde::Deserialize;
-use std::{env, fs};
 use std::path::{Path, PathBuf};
+use std::{env, fs};
 
 use crate::team::{self, KnowledgeEntry};
 
@@ -104,10 +104,10 @@ pub fn detect_project() -> Option<ProjectConfig> {
 }
 
 pub fn load_project(path: &Path) -> Result<ProjectConfig> {
-    let contents = fs::read_to_string(path)
-        .with_context(|| format!("Failed to read {}", path.display()))?;
-    let file: ProjectFile = toml::from_str(&contents)
-        .with_context(|| format!("Failed to parse {}", path.display()))?;
+    let contents =
+        fs::read_to_string(path).with_context(|| format!("Failed to read {}", path.display()))?;
+    let file: ProjectFile =
+        toml::from_str(&contents).with_context(|| format!("Failed to parse {}", path.display()))?;
     let mut config = file.project;
     apply_profile(&mut config);
     Ok(config)
@@ -196,11 +196,7 @@ fn apply_production_profile(config: &mut ProjectConfig) {
 }
 
 fn default_production_verify(config: &ProjectConfig) -> String {
-    let language = config
-        .language
-        .as_deref()
-        .unwrap_or("")
-        .to_lowercase();
+    let language = config.language.as_deref().unwrap_or("").to_lowercase();
     if language == "typescript" || language == "javascript" || language == "node" {
         "npm test".to_string()
     } else {
@@ -302,7 +298,7 @@ budget.cost_limit_usd = 99.5
     }
 
     #[test]
-    fn read_project_knowledge() {
+    fn test_read_project_knowledge() {
         let dir = TempDir::new().unwrap();
         let git_root = dir.path();
         fs::create_dir_all(git_root.join(".git")).unwrap();

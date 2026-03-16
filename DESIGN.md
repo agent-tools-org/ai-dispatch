@@ -1,6 +1,6 @@
 # ai-dispatch — Multi-AI CLI Team Orchestrator
 
-## Current Status (v7.5.0)
+## Current Status (v7.9.1)
 
 **Foundation (v1.x–v3.x):** Task dispatch, batch parallel, worktree isolation, retry chains, webhook notifications, prompt templates, TUI multipane with charts, modular architecture, agent benchmark, zombie cleanup, UTF-8 safety, task classifier with capability matrix.
 
@@ -12,7 +12,21 @@
 - Empty diff guard, foreground task timeout, `--cascade` model cascade
 - Conditional batch chains (`on_success`/`on_fail`/`conditional` in TOML)
 - Episodic memory with append-only versioning, success-weighted injection, multi-query search
-- **v7.5:** Budget-aware cost-efficiency routing (PILOT-inspired `quality/(1+avg_cost)` formula), `--judge` flag for automatic AI review with auto-retry
+- Budget-aware cost-efficiency routing, `--judge` flag for automatic AI review with auto-retry
+
+**Collective Intelligence (v7.6–v7.7):**
+- `--parent` for thread composition, completion summary generation, sibling context injection
+- `--peer-review` scored critique, `--metric` for best-of quality measurement
+
+**Autonomous Experiments + TUI (v7.8):**
+- `aid experiment run` metric-driven dispatch loop, TUI tree view with workgroup grouping
+- Rolling context compression, batch milestone SQL, throttled metrics
+
+**Code Health + Performance (v7.9):**
+- File-split refactoring (run_bestof.rs, selection_scoring.rs, prompt_context.rs extracted)
+- Milestone tag stripping from agent output
+- Binary size: 9.5MB → 3.1MB (strip + LTO + ureq→curl)
+- SQLite indexes on hot query paths (tasks, events), opt-level="z"
 
 State is stored under `~/.aid` by default, or `AID_HOME` when overridden.
 
@@ -410,24 +424,13 @@ ai-dispatch/
 
 ## Roadmap
 
-### v7.5 P1 (next)
-- Entity resolution on memory extract (self-contained searchable memories)
-- Surprise-based memory filtering (skip trivial memories)
-- Best-of-n cheap dispatch (`--best-of 3`)
-- Structured state deltas (parsed agent output)
-- Cross-session learning (routing hints from history)
+### v8.0 — Programmable Orchestration (next)
+- Task steering: `aid steer <task-id> "message"` — mid-flight course correction via PTY
+- Pre-dispatch plan validation — lightweight prompt quality check before dispatch
+- `aid merge --group` bulk merge — cherry-pick all completed tasks in a workgroup
+- Structured state deltas — parse agent output into structured file-change summaries
 
-### v7.6 — Shared Context Threads
-- `aid run --parent <task-id>` sub-threads with result flow
-- Auto-generated thread completion summaries
-
-### v7.7 — Programmable Orchestration
-- Scripted batch dispatch (TypeScript/Rhai)
-- `aid steer <task-id>` mid-flight course correction
-- Dynamic topology selection, pre-dispatch validation
-
-### v7.8 — Autonomous Experiment Loop
-- `aid experiment --metric --command --direction` with auto-commit/revert
-
-### v8.0 — Ecosystem Maturity
-- `aid store publish`, daemon mode, agent protocol v2
+### v8.1 — Ecosystem Maturity
+- `aid store publish` — publish local agent/skill packages to community store
+- Daemon mode — `aid daemon` as persistent service via Unix socket
+- Agent protocol v2 — unified structured event protocol for all agents

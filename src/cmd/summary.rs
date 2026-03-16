@@ -54,6 +54,20 @@ pub fn format_summary_for_injection(summary: &CompletionSummary) -> String {
     )
 }
 
+pub fn format_sibling_summaries(summaries: &[CompletionSummary]) -> String {
+    if summaries.is_empty() { return String::new(); }
+    let mut lines = vec!["## Sibling Task Context".to_string()];
+    for s in summaries {
+        lines.push(format!(
+            "- {} ({}): {} | Files: {}",
+            s.task_id, s.agent, s.status,
+            if s.files_changed.is_empty() { "(none)".to_string() }
+            else { s.files_changed.join(", ") }
+        ));
+    }
+    lines.join("\n")
+}
+
 fn format_file_list(files: &[String]) -> String {
     if files.is_empty() {
         "no changes detected".to_string()
@@ -144,5 +158,22 @@ mod tests {
         let diff = "diff --git a/src/main.rs b/src/main.rs\ndiff --git a/tests/helpers.rs b/tests/helpers.rs";
         let files = extract_files_from_diff(diff);
         assert_eq!(files, vec!["src/main.rs", "tests/helpers.rs"]);
+    }
+    #[test]
+    fn format_sibling_summaries_renders_list() {
+        let summaries = vec![
+            CompletionSummary { task_id: "t-1".into(), agent: "codex".into(), status: "done".into(), files_changed: vec!["src/a.rs".into()], summary_text: "...".into(), duration_secs: Some(60), token_count: None },
+            CompletionSummary { task_id: "t-2".into(), agent: "gemini".into(), status: "done".into(), files_changed: vec![], summary_text: "...".into(), duration_secs: None, token_count: None },
+        ];
+        let output = format_sibling_summaries(&summaries);
+        assert!(output.contains("Sibling Task Context"));
+        assert!(output.contains("t-1"));
+        assert!(output.contains("src/a.rs"));
+        assert!(output.contains("(none)"));
+    }
+
+    #[test]
+    fn format_sibling_summaries_empty_returns_empty() {
+        assert!(format_sibling_summaries(&[]).is_empty());
     }
 }

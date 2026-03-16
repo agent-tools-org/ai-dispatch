@@ -179,7 +179,7 @@ pub async fn run(store: Arc<Store>, args: RunArgs) -> Result<TaskId> {
     };
     store.insert_task(&task)?;
     let before_worktree = task.worktree_path.clone();
-    let prompt_bundle = run_prompt::build_prompt_bundle(&store, &args, &agent_kind, workgroup.as_ref(), &requested_skills)?;
+    let prompt_bundle = run_prompt::build_prompt_bundle(&store, &args, &agent_kind, workgroup.as_ref(), &requested_skills, task_id.as_str())?;
     store.update_resolved_prompt(task_id.as_str(), &prompt_bundle.effective_prompt)?;
     store.update_prompt_tokens(task_id.as_str(), prompt_bundle.prompt_tokens)?;
     let opts = RunOpts {

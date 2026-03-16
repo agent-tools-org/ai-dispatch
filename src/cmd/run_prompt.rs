@@ -24,7 +24,7 @@ pub(super) struct PromptBundle { pub effective_prompt: String, pub context_files
 #[allow(dead_code)]
 pub(super) enum PromptSource<'a> { Inline(&'a str), File(&'a str) }
 
-pub(super) fn build_prompt_bundle(store: &Store, args: &RunArgs, agent_kind: &AgentKind, workgroup: Option<&Workgroup>, requested_skills: &[String]) -> Result<PromptBundle> {
+pub(super) fn build_prompt_bundle(store: &Store, args: &RunArgs, agent_kind: &AgentKind, workgroup: Option<&Workgroup>, requested_skills: &[String], current_task_id: &str) -> Result<PromptBundle> {
     let (file_context, context_files) = build_context_flags(agent_kind, &args.context)?;
     let milestones = if let Some(group_id) = args.group.as_deref() {
         store.get_workgroup_milestones(group_id)?
@@ -56,6 +56,13 @@ pub(super) fn build_prompt_bundle(store: &Store, args: &RunArgs, agent_kind: &Ag
     {
         let summary_block = format_summary_for_injection(&summary);
         effective_prompt = format!("{summary_block}\n\n{effective_prompt}");
+    }
+    if let Some(ref group_id) = args.group {
+        let sibling_summaries = collect_sibling_summaries(store, group_id, current_task_id)?;
+        if !sibling_summaries.is_empty() {
+            let block = crate::cmd::summary::format_sibling_summaries(&sibling_summaries);
+            effective_prompt = format!("{block}\n\n{effective_prompt}");
+        }
     }
     let mut effective_prompt = inject_skill(&effective_prompt, requested_skills)?;
     let mut injected_memory_ids = Vec::new();
@@ -352,6 +359,26 @@ fn resolve_context_from(store: &Store, task_ids: &[String]) -> Result<Option<Str
         return Ok(None);
     }
     Ok(Some(blocks.join("\n\n")))
+}
+
+fn collect_sibling_summaries(
+    store: &Store,
+    group_id: &str,
+    current_task_id: &str,
+) -> Result<Vec<CompletionSummary>> {
+    let tasks = store.list_tasks_by_group(group_id)?;
+    let mut summaries = Vec::new();
+    for task in &tasks {
+        if task.id.as_str() == current_task_id { continue; }
+        if !task.status.is_terminal() { continue; }
+        if let Some(json) = store.get_completion_summary(task.id.as_str())? {
+            if let Ok(summary) = serde_json::from_str::<CompletionSummary>(&json) {
+                summaries.push(summary);
+            }
+        }
+    }
+    summaries.truncate(5);
+    Ok(summaries)
 }
 
 pub(super) fn resolve_prompt(source: PromptSource<'_>, template: Option<&str>) -> Result<String> {

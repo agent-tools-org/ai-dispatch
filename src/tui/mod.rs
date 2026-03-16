@@ -115,4 +115,16 @@ mod tests {
         app.handle_key(KeyEvent::new(KeyCode::Char('s'), KeyModifiers::NONE)).unwrap();
         assert!(!app.stats_mode);
     }
+
+    #[test]
+    fn toggles_tree_mode_with_t_key() {
+        let store = Arc::new(Store::open_memory().unwrap());
+        let mut app = app::App::new(store, RunOptions::default()).unwrap();
+
+        assert!(!app.tree_mode);
+        app.handle_key(KeyEvent::new(KeyCode::Char('t'), KeyModifiers::NONE)).unwrap();
+        assert!(app.tree_mode);
+        app.handle_key(KeyEvent::new(KeyCode::Char('t'), KeyModifiers::NONE)).unwrap();
+        assert!(!app.tree_mode);
+    }
 }

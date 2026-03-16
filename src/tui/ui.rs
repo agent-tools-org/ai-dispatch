@@ -16,11 +16,14 @@ use super::app::{App, DetailTab};
 use super::charts;
 use super::dashboard;
 use super::multipane;
+use super::tree_data;
 use crate::cost;
 use crate::types::TaskStatus;
 
 pub fn render(frame: &mut ratatui::Frame<'_>, app: &App) {
-    if app.multipane_mode {
+    if app.tree_mode {
+        render_tree_view(frame, app);
+    } else if app.multipane_mode {
         render_multipane_view(frame, app);
     } else if app.detail_mode {
         render_detail(frame, app);
@@ -182,6 +185,77 @@ fn render_board(frame: &mut ratatui::Frame<'_>, app: &App) {
         ),
     ]);
     frame.render_widget(Paragraph::new(status_line), chunks[2]);
+}
+
+fn render_tree_view(frame: &mut ratatui::Frame<'_>, app: &App) {
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(1),
+            Constraint::Min(1),
+            Constraint::Length(1),
+        ])
+        .split(frame.area());
+
+    frame.render_widget(
+        Paragraph::new(Line::from(vec![
+            Span::styled("aid tree ", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+            Span::styled(
+                format!("[{}]", app.scope_label()),
+                Style::default().fg(Color::Indexed(250)),
+            ),
+        ]))
+        .alignment(Alignment::Center),
+        chunks[0],
+    );
+
+    let nodes = tree_data::build_task_tree(&app.tasks);
+    if nodes.is_empty() {
+        frame.render_widget(Paragraph::new(app.empty_message()), chunks[1]);
+    } else {
+        let items: Vec<ListItem> = nodes
+            .iter()
+            .map(|node| {
+                let task = &node.task;
+                let duration = task_duration(task);
+                let prompt_preview = truncate(&task.prompt, 40);
+                let status_color = match task.status {
+                    TaskStatus::Done | TaskStatus::Merged => Color::Green,
+                    TaskStatus::Failed => Color::Red,
+                    TaskStatus::Pending | TaskStatus::AwaitingInput => Color::Yellow,
+                    TaskStatus::Running => Color::Cyan,
+                    _ => Color::Indexed(250),
+                };
+                ListItem::new(Line::from(vec![
+                    Span::raw(node.prefix.clone()),
+                    Span::styled(task.id.as_str(), Style::default().add_modifier(Modifier::BOLD)),
+                    Span::raw(" "),
+                    Span::styled(task.agent_display_name().to_string(), Style::default().fg(Color::Indexed(250))),
+                    Span::raw(" "),
+                    Span::styled(
+                        task.status.label().to_string(),
+                        Style::default().fg(status_color),
+                    ),
+                    Span::raw(" "),
+                    Span::styled(duration, Style::default().fg(Color::Indexed(248))),
+                    Span::raw(" "),
+                    Span::raw(prompt_preview),
+                ]))
+            })
+            .collect();
+        frame.render_widget(
+            List::new(items).block(Block::default().title("Task Tree").borders(Borders::ALL)),
+            chunks[1],
+        );
+    }
+
+    frame.render_widget(
+        Paragraph::new(Line::from(Span::styled(
+            "t:table d:dashboard m:multipane q=quit",
+            Style::default().fg(Color::Indexed(243)),
+        ))),
+        chunks[2],
+    );
 }
 
 fn render_detail(frame: &mut ratatui::Frame<'_>, app: &App) {

@@ -11,6 +11,7 @@ impl App {
                 return Ok(());
             }
             KeyCode::Char('d') => {
+                self.tree_mode = false;
                 self.dashboard_mode = !self.dashboard_mode;
                 return Ok(());
             }
@@ -20,14 +21,26 @@ impl App {
                 return Ok(());
             }
             KeyCode::Char('s') => {
+                self.tree_mode = false;
                 self.stats_mode = !self.stats_mode;
                 return Ok(());
             }
             KeyCode::Char('m') => {
+                self.tree_mode = false;
                 self.multipane_mode = !self.multipane_mode;
                 if self.multipane_mode {
                     self.active_pane = 0;
                     self.pane_scroll_offsets.clear();
+                }
+                return Ok(());
+            }
+            KeyCode::Char('t') => {
+                self.tree_mode = !self.tree_mode;
+                if self.tree_mode {
+                    self.dashboard_mode = false;
+                    self.stats_mode = false;
+                    self.multipane_mode = false;
+                    self.detail_mode = false;
                 }
                 return Ok(());
             }
@@ -120,6 +133,7 @@ impl App {
     }
 
     fn enter_detail_mode(&mut self) -> Result<()> {
+        self.tree_mode = false;
         self.detail_mode = true;
         self.reset_detail_state();
         self.load_selected_events()

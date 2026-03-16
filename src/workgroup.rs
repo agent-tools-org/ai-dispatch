@@ -47,7 +47,44 @@ pub fn compose_prompt(
     }
 
     sections.push(format!("[Task]\n{prompt}"));
-    sections.join("\n\n")
+    let full = sections.join("\n\n");
+    compress_workgroup_context(&full)
+}
+
+const MAX_CONTEXT_CHARS: usize = 6000;
+
+pub fn compress_workgroup_context(context: &str) -> String {
+    if context.len() <= MAX_CONTEXT_CHARS {
+        return context.to_string();
+    }
+    let lines: Vec<&str> = context.lines().collect();
+    let header_count = lines.len().min(5);
+    let header_budget = MAX_CONTEXT_CHARS / 3;
+    let footer_budget = MAX_CONTEXT_CHARS * 2 / 3;
+
+    let mut header = String::new();
+    for line in lines.iter().take(header_count) {
+        if header.len() + line.len() + 1 > header_budget {
+            break;
+        }
+        header.push_str(line);
+        header.push('\n');
+    }
+
+    let mut footer_lines: Vec<&str> = Vec::new();
+    let mut footer_len = 0;
+    for line in lines.iter().rev() {
+        if footer_len + line.len() + 1 > footer_budget {
+            break;
+        }
+        footer_len += line.len() + 1;
+        footer_lines.push(line);
+    }
+    footer_lines.reverse();
+    let footer = footer_lines.join("\n");
+    let compressed = lines.len() - header_count - footer_lines.len();
+
+    format!("{header}\n[... {compressed} lines compressed ...]\n\n{footer}")
 }
 
 #[cfg(test)]
@@ -98,6 +135,31 @@ mod tests {
         assert!(prompt.contains("- [t-1000] finding one"));
         assert!(prompt.contains("- [t-1001] finding two"));
         assert!(prompt.contains("[Task]"));
+    }
+
+    #[test]
+    fn short_context_unchanged() {
+        let short = "hello world\nline two";
+        assert_eq!(super::compress_workgroup_context(short), short);
+    }
+
+    #[test]
+    fn long_context_compressed() {
+        let lines: Vec<String> = (0..500).map(|i| format!("line {i}: some content here")).collect();
+        let long = lines.join("\n");
+        let compressed = super::compress_workgroup_context(&long);
+        assert!(compressed.len() <= super::MAX_CONTEXT_CHARS + 200);
+        assert!(compressed.contains("[... "));
+        assert!(compressed.contains("lines compressed"));
+    }
+
+    #[test]
+    fn compression_preserves_recent() {
+        let mut lines: Vec<String> = (0..500).map(|i| format!("line {i}")).collect();
+        lines.push("IMPORTANT_LAST_LINE".to_string());
+        let long = lines.join("\n");
+        let compressed = super::compress_workgroup_context(&long);
+        assert!(compressed.contains("IMPORTANT_LAST_LINE"));
     }
 
     #[test]

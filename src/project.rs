@@ -4,12 +4,14 @@
 
 use anyhow::{Context, Result};
 use serde::Deserialize;
+use serde::de::{Deserializer, IntoDeserializer};
 use std::path::{Path, PathBuf};
 use std::{env, fs};
 
 use crate::team::{self, KnowledgeEntry};
 
 #[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
 struct ProjectFile {
     #[serde(rename = "project")]
     pub project: ProjectConfig,
@@ -30,7 +32,7 @@ pub struct ProjectConfig {
     pub language: Option<String>,
     #[serde(default)]
     pub rules: Vec<String>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_budget")]
     pub budget: ProjectBudget,
     #[serde(default)]
     pub agents: ProjectAgents,
@@ -51,6 +53,25 @@ pub struct ProjectBudget {
     pub prefer_budget: bool,
 }
 
+#[allow(dead_code)]
+impl ProjectBudget {
+    pub fn budget_shorthand(&self) -> Option<String> {
+        let cost = self.cost_limit_usd?;
+        let mut shorthand = format!("${}", cost);
+        if let Some(window) = self.window.as_deref() {
+            match window.to_lowercase().as_str() {
+                "day" | "daily" => shorthand.push_str("/day"),
+                "month" | "monthly" => shorthand.push_str("/month"),
+                other => {
+                    shorthand.push('/');
+                    shorthand.push_str(other);
+                }
+            }
+        }
+        Some(shorthand)
+    }
+}
+
 
 #[allow(dead_code)] // Schema fields — used when TOML is parsed, agent integration planned
 #[derive(Debug, Clone, Deserialize)]
@@ -63,6 +84,73 @@ pub struct ProjectAgents {
     pub research: Option<String>,
     #[serde(default)]
     pub simple_edit: Option<String>,
+}
+
+fn deserialize_budget<'de, D>(deserializer: D) -> Result<ProjectBudget, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let value = toml::Value::deserialize(deserializer)?;
+    match value {
+        toml::Value::String(raw) => parse_budget_shorthand(&raw).map_err(serde::de::Error::custom),
+        toml::Value::Integer(amount) => Ok(ProjectBudget {
+            cost_limit_usd: Some(amount as f64),
+            ..Default::default()
+        }),
+        toml::Value::Float(amount) => Ok(ProjectBudget {
+            cost_limit_usd: Some(amount),
+            ..Default::default()
+        }),
+        toml::Value::Table(table) => ProjectBudget::deserialize(
+            toml::Value::Table(table).into_deserializer(),
+        )
+        .map_err(serde::de::Error::custom),
+        other => Err(serde::de::Error::custom(format!(
+            "invalid budget value: {other:?}"
+        ))),
+    }
+}
+
+fn parse_budget_shorthand(value: &str) -> Result<ProjectBudget, String> {
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        return Err("budget shorthand is empty".to_string());
+    }
+    let trimmed = trimmed.strip_prefix('$').unwrap_or(trimmed).trim();
+    if trimmed.is_empty() {
+        return Err("budget amount is missing".to_string());
+    }
+
+    let (amount_part, window_part) = match trimmed.split_once('/') {
+        Some((left, right)) => (left.trim(), Some(right.trim())),
+        None => (trimmed, None),
+    };
+
+    if amount_part.is_empty() {
+        return Err("budget amount is missing".to_string());
+    }
+
+    let cost_limit_usd = amount_part
+        .parse::<f64>()
+        .map_err(|_| format!("invalid budget amount '{}'", amount_part))?;
+
+    let window = match window_part {
+        Some(w) if !w.is_empty() => match w.to_lowercase().as_str() {
+            "day" | "daily" => Some("daily".to_string()),
+            "month" | "monthly" => Some("monthly".to_string()),
+            other => {
+                return Err(format!("unsupported budget window '{}'", other));
+            }
+        },
+        Some(_) => return Err("budget window is empty".to_string()),
+        None => None,
+    };
+
+    Ok(ProjectBudget {
+        cost_limit_usd: Some(cost_limit_usd),
+        window,
+        ..Default::default()
+    })
 }
 
 
@@ -256,6 +344,55 @@ budget.cost_limit_usd = 99.5
             .iter()
             .any(|rule| rule.contains("new functions")));
         assert_eq!(config.budget.cost_limit_usd, Some(99.5));
+    }
+
+    #[test]
+    fn strict_toml_rejects_unknown_top_level() {
+        let dir = TempDir::new().unwrap();
+        let contents = r#"
+[project]
+id = "test"
+[budget]
+daily_limit = "$50"
+"#;
+        assert!(load_project(&write_project(dir.path(), contents)).is_err());
+    }
+
+    #[test]
+    fn budget_shorthand_day() {
+        let dir = TempDir::new().unwrap();
+        let contents = r#"[project]
+id = "test"
+budget = "$1000/day"
+"#;
+        let config = load_project(&write_project(dir.path(), contents)).unwrap();
+        assert_eq!(config.budget.cost_limit_usd, Some(1000.0));
+        assert_eq!(config.budget.window.as_deref(), Some("daily"));
+        assert_eq!(config.budget.budget_shorthand(), Some("$1000/day".to_string()));
+    }
+
+    #[test]
+    fn budget_shorthand_plain_number() {
+        let dir = TempDir::new().unwrap();
+        let contents = r#"[project]
+id = "test"
+budget = "$500"
+"#;
+        let config = load_project(&write_project(dir.path(), contents)).unwrap();
+        assert_eq!(config.budget.cost_limit_usd, Some(500.0));
+        assert!(config.budget.window.is_none());
+    }
+
+    #[test]
+    fn budget_shorthand_month() {
+        let dir = TempDir::new().unwrap();
+        let contents = r#"[project]
+id = "test"
+budget = "$2000/month"
+"#;
+        let config = load_project(&write_project(dir.path(), contents)).unwrap();
+        assert_eq!(config.budget.cost_limit_usd, Some(2000.0));
+        assert_eq!(config.budget.window.as_deref(), Some("monthly"));
     }
 
     #[test]

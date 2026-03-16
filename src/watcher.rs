@@ -71,8 +71,10 @@ pub async fn watch_streaming(
         };
 
         use tokio::io::AsyncWriteExt;
-        log_file.write_all(line.as_bytes()).await?;
-        log_file.write_all(b"\n").await?;
+        if extract_milestone_detail(&line).is_none() {
+            log_file.write_all(line.as_bytes()).await?;
+            log_file.write_all(b"\n").await?;
+        }
 
         handle_streaming_line_with_session(
             StreamLineContext {
@@ -167,15 +169,25 @@ pub async fn watch_buffered(
     use tokio::io::AsyncReadExt;
     reader.read_to_string(&mut buffer).await?;
 
-    // Write raw output to log
-    tokio::fs::write(log_path, &buffer).await?;
+    // Write raw output to log (filter out milestone lines)
+    let filtered: String = buffer
+        .lines()
+        .filter(|line| extract_milestone_detail(line).is_none())
+        .collect::<Vec<_>>()
+        .join("\n");
+    tokio::fs::write(log_path, &filtered).await?;
 
     // Write response to output file if requested
     if let Some(out_path) = output_path {
         if let Some(response) = crate::agent::gemini::extract_response(&buffer) {
-            tokio::fs::write(out_path, &response).await?;
+            let response_filtered: String = response
+                .lines()
+                .filter(|line| extract_milestone_detail(line).is_none())
+                .collect::<Vec<_>>()
+                .join("\n");
+            tokio::fs::write(out_path, &response_filtered).await?;
         } else {
-            tokio::fs::write(out_path, &buffer).await?;
+            tokio::fs::write(out_path, &filtered).await?;
         }
     }
 
@@ -569,5 +581,16 @@ mod tests {
     fn real_finding_still_extracted() {
         let detail = super::extract_finding_detail("[FINDING] pool has degenerate state");
         assert_eq!(detail.as_deref(), Some("pool has degenerate state"));
+    }
+
+    #[test]
+    fn milestone_lines_stripped_from_output() {
+        let input = "line1\n[MILESTONE] types defined\nline2\n";
+        let filtered: String = input
+            .lines()
+            .filter(|line| super::extract_milestone_detail(line).is_none())
+            .collect::<Vec<_>>()
+            .join("\n");
+        assert_eq!(filtered, "line1\nline2");
     }
 }

@@ -18,7 +18,7 @@ mod show_output;
 pub use show_output::{diff_text, log_text, output_text, output_text_for_task};
 #[allow(unused_imports)]
 pub use show_output::read_task_output;
-pub(crate) use show_output::{diff_stat, read_tail, worktree_diff};
+pub(crate) use show_output::{diff_stat, parse_diff_stat, read_tail, worktree_diff};
 
 pub struct ShowArgs {
     pub task_id: String,
@@ -90,6 +90,22 @@ fn task_json(store: &Arc<Store>, task_id: &str) -> Result<String> {
             })
         })
         .collect();
+    let diff_entries = task
+        .worktree_path
+        .as_deref()
+        .filter(|path| Path::new(path).exists())
+        .map(|path| parse_diff_stat(&diff_stat(path)))
+        .unwrap_or_default();
+    let files_changed = diff_entries.len();
+    let (insertions, deletions) =
+        diff_entries
+            .iter()
+            .fold((0u64, 0u64), |(ins, del), entry| {
+                (
+                    ins + entry["insertions"].as_u64().unwrap_or(0),
+                    del + entry["deletions"].as_u64().unwrap_or(0),
+                )
+            });
     let payload = serde_json::json!({
         "id": task.id.as_str(),
         "agent": task.agent_display_name(),
@@ -115,6 +131,12 @@ fn task_json(store: &Arc<Store>, task_id: &str) -> Result<String> {
         "created_at": task.created_at.to_rfc3339(),
         "completed_at": task.completed_at.map(|dt| dt.to_rfc3339()),
         "events": event_list,
+        "diff_stat": diff_entries,
+        "diff_summary": {
+            "files_changed": files_changed,
+            "insertions": insertions,
+            "deletions": deletions,
+        },
     });
     serde_json::to_string(&payload).map_err(Into::into)
 }

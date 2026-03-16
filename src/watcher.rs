@@ -3,6 +3,7 @@
 
 use anyhow::Result;
 use chrono::Local;
+use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::Child;
@@ -43,9 +44,10 @@ pub async fn watch_streaming(
     };
     let mut event_count = 0u32;
     let mut session_saved = false;
+    let mut loop_detector = LoopDetector::new();
 
     // Spawn stderr capture in background
-    let stderr_handle = spawn_stderr_capture(child, task_id);
+    let mut stderr_handle = spawn_stderr_capture(child, task_id);
 
     loop {
         let line = match timeout(HUNG_TIMEOUT, lines.next_line()).await {
@@ -76,7 +78,7 @@ pub async fn watch_streaming(
             log_file.write_all(b"\n").await?;
         }
 
-        handle_streaming_line_with_session(
+        if let Some(detail) = handle_streaming_line_with_session(
             StreamLineContext {
                 agent,
                 task_id,
@@ -87,11 +89,26 @@ pub async fn watch_streaming(
             &mut event_count,
             &line,
             &mut session_saved,
-        )?;
+        )? {
+            loop_detector.push(&detail);
+            if loop_detector.is_looping() {
+                let _ = store.insert_event(&TaskEvent {
+                    task_id: task_id.clone(),
+                    timestamp: Local::now(),
+                    event_kind: EventKind::Error,
+                    detail: "Agent appears stuck in a loop — killing process".to_string(),
+                    metadata: None,
+                });
+                let _ = child.kill().await;
+                info.status = TaskStatus::Failed;
+                if let Some(handle) = stderr_handle.take() { let _ = handle.await; }
+                return Ok(info);
+            }
+        }
     }
 
     // Wait for stderr to finish
-    if let Some(handle) = stderr_handle {
+    if let Some(handle) = stderr_handle.take() {
         let _ = handle.await;
     }
 
@@ -300,7 +317,7 @@ pub(crate) fn handle_streaming_line_with_session(
     event_count: &mut u32,
     line: &str,
     session_saved: &mut bool,
-) -> Result<()> {
+) -> Result<Option<String>> {
     let StreamLineContext {
         agent,
         task_id,
@@ -316,7 +333,7 @@ pub(crate) fn handle_streaming_line_with_session(
     if let Some(event) = parse_milestone_event(task_id, line) {
         store.insert_event(&event)?;
         *event_count += 1;
-        return Ok(());
+        return Ok(Some(event.detail.clone()));
     }
     if let Some(event) = agent.parse_event(task_id, line) {
         apply_completion_event(info, &event);
@@ -329,8 +346,9 @@ pub(crate) fn handle_streaming_line_with_session(
         }
         store.insert_event(&event)?;
         *event_count += 1;
+        return Ok(Some(event.detail.clone()));
     }
-    Ok(())
+    Ok(None)
 }
 
 fn parse_milestone_event(task_id: &TaskId, line: &str) -> Option<TaskEvent> {
@@ -467,9 +485,33 @@ fn extract_finding_from_text(text: &str) -> Option<String> {
     })
 }
 
+struct LoopDetector {
+    recent_events: VecDeque<String>,
+}
+
+impl LoopDetector {
+    fn new() -> Self { Self { recent_events: VecDeque::new() } }
+    fn push(&mut self, detail: &str) {
+        let mut truncated = detail.to_string();
+        truncated.truncate(100);
+        self.recent_events.push_back(truncated);
+        if self.recent_events.len() > 20 { self.recent_events.pop_front(); }
+    }
+    fn is_looping(&self) -> bool {
+        if self.recent_events.len() < 10 { return false; }
+        let mut counts = HashMap::new();
+        for detail in self.recent_events.iter().rev().take(10) {
+            let counter = counts.entry(detail.as_str()).or_insert(0);
+            *counter += 1;
+            if *counter >= 8 { return true; }
+        }
+        false
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{apply_completion_event, parse_milestone_event};
+    use super::{apply_completion_event, parse_milestone_event, LoopDetector};
     use crate::types::{CompletionInfo, EventKind, TaskEvent, TaskId, TaskStatus};
     use chrono::Local;
     use serde_json::json;
@@ -592,5 +634,24 @@ mod tests {
             .collect::<Vec<_>>()
             .join("\n");
         assert_eq!(filtered, "line1\nline2");
+    }
+
+    fn loop_detector_case<I>(expected: bool, events: I) where I: IntoIterator<Item = &'static str> {
+        let mut detector = LoopDetector::new();
+        events.into_iter().for_each(|detail| detector.push(detail));
+        assert_eq!(detector.is_looping(), expected);
+    }
+    #[test]
+    fn loop_detector_patterns() {
+        loop_detector_case(false, ["a", "b", "c", "d", "e", "f", "g", "h", "i", "j"]);
+        loop_detector_case(true, std::iter::repeat("repeat").take(10));
+        loop_detector_case(
+            false,
+            std::iter::repeat("dup").take(7).chain(["unique-1", "unique-2", "unique-3"]),
+        );
+        loop_detector_case(
+            true,
+            std::iter::repeat("dup").take(8).chain(["unique-1", "unique-2"]),
+        );
     }
 }

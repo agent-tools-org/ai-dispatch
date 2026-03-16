@@ -2,6 +2,7 @@
 // Exports: diff_text, output_text, output_text_for_task, log_text, read_task_output, read_tail.
 // Deps: cmd::show::load_task, paths, Store, Task.
 use anyhow::{Context, Result};
+use serde_json::json;
 use std::path::Path;
 use std::process::Command;
 use std::sync::Arc;
@@ -274,6 +275,34 @@ pub(crate) fn diff_stat(wt_path: &str) -> String {
         "  (no changes detected)\n",
     )
 }
+
+pub(crate) fn parse_diff_stat(diff_text: &str) -> Vec<serde_json::Value> {
+    diff_text
+        .lines()
+        .filter_map(|line| {
+            let line = line.trim();
+            if line.is_empty() || !line.contains('|') {
+                return None;
+            }
+            let mut parts = line.splitn(2, '|');
+            let file = parts.next()?.trim();
+            let stats = parts.next()?.trim();
+            if stats.starts_with("Bin") {
+                return None;
+            }
+            let insertions = stats.chars().filter(|c| *c == '+').count() as u64;
+            let deletions = stats.chars().filter(|c| *c == '-').count() as u64;
+            if insertions == 0 && deletions == 0 {
+                return None;
+            }
+            Some(json!({
+                "file": file,
+                "insertions": insertions,
+                "deletions": deletions,
+            }))
+        })
+        .collect()
+}
 fn full_diff(wt_path: &str) -> String {
     generate_diff(
         wt_path,
@@ -384,6 +413,23 @@ mod tests {
     #[test]
     fn tail_lines_keeps_only_requested_suffix() {
         assert_eq!(tail_lines("a\nb\nc\nd", 2), "c\nd");
+    }
+    #[test]
+    fn parse_diff_stat_standard_line() {
+        let entries = parse_diff_stat(" src/foo.rs | 8 +++++---\n");
+        assert_eq!(entries.len(), 1);
+        let entry = &entries[0];
+        assert_eq!(entry["file"], json!("src/foo.rs"));
+        assert_eq!(entry["insertions"], json!(5));
+        assert_eq!(entry["deletions"], json!(3));
+    }
+    #[test]
+    fn parse_diff_stat_skips_binary_entries() {
+        assert!(parse_diff_stat(" src/bin.dat | Bin 0 -> 123 bytes\n").is_empty());
+    }
+    #[test]
+    fn parse_diff_stat_empty_text() {
+        assert!(parse_diff_stat("").is_empty());
     }
     #[test]
     fn diff_text_falls_back_to_default_log_output() {

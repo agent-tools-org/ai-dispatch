@@ -60,6 +60,30 @@ pub struct RunArgs {
     pub context_from: Vec<String>,
     pub judge_retry: bool,
 }
+
+fn validate_dispatch(args: &RunArgs, agent_kind: &AgentKind) -> Vec<String> {
+    let mut warnings = Vec::new();
+    let prompt_len = args.prompt.chars().count();
+    if prompt_len < 10 {
+        warnings.push("Prompt is very short, agent may not have enough context".to_string());
+    }
+    if matches!(
+        agent_kind,
+        AgentKind::Codex | AgentKind::OpenCode | AgentKind::Cursor | AgentKind::Kilo | AgentKind::Codebuff
+    ) && args.dir.is_none()
+    {
+        warnings.push("Code agent without --dir may not be able to write files".to_string());
+    }
+    if prompt_len > 5000 {
+        warnings.push(format!(
+            "Very long prompt ({prompt_len} chars), consider using --context files instead"
+        ));
+    }
+    if matches!(agent_kind, AgentKind::Gemini) && args.worktree.is_some() {
+        warnings.push("Research agent with --worktree is unusual, did you mean a code agent?".to_string());
+    }
+    warnings
+}
 pub async fn run(store: Arc<Store>, args: RunArgs) -> Result<TaskId> {
     if let Some(n) = args.best_of {
         return Box::pin(run_bestof::run_best_of(store, args, n)).await;
@@ -178,6 +202,10 @@ pub async fn run(store: Arc<Store>, args: RunArgs) -> Result<TaskId> {
         read_only: args.read_only,
         budget: args.budget,
     };
+    let dispatch_warnings = validate_dispatch(&args, &agent_kind);
+    for warning in &dispatch_warnings {
+        eprintln!("[aid] Warning: {warning}");
+    }
     store.insert_task(&task)?;
     let before_worktree = task.worktree_path.clone();
     let prompt_bundle = run_prompt::build_prompt_bundle(&store, &args, &agent_kind, workgroup.as_ref(), &requested_skills, task_id.as_str())?;
@@ -547,6 +575,24 @@ mod tests {
     fn take_next_cascade_agent_returns_none_when_empty() {
         let args = RunArgs { cascade: vec![], ..Default::default() };
         assert!(take_next_cascade_agent(&args).is_none());
+    }
+
+    #[test]
+    fn validate_dispatch_warns_short_prompt() {
+        assert_eq!(validate_dispatch(&RunArgs { prompt: "tiny".to_string(), ..Default::default() }, &AgentKind::Gemini), vec!["Prompt is very short, agent may not have enough context".to_string()]);
+    }
+    #[test]
+    fn validate_dispatch_warns_code_agent_without_dir() {
+        assert_eq!(validate_dispatch(&RunArgs { prompt: "adequate prompt".to_string(), ..Default::default() }, &AgentKind::Codex), vec!["Code agent without --dir may not be able to write files".to_string()]);
+    }
+    #[test]
+    fn validate_dispatch_warns_long_prompt() {
+        let prompt = "a".repeat(5001);
+        assert_eq!(validate_dispatch(&RunArgs { prompt, ..Default::default() }, &AgentKind::Gemini), vec!["Very long prompt (5001 chars), consider using --context files instead".to_string()]);
+    }
+    #[test]
+    fn validate_dispatch_warns_research_worktree() {
+        assert_eq!(validate_dispatch(&RunArgs { prompt: "valid prompt text".to_string(), worktree: Some("wt".to_string()), ..Default::default() }, &AgentKind::Gemini), vec!["Research agent with --worktree is unusual, did you mean a code agent?".to_string()]);
     }
 
 }

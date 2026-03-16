@@ -1,6 +1,6 @@
 # ai-dispatch (aid)
 
-![Version](https://img.shields.io/badge/version-7.9.1-blue)
+![Version](https://img.shields.io/badge/version-8.0.0-blue)
 ![Rust](https://img.shields.io/badge/rust-2024-orange)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
@@ -527,39 +527,48 @@ The board displays `[VFAIL]` next to tasks that completed but failed verificatio
 
 The most effective `aid` workflow is:
 
-1. Plan the work.
-2. Dispatch specialized agents.
+1. Plan the work — decompose into 5–10 independent subtasks.
+2. Dispatch agents in parallel via batch files.
 3. Monitor with background watch (auto-notifies on completion).
-4. Review artifacts and milestones.
-5. Iterate with retries or follow-up tasks.
+4. Review artifacts with `aid show --diff`.
+5. Iterate with retries, or re-dispatch with `--best-of` for critical tasks.
+
+Think big — 6–10 parallel agents finish faster and often produce better results than one agent doing everything serially. Each agent stays focused on a small, well-defined task.
 
 A practical sequence looks like this:
 
 ```bash
-aid ask "Break this feature into research, implementation, and validation steps."
+# Phase 1: Research (free)
+aid run gemini "Analyze src/api/ architecture, list public types and extension points" \
+  -o /tmp/research.md
 
-aid group create release-docs \
-  --context "Keep the README user-facing, source-accurate, and aligned with current commands."
+# Phase 2: Parallel implementation (batch file, 4–6 tasks)
+aid batch feature-tasks.toml --parallel
 
-aid run gemini "Summarize DESIGN.md and call out the user-visible features" \
-  --group wg-a3f1 \
-  -o /tmp/design-notes.md
+# Phase 3: Background watch (push notification, no polling)
+aid watch --quiet --group wg-a3f1   # Bash run_in_background: true
 
-aid run codex "Rewrite README.md around the current CLI surface" \
-  --group wg-a3f1 \
-  --dir . \
-  --worktree docs/readme \
-  --skill implementer \
-  --verify auto
-
-aid watch --quiet --group wg-a3f1   # blocks until all tasks complete
+# Phase 4: Review and iterate
 aid show t-1234 --diff
-aid retry t-1234 --feedback "Trim unsupported claims and improve MCP setup guidance."
+aid retry t-1234 --feedback "Missing error handling in the timeout path"
 ```
 
 **For AI orchestrators (Claude Code, etc.)**: Use `aid watch --quiet --group <wg-id>` as a background command to get automatic completion callbacks instead of polling `aid board`.
 
-This pattern keeps planning cheap, execution specialized, and review artifact-driven.
+### Quality Tiers
+
+Match effort to task importance:
+
+| Tier | When | Pattern |
+|------|------|---------|
+| **Draft** | Exploration, prototyping | `aid run codex "..." --dir .` |
+| **Standard** | Normal development | `aid run codex "..." --worktree feat/x --verify auto` |
+| **Reviewed** | Important features | `aid run codex "..." --verify auto --peer-review gemini` |
+| **Best-of** | Critical code paths | `aid run codex "..." --best-of 3 --metric "<cmd>" --verify auto` |
+
+`--best-of N` dispatches the same task to N agents (or the same agent N times), runs an optional `--metric` command on each result, and keeps the best. Use it for bug fixes, core modules, and public APIs where quality matters more than speed.
+
+`--peer-review <agent>` sends the completed diff to a second agent for scored critique (1–10). Cheap agents like gemini make excellent reviewers.
 
 ### Agent Selection Guide
 
@@ -572,7 +581,6 @@ This pattern keeps planning cheap, execution specialized, and review artifact-dr
 | `opencode` | 1 | **8** | 3 | 2 | 4 | 4 | 4 | 5 |
 | `kilo` | 1 | 7 | 2 | 2 | 3 | 3 | 3 | 4 |
 | `cursor` | 2 | 4 | 7 | **9** | 5 | 5 | 6 | 4 |
-| `ob1` | 5 | 3 | 5 | 3 | 4 | 4 | 4 | 3 |
 | `codebuff` | 2 | 5 | 8 | 7 | 6 | 6 | 7 | 4 |
 
 Additional scoring adjustments: budget mode boosts cheap agents (+4) and penalizes expensive ones (-6); high-complexity tasks boost codex/cursor (+2); rate-limited agents get -10; historical success rates apply ±2-3.
@@ -595,49 +603,89 @@ aid run codex "Fix the MCP framing bug and add regression coverage" \
   --verify auto
 ```
 
-### Workgroup-Based Collaborative Investigation
+### Workgroup-Based Batch Collaboration
 
-A workgroup lets several agents collaborate without repeating the same shared context in every prompt.
+A workgroup lets several agents collaborate without repeating shared context. Batch files support DAG dependencies via `depends_on` — tasks dispatch as soon as their dependencies complete.
 
-For larger investigations, pair a workgroup with a batch file. Batch files support DAG dependencies via `depends_on` — tasks dispatch as soon as their individual dependencies complete, not when an entire level finishes:
+**Think in phases**: research (free) → parallel implementation (4–6 agents) → integration + validation. Each agent gets a focused, bounded task.
 
 ```toml
+[defaults]
+agent = "codex"
+dir = "."
+verify = "cargo check"
+
+# Phase 1: Research (free, fast)
 [[task]]
 name = "research"
 agent = "gemini"
-prompt = "Summarize DESIGN.md and note MCP constraints"
-output = "/tmp/mcp-notes.md"
+prompt = "Analyze src/api/ and src/types.rs. List all public types, relationships, and extension points for adding a webhook system."
+output = "/tmp/research.md"
 read_only = true
 
+# Phase 2: Parallel implementation (all depend on research)
 [[task]]
-name = "implementation"
-agent = "codex"
-prompt = "Update README.md with MCP setup guidance"
-dir = "."
-worktree = "docs/mcp-guide"
-skills = ["implementer"]
+name = "types"
+prompt = "Create src/webhook/types.rs with WebhookConfig, WebhookEvent, WebhookPayload structs. Use serde. Match patterns in src/types.rs. Include tests. Keep < 150 lines."
+worktree = "feat/webhook-types"
 depends_on = ["research"]
+
+[[task]]
+name = "handler"
+prompt = "Create src/webhook/handler.rs that sends HTTP POST on task completion. Use reqwest with 10s timeout. Log + continue on error. Include tests. Keep < 200 lines."
+worktree = "feat/webhook-handler"
+depends_on = ["research"]
+
+[[task]]
+name = "config"
+prompt = "Add [[webhook]] config parsing to src/config.rs with url, events, headers fields. Include tests for valid/invalid configs. Keep changes < 100 lines."
+worktree = "feat/webhook-config"
+depends_on = ["research"]
+
+[[task]]
+name = "cli"
+prompt = "Add 'aid webhook test <url>' command in src/cli.rs and src/cmd/webhook.rs. Send test payload, print result. Keep < 80 lines."
+worktree = "feat/webhook-cli"
+depends_on = ["research"]
+
+# Phase 3: Integration (depends on all implementations)
+[[task]]
+name = "integration"
+prompt = "Wire webhook handler into task completion flow in src/watcher.rs. Import from src/webhook/. Call on Done/Failed. Add integration test. Keep < 50 lines."
+worktree = "feat/webhook-integration"
+depends_on = ["types", "handler", "config"]
 verify = "cargo test"
 
+# Phase 4: Docs (cheap agent, depends on CLI)
 [[task]]
-name = "formatting"
+name = "docs"
 agent = "opencode"
-prompt = "Run cargo fmt and fix any clippy warnings"
-dir = "."
-budget = true
+prompt = "Add webhook configuration section to README.md. Show config.toml example and 'aid webhook test' usage. Keep < 40 lines."
+worktree = "feat/webhook-docs"
+depends_on = ["cli"]
 ```
 
-Dispatch it like this:
+Dispatch and monitor:
 
 ```bash
-aid batch tasks.toml --parallel --wait
-aid board
-aid show t-1234
+aid batch webhook.toml --parallel
+aid watch --quiet --group <wg-id>   # background, auto-notifies on completion
 ```
 
-Batch dispatches with 2+ tasks auto-create a workgroup. The batch file is archived to `~/.aid/batches/` after dispatch.
+Batch dispatches with 2+ tasks auto-create a workgroup. The batch file is archived to `~/.aid/batches/`.
 
-This works well for incident response, release prep, and cross-cutting refactors where one agent researches while another edits.
+For critical tasks within a batch, use `best_of = 3` to dispatch to multiple agents and keep the best result:
+
+```toml
+[[task]]
+name = "critical-fix"
+agent = "codex"
+prompt = "Fix the race condition in src/store.rs. Add a test that reproduces it."
+worktree = "fix/store-race"
+best_of = 3
+metric = "cargo test 2>&1 | grep -c 'test.*ok'"
+verify = "cargo test"
+```
 
 ### Cost Optimization Tips
 

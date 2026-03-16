@@ -1,7 +1,7 @@
 // aid-website — Cloudflare Worker for aid.agent-tools.org
 // Serves: HTML landing page, /llms.txt, /llms-full.txt, /install.sh, /api/*
 
-const VERSION = "8.5.0";
+const VERSION = "8.6.0";
 const SITE_URL = "https://aid.agent-tools.org";
 const REPO_URL = "https://github.com/agent-tools-org/ai-dispatch";
 const META_DESCRIPTION =
@@ -134,6 +134,10 @@ function buildLLMSText(): string {
   lines.push(`Profiles expand into verify, budget, and rules defaults. Project settings act as CLI fallbacks.`);
   lines.push(`Commands: aid project init, aid project show.`);
   lines.push(`Profiles: hobby ($5/day, budget mode), standard (auto verify, $20/day, tests required), production (cargo test, $50/day, tests+no unwrap+cross-review).`);
+  lines.push(``);
+  lines.push(`## Smart Knowledge Injection (v8.5)`);
+  lines.push(`Stop-word filtering (70+ words), relevance threshold ≥2 word overlap, cross-layer dedup (project-first, skip overlapping team entries), content truncation at 500 chars.`);
+  lines.push(`Auto-stash on merge, VFAIL merge guard, space-separated --context/--scope/--skill args.`);
   lines.push(``);
   lines.push(`## Task Lifecycle Hooks`);
   lines.push(`Define shell hooks in ~/.aid/hooks.toml that run at before_run, after_complete, or on_fail.`);
@@ -337,6 +341,7 @@ function buildHTML(): string {
         <div class="feat-card"><h3>TUI Dashboard</h3><p><code>aid watch --tui</code> for live progress, stats view, and task timeline.</p></div>
         <div class="feat-card"><h3>Teams <span class="badge">v8.4</span></h3><p>Role-based agent groups with knowledge context, behavioral rules, and capability overrides via <code>--team</code>.</p></div>
         <div class="feat-card"><h3>Project Profiles <span class="badge">v8.5</span></h3><p>Per-repo <code>.aid/project.toml</code> with hobby/standard/production presets for verify, budget, and rules.</p></div>
+        <div class="feat-card"><h3>Smart Knowledge Injection <span class="badge">v8.5</span></h3><p>Stop-word filtering, cross-layer dedup, and relevance scoring keep agent prompts lean and focused.</p></div>
         <div class="feat-card"><h3>Live Task Control <span class="badge">v8.3</span></h3><p><code>aid stop</code> / <code>aid kill</code> for termination, <code>aid steer</code> for mid-flight guidance injection.</p></div>
         <div class="feat-card"><h3>Best-of-N</h3><p>Dispatch the same task to N agents, run quality metrics, and keep the best result.</p></div>
         <div class="feat-card"><h3>Agent Store</h3><p>Browse and install community agents from the GitHub-backed store with version pinning.</p></div>

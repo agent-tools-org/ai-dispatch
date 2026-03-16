@@ -1,7 +1,7 @@
 // Project command handlers for the `aid project` CLI group.
 // Exports: ProjectAction, run_project_command.
-// Deps: crate::project, serde_json, std::{fs, io, path, process}.
-use crate::project;
+// Deps: crate::config, crate::project, serde_json, std::{fs, io, path, process}.
+use crate::{config as aid_config, project};
 use anyhow::{anyhow, bail, Context, Result};
 use serde_json::Value;
 use std::fs;
@@ -11,11 +11,13 @@ use std::process::Command;
 pub enum ProjectAction {
     Init,
     Show,
+    Sync,
 }
 pub fn run_project_command(action: ProjectAction) -> Result<()> {
     match action {
         ProjectAction::Init => init(),
         ProjectAction::Show => show(),
+        ProjectAction::Sync => sync(),
     }
 }
 fn init() -> Result<()> {
@@ -23,13 +25,51 @@ fn init() -> Result<()> {
     let project_id = prompt_project_id(&git_root)?;
     let profile = prompt_profile("Profile (hobby/standard/production)", "standard")?;
     let language = prompt_language(detect_language(&git_root).as_deref())?;
-    let (project_path, knowledge_index) = write_project_config(&git_root, &project_id, &profile, language.as_deref())?;
+    let (budget_shorthand, budget_cost, budget_window) =
+        prompt_daily_budget(default_budget_for_profile(&profile))?;
+    let team_input = prompt_line("Team (optional)", Some(""), true)?;
+    let team = if team_input.is_empty() {
+        None
+    } else {
+        Some(team_input)
+    };
+    let verify_default = default_verify_for_language(language.as_deref());
+    let verify_command = prompt_line("Verify command", Some(verify_default), false)?;
+    let (project_path, knowledge_index) = write_project_config(
+        &git_root,
+        &project_id,
+        &profile,
+        language.as_deref(),
+        Some(&budget_shorthand),
+        team.as_deref(),
+        Some(verify_command.as_str()),
+    )?;
+    aid_config::upsert_budget(&project_id, budget_cost, budget_window.as_deref())?;
+    println!("  Budget synced to ~/.aid/config.toml");
     let config = project::load_project(&project_path)?;
+    crate::claudemd::sync_claude_md(&git_root, &config)?;
+    println!("  CLAUDE.md updated with aid section");
     println!("Project: {}", config.id);
     println!("  Profile: {}", config.profile.as_deref().unwrap_or("-"));
     println!("  Language: {}", config.language.as_deref().unwrap_or("-"));
     println!("  File: {}", project_path.display());
     println!("  Knowledge: {}", knowledge_index.display());
+    Ok(())
+}
+fn sync() -> Result<()> {
+    let git_root = current_git_root()?;
+    let config = project::detect_project()
+        .ok_or_else(|| anyhow!("No project configuration found. Run `aid project init` first."))?;
+
+    if let Some(cost) = config.budget.cost_limit_usd {
+        let window = config.budget.window.as_deref();
+        aid_config::upsert_budget(&config.id, cost, window)?;
+        println!("Budget synced to ~/.aid/config.toml");
+    }
+
+    crate::claudemd::sync_claude_md(&git_root, &config)?;
+    println!("CLAUDE.md updated with aid section");
+
     Ok(())
 }
 fn show() -> Result<()> {
@@ -38,33 +78,43 @@ fn show() -> Result<()> {
     })?;
     let git_root = current_git_root()?;
     println!("Project: {}", config.id);
-    println!("  Profile: {}", config.profile.as_deref().unwrap_or("-"));
-    println!("  Team: {}", config.team.as_deref().unwrap_or("-"));
-    println!("  Verify: {}", config.verify.as_deref().unwrap_or("-"));
-    println!("  Language: {}", config.language.as_deref().unwrap_or("-"));
-    if let Some(window) = &config.budget.window {
-        println!("  Budget window: {}", window);
-    }
-    if let Some(cost) = config.budget.cost_limit_usd {
-        println!("  Budget limit: ${cost:.2}");
-    }
-    if let Some(tokens) = config.budget.token_limit {
-        println!("  Budget token limit: {}", tokens);
-    }
-    if config.budget.prefer_budget {
-        println!("  Budget prefer_budget: true");
+    println!("  Profile:    {}", config.profile.as_deref().unwrap_or("-"));
+    println!("  Team:       {}", config.team.as_deref().unwrap_or("-"));
+    println!("  Language:   {}", config.language.as_deref().unwrap_or("-"));
+    println!("  Verify:     {}", config.verify.as_deref().unwrap_or("-"));
+    let budget_display = if let Some(shorthand) = config.budget.budget_shorthand() {
+        format!("{shorthand} (shorthand)")
+    } else if let Some(cost) = config.budget.cost_limit_usd {
+        let window = config.budget.window.as_deref().unwrap_or("unlimited");
+        format!("${cost:.2}/{window}")
+    } else {
+        "-".to_string()
+    };
+    println!("  Budget:     {}", budget_display);
+    match aid_config::effective_budget(&config.id) {
+        Ok(Some((cost, window))) => {
+            let window_str = window.as_deref().unwrap_or("unlimited");
+            println!(
+                "  Effective:  ${cost:.2}/{window_str} (synced to ~/.aid/config.toml)"
+            );
+        }
+        Ok(None) => {
+            println!("  Effective:  (not configured in ~/.aid/config.toml)");
+        }
+        Err(_) => {}
     }
     if config.rules.is_empty() {
-        println!("  Rules: (none)");
+        println!("  Rules:      (none)");
     } else {
-        println!("  Rules: {} rule(s)", config.rules.len());
+        println!("  Rules:      {} rule(s)", config.rules.len());
         for rule in &config.rules {
             println!("    - {rule}");
         }
     }
     let knowledge_entries = project::read_project_knowledge(&git_root);
     let knowledge_index = project::project_knowledge_dir(&git_root).join("KNOWLEDGE.md");
-    println!("  Knowledge: {} entries ({})", knowledge_entries.len(), knowledge_index.display());
+    println!("  Knowledge:  {} entries", knowledge_entries.len());
+    println!("    Index: {}", knowledge_index.display());
     Ok(())
 }
 fn write_project_config(
@@ -72,6 +122,9 @@ fn write_project_config(
     project_id: &str,
     profile: &str,
     language: Option<&str>,
+    budget: Option<&str>,
+    team: Option<&str>,
+    verify: Option<&str>,
 ) -> Result<(PathBuf, PathBuf)> {
     let aid_dir = git_root.join(".aid");
     let project_path = aid_dir.join("project.toml");
@@ -80,11 +133,23 @@ fn write_project_config(
     if project_path.exists() {
         bail!("Project config already exists at {}", project_path.display());
     }
-    let mut lines = vec!["[project]".to_string(), format!("id = \"{}\"", project_id), format!("profile = \"{}\"", profile)];
-    if let Some(lang) = language
-        && !lang.trim().is_empty() {
-            lines.push(format!("language = \"{}\"", lang.trim()));
-        }
+    let mut lines = vec![
+        "[project]".to_string(),
+        format!("id = \"{}\"", project_id),
+        format!("profile = \"{}\"", profile),
+    ];
+    if let Some(lang) = language && !lang.trim().is_empty() {
+        lines.push(format!("language = \"{}\"", lang.trim()));
+    }
+    if let Some(value) = budget && !value.trim().is_empty() {
+        lines.push(format!("budget = \"{}\"", value.trim()));
+    }
+    if let Some(value) = team && !value.trim().is_empty() {
+        lines.push(format!("team = \"{}\"", value.trim()));
+    }
+    if let Some(value) = verify && !value.trim().is_empty() {
+        lines.push(format!("verify = \"{}\"", value.trim()));
+    }
     lines.push(String::new());
     fs::write(&project_path, lines.join("\n"))?;
     let knowledge_dir = project::project_knowledge_dir(git_root);
@@ -124,6 +189,97 @@ fn prompt_language(default: Option<&str>) -> Result<Option<String>> {
         Ok(None)
     } else {
         Ok(Some(entry.trim().to_string()))
+    }
+}
+
+fn prompt_daily_budget(default_cost: f64) -> Result<(String, f64, Option<String>)> {
+    let default_label = format_budget_default_label(default_cost);
+    loop {
+        let entry = prompt_line("Daily budget", Some(&default_label), false)?;
+        match normalize_budget_input(&entry, "day") {
+            Ok(parsed) => return Ok(parsed),
+            Err(err) => eprintln!("Invalid budget: {err}"),
+        }
+    }
+}
+
+fn default_budget_for_profile(profile: &str) -> f64 {
+    match profile {
+        "hobby" => 5.0,
+        "standard" => 20.0,
+        "production" => 50.0,
+        _ => 20.0,
+    }
+}
+
+fn format_budget_default_label(cost: f64) -> String {
+    let amount = if (cost - cost.trunc()).abs() < f64::EPSILON {
+        format!("{:.0}", cost)
+    } else {
+        format!("{cost}")
+    };
+    format!("${amount}")
+}
+
+fn normalize_budget_input(value: &str, default_window: &str) -> Result<(String, f64, Option<String>)> {
+    let mut sanitized = value.trim().to_string();
+    if sanitized.is_empty() {
+        bail!("Budget cannot be empty");
+    }
+    if !sanitized.starts_with('$') {
+        sanitized.insert(0, '$');
+    }
+    if !sanitized.contains('/') {
+        sanitized.push('/');
+        sanitized.push_str(default_window);
+    }
+    let (cost, window) = parse_budget_value(&sanitized)?;
+    Ok((sanitized, cost, window))
+}
+
+fn parse_budget_value(value: &str) -> Result<(f64, Option<String>)> {
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        bail!("budget shorthand is empty");
+    }
+    let amount_window = trimmed.strip_prefix('$').unwrap_or(trimmed).trim();
+    if amount_window.is_empty() {
+        bail!("budget amount is missing");
+    }
+    let (amount_part, window_part) = match amount_window.split_once('/') {
+        Some((left, right)) => (left.trim(), Some(right.trim())),
+        None => (amount_window, None),
+    };
+    if amount_part.is_empty() {
+        bail!("budget amount is missing");
+    }
+    let cost_limit = amount_part
+        .parse::<f64>()
+        .map_err(|_| anyhow!("invalid budget amount '{amount_part}'"))?;
+    let window = match window_part {
+        Some(part) if !part.is_empty() => {
+            match part.to_lowercase().as_str() {
+                "day" | "daily" => Some("daily".to_string()),
+                "month" | "monthly" => Some("monthly".to_string()),
+                other => bail!("unsupported budget window '{other}'"),
+            }
+        }
+        Some(_) => bail!("budget window is empty"),
+        None => None,
+    };
+    Ok((cost_limit, window))
+}
+
+fn default_verify_for_language(language: Option<&str>) -> &'static str {
+    match language {
+        Some(lang) => {
+            let lower = lang.to_ascii_lowercase();
+            match lower.as_str() {
+                "typescript" | "javascript" | "node" => "npm test",
+                _ => "cargo test",
+            }
+        }
+        None => "cargo test",
     }
 }
 fn prompt_line(label: &str, default: Option<&str>, allow_empty: bool) -> Result<String> {

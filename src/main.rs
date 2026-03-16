@@ -29,6 +29,7 @@ mod project;
 mod team;
 mod templates;
 mod compaction;
+pub mod claudemd;
 mod tui;
 mod types;
 mod usage;
@@ -39,7 +40,6 @@ mod webhook;
 mod workgroup;
 mod worktree;
 mod cli;
-
 use crate::cli_actions::{GroupAction, ProjectAction, TeamAction, WorktreeAction};
 use crate::types::AgentKind;
 use anyhow::Result;
@@ -394,6 +394,7 @@ async fn main() -> Result<()> {
             let action = match action {
                 ProjectAction::Init => ProjectCommand::Init,
                 ProjectAction::Show => ProjectCommand::Show,
+                ProjectAction::Sync => ProjectCommand::Sync,
             };
             run_project_command(action)?;
         }

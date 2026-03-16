@@ -92,3 +92,31 @@ rules = ["File size limit: 300 lines"]
 | `production` | `cargo test`/`npm test` | $50/day | Tests, no unwrap(), cross-review |
 
 CLI: `aid project init`, `aid project show`. Project defaults are fallbacks — CLI flags always win.
+
+
+<!-- aid:start -->
+## aid orchestration
+
+This project uses [aid](https://github.com/agent-tools-org/ai-dispatch) for AI task orchestration.
+
+- **Project**: ai-dispatch
+- **Profile**: production
+- **Language**: rust
+- **Budget**: $50
+- **Verify**: cargo test
+- **Team**: dev
+
+### Rules
+- File size limit: 300 lines per file
+- Never use features = ["full"] for dependencies
+- All public functions must have tests
+- All changes must have tests
+- No unwrap() in production code
+- Changes require cross-review
+
+### Usage
+- Dispatch work: `aid run <agent> "<prompt>" --dir .`
+- Review output: `aid show <id> --diff`
+- Batch dispatch: `aid batch <file> --parallel`
+- Project config: `.aid/project.toml`
+<!-- aid:end -->

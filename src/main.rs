@@ -40,7 +40,7 @@ mod workgroup;
 mod worktree;
 mod cli;
 
-use crate::cli_actions::{GroupAction, TeamAction, WorktreeAction};
+use crate::cli_actions::{GroupAction, ProjectAction, TeamAction, WorktreeAction};
 use crate::types::AgentKind;
 use anyhow::Result;
 use clap::Parser;
@@ -388,6 +388,14 @@ async fn main() -> Result<()> {
                 TeamAction::Delete { name } => TA::Delete { name },
             };
             run_team_command(action)?;
+        }
+        Commands::Project { action } => {
+            use cmd::project::{ProjectAction as ProjectCommand, run_project_command};
+            let action = match action {
+                ProjectAction::Init => ProjectCommand::Init,
+                ProjectAction::Show => ProjectCommand::Show,
+            };
+            run_project_command(action)?;
         }
         Commands::Memory { action } => match action {
             MemoryCommands::Add {

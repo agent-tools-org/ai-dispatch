@@ -44,7 +44,7 @@ mod tests {
         ExperimentConfig {
             metric_command: "echo 1".into(), direction: MetricDirection::Max,
             agent: "test".into(), prompt: "test".into(),
-            checks: None, max_runs: Some(5), worktree: None,
+            checks: None, max_runs: Some(5), worktree: None, verify: None,
         }
     }
 

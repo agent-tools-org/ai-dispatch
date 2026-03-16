@@ -19,6 +19,7 @@ pub fn run_status(dir: Option<&str>) -> Result<()> {
         checks: None,
         max_runs: None,
         worktree: None,
+        verify: None,
     };
     let state = super::experiment_persist::load_state(&path, &dummy)?;
     if state.runs.is_empty() {

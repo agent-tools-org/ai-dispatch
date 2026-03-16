@@ -45,6 +45,7 @@ use anyhow::Result;
 use clap::Parser;
 use std::sync::Arc;
 use crate::cli::{Cli, Commands, AgentCommands, StoreCommands, MemoryCommands, FindingCommands, ExperimentCommands};
+use crate::cmd::experiment_types::{ExperimentConfig, MetricDirection};
 
 /// Resolve group: CLI flag takes precedence, then AID_GROUP env var.
 fn resolve_group(flag: Option<String>) -> Option<String> {
@@ -422,8 +423,18 @@ async fn main() -> Result<()> {
         }
         Commands::Experiment(sub) => {
             match sub {
-                cli::ExperimentCommands::Run { agent, prompt, metric, direction, checks, max_runs, dir } => {
-                    eprintln!("[aid] Experiment loop not yet implemented");
+                cli::ExperimentCommands::Run { agent, prompt, metric, direction, checks, max_runs, worktree, verify } => {
+                    let config = ExperimentConfig {
+                        metric_command: metric,
+                        direction: match direction.to_lowercase().as_str() {
+                            "min" => MetricDirection::Min,
+                            _ => MetricDirection::Max,
+                        },
+                        agent, prompt, checks,
+                        max_runs: Some(max_runs),
+                        worktree, verify,
+                    };
+                    cmd::experiment::run_experiment(store.clone(), config).await?;
                 }
                 cli::ExperimentCommands::Status { dir } => {
                     cmd::experiment_status::run_status(dir.as_deref())?;

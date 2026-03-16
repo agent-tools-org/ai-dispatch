@@ -13,6 +13,7 @@ pub struct ExperimentConfig {
     pub checks: Option<String>,
     pub max_runs: Option<usize>,
     pub worktree: Option<String>,
+    pub verify: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
@@ -66,7 +67,7 @@ mod tests {
     use super::*;
     fn cfg(d: MetricDirection) -> ExperimentConfig {
         ExperimentConfig { metric_command: "".into(), direction: d, agent: "".into(),
-            prompt: "".into(), checks: None, max_runs: None, worktree: None }
+            prompt: "".into(), checks: None, max_runs: None, worktree: None, verify: None }
     }
     #[test]
     fn is_improvement_max_direction() {

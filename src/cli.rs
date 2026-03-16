@@ -589,9 +589,12 @@ pub enum ExperimentCommands {
         /// Maximum number of experiment runs
         #[arg(long, default_value = "5")]
         max_runs: usize,
-        /// Working directory
+        /// Worktree branch for the experiment
         #[arg(long)]
-        dir: Option<String>,
+        worktree: Option<String>,
+        /// Verify command to run after each iteration
+        #[arg(long)]
+        verify: Option<String>,
     },
     /// Show experiment status and history
     Status {

@@ -40,5 +40,6 @@ pub mod watch;
 pub mod worktree;
 pub mod tree;
 pub mod experiment_types;
+pub mod experiment;
 pub mod experiment_persist;
 pub mod experiment_status;

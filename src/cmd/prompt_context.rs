@@ -12,6 +12,17 @@ use crate::team::KnowledgeEntry;
 use crate::templates;
 use crate::types::*;
 
+const STOP_WORDS: &[&str] = &[
+    "the", "a", "an", "is", "are", "was", "were", "be", "been", "being", "have", "has", "had",
+    "do", "does", "did", "will", "would", "could", "should", "may", "might", "can", "shall", "to",
+    "of", "in", "for", "on", "with", "at", "by", "from", "as", "into", "about", "between",
+    "through", "after", "before", "and", "but", "or", "not", "no", "if", "then", "than", "so",
+    "it", "its", "this", "that", "these", "those", "all", "each", "every", "both", "few", "more",
+    "most", "other", "some", "such", "only", "same", "new", "use", "used", "using", "add", "run",
+    "set", "get", "code", "file", "fix", "check", "change", "make", "src", "test", "when", "how",
+    "what", "which", "who", "where",
+];
+
 pub(super) fn inject_memories(store: &Store, prompt: &str, max_memories: usize) -> Result<Option<(String, Vec<String>)>> {
     let project_path = detect_project_path();
     let keywords = extract_words(prompt);
@@ -170,7 +181,13 @@ pub(super) fn format_entry_block(entry: &KnowledgeEntry) -> String {
     line.push_str(&entry.description);
     if let Some(content) = &entry.content {
         line.push('\n');
-        line.push_str(content);
+        if content.len() > 500 {
+            let truncated = &content[..content.floor_char_boundary(500)];
+            line.push_str(truncated);
+            line.push_str("...");
+        } else {
+            line.push_str(content);
+        }
     }
     line
 }
@@ -188,7 +205,7 @@ pub(super) fn select_relevant_entries<'a>(entries: &'a [KnowledgeEntry], prompt:
     scored.sort_by(|a, b| b.0.cmp(&a.0));
     scored
         .into_iter()
-        .filter(|(score, _)| *score > 0)
+        .filter(|(score, _)| *score >= 2)
         .take(5)
         .map(|(_, entry)| entry)
         .collect()
@@ -199,7 +216,9 @@ pub fn extract_words(value: &str) -> HashSet<String> {
         .split(|c: char| !c.is_alphanumeric())
         .filter_map(|token| {
             let normalized = token.to_lowercase();
-            if normalized.is_empty() { None } else { Some(normalized) }
+            if normalized.is_empty() { None }
+            else if STOP_WORDS.contains(&normalized.as_str()) { None }
+            else { Some(normalized) }
         })
         .collect()
 }
@@ -311,6 +330,15 @@ mod tests {
     }
 
     #[test]
+    fn format_entry_block_truncates_long_content() {
+        let long_content: String = std::iter::repeat('x').take(1_000).collect();
+        let entry = make_entry("Topic Long", None, "Long desc", Some(&long_content));
+        let block = format_entry_block(&entry);
+        assert!(block.ends_with("..."));
+        assert!(block.len() < 600);
+    }
+
+    #[test]
     fn format_knowledge_block_header() {
         let entry = make_entry("Topic C", None, "Header desc", None);
         let block = format_knowledge_block("dev", &[&entry]);
@@ -373,6 +401,19 @@ mod tests {
     }
 
     #[test]
+    fn select_relevant_entries_requires_two_word_overlap() {
+        let entries = vec![
+            make_entry("Rust Guide", None, "rust feature reference", None),
+            make_entry("Python Guide", None, "overview", None),
+        ];
+        let selected = select_relevant_entries(&entries, "implement rust feature");
+        assert_eq!(selected.len(), 1);
+        assert_eq!(selected[0].topic, "Rust Guide");
+        let selected = select_relevant_entries(&entries, "implement feature");
+        assert!(selected.is_empty());
+    }
+
+    #[test]
     fn select_relevant_entries_empty_prompt() {
         let entries = vec![
             make_entry("Rust", None, "Topics", None),
@@ -386,6 +427,18 @@ mod tests {
     fn extract_words_basic() {
         let words = extract_words("hello world");
         let expected: HashSet<String> = vec!["hello", "world"].into_iter().map(String::from).collect();
+        assert_eq!(words, expected);
+    }
+
+    #[test]
+    fn extract_words_filters_stop_words() {
+        let filtered = extract_words("use the code to fix it");
+        assert!(filtered.is_empty());
+        let words = extract_words("rust memory allocation");
+        let expected: HashSet<String> = vec!["rust", "memory", "allocation"]
+            .into_iter()
+            .map(String::from)
+            .collect();
         assert_eq!(words, expected);
     }
 }

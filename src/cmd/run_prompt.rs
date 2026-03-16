@@ -4,6 +4,7 @@
 use anyhow::{Context, Result};
 use chrono::Local;
 use serde_json;
+use std::collections::HashSet;
 use std::path::{Component, Path, PathBuf};
 use std::sync::Arc;
 use tokio::process::Command;
@@ -73,29 +74,7 @@ pub(super) fn build_prompt_bundle(store: &Store, args: &RunArgs, agent_kind: &Ag
         injected_memory_ids = memory_ids;
     }
 
-    // Inject team rules + knowledge if --team was specified
-    if let Some(ref team_id) = args.team {
-        if let Some(tc) = team::resolve_team(team_id) {
-            if !tc.rules.is_empty() {
-                let rules_block = tc.rules.iter()
-                    .map(|r| format!("- {r}"))
-                    .collect::<Vec<_>>()
-                    .join("\n");
-                effective_prompt = format!("<aid-team-rules>\n{rules_block}\n</aid-team-rules>\n\n{effective_prompt}");
-                eprintln!("[aid] Injected {} team rule(s)", tc.rules.len());
-            }
-        }
-        let entries = team::read_knowledge_entries(team_id);
-        let total_entries = entries.len();
-        if total_entries > 0 {
-            let relevant = prompt_context::select_relevant_entries(&entries, &args.prompt);
-            eprintln!("[aid] Injected {}/{} knowledge entries (relevance-filtered)", relevant.len(), total_entries);
-            if !relevant.is_empty() {
-                let knowledge_block = prompt_context::format_knowledge_block(team_id, &relevant);
-                effective_prompt = format!("{knowledge_block}\n\n{effective_prompt}");
-            }
-        }
-    }
+    let mut project_topics: HashSet<String> = HashSet::new();
 
     // Inject project rules + knowledge if a project was detected
     if let Some(pc) = project::detect_project() {
@@ -114,12 +93,55 @@ pub(super) fn build_prompt_bundle(store: &Store, args: &RunArgs, agent_kind: &Ag
         if total_knowledge > 0 {
             let relevant = prompt_context::select_relevant_entries(&knowledge_entries, &args.prompt);
             if !relevant.is_empty() {
+                for entry in &relevant {
+                    project_topics.extend(prompt_context::extract_words(&entry.topic));
+                }
                 let knowledge_block = prompt_context::format_knowledge_block(&pc.id, &relevant);
                 effective_prompt = format!("{knowledge_block}\n\n{effective_prompt}");
             }
             eprintln!("[aid] Project '{}' detected: {} rule(s), {}/{} knowledge entries", pc.id, rules_count, relevant.len(), total_knowledge);
         } else if rules_count > 0 {
             eprintln!("[aid] Project '{}' detected: {} rule(s)", pc.id, rules_count);
+        }
+    }
+
+    // Inject team rules + knowledge if --team was specified
+    if let Some(ref team_id) = args.team {
+        if let Some(tc) = team::resolve_team(team_id) {
+            if !tc.rules.is_empty() {
+                let rules_block = tc.rules.iter()
+                    .map(|r| format!("- {r}"))
+                    .collect::<Vec<_>>()
+                    .join("\n");
+                effective_prompt = format!("<aid-team-rules>\n{rules_block}\n</aid-team-rules>\n\n{effective_prompt}");
+                eprintln!("[aid] Injected {} team rule(s)", tc.rules.len());
+            }
+        }
+        let entries = team::read_knowledge_entries(team_id);
+        let total_entries = entries.len();
+        if total_entries > 0 {
+            let relevant = prompt_context::select_relevant_entries(&entries, &args.prompt);
+            let relevant: Vec<_> = if project_topics.is_empty() {
+                relevant
+            } else {
+                relevant
+                    .into_iter()
+                    .filter(|entry| {
+                        let entry_topic_words = prompt_context::extract_words(&entry.topic);
+                        let overlap = entry_topic_words
+                            .iter()
+                            .filter(|word| project_topics.contains(*word))
+                            .count();
+                        let total = entry_topic_words.len().max(1);
+                        (overlap as f64 / total as f64) < 0.5
+                    })
+                    .collect()
+            };
+            eprintln!("[aid] Injected {}/{} knowledge entries (relevance-filtered)", relevant.len(), total_entries);
+            if !relevant.is_empty() {
+                let knowledge_block = prompt_context::format_knowledge_block(team_id, &relevant);
+                effective_prompt = format!("{knowledge_block}\n\n{effective_prompt}");
+            }
         }
     }
 

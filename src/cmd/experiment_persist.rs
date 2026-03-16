@@ -1,7 +1,9 @@
 // Persistence layer for experiment runs (append-only JSONL).
 // Exports: save_run, load_state, experiment_file_path.
 // Deps: serde_json, std::fs, crate::cmd::experiment_types.
-use crate::cmd::experiment_types::{ExperimentConfig, ExperimentRun, ExperimentState, MetricDirection};
+use crate::cmd::experiment_types::{ExperimentConfig, ExperimentRun, ExperimentState};
+#[cfg(test)]
+use crate::cmd::experiment_types::MetricDirection;
 use anyhow::Result;
 use std::fs::{self, File};
 use std::io::{BufRead, BufReader, Write};

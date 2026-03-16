@@ -27,6 +27,7 @@ toml = { version = "0.8", default-features = false, features = ["parse", "displa
 portable-pty = { version = "0.8", default-features = false }
 
 [profile.release]
+opt-level = "z"
 strip = true
 lto = true
 codegen-units = 1

@@ -12,7 +12,6 @@ use crate::{
 use crate::cmd::summary::{format_summary_for_injection, CompletionSummary};
 use crate::store::TaskCompletionUpdate;
 mod prompt_context;
-pub(super) use prompt_context::extract_words;
 use super::RunArgs;
 
 const VERIFY_RETRY_FEEDBACK: &str =

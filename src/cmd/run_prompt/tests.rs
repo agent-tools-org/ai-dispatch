@@ -69,7 +69,7 @@ fn effective_skills_respect_no_skill_sentinel() {
 #[test]
 fn extract_words_normalizes_keywords() {
     let text = "Refactor Foo::Bar and update src/lib.rs to fix Config::load().";
-    let words = extract_words(text);
+    let words = super::prompt_context::extract_words(text);
     assert!(words.contains("refactor"));
     assert!(words.contains("foo"));
     assert!(words.contains("bar"));

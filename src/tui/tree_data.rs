@@ -2,10 +2,11 @@
 // Exports: TreeNode, build_task_tree.
 // Deps: crate::types::Task.
 
-use crate::types::{Task, TaskStatus};
+use crate::types::Task;
 use std::collections::{HashMap, HashSet};
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct TreeNode {
     pub task: Task,
     pub depth: usize,
@@ -155,7 +156,7 @@ fn add_children(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::types::{AgentKind, TaskId, VerifyStatus};
+    use crate::types::{AgentKind, TaskId, TaskStatus, VerifyStatus};
     use chrono::Local;
 
     fn mk(id: &str, parent: Option<&str>) -> Task {

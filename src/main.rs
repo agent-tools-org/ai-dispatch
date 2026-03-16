@@ -44,7 +44,7 @@ use crate::types::AgentKind;
 use anyhow::Result;
 use clap::Parser;
 use std::sync::Arc;
-use crate::cli::{Cli, Commands, AgentCommands, StoreCommands, MemoryCommands, FindingCommands, ExperimentCommands};
+use crate::cli::{Cli, Commands, AgentCommands, StoreCommands, MemoryCommands, FindingCommands};
 use crate::cmd::experiment_types::{ExperimentConfig, MetricDirection};
 
 /// Resolve group: CLI flag takes precedence, then AID_GROUP env var.

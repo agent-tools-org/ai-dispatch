@@ -1,6 +1,5 @@
 use chrono::Local;
 
-use crate::types::*;
 use super::*;
 
 fn make_memory(id: &str, content: &str) -> Memory {

@@ -143,6 +143,12 @@ pub(super) fn migrate(store: &Store) -> Result<()> {
         "ALTER TABLE tasks ADD COLUMN verify_status TEXT NOT NULL DEFAULT 'skipped';",
     );
     let _ = conn.execute_batch(CREATE_FINDINGS_SQL);
+    // Performance indexes for hot query paths
+    let _ = conn.execute_batch("CREATE INDEX IF NOT EXISTS idx_tasks_created_at ON tasks(created_at);");
+    let _ = conn.execute_batch("CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);");
+    let _ = conn.execute_batch("CREATE INDEX IF NOT EXISTS idx_tasks_workgroup ON tasks(workgroup_id);");
+    let _ = conn.execute_batch("CREATE INDEX IF NOT EXISTS idx_events_task_id ON events(task_id);");
+    let _ = conn.execute_batch("CREATE INDEX IF NOT EXISTS idx_events_task_kind ON events(task_id, event_type);");
     Ok(())
 }
 

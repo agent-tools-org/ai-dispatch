@@ -26,6 +26,11 @@ tokio = { version = "1", features = ["rt-multi-thread", "macros", "process", "fs
 toml = { version = "0.8", default-features = false, features = ["parse", "display"] }
 portable-pty = { version = "0.8", default-features = false }
 
+[profile.release]
+strip = true
+lto = true
+codegen-units = 1
+
 [dev-dependencies]
 tempfile = "3"
 libc = "0.2"

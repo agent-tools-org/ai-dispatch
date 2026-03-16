@@ -107,8 +107,8 @@ pub(super) fn build_prompt_bundle(store: &Store, args: &RunArgs, agent_kind: &Ag
 
     // Inject team rules + knowledge if --team was specified
     if let Some(ref team_id) = args.team {
-        if let Some(tc) = team::resolve_team(team_id) {
-            if !tc.rules.is_empty() {
+        if let Some(tc) = team::resolve_team(team_id)
+            && !tc.rules.is_empty() {
                 let rules_block = tc.rules.iter()
                     .map(|r| format!("- {r}"))
                     .collect::<Vec<_>>()
@@ -116,7 +116,6 @@ pub(super) fn build_prompt_bundle(store: &Store, args: &RunArgs, agent_kind: &Ag
                 effective_prompt = format!("<aid-team-rules>\n{rules_block}\n</aid-team-rules>\n\n{effective_prompt}");
                 eprintln!("[aid] Injected {} team rule(s)", tc.rules.len());
             }
-        }
         let entries = team::read_knowledge_entries(team_id);
         let total_entries = entries.len();
         if total_entries > 0 {
@@ -493,7 +492,7 @@ pub(super) fn warn_agent_committed_files_outside_scope(
                 .any(|scope| file_path == scope || file_path.starts_with(scope));
         let dir_violation = dir_path
             .as_ref()
-            .map_or(false, |dir| !(file_path == dir || file_path.starts_with(dir)));
+            .is_some_and(|dir| !(file_path == dir || file_path.starts_with(dir)));
         if scope_violation || dir_violation {
             violations.push(file);
         }

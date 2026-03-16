@@ -67,11 +67,10 @@ fn notify_hiboss(task: &Task) {
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null());
-    if let Err(err) = cmd.spawn() {
-        if err.kind() != std::io::ErrorKind::NotFound {
+    if let Err(err) = cmd.spawn()
+        && err.kind() != std::io::ErrorKind::NotFound {
             eprintln!("hiboss send failed: {err}");
         }
-    }
 }
 
 fn format_duration(duration_ms: Option<i64>) -> String {

@@ -33,8 +33,8 @@ pub fn run_status(dir: Option<&str>) -> Result<()> {
         state.best_run_id.unwrap_or(0),
     );
     println!(
-        "{:<6} {:<10} {:<12} {:<8} {:<8} {}",
-        "Run", "Agent", "Metric", "Kept", "Checks", "Duration"
+        "{:<6} {:<10} {:<12} {:<8} {:<8} Duration",
+        "Run", "Agent", "Metric", "Kept", "Checks"
     );
     println!("{}", "-".repeat(60));
     for run in &state.runs {

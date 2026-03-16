@@ -94,18 +94,16 @@ pub async fn run(store: Arc<Store>, mut args: RunArgs) -> Result<TaskId> {
 
     if let Some(project) = project::detect_project() {
         let mut defaults_applied = false;
-        if args.team.is_none() {
-            if let Some(team) = project.team.as_ref() {
+        if args.team.is_none()
+            && let Some(team) = project.team.as_ref() {
                 args.team = Some(team.clone());
                 defaults_applied = true;
             }
-        }
-        if args.verify.is_none() {
-            if let Some(verify) = project.verify.as_ref() {
+        if args.verify.is_none()
+            && let Some(verify) = project.verify.as_ref() {
                 args.verify = Some(verify.clone());
                 defaults_applied = true;
             }
-        }
         if !args.budget && project.budget.prefer_budget {
             args.budget = true;
             defaults_applied = true;

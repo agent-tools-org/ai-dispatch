@@ -216,9 +216,11 @@ pub fn extract_words(value: &str) -> HashSet<String> {
         .split(|c: char| !c.is_alphanumeric())
         .filter_map(|token| {
             let normalized = token.to_lowercase();
-            if normalized.is_empty() { None }
-            else if STOP_WORDS.contains(&normalized.as_str()) { None }
-            else { Some(normalized) }
+            if normalized.is_empty() || STOP_WORDS.contains(&normalized.as_str()) {
+                None
+            } else {
+                Some(normalized)
+            }
         })
         .collect()
 }

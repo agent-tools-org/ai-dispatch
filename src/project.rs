@@ -17,6 +17,7 @@ struct ProjectFile {
 
 #[allow(dead_code)] // All fields used via TOML deserialization; agents integration planned
 #[derive(Debug, Clone, Deserialize)]
+#[derive(Default)]
 pub struct ProjectConfig {
     pub id: String,
     #[serde(default)]
@@ -35,23 +36,10 @@ pub struct ProjectConfig {
     pub agents: ProjectAgents,
 }
 
-impl Default for ProjectConfig {
-    fn default() -> Self {
-        Self {
-            id: String::new(),
-            profile: None,
-            team: None,
-            verify: None,
-            language: None,
-            rules: Vec::new(),
-            budget: ProjectBudget::default(),
-            agents: ProjectAgents::default(),
-        }
-    }
-}
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(default)]
+#[derive(Default)]
 pub struct ProjectBudget {
     #[serde(default)]
     pub window: Option<String>,
@@ -63,20 +51,11 @@ pub struct ProjectBudget {
     pub prefer_budget: bool,
 }
 
-impl Default for ProjectBudget {
-    fn default() -> Self {
-        Self {
-            window: None,
-            cost_limit_usd: None,
-            token_limit: None,
-            prefer_budget: false,
-        }
-    }
-}
 
 #[allow(dead_code)] // Schema fields — used when TOML is parsed, agent integration planned
 #[derive(Debug, Clone, Deserialize)]
 #[serde(default)]
+#[derive(Default)]
 pub struct ProjectAgents {
     #[serde(default)]
     pub default: Option<String>,
@@ -86,15 +65,6 @@ pub struct ProjectAgents {
     pub simple_edit: Option<String>,
 }
 
-impl Default for ProjectAgents {
-    fn default() -> Self {
-        Self {
-            default: None,
-            research: None,
-            simple_edit: None,
-        }
-    }
-}
 
 pub fn detect_project() -> Option<ProjectConfig> {
     let git_root = find_git_root()?;

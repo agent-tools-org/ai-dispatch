@@ -27,12 +27,11 @@ pub fn load_state(path: &Path, config: &ExperimentConfig) -> Result<ExperimentSt
     if !path.exists() {
         return Ok(state);
     }
-    for line in BufReader::new(File::open(path)?).lines().flatten() {
-        if !line.trim().is_empty() {
-            if let Ok(run) = serde_json::from_str::<ExperimentRun>(&line) {
+    for line in BufReader::new(File::open(path)?).lines().map_while(Result::ok) {
+        if !line.trim().is_empty()
+            && let Ok(run) = serde_json::from_str::<ExperimentRun>(&line) {
                 state.record_run(run);
             }
-        }
     }
     Ok(state)
 }

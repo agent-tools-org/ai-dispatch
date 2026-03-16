@@ -81,11 +81,10 @@ fn write_project_config(
         bail!("Project config already exists at {}", project_path.display());
     }
     let mut lines = vec!["[project]".to_string(), format!("id = \"{}\"", project_id), format!("profile = \"{}\"", profile)];
-    if let Some(lang) = language {
-        if !lang.trim().is_empty() {
+    if let Some(lang) = language
+        && !lang.trim().is_empty() {
             lines.push(format!("language = \"{}\"", lang.trim()));
         }
-    }
     lines.push(String::new());
     fs::write(&project_path, lines.join("\n"))?;
     let knowledge_dir = project::project_knowledge_dir(git_root);
@@ -177,7 +176,7 @@ fn package_json_has_typescript(path: &Path) -> bool {
         parsed
             .get(*key)
             .and_then(|deps| deps.as_object())
-            .map_or(false, |deps| deps.contains_key("typescript"))
+            .is_some_and(|deps| deps.contains_key("typescript"))
     })
 }
 fn current_git_root() -> Result<PathBuf> {

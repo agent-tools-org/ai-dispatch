@@ -328,11 +328,10 @@ impl App {
             let fresh = self.store.latest_milestones_batch(&need_query)?;
             for (tid, detail) in &fresh {
                 // Cache milestones for terminal tasks so we never re-query them
-                if let Some(task) = tasks.iter().find(|t| t.id.as_str() == tid) {
-                    if task.status.is_terminal() {
+                if let Some(task) = tasks.iter().find(|t| t.id.as_str() == tid)
+                    && task.status.is_terminal() {
                         self.cached_terminal_milestones.insert(tid.clone(), detail.clone());
                     }
-                }
             }
             result.extend(fresh);
         }

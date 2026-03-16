@@ -1,8 +1,8 @@
 // aid CLI definitions.
 // Exports parser structs and subcommands; depends on clap derive.
 
-use clap::{Args, Parser, Subcommand};
 use crate::cli_actions::{ConfigAction, GroupAction, TeamAction, WorktreeAction};
+use clap::{Args, Parser, Subcommand};
 
 #[derive(Parser)]
 #[command(name = "aid", version, about = "Multi-AI CLI team orchestrator")]
@@ -429,6 +429,9 @@ Batch TOML format:
         /// Message to broadcast
         message: String,
     },
+    /// Run autonomous experiment loop: edit → measure → keep/revert
+    #[command(subcommand)]
+    Experiment(ExperimentCommands),
     /// Upgrade aid to the latest version from crates.io
     Upgrade {
         /// Force upgrade even if tasks are running
@@ -566,22 +569,47 @@ pub enum FindingCommands {
     },
 }
 
+#[derive(Subcommand)]
+pub enum ExperimentCommands {
+    /// Start an experiment loop
+    Run {
+        /// Agent to use for each iteration
+        agent: String,
+        /// Prompt describing what to optimize
+        prompt: String,
+        /// Command to measure the metric (output must be a number)
+        #[arg(long)]
+        metric: String,
+        /// Optimization direction
+        #[arg(long, default_value = "max")]
+        direction: String,
+        /// Correctness checks (must pass to keep changes)
+        #[arg(long)]
+        checks: Option<String>,
+        /// Maximum number of experiment runs
+        #[arg(long, default_value = "5")]
+        max_runs: usize,
+        /// Working directory
+        #[arg(long)]
+        dir: Option<String>,
+    },
+    /// Show experiment status and history
+    Status {
+        /// Working directory (where experiment.jsonl is)
+        #[arg(long)]
+        dir: Option<String>,
+    },
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{Commands, Cli};
+    use super::{Cli, Commands, ExperimentCommands};
     use clap::Parser;
 
     #[test]
     fn run_best_of_flag_parses() {
-        let cli = Cli::try_parse_from([
-            "aid",
-            "run",
-            "auto",
-            "add tests",
-            "--best-of",
-            "3",
-        ])
-        .unwrap();
+        let cli =
+            Cli::try_parse_from(["aid", "run", "auto", "add tests", "--best-of", "3"]).unwrap();
         match cli.command {
             Commands::Run { best_of, .. } => assert_eq!(best_of, Some(3)),
             _ => panic!("expected Run command"),
@@ -590,15 +618,8 @@ mod tests {
 
     #[test]
     fn run_parent_flag_parses() {
-        let cli = Cli::try_parse_from([
-            "aid",
-            "run",
-            "codex",
-            "do stuff",
-            "--parent",
-            "t-abc123",
-        ])
-        .unwrap();
+        let cli = Cli::try_parse_from(["aid", "run", "codex", "do stuff", "--parent", "t-abc123"])
+            .unwrap();
         match cli.command {
             Commands::Run { parent, .. } => assert_eq!(parent, Some("t-abc123".to_string())),
             _ => panic!("expected Run"),
@@ -607,18 +628,40 @@ mod tests {
 
     #[test]
     fn run_peer_review_flag_parses() {
+        let cli = Cli::try_parse_from(["aid", "run", "codex", "task", "--peer-review", "gemini"])
+            .unwrap();
+        match cli.command {
+            Commands::Run { peer_review, .. } => {
+                assert_eq!(peer_review, Some("gemini".to_string()))
+            }
+            _ => panic!("expected Run"),
+        }
+    }
+
+    #[test]
+    fn experiment_run_parses() {
         let cli = Cli::try_parse_from([
             "aid",
+            "experiment",
             "run",
             "codex",
-            "task",
-            "--peer-review",
-            "gemini",
+            "optimize perf",
+            "--metric",
+            "cargo bench 2>&1 | tail -1",
+            "--direction",
+            "min",
+            "--max-runs",
+            "10",
         ])
         .unwrap();
         match cli.command {
-            Commands::Run { peer_review, .. } => assert_eq!(peer_review, Some("gemini".to_string())),
-            _ => panic!("expected Run"),
+            Commands::Experiment(ExperimentCommands::Run {
+                agent, max_runs, ..
+            }) => {
+                assert_eq!(agent, "codex");
+                assert_eq!(max_runs, 10);
+            }
+            _ => panic!("expected Experiment Run"),
         }
     }
 }

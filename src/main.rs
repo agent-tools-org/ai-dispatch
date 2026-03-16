@@ -44,7 +44,7 @@ use crate::types::AgentKind;
 use anyhow::Result;
 use clap::Parser;
 use std::sync::Arc;
-use crate::cli::{Cli, Commands, AgentCommands, StoreCommands, MemoryCommands, FindingCommands};
+use crate::cli::{Cli, Commands, AgentCommands, StoreCommands, MemoryCommands, FindingCommands, ExperimentCommands};
 
 /// Resolve group: CLI flag takes precedence, then AID_GROUP env var.
 fn resolve_group(flag: Option<String>) -> Option<String> {
@@ -419,6 +419,16 @@ async fn main() -> Result<()> {
         Commands::Setup => cmd::setup::run()?,
         Commands::InternalRunTask { task_id } => {
             background::run_task(store, &task_id).await?;
+        }
+        Commands::Experiment(sub) => {
+            match sub {
+                cli::ExperimentCommands::Run { agent, prompt, metric, direction, checks, max_runs, dir } => {
+                    eprintln!("[aid] Experiment loop not yet implemented");
+                }
+                cli::ExperimentCommands::Status { dir } => {
+                    eprintln!("[aid] Experiment status not yet implemented");
+                }
+            }
         }
     }
 

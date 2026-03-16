@@ -5,6 +5,7 @@ use anyhow::Result;
 use crossterm::event::{KeyCode, KeyEvent};
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::time::Instant;
 
 use super::metrics::{get_process_metrics, ProcessMetrics};
 use crate::background;
@@ -64,6 +65,8 @@ pub struct App {
     group_filter: Option<String>,
     config: crate::config::AidConfig,
     store: Arc<Store>,
+    last_metrics_refresh: Instant,
+    cached_terminal_milestones: HashMap<String, String>,
 }
 
 impl App {
@@ -89,6 +92,8 @@ impl App {
             group_filter: options.group,
             config: crate::config::load_config().unwrap_or_default(),
             store,
+            last_metrics_refresh: Instant::now(),
+            cached_terminal_milestones: HashMap::new(),
         };
         app.reload_tasks()?;
         Ok(app)
@@ -96,6 +101,11 @@ impl App {
 
     pub fn tick(&mut self) -> Result<()> {
         self.reload_tasks()?;
+        // Only refresh process metrics every 2 seconds (ps fork is expensive)
+        if self.last_metrics_refresh.elapsed().as_secs() >= 2 {
+            self.metrics = self.load_metrics(&self.tasks);
+            self.last_metrics_refresh = Instant::now();
+        }
         if self.dashboard_mode {
             self.load_dashboard_events()?;
         }
@@ -226,8 +236,7 @@ impl App {
     }
     fn reload_tasks(&mut self) -> Result<()> {
         let tasks = self.load_tasks()?;
-        self.metrics = self.load_metrics(&tasks);
-        self.milestones = self.load_milestones(&tasks)?;
+        self.milestones = self.load_milestones_batch(&tasks)?;
         self.tasks = tasks;
         if self.selected >= self.tasks.len() && !self.tasks.is_empty() {
             self.selected = self.tasks.len() - 1;
@@ -280,23 +289,34 @@ impl App {
         }
         metrics
     }
-    fn load_milestones(&self, tasks: &[Task]) -> Result<HashMap<String, String>> {
-        let mut milestones = HashMap::new();
-        for task in tasks.iter().filter(|task| {
-            matches!(
-                task.status,
-                crate::types::TaskStatus::Running
-                    | crate::types::TaskStatus::AwaitingInput
-                    | crate::types::TaskStatus::Done
-                    | crate::types::TaskStatus::Merged
-                    | crate::types::TaskStatus::Failed
-            )
-        }) {
-            if let Some(milestone) = self.store.latest_milestone(task.id.as_str())? {
-                milestones.insert(task.id.as_str().to_string(), milestone);
+    fn load_milestones_batch(&mut self, tasks: &[Task]) -> Result<HashMap<String, String>> {
+        // Only query milestones for non-terminal tasks (running/pending change)
+        // For terminal tasks, use cached values
+        let mut need_query: Vec<&str> = Vec::new();
+        let mut result = HashMap::new();
+        for task in tasks.iter().filter(|t| !matches!(t.status, TaskStatus::Pending)) {
+            if task.status.is_terminal() {
+                // Use cached milestone for completed tasks
+                if let Some(cached) = self.cached_terminal_milestones.get(task.id.as_str()) {
+                    result.insert(task.id.as_str().to_string(), cached.clone());
+                    continue;
+                }
             }
+            need_query.push(task.id.as_str());
         }
-        Ok(milestones)
+        if !need_query.is_empty() {
+            let fresh = self.store.latest_milestones_batch(&need_query)?;
+            for (tid, detail) in &fresh {
+                // Cache milestones for terminal tasks so we never re-query them
+                if let Some(task) = tasks.iter().find(|t| t.id.as_str() == tid) {
+                    if task.status.is_terminal() {
+                        self.cached_terminal_milestones.insert(tid.clone(), detail.clone());
+                    }
+                }
+            }
+            result.extend(fresh);
+        }
+        Ok(result)
     }
 }
 

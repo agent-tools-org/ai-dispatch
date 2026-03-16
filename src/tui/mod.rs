@@ -50,7 +50,7 @@ fn run_loop(
 ) -> Result<()> {
     loop {
         terminal.draw(|frame| ui::render(frame, &app))?;
-        if event::poll(Duration::from_millis(250))?
+        if event::poll(Duration::from_millis(500))?
             && let Event::Key(key) = event::read()?
         {
             app.handle_key(key)?;

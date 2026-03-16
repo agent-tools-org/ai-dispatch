@@ -2,6 +2,8 @@
 // Exports: Store query methods.
 // Deps: rusqlite, chrono, crate::types.
 
+use std::collections::HashMap;
+
 use anyhow::Result;
 use chrono::Local;
 use rusqlite::{params, OptionalExtension};
@@ -72,6 +74,36 @@ impl Store {
             )
             .optional()?;
         Ok(milestone)
+    }
+
+    /// Batch fetch latest milestone for multiple tasks in a single query.
+    pub fn latest_milestones_batch(&self, task_ids: &[&str]) -> Result<HashMap<String, String>> {
+        if task_ids.is_empty() {
+            return Ok(HashMap::new());
+        }
+        let conn = self.db();
+        let placeholders: Vec<String> = (1..=task_ids.len()).map(|i| format!("?{i}")).collect();
+        let sql = format!(
+            "SELECT task_id, detail FROM events e1
+             WHERE event_type = 'milestone'
+             AND timestamp = (
+                 SELECT MAX(timestamp) FROM events e2
+                 WHERE e2.task_id = e1.task_id AND e2.event_type = 'milestone'
+             )
+             AND task_id IN ({})",
+            placeholders.join(",")
+        );
+        let mut stmt = conn.prepare(&sql)?;
+        let params: Vec<&dyn rusqlite::ToSql> = task_ids.iter().map(|s| s as &dyn rusqlite::ToSql).collect();
+        let rows = stmt.query_map(params.as_slice(), |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+        })?;
+        let mut map = HashMap::new();
+        for row in rows {
+            let (tid, detail) = row?;
+            map.insert(tid, detail);
+        }
+        Ok(map)
     }
 
     pub fn get_workgroup_milestones(&self, workgroup_id: &str) -> Result<Vec<(String, String)>> {
@@ -166,14 +198,17 @@ impl Store {
                  FROM tasks WHERE status IN (?1, ?2) ORDER BY created_at DESC",
                 vec!["running".to_string(), "awaiting_input".to_string()],
             ),
-            TaskFilter::Today => (
-            "SELECT id, agent, prompt, resolved_prompt, status, parent_task_id, workgroup_id,
-                 caller_kind, caller_session_id, agent_session_id, repo_path, worktree_path, worktree_branch,
-                 log_path, output_path, tokens, prompt_tokens, duration_ms, model, cost_usd, created_at,
-                 completed_at, verify, read_only, budget, custom_agent_name, verify_status
-                 FROM tasks ORDER BY created_at DESC",
-                vec![],
-            ),
+            TaskFilter::Today => {
+                let today = Local::now().format("%Y-%m-%d").to_string();
+                (
+                "SELECT id, agent, prompt, resolved_prompt, status, parent_task_id, workgroup_id,
+                     caller_kind, caller_session_id, agent_session_id, repo_path, worktree_path, worktree_branch,
+                     log_path, output_path, tokens, prompt_tokens, duration_ms, model, cost_usd, created_at,
+                     completed_at, verify, read_only, budget, custom_agent_name, verify_status
+                     FROM tasks WHERE created_at >= ?1 ORDER BY created_at DESC",
+                    vec![today],
+                )
+            },
         };
         let mut stmt = conn.prepare(sql)?;
         let params: Vec<&dyn rusqlite::ToSql> = filter_params
@@ -181,11 +216,7 @@ impl Store {
             .map(|s| s as &dyn rusqlite::ToSql)
             .collect();
         let rows = stmt.query_map(params.as_slice(), row_to_task)?;
-        let mut tasks = rows.map(|r| r?).collect::<Result<Vec<_>>>()?;
-        if matches!(filter, TaskFilter::Today) {
-            let today = Local::now().date_naive();
-            tasks.retain(|task| task.created_at.date_naive() == today);
-        }
+        let tasks = rows.map(|r| r?).collect::<Result<Vec<_>>>()?;
         Ok(tasks)
     }
 

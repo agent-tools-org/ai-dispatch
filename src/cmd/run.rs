@@ -13,6 +13,7 @@ use crate::cmd::{config as cmd_config, judge, retry_logic, show};
 use crate::config;
 use crate::hooks;
 use crate::paths;
+use crate::project;
 use crate::rate_limit;
 use crate::session;
 use crate::store::Store;
@@ -86,9 +87,37 @@ fn validate_dispatch(args: &RunArgs, agent_kind: &AgentKind) -> Vec<String> {
     }
     warnings
 }
-pub async fn run(store: Arc<Store>, args: RunArgs) -> Result<TaskId> {
+pub async fn run(store: Arc<Store>, mut args: RunArgs) -> Result<TaskId> {
     if let Some(n) = args.best_of {
         return Box::pin(run_bestof::run_best_of(store, args, n)).await;
+    }
+
+    if let Some(project) = project::detect_project() {
+        let mut defaults_applied = false;
+        if args.team.is_none() {
+            if let Some(team) = project.team.as_ref() {
+                args.team = Some(team.clone());
+                defaults_applied = true;
+            }
+        }
+        if args.verify.is_none() {
+            if let Some(verify) = project.verify.as_ref() {
+                args.verify = Some(verify.clone());
+                defaults_applied = true;
+            }
+        }
+        if !args.budget && project.budget.prefer_budget {
+            args.budget = true;
+            defaults_applied = true;
+        }
+        if defaults_applied {
+            eprintln!(
+                "[aid] Project '{}' defaults: team={}, verify={}",
+                project.id,
+                args.team.as_deref().unwrap_or("None"),
+                args.verify.as_deref().unwrap_or("None"),
+            );
+        }
     }
 
     let (agent_kind, custom_agent_name) = if let Some(kind) = AgentKind::parse_str(&args.agent_name) {

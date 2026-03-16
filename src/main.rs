@@ -426,7 +426,7 @@ async fn main() -> Result<()> {
                     eprintln!("[aid] Experiment loop not yet implemented");
                 }
                 cli::ExperimentCommands::Status { dir } => {
-                    eprintln!("[aid] Experiment status not yet implemented");
+                    cmd::experiment_status::run_status(dir.as_deref())?;
                 }
             }
         }

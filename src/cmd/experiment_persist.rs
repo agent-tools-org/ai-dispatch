@@ -1,7 +1,7 @@
 // Persistence layer for experiment runs (append-only JSONL).
 // Exports: save_run, load_state, experiment_file_path.
 // Deps: serde_json, std::fs, crate::cmd::experiment_types.
-use crate::cmd::experiment_types::{ExperimentConfig, ExperimentRun, ExperimentState};
+use crate::cmd::experiment_types::{ExperimentConfig, ExperimentRun, ExperimentState, MetricDirection};
 use anyhow::Result;
 use std::fs::{self, File};
 use std::io::{BufRead, BufReader, Write};
@@ -16,7 +16,7 @@ pub fn save_run(path: &Path, run: &ExperimentRun) -> Result<()> {
         .create(true)
         .append(true)
         .open(path)?;
-    writeln!(file, "{}", serde_json::to_string(run)?);
+    writeln!(file, "{}", serde_json::to_string(run)?)?;
     Ok(())
 }
 
@@ -39,11 +39,20 @@ pub fn load_state(path: &Path, config: &ExperimentConfig) -> Result<ExperimentSt
 mod tests {
     use super::*;
     use tempfile::TempDir;
-    fn mk_run(i: u32, s: bool, d: u64) -> ExperimentRun {
+
+    fn test_cfg() -> ExperimentConfig {
+        ExperimentConfig {
+            metric_command: "echo 1".into(), direction: MetricDirection::Max,
+            agent: "test".into(), prompt: "test".into(),
+            checks: None, max_runs: Some(5), worktree: None,
+        }
+    }
+
+    fn mk_run(id: usize, kept: bool) -> ExperimentRun {
         ExperimentRun {
-            iteration: i,
-            success: s,
-            duration_ms: d,
+            run_id: id, task_id: format!("t-{id}"), agent: "test".into(),
+            metric_value: Some(id as f64), checks_passed: Some(true),
+            kept, timestamp: "2026-03-16".into(), duration_ms: Some(100),
         }
     }
 
@@ -51,24 +60,16 @@ mod tests {
     fn save_and_load_roundtrip() {
         let dir = TempDir::new().unwrap();
         let path = dir.path().join("experiment.jsonl");
-        let cfg = ExperimentConfig {
-            name: "test".into(),
-            iterations: 10,
-        };
-        save_run(&path, &mk_run(1, true, 100)).unwrap();
-        save_run(&path, &mk_run(2, false, 200)).unwrap();
-        let state = load_state(&path, &cfg).unwrap();
+        save_run(&path, &mk_run(1, true)).unwrap();
+        save_run(&path, &mk_run(2, false)).unwrap();
+        let state = load_state(&path, &test_cfg()).unwrap();
         assert_eq!(state.runs.len(), 2);
-        assert_eq!(state.runs[0].iteration, 1);
+        assert_eq!(state.runs[0].run_id, 1);
     }
 
     #[test]
     fn load_missing_file_returns_empty() {
         let path = std::path::Path::new("/nonexistent/experiment.jsonl");
-        let cfg = ExperimentConfig {
-            name: "test".into(),
-            iterations: 5,
-        };
-        assert!(load_state(&path, &cfg).unwrap().runs.is_empty());
+        assert!(load_state(path, &test_cfg()).unwrap().runs.is_empty());
     }
 }

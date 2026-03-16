@@ -126,10 +126,10 @@ impl Store {
             .query_row(
                 "SELECT completion_summary FROM tasks WHERE id = ?1",
                 params![task_id],
-                |row| row.get::<_, String>(0),
+                |row| row.get::<_, Option<String>>(0),
             )
             .optional()?;
-        Ok(summary.filter(|s| !s.is_empty()))
+        Ok(summary.flatten().filter(|s| !s.is_empty()))
     }
 
     pub fn get_retry_chain(&self, task_id: &str) -> Result<Vec<Task>> {

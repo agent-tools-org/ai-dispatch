@@ -7,7 +7,7 @@ use std::process::Command;
 use std::sync::Arc;
 
 use crate::store::Store;
-use crate::types::TaskStatus;
+use crate::types::{TaskStatus, VerifyStatus};
 
 #[path = "merge_git.rs"]
 mod merge_git;
@@ -31,6 +31,10 @@ fn merge_single(store: &Store, task_id: &str) -> Result<()> {
             "Task '{task_id}' is {} — only DONE tasks can be marked as merged",
             task.status.label()
         ));
+    }
+    if task.verify_status == VerifyStatus::Failed {
+        eprintln!("[aid] Warning: task '{task_id}' has VFAIL status — verify failed before merge");
+        eprintln!("[aid] Review carefully: aid show {task_id} --diff");
     }
     let repo_dir = resolve_repo_dir(task.repo_path.as_deref(), task.worktree_path.as_deref());
 

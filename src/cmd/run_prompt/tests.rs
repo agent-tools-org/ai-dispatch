@@ -73,7 +73,7 @@ fn extract_words_normalizes_keywords() {
     assert!(words.contains("refactor"));
     assert!(words.contains("foo"));
     assert!(words.contains("bar"));
-    assert!(words.contains("src"));
+    assert!(!words.contains("src")); // "src" is a stop word
     assert!(words.contains("lib"));
     assert!(words.contains("rs"));
     assert!(words.contains("config"));

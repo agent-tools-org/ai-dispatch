@@ -25,6 +25,7 @@ mod session;
 mod skills;
 mod store;
 mod store_workgroups;
+mod project;
 mod team;
 mod templates;
 mod compaction;

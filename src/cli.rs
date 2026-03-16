@@ -329,6 +329,23 @@ Batch TOML format:
         #[arg(long, short)]
         file: Option<String>,
     },
+    /// Gracefully stop a running task (SIGTERM + wait)
+    Stop {
+        /// Task ID to stop
+        task_id: String,
+    },
+    /// Force-kill a running task (SIGKILL)
+    Kill {
+        /// Task ID to kill
+        task_id: String,
+    },
+    /// Inject guidance into a running task's PTY
+    Steer {
+        /// Task ID of the running task
+        task_id: String,
+        /// Message to inject (guidance, correction, etc.)
+        message: String,
+    },
     #[command(after_help = r#"Examples:
   aid ask "What is the latest Rust edition?"
   aid ask "Explain this error" --files src/main.rs -o explanation.md"#)]

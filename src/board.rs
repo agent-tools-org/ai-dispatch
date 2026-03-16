@@ -240,7 +240,7 @@ fn count_statuses(tasks: &[Task]) -> (usize, usize, usize) {
         match t.status {
             TaskStatus::Done | TaskStatus::Merged => done += 1,
             TaskStatus::Running | TaskStatus::AwaitingInput => running += 1,
-            TaskStatus::Failed => failed += 1,
+            TaskStatus::Failed | TaskStatus::Stopped => failed += 1,
             TaskStatus::Pending | TaskStatus::Waiting | TaskStatus::Skipped => {}
         }
     }
@@ -327,6 +327,7 @@ fn retry_status(status: TaskStatus) -> &'static str {
         TaskStatus::Merged => "Merged",
         TaskStatus::Failed => "Failed",
         TaskStatus::Skipped => "Skipped",
+        TaskStatus::Stopped => "Stopped",
     }
 }
 

@@ -173,7 +173,10 @@ fn is_active(status: TaskStatus) -> bool {
 }
 
 fn is_terminal(status: TaskStatus) -> bool {
-    matches!(status, TaskStatus::Done | TaskStatus::Failed | TaskStatus::Merged | TaskStatus::Skipped)
+    matches!(
+        status,
+        TaskStatus::Done | TaskStatus::Failed | TaskStatus::Merged | TaskStatus::Skipped | TaskStatus::Stopped
+    )
 }
 
 fn colored_status(status: TaskStatus) -> String {
@@ -181,6 +184,7 @@ fn colored_status(status: TaskStatus) -> String {
         TaskStatus::Done => color("Done", ANSI_GREEN),
         TaskStatus::Merged => color("Merged", ANSI_GREEN),
         TaskStatus::Failed => color("Failed", ANSI_RED),
+        TaskStatus::Stopped => color("Stopped", ANSI_RED),
         TaskStatus::Running => color("Running", ANSI_YELLOW),
         TaskStatus::AwaitingInput => color("Await", ANSI_BLUE),
         TaskStatus::Waiting => color("Waiting", ANSI_DIM),

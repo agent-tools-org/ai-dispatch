@@ -320,6 +320,15 @@ async fn main() -> Result<()> {
         } => {
             cmd::respond::run(&task_id, input.as_deref(), file.as_deref())?;
         }
+        Commands::Stop { task_id } => {
+            cmd::stop::stop(&store, &task_id)?;
+        }
+        Commands::Kill { task_id } => {
+            cmd::stop::kill(&store, &task_id)?;
+        }
+        Commands::Steer { task_id, message } => {
+            cmd::steer::run(&store, &task_id, &message)?;
+        }
         Commands::Ask {
             prompt,
             agent,

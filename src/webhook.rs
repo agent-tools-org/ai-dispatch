@@ -17,6 +17,7 @@ pub async fn fire_task_webhooks(store: &Store, task_id: &str) {
     let status = match task.status {
         TaskStatus::Done | TaskStatus::Merged => "done",
         TaskStatus::Failed => "failed",
+        TaskStatus::Stopped => "failed",
         _ => return,
     };
     match crate::config::load_config() {

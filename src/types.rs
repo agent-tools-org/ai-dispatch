@@ -101,6 +101,7 @@ pub enum TaskStatus {
     Merged,
     Failed,
     Skipped,
+    Stopped,
 }
 
 impl TaskStatus {
@@ -114,6 +115,7 @@ impl TaskStatus {
             Self::Merged => "merged",
             Self::Failed => "failed",
             Self::Skipped => "skipped",
+            Self::Stopped => "stopped",
         }
     }
 
@@ -131,6 +133,7 @@ impl TaskStatus {
             "merged" => Some(Self::Merged),
             "failed" => Some(Self::Failed),
             "skipped" => Some(Self::Skipped),
+            "stopped" => Some(Self::Stopped),
             _ => None,
         }
     }
@@ -145,13 +148,14 @@ impl TaskStatus {
             Self::Merged => "MERGED",
             Self::Failed => "FAIL",
             Self::Skipped => "SKIP",
+            Self::Stopped => "STOP",
         }
     }
 
     pub fn is_terminal(&self) -> bool {
         matches!(
             self,
-            Self::Done | Self::Merged | Self::Failed | Self::Skipped
+            Self::Done | Self::Merged | Self::Failed | Self::Skipped | Self::Stopped
         )
     }
 }

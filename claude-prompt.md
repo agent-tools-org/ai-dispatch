@@ -205,6 +205,20 @@ Teams provide:
 
 Configure teams in `~/.aid/teams/<id>.toml`. Use `aid team show <id>` to inspect.
 
+### Project Profiles
+
+Use `.aid/project.toml` to set per-repo defaults. Run `aid project init` to scaffold:
+
+```toml
+[project]
+id = "my-app"
+profile = "production"   # hobby | standard | production
+team = "dev"
+language = "rust"
+```
+
+Profiles expand into verify/budget/rules defaults. Project settings act as CLI fallbacks — explicit flags always win.
+
 ### Rules
 
 - **Always review agent output** before accepting — treat it as a draft

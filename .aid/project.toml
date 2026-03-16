@@ -1,0 +1,10 @@
+[project]
+id = "ai-dispatch"
+profile = "production"
+team = "dev"
+language = "rust"
+rules = [
+  "File size limit: 300 lines per file",
+  "Never use features = [\"full\"] for dependencies",
+  "All public functions must have tests",
+]

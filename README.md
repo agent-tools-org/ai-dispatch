@@ -1,6 +1,6 @@
 # ai-dispatch (aid)
 
-![Version](https://img.shields.io/badge/version-8.4.0-blue)
+![Version](https://img.shields.io/badge/version-8.5.0-blue)
 ![Rust](https://img.shields.io/badge/rust-2024-orange)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
@@ -385,6 +385,37 @@ aid run codex "implement feature" --team dev   # inject dev team context
 aid batch tasks.toml --parallel            # batch with [defaults] team = "dev"
 ```
 
+### Project Profiles
+
+Project-level configuration via `.aid/project.toml` sets defaults for all tasks dispatched within a repository. Built-in profiles expand into sensible presets:
+
+```bash
+# Initialize in current repo
+aid project init
+# → creates .aid/project.toml + .aid/knowledge/KNOWLEDGE.md
+
+aid project show
+```
+
+```toml
+[project]
+id = "my-app"
+profile = "production"    # hobby | standard | production
+team = "dev"
+language = "rust"
+rules = [
+    "File size limit: 300 lines per file",
+]
+```
+
+| Profile | Verify | Budget | Rules |
+|---------|--------|--------|-------|
+| `hobby` | - | $5/day, prefer_budget | - |
+| `standard` | `auto` | $20/day | All new functions must have tests |
+| `production` | `cargo test` / `npm test` | $50/day | Tests required, no unwrap(), cross-review |
+
+Project defaults act as CLI fallbacks — explicit flags always win. Rules are always injected into agent prompts (no relevance filtering). Knowledge in `.aid/knowledge/` is relevance-filtered like team knowledge.
+
 ## Agent Store
 
 `aid` includes a GitHub-backed community agent store for discovering and installing custom agent definitions.
@@ -559,6 +590,7 @@ The board displays `[VFAIL]` next to tasks that completed but failed verificatio
 | `aid setup` | Interactive configuration wizard. Detects agents, sets API keys. | `aid setup` |
 | `aid broadcast` | Send a message to a workgroup's broadcast channel. | `aid broadcast wg-abc1 "status update"` |
 | `aid team` | Manage teams: create, list, show, delete. Teams inject knowledge and rules into agent prompts. | `aid team list`, `aid team show dev`, `aid team create ops` |
+| `aid project` | Initialize and show project configuration (`.aid/project.toml`). Profiles expand into verify/budget/rules defaults. | `aid project init`, `aid project show` |
 | `aid stop` | Stop a running task (SIGTERM + 5s grace + SIGKILL). | `aid stop t-1234` |
 | `aid kill` | Immediately kill a running task (SIGKILL). | `aid kill t-1234` |
 | `aid steer` | Inject guidance into a running PTY task. | `aid steer t-1234 "focus on tests"` |

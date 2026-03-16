@@ -71,3 +71,24 @@ aid run gemini "research API design" --team dev
 # Usage filtered to preferred agents
 aid usage --team dev
 ```
+
+## Project Profiles
+
+Per-repo configuration via `.aid/project.toml`. Profiles expand into defaults for verify, budget, and rules.
+
+```toml
+[project]
+id = "my-app"
+profile = "production"   # hobby | standard | production
+team = "dev"
+language = "rust"
+rules = ["File size limit: 300 lines"]
+```
+
+| Profile | Verify | Budget | Rules |
+|---------|--------|--------|-------|
+| `hobby` | - | $5/day, prefer_budget | - |
+| `standard` | `auto` | $20/day | Tests for new functions |
+| `production` | `cargo test`/`npm test` | $50/day | Tests, no unwrap(), cross-review |
+
+CLI: `aid project init`, `aid project show`. Project defaults are fallbacks — CLI flags always win.

@@ -208,7 +208,7 @@ pub async fn run(store: Arc<Store>, args: RunArgs) -> Result<TaskId> {
     for warning in &dispatch_warnings {
         eprintln!("[aid] Warning: {warning}");
     }
-    if args.existing_task_id.is_some() {
+    if args.existing_task_id.is_some() && store.get_task(task_id.as_str())?.is_some() {
         store.replace_waiting_task(&task)?;
     } else {
         store.insert_task(&task)?;

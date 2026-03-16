@@ -70,6 +70,7 @@ pub async fn run_task(store: Arc<Store>, task_id: &str) -> Result<()> {
     let result = run_task_inner(&store, &spec).await;
     let _ = remove_spec(task_id);
     let _ = crate::input_signal::clear_response(task_id);
+    let _ = crate::input_signal::clear_steer(task_id);
 
     if let Err(err) = result {
         record_worker_failure(&store, task_id, &err)?;
@@ -101,7 +102,7 @@ pub fn check_zombie_tasks(store: &Store) -> Result<Vec<String>> {
     check_zombie_tasks_with(store, is_process_running)
 }
 
-pub(crate) fn load_worker_pid(task_id: &str) -> Result<Option<u32>> {
+pub fn load_worker_pid(task_id: &str) -> Result<Option<u32>> {
     Ok(load_spec_if_exists(task_id)?.and_then(|spec| spec.worker_pid))
 }
 
@@ -361,7 +362,7 @@ fn notify_task_completion(store: &Store, task_id: &str) -> Result<()> {
 }
 
 #[cfg(unix)]
-fn kill_process(pid: u32) {
+pub fn kill_process(pid: u32) {
     if pid > i32::MAX as u32 {
         return;
     }
@@ -372,10 +373,24 @@ fn kill_process(pid: u32) {
 }
 
 #[cfg(not(unix))]
-fn kill_process(_pid: u32) {}
+pub fn kill_process(_pid: u32) {}
 
 #[cfg(unix)]
-fn is_process_running(pid: u32) -> bool {
+pub fn sigkill_process(pid: u32) {
+    if pid > i32::MAX as u32 {
+        return;
+    }
+    unsafe extern "C" {
+        fn kill(pid: i32, sig: i32) -> i32;
+    }
+    unsafe { kill(pid as i32, 9) };
+}
+
+#[cfg(not(unix))]
+pub fn sigkill_process(_pid: u32) {}
+
+#[cfg(unix)]
+pub fn is_process_running(pid: u32) -> bool {
     if pid > i32::MAX as u32 {
         return false;
     }

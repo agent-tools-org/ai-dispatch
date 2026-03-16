@@ -340,6 +340,7 @@ fn status_to_color(status: TaskStatus) -> Color {
     match status {
         TaskStatus::Done | TaskStatus::Merged => Color::Green,
         TaskStatus::Failed => Color::Red,
+        TaskStatus::Stopped => Color::Red,
         TaskStatus::Pending => Color::Indexed(250),
         TaskStatus::Waiting => Color::Indexed(240),
         TaskStatus::AwaitingInput => Color::Magenta,

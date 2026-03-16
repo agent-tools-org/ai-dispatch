@@ -18,7 +18,7 @@ pub fn run(store: &Store, group_id: &str) -> Result<()> {
         .count();
     let failed = tasks
         .iter()
-        .filter(|task| task.status == TaskStatus::Failed)
+        .filter(|task| matches!(task.status, TaskStatus::Failed | TaskStatus::Stopped))
         .count();
 
     print_header(&workgroup, total_tasks(&tasks), done, failed);
@@ -93,6 +93,7 @@ fn status_symbol(status: TaskStatus) -> &'static str {
     match status {
         TaskStatus::Done | TaskStatus::Merged => "✓",
         TaskStatus::Failed => "✗",
+        TaskStatus::Stopped => "✗",
         _ => "•",
     }
 }
@@ -106,7 +107,7 @@ fn format_result_attrs(task: &Task) -> String {
     if let Some(duration) = task.duration_ms {
         parts.push(format_duration(duration));
     }
-    if task.status == TaskStatus::Failed {
+    if matches!(task.status, TaskStatus::Failed | TaskStatus::Stopped) {
         parts.push("FAILED".to_string());
     } else if is_success_status(task.status) {
         if let Some(tokens) = task.tokens {

@@ -119,6 +119,26 @@ impl MonitorState {
         self.prompt_detector.reset_after_input();
         Ok(())
     }
+
+    fn maybe_forward_steer(
+        &mut self,
+        bridge: &mut PtyBridge,
+        store: &Arc<Store>,
+        task_id: &TaskId,
+    ) -> Result<()> {
+        let Some(message) = input_signal::take_steer(task_id.as_str())? else {
+            return Ok(());
+        };
+        bridge.write_input(&message)?;
+        store.insert_event(&TaskEvent {
+            task_id: task_id.clone(),
+            timestamp: Local::now(),
+            event_kind: EventKind::Reasoning,
+            detail: format!("Steered: {}", message.chars().take(200).collect::<String>()),
+            metadata: Some(json!({ "steered": true })),
+        })?;
+        Ok(())
+    }
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -143,6 +163,7 @@ pub(crate) fn monitor_bridge(
             Err(RecvTimeoutError::Disconnected) => reader_done = true,
         }
         state.maybe_forward_input(bridge, store, task_id)?;
+        state.maybe_forward_steer(bridge, store, task_id)?;
     }
 
     if streaming && !state.line_buffer.trim().is_empty() {

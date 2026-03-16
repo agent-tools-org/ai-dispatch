@@ -47,6 +47,10 @@ pub fn job_input_path(task_id: &str) -> PathBuf {
     jobs_dir().join(format!("{task_id}.input"))
 }
 
+pub fn steer_signal_path(task_id: &str) -> PathBuf {
+    jobs_dir().join(format!("{task_id}.steer"))
+}
+
 /// Returns /tmp/aid-wg-{id}/ as the workspace directory for a workgroup.
 pub fn workspace_dir(workgroup_id: &str) -> PathBuf {
     std::path::PathBuf::from(format!("/tmp/aid-wg-{workgroup_id}"))
@@ -117,5 +121,14 @@ mod tests {
         assert!(job_path("t-1234").starts_with(&base));
         assert!(job_input_path("t-1234").starts_with(&base));
         assert!(log_path("t-1234").starts_with(&base));
+        assert!(steer_signal_path("t-1234").starts_with(&base));
+    }
+
+    #[test]
+    fn steer_signal_path_in_jobs() {
+        let _lock = AID_HOME_LOCK.lock().unwrap();
+        let _guard = AidHomeGuard::set(std::path::Path::new("/tmp/aid-test"));
+        let path = steer_signal_path("t-steer");
+        assert!(path.ends_with("jobs/t-steer.steer"));
     }
 }

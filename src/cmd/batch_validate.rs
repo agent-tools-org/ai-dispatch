@@ -116,7 +116,8 @@ pub(super) fn load_task_outcome(store: &Arc<Store>, task_id: &str) -> Result<Bat
         | TaskStatus::Pending
         | TaskStatus::Running
         | TaskStatus::AwaitingInput
-        | TaskStatus::Failed => BatchTaskOutcome::Failed,
+        | TaskStatus::Failed
+        | TaskStatus::Stopped => BatchTaskOutcome::Failed,
     })
 }
 fn validate_task_agents(tasks: &[batch::BatchTask]) -> Result<()> {

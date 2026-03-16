@@ -14,6 +14,7 @@ pub fn task_row(app: &App, task: &Task) -> Row<'static> {
         TaskStatus::Running => format!("▶ {}", task.status.label()),
         TaskStatus::Done | TaskStatus::Merged => format!("✓ {}", task.status.label()),
         TaskStatus::Failed => format!("✗ {}", task.status.label()),
+        TaskStatus::Stopped => format!("✗ {}", task.status.label()),
         _ => task.status.label().to_string(),
     };
     Row::new(vec![
@@ -39,6 +40,7 @@ pub fn task_header(task: &Task, events: &[crate::types::TaskEvent]) -> Paragraph
         TaskStatus::Running => Color::Yellow,
         TaskStatus::AwaitingInput => Color::Magenta,
         TaskStatus::Failed => Color::Red,
+        TaskStatus::Stopped => Color::Red,
         _ => Color::Indexed(250),
     };
     let line1 = Line::from(vec![
@@ -207,7 +209,8 @@ pub fn task_progress(app: &App, task: &Task) -> String {
         TaskStatus::Running
         | TaskStatus::Done
         | TaskStatus::Merged
-        | TaskStatus::Failed => milestone_or_dash(),
+        | TaskStatus::Failed
+        | TaskStatus::Stopped => milestone_or_dash(),
         _ => "—".to_string(),
     }
 }
@@ -218,6 +221,7 @@ pub fn status_style(status: TaskStatus) -> Style {
         TaskStatus::Running => Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD),
         TaskStatus::AwaitingInput => Style::default().fg(Color::Magenta).add_modifier(Modifier::BOLD),
         TaskStatus::Failed => Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
+        TaskStatus::Stopped => Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
         TaskStatus::Pending => Style::default().fg(Color::Indexed(250)),
         TaskStatus::Waiting => Style::default().fg(Color::Indexed(240)),
         TaskStatus::Skipped => Style::default().fg(Color::Blue),

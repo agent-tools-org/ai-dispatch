@@ -21,6 +21,8 @@ mod mcp_schema;
 mod mcp_tools;
 pub mod query;
 pub mod respond;
+pub mod steer;
+pub mod stop;
 pub mod setup;
 pub mod retry;
 pub mod judge;

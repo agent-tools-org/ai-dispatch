@@ -1,6 +1,6 @@
 # ai-dispatch — Multi-AI CLI Team Orchestrator
 
-## Current Status (v8.1.0)
+## Current Status (v8.3.0)
 
 **Foundation (v1.x–v3.x):** Task dispatch, batch parallel, worktree isolation, retry chains, webhook notifications, prompt templates, TUI multipane with charts, modular architecture, agent benchmark, zombie cleanup, UTF-8 safety, task classifier with capability matrix.
 
@@ -27,6 +27,18 @@
 - Milestone tag stripping from agent output
 - Binary size: 9.5MB → 3.1MB (strip + LTO + ureq→curl)
 - SQLite indexes on hot query paths (tasks, events), opt-level="z"
+
+**Ecosystem Maturity (v8.0–v8.2):**
+- Pre-dispatch validation, structured diff in `aid show --json`, loop detection
+- Per-model capability scoring (`capability: f64` on AgentModel), model-weighted auto-selection
+- Custom IDs (`--id` on `aid run` and `aid group create`, `id`/`group_id` in batch TOML)
+- Work scope verification (`--scope` for post-completion file boundary checking)
+- Cursor CLI 3-tier model support (auto/composer-1.5/opus-4.6-thinking/gpt-5.4-high)
+
+**Live Task Control (v8.3):**
+- `aid stop` / `aid kill` — graceful SIGTERM+wait and forced SIGKILL task termination
+- `aid steer` — inject guidance into running PTY tasks mid-flight
+- `Stopped` task status with full TUI/board/webhook integration
 
 State is stored under `~/.aid` by default, or `AID_HOME` when overridden.
 
@@ -430,8 +442,18 @@ ai-dispatch/
 ### v8.1 — Model-Level Scoring (done)
 - Per-model capability scoring (`capability: f64` on AgentModel), model-weighted selection, config display with cap scores, workgroup sort + creator
 
-### v8.2 — Ecosystem Maturity (next)
-- Task steering: `aid steer <task-id> "message"` — mid-flight course correction via PTY
+### v8.2 — Custom IDs, Scope & Cursor Tiers (done)
+- Custom readable IDs: `--id` on `aid run` and `aid group create`, `id`/`group_id` fields in batch TOML
+- Work scope verification: `--scope` flag and batch `scope` field for post-completion file boundary checking
+- Cursor CLI 3-tier model support: auto (cheap), composer-1.5 (standard), opus-4.6-thinking/gpt-5.4-high (premium)
+- Cursor headless mode: `--force` and `--stream-partial-output` flags, model metadata extraction, cost tracking
+
+### v8.3 — Live Task Control (done)
+- `aid stop <id>` / `aid kill <id>` — graceful (SIGTERM + 5s wait + SIGKILL) and forced task termination
+- `aid steer <id> "message"` — inject guidance into running PTY tasks via file-based signal
+- `Stopped` status with full integration: TUI, board, webhook, batch validation, summary
+
+### v8.4 — Platform Evolution (next)
 - `aid store publish` — publish local agent/skill packages to community store
 - Daemon mode — `aid daemon` as persistent service via Unix socket
 - Agent protocol v2 — unified structured event protocol for all agents

@@ -76,6 +76,9 @@ pub enum Commands {
         /// Judge agent to auto-review the task output (default gemini if omitted)
         #[arg(long, value_name = "AGENT", num_args = 0..=1, default_missing_value = "gemini")]
         judge: Option<String>,
+        /// After completion, send output to a different agent for peer critique (scored 1-10)
+        #[arg(long, value_name = "AGENT")]
+        peer_review: Option<String>,
         /// Max retry attempts on failure
         #[arg(long, default_value = "0")]
         retry: u32,
@@ -595,6 +598,23 @@ mod tests {
         .unwrap();
         match cli.command {
             Commands::Run { parent, .. } => assert_eq!(parent, Some("t-abc123".to_string())),
+            _ => panic!("expected Run"),
+        }
+    }
+
+    #[test]
+    fn run_peer_review_flag_parses() {
+        let cli = Cli::try_parse_from([
+            "aid",
+            "run",
+            "codex",
+            "task",
+            "--peer-review",
+            "gemini",
+        ])
+        .unwrap();
+        match cli.command {
+            Commands::Run { peer_review, .. } => assert_eq!(peer_review, Some("gemini".to_string())),
             _ => panic!("expected Run"),
         }
     }

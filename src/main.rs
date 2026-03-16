@@ -79,6 +79,7 @@ async fn main() -> Result<()> {
             bg,
             read_only,
             judge,
+            peer_review,
             best_of,
             parent,
         } => {
@@ -151,6 +152,7 @@ async fn main() -> Result<()> {
                     read_only,
                     budget,
                     judge,
+                    peer_review,
                     best_of,
                     team: team_flag,
                     context_from: extras.context_from,

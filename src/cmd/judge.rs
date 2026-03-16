@@ -13,6 +13,11 @@ pub struct JudgeResult {
     pub feedback: String,
 }
 
+pub struct PeerReview {
+    pub score: u8,
+    pub feedback: String,
+}
+
 pub async fn judge_task(task: &Task, judge_agent: &str, original_prompt: &str) -> Result<JudgeResult> {
     let diff = gather_diff(task)
         .or_else(|| read_output(task))
@@ -45,6 +50,38 @@ pub async fn judge_task(task: &Task, judge_agent: &str, original_prompt: &str) -
         anyhow::bail!("Judge agent exited: {}", output.status);
     }
     parse_judge_response(&String::from_utf8_lossy(&output.stdout))
+}
+
+pub async fn peer_review_task(task: &Task, reviewer_agent: &str, original_prompt: &str) -> Result<PeerReview> {
+    let diff = gather_diff(task)
+        .or_else(|| read_output(task))
+        .unwrap_or_else(|| "(no diff or output)".to_string());
+    let truncated = truncate_diff(&diff, MAX_DIFF_CHARS);
+    let prompt = format!(
+        concat!(
+            "You are a code review peer.\n\n",
+            "## Original task\n{}\n\n",
+            "## Output\n```\n{}\n```\n\n",
+            "## Instructions\n",
+            "Score the output quality from 1-10 and provide brief feedback.\n",
+            "Your FIRST line MUST be: SCORE: <number>/10\n",
+            "Then provide 1-3 lines of feedback.\n",
+        ),
+        original_prompt, truncated,
+    );
+    let exe = std::env::current_exe().context("Failed to locate aid binary")?;
+    let output = tokio::process::Command::new(exe)
+        .args(["run", reviewer_agent, &prompt, "--dir", "."])
+        .current_dir(task.repo_path.as_deref().unwrap_or("."))
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::null())
+        .output()
+        .await
+        .context("Peer review subprocess failed")?;
+    if !output.status.success() {
+        anyhow::bail!("Peer reviewer exited: {}", output.status);
+    }
+    parse_peer_review(&String::from_utf8_lossy(&output.stdout))
 }
 
 pub(crate) fn gather_diff(task: &Task) -> Option<String> {
@@ -118,6 +155,34 @@ fn parse_judge_response(text: &str) -> Result<JudgeResult> {
     Ok(JudgeResult { passed: true, feedback: "no verdict found in judge response".to_string() })
 }
 
+fn parse_peer_review(text: &str) -> Result<PeerReview> {
+    for line in text.lines() {
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        let up = trimmed.to_uppercase();
+        if up.starts_with("SCORE:") || up.starts_with("SCORE ") {
+            let rest = trimmed[6..].trim().trim_start_matches(':').trim();
+            if let Some(num_str) = rest.split('/').next()
+                && let Ok(score) = num_str.trim().parse::<u8>()
+            {
+                let score = score.min(10);
+                let feedback: String = text
+                    .lines()
+                    .skip_while(|l| !l.trim().to_uppercase().starts_with("SCORE"))
+                    .skip(1)
+                    .filter(|l| !l.trim().is_empty())
+                    .take(3)
+                    .collect::<Vec<_>>()
+                    .join(" ");
+                return Ok(PeerReview { score, feedback });
+            }
+        }
+    }
+    Ok(PeerReview { score: 5, feedback: "no score found in review".to_string() })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -177,5 +242,19 @@ mod tests {
         let diff = "line1\nline2\nline3\nline4";
         let result = truncate_diff(diff, 13);
         assert_eq!(result, "line1\nline2");
+    }
+
+    #[test]
+    fn parse_peer_review_extracts_score() {
+        let text = "SCORE: 8/10\nGood implementation, clean code.";
+        let review = parse_peer_review(text).unwrap();
+        assert_eq!(review.score, 8);
+        assert!(review.feedback.contains("Good implementation"));
+    }
+
+    #[test]
+    fn parse_peer_review_no_score_defaults_to_5() {
+        let review = parse_peer_review("The code looks fine.").unwrap();
+        assert_eq!(review.score, 5);
     }
 }

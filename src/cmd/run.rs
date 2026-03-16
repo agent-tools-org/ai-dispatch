@@ -40,6 +40,7 @@ pub struct RunArgs {
     pub group: Option<String>,
     pub verify: Option<String>,
     pub judge: Option<String>,
+    pub peer_review: Option<String>,
     pub max_duration_mins: Option<i64>,
     pub retry: u32,
     pub context: Vec<String>,
@@ -345,6 +346,26 @@ pub async fn run(store: Arc<Store>, args: RunArgs) -> Result<TaskId> {
         }
         if let Some(retry_id) = maybe_judge_retry(&store, &args, &task_id).await? {
             return Ok(retry_id);
+        }
+        if let Some(ref reviewer_agent) = args.peer_review
+            && let Some(task) = store.get_task(task_id.as_str())?
+            && task.status == TaskStatus::Done
+        {
+            match judge::peer_review_task(&task, reviewer_agent, &args.prompt).await {
+                Ok(review) => {
+                    eprintln!(
+                        "[aid] Peer review by {reviewer_agent}: {}/10 — {}",
+                        review.score, review.feedback
+                    );
+                    store.save_peer_review(
+                        task_id.as_str(),
+                        reviewer_agent,
+                        review.score,
+                        &review.feedback,
+                    )?;
+                }
+                Err(e) => eprintln!("[aid] Peer review failed: {e}"),
+            }
         }
         run_prompt::notify_task_completion(&store, &task_id)?;
         let summary = crate::cmd::summary::generate_summary(&store.get_task(task_id.as_str())?.unwrap());

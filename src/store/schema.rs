@@ -30,7 +30,8 @@ const CREATE_TABLES_SQL: &str = "CREATE TABLE IF NOT EXISTS tasks (
     cost_usd REAL,
     created_at TEXT NOT NULL,
     completed_at TEXT,
-    completion_summary TEXT
+    completion_summary TEXT,
+    peer_review TEXT
 );
 CREATE TABLE IF NOT EXISTS workgroups (
     id TEXT PRIMARY KEY,
@@ -137,6 +138,7 @@ pub(super) fn migrate(store: &Store) -> Result<()> {
     let _ = conn.execute_batch("ALTER TABLE tasks ADD COLUMN budget INTEGER NOT NULL DEFAULT 0;");
     let _ = conn.execute_batch("ALTER TABLE tasks ADD COLUMN custom_agent_name TEXT;");
     let _ = conn.execute_batch("ALTER TABLE tasks ADD COLUMN completion_summary TEXT;");
+    let _ = conn.execute_batch("ALTER TABLE tasks ADD COLUMN peer_review TEXT;");
     let _ = conn.execute_batch(
         "ALTER TABLE tasks ADD COLUMN verify_status TEXT NOT NULL DEFAULT 'skipped';",
     );

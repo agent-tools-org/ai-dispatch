@@ -154,6 +154,20 @@ impl Store {
         Ok(())
     }
 
+    pub fn save_peer_review(&self, task_id: &str, reviewer: &str, score: u8, feedback: &str) -> Result<()> {
+        let review_json = serde_json::json!({
+            "reviewer": reviewer,
+            "score": score,
+            "feedback": feedback,
+        })
+        .to_string();
+        self.db().execute(
+            "UPDATE tasks SET peer_review = ?1 WHERE id = ?2",
+            params![review_json, task_id],
+        )?;
+        Ok(())
+    }
+
     pub fn insert_event(&self, event: &TaskEvent) -> Result<()> {
         let metadata_str = event.metadata.as_ref().map(|m| m.to_string());
         self.db().execute(

@@ -48,6 +48,7 @@ pub struct ProjectBudget {
     #[serde(default)]
     pub cost_limit_usd: Option<f64>,
     #[serde(default)]
+    #[allow(dead_code)]
     pub token_limit: Option<u64>,
     #[serde(default)]
     pub prefer_budget: bool,

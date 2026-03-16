@@ -178,17 +178,17 @@ fn upsert_budget_at(path: &Path, name: &str, cost_limit_usd: f64, window: Option
 
     let mut updated = false;
     for entry in budgets.iter_mut() {
-        if let Value::Table(table) = entry {
-            if table.get("name").and_then(|n| n.as_str()) == Some(name) {
-                table.insert("cost_limit_usd".to_string(), Value::Float(cost_limit_usd));
-                if let Some(window) = window {
-                    table.insert("window".to_string(), Value::String(window.to_string()));
-                } else {
-                    table.remove("window");
-                }
-                updated = true;
-                break;
+        if let Value::Table(table) = entry
+            && table.get("name").and_then(|n| n.as_str()) == Some(name)
+        {
+            table.insert("cost_limit_usd".to_string(), Value::Float(cost_limit_usd));
+            if let Some(window) = window {
+                table.insert("window".to_string(), Value::String(window.to_string()));
+            } else {
+                table.remove("window");
             }
+            updated = true;
+            break;
         }
     }
 
@@ -236,16 +236,16 @@ fn find_budget(value: &Value, name: &str) -> Option<(f64, Option<String>)> {
     let usage = value.get("usage")?.as_table()?;
     let budgets = usage.get("budget")?.as_array()?;
     for entry in budgets {
-        if let Value::Table(table) = entry {
-            if table.get("name")?.as_str()? == name {
-                let cost = table.get("cost_limit_usd")?;
-                let cost = value_to_f64(cost)?;
-                let window = table
-                    .get("window")
-                    .and_then(|w| w.as_str())
-                    .map(|s| s.to_string());
-                return Some((cost, window));
-            }
+        if let Value::Table(table) = entry
+            && table.get("name")?.as_str()? == name
+        {
+            let cost = table.get("cost_limit_usd")?;
+            let cost = value_to_f64(cost)?;
+            let window = table
+                .get("window")
+                .and_then(|w| w.as_str())
+                .map(|s| s.to_string());
+            return Some((cost, window));
         }
     }
     None

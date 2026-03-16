@@ -189,5 +189,44 @@ pub fn branch_has_commits_ahead_of_main(repo_dir: &Path, branch: &str) -> Result
         > 0)
 }
 
+/// Returns the files touched by the agent's commits in `wt_path`.
+pub fn worktree_changed_files(wt_path: &Path) -> Result<Vec<String>> {
+    let repo = wt_path.to_string_lossy().to_string();
+    let range = if commits_ahead_of_main(&repo).unwrap_or(0) > 1 {
+        "main..HEAD"
+    } else {
+        "HEAD~1..HEAD"
+    };
+    let out = Command::new("git")
+        .args(["-C", &repo, "diff", "--name-only", range])
+        .output()
+        .context("Failed to run git diff --name-only")?;
+    anyhow::ensure!(
+        out.status.success(),
+        "git diff failed: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let files = String::from_utf8_lossy(&out.stdout)
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+        .map(ToString::to_string)
+        .collect();
+    Ok(files)
+}
+
+fn commits_ahead_of_main(repo: &str) -> Option<u32> {
+    let out = Command::new("git")
+        .args(["-C", repo, "rev-list", "--count", "main..HEAD"])
+        .output()
+        .ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    let output = String::from_utf8_lossy(&out.stdout);
+    let trimmed = output.trim();
+    trimmed.parse::<u32>().ok()
+}
+
 #[cfg(test)]
 mod tests;

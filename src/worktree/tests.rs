@@ -186,3 +186,27 @@ fn create_worktree_prunes_orphaned_branch_worktree() {
         ],
     );
 }
+
+#[test]
+fn worktree_changed_files_reports_committed_files() {
+    let repo = TempDir::new().unwrap();
+    git(repo.path(), &["init", "-b", "main"]);
+    git(repo.path(), &["config", "user.email", "test@example.com"]);
+    git(repo.path(), &["config", "user.name", "Test User"]);
+    std::fs::write(repo.path().join("base.txt"), "main").unwrap();
+    git(repo.path(), &["add", "base.txt"]);
+    git(repo.path(), &["commit", "-m", "base"]);
+    git(repo.path(), &["checkout", "-b", "agent-branch"]);
+
+    std::fs::write(repo.path().join("agent.txt"), "one").unwrap();
+    git(repo.path(), &["add", "agent.txt"]);
+    git(repo.path(), &["commit", "-m", "agent one"]);
+
+    std::fs::write(repo.path().join("agent2.txt"), "two").unwrap();
+    git(repo.path(), &["add", "agent2.txt"]);
+    git(repo.path(), &["commit", "-m", "agent two"]);
+
+    let files = worktree_changed_files(repo.path()).unwrap();
+    assert!(files.contains(&"agent.txt".to_string()));
+    assert!(files.contains(&"agent2.txt".to_string()));
+}

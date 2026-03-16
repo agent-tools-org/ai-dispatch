@@ -1,4 +1,4 @@
-const VERSION = "7.4.0";
+const VERSION = "8.3.0";
 const SITE_URL = "https://aid.agent-tools.org";
 const REPO_URL = "https://github.com/agent-tools-org/ai-dispatch";
 const META_DESCRIPTION = "Multi-AI CLI team orchestrator that dispatches work to gemini, codex, opencode, cursor, kilo, codebuff, auto, and custom agents defined via ~/.aid/agents/.";
@@ -15,7 +15,7 @@ const JSON_LD_DATA = JSON.stringify({
   genre: "Productivity"
 });
 const COMMANDS = [
-  { name: "run", purpose: "Dispatch task to an agent with optional bg, verify, worktree, on-done, retry, context, and skill flags.", example: "aid run codex \"Document the MCP server workflow\" --dir . --worktree docs/mcp-readme --verify auto" },
+  { name: "run", purpose: "Dispatch task to an agent with optional bg, verify, worktree, on-done, retry, context, skill, --id, and --scope flags.", example: "aid run codex \"Document the MCP server workflow\" --dir . --worktree docs/mcp-readme --verify auto --id doc-task" },
   { name: "batch", purpose: "Run a TOML batch file with DAG dependency scheduling.", example: "aid batch tasks.toml --parallel --wait" },
   { name: "watch", purpose: "Follow live progress in text, quiet, or TUI mode.", example: "aid watch --tui" },
   { name: "board", purpose: "List tracked tasks with filters and zombie detection.", example: "aid board --today" },
@@ -23,6 +23,9 @@ const COMMANDS = [
   { name: "usage", purpose: "View task history, per-agent analytics, and budget windows.", example: "aid usage --agent codex --period 7d" },
   { name: "retry", purpose: "Re-dispatch a failed task with feedback, optionally switching agent or dir.", example: "aid retry t-1234 -f \"Fix the compilation error\" --agent opencode" },
   { name: "respond", purpose: "Send interactive input to a running background task.", example: "aid respond t-1234 \"Please rerun with logging enabled\"" },
+  { name: "stop", purpose: "Gracefully stop a running task (SIGTERM + 5s wait + SIGKILL).", example: "aid stop t-1234" },
+  { name: "kill", purpose: "Force-kill a running task immediately (SIGKILL).", example: "aid kill t-1234" },
+  { name: "steer", purpose: "Inject guidance into a running PTY task mid-flight.", example: "aid steer t-1234 \"Switch to approach B instead\"" },
   { name: "benchmark", purpose: "Compare the same task across multiple agents.", example: "aid benchmark --agents codex,cursor \"Implement new parsing\"" },
   { name: "output", purpose: "Show task output directly without additional metadata.", example: "aid output t-1234" },
   { name: "ask", purpose: "Quick research or exploration task.", example: "aid ask \"How does the retry flow work in this repo?\"" },
@@ -32,7 +35,7 @@ const COMMANDS = [
   { name: "agent", purpose: "Manage custom agent definitions: list, show, add, remove, fork.", example: "aid agent fork codex --as codex-fast" },
   { name: "config", purpose: "Inspect agent profiles, skills, pricing, prompt token budget.", example: "aid config prompt-budget" },
   { name: "worktree", purpose: "Manage worktree lifecycle (create/list/remove).", example: "aid worktree create --dir feat/parser" },
-  { name: "group", purpose: "Workgroup CRUD with shared context and constraints.", example: "aid group create dispatch --context \"Docs only, cite sources\"" },
+  { name: "group", purpose: "Workgroup CRUD with shared context and constraints. Supports --id for custom group IDs.", example: "aid group create dispatch --context \"Docs only\" --id my-wg" },
   { name: "init", purpose: "Initialize default skills and templates for a fresh project.", example: "aid init" },
   { name: "store", purpose: "Browse, install (with version pinning), and update community agent/skill packages.", example: "aid store install community/aider@1.0.0" },
   { name: "upgrade", purpose: "Upgrade aid to latest version from crates.io (checks for running tasks).", example: "aid upgrade" },
@@ -163,6 +166,18 @@ function buildLLMSText() {
   lines.push(`## Episodic Memory (v7.4)`);
   lines.push(`Append-only memory versioning with \`supersedes\` chains — never lose history. Usage tracking: inject_count, success_count, last_injected_at. Priority-based injection (high-success memories injected first, cap at top 10). Multi-query memory search with keyword extraction. \`aid memory list --stats\`, \`aid memory history <id>\`.`);
   lines.push(``);
+  lines.push(`## Custom IDs (v8.2)`);
+  lines.push(`Assign readable IDs to tasks and workgroups with \`--id\`. Example: \`aid run codex "task" --id my-task\`, \`aid group create feature --id my-wg\`. Batch TOML supports \`id\` and \`group_id\` fields.`);
+  lines.push(``);
+  lines.push(`## Work Scope Verification (v8.2)`);
+  lines.push(`Constrain agents to file boundaries with \`--scope\`. Post-completion, aid checks git diff against scope and logs violations as errors. No prompt injection — agent instruction freedom is preserved. Batch TOML: \`scope = ["src/api/", "src/types.rs"]\`.`);
+  lines.push(``);
+  lines.push(`## Cursor Model Tiers (v8.2)`);
+  lines.push(`Three-tier model support for Cursor CLI: auto (cheap, Auto routing), composer-1.5 (standard, Cursor proprietary), opus-4.6-thinking/gpt-5.4-high (premium). Headless mode with --force and --stream-partial-output.`);
+  lines.push(``);
+  lines.push(`## Live Task Control (v8.3)`);
+  lines.push(`\`aid stop <id>\` sends SIGTERM, waits 5s, then SIGKILL. \`aid kill <id>\` sends immediate SIGKILL. Both preserve worktree changes via auto-commit. \`aid steer <id> "message"\` injects guidance into running PTY tasks — the monitor loop picks up file-based signals every 500ms and writes to the agent's stdin. New \`Stopped\` task status integrated across TUI, board, webhook, and batch validation.`);
+  lines.push(``);
   lines.push(`## Workgroups`);
   lines.push(`Shared context containers created via aid group create keep prompts, constraints, and notes in sync across multiple tasks.`);
   lines.push(`Use --group/-g or set AID_GROUP so watch, board, run, and merge commands automatically stay scoped to the same workspace.`);
@@ -245,17 +260,37 @@ function buildHTML() {
   const agentHeader = AGENT_CATEGORIES.map((cat) => `<th>${cat}</th>`).join("");
   const agentRows = Object.entries(AGENT_MATRIX)
     .map(([agent, scores]) => {
-      const cells = AGENT_CATEGORIES.map((cat) => `<td>${scores[cat]}</td>`).join("");
+      const cells = AGENT_CATEGORIES.map((cat) => {
+        const s = scores[cat];
+        let style = "";
+        if (s >= 8) style = "background:rgba(6,182,212,0.25)";
+        else if (s >= 6) style = "background:rgba(59,130,246,0.2)";
+        else if (s >= 4) style = "background:rgba(148,163,184,0.08)";
+        else style = "background:rgba(100,116,139,0.12);color:#64748b";
+        return `<td style="${style}">${s}</td>`;
+      }).join("");
       return `<tr><th>${agent}</th>${cells}</tr>`;
     })
     .join("");
-  const quickList = [
-    "Install Rust 1.85+ and agent CLIs (gemini, codex, opencode, cursor, kilo, codebuff, auto).",
-    "Run `cargo install --path .` then `aid config agents` and `aid config skills`.",
-    "Use `aid run` for tasks, `aid watch` for progress, `aid board` to inspect the queue, `aid show` to review artifacts, and `aid retry` to iterate.",
-    "For MCP workflows, start `aid mcp` and call MCP tools from another client."
-  ].map((item) => `<li>${item}</li>`).join("");
-  const mcpList = MCP_TOOLS.map((tool) => `<li>${tool}</li>`).join("");
+  const installCmd = "curl -fsSL https://aid.agent-tools.org/install.sh | sh";
+  const archDiagram = `┌─────────────────────────────────────┐
+│           aid (CLI binary)          │
+├──────┬──────┬──────┬───────┬────────┬───────────┤
+│ run  │ watch│ show │ board │ usage  │ benchmark │  ← user-facing commands
+├──────┴──────┴──────┴───────┴────────┤
+│           Task Manager              │
+│  ┌────────┐ ┌────────┐ ┌────────┐  │
+│  │Classif.│ │ Watch  │ │ Store  │  │
+│  │+ Agent │ │ Engine │ │(SQLite)│  │
+│  │Registry│ │        │ │        │  │
+│  └────┬───┘ └────┬───┘ └────┬───┘  │
+│       │          │          │       │
+├───────┴──────────┴──────────┴───────┤
+│         Agent Adapters              │
+│  ┌──────┐ ┌─────┐ ┌────────┐ ┌──────┐ ┌────┐ ┌───┐ ┌────────┐
+│  │Gemini│ │Codex│ │OpenCode│ │Cursor│ │Kilo│ │Codebuff│
+│  └──────┘ └─────┘ └────────┘ └──────┘ └────┘ └────────┘
+└─────────────────────────────────────┘`;
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -266,187 +301,208 @@ function buildHTML() {
   <meta property="og:description" content="${META_DESCRIPTION}">
   <link rel="alternate" type="text/plain" href="/llms.txt">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <style>body{margin:0;font-family:"IBM Plex Mono",SFMono-Regular,Menlo,monospace;background:#05070a;color:#e2e8f0;min-height:100vh;}header,section,footer{padding:1.5rem 4vw;}header{border-bottom:1px solid rgba(226,232,240,.2);}h1{margin:0;font-size:2em;}p{margin:0.4rem 0;}main{display:flex;flex-direction:column;gap:1.2rem;}section{background:#0c111d;border-radius:12px;border:1px solid rgba(226,232,240,.1);}table{width:100%;border-collapse:collapse;font-size:0.95rem;}th,td{border:1px solid rgba(226,232,240,.15);padding:0.5rem;text-align:left;}th{background:#11182b;}ul{margin:0;padding-left:1.5rem;}footer{border-top:1px solid rgba(226,232,240,.2);font-size:0.9rem;display:flex;flex-wrap:wrap;gap:1rem;}</style>
+  <style>
+    html { scroll-behavior: smooth; }
+    body { margin: 0; font-family: system-ui, -apple-system, sans-serif; background: #030711; color: #f1f5f9; min-height: 100vh; }
+    body::before { content: ""; position: fixed; inset: 0; background: radial-gradient(ellipse 80% 50% at 50% -20%, rgba(59,130,246,0.15), transparent), radial-gradient(ellipse 60% 40% at 80% 60%, rgba(6,182,212,0.08), transparent); pointer-events: none; z-index: 0; }
+    .wrap { position: relative; z-index: 1; }
+    .nav { position: sticky; top: 0; z-index: 100; display: flex; align-items: center; gap: 2rem; padding: 0.75rem 4vw; background: rgba(15,23,42,0.6); border-bottom: 1px solid rgba(148,163,184,0.08); backdrop-filter: blur(12px); }
+    .nav-logo { font-weight: 700; font-size: 1.25rem; color: #f1f5f9; text-decoration: none; background: linear-gradient(90deg, #3b82f6, #06b6d4); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+    .nav-links { display: flex; gap: 1.5rem; flex-wrap: wrap; }
+    .nav-links a { color: #94a3b8; text-decoration: none; font-size: 0.9rem; }
+    .nav-links a:hover { color: #f1f5f9; }
+    .hero { padding: 4rem 4vw 3rem; text-align: center; max-width: 720px; margin: 0 auto; }
+    .hero-title { font-size: clamp(3rem, 10vw, 5rem); font-weight: 800; margin: 0; letter-spacing: -0.03em; background: linear-gradient(90deg, #3b82f6, #06b6d4); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+    .hero-sub { font-size: 1.25rem; color: #94a3b8; margin: 0.5rem 0 0; font-weight: 500; }
+    .hero-desc { color: #94a3b8; font-size: 1rem; line-height: 1.6; margin: 1rem 0 1.5rem; }
+    .term-block { background: rgba(15,23,42,0.9); border: 1px solid rgba(148,163,184,0.08); border-radius: 12px; overflow: hidden; text-align: left; margin: 1.5rem 0; }
+    .term-head { display: flex; align-items: center; gap: 6px; padding: 0.5rem 1rem; background: rgba(15,23,42,0.95); border-bottom: 1px solid rgba(148,163,184,0.08); }
+    .term-dot { width: 10px; height: 10px; border-radius: 50%; }
+    .term-dot.r { background: #ef4444; }
+    .term-dot.y { background: #eab308; }
+    .term-dot.g { background: #22c55e; }
+    .term-body { padding: 1rem 1.25rem; font-family: "SF Mono", "Monaco", "Inconsolata", monospace; font-size: 0.9rem; color: #e2e8f0; display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; white-space: pre; }
+    .term-copy { flex-shrink: 0; padding: 0.35rem 0.75rem; font-size: 0.8rem; background: rgba(59,130,246,0.2); color: #93c5fd; border: 1px solid rgba(59,130,246,0.3); border-radius: 6px; cursor: pointer; font-family: inherit; }
+    .term-copy:hover { background: rgba(59,130,246,0.3); }
+    .cta { display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap; margin-top: 1.5rem; }
+    .cta a { display: inline-block; padding: 0.6rem 1.25rem; border-radius: 8px; font-size: 0.95rem; font-weight: 500; text-decoration: none; }
+    .cta-primary { background: linear-gradient(90deg, #3b82f6, #06b6d4); color: #fff; }
+    .cta-primary:hover { opacity: 0.9; }
+    .cta-secondary { background: rgba(15,23,42,0.6); color: #94a3b8; border: 1px solid rgba(148,163,184,0.2); }
+    .cta-secondary:hover { color: #f1f5f9; border-color: rgba(148,163,184,0.4); }
+    .stats { display: flex; flex-wrap: wrap; gap: 1rem; justify-content: center; padding: 1rem 4vw 2rem; color: #64748b; font-size: 0.9rem; }
+    .stats span { padding: 0.25rem 0.6rem; background: rgba(15,23,42,0.6); border: 1px solid rgba(148,163,184,0.08); border-radius: 6px; }
+    section { padding: 2.5rem 4vw; max-width: 1100px; margin: 0 auto; }
+    .sec-title { font-size: 1.75rem; margin: 0 0 1.5rem; color: #f1f5f9; }
+    .why-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; }
+    .card { background: rgba(15,23,42,0.6); border: 1px solid rgba(148,163,184,0.08); border-radius: 12px; padding: 1.25rem; transition: transform 0.2s, border-color 0.2s; }
+    .card:hover { transform: translateY(-2px); border-color: rgba(59,130,246,0.3); }
+    .card h3 { margin: 0 0 0.5rem; font-size: 1rem; color: #f1f5f9; }
+    .card p { margin: 0; font-size: 0.9rem; color: #94a3b8; line-height: 1.5; }
+    .feat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1rem; }
+    .feat-card { background: rgba(15,23,42,0.6); border: 1px solid rgba(148,163,184,0.08); border-radius: 12px; padding: 1.25rem; transition: transform 0.2s, border-color 0.2s; }
+    .feat-card:hover { transform: translateY(-2px); border-color: rgba(59,130,246,0.3); }
+    .feat-card h3 { margin: 0 0 0.5rem; font-size: 1rem; color: #f1f5f9; }
+    .feat-card .badge { font-size: 0.7rem; color: #64748b; margin-left: 0.35rem; }
+    .feat-card p { margin: 0; font-size: 0.875rem; color: #94a3b8; line-height: 1.5; }
+    .table-wrap { overflow-x: auto; border: 1px solid rgba(148,163,184,0.08); border-radius: 12px; background: rgba(15,23,42,0.6); }
+    table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+    table th, table td { padding: 0.6rem 1rem; text-align: left; border-bottom: 1px solid rgba(148,163,184,0.08); }
+    table th { background: rgba(15,23,42,0.8); color: #94a3b8; font-weight: 600; }
+    table tbody tr:nth-child(even) { background: rgba(15,23,42,0.35); }
+    table tbody tr:hover { background: rgba(59,130,246,0.06); }
+    .arch-term .term-body { white-space: pre; font-size: 0.8rem; line-height: 1.4; }
+    .steps { counter-reset: step; }
+    .step { display: flex; gap: 1rem; margin-bottom: 1.5rem; align-items: flex-start; }
+    .step-num { counter-increment: step; flex-shrink: 0; width: 1.75rem; height: 1.75rem; border-radius: 50%; background: linear-gradient(90deg, #3b82f6, #06b6d4); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 0.9rem; font-weight: 600; }
+    .step-num::before { content: counter(step); }
+    .step-content { flex: 1; }
+    .step-content p { margin: 0 0 0.5rem; color: #94a3b8; font-size: 0.9rem; }
+    .step-content pre { margin: 0; }
+    footer { padding: 1.5rem 4vw; border-top: 1px solid rgba(148,163,184,0.08); font-size: 0.9rem; color: #64748b; display: flex; flex-wrap: wrap; gap: 1rem; align-items: center; }
+    footer a { color: #7dd3fc; text-decoration: none; }
+    footer a:hover { text-decoration: underline; }
+    code { font-family: "SF Mono", "Monaco", "Inconsolata", monospace; font-size: 0.85em; background: rgba(15,23,42,0.8); padding: 0.15em 0.4em; border-radius: 4px; color: #e2e8f0; }
+  </style>
   <script type="application/ld+json">${JSON_LD_DATA}</script>
 </head>
 <body>
-  <header>
-    <p style="font-size:.85rem;letter-spacing:.2rem;text-transform:uppercase;color:#94a3b8;">aid.agent-tools.org</p>
-    <h1>aid (ai-dispatch)</h1>
-    <p>${META_DESCRIPTION}</p>
-    <p style="font-size:.9rem;color:#94a3b8;">Version ${VERSION} · <a href="${REPO_URL}" style="color:#7dd3fc;text-decoration:none;">${REPO_URL}</a></p>
-  </header>
-  <main>
-    <section>
-      <h2>What it is</h2>
-      <p>Multi-AI CLI orchestrator that dispatches work to gemini, codex, opencode, cursor, kilo, codebuff, auto, and custom agents defined via ~/.aid/agents/ while tracking progress, enforcing methodology, and tracking cost.</p>
+  <div class="wrap">
+    <nav class="nav">
+      <a href="#" class="nav-logo">aid</a>
+      <div class="nav-links">
+        <a href="#features">Features</a>
+        <a href="#commands">Commands</a>
+        <a href="#agents">Agents</a>
+        <a href="${REPO_URL}" target="_blank" rel="noopener">GitHub</a>
+      </div>
+    </nav>
+    <header class="hero">
+      <h1 class="hero-title">aid</h1>
+      <p class="hero-sub">Multi-AI CLI Team Orchestrator</p>
+      <p class="hero-desc">${META_DESCRIPTION}</p>
+      <div class="term-block">
+        <div class="term-head">
+          <span class="term-dot r"></span><span class="term-dot y"></span><span class="term-dot g"></span>
+        </div>
+        <div class="term-body">
+          <code class="term-code">${installCmd}</code>
+          <button type="button" class="term-copy" data-copy="${installCmd.replace(/"/g, "&quot;")}">Copy</button>
+        </div>
+      </div>
+      <div class="cta">
+        <a href="#quick-start" class="cta-primary">Get Started</a>
+        <a href="${REPO_URL}" class="cta-secondary" target="_blank" rel="noopener">GitHub</a>
+      </div>
+    </header>
+    <div class="stats">
+      <span>v${VERSION}</span>
+      <span>${Object.keys(AGENT_MATRIX).length} agents</span>
+      <span>${COMMANDS.length} commands</span>
+      <span>MIT</span>
+    </div>
+    <section id="why">
+      <h2 class="sec-title">Why aid?</h2>
+      <div class="why-grid">
+        <div class="card"><h3>Unified Interface</h3><p>One CLI for gemini, codex, opencode, cursor, kilo, codebuff, and custom agents. Same flags and workflow across all of them.</p></div>
+        <div class="card"><h3>Progress Visibility</h3><p>Watch background tasks in real time with <code>aid watch</code> or the TUI. No more blind runs until completion.</p></div>
+        <div class="card"><h3>Cost Tracking</h3><p>Per-agent usage, budgets, and spend windows. Set limits and run low-value work with <code>--budget</code>.</p></div>
+        <div class="card"><h3>Git-Native Isolation</h3><p>Per-task worktrees, auto-merge, and escape detection. Parallel work without polluting the main branch.</p></div>
+        <div class="card"><h3>Methodology Enforcement</h3><p>Skills inject repeatable behavior. Shared discipline for verification, testing, and prompts across agents.</p></div>
+      </div>
     </section>
-    <section>
-      <h2>Why aid?</h2>
-      <ul>
-        <li>Managing multiple AI CLIs is chaotic because every tool has different flags, output formats, and calling conventions.</li>
-        <li>No unified progress visibility leaves background work blind until completion.</li>
-        <li>Cost tracking across agents is manual, so budgets and tokens drift.</li>
-        <li>Manual worktree juggling slows parallel tasks.</li>
-        <li>Without shared methodology, prompt discipline and testing drift between agents.</li>
-      </ul>
+    <section id="features">
+      <h2 class="sec-title">Features</h2>
+      <div class="feat-grid">
+        <div class="feat-card"><h3>Auto Selection</h3><p>Let aid pick the best agent for the task from capability scores and history.</p></div>
+        <div class="feat-card"><h3>Batch DAG</h3><p>Run TOML batch files with dependency scheduling, parallel execution, and conditional chains.</p></div>
+        <div class="feat-card"><h3>Agent Memory</h3><p>Project-scoped discoveries, conventions, and lessons auto-injected into agent prompts.</p></div>
+        <div class="feat-card"><h3>Custom Agents</h3><p>Define agents in ~/.aid/agents/ so any CLI or wrapper can join the orchestrator.</p></div>
+        <div class="feat-card"><h3>TUI Dashboard</h3><p><code>aid watch --tui</code> for live progress, stats view, and task timeline.</p></div>
+        <div class="feat-card"><h3>Work Scope <span class="badge">v8.2</span></h3><p>Constrain agents to file boundaries with <code>--scope</code>; aid verifies diff after completion.</p></div>
+        <div class="feat-card"><h3>Live Task Control <span class="badge">v8.3</span></h3><p><code>aid stop</code> / <code>aid kill</code> for termination, <code>aid steer</code> for mid-flight guidance injection into running PTY tasks.</p></div>
+        <div class="feat-card"><h3>Best-of-N</h3><p>Benchmark the same task across multiple agents and compare results.</p></div>
+        <div class="feat-card"><h3>Agent Store</h3><p>Browse and install community agents from the GitHub-backed store with version pinning.</p></div>
+        <div class="feat-card"><h3>Teams</h3><p>Role-based agent groups with preferred agents and knowledge context via <code>--team</code>.</p></div>
+      </div>
     </section>
-    <section>
-      <h2>Custom Agents</h2>
-      <p>v5.0 lets you define custom agents via TOML files under ~/.aid/agents/, so wrappers and legacy CLIs can join the orchestrator.</p>
-      <pre style="background:#040b16;padding:1rem;border-radius:8px;margin:0;"><code>[agent]&#10;id = "ops-bot"&#10;display_name = "Ops Bot"&#10;command = "ops-agent"&#10;prompt_mode = "flag"&#10;prompt_flag = "--task"&#10;&#10;[agent.capabilities]&#10;research = 6&#10;complex_impl = 4</code></pre>
-    </section>
-    <section>
-      <h2>Agent Store</h2>
-      <p>Discover and install community agent definitions with <code>aid store</code>. The store is backed by <a href="https://github.com/agent-tools-org/aid-agents" style="color:#7dd3fc;">agent-tools-org/aid-agents</a> on GitHub.</p>
-      <pre style="background:#040b16;padding:1rem;border-radius:8px;margin:0;"><code>aid store browse              # list all agents
-aid store browse coding       # search by keyword
-aid store show community/aider  # preview config
-aid store install community/aider  # install</code></pre>
-    </section>
-    <section>
-      <h2>Task Lifecycle Hooks</h2>
-      <p>Define shell hooks in <code>~/.aid/hooks.toml</code> that run at <code>before_run</code> (blocks on failure), <code>after_complete</code>, or <code>on_fail</code>. Hooks receive task JSON on stdin. Per-task overrides via <code>--hook event:command</code> or batch <code>[defaults] hooks</code>.</p>
-    </section>
-    <section>
-      <h2>Prompt Budget</h2>
-      <p>Run <code>aid config prompt-budget</code> to see per-skill token estimates. Skills and context injection log token counts during dispatch for visibility into prompt overhead.</p>
-    </section>
-    <section>
-      <h2>Skills</h2>
-      <p>Methodology files under ~/.aid/skills/ (code-scout, implementer, researcher, test-writer, debugger, etc.) inject repeatable behavior per agent; use --skill to add extras or --no-skill to opt out.</p>
-    </section>
-    <section>
-      <h2>Agent Memory <span style="color:#94a3b8;font-size:.8em;">(v5.4)</span></h2>
-      <p>Project-scoped persistent knowledge that auto-injects into agent prompts. Four types: discovery, convention, lesson (30-day TTL), fact.</p>
-      <pre style="background:#040b16;padding:1rem;border-radius:8px;margin:0;"><code>aid memory add discovery "Auth module uses bcrypt not argon2"
-aid memory list --type convention
-aid memory search "auth"</code></pre>
-    </section>
-    <section>
-      <h2>Shared Findings <span style="color:#94a3b8;font-size:.8em;">(v5.6)</span></h2>
-      <p>Workgroup-scoped evidence for investigation collaboration. Agents emit <code>[FINDING]</code> tags that are auto-captured and injected into subsequent task prompts within the same workgroup.</p>
-      <pre style="background:#040b16;padding:1rem;border-radius:8px;margin:0;"><code>aid finding add wg-abc1 "gamma can be zero in tricrypto"
-aid finding list wg-abc1</code></pre>
-    </section>
-    <section>
-      <h2>Fast Query <span style="color:#94a3b8;font-size:.8em;">(v5.8)</span></h2>
-      <p>Instant LLM queries via OpenRouter — no agent startup overhead. Free and paid auto tiers.</p>
-      <pre style="background:#040b16;padding:1rem;border-radius:8px;margin:0;"><code>aid query "What does gamma=0 mean?"         # free
-aid query --auto "Explain this error"        # paid, better
-aid setup                                    # configure API key</code></pre>
-    </section>
-    <section>
-      <h2>Teams <span style="color:#94a3b8;font-size:.8em;">(v6.0)</span></h2>
-      <p>Teams group agents into role-specific sets for constrained auto-selection. Define teams in <code>~/.aid/teams/*.toml</code> with member lists, default agent, and per-agent capability overrides.</p>
-      <pre style="background:#040b16;padding:1rem;border-radius:8px;margin:0;"><code>[team]&#10;id = "dev"&#10;display_name = "Development Team"&#10;agents = ["codex", "opencode", "cursor", "kilo"]&#10;default_agent = "codex"&#10;&#10;[team.overrides.opencode]&#10;simple_edit = 10</code></pre>
-      <p style="margin-top:.5rem;">Use <code>--team dev</code> on <code>aid run auto</code> to restrict selection. Set <code>team = "dev"</code> in batch TOML defaults. Filter usage with <code>aid usage --team dev</code>.</p>
-    </section>
-    <section>
-      <h2>Structured Output & JSON <span style="color:#94a3b8;font-size:.8em;">(v7.0)</span></h2>
-      <p><code>--json</code> flag on <code>aid show</code> and <code>aid board</code> for machine-parseable output. Exit codes captured per task. <code>--context-from</code> forwards results between tasks. Shared workspace with knowledge compaction (30K token threshold).</p>
-    </section>
-    <section>
-      <h2>Reliability & Intelligence <span style="color:#94a3b8;font-size:.8em;">(v7.1–v7.2)</span></h2>
-      <ul>
-        <li>Empty diff guard detects agent hallucination (claims DONE but made no changes).</li>
-        <li>Foreground task timeout (30m default, auto-kill).</li>
-        <li><code>--cascade opencode,codex,cursor</code> — tries the next agent on failure.</li>
-        <li>Conditional batch chains: <code>on_success</code>, <code>on_fail</code>, <code>conditional</code> in TOML.</li>
-      </ul>
-    </section>
-    <section>
-      <h2>Code Health & UX <span style="color:#94a3b8;font-size:.8em;">(v7.3)</span></h2>
-      <p>Modular architecture with AI-friendly file sizes. Success-weighted agent routing using continuous scoring from task history. Shell-safe verify commands. Fast-fail diagnostics with stderr hints.</p>
-    </section>
-    <section>
-      <h2>Episodic Memory <span style="color:#94a3b8;font-size:.8em;">(v7.4)</span></h2>
-      <ul>
-        <li>Append-only memory versioning with <code>supersedes</code> chains — full history preserved.</li>
-        <li>Usage tracking: inject_count, success_count, last_injected_at.</li>
-        <li>Priority-based injection: high-success memories injected first, capped at top 10.</li>
-        <li>Multi-query memory search with keyword extraction.</li>
-        <li><code>aid memory list --stats</code> and <code>aid memory history &lt;id&gt;</code>.</li>
-      </ul>
-    </section>
-    <section>
-      <h2>Workgroups</h2>
-      <p>Workgroups share context and constraints. Create one with <code>aid group create</code> and scope tasks via <code>--group</code>/<code>-g</code> or the <code>AID_GROUP</code> environment variable.</p>
-    </section>
-    <section>
-      <h2>Worktree Management</h2>
-      <p>aid auto-creates per-task worktrees when you pass <code>--worktree</code>, and <code>aid worktree create/list/remove</code> manage them explicitly. <code>aid merge</code> auto-merges branches, auto-commits leftovers, and warns when escape detection triggers.</p>
-    </section>
-    <section>
-      <h2>TUI</h2>
-      <p><code>aid watch --tui</code> opens the dashboard; press <code>s</code> to view stats and <code>a</code> to toggle today-only vs all-time timelines.</p>
-    </section>
-    <section>
-      <h2>Reliability</h2>
-      <ul>
-        <li>Zombie detection, max-duration enforcement, and auto-commit keep background worktrees healthy.</li>
-        <li>Zombie recovery preserves artifacts before failing a task.</li>
-        <li>Shared <code>CARGO_TARGET_DIR</code> avoids redundant Rust compilations.</li>
-        <li>Worktree escape detection warns if an agent mutates the main repo.</li>
-        <li>Auto merge on <code>aid merge</code> plus SQLite busy_timeout and the fallback agent chain keep concurrency stable.</li>
-      </ul>
-    </section>
-    <section>
-      <h2>Best Practices</h2>
-      <p>Follow the orchestrator pattern: plan the work, dispatch specialized agents, monitor progress, review artifacts, and iterate with retries or follow-up tasks.</p>
-      <ul>
-        <li>Use <code>aid ask</code> or <code>gemini</code> for research and low-cost exploration.</li>
-        <li>Prefer <code>opencode</code> for straightforward single-file edits.</li>
-        <li>Reuse workgroups for shared context and budgets.</li>
-        <li>Set [[usage.budget]] entries and run low-value work with <code>--budget</code>.</li>
-      </ul>
-    </section>
-    <section>
-      <h2>Install</h2>
-      <p>Rust 1.85+ is required. Install the binary with <code>cargo install --path .</code> and bootstrap agent/skill configs with <code>aid config agents</code> and <code>aid config skills</code>.</p>
-    </section>
-    <section>
-      <h2>Quick start</h2>
-      <ul>${quickList}</ul>
-    </section>
-    <section>
-      <h2>Commands</h2>
-      <div style="overflow-x:auto;">
+    <section id="commands">
+      <h2 class="sec-title">Commands</h2>
+      <div class="table-wrap">
         <table>
-          <thead>
-            <tr><th>Command</th><th>Purpose</th><th>Example</th></tr>
-          </thead>
+          <thead><tr><th>Command</th><th>Purpose</th><th>Example</th></tr></thead>
           <tbody>${commandsRows}</tbody>
         </table>
       </div>
     </section>
-    <section>
-      <h2>Agent capability matrix</h2>
-      <div style="overflow-x:auto;">
+    <section id="agents">
+      <h2 class="sec-title">Agent capability matrix</h2>
+      <div class="table-wrap">
         <table>
-          <thead>
-            <tr><th>Agent</th>${agentHeader}</tr>
-          </thead>
+          <thead><tr><th>Agent</th>${agentHeader}</tr></thead>
           <tbody>${agentRows}</tbody>
         </table>
       </div>
     </section>
-    <section>
-      <h2>Architecture</h2>
-      <pre style="background:#040b16;padding:1rem;border-radius:8px;margin:0;font-family:inherit;"><code>┌─────────────────────────────────────┐&#10;│           aid (CLI binary)          │&#10;├──────┬──────┬──────┬───────┬────────┬───────────┤&#10;│ run  │ watch│ show │ board │ usage  │ benchmark │  ← user-facing commands&#10;├──────┴──────┴──────┴───────┴────────┤&#10;│           Task Manager              │&#10;│  ┌────────┐ ┌────────┐ ┌────────┐  │&#10;│  │Classif.│ │ Watch  │ │ Store  │  │&#10;│  │+ Agent │ │ Engine │ │(SQLite)│  │&#10;│  │Registry│ │        │ │        │  │&#10;│  └────┬───┘ └────┬───┘ └────┬───┘  │&#10;│       │          │          │       │&#10;├───────┴──────────┴──────────┴───────┤&#10;│         Agent Adapters              │&#10;│  ┌──────┐ ┌─────┐ ┌────────┐ ┌──────┐ ┌────┐ ┌───┐ ┌────────┐&#10;│  │Gemini│ │Codex│ │OpenCode│ │Cursor│ │Kilo│ │Codebuff│&#10;│  └──────┘ └─────┘ └────────┘ └──────┘ └────┘ └────────┘&#10;└─────────────────────────────────────┘</code></pre>
+    <section id="arch">
+      <h2 class="sec-title">Architecture</h2>
+      <div class="term-block arch-term">
+        <div class="term-head">
+          <span class="term-dot r"></span><span class="term-dot y"></span><span class="term-dot g"></span>
+        </div>
+        <div class="term-body"><pre style="margin:0;background:transparent;color:inherit;padding:0;">${archDiagram}</pre></div>
+      </div>
     </section>
-    <section>
-      <h2>MCP integration</h2>
-      <p>Start <code>aid mcp</code> to expose the following stdio MCP tools:</p>
-      <ul>${mcpList}</ul>
-      <p>Register the server in your Claude Code MCP config to call <code>aid_run</code>, <code>aid_board</code>, <code>aid_show</code>, <code>aid_retry</code>, <code>aid_usage</code>, and <code>aid_ask</code> without shell parsing.</p>
+    <section id="quick-start">
+      <h2 class="sec-title">Quick Start</h2>
+      <div class="steps">
+        <div class="step">
+          <span class="step-num"></span>
+          <div class="step-content">
+            <p>Install Rust 1.85+ and ensure agent CLIs (gemini, codex, opencode, cursor, kilo, codebuff) are on your PATH.</p>
+            <div class="term-block" style="margin-top:0.5rem;">
+              <div class="term-head"><span class="term-dot r"></span><span class="term-dot y"></span><span class="term-dot g"></span></div>
+              <div class="term-body">curl -fsSL https://aid.agent-tools.org/install.sh | sh</div>
+            </div>
+          </div>
+        </div>
+        <div class="step">
+          <span class="step-num"></span>
+          <div class="step-content">
+            <p>Run <code>aid setup</code> to configure API keys and detect installed agents.</p>
+            <div class="term-block" style="margin-top:0.5rem;">
+              <div class="term-head"><span class="term-dot r"></span><span class="term-dot y"></span><span class="term-dot g"></span></div>
+              <div class="term-body">aid setup</div>
+            </div>
+          </div>
+        </div>
+        <div class="step">
+          <span class="step-num"></span>
+          <div class="step-content">
+            <p>Dispatch tasks, watch progress, and inspect results.</p>
+            <div class="term-block" style="margin-top:0.5rem;">
+              <div class="term-head"><span class="term-dot r"></span><span class="term-dot y"></span><span class="term-dot g"></span></div>
+              <div class="term-body">aid run codex "Document the API"
+aid watch --tui
+aid show t-1234</div>
+            </div>
+          </div>
+        </div>
+      </div>
     </section>
-  </main>
-  <footer>
-    <a href="/llms.txt" style="color:#7dd3fc;text-decoration:none;">/llms.txt</a>
-    <a href="/llms-full.txt" style="color:#7dd3fc;text-decoration:none;">/llms-full.txt</a>
-    <span>Full docs: <a href="${SITE_URL}/llms-full.txt" style="color:#7dd3fc;text-decoration:none;">${SITE_URL}/llms-full.txt</a></span>
-  </footer>
+    <footer>
+      <a href="/llms.txt">/llms.txt</a>
+      <a href="/llms-full.txt">/llms-full.txt</a>
+      <a href="${REPO_URL}" target="_blank" rel="noopener">GitHub</a>
+      <span>MIT License</span>
+    </footer>
+  </div>
+  <script>
+    (function(){
+      var btn = document.querySelector(".term-copy");
+      if (btn) btn.addEventListener("click", function(){ var t = this.getAttribute("data-copy"); if (t) navigator.clipboard.writeText(t.replace(/&quot;/g, '"')).then(function(){ btn.textContent = "Copied"; setTimeout(function(){ btn.textContent = "Copy"; }, 1500); }); });
+    })();
+  </script>
 </body>
 </html>`;
 }

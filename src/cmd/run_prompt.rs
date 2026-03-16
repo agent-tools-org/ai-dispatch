@@ -371,10 +371,10 @@ fn collect_sibling_summaries(
     for task in &tasks {
         if task.id.as_str() == current_task_id { continue; }
         if !task.status.is_terminal() { continue; }
-        if let Some(json) = store.get_completion_summary(task.id.as_str())? {
-            if let Ok(summary) = serde_json::from_str::<CompletionSummary>(&json) {
-                summaries.push(summary);
-            }
+        if let Some(json) = store.get_completion_summary(task.id.as_str())?
+            && let Ok(summary) = serde_json::from_str::<CompletionSummary>(&json)
+        {
+            summaries.push(summary);
         }
     }
     summaries.truncate(5);

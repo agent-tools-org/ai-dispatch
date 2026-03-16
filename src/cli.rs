@@ -99,6 +99,9 @@ pub enum Commands {
         /// Dispatch to N budget-friendly agents and judge the best output
         #[arg(long, value_name = "N")]
         best_of: Option<usize>,
+        /// Custom metric command for --best-of scoring (output must be a number)
+        #[arg(long, value_name = "COMMAND", requires = "best_of")]
+        metric: Option<String>,
         /// Link this task as a child of an existing task (thread composition)
         #[arg(long, value_name = "TASK_ID")]
         parent: Option<String>,

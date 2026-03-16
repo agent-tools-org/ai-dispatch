@@ -81,6 +81,7 @@ async fn main() -> Result<()> {
             judge,
             peer_review,
             best_of,
+            metric,
             parent,
         } => {
             let config = config::load_config().unwrap_or_default();
@@ -154,6 +155,7 @@ async fn main() -> Result<()> {
                     judge,
                     peer_review,
                     best_of,
+                    metric,
                     team: team_flag,
                     context_from: extras.context_from,
                     parent_task_id: parent,

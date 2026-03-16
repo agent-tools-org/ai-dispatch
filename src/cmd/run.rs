@@ -55,6 +55,7 @@ pub struct RunArgs {
     pub read_only: bool,
     pub budget: bool,
     pub best_of: Option<usize>,
+    pub metric: Option<String>,
     pub session_id: Option<String>,
     pub team: Option<String>,
     pub context_from: Vec<String>,
@@ -459,10 +460,31 @@ struct CandidateResult {
     agent_label: String,
     status: TaskStatus,
     diff_line_count: usize,
+    metric_score: Option<f64>,
+}
+
+fn evaluate_metric(metric_cmd: &str, worktree_path: Option<&str>) -> Option<f64> {
+    let dir = worktree_path.unwrap_or(".");
+    let output = std::process::Command::new("sh")
+        .args(["-c", metric_cmd])
+        .current_dir(dir)
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    stdout
+        .trim()
+        .lines()
+        .last()
+        .and_then(|line| {
+            line.split_whitespace().last().and_then(|word| word.parse::<f64>().ok())
+        })
 }
 
 impl CandidateResult {
-    fn from_task(task: Task) -> Self {
+    fn from_task(task: Task, metric_cmd: Option<&str>) -> Self {
         let agent_label = task
             .custom_agent_name
             .clone()
@@ -475,22 +497,31 @@ impl CandidateResult {
         } else {
             0
         };
+        let metric_score = if task.status == TaskStatus::Done {
+            metric_cmd.and_then(|cmd| evaluate_metric(cmd, task.worktree_path.as_deref()))
+        } else {
+            None
+        };
         CandidateResult {
             task_id: task.id.clone(),
             agent_label,
             status: task.status,
             diff_line_count,
+            metric_score,
         }
     }
 }
 
-fn pick_best_result(results: &[CandidateResult]) -> Option<&CandidateResult> {
-    let mut successes: Vec<&CandidateResult> = results
+fn pick_best_result(candidates: &[CandidateResult]) -> Option<&CandidateResult> {
+    candidates
         .iter()
-        .filter(|candidate| candidate.status == TaskStatus::Done)
-        .collect();
-    successes.sort_by(|a, b| b.diff_line_count.cmp(&a.diff_line_count));
-    successes.first().copied()
+        .filter(|c| c.status == TaskStatus::Done)
+        .max_by(|a, b| match (a.metric_score, b.metric_score) {
+            (Some(sa), Some(sb)) => sa.partial_cmp(&sb).unwrap_or(std::cmp::Ordering::Equal),
+            (Some(_), None) => std::cmp::Ordering::Greater,
+            (None, Some(_)) => std::cmp::Ordering::Less,
+            (None, None) => a.diff_line_count.cmp(&b.diff_line_count),
+        })
 }
 
 fn validate_best_of_count(n: usize) -> Result<()> {
@@ -557,7 +588,7 @@ async fn run_best_of(store: Arc<Store>, args: RunArgs, n: usize) -> Result<TaskI
             if let Some(task) = store.get_task(dispatch.task_id.as_str())? {
                 if task.status.is_terminal() {
                     done.push(idx);
-                    completed.push(CandidateResult::from_task(task));
+                    completed.push(CandidateResult::from_task(task, args.metric.as_deref()));
                 }
             } else {
                 eprintln!(
@@ -704,18 +735,21 @@ mod tests {
             agent_label: "kilo".to_string(),
             status: TaskStatus::Done,
             diff_line_count: 12,
+            metric_score: None,
         };
         let runner = CandidateResult {
             task_id: TaskId::generate(),
             agent_label: "cursor".to_string(),
             status: TaskStatus::Done,
             diff_line_count: 3,
+            metric_score: None,
         };
         let failed = CandidateResult {
             task_id: TaskId::generate(),
             agent_label: "gemini".to_string(),
             status: TaskStatus::Failed,
             diff_line_count: 0,
+            metric_score: None,
         };
         let results = vec![winner.clone(), runner, failed];
         let best = pick_best_result(&results).unwrap();
@@ -729,8 +763,31 @@ mod tests {
             agent_label: "opencode".to_string(),
             status: TaskStatus::Failed,
             diff_line_count: 0,
+            metric_score: None,
         };
         assert!(pick_best_result(&[failed]).is_none());
+    }
+
+    #[test]
+    fn pick_best_result_prefers_metric_score() {
+        let candidates = vec![
+            CandidateResult {
+                task_id: TaskId("t-1".into()),
+                agent_label: "a".into(),
+                status: TaskStatus::Done,
+                diff_line_count: 100,
+                metric_score: Some(3.0),
+            },
+            CandidateResult {
+                task_id: TaskId("t-2".into()),
+                agent_label: "b".into(),
+                status: TaskStatus::Done,
+                diff_line_count: 10,
+                metric_score: Some(9.0),
+            },
+        ];
+        let best = pick_best_result(&candidates).unwrap();
+        assert_eq!(best.task_id, TaskId("t-2".into()));
     }
 
     #[test]

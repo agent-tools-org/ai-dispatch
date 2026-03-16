@@ -62,6 +62,7 @@ pub struct AgentModel {
     pub output_per_m: f64,
     pub tier: &'static str,
     pub description: &'static str,
+    pub capability: f64,
 }
 
 pub const AGENT_MODELS: &[AgentModel] = &[
@@ -72,6 +73,7 @@ pub const AGENT_MODELS: &[AgentModel] = &[
         output_per_m: 8.0,
         tier: "premium",
         description: "Latest, best quality",
+        capability: 9.4,
     },
     AgentModel {
         agent: AgentKind::Codex,
@@ -80,6 +82,7 @@ pub const AGENT_MODELS: &[AgentModel] = &[
         output_per_m: 8.0,
         tier: "standard",
         description: "Reliable, good quality",
+        capability: 8.7,
     },
     AgentModel {
         agent: AgentKind::Codex,
@@ -88,6 +91,7 @@ pub const AGENT_MODELS: &[AgentModel] = &[
         output_per_m: 1.6,
         tier: "cheap",
         description: "Balanced cost/quality",
+        capability: 6.3,
     },
     AgentModel {
         agent: AgentKind::Codex,
@@ -96,6 +100,7 @@ pub const AGENT_MODELS: &[AgentModel] = &[
         output_per_m: 0.4,
         tier: "cheap",
         description: "Ultra-cheap, simple tasks",
+        capability: 4.6,
     },
     AgentModel {
         agent: AgentKind::Gemini,
@@ -104,6 +109,7 @@ pub const AGENT_MODELS: &[AgentModel] = &[
         output_per_m: 0.60,
         tier: "cheap",
         description: "Fast, balanced (default)",
+        capability: 7.3,
     },
     AgentModel {
         agent: AgentKind::Gemini,
@@ -112,6 +118,7 @@ pub const AGENT_MODELS: &[AgentModel] = &[
         output_per_m: 10.0,
         tier: "premium",
         description: "Complex reasoning",
+        capability: 7.8,
     },
     AgentModel {
         agent: AgentKind::Gemini,
@@ -120,6 +127,7 @@ pub const AGENT_MODELS: &[AgentModel] = &[
         output_per_m: 0.0,
         tier: "cheap",
         description: "Fastest, simple tasks",
+        capability: 5.9,
     },
     AgentModel {
         agent: AgentKind::OpenCode,
@@ -128,6 +136,7 @@ pub const AGENT_MODELS: &[AgentModel] = &[
         output_per_m: 2.0,
         tier: "cheap",
         description: "Paid, good quality",
+        capability: 6.5,
     },
     AgentModel {
         agent: AgentKind::OpenCode,
@@ -136,6 +145,7 @@ pub const AGENT_MODELS: &[AgentModel] = &[
         output_per_m: 2.0,
         tier: "cheap",
         description: "Paid, good quality",
+        capability: 6.1,
     },
     AgentModel {
         agent: AgentKind::OpenCode,
@@ -144,6 +154,7 @@ pub const AGENT_MODELS: &[AgentModel] = &[
         output_per_m: 0.0,
         tier: "free",
         description: "Free tier",
+        capability: 4.3,
     },
     AgentModel {
         agent: AgentKind::OpenCode,
@@ -152,6 +163,7 @@ pub const AGENT_MODELS: &[AgentModel] = &[
         output_per_m: 0.0,
         tier: "free",
         description: "Free tier",
+        capability: 4.1,
     },
     AgentModel {
         agent: AgentKind::OpenCode,
@@ -160,6 +172,7 @@ pub const AGENT_MODELS: &[AgentModel] = &[
         output_per_m: 0.0,
         tier: "free",
         description: "Free tier",
+        capability: 4.1,
     },
     AgentModel {
         agent: AgentKind::Kilo,
@@ -168,6 +181,7 @@ pub const AGENT_MODELS: &[AgentModel] = &[
         output_per_m: 0.0,
         tier: "free",
         description: "Free tier",
+        capability: 3.8,
     },
     AgentModel {
         agent: AgentKind::Cursor,
@@ -176,6 +190,7 @@ pub const AGENT_MODELS: &[AgentModel] = &[
         output_per_m: 0.40,
         tier: "standard",
         description: "Auto-select (cheapest, recommended for most tasks)",
+        capability: 7.0,
     },
     AgentModel {
         agent: AgentKind::Cursor,
@@ -184,6 +199,7 @@ pub const AGENT_MODELS: &[AgentModel] = &[
         output_per_m: 0.0,
         tier: "premium",
         description: "Default, strongest reasoning",
+        capability: 8.3,
     },
     AgentModel {
         agent: AgentKind::Cursor,
@@ -192,6 +208,7 @@ pub const AGENT_MODELS: &[AgentModel] = &[
         output_per_m: 0.0,
         tier: "standard",
         description: "Fast, good quality",
+        capability: 7.5,
     },
     AgentModel {
         agent: AgentKind::Cursor,
@@ -200,6 +217,7 @@ pub const AGENT_MODELS: &[AgentModel] = &[
         output_per_m: 0.0,
         tier: "standard",
         description: "GPT-5.4, reliable",
+        capability: 8.9,
     },
     AgentModel {
         agent: AgentKind::Cursor,
@@ -208,6 +226,7 @@ pub const AGENT_MODELS: &[AgentModel] = &[
         output_per_m: 0.0,
         tier: "standard",
         description: "Gemini 3.1 Pro",
+        capability: 8.2,
     },
     AgentModel {
         agent: AgentKind::Codebuff,
@@ -216,6 +235,7 @@ pub const AGENT_MODELS: &[AgentModel] = &[
         output_per_m: 0.0,
         tier: "standard",
         description: "SDK-managed pricing",
+        capability: 6.8,
     },
 ];
 
@@ -422,8 +442,8 @@ fn agent_profile(
                     None => String::new(),
                 };
                 lines.push_str(&format!(
-                    "    {:<15} {:<8} ${:>5.2}/${:<5.2}  {}{}\n",
-                    am.model, am.tier, am.input_per_m, am.output_per_m, am.description, history_suffix
+                    "    {:<15} ({}, cap:{:.1}, ${:.2}/${:.2}/M)  {}{}\n",
+                    am.model, am.tier, am.capability, am.input_per_m, am.output_per_m, am.description, history_suffix
                 ));
             }
             lines

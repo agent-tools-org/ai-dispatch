@@ -120,6 +120,11 @@ pub async fn watch_streaming(
         TaskStatus::Failed
     };
 
+    // Auto-clear rate limit on successful completion
+    if status == TaskStatus::Done && rate_limit::is_rate_limited(&agent.kind()) {
+        rate_limit::clear_rate_limit(&agent.kind());
+    }
+
     // Record final event (include stderr hint on failure)
     let stderr_note = if status == TaskStatus::Failed {
         let stderr_path = paths::stderr_path(task_id.as_str());

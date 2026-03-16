@@ -142,6 +142,7 @@ pub(super) fn migrate(store: &Store) -> Result<()> {
     let _ = conn.execute_batch(
         "ALTER TABLE tasks ADD COLUMN verify_status TEXT NOT NULL DEFAULT 'skipped';",
     );
+    let _ = conn.execute_batch("ALTER TABLE workgroups ADD COLUMN created_by TEXT;");
     let _ = conn.execute_batch(CREATE_FINDINGS_SQL);
     // Performance indexes for hot query paths
     let _ = conn.execute_batch("CREATE INDEX IF NOT EXISTS idx_tasks_created_at ON tasks(created_at);");

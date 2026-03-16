@@ -42,7 +42,7 @@ fn auto_run_selects_gemini_and_reports_reason() {
         String::from_utf8_lossy(&output.stderr)
     );
     let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(stderr.contains("[aid] Auto-selected agent: gemini"));
+    assert!(stderr.contains("[aid] Auto-selected: gemini"));
     assert!(stderr.contains("research task"));
 }
 

@@ -211,7 +211,7 @@ fn render_tree_view(frame: &mut ratatui::Frame<'_>, app: &App) {
         chunks[0],
     );
 
-    let nodes = tree_data::build_task_tree(&app.tasks);
+    let nodes = tree_data::build_task_tree_with_creators(&app.tasks, &app.wg_creators);
     // We can't mutate app here (render takes &App), so tree_node_count
     // is updated in tick(). Use nodes.len() for bounds checking.
     if nodes.is_empty() {
@@ -341,6 +341,7 @@ fn status_to_color(status: TaskStatus) -> Color {
         TaskStatus::Done | TaskStatus::Merged => Color::Green,
         TaskStatus::Failed => Color::Red,
         TaskStatus::Pending => Color::Indexed(250),
+        TaskStatus::Waiting => Color::Indexed(240),
         TaskStatus::AwaitingInput => Color::Magenta,
         TaskStatus::Running => Color::Yellow,
         TaskStatus::Skipped => Color::Blue,

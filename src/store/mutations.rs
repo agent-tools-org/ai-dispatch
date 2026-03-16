@@ -67,22 +67,61 @@ impl Store {
         Ok(())
     }
 
-    pub fn create_workgroup(&self, name: &str, shared_context: &str) -> Result<Workgroup> {
+    /// Insert a minimal waiting task placeholder (visible in TUI before dispatch).
+    pub fn insert_waiting_task(&self, id: &str, agent: &str, prompt: &str, workgroup_id: Option<&str>) -> Result<()> {
+        self.db().execute(
+            "INSERT INTO tasks (id, agent, prompt, status, workgroup_id, created_at, verify_status, read_only, budget)
+             VALUES (?1, ?2, ?3, 'waiting', ?4, ?5, 'skipped', 0, 0)",
+            params![id, agent, prompt, workgroup_id, Local::now().to_rfc3339()],
+        )?;
+        Ok(())
+    }
+
+    /// Replace a waiting task's row with full task data (called when dispatch begins).
+    pub fn replace_waiting_task(&self, task: &Task) -> Result<()> {
+        let agent_value = if task.agent == AgentKind::Custom {
+            task.custom_agent_name.as_deref().unwrap_or("custom")
+        } else {
+            task.agent.as_str()
+        };
+        self.db().execute(
+            "UPDATE tasks SET agent=?2, prompt=?3, resolved_prompt=?4, status=?5,
+             parent_task_id=?6, workgroup_id=?7, caller_kind=?8, caller_session_id=?9,
+             agent_session_id=?10, repo_path=?11, worktree_path=?12, worktree_branch=?13,
+             log_path=?14, output_path=?15, model=?16, verify=?17, verify_status=?18,
+             read_only=?19, budget=?20, custom_agent_name=?21
+             WHERE id=?1",
+            params![
+                task.id.as_str(), agent_value, task.prompt, task.resolved_prompt,
+                task.status.as_str(), task.parent_task_id, task.workgroup_id,
+                task.caller_kind, task.caller_session_id, task.agent_session_id,
+                task.repo_path, task.worktree_path, task.worktree_branch,
+                task.log_path, task.output_path, task.model, task.verify,
+                task.verify_status.as_str(), task.read_only, task.budget,
+                task.custom_agent_name,
+            ],
+        )?;
+        Ok(())
+    }
+
+    pub fn create_workgroup(&self, name: &str, shared_context: &str, created_by: Option<&str>) -> Result<Workgroup> {
         let now = Local::now();
         let workgroup = Workgroup {
             id: WorkgroupId::generate(),
             name: name.to_string(),
             shared_context: shared_context.to_string(),
+            created_by: created_by.map(str::to_string),
             created_at: now,
             updated_at: now,
         };
         self.db().execute(
-            "INSERT INTO workgroups (id, name, shared_context, created_at, updated_at)
-             VALUES (?1, ?2, ?3, ?4, ?5)",
+            "INSERT INTO workgroups (id, name, shared_context, created_by, created_at, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
             params![
                 workgroup.id.as_str(),
                 workgroup.name,
                 workgroup.shared_context,
+                workgroup.created_by,
                 workgroup.created_at.to_rfc3339(),
                 workgroup.updated_at.to_rfc3339(),
             ],

@@ -1,6 +1,6 @@
 # ai-dispatch — Multi-AI CLI Team Orchestrator
 
-## Current Status (v7.9.1)
+## Current Status (v8.1.0)
 
 **Foundation (v1.x–v3.x):** Task dispatch, batch parallel, worktree isolation, retry chains, webhook notifications, prompt templates, TUI multipane with charts, modular architecture, agent benchmark, zombie cleanup, UTF-8 safety, task classifier with capability matrix.
 
@@ -424,13 +424,14 @@ ai-dispatch/
 
 ## Roadmap
 
-### v8.0 — Programmable Orchestration (next)
-- Task steering: `aid steer <task-id> "message"` — mid-flight course correction via PTY
-- Pre-dispatch plan validation — lightweight prompt quality check before dispatch
-- `aid merge --group` bulk merge — cherry-pick all completed tasks in a workgroup
-- Structured state deltas — parse agent output into structured file-change summaries
+### v8.0 — Programmable Orchestration (done)
+- Pre-dispatch validation, structured diff in `aid show --json`, loop detection, scaled-up batch docs
 
-### v8.1 — Ecosystem Maturity
+### v8.1 — Model-Level Scoring (done)
+- Per-model capability scoring (`capability: f64` on AgentModel), model-weighted selection, config display with cap scores, workgroup sort + creator
+
+### v8.2 — Ecosystem Maturity (next)
+- Task steering: `aid steer <task-id> "message"` — mid-flight course correction via PTY
 - `aid store publish` — publish local agent/skill packages to community store
 - Daemon mode — `aid daemon` as persistent service via Unix socket
 - Agent protocol v2 — unified structured event protocol for all agents

@@ -223,6 +223,7 @@ fn status_style(status: TaskStatus) -> Style {
         TaskStatus::AwaitingInput => Style::default().fg(Color::Magenta),
         TaskStatus::Failed => Style::default().fg(Color::Red),
         TaskStatus::Pending => Style::default().fg(Color::Gray),
+        TaskStatus::Waiting => Style::default().fg(Color::DarkGray),
         TaskStatus::Skipped => Style::default().fg(Color::Blue),
     }
 }

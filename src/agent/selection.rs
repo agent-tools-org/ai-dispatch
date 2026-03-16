@@ -59,6 +59,7 @@ fn select_agent_from(
         history_map: &history_map,
         avg_cost_map: &avg_cost_map,
         team_default,
+        budget,
     };
     let primary_candidate = pick_best_candidate(BUILTIN_AGENTS, &ctx, budget);
     let available_candidate = if available.is_empty() {
@@ -67,7 +68,7 @@ fn select_agent_from(
         pick_best_candidate(available, &ctx, budget)
     };
     let mut selected_name = available_candidate.kind.as_str().to_string();
-    let mut selected_score = available_candidate.quality;
+    let mut selected_score = available_candidate.score;
     let mut selected_builtin = Some(available_candidate.kind);
     if let Some((custom_name, custom_score)) = load_custom_agents()
         .into_values()
@@ -86,25 +87,35 @@ fn select_agent_from(
         })
         .max_by_key(|(_, score)| *score)
     {
+        let custom_score_value = custom_score as f64;
         let custom_priority = priority(AgentKind::Custom);
         let available_priority = priority(available_candidate.kind);
-        if (custom_score, custom_priority) > (available_candidate.quality, available_priority) {
+        if (custom_score_value > available_candidate.score)
+            || (custom_score_value == available_candidate.score && custom_priority > available_priority)
+        {
             selected_name = custom_name;
-            selected_score = custom_score;
+            selected_score = custom_score_value;
             selected_builtin = None;
         }
     }
+    let selected_model = selected_builtin
+        .and_then(|kind| recommend_model(&kind, &profile.complexity, budget));
     let selected_avg_cost = selected_builtin
         .and_then(|kind| avg_cost_map.get(&kind).copied())
         .unwrap_or(0.0);
-    let selected_efficiency = cost_efficiency(selected_score as f64, selected_avg_cost);
+    let selected_efficiency = cost_efficiency(selected_score, selected_avg_cost);
+    let selected_model_label = if let Some(model) = selected_model {
+        format!("{}/{}", selected_name, model)
+    } else {
+        selected_name.clone()
+    };
     let selected_label = if budget && selected_builtin.is_some() {
         format!(
-            "{} (score: {}, avg: ${:.2}, efficiency: {:.1})",
-            selected_name, selected_score, selected_avg_cost, selected_efficiency
+            "{} (score: {:.1}, avg: ${:.2}, efficiency: {:.1})",
+            selected_model_label, selected_score, selected_avg_cost, selected_efficiency
         )
     } else {
-        format!("{} (score: {})", selected_name, selected_score)
+        format!("{} (score: {:.1})", selected_model_label, selected_score)
     };
     let mut reason = format!(
         "{} task ({}) \u{2192} {}",
@@ -186,6 +197,7 @@ pub(crate) fn budget_ranked_agents(
         history_map: &history_map,
         avg_cost_map: &avg_cost_map,
         team_default,
+        budget: false,
     };
     let mut candidates: Vec<Candidate> = BUILTIN_AGENTS
         .iter()

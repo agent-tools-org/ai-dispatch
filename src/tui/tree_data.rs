@@ -19,7 +19,13 @@ pub struct TreeNode {
 /// Build a flat list of TreeNodes with proper indentation.
 /// Groups tasks by workgroup, then by parent_task_id hierarchy within each group.
 /// Orphan tasks (no workgroup, no parent) appear at root level.
+#[cfg(test)]
 pub fn build_task_tree(tasks: &[Task]) -> Vec<TreeNode> {
+    build_task_tree_with_creators(tasks, &HashMap::new())
+}
+
+/// Build tree with optional workgroup creator labels.
+pub fn build_task_tree_with_creators(tasks: &[Task], creators: &HashMap<String, String>) -> Vec<TreeNode> {
     let mut result = Vec::new();
     let mut seen = HashSet::new();
     let task_ids: HashSet<&str> = tasks.iter().map(|t| t.id.as_str()).collect();
@@ -30,10 +36,13 @@ pub fn build_task_tree(tasks: &[Task]) -> Vec<TreeNode> {
         groups.entry(task.workgroup_id.as_deref()).or_default().push(task);
     }
 
-    // Collect and sort group keys: named groups first (sorted), then None (ungrouped)
+    // Sort groups: named groups first (newest first by latest task), then None (ungrouped)
     let mut group_keys: Vec<Option<&str>> = groups.keys().copied().collect();
     group_keys.sort_by(|a, b| match (a, b) {
-        (Some(a), Some(b)) => a.cmp(b),
+        (Some(ga), Some(gb)) => {
+            let newest = |g: &str| groups[&Some(g)].iter().map(|t| t.created_at).max();
+            newest(gb).cmp(&newest(ga))
+        }
         (Some(_), None) => std::cmp::Ordering::Less,
         (None, Some(_)) => std::cmp::Ordering::Greater,
         (None, None) => std::cmp::Ordering::Equal,
@@ -53,7 +62,10 @@ pub fn build_task_tree(tasks: &[Task]) -> Vec<TreeNode> {
                 task: header_task.clone(),
                 depth: 0,
                 is_last: false,
-                prefix: format!("▸ {gid} "),
+                prefix: match creators.get(gid) {
+                    Some(by) => format!("▸ {gid} ({by}) "),
+                    None => format!("▸ {gid} "),
+                },
                 is_group_header: true,
             });
             seen.insert(header_task.id.as_str().to_string());

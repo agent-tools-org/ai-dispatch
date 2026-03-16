@@ -98,6 +98,7 @@ mod tests {
             id: WorkgroupId("wg-demo".to_string()),
             name: "dispatch".to_string(),
             shared_context: shared_context.to_string(),
+            created_by: None,
             created_at: Local::now(),
             updated_at: Local::now(),
         }

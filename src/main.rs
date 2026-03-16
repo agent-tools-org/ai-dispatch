@@ -104,16 +104,13 @@ async fn main() -> Result<()> {
                 let (selected, reason) = agent::select_agent_with_reason(
                     &prompt, &selection_opts, &store, team_config.as_ref(),
                 );
-                eprintln!("[aid] Auto-selected agent: {selected} (reason: {reason})");
+                eprintln!("[aid] Auto-selected: {selected} (reason: {reason})");
                 let rec = if model.is_none() && !budget {
                     let norm = prompt.trim().to_lowercase();
                     let fc = agent::classifier::count_file_mentions(&norm);
                     let profile = agent::classifier::classify(&prompt, fc, prompt.len());
                     let m = AgentKind::parse_str(&selected)
                         .and_then(|kind| agent::selection::recommend_model(&kind, &profile.complexity, false));
-                    if let Some(name) = m {
-                        eprintln!("[aid] Auto-selected model: {name} (complexity: {})", profile.complexity.label());
-                    }
                     m.map(|s| s.to_string())
                 } else {
                     None

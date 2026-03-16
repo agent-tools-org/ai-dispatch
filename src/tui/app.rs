@@ -59,6 +59,7 @@ pub struct App {
     pub tree_mode: bool,
     pub tree_selected: usize,
     pub tree_node_count: usize,
+    pub wg_creators: HashMap<String, String>,
     pub show_all: bool,
     pub active_pane: usize,
     pub pane_scroll_offsets: Vec<usize>,
@@ -88,6 +89,7 @@ impl App {
             tree_mode: false,
             tree_selected: 0,
             tree_node_count: 0,
+            wg_creators: HashMap::new(),
             show_all: false,
             active_pane: 0,
             pane_scroll_offsets: Vec::new(),
@@ -107,7 +109,7 @@ impl App {
         self.reload_tasks()?;
         // Keep tree_node_count in sync for key navigation
         if self.tree_mode {
-            let count = super::tree_data::build_task_tree(&self.tasks).len();
+            let count = super::tree_data::build_task_tree_with_creators(&self.tasks, &self.wg_creators).len();
             self.tree_node_count = count;
             if self.tree_selected >= count && count > 0 {
                 self.tree_selected = count - 1;
@@ -249,6 +251,12 @@ impl App {
     fn reload_tasks(&mut self) -> Result<()> {
         let tasks = self.load_tasks()?;
         self.milestones = self.load_milestones_batch(&tasks)?;
+        // Load workgroup creators for tree display
+        if let Ok(wgs) = self.store.list_workgroups() {
+            self.wg_creators = wgs.into_iter()
+                .filter_map(|w| w.created_by.map(|by| (w.id.to_string(), by)))
+                .collect();
+        }
         self.tasks = tasks;
         if self.selected >= self.tasks.len() && !self.tasks.is_empty() {
             self.selected = self.tasks.len() - 1;

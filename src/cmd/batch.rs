@@ -29,7 +29,7 @@ pub async fn run(store: Arc<Store>, args: BatchArgs) -> Result<()> {
             eprintln!("[aid] Using workspace {env_group} from AID_GROUP");
         } else if total >= 2 {
             let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("batch");
-            let wg = store.create_workgroup(stem, "Auto-created for batch dispatch")?;
+            let wg = store.create_workgroup(stem, "Auto-created for batch dispatch", Some(stem))?;
             for task in &mut config.tasks {
                 task.group = Some(wg.id.to_string());
             }
@@ -151,6 +151,16 @@ async fn dispatch_with_dependencies(
     if tasks.is_empty() {
         return Ok(Vec::new());
     }
+    // Pre-create all tasks with Waiting status so they're visible in TUI immediately
+    let waiting_ids: Vec<String> = tasks.iter().enumerate().map(|(i, task)| {
+        let id = crate::types::TaskId::generate();
+        let agent = if task.agent.is_empty() { "auto" } else { &task.agent };
+        let prompt_preview = if task.prompt.len() > 120 { &task.prompt[..120] } else { &task.prompt };
+        if let Err(e) = store.insert_waiting_task(id.as_str(), agent, prompt_preview, task.group.as_deref()) {
+            eprintln!("[aid] Warning: failed to pre-create task {i}: {e}");
+        }
+        id.to_string()
+    }).collect();
     let name_map = batch::task_name_map(tasks)?;
     let success_targets = resolve_hook_targets(tasks, &name_map, |task| task.on_success.as_deref())?;
     let failure_targets = resolve_hook_targets(tasks, &name_map, |task| task.on_fail.as_deref())?;
@@ -172,7 +182,7 @@ async fn dispatch_with_dependencies(
         let available = max_active.saturating_sub(active.len());
         if available > 0 && !ready.is_empty() {
             let dispatch_group: Vec<_> = ready.into_iter().take(available).collect();
-            for dispatch in dispatch_level(store.clone(), tasks, &dispatch_group).await? {
+            for dispatch in dispatch_level_with_ids(store.clone(), tasks, &dispatch_group, &waiting_ids).await? {
                 started[dispatch.index] = true;
                 match dispatch.task_id {
                     Some(task_id) => {
@@ -181,6 +191,8 @@ async fn dispatch_with_dependencies(
                     }
                     None => {
                         outcomes[dispatch.index] = Some(BatchTaskOutcome::Failed);
+                        // Mark waiting placeholder as skipped
+                        let _ = store.update_task_status(&waiting_ids[dispatch.index], crate::types::TaskStatus::Skipped);
                         trigger_conditional(
                             BatchTaskOutcome::Failed,
                             dispatch.index,
@@ -203,6 +215,12 @@ async fn dispatch_with_dependencies(
             &success_targets,
             &failure_targets,
         )?;
+    }
+    // Mark any remaining waiting tasks as skipped (deps never resolved)
+    for (i, outcome) in outcomes.iter().enumerate() {
+        if outcome.is_none() {
+            let _ = store.update_task_status(&waiting_ids[i], crate::types::TaskStatus::Skipped);
+        }
     }
     Ok(task_ids)
 }
@@ -252,12 +270,13 @@ fn trigger_conditional(
         BatchTaskOutcome::Skipped => {}
     }
 }
-async fn dispatch_level(store: Arc<Store>, tasks: &[batch::BatchTask], task_indices: &[usize]) -> Result<Vec<DispatchedTask>> {
+async fn dispatch_level_with_ids(store: Arc<Store>, tasks: &[batch::BatchTask], task_indices: &[usize], waiting_ids: &[String]) -> Result<Vec<DispatchedTask>> {
     let handles: Vec<_> = task_indices
         .iter()
         .map(|&task_idx| {
             let store = store.clone();
-            let run_args = task_to_run_args(&tasks[task_idx], true, &store);
+            let mut run_args = task_to_run_args(&tasks[task_idx], true, &store);
+            run_args.existing_task_id = Some(crate::types::TaskId(waiting_ids[task_idx].clone()));
             tokio::spawn(async move { (task_idx, run::run(store, run_args).await) })
         })
         .collect();
@@ -283,6 +302,7 @@ async fn dispatch_level(store: Arc<Store>, tasks: &[batch::BatchTask], task_indi
     }
     Ok(dispatches)
 }
+
 fn wait_for_any_completion(
     store: &Arc<Store>,
     active: &mut Vec<(usize, String)>,

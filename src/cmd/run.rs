@@ -59,6 +59,7 @@ pub struct RunArgs {
     pub team: Option<String>,
     pub context_from: Vec<String>,
     pub judge_retry: bool,
+    pub existing_task_id: Option<TaskId>,
 }
 
 fn validate_dispatch(args: &RunArgs, agent_kind: &AgentKind) -> Vec<String> {
@@ -163,7 +164,7 @@ pub async fn run(store: Arc<Store>, args: RunArgs) -> Result<TaskId> {
     } else {
         agent::get_agent(agent_kind)
     };
-    let task_id = TaskId::generate();
+    let task_id = args.existing_task_id.clone().unwrap_or_else(TaskId::generate);
     let log_path = paths::log_path(task_id.as_str());
     let workgroup = run_prompt::load_workgroup(&store, args.group.as_deref())?;
     let explicit_repo_path = args.repo.as_deref().map(run_prompt::resolve_repo_path).transpose()?;
@@ -206,7 +207,11 @@ pub async fn run(store: Arc<Store>, args: RunArgs) -> Result<TaskId> {
     for warning in &dispatch_warnings {
         eprintln!("[aid] Warning: {warning}");
     }
-    store.insert_task(&task)?;
+    if args.existing_task_id.is_some() {
+        store.replace_waiting_task(&task)?;
+    } else {
+        store.insert_task(&task)?;
+    }
     let before_worktree = task.worktree_path.clone();
     let prompt_bundle = run_prompt::build_prompt_bundle(&store, &args, &agent_kind, workgroup.as_ref(), &requested_skills, task_id.as_str())?;
     store.update_resolved_prompt(task_id.as_str(), &prompt_bundle.effective_prompt)?;

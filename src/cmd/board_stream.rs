@@ -183,6 +183,7 @@ fn colored_status(status: TaskStatus) -> String {
         TaskStatus::Failed => color("Failed", ANSI_RED),
         TaskStatus::Running => color("Running", ANSI_YELLOW),
         TaskStatus::AwaitingInput => color("Await", ANSI_BLUE),
+        TaskStatus::Waiting => color("Waiting", ANSI_DIM),
         TaskStatus::Pending => color("Queued", ANSI_DIM),
         TaskStatus::Skipped => color("Skipped", ANSI_DIM),
     }

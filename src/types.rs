@@ -93,6 +93,7 @@ impl fmt::Display for AgentKind {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 pub enum TaskStatus {
+    Waiting,
     Pending,
     Running,
     AwaitingInput,
@@ -105,6 +106,7 @@ pub enum TaskStatus {
 impl TaskStatus {
     pub fn as_str(&self) -> &'static str {
         match self {
+            Self::Waiting => "waiting",
             Self::Pending => "pending",
             Self::Running => "running",
             Self::AwaitingInput => "awaiting_input",
@@ -121,6 +123,7 @@ impl TaskStatus {
 
     pub fn from_str(s: &str) -> Option<Self> {
         match s {
+            "waiting" => Some(Self::Waiting),
             "pending" => Some(Self::Pending),
             "running" => Some(Self::Running),
             "awaiting_input" => Some(Self::AwaitingInput),
@@ -134,6 +137,7 @@ impl TaskStatus {
 
     pub fn label(&self) -> &'static str {
         match self {
+            Self::Waiting => "WAIT",
             Self::Pending => "PEND",
             Self::Running => "RUN",
             Self::AwaitingInput => "AWAIT",
@@ -297,6 +301,7 @@ pub struct Workgroup {
     pub id: WorkgroupId,
     pub name: String,
     pub shared_context: String,
+    pub created_by: Option<String>,
     pub created_at: DateTime<Local>,
     pub updated_at: DateTime<Local>,
 }

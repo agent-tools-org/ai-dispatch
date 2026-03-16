@@ -112,7 +112,8 @@ pub(super) fn load_task_outcome(store: &Arc<Store>, task_id: &str) -> Result<Bat
     Ok(match task.status {
         TaskStatus::Done | TaskStatus::Merged => BatchTaskOutcome::Done,
         TaskStatus::Skipped => BatchTaskOutcome::Skipped,
-        TaskStatus::Pending
+        TaskStatus::Waiting
+        | TaskStatus::Pending
         | TaskStatus::Running
         | TaskStatus::AwaitingInput
         | TaskStatus::Failed => BatchTaskOutcome::Failed,

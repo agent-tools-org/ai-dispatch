@@ -41,7 +41,7 @@ impl Store {
     pub fn get_workgroup(&self, id: &str) -> Result<Option<Workgroup>> {
         let conn = self.db();
         let mut stmt = conn.prepare(
-            "SELECT id, name, shared_context, created_at, updated_at
+            "SELECT id, name, shared_context, created_at, updated_at, created_by
              FROM workgroups WHERE id = ?1",
         )?;
         let mut rows = stmt.query_map(params![id], row_to_workgroup)?;
@@ -54,7 +54,7 @@ impl Store {
     pub fn list_workgroups(&self) -> Result<Vec<Workgroup>> {
         let conn = self.db();
         let mut stmt = conn.prepare(
-            "SELECT id, name, shared_context, created_at, updated_at
+            "SELECT id, name, shared_context, created_at, updated_at, created_by
              FROM workgroups ORDER BY created_at DESC",
         )?;
         let rows = stmt.query_map([], row_to_workgroup)?;
@@ -470,6 +470,7 @@ fn row_to_workgroup(row: &rusqlite::Row) -> rusqlite::Result<Result<Workgroup>> 
         id: WorkgroupId(row.get::<_, String>(0)?),
         name: row.get(1)?,
         shared_context: row.get(2)?,
+        created_by: row.get(5).ok().flatten(),
         created_at: parse_dt(&row.get::<_, String>(3)?),
         updated_at: parse_dt(&row.get::<_, String>(4)?),
     }))

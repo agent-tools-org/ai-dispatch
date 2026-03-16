@@ -153,7 +153,7 @@ impl App {
             }
             KeyCode::Enter => {
                 // Map tree_selected back to app.tasks index for detail view
-                let nodes = crate::tui::tree_data::build_task_tree(&self.tasks);
+                let nodes = crate::tui::tree_data::build_task_tree_with_creators(&self.tasks, &self.wg_creators);
                 if let Some(node) = nodes.get(self.tree_selected) {
                     if let Some(idx) = self.tasks.iter().position(|t| t.id == node.task.id) {
                         self.selected = idx;

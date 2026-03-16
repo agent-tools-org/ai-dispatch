@@ -1,6 +1,6 @@
 # ai-dispatch (aid)
 
-![Version](https://img.shields.io/badge/version-8.0.0-blue)
+![Version](https://img.shields.io/badge/version-8.1.0-blue)
 ![Rust](https://img.shields.io/badge/rust-2024-orange)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
@@ -584,6 +584,8 @@ Match effort to task importance:
 | `codebuff` | 2 | 5 | 8 | 7 | 6 | 6 | 7 | 4 |
 
 Additional scoring adjustments: budget mode boosts cheap agents (+4) and penalizes expensive ones (-6); high-complexity tasks boost codex/cursor (+2); rate-limited agents get -10; historical success rates apply ±2-3.
+
+Scores above are per-agent baselines. When `auto` selects, it also factors in model capability (1-10 scale): **Premium** (cap 9-10): gpt-5.4, gemini-pro, cursor opus-thinking. **Standard** (cap 6-8): gpt-4.1, gemini-flash, cursor-auto, opencode/glm-5. **Budget** (cap 3-5): gpt-4.1-nano, gemini-flash-lite, mimo-free. Final score = (agent_base × 0.4) + (model_capability × 0.6). Use `aid config agents` to see all model scores.
 
 If you are unsure, start with `aid ask` or `aid run auto`, then escalate to a more expensive agent only when the task scope is clear.
 

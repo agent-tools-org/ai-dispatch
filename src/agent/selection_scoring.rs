@@ -4,6 +4,7 @@
 
 use crate::agent::classifier::{self, Complexity, TaskCategory};
 use crate::agent::custom::CustomAgentConfig;
+use crate::cmd::config::AGENT_MODELS;
 use crate::rate_limit;
 use crate::team::TeamConfig;
 use crate::types::AgentKind;
@@ -70,6 +71,21 @@ pub(super) fn cost_efficiency(quality_score: f64, avg_cost: f64) -> f64 {
     quality_score / (1.0 + normalized_cost)
 }
 
+pub(super) fn model_quality_score(base_score: i32, capability: Option<f64>) -> f64 {
+    let base = base_score.max(0) as f64;
+    if let Some(cap) = capability {
+        (base + cap) * 0.5
+    } else {
+        base
+    }
+}
+
+fn model_capability_score(agent: AgentKind, model: &str) -> Option<f64> {
+    AGENT_MODELS.iter()
+        .find(|m| m.agent == agent && m.model == model)
+        .map(|m| m.capability)
+}
+
 pub(super) fn custom_category_score(config: &CustomAgentConfig, category: TaskCategory) -> i32 {
     let caps = &config.capabilities;
     match category {
@@ -126,7 +142,7 @@ pub(super) const BUILTIN_AGENTS: &[AgentKind] = &[
 #[derive(Clone)]
 pub(super) struct Candidate {
     pub(super) kind: AgentKind,
-    pub(super) quality: i32,
+    pub(super) score: f64,
     pub(super) efficiency: f64,
     pub(super) is_default: bool,
     pub(super) priority: i32,
@@ -138,29 +154,32 @@ pub(super) struct CandidateContext<'a> {
     pub(super) history_map: &'a HashMap<AgentKind, (f64, usize)>,
     pub(super) avg_cost_map: &'a HashMap<AgentKind, f64>,
     pub(super) team_default: Option<AgentKind>,
+    pub(super) budget: bool,
 }
 
-pub(super) fn score_for(ctx: &CandidateContext<'_>, kind: AgentKind) -> i32 {
-    let mut s = if let Some(tc) = ctx.team {
+pub(super) fn score_for(ctx: &CandidateContext<'_>, kind: AgentKind) -> f64 {
+    let base = if let Some(tc) = ctx.team {
         team_override_score(tc, kind.as_str(), ctx.profile.category)
             .unwrap_or_else(|| base_score(kind, ctx.profile.category))
     } else {
         base_score(kind, ctx.profile.category)
     };
+    let model = super::recommend_model(&kind, &ctx.profile.complexity, ctx.budget);
+    let capability = model.and_then(|m| model_capability_score(kind, m));
+    let mut s = model_quality_score(base, capability);
     if rate_limit::is_rate_limited(&kind) {
-        s -= 10;
+        s -= 10.0;
     }
     if let Some((rate, count)) = ctx.history_map.get(&kind)
         && *count >= 5
     {
-        let bonus = ((*rate - 0.75) * 16.0).round() as i32;
-        let bonus = bonus.clamp(-5, 4);
+        let bonus = ((*rate - 0.75) * 16.0).round().clamp(-5.0, 4.0);
         s += bonus;
     }
     if matches!(ctx.profile.complexity, Complexity::High)
         && matches!(kind, AgentKind::Codex | AgentKind::Cursor)
     {
-        s += 2;
+        s += 2.0;
     }
     // Boost preferred agents from team (soft preference, not hard filter)
     if let Some(tc) = ctx.team
@@ -169,18 +188,18 @@ pub(super) fn score_for(ctx: &CandidateContext<'_>, kind: AgentKind) -> i32 {
             .iter()
             .any(|a| a.eq_ignore_ascii_case(kind.as_str()))
     {
-        s += 3;
+        s += 3.0;
     }
     s
 }
 
 pub(super) fn candidate_for(kind: AgentKind, ctx: &CandidateContext<'_>) -> Candidate {
-    let quality = score_for(ctx, kind);
+    let score = score_for(ctx, kind);
     let avg_cost = ctx.avg_cost_map.get(&kind).copied().unwrap_or(0.0);
     Candidate {
         kind,
-        quality,
-        efficiency: cost_efficiency(quality as f64, avg_cost),
+        score,
+        efficiency: cost_efficiency(score, avg_cost),
         is_default: ctx.team_default == Some(kind),
         priority: priority(kind),
     }
@@ -190,12 +209,12 @@ pub(super) fn compare_candidates(a: &Candidate, b: &Candidate, budget: bool) -> 
     let primary = if budget {
         a.efficiency.partial_cmp(&b.efficiency).unwrap_or(Ordering::Equal)
     } else {
-        a.quality.cmp(&b.quality)
+        a.score.partial_cmp(&b.score).unwrap_or(Ordering::Equal)
     };
     let mut ord = primary;
     if ord == Ordering::Equal {
         ord = if budget {
-            a.quality.cmp(&b.quality)
+            a.score.partial_cmp(&b.score).unwrap_or(Ordering::Equal)
         } else {
             a.efficiency
                 .partial_cmp(&b.efficiency)

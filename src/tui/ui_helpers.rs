@@ -219,6 +219,7 @@ pub fn status_style(status: TaskStatus) -> Style {
         TaskStatus::AwaitingInput => Style::default().fg(Color::Magenta).add_modifier(Modifier::BOLD),
         TaskStatus::Failed => Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
         TaskStatus::Pending => Style::default().fg(Color::Indexed(250)),
+        TaskStatus::Waiting => Style::default().fg(Color::Indexed(240)),
         TaskStatus::Skipped => Style::default().fg(Color::Blue),
     }
 }

@@ -194,7 +194,7 @@ pub(super) fn select_relevant_entries<'a>(entries: &'a [KnowledgeEntry], prompt:
         .collect()
 }
 
-pub(super) fn extract_words(value: &str) -> HashSet<String> {
+pub fn extract_words(value: &str) -> HashSet<String> {
     value
         .split(|c: char| !c.is_alphanumeric())
         .filter_map(|token| {

@@ -1,9 +1,10 @@
 // Fast LLM query via OpenRouter API — no agent subprocess startup.
 // Exports: run.
-// Deps: ureq, serde_json, config, store.
+// Deps: serde_json, config, store.
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use std::io::Write;
+use std::process::Command;
 use std::time::Instant;
 
 const OPENROUTER_URL: &str = "https://openrouter.ai/api/v1/chat/completions";
@@ -62,15 +63,41 @@ fn call_api(api_key: &str, model: &str, prompt: &str) -> Result<(String, f64, f6
         "model": model,
         "messages": [{"role": "user", "content": prompt}]
     });
+    let body_str = serde_json::to_string(&body)
+        .context("serialize OpenRouter request body")?;
 
     let start = Instant::now();
-    let resp: serde_json::Value = ureq::post(OPENROUTER_URL)
-        .header("Authorization", &format!("Bearer {api_key}"))
-        .send_json(&body)?
-        .into_body()
-        .read_json()?;
+    let output = Command::new("curl")
+        .args([
+            "-s",
+            "-X",
+            "POST",
+            OPENROUTER_URL,
+            "-H",
+            &format!("Authorization: Bearer {api_key}"),
+            "-H",
+            "Content-Type: application/json",
+            "-d",
+            &body_str,
+        ])
+        .output()
+        .context("run curl request")?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(anyhow::anyhow!(
+            "curl failed (status {}): {}",
+            output.status,
+            stderr
+        ));
+    }
 
     let elapsed = start.elapsed().as_secs_f64();
+    let stdout = String::from_utf8(output.stdout)
+        .context("read OpenRouter response from curl")?;
+    let resp: serde_json::Value = serde_json::from_str(&stdout)
+        .context("parse OpenRouter response JSON")?;
+
     let content = resp["choices"][0]["message"]["content"]
         .as_str()
         .unwrap_or("(no response)")

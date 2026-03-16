@@ -4,6 +4,7 @@
 
 use anyhow::Result;
 use std::io::{self, BufRead, Write};
+use std::process::Command;
 
 pub fn run() -> Result<()> {
     println!();
@@ -178,10 +179,36 @@ fn test_openrouter_key(key: &str) -> bool {
         "messages": [{"role": "user", "content": "ping"}],
         "max_tokens": 1
     });
-    ureq::post("https://openrouter.ai/api/v1/chat/completions")
-        .header("Authorization", &format!("Bearer {key}"))
-        .send_json(&body)
-        .is_ok()
+    let body_str = match serde_json::to_string(&body) {
+        Ok(s) => s,
+        Err(_) => return false,
+    };
+
+    let output = match Command::new("curl")
+        .args([
+            "-s",
+            "-X",
+            "POST",
+            "https://openrouter.ai/api/v1/chat/completions",
+            "-H",
+            &format!("Authorization: Bearer {key}"),
+            "-H",
+            "Content-Type: application/json",
+            "-d",
+            &body_str,
+        ])
+        .output()
+    {
+        Ok(out) => out,
+        Err(_) => return false,
+    };
+
+    if !output.status.success() {
+        return false;
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout).to_lowercase();
+    !stdout.contains("error")
 }
 
 fn append_query_section(config: &mut String, key: &str) {

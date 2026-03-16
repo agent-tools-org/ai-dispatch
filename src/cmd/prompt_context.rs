@@ -275,3 +275,117 @@ pub(super) fn collect_sibling_summaries(
     summaries.truncate(5);
     Ok(summaries)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::HashSet;
+
+    fn make_entry(topic: &str, path: Option<&str>, description: &str, content: Option<&str>) -> KnowledgeEntry {
+        KnowledgeEntry {
+            topic: topic.to_string(),
+            path: path.map(str::to_string),
+            description: description.to_string(),
+            content: content.map(str::to_string),
+        }
+    }
+
+    #[test]
+    fn format_entry_block_with_content() {
+        let entry = make_entry(
+            "Topic A",
+            Some("knowledge/guide.md"),
+            "Useful guide",
+            Some("Guide content"),
+        );
+        assert_eq!(
+            format_entry_block(&entry),
+            "- [Topic A](knowledge/guide.md) — Useful guide\nGuide content",
+        );
+    }
+
+    #[test]
+    fn format_entry_block_without_content() {
+        let entry = make_entry("Topic B", None, "Only description", None);
+        assert_eq!(format_entry_block(&entry), "- [Topic B] — Only description");
+    }
+
+    #[test]
+    fn format_knowledge_block_header() {
+        let entry = make_entry("Topic C", None, "Header desc", None);
+        let block = format_knowledge_block("dev", &[&entry]);
+        assert!(block.starts_with("[Team Knowledge — dev]\n"));
+    }
+
+    #[test]
+    fn format_knowledge_block_multiple() {
+        let first = make_entry("First", None, "One", None);
+        let second = make_entry("Second", None, "Two", None);
+        let block = format_knowledge_block("dev", &[&first, &second]);
+        let body = block
+            .strip_prefix("[Team Knowledge — dev]\n")
+            .expect("header present");
+        let expected = format!("{}\n\n{}", format_entry_block(&first), format_entry_block(&second));
+        assert_eq!(body, expected);
+    }
+
+    #[test]
+    fn select_relevant_entries_filters_zero_score() {
+        let entries = vec![
+            make_entry("Python", None, "Scripting", None),
+            make_entry("Release", None, "Notes", None),
+        ];
+        let selected = select_relevant_entries(&entries, "rust memory");
+        assert!(selected.is_empty());
+    }
+
+    #[test]
+    fn select_relevant_entries_ranks_by_overlap() {
+        let entries = vec![
+            make_entry("Rust Guide", None, "Memory", None),
+            make_entry("Memory Data Guide", None, "Rust", None),
+        ];
+        let selected = select_relevant_entries(&entries, "rust data guide memory");
+        let topics: Vec<_> = selected.iter().map(|entry| entry.topic.as_str()).collect();
+        assert_eq!(topics, vec!["Memory Data Guide", "Rust Guide"]);
+    }
+
+    #[test]
+    fn select_relevant_entries_caps_at_5() {
+        let prompt_words = [
+            "alpha", "beta", "gamma", "delta", "epsilon", "zeta", "eta", "theta", "iota", "kappa",
+        ];
+        let prompt = prompt_words.join(" ");
+        let entries: Vec<_> = (0..prompt_words.len())
+            .map(|count| {
+                let topic = prompt_words[0..=count].join(" ");
+                make_entry(&topic, None, "desc", None)
+            })
+            .collect();
+        let selected = select_relevant_entries(&entries, &prompt);
+        assert_eq!(selected.len(), 5);
+        let topics: Vec<_> = selected.iter().map(|entry| entry.topic.as_str()).collect();
+        let expected: Vec<_> = (prompt_words.len() - 5..prompt_words.len())
+            .rev()
+            .map(|idx| entries[idx].topic.as_str())
+            .collect();
+        assert_eq!(topics, expected);
+    }
+
+    #[test]
+    fn select_relevant_entries_empty_prompt() {
+        let entries = vec![
+            make_entry("Rust", None, "Topics", None),
+            make_entry("Memory", None, "Data", None),
+        ];
+        let selected = select_relevant_entries(&entries, "");
+        assert!(selected.is_empty());
+    }
+
+    #[test]
+    fn extract_words_basic() {
+        let words = extract_words("hello world");
+        let expected: HashSet<String> = vec!["hello", "world"].into_iter().map(String::from).collect();
+        assert_eq!(words, expected);
+    }
+}

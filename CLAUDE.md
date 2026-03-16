@@ -23,6 +23,12 @@ description = "Feature development and code quality"
 preferred_agents = ["codex", "opencode", "cursor"]  # soft boost, not hard filter
 default_agent = "codex"
 
+# Always-injected behavioral constraints — no relevance filtering
+rules = [
+    "Do NOT run cargo fmt or any auto-formatter",
+    "Only git add files you explicitly modified",
+]
+
 [team.overrides.opencode]
 simple_edit = 10
 debugging = 6

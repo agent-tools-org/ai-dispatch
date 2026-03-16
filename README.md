@@ -1,6 +1,6 @@
 # ai-dispatch (aid)
 
-![Version](https://img.shields.io/badge/version-8.1.0-blue)
+![Version](https://img.shields.io/badge/version-8.4.0-blue)
 ![Rust](https://img.shields.io/badge/rust-2024-orange)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
@@ -346,6 +346,45 @@ aid run codex "Refactor the retry code path" \
 aid run opencode "Rename TaskRow to BoardRow" --dir . --no-skill
 ```
 
+### Teams
+
+Teams provide knowledge context and soft agent preferences for different workflows. Each team has preferred agents (scoring boost in auto-selection), capability overrides, behavioral rules, and a knowledge directory.
+
+```bash
+# Create a team
+aid team create dev
+
+# Configure in ~/.aid/teams/dev.toml
+```
+
+```toml
+[team]
+id = "dev"
+display_name = "Development Team"
+preferred_agents = ["codex", "opencode", "cursor"]
+default_agent = "codex"
+
+# Always-injected constraints (no relevance filtering)
+rules = [
+    "Do NOT run cargo fmt or any auto-formatter",
+    "Only git add files you explicitly modified",
+]
+
+# Override agent scoring for this team's tasks
+[team.overrides.opencode]
+simple_edit = 10
+refactoring = 7
+```
+
+Team knowledge is stored in `~/.aid/teams/<id>/knowledge/` and auto-injected (relevance-filtered) when `--team` is used. Rules are always injected without filtering.
+
+```bash
+aid team list                              # list all teams
+aid team show dev                          # show team config + knowledge + rules
+aid run codex "implement feature" --team dev   # inject dev team context
+aid batch tasks.toml --parallel            # batch with [defaults] team = "dev"
+```
+
 ## Agent Store
 
 `aid` includes a GitHub-backed community agent store for discovering and installing custom agent definitions.
@@ -519,6 +558,10 @@ The board displays `[VFAIL]` next to tasks that completed but failed verificatio
 | `aid query` | Fast LLM query via OpenRouter (no agent startup). Free and auto tiers. | `aid query "question"`, `aid query --auto "question"` |
 | `aid setup` | Interactive configuration wizard. Detects agents, sets API keys. | `aid setup` |
 | `aid broadcast` | Send a message to a workgroup's broadcast channel. | `aid broadcast wg-abc1 "status update"` |
+| `aid team` | Manage teams: create, list, show, delete. Teams inject knowledge and rules into agent prompts. | `aid team list`, `aid team show dev`, `aid team create ops` |
+| `aid stop` | Stop a running task (SIGTERM + 5s grace + SIGKILL). | `aid stop t-1234` |
+| `aid kill` | Immediately kill a running task (SIGKILL). | `aid kill t-1234` |
+| `aid steer` | Inject guidance into a running PTY task. | `aid steer t-1234 "focus on tests"` |
 | `aid init` | Initialize default skills and templates. | `aid init` |
 
 ## Best Practices / Methodology

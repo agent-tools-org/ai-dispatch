@@ -188,6 +188,23 @@ depends_on = ["split-parser", "split-evaluator", "split-optimizer"]
 verify = "cargo clippy -- -D warnings"
 ```
 
+### Teams
+
+Use `--team` to inject team-specific knowledge and behavioral rules into agent prompts:
+
+```bash
+aid run codex "implement feature" --team dev
+aid batch tasks.toml --parallel   # with [defaults] team = "dev"
+```
+
+Teams provide:
+- **Preferred agents**: scoring boost in auto-selection
+- **Rules**: always-injected constraints (e.g., "don't run cargo fmt")
+- **Knowledge**: relevance-filtered domain context
+- **Overrides**: per-agent capability score adjustments
+
+Configure teams in `~/.aid/teams/<id>.toml`. Use `aid team show <id>` to inspect.
+
 ### Rules
 
 - **Always review agent output** before accepting — treat it as a draft

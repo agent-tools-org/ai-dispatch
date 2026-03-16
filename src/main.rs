@@ -29,6 +29,7 @@ mod project;
 mod team;
 mod templates;
 mod compaction;
+pub mod claudemd;
 mod tui;
 mod types;
 mod usage;

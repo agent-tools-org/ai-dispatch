@@ -90,6 +90,8 @@ pub enum ProjectAction {
     Init,
     /// Show the detected project configuration
     Show,
+    /// Sync project config to CLAUDE.md and global budget
+    Sync,
 }
 
 #[derive(Subcommand)]

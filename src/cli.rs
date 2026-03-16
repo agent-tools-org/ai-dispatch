@@ -39,7 +39,9 @@ pub enum Commands {
     #[command(after_help = r#"Examples:
   aid run codex "Add unit tests" --verify
   aid run gemini "Research topic" -o notes.md
-  aid run codex "Refactor" -w feat/refactor --verify --retry 1 --bg"#)]
+  aid run codex "Refactor" -w feat/refactor --verify --retry 1 --bg
+
+Hint: If passing file paths, use --context <path> not positional args"#)]
     /// Dispatch a task to an AI agent
     Run {
         /// Agent to use (auto, gemini, codex, opencode, cursor, kilo)

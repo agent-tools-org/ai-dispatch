@@ -134,7 +134,10 @@ fn create_worktree_reuses_existing_branch_worktree() {
     );
 
     let info = create_worktree(repo.path(), branch.as_str(), None).unwrap();
-    assert_eq!(info.path, existing_path);
+    // Canonicalize to handle macOS /var → /private/var symlink
+    let actual = info.path.canonicalize().unwrap_or(info.path.clone());
+    let expected = existing_path.canonicalize().unwrap_or(existing_path.clone());
+    assert_eq!(actual, expected);
 
     git(
         repo.path(),

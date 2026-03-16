@@ -101,7 +101,7 @@ pub(super) fn build_prompt_bundle(store: &Store, args: &RunArgs, agent_kind: &Ag
         let workspace = crate::paths::workspace_dir(group_id);
         if workspace.is_dir() {
             effective_prompt = format!(
-                "[Shared Workspace]\nPath: {}\nUse this directory for intermediate artifacts, shared files, and inter-agent communication.\n\n{effective_prompt}",
+                "<aid-system-context>\n[Shared Workspace] Path: {} — use for intermediate artifacts and inter-agent communication.\n</aid-system-context>\n\n{effective_prompt}",
                 workspace.display()
             );
         }

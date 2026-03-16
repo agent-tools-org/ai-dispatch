@@ -15,6 +15,7 @@ struct ProjectFile {
     pub project: ProjectConfig,
 }
 
+#[allow(dead_code)] // All fields used via TOML deserialization; agents integration planned
 #[derive(Debug, Clone, Deserialize)]
 pub struct ProjectConfig {
     pub id: String,
@@ -73,6 +74,7 @@ impl Default for ProjectBudget {
     }
 }
 
+#[allow(dead_code)] // Schema fields — used when TOML is parsed, agent integration planned
 #[derive(Debug, Clone, Deserialize)]
 #[serde(default)]
 pub struct ProjectAgents {
@@ -111,10 +113,6 @@ pub fn load_project(path: &Path) -> Result<ProjectConfig> {
     let mut config = file.project;
     apply_profile(&mut config);
     Ok(config)
-}
-
-pub fn project_rules(config: &ProjectConfig) -> &[String] {
-    &config.rules
 }
 
 pub fn project_knowledge_dir(git_root: &Path) -> PathBuf {

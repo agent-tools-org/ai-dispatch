@@ -14,10 +14,10 @@ pub struct Cli {
 #[derive(Args)]
 pub(crate) struct RunExtrasArgs {
     /// Inject output from previous task(s) as context
-    #[arg(long)]
+    #[arg(long, num_args(1..))]
     pub(crate) context_from: Vec<String>,
     /// Methodology skills to inject
-    #[arg(long)]
+    #[arg(long, num_args(1..))]
     pub(crate) skill: Vec<String>,
     /// Prompt template to wrap around the task
     #[arg(long)]
@@ -84,11 +84,11 @@ Hint: If passing file paths, use --context <path> not positional args"#)]
         /// Max retry attempts on failure
         #[arg(long, default_value = "0")]
         retry: u32,
-        /// Context files to inject
-        #[arg(long)]
+        /// Context files to inject (can repeat or space-separate)
+        #[arg(long, num_args(1..))]
         context: Vec<String>,
         /// Restrict agent to only read/modify files within scope
-        #[arg(long)]
+        #[arg(long, num_args(1..))]
         scope: Vec<String>,
         #[command(flatten)]
         run_extras: Box<RunExtrasArgs>,

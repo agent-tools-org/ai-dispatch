@@ -52,6 +52,9 @@ impl App {
         if self.detail_mode {
             return self.handle_detail_key(key);
         }
+        if self.tree_mode {
+            return self.handle_tree_key(key);
+        }
         match key.code {
             KeyCode::Down | KeyCode::Char('j') => self.next(),
             KeyCode::Up | KeyCode::Char('k') => self.previous(),
@@ -126,6 +129,41 @@ impl App {
             KeyCode::Esc => {
                 self.detail_mode = false;
                 self.reset_detail_state();
+            }
+            _ => {}
+        }
+        Ok(())
+    }
+
+    fn handle_tree_key(&mut self, key: KeyEvent) -> Result<()> {
+        match key.code {
+            KeyCode::Down | KeyCode::Char('j') => {
+                if self.tree_node_count > 0 {
+                    self.tree_selected = (self.tree_selected + 1) % self.tree_node_count;
+                }
+            }
+            KeyCode::Up | KeyCode::Char('k') => {
+                if self.tree_node_count > 0 {
+                    self.tree_selected = if self.tree_selected == 0 {
+                        self.tree_node_count - 1
+                    } else {
+                        self.tree_selected - 1
+                    };
+                }
+            }
+            KeyCode::Enter => {
+                // Map tree_selected back to app.tasks index for detail view
+                let nodes = crate::tui::tree_data::build_task_tree(&self.tasks);
+                if let Some(node) = nodes.get(self.tree_selected) {
+                    if let Some(idx) = self.tasks.iter().position(|t| t.id == node.task.id) {
+                        self.selected = idx;
+                        self.tree_mode = false;
+                        self.enter_detail_mode()?;
+                    }
+                }
+            }
+            KeyCode::Esc => {
+                self.tree_mode = false;
             }
             _ => {}
         }

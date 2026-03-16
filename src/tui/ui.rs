@@ -197,50 +197,102 @@ fn render_tree_view(frame: &mut ratatui::Frame<'_>, app: &App) {
         ])
         .split(frame.area());
 
+    let done = app.tasks.iter().filter(|t| t.status.is_terminal()).count();
+    let running = app.tasks.iter().filter(|t| matches!(t.status, TaskStatus::Running)).count();
     frame.render_widget(
         Paragraph::new(Line::from(vec![
             Span::styled("aid tree ", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
-            Span::styled(
-                format!("[{}]", app.scope_label()),
-                Style::default().fg(Color::Indexed(250)),
-            ),
+            Span::styled(format!("[{}]", app.scope_label()), Style::default().fg(Color::Indexed(250))),
+            Span::raw("  "),
+            Span::styled(format!("{done}✓ "), Style::default().fg(Color::Green)),
+            Span::styled(format!("{running}▶"), Style::default().fg(Color::Yellow)),
         ]))
         .alignment(Alignment::Center),
         chunks[0],
     );
 
     let nodes = tree_data::build_task_tree(&app.tasks);
+    // We can't mutate app here (render takes &App), so tree_node_count
+    // is updated in tick(). Use nodes.len() for bounds checking.
     if nodes.is_empty() {
         frame.render_widget(Paragraph::new(app.empty_message()), chunks[1]);
     } else {
         let items: Vec<ListItem> = nodes
             .iter()
-            .map(|node| {
+            .enumerate()
+            .map(|(i, node)| {
                 let task = &node.task;
-                let duration = task_duration(task);
-                let prompt_preview = truncate(&task.prompt, 40);
-                let status_color = match task.status {
-                    TaskStatus::Done | TaskStatus::Merged => Color::Green,
-                    TaskStatus::Failed => Color::Red,
-                    TaskStatus::Pending | TaskStatus::AwaitingInput => Color::Yellow,
-                    TaskStatus::Running => Color::Cyan,
-                    _ => Color::Indexed(250),
-                };
-                ListItem::new(Line::from(vec![
-                    Span::raw(node.prefix.clone()),
-                    Span::styled(task.id.as_str(), Style::default().add_modifier(Modifier::BOLD)),
-                    Span::raw(" "),
-                    Span::styled(task.agent_display_name().to_string(), Style::default().fg(Color::Indexed(250))),
-                    Span::raw(" "),
-                    Span::styled(
-                        task.status.label().to_string(),
-                        Style::default().fg(status_color),
-                    ),
-                    Span::raw(" "),
-                    Span::styled(duration, Style::default().fg(Color::Indexed(248))),
-                    Span::raw(" "),
-                    Span::raw(prompt_preview),
-                ]))
+                let status_color = status_to_color(task.status);
+                let is_selected = i == app.tree_selected;
+
+                if node.is_group_header {
+                    // Workgroup header line
+                    let running_in_group = app.tasks.iter()
+                        .filter(|t| t.workgroup_id.as_deref() == task.workgroup_id.as_deref()
+                            && matches!(t.status, TaskStatus::Running))
+                        .count();
+                    let total_in_group = app.tasks.iter()
+                        .filter(|t| t.workgroup_id.as_deref() == task.workgroup_id.as_deref())
+                        .count();
+                    let done_in_group = app.tasks.iter()
+                        .filter(|t| t.workgroup_id.as_deref() == task.workgroup_id.as_deref() && t.status.is_terminal())
+                        .count();
+                    let mut spans = vec![
+                        Span::styled(&node.prefix, Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+                        Span::styled(
+                            format!(" ({done_in_group}/{total_in_group})"),
+                            Style::default().fg(Color::Indexed(243)),
+                        ),
+                    ];
+                    if running_in_group > 0 {
+                        spans.push(Span::styled(
+                            format!(" {running_in_group}▶"),
+                            Style::default().fg(Color::Yellow),
+                        ));
+                    }
+                    let item = ListItem::new(Line::from(spans));
+                    if is_selected {
+                        item.style(Style::default().bg(Color::Indexed(237)).add_modifier(Modifier::BOLD))
+                    } else {
+                        item
+                    }
+                } else {
+                    // Task line
+                    let duration = tree_duration(task);
+                    let milestone = app.get_milestone(task.id.as_str()).map(|m| truncate(m, 25));
+                    let cost_str = cost::format_cost_label(task.cost_usd, task.agent);
+                    let prompt_width = if milestone.is_some() { 25 } else { 40 };
+                    let prompt_preview = truncate(&task.prompt, prompt_width);
+
+                    let mut spans = vec![
+                        Span::styled(node.prefix.clone(), Style::default().fg(Color::Indexed(240))),
+                        Span::styled(task.id.as_str(), Style::default().fg(Color::White).add_modifier(Modifier::BOLD)),
+                        Span::raw(" "),
+                        Span::styled(task.agent_display_name().to_string(), Style::default().fg(Color::Cyan)),
+                        Span::raw(" "),
+                        Span::styled(task.status.label().to_string(), Style::default().fg(status_color)),
+                        Span::raw(" "),
+                        Span::styled(duration, Style::default().fg(Color::Indexed(248))),
+                    ];
+                    if cost_str != "—" && cost_str != "-" {
+                        spans.push(Span::raw(" "));
+                        spans.push(Span::styled(cost_str, Style::default().fg(Color::Indexed(243))));
+                    }
+                    if let Some(ms) = milestone {
+                        spans.push(Span::raw(" "));
+                        spans.push(Span::styled(ms, Style::default().fg(Color::Green)));
+                    } else {
+                        spans.push(Span::raw("  "));
+                        spans.push(Span::styled(prompt_preview, Style::default().fg(Color::Indexed(245))));
+                    }
+
+                    let item = ListItem::new(Line::from(spans));
+                    if is_selected {
+                        item.style(Style::default().bg(Color::Indexed(237)).add_modifier(Modifier::BOLD))
+                    } else {
+                        item
+                    }
+                }
             })
             .collect();
         frame.render_widget(
@@ -250,12 +302,49 @@ fn render_tree_view(frame: &mut ratatui::Frame<'_>, app: &App) {
     }
 
     frame.render_widget(
-        Paragraph::new(Line::from(Span::styled(
-            "t:table d:dashboard m:multipane q=quit",
-            Style::default().fg(Color::Indexed(243)),
-        ))),
+        Paragraph::new(Line::from(vec![
+            Span::styled(" j/k", Style::default().fg(Color::Yellow)),
+            Span::raw(":nav "),
+            Span::styled("Enter", Style::default().fg(Color::Yellow)),
+            Span::raw(":detail "),
+            Span::styled("t", Style::default().fg(Color::Yellow)),
+            Span::raw(":table "),
+            Span::styled("d", Style::default().fg(Color::Yellow)),
+            Span::raw(":dashboard "),
+            Span::styled("m", Style::default().fg(Color::Yellow)),
+            Span::raw(":multipane "),
+            Span::styled("q", Style::default().fg(Color::Yellow)),
+            Span::raw(":quit"),
+        ])),
         chunks[2],
     );
+}
+
+fn tree_duration(task: &crate::types::Task) -> String {
+    if let Some(ms) = task.duration_ms {
+        let secs = ms / 1000;
+        if secs < 60 { format!("{secs}s") }
+        else if secs < 3600 { format!("{}m{:02}s", secs / 60, secs % 60) }
+        else { format!("{}h{:02}m", secs / 3600, (secs % 3600) / 60) }
+    } else if matches!(task.status, TaskStatus::Running | TaskStatus::AwaitingInput) {
+        let elapsed = (chrono::Local::now() - task.created_at).num_seconds();
+        if elapsed < 60 { format!("{elapsed}s") }
+        else if elapsed < 3600 { format!("{}m{:02}s", elapsed / 60, elapsed % 60) }
+        else { format!("{}h{:02}m", elapsed / 3600, (elapsed % 3600) / 60) }
+    } else {
+        "-".to_string()
+    }
+}
+
+fn status_to_color(status: TaskStatus) -> Color {
+    match status {
+        TaskStatus::Done | TaskStatus::Merged => Color::Green,
+        TaskStatus::Failed => Color::Red,
+        TaskStatus::Pending => Color::Indexed(250),
+        TaskStatus::AwaitingInput => Color::Magenta,
+        TaskStatus::Running => Color::Yellow,
+        TaskStatus::Skipped => Color::Blue,
+    }
 }
 
 fn render_detail(frame: &mut ratatui::Frame<'_>, app: &App) {

@@ -57,6 +57,8 @@ pub struct App {
     pub stats_mode: bool,
     pub multipane_mode: bool,
     pub tree_mode: bool,
+    pub tree_selected: usize,
+    pub tree_node_count: usize,
     pub show_all: bool,
     pub active_pane: usize,
     pub pane_scroll_offsets: Vec<usize>,
@@ -84,6 +86,8 @@ impl App {
             stats_mode: false,
             multipane_mode: false,
             tree_mode: false,
+            tree_selected: 0,
+            tree_node_count: 0,
             show_all: false,
             active_pane: 0,
             pane_scroll_offsets: Vec::new(),
@@ -101,6 +105,14 @@ impl App {
 
     pub fn tick(&mut self) -> Result<()> {
         self.reload_tasks()?;
+        // Keep tree_node_count in sync for key navigation
+        if self.tree_mode {
+            let count = super::tree_data::build_task_tree(&self.tasks).len();
+            self.tree_node_count = count;
+            if self.tree_selected >= count && count > 0 {
+                self.tree_selected = count - 1;
+            }
+        }
         // Only refresh process metrics every 2 seconds (ps fork is expensive)
         if self.last_metrics_refresh.elapsed().as_secs() >= 2 {
             self.metrics = self.load_metrics(&self.tasks);

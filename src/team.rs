@@ -139,7 +139,7 @@ pub fn read_knowledge_entries(team_id: &str) -> Vec<KnowledgeEntry> {
         .collect()
 }
 
-fn parse_knowledge_line(line: &str, base_dir: &Path) -> Option<KnowledgeEntry> {
+pub(crate) fn parse_knowledge_line(line: &str, base_dir: &Path) -> Option<KnowledgeEntry> {
     let trimmed = line.trim();
     if !trimmed.starts_with('-') {
         return None;

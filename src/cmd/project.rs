@@ -11,11 +11,13 @@ use std::process::Command;
 pub enum ProjectAction {
     Init,
     Show,
+    Sync,
 }
 pub fn run_project_command(action: ProjectAction) -> Result<()> {
     match action {
         ProjectAction::Init => init(),
         ProjectAction::Show => show(),
+        ProjectAction::Sync => sync(),
     }
 }
 fn init() -> Result<()> {
@@ -45,11 +47,29 @@ fn init() -> Result<()> {
     aid_config::upsert_budget(&project_id, budget_cost, budget_window.as_deref())?;
     println!("  Budget synced to ~/.aid/config.toml");
     let config = project::load_project(&project_path)?;
+    crate::claudemd::sync_claude_md(&git_root, &config)?;
+    println!("  CLAUDE.md updated with aid section");
     println!("Project: {}", config.id);
     println!("  Profile: {}", config.profile.as_deref().unwrap_or("-"));
     println!("  Language: {}", config.language.as_deref().unwrap_or("-"));
     println!("  File: {}", project_path.display());
     println!("  Knowledge: {}", knowledge_index.display());
+    Ok(())
+}
+fn sync() -> Result<()> {
+    let git_root = current_git_root()?;
+    let config = project::detect_project()
+        .ok_or_else(|| anyhow!("No project configuration found. Run `aid project init` first."))?;
+
+    if let Some(cost) = config.budget.cost_limit_usd {
+        let window = config.budget.window.as_deref();
+        aid_config::upsert_budget(&config.id, cost, window)?;
+        println!("Budget synced to ~/.aid/config.toml");
+    }
+
+    crate::claudemd::sync_claude_md(&git_root, &config)?;
+    println!("CLAUDE.md updated with aid section");
+
     Ok(())
 }
 fn show() -> Result<()> {

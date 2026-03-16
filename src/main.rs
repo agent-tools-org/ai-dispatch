@@ -40,6 +40,68 @@ mod webhook;
 mod workgroup;
 mod worktree;
 mod cli;
+mod claudemd {
+    use crate::project::ProjectConfig;
+    use anyhow::Result;
+    use std::fs;
+    use std::path::Path;
+
+    const START_MARKER: &str = "<!-- aid:project:start -->";
+    const END_MARKER: &str = "<!-- aid:project:end -->";
+
+    pub fn sync_claude_md(git_root: &Path, config: &ProjectConfig) -> Result<()> {
+        let path = git_root.join("CLAUDE.md");
+        let existing = fs::read_to_string(&path).unwrap_or_default();
+        let section = render_section(config);
+        let updated = if let Some((start, end)) = find_section_bounds(&existing) {
+            let mut next = String::with_capacity(existing.len() + section.len());
+            next.push_str(&existing[..start]);
+            if start > 0 && !existing[..start].ends_with('\n') {
+                next.push('\n');
+            }
+            next.push_str(&section);
+            if end < existing.len() && !existing[end..].starts_with('\n') {
+                next.push('\n');
+            }
+            next.push_str(&existing[end..]);
+            next
+        } else if existing.trim().is_empty() {
+            section
+        } else {
+            format!("{existing}\n\n{section}")
+        };
+        fs::write(path, updated)?;
+        Ok(())
+    }
+
+    fn render_section(config: &ProjectConfig) -> String {
+        let budget = if let Some(shorthand) = config.budget.budget_shorthand() {
+            shorthand
+        } else {
+            "-".to_string()
+        };
+        let mut lines = vec![
+            START_MARKER.to_string(),
+            "## aid".to_string(),
+            format!("- project: {}", config.id),
+            format!("- profile: {}", config.profile.as_deref().unwrap_or("-")),
+            format!("- team: {}", config.team.as_deref().unwrap_or("-")),
+            format!("- language: {}", config.language.as_deref().unwrap_or("-")),
+            format!("- verify: {}", config.verify.as_deref().unwrap_or("-")),
+            format!("- budget: {budget}"),
+            END_MARKER.to_string(),
+        ];
+        lines.push(String::new());
+        lines.join("\n")
+    }
+
+    fn find_section_bounds(contents: &str) -> Option<(usize, usize)> {
+        let start = contents.find(START_MARKER)?;
+        let end_marker = contents[start..].find(END_MARKER)?;
+        let end = start + end_marker + END_MARKER.len();
+        Some((start, end))
+    }
+}
 
 use crate::cli_actions::{GroupAction, ProjectAction, TeamAction, WorktreeAction};
 use crate::types::AgentKind;
@@ -395,6 +457,7 @@ async fn main() -> Result<()> {
             let action = match action {
                 ProjectAction::Init => ProjectCommand::Init,
                 ProjectAction::Show => ProjectCommand::Show,
+                ProjectAction::Sync => ProjectCommand::Sync,
             };
             run_project_command(action)?;
         }

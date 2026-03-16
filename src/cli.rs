@@ -1,7 +1,7 @@
 // aid CLI definitions.
 // Exports parser structs and subcommands; depends on clap derive.
 
-use crate::cli_actions::{ConfigAction, GroupAction, TeamAction, WorktreeAction};
+use crate::cli_actions::{ConfigAction, GroupAction, ProjectAction, TeamAction, WorktreeAction};
 use clap::{Args, Parser, Subcommand};
 
 #[derive(Parser)]
@@ -428,6 +428,14 @@ Batch TOML format:
     Team {
         #[command(subcommand)]
         action: TeamAction,
+    },
+    #[command(after_help = r#"Examples:
+  aid project init
+  aid project show"#)]
+    /// Manage project configuration and knowledge
+    Project {
+        #[command(subcommand)]
+        action: ProjectAction,
     },
     #[command(after_help = r#"Examples:
   aid memory add discovery "The auth module uses bcrypt not argon2"

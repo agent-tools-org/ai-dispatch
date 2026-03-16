@@ -85,6 +85,14 @@ pub enum TeamAction {
 }
 
 #[derive(Subcommand)]
+pub enum ProjectAction {
+    /// Initialize project configuration in current repo
+    Init,
+    /// Show the detected project configuration
+    Show,
+}
+
+#[derive(Subcommand)]
 pub enum WorktreeAction {
     /// Create a worktree for a branch (prints path to stdout)
     Create {

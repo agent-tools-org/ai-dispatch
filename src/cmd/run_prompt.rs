@@ -4,7 +4,6 @@
 use anyhow::{Context, Result};
 use chrono::Local;
 use serde_json;
-use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use tokio::process::Command;
 use crate::{
@@ -12,7 +11,7 @@ use crate::{
 };
 use crate::cmd::summary::{format_summary_for_injection, CompletionSummary};
 use crate::store::TaskCompletionUpdate;
-use crate::team::KnowledgeEntry;
+mod prompt_context;
 use super::RunArgs;
 
 const VERIFY_RETRY_FEEDBACK: &str =
@@ -58,7 +57,7 @@ pub(super) fn build_prompt_bundle(store: &Store, args: &RunArgs, agent_kind: &Ag
         effective_prompt = format!("{summary_block}\n\n{effective_prompt}");
     }
     if let Some(ref group_id) = args.group {
-        let sibling_summaries = collect_sibling_summaries(store, group_id, current_task_id)?;
+        let sibling_summaries = prompt_context::collect_sibling_summaries(store, group_id, current_task_id)?;
         if !sibling_summaries.is_empty() {
             let block = crate::cmd::summary::format_sibling_summaries(&sibling_summaries);
             effective_prompt = format!("{block}\n\n{effective_prompt}");
@@ -68,7 +67,7 @@ pub(super) fn build_prompt_bundle(store: &Store, args: &RunArgs, agent_kind: &Ag
     let mut injected_memory_ids = Vec::new();
 
     // Inject relevant memories from past tasks
-    if let Some((memory_block, memory_ids)) = inject_memories(store, &args.prompt, 10)? {
+    if let Some((memory_block, memory_ids)) = prompt_context::inject_memories(store, &args.prompt, 10)? {
         effective_prompt = format!("{memory_block}\n\n{effective_prompt}");
         injected_memory_ids = memory_ids;
     }
@@ -78,10 +77,10 @@ pub(super) fn build_prompt_bundle(store: &Store, args: &RunArgs, agent_kind: &Ag
         let entries = team::read_knowledge_entries(team_id);
         let total_entries = entries.len();
         if total_entries > 0 {
-            let relevant = select_relevant_entries(&entries, &args.prompt);
+            let relevant = prompt_context::select_relevant_entries(&entries, &args.prompt);
             eprintln!("[aid] Injected {}/{} knowledge entries (relevance-filtered)", relevant.len(), total_entries);
             if !relevant.is_empty() {
-                let knowledge_block = format_knowledge_block(team_id, &relevant);
+                let knowledge_block = prompt_context::format_knowledge_block(team_id, &relevant);
                 effective_prompt = format!("{knowledge_block}\n\n{effective_prompt}");
             }
         }
@@ -89,7 +88,7 @@ pub(super) fn build_prompt_bundle(store: &Store, args: &RunArgs, agent_kind: &Ag
 
     // Inject output from previous tasks (--context-from)
     if !args.context_from.is_empty()
-        && let Some(block) = resolve_context_from(store, &args.context_from)?
+        && let Some(block) = prompt_context::resolve_context_from(store, &args.context_from)?
     {
         let token_count = templates::estimate_tokens(&block);
         eprintln!("[aid] Injected context from {} task(s) (~{token_count} tokens)", args.context_from.len());
@@ -111,274 +110,6 @@ pub(super) fn build_prompt_bundle(store: &Store, args: &RunArgs, agent_kind: &Ag
     let effective_prompt = maybe_compact_prompt(&effective_prompt, PROMPT_TOKEN_LIMIT);
     let prompt_tokens = templates::estimate_tokens(&effective_prompt) as i64;
     Ok(PromptBundle { effective_prompt, context_files, prompt_tokens, injected_memory_ids })
-}
-
-/// Query relevant memories and inject them into the prompt.
-fn inject_memories(store: &Store, prompt: &str, max_memories: usize) -> Result<Option<(String, Vec<String>)>> {
-    let project_path = detect_project_path();
-    let keywords = extract_words(prompt);
-    let queries = build_memory_queries(prompt, &keywords);
-    if queries.is_empty() {
-        return Ok(None);
-    }
-
-    let mut scored: HashMap<String, (Memory, usize)> = HashMap::new();
-    for query in queries {
-        for memory in store.search_memories(&query, project_path.as_deref(), max_memories)? {
-            let entry = scored
-                .entry(memory.id.as_str().to_string())
-                .or_insert((memory.clone(), 0));
-            entry.1 += 1;
-        }
-    }
-
-    let mut scored: Vec<_> = scored.into_values().collect();
-    scored.sort_by(|a, b| {
-        b.1.cmp(&a.1)
-            .then_with(|| b.0.created_at.cmp(&a.0.created_at))
-    });
-    let memories: Vec<_> = scored.into_iter().take(max_memories).map(|(mem, _)| mem).collect();
-    if memories.is_empty() {
-        return Ok(None);
-    }
-    for memory in &memories {
-        store.increment_memory_inject(memory.id.as_str())?;
-    }
-
-    let mut lines = vec!["[Agent Memory — knowledge from past tasks]".to_string()];
-    let now = Local::now();
-    for mem in &memories {
-        let age = format_memory_age(now.signed_duration_since(mem.created_at));
-        lines.push(format!("- [{}] ({}) {}", mem.memory_type.label(), age, mem.content));
-    }
-    let memory_ids = memories.iter().map(|mem| mem.id.as_str().to_string()).collect();
-    let token_count = crate::templates::estimate_tokens(&lines.join("\n"));
-    eprintln!("[aid] Injected {} memories (~{} tokens)", memories.len(), token_count);
-    Ok(Some((lines.join("\n"), memory_ids)))
-}
-
-fn build_memory_queries(prompt: &str, keywords: &HashSet<String>) -> Vec<String> {
-    let mut seen = HashSet::new();
-    let mut queries = Vec::new();
-
-    let trimmed = prompt.trim();
-    if !trimmed.is_empty() {
-        let truncated = trimmed.chars().take(200).collect::<String>();
-        if seen.insert(truncated.clone()) {
-            queries.push(truncated);
-        }
-    }
-
-    let top_words = top_significant_words(prompt, keywords, 5);
-    if !top_words.is_empty() {
-        let joined = top_words.join(" ");
-        if seen.insert(joined.clone()) {
-            queries.push(joined);
-        }
-    }
-
-    let paths = extract_path_tokens(prompt);
-    if !paths.is_empty() {
-        let joined = paths.join(" ");
-        if seen.insert(joined.clone()) {
-            queries.push(joined);
-        }
-    }
-
-    let idents = extract_type_or_function_names(prompt);
-    if !idents.is_empty() {
-        let joined = idents.join(" ");
-        if seen.insert(joined.clone()) {
-            queries.push(joined);
-        }
-    }
-
-    queries
-}
-
-fn top_significant_words(text: &str, keywords: &HashSet<String>, limit: usize) -> Vec<String> {
-    let mut counts = HashMap::new();
-    for token in text.split(|c: char| !c.is_alphanumeric()) {
-        let normalized = token.to_lowercase();
-        if normalized.is_empty() || !keywords.contains(&normalized) {
-            continue;
-        }
-        *counts.entry(normalized).or_insert(0) += 1;
-    }
-    let mut entries: Vec<_> = counts.into_iter().collect();
-    entries.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
-    entries.into_iter().take(limit).map(|(word, _)| word).collect()
-}
-
-fn extract_path_tokens(prompt: &str) -> Vec<String> {
-    let mut seen = HashSet::new();
-    prompt
-        .split_whitespace()
-        .filter_map(|token| {
-            let trimmed = token.trim_matches(|c: char| matches!(c, ',' | ';' | '.' | '?' | '!' | '"' | '\'' | '[' | ']' | '{' | '}' | '(' | ')'));
-            if trimmed.is_empty() || (!trimmed.contains('/') && !trimmed.contains('\\')) {
-                return None;
-            }
-            let candidate = trimmed.to_string();
-            if seen.insert(candidate.clone()) { Some(candidate) } else { None }
-        })
-        .collect()
-}
-
-fn extract_type_or_function_names(prompt: &str) -> Vec<String> {
-    let mut seen = HashSet::new();
-    let mut names = Vec::new();
-    for token in prompt.split_whitespace() {
-        let trimmed = token.trim_matches(|c: char| matches!(c, ',' | ';' | '.' | '?' | '!' | '"' | '\'' | '[' | ']' | '{' | '}'));
-        if trimmed.is_empty() {
-            continue;
-        }
-        let key = trimmed.strip_suffix("()").unwrap_or(trimmed).to_string();
-        let qualifies = trimmed.contains("::") || trimmed.ends_with("()") || key.chars().any(|c| c.is_ascii_uppercase());
-        if qualifies && seen.insert(key.clone()) {
-            names.push(key);
-        }
-    }
-    names
-}
-
-fn format_memory_age(duration: chrono::Duration) -> String {
-    let days = duration.num_days();
-    if days >= 30 { format!("{}mo ago", days / 30) }
-    else if days >= 1 { format!("{}d ago", days) }
-    else {
-        let hours = duration.num_hours();
-        if hours >= 1 { format!("{}h ago", hours) }
-        else { format!("{}m ago", duration.num_minutes().max(1)) }
-    }
-}
-
-fn format_knowledge_block(team_id: &str, entries: &[&KnowledgeEntry]) -> String {
-    let blocks: Vec<String> = entries.iter().map(|entry| format_entry_block(entry)).collect();
-    format!("[Team Knowledge — {team_id}]\n{}", blocks.join("\n\n"))
-}
-
-fn format_entry_block(entry: &KnowledgeEntry) -> String {
-    let mut line = String::new();
-    line.push_str("- [");
-    line.push_str(&entry.topic);
-    line.push(']');
-    if let Some(path) = &entry.path {
-        line.push('(');
-        line.push_str(path);
-        line.push(')');
-    }
-    line.push_str(" — ");
-    line.push_str(&entry.description);
-    if let Some(content) = &entry.content {
-        line.push('\n');
-        line.push_str(content);
-    }
-    line
-}
-
-fn select_relevant_entries<'a>(entries: &'a [KnowledgeEntry], prompt: &str) -> Vec<&'a KnowledgeEntry> {
-    let prompt_words = extract_words(prompt);
-    let mut scored: Vec<(usize, &KnowledgeEntry)> = entries
-        .iter()
-        .map(|entry| {
-            let entry_words = extract_words(&format!("{} {}", entry.topic, entry.description));
-            let score = entry_words.iter().filter(|word| prompt_words.contains(*word)).count();
-            (score, entry)
-        })
-        .collect();
-    scored.sort_by(|a, b| b.0.cmp(&a.0));
-    scored
-        .into_iter()
-        .filter(|(score, _)| *score > 0)
-        .take(5)
-        .map(|(_, entry)| entry)
-        .collect()
-}
-
-fn extract_words(value: &str) -> HashSet<String> {
-    value
-        .split(|c: char| !c.is_alphanumeric())
-        .filter_map(|token| {
-            let normalized = token.to_lowercase();
-            if normalized.is_empty() { None } else { Some(normalized) }
-        })
-        .collect()
-}
-
-fn detect_project_path() -> Option<String> {
-    std::process::Command::new("git")
-        .args(["rev-parse", "--show-toplevel"])
-        .output()
-        .ok()
-        .and_then(|o| if o.status.success() {
-            String::from_utf8(o.stdout).ok().map(|s| s.trim().to_string())
-        } else {
-            None
-        })
-}
-
-/// Resolve --context-from task IDs: read output/diff from completed tasks.
-fn resolve_context_from(store: &Store, task_ids: &[String]) -> Result<Option<String>> {
-    let mut blocks = Vec::new();
-    for task_id in task_ids {
-        let Some(task) = store.get_task(task_id)? else {
-            eprintln!("[aid] Warning: --context-from task '{task_id}' not found, skipping");
-            continue;
-        };
-        let mut content = String::new();
-        // Try output file first
-        if let Some(ref path) = task.output_path
-            && let Ok(text) = std::fs::read_to_string(path)
-        {
-            content = text;
-        }
-        // Fall back to log file
-        if content.is_empty()
-            && let Some(ref log_path) = task.log_path
-            && let Ok(text) = std::fs::read_to_string(log_path)
-        {
-            // Take last 200 lines to avoid huge context
-            let lines: Vec<&str> = text.lines().collect();
-            let start = lines.len().saturating_sub(200);
-            content = lines[start..].join("\n");
-        }
-        if content.is_empty() {
-            eprintln!("[aid] Warning: --context-from task '{task_id}' has no output, skipping");
-            continue;
-        }
-        blocks.push(format!(
-            "[Prior Task Result — {} ({}, {})]\n{}",
-            task_id,
-            task.agent_display_name(),
-            task.status.as_str(),
-            content.trim()
-        ));
-    }
-    if blocks.is_empty() {
-        return Ok(None);
-    }
-    Ok(Some(blocks.join("\n\n")))
-}
-
-fn collect_sibling_summaries(
-    store: &Store,
-    group_id: &str,
-    current_task_id: &str,
-) -> Result<Vec<CompletionSummary>> {
-    let tasks = store.list_tasks_by_group(group_id)?;
-    let mut summaries = Vec::new();
-    for task in &tasks {
-        if task.id.as_str() == current_task_id { continue; }
-        if !task.status.is_terminal() { continue; }
-        if let Some(json) = store.get_completion_summary(task.id.as_str())?
-            && let Ok(summary) = serde_json::from_str::<CompletionSummary>(&json)
-        {
-            summaries.push(summary);
-        }
-    }
-    summaries.truncate(5);
-    Ok(summaries)
 }
 
 pub(super) fn resolve_prompt(source: PromptSource<'_>, template: Option<&str>) -> Result<String> {

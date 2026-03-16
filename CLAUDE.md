@@ -82,6 +82,8 @@ id = "my-app"
 profile = "production"   # hobby | standard | production
 team = "dev"
 language = "rust"
+budget = "$1000/day"     # shorthand syntax
+verify = "cargo test"
 rules = ["File size limit: 300 lines"]
 ```
 
@@ -91,7 +93,9 @@ rules = ["File size limit: 300 lines"]
 | `standard` | `auto` | $20/day | Tests for new functions |
 | `production` | `cargo test`/`npm test` | $50/day | Tests, no unwrap(), cross-review |
 
-CLI: `aid project init`, `aid project show`. Project defaults are fallbacks — CLI flags always win.
+Budget shorthand: `budget = "$1000/day"` or `budget = "$500/month"` (also accepts struct syntax).
+
+CLI: `aid project init` (interactive setup + CLAUDE.md sync), `aid project show`, `aid project sync` (re-sync to CLAUDE.md + global config). Project defaults are fallbacks — CLI flags always win.
 
 
 <!-- aid:start -->

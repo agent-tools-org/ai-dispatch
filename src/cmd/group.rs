@@ -8,8 +8,8 @@ use std::sync::Arc;
 use crate::store::Store;
 use crate::types::TaskFilter;
 
-pub fn create(store: &Arc<Store>, name: &str, context: &str) -> Result<()> {
-    let workgroup = store.create_workgroup(name, context, Some("cli"))?;
+pub fn create(store: &Arc<Store>, name: &str, context: &str, custom_id: Option<&str>) -> Result<()> {
+    let workgroup = store.create_workgroup(name, context, Some("cli"), custom_id)?;
     println!("{}", workgroup.id);
     eprintln!("[aid] Created workgroup '{}' ({})", workgroup.name, workgroup.id);
     eprintln!("[aid] Scope all commands: export AID_GROUP={}", workgroup.id);

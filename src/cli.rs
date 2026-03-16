@@ -85,6 +85,9 @@ pub enum Commands {
         /// Context files to inject
         #[arg(long)]
         context: Vec<String>,
+        /// Restrict agent to only read/modify files within scope
+        #[arg(long)]
+        scope: Vec<String>,
         #[command(flatten)]
         run_extras: Box<RunExtrasArgs>,
         /// Disable automatic skill injection
@@ -105,6 +108,9 @@ pub enum Commands {
         /// Link this task as a child of an existing task (thread composition)
         #[arg(long, value_name = "TASK_ID")]
         parent: Option<String>,
+        /// Custom task ID (default: auto-generated t-xxxx)
+        #[arg(long, value_name = "ID")]
+        id: Option<String>,
     },
     #[command(after_help = r#"Examples:
   aid batch tasks.toml --parallel

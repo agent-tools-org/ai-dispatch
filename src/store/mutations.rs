@@ -104,10 +104,10 @@ impl Store {
         Ok(())
     }
 
-    pub fn create_workgroup(&self, name: &str, shared_context: &str, created_by: Option<&str>) -> Result<Workgroup> {
+    pub fn create_workgroup(&self, name: &str, shared_context: &str, created_by: Option<&str>, custom_id: Option<&str>) -> Result<Workgroup> {
         let now = Local::now();
         let workgroup = Workgroup {
-            id: WorkgroupId::generate(),
+            id: custom_id.map(|s| WorkgroupId(s.to_string())).unwrap_or_else(WorkgroupId::generate),
             name: name.to_string(),
             shared_context: shared_context.to_string(),
             created_by: created_by.map(str::to_string),

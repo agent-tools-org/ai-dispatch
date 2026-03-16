@@ -8,7 +8,7 @@ use super::*;
 fn create_and_get_workgroup() {
     let store = Store::open_memory().unwrap();
     let workgroup = store
-        .create_workgroup("dispatch", "Shared API contract context.", None)
+        .create_workgroup("dispatch", "Shared API contract context.", None, None)
         .unwrap();
 
     let loaded = store.get_workgroup(workgroup.id.as_str()).unwrap().unwrap();
@@ -21,7 +21,7 @@ fn create_and_get_workgroup() {
 fn gets_workgroup_milestones() {
     let store = Store::open_memory().unwrap();
     let workgroup = store
-        .create_workgroup("dispatch", "Shared API contract context.", None)
+        .create_workgroup("dispatch", "Shared API contract context.", None, None)
         .unwrap();
 
     let mut first = make_task("t-0040", AgentKind::Codex, TaskStatus::Running);

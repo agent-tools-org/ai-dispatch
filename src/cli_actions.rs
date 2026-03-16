@@ -39,6 +39,9 @@ pub enum GroupAction {
         /// Shared context files (e.g. src/types.rs)
         #[arg(long, short)]
         context: Option<String>,
+        /// Custom workgroup ID (default: auto-generated wg-xxxx)
+        #[arg(long)]
+        id: Option<String>,
     },
     /// List workgroups
     List,

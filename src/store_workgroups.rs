@@ -106,7 +106,7 @@ mod tests {
     fn update_workgroup_changes_requested_fields() {
         let store = Store::open_memory().unwrap();
         let workgroup = store
-            .create_workgroup("dispatch", "Shared repo rules.", None)
+            .create_workgroup("dispatch", "Shared repo rules.", None, None)
             .unwrap();
 
         let updated = store
@@ -127,7 +127,7 @@ mod tests {
     fn delete_workgroup_keeps_historical_task_tags() {
         let store = Store::open_memory().unwrap();
         let workgroup = store
-            .create_workgroup("dispatch", "Shared repo rules.", None)
+            .create_workgroup("dispatch", "Shared repo rules.", None, None)
             .unwrap();
         store
             .insert_task(&make_task("t-1000", workgroup.id.as_str()))

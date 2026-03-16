@@ -44,6 +44,7 @@ pub struct BatchConfig {
 
 #[derive(Debug, Deserialize, Default)]
 pub struct BatchDefaults {
+    pub group_id: Option<String>,
     pub agent: Option<String>,
     pub team: Option<String>,
     pub dir: Option<String>,
@@ -62,6 +63,7 @@ pub struct BatchDefaults {
     #[serde(default)]
     pub hooks: Option<Vec<String>>,
     pub fallback: Option<String>,
+    pub scope: Option<Vec<String>>,
     #[serde(default)]
     pub read_only: Option<bool>,
     #[serde(default)]
@@ -70,6 +72,7 @@ pub struct BatchDefaults {
 
 #[derive(Debug, Deserialize)]
 pub struct BatchTask {
+    pub id: Option<String>,
     pub name: Option<String>,
     #[serde(default)]
     pub agent: String,
@@ -96,6 +99,7 @@ pub struct BatchTask {
     pub parent: Option<String>,
     pub context_from: Option<Vec<String>>,
     pub fallback: Option<String>,
+    pub scope: Option<Vec<String>>,
     #[serde(default)]
     pub read_only: bool,
     #[serde(default)]
@@ -169,6 +173,9 @@ fn apply_task_defaults(task: &mut BatchTask, defaults: &BatchDefaults) {
     }
     if task.fallback.is_none() {
         task.fallback = defaults.fallback.clone();
+    }
+    if task.scope.is_none() {
+        task.scope = defaults.scope.clone();
     }
     if !task.read_only && matches!(defaults.read_only, Some(true)) {
         task.read_only = true;

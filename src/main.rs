@@ -75,6 +75,7 @@ async fn main() -> Result<()> {
             verify,
             retry,
             context,
+            scope,
             run_extras,
             no_skill,
             bg,
@@ -84,6 +85,7 @@ async fn main() -> Result<()> {
             best_of,
             metric,
             parent,
+            id,
         } => {
             let config = config::load_config().unwrap_or_default();
             let budget = budget || config.selection.budget_mode;
@@ -156,7 +158,9 @@ async fn main() -> Result<()> {
                     metric,
                     team: team_flag,
                     context_from: extras.context_from,
+                    scope,
                     parent_task_id: parent,
+                    existing_task_id: id.map(crate::types::TaskId),
                     ..Default::default()
                 },
             )
@@ -334,7 +338,7 @@ async fn main() -> Result<()> {
             cmd::config::run(&store, action)?;
         }
         Commands::Group { action } => match action {
-            GroupAction::Create { name, context } => cmd::group::create(&store, &name, context.as_deref().unwrap_or(""))?,
+            GroupAction::Create { name, context, id } => cmd::group::create(&store, &name, context.as_deref().unwrap_or(""), id.as_deref())?,
             GroupAction::List => cmd::group::list(&store)?,
             GroupAction::Show { group_id } => cmd::group::show(&store, &group_id)?,
             GroupAction::Update {

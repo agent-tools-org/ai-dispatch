@@ -24,7 +24,7 @@ mod run_prompt;
 mod run_agent;
 #[path = "run_bestof.rs"]
 mod run_bestof;
-use self::run_agent::{check_worktree_escape, run_agent_process_with_timeout};
+use self::run_agent::{check_worktree_escape, check_scope_violations, run_agent_process_with_timeout};
 pub const NO_SKILL_SENTINEL: &str = "__aid_no_skill__";
 #[derive(Clone, Default)]
 pub struct RunArgs {
@@ -58,6 +58,7 @@ pub struct RunArgs {
     pub session_id: Option<String>,
     pub team: Option<String>,
     pub context_from: Vec<String>,
+    pub scope: Vec<String>,
     pub judge_retry: bool,
     pub existing_task_id: Option<TaskId>,
 }
@@ -339,6 +340,9 @@ pub async fn run(store: Arc<Store>, args: RunArgs) -> Result<TaskId> {
             args.verify.as_deref(),
             effective_dir.as_deref(),
         );
+        if !args.scope.is_empty() {
+            check_scope_violations(&store, &task_id, &args.scope, effective_dir.as_deref());
+        }
         if let Some(task) = store.get_task(task_id.as_str())? {
             if task.status == TaskStatus::Done && !prompt_bundle.injected_memory_ids.is_empty() {
                 for memory_id in &prompt_bundle.injected_memory_ids {

@@ -208,6 +208,47 @@ pub(crate) fn check_worktree_escape(repo_dir: Option<&str>) {
     }
 }
 
+/// Check if the agent's diff contains files outside the declared scope.
+/// Scope entries can be file paths or directory prefixes (e.g. "src/agent/").
+pub(crate) fn check_scope_violations(store: &Store, task_id: &TaskId, scope: &[String], dir: Option<&str>) {
+    let work_dir = dir.unwrap_or(".");
+    let output = process::Command::new("git")
+        .args(["diff", "--name-only", "HEAD"])
+        .current_dir(work_dir)
+        .output();
+    let Ok(o) = output else { return };
+    if !o.status.success() { return }
+    let stdout = String::from_utf8_lossy(&o.stdout);
+    let changed: Vec<&str> = stdout.lines().filter(|l| !l.is_empty()).collect();
+    if changed.is_empty() { return }
+    let violations: Vec<&str> = changed.iter().copied().filter(|file| {
+        !scope.iter().any(|s| {
+            let s = s.trim_end_matches('/');
+            *file == s || file.starts_with(&format!("{s}/"))
+        })
+    }).collect();
+    if violations.is_empty() { return }
+    eprintln!(
+        "[aid] Scope violation: {} file(s) modified outside scope",
+        violations.len()
+    );
+    for f in violations.iter().take(10) {
+        eprintln!("  {f}");
+    }
+    if violations.len() > 10 {
+        eprintln!("  ... and {} more", violations.len() - 10);
+    }
+    eprintln!("[aid] Declared scope: {}", scope.join(", "));
+    let event = crate::types::TaskEvent {
+        task_id: task_id.clone(),
+        timestamp: chrono::Local::now(),
+        event_kind: crate::types::EventKind::Error,
+        detail: format!("Scope violation: {} file(s) outside scope", violations.len()),
+        metadata: None,
+    };
+    let _ = store.insert_event(&event);
+}
+
 fn format_duration(ms: i64) -> String {
     let secs = ms / 1000;
     if secs < 60 {

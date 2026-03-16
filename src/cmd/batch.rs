@@ -29,7 +29,8 @@ pub async fn run(store: Arc<Store>, args: BatchArgs) -> Result<()> {
             eprintln!("[aid] Using workspace {env_group} from AID_GROUP");
         } else if total >= 2 {
             let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("batch");
-            let wg = store.create_workgroup(stem, "Auto-created for batch dispatch", Some(stem))?;
+            let custom_gid = config.defaults.group_id.as_deref();
+            let wg = store.create_workgroup(stem, "Auto-created for batch dispatch", Some(stem), custom_gid)?;
             for task in &mut config.tasks {
                 task.group = Some(wg.id.to_string());
             }
@@ -119,6 +120,7 @@ fn task_to_run_args(task: &batch::BatchTask, background: bool, store: &Arc<Store
         best_of: task.best_of,
         team: task.team.clone(),
         context_from: task.context_from.clone().unwrap_or_default(),
+        scope: task.scope.clone().unwrap_or_default(),
         parent_task_id: task.parent.clone(),
         ..Default::default()
     }
@@ -153,7 +155,9 @@ async fn dispatch_with_dependencies(
     }
     // Pre-create all tasks with Waiting status so they're visible in TUI immediately
     let waiting_ids: Vec<String> = tasks.iter().enumerate().map(|(i, task)| {
-        let id = crate::types::TaskId::generate();
+        let id = task.id.as_ref()
+            .map(|s| crate::types::TaskId(s.clone()))
+            .unwrap_or_else(crate::types::TaskId::generate);
         let agent = if task.agent.is_empty() { "auto" } else { &task.agent };
         let prompt_preview = if task.prompt.len() > 120 { &task.prompt[..120] } else { &task.prompt };
         if let Err(e) = store.insert_waiting_task(id.as_str(), agent, prompt_preview, task.group.as_deref()) {
@@ -346,6 +350,7 @@ mod tests {
 
     fn make_task(name: &str, conditional: bool, on_success: Option<&str>) -> batch::BatchTask {
         batch::BatchTask {
+            id: None,
             name: Some(name.to_string()),
             agent: "codex".to_string(),
             team: None,
@@ -366,6 +371,7 @@ mod tests {
             parent: None,
             context_from: None,
             fallback: None,
+            scope: None,
             read_only: false,
             budget: false,
             on_success: on_success.map(str::to_string),
@@ -425,6 +431,7 @@ mod tests {
         let store = Arc::new(Store::open_memory().unwrap());
         let run_args = task_to_run_args(
             &batch::BatchTask {
+                id: None,
                 name: None,
                 agent: "codex".to_string(),
                 team: None,
@@ -443,6 +450,7 @@ mod tests {
                 parent: None,
                 context_from: None,
                 fallback: None,
+                scope: None,
                 read_only: false,
                 budget: false,
                 judge: None,

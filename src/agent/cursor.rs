@@ -32,6 +32,7 @@ impl super::Agent for CursorAgent {
                 "plan",
                 "--output-format",
                 "stream-json",
+                "--stream-partial-output",
             ]);
         } else {
             cmd.args([
@@ -39,8 +40,10 @@ impl super::Agent for CursorAgent {
                 "-p",
                 prompt,
                 "--trust",
+                "--force",
                 "--output-format",
                 "stream-json",
+                "--stream-partial-output",
             ]);
         }
         if let Some(ref dir) = opts.dir {
@@ -97,12 +100,12 @@ fn parse_json_event(
                 .get("subtype")
                 .and_then(|value| value.as_str())
                 .unwrap_or("system");
-            let detail = v
-                .get("model")
-                .and_then(|value| value.as_str())
-                .map(|model| format!("{subtype}: {model}"))
+            let model = v.get("model").and_then(|value| value.as_str());
+            let detail = model
+                .map(|m| format!("{subtype}: {m}"))
                 .unwrap_or_else(|| subtype.to_string());
-            (EventKind::Reasoning, detail, None)
+            let metadata = model.map(|m| json!({"model": m}));
+            (EventKind::Reasoning, detail, metadata)
         }
         "assistant" => {
             let detail = v
@@ -129,12 +132,19 @@ fn parse_json_event(
                 "tokens: {} in + {} out = {} ({} cached)",
                 input_tokens, output_tokens, total_tokens, cache_read_tokens
             );
-            let metadata = Some(json!({
+            let cost_usd = v
+                .pointer("/usage/totalCostUSD")
+                .and_then(|value| value.as_f64());
+            let mut meta = json!({
                 "tokens": total_tokens,
                 "input_tokens": input_tokens,
                 "output_tokens": output_tokens,
-            }));
-            (EventKind::Completion, detail, metadata)
+                "prompt_tokens": input_tokens,
+            });
+            if let Some(cost) = cost_usd {
+                meta["cost_usd"] = json!(cost);
+            }
+            (EventKind::Completion, detail, Some(meta))
         }
         _ => return None,
     };
@@ -208,6 +218,21 @@ mod tests {
                 .and_then(|value| value.get("output_tokens"))
                 .and_then(|value| value.as_i64()),
             Some(5)
+        );
+    }
+
+    #[test]
+    fn extracts_model_from_system_event() {
+        let agent = CursorAgent;
+        let line = r#"{"type":"system","subtype":"init","model":"composer-1.5"}"#;
+        let event = agent
+            .parse_event(&TaskId("t-sys".to_string()), line)
+            .unwrap();
+        assert_eq!(event.event_kind, EventKind::Reasoning);
+        assert_eq!(event.detail, "init: composer-1.5");
+        assert_eq!(
+            event.metadata.as_ref().and_then(|v| v.get("model")).and_then(|v| v.as_str()),
+            Some("composer-1.5")
         );
     }
 

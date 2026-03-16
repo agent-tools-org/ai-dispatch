@@ -15,6 +15,7 @@ fn write_temp(content: &str) -> NamedTempFile {
 
 fn make_task(name: Option<&str>, depends_on: &[&str]) -> BatchTask {
         BatchTask {
+            id: None,
             name: name.map(str::to_string),
             agent: "codex".to_string(),
             team: None,
@@ -36,6 +37,7 @@ fn make_task(name: Option<&str>, depends_on: &[&str]) -> BatchTask {
             parent: None,
             context_from: None,
             fallback: None,
+            scope: None,
             read_only: false,
             budget: false,
             on_success: None,

@@ -188,6 +188,7 @@ mod tests {
 
     fn stub_task(name: &str, depends_on: Option<Vec<&str>>) -> batch::BatchTask {
         batch::BatchTask {
+            id: None,
             name: Some(name.to_string()),
             agent: "codex".to_string(),
             team: None,
@@ -208,6 +209,7 @@ mod tests {
             parent: None,
             context_from: None,
             fallback: None,
+            scope: None,
             read_only: false,
             budget: false,
             on_success: None,

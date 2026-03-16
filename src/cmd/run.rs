@@ -172,7 +172,7 @@ pub async fn run(store: Arc<Store>, args: RunArgs) -> Result<TaskId> {
     // Create worktree if requested, override dir to point into it
     let (wt_path, wt_branch, effective_dir, resolved_repo) = run_prompt::resolve_worktree_paths(&args, explicit_repo_path.as_deref())?;
     // Use resolved repo_path (always set when worktree is created, even without --repo)
-    let repo_path = resolved_repo.or(explicit_repo_path);
+    let repo_path = resolved_repo.clone().or(explicit_repo_path);
     let caller = session::current_caller();
     let task = Task {
         id: task_id.clone(),
@@ -187,7 +187,7 @@ pub async fn run(store: Arc<Store>, args: RunArgs) -> Result<TaskId> {
         caller_session_id: caller.as_ref().map(|item| item.session_id.clone()),
         agent_session_id: None,
         repo_path: repo_path.clone(),
-        worktree_path: wt_path,
+        worktree_path: wt_path.clone(),
         worktree_branch: wt_branch,
         log_path: Some(log_path.to_string_lossy().to_string()),
         output_path: args.output.clone(),
@@ -328,6 +328,13 @@ pub async fn run(store: Arc<Store>, args: RunArgs) -> Result<TaskId> {
             args.max_duration_mins,
         )
         .await?;
+        run_prompt::warn_agent_committed_files_outside_scope(
+            &args.scope,
+            args.dir.as_ref(),
+            effective_dir.as_ref(),
+            resolved_repo.as_ref(),
+            wt_path.as_ref(),
+        );
         // Detect worktree escape: warn if agent modified files in main repo
         if args.worktree.is_some() {
             check_worktree_escape(repo_path.as_deref());

@@ -100,38 +100,90 @@ pub(crate) fn git_merge_branch(repo_dir: &str, branch: &str) -> MergeResult {
         .filter(|o| o.status.success())
         .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string());
 
+    let stashed = stash_local_changes(repo_dir);
+
     let output = Command::new("git")
         .args(["-C", repo_dir, "merge", branch, "--no-edit"])
         .output();
-    match output {
+    let merge_result = match output {
         Ok(o) if o.status.success() => {
             let stdout = String::from_utf8_lossy(&o.stdout);
             if stdout.contains("Already up to date") {
-                return MergeResult::AlreadyUpToDate;
+                MergeResult::AlreadyUpToDate
+            } else {
+                let head_after = Command::new("git")
+                    .args(["-C", repo_dir, "rev-parse", "HEAD"])
+                    .output()
+                    .ok()
+                    .filter(|o| o.status.success())
+                    .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string());
+                if head_before == head_after {
+                    MergeResult::AlreadyUpToDate
+                } else {
+                    MergeResult::Merged
+                }
             }
-            let head_after = Command::new("git")
-                .args(["-C", repo_dir, "rev-parse", "HEAD"])
-                .output()
-                .ok()
-                .filter(|o| o.status.success())
-                .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string());
-            if head_before == head_after {
-                return MergeResult::AlreadyUpToDate;
-            }
-            MergeResult::Merged
         }
         Ok(o) => {
             let stderr = String::from_utf8_lossy(&o.stderr).to_string();
             MergeResult::Failed(stderr)
         }
         Err(e) => MergeResult::Failed(e.to_string()),
+    };
+
+    if stashed {
+        if pop_stash(repo_dir) {
+            eprintln!("[aid] Restored local changes");
+        } else {
+            eprintln!("[aid] Your stashed local changes conflict with the merge. Resolve with: git stash pop");
+        }
     }
+    merge_result
 }
 
 pub(crate) enum MergeResult {
     Merged,
     AlreadyUpToDate,
     Failed(String),
+}
+
+fn stash_local_changes(repo_dir: &str) -> bool {
+    let dirty = Command::new("git")
+        .args(["-C", repo_dir, "status", "--porcelain"])
+        .output()
+        .ok()
+        .filter(|o| o.status.success())
+        .map(|o| !o.stdout.is_empty())
+        .unwrap_or(false);
+    if !dirty {
+        return false;
+    }
+    eprintln!("[aid] Stashing local changes before merge...");
+    match Command::new("git")
+        .args(["-C", repo_dir, "stash", "push", "-m", "aid: auto-stash before merge"])
+        .output()
+    {
+        Ok(o) if o.status.success() => true,
+        Ok(o) => {
+            let stderr = String::from_utf8_lossy(&o.stderr);
+            eprintln!("[aid] Warning: failed to stash local changes: {}", stderr.lines().next().unwrap_or(""));
+            false
+        }
+        Err(e) => {
+            eprintln!("[aid] Warning: failed to stash local changes: {e}");
+            false
+        }
+    }
+}
+
+fn pop_stash(repo_dir: &str) -> bool {
+    match Command::new("git")
+        .args(["-C", repo_dir, "stash", "pop"])
+        .output()
+    {
+        Ok(o) => o.status.success(),
+        Err(_) => false,
+    }
 }
 
 pub fn remove_worktree(repo_dir: &str, wt_path: &str) {

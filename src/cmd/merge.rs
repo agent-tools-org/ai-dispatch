@@ -355,6 +355,45 @@ mod tests {
     }
 
     #[test]
+    fn git_merge_branch_stashes_local_changes() {
+        let repo = init_repo();
+        let local_file = repo.path().join("init.txt");
+        std::fs::write(&local_file, "local change\n").unwrap();
+        let (wt, branch) = create_worktree_with_commit(repo.path());
+
+        let result = git_merge_branch(&repo.path().to_string_lossy(), &branch);
+        assert!(matches!(result, MergeResult::Merged));
+        assert_eq!(std::fs::read_to_string(local_file).unwrap(), "local change\n");
+
+        git(repo.path(), &["worktree", "remove", "--force", &wt.path().to_string_lossy()]);
+    }
+
+    #[test]
+    fn git_merge_branch_stashes_and_warns_on_pop_conflict() {
+        let repo = init_repo();
+        let branch = unique("pop-conflict");
+        let wt = TempDir::new().unwrap();
+        git(repo.path(), &["worktree", "add", &wt.path().to_string_lossy(), "-b", &branch]);
+        std::fs::write(wt.path().join("init.txt"), "branch change\n").unwrap();
+        git(wt.path(), &["add", "init.txt"]);
+        git(wt.path(), &["commit", "-m", "branch change"]);
+        std::fs::write(repo.path().join("init.txt"), "local change\n").unwrap();
+
+        let result = git_merge_branch(&repo.path().to_string_lossy(), &branch);
+        assert!(matches!(result, MergeResult::Merged));
+        let status = Command::new("git")
+            .args(["-C", &repo.path().to_string_lossy(), "status", "--short"])
+            .output()
+            .unwrap();
+        let stdout = String::from_utf8_lossy(&status.stdout);
+        assert!(stdout.contains("UU init.txt"));
+
+        git(repo.path(), &["reset", "--hard", "HEAD~1"]);
+        git(repo.path(), &["stash", "drop"]);
+        git(repo.path(), &["worktree", "remove", "--force", &wt.path().to_string_lossy()]);
+    }
+
+    #[test]
     fn resolve_repo_dir_prefers_explicit_repo_path() {
         let result = resolve_repo_dir(Some("/explicit/repo"), Some("/tmp/worktree"));
         assert_eq!(result, "/explicit/repo");

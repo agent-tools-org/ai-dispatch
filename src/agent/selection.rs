@@ -586,6 +586,7 @@ research = 6
             preferred_agents: vec![],
             default_agent: None,
             overrides,
+            rules: vec![],
         };
         let team_context = CandidateContext {
             profile: &profile,
@@ -626,6 +627,7 @@ research = 6
             preferred_agents: vec!["kilo".to_string()],
             default_agent: None,
             overrides: HashMap::new(),
+            rules: vec![],
         };
         let preferred_context = CandidateContext {
             profile: &profile,
@@ -666,6 +668,7 @@ research = 6
             preferred_agents: vec![],
             default_agent: Some("cursor".to_string()),
             overrides,
+            rules: vec![],
         };
         let (kind, _) = select_agent_from(
             "rename src/types.rs field name to task_name",
@@ -688,6 +691,7 @@ research = 6
             preferred_agents: vec!["kilo".to_string()],
             default_agent: None,
             overrides: HashMap::new(),
+            rules: vec![],
         };
         let prompt = "Implement a retry-aware test suite across src/main.rs and src/cmd/run.rs. Add validation coverage.";
         let (kind, _) = select_agent_from(
@@ -719,6 +723,7 @@ research = 6
             preferred_agents: vec![],
             default_agent: None,
             overrides,
+            rules: vec![],
         };
         let (kind, _) = select_agent_from(
             "rename src/types.rs field name to task_name",

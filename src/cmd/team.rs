@@ -101,6 +101,12 @@ fn show_team(name: &str) -> Result<()> {
     } else {
         println!("  Knowledge: (none — create {}/KNOWLEDGE.md)", knowledge_dir.parent().unwrap_or(&knowledge_dir).display());
     }
+    if !config.rules.is_empty() {
+        println!("  Rules: {} rule(s)", config.rules.len());
+        for rule in &config.rules {
+            println!("    - {rule}");
+        }
+    }
     if !config.overrides.is_empty() {
         println!("  Overrides:");
         for (agent, overrides) in &config.overrides {

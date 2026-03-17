@@ -14,7 +14,8 @@ pub async fn run(store: Arc<Store>, args: BatchArgs) -> Result<()> {
     if args.max_concurrent == Some(0) {
         anyhow::bail!("--max-concurrent must be at least 1");
     }
-    let path = Path::new(&args.file);
+    let resolved_path = resolve_batch_path(Path::new(&args.file));
+    let path = resolved_path.as_path();
     let mut config = batch::parse_batch_file(path)
         .with_context(|| format!("Failed to load batch file {}", path.display()))?;
     let total = config.tasks.len();
@@ -71,6 +72,18 @@ pub async fn run(store: Arc<Store>, args: BatchArgs) -> Result<()> {
         eprintln!("[aid] Watch: aid watch --quiet {}", task_ids[0]);
     }
     Ok(())
+}
+fn resolve_batch_path(path: &Path) -> std::path::PathBuf {
+    if path.exists() {
+        return path.to_path_buf();
+    }
+    match path.file_name() {
+        Some(file_name) => {
+            let fallback = crate::paths::aid_dir().join("batches").join(file_name);
+            if fallback.exists() { fallback } else { path.to_path_buf() }
+        }
+        None => path.to_path_buf(),
+    }
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum BatchTaskOutcome { Done, Failed, Skipped }
@@ -345,7 +358,9 @@ fn wait_for_any_completion(
 mod tests {
     use super::*;
     use crate::batch;
+    use crate::paths::AidHomeGuard;
     use crate::store::Store;
+    use std::fs;
     use std::sync::Arc;
 
     fn make_task(name: &str, conditional: bool, on_success: Option<&str>) -> batch::BatchTask {
@@ -467,5 +482,20 @@ mod tests {
             run_args.context,
             vec!["src/lib.rs".to_string(), "src/main.rs:run".to_string()]
         );
+    }
+
+    #[test]
+    fn resolve_batch_path_uses_aid_batches_fallback() {
+        let temp = tempfile::tempdir().unwrap();
+        let _guard = AidHomeGuard::set(temp.path());
+
+        let batches_dir = crate::paths::aid_dir().join("batches");
+        fs::create_dir_all(&batches_dir).unwrap();
+        let fallback = batches_dir.join("deploy.toml");
+        fs::write(&fallback, "tasks = []\n").unwrap();
+
+        let resolved = resolve_batch_path(Path::new("deploy.toml"));
+
+        assert_eq!(resolved, fallback);
     }
 }

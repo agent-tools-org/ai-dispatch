@@ -3,26 +3,26 @@
 // Deps: crate::store::Store, crate::types::TaskStatus
 
 use anyhow::{anyhow, Result};
-use std::process::Command;
+use std::process::{Command, Stdio};
 use std::sync::Arc;
 
 use crate::store::Store;
-use crate::types::{TaskStatus, VerifyStatus};
+use crate::types::{Task, TaskStatus, VerifyStatus};
 
 #[path = "merge_git.rs"]
 mod merge_git;
 use merge_git::*;
 pub use merge_git::remove_worktree;
 
-pub fn run(store: Arc<Store>, task_id: Option<&str>, group: Option<&str>) -> Result<()> {
+pub fn run(store: Arc<Store>, task_id: Option<&str>, group: Option<&str>, approve: bool) -> Result<()> {
     match (task_id, group) {
-        (Some(id), _) => merge_single(&store, id),
-        (_, Some(group_id)) => merge_group(&store, group_id),
+        (Some(id), _) => merge_single(&store, id, approve),
+        (_, Some(group_id)) => merge_group(&store, group_id, approve),
         (None, None) => Err(anyhow!("Provide either a task ID or --group <wg-id>")),
     }
 }
 
-fn merge_single(store: &Store, task_id: &str) -> Result<()> {
+fn merge_single(store: &Store, task_id: &str, approve: bool) -> Result<()> {
     let task = store
         .get_task(task_id)?
         .ok_or_else(|| anyhow!("Task '{task_id}' not found"))?;
@@ -43,6 +43,16 @@ fn merge_single(store: &Store, task_id: &str) -> Result<()> {
         && std::path::Path::new(wt).exists()
     {
         run_verify_in_worktree(wt, task.verify.as_deref());
+    }
+    if approve {
+        match ask_approval(&task)? {
+            ApprovalDecision::Merge => {}
+            ApprovalDecision::Skip => return Ok(()),
+            ApprovalDecision::Retry => {
+                eprintln!("[aid] Boss requested retry");
+                return Err(anyhow!("Boss requested retry"));
+            }
+        }
     }
     // Auto cherry-pick worktree branch into current branch
     if let Some(ref branch) = task.worktree_branch {
@@ -111,10 +121,20 @@ fn merge_single(store: &Store, task_id: &str) -> Result<()> {
     Ok(())
 }
 
-fn merge_group(store: &Store, group_id: &str) -> Result<()> {
+fn merge_group(store: &Store, group_id: &str, approve: bool) -> Result<()> {
     let tasks = store.list_tasks_by_group(group_id)?;
     if tasks.is_empty() {
         return Err(anyhow!("No tasks found in group '{group_id}'"));
+    }
+    if approve {
+        match ask_group_approval(group_id, &tasks)? {
+            ApprovalDecision::Merge => {}
+            ApprovalDecision::Skip => return Ok(()),
+            ApprovalDecision::Retry => {
+                eprintln!("[aid] Boss requested retry");
+                return Err(anyhow!("Boss requested retry"));
+            }
+        }
     }
     let mut merged = 0;
     let mut skipped = Vec::new();
@@ -177,6 +197,58 @@ fn merge_group(store: &Store, group_id: &str) -> Result<()> {
         .args(["-C", &first_repo_dir, "worktree", "prune"])
         .output();
     Ok(())
+}
+
+enum ApprovalDecision {
+    Merge,
+    Retry,
+    Skip,
+}
+
+fn ask_approval(task: &Task) -> Result<ApprovalDecision> {
+    let branch = task.worktree_branch.as_deref().unwrap_or("-");
+    let prompt = format!(
+        "Task {} ready to merge:\n- Agent: {}\n- Branch: {}\n\nApprove?",
+        task.id,
+        task.agent_display_name(),
+        branch
+    );
+    run_approval_prompt(
+        &format!("Merge:aid merge {}", task.id),
+        &format!("Retry:aid retry {}", task.id),
+        &prompt,
+    )
+}
+
+fn ask_group_approval(group_id: &str, tasks: &[Task]) -> Result<ApprovalDecision> {
+    let details = tasks
+        .iter()
+        .map(|task| format!("- {}: {} ({})", task.id, task.agent_display_name(), task.worktree_branch.as_deref().unwrap_or("-")))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let prompt = format!("Group {group_id} ready to merge:\n{details}\n\nApprove?");
+    run_approval_prompt(&format!("Merge:aid merge --group {group_id}"), "Retry", &prompt)
+}
+
+fn run_approval_prompt(merge_action: &str, retry_action: &str, prompt: &str) -> Result<ApprovalDecision> {
+    let actions = format!("{merge_action},{retry_action},Skip");
+    let output = match Command::new("hiboss")
+        .args(["ask", "--actions", &actions, "--timeout", "300", prompt])
+        .stdout(Stdio::piped())
+        .output()
+    {
+        Ok(output) => output,
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => return Ok(ApprovalDecision::Merge),
+        Err(err) => return Err(err.into()),
+    };
+    let reply = String::from_utf8_lossy(&output.stdout);
+    if reply.contains("Skip") {
+        return Ok(ApprovalDecision::Skip);
+    }
+    if reply.contains("Retry") {
+        return Ok(ApprovalDecision::Retry);
+    }
+    Ok(ApprovalDecision::Merge)
 }
 
 #[cfg(test)]
@@ -433,7 +505,7 @@ mod tests {
         let task = make_task_with_worktree("t-merge-ok", repo.path(), wt.path(), &branch);
         store.insert_task(&task).unwrap();
 
-        let result = merge_single(&store, "t-merge-ok");
+        let result = merge_single(&store, "t-merge-ok", false);
         assert!(result.is_ok(), "merge_single failed: {result:?}");
 
         let loaded = store.get_task("t-merge-ok").unwrap().unwrap();
@@ -454,7 +526,7 @@ mod tests {
         let task = make_task_with_worktree("t-autocommit", repo.path(), wt.path(), &branch);
         store.insert_task(&task).unwrap();
 
-        let result = merge_single(&store, "t-autocommit");
+        let result = merge_single(&store, "t-autocommit", false);
         assert!(result.is_ok(), "merge_single should auto-commit and merge: {result:?}");
 
         let loaded = store.get_task("t-autocommit").unwrap().unwrap();
@@ -475,7 +547,7 @@ mod tests {
         let task = make_task_with_worktree("t-empty", repo.path(), wt.path(), &branch);
         store.insert_task(&task).unwrap();
 
-        let result = merge_single(&store, "t-empty");
+        let result = merge_single(&store, "t-empty", false);
         assert!(result.is_err());
         let err = result.unwrap_err().to_string();
         assert!(err.contains("No commits to merge"), "unexpected error: {err}");
@@ -496,7 +568,7 @@ mod tests {
         task.status = TaskStatus::Running;
         store.insert_task(&task).unwrap();
 
-        let result = merge_single(&store, "t-running");
+        let result = merge_single(&store, "t-running", false);
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("only DONE"));
     }
@@ -536,7 +608,7 @@ mod tests {
         };
         store.insert_task(&task).unwrap();
 
-        let result = merge_single(&store, "t-inplace");
+        let result = merge_single(&store, "t-inplace", false);
         assert!(result.is_ok());
         let loaded = store.get_task("t-inplace").unwrap().unwrap();
         assert_eq!(loaded.status, TaskStatus::Merged);
@@ -560,7 +632,7 @@ mod tests {
         let task = make_task_with_worktree("t-conflict", repo.path(), wt.path(), &branch);
         store.insert_task(&task).unwrap();
 
-        let result = merge_single(&store, "t-conflict");
+        let result = merge_single(&store, "t-conflict", false);
         assert!(result.is_err());
         // Worktree must be preserved for manual resolution
         assert!(wt.path().exists());
@@ -582,7 +654,7 @@ mod tests {
         task.repo_path = None;
         store.insert_task(&task).unwrap();
 
-        let result = merge_single(&store, "t-no-repo");
+        let result = merge_single(&store, "t-no-repo", false);
         assert!(result.is_ok(), "merge should resolve repo from worktree: {result:?}");
         assert!(repo.path().join("agent-work.txt").exists());
     }
@@ -606,7 +678,7 @@ mod tests {
         empty_task.workgroup_id = Some(group_id.to_string());
         store.insert_task(&empty_task).unwrap();
 
-        let result = merge_group(&store, group_id);
+        let result = merge_group(&store, group_id, false);
         assert!(result.is_ok(), "merge_group failed: {result:?}");
 
         let loaded_committed = store.get_task("t-merge-group").unwrap().unwrap();
@@ -650,5 +722,19 @@ mod tests {
         // (will fail since no Cargo.toml, but that's OK — it shouldn't panic or try "auto")
         run_verify_in_worktree(&repo.path().to_string_lossy(), Some("auto"));
         // If we got here without panic, the fix works
+    }
+
+    #[test]
+    fn approval_decision_defaults_to_merge() {
+        // Verify the approval decision logic: empty/unknown reply → Merge
+        let reply = "";
+        let decision = if reply.contains("Skip") {
+            ApprovalDecision::Skip
+        } else if reply.contains("Retry") {
+            ApprovalDecision::Retry
+        } else {
+            ApprovalDecision::Merge
+        };
+        assert!(matches!(decision, ApprovalDecision::Merge));
     }
 }

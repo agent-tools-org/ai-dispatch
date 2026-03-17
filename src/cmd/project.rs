@@ -130,6 +130,11 @@ fn write_project_config(
     let project_path = aid_dir.join("project.toml");
     fs::create_dir_all(&aid_dir)
         .with_context(|| format!("Failed to create {}", aid_dir.display()))?;
+    let batches_dir = aid_dir.join("batches");
+    if !batches_dir.exists() {
+        std::fs::create_dir_all(&batches_dir)?;
+        eprintln!("[aid] Created .aid/batches/ for batch TOML files");
+    }
     if project_path.exists() {
         bail!("Project config already exists at {}", project_path.display());
     }

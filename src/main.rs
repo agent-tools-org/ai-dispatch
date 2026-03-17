@@ -310,9 +310,13 @@ async fn main() -> Result<()> {
         Commands::Retry { task_id, feedback, agent, dir } => {
             cmd::retry::run(store, cmd::retry::RetryArgs { task_id, feedback, agent, dir }).await?;
         }
-        Commands::Merge { task_id, group } => {
+        Commands::Merge {
+            task_id,
+            group,
+            approve,
+        } => {
             let group = resolve_group(group);
-            cmd::merge::run(store, task_id.as_deref(), group.as_deref())?;
+            cmd::merge::run(store, task_id.as_deref(), group.as_deref(), approve)?;
         }
         Commands::Respond {
             task_id,

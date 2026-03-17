@@ -325,6 +325,9 @@ Note: --dir, --team, --verify are set in [defaults], not as CLI flags."#)]
         /// Mark all done tasks in a workgroup as merged
         #[arg(long)]
         group: Option<String>,
+        /// Ask boss approval before merging
+        #[arg(long)]
+        approve: bool,
     },
     /// Send interactive input to a background task
     Respond {

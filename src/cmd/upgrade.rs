@@ -3,8 +3,6 @@
 // Deps: crate::paths, crate::store, std::env, std::process.
 
 use anyhow::{bail, Result};
-use std::env;
-use std::path::PathBuf;
 use std::process::Command;
 
 use crate::paths;
@@ -50,6 +48,6 @@ pub fn run(force: bool) -> Result<()> {
 }
 
 #[cfg(target_os = "macos")]
-fn home_cargo_bin() -> PathBuf {
-    PathBuf::from(env::var("HOME").unwrap_or_else(|_| ".".to_string())).join(".cargo/bin")
+fn home_cargo_bin() -> std::path::PathBuf {
+    std::path::PathBuf::from(std::env::var("HOME").unwrap_or_else(|_| ".".to_string())).join(".cargo/bin")
 }

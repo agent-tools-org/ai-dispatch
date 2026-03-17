@@ -378,9 +378,6 @@ fn record_failure(
 fn notify_task_completion(store: &Store, task_id: &str) -> Result<()> {
     if let Some(task) = store.get_task(task_id)? {
         notify::notify_completion(&task);
-        if let Some(ref wg_id) = task.workgroup_id {
-            notify::notify_workgroup_if_complete(store, wg_id);
-        }
     }
     Ok(())
 }

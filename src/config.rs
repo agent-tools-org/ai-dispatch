@@ -20,8 +20,6 @@ pub struct AidConfig {
     pub webhooks: Vec<WebhookConfig>,
     #[serde(default)]
     pub query: QueryConfig,
-    #[serde(default)]
-    pub hiboss: HibossConfig,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -110,33 +108,10 @@ fn default_max_duration() -> i64 {
     60
 }
 
-fn default_hiboss_priority() -> String {
-    "normal".to_string()
-}
-
 impl Default for BackgroundConfig {
     fn default() -> Self {
         Self {
             max_task_duration_mins: default_max_duration(),
-        }
-    }
-}
-
-#[derive(Debug, Clone, Deserialize)]
-pub struct HibossConfig {
-    #[serde(default)]
-    pub enabled: bool,
-    #[serde(default = "default_hiboss_priority")]
-    pub priority: String,
-    pub template: Option<String>,
-}
-
-impl Default for HibossConfig {
-    fn default() -> Self {
-        Self {
-            enabled: false,
-            priority: default_hiboss_priority(),
-            template: None,
         }
     }
 }
@@ -359,21 +334,6 @@ mod tests {
         .unwrap();
 
         assert!(config.selection.budget_mode);
-    }
-
-    #[test]
-    fn parses_hiboss_config() {
-        let config: AidConfig = toml::from_str(
-            r#"
-            [hiboss]
-            enabled = true
-            priority = "high"
-            "#,
-        )
-        .unwrap();
-
-        assert!(config.hiboss.enabled);
-        assert_eq!(config.hiboss.priority, "high");
     }
 
     #[test]

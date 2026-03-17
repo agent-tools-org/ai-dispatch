@@ -101,7 +101,8 @@ CLI: `aid project init` (interactive setup + CLAUDE.md sync), `aid project show`
 <!-- aid:start -->
 ## aid orchestration
 
-This project uses [aid](https://github.com/agent-tools-org/ai-dispatch) for AI task orchestration.
+This project uses [aid](https://github.com/agent-tools-org/ai-dispatch) as the primary development method.
+Use `aid run` to dispatch coding tasks to AI agents instead of writing code directly.
 
 - **Project**: ai-dispatch
 - **Profile**: production
@@ -123,4 +124,5 @@ This project uses [aid](https://github.com/agent-tools-org/ai-dispatch) for AI t
 - Review output: `aid show <id> --diff`
 - Batch dispatch: `aid batch <file> --parallel`
 - Project config: `.aid/project.toml`
+
 <!-- aid:end -->

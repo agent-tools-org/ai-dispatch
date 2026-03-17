@@ -25,6 +25,8 @@ pub struct ProjectConfig {
     #[serde(default)]
     pub profile: Option<String>,
     #[serde(default)]
+    pub max_task_cost: Option<f64>,
+    #[serde(default)]
     pub team: Option<String>,
     #[serde(default)]
     pub verify: Option<String>,
@@ -219,6 +221,9 @@ fn apply_profile(config: &mut ProjectConfig) {
 }
 
 fn apply_hobby_profile(config: &mut ProjectConfig) {
+    if config.max_task_cost.is_none() {
+        config.max_task_cost = Some(2.0);
+    }
     if config.budget.cost_limit_usd.is_none() {
         config.budget.cost_limit_usd = Some(5.0);
     }
@@ -226,6 +231,9 @@ fn apply_hobby_profile(config: &mut ProjectConfig) {
 }
 
 fn apply_standard_profile(config: &mut ProjectConfig) {
+    if config.max_task_cost.is_none() {
+        config.max_task_cost = Some(10.0);
+    }
     if config.verify.is_none() {
         config.verify = Some("auto".to_string());
     }
@@ -240,6 +248,9 @@ fn apply_standard_profile(config: &mut ProjectConfig) {
 }
 
 fn apply_production_profile(config: &mut ProjectConfig) {
+    if config.max_task_cost.is_none() {
+        config.max_task_cost = Some(25.0);
+    }
     if config.verify.is_none() {
         config.verify = Some(default_production_verify(config));
     }
@@ -318,6 +329,7 @@ id = "beta"
 profile = "standard"
 "#;
         let config = load_project(&write_project(dir.path(), contents)).unwrap();
+        assert_eq!(config.max_task_cost, Some(10.0));
         assert_eq!(config.verify.as_deref(), Some("auto"));
         assert_eq!(config.budget.cost_limit_usd, Some(20.0));
         assert!(config
@@ -332,12 +344,14 @@ profile = "standard"
         let contents = r#"[project]
 id = "gamma"
 profile = "standard"
+max_task_cost = 3.5
 verify = "custom verify"
 rules = ["explicit rule"]
 budget.window = "4h"
 budget.cost_limit_usd = 99.5
 "#;
         let config = load_project(&write_project(dir.path(), contents)).unwrap();
+        assert_eq!(config.max_task_cost, Some(3.5));
         assert_eq!(config.verify.as_deref(), Some("custom verify"));
         assert!(config.rules.iter().any(|rule| rule == "explicit rule"));
         assert!(config
@@ -394,6 +408,52 @@ budget = "$2000/month"
         let config = load_project(&write_project(dir.path(), contents)).unwrap();
         assert_eq!(config.budget.cost_limit_usd, Some(2000.0));
         assert_eq!(config.budget.window.as_deref(), Some("monthly"));
+    }
+
+    #[test]
+    fn parses_max_task_cost_from_toml() {
+        let dir = TempDir::new().unwrap();
+        let contents = r#"[project]
+id = "delta"
+max_task_cost = 7.25
+"#;
+        let config = load_project(&write_project(dir.path(), contents)).unwrap();
+        assert_eq!(config.max_task_cost, Some(7.25));
+    }
+
+    #[test]
+    fn profile_sets_default_max_task_costs() {
+        let dir = TempDir::new().unwrap();
+
+        let hobby = load_project(&write_project(
+            dir.path(),
+            r#"[project]
+id = "hobby"
+profile = "hobby"
+"#,
+        ))
+        .unwrap();
+        assert_eq!(hobby.max_task_cost, Some(2.0));
+
+        let standard = load_project(&write_project(
+            dir.path(),
+            r#"[project]
+id = "standard"
+profile = "standard"
+"#,
+        ))
+        .unwrap();
+        assert_eq!(standard.max_task_cost, Some(10.0));
+
+        let production = load_project(&write_project(
+            dir.path(),
+            r#"[project]
+id = "production"
+profile = "production"
+"#,
+        ))
+        .unwrap();
+        assert_eq!(production.max_task_cost, Some(25.0));
     }
 
     #[test]

@@ -22,7 +22,7 @@ Without an orchestrator, a multi-agent CLI workflow breaks down fast:
 
 ### Prerequisites
 
-Install Rust (1.85 or later, required for edition 2024) and whichever AI CLIs you want `aid` to orchestrate. `aid` auto-detects supported agents on your `PATH`: `gemini`, `codex`, `opencode`, `cursor`, `kilo`, `ob1`, `codebuff`, and `auto`.
+Install Rust (1.85 or later, required for edition 2024) and whichever AI CLIs you want `aid` to orchestrate. `aid` auto-detects supported agents on your `PATH`: `gemini`, `codex`, `opencode`, `cursor`, `kilo`, `codebuff`, and `auto`.
 
 ### Install
 
@@ -141,9 +141,6 @@ aid run opencode "Rename TaskRow to BoardRow in src/board.rs" \
 
 aid run cursor "Refine the TUI layout for narrow terminals" \
   --dir .
-
-aid run ob1 "Analyze the cost structure of this codebase" \
-  --dir . --read-only
 
 aid run codebuff "Refactor the auth module into separate files" \
   --dir .
@@ -330,7 +327,7 @@ Press `a` to toggle between today-only and all-time task views.
 
 Skills are methodology files loaded from `~/.aid/skills/` and appended to the effective prompt under a `--- Methodology ---` section. They make agent behavior more consistent across runs.
 
-Skills are auto-injected by default: coding agents (`codex`, `opencode`, `cursor`, `kilo`, `ob1`, `codebuff`) get the `implementer` skill, and `gemini` gets the `researcher` skill. Use `--skill` to add extras or `--no-skill` to disable auto-injection.
+Skills are auto-injected by default: coding agents (`codex`, `opencode`, `cursor`, `kilo`, `codebuff`) get the `implementer` skill, and `gemini` gets the `researcher` skill. Use `--skill` to add extras or `--no-skill` to disable auto-injection.
 
 Examples:
 
@@ -974,7 +971,7 @@ The diagram below is adapted from `DESIGN.md` to reflect the current `show` comm
 ├───────┴──────────┴──────────┴───────┤
 │         Agent Adapters              │
 │  ┌──────┐ ┌─────┐ ┌────────┐ ┌──────┐ ┌────┐ ┌───┐ ┌────────┐ ┌──────┐
-│  │Gemini│ │Codex│ │OpenCode│ │Cursor│ │Kilo│ │OB1│ │Codebuff│ │Custom│
+│  │Gemini│ │Codex│ │OpenCode│ │Cursor│ │Kilo│ │Codebuff│ │Custom│
 │  └──────┘ └─────┘ └────────┘ └──────┘ └────┘ └───┘ └────────┘ └──────┘
 └─────────────────────────────────────┘
 ```
@@ -983,7 +980,7 @@ How the pieces fit together:
 
 - The CLI entrypoint parses commands and routes them to task-oriented handlers such as `run`, `watch`, `show`, `usage`, and `mcp`.
 - The task classifier categorizes prompts into eight task types and estimates complexity, then the capability matrix scores each agent to pick the best fit.
-- The agent registry selects and instantiates adapters for `gemini`, `codex`, `opencode`, `cursor`, `kilo`, `ob1`, and `codebuff`.
+- The agent registry selects and instantiates adapters for `gemini`, `codex`, `opencode`, `cursor`, `kilo`, and `codebuff`.
 - The watcher parses streamed or buffered output into milestones, tool activity, usage totals, and completion events.
 - SQLite keeps task history, workgroups, and events queryable for `board`, `show`, `watch`, `usage`, and MCP clients.
 - Artifact files under `~/.aid/` preserve the raw execution trail so the dispatcher can review what actually happened.

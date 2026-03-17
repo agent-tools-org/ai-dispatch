@@ -25,6 +25,16 @@ pub(super) struct PromptBundle { pub effective_prompt: String, pub context_files
 #[allow(dead_code)]
 pub(super) enum PromptSource<'a> { Inline(&'a str), File(&'a str) }
 
+fn sanitize_injected_text(text: &str) -> String {
+    text.lines()
+        .filter(|line| {
+            let trimmed = line.trim_start();
+            !trimmed.starts_with("<aid-") && !trimmed.starts_with("</aid-")
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
 pub(super) fn build_prompt_bundle(store: &Store, args: &RunArgs, agent_kind: &AgentKind, workgroup: Option<&Workgroup>, requested_skills: &[String], current_task_id: &str) -> Result<PromptBundle> {
     let (file_context, context_files) = build_context_flags(agent_kind, &args.context)?;
     let milestones = if let Some(group_id) = args.group.as_deref() {
@@ -61,7 +71,7 @@ pub(super) fn build_prompt_bundle(store: &Store, args: &RunArgs, agent_kind: &Ag
     if let Some(ref group_id) = args.group {
         let sibling_summaries = prompt_context::collect_sibling_summaries(store, group_id, current_task_id)?;
         if !sibling_summaries.is_empty() {
-            let block = crate::cmd::summary::format_sibling_summaries(&sibling_summaries);
+            let block = sanitize_injected_text(&crate::cmd::summary::format_sibling_summaries(&sibling_summaries));
             effective_prompt = format!("{block}\n\n{effective_prompt}");
         }
     }
@@ -70,6 +80,7 @@ pub(super) fn build_prompt_bundle(store: &Store, args: &RunArgs, agent_kind: &Ag
 
     // Inject relevant memories from past tasks
     if let Some((memory_block, memory_ids)) = prompt_context::inject_memories(store, &args.prompt, 10)? {
+        let memory_block = sanitize_injected_text(&memory_block);
         effective_prompt = format!("{memory_block}\n\n{effective_prompt}");
         injected_memory_ids = memory_ids;
     }
@@ -96,7 +107,7 @@ pub(super) fn build_prompt_bundle(store: &Store, args: &RunArgs, agent_kind: &Ag
                 for entry in &relevant {
                     project_topics.extend(prompt_context::extract_words(&entry.topic));
                 }
-                let knowledge_block = prompt_context::format_knowledge_block(&pc.id, &relevant);
+                let knowledge_block = sanitize_injected_text(&prompt_context::format_knowledge_block(&pc.id, &relevant));
                 effective_prompt = format!("{knowledge_block}\n\n{effective_prompt}");
             }
             eprintln!("[aid] Project '{}' detected: {} rule(s), {}/{} knowledge entries", pc.id, rules_count, relevant.len(), total_knowledge);
@@ -138,7 +149,7 @@ pub(super) fn build_prompt_bundle(store: &Store, args: &RunArgs, agent_kind: &Ag
             };
             eprintln!("[aid] Injected {}/{} knowledge entries (relevance-filtered)", relevant.len(), total_entries);
             if !relevant.is_empty() {
-                let knowledge_block = prompt_context::format_knowledge_block(team_id, &relevant);
+                let knowledge_block = sanitize_injected_text(&prompt_context::format_knowledge_block(team_id, &relevant));
                 effective_prompt = format!("{knowledge_block}\n\n{effective_prompt}");
             }
         }
@@ -571,3 +582,22 @@ fn normalize_relative_path(path: &Path) -> PathBuf {
 #[cfg(test)]
 #[path = "run_prompt/tests.rs"]
 mod tests;
+
+#[cfg(test)]
+mod sanitize_tests {
+    use super::sanitize_injected_text;
+
+    #[test]
+    fn sanitize_strips_structural_tags() {
+        let input = "keep\n<aid-project-rules>\ninside\n</aid-team-rules>\nend";
+        let sanitized = sanitize_injected_text(input);
+        assert_eq!(sanitized, "keep\ninside\nend");
+    }
+
+    #[test]
+    fn sanitize_preserves_normal_lines() {
+        let input = "alpha\n beta\n[Task]\nplain text";
+        let sanitized = sanitize_injected_text(input);
+        assert_eq!(sanitized, input);
+    }
+}

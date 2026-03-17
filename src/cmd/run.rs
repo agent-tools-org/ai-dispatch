@@ -49,6 +49,7 @@ pub struct RunArgs {
     pub hooks: Vec<String>,
     pub template: Option<String>,
     pub background: bool,
+    pub dry_run: bool,
     pub announce: bool,
     pub parent_task_id: Option<String>,
     pub on_done: Option<String>,
@@ -68,6 +69,14 @@ pub struct RunArgs {
 
 fn resolve_max_duration_mins(timeout: Option<u64>, max_duration_mins: Option<i64>) -> Option<i64> {
     max_duration_mins.or_else(|| timeout.map(|secs| secs.div_ceil(60) as i64))
+}
+
+fn preview_prompt(prompt: &str, max_chars: usize) -> String {
+    let mut preview: String = prompt.chars().take(max_chars).collect();
+    if prompt.chars().count() > max_chars {
+        preview.push_str("...");
+    }
+    preview
 }
 
 fn validate_dispatch(args: &RunArgs, agent_kind: &AgentKind) -> Vec<String> {
@@ -267,6 +276,34 @@ pub async fn run(store: Arc<Store>, mut args: RunArgs) -> Result<TaskId> {
     let prompt_bundle = run_prompt::build_prompt_bundle(&store, &args, &agent_kind, workgroup.as_ref(), &requested_skills, task_id.as_str())?;
     store.update_resolved_prompt(task_id.as_str(), &prompt_bundle.effective_prompt)?;
     store.update_prompt_tokens(task_id.as_str(), prompt_bundle.prompt_tokens)?;
+    if args.dry_run {
+        let estimated_cost = crate::cost::estimate_cost(
+            prompt_bundle.prompt_tokens,
+            effective_model.as_deref(),
+            agent_kind,
+        );
+        println!("[dry-run] Task: {task_id}");
+        println!("[dry-run] Agent: {agent_display_name}");
+        println!(
+            "[dry-run] Prompt: {}",
+            preview_prompt(&prompt_bundle.effective_prompt, 200)
+        );
+        if !prompt_bundle.context_files.is_empty() {
+            println!(
+                "[dry-run] Context: {}",
+                prompt_bundle.context_files.join(", ")
+            );
+        }
+        if !requested_skills.is_empty() {
+            println!("[dry-run] Skills: {}", requested_skills.join(", "));
+        }
+        println!("[dry-run] Estimated tokens: ~{}", prompt_bundle.prompt_tokens);
+        println!(
+            "[dry-run] Estimated cost: {}",
+            crate::cost::format_cost(estimated_cost)
+        );
+        return Ok(task_id);
+    }
     let opts = RunOpts {
         dir: effective_dir.clone(),
         output: args.output.clone(),
@@ -630,7 +667,9 @@ fn git_diff_stat_output(dir: &Path, args: &[&str]) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::store::Store;
     use std::process::Command;
+    use std::sync::Arc;
     use tempfile::TempDir;
 
     fn git(dir: &std::path::Path, args: &[&str]) {
@@ -747,6 +786,32 @@ mod tests {
     #[test]
     fn resolve_max_duration_mins_preserves_explicit_minutes() {
         assert_eq!(resolve_max_duration_mins(Some(300), Some(2)), Some(2));
+    }
+
+    #[tokio::test]
+    async fn dry_run_returns_without_starting_task() {
+        let temp = TempDir::new().unwrap();
+        let _aid_home = paths::AidHomeGuard::set(temp.path());
+        crate::paths::ensure_dirs().unwrap();
+        let store = Arc::new(Store::open_memory().unwrap());
+
+        let task_id = run(
+            store.clone(),
+            RunArgs {
+                agent_name: "codex".to_string(),
+                prompt: "Inspect the repository state".to_string(),
+                dry_run: true,
+                skills: vec![NO_SKILL_SENTINEL.to_string()],
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+
+        let task = store.get_task(task_id.as_str()).unwrap().unwrap();
+        assert_eq!(task.status, TaskStatus::Pending);
+        assert!(task.resolved_prompt.is_some());
+        assert!(task.prompt_tokens.is_some());
     }
 
 }

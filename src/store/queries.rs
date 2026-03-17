@@ -17,6 +17,10 @@ const SIMILAR_TASK_STOPWORDS: &[&str] = &[
     "into", "using", "while", "when", "then", "which",
 ];
 
+fn escape_like(s: &str) -> String {
+    s.replace('%', r"\%").replace('_', r"\_")
+}
+
 fn extract_similar_keywords(prompt: &str) -> Vec<String> {
     let mut candidates: Vec<(String, usize)> = prompt
         .split_whitespace()
@@ -444,12 +448,12 @@ impl Store {
     ) -> Result<Vec<Memory>> {
         let conn = self.db();
         let now = Local::now().to_rfc3339();
-        let pattern = format!("%{}%", query);
+        let pattern = format!("%{}%", escape_like(query));
         let mut stmt = conn.prepare(
             "SELECT id, memory_type, content, source_task_id, agent, project_path, content_hash,
              created_at, expires_at, supersedes, version, inject_count, last_injected_at, success_count
              FROM memories
-             WHERE content LIKE ?1
+             WHERE content LIKE ?1 ESCAPE '\\'
                AND (?2 IS NULL OR project_path = ?2)
                AND (expires_at IS NULL OR expires_at > ?3)
              ORDER BY created_at DESC
@@ -563,5 +567,43 @@ mod tests {
         );
         let results = store.find_similar_tasks("Short", 3).unwrap();
         assert!(results.is_empty());
+    }
+
+    #[test]
+    fn search_memories_escapes_wildcards() {
+        let store = Store::open_memory().unwrap();
+        let conn = store.db();
+        conn.execute(
+            "INSERT INTO memories (id, memory_type, content, source_task_id, agent, project_path,
+             content_hash, created_at, expires_at, supersedes, version, inject_count, last_injected_at,
+             success_count)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)",
+            params![
+                "m-100-percent",
+                "task_output",
+                "100% success rate",
+                Option::<String>::None,
+                Option::<String>::None,
+                Option::<String>::None,
+                "hash-100-percent",
+                "2026-03-15T00:00:00Z",
+                Option::<String>::None,
+                Option::<String>::None,
+                1,
+                0,
+                Option::<String>::None,
+                0,
+            ],
+        )
+        .unwrap();
+        drop(conn);
+
+        let percent_results = store.search_memories("100%", None, 10).unwrap();
+        assert_eq!(percent_results.len(), 1);
+        assert_eq!(percent_results[0].content, "100% success rate");
+
+        let plain_results = store.search_memories("100", None, 10).unwrap();
+        assert_eq!(plain_results.len(), 1);
+        assert_eq!(plain_results[0].content, "100% success rate");
     }
 }

@@ -28,7 +28,13 @@ pub fn compose_prompt(
             .iter()
             .map(|f| {
                 let source = f.source_task_id.as_deref().unwrap_or("manual");
-                format!("- [{source}] {}", f.content)
+                let content = if f.content.len() > 500 {
+                    let safe = f.content.floor_char_boundary(497);
+                    format!("{}...", &f.content[..safe])
+                } else {
+                    f.content.clone()
+                };
+                format!("- [{source}] {content}")
             })
             .collect::<Vec<_>>()
             .join("\n");
@@ -37,7 +43,15 @@ pub fn compose_prompt(
     if !milestones.is_empty() {
         let findings = milestones
             .iter()
-            .map(|(task_id, detail)| format!("- [{task_id}] {detail}"))
+            .map(|(task_id, detail)| {
+                let detail = if detail.len() > 500 {
+                    let safe = detail.floor_char_boundary(497);
+                    format!("{}...", &detail[..safe])
+                } else {
+                    detail.clone()
+                };
+                format!("- [{task_id}] {detail}")
+            })
             .collect::<Vec<_>>()
             .join("\n");
         sections.push(format!("--- Shared Findings ---\n{findings}"));
@@ -175,5 +189,47 @@ mod tests {
         let prompt = compose_prompt("investigate", None, None, &[], &findings);
         assert!(prompt.contains("[Shared Findings]"));
         assert!(prompt.contains("gamma can be zero"));
+    }
+
+    #[test]
+    fn finding_content_truncated_at_500() {
+        let long = "a".repeat(1000);
+        let findings = vec![Finding {
+            id: 1,
+            workgroup_id: "wg-1".to_string(),
+            content: long,
+            source_task_id: Some("t-100".to_string()),
+            created_at: Local::now(),
+        }];
+
+        let prompt = compose_prompt("investigate", None, None, &[], &findings);
+
+        assert!(prompt.contains(&format!("- [t-100] {}...", "a".repeat(497))));
+        assert!(!prompt.contains(&"a".repeat(498)));
+    }
+
+    #[test]
+    fn milestone_content_truncated_at_500() {
+        let milestones = vec![("t-1000".to_string(), "b".repeat(1000))];
+
+        let prompt = compose_prompt("ship it", None, None, &milestones, &[]);
+
+        assert!(prompt.contains(&format!("- [t-1000] {}...", "b".repeat(497))));
+        assert!(!prompt.contains(&"b".repeat(498)));
+    }
+
+    #[test]
+    fn short_finding_unchanged() {
+        let findings = vec![Finding {
+            id: 1,
+            workgroup_id: "wg-1".to_string(),
+            content: "short finding".to_string(),
+            source_task_id: Some("t-100".to_string()),
+            created_at: Local::now(),
+        }];
+
+        let prompt = compose_prompt("investigate", None, None, &[], &findings);
+
+        assert!(prompt.contains("- [t-100] short finding"));
     }
 }

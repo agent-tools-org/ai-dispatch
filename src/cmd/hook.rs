@@ -36,6 +36,8 @@ fn render_session_start(project: Option<&ProjectConfig>, team: Option<&TeamConfi
             config.id, profile, team_id
         ));
         lines.push(format!("Rules: {rules} rule(s)"));
+    } else {
+        lines.push("Tip: run `aid project init` to configure this project for aid orchestration".to_string());
     }
     lines.join("\n")
 }

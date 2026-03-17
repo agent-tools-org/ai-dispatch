@@ -44,7 +44,8 @@ fn generate_aid_section(config: &ProjectConfig) -> String {
         START_MARKER.to_string(),
         "## aid orchestration".to_string(),
         String::new(),
-        "This project uses [aid](https://github.com/agent-tools-org/ai-dispatch) for AI task orchestration.".to_string(),
+        "This project uses [aid](https://github.com/agent-tools-org/ai-dispatch) as the primary development method.".to_string(),
+        "Use `aid run` to dispatch coding tasks to AI agents instead of writing code directly.".to_string(),
         String::new(),
     ];
     push_value(&mut lines, "Project", Some(config.id.as_str()));
@@ -65,6 +66,7 @@ fn generate_aid_section(config: &ProjectConfig) -> String {
     lines.push("- Review output: `aid show <id> --diff`".to_string());
     lines.push("- Batch dispatch: `aid batch <file> --parallel`".to_string());
     lines.push("- Project config: `.aid/project.toml`".to_string());
+    lines.push(String::new());
     lines.push(END_MARKER.to_string());
     lines.join("\n") + "\n"
 }

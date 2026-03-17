@@ -37,6 +37,15 @@ fn run_args(skills: Vec<String>) -> RunArgs {
     }
 }
 
+fn build_prompt_args(output: Option<&str>) -> RunArgs {
+    RunArgs {
+        agent_name: "codex".to_string(),
+        prompt: "Write the requested content".to_string(),
+        output: output.map(str::to_string),
+        ..Default::default()
+    }
+}
+
 #[test]
 fn effective_skills_auto_apply_defaults() {
     let temp = tempfile::tempdir().unwrap();
@@ -78,6 +87,38 @@ fn extract_words_normalizes_keywords() {
     assert!(words.contains("rs"));
     assert!(words.contains("config"));
     assert!(words.contains("load"));
+}
+
+#[test]
+fn build_prompt_bundle_includes_output_instruction_when_output_is_set() {
+    let store = Store::open_memory().unwrap();
+    let bundle = build_prompt_bundle(
+        &store,
+        &build_prompt_args(Some("out.txt")),
+        &AgentKind::Codex,
+        None,
+        &[],
+        "task-1",
+    )
+    .unwrap();
+
+    assert!(bundle.effective_prompt.contains("Your final response will be saved to a file."));
+}
+
+#[test]
+fn build_prompt_bundle_omits_output_instruction_when_output_is_not_set() {
+    let store = Store::open_memory().unwrap();
+    let bundle = build_prompt_bundle(
+        &store,
+        &build_prompt_args(None),
+        &AgentKind::Codex,
+        None,
+        &[],
+        "task-1",
+    )
+    .unwrap();
+
+    assert!(!bundle.effective_prompt.contains("Your final response will be saved to a file."));
 }
 
 #[tokio::test]

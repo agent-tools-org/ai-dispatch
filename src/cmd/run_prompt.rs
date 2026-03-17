@@ -175,6 +175,10 @@ pub(super) fn build_prompt_bundle(store: &Store, args: &RunArgs, agent_kind: &Ag
         }
     }
 
+    if args.output.is_some() {
+        effective_prompt = format!("{effective_prompt}\n\n{}", output_file_instruction());
+    }
+
     // Compact prompt if it exceeds token budget
     let effective_prompt = maybe_compact_prompt(&effective_prompt, PROMPT_TOKEN_LIMIT);
     let prompt_tokens = templates::estimate_tokens(&effective_prompt) as i64;
@@ -193,6 +197,10 @@ pub(super) fn inject_skill(prompt: &str, requested_skills: &[String]) -> Result<
     if requested_skills.is_empty() { return Ok(prompt.to_string()); }
     let skill_text = skills::load_skills(requested_skills)?;
     Ok(format!("{prompt}\n\n--- Methodology ---\n{skill_text}"))
+}
+
+fn output_file_instruction() -> String {
+    "IMPORTANT: Your final response will be saved to a file. Write ONLY the requested deliverable content in your final response. Do NOT include planning, reasoning, chain-of-thought, or meta-commentary. The file should contain only the finished work product.".to_string()
 }
 
 pub(super) fn build_context_flags(agent_kind: &AgentKind, context_args: &[String]) -> Result<(Option<String>, Vec<String>)> {

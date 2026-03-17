@@ -63,6 +63,11 @@ pub struct RunArgs {
     pub scope: Vec<String>,
     pub judge_retry: bool,
     pub existing_task_id: Option<TaskId>,
+    pub timeout: Option<u64>,
+}
+
+fn resolve_max_duration_mins(timeout: Option<u64>, max_duration_mins: Option<i64>) -> Option<i64> {
+    max_duration_mins.or_else(|| timeout.map(|secs| secs.div_ceil(60) as i64))
 }
 
 fn validate_dispatch(args: &RunArgs, agent_kind: &AgentKind) -> Vec<String> {
@@ -89,6 +94,8 @@ fn validate_dispatch(args: &RunArgs, agent_kind: &AgentKind) -> Vec<String> {
     warnings
 }
 pub async fn run(store: Arc<Store>, mut args: RunArgs) -> Result<TaskId> {
+    args.max_duration_mins = resolve_max_duration_mins(args.timeout, args.max_duration_mins);
+
     if let Some(n) = args.best_of {
         return Box::pin(run_bestof::run_best_of(store, args, n)).await;
     }
@@ -729,6 +736,17 @@ mod tests {
     #[test]
     fn validate_dispatch_warns_research_worktree() {
         assert_eq!(validate_dispatch(&RunArgs { prompt: "valid prompt text".to_string(), worktree: Some("wt".to_string()), ..Default::default() }, &AgentKind::Gemini), vec!["Research agent with --worktree is unusual, did you mean a code agent?".to_string()]);
+    }
+
+    #[test]
+    fn resolve_max_duration_mins_uses_timeout_when_minutes_missing() {
+        assert_eq!(resolve_max_duration_mins(Some(300), None), Some(5));
+        assert_eq!(resolve_max_duration_mins(Some(301), None), Some(6));
+    }
+
+    #[test]
+    fn resolve_max_duration_mins_preserves_explicit_minutes() {
+        assert_eq!(resolve_max_duration_mins(Some(300), Some(2)), Some(2));
     }
 
 }

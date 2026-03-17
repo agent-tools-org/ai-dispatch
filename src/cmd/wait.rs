@@ -11,7 +11,19 @@ use crate::cost;
 use crate::store::Store;
 use crate::types::{TaskFilter, TaskStatus};
 
-pub async fn run(store: &Arc<Store>, task_ids: &[String], group: Option<&str>, exit_on_await: bool) -> Result<()> {
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) enum WaitOutcome {
+    Completed,
+    TimedOut(Vec<String>),
+}
+
+pub async fn run(
+    store: &Arc<Store>,
+    task_ids: &[String],
+    group: Option<&str>,
+    exit_on_await: bool,
+    timeout_secs: Option<u64>,
+) -> Result<()> {
     let task_ids = if task_ids.is_empty() {
         current_running_ids(store, group)?
     } else {
@@ -24,10 +36,48 @@ pub async fn run(store: &Arc<Store>, task_ids: &[String], group: Option<&str>, e
     }
 
     println!("Waiting for {} task(s): {}", task_ids.len(), task_ids.join(", "));
-    wait_for_task_ids(store, &task_ids, exit_on_await).await
+    match wait_for_task_ids(
+        store,
+        &task_ids,
+        exit_on_await,
+        timeout_secs.map(Duration::from_secs),
+    )
+    .await?
+    {
+        WaitOutcome::Completed => Ok(()),
+        WaitOutcome::TimedOut(running) => {
+            let secs = timeout_secs.unwrap_or_default();
+            eprintln!(
+                "[aid] Timeout after {}s. Still running: {}",
+                secs,
+                running.join(", ")
+            );
+            std::process::exit(124);
+        }
+    }
 }
 
-pub async fn wait_for_task_ids(store: &Arc<Store>, task_ids: &[String], exit_on_await: bool) -> Result<()> {
+pub(crate) async fn wait_for_task_ids(
+    store: &Arc<Store>,
+    task_ids: &[String],
+    exit_on_await: bool,
+    timeout: Option<Duration>,
+) -> Result<WaitOutcome> {
+    if let Some(timeout) = timeout {
+        match tokio::time::timeout(timeout, wait_for_task_ids_inner(store, task_ids, exit_on_await)).await {
+            Ok(result) => result,
+            Err(_) => Ok(WaitOutcome::TimedOut(still_running_task_ids(store, task_ids)?)),
+        }
+    } else {
+        wait_for_task_ids_inner(store, task_ids, exit_on_await).await
+    }
+}
+
+async fn wait_for_task_ids_inner(
+    store: &Arc<Store>,
+    task_ids: &[String],
+    exit_on_await: bool,
+) -> Result<WaitOutcome> {
     let mut last_status: HashMap<String, String> = HashMap::new();
     let mut last_milestone: HashMap<String, String> = HashMap::new();
     let total = task_ids.len();
@@ -92,7 +142,7 @@ pub async fn wait_for_task_ids(store: &Arc<Store>, task_ids: &[String], exit_on_
                     .unwrap_or("");
                 println!("{} {}", task_id, prompt);
                 println!("Use: aid respond {} \"your answer\"", task_id);
-                return Ok(());
+                return Ok(WaitOutcome::Completed);
             }
 
             if matches!(status, TaskStatus::Pending | TaskStatus::Running | TaskStatus::AwaitingInput) {
@@ -102,7 +152,7 @@ pub async fn wait_for_task_ids(store: &Arc<Store>, task_ids: &[String], exit_on_
 
         if remaining == 0 {
             println!("All {} task(s) completed.", total);
-            return Ok(());
+            return Ok(WaitOutcome::Completed);
         }
 
         sleep(Duration::from_secs(2)).await;
@@ -115,4 +165,73 @@ fn current_running_ids(store: &Arc<Store>, group: Option<&str>) -> Result<Vec<St
         tasks.retain(|t| t.workgroup_id.as_deref() == Some(group_id));
     }
     Ok(tasks.into_iter().map(|task| task.id.to_string()).collect())
+}
+
+fn still_running_task_ids(store: &Arc<Store>, task_ids: &[String]) -> Result<Vec<String>> {
+    let mut running = Vec::new();
+    for task_id in task_ids {
+        if let Some(task) = store.get_task(task_id)?
+            && !task.status.is_terminal()
+        {
+            running.push(task_id.clone());
+        }
+    }
+    Ok(running)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use chrono::Local;
+    use crate::types::{AgentKind, Task, TaskId, TaskStatus, VerifyStatus};
+
+    fn make_task(id: &str, status: TaskStatus) -> Task {
+        Task {
+            id: TaskId(id.to_string()),
+            agent: AgentKind::Codex,
+            custom_agent_name: None,
+            prompt: "test prompt".to_string(),
+            resolved_prompt: None,
+            status,
+            parent_task_id: None,
+            workgroup_id: None,
+            caller_kind: None,
+            caller_session_id: None,
+            agent_session_id: None,
+            repo_path: None,
+            worktree_path: None,
+            worktree_branch: None,
+            log_path: None,
+            output_path: None,
+            tokens: None,
+            prompt_tokens: None,
+            duration_ms: None,
+            model: None,
+            cost_usd: None,
+            exit_code: None,
+            created_at: Local::now(),
+            completed_at: None,
+            verify: None,
+            verify_status: VerifyStatus::Skipped,
+            read_only: false,
+            budget: false,
+        }
+    }
+
+    #[tokio::test]
+    async fn wait_for_task_ids_times_out_with_running_tasks() {
+        let store = Arc::new(Store::open_memory().unwrap());
+        store.insert_task(&make_task("t-run", TaskStatus::Running)).unwrap();
+
+        let outcome = wait_for_task_ids(
+            &store,
+            &[String::from("t-run")],
+            false,
+            Some(Duration::from_millis(10)),
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(outcome, WaitOutcome::TimedOut(vec![String::from("t-run")]));
+    }
 }

@@ -13,7 +13,7 @@ use crate::types::TaskFilter;
 /// With `quiet`, delegates to wait logic (silent blocking).
 pub async fn run(store: &Arc<Store>, task_ids: &[String], group: Option<&str>, quiet: bool, exit_on_await: bool) -> Result<()> {
     if quiet {
-        return crate::cmd::wait::run(store, task_ids, group, exit_on_await).await;
+        return crate::cmd::wait::run(store, task_ids, group, exit_on_await, None).await;
     }
 
     loop {

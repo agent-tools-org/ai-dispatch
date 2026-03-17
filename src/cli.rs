@@ -613,7 +613,11 @@ pub enum FindingCommands {
         /// Workgroup ID
         group: String,
         /// Finding content
-        content: String,
+        content: Option<String>,
+        #[arg(long)]
+        stdin: bool,
+        #[arg(long)]
+        file: Option<String>,
         /// Source task ID (optional)
         #[arg(long)]
         task: Option<String>,

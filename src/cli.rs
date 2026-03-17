@@ -98,6 +98,9 @@ Hint: If passing file paths, use --context <path> not positional args"#)]
         /// Run in background
         #[arg(long)]
         bg: bool,
+        /// Preview dispatch without running the agent
+        #[arg(long)]
+        dry_run: bool,
         /// Run in read-only mode (no file writes)
         #[arg(long)]
         read_only: bool,
@@ -144,6 +147,9 @@ Note: --dir, --team, --verify are set in [defaults], not as CLI flags."#)]
         /// Wait for dispatched tasks to finish
         #[arg(long)]
         wait: bool,
+        /// Preview task dispatch without running agents
+        #[arg(long)]
+        dry_run: bool,
         /// Limit number of concurrent tasks
         #[arg(long)]
         max_concurrent: Option<usize>,

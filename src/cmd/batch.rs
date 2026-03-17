@@ -9,7 +9,13 @@ use crate::store::Store;
 #[path = "batch_validate.rs"]
 mod batch_validate;
 use batch_validate::{find_ready_tasks, load_task_outcome, resolve_dependencies, task_has_dependencies, task_label, validate_batch_config};
-pub struct BatchArgs { pub file: String, pub parallel: bool, pub wait: bool, pub max_concurrent: Option<usize> }
+pub struct BatchArgs {
+    pub file: String,
+    pub parallel: bool,
+    pub wait: bool,
+    pub dry_run: bool,
+    pub max_concurrent: Option<usize>,
+}
 pub async fn run(store: Arc<Store>, args: BatchArgs) -> Result<()> {
     if args.max_concurrent == Some(0) {
         anyhow::bail!("--max-concurrent must be at least 1");
@@ -35,6 +41,16 @@ pub async fn run(store: Arc<Store>, args: BatchArgs) -> Result<()> {
                 task.group = Some(wg_id.clone());
             }
         }
+    }
+    if args.dry_run {
+        println!("Batch: previewing {total} task(s) from {}", path.display());
+        for task in &config.tasks {
+            let mut run_args = task_to_run_args(task, false, &store);
+            run_args.dry_run = true;
+            let _ = run::run(store.clone(), run_args).await?;
+        }
+        println!("Batch: {total} task(s) previewed");
+        return Ok(());
     }
     println!("Batch: dispatching {total} task(s) from {}", path.display());
     let task_ids = if has_dependencies && args.parallel {
@@ -137,6 +153,7 @@ fn task_to_run_args(task: &batch::BatchTask, background: bool, store: &Arc<Store
         skills: task.skills.clone().unwrap_or_default(),
         hooks: task.hooks.clone().unwrap_or_default(),
         background,
+        dry_run: false,
         announce: true,
         cascade: task.fallback.as_deref().map(|f| vec![f.to_string()]).unwrap_or_default(),
         read_only: task.read_only,
@@ -493,6 +510,46 @@ mod tests {
             run_args.context,
             vec!["src/lib.rs".to_string(), "src/main.rs:run".to_string()]
         );
+    }
+
+    #[test]
+    fn task_to_run_args_defaults_dry_run_to_false() {
+        let store = Arc::new(Store::open_memory().unwrap());
+        let run_args = task_to_run_args(
+            &batch::BatchTask {
+                id: None,
+                name: None,
+                agent: "codex".to_string(),
+                team: None,
+                prompt: "test".to_string(),
+                dir: None,
+                output: None,
+                model: None,
+                worktree: None,
+                group: None,
+                verify: None,
+                max_duration_mins: None,
+                context: None,
+                skills: None,
+                hooks: None,
+                depends_on: None,
+                parent: None,
+                context_from: None,
+                fallback: None,
+                scope: None,
+                read_only: false,
+                budget: false,
+                judge: None,
+                best_of: None,
+                on_success: None,
+                on_fail: None,
+                conditional: false,
+            },
+            false,
+            &store,
+        );
+
+        assert!(!run_args.dry_run);
     }
 
     #[test]

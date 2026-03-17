@@ -108,6 +108,7 @@ async fn main() -> Result<()> {
             run_extras,
             no_skill,
             bg,
+            dry_run,
             read_only,
             judge,
             peer_review,
@@ -177,6 +178,7 @@ async fn main() -> Result<()> {
                     hooks: extras.hook,
                     template: extras.template,
                     background: bg,
+                    dry_run,
                     announce: true,
                     on_done: extras.on_done,
                     cascade: extras.cascade,
@@ -201,6 +203,7 @@ async fn main() -> Result<()> {
             file,
             parallel,
             wait,
+            dry_run,
             max_concurrent,
         } => {
             cmd::batch::run(
@@ -209,6 +212,7 @@ async fn main() -> Result<()> {
                     file,
                     parallel,
                     wait,
+                    dry_run,
                     max_concurrent,
                 },
             )

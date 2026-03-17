@@ -113,6 +113,9 @@ Hint: If passing file paths, use --context <path> not positional args"#)]
         /// Custom task ID (default: auto-generated t-xxxx)
         #[arg(long, value_name = "ID")]
         id: Option<String>,
+        /// Task timeout in seconds (converted to max_duration_mins internally)
+        #[arg(long)]
+        timeout: Option<u64>,
     },
     #[command(after_help = r#"Examples:
   aid batch tasks.toml --parallel
@@ -180,6 +183,9 @@ Note: --dir, --team, --verify are set in [defaults], not as CLI flags."#)]
         /// Exit when task enters AwaitingInput, print task ID and prompt
         #[arg(long)]
         exit_on_await: bool,
+        /// Stop waiting after N seconds and exit with code 124 if tasks remain running
+        #[arg(long)]
+        timeout: Option<u64>,
     },
     /// List all tasks with status
     Board {
@@ -698,6 +704,30 @@ mod tests {
                 assert_eq!(peer_review, Some("gemini".to_string()))
             }
             _ => panic!("expected Run"),
+        }
+    }
+
+    #[test]
+    fn run_timeout_flag_parses() {
+        let cli = Cli::try_parse_from(["aid", "run", "codex", "task", "--timeout", "300"])
+            .unwrap();
+        match cli.command {
+            Commands::Run { timeout, .. } => assert_eq!(timeout, Some(300)),
+            _ => panic!("expected Run"),
+        }
+    }
+
+    #[test]
+    fn watch_timeout_flag_parses() {
+        let cli = Cli::try_parse_from(["aid", "watch", "--quiet", "--timeout", "60", "--group", "wg-a"])
+            .unwrap();
+        match cli.command {
+            Commands::Watch { timeout, group, quiet, .. } => {
+                assert!(quiet);
+                assert_eq!(timeout, Some(60));
+                assert_eq!(group, Some("wg-a".to_string()));
+            }
+            _ => panic!("expected Watch"),
         }
     }
 

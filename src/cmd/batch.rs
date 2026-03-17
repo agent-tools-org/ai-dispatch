@@ -47,7 +47,7 @@ pub async fn run(store: Arc<Store>, args: BatchArgs) -> Result<()> {
         dispatch_sequential(store.clone(), &config.tasks).await?
     };
     if args.wait && args.parallel && !has_dependencies && !task_ids.is_empty() {
-        crate::cmd::wait::wait_for_task_ids(&store, &task_ids, false).await?;
+        crate::cmd::wait::wait_for_task_ids(&store, &task_ids, false, None).await?;
     }
     let archive_dir = crate::paths::aid_dir().join("batches");
     if let Err(e) = std::fs::create_dir_all(&archive_dir) {

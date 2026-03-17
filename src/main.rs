@@ -115,6 +115,7 @@ async fn main() -> Result<()> {
             metric,
             parent,
             id,
+            timeout,
         } => {
             let config = config::load_config().unwrap_or_default();
             let budget = budget || config.selection.budget_mode;
@@ -190,6 +191,7 @@ async fn main() -> Result<()> {
                     scope,
                     parent_task_id: parent,
                     existing_task_id: id.map(crate::types::TaskId),
+                    timeout,
                     ..Default::default()
                 },
             )
@@ -234,9 +236,14 @@ async fn main() -> Result<()> {
             tui: false,
             quiet,
             exit_on_await,
+            timeout,
         } => {
             let group = resolve_group(group);
-            cmd::watch::run(&store, &task_ids, group.as_deref(), quiet, exit_on_await).await?;
+            if quiet {
+                cmd::wait::run(&store, &task_ids, group.as_deref(), exit_on_await, timeout).await?;
+            } else {
+                cmd::watch::run(&store, &task_ids, group.as_deref(), quiet, exit_on_await).await?;
+            }
         }
         Commands::Board {
             running,

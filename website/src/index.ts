@@ -1,7 +1,7 @@
 // aid-website — Cloudflare Worker for aid.agent-tools.org
 // Serves: HTML landing page, /llms.txt, /llms-full.txt, /install.sh, /api/*
 
-const VERSION = "8.6.0";
+const VERSION = "8.9.1";
 const SITE_URL = "https://aid.agent-tools.org";
 const REPO_URL = "https://github.com/agent-tools-org/ai-dispatch";
 const META_DESCRIPTION =
@@ -42,7 +42,7 @@ const COMMANDS: Command[] = [
   { name: "output", purpose: "Show task output directly without additional metadata.", example: "aid output t-1234" },
   { name: "ask", purpose: "Quick research or exploration task.", example: 'aid ask "How does the retry flow work in this repo?"' },
   { name: "mcp", purpose: "Start the stdio MCP server for Claude Code or other MCP clients.", example: "aid mcp" },
-  { name: "merge", purpose: "Mark done tasks as merged or perform bulk workgroup merges.", example: "aid merge --group wg-a3f1" },
+  { name: "merge", purpose: "Mark done tasks as merged. Supports --group for bulk merge, --approve for interactive approval via hiboss.", example: "aid merge --group wg-a3f1 --approve" },
   { name: "clean", purpose: "Remove old tasks, orphaned worktrees, and logs.", example: "aid clean --days 30" },
   { name: "agent", purpose: "Manage custom agent definitions: list, show, add, remove, fork.", example: "aid agent fork codex --as codex-fast" },
   { name: "config", purpose: "Inspect agent profiles, skills, pricing, prompt token budget.", example: "aid config prompt-budget" },
@@ -148,6 +148,12 @@ function buildLLMSText(): string {
   lines.push(`## Agent Memory (v5.4)`);
   lines.push(`Project-scoped persistent knowledge auto-injected into agent prompts.`);
   lines.push(`Types: discovery, convention, lesson (30-day TTL), fact.`);
+  lines.push(``);
+  lines.push(`## Quota Cascade & Auto-Dir (v8.7)`);
+  lines.push(`Rate-limited agents auto-fallback to the next capable agent. Tasks auto-infer --dir from worktree context.`);
+  lines.push(``);
+  lines.push(`## Merge Approval & Batch Directory (v8.9)`);
+  lines.push(`aid merge --approve for interactive Merge/Retry/Skip decisions. .aid/batches/ for batch file fallback resolution.`);
   lines.push(``);
   lines.push(`## Live Task Control (v8.3)`);
   lines.push(`aid stop (SIGTERM + 5s + SIGKILL), aid kill (immediate SIGKILL), aid steer (mid-flight guidance injection).`);
@@ -343,6 +349,9 @@ function buildHTML(): string {
         <div class="feat-card"><h3>Project Profiles <span class="badge">v8.5</span></h3><p>Per-repo <code>.aid/project.toml</code> with hobby/standard/production presets for verify, budget, and rules.</p></div>
         <div class="feat-card"><h3>Smart Knowledge Injection <span class="badge">v8.5</span></h3><p>Stop-word filtering, cross-layer dedup, and relevance scoring keep agent prompts lean and focused.</p></div>
         <div class="feat-card"><h3>Live Task Control <span class="badge">v8.3</span></h3><p><code>aid stop</code> / <code>aid kill</code> for termination, <code>aid steer</code> for mid-flight guidance injection.</p></div>
+        <div class="feat-card"><h3>Quota Cascade <span class="badge">v8.7</span></h3><p>When an agent hits its rate limit, aid auto-falls back to the next capable agent in the chain.</p></div>
+        <div class="feat-card"><h3>Merge Approval <span class="badge">v8.9</span></h3><p><code>aid merge --approve</code> for interactive Merge/Retry/Skip decisions via hiboss before merging.</p></div>
+        <div class="feat-card"><h3>Batch Directory <span class="badge">v8.9</span></h3><p>Store batch files in <code>.aid/batches/</code> and reference them by name without full paths.</p></div>
         <div class="feat-card"><h3>Best-of-N</h3><p>Dispatch the same task to N agents, run quality metrics, and keep the best result.</p></div>
         <div class="feat-card"><h3>Agent Store</h3><p>Browse and install community agents from the GitHub-backed store with version pinning.</p></div>
       </div>

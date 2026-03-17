@@ -1,6 +1,6 @@
 # ai-dispatch (aid)
 
-![Version](https://img.shields.io/badge/version-8.6.0-blue)
+![Version](https://img.shields.io/badge/version-8.9.1-blue)
 ![Rust](https://img.shields.io/badge/rust-2024-orange)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
@@ -573,7 +573,7 @@ The board displays `[VFAIL]` next to tasks that completed but failed verificatio
 | `aid output` | Show task output directly. | `aid output t-1234` |
 | `aid ask` | Run a quick research or exploration task, optionally with file context. | `aid ask "What changed in src/main.rs?" --files src/main.rs` |
 | `aid mcp` | Start the stdio MCP server so another tool can call `aid` natively. | `aid mcp` |
-| `aid merge` | Mark done task(s) as merged. Supports `--group` for bulk workgroup merge with worktree cleanup. | `aid merge t-1234`, `aid merge --group wg-a3f1` |
+| `aid merge` | Mark done task(s) as merged. Supports `--group` for bulk merge, `--approve` for interactive approval via hiboss. | `aid merge t-1234`, `aid merge --group wg-a3f1 --approve` |
 | `aid clean` | Remove old tasks/events and orphaned worktrees/logs. Supports `--dry-run`. | `aid clean --older-than 7 --worktrees` |
 | `aid config` | Inspect agent profiles, skills, pricing, and prompt token budget. | `aid config agents`, `aid config prompt-budget`, `aid config pricing` |
 | `aid worktree` | Explicit worktree lifecycle management: create, list, remove. | `aid worktree create feat/x`, `aid worktree list`, `aid worktree remove feat/x` |

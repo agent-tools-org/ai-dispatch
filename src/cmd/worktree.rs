@@ -5,9 +5,9 @@
 use anyhow::Result;
 use std::path::Path;
 
-/// Check if a path is an aid-managed worktree (handles macOS /tmp → /private/tmp).
+/// Check if a path is an aid-managed worktree (delegates to shared sandbox guard).
 fn is_aid_worktree(path: &str) -> bool {
-    path.starts_with("/tmp/aid-wt-") || path.starts_with("/private/tmp/aid-wt-")
+    super::merge::merge_git::is_safe_worktree_path(path)
 }
 
 /// Create a worktree, print its path to stdout for capture.

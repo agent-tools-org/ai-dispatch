@@ -10,7 +10,7 @@ use crate::store::Store;
 use crate::types::{Task, TaskStatus, VerifyStatus};
 
 #[path = "merge_git.rs"]
-mod merge_git;
+pub(crate) mod merge_git;
 use merge_git::*;
 pub use merge_git::remove_worktree;
 
@@ -697,8 +697,8 @@ mod tests {
     fn remove_worktree_cleans_up_properly() {
         let repo = init_repo();
         let branch = unique("cleanup");
-        let wt = TempDir::new().unwrap();
-        let wt_path = wt.path().to_string_lossy().to_string();
+        // Use /tmp/aid-wt-* path to pass sandbox guard
+        let wt_path = format!("/tmp/aid-wt-test-{branch}");
         git(repo.path(), &["worktree", "add", &wt_path, "-b", &branch]);
 
         // Should not panic and worktree dir should be gone
@@ -722,6 +722,41 @@ mod tests {
         // (will fail since no Cargo.toml, but that's OK — it shouldn't panic or try "auto")
         run_verify_in_worktree(&repo.path().to_string_lossy(), Some("auto"));
         // If we got here without panic, the fix works
+    }
+
+    // --- Sandbox guard tests ---
+
+    #[test]
+    fn sandbox_allows_aid_worktree_paths() {
+        assert!(is_safe_worktree_path("/tmp/aid-wt-feat-foo"));
+        assert!(is_safe_worktree_path("/tmp/aid-wt-fix/bar"));
+        assert!(is_safe_worktree_path("/private/tmp/aid-wt-test"));
+    }
+
+    #[test]
+    fn sandbox_blocks_non_worktree_paths() {
+        assert!(!is_safe_worktree_path("/home/user/project"));
+        assert!(!is_safe_worktree_path("/Users/someone/Develop/myrepo"));
+        assert!(!is_safe_worktree_path("/tmp/other-dir"));
+        assert!(!is_safe_worktree_path("/tmp/aid-wt")); // missing trailing dash
+        assert!(!is_safe_worktree_path("."));
+        assert!(!is_safe_worktree_path(""));
+        assert!(!is_safe_worktree_path("/"));
+    }
+
+    #[test]
+    fn remove_worktree_refuses_unsafe_path() {
+        let repo = init_repo();
+        let unsafe_path = repo.path().join("subdir");
+        std::fs::create_dir_all(&unsafe_path).unwrap();
+
+        // This should NOT delete the directory — sandbox guard blocks it
+        remove_worktree(
+            &repo.path().to_string_lossy(),
+            &unsafe_path.to_string_lossy(),
+        );
+        // Directory must still exist
+        assert!(unsafe_path.exists(), "Sandbox guard failed: unsafe path was deleted!");
     }
 
     #[test]

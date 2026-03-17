@@ -186,7 +186,31 @@ fn pop_stash(repo_dir: &str) -> bool {
     }
 }
 
+/// Check if a path is safe to delete: must resolve to /tmp/aid-wt-* (or /private/tmp/aid-wt-* on macOS).
+/// This is the sandbox guard — NEVER delete a directory that fails this check.
+pub fn is_safe_worktree_path(wt_path: &str) -> bool {
+    // Canonicalize to resolve symlinks (macOS: /tmp → /private/tmp)
+    let canonical = match Path::new(wt_path).canonicalize() {
+        Ok(p) => p,
+        // If path doesn't exist, check the raw string as fallback
+        Err(_) => return wt_path.starts_with("/tmp/aid-wt-")
+            || wt_path.starts_with("/private/tmp/aid-wt-"),
+    };
+    let s = canonical.to_string_lossy();
+    s.starts_with("/tmp/aid-wt-") || s.starts_with("/private/tmp/aid-wt-")
+}
+
 pub fn remove_worktree(repo_dir: &str, wt_path: &str) {
+    // SANDBOX: refuse to touch anything outside /tmp/aid-wt-*
+    if !is_safe_worktree_path(wt_path) {
+        eprintln!(
+            "[aid] SAFETY: refusing to remove '{}' — not an aid worktree path. \
+             Only /tmp/aid-wt-* paths are allowed.",
+            wt_path
+        );
+        return;
+    }
+
     let result = Command::new("git")
         .args(["-C", repo_dir, "worktree", "remove", "--force", wt_path])
         .output();
@@ -197,6 +221,8 @@ pub fn remove_worktree(repo_dir: &str, wt_path: &str) {
         }
         _ => {}
     }
+
+    // Fallback: rm -rf, but ONLY after sandbox validation above
     match fs::remove_dir_all(wt_path) {
         Ok(()) => {
             eprintln!("[aid] Cleaned up worktree {wt_path}");

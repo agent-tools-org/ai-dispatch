@@ -403,6 +403,11 @@ Note: --dir, --team, --verify are set in [defaults], not as CLI flags."#)]
     },
     /// Start MCP server (stdio)
     Mcp,
+    /// Print short hook text for Claude Code session start
+    Hook {
+        #[command(subcommand)]
+        action: HookAction,
+    },
     /// Manage agent configuration and detection
     Config {
         #[command(subcommand)]
@@ -519,6 +524,12 @@ pub enum AgentCommands {
         #[arg(long = "as")]
         new_name: Option<String>,
     },
+}
+
+#[derive(Subcommand)]
+pub enum HookAction {
+    /// Print session-start hook text for Claude Code
+    SessionStart,
 }
 
 #[derive(Subcommand)]
@@ -651,7 +662,7 @@ pub enum ExperimentCommands {
 
 #[cfg(test)]
 mod tests {
-    use super::{Cli, Commands, ExperimentCommands};
+    use super::{Cli, Commands, ExperimentCommands, HookAction};
     use clap::Parser;
 
     #[test]
@@ -710,6 +721,17 @@ mod tests {
                 assert_eq!(max_runs, 10);
             }
             _ => panic!("expected Experiment Run"),
+        }
+    }
+
+    #[test]
+    fn hook_session_start_parses() {
+        let cli = Cli::try_parse_from(["aid", "hook", "session-start"]).unwrap();
+        match cli.command {
+            Commands::Hook {
+                action: HookAction::SessionStart,
+            } => {}
+            _ => panic!("expected Hook SessionStart"),
         }
     }
 }

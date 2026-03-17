@@ -164,12 +164,12 @@ pub(super) fn build_prompt_bundle(store: &Store, args: &RunArgs, agent_kind: &Ag
         effective_prompt = format!("{block}\n\n{effective_prompt}");
     }
 
-    // Inject workspace path if workgroup has one
+    // Inject workspace path if workgroup has one (appended to avoid commit message pollution)
     if let Some(ref group_id) = args.group {
         let workspace = crate::paths::workspace_dir(group_id);
         if workspace.is_dir() {
             effective_prompt = format!(
-                "<aid-system-context>\n[Shared Workspace] Path: {} — use for intermediate artifacts and inter-agent communication.\n</aid-system-context>\n\n{effective_prompt}",
+                "{effective_prompt}\n\n<aid-system-context>\n[Shared Workspace] Path: {} — use for intermediate artifacts and inter-agent communication.\n</aid-system-context>",
                 workspace.display()
             );
         }

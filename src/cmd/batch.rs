@@ -71,6 +71,7 @@ pub async fn run(store: Arc<Store>, args: BatchArgs) -> Result<()> {
     } else if task_ids.len() == 1 {
         eprintln!("[aid] Watch: aid watch --quiet {}", task_ids[0]);
     }
+    eprintln!("[aid] TUI:   aid watch --tui");
     Ok(())
 }
 fn resolve_batch_path(path: &Path) -> std::path::PathBuf {

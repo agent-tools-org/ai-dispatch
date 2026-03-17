@@ -442,25 +442,73 @@ function buildInstallScript(): string {
   return `#!/bin/sh
 set -e
 
-echo "Installing aid (ai-dispatch) v${VERSION}..."
+VERSION="v${VERSION}"
+REPO="agent-tools-org/ai-dispatch"
 
-if ! command -v cargo >/dev/null 2>&1; then
-  echo "Error: cargo not found. Install Rust first:"
-  echo "  curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh"
-  exit 1
+echo "Installing aid (ai-dispatch) \${VERSION}..."
+
+# Detect OS and architecture
+OS="$(uname -s)"
+ARCH="$(uname -m)"
+
+case "\${OS}" in
+  Linux)  OS_TAG="unknown-linux-gnu" ;;
+  Darwin) OS_TAG="apple-darwin" ;;
+  *)
+    echo "Unsupported OS: \${OS}. Falling back to cargo install."
+    cargo install ai-dispatch && exit 0
+    exit 1
+    ;;
+esac
+
+case "\${ARCH}" in
+  x86_64|amd64)   ARCH_TAG="x86_64" ;;
+  aarch64|arm64)   ARCH_TAG="aarch64" ;;
+  *)
+    echo "Unsupported arch: \${ARCH}. Falling back to cargo install."
+    cargo install ai-dispatch && exit 0
+    exit 1
+    ;;
+esac
+
+TARGET="\${ARCH_TAG}-\${OS_TAG}"
+URL="https://github.com/\${REPO}/releases/download/\${VERSION}/aid-\${TARGET}.tar.gz"
+
+# Determine install directory
+if [ -d "\${HOME}/.cargo/bin" ]; then
+  INSTALL_DIR="\${HOME}/.cargo/bin"
+elif [ -w "/usr/local/bin" ]; then
+  INSTALL_DIR="/usr/local/bin"
+else
+  INSTALL_DIR="\${HOME}/.local/bin"
+  mkdir -p "\${INSTALL_DIR}"
 fi
 
-RUST_VER=$(rustc --version | grep -oE '[0-9]+\\.[0-9]+' | head -1)
-if [ "$(echo "$RUST_VER < 1.85" | bc)" = "1" ] 2>/dev/null; then
-  echo "Warning: Rust 1.85+ recommended (you have $RUST_VER). Run: rustup update"
+TMPDIR="$(mktemp -d)"
+trap 'rm -rf "\${TMPDIR}"' EXIT
+
+echo "Downloading \${URL}..."
+if curl -fsSL "\${URL}" -o "\${TMPDIR}/aid.tar.gz"; then
+  tar -xzf "\${TMPDIR}/aid.tar.gz" -C "\${TMPDIR}"
+  install -m 755 "\${TMPDIR}/aid" "\${INSTALL_DIR}/aid"
+  echo "Installed aid to \${INSTALL_DIR}/aid"
+else
+  echo "Download failed. Falling back to cargo install..."
+  if command -v cargo >/dev/null 2>&1; then
+    cargo install ai-dispatch
+  else
+    echo "Error: cargo not found and binary download failed."
+    echo "Install Rust: curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh"
+    exit 1
+  fi
 fi
 
-cargo install ai-dispatch
 echo ""
 echo "Done! Run 'aid --version' to verify."
 echo ""
-echo "Next step:"
-echo "  aid setup    # detect agents, configure API keys, install skills"
+echo "Next steps:"
+echo "  aid setup          # detect agents, configure API keys"
+echo "  aid project init   # set up project profile"
 echo ""
 echo "Quick start: https://aid.agent-tools.org"
 `;

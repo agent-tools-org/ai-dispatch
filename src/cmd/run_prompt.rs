@@ -385,7 +385,12 @@ pub(super) async fn maybe_auto_retry_after_verify_failure_impl(
 }
 
 pub(super) fn notify_task_completion(store: &Store, task_id: &TaskId) -> Result<()> {
-    if let Some(task) = store.get_task(task_id.as_str())? { crate::notify::notify_completion(&task); }
+    if let Some(task) = store.get_task(task_id.as_str())? {
+        crate::notify::notify_completion(&task);
+        if let Some(ref wg_id) = task.workgroup_id {
+            crate::notify::notify_workgroup_if_complete(store, wg_id);
+        }
+    }
     Ok(())
 }
 

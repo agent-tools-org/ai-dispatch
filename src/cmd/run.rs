@@ -537,8 +537,6 @@ pub async fn run(store: Arc<Store>, mut args: RunArgs) -> Result<TaskId> {
                     }
                     TaskStatus::Failed => {
                         let reason = store.latest_error(task_id.as_str())
-                            .ok()
-                            .flatten()
                             .map(|r| format!("[aid] Reason: {r}\n"))
                             .unwrap_or_default();
                         let next = format!(

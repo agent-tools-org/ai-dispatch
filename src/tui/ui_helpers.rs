@@ -76,13 +76,13 @@ pub fn task_header(task: &Task, events: &[crate::types::TaskEvent]) -> Paragraph
             Style::default().fg(Color::Magenta),
         )));
     }
-    if matches!(task.status, TaskStatus::Failed | TaskStatus::Stopped) {
-        if let Some(reason) = last_error_detail(events) {
-            lines.push(Line::from(Span::styled(
-                format!("Reason: {}", truncate(&reason, 120)),
-                Style::default().fg(Color::Red),
-            )));
-        }
+    if matches!(task.status, TaskStatus::Failed | TaskStatus::Stopped)
+        && let Some(reason) = last_error_detail(events)
+    {
+        lines.push(Line::from(Span::styled(
+            format!("Reason: {}", truncate(&reason, 120)),
+            Style::default().fg(Color::Red),
+        )));
     }
     Paragraph::new(lines)
 }
@@ -209,10 +209,10 @@ pub fn task_progress(app: &App, task: &Task) -> String {
         return "awaiting input".to_string();
     }
     // For failed/stopped tasks, show last error reason instead of milestone
-    if matches!(task.status, TaskStatus::Failed | TaskStatus::Stopped) {
-        if let Some(reason) = app.get_failure_reason(task.id.as_str()) {
-            return truncate(&reason, 30);
-        }
+    if matches!(task.status, TaskStatus::Failed | TaskStatus::Stopped)
+        && let Some(reason) = app.get_failure_reason(task.id.as_str())
+    {
+        return truncate(&reason, 30);
     }
     let milestone_or_dash = || {
         app.get_milestone(task.id.as_str())
@@ -240,7 +240,7 @@ pub fn status_style(status: TaskStatus) -> Style {
     }
 }
 
-pub fn last_error_detail(events: &[crate::types::TaskEvent]) -> Option<String> {
+fn last_error_detail(events: &[crate::types::TaskEvent]) -> Option<String> {
     events
         .iter()
         .rev()

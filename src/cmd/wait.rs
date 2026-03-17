@@ -110,8 +110,6 @@ async fn wait_for_task_ids_inner(
                         .unwrap_or_else(|| "-".to_string());
                     let fail_reason = if status == TaskStatus::Failed {
                         store.latest_error(task_id)
-                            .ok()
-                            .flatten()
                             .map(|r| format!(" — {r}"))
                             .unwrap_or_default()
                     } else {

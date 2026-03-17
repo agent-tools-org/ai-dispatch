@@ -65,19 +65,19 @@ impl Store {
         rows.map(|row| row?).collect()
     }
 
-    pub fn latest_error(&self, task_id: &str) -> Result<Option<String>> {
+    pub fn latest_error(&self, task_id: &str) -> Option<String> {
         let conn = self.db();
-        let error = conn
-            .query_row(
-                "SELECT detail FROM events
-                 WHERE task_id = ?1 AND event_type = 'error'
-                 ORDER BY timestamp DESC
-                 LIMIT 1",
-                params![task_id],
-                |row| row.get(0),
-            )
-            .optional()?;
-        Ok(error)
+        conn.query_row(
+            "SELECT detail FROM events
+             WHERE task_id = ?1 AND event_type = 'error'
+             ORDER BY timestamp DESC
+             LIMIT 1",
+            params![task_id],
+            |row| row.get(0),
+        )
+        .optional()
+        .ok()
+        .flatten()
     }
 
     pub fn latest_milestone(&self, task_id: &str) -> Result<Option<String>> {

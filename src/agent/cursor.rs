@@ -107,17 +107,14 @@ fn parse_json_event(
             let detail = model
                 .map(|m| format!("{subtype}: {m}"))
                 .unwrap_or_else(|| subtype.to_string());
-            let mut meta = json!({});
-            if let Some(m) = model {
-                meta["model"] = json!(m);
-            }
-            if let Some(sid) = session_id {
-                meta["agent_session_id"] = json!(sid);
-            }
-            let metadata = if meta.as_object().map_or(true, |o| o.is_empty()) {
-                None
-            } else {
-                Some(meta)
+            let metadata = match (model, session_id) {
+                (None, None) => None,
+                _ => {
+                    let mut meta = json!({});
+                    if let Some(m) = model { meta["model"] = json!(m); }
+                    if let Some(sid) = session_id { meta["agent_session_id"] = json!(sid); }
+                    Some(meta)
+                }
             };
             (EventKind::Reasoning, detail, metadata)
         }
@@ -175,12 +172,10 @@ fn parse_json_event(
                 }
                 _ => format!("{subtype}: {tool_name}"),
             };
-            let event_kind = if tool_name.contains("write") || tool_name.contains("Write") {
-                EventKind::FileWrite
-            } else if tool_name.contains("read") || tool_name.contains("Read") {
-                EventKind::FileRead
-            } else {
-                EventKind::Reasoning
+            let event_kind = match tool_name.as_str() {
+                "writeToolCall" => EventKind::FileWrite,
+                "readToolCall" => EventKind::FileRead,
+                _ => EventKind::Reasoning,
             };
             (event_kind, detail, None)
         }

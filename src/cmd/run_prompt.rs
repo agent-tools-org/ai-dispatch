@@ -323,9 +323,7 @@ pub(super) async fn run_agent_process_impl(args: RunProcessArgs<'_>) -> Result<(
     let cost_str = if cost_usd.is_some() { format!(", {}", crate::cost::format_cost(cost_usd)) } else { String::new() };
     let fail_reason = if info.status == TaskStatus::Failed {
         store.latest_error(task_id.as_str())
-            .ok()
-            .flatten()
-            .map(|reason| format!("\n[aid] Reason: {reason}"))
+            .map(|r| format!("\n[aid] Reason: {r}"))
             .unwrap_or_default()
     } else {
         String::new()

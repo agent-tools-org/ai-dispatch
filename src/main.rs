@@ -402,8 +402,8 @@ async fn main() -> Result<()> {
                     let content = resolve_finding_content(content, stdin, file)?;
                     cmd::finding::add(&store, &group, &content, task.as_deref())?;
                 }
-                GroupFindingAction::List { group } => {
-                    cmd::finding::list(&store, &group)?;
+                GroupFindingAction::List { group, json, count } => {
+                    cmd::finding::list(&store, &group, json, count)?;
                 }
             },
             GroupAction::Broadcast { group_id, message } => {
@@ -479,8 +479,8 @@ async fn main() -> Result<()> {
                 let content = resolve_finding_content(content, stdin, file)?;
                 cmd::finding::add(&store, &group, &content, task.as_deref())?;
             }
-            FindingCommands::List { group } => {
-                cmd::finding::list(&store, &group)?;
+            FindingCommands::List { group, json, count } => {
+                cmd::finding::list(&store, &group, json, count)?;
             }
         },
         Commands::Broadcast { group, message } => {

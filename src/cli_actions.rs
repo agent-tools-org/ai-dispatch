@@ -103,6 +103,10 @@ pub enum GroupFindingAction {
     List {
         /// Workgroup ID
         group: String,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        count: bool,
     },
 }
 

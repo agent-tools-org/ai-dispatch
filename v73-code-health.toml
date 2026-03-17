@@ -1,0 +1,122 @@
+[defaults]
+agent = "codex"
+verify = "cargo check 2>&1"
+
+[[task]]
+name = "split-main"
+worktree = "refactor/split-main"
+prompt = """Split src/main.rs (941 lines) into two files. This is a Rust project using clap derive.
+
+CURRENT STRUCTURE:
+- Lines 1-43: mod declarations + use statements
+- Lines 44-48: resolve_group() helper
+- Lines 50-577: #[derive(Parser)] struct Cli + #[derive(Subcommand)] enum Commands (all CLI definitions)
+- Lines 579-941: async fn main() with match cli.command dispatch
+
+TASK:
+1. Create src/cli.rs — move the Cli struct, Commands enum, and all subcommand arg structs (lines 50-577) into it. Add proper use statements. Make Cli and Commands pub.
+2. Keep src/main.rs thin: mod declarations, resolve_group(), and async fn main() with the dispatch match.
+3. In main.rs, add `mod cli;` and `use cli::{Cli, Commands};`
+4. The `use clap::{Parser, Subcommand};` import moves to cli.rs. main.rs only needs `use clap::Parser;` (for Cli::parse()).
+
+CONSTRAINTS:
+- Do NOT change any functionality or logic
+- Do NOT rename any variants or fields
+- Both files must have a 2-line header comment (purpose, exports/deps)
+- The after_help strings and doc comments stay with the enum variants
+- Run `cargo check` to verify, then `cargo test` to verify all tests pass
+"""
+context = ["src/main.rs"]
+
+[[task]]
+name = "split-usage"
+worktree = "refactor/split-usage"
+prompt = """Split src/usage.rs (843 lines) into two files.
+
+CURRENT STRUCTURE:
+- Lines 1-176: types (UsageSnapshot, AgentAnalytics, BudgetStatus, etc.)
+- Lines 178-253: collect_usage*, check_budget_status (data collection)
+- Lines 255-320: render_usage (text report rendering)
+- Lines 321-425: agent_analytics + render_agent_analytics
+- Lines 426-701: helper functions (summarize, filter, format, collect rows)
+- Lines 703-843: tests
+
+TASK:
+1. Create src/usage_report.rs — move ALL rendering/formatting functions into it:
+   - render_usage() and its helpers: format_duration_secs, format_tokens, format_ratio_*, collect_agent_rows, collect_budget_rows
+   - render_agent_analytics() and its helpers: select_top_tasks, prompt_snippet, format_last_seen
+   - The types these functions use should be imported from usage.rs (keep types in usage.rs)
+2. Keep in src/usage.rs: all types/structs, collect_usage*, check_budget_status, agent_analytics, summarize_agent_period, filter_tasks*, parse_window, start_of_day, compute_agent_history
+3. Add `pub mod usage_report;` in the appropriate place (main.rs or usage.rs).
+4. Update all callers. Search for `usage::render_usage` and `usage::render_agent_analytics` — these move to `usage_report::`.
+
+CONSTRAINTS:
+- Do NOT change any functionality
+- Both files must have 2-line header comments
+- Run `cargo check` then `cargo test` — all 287 tests must pass
+"""
+context = ["src/usage.rs"]
+
+[[task]]
+name = "split-merge"
+worktree = "refactor/split-merge"
+prompt = """Split src/cmd/merge.rs (784 lines) into two files.
+
+CURRENT STRUCTURE:
+- Lines 1-11: imports
+- Lines 12-20: pub fn run() — top-level entry point
+- Lines 21-56: resolve_repo_dir, commits_ahead (git helpers)
+- Lines 57-108: auto_commit_uncommitted (git helper)
+- Lines 109-152: git_merge_branch (git helper)
+- Lines 153-176: remove_worktree (git helper, pub)
+- Lines 177-261: merge_single (orchestration)
+- Lines 262-282: run_verify_in_worktree
+- Lines 283-350: merge_group (orchestration)
+- Lines 351-784: tests
+
+TASK:
+1. Create src/cmd/merge_git.rs — move all pure git operations into it:
+   - resolve_repo_dir, commits_ahead, auto_commit_uncommitted, git_merge_branch, remove_worktree, run_verify_in_worktree
+   - Also move the MergeResult enum used by git_merge_branch
+   - Make them pub(crate) so merge.rs can call them
+2. Keep in src/cmd/merge.rs: pub fn run(), merge_single(), merge_group(), and all tests
+3. In merge.rs: add `#[path = "merge_git.rs"] mod merge_git;` and `use merge_git::*;`
+4. Keep `remove_worktree` accessible to external callers (it's used from run.rs)
+
+CONSTRAINTS:
+- Do NOT change any functionality
+- Both files must have 2-line header comments
+- Run `cargo check` then `cargo test` — all tests must pass
+"""
+context = ["src/cmd/merge.rs"]
+
+[[task]]
+name = "split-run"
+worktree = "refactor/split-run"
+prompt = """Split src/cmd/run.rs (722 lines) into two files.
+
+CURRENT STRUCTURE:
+- Lines 1-55: imports + RunArgs struct
+- Lines 56-407: pub async fn run() — main dispatch orchestration
+- Lines 408-512: helper functions (check_worktree_escape, maybe_flag_empty_worktree_diff, write_streaming_output, take_next_cascade_agent, worktree_is_empty_diff, git_diff_stat_output)
+- Lines 513-569: tests
+- Lines 570-720: pub(crate) delegate functions (inherit_retry_base_branch, run_agent_process, run_agent_process_with_timeout, format_duration, maybe_cleanup_fast_fail, maybe_verify, maybe_auto_retry_after_verify_failure)
+
+TASK:
+1. Create src/cmd/run_agent.rs — move agent process management into it:
+   - run_agent_process (pub(crate))
+   - run_agent_process_with_timeout (the inner async fn)
+   - write_streaming_output
+   - format_duration
+   - check_worktree_escape
+   These functions deal with the actual agent process lifecycle (spawn, watch, timeout, output).
+2. Keep in src/cmd/run.rs: RunArgs, pub async fn run(), maybe_flag_empty_worktree_diff, take_next_cascade_agent, worktree_is_empty_diff, git_diff_stat_output, the delegate functions (maybe_cleanup_fast_fail, maybe_verify, etc.), and all tests
+3. In run.rs: add `#[path = "run_agent.rs"] mod run_agent;` and import what's needed
+4. run_agent.rs needs access to: watcher module, types, store, agent module, paths, retry_logic::read_stderr_tail
+
+CONSTRAINTS:
+- Do NOT change any functionality
+- Both files must have 2-line header comments
+- Run `cargo check` then `cargo test` — all tests must pass
+"""
+context = ["src/cmd/run.rs"]

@@ -1,0 +1,515 @@
+# v7.8 — Autonomous Experiment Loop
+# Mixed agent dispatch: gemini (research), opencode (wiring), codex (core logic)
+
+[defaults]
+verify = true
+dir = "."
+
+# === Phase 1: Research + Foundation (all parallel) ===
+
+[[task]]
+name = "research-experiment-patterns"
+agent = "gemini"
+prompt = """Research how existing tools implement autonomous experiment loops. Look at:
+1. pi-autoresearch (badlogic) — git state machine, hypothesis → run → measure → keep/revert
+2. optuna / hyperopt — experiment tracking, trial persistence
+3. wandb sweeps — metric tracking, early stopping
+
+For each, summarize:
+- How experiments are defined (config format)
+- How results are persisted (file format, schema)
+- How keep/revert decisions are made
+- How correctness checks are integrated
+
+Output a structured comparison table and recommendation for aid's implementation.
+Keep output under 2000 words.
+"""
+
+[[task]]
+name = "experiment-types"
+agent = "opencode"
+prompt = """Create `src/cmd/experiment_types.rs` — types for the experiment system.
+
+File header:
+```rust
+// Types for the autonomous experiment loop.
+// Exports: ExperimentConfig, ExperimentRun, ExperimentResult.
+// Deps: serde, chrono.
+```
+
+Define these types:
+
+```rust
+use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ExperimentConfig {
+    pub metric_command: String,
+    pub direction: MetricDirection,
+    pub agent: String,
+    pub prompt: String,
+    pub checks: Option<String>,
+    pub max_runs: Option<usize>,
+    pub worktree: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "lowercase")]
+pub enum MetricDirection {
+    Min,
+    Max,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ExperimentRun {
+    pub run_id: usize,
+    pub task_id: String,
+    pub agent: String,
+    pub metric_value: Option<f64>,
+    pub checks_passed: Option<bool>,
+    pub kept: bool,
+    pub timestamp: String,
+    pub duration_ms: Option<i64>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ExperimentState {
+    pub config: ExperimentConfig,
+    pub runs: Vec<ExperimentRun>,
+    pub best_metric: Option<f64>,
+    pub best_run_id: Option<usize>,
+}
+
+impl ExperimentState {
+    pub fn new(config: ExperimentConfig) -> Self {
+        Self { config, runs: Vec::new(), best_metric: None, best_run_id: None }
+    }
+
+    pub fn is_improvement(&self, value: f64) -> bool {
+        match self.best_metric {
+            None => true,
+            Some(best) => match self.config.direction {
+                MetricDirection::Min => value < best,
+                MetricDirection::Max => value > best,
+            },
+        }
+    }
+
+    pub fn record_run(&mut self, run: ExperimentRun) {
+        if run.kept {
+            if let Some(v) = run.metric_value {
+                self.best_metric = Some(v);
+                self.best_run_id = Some(run.run_id);
+            }
+        }
+        self.runs.push(run);
+    }
+}
+```
+
+Register in `src/cmd/mod.rs`: `pub mod experiment_types;`
+
+Add tests:
+- `is_improvement_max_direction` — higher is better
+- `is_improvement_min_direction` — lower is better
+- `is_improvement_first_run_always_true` — no baseline yet
+- `record_run_updates_best` — kept run updates best_metric
+
+Run `cargo test --bin aid` and `cargo clippy --bin aid`.
+File MUST be < 100 lines.
+"""
+worktree = "feat/experiment-types"
+
+[[task]]
+name = "experiment-persistence"
+agent = "opencode"
+prompt = """Create `src/cmd/experiment_persist.rs` — JSONL persistence for experiment state.
+
+File header:
+```rust
+// Persistence layer for experiment runs (append-only JSONL).
+// Exports: save_run, load_state, experiment_file_path.
+// Deps: serde_json, std::fs, crate::cmd::experiment_types.
+```
+
+Functions:
+
+```rust
+use anyhow::Result;
+use std::fs;
+use std::io::{BufRead, Write};
+use std::path::Path;
+use crate::cmd::experiment_types::{ExperimentConfig, ExperimentRun, ExperimentState};
+
+/// Default experiment file location
+pub fn experiment_file_path(dir: &str) -> std::path::PathBuf {
+    Path::new(dir).join("experiment.jsonl")
+}
+
+/// Append a single run to the JSONL file
+pub fn save_run(path: &Path, run: &ExperimentRun) -> Result<()> {
+    let mut file = fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(path)?;
+    let line = serde_json::to_string(run)?;
+    writeln!(file, "{line}")?;
+    Ok(())
+}
+
+/// Load all runs from JSONL and reconstruct state
+pub fn load_state(path: &Path, config: &ExperimentConfig) -> Result<ExperimentState> {
+    let mut state = ExperimentState::new(config.clone());
+    if !path.exists() {
+        return Ok(state);
+    }
+    let file = fs::File::open(path)?;
+    for line in std::io::BufReader::new(file).lines() {
+        let line = line?;
+        if line.trim().is_empty() { continue; }
+        if let Ok(run) = serde_json::from_str::<ExperimentRun>(&line) {
+            state.record_run(run);
+        }
+    }
+    Ok(state)
+}
+```
+
+Register in `src/cmd/mod.rs`: `pub mod experiment_persist;`
+
+Add tests (use tempfile crate which is already in dev-dependencies):
+- `save_and_load_roundtrip` — write 2 runs, load back, verify state
+- `load_missing_file_returns_empty` — non-existent path returns empty state
+
+Run `cargo test --bin aid` and `cargo clippy --bin aid`.
+File MUST be < 80 lines.
+"""
+worktree = "feat/experiment-persist"
+
+[[task]]
+name = "experiment-cli"
+agent = "opencode"
+prompt = """Add `aid experiment` CLI subcommand to src/cli.rs and wire it in src/main.rs.
+
+Changes to src/cli.rs — add to the Commands enum:
+
+```rust
+/// Run autonomous experiment loop: edit → measure → keep/revert
+#[command(subcommand)]
+Experiment(ExperimentCommands),
+```
+
+Add new enum after Commands:
+```rust
+#[derive(Subcommand)]
+pub enum ExperimentCommands {
+    /// Start an experiment loop
+    Run {
+        /// Agent to use for each iteration
+        agent: String,
+        /// Prompt describing what to optimize
+        prompt: String,
+        /// Command to measure the metric (output must be a number)
+        #[arg(long)]
+        metric: String,
+        /// Optimization direction
+        #[arg(long, default_value = "max")]
+        direction: String,
+        /// Correctness checks (must pass to keep changes)
+        #[arg(long)]
+        checks: Option<String>,
+        /// Maximum number of experiment runs
+        #[arg(long, default_value = "5")]
+        max_runs: usize,
+        /// Working directory
+        #[arg(long)]
+        dir: Option<String>,
+    },
+    /// Show experiment status and history
+    Status {
+        /// Working directory (where experiment.jsonl is)
+        #[arg(long)]
+        dir: Option<String>,
+    },
+}
+```
+
+In src/main.rs, add the match arm:
+```rust
+Commands::Experiment(sub) => {
+    match sub {
+        cli::ExperimentCommands::Run { agent, prompt, metric, direction, checks, max_runs, dir } => {
+            eprintln!("[aid] Experiment loop not yet implemented");
+        }
+        cli::ExperimentCommands::Status { dir } => {
+            eprintln!("[aid] Experiment status not yet implemented");
+        }
+    }
+}
+```
+
+Add test in src/cli.rs:
+```rust
+#[test]
+fn experiment_run_parses() {
+    let cli = Cli::try_parse_from([
+        "aid", "experiment", "run", "codex", "optimize perf",
+        "--metric", "cargo bench 2>&1 | tail -1",
+        "--direction", "min",
+        "--max-runs", "10",
+    ]).unwrap();
+    match cli.command {
+        Commands::Experiment(ExperimentCommands::Run { agent, max_runs, .. }) => {
+            assert_eq!(agent, "codex");
+            assert_eq!(max_runs, 10);
+        }
+        _ => panic!("expected Experiment Run"),
+    }
+}
+```
+
+Run `cargo test --bin aid` and `cargo clippy --bin aid`.
+"""
+worktree = "feat/experiment-cli"
+
+# === Phase 2: Core logic (depends on phase 1) ===
+
+[[task]]
+name = "experiment-core"
+agent = "codex"
+depends_on = ["experiment-types", "experiment-persistence", "experiment-cli"]
+prompt = """Implement the core experiment loop in `src/cmd/experiment.rs`.
+
+## Context files (READ THESE FIRST)
+- src/cmd/experiment_types.rs — ExperimentConfig, ExperimentRun, ExperimentState, MetricDirection
+- src/cmd/experiment_persist.rs — save_run, load_state, experiment_file_path
+- src/cli.rs — ExperimentCommands::Run fields
+- src/cmd/run.rs — RunArgs struct, run() function
+
+## File header
+```rust
+// Core experiment loop: dispatch → measure → keep/revert.
+// Exports: run_experiment().
+// Deps: experiment_types, experiment_persist, cmd::run, store.
+```
+
+## Core function
+```rust
+pub async fn run_experiment(store: Arc<Store>, config: ExperimentConfig) -> Result<()>
+```
+
+### Loop logic (for each run 1..=max_runs):
+1. **Snapshot**: `git stash create` to save current state (for revert)
+2. **Dispatch**: `cmd::run::run(store, RunArgs { agent, prompt, verify, ... })` with worktree
+3. **Wait**: task completes (it's foreground)
+4. **Checks** (if config.checks is Some): run the checks command, if it fails → revert and continue
+5. **Measure**: run `config.metric_command`, parse output as f64
+6. **Decide**: if `state.is_improvement(value)` → keep (commit), else → revert (`git checkout .`)
+7. **Record**: `save_run(path, &run)` to experiment.jsonl
+8. **Report**: print iteration summary to stderr
+
+### Wire in main.rs
+Replace the placeholder in `Commands::Experiment(ExperimentCommands::Run { .. })` with actual call:
+```rust
+let config = ExperimentConfig {
+    metric_command: metric,
+    direction: match direction.as_str() { "min" => MetricDirection::Min, _ => MetricDirection::Max },
+    agent,
+    prompt,
+    checks,
+    max_runs: Some(max_runs),
+    worktree: None,
+};
+cmd::experiment::run_experiment(store, config).await?;
+```
+
+Register in `src/cmd/mod.rs`: `pub mod experiment;`
+
+### Metric evaluation helper (reuse pattern from run.rs evaluate_metric if it exists)
+```rust
+fn evaluate_metric(cmd: &str, dir: &str) -> Result<f64> {
+    let output = std::process::Command::new("sh")
+        .args(["-c", cmd])
+        .current_dir(dir)
+        .output()
+        .context("metric command failed")?;
+    if !output.status.success() {
+        anyhow::bail!("metric command exited with {}", output.status);
+    }
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    stdout.trim().lines().last()
+        .and_then(|l| l.trim().split_whitespace().last())
+        .and_then(|w| w.parse::<f64>().ok())
+        .ok_or_else(|| anyhow::anyhow!("metric command output is not a number"))
+}
+```
+
+### Git helpers
+```rust
+fn git_revert(dir: &str) -> Result<()> {
+    std::process::Command::new("git")
+        .args(["checkout", "."])
+        .current_dir(dir)
+        .output()?;
+    Ok(())
+}
+
+fn git_commit(dir: &str, message: &str) -> Result<()> {
+    std::process::Command::new("git")
+        .args(["add", "-A"])
+        .current_dir(dir)
+        .output()?;
+    std::process::Command::new("git")
+        .args(["commit", "-m", message])
+        .current_dir(dir)
+        .output()?;
+    Ok(())
+}
+```
+
+IMPORTANT:
+- File MUST be < 150 lines
+- Do NOT modify experiment_types.rs or experiment_persist.rs
+- Run `cargo test --bin aid` and `cargo clippy --bin aid`
+"""
+worktree = "feat/experiment-core"
+
+[[task]]
+name = "experiment-status"
+agent = "opencode"
+depends_on = ["experiment-persistence"]
+prompt = """Implement `aid experiment status` in `src/cmd/experiment_status.rs`.
+
+Read experiment.jsonl from current directory (or --dir), display a summary table.
+
+File header:
+```rust
+// Display experiment status and run history.
+// Exports: run_status().
+// Deps: experiment_types, experiment_persist.
+```
+
+Function:
+```rust
+pub fn run_status(dir: Option<&str>) -> Result<()> {
+    let dir = dir.unwrap_or(".");
+    let path = super::experiment_persist::experiment_file_path(dir);
+    if !path.exists() {
+        eprintln!("[aid] No experiment.jsonl found in {dir}");
+        return Ok(());
+    }
+    // Create a dummy config just to load state (we only need runs)
+    let dummy = super::experiment_types::ExperimentConfig {
+        metric_command: String::new(),
+        direction: super::experiment_types::MetricDirection::Max,
+        agent: String::new(),
+        prompt: String::new(),
+        checks: None,
+        max_runs: None,
+        worktree: None,
+    };
+    let state = super::experiment_persist::load_state(&path, &dummy)?;
+    if state.runs.is_empty() {
+        eprintln!("[aid] No experiment runs recorded yet");
+        return Ok(());
+    }
+    println!("Experiment: {} runs | Best: {} (run #{})",
+        state.runs.len(),
+        state.best_metric.map(|v| format!("{v:.4}")).unwrap_or("n/a".into()),
+        state.best_run_id.unwrap_or(0),
+    );
+    println!("{:<6} {:<10} {:<12} {:<8} {:<8} {}",
+        "Run", "Agent", "Metric", "Kept", "Checks", "Duration");
+    println!("{}", "-".repeat(60));
+    for run in &state.runs {
+        let metric = run.metric_value.map(|v| format!("{v:.4}")).unwrap_or("err".into());
+        let kept = if run.kept { "yes" } else { "no" };
+        let checks = match run.checks_passed {
+            Some(true) => "pass",
+            Some(false) => "fail",
+            None => "-",
+        };
+        let duration = run.duration_ms.map(|d| format!("{}s", d / 1000)).unwrap_or("-".into());
+        println!("{:<6} {:<10} {:<12} {:<8} {:<8} {}", run.run_id, run.agent, metric, kept, checks, duration);
+    }
+    Ok(())
+}
+```
+
+Register in `src/cmd/mod.rs`: `pub mod experiment_status;`
+
+Wire in main.rs: replace the Status placeholder with:
+```rust
+cli::ExperimentCommands::Status { dir } => {
+    cmd::experiment_status::run_status(dir.as_deref())?;
+}
+```
+
+Run `cargo test --bin aid` and `cargo clippy --bin aid`.
+File MUST be < 70 lines.
+"""
+worktree = "feat/experiment-status"
+
+# === Independent: Rolling context compression ===
+
+[[task]]
+name = "context-compression"
+agent = "codex"
+prompt = """Add rolling context compression for workgroup prompts.
+
+When a workgroup has many completed tasks, the injected context (milestones, findings, sibling summaries) can grow very large. Add compression to keep it under a token budget.
+
+## Context files
+- src/workgroup.rs (compose_prompt — builds the workgroup context)
+- src/cmd/run_prompt.rs (build_prompt_bundle — calls compose_prompt)
+
+## Changes
+
+### 1. Add `compress_workgroup_context` in src/workgroup.rs
+
+```rust
+const MAX_CONTEXT_CHARS: usize = 6000; // ~1500 tokens
+
+pub fn compress_workgroup_context(context: &str) -> String {
+    if context.len() <= MAX_CONTEXT_CHARS {
+        return context.to_string();
+    }
+    // Strategy: keep header + most recent entries, drop middle
+    let lines: Vec<&str> = context.lines().collect();
+    let header_count = lines.iter().take(5).count().min(5);
+    let footer_budget = MAX_CONTEXT_CHARS * 2 / 3; // 2/3 for recent entries
+    let header_budget = MAX_CONTEXT_CHARS / 3; // 1/3 for header
+
+    let mut header = String::new();
+    for line in lines.iter().take(header_count) {
+        if header.len() + line.len() + 1 > header_budget { break; }
+        header.push_str(line);
+        header.push('\n');
+    }
+
+    let mut footer = String::new();
+    let mut footer_lines = Vec::new();
+    for line in lines.iter().rev() {
+        if footer.len() + line.len() + 1 > footer_budget { break; }
+        footer_lines.push(*line);
+        footer = footer_lines.iter().rev().cloned().collect::<Vec<_>>().join("\n");
+    }
+
+    format!("{header}\n[... {} lines compressed ...]\n\n{footer}", lines.len() - header_count - footer_lines.len())
+}
+```
+
+### 2. Apply compression in compose_prompt
+After building the full context string, wrap it:
+```rust
+let context = compress_workgroup_context(&full_context);
+```
+
+### 3. Tests
+- `short_context_unchanged` — under limit passes through
+- `long_context_compressed` — over limit gets header + footer with compression marker
+- `compression_preserves_recent` — last entries are kept intact
+
+Run `cargo test --bin aid` and `cargo clippy --bin aid`.
+"""
+worktree = "feat/context-compression"

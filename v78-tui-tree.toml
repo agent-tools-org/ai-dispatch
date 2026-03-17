@@ -1,0 +1,323 @@
+# TUI Tree View — show task relationships
+
+[defaults]
+verify = true
+dir = "."
+
+[[task]]
+name = "tree-data"
+agent = "opencode"
+prompt = """Add tree data structures and logic for building task hierarchy in TUI.
+
+Create `src/tui/tree_data.rs`:
+
+File header:
+```rust
+// Build a tree of tasks by parent_task_id and workgroup relationships.
+// Exports: TreeNode, build_task_tree.
+// Deps: crate::types::Task.
+```
+
+```rust
+use crate::types::{Task, TaskStatus};
+
+#[derive(Debug, Clone)]
+pub struct TreeNode {
+    pub task: Task,
+    pub depth: usize,
+    pub is_last: bool,
+    pub prefix: String,  // e.g. "├── " or "└── " or "│   ├── "
+}
+
+/// Build a flat list of TreeNodes with proper indentation from a task list.
+/// Groups by: workgroup → parent_task_id hierarchy → retry chains.
+pub fn build_task_tree(tasks: &[Task]) -> Vec<TreeNode> {
+    let mut result = Vec::new();
+    let mut seen = std::collections::HashSet::new();
+
+    // First: find root tasks (no parent_task_id, or parent not in task list)
+    let task_ids: std::collections::HashSet<&str> = tasks.iter().map(|t| t.id.as_str()).collect();
+    let mut roots: Vec<&Task> = tasks.iter()
+        .filter(|t| {
+            match t.parent_task_id.as_deref() {
+                None => true,
+                Some(pid) => !task_ids.contains(pid),
+            }
+        })
+        .collect();
+    // Sort roots: running first, then by created_at desc
+    roots.sort_by(|a, b| {
+        let a_active = !a.status.is_terminal();
+        let b_active = !b.status.is_terminal();
+        b_active.cmp(&a_active).then(b.created_at.cmp(&a.created_at))
+    });
+
+    for root in &roots {
+        if seen.contains(root.id.as_str()) { continue; }
+        seen.insert(root.id.as_str());
+        result.push(TreeNode {
+            task: (*root).clone(),
+            depth: 0,
+            is_last: false,
+            prefix: String::new(),
+        });
+        add_children(root.id.as_str(), tasks, &mut result, &mut seen, 1, "");
+    }
+    // Fix is_last for each depth level
+    fix_last_flags(&mut result);
+    result
+}
+
+fn add_children(
+    parent_id: &str,
+    tasks: &[Task],
+    result: &mut Vec<TreeNode>,
+    seen: &mut std::collections::HashSet<String>,
+    depth: usize,
+    parent_prefix: &str,
+) {
+    let children: Vec<&Task> = tasks.iter()
+        .filter(|t| t.parent_task_id.as_deref() == Some(parent_id) && !seen.contains(t.id.as_str()))
+        .collect();
+    for (i, child) in children.iter().enumerate() {
+        let is_last = i + 1 == children.len();
+        let connector = if is_last { "└── " } else { "├── " };
+        let child_prefix = format!("{parent_prefix}{connector}");
+        seen.insert(child.id.as_str().to_string());
+        result.push(TreeNode {
+            task: (*child).clone(),
+            depth,
+            is_last,
+            prefix: child_prefix.clone(),
+        });
+        let next_parent_prefix = format!("{parent_prefix}{}", if is_last { "    " } else { "│   " });
+        add_children(child.id.as_str(), tasks, result, seen, depth + 1, &next_parent_prefix);
+    }
+}
+
+fn fix_last_flags(nodes: &mut [TreeNode]) {
+    // Already handled in add_children
+}
+```
+
+Register in `src/tui/mod.rs`: add `pub mod tree_data;`
+
+Add tests:
+```rust
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::types::*;
+    use chrono::Local;
+
+    fn mock_task(id: &str, parent: Option<&str>) -> Task {
+        Task {
+            id: TaskId::new(id),
+            agent: "codex".to_string(),
+            prompt: "test".to_string(),
+            status: TaskStatus::Done,
+            parent_task_id: parent.map(str::to_string),
+            created_at: Local::now(),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn flat_tasks_no_hierarchy() {
+        let tasks = vec![mock_task("t-1", None), mock_task("t-2", None)];
+        let tree = build_task_tree(&tasks);
+        assert_eq!(tree.len(), 2);
+        assert_eq!(tree[0].depth, 0);
+        assert_eq!(tree[1].depth, 0);
+    }
+
+    #[test]
+    fn parent_child_creates_hierarchy() {
+        let tasks = vec![
+            mock_task("t-parent", None),
+            mock_task("t-child1", Some("t-parent")),
+            mock_task("t-child2", Some("t-parent")),
+        ];
+        let tree = build_task_tree(&tasks);
+        assert_eq!(tree.len(), 3);
+        assert_eq!(tree[0].depth, 0);
+        assert_eq!(tree[1].depth, 1);
+        assert_eq!(tree[2].depth, 1);
+    }
+
+    #[test]
+    fn nested_hierarchy() {
+        let tasks = vec![
+            mock_task("t-root", None),
+            mock_task("t-mid", Some("t-root")),
+            mock_task("t-leaf", Some("t-mid")),
+        ];
+        let tree = build_task_tree(&tasks);
+        assert_eq!(tree.len(), 3);
+        assert_eq!(tree[0].depth, 0);
+        assert_eq!(tree[1].depth, 1);
+        assert_eq!(tree[2].depth, 2);
+    }
+}
+```
+
+Run `cargo test --bin aid` and `cargo clippy --bin aid`. File < 120 lines.
+"""
+worktree = "feat/tui-tree-data"
+
+[[task]]
+name = "tree-view"
+agent = "codex"
+depends_on = ["tree-data"]
+prompt = """Add tree view mode to the TUI, toggled with the 't' key.
+
+## Context files (READ FIRST)
+- src/tui/app.rs — App struct, handle_key, tick
+- src/tui/ui.rs — render function, render_board
+- src/tui/ui_helpers.rs — task_row helper
+- src/tui/tree_data.rs — TreeNode, build_task_tree (NEW — from dependency task)
+- src/tui/mod.rs — mode flags, key handling tests
+
+## Changes
+
+### 1. App state (src/tui/app.rs)
+Add field to App struct:
+```rust
+pub tree_mode: bool,
+```
+Initialize to `false` in App::new().
+
+In `tick()`, no special loading needed (tree is built from tasks on render).
+
+### 2. Key handling (src/tui/app_keys.rs)
+Add 't' key toggle (same pattern as 'd' for dashboard, 's' for stats):
+```rust
+KeyCode::Char('t') => {
+    self.tree_mode = !self.tree_mode;
+    if self.tree_mode {
+        self.dashboard_mode = false;
+        self.stats_mode = false;
+        self.multipane_mode = false;
+        self.detail_mode = false;
+    }
+}
+```
+Also, when entering other modes, set `tree_mode = false`.
+
+### 3. Render dispatch (src/tui/ui.rs)
+In the `render` function, add tree_mode check:
+```rust
+pub fn render(frame: &mut ratatui::Frame<'_>, app: &App) {
+    if app.tree_mode {
+        render_tree_view(frame, app);
+    } else if app.multipane_mode {
+        ...
+    }
+}
+```
+
+### 4. Tree view renderer (src/tui/ui.rs)
+Add `render_tree_view` function:
+```rust
+fn render_tree_view(frame: &mut ratatui::Frame<'_>, app: &App) {
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(1),
+            Constraint::Min(5),
+            Constraint::Length(1),
+        ])
+        .split(frame.area());
+
+    // Header
+    frame.render_widget(
+        Paragraph::new(Line::from(vec![
+            Span::styled("aid ", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+            Span::styled("tree view", Style::default().fg(Color::Yellow)),
+        ])).alignment(Alignment::Center),
+        chunks[0],
+    );
+
+    // Build tree
+    let tree_nodes = super::tree_data::build_task_tree(&app.tasks);
+    let items: Vec<ListItem> = tree_nodes.iter().map(|node| {
+        let status_color = match node.task.status {
+            TaskStatus::Done | TaskStatus::Merged => Color::Green,
+            TaskStatus::Failed => Color::Red,
+            TaskStatus::Pending | TaskStatus::Queued => Color::Yellow,
+            _ => Color::Cyan,
+        };
+        let duration = format_duration_short(node.task.duration_ms);
+        let agent = node.task.agent_display_name();
+        let prompt_preview: String = node.task.prompt.chars().take(40).collect();
+
+        let line = Line::from(vec![
+            Span::styled(&node.prefix, Style::default().fg(Color::DarkGray)),
+            Span::styled(node.task.id.as_str(), Style::default().fg(Color::White).add_modifier(Modifier::BOLD)),
+            Span::raw(" "),
+            Span::styled(agent, Style::default().fg(Color::Cyan)),
+            Span::raw(" "),
+            Span::styled(node.task.status.label(), Style::default().fg(status_color)),
+            Span::raw(" "),
+            Span::styled(duration, Style::default().fg(Color::Indexed(250))),
+            Span::raw("  "),
+            Span::styled(prompt_preview, Style::default().fg(Color::Indexed(245))),
+        ]);
+        ListItem::new(line)
+    }).collect();
+
+    let list = List::new(items)
+        .block(Block::default().title("Task Tree").borders(Borders::ALL))
+        .highlight_style(Style::default().bg(Color::Indexed(237)).add_modifier(Modifier::BOLD));
+
+    frame.render_widget(list, chunks[1]);
+
+    // Footer
+    let footer = Line::from(vec![
+        Span::styled(" t", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+        Span::raw(":table "),
+        Span::styled("d", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+        Span::raw(":dashboard "),
+        Span::styled("m", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+        Span::raw(":multipane "),
+        Span::styled("q", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+        Span::raw(":quit"),
+    ]);
+    frame.render_widget(Paragraph::new(footer), chunks[2]);
+}
+
+fn format_duration_short(duration_ms: Option<i64>) -> String {
+    match duration_ms {
+        Some(ms) => {
+            let secs = ms / 1000;
+            if secs < 60 { format!("{secs}s") }
+            else if secs < 3600 { format!("{}m", secs / 60) }
+            else { format!("{}h", secs / 3600) }
+        }
+        None => "-".to_string(),
+    }
+}
+```
+
+### 5. Tests
+In src/tui/mod.rs tests, add:
+```rust
+#[test]
+fn toggles_tree_mode_with_t_key() {
+    let store = Arc::new(Store::open_memory().unwrap());
+    let mut app = app::App::new(store, RunOptions::default()).unwrap();
+    assert!(!app.tree_mode);
+    app.handle_key(KeyEvent::new(KeyCode::Char('t'), KeyModifiers::NONE)).unwrap();
+    assert!(app.tree_mode);
+    assert!(!app.dashboard_mode);
+    app.handle_key(KeyEvent::new(KeyCode::Char('t'), KeyModifiers::NONE)).unwrap();
+    assert!(!app.tree_mode);
+}
+```
+
+IMPORTANT:
+- Tree mode is exclusive with other modes (dashboard, stats, multipane, detail)
+- Keep render_tree_view under 60 lines
+- Run `cargo test --bin aid` and `cargo clippy --bin aid`
+"""
+worktree = "feat/tui-tree-view"

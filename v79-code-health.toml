@@ -1,0 +1,174 @@
+# v7.9 — Code Health + Reliability
+# 3 refactor tasks (file splits) + 1 bug fix
+
+[defaults]
+verify = "cargo check"
+announce = true
+
+# Task 1: Extract best-of logic from run.rs into run_bestof.rs
+[[tasks]]
+agent = "codex"
+worktree = "v79-split-run"
+prompt = """
+Split src/cmd/run.rs by extracting best-of logic into src/cmd/run_bestof.rs.
+
+WHAT TO EXTRACT into src/cmd/run_bestof.rs:
+- struct BestOfDispatch (line ~452)
+- struct CandidateResult + impl CandidateResult (lines ~457-513)
+- fn evaluate_metric() (line ~466)
+- fn pick_best_result() (line ~515)
+- fn validate_best_of_count() (line ~527)
+- async fn run_best_of() (line ~535)
+- Tests: pick_best_result_prefers_longest_diff, pick_best_result_none_when_no_done, pick_best_result_prefers_metric_score, best_of_count_validation
+
+WHAT TO KEEP in run.rs:
+- RunArgs struct and run() function
+- maybe_flag_empty_worktree_diff, take_next_cascade_agent, worktree helpers
+- maybe_judge_retry, inherit_retry_base_branch, maybe_verify, etc.
+- Tests: empty_diff_detection, take_next_cascade_agent tests
+
+WIRING:
+- run_bestof.rs needs: `use super::RunArgs;`, `use super::run;`, `use crate::agent::{self, RunOpts};`, `use crate::cmd::judge;`, `use crate::store::Store;`, `use crate::types::*;`, `use crate::team;`
+- run.rs: add `#[path = "run_bestof.rs"] mod run_bestof;` next to existing `#[path]` modules
+- run.rs: change `run_best_of(store, args, n)` call to `run_bestof::run_best_of(store, args, n)`
+- run_bestof.rs header: `// Best-of-N dispatch: send task to N budget agents, pick best result.\n// Exports: run_best_of(). Deps: run::RunArgs, judge, agent selection.`
+
+RULES:
+- run_bestof.rs must be < 300 lines
+- run.rs must be < 500 lines after extraction
+- All existing tests must pass unchanged
+- Do NOT change any logic, only move code between files
+"""
+
+# Task 2: Extract scoring internals from selection.rs into selection_scoring.rs
+[[tasks]]
+agent = "codex"
+worktree = "v79-split-selection"
+prompt = """
+Split src/agent/selection.rs by extracting scoring internals into src/agent/selection_scoring.rs.
+
+WHAT TO EXTRACT into selection_scoring.rs:
+- pub(crate) const AGENT_CAPABILITIES table (line ~17)
+- fn base_score() (line ~56)
+- fn priority() (line ~62)
+- fn cost_efficiency() (line ~69)
+- fn custom_category_score() (line ~74)
+- fn category_strength_key() (line ~88)
+- fn custom_strength_bonus() (line ~101)
+- fn custom_command_installed() (line ~110)
+- const BUILTIN_AGENTS (line ~118)
+- struct Candidate (line ~127)
+- struct CandidateContext (line ~136)
+- fn score_for() (line ~144)
+- fn candidate_for() (line ~178)
+- fn compare_candidates() (line ~190)
+- fn pick_best_candidate() (line ~215)
+- fn team_override_score() (line ~422)
+
+WHAT TO KEEP in selection.rs:
+- select_agent_with_reason() — the main public API
+- select_agent_from() — internal selection logic using scoring helpers
+- budget_ranked_agents()
+- recommend_model()
+- coding_fallback_for(), CODING_FALLBACK_CHAIN
+- All tests (they test the public API via select_agent_from)
+
+WIRING:
+- selection_scoring.rs needs: `use crate::agent::classifier::{self, Complexity, TaskCategory};`, `use crate::agent::custom::CustomAgentConfig;`, `use crate::rate_limit;`, `use crate::store::Store;`, `use crate::types::{AgentKind, TaskStatus};`, `use crate::team::TeamConfig;`, `use std::cmp::Ordering;`, `use std::collections::HashMap;`, `use std::process::Command;`
+- selection.rs: add `mod selection_scoring;` and `use selection_scoring::*;` (or specific imports)
+- Make extracted items pub(crate) or pub(super) as needed so selection.rs can use them
+- selection_scoring.rs header: `// Scoring internals for agent auto-selection.\n// Exports: AGENT_CAPABILITIES, Candidate, CandidateContext, score_for, pick_best_candidate, etc.\n// Deps: classifier, rate_limit, types.`
+
+RULES:
+- selection_scoring.rs must be < 300 lines
+- selection.rs must be < 500 lines after extraction
+- All existing tests must pass unchanged
+- Do NOT change any logic, only move code between files
+"""
+
+# Task 3: Extract memory/context injection from run_prompt.rs into prompt_context.rs
+[[tasks]]
+agent = "codex"
+worktree = "v79-split-prompt"
+prompt = """
+Split src/cmd/run_prompt.rs by extracting memory/context injection into src/cmd/prompt_context.rs.
+
+WHAT TO EXTRACT into prompt_context.rs:
+- fn inject_memories() (line ~117) — query and format memories for injection
+- fn build_memory_queries() (line ~160) — multi-query memory search
+- fn top_significant_words() (line ~199)
+- fn extract_path_tokens() (line ~213)
+- fn extract_type_or_function_names() (line ~228)
+- fn format_memory_age() (line ~245)
+- fn format_knowledge_block() (line ~256)
+- fn format_entry_block() (line ~261)
+- fn select_relevant_entries() (line ~280)
+- fn extract_words() (line ~299)
+- fn detect_project_path() (line ~309)
+- fn resolve_context_from() (line ~322) — read output from prior tasks
+- fn collect_sibling_summaries() (line ~364) — gather sibling completion summaries
+
+WHAT TO KEEP in run_prompt.rs:
+- struct PromptBundle, enum PromptSource
+- fn build_prompt_bundle() — calls into prompt_context helpers
+- fn resolve_prompt(), fn inject_skill()
+- fn build_context_flags(), expand_context_paths(), read_context_file(), format_context_block()
+- fn effective_skills()
+- fn resolve_repo_path(), resolve_dir_in_target(), resolve_worktree_paths(), load_workgroup()
+- struct RunProcessArgs, fn run_agent_process_impl()
+- fn maybe_cleanup_fast_fail_impl(), maybe_verify_impl(), maybe_auto_retry_after_verify_failure_impl()
+- fn notify_task_completion(), current_branch(), inherit_retry_base_branch_impl(), retry_target()
+- fn format_duration(), maybe_compact_prompt()
+- Tests module
+
+WIRING:
+- prompt_context.rs needs: `use crate::store::Store;`, `use crate::types::*;`, `use crate::templates;`, `use crate::team::KnowledgeEntry;`, `use crate::cmd::summary::{format_summary_for_injection, CompletionSummary};`, `use std::collections::{HashMap, HashSet};`, `use chrono::Local;`
+- run_prompt.rs: add `mod prompt_context;` near top
+- In build_prompt_bundle(), change calls to use `prompt_context::inject_memories(...)`, `prompt_context::resolve_context_from(...)`, `prompt_context::collect_sibling_summaries(...)`, `prompt_context::select_relevant_entries(...)`, `prompt_context::format_knowledge_block(...)`, `prompt_context::extract_words(...)`
+- Make extracted functions pub(super) so run_prompt.rs can call them
+- prompt_context.rs header: `// Memory, knowledge, and context injection for agent prompts.\n// Exports: inject_memories, resolve_context_from, collect_sibling_summaries, etc.\n// Deps: store, types, templates, team.`
+
+RULES:
+- prompt_context.rs must be < 300 lines
+- run_prompt.rs must be < 450 lines after extraction
+- All existing tests must pass unchanged
+- Do NOT change any logic, only move code between files
+"""
+
+# Task 4: Strip [MILESTONE] tags from captured agent output
+[[tasks]]
+agent = "opencode"
+worktree = "v79-milestone-strip"
+prompt = """
+In src/watcher.rs, filter out lines containing [MILESTONE] from the captured output that gets written to log files and output files. The milestone events should still be extracted and saved to the database, but the raw [MILESTONE] text should NOT appear in the log/output files.
+
+Currently in watch_streaming() (line ~73-75):
+```rust
+log_file.write_all(line.as_bytes()).await?;
+log_file.write_all(b"\n").await?;
+```
+This writes every line to the log. Add a check: if extract_milestone_detail(&line).is_some(), skip writing that line to the log file.
+
+Similarly in watch_buffered() (line ~170-178), after reading all output into buffer:
+- Before writing to log_path and output_path, filter out lines containing [MILESTONE]
+- Use the existing extract_milestone_detail() function (line ~335) to detect milestone lines
+- Filter: `buffer.lines().filter(|line| extract_milestone_detail(line).is_none()).collect::<Vec<_>>().join("\n")`
+
+Add a test in the existing tests module:
+```rust
+#[test]
+fn milestone_lines_stripped_from_output() {
+    let input = "line1\n[MILESTONE] types defined\nline2\n";
+    let filtered: String = input.lines()
+        .filter(|line| extract_milestone_detail(line).is_none())
+        .collect::<Vec<_>>()
+        .join("\n");
+    assert_eq!(filtered, "line1\nline2");
+}
+```
+
+RULES:
+- Milestones must still be extracted and saved as events (don't break that)
+- Only filter them from log/output file writes
+- Keep the fix minimal — don't refactor surrounding code
+"""

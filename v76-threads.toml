@@ -1,0 +1,163 @@
+# v7.6 — Shared Context Threads
+# Thread composition + completion summaries
+
+[defaults]
+verify = true
+dir = "."
+
+[[task]]
+name = "parent-cli-flag"
+agent = "codex"
+prompt = """Add `--parent <TASK_ID>` CLI flag to the `run` command.
+
+1. In `src/cli.rs`, add to the Run variant:
+   ```
+   /// Link this task as a child of an existing task (thread composition)
+   #[arg(long, value_name = "TASK_ID")]
+   parent: Option<String>,
+   ```
+
+2. In `src/main.rs`, in the Commands::Run match arm, wire `parent` into RunArgs:
+   - Replace `..Default::default()` with explicit `parent_task_id: parent, ..Default::default()`
+
+3. In `src/batch.rs` BatchTask struct, add `pub parent: Option<String>` field.
+
+4. In `src/cmd/batch.rs` `task_to_run_args()`, wire `parent` → `parent_task_id`.
+
+5. Add a test in `src/cli.rs` tests module:
+   ```rust
+   #[test]
+   fn run_parent_flag_parses() {
+       let cli = Cli::try_parse_from([
+           "aid", "run", "codex", "do stuff", "--parent", "t-abc123",
+       ]).unwrap();
+       match cli.command {
+           Commands::Run { parent, .. } => assert_eq!(parent, Some("t-abc123".to_string())),
+           _ => panic!("expected Run"),
+       }
+   }
+   ```
+
+IMPORTANT: Only add the CLI flag and wiring. Do NOT change any existing logic. Run `cargo test --bin aid` to verify all tests pass.
+"""
+worktree = "feat/parent-cli"
+
+[[task]]
+name = "completion-summary"
+agent = "codex"
+prompt = """Create a new module `src/cmd/summary.rs` that generates structured completion summaries for tasks.
+
+## File header
+```rust
+// Generate structured completion summaries for finished tasks.
+// Exports: generate_summary(), CompletionSummary.
+// Deps: crate::store::Store, crate::types::Task, crate::cmd::judge (for gather_diff).
+```
+
+## Types
+```rust
+pub struct CompletionSummary {
+    pub task_id: String,
+    pub agent: String,
+    pub status: String,
+    pub files_changed: Vec<String>,
+    pub summary_text: String,
+    pub duration_secs: Option<i64>,
+    pub token_count: Option<i64>,
+}
+```
+
+## Functions
+
+### `generate_summary(task: &Task) -> CompletionSummary`
+- Extract files_changed from the diff (parse `diff --git a/path b/path` lines)
+- Build summary_text: "{agent} {status}: {N} files changed ({file list}). Duration: {Xs}."
+- Use `crate::cmd::judge::gather_diff(task)` to get the diff
+- This is a LOCAL summary (no LLM call) — fast and free
+
+### `format_summary_for_injection(summary: &CompletionSummary) -> String`
+- Format as a context block for injection into child task prompts:
+  ```
+  ## Parent Task Context ({task_id})
+  Agent: {agent} | Status: {status} | Duration: {duration}
+  Files changed: {file_list}
+  ```
+
+## Tests (in same file, `#[cfg(test)]`)
+- `generates_summary_from_task` — create a Task with mock data, verify summary fields
+- `format_summary_produces_readable_output` — verify injection format
+- `handles_no_diff_gracefully` — task with no worktree/repo produces "(no changes detected)"
+- `extracts_files_from_diff` — test diff parsing with multi-file diff input
+
+File MUST be < 150 lines. Register the module in `src/cmd/mod.rs` with `pub mod summary;`.
+Run `cargo test --bin aid` to verify.
+"""
+worktree = "feat/completion-summary"
+
+[[task]]
+name = "summary-injection"
+agent = "codex"
+depends_on = ["completion-summary", "parent-cli-flag"]
+prompt = """Wire completion summaries into the task lifecycle.
+
+Context files: src/cmd/run.rs, src/cmd/summary.rs, src/cmd/run_prompt.rs, src/store/queries.rs
+
+## Changes needed:
+
+### 1. Store: save summary on completion
+In `src/store/mutations.rs`, add a method:
+```rust
+pub fn save_completion_summary(&self, task_id: &str, summary_json: &str) -> Result<()>
+```
+- Store in the existing `completion_summary` column if it exists, or add it to the tasks table schema in `src/store/schema.rs`
+- Check schema first: `grep completion_summary src/store/schema.rs`
+
+### 2. Generate summary on task completion
+In `src/cmd/run.rs`, after `run_prompt::notify_task_completion()` (around line 348):
+```rust
+// Generate and store completion summary
+let summary = crate::cmd::summary::generate_summary(&store.get_task(task_id.as_str())?.unwrap());
+let summary_json = serde_json::to_string(&summary).unwrap_or_default();
+let _ = store.save_completion_summary(task_id.as_str(), &summary_json);
+```
+
+### 3. Inject parent summary into child prompts
+In `src/cmd/run_prompt.rs`, in the prompt-building logic, if `args.parent_task_id` is Some:
+- Load parent task from store
+- Load parent's completion_summary
+- If parent is Done and has summary, prepend the formatted summary to the prompt
+- Use `crate::cmd::summary::format_summary_for_injection()`
+
+### 4. Store query: get completion summary
+In `src/store/queries.rs`, add:
+```rust
+pub fn get_completion_summary(&self, task_id: &str) -> Result<Option<String>>
+```
+
+IMPORTANT:
+- Do NOT change existing behavior — only ADD summary generation and injection
+- If completion_summary column doesn't exist in schema, add it with `ALTER TABLE` migration
+- Run `cargo test --bin aid` and verify ALL tests pass
+- Keep changes minimal and focused
+"""
+worktree = "feat/summary-injection"
+
+[[task]]
+name = "tree-threads"
+agent = "opencode"
+prompt = """Enhance `src/cmd/tree.rs` to show thread hierarchy, not just retry chains.
+
+Currently `aid tree <task-id>` shows retry chains. Extend it to also show parent→child thread relationships.
+
+Changes:
+1. After building the retry chain, also find all tasks where parent_task_id matches any task in the chain
+2. Show child threads with a different connector (e.g. `◈──` instead of `├──`)
+3. For child threads that have their own children, recurse
+
+The existing code already does some of this (lines 16-22 build children_by_parent). Make sure it works for the `--parent` use case where tasks are explicitly linked.
+
+Add a test: `thread_tree_shows_parent_child` — create 3 tasks in Store (parent → child1, child2), call `run()` and verify it doesn't error.
+
+Keep the file < 150 lines. Run `cargo test --bin aid` to verify.
+"""
+worktree = "feat/tree-threads"

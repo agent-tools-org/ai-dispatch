@@ -134,6 +134,18 @@ pub async fn run(store: Arc<Store>, mut args: RunArgs) -> Result<TaskId> {
         }
         anyhow::bail!("Unknown agent '{}'. Available: {}", args.agent_name, available);
     };
+    // Auto-infer --dir . for code agents when cwd is a git repo
+    if args.dir.is_none()
+        && args.worktree.is_none()
+        && matches!(
+            agent_kind,
+            AgentKind::Codex | AgentKind::OpenCode | AgentKind::Cursor | AgentKind::Kilo | AgentKind::Codebuff | AgentKind::Custom
+        )
+        && std::path::Path::new(".git").exists()
+    {
+        args.dir = Some(".".to_string());
+        eprintln!("[aid] Auto-set --dir . (git repo detected)");
+    }
     let agent_display_name = custom_agent_name
         .as_deref()
         .unwrap_or_else(|| agent_kind.as_str());
@@ -573,7 +585,7 @@ fn take_next_cascade_agent(args: &RunArgs) -> Option<(String, Vec<String>)> {
     }
 }
 
-fn read_quota_error_message(task_id: &TaskId) -> Option<String> {
+pub(crate) fn read_quota_error_message(task_id: &TaskId) -> Option<String> {
     let stderr_path = crate::paths::stderr_path(task_id.as_str());
     if let Ok(stderr) = std::fs::read_to_string(&stderr_path)
         && rate_limit::is_rate_limit_error(&stderr)

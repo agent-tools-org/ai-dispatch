@@ -63,16 +63,22 @@ const COMMANDS: Command[] = [
   { name: "project", purpose: "Initialize and manage per-repo project profiles (.aid/project.toml) with built-in presets.", example: "aid project init, aid project show" },
 ];
 
-const AGENT_CATEGORIES = ["Research", "Simple Edit", "Complex Impl", "Frontend", "Debugging", "Testing", "Refactoring", "Documentation"];
+interface AgentCard {
+  name: string;
+  role: string;
+  bestFor: string;
+  models: string;
+  cost: string;
+}
 
-const AGENT_MATRIX: Record<string, Record<string, number>> = {
-  gemini:   { Research: 9, "Simple Edit": 2, "Complex Impl": 3, Frontend: 2, Debugging: 5, Testing: 3, Refactoring: 3, Documentation: 6 },
-  codex:    { Research: 1, "Simple Edit": 4, "Complex Impl": 9, Frontend: 4, Debugging: 7, Testing: 7, Refactoring: 8, Documentation: 3 },
-  opencode: { Research: 1, "Simple Edit": 8, "Complex Impl": 3, Frontend: 2, Debugging: 4, Testing: 4, Refactoring: 4, Documentation: 5 },
-  kilo:     { Research: 1, "Simple Edit": 7, "Complex Impl": 2, Frontend: 2, Debugging: 3, Testing: 3, Refactoring: 3, Documentation: 4 },
-  cursor:   { Research: 2, "Simple Edit": 4, "Complex Impl": 7, Frontend: 9, Debugging: 5, Testing: 5, Refactoring: 6, Documentation: 4 },
-  codebuff: { Research: 2, "Simple Edit": 5, "Complex Impl": 8, Frontend: 7, Debugging: 6, Testing: 6, Refactoring: 7, Documentation: 4 },
-};
+const AGENTS: AgentCard[] = [
+  { name: "gemini", role: "Researcher", bestFor: "Research, web search, fact-checking, documentation", models: "flash (default), pro, flash-lite", cost: "Free – $10/M" },
+  { name: "codex", role: "Builder", bestFor: "Complex implementation, multi-file refactors, test suites", models: "gpt-5.4, gpt-4.1, gpt-4.1-mini, gpt-4.1-nano", cost: "$0.10 – $8/M" },
+  { name: "opencode", role: "Editor", bestFor: "Simple edits, renames, type fixes, quick patches", models: "glm-5, kimi-k2.5, mimo-free, nemotron-free, minimax-free", cost: "Free – $2/M" },
+  { name: "kilo", role: "Budget Editor", bestFor: "Simple edits and renames (free tier)", models: "default (free)", cost: "Free" },
+  { name: "cursor", role: "Frontend + General", bestFor: "Frontend/UI, general coding, strong model routing", models: "auto, composer-1.5, opus-4.6-thinking, gpt-5.4-high", cost: "$20/mo subscription" },
+  { name: "codebuff", role: "Full-Stack", bestFor: "Complex implementation, frontend, refactoring", models: "claude-opus-4.6 (SDK)", cost: "Per-token via SDK" },
+];
 
 const MCP_TOOLS = ["aid_run", "aid_board", "aid_show", "aid_retry", "aid_usage", "aid_ask"];
 
@@ -163,10 +169,9 @@ function buildLLMSText(): string {
     lines.push(`- ${cmd.name}: ${cmd.purpose}`);
   });
   lines.push(``);
-  lines.push(`## Agent Capability Matrix (0-10)`);
-  Object.entries(AGENT_MATRIX).forEach(([agent, scores]) => {
-    const summary = AGENT_CATEGORIES.map((cat) => `${cat}=${scores[cat]}`).join(", ");
-    lines.push(`- ${agent}: ${summary}`);
+  lines.push(`## Agents`);
+  AGENTS.forEach((a) => {
+    lines.push(`- ${a.name} (${a.role}): ${a.bestFor}. Models: ${a.models}. Cost: ${a.cost}.`);
   });
   lines.push(``);
   lines.push(`## Quick Start`);
@@ -188,21 +193,9 @@ function buildHTML(): string {
     (cmd) => `<tr><td>${cmd.name}</td><td>${cmd.purpose}</td><td>${cmd.example}</td></tr>`
   ).join("");
 
-  const agentHeader = AGENT_CATEGORIES.map((cat) => `<th>${cat}</th>`).join("");
-  const agentRows = Object.entries(AGENT_MATRIX)
-    .map(([agent, scores]) => {
-      const cells = AGENT_CATEGORIES.map((cat) => {
-        const s = scores[cat];
-        let style = "";
-        if (s >= 8) style = "background:rgba(6,182,212,0.25)";
-        else if (s >= 6) style = "background:rgba(59,130,246,0.2)";
-        else if (s >= 4) style = "background:rgba(148,163,184,0.08)";
-        else style = "background:rgba(100,116,139,0.12);color:#64748b";
-        return `<td style="${style}">${s}</td>`;
-      }).join("");
-      return `<tr><th>${agent}</th>${cells}</tr>`;
-    })
-    .join("");
+  const agentCards = AGENTS.map((a) =>
+    `<div class="agent-card"><div class="agent-header"><h3>${a.name}</h3><span class="agent-role">${a.role}</span></div><p class="agent-best">${a.bestFor}</p><div class="agent-meta"><span class="agent-models">${a.models}</span><span class="agent-cost">${a.cost}</span></div></div>`
+  ).join("");
 
   const installCmd = "curl -fsSL https://aid.agent-tools.org/install.sh | sh";
 
@@ -282,6 +275,16 @@ function buildHTML(): string {
     table th { background: rgba(15,23,42,0.8); color: #94a3b8; font-weight: 600; }
     table tbody tr:nth-child(even) { background: rgba(15,23,42,0.35); }
     table tbody tr:hover { background: rgba(59,130,246,0.06); }
+    .agent-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1rem; }
+    .agent-card { background: rgba(15,23,42,0.6); border: 1px solid rgba(148,163,184,0.08); border-radius: 12px; padding: 1.25rem; transition: transform 0.2s, border-color 0.2s; }
+    .agent-card:hover { transform: translateY(-2px); border-color: rgba(59,130,246,0.3); }
+    .agent-header { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.5rem; }
+    .agent-header h3 { margin: 0; font-size: 1.1rem; color: #f1f5f9; font-family: "SF Mono","Monaco","Inconsolata",monospace; }
+    .agent-role { font-size: 0.75rem; padding: 0.15rem 0.5rem; border-radius: 4px; background: rgba(59,130,246,0.15); color: #93c5fd; }
+    .agent-best { margin: 0 0 0.75rem; font-size: 0.9rem; color: #94a3b8; line-height: 1.5; }
+    .agent-meta { display: flex; flex-direction: column; gap: 0.35rem; font-size: 0.8rem; color: #64748b; }
+    .agent-models::before { content: "Models: "; color: #475569; }
+    .agent-cost::before { content: "Cost: "; color: #475569; }
     .arch-term .term-body { white-space: pre; font-size: 0.8rem; line-height: 1.4; }
     .steps { counter-reset: step; }
     .step { display: flex; gap: 1rem; margin-bottom: 1.5rem; align-items: flex-start; }
@@ -323,7 +326,7 @@ function buildHTML(): string {
     </header>
     <div class="stats">
       <span>v${VERSION}</span>
-      <span>${Object.keys(AGENT_MATRIX).length} agents</span>
+      <span>${AGENTS.length} agents</span>
       <span>${COMMANDS.length} commands</span>
       <span>MIT</span>
     </div>
@@ -366,13 +369,9 @@ function buildHTML(): string {
       </div>
     </section>
     <section id="agents">
-      <h2 class="sec-title">Agent capability matrix</h2>
-      <div class="table-wrap">
-        <table>
-          <thead><tr><th>Agent</th>${agentHeader}</tr></thead>
-          <tbody>${agentRows}</tbody>
-        </table>
-      </div>
+      <h2 class="sec-title">Agents</h2>
+      <p style="color:#94a3b8;margin:0 0 1.5rem;font-size:0.95rem;">Each agent wraps a different AI CLI. <code>aid run auto</code> picks the best fit based on task type, model capability, cost, and rate limits.</p>
+      <div class="agent-grid">${agentCards}</div>
     </section>
     <section id="arch">
       <h2 class="sec-title">Architecture</h2>
@@ -481,13 +480,13 @@ async function handleRequest(request: Request): Promise<Response> {
         name: "aid", version: VERSION, description: META_DESCRIPTION,
         repository: REPO_URL, license: "MIT",
         install: "curl -fsSL https://aid.agent-tools.org/install.sh | sh",
-        agents: Object.keys(AGENT_MATRIX),
+        agents: AGENTS.map((a) => a.name),
         commands: COMMANDS.map((cmd) => ({ name: cmd.name, purpose: cmd.purpose })),
       });
     case "/api/commands":
       return respondJSON(COMMANDS.map((cmd) => ({ name: cmd.name, purpose: cmd.purpose, example: cmd.example })));
     case "/api/agents":
-      return respondJSON(AGENT_MATRIX);
+      return respondJSON(AGENTS.map((a) => ({ name: a.name, role: a.role, bestFor: a.bestFor, models: a.models, cost: a.cost })));
     case "/install.sh":
       return respondText(buildInstallScript(), "text/plain; charset=utf-8");
     case "/robots.txt":

@@ -8,9 +8,8 @@
 .env.*
 node_modules/
 
-# Batch TOML files (ephemeral, not source code)
-v*-*.toml
-evermemos-batch.toml
+# Batch TOML files (ephemeral dispatch files)
+.aid/batches/
 
 # Generated output dirs
 nanobanana-output/

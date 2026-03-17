@@ -55,6 +55,7 @@ mod tests {
         assert!(rendered.contains("[aid] ai-dispatch is installed"));
         assert!(!rendered.contains("Project:"));
         assert!(!rendered.contains("Rules:"));
+        assert!(rendered.contains("aid project init"));
     }
 
     #[test]

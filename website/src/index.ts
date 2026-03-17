@@ -1,7 +1,7 @@
 // aid-website — Cloudflare Worker for aid.agent-tools.org
 // Serves: HTML landing page, /llms.txt, /llms-full.txt, /install.sh, /api/*
 
-const VERSION = "8.10.0";
+const VERSION = "8.11.0";
 const SITE_URL = "https://aid.agent-tools.org";
 const REPO_URL = "https://github.com/agent-tools-org/ai-dispatch";
 const META_DESCRIPTION =

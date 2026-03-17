@@ -120,13 +120,17 @@ Hint: If passing file paths, use --context <path> not positional args"#)]
 
 Batch TOML format:
   [defaults]
-  verify = true
+  dir = "."
+  verify = "cargo check"
   agent = "codex"
+  team = "dev"
 
-  [[task]]
+  [[tasks]]
   name = "types"
   prompt = "Create shared types"
-  worktree = "feat/types""#)]
+  worktree = "feat/types"
+
+Note: --dir, --team, --verify are set in [defaults], not as CLI flags."#)]
     /// Dispatch tasks from a TOML batch file
     Batch {
         /// Path to the batch TOML file

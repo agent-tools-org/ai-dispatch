@@ -15,21 +15,33 @@ pub fn parse_context_specs(specs: &[String]) -> Result<Vec<ContextSpec>> {
     specs
         .iter()
         .map(|s| {
-            if let Some((file, items_str)) = s.split_once(':') {
+            let (raw_file, items) = if let Some((file, items_str)) = s.split_once(':') {
                 let items: Vec<String> =
                     items_str.split(',').map(|i| i.trim().to_string()).collect();
-                Ok(ContextSpec {
-                    file: file.to_string(),
-                    items: Some(items),
-                })
+                (file.to_string(), Some(items))
             } else {
-                Ok(ContextSpec {
-                    file: s.to_string(),
-                    items: None,
-                })
-            }
+                (s.to_string(), None)
+            };
+            Ok(ContextSpec {
+                file: resolve_to_absolute(&raw_file),
+                items,
+            })
         })
         .collect()
+}
+
+fn resolve_to_absolute(path: &str) -> String {
+    let path_buf = std::path::Path::new(path);
+    if path_buf.is_absolute() {
+        return path.to_string();
+    }
+    if let Ok(canonical) = path_buf.canonicalize() {
+        return canonical.to_string_lossy().to_string();
+    }
+    if let Ok(cwd) = std::env::current_dir() {
+        return cwd.join(path_buf).to_string_lossy().to_string();
+    }
+    path.to_string()
 }
 
 /// Read files and optionally extract matching pub items, formatted as markdown.
@@ -150,20 +162,45 @@ fn extract_items(content: &str, items: &[String]) -> String {
 mod tests {
     use super::*;
     use std::io::Write;
+    use tempfile::tempdir_in;
     use tempfile::NamedTempFile;
 
     #[test]
     fn parse_specs_whole_file() {
         let specs = parse_context_specs(&["src/types.rs".to_string()]).unwrap();
         assert_eq!(specs.len(), 1);
-        assert_eq!(specs[0].file, "src/types.rs");
+        assert_eq!(specs[0].file, resolve_to_absolute("src/types.rs"));
         assert!(specs[0].items.is_none());
     }
 
     #[test]
     fn parse_specs_with_items() {
         let specs = parse_context_specs(&["src/types.rs:AgentKind,TaskId".to_string()]).unwrap();
+        assert_eq!(specs[0].file, resolve_to_absolute("src/types.rs"));
         assert_eq!(specs[0].items.as_ref().unwrap(), &["AgentKind", "TaskId"]);
+    }
+
+    #[test]
+    fn parse_specs_resolves_relative_paths_to_absolute() {
+        let cwd = std::env::current_dir().unwrap();
+        let dir = tempdir_in(&cwd).unwrap();
+        let path = dir.path().join("context.rs");
+        std::fs::write(&path, "pub struct RelativePath;\n").unwrap();
+        let relative = path.strip_prefix(&cwd).unwrap().to_string_lossy().to_string();
+
+        let specs = parse_context_specs(&[relative]).unwrap();
+
+        assert_eq!(specs[0].file, path.canonicalize().unwrap().to_string_lossy());
+    }
+
+    #[test]
+    fn parse_specs_keeps_absolute_paths_unchanged() {
+        let file = NamedTempFile::new().unwrap();
+        let absolute = file.path().to_string_lossy().to_string();
+
+        let specs = parse_context_specs(std::slice::from_ref(&absolute)).unwrap();
+
+        assert_eq!(specs[0].file, absolute);
     }
 
     #[test]

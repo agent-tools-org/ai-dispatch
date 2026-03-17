@@ -12,6 +12,7 @@ pub mod clean;
 pub mod config;
 pub mod explain;
 pub mod group;
+pub mod hook;
 pub mod memory;
 pub mod finding;
 pub mod init;

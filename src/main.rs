@@ -45,7 +45,7 @@ use crate::types::AgentKind;
 use anyhow::Result;
 use clap::Parser;
 use std::sync::Arc;
-use crate::cli::{Cli, Commands, AgentCommands, StoreCommands, MemoryCommands, FindingCommands};
+use crate::cli::{Cli, Commands, AgentCommands, HookAction, StoreCommands, MemoryCommands, FindingCommands};
 use crate::cmd::experiment_types::{ExperimentConfig, MetricDirection};
 
 /// Resolve group: CLI flag takes precedence, then AID_GROUP env var.
@@ -352,6 +352,9 @@ async fn main() -> Result<()> {
             cmd::query::run(&store, &prompt, model.as_deref(), auto, group.as_deref(), finding)?;
         }
         Commands::Mcp => cmd::mcp::run(store).await?,
+        Commands::Hook { action } => match action {
+            HookAction::SessionStart => cmd::hook::session_start()?,
+        },
         Commands::Config { action } => {
             cmd::config::run(&store, action)?;
         }

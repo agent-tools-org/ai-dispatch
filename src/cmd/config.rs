@@ -2,7 +2,9 @@
 // Manages agent registry and displays detected AI CLIs.
 
 use anyhow::Result;
+use serde::Deserialize;
 use std::collections::HashMap;
+use std::fs;
 use std::process::Command;
 use std::sync::Arc;
 
@@ -63,6 +65,32 @@ pub struct AgentModel {
     pub tier: &'static str,
     pub description: &'static str,
     pub capability: f64,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct PricingResponse {
+    models: Vec<PricingFileModel>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct PricingFileModel {
+    pub agent: String,
+    pub model: String,
+    pub input_per_m: f64,
+    pub output_per_m: f64,
+    pub tier: String,
+    pub description: String,
+    pub updated: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct ResolvedAgentModel {
+    pub agent: AgentKind,
+    pub model: String,
+    pub input_per_m: f64,
+    pub output_per_m: f64,
+    pub tier: String,
+    pub description: String,
 }
 
 pub const AGENT_MODELS: &[AgentModel] = &[
@@ -309,7 +337,12 @@ pub fn run(store: &Arc<Store>, action: ConfigAction) -> Result<()> {
                 }
             }
         }
-        ConfigAction::Pricing => {
+        ConfigAction::Pricing { update } => {
+            if update {
+                let updated = update_pricing_file()?;
+                println!("Updated {updated} models in {}.", crate::paths::pricing_path().display());
+            }
+            let pricing = merged_agent_models()?;
             println!(
                 "{:<10} {:<25} {:>10} {:>10} {:>10} Description",
                 "Agent", "Model", "Tier", "Input/M", "Output/M"
@@ -322,7 +355,7 @@ pub fn run(store: &Arc<Store>, action: ConfigAction) -> Result<()> {
                 AgentKind::Kilo,
                 AgentKind::Cursor,
             ] {
-                for am in AGENT_MODELS.iter().filter(|m| m.agent == agent) {
+                for am in pricing.iter().filter(|m| m.agent == agent) {
                     println!(
                         "{:<10} {:<25} {:>10} ${:>9.2} ${:>9.2} {}",
                         agent.as_str(),
@@ -358,6 +391,83 @@ pub fn run(store: &Arc<Store>, action: ConfigAction) -> Result<()> {
         }
     }
     Ok(())
+}
+
+pub fn load_pricing_overrides() -> Result<Vec<PricingFileModel>> {
+    let path = crate::paths::pricing_path();
+    if !path.exists() {
+        return Ok(Vec::new());
+    }
+    let contents = fs::read_to_string(path)?;
+    let response: PricingResponse = serde_json::from_str(&contents)?;
+    Ok(response.models)
+}
+
+pub fn merged_agent_models() -> Result<Vec<ResolvedAgentModel>> {
+    let mut merged = Vec::with_capacity(AGENT_MODELS.len());
+    let mut indexes = HashMap::new();
+    for model in AGENT_MODELS {
+        indexes.insert((model.agent, model.model.to_lowercase()), merged.len());
+        merged.push(ResolvedAgentModel {
+            agent: model.agent,
+            model: model.model.to_string(),
+            input_per_m: model.input_per_m,
+            output_per_m: model.output_per_m,
+            tier: model.tier.to_string(),
+            description: model.description.to_string(),
+        });
+    }
+    for model in load_pricing_overrides()? {
+        let PricingFileModel {
+            agent: agent_name,
+            model,
+            input_per_m,
+            output_per_m,
+            tier,
+            description,
+            updated,
+        } = model;
+        let _ = updated;
+        let Some(agent) = AgentKind::parse_str(&agent_name) else {
+            continue;
+        };
+        let key = (agent, model.to_lowercase());
+        if let Some(index) = indexes.get(&key).copied() {
+            let current = &mut merged[index];
+            current.input_per_m = input_per_m;
+            current.output_per_m = output_per_m;
+            current.tier = tier;
+            current.description = description;
+        } else {
+            indexes.insert(key, merged.len());
+            merged.push(ResolvedAgentModel {
+                agent,
+                model,
+                input_per_m,
+                output_per_m,
+                tier,
+                description,
+            });
+        }
+    }
+    Ok(merged)
+}
+
+fn update_pricing_file() -> Result<usize> {
+    let output = Command::new("curl")
+        .args(["-fsSL", "https://aid.agent-tools.org/api/pricing"])
+        .output()?;
+    if !output.status.success() {
+        anyhow::bail!("curl failed with status {}", output.status);
+    }
+    let body = String::from_utf8(output.stdout)?;
+    let response: PricingResponse = serde_json::from_str(&body)?;
+    let path = crate::paths::pricing_path();
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    fs::write(path, body)?;
+    Ok(response.models.len())
 }
 
 fn command_installed(command: &str) -> bool {
@@ -554,5 +664,61 @@ pub fn budget_model(agent: &AgentKind) -> Option<&'static str> {
                 cost_a.partial_cmp(&cost_b).unwrap()
             })
             .map(|m| m.model)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{load_pricing_overrides, merged_agent_models};
+    use crate::paths::AidHomeGuard;
+
+    #[test]
+    fn loads_and_merges_pricing_overrides() {
+        let temp = tempfile::tempdir().unwrap();
+        let _guard = AidHomeGuard::set(temp.path());
+        std::fs::write(
+            crate::paths::pricing_path(),
+            r#"{
+                "models": [
+                    {
+                        "agent": "codex",
+                        "model": "gpt-4.1",
+                        "input_per_m": 9.0,
+                        "output_per_m": 19.0,
+                        "tier": "custom",
+                        "description": "override",
+                        "updated": "2026-03-17"
+                    },
+                    {
+                        "agent": "codex",
+                        "model": "new-model",
+                        "input_per_m": 1.5,
+                        "output_per_m": 2.5,
+                        "tier": "cheap",
+                        "description": "new entry",
+                        "updated": "2026-03-17"
+                    }
+                ]
+            }"#,
+        )
+        .unwrap();
+
+        let loaded = load_pricing_overrides().unwrap();
+        assert_eq!(loaded.len(), 2);
+
+        let merged = merged_agent_models().unwrap();
+        let existing = merged
+            .iter()
+            .find(|model| model.agent == crate::types::AgentKind::Codex && model.model == "gpt-4.1")
+            .unwrap();
+        assert_eq!(existing.input_per_m, 9.0);
+        assert_eq!(existing.output_per_m, 19.0);
+        assert_eq!(existing.tier, "custom");
+        let added = merged
+            .iter()
+            .find(|model| model.agent == crate::types::AgentKind::Codex && model.model == "new-model")
+            .unwrap();
+        assert_eq!(added.input_per_m, 1.5);
+        assert_eq!(added.output_per_m, 2.5);
     }
 }

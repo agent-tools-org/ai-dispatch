@@ -21,7 +21,10 @@ pub enum ConfigAction {
         agent: String,
     },
     /// Show pricing table
-    Pricing,
+    Pricing {
+        #[arg(long)]
+        update: bool,
+    },
     /// List available skills
     Skills,
     /// Display skill token estimates for prompt budgeting
@@ -60,6 +63,42 @@ pub enum GroupAction {
     /// Delete a workgroup definition
     Delete {
         group_id: String,
+    },
+    /// Summarize workgroup results with milestones, findings, costs
+    Summary {
+        /// Workgroup ID (e.g. wg-abc1)
+        group_id: String,
+    },
+    /// Post or list workgroup findings
+    Finding {
+        #[command(subcommand)]
+        action: GroupFindingAction,
+    },
+    /// Send a message to the workgroup's broadcast channel
+    Broadcast {
+        /// Workgroup ID
+        group_id: String,
+        /// Message to broadcast
+        message: String,
+    },
+}
+
+#[derive(Subcommand)]
+pub enum GroupFindingAction {
+    /// Post a finding to a workgroup
+    Add {
+        /// Workgroup ID
+        group: String,
+        /// Finding content
+        content: String,
+        /// Source task ID (optional)
+        #[arg(long)]
+        task: Option<String>,
+    },
+    /// List findings for a workgroup
+    List {
+        /// Workgroup ID
+        group: String,
     },
 }
 

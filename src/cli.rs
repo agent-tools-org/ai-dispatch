@@ -296,7 +296,8 @@ Note: --dir, --team, --verify are set in [defaults], not as CLI flags."#)]
         #[arg(long)]
         json: bool,
     },
-    /// Summarize workgroup results
+    /// Summarize workgroup results (alias for `group summary`)
+    #[command(hide = true)]
     Summary {
         /// Workgroup ID (e.g. wg-abc1)
         group: String,
@@ -338,12 +339,16 @@ Note: --dir, --team, --verify are set in [defaults], not as CLI flags."#)]
         #[arg(long, short)]
         file: Option<String>,
     },
-    /// Gracefully stop a running task (SIGTERM + wait)
+    /// Stop a running task (graceful by default, --force for SIGKILL)
     Stop {
         /// Task ID to stop
         task_id: String,
+        /// Force-kill immediately (SIGKILL instead of SIGTERM + wait)
+        #[arg(long)]
+        force: bool,
     },
-    /// Force-kill a running task (SIGKILL)
+    /// Force-kill a running task (alias for `stop --force`)
+    #[command(hide = true)]
     Kill {
         /// Task ID to kill
         task_id: String,
@@ -454,15 +459,14 @@ Note: --dir, --team, --verify are set in [defaults], not as CLI flags."#)]
         #[command(subcommand)]
         action: MemoryCommands,
     },
-    #[command(after_help = r#"Examples:
-  aid finding add wg-abc1 "gamma can be zero in tricrypto"
-  aid finding list wg-abc1"#)]
-    /// Post or list workgroup findings
+    /// Post or list workgroup findings (alias for `group finding`)
+    #[command(hide = true)]
     Finding {
         #[command(subcommand)]
         action: FindingCommands,
     },
-    /// Send a message to a workgroup's broadcast channel
+    /// Send a message to a workgroup's broadcast channel (alias for `group broadcast`)
+    #[command(hide = true)]
     Broadcast {
         /// Workgroup ID
         group: String,
@@ -478,9 +482,10 @@ Note: --dir, --team, --verify are set in [defaults], not as CLI flags."#)]
         #[arg(long)]
         force: bool,
     },
-    /// Initialize default skills and templates
+    /// Initialize default skills and templates (use `setup` instead)
+    #[command(hide = true)]
     Init,
-    /// Interactive setup wizard
+    /// Interactive setup wizard (includes auto-init of skills and templates)
     Setup,
     #[command(hide = true, name = "__run-task")]
     InternalRunTask { task_id: String },

@@ -459,9 +459,8 @@ cargo install ai-dispatch
 echo ""
 echo "Done! Run 'aid --version' to verify."
 echo ""
-echo "Next steps:"
-echo "  aid setup    # detect agents, configure API keys"
-echo "  aid init     # install default skills and templates"
+echo "Next step:"
+echo "  aid setup    # detect agents, configure API keys, install skills"
 echo ""
 echo "Quick start: https://aid.agent-tools.org"
 `;

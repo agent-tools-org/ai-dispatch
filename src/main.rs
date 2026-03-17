@@ -40,7 +40,7 @@ mod webhook;
 mod workgroup;
 mod worktree;
 mod cli;
-use crate::cli_actions::{GroupAction, ProjectAction, TeamAction, WorktreeAction};
+use crate::cli_actions::{GroupAction, GroupFindingAction, ProjectAction, TeamAction, WorktreeAction};
 use crate::types::AgentKind;
 use anyhow::Result;
 use clap::Parser;
@@ -325,8 +325,12 @@ async fn main() -> Result<()> {
         } => {
             cmd::respond::run(&task_id, input.as_deref(), file.as_deref())?;
         }
-        Commands::Stop { task_id } => {
-            cmd::stop::stop(&store, &task_id)?;
+        Commands::Stop { task_id, force } => {
+            if force {
+                cmd::stop::kill(&store, &task_id)?;
+            } else {
+                cmd::stop::stop(&store, &task_id)?;
+            }
         }
         Commands::Kill { task_id } => {
             cmd::stop::kill(&store, &task_id)?;
@@ -361,6 +365,18 @@ async fn main() -> Result<()> {
                 context,
             } => cmd::group::update(&store, &group_id, name.as_deref(), context.as_deref())?,
             GroupAction::Delete { group_id } => cmd::group::delete(&store, &group_id)?,
+            GroupAction::Summary { group_id } => cmd::summary_cli::run(&store, &group_id)?,
+            GroupAction::Finding { action } => match action {
+                GroupFindingAction::Add { group, content, task } => {
+                    cmd::finding::add(&store, &group, &content, task.as_deref())?;
+                }
+                GroupFindingAction::List { group } => {
+                    cmd::finding::list(&store, &group)?;
+                }
+            },
+            GroupAction::Broadcast { group_id, message } => {
+                cmd::broadcast::run(&store, &group_id, &message)?;
+            }
         },
         Commands::Worktree { action } => match action {
             WorktreeAction::Create { branch, base, repo } => {

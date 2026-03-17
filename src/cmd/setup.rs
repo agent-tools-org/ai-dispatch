@@ -135,20 +135,28 @@ pub fn run() -> Result<()> {
     std::fs::create_dir_all(dir)?;
     std::fs::write(&config_path, &existing)?;
 
-    // 4. Summary — different for first-time vs returning
+    // 4. Auto-init skills & templates if missing
+    let skills_dir = crate::paths::aid_dir().join("skills");
+    let needs_init = !skills_dir.is_dir()
+        || std::fs::read_dir(&skills_dir)
+            .map(|d| d.count() == 0)
+            .unwrap_or(true);
+    if needs_init {
+        section("Skills & Templates");
+        crate::cmd::init::run()?;
+    }
+
+    // 5. Summary
+    section(if has_key { "Status" } else { "Done" });
+    println!("  Config: {}", config_path.display());
     if has_key {
-        section("Status");
-        println!("  Config: {}", config_path.display());
         println!("  Ready to use.");
     } else {
-        section("Done");
-        println!("  Config: {}", config_path.display());
         println!();
         println!("  Quick start:");
         println!("    aid query \"your question\"          free LLM query");
         println!("    aid query --auto \"question\"         paid, better quality");
         println!("    aid run codex \"task\" --worktree x   dispatch agent");
-        println!("    aid init                            install skills & templates");
     }
     println!();
     Ok(())

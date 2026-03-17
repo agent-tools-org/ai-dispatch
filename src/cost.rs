@@ -1,12 +1,19 @@
 // Cost estimation for AI agent tasks.
 // Maps model names to per-token pricing, computes task cost from token counts.
+use crate::cmd::config;
 use crate::types::AgentKind;
+use std::collections::HashMap;
+use std::sync::OnceLock;
 
 /// Price per 1M tokens (input, output) in USD
+#[derive(Clone, Copy)]
 struct ModelPricing {
     input_per_m: f64,
     output_per_m: f64,
 }
+
+static PRICING_OVERRIDES: OnceLock<HashMap<(AgentKind, String), ModelPricing>> = OnceLock::new();
+
 /// Estimate cost in USD from total token count and model name.
 /// Uses blended rate (assumes ~70% input, ~30% output) when breakdown unavailable.
 pub fn estimate_cost(tokens: i64, model: Option<&str>, agent: AgentKind) -> Option<f64> {
@@ -35,12 +42,12 @@ pub fn format_cost_label(cost_usd: Option<f64>, agent: AgentKind) -> String {
 }
 fn resolve_pricing(model: Option<&str>, agent: AgentKind) -> Option<ModelPricing> {
     if let Some(m) = model {
-        return model_pricing(m);
+        return model_pricing(m, agent);
     }
     // Default pricing by agent
     match agent {
-        AgentKind::Gemini => model_pricing("gemini-2.5-flash"),
-        AgentKind::Codex => model_pricing("gpt-4.1"),
+        AgentKind::Gemini => model_pricing("gemini-2.5-flash", agent),
+        AgentKind::Codex => model_pricing("gpt-4.1", agent),
         AgentKind::OpenCode => None, // Unknown without model
         AgentKind::Cursor => Some(ModelPricing {
             input_per_m: 0.0,
@@ -55,7 +62,42 @@ fn resolve_pricing(model: Option<&str>, agent: AgentKind) -> Option<ModelPricing
     }
 }
 
-fn model_pricing(model: &str) -> Option<ModelPricing> {
+fn pricing_overrides() -> &'static HashMap<(AgentKind, String), ModelPricing> {
+    PRICING_OVERRIDES.get_or_init(|| {
+        config::load_pricing_overrides()
+            .unwrap_or_default()
+            .into_iter()
+            .filter_map(|model| {
+                let agent = AgentKind::parse_str(&model.agent)?;
+                Some((
+                    (agent, model.model.to_lowercase()),
+                    ModelPricing {
+                        input_per_m: model.input_per_m,
+                        output_per_m: model.output_per_m,
+                    },
+                ))
+            })
+            .collect()
+    })
+}
+
+fn override_pricing(model: &str, agent: AgentKind) -> Option<ModelPricing> {
+    let candidates = [
+        model.to_lowercase(),
+        model.rsplit('/').next().unwrap_or(model).to_lowercase(),
+    ];
+    for candidate in candidates {
+        if let Some(pricing) = pricing_overrides().get(&(agent, candidate)) {
+            return Some(*pricing);
+        }
+    }
+    None
+}
+
+fn model_pricing(model: &str, agent: AgentKind) -> Option<ModelPricing> {
+    if let Some(pricing) = override_pricing(model, agent) {
+        return Some(pricing);
+    }
     // Normalize model name for matching
     let m = model.to_lowercase();
     let p = if m.contains("gpt-4.1") && !m.contains("mini") && !m.contains("nano") {
@@ -198,19 +240,19 @@ mod tests {
 
     #[test]
     fn new_model_pricing_entries() {
-        let pricing = model_pricing("claude-sonnet-4").unwrap();
+        let pricing = model_pricing("claude-sonnet-4", AgentKind::Custom).unwrap();
         assert_eq!(pricing.input_per_m, 3.0);
         assert_eq!(pricing.output_per_m, 15.0);
-        let pricing = model_pricing("gpt-5").unwrap();
+        let pricing = model_pricing("gpt-5", AgentKind::Codex).unwrap();
         assert_eq!(pricing.input_per_m, 1.25);
         assert_eq!(pricing.output_per_m, 10.0);
-        let pricing = model_pricing("gpt-5.4").unwrap();
+        let pricing = model_pricing("gpt-5.4", AgentKind::Codex).unwrap();
         assert_eq!(pricing.input_per_m, 2.5);
         assert_eq!(pricing.output_per_m, 15.0);
-        let pricing = model_pricing("gpt-5-mini").unwrap();
+        let pricing = model_pricing("gpt-5-mini", AgentKind::Codex).unwrap();
         assert_eq!(pricing.input_per_m, 0.25);
         assert_eq!(pricing.output_per_m, 2.0);
-        let pricing = model_pricing("o3-mini").unwrap();
+        let pricing = model_pricing("o3-mini", AgentKind::Custom).unwrap();
         assert_eq!(pricing.input_per_m, 1.10);
         assert_eq!(pricing.output_per_m, 4.40);
     }

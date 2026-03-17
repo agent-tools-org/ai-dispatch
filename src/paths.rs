@@ -41,6 +41,10 @@ pub fn config_path() -> PathBuf {
     aid_dir().join("config.toml")
 }
 
+pub fn pricing_path() -> PathBuf {
+    aid_dir().join("pricing.json")
+}
+
 pub fn log_path(task_id: &str) -> PathBuf {
     logs_dir().join(format!("{task_id}.jsonl"))
 }
@@ -114,6 +118,7 @@ mod tests {
         let base = aid_dir();
         assert!(db_path().starts_with(&base));
         assert!(config_path().starts_with(&base));
+        assert!(pricing_path().starts_with(&base));
         assert!(jobs_dir().starts_with(&base));
         assert!(logs_dir().starts_with(&base));
         assert!(job_path("t-1234").starts_with(&base));

@@ -60,7 +60,7 @@ pub fn detect_agents() -> Vec<AgentKind> {
         ("gemini", AgentKind::Gemini),
         ("codex", AgentKind::Codex),
         ("opencode", AgentKind::OpenCode),
-        ("cursor", AgentKind::Cursor),
+        ("cursor-agent", AgentKind::Cursor),
         ("kilo", AgentKind::Kilo),
         ("aid-codebuff", AgentKind::Codebuff),
     ] {

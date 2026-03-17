@@ -7,7 +7,17 @@
 .env
 .env.*
 node_modules/
-website/node_modules/
-website/.wrangler/
-v7*-*.toml
+
+# Batch TOML files (ephemeral, not source code)
+v*-*.toml
 evermemos-batch.toml
+
+# Generated output dirs
+nanobanana-output/
+
+# Website (moved to separate repo)
+website/
+website-store/
+
+# Claude prompt (content lives in CLAUDE.md)
+claude-prompt.md

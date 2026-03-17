@@ -49,6 +49,7 @@ pub fn run(force: bool) -> Result<()> {
     Ok(())
 }
 
+#[cfg(target_os = "macos")]
 fn home_cargo_bin() -> PathBuf {
     PathBuf::from(env::var("HOME").unwrap_or_else(|_| ".".to_string())).join(".cargo/bin")
 }

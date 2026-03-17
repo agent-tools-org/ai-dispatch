@@ -30,12 +30,10 @@ pub async fn run(store: Arc<Store>, args: BatchArgs) -> Result<()> {
             eprintln!("[aid] Using workspace {env_group} from AID_GROUP");
         } else if total >= 2 {
             let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("batch");
-            let custom_gid = config.defaults.group_id.as_deref();
-            let wg = store.create_workgroup(stem, "Auto-created for batch dispatch", Some(stem), custom_gid)?;
+            let wg_id = ensure_batch_workgroup(&store, stem, config.defaults.group_id.as_deref())?;
             for task in &mut config.tasks {
-                task.group = Some(wg.id.to_string());
+                task.group = Some(wg_id.clone());
             }
-            eprintln!("[aid] Auto-created workgroup {} for batch {stem}", wg.id);
         }
     }
     println!("Batch: dispatching {total} task(s) from {}", path.display());
@@ -85,6 +83,18 @@ fn resolve_batch_path(path: &Path) -> std::path::PathBuf {
         }
         None => path.to_path_buf(),
     }
+}
+
+fn ensure_batch_workgroup(store: &Store, stem: &str, custom_gid: Option<&str>) -> Result<String> {
+    if let Some(gid) = custom_gid
+        && store.get_workgroup(gid)?.is_some()
+    {
+        eprintln!("[aid] Reusing existing workgroup {gid} for batch {stem}");
+        return Ok(gid.to_string());
+    }
+    let wg = store.create_workgroup(stem, "Auto-created for batch dispatch", Some(stem), custom_gid)?;
+    eprintln!("[aid] Auto-created workgroup {} for batch {stem}", wg.id);
+    Ok(wg.id.to_string())
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum BatchTaskOutcome { Done, Failed, Skipped }
@@ -498,5 +508,32 @@ mod tests {
         let resolved = resolve_batch_path(Path::new("deploy.toml"));
 
         assert_eq!(resolved, fallback);
+    }
+
+    #[test]
+    fn ensure_batch_workgroup_reuses_existing_default_group() {
+        let store = Store::open_memory().unwrap();
+        let existing = store
+            .create_workgroup("existing", "shared", Some("seed"), Some("wg-shared"))
+            .unwrap();
+
+        let workgroup_id = ensure_batch_workgroup(&store, "batch", Some("wg-shared")).unwrap();
+        let workgroups = store.list_workgroups().unwrap();
+
+        assert_eq!(workgroup_id, existing.id.to_string());
+        assert_eq!(workgroups.len(), 1);
+    }
+
+    #[test]
+    fn ensure_batch_workgroup_creates_missing_default_group() {
+        let store = Store::open_memory().unwrap();
+
+        let workgroup_id = ensure_batch_workgroup(&store, "batch", Some("wg-custom")).unwrap();
+        let workgroups = store.list_workgroups().unwrap();
+        let workgroup = store.get_workgroup("wg-custom").unwrap().unwrap();
+
+        assert_eq!(workgroup_id, "wg-custom");
+        assert_eq!(workgroups.len(), 1);
+        assert_eq!(workgroup.name, "batch");
     }
 }

@@ -95,7 +95,7 @@ jobs:
             echo "## Install"
             echo ""
             echo '```bash'
-            echo "curl -fsSL https://aid.mingdev.xyz/install.sh | bash"
+            echo "curl -fsSL https://aid.agent-tools.org/install.sh | bash"
             echo '```'
             echo ""
             echo "Or download a binary below and place it in your PATH."

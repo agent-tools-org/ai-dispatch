@@ -1,6 +1,6 @@
 # ai-dispatch (aid)
 
-![Version](https://img.shields.io/badge/version-8.9.1-blue)
+![Version](https://img.shields.io/badge/version-8.10.0-blue)
 ![Rust](https://img.shields.io/badge/rust-2024-orange)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
@@ -572,26 +572,21 @@ The board displays `[VFAIL]` next to tasks that completed but failed verificatio
 | `aid mcp` | Start the stdio MCP server so another tool can call `aid` natively. | `aid mcp` |
 | `aid merge` | Mark done task(s) as merged. Supports `--group` for bulk merge, `--approve` for interactive approval via hiboss. | `aid merge t-1234`, `aid merge --group wg-a3f1 --approve` |
 | `aid clean` | Remove old tasks/events and orphaned worktrees/logs. Supports `--dry-run`. | `aid clean --older-than 7 --worktrees` |
-| `aid config` | Inspect agent profiles, skills, pricing, and prompt token budget. | `aid config agents`, `aid config prompt-budget`, `aid config pricing` |
+| `aid config` | Inspect agent profiles, skills, pricing (with `--update` to fetch latest), and prompt token budget. | `aid config agents`, `aid config pricing --update` |
 | `aid worktree` | Explicit worktree lifecycle management: create, list, remove. | `aid worktree create feat/x`, `aid worktree list`, `aid worktree remove feat/x` |
-| `aid group` | Create, list, show, update, and delete shared-context workgroups. | `aid group create dispatch -c "Shared rollout notes"` |
+| `aid group` | Workgroup management: create, list, show, update, delete, summary, finding, broadcast. | `aid group create dispatch -c "Shared rollout notes"`, `aid group summary wg-a3f1` |
 | `aid store` | Browse, install (with version pinning), update community agent/skill packages. | `aid store install community/aider@1.0.0`, `aid store update --apply` |
 | `aid upgrade` | Upgrade aid to latest crates.io version (checks for running tasks). | `aid upgrade`, `aid upgrade --force` |
 | `aid agent` | Manage custom agent definitions: list, show, add, remove, fork. | `aid agent list`, `aid agent fork codex --as codex-fast` |
 | `aid export` | Export a task with full context (prompt, events, output, diff). Supports markdown and JSON. | `aid export t-1234`, `aid export t-1234 --format json --output task.json` |
 | `aid memory` | Manage shared agent memory: add, list, search, update, forget. | `aid memory add discovery "Finding"`, `aid memory search "query"` |
-| `aid finding` | Post or list workgroup findings for investigation collaboration. | `aid finding add wg-abc1 "key insight"`, `aid finding list wg-abc1` |
 | `aid tree` | Show retry chain as an ASCII tree with agent/status/cost per node. | `aid tree t-1234` |
-| `aid summary` | Summarize workgroup results with tasks, milestones, findings, costs. | `aid summary wg-abc1` |
 | `aid query` | Fast LLM query via OpenRouter (no agent startup). Free and auto tiers. | `aid query "question"`, `aid query --auto "question"` |
-| `aid setup` | Interactive configuration wizard. Detects agents, sets API keys. | `aid setup` |
-| `aid broadcast` | Send a message to a workgroup's broadcast channel. | `aid broadcast wg-abc1 "status update"` |
+| `aid setup` | Interactive setup wizard. Detects agents, sets API keys, initializes skills and templates. | `aid setup` |
 | `aid team` | Manage teams: create, list, show, delete. Teams inject knowledge and rules into agent prompts. | `aid team list`, `aid team show dev`, `aid team create ops` |
 | `aid project` | Initialize and show project configuration (`.aid/project.toml`). Profiles expand into verify/budget/rules defaults. | `aid project init`, `aid project show` |
-| `aid stop` | Stop a running task (SIGTERM + 5s grace + SIGKILL). | `aid stop t-1234` |
-| `aid kill` | Immediately kill a running task (SIGKILL). | `aid kill t-1234` |
+| `aid stop` | Stop a running task. Graceful by default (SIGTERM + 5s + SIGKILL), `--force` for immediate SIGKILL. | `aid stop t-1234`, `aid stop t-1234 --force` |
 | `aid steer` | Inject guidance into a running PTY task. | `aid steer t-1234 "focus on tests"` |
-| `aid init` | Initialize default skills and templates. | `aid init` |
 
 ## Best Practices / Methodology
 

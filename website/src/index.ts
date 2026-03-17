@@ -1,7 +1,7 @@
 // aid-website — Cloudflare Worker for aid.agent-tools.org
 // Serves: HTML landing page, /llms.txt, /llms-full.txt, /install.sh, /api/*
 
-const VERSION = "8.9.1";
+const VERSION = "8.10.0";
 const SITE_URL = "https://aid.agent-tools.org";
 const REPO_URL = "https://github.com/agent-tools-org/ai-dispatch";
 const META_DESCRIPTION =
@@ -35,8 +35,7 @@ const COMMANDS: Command[] = [
   { name: "usage", purpose: "View task history, per-agent analytics, and budget windows.", example: "aid usage --agent codex --period 7d" },
   { name: "retry", purpose: "Re-dispatch a failed task with feedback, optionally switching agent or dir.", example: 'aid retry t-1234 -f "Fix the compilation error" --agent opencode' },
   { name: "respond", purpose: "Send interactive input to a running background task.", example: 'aid respond t-1234 "Please rerun with logging enabled"' },
-  { name: "stop", purpose: "Gracefully stop a running task (SIGTERM + 5s wait + SIGKILL).", example: "aid stop t-1234" },
-  { name: "kill", purpose: "Force-kill a running task immediately (SIGKILL).", example: "aid kill t-1234" },
+  { name: "stop", purpose: "Stop a running task. Graceful by default, --force for immediate SIGKILL.", example: "aid stop t-1234, aid stop t-1234 --force" },
   { name: "steer", purpose: "Inject guidance into a running PTY task mid-flight.", example: 'aid steer t-1234 "Switch to approach B instead"' },
   { name: "benchmark", purpose: "Compare the same task across multiple agents.", example: 'aid benchmark --agents codex,cursor "Implement new parsing"' },
   { name: "output", purpose: "Show task output directly without additional metadata.", example: "aid output t-1234" },
@@ -45,20 +44,16 @@ const COMMANDS: Command[] = [
   { name: "merge", purpose: "Mark done tasks as merged. Supports --group for bulk merge, --approve for interactive approval via hiboss.", example: "aid merge --group wg-a3f1 --approve" },
   { name: "clean", purpose: "Remove old tasks, orphaned worktrees, and logs.", example: "aid clean --days 30" },
   { name: "agent", purpose: "Manage custom agent definitions: list, show, add, remove, fork.", example: "aid agent fork codex --as codex-fast" },
-  { name: "config", purpose: "Inspect agent profiles, skills, pricing, prompt token budget.", example: "aid config prompt-budget" },
+  { name: "config", purpose: "Inspect agent profiles, skills, pricing (--update to fetch latest), prompt token budget.", example: "aid config pricing --update" },
   { name: "worktree", purpose: "Manage worktree lifecycle (create/list/remove).", example: "aid worktree create --dir feat/parser" },
-  { name: "group", purpose: "Workgroup CRUD with shared context and constraints. Supports --id for custom group IDs.", example: 'aid group create dispatch --context "Docs only" --id my-wg' },
-  { name: "init", purpose: "Initialize default skills and templates for a fresh project.", example: "aid init" },
+  { name: "group", purpose: "Workgroup management: create, list, show, update, delete, summary, finding, broadcast.", example: 'aid group create dispatch --context "Docs only", aid group summary wg-a3f1' },
   { name: "store", purpose: "Browse, install (with version pinning), and update community agent/skill packages.", example: "aid store install community/aider@1.0.0" },
   { name: "upgrade", purpose: "Upgrade aid to latest version from crates.io (checks for running tasks).", example: "aid upgrade" },
   { name: "memory", purpose: "Manage project-scoped agent memory (discoveries, conventions, lessons, facts).", example: 'aid memory add discovery "Auth uses bcrypt not argon2"' },
-  { name: "finding", purpose: "Post or list workgroup findings for shared investigation evidence.", example: 'aid finding add wg-abc1 "gamma can be zero in tricrypto"' },
-  { name: "tree", purpose: "Show retry chain as an ASCII tree.", example: "aid tree t-1234" },
-  { name: "summary", purpose: "Summarize workgroup results with milestones, findings, and costs.", example: "aid summary wg-abc1" },
   { name: "export", purpose: "Export a task with full context in markdown or JSON.", example: "aid export t-1234 --format json" },
+  { name: "tree", purpose: "Show retry chain as an ASCII tree.", example: "aid tree t-1234" },
   { name: "query", purpose: "Fast LLM query via OpenRouter (no agent startup). Free and auto tiers.", example: 'aid query "question", aid query --auto "question"' },
-  { name: "setup", purpose: "Interactive configuration wizard. Detects agents, sets API keys.", example: "aid setup" },
-  { name: "broadcast", purpose: "Send a message to a workgroup's broadcast channel.", example: 'aid broadcast wg-abc1 "update"' },
+  { name: "setup", purpose: "Interactive configuration wizard. Detects agents, sets API keys, initializes skills and templates.", example: "aid setup" },
   { name: "team", purpose: "Manage teams with knowledge context, rules, and agent preferences.", example: "aid team list, aid team show dev, aid team create dev" },
   { name: "project", purpose: "Initialize and manage per-repo project profiles (.aid/project.toml) with built-in presets.", example: "aid project init, aid project show" },
 ];
@@ -191,6 +186,9 @@ function buildLLMSText(): string {
   lines.push(``);
   lines.push(`## Merge Approval & Batch Directory (v8.9)`);
   lines.push(`aid merge --approve for interactive Merge/Retry/Skip decisions. .aid/batches/ for batch file fallback resolution.`);
+  lines.push(``);
+  lines.push(`## Configurable Pricing & Command Consolidation (v8.10)`);
+  lines.push(`Model pricing overrides via ~/.aid/pricing.json with aid config pricing --update. Commands consolidated: finding/broadcast/summary moved under group, kill merged into stop --force, setup auto-runs init.`);
   lines.push(``);
   lines.push(`## Live Task Control (v8.3)`);
   lines.push(`aid stop (SIGTERM + 5s + SIGKILL), aid kill (immediate SIGKILL), aid steer (mid-flight guidance injection).`);
@@ -382,6 +380,8 @@ function buildHTML(): string {
         <div class="feat-card"><h3>Teams <span class="badge">v8.4</span></h3><p>Role-based agent groups with knowledge context, behavioral rules, and capability overrides via <code>--team</code>.</p></div>
         <div class="feat-card"><h3>Project Profiles <span class="badge">v8.5</span></h3><p>Per-repo <code>.aid/project.toml</code> with hobby/standard/production presets for verify, budget, and rules.</p></div>
         <div class="feat-card"><h3>Smart Knowledge Injection <span class="badge">v8.5</span></h3><p>Stop-word filtering, cross-layer dedup, and relevance scoring keep agent prompts lean and focused.</p></div>
+        <div class="feat-card"><h3>Configurable Pricing <span class="badge">v8.10</span></h3><p>Override model prices via <code>~/.aid/pricing.json</code>. Public API at <code>/api/pricing</code>. Auto-update with <code>aid config pricing --update</code>.</p></div>
+        <div class="feat-card"><h3>Command Consolidation <span class="badge">v8.10</span></h3><p>Cleaner CLI: finding/broadcast/summary moved under <code>group</code>, kill merged into <code>stop --force</code>, setup auto-runs init.</p></div>
         <div class="feat-card"><h3>Live Task Control <span class="badge">v8.3</span></h3><p><code>aid stop</code> / <code>aid kill</code> for termination, <code>aid steer</code> for mid-flight guidance injection.</p></div>
         <div class="feat-card"><h3>Quota Cascade <span class="badge">v8.7</span></h3><p>When an agent hits its rate limit, aid auto-falls back to the next capable agent in the chain.</p></div>
         <div class="feat-card"><h3>Merge Approval <span class="badge">v8.9</span></h3><p><code>aid merge --approve</code> for interactive Merge/Retry/Skip decisions via hiboss before merging.</p></div>

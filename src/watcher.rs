@@ -374,6 +374,10 @@ pub(crate) fn handle_streaming_line_with_session(
             store.update_agent_session_id(task_id.as_str(), session_id)?;
             *session_saved = true;
         }
+        // Detect rate limit errors in streaming output (cursor sends these via stdout JSON)
+        if rate_limit::is_rate_limit_error(&event.detail) {
+            rate_limit::mark_rate_limited(&agent.kind(), &event.detail);
+        }
         store.insert_event(&event)?;
         *event_count += 1;
         return Ok(Some(event.detail.clone()));
@@ -522,6 +526,10 @@ struct LoopDetector {
 impl LoopDetector {
     fn new() -> Self { Self { recent_events: VecDeque::new() } }
     fn push(&mut self, detail: &str) {
+        // Skip empty/whitespace-only details to avoid false loop detection
+        if detail.trim().is_empty() {
+            return;
+        }
         let mut truncated = detail.to_string();
         truncated.truncate(100);
         self.recent_events.push_back(truncated);
@@ -691,5 +699,21 @@ mod tests {
             true,
             std::iter::repeat("dup").take(8).chain(["unique-1", "unique-2"]),
         );
+    }
+
+    #[test]
+    fn loop_detector_ignores_empty_details() {
+        // Empty/whitespace details should not trigger loop detection
+        loop_detector_case(false, std::iter::repeat("").take(20));
+        loop_detector_case(false, std::iter::repeat("  ").take(20));
+        loop_detector_case(false, std::iter::repeat("\t").take(20));
+        // Mix of empty and real events should not false-positive
+        let mut events: Vec<&str> = Vec::new();
+        for _ in 0..5 {
+            events.push("");
+            events.push("working");
+            events.push("  ");
+        }
+        loop_detector_case(false, events);
     }
 }

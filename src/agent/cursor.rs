@@ -1,5 +1,5 @@
-// Cursor Agent CLI adapter: builds `cursor agent` commands, parses text output.
-// Cursor Agent runs with --trust for autonomous operation and --workspace for dir.
+// Cursor Agent CLI adapter: builds `cursor-agent` commands, parses stream-json output.
+// Uses the standalone cursor-agent binary (not the IDE CLI `cursor agent` subcommand).
 
 use anyhow::Result;
 use chrono::Local;
@@ -22,10 +22,9 @@ impl super::Agent for CursorAgent {
     }
 
     fn build_command(&self, prompt: &str, opts: &RunOpts) -> Result<Command> {
-        let mut cmd = Command::new("cursor");
+        let mut cmd = Command::new("cursor-agent");
         if opts.read_only {
             cmd.args([
-                "agent",
                 "-p",
                 prompt,
                 "--mode",
@@ -36,7 +35,6 @@ impl super::Agent for CursorAgent {
             ]);
         } else {
             cmd.args([
-                "agent",
                 "-p",
                 prompt,
                 "--trust",
@@ -47,6 +45,10 @@ impl super::Agent for CursorAgent {
             ]);
         }
         if let Some(ref dir) = opts.dir {
+            let path = std::path::Path::new(dir);
+            if !path.is_dir() {
+                anyhow::bail!("Workspace path does not exist: {dir}");
+            }
             cmd.args(["--workspace", dir]);
             cmd.current_dir(dir);
         }
@@ -101,10 +103,22 @@ fn parse_json_event(
                 .and_then(|value| value.as_str())
                 .unwrap_or("system");
             let model = v.get("model").and_then(|value| value.as_str());
+            let session_id = v.get("session_id").and_then(|value| value.as_str());
             let detail = model
                 .map(|m| format!("{subtype}: {m}"))
                 .unwrap_or_else(|| subtype.to_string());
-            let metadata = model.map(|m| json!({"model": m}));
+            let mut meta = json!({});
+            if let Some(m) = model {
+                meta["model"] = json!(m);
+            }
+            if let Some(sid) = session_id {
+                meta["agent_session_id"] = json!(sid);
+            }
+            let metadata = if meta.as_object().map_or(true, |o| o.is_empty()) {
+                None
+            } else {
+                Some(meta)
+            };
             (EventKind::Reasoning, detail, metadata)
         }
         "assistant" => {
@@ -113,6 +127,62 @@ fn parse_json_event(
                 .and_then(|value| value.as_str())?
                 .to_string();
             (EventKind::Reasoning, detail, None)
+        }
+        "thinking" => {
+            // Skip thinking deltas — they're tiny streaming fragments, not useful events
+            return None;
+        }
+        "tool_call" => {
+            let subtype = v
+                .get("subtype")
+                .and_then(|value| value.as_str())
+                .unwrap_or("call");
+            // Cursor uses tool-specific keys inside "tool_call" object:
+            // e.g. {"tool_call": {"globToolCall": {...}}} or {"tool_call": {"writeToolCall": {...}}}
+            let tc = v.get("tool_call").and_then(|value| value.as_object())?;
+            let (tool_name, tool_data) = tc.iter().next()?;
+            let path_from = |data: &serde_json::Value| -> String {
+                data.pointer("/args/path")
+                    .or_else(|| data.pointer("/args/filePath"))
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("?")
+                    .to_string()
+            };
+            let detail = match tool_name.as_str() {
+                "writeToolCall" => format!("{subtype}: write {}", path_from(tool_data)),
+                "readToolCall" => format!("{subtype}: read {}", path_from(tool_data)),
+                "globToolCall" => {
+                    let pattern = tool_data
+                        .pointer("/args/globPattern")
+                        .or_else(|| tool_data.pointer("/args/pattern"))
+                        .and_then(|value| value.as_str())
+                        .unwrap_or("*");
+                    format!("{subtype}: glob {pattern}")
+                }
+                "shellToolCall" | "terminalToolCall" => {
+                    let command = tool_data
+                        .pointer("/args/command")
+                        .and_then(|value| value.as_str())
+                        .unwrap_or("?");
+                    format!("{subtype}: shell {command}")
+                }
+                "grepToolCall" => {
+                    let pattern = tool_data
+                        .pointer("/args/pattern")
+                        .and_then(|value| value.as_str())
+                        .unwrap_or("?");
+                    format!("{subtype}: grep {pattern}")
+                }
+                _ => format!("{subtype}: {tool_name}"),
+            };
+            let event_kind = if tool_name.contains("write") || tool_name.contains("Write") {
+                EventKind::FileWrite
+            } else if tool_name.contains("read") || tool_name.contains("Read") {
+                EventKind::FileRead
+            } else {
+                EventKind::Reasoning
+            };
+            (event_kind, detail, None)
         }
         "result" => {
             let input_tokens = v
@@ -247,5 +317,56 @@ mod tests {
         assert_eq!(event.event_kind, EventKind::Reasoning);
         assert_eq!(event.detail, "Hello!");
         assert!(event.metadata.is_none());
+    }
+
+    #[test]
+    fn parses_tool_call_write() {
+        let agent = CursorAgent;
+        let line = r#"{"type":"tool_call","subtype":"started","tool_call":{"writeToolCall":{"args":{"filePath":"src/main.rs","content":"fn main() {}"}}}}"#;
+        let event = agent
+            .parse_event(&TaskId("t-tool".to_string()), line)
+            .unwrap();
+        assert_eq!(event.event_kind, EventKind::FileWrite);
+        assert_eq!(event.detail, "started: write src/main.rs");
+    }
+
+    #[test]
+    fn parses_tool_call_glob() {
+        let agent = CursorAgent;
+        let line = r#"{"type":"tool_call","subtype":"started","tool_call":{"globToolCall":{"args":{"globPattern":"**/*.rs","targetDirectory":"src/"}}}}"#;
+        let event = agent
+            .parse_event(&TaskId("t-tool".to_string()), line)
+            .unwrap();
+        assert_eq!(event.event_kind, EventKind::Reasoning);
+        assert_eq!(event.detail, "started: glob **/*.rs");
+    }
+
+    #[test]
+    fn skips_all_thinking_deltas() {
+        let agent = CursorAgent;
+        // All thinking events should be skipped, including non-empty ones
+        let line = r#"{"type":"thinking","subtype":"delta","text":"analyzing the code"}"#;
+        assert!(agent
+            .parse_event(&TaskId("t-think".to_string()), line)
+            .is_none());
+    }
+
+    #[test]
+    fn uses_cursor_agent_binary() {
+        let agent = CursorAgent;
+        let opts = crate::agent::RunOpts {
+            dir: None,
+            output: None,
+            model: None,
+            budget: false,
+            read_only: false,
+            context_files: vec![],
+            session_id: None,
+        };
+        let cmd = agent.build_command("test prompt", &opts).unwrap();
+        assert_eq!(cmd.get_program(), "cursor-agent");
+        // Should NOT have "agent" as first arg (no longer a subcommand)
+        let args: Vec<_> = cmd.get_args().collect();
+        assert_eq!(args[0], "-p");
     }
 }

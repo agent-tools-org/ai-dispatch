@@ -147,6 +147,15 @@ impl App {
     pub fn get_milestone(&self, task_id: &str) -> Option<&str> {
         self.milestones.get(task_id).map(String::as_str)
     }
+    pub fn get_failure_reason(&self, task_id: &str) -> Option<String> {
+        self.events_cache.get(task_id).and_then(|events| {
+            events
+                .iter()
+                .rev()
+                .find(|e| e.event_kind == EventKind::Error)
+                .map(|e| e.detail.clone())
+        })
+    }
     pub fn config(&self) -> &crate::config::AidConfig { &self.config }
     pub fn task_milestones(&self, task_id: &str) -> Vec<String> {
         self.events_cache

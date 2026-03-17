@@ -76,6 +76,14 @@ pub fn task_header(task: &Task, events: &[crate::types::TaskEvent]) -> Paragraph
             Style::default().fg(Color::Magenta),
         )));
     }
+    if matches!(task.status, TaskStatus::Failed | TaskStatus::Stopped) {
+        if let Some(reason) = last_error_detail(events) {
+            lines.push(Line::from(Span::styled(
+                format!("Reason: {}", truncate(&reason, 120)),
+                Style::default().fg(Color::Red),
+            )));
+        }
+    }
     Paragraph::new(lines)
 }
 
@@ -200,6 +208,12 @@ pub fn task_progress(app: &App, task: &Task) -> String {
     if task.status == TaskStatus::AwaitingInput {
         return "awaiting input".to_string();
     }
+    // For failed/stopped tasks, show last error reason instead of milestone
+    if matches!(task.status, TaskStatus::Failed | TaskStatus::Stopped) {
+        if let Some(reason) = app.get_failure_reason(task.id.as_str()) {
+            return truncate(&reason, 30);
+        }
+    }
     let milestone_or_dash = || {
         app.get_milestone(task.id.as_str())
             .map(|milestone| truncate(milestone, 30))
@@ -208,9 +222,7 @@ pub fn task_progress(app: &App, task: &Task) -> String {
     match task.status {
         TaskStatus::Running
         | TaskStatus::Done
-        | TaskStatus::Merged
-        | TaskStatus::Failed
-        | TaskStatus::Stopped => milestone_or_dash(),
+        | TaskStatus::Merged => milestone_or_dash(),
         _ => "—".to_string(),
     }
 }
@@ -226,6 +238,14 @@ pub fn status_style(status: TaskStatus) -> Style {
         TaskStatus::Waiting => Style::default().fg(Color::Indexed(240)),
         TaskStatus::Skipped => Style::default().fg(Color::Blue),
     }
+}
+
+pub fn last_error_detail(events: &[crate::types::TaskEvent]) -> Option<String> {
+    events
+        .iter()
+        .rev()
+        .find(|e| e.event_kind == crate::types::EventKind::Error)
+        .map(|e| e.detail.clone())
 }
 
 pub fn pending_prompt(events: &[crate::types::TaskEvent]) -> Option<&str> {

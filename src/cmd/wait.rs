@@ -108,8 +108,17 @@ async fn wait_for_task_ids_inner(
                     let tokens = task.tokens
                         .map(|t| if t >= 1_000_000 { format!("{:.1}M", t as f64 / 1_000_000.0) } else if t >= 1_000 { format!("{:.1}k", t as f64 / 1_000.0) } else { t.to_string() })
                         .unwrap_or_else(|| "-".to_string());
+                    let fail_reason = if status == TaskStatus::Failed {
+                        store.latest_error(task_id)
+                            .ok()
+                            .flatten()
+                            .map(|r| format!(" — {r}"))
+                            .unwrap_or_default()
+                    } else {
+                        String::new()
+                    };
                     println!(
-                        "[{}/{}] {} {} ({}, {}tok, {})",
+                        "[{}/{}] {} {} ({}, {}tok, {}){fail_reason}",
                         completed, total, task_id, status.label(), duration, tokens, cost::format_cost(task.cost_usd),
                     );
                 } else {

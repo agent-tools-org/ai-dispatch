@@ -380,7 +380,6 @@ pub async fn run(store: Arc<Store>, mut args: RunArgs) -> Result<TaskId> {
                 crate::agent::truncate::truncate_text(&args.prompt, 50)
             );
             eprintln!("[aid] Watch: aid watch --quiet {task_id}");
-            eprintln!("[aid] TUI:   aid watch --tui");
         }
     } else {
         let std_cmd = agent
@@ -537,14 +536,19 @@ pub async fn run(store: Arc<Store>, mut args: RunArgs) -> Result<TaskId> {
                         format!("[aid] Next: aid show {task_id} --diff | aid merge {task_id}")
                     }
                     TaskStatus::Failed => {
-                        let base = format!(
+                        let reason = store.latest_error(task_id.as_str())
+                            .ok()
+                            .flatten()
+                            .map(|r| format!("[aid] Reason: {r}\n"))
+                            .unwrap_or_default();
+                        let next = format!(
                             "[aid] Next: aid show {task_id} | aid retry {task_id} -f \"feedback\""
                         );
                         if task.duration_ms.unwrap_or(i64::MAX) < 5000 {
                             let stderr = retry_logic::read_stderr_tail(task_id.as_str(), 3);
-                            format!("{base}\n[aid] Hint: task failed in <5s — check agent binary is installed and --dir points to a valid repo\n[aid] stderr: {stderr}")
+                            format!("{reason}{next}\n[aid] Hint: task failed in <5s — check agent binary is installed and --dir points to a valid repo\n[aid] stderr: {stderr}")
                         } else {
-                            base
+                            format!("{reason}{next}")
                         }
                     }
                     _ => String::new(),

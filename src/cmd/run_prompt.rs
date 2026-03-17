@@ -321,7 +321,16 @@ pub(super) async fn run_agent_process_impl(args: RunProcessArgs<'_>) -> Result<(
     let duration_str = format_duration(duration_ms);
     let tokens_str = info.tokens.map(|t| format!(", {} tokens", t)).unwrap_or_default();
     let cost_str = if cost_usd.is_some() { format!(", {}", crate::cost::format_cost(cost_usd)) } else { String::new() };
-    println!("Task {} {} ({}{}{})", task_id, info.status.label(), duration_str, tokens_str, cost_str);
+    let fail_reason = if info.status == TaskStatus::Failed {
+        store.latest_error(task_id.as_str())
+            .ok()
+            .flatten()
+            .map(|reason| format!("\n[aid] Reason: {reason}"))
+            .unwrap_or_default()
+    } else {
+        String::new()
+    };
+    println!("Task {} {} ({}{}{}){}", task_id, info.status.label(), duration_str, tokens_str, cost_str, fail_reason);
     Ok(())
 }
 

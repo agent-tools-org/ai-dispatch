@@ -1,6 +1,6 @@
 # ai-dispatch (aid)
 
-![Version](https://img.shields.io/badge/version-8.10.0-blue)
+![Version](https://img.shields.io/badge/version-8.15.2-blue)
 ![Rust](https://img.shields.io/badge/rust-2024-orange)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
@@ -938,6 +938,7 @@ Webhooks fire automatically when background tasks reach a terminal state. Custom
 - **Auto-commit enforcement**: Background worktree tasks auto-commit uncommitted changes after completion, preventing lost work.
 - **Zombie recovery**: When a zombie task is detected in a worktree with uncommitted changes, those changes are preserved via auto-commit before marking the task as failed.
 - **Shared build cache**: Rust worktree tasks share `CARGO_TARGET_DIR` to avoid redundant recompilation across parallel dispatches.
+- **Worktree sandbox guard**: All worktree cleanup operations validate paths must resolve to `/tmp/aid-wt-*` before any deletion. The sandbox guard prevents accidental removal of non-worktree directories even if task metadata is corrupted.
 - **Worktree escape detection**: After each worktree task, `aid` checks if the agent accidentally modified the main repo and warns with a file list.
 - **Auto merge on `aid merge`**: Merges the worktree branch into the current branch, runs pre-merge verification, and cleans up the worktree directory.
 - **SQLite concurrency**: `busy_timeout=5000` prevents "database is locked" errors under parallel task access.

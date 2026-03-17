@@ -49,7 +49,12 @@ impl Store {
             return Ok(None);
         }
         let workspace_dir = crate::paths::workspace_dir(id);
-        let _ = std::fs::remove_dir_all(&workspace_dir);
+        let ws = workspace_dir.to_string_lossy();
+        if ws.starts_with("/tmp/aid-wg-") || ws.starts_with("/private/tmp/aid-wg-") {
+            let _ = std::fs::remove_dir_all(&workspace_dir);
+        } else {
+            eprintln!("[aid] SAFETY: refusing to remove workspace '{}' — not under /tmp/aid-wg-*", ws);
+        }
         Ok(Some(tagged_tasks))
     }
 

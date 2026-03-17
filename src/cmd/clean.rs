@@ -66,6 +66,12 @@ fn clean_orphaned_worktrees(store: &Store, dry_run: bool) -> Result<()> {
         if dry_run {
             println!("[dry-run] Would remove orphaned worktree {}", path.display());
         } else {
+            // SANDBOX: double-check path is under /tmp/aid-wt-* before deletion
+            let path_str = path.to_string_lossy();
+            if !path_str.starts_with("/tmp/aid-wt-") && !path_str.starts_with("/private/tmp/aid-wt-") {
+                eprintln!("[aid] SAFETY: refusing to remove '{}' — not an aid worktree", path.display());
+                continue;
+            }
             fs::remove_dir_all(&path)?;
             println!("Removed orphaned worktree {}", path.display());
         }

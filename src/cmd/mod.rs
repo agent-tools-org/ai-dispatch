@@ -41,6 +41,8 @@ pub mod summary_cli;
 pub mod upgrade;
 pub mod wait;
 pub mod watch;
+#[cfg(feature = "web")]
+pub mod web;
 pub mod worktree;
 pub mod tree;
 pub mod experiment_types;

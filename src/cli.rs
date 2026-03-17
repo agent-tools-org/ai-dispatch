@@ -123,23 +123,37 @@ Hint: If passing file paths, use --context <path> not positional args"#)]
     #[command(after_help = r#"Examples:
   aid batch tasks.toml --parallel
   aid batch tasks.toml --parallel --max-concurrent 3
+  aid batch init                         # Generate template TOML
 
 Batch TOML format:
   [defaults]
-  dir = "."
-  verify = "cargo check"
-  agent = "codex"
-  team = "dev"
+  dir = "."                              # Working directory
+  agent = "codex"                        # Default agent
+  team = "dev"                           # Team knowledge injection
+  verify = "cargo check"                 # Auto-verify on completion
+  fallback = "cursor"                    # Agent to try if primary fails
+  model = "o3"                           # Model override
+  context = ["src/types.rs"]             # Files to inject as context
+  skills = ["implementer"]               # Methodology skills
+  read_only = false                      # Read-only mode
+  budget = false                         # Budget/cheap mode
 
   [[tasks]]
-  name = "types"
-  prompt = "Create shared types"
-  worktree = "feat/types"
+  name = "types"                         # Task name (for depends_on)
+  agent = "codex"                        # Override default agent
+  prompt = "Create shared types"         # Task prompt
+  worktree = "feat/types"                # Git worktree branch
+  fallback = "cursor"                    # Fallback agent on failure
+  depends_on = ["other-task"]            # Run after named task(s)
+  context = ["src/lib.rs"]               # Extra context files
+  on_success = "deploy"                  # Trigger conditional task
+  on_fail = "notify"                     # Trigger on failure
 
-Note: --dir, --team, --verify are set in [defaults], not as CLI flags."#)]
+Note: --dir, --team, --verify are set in [defaults], not as CLI flags.
+Run `aid batch init` to generate a full template with all fields."#)]
     /// Dispatch tasks from a TOML batch file
     Batch {
-        /// Path to the batch TOML file
+        /// Path to batch TOML file, or "init" to generate a template
         file: String,
         /// Dispatch tasks in parallel
         #[arg(long)]
@@ -153,6 +167,9 @@ Note: --dir, --team, --verify are set in [defaults], not as CLI flags."#)]
         /// Limit number of concurrent tasks
         #[arg(long)]
         max_concurrent: Option<usize>,
+        /// Output file for init (default: tasks.toml)
+        #[arg(short, long)]
+        output: Option<String>,
     },
     /// Benchmark a task across multiple agents
     Benchmark {
@@ -516,6 +533,14 @@ Note: --dir, --team, --verify are set in [defaults], not as CLI flags."#)]
         /// Task ID
         task_id: String,
     },
+    /// Start local web UI dashboard
+    #[cfg(feature = "web")]
+    #[command(name = "web")]
+    Web {
+        /// Port to listen on
+        #[arg(long, default_value = "8080")]
+        port: u16,
+    },
 }
 
 #[derive(Subcommand)]
@@ -719,8 +744,7 @@ mod tests {
 
     #[test]
     fn run_timeout_flag_parses() {
-        let cli = Cli::try_parse_from(["aid", "run", "codex", "task", "--timeout", "300"])
-            .unwrap();
+        let cli = Cli::try_parse_from(["aid", "run", "codex", "task", "--timeout", "300"]).unwrap();
         match cli.command {
             Commands::Run { timeout, .. } => assert_eq!(timeout, Some(300)),
             _ => panic!("expected Run"),
@@ -729,10 +753,23 @@ mod tests {
 
     #[test]
     fn watch_timeout_flag_parses() {
-        let cli = Cli::try_parse_from(["aid", "watch", "--quiet", "--timeout", "60", "--group", "wg-a"])
-            .unwrap();
+        let cli = Cli::try_parse_from([
+            "aid",
+            "watch",
+            "--quiet",
+            "--timeout",
+            "60",
+            "--group",
+            "wg-a",
+        ])
+        .unwrap();
         match cli.command {
-            Commands::Watch { timeout, group, quiet, .. } => {
+            Commands::Watch {
+                timeout,
+                group,
+                quiet,
+                ..
+            } => {
                 assert!(quiet);
                 assert_eq!(timeout, Some(60));
                 assert_eq!(group, Some("wg-a".to_string()));

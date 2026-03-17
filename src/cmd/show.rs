@@ -64,12 +64,19 @@ pub async fn run(store: Arc<Store>, args: ShowArgs) -> Result<()> {
     } else {
         ShowMode::Summary
     };
+    let task = load_task(&store, &args.task_id)?;
     let text = render_mode_text(&store, &args.task_id, mode)?;
     print!("{text}");
     if matches!(mode, ShowMode::Diff) {
         eprintln!(
             "[aid] Actions: aid merge {} | aid retry {} -f \"feedback\"",
             args.task_id, args.task_id
+        );
+    }
+    if !task.status.is_terminal() {
+        eprintln!(
+            "[aid] Task is still running. To wait for completion: aid watch --quiet {}",
+            args.task_id
         );
     }
     Ok(())

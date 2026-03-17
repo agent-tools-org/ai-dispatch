@@ -37,6 +37,8 @@ pub mod usage_report;
 mod verify;
 mod watcher;
 mod webhook;
+#[cfg(feature = "web")]
+mod web;
 mod workgroup;
 mod worktree;
 mod cli;
@@ -205,18 +207,23 @@ async fn main() -> Result<()> {
             wait,
             dry_run,
             max_concurrent,
+            output,
         } => {
-            cmd::batch::run(
-                store,
-                cmd::batch::BatchArgs {
-                    file,
-                    parallel,
-                    wait,
-                    dry_run,
-                    max_concurrent,
-                },
-            )
-            .await?;
+            if file == "init" {
+                cmd::batch::init(output.as_deref())?;
+            } else {
+                cmd::batch::run(
+                    store,
+                    cmd::batch::BatchArgs {
+                        file,
+                        parallel,
+                        wait,
+                        dry_run,
+                        max_concurrent,
+                    },
+                )
+                .await?;
+            }
         }
         Commands::Benchmark {
             prompt,
@@ -499,6 +506,10 @@ async fn main() -> Result<()> {
         }
         Commands::Upgrade { force } => {
             cmd::upgrade::run(force)?;
+        }
+        #[cfg(feature = "web")]
+        Commands::Web { port } => {
+            cmd::web::run(port).await?;
         }
         Commands::Init => cmd::init::run()?,
         Commands::Setup => cmd::setup::run()?,

@@ -8,6 +8,8 @@ use crate::cmd::run::{self, RunArgs};
 use crate::store::Store;
 #[path = "batch_validate.rs"]
 mod batch_validate;
+#[path = "batch_init.rs"]
+mod batch_init;
 use batch_validate::{find_ready_tasks, load_task_outcome, resolve_dependencies, task_has_dependencies, task_label, validate_batch_config};
 pub struct BatchArgs {
     pub file: String,
@@ -15,6 +17,10 @@ pub struct BatchArgs {
     pub wait: bool,
     pub dry_run: bool,
     pub max_concurrent: Option<usize>,
+}
+
+pub fn init(output_path: Option<&str>) -> Result<()> {
+    batch_init::init(output_path)
 }
 pub async fn run(store: Arc<Store>, args: BatchArgs) -> Result<()> {
     if args.max_concurrent == Some(0) {

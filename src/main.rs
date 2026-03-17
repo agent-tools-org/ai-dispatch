@@ -42,8 +42,10 @@ mod worktree;
 mod cli;
 use crate::cli_actions::{GroupAction, GroupFindingAction, ProjectAction, TeamAction, WorktreeAction};
 use crate::types::AgentKind;
-use anyhow::Result;
+use anyhow::{Result, bail};
 use clap::Parser;
+use std::fs;
+use std::io::{IsTerminal, Read};
 use std::sync::Arc;
 use crate::cli::{Cli, Commands, AgentCommands, HookAction, StoreCommands, MemoryCommands, FindingCommands};
 use crate::cmd::experiment_types::{ExperimentConfig, MetricDirection};
@@ -51,6 +53,32 @@ use crate::cmd::experiment_types::{ExperimentConfig, MetricDirection};
 /// Resolve group: CLI flag takes precedence, then AID_GROUP env var.
 fn resolve_group(flag: Option<String>) -> Option<String> {
     flag.or_else(|| std::env::var("AID_GROUP").ok())
+}
+
+fn resolve_finding_content(content: Option<String>, stdin: bool, file: Option<String>) -> Result<String> {
+    let stdin_is_terminal = std::io::stdin().is_terminal();
+    resolve_finding_content_from(content, stdin, file, stdin_is_terminal, &mut std::io::stdin())
+}
+
+fn resolve_finding_content_from<R: Read>(
+    content: Option<String>,
+    stdin: bool,
+    file: Option<String>,
+    stdin_is_terminal: bool,
+    reader: &mut R,
+) -> Result<String> {
+    if let Some(path) = file {
+        return Ok(fs::read_to_string(path)?);
+    }
+    if stdin || (content.is_none() && !stdin_is_terminal) {
+        let mut buffer = String::new();
+        reader.read_to_string(&mut buffer)?;
+        return Ok(buffer);
+    }
+    if let Some(content) = content {
+        return Ok(content);
+    }
+    bail!("No finding content provided")
 }
 
 #[tokio::main]
@@ -370,7 +398,8 @@ async fn main() -> Result<()> {
             GroupAction::Delete { group_id } => cmd::group::delete(&store, &group_id)?,
             GroupAction::Summary { group_id } => cmd::summary_cli::run(&store, &group_id)?,
             GroupAction::Finding { action } => match action {
-                GroupFindingAction::Add { group, content, task } => {
+                GroupFindingAction::Add { group, content, stdin, file, task } => {
+                    let content = resolve_finding_content(content, stdin, file)?;
                     cmd::finding::add(&store, &group, &content, task.as_deref())?;
                 }
                 GroupFindingAction::List { group } => {
@@ -446,7 +475,8 @@ async fn main() -> Result<()> {
             }
         },
         Commands::Finding { action } => match action {
-            FindingCommands::Add { group, content, task } => {
+            FindingCommands::Add { group, content, stdin, file, task } => {
+                let content = resolve_finding_content(content, stdin, file)?;
                 cmd::finding::add(&store, &group, &content, task.as_deref())?;
             }
             FindingCommands::List { group } => {
@@ -487,4 +517,87 @@ async fn main() -> Result<()> {
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::resolve_finding_content_from;
+    use std::fs;
+    use std::io::Cursor;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    #[test]
+    fn resolve_finding_content_prefers_file() {
+        let path = std::env::temp_dir().join(format!(
+            "aid-finding-{}.txt",
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        fs::write(&path, "from file").unwrap();
+        let mut stdin = Cursor::new("from stdin");
+
+        let content = resolve_finding_content_from(
+            Some("inline".to_string()),
+            true,
+            Some(path.to_string_lossy().into_owned()),
+            false,
+            &mut stdin,
+        )
+        .unwrap();
+
+        assert_eq!(content, "from file");
+        fs::remove_file(path).unwrap();
+    }
+
+    #[test]
+    fn resolve_finding_content_reads_stdin_when_requested() {
+        let mut stdin = Cursor::new("from stdin");
+
+        let content = resolve_finding_content_from(
+            Some("inline".to_string()),
+            true,
+            None,
+            true,
+            &mut stdin,
+        )
+        .unwrap();
+
+        assert_eq!(content, "from stdin");
+    }
+
+    #[test]
+    fn resolve_finding_content_reads_stdin_when_piped_without_arg() {
+        let mut stdin = Cursor::new("from pipe");
+
+        let content = resolve_finding_content_from(None, false, None, false, &mut stdin).unwrap();
+
+        assert_eq!(content, "from pipe");
+    }
+
+    #[test]
+    fn resolve_finding_content_uses_inline_arg() {
+        let mut stdin = Cursor::new("");
+
+        let content = resolve_finding_content_from(
+            Some("inline".to_string()),
+            false,
+            None,
+            true,
+            &mut stdin,
+        )
+        .unwrap();
+
+        assert_eq!(content, "inline");
+    }
+
+    #[test]
+    fn resolve_finding_content_errors_without_input() {
+        let mut stdin = Cursor::new("");
+
+        let error = resolve_finding_content_from(None, false, None, true, &mut stdin).unwrap_err();
+
+        assert_eq!(error.to_string(), "No finding content provided");
+    }
 }

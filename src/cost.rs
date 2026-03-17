@@ -95,8 +95,8 @@ fn model_pricing(model: &str) -> Option<ModelPricing> {
         }
     } else if m.contains("gemini-2.5-flash") {
         ModelPricing {
-            input_per_m: 0.15,
-            output_per_m: 0.60,
+            input_per_m: 0.30,
+            output_per_m: 2.50,
         }
     } else if m.contains("gemini-2.5-pro") {
         ModelPricing {
@@ -133,10 +133,10 @@ fn model_pricing(model: &str) -> Option<ModelPricing> {
             input_per_m: 0.0,
             output_per_m: 0.0,
         });
-    } else if m.contains("glm-5") || m.contains("kimi-k2.5") {
+    } else if m.contains("glm-4") || m.contains("glm-5") || m.contains("kimi-k2") {
         ModelPricing {
-            input_per_m: 0.5,
-            output_per_m: 2.0,
+            input_per_m: 0.42,
+            output_per_m: 2.10,
         }
     } else {
         return None;

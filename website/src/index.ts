@@ -80,6 +80,37 @@ const AGENTS: AgentCard[] = [
   { name: "codebuff", role: "Full-Stack", bestFor: "Complex implementation, frontend, refactoring", models: "claude-opus-4.6 (SDK)", cost: "Per-token via SDK" },
 ];
 
+interface ModelPricing {
+  agent: string;
+  model: string;
+  input_per_m: number;
+  output_per_m: number;
+  tier: string;
+  description: string;
+  updated: string;
+}
+
+const MODEL_PRICING: ModelPricing[] = [
+  { agent: "codex", model: "gpt-5.4", input_per_m: 2.50, output_per_m: 15.00, tier: "premium", description: "Latest, best quality", updated: "2026-03-17" },
+  { agent: "codex", model: "gpt-4.1", input_per_m: 2.00, output_per_m: 8.00, tier: "standard", description: "Reliable, good quality", updated: "2026-03-17" },
+  { agent: "codex", model: "gpt-4.1-mini", input_per_m: 0.40, output_per_m: 1.60, tier: "cheap", description: "Balanced cost/quality", updated: "2026-03-17" },
+  { agent: "codex", model: "gpt-4.1-nano", input_per_m: 0.10, output_per_m: 0.40, tier: "cheap", description: "Ultra-cheap, simple tasks", updated: "2026-03-17" },
+  { agent: "gemini", model: "gemini-2.5-flash", input_per_m: 0.30, output_per_m: 2.50, tier: "cheap", description: "Fast, balanced (default)", updated: "2026-03-17" },
+  { agent: "gemini", model: "gemini-2.5-pro", input_per_m: 1.25, output_per_m: 10.00, tier: "premium", description: "Complex reasoning", updated: "2026-03-17" },
+  { agent: "gemini", model: "gemini-2.5-flash-lite", input_per_m: 0.00, output_per_m: 0.00, tier: "free", description: "Free tier via AI Studio", updated: "2026-03-17" },
+  { agent: "opencode", model: "glm-4.7", input_per_m: 0.38, output_per_m: 1.98, tier: "cheap", description: "Paid, good quality (via OpenRouter)", updated: "2026-03-17" },
+  { agent: "opencode", model: "kimi-k2.5", input_per_m: 0.45, output_per_m: 2.20, tier: "cheap", description: "Paid, good quality (via OpenRouter)", updated: "2026-03-17" },
+  { agent: "opencode", model: "mimo-v2-flash:free", input_per_m: 0.00, output_per_m: 0.00, tier: "free", description: "Free tier (via OpenRouter)", updated: "2026-03-17" },
+  { agent: "opencode", model: "nemotron-3-super:free", input_per_m: 0.00, output_per_m: 0.00, tier: "free", description: "Free tier (via OpenRouter)", updated: "2026-03-17" },
+  { agent: "opencode", model: "minimax-m2.5:free", input_per_m: 0.00, output_per_m: 0.00, tier: "free", description: "Free tier (via OpenRouter)", updated: "2026-03-17" },
+  { agent: "kilo", model: "default", input_per_m: 0.00, output_per_m: 0.00, tier: "free", description: "Free tier", updated: "2026-03-17" },
+  { agent: "cursor", model: "auto", input_per_m: 0.00, output_per_m: 0.00, tier: "subscription", description: "Auto routing (included in $20/mo)", updated: "2026-03-17" },
+  { agent: "cursor", model: "composer-1.5", input_per_m: 0.00, output_per_m: 0.00, tier: "subscription", description: "Cursor proprietary (included in plan)", updated: "2026-03-17" },
+  { agent: "cursor", model: "opus-4.6-thinking", input_per_m: 0.00, output_per_m: 0.00, tier: "premium", description: "Premium pool, uses fast requests", updated: "2026-03-17" },
+  { agent: "cursor", model: "gpt-5.4-high", input_per_m: 0.00, output_per_m: 0.00, tier: "premium", description: "Premium pool, uses fast requests", updated: "2026-03-17" },
+  { agent: "codebuff", model: "auto", input_per_m: 0.00, output_per_m: 0.00, tier: "subscription", description: "SDK-managed, per-token billing", updated: "2026-03-17" },
+];
+
 const MCP_TOOLS = ["aid_run", "aid_board", "aid_show", "aid_retry", "aid_usage", "aid_ask"];
 
 async function fetchReadme(): Promise<string> {
@@ -487,6 +518,8 @@ async function handleRequest(request: Request): Promise<Response> {
       return respondJSON(COMMANDS.map((cmd) => ({ name: cmd.name, purpose: cmd.purpose, example: cmd.example })));
     case "/api/agents":
       return respondJSON(AGENTS.map((a) => ({ name: a.name, role: a.role, bestFor: a.bestFor, models: a.models, cost: a.cost })));
+    case "/api/pricing":
+      return respondJSON({ version: VERSION, updated: "2026-03-17", models: MODEL_PRICING });
     case "/install.sh":
       return respondText(buildInstallScript(), "text/plain; charset=utf-8");
     case "/robots.txt":

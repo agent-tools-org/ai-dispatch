@@ -56,6 +56,7 @@ pub(crate) async fn run_agent_process_with_timeout(
     streaming: bool,
     workgroup_id: Option<&str>,
     max_duration_mins: Option<i64>,
+    max_task_cost: Option<f64>,
 ) -> Result<()> {
     let timeout_mins = max_duration_mins
         .filter(|m| *m > 0)
@@ -66,7 +67,15 @@ pub(crate) async fn run_agent_process_with_timeout(
     let mut child = cmd.spawn().context("Failed to spawn agent process")?;
     let watch_future = async {
         let info = if streaming {
-            watcher::watch_streaming(agent, &mut child, task_id, store, log_path, workgroup_id)
+            watcher::watch_streaming(
+                agent,
+                &mut child,
+                task_id,
+                store,
+                log_path,
+                workgroup_id,
+                max_task_cost,
+            )
                 .await?
         } else {
             let output_path = output_path.map(Path::new);

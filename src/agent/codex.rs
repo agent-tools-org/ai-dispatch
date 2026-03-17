@@ -28,9 +28,16 @@ impl super::Agent for CodexAgent {
         let injected = templates::inject_codex_prompt(prompt, None);
         let mut cmd = Command::new("codex");
         if opts.read_only {
-            cmd.args(["exec", "--json", "-s", "read-only", &injected]);
+            cmd.args([
+                "exec",
+                "--json",
+                "--skip-git-repo-check",
+                "-s",
+                "read-only",
+                &injected,
+            ]);
         } else {
-            cmd.args(["exec", "--json", "--full-auto", &injected]);
+            cmd.args(["exec", "--json", "--skip-git-repo-check", "--full-auto", &injected]);
         }
         if let Some(ref model) = opts.model {
             cmd.args(["-c", &format!("model=\"{model}\"")]);
@@ -316,7 +323,7 @@ fn extract_noop_reason(line: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::CodexAgent;
-    use crate::agent::Agent;
+    use crate::agent::{Agent, RunOpts};
     use crate::types::{EventKind, TaskId};
 
     #[test]
@@ -346,5 +353,25 @@ mod tests {
                 .and_then(|v| v.as_i64()),
             Some(238440)
         );
+    }
+
+    #[test]
+    fn build_command_includes_skip_git_repo_check() {
+        let opts = RunOpts {
+            dir: None,
+            output: None,
+            model: None,
+            budget: false,
+            read_only: false,
+            context_files: vec![],
+            session_id: None,
+        };
+        let cmd = CodexAgent.build_command("test prompt", &opts).unwrap();
+        let args: Vec<String> = cmd
+            .get_args()
+            .map(|arg| arg.to_string_lossy().to_string())
+            .collect();
+
+        assert!(args.contains(&"--skip-git-repo-check".to_string()));
     }
 }

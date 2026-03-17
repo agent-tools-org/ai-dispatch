@@ -25,6 +25,7 @@ pub async fn watch_streaming(
     store: &Arc<Store>,
     log_path: &std::path::Path,
     workgroup_id: Option<&str>,
+    max_task_cost: Option<f64>,
 ) -> Result<CompletionInfo> {
     let stdout = child
         .stdout
@@ -90,6 +91,23 @@ pub async fn watch_streaming(
             &line,
             &mut session_saved,
         )? {
+            if exceeds_cost_ceiling(info.cost_usd, max_task_cost) {
+                let current_cost = info.cost_usd.unwrap_or_default();
+                let max_cost = max_task_cost.unwrap_or_default();
+                let _ = store.insert_event(&TaskEvent {
+                    task_id: task_id.clone(),
+                    timestamp: Local::now(),
+                    event_kind: EventKind::Error,
+                    detail: format!(
+                        "Task killed: cost ${:.2} exceeded ceiling ${:.2}",
+                        current_cost, max_cost
+                    ),
+                    metadata: None,
+                });
+                let _ = child.kill().await;
+                info.status = TaskStatus::Failed;
+                break;
+            }
             loop_detector.push(&detail);
             if loop_detector.is_looping() {
                 let _ = store.insert_event(&TaskEvent {
@@ -279,6 +297,13 @@ fn apply_completion_event(info: &mut CompletionInfo, event: &TaskEvent) {
     if let Some(cost_usd) = metadata.get("cost_usd").and_then(|value| value.as_f64()) {
         info.cost_usd = Some(cost_usd);
     }
+}
+
+fn exceeds_cost_ceiling(current_cost: Option<f64>, max_task_cost: Option<f64>) -> bool {
+    matches!(
+        (current_cost, max_task_cost),
+        (Some(current_cost), Some(max_task_cost)) if current_cost > max_task_cost
+    )
 }
 
 pub(crate) struct StreamLineContext<'a> {
@@ -516,7 +541,7 @@ impl LoopDetector {
 
 #[cfg(test)]
 mod tests {
-    use super::{apply_completion_event, parse_milestone_event, LoopDetector};
+    use super::{apply_completion_event, exceeds_cost_ceiling, parse_milestone_event, LoopDetector};
     use crate::types::{CompletionInfo, EventKind, TaskEvent, TaskId, TaskStatus};
     use chrono::Local;
     use serde_json::json;
@@ -571,6 +596,14 @@ mod tests {
         assert_eq!(info.tokens, Some(10));
         assert_eq!(info.model.as_deref(), Some("gpt-4.1"));
         assert_eq!(info.cost_usd, Some(0.01));
+    }
+
+    #[test]
+    fn cost_ceiling_only_triggers_above_limit() {
+        assert!(!exceeds_cost_ceiling(Some(1.0), Some(1.0)));
+        assert!(exceeds_cost_ceiling(Some(1.01), Some(1.0)));
+        assert!(!exceeds_cost_ceiling(None, Some(1.0)));
+        assert!(!exceeds_cost_ceiling(Some(1.0), None));
     }
 
     #[test]

@@ -72,6 +72,7 @@ pub fn is_rate_limit_error(message: &str) -> bool {
         || lower.contains("rate_limit")
         || lower.contains("429")
         || lower.contains("quota exceeded")
+        || lower.contains("exhausted your capacity")
         || lower.contains("too many requests")
         || lower.contains("usage limit")
 }
@@ -154,6 +155,7 @@ mod tests {
         assert!(is_rate_limit_error("error: rate_limit hit"));
         assert!(is_rate_limit_error("HTTP 429"));
         assert!(is_rate_limit_error("quota exceeded"));
+        assert!(is_rate_limit_error("You have exhausted your capacity for today."));
         assert!(is_rate_limit_error("too many requests"));
         assert!(is_rate_limit_error("usage limit reached"));
         assert!(!is_rate_limit_error("network timeout"));

@@ -42,6 +42,7 @@ pub struct RunArgs {
     pub judge: Option<String>,
     pub peer_review: Option<String>,
     pub max_duration_mins: Option<i64>,
+    pub max_task_cost: Option<f64>,
     pub retry: u32,
     pub context: Vec<String>,
     pub skills: Vec<String>,
@@ -94,6 +95,9 @@ pub async fn run(store: Arc<Store>, mut args: RunArgs) -> Result<TaskId> {
 
     if let Some(project) = project::detect_project() {
         let mut defaults_applied = false;
+        if args.max_task_cost.is_none() {
+            args.max_task_cost = project.max_task_cost;
+        }
         if args.team.is_none()
             && let Some(team) = project.team.as_ref() {
                 args.team = Some(team.clone());
@@ -353,6 +357,7 @@ pub async fn run(store: Arc<Store>, mut args: RunArgs) -> Result<TaskId> {
             is_streaming,
             task.workgroup_id.as_deref(),
             args.max_duration_mins,
+            args.max_task_cost,
         )
         .await?;
         run_prompt::warn_agent_committed_files_outside_scope(
@@ -377,6 +382,7 @@ pub async fn run(store: Arc<Store>, mut args: RunArgs) -> Result<TaskId> {
         if !args.scope.is_empty() {
             check_scope_violations(&store, &task_id, &args.scope, effective_dir.as_deref());
         }
+        let mut quota_error_message = None;
         if let Some(task) = store.get_task(task_id.as_str())? {
             if task.status == TaskStatus::Done && !prompt_bundle.injected_memory_ids.is_empty() {
                 for memory_id in &prompt_bundle.injected_memory_ids {
@@ -389,6 +395,10 @@ pub async fn run(store: Arc<Store>, mut args: RunArgs) -> Result<TaskId> {
             maybe_cleanup_fast_fail(&store, &task_id, &task);
             // Auto-cleanup worktree for failed tasks (no useful changes to preserve)
             if task.status == TaskStatus::Failed {
+                quota_error_message = read_quota_error_message(&task_id);
+                if let Some(message) = quota_error_message.as_deref() {
+                    rate_limit::mark_rate_limited(&agent_kind, message);
+                }
                 let fail_payload = show::task_hook_json(
                     &task_id,
                     agent_display_name,
@@ -514,6 +524,22 @@ pub async fn run(store: Arc<Store>, mut args: RunArgs) -> Result<TaskId> {
             cascade_args.cascade = remaining_cascade;
             cascade_args.parent_task_id = Some(task_id.as_str().to_string());
             Box::pin(run(store, cascade_args)).await?;
+        } else if let Some(task) = store.get_task(task_id.as_str())?
+            && task.status == TaskStatus::Failed
+            && args.cascade.is_empty()
+            && let Some(message) = quota_error_message.as_deref()
+            && let Some(fallback) = agent::selection::coding_fallback_for(&agent_kind)
+        {
+            rate_limit::mark_rate_limited(&agent_kind, message);
+            eprintln!(
+                "[aid] Quota exhausted for {}, auto-cascading to {}",
+                agent_kind.as_str(),
+                fallback.as_str()
+            );
+            let mut cascade_args = args.clone();
+            cascade_args.agent_name = fallback.as_str().to_string();
+            cascade_args.parent_task_id = Some(task_id.as_str().to_string());
+            Box::pin(run(store, cascade_args)).await?;
         }
     }
     Ok(task_id)
@@ -545,6 +571,22 @@ fn take_next_cascade_agent(args: &RunArgs) -> Option<(String, Vec<String>)> {
         let next_agent = cascade.remove(0);
         Some((next_agent, cascade))
     }
+}
+
+fn read_quota_error_message(task_id: &TaskId) -> Option<String> {
+    let stderr_path = crate::paths::stderr_path(task_id.as_str());
+    if let Ok(stderr) = std::fs::read_to_string(&stderr_path)
+        && rate_limit::is_rate_limit_error(&stderr)
+    {
+        return Some(stderr);
+    }
+    let log_path = crate::paths::log_path(task_id.as_str());
+    if let Ok(log) = std::fs::read_to_string(&log_path)
+        && rate_limit::is_rate_limit_error(&log)
+    {
+        return Some(log);
+    }
+    None
 }
 
 fn worktree_is_empty_diff(worktree_dir: &Path) -> Option<bool> {
@@ -618,6 +660,44 @@ mod tests {
     fn take_next_cascade_agent_returns_none_when_empty() {
         let args = RunArgs { cascade: vec![], ..Default::default() };
         assert!(take_next_cascade_agent(&args).is_none());
+    }
+
+    #[test]
+    fn read_quota_error_message_uses_stderr() {
+        let dir = TempDir::new().unwrap();
+        let _guard = paths::AidHomeGuard::set(dir.path());
+        std::fs::create_dir_all(paths::logs_dir()).unwrap();
+        std::fs::write(
+            paths::stderr_path("t-quota-stderr"),
+            "You have exhausted your capacity for today.",
+        )
+        .unwrap();
+
+        let message = read_quota_error_message(&TaskId("t-quota-stderr".to_string()));
+
+        assert_eq!(
+            message.as_deref(),
+            Some("You have exhausted your capacity for today.")
+        );
+    }
+
+    #[test]
+    fn read_quota_error_message_falls_back_to_log() {
+        let dir = TempDir::new().unwrap();
+        let _guard = paths::AidHomeGuard::set(dir.path());
+        std::fs::create_dir_all(paths::logs_dir()).unwrap();
+        std::fs::write(
+            paths::log_path("t-quota-log"),
+            "{\"error\":\"You have hit your usage limit.\"}\n",
+        )
+        .unwrap();
+
+        let message = read_quota_error_message(&TaskId("t-quota-log".to_string()));
+
+        assert_eq!(
+            message.as_deref(),
+            Some("{\"error\":\"You have hit your usage limit.\"}\n")
+        );
     }
 
     #[test]

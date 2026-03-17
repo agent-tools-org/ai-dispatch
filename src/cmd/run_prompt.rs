@@ -282,7 +282,7 @@ pub(super) async fn run_agent_process_impl(args: RunProcessArgs<'_>) -> Result<(
     let start = std::time::Instant::now();
     let mut child = cmd.spawn().context("Failed to spawn agent process")?;
     let info = if streaming {
-        watcher::watch_streaming(agent, &mut child, task_id, store, log_path, workgroup_id).await?
+        watcher::watch_streaming(agent, &mut child, task_id, store, log_path, workgroup_id, None).await?
     } else {
         let out = output_path.map(std::path::Path::new);
         watcher::watch_buffered(agent, &mut child, task_id, store, log_path, out, workgroup_id).await?

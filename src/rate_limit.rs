@@ -66,7 +66,6 @@ pub fn is_rate_limited(agent: &AgentKind) -> bool {
     }
 }
 
-#[cfg(test)]
 pub fn rate_limited_agents() -> Vec<(AgentKind, String)> {
     [
         AgentKind::Gemini,
@@ -173,7 +172,9 @@ mod tests {
         assert!(is_rate_limit_error("error: rate_limit hit"));
         assert!(is_rate_limit_error("HTTP 429"));
         assert!(is_rate_limit_error("quota exceeded"));
-        assert!(is_rate_limit_error("You have exhausted your capacity for today."));
+        assert!(is_rate_limit_error(
+            "You have exhausted your capacity for today."
+        ));
         assert!(is_rate_limit_error("too many requests"));
         assert!(is_rate_limit_error("usage limit reached"));
         assert!(!is_rate_limit_error("network timeout"));
@@ -228,26 +229,22 @@ mod tests {
     fn test_parse_recovery_datetime() {
         let parsed = parse_recovery_datetime("Mar 19th, 2026 2:27 PM").unwrap();
         let expected =
-            NaiveDateTime::parse_from_str("Mar 19, 2026 2:27 PM", "%b %d, %Y %I:%M %p")
-                .unwrap();
+            NaiveDateTime::parse_from_str("Mar 19, 2026 2:27 PM", "%b %d, %Y %I:%M %p").unwrap();
         assert_eq!(parsed, expected);
 
         let first = parse_recovery_datetime("Mar 1st, 2026 2:27 PM").unwrap();
         let expected_first =
-            NaiveDateTime::parse_from_str("Mar 01, 2026 2:27 PM", "%b %d, %Y %I:%M %p")
-                .unwrap();
+            NaiveDateTime::parse_from_str("Mar 01, 2026 2:27 PM", "%b %d, %Y %I:%M %p").unwrap();
         assert_eq!(first, expected_first);
 
         let second = parse_recovery_datetime("Mar 2nd, 2026 2:27 PM").unwrap();
         let expected_second =
-            NaiveDateTime::parse_from_str("Mar 02, 2026 2:27 PM", "%b %d, %Y %I:%M %p")
-                .unwrap();
+            NaiveDateTime::parse_from_str("Mar 02, 2026 2:27 PM", "%b %d, %Y %I:%M %p").unwrap();
         assert_eq!(second, expected_second);
 
         let third = parse_recovery_datetime("Mar 3rd, 2026 2:27 PM").unwrap();
         let expected_third =
-            NaiveDateTime::parse_from_str("Mar 03, 2026 2:27 PM", "%b %d, %Y %I:%M %p")
-                .unwrap();
+            NaiveDateTime::parse_from_str("Mar 03, 2026 2:27 PM", "%b %d, %Y %I:%M %p").unwrap();
         assert_eq!(third, expected_third);
 
         assert!(parse_recovery_datetime("not a date").is_none());

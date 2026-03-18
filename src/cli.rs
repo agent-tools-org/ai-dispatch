@@ -563,6 +563,8 @@ pub enum AgentCommands {
         #[arg(long = "as")]
         new_name: Option<String>,
     },
+    /// Show rate-limit / quota status for all agents
+    Quota,
 }
 
 #[derive(Subcommand)]
@@ -852,12 +854,11 @@ mod tests {
 
     #[test]
     fn batch_retry_parses() {
-        let cli = Cli::try_parse_from(["aid", "batch", "retry", "wg-a", "--agent", "cursor"])
-            .unwrap();
+        let cli =
+            Cli::try_parse_from(["aid", "batch", "retry", "wg-a", "--agent", "cursor"]).unwrap();
         match cli.command {
             Commands::Batch {
-                action:
-                    Some(BatchAction::Retry { group_id, agent }),
+                action: Some(BatchAction::Retry { group_id, agent }),
                 file,
                 ..
             } => {

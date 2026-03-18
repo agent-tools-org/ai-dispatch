@@ -298,6 +298,7 @@ async fn main() -> Result<()> {
                 AgentCommands::Add { name } => AgentAction::Add { name },
                 AgentCommands::Remove { name } => AgentAction::Remove { name },
                 AgentCommands::Fork { name, new_name } => AgentAction::Fork { name, new_name },
+                AgentCommands::Quota => AgentAction::Quota,
             };
             run_agent_command(action)?;
         }

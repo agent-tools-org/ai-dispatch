@@ -6,7 +6,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use crate::agent::classifier::TaskCategory;
-use crate::agent::custom::{CapabilityScores, CustomAgentConfig, parse_config};
+use crate::agent::custom::{parse_config, CapabilityScores, CustomAgentConfig};
 use crate::agent::registry;
 use crate::agent::selection::AGENT_CAPABILITIES;
 use crate::paths;
@@ -120,10 +120,20 @@ const BUILTIN_AGENT_PROFILES: &[BuiltinAgentProfile] = &[
 
 pub enum AgentAction {
     List,
-    Show { name: String },
-    Add { name: String },
-    Remove { name: String },
-    Fork { name: String, new_name: Option<String> },
+    Show {
+        name: String,
+    },
+    Add {
+        name: String,
+    },
+    Remove {
+        name: String,
+    },
+    Fork {
+        name: String,
+        new_name: Option<String>,
+    },
+    Quota,
 }
 
 pub fn run_agent_command(action: AgentAction) -> Result<()> {
@@ -133,14 +143,41 @@ pub fn run_agent_command(action: AgentAction) -> Result<()> {
         AgentAction::Add { name } => add_agent(&name),
         AgentAction::Remove { name } => remove_agent(&name),
         AgentAction::Fork { name, new_name } => fork_agent(&name, new_name.as_deref()),
+        AgentAction::Quota => show_quota(),
     }
+}
+
+fn show_quota() -> Result<()> {
+    use crate::rate_limit;
+    let limited = rate_limit::rate_limited_agents();
+    println!("{:<12} {:<10} DETAIL", "AGENT", "STATUS");
+    for profile in BUILTIN_AGENT_PROFILES {
+        let kind = AgentKind::parse_str(profile.name).unwrap_or(AgentKind::Codex);
+        if let Some((_, msg)) = limited.iter().find(|(a, _)| *a == kind) {
+            let info = rate_limit::get_rate_limit_info(&kind);
+            let recovery = info
+                .as_ref()
+                .and_then(|i| i.recovery_at.as_deref())
+                .unwrap_or("~1h");
+            println!(
+                "{:<12} {:<10} resets {recovery} — {msg}",
+                profile.name, "LIMITED"
+            );
+        } else {
+            println!("{:<12} {:<10}", profile.name, "OK");
+        }
+    }
+    Ok(())
 }
 
 fn list_agents() -> Result<()> {
     println!("Built-in agents:");
     println!("  {:<10} {:<6} DESCRIPTION", "NAME", "TRUST");
     for profile in BUILTIN_AGENT_PROFILES {
-        println!("  {:<10} {:<6} {}", profile.name, profile.trust_tier, profile.description);
+        println!(
+            "  {:<10} {:<6} {}",
+            profile.name, profile.trust_tier, profile.description
+        );
     }
     println!("\nCustom agents:");
     let custom = registry::list_custom_agents();
@@ -150,7 +187,10 @@ fn list_agents() -> Result<()> {
     }
     println!("  {:<10} {:<6} DISPLAY NAME", "NAME", "TRUST");
     for config in custom {
-        println!("  {:<10} {:<6} {}", config.id, config.trust_tier, config.display_name);
+        println!(
+            "  {:<10} {:<6} {}",
+            config.id, config.trust_tier, config.display_name
+        );
     }
     Ok(())
 }
@@ -209,7 +249,10 @@ fn fork_agent(name: &str, new_name: Option<&str>) -> Result<()> {
     fs::create_dir_all(&dir)?;
     let target = custom_agent_path(&target_name);
     if target.exists() {
-        bail!("Agent '{target_name}' already exists at {}", target.display());
+        bail!(
+            "Agent '{target_name}' already exists at {}",
+            target.display()
+        );
     }
 
     if let Some(profile) = builtin_profile(name) {
@@ -223,10 +266,18 @@ fn fork_agent(name: &str, new_name: Option<&str>) -> Result<()> {
 
     let source = custom_agent_path(name);
     if !source.is_file() {
-        bail!("Custom agent '{name}' not found (expected at {})", source.display());
+        bail!(
+            "Custom agent '{name}' not found (expected at {})",
+            source.display()
+        );
     }
-    fs::copy(&source, &target)
-        .with_context(|| format!("Failed to copy {} to {}", source.display(), target.display()))?;
+    fs::copy(&source, &target).with_context(|| {
+        format!(
+            "Failed to copy {} to {}",
+            source.display(),
+            target.display()
+        )
+    })?;
     println!("Created {}", target.display());
     println!("Edit the file to configure the agent.");
     Ok(())
@@ -237,19 +288,29 @@ fn show_builtin_profile(profile: &BuiltinAgentProfile) {
     println!("  Description: {}", profile.description);
     println!("  Cost: {}", profile.cost);
     println!("  Best for: {}", profile.best_for);
-    println!("  Mode: {}", if profile.streaming { "streaming" } else { "buffered" });
+    println!(
+        "  Mode: {}",
+        if profile.streaming {
+            "streaming"
+        } else {
+            "buffered"
+        }
+    );
     println!("  Trust tier: {}", profile.trust_tier);
 }
 
 fn show_custom_agent(name: &str) -> Result<()> {
     let target = custom_agent_path(name);
     if !target.is_file() {
-        bail!("Custom agent '{name}' not found (expected at {})", target.display());
+        bail!(
+            "Custom agent '{name}' not found (expected at {})",
+            target.display()
+        );
     }
     let contents = fs::read_to_string(&target)
         .with_context(|| format!("Failed to read {}", target.display()))?;
-    let config = parse_config(&contents)
-        .with_context(|| format!("Failed to parse {}", target.display()))?;
+    let config =
+        parse_config(&contents).with_context(|| format!("Failed to parse {}", target.display()))?;
     print_custom_summary(&config, &target);
     println!("\nTOML preview:\n{}", contents);
     Ok(())
@@ -268,7 +329,7 @@ fn print_custom_summary(config: &CustomAgentConfig, path: &Path) {
     if config.fixed_args.is_empty() {
         println!("  Fixed args: (none)");
     } else {
-    println!("  Fixed args: {}", config.fixed_args.join(" "));
+        println!("  Fixed args: {}", config.fixed_args.join(" "));
     }
     println!("  Streaming: {}", config.streaming);
     println!("  Output format: {}", config.output_format);
@@ -341,7 +402,9 @@ fn build_builtin_agent_toml(target_name: &str, profile: &BuiltinAgentProfile) ->
     toml.push_str("# Streaming controls whether aid expects live JSONL events\n");
     toml.push_str(&format!("streaming = {}\n", profile.streaming));
     toml.push_str("output_format = \"text\"  # text | jsonl\n\n");
-    toml.push_str("# Trust tier: \"local\" (runs locally) or \"api\" (sends prompts to third-party)\n");
+    toml.push_str(
+        "# Trust tier: \"local\" (runs locally) or \"api\" (sends prompts to third-party)\n",
+    );
     toml.push_str(&format!("trust_tier = \"{}\"\n\n", profile.trust_tier));
     toml.push_str("# Strength categories for auto-selection boosts\n");
     toml.push_str("strengths = []\n\n");
@@ -395,4 +458,19 @@ fn title_case(name: &str) -> String {
         return name.to_string();
     }
     pieces.join(" ")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::paths;
+
+    #[test]
+    fn show_quota_runs_without_panic() {
+        let temp_dir = std::env::temp_dir().join("aid-quota-test-no-markers");
+        let _guard = paths::AidHomeGuard::set(&temp_dir);
+        std::fs::create_dir_all(paths::aid_dir()).ok(); // No rate-limit markers — should not panic
+        let result = show_quota();
+        assert!(result.is_ok());
+    }
 }

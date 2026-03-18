@@ -18,21 +18,18 @@ pub struct VerifyResult {
 /// Run a verification command in the given worktree directory.
 /// If `command` is None, auto-detect based on project files.
 pub fn run_verify(worktree_path: &Path, command: Option<&str>) -> Result<VerifyResult> {
-    let cmd_str = match command {
-        Some(c) => c.to_string(),
-        None => auto_detect_command(worktree_path),
-    };
-
-    if cmd_str == "skip" {
+    let Some((cmd_str, mut cmd)) = build_verify_command(worktree_path, command)? else {
         return Ok(VerifyResult {
             success: true,
             output: "No project file detected, skipping verification".to_string(),
-            command: cmd_str,
+            command: "skip".to_string(),
         });
-    }
+    };
 
-    let output = Command::new("sh")
-        .args(["-c", &cmd_str])
+    // Verify commands are user-authored, but we still execute them as argv to avoid
+    // handing arbitrary strings to a shell. This preserves simple commands like
+    // `cargo test` while refusing shell metacharacter expansion by default.
+    let output = cmd
         .current_dir(worktree_path)
         .output()
         .with_context(|| format!("Failed to run verify command: {cmd_str}"))?;
@@ -83,12 +80,35 @@ pub fn record_verify_status(store: &Store, task_id: &TaskId, result: &VerifyResu
 
 fn auto_detect_command(path: &Path) -> String {
     if path.join("Cargo.toml").exists() {
-        "cargo check 2>&1".to_string()
+        "cargo check".to_string()
     } else if path.join("package.json").exists() {
-        "npm run build 2>&1".to_string()
+        "npm run build".to_string()
     } else {
         "skip".to_string()
     }
+}
+
+fn build_verify_command(
+    worktree_path: &Path,
+    command: Option<&str>,
+) -> Result<Option<(String, Command)>> {
+    let cmd_str = match command {
+        Some(c) => c.trim().to_string(),
+        None => auto_detect_command(worktree_path),
+    };
+    if cmd_str == "skip" {
+        return Ok(None);
+    }
+    split_command(&cmd_str).map(Some)
+}
+
+fn split_command(command: &str) -> Result<(String, Command)> {
+    let mut parts = command.split_whitespace();
+    let program = parts.next().context("verify command is empty")?;
+    let args: Vec<&str> = parts.collect();
+    let mut cmd = Command::new(program);
+    cmd.args(&args);
+    Ok((command.to_string(), cmd))
 }
 
 #[cfg(test)]
@@ -108,9 +128,16 @@ mod tests {
     #[test]
     fn verify_fail_case() {
         let dir = TempDir::new().unwrap();
-        let result = run_verify(dir.path(), Some("sh -c 'echo bad >&2; exit 1'")).unwrap();
+        let result = run_verify(dir.path(), Some("false")).unwrap();
         assert!(!result.success);
-        assert!(result.output.contains("bad"));
+    }
+
+    #[test]
+    fn verify_does_not_expand_shell_operators() {
+        let dir = TempDir::new().unwrap();
+        let result = run_verify(dir.path(), Some("echo ok && false")).unwrap();
+        assert!(result.success);
+        assert!(result.output.contains("ok && false"));
     }
 
     #[test]

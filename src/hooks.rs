@@ -17,6 +17,8 @@ pub struct Hook {
     pub command: String,
     #[serde(default)]
     pub agent: Option<String>,
+    #[serde(skip)]
+    trusted: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -34,7 +36,11 @@ pub fn load_hooks() -> Result<Vec<Hook>> {
     };
     let config: HooksFile = toml::from_str(&content)
         .with_context(|| format!("failed to parse hooks file {}", path.display()))?;
-    Ok(config.hook)
+    Ok(config
+        .hook
+        .into_iter()
+        .map(|hook| hook.trusted())
+        .collect())
 }
 
 pub fn parse_cli_hooks(specs: &[String]) -> Result<Vec<Hook>> {
@@ -52,6 +58,7 @@ pub fn parse_cli_hooks(specs: &[String]) -> Result<Vec<Hook>> {
                 event: event.to_string(),
                 command: command.to_string(),
                 agent: None,
+                trusted: true,
             })
         })
         .collect()
@@ -84,6 +91,8 @@ pub fn run_hooks_with(
         return Ok(());
     }
     for hook in relevant {
+        ensure_trusted_hook(hook)?;
+        eprintln!("[aid] Executing hook via shell: {}", hook.command);
         let mut cmd = Command::new("sh");
         cmd.arg("-c").arg(&hook.command);
         cmd.stdin(Stdio::piped()).stderr(Stdio::piped());
@@ -108,4 +117,60 @@ pub fn run_hooks_with(
         }
     }
     Ok(())
+}
+
+impl Hook {
+    pub(crate) fn new_trusted(event: String, command: String, agent: Option<String>) -> Self {
+        Self {
+            event,
+            command,
+            agent,
+            trusted: true,
+        }
+    }
+
+    pub(crate) fn trusted(mut self) -> Self {
+        self.trusted = true;
+        self
+    }
+}
+
+fn ensure_trusted_hook(hook: &Hook) -> Result<()> {
+    anyhow::ensure!(
+        hook.trusted,
+        "refusing to execute untrusted hook command from task data or agent output"
+    );
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn parse_cli_hooks_marks_hooks_trusted() {
+        let hooks = parse_cli_hooks(&["before_run:echo ok".to_string()]).unwrap();
+        assert!(run_hooks_with("before_run", &json!({}), None, &hooks, true).is_ok());
+    }
+
+    #[test]
+    fn run_hooks_rejects_untrusted_hooks() {
+        let err = run_hooks_with(
+            "before_run",
+            &json!({}),
+            None,
+            &[Hook {
+                event: "before_run".to_string(),
+                command: "echo bad".to_string(),
+                agent: None,
+                trusted: false,
+            }],
+            true,
+        )
+        .unwrap_err();
+        assert!(err
+            .to_string()
+            .contains("refusing to execute untrusted hook command"));
+    }
 }

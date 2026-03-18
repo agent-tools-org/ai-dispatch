@@ -80,11 +80,7 @@ pub async fn run_task(store: Arc<Store>, task_id: &str) -> Result<()> {
         record_worker_failure(&store, task_id, &err)?;
         crate::webhook::fire_task_webhooks(&store, task_id).await;
         if let Some(ref cmd) = spec.on_done {
-            let _ = std::process::Command::new("sh")
-                .args(["-c", cmd])
-                .env("AID_TASK_ID", task_id)
-                .env("AID_TASK_STATUS", "failed")
-                .spawn();
+            let _ = spawn_on_done_command(cmd, task_id, "failed");
         }
         return Err(err);
     }
@@ -92,11 +88,7 @@ pub async fn run_task(store: Arc<Store>, task_id: &str) -> Result<()> {
     crate::webhook::fire_task_webhooks(&store, task_id).await;
 
     if let Some(ref cmd) = spec.on_done {
-        let _ = std::process::Command::new("sh")
-            .args(["-c", cmd])
-            .env("AID_TASK_ID", task_id)
-            .env("AID_TASK_STATUS", "done")
-            .spawn();
+        let _ = spawn_on_done_command(cmd, task_id, "done");
     }
 
     Ok(())
@@ -382,6 +374,24 @@ fn record_failure(
     })?;
     notify_task_completion(store, task_id)?;
     Ok(())
+}
+
+fn spawn_on_done_command(command: &str, task_id: &str, status: &str) -> Result<()> {
+    let mut cmd = build_on_done_command(command)?;
+    cmd.env("AID_TASK_ID", task_id)
+        .env("AID_TASK_STATUS", status)
+        .spawn()
+        .context("failed to spawn on_done callback")?;
+    Ok(())
+}
+
+fn build_on_done_command(command: &str) -> Result<Command> {
+    let mut parts = command.split_whitespace();
+    let program = parts.next().context("on_done command is empty")?;
+    let args: Vec<&str> = parts.collect();
+    let mut cmd = Command::new(program);
+    cmd.args(&args);
+    Ok(cmd)
 }
 
 fn notify_task_completion(store: &Store, task_id: &str) -> Result<()> {

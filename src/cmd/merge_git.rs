@@ -190,6 +190,9 @@ fn pop_stash(repo_dir: &str) -> bool {
 /// Check if a path is safe to delete: must resolve to /tmp/aid-wt-* (or /private/tmp/aid-wt-* on macOS).
 /// This is the sandbox guard — NEVER delete a directory that fails this check.
 pub fn is_safe_worktree_path(wt_path: &str) -> bool {
+    if !Path::new(wt_path).is_absolute() {
+        return false;
+    }
     // Canonicalize to resolve symlinks (macOS: /tmp → /private/tmp)
     let canonical = match Path::new(wt_path).canonicalize() {
         Ok(p) => p,
@@ -276,5 +279,20 @@ pub(crate) fn run_verify_in_worktree(wt: &str, verify: Option<&str>) {
         }
         Err(e) => eprintln!("[aid] Warning: could not run `{verify_cmd}`: {e}"),
         _ => {}
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::process::Command;
+
+    #[test]
+    fn verify_argv_split_keeps_shell_tokens_literal() {
+        let parts: Vec<&str> = "echo ok && false".split_whitespace().collect();
+        let (program, args) = parts.split_first().unwrap();
+        let cmd = Command::new(program);
+        let debug = format!("{cmd:?}");
+        assert!(debug.contains("\"echo\""));
+        assert_eq!(args, &["ok", "&&", "false"]);
     }
 }

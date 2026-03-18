@@ -76,7 +76,7 @@ fn parse_stream_event(task_id: &TaskId, v: &serde_json::Value, now: chrono::Date
                 metadata: None,
             })
         }
-        "tool_call" => {
+        "tool_call" | "tool_use" => {
             let name = extract_tool_name(v).unwrap_or("unknown");
             let args = extract_tool_arguments(v).unwrap_or_default();
             let truncated_args = if args.len() > 100 {
@@ -124,8 +124,9 @@ fn parse_stream_event(task_id: &TaskId, v: &serde_json::Value, now: chrono::Date
 }
 
 fn extract_tool_name<'a>(v: &'a serde_json::Value) -> Option<&'a str> {
-    v.get("name")
+    v.get("tool_name")
         .and_then(|value| value.as_str())
+        .or_else(|| v.get("name").and_then(|value| value.as_str()))
         .or_else(|| v.pointer("/functionCall/name").and_then(|value| value.as_str()))
         .or_else(|| v.get("function_call").and_then(|value| value.as_str()))
         .or_else(|| {
@@ -410,6 +411,21 @@ mod tests {
         assert_eq!(function_call_event.detail, r#"Glob({"pattern":"*.rs"})"#);
         assert_eq!(tool_name_event.detail, r#"Read({"file":"src/lib.rs"})"#);
         assert_eq!(tool_event.detail, r#"Write({"file":"src/lib.rs"})"#);
+    }
+
+    #[test]
+    fn parses_gemini_cli_tool_use_event() {
+        let task_id = TaskId::generate();
+        // Real gemini-cli format: "type": "tool_use" with "tool_name" field
+        let json = serde_json::json!({
+            "type": "tool_use",
+            "tool_name": "grep_search",
+            "tool_id": "grep_search_123_0",
+            "parameters": { "pattern": "dispatch" }
+        });
+        let event = parse_stream_event(&task_id, &json, Local::now()).unwrap();
+        assert_eq!(event.event_kind, EventKind::ToolCall);
+        assert_eq!(event.detail, r#"grep_search({"pattern":"dispatch"})"#);
     }
 
     #[test]

@@ -13,7 +13,18 @@ use crate::paths;
 use crate::sanitize;
 use crate::types::AgentKind;
 
-const AGENT_TEMPLATE: &str = r#"[agent]
+const AGENT_TEMPLATE: &str = r#"# Custom agent definition for aid.
+#
+# Requirements: the command must be a non-interactive CLI that:
+#   1. Accepts a prompt (via arg, flag, or stdin)
+#   2. Performs the task autonomously
+#   3. Exits when done
+#
+# Compatible CLIs: gemini, codex, opencode, cursor, kilo, codebuff, aider, etc.
+# NOT compatible: interactive/session-based tools (e.g. Claude Code) — those
+# are orchestrators that call aid, not agents that aid dispatches.
+
+[agent]
 id = "{name}"
 display_name = "{display_name}"
 command = "{name}"

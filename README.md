@@ -124,7 +124,9 @@ The model tier is auto-selected based on complexity: low → cheap/free models, 
 
 ### Agents
 
-An agent is the CLI backend that actually performs work. `aid` normalizes command construction, logging, usage extraction, and completion handling behind one adapter trait.
+An agent is a **non-interactive CLI** that accepts a prompt, performs the task autonomously, and exits. `aid` normalizes command construction, logging, usage extraction, and completion handling behind one adapter trait.
+
+Built-in agents: `gemini`, `codex`, `opencode`, `cursor`, `kilo`, `codebuff`, `droid`. Custom agents can be added via `aid agent add` for any compatible CLI (e.g. `aider`). Interactive/session-based tools like Claude Code are **not** agents — they are orchestrators that call `aid`, not targets that `aid` dispatches.
 
 Examples:
 
@@ -898,13 +900,11 @@ token_limit = 1000000
 cost_limit_usd = 15.0
 
 [[usage.budget]]
-name = "claude-code"
-plan = "max"
-window = "5h"
-request_limit = 200
-external_requests = 120
-resets_at = "2026-03-13T02:00:00+07:00"
-notes = "Track Claude Code separately from aid task history."
+name = "gemini-daily"
+agent = "gemini"
+window = "24h"
+task_limit = 50
+cost_limit_usd = 5.0
 ```
 
 Then inspect usage and budget status:

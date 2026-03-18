@@ -363,11 +363,11 @@ token_limit = 1000000
 cost_limit_usd = 15.0
 
 [[usage.budget]]
-name = "claude-code"
-plan = "max"
-window = "5h"
-request_limit = 200
-external_requests = 120
+name = "gemini-daily"
+agent = "gemini"
+window = "24h"
+task_limit = 50
+cost_limit_usd = 5.0
 ```
 
 ## Prompt Templates

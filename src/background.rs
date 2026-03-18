@@ -385,9 +385,17 @@ fn record_failure(
 fn spawn_on_done_command(command: &str, task_id: &str, status: &str) -> Result<()> {
     let mut cmd = build_on_done_command(command)?;
     cmd.env("AID_TASK_ID", task_id)
-        .env("AID_TASK_STATUS", status)
-        .spawn()
-        .context("failed to spawn on_done callback")?;
+        .env("AID_TASK_STATUS", status);
+    // Reap the child in a background thread to prevent orphan/zombie processes.
+    let child = cmd.spawn().context("failed to spawn on_done callback")?;
+    let command_name = command.to_string();
+    std::thread::spawn(move || match child.wait_with_output() {
+        Ok(output) if !output.status.success() => {
+            eprintln!("[aid] on_done callback failed: {command_name}");
+        }
+        Err(err) => eprintln!("[aid] on_done callback wait failed: {err}"),
+        _ => {}
+    });
     Ok(())
 }
 

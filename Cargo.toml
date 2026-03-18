@@ -41,5 +41,10 @@ strip = true
 lto = true
 codegen-units = 1
 
+[profile.dev-release]
+inherits = "release"
+lto = false
+codegen-units = 8
+
 [dev-dependencies]
 tempfile = "3"

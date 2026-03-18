@@ -261,7 +261,7 @@ pub(super) fn fill_empty_output_from_log(log_path: &Path, output_path: Option<&P
     if !needs_fallback {
         return Ok(());
     }
-    let Some(content) = crate::cmd::show::extract_messages_from_log(log_path) else {
+    let Some(content) = crate::cmd::show::extract_messages_from_log(log_path, false) else {
         return Ok(());
     };
     if content.is_empty() {

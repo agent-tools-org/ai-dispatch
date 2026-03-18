@@ -324,6 +324,7 @@ async fn main() -> Result<()> {
             context,
             diff,
             output,
+            full,
             explain,
             log,
             json,
@@ -337,6 +338,7 @@ async fn main() -> Result<()> {
                     context,
                     diff,
                     output,
+                    full,
                     explain,
                     log,
                     json,
@@ -365,9 +367,9 @@ async fn main() -> Result<()> {
         Commands::Tree { task_id } => {
             cmd::tree::run(&store, &task_id)?;
         }
-        Commands::Output { task_id } => {
+        Commands::Output { task_id, full } => {
             let store = store::Store::open(&paths::db_path())?;
-            let text = cmd::show::output_text_for_task(&store, &task_id)?;
+            let text = cmd::show::output_text_for_task(&store, &task_id, full)?;
             print!("{text}");
         }
         Commands::Usage { session, agent, team: team_flag, period, json } => {

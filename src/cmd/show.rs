@@ -15,7 +15,7 @@ use crate::types::{Task, TaskId, TaskStatus, VerifyStatus};
 #[path = "show_output.rs"]
 mod show_output;
 
-pub use show_output::{diff_text, log_text, output_text, output_text_for_task};
+pub use show_output::{diff_text, log_text, output_text, output_text_for_task, output_text_full};
 #[allow(unused_imports)]
 pub use show_output::read_task_output;
 pub(crate) use show_output::{diff_stat, extract_messages_from_log, parse_diff_stat, read_tail, worktree_diff};
@@ -25,6 +25,7 @@ pub struct ShowArgs {
     pub context: bool,
     pub diff: bool,
     pub output: bool,
+    pub full: bool,
     pub explain: bool,
     pub log: bool,
     pub json: bool,
@@ -65,7 +66,11 @@ pub async fn run(store: Arc<Store>, args: ShowArgs) -> Result<()> {
         ShowMode::Summary
     };
     let task = load_task(&store, &args.task_id)?;
-    let text = render_mode_text(&store, &args.task_id, mode)?;
+    let text = if matches!(mode, ShowMode::Output) && args.full {
+        output_text_full(&store, &args.task_id)?
+    } else {
+        render_mode_text(&store, &args.task_id, mode)?
+    };
     print!("{text}");
     if matches!(mode, ShowMode::Diff) {
         aid_hint!(

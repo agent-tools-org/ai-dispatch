@@ -130,7 +130,7 @@ async fn wait_for_task_ids_inner(
             {
                 let is_new = last_milestone.insert(task_id.clone(), milestone.clone()) != Some(milestone.clone());
                 if is_new {
-                    let truncated = if milestone.len() > 80 { format!("{}...", &milestone[..77]) } else { milestone };
+                    let truncated = if milestone.len() > 80 { format!("{}...", &milestone[..milestone.floor_char_boundary(77)]) } else { milestone };
                     println!("[progress] {} — {}", task_id, truncated);
                 }
             }

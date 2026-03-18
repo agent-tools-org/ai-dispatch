@@ -95,10 +95,12 @@ pub(crate) async fn run_agent_process_with_timeout(
 
     match timeout(deadline, watch_future).await {
         Ok(Ok(info)) => {
-            if streaming
-                && let Some(out_path) = output_path
-            {
-                write_streaming_output(log_path, Path::new(out_path));
+            if let Some(out_path) = output_path {
+                let out_path = Path::new(out_path);
+                if streaming {
+                    write_streaming_output(log_path, out_path);
+                }
+                run_prompt::fill_empty_output_from_log(log_path, Some(out_path))?;
             }
             let duration_ms = start.elapsed().as_millis() as i64;
             let final_model = info.model.as_deref().or(model);

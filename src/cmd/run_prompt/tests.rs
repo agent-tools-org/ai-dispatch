@@ -144,6 +144,41 @@ fn build_prompt_bundle_omits_output_instruction_when_output_is_not_set() {
 }
 
 #[test]
+fn fill_empty_output_from_log_populates_zero_byte_file() {
+    let log = tempfile::NamedTempFile::new().unwrap();
+    let output = tempfile::NamedTempFile::new().unwrap();
+    std::fs::write(
+        log.path(),
+        "{\"type\":\"message\",\"role\":\"assistant\",\"content\":\"human-readable output\"}\n",
+    )
+    .unwrap();
+    std::fs::write(output.path(), "").unwrap();
+
+    fill_empty_output_from_log(log.path(), Some(output.path())).unwrap();
+
+    assert_eq!(
+        std::fs::read_to_string(output.path()).unwrap(),
+        "human-readable output"
+    );
+}
+
+#[test]
+fn fill_empty_output_from_log_keeps_existing_output() {
+    let log = tempfile::NamedTempFile::new().unwrap();
+    let output = tempfile::NamedTempFile::new().unwrap();
+    std::fs::write(
+        log.path(),
+        "{\"type\":\"message\",\"role\":\"assistant\",\"content\":\"replacement\"}\n",
+    )
+    .unwrap();
+    std::fs::write(output.path(), "existing").unwrap();
+
+    fill_empty_output_from_log(log.path(), Some(output.path())).unwrap();
+
+    assert_eq!(std::fs::read_to_string(output.path()).unwrap(), "existing");
+}
+
+#[test]
 fn build_prompt_bundle_appends_batch_siblings_after_system_context() {
     let temp = tempfile::tempdir().unwrap();
     let _aid_home = crate::paths::AidHomeGuard::set(temp.path());
@@ -238,4 +273,31 @@ async fn run_auto_retries_after_verify_failure() {
     assert_eq!(retried.status, TaskStatus::Done);
     assert_eq!(retried.verify_status, VerifyStatus::Failed);
     assert!(retried.prompt.contains(VERIFY_RETRY_FEEDBACK));
+}
+
+#[test]
+fn load_workgroup_returns_none_when_group_id_is_none() {
+    let store = Store::open_memory().unwrap();
+    let result = load_workgroup(&store, None).unwrap();
+    assert!(result.is_none());
+}
+
+#[test]
+fn load_workgroup_returns_existing_workgroup() {
+    let store = Store::open_memory().unwrap();
+    let created = store.create_workgroup("test-group", "", Some("test"), Some("wg-test")).unwrap();
+    let loaded = load_workgroup(&store, Some("wg-test")).unwrap().unwrap();
+    assert_eq!(loaded.id, created.id);
+    assert_eq!(loaded.name, "test-group");
+}
+
+#[test]
+fn load_workgroup_auto_creates_when_not_found() {
+    let store = Store::open_memory().unwrap();
+    let loaded = load_workgroup(&store, Some("wg-new")).unwrap().unwrap();
+    assert_eq!(loaded.id.as_str(), "wg-new");
+    assert_eq!(loaded.name, "wg-new");
+    assert_eq!(loaded.created_by.as_deref(), Some("auto"));
+    let found = store.get_workgroup("wg-new").unwrap().unwrap();
+    assert_eq!(found.id, loaded.id);
 }

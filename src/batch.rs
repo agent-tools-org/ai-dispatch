@@ -9,6 +9,32 @@ use std::path::Path;
 
 const VALID_AGENTS: &[&str] = &["gemini", "codex", "opencode", "cursor", "kilo"];
 
+fn deserialize_judge<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> Result<Option<String>, D::Error> {
+    use serde::de;
+    struct JudgeVisitor;
+    impl<'de> de::Visitor<'de> for JudgeVisitor {
+        type Value = Option<String>;
+        fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+            f.write_str("a boolean or string")
+        }
+        fn visit_bool<E: de::Error>(self, v: bool) -> Result<Self::Value, E> {
+            Ok(if v { Some("gemini".to_string()) } else { None })
+        }
+        fn visit_str<E: de::Error>(self, v: &str) -> Result<Self::Value, E> {
+            Ok(Some(v.to_string()))
+        }
+        fn visit_none<E: de::Error>(self) -> Result<Self::Value, E> {
+            Ok(None)
+        }
+        fn visit_unit<E: de::Error>(self) -> Result<Self::Value, E> {
+            Ok(None)
+        }
+    }
+    deserializer.deserialize_any(JudgeVisitor)
+}
+
 fn deserialize_verify<'de, D: serde::Deserializer<'de>>(
     deserializer: D,
 ) -> Result<Option<String>, D::Error> {
@@ -53,7 +79,7 @@ pub struct BatchDefaults {
     pub dir: Option<String>,
     pub model: Option<String>,
     pub worktree_prefix: Option<String>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_judge")]
     pub judge: Option<String>,
     #[serde(default, deserialize_with = "deserialize_verify")]
     pub verify: Option<String>,
@@ -88,7 +114,7 @@ pub struct BatchTask {
     pub group: Option<String>,
     #[serde(default, deserialize_with = "deserialize_verify")]
     pub verify: Option<String>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_judge")]
     pub judge: Option<String>,
     #[serde(default)]
     pub best_of: Option<usize>,

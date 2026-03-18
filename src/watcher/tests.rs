@@ -134,9 +134,15 @@ fn milestone_lines_stripped_from_output() {
     assert_eq!(filtered, "line1\nline2");
 }
 
-fn loop_detector_case<I>(expected: bool, events: I) where I: IntoIterator<Item = &'static str> {
+fn loop_detector_case<I, S>(expected: bool, events: I)
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<str>,
+{
     let mut detector = LoopDetector::new();
-    events.into_iter().for_each(|detail| detector.push(detail));
+    events
+        .into_iter()
+        .for_each(|detail| detector.push(detail.as_ref()));
     assert_eq!(detector.is_looping(), expected);
 }
 #[test]
@@ -166,5 +172,16 @@ fn loop_detector_ignores_empty_details() {
         events.push("working");
         events.push("  ");
     }
+    loop_detector_case(false, events);
+}
+
+#[test]
+fn loop_detector_distinguishes_long_details() {
+    let shared_prefix = "Read(".to_string() + &"a".repeat(110);
+    let first = format!("{shared_prefix}file1.rs)");
+    let second = format!("{shared_prefix}file2.rs)");
+    let events = std::iter::repeat(first.as_str())
+        .take(5)
+        .chain(std::iter::repeat(second.as_str()).take(5));
     loop_detector_case(false, events);
 }

@@ -14,37 +14,37 @@ fn write_temp(content: &str) -> NamedTempFile {
 }
 
 fn make_task(name: Option<&str>, depends_on: &[&str]) -> BatchTask {
-        BatchTask {
-            id: None,
-            name: name.map(str::to_string),
-            agent: "codex".to_string(),
-            team: None,
-            prompt: "prompt".to_string(),
-            dir: None,
-            output: None,
-            model: None,
-            worktree: None,
-            group: None,
-            best_of: None,
-            max_duration_mins: None,
-            verify: None,
-            judge: None,
-            context: None,
-            skills: None,
-            hooks: None,
-            depends_on: (!depends_on.is_empty())
-                .then(|| depends_on.iter().map(|item| item.to_string()).collect()),
-            parent: None,
-            context_from: None,
-            fallback: None,
-            scope: None,
-            read_only: false,
-            budget: false,
-            on_success: None,
-            on_fail: None,
-            conditional: false,
-        }
+    BatchTask {
+        id: None,
+        name: name.map(str::to_string),
+        agent: "codex".to_string(),
+        team: None,
+        prompt: "prompt".to_string(),
+        dir: None,
+        output: None,
+        model: None,
+        worktree: None,
+        group: None,
+        best_of: None,
+        max_duration_mins: None,
+        verify: None,
+        judge: None,
+        context: None,
+        skills: None,
+        hooks: None,
+        depends_on: (!depends_on.is_empty())
+            .then(|| depends_on.iter().map(|item| item.to_string()).collect()),
+        parent: None,
+        context_from: None,
+        fallback: None,
+        scope: None,
+        read_only: false,
+        budget: false,
+        on_success: None,
+        on_fail: None,
+        conditional: false,
     }
+}
 
 #[test]
 fn parse_valid_batch() {
@@ -179,12 +179,10 @@ fn rejects_missing_agent_without_defaults() {
 #[test]
 fn rejects_unknown_agent() {
     let file = write_temp("[[task]]\nagent = \"gpt-3\"\nprompt = \"do something\"");
-    assert!(
-        parse_batch_file(file.path())
-            .unwrap_err()
-            .to_string()
-            .contains("unknown agent")
-    );
+    assert!(parse_batch_file(file.path())
+        .unwrap_err()
+        .to_string()
+        .contains("unknown agent"));
 }
 
 #[test]
@@ -193,12 +191,10 @@ fn rejects_duplicate_worktree() {
         "[[task]]\nagent = \"gemini\"\nprompt = \"a\"\nworktree = \"feat/x\"\n",
         "[[task]]\nagent = \"codex\"\nprompt = \"b\"\nworktree = \"feat/x\""
     ));
-    assert!(
-        parse_batch_file(file.path())
-            .unwrap_err()
-            .to_string()
-            .contains("duplicate worktree")
-    );
+    assert!(parse_batch_file(file.path())
+        .unwrap_err()
+        .to_string()
+        .contains("duplicate worktree"));
 }
 
 #[test]
@@ -233,12 +229,10 @@ fn rejects_unknown_fallback_agent() {
         "[[task]]\nagent = \"codex\"\nprompt = \"do something\"\n",
         "fallback = \"unknown-agent\""
     ));
-    assert!(
-        parse_batch_file(file.path())
-            .unwrap_err()
-            .to_string()
-            .contains("unknown fallback agent")
-    );
+    assert!(parse_batch_file(file.path())
+        .unwrap_err()
+        .to_string()
+        .contains("unknown fallback agent"));
 }
 
 #[test]
@@ -268,7 +262,11 @@ fn context_from_creates_implicit_dependency() {
     let tasks = vec![a, b];
     let deps = dependency_indices(&tasks).unwrap();
     assert!(deps[0].is_empty());
-    assert_eq!(deps[1], vec![0], "context_from should create implicit dependency");
+    assert_eq!(
+        deps[1],
+        vec![0],
+        "context_from should create implicit dependency"
+    );
 }
 
 #[test]
@@ -278,7 +276,11 @@ fn context_from_deduplicates_with_explicit_depends_on() {
     b.context_from = Some(vec!["research".to_string()]);
     let tasks = vec![a, b];
     let deps = dependency_indices(&tasks).unwrap();
-    assert_eq!(deps[1], vec![0], "duplicate dependency should be deduplicated");
+    assert_eq!(
+        deps[1],
+        vec![0],
+        "duplicate dependency should be deduplicated"
+    );
 }
 
 #[test]
@@ -333,4 +335,67 @@ fn does_not_warn_for_audit_log_prompt() {
     warn_audit_without_readonly_into(&[task], &mut stderr).unwrap();
 
     assert!(stderr.is_empty());
+}
+
+#[test]
+fn judge_true_defaults_to_gemini() {
+    let cfg = parse_batch_file(
+        write_temp(concat!(
+            "[[task]]\nagent = \"codex\"\nprompt = \"test\"\njudge = true\n"
+        ))
+        .path(),
+    )
+    .unwrap();
+
+    assert_eq!(cfg.tasks[0].judge.as_deref(), Some("gemini"));
+}
+
+#[test]
+fn judge_string_uses_specified_agent() {
+    let cfg = parse_batch_file(
+        write_temp(concat!(
+            "[[task]]\nagent = \"codex\"\nprompt = \"test\"\njudge = \"cursor\"\n"
+        ))
+        .path(),
+    )
+    .unwrap();
+
+    assert_eq!(cfg.tasks[0].judge.as_deref(), Some("cursor"));
+}
+
+#[test]
+fn judge_false_is_none() {
+    let cfg = parse_batch_file(
+        write_temp(concat!(
+            "[[task]]\nagent = \"codex\"\nprompt = \"test\"\njudge = false\n"
+        ))
+        .path(),
+    )
+    .unwrap();
+
+    assert!(cfg.tasks[0].judge.is_none());
+}
+
+#[test]
+fn judge_absent_is_none() {
+    let cfg =
+        parse_batch_file(write_temp("[[task]]\nagent = \"codex\"\nprompt = \"test\"\n").path())
+            .unwrap();
+
+    assert!(cfg.tasks[0].judge.is_none());
+}
+
+#[test]
+fn judge_defaults_propagate_to_tasks() {
+    let cfg = parse_batch_file(
+        write_temp(concat!(
+            "[defaults]\njudge = true\nagent = \"codex\"\n",
+            "[[task]]\nprompt = \"test\"\n"
+        ))
+        .path(),
+    )
+    .unwrap();
+
+    assert_eq!(cfg.defaults.judge.as_deref(), Some("gemini"));
+    assert_eq!(cfg.tasks[0].judge.as_deref(), Some("gemini"));
 }

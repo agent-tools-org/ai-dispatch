@@ -77,12 +77,12 @@ fn parse_stream_event(task_id: &TaskId, v: &serde_json::Value, now: chrono::Date
             })
         }
         "tool_call" => {
-            let name = v.get("name").and_then(|n| n.as_str()).unwrap_or("unknown");
-            let args = v.get("arguments").and_then(|a| a.as_str()).unwrap_or("");
+            let name = extract_tool_name(v).unwrap_or("unknown");
+            let args = extract_tool_arguments(v).unwrap_or_default();
             let truncated_args = if args.len() > 100 {
                 format!("{}...", &args[..100])
             } else {
-                args.to_string()
+                args
             };
             Some(TaskEvent {
                 task_id: task_id.clone(),
@@ -93,7 +93,7 @@ fn parse_stream_event(task_id: &TaskId, v: &serde_json::Value, now: chrono::Date
             })
         }
         "tool_result" => {
-            let name = v.get("name").and_then(|n| n.as_str()).unwrap_or("unknown");
+            let name = extract_tool_name(v).unwrap_or("unknown");
             let output = v.get("output").and_then(|o| o.as_str()).unwrap_or("");
             let (kind, detail) = classify_tool_result(name, output);
             Some(TaskEvent {
@@ -120,6 +120,45 @@ fn parse_stream_event(task_id: &TaskId, v: &serde_json::Value, now: chrono::Date
             })
         }
         _ => None,
+    }
+}
+
+fn extract_tool_name<'a>(v: &'a serde_json::Value) -> Option<&'a str> {
+    v.get("name")
+        .and_then(|value| value.as_str())
+        .or_else(|| v.pointer("/functionCall/name").and_then(|value| value.as_str()))
+        .or_else(|| v.get("function_call").and_then(|value| value.as_str()))
+        .or_else(|| {
+            v.get("function_call")
+                .and_then(|value| value.get("name"))
+                .and_then(|value| value.as_str())
+        })
+        .or_else(|| v.get("toolName").and_then(|value| value.as_str()))
+        .or_else(|| v.get("tool").and_then(|value| value.as_str()))
+        .or_else(|| {
+            v.get("tool")
+                .and_then(|value| value.get("name"))
+                .and_then(|value| value.as_str())
+        })
+}
+
+fn extract_tool_arguments(v: &serde_json::Value) -> Option<String> {
+    [
+        v.get("arguments"),
+        v.pointer("/functionCall/args"),
+        v.get("parameters"),
+        v.get("input"),
+    ]
+    .into_iter()
+    .flatten()
+    .find_map(stringify_value)
+}
+
+fn stringify_value(value: &serde_json::Value) -> Option<String> {
+    match value {
+        serde_json::Value::Null => None,
+        serde_json::Value::String(text) => Some(text.clone()),
+        other => Some(other.to_string()),
     }
 }
 
@@ -328,6 +367,49 @@ mod tests {
         let event = parse_stream_event(&task_id, &json, Local::now()).unwrap();
         assert_eq!(event.event_kind, EventKind::ToolCall);
         assert!(event.detail.starts_with("Read("));
+    }
+
+    #[test]
+    fn parses_tool_call_event_from_function_call_object() {
+        let task_id = TaskId::generate();
+        let json = serde_json::json!({
+            "type": "tool_call",
+            "functionCall": {
+                "name": "Read",
+                "args": { "file": "src/main.rs" }
+            }
+        });
+        let event = parse_stream_event(&task_id, &json, Local::now()).unwrap();
+        assert_eq!(event.event_kind, EventKind::ToolCall);
+        assert_eq!(event.detail, r#"Read({"file":"src/main.rs"})"#);
+    }
+
+    #[test]
+    fn parses_tool_call_event_from_alternate_name_fields() {
+        let task_id = TaskId::generate();
+        let function_call = serde_json::json!({
+            "type": "tool_call",
+            "function_call": "Glob",
+            "parameters": { "pattern": "*.rs" }
+        });
+        let tool_name = serde_json::json!({
+            "type": "tool_call",
+            "toolName": "Read",
+            "input": { "file": "src/lib.rs" }
+        });
+        let tool = serde_json::json!({
+            "type": "tool_call",
+            "tool": "Write",
+            "arguments": "{\"file\":\"src/lib.rs\"}"
+        });
+
+        let function_call_event = parse_stream_event(&task_id, &function_call, Local::now()).unwrap();
+        let tool_name_event = parse_stream_event(&task_id, &tool_name, Local::now()).unwrap();
+        let tool_event = parse_stream_event(&task_id, &tool, Local::now()).unwrap();
+
+        assert_eq!(function_call_event.detail, r#"Glob({"pattern":"*.rs"})"#);
+        assert_eq!(tool_name_event.detail, r#"Read({"file":"src/lib.rs"})"#);
+        assert_eq!(tool_event.detail, r#"Write({"file":"src/lib.rs"})"#);
     }
 
     #[test]

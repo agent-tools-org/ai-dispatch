@@ -252,6 +252,26 @@ fn output_file_instruction() -> String {
     "IMPORTANT: Your final response will be saved to a file. Write ONLY the requested deliverable content in your final response. Do NOT include planning, reasoning, chain-of-thought, or meta-commentary. The file should contain only the finished work product.".to_string()
 }
 
+pub(super) fn fill_empty_output_from_log(log_path: &Path, output_path: Option<&Path>) -> Result<()> {
+    let Some(output_path) = output_path else { return Ok(()) };
+    let needs_fallback = match std::fs::metadata(output_path) {
+        Ok(metadata) => metadata.len() == 0,
+        Err(_) => true,
+    };
+    if !needs_fallback {
+        return Ok(());
+    }
+    let Some(content) = crate::cmd::show::extract_messages_from_log(log_path) else {
+        return Ok(());
+    };
+    if content.is_empty() {
+        return Ok(());
+    }
+    std::fs::write(output_path, content).with_context(|| {
+        format!("Failed to write output fallback file {}", output_path.display())
+    })
+}
+
 pub(super) fn build_context_flags(agent_kind: &AgentKind, context_args: &[String]) -> Result<(Option<String>, Vec<String>)> {
     if context_args.is_empty() { return Ok((None, vec![])); }
     let specs = crate::context::parse_context_specs(context_args)?;
@@ -320,7 +340,11 @@ pub(super) fn resolve_worktree_paths(args: &RunArgs, repo_path: Option<&str>) ->
 
 pub(super) fn load_workgroup(store: &Store, group_id: Option<&str>) -> Result<Option<Workgroup>> {
     let Some(group_id) = group_id else { return Ok(None) };
-    store.get_workgroup(group_id)?.ok_or_else(|| anyhow::anyhow!("Workgroup '{}' not found", group_id)).map(Some)
+    if let Some(wg) = store.get_workgroup(group_id)? {
+        return Ok(Some(wg));
+    }
+    println!("[aid] Auto-created workgroup '{}'", group_id);
+    Ok(Some(store.create_workgroup(group_id, "", Some("auto"), Some(group_id))?))
 }
 
 pub(super) struct RunProcessArgs<'a> {
@@ -355,6 +379,7 @@ pub(super) async fn run_agent_process_impl(args: RunProcessArgs<'_>) -> Result<(
         let out = output_path.map(std::path::Path::new);
         watcher::watch_buffered(agent, &mut child, task_id, store, log_path, out, workgroup_id).await?
     };
+    fill_empty_output_from_log(log_path, output_path.map(std::path::Path::new))?;
     let duration_ms = start.elapsed().as_millis() as i64;
     let final_model = info.model.as_deref().or(model);
     let cost_usd = info.cost_usd.or_else(|| info.tokens.and_then(|tokens| crate::cost::estimate_cost(tokens, final_model, agent.kind())));

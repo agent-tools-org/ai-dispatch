@@ -552,9 +552,7 @@ impl LoopDetector {
         if detail.trim().is_empty() {
             return;
         }
-        let mut truncated = detail.to_string();
-        truncated.truncate(100);
-        self.recent_events.push_back(truncated);
+        self.recent_events.push_back(detail.to_string());
         if self.recent_events.len() > 20 { self.recent_events.pop_front(); }
     }
     fn is_looping(&self) -> bool {

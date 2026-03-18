@@ -280,3 +280,57 @@ fn context_from_deduplicates_with_explicit_depends_on() {
     let deps = dependency_indices(&tasks).unwrap();
     assert_eq!(deps[1], vec![0], "duplicate dependency should be deduplicated");
 }
+
+#[test]
+fn warns_on_audit_prompt_without_read_only() {
+    let task = BatchTask {
+        prompt: "Audit this codebase and report only findings".to_string(),
+        ..make_task(Some("review"), &[])
+    };
+    let mut stderr = Vec::new();
+
+    warn_audit_without_readonly_into(&[task], &mut stderr).unwrap();
+
+    let output = String::from_utf8(stderr).unwrap();
+    assert!(output.contains("Task 'review' prompt suggests read-only intent"));
+}
+
+#[test]
+fn does_not_warn_on_normal_prompt() {
+    let task = BatchTask {
+        prompt: "Implement the parser changes".to_string(),
+        ..make_task(Some("implement"), &[])
+    };
+    let mut stderr = Vec::new();
+
+    warn_audit_without_readonly_into(&[task], &mut stderr).unwrap();
+
+    assert!(stderr.is_empty());
+}
+
+#[test]
+fn does_not_warn_when_read_only_is_true() {
+    let task = BatchTask {
+        prompt: "Do not modify files, analysis only".to_string(),
+        read_only: true,
+        ..make_task(Some("analysis"), &[])
+    };
+    let mut stderr = Vec::new();
+
+    warn_audit_without_readonly_into(&[task], &mut stderr).unwrap();
+
+    assert!(stderr.is_empty());
+}
+
+#[test]
+fn does_not_warn_for_audit_log_prompt() {
+    let task = BatchTask {
+        prompt: "Add an audit log feature for admin actions".to_string(),
+        ..make_task(Some("feature"), &[])
+    };
+    let mut stderr = Vec::new();
+
+    warn_audit_without_readonly_into(&[task], &mut stderr).unwrap();
+
+    assert!(stderr.is_empty());
+}

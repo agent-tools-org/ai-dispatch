@@ -2,8 +2,8 @@
 // Exports: diff_text, output_text, output_text_for_task, log_text, read_task_output, read_tail.
 // Deps: cmd::show::load_task, paths, Store, Task.
 use anyhow::{Context, Result};
-use serde_json::json;
-use std::path::Path;
+use serde_json::{json, Value};
+use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::Arc;
 use crate::paths;
@@ -222,11 +222,10 @@ pub fn output_text_for_task(store: &Store, task_id: &str) -> Result<String> {
     if let Ok(content) = read_task_output(&task) {
         return Ok(content);
     }
-    if let Some(ref log_path) = task.log_path {
-        let path = Path::new(log_path);
-        return Ok(read_tail(path, 50, "No output or log available"));
+    if let Some(content) = extract_messages_for_task(&task, task_id) {
+        return Ok(content);
     }
-    let path = paths::log_path(task_id);
+    let path = task_log_path(&task, task_id);
     Ok(read_tail(&path, 50, "No output or log available"))
 }
 fn load_task_for_output(task_id: &str, store: &Store) -> Result<Task> {
@@ -239,12 +238,87 @@ pub fn output_text(store: &Arc<Store>, task_id: &str) -> Result<String> {
     if let Ok(content) = read_task_output(&task) {
         return Ok(content);
     }
-    if let Some(ref log_path) = task.log_path {
-        let path = Path::new(log_path);
-        return Ok(read_tail(path, 50, "No output or log available"));
+    if let Some(content) = extract_messages_for_task(&task, task_id) {
+        return Ok(content);
     }
-    let path = paths::log_path(task_id);
+    let path = task_log_path(&task, task_id);
     Ok(read_tail(&path, 50, "No output or log available"))
+}
+
+fn task_log_path(task: &Task, task_id: &str) -> PathBuf {
+    task.log_path
+        .as_ref()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| paths::log_path(task_id))
+}
+
+fn extract_messages_for_task(task: &Task, task_id: &str) -> Option<String> {
+    extract_messages_from_log(&task_log_path(task, task_id))
+}
+
+fn extract_messages_from_log(log_path: &Path) -> Option<String> {
+    let content = std::fs::read_to_string(log_path).ok()?;
+    let mut messages = Vec::new();
+    let mut streaming_message = String::new();
+    for line in content.lines() {
+        let Ok(value) = serde_json::from_str::<Value>(line) else {
+            continue;
+        };
+        match value.get("type").and_then(|kind| kind.as_str()) {
+            Some("item.completed") => {
+                let Some(item) = value.get("item") else { continue };
+                let is_agent_message =
+                    item.get("type").and_then(|kind| kind.as_str()) == Some("agent_message");
+                let Some(text) = item.get("text").and_then(|text| text.as_str()) else {
+                    continue;
+                };
+                if is_agent_message {
+                    messages.push(text.to_string());
+                }
+            }
+            Some("message") => {
+                let is_assistant =
+                    value.get("role").and_then(|role| role.as_str()) == Some("assistant");
+                let Some(content) = value.get("content").and_then(|text| text.as_str()) else {
+                    continue;
+                };
+                if !is_assistant {
+                    continue;
+                }
+                if value.get("delta").and_then(|delta| delta.as_bool()) == Some(true) {
+                    streaming_message.push_str(content);
+                } else {
+                    if !streaming_message.is_empty() {
+                        messages.push(std::mem::take(&mut streaming_message));
+                    }
+                    messages.push(content.to_string());
+                }
+            }
+            Some("text") => {
+                let Some(text) = value
+                    .get("content")
+                    .and_then(|text| text.as_str())
+                    .or_else(|| value.get("text").and_then(|text| text.as_str()))
+                    .or_else(|| value.pointer("/part/text").and_then(|text| text.as_str()))
+                else {
+                    continue;
+                };
+                if !streaming_message.is_empty() {
+                    messages.push(std::mem::take(&mut streaming_message));
+                }
+                messages.push(text.to_string());
+            }
+            _ => {}
+        }
+    }
+    if !streaming_message.is_empty() {
+        messages.push(streaming_message);
+    }
+    if messages.is_empty() {
+        None
+    } else {
+        Some(messages.join("\n---\n"))
+    }
 }
 pub fn read_task_output(task: &Task) -> Result<String> {
     let path = task
@@ -372,6 +446,7 @@ mod tests {
     use super::*;
     use crate::types::{AgentKind, TaskId, TaskStatus, VerifyStatus};
     use chrono::Local;
+    use serde_json::json;
     use std::sync::Arc;
     use tempfile::NamedTempFile;
     #[test]
@@ -475,5 +550,119 @@ mod tests {
 
         assert!(text.contains("\n--- Output ---\nlog output\n"));
         assert!(!text.contains("no worktree diff or output file available"));
+    }
+    #[test]
+    fn extract_messages_from_log_collects_supported_formats() {
+        let file = NamedTempFile::new().unwrap();
+        let content = [
+            json!({
+                "type": "item.completed",
+                "item": { "type": "agent_message", "text": "codex message" }
+            }),
+            json!({
+                "type": "message",
+                "role": "assistant",
+                "content": "stream ",
+                "delta": true
+            }),
+            json!({
+                "type": "message",
+                "role": "assistant",
+                "content": "delta",
+                "delta": true
+            }),
+            json!({
+                "type": "text",
+                "part": { "text": "opencode text part" }
+            }),
+            json!({
+                "type": "text",
+                "content": "gemini text event"
+            }),
+        ]
+        .iter()
+        .map(serde_json::to_string)
+        .collect::<Result<Vec<_>, _>>()
+        .unwrap()
+        .join("\n");
+        std::fs::write(file.path(), content).unwrap();
+
+        let output = extract_messages_from_log(file.path());
+
+        assert_eq!(
+            output,
+            Some(
+                "codex message\n---\nstream delta\n---\nopencode text part\n---\ngemini text event"
+                    .to_string()
+            )
+        );
+    }
+    #[test]
+    fn extract_messages_from_log_returns_none_without_supported_messages() {
+        let file = NamedTempFile::new().unwrap();
+        std::fs::write(file.path(), "{\"type\":\"event\"}\nnot-json\n").unwrap();
+
+        assert_eq!(extract_messages_from_log(file.path()), None);
+    }
+    #[test]
+    fn output_text_for_task_prefers_extracted_messages_to_raw_log() {
+        let temp = tempfile::tempdir().unwrap();
+        let _aid_home = crate::paths::AidHomeGuard::set(temp.path());
+        std::fs::create_dir_all(crate::paths::logs_dir()).unwrap();
+        let log_path = crate::paths::log_path("t-output-messages");
+        let log_content = [
+            json!({
+                "type": "message",
+                "role": "assistant",
+                "content": "human-readable output"
+            }),
+            json!({
+                "type": "text",
+                "part": { "text": "second chunk" }
+            }),
+        ]
+        .iter()
+        .map(serde_json::to_string)
+        .collect::<Result<Vec<_>, _>>()
+        .unwrap()
+        .join("\n");
+        std::fs::write(&log_path, log_content).unwrap();
+
+        let store = Store::open_memory().unwrap();
+        let task = Task {
+            id: TaskId("t-output-messages".to_string()),
+            agent: AgentKind::Codex,
+            custom_agent_name: None,
+            prompt: "prompt".to_string(),
+            resolved_prompt: None,
+            status: TaskStatus::Done,
+            parent_task_id: None,
+            workgroup_id: None,
+            caller_kind: None,
+            caller_session_id: None,
+            agent_session_id: None,
+            repo_path: None,
+            worktree_path: None,
+            worktree_branch: None,
+            log_path: None,
+            output_path: None,
+            tokens: None,
+            prompt_tokens: None,
+            duration_ms: None,
+            model: None,
+            cost_usd: None,
+            exit_code: None,
+            created_at: Local::now(),
+            completed_at: None,
+            verify: None,
+            verify_status: VerifyStatus::Skipped,
+            read_only: false,
+            budget: false,
+        };
+        store.insert_task(&task).unwrap();
+
+        let output = output_text_for_task(&store, "t-output-messages").unwrap();
+
+        assert_eq!(output, "human-readable output\n---\nsecond chunk");
     }
 }

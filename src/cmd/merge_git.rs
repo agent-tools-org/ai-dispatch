@@ -268,7 +268,14 @@ pub(crate) fn run_verify_in_worktree(wt: &str, verify: Option<&str>) {
         return;
     };
     let verify_cmd = verify_parts.join(" ");
-    let output = Command::new(program).args(args).current_dir(wt).output();
+    let worktree_branch = Path::new(wt).file_name().and_then(|name| name.to_str());
+    let cargo_target_dir = crate::agent::target_dir_for_worktree(worktree_branch);
+    let mut command = Command::new(program);
+    command.args(args).current_dir(wt);
+    if let Some(target_dir) = cargo_target_dir {
+        command.env("CARGO_TARGET_DIR", target_dir);
+    }
+    let output = command.output();
     match output {
         Ok(o) if !o.status.success() => {
             eprintln!("[aid] Warning: `{verify_cmd}` failed in worktree {wt}");

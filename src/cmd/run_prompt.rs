@@ -400,7 +400,13 @@ pub(super) fn maybe_verify_impl(store: &Store, task_id: &TaskId, verify: Option<
     let Some(dir_path) = dir else { println!("Verify skipped: no working directory"); return; };
     let command = if verify_arg == "auto" { None } else { Some(verify_arg) };
     let path = std::path::Path::new(dir_path);
-    match crate::verify::run_verify(path, command) {
+    let worktree_branch = store
+        .get_task(task_id.as_str())
+        .ok()
+        .flatten()
+        .and_then(|task| task.worktree_branch);
+    let cargo_target_dir = crate::agent::target_dir_for_worktree(worktree_branch.as_deref());
+    match crate::verify::run_verify(path, command, cargo_target_dir.as_deref()) {
         Ok(result) => {
             let report = crate::verify::format_verify_report(&result);
             println!("{report}");

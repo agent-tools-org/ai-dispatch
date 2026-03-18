@@ -4,9 +4,12 @@
 use anyhow::{Context, Result};
 use std::path::Path;
 use std::process::Command;
+use std::sync::Mutex;
 
 use crate::store::Store;
 use crate::types::{TaskId, VerifyStatus};
+
+static VERIFY_LOCK: Mutex<()> = Mutex::new(());
 
 #[derive(Debug, Clone)]
 pub struct VerifyResult {
@@ -17,7 +20,11 @@ pub struct VerifyResult {
 
 /// Run a verification command in the given worktree directory.
 /// If `command` is None, auto-detect based on project files.
-pub fn run_verify(worktree_path: &Path, command: Option<&str>) -> Result<VerifyResult> {
+pub fn run_verify(
+    worktree_path: &Path,
+    command: Option<&str>,
+    cargo_target_dir: Option<&str>,
+) -> Result<VerifyResult> {
     let Some((cmd_str, mut cmd)) = build_verify_command(worktree_path, command)? else {
         return Ok(VerifyResult {
             success: true,
@@ -29,6 +36,11 @@ pub fn run_verify(worktree_path: &Path, command: Option<&str>) -> Result<VerifyR
     // Verify commands are user-authored, but we still execute them as argv to avoid
     // handing arbitrary strings to a shell. This preserves simple commands like
     // `cargo test` while refusing shell metacharacter expansion by default.
+    if let Some(target_dir) = cargo_target_dir {
+        cmd.env("CARGO_TARGET_DIR", target_dir);
+    }
+
+    let _guard = VERIFY_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let output = cmd
         .current_dir(worktree_path)
         .output()
@@ -121,7 +133,7 @@ mod tests {
     fn verify_pass_case() {
         let _permit = test_subprocess::acquire();
         let dir = TempDir::new().unwrap();
-        let result = run_verify(dir.path(), Some("echo ok")).unwrap();
+        let result = run_verify(dir.path(), Some("echo ok"), None).unwrap();
         assert!(result.success);
         assert!(result.output.contains("ok"));
         assert_eq!(result.command, "echo ok");
@@ -131,7 +143,7 @@ mod tests {
     fn verify_fail_case() {
         let _permit = test_subprocess::acquire();
         let dir = TempDir::new().unwrap();
-        let result = run_verify(dir.path(), Some("false")).unwrap();
+        let result = run_verify(dir.path(), Some("false"), None).unwrap();
         assert!(!result.success);
     }
 
@@ -139,7 +151,7 @@ mod tests {
     fn verify_does_not_expand_shell_operators() {
         let _permit = test_subprocess::acquire();
         let dir = TempDir::new().unwrap();
-        let result = run_verify(dir.path(), Some("echo ok && false")).unwrap();
+        let result = run_verify(dir.path(), Some("echo ok && false"), None).unwrap();
         assert!(result.success);
         assert!(result.output.contains("ok && false"));
     }
@@ -147,7 +159,7 @@ mod tests {
     #[test]
     fn verify_no_project_file_skips() {
         let dir = TempDir::new().unwrap();
-        let result = run_verify(dir.path(), None).unwrap();
+        let result = run_verify(dir.path(), None, None).unwrap();
         assert!(result.success);
         assert!(result.output.contains("skipping"));
     }

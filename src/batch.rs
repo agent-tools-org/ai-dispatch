@@ -4,6 +4,7 @@
 use anyhow::{Context, Result};
 use serde::Deserialize;
 use std::collections::{HashMap, HashSet};
+use std::io::{self, Write};
 use std::path::Path;
 
 const VALID_AGENTS: &[&str] = &["gemini", "codex", "opencode", "cursor", "kilo"];
@@ -126,6 +127,7 @@ pub fn parse_batch_file(path: &Path) -> Result<BatchConfig> {
     validate_no_file_overlap(&config.tasks)?;
     validate_dag(&config.tasks)?;
     validate_conditional_hooks(&config.tasks)?;
+    warn_audit_without_readonly(&config.tasks);
     Ok(config)
 }
 
@@ -352,6 +354,39 @@ fn resolve_dependencies(
 fn task_label(task: &BatchTask, task_idx: usize) -> String {
     task.name.clone().unwrap_or_else(|| format!("#{task_idx}"))
 }
+pub fn warn_audit_without_readonly(tasks: &[BatchTask]) {
+    let _ = warn_audit_without_readonly_into(tasks, &mut io::stderr().lock());
+}
+
+fn warn_audit_without_readonly_into(tasks: &[BatchTask], writer: &mut impl Write) -> io::Result<()> {
+    for (task_idx, task) in tasks.iter().enumerate() {
+        if task.read_only || !prompt_suggests_read_only(&task.prompt) {
+            continue;
+        }
+        writeln!(
+            writer,
+            "[aid] ⚠ Task '{}' prompt suggests read-only intent but read_only is not set. Consider adding read_only = true",
+            task_label(task, task_idx)
+        )?;
+    }
+    Ok(())
+}
+
+fn prompt_suggests_read_only(prompt: &str) -> bool {
+    let lower = prompt.to_ascii_lowercase();
+    lower.contains("do not modify")
+        || lower.contains("don't modify")
+        || lower.contains("report only")
+        || lower.contains("read only")
+        || lower.contains("read-only")
+        || lower.contains("do not change")
+        || lower.contains("analysis only")
+        || lower.contains("analyze only")
+        || (lower.contains("audit")
+            && !lower.contains("audit trail")
+            && !lower.contains("audit log"))
+}
+
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum VisitState {
     Pending,

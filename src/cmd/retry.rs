@@ -92,7 +92,8 @@ fn resolve_retry_target(
 ) -> (Option<String>, Option<String>) {
     match task.worktree_path.as_ref() {
         Some(path) if std::path::Path::new(path).exists() => {
-            // Worktree still exists — run inside it directly, no need to recreate
+            // Worktree still exists — reset any dirty state from crashed prior attempt
+            reset_dirty_worktree(path);
             (Some(path.clone()), None)
         }
         Some(_) => {
@@ -101,6 +102,25 @@ fn resolve_retry_target(
             (None, worktree)
         }
         None => (None, None),
+    }
+}
+
+fn reset_dirty_worktree(path: &str) {
+    let output = std::process::Command::new("git")
+        .args(["-C", path, "status", "--porcelain"])
+        .output();
+    let is_dirty = output
+        .as_ref()
+        .map(|o| o.status.success() && !o.stdout.is_empty())
+        .unwrap_or(false);
+    if is_dirty {
+        eprintln!("[aid] Worktree has uncommitted changes from prior attempt, resetting...");
+        let _ = std::process::Command::new("git")
+            .args(["-C", path, "checkout", "."])
+            .output();
+        let _ = std::process::Command::new("git")
+            .args(["-C", path, "clean", "-fd"])
+            .output();
     }
 }
 

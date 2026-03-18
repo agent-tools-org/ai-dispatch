@@ -22,6 +22,9 @@ impl super::Agent for OpenCodeAgent {
     }
 
     fn build_command(&self, prompt: &str, opts: &RunOpts) -> Result<Command> {
+        if opts.read_only {
+            eprintln!("[aid] ⚠ OpenCode read-only is prompt-level only, not enforced. Use --worktree for isolation.");
+        }
         let effective_prompt = if opts.read_only {
             format!(
                 "IMPORTANT: READ-ONLY MODE. Do NOT modify, create, or delete any files. Only read and analyze.\n\n{}",
@@ -392,5 +395,29 @@ mod tests {
 
         assert!(!args.contains(&"--session".to_string()));
         assert!(!args.contains(&"--continue".to_string()));
+    }
+
+    #[test]
+    fn build_command_read_only_prepends_readonly_prefix() {
+        let agent = OpenCodeAgent;
+        let opts = RunOpts {
+            dir: None,
+            output: None,
+            model: None,
+            budget: false,
+            read_only: true,
+            context_files: vec![],
+            session_id: None,
+        };
+        let cmd = agent.build_command("analyze this code", &opts).unwrap();
+        let args: Vec<String> = cmd
+            .get_args()
+            .map(|a| a.to_string_lossy().to_string())
+            .collect();
+
+        let last_arg = args.last().expect("should have prompt as last arg");
+        assert!(last_arg.contains("READ-ONLY MODE"));
+        assert!(last_arg.starts_with("IMPORTANT: READ-ONLY MODE"));
+        assert!(last_arg.contains("analyze this code"));
     }
 }

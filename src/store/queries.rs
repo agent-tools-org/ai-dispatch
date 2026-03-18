@@ -11,7 +11,6 @@ use rusqlite::{params, OptionalExtension};
 use super::schema::{parse_dt, row_to_event, row_to_memory, row_to_task};
 use super::Store;
 use crate::types::*;
-use crate::usage::parse_window;
 
 const SIMILAR_TASK_STOPWORDS: &[&str] = &[
     "the", "and", "for", "with", "from", "that", "this", "have", "your", "task", "code",
@@ -122,6 +121,38 @@ impl Store {
         for row in rows {
             let (tid, detail) = row?;
             map.insert(tid, detail);
+        }
+        Ok(map)
+    }
+
+    pub fn latest_awaiting_reasons_batch(&self, task_ids: &[&str]) -> Result<HashMap<String, String>> {
+        if task_ids.is_empty() {
+            return Ok(HashMap::new());
+        }
+        let conn = self.db();
+        let placeholders: Vec<String> = (1..=task_ids.len()).map(|i| format!("?{i}")).collect();
+        let sql = format!(
+            "SELECT task_id, json_extract(metadata, '$.awaiting_prompt') FROM events e1
+             WHERE json_extract(metadata, '$.awaiting_input') = 1
+             AND timestamp = (
+                 SELECT MAX(timestamp) FROM events e2
+                 WHERE e2.task_id = e1.task_id
+                   AND json_extract(e2.metadata, '$.awaiting_input') = 1
+             )
+             AND task_id IN ({})",
+            placeholders.join(",")
+        );
+        let mut stmt = conn.prepare(&sql)?;
+        let params: Vec<&dyn rusqlite::ToSql> = task_ids.iter().map(|s| s as &dyn rusqlite::ToSql).collect();
+        let rows = stmt.query_map(params.as_slice(), |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, Option<String>>(1)?))
+        })?;
+        let mut map = HashMap::new();
+        for row in rows {
+            let (task_id, prompt) = row?;
+            if let Some(prompt) = prompt {
+                map.insert(task_id, prompt);
+            }
         }
         Ok(map)
     }
@@ -524,6 +555,7 @@ mod tests {
     use chrono::{Duration, Local};
     use crate::store::Store;
     use crate::types::{AgentKind, TaskStatus};
+    use crate::usage::parse_window;
     use rusqlite::params;
 
     fn insert_task(
@@ -538,6 +570,23 @@ mod tests {
             "INSERT INTO tasks (id, agent, prompt, status, created_at)
              VALUES (?1, ?2, ?3, ?4, ?5)",
             params![id, agent.as_str(), prompt, status.as_str(), "2026-03-15T00:00:00Z"],
+        )
+        .unwrap();
+    }
+
+    fn insert_event(
+        store: &Store,
+        task_id: &str,
+        timestamp: &str,
+        event_type: &str,
+        detail: &str,
+        metadata: Option<&str>,
+    ) {
+        let conn = store.db();
+        conn.execute(
+            "INSERT INTO events (task_id, timestamp, event_type, detail, metadata)
+             VALUES (?1, ?2, ?3, ?4, ?5)",
+            params![task_id, timestamp, event_type, detail, metadata],
         )
         .unwrap();
     }
@@ -607,6 +656,73 @@ mod tests {
         );
         let results = store.find_similar_tasks("Short", 3).unwrap();
         assert!(results.is_empty());
+    }
+
+    #[test]
+    fn latest_awaiting_reasons_batch_returns_latest_prompt_per_task() {
+        let store = Store::open_memory().unwrap();
+        insert_task(&store, "t-await-1", AgentKind::Codex, TaskStatus::AwaitingInput, "Prompt one");
+        insert_task(&store, "t-await-2", AgentKind::Gemini, TaskStatus::AwaitingInput, "Prompt two");
+        insert_task(&store, "t-other", AgentKind::Cursor, TaskStatus::Running, "Prompt three");
+        insert_event(
+            &store,
+            "t-await-1",
+            "2026-03-15T00:00:00Z",
+            "status",
+            "awaiting",
+            Some(r#"{"awaiting_input":true,"awaiting_prompt":"First prompt"}"#),
+        );
+        insert_event(
+            &store,
+            "t-await-1",
+            "2026-03-15T01:00:00Z",
+            "status",
+            "awaiting",
+            Some(r#"{"awaiting_input":true,"awaiting_prompt":"Latest prompt"}"#),
+        );
+        insert_event(
+            &store,
+            "t-await-2",
+            "2026-03-15T02:00:00Z",
+            "status",
+            "awaiting",
+            Some(r#"{"awaiting_input":true,"awaiting_prompt":"Second task prompt"}"#),
+        );
+        insert_event(
+            &store,
+            "t-other",
+            "2026-03-15T03:00:00Z",
+            "status",
+            "running",
+            Some(r#"{"awaiting_input":false,"awaiting_prompt":"Ignored"}"#),
+        );
+
+        let reasons = store
+            .latest_awaiting_reasons_batch(&["t-await-1", "t-await-2", "t-other"])
+            .unwrap();
+
+        assert_eq!(reasons.len(), 2);
+        assert_eq!(reasons.get("t-await-1").map(String::as_str), Some("Latest prompt"));
+        assert_eq!(reasons.get("t-await-2").map(String::as_str), Some("Second task prompt"));
+        assert!(!reasons.contains_key("t-other"));
+    }
+
+    #[test]
+    fn latest_awaiting_reasons_batch_skips_missing_prompts() {
+        let store = Store::open_memory().unwrap();
+        insert_task(&store, "t-await", AgentKind::Codex, TaskStatus::AwaitingInput, "Prompt");
+        insert_event(
+            &store,
+            "t-await",
+            "2026-03-15T00:00:00Z",
+            "status",
+            "awaiting",
+            Some(r#"{"awaiting_input":true}"#),
+        );
+
+        let reasons = store.latest_awaiting_reasons_batch(&["t-await"]).unwrap();
+
+        assert!(reasons.is_empty());
     }
 
     #[test]

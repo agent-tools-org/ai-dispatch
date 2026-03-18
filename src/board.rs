@@ -1,6 +1,8 @@
 // Text rendering for task board and task detail views.
 // Board rows can enrich output with stored milestone events.
 
+use std::collections::HashMap;
+
 use anyhow::Result;
 
 use crate::cost;
@@ -33,6 +35,18 @@ pub fn render_board(tasks: &[Task], store: &Store) -> Result<String> {
     out.push('\n');
 
     let show_repo = tasks.iter().any(|task| task.repo_path.is_some());
+    let running_ids: Vec<&str> = tasks
+        .iter()
+        .filter(|task| task.status != TaskStatus::AwaitingInput)
+        .map(|task| task.id.as_str())
+        .collect();
+    let awaiting_ids: Vec<&str> = tasks
+        .iter()
+        .filter(|task| task.status == TaskStatus::AwaitingInput)
+        .map(|task| task.id.as_str())
+        .collect();
+    let latest_milestones = store.latest_milestones_batch(&running_ids)?;
+    let awaiting_reasons = store.latest_awaiting_reasons_batch(&awaiting_ids)?;
 
     // Header
     if show_repo {
@@ -53,23 +67,13 @@ pub fn render_board(tasks: &[Task], store: &Store) -> Result<String> {
 
     for task in tasks {
         let status = if task.status == TaskStatus::AwaitingInput {
-            let reason = store.get_events(task.id.as_str())
-                .ok()
-                .and_then(|evs| evs.into_iter().rev()
-                    .find(|e| e.metadata.as_ref()
-                        .and_then(|m| m.get("awaiting_input"))
-                        .and_then(|v| v.as_bool())
-                        .unwrap_or(false))
-                    .and_then(|e| e.metadata.as_ref()
-                        .and_then(|m| m.get("awaiting_prompt"))
-                        .and_then(|v| v.as_str())
-                        .map(|s| s.to_string())));
+            let reason = awaiting_reasons.get(task.id.as_str());
             match reason {
                 Some(r) => truncate(&format!("AWAIT — {}", r), 30),
                 None => task.status.label().to_string(),
             }
         } else {
-            let base = task_status(task, store.latest_milestone(task.id.as_str())?);
+            let base = task_status(task, latest_milestone(&latest_milestones, task.id.as_str()));
             if task.verify_status == VerifyStatus::Failed {
                 format!("{} [VFAIL]", base)
             } else {
@@ -135,6 +139,10 @@ pub fn render_board(tasks: &[Task], store: &Store) -> Result<String> {
         }
     }
     Ok(out)
+}
+
+fn latest_milestone(milestones: &HashMap<String, String>, task_id: &str) -> Option<String> {
+    milestones.get(task_id).cloned()
 }
 
 /// Render detailed view of a single task (for `aid audit`)

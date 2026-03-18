@@ -192,6 +192,7 @@ pub fn collect_usage_snapshot(
 }
 
 pub fn check_budget_status(store: &Store, config: &AidConfig) -> Result<BudgetStatus> {
+    let now = Local::now();
     let mut over_limit = false;
     let mut near_limit = false;
     let mut messages: Vec<String> = Vec::new();
@@ -201,7 +202,7 @@ pub fn check_budget_status(store: &Store, config: &AidConfig) -> Result<BudgetSt
             .window
             .as_deref()
             .and_then(parse_window)
-            .map(|window| Local::now() - window);
+            .map(|window| now - window);
         let (task_count, total_tokens, total_cost) = match budget.agent.as_deref() {
             Some(agent) => store.budget_usage_summary(agent, since)?,
             None => (0, 0, 0.0),

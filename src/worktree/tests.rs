@@ -88,7 +88,7 @@ fn create_worktree_syncs_cargo_lock() {
     git(repo.path(), &["add", "."]);
     git(repo.path(), &["commit", "-m", "init"]);
 
-    let branch = unique_branch("cargo-lock-test");
+    let branch = unique_branch("feat/cargo-lock-test");
     let info = create_worktree(repo.path(), branch.as_str(), None).unwrap();
     assert!(info.path.join("Cargo.lock").exists());
     std::fs::write(repo.path().join("Cargo.lock"), "# updated lock\n").unwrap();
@@ -119,7 +119,7 @@ fn create_worktree_reuses_existing_branch_worktree() {
     git(repo.path(), &["add", "."]);
     git(repo.path(), &["commit", "-m", "init"]);
 
-    let branch = unique_branch("reuse");
+    let branch = unique_branch("feat/reuse");
     let existing_root = TempDir::new().unwrap();
     let existing_path = existing_root.path().join("worktree");
     git(
@@ -160,7 +160,7 @@ fn create_worktree_prunes_orphaned_branch_worktree() {
     git(repo.path(), &["add", "."]);
     git(repo.path(), &["commit", "-m", "init"]);
 
-    let branch = unique_branch("orphan");
+    let branch = unique_branch("feat/orphan");
     let orphan_root = TempDir::new().unwrap();
     let orphan_path = orphan_root.path().join("worktree");
     git(
@@ -212,4 +212,42 @@ fn worktree_changed_files_reports_committed_files() {
     let files = worktree_changed_files(repo.path()).unwrap();
     assert!(files.contains(&"agent.txt".to_string()));
     assert!(files.contains(&"agent2.txt".to_string()));
+}
+
+#[test]
+fn create_worktree_rejects_non_aid_branch_on_force_reset_fallback() {
+    let repo = TempDir::new().unwrap();
+    git(repo.path(), &["init", "-b", "main"]);
+    git(repo.path(), &["config", "user.email", "test@example.com"]);
+    git(repo.path(), &["config", "user.name", "Test User"]);
+    std::fs::write(repo.path().join("file.txt"), "hello\n").unwrap();
+    git(repo.path(), &["add", "file.txt"]);
+    git(repo.path(), &["commit", "-m", "init"]);
+
+    let branch = unique_branch("legacy");
+    git(repo.path(), &["branch", branch.as_str()]);
+
+    let err = create_worktree(repo.path(), branch.as_str(), None).unwrap_err();
+    assert!(err.to_string().contains("Refusing to force-reset branch"));
+}
+
+#[test]
+fn create_worktree_allows_aid_branch_on_force_reset_fallback() {
+    let repo = TempDir::new().unwrap();
+    git(repo.path(), &["init", "-b", "main"]);
+    git(repo.path(), &["config", "user.email", "test@example.com"]);
+    git(repo.path(), &["config", "user.name", "Test User"]);
+    std::fs::write(repo.path().join("file.txt"), "hello\n").unwrap();
+    git(repo.path(), &["add", "file.txt"]);
+    git(repo.path(), &["commit", "-m", "init"]);
+
+    let branch = unique_branch("feat/reset");
+    git(repo.path(), &["branch", branch.as_str()]);
+
+    let info = create_worktree(repo.path(), branch.as_str(), None).unwrap();
+    assert!(info.path.exists());
+    git(
+        repo.path(),
+        &["worktree", "remove", "--force", &info.path.to_string_lossy()],
+    );
 }

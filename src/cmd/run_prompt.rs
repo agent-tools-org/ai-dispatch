@@ -346,7 +346,13 @@ pub(super) fn maybe_cleanup_fast_fail_impl(store: &Store, task_id: &TaskId, task
     let Some(duration_ms) = task.duration_ms else { return };
     if duration_ms > 10_000 { return }
     if crate::worktree::branch_has_commits_ahead_of_main(path, task.worktree_branch.as_deref().unwrap_or("unknown")).unwrap_or(true) { return; }
-    let _ = std::process::Command::new("git").args(["worktree", "remove", "--force", wt_path]).output();
+    let Some(repo_dir) = task.repo_path.as_deref() else {
+        eprintln!("[aid] Warning: skipping fast-fail cleanup for {} — missing repo_path", task_id);
+        return;
+    };
+    let _ = std::process::Command::new("git")
+        .args(["-C", repo_dir, "worktree", "remove", "--force", wt_path])
+        .output();
     eprintln!("[aid] Cleaned up worktree for fast-failed task {}", task_id);
 }
 

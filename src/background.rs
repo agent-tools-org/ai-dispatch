@@ -42,6 +42,8 @@ pub struct BackgroundRunSpec {
     #[serde(default)]
     pub on_done: Option<String>,
     #[serde(default)]
+    pub cascade: Vec<String>,
+    #[serde(default)]
     pub parent_task_id: Option<String>,
 }
 
@@ -179,6 +181,7 @@ async fn run_task_inner(store: &Arc<Store>, spec: &BackgroundRunSpec) -> Result<
         retry: spec.retry,
         skills: spec.skills.clone(),
         template: spec.template.clone(),
+        cascade: spec.cascade.clone(),
         parent_task_id: spec.parent_task_id.clone(),
         ..Default::default()
     };

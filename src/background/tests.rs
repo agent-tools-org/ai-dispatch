@@ -30,12 +30,27 @@ fn serializes_spec_to_json() {
         template: None,
         interactive: true,
         on_done: None,
+        cascade: vec![],
         parent_task_id: None,
     };
 
     let content = serde_json::to_string_pretty(&spec).unwrap();
     assert!(content.contains("\"agent_name\""));
     assert!(content.contains("\"codex\""));
+}
+
+#[test]
+fn serializes_cascade_field() {
+    let spec = BackgroundRunSpec {
+        cascade: vec!["opencode".to_string(), "cursor".to_string()],
+        ..make_spec("t-cascade")
+    };
+    let content = serde_json::to_string_pretty(&spec).unwrap();
+    assert!(content.contains("\"cascade\""));
+    assert!(content.contains("\"opencode\""));
+    assert!(content.contains("\"cursor\""));
+    let parsed: BackgroundRunSpec = serde_json::from_str(&content).unwrap();
+    assert_eq!(parsed.cascade, vec!["opencode", "cursor"]);
 }
 
 #[test]
@@ -138,6 +153,7 @@ fn make_spec(task_id: &str) -> BackgroundRunSpec {
         template: None,
         interactive: true,
         on_done: None,
+        cascade: vec![],
         parent_task_id: None,
     }
 }

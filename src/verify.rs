@@ -66,25 +66,15 @@ pub fn run_verify(
     let reader = spawn_output_reader(&mut child)?;
     let status = wait_for_child(&mut child, VERIFY_TIMEOUT)?;
     let timed_out = status.is_none();
-    let output = finalize_child(&mut child, timed_out);
+    finalize_child(&mut child, timed_out);
     let combined = match reader.join() {
         Ok(result) => result?,
         Err(_) => return Err(anyhow::anyhow!("verify output reader thread panicked")),
     };
-    let combined = match output {
-        Ok(()) => {
-            if timed_out {
-                format!("{combined}\nVerification timed out after {} seconds", VERIFY_TIMEOUT.as_secs())
-            } else {
-                combined
-            }
-        }
-        Err(err) => {
-            if combined.is_empty() {
-                return Err(err);
-            }
-            format!("{combined}\n{err:#}")
-        }
+    let combined = if timed_out {
+        format!("{combined}\nVerification timed out after {} seconds", VERIFY_TIMEOUT.as_secs())
+    } else {
+        combined
     };
 
     Ok(VerifyResult {
@@ -183,36 +173,34 @@ fn wait_for_child(child: &mut Child, timeout_dur: Duration) -> Result<Option<Exi
     // Watchdog thread: kills process group if timeout expires before child exits.
     thread::spawn(move || {
         thread::sleep(timeout_dur);
-        if !done2.load(std::sync::atomic::Ordering::Acquire) {
-            fired2.store(true, std::sync::atomic::Ordering::Release);
+        if !done2.load(std::sync::atomic::Ordering::SeqCst) {
             #[cfg(unix)]
             unsafe {
                 libc::kill(-(child_pid as i32), libc::SIGKILL);
             }
+            fired2.store(true, std::sync::atomic::Ordering::SeqCst);
         }
     });
     let status = child.wait().context("failed to wait for verify process")?;
-    done.store(true, std::sync::atomic::Ordering::Release);
-    if fired.load(std::sync::atomic::Ordering::Acquire) {
+    done.store(true, std::sync::atomic::Ordering::SeqCst);
+    if fired.load(std::sync::atomic::Ordering::SeqCst) {
         Ok(None)
     } else {
         Ok(Some(status))
     }
 }
-fn finalize_child(child: &mut Child, timed_out: bool) -> Result<()> {
+fn finalize_child(child: &mut Child, timed_out: bool) {
     #[cfg(unix)]
     {
         let pid = child.id() as i32;
         if timed_out {
-            // Forcibly kill — process didn't exit within timeout
             kill_process_group(pid, libc::SIGKILL);
         } else {
-            // Process exited normally — just SIGTERM orphaned grandchildren, no wait needed
+            // Process already reaped by wait_for_child — just SIGTERM orphaned grandchildren
             kill_process_group(pid, libc::SIGTERM);
         }
     }
-    child.wait().context("failed to reap verify process")?;
-    Ok(())
+    // child.wait() already called in wait_for_child — do NOT double-wait
 }
 #[cfg(unix)]
 fn kill_process_group(pid: i32, signal: i32) {

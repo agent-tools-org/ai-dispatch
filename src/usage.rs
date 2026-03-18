@@ -388,7 +388,7 @@ fn parse_window(value: &str) -> Option<Duration> {
 
 fn start_of_day(now: DateTime<Local>) -> DateTime<Local> {
     let date = now.date_naive();
-    let naive = date.and_hms_opt(0, 0, 0).unwrap();
+    let Some(naive) = date.and_hms_opt(0, 0, 0) else { return now; };
     match Local.from_local_datetime(&naive) {
         LocalResult::Single(dt) => dt,
         LocalResult::Ambiguous(dt, _) => dt,

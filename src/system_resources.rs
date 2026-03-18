@@ -36,6 +36,7 @@ fn parse_available_mb(line: &str) -> Option<u64> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_subprocess;
 
     #[test]
     fn recommended_max_concurrent_is_in_range() {
@@ -49,11 +50,13 @@ mod tests {
 
     #[test]
     fn available_disk_mb_returns_tmp_capacity() {
+        let _permit = test_subprocess::acquire();
         assert!(available_disk_mb("/tmp").is_some());
     }
 
     #[test]
     fn check_disk_space_handles_zero_threshold() {
+        let _permit = test_subprocess::acquire();
         assert!(check_disk_space("/tmp", 0));
     }
 

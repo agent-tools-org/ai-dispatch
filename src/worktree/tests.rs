@@ -1,6 +1,7 @@
 // Worktree tests for reuse/prune behavior. Exports test helpers and validates Cargo sync deps.
 // Purpose: Guard worktree creation when branches already exist. Deps: tempfile, std.
 use super::*;
+use crate::test_subprocess;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -39,6 +40,7 @@ fn validate_git_repo_succeeds_on_real_repo() {
 
 #[test]
 fn create_worktree_rejects_invalid_branch_name() {
+    let _permit = test_subprocess::acquire();
     let repo = TempDir::new().unwrap();
     git(repo.path(), &["init", "-b", "main"]);
     git(repo.path(), &["config", "user.email", "test@example.com"]);
@@ -50,6 +52,7 @@ fn create_worktree_rejects_invalid_branch_name() {
 
 #[test]
 fn create_worktree_with_base_branch_inherits_base_content() {
+    let _permit = test_subprocess::acquire();
     let repo = TempDir::new().unwrap();
     git(repo.path(), &["init", "-b", "main"]);
     git(repo.path(), &["config", "user.email", "test@example.com"]);
@@ -90,6 +93,7 @@ fn create_worktree_with_base_branch_inherits_base_content() {
 
 #[test]
 fn create_worktree_syncs_cargo_lock() {
+    let _permit = test_subprocess::acquire();
     let repo = TempDir::new().unwrap();
     git(repo.path(), &["init", "-b", "main"]);
     git(repo.path(), &["config", "user.email", "test@example.com"]);
@@ -122,6 +126,7 @@ fn create_worktree_syncs_cargo_lock() {
 
 #[test]
 fn create_worktree_reuses_existing_branch_worktree() {
+    let _permit = test_subprocess::acquire();
     let repo = TempDir::new().unwrap();
     git(repo.path(), &["init", "-b", "main"]);
     git(repo.path(), &["config", "user.email", "test@example.com"]);
@@ -163,6 +168,7 @@ fn create_worktree_reuses_existing_branch_worktree() {
 
 #[test]
 fn create_worktree_prunes_orphaned_branch_worktree() {
+    let _permit = test_subprocess::acquire();
     let repo = TempDir::new().unwrap();
     git(repo.path(), &["init", "-b", "main"]);
     git(repo.path(), &["config", "user.email", "test@example.com"]);
@@ -203,6 +209,7 @@ fn create_worktree_prunes_orphaned_branch_worktree() {
 
 #[test]
 fn worktree_changed_files_reports_committed_files() {
+    let _permit = test_subprocess::acquire();
     let repo = TempDir::new().unwrap();
     git(repo.path(), &["init", "-b", "main"]);
     git(repo.path(), &["config", "user.email", "test@example.com"]);
@@ -227,6 +234,7 @@ fn worktree_changed_files_reports_committed_files() {
 
 #[test]
 fn create_worktree_rejects_non_aid_branch_on_force_reset_fallback() {
+    let _permit = test_subprocess::acquire();
     let repo = TempDir::new().unwrap();
     git(repo.path(), &["init", "-b", "main"]);
     git(repo.path(), &["config", "user.email", "test@example.com"]);
@@ -244,6 +252,7 @@ fn create_worktree_rejects_non_aid_branch_on_force_reset_fallback() {
 
 #[test]
 fn create_worktree_allows_aid_branch_on_force_reset_fallback() {
+    let _permit = test_subprocess::acquire();
     let repo = TempDir::new().unwrap();
     git(repo.path(), &["init", "-b", "main"]);
     git(repo.path(), &["config", "user.email", "test@example.com"]);

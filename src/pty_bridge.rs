@@ -89,9 +89,11 @@ impl PtyBridge {
 #[cfg(test)]
 mod tests {
     use super::PtyBridge;
+    use crate::test_subprocess;
 
     #[test]
     fn spawns_echo_in_a_pty() {
+        let _permit = test_subprocess::acquire();
         let cmd = vec!["/bin/echo".to_string(), "hello".to_string()];
         let mut bridge = PtyBridge::spawn(&cmd, None, vec![]).unwrap();
 
@@ -103,6 +105,7 @@ mod tests {
 
     #[test]
     fn kill_terminates_running_process() {
+        let _permit = test_subprocess::acquire();
         let cmd = vec!["/bin/sleep".to_string(), "60".to_string()];
         let mut bridge = PtyBridge::spawn(&cmd, None, vec![]).unwrap();
 
@@ -114,6 +117,7 @@ mod tests {
 
     #[test]
     fn try_wait_returns_none_while_running() {
+        let _permit = test_subprocess::acquire();
         let cmd = vec!["/bin/sleep".to_string(), "60".to_string()];
         let mut bridge = PtyBridge::spawn(&cmd, None, vec![]).unwrap();
 

@@ -48,6 +48,7 @@ fn strip_aid_tags(text: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::{has_uncommitted_changes, strip_aid_tags};
+    use crate::test_subprocess;
 
     #[test]
     fn strip_aid_tags_removes_tag_blocks() {
@@ -71,6 +72,7 @@ mod tests {
 
     #[test]
     fn detects_dirty_git_repo() {
+        let _permit = test_subprocess::acquire();
         let dir = tempfile::tempdir().unwrap();
         assert!(std::process::Command::new("git").arg("-C").arg(dir.path()).args(["init"]).status().unwrap().success());
         assert!(!has_uncommitted_changes(dir.path().to_str().unwrap()).unwrap());

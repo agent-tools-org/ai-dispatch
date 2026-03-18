@@ -337,6 +337,7 @@ pub async fn run(store: Arc<Store>, mut args: RunArgs) -> Result<TaskId> {
         return Err(err);
     }
     if args.background {
+        background::check_worker_capacity(&store)?;
         let spec = BackgroundRunSpec {
             task_id: task_id.as_str().to_string(),
             worker_pid: None,

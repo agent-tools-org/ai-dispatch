@@ -29,6 +29,8 @@ mod store_workgroups;
 mod project;
 mod team;
 mod templates;
+#[cfg(test)]
+mod test_subprocess;
 mod compaction;
 pub mod claudemd;
 mod tui;

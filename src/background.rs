@@ -13,9 +13,12 @@ use crate::notify;
 use crate::paths;
 use crate::sanitize;
 use crate::store::Store;
+use crate::system_resources;
 use crate::types::{AgentKind, EventKind, TaskEvent, TaskFilter, TaskId, TaskStatus};
 
 const ZOMBIE_FAILURE_DETAIL: &str = "Background worker died unexpectedly";
+/// Hard limit on concurrent background workers — prevents process exhaustion.
+const MAX_WORKERS: usize = 32;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BackgroundRunSpec {
@@ -74,6 +77,24 @@ pub fn spawn_worker(task_id: &str) -> Result<Child> {
     }
     cmd.spawn()
         .context("Failed to spawn detached background worker")
+}
+
+/// Check whether spawning another worker would exceed the process limit.
+/// Returns Ok(()) if within limits, Err if at capacity.
+pub fn check_worker_capacity(store: &Store) -> Result<()> {
+    let running = store.list_tasks(TaskFilter::Running)?.len();
+    let soft_limit = system_resources::recommended_max_concurrent();
+    if running >= MAX_WORKERS {
+        anyhow::bail!(
+            "Worker limit reached ({running}/{MAX_WORKERS} active) — wait for tasks to complete"
+        );
+    }
+    if running >= soft_limit {
+        eprintln!(
+            "[aid] Warning: {running} active workers (recommended max: {soft_limit})"
+        );
+    }
+    Ok(())
 }
 
 pub async fn run_task(store: Arc<Store>, task_id: &str) -> Result<()> {

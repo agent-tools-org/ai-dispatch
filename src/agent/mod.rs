@@ -152,6 +152,7 @@ fn which_exists(name: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::{is_rust_project, shared_target_dir, target_dir_for_worktree};
+    use crate::test_subprocess;
     use std::ffi::OsStr;
     use std::path::{Path, PathBuf};
     use std::process::Command;
@@ -159,6 +160,7 @@ mod tests {
 
     #[test]
     fn detects_rust_project_in_current_dir() {
+        let _permit = test_subprocess::acquire();
         let temp_dir = TempDir::new().unwrap();
 
         std::fs::write(
@@ -199,6 +201,7 @@ mod tests {
 
     #[test]
     fn shared_target_dir_prefers_explicit_env_var() {
+        let _permit = test_subprocess::acquire();
         let temp_dir = TempDir::new().unwrap();
         let expected = temp_dir.path().join("shared-target");
         let output = run_helper(
@@ -214,6 +217,7 @@ mod tests {
 
     #[test]
     fn shared_target_dir_defaults_under_aid_home() {
+        let _permit = test_subprocess::acquire();
         let temp_dir = TempDir::new().unwrap();
         let aid_home = temp_dir.path().join("aid-home");
         let expected = aid_home.join("cargo-target");
@@ -233,6 +237,7 @@ mod tests {
 
     #[test]
     fn shared_target_dir_defaults_to_home_aid_path() {
+        let _permit = test_subprocess::acquire();
         let temp_dir = TempDir::new().unwrap();
         let home_dir = temp_dir.path().join("home");
         let expected = PathBuf::from(&home_dir).join(".aid").join("cargo-target");
@@ -254,12 +259,14 @@ mod tests {
     #[test]
     #[ignore]
     fn reports_is_rust_project_for_subprocess() {
+        let _permit = test_subprocess::acquire();
         println!("IS_RUST_PROJECT={}", is_rust_project(None));
     }
 
     #[test]
     #[ignore]
     fn reports_shared_target_dir_for_subprocess() {
+        let _permit = test_subprocess::acquire();
         println!(
             "SHARED_TARGET_DIR={}",
             shared_target_dir().unwrap_or_default()

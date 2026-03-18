@@ -258,6 +258,7 @@ fn run_approval_prompt(merge_action: &str, retry_action: &str, prompt: &str) -> 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_subprocess;
     use crate::types::*;
     use chrono::Local;
     use std::path::Path;
@@ -344,6 +345,7 @@ mod tests {
 
     #[test]
     fn commits_ahead_detects_branch_with_commits() {
+        let _permit = test_subprocess::acquire();
         let repo = init_repo();
         let (wt, branch) = create_worktree_with_commit(repo.path());
         assert!(commits_ahead(&repo.path().to_string_lossy(), &branch) > 0);
@@ -352,6 +354,7 @@ mod tests {
 
     #[test]
     fn commits_ahead_returns_zero_for_same_head() {
+        let _permit = test_subprocess::acquire();
         let repo = init_repo();
         let branch = unique("empty-branch");
         git(repo.path(), &["branch", &branch]);
@@ -360,12 +363,14 @@ mod tests {
 
     #[test]
     fn commits_ahead_returns_zero_for_missing_branch() {
+        let _permit = test_subprocess::acquire();
         let repo = init_repo();
         assert_eq!(commits_ahead(&repo.path().to_string_lossy(), "nonexistent"), 0);
     }
 
     #[test]
     fn auto_commit_uncommitted_commits_dirty_worktree() {
+        let _permit = test_subprocess::acquire();
         let repo = init_repo();
         let branch = unique("dirty-branch");
         let wt = TempDir::new().unwrap();
@@ -383,6 +388,7 @@ mod tests {
 
     #[test]
     fn auto_commit_uncommitted_returns_false_for_clean_worktree() {
+        let _permit = test_subprocess::acquire();
         let repo = init_repo();
         let (wt, branch) = create_worktree_with_commit(repo.path());
         let committed = auto_commit_uncommitted(&wt.path().to_string_lossy(), &branch);
@@ -392,6 +398,7 @@ mod tests {
 
     #[test]
     fn git_merge_branch_merges_committed_branch() {
+        let _permit = test_subprocess::acquire();
         let repo = init_repo();
         let (wt, branch) = create_worktree_with_commit(repo.path());
 
@@ -405,6 +412,7 @@ mod tests {
 
     #[test]
     fn git_merge_branch_detects_already_up_to_date() {
+        let _permit = test_subprocess::acquire();
         let repo = init_repo();
         let branch = unique("noop-branch");
         git(repo.path(), &["branch", &branch]);
@@ -415,6 +423,7 @@ mod tests {
 
     #[test]
     fn git_merge_branch_detects_conflict() {
+        let _permit = test_subprocess::acquire();
         let repo = init_repo();
         let branch = unique("conflict-branch");
         let wt = TempDir::new().unwrap();
@@ -436,6 +445,7 @@ mod tests {
 
     #[test]
     fn git_merge_branch_stashes_local_changes() {
+        let _permit = test_subprocess::acquire();
         let repo = init_repo();
         let local_file = repo.path().join("init.txt");
         std::fs::write(&local_file, "local change\n").unwrap();
@@ -450,6 +460,7 @@ mod tests {
 
     #[test]
     fn git_merge_branch_stashes_and_warns_on_pop_conflict() {
+        let _permit = test_subprocess::acquire();
         let repo = init_repo();
         let branch = unique("pop-conflict");
         let wt = TempDir::new().unwrap();
@@ -475,12 +486,14 @@ mod tests {
 
     #[test]
     fn resolve_repo_dir_prefers_explicit_repo_path() {
+        let _permit = test_subprocess::acquire();
         let result = resolve_repo_dir(Some("/explicit/repo"), Some("/tmp/worktree"));
         assert_eq!(result, "/explicit/repo");
     }
 
     #[test]
     fn resolve_repo_dir_detects_from_worktree() {
+        let _permit = test_subprocess::acquire();
         let repo = init_repo();
         let (wt, _branch) = create_worktree_with_commit(repo.path());
 
@@ -495,6 +508,7 @@ mod tests {
 
     #[test]
     fn resolve_repo_dir_falls_back_to_dot() {
+        let _permit = test_subprocess::acquire();
         let result = resolve_repo_dir(None, None);
         assert_eq!(result, ".");
     }
@@ -503,6 +517,7 @@ mod tests {
 
     #[test]
     fn merge_single_succeeds_with_committed_worktree() {
+        let _permit = test_subprocess::acquire();
         let repo = init_repo();
         let (wt, branch) = create_worktree_with_commit(repo.path());
         let store = Store::open_memory().unwrap();
@@ -519,6 +534,7 @@ mod tests {
 
     #[test]
     fn merge_single_auto_commits_then_merges() {
+        let _permit = test_subprocess::acquire();
         let repo = init_repo();
         let branch = unique("uncommitted");
         let wt = TempDir::new().unwrap();
@@ -541,6 +557,7 @@ mod tests {
 
     #[test]
     fn merge_single_fails_when_no_commits_and_no_changes() {
+        let _permit = test_subprocess::acquire();
         let repo = init_repo();
         let branch = unique("empty");
         let wt = TempDir::new().unwrap();
@@ -567,6 +584,7 @@ mod tests {
 
     #[test]
     fn merge_single_rejects_non_done_task() {
+        let _permit = test_subprocess::acquire();
         let store = Store::open_memory().unwrap();
         let mut task = make_task_with_worktree("t-running", Path::new("."), Path::new("/tmp"), "b");
         task.status = TaskStatus::Running;
@@ -579,6 +597,7 @@ mod tests {
 
     #[test]
     fn merge_single_works_without_worktree_branch() {
+        let _permit = test_subprocess::acquire();
         let store = Store::open_memory().unwrap();
         let task = Task {
             id: TaskId("t-inplace".to_string()),
@@ -620,6 +639,7 @@ mod tests {
 
     #[test]
     fn merge_single_preserves_worktree_on_conflict() {
+        let _permit = test_subprocess::acquire();
         let repo = init_repo();
         let branch = unique("conflict");
         let wt = TempDir::new().unwrap();
@@ -650,6 +670,7 @@ mod tests {
 
     #[test]
     fn merge_single_without_repo_path_resolves_from_worktree() {
+        let _permit = test_subprocess::acquire();
         let repo = init_repo();
         let (wt, branch) = create_worktree_with_commit(repo.path());
         let store = Store::open_memory().unwrap();
@@ -665,6 +686,7 @@ mod tests {
 
     #[test]
     fn merge_group_skips_empty_branches() {
+        let _permit = test_subprocess::acquire();
         let repo = init_repo();
         let (committed_wt, committed_branch) = create_worktree_with_commit(repo.path());
         let (empty_wt, empty_branch) = create_empty_worktree_branch(repo.path());
@@ -699,6 +721,7 @@ mod tests {
 
     #[test]
     fn remove_worktree_cleans_up_properly() {
+        let _permit = test_subprocess::acquire();
         let repo = init_repo();
         let branch = unique("cleanup");
         // Use /tmp/aid-wt-* path to pass sandbox guard
@@ -721,6 +744,7 @@ mod tests {
 
     #[test]
     fn run_verify_handles_auto_without_error() {
+        let _permit = test_subprocess::acquire();
         let repo = init_repo();
         // Should not try to execute "auto" as a command — should fallback to "cargo check"
         // (will fail since no Cargo.toml, but that's OK — it shouldn't panic or try "auto")
@@ -732,6 +756,7 @@ mod tests {
 
     #[test]
     fn sandbox_allows_aid_worktree_paths() {
+        let _permit = test_subprocess::acquire();
         assert!(is_safe_worktree_path("/tmp/aid-wt-feat-foo"));
         assert!(is_safe_worktree_path("/tmp/aid-wt-fix/bar"));
         assert!(is_safe_worktree_path("/private/tmp/aid-wt-test"));
@@ -739,6 +764,7 @@ mod tests {
 
     #[test]
     fn sandbox_blocks_non_worktree_paths() {
+        let _permit = test_subprocess::acquire();
         assert!(!is_safe_worktree_path("/home/user/project"));
         assert!(!is_safe_worktree_path("/Users/someone/Develop/myrepo"));
         assert!(!is_safe_worktree_path("/tmp/other-dir"));
@@ -750,6 +776,7 @@ mod tests {
 
     #[test]
     fn remove_worktree_refuses_unsafe_path() {
+        let _permit = test_subprocess::acquire();
         let repo = init_repo();
         let unsafe_path = repo.path().join("subdir");
         std::fs::create_dir_all(&unsafe_path).unwrap();
@@ -766,6 +793,7 @@ mod tests {
 
     #[test]
     fn approval_decision_defaults_to_merge() {
+        let _permit = test_subprocess::acquire();
         // Verify the approval decision logic: empty/unknown reply → Merge
         let reply = "";
         let decision = if reply.contains("Skip") {

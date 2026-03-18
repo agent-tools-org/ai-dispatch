@@ -3,6 +3,7 @@
 // Deps: run_prompt helpers, in-memory Store, temporary PATH/AID_HOME setup.
 
 use super::*;
+use crate::test_subprocess;
 use std::ffi::{OsStr, OsString};
 use std::sync::Arc;
 
@@ -180,6 +181,7 @@ fn build_prompt_bundle_appends_batch_siblings_after_system_context() {
 
 #[tokio::test]
 async fn run_auto_retries_after_verify_failure() {
+    let _permit = test_subprocess::acquire();
     let temp = tempfile::tempdir().unwrap();
     let _aid_home = crate::paths::AidHomeGuard::set(temp.path());
     crate::paths::ensure_dirs().unwrap();

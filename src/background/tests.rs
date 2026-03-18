@@ -7,6 +7,7 @@ use super::{
     build_on_done_command, check_zombie_tasks_with, save_spec, BackgroundRunSpec,
     ZOMBIE_FAILURE_DETAIL,
 };
+use crate::test_subprocess;
 use crate::paths;
 use crate::store::Store;
 use crate::types::{AgentKind, EventKind, Task, TaskId, TaskStatus, VerifyStatus};
@@ -214,9 +215,32 @@ fn quota_cascade_skipped_for_batch_tasks() {
     );
 }
 
+#[test]
+fn check_worker_capacity_warns_at_soft_limit() {
+    let store = Store::open_memory().unwrap();
+    // No tasks running — should pass silently
+    assert!(super::check_worker_capacity(&store).is_ok());
+}
+
+#[test]
+fn check_worker_capacity_rejects_at_hard_limit() {
+    let store = Store::open_memory().unwrap();
+    // Insert MAX_WORKERS running tasks to trigger hard limit
+    for i in 0..super::MAX_WORKERS {
+        let id = format!("t-cap{i:03}");
+        store
+            .insert_task(&make_task(&id, TaskStatus::Running))
+            .unwrap();
+    }
+    let result = super::check_worker_capacity(&store);
+    assert!(result.is_err());
+    assert!(result.unwrap_err().to_string().contains("Worker limit reached"));
+}
+
 #[cfg(unix)]
 #[test]
 fn is_process_running_returns_false_for_zombie() {
+    let _permit = test_subprocess::acquire();
     unsafe {
         let pid = libc::fork();
         if pid == 0 {

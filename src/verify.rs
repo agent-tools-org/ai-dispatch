@@ -114,10 +114,12 @@ fn split_command(command: &str) -> Result<(String, Command)> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_subprocess;
     use tempfile::TempDir;
 
     #[test]
     fn verify_pass_case() {
+        let _permit = test_subprocess::acquire();
         let dir = TempDir::new().unwrap();
         let result = run_verify(dir.path(), Some("echo ok")).unwrap();
         assert!(result.success);
@@ -127,6 +129,7 @@ mod tests {
 
     #[test]
     fn verify_fail_case() {
+        let _permit = test_subprocess::acquire();
         let dir = TempDir::new().unwrap();
         let result = run_verify(dir.path(), Some("false")).unwrap();
         assert!(!result.success);
@@ -134,6 +137,7 @@ mod tests {
 
     #[test]
     fn verify_does_not_expand_shell_operators() {
+        let _permit = test_subprocess::acquire();
         let dir = TempDir::new().unwrap();
         let result = run_verify(dir.path(), Some("echo ok && false")).unwrap();
         assert!(result.success);

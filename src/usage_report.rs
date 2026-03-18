@@ -143,6 +143,7 @@ pub(crate) fn collect_agent_rows(tasks: &[Task]) -> Vec<AgentUsageRow> {
         AgentKind::OpenCode,
         AgentKind::Kilo,
         AgentKind::Cursor,
+        AgentKind::Droid,
     ] {
         let agent_tasks: Vec<&Task> = tasks.iter().filter(|task| task.agent == agent).collect();
         if agent_tasks.is_empty() {

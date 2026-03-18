@@ -58,6 +58,7 @@ fn resolve_pricing(model: Option<&str>, agent: AgentKind) -> Option<ModelPricing
             output_per_m: 0.0,
         }),
         AgentKind::Codebuff => None, // Cost tracked by codebuff SDK
+        AgentKind::Droid => None,    // BYOK (API key)
         AgentKind::Custom => None,
     }
 }

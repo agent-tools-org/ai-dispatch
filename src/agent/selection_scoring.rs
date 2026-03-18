@@ -49,6 +49,12 @@ pub(super) const AGENT_CAPABILITIES: &[(AgentKind, &[(TaskCategory, i32)])] = &[
         (TaskCategory::Debugging, 6), (TaskCategory::SimpleEdit, 5),
         (TaskCategory::Research, 2), (TaskCategory::Documentation, 4),
     ]),
+    (AgentKind::Droid, &[
+        (TaskCategory::ComplexImpl, 9), (TaskCategory::Refactoring, 8),
+        (TaskCategory::Testing, 7), (TaskCategory::Debugging, 7),
+        (TaskCategory::SimpleEdit, 5), (TaskCategory::Research, 3),
+        (TaskCategory::Frontend, 5), (TaskCategory::Documentation, 4),
+    ]),
 ];
 
 pub(super) fn base_score(agent: AgentKind, category: TaskCategory) -> i32 {
@@ -61,7 +67,7 @@ pub(super) fn base_score(agent: AgentKind, category: TaskCategory) -> i32 {
 pub(super) fn priority(kind: AgentKind) -> i32 {
     match kind {
         AgentKind::Gemini | AgentKind::Kilo => 0,
-        AgentKind::OpenCode => 1, AgentKind::Cursor | AgentKind::Codebuff => 2, AgentKind::Codex => 3,
+        AgentKind::OpenCode => 1, AgentKind::Cursor | AgentKind::Codebuff => 2, AgentKind::Codex | AgentKind::Droid => 3,
         AgentKind::Custom => 1,
     }
 }
@@ -137,6 +143,7 @@ pub(super) const BUILTIN_AGENTS: &[AgentKind] = &[
     AgentKind::Cursor,
     AgentKind::Codex,
     AgentKind::Codebuff,
+    AgentKind::Droid,
 ];
 
 #[derive(Clone)]

@@ -56,6 +56,7 @@ pub enum AgentKind {
     Cursor,
     Kilo,
     Codebuff,
+    Droid,
     Custom,
 }
 
@@ -68,6 +69,7 @@ impl AgentKind {
             "cursor" => Some(Self::Cursor),
             "kilo" => Some(Self::Kilo),
             "codebuff" => Some(Self::Codebuff),
+            "droid" => Some(Self::Droid),
             _ => None,
         }
     }
@@ -80,6 +82,7 @@ impl AgentKind {
             Self::Cursor => "cursor",
             Self::Kilo => "kilo",
             Self::Codebuff => "codebuff",
+            Self::Droid => "droid",
             Self::Custom => "custom",
         }
     }

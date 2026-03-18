@@ -4,6 +4,7 @@
 pub mod codebuff;
 pub mod codex;
 pub mod cursor;
+pub mod droid;
 pub mod gemini;
 pub mod kilo;
 pub mod opencode;
@@ -67,6 +68,7 @@ pub fn detect_agents() -> Vec<AgentKind> {
         ("codex", AgentKind::Codex),
         ("opencode", AgentKind::OpenCode),
         ("cursor-agent", AgentKind::Cursor),
+        ("droid", AgentKind::Droid),
         ("kilo", AgentKind::Kilo),
         ("aid-codebuff", AgentKind::Codebuff),
     ] {
@@ -93,6 +95,7 @@ pub fn get_agent(kind: AgentKind) -> Box<dyn Agent> {
         AgentKind::OpenCode => Box::new(opencode::OpenCodeAgent),
         AgentKind::Kilo => Box::new(kilo::KiloAgent),
         AgentKind::Codebuff => Box::new(codebuff::CodebuffAgent),
+        AgentKind::Droid => Box::new(droid::DroidAgent),
         AgentKind::Custom => panic!("Custom agents must be resolved via resolve_agent()"),
     }
 }

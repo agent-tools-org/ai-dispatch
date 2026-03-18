@@ -116,6 +116,15 @@ const BUILTIN_AGENT_PROFILES: &[BuiltinAgentProfile] = &[
         streaming: true,
         trust_tier: "local",
     },
+    BuiltinAgentProfile {
+        name: "droid",
+        command: "droid",
+        description: "Complex implementation, multi-agent orchestration",
+        cost: "BYOK (API key)",
+        best_for: "implement, create, build, refactor, test, orchestrate",
+        streaming: true,
+        trust_tier: "api",
+    },
 ];
 
 pub enum AgentAction {

@@ -74,6 +74,7 @@ pub fn rate_limited_agents() -> Vec<(AgentKind, String)> {
         AgentKind::Cursor,
         AgentKind::Kilo,
         AgentKind::Codebuff,
+        AgentKind::Droid,
     ]
     .into_iter()
     .filter_map(|agent| {

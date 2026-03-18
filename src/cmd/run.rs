@@ -156,7 +156,7 @@ pub async fn run(store: Arc<Store>, mut args: RunArgs) -> Result<TaskId> {
         && args.worktree.is_none()
         && matches!(
             agent_kind,
-            AgentKind::Codex | AgentKind::OpenCode | AgentKind::Cursor | AgentKind::Kilo | AgentKind::Codebuff | AgentKind::Custom
+            AgentKind::Codex | AgentKind::OpenCode | AgentKind::Cursor | AgentKind::Kilo | AgentKind::Codebuff | AgentKind::Droid | AgentKind::Custom
         )
         && std::path::Path::new(".git").exists()
     {

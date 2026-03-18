@@ -69,6 +69,10 @@ pub fn spawn_worker(task_id: &str) -> Result<Child> {
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null());
+    // Inherit AID_HOME so the worker uses the same data directory.
+    if let Ok(home) = std::env::var("AID_HOME") {
+        cmd.env("AID_HOME", home);
+    }
     // Create a new process group so we can kill the worker and all its children.
     #[cfg(unix)]
     {
@@ -425,6 +429,11 @@ fn spawn_on_done_command(command: &str, task_id: &str, status: &str) -> Result<(
     let mut cmd = build_on_done_command(command)?;
     cmd.env("AID_TASK_ID", task_id)
         .env("AID_TASK_STATUS", status);
+    #[cfg(unix)]
+    {
+        use std::os::unix::process::CommandExt;
+        cmd.process_group(0);
+    }
     // Reap the child in a background thread to prevent orphan/zombie processes.
     let child = cmd.spawn().context("failed to spawn on_done callback")?;
     let command_name = command.to_string();

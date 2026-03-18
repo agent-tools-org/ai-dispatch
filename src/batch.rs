@@ -7,7 +7,6 @@ use std::collections::{HashMap, HashSet};
 use std::io::{self, Write};
 use std::path::Path;
 
-const VALID_AGENTS: &[&str] = &["gemini", "codex", "opencode", "cursor", "kilo"];
 
 fn deserialize_judge<'de, D: serde::Deserializer<'de>>(
     deserializer: D,
@@ -251,13 +250,8 @@ fn validate_fallback_agents(tasks: &[BatchTask]) -> Result<()> {
     Ok(())
 }
 pub(crate) fn is_valid_agent(agent: &str) -> bool {
-    if VALID_AGENTS
-        .iter()
-        .any(|valid| valid.eq_ignore_ascii_case(agent))
-    {
-        return true;
-    }
-    crate::agent::registry::custom_agent_exists(agent)
+    crate::types::AgentKind::parse_str(agent).is_some()
+        || crate::agent::registry::custom_agent_exists(agent)
 }
 
 pub fn validate_no_file_overlap(tasks: &[BatchTask]) -> Result<()> {

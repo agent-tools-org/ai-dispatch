@@ -286,18 +286,18 @@ mod tests {
             cost_limit_usd = 10.0
 
             [[usage.budget]]
-            name = "claude-code"
-            plan = "pro"
-            window = "5h"
-            request_limit = 200
-            external_requests = 120
+            name = "gemini-daily"
+            agent = "gemini"
+            window = "24h"
+            task_limit = 50
+            cost_limit_usd = 5.0
             "#,
         )
         .unwrap();
 
         assert_eq!(config.usage.budgets.len(), 2);
         assert_eq!(config.usage.budgets[0].agent.as_deref(), Some("codex"));
-        assert_eq!(config.usage.budgets[1].external_requests, 120);
+        assert_eq!(config.usage.budgets[1].agent.as_deref(), Some("gemini"));
     }
 
     #[test]

@@ -475,8 +475,8 @@ mod tests {
 
     #[test]
     fn agent_display_name_returns_custom_name() {
-        let task = sample_task(AgentKind::Custom, Some("claude-code"));
-        assert_eq!(task.agent_display_name(), "claude-code");
+        let task = sample_task(AgentKind::Custom, Some("my-tool"));
+        assert_eq!(task.agent_display_name(), "my-tool");
     }
 
     #[test]

@@ -51,6 +51,11 @@ pub(crate) fn task_to_run_args(
             )
         })
         .collect();
+    let cascade = task
+        .fallback
+        .as_deref()
+        .map(|f| vec![f.to_string()])
+        .unwrap_or_else(|| auto_cascade_for_rate_limited(&agent_name));
     RunArgs {
         agent_name,
         prompt: task.prompt.clone(),
@@ -68,11 +73,7 @@ pub(crate) fn task_to_run_args(
         background,
         dry_run: false,
         announce: true,
-        cascade: task
-            .fallback
-            .as_deref()
-            .map(|f| vec![f.to_string()])
-            .unwrap_or_default(),
+        cascade,
         read_only: task.read_only,
         budget: task.budget,
         best_of: task.best_of,
@@ -83,4 +84,17 @@ pub(crate) fn task_to_run_args(
         parent_task_id: task.parent.clone(),
         ..Default::default()
     }
+}
+
+/// If the agent is rate-limited, return the suggested fallback as an auto-cascade.
+fn auto_cascade_for_rate_limited(agent_name: &str) -> Vec<String> {
+    let Some(agent) = crate::types::AgentKind::parse_str(agent_name) else {
+        return vec![];
+    };
+    if !crate::rate_limit::is_rate_limited(&agent) {
+        return vec![];
+    }
+    crate::agent::selection::coding_fallback_for(&agent)
+        .map(|fallback| vec![fallback.as_str().to_string()])
+        .unwrap_or_default()
 }

@@ -263,7 +263,8 @@ Run `aid batch init` to generate a full template with all fields."#)]
     #[command(after_help = r#"Examples:
   aid show t-1234              # Events timeline
   aid show t-1234 --diff       # Full worktree diff
-  aid show t-1234 --output     # Task output
+  aid show t-1234 --output     # Task output (truncated)
+  aid show t-1234 --output --full  # Task output (no truncation)
   aid show t-1234 --context    # Resolved prompt
   aid show t-1234 --explain    # AI explanation"#)]
     /// Inspect task artifacts (events, diff, output, explain)
@@ -282,6 +283,9 @@ Run `aid batch init` to generate a full template with all fields."#)]
         /// Print output file
         #[arg(long)]
         output: bool,
+        /// Show full output without truncation (use with --output)
+        #[arg(long)]
+        full: bool,
         /// Dispatch AI explanation (creates child task)
         #[arg(long)]
         explain: bool,
@@ -537,6 +541,9 @@ Run `aid batch init` to generate a full template with all fields."#)]
     Output {
         /// Task ID
         task_id: String,
+        /// Show full output without truncation
+        #[arg(long)]
+        full: bool,
     },
     /// Start local web UI dashboard
     #[cfg(feature = "web")]

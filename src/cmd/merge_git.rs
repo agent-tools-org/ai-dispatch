@@ -189,6 +189,9 @@ fn pop_stash(repo_dir: &str) -> bool {
 /// Check if a path is safe to delete: must resolve to /tmp/aid-wt-* (or /private/tmp/aid-wt-* on macOS).
 /// This is the sandbox guard — NEVER delete a directory that fails this check.
 pub fn is_safe_worktree_path(wt_path: &str) -> bool {
+    if !Path::new(wt_path).is_absolute() {
+        return false;
+    }
     // Canonicalize to resolve symlinks (macOS: /tmp → /private/tmp)
     let canonical = match Path::new(wt_path).canonicalize() {
         Ok(p) => p,
@@ -239,7 +242,9 @@ pub(crate) fn run_verify_in_worktree(wt: &str, verify: Option<&str>) {
         Some("auto") | None => "cargo check",
         Some(cmd) => cmd,
     };
-    let output = Command::new("sh").args(["-c", verify_cmd]).current_dir(wt).output();
+    let output = build_verify_command(verify_cmd)
+        .and_then(|mut cmd| cmd.current_dir(wt).output())
+        .map_err(|e| e.to_string());
     match output {
         Ok(o) if !o.status.success() => {
             eprintln!("[aid] Warning: `{verify_cmd}` failed in worktree {wt}");
@@ -250,5 +255,40 @@ pub(crate) fn run_verify_in_worktree(wt: &str, verify: Option<&str>) {
         }
         Err(e) => eprintln!("[aid] Warning: could not run `{verify_cmd}`: {e}"),
         _ => {}
+    }
+}
+
+fn build_verify_command(command: &str) -> std::io::Result<Command> {
+    let mut parts = command.split_whitespace();
+    let Some(program) = parts.next() else {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "verify command is empty",
+        ));
+    };
+    let args: Vec<&str> = parts.collect();
+    let mut cmd = Command::new(program);
+    cmd.args(&args);
+    Ok(cmd)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::build_verify_command;
+
+    #[test]
+    fn build_verify_command_splits_simple_argv() {
+        let cmd = build_verify_command("cargo test").unwrap();
+        let debug = format!("{cmd:?}");
+        assert!(debug.contains("\"cargo\""));
+        assert!(debug.contains("\"test\""));
+    }
+
+    #[test]
+    fn build_verify_command_keeps_shell_tokens_literal() {
+        let cmd = build_verify_command("echo ok && false").unwrap();
+        let debug = format!("{cmd:?}");
+        assert!(debug.contains("\"&&\""));
+        assert!(debug.contains("\"false\""));
     }
 }

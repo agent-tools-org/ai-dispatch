@@ -3,7 +3,10 @@
 
 use chrono::Local;
 
-use super::{check_zombie_tasks_with, save_spec, BackgroundRunSpec, ZOMBIE_FAILURE_DETAIL};
+use super::{
+    build_on_done_command, check_zombie_tasks_with, save_spec, BackgroundRunSpec,
+    ZOMBIE_FAILURE_DETAIL,
+};
 use crate::paths;
 use crate::store::Store;
 use crate::types::{AgentKind, EventKind, Task, TaskId, TaskStatus, VerifyStatus};
@@ -99,6 +102,22 @@ fn completion_notifications_are_written_as_jsonl() {
     assert_eq!(value["cost_usd"], 0.25);
     assert_eq!(value["prompt"], "x".repeat(100));
     assert!(value["timestamp"].as_str().is_some());
+}
+
+#[test]
+fn build_on_done_command_splits_simple_argv() {
+    let cmd = build_on_done_command("echo done").unwrap();
+    let debug = format!("{cmd:?}");
+    assert!(debug.contains("\"echo\""));
+    assert!(debug.contains("\"done\""));
+}
+
+#[test]
+fn build_on_done_command_does_not_expand_shell_operators() {
+    let cmd = build_on_done_command("echo done && false").unwrap();
+    let debug = format!("{cmd:?}");
+    assert!(debug.contains("\"&&\""));
+    assert!(debug.contains("\"false\""));
 }
 
 fn make_spec(task_id: &str) -> BackgroundRunSpec {

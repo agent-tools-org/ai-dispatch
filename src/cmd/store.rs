@@ -259,11 +259,11 @@ fn install_hooks(entries: &[HookEntry]) -> Result<()> {
         {
             continue;
         }
-        hooks_file.hook.push(Hook {
-            event: entry.event.clone(),
-            command: entry.command.clone(),
-            agent: None,
-        });
+        hooks_file.hook.push(Hook::new_trusted(
+            entry.event.clone(),
+            entry.command.clone(),
+            None,
+        ));
         added.push(entry.clone());
     }
     if added.is_empty() {

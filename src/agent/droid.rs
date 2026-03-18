@@ -165,6 +165,16 @@ mod tests {
     }
 
     #[test]
+    fn parses_tool_call_events_with_tool_name() {
+        use crate::types::{EventKind, TaskId};
+        let agent = DroidAgent;
+        let line = r#"{"type":"tool_call","id":"toolu_01","toolId":"Read","toolName":"Read","parameters":{"file_path":"src/main.rs"}}"#;
+        let event = agent.parse_event(&TaskId("t-droid".to_string()), line).unwrap();
+        assert_eq!(event.event_kind, EventKind::ToolCall);
+        assert_eq!(event.detail, "Read");
+    }
+
+    #[test]
     fn build_command_with_dir_sets_cwd() {
         let opts = RunOpts {
             dir: Some("/tmp/test".to_string()),

@@ -152,7 +152,9 @@ fn create_worktree_reuses_existing_branch_worktree() {
     let info = create_worktree(repo.path(), branch.as_str(), None).unwrap();
     // Canonicalize to handle macOS /var → /private/var symlink
     let actual = info.path.canonicalize().unwrap_or(info.path.clone());
-    let expected = existing_path.canonicalize().unwrap_or(existing_path.clone());
+    let expected = existing_path
+        .canonicalize()
+        .unwrap_or(existing_path.clone());
     assert_eq!(actual, expected);
 
     git(
@@ -268,6 +270,11 @@ fn create_worktree_allows_aid_branch_on_force_reset_fallback() {
     assert!(info.path.exists());
     git(
         repo.path(),
-        &["worktree", "remove", "--force", &info.path.to_string_lossy()],
+        &[
+            "worktree",
+            "remove",
+            "--force",
+            &info.path.to_string_lossy(),
+        ],
     );
 }

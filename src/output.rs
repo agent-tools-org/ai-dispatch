@@ -49,17 +49,17 @@ macro_rules! aid_hint {
 /// Use for: rate limits, disk space, scope violations, audit safety.
 #[macro_export]
 macro_rules! aid_warn {
-    ($($arg:tt)*) => {
+    ($($arg:tt)*) => {{
         eprintln!($($arg)*);
-    };
+    }};
 }
 
 /// Error — always shown, even in quiet mode.
 #[macro_export]
 macro_rules! aid_error {
-    ($($arg:tt)*) => {
+    ($($arg:tt)*) => {{
         eprintln!($($arg)*);
-    };
+    }};
 }
 
 #[cfg(test)]

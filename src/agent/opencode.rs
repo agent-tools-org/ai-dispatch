@@ -23,7 +23,7 @@ impl super::Agent for OpenCodeAgent {
 
     fn build_command(&self, prompt: &str, opts: &RunOpts) -> Result<Command> {
         if opts.read_only {
-            eprintln!("[aid] ⚠ OpenCode read-only is prompt-level only, not enforced. Use --worktree for isolation.");
+            aid_warn!("[aid] ⚠OpenCode read-only is prompt-level only, not enforced. Use --worktree for isolation.");
         }
         let effective_prompt = if opts.read_only {
             format!(

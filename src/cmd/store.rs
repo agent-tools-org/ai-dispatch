@@ -2,10 +2,10 @@
 // Exports: StoreAction, run_store.
 // Deps: serde, serde_json, toml, std::fs, std::process::Command (curl), crate::paths.
 
-use anyhow::{bail, Context, Result};
 use crate::cmd::store_lock::{add_lock_entry, read_lockfile};
 use crate::hooks::Hook;
 use crate::paths;
+use anyhow::{bail, Context, Result};
 use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
 use std::fs;
@@ -128,8 +128,8 @@ fn install(name: &str) -> Result<()> {
 
     let installed_version = if matches!(entry.kind, PackageKind::Agent) {
         let agent_toml = fetch_agent_definition(publisher, agent_name, version_override)?;
-        let agent_meta =
-            toml::from_str::<AgentEntry>(&agent_toml).context("Failed to parse agent definition")?;
+        let agent_meta = toml::from_str::<AgentEntry>(&agent_toml)
+            .context("Failed to parse agent definition")?;
         let ver = agent_meta.version.clone();
 
         let dir = paths::aid_dir().join("agents");
@@ -167,20 +167,19 @@ fn update(apply: bool) -> Result<()> {
 
     let mut updates = Vec::new();
     for entry in &entries {
-        let (available_display, status) = if let Some(agent) =
-            index.agents.iter().find(|agent| agent.id == entry.id)
-        {
-            match agent.version.cmp(&entry.version) {
-                Ordering::Equal => (agent.version.as_str(), "Up to date"),
-                Ordering::Greater => {
-                    updates.push(entry.id.clone());
-                    (agent.version.as_str(), "Update available")
+        let (available_display, status) =
+            if let Some(agent) = index.agents.iter().find(|agent| agent.id == entry.id) {
+                match agent.version.cmp(&entry.version) {
+                    Ordering::Equal => (agent.version.as_str(), "Up to date"),
+                    Ordering::Greater => {
+                        updates.push(entry.id.clone());
+                        (agent.version.as_str(), "Update available")
+                    }
+                    Ordering::Less => (agent.version.as_str(), "Installed ahead of index"),
                 }
-                Ordering::Less => (agent.version.as_str(), "Installed ahead of index"),
-            }
-        } else {
-            ("-", "Missing from index")
-        };
+            } else {
+                ("-", "Missing from index")
+            };
 
         println!(
             "{:<25} {:<12} {:<12} {}",
@@ -217,7 +216,7 @@ fn install_scripts(entry: &AgentEntry, publisher: &str) -> Result<()> {
                 fs::set_permissions(&target, fs::Permissions::from_mode(0o755))?;
                 println!("  Script: {}", target.display());
             }
-            Err(e) => eprintln!("  Warning: script {script}: {e}"),
+            Err(e) => aid_warn!("  Warning: script {script}: {e}"),
         }
     }
     Ok(())
@@ -237,7 +236,7 @@ fn install_skills(entry: &AgentEntry, publisher: &str) -> Result<()> {
                 fs::write(&target, &content)?;
                 println!("  Skill: {}", target.display());
             }
-            Err(e) => eprintln!("  Warning: skill {skill}: {e}"),
+            Err(e) => aid_warn!("  Warning: skill {skill}: {e}"),
         }
     }
     Ok(())
@@ -279,8 +278,9 @@ fn install_hooks(entries: &[HookEntry]) -> Result<()> {
 
 fn load_hooks_file(path: &Path) -> Result<HooksFile> {
     match fs::read_to_string(path) {
-        Ok(content) if !content.trim().is_empty() => toml::from_str(&content)
-            .with_context(|| format!("Failed to parse {}", path.display())),
+        Ok(content) if !content.trim().is_empty() => {
+            toml::from_str(&content).with_context(|| format!("Failed to parse {}", path.display()))
+        }
         Ok(_) => Ok(HooksFile::default()),
         Err(err) if err.kind() == io::ErrorKind::NotFound => Ok(HooksFile::default()),
         Err(err) => Err(err).with_context(|| format!("Failed to read {}", path.display())),
@@ -332,7 +332,7 @@ fn fetch_agent_definition(
         let url = format!("{REPO_RAW}/agents/{publisher}/{agent_name}@{version}.toml");
         match curl_fetch(&url) {
             Ok(content) => return Ok(content),
-            Err(err) => eprintln!(
+            Err(err) => aid_warn!(
                 "Warning: versioned definition {publisher}/{agent_name}@{version} not found ({err}); using latest instead."
             ),
         }

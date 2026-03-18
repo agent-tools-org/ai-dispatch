@@ -15,7 +15,8 @@ use crate::store::Store;
 
 const COUNT_OLD_TASKS_SQL: &str = "SELECT COUNT(*) FROM tasks WHERE status IN ('done', 'failed', 'merged', 'skipped') AND created_at < ?1";
 const DELETE_OLD_EVENTS_SQL: &str = "DELETE FROM events WHERE task_id IN (SELECT id FROM tasks WHERE status IN ('done', 'failed', 'merged', 'skipped') AND created_at < ?1)";
-const DELETE_OLD_TASKS_SQL: &str = "DELETE FROM tasks WHERE status IN ('done', 'failed', 'merged', 'skipped') AND created_at < ?1";
+const DELETE_OLD_TASKS_SQL: &str =
+    "DELETE FROM tasks WHERE status IN ('done', 'failed', 'merged', 'skipped') AND created_at < ?1";
 const ACTIVE_WORKTREES_SQL: &str = "SELECT DISTINCT worktree_path FROM tasks WHERE worktree_path IS NOT NULL AND status IN ('pending', 'running', 'awaiting_input')";
 const TASK_IDS_SQL: &str = "SELECT id FROM tasks";
 const WORKTREE_ROOT: &str = "/tmp";
@@ -64,12 +65,20 @@ fn clean_orphaned_worktrees(store: &Store, dry_run: bool) -> Result<()> {
             continue;
         }
         if dry_run {
-            println!("[dry-run] Would remove orphaned worktree {}", path.display());
+            println!(
+                "[dry-run] Would remove orphaned worktree {}",
+                path.display()
+            );
         } else {
             // SANDBOX: double-check path is under /tmp/aid-wt-* before deletion
             let path_str = path.to_string_lossy();
-            if !path_str.starts_with("/tmp/aid-wt-") && !path_str.starts_with("/private/tmp/aid-wt-") {
-                eprintln!("[aid] SAFETY: refusing to remove '{}' — not an aid worktree", path.display());
+            if !path_str.starts_with("/tmp/aid-wt-")
+                && !path_str.starts_with("/private/tmp/aid-wt-")
+            {
+                aid_warn!(
+                    "[aid] SAFETY: refusing to remove '{}' — not an aid worktree",
+                    path.display()
+                );
                 continue;
             }
             fs::remove_dir_all(&path)?;
@@ -92,7 +101,10 @@ fn clean_orphaned_logs(store: &Store, dry_run: bool) -> Result<()> {
     let task_ids = query_string_set(store, TASK_IDS_SQL)?;
     let mut removed = 0usize;
     for path in log_paths()? {
-        let name = path.file_name().and_then(|value| value.to_str()).unwrap_or_default();
+        let name = path
+            .file_name()
+            .and_then(|value| value.to_str())
+            .unwrap_or_default();
         let task_id = name.trim_end_matches(LOG_SUFFIX);
         if task_ids.contains(task_id) {
             continue;
@@ -104,7 +116,14 @@ fn clean_orphaned_logs(store: &Store, dry_run: bool) -> Result<()> {
         }
         removed += 1;
     }
-    println!("{} {removed} orphaned logs", if dry_run { "[dry-run] Would remove" } else { "Removed" });
+    println!(
+        "{} {removed} orphaned logs",
+        if dry_run {
+            "[dry-run] Would remove"
+        } else {
+            "Removed"
+        }
+    );
     Ok(())
 }
 

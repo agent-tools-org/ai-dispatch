@@ -74,7 +74,7 @@ pub(crate) fn warn_for_rate_limited_agents(tasks: &[batch::BatchTask]) {
         }
         if rate_limit::is_rate_limited(&agent) {
             let count = tasks.iter().filter(|t| t.agent == agent.as_str()).count();
-            eprintln!(
+            aid_warn!(
                 "[aid] Warning: {agent} is rate-limited — {count} task(s) may fail or need fallback"
             );
         }
@@ -102,7 +102,7 @@ pub(crate) fn ensure_batch_workgroup(store: &Store, stem: &str, custom_gid: Opti
     if let Some(gid) = custom_gid
         && store.get_workgroup(gid)?.is_some()
     {
-        eprintln!("[aid] Reusing existing workgroup {gid} for batch {stem}");
+        aid_info!("[aid] Reusing existing workgroup {gid} for batch {stem}");
         return Ok(gid.to_string());
     }
     let wg = store.create_workgroup(
@@ -111,7 +111,7 @@ pub(crate) fn ensure_batch_workgroup(store: &Store, stem: &str, custom_gid: Opti
         Some(stem),
         custom_gid,
     )?;
-    eprintln!("[aid] Auto-created workgroup {} for batch {stem}", wg.id);
+    aid_info!("[aid] Auto-created workgroup {} for batch {stem}", wg.id);
     Ok(wg.id.to_string())
 }
 

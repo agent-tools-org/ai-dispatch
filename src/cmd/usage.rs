@@ -25,7 +25,7 @@ pub fn run(
     let config = config::load_config()?;
     let mut tasks = if session {
         let Some(caller) = session::current_caller() else {
-            eprintln!("[aid] No active session detected");
+            aid_info!("[aid] No active session detected");
             return Ok(());
         };
         store.list_tasks_by_session(&caller.session_id)?
@@ -35,11 +35,23 @@ pub fn run(
     // Filter tasks to team members if --team is set
     if let Some(ref team_name) = team_filter {
         if let Some(tc) = team::resolve_team(team_name) {
-            let members: Vec<String> = tc.preferred_agents.iter().map(|a| a.to_lowercase()).collect();
-            tasks.retain(|t| members.iter().any(|m| t.agent_display_name().eq_ignore_ascii_case(m)));
-            eprintln!("[aid] Filtering usage to team '{}' ({} preferred agents)", team_name, tc.preferred_agents.len());
+            let members: Vec<String> = tc
+                .preferred_agents
+                .iter()
+                .map(|a| a.to_lowercase())
+                .collect();
+            tasks.retain(|t| {
+                members
+                    .iter()
+                    .any(|m| t.agent_display_name().eq_ignore_ascii_case(m))
+            });
+            aid_info!(
+                "[aid] Filtering usage to team '{}' ({} preferred agents)",
+                team_name,
+                tc.preferred_agents.len()
+            );
         } else {
-            eprintln!("[aid] Warning: team '{team_name}' not found, showing all usage");
+            aid_warn!("[aid] Warning: team '{team_name}' not found, showing all usage");
         }
     }
     let window = usage::UsageWindow::parse(&period)?;

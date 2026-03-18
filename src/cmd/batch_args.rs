@@ -24,9 +24,13 @@ pub(crate) fn task_to_run_args(
             context_files: vec![],
             session_id: None,
         };
-        let (selected, reason) =
-            crate::agent::select_agent_with_reason(&task.prompt, &selection_opts, store, team_config.as_ref());
-        eprintln!("[aid] Batch auto-selected: {selected} (reason: {reason})");
+        let (selected, reason) = crate::agent::select_agent_with_reason(
+            &task.prompt,
+            &selection_opts,
+            store,
+            team_config.as_ref(),
+        );
+        aid_info!("[aid] Batch auto-selected: {selected} (reason: {reason})");
         selected
     } else if task.agent.is_empty() {
         "auto".to_string()

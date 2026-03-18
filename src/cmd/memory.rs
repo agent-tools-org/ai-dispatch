@@ -11,11 +11,16 @@ use std::hash::{Hash, Hasher};
 use crate::store::Store;
 use crate::types::{Memory, MemoryId, MemoryType};
 
-pub fn add(store: &Store, memory_type: &str, content: &str, project_path: Option<&str>) -> Result<()> {
+pub fn add(
+    store: &Store,
+    memory_type: &str,
+    content: &str,
+    project_path: Option<&str>,
+) -> Result<()> {
     let parsed_type = parse_memory_type(memory_type)?;
     if !is_surprising(content, parsed_type.as_str()) {
         let preview: String = content.chars().take(50).collect();
-        eprintln!("[aid] Skipping trivial memory: {preview}...");
+        aid_info!("[aid] Skipping trivial memory: {preview}...");
         return Ok(());
     }
     let type_label = parsed_type.label();
@@ -46,16 +51,24 @@ pub fn add(store: &Store, memory_type: &str, content: &str, project_path: Option
     Ok(())
 }
 
-pub fn list(store: &Store, memory_type: Option<&str>, project_path: Option<&str>, all: bool, stats: bool) -> Result<()> {
+pub fn list(
+    store: &Store,
+    memory_type: Option<&str>,
+    project_path: Option<&str>,
+    all: bool,
+    stats: bool,
+) -> Result<()> {
     let kind = parse_optional_memory_type(memory_type)?;
     if all {
         let memories = store.list_memories(None, kind)?;
         print_memory_table(&memories, stats);
         return Ok(());
     }
-    let project = project_path.map(str::to_string).or_else(|| detect_git_root().ok().flatten());
+    let project = project_path
+        .map(str::to_string)
+        .or_else(|| detect_git_root().ok().flatten());
     if project.is_none() {
-        eprintln!("[aid] Not in a git repo. Use --all to list memories across all projects.");
+        aid_hint!("[aid] Not in a git repo. Use --all to list memories across all projects.");
         return Ok(());
     }
     let memories = store.list_memories(project.as_deref(), kind)?;
@@ -64,9 +77,11 @@ pub fn list(store: &Store, memory_type: Option<&str>, project_path: Option<&str>
 }
 
 pub fn search(store: &Store, query: &str, project_path: Option<&str>) -> Result<()> {
-    let project = project_path.map(str::to_string).or_else(|| detect_git_root().ok().flatten());
+    let project = project_path
+        .map(str::to_string)
+        .or_else(|| detect_git_root().ok().flatten());
     if project.is_none() {
-        eprintln!("[aid] Not in a git repo. Searching across all projects.");
+        aid_info!("[aid] Not in a git repo. Searching across all projects.");
     }
     let memories = store.search_memories(query, project.as_deref(), 20)?;
     print_memory_table(&memories, false);
@@ -117,8 +132,7 @@ fn parse_optional_memory_type(value: Option<&str>) -> Result<Option<MemoryType>>
 }
 
 fn parse_memory_type(value: &str) -> Result<MemoryType> {
-    MemoryType::parse_str(value)
-        .ok_or_else(|| anyhow!("Invalid memory type: {}", value))
+    MemoryType::parse_str(value).ok_or_else(|| anyhow!("Invalid memory type: {}", value))
 }
 
 fn hash_content(content: &str) -> String {
@@ -162,7 +176,10 @@ fn print_memory_table(memories: &[Memory], stats: bool) {
             );
         }
     } else {
-        println!("{:<10} {:<10} {:<60} {:<8} SOURCE", "ID", "TYPE", "CONTENT", "AGE");
+        println!(
+            "{:<10} {:<10} {:<60} {:<8} SOURCE",
+            "ID", "TYPE", "CONTENT", "AGE"
+        );
         println!("{}", "-".repeat(94));
         for memory in memories {
             println!(
@@ -283,9 +300,11 @@ fn looks_like_signature(text: &str) -> bool {
         return true;
     }
     let is_single_word = trimmed.split_whitespace().count() == 1;
-    if is_single_word && trimmed.chars().all(|c| {
-        c.is_ascii_alphanumeric() || matches!(c, ':' | '_' | '<' | '>' | '-' | '.' | ',')
-    }) {
+    if is_single_word
+        && trimmed.chars().all(|c| {
+            c.is_ascii_alphanumeric() || matches!(c, ':' | '_' | '<' | '>' | '-' | '.' | ',')
+        })
+    {
         return true;
     }
     false

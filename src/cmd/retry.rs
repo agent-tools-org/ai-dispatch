@@ -17,8 +17,8 @@ pub struct RetryArgs {
 
 pub async fn run(store: Arc<Store>, args: RetryArgs) -> Result<()> {
     let retry_id = retry_task(store, args, true).await?;
-    eprintln!("[aid] Watch: aid watch --quiet {}", retry_id);
-    eprintln!("[aid] TUI:   aid watch --tui");
+    aid_hint!("[aid] Watch: aid watch --quiet {}", retry_id);
+    aid_hint!("[aid] TUI:   aid watch --tui");
     Ok(())
 }
 
@@ -114,7 +114,7 @@ fn reset_dirty_worktree(path: &str) {
         .map(|o| o.status.success() && !o.stdout.is_empty())
         .unwrap_or(false);
     if is_dirty {
-        eprintln!("[aid] Worktree has uncommitted changes from prior attempt, resetting...");
+        aid_info!("[aid] Worktree has uncommitted changes from prior attempt, resetting...");
         let _ = std::process::Command::new("git")
             .args(["-C", path, "checkout", "."])
             .output();

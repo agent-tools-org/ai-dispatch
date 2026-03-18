@@ -56,7 +56,7 @@ pub async fn run(store: Arc<Store>, args: BatchArgs) -> Result<()> {
             for task in &mut config.tasks {
                 task.group = Some(env_group.clone());
             }
-            eprintln!("[aid] Using workspace {env_group} from AID_GROUP");
+            aid_info!("[aid] Using workspace {env_group} from AID_GROUP");
         } else if total >= 2 {
             let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("batch");
             let wg_id = batch_helpers::ensure_batch_workgroup(
@@ -86,7 +86,7 @@ pub async fn run(store: Arc<Store>, args: BatchArgs) -> Result<()> {
         return Ok(());
     }
     if let Some(avail) = batch_helpers::low_disk_space_mb(500) {
-        eprintln!("[aid] Warning: low disk space ({avail} MB free) — parallel dispatch may fail");
+        aid_warn!("[aid] Warning: low disk space ({avail} MB free) — parallel dispatch may fail");
     }
     batch_helpers::warn_for_rate_limited_agents(&config.tasks);
     println!("Batch: dispatching {total} task(s) from {}", path.display());
@@ -126,7 +126,7 @@ pub async fn run(store: Arc<Store>, args: BatchArgs) -> Result<()> {
     if args.wait && args.parallel && !has_dependencies && !task_ids.is_empty() {
         crate::cmd::wait::wait_for_task_ids(&store, &task_ids, false, None).await?;
     }
-    eprintln!(
+    aid_info!(
         "{}",
         batch_helpers::batch_summary(
             &dispatch.outcomes,
@@ -138,25 +138,25 @@ pub async fn run(store: Arc<Store>, args: BatchArgs) -> Result<()> {
     );
     let archive_dir = crate::paths::aid_dir().join("batches");
     if let Err(e) = std::fs::create_dir_all(&archive_dir) {
-        eprintln!("[aid] Failed to create batch archive dir: {e}");
+        aid_error!("[aid] Failed to create batch archive dir: {e}");
     } else {
         let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("batch");
         let timestamp = chrono::Local::now().format("%Y%m%d-%H%M%S");
         let dest = archive_dir.join(format!("{timestamp}-{stem}.toml"));
         match std::fs::copy(path, &dest) {
-            Ok(_) => eprintln!("[aid] Archived batch to {}", dest.display()),
-            Err(e) => eprintln!("[aid] Failed to archive batch: {e}"),
+            Ok(_) => aid_info!("[aid] Archived batch to {}", dest.display()),
+            Err(e) => aid_error!("[aid] Failed to archive batch: {e}"),
         }
     }
     println!("Batch: {total} task(s) dispatched");
     // Print watch hint for the caller
     let group_id = config.tasks.first().and_then(|t| t.group.as_deref());
     if let Some(gid) = group_id {
-        eprintln!("[aid] Watch: aid watch --quiet --group {gid}");
+        aid_hint!("[aid] Watch: aid watch --quiet --group {gid}");
     } else if task_ids.len() == 1 {
-        eprintln!("[aid] Watch: aid watch --quiet {}", task_ids[0]);
+        aid_hint!("[aid] Watch: aid watch --quiet {}", task_ids[0]);
     }
-    eprintln!("[aid] TUI:   aid watch --tui");
+    aid_hint!("[aid] TUI:   aid watch --tui");
     Ok(())
 }
 #[cfg(test)]

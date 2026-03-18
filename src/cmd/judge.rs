@@ -151,7 +151,7 @@ fn parse_judge_response(text: &str) -> Result<JudgeResult> {
         return Ok(JudgeResult { passed, feedback });
     }
     // Fallback: if no explicit verdict found, default to PASS (avoid blocking on judge failures)
-    eprintln!("[aid] Judge response contained no PASS/RETRY verdict — defaulting to PASS");
+    aid_warn!("[aid] Judge response contained no PASS/RETRY verdict — defaulting to PASS");
     Ok(JudgeResult { passed: true, feedback: "no verdict found in judge response".to_string() })
 }
 

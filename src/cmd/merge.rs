@@ -33,8 +33,8 @@ fn merge_single(store: &Store, task_id: &str, approve: bool) -> Result<()> {
         ));
     }
     if task.verify_status == VerifyStatus::Failed {
-        eprintln!("[aid] Warning: task '{task_id}' has VFAIL status — verify failed before merge");
-        eprintln!("[aid] Review carefully: aid show {task_id} --diff");
+        aid_warn!("[aid] Warning: task '{task_id}' has VFAIL status — verify failed before merge");
+        aid_hint!("[aid] Review carefully: aid show {task_id} --diff");
     }
     let repo_dir = resolve_repo_dir(task.repo_path.as_deref(), task.worktree_path.as_deref());
 
@@ -49,7 +49,7 @@ fn merge_single(store: &Store, task_id: &str, approve: bool) -> Result<()> {
             ApprovalDecision::Merge => {}
             ApprovalDecision::Skip => return Ok(()),
             ApprovalDecision::Retry => {
-                eprintln!("[aid] Boss requested retry");
+                aid_info!("[aid] Boss requested retry");
                 return Err(anyhow!("Boss requested retry"));
             }
         }
@@ -65,31 +65,31 @@ fn merge_single(store: &Store, task_id: &str, approve: bool) -> Result<()> {
         // Pre-check: verify branch has commits to merge
         let ahead = commits_ahead(&repo_dir, branch);
         if ahead == 0 {
-            eprintln!("[aid] Error: branch {branch} has 0 commits ahead — nothing to merge");
-            eprintln!("[aid] The agent may not have committed its changes.");
+            aid_error!("[aid] Error: branch {branch} has 0 commits ahead — nothing to merge");
+            aid_hint!("[aid] The agent may not have committed its changes.");
             if let Some(wt) = task.worktree_path.as_deref()
                 && std::path::Path::new(wt).exists()
             {
-                eprintln!("[aid] Worktree preserved at {wt} for manual recovery");
+                aid_info!("[aid] Worktree preserved at {wt} for manual recovery");
             }
             return Err(anyhow!("No commits to merge from {branch}"));
         }
-        eprintln!("[aid] Branch {branch} has {ahead} commit(s) ahead");
+        aid_info!("[aid] Branch {branch} has {ahead} commit(s) ahead");
         match git_merge_branch(&repo_dir, branch) {
             MergeResult::Merged => {
-                eprintln!("[aid] Merged branch {branch} into current branch");
+                aid_info!("[aid] Merged branch {branch} into current branch");
             }
             MergeResult::AlreadyUpToDate => {
-                eprintln!("[aid] Error: git merge reported 'Already up to date' despite {ahead} commit(s)");
-                eprintln!("[aid] This may indicate a repo path mismatch. Worktree preserved.");
+                aid_error!("[aid] Error: git merge reported 'Already up to date' despite {ahead} commit(s)");
+                aid_warn!("[aid] This may indicate a repo path mismatch. Worktree preserved.");
                 return Err(anyhow!("Merge was a no-op — possible repo_path mismatch"));
             }
             MergeResult::Failed(stderr) => {
-                eprintln!("[aid] Warning: git merge {branch} failed:");
+                aid_warn!("[aid] Warning: git merge {branch} failed:");
                 for line in stderr.lines().take(5) {
-                    eprintln!("  {}", line);
+                    aid_warn!("  {}", line);
                 }
-                eprintln!("[aid] Manual merge needed: git merge {branch}");
+                aid_hint!("[aid] Manual merge needed: git merge {branch}");
                 // Don't clean up worktree — user needs it for manual merge
                 store.update_task_status(task_id, TaskStatus::Done)?;
                 return Err(anyhow!("Merge failed — resolve manually, then re-run aid merge {task_id}"));
@@ -104,10 +104,10 @@ fn merge_single(store: &Store, task_id: &str, approve: bool) -> Result<()> {
             .map(|o| o.status.success() && !o.stdout.is_empty())
             .unwrap_or(false);
         if has_changes {
-            eprintln!("[aid] In-place edit — changes are in your working tree.");
-            eprintln!("[aid] Review: git diff | Revert: git checkout .");
+            aid_info!("[aid] In-place edit — changes are in your working tree.");
+            aid_hint!("[aid] Review: git diff | Revert: git checkout .");
         } else {
-            eprintln!("[aid] In-place edit — no uncommitted changes (may already be committed).");
+            aid_info!("[aid] In-place edit — no uncommitted changes (may already be committed).");
         }
     }
     store.update_task_status(task_id, TaskStatus::Merged)?;
@@ -116,7 +116,7 @@ fn merge_single(store: &Store, task_id: &str, approve: bool) -> Result<()> {
     if let Some(wt) = task.worktree_path.as_deref()
         && std::path::Path::new(wt).exists()
         && let Err(err) = remove_worktree(&repo_dir, wt) {
-            eprintln!("[aid] Warning: failed to clean up worktree {wt}: {err}");
+            aid_warn!("[aid] Warning: failed to clean up worktree {wt}: {err}");
         }
     Ok(())
 }
@@ -131,7 +131,7 @@ fn merge_group(store: &Store, group_id: &str, approve: bool) -> Result<()> {
             ApprovalDecision::Merge => {}
             ApprovalDecision::Skip => return Ok(()),
             ApprovalDecision::Retry => {
-                eprintln!("[aid] Boss requested retry");
+                aid_info!("[aid] Boss requested retry");
                 return Err(anyhow!("Boss requested retry"));
             }
         }
@@ -157,27 +157,27 @@ fn merge_group(store: &Store, group_id: &str, approve: bool) -> Result<()> {
         }
             let ahead = commits_ahead(&repo_dir, branch);
             if ahead == 0 {
-                eprintln!("[aid] Warning: {} — branch {branch} has 0 commits, skipping", task.id);
+                aid_warn!("[aid] Warning: {} — branch {branch} has 0 commits, skipping", task.id);
                 skipped.push(format!("{} (no commits)", task.id));
                 continue;
             }
             match git_merge_branch(&repo_dir, branch) {
                 MergeResult::Merged => {
-                    eprintln!("[aid] Merged branch {branch}");
+                    aid_info!("[aid] Merged branch {branch}");
                 }
                 MergeResult::AlreadyUpToDate => {
-                    eprintln!("[aid] Warning: {} — merge was no-op despite {ahead} commit(s)", task.id);
+                    aid_warn!("[aid] Warning: {} — merge was no-op despite {ahead} commit(s)", task.id);
                     skipped.push(format!("{} (merge no-op)", task.id));
                     continue;
                 }
                 MergeResult::Failed(_) => {
-                    eprintln!("[aid] Warning: git merge {branch} failed, skipping {}", task.id);
+                    aid_warn!("[aid] Warning: git merge {branch} failed, skipping {}", task.id);
                     skipped.push(format!("{} (merge conflict)", task.id));
                     continue;
                 }
             }
         } else {
-            eprintln!("[aid] {} — no worktree, edits applied in-place", task.id);
+            aid_info!("[aid] {} — no worktree, edits applied in-place", task.id);
         }
         store.update_task_status(task.id.as_str(), TaskStatus::Merged)?;
         merged += 1;
@@ -185,12 +185,12 @@ fn merge_group(store: &Store, group_id: &str, approve: bool) -> Result<()> {
         if let Some(wt) = task.worktree_path.as_deref()
             && std::path::Path::new(wt).exists()
             && let Err(err) = remove_worktree(&repo_dir, wt) {
-                eprintln!("[aid] Warning: failed to clean up worktree {wt}: {err}");
+                aid_warn!("[aid] Warning: failed to clean up worktree {wt}: {err}");
             }
     }
     println!("Merged {merged} task(s) in group {group_id}");
     if !skipped.is_empty() {
-        eprintln!("[aid] Skipped: {}", skipped.join(", "));
+        aid_info!("[aid] Skipped: {}", skipped.join(", "));
     }
     // Prune stale git worktree references
     let _ = Command::new("git")

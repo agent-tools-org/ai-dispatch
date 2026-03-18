@@ -133,7 +133,7 @@ fn write_project_config(
     let batches_dir = aid_dir.join("batches");
     if !batches_dir.exists() {
         std::fs::create_dir_all(&batches_dir)?;
-        eprintln!("[aid] Created .aid/batches/ for batch TOML files");
+        aid_info!("[aid] Created .aid/batches/ for batch TOML files");
     }
     if project_path.exists() {
         bail!("Project config already exists at {}", project_path.display());
@@ -184,7 +184,7 @@ fn prompt_profile(label: &str, default: &str) -> Result<String> {
         let normalized = value.to_lowercase();
         match normalized.as_str() {
             "hobby" | "standard" | "production" => return Ok(normalized),
-            _ => eprintln!("Allowed profiles: hobby, standard, production."),
+            _ => aid_error!("Allowed profiles: hobby, standard, production."),
         }
     }
 }
@@ -203,7 +203,7 @@ fn prompt_daily_budget(default_cost: f64) -> Result<(String, f64, Option<String>
         let entry = prompt_line("Daily budget", Some(&default_label), false)?;
         match normalize_budget_input(&entry, "day") {
             Ok(parsed) => return Ok(parsed),
-            Err(err) => eprintln!("Invalid budget: {err}"),
+            Err(err) => aid_error!("Invalid budget: {err}"),
         }
     }
 }
@@ -306,7 +306,7 @@ fn prompt_line(label: &str, default: Option<&str>, allow_empty: bool) -> Result<
         if allow_empty {
             return Ok(String::new());
         }
-        eprintln!("{} cannot be empty.", label);
+        aid_error!("{} cannot be empty.", label);
     }
 }
 fn detect_language(git_root: &Path) -> Option<String> {

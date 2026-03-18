@@ -100,7 +100,7 @@ fn preserve_worktree(task_id: &str, task: &Task, action: &str) {
         && crate::commit::has_uncommitted_changes(path).unwrap_or(false)
     {
         let _ = crate::commit::auto_commit(path, task_id, &task.prompt);
-        eprintln!("[aid] Preserved uncommitted changes for {action} task {task_id}");
+        aid_info!("[aid] Preserved uncommitted changes for {action} task {task_id}");
     }
 }
 

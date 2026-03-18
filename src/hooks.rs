@@ -36,11 +36,7 @@ pub fn load_hooks() -> Result<Vec<Hook>> {
     };
     let config: HooksFile = toml::from_str(&content)
         .with_context(|| format!("failed to parse hooks file {}", path.display()))?;
-    Ok(config
-        .hook
-        .into_iter()
-        .map(|hook| hook.trusted())
-        .collect())
+    Ok(config.hook.into_iter().map(|hook| hook.trusted()).collect())
 }
 
 pub fn parse_cli_hooks(specs: &[String]) -> Result<Vec<Hook>> {
@@ -86,17 +82,19 @@ pub fn run_hooks_with(
     }
     for hook in relevant {
         ensure_trusted_hook(hook)?;
-        eprintln!("[aid] Executing hook via shell: {}", hook.command);
+        aid_info!("[aid] Executing hook via shell: {}", hook.command);
         let mut cmd = Command::new("sh");
         cmd.arg("-c").arg(&hook.command);
         cmd.stdin(Stdio::piped()).stderr(Stdio::piped());
-        let mut child = cmd.spawn().with_context(|| format!("failed to run hook {}", hook.command))?;
+        let mut child = cmd
+            .spawn()
+            .with_context(|| format!("failed to run hook {}", hook.command))?;
         if let Some(mut stdin) = child.stdin.take() {
             stdin.write_all(payload.as_bytes())?;
         }
         let output = child.wait_with_output()?;
         if !output.stderr.is_empty() {
-            eprintln!(
+            aid_warn!(
                 "[aid] Hook {} stderr:\n{}",
                 hook.command,
                 String::from_utf8_lossy(&output.stderr)
@@ -107,7 +105,7 @@ pub fn run_hooks_with(
             if fail_on_error {
                 anyhow::bail!(msg);
             }
-            eprintln!("[aid] {msg}");
+            aid_warn!("[aid] {msg}");
         }
     }
     Ok(())

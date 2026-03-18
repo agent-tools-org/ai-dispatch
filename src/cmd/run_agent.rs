@@ -182,7 +182,7 @@ pub(crate) async fn run_agent_process_with_timeout(
                 metadata: None,
             };
             let _ = store.insert_event(&event);
-            eprintln!("[aid] {detail}");
+            aid_error!("[aid] {detail}");
             Err(anyhow::anyhow!(detail))
         }
     }
@@ -232,7 +232,7 @@ fn write_streaming_output(log_path: &Path, out_path: &Path) {
     if !output.is_empty()
         && let Err(err) = std::fs::write(out_path, &output)
     {
-        eprintln!("[aid] Failed to write output file: {err}");
+        aid_error!("[aid] Failed to write output file: {err}");
     }
 }
 
@@ -246,14 +246,14 @@ pub(crate) fn check_worktree_escape(repo_dir: Option<&str>) {
         let stdout = String::from_utf8_lossy(&o.stdout);
         let dirty: Vec<&str> = stdout.lines().filter(|l| !l.is_empty()).collect();
         if !dirty.is_empty() {
-            eprintln!("[aid] ⚠ Worktree escape detected! Agent modified {} file(s) in main repo:", dirty.len());
+            aid_warn!("[aid] ⚠ Worktree escape detected! Agent modified {} file(s) in main repo:", dirty.len());
             for line in dirty.iter().take(10) {
-                eprintln!("  {line}");
+                aid_warn!("  {line}");
             }
             if dirty.len() > 10 {
-                eprintln!("  ... and {} more", dirty.len() - 10);
+                aid_warn!("  ... and {} more", dirty.len() - 10);
             }
-            eprintln!("[aid] Run `git checkout .` to discard, or review with `git diff`");
+            aid_hint!("[aid] Run `git checkout .` to discard, or review with `git diff`");
         }
     }
 }
@@ -278,17 +278,17 @@ pub(crate) fn check_scope_violations(store: &Store, task_id: &TaskId, scope: &[S
         })
     }).collect();
     if violations.is_empty() { return }
-    eprintln!(
+    aid_warn!(
         "[aid] Scope violation: {} file(s) modified outside scope",
         violations.len()
     );
     for f in violations.iter().take(10) {
-        eprintln!("  {f}");
+        aid_warn!("  {f}");
     }
     if violations.len() > 10 {
-        eprintln!("  ... and {} more", violations.len() - 10);
+        aid_warn!("  ... and {} more", violations.len() - 10);
     }
-    eprintln!("[aid] Declared scope: {}", scope.join(", "));
+    aid_warn!("[aid] Declared scope: {}", scope.join(", "));
     let event = crate::types::TaskEvent {
         task_id: task_id.clone(),
         timestamp: chrono::Local::now(),

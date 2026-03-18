@@ -63,7 +63,7 @@ pub(super) fn inject_memories(store: &Store, prompt: &str, max_memories: usize) 
     }
     let memory_ids = memories.iter().map(|mem| mem.id.as_str().to_string()).collect();
     let token_count = templates::estimate_tokens(&lines.join("\n"));
-    eprintln!("[aid] Injected {} memories (~{} tokens)", memories.len(), token_count);
+    aid_info!("[aid] Injected {} memories (~{} tokens)", memories.len(), token_count);
     Ok(Some((lines.join("\n"), memory_ids)))
 }
 
@@ -271,7 +271,7 @@ pub(super) fn resolve_context_from(store: &Store, task_ids: &[String]) -> Result
     let mut blocks = Vec::new();
     for task_id in task_ids {
         let Some(task) = store.get_task(task_id)? else {
-            eprintln!("[aid] Warning: --context-from task '{task_id}' not found, skipping");
+            aid_warn!("[aid] Warning: --context-from task '{task_id}' not found, skipping");
             continue;
         };
         let mut content = String::new();
@@ -292,7 +292,7 @@ pub(super) fn resolve_context_from(store: &Store, task_ids: &[String]) -> Result
             }
         }
         if content.is_empty() {
-            eprintln!("[aid] Warning: --context-from task '{task_id}' has no output, skipping");
+            aid_warn!("[aid] Warning: --context-from task '{task_id}' has no output, skipping");
             continue;
         }
         let sanitized = sanitize_injected_content(&content);

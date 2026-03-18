@@ -3,11 +3,11 @@
 // Deps: crate::paths, super::custom.
 #![allow(dead_code)]
 
+use super::custom::{parse_config, CustomAgent, CustomAgentConfig};
+use crate::paths;
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
-use super::custom::{CustomAgent, CustomAgentConfig, parse_config};
-use crate::paths;
 
 fn agents_dir() -> PathBuf {
     paths::aid_dir().join("agents")
@@ -28,11 +28,11 @@ fn load_from_dir(dir: &Path) -> HashMap<String, CustomAgentConfig> {
                         agents.insert(id, config);
                     }
                     Err(err) => {
-                        eprintln!("Failed to parse {}: {}", path.display(), err);
+                        aid_warn!("Failed to parse {}: {}", path.display(), err);
                     }
                 },
                 Err(err) => {
-                    eprintln!("Failed to read {}: {}", path.display(), err);
+                    aid_warn!("Failed to read {}: {}", path.display(), err);
                 }
             }
         }

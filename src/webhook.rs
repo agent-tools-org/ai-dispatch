@@ -12,7 +12,7 @@ pub async fn fire_task_webhooks(store: &Store, task_id: &str) {
     let task = match store.get_task(task_id) {
         Ok(Some(task)) => task,
         Ok(None) => return,
-        Err(err) => return eprintln!("[aid] failed to load task {task_id} for webhooks: {err}"),
+        Err(err) => return aid_error!("[aid] failed to load task {task_id} for webhooks: {err}"),
     };
     let status = match task.status {
         TaskStatus::Done | TaskStatus::Merged => "done",
@@ -22,7 +22,7 @@ pub async fn fire_task_webhooks(store: &Store, task_id: &str) {
     };
     match crate::config::load_config() {
         Ok(config) => fire_webhooks(&config, &task, status).await,
-        Err(err) => eprintln!("[aid] failed to load config for webhooks: {err}"),
+        Err(err) => aid_error!("[aid] failed to load config for webhooks: {err}"),
     }
 }
 
@@ -63,14 +63,14 @@ async fn send_webhook(webhook: &WebhookConfig, task: &Task, status: &str) {
         Ok(child) => {
             let name = webhook.name.clone();
             std::thread::spawn(move || match child.wait_with_output() {
-                Ok(output) if !output.status.success() => eprintln!(
+                Ok(output) if !output.status.success() => aid_error!(
                     "[aid] webhook {name} failed: {}",
                     String::from_utf8_lossy(&output.stderr).trim()
                 ),
                 Ok(_) => {}
-                Err(err) => eprintln!("[aid] webhook {name} wait failed: {err}"),
+                Err(err) => aid_error!("[aid] webhook {name} wait failed: {err}"),
             });
         }
-        Err(err) => eprintln!("[aid] failed to fire webhook {}: {err}", webhook.name),
+        Err(err) => aid_error!("[aid] failed to fire webhook {}: {err}", webhook.name),
     }
 }

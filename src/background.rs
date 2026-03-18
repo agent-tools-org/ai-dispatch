@@ -90,7 +90,7 @@ pub fn check_worker_capacity(store: &Store) -> Result<()> {
         );
     }
     if running >= soft_limit {
-        eprintln!(
+        aid_warn!(
             "[aid] Warning: {running} active workers (recommended max: {soft_limit})"
         );
     }
@@ -237,7 +237,7 @@ async fn run_task_inner(store: &Arc<Store>, spec: &BackgroundRunSpec) -> Result<
         && crate::commit::has_uncommitted_changes(worktree_dir).unwrap_or(false)
         && let Err(e) = crate::commit::auto_commit(worktree_dir, &spec.task_id, &spec.prompt)
     {
-        eprintln!("[aid] auto-commit failed: {e}");
+        aid_error!("[aid] auto-commit failed: {e}");
         let _ = store.insert_event(&TaskEvent {
             task_id: TaskId(spec.task_id.clone()),
             timestamp: Local::now(),
@@ -279,7 +279,7 @@ async fn run_task_inner(store: &Arc<Store>, spec: &BackgroundRunSpec) -> Result<
         {
             crate::rate_limit::mark_rate_limited(&kind, &message);
             if let Some(fallback) = agent::selection::coding_fallback_for(&kind) {
-                eprintln!(
+                aid_info!(
                     "[aid] Quota exhausted for {}, auto-cascading to {}",
                     kind.as_str(),
                     fallback.as_str()
@@ -350,7 +350,7 @@ where
                 && crate::commit::has_uncommitted_changes(path).unwrap_or(false)
             {
                 let _ = crate::commit::auto_commit(path, task_id, &task.prompt);
-                eprintln!("[aid] Preserved uncommitted changes for zombie task {task_id}");
+                aid_info!("[aid] Preserved uncommitted changes for zombie task {task_id}");
             }
             record_failure(store, task_id, ZOMBIE_FAILURE_DETAIL, ZOMBIE_FAILURE_DETAIL)?;
             cleaned.push(task_id.to_string());
@@ -379,7 +379,7 @@ where
             && crate::commit::has_uncommitted_changes(path).unwrap_or(false)
         {
             let _ = crate::commit::auto_commit(path, task_id, &task.prompt);
-            eprintln!("[aid] Preserved uncommitted changes for zombie task {task_id}");
+            aid_info!("[aid] Preserved uncommitted changes for zombie task {task_id}");
         }
         record_failure(store, task_id, ZOMBIE_FAILURE_DETAIL, ZOMBIE_FAILURE_DETAIL)?;
         cleaned.push(task_id.to_string());
@@ -430,9 +430,9 @@ fn spawn_on_done_command(command: &str, task_id: &str, status: &str) -> Result<(
     let command_name = command.to_string();
     std::thread::spawn(move || match child.wait_with_output() {
         Ok(output) if !output.status.success() => {
-            eprintln!("[aid] on_done callback failed: {command_name}");
+            aid_error!("[aid] on_done callback failed: {command_name}");
         }
-        Err(err) => eprintln!("[aid] on_done callback wait failed: {err}"),
+        Err(err) => aid_error!("[aid] on_done callback wait failed: {err}"),
         _ => {}
     });
     Ok(())

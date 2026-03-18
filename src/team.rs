@@ -71,11 +71,11 @@ fn load_from_dir(dir: &PathBuf) -> HashMap<String, TeamConfig> {
                         teams.insert(id, config);
                     }
                     Err(err) => {
-                        eprintln!("Failed to parse {}: {}", path.display(), err);
+                        aid_warn!("Failed to parse {}: {}", path.display(), err);
                     }
                 },
                 Err(err) => {
-                    eprintln!("Failed to read {}: {}", path.display(), err);
+                    aid_warn!("Failed to read {}: {}", path.display(), err);
                 }
             }
         }

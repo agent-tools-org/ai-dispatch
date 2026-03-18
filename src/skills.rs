@@ -44,7 +44,7 @@ pub fn load_skills(names: &[String]) -> Result<String> {
         contents.push(content);
         total_tokens += tokens;
     }
-    eprintln!("[aid] Skills loaded: {} skills, ~{} tokens", contents.len(), total_tokens);
+    aid_info!("[aid] Skills loaded: {} skills, ~{} tokens", contents.len(), total_tokens);
     Ok(contents.join("\n\n"))
 }
 

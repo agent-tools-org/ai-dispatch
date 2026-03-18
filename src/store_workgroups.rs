@@ -53,7 +53,10 @@ impl Store {
         if ws.starts_with("/tmp/aid-wg-") || ws.starts_with("/private/tmp/aid-wg-") {
             let _ = std::fs::remove_dir_all(&workspace_dir);
         } else {
-            eprintln!("[aid] SAFETY: refusing to remove workspace '{}' — not under /tmp/aid-wg-*", ws);
+            aid_warn!(
+                "[aid] SAFETY: refusing to remove workspace '{}' — not under /tmp/aid-wg-*",
+                ws
+            );
         }
         Ok(Some(tagged_tasks))
     }

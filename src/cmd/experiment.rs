@@ -46,7 +46,7 @@ pub async fn run_experiment(store: Arc<Store>, config: ExperimentConfig) -> Resu
             git_revert(&dir)?;
             let run = make_run(run_id, &task, None, Some(false), false, start.elapsed().as_millis() as i64);
             persist_run(&mut state, &state_path, run)?;
-            eprintln!("[aid experiment] run {run_id}: checks failed, reverted");
+            aid_warn!("[aid experiment] run {run_id}: checks failed, reverted");
             continue;
         }
         let metric_value = evaluate_metric(&config.metric_command, &dir).with_context(|| "metric command failed")?;
@@ -59,7 +59,7 @@ pub async fn run_experiment(store: Arc<Store>, config: ExperimentConfig) -> Resu
 
         let run = make_run(run_id, &task, Some(metric_value), config.checks.as_ref().map(|_| true), kept, start.elapsed().as_millis() as i64);
         persist_run(&mut state, &state_path, run)?;
-        eprintln!("[aid experiment] run {run_id}: metric={metric_value} kept={kept}");
+        aid_info!("[aid experiment] run {run_id}: metric={metric_value} kept={kept}");
     }
     Ok(())
 }

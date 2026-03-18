@@ -130,7 +130,7 @@ pub async fn run(store: Arc<Store>, mut args: RunArgs) -> Result<TaskId> {
             defaults_applied = true;
         }
         if defaults_applied {
-            eprintln!(
+            aid_info!(
                 "[aid] Project '{}' defaults: team={}, verify={}",
                 project.id,
                 args.team.as_deref().unwrap_or("None"),
@@ -161,7 +161,7 @@ pub async fn run(store: Arc<Store>, mut args: RunArgs) -> Result<TaskId> {
         && std::path::Path::new(".git").exists()
     {
         args.dir = Some(".".to_string());
-        eprintln!("[aid] Auto-set --dir . (git repo detected)");
+        aid_info!("[aid] Auto-set --dir . (git repo detected)");
     }
     let agent_display_name = custom_agent_name
         .as_deref()
@@ -169,26 +169,26 @@ pub async fn run(store: Arc<Store>, mut args: RunArgs) -> Result<TaskId> {
     if let Some(info) = rate_limit::get_rate_limit_info(&agent_kind)
         && let Some(ref recovery) = info.recovery_at
     {
-        eprintln!(
+        aid_warn!(
             "[aid] Warning: {} is rate-limited (try again at {})",
             agent_kind.as_str(),
             recovery
         );
         if let Some(next_agent) = args.cascade.first() {
-            eprintln!("[aid] Switching to cascade agent: {}", next_agent);
+            aid_info!("[aid] Switching to cascade agent: {}", next_agent);
         } else if let Some(suggested) = crate::agent::selection::coding_fallback_for(&agent_kind) {
-            eprintln!(
+            aid_hint!(
                 "[aid] Suggested fallback: --cascade {} (similar capability)",
                 suggested.as_str()
             );
         } else {
-            eprintln!("[aid] Tip: use --cascade <agent> or --agent with `aid retry`");
+            aid_hint!("[aid] Tip: use --cascade <agent> or --agent with `aid retry`");
         }
     }
     let requested_skills = run_prompt::effective_skills(&agent_kind, &args);
     if args.skills.is_empty() {
         for skill in &requested_skills {
-            eprintln!("[aid] Auto-applied skill: {skill}");
+            aid_info!("[aid] Auto-applied skill: {skill}");
         }
     }
     let cfg = config::load_config()?;
@@ -202,7 +202,7 @@ pub async fn run(store: Arc<Store>, mut args: RunArgs) -> Result<TaskId> {
     }
     let auto_budget = if budget_status.near_limit && !cfg.selection.budget_mode {
         if let Some(ref msg) = budget_status.message {
-            eprintln!("[aid] Warning: {}\n[aid] Auto-enabling budget mode", msg);
+            aid_warn!("[aid] Warning: {}\n[aid] Auto-enabling budget mode", msg);
         }
         true
     } else {
@@ -211,7 +211,7 @@ pub async fn run(store: Arc<Store>, mut args: RunArgs) -> Result<TaskId> {
     let budget_active = args.budget || auto_budget || cfg.selection.budget_mode;
     let effective_model = if budget_active && args.model.is_none() {
         if let Some(bm) = cmd_config::budget_model(&agent_kind) {
-            eprintln!("[aid] Budget mode: using model {}", bm);
+            aid_info!("[aid] Budget mode: using model {}", bm);
             Some(bm.to_string())
         } else {
             args.model.clone()
@@ -266,7 +266,7 @@ pub async fn run(store: Arc<Store>, mut args: RunArgs) -> Result<TaskId> {
     };
     let dispatch_warnings = validate_dispatch(&args, &agent_kind);
     for warning in &dispatch_warnings {
-        eprintln!("[aid] Warning: {warning}");
+        aid_warn!("[aid] Warning: {warning}");
     }
     if args.existing_task_id.is_some() && store.get_task(task_id.as_str())?.is_some() {
         store.replace_waiting_task(&task)?;
@@ -382,7 +382,7 @@ pub async fn run(store: Arc<Store>, mut args: RunArgs) -> Result<TaskId> {
                 agent_display_name,
                 crate::agent::truncate::truncate_text(&args.prompt, 50)
             );
-            eprintln!("[aid] Watch: aid watch --quiet {task_id}");
+            aid_hint!("[aid] Watch: aid watch --quiet {task_id}");
         }
     } else {
         let mut std_cmd = agent
@@ -467,7 +467,7 @@ pub async fn run(store: Arc<Store>, mut args: RunArgs) -> Result<TaskId> {
             if task.status == TaskStatus::Done && !prompt_bundle.injected_memory_ids.is_empty() {
                 for memory_id in &prompt_bundle.injected_memory_ids {
                     if let Err(err) = store.increment_memory_success(memory_id) {
-                        eprintln!("[aid] Failed to record memory success for {memory_id}: {err}");
+                        aid_error!("[aid] Failed to record memory success for {memory_id}: {err}");
                     }
                 }
             }
@@ -495,14 +495,14 @@ pub async fn run(store: Arc<Store>, mut args: RunArgs) -> Result<TaskId> {
                     &runtime_hooks,
                     false,
                 ) {
-                    eprintln!("[aid] Hook on_fail failed: {err}");
+                    aid_error!("[aid] Hook on_fail failed: {err}");
                 }
                 if let Some(wt) = task.worktree_path.as_deref()
                     && std::path::Path::new(wt).exists()
                 {
                     let repo = repo_path.as_deref().unwrap_or(".");
                     if let Err(err) = crate::cmd::merge::remove_worktree(repo, wt) {
-                        eprintln!("[aid] Warning: failed to clean up worktree {wt}: {err}");
+                        aid_warn!("[aid] Warning: failed to clean up worktree {wt}: {err}");
                     }
                 }
             }
@@ -516,7 +516,7 @@ pub async fn run(store: Arc<Store>, mut args: RunArgs) -> Result<TaskId> {
         {
             match judge::peer_review_task(&task, reviewer_agent, &args.prompt).await {
                 Ok(review) => {
-                    eprintln!(
+                    aid_info!(
                         "[aid] Peer review by {reviewer_agent}: {}/10 — {}",
                         review.score, review.feedback
                     );
@@ -527,7 +527,7 @@ pub async fn run(store: Arc<Store>, mut args: RunArgs) -> Result<TaskId> {
                         &review.feedback,
                     )?;
                 }
-                Err(e) => eprintln!("[aid] Peer review failed: {e}"),
+                Err(e) => aid_error!("[aid] Peer review failed: {e}"),
             }
         }
         run_prompt::notify_task_completion(&store, &task_id)?;
@@ -552,7 +552,7 @@ pub async fn run(store: Arc<Store>, mut args: RunArgs) -> Result<TaskId> {
                 &runtime_hooks,
                 false,
             ) {
-                eprintln!("[aid] Hook after_complete failed: {err}");
+                aid_error!("[aid] Hook after_complete failed: {err}");
             }
         }
         crate::webhook::fire_task_webhooks(&store, task_id.as_str()).await;
@@ -582,7 +582,7 @@ pub async fn run(store: Arc<Store>, mut args: RunArgs) -> Result<TaskId> {
                 String::new()
             };
             if !status_hint.is_empty() {
-                eprintln!("{status_hint}");
+                aid_hint!("{status_hint}");
             }
         }
         if let Some(retry_id) =
@@ -600,7 +600,7 @@ pub async fn run(store: Arc<Store>, mut args: RunArgs) -> Result<TaskId> {
             && task.status == TaskStatus::Failed
             && let Some((next_agent, remaining_cascade)) = take_next_cascade_agent(&args)
         {
-            eprintln!(
+            aid_info!(
                 "[aid] Cascade: trying {} after {} failed",
                 next_agent,
                 args.agent_name
@@ -617,7 +617,7 @@ pub async fn run(store: Arc<Store>, mut args: RunArgs) -> Result<TaskId> {
             && let Some(fallback) = agent::selection::coding_fallback_for(&agent_kind)
         {
             rate_limit::mark_rate_limited(&agent_kind, message);
-            eprintln!(
+            aid_info!(
                 "[aid] Quota exhausted for {}, auto-cascading to {}",
                 agent_kind.as_str(),
                 fallback.as_str()
@@ -643,9 +643,9 @@ fn maybe_flag_empty_worktree_diff(store: &Store, task_id: &TaskId, task: &Task) 
         return;
     }
     if let Some(true) = worktree_is_empty_diff(path) {
-        eprintln!("[aid] Warning: agent completed but made no code changes in worktree");
+        aid_warn!("[aid] Warning: agent completed but made no code changes in worktree");
         if let Err(err) = store.update_verify_status(task_id.as_str(), VerifyStatus::EmptyDiff) {
-            eprintln!("[aid] Failed to record empty diff status: {err}");
+            aid_error!("[aid] Failed to record empty diff status: {err}");
         }
     }
 }
@@ -881,7 +881,7 @@ pub(crate) async fn maybe_judge_retry(store: &Arc<Store>, args: &RunArgs, task_i
         return Ok(None);
     }
     let feedback = judge_result.feedback.trim();
-    eprintln!(
+    aid_info!(
         "[aid] Judge requested retry: {}",
         if feedback.is_empty() { "no feedback provided" } else { feedback }
     );

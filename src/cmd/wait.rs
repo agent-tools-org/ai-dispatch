@@ -47,7 +47,7 @@ pub async fn run(
         WaitOutcome::Completed => Ok(()),
         WaitOutcome::TimedOut(running) => {
             let secs = timeout_secs.unwrap_or_default();
-            eprintln!(
+            aid_error!(
                 "[aid] Timeout after {}s. Still running: {}",
                 secs,
                 running.join(", ")

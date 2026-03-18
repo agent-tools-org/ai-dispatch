@@ -16,7 +16,7 @@ pub fn create(branch: &str, base: Option<&str>, repo: Option<&str>) -> Result<()
     let repo_path = Path::new(repo_dir).canonicalize()?;
     let info = crate::worktree::create_worktree(&repo_path, branch, base)?;
     println!("{}", info.path.display());
-    eprintln!(
+    aid_info!(
         "[aid] Created worktree on branch '{}' at {}",
         info.branch,
         info.path.display()

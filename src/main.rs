@@ -1,6 +1,8 @@
 // aid — Multi-AI CLI team orchestrator.
 // Entry point wiring: modules, CLI dispatch, and exported main.
 
+#[macro_use]
+pub mod output;
 mod agent;
 mod background;
 mod batch;
@@ -35,7 +37,6 @@ mod compaction;
 pub mod claudemd;
 mod tui;
 mod system_resources;
-mod output;
 mod types;
 mod update_check;
 mod usage;
@@ -153,7 +154,7 @@ async fn main() -> Result<()> {
                 let (selected, reason) = agent::select_agent_with_reason(
                     &prompt, &selection_opts, &store, team_config.as_ref(),
                 );
-                eprintln!("[aid] Auto-selected: {selected} (reason: {reason})");
+                aid_info!("[aid] Auto-selected: {selected} (reason: {reason})");
                 let rec = if model.is_none() && !budget {
                     let norm = prompt.trim().to_lowercase();
                     let fc = agent::classifier::count_file_mentions(&norm);

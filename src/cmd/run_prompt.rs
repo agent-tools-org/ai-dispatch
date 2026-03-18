@@ -153,9 +153,9 @@ pub(super) fn build_prompt_bundle(store: &Store, args: &RunArgs, agent_kind: &Ag
                 let knowledge_block = sanitize_injected_text(&prompt_context::format_knowledge_block(&pc.id, &relevant));
                 effective_prompt = format!("{knowledge_block}\n\n{effective_prompt}");
             }
-            eprintln!("[aid] Project '{}' detected: {} rule(s), {}/{} knowledge entries", pc.id, rules_count, relevant.len(), total_knowledge);
+            aid_info!("[aid] Project '{}' detected: {} rule(s), {}/{} knowledge entries", pc.id, rules_count, relevant.len(), total_knowledge);
         } else if rules_count > 0 {
-            eprintln!("[aid] Project '{}' detected: {} rule(s)", pc.id, rules_count);
+            aid_info!("[aid] Project '{}' detected: {} rule(s)", pc.id, rules_count);
         }
     }
 
@@ -168,7 +168,7 @@ pub(super) fn build_prompt_bundle(store: &Store, args: &RunArgs, agent_kind: &Ag
                     .collect::<Vec<_>>()
                     .join("\n");
                 effective_prompt = format!("<aid-team-rules>\n{rules_block}\n</aid-team-rules>\n\n{effective_prompt}");
-                eprintln!("[aid] Injected {} team rule(s)", tc.rules.len());
+                aid_info!("[aid] Injected {} team rule(s)", tc.rules.len());
             }
         let entries = team::read_knowledge_entries(team_id);
         let total_entries = entries.len();
@@ -190,7 +190,7 @@ pub(super) fn build_prompt_bundle(store: &Store, args: &RunArgs, agent_kind: &Ag
                     })
                     .collect()
             };
-            eprintln!("[aid] Injected {}/{} knowledge entries (relevance-filtered)", relevant.len(), total_entries);
+            aid_info!("[aid] Injected {}/{} knowledge entries (relevance-filtered)", relevant.len(), total_entries);
             if !relevant.is_empty() {
                 let knowledge_block = sanitize_injected_text(&prompt_context::format_knowledge_block(team_id, &relevant));
                 effective_prompt = format!("{knowledge_block}\n\n{effective_prompt}");
@@ -203,7 +203,7 @@ pub(super) fn build_prompt_bundle(store: &Store, args: &RunArgs, agent_kind: &Ag
         && let Some(block) = prompt_context::resolve_context_from(store, &args.context_from)?
     {
         let token_count = templates::estimate_tokens(&block);
-        eprintln!("[aid] Injected context from {} task(s) (~{token_count} tokens)", args.context_from.len());
+        aid_info!("[aid] Injected context from {} task(s) (~{token_count} tokens)", args.context_from.len());
         effective_prompt = format!("{block}\n\n{effective_prompt}");
     }
 
@@ -433,7 +433,7 @@ pub(super) fn maybe_cleanup_fast_fail_impl(store: &Store, task_id: &TaskId, task
     let Some(ref wt_path) = task.worktree_path else { return };
     // SANDBOX: refuse to touch anything outside /tmp/aid-wt-*
     if !crate::cmd::merge::merge_git::is_safe_worktree_path(wt_path) {
-        eprintln!("[aid] SAFETY: refusing to remove '{}' — not an aid worktree path", wt_path);
+        aid_warn!("[aid] SAFETY: refusing to remove '{}' — not an aid worktree path", wt_path);
         return;
     }
     let path = std::path::Path::new(wt_path);
@@ -444,13 +444,13 @@ pub(super) fn maybe_cleanup_fast_fail_impl(store: &Store, task_id: &TaskId, task
     if duration_ms > 10_000 { return }
     if crate::worktree::branch_has_commits_ahead_of_main(path, task.worktree_branch.as_deref().unwrap_or("unknown")).unwrap_or(true) { return; }
     let Some(repo_dir) = task.repo_path.as_deref() else {
-        eprintln!("[aid] Warning: skipping fast-fail cleanup for {} — missing repo_path", task_id);
+        aid_warn!("[aid] Warning: skipping fast-fail cleanup for {} — missing repo_path", task_id);
         return;
     };
     let _ = std::process::Command::new("git")
         .args(["-C", repo_dir, "worktree", "remove", "--force", wt_path])
         .output();
-    eprintln!("[aid] Cleaned up worktree for fast-failed task {}", task_id);
+    aid_info!("[aid] Cleaned up worktree for fast-failed task {}", task_id);
 }
 
 pub(super) fn maybe_verify_impl(store: &Store, task_id: &TaskId, verify: Option<&str>, dir: Option<&str>) {
@@ -474,7 +474,7 @@ pub(super) fn maybe_verify_impl(store: &Store, task_id: &TaskId, verify: Option<
                 let _ = store.insert_event(&event);
             }
         }
-        Err(e) => eprintln!("Verify error: {e}"),
+        Err(e) => aid_error!("Verify error: {e}"),
     }
 }
 
@@ -492,7 +492,7 @@ pub(super) async fn maybe_auto_retry_after_verify_failure_impl(
         return Ok(None);
     }
 
-    eprintln!(
+    aid_warn!(
         "[aid] Verify failed, auto-retrying ({} retries left)",
         args.retry - 1
     );
@@ -594,7 +594,7 @@ fn maybe_compact_prompt(prompt: &str, max_tokens: usize) -> String {
     }
     let result = prompt.replacen(section, &compacted, 1);
     let after = templates::estimate_tokens(&result);
-    eprintln!("[aid] Compacted prompt from ~{before} to ~{after} tokens");
+    aid_info!("[aid] Compacted prompt from ~{before} to ~{after} tokens");
     result
 }
 
@@ -642,7 +642,7 @@ pub(super) fn warn_agent_committed_files_outside_scope(
     if violations.is_empty() {
         return;
     }
-    eprintln!(
+    aid_warn!(
         "[aid] Warning: agent committed {} files outside scope: {:?}",
         violations.len(),
         violations

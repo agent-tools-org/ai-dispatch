@@ -56,10 +56,9 @@ fn existing_worktree_path(repo_dir: &Path, branch: &str) -> Result<Option<PathBu
             current_path = None;
             continue;
         }
-        if let (Some(path), Some(branch_line)) = (
-            current_path.as_ref(),
-            line.strip_prefix("branch "),
-        ) {
+        if let (Some(path), Some(branch_line)) =
+            (current_path.as_ref(), line.strip_prefix("branch "))
+        {
             let branch_name = branch_line
                 .trim()
                 .strip_prefix("refs/heads/")
@@ -74,12 +73,20 @@ fn existing_worktree_path(repo_dir: &Path, branch: &str) -> Result<Option<PathBu
 }
 
 fn is_aid_managed_branch(branch: &str) -> bool {
-    AID_BRANCH_PREFIXES.iter().any(|prefix| branch.starts_with(prefix))
+    AID_BRANCH_PREFIXES
+        .iter()
+        .any(|prefix| branch.starts_with(prefix))
 }
 
 fn local_branch_exists(repo_dir: &Path, branch: &str) -> Result<bool> {
     let status = Command::new("git")
-        .args(["-C", &repo_dir.to_string_lossy(), "rev-parse", "--verify", &format!("refs/heads/{branch}")])
+        .args([
+            "-C",
+            &repo_dir.to_string_lossy(),
+            "rev-parse",
+            "--verify",
+            &format!("refs/heads/{branch}"),
+        ])
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())
         .status()
@@ -133,12 +140,7 @@ pub fn create_worktree(
         }
 
         let prune_status = Command::new("git")
-            .args([
-                "-C",
-                &repo_dir.to_string_lossy(),
-                "worktree",
-                "prune",
-            ])
+            .args(["-C", &repo_dir.to_string_lossy(), "worktree", "prune"])
             .status()
             .context("Failed to run git worktree prune")?;
         anyhow::ensure!(prune_status.success(), "git worktree prune failed");
@@ -148,7 +150,7 @@ pub fn create_worktree(
     let branch_exists = local_branch_exists(repo_dir, branch)?;
     if !is_aid_managed_branch(branch) {
         if branch_exists {
-            eprintln!(
+            aid_warn!(
                 "[aid] Warning: refusing to force-reset existing non aid-managed branch '{branch}'"
             );
         }

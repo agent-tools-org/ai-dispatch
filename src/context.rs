@@ -1,8 +1,8 @@
 // Context injection: read files and extract specific items to prepend to prompts.
 // Supports whole-file injection or targeted extraction of pub struct/trait/fn/enum.
 
-use anyhow::{Context, Result};
 use crate::skills;
+use anyhow::{Context, Result};
 
 #[derive(Debug, Clone)]
 pub struct ContextSpec {
@@ -77,7 +77,11 @@ pub fn resolve_context(specs: &[ContextSpec]) -> Result<String> {
 
     let context = parts.join("\n\n");
     let tokens = skills::estimate_tokens(&context);
-    eprintln!("[aid] Context injected: {} files, ~{} tokens", file_count, tokens);
+    aid_info!(
+        "[aid] Context injected: {} files, ~{} tokens",
+        file_count,
+        tokens
+    );
     Ok(context)
 }
 
@@ -186,11 +190,18 @@ mod tests {
         let dir = tempdir_in(&cwd).unwrap();
         let path = dir.path().join("context.rs");
         std::fs::write(&path, "pub struct RelativePath;\n").unwrap();
-        let relative = path.strip_prefix(&cwd).unwrap().to_string_lossy().to_string();
+        let relative = path
+            .strip_prefix(&cwd)
+            .unwrap()
+            .to_string_lossy()
+            .to_string();
 
         let specs = parse_context_specs(&[relative]).unwrap();
 
-        assert_eq!(specs[0].file, path.canonicalize().unwrap().to_string_lossy());
+        assert_eq!(
+            specs[0].file,
+            path.canonicalize().unwrap().to_string_lossy()
+        );
     }
 
     #[test]

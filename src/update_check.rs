@@ -28,7 +28,7 @@ pub fn maybe_check_update() {
     if let Some(latest) = latest
         && version_is_newer(env!("CARGO_PKG_VERSION"), &latest)
     {
-        eprintln!(
+        aid_hint!(
             "[aid] Update available: v{} → v{}. Run: aid upgrade",
             env!("CARGO_PKG_VERSION"),
             latest

@@ -39,11 +39,11 @@ pub fn run() -> Result<()> {
             eprint!("  Verifying... ");
             io::stderr().flush()?;
             if test_openrouter_key(&key) {
-                eprintln!("OK");
+                aid_info!("OK");
                 println!("  ✓ Key updated ({})", mask_key(&key));
                 replace_api_key(&mut existing, &key);
             } else {
-                eprintln!("failed");
+                aid_warn!("failed");
                 println!("  ✗ Could not verify — saved anyway");
                 replace_api_key(&mut existing, &key);
             }
@@ -57,10 +57,10 @@ pub fn run() -> Result<()> {
             eprint!("  Verifying... ");
             io::stderr().flush()?;
             if test_openrouter_key(&key) {
-                eprintln!("OK");
+                aid_info!("OK");
                 println!("  ✓ Key saved ({})", mask_key(&key));
             } else {
-                eprintln!("failed");
+                aid_warn!("failed");
                 println!("  ✗ Could not verify — saved anyway");
             }
             append_query_section(&mut existing, &key);
@@ -76,10 +76,10 @@ pub fn run() -> Result<()> {
             eprint!("  Verifying... ");
             io::stderr().flush()?;
             if test_openrouter_key(&key) {
-                eprintln!("OK");
+                aid_info!("OK");
                 println!("  ✓ Key verified ({})", mask_key(&key));
             } else {
-                eprintln!("failed");
+                aid_warn!("failed");
                 println!("  ✗ Could not verify — saved anyway");
             }
             append_query_section(&mut existing, &key);

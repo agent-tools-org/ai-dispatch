@@ -78,7 +78,7 @@ async fn dispatch_with_dependencies(
                 &task.prompt
             };
             if let Err(e) = store.insert_waiting_task(id.as_str(), agent, prompt_preview, task.group.as_deref()) {
-                eprintln!("[aid] Warning: failed to pre-create task {i}: {e}");
+                aid_warn!("[aid] Warning: failed to pre-create task {i}: {e}");
             }
             id.to_string()
         })
@@ -206,7 +206,7 @@ async fn dispatch_level_with_ids(
                 task_id: Some(task_id.to_string()),
             }),
             Err(err) => {
-                eprintln!(
+                aid_error!(
                     "Batch task failed ({}): {err}",
                     task_label(&tasks[task_idx], task_idx)
                 );
@@ -270,7 +270,7 @@ async fn maybe_dispatch_auto_fallback(
     run_args.agent_name = fallback_agent.as_str().to_string();
     run_args.parent_task_id = Some(task_id.to_string());
     retried[task_idx] = true;
-    eprintln!(
+    aid_info!(
         "[batch] Auto-fallback: {} -> {} for task {}",
         original_agent,
         fallback_agent.as_str(),

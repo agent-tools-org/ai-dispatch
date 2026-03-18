@@ -1,19 +1,31 @@
 // Batch validation/helpers used by cmd::batch dispatch.
 // Exports: validate_batch_config, rate_limit_precheck, resolve_dependencies, task helpers
 // Deps: crate::batch, crate::rate_limit, crate::store::Store, crate::types
-use anyhow::Result;
-use chrono::Local;
-use std::collections::HashSet;
-use std::sync::Arc;
+use super::batch_types::BatchTaskOutcome;
 use crate::batch;
 use crate::rate_limit;
 use crate::store::Store;
 use crate::types::{AgentKind, Task, TaskId, TaskStatus, VerifyStatus};
-use super::batch_types::BatchTaskOutcome;
-pub(super) fn validate_batch_config(tasks: &[batch::BatchTask]) -> Result<()> { validate_task_agents(tasks)?; rate_limit_precheck(tasks); Ok(()) }
-pub(super) fn resolve_dependencies(tasks: &[batch::BatchTask]) -> Result<Vec<Vec<usize>>> { batch::dependency_indices(tasks) }
-pub(super) fn task_has_dependencies(task: &batch::BatchTask) -> bool { task.depends_on.as_ref().is_some_and(|depends_on| !depends_on.is_empty()) }
-pub(super) fn task_label(task: &batch::BatchTask, task_idx: usize) -> String { task.name.clone().unwrap_or_else(|| format!("#{task_idx}")) }
+use anyhow::Result;
+use chrono::Local;
+use std::collections::HashSet;
+use std::sync::Arc;
+pub(super) fn validate_batch_config(tasks: &[batch::BatchTask]) -> Result<()> {
+    validate_task_agents(tasks)?;
+    rate_limit_precheck(tasks);
+    Ok(())
+}
+pub(super) fn resolve_dependencies(tasks: &[batch::BatchTask]) -> Result<Vec<Vec<usize>>> {
+    batch::dependency_indices(tasks)
+}
+pub(super) fn task_has_dependencies(task: &batch::BatchTask) -> bool {
+    task.depends_on
+        .as_ref()
+        .is_some_and(|depends_on| !depends_on.is_empty())
+}
+pub(super) fn task_label(task: &batch::BatchTask, task_idx: usize) -> String {
+    task.name.clone().unwrap_or_else(|| format!("#{task_idx}"))
+}
 pub(super) fn rate_limit_precheck(tasks: &[batch::BatchTask]) {
     let mut unique_agents = HashSet::new();
     for task in tasks {
@@ -30,7 +42,7 @@ pub(super) fn rate_limit_precheck(tasks: &[batch::BatchTask]) {
             .and_then(|info| info.recovery_at)
             .map(|time| format!(" (try again at {time})"))
             .unwrap_or_default();
-        eprintln!(
+        aid_warn!(
             "[aid] Warning: agent '{}' is rate-limited{}",
             agent_kind.as_str(),
             recovery_info
@@ -48,7 +60,7 @@ pub(super) fn rate_limit_precheck(tasks: &[batch::BatchTask]) {
         if rate_limited.contains(&kind) {
             rate_limited_tasks += 1;
             if let Some(ref fallback) = task.fallback {
-                eprintln!(
+                aid_info!(
                     "[aid] Task {} will use fallback agent: {}",
                     task_label(task, task_idx),
                     fallback
@@ -56,7 +68,7 @@ pub(super) fn rate_limit_precheck(tasks: &[batch::BatchTask]) {
             }
         }
     }
-    eprintln!(
+    aid_info!(
         "[aid] {}/{} task(s) use rate-limited agents",
         rate_limited_tasks,
         tasks.len()
@@ -89,15 +101,36 @@ pub(super) fn find_ready_tasks(
     }
     Ok(ready)
 }
-pub(super) fn failed_dependency(task_idx: usize, dependencies: &[Vec<usize>], outcomes: &[Option<BatchTaskOutcome>]) -> Option<usize> {
-    dependencies[task_idx].iter().copied().find(|&dep_idx| matches!(outcomes[dep_idx], Some(BatchTaskOutcome::Failed) | Some(BatchTaskOutcome::Skipped)))
+pub(super) fn failed_dependency(
+    task_idx: usize,
+    dependencies: &[Vec<usize>],
+    outcomes: &[Option<BatchTaskOutcome>],
+) -> Option<usize> {
+    dependencies[task_idx].iter().copied().find(|&dep_idx| {
+        matches!(
+            outcomes[dep_idx],
+            Some(BatchTaskOutcome::Failed) | Some(BatchTaskOutcome::Skipped)
+        )
+    })
 }
-pub(super) fn pending_dependency(task_idx: usize, dependencies: &[Vec<usize>], outcomes: &[Option<BatchTaskOutcome>]) -> Option<usize> {
-    dependencies[task_idx].iter().copied().find(|&dep_idx| outcomes[dep_idx].is_none())
+pub(super) fn pending_dependency(
+    task_idx: usize,
+    dependencies: &[Vec<usize>],
+    outcomes: &[Option<BatchTaskOutcome>],
+) -> Option<usize> {
+    dependencies[task_idx]
+        .iter()
+        .copied()
+        .find(|&dep_idx| outcomes[dep_idx].is_none())
 }
-pub(super) fn record_skipped_task(store: &Arc<Store>, tasks: &[batch::BatchTask], task_idx: usize, dep_idx: usize) -> Result<()> {
+pub(super) fn record_skipped_task(
+    store: &Arc<Store>,
+    tasks: &[batch::BatchTask],
+    task_idx: usize,
+    dep_idx: usize,
+) -> Result<()> {
     let task_id = insert_skipped_task(store, &tasks[task_idx])?;
-    eprintln!(
+    aid_info!(
         "[batch] Skipping task {} ({}) because dependency {} failed",
         task_label(&tasks[task_idx], task_idx),
         task_id,
@@ -222,24 +255,43 @@ mod tests {
     #[test]
     fn find_ready_dispatches_when_individual_dep_satisfied() {
         let store = Arc::new(Store::open_memory().unwrap());
-        let tasks = vec![stub_task("A", None), stub_task("B", Some(vec!["A"])), stub_task("C", Some(vec!["A"])), stub_task("D", Some(vec!["B", "C"]))];
+        let tasks = vec![
+            stub_task("A", None),
+            stub_task("B", Some(vec!["A"])),
+            stub_task("C", Some(vec!["A"])),
+            stub_task("D", Some(vec!["B", "C"])),
+        ];
         let deps = vec![vec![], vec![0], vec![0], vec![1, 2]];
         let mut outcomes: Vec<Option<BatchTaskOutcome>> = vec![None; 4];
         let started = vec![false; 4];
         let triggered = vec![true; tasks.len()];
-        let ready = find_ready_tasks(&store, &tasks, &deps, &started, &mut outcomes, &triggered).unwrap();
+        let ready =
+            find_ready_tasks(&store, &tasks, &deps, &started, &mut outcomes, &triggered).unwrap();
         assert_eq!(ready, vec![0]);
         let mut outcomes = vec![Some(BatchTaskOutcome::Done), None, None, None];
         let started = vec![true, false, false, false];
-        let ready = find_ready_tasks(&store, &tasks, &deps, &started, &mut outcomes, &triggered).unwrap();
+        let ready =
+            find_ready_tasks(&store, &tasks, &deps, &started, &mut outcomes, &triggered).unwrap();
         assert_eq!(ready, vec![1, 2]);
-        let mut outcomes = vec![Some(BatchTaskOutcome::Done), Some(BatchTaskOutcome::Done), None, None];
+        let mut outcomes = vec![
+            Some(BatchTaskOutcome::Done),
+            Some(BatchTaskOutcome::Done),
+            None,
+            None,
+        ];
         let started = vec![true, true, true, false];
-        let ready = find_ready_tasks(&store, &tasks, &deps, &started, &mut outcomes, &triggered).unwrap();
+        let ready =
+            find_ready_tasks(&store, &tasks, &deps, &started, &mut outcomes, &triggered).unwrap();
         assert!(ready.is_empty());
-        let mut outcomes = vec![Some(BatchTaskOutcome::Done), Some(BatchTaskOutcome::Done), Some(BatchTaskOutcome::Done), None];
+        let mut outcomes = vec![
+            Some(BatchTaskOutcome::Done),
+            Some(BatchTaskOutcome::Done),
+            Some(BatchTaskOutcome::Done),
+            None,
+        ];
         let started = vec![true, true, true, false];
-        let ready = find_ready_tasks(&store, &tasks, &deps, &started, &mut outcomes, &triggered).unwrap();
+        let ready =
+            find_ready_tasks(&store, &tasks, &deps, &started, &mut outcomes, &triggered).unwrap();
         assert_eq!(ready, vec![3]);
     }
 
@@ -251,7 +303,8 @@ mod tests {
         let mut outcomes = vec![Some(BatchTaskOutcome::Failed), None];
         let started = vec![true, false];
         let triggered = vec![true; tasks.len()];
-        let ready = find_ready_tasks(&store, &tasks, &deps, &started, &mut outcomes, &triggered).unwrap();
+        let ready =
+            find_ready_tasks(&store, &tasks, &deps, &started, &mut outcomes, &triggered).unwrap();
         assert!(ready.is_empty());
         assert_eq!(outcomes[1], Some(BatchTaskOutcome::Skipped));
     }

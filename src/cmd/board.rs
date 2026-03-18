@@ -43,20 +43,17 @@ pub fn run(
     if let Ok(prev) = std::fs::read_to_string(&marker_path) {
         // Format: "timestamp\nfingerprint"
         let mut lines = prev.splitn(2, '\n');
-        let prev_ts: i64 = lines
-            .next()
-            .and_then(|s| s.parse().ok())
-            .unwrap_or(0);
+        let prev_ts: i64 = lines.next().and_then(|s| s.parse().ok()).unwrap_or(0);
         let prev_fp = lines.next().unwrap_or("");
         if prev_fp == fingerprint {
             let now_ts = Local::now().timestamp();
             if now_ts - prev_ts < 10 {
                 // Rapid repeated call with no changes — hard error to break polling loops
-                eprintln!("[aid] ERROR: No changes detected. Stop polling — use `aid watch --quiet --group <wg-id>` instead.");
-                eprintln!("[aid] Board calls within 10s of identical state are rejected.");
+                aid_error!("[aid] ERROR: No changes detected. Stop polling — use `aid watch --quiet --group <wg-id>` instead.");
+                aid_error!("[aid] Board calls within 10s of identical state are rejected.");
                 std::process::exit(1);
             } else {
-                eprintln!("[aid] No status changes since last check. Use `aid watch --quiet` for automatic notification instead of polling.");
+                aid_hint!("[aid] No status changes since last check. Use `aid watch --quiet` for automatic notification instead of polling.");
             }
         }
     }

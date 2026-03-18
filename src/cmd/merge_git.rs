@@ -60,7 +60,7 @@ pub(crate) fn auto_commit_uncommitted(wt_path: &str, branch: &str) -> bool {
     if !has_changes {
         return false;
     }
-    eprintln!("[aid] Worktree has uncommitted changes — auto-committing on {branch}");
+    aid_info!("[aid] Worktree has uncommitted changes — auto-committing on {branch}");
     let _ = Command::new("git")
         .args(["-C", wt_path, "add", "-A"])
         .output();
@@ -75,19 +75,19 @@ pub(crate) fn auto_commit_uncommitted(wt_path: &str, branch: &str) -> bool {
         .output();
     match out {
         Ok(o) if o.status.success() => {
-            eprintln!("[aid] Auto-committed uncommitted changes");
+            aid_info!("[aid] Auto-committed uncommitted changes");
             true
         }
         Ok(o) => {
             let stderr = String::from_utf8_lossy(&o.stderr);
-            eprintln!(
+            aid_warn!(
                 "[aid] Warning: auto-commit failed: {}",
                 stderr.lines().next().unwrap_or("")
             );
             false
         }
         Err(e) => {
-            eprintln!("[aid] Warning: auto-commit failed: {e}");
+            aid_warn!("[aid] Warning: auto-commit failed: {e}");
             false
         }
     }
@@ -134,9 +134,9 @@ pub(crate) fn git_merge_branch(repo_dir: &str, branch: &str) -> MergeResult {
 
     if stashed {
         if pop_stash(repo_dir) {
-            eprintln!("[aid] Restored local changes");
+            aid_info!("[aid] Restored local changes");
         } else {
-            eprintln!("[aid] Your stashed local changes conflict with the merge. Resolve with: git stash pop");
+            aid_hint!("[aid] Your stashed local changes conflict with the merge. Resolve with: git stash pop");
         }
     }
     merge_result
@@ -159,7 +159,7 @@ fn stash_local_changes(repo_dir: &str) -> bool {
     if !dirty {
         return false;
     }
-    eprintln!("[aid] Stashing local changes before merge...");
+    aid_info!("[aid] Stashing local changes before merge...");
     match Command::new("git")
         .args(["-C", repo_dir, "stash", "push", "-m", "aid: auto-stash before merge"])
         .output()
@@ -167,11 +167,11 @@ fn stash_local_changes(repo_dir: &str) -> bool {
         Ok(o) if o.status.success() => true,
         Ok(o) => {
             let stderr = String::from_utf8_lossy(&o.stderr);
-            eprintln!("[aid] Warning: failed to stash local changes: {}", stderr.lines().next().unwrap_or(""));
+            aid_warn!("[aid] Warning: failed to stash local changes: {}", stderr.lines().next().unwrap_or(""));
             false
         }
         Err(e) => {
-            eprintln!("[aid] Warning: failed to stash local changes: {e}");
+            aid_warn!("[aid] Warning: failed to stash local changes: {e}");
             false
         }
     }
@@ -219,7 +219,7 @@ pub fn remove_worktree(repo_dir: &str, wt_path: &str) -> Result<()> {
         .output();
     match result {
         Ok(o) if o.status.success() => {
-            eprintln!("[aid] Cleaned up worktree {wt_path}");
+            aid_info!("[aid] Cleaned up worktree {wt_path}");
             return Ok(());
         }
         _ => {}
@@ -248,7 +248,7 @@ pub fn remove_worktree(repo_dir: &str, wt_path: &str) -> Result<()> {
 
     match fs::remove_dir_all(&canonical) {
         Ok(()) => {
-            eprintln!("[aid] Cleaned up worktree {wt_path}");
+            aid_info!("[aid] Cleaned up worktree {wt_path}");
             let _ = Command::new("git")
                 .args(["-C", repo_dir, "worktree", "prune"])
                 .output();
@@ -264,7 +264,7 @@ pub(crate) fn run_verify_in_worktree(wt: &str, verify: Option<&str>) {
         Some(cmd) => cmd.split_whitespace().collect::<Vec<_>>(),
     };
     let Some((program, args)) = verify_parts.split_first() else {
-        eprintln!("[aid] Warning: verify command is empty");
+        aid_warn!("[aid] Warning: verify command is empty");
         return;
     };
     let verify_cmd = verify_parts.join(" ");
@@ -278,13 +278,13 @@ pub(crate) fn run_verify_in_worktree(wt: &str, verify: Option<&str>) {
     let output = command.output();
     match output {
         Ok(o) if !o.status.success() => {
-            eprintln!("[aid] Warning: `{verify_cmd}` failed in worktree {wt}");
+            aid_warn!("[aid] Warning: `{verify_cmd}` failed in worktree {wt}");
             let stderr = String::from_utf8_lossy(&o.stderr);
             for line in stderr.lines().take(5) {
-                eprintln!("  {}", line);
+                aid_warn!("  {}", line);
             }
         }
-        Err(e) => eprintln!("[aid] Warning: could not run `{verify_cmd}`: {e}"),
+        Err(e) => aid_warn!("[aid] Warning: could not run `{verify_cmd}`: {e}"),
         _ => {}
     }
 }

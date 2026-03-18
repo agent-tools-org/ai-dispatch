@@ -45,7 +45,7 @@ pub(crate) async fn prepare_retry(
     if let Some(ref wt) = task.worktree_path {
         retry_args.worktree = None;
         if std::path::Path::new(wt).is_dir() {
-            eprintln!("[aid] Retry reusing worktree: {wt}");
+            aid_info!("[aid] Retry reusing worktree: {wt}");
             retry_args.dir = Some(wt.clone());
         }
     }

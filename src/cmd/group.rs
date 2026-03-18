@@ -9,15 +9,27 @@ use crate::sanitize;
 use crate::store::Store;
 use crate::types::TaskFilter;
 
-pub fn create(store: &Arc<Store>, name: &str, context: &str, custom_id: Option<&str>) -> Result<()> {
+pub fn create(
+    store: &Arc<Store>,
+    name: &str,
+    context: &str,
+    custom_id: Option<&str>,
+) -> Result<()> {
     if let Some(custom_id) = custom_id {
         sanitize::validate_workgroup_id(custom_id)?;
     }
     let workgroup = store.create_workgroup(name, context, Some("cli"), custom_id)?;
     println!("{}", workgroup.id);
-    eprintln!("[aid] Created workgroup '{}' ({})", workgroup.name, workgroup.id);
-    eprintln!("[aid] Scope all commands: export AID_GROUP={}", workgroup.id);
-    eprintln!(
+    aid_info!(
+        "[aid] Created workgroup '{}' ({})",
+        workgroup.name,
+        workgroup.id
+    );
+    aid_hint!(
+        "[aid] Scope all commands: export AID_GROUP={}",
+        workgroup.id
+    );
+    aid_info!(
         "[aid] Workspace: {}",
         crate::paths::workspace_dir(workgroup.id.as_str())?.display()
     );
@@ -61,7 +73,10 @@ pub fn show(store: &Arc<Store>, workgroup_id: &str) -> Result<()> {
         .collect::<Vec<_>>();
 
     println!("Workgroup: {} ({})", workgroup.id, workgroup.name);
-    println!("Updated: {}", workgroup.updated_at.format("%Y-%m-%d %H:%M:%S"));
+    println!(
+        "Updated: {}",
+        workgroup.updated_at.format("%Y-%m-%d %H:%M:%S")
+    );
     println!("\nShared context:\n{}", workgroup.shared_context);
     println!("\nTasks:");
     if tasks.is_empty() {

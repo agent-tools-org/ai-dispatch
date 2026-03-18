@@ -135,7 +135,7 @@ pub async fn run_best_of(store: Arc<Store>, args: RunArgs, n: usize) -> Result<T
                 task_id,
             }),
             Err(err) => {
-                eprintln!("[aid] best-of-{n}: dispatch to {agent_label} failed: {err}");
+                aid_error!("[aid] best-of-{n}: dispatch to {agent_label} failed: {err}");
             }
         }
     }
@@ -153,7 +153,7 @@ pub async fn run_best_of(store: Arc<Store>, args: RunArgs, n: usize) -> Result<T
                     completed.push(CandidateResult::from_task(task, args.metric.as_deref()));
                 }
             } else {
-                eprintln!(
+                aid_warn!(
                     "[aid] best-of-{n}: task {} (agent {}) missing from store",
                     dispatch.task_id, dispatch.agent_hint
                 );

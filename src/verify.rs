@@ -3,14 +3,13 @@
 
 use anyhow::{Context, Result};
 use std::io::{self, Read};
-#[cfg(unix)]
-use std::os::unix::process::CommandExt;
 use std::path::Path;
-use std::process::{Child, Command, ExitStatus, Stdio};
+use std::process::{Child, Command, Stdio};
 use std::sync::Mutex;
 use std::thread;
 use std::time::Duration;
 
+use crate::process_guard::ProcessGuard;
 use crate::store::Store;
 use crate::types::{TaskId, VerifyStatus};
 
@@ -46,27 +45,16 @@ pub fn run_verify(
         cmd.env("CARGO_TARGET_DIR", target_dir);
     }
 
-    let _guard = VERIFY_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let _lock = VERIFY_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     cmd.current_dir(worktree_path)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
-    #[cfg(unix)]
-    unsafe {
-        cmd.pre_exec(|| {
-            if libc::setsid() == -1 {
-                return Err(io::Error::last_os_error());
-            }
-            Ok(())
-        });
-    }
 
-    let mut child = cmd
-        .spawn()
+    let mut guard = ProcessGuard::spawn(&mut cmd)
         .with_context(|| format!("Failed to run verify command: {cmd_str}"))?;
-    let reader = spawn_output_reader(&mut child)?;
-    let status = wait_for_child(&mut child, VERIFY_TIMEOUT)?;
+    let reader = spawn_output_reader(guard.child_mut())?;
+    let status = guard.wait_with_timeout(VERIFY_TIMEOUT)?;
     let timed_out = status.is_none();
-    finalize_child(&mut child, timed_out);
     let combined = match reader.join() {
         Ok(result) => result?,
         Err(_) => return Err(anyhow::anyhow!("verify output reader thread panicked")),
@@ -164,51 +152,6 @@ fn read_pipe<R: Read + Send + 'static>(mut reader: R) -> Result<String> {
     reader.read_to_end(&mut bytes)?;
     Ok(String::from_utf8_lossy(&bytes).into_owned())
 }
-fn wait_for_child(child: &mut Child, timeout_dur: Duration) -> Result<Option<ExitStatus>> {
-    let child_pid = child.id();
-    let fired = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
-    let fired2 = fired.clone();
-    let done = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
-    let done2 = done.clone();
-    // Watchdog thread: kills process group if timeout expires before child exits.
-    thread::spawn(move || {
-        thread::sleep(timeout_dur);
-        if !done2.load(std::sync::atomic::Ordering::SeqCst) {
-            #[cfg(unix)]
-            unsafe {
-                libc::kill(-(child_pid as i32), libc::SIGKILL);
-            }
-            fired2.store(true, std::sync::atomic::Ordering::SeqCst);
-        }
-    });
-    let status = child.wait().context("failed to wait for verify process")?;
-    done.store(true, std::sync::atomic::Ordering::SeqCst);
-    if fired.load(std::sync::atomic::Ordering::SeqCst) {
-        Ok(None)
-    } else {
-        Ok(Some(status))
-    }
-}
-fn finalize_child(child: &mut Child, timed_out: bool) {
-    #[cfg(unix)]
-    {
-        let pid = child.id() as i32;
-        if timed_out {
-            kill_process_group(pid, libc::SIGKILL);
-        } else {
-            // Process already reaped by wait_for_child — just SIGTERM orphaned grandchildren
-            kill_process_group(pid, libc::SIGTERM);
-        }
-    }
-    // child.wait() already called in wait_for_child — do NOT double-wait
-}
-#[cfg(unix)]
-fn kill_process_group(pid: i32, signal: i32) {
-    unsafe {
-        libc::kill(-pid, signal);
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

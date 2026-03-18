@@ -8,14 +8,17 @@ use std::path::{Path, PathBuf};
 
 /// Validate a task ID: must match `t-[0-9a-f]{4}` pattern.
 pub fn validate_task_id(id: &str) -> Result<()> {
-    if id.len() >= 3
-        && id.starts_with("t-")
-        && id[2..].chars().all(|c| c.is_ascii_hexdigit())
-        && id.len() <= 6
-    {
+    if is_valid_task_id(id) {
         return Ok(());
     }
     bail!("Invalid task ID '{id}': must match t-XXXX (hex)")
+}
+
+pub fn is_valid_task_id(id: &str) -> bool {
+    id.len() >= 3
+        && id.len() <= 6
+        && id.starts_with("t-")
+        && id[2..].chars().all(|c| c.is_ascii_hexdigit())
 }
 
 /// Validate a workgroup ID: must start with `wg-` followed by safe characters.

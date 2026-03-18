@@ -69,6 +69,7 @@ async fn dispatch_with_dependencies(
             let id = task
                 .id
                 .as_ref()
+                .filter(|s| crate::sanitize::is_valid_task_id(s))
                 .map(|s| crate::types::TaskId(s.clone()))
                 .unwrap_or_else(crate::types::TaskId::generate);
             let agent = if task.agent.is_empty() { "auto" } else { &task.agent };

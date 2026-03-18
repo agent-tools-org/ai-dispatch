@@ -268,12 +268,29 @@ impl Store {
         workgroup_id: &str,
         content: &str,
         source_task_id: Option<&str>,
+        severity: Option<&str>,
+        title: Option<&str>,
+        file: Option<&str>,
+        lines: Option<&str>,
+        category: Option<&str>,
+        confidence: Option<&str>,
     ) -> Result<()> {
         let now = Local::now().to_rfc3339();
         self.db().execute(
-            "INSERT INTO findings (workgroup_id, content, source_task_id, created_at)
-             VALUES (?1, ?2, ?3, ?4)",
-            params![workgroup_id, content, source_task_id, now],
+            "INSERT INTO findings (workgroup_id, content, source_task_id, severity, title, file, lines, category, confidence, created_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+            params![
+                workgroup_id,
+                content,
+                source_task_id,
+                severity,
+                title,
+                file,
+                lines,
+                category,
+                confidence,
+                now,
+            ],
         )?;
         Ok(())
     }

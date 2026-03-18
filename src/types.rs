@@ -316,6 +316,12 @@ pub struct Finding {
     pub workgroup_id: String,
     pub content: String,
     pub source_task_id: Option<String>,
+    pub severity: Option<String>,
+    pub title: Option<String>,
+    pub file: Option<String>,
+    pub lines: Option<String>,
+    pub category: Option<String>,
+    pub confidence: Option<String>,
     pub created_at: DateTime<Local>,
 }
 

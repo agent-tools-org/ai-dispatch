@@ -98,6 +98,18 @@ pub enum GroupFindingAction {
         /// Source task ID (optional)
         #[arg(long)]
         task: Option<String>,
+        #[arg(long)]
+        severity: Option<String>,
+        #[arg(long)]
+        title: Option<String>,
+        #[arg(long, name = "finding-file")]
+        finding_file: Option<String>,
+        #[arg(long)]
+        lines: Option<String>,
+        #[arg(long)]
+        category: Option<String>,
+        #[arg(long)]
+        confidence: Option<String>,
     },
     /// List findings for a workgroup
     List {

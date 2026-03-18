@@ -184,6 +184,12 @@ mod tests {
             workgroup_id: "wg-1".to_string(),
             content: "gamma can be zero".to_string(),
             source_task_id: Some("t-100".to_string()),
+            severity: None,
+            title: None,
+            file: None,
+            lines: None,
+            category: None,
+            confidence: None,
             created_at: Local::now(),
         }];
         let prompt = compose_prompt("investigate", None, None, &[], &findings);
@@ -199,6 +205,12 @@ mod tests {
             workgroup_id: "wg-1".to_string(),
             content: long,
             source_task_id: Some("t-100".to_string()),
+            severity: None,
+            title: None,
+            file: None,
+            lines: None,
+            category: None,
+            confidence: None,
             created_at: Local::now(),
         }];
 
@@ -225,6 +237,12 @@ mod tests {
             workgroup_id: "wg-1".to_string(),
             content: "short finding".to_string(),
             source_task_id: Some("t-100".to_string()),
+            severity: None,
+            title: None,
+            file: None,
+            lines: None,
+            category: None,
+            confidence: None,
             created_at: Local::now(),
         }];
 

@@ -325,7 +325,17 @@ pub(crate) fn handle_streaming_line(
     if let Some(finding) = extract_finding_detail(line)
         && let Some(group_id) = workgroup_id
     {
-        let _ = store.insert_finding(group_id, &finding, Some(task_id.as_str()));
+        let _ = store.insert_finding(
+            group_id,
+            &finding,
+            Some(task_id.as_str()),
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        );
         append_to_broadcast(group_id, task_id.as_str(), &finding);
     }
     if let Some(event) = parse_milestone_event(task_id, line) {
@@ -357,7 +367,17 @@ pub(crate) fn handle_streaming_line_with_session(
     if let Some(finding) = extract_finding_detail(line)
         && let Some(group_id) = workgroup_id
     {
-        let _ = store.insert_finding(group_id, &finding, Some(task_id.as_str()));
+        let _ = store.insert_finding(
+            group_id,
+            &finding,
+            Some(task_id.as_str()),
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        );
         append_to_broadcast(group_id, task_id.as_str(), &finding);
     }
     if let Some(event) = parse_milestone_event(task_id, line) {

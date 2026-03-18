@@ -5,12 +5,13 @@
 use std::collections::HashMap;
 
 use anyhow::Result;
-use chrono::Local;
+use chrono::{DateTime, Local};
 use rusqlite::{params, OptionalExtension};
 
 use super::schema::{parse_dt, row_to_event, row_to_memory, row_to_task};
 use super::Store;
 use crate::types::*;
+use crate::usage::parse_window;
 
 const SIMILAR_TASK_STOPWORDS: &[&str] = &[
     "the", "and", "for", "with", "from", "that", "this", "have", "your", "task", "code",
@@ -247,6 +248,23 @@ impl Store {
 
     pub fn list_running_tasks(&self) -> Result<Vec<Task>> {
         self.list_tasks(TaskFilter::Running)
+    }
+
+    pub fn budget_usage_summary(
+        &self,
+        agent: &str,
+        since: Option<DateTime<Local>>,
+    ) -> Result<(u32, i64, f64)> {
+        let conn = self.db();
+        let (task_count, total_tokens, total_cost): (i64, i64, f64) = conn.query_row(
+            "SELECT COUNT(*) as task_count,
+                    COALESCE(SUM(tokens), 0) as total_tokens,
+                    COALESCE(SUM(cost_usd), 0.0) as total_cost
+             FROM tasks WHERE agent = ?1 AND (?2 IS NULL OR created_at >= ?2)",
+            params![agent, since.map(|value| value.to_rfc3339())],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+        )?;
+        Ok((u32::try_from(task_count)?, total_tokens, total_cost))
     }
 
     pub fn list_tasks_by_session(&self, session_id: &str) -> Result<Vec<Task>> {
@@ -503,6 +521,7 @@ fn row_to_workgroup(row: &rusqlite::Row) -> rusqlite::Result<Result<Workgroup>> 
 
 #[cfg(test)]
 mod tests {
+    use chrono::{Duration, Local};
     use crate::store::Store;
     use crate::types::{AgentKind, TaskStatus};
     use rusqlite::params;
@@ -588,6 +607,48 @@ mod tests {
         );
         let results = store.find_similar_tasks("Short", 3).unwrap();
         assert!(results.is_empty());
+    }
+
+    #[test]
+    fn aggregates_budget_usage_by_agent_and_window() {
+        let store = Store::open_memory().unwrap();
+        let conn = store.db();
+        let now = Local::now();
+        let within_window = (now - Duration::hours(6)).to_rfc3339();
+        let outside_window = (now - Duration::days(2)).to_rfc3339();
+
+        conn.execute(
+            "INSERT INTO tasks (id, agent, prompt, status, tokens, cost_usd, created_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            params!["t-recent-1", "codex", "recent", "done", 120_i64, 1.25_f64, &within_window],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO tasks (id, agent, prompt, status, tokens, cost_usd, created_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            params!["t-recent-2", "codex", "recent", "done", 80_i64, 0.75_f64, &within_window],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO tasks (id, agent, prompt, status, tokens, cost_usd, created_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            params!["t-old", "codex", "old", "done", 500_i64, 4.0_f64, &outside_window],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO tasks (id, agent, prompt, status, tokens, cost_usd, created_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            params!["t-other", "gemini", "other", "done", 999_i64, 9.0_f64, &within_window],
+        )
+        .unwrap();
+        drop(conn);
+
+        let all_time = store.budget_usage_summary("codex", None).unwrap();
+        assert_eq!(all_time, (3, 700, 6.0));
+
+        let since = parse_window("24h").map(|window| now - window).unwrap();
+        let recent = store.budget_usage_summary("codex", Some(since)).unwrap();
+        assert_eq!(recent, (2, 200, 2.0));
     }
 
     #[test]

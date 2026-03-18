@@ -152,6 +152,9 @@ async fn run_task_inner(store: &Arc<Store>, spec: &BackgroundRunSpec) -> Result<
     let mut std_cmd = agent
         .build_command(&spec.prompt, &opts)
         .context("Failed to build agent command")?;
+    if let Some(ref dir) = spec.dir {
+        agent::set_git_ceiling(&mut std_cmd, dir);
+    }
     let worktree_branch = store
         .get_task(&spec.task_id)?
         .and_then(|task| task.worktree_branch);

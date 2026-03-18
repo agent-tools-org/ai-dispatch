@@ -388,6 +388,9 @@ pub async fn run(store: Arc<Store>, mut args: RunArgs) -> Result<TaskId> {
         let mut std_cmd = agent
             .build_command(&prompt_bundle.effective_prompt, &opts)
             .context("Failed to build agent command")?;
+        if let Some(ref dir) = effective_dir {
+            agent::set_git_ceiling(&mut std_cmd, dir);
+        }
         if agent::is_rust_project(effective_dir.as_deref())
             && let Some(target_dir) = agent::target_dir_for_worktree(args.worktree.as_deref())
         {

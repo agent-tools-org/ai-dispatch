@@ -141,6 +141,16 @@ fn resolve_project_dir(dir: Option<&str>) -> PathBuf {
         .unwrap_or_else(|| PathBuf::from("."))
 }
 
+/// Set GIT_CEILING_DIRECTORIES on a command to prevent git from ascending
+/// above the target --dir. This stops agents from discovering and modifying
+/// the host git repo when --dir points to a non-repo directory.
+pub fn set_git_ceiling(cmd: &mut Command, dir: &str) {
+    let path = std::path::Path::new(dir);
+    if let Some(parent) = path.parent() {
+        cmd.env("GIT_CEILING_DIRECTORIES", parent);
+    }
+}
+
 fn which_exists(name: &str) -> bool {
     Command::new("which")
         .arg(name)
@@ -151,12 +161,25 @@ fn which_exists(name: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::{is_rust_project, shared_target_dir, target_dir_for_worktree};
+    use super::{is_rust_project, set_git_ceiling, shared_target_dir, target_dir_for_worktree};
     use crate::test_subprocess;
     use std::ffi::OsStr;
     use std::path::{Path, PathBuf};
     use std::process::Command;
     use tempfile::TempDir;
+
+    #[test]
+    fn set_git_ceiling_uses_parent_dir() {
+        let mut cmd = Command::new("echo");
+        set_git_ceiling(&mut cmd, "/tmp/cloned-repo");
+        let envs: Vec<_> = cmd.get_envs().collect();
+        let ceiling = envs
+            .iter()
+            .find(|(k, _)| *k == "GIT_CEILING_DIRECTORIES")
+            .and_then(|(_, v)| v.as_ref())
+            .map(|v| v.to_string_lossy().to_string());
+        assert_eq!(ceiling.as_deref(), Some("/tmp"));
+    }
 
     #[test]
     fn detects_rust_project_in_current_dir() {

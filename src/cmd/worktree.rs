@@ -69,6 +69,6 @@ pub fn remove(branch: &str, repo: Option<&str>) -> Result<()> {
         anyhow::bail!("Worktree not found: {wt_path}");
     }
     let repo_dir = repo.unwrap_or(".");
-    super::merge::remove_worktree(repo_dir, &wt_path);
+    super::merge::remove_worktree(repo_dir, &wt_path)?;
     Ok(())
 }

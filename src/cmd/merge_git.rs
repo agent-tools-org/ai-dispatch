@@ -2,6 +2,7 @@
 // Exports: resolve_repo_dir, commits_ahead, auto_commit_uncommitted, git_merge_branch, MergeResult, remove_worktree, run_verify_in_worktree.
 // Deps: std::fs, std::path::Path, std::process::Command.
 
+use anyhow::{anyhow, Context, Result};
 use std::fs;
 use std::path::Path;
 use std::process::Command;
@@ -200,15 +201,14 @@ pub fn is_safe_worktree_path(wt_path: &str) -> bool {
     s.starts_with("/tmp/aid-wt-") || s.starts_with("/private/tmp/aid-wt-")
 }
 
-pub fn remove_worktree(repo_dir: &str, wt_path: &str) {
+pub fn remove_worktree(repo_dir: &str, wt_path: &str) -> Result<()> {
     // SANDBOX: refuse to touch anything outside /tmp/aid-wt-*
     if !is_safe_worktree_path(wt_path) {
-        eprintln!(
+        return Err(anyhow!(
             "[aid] SAFETY: refusing to remove '{}' — not an aid worktree path. \
              Only /tmp/aid-wt-* paths are allowed.",
             wt_path
-        );
-        return;
+        ));
     }
 
     let result = Command::new("git")
@@ -217,29 +217,55 @@ pub fn remove_worktree(repo_dir: &str, wt_path: &str) {
     match result {
         Ok(o) if o.status.success() => {
             eprintln!("[aid] Cleaned up worktree {wt_path}");
-            return;
+            return Ok(());
         }
         _ => {}
     }
 
     // Fallback: rm -rf, but ONLY after sandbox validation above
-    match fs::remove_dir_all(wt_path) {
+    let delete_path = Path::new(wt_path);
+    let git_file = delete_path.join(".git");
+    if !git_file.is_file() {
+        return Err(anyhow!(
+            "[aid] SAFETY: refusing fallback removal for '{}' — missing worktree .git file",
+            wt_path
+        ));
+    }
+    let canonical = delete_path
+        .canonicalize()
+        .with_context(|| format!("failed to canonicalize worktree path '{wt_path}' before deletion"))?;
+    let canonical_str = canonical.to_string_lossy().to_string();
+    if !is_safe_worktree_path(&canonical_str) {
+        return Err(anyhow!(
+            "[aid] SAFETY: refusing fallback removal for '{}' — canonical path '{}' is outside /tmp/aid-wt-*",
+            wt_path,
+            canonical_str
+        ));
+    }
+
+    match fs::remove_dir_all(&canonical) {
         Ok(()) => {
             eprintln!("[aid] Cleaned up worktree {wt_path}");
             let _ = Command::new("git")
                 .args(["-C", repo_dir, "worktree", "prune"])
                 .output();
+            Ok(())
         }
-        Err(e) => eprintln!("[aid] Warning: failed to remove {wt_path}: {e}"),
+        Err(e) => Err(e).with_context(|| format!("failed to remove worktree '{wt_path}'")),
     }
 }
 
 pub(crate) fn run_verify_in_worktree(wt: &str, verify: Option<&str>) {
-    let verify_cmd = match verify {
-        Some("auto") | None => "cargo check",
-        Some(cmd) => cmd,
+    let verify_parts = match verify {
+        Some("auto") | None => vec!["cargo", "check"],
+        Some(cmd) => cmd.split_whitespace().collect::<Vec<_>>(),
     };
-    let output = Command::new("sh").args(["-c", verify_cmd]).current_dir(wt).output();
+    let Some((program, args)) = verify_parts.split_first() else {
+        eprintln!("[aid] Warning: verify command is empty");
+        return;
+    };
+    let verify_cmd = verify_parts.join(" ");
+    let output = Command::new(program).args(args).current_dir(wt).output();
     match output {
         Ok(o) if !o.status.success() => {
             eprintln!("[aid] Warning: `{verify_cmd}` failed in worktree {wt}");

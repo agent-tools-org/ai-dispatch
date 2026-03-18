@@ -116,7 +116,9 @@ fn merge_single(store: &Store, task_id: &str, approve: bool) -> Result<()> {
     if let Some(wt) = task.worktree_path.as_deref()
         && std::path::Path::new(wt).exists()
     {
-        remove_worktree(&repo_dir, wt);
+        if let Err(err) = remove_worktree(&repo_dir, wt) {
+            eprintln!("[aid] Warning: failed to clean up worktree {wt}: {err}");
+        }
     }
     Ok(())
 }
@@ -185,7 +187,9 @@ fn merge_group(store: &Store, group_id: &str, approve: bool) -> Result<()> {
         if let Some(wt) = task.worktree_path.as_deref()
             && std::path::Path::new(wt).exists()
         {
-            remove_worktree(&repo_dir, wt);
+            if let Err(err) = remove_worktree(&repo_dir, wt) {
+                eprintln!("[aid] Warning: failed to clean up worktree {wt}: {err}");
+            }
         }
     }
     println!("Merged {merged} task(s) in group {group_id}");
@@ -702,7 +706,7 @@ mod tests {
         git(repo.path(), &["worktree", "add", &wt_path, "-b", &branch]);
 
         // Should not panic and worktree dir should be gone
-        remove_worktree(&repo.path().to_string_lossy(), &wt_path);
+        remove_worktree(&repo.path().to_string_lossy(), &wt_path).unwrap();
         assert!(!Path::new(&wt_path).exists());
 
         // git worktree list should not show it
@@ -739,7 +743,7 @@ mod tests {
         assert!(!is_safe_worktree_path("/Users/someone/Develop/myrepo"));
         assert!(!is_safe_worktree_path("/tmp/other-dir"));
         assert!(!is_safe_worktree_path("/tmp/aid-wt")); // missing trailing dash
-        assert!(!is_safe_worktree_path("."));
+        assert!(!is_safe_worktree_path("/tmp"));
         assert!(!is_safe_worktree_path(""));
         assert!(!is_safe_worktree_path("/"));
     }
@@ -751,10 +755,11 @@ mod tests {
         std::fs::create_dir_all(&unsafe_path).unwrap();
 
         // This should NOT delete the directory — sandbox guard blocks it
-        remove_worktree(
+        let result = remove_worktree(
             &repo.path().to_string_lossy(),
             &unsafe_path.to_string_lossy(),
         );
+        assert!(result.is_err());
         // Directory must still exist
         assert!(unsafe_path.exists(), "Sandbox guard failed: unsafe path was deleted!");
     }

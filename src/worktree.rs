@@ -7,6 +7,8 @@ use std::process::Command;
 
 use crate::sanitize;
 
+const AID_BRANCH_PREFIXES: &[&str] = &["feat/", "fix/", "docs/", "chore/", "test/", "refactor/"];
+
 #[derive(Debug, Clone)]
 pub struct WorktreeInfo {
     pub path: PathBuf,
@@ -71,6 +73,20 @@ fn existing_worktree_path(repo_dir: &Path, branch: &str) -> Result<Option<PathBu
     Ok(None)
 }
 
+fn is_aid_managed_branch(branch: &str) -> bool {
+    AID_BRANCH_PREFIXES.iter().any(|prefix| branch.starts_with(prefix))
+}
+
+fn local_branch_exists(repo_dir: &Path, branch: &str) -> Result<bool> {
+    let status = Command::new("git")
+        .args(["-C", &repo_dir.to_string_lossy(), "rev-parse", "--verify", &format!("refs/heads/{branch}")])
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .context("Failed to run git rev-parse")?;
+    Ok(status.success())
+}
+
 pub fn create_worktree(
     repo_dir: &Path,
     branch: &str,
@@ -129,6 +145,18 @@ pub fn create_worktree(
     }
 
     // Fallback: existing branch — reset it to HEAD first to avoid stale checkout
+    let branch_exists = local_branch_exists(repo_dir, branch)?;
+    if !is_aid_managed_branch(branch) {
+        if branch_exists {
+            eprintln!(
+                "[aid] Warning: refusing to force-reset existing non aid-managed branch '{branch}'"
+            );
+        }
+        anyhow::bail!(
+            "Refusing to force-reset branch '{branch}' — branch must start with one of: {}",
+            AID_BRANCH_PREFIXES.join(", ")
+        );
+    }
     let _ = Command::new("git")
         .args([
             "-C",

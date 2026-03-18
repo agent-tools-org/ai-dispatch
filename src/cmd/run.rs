@@ -477,7 +477,9 @@ pub async fn run(store: Arc<Store>, mut args: RunArgs) -> Result<TaskId> {
                     && std::path::Path::new(wt).exists()
                 {
                     let repo = repo_path.as_deref().unwrap_or(".");
-                    crate::cmd::merge::remove_worktree(repo, wt);
+                    if let Err(err) = crate::cmd::merge::remove_worktree(repo, wt) {
+                        eprintln!("[aid] Warning: failed to clean up worktree {wt}: {err}");
+                    }
                 }
             }
         }

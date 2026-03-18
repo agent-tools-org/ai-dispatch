@@ -348,6 +348,12 @@ where
             continue;
         };
         let Some(worker_pid) = spec.worker_pid else {
+            // Grace period: tasks without worker_pid may be in the dispatch window
+            // (spec created but worker not yet spawned). Skip if created < 60s ago.
+            let age_secs = (Local::now() - task.created_at).num_seconds();
+            if age_secs < 60 {
+                continue;
+            }
             if let Some(task) = store.get_task(task_id)?
                 && let Some(ref path) = task.worktree_path
                 && std::path::Path::new(path).exists()

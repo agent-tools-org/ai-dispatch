@@ -115,11 +115,9 @@ fn merge_single(store: &Store, task_id: &str, approve: bool) -> Result<()> {
     // Clean up worktree only after successful merge
     if let Some(wt) = task.worktree_path.as_deref()
         && std::path::Path::new(wt).exists()
-    {
-        if let Err(err) = remove_worktree(&repo_dir, wt) {
+        && let Err(err) = remove_worktree(&repo_dir, wt) {
             eprintln!("[aid] Warning: failed to clean up worktree {wt}: {err}");
         }
-    }
     Ok(())
 }
 
@@ -186,11 +184,9 @@ fn merge_group(store: &Store, group_id: &str, approve: bool) -> Result<()> {
         // Clean up worktree after successful merge
         if let Some(wt) = task.worktree_path.as_deref()
             && std::path::Path::new(wt).exists()
-        {
-            if let Err(err) = remove_worktree(&repo_dir, wt) {
+            && let Err(err) = remove_worktree(&repo_dir, wt) {
                 eprintln!("[aid] Warning: failed to clean up worktree {wt}: {err}");
             }
-        }
     }
     println!("Merged {merged} task(s) in group {group_id}");
     if !skipped.is_empty() {

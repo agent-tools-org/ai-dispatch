@@ -166,8 +166,8 @@ pub(crate) fn monitor_bridge(
             }
             Err(RecvTimeoutError::Timeout) => {
                 state.handle_timeout(store, task_id)?;
-                if let Some(dl) = deadline {
-                    if Instant::now() > dl {
+                if let Some(dl) = deadline
+                    && Instant::now() > dl {
                         state.info.status = TaskStatus::Failed;
                         store.insert_event(&TaskEvent {
                             task_id: task_id.clone(),
@@ -178,9 +178,8 @@ pub(crate) fn monitor_bridge(
                         })?;
                         break;
                     }
-                }
-                if let Some(idle) = idle_timeout {
-                    if last_output_time.elapsed() > idle {
+                if let Some(idle) = idle_timeout
+                    && last_output_time.elapsed() > idle {
                         state.info.status = TaskStatus::Failed;
                         store.insert_event(&TaskEvent {
                             task_id: task_id.clone(),
@@ -194,7 +193,6 @@ pub(crate) fn monitor_bridge(
                         })?;
                         break;
                     }
-                }
             }
             Err(RecvTimeoutError::Disconnected) => reader_done = true,
         }

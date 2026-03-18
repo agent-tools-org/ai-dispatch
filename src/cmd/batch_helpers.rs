@@ -69,7 +69,7 @@ pub(crate) fn warn_for_rate_limited_agents(tasks: &[batch::BatchTask]) {
         let Some(agent) = crate::types::AgentKind::parse_str(&task.agent) else {
             continue;
         };
-        if !seen.insert(agent.clone()) {
+        if !seen.insert(agent) {
             continue;
         }
         if rate_limit::is_rate_limited(&agent) {

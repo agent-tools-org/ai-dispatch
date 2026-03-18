@@ -263,6 +263,7 @@ impl Store {
         Ok(())
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn insert_finding(
         &self,
         workgroup_id: &str,

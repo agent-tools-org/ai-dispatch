@@ -9,6 +9,7 @@ use serde_json;
 use crate::types::Finding;
 use crate::store::Store;
 
+#[allow(clippy::too_many_arguments)]
 pub fn add(
     store: &Store,
     group_id: &str,

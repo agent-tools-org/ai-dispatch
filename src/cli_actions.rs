@@ -84,6 +84,7 @@ pub enum GroupAction {
 }
 
 #[derive(Subcommand)]
+#[allow(clippy::large_enum_variant)]
 pub enum GroupFindingAction {
     /// Post a finding to a workgroup
     Add {

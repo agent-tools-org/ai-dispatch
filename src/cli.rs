@@ -648,6 +648,7 @@ pub enum MemoryCommands {
 }
 
 #[derive(Subcommand)]
+#[allow(clippy::large_enum_variant)]
 pub enum FindingCommands {
     /// Post a finding to a workgroup
     Add {

@@ -34,10 +34,11 @@ fn detect_project_defaults() -> (String, String, String, String) {
 }
 
 fn render_template(dir: &str, team: &str, verify: &str, language: &str) -> String {
-    let mut lines = Vec::new();
-    lines.push("# Batch task file for aid".to_string());
-    lines.push("# Docs: aid batch --help".to_string());
-    lines.push(String::new());
+    let mut lines = vec![
+        "# Batch task file for aid".to_string(),
+        "# Docs: aid batch --help".to_string(),
+        String::new(),
+    ];
 
     // [defaults] section
     lines.push("[defaults]".to_string());
@@ -70,9 +71,7 @@ fn render_template(dir: &str, team: &str, verify: &str, language: &str) -> Strin
     lines.push("[[task]]".to_string());
     lines.push("name = \"task-1\"".to_string());
     lines.push("agent = \"codex\"".to_string());
-    lines.push(format!(
-        "prompt = \"\"\"",
-    ));
+    lines.push("prompt = \"\"\"".to_string());
     if language.is_empty() {
         lines.push("<DESCRIBE_TASK_HERE>".to_string());
     } else {

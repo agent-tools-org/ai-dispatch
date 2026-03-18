@@ -2,14 +2,21 @@
 // Supports auto-detect (Cargo.toml -> cargo check, package.json -> npm run build).
 
 use anyhow::{Context, Result};
+use std::io::{self, Read};
+#[cfg(unix)]
+use std::os::unix::process::CommandExt;
 use std::path::Path;
-use std::process::Command;
+use std::process::{Child, Command, ExitStatus, Stdio};
 use std::sync::Mutex;
+use std::thread;
+use std::time::{Duration, Instant};
 
 use crate::store::Store;
 use crate::types::{TaskId, VerifyStatus};
 
 static VERIFY_LOCK: Mutex<()> = Mutex::new(());
+const VERIFY_TIMEOUT: Duration = Duration::from_secs(120);
+const VERIFY_KILL_GRACE: Duration = Duration::from_secs(2);
 
 #[derive(Debug, Clone)]
 pub struct VerifyResult {
@@ -41,24 +48,52 @@ pub fn run_verify(
     }
 
     let _guard = VERIFY_LOCK.lock().unwrap_or_else(|e| e.into_inner());
-    let output = cmd
-        .current_dir(worktree_path)
-        .output()
-        .with_context(|| format!("Failed to run verify command: {cmd_str}"))?;
+    cmd.current_dir(worktree_path)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    #[cfg(unix)]
+    unsafe {
+        cmd.pre_exec(|| {
+            if libc::setsid() == -1 {
+                return Err(io::Error::last_os_error());
+            }
+            Ok(())
+        });
+    }
 
-    let combined = format!(
-        "{}{}",
-        String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr),
-    );
+    let mut child = cmd
+        .spawn()
+        .with_context(|| format!("Failed to run verify command: {cmd_str}"))?;
+    let reader = spawn_output_reader(&mut child)?;
+    let status = wait_for_child(&mut child, VERIFY_TIMEOUT)?;
+    let timed_out = status.is_none();
+    let output = finalize_child(&mut child, timed_out);
+    let combined = match reader.join() {
+        Ok(result) => result?,
+        Err(_) => return Err(anyhow::anyhow!("verify output reader thread panicked")),
+    };
+    let combined = match output {
+        Ok(()) => {
+            if timed_out {
+                format!("{combined}\nVerification timed out after {} seconds", VERIFY_TIMEOUT.as_secs())
+            } else {
+                combined
+            }
+        }
+        Err(err) => {
+            if combined.is_empty() {
+                return Err(err);
+            }
+            format!("{combined}\n{err:#}")
+        }
+    };
 
     Ok(VerifyResult {
-        success: output.status.success(),
+        success: status.is_some_and(|status| status.success()),
         output: combined,
         command: cmd_str,
     })
 }
-
 /// Format a concise pass/fail report from verification result.
 pub fn format_verify_report(result: &VerifyResult) -> String {
     let status = if result.success { "PASS" } else { "FAIL" };
@@ -89,7 +124,6 @@ pub fn record_verify_status(store: &Store, task_id: &TaskId, result: &VerifyResu
     };
     let _ = store.update_verify_status(task_id.as_str(), status);
 }
-
 fn auto_detect_command(path: &Path) -> String {
     if path.join("Cargo.toml").exists() {
         "cargo check".to_string()
@@ -113,7 +147,6 @@ fn build_verify_command(
     }
     split_command(&cmd_str).map(Some)
 }
-
 fn split_command(command: &str) -> Result<(String, Command)> {
     let mut parts = command.split_whitespace();
     let program = parts.next().context("verify command is empty")?;
@@ -122,13 +155,68 @@ fn split_command(command: &str) -> Result<(String, Command)> {
     cmd.args(&args);
     Ok((command.to_string(), cmd))
 }
+fn spawn_output_reader(child: &mut Child) -> Result<thread::JoinHandle<Result<String>>> {
+    let stdout = child.stdout.take().context("verify stdout pipe missing")?;
+    let stderr = child.stderr.take().context("verify stderr pipe missing")?;
+    Ok(thread::spawn(move || {
+        let stdout_handle = thread::spawn(move || read_pipe(stdout));
+        let stderr_handle = thread::spawn(move || read_pipe(stderr));
+        let stdout = stdout_handle
+            .join()
+            .map_err(|_| anyhow::anyhow!("verify stdout reader thread panicked"))??;
+        let stderr = stderr_handle
+            .join()
+            .map_err(|_| anyhow::anyhow!("verify stderr reader thread panicked"))??;
+        Ok(format!("{stdout}{stderr}"))
+    }))
+}
+fn read_pipe<R: Read + Send + 'static>(mut reader: R) -> Result<String> {
+    let mut bytes = Vec::new();
+    reader.read_to_end(&mut bytes)?;
+    Ok(String::from_utf8_lossy(&bytes).into_owned())
+}
+fn wait_for_child(child: &mut Child, timeout: Duration) -> Result<Option<ExitStatus>> {
+    let start = Instant::now();
+    loop {
+        if let Some(status) = child.try_wait()? {
+            return Ok(Some(status));
+        }
+        if start.elapsed() >= timeout {
+            return Ok(None);
+        }
+        thread::sleep(Duration::from_millis(100));
+    }
+}
+fn finalize_child(child: &mut Child, timed_out: bool) -> Result<()> {
+    #[cfg(unix)]
+    {
+        let pid = child.id() as i32;
+        if timed_out {
+            kill_process_group(pid, libc::SIGKILL);
+        } else {
+            kill_process_group(pid, libc::SIGTERM);
+            thread::sleep(VERIFY_KILL_GRACE);
+            kill_process_group(pid, libc::SIGKILL);
+        }
+    }
+    child.wait().context("failed to reap verify process")?;
+    Ok(())
+}
+#[cfg(unix)]
+fn kill_process_group(pid: i32, signal: i32) {
+    unsafe {
+        libc::kill(-pid, signal);
+    }
+}
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::test_subprocess;
+    use std::fs;
+    #[cfg(unix)]
+    use std::os::unix::fs::PermissionsExt;
     use tempfile::TempDir;
-
     #[test]
     fn verify_pass_case() {
         let _permit = test_subprocess::acquire();
@@ -138,7 +226,6 @@ mod tests {
         assert!(result.output.contains("ok"));
         assert_eq!(result.command, "echo ok");
     }
-
     #[test]
     fn verify_fail_case() {
         let _permit = test_subprocess::acquire();
@@ -146,7 +233,6 @@ mod tests {
         let result = run_verify(dir.path(), Some("false"), None).unwrap();
         assert!(!result.success);
     }
-
     #[test]
     fn verify_does_not_expand_shell_operators() {
         let _permit = test_subprocess::acquire();
@@ -155,7 +241,6 @@ mod tests {
         assert!(result.success);
         assert!(result.output.contains("ok && false"));
     }
-
     #[test]
     fn verify_no_project_file_skips() {
         let dir = TempDir::new().unwrap();
@@ -163,7 +248,6 @@ mod tests {
         assert!(result.success);
         assert!(result.output.contains("skipping"));
     }
-
     #[test]
     fn format_report_pass() {
         let result = VerifyResult {
@@ -174,7 +258,6 @@ mod tests {
         let report = format_verify_report(&result);
         assert!(report.starts_with("Verify PASS"));
     }
-
     #[test]
     fn format_report_fail_shows_output() {
         let result = VerifyResult {
@@ -185,5 +268,28 @@ mod tests {
         let report = format_verify_report(&result);
         assert!(report.contains("FAIL"));
         assert!(report.contains("mismatched types"));
+    }
+    #[cfg(unix)]
+    #[test]
+    fn verify_kills_background_grandchildren() {
+        let _permit = test_subprocess::acquire();
+        let dir = TempDir::new().unwrap();
+        let script = dir.path().join("verify-cleanup.sh");
+        fs::write(
+            &script,
+            "#!/bin/sh\nsleep 30 &\nchild_pid=$!\necho \"$child_pid\"\nexit 0\n",
+        )
+        .unwrap();
+        let mut perms = fs::metadata(&script).unwrap().permissions();
+        perms.set_mode(0o755);
+        fs::set_permissions(&script, perms).unwrap();
+
+        let result = run_verify(dir.path(), script.to_str(), None).unwrap();
+        assert!(result.success);
+        let pid = result.output.trim().parse::<i32>().unwrap();
+        thread::sleep(Duration::from_millis(200));
+        let status = unsafe { libc::kill(pid, 0) };
+        assert_eq!(status, -1);
+        assert_eq!(io::Error::last_os_error().raw_os_error(), Some(libc::ESRCH));
     }
 }

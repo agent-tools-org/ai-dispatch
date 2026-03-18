@@ -11,13 +11,34 @@ pub fn has_uncommitted_changes(dir: &str) -> Result<bool> {
 }
 
 pub fn auto_commit(dir: &str, task_id: &str, prompt: &str) -> Result<()> {
-    let add = Command::new("git").args(["-C", dir, "add", "-A"]).output().context("Failed to run git add")?;
+    // Only stage tracked files that were modified — avoid committing aid-injected
+    // temp files (batch TOML, team knowledge, shared context) via `git add -u`.
+    let add = Command::new("git").args(["-C", dir, "add", "-u"]).output().context("Failed to run git add")?;
     anyhow::ensure!(add.status.success(), "git add failed: {}", String::from_utf8_lossy(&add.stderr));
+    // Also stage new source files the agent created, but not aid artifacts.
+    let _ = Command::new("git").args(["-C", dir, "add", "src/", "tests/", "crates/"]).output();
     let clean = strip_aid_tags(prompt);
-    let summary: String = clean.chars().take(60).collect();
-    let commit = Command::new("git").args(["-C", dir, "commit", "-m", &format!("feat: {summary}\n\nTask: {task_id}")]).output().context("Failed to run git commit")?;
+    // Skip injected context prefixes like [Shared Context: ...] and [Team Knowledge — ...]
+    let summary = extract_task_summary(&clean);
+    let commit = Command::new("git").args(["-C", dir, "commit", "--allow-empty-message", "-m", &format!("{summary}\n\nTask: {task_id}")]).output().context("Failed to run git commit")?;
     anyhow::ensure!(commit.status.success(), "git commit failed: {}", String::from_utf8_lossy(&commit.stderr));
     Ok(())
+}
+
+/// Extract the actual task description, skipping injected context headers.
+fn extract_task_summary(prompt: &str) -> String {
+    for line in prompt.lines() {
+        let trimmed = line.trim();
+        if trimmed.is_empty()
+            || trimmed.starts_with('[')
+            || trimmed.starts_with("---")
+            || trimmed.starts_with('#')
+        {
+            continue;
+        }
+        return trimmed.chars().take(60).collect();
+    }
+    prompt.chars().take(60).collect()
 }
 
 /// Strip `<aid-*>...</aid-*>` tag blocks from text to prevent prompt metadata
@@ -47,7 +68,7 @@ fn strip_aid_tags(text: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{has_uncommitted_changes, strip_aid_tags};
+    use super::{extract_task_summary, has_uncommitted_changes, strip_aid_tags};
     use crate::test_subprocess;
 
     #[test]
@@ -68,6 +89,17 @@ mod tests {
     fn strip_aid_tags_passthrough_no_tags() {
         let input = "Just a normal prompt with no tags";
         assert_eq!(strip_aid_tags(input), input);
+    }
+
+    #[test]
+    fn extract_task_summary_skips_context_headers() {
+        let prompt = "[Shared Context: batch]\nSome shared stuff\n\n[Team Knowledge — dev]\n- coding rules\n\n[Task]\nImplement the parser changes for v2";
+        assert_eq!(extract_task_summary(prompt), "Some shared stuff");
+    }
+
+    #[test]
+    fn extract_task_summary_plain_prompt() {
+        assert_eq!(extract_task_summary("Fix the login bug"), "Fix the login bug");
     }
 
     #[test]

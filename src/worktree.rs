@@ -107,6 +107,13 @@ pub fn create_worktree(
     let wt_path = PathBuf::from(format!("/tmp/aid-wt-{branch}"));
 
     if wt_path.exists() {
+        // Reject symlinks to prevent symlink-following attacks on /tmp paths
+        if wt_path.symlink_metadata().is_ok_and(|m| m.file_type().is_symlink()) {
+            anyhow::bail!(
+                "Worktree path {} is a symlink — refusing to use for safety",
+                wt_path.display()
+            );
+        }
         sync_cargo_lock(repo_dir, &wt_path);
         return Ok(WorktreeInfo {
             path: wt_path,

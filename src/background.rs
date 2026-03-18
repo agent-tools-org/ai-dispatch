@@ -417,9 +417,13 @@ fn record_failure(
     event_detail: &str,
 ) -> Result<()> {
     sanitize::validate_task_id(task_id)?;
+    // Only mark as failed if task is still running/waiting — prevents
+    // zombie cleanup from clobbering a real completion status.
+    if !store.fail_if_running(task_id)? {
+        return Ok(());
+    }
     let stderr_path = paths::stderr_path(task_id);
     std::fs::write(&stderr_path, format!("{stderr_detail}\n"))?;
-    store.update_task_status(task_id, TaskStatus::Failed)?;
     store.insert_event(&TaskEvent {
         task_id: TaskId(task_id.to_string()),
         timestamp: Local::now(),

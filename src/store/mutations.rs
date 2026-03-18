@@ -146,6 +146,17 @@ impl Store {
         Ok(())
     }
 
+    /// Set status to Failed only if currently Running or Waiting.
+    /// Prevents zombie cleanup from clobbering a real completion status.
+    pub fn fail_if_running(&self, id: &str) -> Result<bool> {
+        let rows = self.db().execute(
+            "UPDATE tasks SET status = 'failed' WHERE id = ?1
+             AND status IN ('running', 'waiting')",
+            params![id],
+        )?;
+        Ok(rows > 0)
+    }
+
     pub fn update_resolved_prompt(&self, id: &str, resolved_prompt: &str) -> Result<()> {
         self.db().execute(
             "UPDATE tasks SET resolved_prompt = ?1 WHERE id = ?2",

@@ -225,7 +225,13 @@ pub async fn run(store: Arc<Store>, mut args: RunArgs) -> Result<TaskId> {
     } else {
         agent::get_agent(agent_kind)
     };
-    let task_id = args.existing_task_id.clone().unwrap_or_else(TaskId::generate);
+    let task_id = match args.existing_task_id.clone() {
+        Some(id) => {
+            crate::sanitize::validate_task_id(id.as_str())?;
+            id
+        }
+        None => TaskId::generate(),
+    };
     let log_path = paths::log_path(task_id.as_str());
     let workgroup = run_prompt::load_workgroup(&store, args.group.as_deref())?;
     let explicit_repo_path = args.repo.as_deref().map(run_prompt::resolve_repo_path).transpose()?;

@@ -123,7 +123,8 @@ mod tests {
 
     #[test]
     fn workspace_dir_rejects_invalid_id() {
-        assert!(workspace_dir("wg-test").is_err());
+        assert!(workspace_dir("wg-../escape").is_err());
+        assert!(workspace_dir("not-a-wg").is_err());
     }
 
     #[test]

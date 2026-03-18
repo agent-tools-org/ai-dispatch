@@ -17,16 +17,26 @@ pub fn validate_task_id(id: &str) -> Result<()> {
     bail!("Invalid task ID '{id}': must match t-XXXX (hex)")
 }
 
-/// Validate a workgroup ID: must match `wg-[0-9a-f]{4}` pattern.
+/// Validate a workgroup ID: must start with `wg-` followed by safe characters.
+/// Accepts both generated hex IDs (wg-a3f1) and custom names (wg-my-feature).
 pub fn validate_workgroup_id(id: &str) -> Result<()> {
-    if id.len() >= 4
-        && id.starts_with("wg-")
-        && id[3..].chars().all(|c| c.is_ascii_hexdigit())
-        && id.len() <= 7
-    {
-        return Ok(());
+    if id.len() < 4 || !id.starts_with("wg-") {
+        bail!("Invalid workgroup ID '{id}': must start with 'wg-'");
     }
-    bail!("Invalid workgroup ID '{id}': must match wg-XXXX (hex)")
+    let suffix = &id[3..];
+    if suffix.is_empty() {
+        bail!("Invalid workgroup ID '{id}': empty suffix");
+    }
+    if suffix.contains('/') || suffix.contains('\\') || suffix.contains("..") {
+        bail!("Invalid workgroup ID '{id}': path separators and '..' are forbidden");
+    }
+    if !suffix
+        .chars()
+        .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+    {
+        bail!("Invalid workgroup ID '{id}': only alphanumeric, '-', '_' allowed after 'wg-'");
+    }
+    Ok(())
 }
 
 /// Validate an identifier used as a filesystem component (agent name, team name,
@@ -144,6 +154,9 @@ mod tests {
     fn valid_workgroup_ids() {
         assert!(validate_workgroup_id("wg-a3f1").is_ok());
         assert!(validate_workgroup_id("wg-0000").is_ok());
+        assert!(validate_workgroup_id("wg-custom").is_ok());
+        assert!(validate_workgroup_id("wg-my-feature").is_ok());
+        assert!(validate_workgroup_id("wg-shared").is_ok());
     }
 
     #[test]
@@ -152,6 +165,7 @@ mod tests {
         assert!(validate_workgroup_id("wg-").is_err());
         assert!(validate_workgroup_id("../../etc").is_err());
         assert!(validate_workgroup_id("wg-a3f1/../../x").is_err());
+        assert!(validate_workgroup_id("wg-foo/../bar").is_err());
     }
 
     #[test]

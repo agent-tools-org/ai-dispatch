@@ -177,12 +177,12 @@ mod tests {
     #[test]
     fn stop_running_task_sets_stopped() {
         with_store(|store| {
-            let task = make_task("t-run", TaskStatus::Running);
+            let task = make_task("t-aa01", TaskStatus::Running);
             store.insert_task(&task).unwrap();
-            stop(&store, "t-run").unwrap();
-            let updated = store.get_task("t-run").unwrap().unwrap();
+            stop(&store, "t-aa01").unwrap();
+            let updated = store.get_task("t-aa01").unwrap().unwrap();
             assert_eq!(updated.status, TaskStatus::Stopped);
-            let events = store.get_events("t-run").unwrap();
+            let events = store.get_events("t-aa01").unwrap();
             assert_eq!(events.len(), 1);
             assert_eq!(events[0].detail, "Task stopped by user");
             assert_eq!(events[0].event_kind, EventKind::Error);

@@ -359,18 +359,12 @@ pub(super) struct RunProcessArgs<'a> {
     pub workgroup_id: Option<&'a str>,
 }
 
-/// Kill the entire process group for a child process (Unix only).
-/// Sends SIGTERM first, waits briefly, then SIGKILL to ensure cleanup.
+/// Clean up any lingering child processes in the process group (Unix only).
 #[cfg(unix)]
-fn kill_process_group(child: &tokio::process::Child) {
+fn cleanup_process_group(child: &tokio::process::Child) {
     if let Some(pid) = child.id() {
-        let pid = pid as i32;
         unsafe {
-            libc::kill(-pid, libc::SIGTERM);
-        }
-        std::thread::sleep(std::time::Duration::from_millis(500));
-        unsafe {
-            libc::kill(-pid, libc::SIGKILL);
+            libc::kill(-(pid as i32), libc::SIGTERM);
         }
     }
 }
@@ -397,9 +391,9 @@ pub(super) async fn run_agent_process_impl(args: RunProcessArgs<'_>) -> Result<(
         let out = output_path.map(std::path::Path::new);
         watcher::watch_buffered(agent, &mut child, task_id, store, log_path, out, workgroup_id).await?
     };
-    // Always kill the process group to clean up any lingering child processes
+    // SIGTERM orphaned child processes — no sleep needed on normal exit
     #[cfg(unix)]
-    kill_process_group(&child);
+    cleanup_process_group(&child);
     let _ = child.kill().await;
     let _ = child.wait().await;
     fill_empty_output_from_log(log_path, output_path.map(std::path::Path::new))?;

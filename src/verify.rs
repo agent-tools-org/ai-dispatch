@@ -9,14 +9,13 @@ use std::path::Path;
 use std::process::{Child, Command, ExitStatus, Stdio};
 use std::sync::Mutex;
 use std::thread;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use crate::store::Store;
 use crate::types::{TaskId, VerifyStatus};
 
 static VERIFY_LOCK: Mutex<()> = Mutex::new(());
 const VERIFY_TIMEOUT: Duration = Duration::from_secs(120);
-const VERIFY_KILL_GRACE: Duration = Duration::from_secs(2);
 
 #[derive(Debug, Clone)]
 pub struct VerifyResult {
@@ -175,16 +174,29 @@ fn read_pipe<R: Read + Send + 'static>(mut reader: R) -> Result<String> {
     reader.read_to_end(&mut bytes)?;
     Ok(String::from_utf8_lossy(&bytes).into_owned())
 }
-fn wait_for_child(child: &mut Child, timeout: Duration) -> Result<Option<ExitStatus>> {
-    let start = Instant::now();
-    loop {
-        if let Some(status) = child.try_wait()? {
-            return Ok(Some(status));
+fn wait_for_child(child: &mut Child, timeout_dur: Duration) -> Result<Option<ExitStatus>> {
+    let child_pid = child.id();
+    let fired = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let fired2 = fired.clone();
+    let done = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let done2 = done.clone();
+    // Watchdog thread: kills process group if timeout expires before child exits.
+    thread::spawn(move || {
+        thread::sleep(timeout_dur);
+        if !done2.load(std::sync::atomic::Ordering::Acquire) {
+            fired2.store(true, std::sync::atomic::Ordering::Release);
+            #[cfg(unix)]
+            unsafe {
+                libc::kill(-(child_pid as i32), libc::SIGKILL);
+            }
         }
-        if start.elapsed() >= timeout {
-            return Ok(None);
-        }
-        thread::sleep(Duration::from_millis(100));
+    });
+    let status = child.wait().context("failed to wait for verify process")?;
+    done.store(true, std::sync::atomic::Ordering::Release);
+    if fired.load(std::sync::atomic::Ordering::Acquire) {
+        Ok(None)
+    } else {
+        Ok(Some(status))
     }
 }
 fn finalize_child(child: &mut Child, timed_out: bool) -> Result<()> {
@@ -192,11 +204,11 @@ fn finalize_child(child: &mut Child, timed_out: bool) -> Result<()> {
     {
         let pid = child.id() as i32;
         if timed_out {
+            // Forcibly kill — process didn't exit within timeout
             kill_process_group(pid, libc::SIGKILL);
         } else {
+            // Process exited normally — just SIGTERM orphaned grandchildren, no wait needed
             kill_process_group(pid, libc::SIGTERM);
-            thread::sleep(VERIFY_KILL_GRACE);
-            kill_process_group(pid, libc::SIGKILL);
         }
     }
     child.wait().context("failed to reap verify process")?;

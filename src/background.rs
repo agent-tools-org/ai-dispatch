@@ -459,16 +459,11 @@ pub fn kill_process(pid: u32) {
     if pid > i32::MAX as u32 {
         return;
     }
-    unsafe extern "C" {
-        fn kill(pid: i32, sig: i32) -> i32;
-    }
-    // Kill the entire process group (negative PID) first, then the process itself.
-    // This ensures agent child processes (git, CLI tools) are also terminated.
     let pid_i32 = pid as i32;
     unsafe {
-        kill(-pid_i32, 15); // SIGTERM to process group
-        kill(pid_i32, 15); // SIGTERM to process (in case pgid differs)
-    };
+        libc::kill(-pid_i32, libc::SIGTERM);
+        libc::kill(pid_i32, libc::SIGTERM);
+    }
 }
 
 #[cfg(not(unix))]
@@ -479,14 +474,11 @@ pub fn sigkill_process(pid: u32) {
     if pid > i32::MAX as u32 {
         return;
     }
-    unsafe extern "C" {
-        fn kill(pid: i32, sig: i32) -> i32;
-    }
     let pid_i32 = pid as i32;
     unsafe {
-        kill(-pid_i32, 9); // SIGKILL to process group
-        kill(pid_i32, 9); // SIGKILL to process
-    };
+        libc::kill(-pid_i32, libc::SIGKILL);
+        libc::kill(pid_i32, libc::SIGKILL);
+    }
 }
 
 #[cfg(not(unix))]
@@ -497,43 +489,18 @@ pub fn is_process_running(pid: u32) -> bool {
     if pid > i32::MAX as u32 {
         return false;
     }
-
-    unsafe extern "C" {
-        fn kill(pid: i32, sig: i32) -> i32;
-    }
-
-    let result = unsafe { kill(pid as i32, 0) };
-    if result != 0 && std::io::Error::last_os_error().raw_os_error() != Some(1) {
+    let result = unsafe { libc::kill(pid as i32, 0) };
+    if result != 0 && std::io::Error::last_os_error().raw_os_error() != Some(libc::EPERM) {
         return false;
     }
-
-    if !is_process_not_zombie(pid) {
-        return false;
-    }
-
-    true
+    is_process_not_zombie(pid)
 }
 
 #[cfg(unix)]
 fn is_process_not_zombie(pid: u32) -> bool {
-    use std::process::Command;
-    const WNOHANG: i32 = 1;
-
-    unsafe extern "C" {
-        fn waitpid(pid: i32, status: *mut i32, options: i32) -> i32;
-    }
-
-    if let Ok(output) = Command::new("ps")
-        .args(["-o", "stat=", "-p", &pid.to_string()])
-        .output()
-    {
-        let stat = String::from_utf8_lossy(&output.stdout);
-        if !stat.trim().is_empty() {
-            return !stat.trim().starts_with('Z');
-        }
-    }
     let mut status = 0;
-    unsafe { waitpid(pid as i32, &mut status, WNOHANG) <= 0 }
+    // Non-blocking waitpid: returns 0 if child is still running, >0 if reaped (zombie collected).
+    unsafe { libc::waitpid(pid as i32, &mut status, libc::WNOHANG) <= 0 }
 }
 
 #[cfg(not(unix))]

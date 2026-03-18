@@ -12,16 +12,22 @@ use tokio::process::Command;
 use tokio::time::{timeout, Duration};
 use crate::store::Store;
 
-/// Kill the entire process group for a child process (Unix only).
-/// Sends SIGTERM first, waits briefly, then SIGKILL to ensure cleanup.
+/// Clean up any lingering child processes in the process group (Unix only).
 #[cfg(unix)]
-fn kill_process_group(child: &tokio::process::Child) {
+fn cleanup_process_group(child: &tokio::process::Child) {
     if let Some(pid) = child.id() {
         let pid = pid as i32;
         unsafe {
             libc::kill(-pid, libc::SIGTERM);
         }
-        std::thread::sleep(std::time::Duration::from_millis(500));
+    }
+}
+
+/// Forcibly kill the entire process group (Unix only). Used on timeout.
+#[cfg(unix)]
+fn force_kill_process_group(child: &tokio::process::Child) {
+    if let Some(pid) = child.id() {
+        let pid = pid as i32;
         unsafe {
             libc::kill(-pid, libc::SIGKILL);
         }
@@ -112,9 +118,14 @@ pub(crate) async fn run_agent_process_with_timeout(
     };
 
     let result = timeout(deadline, watch_future).await;
-    // Always kill the process group to clean up any lingering child processes
+    let timed_out = result.is_err();
+    // On timeout: force-kill immediately. On normal exit: just SIGTERM orphaned children.
     #[cfg(unix)]
-    kill_process_group(&child);
+    if timed_out {
+        force_kill_process_group(&child);
+    } else {
+        cleanup_process_group(&child);
+    }
     let _ = child.kill().await;
     let _ = child.wait().await;
     match result {

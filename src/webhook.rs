@@ -52,13 +52,17 @@ async fn send_webhook(webhook: &WebhookConfig, task: &Task, status: &str) {
         "prompt": task.prompt.as_str(),
         "duration_ms": task.duration_ms,
     });
-    match cmd
-        .arg("-d")
+    cmd.arg("-d")
         .arg(body.to_string())
         .stdin(Stdio::null())
         .stdout(Stdio::null())
-        .stderr(Stdio::piped())
-        .spawn()
+        .stderr(Stdio::piped());
+    #[cfg(unix)]
+    {
+        use std::os::unix::process::CommandExt;
+        cmd.process_group(0);
+    }
+    match cmd.spawn()
     {
         Ok(child) => {
             let name = webhook.name.clone();

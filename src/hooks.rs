@@ -86,6 +86,11 @@ pub fn run_hooks_with(
         let mut cmd = Command::new("sh");
         cmd.arg("-c").arg(&hook.command);
         cmd.stdin(Stdio::piped()).stderr(Stdio::piped());
+        #[cfg(unix)]
+        {
+            use std::os::unix::process::CommandExt;
+            cmd.process_group(0);
+        }
         let mut child = cmd
             .spawn()
             .with_context(|| format!("failed to run hook {}", hook.command))?;

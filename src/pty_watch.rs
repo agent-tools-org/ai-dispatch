@@ -157,7 +157,21 @@ pub(crate) fn monitor_bridge(
 ) -> Result<()> {
     let mut reader_done = false;
     let mut last_output_time = Instant::now();
-    while !reader_done || bridge.is_alive() {
+    // When the child exits, the PTY reader may block indefinitely on macOS
+    // (no EIO on master read after slave closes). Give it a short drain window.
+    let mut child_exited_at: Option<Instant> = None;
+    const CHILD_EXIT_DRAIN: Duration = Duration::from_secs(2);
+    loop {
+        if reader_done && !bridge.is_alive() {
+            break;
+        }
+        // Child exited but reader still open — drain for a short window then break
+        if !reader_done && !bridge.is_alive() {
+            let exited_at = *child_exited_at.get_or_insert_with(Instant::now);
+            if exited_at.elapsed() > CHILD_EXIT_DRAIN {
+                break;
+            }
+        }
         match rx.recv_timeout(INPUT_POLL_INTERVAL) {
             Ok(bytes) => {
                 let chunk = String::from_utf8_lossy(&bytes).into_owned();

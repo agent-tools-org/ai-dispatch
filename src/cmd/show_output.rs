@@ -256,7 +256,12 @@ fn extract_messages_for_task(task: &Task, task_id: &str) -> Option<String> {
     extract_messages_from_log(&task_log_path(task, task_id))
 }
 
-fn extract_messages_from_log(log_path: &Path) -> Option<String> {
+pub(crate) fn extract_messages_from_log(log_path: &Path) -> Option<String> {
+    const MAX_MESSAGE_CHARS: usize = 1_000;
+    const MAX_OUTPUT_CHARS: usize = 8_000;
+    const HEAD_MESSAGE_COUNT: usize = 3;
+    const TAIL_MESSAGE_COUNT: usize = 7;
+
     let content = std::fs::read_to_string(log_path).ok()?;
     let mut messages = Vec::new();
     let mut streaming_message = String::new();
@@ -314,11 +319,35 @@ fn extract_messages_from_log(log_path: &Path) -> Option<String> {
     if !streaming_message.is_empty() {
         messages.push(streaming_message);
     }
+
     if messages.is_empty() {
-        None
-    } else {
-        Some(messages.join("\n---\n"))
+        return None;
     }
+
+    for message in &mut messages {
+        if message.len() > MAX_MESSAGE_CHARS {
+            message.truncate(message.floor_char_boundary(MAX_MESSAGE_CHARS.saturating_sub(3)));
+            message.push_str("...");
+        }
+    }
+
+    if messages.len() > HEAD_MESSAGE_COUNT + TAIL_MESSAGE_COUNT {
+        let omitted = messages.len() - HEAD_MESSAGE_COUNT - TAIL_MESSAGE_COUNT;
+        let mut capped =
+            Vec::with_capacity(HEAD_MESSAGE_COUNT + TAIL_MESSAGE_COUNT + 1);
+        capped.extend(messages[..HEAD_MESSAGE_COUNT].iter().cloned());
+        capped.push(format!("[... {omitted} messages omitted ...]"));
+        capped.extend(messages[messages.len() - TAIL_MESSAGE_COUNT..].iter().cloned());
+        messages = capped;
+    }
+
+    let mut output = messages.join("\n---\n");
+    if output.len() > MAX_OUTPUT_CHARS {
+        output.truncate(output.floor_char_boundary(MAX_OUTPUT_CHARS.saturating_sub(3)));
+        output.push_str("...");
+    }
+
+    Some(output)
 }
 pub fn read_task_output(task: &Task) -> Result<String> {
     let path = task
@@ -603,6 +632,33 @@ mod tests {
         std::fs::write(file.path(), "{\"type\":\"event\"}\nnot-json\n").unwrap();
 
         assert_eq!(extract_messages_from_log(file.path()), None);
+    }
+    #[test]
+    fn extract_messages_from_log_caps_message_count_and_size() {
+        let file = NamedTempFile::new().unwrap();
+        let content = (0..22)
+            .map(|index| {
+                serde_json::to_string(&json!({
+                    "type": "message",
+                    "role": "assistant",
+                    "content": format!("message-{index:02}-{}", "x".repeat(500)),
+                }))
+            })
+            .collect::<Result<Vec<_>, _>>()
+            .unwrap()
+            .join("\n");
+        std::fs::write(file.path(), content).unwrap();
+
+        let output = extract_messages_from_log(file.path()).unwrap();
+        let parts = output.split("\n---\n").collect::<Vec<_>>();
+
+        assert_eq!(output.matches("\n---\n").count(), 10);
+        assert_eq!(parts.len(), 11);
+        assert!(parts[3].starts_with("[... 12 messages omitted ...]"));
+        assert!(parts[0].starts_with("message-00-"));
+        assert!(parts[10].starts_with("message-21-"));
+        assert!(parts.iter().all(|part| part.len() <= 1_000));
+        assert!(output.len() <= 8_000);
     }
     #[test]
     fn output_text_for_task_prefers_extracted_messages_to_raw_log() {

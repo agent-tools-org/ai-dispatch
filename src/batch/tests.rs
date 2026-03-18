@@ -262,7 +262,7 @@ fn accepts_tasks_plural_alias() {
 
 #[test]
 fn context_from_creates_implicit_dependency() {
-    let mut a = make_task(Some("research"), &[]);
+    let a = make_task(Some("research"), &[]);
     let mut b = make_task(Some("implement"), &[]);
     b.context_from = Some(vec!["research".to_string()]);
     let tasks = vec![a, b];

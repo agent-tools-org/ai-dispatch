@@ -7,6 +7,9 @@ use clap::{Args, Parser, Subcommand};
 #[derive(Parser)]
 #[command(name = "aid", version, about = "Multi-AI CLI team orchestrator")]
 pub struct Cli {
+    /// Suppress informational output (only errors/warnings shown). Also set via AID_QUIET=1.
+    #[arg(long, short = 'q', global = true)]
+    pub quiet: bool,
     #[command(subcommand)]
     pub command: Commands,
 }

@@ -166,7 +166,8 @@ pub(crate) async fn run_agent_process_with_timeout(
 
 fn write_streaming_output(log_path: &Path, out_path: &Path) {
     let Ok(log_content) = std::fs::read_to_string(log_path) else { return };
-    let mut last_message = String::new();
+    let mut messages = Vec::new();
+    let mut current_stream = String::new();
     for line in log_content.lines() {
         if let Ok(v) = serde_json::from_str::<Value>(line) {
             if v.get("type").and_then(|t| t.as_str()) == Some("message")
@@ -174,9 +175,14 @@ fn write_streaming_output(log_path: &Path, out_path: &Path) {
                 && let Some(content) = v.get("content").and_then(|c| c.as_str())
             {
                 if v.get("delta").and_then(|d| d.as_bool()) == Some(true) {
-                    last_message.push_str(content);
+                    current_stream.push_str(content);
                 } else {
-                    last_message = content.to_string();
+                    if !current_stream.is_empty() && current_stream != content {
+                        messages.push(std::mem::take(&mut current_stream));
+                    } else {
+                        current_stream.clear();
+                    }
+                    messages.push(content.to_string());
                 }
             }
             if v.get("type").and_then(|t| t.as_str()) == Some("item.completed")
@@ -184,12 +190,23 @@ fn write_streaming_output(log_path: &Path, out_path: &Path) {
                 && item.get("type").and_then(|t| t.as_str()) == Some("agent_message")
                 && let Some(text) = item.get("text").and_then(|t| t.as_str())
             {
-                last_message = text.to_string();
+                if !current_stream.is_empty() && current_stream != text {
+                    messages.push(std::mem::take(&mut current_stream));
+                } else {
+                    current_stream.clear();
+                }
+                messages.push(text.to_string());
             }
         }
     }
-    if !last_message.is_empty()
-        && let Err(err) = std::fs::write(out_path, &last_message)
+    if !current_stream.is_empty() {
+        messages.push(current_stream);
+    }
+    let substantive: Vec<String> = messages.into_iter().filter(|message| message.len() > 50).collect();
+    let start = substantive.len().saturating_sub(5);
+    let output = substantive[start..].join("\n\n---\n\n");
+    if !output.is_empty()
+        && let Err(err) = std::fs::write(out_path, &output)
     {
         eprintln!("[aid] Failed to write output file: {err}");
     }
@@ -257,6 +274,10 @@ pub(crate) fn check_scope_violations(store: &Store, task_id: &TaskId, scope: &[S
     };
     let _ = store.insert_event(&event);
 }
+
+#[cfg(test)]
+#[path = "run_agent/tests.rs"]
+mod tests;
 
 fn format_duration(ms: i64) -> String {
     let secs = ms / 1000;

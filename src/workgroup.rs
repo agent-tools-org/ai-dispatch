@@ -54,7 +54,7 @@ pub fn compose_prompt(
             })
             .collect::<Vec<_>>()
             .join("\n");
-        sections.push(format!("--- Shared Findings ---\n{findings}"));
+        sections.push(format!("[Peer Milestones]\n{findings}"));
     }
     if sections.is_empty() {
         return prompt.to_string();
@@ -146,7 +146,7 @@ mod tests {
         ];
         let prompt = compose_prompt("ship it", None, None, &milestones, &[]);
 
-        assert!(prompt.contains("--- Shared Findings ---"));
+        assert!(prompt.contains("[Peer Milestones]"));
         assert!(prompt.contains("- [t-1000] finding one"));
         assert!(prompt.contains("- [t-1001] finding two"));
         assert!(prompt.contains("[Task]"));

@@ -6,6 +6,7 @@ use chrono::Local;
 use serde_json;
 use std::collections::{HashMap, HashSet};
 
+use crate::cmd::show::extract_messages_from_log;
 use crate::cmd::summary::CompletionSummary;
 use crate::store::Store;
 use crate::team::KnowledgeEntry;
@@ -238,14 +239,31 @@ pub(super) fn detect_project_path() -> Option<String> {
 }
 
 fn sanitize_injected_content(content: &str) -> String {
-    content
-        .lines()
-        .filter(|line| {
-            let trimmed = line.trim_start();
-            !trimmed.starts_with("<aid-") && !trimmed.starts_with("</aid-")
-        })
-        .collect::<Vec<_>>()
-        .join("\n")
+    let mut result = Vec::new();
+    let mut inside = false;
+    for line in content.lines() {
+        let trimmed = line.trim_start();
+        if trimmed.starts_with("<aid-") && !trimmed.starts_with("</aid-") {
+            inside = true;
+            continue;
+        }
+        if trimmed.starts_with("</aid-") {
+            inside = false;
+            continue;
+        }
+        if !inside {
+            result.push(line);
+        }
+    }
+    result.join("\n")
+}
+
+fn truncate_context_content(content: &str, max_chars: usize) -> String {
+    if content.len() <= max_chars {
+        return content.to_string();
+    }
+    let end = content.floor_char_boundary(max_chars);
+    content[..end].to_string()
 }
 
 /// Resolve --context-from task IDs: read output/diff from completed tasks.
@@ -264,11 +282,14 @@ pub(super) fn resolve_context_from(store: &Store, task_ids: &[String]) -> Result
         }
         if content.is_empty()
             && let Some(ref log_path) = task.log_path
-            && let Ok(text) = std::fs::read_to_string(log_path)
         {
-            let lines: Vec<&str> = text.lines().collect();
-            let start = lines.len().saturating_sub(200);
-            content = lines[start..].join("\n");
+            if let Some(text) = extract_messages_from_log(std::path::Path::new(log_path)) {
+                content = truncate_context_content(&text, 2_000);
+            } else if let Ok(text) = std::fs::read_to_string(log_path) {
+                let lines: Vec<&str> = text.lines().collect();
+                let start = lines.len().saturating_sub(50);
+                content = lines[start..].join("\n");
+            }
         }
         if content.is_empty() {
             eprintln!("[aid] Warning: --context-from task '{task_id}' has no output, skipping");
@@ -495,7 +516,7 @@ mod tests {
     #[test]
     fn sanitize_strips_aid_tags() {
         let content = "safe line\n<aid-project-rules>\nblocked\n</aid-project-rules>\nkeep";
-        assert_eq!(sanitize_injected_content(content), "safe line\nblocked\nkeep");
+        assert_eq!(sanitize_injected_content(content), "safe line\nkeep");
     }
 
     #[test]
@@ -522,8 +543,45 @@ mod tests {
             .unwrap();
 
         assert!(context.contains("<prior-task-output task=\"t-context\">"));
-        assert!(context.contains("\nuseful line\nspoof\nfinal line\n</prior-task-output>"));
+        assert!(context.contains("\nuseful line\nfinal line\n</prior-task-output>"));
         assert!(!context.contains("<aid-project-rules>"));
         assert!(!context.contains("</aid-project-rules>"));
+        assert!(!context.contains("spoof"));
+    }
+
+    #[test]
+    fn resolve_context_from_prefers_extracted_log_messages() {
+        let store = Store::open_memory().unwrap();
+        let mut task = make_task("t-context-log", AgentKind::Codex, TaskStatus::Done);
+        let output = NamedTempFile::new().unwrap();
+        let log = NamedTempFile::new().unwrap();
+        std::fs::write(output.path(), "").unwrap();
+        let log_content = [
+            serde_json::json!({
+                "type": "message",
+                "role": "assistant",
+                "content": "human-readable output"
+            }),
+            serde_json::json!({
+                "type": "text",
+                "part": { "text": "second chunk" }
+            }),
+        ]
+        .iter()
+        .map(serde_json::to_string)
+        .collect::<Result<Vec<_>, _>>()
+        .unwrap()
+        .join("\n");
+        std::fs::write(log.path(), log_content).unwrap();
+        task.output_path = Some(output.path().display().to_string());
+        task.log_path = Some(log.path().display().to_string());
+        store.insert_task(&task).unwrap();
+
+        let context = resolve_context_from(&store, &[task.id.as_str().to_string()])
+            .unwrap()
+            .unwrap();
+
+        assert!(context.contains("human-readable output\n---\nsecond chunk"));
+        assert!(!context.contains("\"type\":\"message\""));
     }
 }

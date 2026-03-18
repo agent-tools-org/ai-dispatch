@@ -184,7 +184,7 @@ pub(super) fn score_for(ctx: &CandidateContext<'_>, kind: AgentKind) -> f64 {
         s += bonus;
     }
     if matches!(ctx.profile.complexity, Complexity::High)
-        && matches!(kind, AgentKind::Codex | AgentKind::Cursor)
+        && matches!(kind, AgentKind::Codex | AgentKind::Cursor | AgentKind::Droid)
     {
         s += 2.0;
     }

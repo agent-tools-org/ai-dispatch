@@ -25,13 +25,23 @@ const BATCH_SIBLING_PROMPT_LIMIT: usize = 80;
 pub(super) struct PromptBundle { pub effective_prompt: String, pub context_files: Vec<String>, pub prompt_tokens: i64, pub injected_memory_ids: Vec<String> }
 
 fn sanitize_injected_text(text: &str) -> String {
-    text.lines()
-        .filter(|line| {
-            let trimmed = line.trim_start();
-            !trimmed.starts_with("<aid-") && !trimmed.starts_with("</aid-")
-        })
-        .collect::<Vec<_>>()
-        .join("\n")
+    let mut result = Vec::new();
+    let mut inside = false;
+    for line in text.lines() {
+        let trimmed = line.trim_start();
+        if trimmed.starts_with("<aid-") && !trimmed.starts_with("</aid-") {
+            inside = true;
+            continue;
+        }
+        if trimmed.starts_with("</aid-") {
+            inside = false;
+            continue;
+        }
+        if !inside {
+            result.push(line);
+        }
+    }
+    result.join("\n")
 }
 
 fn truncate_batch_sibling_prompt(prompt: &str) -> String {
@@ -662,7 +672,7 @@ mod sanitize_tests {
     fn sanitize_strips_structural_tags() {
         let input = "keep\n<aid-project-rules>\ninside\n</aid-team-rules>\nend";
         let sanitized = sanitize_injected_text(input);
-        assert_eq!(sanitized, "keep\ninside\nend");
+        assert_eq!(sanitized, "keep\nend");
     }
 
     #[test]

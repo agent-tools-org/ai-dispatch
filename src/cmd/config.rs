@@ -55,6 +55,13 @@ const AGENT_PROFILES: &[(AgentKind, &str, &str, &str, bool)] = &[
         "implement, create, build, refactor, ui, frontend, css",
         true,
     ),
+    (
+        AgentKind::Droid,
+        "Complex implementation, multi-file refactors, debugging",
+        "$3-$15/M blended",
+        "implement, create, build, refactor, test, debug",
+        true,
+    ),
 ];
 
 pub struct AgentModel {
@@ -255,6 +262,33 @@ pub const AGENT_MODELS: &[AgentModel] = &[
         tier: "standard",
         description: "SDK-managed pricing",
         capability: 6.8,
+    },
+    AgentModel {
+        agent: AgentKind::Droid,
+        model: "sonnet",
+        input_per_m: 3.0,
+        output_per_m: 15.0,
+        tier: "standard",
+        description: "Balanced cost/quality (default)",
+        capability: 8.5,
+    },
+    AgentModel {
+        agent: AgentKind::Droid,
+        model: "opus",
+        input_per_m: 15.0,
+        output_per_m: 75.0,
+        tier: "premium",
+        description: "Strongest reasoning",
+        capability: 9.5,
+    },
+    AgentModel {
+        agent: AgentKind::Droid,
+        model: "haiku",
+        input_per_m: 0.25,
+        output_per_m: 1.25,
+        tier: "cheap",
+        description: "Fast, simple tasks",
+        capability: 5.8,
     },
 ];
 

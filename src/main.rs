@@ -35,6 +35,7 @@ mod compaction;
 pub mod claudemd;
 mod tui;
 mod system_resources;
+mod output;
 mod types;
 mod update_check;
 mod usage;
@@ -91,6 +92,10 @@ fn resolve_finding_content_from<R: Read>(
 #[tokio::main]
 async fn main() -> Result<()> {
     let cli = Cli::parse();
+    output::init();
+    if cli.quiet {
+        output::set_quiet(true);
+    }
 
     paths::ensure_dirs()?;
     let config = config::load_config().unwrap_or_default();

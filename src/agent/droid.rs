@@ -65,7 +65,7 @@ impl super::Agent for DroidAgent {
                 })
             }
             "tool_use" | "tool_result" | "tool_call" => {
-                let name = v.get("toolName").or_else(|| v.get("name")).and_then(|n| n.as_str()).unwrap_or("tool");
+                let name = v.get("toolName").or_else(|| v.get("toolId")).or_else(|| v.get("name")).and_then(|n| n.as_str()).unwrap_or("tool");
                 let detail = truncate_text(name, 80);
                 Some(TaskEvent {
                     task_id: task_id.clone(),

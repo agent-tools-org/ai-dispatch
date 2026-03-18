@@ -185,6 +185,46 @@ impl Store {
         Ok(())
     }
 
+    /// Atomically update task completion AND insert the completion event.
+    /// Prevents inconsistent state if process crashes between the two writes.
+    pub fn complete_task_atomic(
+        &self,
+        payload: TaskCompletionUpdate<'_>,
+        event: &TaskEvent,
+    ) -> Result<()> {
+        let conn = self.db();
+        let tx = conn.unchecked_transaction()?;
+        let now = Local::now().to_rfc3339();
+        tx.execute(
+            "UPDATE tasks SET status = ?1, tokens = ?2, duration_ms = ?3, completed_at = ?4,
+             model = ?5, cost_usd = ?6, exit_code = ?7 WHERE id = ?8",
+            params![
+                payload.status.as_str(),
+                payload.tokens,
+                payload.duration_ms,
+                now,
+                payload.model,
+                payload.cost_usd,
+                payload.exit_code,
+                payload.id
+            ],
+        )?;
+        let metadata_str = event.metadata.as_ref().map(|m| m.to_string());
+        tx.execute(
+            "INSERT INTO events (task_id, timestamp, event_type, detail, metadata)
+             VALUES (?1, ?2, ?3, ?4, ?5)",
+            params![
+                event.task_id.as_str(),
+                event.timestamp.to_rfc3339(),
+                event.event_kind.as_str(),
+                event.detail,
+                metadata_str,
+            ],
+        )?;
+        tx.commit()?;
+        Ok(())
+    }
+
     pub fn save_completion_summary(&self, task_id: &str, summary_json: &str) -> Result<()> {
         self.db().execute(
             "UPDATE tasks SET completion_summary = ?1 WHERE id = ?2",
@@ -352,5 +392,56 @@ impl Store {
             params![verify_status.as_str(), id],
         )?;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::store::Store;
+
+    #[test]
+    fn complete_task_atomic_writes_both_task_and_event() {
+        let store = Store::open_memory().unwrap();
+        let conn = store.db();
+        conn.execute(
+            "INSERT INTO tasks (id, agent, prompt, status, created_at)
+             VALUES ('t-atomic', 'codex', 'test prompt', 'running', '2026-03-18T00:00:00Z')",
+            [],
+        )
+        .unwrap();
+        drop(conn);
+
+        let event = TaskEvent {
+            task_id: TaskId("t-atomic".to_string()),
+            timestamp: Local::now(),
+            event_kind: EventKind::Completion,
+            detail: "completed atomically".to_string(),
+            metadata: None,
+        };
+        store
+            .complete_task_atomic(
+                TaskCompletionUpdate {
+                    id: "t-atomic",
+                    status: TaskStatus::Done,
+                    tokens: Some(1234),
+                    duration_ms: 5000,
+                    model: Some("test-model"),
+                    cost_usd: Some(0.05),
+                    exit_code: Some(0),
+                },
+                &event,
+            )
+            .unwrap();
+
+        let task = store.get_task("t-atomic").unwrap().unwrap();
+        assert_eq!(task.status, TaskStatus::Done);
+        assert_eq!(task.tokens, Some(1234));
+        assert_eq!(task.duration_ms, Some(5000));
+
+        let events = store.get_events("t-atomic").unwrap();
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].event_kind, EventKind::Completion);
+        assert_eq!(events[0].detail, "completed atomically");
     }
 }

@@ -39,6 +39,12 @@ pub trait Agent: Send + Sync {
 
     /// Parse buffered output into completion info (non-streaming agents)
     fn parse_completion(&self, output: &str) -> CompletionInfo;
+
+    /// Whether this agent requires a PTY even for foreground execution.
+    /// Agents that don't produce stdout when piped (e.g. opencode) should return true.
+    fn needs_pty(&self) -> bool {
+        false
+    }
 }
 
 /// Options passed to agent for command construction

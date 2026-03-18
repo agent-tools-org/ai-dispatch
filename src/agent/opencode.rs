@@ -76,6 +76,10 @@ impl super::Agent for OpenCodeAgent {
         })
     }
 
+    fn needs_pty(&self) -> bool {
+        true
+    }
+
     fn parse_completion(&self, output: &str) -> CompletionInfo {
         let (tokens, cost_usd) = extract_tokens_from_output(output);
         CompletionInfo {
@@ -356,6 +360,16 @@ mod tests {
         assert!(args.contains(&"--session".to_string()));
         assert!(args.contains(&"ses_test123".to_string()));
         assert!(args.contains(&"--continue".to_string()));
+    }
+
+    #[test]
+    fn opencode_needs_pty() {
+        assert!(OpenCodeAgent.needs_pty());
+    }
+
+    #[test]
+    fn codex_does_not_need_pty() {
+        assert!(!super::super::codex::CodexAgent.needs_pty());
     }
 
     #[test]

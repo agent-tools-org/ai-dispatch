@@ -68,6 +68,19 @@ impl PtyBridge {
         self.child.try_wait().map(|status| status.is_none()).unwrap_or(false)
     }
 
+    pub fn kill(&mut self) -> Result<()> {
+        self.child
+            .kill()
+            .map_err(|e| anyhow::anyhow!("PTY kill failed: {e}"))
+    }
+
+    #[allow(dead_code)]
+    pub fn try_wait(&mut self) -> Result<Option<ExitStatus>> {
+        self.child
+            .try_wait()
+            .map_err(|e| anyhow::anyhow!("try_wait failed: {e}"))
+    }
+
     pub fn wait(&mut self) -> Result<ExitStatus> {
         Ok(self.child.wait()?)
     }
@@ -86,5 +99,27 @@ mod tests {
         bridge.reader().read_to_string(&mut output).unwrap();
         let _ = bridge.wait().unwrap();
         assert!(output.contains("hello"));
+    }
+
+    #[test]
+    fn kill_terminates_running_process() {
+        let cmd = vec!["/bin/sleep".to_string(), "60".to_string()];
+        let mut bridge = PtyBridge::spawn(&cmd, None, vec![]).unwrap();
+
+        assert!(bridge.is_alive());
+        bridge.kill().unwrap();
+        let _ = bridge.wait().unwrap();
+        assert!(!bridge.is_alive());
+    }
+
+    #[test]
+    fn try_wait_returns_none_while_running() {
+        let cmd = vec!["/bin/sleep".to_string(), "60".to_string()];
+        let mut bridge = PtyBridge::spawn(&cmd, None, vec![]).unwrap();
+
+        assert!(bridge.try_wait().unwrap().is_none());
+        bridge.kill().unwrap();
+        let _ = bridge.wait().unwrap();
+        assert!(bridge.try_wait().unwrap().is_some());
     }
 }

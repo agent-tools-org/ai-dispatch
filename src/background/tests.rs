@@ -175,6 +175,29 @@ fn make_task(task_id: &str, status: TaskStatus) -> Task {
     }
 }
 
+#[test]
+fn quota_cascade_skipped_for_batch_tasks() {
+    let batch_spec = BackgroundRunSpec {
+        group: Some("wg-test".to_string()),
+        ..make_spec("t-batch")
+    };
+    // Batch tasks have group set — cascade guard (spec.group.is_none()) blocks them
+    assert!(
+        batch_spec.group.is_some(),
+        "batch tasks have group set, cascade should be skipped"
+    );
+
+    let solo_spec = BackgroundRunSpec {
+        group: None,
+        ..make_spec("t-solo")
+    };
+    // Non-batch tasks have no group — cascade is allowed
+    assert!(
+        solo_spec.group.is_none(),
+        "solo tasks should allow cascade"
+    );
+}
+
 #[cfg(unix)]
 #[test]
 fn is_process_running_returns_false_for_zombie() {

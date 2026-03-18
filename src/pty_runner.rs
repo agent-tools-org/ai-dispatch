@@ -40,7 +40,12 @@ pub fn run_agent_process(
         &mut log_file,
         &mut state,
         streaming,
+        Some(crate::pty_watch::PTY_IDLE_TIMEOUT),
+        None,
     )?;
+    if bridge.is_alive() {
+        let _ = bridge.kill();
+    }
     let exit_status = bridge.wait()?;
     finalize_output(agent, task_id, store, output_path, streaming, &exit_status, &mut state)?;
     record_completion(agent, task_id, store, model, start.elapsed().as_millis() as i64, &state.info)
@@ -86,22 +91,50 @@ fn record_completion(
         info.tokens
             .and_then(|tokens| cost::estimate_cost(tokens, final_model, agent.kind()))
     });
-    store.update_task_completion(TaskCompletionUpdate {
-        id: task_id.as_str(),
-        status: info.status,
-        tokens: info.tokens,
-        duration_ms,
-        model: final_model,
-        cost_usd,
-        exit_code: info.exit_code,
-    })?;
+    let event = crate::types::TaskEvent {
+        task_id: task_id.clone(),
+        timestamp: chrono::Local::now(),
+        event_kind: if info.status == crate::types::TaskStatus::Done {
+            crate::types::EventKind::Completion
+        } else {
+            crate::types::EventKind::Error
+        },
+        detail: format!(
+            "{} ({}{}{})",
+            info.status.label(),
+            format_duration(duration_ms),
+            info.tokens
+                .map(|t| format!(", {} tokens", t))
+                .unwrap_or_default(),
+            cost_usd
+                .map(|c| format!(", {}", cost::format_cost(Some(c))))
+                .unwrap_or_default(),
+        ),
+        metadata: None,
+    };
+    store.complete_task_atomic(
+        TaskCompletionUpdate {
+            id: task_id.as_str(),
+            status: info.status,
+            tokens: info.tokens,
+            duration_ms,
+            model: final_model,
+            cost_usd,
+            exit_code: info.exit_code,
+        },
+        &event,
+    )?;
     println!(
         "Task {} {} ({}{}{})",
         task_id,
         info.status.label(),
         format_duration(duration_ms),
-        info.tokens.map(|tokens| format!(", {} tokens", tokens)).unwrap_or_default(),
-        cost_usd.map(|cost| format!(", {}", cost::format_cost(Some(cost)))).unwrap_or_default(),
+        info.tokens
+            .map(|tokens| format!(", {} tokens", tokens))
+            .unwrap_or_default(),
+        cost_usd
+            .map(|cost| format!(", {}", cost::format_cost(Some(cost))))
+            .unwrap_or_default(),
     );
     Ok(())
 }

@@ -383,17 +383,14 @@ pub async fn run(store: Arc<Store>, mut args: RunArgs) -> Result<TaskId> {
             eprintln!("[aid] Watch: aid watch --quiet {task_id}");
         }
     } else {
-        let std_cmd = agent
+        let mut std_cmd = agent
             .build_command(&prompt_bundle.effective_prompt, &opts)
             .context("Failed to build agent command")?;
-        let mut tokio_cmd = Command::from(std_cmd);
         if agent::is_rust_project(effective_dir.as_deref())
             && let Some(target_dir) = agent::target_dir_for_worktree(args.worktree.as_deref())
         {
-            tokio_cmd.env("CARGO_TARGET_DIR", &target_dir);
+            std_cmd.env("CARGO_TARGET_DIR", &target_dir);
         }
-        tokio_cmd.stdout(std::process::Stdio::piped());
-        tokio_cmd.stderr(std::process::Stdio::piped());
         if args.announce {
             println!(
                 "Task {} started ({}: {})",
@@ -402,21 +399,38 @@ pub async fn run(store: Arc<Store>, mut args: RunArgs) -> Result<TaskId> {
                 crate::agent::truncate::truncate_text(&args.prompt, 50)
             );
         }
-        let is_streaming = agent.streaming();
-        run_agent_process_with_timeout(
-            &*agent,
-            tokio_cmd,
-            &task_id,
-            &store,
-            &log_path,
-            args.output.as_deref(),
-            effective_model.as_deref(),
-            is_streaming,
-            task.workgroup_id.as_deref(),
-            args.max_duration_mins,
-            args.max_task_cost,
-        )
-        .await?;
+        if agent.needs_pty() {
+            // Route through PTY runner for agents that need a terminal
+            crate::pty_runner::run_agent_process(
+                &*agent,
+                &std_cmd,
+                &task_id,
+                &store,
+                &log_path,
+                args.output.as_deref(),
+                effective_model.as_deref(),
+                agent.streaming(),
+            )?;
+        } else {
+            let mut tokio_cmd = Command::from(std_cmd);
+            tokio_cmd.stdout(std::process::Stdio::piped());
+            tokio_cmd.stderr(std::process::Stdio::piped());
+            let is_streaming = agent.streaming();
+            run_agent_process_with_timeout(
+                &*agent,
+                tokio_cmd,
+                &task_id,
+                &store,
+                &log_path,
+                args.output.as_deref(),
+                effective_model.as_deref(),
+                is_streaming,
+                task.workgroup_id.as_deref(),
+                args.max_duration_mins,
+                args.max_task_cost,
+            )
+            .await?;
+        }
         run_prompt::warn_agent_committed_files_outside_scope(
             &args.scope,
             args.dir.as_ref(),

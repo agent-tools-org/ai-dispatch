@@ -230,10 +230,11 @@ async fn run_task_inner(store: &Arc<Store>, spec: &BackgroundRunSpec) -> Result<
             crate::cmd::run::inherit_retry_base_branch(spec.dir.as_deref(), &task, &mut retry_args);
         }
         Box::pin(crate::cmd::run::run(store.clone(), retry_args)).await?;
-    } else if let Some(task) = store.get_task(&spec.task_id)?
+    } else if spec.group.is_none()
+        && let Some(task) = store.get_task(&spec.task_id)?
         && task.status == TaskStatus::Failed
     {
-        // Quota cascade: detect quota errors and auto-fallback
+        // Quota cascade: only for non-batch tasks (batch_dispatch handles its own fallback)
         let agent_kind = AgentKind::parse_str(&spec.agent_name);
         if let Some(kind) = agent_kind
             && let Some(message) = crate::cmd::run::read_quota_error_message(&TaskId(spec.task_id.clone()))

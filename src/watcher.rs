@@ -9,7 +9,7 @@ use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::Child;
 use tokio::time::{timeout, Duration};
 
-const HUNG_TIMEOUT: Duration = Duration::from_secs(300);
+const HUNG_TIMEOUT: Duration = Duration::from_secs(180);
 
 use crate::agent::Agent;
 use crate::paths;

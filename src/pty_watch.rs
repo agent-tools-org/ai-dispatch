@@ -18,6 +18,7 @@ use crate::types::{CompletionInfo, EventKind, TaskEvent, TaskId, TaskStatus};
 use crate::watcher;
 
 const INPUT_POLL_INTERVAL: Duration = Duration::from_millis(500);
+pub(crate) const PTY_IDLE_TIMEOUT: Duration = Duration::from_secs(180);
 
 pub(crate) struct MonitorState {
     pub(crate) info: CompletionInfo,
@@ -151,15 +152,50 @@ pub(crate) fn monitor_bridge(
     log_file: &mut std::fs::File,
     state: &mut MonitorState,
     streaming: bool,
+    idle_timeout: Option<Duration>,
+    deadline: Option<Instant>,
 ) -> Result<()> {
     let mut reader_done = false;
+    let mut last_output_time = Instant::now();
     while !reader_done || bridge.is_alive() {
         match rx.recv_timeout(INPUT_POLL_INTERVAL) {
             Ok(bytes) => {
                 let chunk = String::from_utf8_lossy(&bytes).into_owned();
                 state.handle_chunk(agent, task_id, store, log_file, chunk, streaming)?;
+                last_output_time = Instant::now();
             }
-            Err(RecvTimeoutError::Timeout) => state.handle_timeout(store, task_id)?,
+            Err(RecvTimeoutError::Timeout) => {
+                state.handle_timeout(store, task_id)?;
+                if let Some(dl) = deadline {
+                    if Instant::now() > dl {
+                        state.info.status = TaskStatus::Failed;
+                        store.insert_event(&TaskEvent {
+                            task_id: task_id.clone(),
+                            timestamp: chrono::Local::now(),
+                            event_kind: EventKind::Error,
+                            detail: "Task exceeded deadline".to_string(),
+                            metadata: None,
+                        })?;
+                        break;
+                    }
+                }
+                if let Some(idle) = idle_timeout {
+                    if last_output_time.elapsed() > idle {
+                        state.info.status = TaskStatus::Failed;
+                        store.insert_event(&TaskEvent {
+                            task_id: task_id.clone(),
+                            timestamp: chrono::Local::now(),
+                            event_kind: EventKind::Error,
+                            detail: format!(
+                                "Agent idle: no output for {} seconds",
+                                idle.as_secs()
+                            ),
+                            metadata: None,
+                        })?;
+                        break;
+                    }
+                }
+            }
             Err(RecvTimeoutError::Disconnected) => reader_done = true,
         }
         state.maybe_forward_input(bridge, store, task_id)?;

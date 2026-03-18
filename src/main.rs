@@ -21,6 +21,7 @@ mod pty_bridge;
 mod pty_runner;
 mod pty_watch;
 mod rate_limit;
+pub(crate) mod sanitize;
 mod session;
 mod skills;
 mod store;

@@ -259,3 +259,24 @@ fn accepts_tasks_plural_alias() {
     let cfg = parse_batch_file(file.path()).unwrap();
     assert_eq!(cfg.tasks.len(), 2);
 }
+
+#[test]
+fn context_from_creates_implicit_dependency() {
+    let mut a = make_task(Some("research"), &[]);
+    let mut b = make_task(Some("implement"), &[]);
+    b.context_from = Some(vec!["research".to_string()]);
+    let tasks = vec![a, b];
+    let deps = dependency_indices(&tasks).unwrap();
+    assert!(deps[0].is_empty());
+    assert_eq!(deps[1], vec![0], "context_from should create implicit dependency");
+}
+
+#[test]
+fn context_from_deduplicates_with_explicit_depends_on() {
+    let a = make_task(Some("research"), &[]);
+    let mut b = make_task(Some("implement"), &["research"]);
+    b.context_from = Some(vec!["research".to_string()]);
+    let tasks = vec![a, b];
+    let deps = dependency_indices(&tasks).unwrap();
+    assert_eq!(deps[1], vec![0], "duplicate dependency should be deduplicated");
+}

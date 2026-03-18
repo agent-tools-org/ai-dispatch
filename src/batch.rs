@@ -314,27 +314,37 @@ fn resolve_dependencies(
     task: &BatchTask,
     name_to_index: &HashMap<&str, usize>,
 ) -> Result<Vec<usize>> {
-    let Some(depends_on) = task.depends_on.as_ref() else {
-        return Ok(Vec::new());
-    };
     let mut seen = HashSet::new();
     let mut resolved = Vec::new();
-    for dependency_name in depends_on {
-        let trimmed = dependency_name.trim();
-        anyhow::ensure!(
-            !trimmed.is_empty(),
-            "task {} has an empty dependency reference",
-            task_label(task, task_idx)
-        );
-        let Some(&dependency_idx) = name_to_index.get(trimmed) else {
-            anyhow::bail!(
-                "task {} depends on unknown task: {}",
-                task_label(task, task_idx),
-                trimmed
+    // Explicit depends_on
+    if let Some(depends_on) = task.depends_on.as_ref() {
+        for dependency_name in depends_on {
+            let trimmed = dependency_name.trim();
+            anyhow::ensure!(
+                !trimmed.is_empty(),
+                "task {} has an empty dependency reference",
+                task_label(task, task_idx)
             );
-        };
-        if seen.insert(dependency_idx) {
-            resolved.push(dependency_idx);
+            let Some(&dependency_idx) = name_to_index.get(trimmed) else {
+                anyhow::bail!(
+                    "task {} depends on unknown task: {}",
+                    task_label(task, task_idx),
+                    trimmed
+                );
+            };
+            if seen.insert(dependency_idx) {
+                resolved.push(dependency_idx);
+            }
+        }
+    }
+    // context_from implies dependency — task must complete before its output is readable
+    if let Some(context_from) = task.context_from.as_ref() {
+        for source_name in context_from {
+            let trimmed = source_name.trim();
+            if let Some(&source_idx) = name_to_index.get(trimmed)
+                && seen.insert(source_idx) {
+                    resolved.push(source_idx);
+                }
         }
     }
     Ok(resolved)

@@ -514,9 +514,14 @@ pub fn is_process_running(pid: u32) -> bool {
 #[cfg(unix)]
 fn is_process_not_zombie(pid: u32) -> bool {
     let mut status = 0;
-    // waitpid returns: 0 = still running, >0 = reaped (was zombie), -1 = error (ECHILD = not our child)
-    // Only return true (alive) when waitpid returns exactly 0.
-    unsafe { libc::waitpid(pid as i32, &mut status, libc::WNOHANG) == 0 }
+    let ret = unsafe { libc::waitpid(pid as i32, &mut status, libc::WNOHANG) };
+    // waitpid returns:
+    //   0: child exists, not yet exited → alive
+    //  >0: child was zombie, now reaped → dead
+    //  -1 ECHILD: not our child → can't determine zombie status, trust kill(0)
+    ret == 0
+        || (ret == -1
+            && std::io::Error::last_os_error().raw_os_error() == Some(libc::ECHILD))
 }
 
 #[cfg(not(unix))]

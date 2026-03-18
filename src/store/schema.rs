@@ -53,6 +53,12 @@ CREATE TABLE IF NOT EXISTS findings (
     workgroup_id TEXT NOT NULL,
     content TEXT NOT NULL,
     source_task_id TEXT,
+    severity TEXT,
+    title TEXT,
+    file TEXT,
+    lines TEXT,
+    category TEXT,
+    confidence TEXT,
     created_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_findings_workgroup ON findings(workgroup_id);
@@ -100,6 +106,12 @@ const CREATE_FINDINGS_SQL: &str = "CREATE TABLE IF NOT EXISTS findings (
     workgroup_id TEXT NOT NULL,
     content TEXT NOT NULL,
     source_task_id TEXT,
+    severity TEXT,
+    title TEXT,
+    file TEXT,
+    lines TEXT,
+    category TEXT,
+    confidence TEXT,
     created_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_findings_workgroup ON findings(workgroup_id);";
@@ -144,6 +156,12 @@ pub(super) fn migrate(store: &Store) -> Result<()> {
     );
     let _ = conn.execute_batch("ALTER TABLE workgroups ADD COLUMN created_by TEXT;");
     let _ = conn.execute_batch(CREATE_FINDINGS_SQL);
+    let _ = conn.execute_batch("ALTER TABLE findings ADD COLUMN severity TEXT;");
+    let _ = conn.execute_batch("ALTER TABLE findings ADD COLUMN title TEXT;");
+    let _ = conn.execute_batch("ALTER TABLE findings ADD COLUMN file TEXT;");
+    let _ = conn.execute_batch("ALTER TABLE findings ADD COLUMN lines TEXT;");
+    let _ = conn.execute_batch("ALTER TABLE findings ADD COLUMN category TEXT;");
+    let _ = conn.execute_batch("ALTER TABLE findings ADD COLUMN confidence TEXT;");
     // Performance indexes for hot query paths
     let _ = conn.execute_batch("CREATE INDEX IF NOT EXISTS idx_tasks_created_at ON tasks(created_at);");
     let _ = conn.execute_batch("CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);");

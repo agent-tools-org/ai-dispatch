@@ -140,7 +140,7 @@ impl Store {
     pub fn list_findings(&self, workgroup_id: &str) -> Result<Vec<Finding>> {
         let conn = self.db();
         let mut stmt = conn.prepare(
-            "SELECT id, workgroup_id, content, source_task_id, created_at FROM findings
+            "SELECT id, workgroup_id, content, source_task_id, severity, title, file, lines, category, confidence, created_at FROM findings
              WHERE workgroup_id = ?1 ORDER BY created_at ASC",
         )?;
         let rows = stmt.query_map(params![workgroup_id], |row| {
@@ -149,7 +149,13 @@ impl Store {
                 workgroup_id: row.get(1)?,
                 content: row.get(2)?,
                 source_task_id: row.get(3)?,
-                created_at: parse_dt(&row.get::<_, String>(4)?),
+                severity: row.get(4)?,
+                title: row.get(5)?,
+                file: row.get(6)?,
+                lines: row.get(7)?,
+                category: row.get(8)?,
+                confidence: row.get(9)?,
+                created_at: parse_dt(&row.get::<_, String>(10)?),
             })
         })?;
         rows.map(|r| Ok(r?)).collect()

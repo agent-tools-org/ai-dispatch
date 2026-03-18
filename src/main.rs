@@ -430,9 +430,32 @@ async fn main() -> Result<()> {
             GroupAction::Delete { group_id } => cmd::group::delete(&store, &group_id)?,
             GroupAction::Summary { group_id } => cmd::summary_cli::run(&store, &group_id)?,
             GroupAction::Finding { action } => match action {
-                GroupFindingAction::Add { group, content, stdin, file, task } => {
+                GroupFindingAction::Add {
+                    group,
+                    content,
+                    stdin,
+                    file,
+                    task,
+                    severity,
+                    title,
+                    finding_file,
+                    lines,
+                    category,
+                    confidence,
+                } => {
                     let content = resolve_finding_content(content, stdin, file)?;
-                    cmd::finding::add(&store, &group, &content, task.as_deref())?;
+                    cmd::finding::add(
+                        &store,
+                        &group,
+                        &content,
+                        task.as_deref(),
+                        severity.as_deref(),
+                        title.as_deref(),
+                        finding_file.as_deref(),
+                        lines.as_deref(),
+                        category.as_deref(),
+                        confidence.as_deref(),
+                    )?;
                 }
                 GroupFindingAction::List { group, json, count } => {
                     cmd::finding::list(&store, &group, json, count)?;
@@ -507,9 +530,32 @@ async fn main() -> Result<()> {
             }
         },
         Commands::Finding { action } => match action {
-            FindingCommands::Add { group, content, stdin, file, task } => {
+            FindingCommands::Add {
+                group,
+                content,
+                stdin,
+                file,
+                task,
+                severity,
+                title,
+                finding_file,
+                lines,
+                category,
+                confidence,
+            } => {
                 let content = resolve_finding_content(content, stdin, file)?;
-                cmd::finding::add(&store, &group, &content, task.as_deref())?;
+                cmd::finding::add(
+                    &store,
+                    &group,
+                    &content,
+                    task.as_deref(),
+                    severity.as_deref(),
+                    title.as_deref(),
+                    finding_file.as_deref(),
+                    lines.as_deref(),
+                    category.as_deref(),
+                    confidence.as_deref(),
+                )?;
             }
             FindingCommands::List { group, json, count } => {
                 cmd::finding::list(&store, &group, json, count)?;

@@ -59,12 +59,18 @@ pub fn save_spec(spec: &BackgroundRunSpec) -> Result<()> {
 pub fn spawn_worker(task_id: &str) -> Result<Child> {
     sanitize::validate_task_id(task_id)?;
     let exe = std::env::current_exe().context("Failed to resolve current aid binary")?;
-    Command::new(exe)
-        .args(["__run-task", task_id])
+    let mut cmd = Command::new(exe);
+    cmd.args(["__run-task", task_id])
         .stdin(Stdio::null())
         .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .spawn()
+        .stderr(Stdio::null());
+    // Create a new process group so we can kill the worker and all its children.
+    #[cfg(unix)]
+    {
+        use std::os::unix::process::CommandExt;
+        cmd.process_group(0);
+    }
+    cmd.spawn()
         .context("Failed to spawn detached background worker")
 }
 
@@ -409,7 +415,13 @@ pub fn kill_process(pid: u32) {
     unsafe extern "C" {
         fn kill(pid: i32, sig: i32) -> i32;
     }
-    unsafe { kill(pid as i32, 15) };
+    // Kill the entire process group (negative PID) first, then the process itself.
+    // This ensures agent child processes (git, CLI tools) are also terminated.
+    let pid_i32 = pid as i32;
+    unsafe {
+        kill(-pid_i32, 15); // SIGTERM to process group
+        kill(pid_i32, 15); // SIGTERM to process (in case pgid differs)
+    };
 }
 
 #[cfg(not(unix))]
@@ -423,7 +435,11 @@ pub fn sigkill_process(pid: u32) {
     unsafe extern "C" {
         fn kill(pid: i32, sig: i32) -> i32;
     }
-    unsafe { kill(pid as i32, 9) };
+    let pid_i32 = pid as i32;
+    unsafe {
+        kill(-pid_i32, 9); // SIGKILL to process group
+        kill(pid_i32, 9); // SIGKILL to process
+    };
 }
 
 #[cfg(not(unix))]

@@ -401,6 +401,119 @@ fn board_shows_skipped_batch_task_when_dependency_fails() {
     assert!(stdout.contains("SKIP"));
 }
 
+#[cfg(unix)]
+#[test]
+fn batch_completion_summary_prints_stats() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let temp_dir = TempDir::new().unwrap();
+    let bin_dir = temp_dir.path().join("bin");
+    std::fs::create_dir(&bin_dir).unwrap();
+
+    let codex_path = bin_dir.join("codex");
+    std::fs::write(&codex_path, "#!/bin/sh\nexit 0\n").unwrap();
+    let mut perms = std::fs::metadata(&codex_path).unwrap().permissions();
+    perms.set_mode(0o755);
+    std::fs::set_permissions(&codex_path, perms).unwrap();
+
+    let batch_path = temp_dir.path().join("batch.toml");
+    std::fs::write(
+        &batch_path,
+        concat!(
+            "[[task]]\n",
+            "name = \"A\"\n",
+            "agent = \"codex\"\n",
+            "prompt = \"task A\"\n",
+            "\n",
+            "[[task]]\n",
+            "name = \"B\"\n",
+            "agent = \"codex\"\n",
+            "prompt = \"task B\"\n",
+        ),
+    )
+    .unwrap();
+
+    let path = std::env::var("PATH").unwrap_or_default();
+    let test_path = format!("{}:{}", bin_dir.display(), path);
+
+    let output = aid_cmd_in(temp_dir.path())
+        .env("PATH", &test_path)
+        .args(["batch", batch_path.to_str().unwrap()])
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("done"));
+    assert!(stderr.contains("failed"));
+    assert!(stderr.contains("skipped"));
+    assert!(stderr.contains("Cost:") || stderr.contains("Time:"));
+}
+
+#[cfg(unix)]
+#[test]
+fn batch_retry_with_no_failures_succeeds() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let temp_dir = TempDir::new().unwrap();
+    let bin_dir = temp_dir.path().join("bin");
+    std::fs::create_dir(&bin_dir).unwrap();
+
+    let codex_path = bin_dir.join("codex");
+    std::fs::write(&codex_path, "#!/bin/sh\nexit 0\n").unwrap();
+    let mut perms = std::fs::metadata(&codex_path).unwrap().permissions();
+    perms.set_mode(0o755);
+    std::fs::set_permissions(&codex_path, perms).unwrap();
+
+    let batch_path = temp_dir.path().join("batch.toml");
+    std::fs::write(
+        &batch_path,
+        concat!(
+            "[[task]]\n",
+            "name = \"A\"\n",
+            "agent = \"codex\"\n",
+            "prompt = \"task A\"\n",
+            "\n",
+            "[[task]]\n",
+            "name = \"B\"\n",
+            "agent = \"codex\"\n",
+            "prompt = \"task B\"\n",
+        ),
+    )
+    .unwrap();
+
+    let path = std::env::var("PATH").unwrap_or_default();
+    let test_path = format!("{}:{}", bin_dir.display(), path);
+
+    let batch_output = aid_cmd_in(temp_dir.path())
+        .env("PATH", &test_path)
+        .args(["batch", batch_path.to_str().unwrap()])
+        .output()
+        .unwrap();
+    assert!(batch_output.status.success());
+
+    let batch_stderr = String::from_utf8_lossy(&batch_output.stderr);
+    let workgroup_id = batch_stderr
+        .lines()
+        .find_map(|line| {
+            let marker = "Auto-created workgroup ";
+            let (_, rest) = line.split_once(marker)?;
+            rest.split_whitespace().next().map(str::to_string)
+        })
+        .unwrap();
+
+    let retry_output = aid_cmd_in(temp_dir.path())
+        .env("PATH", &test_path)
+        .args(["batch", "retry", &workgroup_id])
+        .output()
+        .unwrap();
+    assert!(retry_output.status.success());
+
+    let stdout = String::from_utf8_lossy(&retry_output.stdout);
+    let stderr = String::from_utf8_lossy(&retry_output.stderr);
+    assert!(stdout.contains("No failed tasks") || stderr.contains("No failed tasks"));
+}
+
 #[test]
 fn respond_reads_response_text_from_file() {
     let temp_dir = TempDir::new().unwrap();

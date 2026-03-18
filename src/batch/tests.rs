@@ -87,7 +87,7 @@ fn parses_batch_with_dependencies() {
 fn applies_defaults_to_tasks() {
     let cfg = parse_batch_file(
         write_temp(concat!(
-            "[defaults]\nagent = \"gemini\"\ndir = \"src\"\nmodel = \"gpt-5\"\n",
+            "[defaults]\nauto_fallback = true\nagent = \"gemini\"\ndir = \"src\"\nmodel = \"gpt-5\"\n",
             "worktree_prefix = \"feat\"\nverify = true\nmax_duration_mins = 25\n",
             "context = [\"src/lib.rs\", \"src/main.rs:run\"]\n",
             "skills = [\"rust\", \"cli\"]\nfallback = \"cursor\"\nread_only = true\nbudget = true\n",
@@ -97,6 +97,7 @@ fn applies_defaults_to_tasks() {
     )
     .unwrap();
 
+    assert_eq!(cfg.defaults.auto_fallback, Some(true));
     let task = &cfg.tasks[0];
     assert_eq!(task.agent, "gemini");
     assert_eq!(task.dir.as_deref(), Some("src"));

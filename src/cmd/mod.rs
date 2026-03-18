@@ -49,3 +49,5 @@ pub mod experiment_types;
 pub mod experiment;
 pub mod experiment_persist;
 pub mod experiment_status;
+#[cfg(test)]
+mod batch_auto_fallback_tests;

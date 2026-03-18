@@ -32,7 +32,9 @@ mod templates;
 mod compaction;
 pub mod claudemd;
 mod tui;
+mod system_resources;
 mod types;
+mod update_check;
 mod usage;
 pub mod usage_report;
 mod verify;
@@ -50,7 +52,7 @@ use clap::Parser;
 use std::fs;
 use std::io::{IsTerminal, Read};
 use std::sync::Arc;
-use crate::cli::{Cli, Commands, AgentCommands, HookAction, StoreCommands, MemoryCommands, FindingCommands};
+use crate::cli::{BatchAction, Cli, Commands, AgentCommands, HookAction, StoreCommands, MemoryCommands, FindingCommands};
 use crate::cmd::experiment_types::{ExperimentConfig, MetricDirection};
 
 /// Resolve group: CLI flag takes precedence, then AID_GROUP env var.
@@ -89,6 +91,10 @@ async fn main() -> Result<()> {
     let cli = Cli::parse();
 
     paths::ensure_dirs()?;
+    let config = config::load_config().unwrap_or_default();
+    if config.updates.check {
+        update_check::maybe_check_update();
+    }
     let store = Arc::new(store::Store::open(&paths::db_path())?);
     let _ = background::check_zombie_tasks(&store);
 
@@ -203,6 +209,7 @@ async fn main() -> Result<()> {
             .await?;
         }
         Commands::Batch {
+            action,
             file,
             parallel,
             wait,
@@ -210,20 +217,25 @@ async fn main() -> Result<()> {
             max_concurrent,
             output,
         } => {
-            if file == "init" {
-                cmd::batch::init(output.as_deref())?;
-            } else {
-                cmd::batch::run(
-                    store,
-                    cmd::batch::BatchArgs {
-                        file,
-                        parallel,
-                        wait,
-                        dry_run,
-                        max_concurrent,
-                    },
-                )
-                .await?;
+            match action {
+                Some(BatchAction::Init) => cmd::batch::init(output.as_deref())?,
+                Some(BatchAction::Retry { group_id, agent }) => {
+                    cmd::batch::retry_failed(store, &group_id, agent.as_deref()).await?;
+                }
+                None => {
+                    let file = file.ok_or_else(|| anyhow::anyhow!("batch file is required"))?;
+                    cmd::batch::run(
+                        store,
+                        cmd::batch::BatchArgs {
+                            file,
+                            parallel,
+                            wait,
+                            dry_run,
+                            max_concurrent,
+                        },
+                    )
+                    .await?;
+                }
             }
         }
         Commands::Benchmark {

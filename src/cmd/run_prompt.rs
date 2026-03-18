@@ -19,6 +19,8 @@ use super::RunArgs;
 const VERIFY_RETRY_FEEDBACK: &str =
     "Verification failed. Please fix the compilation/test errors and try again.";
 const PROMPT_TOKEN_LIMIT: usize = 30_000;
+const BATCH_SIBLING_LIMIT: usize = 10;
+const BATCH_SIBLING_PROMPT_LIMIT: usize = 80;
 
 pub(super) struct PromptBundle { pub effective_prompt: String, pub context_files: Vec<String>, pub prompt_tokens: i64, pub injected_memory_ids: Vec<String> }
 
@@ -33,6 +35,40 @@ fn sanitize_injected_text(text: &str) -> String {
         })
         .collect::<Vec<_>>()
         .join("\n")
+}
+
+fn truncate_batch_sibling_prompt(prompt: &str) -> String {
+    let mut preview: String = prompt.chars().take(BATCH_SIBLING_PROMPT_LIMIT).collect();
+    if prompt.chars().count() > BATCH_SIBLING_PROMPT_LIMIT {
+        preview.push_str("...");
+    }
+    preview
+}
+
+pub(super) fn format_batch_siblings(siblings: &[(String, String, String)]) -> String {
+    let shown = siblings
+        .iter()
+        .take(BATCH_SIBLING_LIMIT)
+        .map(|(name, agent, prompt)| {
+            format!(
+                "- \"{}\" ({}): {}",
+                name,
+                agent,
+                truncate_batch_sibling_prompt(prompt)
+            )
+        })
+        .collect::<Vec<_>>();
+    let remaining = siblings.len().saturating_sub(BATCH_SIBLING_LIMIT);
+    let mut lines = vec![
+        "<aid-batch-siblings>".to_string(),
+        "Other tasks running in this batch:".to_string(),
+    ];
+    lines.extend(shown);
+    if remaining > 0 {
+        lines.push(format!("+ {remaining} more"));
+    }
+    lines.push("</aid-batch-siblings>".to_string());
+    lines.join("\n")
 }
 
 pub(super) fn build_prompt_bundle(store: &Store, args: &RunArgs, agent_kind: &AgentKind, workgroup: Option<&Workgroup>, requested_skills: &[String], current_task_id: &str) -> Result<PromptBundle> {
@@ -175,6 +211,12 @@ pub(super) fn build_prompt_bundle(store: &Store, args: &RunArgs, agent_kind: &Ag
         }
     }
 
+    if !args.batch_siblings.is_empty() {
+        effective_prompt = format!(
+            "{effective_prompt}\n\n{}",
+            format_batch_siblings(&args.batch_siblings)
+        );
+    }
     if args.output.is_some() {
         effective_prompt = format!("{effective_prompt}\n\n{}", output_file_instruction());
     }

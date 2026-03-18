@@ -47,6 +47,27 @@ fn build_prompt_args(output: Option<&str>) -> RunArgs {
 }
 
 #[test]
+fn format_batch_siblings_truncates_and_limits_output() {
+    let prompt = "a".repeat(81);
+    let siblings = (0..12)
+        .map(|idx| {
+            (
+                format!("task-{idx}"),
+                "codex".to_string(),
+                prompt.clone(),
+            )
+        })
+        .collect::<Vec<_>>();
+
+    let formatted = format_batch_siblings(&siblings);
+
+    assert!(formatted.contains("- \"task-0\" (codex):"));
+    assert!(formatted.contains(&format!("{}...", "a".repeat(80))));
+    assert!(!formatted.contains("\"task-10\""));
+    assert!(formatted.contains("+ 2 more"));
+}
+
+#[test]
 fn effective_skills_auto_apply_defaults() {
     let temp = tempfile::tempdir().unwrap();
     let _aid_home = crate::paths::AidHomeGuard::set(temp.path());
@@ -119,6 +140,42 @@ fn build_prompt_bundle_omits_output_instruction_when_output_is_not_set() {
     .unwrap();
 
     assert!(!bundle.effective_prompt.contains("Your final response will be saved to a file."));
+}
+
+#[test]
+fn build_prompt_bundle_appends_batch_siblings_after_system_context() {
+    let temp = tempfile::tempdir().unwrap();
+    let _aid_home = crate::paths::AidHomeGuard::set(temp.path());
+    crate::paths::ensure_dirs().unwrap();
+    let store = Store::open_memory().unwrap();
+    let group = store
+        .create_workgroup("batch", "desc", Some("seed"), Some("wg-batch"))
+        .unwrap();
+    let bundle = build_prompt_bundle(
+        &store,
+        &RunArgs {
+            agent_name: "codex".to_string(),
+            prompt: "Write the requested content".to_string(),
+            group: Some(group.id.to_string()),
+            batch_siblings: vec![(
+                "task-2".to_string(),
+                "gemini".to_string(),
+                "Summarize the dependency graph".to_string(),
+            )],
+            ..Default::default()
+        },
+        &AgentKind::Codex,
+        None,
+        &[],
+        "task-1",
+    )
+    .unwrap();
+
+    let system_idx = bundle.effective_prompt.find("<aid-system-context>").unwrap();
+    let siblings_idx = bundle.effective_prompt.find("<aid-batch-siblings>").unwrap();
+
+    assert!(siblings_idx > system_idx);
+    assert!(bundle.effective_prompt.contains("- \"task-2\" (gemini): Summarize the dependency graph"));
 }
 
 #[tokio::test]

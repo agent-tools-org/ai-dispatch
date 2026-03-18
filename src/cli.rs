@@ -151,10 +151,12 @@ Batch TOML format:
 
 Note: --dir, --team, --verify are set in [defaults], not as CLI flags.
 Run `aid batch init` to generate a full template with all fields."#)]
-    /// Dispatch tasks from a TOML batch file
+    /// Dispatch tasks from a TOML batch file or manage batch reruns
     Batch {
-        /// Path to batch TOML file, or "init" to generate a template
-        file: String,
+        #[command(subcommand)]
+        action: Option<BatchAction>,
+        /// Path to batch TOML file
+        file: Option<String>,
         /// Dispatch tasks in parallel
         #[arg(long)]
         parallel: bool,
@@ -705,9 +707,23 @@ pub enum ExperimentCommands {
     },
 }
 
+#[derive(Subcommand)]
+pub enum BatchAction {
+    /// Generate a template batch TOML file
+    Init,
+    /// Re-dispatch failed tasks from an existing batch workgroup
+    Retry {
+        /// Workgroup ID to retry failed tasks from
+        group_id: String,
+        /// Agent override for all retried tasks
+        #[arg(long)]
+        agent: Option<String>,
+    },
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{Cli, Commands, ExperimentCommands, HookAction};
+    use super::{BatchAction, Cli, Commands, ExperimentCommands, HookAction};
     use clap::Parser;
 
     #[test]
@@ -813,6 +829,43 @@ mod tests {
                 action: HookAction::SessionStart,
             } => {}
             _ => panic!("expected Hook SessionStart"),
+        }
+    }
+
+    #[test]
+    fn batch_dispatch_file_parses() {
+        let cli = Cli::try_parse_from(["aid", "batch", "tasks.toml", "--parallel"]).unwrap();
+        match cli.command {
+            Commands::Batch {
+                action,
+                file,
+                parallel,
+                ..
+            } => {
+                assert!(action.is_none());
+                assert_eq!(file, Some("tasks.toml".to_string()));
+                assert!(parallel);
+            }
+            _ => panic!("expected Batch"),
+        }
+    }
+
+    #[test]
+    fn batch_retry_parses() {
+        let cli = Cli::try_parse_from(["aid", "batch", "retry", "wg-a", "--agent", "cursor"])
+            .unwrap();
+        match cli.command {
+            Commands::Batch {
+                action:
+                    Some(BatchAction::Retry { group_id, agent }),
+                file,
+                ..
+            } => {
+                assert_eq!(group_id, "wg-a");
+                assert_eq!(agent, Some("cursor".to_string()));
+                assert!(file.is_none());
+            }
+            _ => panic!("expected Batch retry"),
         }
     }
 }

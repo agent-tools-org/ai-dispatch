@@ -20,6 +20,26 @@ pub struct AidConfig {
     pub webhooks: Vec<WebhookConfig>,
     #[serde(default)]
     pub query: QueryConfig,
+    #[serde(default)]
+    pub updates: UpdateConfig,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct UpdateConfig {
+    #[serde(default = "default_check_updates")]
+    pub check: bool,
+}
+
+fn default_check_updates() -> bool {
+    true
+}
+
+impl Default for UpdateConfig {
+    fn default() -> Self {
+        Self {
+            check: default_check_updates(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -334,6 +354,21 @@ mod tests {
         .unwrap();
 
         assert!(config.selection.budget_mode);
+    }
+
+    #[test]
+    fn updates_check_defaults_to_true_and_allows_override() {
+        assert!(AidConfig::default().updates.check);
+
+        let config: AidConfig = toml::from_str(
+            r#"
+            [updates]
+            check = false
+            "#,
+        )
+        .unwrap();
+
+        assert!(!config.updates.check);
     }
 
     #[test]

@@ -66,6 +66,23 @@ pub fn is_rate_limited(agent: &AgentKind) -> bool {
     }
 }
 
+pub fn rate_limited_agents() -> Vec<(AgentKind, String)> {
+    [
+        AgentKind::Gemini,
+        AgentKind::Codex,
+        AgentKind::OpenCode,
+        AgentKind::Cursor,
+        AgentKind::Kilo,
+        AgentKind::Codebuff,
+    ]
+    .into_iter()
+    .filter_map(|agent| {
+        let info = get_rate_limit_info(&agent)?;
+        is_rate_limited(&agent).then(|| (agent, info.message.unwrap_or_default()))
+    })
+    .collect()
+}
+
 pub fn is_rate_limit_error(message: &str) -> bool {
     let lower = message.to_lowercase();
     lower.contains("rate limit")
@@ -173,6 +190,24 @@ mod tests {
 
         let _ = std::fs::remove_file(marker_path(&AgentKind::Codex));
         assert!(!is_rate_limited(&AgentKind::Codex));
+    }
+
+    #[test]
+    fn test_is_rate_limited_returns_false_for_fresh_agents() {
+        let temp_dir = std::env::temp_dir().join("aid-rate-limit-test-fresh");
+        let _guard = paths::AidHomeGuard::set(&temp_dir);
+        std::fs::create_dir_all(paths::aid_dir()).ok();
+
+        assert!(!is_rate_limited(&AgentKind::Codex));
+    }
+
+    #[test]
+    fn test_rate_limited_agents_returns_empty_initially() {
+        let temp_dir = std::env::temp_dir().join("aid-rate-limit-test-empty");
+        let _guard = paths::AidHomeGuard::set(&temp_dir);
+        std::fs::create_dir_all(paths::aid_dir()).ok();
+
+        assert!(rate_limited_agents().is_empty());
     }
 
     #[test]

@@ -1,16 +1,32 @@
 // Batch dispatch command for running tasks from a TOML file.
 // Exports: BatchArgs, run()
 // Deps: crate::batch, crate::cmd::run, crate::cmd::batch_validate, crate::store::Store
-use anyhow::{anyhow, Context, Result};
-use std::{collections::HashMap, path::Path, sync::Arc};
+use anyhow::{Context, Result};
+use std::{path::Path, sync::Arc, time::Instant};
 use crate::batch;
-use crate::cmd::run::{self, RunArgs};
+use crate::cmd::run;
 use crate::store::Store;
 #[path = "batch_validate.rs"]
 mod batch_validate;
 #[path = "batch_init.rs"]
 mod batch_init;
-use batch_validate::{find_ready_tasks, load_task_outcome, resolve_dependencies, task_has_dependencies, task_label, validate_batch_config};
+#[path = "batch_args.rs"]
+mod batch_args;
+#[path = "batch_retry.rs"]
+mod batch_retry;
+#[path = "batch_dispatch.rs"]
+mod batch_dispatch;
+#[path = "batch_helpers.rs"]
+mod batch_helpers;
+#[path = "batch_types.rs"]
+mod batch_types;
+
+use batch_validate::{task_has_dependencies, validate_batch_config};
+#[cfg(test)]
+pub(crate) use batch_dispatch::{auto_fallback_agent, should_auto_fallback};
+#[cfg(test)]
+pub(crate) use batch_types::BatchTaskOutcome;
+pub use batch_retry::retry_failed;
 pub struct BatchArgs {
     pub file: String,
     pub parallel: bool,
@@ -22,11 +38,12 @@ pub struct BatchArgs {
 pub fn init(output_path: Option<&str>) -> Result<()> {
     batch_init::init(output_path)
 }
+
 pub async fn run(store: Arc<Store>, args: BatchArgs) -> Result<()> {
     if args.max_concurrent == Some(0) {
         anyhow::bail!("--max-concurrent must be at least 1");
     }
-    let resolved_path = resolve_batch_path(Path::new(&args.file));
+    let resolved_path = batch_helpers::resolve_batch_path(Path::new(&args.file));
     let path = resolved_path.as_path();
     let mut config = batch::parse_batch_file(path)
         .with_context(|| format!("Failed to load batch file {}", path.display()))?;
@@ -42,7 +59,11 @@ pub async fn run(store: Arc<Store>, args: BatchArgs) -> Result<()> {
             eprintln!("[aid] Using workspace {env_group} from AID_GROUP");
         } else if total >= 2 {
             let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("batch");
-            let wg_id = ensure_batch_workgroup(&store, stem, config.defaults.group_id.as_deref())?;
+            let wg_id = batch_helpers::ensure_batch_workgroup(
+                &store,
+                stem,
+                config.defaults.group_id.as_deref(),
+            )?;
             for task in &mut config.tasks {
                 task.group = Some(wg_id.clone());
             }
@@ -50,27 +71,71 @@ pub async fn run(store: Arc<Store>, args: BatchArgs) -> Result<()> {
     }
     if args.dry_run {
         println!("Batch: previewing {total} task(s) from {}", path.display());
-        for task in &config.tasks {
-            let mut run_args = task_to_run_args(task, false, &store);
+        for (task_idx, task) in config.tasks.iter().enumerate() {
+            let siblings: Vec<_> = config.tasks
+                .iter()
+                .enumerate()
+                .filter(|(idx, _)| *idx != task_idx)
+                .map(|(_, sibling)| sibling)
+                .collect();
+            let mut run_args = batch_args::task_to_run_args(task, &siblings, false, &store);
             run_args.dry_run = true;
             let _ = run::run(store.clone(), run_args).await?;
         }
         println!("Batch: {total} task(s) previewed");
         return Ok(());
     }
+    if let Some(avail) = batch_helpers::low_disk_space_mb(500) {
+        eprintln!("[aid] Warning: low disk space ({avail} MB free) — parallel dispatch may fail");
+    }
+    batch_helpers::warn_for_rate_limited_agents(&config.tasks);
     println!("Batch: dispatching {total} task(s) from {}", path.display());
-    let task_ids = if has_dependencies && args.parallel {
-        dispatch_parallel_with_dependencies(store.clone(), &config.tasks, args.max_concurrent).await?
+    let start_time = Instant::now();
+    let dispatch = if has_dependencies && args.parallel {
+        batch_dispatch::dispatch_parallel_with_dependencies(
+            store.clone(),
+            &config.tasks,
+            args.max_concurrent,
+            config.defaults.auto_fallback.unwrap_or(false),
+        )
+        .await?
     } else if has_dependencies {
-        dispatch_sequential_with_dependencies(store.clone(), &config.tasks).await?
+        batch_dispatch::dispatch_sequential_with_dependencies(
+            store.clone(),
+            &config.tasks,
+            config.defaults.auto_fallback.unwrap_or(false),
+        )
+        .await?
     } else if args.parallel {
-        dispatch_parallel(store.clone(), &config.tasks, args.max_concurrent).await?
+        batch_dispatch::dispatch_parallel(
+            store.clone(),
+            &config.tasks,
+            args.max_concurrent,
+            config.defaults.auto_fallback.unwrap_or(false),
+        )
+        .await?
     } else {
-        dispatch_sequential(store.clone(), &config.tasks).await?
+        batch_dispatch::dispatch_sequential(
+            store.clone(),
+            &config.tasks,
+            config.defaults.auto_fallback.unwrap_or(false),
+        )
+        .await?
     };
+    let task_ids = dispatch.dispatched_task_ids();
     if args.wait && args.parallel && !has_dependencies && !task_ids.is_empty() {
         crate::cmd::wait::wait_for_task_ids(&store, &task_ids, false, None).await?;
     }
+    eprintln!(
+        "{}",
+        batch_helpers::batch_summary(
+            &dispatch.outcomes,
+            &dispatch.task_ids,
+            &config.tasks,
+            &store,
+            start_time,
+        )
+    );
     let archive_dir = crate::paths::aid_dir().join("batches");
     if let Err(e) = std::fs::create_dir_all(&archive_dir) {
         eprintln!("[aid] Failed to create batch archive dir: {e}");
@@ -94,509 +159,6 @@ pub async fn run(store: Arc<Store>, args: BatchArgs) -> Result<()> {
     eprintln!("[aid] TUI:   aid watch --tui");
     Ok(())
 }
-fn resolve_batch_path(path: &Path) -> std::path::PathBuf {
-    if path.exists() {
-        return path.to_path_buf();
-    }
-    match path.file_name() {
-        Some(file_name) => {
-            let fallback = crate::paths::aid_dir().join("batches").join(file_name);
-            if fallback.exists() { fallback } else { path.to_path_buf() }
-        }
-        None => path.to_path_buf(),
-    }
-}
-
-fn ensure_batch_workgroup(store: &Store, stem: &str, custom_gid: Option<&str>) -> Result<String> {
-    if let Some(gid) = custom_gid
-        && store.get_workgroup(gid)?.is_some()
-    {
-        eprintln!("[aid] Reusing existing workgroup {gid} for batch {stem}");
-        return Ok(gid.to_string());
-    }
-    let wg = store.create_workgroup(stem, "Auto-created for batch dispatch", Some(stem), custom_gid)?;
-    eprintln!("[aid] Auto-created workgroup {} for batch {stem}", wg.id);
-    Ok(wg.id.to_string())
-}
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum BatchTaskOutcome { Done, Failed, Skipped }
-struct DispatchedTask { index: usize, task_id: Option<String> }
-fn task_to_run_args(task: &batch::BatchTask, background: bool, store: &Arc<Store>) -> RunArgs {
-    // If team is set and agent is empty/auto, auto-select from team members
-    let agent_name = if (task.agent.is_empty() || task.agent == "auto") && task.team.is_some() {
-        let team_config = task.team.as_deref().and_then(crate::team::resolve_team);
-        let selection_opts = crate::agent::RunOpts {
-            dir: task.dir.clone(),
-            output: task.output.clone(),
-            model: task.model.clone(),
-            budget: task.budget,
-            read_only: task.read_only,
-            context_files: vec![],
-            session_id: None,
-        };
-        let (selected, reason) = crate::agent::select_agent_with_reason(
-            &task.prompt, &selection_opts, store, team_config.as_ref(),
-        );
-        eprintln!("[aid] Batch auto-selected: {selected} (reason: {reason})");
-        selected
-    } else if task.agent.is_empty() {
-        "auto".to_string()
-    } else {
-        task.agent.clone()
-    };
-        RunArgs {
-            agent_name,
-            prompt: task.prompt.clone(),
-            dir: task.dir.clone(),
-            output: task.output.clone(),
-            model: task.model.clone(),
-            worktree: task.worktree.clone(),
-            group: task.group.clone(),
-            verify: task.verify.clone(),
-            judge: task.judge.clone(),
-            max_duration_mins: task.max_duration_mins.map(|value| value as i64),
-        context: task.context.clone().unwrap_or_default(),
-        skills: task.skills.clone().unwrap_or_default(),
-        hooks: task.hooks.clone().unwrap_or_default(),
-        background,
-        dry_run: false,
-        announce: true,
-        cascade: task.fallback.as_deref().map(|f| vec![f.to_string()]).unwrap_or_default(),
-        read_only: task.read_only,
-        budget: task.budget,
-        best_of: task.best_of,
-        team: task.team.clone(),
-        context_from: task.context_from.clone().unwrap_or_default(),
-        scope: task.scope.clone().unwrap_or_default(),
-        parent_task_id: task.parent.clone(),
-        ..Default::default()
-    }
-}
-async fn dispatch_parallel(store: Arc<Store>, tasks: &[batch::BatchTask], max_concurrent: Option<usize>) -> Result<Vec<String>> {
-    let dependencies = vec![Vec::new(); tasks.len()];
-    let max_active = max_concurrent.unwrap_or(tasks.len()).max(1);
-    dispatch_with_dependencies(store, tasks, &dependencies, max_active).await
-}
-async fn dispatch_sequential(store: Arc<Store>, tasks: &[batch::BatchTask]) -> Result<Vec<String>> {
-    let dependencies = vec![Vec::new(); tasks.len()];
-    dispatch_with_dependencies(store, tasks, &dependencies, 1).await
-}
-async fn dispatch_parallel_with_dependencies(store: Arc<Store>, tasks: &[batch::BatchTask], max_concurrent: Option<usize>) -> Result<Vec<String>> {
-    let dependencies = resolve_dependencies(tasks)?;
-    let max_active = max_concurrent.unwrap_or(tasks.len()).max(1);
-    dispatch_with_dependencies(store, tasks, &dependencies, max_active).await
-}
-async fn dispatch_sequential_with_dependencies(store: Arc<Store>, tasks: &[batch::BatchTask]) -> Result<Vec<String>> {
-    let dependencies = resolve_dependencies(tasks)?;
-    dispatch_with_dependencies(store, tasks, &dependencies, 1).await
-}
-
-async fn dispatch_with_dependencies(
-    store: Arc<Store>,
-    tasks: &[batch::BatchTask],
-    dependencies: &[Vec<usize>],
-    max_active: usize,
-) -> Result<Vec<String>> {
-    if tasks.is_empty() {
-        return Ok(Vec::new());
-    }
-    // Pre-create all tasks with Waiting status so they're visible in TUI immediately
-    let waiting_ids: Vec<String> = tasks.iter().enumerate().map(|(i, task)| {
-        let id = task.id.as_ref()
-            .map(|s| crate::types::TaskId(s.clone()))
-            .unwrap_or_else(crate::types::TaskId::generate);
-        let agent = if task.agent.is_empty() { "auto" } else { &task.agent };
-        let prompt_preview = if task.prompt.len() > 120 { &task.prompt[..120] } else { &task.prompt };
-        if let Err(e) = store.insert_waiting_task(id.as_str(), agent, prompt_preview, task.group.as_deref()) {
-            eprintln!("[aid] Warning: failed to pre-create task {i}: {e}");
-        }
-        id.to_string()
-    }).collect();
-    let name_map = batch::task_name_map(tasks)?;
-    let success_targets = resolve_hook_targets(tasks, &name_map, |task| task.on_success.as_deref())?;
-    let failure_targets = resolve_hook_targets(tasks, &name_map, |task| task.on_fail.as_deref())?;
-    let mut started = vec![false; tasks.len()];
-    let mut outcomes = vec![None; tasks.len()];
-    let mut triggered: Vec<bool> = tasks.iter().map(|task| !task.conditional).collect();
-    let mut active: Vec<(usize, String)> = Vec::new();
-    let mut task_ids = Vec::new();
-    let max_active = max_active.max(1);
-    while outcomes.iter().any(Option::is_none) {
-        let ready = find_ready_tasks(
-            &store,
-            tasks,
-            dependencies,
-            &started,
-            &mut outcomes,
-            &triggered,
-        )?;
-        let available = max_active.saturating_sub(active.len());
-        if available > 0 && !ready.is_empty() {
-            let dispatch_group: Vec<_> = ready.into_iter().take(available).collect();
-            for dispatch in dispatch_level_with_ids(store.clone(), tasks, &dispatch_group, &waiting_ids).await? {
-                started[dispatch.index] = true;
-                match dispatch.task_id {
-                    Some(task_id) => {
-                        task_ids.push(task_id.clone());
-                        active.push((dispatch.index, task_id));
-                    }
-                    None => {
-                        outcomes[dispatch.index] = Some(BatchTaskOutcome::Failed);
-                        // Mark waiting placeholder as skipped
-                        let _ = store.update_task_status(&waiting_ids[dispatch.index], crate::types::TaskStatus::Skipped);
-                        trigger_conditional(
-                            BatchTaskOutcome::Failed,
-                            dispatch.index,
-                            &mut triggered,
-                            &success_targets,
-                            &failure_targets,
-                        );
-                    }
-                }
-            }
-        }
-        if active.is_empty() {
-            break;
-        }
-        wait_for_any_completion(
-            &store,
-            &mut active,
-            &mut outcomes,
-            &mut triggered,
-            &success_targets,
-            &failure_targets,
-        )?;
-    }
-    // Mark any remaining waiting tasks as skipped (deps never resolved)
-    for (i, outcome) in outcomes.iter().enumerate() {
-        if outcome.is_none() {
-            let _ = store.update_task_status(&waiting_ids[i], crate::types::TaskStatus::Skipped);
-        }
-    }
-    Ok(task_ids)
-}
-
-fn resolve_hook_targets<F>(
-    tasks: &[batch::BatchTask],
-    name_map: &HashMap<&str, usize>,
-    selector: F,
-) -> Result<Vec<Option<usize>>>
-where
-    F: Fn(&batch::BatchTask) -> Option<&str>,
-{
-    tasks
-        .iter()
-        .map(|task| {
-            if let Some(reference) = selector(task) {
-                let trimmed = reference.trim();
-                let &target_idx = name_map
-                    .get(trimmed)
-                    .ok_or_else(|| anyhow!("unknown hook target: {trimmed}"))?;
-                Ok(Some(target_idx))
-            } else {
-                Ok(None)
-            }
-        })
-        .collect()
-}
-
-fn trigger_conditional(
-    outcome: BatchTaskOutcome,
-    task_idx: usize,
-    triggered: &mut [bool],
-    success_targets: &[Option<usize>],
-    failure_targets: &[Option<usize>],
-) {
-    match outcome {
-        BatchTaskOutcome::Done => {
-            if let Some(target_idx) = success_targets[task_idx] {
-                triggered[target_idx] = true;
-            }
-        }
-        BatchTaskOutcome::Failed => {
-            if let Some(target_idx) = failure_targets[task_idx] {
-                triggered[target_idx] = true;
-            }
-        }
-        BatchTaskOutcome::Skipped => {}
-    }
-}
-async fn dispatch_level_with_ids(store: Arc<Store>, tasks: &[batch::BatchTask], task_indices: &[usize], waiting_ids: &[String]) -> Result<Vec<DispatchedTask>> {
-    let handles: Vec<_> = task_indices
-        .iter()
-        .map(|&task_idx| {
-            let store = store.clone();
-            let mut run_args = task_to_run_args(&tasks[task_idx], true, &store);
-            run_args.existing_task_id = Some(crate::types::TaskId(waiting_ids[task_idx].clone()));
-            tokio::spawn(async move { (task_idx, run::run(store, run_args).await) })
-        })
-        .collect();
-    let mut dispatches = Vec::with_capacity(task_indices.len());
-    for handle in handles {
-        let (task_idx, result) = handle.await.context("Batch task join failure")?;
-        match result {
-            Ok(task_id) => dispatches.push(DispatchedTask {
-                index: task_idx,
-                task_id: Some(task_id.to_string()),
-            }),
-            Err(err) => {
-                eprintln!(
-                    "Batch task failed ({}): {err}",
-                    task_label(&tasks[task_idx], task_idx)
-                );
-                dispatches.push(DispatchedTask {
-                    index: task_idx,
-                    task_id: None,
-                });
-            }
-        }
-    }
-    Ok(dispatches)
-}
-
-fn wait_for_any_completion(
-    store: &Arc<Store>,
-    active: &mut Vec<(usize, String)>,
-    outcomes: &mut [Option<BatchTaskOutcome>],
-    triggered: &mut [bool],
-    success_targets: &[Option<usize>],
-    failure_targets: &[Option<usize>],
-) -> Result<()> {
-    loop {
-        let mut completed = Vec::new();
-        for (i, (_, task_id)) in active.iter().enumerate() {
-            if let Some(task) = store.get_task(task_id)?
-                && task.status.is_terminal()
-            {
-                completed.push(i);
-            }
-        }
-        if !completed.is_empty() {
-            for &i in completed.iter().rev() {
-                let (task_idx, task_id) = active.remove(i);
-                outcomes[task_idx] = Some(load_task_outcome(store, &task_id)?);
-                trigger_conditional(
-                    outcomes[task_idx].unwrap(),
-                    task_idx,
-                    triggered,
-                    success_targets,
-                    failure_targets,
-                );
-            }
-            return Ok(());
-        }
-        std::thread::sleep(std::time::Duration::from_secs(2));
-    }
-}
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::batch;
-    use crate::paths::AidHomeGuard;
-    use crate::store::Store;
-    use std::fs;
-    use std::sync::Arc;
-
-    fn make_task(name: &str, conditional: bool, on_success: Option<&str>) -> batch::BatchTask {
-        batch::BatchTask {
-            id: None,
-            name: Some(name.to_string()),
-            agent: "codex".to_string(),
-            team: None,
-            prompt: "prompt".to_string(),
-            dir: None,
-            output: None,
-            model: None,
-            worktree: None,
-            group: None,
-            best_of: None,
-            max_duration_mins: None,
-            verify: None,
-            judge: None,
-            context: None,
-            skills: None,
-            hooks: None,
-            depends_on: None,
-            parent: None,
-            context_from: None,
-            fallback: None,
-            scope: None,
-            read_only: false,
-            budget: false,
-            on_success: on_success.map(str::to_string),
-            on_fail: None,
-            conditional,
-        }
-    }
-
-
-    #[test]
-    fn trigger_success_marks_target() {
-        let mut triggered = vec![true, false];
-        let success_targets = vec![Some(1), None];
-        let failure_targets = vec![None, None];
-        trigger_conditional(
-            BatchTaskOutcome::Done,
-            0,
-            &mut triggered,
-            &success_targets,
-            &failure_targets,
-        );
-        assert!(triggered[1]);
-    }
-
-    #[test]
-    fn trigger_failure_marks_target() {
-        let mut triggered = vec![true, false];
-        let success_targets = vec![None, None];
-        let failure_targets = vec![Some(1), None];
-        trigger_conditional(
-            BatchTaskOutcome::Failed,
-            0,
-            &mut triggered,
-            &success_targets,
-            &failure_targets,
-        );
-        assert!(triggered[1]);
-    }
-
-    #[test]
-    fn conditional_task_stays_dormant_until_triggered() {
-        let store = Arc::new(Store::open_memory().unwrap());
-        let tasks = vec![make_task("first", false, Some("second")), make_task("second", true, None)];
-        let deps = vec![Vec::new(), Vec::new()];
-        let started = vec![false; 2];
-        let mut outcomes = vec![None; 2];
-        let triggered = vec![true, false];
-        let ready = find_ready_tasks(&store, &tasks, &deps, &started, &mut outcomes, &triggered).unwrap();
-        assert_eq!(ready, vec![0]);
-        let triggered = vec![true, true];
-        let ready = find_ready_tasks(&store, &tasks, &deps, &started, &mut outcomes, &triggered).unwrap();
-        assert_eq!(ready, vec![0, 1]);
-    }
-
-    #[test]
-    fn task_to_run_args_copies_context() {
-        let store = Arc::new(Store::open_memory().unwrap());
-        let run_args = task_to_run_args(
-            &batch::BatchTask {
-                id: None,
-                name: None,
-                agent: "codex".to_string(),
-                team: None,
-                prompt: "test".to_string(),
-                dir: None,
-                output: None,
-                model: None,
-                worktree: None,
-                group: None,
-                verify: None,
-                max_duration_mins: None,
-                context: Some(vec!["src/lib.rs".to_string(), "src/main.rs:run".to_string()]),
-                skills: None,
-                hooks: None,
-                depends_on: None,
-                parent: None,
-                context_from: None,
-                fallback: None,
-                scope: None,
-                read_only: false,
-                budget: false,
-                judge: None,
-                best_of: None,
-                on_success: None,
-                on_fail: None,
-                conditional: false,
-            },
-            true,
-            &store,
-        );
-
-        assert_eq!(
-            run_args.context,
-            vec!["src/lib.rs".to_string(), "src/main.rs:run".to_string()]
-        );
-    }
-
-    #[test]
-    fn task_to_run_args_defaults_dry_run_to_false() {
-        let store = Arc::new(Store::open_memory().unwrap());
-        let run_args = task_to_run_args(
-            &batch::BatchTask {
-                id: None,
-                name: None,
-                agent: "codex".to_string(),
-                team: None,
-                prompt: "test".to_string(),
-                dir: None,
-                output: None,
-                model: None,
-                worktree: None,
-                group: None,
-                verify: None,
-                max_duration_mins: None,
-                context: None,
-                skills: None,
-                hooks: None,
-                depends_on: None,
-                parent: None,
-                context_from: None,
-                fallback: None,
-                scope: None,
-                read_only: false,
-                budget: false,
-                judge: None,
-                best_of: None,
-                on_success: None,
-                on_fail: None,
-                conditional: false,
-            },
-            false,
-            &store,
-        );
-
-        assert!(!run_args.dry_run);
-    }
-
-    #[test]
-    fn resolve_batch_path_uses_aid_batches_fallback() {
-        let temp = tempfile::tempdir().unwrap();
-        let _guard = AidHomeGuard::set(temp.path());
-
-        let batches_dir = crate::paths::aid_dir().join("batches");
-        fs::create_dir_all(&batches_dir).unwrap();
-        let fallback = batches_dir.join("deploy.toml");
-        fs::write(&fallback, "tasks = []\n").unwrap();
-
-        let resolved = resolve_batch_path(Path::new("deploy.toml"));
-
-        assert_eq!(resolved, fallback);
-    }
-
-    #[test]
-    fn ensure_batch_workgroup_reuses_existing_default_group() {
-        let store = Store::open_memory().unwrap();
-        let existing = store
-            .create_workgroup("existing", "shared", Some("seed"), Some("wg-shared"))
-            .unwrap();
-
-        let workgroup_id = ensure_batch_workgroup(&store, "batch", Some("wg-shared")).unwrap();
-        let workgroups = store.list_workgroups().unwrap();
-
-        assert_eq!(workgroup_id, existing.id.to_string());
-        assert_eq!(workgroups.len(), 1);
-    }
-
-    #[test]
-    fn ensure_batch_workgroup_creates_missing_default_group() {
-        let store = Store::open_memory().unwrap();
-
-        let workgroup_id = ensure_batch_workgroup(&store, "batch", Some("wg-custom")).unwrap();
-        let workgroups = store.list_workgroups().unwrap();
-        let workgroup = store.get_workgroup("wg-custom").unwrap().unwrap();
-
-        assert_eq!(workgroup_id, "wg-custom");
-        assert_eq!(workgroups.len(), 1);
-        assert_eq!(workgroup.name, "batch");
-    }
-}
+#[path = "batch_tests.rs"]
+mod batch_tests;

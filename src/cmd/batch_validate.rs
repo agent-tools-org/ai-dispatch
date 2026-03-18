@@ -9,7 +9,7 @@ use crate::batch;
 use crate::rate_limit;
 use crate::store::Store;
 use crate::types::{AgentKind, Task, TaskId, TaskStatus, VerifyStatus};
-use super::BatchTaskOutcome;
+use super::batch_types::BatchTaskOutcome;
 pub(super) fn validate_batch_config(tasks: &[batch::BatchTask]) -> Result<()> { validate_task_agents(tasks)?; rate_limit_precheck(tasks); Ok(()) }
 pub(super) fn resolve_dependencies(tasks: &[batch::BatchTask]) -> Result<Vec<Vec<usize>>> { batch::dependency_indices(tasks) }
 pub(super) fn task_has_dependencies(task: &batch::BatchTask) -> bool { task.depends_on.as_ref().is_some_and(|depends_on| !depends_on.is_empty()) }

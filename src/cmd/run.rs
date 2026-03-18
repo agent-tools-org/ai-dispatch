@@ -61,6 +61,7 @@ pub struct RunArgs {
     pub session_id: Option<String>,
     pub team: Option<String>,
     pub context_from: Vec<String>,
+    pub batch_siblings: Vec<(String, String, String)>,
     pub scope: Vec<String>,
     pub judge_retry: bool,
     pub existing_task_id: Option<TaskId>,

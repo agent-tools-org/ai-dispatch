@@ -46,6 +46,8 @@ pub struct BatchConfig {
 pub struct BatchDefaults {
     pub group_id: Option<String>,
     pub agent: Option<String>,
+    #[serde(default)]
+    pub auto_fallback: Option<bool>,
     pub team: Option<String>,
     pub dir: Option<String>,
     pub model: Option<String>,

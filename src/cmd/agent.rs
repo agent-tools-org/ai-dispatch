@@ -10,6 +10,7 @@ use crate::agent::custom::{CapabilityScores, CustomAgentConfig, parse_config};
 use crate::agent::registry;
 use crate::agent::selection::AGENT_CAPABILITIES;
 use crate::paths;
+use crate::sanitize;
 use crate::types::AgentKind;
 
 const AGENT_TEMPLATE: &str = r#"[agent]
@@ -186,6 +187,7 @@ fn remove_agent(name: &str) -> Result<()> {
     if is_builtin(name) {
         bail!("Cannot remove built-in agent '{name}'");
     }
+    sanitize::validate_name(name, "agent")?;
     let target = custom_agent_path(name);
     if !target.is_file() {
         bail!("Custom agent '{name}' does not exist");

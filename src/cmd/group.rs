@@ -5,17 +5,21 @@
 use anyhow::Result;
 use std::sync::Arc;
 
+use crate::sanitize;
 use crate::store::Store;
 use crate::types::TaskFilter;
 
 pub fn create(store: &Arc<Store>, name: &str, context: &str, custom_id: Option<&str>) -> Result<()> {
+    if let Some(custom_id) = custom_id {
+        sanitize::validate_workgroup_id(custom_id)?;
+    }
     let workgroup = store.create_workgroup(name, context, Some("cli"), custom_id)?;
     println!("{}", workgroup.id);
     eprintln!("[aid] Created workgroup '{}' ({})", workgroup.name, workgroup.id);
     eprintln!("[aid] Scope all commands: export AID_GROUP={}", workgroup.id);
     eprintln!(
         "[aid] Workspace: {}",
-        crate::paths::workspace_dir(workgroup.id.as_str()).display()
+        crate::paths::workspace_dir(workgroup.id.as_str())?.display()
     );
     Ok(())
 }

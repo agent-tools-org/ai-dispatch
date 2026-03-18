@@ -6,6 +6,8 @@ use std::path::PathBuf;
 #[cfg(test)]
 use std::cell::RefCell;
 
+use crate::sanitize;
+
 #[cfg(test)]
 thread_local! {
     static AID_HOME_OVERRIDE: RefCell<Option<PathBuf>> = const { RefCell::new(None) };
@@ -46,28 +48,34 @@ pub fn pricing_path() -> PathBuf {
 }
 
 pub fn log_path(task_id: &str) -> PathBuf {
+    // Takes a validated task ID from the input boundary.
     logs_dir().join(format!("{task_id}.jsonl"))
 }
 
 pub fn stderr_path(task_id: &str) -> PathBuf {
+    // Takes a validated task ID from the input boundary.
     logs_dir().join(format!("{task_id}.stderr"))
 }
 
 pub fn job_path(task_id: &str) -> PathBuf {
+    // Takes a validated task ID from the input boundary.
     jobs_dir().join(format!("{task_id}.json"))
 }
 
 pub fn job_input_path(task_id: &str) -> PathBuf {
+    // Takes a validated task ID from the input boundary.
     jobs_dir().join(format!("{task_id}.input"))
 }
 
 pub fn steer_signal_path(task_id: &str) -> PathBuf {
+    // Takes a validated task ID from the input boundary.
     jobs_dir().join(format!("{task_id}.steer"))
 }
 
 /// Returns /tmp/aid-wg-{id}/ as the workspace directory for a workgroup.
-pub fn workspace_dir(workgroup_id: &str) -> PathBuf {
-    std::path::PathBuf::from(format!("/tmp/aid-wg-{workgroup_id}"))
+pub fn workspace_dir(workgroup_id: &str) -> Result<PathBuf> {
+    sanitize::validate_workgroup_id(workgroup_id)?;
+    Ok(std::path::PathBuf::from(format!("/tmp/aid-wg-{workgroup_id}")))
 }
 
 pub fn ensure_dirs() -> Result<()> {
@@ -109,8 +117,13 @@ mod tests {
 
     #[test]
     fn workspace_dir_uses_tmp() {
-        let path = workspace_dir("wg-test");
-        assert_eq!(path.to_str().unwrap(), "/tmp/aid-wg-wg-test");
+        let path = workspace_dir("wg-abcd").unwrap();
+        assert_eq!(path.to_str().unwrap(), "/tmp/aid-wg-wg-abcd");
+    }
+
+    #[test]
+    fn workspace_dir_rejects_invalid_id() {
+        assert!(workspace_dir("wg-test").is_err());
     }
 
     #[test]
@@ -130,7 +143,7 @@ mod tests {
     #[test]
     fn steer_signal_path_in_jobs() {
         let _guard = AidHomeGuard::set(std::path::Path::new("/tmp/aid-test"));
-        let path = steer_signal_path("t-steer");
-        assert!(path.ends_with("jobs/t-steer.steer"));
+        let path = steer_signal_path("t-abcd");
+        assert!(path.ends_with("jobs/t-abcd.steer"));
     }
 }

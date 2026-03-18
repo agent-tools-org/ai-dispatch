@@ -38,6 +38,17 @@ fn validate_git_repo_succeeds_on_real_repo() {
 }
 
 #[test]
+fn create_worktree_rejects_invalid_branch_name() {
+    let repo = TempDir::new().unwrap();
+    git(repo.path(), &["init", "-b", "main"]);
+    git(repo.path(), &["config", "user.email", "test@example.com"]);
+    git(repo.path(), &["config", "user.name", "Test User"]);
+
+    let err = create_worktree(repo.path(), "../escape", None).unwrap_err();
+    assert!(err.to_string().contains("Invalid branch name"));
+}
+
+#[test]
 fn create_worktree_with_base_branch_inherits_base_content() {
     let repo = TempDir::new().unwrap();
     git(repo.path(), &["init", "-b", "main"]);

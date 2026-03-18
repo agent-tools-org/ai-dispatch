@@ -480,7 +480,9 @@ fn extract_finding_detail(line: &str) -> Option<String> {
 }
 
 fn append_to_broadcast(workgroup_id: &str, task_id: &str, content: &str) {
-    let broadcast_path = crate::paths::workspace_dir(workgroup_id).join("broadcast.md");
+    let Ok(broadcast_path) = crate::paths::workspace_dir(workgroup_id).map(|path| path.join("broadcast.md")) else {
+        return;
+    };
     if let Ok(mut file) = std::fs::OpenOptions::new()
         .create(true)
         .append(true)

@@ -48,7 +48,7 @@ impl Store {
         if deleted == 0 {
             return Ok(None);
         }
-        let workspace_dir = crate::paths::workspace_dir(id);
+        let workspace_dir = crate::paths::workspace_dir(id)?;
         let ws = workspace_dir.to_string_lossy();
         if ws.starts_with("/tmp/aid-wg-") || ws.starts_with("/private/tmp/aid-wg-") {
             let _ = std::fs::remove_dir_all(&workspace_dir);

@@ -5,6 +5,8 @@ use anyhow::{Context, Result};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+use crate::sanitize;
+
 #[derive(Debug, Clone)]
 pub struct WorktreeInfo {
     pub path: PathBuf,
@@ -74,6 +76,10 @@ pub fn create_worktree(
     branch: &str,
     base_branch: Option<&str>,
 ) -> Result<WorktreeInfo> {
+    sanitize::validate_branch_name(branch)?;
+    if let Some(base_branch) = base_branch {
+        sanitize::validate_branch_name(base_branch)?;
+    }
     validate_git_repo(repo_dir)?;
     let wt_path = PathBuf::from(format!("/tmp/aid-wt-{branch}"));
 

@@ -5,6 +5,7 @@
 use anyhow::{bail, Result};
 use std::fs;
 
+use crate::sanitize;
 use crate::team;
 
 const TEAM_TEMPLATE: &str = r#"[team]
@@ -153,6 +154,7 @@ fn create_team(name: &str) -> Result<()> {
 }
 
 fn delete_team(name: &str) -> Result<()> {
+    sanitize::validate_name(name, "team")?;
     let target = team::teams_dir().join(format!("{name}.toml"));
     if !target.is_file() {
         bail!("Team '{name}' does not exist");

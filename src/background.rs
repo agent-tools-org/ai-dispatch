@@ -11,6 +11,7 @@ use crate::agent::{self, RunOpts};
 use crate::config;
 use crate::notify;
 use crate::paths;
+use crate::sanitize;
 use crate::store::Store;
 use crate::types::{AgentKind, EventKind, TaskEvent, TaskFilter, TaskId, TaskStatus};
 
@@ -45,6 +46,7 @@ pub struct BackgroundRunSpec {
 }
 
 pub fn save_spec(spec: &BackgroundRunSpec) -> Result<()> {
+    sanitize::validate_task_id(&spec.task_id)?;
     let path = paths::job_path(&spec.task_id);
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)?;
@@ -55,6 +57,7 @@ pub fn save_spec(spec: &BackgroundRunSpec) -> Result<()> {
 }
 
 pub fn spawn_worker(task_id: &str) -> Result<Child> {
+    sanitize::validate_task_id(task_id)?;
     let exe = std::env::current_exe().context("Failed to resolve current aid binary")?;
     Command::new(exe)
         .args(["__run-task", task_id])
@@ -66,6 +69,7 @@ pub fn spawn_worker(task_id: &str) -> Result<Child> {
 }
 
 pub async fn run_task(store: Arc<Store>, task_id: &str) -> Result<()> {
+    sanitize::validate_task_id(task_id)?;
     let spec = load_spec(task_id)?;
     let result = run_task_inner(&store, &spec).await;
     let _ = remove_spec(task_id);
@@ -103,6 +107,7 @@ pub fn check_zombie_tasks(store: &Store) -> Result<Vec<String>> {
 }
 
 pub fn load_worker_pid(task_id: &str) -> Result<Option<u32>> {
+    sanitize::validate_task_id(task_id)?;
     Ok(load_spec_if_exists(task_id)?.and_then(|spec| spec.worker_pid))
 }
 
@@ -254,6 +259,7 @@ async fn run_task_inner(store: &Arc<Store>, spec: &BackgroundRunSpec) -> Result<
 }
 
 fn load_spec(task_id: &str) -> Result<BackgroundRunSpec> {
+    sanitize::validate_task_id(task_id)?;
     let path = paths::job_path(task_id);
     let content = std::fs::read_to_string(&path)
         .with_context(|| format!("Failed to read background spec {}", path.display()))?;
@@ -262,6 +268,7 @@ fn load_spec(task_id: &str) -> Result<BackgroundRunSpec> {
 }
 
 fn remove_spec(task_id: &str) -> Result<()> {
+    sanitize::validate_task_id(task_id)?;
     let path = paths::job_path(task_id);
     if path.exists() {
         std::fs::remove_file(path)?;
@@ -344,6 +351,7 @@ where
 }
 
 fn load_spec_if_exists(task_id: &str) -> Result<Option<BackgroundRunSpec>> {
+    sanitize::validate_task_id(task_id)?;
     let path = paths::job_path(task_id);
     if !path.exists() {
         return Ok(None);
@@ -361,6 +369,7 @@ fn record_failure(
     stderr_detail: &str,
     event_detail: &str,
 ) -> Result<()> {
+    sanitize::validate_task_id(task_id)?;
     let stderr_path = paths::stderr_path(task_id);
     std::fs::write(&stderr_path, format!("{stderr_detail}\n"))?;
     store.update_task_status(task_id, TaskStatus::Failed)?;

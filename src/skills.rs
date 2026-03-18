@@ -4,12 +4,14 @@
 
 use anyhow::{Context, Result};
 use crate::types::AgentKind;
+use crate::sanitize;
 
 fn skills_dir() -> std::path::PathBuf {
     crate::paths::aid_dir().join("skills")
 }
 
 pub fn load_skill(name: &str) -> Result<String> {
+    sanitize::validate_name(name, "skill")?;
     let path = skills_dir().join(format!("{name}.md"));
     match std::fs::read_to_string(&path) {
         Ok(content) => Ok(content),
@@ -160,6 +162,12 @@ mod tests {
 
         assert_eq!(load_skill("test-writer").unwrap(), "# Test Writer");
         assert_eq!(list_skills().unwrap(), vec!["reviewer", "test-writer"]);
+    }
+
+    #[test]
+    fn load_skill_rejects_invalid_name() {
+        let err = load_skill("../escape").unwrap_err();
+        assert!(err.to_string().contains("Invalid skill name"));
     }
 
     #[test]

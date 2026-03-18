@@ -4,8 +4,10 @@
 use anyhow::Result;
 
 use crate::paths;
+use crate::sanitize;
 
 pub fn write_response(task_id: &str, input: &str) -> Result<()> {
+    sanitize::validate_task_id(task_id)?;
     if let Some(parent) = paths::job_input_path(task_id).parent() {
         std::fs::create_dir_all(parent)?;
     }
@@ -14,6 +16,7 @@ pub fn write_response(task_id: &str, input: &str) -> Result<()> {
 }
 
 pub fn take_response(task_id: &str) -> Result<Option<String>> {
+    sanitize::validate_task_id(task_id)?;
     let path = paths::job_input_path(task_id);
     if !path.exists() {
         return Ok(None);
@@ -24,6 +27,7 @@ pub fn take_response(task_id: &str) -> Result<Option<String>> {
 }
 
 pub fn clear_response(task_id: &str) -> Result<()> {
+    sanitize::validate_task_id(task_id)?;
     let path = paths::job_input_path(task_id);
     if path.exists() {
         std::fs::remove_file(path)?;
@@ -32,6 +36,7 @@ pub fn clear_response(task_id: &str) -> Result<()> {
 }
 
 pub fn write_steer(task_id: &str, message: &str) -> Result<()> {
+    sanitize::validate_task_id(task_id)?;
     let path = paths::steer_signal_path(task_id);
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)?;
@@ -41,6 +46,7 @@ pub fn write_steer(task_id: &str, message: &str) -> Result<()> {
 }
 
 pub fn take_steer(task_id: &str) -> Result<Option<String>> {
+    sanitize::validate_task_id(task_id)?;
     let path = paths::steer_signal_path(task_id);
     if !path.exists() {
         return Ok(None);
@@ -51,6 +57,7 @@ pub fn take_steer(task_id: &str) -> Result<Option<String>> {
 }
 
 pub fn clear_steer(task_id: &str) -> Result<()> {
+    sanitize::validate_task_id(task_id)?;
     let path = paths::steer_signal_path(task_id);
     if path.exists() {
         std::fs::remove_file(path)?;
@@ -68,12 +75,12 @@ mod tests {
         let temp = tempfile::tempdir().unwrap();
         let _aid_home = paths::AidHomeGuard::set(temp.path());
 
-        write_response("t-respond", "yes").unwrap();
-        assert!(paths::job_input_path("t-respond").exists());
+        write_response("t-abcd", "yes").unwrap();
+        assert!(paths::job_input_path("t-abcd").exists());
 
-        let input = take_response("t-respond").unwrap();
+        let input = take_response("t-abcd").unwrap();
         assert_eq!(input.as_deref(), Some("yes"));
-        assert!(!paths::job_input_path("t-respond").exists());
+        assert!(!paths::job_input_path("t-abcd").exists());
     }
 
     #[test]
@@ -81,11 +88,17 @@ mod tests {
         let temp = tempfile::tempdir().unwrap();
         let _aid_home = paths::AidHomeGuard::set(temp.path());
 
-        write_steer("t-steer", "go left").unwrap();
-        assert!(paths::steer_signal_path("t-steer").exists());
+        write_steer("t-bcde", "go left").unwrap();
+        assert!(paths::steer_signal_path("t-bcde").exists());
 
-        let message = take_steer("t-steer").unwrap();
+        let message = take_steer("t-bcde").unwrap();
         assert_eq!(message.as_deref(), Some("go left"));
-        assert!(!paths::steer_signal_path("t-steer").exists());
+        assert!(!paths::steer_signal_path("t-bcde").exists());
+    }
+
+    #[test]
+    fn rejects_invalid_task_id() {
+        let err = write_response("t-respond", "yes").unwrap_err();
+        assert!(err.to_string().contains("Invalid task ID"));
     }
 }

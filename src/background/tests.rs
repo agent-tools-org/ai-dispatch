@@ -11,7 +11,7 @@ use crate::types::{AgentKind, EventKind, Task, TaskId, TaskStatus, VerifyStatus}
 #[test]
 fn serializes_spec_to_json() {
     let spec = BackgroundRunSpec {
-        task_id: "t-save".to_string(),
+        task_id: "t-5a0e".to_string(),
         worker_pid: Some(4242),
         agent_name: "codex".to_string(),
         prompt: "prompt".to_string(),
@@ -22,7 +22,7 @@ fn serializes_spec_to_json() {
         judge: Some("gemini".to_string()),
         max_duration_mins: Some(90),
         retry: 2,
-        group: Some("wg-demo".to_string()),
+        group: Some("wg-abcd".to_string()),
         skills: vec![],
         template: None,
         interactive: true,
@@ -43,39 +43,39 @@ fn marks_running_background_tasks_failed_when_worker_is_missing() {
 
     let store = Store::open_memory().unwrap();
     store
-        .insert_task(&make_task("t-live", TaskStatus::Running))
+        .insert_task(&make_task("t-1a1a", TaskStatus::Running))
         .unwrap();
     store
-        .insert_task(&make_task("t-zombie", TaskStatus::Running))
+        .insert_task(&make_task("t-2b2b", TaskStatus::Running))
         .unwrap();
     store
-        .insert_task(&make_task("t-foreground", TaskStatus::Running))
+        .insert_task(&make_task("t-3c3c", TaskStatus::Running))
         .unwrap();
-    save_spec(&make_spec("t-live")).unwrap();
-    save_spec(&make_spec("t-zombie")).unwrap();
+    save_spec(&make_spec("t-1a1a")).unwrap();
+    save_spec(&make_spec("t-2b2b")).unwrap();
 
     let cleaned = check_zombie_tasks_with(&store, |pid| pid == 101).unwrap();
 
-    assert_eq!(cleaned, vec!["t-zombie".to_string()]);
+    assert_eq!(cleaned, vec!["t-2b2b".to_string()]);
     assert_eq!(
-        store.get_task("t-live").unwrap().unwrap().status,
+        store.get_task("t-1a1a").unwrap().unwrap().status,
         TaskStatus::Running
     );
     assert_eq!(
-        store.get_task("t-zombie").unwrap().unwrap().status,
+        store.get_task("t-2b2b").unwrap().unwrap().status,
         TaskStatus::Failed
     );
     assert_eq!(
-        store.get_task("t-foreground").unwrap().unwrap().status,
+        store.get_task("t-3c3c").unwrap().unwrap().status,
         TaskStatus::Running
     );
 
-    let events = store.get_events("t-zombie").unwrap();
+    let events = store.get_events("t-2b2b").unwrap();
     assert_eq!(events.len(), 1);
     assert_eq!(events[0].event_kind, EventKind::Error);
     assert_eq!(events[0].detail, ZOMBIE_FAILURE_DETAIL);
 
-    let stderr = std::fs::read_to_string(paths::stderr_path("t-zombie")).unwrap();
+    let stderr = std::fs::read_to_string(paths::stderr_path("t-2b2b")).unwrap();
     assert_eq!(stderr.trim(), ZOMBIE_FAILURE_DETAIL);
 }
 
@@ -83,7 +83,7 @@ fn marks_running_background_tasks_failed_when_worker_is_missing() {
 fn completion_notifications_are_written_as_jsonl() {
     let temp = tempfile::tempdir().unwrap();
     let _aid_home = paths::AidHomeGuard::set(temp.path());
-    let mut task = make_task("t-note", TaskStatus::Done);
+    let mut task = make_task("t-4d4d", TaskStatus::Done);
     task.duration_ms = Some(1_500);
     task.cost_usd = Some(0.25);
     task.prompt = "x".repeat(120);
@@ -92,7 +92,7 @@ fn completion_notifications_are_written_as_jsonl() {
 
     let line = crate::notify::read_recent(20).unwrap();
     let value: serde_json::Value = serde_json::from_str(&line).unwrap();
-    assert_eq!(value["task_id"], "t-note");
+    assert_eq!(value["task_id"], "t-4d4d");
     assert_eq!(value["agent"], "codex");
     assert_eq!(value["status"], "DONE");
     assert_eq!(value["duration_ms"], 1_500);
@@ -104,7 +104,7 @@ fn completion_notifications_are_written_as_jsonl() {
 fn make_spec(task_id: &str) -> BackgroundRunSpec {
     BackgroundRunSpec {
         task_id: task_id.to_string(),
-        worker_pid: Some(if task_id == "t-live" { 101 } else { 202 }),
+        worker_pid: Some(if task_id == "t-1a1a" { 101 } else { 202 }),
         agent_name: "codex".to_string(),
         prompt: "prompt".to_string(),
         dir: Some(".".to_string()),

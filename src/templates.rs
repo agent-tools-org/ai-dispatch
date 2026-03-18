@@ -4,6 +4,8 @@
 
 use anyhow::{Context, Result};
 
+use crate::sanitize;
+
 fn templates_dir() -> std::path::PathBuf { crate::paths::aid_dir().join("templates") }
 
 pub fn list_templates() -> Vec<String> {
@@ -22,6 +24,7 @@ pub fn list_templates() -> Vec<String> {
 }
 
 pub fn load_template(name: &str) -> Result<String> {
+    sanitize::validate_name(name, "template")?;
     let path = templates_dir().join(format!("{name}.md"));
     match std::fs::read_to_string(&path) {
         Ok(content) => Ok(content),
@@ -81,5 +84,11 @@ mod tests {
     #[test]
     fn text_edit_guard_triggers_for_toml() {
         assert!(text_edit_guard("Update Cargo.toml version").is_some());
+    }
+
+    #[test]
+    fn load_template_rejects_invalid_name() {
+        let err = load_template("../escape").unwrap_err();
+        assert!(err.to_string().contains("Invalid template name"));
     }
 }

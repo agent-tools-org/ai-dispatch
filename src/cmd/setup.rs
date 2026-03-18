@@ -2,7 +2,7 @@
 // Exports: run.
 // Deps: paths, config, std::io.
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use std::io::{self, BufRead, Write};
 use std::process::Command;
 
@@ -119,7 +119,9 @@ pub fn run() -> Result<()> {
     {
         for entry in entries.flatten() {
             if entry.path().extension().is_some_and(|e| e == "toml") {
-                let name = entry.path().file_stem().unwrap().to_string_lossy().to_string();
+                let path = entry.path();
+                let Some(stem) = path.file_stem() else { continue };
+                let name = stem.to_string_lossy().to_string();
                 installed += 1;
                 println!("  ✓ {name} (custom)");
             }
@@ -131,7 +133,7 @@ pub fn run() -> Result<()> {
     println!("  {installed} agent(s) ready");
 
     // 3. Write config
-    let dir = config_path.parent().unwrap();
+    let dir = config_path.parent().context("config path has no parent")?;
     std::fs::create_dir_all(dir)?;
     std::fs::write(&config_path, &existing)?;
 

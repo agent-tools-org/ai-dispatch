@@ -531,7 +531,8 @@ pub async fn run(store: Arc<Store>, mut args: RunArgs) -> Result<TaskId> {
             }
         }
         run_prompt::notify_task_completion(&store, &task_id)?;
-        let summary = crate::cmd::summary::generate_summary(&store.get_task(task_id.as_str())?.unwrap());
+        let Some(task) = store.get_task(task_id.as_str())? else { return Ok(task_id) };
+        let summary = crate::cmd::summary::generate_summary(&task);
         let summary_json = serde_json::to_string(&summary).unwrap_or_default();
         let _ = store.save_completion_summary(task_id.as_str(), &summary_json);
         if let Some(task) = store.get_task(task_id.as_str())? {

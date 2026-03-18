@@ -2,7 +2,7 @@
 // Exports: run.
 // Deps: paths, store.
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use chrono::Local;
 
 use crate::store::Store;
@@ -13,7 +13,7 @@ pub fn run(store: &Store, group_id: &str, message: &str) -> Result<()> {
         .ok_or_else(|| anyhow::anyhow!("Workgroup '{group_id}' not found"))?;
 
     let broadcast_path = crate::paths::workspace_dir(group_id)?.join("broadcast.md");
-    let dir = broadcast_path.parent().unwrap();
+    let dir = broadcast_path.parent().context("broadcast path has no parent")?;
     std::fs::create_dir_all(dir)?;
 
     use std::io::Write;

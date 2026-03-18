@@ -557,7 +557,7 @@ fn agent_profile(
                 .unwrap_or_default();
             format!(
                 "  Status:    rate-limited (try again at {}){}\n",
-                info.recovery_at.as_ref().unwrap(),
+                info.recovery_at.as_deref().unwrap_or("unknown"),
                 fallback_hint,
             )
         }
@@ -661,7 +661,7 @@ pub fn budget_model(agent: &AgentKind) -> Option<&'static str> {
             .min_by(|a, b| {
                 let cost_a = a.input_per_m + a.output_per_m;
                 let cost_b = b.input_per_m + b.output_per_m;
-                cost_a.partial_cmp(&cost_b).unwrap()
+                cost_a.partial_cmp(&cost_b).unwrap_or(std::cmp::Ordering::Equal)
             })
             .map(|m| m.model)
     }

@@ -192,43 +192,54 @@ pub fn collect_usage_snapshot(
 }
 
 pub fn check_budget_status(store: &Store, config: &AidConfig) -> Result<BudgetStatus> {
-    let tasks = store.list_tasks(TaskFilter::All)?;
-    let budget_rows = collect_budget_rows(&tasks, &config.usage.budgets);
-
+    let now = Local::now();
     let mut over_limit = false;
     let mut near_limit = false;
     let mut messages: Vec<String> = Vec::new();
 
-    for row in &budget_rows {
-        if let Some(limit) = row.task_limit {
-            if row.tasks >= limit {
+    for budget in &config.usage.budgets {
+        let since = budget
+            .window
+            .as_deref()
+            .and_then(parse_window)
+            .map(|window| now - window);
+        let (task_count, total_tokens, total_cost) = match budget.agent.as_deref() {
+            Some(agent) => store.budget_usage_summary(agent, since)?,
+            None => (0, 0, 0.0),
+        };
+        let tasks = task_count + budget.external_tasks;
+        let _tokens = total_tokens + budget.external_tokens;
+        let cost_usd = total_cost + budget.external_cost_usd;
+
+        if let Some(limit) = budget.task_limit {
+            if tasks >= limit {
                 over_limit = true;
                 messages.push(format!(
                     "Budget '{}': task limit reached ({}/{})",
-                    row.name, row.tasks, limit
+                    budget.name, tasks, limit
                 ));
-            } else if row.tasks as f64 / limit as f64 > 0.8 {
+            } else if tasks as f64 / limit as f64 > 0.8 {
                 near_limit = true;
                 messages.push(format!(
                     "Budget '{}': task usage at {}%",
-                    row.name,
-                    (row.tasks as f64 / limit as f64 * 100.0) as u32
+                    budget.name,
+                    (tasks as f64 / limit as f64 * 100.0) as u32
                 ));
             }
         }
-        if let Some(limit) = row.cost_limit_usd {
-            if row.cost_usd >= limit {
+        if let Some(limit) = budget.cost_limit_usd {
+            if cost_usd >= limit {
                 over_limit = true;
                 messages.push(format!(
                     "Budget '{}': cost limit reached (${:.2}/${:.2})",
-                    row.name, row.cost_usd, limit
+                    budget.name, cost_usd, limit
                 ));
-            } else if row.cost_usd / limit > 0.8 {
+            } else if cost_usd / limit > 0.8 {
                 near_limit = true;
                 messages.push(format!(
                     "Budget '{}': cost usage at {}%",
-                    row.name,
-                    (row.cost_usd / limit * 100.0) as u32
+                    budget.name,
+                    (cost_usd / limit * 100.0) as u32
                 ));
             }
         }
@@ -372,7 +383,7 @@ pub(crate) fn filter_budget_tasks<'a>(tasks: &'a [Task], budget: &UsageBudget) -
         .collect()
 }
 
-fn parse_window(value: &str) -> Option<Duration> {
+pub(crate) fn parse_window(value: &str) -> Option<Duration> {
     let trimmed = value.trim();
     if let Some(hours) = trimmed.strip_suffix('h') {
         return hours.parse::<i64>().ok().map(Duration::hours);

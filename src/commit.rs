@@ -25,8 +25,29 @@ pub fn auto_commit(dir: &str, task_id: &str, prompt: &str) -> Result<()> {
     Ok(())
 }
 
-/// Extract the actual task description, skipping injected context headers.
+/// Extract the actual task description from the [Task] section, falling back to
+/// the first non-header content line.
 fn extract_task_summary(prompt: &str) -> String {
+    // Prefer content after [Task] header — that's the real task description
+    let mut in_task_section = false;
+    for line in prompt.lines() {
+        let trimmed = line.trim();
+        if trimmed == "[Task]" {
+            in_task_section = true;
+            continue;
+        }
+        if in_task_section {
+            if trimmed.is_empty()
+                || trimmed.starts_with('[')
+                || trimmed.starts_with("---")
+                || trimmed.starts_with('#')
+            {
+                continue;
+            }
+            return trimmed.chars().take(60).collect();
+        }
+    }
+    // Fallback: first non-header content line
     for line in prompt.lines() {
         let trimmed = line.trim();
         if trimmed.is_empty()
@@ -92,9 +113,12 @@ mod tests {
     }
 
     #[test]
-    fn extract_task_summary_skips_context_headers() {
-        let prompt = "[Shared Context: batch]\nSome shared stuff\n\n[Team Knowledge — dev]\n- coding rules\n\n[Task]\nImplement the parser changes for v2";
-        assert_eq!(extract_task_summary(prompt), "Some shared stuff");
+    fn extract_task_summary_prefers_task_section() {
+        let prompt = "[Shared Context: batch]\nAuto-created for batch dispatch\n\n[Team Knowledge — dev]\n- coding rules\n\n[Task]\nImplement the parser changes for v2";
+        assert_eq!(
+            extract_task_summary(prompt),
+            "Implement the parser changes for v2"
+        );
     }
 
     #[test]

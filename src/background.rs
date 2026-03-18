@@ -74,8 +74,9 @@ pub fn spawn_worker(task_id: &str) -> Result<Child> {
         cmd.env("AID_HOME", home);
     }
     // Create a new process group so we can kill the worker and all its children.
+    // Skip in test context (AID_NO_DETACH=1) so workers die with the test process.
     #[cfg(unix)]
-    {
+    if std::env::var_os("AID_NO_DETACH").is_none() {
         use std::os::unix::process::CommandExt;
         cmd.process_group(0);
     }

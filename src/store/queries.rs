@@ -5,7 +5,7 @@
 use std::collections::HashMap;
 
 use anyhow::Result;
-use chrono::Local;
+use chrono::{DateTime, Local};
 use rusqlite::{params, OptionalExtension};
 
 use super::schema::{parse_dt, row_to_event, row_to_memory, row_to_task};
@@ -121,6 +121,38 @@ impl Store {
         for row in rows {
             let (tid, detail) = row?;
             map.insert(tid, detail);
+        }
+        Ok(map)
+    }
+
+    pub fn latest_awaiting_reasons_batch(&self, task_ids: &[&str]) -> Result<HashMap<String, String>> {
+        if task_ids.is_empty() {
+            return Ok(HashMap::new());
+        }
+        let conn = self.db();
+        let placeholders: Vec<String> = (1..=task_ids.len()).map(|i| format!("?{i}")).collect();
+        let sql = format!(
+            "SELECT task_id, json_extract(metadata, '$.awaiting_prompt') FROM events e1
+             WHERE json_extract(metadata, '$.awaiting_input') = 1
+             AND timestamp = (
+                 SELECT MAX(timestamp) FROM events e2
+                 WHERE e2.task_id = e1.task_id
+                   AND json_extract(e2.metadata, '$.awaiting_input') = 1
+             )
+             AND task_id IN ({})",
+            placeholders.join(",")
+        );
+        let mut stmt = conn.prepare(&sql)?;
+        let params: Vec<&dyn rusqlite::ToSql> = task_ids.iter().map(|s| s as &dyn rusqlite::ToSql).collect();
+        let rows = stmt.query_map(params.as_slice(), |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, Option<String>>(1)?))
+        })?;
+        let mut map = HashMap::new();
+        for row in rows {
+            let (task_id, prompt) = row?;
+            if let Some(prompt) = prompt {
+                map.insert(task_id, prompt);
+            }
         }
         Ok(map)
     }
@@ -247,6 +279,23 @@ impl Store {
 
     pub fn list_running_tasks(&self) -> Result<Vec<Task>> {
         self.list_tasks(TaskFilter::Running)
+    }
+
+    pub fn budget_usage_summary(
+        &self,
+        agent: &str,
+        since: Option<DateTime<Local>>,
+    ) -> Result<(u32, i64, f64)> {
+        let conn = self.db();
+        let (task_count, total_tokens, total_cost): (i64, i64, f64) = conn.query_row(
+            "SELECT COUNT(*) as task_count,
+                    COALESCE(SUM(tokens), 0) as total_tokens,
+                    COALESCE(SUM(cost_usd), 0.0) as total_cost
+             FROM tasks WHERE agent = ?1 AND (?2 IS NULL OR created_at >= ?2)",
+            params![agent, since.map(|value| value.to_rfc3339())],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+        )?;
+        Ok((u32::try_from(task_count)?, total_tokens, total_cost))
     }
 
     pub fn list_tasks_by_session(&self, session_id: &str) -> Result<Vec<Task>> {
@@ -503,8 +552,10 @@ fn row_to_workgroup(row: &rusqlite::Row) -> rusqlite::Result<Result<Workgroup>> 
 
 #[cfg(test)]
 mod tests {
+    use chrono::{Duration, Local};
     use crate::store::Store;
     use crate::types::{AgentKind, TaskStatus};
+    use crate::usage::parse_window;
     use rusqlite::params;
 
     fn insert_task(
@@ -519,6 +570,23 @@ mod tests {
             "INSERT INTO tasks (id, agent, prompt, status, created_at)
              VALUES (?1, ?2, ?3, ?4, ?5)",
             params![id, agent.as_str(), prompt, status.as_str(), "2026-03-15T00:00:00Z"],
+        )
+        .unwrap();
+    }
+
+    fn insert_event(
+        store: &Store,
+        task_id: &str,
+        timestamp: &str,
+        event_type: &str,
+        detail: &str,
+        metadata: Option<&str>,
+    ) {
+        let conn = store.db();
+        conn.execute(
+            "INSERT INTO events (task_id, timestamp, event_type, detail, metadata)
+             VALUES (?1, ?2, ?3, ?4, ?5)",
+            params![task_id, timestamp, event_type, detail, metadata],
         )
         .unwrap();
     }
@@ -588,6 +656,115 @@ mod tests {
         );
         let results = store.find_similar_tasks("Short", 3).unwrap();
         assert!(results.is_empty());
+    }
+
+    #[test]
+    fn latest_awaiting_reasons_batch_returns_latest_prompt_per_task() {
+        let store = Store::open_memory().unwrap();
+        insert_task(&store, "t-await-1", AgentKind::Codex, TaskStatus::AwaitingInput, "Prompt one");
+        insert_task(&store, "t-await-2", AgentKind::Gemini, TaskStatus::AwaitingInput, "Prompt two");
+        insert_task(&store, "t-other", AgentKind::Cursor, TaskStatus::Running, "Prompt three");
+        insert_event(
+            &store,
+            "t-await-1",
+            "2026-03-15T00:00:00Z",
+            "status",
+            "awaiting",
+            Some(r#"{"awaiting_input":true,"awaiting_prompt":"First prompt"}"#),
+        );
+        insert_event(
+            &store,
+            "t-await-1",
+            "2026-03-15T01:00:00Z",
+            "status",
+            "awaiting",
+            Some(r#"{"awaiting_input":true,"awaiting_prompt":"Latest prompt"}"#),
+        );
+        insert_event(
+            &store,
+            "t-await-2",
+            "2026-03-15T02:00:00Z",
+            "status",
+            "awaiting",
+            Some(r#"{"awaiting_input":true,"awaiting_prompt":"Second task prompt"}"#),
+        );
+        insert_event(
+            &store,
+            "t-other",
+            "2026-03-15T03:00:00Z",
+            "status",
+            "running",
+            Some(r#"{"awaiting_input":false,"awaiting_prompt":"Ignored"}"#),
+        );
+
+        let reasons = store
+            .latest_awaiting_reasons_batch(&["t-await-1", "t-await-2", "t-other"])
+            .unwrap();
+
+        assert_eq!(reasons.len(), 2);
+        assert_eq!(reasons.get("t-await-1").map(String::as_str), Some("Latest prompt"));
+        assert_eq!(reasons.get("t-await-2").map(String::as_str), Some("Second task prompt"));
+        assert!(!reasons.contains_key("t-other"));
+    }
+
+    #[test]
+    fn latest_awaiting_reasons_batch_skips_missing_prompts() {
+        let store = Store::open_memory().unwrap();
+        insert_task(&store, "t-await", AgentKind::Codex, TaskStatus::AwaitingInput, "Prompt");
+        insert_event(
+            &store,
+            "t-await",
+            "2026-03-15T00:00:00Z",
+            "status",
+            "awaiting",
+            Some(r#"{"awaiting_input":true}"#),
+        );
+
+        let reasons = store.latest_awaiting_reasons_batch(&["t-await"]).unwrap();
+
+        assert!(reasons.is_empty());
+    }
+
+    #[test]
+    fn aggregates_budget_usage_by_agent_and_window() {
+        let store = Store::open_memory().unwrap();
+        let conn = store.db();
+        let now = Local::now();
+        let within_window = (now - Duration::hours(6)).to_rfc3339();
+        let outside_window = (now - Duration::days(2)).to_rfc3339();
+
+        conn.execute(
+            "INSERT INTO tasks (id, agent, prompt, status, tokens, cost_usd, created_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            params!["t-recent-1", "codex", "recent", "done", 120_i64, 1.25_f64, &within_window],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO tasks (id, agent, prompt, status, tokens, cost_usd, created_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            params!["t-recent-2", "codex", "recent", "done", 80_i64, 0.75_f64, &within_window],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO tasks (id, agent, prompt, status, tokens, cost_usd, created_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            params!["t-old", "codex", "old", "done", 500_i64, 4.0_f64, &outside_window],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO tasks (id, agent, prompt, status, tokens, cost_usd, created_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            params!["t-other", "gemini", "other", "done", 999_i64, 9.0_f64, &within_window],
+        )
+        .unwrap();
+        drop(conn);
+
+        let all_time = store.budget_usage_summary("codex", None).unwrap();
+        assert_eq!(all_time, (3, 700, 6.0));
+
+        let since = parse_window("24h").map(|window| now - window).unwrap();
+        let recent = store.budget_usage_summary("codex", Some(since)).unwrap();
+        assert_eq!(recent, (2, 200, 2.0));
     }
 
     #[test]

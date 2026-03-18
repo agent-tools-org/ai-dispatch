@@ -24,6 +24,7 @@ pub fn available_disk_mb(path: &str) -> Option<u64> {
         .find_map(parse_available_mb)
 }
 
+#[cfg(test)]
 pub fn check_disk_space(path: &str, min_mb: u64) -> bool {
     available_disk_mb(path).is_some_and(|available| available >= min_mb)
 }

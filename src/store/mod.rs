@@ -15,9 +15,9 @@ use rusqlite::Connection;
 use std::path::Path;
 use std::sync::Mutex;
 
+#[cfg(test)]
 pub struct DbStats {
     pub size_bytes: u64,
-    pub wal_size_bytes: u64,
     pub page_count: u64,
     pub free_pages: u64,
 }
@@ -76,18 +76,15 @@ impl Store {
         schema::migrate(self)
     }
 
+    #[cfg(test)]
     pub fn db_stats(&self) -> Result<DbStats> {
         let conn = self.db();
         let db_path: String = conn.query_row("PRAGMA database_list", [], |row| row.get(2))?;
         let size_bytes = std::fs::metadata(&db_path).map(|meta| meta.len()).unwrap_or(0);
-        let wal_size_bytes = std::fs::metadata(format!("{db_path}-wal"))
-            .map(|meta| meta.len())
-            .unwrap_or(0);
         let page_count = conn.query_row("PRAGMA page_count", [], |row| row.get(0))?;
         let free_pages = conn.query_row("PRAGMA freelist_count", [], |row| row.get(0))?;
         Ok(DbStats {
             size_bytes,
-            wal_size_bytes,
             page_count,
             free_pages,
         })

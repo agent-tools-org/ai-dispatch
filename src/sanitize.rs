@@ -3,6 +3,7 @@
 // All user-controlled IDs must pass through these validators before filesystem use.
 
 use anyhow::{bail, Result};
+#[cfg(test)]
 use std::path::{Path, PathBuf};
 
 /// Validate a task ID: must match `t-[0-9a-f]{4}` pattern.
@@ -93,6 +94,7 @@ pub fn validate_branch_name(branch: &str) -> Result<()> {
 
 /// Join a user-supplied component under a base directory and verify containment.
 /// Returns the normalized path. Rejects traversal attempts.
+#[cfg(test)]
 pub fn safe_join(base: &Path, component: &str) -> Result<PathBuf> {
     // Quick reject: component must not contain `..`
     if component.contains("..") {
@@ -115,6 +117,7 @@ pub fn safe_join(base: &Path, component: &str) -> Result<PathBuf> {
 }
 
 /// Normalize a path without requiring it to exist (resolve `.` and `..` components).
+#[cfg(test)]
 fn normalize_path(path: &Path) -> PathBuf {
     let mut components = Vec::new();
     for component in path.components() {

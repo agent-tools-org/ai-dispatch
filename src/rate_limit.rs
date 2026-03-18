@@ -66,6 +66,7 @@ pub fn is_rate_limited(agent: &AgentKind) -> bool {
     }
 }
 
+#[cfg(test)]
 pub fn rate_limited_agents() -> Vec<(AgentKind, String)> {
     [
         AgentKind::Gemini,

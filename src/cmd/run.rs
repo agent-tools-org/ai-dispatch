@@ -391,6 +391,10 @@ pub async fn run(store: Arc<Store>, mut args: RunArgs) -> Result<TaskId> {
         if let Some(ref dir) = effective_dir {
             agent::set_git_ceiling(&mut std_cmd, dir);
         }
+        if let Some(ref group) = args.group {
+            std_cmd.env("AID_GROUP", group);
+        }
+        std_cmd.env("AID_TASK_ID", task_id.as_str());
         if agent::is_rust_project(effective_dir.as_deref())
             && let Some(target_dir) = agent::target_dir_for_worktree(args.worktree.as_deref())
         {

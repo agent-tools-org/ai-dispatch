@@ -155,6 +155,10 @@ async fn run_task_inner(store: &Arc<Store>, spec: &BackgroundRunSpec) -> Result<
     if let Some(ref dir) = spec.dir {
         agent::set_git_ceiling(&mut std_cmd, dir);
     }
+    if let Some(ref group) = spec.group {
+        std_cmd.env("AID_GROUP", group);
+    }
+    std_cmd.env("AID_TASK_ID", &spec.task_id);
     let worktree_branch = store
         .get_task(&spec.task_id)?
         .and_then(|task| task.worktree_branch);

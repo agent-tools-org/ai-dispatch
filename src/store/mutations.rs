@@ -127,7 +127,14 @@ impl Store {
             ],
         )?;
         let workspace_dir = crate::paths::workspace_dir(workgroup.id.as_str())?;
-        let _ = std::fs::create_dir_all(&workspace_dir);
+        if let Err(e) = std::fs::create_dir_all(&workspace_dir) {
+            // Rollback DB row to avoid orphaned workgroup without workspace
+            let _ = self.db().execute(
+                "DELETE FROM workgroups WHERE id = ?1",
+                params![workgroup.id.as_str()],
+            );
+            return Err(e.into());
+        }
         Ok(workgroup)
     }
 

@@ -238,6 +238,13 @@ async fn run_task_inner(store: &Arc<Store>, spec: &BackgroundRunSpec) -> Result<
         && let Err(e) = crate::commit::auto_commit(worktree_dir, &spec.task_id, &spec.prompt)
     {
         eprintln!("[aid] auto-commit failed: {e}");
+        let _ = store.insert_event(&TaskEvent {
+            task_id: TaskId(spec.task_id.clone()),
+            timestamp: Local::now(),
+            event_kind: EventKind::Error,
+            detail: format!("Auto-commit failed: {e}"),
+            metadata: None,
+        });
     }
     if crate::cmd::run::maybe_auto_retry_after_verify_failure(
         store,

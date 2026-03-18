@@ -11,6 +11,22 @@ use std::time::Instant;
 use tokio::process::Command;
 use tokio::time::{timeout, Duration};
 use crate::store::Store;
+
+/// Kill the entire process group for a child process (Unix only).
+/// Sends SIGTERM first, waits briefly, then SIGKILL to ensure cleanup.
+#[cfg(unix)]
+fn kill_process_group(child: &tokio::process::Child) {
+    if let Some(pid) = child.id() {
+        let pid = pid as i32;
+        unsafe {
+            libc::kill(-pid, libc::SIGTERM);
+        }
+        std::thread::sleep(std::time::Duration::from_millis(500));
+        unsafe {
+            libc::kill(-pid, libc::SIGKILL);
+        }
+    }
+}
 use crate::store::TaskCompletionUpdate;
 use crate::types::{CompletionInfo, EventKind, TaskEvent, TaskId, TaskStatus};
 use crate::watcher;
@@ -64,6 +80,8 @@ pub(crate) async fn run_agent_process_with_timeout(
         .unwrap_or(DEFAULT_FOREGROUND_TIMEOUT_MINS);
     let deadline = Duration::from_secs(timeout_mins * 60);
     let start = Instant::now();
+    #[cfg(unix)]
+    cmd.process_group(0);
     let mut child = cmd.spawn().context("Failed to spawn agent process")?;
     let watch_future = async {
         let info = if streaming {
@@ -93,7 +111,13 @@ pub(crate) async fn run_agent_process_with_timeout(
         Ok::<CompletionInfo, anyhow::Error>(info)
     };
 
-    match timeout(deadline, watch_future).await {
+    let result = timeout(deadline, watch_future).await;
+    // Always kill the process group to clean up any lingering child processes
+    #[cfg(unix)]
+    kill_process_group(&child);
+    let _ = child.kill().await;
+    let _ = child.wait().await;
+    match result {
         Ok(Ok(info)) => {
             if let Some(out_path) = output_path {
                 let out_path = Path::new(out_path);
@@ -139,8 +163,6 @@ pub(crate) async fn run_agent_process_with_timeout(
         }
         Ok(Err(err)) => Err(err),
         Err(_) => {
-            let _ = child.kill().await;
-            let _ = child.wait().await;
             let duration_ms = start.elapsed().as_millis() as i64;
             store.update_task_completion(TaskCompletionUpdate {
                 id: task_id.as_str(),

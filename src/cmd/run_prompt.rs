@@ -359,6 +359,22 @@ pub(super) struct RunProcessArgs<'a> {
     pub workgroup_id: Option<&'a str>,
 }
 
+/// Kill the entire process group for a child process (Unix only).
+/// Sends SIGTERM first, waits briefly, then SIGKILL to ensure cleanup.
+#[cfg(unix)]
+fn kill_process_group(child: &tokio::process::Child) {
+    if let Some(pid) = child.id() {
+        let pid = pid as i32;
+        unsafe {
+            libc::kill(-pid, libc::SIGTERM);
+        }
+        std::thread::sleep(std::time::Duration::from_millis(500));
+        unsafe {
+            libc::kill(-pid, libc::SIGKILL);
+        }
+    }
+}
+
 pub(super) async fn run_agent_process_impl(args: RunProcessArgs<'_>) -> Result<()> {
     let RunProcessArgs {
         agent,
@@ -372,6 +388,8 @@ pub(super) async fn run_agent_process_impl(args: RunProcessArgs<'_>) -> Result<(
         workgroup_id,
     } = args;
     let start = std::time::Instant::now();
+    #[cfg(unix)]
+    cmd.process_group(0);
     let mut child = cmd.spawn().context("Failed to spawn agent process")?;
     let info = if streaming {
         watcher::watch_streaming(agent, &mut child, task_id, store, log_path, workgroup_id, None).await?
@@ -379,6 +397,11 @@ pub(super) async fn run_agent_process_impl(args: RunProcessArgs<'_>) -> Result<(
         let out = output_path.map(std::path::Path::new);
         watcher::watch_buffered(agent, &mut child, task_id, store, log_path, out, workgroup_id).await?
     };
+    // Always kill the process group to clean up any lingering child processes
+    #[cfg(unix)]
+    kill_process_group(&child);
+    let _ = child.kill().await;
+    let _ = child.wait().await;
     fill_empty_output_from_log(log_path, output_path.map(std::path::Path::new))?;
     let duration_ms = start.elapsed().as_millis() as i64;
     let final_model = info.model.as_deref().or(model);

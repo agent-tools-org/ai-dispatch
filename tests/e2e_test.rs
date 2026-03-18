@@ -410,7 +410,7 @@ fn respond_reads_response_text_from_file() {
     let output = aid_cmd_in(temp_dir.path())
         .args([
             "respond",
-            "t-respond",
+            "t-bb02",
             "--file",
             response_file.path().to_str().unwrap(),
         ])
@@ -418,7 +418,7 @@ fn respond_reads_response_text_from_file() {
         .unwrap();
     assert!(output.status.success());
 
-    let queued = std::fs::read_to_string(temp_dir.path().join("jobs/t-respond.input")).unwrap();
+    let queued = std::fs::read_to_string(temp_dir.path().join("jobs/t-bb02.input")).unwrap();
     assert_eq!(queued, "text with `backticks` and {braces}");
 }
 

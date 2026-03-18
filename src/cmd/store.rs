@@ -22,7 +22,6 @@ struct AgentIndex {
 }
 
 #[derive(Deserialize)]
-#[allow(dead_code)]
 struct AgentEntry {
     id: String,
     display_name: String,

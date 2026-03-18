@@ -24,9 +24,6 @@ const BATCH_SIBLING_PROMPT_LIMIT: usize = 80;
 
 pub(super) struct PromptBundle { pub effective_prompt: String, pub context_files: Vec<String>, pub prompt_tokens: i64, pub injected_memory_ids: Vec<String> }
 
-#[allow(dead_code)]
-pub(super) enum PromptSource<'a> { Inline(&'a str), File(&'a str) }
-
 fn sanitize_injected_text(text: &str) -> String {
     text.lines()
         .filter(|line| {
@@ -83,7 +80,7 @@ pub(super) fn build_prompt_bundle(store: &Store, args: &RunArgs, agent_kind: &Ag
     } else {
         vec![]
     };
-    let prompt = resolve_prompt(PromptSource::Inline(&args.prompt), args.template.as_deref())?;
+    let prompt = resolve_prompt(&args.prompt, args.template.as_deref())?;
     let mut effective_prompt = crate::workgroup::compose_prompt(
         &prompt,
         file_context.as_deref(),
@@ -227,8 +224,8 @@ pub(super) fn build_prompt_bundle(store: &Store, args: &RunArgs, agent_kind: &Ag
     Ok(PromptBundle { effective_prompt, context_files, prompt_tokens, injected_memory_ids })
 }
 
-pub(super) fn resolve_prompt(source: PromptSource<'_>, template: Option<&str>) -> Result<String> {
-    let raw = match source { PromptSource::Inline(prompt) => prompt.to_string(), PromptSource::File(path) => read_context_file(path)?, };
+pub(super) fn resolve_prompt(prompt: &str, template: Option<&str>) -> Result<String> {
+    let raw = prompt.to_string();
     if let Some(template) = template {
         let template_content = templates::load_template(template)?;
         Ok(templates::apply_template(&template_content, &raw))

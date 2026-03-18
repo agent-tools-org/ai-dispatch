@@ -36,68 +36,6 @@ pub fn measure_skill_tokens(name: &str) -> Result<(String, usize)> {
     Ok((content, tokens))
 }
 
-#[allow(dead_code)]
-pub fn compact_skill(content: &str, max_tokens: usize) -> String {
-    if max_tokens == 0 {
-        return "...".to_string();
-    }
-    if estimate_tokens(content) <= max_tokens {
-        return content.to_string();
-    }
-
-    let mut collapsed_lines = Vec::new();
-    let mut last_blank = false;
-    for line in content.lines() {
-        if line.trim().is_empty() {
-            if last_blank {
-                continue;
-            }
-            collapsed_lines.push(String::new());
-            last_blank = true;
-        } else {
-            collapsed_lines.push(line.to_string());
-            last_blank = false;
-        }
-    }
-
-    let processed_lines: Vec<String> = collapsed_lines
-        .into_iter()
-        .map(|line| {
-            if line.trim().is_empty() {
-                return String::new();
-            }
-            let mut working = line.trim_start().to_string();
-            working = working.trim_start_matches('#').trim_start().to_string();
-            if let Some(stripped) = working.strip_prefix("- ") {
-                working = stripped.to_string();
-            }
-            working.trim_start().to_string()
-        })
-        .collect();
-
-    let compacted = processed_lines.join("\n");
-    let char_limit = max_tokens.saturating_mul(4);
-    if char_limit == 0 {
-        return "...".to_string();
-    }
-    if compacted.len() <= char_limit {
-        return compacted;
-    }
-
-    let mut end = 0;
-    for (idx, ch) in compacted.char_indices() {
-        if idx >= char_limit {
-            break;
-        }
-        end = idx + ch.len_utf8();
-    }
-    if end == 0 {
-        return "...".to_string();
-    }
-    let truncated = &compacted[..end];
-    format!("{truncated}...")
-}
-
 pub fn load_skills(names: &[String]) -> Result<String> {
     let mut contents = Vec::new();
     let mut total_tokens = 0usize;
@@ -204,19 +142,4 @@ mod tests {
         assert_eq!(estimate_tokens(""), 0);
     }
 
-    #[test]
-    fn compact_skill_truncates_and_cleans_content() {
-        let input = "\n# Topic\n\n- bullet one\n- bullet two\nDetail line\nMore detail\n";
-        let compacted = compact_skill(input, 2);
-        assert!(compacted.contains("Topic"));
-        assert!(!compacted.contains('#'));
-        assert!(!compacted.contains("- "));
-        assert!(compacted.ends_with("..."));
-    }
-
-    #[test]
-    fn compact_skill_returns_same_when_under_limit() {
-        let input = "ok";
-        assert_eq!(compact_skill(input, 1), input);
-    }
 }

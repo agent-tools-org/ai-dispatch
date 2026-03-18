@@ -14,7 +14,6 @@ pub struct CompletionSummary {
     pub files_changed: Vec<String>,
     pub summary_text: String,
     pub duration_secs: Option<i64>,
-    #[allow(dead_code)]
     pub token_count: Option<i64>,
 }
 

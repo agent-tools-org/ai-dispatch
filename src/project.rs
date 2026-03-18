@@ -17,7 +17,6 @@ struct ProjectFile {
     pub project: ProjectConfig,
 }
 
-#[allow(dead_code)] // All fields used via TOML deserialization; agents integration planned
 #[derive(Debug, Clone, Deserialize)]
 #[derive(Default)]
 pub struct ProjectConfig {
@@ -50,13 +49,11 @@ pub struct ProjectBudget {
     #[serde(default)]
     pub cost_limit_usd: Option<f64>,
     #[serde(default)]
-    #[allow(dead_code)]
     pub token_limit: Option<u64>,
     #[serde(default)]
     pub prefer_budget: bool,
 }
 
-#[allow(dead_code)]
 impl ProjectBudget {
     pub fn budget_shorthand(&self) -> Option<String> {
         let cost = self.cost_limit_usd?;
@@ -76,7 +73,6 @@ impl ProjectBudget {
 }
 
 
-#[allow(dead_code)] // Schema fields — used when TOML is parsed, agent integration planned
 #[derive(Debug, Clone, Deserialize)]
 #[serde(default)]
 #[derive(Default)]

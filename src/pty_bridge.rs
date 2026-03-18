@@ -44,13 +44,6 @@ impl PtyBridge {
         })
     }
 
-    #[allow(dead_code)]
-    pub fn reader(&mut self) -> &mut dyn Read {
-        self.reader
-            .as_deref_mut()
-            .expect("PTY reader has already been taken")
-    }
-
     pub fn take_reader(&mut self) -> Result<Box<dyn Read + Send>> {
         self.reader.take().context("PTY reader has already been taken")
     }
@@ -96,9 +89,10 @@ mod tests {
         let _permit = test_subprocess::acquire();
         let cmd = vec!["/bin/echo".to_string(), "hello".to_string()];
         let mut bridge = PtyBridge::spawn(&cmd, None, vec![]).unwrap();
+        let mut reader = bridge.take_reader().unwrap();
 
         let mut output = String::new();
-        bridge.reader().read_to_string(&mut output).unwrap();
+        reader.read_to_string(&mut output).unwrap();
         let _ = bridge.wait().unwrap();
         assert!(output.contains("hello"));
     }

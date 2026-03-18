@@ -64,12 +64,6 @@ pub fn parse_cli_hooks(specs: &[String]) -> Result<Vec<Hook>> {
         .collect()
 }
 
-#[allow(dead_code)]
-pub fn run_hooks(event: &str, task_json: &Value, agent: Option<&str>) -> Result<()> {
-    let hooks = load_hooks()?;
-    run_hooks_with(event, task_json, agent, &hooks, event.eq_ignore_ascii_case("before_run"))
-}
-
 pub fn run_hooks_with(
     event: &str,
     task_json: &Value,

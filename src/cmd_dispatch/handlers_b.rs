@@ -5,7 +5,7 @@ use super::{resolve_finding_content, resolve_group};
 use crate::cli::{
     ExperimentCommands, FindingCommands, HookAction, MemoryCommands, StoreCommands,
 };
-use crate::cli_actions::{ConfigAction, ContainerAction, GroupAction, GroupFindingAction, ProjectAction, TeamAction, WorktreeAction};
+use crate::cli_actions::{ConfigAction, ContainerAction, GroupAction, GroupFindingAction, ProjectAction, TeamAction, ToolAction, WorktreeAction};
 use crate::cmd;
 use crate::cmd::experiment_types::{ExperimentConfig, MetricDirection};
 use crate::{background, cli, store};
@@ -206,6 +206,18 @@ pub(super) fn team(action: TeamAction) -> Result<()> {
         TeamAction::Delete { name } => TeamCommand::Delete { name },
     };
     run_team_command(action)
+}
+
+pub(super) fn tool(action: ToolAction) -> Result<()> {
+    use cmd::tool::{ToolAction as ToolCommand, run_tool_command};
+    let action = match action {
+        ToolAction::List { team } => ToolCommand::List { team },
+        ToolAction::Show { name } => ToolCommand::Show { name },
+        ToolAction::Add { name, team } => ToolCommand::Add { name, team },
+        ToolAction::Remove { name } => ToolCommand::Remove { name },
+        ToolAction::Test { name, args } => ToolCommand::Test { name, args },
+    };
+    run_tool_command(action)
 }
 
 pub(super) fn project(action: ProjectAction) -> Result<()> {

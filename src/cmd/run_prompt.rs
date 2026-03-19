@@ -7,7 +7,7 @@ use std::collections::HashSet;
 use std::sync::Arc;
 use tokio::process::Command;
 use crate::{
-    agent, project, skills, store::Store, templates, team, types::*, watcher,
+    agent, project, skills, store::Store, templates, team, toolbox, types::*, watcher,
 };
 use crate::cmd::summary::{format_summary_for_injection, CompletionSummary};
 use crate::store::TaskCompletionUpdate;
@@ -204,6 +204,20 @@ pub(super) fn build_prompt_bundle(store: &Store, args: &RunArgs, agent_kind: &Ag
                 let knowledge_block = sanitize_injected_text(&prompt_context::format_knowledge_block(team_id, &relevant));
                 effective_prompt = format!("{knowledge_block}\n\n{effective_prompt}");
             }
+        }
+    }
+
+    // Inject team toolbox tools
+    {
+        let project_dir = prompt_context::detect_project_path().map(std::path::PathBuf::from);
+        let tools = toolbox::resolve_toolbox(
+            args.team.as_deref(),
+            project_dir.as_deref(),
+        );
+        if !tools.is_empty() {
+            let toolbox_block = toolbox::format_toolbox_instructions(&tools);
+            effective_prompt = format!("{effective_prompt}\n\n{toolbox_block}");
+            aid_info!("[aid] Injected {} toolbox tool(s)", tools.len());
         }
     }
 

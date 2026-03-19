@@ -118,7 +118,7 @@ pub(super) fn build_prompt_bundle(store: &Store, args: &RunArgs, agent_kind: &Ag
             effective_prompt = format!("{block}\n\n{effective_prompt}");
         }
     }
-    let mut effective_prompt = inject_skill(&effective_prompt, requested_skills)?;
+    let mut effective_prompt = inject_skill(&effective_prompt, agent_kind, requested_skills)?;
     let mut injected_memory_ids = Vec::new();
 
     // Inject relevant memories from past tasks
@@ -242,10 +242,39 @@ pub(super) fn resolve_prompt(prompt: &str, template: Option<&str>) -> Result<Str
     } else { Ok(raw) }
 }
 
-pub(super) fn inject_skill(prompt: &str, requested_skills: &[String]) -> Result<String> {
+pub(super) fn inject_skill(prompt: &str, agent_kind: &AgentKind, requested_skills: &[String]) -> Result<String> {
     if requested_skills.is_empty() { return Ok(prompt.to_string()); }
-    let skill_text = skills::load_skills(requested_skills)?;
-    Ok(format!("{prompt}\n\n--- Methodology ---\n{skill_text}"))
+    let mut sections = Vec::new();
+    for name in requested_skills {
+        let skill_text = skills::load_skill(name)?;
+        if let Some(gotchas) = skills::load_skill_gotchas(name, agent_kind) {
+            sections.push(format!("--- Gotchas ---\n{gotchas}"));
+        }
+        sections.push(format!("--- Methodology ---\n{skill_text}"));
+        let scripts = skills::list_skill_scripts(name);
+        if !scripts.is_empty() {
+            sections.push(format!(
+                "--- Available Scripts ---\nThe following scripts are available in the skill directory. Execute them directly:\n{}",
+                scripts
+                    .iter()
+                    .map(|path| format!("- {path}"))
+                    .collect::<Vec<_>>()
+                    .join("\n")
+            ));
+        }
+        let references = skills::list_skill_references(name);
+        if !references.is_empty() {
+            sections.push(format!(
+                "--- References (read on demand) ---\nFor detailed reference, read these files when needed:\n{}",
+                references
+                    .iter()
+                    .map(|path| format!("- {path}"))
+                    .collect::<Vec<_>>()
+                    .join("\n")
+            ));
+        }
+    }
+    Ok(format!("{prompt}\n\n{}", sections.join("\n\n")))
 }
 
 fn output_file_instruction() -> String {
@@ -705,6 +734,10 @@ fn normalize_relative_path(path: &Path) -> PathBuf {
 #[cfg(test)]
 #[path = "run_prompt/tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "run_prompt/skill_tests.rs"]
+mod skill_tests;
 
 #[cfg(test)]
 mod sanitize_tests {

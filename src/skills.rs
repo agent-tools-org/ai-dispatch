@@ -1,25 +1,81 @@
 // Skill loading for methodology prompt injection.
-// Exports: load_skill(), resolve_skill_content(), load_skills(), list_skills(), auto_skills().
+// Exports: load_skill(), load_skill_gotchas(), list_skill_scripts(), list_skill_references().
 // Deps: crate::paths, crate::types, anyhow, std::fs.
 
 use anyhow::{Context, Result};
 use crate::types::AgentKind;
 use crate::sanitize;
+use std::collections::BTreeSet;
+use std::path::{Path, PathBuf};
 
 fn skills_dir() -> std::path::PathBuf {
     crate::paths::aid_dir().join("skills")
 }
 
+fn skill_dir(name: &str) -> PathBuf {
+    skills_dir().join(name)
+}
+
+fn folder_skill_path(name: &str) -> PathBuf {
+    skill_dir(name).join("SKILL.md")
+}
+
+fn flat_skill_path(name: &str) -> PathBuf {
+    skills_dir().join(format!("{name}.md"))
+}
+
+fn read_skill_file(path: &Path) -> Result<String> {
+    std::fs::read_to_string(path)
+        .with_context(|| format!("Failed to read skill {}", path.display()))
+}
+
+fn list_skill_files(name: &str, subdir: &str) -> Vec<String> {
+    let dir = skill_dir(name).join(subdir);
+    let Ok(entries) = std::fs::read_dir(&dir) else {
+        return Vec::new();
+    };
+    let mut paths: Vec<String> = entries
+        .flatten()
+        .filter_map(|entry| {
+            entry
+                .file_type()
+                .ok()
+                .filter(|kind| kind.is_file())
+                .map(|_| entry.path().display().to_string())
+        })
+        .collect();
+    paths.sort();
+    paths
+}
+
+fn read_optional_file(path: &Path) -> Option<String> {
+    std::fs::read_to_string(path).ok()
+}
+
+fn all_agent_kinds() -> [AgentKind; 8] {
+    [
+        AgentKind::Gemini,
+        AgentKind::Codex,
+        AgentKind::OpenCode,
+        AgentKind::Cursor,
+        AgentKind::Kilo,
+        AgentKind::Codebuff,
+        AgentKind::Droid,
+        AgentKind::Custom,
+    ]
+}
+
 pub fn load_skill(name: &str) -> Result<String> {
     sanitize::validate_name(name, "skill")?;
-    let path = skills_dir().join(format!("{name}.md"));
-    match std::fs::read_to_string(&path) {
-        Ok(content) => Ok(content),
-        Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
-            anyhow::bail!("Skill '{name}' not found in ~/.aid/skills/")
-        }
-        Err(err) => Err(err).with_context(|| format!("Failed to read skill {}", path.display())),
+    let folder_path = folder_skill_path(name);
+    if folder_path.is_file() {
+        return read_skill_file(&folder_path);
     }
+    let flat_path = flat_skill_path(name);
+    if flat_path.is_file() {
+        return read_skill_file(&flat_path);
+    }
+    anyhow::bail!("Skill '{name}' not found in ~/.aid/skills/")
 }
 
 pub fn resolve_skill_content(name: &str) -> Result<String> {
@@ -32,20 +88,27 @@ pub fn estimate_tokens(text: &str) -> usize {
 
 pub fn measure_skill_tokens(name: &str) -> Result<(String, usize)> {
     let content = load_skill(name)?;
-    let tokens = estimate_tokens(&content);
-    Ok((content, tokens))
-}
-
-pub fn load_skills(names: &[String]) -> Result<String> {
-    let mut contents = Vec::new();
-    let mut total_tokens = 0usize;
-    for name in names {
-        let (content, tokens) = measure_skill_tokens(name)?;
-        contents.push(content);
-        total_tokens += tokens;
+    let mut parts = vec![content.clone()];
+    let mut gotchas = Vec::new();
+    if let Some(general) = read_optional_file(&skill_dir(name).join("gotchas.md")) {
+        gotchas.push(general);
     }
-    aid_info!("[aid] Skills loaded: {} skills, ~{} tokens", contents.len(), total_tokens);
-    Ok(contents.join("\n\n"))
+    for agent in all_agent_kinds() {
+        if let Some(agent_gotchas) =
+            read_optional_file(&skill_dir(name).join("gotchas").join(format!("{}.md", agent.as_str())))
+        {
+            gotchas.push(agent_gotchas);
+        }
+    }
+    if !gotchas.is_empty() {
+        parts.push(gotchas.join("\n\n"));
+    }
+    let scripts = list_skill_scripts(name);
+    if !scripts.is_empty() {
+        parts.push(scripts.join("\n"));
+    }
+    let tokens = estimate_tokens(&parts.join("\n\n"));
+    Ok((content, tokens))
 }
 
 pub fn list_skills() -> Result<Vec<String>> {
@@ -53,19 +116,55 @@ pub fn list_skills() -> Result<Vec<String>> {
     if !dir.exists() {
         return Ok(Vec::new());
     }
-    let mut skills = Vec::new();
+    let mut skills = BTreeSet::new();
     for entry in std::fs::read_dir(&dir)
         .with_context(|| format!("Failed to read skills dir {}", dir.display()))?
     {
         let path = entry?.path();
-        if path.extension().and_then(|ext| ext.to_str()) == Some("md")
+        if path.is_file()
+            && path.extension().and_then(|ext| ext.to_str()) == Some("md")
             && let Some(name) = path.file_stem().and_then(|stem| stem.to_str())
         {
-            skills.push(name.to_string());
+            skills.insert(name.to_string());
+        }
+        if path.is_dir()
+            && path.join("SKILL.md").is_file()
+            && let Some(name) = path.file_name().and_then(|dir_name| dir_name.to_str())
+        {
+            skills.insert(name.to_string());
         }
     }
-    skills.sort();
-    Ok(skills)
+    Ok(skills.into_iter().collect())
+}
+
+pub fn load_skill_gotchas(name: &str, agent: &AgentKind) -> Option<String> {
+    sanitize::validate_name(name, "skill").ok()?;
+    let mut parts = Vec::new();
+    if let Some(general) = read_optional_file(&skill_dir(name).join("gotchas.md")) {
+        parts.push(general);
+    }
+    if let Some(agent_specific) = read_optional_file(
+        &skill_dir(name)
+            .join("gotchas")
+            .join(format!("{}.md", agent.as_str())),
+    ) {
+        parts.push(agent_specific);
+    }
+    (!parts.is_empty()).then(|| parts.join("\n\n"))
+}
+
+pub fn list_skill_scripts(name: &str) -> Vec<String> {
+    if sanitize::validate_name(name, "skill").is_err() {
+        return Vec::new();
+    }
+    list_skill_files(name, "scripts")
+}
+
+pub fn list_skill_references(name: &str) -> Vec<String> {
+    if sanitize::validate_name(name, "skill").is_err() {
+        return Vec::new();
+    }
+    list_skill_files(name, "references")
 }
 
 pub fn auto_skills(agent: &AgentKind, has_worktree: bool) -> Vec<String> {
@@ -86,60 +185,5 @@ pub fn auto_skills(agent: &AgentKind, has_worktree: bool) -> Vec<String> {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn loads_and_lists_skills_from_aid_home() {
-        let temp = tempfile::tempdir().unwrap();
-        let _aid_home = crate::paths::AidHomeGuard::set(temp.path());
-        let dir = skills_dir();
-        std::fs::create_dir_all(&dir).unwrap();
-        std::fs::write(dir.join("test-writer.md"), "# Test Writer").unwrap();
-        std::fs::write(dir.join("reviewer.md"), "# Reviewer").unwrap();
-
-        assert_eq!(load_skill("test-writer").unwrap(), "# Test Writer");
-        assert_eq!(list_skills().unwrap(), vec!["reviewer", "test-writer"]);
-    }
-
-    #[test]
-    fn load_skill_rejects_invalid_name() {
-        let err = load_skill("../escape").unwrap_err();
-        assert!(err.to_string().contains("Invalid skill name"));
-    }
-
-    #[test]
-    fn auto_skills_returns_agent_defaults_when_installed() {
-        let temp = tempfile::tempdir().unwrap();
-        let _aid_home = crate::paths::AidHomeGuard::set(temp.path());
-        let dir = skills_dir();
-        std::fs::create_dir_all(&dir).unwrap();
-        std::fs::write(dir.join("implementer.md"), "# Implementer").unwrap();
-        std::fs::write(dir.join("researcher.md"), "# Researcher").unwrap();
-
-        assert_eq!(auto_skills(&AgentKind::Codex, false), vec!["implementer"]);
-        assert_eq!(auto_skills(&AgentKind::OpenCode, false), vec!["implementer"]);
-        assert!(auto_skills(&AgentKind::Cursor, true).is_empty());
-        assert_eq!(auto_skills(&AgentKind::Gemini, false), vec!["researcher"]);
-        assert_eq!(auto_skills(&AgentKind::Kilo, false), vec!["implementer"]);
-    }
-
-    #[test]
-    fn auto_skills_skips_missing_defaults() {
-        let temp = tempfile::tempdir().unwrap();
-        let _aid_home = crate::paths::AidHomeGuard::set(temp.path());
-        let dir = skills_dir();
-        std::fs::create_dir_all(&dir).unwrap();
-        std::fs::write(dir.join("implementer.md"), "# Implementer").unwrap();
-
-        assert!(auto_skills(&AgentKind::Gemini, false).is_empty());
-    }
-
-    #[test]
-    fn estimate_tokens_uses_length_divided_by_four() {
-        assert_eq!(estimate_tokens("abcd"), 1);
-        assert_eq!(estimate_tokens("abc"), 0);
-        assert_eq!(estimate_tokens(""), 0);
-    }
-
-}
+#[path = "skills/tests.rs"]
+mod tests;

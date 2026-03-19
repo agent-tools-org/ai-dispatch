@@ -6,7 +6,7 @@ use crate::rate_limit;
 use crate::store::Store;
 use anyhow::{anyhow, Result};
 use std::collections::HashMap;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
 use super::batch_types::BatchTaskOutcome;
@@ -98,12 +98,25 @@ pub(crate) fn resolve_batch_path(path: &Path) -> std::path::PathBuf {
     }
 }
 
-pub(crate) fn ensure_batch_workgroup(store: &Store, stem: &str, custom_gid: Option<&str>) -> Result<String> {
+pub(crate) fn ensure_batch_workgroup(
+    store: &Store,
+    stem: &str,
+    custom_gid: Option<&str>,
+    shared_dir: bool,
+) -> Result<(String, Option<PathBuf>)> {
     if let Some(gid) = custom_gid
         && store.get_workgroup(gid)?.is_some()
     {
         aid_info!("[aid] Reusing existing workgroup {gid} for batch {stem}");
-        return Ok(gid.to_string());
+        let path = if shared_dir {
+            match crate::shared_dir::shared_dir_path(gid) {
+                Some(path) => Some(path),
+                None => Some(crate::shared_dir::create_shared_dir(gid)?),
+            }
+        } else {
+            None
+        };
+        return Ok((gid.to_string(), path));
     }
     let wg = store.create_workgroup(
         stem,
@@ -112,7 +125,12 @@ pub(crate) fn ensure_batch_workgroup(store: &Store, stem: &str, custom_gid: Opti
         custom_gid,
     )?;
     aid_info!("[aid] Auto-created workgroup {} for batch {stem}", wg.id);
-    Ok(wg.id.to_string())
+    let path = if shared_dir {
+        Some(crate::shared_dir::create_shared_dir(wg.id.as_str())?)
+    } else {
+        None
+    };
+    Ok((wg.id.to_string(), path))
 }
 
 pub(crate) fn resolve_hook_targets<F>(
@@ -170,4 +188,3 @@ pub(crate) fn low_disk_space_mb(min_mb: u64) -> Option<u64> {
         None
     }
 }
-

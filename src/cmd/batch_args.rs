@@ -12,6 +12,7 @@ pub(crate) fn task_to_run_args(
     siblings: &[&batch::BatchTask],
     background: bool,
     store: &Arc<Store>,
+    shared_dir_path: Option<&str>,
 ) -> RunArgs {
     // If team is set and agent is empty/auto, auto-select from team members
     let agent_name = if (task.agent.is_empty() || task.agent == "auto") && task.team.is_some() {
@@ -63,7 +64,7 @@ pub(crate) fn task_to_run_args(
         .as_deref()
         .map(|f| vec![f.to_string()])
         .unwrap_or_else(|| auto_cascade_for_rate_limited(&agent_name));
-    let env = merged_env(task.env.as_ref(), task.env_forward.as_ref());
+    let env = merged_env(task.env.as_ref(), task.env_forward.as_ref(), shared_dir_path);
     RunArgs {
         agent_name,
         prompt: task.prompt.clone(),
@@ -112,8 +113,12 @@ fn auto_cascade_for_rate_limited(agent_name: &str) -> Vec<String> {
 fn merged_env(
     env: Option<&HashMap<String, String>>,
     env_forward: Option<&Vec<String>>,
+    shared_dir_path: Option<&str>,
 ) -> Option<HashMap<String, String>> {
     let mut merged = env.cloned().unwrap_or_default();
+    if let Some(shared_dir_path) = shared_dir_path {
+        merged.insert("AID_SHARED_DIR".to_string(), shared_dir_path.to_string());
+    }
     if let Some(env_forward) = env_forward {
         for name in env_forward {
             if let Ok(value) = std::env::var(name) {

@@ -209,6 +209,12 @@ pub(super) fn build_prompt_bundle(store: &Store, args: &RunArgs, agent_kind: &Ag
         effective_prompt = format!("{block}\n\n{effective_prompt}");
     }
 
+    if let Ok(shared_dir) = std::env::var("AID_SHARED_DIR") {
+        effective_prompt = format!(
+            "[Shared Directory]\nA shared directory is available at: {shared_dir}\nWrite files here that other tasks in the batch need to read.\nRead files here that other tasks may have produced.\n\n{effective_prompt}"
+        );
+    }
+
     // Inject workspace path if workgroup has one (appended to avoid commit message pollution)
     if let Some(ref group_id) = args.group {
         let workspace = crate::paths::workspace_dir(group_id)?;

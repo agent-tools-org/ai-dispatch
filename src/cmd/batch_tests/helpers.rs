@@ -28,29 +28,54 @@ fn resolve_batch_path_uses_aid_batches_fallback() {
 
 #[test]
 fn ensure_batch_workgroup_reuses_existing_default_group() {
+    let temp = tempfile::tempdir().unwrap();
+    let _guard = AidHomeGuard::set(temp.path());
     let store = Store::open_memory().unwrap();
     let existing = store
         .create_workgroup("existing", "shared", Some("seed"), Some("wg-shared"))
         .unwrap();
 
-    let workgroup_id = ensure_batch_workgroup(&store, "batch", Some("wg-shared")).unwrap();
+    let (workgroup_id, shared_path) =
+        ensure_batch_workgroup(&store, "batch", Some("wg-shared"), false).unwrap();
     let workgroups = store.list_workgroups().unwrap();
 
     assert_eq!(workgroup_id, existing.id.to_string());
+    assert_eq!(shared_path, None);
     assert_eq!(workgroups.len(), 1);
 }
 
 #[test]
 fn ensure_batch_workgroup_creates_missing_default_group() {
+    let temp = tempfile::tempdir().unwrap();
+    let _guard = AidHomeGuard::set(temp.path());
     let store = Store::open_memory().unwrap();
 
-    let workgroup_id = ensure_batch_workgroup(&store, "batch", Some("wg-custom")).unwrap();
+    let (workgroup_id, shared_path) =
+        ensure_batch_workgroup(&store, "batch", Some("wg-custom"), false).unwrap();
     let workgroups = store.list_workgroups().unwrap();
     let workgroup = store.get_workgroup("wg-custom").unwrap().unwrap();
 
     assert_eq!(workgroup_id, "wg-custom");
+    assert_eq!(shared_path, None);
     assert_eq!(workgroups.len(), 1);
     assert_eq!(workgroup.name, "batch");
+}
+
+#[test]
+fn ensure_batch_workgroup_creates_shared_dir_when_enabled() {
+    let temp = tempfile::tempdir().unwrap();
+    let _guard = AidHomeGuard::set(temp.path());
+    let store = Store::open_memory().unwrap();
+
+    let (workgroup_id, shared_path) =
+        ensure_batch_workgroup(&store, "batch", Some("wg-custom"), true).unwrap();
+
+    assert_eq!(workgroup_id, "wg-custom");
+    assert_eq!(
+        shared_path,
+        crate::shared_dir::shared_dir_path("wg-custom")
+    );
+    assert!(shared_path.as_ref().is_some_and(|path| path.is_dir()));
 }
 
 #[test]
@@ -96,4 +121,3 @@ fn batch_summary_skips_zero_cost_and_uses_seconds_under_minute() {
 
     assert_eq!(summary, "[batch] 2/2 done, 0 failed, 0 skipped. Time: 42s");
 }
-

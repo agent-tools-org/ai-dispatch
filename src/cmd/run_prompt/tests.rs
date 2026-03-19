@@ -144,6 +144,25 @@ fn build_prompt_bundle_omits_output_instruction_when_output_is_not_set() {
 }
 
 #[test]
+fn build_prompt_bundle_includes_shared_dir_instruction_when_env_is_set() {
+    let shared_dir = tempfile::tempdir().unwrap();
+    let _guard = EnvVarGuard::set("AID_SHARED_DIR", shared_dir.path());
+    let store = Store::open_memory().unwrap();
+    let bundle = build_prompt_bundle(
+        &store,
+        &build_prompt_args(None),
+        &AgentKind::Codex,
+        None,
+        &[],
+        "task-1",
+    )
+    .unwrap();
+
+    assert!(bundle.effective_prompt.contains("[Shared Directory]"));
+    assert!(bundle.effective_prompt.contains(&shared_dir.path().display().to_string()));
+}
+
+#[test]
 fn fill_empty_output_from_log_populates_zero_byte_file() {
     let log = tempfile::NamedTempFile::new().unwrap();
     let output = tempfile::NamedTempFile::new().unwrap();

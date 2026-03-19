@@ -196,7 +196,7 @@ mod tests {
         });
     }
 
-#[test]
+    #[test]
     fn stop_attempts_agent_cleanup_when_agent_pid_exists() {
         use crate::background::{save_spec, BackgroundRunSpec};
         use tempfile::TempDir;

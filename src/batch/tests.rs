@@ -13,6 +13,21 @@ fn write_temp(content: &str) -> NamedTempFile {
     file
 }
 
+fn parse_batch_with_vars(
+    content: &str,
+    cli_vars: &[(&str, &str)],
+) -> (BatchConfig, String) {
+    let vars = cli_vars
+        .iter()
+        .map(|(key, value)| (key.to_string(), value.to_string()))
+        .collect();
+    let mut stderr = Vec::new();
+    let mut config = toml::from_str::<BatchConfig>(content).unwrap();
+    interpolate_batch_config(&mut config, &vars, &mut stderr).unwrap();
+    apply_defaults(&mut config.tasks, &config.defaults);
+    (config, String::from_utf8(stderr).unwrap())
+}
+
 fn make_task(name: Option<&str>, depends_on: &[&str]) -> BatchTask {
     BatchTask {
         id: None,
@@ -398,4 +413,59 @@ fn judge_defaults_propagate_to_tasks() {
 
     assert_eq!(cfg.defaults.judge.as_deref(), Some("gemini"));
     assert_eq!(cfg.tasks[0].judge.as_deref(), Some("gemini"));
+}
+
+#[test]
+fn interpolates_task_vars_in_prompt_dir_and_worktree() {
+    let (cfg, stderr) = parse_batch_with_vars(
+        concat!(
+            "[vars]\nproject_name = \"my-app\"\nbase_dir = \"/tmp/projects\"\n",
+            "[[task]]\nagent = \"codex\"\nprompt = \"Build {{project_name}}\"\n",
+            "dir = \"{{base_dir}}/{{project_name}}\"\n",
+            "worktree = \"feat/{{project_name}}\"\n"
+        ),
+        &[],
+    );
+
+    let task = &cfg.tasks[0];
+    assert_eq!(task.prompt, "Build my-app");
+    assert_eq!(task.dir.as_deref(), Some("/tmp/projects/my-app"));
+    assert_eq!(task.worktree.as_deref(), Some("feat/my-app"));
+    assert!(stderr.is_empty());
+}
+
+#[test]
+fn cli_vars_override_toml_vars() {
+    let (cfg, stderr) = parse_batch_with_vars(
+        concat!(
+            "[vars]\nproject_name = \"from-toml\"\nbase_dir = \"/tmp/projects\"\n",
+            "[[task]]\nagent = \"codex\"\nprompt = \"Build {{project_name}}\"\n"
+        ),
+        &[("project_name", "from-cli")],
+    );
+
+    assert_eq!(cfg.tasks[0].prompt, "Build from-cli");
+    assert!(stderr.is_empty());
+}
+
+#[test]
+fn missing_var_warns_without_failing() {
+    let (cfg, stderr) = parse_batch_with_vars(
+        "[[task]]\nagent = \"codex\"\nprompt = \"Build {{missing}}\"\n",
+        &[],
+    );
+
+    assert_eq!(cfg.tasks[0].prompt, "Build {{missing}}");
+    assert!(stderr.contains("missing batch var 'missing'"));
+}
+
+#[test]
+fn no_vars_section_keeps_existing_behavior() {
+    let (cfg, stderr) = parse_batch_with_vars(
+        "[[task]]\nagent = \"codex\"\nprompt = \"do something\"\n",
+        &[],
+    );
+
+    assert_eq!(cfg.tasks[0].prompt, "do something");
+    assert!(stderr.is_empty());
 }

@@ -220,6 +220,7 @@ async fn main() -> Result<()> {
         Commands::Batch {
             action,
             file,
+            vars,
             parallel,
             wait,
             dry_run,
@@ -237,6 +238,7 @@ async fn main() -> Result<()> {
                         store,
                         cmd::batch::BatchArgs {
                             file,
+                            vars,
                             parallel,
                             wait,
                             dry_run,

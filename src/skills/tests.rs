@@ -4,6 +4,12 @@
 
 use super::*;
 
+fn write_skill_script(skill_dir: &std::path::Path, name: &str, content: &str) -> std::path::PathBuf {
+    let path = skill_dir.join("scripts").join(name);
+    std::fs::write(&path, content).unwrap();
+    path
+}
+
 #[test]
 fn loads_folder_skill_from_skill_md() {
     let temp = tempfile::tempdir().unwrap();
@@ -83,6 +89,77 @@ fn lists_scripts_and_references_for_folder_skill() {
         list_skill_references("implementer"),
         vec![dir.join("references").join("api.md").display().to_string()]
     );
+}
+
+#[test]
+fn parse_script_metadata_extracts_fields() {
+    let temp = tempfile::tempdir().unwrap();
+    let script_path = temp.path().join("tool.sh");
+    std::fs::write(
+        &script_path,
+        "#!/bin/bash\n# @description: Sync cached metadata\n# @args: <skill>\n# @output: JSON metadata\n",
+    )
+    .unwrap();
+
+    let meta = parse_script_metadata(&script_path).unwrap();
+    assert_eq!(meta.name, "tool");
+    assert_eq!(meta.path, script_path);
+    assert_eq!(meta.description, "Sync cached metadata");
+    assert_eq!(meta.args, "<skill>");
+    assert_eq!(meta.output, "JSON metadata");
+}
+
+#[test]
+fn parse_script_metadata_uses_default_description() {
+    let temp = tempfile::tempdir().unwrap();
+    let script_path = temp.path().join("inspect.sh");
+    std::fs::write(&script_path, "#!/bin/bash\n# @args: <id>\n").unwrap();
+
+    let meta = parse_script_metadata(&script_path).unwrap();
+    assert_eq!(meta.description, "Run inspect script");
+    assert_eq!(meta.args, "<id>");
+    assert_eq!(meta.output, "");
+}
+
+#[test]
+fn load_skill_scripts_returns_sorted_metadata() {
+    let temp = tempfile::tempdir().unwrap();
+    let _aid_home = crate::paths::AidHomeGuard::set(temp.path());
+    let dir = skills_dir().join("implementer");
+    std::fs::create_dir_all(dir.join("scripts")).unwrap();
+    std::fs::write(dir.join("SKILL.md"), "# Implementer").unwrap();
+    write_skill_script(
+        &dir,
+        "z-last.sh",
+        "#!/bin/bash\n# @description: Last tool\n# @args: <x>\n",
+    );
+    write_skill_script(
+        &dir,
+        "a-first.sh",
+        "#!/bin/bash\n# @description: First tool\n# @output: plain text\n",
+    );
+
+    let scripts = load_skill_scripts("implementer");
+    assert_eq!(scripts.iter().map(|script| script.name.as_str()).collect::<Vec<_>>(), vec!["a-first", "z-last"]);
+    assert_eq!(scripts[0].description, "First tool");
+    assert_eq!(scripts[0].output, "plain text");
+    assert_eq!(scripts[1].args, "<x>");
+}
+
+#[test]
+fn format_script_instructions_renders_tool_list() {
+    let scripts = vec![ScriptMeta {
+        name: "tool".to_string(),
+        path: PathBuf::from("/tmp/tool.sh"),
+        description: "Inspect a skill".to_string(),
+        args: "<skill>".to_string(),
+        output: "JSON".to_string(),
+    }];
+
+    let rendered = format_script_instructions(&scripts);
+    assert!(rendered.contains("--- Available Tools ---"));
+    assert!(rendered.contains("/tmp/tool.sh <skill>: Inspect a skill"));
+    assert!(rendered.contains("Output: JSON"));
 }
 
 #[test]

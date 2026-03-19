@@ -253,16 +253,9 @@ pub(super) fn inject_skill(prompt: &str, agent_kind: &AgentKind, requested_skill
             sections.push(format!("--- Gotchas ---\n{gotchas}"));
         }
         sections.push(format!("--- Methodology ---\n{skill_text}"));
-        let scripts = skills::list_skill_scripts(name);
+        let scripts = skills::load_skill_scripts(name);
         if !scripts.is_empty() {
-            sections.push(format!(
-                "--- Available Scripts ---\nThe following scripts are available in the skill directory. Execute them directly:\n{}",
-                scripts
-                    .iter()
-                    .map(|path| format!("- {path}"))
-                    .collect::<Vec<_>>()
-                    .join("\n")
-            ));
+            sections.push(skills::format_script_instructions(&scripts));
         }
         let references = skills::list_skill_references(name);
         if !references.is_empty() {

@@ -8,6 +8,15 @@ use crate::sanitize;
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
+#[derive(Debug, Clone)]
+pub struct ScriptMeta {
+    pub name: String,
+    pub path: PathBuf,
+    pub description: String,
+    pub args: String,
+    pub output: String,
+}
+
 fn skills_dir() -> std::path::PathBuf {
     crate::paths::aid_dir().join("skills")
 }
@@ -52,7 +61,35 @@ fn read_optional_file(path: &Path) -> Option<String> {
     std::fs::read_to_string(path).ok()
 }
 
-fn all_agent_kinds() -> [AgentKind; 8] {
+fn parse_script_metadata(path: &Path) -> Option<ScriptMeta> {
+    let content = std::fs::read_to_string(path).ok()?;
+    let name = path.file_stem()?.to_str()?.to_string();
+    let mut description = String::new();
+    let mut args = String::new();
+    let mut output = String::new();
+    for line in content.lines().take(10) {
+        let trimmed = line.trim_start_matches('#').trim();
+        if let Some(desc) = trimmed.strip_prefix("@description:") {
+            description = desc.trim().to_string();
+        } else if let Some(script_args) = trimmed.strip_prefix("@args:") {
+            args = script_args.trim().to_string();
+        } else if let Some(script_output) = trimmed.strip_prefix("@output:") {
+            output = script_output.trim().to_string();
+        }
+    }
+    if description.is_empty() {
+        description = format!("Run {name} script");
+    }
+    Some(ScriptMeta {
+        name,
+        path: path.to_path_buf(),
+        description,
+        args,
+        output,
+    })
+}
+
+fn all_agent_kinds() -> [AgentKind; 9] {
     [
         AgentKind::Gemini,
         AgentKind::Codex,
@@ -61,6 +98,7 @@ fn all_agent_kinds() -> [AgentKind; 8] {
         AgentKind::Kilo,
         AgentKind::Codebuff,
         AgentKind::Droid,
+        AgentKind::Oz,
         AgentKind::Custom,
     ]
 }
@@ -158,6 +196,47 @@ pub fn list_skill_scripts(name: &str) -> Vec<String> {
         return Vec::new();
     }
     list_skill_files(name, "scripts")
+}
+
+pub fn load_skill_scripts(name: &str) -> Vec<ScriptMeta> {
+    if sanitize::validate_name(name, "skill").is_err() {
+        return Vec::new();
+    }
+    let dir = skill_dir(name).join("scripts");
+    let Ok(entries) = std::fs::read_dir(&dir) else {
+        return Vec::new();
+    };
+    let mut scripts: Vec<ScriptMeta> = entries
+        .flatten()
+        .filter(|entry| {
+            entry.file_type().ok().map(|ft| ft.is_file()).unwrap_or(false)
+                && entry.file_name().to_str().map(|name| !name.starts_with('.')).unwrap_or(false)
+        })
+        .filter_map(|entry| parse_script_metadata(&entry.path()))
+        .collect();
+    scripts.sort_by(|a, b| a.name.cmp(&b.name));
+    scripts
+}
+
+pub fn format_script_instructions(scripts: &[ScriptMeta]) -> String {
+    if scripts.is_empty() {
+        return String::new();
+    }
+    let mut lines = vec!["--- Available Tools ---".to_string()];
+    lines.push("Run these scripts directly via bash. They are pre-installed and executable:".to_string());
+    lines.push(String::new());
+    for script in scripts {
+        let args_part = if script.args.is_empty() {
+            String::new()
+        } else {
+            format!(" {}", script.args)
+        };
+        lines.push(format!("  {}{}: {}", script.path.display(), args_part, script.description));
+        if !script.output.is_empty() {
+            lines.push(format!("    Output: {}", script.output));
+        }
+    }
+    lines.join("\n")
 }
 
 pub fn list_skill_references(name: &str) -> Vec<String> {

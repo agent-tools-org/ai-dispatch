@@ -11,7 +11,8 @@ use chrono::Local;
 use tempfile::NamedTempFile;
 
 use super::api::{
-    TaskEventResponse, TaskListParams, TaskResponse, get_task, get_task_events, get_task_output, get_usage, list_tasks,
+    ActionResponse, DiffResponse, TaskEventResponse, TaskListParams, TaskResponse, get_task, get_task_events,
+    get_task_output, get_usage, list_tasks,
 };
 use crate::store::Store;
 use crate::types::{AgentKind, EventKind, Task, TaskEvent, TaskId, TaskStatus, VerifyStatus};
@@ -69,6 +70,28 @@ fn task_event_response_serializes_timestamp() {
     let json = serde_json::to_value(TaskEventResponse::from(event)).unwrap();
     assert!(json["timestamp"].as_str().unwrap().contains('T'));
     assert_eq!(json["event_kind"], "milestone");
+}
+
+#[test]
+fn action_response_serializes_ok() {
+    let json = serde_json::to_value(ActionResponse {
+        ok: true,
+        new_task_id: Some("t-2".to_string()),
+        error: None,
+    })
+    .unwrap();
+    assert_eq!(json["ok"], true);
+    assert_eq!(json["new_task_id"], "t-2");
+    assert!(json.get("error").is_none());
+}
+
+#[test]
+fn diff_response_serializes() {
+    let json = serde_json::to_value(DiffResponse {
+        diff: "diff --git a b".to_string(),
+    })
+    .unwrap();
+    assert_eq!(json["diff"], "diff --git a b");
 }
 
 #[tokio::test]

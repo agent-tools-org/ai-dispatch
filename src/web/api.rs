@@ -7,6 +7,7 @@ use std::sync::Arc;
 
 use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
+use axum::response::IntoResponse;
 use axum::Json;
 use serde::{Deserialize, Serialize};
 
@@ -14,9 +15,7 @@ use crate::store::Store;
 use crate::types::{Task, TaskEvent, TaskFilter};
 
 #[derive(Debug, Deserialize)]
-pub struct TaskListParams {
-    pub filter: Option<String>,
-}
+pub struct TaskListParams { pub filter: Option<String> }
 
 #[derive(Debug, Serialize)]
 pub struct TaskResponse {
@@ -62,9 +61,7 @@ pub struct TaskEventResponse {
 }
 
 #[derive(Debug, Serialize)]
-pub struct TaskOutputResponse {
-    pub output: String,
-}
+pub struct TaskOutputResponse { pub output: String }
 
 #[derive(Debug, Serialize)]
 pub struct AgentUsageResponse {
@@ -75,12 +72,29 @@ pub struct AgentUsageResponse {
 }
 
 #[derive(Debug, Serialize)]
-pub struct UsageResponse {
-    pub agents: Vec<AgentUsageResponse>,
+pub struct UsageResponse { pub agents: Vec<AgentUsageResponse> }
+
+#[derive(Debug, Serialize)]
+pub struct ActionResponse {
+    pub ok: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub new_task_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
 }
 
+#[derive(Debug, Serialize)]
+pub struct DiffResponse { pub diff: String }
+
+#[derive(Debug, Deserialize)]
+pub struct RetryRequest { pub feedback: Option<String> }
+
 impl TaskResponse {
-    pub(crate) fn from_task(task: Task, latest_milestone: Option<String>, latest_error: Option<String>) -> Self {
+    pub(crate) fn from_task(
+        task: Task,
+        latest_milestone: Option<String>,
+        latest_error: Option<String>,
+    ) -> Self {
         Self {
             id: task.id.to_string(),
             agent: task.agent.as_str().to_string(),
@@ -170,9 +184,7 @@ pub async fn get_task_output(
     State(store): State<Arc<Store>>,
 ) -> Result<Json<TaskOutputResponse>, StatusCode> {
     let task = store.get_task(&id).map_err(internal_error)?.ok_or(StatusCode::NOT_FOUND)?;
-    Ok(Json(TaskOutputResponse {
-        output: read_task_output(&task),
-    }))
+    Ok(Json(TaskOutputResponse { output: read_task_output(&task) }))
 }
 
 pub async fn get_usage(State(store): State<Arc<Store>>) -> Result<Json<UsageResponse>, StatusCode> {
@@ -190,18 +202,55 @@ pub async fn get_usage(State(store): State<Arc<Store>>) -> Result<Json<UsageResp
     Ok(Json(UsageResponse { agents }))
 }
 
-fn parse_filter(filter: Option<&str>) -> Option<TaskFilter> {
-    match filter.unwrap_or("today") {
-        "all" => Some(TaskFilter::All),
-        "running" => Some(TaskFilter::Running),
-        "today" => Some(TaskFilter::Today),
-        _ => None,
+pub async fn stop_task(Path(id): Path<String>, State(store): State<Arc<Store>>) -> impl IntoResponse {
+    match crate::cmd::stop::stop(&store, &id) {
+        Ok(()) => (StatusCode::OK, Json(ActionResponse { ok: true, new_task_id: None, error: None })).into_response(),
+        Err(error) => action_error(error).into_response(),
     }
 }
 
+pub async fn retry_task(
+    Path(id): Path<String>,
+    State(store): State<Arc<Store>>,
+    Json(request): Json<RetryRequest>,
+) -> impl IntoResponse {
+    match crate::cmd::retry::run(store, crate::cmd::retry::RetryArgs {
+        task_id: id,
+        feedback: request.feedback.unwrap_or_default(),
+        agent: None,
+        dir: None,
+        reset: false,
+    }).await {
+        Ok(new_task_id) => (StatusCode::OK, Json(ActionResponse {
+            ok: true,
+            new_task_id: Some(new_task_id.to_string()),
+            error: None,
+        })).into_response(),
+        Err(error) => action_error(error).into_response(),
+    }
+}
+
+pub async fn merge_task(Path(id): Path<String>, State(store): State<Arc<Store>>) -> impl IntoResponse {
+    match crate::cmd::merge::run(store, Some(&id), None, true, false) {
+        Ok(()) => (StatusCode::OK, Json(ActionResponse { ok: true, new_task_id: None, error: None })).into_response(),
+        Err(error) => action_error(error).into_response(),
+    }
+}
+
+pub async fn get_task_diff(Path(id): Path<String>, State(store): State<Arc<Store>>) -> impl IntoResponse {
+    match crate::cmd::show::diff_text(&store, &id) {
+        Ok(diff) if diff_unavailable(&diff) => StatusCode::NOT_FOUND.into_response(),
+        Ok(diff) => (StatusCode::OK, Json(DiffResponse { diff })).into_response(),
+        Err(error) => internal_error(error).into_response(),
+    }
+}
+
+fn parse_filter(filter: Option<&str>) -> Option<TaskFilter> { match filter.unwrap_or("today") {
+    "all" => Some(TaskFilter::All), "running" => Some(TaskFilter::Running), "today" => Some(TaskFilter::Today), _ => None,
+} }
+
 fn ensure_task_exists(store: &Store, id: &str) -> Result<(), StatusCode> {
-    store.get_task(id).map_err(internal_error)?.ok_or(StatusCode::NOT_FOUND)?;
-    Ok(())
+    store.get_task(id).map_err(internal_error)?.ok_or(StatusCode::NOT_FOUND).map(|_| ())
 }
 
 fn read_task_output(task: &Task) -> String {
@@ -230,6 +279,21 @@ fn read_task_output(task: &Task) -> String {
     "No output available".to_string()
 }
 
-fn internal_error(_: anyhow::Error) -> StatusCode {
-    StatusCode::INTERNAL_SERVER_ERROR
+fn internal_error(_: anyhow::Error) -> StatusCode { StatusCode::INTERNAL_SERVER_ERROR }
+
+fn action_error(error: anyhow::Error) -> (StatusCode, Json<ActionResponse>) {
+    let message = error.to_string();
+    let status = if message.contains("not found") {
+        StatusCode::NOT_FOUND
+    } else if message.contains("not running") || message.contains("only DONE tasks") {
+        StatusCode::BAD_REQUEST
+    } else {
+        StatusCode::INTERNAL_SERVER_ERROR
+    };
+    (status, Json(ActionResponse { ok: false, new_task_id: None, error: Some(message) }))
+}
+
+fn diff_unavailable(diff: &str) -> bool { diff.contains("(worktree removed or diff unavailable)")
+    || diff.contains("(no worktree diff or output file available)")
+    || diff.contains("(in-place edit — no uncommitted changes detected, may already be committed)")
 }

@@ -14,7 +14,7 @@ use axum::extract::Path;
 use axum::http::header::{CONTENT_TYPE, HeaderValue};
 use axum::http::{Method, StatusCode};
 use axum::response::{IntoResponse, Response};
-use axum::routing::get;
+use axum::routing::{get, post};
 use axum::Router;
 use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4};
 use std::sync::Arc;
@@ -28,6 +28,10 @@ pub async fn serve(store: Arc<Store>, port: u16) -> Result<()> {
         .route("/api/tasks/{id}", get(api::get_task))
         .route("/api/tasks/{id}/events", get(api::get_task_events))
         .route("/api/tasks/{id}/output", get(api::get_task_output))
+        .route("/api/tasks/{id}/stop", post(api::stop_task))
+        .route("/api/tasks/{id}/retry", post(api::retry_task))
+        .route("/api/tasks/{id}/merge", post(api::merge_task))
+        .route("/api/tasks/{id}/diff", get(api::get_task_diff))
         .route("/api/usage", get(api::get_usage))
         .route("/api/events", get(|state| async move { sse::sse_handler(state) }))
         .route("/", get(index))
@@ -71,7 +75,7 @@ fn normalize_asset_path(path: &str) -> String {
 
 fn cors_layer() -> CorsLayer {
     CorsLayer::new()
-        .allow_methods([Method::GET, Method::OPTIONS])
+        .allow_methods([Method::GET, Method::POST, Method::OPTIONS])
         .allow_origin(AllowOrigin::predicate(|origin: &HeaderValue, _| {
             is_localhost_origin(origin)
         }))

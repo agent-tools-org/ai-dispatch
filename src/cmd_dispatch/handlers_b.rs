@@ -66,7 +66,9 @@ pub(super) async fn retry(
     dir: Option<String>,
     reset: bool,
 ) -> Result<()> {
-    cmd::retry::run(store, cmd::retry::RetryArgs { task_id, feedback, agent, dir, reset }).await
+    cmd::retry::run(store, cmd::retry::RetryArgs { task_id, feedback, agent, dir, reset })
+        .await
+        .map(|_| ())
 }
 
 pub(super) fn merge(

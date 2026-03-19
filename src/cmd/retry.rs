@@ -16,11 +16,11 @@ pub struct RetryArgs {
     pub reset: bool,
 }
 
-pub async fn run(store: Arc<Store>, args: RetryArgs) -> Result<()> {
+pub async fn run(store: Arc<Store>, args: RetryArgs) -> Result<TaskId> {
     let retry_id = retry_task(store, args, true).await?;
     aid_hint!("[aid] Watch: aid watch --quiet {}", retry_id);
     aid_hint!("[aid] TUI:   aid watch --tui");
-    Ok(())
+    Ok(retry_id)
 }
 
 pub async fn retry_task(store: Arc<Store>, args: RetryArgs, announce: bool) -> Result<TaskId> {

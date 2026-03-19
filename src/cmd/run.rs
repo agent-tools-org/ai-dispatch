@@ -370,6 +370,7 @@ pub async fn run(store: Arc<Store>, mut args: RunArgs) -> Result<TaskId> {
             parent_task_id: args.parent_task_id.clone(),
             env: args.env.clone(),
             env_forward: args.env_forward.clone(),
+            agent_pid: None,
         };
         background::save_spec(&spec)?;
         let mut worker = match background::spawn_worker(task_id.as_str()) {

@@ -233,7 +233,7 @@ mod tests {
     #[tokio::test]
     async fn wait_for_task_ids_completes_with_existing_milestone_event() {
         let store = Arc::new(Store::open_memory().unwrap());
-        let mut task = make_task("t-done", TaskStatus::Completed);
+        let mut task = make_task("t-done", TaskStatus::Done);
         task.duration_ms = Some(1_000);
         store.insert_task(&task).unwrap();
         store

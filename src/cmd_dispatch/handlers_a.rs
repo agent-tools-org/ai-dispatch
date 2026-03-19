@@ -220,6 +220,7 @@ pub(super) async fn batch(
     file: Option<String>,
     vars: Vec<String>,
     parallel: bool,
+    analyze: bool,
     wait: bool,
     dry_run: bool,
     max_concurrent: Option<usize>,
@@ -234,7 +235,15 @@ pub(super) async fn batch(
             let file = file.ok_or_else(|| anyhow!("batch file is required"))?;
             cmd::batch::run(
                 store,
-                cmd::batch::BatchArgs { file, vars, parallel, wait, dry_run, max_concurrent },
+                cmd::batch::BatchArgs {
+                    file,
+                    vars,
+                    parallel,
+                    analyze,
+                    wait,
+                    dry_run,
+                    max_concurrent,
+                },
             )
             .await?;
         }

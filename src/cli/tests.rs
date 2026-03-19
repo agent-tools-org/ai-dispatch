@@ -126,13 +126,23 @@ fn container_subcommand_parses() {
 
 #[test]
 fn batch_dispatch_file_parses() {
-    let cli = Cli::try_parse_from(["aid", "batch", "tasks.toml", "--parallel", "--var", "project=demo"]).unwrap();
+    let cli = Cli::try_parse_from([
+        "aid",
+        "batch",
+        "tasks.toml",
+        "--parallel",
+        "--analyze",
+        "--var",
+        "project=demo",
+    ])
+    .unwrap();
     match cli.command {
-        Commands::Batch(command_args_a::BatchArgs { action, file, vars, parallel, .. }) => {
+        Commands::Batch(command_args_a::BatchArgs { action, file, vars, parallel, analyze, .. }) => {
             assert!(action.is_none());
             assert_eq!(file, Some("tasks.toml".to_string()));
             assert_eq!(vars, vec!["project=demo".to_string()]);
             assert!(parallel);
+            assert!(analyze);
         }
         _ => panic!("expected Batch"),
     }

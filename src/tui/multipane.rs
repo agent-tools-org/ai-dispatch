@@ -191,7 +191,7 @@ fn render_pane(pane: &PaneData, is_active: bool) -> List<'static> {
     let prompt = if pane.prompt.len() <= 60 {
         pane.prompt.clone()
     } else {
-        format!("{}...", &pane.prompt[..57])
+        { let mut end = 57; while !pane.prompt.is_char_boundary(end) { end -= 1; } format!("{}...", &pane.prompt[..end]) }
     };
     let mut items = vec![ListItem::new(format!("Prompt: {prompt}"))];
     let summary = format!(

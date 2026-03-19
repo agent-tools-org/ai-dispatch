@@ -17,7 +17,9 @@ pub fn mark_rate_limited(agent: &AgentKind, message: &str) {
     let path = marker_path(agent);
     let recovery_at = parse_recovery_time(message);
     let truncated_message = if message.len() > 200 {
-        &message[..200]
+        let mut end = 200;
+        while !message.is_char_boundary(end) { end -= 1; }
+        &message[..end]
     } else {
         message
     };

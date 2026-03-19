@@ -74,7 +74,9 @@ async fn dispatch_with_dependencies(
                 .unwrap_or_else(crate::types::TaskId::generate);
             let agent = if task.agent.is_empty() { "auto" } else { &task.agent };
             let prompt_preview = if task.prompt.len() > 120 {
-                &task.prompt[..120]
+                let mut end = 120;
+                while !task.prompt.is_char_boundary(end) { end -= 1; }
+                &task.prompt[..end]
             } else {
                 &task.prompt
             };

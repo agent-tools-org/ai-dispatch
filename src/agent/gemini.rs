@@ -80,7 +80,9 @@ fn parse_stream_event(task_id: &TaskId, v: &serde_json::Value, now: chrono::Date
             let name = extract_tool_name(v).unwrap_or("unknown");
             let args = extract_tool_arguments(v).unwrap_or_default();
             let truncated_args = if args.len() > 100 {
-                format!("{}...", &args[..100])
+                let mut end = 100;
+                while !args.is_char_boundary(end) { end -= 1; }
+                format!("{}...", &args[..end])
             } else {
                 args
             };

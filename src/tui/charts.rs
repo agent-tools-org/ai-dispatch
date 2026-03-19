@@ -10,16 +10,7 @@ use ratatui::layout::{Alignment, Constraint, Direction, Layout, Rect};
 use ratatui::prelude::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Bar, BarChart, BarGroup, Block, Borders, Gauge, Paragraph, Sparkline};
-const AGENTS: &[AgentKind] = &[
-    AgentKind::Codex,
-    AgentKind::Gemini,
-    AgentKind::OpenCode,
-    AgentKind::Cursor,
-    AgentKind::Kilo,
-    AgentKind::Codebuff,
-    AgentKind::Droid,
-    AgentKind::Oz,
-];
+const AGENTS: &[AgentKind] = AgentKind::ALL_BUILTIN;
 const FOOTER_HINT: &str = "a=all/today s=stats d=dashboard m=multipane q=quit";
 struct BudgetUsage {
     name: String,

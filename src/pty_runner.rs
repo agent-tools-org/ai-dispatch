@@ -2,6 +2,7 @@
 // Runs combined stdout/stderr through prompt detection and file-based input forwarding.
 
 use anyhow::Result;
+use chrono::Local;
 use std::io::Read;
 use std::path::Path;
 use std::sync::mpsc;
@@ -27,7 +28,7 @@ pub fn run_agent_process(
     streaming: bool,
 ) -> Result<()> {
     let start = std::time::Instant::now();
-    let mut bridge = spawn_bridge(cmd)?;
+    let mut bridge = spawn_bridge(cmd, log_path)?;
     let rx = spawn_reader_thread(bridge.take_reader()?);
     let mut log_file = std::fs::File::create(log_path)?;
     let mut state = MonitorState::new(streaming);
@@ -73,9 +74,17 @@ pub fn run_agent_process(
     )
 }
 
-fn spawn_bridge(cmd: &std::process::Command) -> Result<PtyBridge> {
+fn spawn_bridge(cmd: &std::process::Command, log_path: &Path) -> Result<PtyBridge> {
     let (argv, dir, env) = command_parts(cmd);
-    PtyBridge::spawn(&argv, dir.as_deref(), env)
+    match PtyBridge::spawn(&argv, dir.as_deref(), env) {
+        Ok(bridge) => Ok(bridge),
+        Err(err) => {
+            let error_msg = format!("Failed to spawn agent process: {err}");
+            aid_error!("[aid] {error_msg}");
+            write_spawn_error_log(log_path, &error_msg);
+            Err(err)
+        }
+    }
 }
 
 fn spawn_reader_thread(mut reader: Box<dyn Read + Send>) -> mpsc::Receiver<Vec<u8>> {
@@ -188,4 +197,14 @@ fn command_parts(
         })
         .collect();
     (argv, dir, env)
+}
+
+fn write_spawn_error_log(log_path: &Path, message: &str) {
+    let event = serde_json::json!({
+        "type": "error",
+        "source": "spawn",
+        "message": message,
+        "timestamp": Local::now().to_rfc3339(),
+    });
+    let _ = std::fs::write(log_path, format!("{event}\n"));
 }

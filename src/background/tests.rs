@@ -1,10 +1,11 @@
 // Tests for background worker persistence and zombie-task cleanup.
 // Covers spec serialization and store reconciliation side effects.
 
-use chrono::Local;
+use chrono::{Duration, Local};
 
 use super::{
-    build_on_done_command, check_zombie_tasks_with, save_spec, BackgroundRunSpec,
+    build_on_done_command, check_zombie_tasks_with, cleanup_stale_pending_tasks,
+    fail_stale_pending_task, save_spec, BackgroundRunSpec,
     ZOMBIE_FAILURE_DETAIL,
 };
 use crate::paths;
@@ -101,6 +102,65 @@ fn marks_running_background_tasks_failed_when_worker_is_missing() {
 
     let stderr = std::fs::read_to_string(paths::stderr_path("t-2b2b")).unwrap();
     assert_eq!(stderr.trim(), ZOMBIE_FAILURE_DETAIL);
+}
+
+#[test]
+fn marks_stale_pending_tasks_failed() {
+    let store = Store::open_memory().unwrap();
+    let mut task = make_task("t-pend-old", TaskStatus::Pending);
+    task.created_at = Local::now() - Duration::seconds(601);
+    store.insert_task(&task).unwrap();
+
+    let cleaned = check_zombie_tasks_with(&store, |_| true).unwrap();
+
+    assert_eq!(cleaned, vec!["t-pend-old".to_string()]);
+    assert_eq!(
+        store.get_task("t-pend-old").unwrap().unwrap().status,
+        TaskStatus::Failed
+    );
+    let events = store.get_events("t-pend-old").unwrap();
+    assert_eq!(events.len(), 1);
+    assert_eq!(events[0].event_kind, EventKind::Error);
+    assert!(events[0]
+        .detail
+        .contains("Task timed out in pending state after"));
+}
+
+#[test]
+fn keeps_recent_pending_tasks_pending() {
+    let store = Store::open_memory().unwrap();
+    let mut task = make_task("t-pend-new", TaskStatus::Pending);
+    task.created_at = Local::now() - Duration::seconds(599);
+    store.insert_task(&task).unwrap();
+
+    let cleaned = cleanup_stale_pending_tasks(&store).unwrap();
+
+    assert!(cleaned.is_empty());
+    assert_eq!(
+        store.get_task("t-pend-new").unwrap().unwrap().status,
+        TaskStatus::Pending
+    );
+    assert!(store.get_events("t-pend-new").unwrap().is_empty());
+}
+
+#[test]
+fn stale_pending_timeout_skips_tasks_that_already_moved_out_of_pending() {
+    let store = Store::open_memory().unwrap();
+    let mut task = make_task("t-pend-race", TaskStatus::Pending);
+    task.created_at = Local::now() - Duration::seconds(601);
+    store.insert_task(&task).unwrap();
+    store
+        .update_task_status("t-pend-race", TaskStatus::Running)
+        .unwrap();
+
+    let changed = fail_stale_pending_task(&store, &task, Local::now(), 601).unwrap();
+
+    assert!(!changed);
+    assert_eq!(
+        store.get_task("t-pend-race").unwrap().unwrap().status,
+        TaskStatus::Running
+    );
+    assert!(store.get_events("t-pend-race").unwrap().is_empty());
 }
 
 #[test]

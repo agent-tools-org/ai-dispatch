@@ -540,8 +540,10 @@ pub async fn run(store: Arc<Store>, mut args: RunArgs) -> Result<TaskId> {
             // Auto-cleanup worktree for failed tasks (no useful changes to preserve)
             if task.status == TaskStatus::Failed {
                 quota_error_message = read_quota_error_message(&task_id);
-                if let Some(message) = quota_error_message.as_deref() {
-                    rate_limit::mark_rate_limited(&agent_kind, message);
+                if let Some(message) = quota_error_message.as_deref()
+                    && let Some(clean_message) = rate_limit::extract_rate_limit_message(message)
+                {
+                    rate_limit::mark_rate_limited(&agent_kind, &clean_message);
                 }
                 let fail_payload = show::task_hook_json(
                     &task_id,
@@ -571,6 +573,7 @@ pub async fn run(store: Arc<Store>, mut args: RunArgs) -> Result<TaskId> {
                 }
             }
         }
+        rescue_quota_failed_task(store.as_ref(), &task_id, quota_error_message.as_deref());
         if let Some(retry_id) = maybe_judge_retry(&store, &args, &task_id).await? {
             return Ok(retry_id);
         }
@@ -655,6 +658,7 @@ pub async fn run(store: Arc<Store>, mut args: RunArgs) -> Result<TaskId> {
         {
             return Ok(retry_id);
         }
+        crate::verify::enforce_verify_status(&store, &task_id);
         if let Some(mut retry_args) = retry_logic::prepare_retry(store.clone(), &task_id, &args).await? {
             if let Some(task) = store.get_task(task_id.as_str())? {
                 inherit_retry_base_branch(args.dir.as_deref(), &task, &mut retry_args);
@@ -678,9 +682,10 @@ pub async fn run(store: Arc<Store>, mut args: RunArgs) -> Result<TaskId> {
             && task.status == TaskStatus::Failed
             && args.cascade.is_empty()
             && let Some(message) = quota_error_message.as_deref()
+            && let Some(clean_message) = rate_limit::extract_rate_limit_message(message)
             && let Some(fallback) = agent::selection::coding_fallback_for(&agent_kind)
         {
-            rate_limit::mark_rate_limited(&agent_kind, message);
+            rate_limit::mark_rate_limited(&agent_kind, &clean_message);
             aid_info!(
                 "[aid] Quota exhausted for {}, auto-cascading to {}",
                 agent_kind.as_str(),
@@ -723,6 +728,23 @@ fn take_next_cascade_agent(args: &RunArgs) -> Option<(String, Vec<String>)> {
     }
 }
 
+pub(crate) fn rescue_quota_failed_task(
+    store: &Store,
+    task_id: &TaskId,
+    quota_error_message: Option<&str>,
+) {
+    if quota_error_message.is_none() {
+        return;
+    }
+    let Ok(Some(task)) = store.get_task(task_id.as_str()) else {
+        return;
+    };
+    if task.status == TaskStatus::Failed && task.verify_status == VerifyStatus::Passed {
+        aid_info!("[aid] Rescuing quota-failed task {} — verify passed", task_id);
+        let _ = store.update_task_status(task_id.as_str(), TaskStatus::Done);
+    }
+}
+
 pub(crate) fn read_quota_error_message(task_id: &TaskId) -> Option<String> {
     let stderr_path = crate::paths::stderr_path(task_id.as_str());
     if let Ok(stderr) = std::fs::read_to_string(&stderr_path) {
@@ -743,8 +765,7 @@ pub(crate) fn read_quota_error_message(task_id: &TaskId) -> Option<String> {
 fn find_rate_limit_line(content: &str) -> Option<String> {
     content
         .lines()
-        .find(|line| rate_limit::is_rate_limit_error(line))
-        .map(|line| line.to_string())
+        .find_map(rate_limit::extract_rate_limit_message)
 }
 
 fn worktree_is_empty_diff(worktree_dir: &Path) -> Option<bool> {

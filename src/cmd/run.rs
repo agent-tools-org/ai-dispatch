@@ -56,6 +56,7 @@ pub struct RunArgs {
     pub on_done: Option<String>,
     pub cascade: Vec<String>,
     pub read_only: bool,
+    pub sandbox: bool,
     pub budget: bool,
     pub best_of: Option<usize>,
     pub metric: Option<String>,
@@ -371,6 +372,7 @@ pub async fn run(store: Arc<Store>, mut args: RunArgs) -> Result<TaskId> {
             env: args.env.clone(),
             env_forward: args.env_forward.clone(),
             agent_pid: None,
+            sandbox: args.sandbox,
         };
         background::save_spec(&spec)?;
         let mut worker = match background::spawn_worker(task_id.as_str()) {
@@ -415,6 +417,18 @@ pub async fn run(store: Arc<Store>, mut args: RunArgs) -> Result<TaskId> {
         {
             std_cmd.env("CARGO_TARGET_DIR", &target_dir);
         }
+        let std_cmd = if args.sandbox && crate::sandbox::can_sandbox(agent_kind) {
+            if !crate::sandbox::is_available() {
+                anyhow::bail!("--sandbox requires Apple Container CLI. Install: brew install container");
+            }
+            aid_info!("[aid] Sandbox: running {} in container aid-{}", agent_kind.as_str(), task_id);
+            crate::sandbox::wrap_command(&std_cmd, task_id.as_str(), agent_kind)
+        } else if args.sandbox {
+            aid_warn!("[aid] Warning: {} does not support sandbox, running on host", agent_kind.as_str());
+            std_cmd
+        } else {
+            std_cmd
+        };
         if args.announce {
             println!(
                 "Task {} started ({}: {})",
@@ -454,6 +468,9 @@ pub async fn run(store: Arc<Store>, mut args: RunArgs) -> Result<TaskId> {
                 args.max_task_cost,
             )
             .await?;
+        }
+        if args.sandbox {
+            crate::sandbox::kill_container(task_id.as_str());
         }
         run_prompt::warn_agent_committed_files_outside_scope(
             &args.scope,

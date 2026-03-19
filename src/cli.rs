@@ -107,6 +107,9 @@ Hint: If passing file paths, use --context <path> not positional args"#)]
         /// Run in read-only mode (no file writes)
         #[arg(long)]
         read_only: bool,
+        /// Run agent inside a container sandbox
+        #[arg(long)]
+        sandbox: bool,
         /// Dispatch to N budget-friendly agents and judge the best output
         #[arg(long, value_name = "N")]
         best_of: Option<usize>,
@@ -834,6 +837,15 @@ mod tests {
         let cli = Cli::try_parse_from(["aid", "run", "codex", "task", "--timeout", "300"]).unwrap();
         match cli.command {
             Commands::Run { timeout, .. } => assert_eq!(timeout, Some(300)),
+            _ => panic!("expected Run"),
+        }
+    }
+
+    #[test]
+    fn run_sandbox_flag_parses() {
+        let cli = Cli::try_parse_from(["aid", "run", "codex", "task", "--sandbox"]).unwrap();
+        match cli.command {
+            Commands::Run { sandbox, .. } => assert!(sandbox),
             _ => panic!("expected Run"),
         }
     }

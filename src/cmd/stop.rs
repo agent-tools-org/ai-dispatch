@@ -63,6 +63,7 @@ fn terminate(
             background::sigkill_process(agent_pid);
         }
     }
+    crate::sandbox::kill_container(task_id);
     preserve_worktree(task_id, &task, preserve_label);
     store.update_task_status(task_id, TaskStatus::Stopped)?;
     store.insert_event(&TaskEvent {
@@ -232,6 +233,7 @@ mod tests {
             parent_task_id: None,
             env: None,
             env_forward: None,
+            sandbox: false,
         };
         save_spec(&spec).unwrap();
         

@@ -25,6 +25,7 @@ mod pty_runner;
 mod pty_watch;
 mod rate_limit;
 pub(crate) mod sanitize;
+mod sandbox;
 mod session;
 mod skills;
 mod store;
@@ -128,6 +129,7 @@ async fn main() -> Result<()> {
             bg,
             dry_run,
             read_only,
+            sandbox,
             judge,
             peer_review,
             best_of,
@@ -203,6 +205,7 @@ async fn main() -> Result<()> {
                     on_done: extras.on_done,
                     cascade: extras.cascade,
                     read_only,
+                    sandbox,
                     budget,
                     judge,
                     peer_review,

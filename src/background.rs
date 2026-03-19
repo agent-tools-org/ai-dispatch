@@ -55,6 +55,8 @@ pub struct BackgroundRunSpec {
     pub env_forward: Option<Vec<String>>,
     #[serde(default)]
     pub agent_pid: Option<u32>,
+    #[serde(default)]
+    pub sandbox: bool,
 }
 
 pub fn save_spec(spec: &BackgroundRunSpec) -> Result<()> {
@@ -183,6 +185,14 @@ async fn run_task_inner(store: &Arc<Store>, spec: &BackgroundRunSpec) -> Result<
     {
         std_cmd.env("CARGO_TARGET_DIR", &target_dir);
     }
+    let std_cmd = if spec.sandbox && crate::sandbox::can_sandbox(agent.kind()) {
+        if !crate::sandbox::is_available() {
+            anyhow::bail!("--sandbox requires container CLI");
+        }
+        crate::sandbox::wrap_command(&std_cmd, &spec.task_id, agent.kind())
+    } else {
+        std_cmd
+    };
     if spec.interactive {
         crate::pty_runner::run_agent_process(
             &*agent,
@@ -211,6 +221,9 @@ async fn run_task_inner(store: &Arc<Store>, spec: &BackgroundRunSpec) -> Result<
         )
         .await?;
     }
+    if spec.sandbox {
+        crate::sandbox::kill_container(&spec.task_id);
+    }
     let retry_args = crate::cmd::run::RunArgs {
         agent_name: spec.agent_name.clone(),
         prompt: spec.prompt.clone(),
@@ -228,6 +241,7 @@ async fn run_task_inner(store: &Arc<Store>, spec: &BackgroundRunSpec) -> Result<
         parent_task_id: spec.parent_task_id.clone(),
         env: spec.env.clone(),
         env_forward: spec.env_forward.clone(),
+        sandbox: spec.sandbox,
         ..Default::default()
     };
     let pre_verify_status = store

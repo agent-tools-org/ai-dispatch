@@ -36,6 +36,7 @@ fn serializes_spec_to_json() {
         env: None,
         env_forward: None,
         agent_pid: None,
+        sandbox: false,
     };
 
     let content = serde_json::to_string_pretty(&spec).unwrap();
@@ -162,6 +163,7 @@ fn make_spec(task_id: &str) -> BackgroundRunSpec {
         env: None,
         env_forward: None,
         agent_pid: None,
+        sandbox: false,
     }
 }
 

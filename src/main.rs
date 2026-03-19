@@ -36,6 +36,7 @@ mod store_workgroups;
 mod project;
 mod team;
 mod templates;
+mod toolbox;
 #[cfg(test)]
 mod test_subprocess;
 mod compaction;

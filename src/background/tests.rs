@@ -33,6 +33,8 @@ fn serializes_spec_to_json() {
         on_done: None,
         cascade: vec![],
         parent_task_id: None,
+        env: None,
+        env_forward: None,
     };
 
     let content = serde_json::to_string_pretty(&spec).unwrap();
@@ -156,6 +158,8 @@ fn make_spec(task_id: &str) -> BackgroundRunSpec {
         on_done: None,
         cascade: vec![],
         parent_task_id: None,
+        env: None,
+        env_forward: None,
     }
 }
 

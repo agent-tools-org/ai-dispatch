@@ -18,6 +18,7 @@ fn opts(dir: Option<&str>, budget: bool) -> RunOpts {
     RunOpts {
         dir: dir.map(|s| s.to_string()), output: None, model: None,
         budget, read_only: false, context_files: vec![], session_id: None,
+        env: None, env_forward: None,
     }
 }
 fn isolated() -> (TempDir, AidHomeGuard) {

@@ -98,6 +98,10 @@ pub struct BatchDefaults {
     pub read_only: Option<bool>,
     #[serde(default)]
     pub budget: Option<bool>,
+    #[serde(default)]
+    pub env: Option<HashMap<String, String>>,
+    #[serde(default)]
+    pub env_forward: Option<Vec<String>>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -134,6 +138,10 @@ pub struct BatchTask {
     pub read_only: bool,
     #[serde(default)]
     pub budget: bool,
+    #[serde(default)]
+    pub env: Option<HashMap<String, String>>,
+    #[serde(default)]
+    pub env_forward: Option<Vec<String>>,
     pub on_success: Option<String>,
     pub on_fail: Option<String>,
     #[serde(default)]
@@ -321,11 +329,32 @@ fn apply_task_defaults(task: &mut BatchTask, defaults: &BatchDefaults) {
     if !task.budget && matches!(defaults.budget, Some(true)) {
         task.budget = true;
     }
+    task.env = merge_env_maps(defaults.env.as_ref(), task.env.as_ref());
+    task.env_forward = merge_env_lists(defaults.env_forward.as_ref(), task.env_forward.as_ref());
 }
 fn default_worktree(task: &BatchTask, defaults: &BatchDefaults) -> Option<String> {
     let prefix = defaults.worktree_prefix.as_deref()?;
     let name = task.name.as_deref()?.trim();
     (!name.is_empty()).then(|| format!("{prefix}/{name}"))
+}
+
+fn merge_env_maps(
+    defaults: Option<&HashMap<String, String>>,
+    task: Option<&HashMap<String, String>>,
+) -> Option<HashMap<String, String>> {
+    let mut merged = defaults.cloned().unwrap_or_default();
+    if let Some(task) = task {
+        merged.extend(task.clone());
+    }
+    (!merged.is_empty()).then_some(merged)
+}
+
+fn merge_env_lists(defaults: Option<&Vec<String>>, task: Option<&Vec<String>>) -> Option<Vec<String>> {
+    let mut merged = defaults.cloned().unwrap_or_default();
+    if let Some(task) = task {
+        merged.extend(task.iter().cloned());
+    }
+    (!merged.is_empty()).then_some(merged)
 }
 fn validate_agents(tasks: &[BatchTask]) -> Result<()> {
     for (task_idx, task) in tasks.iter().enumerate() {

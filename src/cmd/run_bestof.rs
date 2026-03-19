@@ -105,6 +105,8 @@ pub async fn run_best_of(store: Arc<Store>, args: RunArgs, n: usize) -> Result<T
         read_only: args.read_only,
         context_files: Vec::new(),
         session_id: args.session_id.clone(),
+        env: None,
+        env_forward: None,
     };
     let agents = agent::selection::budget_ranked_agents(
         &args.prompt,

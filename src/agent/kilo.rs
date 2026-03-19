@@ -96,6 +96,8 @@ mod tests {
             read_only: false,
             context_files: vec![],
             session_id: None,
+            env: None,
+            env_forward: None,
         };
         let cmd = KiloAgent.build_command("test prompt", &opts).unwrap();
         let args: Vec<String> = cmd
@@ -117,6 +119,8 @@ mod tests {
             read_only: false,
             context_files: vec![],
             session_id: Some("ses_abc".to_string()),
+            env: None,
+            env_forward: None,
         };
         let cmd = KiloAgent.build_command("test", &opts).unwrap();
         let args: Vec<String> = cmd
@@ -138,6 +142,8 @@ mod tests {
             read_only: false,
             context_files: vec!["src/main.rs".to_string()],
             session_id: None,
+            env: None,
+            env_forward: None,
         };
         let cmd = KiloAgent.build_command("test", &opts).unwrap();
         let args: Vec<String> = cmd
@@ -158,6 +164,8 @@ mod tests {
             read_only: false,
             context_files: vec![],
             session_id: None,
+            env: None,
+            env_forward: None,
         };
         let cmd = KiloAgent.build_command("test", &opts).unwrap();
         let dir = cmd.get_current_dir().unwrap();

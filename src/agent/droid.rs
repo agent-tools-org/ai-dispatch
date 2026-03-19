@@ -139,6 +139,8 @@ mod tests {
             read_only: false,
             context_files: vec![],
             session_id: None,
+            env: None,
+            env_forward: None,
         };
         let cmd = DroidAgent.build_command("test prompt", &opts).unwrap();
         assert_eq!(cmd.get_program().to_str().unwrap(), "droid");
@@ -158,6 +160,8 @@ mod tests {
             read_only: true,
             context_files: vec![],
             session_id: None,
+            env: None,
+            env_forward: None,
         };
         let cmd = DroidAgent.build_command("test", &opts).unwrap();
         let args: Vec<String> = cmd.get_args().map(|a| a.to_string_lossy().to_string()).collect();
@@ -184,6 +188,8 @@ mod tests {
             read_only: false,
             context_files: vec![],
             session_id: None,
+            env: None,
+            env_forward: None,
         };
         let cmd = DroidAgent.build_command("test", &opts).unwrap();
         let args: Vec<String> = cmd.get_args().map(|a| a.to_string_lossy().to_string()).collect();

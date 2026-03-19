@@ -300,6 +300,8 @@ mod tests {
             read_only: false,
             context_files: vec!["src/types.rs".to_string(), "src/lib.rs".to_string()],
             session_id: None,
+            env: None,
+            env_forward: None,
         };
         let cmd = OpenCodeAgent.build_command("test prompt", &opts).unwrap();
         let args: Vec<String> = cmd
@@ -353,6 +355,8 @@ mod tests {
             read_only: false,
             context_files: vec![],
             session_id: Some("ses_test123".to_string()),
+            env: None,
+            env_forward: None,
         };
         let cmd = agent.build_command("test prompt", &opts).unwrap();
         let args: Vec<String> = cmd
@@ -386,6 +390,8 @@ mod tests {
             read_only: false,
             context_files: vec![],
             session_id: None,
+            env: None,
+            env_forward: None,
         };
         let cmd = agent.build_command("test prompt", &opts).unwrap();
         let args: Vec<String> = cmd
@@ -408,6 +414,8 @@ mod tests {
             read_only: true,
             context_files: vec![],
             session_id: None,
+            env: None,
+            env_forward: None,
         };
         let cmd = agent.build_command("analyze this code", &opts).unwrap();
         let args: Vec<String> = cmd

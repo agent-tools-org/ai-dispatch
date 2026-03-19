@@ -216,6 +216,8 @@ mod tests {
             read_only: false,
             context_files: Vec::new(),
             session_id: None,
+            env: None,
+            env_forward: None,
         }
     }
 

@@ -33,6 +33,8 @@ pub(super) fn make_task(name: &str, conditional: bool, on_success: Option<&str>)
         scope: None,
         read_only: false,
         budget: false,
+        env: None,
+        env_forward: None,
         on_success: on_success.map(str::to_string),
         on_fail: None,
         conditional,
@@ -86,4 +88,3 @@ pub(super) fn make_stored_task(id: &str, agent: AgentKind, status: TaskStatus) -
         budget: false,
     }
 }
-

@@ -142,16 +142,7 @@ pub(super) fn custom_command_installed(command: &str) -> bool {
         .unwrap_or(false)
 }
 
-pub(super) const BUILTIN_AGENTS: &[AgentKind] = &[
-    AgentKind::Gemini,
-    AgentKind::OpenCode,
-    AgentKind::Kilo,
-    AgentKind::Cursor,
-    AgentKind::Codex,
-    AgentKind::Codebuff,
-    AgentKind::Droid,
-    AgentKind::Oz,
-];
+pub(super) const BUILTIN_AGENTS: &[AgentKind] = AgentKind::ALL_BUILTIN;
 
 #[derive(Clone)]
 pub(super) struct Candidate {

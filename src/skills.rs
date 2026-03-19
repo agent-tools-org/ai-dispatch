@@ -89,18 +89,8 @@ fn parse_script_metadata(path: &Path) -> Option<ScriptMeta> {
     })
 }
 
-fn all_agent_kinds() -> [AgentKind; 9] {
-    [
-        AgentKind::Gemini,
-        AgentKind::Codex,
-        AgentKind::OpenCode,
-        AgentKind::Cursor,
-        AgentKind::Kilo,
-        AgentKind::Codebuff,
-        AgentKind::Droid,
-        AgentKind::Oz,
-        AgentKind::Custom,
-    ]
+fn all_agent_kinds() -> &'static [AgentKind] {
+    AgentKind::ALL
 }
 
 pub fn load_skill(name: &str) -> Result<String> {

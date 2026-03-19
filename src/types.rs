@@ -62,6 +62,29 @@ pub enum AgentKind {
 }
 
 impl AgentKind {
+    pub const ALL_BUILTIN: &'static [Self] = &[
+        Self::Gemini,
+        Self::Codex,
+        Self::OpenCode,
+        Self::Cursor,
+        Self::Kilo,
+        Self::Codebuff,
+        Self::Droid,
+        Self::Oz,
+    ];
+
+    pub const ALL: &'static [Self] = &[
+        Self::Gemini,
+        Self::Codex,
+        Self::OpenCode,
+        Self::Cursor,
+        Self::Kilo,
+        Self::Codebuff,
+        Self::Droid,
+        Self::Oz,
+        Self::Custom,
+    ];
+
     pub fn parse_str(s: &str) -> Option<Self> {
         match s.to_lowercase().as_str() {
             "gemini" => Some(Self::Gemini),
@@ -87,6 +110,78 @@ impl AgentKind {
             Self::Droid => "droid",
             Self::Oz => "oz",
             Self::Custom => "custom",
+        }
+    }
+
+    pub fn profile(
+        &self,
+    ) -> Option<(&'static str, &'static str, &'static str, &'static str, bool, &'static str)> {
+        match self {
+            Self::Gemini => Some((
+                "gemini",
+                "Research, coding, web search, file editing",
+                "$0.10-$10/M blended",
+                "research, explain, implement, create, analyze, build",
+                true,
+                "api",
+            )),
+            Self::Codex => Some((
+                "codex",
+                "Complex implementation, multi-file refactors",
+                "$0.10-$8/M blended",
+                "implement, create, build, refactor, test",
+                true,
+                "local",
+            )),
+            Self::OpenCode => Some((
+                "opencode",
+                "Simple edits, renames, type annotations",
+                "free-$2/M blended",
+                "rename, change, update, fix typo, add type",
+                true,
+                "api",
+            )),
+            Self::Cursor => Some((
+                "cursor",
+                "General coding, strong model selection, frontend",
+                "$20/mo subscription",
+                "implement, create, build, refactor, ui, frontend, css",
+                true,
+                "api",
+            )),
+            Self::Kilo => Some((
+                "kilo",
+                "Simple edits (free tier)",
+                "free",
+                "rename, change, update, fix typo, add type",
+                true,
+                "api",
+            )),
+            Self::Codebuff => Some((
+                "aid-codebuff",
+                "Complex implementation, frontend",
+                "SDK-managed",
+                "complex coding, frontend",
+                true,
+                "local",
+            )),
+            Self::Droid => Some((
+                "droid",
+                "Complex implementation, multi-agent orchestration",
+                "BYOK (API key)",
+                "implement, create, build, refactor, test, orchestrate",
+                true,
+                "api",
+            )),
+            Self::Oz => Some((
+                "oz",
+                "Complex implementation, multi-file refactors",
+                "Warp subscription",
+                "implement, create, build, refactor, test",
+                true,
+                "local",
+            )),
+            Self::Custom => None,
         }
     }
 }
@@ -505,5 +600,34 @@ mod tests {
             let s = memory_type.as_str();
             assert_eq!(MemoryType::parse_str(s), Some(memory_type));
         }
+    }
+
+    #[test]
+    fn all_builtin_excludes_custom() {
+        assert!(!AgentKind::ALL_BUILTIN.contains(&AgentKind::Custom));
+    }
+
+    #[test]
+    fn all_includes_custom() {
+        assert!(AgentKind::ALL.contains(&AgentKind::Custom));
+    }
+
+    #[test]
+    fn all_builtin_matches_parse_str_coverage() {
+        for kind in AgentKind::ALL_BUILTIN {
+            assert_eq!(AgentKind::parse_str(kind.as_str()), Some(*kind));
+        }
+    }
+
+    #[test]
+    fn profile_returns_some_for_all_builtin() {
+        for kind in AgentKind::ALL_BUILTIN {
+            assert!(kind.profile().is_some(), "{} should have a profile", kind.as_str());
+        }
+    }
+
+    #[test]
+    fn profile_returns_none_for_custom() {
+        assert!(AgentKind::Custom.profile().is_none());
     }
 }

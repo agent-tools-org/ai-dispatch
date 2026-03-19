@@ -62,91 +62,6 @@ refactoring = 5
 documentation = 3
 "#;
 
-struct BuiltinAgentProfile {
-    name: &'static str,
-    command: &'static str,
-    description: &'static str,
-    cost: &'static str,
-    best_for: &'static str,
-    streaming: bool,
-    trust_tier: &'static str,
-}
-
-const BUILTIN_AGENT_PROFILES: &[BuiltinAgentProfile] = &[
-    BuiltinAgentProfile {
-        name: "gemini",
-        command: "gemini",
-        description: "Research, coding, web search, file editing",
-        cost: "$0.10-$10/M blended",
-        best_for: "research, explain, implement, create, analyze, build",
-        streaming: true,
-        trust_tier: "api",
-    },
-    BuiltinAgentProfile {
-        name: "codex",
-        command: "codex",
-        description: "Complex implementation, multi-file refactors",
-        cost: "$0.10-$8/M blended",
-        best_for: "implement, create, build, refactor, test",
-        streaming: true,
-        trust_tier: "local",
-    },
-    BuiltinAgentProfile {
-        name: "opencode",
-        command: "opencode",
-        description: "Simple edits, renames, type annotations",
-        cost: "free-$2/M blended",
-        best_for: "rename, change, update, fix typo, add type",
-        streaming: true,
-        trust_tier: "api",
-    },
-    BuiltinAgentProfile {
-        name: "cursor",
-        command: "cursor",
-        description: "General coding, strong model selection, frontend",
-        cost: "$20/mo subscription",
-        best_for: "implement, create, build, refactor, ui, frontend, css",
-        streaming: true,
-        trust_tier: "api",
-    },
-    BuiltinAgentProfile {
-        name: "kilo",
-        command: "kilo",
-        description: "Simple edits (free tier)",
-        cost: "free",
-        best_for: "rename, change, update, fix typo, add type",
-        streaming: true,
-        trust_tier: "api",
-    },
-    BuiltinAgentProfile {
-        name: "codebuff",
-        command: "aid-codebuff",
-        description: "Complex implementation, frontend",
-        cost: "SDK-managed",
-        best_for: "complex coding, frontend",
-        streaming: true,
-        trust_tier: "local",
-    },
-    BuiltinAgentProfile {
-        name: "droid",
-        command: "droid",
-        description: "Complex implementation, multi-agent orchestration",
-        cost: "BYOK (API key)",
-        best_for: "implement, create, build, refactor, test, orchestrate",
-        streaming: true,
-        trust_tier: "api",
-    },
-    BuiltinAgentProfile {
-        name: "oz",
-        command: "oz",
-        description: "Complex implementation, multi-file refactors",
-        cost: "Warp subscription",
-        best_for: "implement, create, build, refactor, test",
-        streaming: true,
-        trust_tier: "local",
-    },
-];
-
 pub enum AgentAction {
     List,
     Show {
@@ -180,20 +95,19 @@ fn show_quota() -> Result<()> {
     use crate::rate_limit;
     let limited = rate_limit::rate_limited_agents();
     println!("{:<12} {:<10} DETAIL", "AGENT", "STATUS");
-    for profile in BUILTIN_AGENT_PROFILES {
-        let kind = AgentKind::parse_str(profile.name).unwrap_or(AgentKind::Codex);
-        if let Some((_, msg)) = limited.iter().find(|(a, _)| *a == kind) {
-            let info = rate_limit::get_rate_limit_info(&kind);
+    for kind in AgentKind::ALL_BUILTIN {
+        if let Some((_, msg)) = limited.iter().find(|(a, _)| *a == *kind) {
+            let info = rate_limit::get_rate_limit_info(kind);
             let recovery = info
                 .as_ref()
                 .and_then(|i| i.recovery_at.as_deref())
                 .unwrap_or("~1h");
             println!(
                 "{:<12} {:<10} resets {recovery} — {msg}",
-                profile.name, "LIMITED"
+                kind.as_str(), "LIMITED"
             );
         } else {
-            println!("{:<12} {:<10}", profile.name, "OK");
+            println!("{:<12} {:<10}", kind.as_str(), "OK");
         }
     }
     Ok(())
@@ -202,11 +116,10 @@ fn show_quota() -> Result<()> {
 fn list_agents() -> Result<()> {
     println!("Built-in agents:");
     println!("  {:<10} {:<6} DESCRIPTION", "NAME", "TRUST");
-    for profile in BUILTIN_AGENT_PROFILES {
-        println!(
-            "  {:<10} {:<6} {}",
-            profile.name, profile.trust_tier, profile.description
-        );
+    for kind in AgentKind::ALL_BUILTIN {
+        if let Some((_, description, _, _, _, trust_tier)) = kind.profile() {
+            println!("  {:<10} {:<6} {}", kind.as_str(), trust_tier, description);
+        }
     }
     println!("\nCustom agents:");
     let custom = registry::list_custom_agents();
@@ -225,8 +138,8 @@ fn list_agents() -> Result<()> {
 }
 
 fn show_agent(name: &str) -> Result<()> {
-    if let Some(profile) = builtin_profile(name) {
-        show_builtin_profile(profile);
+    if let Some(kind) = builtin_profile(name) {
+        show_builtin_profile(kind);
         return Ok(());
     }
     show_custom_agent(name)
@@ -284,8 +197,8 @@ fn fork_agent(name: &str, new_name: Option<&str>) -> Result<()> {
         );
     }
 
-    if let Some(profile) = builtin_profile(name) {
-        let contents = build_builtin_agent_toml(&target_name, profile);
+    if let Some(kind) = builtin_profile(name) {
+        let contents = build_builtin_agent_toml(&target_name, kind);
         fs::write(&target, contents)
             .with_context(|| format!("Failed to write {}", target.display()))?;
         println!("Created {}", target.display());
@@ -312,20 +225,23 @@ fn fork_agent(name: &str, new_name: Option<&str>) -> Result<()> {
     Ok(())
 }
 
-fn show_builtin_profile(profile: &BuiltinAgentProfile) {
-    println!("Built-in agent: {}", profile.name);
-    println!("  Description: {}", profile.description);
-    println!("  Cost: {}", profile.cost);
-    println!("  Best for: {}", profile.best_for);
+fn show_builtin_profile(kind: AgentKind) {
+    let Some((_, description, cost, best_for, streaming, trust_tier)) = kind.profile() else {
+        return;
+    };
+    println!("Built-in agent: {}", kind.as_str());
+    println!("  Description: {}", description);
+    println!("  Cost: {}", cost);
+    println!("  Best for: {}", best_for);
     println!(
         "  Mode: {}",
-        if profile.streaming {
+        if streaming {
             "streaming"
         } else {
             "buffered"
         }
     );
-    println!("  Trust tier: {}", profile.trust_tier);
+    println!("  Trust tier: {}", trust_tier);
 }
 
 fn show_custom_agent(name: &str) -> Result<()> {
@@ -385,10 +301,11 @@ fn print_capabilities(cap: &CapabilityScores) {
     }
 }
 
-fn builtin_profile(name: &str) -> Option<&'static BuiltinAgentProfile> {
-    BUILTIN_AGENT_PROFILES
+fn builtin_profile(name: &str) -> Option<AgentKind> {
+    AgentKind::ALL_BUILTIN
         .iter()
-        .find(|profile| profile.name.eq_ignore_ascii_case(name))
+        .copied()
+        .find(|kind| kind.as_str().eq_ignore_ascii_case(name))
 }
 
 fn is_builtin(name: &str) -> bool {
@@ -403,21 +320,23 @@ fn custom_agent_path(name: &str) -> PathBuf {
     agent_dir().join(format!("{name}.toml"))
 }
 
-fn build_builtin_agent_toml(target_name: &str, profile: &BuiltinAgentProfile) -> String {
+fn build_builtin_agent_toml(target_name: &str, kind: AgentKind) -> String {
     let display_name = title_case(target_name);
-    let kind = AgentKind::parse_str(profile.name).unwrap_or(AgentKind::Codex);
+    let Some((command, _, _, _, streaming, trust_tier)) = kind.profile() else {
+        return String::new();
+    };
     let caps = capability_scores_for(kind);
     let mut toml = String::new();
     toml.push_str(&format!(
         "# Forked from the built-in `{}` agent. Edit the entries below to customize this clone.\n",
-        profile.name
+        kind.as_str()
     ));
     toml.push_str("[agent]\n");
     toml.push_str(&format!("id = \"{target_name}\"\n"));
     toml.push_str(&format!("display_name = \"{display_name}\"\n"));
     toml.push_str(&format!(
         "command = \"{}\"  # CLI binary invoked by this agent\n",
-        profile.command
+        command
     ));
     toml.push_str("\n# How prompts reach the CLI\n");
     toml.push_str("prompt_mode = \"arg\"  # options: arg | flag | stdin\n");
@@ -429,12 +348,12 @@ fn build_builtin_agent_toml(target_name: &str, profile: &BuiltinAgentProfile) ->
     toml.push_str("# Arguments that always run with this agent\n");
     toml.push_str("fixed_args = []\n\n");
     toml.push_str("# Streaming controls whether aid expects live JSONL events\n");
-    toml.push_str(&format!("streaming = {}\n", profile.streaming));
+    toml.push_str(&format!("streaming = {}\n", streaming));
     toml.push_str("output_format = \"text\"  # text | jsonl\n\n");
     toml.push_str(
         "# Trust tier: \"local\" (runs locally) or \"api\" (sends prompts to third-party)\n",
     );
-    toml.push_str(&format!("trust_tier = \"{}\"\n\n", profile.trust_tier));
+    toml.push_str(&format!("trust_tier = \"{}\"\n\n", trust_tier));
     toml.push_str("# Strength categories for auto-selection boosts\n");
     toml.push_str("strengths = []\n\n");
     toml.push_str("# Capability scores (0-10) guide auto-selection\n");

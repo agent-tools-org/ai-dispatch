@@ -1,7 +1,10 @@
 // Tests for watcher event parsing — milestone/finding extraction, loop detection, cost ceiling.
 // Deps: super::*, types
 
-use super::{apply_completion_event, exceeds_cost_ceiling, parse_milestone_event, LoopDetector};
+use super::{
+    apply_completion_event, exceeds_cost_ceiling, parse_milestone_event, LoopDetector,
+    SyntheticMilestoneTracker,
+};
 use crate::types::{CompletionInfo, EventKind, TaskEvent, TaskId, TaskStatus};
 use chrono::Local;
 use serde_json::json;
@@ -132,6 +135,64 @@ fn milestone_lines_stripped_from_output() {
         .collect::<Vec<_>>()
         .join("\n");
     assert_eq!(filtered, "line1\nline2");
+}
+
+fn tracker_event(kind: EventKind, detail: &str) -> TaskEvent {
+    TaskEvent {
+        task_id: TaskId("t-synth".to_string()),
+        timestamp: Local::now(),
+        event_kind: kind,
+        detail: detail.to_string(),
+        metadata: None,
+    }
+}
+
+#[test]
+fn synthetic_tracker_emits_milestone_after_three_reads() {
+    let task_id = TaskId("t-read".to_string());
+    let mut tracker = SyntheticMilestoneTracker::new();
+
+    let mut milestone = None;
+    for detail in ["Read", "Glob", "Read"] {
+        let event = tracker_event(EventKind::ToolCall, detail);
+        tracker.observe(&event);
+        milestone = tracker.synthetic_event(&task_id, &event);
+    }
+
+    let milestone = milestone.expect("expected synthetic milestone");
+    assert_eq!(milestone.event_kind, EventKind::Milestone);
+    assert_eq!(milestone.detail, "[exploring] read 3 files");
+}
+
+#[test]
+fn synthetic_tracker_emits_first_edit_after_reads() {
+    let task_id = TaskId("t-edit".to_string());
+    let mut tracker = SyntheticMilestoneTracker::new();
+
+    for detail in ["Read", "Read", "Glob"] {
+        let event = tracker_event(EventKind::ToolCall, detail);
+        tracker.observe(&event);
+        let _ = tracker.synthetic_event(&task_id, &event);
+    }
+
+    let edit = tracker_event(EventKind::ToolCall, "Edit");
+    tracker.observe(&edit);
+    let milestone = tracker.synthetic_event(&task_id, &edit).expect("expected first edit");
+
+    assert_eq!(milestone.detail, "[implementing] first edit");
+}
+
+#[test]
+fn synthetic_tracker_stays_disabled_when_reasoning_exists() {
+    let task_id = TaskId("t-reason".to_string());
+    let mut tracker = SyntheticMilestoneTracker::new();
+    let reasoning = tracker_event(EventKind::Reasoning, "thinking");
+    tracker.observe(&reasoning);
+
+    let tool = tracker_event(EventKind::ToolCall, "Read");
+    tracker.observe(&tool);
+
+    assert!(tracker.synthetic_event(&task_id, &tool).is_none());
 }
 
 fn loop_detector_case<I, S>(expected: bool, events: I)

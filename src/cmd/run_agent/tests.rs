@@ -2,8 +2,8 @@
 // Covers substantive message retention, filtering, and mixed streaming completion events.
 // Depends on super::write_streaming_output, serde_json, and tempfile.
 
-use super::write_streaming_output;
-use serde_json::json;
+use super::{spawn_child_with_log, write_streaming_output};
+use serde_json::{Value, json};
 use tempfile::NamedTempFile;
 
 #[test]
@@ -137,4 +137,26 @@ fn write_streaming_output_does_not_duplicate_streamed_message_when_final_message
 
     let output = std::fs::read_to_string(out_file.path()).unwrap();
     assert_eq!(output, message);
+}
+
+#[tokio::test]
+async fn spawn_child_with_log_writes_error_event_when_spawn_fails() {
+    let log_file = NamedTempFile::new().unwrap();
+    let mut cmd = tokio::process::Command::new("/definitely/missing/aid-binary");
+
+    let err = spawn_child_with_log(&mut cmd, log_file.path()).err().unwrap();
+
+    assert!(err.to_string().contains("No such file") || err.to_string().contains("cannot find"));
+
+    let content = std::fs::read_to_string(log_file.path()).unwrap();
+    let value: Value = serde_json::from_str(content.trim()).unwrap();
+    assert_eq!(value["type"], "error");
+    assert_eq!(value["source"], "spawn");
+    assert!(
+        value["message"]
+            .as_str()
+            .unwrap()
+            .contains("Failed to spawn agent process")
+    );
+    assert!(value["timestamp"].as_str().is_some());
 }

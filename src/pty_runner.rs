@@ -4,13 +4,13 @@
 use anyhow::Result;
 use std::io::Read;
 use std::path::Path;
-use std::sync::Arc;
 use std::sync::mpsc;
+use std::sync::Arc;
 
 use crate::agent::Agent;
 use crate::cost;
 use crate::pty_bridge::PtyBridge;
-use crate::pty_watch::{MonitorState, finalize_output, monitor_bridge};
+use crate::pty_watch::{finalize_output, monitor_bridge, MonitorState};
 use crate::store::Store;
 use crate::store::TaskCompletionUpdate;
 use crate::types::{CompletionInfo, TaskId};
@@ -44,11 +44,33 @@ pub fn run_agent_process(
         None,
     )?;
     if bridge.is_alive() {
-        let _ = bridge.kill();
+        let _ = bridge.kill_group();
+    } else {
+        if let Some(pid) = bridge.child_pid() {
+            #[cfg(unix)]
+            unsafe {
+                libc::kill(-(pid as i32), libc::SIGTERM);
+            }
+        }
     }
     let exit_status = bridge.wait()?;
-    finalize_output(agent, task_id, store, output_path, streaming, &exit_status, &mut state)?;
-    record_completion(agent, task_id, store, model, start.elapsed().as_millis() as i64, &state.info)
+    finalize_output(
+        agent,
+        task_id,
+        store,
+        output_path,
+        streaming,
+        &exit_status,
+        &mut state,
+    )?;
+    record_completion(
+        agent,
+        task_id,
+        store,
+        model,
+        start.elapsed().as_millis() as i64,
+        &state.info,
+    )
 }
 
 fn spawn_bridge(cmd: &std::process::Command) -> Result<PtyBridge> {
@@ -56,9 +78,7 @@ fn spawn_bridge(cmd: &std::process::Command) -> Result<PtyBridge> {
     PtyBridge::spawn(&argv, dir.as_deref(), env)
 }
 
-fn spawn_reader_thread(
-    mut reader: Box<dyn Read + Send>,
-) -> mpsc::Receiver<Vec<u8>> {
+fn spawn_reader_thread(mut reader: Box<dyn Read + Send>) -> mpsc::Receiver<Vec<u8>> {
     let (tx, rx) = mpsc::channel();
     std::thread::spawn(move || {
         let mut buf = [0u8; 1024];
@@ -148,15 +168,24 @@ fn format_duration(ms: i64) -> String {
     }
 }
 
-fn command_parts(cmd: &std::process::Command) -> (Vec<String>, Option<String>, Vec<(String, String)>) {
+fn command_parts(
+    cmd: &std::process::Command,
+) -> (Vec<String>, Option<String>, Vec<(String, String)>) {
     let argv = std::iter::once(cmd.get_program())
         .chain(cmd.get_args())
         .map(|value| value.to_string_lossy().into_owned())
         .collect();
-    let dir = cmd.get_current_dir().map(|path| path.to_string_lossy().into_owned());
+    let dir = cmd
+        .get_current_dir()
+        .map(|path| path.to_string_lossy().into_owned());
     let env = cmd
         .get_envs()
-        .filter_map(|(key, value)| Some((key.to_string_lossy().into_owned(), value?.to_string_lossy().into_owned())))
+        .filter_map(|(key, value)| {
+            Some((
+                key.to_string_lossy().into_owned(),
+                value?.to_string_lossy().into_owned(),
+            ))
+        })
         .collect();
     (argv, dir, env)
 }

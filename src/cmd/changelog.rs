@@ -1,13 +1,11 @@
 // Handler for `aid changelog` — render git tag history and tagged commits.
 // Exports: `run`; deps: anyhow, std::process::Command.
 
-use anyhow::{Result, bail};
+use anyhow::{bail, Result};
 use std::ffi::OsStr;
 use std::process::Command;
 
 const EMBEDDED_CHANGELOG: &str = env!("AID_CHANGELOG");
-const NO_VERSION_TAGS_MESSAGE: &str =
-    "No version tags found. Run from the ai-dispatch repo or rebuild aid.";
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct Entry {
@@ -16,34 +14,51 @@ struct Entry {
     commits: Vec<String>,
 }
 
-pub(crate) fn run(version: Option<String>, all: bool, count: usize) -> Result<()> {
-    let tags = version_tags();
-    let embedded = if tags.is_empty() || version.is_some() {
-        embedded_decoded()
-    } else {
-        String::new()
-    };
+pub(crate) fn run(version: Option<String>, all: bool, count: usize, git: bool) -> Result<()> {
+    let embedded = embedded_decoded();
 
-    if tags.is_empty() && version.is_none() {
-        if let Some(text) = no_version_tags_fallback(&embedded) {
-            print!("{text}");
+    if git {
+        return run_from_git_tags(version, all, count);
+    }
+
+    if !embedded.is_empty() {
+        if let Some(v) = version.as_deref() {
+            if let Some(section) = embedded_section_for_version(&embedded, v) {
+                print!("{section}");
+                return Ok(());
+            }
+        } else if all {
+            print!("{embedded}");
+            return Ok(());
+        } else {
+            let lines = embedded.lines().collect::<Vec<_>>();
+            let version_starts: Vec<usize> = lines
+                .iter()
+                .enumerate()
+                .filter(|(_, line)| line.starts_with("## v"))
+                .map(|(i, _)| i)
+                .collect();
+            let limit = count.min(version_starts.len());
+            let start_idx = version_starts.first().copied().unwrap_or(0);
+            let end_idx = version_starts.get(limit).copied().unwrap_or(lines.len());
+            for line in &lines[start_idx..end_idx] {
+                println!("{line}");
+            }
+            return Ok(());
         }
+    }
+
+    run_from_git_tags(version, all, count)
+}
+
+fn run_from_git_tags(version: Option<String>, all: bool, count: usize) -> Result<()> {
+    let tags = version_tags();
+
+    if tags.is_empty() {
         return Ok(());
     }
 
-    let indexes = match selected_indexes(&tags, version.as_deref(), all, count) {
-        Ok(indexes) => indexes,
-        Err(err) => {
-            if let Some(version) = version.as_deref() {
-                if let Some(section) = embedded_section_for_version(&embedded, version) {
-                    print!("{section}");
-                    return Ok(());
-                }
-            }
-            return Err(err);
-        }
-    };
-
+    let indexes = selected_indexes(&tags, version.as_deref(), all, count)?;
     let text = render_entries(&build_entries(&tags, &indexes)?);
     if !text.is_empty() {
         print!("{text}");
@@ -54,14 +69,6 @@ pub(crate) fn run(version: Option<String>, all: bool, count: usize) -> Result<()
 fn embedded_decoded() -> String {
     // build.rs escapes newlines as a sentinel token to keep `cargo:rustc-env` values single-line.
     EMBEDDED_CHANGELOG.replace("__AID_NL__", "\n")
-}
-
-fn no_version_tags_fallback(embedded: &str) -> Option<String> {
-    if embedded.is_empty() {
-        Some(NO_VERSION_TAGS_MESSAGE.to_string())
-    } else {
-        Some(embedded.to_string())
-    }
 }
 
 fn embedded_section_for_version<'a>(embedded: &'a str, version: &str) -> Option<&'a str> {
@@ -85,10 +92,18 @@ fn version_tags() -> Vec<String> {
         .collect()
 }
 
-fn selected_indexes(tags: &[String], version: Option<&str>, all: bool, count: usize) -> Result<Vec<usize>> {
+fn selected_indexes(
+    tags: &[String],
+    version: Option<&str>,
+    all: bool,
+    count: usize,
+) -> Result<Vec<usize>> {
     if let Some(version) = version {
         let wanted = version.trim_start_matches('v');
-        let Some(index) = tags.iter().position(|tag| tag.trim_start_matches('v') == wanted) else {
+        let Some(index) = tags
+            .iter()
+            .position(|tag| tag.trim_start_matches('v') == wanted)
+        else {
             bail!("Version '{version}' not found");
         };
         return Ok(vec![index]);
@@ -120,9 +135,9 @@ fn build_entries(tags: &[String], indexes: &[usize]) -> Result<Vec<Entry>> {
 
 fn commit_messages(tag: &str, previous_tag: Option<&str>) -> Result<Vec<String>> {
     let range = previous_tag.map_or_else(|| tag.to_string(), |prev| format!("{prev}..{tag}"));
-    let commits: Vec<String> = git(["log", &range, "--oneline"])?
+    let commits: Vec<String> = git(["log", "--no-merges", "--format=%s", &range])?
         .lines()
-        .filter_map(|line| line.split_once(' ').map(|(_, message)| message.to_string()))
+        .map(str::to_string)
         .collect();
     Ok(if commits.is_empty() {
         vec!["No commits found".to_string()]
@@ -172,17 +187,17 @@ fn render_entries(entries: &[Entry]) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        embedded_section_for_version, no_version_tags_fallback, Entry, render_entries,
-        selected_indexes,
-    };
+    use super::{embedded_section_for_version, render_entries, selected_indexes, Entry};
 
     #[test]
     fn renders_version_sections() {
         let text = render_entries(&[Entry {
             tag: "v8.22.0".to_string(),
             date: "2026-03-19".to_string(),
-            commits: vec!["Add changelog command".to_string(), "Wire CLI dispatch".to_string()],
+            commits: vec![
+                "Add changelog command".to_string(),
+                "Wire CLI dispatch".to_string(),
+            ],
         }]);
         assert_eq!(
             text,
@@ -193,7 +208,10 @@ mod tests {
     #[test]
     fn selects_specific_version_without_v_prefix() {
         let tags = vec!["v8.22.0".to_string(), "v8.21.14".to_string()];
-        assert_eq!(selected_indexes(&tags, Some("8.21.14"), false, 5).unwrap(), vec![1]);
+        assert_eq!(
+            selected_indexes(&tags, Some("8.21.14"), false, 5).unwrap(),
+            vec![1]
+        );
     }
 
     #[test]
@@ -212,13 +230,5 @@ mod tests {
             Some("## v0.1.0 (2026-01-02)\n- B\n")
         );
         assert_eq!(embedded_section_for_version(embedded, "9.9.9"), None);
-    }
-
-    #[test]
-    fn no_version_tags_message_when_embedded_empty() {
-        assert_eq!(
-            no_version_tags_fallback(""),
-            Some("No version tags found. Run from the ai-dispatch repo or rebuild aid.".to_string())
-        );
     }
 }

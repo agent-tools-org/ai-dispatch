@@ -244,7 +244,7 @@ Run `aid batch init` to generate a full template with all fields."#)]
     /// Show version history from git tags and commits
     Changelog {
         /// Show changelog for one version (accepts `vN.N.N` or `N.N.N`)
-        #[arg(long, conflicts_with_all = ["all", "count"])]
+        #[arg(long, conflicts_with_all = ["all","count"])]
         version: Option<String>,
         /// Show all tagged versions
         #[arg(long, conflicts_with = "version")]
@@ -252,6 +252,9 @@ Run `aid batch init` to generate a full template with all fields."#)]
         /// Number of recent versions to show
         #[arg(long, default_value = "5", conflicts_with = "version")]
         count: usize,
+        /// Show changelog from current git repo tags instead of embedded
+        #[arg(long)]
+        git: bool,
     },
     #[command(after_help = r#"Examples:
   aid agent list
@@ -956,10 +959,23 @@ mod tests {
                 version,
                 all,
                 count,
+                git,
             } => {
                 assert_eq!(version, Some("8.21.14".to_string()));
                 assert!(!all);
                 assert_eq!(count, 5);
+                assert!(!git);
+            }
+            _ => panic!("expected Changelog"),
+        }
+    }
+
+    #[test]
+    fn changelog_git_flag_parses() {
+        let cli = Cli::try_parse_from(["aid", "changelog", "--git"]).unwrap();
+        match cli.command {
+            Commands::Changelog { git, .. } => {
+                assert!(git);
             }
             _ => panic!("expected Changelog"),
         }

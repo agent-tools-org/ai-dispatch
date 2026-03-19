@@ -7,9 +7,9 @@ use super::{
     build_on_done_command, check_zombie_tasks_with, save_spec, BackgroundRunSpec,
     ZOMBIE_FAILURE_DETAIL,
 };
-use crate::test_subprocess;
 use crate::paths;
 use crate::store::Store;
+use crate::test_subprocess;
 use crate::types::{AgentKind, EventKind, Task, TaskId, TaskStatus, VerifyStatus};
 
 #[test]
@@ -35,6 +35,7 @@ fn serializes_spec_to_json() {
         parent_task_id: None,
         env: None,
         env_forward: None,
+        agent_pid: None,
     };
 
     let content = serde_json::to_string_pretty(&spec).unwrap();
@@ -160,15 +161,16 @@ fn make_spec(task_id: &str) -> BackgroundRunSpec {
         parent_task_id: None,
         env: None,
         env_forward: None,
+        agent_pid: None,
     }
 }
 
 fn make_task(task_id: &str, status: TaskStatus) -> Task {
-        Task {
-            id: TaskId(task_id.to_string()),
-            agent: AgentKind::Codex,
-            custom_agent_name: None,
-            prompt: "prompt".to_string(),
+    Task {
+        id: TaskId(task_id.to_string()),
+        agent: AgentKind::Codex,
+        custom_agent_name: None,
+        prompt: "prompt".to_string(),
         resolved_prompt: None,
         status,
         parent_task_id: None,
@@ -213,10 +215,7 @@ fn quota_cascade_skipped_for_batch_tasks() {
         ..make_spec("t-solo")
     };
     // Non-batch tasks have no group — cascade is allowed
-    assert!(
-        solo_spec.group.is_none(),
-        "solo tasks should allow cascade"
-    );
+    assert!(solo_spec.group.is_none(), "solo tasks should allow cascade");
 }
 
 #[test]
@@ -238,7 +237,10 @@ fn check_worker_capacity_rejects_at_hard_limit() {
     }
     let result = super::check_worker_capacity(&store);
     assert!(result.is_err());
-    assert!(result.unwrap_err().to_string().contains("Worker limit reached"));
+    assert!(result
+        .unwrap_err()
+        .to_string()
+        .contains("Worker limit reached"));
 }
 
 #[cfg(unix)]
@@ -272,4 +274,36 @@ fn is_process_running_returns_false_for_zombie() {
         let mut status: i32 = 0;
         libc::waitpid(pid, &mut status, 0);
     }
+}
+
+#[test]
+fn agent_pid_stored_and_loaded_correctly() {
+    let temp = tempfile::tempdir().unwrap();
+    let _aid_home = paths::AidHomeGuard::set(temp.path());
+    paths::ensure_dirs().unwrap();
+
+    save_spec(&make_spec("t-a100")).unwrap();
+
+    assert!(super::load_agent_pid("t-a100").unwrap().is_none());
+
+    super::update_agent_pid("t-a100", 12345).unwrap();
+
+    let loaded = super::load_agent_pid("t-a100").unwrap();
+    assert_eq!(loaded, Some(12345));
+
+    let spec = super::load_spec("t-a100").unwrap();
+    assert_eq!(spec.agent_pid, Some(12345));
+    assert_eq!(spec.worker_pid, Some(202));
+}
+
+#[test]
+fn agent_pid_backwards_compatible() {
+    let temp = tempfile::tempdir().unwrap();
+    let _aid_home = paths::AidHomeGuard::set(temp.path());
+    paths::ensure_dirs().unwrap();
+
+    save_spec(&make_spec("t-c200")).unwrap();
+
+    let spec = super::load_spec("t-c200").unwrap();
+    assert!(spec.agent_pid.is_none());
 }

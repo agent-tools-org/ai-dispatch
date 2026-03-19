@@ -53,6 +53,8 @@ pub struct BackgroundRunSpec {
     pub env: Option<HashMap<String, String>>,
     #[serde(default)]
     pub env_forward: Option<Vec<String>>,
+    #[serde(default)]
+    pub agent_pid: Option<u32>,
 }
 
 pub fn save_spec(spec: &BackgroundRunSpec) -> Result<()> {
@@ -338,6 +340,16 @@ pub(crate) fn update_worker_pid(task_id: &str, worker_pid: u32) -> Result<()> {
     save_spec(&spec)
 }
 
+pub fn update_agent_pid(task_id: &str, agent_pid: u32) -> Result<()> {
+    let mut spec = load_spec(task_id)?;
+    spec.agent_pid = Some(agent_pid);
+    save_spec(&spec)
+}
+
+pub fn load_agent_pid(task_id: &str) -> Result<Option<u32>> {
+    Ok(load_spec_if_exists(task_id)?.and_then(|spec| spec.agent_pid))
+}
+
 fn record_worker_failure(store: &Store, task_id: &str, err: &anyhow::Error) -> Result<()> {
     record_failure(
         store,
@@ -403,6 +415,9 @@ where
             aid_info!("[aid] Preserved uncommitted changes for zombie task {task_id}");
         }
         record_failure(store, task_id, ZOMBIE_FAILURE_DETAIL, ZOMBIE_FAILURE_DETAIL)?;
+        if let Some(agent_pid) = spec.agent_pid {
+            kill_process(agent_pid);
+        }
         cleaned.push(task_id.to_string());
     }
     Ok(cleaned)

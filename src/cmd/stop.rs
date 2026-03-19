@@ -56,6 +56,13 @@ fn terminate(
             let _ = wait_for_exit(pid);
         }
     }
+    if let Some(agent_pid) = background::load_agent_pid(task_id)? {
+        if graceful {
+            background::kill_process(agent_pid);
+        } else {
+            background::sigkill_process(agent_pid);
+        }
+    }
     preserve_worktree(task_id, &task, preserve_label);
     store.update_task_status(task_id, TaskStatus::Stopped)?;
     store.insert_event(&TaskEvent {
@@ -187,5 +194,52 @@ mod tests {
             assert_eq!(events[0].detail, "Task stopped by user");
             assert_eq!(events[0].event_kind, EventKind::Error);
         });
+    }
+
+    #[test]
+    fn stop_attempts_agent_cleanup_when_agent_pid_exists() {
+        use crate::background::{save_spec, BackgroundRunSpec};
+        use tempfile::TempDir;
+
+        let temp = TempDir::new().unwrap();
+        let _guard = crate::paths::AidHomeGuard::set(temp.path());
+        crate::paths::ensure_dirs().unwrap();
+
+        let store = Arc::new(Store::open_memory().unwrap());
+        let task = make_task("t-3010", TaskStatus::Running);
+        store.insert_task(&task).unwrap();
+        
+        let spec = BackgroundRunSpec {
+            task_id: "t-3010".to_string(),
+            worker_pid: Some(999999),
+            agent_pid: Some(888888),
+            agent_name: "codex".to_string(),
+            prompt: "test".to_string(),
+            dir: None,
+            output: None,
+            model: None,
+            verify: None,
+            judge: None,
+            max_duration_mins: None,
+            retry: 0,
+            group: None,
+            skills: vec![],
+            template: None,
+            interactive: false,
+            on_done: None,
+            cascade: vec![],
+            parent_task_id: None,
+            env: None,
+            env_forward: None,
+        };
+        save_spec(&spec).unwrap();
+        
+        let result = stop(&store, "t-3010");
+        
+        assert!(result.is_ok(), "stop should succeed even with non-existent PIDs");
+        assert_eq!(
+            store.get_task("t-3010").unwrap().unwrap().status,
+            TaskStatus::Stopped
+        );
     }
 }

@@ -80,6 +80,7 @@ mod tests {
             default_agent: None,
             overrides: HashMap::new(),
             rules: vec!["team rule 1".to_string(), "team rule 2".to_string()],
+            toolbox: Default::default(),
         };
 
         let rendered = render_session_start(Some(&project), Some(&team));

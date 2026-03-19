@@ -63,6 +63,7 @@ pub enum Commands {
     Worktree(command_args_c::WorktreeArgs),
     Store(command_args_c::StoreArgs),
     Team(command_args_c::TeamArgs),
+    Tool(command_args_c::ToolArgs),
     Project(command_args_c::ProjectArgs),
     Memory(command_args_c::MemoryArgs),
     #[command(hide = true)]

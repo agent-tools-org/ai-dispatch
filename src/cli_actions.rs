@@ -171,6 +171,33 @@ pub enum ProjectAction {
 }
 
 #[derive(Subcommand)]
+pub enum ToolAction {
+    /// List available tools
+    List {
+        /// Filter to a specific team
+        #[arg(long)]
+        team: Option<String>,
+    },
+    /// Show tool details
+    Show { name: String },
+    /// Create a new tool definition
+    Add {
+        name: String,
+        /// Create in team tools directory
+        #[arg(long)]
+        team: Option<String>,
+    },
+    /// Remove a tool definition
+    Remove { name: String },
+    /// Test-run a tool with arguments
+    Test {
+        name: String,
+        /// Arguments to pass to the tool
+        args: Vec<String>,
+    },
+}
+
+#[derive(Subcommand)]
 pub enum WorktreeAction {
     /// Create a worktree for a branch (prints path to stdout)
     Create {

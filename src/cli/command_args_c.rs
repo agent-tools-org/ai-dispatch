@@ -2,7 +2,7 @@
 // Exports clap Args types for top-level commands from worktree through web.
 
 use crate::cli::{FindingCommands, MemoryCommands, StoreCommands};
-use crate::cli_actions::{ProjectAction, TeamAction, WorktreeAction};
+use crate::cli_actions::{ProjectAction, TeamAction, ToolAction, WorktreeAction};
 use clap::Args;
 
 #[derive(Args)]
@@ -34,6 +34,18 @@ pub struct StoreArgs {
 pub struct TeamArgs {
     #[command(subcommand)]
     pub action: TeamAction,
+}
+
+#[derive(Args)]
+#[command(after_help = r#"Examples:
+  aid tool list
+  aid tool show lint-check
+  aid tool add lint-check
+  aid tool add scanner --team dev
+  aid tool test lint-check file.ts"#)]
+pub struct ToolArgs {
+    #[command(subcommand)]
+    pub action: ToolAction,
 }
 
 #[derive(Args)]

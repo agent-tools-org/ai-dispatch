@@ -75,6 +75,8 @@ pub struct MergeArgs {
     pub group: Option<String>,
     #[arg(long)]
     pub approve: bool,
+    #[arg(long)]
+    pub check: bool,
 }
 
 #[derive(Args)]

@@ -14,15 +14,15 @@ pub(crate) mod merge_git;
 use merge_git::*;
 pub use merge_git::remove_worktree;
 
-pub fn run(store: Arc<Store>, task_id: Option<&str>, group: Option<&str>, approve: bool) -> Result<()> {
+pub fn run(store: Arc<Store>, task_id: Option<&str>, group: Option<&str>, approve: bool, check: bool) -> Result<()> {
     match (task_id, group) {
-        (Some(id), _) => merge_single(&store, id, approve),
-        (_, Some(group_id)) => merge_group(&store, group_id, approve),
+        (Some(id), _) => merge_single(&store, id, approve, check),
+        (_, Some(group_id)) => merge_group(&store, group_id, approve, check),
         (None, None) => Err(anyhow!("Provide either a task ID or --group <wg-id>")),
     }
 }
 
-fn merge_single(store: &Store, task_id: &str, approve: bool) -> Result<()> {
+fn merge_single(store: &Store, task_id: &str, approve: bool, check: bool) -> Result<()> {
     let task = store
         .get_task(task_id)?
         .ok_or_else(|| anyhow!("Task '{task_id}' not found"))?;
@@ -37,6 +37,9 @@ fn merge_single(store: &Store, task_id: &str, approve: bool) -> Result<()> {
         aid_hint!("[aid] Review carefully: aid show {task_id} --diff");
     }
     let repo_dir = resolve_repo_dir(task.repo_path.as_deref(), task.worktree_path.as_deref());
+    if check {
+        return check_single(task_id, &task, &repo_dir);
+    }
 
     // Pre-merge verification: run verify command in worktree
     if let Some(wt) = task.worktree_path.as_deref()
@@ -121,10 +124,13 @@ fn merge_single(store: &Store, task_id: &str, approve: bool) -> Result<()> {
     Ok(())
 }
 
-fn merge_group(store: &Store, group_id: &str, approve: bool) -> Result<()> {
+fn merge_group(store: &Store, group_id: &str, approve: bool, check: bool) -> Result<()> {
     let tasks = store.list_tasks_by_group(group_id)?;
     if tasks.is_empty() {
         return Err(anyhow!("No tasks found in group '{group_id}'"));
+    }
+    if check {
+        return check_group(group_id, &tasks);
     }
     if approve {
         match ask_group_approval(group_id, &tasks)? {
@@ -164,6 +170,7 @@ fn merge_group(store: &Store, group_id: &str, approve: bool) -> Result<()> {
             match git_merge_branch(&repo_dir, branch) {
                 MergeResult::Merged => {
                     aid_info!("[aid] Merged branch {branch}");
+                    run_post_merge_verify(&repo_dir, task.verify.as_deref());
                 }
                 MergeResult::AlreadyUpToDate => {
                     aid_warn!("[aid] Warning: {} — merge was no-op despite {ahead} commit(s)", task.id);
@@ -197,6 +204,40 @@ fn merge_group(store: &Store, group_id: &str, approve: bool) -> Result<()> {
         .args(["-C", &first_repo_dir, "worktree", "prune"])
         .output();
     Ok(())
+}
+
+fn check_single(task_id: &str, task: &Task, repo_dir: &str) -> Result<()> {
+    match task.worktree_branch.as_deref() {
+        Some(branch) => print_check_result(task_id, &check_merge(repo_dir, branch)),
+        None => println!("{task_id}: OK (in-place edit)"),
+    }
+    Ok(())
+}
+
+fn check_group(group_id: &str, tasks: &[Task]) -> Result<()> {
+    let mut conflicts = 0;
+    for task in tasks {
+        let repo_dir = resolve_repo_dir(task.repo_path.as_deref(), task.worktree_path.as_deref());
+        match task.worktree_branch.as_deref() {
+            Some(branch) => {
+                let result = check_merge(&repo_dir, branch);
+                if matches!(result, MergeCheckResult::Conflict(_)) {
+                    conflicts += 1;
+                }
+                print_check_result(task.id.as_str(), &result);
+            }
+            None => println!("{}: OK (in-place edit)", task.id),
+        }
+    }
+    println!("Checked {} task(s) in group {group_id}; conflicts: {conflicts}", tasks.len());
+    Ok(())
+}
+
+fn print_check_result(task_id: &str, result: &MergeCheckResult) {
+    match result {
+        MergeCheckResult::Ok(commits) => println!("{task_id}: OK ({commits} commit(s))"),
+        MergeCheckResult::Conflict(files) => println!("{task_id}: CONFLICT ({})", files.join(", ")),
+    }
 }
 
 enum ApprovalDecision {

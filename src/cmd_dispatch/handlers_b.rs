@@ -74,9 +74,10 @@ pub(super) fn merge(
     task_id: Option<String>,
     group: Option<String>,
     approve: bool,
+    check: bool,
 ) -> Result<()> {
     let group = resolve_group(group);
-    cmd::merge::run(store, task_id.as_deref(), group.as_deref(), approve)
+    cmd::merge::run(store, task_id.as_deref(), group.as_deref(), approve, check)
 }
 
 pub(super) fn respond(task_id: String, input: Option<String>, file: Option<String>) -> Result<()> {

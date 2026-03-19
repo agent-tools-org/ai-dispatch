@@ -1,11 +1,14 @@
-// Git helpers for `aid merge`.
-// Exports: resolve_repo_dir, commits_ahead, auto_commit_uncommitted, git_merge_branch, MergeResult, remove_worktree, run_verify_in_worktree.
-// Deps: std::fs, std::path::Path, std::process::Command.
+// Git helpers for `aid merge`; exports merge, check, cleanup, and verify helpers.
+// Deps: crate::cmd::merge_verify, std::{fs, path::Path, process::Command}.
 
 use anyhow::{anyhow, Context, Result};
 use std::fs;
 use std::path::Path;
 use std::process::Command;
+
+#[path = "merge_verify.rs"]
+mod merge_verify;
+pub(crate) use merge_verify::{run_post_merge_verify, run_verify_in_worktree};
 
 pub(crate) fn resolve_repo_dir(repo_path: Option<&str>, worktree_path: Option<&str>) -> String {
     if let Some(repo) = repo_path {
@@ -42,9 +45,7 @@ pub(crate) fn commits_ahead(repo_dir: &str, branch: &str) -> u32 {
         .args(["-C", repo_dir, "rev-list", "--count", &format!("HEAD..{branch}")])
         .output();
     match out {
-        Ok(o) if o.status.success() => {
-            String::from_utf8_lossy(&o.stdout).trim().parse().unwrap_or(0)
-        }
+        Ok(o) if o.status.success() => String::from_utf8_lossy(&o.stdout).trim().parse().unwrap_or(0),
         _ => 0,
     }
 }
@@ -86,10 +87,7 @@ pub(crate) fn auto_commit_uncommitted(wt_path: &str, branch: &str) -> bool {
             );
             false
         }
-        Err(e) => {
-            aid_warn!("[aid] Warning: auto-commit failed: {e}");
-            false
-        }
+        Err(e) => { aid_warn!("[aid] Warning: auto-commit failed: {e}"); false }
     }
 }
 
@@ -132,20 +130,41 @@ pub(crate) fn git_merge_branch(repo_dir: &str, branch: &str) -> MergeResult {
         Err(e) => MergeResult::Failed(e.to_string()),
     };
 
-    if stashed {
-        if pop_stash(repo_dir) {
-            aid_info!("[aid] Restored local changes");
-        } else {
-            aid_hint!("[aid] Your stashed local changes conflict with the merge. Resolve with: git stash pop");
-        }
+    if stashed && pop_stash(repo_dir) {
+        aid_info!("[aid] Restored local changes");
+    } else if stashed {
+        aid_hint!("[aid] Your stashed local changes conflict with the merge. Resolve with: git stash pop");
     }
     merge_result
+}
+
+pub(crate) fn check_merge(repo_dir: &str, branch: &str) -> MergeCheckResult {
+    let ahead = commits_ahead(repo_dir, branch);
+    let stashed = stash_local_changes(repo_dir);
+    let output = Command::new("git")
+        .args(["-C", repo_dir, "merge", "--no-commit", "--no-ff", branch])
+        .output();
+    let result = match output {
+        Ok(out) if out.status.success() => MergeCheckResult::Ok(ahead),
+        Ok(_) => MergeCheckResult::Conflict(conflict_files(repo_dir)),
+        Err(err) => MergeCheckResult::Conflict(vec![err.to_string()]),
+    };
+    abort_merge(repo_dir);
+    if stashed && !pop_stash(repo_dir) {
+        aid_hint!("[aid] Your stashed local changes conflict with the merge check. Resolve with: git stash pop");
+    }
+    result
 }
 
 pub(crate) enum MergeResult {
     Merged,
     AlreadyUpToDate,
     Failed(String),
+}
+
+pub(crate) enum MergeCheckResult {
+    Ok(u32),
+    Conflict(Vec<String>),
 }
 
 fn stash_local_changes(repo_dir: &str) -> bool {
@@ -170,10 +189,7 @@ fn stash_local_changes(repo_dir: &str) -> bool {
             aid_warn!("[aid] Warning: failed to stash local changes: {}", stderr.lines().next().unwrap_or(""));
             false
         }
-        Err(e) => {
-            aid_warn!("[aid] Warning: failed to stash local changes: {e}");
-            false
-        }
+        Err(e) => { aid_warn!("[aid] Warning: failed to stash local changes: {e}"); false }
     }
 }
 
@@ -187,16 +203,39 @@ fn pop_stash(repo_dir: &str) -> bool {
     }
 }
 
-/// Check if a path is safe to delete: must resolve to /tmp/aid-wt-* (or /private/tmp/aid-wt-* on macOS).
-/// This is the sandbox guard — NEVER delete a directory that fails this check.
+fn abort_merge(repo_dir: &str) {
+    let _ = Command::new("git").args(["-C", repo_dir, "merge", "--abort"]).output();
+}
+
+fn conflict_files(repo_dir: &str) -> Vec<String> {
+    let output = Command::new("git")
+        .args(["-C", repo_dir, "diff", "--name-only", "--diff-filter=U"])
+        .output();
+    match output {
+        Ok(out) if out.status.success() => {
+            let files: Vec<String> = String::from_utf8_lossy(&out.stdout)
+                .lines()
+                .map(str::trim)
+                .filter(|line| !line.is_empty())
+                .map(ToOwned::to_owned)
+                .collect();
+            if files.is_empty() { unknown_conflict_files() } else { files }
+        }
+        _ => unknown_conflict_files(),
+    }
+}
+
+fn unknown_conflict_files() -> Vec<String> {
+    vec!["merge failed without reported conflict files".to_string()]
+}
+
+/// Sandbox guard for worktree cleanup paths.
 pub fn is_safe_worktree_path(wt_path: &str) -> bool {
     if !Path::new(wt_path).is_absolute() {
         return false;
     }
-    // Canonicalize to resolve symlinks (macOS: /tmp → /private/tmp)
     let canonical = match Path::new(wt_path).canonicalize() {
         Ok(p) => p,
-        // If path doesn't exist, check the raw string as fallback
         Err(_) => return wt_path.starts_with("/tmp/aid-wt-")
             || wt_path.starts_with("/private/tmp/aid-wt-"),
     };
@@ -217,12 +256,9 @@ pub fn remove_worktree(repo_dir: &str, wt_path: &str) -> Result<()> {
     let result = Command::new("git")
         .args(["-C", repo_dir, "worktree", "remove", "--force", wt_path])
         .output();
-    match result {
-        Ok(o) if o.status.success() => {
-            aid_info!("[aid] Cleaned up worktree {wt_path}");
-            return Ok(());
-        }
-        _ => {}
+    if matches!(result, Ok(ref out) if out.status.success()) {
+        aid_info!("[aid] Cleaned up worktree {wt_path}");
+        return Ok(());
     }
 
     // Fallback: rm -rf, but ONLY after sandbox validation above
@@ -255,51 +291,5 @@ pub fn remove_worktree(repo_dir: &str, wt_path: &str) -> Result<()> {
             Ok(())
         }
         Err(e) => Err(e).with_context(|| format!("failed to remove worktree '{wt_path}'")),
-    }
-}
-
-pub(crate) fn run_verify_in_worktree(wt: &str, verify: Option<&str>) {
-    let verify_parts = match verify {
-        Some("auto") | None => vec!["cargo", "check"],
-        Some(cmd) => cmd.split_whitespace().collect::<Vec<_>>(),
-    };
-    let Some((program, args)) = verify_parts.split_first() else {
-        aid_warn!("[aid] Warning: verify command is empty");
-        return;
-    };
-    let verify_cmd = verify_parts.join(" ");
-    let worktree_branch = Path::new(wt).file_name().and_then(|name| name.to_str());
-    let cargo_target_dir = crate::agent::target_dir_for_worktree(worktree_branch);
-    let mut command = Command::new(program);
-    command.args(args).current_dir(wt);
-    if let Some(target_dir) = cargo_target_dir {
-        command.env("CARGO_TARGET_DIR", target_dir);
-    }
-    let output = command.output();
-    match output {
-        Ok(o) if !o.status.success() => {
-            aid_warn!("[aid] Warning: `{verify_cmd}` failed in worktree {wt}");
-            let stderr = String::from_utf8_lossy(&o.stderr);
-            for line in stderr.lines().take(5) {
-                aid_warn!("  {}", line);
-            }
-        }
-        Err(e) => aid_warn!("[aid] Warning: could not run `{verify_cmd}`: {e}"),
-        _ => {}
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use std::process::Command;
-
-    #[test]
-    fn verify_argv_split_keeps_shell_tokens_literal() {
-        let parts: Vec<&str> = "echo ok && false".split_whitespace().collect();
-        let (program, args) = parts.split_first().unwrap();
-        let cmd = Command::new(program);
-        let debug = format!("{cmd:?}");
-        assert!(debug.contains("\"echo\""));
-        assert_eq!(args, &["ok", "&&", "false"]);
     }
 }

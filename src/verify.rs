@@ -11,7 +11,7 @@ use std::time::Duration;
 
 use crate::process_guard::ProcessGuard;
 use crate::store::Store;
-use crate::types::{TaskId, VerifyStatus};
+use crate::types::{TaskId, TaskStatus, VerifyStatus};
 
 static VERIFY_LOCK: Mutex<()> = Mutex::new(());
 const VERIFY_TIMEOUT: Duration = Duration::from_secs(120);
@@ -105,6 +105,13 @@ pub fn record_verify_status(store: &Store, task_id: &TaskId, result: &VerifyResu
     };
     let _ = store.update_verify_status(task_id.as_str(), status);
 }
+/// If verify failed and no retry is planned, downgrade task status to Failed.
+pub fn enforce_verify_status(store: &Store, task_id: &TaskId) {
+    let Some(task) = store.get_task(task_id.as_str()).ok().flatten() else { return };
+    if task.status == TaskStatus::Done && task.verify_status == VerifyStatus::Failed {
+        let _ = store.update_task_status(task_id.as_str(), TaskStatus::Failed);
+    }
+}
 fn auto_detect_command(path: &Path) -> String {
     if path.join("Cargo.toml").exists() {
         "cargo check".to_string()
@@ -172,12 +179,29 @@ fn read_pipe<R: Read + Send + 'static>(mut reader: R) -> Result<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::store::Store;
     use crate::test_subprocess;
+    use crate::types::{AgentKind, Task, TaskStatus};
+    use chrono::Local;
     use std::fs;
     use std::io::Error;
     #[cfg(unix)]
     use std::os::unix::fs::PermissionsExt;
     use tempfile::TempDir;
+
+    fn make_task(id: &str, status: TaskStatus, verify_status: VerifyStatus) -> Task {
+        Task {
+            id: TaskId(id.to_string()),
+            agent: AgentKind::Codex,
+            custom_agent_name: None, prompt: "test prompt".to_string(), resolved_prompt: None, status,
+            parent_task_id: None, workgroup_id: None, caller_kind: None, caller_session_id: None,
+            agent_session_id: None, repo_path: None, worktree_path: None, worktree_branch: None,
+            log_path: None, output_path: None, tokens: None, prompt_tokens: None, duration_ms: None,
+            model: None, cost_usd: None, exit_code: None,
+            created_at: Local::now(),
+            completed_at: None, verify: None, verify_status, read_only: false, budget: false,
+        }
+    }
     #[test]
     fn verify_pass_case() {
         let _permit = test_subprocess::acquire();
@@ -229,6 +253,24 @@ mod tests {
         let report = format_verify_report(&result);
         assert!(report.contains("FAIL"));
         assert!(report.contains("mismatched types"));
+    }
+    #[test]
+    fn enforce_verify_status_marks_done_failed_verify_as_failed() {
+        let store = Store::open_memory().unwrap();
+        let task = make_task("t-verify-failed", TaskStatus::Done, VerifyStatus::Failed);
+        store.insert_task(&task).unwrap();
+        enforce_verify_status(&store, &task.id);
+        let loaded = store.get_task(task.id.as_str()).unwrap().unwrap();
+        assert_eq!(loaded.status, TaskStatus::Failed);
+    }
+    #[test]
+    fn enforce_verify_status_keeps_done_passed_verify_as_done() {
+        let store = Store::open_memory().unwrap();
+        let task = make_task("t-verify-passed", TaskStatus::Done, VerifyStatus::Passed);
+        store.insert_task(&task).unwrap();
+        enforce_verify_status(&store, &task.id);
+        let loaded = store.get_task(task.id.as_str()).unwrap().unwrap();
+        assert_eq!(loaded.status, TaskStatus::Done);
     }
     #[cfg(unix)]
     #[test]

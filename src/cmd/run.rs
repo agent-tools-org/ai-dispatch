@@ -658,6 +658,7 @@ pub async fn run(store: Arc<Store>, mut args: RunArgs) -> Result<TaskId> {
         {
             return Ok(retry_id);
         }
+        crate::verify::enforce_verify_status(&store, &task_id);
         if let Some(mut retry_args) = retry_logic::prepare_retry(store.clone(), &task_id, &args).await? {
             if let Some(task) = store.get_task(task_id.as_str())? {
                 inherit_retry_base_branch(args.dir.as_deref(), &task, &mut retry_args);

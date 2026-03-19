@@ -84,7 +84,8 @@ fn keeps_ungrouped_tasks_visible_with_group_filter() {
     )
     .unwrap();
 
-    let task_ids: Vec<&str> = app.tasks.iter().map(|task| task.id.as_str()).collect();
+    let mut task_ids: Vec<&str> = app.tasks.iter().map(|task| task.id.as_str()).collect();
+    task_ids.sort();
     assert_eq!(task_ids, vec!["t-2000", "t-2002"]);
 }
 

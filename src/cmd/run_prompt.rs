@@ -302,14 +302,60 @@ pub(super) fn fill_empty_output_from_log(log_path: &Path, output_path: Option<&P
     if !needs_fallback {
         return Ok(());
     }
-    let Some(content) = crate::cmd::show::extract_messages_from_log(log_path, false) else {
-        return Ok(());
-    };
+    let content = crate::cmd::show::extract_messages_from_log(log_path, false)
+        .or_else(|| extract_raw_text_from_log(log_path));
+    let Some(content) = content else { return Ok(()) };
     if content.is_empty() {
         return Ok(());
     }
     std::fs::write(output_path, content).with_context(|| {
         format!("Failed to write output fallback file {}", output_path.display())
+    })
+}
+
+fn extract_raw_text_from_log(log_path: &Path) -> Option<String> {
+    let content = std::fs::read_to_string(log_path).ok()?;
+    let raw_lines: Vec<&str> = content
+        .lines()
+        .filter(|line| serde_json::from_str::<serde_json::Value>(line).is_err())
+        .collect();
+    raw_lines
+        .iter()
+        .any(|line| !line.trim().is_empty())
+        .then(|| raw_lines.join("\n"))
+}
+
+pub(super) fn clean_output_if_jsonl(output_path: &Path) -> Result<()> {
+    let content = match std::fs::read_to_string(output_path) {
+        Ok(content) => content,
+        Err(_) => return Ok(()),
+    };
+    let non_empty_lines: Vec<&str> = content
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+        .collect();
+    if non_empty_lines.is_empty() {
+        return Ok(());
+    }
+    let json_lines = non_empty_lines
+        .iter()
+        .filter(|line| {
+            line.starts_with('{')
+                && matches!(
+                    serde_json::from_str::<serde_json::Value>(line),
+                    Ok(serde_json::Value::Object(_))
+                )
+        })
+        .count();
+    if json_lines * 2 <= non_empty_lines.len() {
+        return Ok(());
+    }
+    let Some(cleaned) = crate::cmd::show::extract_messages_from_log(output_path, true) else {
+        return Ok(());
+    };
+    std::fs::write(output_path, cleaned).with_context(|| {
+        format!("Failed to rewrite cleaned output file {}", output_path.display())
     })
 }
 
@@ -437,7 +483,11 @@ pub(super) async fn run_agent_process_impl(args: RunProcessArgs<'_>) -> Result<(
     cleanup_process_group(&child);
     let _ = child.kill().await;
     let _ = child.wait().await;
-    fill_empty_output_from_log(log_path, output_path.map(std::path::Path::new))?;
+    let output_path = output_path.map(std::path::Path::new);
+    fill_empty_output_from_log(log_path, output_path)?;
+    if let Some(out_path) = output_path {
+        clean_output_if_jsonl(out_path)?;
+    }
     let duration_ms = start.elapsed().as_millis() as i64;
     let final_model = info.model.as_deref().or(model);
     let cost_usd = info.cost_usd.or_else(|| info.tokens.and_then(|tokens| crate::cost::estimate_cost(tokens, final_model, agent.kind())));

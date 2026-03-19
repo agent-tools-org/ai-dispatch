@@ -198,6 +198,73 @@ fn fill_empty_output_from_log_keeps_existing_output() {
 }
 
 #[test]
+fn fill_empty_output_from_log_falls_back_to_raw_text() {
+    let log = tempfile::NamedTempFile::new().unwrap();
+    let output = tempfile::NamedTempFile::new().unwrap();
+    std::fs::write(
+        log.path(),
+        "plain output line 1\n{\"type\":\"completion\",\"tokens\":1}\nplain output line 2\n",
+    )
+    .unwrap();
+    std::fs::write(output.path(), "").unwrap();
+
+    fill_empty_output_from_log(log.path(), Some(output.path())).unwrap();
+
+    assert_eq!(
+        std::fs::read_to_string(output.path()).unwrap(),
+        "plain output line 1\nplain output line 2"
+    );
+}
+
+#[test]
+fn clean_output_if_jsonl_cleans_jsonl_file() {
+    let output = tempfile::NamedTempFile::new().unwrap();
+    std::fs::write(
+        output.path(),
+        concat!(
+            "{\"type\":\"message\",\"role\":\"assistant\",\"content\":\"first message\"}\n",
+            "{\"type\":\"message\",\"role\":\"assistant\",\"content\":\"second message\"}\n"
+        ),
+    )
+    .unwrap();
+
+    clean_output_if_jsonl(output.path()).unwrap();
+
+    assert_eq!(
+        std::fs::read_to_string(output.path()).unwrap(),
+        "first message\n---\nsecond message"
+    );
+}
+
+#[test]
+fn clean_output_if_jsonl_preserves_normal_text() {
+    let output = tempfile::NamedTempFile::new().unwrap();
+    std::fs::write(output.path(), "normal output\nsecond line\n").unwrap();
+
+    clean_output_if_jsonl(output.path()).unwrap();
+
+    assert_eq!(
+        std::fs::read_to_string(output.path()).unwrap(),
+        "normal output\nsecond line\n"
+    );
+}
+
+#[test]
+fn clean_output_if_jsonl_preserves_mixed_content() {
+    let output = tempfile::NamedTempFile::new().unwrap();
+    let mixed = concat!(
+        "{\"type\":\"message\",\"role\":\"assistant\",\"content\":\"json message\"}\n",
+        "plain line one\n",
+        "plain line two\n"
+    );
+    std::fs::write(output.path(), mixed).unwrap();
+
+    clean_output_if_jsonl(output.path()).unwrap();
+
+    assert_eq!(std::fs::read_to_string(output.path()).unwrap(), mixed);
+}
+
+#[test]
 fn build_prompt_bundle_appends_batch_siblings_after_system_context() {
     let temp = tempfile::tempdir().unwrap();
     let _aid_home = crate::paths::AidHomeGuard::set(temp.path());

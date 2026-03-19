@@ -141,6 +141,7 @@ pub(crate) async fn run_agent_process_with_timeout(
                     write_streaming_output(log_path, out_path);
                 }
                 run_prompt::fill_empty_output_from_log(log_path, Some(out_path))?;
+                run_prompt::clean_output_if_jsonl(out_path)?;
             }
             let duration_ms = start.elapsed().as_millis() as i64;
             let final_model = info.model.as_deref().or(model);

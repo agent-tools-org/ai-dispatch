@@ -259,6 +259,25 @@ body {
 @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.7; } }
 @keyframes spin { to { transform: rotate(360deg); } }
 
+/* Action buttons */
+.detail-actions { display: flex; gap: 8px; margin: 12px 0; padding: 0 1rem; }
+.action-btn { padding: 6px 16px; border: 1px solid var(--bg-border); border-radius: 6px; background: var(--bg-card); color: var(--text-primary); font-family: var(--font-mono); font-size: 13px; cursor: pointer; transition: background 0.15s, border-color 0.15s; }
+.action-btn:hover { background: var(--bg-card-hover); border-color: var(--text-muted); }
+.action-stop { border-color: var(--error); color: var(--error); }
+.action-stop:hover { background: rgba(248, 81, 73, 0.15); }
+.action-retry { border-color: var(--warning); color: var(--warning); }
+.action-retry:hover { background: rgba(210, 153, 34, 0.15); }
+.action-merge { border-color: var(--success); color: var(--success); }
+.action-merge:hover { background: rgba(63, 185, 80, 0.15); }
+
+/* Diff viewer */
+.diff-display { background: var(--bg-card); border: 1px solid var(--bg-border); border-radius: 8px; padding: 16px; overflow-x: auto; font-size: 13px; line-height: 1.6; margin: 0; white-space: pre; }
+.diff-line { display: block; }
+.diff-add { color: var(--success); background: rgba(63, 185, 80, 0.1); }
+.diff-del { color: var(--error); background: rgba(248, 81, 73, 0.1); }
+.diff-hunk { color: var(--accent); }
+.diff-file { color: var(--text-secondary); font-weight: bold; }
+
 /* Scrollbar */
 ::-webkit-scrollbar { width: 8px; height: 8px; }
 ::-webkit-scrollbar-track { background: var(--bg-page); }

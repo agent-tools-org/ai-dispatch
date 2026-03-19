@@ -13,7 +13,17 @@ pub fn has_uncommitted_changes(dir: &str) -> Result<bool> {
 pub fn auto_commit(dir: &str, task_id: &str, prompt: &str) -> Result<()> {
     // Only stage tracked files that were modified — avoid committing aid-injected
     // temp files (batch TOML, team knowledge, shared context) via `git add -u`.
-    let add = Command::new("git").args(["-C", dir, "add", "-u"]).output().context("Failed to run git add")?;
+    let has_head = Command::new("git")
+        .args(["-C", dir, "rev-parse", "HEAD"])
+        .output()
+        .context("Failed to check git HEAD")?
+        .status
+        .success();
+    let add_mode = if has_head { "-u" } else { "-A" };
+    let add = Command::new("git")
+        .args(["-C", dir, "add", add_mode])
+        .output()
+        .context("Failed to run git add")?;
     anyhow::ensure!(add.status.success(), "git add failed: {}", String::from_utf8_lossy(&add.stderr));
     // Also stage new source files the agent created, but not aid artifacts.
     let _ = Command::new("git").args(["-C", dir, "add", "src/", "tests/", "crates/"]).output();
@@ -89,8 +99,19 @@ fn strip_aid_tags(text: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{extract_task_summary, has_uncommitted_changes, strip_aid_tags};
+    use super::{auto_commit, extract_task_summary, has_uncommitted_changes, strip_aid_tags};
     use crate::test_subprocess;
+    use std::process::Command;
+
+    fn git(dir: &std::path::Path, args: &[&str]) {
+        assert!(Command::new("git")
+            .arg("-C")
+            .arg(dir)
+            .args(args)
+            .status()
+            .unwrap()
+            .success());
+    }
 
     #[test]
     fn strip_aid_tags_removes_tag_blocks() {
@@ -134,5 +155,39 @@ mod tests {
         assert!(!has_uncommitted_changes(dir.path().to_str().unwrap()).unwrap());
         std::fs::write(dir.path().join("tracked.txt"), "change").unwrap();
         assert!(has_uncommitted_changes(dir.path().to_str().unwrap()).unwrap());
+    }
+
+    #[test]
+    fn auto_commit_succeeds_on_repo_without_head() {
+        let _permit = test_subprocess::acquire();
+        let dir = tempfile::tempdir().unwrap();
+        git(dir.path(), &["init"]);
+        git(dir.path(), &["config", "user.email", "test@example.com"]);
+        git(dir.path(), &["config", "user.name", "Test User"]);
+        std::fs::write(dir.path().join("first.txt"), "hello").unwrap();
+
+        auto_commit(
+            dir.path().to_str().unwrap(),
+            "task-123",
+            "[Task]\nCreate the first file",
+        )
+        .unwrap();
+
+        let head = Command::new("git")
+            .arg("-C")
+            .arg(dir.path())
+            .args(["rev-parse", "HEAD"])
+            .output()
+            .unwrap();
+        assert!(head.status.success());
+
+        let tree = Command::new("git")
+            .arg("-C")
+            .arg(dir.path())
+            .args(["ls-tree", "-r", "--name-only", "HEAD"])
+            .output()
+            .unwrap();
+        assert!(tree.status.success());
+        assert_eq!(String::from_utf8_lossy(&tree.stdout).trim(), "first.txt");
     }
 }

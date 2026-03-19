@@ -3,6 +3,7 @@
 // Depends on the parent run module, store, paths, tokio, and tempfile.
 use super::*;
 use crate::store::Store;
+use crate::types::{AgentKind, Task, TaskStatus, VerifyStatus};
 use std::process::Command;
 use std::sync::Arc;
 use tempfile::TempDir;
@@ -114,6 +115,55 @@ fn read_quota_error_message_extracts_rate_limit_line_only() {
 }
 
 #[test]
+fn rescue_quota_failed_task_marks_passed_verify_as_done() {
+    let dir = TempDir::new().unwrap();
+    let _guard = paths::AidHomeGuard::set(dir.path());
+    std::fs::create_dir_all(paths::logs_dir()).unwrap();
+    std::fs::write(
+        paths::stderr_path("t-rescue-pass"),
+        "Error: You have hit your usage limit.",
+    )
+    .unwrap();
+    let store = Store::open_memory().unwrap();
+    let mut task = make_failed_task("t-rescue-pass");
+    task.verify_status = VerifyStatus::Passed;
+    store.insert_task(&task).unwrap();
+
+    rescue_quota_failed_task(
+        &store,
+        &task.id,
+        read_quota_error_message(&task.id).as_deref(),
+    );
+
+    let task = store.get_task("t-rescue-pass").unwrap().unwrap();
+    assert_eq!(task.status, TaskStatus::Done);
+}
+
+#[test]
+fn rescue_quota_failed_task_keeps_failed_verify_failed() {
+    let dir = TempDir::new().unwrap();
+    let _guard = paths::AidHomeGuard::set(dir.path());
+    std::fs::create_dir_all(paths::logs_dir()).unwrap();
+    std::fs::write(
+        paths::stderr_path("t-rescue-fail"),
+        "Error: You have hit your usage limit.",
+    )
+    .unwrap();
+    let store = Store::open_memory().unwrap();
+    let task = make_failed_task("t-rescue-fail");
+    store.insert_task(&task).unwrap();
+
+    rescue_quota_failed_task(
+        &store,
+        &task.id,
+        read_quota_error_message(&task.id).as_deref(),
+    );
+
+    let task = store.get_task("t-rescue-fail").unwrap().unwrap();
+    assert_eq!(task.status, TaskStatus::Failed);
+}
+
+#[test]
 fn validate_dispatch_warns_short_prompt() {
     assert_eq!(validate_dispatch(&RunArgs { prompt: "tiny".to_string(), ..Default::default() }, &AgentKind::Gemini), vec!["Prompt is very short, agent may not have enough context".to_string()]);
 }
@@ -169,4 +219,37 @@ async fn dry_run_returns_without_starting_task() {
     assert_eq!(task.status, TaskStatus::Pending);
     assert!(task.resolved_prompt.is_some());
     assert!(task.prompt_tokens.is_some());
+}
+
+fn make_failed_task(task_id: &str) -> Task {
+    Task {
+        id: TaskId(task_id.to_string()),
+        agent: AgentKind::Codex,
+        custom_agent_name: None,
+        prompt: "prompt".to_string(),
+        resolved_prompt: None,
+        status: TaskStatus::Failed,
+        parent_task_id: None,
+        workgroup_id: None,
+        caller_kind: None,
+        caller_session_id: None,
+        agent_session_id: None,
+        repo_path: None,
+        worktree_path: None,
+        worktree_branch: None,
+        log_path: None,
+        output_path: None,
+        tokens: None,
+        prompt_tokens: None,
+        duration_ms: None,
+        model: None,
+        cost_usd: None,
+        exit_code: Some(1),
+        created_at: chrono::Local::now(),
+        completed_at: None,
+        verify: None,
+        verify_status: VerifyStatus::Failed,
+        read_only: false,
+        budget: false,
+    }
 }

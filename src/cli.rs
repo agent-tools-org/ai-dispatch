@@ -356,6 +356,9 @@ Run `aid batch init` to generate a full template with all fields."#)]
         /// Override working directory for this retry
         #[arg(long)]
         dir: Option<String>,
+        /// Reset the retry worktree instead of saving partial work
+        #[arg(long)]
+        reset: bool,
     },
     /// Mark task(s) as merged
     Merge {

@@ -150,6 +150,7 @@ async fn retry_tool(store: Arc<Store>, arguments: Value) -> Result<Value> {
             feedback: args.feedback,
             agent: args.agent,
             dir: None,
+            reset: false,
         },
         false,
     )

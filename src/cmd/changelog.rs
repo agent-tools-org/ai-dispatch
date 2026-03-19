@@ -48,7 +48,11 @@ pub(crate) fn run(version: Option<String>, all: bool, count: usize, git: bool) -
         }
     }
 
-    run_from_git_tags(version, all, count)
+    // Only fall back to git tags when --git is explicitly passed.
+    // Without --git, we show only aid's embedded changelog to avoid
+    // displaying another repo's history when run outside the aid repo.
+    println!("No embedded changelog available. Use --git to show tags from the current repo.");
+    Ok(())
 }
 
 fn run_from_git_tags(version: Option<String>, all: bool, count: usize) -> Result<()> {

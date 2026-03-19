@@ -525,6 +525,9 @@ pub async fn run(store: Arc<Store>, mut args: RunArgs) -> Result<TaskId> {
         }
         let mut quota_error_message = None;
         if let Some(task) = store.get_task(task_id.as_str())? {
+            if task.status == TaskStatus::Done && rate_limit::is_rate_limited(&agent_kind) {
+                rate_limit::clear_rate_limit(&agent_kind);
+            }
             if task.status == TaskStatus::Done && !prompt_bundle.injected_memory_ids.is_empty() {
                 for memory_id in &prompt_bundle.injected_memory_ids {
                     if let Err(err) = store.increment_memory_success(memory_id) {
@@ -722,18 +725,26 @@ fn take_next_cascade_agent(args: &RunArgs) -> Option<(String, Vec<String>)> {
 
 pub(crate) fn read_quota_error_message(task_id: &TaskId) -> Option<String> {
     let stderr_path = crate::paths::stderr_path(task_id.as_str());
-    if let Ok(stderr) = std::fs::read_to_string(&stderr_path)
-        && rate_limit::is_rate_limit_error(&stderr)
-    {
-        return Some(stderr);
+    if let Ok(stderr) = std::fs::read_to_string(&stderr_path) {
+        if let Some(line) = find_rate_limit_line(&stderr) {
+            return Some(line);
+        }
     }
     let log_path = crate::paths::log_path(task_id.as_str());
-    if let Ok(log) = std::fs::read_to_string(&log_path)
-        && rate_limit::is_rate_limit_error(&log)
-    {
-        return Some(log);
+    if let Ok(log) = std::fs::read_to_string(&log_path) {
+        if let Some(line) = find_rate_limit_line(&log) {
+            return Some(line);
+        }
     }
     None
+}
+
+/// Extract the specific line that contains the rate-limit error, not the entire file.
+fn find_rate_limit_line(content: &str) -> Option<String> {
+    content
+        .lines()
+        .find(|line| rate_limit::is_rate_limit_error(line))
+        .map(|line| line.to_string())
 }
 
 fn worktree_is_empty_diff(worktree_dir: &Path) -> Option<bool> {
@@ -845,7 +856,26 @@ mod tests {
 
         assert_eq!(
             message.as_deref(),
-            Some("{\"error\":\"You have hit your usage limit.\"}\n")
+            Some("{\"error\":\"You have hit your usage limit.\"}")
+        );
+    }
+
+    #[test]
+    fn read_quota_error_message_extracts_rate_limit_line_only() {
+        let dir = TempDir::new().unwrap();
+        let _guard = paths::AidHomeGuard::set(dir.path());
+        std::fs::create_dir_all(paths::logs_dir()).unwrap();
+        std::fs::write(
+            paths::stderr_path("t-quota-mixed"),
+            "tokens: 8714294 in + 27373 out = 8741667 (8442752 cached)\nYou have exhausted your capacity for today.\nsome other line\n",
+        )
+        .unwrap();
+
+        let message = read_quota_error_message(&TaskId("t-quota-mixed".to_string()));
+
+        assert_eq!(
+            message.as_deref(),
+            Some("You have exhausted your capacity for today.")
         );
     }
 

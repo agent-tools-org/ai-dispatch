@@ -90,11 +90,26 @@ pub fn is_rate_limit_error(message: &str) -> bool {
     let lower = message.to_lowercase();
     lower.contains("rate limit")
         || lower.contains("rate_limit")
-        || lower.contains("429")
+        || contains_status_429(&lower)
         || lower.contains("quota exceeded")
         || lower.contains("exhausted your capacity")
         || lower.contains("too many requests")
         || lower.contains("usage limit")
+}
+
+/// Match "429" only as a standalone number, not inside larger numbers like "8714294".
+fn contains_status_429(s: &str) -> bool {
+    let bytes = s.as_bytes();
+    for i in 0..bytes.len().saturating_sub(2) {
+        if bytes[i] == b'4' && bytes[i + 1] == b'2' && bytes[i + 2] == b'9' {
+            let before_ok = i == 0 || !bytes[i - 1].is_ascii_digit();
+            let after_ok = i + 3 >= bytes.len() || !bytes[i + 3].is_ascii_digit();
+            if before_ok && after_ok {
+                return true;
+            }
+        }
+    }
+    false
 }
 
 fn parse_recovery_time(message: &str) -> Option<String> {
@@ -180,8 +195,14 @@ mod tests {
         ));
         assert!(is_rate_limit_error("too many requests"));
         assert!(is_rate_limit_error("usage limit reached"));
+        assert!(is_rate_limit_error("status: 429"));
+        assert!(is_rate_limit_error("error 429 too many"));
         assert!(!is_rate_limit_error("network timeout"));
         assert!(!is_rate_limit_error("connection refused"));
+        // Must not match 429 inside larger numbers (token counts, IDs)
+        assert!(!is_rate_limit_error(
+            "tokens: 8714294 in + 27373 out = 8741667 (8442752 cached)"
+        ));
     }
 
     #[test]

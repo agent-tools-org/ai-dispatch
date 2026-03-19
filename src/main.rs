@@ -303,6 +303,13 @@ async fn main() -> Result<()> {
                 println!("{text}");
             }
         }
+        Commands::Changelog {
+            version,
+            all,
+            count,
+        } => {
+            cmd::changelog::run(version, all, count)?;
+        }
         Commands::Agent { action } => {
             use cmd::agent::{AgentAction, run_agent_command};
             let action = match action {

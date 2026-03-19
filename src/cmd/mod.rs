@@ -9,6 +9,7 @@ pub mod broadcast;
 pub mod board;
 pub mod board_stream;
 pub mod clean;
+pub mod changelog;
 pub mod config;
 pub mod cost;
 pub mod explain;

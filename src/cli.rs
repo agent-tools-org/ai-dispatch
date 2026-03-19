@@ -241,6 +241,18 @@ Run `aid batch init` to generate a full template with all fields."#)]
     },
     /// Print the most recent completion notifications
     Completions,
+    /// Show version history from git tags and commits
+    Changelog {
+        /// Show changelog for one version (accepts `vN.N.N` or `N.N.N`)
+        #[arg(long, conflicts_with_all = ["all", "count"])]
+        version: Option<String>,
+        /// Show all tagged versions
+        #[arg(long, conflicts_with = "version")]
+        all: bool,
+        /// Number of recent versions to show
+        #[arg(long, default_value = "5", conflicts_with = "version")]
+        count: usize,
+    },
     #[command(after_help = r#"Examples:
   aid agent list
   aid agent show aider
@@ -927,6 +939,23 @@ mod tests {
                 assert!(vars.is_empty());
             }
             _ => panic!("expected Batch retry"),
+        }
+    }
+
+    #[test]
+    fn changelog_version_parses() {
+        let cli = Cli::try_parse_from(["aid", "changelog", "--version", "8.21.14"]).unwrap();
+        match cli.command {
+            Commands::Changelog {
+                version,
+                all,
+                count,
+            } => {
+                assert_eq!(version, Some("8.21.14".to_string()));
+                assert!(!all);
+                assert_eq!(count, 5);
+            }
+            _ => panic!("expected Changelog"),
         }
     }
 }

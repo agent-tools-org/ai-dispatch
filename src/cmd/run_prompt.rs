@@ -214,6 +214,17 @@ pub(super) fn build_prompt_bundle(store: &Store, args: &RunArgs, agent_kind: &Ag
             args.team.as_deref(),
             project_dir.as_deref(),
         );
+        let tools = if let Some(ref team_id) = args.team {
+            if let Some(tc) = team::resolve_team(team_id)
+                && !tc.toolbox.auto_inject.is_empty()
+            {
+                toolbox::filter_by_auto_inject(tools, &tc.toolbox.auto_inject)
+            } else {
+                tools
+            }
+        } else {
+            tools
+        };
         if !tools.is_empty() {
             let toolbox_block = toolbox::format_toolbox_instructions(&tools);
             effective_prompt = format!("{effective_prompt}\n\n{toolbox_block}");

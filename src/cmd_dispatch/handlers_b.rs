@@ -209,15 +209,7 @@ pub(super) fn team(action: TeamAction) -> Result<()> {
 }
 
 pub(super) fn tool(action: ToolAction) -> Result<()> {
-    use cmd::tool::{ToolAction as ToolCommand, run_tool_command};
-    let action = match action {
-        ToolAction::List { team } => ToolCommand::List { team },
-        ToolAction::Show { name } => ToolCommand::Show { name },
-        ToolAction::Add { name, team } => ToolCommand::Add { name, team },
-        ToolAction::Remove { name } => ToolCommand::Remove { name },
-        ToolAction::Test { name, args } => ToolCommand::Test { name, args },
-    };
-    run_tool_command(action)
+    cmd::tool::run_tool_command(action)
 }
 
 pub(super) fn project(action: ProjectAction) -> Result<()> {

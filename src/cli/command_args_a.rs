@@ -109,6 +109,8 @@ pub struct BatchArgs {
     #[arg(long = "var")]
     pub vars: Vec<String>,
     #[arg(long)]
+    pub group: Option<String>,
+    #[arg(long)]
     pub parallel: bool,
     #[arg(long)]
     pub analyze: bool,

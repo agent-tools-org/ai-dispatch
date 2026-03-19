@@ -225,6 +225,7 @@ pub(super) async fn batch(
     dry_run: bool,
     max_concurrent: Option<usize>,
     output: Option<String>,
+    group: Option<String>,
 ) -> Result<()> {
     match action {
         Some(BatchAction::Init) => cmd::batch::init(output.as_deref())?,
@@ -238,6 +239,7 @@ pub(super) async fn batch(
                 cmd::batch::BatchArgs {
                     file,
                     vars,
+                    group,
                     parallel,
                     analyze,
                     wait,

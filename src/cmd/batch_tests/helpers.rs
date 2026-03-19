@@ -4,8 +4,9 @@
 use super::shared::{make_task, seed_task};
 use crate::paths::AidHomeGuard;
 use crate::store::Store;
-use crate::types::TaskStatus;
+use crate::types::{TaskFilter, TaskStatus};
 use std::fs;
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use super::super::batch_helpers::{batch_summary, ensure_batch_workgroup, resolve_batch_path};
@@ -76,6 +77,53 @@ fn ensure_batch_workgroup_creates_shared_dir_when_enabled() {
         crate::shared_dir::shared_dir_path("wg-custom")
     );
     assert!(shared_path.as_ref().is_some_and(|path| path.is_dir()));
+}
+
+#[tokio::test]
+async fn batch_group_flag_assigns_existing_workgroup() {
+    let temp = tempfile::tempdir().unwrap();
+    let _guard = AidHomeGuard::set(temp.path());
+    let store = Arc::new(Store::open_memory().unwrap());
+    store
+        .create_workgroup("existing", "shared", Some("seed"), Some("wg-shared"))
+        .unwrap();
+
+    let batch_file = temp.path().join("tasks.toml");
+    fs::write(
+        &batch_file,
+        r#"
+[[tasks]]
+name = "first"
+agent = "codex"
+prompt = "first prompt"
+
+[[tasks]]
+name = "second"
+agent = "codex"
+prompt = "second prompt"
+"#,
+    )
+    .unwrap();
+
+    crate::cmd::batch::run(
+        store.clone(),
+        crate::cmd::batch::BatchArgs {
+            file: batch_file.display().to_string(),
+            vars: vec![],
+            group: Some("wg-shared".to_string()),
+            parallel: false,
+            analyze: false,
+            wait: false,
+            dry_run: true,
+            max_concurrent: None,
+        },
+    )
+    .await
+    .unwrap();
+
+    let tasks = store.list_tasks(TaskFilter::All).unwrap();
+    assert_eq!(tasks.len(), 2);
+    assert!(tasks.iter().all(|task| task.workgroup_id.as_deref() == Some("wg-shared")));
 }
 
 #[test]

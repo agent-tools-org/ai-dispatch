@@ -33,6 +33,7 @@ pub use batch_retry::retry_failed;
 pub struct BatchArgs {
     pub file: String,
     pub vars: Vec<String>,
+    pub group: Option<String>,
     pub parallel: bool,
     pub analyze: bool,
     pub wait: bool,
@@ -61,6 +62,19 @@ pub async fn run(store: Arc<Store>, args: BatchArgs) -> Result<()> {
     let shared_dir_enabled = config.defaults.shared_dir.unwrap_or(false);
     validate_batch_config(&config.tasks)?;
     let has_dependencies = config.tasks.iter().any(task_has_dependencies);
+    if let Some(ref cli_group) = args.group {
+        if store.get_workgroup(cli_group)?.is_none() {
+            anyhow::bail!(
+                "Workgroup '{cli_group}' not found. Create it with: aid group create --name <name> --id {cli_group}"
+            );
+        }
+        for task in &mut config.tasks {
+            if task.group.is_none() {
+                task.group = Some(cli_group.clone());
+            }
+        }
+        aid_info!("[aid] Using workgroup {cli_group} from --group flag");
+    }
     let no_groups_set = config.tasks.iter().all(|t| t.group.is_none());
     if no_groups_set {
         if let Ok(env_group) = std::env::var("AID_GROUP") {

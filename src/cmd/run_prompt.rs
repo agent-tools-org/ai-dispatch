@@ -2,18 +2,25 @@
 // Exports: build_prompt_bundle(), resolve_prompt(), build_context_flags(), run_agent_process_impl().
 // Deps: context, templates, workgroup, skills, watcher, store.
 use anyhow::{Context, Result};
-use chrono::Local;
 use serde_json;
 use std::collections::HashSet;
-use std::path::{Component, Path, PathBuf};
 use std::sync::Arc;
 use tokio::process::Command;
 use crate::{
-    agent, project, skills, store::Store, templates, team, types::*, watcher, worktree,
+    agent, project, skills, store::Store, templates, team, types::*, watcher,
 };
 use crate::cmd::summary::{format_summary_for_injection, CompletionSummary};
 use crate::store::TaskCompletionUpdate;
 mod prompt_context;
+#[path = "run_output.rs"]
+mod run_output;
+#[path = "run_verify.rs"]
+mod run_verify;
+#[path = "run_scope.rs"]
+mod run_scope;
+pub(super) use run_output::{fill_empty_output_from_log, clean_output_if_jsonl, output_file_instruction};
+pub(super) use run_scope::warn_agent_committed_files_outside_scope;
+pub(super) use run_verify::{maybe_auto_retry_after_verify_failure_impl, maybe_cleanup_fast_fail_impl, maybe_verify_impl};
 use super::RunArgs;
 
 const VERIFY_RETRY_FEEDBACK: &str =
@@ -289,76 +296,6 @@ pub(super) fn inject_skill(prompt: &str, agent_kind: &AgentKind, requested_skill
     Ok(format!("{prompt}\n\n{}", sections.join("\n\n")))
 }
 
-fn output_file_instruction() -> String {
-    "IMPORTANT: Your final response will be saved to a file. Write ONLY the requested deliverable content in your final response. Do NOT include planning, reasoning, chain-of-thought, or meta-commentary. The file should contain only the finished work product.".to_string()
-}
-
-pub(super) fn fill_empty_output_from_log(log_path: &Path, output_path: Option<&Path>) -> Result<()> {
-    let Some(output_path) = output_path else { return Ok(()) };
-    let needs_fallback = match std::fs::metadata(output_path) {
-        Ok(metadata) => metadata.len() == 0,
-        Err(_) => true,
-    };
-    if !needs_fallback {
-        return Ok(());
-    }
-    let content = crate::cmd::show::extract_messages_from_log(log_path, false)
-        .or_else(|| extract_raw_text_from_log(log_path));
-    let Some(content) = content else { return Ok(()) };
-    if content.is_empty() {
-        return Ok(());
-    }
-    std::fs::write(output_path, content).with_context(|| {
-        format!("Failed to write output fallback file {}", output_path.display())
-    })
-}
-
-fn extract_raw_text_from_log(log_path: &Path) -> Option<String> {
-    let content = std::fs::read_to_string(log_path).ok()?;
-    let raw_lines: Vec<&str> = content
-        .lines()
-        .filter(|line| serde_json::from_str::<serde_json::Value>(line).is_err())
-        .collect();
-    raw_lines
-        .iter()
-        .any(|line| !line.trim().is_empty())
-        .then(|| raw_lines.join("\n"))
-}
-
-pub(super) fn clean_output_if_jsonl(output_path: &Path) -> Result<()> {
-    let content = match std::fs::read_to_string(output_path) {
-        Ok(content) => content,
-        Err(_) => return Ok(()),
-    };
-    let non_empty_lines: Vec<&str> = content
-        .lines()
-        .map(str::trim)
-        .filter(|line| !line.is_empty())
-        .collect();
-    if non_empty_lines.is_empty() {
-        return Ok(());
-    }
-    let json_lines = non_empty_lines
-        .iter()
-        .filter(|line| {
-            line.starts_with('{')
-                && matches!(
-                    serde_json::from_str::<serde_json::Value>(line),
-                    Ok(serde_json::Value::Object(_))
-                )
-        })
-        .count();
-    if json_lines * 2 <= non_empty_lines.len() {
-        return Ok(());
-    }
-    let Some(cleaned) = crate::cmd::show::extract_messages_from_log(output_path, true) else {
-        return Ok(());
-    };
-    std::fs::write(output_path, cleaned).with_context(|| {
-        format!("Failed to rewrite cleaned output file {}", output_path.display())
-    })
-}
-
 pub(super) fn build_context_flags(agent_kind: &AgentKind, context_args: &[String]) -> Result<(Option<String>, Vec<String>)> {
     if context_args.is_empty() { return Ok((None, vec![])); }
     let specs = crate::context::parse_context_specs(context_args)?;
@@ -514,107 +451,6 @@ pub(super) async fn run_agent_process_impl(args: RunProcessArgs<'_>) -> Result<(
     Ok(())
 }
 
-pub(super) fn maybe_cleanup_fast_fail_impl(store: &Store, task_id: &TaskId, task: &Task) {
-    let Some(ref wt_path) = task.worktree_path else { return };
-    // SANDBOX: refuse to touch anything outside /tmp/aid-wt-*
-    if !crate::cmd::merge::merge_git::is_safe_worktree_path(wt_path) {
-        aid_warn!("[aid] SAFETY: refusing to remove '{}' — not an aid worktree path", wt_path);
-        return;
-    }
-    let path = std::path::Path::new(wt_path);
-    if !path.exists() { return }
-    let Some(task) = store.get_task(task_id.as_str()).ok().flatten() else { return };
-    if task.status != TaskStatus::Failed { return }
-    let Some(duration_ms) = task.duration_ms else { return };
-    if duration_ms > 10_000 { return }
-    if crate::worktree::branch_has_commits_ahead_of_main(path, task.worktree_branch.as_deref().unwrap_or("unknown")).unwrap_or(true) { return; }
-    let Some(repo_dir) = task.repo_path.as_deref() else {
-        aid_warn!("[aid] Warning: skipping fast-fail cleanup for {} — missing repo_path", task_id);
-        return;
-    };
-    let _ = std::process::Command::new("git")
-        .args(["-C", repo_dir, "worktree", "remove", "--force", wt_path])
-        .output();
-    aid_info!("[aid] Cleaned up worktree for fast-failed task {}", task_id);
-}
-
-pub(super) fn maybe_verify_impl(
-    store: &Store,
-    task_id: &TaskId,
-    verify: Option<&str>,
-    dir: Option<&str>,
-    container_name: Option<&str>,
-) {
-    let Some(verify_arg) = verify else { return };
-    let Some(dir_path) = dir else { println!("Verify skipped: no working directory"); return; };
-    let command = if verify_arg == "auto" { None } else { Some(verify_arg) };
-    let path = std::path::Path::new(dir_path);
-    let worktree_branch = store
-        .get_task(task_id.as_str())
-        .ok()
-        .flatten()
-        .and_then(|task| task.worktree_branch);
-    let cargo_target_dir = crate::agent::target_dir_for_worktree(worktree_branch.as_deref());
-    match crate::verify::run_verify(path, command, cargo_target_dir.as_deref(), container_name) {
-        Ok(result) => {
-            let report = crate::verify::format_verify_report(&result);
-            println!("{report}");
-            crate::verify::record_verify_status(store, task_id, &result);
-            if !result.success {
-                let event = TaskEvent { task_id: task_id.clone(), timestamp: Local::now(), event_kind: EventKind::Error, detail: format!("Verification failed: {}", result.command), metadata: None };
-                let _ = store.insert_event(&event);
-            }
-        }
-        Err(e) => aid_error!("Verify error: {e}"),
-    }
-}
-
-pub(super) async fn maybe_auto_retry_after_verify_failure_impl(
-    store: &Arc<Store>,
-    task_id: &TaskId,
-    args: &RunArgs,
-    pre_verify_status: TaskStatus,
-) -> Result<Option<TaskId>> {
-    if args.verify.is_none() || args.retry == 0 || pre_verify_status != TaskStatus::Done {
-        return Ok(None);
-    }
-    let Some(task) = store.get_task(task_id.as_str())? else { return Ok(None) };
-    if task.verify_status != crate::types::VerifyStatus::Failed {
-        return Ok(None);
-    }
-
-    aid_warn!(
-        "[aid] Verify failed, auto-retrying ({} retries left)",
-        args.retry - 1
-    );
-
-    let mut retry_args = args.clone();
-    retry_args.prompt = format!(
-        "[Previous attempt feedback]\n{VERIFY_RETRY_FEEDBACK}\n\n[Original task]\n{}",
-        task.prompt
-    );
-    retry_args.retry = args.retry.saturating_sub(1);
-    retry_args.parent_task_id = Some(task_id.as_str().to_string());
-    retry_args.repo = task.repo_path.clone().or_else(|| retry_args.repo.clone());
-    retry_args.output = task
-        .output_path
-        .clone()
-        .or_else(|| retry_args.output.clone());
-    retry_args.model = task.model.clone().or_else(|| retry_args.model.clone());
-    retry_args.verify = task.verify.clone();
-    retry_args.read_only = task.read_only;
-    retry_args.budget = task.budget;
-    retry_args.background = false;
-    let (dir, worktree) = retry_target(&task);
-    retry_args.dir = dir.or_else(|| retry_args.dir.clone());
-    retry_args.worktree = worktree.or_else(|| retry_args.worktree.clone());
-    if task.agent == AgentKind::OpenCode {
-        retry_args.session_id = task.agent_session_id.clone();
-    }
-
-    Box::pin(super::run(store.clone(), retry_args)).await.map(Some)
-}
-
 pub(super) fn notify_task_completion(store: &Store, task_id: &TaskId) -> Result<()> {
     if let Some(task) = store.get_task(task_id.as_str())? {
         crate::notify::notify_completion(&task);
@@ -689,139 +525,6 @@ fn maybe_compact_prompt(prompt: &str, max_tokens: usize) -> String {
     result
 }
 
-pub(super) fn warn_agent_committed_files_outside_scope(
-    scope: &[String],
-    dir: Option<&String>,
-    effective_dir: Option<&String>,
-    resolved_repo: Option<&String>,
-    worktree_path: Option<&String>,
-) {
-    if scope.is_empty() && dir.map(|value| value.trim()).unwrap_or("").is_empty() {
-        return;
-    }
-    let base_path = worktree_path
-        .map(PathBuf::from)
-        .or_else(|| effective_dir.map(PathBuf::from))
-        .unwrap_or_else(|| PathBuf::from("."));
-    let changed_files = match worktree::worktree_changed_files(&base_path) {
-        Ok(files) if !files.is_empty() => files,
-        _ => return,
-    };
-    let base_dir = base_path.to_string_lossy().to_string();
-    let repo_root = resolved_repo
-        .map(PathBuf::from)
-        .or_else(|| resolve_repo_path(&base_dir).ok().map(PathBuf::from));
-    let scope_paths = normalized_scope_paths(scope, repo_root.as_deref());
-    let dir_path = normalized_dir_path(dir, repo_root.as_deref());
-    if scope_paths.is_empty() && dir_path.is_none() {
-        return;
-    }
-    let mut violations = Vec::new();
-    for file in changed_files {
-        let file_path = Path::new(&file);
-        let scope_violation = !scope_paths.is_empty()
-            && !scope_paths
-                .iter()
-                .any(|scope| file_path == scope || file_path.starts_with(scope));
-        let dir_violation = dir_path
-            .as_ref()
-            .is_some_and(|dir| !(file_path == dir || file_path.starts_with(dir)));
-        if scope_violation || dir_violation {
-            violations.push(file);
-        }
-    }
-    if violations.is_empty() {
-        return;
-    }
-    aid_warn!(
-        "[aid] Warning: agent committed {} files outside scope: {:?}",
-        violations.len(),
-        violations
-    );
-}
-
-fn normalized_scope_paths(scope: &[String], repo_root: Option<&Path>) -> Vec<PathBuf> {
-    scope
-        .iter()
-        .filter_map(|entry| {
-            let trimmed = entry.trim().trim_end_matches('/');
-            if trimmed.is_empty() {
-                return None;
-            }
-            let path = Path::new(trimmed);
-            let relative = if path.is_absolute() {
-                let root = repo_root?;
-                path.strip_prefix(root).ok()?
-            } else {
-                path
-            };
-            let normalized = normalize_relative_path(relative);
-            if normalized.as_os_str().is_empty() {
-                return None;
-            }
-            Some(normalized)
-        })
-        .collect()
-}
-
-fn normalized_dir_path(dir: Option<&String>, repo_root: Option<&Path>) -> Option<PathBuf> {
-    let dir = dir?;
-    let trimmed = dir.trim().trim_end_matches('/');
-    if trimmed.is_empty() || trimmed == "." {
-        return None;
-    }
-    let path = Path::new(trimmed);
-    let relative = if path.is_absolute() {
-        let root = repo_root?;
-        path.strip_prefix(root).ok()?
-    } else {
-        path
-    };
-    let normalized = normalize_relative_path(relative);
-    if normalized.as_os_str().is_empty() {
-        return None;
-    }
-    Some(normalized)
-}
-
-fn normalize_relative_path(path: &Path) -> PathBuf {
-    let mut normalized = PathBuf::new();
-    for component in path.components() {
-        match component {
-            Component::CurDir => {}
-            Component::ParentDir => {
-                normalized.pop();
-            }
-            Component::Normal(part) => normalized.push(part),
-            _ => normalized.push(component.as_os_str()),
-        }
-    }
-    normalized
-}
-
 #[cfg(test)]
-#[path = "run_prompt/tests.rs"]
+#[path = "run_prompt_tests.rs"]
 mod tests;
-
-#[cfg(test)]
-#[path = "run_prompt/skill_tests.rs"]
-mod skill_tests;
-
-#[cfg(test)]
-mod sanitize_tests {
-    use super::sanitize_injected_text;
-
-    #[test]
-    fn sanitize_strips_structural_tags() {
-        let input = "keep\n<aid-project-rules>\ninside\n</aid-team-rules>\nend";
-        let sanitized = sanitize_injected_text(input);
-        assert_eq!(sanitized, "keep\nend");
-    }
-
-    #[test]
-    fn sanitize_preserves_normal_lines() {
-        let input = "alpha\n beta\n[Task]\nplain text";
-        let sanitized = sanitize_injected_text(input);
-        assert_eq!(sanitized, input);
-    }
-}

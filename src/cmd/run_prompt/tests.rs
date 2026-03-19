@@ -91,7 +91,7 @@ fn effective_skills_respect_no_skill_sentinel() {
     assert!(
         effective_skills(
             &AgentKind::Codex,
-            &run_args(vec![super::super::NO_SKILL_SENTINEL.to_string()])
+            &run_args(vec![crate::cmd::run::NO_SKILL_SENTINEL.to_string()])
         )
         .is_empty()
     );
@@ -329,7 +329,7 @@ async fn run_auto_retries_after_verify_failure() {
     let work_dir = temp.path().join("work");
     std::fs::create_dir_all(&work_dir).unwrap();
     let store = Arc::new(Store::open_memory().unwrap());
-    let root_id = super::super::run(
+    let root_id = crate::cmd::run::run(
         store.clone(),
         RunArgs {
             agent_name: "opencode".to_string(),
@@ -337,7 +337,7 @@ async fn run_auto_retries_after_verify_failure() {
             dir: Some(work_dir.to_string_lossy().to_string()),
             verify: Some("false".to_string()),
             retry: 1,
-            skills: vec![super::super::NO_SKILL_SENTINEL.to_string()],
+            skills: vec![crate::cmd::run::NO_SKILL_SENTINEL.to_string()],
             ..Default::default()
         },
     )

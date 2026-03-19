@@ -11,6 +11,14 @@ use crate::store::Store;
 use crate::types::{EventKind, Task, TaskEvent};
 const DIFF_EXCLUDE: &[&str] = &[":(exclude)*.lock", ":(exclude)package-lock.json"];
 pub fn diff_text(store: &Arc<Store>, task_id: &str) -> Result<String> {
+    diff_text_with_filter(store, task_id, None)
+}
+
+pub fn diff_text_file(store: &Arc<Store>, task_id: &str, file: &str) -> Result<String> {
+    diff_text_with_filter(store, task_id, Some(file))
+}
+
+fn diff_text_with_filter(store: &Arc<Store>, task_id: &str, file: Option<&str>) -> Result<String> {
     let task = super::load_task(store, task_id)?;
     let mut out = format_diff_header(&task);
     let events = store.get_events(task_id)?;
@@ -20,7 +28,7 @@ pub fn diff_text(store: &Arc<Store>, task_id: &str) -> Result<String> {
     if let Some(ref worktree_path) = task.worktree_path
         && Path::new(worktree_path).exists()
     {
-        out.push_str(&format_diff_output(worktree_path));
+        out.push_str(&format_diff_output(worktree_path, file));
         out.push_str(&format!("\nWorktree: {worktree_path}\n"));
         return Ok(out);
     }
@@ -34,7 +42,7 @@ pub fn diff_text(store: &Arc<Store>, task_id: &str) -> Result<String> {
     if task.worktree_branch.is_none() {
         // In-place task: show working tree diff from repo_path
         let repo = task.repo_path.as_deref().unwrap_or(".");
-        let wt_diff = inplace_working_diff(repo);
+        let wt_diff = inplace_working_diff(repo, file);
         if !wt_diff.is_empty() {
             out.push_str("\n--- Working Tree Changes (in-place edit) ---\n");
             out.push_str(&wt_diff);
@@ -51,7 +59,7 @@ pub(crate) fn worktree_diff(task: &Task, task_id: &str) -> Result<String> {
     if let Some(ref worktree_path) = task.worktree_path
         && Path::new(worktree_path).exists()
     {
-        return Ok(format_diff_output(worktree_path));
+        return Ok(format_diff_output(worktree_path, None));
     }
     if let Some(fallback) = diff_artifact_fallback(task, task_id)? {
         return Ok(fallback);
@@ -89,12 +97,20 @@ fn format_recent_events(events: &[TaskEvent]) -> String {
     }
     out
 }
-fn format_diff_output(worktree_path: &str) -> String {
+fn format_diff_output(worktree_path: &str, file: Option<&str>) -> String {
     let mut out = String::new();
     out.push_str("\n--- Diff Stat ---\n");
-    out.push_str(&diff_stat(worktree_path));
+    let stat = match file {
+        Some(path) => diff_stat_file(worktree_path, path),
+        None => diff_stat(worktree_path),
+    };
+    out.push_str(&stat);
     out.push_str("\n--- Full Diff ---\n");
-    out.push_str(&full_diff(worktree_path));
+    let diff = match file {
+        Some(path) => full_diff_file(worktree_path, path),
+        None => full_diff(worktree_path),
+    };
+    out.push_str(&diff);
     out
 }
 fn diff_artifact_fallback(task: &Task, task_id: &str) -> Result<Option<String>> {
@@ -197,12 +213,16 @@ fn extract_edits_from_log(log_path: &Path) -> Option<String> {
     Some(out)
 }
 /// For in-place tasks: show `git diff` from the repo directory.
-fn inplace_working_diff(repo_path: &str) -> String {
-    let output = Command::new("git")
-        .args(["-C", repo_path, "diff", "--", "."])
-        .args(DIFF_EXCLUDE)
-        .output()
-        .ok();
+fn inplace_working_diff(repo_path: &str, file: Option<&str>) -> String {
+    let mut cmd = Command::new("git");
+    cmd.args(["-C", repo_path, "diff"]);
+    if let Some(file) = file {
+        cmd.args(["--", file]);
+    } else {
+        cmd.args(["--", "."]);
+    }
+    cmd.args(DIFF_EXCLUDE);
+    let output = cmd.output().ok();
     match output {
         Some(o) if o.status.success() && !o.stdout.is_empty() => {
             String::from_utf8_lossy(&o.stdout).into()
@@ -394,6 +414,19 @@ pub(crate) fn diff_stat(wt_path: &str) -> String {
     )
 }
 
+pub(crate) fn diff_stat_file(wt_path: &str, file: &str) -> String {
+    generate_diff_file(
+        wt_path,
+        &[
+            &["diff", "main...HEAD", "--stat"],
+            &["diff", "--stat"],
+            &["diff", "--stat", "HEAD~1"],
+        ],
+        "  (no changes detected)\n",
+        file,
+    )
+}
+
 pub(crate) fn parse_diff_stat(diff_text: &str) -> Vec<serde_json::Value> {
     diff_text
         .lines()
@@ -432,6 +465,18 @@ fn full_diff(wt_path: &str) -> String {
         "  (no diff available)\n",
     )
 }
+fn full_diff_file(wt_path: &str, file: &str) -> String {
+    generate_diff_file(
+        wt_path,
+        &[
+            &["diff", "main...HEAD"],
+            &["diff"],
+            &["diff", "HEAD~1"],
+        ],
+        "  (no diff available)\n",
+        file,
+    )
+}
 fn generate_diff(wt_path: &str, args_sets: &[&[&str]], fallback: &str) -> String {
     for args in args_sets {
         if let Some(output) = run_git_diff(wt_path, &diff_args(args))
@@ -441,6 +486,21 @@ fn generate_diff(wt_path: &str, args_sets: &[&[&str]], fallback: &str) -> String
         }
     }
     fallback.to_string()
+}
+fn generate_diff_file(wt_path: &str, args_sets: &[&[&str]], fallback: &str, file: &str) -> String {
+    for args in args_sets {
+        if let Some(output) = run_git_diff(wt_path, &diff_args_file(args, file))
+            && !output.trim().is_empty()
+        {
+            return output;
+        }
+    }
+    fallback.to_string()
+}
+fn diff_args_file<'a>(base_args: &'a [&'a str], file: &'a str) -> Vec<&'a str> {
+    let mut args = base_args.to_vec();
+    args.extend_from_slice(&["--", file]);
+    args
 }
 fn run_git_diff(wt_path: &str, args: &[&str]) -> Option<String> {
     let output = Command::new("git")

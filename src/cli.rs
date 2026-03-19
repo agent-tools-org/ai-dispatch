@@ -295,6 +295,12 @@ Run `aid batch init` to generate a full template with all fields."#)]
         /// Show full worktree diff
         #[arg(long)]
         diff: bool,
+        /// Show only diff stat without full diff
+        #[arg(long, conflicts_with_all = ["diff", "output", "log"])]
+        summary: bool,
+        /// Filter --diff output to a single file path
+        #[arg(long, requires = "diff")]
+        file: Option<String>,
         /// Print output file
         #[arg(long)]
         output: bool,
@@ -956,6 +962,45 @@ mod tests {
                 assert_eq!(count, 5);
             }
             _ => panic!("expected Changelog"),
+        }
+    }
+
+    #[test]
+    fn show_summary_flag_parses() {
+        let cli = Cli::try_parse_from(["aid", "show", "t-1234", "--summary"]).unwrap();
+        match cli.command {
+            Commands::Show {
+                task_id,
+                summary,
+                diff,
+                file,
+                ..
+            } => {
+                assert_eq!(task_id, "t-1234");
+                assert!(summary);
+                assert!(!diff);
+                assert_eq!(file, None);
+            }
+            _ => panic!("expected Show"),
+        }
+    }
+
+    #[test]
+    fn show_diff_file_flag_parses() {
+        let cli = Cli::try_parse_from(["aid", "show", "t-1234", "--diff", "--file", "src/cli.rs"])
+            .unwrap();
+        match cli.command {
+            Commands::Show {
+                diff,
+                summary,
+                file,
+                ..
+            } => {
+                assert!(diff);
+                assert!(!summary);
+                assert_eq!(file, Some("src/cli.rs".to_string()));
+            }
+            _ => panic!("expected Show"),
         }
     }
 }

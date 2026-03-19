@@ -18,12 +18,17 @@ mod show_output;
 pub use show_output::{diff_text, log_text, output_text, output_text_for_task, output_text_full};
 #[allow(unused_imports)]
 pub use show_output::read_task_output;
-pub(crate) use show_output::{diff_stat, extract_messages_from_log, parse_diff_stat, read_tail, worktree_diff};
+pub(crate) use show_output::{
+    diff_stat, diff_text_file, extract_messages_from_log, parse_diff_stat, read_tail,
+    worktree_diff,
+};
 
 pub struct ShowArgs {
     pub task_id: String,
     pub context: bool,
     pub diff: bool,
+    pub summary: bool,
+    pub file: Option<String>,
     pub output: bool,
     pub full: bool,
     pub explain: bool,
@@ -36,6 +41,7 @@ pub struct ShowArgs {
 #[derive(Clone, Copy)]
 pub enum ShowMode {
     Summary,
+    StatOnly,
     Context,
     Diff,
     Output,
@@ -56,7 +62,9 @@ pub async fn run(store: Arc<Store>, args: ShowArgs) -> Result<()> {
     if args.explain {
         return cmd::explain::run_explain(store, &args.task_id, args.agent, args.model).await;
     }
-    let mode = if args.diff {
+    let mode = if args.summary {
+        ShowMode::StatOnly
+    } else if args.diff {
         ShowMode::Diff
     } else if args.output {
         ShowMode::Output
@@ -68,6 +76,12 @@ pub async fn run(store: Arc<Store>, args: ShowArgs) -> Result<()> {
     let task = load_task(&store, &args.task_id)?;
     let text = if matches!(mode, ShowMode::Output) && args.full {
         output_text_full(&store, &args.task_id)?
+    } else if matches!(mode, ShowMode::Diff) {
+        if let Some(file) = args.file.as_deref() {
+            diff_text_file(&store, &args.task_id, file)?
+        } else {
+            diff_text(&store, &args.task_id)?
+        }
     } else {
         render_mode_text(&store, &args.task_id, mode)?
     };
@@ -156,6 +170,7 @@ fn task_json(store: &Arc<Store>, task_id: &str) -> Result<String> {
 pub fn render_mode_text(store: &Arc<Store>, task_id: &str, mode: ShowMode) -> Result<String> {
     match mode {
         ShowMode::Summary => audit_text(store, task_id),
+        ShowMode::StatOnly => summary_text(store, task_id),
         ShowMode::Context => context_text(store, task_id),
         ShowMode::Diff => diff_text(store, task_id),
         ShowMode::Output => output_text(store, task_id),
@@ -197,6 +212,39 @@ pub fn audit_text(store: &Arc<Store>, task_id: &str) -> Result<String> {
         if let Some(stat) = inplace_diff_stat(repo) {
             out.push_str("\nWorking tree changes (in-place edit):\n");
             out.push_str(&stat);
+        }
+    }
+
+    Ok(out)
+}
+
+pub fn summary_text(store: &Arc<Store>, task_id: &str) -> Result<String> {
+    let task = load_task(store, task_id)?;
+    let mut out = String::new();
+    out.push_str(&format!("=== Review: {} ===\n", task.id));
+    out.push_str(&format!(
+        "Agent: {}  Status: {}  Prompt: {}\n",
+        task.agent_display_name(),
+        task.status.label(),
+        task.prompt,
+    ));
+
+    if task.verify_status == VerifyStatus::EmptyDiff {
+        out.push_str("\n--- Diff Stat ---\n  (no changes detected)\n");
+    } else if let Some(ref wt_path) = task.worktree_path
+        && Path::new(wt_path).exists()
+    {
+        out.push_str("\n--- Diff Stat ---\n");
+        out.push_str(&diff_stat(wt_path));
+    } else if task.worktree_branch.is_none()
+        && matches!(task.status, TaskStatus::Done | TaskStatus::Merged)
+    {
+        let repo = task.repo_path.as_deref().unwrap_or(".");
+        out.push_str("\n--- Diff Stat ---\n");
+        if let Some(stat) = inplace_diff_stat(repo) {
+            out.push_str(&stat);
+        } else {
+            out.push_str("  (no changes detected)\n");
         }
     }
 
@@ -419,5 +467,78 @@ mod tests {
         assert!(text.contains("=== Injected Skills ===\n# Implementer"));
         assert!(text.contains("=== Resolved Prompt ===\nraw prompt"));
         assert!(text.contains("[MILESTONE] <brief description>"));
+    }
+
+    #[test]
+    fn summary_text_shows_diff_stat_without_full_diff() {
+        let temp = tempfile::tempdir().unwrap();
+        let repo = temp.path();
+        std::process::Command::new("git")
+            .args(["init"])
+            .current_dir(repo)
+            .output()
+            .unwrap();
+        std::process::Command::new("git")
+            .args(["config", "user.email", "test@example.com"])
+            .current_dir(repo)
+            .output()
+            .unwrap();
+        std::process::Command::new("git")
+            .args(["config", "user.name", "Test User"])
+            .current_dir(repo)
+            .output()
+            .unwrap();
+        std::fs::write(repo.join("note.txt"), "before\n").unwrap();
+        std::process::Command::new("git")
+            .args(["add", "note.txt"])
+            .current_dir(repo)
+            .output()
+            .unwrap();
+        std::process::Command::new("git")
+            .args(["commit", "-m", "init"])
+            .current_dir(repo)
+            .output()
+            .unwrap();
+        std::fs::write(repo.join("note.txt"), "before\nafter\n").unwrap();
+
+        let store = Arc::new(Store::open_memory().unwrap());
+        let task = Task {
+            id: TaskId("t-summary".to_string()),
+            agent: AgentKind::Codex,
+            custom_agent_name: None,
+            prompt: "summarize diff".to_string(),
+            resolved_prompt: None,
+            status: TaskStatus::Done,
+            parent_task_id: None,
+            workgroup_id: None,
+            caller_kind: None,
+            caller_session_id: None,
+            agent_session_id: None,
+            repo_path: Some(repo.display().to_string()),
+            worktree_path: None,
+            worktree_branch: None,
+            log_path: None,
+            output_path: None,
+            tokens: None,
+            prompt_tokens: None,
+            duration_ms: None,
+            model: None,
+            cost_usd: None,
+            exit_code: None,
+            created_at: Local::now(),
+            completed_at: None,
+            verify: None,
+            verify_status: VerifyStatus::Skipped,
+            read_only: false,
+            budget: false,
+        };
+        store.insert_task(&task).unwrap();
+
+        let text = summary_text(&store, "t-summary").unwrap();
+
+        assert!(text.contains("--- Diff Stat ---"));
+        assert!(text.contains("note.txt | 1 +"));
+        assert!(!text.contains("--- Full Diff ---"));
+        assert!(!text.contains("@@"));
     }
 }

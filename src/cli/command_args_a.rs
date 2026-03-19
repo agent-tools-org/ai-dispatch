@@ -155,7 +155,7 @@ pub struct WatchArgs {
     pub timeout: Option<u64>,
 }
 
-#[derive(Args)]
+#[derive(Args, Default)]
 pub struct BoardArgs {
     #[arg(long)]
     pub running: bool,

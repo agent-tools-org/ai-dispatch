@@ -136,6 +136,15 @@ const BUILTIN_AGENT_PROFILES: &[BuiltinAgentProfile] = &[
         streaming: true,
         trust_tier: "api",
     },
+    BuiltinAgentProfile {
+        name: "oz",
+        command: "oz",
+        description: "Complex implementation, multi-file refactors",
+        cost: "Warp subscription",
+        best_for: "implement, create, build, refactor, test",
+        streaming: true,
+        trust_tier: "local",
+    },
 ];
 
 pub enum AgentAction {

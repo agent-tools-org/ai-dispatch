@@ -18,6 +18,7 @@ const AGENTS: &[AgentKind] = &[
     AgentKind::Kilo,
     AgentKind::Codebuff,
     AgentKind::Droid,
+    AgentKind::Oz,
 ];
 const FOOTER_HINT: &str = "a=all/today s=stats d=dashboard m=multipane q=quit";
 struct BudgetUsage {

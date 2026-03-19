@@ -88,7 +88,7 @@ pub(crate) async fn run_agent_process_with_timeout(
     let start = Instant::now();
     #[cfg(unix)]
     cmd.process_group(0);
-    let mut child = cmd.spawn().context("Failed to spawn agent process")?;
+    let mut child = spawn_child_with_log(&mut cmd, log_path).context("Failed to spawn agent process")?;
     if let Some(pid) = child.id() {
         if let Ok(task_id_str) = std::env::var("AID_TASK_ID") {
             let _ = crate::background::update_agent_pid(&task_id_str, pid);
@@ -203,6 +203,28 @@ pub(crate) async fn run_agent_process_with_timeout(
             Err(anyhow::anyhow!(detail))
         }
     }
+}
+
+fn spawn_child_with_log(cmd: &mut Command, log_path: &Path) -> Result<tokio::process::Child> {
+    match cmd.spawn() {
+        Ok(child) => Ok(child),
+        Err(err) => {
+            let error_msg = format!("Failed to spawn agent process: {err}");
+            aid_error!("[aid] {error_msg}");
+            write_spawn_error_log(log_path, &error_msg);
+            Err(err.into())
+        }
+    }
+}
+
+fn write_spawn_error_log(log_path: &Path, message: &str) {
+    let event = serde_json::json!({
+        "type": "error",
+        "source": "spawn",
+        "message": message,
+        "timestamp": Local::now().to_rfc3339(),
+    });
+    let _ = std::fs::write(log_path, format!("{event}\n"));
 }
 
 fn write_streaming_output(log_path: &Path, out_path: &Path) {

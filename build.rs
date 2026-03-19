@@ -32,11 +32,8 @@ fn build_embedded_changelog() -> Option<String> {
         let prev = tags.get(i + 1).map(String::as_str);
         let range = prev.map_or_else(|| tag.to_string(), |p| format!("{p}..{tag}"));
 
-        let commits_out = git(&["log", &range, "--oneline"])?;
-        let commits = commits_out
-            .lines()
-            .filter_map(|line| line.split_once(' ').map(|(_, msg)| msg.to_string()))
-            .collect::<Vec<_>>();
+        let commits_out = git(&["log", "--no-merges", "--format=%s", &range])?;
+        let commits = commits_out.lines().map(str::to_string).collect::<Vec<_>>();
         let commits = if commits.is_empty() {
             vec!["No commits found".to_string()]
         } else {
@@ -63,9 +60,5 @@ fn escape_newlines(s: &str) -> String {
 fn main() {
     println!("cargo:rerun-if-changed=.git/refs/tags");
     let text = build_embedded_changelog().unwrap_or_default();
-    println!(
-        "cargo:rustc-env=AID_CHANGELOG={}",
-        escape_newlines(&text)
-    );
+    println!("cargo:rustc-env=AID_CHANGELOG={}", escape_newlines(&text));
 }
-

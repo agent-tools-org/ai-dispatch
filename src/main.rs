@@ -307,8 +307,9 @@ async fn main() -> Result<()> {
             version,
             all,
             count,
+            git,
         } => {
-            cmd::changelog::run(version, all, count)?;
+            cmd::changelog::run(version, all, count, git)?;
         }
         Commands::Agent { action } => {
             use cmd::agent::{AgentAction, run_agent_command};

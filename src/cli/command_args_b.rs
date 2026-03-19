@@ -2,7 +2,7 @@
 // Exports clap Args types for top-level commands from export through group.
 
 use crate::cli::HookAction;
-use crate::cli_actions::{ConfigAction, GroupAction};
+use crate::cli_actions::{ConfigAction, ContainerAction, GroupAction};
 use clap::Args;
 
 #[derive(Args)]
@@ -152,4 +152,10 @@ pub struct ConfigArgs {
 pub struct GroupArgs {
     #[command(subcommand)]
     pub action: GroupAction,
+}
+
+#[derive(Args)]
+pub struct ContainerArgs {
+    #[command(subcommand)]
+    pub action: ContainerAction,
 }

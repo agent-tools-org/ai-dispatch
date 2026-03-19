@@ -87,6 +87,8 @@ pub struct BatchDefaults {
     #[serde(default, deserialize_with = "deserialize_verify")]
     pub verify: Option<String>,
     #[serde(default)]
+    pub container: Option<String>,
+    #[serde(default)]
     pub max_duration_mins: Option<u64>,
     #[serde(default)]
     pub best_of: Option<usize>,
@@ -119,6 +121,7 @@ pub struct BatchTask {
     pub model: Option<String>,
     pub worktree: Option<String>,
     pub group: Option<String>,
+    pub container: Option<String>,
     #[serde(default, deserialize_with = "deserialize_verify")]
     pub verify: Option<String>,
     #[serde(default, deserialize_with = "deserialize_judge")]
@@ -303,6 +306,9 @@ fn apply_task_defaults(task: &mut BatchTask, defaults: &BatchDefaults) {
     }
     if task.verify.is_none() {
         task.verify = defaults.verify.clone();
+    }
+    if task.container.is_none() {
+        task.container = defaults.container.clone();
     }
     if task.judge.is_none() {
         task.judge = defaults.judge.clone();

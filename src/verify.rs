@@ -2,7 +2,7 @@
 // Supports auto-detect (Cargo.toml -> cargo check, package.json -> npm run build).
 
 use anyhow::{Context, Result};
-use std::io::{self, Read};
+use std::io::Read;
 use std::path::Path;
 use std::process::{Child, Command, Stdio};
 use std::sync::Mutex;
@@ -29,8 +29,11 @@ pub fn run_verify(
     worktree_path: &Path,
     command: Option<&str>,
     cargo_target_dir: Option<&str>,
+    container_name: Option<&str>,
 ) -> Result<VerifyResult> {
-    let Some((cmd_str, mut cmd)) = build_verify_command(worktree_path, command)? else {
+    let Some((cmd_str, mut cmd)) =
+        build_verify_command(worktree_path, command, container_name, cargo_target_dir)?
+    else {
         return Ok(VerifyResult {
             success: true,
             output: "No project file detected, skipping verification".to_string(),
@@ -41,7 +44,8 @@ pub fn run_verify(
     // Verify commands are user-authored, but we still execute them as argv to avoid
     // handing arbitrary strings to a shell. This preserves simple commands like
     // `cargo test` while refusing shell metacharacter expansion by default.
-    if let Some(target_dir) = cargo_target_dir {
+    if container_name.is_none()
+        && let Some(target_dir) = cargo_target_dir {
         cmd.env("CARGO_TARGET_DIR", target_dir);
     }
 
@@ -114,6 +118,8 @@ fn auto_detect_command(path: &Path) -> String {
 fn build_verify_command(
     worktree_path: &Path,
     command: Option<&str>,
+    container_name: Option<&str>,
+    cargo_target_dir: Option<&str>,
 ) -> Result<Option<(String, Command)>> {
     let cmd_str = match command {
         Some(c) => c.trim().to_string(),
@@ -122,7 +128,18 @@ fn build_verify_command(
     if cmd_str == "skip" {
         return Ok(None);
     }
-    split_command(&cmd_str).map(Some)
+    let (_, cmd) = split_command(&cmd_str)?;
+    let cmd = if let Some(container_name) = container_name {
+        crate::container::verify_in_container(
+            container_name,
+            worktree_path,
+            &cmd_str,
+            cargo_target_dir,
+        )
+    } else {
+        cmd
+    };
+    Ok(Some((cmd_str, cmd)))
 }
 fn split_command(command: &str) -> Result<(String, Command)> {
     let mut parts = command.split_whitespace();
@@ -157,6 +174,7 @@ mod tests {
     use super::*;
     use crate::test_subprocess;
     use std::fs;
+    use std::io::Error;
     #[cfg(unix)]
     use std::os::unix::fs::PermissionsExt;
     use tempfile::TempDir;
@@ -164,7 +182,7 @@ mod tests {
     fn verify_pass_case() {
         let _permit = test_subprocess::acquire();
         let dir = TempDir::new().unwrap();
-        let result = run_verify(dir.path(), Some("echo ok"), None).unwrap();
+        let result = run_verify(dir.path(), Some("echo ok"), None, None).unwrap();
         assert!(result.success);
         assert!(result.output.contains("ok"));
         assert_eq!(result.command, "echo ok");
@@ -173,21 +191,21 @@ mod tests {
     fn verify_fail_case() {
         let _permit = test_subprocess::acquire();
         let dir = TempDir::new().unwrap();
-        let result = run_verify(dir.path(), Some("false"), None).unwrap();
+        let result = run_verify(dir.path(), Some("false"), None, None).unwrap();
         assert!(!result.success);
     }
     #[test]
     fn verify_does_not_expand_shell_operators() {
         let _permit = test_subprocess::acquire();
         let dir = TempDir::new().unwrap();
-        let result = run_verify(dir.path(), Some("echo ok && false"), None).unwrap();
+        let result = run_verify(dir.path(), Some("echo ok && false"), None, None).unwrap();
         assert!(result.success);
         assert!(result.output.contains("ok && false"));
     }
     #[test]
     fn verify_no_project_file_skips() {
         let dir = TempDir::new().unwrap();
-        let result = run_verify(dir.path(), None, None).unwrap();
+        let result = run_verify(dir.path(), None, None, None).unwrap();
         assert!(result.success);
         assert!(result.output.contains("skipping"));
     }
@@ -227,12 +245,12 @@ mod tests {
         perms.set_mode(0o755);
         fs::set_permissions(&script, perms).unwrap();
 
-        let result = run_verify(dir.path(), script.to_str(), None).unwrap();
+        let result = run_verify(dir.path(), script.to_str(), None, None).unwrap();
         assert!(result.success);
         let pid = result.output.trim().parse::<i32>().unwrap();
         thread::sleep(Duration::from_millis(200));
         let status = unsafe { libc::kill(pid, 0) };
         assert_eq!(status, -1);
-        assert_eq!(io::Error::last_os_error().raw_os_error(), Some(libc::ESRCH));
+        assert_eq!(Error::last_os_error().raw_os_error(), Some(libc::ESRCH));
     }
 }

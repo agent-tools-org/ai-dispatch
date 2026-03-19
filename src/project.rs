@@ -30,6 +30,8 @@ pub struct ProjectConfig {
     #[serde(default)]
     pub verify: Option<String>,
     #[serde(default)]
+    pub container: Option<String>,
+    #[serde(default)]
     pub language: Option<String>,
     #[serde(default)]
     pub rules: Vec<String>,
@@ -154,7 +156,12 @@ fn parse_budget_shorthand(value: &str) -> Result<ProjectBudget, String> {
 
 
 pub fn detect_project() -> Option<ProjectConfig> {
-    let git_root = find_git_root()?;
+    let cwd = env::current_dir().ok()?;
+    detect_project_in(&cwd)
+}
+
+pub fn detect_project_in(start_dir: &Path) -> Option<ProjectConfig> {
+    let git_root = find_git_root_from(start_dir)?;
     let project_path = git_root.join(".aid").join("project.toml");
     if !project_path.is_file() {
         return None;
@@ -188,8 +195,8 @@ pub fn read_project_knowledge(git_root: &Path) -> Vec<KnowledgeEntry> {
         .collect()
 }
 
-fn find_git_root() -> Option<PathBuf> {
-    let mut dir = env::current_dir().ok()?;
+fn find_git_root_from(start_dir: &Path) -> Option<PathBuf> {
+    let mut dir = start_dir.to_path_buf();
     loop {
         if dir.join(".git").exists() {
             return Some(dir);
@@ -404,6 +411,17 @@ budget = "$2000/month"
         let config = load_project(&write_project(dir.path(), contents)).unwrap();
         assert_eq!(config.budget.cost_limit_usd, Some(2000.0));
         assert_eq!(config.budget.window.as_deref(), Some("monthly"));
+    }
+
+    #[test]
+    fn parses_container_image() {
+        let dir = TempDir::new().unwrap();
+        let contents = r#"[project]
+id = "test"
+container = "dev:latest"
+"#;
+        let config = load_project(&write_project(dir.path(), contents)).unwrap();
+        assert_eq!(config.container.as_deref(), Some("dev:latest"));
     }
 
     #[test]

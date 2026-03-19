@@ -19,6 +19,7 @@ pub(super) fn make_task(name: &str, conditional: bool, on_success: Option<&str>)
         model: None,
         worktree: None,
         group: None,
+        container: None,
         best_of: None,
         max_duration_mins: None,
         verify: None,

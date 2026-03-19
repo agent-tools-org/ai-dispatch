@@ -3,6 +3,7 @@
 
 use super::{BatchAction, Cli, Commands, ExperimentCommands, HookAction};
 use super::{command_args_a, command_args_b};
+use crate::cli_actions::ContainerAction;
 use clap::Parser;
 
 #[test]
@@ -55,6 +56,17 @@ fn run_sandbox_flag_parses() {
 }
 
 #[test]
+fn run_container_flag_parses() {
+    let cli = Cli::try_parse_from(["aid", "run", "codex", "task", "--container", "dev:latest"]).unwrap();
+    match cli.command {
+        Commands::Run(command_args_a::RunArgs { container, .. }) => {
+            assert_eq!(container, Some("dev:latest".to_string()))
+        }
+        _ => panic!("expected Run"),
+    }
+}
+
+#[test]
 fn watch_timeout_flag_parses() {
     let cli = Cli::try_parse_from(["aid", "watch", "--quiet", "--timeout", "60", "--group", "wg-a"]).unwrap();
     match cli.command {
@@ -98,6 +110,17 @@ fn hook_session_start_parses() {
     match cli.command {
         Commands::Hook(command_args_b::HookArgs { action: HookAction::SessionStart }) => {}
         _ => panic!("expected Hook SessionStart"),
+    }
+}
+
+#[test]
+fn container_subcommand_parses() {
+    let cli = Cli::try_parse_from(["aid", "container", "stop", "aid-dev-demo"]).unwrap();
+    match cli.command {
+        Commands::Container(command_args_b::ContainerArgs {
+            action: ContainerAction::Stop { name },
+        }) => assert_eq!(name, "aid-dev-demo"),
+        _ => panic!("expected Container stop"),
     }
 }
 

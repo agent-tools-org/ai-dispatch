@@ -73,6 +73,7 @@ pub(crate) fn task_to_run_args(
         model: task.model.clone(),
         worktree: task.worktree.clone(),
         group: task.group.clone(),
+        container: task.container.clone(),
         verify: task.verify.clone(),
         judge: task.judge.clone(),
         max_duration_mins: task.max_duration_mins.map(|value| value as i64),

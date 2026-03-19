@@ -57,6 +57,7 @@ pub struct RunArgs {
     pub cascade: Vec<String>,
     pub read_only: bool,
     pub sandbox: bool,
+    pub container: Option<String>,
     pub budget: bool,
     pub best_of: Option<usize>,
     pub metric: Option<String>,
@@ -114,7 +115,8 @@ pub async fn run(store: Arc<Store>, mut args: RunArgs) -> Result<TaskId> {
         return Box::pin(run_bestof::run_best_of(store, args, n)).await;
     }
 
-    if let Some(project) = project::detect_project() {
+    let detected_project = project::detect_project();
+    if let Some(project) = detected_project.as_ref() {
         let mut defaults_applied = false;
         if args.max_task_cost.is_none() {
             args.max_task_cost = project.max_task_cost;
@@ -127,6 +129,11 @@ pub async fn run(store: Arc<Store>, mut args: RunArgs) -> Result<TaskId> {
         if args.verify.is_none()
             && let Some(verify) = project.verify.as_ref() {
                 args.verify = Some(verify.clone());
+                defaults_applied = true;
+            }
+        if args.container.is_none()
+            && let Some(container) = project.container.as_ref() {
+                args.container = Some(container.clone());
                 defaults_applied = true;
             }
         if !args.budget && project.budget.prefer_budget {
@@ -328,6 +335,19 @@ pub async fn run(store: Arc<Store>, mut args: RunArgs) -> Result<TaskId> {
     };
     let mut runtime_hooks = hooks::load_hooks()?;
     runtime_hooks.extend(hooks::parse_cli_hooks(&args.hooks)?);
+    let container_name = if let Some(image) = args.container.as_deref() {
+        let project_dir = effective_dir
+            .as_deref()
+            .map(Path::new)
+            .unwrap_or_else(|| Path::new("."));
+        let project_id = detected_project
+            .as_ref()
+            .map(|project| project.id.as_str())
+            .unwrap_or(task_id.as_str());
+        Some(crate::container::start_or_reuse(image, project_dir, project_id)?)
+    } else {
+        None
+    };
     store.update_task_status(task_id.as_str(), TaskStatus::Running)?;
     let before_payload = show::task_hook_json(
         &task_id,
@@ -373,6 +393,7 @@ pub async fn run(store: Arc<Store>, mut args: RunArgs) -> Result<TaskId> {
             env_forward: args.env_forward.clone(),
             agent_pid: None,
             sandbox: args.sandbox,
+            container: args.container.clone(),
         };
         background::save_spec(&spec)?;
         let mut worker = match background::spawn_worker(task_id.as_str()) {
@@ -417,7 +438,14 @@ pub async fn run(store: Arc<Store>, mut args: RunArgs) -> Result<TaskId> {
         {
             std_cmd.env("CARGO_TARGET_DIR", &target_dir);
         }
-        let std_cmd = if args.sandbox && crate::sandbox::can_sandbox(agent_kind) {
+        let std_cmd = if let Some(container_name) = container_name.as_deref() {
+            aid_info!(
+                "[aid] Container: running {} in {}",
+                agent_kind.as_str(),
+                container_name
+            );
+            crate::container::exec_in_container(&std_cmd, container_name)
+        } else if args.sandbox && crate::sandbox::can_sandbox(agent_kind) {
             if !crate::sandbox::is_available() {
                 anyhow::bail!("--sandbox requires Apple Container CLI. Install: brew install container");
             }
@@ -490,6 +518,7 @@ pub async fn run(store: Arc<Store>, mut args: RunArgs) -> Result<TaskId> {
             &task_id,
             args.verify.as_deref(),
             effective_dir.as_deref(),
+            container_name.as_deref(),
         );
         if !args.scope.is_empty() {
             check_scope_violations(&store, &task_id, &args.scope, effective_dir.as_deref());
@@ -883,7 +912,15 @@ pub(crate) use run_agent::run_agent_process;
 
 pub(crate) fn maybe_cleanup_fast_fail(store: &Store, task_id: &TaskId, task: &Task) { run_prompt::maybe_cleanup_fast_fail_impl(store, task_id, task); }
 /// Run verification if --verify was set and a working dir exists.
-pub(crate) fn maybe_verify(store: &Store, task_id: &TaskId, verify: Option<&str>, dir: Option<&str>) { run_prompt::maybe_verify_impl(store, task_id, verify, dir); }
+pub(crate) fn maybe_verify(
+    store: &Store,
+    task_id: &TaskId,
+    verify: Option<&str>,
+    dir: Option<&str>,
+    container_name: Option<&str>,
+) {
+    run_prompt::maybe_verify_impl(store, task_id, verify, dir, container_name);
+}
 pub(crate) async fn maybe_auto_retry_after_verify_failure(store: &Arc<Store>, task_id: &TaskId, args: &RunArgs, pre_verify_status: TaskStatus) -> Result<Option<TaskId>> {
     run_prompt::maybe_auto_retry_after_verify_failure_impl(store, task_id, args, pre_verify_status).await
 }

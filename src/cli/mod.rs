@@ -59,6 +59,7 @@ pub enum Commands {
     Hook(command_args_b::HookArgs),
     Config(command_args_b::ConfigArgs),
     Group(command_args_b::GroupArgs),
+    Container(command_args_b::ContainerArgs),
     Worktree(command_args_c::WorktreeArgs),
     Store(command_args_c::StoreArgs),
     Team(command_args_c::TeamArgs),

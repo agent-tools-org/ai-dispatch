@@ -54,6 +54,8 @@ pub struct RunArgs {
     pub read_only: bool,
     #[arg(long)]
     pub sandbox: bool,
+    #[arg(long, value_name = "IMAGE", conflicts_with = "sandbox")]
+    pub container: Option<String>,
     #[arg(long, value_name = "N")]
     pub best_of: Option<usize>,
     #[arg(long, value_name = "COMMAND", requires = "best_of")]

@@ -82,6 +82,7 @@ fn show() -> Result<()> {
     println!("  Team:       {}", config.team.as_deref().unwrap_or("-"));
     println!("  Language:   {}", config.language.as_deref().unwrap_or("-"));
     println!("  Verify:     {}", config.verify.as_deref().unwrap_or("-"));
+    println!("  Container:  {}", config.container.as_deref().unwrap_or("-"));
     let budget_display = if let Some(shorthand) = config.budget.budget_shorthand() {
         format!("{shorthand} (shorthand)")
     } else if let Some(cost) = config.budget.cost_limit_usd {

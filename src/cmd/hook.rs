@@ -66,6 +66,7 @@ mod tests {
             max_task_cost: None,
             team: Some("dev".to_string()),
             verify: None,
+            container: None,
             language: None,
             rules: vec!["project rule".to_string()],
             budget: ProjectBudget::default(),

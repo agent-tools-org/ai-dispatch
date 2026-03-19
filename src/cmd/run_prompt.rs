@@ -261,7 +261,18 @@ pub(super) fn inject_skill(prompt: &str, agent_kind: &AgentKind, requested_skill
         sections.push(format!("--- Methodology ---\n{skill_text}"));
         let scripts = skills::load_skill_scripts(name);
         if !scripts.is_empty() {
-            sections.push(skills::format_script_instructions(&scripts));
+            sections.push(
+                format!(
+                    "{}\n{}",
+                    skills::format_script_instructions(&scripts)
+                        .replacen("--- Available Tools ---", "--- Available Scripts ---", 1),
+                    scripts
+                        .iter()
+                        .map(|script| format!("- {}", script.path.display()))
+                        .collect::<Vec<_>>()
+                        .join("\n")
+                ),
+            );
         }
         let references = skills::list_skill_references(name);
         if !references.is_empty() {
@@ -477,7 +488,13 @@ pub(super) fn maybe_cleanup_fast_fail_impl(store: &Store, task_id: &TaskId, task
     aid_info!("[aid] Cleaned up worktree for fast-failed task {}", task_id);
 }
 
-pub(super) fn maybe_verify_impl(store: &Store, task_id: &TaskId, verify: Option<&str>, dir: Option<&str>) {
+pub(super) fn maybe_verify_impl(
+    store: &Store,
+    task_id: &TaskId,
+    verify: Option<&str>,
+    dir: Option<&str>,
+    container_name: Option<&str>,
+) {
     let Some(verify_arg) = verify else { return };
     let Some(dir_path) = dir else { println!("Verify skipped: no working directory"); return; };
     let command = if verify_arg == "auto" { None } else { Some(verify_arg) };
@@ -488,7 +505,7 @@ pub(super) fn maybe_verify_impl(store: &Store, task_id: &TaskId, verify: Option<
         .flatten()
         .and_then(|task| task.worktree_branch);
     let cargo_target_dir = crate::agent::target_dir_for_worktree(worktree_branch.as_deref());
-    match crate::verify::run_verify(path, command, cargo_target_dir.as_deref()) {
+    match crate::verify::run_verify(path, command, cargo_target_dir.as_deref(), container_name) {
         Ok(result) => {
             let report = crate::verify::format_verify_report(&result);
             println!("{report}");

@@ -5,7 +5,7 @@ use super::{resolve_finding_content, resolve_group};
 use crate::cli::{
     ExperimentCommands, FindingCommands, HookAction, MemoryCommands, StoreCommands,
 };
-use crate::cli_actions::{ConfigAction, GroupAction, GroupFindingAction, ProjectAction, TeamAction, WorktreeAction};
+use crate::cli_actions::{ConfigAction, ContainerAction, GroupAction, GroupFindingAction, ProjectAction, TeamAction, WorktreeAction};
 use crate::cmd;
 use crate::cmd::experiment_types::{ExperimentConfig, MetricDirection};
 use crate::{background, cli, store};
@@ -171,6 +171,16 @@ pub(super) fn worktree(action: WorktreeAction) -> Result<()> {
         WorktreeAction::List { repo } => cmd::worktree::list(repo.as_deref()),
         WorktreeAction::Remove { branch, repo } => cmd::worktree::remove(&branch, repo.as_deref()),
     }
+}
+
+pub(super) fn container(action: ContainerAction) -> Result<()> {
+    use cmd::container::{ContainerAction as ContainerCommand, run_container_command};
+    let action = match action {
+        ContainerAction::Build { tag, file } => ContainerCommand::Build { tag, file },
+        ContainerAction::List => ContainerCommand::List,
+        ContainerAction::Stop { name } => ContainerCommand::Stop { name },
+    };
+    run_container_command(action)
 }
 
 pub(super) fn store(action: StoreCommands) -> Result<()> {

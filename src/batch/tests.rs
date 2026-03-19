@@ -37,6 +37,7 @@ fn make_task(name: Option<&str>, depends_on: &[&str]) -> BatchTask {
         model: None,
         worktree: None,
         group: None,
+        container: None,
         best_of: None,
         max_duration_mins: None,
         verify: None,

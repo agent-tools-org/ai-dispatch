@@ -12,6 +12,7 @@ mod cmd;
 mod cmd_dispatch;
 mod commit;
 mod config;
+mod container;
 mod context;
 mod cost;
 mod explore;

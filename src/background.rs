@@ -57,6 +57,8 @@ pub struct BackgroundRunSpec {
     pub agent_pid: Option<u32>,
     #[serde(default)]
     pub sandbox: bool,
+    #[serde(default)]
+    pub container: Option<String>,
 }
 
 pub fn save_spec(spec: &BackgroundRunSpec) -> Result<()> {
@@ -185,7 +187,22 @@ async fn run_task_inner(store: &Arc<Store>, spec: &BackgroundRunSpec) -> Result<
     {
         std_cmd.env("CARGO_TARGET_DIR", &target_dir);
     }
-    let std_cmd = if spec.sandbox && crate::sandbox::can_sandbox(agent.kind()) {
+    let container_name = if let Some(image) = spec.container.as_deref() {
+        let project_dir = spec
+            .dir
+            .as_deref()
+            .map(std::path::Path::new)
+            .unwrap_or_else(|| std::path::Path::new("."));
+        let project_id = crate::project::detect_project_in(project_dir)
+            .map(|project| project.id)
+            .unwrap_or_else(|| spec.task_id.clone());
+        Some(crate::container::start_or_reuse(image, project_dir, &project_id)?)
+    } else {
+        None
+    };
+    let std_cmd = if let Some(container_name) = container_name.as_deref() {
+        crate::container::exec_in_container(&std_cmd, container_name)
+    } else if spec.sandbox && crate::sandbox::can_sandbox(agent.kind()) {
         if !crate::sandbox::is_available() {
             anyhow::bail!("--sandbox requires container CLI");
         }
@@ -242,6 +259,7 @@ async fn run_task_inner(store: &Arc<Store>, spec: &BackgroundRunSpec) -> Result<
         env: spec.env.clone(),
         env_forward: spec.env_forward.clone(),
         sandbox: spec.sandbox,
+        container: spec.container.clone(),
         ..Default::default()
     };
     let pre_verify_status = store
@@ -253,6 +271,7 @@ async fn run_task_inner(store: &Arc<Store>, spec: &BackgroundRunSpec) -> Result<
         &TaskId(spec.task_id.clone()),
         spec.verify.as_deref(),
         spec.dir.as_deref(),
+        container_name.as_deref(),
     );
     if let Some(task) = store.get_task(&spec.task_id)? {
         crate::cmd::run::maybe_cleanup_fast_fail(store, &TaskId(spec.task_id.clone()), &task);

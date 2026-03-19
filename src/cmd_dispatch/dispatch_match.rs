@@ -39,6 +39,7 @@ pub(crate) async fn dispatch(store: Arc<crate::store::Store>, command: Commands)
             | Commands::Hook(..)
             | Commands::Config(..)
             | Commands::Group(..)
+            | Commands::Container(..)
             | Commands::Worktree(..)
             | Commands::Store(..)
             | Commands::Team(..)
@@ -61,7 +62,7 @@ pub(crate) async fn dispatch(store: Arc<crate::store::Store>, command: Commands)
 
 async fn dispatch_primary(store: Arc<crate::store::Store>, command: Commands) -> Result<()> {
     match command {
-        Commands::Run(command_args_a::RunArgs { agent, prompt, repo, dir, output, model, budget, worktree, team, group, verify, judge, peer_review, retry, context, scope, run_extras, no_skill, bg, dry_run, read_only, sandbox, best_of, metric, parent, id, timeout }) => handlers_a::run(store, agent, prompt, repo, dir, output, model, budget, worktree, team, group, verify, judge, peer_review, retry, context, scope, run_extras, no_skill, bg, dry_run, read_only, sandbox, best_of, metric, parent, id, timeout).await,
+        Commands::Run(command_args_a::RunArgs { agent, prompt, repo, dir, output, model, budget, worktree, team, group, verify, judge, peer_review, retry, context, scope, run_extras, no_skill, bg, dry_run, read_only, sandbox, container, best_of, metric, parent, id, timeout }) => handlers_a::run(store, agent, prompt, repo, dir, output, model, budget, worktree, team, group, verify, judge, peer_review, retry, context, scope, run_extras, no_skill, bg, dry_run, read_only, sandbox, container, best_of, metric, parent, id, timeout).await,
         Commands::Batch(command_args_a::BatchArgs { action, file, vars, parallel, wait, dry_run, max_concurrent, output }) => handlers_a::batch(store, action, file, vars, parallel, wait, dry_run, max_concurrent, output).await,
         Commands::Benchmark(command_args_a::BenchmarkArgs { prompt, agents, dir, verify }) => handlers_c::benchmark(store, prompt, agents, dir, verify).await,
         Commands::Watch(command_args_a::WatchArgs { task_ids, group, tui, quiet, exit_on_await, timeout }) => handlers_c::watch(store, task_ids, group, tui, quiet, exit_on_await, timeout).await,
@@ -95,6 +96,7 @@ async fn dispatch_secondary(store: Arc<crate::store::Store>, command: Commands) 
         Commands::Hook(command_args_b::HookArgs { action }) => handlers_b::hook(action),
         Commands::Config(command_args_b::ConfigArgs { action }) => handlers_b::config(store, action),
         Commands::Group(command_args_b::GroupArgs { action }) => handlers_b::group(store, action),
+        Commands::Container(command_args_b::ContainerArgs { action }) => handlers_b::container(action),
         Commands::Worktree(command_args_c::WorktreeArgs { action }) => handlers_b::worktree(action),
         Commands::Store(command_args_c::StoreArgs { action }) => handlers_b::store(action),
         Commands::Team(command_args_c::TeamArgs { action }) => handlers_b::team(action),

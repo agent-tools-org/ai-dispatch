@@ -84,6 +84,22 @@ pub enum GroupAction {
 }
 
 #[derive(Subcommand)]
+pub enum ContainerAction {
+    /// Build a container image from a Containerfile
+    Build {
+        tag: String,
+        #[arg(long)]
+        file: Option<String>,
+    },
+    /// List running dev containers
+    List,
+    /// Stop and remove a dev container
+    Stop {
+        name: String,
+    },
+}
+
+#[derive(Subcommand)]
 #[allow(clippy::large_enum_variant)]
 pub enum GroupFindingAction {
     /// Post a finding to a workgroup

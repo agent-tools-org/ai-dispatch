@@ -55,7 +55,7 @@ mod workgroup;
 mod worktree;
 mod cli;
 
-use crate::cli::Cli;
+use crate::cli::{Cli, Commands};
 use anyhow::Result;
 use clap::Parser;
 use std::sync::Arc;
@@ -76,5 +76,8 @@ async fn main() -> Result<()> {
     let store = Arc::new(store::Store::open(&paths::db_path())?);
     let _ = background::check_zombie_tasks(&store);
 
-    cmd_dispatch::dispatch(store, cli.command).await
+    match cli.command {
+        Some(command) => cmd_dispatch::dispatch(store, command).await,
+        None => cmd_dispatch::dispatch(store, Commands::Board(Default::default())).await,
+    }
 }

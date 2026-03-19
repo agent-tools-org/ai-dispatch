@@ -73,6 +73,8 @@ pub struct BatchConfig {
 #[derive(Debug, Deserialize, Default)]
 pub struct BatchDefaults {
     pub group_id: Option<String>,
+    #[serde(default)]
+    pub shared_dir: Option<bool>,
     pub agent: Option<String>,
     #[serde(default)]
     pub auto_fallback: Option<bool>,

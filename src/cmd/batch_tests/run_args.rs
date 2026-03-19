@@ -45,6 +45,7 @@ fn task_to_run_args_copies_context() {
         &[],
         true,
         &store,
+        None,
     );
 
     assert_eq!(
@@ -91,6 +92,7 @@ fn task_to_run_args_defaults_dry_run_to_false() {
         &[],
         false,
         &store,
+        None,
     );
 
     assert!(!run_args.dry_run);
@@ -162,7 +164,7 @@ fn task_to_run_args_includes_sibling_metadata() {
         conditional: false,
     };
 
-    let run_args = task_to_run_args(&current, &[&sibling], true, &store);
+    let run_args = task_to_run_args(&current, &[&sibling], true, &store, None);
 
     assert_eq!(
         run_args.batch_siblings,
@@ -213,6 +215,7 @@ fn task_to_run_args_applies_forwarded_env_after_explicit_env() {
         &[],
         true,
         &store,
+        None,
     );
 
     assert_eq!(
@@ -220,4 +223,55 @@ fn task_to_run_args_applies_forwarded_env_after_explicit_env() {
         Some(forwarded_path.as_str())
     );
     assert_eq!(run_args.env_forward, Some(vec!["PATH".to_string()]));
+}
+
+#[test]
+fn task_to_run_args_includes_shared_dir_env() {
+    let store = Arc::new(Store::open_memory().unwrap());
+    let run_args = task_to_run_args(
+        &batch::BatchTask {
+            id: None,
+            name: None,
+            agent: "codex".to_string(),
+            team: None,
+            prompt: "test".to_string(),
+            dir: None,
+            output: None,
+            model: None,
+            worktree: None,
+            group: None,
+            verify: None,
+            max_duration_mins: None,
+            context: None,
+            skills: None,
+            hooks: None,
+            depends_on: None,
+            parent: None,
+            context_from: None,
+            fallback: None,
+            scope: None,
+            read_only: false,
+            budget: false,
+            env: None,
+            env_forward: None,
+            judge: None,
+            best_of: None,
+            on_success: None,
+            on_fail: None,
+            conditional: false,
+        },
+        &[],
+        true,
+        &store,
+        Some("/tmp/shared-batch"),
+    );
+
+    assert_eq!(
+        run_args
+            .env
+            .as_ref()
+            .and_then(|env| env.get("AID_SHARED_DIR"))
+            .map(String::as_str),
+        Some("/tmp/shared-batch")
+    );
 }

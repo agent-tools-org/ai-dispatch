@@ -28,6 +28,7 @@ mod rate_limit;
 pub(crate) mod sanitize;
 mod sandbox;
 mod session;
+mod shared_dir;
 mod skills;
 mod store;
 mod store_workgroups;

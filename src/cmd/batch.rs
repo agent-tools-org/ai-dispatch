@@ -55,6 +55,7 @@ pub async fn run(store: Arc<Store>, args: BatchArgs) -> Result<()> {
     }
     .with_context(|| format!("Failed to load batch file {}", path.display()))?;
     let total = config.tasks.len();
+    let shared_dir_enabled = config.defaults.shared_dir.unwrap_or(false);
     validate_batch_config(&config.tasks)?;
     let has_dependencies = config.tasks.iter().any(task_has_dependencies);
     let no_groups_set = config.tasks.iter().all(|t| t.group.is_none());
@@ -66,16 +67,30 @@ pub async fn run(store: Arc<Store>, args: BatchArgs) -> Result<()> {
             aid_info!("[aid] Using workspace {env_group} from AID_GROUP");
         } else if total >= 2 {
             let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("batch");
-            let wg_id = batch_helpers::ensure_batch_workgroup(
+            let (wg_id, shared_path) = batch_helpers::ensure_batch_workgroup(
                 &store,
                 stem,
                 config.defaults.group_id.as_deref(),
+                shared_dir_enabled,
             )?;
             for task in &mut config.tasks {
                 task.group = Some(wg_id.clone());
             }
+            if let Some(shared_path) = shared_path {
+                aid_info!("[aid] Shared batch dir: {}", shared_path.display());
+            }
         }
     }
+    let shared_dir_path = if shared_dir_enabled {
+        config
+            .tasks
+            .first()
+            .and_then(|task| task.group.as_deref())
+            .and_then(crate::shared_dir::shared_dir_path)
+            .map(|path| path.display().to_string())
+    } else {
+        None
+    };
     if args.dry_run {
         println!("Batch: previewing {total} task(s) from {}", path.display());
         for (task_idx, task) in config.tasks.iter().enumerate() {
@@ -85,7 +100,13 @@ pub async fn run(store: Arc<Store>, args: BatchArgs) -> Result<()> {
                 .filter(|(idx, _)| *idx != task_idx)
                 .map(|(_, sibling)| sibling)
                 .collect();
-            let mut run_args = batch_args::task_to_run_args(task, &siblings, false, &store);
+            let mut run_args = batch_args::task_to_run_args(
+                task,
+                &siblings,
+                false,
+                &store,
+                shared_dir_path.as_deref(),
+            );
             run_args.dry_run = true;
             let _ = run::run(store.clone(), run_args).await?;
         }
@@ -104,6 +125,7 @@ pub async fn run(store: Arc<Store>, args: BatchArgs) -> Result<()> {
             &config.tasks,
             args.max_concurrent,
             config.defaults.auto_fallback.unwrap_or(false),
+            shared_dir_path.as_deref(),
         )
         .await?
     } else if has_dependencies {
@@ -111,6 +133,7 @@ pub async fn run(store: Arc<Store>, args: BatchArgs) -> Result<()> {
             store.clone(),
             &config.tasks,
             config.defaults.auto_fallback.unwrap_or(false),
+            shared_dir_path.as_deref(),
         )
         .await?
     } else if args.parallel {
@@ -119,6 +142,7 @@ pub async fn run(store: Arc<Store>, args: BatchArgs) -> Result<()> {
             &config.tasks,
             args.max_concurrent,
             config.defaults.auto_fallback.unwrap_or(false),
+            shared_dir_path.as_deref(),
         )
         .await?
     } else {
@@ -126,6 +150,7 @@ pub async fn run(store: Arc<Store>, args: BatchArgs) -> Result<()> {
             store.clone(),
             &config.tasks,
             config.defaults.auto_fallback.unwrap_or(false),
+            shared_dir_path.as_deref(),
         )
         .await?
     };

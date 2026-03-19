@@ -15,38 +15,58 @@ pub(crate) async fn dispatch_parallel(
     tasks: &[batch::BatchTask],
     max_concurrent: Option<usize>,
     auto_fallback: bool,
+    shared_dir_path: Option<&str>,
 ) -> Result<BatchDispatchResult> {
     let dependencies = vec![Vec::new(); tasks.len()];
     let default_max = crate::system_resources::recommended_max_concurrent().min(tasks.len());
     let max_active = max_concurrent.unwrap_or(default_max).max(1);
-    dispatch_with_dependencies(store, tasks, &dependencies, max_active, auto_fallback).await
+    dispatch_with_dependencies(
+        store,
+        tasks,
+        &dependencies,
+        max_active,
+        auto_fallback,
+        shared_dir_path,
+    )
+    .await
 }
 pub(crate) async fn dispatch_sequential(
     store: Arc<Store>,
     tasks: &[batch::BatchTask],
     auto_fallback: bool,
+    shared_dir_path: Option<&str>,
 ) -> Result<BatchDispatchResult> {
     let dependencies = vec![Vec::new(); tasks.len()];
-    dispatch_with_dependencies(store, tasks, &dependencies, 1, auto_fallback).await
+    dispatch_with_dependencies(store, tasks, &dependencies, 1, auto_fallback, shared_dir_path).await
 }
 pub(crate) async fn dispatch_parallel_with_dependencies(
     store: Arc<Store>,
     tasks: &[batch::BatchTask],
     max_concurrent: Option<usize>,
     auto_fallback: bool,
+    shared_dir_path: Option<&str>,
 ) -> Result<BatchDispatchResult> {
     let dependencies = resolve_dependencies(tasks)?;
     let default_max = crate::system_resources::recommended_max_concurrent().min(tasks.len());
     let max_active = max_concurrent.unwrap_or(default_max).max(1);
-    dispatch_with_dependencies(store, tasks, &dependencies, max_active, auto_fallback).await
+    dispatch_with_dependencies(
+        store,
+        tasks,
+        &dependencies,
+        max_active,
+        auto_fallback,
+        shared_dir_path,
+    )
+    .await
 }
 pub(crate) async fn dispatch_sequential_with_dependencies(
     store: Arc<Store>,
     tasks: &[batch::BatchTask],
     auto_fallback: bool,
+    shared_dir_path: Option<&str>,
 ) -> Result<BatchDispatchResult> {
     let dependencies = resolve_dependencies(tasks)?;
-    dispatch_with_dependencies(store, tasks, &dependencies, 1, auto_fallback).await
+    dispatch_with_dependencies(store, tasks, &dependencies, 1, auto_fallback, shared_dir_path).await
 }
 async fn dispatch_with_dependencies(
     store: Arc<Store>,
@@ -54,6 +74,7 @@ async fn dispatch_with_dependencies(
     dependencies: &[Vec<usize>],
     max_active: usize,
     auto_fallback: bool,
+    shared_dir_path: Option<&str>,
 ) -> Result<BatchDispatchResult> {
     if tasks.is_empty() {
         return Ok(BatchDispatchResult {
@@ -108,7 +129,14 @@ async fn dispatch_with_dependencies(
         let available = max_active.saturating_sub(active.len());
         if available > 0 && !ready.is_empty() {
             let dispatch_group: Vec<_> = ready.into_iter().take(available).collect();
-            for dispatch in dispatch_level_with_ids(store.clone(), tasks, &dispatch_group, &waiting_ids).await? {
+            for dispatch in dispatch_level_with_ids(
+                store.clone(),
+                tasks,
+                &dispatch_group,
+                &waiting_ids,
+                shared_dir_path,
+            )
+            .await? {
                 started[dispatch.index] = true;
                 match dispatch.task_id {
                     Some(task_id) => {
@@ -145,6 +173,7 @@ async fn dispatch_with_dependencies(
                 completed.outcome,
                 auto_fallback,
                 &mut retried,
+                shared_dir_path,
             )
             .await?
             {
@@ -184,18 +213,27 @@ async fn dispatch_level_with_ids(
     tasks: &[batch::BatchTask],
     task_indices: &[usize],
     waiting_ids: &[String],
+    shared_dir_path: Option<&str>,
 ) -> Result<Vec<DispatchedTask>> {
+    let shared_dir_path = shared_dir_path.map(str::to_string);
     let handles: Vec<_> = task_indices
         .iter()
         .map(|&task_idx| {
             let store = store.clone();
+            let shared_dir_path = shared_dir_path.clone();
             let siblings: Vec<_> = tasks
                 .iter()
                 .enumerate()
                 .filter(|(idx, _)| *idx != task_idx)
                 .map(|(_, task)| task)
                 .collect();
-            let mut run_args = task_to_run_args(&tasks[task_idx], &siblings, true, &store);
+            let mut run_args = task_to_run_args(
+                &tasks[task_idx],
+                &siblings,
+                true,
+                &store,
+                shared_dir_path.as_deref(),
+            );
             run_args.existing_task_id = Some(crate::types::TaskId(waiting_ids[task_idx].clone()));
             tokio::spawn(async move { (task_idx, run::run(store, run_args).await) })
         })
@@ -256,6 +294,7 @@ async fn maybe_dispatch_auto_fallback(
     outcome: BatchTaskOutcome,
     auto_fallback: bool,
     retried: &mut [bool],
+    shared_dir_path: Option<&str>,
 ) -> Result<Option<String>> {
     if !should_auto_fallback(auto_fallback, retried[task_idx], outcome) {
         return Ok(None);
@@ -269,7 +308,13 @@ async fn maybe_dispatch_auto_fallback(
         .filter(|(idx, _)| *idx != task_idx)
         .map(|(_, task)| task)
         .collect();
-    let mut run_args = task_to_run_args(&tasks[task_idx], &siblings, true, &store);
+    let mut run_args = task_to_run_args(
+        &tasks[task_idx],
+        &siblings,
+        true,
+        &store,
+        shared_dir_path,
+    );
     run_args.agent_name = fallback_agent.as_str().to_string();
     run_args.parent_task_id = Some(task_id.to_string());
     retried[task_idx] = true;

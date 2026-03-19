@@ -17,12 +17,14 @@ mod batch_args;
 mod batch_retry;
 #[path = "batch_dispatch.rs"]
 mod batch_dispatch;
+#[path = "batch_analyze.rs"]
+mod batch_analyze;
 #[path = "batch_helpers.rs"]
 mod batch_helpers;
 #[path = "batch_types.rs"]
 mod batch_types;
 
-use batch_validate::{task_has_dependencies, validate_batch_config};
+use batch_validate::{analyze_file_overlap, task_has_dependencies, validate_batch_config};
 #[cfg(test)]
 pub(crate) use batch_dispatch::{auto_fallback_agent, should_auto_fallback};
 #[cfg(test)]
@@ -32,6 +34,7 @@ pub struct BatchArgs {
     pub file: String,
     pub vars: Vec<String>,
     pub parallel: bool,
+    pub analyze: bool,
     pub wait: bool,
     pub dry_run: bool,
     pub max_concurrent: Option<usize>,
@@ -117,6 +120,20 @@ pub async fn run(store: Arc<Store>, args: BatchArgs) -> Result<()> {
         aid_warn!("[aid] Warning: low disk space ({avail} MB free) — parallel dispatch may fail");
     }
     batch_helpers::warn_for_rate_limited_agents(&config.tasks);
+    if args.analyze || config.defaults.analyze.unwrap_or(false) {
+        let overlaps = analyze_file_overlap(&config.tasks, &config.defaults);
+        if !overlaps.is_empty() {
+            aid_warn!("[aid] Warning: potential merge conflicts detected:");
+            for overlap in overlaps {
+                aid_warn!(
+                    "  {} - referenced by: {}",
+                    overlap.file,
+                    overlap.task_ids.join(", ")
+                );
+            }
+            aid_warn!("[aid] Consider adding dependencies or using --worktree isolation");
+        }
+    }
     println!("Batch: dispatching {total} task(s) from {}", path.display());
     let start_time = Instant::now();
     let dispatch = if has_dependencies && args.parallel {

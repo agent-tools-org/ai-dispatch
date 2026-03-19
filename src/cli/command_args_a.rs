@@ -71,6 +71,7 @@ pub struct RunArgs {
 #[derive(Args)]
 #[command(after_help = r#"Examples:
   aid batch tasks.toml --parallel
+  aid batch tasks.toml --analyze
   aid batch tasks.toml --parallel --max-concurrent 3
   aid batch init                         # Generate template TOML
 
@@ -78,6 +79,7 @@ Batch TOML format:
   [defaults]
   dir = "."                              # Working directory
   agent = "codex"                        # Default agent
+  analyze = true                         # Warn about overlapping file edits
   team = "dev"                           # Team knowledge injection
   verify = "cargo check"                 # Auto-verify on completion
   fallback = "cursor"                    # Agent to try if primary fails
@@ -108,6 +110,8 @@ pub struct BatchArgs {
     pub vars: Vec<String>,
     #[arg(long)]
     pub parallel: bool,
+    #[arg(long)]
+    pub analyze: bool,
     #[arg(long)]
     pub wait: bool,
     #[arg(long)]

@@ -18,6 +18,7 @@ use crate::system_resources;
 use crate::types::{AgentKind, EventKind, TaskEvent, TaskFilter, TaskId, TaskStatus};
 
 const ZOMBIE_FAILURE_DETAIL: &str = "Background worker died unexpectedly";
+const PENDING_TASK_TIMEOUT_SECS: i64 = 600;
 /// Hard limit on concurrent background workers — prevents process exhaustion.
 const MAX_WORKERS: usize = 32;
 
@@ -399,7 +400,7 @@ where
     F: Fn(u32) -> bool,
 {
     let config = config::load_config()?;
-    let mut cleaned = Vec::new();
+    let mut cleaned = cleanup_stale_pending_tasks(store)?;
     for task in store.list_tasks(TaskFilter::Running)? {
         let task_id = task.id.as_str();
         let Some(spec) = load_spec_if_exists(task_id)? else {
@@ -458,6 +459,56 @@ where
         cleaned.push(task_id.to_string());
     }
     Ok(cleaned)
+}
+
+fn cleanup_stale_pending_tasks(store: &Store) -> Result<Vec<String>> {
+    let now = Local::now();
+    let mut cleaned = Vec::new();
+    for task in store.list_tasks(TaskFilter::All)? {
+        if task.status != TaskStatus::Pending {
+            continue;
+        }
+        let elapsed_secs = (now - task.created_at).num_seconds();
+        if elapsed_secs <= PENDING_TASK_TIMEOUT_SECS {
+            continue;
+        }
+        let task_id = task.id.as_str();
+        aid_warn!(
+            "[aid] Timing out stale pending task {} (pending for {}s)",
+            task_id,
+            elapsed_secs
+        );
+        if !fail_stale_pending_task(store, &task, now, elapsed_secs)? {
+            continue;
+        }
+        cleaned.push(task_id.to_string());
+    }
+    Ok(cleaned)
+}
+
+fn fail_stale_pending_task(
+    store: &Store,
+    task: &crate::types::Task,
+    now: chrono::DateTime<Local>,
+    elapsed_secs: i64,
+) -> Result<bool> {
+    let task_id = task.id.as_str();
+    let rows = store.db().execute(
+        "UPDATE tasks SET status = 'failed' WHERE id = ?1 AND status = 'pending'",
+        rusqlite::params![task_id],
+    )?;
+    if rows == 0 {
+        return Ok(false);
+    }
+    store.insert_event(&TaskEvent {
+        task_id: task.id.clone(),
+        timestamp: now,
+        event_kind: EventKind::Error,
+        detail: format!("Task timed out in pending state after {}s", elapsed_secs),
+        metadata: None,
+    })?;
+    notify_task_completion(store, task_id)?;
+    Ok(true)
 }
 
 fn load_spec_if_exists(task_id: &str) -> Result<Option<BackgroundRunSpec>> {

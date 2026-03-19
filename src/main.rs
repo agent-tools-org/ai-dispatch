@@ -388,8 +388,24 @@ async fn main() -> Result<()> {
         Commands::Summary { group } => {
             cmd::summary_cli::run(&store, &group)?;
         }
-        Commands::Retry { task_id, feedback, agent, dir } => {
-            cmd::retry::run(store, cmd::retry::RetryArgs { task_id, feedback, agent, dir }).await?;
+        Commands::Retry {
+            task_id,
+            feedback,
+            agent,
+            dir,
+            reset,
+        } => {
+            cmd::retry::run(
+                store,
+                cmd::retry::RetryArgs {
+                    task_id,
+                    feedback,
+                    agent,
+                    dir,
+                    reset,
+                },
+            )
+            .await?;
         }
         Commands::Merge {
             task_id,

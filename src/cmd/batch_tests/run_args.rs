@@ -34,6 +34,8 @@ fn task_to_run_args_copies_context() {
             scope: None,
             read_only: false,
             budget: false,
+            env: None,
+            env_forward: None,
             judge: None,
             best_of: None,
             on_success: None,
@@ -78,6 +80,8 @@ fn task_to_run_args_defaults_dry_run_to_false() {
             scope: None,
             read_only: false,
             budget: false,
+            env: None,
+            env_forward: None,
             judge: None,
             best_of: None,
             on_success: None,
@@ -118,6 +122,8 @@ fn task_to_run_args_includes_sibling_metadata() {
         scope: None,
         read_only: false,
         budget: false,
+        env: None,
+        env_forward: None,
         judge: None,
         best_of: None,
         on_success: None,
@@ -147,6 +153,8 @@ fn task_to_run_args_includes_sibling_metadata() {
         scope: None,
         read_only: false,
         budget: false,
+        env: None,
+        env_forward: None,
         judge: None,
         best_of: None,
         on_success: None,
@@ -166,3 +174,50 @@ fn task_to_run_args_includes_sibling_metadata() {
     );
 }
 
+#[test]
+fn task_to_run_args_applies_forwarded_env_after_explicit_env() {
+    let store = Arc::new(Store::open_memory().unwrap());
+    let forwarded_path = std::env::var("PATH").unwrap();
+    let run_args = task_to_run_args(
+        &batch::BatchTask {
+            id: None,
+            name: None,
+            agent: "codex".to_string(),
+            team: None,
+            prompt: "test".to_string(),
+            dir: None,
+            output: None,
+            model: None,
+            worktree: None,
+            group: None,
+            verify: None,
+            max_duration_mins: None,
+            context: None,
+            skills: None,
+            hooks: None,
+            depends_on: None,
+            parent: None,
+            context_from: None,
+            fallback: None,
+            scope: None,
+            read_only: false,
+            budget: false,
+            env: Some([("PATH".to_string(), "explicit".to_string())].into_iter().collect()),
+            env_forward: Some(vec!["PATH".to_string()]),
+            judge: None,
+            best_of: None,
+            on_success: None,
+            on_fail: None,
+            conditional: false,
+        },
+        &[],
+        true,
+        &store,
+    );
+
+    assert_eq!(
+        run_args.env.as_ref().and_then(|env| env.get("PATH")).map(String::as_str),
+        Some(forwarded_path.as_str())
+    );
+    assert_eq!(run_args.env_forward, Some(vec!["PATH".to_string()]));
+}

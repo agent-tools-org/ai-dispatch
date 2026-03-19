@@ -246,6 +246,8 @@ mod tests {
             scope: None,
             read_only: false,
             budget: false,
+            env: None,
+            env_forward: None,
             on_success: None,
             on_fail: None,
             conditional: false,

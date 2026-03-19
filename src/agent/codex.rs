@@ -365,6 +365,8 @@ mod tests {
             read_only: false,
             context_files: vec![],
             session_id: None,
+            env: None,
+            env_forward: None,
         };
         let cmd = CodexAgent.build_command("test prompt", &opts).unwrap();
         let args: Vec<String> = cmd

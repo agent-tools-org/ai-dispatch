@@ -150,6 +150,8 @@ async fn main() -> Result<()> {
                     read_only,
                     context_files: vec![],
                     session_id: None,
+                    env: None,
+                    env_forward: None,
                 };
                 let team_config = team_flag.as_deref().and_then(team::resolve_team);
                 let (selected, reason) = agent::select_agent_with_reason(

@@ -3,6 +3,7 @@
 // Depends on agents, hooks, store, and run_agent helpers for process lifecycle work.
 use anyhow::{Context, Result};
 use chrono::Local;
+use std::collections::HashMap;
 use std::path::Path;
 use std::sync::Arc;
 use serde_json;
@@ -63,6 +64,8 @@ pub struct RunArgs {
     pub context_from: Vec<String>,
     pub batch_siblings: Vec<(String, String, String)>,
     pub scope: Vec<String>,
+    pub env: Option<HashMap<String, String>>,
+    pub env_forward: Option<Vec<String>>,
     pub judge_retry: bool,
     pub existing_task_id: Option<TaskId>,
     pub timeout: Option<u64>,
@@ -319,6 +322,8 @@ pub async fn run(store: Arc<Store>, mut args: RunArgs) -> Result<TaskId> {
         read_only: args.read_only,
         context_files: prompt_bundle.context_files,
         session_id: args.session_id.clone(),
+        env: args.env.clone(),
+        env_forward: args.env_forward.clone(),
     };
     let mut runtime_hooks = hooks::load_hooks()?;
     runtime_hooks.extend(hooks::parse_cli_hooks(&args.hooks)?);
@@ -363,6 +368,8 @@ pub async fn run(store: Arc<Store>, mut args: RunArgs) -> Result<TaskId> {
             on_done: args.on_done.clone(),
             cascade: args.cascade.clone(),
             parent_task_id: args.parent_task_id.clone(),
+            env: args.env.clone(),
+            env_forward: args.env_forward.clone(),
         };
         background::save_spec(&spec)?;
         let mut worker = match background::spawn_worker(task_id.as_str()) {
@@ -394,6 +401,7 @@ pub async fn run(store: Arc<Store>, mut args: RunArgs) -> Result<TaskId> {
         let mut std_cmd = agent
             .build_command(&prompt_bundle.effective_prompt, &opts)
             .context("Failed to build agent command")?;
+        agent::apply_run_env(&mut std_cmd, &opts);
         if let Some(ref dir) = effective_dir {
             agent::set_git_ceiling(&mut std_cmd, dir);
         }

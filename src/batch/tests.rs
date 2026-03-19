@@ -40,6 +40,8 @@ fn make_task(name: Option<&str>, depends_on: &[&str]) -> BatchTask {
         scope: None,
         read_only: false,
         budget: false,
+        env: None,
+        env_forward: None,
         on_success: None,
         on_fail: None,
         conditional: false,
@@ -91,6 +93,8 @@ fn applies_defaults_to_tasks() {
             "worktree_prefix = \"feat\"\nverify = true\nmax_duration_mins = 25\n",
             "context = [\"src/lib.rs\", \"src/main.rs:run\"]\n",
             "skills = [\"rust\", \"cli\"]\nfallback = \"cursor\"\nread_only = true\nbudget = true\n",
+            "env = { DEFAULT_ONLY = \"yes\", SHARED = \"default\" }\n",
+            "env_forward = [\"PATH\"]\n",
             "[[task]]\nname = \"impl\"\nprompt = \"build it\"\n"
         ))
         .path(),
@@ -116,6 +120,15 @@ fn applies_defaults_to_tasks() {
     assert_eq!(task.fallback.as_deref(), Some("cursor"));
     assert!(task.read_only);
     assert!(task.budget);
+    assert_eq!(
+        task.env.as_ref().and_then(|env| env.get("DEFAULT_ONLY")).map(String::as_str),
+        Some("yes")
+    );
+    assert_eq!(
+        task.env.as_ref().and_then(|env| env.get("SHARED")).map(String::as_str),
+        Some("default")
+    );
+    assert_eq!(task.env_forward.as_deref(), Some(&["PATH".to_string()][..]));
 }
 
 #[test]
@@ -125,10 +138,14 @@ fn task_values_override_defaults() {
             "[defaults]\nagent = \"gemini\"\ndir = \"src\"\nmodel = \"gpt-5\"\n",
             "worktree_prefix = \"feat\"\nverify = true\nmax_duration_mins = 25\n",
             "context = [\"src/default.rs\"]\nskills = [\"rust\"]\nfallback = \"cursor\"\n",
+            "env = { DEFAULT_ONLY = \"yes\", SHARED = \"default\" }\n",
+            "env_forward = [\"PATH\"]\n",
             "[[task]]\nname = \"impl\"\nagent = \"codex\"\nprompt = \"build it\"\n",
             "dir = \"custom\"\nmodel = \"gpt-4\"\nworktree = \"manual/impl\"\n",
             "verify = \"manual\"\nmax_duration_mins = 5\n",
-            "context = [\"src/task.rs\"]\nskills = [\"own\"]\nfallback = \"opencode\"\n"
+            "context = [\"src/task.rs\"]\nskills = [\"own\"]\nfallback = \"opencode\"\n",
+            "env = { SHARED = \"task\", TASK_ONLY = \"set\" }\n",
+            "env_forward = [\"HOME\"]\n"
         ))
         .path(),
     )
@@ -147,6 +164,22 @@ fn task_values_override_defaults() {
     );
     assert_eq!(task.skills.as_deref(), Some(&["own".to_string()][..]));
     assert_eq!(task.fallback.as_deref(), Some("opencode"));
+    assert_eq!(
+        task.env.as_ref().and_then(|env| env.get("DEFAULT_ONLY")).map(String::as_str),
+        Some("yes")
+    );
+    assert_eq!(
+        task.env.as_ref().and_then(|env| env.get("SHARED")).map(String::as_str),
+        Some("task")
+    );
+    assert_eq!(
+        task.env.as_ref().and_then(|env| env.get("TASK_ONLY")).map(String::as_str),
+        Some("set")
+    );
+    assert_eq!(
+        task.env_forward.as_deref(),
+        Some(&["PATH".to_string(), "HOME".to_string()][..])
+    );
 }
 
 #[test]

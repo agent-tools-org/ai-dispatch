@@ -4,6 +4,7 @@
 use crate::batch;
 use crate::cmd::run::RunArgs;
 use crate::store::Store;
+use std::collections::HashMap;
 use std::sync::Arc;
 
 pub(crate) fn task_to_run_args(
@@ -23,6 +24,8 @@ pub(crate) fn task_to_run_args(
             read_only: task.read_only,
             context_files: vec![],
             session_id: None,
+            env: None,
+            env_forward: None,
         };
         let (selected, reason) = crate::agent::select_agent_with_reason(
             &task.prompt,
@@ -60,6 +63,7 @@ pub(crate) fn task_to_run_args(
         .as_deref()
         .map(|f| vec![f.to_string()])
         .unwrap_or_else(|| auto_cascade_for_rate_limited(&agent_name));
+    let env = merged_env(task.env.as_ref(), task.env_forward.as_ref());
     RunArgs {
         agent_name,
         prompt: task.prompt.clone(),
@@ -86,6 +90,8 @@ pub(crate) fn task_to_run_args(
         batch_siblings,
         scope: task.scope.clone().unwrap_or_default(),
         parent_task_id: task.parent.clone(),
+        env,
+        env_forward: task.env_forward.clone(),
         ..Default::default()
     }
 }
@@ -101,4 +107,19 @@ fn auto_cascade_for_rate_limited(agent_name: &str) -> Vec<String> {
     crate::agent::selection::coding_fallback_for(&agent)
         .map(|fallback| vec![fallback.as_str().to_string()])
         .unwrap_or_default()
+}
+
+fn merged_env(
+    env: Option<&HashMap<String, String>>,
+    env_forward: Option<&Vec<String>>,
+) -> Option<HashMap<String, String>> {
+    let mut merged = env.cloned().unwrap_or_default();
+    if let Some(env_forward) = env_forward {
+        for name in env_forward {
+            if let Ok(value) = std::env::var(name) {
+                merged.insert(name.clone(), value);
+            }
+        }
+    }
+    (!merged.is_empty()).then_some(merged)
 }

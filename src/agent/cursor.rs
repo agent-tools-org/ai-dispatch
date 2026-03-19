@@ -357,6 +357,8 @@ mod tests {
             read_only: false,
             context_files: vec![],
             session_id: None,
+            env: None,
+            env_forward: None,
         };
         let cmd = agent.build_command("test prompt", &opts).unwrap();
         assert_eq!(cmd.get_program(), "cursor-agent");

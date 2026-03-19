@@ -15,6 +15,7 @@ pub(crate) mod selection;
 pub(crate) mod truncate;
 
 use anyhow::Result;
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::process::Command;
 
@@ -58,6 +59,8 @@ pub struct RunOpts {
     pub read_only: bool,
     pub context_files: Vec<String>,
     pub session_id: Option<String>,
+    pub env: Option<HashMap<String, String>>,
+    pub env_forward: Option<Vec<String>>,
 }
 
 /// Detect which agents are installed on the system
@@ -151,6 +154,21 @@ pub fn set_git_ceiling(cmd: &mut Command, dir: &str) {
     }
 }
 
+pub fn apply_run_env(cmd: &mut Command, opts: &RunOpts) {
+    if let Some(env) = opts.env.as_ref() {
+        for (key, value) in env {
+            cmd.env(key, value);
+        }
+    }
+    if let Some(env_forward) = opts.env_forward.as_ref() {
+        for name in env_forward {
+            if let Ok(value) = std::env::var(name) {
+                cmd.env(name, value);
+            }
+        }
+    }
+}
+
 fn which_exists(name: &str) -> bool {
     Command::new("which")
         .arg(name)
@@ -161,8 +179,9 @@ fn which_exists(name: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::{is_rust_project, set_git_ceiling, shared_target_dir, target_dir_for_worktree};
+    use super::{apply_run_env, is_rust_project, set_git_ceiling, shared_target_dir, target_dir_for_worktree, RunOpts};
     use crate::test_subprocess;
+    use std::collections::HashMap;
     use std::ffi::OsStr;
     use std::path::{Path, PathBuf};
     use std::process::Command;
@@ -303,6 +322,93 @@ mod tests {
         assert_eq!(isolated, format!("{base}/feat-my-feature"));
         let shared = target_dir_for_worktree(None).unwrap();
         assert_eq!(shared, base);
+    }
+
+    #[test]
+    fn apply_run_env_sets_explicit_vars_on_command() {
+        let mut cmd = Command::new("echo");
+        let opts = RunOpts {
+            dir: None,
+            output: None,
+            model: None,
+            budget: false,
+            read_only: false,
+            context_files: vec![],
+            session_id: None,
+            env: Some([("APP_MODE".to_string(), "test".to_string())].into_iter().collect()),
+            env_forward: None,
+        };
+
+        apply_run_env(&mut cmd, &opts);
+
+        let envs: Vec<_> = cmd.get_envs().collect();
+        let mode = envs
+            .iter()
+            .find(|(key, _)| *key == "APP_MODE")
+            .and_then(|(_, value)| value.as_ref())
+            .map(|value| value.to_string_lossy().to_string());
+        assert_eq!(mode.as_deref(), Some("test"));
+    }
+
+    #[test]
+    fn apply_run_env_is_noop_for_empty_values() {
+        let mut cmd = Command::new("echo");
+        let opts = RunOpts {
+            dir: None,
+            output: None,
+            model: None,
+            budget: false,
+            read_only: false,
+            context_files: vec![],
+            session_id: None,
+            env: Some(HashMap::new()),
+            env_forward: Some(vec![]),
+        };
+
+        apply_run_env(&mut cmd, &opts);
+
+        assert_eq!(cmd.get_envs().count(), 0);
+    }
+
+    #[test]
+    fn apply_run_env_forwards_parent_vars() {
+        let _permit = test_subprocess::acquire();
+        let output = run_helper(
+            "agent::tests::reports_forwarded_env_for_subprocess",
+            None,
+            &[("AID_TEST_FORWARDED_ENV", Some(OsStr::new("forwarded-value")))],
+        );
+        assert_eq!(
+            extract_marker(&output, "FORWARDED_ENV="),
+            "forwarded-value"
+        );
+    }
+
+    #[test]
+    #[ignore]
+    fn reports_forwarded_env_for_subprocess() {
+        let _permit = test_subprocess::acquire();
+        let mut cmd = Command::new("echo");
+        let opts = RunOpts {
+            dir: None,
+            output: None,
+            model: None,
+            budget: false,
+            read_only: false,
+            context_files: vec![],
+            session_id: None,
+            env: None,
+            env_forward: Some(vec!["AID_TEST_FORWARDED_ENV".to_string()]),
+        };
+        apply_run_env(&mut cmd, &opts);
+        let envs: Vec<_> = cmd.get_envs().collect();
+        let forwarded = envs
+            .iter()
+            .find(|(key, _)| *key == "AID_TEST_FORWARDED_ENV")
+            .and_then(|(_, value)| value.as_ref())
+            .map(|value| value.to_string_lossy().to_string())
+            .unwrap_or_default();
+        println!("FORWARDED_ENV={forwarded}");
     }
 
     fn run_helper(

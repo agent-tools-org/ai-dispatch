@@ -4,6 +4,7 @@
 use anyhow::{Context, Result};
 use chrono::Local;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::process::{Child, Command, Stdio};
 use std::sync::Arc;
 
@@ -48,6 +49,10 @@ pub struct BackgroundRunSpec {
     pub cascade: Vec<String>,
     #[serde(default)]
     pub parent_task_id: Option<String>,
+    #[serde(default)]
+    pub env: Option<HashMap<String, String>>,
+    #[serde(default)]
+    pub env_forward: Option<Vec<String>>,
 }
 
 pub fn save_spec(spec: &BackgroundRunSpec) -> Result<()> {
@@ -153,10 +158,13 @@ async fn run_task_inner(store: &Arc<Store>, spec: &BackgroundRunSpec) -> Result<
         read_only: false,
         context_files: vec![],
         session_id: None,
+        env: spec.env.clone(),
+        env_forward: spec.env_forward.clone(),
     };
     let mut std_cmd = agent
         .build_command(&spec.prompt, &opts)
         .context("Failed to build agent command")?;
+    agent::apply_run_env(&mut std_cmd, &opts);
     if let Some(ref dir) = spec.dir {
         agent::set_git_ceiling(&mut std_cmd, dir);
     }
@@ -216,6 +224,8 @@ async fn run_task_inner(store: &Arc<Store>, spec: &BackgroundRunSpec) -> Result<
         template: spec.template.clone(),
         cascade: spec.cascade.clone(),
         parent_task_id: spec.parent_task_id.clone(),
+        env: spec.env.clone(),
+        env_forward: spec.env_forward.clone(),
         ..Default::default()
     };
     let pre_verify_status = store

@@ -65,6 +65,30 @@ fn filters_today_view_by_group() {
 }
 
 #[test]
+fn keeps_ungrouped_tasks_visible_with_group_filter() {
+    let store = Arc::new(Store::open_memory().unwrap());
+    store
+        .insert_task(&make_task("t-2000", Some("wg-test")))
+        .unwrap();
+    store
+        .insert_task(&make_task("t-2001", Some("wg-other")))
+        .unwrap();
+    store.insert_task(&make_task("t-2002", None)).unwrap();
+
+    let app = App::new(
+        store,
+        super::super::RunOptions {
+            task_id: None,
+            group: Some("wg-test".to_string()),
+        },
+    )
+    .unwrap();
+
+    let task_ids: Vec<&str> = app.tasks.iter().map(|task| task.id.as_str()).collect();
+    assert_eq!(task_ids, vec!["t-2000", "t-2002"]);
+}
+
+#[test]
 fn filters_specific_task_scope() {
     let store = Arc::new(Store::open_memory().unwrap());
     store

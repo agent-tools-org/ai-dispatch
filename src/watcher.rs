@@ -75,7 +75,7 @@ pub async fn watch_streaming(
         };
 
         use tokio::io::AsyncWriteExt;
-        if extract_milestone_detail(&line).is_none() {
+        if extract_milestone_detail(&line).is_none() && !is_thinking_delta(&line) {
             log_file.write_all(line.as_bytes()).await?;
             log_file.write_all(b"\n").await?;
         }
@@ -538,6 +538,12 @@ impl SyntheticMilestoneTracker {
             SyntheticToolKind::Other
         }
     }
+}
+
+/// Skip cursor thinking delta lines from the log — they are high-volume
+/// streaming fragments (one per token) that bloat the log without value.
+fn is_thinking_delta(line: &str) -> bool {
+    line.contains("\"type\":\"thinking\"")
 }
 
 fn extract_milestone_detail(line: &str) -> Option<String> {

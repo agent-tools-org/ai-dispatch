@@ -332,6 +332,16 @@ pub(crate) fn extract_messages_from_log(log_path: &Path, full: bool) -> Option<S
                     messages.push(content.to_string());
                 }
             }
+            // Cursor "assistant" events: {"type":"assistant","message":{"content":[{"type":"text","text":"..."}]}}
+            Some("assistant") => {
+                let Some(text) = value.pointer("/message/content/0/text").and_then(|v| v.as_str()) else {
+                    continue;
+                };
+                if !streaming_message.is_empty() {
+                    messages.push(std::mem::take(&mut streaming_message));
+                }
+                messages.push(text.to_string());
+            }
             Some("text") => {
                 let Some(text) = value
                     .get("content")

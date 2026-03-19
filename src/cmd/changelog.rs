@@ -17,7 +17,7 @@ struct Entry {
 }
 
 pub(crate) fn run(version: Option<String>, all: bool, count: usize) -> Result<()> {
-    let tags = version_tags()?;
+    let tags = version_tags();
     let embedded = if tags.is_empty() || version.is_some() {
         embedded_decoded()
     } else {
@@ -76,12 +76,13 @@ fn embedded_section_for_version<'a>(embedded: &'a str, version: &str) -> Option<
     Some(&embedded[start..end])
 }
 
-fn version_tags() -> Result<Vec<String>> {
-    Ok(git(["tag", "--sort=-version:refname"])?
+fn version_tags() -> Vec<String> {
+    git(["tag", "--sort=-version:refname"])
+        .unwrap_or_default()
         .lines()
         .filter(|tag| is_version_tag(tag))
         .map(str::to_string)
-        .collect())
+        .collect()
 }
 
 fn selected_indexes(tags: &[String], version: Option<&str>, all: bool, count: usize) -> Result<Vec<usize>> {

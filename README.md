@@ -1,6 +1,6 @@
 # ai-dispatch (aid)
 
-![Version](https://img.shields.io/badge/version-8.15.2-blue)
+![Version](https://img.shields.io/badge/version-8.27.3-blue)
 ![Rust](https://img.shields.io/badge/rust-2024-orange)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
@@ -22,7 +22,7 @@ Without an orchestrator, a multi-agent CLI workflow breaks down fast:
 
 ### Prerequisites
 
-Install Rust (1.85 or later, required for edition 2024) and whichever AI CLIs you want `aid` to orchestrate. `aid` auto-detects supported agents on your `PATH`: `gemini`, `codex`, `opencode`, `cursor`, `kilo`, `codebuff`, and `auto`.
+Install Rust (1.85 or later, required for edition 2024) and whichever AI CLIs you want `aid` to orchestrate. `aid` auto-detects supported agents on your `PATH`: `gemini`, `codex`, `opencode`, `cursor`, `kilo`, `codebuff`, `droid`, `oz`, and `auto`.
 
 ### Install
 
@@ -126,7 +126,7 @@ The model tier is auto-selected based on complexity: low → cheap/free models, 
 
 An agent is a **non-interactive CLI** that accepts a prompt, performs the task autonomously, and exits. `aid` normalizes command construction, logging, usage extraction, and completion handling behind one adapter trait.
 
-Built-in agents: `gemini`, `codex`, `opencode`, `cursor`, `kilo`, `codebuff`, `droid`. Custom agents can be added via `aid agent add` for any compatible CLI (e.g. `aider`). Interactive/session-based tools like Claude Code are **not** agents — they are orchestrators that call `aid`, not targets that `aid` dispatches.
+Built-in agents: `gemini`, `codex`, `opencode`, `cursor`, `kilo`, `codebuff`, `droid`, `oz`. Custom agents can be added via `aid agent add` for any compatible CLI (e.g. `aider`). Interactive/session-based tools like Claude Code are **not** agents — they are orchestrators that call `aid`, not targets that `aid` dispatches.
 
 Examples:
 
@@ -291,6 +291,26 @@ aid run codex "Implement feature" --worktree feat/my-feature --dir .
 ```
 
 `aid merge` auto-merges the worktree branch into the current branch and cleans up the worktree directory. Failed tasks auto-cleanup their worktrees. Worktree escape detection warns if an agent accidentally modifies the main repo.
+
+### Container Sandbox (v8.27)
+
+Run agents inside Apple Container micro-VMs for process isolation. The `--sandbox` flag wraps the agent command in a container with volume mounts for the project directory and agent config directories.
+
+```bash
+# Run a task in a sandboxed container
+aid run codex "Implement feature" --dir . --sandbox
+
+# Supported agents (node-based): codex, gemini, kilo, codebuff
+# Falls back to host for native agents: opencode, droid, oz, cursor
+```
+
+The sandbox image (`aid-sandbox:latest`) comes with Node.js and all node-based agent CLIs pre-installed. Build it from the included `Containerfile`:
+
+```bash
+container build -t aid-sandbox:latest .
+```
+
+Agent authentication is handled by mounting config directories (`~/.codex`, `~/.gemini`, etc.) and forwarding API key env vars into the container.
 
 ### Codebuff Plugin (Optional)
 
@@ -651,6 +671,8 @@ Match effort to task importance:
 | `kilo` | 1 | 7 | 2 | 2 | 3 | 3 | 3 | 4 |
 | `cursor` | 2 | 4 | 7 | **9** | 5 | 5 | 6 | 4 |
 | `codebuff` | 2 | 5 | 8 | 7 | 6 | 6 | 7 | 4 |
+| `droid` | 1 | 6 | 5 | 3 | 4 | 4 | 5 | 4 |
+| `oz` | 1 | 6 | 5 | 3 | 4 | 4 | 5 | 4 |
 
 Additional scoring adjustments: budget mode boosts cheap agents (+4) and penalizes expensive ones (-6); high-complexity tasks boost codex/cursor (+2); rate-limited agents get -10; historical success rates apply ±2-3.
 

@@ -1,5 +1,5 @@
 // Verification runner: checks agent output by running a command in the worktree.
-// Supports auto-detect (Cargo.toml -> cargo check, package.json -> npm run build).
+// Supports auto-detect for Rust, Node, and Python projects.
 
 use anyhow::{Context, Result};
 use std::io::Read;
@@ -117,9 +117,39 @@ fn auto_detect_command(path: &Path) -> String {
         "cargo check".to_string()
     } else if path.join("package.json").exists() {
         "npm run build".to_string()
+    } else if path.join("pyproject.toml").exists()
+        || path.join("setup.py").exists()
+        || path.join("setup.cfg").exists()
+        || has_python_files(path) {
+        "python3 -m compileall -q .".to_string()
     } else {
         "skip".to_string()
     }
+}
+
+fn has_python_files(path: &Path) -> bool {
+    std::fs::read_dir(path)
+        .ok()
+        .into_iter()
+        .flatten()
+        .flatten()
+        .any(|entry| {
+            let entry_path = entry.path();
+            is_python_file(&entry_path)
+                || entry.file_type().ok().is_some_and(|file_type| {
+                    file_type.is_dir()
+                        && std::fs::read_dir(entry_path)
+                            .ok()
+                            .into_iter()
+                            .flatten()
+                            .flatten()
+                            .any(|nested| is_python_file(&nested.path()))
+                })
+        })
+}
+
+fn is_python_file(path: &Path) -> bool {
+    path.extension().is_some_and(|ext| ext == "py")
 }
 
 fn build_verify_command(
@@ -177,122 +207,5 @@ fn read_pipe<R: Read + Send + 'static>(mut reader: R) -> Result<String> {
     Ok(String::from_utf8_lossy(&bytes).into_owned())
 }
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::store::Store;
-    use crate::test_subprocess;
-    use crate::types::{AgentKind, Task, TaskStatus};
-    use chrono::Local;
-    use std::fs;
-    use std::io::Error;
-    #[cfg(unix)]
-    use std::os::unix::fs::PermissionsExt;
-    use tempfile::TempDir;
-
-    fn make_task(id: &str, status: TaskStatus, verify_status: VerifyStatus) -> Task {
-        Task {
-            id: TaskId(id.to_string()),
-            agent: AgentKind::Codex,
-            custom_agent_name: None, prompt: "test prompt".to_string(), resolved_prompt: None, status,
-            parent_task_id: None, workgroup_id: None, caller_kind: None, caller_session_id: None,
-            agent_session_id: None, repo_path: None, worktree_path: None, worktree_branch: None,
-            log_path: None, output_path: None, tokens: None, prompt_tokens: None, duration_ms: None,
-            model: None, cost_usd: None, exit_code: None,
-            created_at: Local::now(),
-            completed_at: None, verify: None, verify_status, read_only: false, budget: false,
-        }
-    }
-    #[test]
-    fn verify_pass_case() {
-        let _permit = test_subprocess::acquire();
-        let dir = TempDir::new().unwrap();
-        let result = run_verify(dir.path(), Some("echo ok"), None, None).unwrap();
-        assert!(result.success);
-        assert!(result.output.contains("ok"));
-        assert_eq!(result.command, "echo ok");
-    }
-    #[test]
-    fn verify_fail_case() {
-        let _permit = test_subprocess::acquire();
-        let dir = TempDir::new().unwrap();
-        let result = run_verify(dir.path(), Some("false"), None, None).unwrap();
-        assert!(!result.success);
-    }
-    #[test]
-    fn verify_does_not_expand_shell_operators() {
-        let _permit = test_subprocess::acquire();
-        let dir = TempDir::new().unwrap();
-        let result = run_verify(dir.path(), Some("echo ok && false"), None, None).unwrap();
-        assert!(result.success);
-        assert!(result.output.contains("ok && false"));
-    }
-    #[test]
-    fn verify_no_project_file_skips() {
-        let dir = TempDir::new().unwrap();
-        let result = run_verify(dir.path(), None, None, None).unwrap();
-        assert!(result.success);
-        assert!(result.output.contains("skipping"));
-    }
-    #[test]
-    fn format_report_pass() {
-        let result = VerifyResult {
-            success: true,
-            output: "all good".to_string(),
-            command: "cargo check".to_string(),
-        };
-        let report = format_verify_report(&result);
-        assert!(report.starts_with("Verify PASS"));
-    }
-    #[test]
-    fn format_report_fail_shows_output() {
-        let result = VerifyResult {
-            success: false,
-            output: "error[E0308]: mismatched types".to_string(),
-            command: "cargo check".to_string(),
-        };
-        let report = format_verify_report(&result);
-        assert!(report.contains("FAIL"));
-        assert!(report.contains("mismatched types"));
-    }
-    #[test]
-    fn enforce_verify_status_marks_done_failed_verify_as_failed() {
-        let store = Store::open_memory().unwrap();
-        let task = make_task("t-verify-failed", TaskStatus::Done, VerifyStatus::Failed);
-        store.insert_task(&task).unwrap();
-        enforce_verify_status(&store, &task.id);
-        let loaded = store.get_task(task.id.as_str()).unwrap().unwrap();
-        assert_eq!(loaded.status, TaskStatus::Failed);
-    }
-    #[test]
-    fn enforce_verify_status_keeps_done_passed_verify_as_done() {
-        let store = Store::open_memory().unwrap();
-        let task = make_task("t-verify-passed", TaskStatus::Done, VerifyStatus::Passed);
-        store.insert_task(&task).unwrap();
-        enforce_verify_status(&store, &task.id);
-        let loaded = store.get_task(task.id.as_str()).unwrap().unwrap();
-        assert_eq!(loaded.status, TaskStatus::Done);
-    }
-    #[cfg(unix)]
-    #[test]
-    fn verify_kills_background_grandchildren() {
-        let _permit = test_subprocess::acquire();
-        let dir = TempDir::new().unwrap();
-        let script = dir.path().join("verify-cleanup.sh");
-        fs::write(
-            &script,
-            "#!/bin/sh\nsleep 30 &\nchild_pid=$!\necho \"$child_pid\"\nexit 0\n",
-        )
-        .unwrap();
-        let mut perms = fs::metadata(&script).unwrap().permissions();
-        perms.set_mode(0o755);
-        fs::set_permissions(&script, perms).unwrap();
-
-        let result = run_verify(dir.path(), script.to_str(), None, None).unwrap();
-        assert!(result.success);
-        let pid = result.output.trim().parse::<i32>().unwrap();
-        thread::sleep(Duration::from_millis(200));
-        let status = unsafe { libc::kill(pid, 0) };
-        assert_eq!(status, -1);
-        assert_eq!(Error::last_os_error().raw_os_error(), Some(libc::ESRCH));
-    }
-}
+#[path = "verify_tests.rs"]
+mod tests;

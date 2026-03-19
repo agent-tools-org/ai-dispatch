@@ -334,6 +334,25 @@ Run `aid batch init` to generate a full template with all fields."#)]
         #[arg(long)]
         json: bool,
     },
+    #[command(after_help = r#"Examples:
+  aid cost --group wg-abc1
+  aid cost --summary
+  aid cost --agent codex --period 30d"#)]
+    /// Roll up tracked spend by group, day, or agent
+    Cost {
+        /// Show all tasks and totals for one workgroup
+        #[arg(long, conflicts_with_all = ["summary", "agent"])]
+        group: Option<String>,
+        /// Show day-by-day spend totals for the selected period
+        #[arg(long, conflicts_with = "agent")]
+        summary: bool,
+        /// Show task-level spend for one agent in the selected period
+        #[arg(long, conflicts_with = "group")]
+        agent: Option<String>,
+        /// Time window to summarize (today, 7d, 30d, all)
+        #[arg(long, default_value = "7d")]
+        period: String,
+    },
     /// Summarize workgroup results (alias for `group summary`)
     #[command(hide = true)]
     Summary {

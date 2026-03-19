@@ -10,6 +10,7 @@ pub mod board;
 pub mod board_stream;
 pub mod clean;
 pub mod config;
+pub mod cost;
 pub mod explain;
 pub mod group;
 pub mod hook;
@@ -51,3 +52,5 @@ pub mod experiment_persist;
 pub mod experiment_status;
 #[cfg(test)]
 mod batch_auto_fallback_tests;
+#[cfg(test)]
+mod cost_tests;

@@ -375,6 +375,14 @@ async fn main() -> Result<()> {
         Commands::Usage { session, agent, team: team_flag, period, json } => {
             cmd::usage::run(&store, session, agent, team_flag, period, json)?;
         }
+        Commands::Cost {
+            group,
+            summary,
+            agent,
+            period,
+        } => {
+            cmd::cost::run(&store, group, summary, agent, period)?;
+        }
         Commands::Summary { group } => {
             cmd::summary_cli::run(&store, &group)?;
         }

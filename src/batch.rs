@@ -73,6 +73,7 @@ pub struct BatchConfig {
 #[derive(Debug, Deserialize, Default)]
 pub struct BatchDefaults {
     pub group_id: Option<String>,
+    pub group: Option<String>,
     #[serde(default)]
     pub shared_dir: Option<bool>,
     #[serde(default)]

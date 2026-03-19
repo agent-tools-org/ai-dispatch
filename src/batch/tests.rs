@@ -581,3 +581,24 @@ fn different_dirs_no_warning() {
 
     assert!(warnings.is_empty());
 }
+
+#[test]
+fn defaults_group_parsed() {
+    let (config, _) = parse_batch_with_vars(
+        "[defaults]\ngroup = \"my-wg\"\n\n[[task]]\nagent = \"codex\"\nprompt = \"do X\"\nworktree = \"a\"\n\n[[task]]\nagent = \"codex\"\nprompt = \"do Y\"\nworktree = \"b\"\n",
+        &[],
+    );
+    assert_eq!(config.defaults.group, Some("my-wg".to_string()));
+}
+
+#[test]
+fn defaults_group_does_not_override_task_group() {
+    let (config, _) = parse_batch_with_vars(
+        "[defaults]\ngroup = \"default-wg\"\n\n[[task]]\nagent = \"codex\"\nprompt = \"do X\"\nworktree = \"a\"\ngroup = \"task-wg\"\n\n[[task]]\nagent = \"codex\"\nprompt = \"do Y\"\nworktree = \"b\"\n",
+        &[],
+    );
+    // Task-level group should NOT be overwritten by defaults
+    assert_eq!(config.tasks[0].group, Some("task-wg".to_string()));
+    // Task without explicit group remains None (assignment happens in cmd/batch.rs)
+    assert_eq!(config.tasks[1].group, None);
+}

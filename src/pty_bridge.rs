@@ -2,7 +2,7 @@
 // Spawns commands under a native PTY and exposes read/write child control handles.
 
 use anyhow::{Context, Result};
-use portable_pty::{Child, CommandBuilder, ExitStatus, MasterPty, PtySize, native_pty_system};
+use portable_pty::{native_pty_system, Child, CommandBuilder, ExitStatus, MasterPty, PtySize};
 use std::io::{Read, Write};
 
 pub struct PtyBridge {
@@ -14,9 +14,7 @@ pub struct PtyBridge {
 
 impl PtyBridge {
     pub fn spawn(cmd: &[String], dir: Option<&str>, env: Vec<(String, String)>) -> Result<Self> {
-        let program = cmd
-            .first()
-            .context("PTY command is missing a program")?;
+        let program = cmd.first().context("PTY command is missing a program")?;
         let pty = native_pty_system().openpty(PtySize {
             rows: 24,
             cols: 80,
@@ -45,7 +43,9 @@ impl PtyBridge {
     }
 
     pub fn take_reader(&mut self) -> Result<Box<dyn Read + Send>> {
-        self.reader.take().context("PTY reader has already been taken")
+        self.reader
+            .take()
+            .context("PTY reader has already been taken")
     }
 
     pub fn write_input(&mut self, input: &str) -> Result<()> {
@@ -58,10 +58,30 @@ impl PtyBridge {
     }
 
     pub fn is_alive(&mut self) -> bool {
-        self.child.try_wait().map(|status| status.is_none()).unwrap_or(false)
+        self.child
+            .try_wait()
+            .map(|status| status.is_none())
+            .unwrap_or(false)
     }
 
     pub fn kill(&mut self) -> Result<()> {
+        self.child
+            .kill()
+            .map_err(|e| anyhow::anyhow!("PTY kill failed: {e}"))
+    }
+
+    pub fn child_pid(&self) -> Option<u32> {
+        self.child.process_id()
+    }
+
+    #[cfg(unix)]
+    pub fn kill_group(&mut self) -> Result<()> {
+        if let Some(pid) = self.child.process_id() {
+            let pid = pid as i32;
+            unsafe {
+                libc::kill(-pid, libc::SIGTERM);
+            }
+        }
         self.child
             .kill()
             .map_err(|e| anyhow::anyhow!("PTY kill failed: {e}"))
@@ -119,5 +139,31 @@ mod tests {
         bridge.kill().unwrap();
         let _ = bridge.wait().unwrap();
         assert!(bridge.try_wait().unwrap().is_some());
+    }
+
+    #[test]
+    fn child_pid_returns_some_while_running() {
+        let _permit = test_subprocess::acquire();
+        let cmd = vec!["/bin/sleep".to_string(), "60".to_string()];
+        let mut bridge = PtyBridge::spawn(&cmd, None, vec![]).unwrap();
+
+        let pid = bridge.child_pid();
+        assert!(pid.is_some());
+        assert!(pid.unwrap() > 0);
+        bridge.kill().unwrap();
+        let _ = bridge.wait().unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn kill_group_terminates_process() {
+        let _permit = test_subprocess::acquire();
+        let cmd = vec!["/bin/sleep".to_string(), "60".to_string()];
+        let mut bridge = PtyBridge::spawn(&cmd, None, vec![]).unwrap();
+
+        assert!(bridge.is_alive());
+        bridge.kill_group().unwrap();
+        let _ = bridge.wait().unwrap();
+        assert!(!bridge.is_alive());
     }
 }

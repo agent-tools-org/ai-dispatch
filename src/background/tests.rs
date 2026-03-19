@@ -307,3 +307,27 @@ fn agent_pid_backwards_compatible() {
     let spec = super::load_spec("t-c200").unwrap();
     assert!(spec.agent_pid.is_none());
 }
+
+#[test]
+fn zombie_cleanup_skips_autocommit_for_read_only() {
+    let temp = tempfile::tempdir().unwrap();
+    let _aid_home = paths::AidHomeGuard::set(temp.path());
+    paths::ensure_dirs().unwrap();
+
+    let store = Store::open_memory().unwrap();
+    let mut task = make_task("t-a1b2", TaskStatus::Running);
+    task.read_only = true;
+    store.insert_task(&task).unwrap();
+
+    save_spec(&BackgroundRunSpec {
+        worker_pid: Some(999999),
+        ..make_spec("t-a1b2")
+    })
+    .unwrap();
+
+    let cleaned = check_zombie_tasks_with(&store, |_| false).unwrap();
+    assert_eq!(cleaned, vec!["t-a1b2".to_string()]);
+
+    let failed_task = store.get_task("t-a1b2").unwrap().unwrap();
+    assert_eq!(failed_task.status, TaskStatus::Failed);
+}

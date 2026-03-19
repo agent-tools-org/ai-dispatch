@@ -102,7 +102,8 @@ fn wait_for_exit(pid: u32) -> bool {
 }
 
 fn preserve_worktree(task_id: &str, task: &Task, action: &str) {
-    if let Some(ref path) = task.worktree_path
+    if !task.read_only
+        && let Some(ref path) = task.worktree_path
         && Path::new(path).exists()
         && crate::commit::has_uncommitted_changes(path).unwrap_or(false)
     {
@@ -241,5 +242,25 @@ mod tests {
             store.get_task("t-3010").unwrap().unwrap().status,
             TaskStatus::Stopped
         );
+    }
+
+    #[test]
+    fn preserve_worktree_skips_read_only_tasks() {
+        let mut task = make_task("t-ro01", TaskStatus::Running);
+        task.read_only = true;
+        preserve_worktree("t-ro01", &task, "stopped");
+    }
+
+    #[test]
+    fn preserve_worktree_attempts_commit_for_non_read_only() {
+        use tempfile::TempDir;
+
+        let temp = TempDir::new().unwrap();
+        let temp_path = temp.path().to_str().unwrap().to_string();
+
+        let mut task = make_task("t-write01", TaskStatus::Running);
+        task.worktree_path = Some(temp_path.clone());
+        
+        preserve_worktree("t-write01", &task, "stopped");
     }
 }

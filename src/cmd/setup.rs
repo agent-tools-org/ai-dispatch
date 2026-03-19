@@ -97,6 +97,8 @@ pub fn run() -> Result<()> {
         ("cursor", "cursor"),
         ("kilo", "kilo"),
         ("codebuff", "codebuff"),
+        ("droid", "droid"),
+        ("oz", "oz"),
     ];
     let mut installed = 0;
     let mut missing = Vec::new();

@@ -69,16 +69,7 @@ pub fn is_rate_limited(agent: &AgentKind) -> bool {
 }
 
 pub fn rate_limited_agents() -> Vec<(AgentKind, String)> {
-    [
-        AgentKind::Gemini,
-        AgentKind::Codex,
-        AgentKind::OpenCode,
-        AgentKind::Cursor,
-        AgentKind::Kilo,
-        AgentKind::Codebuff,
-        AgentKind::Droid,
-    ]
-    .into_iter()
+    AgentKind::ALL_BUILTIN.iter().copied()
     .filter_map(|agent| {
         let info = get_rate_limit_info(&agent)?;
         is_rate_limited(&agent).then(|| (agent, info.message.unwrap_or_default()))

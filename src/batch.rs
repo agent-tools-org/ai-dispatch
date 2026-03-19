@@ -172,6 +172,9 @@ pub(crate) fn parse_batch_file_with_vars(
     validate_dag(&config.tasks)?;
     validate_conditional_hooks(&config.tasks)?;
     warn_audit_without_readonly(&config.tasks);
+    for warning in warn_dir_overlap(&config.tasks) {
+        eprintln!("{}", warning);
+    }
     Ok(config)
 }
 
@@ -512,6 +515,29 @@ fn resolve_dependencies(
 fn task_label(task: &BatchTask, task_idx: usize) -> String {
     task.name.clone().unwrap_or_else(|| format!("#{task_idx}"))
 }
+pub fn warn_dir_overlap(tasks: &[BatchTask]) -> Vec<String> {
+    let mut dir_counts: HashMap<&str, usize> = HashMap::new();
+    for task in tasks {
+        if task.worktree.is_some() {
+            continue;
+        }
+        if let Some(ref dir) = task.dir {
+            *dir_counts.entry(dir.as_str()).or_default() += 1;
+        }
+    }
+    let mut warnings = Vec::new();
+    for (dir, count) in &dir_counts {
+        if *count > 1 {
+            warnings.push(format!(
+                "[aid] ⚠ {} tasks target dir '{}' without worktree isolation — risk of git index.lock contention",
+                count, dir
+            ));
+            warnings.push("[aid] Tip: add `worktree = \"branch-name\"` to each task for safe parallel execution".to_string());
+        }
+    }
+    warnings
+}
+
 pub fn warn_audit_without_readonly(tasks: &[BatchTask]) {
     let _ = warn_audit_without_readonly_into(tasks, &mut io::stderr().lock());
 }

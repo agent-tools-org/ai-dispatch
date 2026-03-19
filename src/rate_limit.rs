@@ -88,6 +88,35 @@ pub fn is_rate_limit_error(message: &str) -> bool {
         || lower.contains("usage limit")
 }
 
+pub fn extract_rate_limit_message(raw: &str) -> Option<String> {
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+    if trimmed.starts_with('{') && trimmed.contains("\"type\"") {
+        return extract_from_json_error(trimmed);
+    }
+    if is_rate_limit_error(trimmed) && trimmed.len() < 500 {
+        Some(trimmed.to_string())
+    } else {
+        None
+    }
+}
+
+fn extract_from_json_error(json_str: &str) -> Option<String> {
+    let value: serde_json::Value = serde_json::from_str(json_str).ok()?;
+    let is_error_event = value.get("error").is_some()
+        || value.get("type").and_then(serde_json::Value::as_str) == Some("error");
+    if !is_error_event {
+        return None;
+    }
+    let message = value.get("message")?.as_str()?.trim();
+    if message.is_empty() || !is_rate_limit_error(message) {
+        return None;
+    }
+    Some(message.to_string())
+}
+
 /// Match "429" only as a standalone number, not inside larger numbers like "8714294".
 fn contains_status_429(s: &str) -> bool {
     let bytes = s.as_bytes();
@@ -194,6 +223,35 @@ mod tests {
         assert!(!is_rate_limit_error(
             "tokens: 8714294 in + 27373 out = 8741667 (8442752 cached)"
         ));
+    }
+
+    #[test]
+    fn test_extract_rate_limit_message_plain_text() {
+        assert_eq!(
+            extract_rate_limit_message("rate limit exceeded"),
+            Some("rate limit exceeded".to_string())
+        );
+    }
+
+    #[test]
+    fn test_extract_rate_limit_message_ignores_init_json() {
+        assert_eq!(
+            extract_rate_limit_message(r#"{"type":"system","subtype":"init","message":"rate limit enabled"}"#),
+            None
+        );
+    }
+
+    #[test]
+    fn test_extract_rate_limit_message_from_error_json() {
+        assert_eq!(
+            extract_rate_limit_message(r#"{"type":"error","message":"429 Too Many Requests"}"#),
+            Some("429 Too Many Requests".to_string())
+        );
+    }
+
+    #[test]
+    fn test_extract_rate_limit_message_ignores_noise() {
+        assert_eq!(extract_rate_limit_message("YOLO mode is enabled"), None);
     }
 
     #[test]

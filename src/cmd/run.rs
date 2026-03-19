@@ -540,8 +540,10 @@ pub async fn run(store: Arc<Store>, mut args: RunArgs) -> Result<TaskId> {
             // Auto-cleanup worktree for failed tasks (no useful changes to preserve)
             if task.status == TaskStatus::Failed {
                 quota_error_message = read_quota_error_message(&task_id);
-                if let Some(message) = quota_error_message.as_deref() {
-                    rate_limit::mark_rate_limited(&agent_kind, message);
+                if let Some(message) = quota_error_message.as_deref()
+                    && let Some(clean_message) = rate_limit::extract_rate_limit_message(message)
+                {
+                    rate_limit::mark_rate_limited(&agent_kind, &clean_message);
                 }
                 let fail_payload = show::task_hook_json(
                     &task_id,
@@ -678,9 +680,10 @@ pub async fn run(store: Arc<Store>, mut args: RunArgs) -> Result<TaskId> {
             && task.status == TaskStatus::Failed
             && args.cascade.is_empty()
             && let Some(message) = quota_error_message.as_deref()
+            && let Some(clean_message) = rate_limit::extract_rate_limit_message(message)
             && let Some(fallback) = agent::selection::coding_fallback_for(&agent_kind)
         {
-            rate_limit::mark_rate_limited(&agent_kind, message);
+            rate_limit::mark_rate_limited(&agent_kind, &clean_message);
             aid_info!(
                 "[aid] Quota exhausted for {}, auto-cascading to {}",
                 agent_kind.as_str(),
@@ -743,8 +746,7 @@ pub(crate) fn read_quota_error_message(task_id: &TaskId) -> Option<String> {
 fn find_rate_limit_line(content: &str) -> Option<String> {
     content
         .lines()
-        .find(|line| rate_limit::is_rate_limit_error(line))
-        .map(|line| line.to_string())
+        .find_map(rate_limit::extract_rate_limit_message)
 }
 
 fn worktree_is_empty_diff(worktree_dir: &Path) -> Option<bool> {

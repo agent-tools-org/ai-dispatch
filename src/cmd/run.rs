@@ -573,6 +573,7 @@ pub async fn run(store: Arc<Store>, mut args: RunArgs) -> Result<TaskId> {
                 }
             }
         }
+        rescue_quota_failed_task(store.as_ref(), &task_id, quota_error_message.as_deref());
         if let Some(retry_id) = maybe_judge_retry(&store, &args, &task_id).await? {
             return Ok(retry_id);
         }
@@ -723,6 +724,23 @@ fn take_next_cascade_agent(args: &RunArgs) -> Option<(String, Vec<String>)> {
     } else {
         let next_agent = cascade.remove(0);
         Some((next_agent, cascade))
+    }
+}
+
+pub(crate) fn rescue_quota_failed_task(
+    store: &Store,
+    task_id: &TaskId,
+    quota_error_message: Option<&str>,
+) {
+    if quota_error_message.is_none() {
+        return;
+    }
+    let Ok(Some(task)) = store.get_task(task_id.as_str()) else {
+        return;
+    };
+    if task.status == TaskStatus::Failed && task.verify_status == VerifyStatus::Passed {
+        aid_info!("[aid] Rescuing quota-failed task {} — verify passed", task_id);
+        let _ = store.update_task_status(task_id.as_str(), TaskStatus::Done);
     }
 }
 

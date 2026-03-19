@@ -29,7 +29,7 @@ impl super::Agent for DroidAgent {
         if opts.read_only {
             cmd.arg("--auto").arg("low");
         } else {
-            cmd.arg("--auto").arg("medium");
+            cmd.arg("--auto").arg("high");
         }
         if let Some(ref model) = opts.model {
             cmd.args(["-m", model]);
@@ -147,7 +147,7 @@ mod tests {
         let args: Vec<String> = cmd.get_args().map(|a| a.to_string_lossy().to_string()).collect();
         assert!(args.contains(&"exec".to_string()));
         assert!(args.contains(&"stream-json".to_string()));
-        assert!(args.contains(&"medium".to_string()));
+        assert!(args.contains(&"high".to_string()));
     }
 
     #[test]

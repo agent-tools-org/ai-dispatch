@@ -1,5 +1,5 @@
 // Handler for `aid wait` — block until tasks finish.
-// Prints status transitions, milestone progress, and per-task completion summaries.
+// Prints status transitions and per-task completion summaries.
 // Deps: crate::store::Store, crate::types, crate::cost
 
 use anyhow::Result;
@@ -79,7 +79,6 @@ async fn wait_for_task_ids_inner(
     exit_on_await: bool,
 ) -> Result<WaitOutcome> {
     let mut last_status: HashMap<String, String> = HashMap::new();
-    let mut last_milestone: HashMap<String, String> = HashMap::new();
     let total = task_ids.len();
     let mut completed = 0usize;
 
@@ -121,17 +120,6 @@ async fn wait_for_task_ids_inner(
                     );
                 } else {
                     println!("[{}/{}] {} {}", completed, total, task_id, status.label());
-                }
-            }
-
-            // Print milestone progress for running tasks
-            if matches!(status, TaskStatus::Running | TaskStatus::AwaitingInput)
-                && let Some(milestone) = store.latest_milestone(task_id)?
-            {
-                let is_new = last_milestone.insert(task_id.clone(), milestone.clone()) != Some(milestone.clone());
-                if is_new {
-                    let truncated = if milestone.len() > 80 { format!("{}...", &milestone[..milestone.floor_char_boundary(77)]) } else { milestone };
-                    println!("[progress] {} — {}", task_id, truncated);
                 }
             }
 
@@ -190,7 +178,7 @@ fn still_running_task_ids(store: &Arc<Store>, task_ids: &[String]) -> Result<Vec
 mod tests {
     use super::*;
     use chrono::Local;
-    use crate::types::{AgentKind, Task, TaskId, TaskStatus, VerifyStatus};
+    use crate::types::{AgentKind, EventKind, Task, TaskEvent, TaskId, TaskStatus, VerifyStatus};
 
     fn make_task(id: &str, status: TaskStatus) -> Task {
         Task {
@@ -240,5 +228,28 @@ mod tests {
         .unwrap();
 
         assert_eq!(outcome, WaitOutcome::TimedOut(vec![String::from("t-run")]));
+    }
+
+    #[tokio::test]
+    async fn wait_for_task_ids_completes_with_existing_milestone_event() {
+        let store = Arc::new(Store::open_memory().unwrap());
+        let mut task = make_task("t-done", TaskStatus::Completed);
+        task.duration_ms = Some(1_000);
+        store.insert_task(&task).unwrap();
+        store
+            .insert_event(&TaskEvent {
+                task_id: TaskId("t-done".to_string()),
+                timestamp: Local::now(),
+                event_kind: EventKind::Milestone,
+                detail: "background progress".to_string(),
+                metadata: None,
+            })
+            .unwrap();
+
+        let outcome = wait_for_task_ids(&store, &[String::from("t-done")], false, None)
+            .await
+            .unwrap();
+
+        assert_eq!(outcome, WaitOutcome::Completed);
     }
 }

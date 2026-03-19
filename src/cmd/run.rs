@@ -659,11 +659,14 @@ pub async fn run(store: Arc<Store>, mut args: RunArgs) -> Result<TaskId> {
             return Ok(retry_id);
         }
         crate::verify::enforce_verify_status(&store, &task_id);
-        if let Some(mut retry_args) = retry_logic::prepare_retry(store.clone(), &task_id, &args).await? {
+        let completed_normally = if let Some(mut retry_args) =
+            retry_logic::prepare_retry(store.clone(), &task_id, &args).await?
+        {
             if let Some(task) = store.get_task(task_id.as_str())? {
                 inherit_retry_base_branch(args.dir.as_deref(), &task, &mut retry_args);
             }
             Box::pin(run(store, retry_args)).await?;
+            false
         } else if let Some(task) = store.get_task(task_id.as_str())?
             && task.status == TaskStatus::Failed
             && let Some((next_agent, remaining_cascade)) = take_next_cascade_agent(&args)
@@ -678,6 +681,7 @@ pub async fn run(store: Arc<Store>, mut args: RunArgs) -> Result<TaskId> {
             cascade_args.cascade = remaining_cascade;
             cascade_args.parent_task_id = Some(task_id.as_str().to_string());
             Box::pin(run(store, cascade_args)).await?;
+            false
         } else if let Some(task) = store.get_task(task_id.as_str())?
             && task.status == TaskStatus::Failed
             && args.cascade.is_empty()
@@ -695,6 +699,12 @@ pub async fn run(store: Arc<Store>, mut args: RunArgs) -> Result<TaskId> {
             cascade_args.agent_name = fallback.as_str().to_string();
             cascade_args.parent_task_id = Some(task_id.as_str().to_string());
             Box::pin(run(store, cascade_args)).await?;
+            false
+        } else {
+            true
+        };
+        if completed_normally {
+            aid_info!("[aid] View in TUI: aid board");
         }
     }
     Ok(task_id)

@@ -25,7 +25,7 @@ pub struct Cli {
     #[arg(long, short = 'q', global = true)]
     pub quiet: bool,
     #[command(subcommand)]
-    pub command: Commands,
+    pub command: Option<Commands>,
 }
 
 #[derive(Subcommand)]

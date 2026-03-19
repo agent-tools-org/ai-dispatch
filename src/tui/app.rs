@@ -296,7 +296,10 @@ impl App {
     }
     fn apply_group_filter(&self, tasks: &mut Vec<Task>) {
         if let Some(group_id) = self.group_filter.as_deref() {
-            tasks.retain(|task| task.workgroup_id.as_deref() == Some(group_id));
+            tasks.retain(|task| {
+                task.workgroup_id.as_deref() == Some(group_id)
+                    || task.workgroup_id.is_none()
+            });
         }
     }
     fn load_metrics(&self, tasks: &[Task]) -> HashMap<String, ProcessMetrics> {

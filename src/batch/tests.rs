@@ -13,10 +13,7 @@ fn write_temp(content: &str) -> NamedTempFile {
     file
 }
 
-fn parse_batch_with_vars(
-    content: &str,
-    cli_vars: &[(&str, &str)],
-) -> (BatchConfig, String) {
+fn parse_batch_with_vars(content: &str, cli_vars: &[(&str, &str)]) -> (BatchConfig, String) {
     let vars = cli_vars
         .iter()
         .map(|(key, value)| (key.to_string(), value.to_string()))
@@ -136,11 +133,17 @@ fn applies_defaults_to_tasks() {
     assert!(task.read_only);
     assert!(task.budget);
     assert_eq!(
-        task.env.as_ref().and_then(|env| env.get("DEFAULT_ONLY")).map(String::as_str),
+        task.env
+            .as_ref()
+            .and_then(|env| env.get("DEFAULT_ONLY"))
+            .map(String::as_str),
         Some("yes")
     );
     assert_eq!(
-        task.env.as_ref().and_then(|env| env.get("SHARED")).map(String::as_str),
+        task.env
+            .as_ref()
+            .and_then(|env| env.get("SHARED"))
+            .map(String::as_str),
         Some("default")
     );
     assert_eq!(task.env_forward.as_deref(), Some(&["PATH".to_string()][..]));
@@ -180,15 +183,24 @@ fn task_values_override_defaults() {
     assert_eq!(task.skills.as_deref(), Some(&["own".to_string()][..]));
     assert_eq!(task.fallback.as_deref(), Some("opencode"));
     assert_eq!(
-        task.env.as_ref().and_then(|env| env.get("DEFAULT_ONLY")).map(String::as_str),
+        task.env
+            .as_ref()
+            .and_then(|env| env.get("DEFAULT_ONLY"))
+            .map(String::as_str),
         Some("yes")
     );
     assert_eq!(
-        task.env.as_ref().and_then(|env| env.get("SHARED")).map(String::as_str),
+        task.env
+            .as_ref()
+            .and_then(|env| env.get("SHARED"))
+            .map(String::as_str),
         Some("task")
     );
     assert_eq!(
-        task.env.as_ref().and_then(|env| env.get("TASK_ONLY")).map(String::as_str),
+        task.env
+            .as_ref()
+            .and_then(|env| env.get("TASK_ONLY"))
+            .map(String::as_str),
         Some("set")
     );
     assert_eq!(
@@ -501,4 +513,70 @@ fn no_vars_section_keeps_existing_behavior() {
 
     assert_eq!(cfg.tasks[0].prompt, "do something");
     assert!(stderr.is_empty());
+}
+
+#[test]
+fn warns_on_dir_overlap_without_worktree() {
+    let mut task1 = make_task(Some("task1"), &[]);
+    task1.dir = Some("src".to_string());
+    let mut task2 = make_task(Some("task2"), &[]);
+    task2.dir = Some("src".to_string());
+
+    let warnings = warn_dir_overlap(&[task1, task2]);
+
+    assert!(!warnings.is_empty());
+    assert!(warnings[0].contains("2 tasks target dir 'src' without worktree isolation"));
+    assert!(warnings.iter().any(|w| w.contains("worktree")));
+}
+
+#[test]
+fn no_warning_when_worktree_set() {
+    let mut task1 = make_task(Some("task1"), &[]);
+    task1.dir = Some("src".to_string());
+    task1.worktree = Some("branch1".to_string());
+    let mut task2 = make_task(Some("task2"), &[]);
+    task2.dir = Some("src".to_string());
+    task2.worktree = Some("branch2".to_string());
+
+    let warnings = warn_dir_overlap(&[task1, task2]);
+
+    assert!(warnings.is_empty());
+}
+
+#[test]
+fn single_task_no_warning() {
+    let mut task = make_task(Some("task1"), &[]);
+    task.dir = Some("src".to_string());
+
+    let warnings = warn_dir_overlap(&[task]);
+
+    assert!(warnings.is_empty());
+}
+
+#[test]
+fn mixed_worktree_no_warning_for_isolated() {
+    let mut task1 = make_task(Some("task1"), &[]);
+    task1.dir = Some("src".to_string());
+    let mut task2 = make_task(Some("task2"), &[]);
+    task2.dir = Some("src".to_string());
+    task2.worktree = Some("branch2".to_string());
+
+    let warnings = warn_dir_overlap(&[task1, task2]);
+
+    assert!(
+        warnings.is_empty(),
+        "no contention when only 1 task targets dir without worktree"
+    );
+}
+
+#[test]
+fn different_dirs_no_warning() {
+    let mut task1 = make_task(Some("task1"), &[]);
+    task1.dir = Some("src".to_string());
+    let mut task2 = make_task(Some("task2"), &[]);
+    task2.dir = Some("lib".to_string());
+
+    let warnings = warn_dir_overlap(&[task1, task2]);
+
+    assert!(warnings.is_empty());
 }

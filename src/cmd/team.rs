@@ -7,6 +7,7 @@ use std::fs;
 
 use crate::sanitize;
 use crate::team;
+use crate::toolbox;
 
 const TEAM_TEMPLATE: &str = r#"[team]
 id = "{name}"
@@ -16,6 +17,11 @@ description = ""
 # Soft preference for auto-selection (all agents remain available)
 preferred_agents = []
 # default_agent = "codex"
+
+# Team toolbox: tools available to agents in this team context
+# [team.toolbox]
+# tools = ["lint-check", "test-runner"]
+# auto_inject = ["lint-check"]
 
 # Optional: override capability scores for agents within this team context
 # [team.overrides.opencode]
@@ -123,6 +129,22 @@ fn show_team(name: &str) -> Result<()> {
             println!("    {}: {}", agent, fields.join(", "));
         }
     }
+    // Toolbox info
+    let installed_tools = toolbox::list_team_tools(name);
+    if !config.toolbox.tools.is_empty() || !installed_tools.is_empty() {
+        let configured = config.toolbox.tools.len();
+        let installed = installed_tools.len();
+        println!("  Toolbox: {} configured, {} installed", configured, installed);
+        if !config.toolbox.tools.is_empty() {
+            println!("    Tools: {}", config.toolbox.tools.join(", "));
+        }
+        if !config.toolbox.auto_inject.is_empty() {
+            println!("    Auto-inject: {}", config.toolbox.auto_inject.join(", "));
+        }
+        for tool in &installed_tools {
+            println!("    - {} ({}): {}", tool.name, tool.scope.label(), tool.description);
+        }
+    }
     Ok(())
 }
 
@@ -148,8 +170,13 @@ fn create_team(name: &str) -> Result<()> {
         format!("# {display_name} — Team Knowledge\n\n<!-- Add knowledge entries as: - [topic](knowledge/file.md) — description -->\n"),
     )?;
 
+    // Scaffold tools directory
+    let tools_dir = toolbox::team_tools_dir(name);
+    fs::create_dir_all(tools_dir.join("scripts"))?;
+
     println!("Created {}", target.display());
     println!("Knowledge: {}", knowledge_index.display());
+    println!("Tools: {}", tools_dir.display());
     Ok(())
 }
 
@@ -215,6 +242,8 @@ mod tests {
         let knowledge_index = team::knowledge_index("ops");
         let contents = fs::read_to_string(&knowledge_index).unwrap();
         assert!(contents.contains("# Ops — Team Knowledge"));
+        assert!(toolbox::team_tools_dir("ops").is_dir());
+        assert!(toolbox::team_tools_dir("ops").join("scripts").is_dir());
     }
 
     #[test]

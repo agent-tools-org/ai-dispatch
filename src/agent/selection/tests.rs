@@ -355,6 +355,7 @@ fn team_override_boosts_score() {
         default_agent: None,
         overrides,
         rules: vec![],
+        toolbox: Default::default(),
     };
     let team_context = CandidateContext {
         profile: &profile,
@@ -396,6 +397,7 @@ fn team_preferred_agents_boost() {
         default_agent: None,
         overrides: HashMap::new(),
         rules: vec![],
+        toolbox: Default::default(),
     };
     let preferred_context = CandidateContext {
         profile: &profile,
@@ -437,6 +439,7 @@ fn team_default_agent_tiebreaker() {
         default_agent: Some("cursor".to_string()),
         overrides,
         rules: vec![],
+        toolbox: Default::default(),
     };
     let (kind, _) = select_agent_from(
         "rename src/types.rs field name to task_name",
@@ -460,6 +463,7 @@ fn team_does_not_block_non_preferred() {
         default_agent: None,
         overrides: HashMap::new(),
         rules: vec![],
+        toolbox: Default::default(),
     };
     let prompt = "Implement a retry-aware test suite across src/main.rs and src/cmd/run.rs. Add validation coverage.";
     let (kind, _) = select_agent_from(
@@ -492,6 +496,7 @@ fn team_override_overrides_base_score() {
         default_agent: None,
         overrides,
         rules: vec![],
+        toolbox: Default::default(),
     };
     let (kind, _) = select_agent_from(
         "rename src/types.rs field name to task_name",

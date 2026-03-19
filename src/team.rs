@@ -30,6 +30,17 @@ pub struct TeamConfig {
     /// Always-injected behavioral constraints — no relevance filtering.
     #[serde(default)]
     pub rules: Vec<String>,
+    /// Team toolbox: named tools and auto-inject list.
+    #[serde(default)]
+    pub toolbox: TeamToolbox,
+}
+
+#[derive(Debug, Clone, Deserialize, Default)]
+pub struct TeamToolbox {
+    #[serde(default)]
+    pub tools: Vec<String>,
+    #[serde(default)]
+    pub auto_inject: Vec<String>,
 }
 
 #[derive(Debug, Clone, Deserialize, Default)]
@@ -256,6 +267,30 @@ preferred_agents = ["codex", "opencode"]
         assert_eq!(config.overrides.len(), 2);
         assert_eq!(config.overrides["opencode"].simple_edit, Some(10));
         assert_eq!(config.overrides["kilo"].simple_edit, Some(9));
+    }
+
+    #[test]
+    fn parses_team_with_toolbox() {
+        let toml_data = r#"
+            [team]
+            id = "dev"
+            display_name = "Dev Team"
+            preferred_agents = ["codex"]
+
+            [team.toolbox]
+            tools = ["lint-check", "test-runner"]
+            auto_inject = ["lint-check"]
+        "#;
+        let config = parse_team(toml_data).unwrap();
+        assert_eq!(config.toolbox.tools, vec!["lint-check", "test-runner"]);
+        assert_eq!(config.toolbox.auto_inject, vec!["lint-check"]);
+    }
+
+    #[test]
+    fn toolbox_defaults_to_empty() {
+        let config = parse_team(&sample_team_toml("dev")).unwrap();
+        assert!(config.toolbox.tools.is_empty());
+        assert!(config.toolbox.auto_inject.is_empty());
     }
 
     #[test]

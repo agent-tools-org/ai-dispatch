@@ -46,6 +46,7 @@ pub async fn watch_streaming(
     let mut event_count = 0u32;
     let mut session_saved = false;
     let mut loop_detector = LoopDetector::new();
+    let mut synthetic_tracker = SyntheticMilestoneTracker::new();
 
     // Spawn stderr capture in background
     let mut stderr_handle = spawn_stderr_capture(child, task_id);
@@ -85,6 +86,7 @@ pub async fn watch_streaming(
                 task_id,
                 store,
                 workgroup_id,
+                synthetic_tracker: &mut synthetic_tracker,
             },
             &mut info,
             &mut event_count,
@@ -311,6 +313,7 @@ pub(crate) struct StreamLineContext<'a> {
     pub task_id: &'a TaskId,
     pub store: &'a Arc<Store>,
     pub workgroup_id: Option<&'a str>,
+    pub synthetic_tracker: &'a mut SyntheticMilestoneTracker,
 }
 
 pub(crate) fn handle_streaming_line(
@@ -319,6 +322,7 @@ pub(crate) fn handle_streaming_line(
     store: &Arc<Store>,
     info: &mut CompletionInfo,
     event_count: &mut u32,
+    synthetic_tracker: &mut SyntheticMilestoneTracker,
     workgroup_id: Option<&str>,
     line: &str,
 ) -> Result<()> {
@@ -339,14 +343,20 @@ pub(crate) fn handle_streaming_line(
         append_to_broadcast(group_id, task_id.as_str(), &finding);
     }
     if let Some(event) = parse_milestone_event(task_id, line) {
+        synthetic_tracker.observe(&event);
         store.insert_event(&event)?;
         *event_count += 1;
         return Ok(());
     }
     if let Some(event) = agent.parse_event(task_id, line) {
         apply_completion_event(info, &event);
+        synthetic_tracker.observe(&event);
         store.insert_event(&event)?;
         *event_count += 1;
+        if let Some(event) = synthetic_tracker.synthetic_event(task_id, &event) {
+            store.insert_event(&event)?;
+            *event_count += 1;
+        }
     }
     Ok(())
 }
@@ -363,6 +373,7 @@ pub(crate) fn handle_streaming_line_with_session(
         task_id,
         store,
         workgroup_id,
+        synthetic_tracker,
     } = ctx;
     if let Some(finding) = extract_finding_detail(line)
         && let Some(group_id) = workgroup_id
@@ -381,12 +392,14 @@ pub(crate) fn handle_streaming_line_with_session(
         append_to_broadcast(group_id, task_id.as_str(), &finding);
     }
     if let Some(event) = parse_milestone_event(task_id, line) {
+        synthetic_tracker.observe(&event);
         store.insert_event(&event)?;
         *event_count += 1;
         return Ok(Some(event.detail.clone()));
     }
     if let Some(event) = agent.parse_event(task_id, line) {
         apply_completion_event(info, &event);
+        synthetic_tracker.observe(&event);
         if !*session_saved
             && let Some(metadata) = &event.metadata
             && let Some(session_id) = metadata.get("agent_session_id").and_then(|s| s.as_str())
@@ -400,6 +413,10 @@ pub(crate) fn handle_streaming_line_with_session(
         }
         store.insert_event(&event)?;
         *event_count += 1;
+        if let Some(event) = synthetic_tracker.synthetic_event(task_id, &event) {
+            store.insert_event(&event)?;
+            *event_count += 1;
+        }
         return Ok(Some(event.detail.clone()));
     }
     Ok(None)
@@ -414,6 +431,113 @@ fn parse_milestone_event(task_id: &TaskId, line: &str) -> Option<TaskEvent> {
         detail,
         metadata: None,
     })
+}
+
+const SYNTHETIC_PROGRESS_WINDOW: usize = 10;
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum SyntheticToolKind {
+    Read,
+    Edit,
+    Execute,
+    Other,
+}
+
+pub(crate) struct SyntheticMilestoneTracker {
+    early_event_count: usize,
+    synthetic_disabled: bool,
+    consecutive_reads: usize,
+    max_read_milestone: usize,
+    edit_count: usize,
+    max_edit_milestone: usize,
+    saw_edit_after_read: bool,
+}
+
+impl SyntheticMilestoneTracker {
+    pub(crate) fn new() -> Self {
+        Self {
+            early_event_count: 0,
+            synthetic_disabled: false,
+            consecutive_reads: 0,
+            max_read_milestone: 0,
+            edit_count: 0,
+            max_edit_milestone: 0,
+            saw_edit_after_read: false,
+        }
+    }
+
+    fn observe(&mut self, event: &TaskEvent) {
+        if self.early_event_count < SYNTHETIC_PROGRESS_WINDOW {
+            self.early_event_count += 1;
+            if matches!(event.event_kind, EventKind::Reasoning | EventKind::Milestone) {
+                self.synthetic_disabled = true;
+            }
+        }
+    }
+
+    fn synthetic_event(&mut self, task_id: &TaskId, event: &TaskEvent) -> Option<TaskEvent> {
+        if event.event_kind != EventKind::ToolCall || self.synthetic_disabled {
+            return None;
+        }
+
+        let detail = match Self::tool_kind(&event.detail) {
+            SyntheticToolKind::Read => {
+                self.consecutive_reads += 1;
+                if self.consecutive_reads >= 3 && self.consecutive_reads > self.max_read_milestone {
+                    self.max_read_milestone = self.consecutive_reads;
+                    Some(format!("[exploring] read {} files", self.consecutive_reads))
+                } else {
+                    None
+                }
+            }
+            SyntheticToolKind::Edit => {
+                let first_edit = self.consecutive_reads > 0 && !self.saw_edit_after_read;
+                self.consecutive_reads = 0;
+                self.edit_count += 1;
+                if first_edit {
+                    self.saw_edit_after_read = true;
+                    Some("[implementing] first edit".to_string())
+                } else if self.edit_count >= 3 && self.edit_count > self.max_edit_milestone {
+                    self.max_edit_milestone = self.edit_count;
+                    Some(format!("[implementing] modified {} files", self.edit_count))
+                } else {
+                    None
+                }
+            }
+            SyntheticToolKind::Execute => {
+                self.consecutive_reads = 0;
+                Some("[verifying] running command".to_string())
+            }
+            SyntheticToolKind::Other => {
+                self.consecutive_reads = 0;
+                None
+            }
+        }?;
+
+        Some(TaskEvent {
+            task_id: task_id.clone(),
+            timestamp: Local::now(),
+            event_kind: EventKind::Milestone,
+            detail,
+            metadata: Some(serde_json::json!({ "synthetic": true })),
+        })
+    }
+
+    fn tool_kind(detail: &str) -> SyntheticToolKind {
+        let name = detail.split_once('(').map(|(head, _)| head).unwrap_or(detail).trim();
+        if name.eq_ignore_ascii_case("Read") || name.eq_ignore_ascii_case("Glob") {
+            SyntheticToolKind::Read
+        } else if name.eq_ignore_ascii_case("Edit")
+            || name.eq_ignore_ascii_case("Write")
+            || name.eq_ignore_ascii_case("MultiEdit")
+        {
+            SyntheticToolKind::Edit
+        } else if name.eq_ignore_ascii_case("Execute") || name.eq_ignore_ascii_case("Bash") {
+            SyntheticToolKind::Execute
+        } else {
+            SyntheticToolKind::Other
+        }
+    }
 }
 
 fn extract_milestone_detail(line: &str) -> Option<String> {

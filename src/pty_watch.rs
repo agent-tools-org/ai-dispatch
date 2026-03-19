@@ -15,7 +15,7 @@ use crate::prompt::PromptDetector;
 use crate::pty_bridge::PtyBridge;
 use crate::store::Store;
 use crate::types::{CompletionInfo, EventKind, TaskEvent, TaskId, TaskStatus};
-use crate::watcher;
+use crate::watcher::{self, SyntheticMilestoneTracker};
 
 const INPUT_POLL_INTERVAL: Duration = Duration::from_millis(500);
 pub(crate) const PTY_IDLE_TIMEOUT: Duration = Duration::from_secs(180);
@@ -25,6 +25,7 @@ pub(crate) struct MonitorState {
     full_output: String,
     line_buffer: String,
     event_count: u32,
+    synthetic_tracker: SyntheticMilestoneTracker,
     prompt_detector: PromptDetector,
     awaiting_input: bool,
     streaming: bool,
@@ -43,6 +44,7 @@ impl MonitorState {
             full_output: String::new(),
             line_buffer: String::new(),
             event_count: 0,
+            synthetic_tracker: SyntheticMilestoneTracker::new(),
             prompt_detector: PromptDetector::default(),
             awaiting_input: false,
             streaming,
@@ -68,6 +70,7 @@ impl MonitorState {
                 store,
                 &mut self.info,
                 &mut self.event_count,
+                &mut self.synthetic_tracker,
                 &mut self.line_buffer,
             )?;
         }
@@ -221,6 +224,7 @@ pub(crate) fn monitor_bridge(
             store,
             &mut state.info,
             &mut state.event_count,
+            &mut state.synthetic_tracker,
             None,
             state.line_buffer.trim_end_matches(['\r', '\n']),
         )?;
@@ -312,11 +316,21 @@ fn flush_stream_lines(
     store: &Arc<Store>,
     info: &mut CompletionInfo,
     event_count: &mut u32,
+    synthetic_tracker: &mut SyntheticMilestoneTracker,
     line_buffer: &mut String,
 ) -> Result<()> {
     while let Some(pos) = line_buffer.find('\n') {
         let line = line_buffer[..pos].trim_end_matches('\r').to_string();
-        watcher::handle_streaming_line(agent, task_id, store, info, event_count, None, &line)?;
+        watcher::handle_streaming_line(
+            agent,
+            task_id,
+            store,
+            info,
+            event_count,
+            synthetic_tracker,
+            None,
+            &line,
+        )?;
         line_buffer.drain(..=pos);
     }
     Ok(())

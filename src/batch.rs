@@ -64,6 +64,8 @@ fn deserialize_verify<'de, D: serde::Deserializer<'de>>(
 pub struct BatchConfig {
     #[serde(default)]
     pub defaults: BatchDefaults,
+    #[serde(default)]
+    pub vars: HashMap<String, String>,
     #[serde(alias = "task", alias = "tasks")]
     pub tasks: Vec<BatchTask>,
 }
@@ -139,6 +141,13 @@ pub struct BatchTask {
 }
 
 pub fn parse_batch_file(path: &Path) -> Result<BatchConfig> {
+    parse_batch_file_with_vars(path, &HashMap::new())
+}
+
+pub(crate) fn parse_batch_file_with_vars(
+    path: &Path,
+    cli_vars: &HashMap<String, String>,
+) -> Result<BatchConfig> {
     let content = std::fs::read_to_string(path)
         .with_context(|| format!("failed to read batch file: {}", path.display()))?;
     let mut config: BatchConfig = toml::from_str(&content)
@@ -146,6 +155,8 @@ pub fn parse_batch_file(path: &Path) -> Result<BatchConfig> {
     if config.tasks.is_empty() {
         anyhow::bail!("batch file contains no tasks");
     }
+    let mut stderr = io::stderr().lock();
+    interpolate_batch_config(&mut config, cli_vars, &mut stderr)?;
     apply_defaults(&mut config.tasks, &config.defaults);
     validate_agents(&config.tasks)?;
     validate_fallback_agents(&config.tasks)?;
@@ -154,6 +165,104 @@ pub fn parse_batch_file(path: &Path) -> Result<BatchConfig> {
     validate_conditional_hooks(&config.tasks)?;
     warn_audit_without_readonly(&config.tasks);
     Ok(config)
+}
+
+fn interpolate_batch_config(
+    config: &mut BatchConfig,
+    cli_vars: &HashMap<String, String>,
+    writer: &mut impl Write,
+) -> io::Result<()> {
+    let mut vars = config.vars.clone();
+    vars.extend(cli_vars.clone());
+    for task in &mut config.tasks {
+        interpolate_task(task, &vars, writer)?;
+    }
+    Ok(())
+}
+
+fn interpolate_task(
+    task: &mut BatchTask,
+    vars: &HashMap<String, String>,
+    writer: &mut impl Write,
+) -> io::Result<()> {
+    interpolate_string(&mut task.id, vars, writer)?;
+    interpolate_string(&mut task.name, vars, writer)?;
+    interpolate_plain_string(&mut task.agent, vars, writer)?;
+    interpolate_string(&mut task.team, vars, writer)?;
+    interpolate_plain_string(&mut task.prompt, vars, writer)?;
+    interpolate_string(&mut task.dir, vars, writer)?;
+    interpolate_string(&mut task.output, vars, writer)?;
+    interpolate_string(&mut task.model, vars, writer)?;
+    interpolate_string(&mut task.worktree, vars, writer)?;
+    interpolate_string(&mut task.group, vars, writer)?;
+    interpolate_string(&mut task.verify, vars, writer)?;
+    interpolate_string(&mut task.judge, vars, writer)?;
+    interpolate_vec(&mut task.context, vars, writer)?;
+    interpolate_vec(&mut task.skills, vars, writer)?;
+    interpolate_vec(&mut task.hooks, vars, writer)?;
+    interpolate_vec(&mut task.depends_on, vars, writer)?;
+    interpolate_string(&mut task.parent, vars, writer)?;
+    interpolate_vec(&mut task.context_from, vars, writer)?;
+    interpolate_string(&mut task.fallback, vars, writer)?;
+    interpolate_vec(&mut task.scope, vars, writer)?;
+    interpolate_string(&mut task.on_success, vars, writer)?;
+    interpolate_string(&mut task.on_fail, vars, writer)?;
+    Ok(())
+}
+
+fn interpolate_vec(
+    values: &mut Option<Vec<String>>,
+    vars: &HashMap<String, String>,
+    writer: &mut impl Write,
+) -> io::Result<()> {
+    if let Some(values) = values {
+        for value in values {
+            interpolate_plain_string(value, vars, writer)?;
+        }
+    }
+    Ok(())
+}
+
+fn interpolate_string(
+    value: &mut Option<String>,
+    vars: &HashMap<String, String>,
+    writer: &mut impl Write,
+) -> io::Result<()> {
+    if let Some(value) = value {
+        interpolate_plain_string(value, vars, writer)?;
+    }
+    Ok(())
+}
+
+fn interpolate_plain_string(
+    value: &mut String,
+    vars: &HashMap<String, String>,
+    writer: &mut impl Write,
+) -> io::Result<()> {
+    let mut cursor = 0;
+    let mut output = String::with_capacity(value.len());
+    while let Some(start_rel) = value[cursor..].find("{{") {
+        let start = cursor + start_rel;
+        output.push_str(&value[cursor..start]);
+        let search_from = start + 2;
+        if let Some(end_rel) = value[search_from..].find("}}") {
+            let end = search_from + end_rel;
+            let key = value[search_from..end].trim();
+            if let Some(replacement) = vars.get(key) {
+                output.push_str(replacement);
+            } else {
+                writeln!(writer, "[aid] Warning: missing batch var '{key}'")?;
+                output.push_str(&value[start..end + 2]);
+            }
+            cursor = end + 2;
+        } else {
+            output.push_str(&value[start..]);
+            cursor = value.len();
+        }
+    }
+    output.push_str(&value[cursor..]);
+    *value = output;
+    Ok(())
 }
 
 fn apply_defaults(tasks: &mut [BatchTask], defaults: &BatchDefaults) {

@@ -2,6 +2,7 @@
 // Exports: BatchArgs, run()
 // Deps: crate::batch, crate::cmd::run, crate::cmd::batch_validate, crate::store::Store
 use anyhow::{Context, Result};
+use std::collections::HashMap;
 use std::{path::Path, sync::Arc, time::Instant};
 use crate::batch;
 use crate::cmd::run;
@@ -29,6 +30,7 @@ pub(crate) use batch_types::BatchTaskOutcome;
 pub use batch_retry::retry_failed;
 pub struct BatchArgs {
     pub file: String,
+    pub vars: Vec<String>,
     pub parallel: bool,
     pub wait: bool,
     pub dry_run: bool,
@@ -45,8 +47,13 @@ pub async fn run(store: Arc<Store>, args: BatchArgs) -> Result<()> {
     }
     let resolved_path = batch_helpers::resolve_batch_path(Path::new(&args.file));
     let path = resolved_path.as_path();
-    let mut config = batch::parse_batch_file(path)
-        .with_context(|| format!("Failed to load batch file {}", path.display()))?;
+    let cli_vars = parse_cli_vars(&args.vars)?;
+    let mut config = if cli_vars.is_empty() {
+        batch::parse_batch_file(path)
+    } else {
+        batch::parse_batch_file_with_vars(path, &cli_vars)
+    }
+    .with_context(|| format!("Failed to load batch file {}", path.display()))?;
     let total = config.tasks.len();
     validate_batch_config(&config.tasks)?;
     let has_dependencies = config.tasks.iter().any(task_has_dependencies);
@@ -158,6 +165,19 @@ pub async fn run(store: Arc<Store>, args: BatchArgs) -> Result<()> {
     }
     aid_hint!("[aid] TUI:   aid watch --tui");
     Ok(())
+}
+
+fn parse_cli_vars(raw_vars: &[String]) -> Result<HashMap<String, String>> {
+    let mut vars = HashMap::new();
+    for raw_var in raw_vars {
+        let Some((key, value)) = raw_var.split_once('=') else {
+            anyhow::bail!("invalid --var '{}': expected key=value", raw_var);
+        };
+        let key = key.trim();
+        anyhow::ensure!(!key.is_empty(), "invalid --var '{}': key cannot be empty", raw_var);
+        vars.insert(key.to_string(), value.to_string());
+    }
+    Ok(vars)
 }
 #[cfg(test)]
 #[path = "batch_tests.rs"]

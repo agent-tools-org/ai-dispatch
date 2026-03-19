@@ -160,6 +160,9 @@ Run `aid batch init` to generate a full template with all fields."#)]
         action: Option<BatchAction>,
         /// Path to batch TOML file
         file: Option<String>,
+        /// Template variable override in key=value form
+        #[arg(long = "var")]
+        vars: Vec<String>,
         /// Dispatch tasks in parallel
         #[arg(long)]
         parallel: bool,
@@ -878,16 +881,26 @@ mod tests {
 
     #[test]
     fn batch_dispatch_file_parses() {
-        let cli = Cli::try_parse_from(["aid", "batch", "tasks.toml", "--parallel"]).unwrap();
+        let cli = Cli::try_parse_from([
+            "aid",
+            "batch",
+            "tasks.toml",
+            "--parallel",
+            "--var",
+            "project=demo",
+        ])
+        .unwrap();
         match cli.command {
             Commands::Batch {
                 action,
                 file,
+                vars,
                 parallel,
                 ..
             } => {
                 assert!(action.is_none());
                 assert_eq!(file, Some("tasks.toml".to_string()));
+                assert_eq!(vars, vec!["project=demo".to_string()]);
                 assert!(parallel);
             }
             _ => panic!("expected Batch"),
@@ -902,11 +915,13 @@ mod tests {
             Commands::Batch {
                 action: Some(BatchAction::Retry { group_id, agent }),
                 file,
+                vars,
                 ..
             } => {
                 assert_eq!(group_id, "wg-a");
                 assert_eq!(agent, Some("cursor".to_string()));
                 assert!(file.is_none());
+                assert!(vars.is_empty());
             }
             _ => panic!("expected Batch retry"),
         }

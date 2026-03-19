@@ -309,6 +309,7 @@ async fn run_task_inner(store: &Arc<Store>, spec: &BackgroundRunSpec) -> Result<
     {
         return Ok(());
     }
+    crate::verify::enforce_verify_status(store, &TaskId(spec.task_id.clone()));
     if let Some(mut retry_args) = crate::cmd::retry_logic::prepare_retry(
         store.clone(),
         &TaskId(spec.task_id.clone()),

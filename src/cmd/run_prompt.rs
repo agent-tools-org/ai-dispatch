@@ -111,8 +111,9 @@ pub(super) fn build_prompt_bundle(store: &Store, args: &RunArgs, agent_kind: &Ag
         let summary_block = format_summary_for_injection(&summary);
         effective_prompt = format!("{summary_block}\n\n{effective_prompt}");
     }
-    if let Some(ref group_id) = args.group {
-        let sibling_summaries = prompt_context::collect_sibling_summaries(store, group_id, current_task_id)?;
+    if let Some(ref group_id) = args.group
+        && !matches!(agent_kind, AgentKind::OpenCode | AgentKind::Kilo)
+    {let sibling_summaries = prompt_context::collect_sibling_summaries(store, group_id, current_task_id)?;
         if !sibling_summaries.is_empty() {
             let block = sanitize_injected_text(&crate::cmd::summary::format_sibling_summaries(&sibling_summaries));
             effective_prompt = format!("{block}\n\n{effective_prompt}");

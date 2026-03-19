@@ -1,6 +1,6 @@
 [package]
 name = "ai-dispatch"
-version = "8.28.0"
+version = "8.28.1"
 edition = "2024"
 description = "Multi-AI CLI team orchestrator"
 license = "MIT"

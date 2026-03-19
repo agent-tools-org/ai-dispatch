@@ -8,6 +8,7 @@ pub mod droid;
 pub mod gemini;
 pub mod kilo;
 pub mod opencode;
+pub mod oz;
 pub(crate) mod custom;
 pub(crate) mod registry;
 pub mod classifier;
@@ -74,6 +75,7 @@ pub fn detect_agents() -> Vec<AgentKind> {
         ("droid", AgentKind::Droid),
         ("kilo", AgentKind::Kilo),
         ("aid-codebuff", AgentKind::Codebuff),
+        ("oz", AgentKind::Oz),
     ] {
         if which_exists(name) {
             found.push(kind);
@@ -99,6 +101,7 @@ pub fn get_agent(kind: AgentKind) -> Box<dyn Agent> {
         AgentKind::Kilo => Box::new(kilo::KiloAgent),
         AgentKind::Codebuff => Box::new(codebuff::CodebuffAgent),
         AgentKind::Droid => Box::new(droid::DroidAgent),
+        AgentKind::Oz => Box::new(oz::OzAgent),
         AgentKind::Custom => panic!("Custom agents must be resolved via resolve_agent()"),
     }
 }

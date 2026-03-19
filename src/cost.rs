@@ -59,6 +59,7 @@ fn resolve_pricing(model: Option<&str>, agent: AgentKind) -> Option<ModelPricing
         }),
         AgentKind::Codebuff => None, // Cost tracked by codebuff SDK
         AgentKind::Droid => None,    // BYOK (API key)
+        AgentKind::Oz => None,       // Reports own cost via events
         AgentKind::Custom => None,
     }
 }
@@ -230,7 +231,10 @@ mod tests {
 
     #[test]
     fn format_cost_label_special_cases() {
-        assert_eq!(format_cost_label(Some(1.0), AgentKind::Cursor), "subscription");
+        assert_eq!(
+            format_cost_label(Some(1.0), AgentKind::Cursor),
+            "subscription"
+        );
         assert_eq!(format_cost_label(Some(0.0), AgentKind::Kilo), "included");
     }
 

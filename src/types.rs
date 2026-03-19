@@ -57,6 +57,7 @@ pub enum AgentKind {
     Kilo,
     Codebuff,
     Droid,
+    Oz,
     Custom,
 }
 
@@ -70,6 +71,7 @@ impl AgentKind {
             "kilo" => Some(Self::Kilo),
             "codebuff" => Some(Self::Codebuff),
             "droid" => Some(Self::Droid),
+            "oz" => Some(Self::Oz),
             _ => None,
         }
     }
@@ -83,6 +85,7 @@ impl AgentKind {
             Self::Kilo => "kilo",
             Self::Codebuff => "codebuff",
             Self::Droid => "droid",
+            Self::Oz => "oz",
             Self::Custom => "custom",
         }
     }

@@ -6,7 +6,7 @@ use std::process::{Command, Stdio};
 use crate::types::AgentKind;
 
 const CONTAINER_BIN: &str = "container";
-const SANDBOX_IMAGE: &str = "ubuntu:24.04";
+const SANDBOX_IMAGE: &str = "aid-sandbox:latest";
 
 pub fn can_sandbox(agent_kind: AgentKind) -> bool {
     !matches!(
@@ -27,7 +27,7 @@ pub fn is_available() -> bool {
         .unwrap_or(false)
 }
 
-pub fn wrap_command(cmd: &Command, task_id: &str, _agent_kind: AgentKind) -> Command {
+pub fn wrap_command(cmd: &Command, task_id: &str, agent_kind: AgentKind) -> Command {
     let cwd = cmd
         .get_current_dir()
         .map(|path| path.to_string_lossy().into_owned())
@@ -48,6 +48,7 @@ pub fn wrap_command(cmd: &Command, task_id: &str, _agent_kind: AgentKind) -> Com
         wrapped.arg("-w").arg(dir);
         wrapped.current_dir(dir);
     }
+    // Forward env vars explicitly set on the command
     for (key, value) in cmd.get_envs() {
         if let Some(value) = value {
             wrapped.arg("-e").arg(format!(
@@ -57,15 +58,64 @@ pub fn wrap_command(cmd: &Command, task_id: &str, _agent_kind: AgentKind) -> Com
             ));
         }
     }
+    // Forward agent-specific API keys from host environment (inherit mode)
+    for key in agent_env_keys(agent_kind) {
+        if std::env::var_os(key).is_some() {
+            wrapped.arg("-e").arg(*key);
+        }
+    }
+    // Mount agent config directories (auth, settings) from host
+    if let Some(home) = std::env::var_os("HOME") {
+        let home = std::path::Path::new(&home);
+        for subdir in agent_config_dirs(agent_kind) {
+            let host_path = home.join(subdir);
+            if host_path.exists() {
+                let container_path = std::path::Path::new("/root").join(subdir);
+                wrapped.arg("-v").arg(format!(
+                    "{}:{}",
+                    host_path.display(),
+                    container_path.display()
+                ));
+            }
+        }
+    }
+    wrapped.arg("-e").arg("HOME=/root");
     wrapped.arg(SANDBOX_IMAGE);
     wrapped.arg(cmd.get_program());
     wrapped.args(cmd.get_args());
     wrapped
 }
 
+fn agent_env_keys(kind: AgentKind) -> &'static [&'static str] {
+    match kind {
+        AgentKind::Codex => &["OPENAI_API_KEY"],
+        AgentKind::Gemini => &["GOOGLE_API_KEY", "GEMINI_API_KEY"],
+        AgentKind::Kilo => &["KILO_API_KEY", "OPENAI_API_KEY"],
+        AgentKind::Codebuff => &["CODEBUFF_API_KEY", "ANTHROPIC_API_KEY"],
+        _ => &[],
+    }
+}
+
+/// Config directory paths relative to $HOME that each agent needs for auth/settings.
+fn agent_config_dirs(kind: AgentKind) -> &'static [&'static str] {
+    match kind {
+        AgentKind::Codex => &[".codex"],
+        AgentKind::Gemini => &[".gemini"],
+        AgentKind::Kilo => &[".kilo"],
+        AgentKind::Codebuff => &[".codebuff"],
+        _ => &[],
+    }
+}
+
 pub fn kill_container(task_id: &str) {
+    let name = format!("aid-{task_id}");
     let _ = Command::new(CONTAINER_BIN)
-        .args(["kill", &format!("aid-{task_id}")])
+        .args(["kill", &name])
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status();
+    let _ = Command::new(CONTAINER_BIN)
+        .args(["rm", &name])
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .status();
@@ -105,7 +155,7 @@ mod tests {
         assert!(wrapped_args.iter().any(|arg| arg == "run"));
         assert!(wrapped_args.iter().any(|arg| arg == "--rm"));
         assert!(wrapped_args.iter().any(|arg| arg == "--init"));
-        assert!(wrapped_args.iter().any(|arg| arg == "ubuntu:24.04"));
+        assert!(wrapped_args.iter().any(|arg| arg == "aid-sandbox:latest"));
         assert_eq!(wrapped_args[wrapped_args.len() - 3], "codex");
         assert_eq!(wrapped_args[wrapped_args.len() - 2], "exec");
         assert_eq!(wrapped_args[wrapped_args.len() - 1], "ship it");

@@ -91,6 +91,36 @@ pub(crate) fn auto_commit_uncommitted(wt_path: &str, branch: &str) -> bool {
     }
 }
 
+pub(crate) fn sync_cargo_lock_before_merge(repo_dir: &str, wt_path: &str, branch: &str) {
+    let src = Path::new(repo_dir).join("Cargo.lock");
+    if !src.exists() {
+        return;
+    }
+    let _ = Command::new("git")
+        .args(["-C", wt_path, "checkout", "HEAD", "--", "Cargo.lock"])
+        .output();
+    let dst = Path::new(wt_path).join("Cargo.lock");
+    if let Err(e) = fs::copy(&src, &dst) {
+        aid_warn!("[aid] Warning: failed to sync Cargo.lock for {branch}: {e}");
+        return;
+    }
+    let status = Command::new("git")
+        .args(["-C", wt_path, "status", "--porcelain", "--", "Cargo.lock"])
+        .output();
+    if !matches!(status, Ok(o) if o.status.success() && !o.stdout.is_empty()) {
+        return;
+    }
+    let _ = Command::new("git").args(["-C", wt_path, "add", "Cargo.lock"]).output();
+    if matches!(
+        Command::new("git")
+            .args(["-C", wt_path, "commit", "-m", "chore: sync Cargo.lock from main"])
+            .output(),
+        Ok(o) if o.status.success()
+    ) {
+        aid_info!("[aid] Synced Cargo.lock from main before merge for {branch}");
+    }
+}
+
 pub(crate) fn git_merge_branch(repo_dir: &str, branch: &str) -> MergeResult {
     let head_before = Command::new("git")
         .args(["-C", repo_dir, "rev-parse", "HEAD"])

@@ -72,16 +72,43 @@ pub(crate) fn auto_commit_uncommitted(wt_path: &str, branch: &str) -> bool {
     }
     aid_info!("[aid] Worktree has uncommitted changes — auto-committing on {branch}");
     let _ = Command::new("git")
-        .args(["-C", wt_path, "add", "-A"])
-        .output();
-    let out = Command::new("git")
         .args([
             "-C",
             wt_path,
-            "commit",
-            "-m",
-            "chore: auto-commit agent changes before merge",
+            "add",
+            "-A",
+            "--",
+            ".",
+            ":(exclude)target/",
+            ":(exclude)node_modules/",
+            ":(exclude).build/",
+            ":(exclude)dist/",
+            ":(exclude)__pycache__/",
         ])
+        .output();
+    let diff_stat = Command::new("git")
+        .args(["-C", wt_path, "diff", "--cached", "--stat", "--stat-width=60"])
+        .output()
+        .ok()
+        .filter(|o| o.status.success())
+        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+        .unwrap_or_default();
+    let file_count = diff_stat.lines().count().saturating_sub(1);
+    let message = if file_count == 1 {
+        let file = diff_stat
+            .lines()
+            .next()
+            .and_then(|line| line.split('|').next())
+            .map(str::trim)
+            .unwrap_or("1 file");
+        format!("chore: auto-commit changes to {file}")
+    } else if file_count > 1 {
+        format!("chore: auto-commit changes to {file_count} files")
+    } else {
+        "chore: auto-commit agent changes before merge".to_string()
+    };
+    let out = Command::new("git")
+        .args(["-C", wt_path, "commit", "-m", &message])
         .output();
     match out {
         Ok(o) if o.status.success() => {

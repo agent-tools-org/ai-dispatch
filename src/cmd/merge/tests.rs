@@ -151,6 +151,30 @@ fn auto_commit_uncommitted_commits_dirty_worktree() {
 }
 
 #[test]
+fn auto_commit_message_includes_filename() {
+    let _permit = test_subprocess::acquire();
+    let repo = init_repo();
+    let branch = unique("message-branch");
+    let wt = TempDir::new().unwrap();
+    git(repo.path(), &["worktree", "add", &wt.path().to_string_lossy(), "-b", &branch]);
+    std::fs::write(wt.path().join("named-file.txt"), "uncommitted\n").unwrap();
+
+    let committed = auto_commit_uncommitted(&wt.path().to_string_lossy(), &branch);
+    assert!(committed);
+
+    let log = Command::new("git")
+        .args(["-C", &wt.path().to_string_lossy(), "log", "-1", "--pretty=%s"])
+        .output()
+        .unwrap();
+    assert_eq!(
+        String::from_utf8_lossy(&log.stdout).trim(),
+        "chore: auto-commit changes to named-file.txt"
+    );
+
+    git(repo.path(), &["worktree", "remove", "--force", &wt.path().to_string_lossy()]);
+}
+
+#[test]
 fn auto_commit_uncommitted_returns_false_for_clean_worktree() {
     let _permit = test_subprocess::acquire();
     let repo = init_repo();

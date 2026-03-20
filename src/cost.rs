@@ -34,7 +34,10 @@ pub fn format_cost(cost_usd: Option<f64>) -> String {
 
 pub fn format_cost_label(cost_usd: Option<f64>, agent: AgentKind) -> String {
     match agent {
-        AgentKind::Cursor => "subscription".to_string(),
+        AgentKind::Cursor => match cost_usd {
+            Some(c) if c > 0.0 => format_cost(cost_usd),
+            _ => "subscription".to_string(),
+        },
         AgentKind::Kilo if cost_usd == Some(0.0) => "included".to_string(),
         AgentKind::Kilo => format_cost(cost_usd),
         _ => format_cost(cost_usd),
@@ -182,6 +185,11 @@ fn model_pricing(model: &str, agent: AgentKind) -> Option<ModelPricing> {
             input_per_m: 0.42,
             output_per_m: 2.10,
         }
+    } else if m.contains("composer-2") {
+        ModelPricing {
+            input_per_m: 0.50,
+            output_per_m: 2.50,
+        }
     } else {
         return None;
     };
@@ -216,6 +224,12 @@ mod tests {
     }
 
     #[test]
+    fn composer2_cost_estimate() {
+        let cost = estimate_cost(1_000_000, Some("composer-2"), AgentKind::Cursor).unwrap();
+        assert!((cost - 1.10).abs() < 0.01);
+    }
+
+    #[test]
     fn unknown_model_returns_none() {
         let cost = estimate_cost(1000, Some("unknown-model"), AgentKind::OpenCode);
         assert!(cost.is_none());
@@ -231,10 +245,8 @@ mod tests {
 
     #[test]
     fn format_cost_label_special_cases() {
-        assert_eq!(
-            format_cost_label(Some(1.0), AgentKind::Cursor),
-            "subscription"
-        );
+        assert_eq!(format_cost_label(Some(1.0), AgentKind::Cursor), "$1.00");
+        assert_eq!(format_cost_label(None, AgentKind::Cursor), "subscription");
         assert_eq!(format_cost_label(Some(0.0), AgentKind::Kilo), "included");
     }
 

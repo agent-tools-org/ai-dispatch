@@ -81,11 +81,15 @@ pub fn is_rate_limit_error(message: &str) -> bool {
     let lower = message.to_lowercase();
     lower.contains("rate limit")
         || lower.contains("rate_limit")
-        || contains_status_429(&lower)
+        || contains_status_code(&lower, "429")
+        || contains_status_code(&lower, "402")
         || lower.contains("quota exceeded")
         || lower.contains("exhausted your capacity")
         || lower.contains("too many requests")
         || lower.contains("usage limit")
+        || lower.contains("payment")
+        || lower.contains("credits")
+        || lower.contains("reload your tokens")
 }
 
 pub fn extract_rate_limit_message(raw: &str) -> Option<String> {
@@ -117,13 +121,17 @@ fn extract_from_json_error(json_str: &str) -> Option<String> {
     Some(message.to_string())
 }
 
-/// Match "429" only as a standalone number, not inside larger numbers like "8714294".
-fn contains_status_429(s: &str) -> bool {
+/// Match an HTTP status code only as a standalone number, not inside larger numbers.
+fn contains_status_code(s: &str, code: &str) -> bool {
     let bytes = s.as_bytes();
-    for i in 0..bytes.len().saturating_sub(2) {
-        if bytes[i] == b'4' && bytes[i + 1] == b'2' && bytes[i + 2] == b'9' {
+    let code = code.as_bytes();
+    if bytes.len() < code.len() {
+        return false;
+    }
+    for i in 0..=bytes.len().saturating_sub(code.len()) {
+        if &bytes[i..i + code.len()] == code {
             let before_ok = i == 0 || !bytes[i - 1].is_ascii_digit();
-            let after_ok = i + 3 >= bytes.len() || !bytes[i + 3].is_ascii_digit();
+            let after_ok = i + code.len() >= bytes.len() || !bytes[i + code.len()].is_ascii_digit();
             if before_ok && after_ok {
                 return true;
             }
@@ -209,6 +217,7 @@ mod tests {
         assert!(is_rate_limit_error("RATE LIMIT"));
         assert!(is_rate_limit_error("error: rate_limit hit"));
         assert!(is_rate_limit_error("HTTP 429"));
+        assert!(is_rate_limit_error("HTTP 402 Payment Required"));
         assert!(is_rate_limit_error("quota exceeded"));
         assert!(is_rate_limit_error(
             "You have exhausted your capacity for today."
@@ -217,12 +226,16 @@ mod tests {
         assert!(is_rate_limit_error("usage limit reached"));
         assert!(is_rate_limit_error("status: 429"));
         assert!(is_rate_limit_error("error 429 too many"));
+        assert!(is_rate_limit_error("payment required"));
+        assert!(is_rate_limit_error("credits exhausted"));
+        assert!(is_rate_limit_error("please reload your tokens"));
         assert!(!is_rate_limit_error("network timeout"));
         assert!(!is_rate_limit_error("connection refused"));
         // Must not match 429 inside larger numbers (token counts, IDs)
         assert!(!is_rate_limit_error(
             "tokens: 8714294 in + 27373 out = 8741667 (8442752 cached)"
         ));
+        assert!(!is_rate_limit_error("invoice 1402 created"));
     }
 
     #[test]
@@ -246,6 +259,16 @@ mod tests {
         assert_eq!(
             extract_rate_limit_message(r#"{"type":"error","message":"429 Too Many Requests"}"#),
             Some("429 Too Many Requests".to_string())
+        );
+    }
+
+    #[test]
+    fn test_extract_rate_limit_message_from_402_error_json() {
+        assert_eq!(
+            extract_rate_limit_message(
+                r#"{"type":"error","source":"agent_loop","message":"402 payment required: reload your tokens"}"#
+            ),
+            Some("402 payment required: reload your tokens".to_string())
         );
     }
 

@@ -115,6 +115,25 @@ fn read_quota_error_message_extracts_rate_limit_line_only() {
 }
 
 #[test]
+fn read_quota_error_message_detects_402_payment_errors() {
+    let dir = TempDir::new().unwrap();
+    let _guard = paths::AidHomeGuard::set(dir.path());
+    std::fs::create_dir_all(paths::logs_dir()).unwrap();
+    std::fs::write(
+        paths::log_path("t-quota-402"),
+        "{\"type\":\"error\",\"source\":\"agent_loop\",\"message\":\"402 payment required: reload your tokens\"}\n",
+    )
+    .unwrap();
+
+    let message = read_quota_error_message(&TaskId("t-quota-402".to_string()));
+
+    assert_eq!(
+        message.as_deref(),
+        Some("402 payment required: reload your tokens")
+    );
+}
+
+#[test]
 fn rescue_quota_failed_task_marks_passed_verify_as_done() {
     let dir = TempDir::new().unwrap();
     let _guard = paths::AidHomeGuard::set(dir.path());

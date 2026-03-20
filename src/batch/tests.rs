@@ -99,6 +99,35 @@ fn parses_batch_with_dependencies() {
 }
 
 #[test]
+fn context_accepts_string() {
+    let toml = r#"
+[[tasks]]
+prompt = "test"
+context = "file.md"
+"#;
+
+    let config: BatchConfig = toml::from_str(toml).unwrap();
+
+    assert_eq!(config.tasks[0].context, Some(vec!["file.md".to_string()]));
+}
+
+#[test]
+fn context_accepts_array() {
+    let toml = r#"
+[[tasks]]
+prompt = "test"
+context = ["a.md", "b.md"]
+"#;
+
+    let config: BatchConfig = toml::from_str(toml).unwrap();
+
+    assert_eq!(
+        config.tasks[0].context,
+        Some(vec!["a.md".to_string(), "b.md".to_string()])
+    );
+}
+
+#[test]
 fn applies_defaults_to_tasks() {
     let cfg = parse_batch_file(
         write_temp(concat!(

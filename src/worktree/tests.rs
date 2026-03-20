@@ -125,6 +125,25 @@ fn create_worktree_syncs_cargo_lock() {
 }
 
 #[test]
+fn sync_context_files_copies_missing_files() {
+    let repo = TempDir::new().unwrap(); let wt = TempDir::new().unwrap();
+    std::fs::write(repo.path().join("new_file.rs"), "fn main() {}\n").unwrap();
+    let synced = sync_context_files_into_worktree(repo.path(), wt.path(), &["new_file.rs".to_string()]);
+    assert_eq!(synced, vec!["new_file.rs"]);
+    assert_eq!(std::fs::read_to_string(wt.path().join("new_file.rs")).unwrap(), "fn main() {}\n");
+}
+
+#[test]
+fn sync_context_files_skips_existing_files() {
+    let repo = TempDir::new().unwrap(); let wt = TempDir::new().unwrap();
+    std::fs::write(repo.path().join("existing.rs"), "original\n").unwrap();
+    std::fs::write(wt.path().join("existing.rs"), "modified\n").unwrap();
+    let synced = sync_context_files_into_worktree(repo.path(), wt.path(), &["existing.rs".to_string()]);
+    assert!(synced.is_empty());
+    assert_eq!(std::fs::read_to_string(wt.path().join("existing.rs")).unwrap(), "modified\n");
+}
+
+#[test]
 fn create_worktree_reuses_existing_branch_worktree() {
     let _permit = test_subprocess::acquire();
     let repo = TempDir::new().unwrap();

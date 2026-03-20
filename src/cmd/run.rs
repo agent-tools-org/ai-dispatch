@@ -87,6 +87,11 @@ fn preview_prompt(prompt: &str, max_chars: usize) -> String {
     preview
 }
 
+fn context_file_from_spec(spec: &str) -> String {
+    spec.split_once(':')
+        .map_or_else(|| spec.to_string(), |(file, _)| file.to_string())
+}
+
 fn validate_dispatch(args: &RunArgs, agent_kind: &AgentKind) -> Vec<String> {
     let mut warnings = Vec::new();
     let prompt_len = args.prompt.chars().count();
@@ -257,6 +262,22 @@ pub async fn run(store: Arc<Store>, mut args: RunArgs) -> Result<TaskId> {
     let (wt_path, wt_branch, effective_dir, resolved_repo) = run_prompt::resolve_worktree_paths(&args, explicit_repo_path.as_deref())?;
     // Use resolved repo_path (always set when worktree is created, even without --repo)
     let repo_path = resolved_repo.clone().or(explicit_repo_path);
+    if let (Some(wt), Some(repo)) = (wt_path.as_deref(), repo_path.as_deref()) {
+        let context_files: Vec<String> =
+            args.context.iter().map(|spec| context_file_from_spec(spec)).collect();
+        let synced = crate::worktree::sync_context_files_into_worktree(
+            Path::new(repo),
+            Path::new(wt),
+            &context_files,
+        );
+        if !synced.is_empty() {
+            aid_info!(
+                "[aid] Synced {} context file(s) into worktree: {}",
+                synced.len(),
+                synced.join(", ")
+            );
+        }
+    }
     let caller = session::current_caller();
     let task = Task {
         id: task_id.clone(),

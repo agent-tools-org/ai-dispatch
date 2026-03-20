@@ -34,6 +34,29 @@ fn sync_cargo_lock(repo_dir: &Path, wt_path: &Path) {
     }
 }
 
+/// Sync repo-backed context files into the worktree when they are missing there.
+pub fn sync_context_files_into_worktree(repo_dir: &Path, wt_path: &Path, context_files: &[String]) -> Vec<String> {
+    let mut synced = Vec::new();
+    for file in context_files {
+        let file_path = Path::new(file);
+        let rel_path = if let Ok(stripped) = file_path.strip_prefix(repo_dir) {
+            stripped.to_path_buf()
+        } else if file_path.is_relative() {
+            PathBuf::from(file)
+        } else {
+            continue;
+        };
+        let wt_file = wt_path.join(&rel_path);
+        let repo_file = repo_dir.join(&rel_path);
+        if wt_file.exists() || !repo_file.exists() { continue; }
+        if let Some(parent) = wt_file.parent() {
+            let _ = std::fs::create_dir_all(parent);
+        }
+        if std::fs::copy(&repo_file, &wt_file).is_ok() { synced.push(rel_path.display().to_string()); }
+    }
+    synced
+}
+
 fn existing_worktree_path(repo_dir: &Path, branch: &str) -> Result<Option<PathBuf>> {
     let out = Command::new("git")
         .args(["-C", &repo_dir.to_string_lossy()])

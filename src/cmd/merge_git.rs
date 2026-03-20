@@ -50,6 +50,15 @@ pub(crate) fn commits_ahead(repo_dir: &str, branch: &str) -> u32 {
     }
 }
 
+pub(crate) fn checkout_branch(repo_dir: &str, branch: &str) -> Result<()> {
+    let out = Command::new("git")
+        .args(["-C", repo_dir, "checkout", branch])
+        .output()
+        .context("Failed to run git checkout")?;
+    anyhow::ensure!(out.status.success(), "git checkout {} failed: {}", branch, String::from_utf8_lossy(&out.stderr));
+    Ok(())
+}
+
 pub(crate) fn auto_commit_uncommitted(wt_path: &str, branch: &str) -> bool {
     let status = Command::new("git")
         .args(["-C", wt_path, "status", "--porcelain"])
@@ -193,19 +202,9 @@ fn stash_local_changes(repo_dir: &str) -> bool {
     }
 }
 
-fn pop_stash(repo_dir: &str) -> bool {
-    match Command::new("git")
-        .args(["-C", repo_dir, "stash", "pop"])
-        .output()
-    {
-        Ok(o) => o.status.success(),
-        Err(_) => false,
-    }
-}
+fn pop_stash(repo_dir: &str) -> bool { matches!(Command::new("git").args(["-C", repo_dir, "stash", "pop"]).output(), Ok(o) if o.status.success()) }
 
-fn abort_merge(repo_dir: &str) {
-    let _ = Command::new("git").args(["-C", repo_dir, "merge", "--abort"]).output();
-}
+fn abort_merge(repo_dir: &str) { let _ = Command::new("git").args(["-C", repo_dir, "merge", "--abort"]).output(); }
 
 fn conflict_files(repo_dir: &str) -> Vec<String> {
     let output = Command::new("git")
@@ -225,9 +224,7 @@ fn conflict_files(repo_dir: &str) -> Vec<String> {
     }
 }
 
-fn unknown_conflict_files() -> Vec<String> {
-    vec!["merge failed without reported conflict files".to_string()]
-}
+fn unknown_conflict_files() -> Vec<String> { vec!["merge failed without reported conflict files".to_string()] }
 
 /// Sandbox guard for worktree cleanup paths.
 pub fn is_safe_worktree_path(wt_path: &str) -> bool {

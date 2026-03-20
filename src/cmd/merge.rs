@@ -14,15 +14,15 @@ pub(crate) mod merge_git;
 use merge_git::*;
 pub use merge_git::remove_worktree;
 
-pub fn run(store: Arc<Store>, task_id: Option<&str>, group: Option<&str>, approve: bool, check: bool) -> Result<()> {
+pub fn run(store: Arc<Store>, task_id: Option<&str>, group: Option<&str>, approve: bool, check: bool, target: Option<&str>) -> Result<()> {
     match (task_id, group) {
-        (Some(id), _) => merge_single(&store, id, approve, check),
-        (_, Some(group_id)) => merge_group(&store, group_id, approve, check),
+        (Some(id), _) => merge_single(&store, id, approve, check, target),
+        (_, Some(group_id)) => merge_group(&store, group_id, approve, check, target),
         (None, None) => Err(anyhow!("Provide either a task ID or --group <wg-id>")),
     }
 }
 
-fn merge_single(store: &Store, task_id: &str, approve: bool, check: bool) -> Result<()> {
+fn merge_single(store: &Store, task_id: &str, approve: bool, check: bool, target: Option<&str>) -> Result<()> {
     let task = store
         .get_task(task_id)?
         .ok_or_else(|| anyhow!("Task '{task_id}' not found"))?;
@@ -78,6 +78,9 @@ fn merge_single(store: &Store, task_id: &str, approve: bool, check: bool) -> Res
             return Err(anyhow!("No commits to merge from {branch}"));
         }
         aid_info!("[aid] Branch {branch} has {ahead} commit(s) ahead");
+        if let Some(target_branch) = target {
+            checkout_branch(&repo_dir, target_branch)?;
+        }
         match git_merge_branch(&repo_dir, branch) {
             MergeResult::Merged => {
                 aid_info!("[aid] Merged branch {branch} into current branch");
@@ -124,7 +127,7 @@ fn merge_single(store: &Store, task_id: &str, approve: bool, check: bool) -> Res
     Ok(())
 }
 
-fn merge_group(store: &Store, group_id: &str, approve: bool, check: bool) -> Result<()> {
+fn merge_group(store: &Store, group_id: &str, approve: bool, check: bool, target: Option<&str>) -> Result<()> {
     let tasks = store.list_tasks_by_group(group_id)?;
     if tasks.is_empty() {
         return Err(anyhow!("No tasks found in group '{group_id}'"));
@@ -144,10 +147,7 @@ fn merge_group(store: &Store, group_id: &str, approve: bool, check: bool) -> Res
     }
     let mut merged = 0;
     let mut skipped = Vec::new();
-    let first_repo_dir = resolve_repo_dir(
-        tasks.first().and_then(|t| t.repo_path.as_deref()),
-        tasks.first().and_then(|t| t.worktree_path.as_deref()),
-    );
+    let first_repo_dir = resolve_repo_dir(tasks.first().and_then(|t| t.repo_path.as_deref()), tasks.first().and_then(|t| t.worktree_path.as_deref()));
     for task in &tasks {
         if task.status != TaskStatus::Done {
             skipped.push(format!("{} ({})", task.id, task.status.label()));
@@ -166,6 +166,9 @@ fn merge_group(store: &Store, group_id: &str, approve: bool, check: bool) -> Res
                 aid_warn!("[aid] Warning: {} — branch {branch} has 0 commits, skipping", task.id);
                 skipped.push(format!("{} (no commits)", task.id));
                 continue;
+            }
+            if let Some(target_branch) = target {
+                checkout_branch(&repo_dir, target_branch)?;
             }
             match git_merge_branch(&repo_dir, branch) {
                 MergeResult::Merged => {
@@ -191,9 +194,10 @@ fn merge_group(store: &Store, group_id: &str, approve: bool, check: bool) -> Res
         // Clean up worktree after successful merge
         if let Some(wt) = task.worktree_path.as_deref()
             && std::path::Path::new(wt).exists()
-            && let Err(err) = remove_worktree(&repo_dir, wt) {
-                aid_warn!("[aid] Warning: failed to clean up worktree {wt}: {err}");
-            }
+            && let Err(err) = remove_worktree(&repo_dir, wt)
+        {
+            aid_warn!("[aid] Warning: failed to clean up worktree {wt}: {err}");
+        }
     }
     println!("Merged {merged} task(s) in group {group_id}");
     if !skipped.is_empty() {

@@ -186,6 +186,22 @@ fn git_merge_branch_detects_already_up_to_date() {
 }
 
 #[test]
+fn checkout_branch_switches_head() {
+    let _permit = test_subprocess::acquire();
+    let repo = init_repo();
+    let branch = unique("target");
+    git(repo.path(), &["branch", &branch]);
+
+    checkout_branch(&repo.path().to_string_lossy(), &branch).unwrap();
+
+    let output = Command::new("git")
+        .args(["-C", &repo.path().to_string_lossy(), "branch", "--show-current"])
+        .output()
+        .unwrap();
+    assert_eq!(String::from_utf8_lossy(&output.stdout).trim(), branch);
+}
+
+#[test]
 fn git_merge_branch_detects_conflict() {
     let _permit = test_subprocess::acquire();
     let repo = init_repo();
@@ -311,7 +327,7 @@ fn merge_single_succeeds_with_committed_worktree() {
     let task = make_task_with_worktree("t-merge-ok", repo.path(), wt.path(), &branch);
     store.insert_task(&task).unwrap();
 
-    let result = merge_single(&store, "t-merge-ok", false, false);
+    let result = merge_single(&store, "t-merge-ok", false, false, None);
     assert!(result.is_ok(), "merge_single failed: {result:?}");
 
     let loaded = store.get_task("t-merge-ok").unwrap().unwrap();
@@ -333,7 +349,7 @@ fn merge_single_auto_commits_then_merges() {
     let task = make_task_with_worktree("t-autocommit", repo.path(), wt.path(), &branch);
     store.insert_task(&task).unwrap();
 
-    let result = merge_single(&store, "t-autocommit", false, false);
+    let result = merge_single(&store, "t-autocommit", false, false, None);
     assert!(result.is_ok(), "merge_single should auto-commit and merge: {result:?}");
 
     let loaded = store.get_task("t-autocommit").unwrap().unwrap();
@@ -355,7 +371,7 @@ fn merge_single_fails_when_no_commits_and_no_changes() {
     let task = make_task_with_worktree("t-empty", repo.path(), wt.path(), &branch);
     store.insert_task(&task).unwrap();
 
-    let result = merge_single(&store, "t-empty", false, false);
+    let result = merge_single(&store, "t-empty", false, false, None);
     assert!(result.is_err());
     let err = result.unwrap_err().to_string();
     assert!(err.contains("No commits to merge"), "unexpected error: {err}");
@@ -377,7 +393,7 @@ fn merge_single_rejects_non_done_task() {
     task.status = TaskStatus::Running;
     store.insert_task(&task).unwrap();
 
-    let result = merge_single(&store, "t-running", false, false);
+    let result = merge_single(&store, "t-running", false, false, None);
     assert!(result.is_err());
     assert!(result.unwrap_err().to_string().contains("only DONE"));
 }
@@ -418,7 +434,7 @@ fn merge_single_works_without_worktree_branch() {
     };
     store.insert_task(&task).unwrap();
 
-    let result = merge_single(&store, "t-inplace", false, false);
+    let result = merge_single(&store, "t-inplace", false, false, None);
     assert!(result.is_ok());
     let loaded = store.get_task("t-inplace").unwrap().unwrap();
     assert_eq!(loaded.status, TaskStatus::Merged);
@@ -443,7 +459,7 @@ fn merge_single_preserves_worktree_on_conflict() {
     let task = make_task_with_worktree("t-conflict", repo.path(), wt.path(), &branch);
     store.insert_task(&task).unwrap();
 
-    let result = merge_single(&store, "t-conflict", false, false);
+    let result = merge_single(&store, "t-conflict", false, false, None);
     assert!(result.is_err());
     // Worktree must be preserved for manual resolution
     assert!(wt.path().exists());
@@ -466,9 +482,34 @@ fn merge_single_without_repo_path_resolves_from_worktree() {
     task.repo_path = None;
     store.insert_task(&task).unwrap();
 
-    let result = merge_single(&store, "t-no-repo", false, false);
+    let result = merge_single(&store, "t-no-repo", false, false, None);
     assert!(result.is_ok(), "merge should resolve repo from worktree: {result:?}");
     assert!(repo.path().join("agent-work.txt").exists());
+}
+
+#[test]
+fn merge_single_merges_into_target_branch() {
+    let _permit = test_subprocess::acquire();
+    let repo = init_repo();
+    let target = unique("target");
+    git(repo.path(), &["branch", &target]);
+    let (wt, branch) = create_worktree_with_commit(repo.path());
+    let store = Store::open_memory().unwrap();
+    let task = make_task_with_worktree("t-target", repo.path(), wt.path(), &branch);
+    store.insert_task(&task).unwrap();
+
+    let result = merge_single(&store, "t-target", false, false, Some(&target));
+    assert!(result.is_ok(), "merge_single failed: {result:?}");
+
+    let current = Command::new("git")
+        .args(["-C", &repo.path().to_string_lossy(), "branch", "--show-current"])
+        .output()
+        .unwrap();
+    assert_eq!(String::from_utf8_lossy(&current.stdout).trim(), target);
+    assert!(repo.path().join("agent-work.txt").exists());
+
+    git(repo.path(), &["checkout", "main"]);
+    assert!(!repo.path().join("agent-work.txt").exists());
 }
 
 #[test]
@@ -491,7 +532,7 @@ fn merge_group_skips_empty_branches() {
     empty_task.workgroup_id = Some(group_id.to_string());
     store.insert_task(&empty_task).unwrap();
 
-    let result = merge_group(&store, group_id, false, false);
+    let result = merge_group(&store, group_id, false, false, None);
     assert!(result.is_ok(), "merge_group failed: {result:?}");
 
     let loaded_committed = store.get_task("t-merge-group").unwrap().unwrap();

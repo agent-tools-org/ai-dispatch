@@ -176,7 +176,8 @@ pub(crate) fn parse_batch_file_with_vars(
     apply_defaults(&mut config.tasks, &config.defaults);
     validate_agents(&config.tasks)?;
     validate_fallback_agents(&config.tasks)?;
-    validate_no_file_overlap(&config.tasks)?;
+    auto_sequence_shared_worktrees(&mut config.tasks, &mut stderr)?;
+    warn_prompt_size(&config.tasks, &mut stderr)?;
     validate_dag(&config.tasks)?;
     validate_conditional_hooks(&config.tasks)?;
     warn_audit_without_readonly(&config.tasks);
@@ -406,13 +407,48 @@ pub(crate) fn is_valid_agent(agent: &str) -> bool {
         || crate::agent::registry::custom_agent_exists(agent)
 }
 
-pub fn validate_no_file_overlap(tasks: &[BatchTask]) -> Result<()> {
-    let mut seen: HashSet<&str> = HashSet::new();
-    for task in tasks {
-        if let Some(ref wt) = task.worktree
-            && !seen.insert(wt.as_str())
-        {
-            anyhow::bail!("duplicate worktree: {}", wt);
+pub fn auto_sequence_shared_worktrees(
+    tasks: &mut [BatchTask],
+    writer: &mut impl Write,
+) -> io::Result<()> {
+    let mut last_task_by_worktree: HashMap<String, String> = HashMap::new();
+    for (task_idx, task) in tasks.iter_mut().enumerate() {
+        let Some(worktree) = task.worktree.as_ref() else {
+            continue;
+        };
+        let current_label = task_label(task, task_idx);
+        if let Some(previous_task) = last_task_by_worktree.get(worktree).cloned() {
+            let depends_on = task.depends_on.get_or_insert_with(Vec::new);
+            if !depends_on.iter().any(|dependency| dependency == &previous_task) {
+                depends_on.push(previous_task.clone());
+            }
+            writeln!(
+                writer,
+                "[aid] Warning: task '{}' shares worktree '{}' with '{}'; auto-sequencing execution.",
+                current_label,
+                worktree,
+                previous_task,
+            )?;
+        }
+        if let Some(name) = task.name.as_ref() {
+            last_task_by_worktree.insert(worktree.clone(), name.clone());
+        }
+    }
+    Ok(())
+}
+
+fn warn_prompt_size(tasks: &[BatchTask], writer: &mut impl Write) -> io::Result<()> {
+    for (idx, task) in tasks.iter().enumerate() {
+        let chars = task.prompt.len();
+        if chars > 6000 {
+            let lines = task.prompt.lines().count();
+            writeln!(
+                writer,
+                "[aid] Warning: task '{}' has a large prompt (~{} chars, {} lines). Consider splitting into smaller tasks for better agent execution quality.",
+                task_label(task, idx),
+                chars,
+                lines,
+            )?;
         }
     }
     Ok(())

@@ -54,6 +54,8 @@ impl super::Agent for CursorAgent {
         }
         if let Some(ref model) = opts.model {
             cmd.args(["--model", model]);
+        } else {
+            cmd.args(["--model", "composer-2"]);
         }
         Ok(cmd)
     }
@@ -365,5 +367,8 @@ mod tests {
         // Should NOT have "agent" as first arg (no longer a subcommand)
         let args: Vec<_> = cmd.get_args().collect();
         assert_eq!(args[0], "-p");
+        assert!(args
+            .windows(2)
+            .any(|window| window[0] == "--model" && window[1] == "composer-2"));
     }
 }

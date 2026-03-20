@@ -300,6 +300,33 @@ fn resolve_repo_dir_falls_back_to_dot() {
     assert_eq!(result, ".");
 }
 
+#[test]
+fn sync_cargo_lock_before_merge_commits_updated_lockfile() {
+    let _permit = test_subprocess::acquire();
+    let repo = init_repo();
+    std::fs::write(repo.path().join("Cargo.lock"), "version = 1\n").unwrap();
+    git(repo.path(), &["add", "Cargo.lock"]);
+    git(repo.path(), &["commit", "-m", "add lockfile"]);
+
+    let (wt, branch) = create_empty_worktree_branch(repo.path());
+    std::fs::write(repo.path().join("Cargo.lock"), "version = 2\n").unwrap();
+    git(repo.path(), &["add", "Cargo.lock"]);
+    git(repo.path(), &["commit", "-m", "update lockfile"]);
+
+    sync_cargo_lock_before_merge(&repo.path().to_string_lossy(), &wt.path().to_string_lossy(), &branch);
+
+    assert_eq!(std::fs::read_to_string(wt.path().join("Cargo.lock")).unwrap(), "version = 2\n");
+    assert!(commits_ahead(&repo.path().to_string_lossy(), &branch) > 0);
+
+    let log = Command::new("git")
+        .args(["-C", &wt.path().to_string_lossy(), "log", "-1", "--pretty=%s"])
+        .output()
+        .unwrap();
+    assert_eq!(String::from_utf8_lossy(&log.stdout).trim(), "chore: sync Cargo.lock from main");
+
+    git(repo.path(), &["worktree", "remove", "--force", &wt.path().to_string_lossy()]);
+}
+
 // --- Integration tests for merge_single ---
 
 #[test]

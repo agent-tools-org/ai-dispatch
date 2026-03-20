@@ -10,6 +10,8 @@ use super::batch_args::task_to_run_args;
 use super::batch_helpers::{resolve_hook_targets, trigger_conditional};
 use super::batch_types::{BatchDispatchResult, BatchTaskOutcome, CompletedTask, DispatchedTask};
 use super::batch_validate::{find_ready_tasks, load_task_outcome, resolve_dependencies, task_label};
+
+const COMPLETION_POLL_INTERVAL: std::time::Duration = std::time::Duration::from_millis(200);
 pub(crate) async fn dispatch_parallel(
     store: Arc<Store>,
     tasks: &[batch::BatchTask],
@@ -305,7 +307,7 @@ fn wait_for_any_completion(store: &Arc<Store>, active: &mut Vec<(usize, String)>
             }
             return Ok(completed_tasks);
         }
-        std::thread::sleep(std::time::Duration::from_secs(2));
+        std::thread::sleep(COMPLETION_POLL_INTERVAL);
     }
 }
 async fn maybe_dispatch_auto_fallback(

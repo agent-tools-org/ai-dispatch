@@ -64,6 +64,7 @@ fn merge_single(store: &Store, task_id: &str, approve: bool, check: bool) -> Res
             && std::path::Path::new(wt).exists()
         {
             auto_commit_uncommitted(wt, branch);
+            sync_cargo_lock_before_merge(&repo_dir, wt, branch);
         }
         // Pre-check: verify branch has commits to merge
         let ahead = commits_ahead(&repo_dir, branch);
@@ -156,11 +157,12 @@ fn merge_group(store: &Store, group_id: &str, approve: bool, check: bool) -> Res
         let repo_dir = resolve_repo_dir(task.repo_path.as_deref(), task.worktree_path.as_deref());
         if let Some(ref branch) = task.worktree_branch {
             // Auto-commit uncommitted changes
-        if let Some(wt) = task.worktree_path.as_deref()
-            && std::path::Path::new(wt).exists()
-        {
-            auto_commit_uncommitted(wt, branch);
-        }
+            if let Some(wt) = task.worktree_path.as_deref()
+                && std::path::Path::new(wt).exists()
+            {
+                auto_commit_uncommitted(wt, branch);
+                sync_cargo_lock_before_merge(&repo_dir, wt, branch);
+            }
             let ahead = commits_ahead(&repo_dir, branch);
             if ahead == 0 {
                 aid_warn!("[aid] Warning: {} — branch {branch} has 0 commits, skipping", task.id);

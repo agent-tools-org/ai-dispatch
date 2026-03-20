@@ -3,11 +3,6 @@
 // Depends on agents, hooks, store, and run_agent helpers for process lifecycle work.
 use anyhow::{Context, Result};
 use chrono::Local;
-use std::collections::HashMap;
-use std::path::Path;
-use std::sync::Arc;
-use serde_json;
-use tokio::process::Command;
 use crate::agent::{self, RunOpts};
 use crate::agent_config;
 use crate::background::{self, BackgroundRunSpec};
@@ -21,13 +16,19 @@ use crate::session;
 use crate::store::Store;
 use crate::types::*;
 use crate::usage;
+use std::collections::HashMap;
+use std::path::Path;
+use std::sync::Arc;
+use tokio::process::Command;
 #[path = "run_prompt.rs"]
 mod run_prompt;
 #[path = "run_agent.rs"]
 mod run_agent;
 #[path = "run_bestof.rs"]
 mod run_bestof;
-use self::run_agent::{check_worktree_escape, check_scope_violations, run_agent_process_with_timeout};
+#[path = "run_lifecycle.rs"]
+mod run_lifecycle;
+use self::run_agent::run_agent_process_with_timeout;
 pub const NO_SKILL_SENTINEL: &str = "__aid_no_skill__";
 #[derive(Clone, Default)]
 pub struct RunArgs {
@@ -175,9 +176,7 @@ pub async fn run(store: Arc<Store>, mut args: RunArgs) -> Result<TaskId> {
         args.dir = Some(".".to_string());
         aid_info!("[aid] Auto-set --dir . (git repo detected)");
     }
-    let agent_display_name = custom_agent_name
-        .as_deref()
-        .unwrap_or_else(|| agent_kind.as_str());
+    let agent_display_name = custom_agent_name.as_deref().unwrap_or_else(|| agent_kind.as_str());
     if let Some(info) = rate_limit::get_rate_limit_info(&agent_kind)
         && let Some(ref recovery) = info.recovery_at
     {
@@ -220,10 +219,7 @@ pub async fn run(store: Arc<Store>, mut args: RunArgs) -> Result<TaskId> {
     } else {
         false
     };
-    let requested_model = args
-        .model
-        .clone()
-        .or_else(|| agent_config::get_default_model(&args.agent_name));
+    let requested_model = args.model.clone().or_else(|| agent_config::get_default_model(&args.agent_name));
     let budget_active = args.budget || auto_budget || cfg.selection.budget_mode;
     let effective_model = if budget_active && requested_model.is_none() {
         if let Some(bm) = cmd_config::budget_model(&agent_kind) {
@@ -307,24 +303,15 @@ pub async fn run(store: Arc<Store>, mut args: RunArgs) -> Result<TaskId> {
         );
         println!("[dry-run] Task: {task_id}");
         println!("[dry-run] Agent: {agent_display_name}");
-        println!(
-            "[dry-run] Prompt: {}",
-            preview_prompt(&prompt_bundle.effective_prompt, 200)
-        );
+        println!("[dry-run] Prompt: {}", preview_prompt(&prompt_bundle.effective_prompt, 200));
         if !prompt_bundle.context_files.is_empty() {
-            println!(
-                "[dry-run] Context: {}",
-                prompt_bundle.context_files.join(", ")
-            );
+            println!("[dry-run] Context: {}", prompt_bundle.context_files.join(", "));
         }
         if !requested_skills.is_empty() {
             println!("[dry-run] Skills: {}", requested_skills.join(", "));
         }
         println!("[dry-run] Estimated tokens: ~{}", prompt_bundle.prompt_tokens);
-        println!(
-            "[dry-run] Estimated cost: {}",
-            crate::cost::format_cost(estimated_cost)
-        );
+        println!("[dry-run] Estimated cost: {}", crate::cost::format_cost(estimated_cost));
         return Ok(task_id);
     }
     let opts = RunOpts {
@@ -333,7 +320,7 @@ pub async fn run(store: Arc<Store>, mut args: RunArgs) -> Result<TaskId> {
         model: effective_model.clone(),
         budget: budget_active,
         read_only: args.read_only,
-        context_files: prompt_bundle.context_files,
+        context_files: prompt_bundle.context_files.clone(),
         session_id: args.session_id.clone(),
         env: args.env.clone(),
         env_forward: args.env_forward.clone(),
@@ -341,14 +328,8 @@ pub async fn run(store: Arc<Store>, mut args: RunArgs) -> Result<TaskId> {
     let mut runtime_hooks = hooks::load_hooks()?;
     runtime_hooks.extend(hooks::parse_cli_hooks(&args.hooks)?);
     let container_name = if let Some(image) = args.container.as_deref() {
-        let project_dir = effective_dir
-            .as_deref()
-            .map(Path::new)
-            .unwrap_or_else(|| Path::new("."));
-        let project_id = detected_project
-            .as_ref()
-            .map(|project| project.id.as_str())
-            .unwrap_or(task_id.as_str());
+        let project_dir = effective_dir.as_deref().map(Path::new).unwrap_or_else(|| Path::new("."));
+        let project_id = detected_project.as_ref().map(|project| project.id.as_str()).unwrap_or(task_id.as_str());
         Some(crate::container::start_or_reuse(image, project_dir, project_id)?)
     } else {
         None
@@ -502,303 +483,12 @@ pub async fn run(store: Arc<Store>, mut args: RunArgs) -> Result<TaskId> {
             )
             .await?;
         }
-        if args.sandbox {
-            crate::sandbox::kill_container(task_id.as_str());
-        }
-        run_prompt::warn_agent_committed_files_outside_scope(
-            &args.scope,
-            args.dir.as_ref(),
-            effective_dir.as_ref(),
-            resolved_repo.as_ref(),
-            wt_path.as_ref(),
-        );
-        // Detect worktree escape: warn if agent modified files in main repo
-        if args.worktree.is_some() {
-            check_worktree_escape(repo_path.as_deref());
-        }
-        let pre_verify_status =
-            store.get_task(task_id.as_str())?.map(|task| task.status).unwrap_or(TaskStatus::Done);
-        maybe_verify(
-            &store,
-            &task_id,
-            args.verify.as_deref(),
-            effective_dir.as_deref(),
-            container_name.as_deref(),
-        );
-        if !args.scope.is_empty() {
-            check_scope_violations(&store, &task_id, &args.scope, effective_dir.as_deref());
-        }
-        let mut quota_error_message = None;
-        if let Some(task) = store.get_task(task_id.as_str())? {
-            if task.status == TaskStatus::Done && rate_limit::is_rate_limited(&agent_kind) {
-                rate_limit::clear_rate_limit(&agent_kind);
-            }
-            if task.status == TaskStatus::Done && !prompt_bundle.injected_memory_ids.is_empty() {
-                for memory_id in &prompt_bundle.injected_memory_ids {
-                    if let Err(err) = store.increment_memory_success(memory_id) {
-                        aid_error!("[aid] Failed to record memory success for {memory_id}: {err}");
-                    }
-                }
-            }
-            maybe_flag_empty_worktree_diff(store.as_ref(), &task_id, &task);
-            maybe_cleanup_fast_fail(&store, &task_id, &task);
-            // Auto-cleanup worktree for failed tasks (no useful changes to preserve)
-            if task.status == TaskStatus::Failed {
-                quota_error_message = read_quota_error_message(&task_id);
-                if let Some(message) = quota_error_message.as_deref()
-                    && let Some(clean_message) = rate_limit::extract_rate_limit_message(message)
-                {
-                    rate_limit::mark_rate_limited(&agent_kind, &clean_message);
-                }
-                let fail_payload = show::task_hook_json(
-                    &task_id,
-                    agent_display_name,
-                    TaskStatus::Failed,
-                    &task.prompt,
-                    task.worktree_path.as_deref(),
-                    effective_dir.as_deref(),
-                    task.exit_code,
-                );
-                if let Err(err) = hooks::run_hooks_with(
-                    "on_fail",
-                    &fail_payload,
-                    Some(agent_display_name),
-                    &runtime_hooks,
-                    false,
-                ) {
-                    aid_error!("[aid] Hook on_fail failed: {err}");
-                }
-                if let Some(wt) = task.worktree_path.as_deref()
-                    && std::path::Path::new(wt).exists()
-                {
-                    let repo = repo_path.as_deref().unwrap_or(".");
-                    if let Err(err) = crate::cmd::merge::remove_worktree(repo, wt) {
-                        aid_warn!("[aid] Warning: failed to clean up worktree {wt}: {err}");
-                    }
-                }
-            }
-        }
-        rescue_quota_failed_task(store.as_ref(), &task_id, quota_error_message.as_deref());
-        if let Some(retry_id) = maybe_judge_retry(&store, &args, &task_id).await? {
+        let pre_verify_status = store.get_task(task_id.as_str())?.map(|task| task.status).unwrap_or(TaskStatus::Done);
+        if let Some(retry_id) = run_lifecycle::post_run_lifecycle(&store, &task_id, &args, agent_kind, agent_display_name, effective_dir.as_ref(), repo_path.as_ref(), wt_path.as_ref(), container_name.as_deref(), &runtime_hooks, &prompt_bundle, pre_verify_status).await? {
             return Ok(retry_id);
-        }
-        if let Some(ref reviewer_agent) = args.peer_review
-            && let Some(task) = store.get_task(task_id.as_str())?
-            && task.status == TaskStatus::Done
-        {
-            match judge::peer_review_task(&task, reviewer_agent, &args.prompt).await {
-                Ok(review) => {
-                    aid_info!(
-                        "[aid] Peer review by {reviewer_agent}: {}/10 — {}",
-                        review.score, review.feedback
-                    );
-                    store.save_peer_review(
-                        task_id.as_str(),
-                        reviewer_agent,
-                        review.score,
-                        &review.feedback,
-                    )?;
-                }
-                Err(e) => aid_error!("[aid] Peer review failed: {e}"),
-            }
-        }
-        run_prompt::notify_task_completion(&store, &task_id)?;
-        let Some(task) = store.get_task(task_id.as_str())? else { return Ok(task_id) };
-        let summary = crate::cmd::summary::generate_summary(&task);
-        let summary_json = serde_json::to_string(&summary).unwrap_or_default();
-        let _ = store.save_completion_summary(task_id.as_str(), &summary_json);
-        if let Some(task) = store.get_task(task_id.as_str())? {
-            let done_payload = show::task_hook_json(
-                &task_id,
-                agent_display_name,
-                task.status,
-                &task.prompt,
-                task.worktree_path.as_deref(),
-                effective_dir.as_deref(),
-                task.exit_code,
-            );
-            if let Err(err) = hooks::run_hooks_with(
-                "after_complete",
-                &done_payload,
-                Some(agent_display_name),
-                &runtime_hooks,
-                false,
-            ) {
-                aid_error!("[aid] Hook after_complete failed: {err}");
-            }
-        }
-        crate::webhook::fire_task_webhooks(&store, task_id.as_str()).await;
-        if args.announce {
-            let status_hint = if let Some(task) = store.get_task(task_id.as_str())? {
-                match task.status {
-                    TaskStatus::Done => {
-                        format!("[aid] Next: aid show {task_id} --diff | aid merge {task_id}")
-                    }
-                    TaskStatus::Failed => {
-                        let reason = store.latest_error(task_id.as_str())
-                            .map(|r| format!("[aid] Reason: {r}\n"))
-                            .unwrap_or_default();
-                        let next = format!(
-                            "[aid] Next: aid show {task_id} | aid retry {task_id} -f \"feedback\""
-                        );
-                        if task.duration_ms.unwrap_or(i64::MAX) < 5000 {
-                            let stderr = retry_logic::read_stderr_tail(task_id.as_str(), 3);
-                            format!("{reason}{next}\n[aid] Hint: task failed in <5s — check agent binary is installed and --dir points to a valid repo\n[aid] stderr: {stderr}")
-                        } else {
-                            format!("{reason}{next}")
-                        }
-                    }
-                    _ => String::new(),
-                }
-            } else {
-                String::new()
-            };
-            if !status_hint.is_empty() {
-                aid_hint!("{status_hint}");
-            }
-        }
-        if let Some(retry_id) =
-            maybe_auto_retry_after_verify_failure(&store, &task_id, &args, pre_verify_status)
-                .await?
-        {
-            return Ok(retry_id);
-        }
-        crate::verify::enforce_verify_status(&store, &task_id);
-        let completed_normally = if let Some(mut retry_args) =
-            retry_logic::prepare_retry(store.clone(), &task_id, &args).await?
-        {
-            if let Some(task) = store.get_task(task_id.as_str())? {
-                inherit_retry_base_branch(args.dir.as_deref(), &task, &mut retry_args);
-            }
-            Box::pin(run(store, retry_args)).await?;
-            false
-        } else if let Some(task) = store.get_task(task_id.as_str())?
-            && task.status == TaskStatus::Failed
-            && let Some((next_agent, remaining_cascade)) = take_next_cascade_agent(&args)
-        {
-            aid_info!(
-                "[aid] Cascade: trying {} after {} failed",
-                next_agent,
-                args.agent_name
-            );
-            let mut cascade_args = args.clone();
-            cascade_args.agent_name = next_agent;
-            cascade_args.cascade = remaining_cascade;
-            cascade_args.parent_task_id = Some(task_id.as_str().to_string());
-            Box::pin(run(store, cascade_args)).await?;
-            false
-        } else if let Some(task) = store.get_task(task_id.as_str())?
-            && task.status == TaskStatus::Failed
-            && args.cascade.is_empty()
-            && let Some(message) = quota_error_message.as_deref()
-            && let Some(clean_message) = rate_limit::extract_rate_limit_message(message)
-            && let Some(fallback) = agent::selection::coding_fallback_for(&agent_kind)
-        {
-            rate_limit::mark_rate_limited(&agent_kind, &clean_message);
-            aid_info!(
-                "[aid] Quota exhausted for {}, auto-cascading to {}",
-                agent_kind.as_str(),
-                fallback.as_str()
-            );
-            let mut cascade_args = args.clone();
-            cascade_args.agent_name = fallback.as_str().to_string();
-            cascade_args.parent_task_id = Some(task_id.as_str().to_string());
-            Box::pin(run(store, cascade_args)).await?;
-            false
-        } else {
-            true
-        };
-        if completed_normally {
-            aid_info!("[aid] View in TUI: aid board");
         }
     }
     Ok(task_id)
-}
-
-fn maybe_flag_empty_worktree_diff(store: &Store, task_id: &TaskId, task: &Task) {
-    if task.status != TaskStatus::Done || task.verify_status != VerifyStatus::Skipped {
-        return;
-    }
-    let Some(wt_path) = task.worktree_path.as_deref() else {
-        return;
-    };
-    let path = Path::new(wt_path);
-    if !path.exists() {
-        return;
-    }
-    if let Some(true) = worktree_is_empty_diff(path) {
-        aid_warn!("[aid] Warning: agent completed but made no code changes in worktree");
-        if let Err(err) = store.update_verify_status(task_id.as_str(), VerifyStatus::EmptyDiff) {
-            aid_error!("[aid] Failed to record empty diff status: {err}");
-        }
-    }
-}
-fn take_next_cascade_agent(args: &RunArgs) -> Option<(String, Vec<String>)> {
-    let mut cascade = args.cascade.clone();
-    if cascade.is_empty() {
-        None
-    } else {
-        let next_agent = cascade.remove(0);
-        Some((next_agent, cascade))
-    }
-}
-
-pub(crate) fn rescue_quota_failed_task(
-    store: &Store,
-    task_id: &TaskId,
-    quota_error_message: Option<&str>,
-) {
-    if quota_error_message.is_none() {
-        return;
-    }
-    let Ok(Some(task)) = store.get_task(task_id.as_str()) else {
-        return;
-    };
-    if task.status == TaskStatus::Failed && task.verify_status == VerifyStatus::Passed {
-        aid_info!("[aid] Rescuing quota-failed task {} — verify passed", task_id);
-        let _ = store.update_task_status(task_id.as_str(), TaskStatus::Done);
-    }
-}
-
-pub(crate) fn read_quota_error_message(task_id: &TaskId) -> Option<String> {
-    let stderr_path = crate::paths::stderr_path(task_id.as_str());
-    if let Ok(stderr) = std::fs::read_to_string(&stderr_path) {
-        if let Some(line) = find_rate_limit_line(&stderr) {
-            return Some(line);
-        }
-    }
-    let log_path = crate::paths::log_path(task_id.as_str());
-    if let Ok(log) = std::fs::read_to_string(&log_path) {
-        if let Some(line) = find_rate_limit_line(&log) {
-            return Some(line);
-        }
-    }
-    None
-}
-
-/// Extract the specific line that contains the rate-limit error, not the entire file.
-fn find_rate_limit_line(content: &str) -> Option<String> {
-    content
-        .lines()
-        .find_map(rate_limit::extract_rate_limit_message)
-}
-
-fn worktree_is_empty_diff(worktree_dir: &Path) -> Option<bool> {
-    let head = git_diff_stat_output(worktree_dir, &["diff", "--stat", "HEAD"])?;
-    let staged = git_diff_stat_output(worktree_dir, &["diff", "--cached", "--stat"])?;
-    Some(head.trim().is_empty() && staged.trim().is_empty())
-}
-
-fn git_diff_stat_output(dir: &Path, args: &[&str]) -> Option<String> {
-    let output = std::process::Command::new("git")
-        .current_dir(dir)
-        .args(args)
-        .output()
-        .ok()?;
-    if !output.status.success() {
-        return None;
-    }
-    Some(String::from_utf8_lossy(&output.stdout).to_string())
 }
 
 #[cfg(test)]
@@ -808,6 +498,12 @@ mod tests;
 
 pub(crate) fn inherit_retry_base_branch(repo_dir: Option<&str>, task: &Task, retry_args: &mut RunArgs) { run_prompt::inherit_retry_base_branch_impl(repo_dir, task, retry_args); }
 pub(crate) use run_agent::run_agent_process;
+#[cfg(test)]
+fn take_next_cascade_agent(args: &RunArgs) -> Option<(String, Vec<String>)> { run_lifecycle::take_next_cascade_agent(args) }
+pub(crate) fn rescue_quota_failed_task(store: &Store, task_id: &TaskId, quota_error_message: Option<&str>) { run_lifecycle::rescue_quota_failed_task(store, task_id, quota_error_message); }
+pub(crate) fn read_quota_error_message(task_id: &TaskId) -> Option<String> { run_lifecycle::read_quota_error_message(task_id) }
+#[cfg(test)]
+fn worktree_is_empty_diff(worktree_dir: &Path) -> Option<bool> { run_lifecycle::worktree_is_empty_diff(worktree_dir) }
 
 pub(crate) fn maybe_cleanup_fast_fail(store: &Store, task_id: &TaskId, task: &Task) { run_prompt::maybe_cleanup_fast_fail_impl(store, task_id, task); }
 /// Run verification if --verify was set and a working dir exists.

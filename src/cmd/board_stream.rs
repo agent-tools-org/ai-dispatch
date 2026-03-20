@@ -9,6 +9,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use crate::background;
+use crate::cmd::eta;
 use crate::session;
 use crate::store::Store;
 use crate::types::{Task, TaskFilter, TaskStatus};
@@ -70,7 +71,7 @@ fn init_stream(
             task.id.as_str(),
             task.agent_display_name(),
             colored_status(task.status),
-            duration_for_task(task),
+            duration_for_task(task, store),
             prompt_snippet(task),
         );
     }
@@ -124,7 +125,7 @@ fn poll_and_print(
                 task.id.as_str(),
                 task.agent_display_name(),
                 colored_status(task.status),
-                duration_for_task(task),
+                duration_for_task(task, store),
                 prompt_snippet(task),
             );
         }
@@ -197,13 +198,18 @@ fn color(label: &str, code: &str) -> String {
     format!("{code}{label}{ANSI_RESET}")
 }
 
-fn duration_for_task(task: &Task) -> String {
+fn duration_for_task(task: &Task, store: &Store) -> String {
     if task.status == TaskStatus::Skipped {
         return "-".to_string();
     }
-    task.duration_ms
+    let duration = task
+        .duration_ms
         .map(format_duration)
-        .unwrap_or_else(|| elapsed_since(task.created_at))
+        .unwrap_or_else(|| elapsed_since(task.created_at));
+    match eta::estimate_eta(task, store) {
+        Some(eta) => format!("{duration} (ETA: {eta})"),
+        None => duration,
+    }
 }
 
 fn format_duration(ms: i64) -> String {

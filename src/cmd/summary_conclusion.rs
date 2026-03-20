@@ -112,5 +112,10 @@ fn normalize_text(text: &str) -> Option<String> {
 }
 
 fn truncate_conclusion(text: &str) -> String {
-    text.chars().take(200).collect()
+    if text.len() <= 2_000 {
+        text.to_string()
+    } else {
+        let end = text.floor_char_boundary(2_000 - 3);
+        format!("{}...", &text[..end])
+    }
 }

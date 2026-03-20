@@ -215,6 +215,18 @@ pub fn audit_text(store: &Arc<Store>, task_id: &str) -> Result<String> {
         }
     }
 
+    if !task_has_changes(&task) && task.status.is_terminal()
+        && let Some(findings) = research_findings(store.as_ref(), &task)
+    {
+        out.push_str("\nFindings:\n");
+        out.push_str(&findings);
+        out.push('\n');
+        aid_hint!(
+            "[aid] Research task. Full output: aid show {} --output [--full]",
+            task.id
+        );
+    }
+
     Ok(out)
 }
 
@@ -245,6 +257,14 @@ pub fn summary_text(store: &Arc<Store>, task_id: &str) -> Result<String> {
             out.push_str(&stat);
         } else {
             out.push_str("  (no changes detected)\n");
+        }
+    }
+
+    if !out.contains("--- Diff Stat ---") || out.contains("(no changes detected)") {
+        if let Some(conclusion) = completion_conclusion(store.as_ref(), task.id.as_str()) {
+            out.push_str("\nConclusion: ");
+            out.push_str(&conclusion);
+            out.push('\n');
         }
     }
 
@@ -334,6 +354,40 @@ fn inplace_diff_stat(repo_path: &str) -> Option<String> {
     }
 }
 
+fn task_has_changes(task: &Task) -> bool {
+    if task.verify_status == VerifyStatus::EmptyDiff {
+        return false;
+    }
+    task.worktree_path
+        .as_ref()
+        .is_some_and(|path| Path::new(path).exists())
+        || (task.worktree_branch.is_none()
+            && inplace_diff_stat(task.repo_path.as_deref().unwrap_or(".")).is_some())
+}
+
+fn completion_conclusion(store: &Store, task_id: &str) -> Option<String> {
+    let summary_json = store.get_completion_summary(task_id).ok()??;
+    let summary =
+        serde_json::from_str::<crate::cmd::summary::CompletionSummary>(&summary_json).ok()?;
+    if summary.conclusion.is_empty() {
+        None
+    } else {
+        Some(summary.conclusion)
+    }
+}
+
+fn research_findings(store: &Store, task: &Task) -> Option<String> {
+    if let Some(conclusion) = completion_conclusion(store, task.id.as_str()) {
+        return Some(conclusion);
+    }
+    let log_path = task
+        .log_path
+        .as_ref()
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|| crate::paths::log_path(task.id.as_str()));
+    extract_messages_from_log(&log_path, false).filter(|messages| !messages.is_empty())
+}
+
 pub(crate) fn task_hook_json(
     task_id: &TaskId,
     agent: &str,
@@ -374,8 +428,11 @@ fn stderr_tail(task_id: &str) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::cmd::summary::CompletionSummary;
     use crate::types::{AgentKind, TaskId, VerifyStatus};
     use chrono::Local;
+    use std::path::Path;
+    use std::process::Command;
     use std::sync::Arc;
 
     #[test]
@@ -475,28 +532,28 @@ mod tests {
     fn summary_text_shows_diff_stat_without_full_diff() {
         let temp = tempfile::tempdir().unwrap();
         let repo = temp.path();
-        std::process::Command::new("git")
+        Command::new("git")
             .args(["init"])
             .current_dir(repo)
             .output()
             .unwrap();
-        std::process::Command::new("git")
+        Command::new("git")
             .args(["config", "user.email", "test@example.com"])
             .current_dir(repo)
             .output()
             .unwrap();
-        std::process::Command::new("git")
+        Command::new("git")
             .args(["config", "user.name", "Test User"])
             .current_dir(repo)
             .output()
             .unwrap();
         std::fs::write(repo.join("note.txt"), "before\n").unwrap();
-        std::process::Command::new("git")
+        Command::new("git")
             .args(["add", "note.txt"])
             .current_dir(repo)
             .output()
             .unwrap();
-        std::process::Command::new("git")
+        Command::new("git")
             .args(["commit", "-m", "init"])
             .current_dir(repo)
             .output()
@@ -543,5 +600,114 @@ mod tests {
         assert!(text.contains("note.txt | 1 +"));
         assert!(!text.contains("--- Full Diff ---"));
         assert!(!text.contains("@@"));
+    }
+
+    #[test]
+    fn audit_text_shows_findings_for_research_task() {
+        let temp = tempfile::tempdir().unwrap();
+        init_git_repo(temp.path());
+        let store = Arc::new(Store::open_memory().unwrap());
+        let task = research_task("t-audit-findings", temp.path());
+        store.insert_task(&task).unwrap();
+        save_completion_summary(&store, task.id.as_str(), "Investigated the failure mode.");
+
+        let text = audit_text(&store, task.id.as_str()).unwrap();
+
+        assert!(text.contains("Findings:\nInvestigated the failure mode."));
+    }
+
+    #[test]
+    fn summary_text_shows_conclusion_for_research_task() {
+        let temp = tempfile::tempdir().unwrap();
+        init_git_repo(temp.path());
+        let store = Arc::new(Store::open_memory().unwrap());
+        let task = research_task("t-summary-conclusion", temp.path());
+        store.insert_task(&task).unwrap();
+        save_completion_summary(&store, task.id.as_str(), "Summarized the research outcome.");
+
+        let text = summary_text(&store, task.id.as_str()).unwrap();
+
+        assert!(text.contains("--- Diff Stat ---"));
+        assert!(text.contains("(no changes detected)"));
+        assert!(text.contains("Conclusion: Summarized the research outcome."));
+    }
+
+    fn init_git_repo(repo: &Path) {
+        Command::new("git")
+            .args(["init"])
+            .current_dir(repo)
+            .output()
+            .unwrap();
+        Command::new("git")
+            .args(["config", "user.email", "test@example.com"])
+            .current_dir(repo)
+            .output()
+            .unwrap();
+        Command::new("git")
+            .args(["config", "user.name", "Test User"])
+            .current_dir(repo)
+            .output()
+            .unwrap();
+        std::fs::write(repo.join("note.txt"), "baseline\n").unwrap();
+        Command::new("git")
+            .args(["add", "note.txt"])
+            .current_dir(repo)
+            .output()
+            .unwrap();
+        Command::new("git")
+            .args(["commit", "-m", "init"])
+            .current_dir(repo)
+            .output()
+            .unwrap();
+    }
+
+    fn research_task(task_id: &str, repo: &Path) -> Task {
+        Task {
+            id: TaskId(task_id.to_string()),
+            agent: AgentKind::Codex,
+            custom_agent_name: None,
+            prompt: "research task".to_string(),
+            resolved_prompt: None,
+            category: None,
+            status: TaskStatus::Done,
+            parent_task_id: None,
+            workgroup_id: None,
+            caller_kind: None,
+            caller_session_id: None,
+            agent_session_id: None,
+            repo_path: Some(repo.display().to_string()),
+            worktree_path: None,
+            worktree_branch: None,
+            log_path: None,
+            output_path: None,
+            tokens: None,
+            prompt_tokens: None,
+            duration_ms: None,
+            model: None,
+            cost_usd: None,
+            exit_code: None,
+            created_at: Local::now(),
+            completed_at: None,
+            verify: None,
+            verify_status: VerifyStatus::Skipped,
+            read_only: false,
+            budget: false,
+        }
+    }
+
+    fn save_completion_summary(store: &Store, task_id: &str, conclusion: &str) {
+        let summary = CompletionSummary {
+            task_id: task_id.to_string(),
+            agent: "codex".to_string(),
+            status: "done".to_string(),
+            files_changed: vec![],
+            summary_text: "research task completed".to_string(),
+            conclusion: conclusion.to_string(),
+            duration_secs: None,
+            token_count: None,
+        };
+        store
+            .save_completion_summary(task_id, &serde_json::to_string(&summary).unwrap())
+            .unwrap();
     }
 }

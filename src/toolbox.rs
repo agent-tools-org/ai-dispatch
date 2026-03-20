@@ -175,6 +175,34 @@ pub fn filter_by_auto_inject(tools: Vec<ToolMeta>, auto_inject: &[String]) -> Ve
     tools.into_iter().filter(|t| allow.contains(t.name.as_str())).collect()
 }
 
+pub fn filter_by_task_category(tools: Vec<ToolMeta>, category: &str) -> Vec<ToolMeta> {
+    let category = category.trim();
+    if category.is_empty() {
+        return tools;
+    }
+    let relevant_tags: &[&str] = match category {
+        "research" => &["research", "search", "docs", "web"],
+        "simple-edit" | "complex-impl" | "refactoring" => {
+            &["build", "lint", "test", "verify", "deploy"]
+        }
+        "frontend" => &["build", "lint", "test", "ui", "design"],
+        "debugging" => &["debug", "trace", "logs", "rpc", "chain"],
+        "testing" => &["test", "verify", "build"],
+        "documentation" => &["docs", "search", "web"],
+        _ => return tools,
+    };
+    tools
+        .into_iter()
+        .filter(|tool| {
+            tool.tags.is_empty()
+                || tool
+                    .tags
+                    .iter()
+                    .any(|tag| relevant_tags.contains(&tag.as_str()))
+        })
+        .collect()
+}
+
 pub fn find_tool(name: &str, team_id: Option<&str>, project_dir: Option<&Path>) -> Result<ToolMeta> {
     crate::sanitize::validate_name(name, "tool")?;
     resolve_toolbox(team_id, project_dir)
@@ -376,6 +404,40 @@ mod tests {
         let tools = vec![make_tool("lint"), make_tool("test")];
         let result = filter_by_auto_inject(tools, &[]);
         assert_eq!(result.len(), 2);
+    }
+
+    #[test]
+    fn filter_by_task_category_keeps_untagged_tools() {
+        let tools = vec![make_tool("universal")];
+        let filtered = filter_by_task_category(tools, "research");
+        assert_eq!(filtered.len(), 1);
+        assert_eq!(filtered[0].name, "universal");
+    }
+
+    #[test]
+    fn filter_by_task_category_filters_irrelevant() {
+        let mut tool = make_tool("rpc");
+        tool.tags = vec!["rpc".to_string()];
+        let filtered = filter_by_task_category(vec![tool], "research");
+        assert!(filtered.is_empty());
+    }
+
+    #[test]
+    fn filter_by_task_category_keeps_relevant() {
+        let mut tool = make_tool("search");
+        tool.tags = vec!["search".to_string()];
+        let filtered = filter_by_task_category(vec![tool], "research");
+        assert_eq!(filtered.len(), 1);
+        assert_eq!(filtered[0].name, "search");
+    }
+
+    #[test]
+    fn filter_by_task_category_empty_category_keeps_all() {
+        let mut tagged = make_tool("search");
+        tagged.tags = vec!["search".to_string()];
+        let tools = vec![make_tool("universal"), tagged];
+        let filtered = filter_by_task_category(tools, "");
+        assert_eq!(filtered.len(), 2);
     }
 
     #[test]

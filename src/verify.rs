@@ -105,11 +105,12 @@ pub fn record_verify_status(store: &Store, task_id: &TaskId, result: &VerifyResu
     };
     let _ = store.update_verify_status(task_id.as_str(), status);
 }
-/// If verify failed and no retry is planned, downgrade task status to Failed.
+/// Log when verify failed but keep task as Done — the agent's work is preserved.
+/// The verify_status = Failed tag signals the failure without losing the output.
 pub fn enforce_verify_status(store: &Store, task_id: &TaskId) {
     let Some(task) = store.get_task(task_id.as_str()).ok().flatten() else { return };
     if task.status == TaskStatus::Done && task.verify_status == VerifyStatus::Failed {
-        let _ = store.update_task_status(task_id.as_str(), TaskStatus::Failed);
+        eprintln!("[aid] Task {task_id} completed but verify failed — status kept as DONE [VFAIL]");
     }
 }
 fn auto_detect_command(path: &Path) -> String {

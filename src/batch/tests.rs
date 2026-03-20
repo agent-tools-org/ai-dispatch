@@ -247,15 +247,63 @@ fn rejects_unknown_agent() {
 }
 
 #[test]
-fn rejects_duplicate_worktree() {
+fn auto_sequences_shared_worktree_tasks() {
     let file = write_temp(concat!(
-        "[[task]]\nagent = \"gemini\"\nprompt = \"a\"\nworktree = \"feat/x\"\n",
-        "[[task]]\nagent = \"codex\"\nprompt = \"b\"\nworktree = \"feat/x\""
+        "[[task]]\nname = \"task-a\"\nagent = \"gemini\"\nprompt = \"a\"\nworktree = \"feat/x\"\n",
+        "[[task]]\nname = \"task-b\"\nagent = \"codex\"\nprompt = \"b\"\nworktree = \"feat/x\""
     ));
-    assert!(parse_batch_file(file.path())
-        .unwrap_err()
-        .to_string()
-        .contains("duplicate worktree"));
+    let cfg = parse_batch_file(file.path()).unwrap();
+    assert_eq!(
+        cfg.tasks[1].depends_on.as_deref(),
+        Some(&["task-a".to_string()][..]),
+        "task-b should auto-depend on task-a"
+    );
+}
+
+#[test]
+fn auto_sequence_preserves_existing_depends_on() {
+    let file = write_temp(concat!(
+        "[[task]]\nname = \"task-a\"\nagent = \"codex\"\nprompt = \"a\"\nworktree = \"feat/x\"\n",
+        "[[task]]\nname = \"task-b\"\nagent = \"codex\"\nprompt = \"b\"\nworktree = \"feat/x\"\n",
+        "depends_on = [\"task-a\"]"
+    ));
+    let cfg = parse_batch_file(file.path()).unwrap();
+    assert_eq!(cfg.tasks[1].depends_on.as_ref().unwrap().len(), 1);
+}
+
+#[test]
+fn auto_sequence_three_tasks_creates_chain() {
+    let file = write_temp(concat!(
+        "[[task]]\nname = \"a\"\nagent = \"codex\"\nprompt = \"1\"\nworktree = \"feat/x\"\n",
+        "[[task]]\nname = \"b\"\nagent = \"codex\"\nprompt = \"2\"\nworktree = \"feat/x\"\n",
+        "[[task]]\nname = \"c\"\nagent = \"codex\"\nprompt = \"3\"\nworktree = \"feat/x\""
+    ));
+    let cfg = parse_batch_file(file.path()).unwrap();
+    assert!(cfg.tasks[0].depends_on.is_none(), "first task has no deps");
+    assert_eq!(cfg.tasks[1].depends_on.as_deref(), Some(&["a".to_string()][..]));
+    assert_eq!(cfg.tasks[2].depends_on.as_deref(), Some(&["b".to_string()][..]));
+}
+
+#[test]
+fn warns_on_large_prompt() {
+    let big_prompt = "x".repeat(7000);
+    let task = BatchTask {
+        prompt: big_prompt,
+        ..make_task(Some("huge"), &[])
+    };
+    let mut output = Vec::new();
+    warn_prompt_size(&[task], &mut output).unwrap();
+    let msg = String::from_utf8(output).unwrap();
+    assert!(msg.contains("large prompt"), "should warn about large prompt");
+    assert!(msg.contains("huge"), "should name the task");
+}
+
+#[test]
+fn no_warning_on_normal_prompt_size() {
+    let task = make_task(Some("small"), &[]);
+    let mut output = Vec::new();
+    warn_prompt_size(&[task], &mut output).unwrap();
+    assert!(output.is_empty());
 }
 
 #[test]

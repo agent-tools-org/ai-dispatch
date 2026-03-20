@@ -121,6 +121,27 @@ impl Store {
         self.list_tasks(TaskFilter::Running)
     }
 
+    pub fn recent_tasks_for_agent(&self, agent: AgentKind, limit: usize) -> Result<Vec<Task>> {
+        if limit == 0 {
+            return Ok(vec![]);
+        }
+        let conn = self.db();
+        let cutoff = (Local::now() - chrono::Duration::days(7)).to_rfc3339();
+        let limit = i64::try_from(limit)?;
+        let mut stmt = conn.prepare(
+            "SELECT id, agent, prompt, resolved_prompt, status, parent_task_id, workgroup_id,
+             caller_kind, caller_session_id, agent_session_id, repo_path, worktree_path, worktree_branch,
+             log_path, output_path, tokens, prompt_tokens, duration_ms, model, cost_usd, created_at,
+             completed_at, verify, read_only, budget, custom_agent_name, verify_status
+             FROM tasks
+             WHERE agent = ?1 AND status = ?2 AND duration_ms IS NOT NULL AND created_at >= ?3
+             ORDER BY created_at DESC
+             LIMIT ?4",
+        )?;
+        let rows = stmt.query_map(params![agent.as_str(), TaskStatus::Done.as_str(), cutoff, limit], row_to_task)?;
+        rows.map(|row| row?).collect()
+    }
+
     pub fn budget_usage_summary(
         &self,
         agent: &str,

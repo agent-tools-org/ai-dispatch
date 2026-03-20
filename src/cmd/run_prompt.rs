@@ -133,7 +133,7 @@ pub(super) fn build_prompt_bundle(store: &Store, args: &RunArgs, agent_kind: &Ag
             effective_prompt = format!("{block}\n\n{effective_prompt}");
         }
     }
-    let mut effective_prompt = inject_skill(&effective_prompt, agent_kind, requested_skills)?;
+    let mut effective_prompt = inject_skill(&effective_prompt, agent_kind, requested_skills, prompt.len())?;
     let mut injected_memory_ids = Vec::new();
 
     // Inject relevant memories from past tasks
@@ -295,15 +295,25 @@ pub(super) fn resolve_prompt(prompt: &str, template: Option<&str>) -> Result<Str
     } else { Ok(raw) }
 }
 
-pub(super) fn inject_skill(prompt: &str, agent_kind: &AgentKind, requested_skills: &[String]) -> Result<String> {
+/// Minimum prompt length to inject full methodology + gotchas.
+/// Short prompts (trivial tasks) get references-only to avoid context pollution.
+const SKILL_FULL_INJECT_MIN_CHARS: usize = 200;
+
+pub(super) fn inject_skill(prompt: &str, agent_kind: &AgentKind, requested_skills: &[String], raw_prompt_len: usize) -> Result<String> {
     if requested_skills.is_empty() { return Ok(prompt.to_string()); }
+    let full_inject = raw_prompt_len >= SKILL_FULL_INJECT_MIN_CHARS;
+    if !full_inject {
+        aid_info!("[aid] Skill methodology skipped (short prompt, references only)");
+    }
     let mut sections = Vec::new();
     for name in requested_skills {
-        let skill_text = skills::load_skill(name)?;
-        if let Some(gotchas) = skills::load_skill_gotchas(name, agent_kind) {
-            sections.push(format!("--- Gotchas ---\n{gotchas}"));
+        if full_inject {
+            let skill_text = skills::load_skill(name)?;
+            if let Some(gotchas) = skills::load_skill_gotchas(name, agent_kind) {
+                sections.push(format!("--- Gotchas ---\n{gotchas}"));
+            }
+            sections.push(format!("--- Methodology ---\n{skill_text}"));
         }
-        sections.push(format!("--- Methodology ---\n{skill_text}"));
         let scripts = skills::load_skill_scripts(name);
         if !scripts.is_empty() {
             sections.push(

@@ -62,7 +62,14 @@ pub(crate) fn task_to_run_args(
     let cascade = task
         .fallback
         .as_deref()
-        .map(|f| vec![f.to_string()])
+        .map(|fallback| {
+            fallback
+                .split(',')
+                .map(str::trim)
+                .filter(|agent| !agent.is_empty())
+                .map(ToString::to_string)
+                .collect()
+        })
         .unwrap_or_else(|| auto_cascade_for_rate_limited(&agent_name));
     let env = merged_env(task.env.as_ref(), task.env_forward.as_ref(), shared_dir_path);
     RunArgs {

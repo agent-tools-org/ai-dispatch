@@ -10,6 +10,7 @@ use clap::Args;
   aid worktree create feat/my-feature
   aid worktree create fix/bug --base develop
   aid worktree list
+  aid worktree prune
   aid worktree remove feat/my-feature"#)]
 pub struct WorktreeArgs {
     #[command(subcommand)]

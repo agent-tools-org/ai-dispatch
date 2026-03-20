@@ -8,6 +8,7 @@ use std::path::{Path, PathBuf};
 use crate::agent::classifier::TaskCategory;
 use crate::agent::custom::{parse_config, CapabilityScores, CustomAgentConfig};
 use crate::agent::registry;
+use crate::agent_config;
 use crate::agent::selection::AGENT_CAPABILITIES;
 use crate::paths;
 use crate::sanitize;
@@ -67,6 +68,10 @@ pub enum AgentAction {
     Show {
         name: String,
     },
+    Config {
+        name: String,
+        model: Option<String>,
+    },
     Add {
         name: String,
     },
@@ -84,11 +89,24 @@ pub fn run_agent_command(action: AgentAction) -> Result<()> {
     match action {
         AgentAction::List => list_agents(),
         AgentAction::Show { name } => show_agent(&name),
+        AgentAction::Config { name, model } => config_agent(&name, model.as_deref()),
         AgentAction::Add { name } => add_agent(&name),
         AgentAction::Remove { name } => remove_agent(&name),
         AgentAction::Fork { name, new_name } => fork_agent(&name, new_name.as_deref()),
         AgentAction::Quota => show_quota(),
     }
+}
+
+fn config_agent(name: &str, model: Option<&str>) -> Result<()> {
+    if !is_builtin(name) && !registry::custom_agent_exists(name) {
+        bail!("Unknown agent '{name}'");
+    }
+    agent_config::save_agent_default_model(name, model)?;
+    match model {
+        Some(model) => println!("[aid] {name}: default model set to {model}"),
+        None => println!("[aid] {name}: default model cleared"),
+    }
+    Ok(())
 }
 
 fn show_quota() -> Result<()> {

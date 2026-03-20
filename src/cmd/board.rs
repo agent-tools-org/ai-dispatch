@@ -91,6 +91,9 @@ pub fn run(
         ) && task.worktree_path.is_some()
     });
     print!("{}", render_board(&tasks, store)?);
+    if let Some(warning) = long_running_warning(&tasks, Local::now()) {
+        println!("{warning}");
+    }
     if has_terminal_worktree
         && let Ok(stale_count) = crate::cmd::worktree::stale_worktree_count(None)
         && stale_count > 3
@@ -108,4 +111,74 @@ fn task_fingerprint(tasks: &[crate::types::Task]) -> String {
         .collect();
     parts.sort();
     parts.join(",")
+}
+
+fn long_running_warning(tasks: &[crate::types::Task], now: chrono::DateTime<Local>) -> Option<String> {
+    let count = tasks
+        .iter()
+        .filter(|task| task.status == TaskStatus::Running)
+        .filter(|task| (now - task.created_at).num_hours() >= 1)
+        .count();
+    if count == 0 {
+        return None;
+    }
+    Some(format!(
+        "[aid] Warning: {} task(s) running >1h — may be stale. Use `aid stop <id>` to clean up.",
+        count
+    ))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::long_running_warning;
+    use chrono::{Duration, Local};
+
+    use crate::types::{AgentKind, Task, TaskId, TaskStatus, VerifyStatus};
+
+    #[test]
+    fn long_running_warning_counts_running_tasks_older_than_one_hour() {
+        let now = Local::now();
+        let tasks = vec![
+            make_task("t-1001", TaskStatus::Running, now - Duration::hours(1)),
+            make_task("t-1002", TaskStatus::Running, now - Duration::minutes(59)),
+            make_task("t-1003", TaskStatus::Done, now - Duration::hours(3)),
+        ];
+
+        let warning = long_running_warning(&tasks, now).unwrap();
+
+        assert!(warning.contains("1 task(s) running >1h"));
+    }
+
+    fn make_task(task_id: &str, status: TaskStatus, created_at: chrono::DateTime<Local>) -> Task {
+        Task {
+            id: TaskId(task_id.to_string()),
+            agent: AgentKind::Codex,
+            custom_agent_name: None,
+            prompt: "prompt".to_string(),
+            resolved_prompt: None,
+            status,
+            parent_task_id: None,
+            workgroup_id: None,
+            caller_kind: None,
+            caller_session_id: None,
+            agent_session_id: None,
+            repo_path: None,
+            worktree_path: None,
+            worktree_branch: None,
+            log_path: None,
+            output_path: None,
+            tokens: None,
+            prompt_tokens: None,
+            duration_ms: None,
+            model: None,
+            cost_usd: None,
+            exit_code: None,
+            created_at,
+            completed_at: None,
+            verify: None,
+            verify_status: VerifyStatus::Skipped,
+            read_only: false,
+            budget: false,
+        }
+    }
 }

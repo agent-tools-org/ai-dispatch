@@ -26,6 +26,7 @@ use crate::types::{AgentKind, EventKind, TaskEvent, TaskFilter, TaskId, TaskStat
 
 const ZOMBIE_FAILURE_DETAIL: &str = "Background worker died unexpectedly";
 const PENDING_TASK_TIMEOUT_SECS: i64 = 600;
+const MAX_RUN_HOURS: i64 = 24;
 /// Hard limit on concurrent background workers — prevents process exhaustion.
 const MAX_WORKERS: usize = 32;
 
@@ -303,7 +304,8 @@ where
 {
     let config = config::load_config()?;
     let mut cleaned = cleanup_stale_pending_tasks(store)?;
-    for task in store.list_tasks(TaskFilter::Running)? {
+    let running_tasks = store.list_tasks(TaskFilter::Running)?;
+    for task in &running_tasks {
         let task_id = task.id.as_str();
         let Some(spec) = load_spec_if_exists(task_id)? else {
             continue;
@@ -358,6 +360,29 @@ where
         if let Some(agent_pid) = spec.agent_pid {
             kill_process(agent_pid);
         }
+        cleaned.push(task_id.to_string());
+    }
+    for task in running_tasks {
+        let task_id = task.id.as_str();
+        if cleaned.iter().any(|id| id == task_id) {
+            continue;
+        }
+        let elapsed = (Local::now() - task.created_at).num_hours();
+        if elapsed <= MAX_RUN_HOURS {
+            continue;
+        }
+        aid_info!(
+            "[aid] Auto-failing stale task {} (running {}h, max {}h)",
+            task.id,
+            elapsed,
+            MAX_RUN_HOURS
+        );
+        record_failure(
+            store,
+            task_id,
+            "Auto-failed: exceeded 24h maximum runtime",
+            "Task exceeded maximum runtime (24h)",
+        )?;
         cleaned.push(task_id.to_string());
     }
     Ok(cleaned)

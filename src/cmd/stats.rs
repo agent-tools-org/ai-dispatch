@@ -113,7 +113,7 @@ mod tests {
     use crate::types::{EventKind, TaskEvent, TaskId, VerifyStatus};
 
     fn task(id: &str, agent: AgentKind, status: TaskStatus, age_days: i64, model: &str, cost_usd: Option<f64>, duration_ms: Option<i64>) -> Task {
-        Task { id: TaskId(id.to_string()), agent, custom_agent_name: None, prompt: "prompt".to_string(), resolved_prompt: None, status, parent_task_id: None, workgroup_id: None, caller_kind: None, caller_session_id: None, agent_session_id: None, repo_path: None, worktree_path: None, worktree_branch: None, log_path: None, output_path: None, tokens: Some(1_000), prompt_tokens: None, duration_ms, model: Some(model.to_string()), cost_usd, exit_code: None, created_at: Local::now() - Duration::days(age_days), completed_at: None, verify: None, verify_status: VerifyStatus::Skipped, read_only: false, budget: false }
+        Task { id: TaskId(id.to_string()), agent, custom_agent_name: None, prompt: "prompt".to_string(), resolved_prompt: None, category: None, status, parent_task_id: None, workgroup_id: None, caller_kind: None, caller_session_id: None, agent_session_id: None, repo_path: None, worktree_path: None, worktree_branch: None, log_path: None, output_path: None, tokens: Some(1_000), prompt_tokens: None, duration_ms, model: Some(model.to_string()), cost_usd, exit_code: None, created_at: Local::now() - Duration::days(age_days), completed_at: None, verify: None, verify_status: VerifyStatus::Skipped, read_only: false, budget: false }
     }
 
     #[test]

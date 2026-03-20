@@ -14,6 +14,7 @@ fn make_task(id: &str, agent: AgentKind, status: TaskStatus) -> Task {
         custom_agent_name: None,
         prompt: "test prompt".to_string(),
         resolved_prompt: None,
+        category: None,
         status,
         parent_task_id: None,
         workgroup_id: None,

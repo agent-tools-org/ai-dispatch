@@ -263,6 +263,7 @@ fn make_task(task_id: &str, status: TaskStatus) -> Task {
         custom_agent_name: None,
         prompt: "prompt".to_string(),
         resolved_prompt: None,
+        category: None,
         status,
         parent_task_id: None,
         workgroup_id: None,

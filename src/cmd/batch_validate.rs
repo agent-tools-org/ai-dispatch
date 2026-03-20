@@ -3,6 +3,7 @@
 // Deps: crate::batch, crate::rate_limit, crate::store::Store, crate::types
 use super::batch_types::BatchTaskOutcome;
 pub(super) use super::batch_analyze::analyze_file_overlap;
+use crate::agent::classifier;
 use crate::batch;
 use crate::rate_limit;
 use crate::store::Store;
@@ -176,6 +177,12 @@ fn validate_task_agents(tasks: &[batch::BatchTask]) -> Result<()> {
 fn insert_skipped_task(store: &Arc<Store>, task: &batch::BatchTask) -> Result<TaskId> {
     let task_id = TaskId::generate();
     let now = Local::now();
+    let normalized = task.prompt.trim().to_lowercase();
+    let profile = classifier::classify(
+        &task.prompt,
+        classifier::count_file_mentions(&normalized),
+        task.prompt.chars().count(),
+    );
     let (agent, custom_agent_name) = match AgentKind::parse_str(&task.agent) {
         Some(kind) => (kind, None),
         None => (AgentKind::Custom, Some(task.agent.clone())),
@@ -185,6 +192,8 @@ fn insert_skipped_task(store: &Arc<Store>, task: &batch::BatchTask) -> Result<Ta
         agent,
         custom_agent_name,
         prompt: task.prompt.clone(),
+        resolved_prompt: None,
+        category: Some(profile.category.label().to_string()),
         status: TaskStatus::Skipped,
         parent_task_id: None,
         workgroup_id: task.group.clone(),
@@ -207,7 +216,6 @@ fn insert_skipped_task(store: &Arc<Store>, task: &batch::BatchTask) -> Result<Ta
         read_only: task.read_only,
         budget: task.budget,
         created_at: now,
-        resolved_prompt: None,
         completed_at: Some(now),
     })?;
     Ok(task_id)

@@ -64,6 +64,7 @@ pub(super) fn make_stored_task(id: &str, agent: AgentKind, status: TaskStatus) -
         custom_agent_name: None,
         prompt: "test prompt".to_string(),
         resolved_prompt: None,
+        category: None,
         status,
         parent_task_id: None,
         workgroup_id: None,

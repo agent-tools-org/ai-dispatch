@@ -279,12 +279,13 @@ pub async fn run(store: Arc<Store>, mut args: RunArgs) -> Result<TaskId> {
         }
     }
     let caller = session::current_caller();
-    let task = Task {
+    let mut task = Task {
         id: task_id.clone(),
         agent: agent_kind,
         custom_agent_name: custom_agent_name.clone(),
         prompt: args.prompt.clone(),
         resolved_prompt: None,
+        category: None,
         status: TaskStatus::Pending,
         parent_task_id: args.parent_task_id.clone(),
         workgroup_id: args.group.clone(),
@@ -309,6 +310,13 @@ pub async fn run(store: Arc<Store>, mut args: RunArgs) -> Result<TaskId> {
         read_only: args.read_only,
         budget: args.budget,
     };
+    let normalized_prompt = task.prompt.trim().to_lowercase();
+    let profile = agent::classifier::classify(
+        &task.prompt,
+        agent::classifier::count_file_mentions(&normalized_prompt),
+        task.prompt.chars().count(),
+    );
+    task.category = Some(profile.category.label().to_string());
     let dispatch_warnings = validate_dispatch(&args, &agent_kind);
     for warning in &dispatch_warnings {
         aid_warn!("[aid] Warning: {warning}");

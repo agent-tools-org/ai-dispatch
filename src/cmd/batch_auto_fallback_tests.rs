@@ -15,6 +15,7 @@ fn stored_task(id: &str, agent: AgentKind) -> Task {
         custom_agent_name: None,
         prompt: "prompt".to_string(),
         resolved_prompt: None,
+        category: None,
         status: TaskStatus::Failed,
         parent_task_id: None,
         workgroup_id: None,

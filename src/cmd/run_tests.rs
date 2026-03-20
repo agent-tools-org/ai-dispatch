@@ -248,6 +248,7 @@ fn make_failed_task(task_id: &str) -> Task {
         custom_agent_name: None,
         prompt: "prompt".to_string(),
         resolved_prompt: None,
+        category: None,
         status: TaskStatus::Failed,
         parent_task_id: None,
         workgroup_id: None,

@@ -191,6 +191,7 @@ mod tests {
             log_path: None, output_path: None, tokens: None, prompt_tokens: None,
             duration_ms: None, model: None, cost_usd: None, exit_code: None,
             completed_at: None, verify: None, read_only: false, budget: false,
+            category: None,
         }
     }
 

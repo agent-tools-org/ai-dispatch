@@ -535,6 +535,8 @@ pub(crate) fn inherit_retry_base_branch(repo_dir: Option<&str>, task: &Task, ret
 pub(crate) use run_agent::run_agent_process;
 #[cfg(test)]
 fn take_next_cascade_agent(args: &RunArgs) -> Option<(String, Vec<String>)> { run_lifecycle::take_next_cascade_agent(args) }
+#[cfg(test)]
+fn auto_save_task_output(store: &Store, task: &Task) -> Result<()> { run_lifecycle::auto_save_task_output(store, task) }
 pub(crate) fn rescue_quota_failed_task(store: &Store, task_id: &TaskId, quota_error_message: Option<&str>) { run_lifecycle::rescue_quota_failed_task(store, task_id, quota_error_message); }
 pub(crate) fn read_quota_error_message(task_id: &TaskId) -> Option<String> { run_lifecycle::read_quota_error_message(task_id) }
 #[cfg(test)]

@@ -174,6 +174,14 @@ impl Store {
         Ok(())
     }
 
+    pub fn update_output_path(&self, task_id: &str, output_path: &str) -> Result<()> {
+        self.db().execute(
+            "UPDATE tasks SET output_path = ?1 WHERE id = ?2",
+            params![output_path, task_id],
+        )?;
+        Ok(())
+    }
+
     pub fn update_agent_session_id(&self, id: &str, session_id: &str) -> Result<()> {
         self.db().execute(
             "UPDATE tasks SET agent_session_id = ?1 WHERE id = ?2",

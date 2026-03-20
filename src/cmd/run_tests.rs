@@ -182,6 +182,24 @@ fn resolve_max_duration_mins_preserves_explicit_minutes() {
     assert_eq!(resolve_max_duration_mins(Some(300), Some(2)), Some(2));
 }
 
+#[test]
+fn auto_save_creates_output_for_research_task() {
+    let temp = TempDir::new().unwrap();
+    let _aid_home = paths::AidHomeGuard::set(temp.path());
+    let log_path = temp.path().join("research.jsonl");
+    std::fs::write(&log_path, "{\"type\":\"message\",\"role\":\"assistant\",\"content\":\"saved output\"}\n").unwrap();
+    let store = Store::open_memory().unwrap();
+    let mut task = make_failed_task("t-research-save");
+    task.status = TaskStatus::Done;
+    task.exit_code = None;
+    task.log_path = Some(log_path.display().to_string());
+    store.insert_task(&task).unwrap();
+    auto_save_task_output(&store, &task).unwrap();
+    let output_path = crate::paths::task_dir(task.id.as_str()).join("output.md");
+    assert_eq!(std::fs::read_to_string(&output_path).unwrap(), "saved output");
+    assert_eq!(store.get_task(task.id.as_str()).unwrap().unwrap().output_path, Some(output_path.display().to_string()));
+}
+
 #[tokio::test]
 async fn dry_run_returns_without_starting_task() {
     let temp = TempDir::new().unwrap();

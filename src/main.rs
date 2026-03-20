@@ -4,6 +4,7 @@
 #[macro_use]
 pub mod output;
 mod agent;
+mod agent_config;
 mod background;
 mod batch;
 mod board;

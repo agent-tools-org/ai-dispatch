@@ -82,6 +82,28 @@ async fn dispatch_with_dependencies(
             outcomes: Vec::new(),
         });
     }
+    let mut rate_warned = std::collections::HashSet::new();
+    for task in tasks {
+        let agent_name = if task.agent.is_empty() {
+            "codex"
+        } else {
+            task.agent.as_str()
+        };
+        let Some(kind) = crate::types::AgentKind::parse_str(agent_name) else {
+            continue;
+        };
+        if !crate::rate_limit::is_rate_limited(&kind) || !rate_warned.insert(agent_name.to_string()) {
+            continue;
+        }
+        if task.fallback.is_some() {
+            aid_warn!("[batch] {} is rate-limited — tasks with fallback will auto-cascade", agent_name);
+        } else {
+            aid_warn!(
+                "[batch] {} is rate-limited — tasks without fallback may fail. Consider adding fallback.",
+                agent_name
+            );
+        }
+    }
     // Pre-create all tasks with Waiting status so they're visible in TUI immediately
     let waiting_ids: Vec<String> = tasks
         .iter()

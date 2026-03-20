@@ -181,20 +181,26 @@ pub async fn run(store: Arc<Store>, mut args: RunArgs) -> Result<TaskId> {
     if let Some(info) = rate_limit::get_rate_limit_info(&agent_kind)
         && let Some(ref recovery) = info.recovery_at
     {
-        aid_warn!(
-            "[aid] Warning: {} is rate-limited (try again at {})",
-            agent_kind.as_str(),
-            recovery
-        );
         if let Some(next_agent) = args.cascade.first() {
-            aid_info!("[aid] Switching to cascade agent: {}", next_agent);
-        } else if let Some(suggested) = crate::agent::selection::coding_fallback_for(&agent_kind) {
-            aid_hint!(
-                "[aid] Suggested fallback: --cascade {} (similar capability)",
-                suggested.as_str()
+            aid_warn!(
+                "[aid] {} is rate-limited — will cascade to {}",
+                agent_kind.as_str(),
+                next_agent
             );
+        } else if let Some(fallback) = crate::agent::selection::coding_fallback_for(&agent_kind) {
+            aid_warn!(
+                "[aid] {} is rate-limited (until {}), auto-cascading to {}",
+                agent_kind.as_str(),
+                recovery,
+                fallback.as_str()
+            );
+            args.cascade = vec![fallback.as_str().to_string()];
         } else {
-            aid_hint!("[aid] Tip: use --cascade <agent> or --agent with `aid retry`");
+            anyhow::bail!(
+                "{} is rate-limited until {}. Use --cascade <agent> to specify a fallback, or wait.",
+                agent_kind.as_str(),
+                recovery
+            );
         }
     }
     let requested_skills = run_prompt::effective_skills(&agent_kind, &args);

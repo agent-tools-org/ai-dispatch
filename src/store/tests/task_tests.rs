@@ -167,3 +167,33 @@ fn gets_retry_chain_from_root_to_current() {
         .collect::<Vec<_>>();
     assert_eq!(ids, vec!["t-1001", "t-1002", "t-1003"]);
 }
+
+#[test]
+fn recent_tasks_for_agent_filters_to_recent_done_tasks() {
+    let store = Store::open_memory().unwrap();
+    let now = chrono::Local::now();
+    let mut recent = make_task("t-2001", AgentKind::Codex, TaskStatus::Done);
+    recent.created_at = now - chrono::Duration::days(1);
+    recent.duration_ms = Some(120_000);
+    let mut older = make_task("t-2002", AgentKind::Codex, TaskStatus::Done);
+    older.created_at = now - chrono::Duration::days(8);
+    older.duration_ms = Some(240_000);
+    let mut failed = make_task("t-2003", AgentKind::Codex, TaskStatus::Failed);
+    failed.created_at = now - chrono::Duration::days(1);
+    failed.duration_ms = Some(180_000);
+    let mut other_agent = make_task("t-2004", AgentKind::Gemini, TaskStatus::Done);
+    other_agent.created_at = now - chrono::Duration::days(1);
+    other_agent.duration_ms = Some(90_000);
+
+    store.insert_task(&recent).unwrap();
+    store.insert_task(&older).unwrap();
+    store.insert_task(&failed).unwrap();
+    store.insert_task(&other_agent).unwrap();
+
+    let recent_tasks = store.recent_tasks_for_agent(AgentKind::Codex, 10).unwrap();
+    let ids = recent_tasks
+        .into_iter()
+        .map(|task| task.id.0)
+        .collect::<Vec<_>>();
+    assert_eq!(ids, vec!["t-2001".to_string()]);
+}

@@ -14,6 +14,7 @@ pub mod container;
 pub mod config;
 pub mod cost;
 pub mod explain;
+pub mod eta;
 pub mod group;
 pub mod hook;
 pub mod memory;

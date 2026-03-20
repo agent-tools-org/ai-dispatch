@@ -1,13 +1,20 @@
 // Detached background worker support for aid tasks.
 // Persists run specs under ~/.aid/jobs and re-execs the binary to finish work.
 
+#[path = "background_process.rs"]
+mod background_process;
+#[path = "background_spec.rs"]
+mod background_spec;
+
 use anyhow::{Context, Result};
 use chrono::Local;
-use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use std::process::{Child, Command, Stdio};
 use std::sync::Arc;
 
+#[cfg(test)]
+use self::background_process::build_on_done_command;
+use self::background_process::spawn_on_done_command;
+use self::background_spec::{load_spec, load_spec_if_exists, remove_spec};
 use crate::agent::{self, RunOpts};
 use crate::config;
 use crate::notify;
@@ -22,56 +29,10 @@ const PENDING_TASK_TIMEOUT_SECS: i64 = 600;
 /// Hard limit on concurrent background workers — prevents process exhaustion.
 const MAX_WORKERS: usize = 32;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct BackgroundRunSpec {
-    pub task_id: String,
-    pub worker_pid: Option<u32>,
-    pub agent_name: String,
-    pub prompt: String,
-    pub dir: Option<String>,
-    pub output: Option<String>,
-    pub model: Option<String>,
-    pub verify: Option<String>,
-    #[serde(default)]
-    pub judge: Option<String>,
-    #[serde(default)]
-    pub max_duration_mins: Option<i64>,
-    pub retry: u32,
-    pub group: Option<String>,
-    #[serde(default)]
-    pub skills: Vec<String>,
-    #[serde(default)]
-    pub template: Option<String>,
-    #[serde(default)]
-    pub interactive: bool,
-    #[serde(default)]
-    pub on_done: Option<String>,
-    #[serde(default)]
-    pub cascade: Vec<String>,
-    #[serde(default)]
-    pub parent_task_id: Option<String>,
-    #[serde(default)]
-    pub env: Option<HashMap<String, String>>,
-    #[serde(default)]
-    pub env_forward: Option<Vec<String>>,
-    #[serde(default)]
-    pub agent_pid: Option<u32>,
-    #[serde(default)]
-    pub sandbox: bool,
-    #[serde(default)]
-    pub container: Option<String>,
-}
-
-pub fn save_spec(spec: &BackgroundRunSpec) -> Result<()> {
-    sanitize::validate_task_id(&spec.task_id)?;
-    let path = paths::job_path(&spec.task_id);
-    if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent)?;
-    }
-    let content = serde_json::to_string_pretty(spec)?;
-    std::fs::write(path, content)?;
-    Ok(())
-}
+pub use self::background_process::{is_process_running, kill_process, load_agent_pid, sigkill_process, update_agent_pid};
+pub use self::background_spec::{load_worker_pid, save_spec, BackgroundRunSpec};
+pub(crate) use self::background_process::update_worker_pid;
+pub(crate) use self::background_spec::clear_spec;
 
 pub fn spawn_worker(task_id: &str) -> Result<Child> {
     sanitize::validate_task_id(task_id)?;
@@ -102,14 +63,10 @@ pub fn check_worker_capacity(store: &Store) -> Result<()> {
     let running = store.list_tasks(TaskFilter::Running)?.len();
     let soft_limit = system_resources::recommended_max_concurrent();
     if running >= MAX_WORKERS {
-        anyhow::bail!(
-            "Worker limit reached ({running}/{MAX_WORKERS} active) — wait for tasks to complete"
-        );
+        anyhow::bail!("Worker limit reached ({running}/{MAX_WORKERS} active) — wait for tasks to complete");
     }
     if running >= soft_limit {
-        aid_warn!(
-            "[aid] Warning: {running} active workers (recommended max: {soft_limit})"
-        );
+        aid_warn!("[aid] Warning: {running} active workers (recommended max: {soft_limit})");
     }
     Ok(())
 }
@@ -121,7 +78,6 @@ pub async fn run_task(store: Arc<Store>, task_id: &str) -> Result<()> {
     let _ = remove_spec(task_id);
     let _ = crate::input_signal::clear_response(task_id);
     let _ = crate::input_signal::clear_steer(task_id);
-
     if let Err(err) = result {
         record_worker_failure(&store, task_id, &err)?;
         crate::webhook::fire_task_webhooks(&store, task_id).await;
@@ -130,24 +86,14 @@ pub async fn run_task(store: Arc<Store>, task_id: &str) -> Result<()> {
         }
         return Err(err);
     }
-
     crate::webhook::fire_task_webhooks(&store, task_id).await;
-
     if let Some(ref cmd) = spec.on_done {
         let _ = spawn_on_done_command(cmd, task_id, "done");
     }
-
     Ok(())
 }
 
-pub fn check_zombie_tasks(store: &Store) -> Result<Vec<String>> {
-    check_zombie_tasks_with(store, is_process_running)
-}
-
-pub fn load_worker_pid(task_id: &str) -> Result<Option<u32>> {
-    sanitize::validate_task_id(task_id)?;
-    Ok(load_spec_if_exists(task_id)?.and_then(|spec| spec.worker_pid))
-}
+pub fn check_zombie_tasks(store: &Store) -> Result<Vec<String>> { check_zombie_tasks_with(store, is_process_running) }
 
 async fn run_task_inner(store: &Arc<Store>, spec: &BackgroundRunSpec) -> Result<()> {
     let agent: Box<dyn agent::Agent> = if let Some(kind) = AgentKind::parse_str(&spec.agent_name) {
@@ -179,9 +125,7 @@ async fn run_task_inner(store: &Arc<Store>, spec: &BackgroundRunSpec) -> Result<
         std_cmd.env("AID_GROUP", group);
     }
     std_cmd.env("AID_TASK_ID", &spec.task_id);
-    let worktree_branch = store
-        .get_task(&spec.task_id)?
-        .and_then(|task| task.worktree_branch);
+    let worktree_branch = store.get_task(&spec.task_id)?.and_then(|task| task.worktree_branch);
     if agent::is_rust_project(spec.dir.as_deref())
         && let Some(target_dir) =
             agent::target_dir_for_worktree(worktree_branch.as_deref())
@@ -263,17 +207,8 @@ async fn run_task_inner(store: &Arc<Store>, spec: &BackgroundRunSpec) -> Result<
         container: spec.container.clone(),
         ..Default::default()
     };
-    let pre_verify_status = store
-        .get_task(&spec.task_id)?
-        .map(|task| task.status)
-        .unwrap_or(TaskStatus::Done);
-    crate::cmd::run::maybe_verify(
-        store,
-        &TaskId(spec.task_id.clone()),
-        spec.verify.as_deref(),
-        spec.dir.as_deref(),
-        container_name.as_deref(),
-    );
+    let pre_verify_status = store.get_task(&spec.task_id)?.map(|task| task.status).unwrap_or(TaskStatus::Done);
+    crate::cmd::run::maybe_verify(store, &TaskId(spec.task_id.clone()), spec.verify.as_deref(), spec.dir.as_deref(), container_name.as_deref());
     if let Some(task) = store.get_task(&spec.task_id)? {
         crate::cmd::run::maybe_cleanup_fast_fail(store, &TaskId(spec.task_id.clone()), &task);
     }
@@ -360,52 +295,7 @@ async fn run_task_inner(store: &Arc<Store>, spec: &BackgroundRunSpec) -> Result<
     Ok(())
 }
 
-fn load_spec(task_id: &str) -> Result<BackgroundRunSpec> {
-    sanitize::validate_task_id(task_id)?;
-    let path = paths::job_path(task_id);
-    let content = std::fs::read_to_string(&path)
-        .with_context(|| format!("Failed to read background spec {}", path.display()))?;
-    serde_json::from_str(&content)
-        .with_context(|| format!("Failed to parse background spec {}", path.display()))
-}
-
-fn remove_spec(task_id: &str) -> Result<()> {
-    sanitize::validate_task_id(task_id)?;
-    let path = paths::job_path(task_id);
-    if path.exists() {
-        std::fs::remove_file(path)?;
-    }
-    Ok(())
-}
-
-pub(crate) fn clear_spec(task_id: &str) -> Result<()> {
-    remove_spec(task_id)
-}
-
-pub(crate) fn update_worker_pid(task_id: &str, worker_pid: u32) -> Result<()> {
-    let mut spec = load_spec(task_id)?;
-    spec.worker_pid = Some(worker_pid);
-    save_spec(&spec)
-}
-
-pub fn update_agent_pid(task_id: &str, agent_pid: u32) -> Result<()> {
-    let mut spec = load_spec(task_id)?;
-    spec.agent_pid = Some(agent_pid);
-    save_spec(&spec)
-}
-
-pub fn load_agent_pid(task_id: &str) -> Result<Option<u32>> {
-    Ok(load_spec_if_exists(task_id)?.and_then(|spec| spec.agent_pid))
-}
-
-fn record_worker_failure(store: &Store, task_id: &str, err: &anyhow::Error) -> Result<()> {
-    record_failure(
-        store,
-        task_id,
-        &format!("{err:#}"),
-        &format!("Background worker failed: {err}"),
-    )
-}
+fn record_worker_failure(store: &Store, task_id: &str, err: &anyhow::Error) -> Result<()> { record_failure(store, task_id, &format!("{err:#}"), &format!("Background worker failed: {err}")) }
 
 fn check_zombie_tasks_with<F>(store: &Store, is_worker_alive: F) -> Result<Vec<String>>
 where
@@ -485,11 +375,7 @@ fn cleanup_stale_pending_tasks(store: &Store) -> Result<Vec<String>> {
             continue;
         }
         let task_id = task.id.as_str();
-        aid_warn!(
-            "[aid] Timing out stale pending task {} (pending for {}s)",
-            task_id,
-            elapsed_secs
-        );
+        aid_warn!("[aid] Timing out stale pending task {} (pending for {}s)", task_id, elapsed_secs);
         if !fail_stale_pending_task(store, &task, now, elapsed_secs)? {
             continue;
         }
@@ -523,25 +409,7 @@ fn fail_stale_pending_task(
     Ok(true)
 }
 
-fn load_spec_if_exists(task_id: &str) -> Result<Option<BackgroundRunSpec>> {
-    sanitize::validate_task_id(task_id)?;
-    let path = paths::job_path(task_id);
-    if !path.exists() {
-        return Ok(None);
-    }
-    let content = std::fs::read_to_string(&path)
-        .with_context(|| format!("Failed to read background spec {}", path.display()))?;
-    let spec = serde_json::from_str(&content)
-        .with_context(|| format!("Failed to parse background spec {}", path.display()))?;
-    Ok(Some(spec))
-}
-
-fn record_failure(
-    store: &Store,
-    task_id: &str,
-    stderr_detail: &str,
-    event_detail: &str,
-) -> Result<()> {
+fn record_failure(store: &Store, task_id: &str, stderr_detail: &str, event_detail: &str) -> Result<()> {
     sanitize::validate_task_id(task_id)?;
     // Only mark as failed if task is still running/waiting — prevents
     // zombie cleanup from clobbering a real completion status.
@@ -561,102 +429,9 @@ fn record_failure(
     Ok(())
 }
 
-fn spawn_on_done_command(command: &str, task_id: &str, status: &str) -> Result<()> {
-    let mut cmd = build_on_done_command(command)?;
-    cmd.env("AID_TASK_ID", task_id)
-        .env("AID_TASK_STATUS", status);
-    #[cfg(unix)]
-    {
-        use std::os::unix::process::CommandExt;
-        cmd.process_group(0);
-    }
-    // Reap the child in a background thread to prevent orphan/zombie processes.
-    let child = cmd.spawn().context("failed to spawn on_done callback")?;
-    let command_name = command.to_string();
-    std::thread::spawn(move || match child.wait_with_output() {
-        Ok(output) if !output.status.success() => {
-            aid_error!("[aid] on_done callback failed: {command_name}");
-        }
-        Err(err) => aid_error!("[aid] on_done callback wait failed: {err}"),
-        _ => {}
-    });
-    Ok(())
-}
-
-fn build_on_done_command(command: &str) -> Result<Command> {
-    let mut parts = command.split_whitespace();
-    let program = parts.next().context("on_done command is empty")?;
-    let args: Vec<&str> = parts.collect();
-    let mut cmd = Command::new(program);
-    cmd.args(&args);
-    Ok(cmd)
-}
-
 fn notify_task_completion(store: &Store, task_id: &str) -> Result<()> {
-    if let Some(task) = store.get_task(task_id)? {
-        notify::notify_completion(&task);
-    }
+    if let Some(task) = store.get_task(task_id)? { notify::notify_completion(&task); }
     Ok(())
-}
-
-#[cfg(unix)]
-pub fn kill_process(pid: u32) {
-    if pid > i32::MAX as u32 {
-        return;
-    }
-    let pid_i32 = pid as i32;
-    unsafe {
-        libc::kill(-pid_i32, libc::SIGTERM);
-        libc::kill(pid_i32, libc::SIGTERM);
-    }
-}
-
-#[cfg(not(unix))]
-pub fn kill_process(_pid: u32) {}
-
-#[cfg(unix)]
-pub fn sigkill_process(pid: u32) {
-    if pid > i32::MAX as u32 {
-        return;
-    }
-    let pid_i32 = pid as i32;
-    unsafe {
-        libc::kill(-pid_i32, libc::SIGKILL);
-        libc::kill(pid_i32, libc::SIGKILL);
-    }
-}
-
-#[cfg(not(unix))]
-pub fn sigkill_process(_pid: u32) {}
-
-#[cfg(unix)]
-pub fn is_process_running(pid: u32) -> bool {
-    if pid > i32::MAX as u32 {
-        return false;
-    }
-    let result = unsafe { libc::kill(pid as i32, 0) };
-    if result != 0 && std::io::Error::last_os_error().raw_os_error() != Some(libc::EPERM) {
-        return false;
-    }
-    is_process_not_zombie(pid)
-}
-
-#[cfg(unix)]
-fn is_process_not_zombie(pid: u32) -> bool {
-    let mut status = 0;
-    let ret = unsafe { libc::waitpid(pid as i32, &mut status, libc::WNOHANG) };
-    // waitpid returns:
-    //   0: child exists, not yet exited → alive
-    //  >0: child was zombie, now reaped → dead
-    //  -1 ECHILD: not our child → can't determine zombie status, trust kill(0)
-    ret == 0
-        || (ret == -1
-            && std::io::Error::last_os_error().raw_os_error() == Some(libc::ECHILD))
-}
-
-#[cfg(not(unix))]
-fn is_process_running(_pid: u32) -> bool {
-    false
 }
 
 #[cfg(test)]

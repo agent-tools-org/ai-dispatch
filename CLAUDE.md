@@ -87,6 +87,17 @@ aid merge --group <wg-id>               # merge all tasks in group
 aid merge --group <wg-id> --check       # dry-run conflict check
 ```
 
+## Worktree Management
+
+```bash
+aid worktree create feat/my-feature      # create worktree
+aid worktree list                        # list aid-managed worktrees
+aid worktree prune                       # clean up stale worktrees (>24h old)
+aid worktree remove feat/my-feature      # remove specific worktree
+```
+
+Context files specified via `--context` are automatically synced into worktrees if they don't exist there (e.g., files created by earlier batch waves).
+
 ## Batch TOML Tips
 
 - `context`, `skills`, `scope` accept both string and array: `context = "file.md"` or `context = ["a.md", "b.md"]`

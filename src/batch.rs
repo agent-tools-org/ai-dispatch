@@ -1,94 +1,16 @@
 // Batch task file parser: reads TOML batch configs and validates task DAGs.
 // Each batch file declares tasks with agent, prompt, overrides, and dependencies.
-
+#[path = "batch_interpolate.rs"]
+mod batch_interpolate;
+#[path = "batch_serde.rs"]
+mod batch_serde;
+use self::batch_interpolate::{apply_defaults, interpolate_batch_config};
+use self::batch_serde::{deserialize_judge, deserialize_string_or_vec, deserialize_verify};
 use anyhow::{Context, Result};
 use serde::Deserialize;
 use std::collections::{HashMap, HashSet};
 use std::io::{self, Write};
 use std::path::Path;
-
-
-fn deserialize_judge<'de, D: serde::Deserializer<'de>>(
-    deserializer: D,
-) -> Result<Option<String>, D::Error> {
-    use serde::de;
-    struct JudgeVisitor;
-    impl<'de> de::Visitor<'de> for JudgeVisitor {
-        type Value = Option<String>;
-        fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-            f.write_str("a boolean or string")
-        }
-        fn visit_bool<E: de::Error>(self, v: bool) -> Result<Self::Value, E> {
-            Ok(if v { Some("gemini".to_string()) } else { None })
-        }
-        fn visit_str<E: de::Error>(self, v: &str) -> Result<Self::Value, E> {
-            Ok(Some(v.to_string()))
-        }
-        fn visit_none<E: de::Error>(self) -> Result<Self::Value, E> {
-            Ok(None)
-        }
-        fn visit_unit<E: de::Error>(self) -> Result<Self::Value, E> {
-            Ok(None)
-        }
-    }
-    deserializer.deserialize_any(JudgeVisitor)
-}
-
-fn deserialize_verify<'de, D: serde::Deserializer<'de>>(
-    deserializer: D,
-) -> Result<Option<String>, D::Error> {
-    use serde::de;
-    struct VerifyVisitor;
-    impl<'de> de::Visitor<'de> for VerifyVisitor {
-        type Value = Option<String>;
-        fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-            f.write_str("a string or boolean")
-        }
-        fn visit_bool<E: de::Error>(self, v: bool) -> Result<Self::Value, E> {
-            Ok(if v { Some("auto".to_string()) } else { None })
-        }
-        fn visit_str<E: de::Error>(self, v: &str) -> Result<Self::Value, E> {
-            Ok(Some(v.to_string()))
-        }
-        fn visit_none<E: de::Error>(self) -> Result<Self::Value, E> {
-            Ok(None)
-        }
-        fn visit_unit<E: de::Error>(self) -> Result<Self::Value, E> {
-            Ok(None)
-        }
-    }
-    deserializer.deserialize_any(VerifyVisitor)
-}
-
-fn deserialize_string_or_vec<'de, D: serde::Deserializer<'de>>(
-    deserializer: D,
-) -> Result<Option<Vec<String>>, D::Error> {
-    use serde::de;
-    struct StringOrVec;
-    impl<'de> de::Visitor<'de> for StringOrVec {
-        type Value = Option<Vec<String>>;
-        fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
-            formatter.write_str("a string or array of strings")
-        }
-        fn visit_str<E: de::Error>(self, v: &str) -> Result<Self::Value, E> {
-            Ok(Some(vec![v.to_string()]))
-        }
-        fn visit_seq<A: de::SeqAccess<'de>>(self, mut seq: A) -> Result<Self::Value, A::Error> {
-            let mut vec = Vec::new();
-            while let Some(val) = seq.next_element::<String>()? {
-                vec.push(val);
-            }
-            Ok(Some(vec))
-        }
-        fn visit_none<E: de::Error>(self) -> Result<Self::Value, E> {
-            Ok(None)
-        }
-        fn visit_unit<E: de::Error>(self) -> Result<Self::Value, E> {
-            Ok(None)
-        }
-    }
-    deserializer.deserialize_any(StringOrVec)
-}
 
 #[derive(Debug, Deserialize)]
 pub struct BatchConfig {
@@ -99,7 +21,6 @@ pub struct BatchConfig {
     #[serde(alias = "task", alias = "tasks")]
     pub tasks: Vec<BatchTask>,
 }
-
 #[derive(Debug, Deserialize, Default)]
 pub struct BatchDefaults {
     pub group_id: Option<String>,
@@ -143,7 +64,6 @@ pub struct BatchDefaults {
     #[serde(default)]
     pub env_forward: Option<Vec<String>>,
 }
-
 #[derive(Debug, Deserialize)]
 pub struct BatchTask {
     pub id: Option<String>,
@@ -196,7 +116,6 @@ pub struct BatchTask {
 pub fn parse_batch_file(path: &Path) -> Result<BatchConfig> {
     parse_batch_file_with_vars(path, &HashMap::new())
 }
-
 pub(crate) fn parse_batch_file_with_vars(
     path: &Path,
     cli_vars: &HashMap<String, String>,
@@ -223,191 +142,6 @@ pub(crate) fn parse_batch_file_with_vars(
     }
     Ok(config)
 }
-
-fn interpolate_batch_config(
-    config: &mut BatchConfig,
-    cli_vars: &HashMap<String, String>,
-    writer: &mut impl Write,
-) -> io::Result<()> {
-    let mut vars = config.vars.clone();
-    vars.extend(cli_vars.clone());
-    for task in &mut config.tasks {
-        interpolate_task(task, &vars, writer)?;
-    }
-    Ok(())
-}
-
-fn interpolate_task(
-    task: &mut BatchTask,
-    vars: &HashMap<String, String>,
-    writer: &mut impl Write,
-) -> io::Result<()> {
-    interpolate_string(&mut task.id, vars, writer)?;
-    interpolate_string(&mut task.name, vars, writer)?;
-    interpolate_plain_string(&mut task.agent, vars, writer)?;
-    interpolate_string(&mut task.team, vars, writer)?;
-    interpolate_plain_string(&mut task.prompt, vars, writer)?;
-    interpolate_string(&mut task.dir, vars, writer)?;
-    interpolate_string(&mut task.output, vars, writer)?;
-    interpolate_string(&mut task.model, vars, writer)?;
-    interpolate_string(&mut task.worktree, vars, writer)?;
-    interpolate_string(&mut task.group, vars, writer)?;
-    interpolate_string(&mut task.verify, vars, writer)?;
-    interpolate_string(&mut task.judge, vars, writer)?;
-    interpolate_vec(&mut task.context, vars, writer)?;
-    interpolate_vec(&mut task.skills, vars, writer)?;
-    interpolate_vec(&mut task.hooks, vars, writer)?;
-    interpolate_vec(&mut task.depends_on, vars, writer)?;
-    interpolate_string(&mut task.parent, vars, writer)?;
-    interpolate_vec(&mut task.context_from, vars, writer)?;
-    interpolate_string(&mut task.fallback, vars, writer)?;
-    interpolate_vec(&mut task.scope, vars, writer)?;
-    interpolate_string(&mut task.on_success, vars, writer)?;
-    interpolate_string(&mut task.on_fail, vars, writer)?;
-    Ok(())
-}
-
-fn interpolate_vec(
-    values: &mut Option<Vec<String>>,
-    vars: &HashMap<String, String>,
-    writer: &mut impl Write,
-) -> io::Result<()> {
-    if let Some(values) = values {
-        for value in values {
-            interpolate_plain_string(value, vars, writer)?;
-        }
-    }
-    Ok(())
-}
-
-fn interpolate_string(
-    value: &mut Option<String>,
-    vars: &HashMap<String, String>,
-    writer: &mut impl Write,
-) -> io::Result<()> {
-    if let Some(value) = value {
-        interpolate_plain_string(value, vars, writer)?;
-    }
-    Ok(())
-}
-
-fn interpolate_plain_string(
-    value: &mut String,
-    vars: &HashMap<String, String>,
-    writer: &mut impl Write,
-) -> io::Result<()> {
-    let mut cursor = 0;
-    let mut output = String::with_capacity(value.len());
-    while let Some(start_rel) = value[cursor..].find("{{") {
-        let start = cursor + start_rel;
-        output.push_str(&value[cursor..start]);
-        let search_from = start + 2;
-        if let Some(end_rel) = value[search_from..].find("}}") {
-            let end = search_from + end_rel;
-            let key = value[search_from..end].trim();
-            if let Some(replacement) = vars.get(key) {
-                output.push_str(replacement);
-            } else {
-                writeln!(writer, "[aid] Warning: missing batch var '{key}'")?;
-                output.push_str(&value[start..end + 2]);
-            }
-            cursor = end + 2;
-        } else {
-            output.push_str(&value[start..]);
-            cursor = value.len();
-        }
-    }
-    output.push_str(&value[cursor..]);
-    *value = output;
-    Ok(())
-}
-
-fn apply_defaults(tasks: &mut [BatchTask], defaults: &BatchDefaults) {
-    for task in tasks {
-        apply_task_defaults(task, defaults);
-    }
-}
-fn apply_task_defaults(task: &mut BatchTask, defaults: &BatchDefaults) {
-    if task.agent.is_empty()
-        && let Some(agent) = defaults.agent.as_ref()
-    {
-        task.agent = agent.clone();
-    }
-    if task.team.is_none() {
-        task.team = defaults.team.clone();
-    }
-    if task.dir.is_none() {
-        task.dir = defaults.dir.clone();
-    }
-    if task.model.is_none() {
-        task.model = defaults.model.clone();
-    }
-    if task.worktree.is_none() {
-        task.worktree = default_worktree(task, defaults);
-    }
-    if task.verify.is_none() {
-        task.verify = defaults.verify.clone();
-    }
-    if task.container.is_none() {
-        task.container = defaults.container.clone();
-    }
-    if task.judge.is_none() {
-        task.judge = defaults.judge.clone();
-    }
-    if task.max_duration_mins.is_none() {
-        task.max_duration_mins = defaults.max_duration_mins;
-    }
-    if task.best_of.is_none() {
-        task.best_of = defaults.best_of;
-    }
-    if task.context.is_none() {
-        task.context = defaults.context.clone();
-    }
-    if task.skills.is_none() {
-        task.skills = defaults.skills.clone();
-    }
-    if task.hooks.is_none() {
-        task.hooks = defaults.hooks.clone();
-    }
-    if task.fallback.is_none() {
-        task.fallback = defaults.fallback.clone();
-    }
-    if task.scope.is_none() {
-        task.scope = defaults.scope.clone();
-    }
-    if !task.read_only && matches!(defaults.read_only, Some(true)) {
-        task.read_only = true;
-    }
-    if !task.budget && matches!(defaults.budget, Some(true)) {
-        task.budget = true;
-    }
-    task.env = merge_env_maps(defaults.env.as_ref(), task.env.as_ref());
-    task.env_forward = merge_env_lists(defaults.env_forward.as_ref(), task.env_forward.as_ref());
-}
-fn default_worktree(task: &BatchTask, defaults: &BatchDefaults) -> Option<String> {
-    let prefix = defaults.worktree_prefix.as_deref()?;
-    let name = task.name.as_deref()?.trim();
-    (!name.is_empty()).then(|| format!("{prefix}/{name}"))
-}
-
-fn merge_env_maps(
-    defaults: Option<&HashMap<String, String>>,
-    task: Option<&HashMap<String, String>>,
-) -> Option<HashMap<String, String>> {
-    let mut merged = defaults.cloned().unwrap_or_default();
-    if let Some(task) = task {
-        merged.extend(task.clone());
-    }
-    (!merged.is_empty()).then_some(merged)
-}
-
-fn merge_env_lists(defaults: Option<&Vec<String>>, task: Option<&Vec<String>>) -> Option<Vec<String>> {
-    let mut merged = defaults.cloned().unwrap_or_default();
-    if let Some(task) = task {
-        merged.extend(task.iter().cloned());
-    }
-    (!merged.is_empty()).then_some(merged)
-}
 fn validate_agents(tasks: &[BatchTask]) -> Result<()> {
     for (task_idx, task) in tasks.iter().enumerate() {
         if task.agent.trim().is_empty() {
@@ -420,10 +154,7 @@ fn validate_agents(tasks: &[BatchTask]) -> Result<()> {
         if task.agent != "auto" && !is_valid_agent(&task.agent) {
             anyhow::bail!("unknown agent: {}", task.agent);
         }
-        if let Some(judge_agent) = task.judge.as_deref()
-            && !judge_agent.trim().is_empty()
-            && !is_valid_agent(judge_agent)
-        {
+        if let Some(judge_agent) = task.judge.as_deref() && !judge_agent.trim().is_empty() && !is_valid_agent(judge_agent) {
             anyhow::bail!("unknown judge agent: {}", judge_agent);
         }
     }
@@ -442,14 +173,9 @@ fn validate_fallback_agents(tasks: &[BatchTask]) -> Result<()> {
     Ok(())
 }
 pub(crate) fn is_valid_agent(agent: &str) -> bool {
-    crate::types::AgentKind::parse_str(agent).is_some()
-        || crate::agent::registry::custom_agent_exists(agent)
+    crate::types::AgentKind::parse_str(agent).is_some() || crate::agent::registry::custom_agent_exists(agent)
 }
-
-pub fn auto_sequence_shared_worktrees(
-    tasks: &mut [BatchTask],
-    writer: &mut impl Write,
-) -> io::Result<()> {
+pub fn auto_sequence_shared_worktrees(tasks: &mut [BatchTask], writer: &mut impl Write) -> io::Result<()> {
     let mut last_task_by_worktree: HashMap<String, String> = HashMap::new();
     for (task_idx, task) in tasks.iter_mut().enumerate() {
         let Some(worktree) = task.worktree.as_ref() else {
@@ -461,13 +187,7 @@ pub fn auto_sequence_shared_worktrees(
             if !depends_on.iter().any(|dependency| dependency == &previous_task) {
                 depends_on.push(previous_task.clone());
             }
-            writeln!(
-                writer,
-                "[aid] Warning: task '{}' shares worktree '{}' with '{}'; auto-sequencing execution.",
-                current_label,
-                worktree,
-                previous_task,
-            )?;
+            writeln!(writer, "[aid] Warning: task '{}' shares worktree '{}' with '{}'; auto-sequencing execution.", current_label, worktree, previous_task)?;
         }
         if let Some(name) = task.name.as_ref() {
             last_task_by_worktree.insert(worktree.clone(), name.clone());
@@ -475,7 +195,6 @@ pub fn auto_sequence_shared_worktrees(
     }
     Ok(())
 }
-
 fn warn_prompt_size(tasks: &[BatchTask], writer: &mut impl Write) -> io::Result<()> {
     for (idx, task) in tasks.iter().enumerate() {
         let chars = task.prompt.len();
@@ -500,7 +219,6 @@ pub fn validate_dag(tasks: &[BatchTask]) -> Result<()> {
     }
     Ok(())
 }
-
 fn validate_conditional_hooks(tasks: &[BatchTask]) -> Result<()> {
     let name_to_index = task_name_map(tasks)?;
     for (task_idx, task) in tasks.iter().enumerate() {
@@ -513,7 +231,6 @@ fn validate_conditional_hooks(tasks: &[BatchTask]) -> Result<()> {
     }
     Ok(())
 }
-
 fn validate_conditional_hook(
     target: &str,
     hook_name: &str,
@@ -527,22 +244,13 @@ fn validate_conditional_hook(
         anyhow::bail!("task {} references unknown task '{}' via {}", task_label(&tasks[task_idx], task_idx), trimmed, hook_name);
     };
     if !tasks[target_idx].conditional {
-        anyhow::bail!(
-            "task {} references {} via {} but target is not conditional",
-            task_label(&tasks[task_idx], task_idx),
-            task_label(&tasks[target_idx], target_idx),
-            hook_name,
-        );
+        anyhow::bail!("task {} references {} via {} but target is not conditional", task_label(&tasks[task_idx], task_idx), task_label(&tasks[target_idx], target_idx), hook_name);
     }
     Ok(())
 }
 pub(crate) fn dependency_indices(tasks: &[BatchTask]) -> Result<Vec<Vec<usize>>> {
     let name_to_index = task_name_map(tasks)?;
-    tasks
-        .iter()
-        .enumerate()
-        .map(|(task_idx, task)| resolve_dependencies(task_idx, task, &name_to_index))
-        .collect()
+    tasks.iter().enumerate().map(|(task_idx, task)| resolve_dependencies(task_idx, task, &name_to_index)).collect()
 }
 pub(crate) fn task_name_map(tasks: &[BatchTask]) -> Result<HashMap<&str, usize>> {
     let mut name_to_index = HashMap::new();
@@ -575,11 +283,7 @@ fn resolve_dependencies(
                 task_label(task, task_idx)
             );
             let Some(&dependency_idx) = name_to_index.get(trimmed) else {
-                anyhow::bail!(
-                    "task {} depends on unknown task: {}",
-                    task_label(task, task_idx),
-                    trimmed
-                );
+                anyhow::bail!("task {} depends on unknown task: {}", task_label(task, task_idx), trimmed);
             };
             if seen.insert(dependency_idx) {
                 resolved.push(dependency_idx);
@@ -590,10 +294,9 @@ fn resolve_dependencies(
     if let Some(context_from) = task.context_from.as_ref() {
         for source_name in context_from {
             let trimmed = source_name.trim();
-            if let Some(&source_idx) = name_to_index.get(trimmed)
-                && seen.insert(source_idx) {
-                    resolved.push(source_idx);
-                }
+            if let Some(&source_idx) = name_to_index.get(trimmed) && seen.insert(source_idx) {
+                resolved.push(source_idx);
+            }
         }
     }
     Ok(resolved)
@@ -623,11 +326,9 @@ pub fn warn_dir_overlap(tasks: &[BatchTask]) -> Vec<String> {
     }
     warnings
 }
-
 pub fn warn_audit_without_readonly(tasks: &[BatchTask]) {
     let _ = warn_audit_without_readonly_into(tasks, &mut io::stderr().lock());
 }
-
 fn warn_audit_without_readonly_into(tasks: &[BatchTask], writer: &mut impl Write) -> io::Result<()> {
     for (task_idx, task) in tasks.iter().enumerate() {
         if task.read_only || !prompt_suggests_read_only(&task.prompt) {
@@ -641,7 +342,6 @@ fn warn_audit_without_readonly_into(tasks: &[BatchTask], writer: &mut impl Write
     }
     Ok(())
 }
-
 fn prompt_suggests_read_only(prompt: &str) -> bool {
     let lower = prompt.to_ascii_lowercase();
     lower.contains("do not modify")
@@ -652,17 +352,10 @@ fn prompt_suggests_read_only(prompt: &str) -> bool {
         || lower.contains("do not change")
         || lower.contains("analysis only")
         || lower.contains("analyze only")
-        || (lower.contains("audit")
-            && !lower.contains("audit trail")
-            && !lower.contains("audit log"))
+        || (lower.contains("audit") && !lower.contains("audit trail") && !lower.contains("audit log"))
 }
-
 #[derive(Clone, Copy, PartialEq, Eq)]
-enum VisitState {
-    Pending,
-    Visiting,
-    Visited,
-}
+enum VisitState { Pending, Visiting, Visited }
 fn visit_task(
     task_idx: usize,
     tasks: &[BatchTask],
@@ -671,12 +364,7 @@ fn visit_task(
 ) -> Result<()> {
     match states[task_idx] {
         VisitState::Visited => return Ok(()),
-        VisitState::Visiting => {
-            anyhow::bail!(
-                "dependency cycle detected at task {}",
-                task_label(&tasks[task_idx], task_idx)
-            );
-        }
+        VisitState::Visiting => anyhow::bail!("dependency cycle detected at task {}", task_label(&tasks[task_idx], task_idx)),
         VisitState::Pending => {}
     }
     states[task_idx] = VisitState::Visiting;

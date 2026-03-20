@@ -299,7 +299,7 @@ async fn maybe_dispatch_auto_fallback(
     if !should_auto_fallback(auto_fallback, retried[task_idx], outcome) {
         return Ok(None);
     }
-    let Some((original_agent, fallback_agent)) = auto_fallback_agent(&store, task_id)? else {
+    let Some((original_agent, fallback_agent)) = auto_fallback_agent(&store, task_id, tasks, task_idx)? else {
         return Ok(None);
     };
     let siblings: Vec<_> = tasks
@@ -337,10 +337,17 @@ pub(crate) fn should_auto_fallback(
 pub(crate) fn auto_fallback_agent(
     store: &Store,
     task_id: &str,
+    tasks: &[crate::batch::BatchTask],
+    task_idx: usize,
 ) -> Result<Option<(String, crate::types::AgentKind)>> {
     let Some(task) = store.get_task(task_id)? else {
         anyhow::bail!("batch task not found after dispatch: {task_id}");
     };
+    if let Some(fallback_name) = tasks.get(task_idx).and_then(|t| t.fallback.as_deref()) {
+        if let Some(fallback_kind) = crate::types::AgentKind::parse_str(fallback_name) {
+            return Ok(Some((task.agent.as_str().to_string(), fallback_kind)));
+        }
+    }
     Ok(crate::agent::selection::coding_fallback_for(&task.agent)
         .map(|fallback| (task.agent.as_str().to_string(), fallback)))
 }

@@ -44,6 +44,7 @@ pub enum Commands {
     Export(command_args_b::ExportArgs),
     Usage(command_args_b::UsageArgs),
     Cost(command_args_b::CostArgs),
+    Stats(command_args_b::StatsArgs),
     #[command(hide = true)]
     Summary(command_args_b::SummaryArgs),
     Retry(command_args_b::RetryArgs),

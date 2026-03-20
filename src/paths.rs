@@ -47,6 +47,10 @@ pub fn pricing_path() -> PathBuf {
     aid_dir().join("pricing.json")
 }
 
+pub fn task_dir(task_id: &str) -> PathBuf {
+    aid_dir().join("tasks").join(task_id)
+}
+
 pub fn log_path(task_id: &str) -> PathBuf {
     // Takes a validated task ID from the input boundary.
     logs_dir().join(format!("{task_id}.jsonl"))

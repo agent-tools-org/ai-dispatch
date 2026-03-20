@@ -122,6 +122,16 @@ fn update_resolved_prompt_persists() {
 }
 
 #[test]
+fn update_output_path_sets_field() {
+    let store = Store::open_memory().unwrap();
+    let task = make_task("t-0005", AgentKind::Codex, TaskStatus::Pending);
+    store.insert_task(&task).unwrap();
+    store.update_output_path("t-0005", "/tmp/output.md").unwrap();
+    let loaded = store.get_task("t-0005").unwrap().unwrap();
+    assert_eq!(loaded.output_path.as_deref(), Some("/tmp/output.md"));
+}
+
+#[test]
 fn list_running_filter() {
     let store = Store::open_memory().unwrap();
     store

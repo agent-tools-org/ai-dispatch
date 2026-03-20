@@ -101,13 +101,14 @@ fn collect_message(value: &Value, messages: &mut Vec<String>, streaming_message:
     match value.get("type").and_then(|kind| kind.as_str()) {
         Some("item.completed") => push_optional(messages, completed_agent_message(value)),
         Some("message") => collect_assistant_message(value, messages, streaming_message),
-        Some("assistant") => push_flushed_message(
-            messages,
-            value
+        Some("assistant") => {
+            let text = value
                 .pointer("/message/content/0/text")
-                .and_then(|text| text.as_str()),
-            streaming_message,
-        ),
+                .and_then(|text| text.as_str());
+            if let Some(text) = text {
+                streaming_message.push_str(text);
+            }
+        }
         Some("text") => push_flushed_message(messages, text_message(value), streaming_message),
         _ => {}
     }

@@ -173,6 +173,16 @@ fn extract_messages_from_log_returns_none_without_supported_messages() {
 }
 
 #[test]
+fn extract_messages_accumulates_cursor_assistant_deltas() {
+    let log = "{\"type\":\"system\",\"subtype\":\"init\",\"model\":\"composer-2\"}\n{\"type\":\"assistant\",\"message\":{\"role\":\"assistant\",\"content\":[{\"type\":\"text\",\"text\":\"Hello \"}]}}\n{\"type\":\"assistant\",\"message\":{\"role\":\"assistant\",\"content\":[{\"type\":\"text\",\"text\":\"world!\"}]}}\n{\"type\":\"tool_call\",\"subtype\":\"started\",\"tool_call\":{\"readToolCall\":{\"args\":{\"filePath\":\"src/main.rs\"}}}}\n{\"type\":\"assistant\",\"message\":{\"role\":\"assistant\",\"content\":[{\"type\":\"text\",\"text\":\"Done.\"}]}}";
+    let file = NamedTempFile::new().unwrap();
+    std::fs::write(file.path(), log).unwrap();
+    let output = extract_messages_from_log(file.path(), true).unwrap();
+    assert!(output.contains("Hello world!"), "Expected merged deltas, got: {output}");
+    assert!(output.contains("Done."), "Expected separate message after tool_call");
+}
+
+#[test]
 fn extract_messages_from_log_caps_message_count_and_size() {
     let file = NamedTempFile::new().unwrap();
     let content = (0..22)

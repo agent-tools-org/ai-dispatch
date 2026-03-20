@@ -92,3 +92,37 @@ fn agent_success_rates_groups_by_agent() {
     assert!((codex_rate.1 - 1.0).abs() < 0.01);
     assert!((gemini_rate.1 - 0.4).abs() < 0.01);
 }
+
+#[test]
+fn agent_success_rates_by_category_filters_correctly() {
+    let store = Store::open_memory().unwrap();
+    for i in 0..5 {
+        let mut task = make_task(&format!("t-c{:04}", i), AgentKind::Codex, TaskStatus::Done);
+        task.category = Some("debugging".to_string());
+        store.insert_task(&task).unwrap();
+    }
+    for i in 0..5 {
+        let mut task = make_task(&format!("t-g{:04}", i), AgentKind::Gemini, TaskStatus::Failed);
+        task.category = Some("testing".to_string());
+        store.insert_task(&task).unwrap();
+    }
+
+    let rates = store.agent_success_rates_by_category("debugging").unwrap();
+    assert_eq!(rates.len(), 1);
+    assert_eq!(rates[0].0, AgentKind::Codex);
+    assert_eq!(rates[0].2, 5);
+    assert!((rates[0].1 - 1.0).abs() < 0.01);
+}
+
+#[test]
+fn agent_success_rates_by_category_empty_for_unknown() {
+    let store = Store::open_memory().unwrap();
+    for i in 0..5 {
+        let mut task = make_task(&format!("t-c{:04}", i), AgentKind::Codex, TaskStatus::Done);
+        task.category = Some("debugging".to_string());
+        store.insert_task(&task).unwrap();
+    }
+
+    let rates = store.agent_success_rates_by_category("documentation").unwrap();
+    assert!(rates.is_empty());
+}

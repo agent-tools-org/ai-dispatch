@@ -84,6 +84,7 @@ mod tests {
             custom_agent_name: None,
             prompt: "test prompt".to_string(),
             resolved_prompt: None,
+            category: None,
             status: TaskStatus::Done,
             parent_task_id: None,
             workgroup_id: Some(group_id.to_string()),

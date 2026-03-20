@@ -77,6 +77,7 @@ fn migrate_adds_repo_path_column() {
     assert!(columns.contains(&"verify".to_string()));
     assert!(columns.contains(&"read_only".to_string()));
     assert!(columns.contains(&"budget".to_string()));
+    assert!(columns.contains(&"category".to_string()));
 }
 
 #[test]

@@ -40,12 +40,18 @@ fn select_agent_from(
     let profile = classifier::classify(prompt, file_count, prompt_len);
     let auto_budget = classifier::contains_any(&normalized, classifier::LOW_VALUE_TERMS);
     let budget = opts.budget || auto_budget;
-    let history_map: HashMap<AgentKind, (f64, usize)> = store
+    let mut history_map: HashMap<AgentKind, (f64, usize)> = store
         .agent_success_rates()
         .unwrap_or_default()
         .into_iter()
         .map(|(kind, rate, count)| (kind, (rate, count)))
         .collect();
+    for (kind, rate, count) in store
+        .agent_success_rates_by_category(profile.category.label())
+        .unwrap_or_default()
+    {
+        history_map.insert(kind, (rate, count));
+    }
     let avg_cost_map: HashMap<AgentKind, f64> = store
         .agent_avg_costs()
         .unwrap_or_default()

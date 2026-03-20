@@ -24,6 +24,7 @@ fn make_task(id: &str) -> Task {
         custom_agent_name: None,
         prompt: "prompt".to_string(),
         resolved_prompt: Some("resolved".to_string()),
+        category: None,
         status: TaskStatus::Done,
         parent_task_id: None,
         workgroup_id: Some("wg-1".to_string()),

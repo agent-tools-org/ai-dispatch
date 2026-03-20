@@ -102,6 +102,7 @@ mod tests {
             custom_agent_name: None,
             prompt: "test prompt".to_string(),
             resolved_prompt: None,
+            category: None,
             status: TaskStatus::Failed,
             parent_task_id: None,
             workgroup_id: None,
@@ -185,4 +186,3 @@ mod tests {
         assert_eq!(args.agent_name, "custom");
     }
 }
-

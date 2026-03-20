@@ -42,7 +42,7 @@ impl Store {
             "SELECT id, agent, prompt, resolved_prompt, status, parent_task_id, workgroup_id,
              caller_kind, caller_session_id, agent_session_id, repo_path, worktree_path, worktree_branch,
              log_path, output_path, tokens, prompt_tokens, duration_ms, model, cost_usd, created_at,
-             completed_at, verify, read_only, budget, custom_agent_name, verify_status
+             completed_at, verify, read_only, budget, custom_agent_name, verify_status, category
              FROM tasks WHERE id = ?1",
         )?;
         let mut rows = stmt.query_map(params![id], row_to_task)?;
@@ -86,7 +86,7 @@ impl Store {
                 "SELECT id, agent, prompt, resolved_prompt, status, parent_task_id, workgroup_id,
                  caller_kind, caller_session_id, agent_session_id, repo_path, worktree_path, worktree_branch,
                  log_path, output_path, tokens, prompt_tokens, duration_ms, model, cost_usd, created_at,
-                 completed_at, verify, read_only, budget, custom_agent_name, verify_status
+                 completed_at, verify, read_only, budget, custom_agent_name, verify_status, category
                  FROM tasks ORDER BY created_at DESC",
                 vec![],
             ),
@@ -94,7 +94,7 @@ impl Store {
                 "SELECT id, agent, prompt, resolved_prompt, status, parent_task_id, workgroup_id,
                  caller_kind, caller_session_id, agent_session_id, repo_path, worktree_path, worktree_branch,
                  log_path, output_path, tokens, prompt_tokens, duration_ms, model, cost_usd, created_at,
-                 completed_at, verify, read_only, budget, custom_agent_name, verify_status
+                 completed_at, verify, read_only, budget, custom_agent_name, verify_status, category
                  FROM tasks WHERE status IN (?1, ?2) ORDER BY created_at DESC",
                 vec!["running".to_string(), "awaiting_input".to_string()],
             ),
@@ -104,7 +104,7 @@ impl Store {
                     "SELECT id, agent, prompt, resolved_prompt, status, parent_task_id, workgroup_id,
                      caller_kind, caller_session_id, agent_session_id, repo_path, worktree_path, worktree_branch,
                      log_path, output_path, tokens, prompt_tokens, duration_ms, model, cost_usd, created_at,
-                     completed_at, verify, read_only, budget, custom_agent_name, verify_status
+                     completed_at, verify, read_only, budget, custom_agent_name, verify_status, category
                      FROM tasks WHERE created_at >= ?1 ORDER BY created_at DESC",
                     vec![today],
                 )
@@ -132,7 +132,7 @@ impl Store {
             "SELECT id, agent, prompt, resolved_prompt, status, parent_task_id, workgroup_id,
              caller_kind, caller_session_id, agent_session_id, repo_path, worktree_path, worktree_branch,
              log_path, output_path, tokens, prompt_tokens, duration_ms, model, cost_usd, created_at,
-             completed_at, verify, read_only, budget, custom_agent_name, verify_status
+             completed_at, verify, read_only, budget, custom_agent_name, verify_status, category
              FROM tasks
              WHERE agent = ?1 AND status = ?2 AND duration_ms IS NOT NULL AND created_at >= ?3
              ORDER BY created_at DESC
@@ -165,7 +165,7 @@ impl Store {
             "SELECT id, agent, prompt, resolved_prompt, status, parent_task_id, workgroup_id,
              caller_kind, caller_session_id, agent_session_id, repo_path, worktree_path, worktree_branch,
              log_path, output_path, tokens, prompt_tokens, duration_ms, model, cost_usd, created_at,
-             completed_at, verify, read_only, budget, custom_agent_name, verify_status
+             completed_at, verify, read_only, budget, custom_agent_name, verify_status, category
              FROM tasks WHERE caller_session_id = ?1 ORDER BY created_at DESC",
         )?;
         let rows = stmt.query_map(params![session_id], row_to_task)?;
@@ -178,7 +178,7 @@ impl Store {
             "SELECT id, agent, prompt, resolved_prompt, status, parent_task_id, workgroup_id,
              caller_kind, caller_session_id, agent_session_id, repo_path, worktree_path, worktree_branch,
              log_path, output_path, tokens, prompt_tokens, duration_ms, model, cost_usd, created_at,
-             completed_at, verify, read_only, budget, custom_agent_name, verify_status
+             completed_at, verify, read_only, budget, custom_agent_name, verify_status, category
              FROM tasks WHERE workgroup_id = ?1 ORDER BY created_at DESC",
         )?;
         let rows = stmt.query_map(params![group_id], row_to_task)?;
@@ -197,6 +197,28 @@ impl Store {
              HAVING total >= 5",
         )?;
         let rows = stmt.query_map([], |row| {
+            let agent_str: String = row.get(0)?;
+            let successes: i64 = row.get(1)?;
+            let total: i64 = row.get(2)?;
+            let agent = AgentKind::parse_str(&agent_str).unwrap_or(AgentKind::Custom);
+            let rate = successes as f64 / total as f64;
+            Ok((agent, rate, total as usize))
+        })?;
+        rows.map(|row| Ok(row?)).collect()
+    }
+
+    pub fn agent_success_rates_by_category(&self, category: &str) -> Result<Vec<(AgentKind, f64, usize)>> {
+        let conn = self.db();
+        let mut stmt = conn.prepare(
+            "SELECT agent,
+                    SUM(CASE WHEN status IN ('done', 'merged') THEN 1 ELSE 0 END) as successes,
+                    COUNT(*) as total
+             FROM tasks
+             WHERE status IN ('done', 'merged', 'failed') AND category = ?1
+             GROUP BY agent
+             HAVING total >= 5",
+        )?;
+        let rows = stmt.query_map(params![category], |row| {
             let agent_str: String = row.get(0)?;
             let successes: i64 = row.get(1)?;
             let total: i64 = row.get(2)?;

@@ -83,10 +83,13 @@ fn reachable_from(
 
 fn task_files(task: &BatchTask, defaults: &BatchDefaults) -> BTreeSet<String> {
     let mut files = BTreeSet::new();
-    if let Some(context) = task.context.as_ref().or(defaults.context.as_ref()) {
-        for file in context {
-            if is_file_path(file) {
-                files.insert(trim_candidate(file).to_string());
+    // read_only tasks don't modify files — skip context to avoid false overlap warnings (GH#60)
+    if !task.read_only {
+        if let Some(context) = task.context.as_ref().or(defaults.context.as_ref()) {
+            for file in context {
+                if is_file_path(file) {
+                    files.insert(trim_candidate(file).to_string());
+                }
             }
         }
     }
@@ -220,6 +223,19 @@ mod tests {
 
         assert_eq!(overlaps[0].file, "src/types.rs");
         assert_eq!(overlaps[0].task_ids, vec!["task-a".to_string(), "task-b".to_string()]);
+    }
+
+    #[test]
+    fn analyze_skips_context_for_read_only_tasks() {
+        let mut writer = stub_task("writer", "edit something");
+        writer.context = Some(vec!["src/main.rs".to_string()]);
+        let mut reader = stub_task("reader", "review something");
+        reader.context = Some(vec!["src/main.rs".to_string()]);
+        reader.read_only = true;
+
+        let overlaps = analyze_file_overlap(&[writer, reader], &BatchDefaults::default());
+
+        assert!(overlaps.is_empty(), "read_only task should not trigger overlap warning");
     }
 
     #[test]

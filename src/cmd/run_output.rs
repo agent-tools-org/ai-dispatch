@@ -16,7 +16,7 @@ pub(in crate::cmd) fn fill_empty_output_from_log(log_path: &Path, output_path: O
     if !needs_fallback {
         return Ok(());
     }
-    let content = crate::cmd::show::extract_messages_from_log(log_path, false)
+    let content = crate::cmd::show::extract_messages_from_log(log_path, true)
         .or_else(|| extract_raw_text_from_log(log_path));
     let Some(content) = content else { return Ok(()) };
     if content.is_empty() {
@@ -71,4 +71,44 @@ pub(in crate::cmd) fn clean_output_if_jsonl(output_path: &Path) -> Result<()> {
     std::fs::write(output_path, cleaned).with_context(|| {
         format!("Failed to rewrite cleaned output file {}", output_path.display())
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::{NamedTempFile, tempdir};
+
+    #[test]
+    fn fill_empty_output_from_log_extracts_full_text_content() {
+        let log = NamedTempFile::new().unwrap();
+        let output = NamedTempFile::new().unwrap();
+        std::fs::write(
+            log.path(),
+            concat!(
+                "{\"type\":\"text\",\"content\":\"first chunk\"}\n",
+                "{\"type\":\"text\",\"content\":\"second chunk\"}\n"
+            ),
+        )
+        .unwrap();
+        std::fs::write(output.path(), "").unwrap();
+
+        fill_empty_output_from_log(log.path(), Some(output.path())).unwrap();
+
+        assert_eq!(
+            std::fs::read_to_string(output.path()).unwrap(),
+            "first chunk\n---\nsecond chunk"
+        );
+    }
+
+    #[test]
+    fn fill_empty_output_from_log_creates_missing_output_file() {
+        let log = NamedTempFile::new().unwrap();
+        let temp = tempdir().unwrap();
+        let output_path = temp.path().join("missing-output.txt");
+        std::fs::write(log.path(), "{\"type\":\"text\",\"content\":\"gemini output\"}\n").unwrap();
+
+        fill_empty_output_from_log(log.path(), Some(output_path.as_path())).unwrap();
+
+        assert_eq!(std::fs::read_to_string(output_path).unwrap(), "gemini output");
+    }
 }

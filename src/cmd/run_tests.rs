@@ -14,12 +14,7 @@ fn git(dir: &std::path::Path, args: &[&str]) {
         .args(args)
         .output()
         .expect("git command failed");
-    assert!(
-        output.status.success(),
-        "git {:?} failed: {}",
-        args,
-        String::from_utf8_lossy(&output.stderr)
-    );
+    assert!(output.status.success(), "git {:?} failed: {}", args, String::from_utf8_lossy(&output.stderr));
 }
 
 #[test]
@@ -32,11 +27,8 @@ fn empty_diff_detection_respects_worktree_state() {
     std::fs::write(&file, "initial").unwrap();
     git(dir.path(), &["add", "file.txt"]);
     git(dir.path(), &["commit", "-m", "initial"]);
-
     assert_eq!(worktree_is_empty_diff(dir.path()), Some(true));
-
     std::fs::write(&file, "updated").unwrap();
-
     assert_eq!(worktree_is_empty_diff(dir.path()), Some(false));
 }
 
@@ -67,13 +59,8 @@ fn read_quota_error_message_uses_stderr() {
         "You have exhausted your capacity for today.",
     )
     .unwrap();
-
     let message = read_quota_error_message(&TaskId("t-quota-stderr".to_string()));
-
-    assert_eq!(
-        message.as_deref(),
-        Some("You have exhausted your capacity for today.")
-    );
+    assert_eq!(message.as_deref(), Some("You have exhausted your capacity for today."));
 }
 
 #[test]
@@ -86,13 +73,8 @@ fn read_quota_error_message_falls_back_to_log() {
         "{\"error\":\"You have hit your usage limit.\"}\n",
     )
     .unwrap();
-
     let message = read_quota_error_message(&TaskId("t-quota-log".to_string()));
-
-    assert_eq!(
-        message.as_deref(),
-        Some("{\"error\":\"You have hit your usage limit.\"}")
-    );
+    assert_eq!(message.as_deref(), Some("{\"error\":\"You have hit your usage limit.\"}"));
 }
 
 #[test]
@@ -105,13 +87,8 @@ fn read_quota_error_message_extracts_rate_limit_line_only() {
         "tokens: 8714294 in + 27373 out = 8741667 (8442752 cached)\nYou have exhausted your capacity for today.\nsome other line\n",
     )
     .unwrap();
-
     let message = read_quota_error_message(&TaskId("t-quota-mixed".to_string()));
-
-    assert_eq!(
-        message.as_deref(),
-        Some("You have exhausted your capacity for today.")
-    );
+    assert_eq!(message.as_deref(), Some("You have exhausted your capacity for today."));
 }
 
 #[test]
@@ -124,13 +101,8 @@ fn read_quota_error_message_detects_402_payment_errors() {
         "{\"type\":\"error\",\"source\":\"agent_loop\",\"message\":\"402 payment required: reload your tokens\"}\n",
     )
     .unwrap();
-
     let message = read_quota_error_message(&TaskId("t-quota-402".to_string()));
-
-    assert_eq!(
-        message.as_deref(),
-        Some("402 payment required: reload your tokens")
-    );
+    assert_eq!(message.as_deref(), Some("402 payment required: reload your tokens"));
 }
 
 #[test]
@@ -147,13 +119,11 @@ fn rescue_quota_failed_task_marks_passed_verify_as_done() {
     let mut task = make_failed_task("t-rescue-pass");
     task.verify_status = VerifyStatus::Passed;
     store.insert_task(&task).unwrap();
-
     rescue_quota_failed_task(
         &store,
         &task.id,
         read_quota_error_message(&task.id).as_deref(),
     );
-
     let task = store.get_task("t-rescue-pass").unwrap().unwrap();
     assert_eq!(task.status, TaskStatus::Done);
 }
@@ -171,13 +141,11 @@ fn rescue_quota_failed_task_keeps_failed_verify_failed() {
     let store = Store::open_memory().unwrap();
     let task = make_failed_task("t-rescue-fail");
     store.insert_task(&task).unwrap();
-
     rescue_quota_failed_task(
         &store,
         &task.id,
         read_quota_error_message(&task.id).as_deref(),
     );
-
     let task = store.get_task("t-rescue-fail").unwrap().unwrap();
     assert_eq!(task.status, TaskStatus::Failed);
 }
@@ -220,7 +188,6 @@ async fn dry_run_returns_without_starting_task() {
     let _aid_home = paths::AidHomeGuard::set(temp.path());
     crate::paths::ensure_dirs().unwrap();
     let store = Arc::new(Store::open_memory().unwrap());
-
     let task_id = run(
         store.clone(),
         RunArgs {
@@ -233,11 +200,45 @@ async fn dry_run_returns_without_starting_task() {
     )
     .await
     .unwrap();
-
     let task = store.get_task(task_id.as_str()).unwrap().unwrap();
     assert_eq!(task.status, TaskStatus::Pending);
     assert!(task.resolved_prompt.is_some());
     assert!(task.prompt_tokens.is_some());
+}
+
+#[tokio::test]
+async fn rate_limited_agent_without_cascade_fails_early() {
+    let temp = TempDir::new().unwrap();
+    let _aid_home = paths::AidHomeGuard::set(temp.path());
+    crate::paths::ensure_dirs().unwrap();
+    crate::rate_limit::mark_rate_limited(&AgentKind::Kilo, "try again at Mar 21st, 2099 2:27 PM.");
+    let err = run(Arc::new(Store::open_memory().unwrap()), RunArgs {
+        agent_name: "kilo".to_string(),
+        prompt: "Inspect the repository state".to_string(),
+        dry_run: true,
+        skills: vec![NO_SKILL_SENTINEL.to_string()],
+        ..Default::default()
+    }).await.unwrap_err();
+    assert!(err.to_string().contains("kilo is rate-limited until Mar 21st, 2099 2:27 PM"));
+}
+
+#[tokio::test]
+async fn rate_limited_agent_with_cascade_proceeds() {
+    let temp = TempDir::new().unwrap();
+    let _aid_home = paths::AidHomeGuard::set(temp.path());
+    crate::paths::ensure_dirs().unwrap();
+    let store = Arc::new(Store::open_memory().unwrap());
+    crate::rate_limit::mark_rate_limited(&AgentKind::Kilo, "try again at Mar 21st, 2099 2:27 PM.");
+    let task_id = run(store.clone(), RunArgs {
+        agent_name: "kilo".to_string(),
+        prompt: "Inspect the repository state".to_string(),
+        cascade: vec!["codex".to_string()],
+        dry_run: true,
+        skills: vec![NO_SKILL_SENTINEL.to_string()],
+        ..Default::default()
+    }).await.unwrap();
+    let task = store.get_task(task_id.as_str()).unwrap().unwrap();
+    assert_eq!(task.status, TaskStatus::Pending);
 }
 
 fn make_failed_task(task_id: &str) -> Task {

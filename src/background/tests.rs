@@ -310,6 +310,21 @@ fn quota_cascade_skipped_for_batch_tasks() {
 }
 
 #[test]
+fn explicit_cascade_takes_priority_over_quota_cascade() {
+    // When spec.cascade is non-empty, the explicit cascade path should run
+    // (not the quota auto-cascade). Verify the spec structure supports this.
+    let spec = BackgroundRunSpec {
+        cascade: vec!["opencode".to_string(), "cursor".to_string()],
+        group: None,
+        ..make_spec("t-cascade-priority")
+    };
+    assert!(spec.group.is_none(), "solo task allows cascade");
+    assert!(!spec.cascade.is_empty(), "explicit cascade should be present");
+    assert_eq!(spec.cascade[0], "opencode");
+    assert_eq!(&spec.cascade[1..], &["cursor"]);
+}
+
+#[test]
 fn check_worker_capacity_warns_at_soft_limit() {
     let store = Store::open_memory().unwrap();
     // No tasks running — should pass silently

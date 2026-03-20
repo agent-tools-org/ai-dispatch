@@ -513,3 +513,20 @@ fn cost_efficiency_calculates_ratio() {
     let value = super::cost_efficiency(9.0, 1.5);
     assert!((value - 3.6).abs() < 1e-6);
 }
+
+#[test]
+fn gemini_in_fallback_chain() {
+    let (_temp, _guard) = isolated();
+    let result = super::coding_fallback_for(&AgentKind::Gemini);
+    assert!(result.is_some(), "Gemini should have a fallback agent");
+}
+
+#[test]
+fn fallback_chain_skips_rate_limited() {
+    let (_temp, _guard) = isolated();
+    crate::rate_limit::mark_rate_limited(&AgentKind::Codex, "quota exhausted");
+    let result = super::coding_fallback_for(&AgentKind::Gemini);
+    // Should skip Codex (rate-limited) and pick the next available
+    assert!(result.is_some());
+    assert_ne!(result.unwrap(), AgentKind::Codex);
+}

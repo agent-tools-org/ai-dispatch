@@ -262,32 +262,48 @@ async fn run_task_inner(store: &Arc<Store>, spec: &BackgroundRunSpec) -> Result<
         && let Some(task) = store.get_task(&spec.task_id)?
         && task.status == TaskStatus::Failed
     {
-        // Quota cascade: only for non-batch tasks (batch_dispatch handles its own fallback)
-        let agent_kind = AgentKind::parse_str(&spec.agent_name);
-        if let Some(kind) = agent_kind
-            && let Some(message) = crate::cmd::run::read_quota_error_message(&TaskId(spec.task_id.clone()))
-        {
-            crate::rate_limit::mark_rate_limited(&kind, &message);
-            crate::cmd::run::rescue_quota_failed_task(
-                store,
-                &TaskId(spec.task_id.clone()),
-                Some(&message),
+        if !spec.cascade.is_empty() {
+            // Explicit --cascade list: try next agent in the chain
+            let next_agent = spec.cascade[0].clone();
+            let remaining: Vec<String> = spec.cascade[1..].to_vec();
+            aid_info!(
+                "[aid] Cascade: trying {} after {} failed",
+                next_agent,
+                spec.agent_name
             );
-            if let Some(fallback) = agent::selection::coding_fallback_for(&kind) {
-                let rescued = store
-                    .get_task(&spec.task_id)?
-                    .map(|task| task.status == TaskStatus::Done)
-                    .unwrap_or(false);
-                if !rescued {
-                    aid_info!(
-                        "[aid] Quota exhausted for {}, auto-cascading to {}",
-                        kind.as_str(),
-                        fallback.as_str()
-                    );
-                    let mut cascade_args = retry_args;
-                    cascade_args.agent_name = fallback.as_str().to_string();
-                    cascade_args.parent_task_id = Some(spec.task_id.clone());
-                    Box::pin(crate::cmd::run::run(store.clone(), cascade_args)).await?;
+            let mut cascade_args = retry_args;
+            cascade_args.agent_name = next_agent;
+            cascade_args.cascade = remaining;
+            cascade_args.parent_task_id = Some(spec.task_id.clone());
+            Box::pin(crate::cmd::run::run(store.clone(), cascade_args)).await?;
+        } else {
+            // Quota auto-cascade: only when no explicit cascade (batch_dispatch handles its own fallback)
+            let agent_kind = AgentKind::parse_str(&spec.agent_name);
+            if let Some(kind) = agent_kind
+                && let Some(message) = crate::cmd::run::read_quota_error_message(&TaskId(spec.task_id.clone()))
+            {
+                crate::rate_limit::mark_rate_limited(&kind, &message);
+                crate::cmd::run::rescue_quota_failed_task(
+                    store,
+                    &TaskId(spec.task_id.clone()),
+                    Some(&message),
+                );
+                if let Some(fallback) = agent::selection::coding_fallback_for(&kind) {
+                    let rescued = store
+                        .get_task(&spec.task_id)?
+                        .map(|task| task.status == TaskStatus::Done)
+                        .unwrap_or(false);
+                    if !rescued {
+                        aid_info!(
+                            "[aid] Quota exhausted for {}, auto-cascading to {}",
+                            kind.as_str(),
+                            fallback.as_str()
+                        );
+                        let mut cascade_args = retry_args;
+                        cascade_args.agent_name = fallback.as_str().to_string();
+                        cascade_args.parent_task_id = Some(spec.task_id.clone());
+                        Box::pin(crate::cmd::run::run(store.clone(), cascade_args)).await?;
+                    }
                 }
             }
         }

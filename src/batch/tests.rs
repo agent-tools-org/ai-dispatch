@@ -365,7 +365,7 @@ fn rejects_dependency_cycles() {
 fn rejects_unknown_fallback_agent() {
     let file = write_temp(concat!(
         "[[task]]\nagent = \"codex\"\nprompt = \"do something\"\n",
-        "fallback = \"unknown-agent\""
+        "fallback = \"codex,unknown-agent\""
     ));
     assert!(parse_batch_file(file.path())
         .unwrap_err()
@@ -380,6 +380,17 @@ fn accepts_valid_fallback_agent() {
         "fallback = \"opencode\""
     ));
     assert!(parse_batch_file(file.path()).is_ok());
+}
+
+#[test]
+fn accepts_comma_separated_fallback() {
+    let toml = r#"
+[[tasks]]
+prompt = "test"
+fallback = "codex,opencode"
+"#;
+    let config: BatchConfig = toml::from_str(toml).unwrap();
+    assert_eq!(config.tasks[0].fallback.as_deref(), Some("codex,opencode"));
 }
 
 #[test]

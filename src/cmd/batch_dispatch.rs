@@ -343,9 +343,11 @@ pub(crate) fn auto_fallback_agent(
     let Some(task) = store.get_task(task_id)? else {
         anyhow::bail!("batch task not found after dispatch: {task_id}");
     };
-    if let Some(fallback_name) = tasks.get(task_idx).and_then(|t| t.fallback.as_deref()) {
-        if let Some(fallback_kind) = crate::types::AgentKind::parse_str(fallback_name) {
-            return Ok(Some((task.agent.as_str().to_string(), fallback_kind)));
+    if let Some(fallback_str) = tasks.get(task_idx).and_then(|t| t.fallback.as_deref()) {
+        for agent_name in fallback_str.split(',').map(str::trim) {
+            if let Some(fallback_kind) = crate::types::AgentKind::parse_str(agent_name) {
+                return Ok(Some((task.agent.as_str().to_string(), fallback_kind)));
+            }
         }
     }
     Ok(crate::agent::selection::coding_fallback_for(&task.agent)

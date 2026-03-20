@@ -431,10 +431,12 @@ fn validate_agents(tasks: &[BatchTask]) -> Result<()> {
 }
 fn validate_fallback_agents(tasks: &[BatchTask]) -> Result<()> {
     for task in tasks {
-        if let Some(fallback) = task.fallback.as_deref()
-            && !is_valid_agent(fallback)
-        {
-            anyhow::bail!("unknown fallback agent: {}", fallback);
+        if let Some(fallback) = task.fallback.as_deref() {
+            for agent in fallback.split(',').map(str::trim) {
+                if !agent.is_empty() && !is_valid_agent(agent) {
+                    anyhow::bail!("unknown fallback agent: {}", agent);
+                }
+            }
         }
     }
     Ok(())

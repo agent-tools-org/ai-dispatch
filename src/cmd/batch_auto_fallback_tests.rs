@@ -54,5 +54,49 @@ fn auto_fallback_agent_returns_none_when_chain_ends() {
     let store = Store::open_memory().unwrap();
     store.insert_task(&stored_task("t-kilo", AgentKind::Kilo)).unwrap();
 
-    assert!(auto_fallback_agent(&store, "t-kilo").unwrap().is_none());
+    assert!(auto_fallback_agent(&store, "t-kilo", &[], 0).unwrap().is_none());
+}
+
+#[test]
+fn auto_fallback_uses_toml_specified_fallback() {
+    let store = Store::open_memory().unwrap();
+    store.insert_task(&stored_task("t-cursor", AgentKind::Cursor)).unwrap();
+    let tasks = vec![crate::batch::BatchTask {
+        id: None,
+        name: None,
+        agent: String::new(),
+        team: None,
+        prompt: String::new(),
+        dir: None,
+        output: None,
+        model: None,
+        worktree: None,
+        group: None,
+        container: None,
+        verify: None,
+        judge: None,
+        best_of: None,
+        max_duration_mins: None,
+        context: None,
+        skills: None,
+        hooks: None,
+        depends_on: None,
+        parent: None,
+        context_from: None,
+        fallback: Some("opencode".to_string()),
+        scope: None,
+        read_only: false,
+        budget: false,
+        env: None,
+        env_forward: None,
+        on_success: None,
+        on_fail: None,
+        conditional: false,
+    }];
+
+    let result = auto_fallback_agent(&store, "t-cursor", &tasks, 0).unwrap();
+    assert!(result.is_some());
+    let (original, fallback) = result.unwrap();
+    assert_eq!(original, "cursor");
+    assert_eq!(fallback, AgentKind::OpenCode);
 }

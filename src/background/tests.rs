@@ -127,6 +127,33 @@ fn marks_stale_pending_tasks_failed() {
 }
 
 #[test]
+fn check_zombie_tasks_auto_fails_old_running_tasks() {
+    let temp = tempfile::tempdir().unwrap();
+    let _aid_home = paths::AidHomeGuard::set(temp.path());
+    paths::ensure_dirs().unwrap();
+
+    let store = Store::open_memory().unwrap();
+    let mut task = make_task("t-a24f", TaskStatus::Running);
+    task.created_at = Local::now() - Duration::hours(25);
+    store.insert_task(&task).unwrap();
+
+    let cleaned = check_zombie_tasks_with(&store, |_| true).unwrap();
+
+    assert_eq!(cleaned, vec!["t-a24f".to_string()]);
+    assert_eq!(
+        store.get_task("t-a24f").unwrap().unwrap().status,
+        TaskStatus::Failed
+    );
+    let events = store.get_events("t-a24f").unwrap();
+    assert_eq!(events.len(), 1);
+    assert_eq!(events[0].event_kind, EventKind::Error);
+    assert_eq!(events[0].detail, "Task exceeded maximum runtime (24h)");
+
+    let stderr = std::fs::read_to_string(paths::stderr_path("t-a24f")).unwrap();
+    assert_eq!(stderr.trim(), "Auto-failed: exceeded 24h maximum runtime");
+}
+
+#[test]
 fn keeps_recent_pending_tasks_pending() {
     let store = Store::open_memory().unwrap();
     let mut task = make_task("t-pend-new", TaskStatus::Pending);

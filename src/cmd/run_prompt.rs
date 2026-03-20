@@ -98,6 +98,12 @@ pub(super) fn build_prompt_bundle(store: &Store, args: &RunArgs, agent_kind: &Ag
         vec![]
     };
     let prompt = resolve_prompt(&args.prompt, args.template.as_deref())?;
+    let task_profile = agent::classifier::classify(
+        &prompt,
+        agent::classifier::count_file_mentions(&prompt),
+        prompt.len(),
+    );
+    let task_category_label = task_profile.category.label();
     let mut effective_prompt = crate::workgroup::compose_prompt(
         &prompt,
         file_context.as_deref(),
@@ -225,10 +231,17 @@ pub(super) fn build_prompt_bundle(store: &Store, args: &RunArgs, agent_kind: &Ag
         } else {
             tools
         };
+        let before_count = tools.len();
+        let tools = toolbox::filter_by_task_category(tools, task_category_label);
+        aid_info!(
+            "[aid] Injected {}/{} toolbox tool(s) (filtered by {})",
+            tools.len(),
+            before_count,
+            task_category_label
+        );
         if !tools.is_empty() {
             let toolbox_block = toolbox::format_toolbox_instructions(&tools);
             effective_prompt = format!("{effective_prompt}\n\n{toolbox_block}");
-            aid_info!("[aid] Injected {} toolbox tool(s)", tools.len());
         }
     }
 

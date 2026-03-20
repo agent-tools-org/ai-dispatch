@@ -6,16 +6,14 @@ use crate::store::Store;
 use crate::types::{AgentKind, Task, TaskId, TaskStatus, VerifyStatus};
 use chrono::Local;
 use serde_json::json;
+use std::path::Path;
 use std::sync::Arc;
 use tempfile::NamedTempFile;
 
-#[test]
-fn reads_task_output_file() {
-    let file = NamedTempFile::new().unwrap();
-    std::fs::write(file.path(), "hello\n").unwrap();
-    let task = Task {
-        id: TaskId("t-output".to_string()),
-        agent: AgentKind::Gemini,
+fn test_task(id: &str) -> Task {
+    Task {
+        id: TaskId(id.to_string()),
+        agent: AgentKind::Codex,
         custom_agent_name: None,
         prompt: "prompt".to_string(),
         resolved_prompt: None,
@@ -30,7 +28,7 @@ fn reads_task_output_file() {
         worktree_path: None,
         worktree_branch: None,
         log_path: None,
-        output_path: Some(file.path().display().to_string()),
+        output_path: None,
         tokens: None,
         prompt_tokens: None,
         duration_ms: None,
@@ -43,7 +41,34 @@ fn reads_task_output_file() {
         verify_status: VerifyStatus::Skipped,
         read_only: false,
         budget: false,
-    };
+    }
+}
+
+fn numbered_assistant_log(count: usize, body_len: usize) -> String {
+    (0..count)
+        .map(|index| {
+            serde_json::to_string(&json!({
+                "type": "message",
+                "role": "assistant",
+                "content": format!("message-{index:02}-{}", "x".repeat(body_len)),
+            }))
+        })
+        .collect::<Result<Vec<_>, _>>()
+        .unwrap()
+        .join("\n")
+}
+
+fn write_log(path: &Path, content: String) {
+    std::fs::write(path, content).unwrap();
+}
+
+#[test]
+fn reads_task_output_file() {
+    let file = NamedTempFile::new().unwrap();
+    std::fs::write(file.path(), "hello\n").unwrap();
+    let mut task = test_task("t-output");
+    task.agent = AgentKind::Gemini;
+    task.output_path = Some(file.path().display().to_string());
     assert_eq!(read_task_output(&task).unwrap(), "hello\n");
 }
 
@@ -80,37 +105,7 @@ fn diff_text_falls_back_to_default_log_output() {
     std::fs::write(crate::paths::log_path("t-log-fallback"), "log output\n").unwrap();
 
     let store = Arc::new(Store::open_memory().unwrap());
-    let task = Task {
-        id: TaskId("t-log-fallback".to_string()),
-        agent: AgentKind::Codex,
-        custom_agent_name: None,
-        prompt: "prompt".to_string(),
-        resolved_prompt: None,
-        category: None,
-        status: TaskStatus::Done,
-        parent_task_id: None,
-        workgroup_id: None,
-        caller_kind: None,
-        caller_session_id: None,
-        agent_session_id: None,
-        repo_path: None,
-        worktree_path: None,
-        worktree_branch: None,
-        log_path: None,
-        output_path: None,
-        tokens: None,
-        prompt_tokens: None,
-        duration_ms: None,
-        model: None,
-        cost_usd: None,
-        exit_code: None,
-        created_at: Local::now(),
-        completed_at: None,
-        verify: None,
-        verify_status: VerifyStatus::Skipped,
-        read_only: false,
-        budget: false,
-    };
+    let task = test_task("t-log-fallback");
     store.insert_task(&task).unwrap();
 
     let text = diff_text(&store, "t-log-fallback").unwrap();
@@ -187,18 +182,7 @@ fn extract_messages_accumulates_cursor_assistant_deltas() {
 #[test]
 fn extract_messages_from_log_caps_message_count_and_size() {
     let file = NamedTempFile::new().unwrap();
-    let content = (0..22)
-        .map(|index| {
-            serde_json::to_string(&json!({
-                "type": "message",
-                "role": "assistant",
-                "content": format!("message-{index:02}-{}", "x".repeat(500)),
-            }))
-        })
-        .collect::<Result<Vec<_>, _>>()
-        .unwrap()
-        .join("\n");
-    std::fs::write(file.path(), content).unwrap();
+    write_log(file.path(), numbered_assistant_log(22, 500));
 
     let output = extract_messages_from_log(file.path(), false).unwrap();
     let parts = output.split("\n---\n").collect::<Vec<_>>();
@@ -215,18 +199,7 @@ fn extract_messages_from_log_caps_message_count_and_size() {
 #[test]
 fn extract_messages_full_skips_truncation() {
     let file = NamedTempFile::new().unwrap();
-    let content = (0..22)
-        .map(|index| {
-            serde_json::to_string(&json!({
-                "type": "message",
-                "role": "assistant",
-                "content": format!("message-{index:02}-{}", "x".repeat(500)),
-            }))
-        })
-        .collect::<Result<Vec<_>, _>>()
-        .unwrap()
-        .join("\n");
-    std::fs::write(file.path(), content).unwrap();
+    write_log(file.path(), numbered_assistant_log(22, 500));
 
     let output = extract_messages_from_log(file.path(), true).unwrap();
     let parts: Vec<&str> = output.split("\n---\n").collect();
@@ -263,40 +236,64 @@ fn output_text_for_task_prefers_extracted_messages_to_raw_log() {
     std::fs::write(&log_path, log_content).unwrap();
 
     let store = Store::open_memory().unwrap();
-    let task = Task {
-        id: TaskId("t-output-messages".to_string()),
-        agent: AgentKind::Codex,
-        custom_agent_name: None,
-        prompt: "prompt".to_string(),
-        resolved_prompt: None,
-        category: None,
-        status: TaskStatus::Done,
-        parent_task_id: None,
-        workgroup_id: None,
-        caller_kind: None,
-        caller_session_id: None,
-        agent_session_id: None,
-        repo_path: None,
-        worktree_path: None,
-        worktree_branch: None,
-        log_path: None,
-        output_path: None,
-        tokens: None,
-        prompt_tokens: None,
-        duration_ms: None,
-        model: None,
-        cost_usd: None,
-        exit_code: None,
-        created_at: Local::now(),
-        completed_at: None,
-        verify: None,
-        verify_status: VerifyStatus::Skipped,
-        read_only: false,
-        budget: false,
-    };
+    let task = test_task("t-output-messages");
     store.insert_task(&task).unwrap();
 
     let output = output_text_for_task(&store, "t-output-messages", false).unwrap();
 
     assert_eq!(output, "human-readable output\n---\nsecond chunk");
+}
+
+#[test]
+fn truncate_conclusion_at_2000_chars() {
+    let short = "a".repeat(200);
+    let short_file = NamedTempFile::new().unwrap();
+    std::fs::write(short_file.path(), &short).unwrap();
+    let mut short_task = test_task("t-summary-short");
+    short_task.output_path = Some(short_file.path().display().to_string());
+    assert_eq!(crate::cmd::summary::generate_summary(&short_task).conclusion, short);
+
+    let long_file = NamedTempFile::new().unwrap();
+    std::fs::write(long_file.path(), "b".repeat(2_500)).unwrap();
+    let mut long_task = test_task("t-summary-long");
+    long_task.output_path = Some(long_file.path().display().to_string());
+    let conclusion = crate::cmd::summary::generate_summary(&long_task).conclusion;
+
+    assert_eq!(conclusion.len(), 2_000);
+    assert_eq!(conclusion, format!("{}...", "b".repeat(1_997)));
+}
+
+#[test]
+fn extract_messages_research_relaxed_limits() {
+    let file = NamedTempFile::new().unwrap();
+    write_log(file.path(), numbered_assistant_log(15, 1_200));
+
+    let output = show_output_messages::extract_messages_research(file.path()).unwrap();
+    let parts = output.split("\n---\n").collect::<Vec<_>>();
+
+    assert_eq!(parts.len(), 15);
+    assert!(parts.iter().all(|part| part.len() > 1_000));
+    assert!(output.contains("message-00-"));
+    assert!(output.contains("message-14-"));
+    assert!(!output.contains("[... "));
+}
+
+#[test]
+fn output_text_uses_research_mode_for_no_worktree() {
+    let temp = tempfile::tempdir().unwrap();
+    let _aid_home = crate::paths::AidHomeGuard::set(temp.path());
+    std::fs::create_dir_all(crate::paths::logs_dir()).unwrap();
+    let log_path = crate::paths::log_path("t-research-output");
+    write_log(&log_path, numbered_assistant_log(12, 1_200));
+
+    let store = Arc::new(Store::open_memory().unwrap());
+    let task = test_task("t-research-output");
+    store.insert_task(&task).unwrap();
+
+    let output = output_text(&store, "t-research-output").unwrap();
+    let parts = output.split("\n---\n").collect::<Vec<_>>();
+
+    assert_eq!(parts.len(), 12);
+    assert!(parts.iter().all(|part| part.len() > 1_000));
+    assert!(!output.contains("[... "));
 }

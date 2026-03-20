@@ -24,6 +24,7 @@ pub(crate) async fn dispatch(store: Arc<crate::store::Store>, command: Commands)
             | Commands::Output(..)
             | Commands::Usage(..)
             | Commands::Cost(..)
+            | Commands::Stats(..)
             | Commands::Summary(..)
         ) => dispatch_primary(store, command).await,
         command @ (
@@ -78,6 +79,7 @@ async fn dispatch_primary(store: Arc<crate::store::Store>, command: Commands) ->
         Commands::Output(command_args_c::OutputArgs { task_id, full }) => handlers_b::output(task_id, full),
         Commands::Usage(command_args_b::UsageArgs { session, agent, team, period, json }) => handlers_b::usage(store, session, agent, team, period, json),
         Commands::Cost(command_args_b::CostArgs { group, summary, agent, period }) => handlers_b::cost(store, group, summary, agent, period),
+        Commands::Stats(command_args_b::StatsArgs { window, agent }) => crate::cmd::stats::run(&store, window, agent),
         Commands::Summary(command_args_b::SummaryArgs { group }) => handlers_b::summary(store, group),
         _ => unreachable!("dispatch_primary received unsupported command"),
     }

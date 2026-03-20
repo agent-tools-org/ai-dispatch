@@ -48,6 +48,14 @@ pub struct CostArgs {
 }
 
 #[derive(Args)]
+pub struct StatsArgs {
+    #[arg(long, default_value = "7d")]
+    pub window: String,
+    #[arg(long)]
+    pub agent: Option<String>,
+}
+
+#[derive(Args)]
 pub struct SummaryArgs {
     pub group: String,
 }

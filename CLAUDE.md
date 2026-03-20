@@ -78,6 +78,25 @@ aid stats --window 30d       # last 30 days
 aid stats --agent codex      # filter to one agent
 ```
 
+## Show
+
+`aid show <task-id>` auto-detects task type and adjusts output:
+
+- **Code tasks**: events + diff stat (default), `--diff` for full diff
+- **Research tasks** (no worktree/changes): events + **Findings** section with agent conclusions
+- Auto-saved output: research task output is auto-extracted to `~/.aid/tasks/<id>/output.md` on completion
+
+```bash
+aid show <task-id>              # smart default: diff stat OR findings
+aid show <task-id> --diff       # full diff (code tasks)
+aid show <task-id> --output     # agent messages (research-aware: relaxed limits)
+aid show <task-id> --output --full  # complete untruncated output
+aid show <task-id> --summary    # one-line status + conclusion
+aid show <task-id> --context    # original + resolved prompt
+aid show <task-id> --explain    # AI-generated explanation of changes
+aid show <task-id> --json       # machine-readable JSON
+```
+
 ## Merge
 
 ```bash

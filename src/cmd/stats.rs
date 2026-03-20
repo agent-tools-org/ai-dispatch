@@ -18,7 +18,7 @@ use crate::usage::UsageWindow;
 pub fn run(store: &Store, window: String, agent: Option<String>) -> Result<()> {
     let window = UsageWindow::parse(&window)?;
     let stats = collect(store, window, agent.as_deref(), Local::now())?;
-    print!("{}", render(&stats, window));
+    print!("{}", render_output(&stats, window));
     Ok(())
 }
 
@@ -46,7 +46,7 @@ fn collect(store: &Store, window: UsageWindow, agent: Option<&str>, now: DateTim
         }
     }
     let mut agent_rows: Vec<_> = agents.into_iter().map(|(agent, (kind, tasks, success, success_base, duration_ms, duration_count, cost_usd))| AgentRow {
-        agent, tasks, success_rate: if success_base == 0 { 0.0 } else { success as f64 * 100.0 / success_base as f64 }, avg_duration_ms: (duration_count > 0).then_some(duration_ms / duration_count as i64), cost: cost::format_cost_label(Some(cost_usd), kind),
+        agent, tasks, success_rate: if success_base == 0 { 0.0 } else { success as f64 * 100.0 / success_base as f64 }, avg_duration_ms: (duration_count > 0).then(|| duration_ms / duration_count as i64), cost: cost::format_cost_label(Some(cost_usd), kind),
     }).collect();
     agent_rows.sort_by(|a, b| b.tasks.cmp(&a.tasks).then_with(|| a.agent.cmp(&b.agent)));
     let mut failure_rows: Vec<_> = failures.into_iter().map(|(label, (tasks, agents))| {
@@ -61,6 +61,13 @@ fn collect(store: &Store, window: UsageWindow, agent: Option<&str>, now: DateTim
     }).collect();
     model_rows.sort_by(|a, b| b.tasks.cmp(&a.tasks).then_with(|| a.model.cmp(&b.model)));
     Ok(StatsSnapshot { agent_rows, failure_rows, model_rows })
+}
+
+fn render_output(stats: &StatsSnapshot, window: UsageWindow) -> String {
+    if stats.agent_rows.is_empty() {
+        return format!("No tasks matched the selected filters for {}.\n", window.description());
+    }
+    render(stats, window)
 }
 
 fn render(stats: &StatsSnapshot, window: UsageWindow) -> String {
@@ -122,5 +129,23 @@ mod tests {
         assert_eq!(stats.agent_rows[1], AgentRow { agent: "cursor".to_string(), tasks: 1, success_rate: 100.0, avg_duration_ms: Some(90_000), cost: "subscription".to_string() });
         assert_eq!(stats.failure_rows, vec![FailureRow { label: "verify failed".to_string(), tasks: 1, agents: vec![("codex".to_string(), 1)] }]);
         assert_eq!(stats.model_rows[0], ModelRow { model: "gpt-5.4".to_string(), tasks: 2, cost: "$15.00".to_string() });
+    }
+
+    #[test]
+    fn stats_does_not_panic_on_zero_duration_count() {
+        let store = Store::open_memory().unwrap();
+        let task = task("t-no-dur", AgentKind::Codex, TaskStatus::Done, 1, "gpt-5.4", Some(1.0), None);
+        store.insert_task(&task).unwrap();
+
+        let stats = collect(&store, UsageWindow::Days(7), None, Local::now()).unwrap();
+
+        assert_eq!(stats.agent_rows[0].avg_duration_ms, None);
+    }
+
+    #[test]
+    fn render_output_shows_friendly_message_when_no_tasks_match() {
+        let stats = StatsSnapshot { agent_rows: Vec::new(), failure_rows: Vec::new(), model_rows: Vec::new() };
+
+        assert_eq!(render_output(&stats, UsageWindow::Days(7)), "No tasks matched the selected filters for last 7 days.\n");
     }
 }

@@ -60,6 +60,36 @@ fn deserialize_verify<'de, D: serde::Deserializer<'de>>(
     deserializer.deserialize_any(VerifyVisitor)
 }
 
+fn deserialize_string_or_vec<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> Result<Option<Vec<String>>, D::Error> {
+    use serde::de;
+    struct StringOrVec;
+    impl<'de> de::Visitor<'de> for StringOrVec {
+        type Value = Option<Vec<String>>;
+        fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+            formatter.write_str("a string or array of strings")
+        }
+        fn visit_str<E: de::Error>(self, v: &str) -> Result<Self::Value, E> {
+            Ok(Some(vec![v.to_string()]))
+        }
+        fn visit_seq<A: de::SeqAccess<'de>>(self, mut seq: A) -> Result<Self::Value, A::Error> {
+            let mut vec = Vec::new();
+            while let Some(val) = seq.next_element::<String>()? {
+                vec.push(val);
+            }
+            Ok(Some(vec))
+        }
+        fn visit_none<E: de::Error>(self) -> Result<Self::Value, E> {
+            Ok(None)
+        }
+        fn visit_unit<E: de::Error>(self) -> Result<Self::Value, E> {
+            Ok(None)
+        }
+    }
+    deserializer.deserialize_any(StringOrVec)
+}
+
 #[derive(Debug, Deserialize)]
 pub struct BatchConfig {
     #[serde(default)]
@@ -95,11 +125,14 @@ pub struct BatchDefaults {
     pub max_duration_mins: Option<u64>,
     #[serde(default)]
     pub best_of: Option<usize>,
+    #[serde(default, deserialize_with = "deserialize_string_or_vec")]
     pub context: Option<Vec<String>>,
+    #[serde(default, deserialize_with = "deserialize_string_or_vec")]
     pub skills: Option<Vec<String>>,
     #[serde(default)]
     pub hooks: Option<Vec<String>>,
     pub fallback: Option<String>,
+    #[serde(default, deserialize_with = "deserialize_string_or_vec")]
     pub scope: Option<Vec<String>>,
     #[serde(default)]
     pub read_only: Option<bool>,
@@ -133,14 +166,18 @@ pub struct BatchTask {
     pub best_of: Option<usize>,
     #[serde(default)]
     pub max_duration_mins: Option<u64>,
+    #[serde(default, deserialize_with = "deserialize_string_or_vec")]
     pub context: Option<Vec<String>>,
+    #[serde(default, deserialize_with = "deserialize_string_or_vec")]
     pub skills: Option<Vec<String>>,
     #[serde(default)]
     pub hooks: Option<Vec<String>>,
     pub depends_on: Option<Vec<String>>,
     pub parent: Option<String>,
+    #[serde(default, deserialize_with = "deserialize_string_or_vec")]
     pub context_from: Option<Vec<String>>,
     pub fallback: Option<String>,
+    #[serde(default, deserialize_with = "deserialize_string_or_vec")]
     pub scope: Option<Vec<String>>,
     #[serde(default)]
     pub read_only: bool,

@@ -152,12 +152,14 @@ pub async fn run(store: Arc<Store>, args: BatchArgs) -> Result<()> {
     }
     println!("Batch: dispatching {total} task(s) from {}", path.display());
     let start_time = Instant::now();
+    let auto_fallback = config.defaults.auto_fallback.unwrap_or(false)
+        || config.tasks.iter().any(|t| t.fallback.is_some());
     let dispatch = if has_dependencies && args.parallel {
         batch_dispatch::dispatch_parallel_with_dependencies(
             store.clone(),
             &config.tasks,
             args.max_concurrent,
-            config.defaults.auto_fallback.unwrap_or(false),
+            auto_fallback,
             shared_dir_path.as_deref(),
         )
         .await?
@@ -165,7 +167,7 @@ pub async fn run(store: Arc<Store>, args: BatchArgs) -> Result<()> {
         batch_dispatch::dispatch_sequential_with_dependencies(
             store.clone(),
             &config.tasks,
-            config.defaults.auto_fallback.unwrap_or(false),
+            auto_fallback,
             shared_dir_path.as_deref(),
         )
         .await?
@@ -174,7 +176,7 @@ pub async fn run(store: Arc<Store>, args: BatchArgs) -> Result<()> {
             store.clone(),
             &config.tasks,
             args.max_concurrent,
-            config.defaults.auto_fallback.unwrap_or(false),
+            auto_fallback,
             shared_dir_path.as_deref(),
         )
         .await?
@@ -182,7 +184,7 @@ pub async fn run(store: Arc<Store>, args: BatchArgs) -> Result<()> {
         batch_dispatch::dispatch_sequential(
             store.clone(),
             &config.tasks,
-            config.defaults.auto_fallback.unwrap_or(false),
+            auto_fallback,
             shared_dir_path.as_deref(),
         )
         .await?

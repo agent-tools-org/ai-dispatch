@@ -55,6 +55,18 @@ aid team create <name>           # scaffold team TOML + knowledge dir
 aid team delete <name>           # remove team TOML
 ```
 
+## Agent Config
+
+Per-agent default model stored in `~/.aid/agent_config.toml`. CLI `--model` flag overrides.
+
+```bash
+aid agent config cursor --model composer-2   # set default model
+aid agent config cursor --model ""           # clear default
+aid agent config codex --model gpt-5.4       # set codex default
+```
+
+Default cursor model is `composer-2` (Cursor's frontier coding model, $0.50/$2.50 per M tokens).
+
 ### Usage with run and batch
 
 ```bash

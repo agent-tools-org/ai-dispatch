@@ -77,6 +77,8 @@ pub struct MergeArgs {
     pub approve: bool,
     #[arg(long)]
     pub check: bool,
+    #[arg(long, help = "Merge into this branch instead of current")]
+    pub target: Option<String>,
 }
 
 #[derive(Args)]

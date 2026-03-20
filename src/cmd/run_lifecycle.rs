@@ -123,6 +123,11 @@ pub(crate) async fn post_run_lifecycle(
         }
     }
     run_prompt::notify_task_completion(store, task_id)?;
+    if let Some(task) = store.get_task(task_id.as_str())?
+        && task.output_path.is_none()
+    {
+        auto_save_task_output(store.as_ref(), &task)?;
+    }
     let Some(task) = store.get_task(task_id.as_str())? else { return Ok(None) };
     let summary_json = serde_json::to_string(&crate::cmd::summary::generate_summary(&task)).unwrap_or_default();
     let _ = store.save_completion_summary(task_id.as_str(), &summary_json);
@@ -226,7 +231,6 @@ pub(crate) async fn post_run_lifecycle(
     if completed_normally { aid_info!("[aid] View in TUI: aid board"); }
     Ok(None)
 }
-
 pub(crate) fn maybe_flag_empty_worktree_diff(store: &Store, task_id: &TaskId, task: &Task) {
     if task.status != TaskStatus::Done || task.verify_status != VerifyStatus::Skipped {
         return;
@@ -241,13 +245,22 @@ pub(crate) fn maybe_flag_empty_worktree_diff(store: &Store, task_id: &TaskId, ta
         }
     }
 }
-
+pub(crate) fn auto_save_task_output(store: &Store, task: &Task) -> Result<()> {
+    let log_path = task.log_path.as_deref().map(std::path::PathBuf::from)
+        .unwrap_or_else(|| crate::paths::log_path(task.id.as_str()));
+    let Some(content) = crate::cmd::show::extract_messages_from_log(&log_path, true)
+        .filter(|content| !content.is_empty()) else { return Ok(()); };
+    let output_dir = crate::paths::task_dir(task.id.as_str());
+    std::fs::create_dir_all(&output_dir)?;
+    let output_path = output_dir.join("output.md");
+    std::fs::write(&output_path, &content)?;
+    store.update_output_path(task.id.as_str(), &output_path.display().to_string())
+}
 pub(crate) fn worktree_is_empty_diff(worktree_dir: &Path) -> Option<bool> {
     let head = git_diff_stat_output(worktree_dir, &["diff", "--stat", "HEAD"])?;
     let staged = git_diff_stat_output(worktree_dir, &["diff", "--cached", "--stat"])?;
     Some(head.trim().is_empty() && staged.trim().is_empty())
 }
-
 pub(crate) fn git_diff_stat_output(dir: &Path, args: &[&str]) -> Option<String> {
     let output = std::process::Command::new("git")
         .current_dir(dir)
@@ -257,7 +270,6 @@ pub(crate) fn git_diff_stat_output(dir: &Path, args: &[&str]) -> Option<String> 
     if !output.status.success() { return None; }
     Some(String::from_utf8_lossy(&output.stdout).to_string())
 }
-
 pub(crate) fn rescue_quota_failed_task(store: &Store, task_id: &TaskId, quota_error_message: Option<&str>) {
     if quota_error_message.is_none() { return; }
     let Ok(Some(task)) = store.get_task(task_id.as_str()) else { return; };
@@ -266,7 +278,6 @@ pub(crate) fn rescue_quota_failed_task(store: &Store, task_id: &TaskId, quota_er
         let _ = store.update_task_status(task_id.as_str(), TaskStatus::Done);
     }
 }
-
 pub(crate) fn read_quota_error_message(task_id: &TaskId) -> Option<String> {
     let stderr_path = crate::paths::stderr_path(task_id.as_str());
     if let Ok(stderr) = std::fs::read_to_string(&stderr_path) {
@@ -278,11 +289,7 @@ pub(crate) fn read_quota_error_message(task_id: &TaskId) -> Option<String> {
     }
     None
 }
-
-fn find_rate_limit_line(content: &str) -> Option<String> {
-    content.lines().find_map(rate_limit::extract_rate_limit_message)
-}
-
+fn find_rate_limit_line(content: &str) -> Option<String> { content.lines().find_map(rate_limit::extract_rate_limit_message) }
 pub(crate) fn take_next_cascade_agent(args: &RunArgs) -> Option<(String, Vec<String>)> {
     let mut cascade = args.cascade.clone();
     if cascade.is_empty() { None } else { Some((cascade.remove(0), cascade)) }

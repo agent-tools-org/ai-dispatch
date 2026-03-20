@@ -22,10 +22,10 @@ command = "{name}"
 pub fn run_tool_command(action: ToolAction) -> Result<()> {
     match action {
         ToolAction::List { team } => list_tools(team.as_deref()),
-        ToolAction::Show { name } => show_tool(&name),
+        ToolAction::Show { name, team } => show_tool(&name, team.as_deref()),
         ToolAction::Add { name, team } => add_tool(&name, team.as_deref()),
         ToolAction::Remove { name } => remove_tool(&name),
-        ToolAction::Test { name, args } => test_tool(&name, &args),
+        ToolAction::Test { name, team, args } => test_tool(&name, team.as_deref(), &args),
     }
 }
 
@@ -60,8 +60,8 @@ fn list_tools(team: Option<&str>) -> Result<()> {
     Ok(())
 }
 
-fn show_tool(name: &str) -> Result<()> {
-    let tool = toolbox::find_tool(name, None, None)?;
+fn show_tool(name: &str, team: Option<&str>) -> Result<()> {
+    let tool = toolbox::find_tool(name, team, None)?;
     println!("Tool: {}", tool.name);
     println!("  Display name: {}", tool.display_name);
     if !tool.description.is_empty() {
@@ -110,8 +110,8 @@ fn remove_tool(name: &str) -> Result<()> {
     Ok(())
 }
 
-fn test_tool(name: &str, args: &[String]) -> Result<()> {
-    let tool = toolbox::find_tool(name, None, None)?;
+fn test_tool(name: &str, team: Option<&str>, args: &[String]) -> Result<()> {
+    let tool = toolbox::find_tool(name, team, None)?;
     println!("Running: {} {}", tool.command, args.join(" "));
     let status = std::process::Command::new(&tool.command)
         .args(args)
@@ -251,6 +251,46 @@ mod tests {
         let (_temp, _guard) = test_env();
         let err = run_tool_command(ToolAction::Show {
             name: "missing".to_string(),
+            team: None,
+        })
+        .unwrap_err();
+        assert!(err.to_string().contains("not found"));
+    }
+
+    #[test]
+    fn show_and_test_team_tool_require_team_flag() {
+        let (_temp, _guard) = test_env();
+        run_tool_command(ToolAction::Add {
+            name: "checker".to_string(),
+            team: Some("dev".to_string()),
+        })
+        .unwrap();
+        run_tool_command(ToolAction::Show {
+            name: "checker".to_string(),
+            team: Some("dev".to_string()),
+        })
+        .unwrap();
+        let err = run_tool_command(ToolAction::Show {
+            name: "checker".to_string(),
+            team: None,
+        })
+        .unwrap_err();
+        assert!(err.to_string().contains("not found"));
+        fs::write(
+            toolbox::team_tools_dir("dev").join("checker.toml"),
+            "[tool]\nid = \"checker\"\ndisplay_name = \"Checker\"\ndescription = \"\"\ncommand = \"true\"\n",
+        )
+        .unwrap();
+        run_tool_command(ToolAction::Test {
+            name: "checker".to_string(),
+            team: Some("dev".to_string()),
+            args: vec![],
+        })
+        .unwrap();
+        let err = run_tool_command(ToolAction::Test {
+            name: "checker".to_string(),
+            team: None,
+            args: vec![],
         })
         .unwrap_err();
         assert!(err.to_string().contains("not found"));

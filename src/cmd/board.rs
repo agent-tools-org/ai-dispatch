@@ -10,7 +10,7 @@ use crate::background;
 use crate::board::render_board;
 use crate::session;
 use crate::store::Store;
-use crate::types::TaskFilter;
+use crate::types::{TaskFilter, TaskStatus};
 
 pub fn run(
     store: &Arc<Store>,
@@ -84,7 +84,19 @@ pub fn run(
         println!("{}", serde_json::to_string(&payload)?);
         return Ok(());
     }
+    let has_terminal_worktree = tasks.iter().any(|task| {
+        matches!(
+            task.status,
+            TaskStatus::Done | TaskStatus::Failed | TaskStatus::Merged | TaskStatus::Skipped | TaskStatus::Stopped
+        ) && task.worktree_path.is_some()
+    });
     print!("{}", render_board(&tasks, store)?);
+    if has_terminal_worktree
+        && let Ok(stale_count) = crate::cmd::worktree::stale_worktree_count(None)
+        && stale_count > 3
+    {
+        println!("[aid] Tip: run `aid worktree prune` to clean up stale worktrees");
+    }
     Ok(())
 }
 

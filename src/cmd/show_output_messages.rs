@@ -15,6 +15,12 @@ pub fn output_text_for_task(store: &Store, task_id: &str, full: bool) -> Result<
     if let Ok(content) = read_task_output(&task) {
         return Ok(content);
     }
+    if is_research_task(&task) {
+        let path = task_log_path(&task, task_id);
+        if let Some(content) = extract_messages_research(&path) {
+            return Ok(content);
+        }
+    }
     if let Some(content) = extract_messages_for_task(&task, task_id, full) {
         return Ok(content);
     }
@@ -33,6 +39,12 @@ pub fn output_text(store: &Arc<Store>, task_id: &str) -> Result<String> {
     let task = super::super::load_task(store, task_id)?;
     if let Ok(content) = read_task_output(&task) {
         return Ok(content);
+    }
+    if is_research_task(&task) {
+        let path = task_log_path(&task, task_id);
+        if let Some(content) = extract_messages_research(&path) {
+            return Ok(content);
+        }
     }
     if let Some(content) = extract_messages_for_task(&task, task_id, false) {
         return Ok(content);
@@ -60,6 +72,10 @@ fn task_log_path(task: &Task, task_id: &str) -> PathBuf {
         .unwrap_or_else(|| paths::log_path(task_id))
 }
 
+fn is_research_task(task: &Task) -> bool {
+    task.worktree_path.is_none() && task.worktree_branch.is_none()
+}
+
 fn extract_messages_for_task(task: &Task, task_id: &str, full: bool) -> Option<String> {
     extract_messages_from_log(&task_log_path(task, task_id), full)
 }
@@ -80,6 +96,19 @@ pub(crate) fn extract_messages_from_log(log_path: &Path, full: bool) -> Option<S
         messages = cap_message_count(messages, HEAD_MESSAGE_COUNT, TAIL_MESSAGE_COUNT);
     }
     Some(join_messages(messages, full, MAX_OUTPUT_CHARS))
+}
+
+pub(crate) fn extract_messages_research(log_path: &Path) -> Option<String> {
+    const MAX_MESSAGE_CHARS: usize = 4_000;
+    const MAX_OUTPUT_CHARS: usize = 20_000;
+
+    let content = std::fs::read_to_string(log_path).ok()?;
+    let mut messages = collect_messages(&content);
+    if messages.is_empty() {
+        return None;
+    }
+    truncate_messages(&mut messages, MAX_MESSAGE_CHARS);
+    Some(join_messages(messages, false, MAX_OUTPUT_CHARS))
 }
 
 fn collect_messages(content: &str) -> Vec<String> {

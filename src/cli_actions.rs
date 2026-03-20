@@ -224,6 +224,12 @@ pub enum WorktreeAction {
         #[arg(long)]
         repo: Option<String>,
     },
+    /// Prune stale aid-managed worktrees
+    Prune {
+        /// Repository path (defaults to current dir)
+        #[arg(long)]
+        repo: Option<String>,
+    },
     /// Remove a worktree and prune git references
     Remove {
         /// Branch name of the worktree to remove

@@ -216,18 +216,10 @@ pub fn format_toolbox_instructions(tools: &[ToolMeta]) -> String {
         return String::new();
     }
     let mut lines = vec!["--- Team Toolbox ---".to_string()];
-    lines.push("The following tools are available. Run them directly via bash:".to_string());
+    lines.push("The following tools are available via bash. Use `aid tool show <name>` for full usage.".to_string());
     lines.push(String::new());
     for tool in tools {
-        let args_part = if tool.args.is_empty() {
-            String::new()
-        } else {
-            format!(" {}", tool.args)
-        };
-        lines.push(format!("  {}{}: {}", tool.command, args_part, tool.description));
-        if tool.output_format != "text" {
-            lines.push(format!("    Output: {}", tool.output_format));
-        }
+        lines.push(format!("  {}: {}", tool.name, tool.description));
     }
     lines.join("\n")
 }
@@ -318,8 +310,9 @@ mod tests {
         }];
         let output = format_toolbox_instructions(&tools);
         assert!(output.contains("--- Team Toolbox ---"));
-        assert!(output.contains("eslint <files>: Run linting"));
-        assert!(output.contains("Output: json"));
+        assert!(output.contains("lint: Run linting"));
+        assert!(!output.contains("eslint"), "command path should not appear in summary");
+        assert!(!output.contains("Output: json"), "output format should not appear in summary");
     }
 
     #[test]

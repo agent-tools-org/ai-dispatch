@@ -121,13 +121,14 @@ fn format_report_fail_shows_output() {
 }
 
 #[test]
-fn enforce_verify_status_marks_done_failed_verify_as_failed() {
+fn enforce_verify_status_keeps_done_on_vfail() {
     let store = Store::open_memory().unwrap();
     let task = make_task("t-verify-failed", TaskStatus::Done, VerifyStatus::Failed);
     store.insert_task(&task).unwrap();
     enforce_verify_status(&store, &task.id);
     let loaded = store.get_task(task.id.as_str()).unwrap().unwrap();
-    assert_eq!(loaded.status, TaskStatus::Failed);
+    assert_eq!(loaded.status, TaskStatus::Done, "VFAIL should keep Done status");
+    assert_eq!(loaded.verify_status, VerifyStatus::Failed);
 }
 
 #[test]

@@ -353,12 +353,12 @@ async fn run_auto_retries_after_verify_failure() {
 
     assert_eq!(all_tasks.len(), 2);
     // Original stays Done because auto-retry triggered (enforce skipped via early return)
-    // Retried is Failed because verify failed and no more retries → enforce_verify_status fires
+    // Retried stays Done with VFAIL — verify failed but work is preserved
     assert_eq!(original.status, TaskStatus::Done);
     assert_eq!(original.verify_status, VerifyStatus::Failed);
     assert_eq!(retried.parent_task_id.as_deref(), Some(original.id.as_str()));
     assert_eq!(retried.verify.as_deref(), Some("false"));
-    assert_eq!(retried.status, TaskStatus::Failed);
+    assert_eq!(retried.status, TaskStatus::Done);
     assert_eq!(retried.verify_status, VerifyStatus::Failed);
     assert!(retried.prompt.contains(VERIFY_RETRY_FEEDBACK));
 }

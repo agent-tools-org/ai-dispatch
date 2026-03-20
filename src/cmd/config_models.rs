@@ -148,6 +148,7 @@ pub const AGENT_MODELS: &[AgentModel] = &[
     AgentModel { agent: AgentKind::OpenCode, model: "nemotron-3-super-free", input_per_m: 0.0, output_per_m: 0.0, tier: "free", description: "Free tier", capability: 4.1 },
     AgentModel { agent: AgentKind::OpenCode, model: "minimax-m2.5-free", input_per_m: 0.0, output_per_m: 0.0, tier: "free", description: "Free tier", capability: 4.1 },
     AgentModel { agent: AgentKind::Kilo, model: "default", input_per_m: 0.0, output_per_m: 0.0, tier: "free", description: "Free tier", capability: 3.8 },
+    AgentModel { agent: AgentKind::Cursor, model: "composer-2", input_per_m: 0.50, output_per_m: 2.50, tier: "standard", description: "Composer 2, frontier coding model (default)", capability: 8.5 },
     AgentModel { agent: AgentKind::Cursor, model: "auto", input_per_m: 0.0, output_per_m: 0.0, tier: "cheap", description: "Auto routing, cheapest (recommended)", capability: 7.0 },
     AgentModel { agent: AgentKind::Cursor, model: "composer-1.5", input_per_m: 0.0, output_per_m: 0.0, tier: "standard", description: "Cursor proprietary, multi-file refactoring", capability: 8.0 },
     AgentModel { agent: AgentKind::Cursor, model: "opus-4.6-thinking", input_per_m: 0.0, output_per_m: 0.0, tier: "premium", description: "Strongest reasoning, premium pool", capability: 9.2 },

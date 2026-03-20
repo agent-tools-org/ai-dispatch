@@ -9,6 +9,12 @@ pub enum AgentCommands {
     List,
     /// Show agent details and configuration
     Show { name: String },
+    /// Set or clear per-agent defaults
+    Config {
+        name: String,
+        #[arg(long)]
+        model: Option<String>,
+    },
     /// Create a new custom agent definition
     Add { name: String },
     /// Remove a custom agent definition

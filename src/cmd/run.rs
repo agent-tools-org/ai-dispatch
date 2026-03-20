@@ -9,6 +9,7 @@ use std::sync::Arc;
 use serde_json;
 use tokio::process::Command;
 use crate::agent::{self, RunOpts};
+use crate::agent_config;
 use crate::background::{self, BackgroundRunSpec};
 use crate::cmd::{config as cmd_config, judge, retry_logic, show};
 use crate::config;
@@ -219,16 +220,20 @@ pub async fn run(store: Arc<Store>, mut args: RunArgs) -> Result<TaskId> {
     } else {
         false
     };
+    let requested_model = args
+        .model
+        .clone()
+        .or_else(|| agent_config::get_default_model(&args.agent_name));
     let budget_active = args.budget || auto_budget || cfg.selection.budget_mode;
-    let effective_model = if budget_active && args.model.is_none() {
+    let effective_model = if budget_active && requested_model.is_none() {
         if let Some(bm) = cmd_config::budget_model(&agent_kind) {
             aid_info!("[aid] Budget mode: using model {}", bm);
             Some(bm.to_string())
         } else {
-            args.model.clone()
+            requested_model.clone()
         }
     } else {
-        args.model.clone()
+        requested_model.clone()
     };
     let agent: Box<dyn agent::Agent> = if agent_kind == AgentKind::Custom {
         agent::registry::resolve_custom_agent(custom_agent_name.as_deref().unwrap_or(""))

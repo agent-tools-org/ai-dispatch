@@ -179,7 +179,12 @@ pub enum ToolAction {
         team: Option<String>,
     },
     /// Show tool details
-    Show { name: String },
+    Show {
+        name: String,
+        /// Search in team tools directory
+        #[arg(long)]
+        team: Option<String>,
+    },
     /// Create a new tool definition
     Add {
         name: String,
@@ -192,6 +197,9 @@ pub enum ToolAction {
     /// Test-run a tool with arguments
     Test {
         name: String,
+        /// Search in team tools directory
+        #[arg(long)]
+        team: Option<String>,
         /// Arguments to pass to the tool
         args: Vec<String>,
     },

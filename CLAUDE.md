@@ -67,6 +67,32 @@ aid agent config codex --model gpt-5.4       # set codex default
 
 Default cursor model is `composer-2` (Cursor's frontier coding model, $0.50/$2.50 per M tokens).
 
+## Stats
+
+Agent performance dashboard with failure causes, model usage, and success rates.
+
+```bash
+aid stats                    # last 7 days (default)
+aid stats --window today     # today only
+aid stats --window 30d       # last 30 days
+aid stats --agent codex      # filter to one agent
+```
+
+## Merge
+
+```bash
+aid merge <task-id>                      # merge into current branch
+aid merge <task-id> --target release     # merge into specific branch
+aid merge --group <wg-id>               # merge all tasks in group
+aid merge --group <wg-id> --check       # dry-run conflict check
+```
+
+## Batch TOML Tips
+
+- `context`, `skills`, `scope` accept both string and array: `context = "file.md"` or `context = ["a.md", "b.md"]`
+- `fallback` supports comma-separated agents: `fallback = "oz,opencode,codex"`
+- `aid tool show <name> --team dev` / `aid tool test <name> --team dev` to find team-scoped tools
+
 ### Usage with run and batch
 
 ```bash

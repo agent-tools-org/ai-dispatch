@@ -32,6 +32,9 @@ mod sandbox;
 mod session;
 mod shared_dir;
 mod skills;
+mod state;
+#[cfg(test)]
+mod state_tests;
 mod store;
 mod store_workgroups;
 mod project;

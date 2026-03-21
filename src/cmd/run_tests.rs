@@ -157,7 +157,7 @@ fn validate_dispatch_warns_short_prompt() {
 
 #[test]
 fn validate_dispatch_warns_code_agent_without_dir() {
-    assert_eq!(validate_dispatch(&RunArgs { prompt: "adequate prompt".to_string(), ..Default::default() }, &AgentKind::Codex), vec!["Code agent without --dir may not be able to write files".to_string()]);
+    assert_eq!(validate_dispatch(&RunArgs { prompt: "Implement the dispatcher".to_string(), ..Default::default() }, &AgentKind::Codex), vec!["Code agent without --dir may not be able to write files".to_string()]);
 }
 
 #[test]
@@ -172,15 +172,16 @@ fn validate_dispatch_warns_research_worktree() {
 }
 
 #[test]
-fn resolve_max_duration_mins_uses_timeout_when_minutes_missing() {
-    assert_eq!(resolve_max_duration_mins(Some(300), None), Some(5));
-    assert_eq!(resolve_max_duration_mins(Some(301), None), Some(6));
+fn validate_dispatch_skips_dir_warning_for_non_writing_tasks() {
+    assert!(validate_dispatch(&RunArgs { prompt: "Research: compare the agent options".to_string(), ..Default::default() }, &AgentKind::Codex).is_empty());
+    assert!(validate_dispatch(&RunArgs { prompt: "Implement the dispatcher".to_string(), read_only: true, ..Default::default() }, &AgentKind::Codex).is_empty());
 }
 
 #[test]
-fn resolve_max_duration_mins_preserves_explicit_minutes() {
-    assert_eq!(resolve_max_duration_mins(Some(300), Some(2)), Some(2));
-}
+fn resolve_max_duration_mins_uses_timeout_when_minutes_missing() { assert_eq!(resolve_max_duration_mins(Some(300), None), Some(5)); assert_eq!(resolve_max_duration_mins(Some(301), None), Some(6)); }
+
+#[test]
+fn resolve_max_duration_mins_preserves_explicit_minutes() { assert_eq!(resolve_max_duration_mins(Some(300), Some(2)), Some(2)); }
 
 #[test]
 fn auto_save_creates_output_for_research_task() {

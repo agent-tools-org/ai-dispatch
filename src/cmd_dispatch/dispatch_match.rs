@@ -68,7 +68,9 @@ async fn dispatch_primary(store: Arc<crate::store::Store>, command: Commands) ->
         Commands::Batch(command_args_a::BatchArgs { action, file, vars, group, parallel, analyze, wait, dry_run, max_concurrent, output }) => handlers_a::batch(store, action, file, vars, parallel, analyze, wait, dry_run, max_concurrent, output, group).await,
         Commands::Benchmark(command_args_a::BenchmarkArgs { prompt, agents, dir, verify }) => handlers_c::benchmark(store, prompt, agents, dir, verify).await,
         Commands::Watch(command_args_a::WatchArgs { task_ids, group, tui, quiet, exit_on_await, timeout }) => handlers_c::watch(store, task_ids, group, tui, quiet, exit_on_await, timeout).await,
-        Commands::Board(command_args_a::BoardArgs { running, today, mine, group, stream, json }) => handlers_c::board(store, running, today, mine, group, stream, json).await,
+        Commands::Board(command_args_a::BoardArgs { running, today, mine, group, limit, stream, json }) => {
+            handlers_c::board(store, running, today, mine, group, limit, stream, json).await
+        }
         Commands::Completions => handlers_c::completions(),
         Commands::Changelog(command_args_a::ChangelogArgs { version, all, count, git }) => handlers_c::changelog(version, all, count, git),
         Commands::Agent(command_args_a::AgentArgs { action }) => handlers_c::agent(action),

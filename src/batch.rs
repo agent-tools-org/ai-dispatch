@@ -116,12 +116,40 @@ pub struct BatchTask {
 pub fn parse_batch_file(path: &Path) -> Result<BatchConfig> {
     parse_batch_file_with_vars(path, &HashMap::new())
 }
+
+fn validate_batch_keys(content: &str, path: &Path) -> Result<()> {
+    let raw: toml::Value = toml::from_str(content)
+        .with_context(|| format!("failed to parse TOML in {}", path.display()))?;
+    let Some(table) = raw.as_table() else {
+        return Ok(());
+    };
+    let known_keys = ["defaults", "tasks", "vars"];
+    for key in table.keys() {
+        if known_keys.contains(&key.as_str()) {
+            continue;
+        }
+        let suggestion = match key.as_str() {
+            "task" => " (did you mean `[[tasks]]`?)",
+            "default" => " (did you mean `[defaults]`?)",
+            _ => "",
+        };
+        anyhow::bail!(
+            "unknown top-level key `{}` in batch file {}{}",
+            key,
+            path.display(),
+            suggestion
+        );
+    }
+    Ok(())
+}
+
 pub(crate) fn parse_batch_file_with_vars(
     path: &Path,
     cli_vars: &HashMap<String, String>,
 ) -> Result<BatchConfig> {
     let content = std::fs::read_to_string(path)
         .with_context(|| format!("failed to read batch file: {}", path.display()))?;
+    validate_batch_keys(&content, path)?;
     let mut config: BatchConfig = toml::from_str(&content)
         .with_context(|| format!("failed to parse TOML in {}", path.display()))?;
     if config.tasks.is_empty() {

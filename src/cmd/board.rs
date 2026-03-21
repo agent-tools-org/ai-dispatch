@@ -10,7 +10,15 @@ use crate::background;
 use crate::board::render_board;
 use crate::session;
 use crate::store::Store;
-use crate::types::{TaskFilter, TaskStatus};
+use crate::types::{Task, TaskFilter, TaskStatus};
+
+const DEFAULT_TASK_LIMIT: usize = 50;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct TruncationNotice {
+    shown: usize,
+    total: usize,
+}
 
 pub fn run(
     store: &Arc<Store>,
@@ -18,6 +26,7 @@ pub fn run(
     today: bool,
     mine: bool,
     group: Option<&str>,
+    limit: Option<usize>,
     json: bool,
 ) -> Result<()> {
     let filter = if running {
@@ -36,6 +45,7 @@ pub fn run(
     if let Some(group_id) = group {
         tasks.retain(|task| task.workgroup_id.as_deref() == Some(group_id));
     }
+    let truncation = apply_limit(&mut tasks, limit, running, today, mine, group);
 
     // Detect repeated calls with no changes — warn or reject rapid polling
     let fingerprint = task_fingerprint(&tasks);
@@ -91,6 +101,9 @@ pub fn run(
         ) && task.worktree_path.is_some()
     });
     print!("{}", render_board(&tasks, store)?);
+    if let Some(truncation) = truncation {
+        println!("{}", truncation_notice_message(truncation));
+    }
     if let Some(warning) = long_running_warning(&tasks, Local::now()) {
         println!("{warning}");
     }
@@ -101,6 +114,35 @@ pub fn run(
         println!("[aid] Tip: run `aid worktree prune` to clean up stale worktrees");
     }
     Ok(())
+}
+
+pub(crate) fn apply_limit(
+    tasks: &mut Vec<Task>,
+    limit: Option<usize>,
+    running: bool,
+    today: bool,
+    mine: bool,
+    group: Option<&str>,
+) -> Option<TruncationNotice> {
+    let effective_limit = match limit {
+        Some(n) => Some(n),
+        None if group.is_none() && !running && !today && !mine => Some(DEFAULT_TASK_LIMIT),
+        None => None,
+    }?;
+    if tasks.len() <= effective_limit {
+        return None;
+    }
+
+    let total = tasks.len();
+    tasks.truncate(effective_limit);
+    Some(TruncationNotice { shown: effective_limit, total })
+}
+
+pub(crate) fn truncation_notice_message(truncation: TruncationNotice) -> String {
+    format!(
+        "[aid] Showing {} of {} tasks. Use --limit N or --today/--running for more.",
+        truncation.shown, truncation.total
+    )
 }
 
 /// Compact fingerprint of task statuses for change detection.
@@ -130,7 +172,7 @@ fn long_running_warning(tasks: &[crate::types::Task], now: chrono::DateTime<Loca
 
 #[cfg(test)]
 mod tests {
-    use super::long_running_warning;
+    use super::{apply_limit, long_running_warning, truncation_notice_message, TruncationNotice};
     use chrono::{Duration, Local};
 
     use crate::types::{AgentKind, Task, TaskId, TaskStatus, VerifyStatus};
@@ -147,6 +189,25 @@ mod tests {
         let warning = long_running_warning(&tasks, now).unwrap();
 
         assert!(warning.contains("1 task(s) running >1h"));
+    }
+
+    #[test]
+    fn board_with_limit_truncates_output() {
+        let now = Local::now();
+        let mut tasks = vec![
+            make_task("t-1001", TaskStatus::Done, now),
+            make_task("t-1002", TaskStatus::Done, now),
+            make_task("t-1003", TaskStatus::Done, now),
+        ];
+
+        let truncation = apply_limit(&mut tasks, Some(2), false, false, false, None);
+
+        assert_eq!(tasks.len(), 2);
+        assert_eq!(truncation, Some(TruncationNotice { shown: 2, total: 3 }));
+        assert_eq!(
+            truncation_notice_message(truncation.unwrap()),
+            "[aid] Showing 2 of 3 tasks. Use --limit N or --today/--running for more."
+        );
     }
 
     fn make_task(task_id: &str, status: TaskStatus, created_at: chrono::DateTime<Local>) -> Task {

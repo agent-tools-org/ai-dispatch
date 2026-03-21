@@ -29,14 +29,15 @@ pub async fn run(
     today: bool,
     mine: bool,
     group: Option<&str>,
+    limit: Option<usize>,
 ) -> Result<()> {
     background::check_zombie_tasks(store)?;
-    let mut init = init_stream(store, running, today, mine, group)?;
+    let mut init = init_stream(store, running, today, mine, group, limit)?;
     if init.tasks.is_empty() || init.tasks.iter().all(|task| is_terminal(task.status)) {
         print_summary(&init.tasks, "Summary");
         return Ok(());
     }
-    run_stream_loop(store, running, today, mine, group, &mut init.state).await
+    run_stream_loop(store, running, today, mine, group, limit, &mut init.state).await
 }
 
 struct StreamState {
@@ -46,6 +47,11 @@ struct StreamState {
 struct StreamInit {
     state: StreamState,
     tasks: Vec<Task>,
+}
+
+struct FilteredTasks {
+    tasks: Vec<Task>,
+    truncation: Option<crate::cmd::board::TruncationNotice>,
 }
 
 enum StreamAction {
@@ -59,9 +65,10 @@ fn init_stream(
     today: bool,
     mine: bool,
     group: Option<&str>,
+    limit: Option<usize>,
 ) -> Result<StreamInit> {
     println!("ID | Agent | Status | Duration | Prompt (truncated)");
-    let mut tasks = list_filtered_tasks(store, running, today, mine, group)?;
+    let FilteredTasks { mut tasks, truncation } = list_filtered_tasks(store, running, today, mine, group, limit)?;
     tasks.sort_by(|a, b| a.id.as_str().cmp(b.id.as_str()));
     let mut last_status = HashMap::new();
     for task in tasks.iter().filter(|task| is_active(task.status)) {
@@ -75,6 +82,9 @@ fn init_stream(
             prompt_snippet(task),
         );
     }
+    if let Some(truncation) = truncation {
+        println!("{}", crate::cmd::board::truncation_notice_message(truncation));
+    }
     Ok(StreamInit {
         state: StreamState { last_status },
         tasks,
@@ -87,13 +97,14 @@ async fn run_stream_loop(
     today: bool,
     mine: bool,
     group: Option<&str>,
+    limit: Option<usize>,
     state: &mut StreamState,
 ) -> Result<()> {
     let mut ticker = tokio::time::interval(POLL_INTERVAL);
     ticker.tick().await;
     loop {
         ticker.tick().await;
-        match poll_and_print(store, running, today, mine, group, state)? {
+        match poll_and_print(store, running, today, mine, group, limit, state)? {
             StreamAction::Continue => {}
             StreamAction::Exit => return Ok(()),
         }
@@ -106,9 +117,10 @@ fn poll_and_print(
     today: bool,
     mine: bool,
     group: Option<&str>,
+    limit: Option<usize>,
     state: &mut StreamState,
 ) -> Result<StreamAction> {
-    let mut tasks = list_filtered_tasks(store, running, today, mine, group)?;
+    let mut tasks = list_filtered_tasks(store, running, today, mine, group, limit)?.tasks;
     tasks.sort_by(|a, b| a.id.as_str().cmp(b.id.as_str()));
     for task in &tasks {
         let key = task.id.as_str();
@@ -150,7 +162,8 @@ fn list_filtered_tasks(
     today: bool,
     mine: bool,
     group: Option<&str>,
-) -> Result<Vec<Task>> {
+    limit: Option<usize>,
+) -> Result<FilteredTasks> {
     let filter = if running {
         TaskFilter::Running
     } else if today {
@@ -166,7 +179,8 @@ fn list_filtered_tasks(
     if let Some(group_id) = group {
         tasks.retain(|task| task.workgroup_id.as_deref() == Some(group_id));
     }
-    Ok(tasks)
+    let truncation = crate::cmd::board::apply_limit(&mut tasks, limit, running, today, mine, group);
+    Ok(FilteredTasks { tasks, truncation })
 }
 
 fn is_active(status: TaskStatus) -> bool {

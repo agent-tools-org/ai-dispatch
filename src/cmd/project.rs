@@ -1,6 +1,8 @@
 // Project command handlers for the `aid project` CLI group.
 // Exports: ProjectAction, run_project_command.
 // Deps: crate::config, crate::project, serde_json, std::{fs, io, path, process}.
+mod state_command;
+
 use crate::{config as aid_config, project};
 use anyhow::{anyhow, bail, Context, Result};
 use serde_json::Value;
@@ -11,12 +13,14 @@ use std::process::Command;
 pub enum ProjectAction {
     Init,
     Show,
+    State,
     Sync,
 }
 pub fn run_project_command(action: ProjectAction) -> Result<()> {
     match action {
         ProjectAction::Init => init(),
         ProjectAction::Show => show(),
+        ProjectAction::State => state(),
         ProjectAction::Sync => sync(),
     }
 }
@@ -117,6 +121,9 @@ fn show() -> Result<()> {
     println!("  Knowledge:  {} entries", knowledge_entries.len());
     println!("    Index: {}", knowledge_index.display());
     Ok(())
+}
+fn state() -> Result<()> {
+    state_command::run()
 }
 fn write_project_config(
     git_root: &Path,

@@ -166,6 +166,8 @@ pub enum ProjectAction {
     Init,
     /// Show the detected project configuration
     Show,
+    /// Show the current computed project state
+    State,
     /// Sync project config to CLAUDE.md and global budget
     Sync,
 }

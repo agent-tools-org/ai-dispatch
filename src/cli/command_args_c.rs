@@ -52,7 +52,8 @@ pub struct ToolArgs {
 #[derive(Args)]
 #[command(after_help = r#"Examples:
   aid project init
-  aid project show"#)]
+  aid project show
+  aid project state"#)]
 pub struct ProjectArgs {
     #[command(subcommand)]
     pub action: ProjectAction,

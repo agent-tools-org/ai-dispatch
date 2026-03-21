@@ -155,6 +155,11 @@ pub(super) fn build_prompt_bundle(store: &Store, args: &RunArgs, agent_kind: &Ag
                 .join("\n");
             effective_prompt = format!("<aid-project-rules>\n{rules_block}\n</aid-project-rules>\n\n{effective_prompt}");
         }
+        if let Some(state_block) = prompt_context::inject_project_state() {
+            let state_block = sanitize_injected_text(&state_block);
+            effective_prompt = format!("{state_block}\n\n{effective_prompt}");
+            aid_info!("[aid] Injected project state");
+        }
         let knowledge_entries = prompt_context::detect_project_path()
             .map(|path| project::read_project_knowledge(std::path::Path::new(&path)))
             .unwrap_or_default();

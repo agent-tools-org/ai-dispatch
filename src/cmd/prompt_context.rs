@@ -67,6 +67,16 @@ pub(super) fn inject_memories(store: &Store, prompt: &str, max_memories: usize) 
     Ok(Some((lines.join("\n"), memory_ids)))
 }
 
+pub(super) fn inject_project_state() -> Option<String> {
+    let state = crate::state::load_state().ok()??;
+    let updated = chrono::DateTime::parse_from_rfc3339(&state.last_updated).ok()?;
+    let age_days = (chrono::Utc::now() - updated.with_timezone(&chrono::Utc)).num_days();
+    if age_days > 7 {
+        return None;
+    }
+    Some(crate::state::format_state_summary(&state))
+}
+
 pub(super) fn build_memory_queries(prompt: &str, keywords: &HashSet<String>) -> Vec<String> {
     let mut seen = HashSet::new();
     let mut queries = Vec::new();

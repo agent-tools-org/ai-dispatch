@@ -65,8 +65,8 @@ fn make_task(name: Option<&str>, depends_on: &[&str]) -> BatchTask {
 fn parse_valid_batch() {
     let cfg = parse_batch_file(
         write_temp(concat!(
-            "[[task]]\nagent = \"gemini\"\nprompt = \"research X\"\nworktree = \"feat/x\"\n",
-            "[[task]]\nagent = \"codex\"\nprompt = \"implement Y\"\ndir = \"src\"\nmodel = \"gpt-4\"\ngroup = \"wg-demo\""
+            "[[tasks]]\nagent = \"gemini\"\nprompt = \"research X\"\nworktree = \"feat/x\"\n",
+            "[[tasks]]\nagent = \"codex\"\nprompt = \"implement Y\"\ndir = \"src\"\nmodel = \"gpt-4\"\ngroup = \"wg-demo\""
         ))
         .path(),
     )
@@ -83,8 +83,8 @@ fn parse_valid_batch() {
 fn parses_batch_with_dependencies() {
     let cfg = parse_batch_file(
         write_temp(concat!(
-            "[[task]]\nname = \"foundation\"\nagent = \"codex\"\nprompt = \"shared types\"\n",
-            "[[task]]\nname = \"feature-a\"\nagent = \"codex\"\nprompt = \"feature a\"\n",
+            "[[tasks]]\nname = \"foundation\"\nagent = \"codex\"\nprompt = \"shared types\"\n",
+            "[[tasks]]\nname = \"feature-a\"\nagent = \"codex\"\nprompt = \"feature a\"\n",
             "depends_on = [\"foundation\"]\n"
         ))
         .path(),
@@ -167,7 +167,7 @@ fn applies_defaults_to_tasks() {
             "skills = [\"rust\", \"cli\"]\nfallback = \"cursor\"\nread_only = true\nbudget = true\n",
             "env = { DEFAULT_ONLY = \"yes\", SHARED = \"default\" }\n",
             "env_forward = [\"PATH\"]\n",
-            "[[task]]\nname = \"impl\"\nprompt = \"build it\"\n"
+            "[[tasks]]\nname = \"impl\"\nprompt = \"build it\"\n"
         ))
         .path(),
     )
@@ -218,7 +218,7 @@ fn task_values_override_defaults() {
             "context = [\"src/default.rs\"]\nskills = [\"rust\"]\nfallback = \"cursor\"\n",
             "env = { DEFAULT_ONLY = \"yes\", SHARED = \"default\" }\n",
             "env_forward = [\"PATH\"]\n",
-            "[[task]]\nname = \"impl\"\nagent = \"codex\"\nprompt = \"build it\"\n",
+            "[[tasks]]\nname = \"impl\"\nagent = \"codex\"\nprompt = \"build it\"\n",
             "dir = \"custom\"\nmodel = \"gpt-4\"\nworktree = \"manual/impl\"\n",
             "verify = \"manual\"\nmax_duration_mins = 5\n",
             "context = [\"src/task.rs\"]\nskills = [\"own\"]\nfallback = \"opencode\"\n",
@@ -274,7 +274,7 @@ fn empty_defaults_do_not_change_existing_behavior() {
     let cfg = parse_batch_file(
         write_temp(concat!(
             "[defaults]\n",
-            "[[task]]\nagent = \"codex\"\nprompt = \"do something\"\n"
+            "[[tasks]]\nagent = \"codex\"\nprompt = \"do something\"\n"
         ))
         .path(),
     )
@@ -290,7 +290,7 @@ fn empty_defaults_do_not_change_existing_behavior() {
 
 #[test]
 fn rejects_missing_agent_without_defaults() {
-    let err = parse_batch_file(write_temp("[[task]]\nprompt = \"do something\"\n").path())
+    let err = parse_batch_file(write_temp("[[tasks]]\nprompt = \"do something\"\n").path())
         .unwrap_err()
         .to_string();
     assert!(err.contains("missing agent"));
@@ -298,7 +298,7 @@ fn rejects_missing_agent_without_defaults() {
 
 #[test]
 fn rejects_unknown_agent() {
-    let file = write_temp("[[task]]\nagent = \"gpt-3\"\nprompt = \"do something\"");
+    let file = write_temp("[[tasks]]\nagent = \"gpt-3\"\nprompt = \"do something\"");
     assert!(parse_batch_file(file.path())
         .unwrap_err()
         .to_string()
@@ -308,8 +308,8 @@ fn rejects_unknown_agent() {
 #[test]
 fn auto_sequences_shared_worktree_tasks() {
     let file = write_temp(concat!(
-        "[[task]]\nname = \"task-a\"\nagent = \"gemini\"\nprompt = \"a\"\nworktree = \"feat/x\"\n",
-        "[[task]]\nname = \"task-b\"\nagent = \"codex\"\nprompt = \"b\"\nworktree = \"feat/x\""
+        "[[tasks]]\nname = \"task-a\"\nagent = \"gemini\"\nprompt = \"a\"\nworktree = \"feat/x\"\n",
+        "[[tasks]]\nname = \"task-b\"\nagent = \"codex\"\nprompt = \"b\"\nworktree = \"feat/x\""
     ));
     let cfg = parse_batch_file(file.path()).unwrap();
     assert_eq!(
@@ -322,8 +322,8 @@ fn auto_sequences_shared_worktree_tasks() {
 #[test]
 fn auto_sequence_preserves_existing_depends_on() {
     let file = write_temp(concat!(
-        "[[task]]\nname = \"task-a\"\nagent = \"codex\"\nprompt = \"a\"\nworktree = \"feat/x\"\n",
-        "[[task]]\nname = \"task-b\"\nagent = \"codex\"\nprompt = \"b\"\nworktree = \"feat/x\"\n",
+        "[[tasks]]\nname = \"task-a\"\nagent = \"codex\"\nprompt = \"a\"\nworktree = \"feat/x\"\n",
+        "[[tasks]]\nname = \"task-b\"\nagent = \"codex\"\nprompt = \"b\"\nworktree = \"feat/x\"\n",
         "depends_on = [\"task-a\"]"
     ));
     let cfg = parse_batch_file(file.path()).unwrap();
@@ -333,9 +333,9 @@ fn auto_sequence_preserves_existing_depends_on() {
 #[test]
 fn auto_sequence_three_tasks_creates_chain() {
     let file = write_temp(concat!(
-        "[[task]]\nname = \"a\"\nagent = \"codex\"\nprompt = \"1\"\nworktree = \"feat/x\"\n",
-        "[[task]]\nname = \"b\"\nagent = \"codex\"\nprompt = \"2\"\nworktree = \"feat/x\"\n",
-        "[[task]]\nname = \"c\"\nagent = \"codex\"\nprompt = \"3\"\nworktree = \"feat/x\""
+        "[[tasks]]\nname = \"a\"\nagent = \"codex\"\nprompt = \"1\"\nworktree = \"feat/x\"\n",
+        "[[tasks]]\nname = \"b\"\nagent = \"codex\"\nprompt = \"2\"\nworktree = \"feat/x\"\n",
+        "[[tasks]]\nname = \"c\"\nagent = \"codex\"\nprompt = \"3\"\nworktree = \"feat/x\""
     ));
     let cfg = parse_batch_file(file.path()).unwrap();
     assert!(cfg.tasks[0].depends_on.is_none(), "first task has no deps");
@@ -394,7 +394,7 @@ fn rejects_dependency_cycles() {
 #[test]
 fn rejects_unknown_fallback_agent() {
     let file = write_temp(concat!(
-        "[[task]]\nagent = \"codex\"\nprompt = \"do something\"\n",
+        "[[tasks]]\nagent = \"codex\"\nprompt = \"do something\"\n",
         "fallback = \"codex,unknown-agent\""
     ));
     assert!(parse_batch_file(file.path())
@@ -406,7 +406,7 @@ fn rejects_unknown_fallback_agent() {
 #[test]
 fn accepts_valid_fallback_agent() {
     let file = write_temp(concat!(
-        "[[task]]\nagent = \"codex\"\nprompt = \"do something\"\n",
+        "[[tasks]]\nagent = \"codex\"\nprompt = \"do something\"\n",
         "fallback = \"opencode\""
     ));
     assert!(parse_batch_file(file.path()).is_ok());
@@ -431,6 +431,37 @@ fn accepts_tasks_plural_alias() {
     ));
     let cfg = parse_batch_file(file.path()).unwrap();
     assert_eq!(cfg.tasks.len(), 2);
+}
+
+#[test]
+fn rejects_unknown_top_level_key() {
+    let file = write_temp("[[task]]\nagent = \"codex\"\nprompt = \"implement\"\n");
+    let err = parse_batch_file(file.path()).unwrap_err().to_string();
+
+    assert!(err.contains("unknown top-level key `task`"));
+    assert!(err.contains("did you mean `[[tasks]]`?"));
+}
+
+#[test]
+fn rejects_unknown_section() {
+    let file = write_temp(concat!(
+        "[setting]\nagent = \"codex\"\n",
+        "[[tasks]]\nprompt = \"implement\"\n"
+    ));
+    let err = parse_batch_file(file.path()).unwrap_err().to_string();
+
+    assert!(err.contains("unknown top-level key `setting`"));
+}
+
+#[test]
+fn accepts_valid_sections() {
+    let file = write_temp(concat!(
+        "[defaults]\nagent = \"codex\"\n",
+        "[vars]\nproject = \"demo\"\n",
+        "[[tasks]]\nprompt = \"build {{project}}\"\n"
+    ));
+
+    assert!(parse_batch_file(file.path()).is_ok());
 }
 
 #[test]
@@ -520,7 +551,7 @@ fn does_not_warn_for_audit_log_prompt() {
 fn judge_true_defaults_to_gemini() {
     let cfg = parse_batch_file(
         write_temp(concat!(
-            "[[task]]\nagent = \"codex\"\nprompt = \"test\"\njudge = true\n"
+            "[[tasks]]\nagent = \"codex\"\nprompt = \"test\"\njudge = true\n"
         ))
         .path(),
     )
@@ -533,7 +564,7 @@ fn judge_true_defaults_to_gemini() {
 fn judge_string_uses_specified_agent() {
     let cfg = parse_batch_file(
         write_temp(concat!(
-            "[[task]]\nagent = \"codex\"\nprompt = \"test\"\njudge = \"cursor\"\n"
+            "[[tasks]]\nagent = \"codex\"\nprompt = \"test\"\njudge = \"cursor\"\n"
         ))
         .path(),
     )
@@ -546,7 +577,7 @@ fn judge_string_uses_specified_agent() {
 fn judge_false_is_none() {
     let cfg = parse_batch_file(
         write_temp(concat!(
-            "[[task]]\nagent = \"codex\"\nprompt = \"test\"\njudge = false\n"
+            "[[tasks]]\nagent = \"codex\"\nprompt = \"test\"\njudge = false\n"
         ))
         .path(),
     )
@@ -558,7 +589,7 @@ fn judge_false_is_none() {
 #[test]
 fn judge_absent_is_none() {
     let cfg =
-        parse_batch_file(write_temp("[[task]]\nagent = \"codex\"\nprompt = \"test\"\n").path())
+        parse_batch_file(write_temp("[[tasks]]\nagent = \"codex\"\nprompt = \"test\"\n").path())
             .unwrap();
 
     assert!(cfg.tasks[0].judge.is_none());
@@ -569,7 +600,7 @@ fn judge_defaults_propagate_to_tasks() {
     let cfg = parse_batch_file(
         write_temp(concat!(
             "[defaults]\njudge = true\nagent = \"codex\"\n",
-            "[[task]]\nprompt = \"test\"\n"
+            "[[tasks]]\nprompt = \"test\"\n"
         ))
         .path(),
     )

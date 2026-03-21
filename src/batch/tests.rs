@@ -128,6 +128,36 @@ context = ["a.md", "b.md"]
 }
 
 #[test]
+fn rejects_unknown_task_field() {
+    let toml = r#"
+[[tasks]]
+prompt = "test"
+promt = "typo"
+"#;
+
+    let err = toml::from_str::<BatchConfig>(toml).unwrap_err().to_string();
+
+    assert!(err.contains("unknown field"));
+    assert!(err.contains("promt"));
+}
+
+#[test]
+fn rejects_unknown_defaults_field() {
+    let toml = r#"
+[defaults]
+agentt = "codex"
+
+[[tasks]]
+prompt = "test"
+"#;
+
+    let err = toml::from_str::<BatchConfig>(toml).unwrap_err().to_string();
+
+    assert!(err.contains("unknown field"));
+    assert!(err.contains("agentt"));
+}
+
+#[test]
 fn applies_defaults_to_tasks() {
     let cfg = parse_batch_file(
         write_temp(concat!(

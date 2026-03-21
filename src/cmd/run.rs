@@ -101,9 +101,19 @@ fn validate_dispatch(args: &RunArgs, agent_kind: &AgentKind) -> Vec<String> {
     if matches!(
         agent_kind,
         AgentKind::Codex | AgentKind::OpenCode | AgentKind::Cursor | AgentKind::Kilo | AgentKind::Codebuff
-    ) && args.dir.is_none()
+    ) && args.dir.is_none() && !args.read_only
     {
-        warnings.push("Code agent without --dir may not be able to write files".to_string());
+        let profile = agent::classifier::classify(
+            &args.prompt,
+            agent::classifier::count_file_mentions(&args.prompt),
+            prompt_len,
+        );
+        if !matches!(
+            profile.category,
+            agent::classifier::TaskCategory::Research | agent::classifier::TaskCategory::Documentation
+        ) {
+            warnings.push("Code agent without --dir may not be able to write files".to_string());
+        }
     }
     if prompt_len > 5000 {
         warnings.push(format!(

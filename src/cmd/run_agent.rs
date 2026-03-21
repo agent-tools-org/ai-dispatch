@@ -158,6 +158,7 @@ pub(crate) async fn run_agent_process_with_timeout(
                 cost_usd,
                 exit_code: info.exit_code,
             })?;
+            crate::state::refresh_project_state(store.as_ref(), task_id);
             let duration_str = format_duration(duration_ms);
             let tokens_str = info
                 .tokens
@@ -190,6 +191,7 @@ pub(crate) async fn run_agent_process_with_timeout(
                 cost_usd: None,
                 exit_code: None,
             })?;
+            crate::state::refresh_project_state(store.as_ref(), task_id);
             let detail = format!("Task killed: exceeded {timeout_mins}m timeout");
             let event = TaskEvent {
                 task_id: task_id.clone(),

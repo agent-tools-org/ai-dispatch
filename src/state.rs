@@ -82,6 +82,18 @@ pub fn save_state(state: &ProjectState) -> Result<()> {
         .with_context(|| format!("Failed to write {}", path.display()))?;
     Ok(())
 }
+pub(crate) fn refresh_project_state(store: &Store, task_id: &crate::types::TaskId) {
+    let Ok(Some(task)) = store.get_task(task_id.as_str()) else { return };
+    let Some(repo_path) = task.repo_path.as_deref() else { return };
+    match compute_state(store, repo_path) {
+        Ok(state) => {
+            if let Err(err) = save_state(&state) {
+                aid_warn!("[aid] Failed to save project state: {err}");
+            }
+        }
+        Err(err) => aid_warn!("[aid] Failed to compute project state: {err}"),
+    }
+}
 pub fn compute_state(store: &Store, repo_path: &str) -> Result<ProjectState> {
     let recent_tasks = store.recent_tasks_for_project(repo_path, 50)?;
     let all_tasks = all_tasks_for_project(store, repo_path)?;

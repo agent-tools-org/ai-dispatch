@@ -10,10 +10,10 @@ use chrono::{Duration, Local};
 use tempfile::TempDir;
 
 use crate::state::{
-    compute_state, format_state_summary, load_state, save_state, state_path, ContextState,
-    HealthState, LearnedState, PerformanceState, ProjectState,
+    compute_state, format_state_summary, load_state, refresh_project_state, save_state,
+    state_path, ContextState, HealthState, LearnedState, PerformanceState, ProjectState,
 };
-use crate::store::Store;
+use crate::store::{Store, TaskCompletionUpdate};
 use crate::types::{AgentKind, Task, TaskId, TaskStatus, VerifyStatus};
 
 struct TempCwd {
@@ -95,6 +95,71 @@ fn compute_state_aggregates_project_metrics() {
     assert_eq!(state.context.last_task_id.as_deref(), Some("t-1"));
     assert_eq!(state.health.last_verify_status.as_deref(), Some("passed"));
     assert_eq!(state.learned.effective_tools, Vec::<String>::new());
+}
+
+#[test]
+fn refresh_project_state_writes_state_after_completion_update() {
+    let dir = TempDir::new().unwrap();
+    fs::create_dir_all(dir.path().join(".aid")).unwrap();
+    fs::write(dir.path().join(".aid/project.toml"), "[project]\nid = \"alpha\"\n").unwrap();
+    let _cwd = TempCwd::enter(dir.path());
+    let store = Store::open_memory().unwrap();
+    let mut task = make_task(
+        "t-refresh",
+        AgentKind::Codex,
+        TaskStatus::Pending,
+        dir.path(),
+        5,
+        120.0,
+        Some(1.2),
+        VerifyStatus::Skipped,
+    );
+    task.completed_at = None;
+    task.duration_ms = None;
+    task.cost_usd = None;
+    store.insert_task(&task).unwrap();
+    store
+        .update_task_completion(TaskCompletionUpdate {
+            id: task.id.as_str(),
+            status: TaskStatus::Done,
+            tokens: Some(42),
+            duration_ms: 12_000,
+            model: Some("gpt-5.4"),
+            cost_usd: Some(0.5),
+            exit_code: Some(0),
+        })
+        .unwrap();
+
+    refresh_project_state(&store, &task.id);
+
+    let state = load_state().unwrap().unwrap();
+    assert_eq!(state.context.last_task_id.as_deref(), Some("t-refresh"));
+    assert_eq!(state.health.total_tasks, 1);
+}
+
+#[test]
+fn refresh_project_state_skips_tasks_without_repo_path() {
+    let dir = TempDir::new().unwrap();
+    fs::create_dir_all(dir.path().join(".aid")).unwrap();
+    fs::write(dir.path().join(".aid/project.toml"), "[project]\nid = \"alpha\"\n").unwrap();
+    let _cwd = TempCwd::enter(dir.path());
+    let store = Store::open_memory().unwrap();
+    let mut task = make_task(
+        "t-no-repo",
+        AgentKind::Codex,
+        TaskStatus::Done,
+        dir.path(),
+        5,
+        120.0,
+        Some(1.2),
+        VerifyStatus::Skipped,
+    );
+    task.repo_path = None;
+    store.insert_task(&task).unwrap();
+
+    refresh_project_state(&store, &task.id);
+
+    assert_eq!(load_state().unwrap(), None);
 }
 
 #[test]

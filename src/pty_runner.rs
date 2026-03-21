@@ -153,6 +153,7 @@ fn record_completion(
         },
         &event,
     )?;
+    crate::state::refresh_project_state(store.as_ref(), task_id);
     println!(
         "Task {} {} ({}{}{})",
         task_id,

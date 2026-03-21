@@ -13,6 +13,7 @@ use std::io::{self, Write};
 use std::path::Path;
 
 #[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct BatchConfig {
     #[serde(default)]
     pub defaults: BatchDefaults,
@@ -22,6 +23,7 @@ pub struct BatchConfig {
     pub tasks: Vec<BatchTask>,
 }
 #[derive(Debug, Deserialize, Default)]
+#[serde(deny_unknown_fields)]
 pub struct BatchDefaults {
     pub group_id: Option<String>,
     pub group: Option<String>,
@@ -65,6 +67,7 @@ pub struct BatchDefaults {
     pub env_forward: Option<Vec<String>>,
 }
 #[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct BatchTask {
     pub id: Option<String>,
     pub name: Option<String>,

@@ -165,6 +165,9 @@ pub struct BoardArgs {
     pub mine: bool,
     #[arg(long)]
     pub group: Option<String>,
+    /// Maximum number of tasks to display (default: 50 without filters, unlimited with --group/--running/--today)
+    #[arg(short, long)]
+    pub limit: Option<usize>,
     #[arg(short, long)]
     pub stream: bool,
     #[arg(long)]

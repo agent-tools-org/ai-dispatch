@@ -4,6 +4,7 @@
 
 mod event_queries;
 mod memory_queries;
+mod state_queries;
 mod task_queries;
 mod workgroup_queries;
 
@@ -11,6 +12,8 @@ mod workgroup_queries;
 pub use event_queries::*;
 #[allow(unused_imports)]
 pub use memory_queries::*;
+#[allow(unused_imports)]
+pub use state_queries::*;
 #[allow(unused_imports)]
 pub use task_queries::*;
 #[allow(unused_imports)]

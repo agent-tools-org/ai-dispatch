@@ -44,14 +44,15 @@ pub(super) async fn board(
     today: bool,
     mine: bool,
     group: Option<String>,
+    limit: Option<usize>,
     stream: bool,
     json: bool,
 ) -> Result<()> {
     let group = resolve_group(group);
     if stream {
-        cmd::board_stream::run(&store, running, today, mine, group.as_deref()).await?;
+        cmd::board_stream::run(&store, running, today, mine, group.as_deref(), limit).await?;
     } else {
-        cmd::board::run(&store, running, today, mine, group.as_deref(), json)?;
+        cmd::board::run(&store, running, today, mine, group.as_deref(), limit, json)?;
     }
     Ok(())
 }

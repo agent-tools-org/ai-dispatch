@@ -219,6 +219,7 @@ pub(super) fn project(action: ProjectAction) -> Result<()> {
     let action = match action {
         ProjectAction::Init => ProjectCommand::Init,
         ProjectAction::Show => ProjectCommand::Show,
+        ProjectAction::State => ProjectCommand::State,
         ProjectAction::Sync => ProjectCommand::Sync,
     };
     run_project_command(action)

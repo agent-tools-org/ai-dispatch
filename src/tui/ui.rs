@@ -264,15 +264,19 @@ fn render_tree_view(frame: &mut ratatui::Frame<'_>, app: &App) {
                     let prompt_width = if milestone.is_some() { 25 } else { 40 };
                     let prompt_preview = truncate(&task.prompt, prompt_width);
 
+                    let is_done = matches!(task.status, TaskStatus::Done | TaskStatus::Merged);
+                    let id_color = if is_done { Color::Green } else { Color::White };
+                    let dim = Color::Indexed(if is_done { 243 } else { 248 });
+
                     let mut spans = vec![
                         Span::styled(node.prefix.clone(), Style::default().fg(Color::Indexed(240))),
-                        Span::styled(task.id.as_str(), Style::default().fg(Color::White).add_modifier(Modifier::BOLD)),
+                        Span::styled(task.id.as_str(), Style::default().fg(id_color).add_modifier(Modifier::BOLD)),
                         Span::raw(" "),
-                        Span::styled(task.agent_display_name().to_string(), Style::default().fg(Color::Cyan)),
+                        Span::styled(task.agent_display_name().to_string(), Style::default().fg(if is_done { Color::Green } else { Color::Cyan })),
                         Span::raw(" "),
                         Span::styled(task.status.label().to_string(), Style::default().fg(status_color)),
                         Span::raw(" "),
-                        Span::styled(duration, Style::default().fg(Color::Indexed(248))),
+                        Span::styled(duration, Style::default().fg(dim)),
                     ];
                     if cost_str != "—" && cost_str != "-" {
                         spans.push(Span::raw(" "));

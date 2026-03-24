@@ -1,12 +1,20 @@
 # ai-dispatch (aid)
 
-![Version](https://img.shields.io/badge/version-8.27.3-blue)
+![Version](https://img.shields.io/badge/version-8.47.0-blue)
 ![Rust](https://img.shields.io/badge/rust-2024-orange)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
 `aid` is a Multi-AI CLI Team Orchestrator written in Rust. It lets a human dispatcher or a primary AI such as Claude Code delegate work to multiple AI CLI tools, track progress, inspect artifacts, enforce methodology, and iterate through one consistent interface.
 
 Licensed under the [MIT License](LICENSE).
+
+## v8.47.0
+
+- Codex CLI v0.116+ compatibility: auto-detect version and use native `-m` model flag, with fallback to `-c model="..."` for older versions.
+- Parse `file_change` events so streamed file edits are captured correctly.
+- Track `thread.started` events for more reliable Codex session detection.
+- Handle inline error items without dropping surrounding streamed output.
+- TUI: dim completed tasks in board tree view for better visual hierarchy.
 
 ## Why aid?
 

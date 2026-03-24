@@ -6,12 +6,45 @@ use anyhow::Result;
 use chrono::Local;
 use serde_json::{json, Map, Value};
 use std::process::Command;
+use std::sync::OnceLock;
 
 use super::truncate::truncate_text;
 use super::RunOpts;
 use crate::rate_limit;
 use crate::templates;
 use crate::types::*;
+
+/// Parsed codex CLI version (major, minor, patch).
+/// Cached via OnceLock so `codex --version` runs at most once.
+fn codex_version() -> (u32, u32, u32) {
+    static VERSION: OnceLock<(u32, u32, u32)> = OnceLock::new();
+    *VERSION.get_or_init(|| {
+        Command::new("codex")
+            .arg("--version")
+            .output()
+            .ok()
+            .and_then(|out| {
+                let text = String::from_utf8_lossy(&out.stdout);
+                parse_semver(text.trim())
+            })
+            .unwrap_or((0, 0, 0))
+    })
+}
+
+fn parse_semver(text: &str) -> Option<(u32, u32, u32)> {
+    // "codex-cli 0.116.0" → "0.116.0"
+    let ver = text.rsplit(' ').next()?;
+    let mut parts = ver.split('.');
+    let major = parts.next()?.parse().ok()?;
+    let minor = parts.next()?.parse().ok()?;
+    let patch = parts.next()?.parse().ok()?;
+    Some((major, minor, patch))
+}
+
+/// Returns true if codex CLI supports the native `-m` / `--model` flag (≥ 0.116.0).
+fn has_native_model_flag() -> bool {
+    codex_version() >= (0, 116, 0)
+}
 
 pub struct CodexAgent;
 
@@ -40,7 +73,11 @@ impl super::Agent for CodexAgent {
             cmd.args(["exec", "--json", "--skip-git-repo-check", "--full-auto", &injected]);
         }
         if let Some(ref model) = opts.model {
-            cmd.args(["-c", &format!("model=\"{model}\"")]);
+            if has_native_model_flag() {
+                cmd.args(["-m", model]);
+            } else {
+                cmd.args(["-c", &format!("model=\"{model}\"")]);
+            }
         }
         if let Some(ref output) = opts.output {
             cmd.args(["-o", output]);
@@ -71,6 +108,7 @@ impl super::Agent for CodexAgent {
         match event_type {
             "item.started" | "item.completed" => parse_item_event(task_id, &v, now),
             "turn.completed" => parse_turn_completed(task_id, &v, now),
+            "thread.started" => parse_thread_started(task_id, &v, now),
             "error" => parse_error_event(task_id, &v, now),
             _ => None,
         }
@@ -116,6 +154,23 @@ fn parse_item_event(
             })
         }
         "command_execution" => parse_command_event(task_id, item, event_type, now),
+        "file_change" => parse_file_change_event(task_id, item, now),
+        "error" => {
+            let message = item.get("message").and_then(|m| m.as_str()).unwrap_or("");
+            if message.is_empty() {
+                return None;
+            }
+            if rate_limit::is_rate_limit_error(message) {
+                rate_limit::mark_rate_limited(&AgentKind::Codex, message);
+            }
+            Some(TaskEvent {
+                task_id: task_id.clone(),
+                timestamp: now,
+                event_kind: EventKind::Error,
+                detail: truncate_text(message, 80),
+                metadata: None,
+            })
+        }
         _ => None,
     }
 }
@@ -242,6 +297,48 @@ fn parse_error_event(
     })
 }
 
+fn parse_thread_started(
+    task_id: &TaskId,
+    v: &Value,
+    now: chrono::DateTime<Local>,
+) -> Option<TaskEvent> {
+    let thread_id = v.get("thread_id")?.as_str()?;
+    Some(TaskEvent {
+        task_id: task_id.clone(),
+        timestamp: now,
+        event_kind: EventKind::Milestone,
+        detail: format!("session {}", thread_id),
+        metadata: Some(json!({ "agent_session_id": thread_id })),
+    })
+}
+
+fn parse_file_change_event(
+    task_id: &TaskId,
+    item: &Value,
+    now: chrono::DateTime<Local>,
+) -> Option<TaskEvent> {
+    let changes = item.get("changes")?.as_array()?;
+    let paths: Vec<&str> = changes
+        .iter()
+        .filter_map(|c| c.get("path").and_then(|p| p.as_str()))
+        .collect();
+    if paths.is_empty() {
+        return None;
+    }
+    let detail = if paths.len() == 1 {
+        truncate_text(paths[0], 80)
+    } else {
+        format!("{} files changed", paths.len())
+    };
+    Some(TaskEvent {
+        task_id: task_id.clone(),
+        timestamp: now,
+        event_kind: EventKind::FileWrite,
+        detail,
+        metadata: Some(json!({ "files": paths })),
+    })
+}
+
 fn completion_metadata(
     total_tokens: i64,
     input_tokens: i64,
@@ -322,9 +419,26 @@ fn extract_noop_reason(line: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::CodexAgent;
+    use super::{parse_semver, CodexAgent};
     use crate::agent::{Agent, RunOpts};
     use crate::types::{EventKind, TaskId};
+
+    #[test]
+    fn semver_parsing() {
+        assert_eq!(parse_semver("codex-cli 0.116.0"), Some((0, 116, 0)));
+        assert_eq!(parse_semver("codex-cli 0.99.3"), Some((0, 99, 3)));
+        assert_eq!(parse_semver("1.2.3"), Some((1, 2, 3)));
+        assert_eq!(parse_semver("garbage"), None);
+    }
+
+    #[test]
+    fn version_comparison_for_model_flag() {
+        assert!((0, 116, 0) >= (0, 116, 0));
+        assert!((0, 117, 0) >= (0, 116, 0));
+        assert!((1, 0, 0) >= (0, 116, 0));
+        assert!(!((0, 115, 9) >= (0, 116, 0)));
+        assert!(!((0, 0, 0) >= (0, 116, 0)));
+    }
 
     #[test]
     fn parses_agent_message_items() {
@@ -335,6 +449,46 @@ mod tests {
             .unwrap();
         assert_eq!(event.event_kind, EventKind::Reasoning);
         assert!(event.detail.contains("Planning"));
+    }
+
+    #[test]
+    fn parses_thread_started_session_id() {
+        let agent = CodexAgent;
+        let line = r#"{"type":"thread.started","thread_id":"019d1efa-5aa6-7132-bdfa-71fb97e12438"}"#;
+        let event = agent
+            .parse_event(&TaskId("t-thread".to_string()), line)
+            .unwrap();
+        assert_eq!(event.event_kind, EventKind::Milestone);
+        assert_eq!(
+            event
+                .metadata
+                .unwrap()
+                .get("agent_session_id")
+                .and_then(|v| v.as_str()),
+            Some("019d1efa-5aa6-7132-bdfa-71fb97e12438")
+        );
+    }
+
+    #[test]
+    fn parses_file_change_events() {
+        let agent = CodexAgent;
+        let line = r#"{"type":"item.completed","item":{"id":"item_5","type":"file_change","changes":[{"path":"/tmp/test.txt","kind":"update"}],"status":"completed"}}"#;
+        let event = agent
+            .parse_event(&TaskId("t-file".to_string()), line)
+            .unwrap();
+        assert_eq!(event.event_kind, EventKind::FileWrite);
+        assert!(event.detail.contains("test.txt"));
+    }
+
+    #[test]
+    fn parses_item_error_events() {
+        let agent = CodexAgent;
+        let line = r#"{"type":"item.completed","item":{"id":"item_0","type":"error","message":"Model metadata for `o3` not found."}}"#;
+        let event = agent
+            .parse_event(&TaskId("t-err".to_string()), line)
+            .unwrap();
+        assert_eq!(event.event_kind, EventKind::Error);
+        assert!(event.detail.contains("Model metadata"));
     }
 
     #[test]

@@ -34,7 +34,59 @@ pub fn auto_commit(dir: &str, task_id: &str, prompt: &str) -> Result<()> {
     anyhow::ensure!(commit.status.success(), "git commit failed: {}", String::from_utf8_lossy(&commit.stderr));
     Ok(())
 }
+pub fn detect_untracked_source_files(dir: &str) -> Result<Vec<String>> {
+    let out = Command::new("git").args(["-C", dir, "status", "--porcelain"]).output().context("Failed to run git status")?;
+    anyhow::ensure!(out.status.success(), "git status failed: {}", String::from_utf8_lossy(&out.stderr));
+    Ok(String::from_utf8_lossy(&out.stdout)
+        .lines()
+        .filter_map(|line| line.strip_prefix("?? "))
+        .filter(|path| {
+            !["target/", "node_modules/", "__pycache__/", ".aid-", "aid-batch-"].iter().any(|part| path.contains(part))
+                && ![".pyc", ".pyo", ".class", ".o", ".so", ".dylib"].iter().any(|suffix| path.ends_with(suffix))
+        })
+        .map(str::to_owned)
+        .collect())
+}
 
+pub fn rescue_untracked_files(dir: &str, task_id: &str) -> Result<Vec<String>> {
+    let mut staged = Vec::new();
+    let files = match detect_untracked_source_files(dir) {
+        Ok(files) => files,
+        Err(err) => {
+            aid_warn!("[aid] Warning: failed to detect untracked files for {task_id}: {err}");
+            return Ok(Vec::new());
+        }
+    };
+    for file in files {
+        let add = match Command::new("git").args(["-C", dir, "add", "--"]).arg(&file).output() {
+            Ok(add) => add,
+            Err(err) => {
+                aid_warn!("[aid] Warning: failed to stage rescued file for {task_id}: {err}");
+                break;
+            }
+        };
+        if !add.status.success() {
+            aid_warn!("[aid] Warning: failed to stage rescued file for {task_id}: {}", String::from_utf8_lossy(&add.stderr).lines().next().unwrap_or(""));
+            break;
+        }
+        staged.push(file);
+    }
+    if staged.is_empty() {
+        return Ok(Vec::new());
+    }
+    let amend = match Command::new("git").args(["-C", dir, "commit", "--amend", "--no-edit"]).output() {
+        Ok(amend) => amend,
+        Err(err) => {
+            aid_warn!("[aid] Warning: failed to amend commit with rescued files for {task_id}: {err}");
+            return Ok(Vec::new());
+        }
+    };
+    if !amend.status.success() {
+        aid_warn!("[aid] Warning: failed to amend commit with rescued files for {task_id}: {}", String::from_utf8_lossy(&amend.stderr).lines().next().unwrap_or(""));
+        return Ok(Vec::new());
+    }
+    Ok(staged)
+}
 /// Extract the actual task description from the [Task] section, falling back to
 /// the first non-header content line.
 fn extract_task_summary(prompt: &str) -> String {
@@ -99,7 +151,7 @@ fn strip_aid_tags(text: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{auto_commit, extract_task_summary, has_uncommitted_changes, strip_aid_tags};
+    use super::{auto_commit, detect_untracked_source_files, extract_task_summary, has_uncommitted_changes, rescue_untracked_files, strip_aid_tags};
     use crate::test_subprocess;
     use std::process::Command;
 
@@ -113,6 +165,18 @@ mod tests {
             .success());
     }
 
+    fn git_stdout(dir: &std::path::Path, args: &[&str]) -> String {
+        String::from_utf8(
+            Command::new("git").arg("-C").arg(dir).args(args).output().unwrap().stdout,
+        )
+        .unwrap()
+    }
+
+    fn init_repo(dir: &std::path::Path) {
+        git(dir, &["init"]);
+        git(dir, &["config", "user.email", "test@example.com"]);
+        git(dir, &["config", "user.name", "Test User"]);
+    }
     #[test]
     fn strip_aid_tags_removes_tag_blocks() {
         let input = "Implement feature X\n<aid-team-rules>\nDo not format\nOnly add modified files\n</aid-team-rules>\nExtra context here";
@@ -161,9 +225,7 @@ mod tests {
     fn auto_commit_succeeds_on_repo_without_head() {
         let _permit = test_subprocess::acquire();
         let dir = tempfile::tempdir().unwrap();
-        git(dir.path(), &["init"]);
-        git(dir.path(), &["config", "user.email", "test@example.com"]);
-        git(dir.path(), &["config", "user.name", "Test User"]);
+        init_repo(dir.path());
         std::fs::write(dir.path().join("first.txt"), "hello").unwrap();
 
         auto_commit(
@@ -189,5 +251,49 @@ mod tests {
             .unwrap();
         assert!(tree.status.success());
         assert_eq!(String::from_utf8_lossy(&tree.stdout).trim(), "first.txt");
+    }
+
+    #[test]
+    fn detect_untracked_finds_new_source_files() {
+        let _permit = test_subprocess::acquire();
+        let dir = tempfile::tempdir().unwrap();
+        init_repo(dir.path());
+        std::fs::write(dir.path().join("new_file.rs"), "fn main() {}\n").unwrap();
+        assert_eq!(
+            detect_untracked_source_files(dir.path().to_str().unwrap()).unwrap(),
+            vec!["new_file.rs"]
+        );
+    }
+
+    #[test]
+    fn detect_untracked_ignores_artifacts() {
+        let _permit = test_subprocess::acquire();
+        let dir = tempfile::tempdir().unwrap();
+        init_repo(dir.path());
+        for path in ["target/out.rs", "node_modules/pkg.js", "__pycache__/mod.pyc", ".aid-temp.rs", "aid-batch-note.ts", "native.so"] {
+            let file = dir.path().join(path);
+            if let Some(parent) = file.parent() {
+                std::fs::create_dir_all(parent).unwrap();
+            }
+            std::fs::write(file, "x").unwrap();
+        }
+        assert!(detect_untracked_source_files(dir.path().to_str().unwrap()).unwrap().is_empty());
+    }
+
+    #[test]
+    fn rescue_untracked_amends_commit() {
+        let _permit = test_subprocess::acquire();
+        let dir = tempfile::tempdir().unwrap();
+        init_repo(dir.path());
+        std::fs::write(dir.path().join("tracked.txt"), "tracked").unwrap();
+        git(dir.path(), &["add", "tracked.txt"]);
+        git(dir.path(), &["commit", "-m", "initial"]);
+        std::fs::write(dir.path().join("rescued.rs"), "pub fn rescued() {}\n").unwrap();
+        assert_eq!(
+            rescue_untracked_files(dir.path().to_str().unwrap(), "task-123").unwrap(),
+            vec!["rescued.rs"]
+        );
+        let tree = git_stdout(dir.path(), &["ls-tree", "-r", "--name-only", "HEAD"]);
+        assert!(tree.lines().any(|line| line == "rescued.rs"));
     }
 }

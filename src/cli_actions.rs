@@ -136,6 +136,32 @@ pub enum GroupFindingAction {
         json: bool,
         #[arg(long)]
         count: bool,
+        #[arg(long)]
+        severity: Option<String>,
+        #[arg(long)]
+        verdict: Option<String>,
+    },
+    /// Show a single finding for a workgroup
+    Get {
+        /// Workgroup ID
+        group: String,
+        /// Finding ID
+        finding_id: i64,
+        #[arg(long)]
+        json: bool,
+    },
+    /// Update review metadata for a finding
+    Update {
+        /// Workgroup ID
+        group: String,
+        /// Finding ID
+        finding_id: i64,
+        #[arg(long)]
+        verdict: Option<String>,
+        #[arg(long)]
+        score: Option<String>,
+        #[arg(long)]
+        note: Option<String>,
     },
 }
 

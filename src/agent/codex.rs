@@ -58,20 +58,17 @@ impl super::Agent for CodexAgent {
     }
 
     fn build_command(&self, prompt: &str, opts: &RunOpts) -> Result<Command> {
-        let injected = templates::inject_codex_prompt(prompt, None);
-        let mut cmd = Command::new("codex");
-        if opts.read_only {
-            cmd.args([
-                "exec",
-                "--json",
-                "--skip-git-repo-check",
-                "-s",
-                "read-only",
-                &injected,
-            ]);
+        let effective_prompt = if opts.read_only {
+            format!(
+                "IMPORTANT: READ-ONLY MODE. Do NOT modify, create, or delete any files. Only read and analyze.\n\n{}",
+                prompt
+            )
         } else {
-            cmd.args(["exec", "--json", "--skip-git-repo-check", "--full-auto", &injected]);
-        }
+            prompt.to_string()
+        };
+        let injected = templates::inject_codex_prompt(&effective_prompt, None);
+        let mut cmd = Command::new("codex");
+        cmd.args(["exec", "--json", "--skip-git-repo-check", "--full-auto", &injected]);
         if let Some(ref model) = opts.model {
             if has_native_model_flag() {
                 cmd.args(["-m", model]);
@@ -529,5 +526,54 @@ mod tests {
             .collect();
 
         assert!(args.contains(&"--skip-git-repo-check".to_string()));
+    }
+
+    #[test]
+    fn build_command_read_only_uses_full_auto() {
+        let opts = RunOpts {
+            dir: None,
+            output: None,
+            model: None,
+            budget: false,
+            read_only: true,
+            context_files: vec![],
+            session_id: None,
+            env: None,
+            env_forward: None,
+        };
+        let cmd = CodexAgent.build_command("analyze this code", &opts).unwrap();
+        let args: Vec<String> = cmd
+            .get_args()
+            .map(|arg| arg.to_string_lossy().to_string())
+            .collect();
+
+        assert!(args.contains(&"--full-auto".to_string()));
+        assert!(!args.contains(&"-s".to_string()));
+        assert!(!args.contains(&"read-only".to_string()));
+    }
+
+    #[test]
+    fn build_command_read_only_prepends_readonly_prefix() {
+        let opts = RunOpts {
+            dir: None,
+            output: None,
+            model: None,
+            budget: false,
+            read_only: true,
+            context_files: vec![],
+            session_id: None,
+            env: None,
+            env_forward: None,
+        };
+        let cmd = CodexAgent.build_command("analyze this code", &opts).unwrap();
+        let args: Vec<String> = cmd
+            .get_args()
+            .map(|arg| arg.to_string_lossy().to_string())
+            .collect();
+
+        let last_arg = args.last().expect("should have prompt as last arg");
+        assert!(last_arg.contains("READ-ONLY MODE"));
+        assert!(last_arg.starts_with("IMPORTANT: READ-ONLY MODE"));
+        assert!(last_arg.contains("analyze this code"));
     }
 }

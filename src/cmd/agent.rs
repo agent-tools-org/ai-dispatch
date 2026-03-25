@@ -71,6 +71,7 @@ pub enum AgentAction {
     Config {
         name: String,
         model: Option<String>,
+        idle_timeout: Option<u64>,
     },
     Add {
         name: String,
@@ -89,7 +90,7 @@ pub fn run_agent_command(action: AgentAction) -> Result<()> {
     match action {
         AgentAction::List => list_agents(),
         AgentAction::Show { name } => show_agent(&name),
-        AgentAction::Config { name, model } => config_agent(&name, model.as_deref()),
+        AgentAction::Config { name, model, idle_timeout } => config_agent(&name, model.as_deref(), idle_timeout),
         AgentAction::Add { name } => add_agent(&name),
         AgentAction::Remove { name } => remove_agent(&name),
         AgentAction::Fork { name, new_name } => fork_agent(&name, new_name.as_deref()),
@@ -97,14 +98,30 @@ pub fn run_agent_command(action: AgentAction) -> Result<()> {
     }
 }
 
-fn config_agent(name: &str, model: Option<&str>) -> Result<()> {
+fn config_agent(name: &str, model: Option<&str>, idle_timeout: Option<u64>) -> Result<()> {
     if !is_builtin(name) && !registry::custom_agent_exists(name) {
         bail!("Unknown agent '{name}'");
     }
-    agent_config::save_agent_default_model(name, model)?;
-    match model {
-        Some(model) => println!("[aid] {name}: default model set to {model}"),
-        None => println!("[aid] {name}: default model cleared"),
+    if let Some(model) = model {
+        agent_config::save_agent_default_model(name, Some(model))?;
+        println!("[aid] {name}: default model set to {model}");
+    }
+    if let Some(secs) = idle_timeout {
+        let value = if secs == 0 { None } else { Some(secs) };
+        agent_config::save_agent_idle_timeout(name, value)?;
+        if secs == 0 {
+            println!("[aid] {name}: idle timeout cleared");
+        } else {
+            println!("[aid] {name}: idle timeout set to {secs}s");
+        }
+    }
+    if model.is_none() && idle_timeout.is_none() {
+        // No flags: show current config
+        let current_model = agent_config::get_default_model(name);
+        let current_idle = agent_config::get_default_idle_timeout(name);
+        println!("[aid] {name} config:");
+        println!("  model: {}", current_model.as_deref().unwrap_or("(default)"));
+        println!("  idle_timeout: {}", current_idle.map_or("(default 300s)".to_string(), |s| format!("{s}s")));
     }
     Ok(())
 }

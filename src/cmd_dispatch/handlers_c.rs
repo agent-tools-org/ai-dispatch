@@ -74,7 +74,7 @@ pub(super) fn agent(action: AgentCommands) -> Result<()> {
     let action = match action {
         AgentCommands::List => AgentAction::List,
         AgentCommands::Show { name } => AgentAction::Show { name },
-        AgentCommands::Config { name, model } => AgentAction::Config { name, model },
+        AgentCommands::Config { name, model, idle_timeout } => AgentAction::Config { name, model, idle_timeout },
         AgentCommands::Add { name } => AgentAction::Add { name },
         AgentCommands::Remove { name } => AgentAction::Remove { name },
         AgentCommands::Fork { name, new_name } => AgentAction::Fork { name, new_name },

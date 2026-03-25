@@ -1,11 +1,11 @@
 // Idle timeout helpers for task execution.
-// Exports env-based readers/writers plus the shared 180s default.
+// Exports env-based readers/writers plus the shared 300s default.
 
 use std::collections::HashMap;
 use std::ffi::OsStr;
 use std::time::Duration;
 
-pub(crate) const DEFAULT_IDLE_TIMEOUT_SECS: u64 = 180;
+pub(crate) const DEFAULT_IDLE_TIMEOUT_SECS: u64 = 300;
 pub(crate) const DEFAULT_IDLE_TIMEOUT: Duration = Duration::from_secs(DEFAULT_IDLE_TIMEOUT_SECS);
 pub(crate) const IDLE_TIMEOUT_ENV: &str = "AID_IDLE_TIMEOUT_SECS";
 
@@ -79,7 +79,7 @@ mod tests {
     }
 
     #[test]
-    fn default_idle_timeout_is_180_seconds() {
+    fn default_idle_timeout_is_300_seconds() {
         let cmd = std::process::Command::new("true");
         assert_eq!(idle_timeout_from_command(&cmd), DEFAULT_IDLE_TIMEOUT);
     }

@@ -130,13 +130,12 @@ fn validate_batch_keys(content: &str, path: &Path) -> Result<()> {
     let Some(table) = raw.as_table() else {
         return Ok(());
     };
-    let known_keys = ["defaults", "tasks", "vars"];
+    let known_keys = ["defaults", "tasks", "task", "vars"];
     for key in table.keys() {
         if known_keys.contains(&key.as_str()) {
             continue;
         }
         let suggestion = match key.as_str() {
-            "task" => " (did you mean `[[tasks]]`?)",
             "default" => " (did you mean `[defaults]`?)",
             _ => "",
         };

@@ -435,12 +435,17 @@ fn accepts_tasks_plural_alias() {
 }
 
 #[test]
-fn rejects_unknown_top_level_key() {
+fn accepts_task_singular_alias() {
     let file = write_temp("[[task]]\nagent = \"codex\"\nprompt = \"implement\"\n");
-    let err = parse_batch_file(file.path()).unwrap_err().to_string();
+    let cfg = parse_batch_file(file.path()).unwrap();
+    assert_eq!(cfg.tasks.len(), 1);
+}
 
-    assert!(err.contains("unknown top-level key `task`"));
-    assert!(err.contains("did you mean `[[tasks]]`?"));
+#[test]
+fn rejects_unknown_top_level_key() {
+    let file = write_temp("[bogus]\nfoo = 1\n\n[[tasks]]\nagent = \"codex\"\nprompt = \"implement\"\n");
+    let err = parse_batch_file(file.path()).unwrap_err().to_string();
+    assert!(err.contains("unknown top-level key `bogus`"));
 }
 
 #[test]

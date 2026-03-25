@@ -191,7 +191,7 @@ pub async fn run(store: Arc<Store>, args: BatchArgs) -> Result<()> {
     };
     let task_ids = dispatch.dispatched_task_ids();
     if args.wait && args.parallel && !has_dependencies && !task_ids.is_empty() {
-        crate::cmd::wait::wait_for_task_ids(&store, &task_ids, false, None).await?;
+        crate::cmd::wait::wait_for_task_ids(&store, &task_ids, None, false, None).await?;
     }
     aid_info!(
         "{}",

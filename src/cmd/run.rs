@@ -412,6 +412,7 @@ pub async fn run(store: Arc<Store>, mut args: RunArgs) -> Result<TaskId> {
             verify: args.verify.clone(),
             judge: args.judge.clone(),
             max_duration_mins: args.max_duration_mins,
+            idle_timeout_secs: crate::idle_timeout::idle_timeout_secs_from_env(args.env.as_ref()),
             retry: args.retry,
             group: args.group.clone(),
             skills: args.skills.clone(),

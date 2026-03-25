@@ -40,6 +40,7 @@ fn make_task(name: Option<&str>, depends_on: &[&str]) -> BatchTask {
         container: None,
         best_of: None,
         max_duration_mins: None,
+        idle_timeout: None,
         verify: None,
         judge: None,
         context: None,

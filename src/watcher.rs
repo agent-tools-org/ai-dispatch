@@ -32,6 +32,7 @@ pub async fn watch_streaming(
     store: &Arc<Store>,
     log_path: &std::path::Path,
     workgroup_id: Option<&str>,
+    idle_timeout: Option<Duration>,
     max_task_cost: Option<f64>,
 ) -> Result<CompletionInfo> {
     let stdout = child
@@ -53,8 +54,9 @@ pub async fn watch_streaming(
     let mut loop_detector = LoopDetector::new();
     let mut synthetic_tracker = SyntheticMilestoneTracker::new();
     let mut stderr_handle = spawn_stderr_capture(child, task_id);
+    let idle_timeout = idle_timeout.unwrap_or(HUNG_TIMEOUT);
     loop {
-        let line = match timeout(HUNG_TIMEOUT, lines.next_line()).await {
+        let line = match timeout(idle_timeout, lines.next_line()).await {
             Ok(Ok(Some(line))) => line,
             Ok(Ok(None)) => break,
             Ok(Err(e)) => return Err(e.into()),
@@ -66,7 +68,7 @@ pub async fn watch_streaming(
                     event_kind: EventKind::Error,
                     detail: format!(
                         "Agent hung: no output for {} seconds",
-                        HUNG_TIMEOUT.as_secs()
+                        idle_timeout.as_secs()
                     ),
                     metadata: None,
                 };

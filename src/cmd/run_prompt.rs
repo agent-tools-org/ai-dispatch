@@ -459,11 +459,12 @@ pub(super) async fn run_agent_process_impl(args: RunProcessArgs<'_>) -> Result<(
         workgroup_id,
     } = args;
     let start = std::time::Instant::now();
+    let idle_timeout = crate::idle_timeout::idle_timeout_from_tokio_command(&cmd);
     #[cfg(unix)]
     cmd.process_group(0);
     let mut child = cmd.spawn().context("Failed to spawn agent process")?;
     let info = if streaming {
-        watcher::watch_streaming(agent, &mut child, task_id, store, log_path, workgroup_id, None).await?
+        watcher::watch_streaming(agent, &mut child, task_id, store, log_path, workgroup_id, Some(idle_timeout), None).await?
     } else {
         let out = output_path.map(std::path::Path::new);
         watcher::watch_buffered(agent, &mut child, task_id, store, log_path, out, workgroup_id).await?

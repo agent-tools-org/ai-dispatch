@@ -22,6 +22,8 @@ pub struct BackgroundRunSpec {
     pub judge: Option<String>,
     #[serde(default)]
     pub max_duration_mins: Option<i64>,
+    #[serde(default)]
+    pub idle_timeout_secs: Option<u64>,
     pub retry: u32,
     pub group: Option<String>,
     #[serde(default)]

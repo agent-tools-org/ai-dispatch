@@ -39,6 +39,7 @@ pub(super) async fn run(
     parent: Option<String>,
     id: Option<String>,
     timeout: Option<u64>,
+    idle_timeout: Option<u64>,
 ) -> Result<()> {
     let config = config::load_config().unwrap_or_default();
     let budget = budget || config.selection.budget_mode;
@@ -85,6 +86,7 @@ pub(super) async fn run(
         parent,
         id,
         timeout,
+        idle_timeout,
     );
     cmd::run::run(store, args).await?;
     Ok(())
@@ -121,9 +123,11 @@ fn build_run_args(
     parent: Option<String>,
     id: Option<String>,
     timeout: Option<u64>,
+    idle_timeout: Option<u64>,
 ) -> cmd::run::RunArgs {
     let extras = *run_extras;
     let skills = if no_skill { vec![cmd::run::NO_SKILL_SENTINEL.to_string()] } else { extras.skill };
+    let env = crate::idle_timeout::env_with_idle_timeout(None, idle_timeout);
 
     cmd::run::RunArgs {
         agent_name,
@@ -159,6 +163,7 @@ fn build_run_args(
         context_from: extras.context_from,
         scope,
         parent_task_id: parent,
+        env,
         existing_task_id: id.map(crate::types::TaskId),
         timeout,
         ..Default::default()

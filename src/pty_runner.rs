@@ -41,7 +41,7 @@ pub fn run_agent_process(
         &mut log_file,
         &mut state,
         streaming,
-        Some(crate::pty_watch::PTY_IDLE_TIMEOUT),
+        Some(crate::idle_timeout::idle_timeout_from_command(cmd)),
         None,
     )?;
     if bridge.is_alive() {

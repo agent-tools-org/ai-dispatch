@@ -224,6 +224,7 @@ mod tests {
             verify: None,
             judge: None,
             max_duration_mins: None,
+            idle_timeout_secs: None,
             retry: 0,
             group: None,
             skills: vec![],

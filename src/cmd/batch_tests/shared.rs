@@ -22,6 +22,7 @@ pub(super) fn make_task(name: &str, conditional: bool, on_success: Option<&str>)
         container: None,
         best_of: None,
         max_duration_mins: None,
+        idle_timeout: None,
         verify: None,
         judge: None,
         context: None,

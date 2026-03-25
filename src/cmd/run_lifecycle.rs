@@ -24,6 +24,10 @@ pub(crate) async fn post_run_lifecycle(
     if args.sandbox {
         crate::sandbox::kill_container(task_id.as_str());
     }
+    // Always clear worktree lock when task finishes (success or failure)
+    if let Some(wt) = wt_path {
+        crate::worktree::clear_worktree_lock(std::path::Path::new(wt));
+    }
     run_prompt::warn_agent_committed_files_outside_scope(
         &args.scope,
         args.dir.as_ref(),
@@ -91,9 +95,15 @@ pub(crate) async fn post_run_lifecycle(
             if let Some(wt) = task.worktree_path.as_deref()
                 && Path::new(wt).exists()
             {
-                let repo = repo_path.map(String::as_str).unwrap_or(".");
-                if let Err(err) = crate::cmd::merge::remove_worktree(repo, wt) {
-                    aid_warn!("[aid] Warning: failed to clean up worktree {wt}: {err}");
+                // Don't remove worktree if other active tasks still reference it
+                let has_siblings = store.has_active_worktree_siblings(wt, task_id.as_str()).unwrap_or(false);
+                if has_siblings {
+                    aid_info!("[aid] Preserving worktree {wt} — other active tasks share it");
+                } else {
+                    let repo = repo_path.map(String::as_str).unwrap_or(".");
+                    if let Err(err) = crate::cmd::merge::remove_worktree(repo, wt) {
+                        aid_warn!("[aid] Warning: failed to clean up worktree {wt}: {err}");
+                    }
                 }
             }
         }

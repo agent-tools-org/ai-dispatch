@@ -105,12 +105,12 @@ fn interpolate_plain_string(
 }
 
 pub(super) fn apply_defaults(tasks: &mut [BatchTask], defaults: &BatchDefaults) {
-    for task in tasks {
-        apply_task_defaults(task, defaults);
+    for (idx, task) in tasks.iter_mut().enumerate() {
+        apply_task_defaults(task, defaults, idx);
     }
 }
 
-fn apply_task_defaults(task: &mut BatchTask, defaults: &BatchDefaults) {
+fn apply_task_defaults(task: &mut BatchTask, defaults: &BatchDefaults, task_idx: usize) {
     if task.agent.is_empty()
         && let Some(agent) = defaults.agent.as_ref()
     {
@@ -126,7 +126,7 @@ fn apply_task_defaults(task: &mut BatchTask, defaults: &BatchDefaults) {
         task.model = defaults.model.clone();
     }
     if task.worktree.is_none() {
-        task.worktree = default_worktree(task, defaults);
+        task.worktree = default_worktree(task, defaults, task_idx);
     }
     if task.verify.is_none() {
         task.verify = defaults.verify.clone();
@@ -171,10 +171,12 @@ fn apply_task_defaults(task: &mut BatchTask, defaults: &BatchDefaults) {
     task.env_forward = merge_env_lists(defaults.env_forward.as_ref(), task.env_forward.as_ref());
 }
 
-fn default_worktree(task: &BatchTask, defaults: &BatchDefaults) -> Option<String> {
+fn default_worktree(task: &BatchTask, defaults: &BatchDefaults, task_idx: usize) -> Option<String> {
     let prefix = defaults.worktree_prefix.as_deref()?;
-    let name = task.name.as_deref()?.trim();
-    (!name.is_empty()).then(|| format!("{prefix}/{name}"))
+    match task.name.as_deref().map(str::trim).filter(|n| !n.is_empty()) {
+        Some(name) => Some(format!("{prefix}/{name}")),
+        None => Some(format!("{prefix}/task-{task_idx}")),
+    }
 }
 
 fn merge_env_maps(

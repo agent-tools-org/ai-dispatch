@@ -281,6 +281,50 @@ pub fn worktree_changed_files(wt_path: &Path) -> Result<Vec<String>> {
     Ok(files)
 }
 
+// --- Worktree lock file: prevents concurrent agent access ---
+
+const LOCK_FILENAME: &str = ".aid-lock";
+
+/// Check if a worktree is locked by an active process. Returns the holder task ID if locked.
+pub fn check_worktree_lock(wt_path: &Path) -> Option<String> {
+    let lock_path = wt_path.join(LOCK_FILENAME);
+    let content = std::fs::read_to_string(&lock_path).ok()?;
+    let mut task_id = None;
+    let mut pid = None;
+    for line in content.lines() {
+        if let Some(t) = line.strip_prefix("task=") { task_id = Some(t.trim().to_string()); }
+        if let Some(p) = line.strip_prefix("pid=") { pid = p.trim().parse::<u32>().ok(); }
+    }
+    // Stale lock: process is dead
+    if let Some(p) = pid {
+        if !process_alive(p) {
+            let _ = std::fs::remove_file(&lock_path);
+            return None;
+        }
+    }
+    task_id
+}
+
+/// Write a lock file claiming this worktree for a task.
+pub fn write_worktree_lock(wt_path: &Path, task_id: &str) {
+    let lock_path = wt_path.join(LOCK_FILENAME);
+    let content = format!("task={task_id}\npid={}\n", std::process::id());
+    let _ = std::fs::write(&lock_path, content);
+}
+
+/// Remove the lock file when a task finishes using the worktree.
+pub fn clear_worktree_lock(wt_path: &Path) {
+    let _ = std::fs::remove_file(wt_path.join(LOCK_FILENAME));
+}
+
+#[cfg(unix)]
+fn process_alive(pid: u32) -> bool {
+    unsafe { libc::kill(pid as i32, 0) == 0 }
+}
+
+#[cfg(not(unix))]
+fn process_alive(_pid: u32) -> bool { false }
+
 fn commits_ahead_of_main(repo: &str) -> Option<u32> {
     let out = Command::new("git")
         .args(["-C", repo, "rev-list", "--count", "main..HEAD"])

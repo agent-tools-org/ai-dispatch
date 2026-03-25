@@ -752,3 +752,60 @@ fn defaults_group_does_not_override_task_group() {
     // Task without explicit group remains None (assignment happens in cmd/batch.rs)
     assert_eq!(config.tasks[1].group, None);
 }
+
+#[test]
+fn rejects_unnamed_tasks_sharing_worktree() {
+    let file = write_temp(concat!(
+        "[[tasks]]\nagent = \"codex\"\nprompt = \"a\"\nworktree = \"feat/shared\"\n",
+        "[[tasks]]\nagent = \"codex\"\nprompt = \"b\"\nworktree = \"feat/shared\""
+    ));
+    let err = parse_batch_file(file.path()).unwrap_err().to_string();
+    assert!(
+        err.contains("has no name"),
+        "should reject unnamed tasks sharing worktree, got: {err}"
+    );
+}
+
+#[test]
+fn accepts_single_unnamed_task_with_worktree() {
+    let file = write_temp(concat!(
+        "[[tasks]]\nagent = \"codex\"\nprompt = \"a\"\nworktree = \"feat/solo\"\n",
+        "[[tasks]]\nagent = \"codex\"\nprompt = \"b\"\nworktree = \"feat/other\""
+    ));
+    assert!(
+        parse_batch_file(file.path()).is_ok(),
+        "single unnamed task per worktree should be fine"
+    );
+}
+
+#[test]
+fn worktree_prefix_generates_worktree_for_unnamed_tasks() {
+    let (cfg, _) = parse_batch_with_vars(
+        concat!(
+            "[defaults]\nworktree_prefix = \"feat\"\nagent = \"codex\"\n",
+            "[[task]]\nprompt = \"unnamed task\"\n"
+        ),
+        &[],
+    );
+    assert_eq!(
+        cfg.tasks[0].worktree.as_deref(),
+        Some("feat/task-0"),
+        "unnamed task should get index-based worktree"
+    );
+}
+
+#[test]
+fn worktree_prefix_prefers_name_over_index() {
+    let (cfg, _) = parse_batch_with_vars(
+        concat!(
+            "[defaults]\nworktree_prefix = \"feat\"\nagent = \"codex\"\n",
+            "[[task]]\nname = \"impl\"\nprompt = \"named task\"\n"
+        ),
+        &[],
+    );
+    assert_eq!(
+        cfg.tasks[0].worktree.as_deref(),
+        Some("feat/impl"),
+        "named task should use name, not index"
+    );
+}

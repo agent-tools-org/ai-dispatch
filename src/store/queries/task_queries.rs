@@ -291,4 +291,17 @@ impl Store {
             .map(|(_, id, agent, status)| (id, agent, status))
             .collect())
     }
+
+    /// Check if any non-terminal tasks share the same worktree path, excluding a given task.
+    pub fn has_active_worktree_siblings(&self, worktree_path: &str, exclude_task_id: &str) -> Result<bool> {
+        let conn = self.db();
+        let count: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM tasks \
+             WHERE worktree_path = ?1 AND id != ?2 \
+             AND status IN ('pending', 'running', 'waiting', 'awaiting_input')",
+            params![worktree_path, exclude_task_id],
+            |row| row.get(0),
+        )?;
+        Ok(count > 0)
+    }
 }

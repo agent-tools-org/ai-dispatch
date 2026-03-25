@@ -211,6 +211,32 @@ pub(crate) fn is_valid_agent(agent: &str) -> bool {
     crate::types::AgentKind::parse_str(agent).is_some() || crate::agent::registry::custom_agent_exists(agent)
 }
 pub fn auto_sequence_shared_worktrees(tasks: &mut [BatchTask], writer: &mut impl Write) -> io::Result<()> {
+    // Validate: all tasks sharing a worktree must have names for dependency tracking.
+    // Without names, depends_on cannot reference them, breaking the sequencing chain
+    // and allowing concurrent git access that causes index.lock contention.
+    let mut worktree_users: HashMap<&str, Vec<usize>> = HashMap::new();
+    for (idx, task) in tasks.iter().enumerate() {
+        if let Some(wt) = task.worktree.as_deref() {
+            worktree_users.entry(wt).or_default().push(idx);
+        }
+    }
+    for (wt, indices) in &worktree_users {
+        if indices.len() < 2 { continue; }
+        for &idx in indices {
+            if tasks[idx].name.is_none() {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidInput,
+                    format!(
+                        "task #{idx} shares worktree '{wt}' with {} other task(s) but has no name — \
+                         add name = \"...\" so aid can auto-sequence shared worktree access",
+                        indices.len() - 1
+                    ),
+                ));
+            }
+        }
+    }
+
+    // Add sequential dependencies for shared worktrees
     let mut last_task_by_worktree: HashMap<String, String> = HashMap::new();
     for (task_idx, task) in tasks.iter_mut().enumerate() {
         let Some(worktree) = task.worktree.as_ref() else {

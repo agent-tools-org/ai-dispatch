@@ -297,3 +297,29 @@ fn create_worktree_allows_aid_branch_on_force_reset_fallback() {
         ],
     );
 }
+
+#[test]
+fn worktree_lock_write_and_read() {
+    let dir = TempDir::new().unwrap();
+    assert!(check_worktree_lock(dir.path()).is_none());
+
+    write_worktree_lock(dir.path(), "t-1234");
+    let holder = check_worktree_lock(dir.path());
+    assert_eq!(holder.as_deref(), Some("t-1234"));
+
+    clear_worktree_lock(dir.path());
+    assert!(check_worktree_lock(dir.path()).is_none());
+}
+
+#[test]
+fn worktree_lock_stale_pid_is_cleared() {
+    let dir = TempDir::new().unwrap();
+    let lock_path = dir.path().join(".aid-lock");
+    // Write a lock with a PID that definitely doesn't exist
+    std::fs::write(&lock_path, "task=t-stale\npid=999999999\n").unwrap();
+
+    // Should return None because the PID is dead
+    assert!(check_worktree_lock(dir.path()).is_none());
+    // Lock file should have been cleaned up
+    assert!(!lock_path.exists());
+}

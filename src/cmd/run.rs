@@ -272,6 +272,16 @@ pub async fn run(store: Arc<Store>, mut args: RunArgs) -> Result<TaskId> {
     let (wt_path, wt_branch, effective_dir, resolved_repo) = run_prompt::resolve_worktree_paths(&args, explicit_repo_path.as_deref())?;
     // Use resolved repo_path (always set when worktree is created, even without --repo)
     let repo_path = resolved_repo.clone().or(explicit_repo_path);
+    // Check worktree lock — prevent concurrent agent access to the same worktree
+    if let Some(ref wt) = wt_path {
+        if let Some(holder) = crate::worktree::check_worktree_lock(Path::new(wt)) {
+            anyhow::bail!(
+                "Worktree {wt} is locked by task {holder} — concurrent access prevented. \
+                 Use separate worktree names for parallel tasks."
+            );
+        }
+        crate::worktree::write_worktree_lock(Path::new(wt), task_id.as_str());
+    }
     if let (Some(wt), Some(repo)) = (wt_path.as_deref(), repo_path.as_deref()) {
         let context_files: Vec<String> =
             args.context.iter().map(|spec| context_file_from_spec(spec)).collect();

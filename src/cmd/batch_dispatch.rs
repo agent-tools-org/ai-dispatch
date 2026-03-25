@@ -4,14 +4,19 @@
 use crate::batch;
 use crate::cmd::run;
 use crate::store::Store;
-use anyhow::{Context, Result};
+use anyhow::Result;
 use std::sync::Arc;
 use super::batch_args::task_to_run_args;
+use super::batch_dispatch_support::{
+    auto_fallback_agent,
+    dispatch_level_with_ids,
+    should_auto_fallback,
+    wait_for_any_completion,
+};
 use super::batch_helpers::{resolve_hook_targets, trigger_conditional};
-use super::batch_types::{BatchDispatchResult, BatchTaskOutcome, CompletedTask, DispatchedTask};
-use super::batch_validate::{find_ready_tasks, load_task_outcome, resolve_dependencies, task_label};
+use super::batch_types::{BatchDispatchResult, BatchTaskOutcome};
+use super::batch_validate::{find_ready_tasks, resolve_dependencies, task_label};
 
-const COMPLETION_POLL_INTERVAL: std::time::Duration = std::time::Duration::from_millis(200);
 pub(crate) async fn dispatch_parallel(
     store: Arc<Store>,
     tasks: &[batch::BatchTask],
@@ -232,84 +237,6 @@ async fn dispatch_with_dependencies(
     })
 }
 
-async fn dispatch_level_with_ids(
-    store: Arc<Store>,
-    tasks: &[batch::BatchTask],
-    task_indices: &[usize],
-    waiting_ids: &[String],
-    shared_dir_path: Option<&str>,
-) -> Result<Vec<DispatchedTask>> {
-    let shared_dir_path = shared_dir_path.map(str::to_string);
-    let handles: Vec<_> = task_indices
-        .iter()
-        .map(|&task_idx| {
-            let store = store.clone();
-            let shared_dir_path = shared_dir_path.clone();
-            let siblings: Vec<_> = tasks
-                .iter()
-                .enumerate()
-                .filter(|(idx, _)| *idx != task_idx)
-                .map(|(_, task)| task)
-                .collect();
-            let mut run_args = task_to_run_args(
-                &tasks[task_idx],
-                &siblings,
-                true,
-                &store,
-                shared_dir_path.as_deref(),
-            );
-            run_args.existing_task_id = Some(crate::types::TaskId(waiting_ids[task_idx].clone()));
-            tokio::spawn(async move { (task_idx, run::run(store, run_args).await) })
-        })
-        .collect();
-    let mut dispatches = Vec::with_capacity(task_indices.len());
-    for handle in handles {
-        let (task_idx, result) = handle.await.context("Batch task join failure")?;
-        match result {
-            Ok(task_id) => dispatches.push(DispatchedTask {
-                index: task_idx,
-                task_id: Some(task_id.to_string()),
-            }),
-            Err(err) => {
-                aid_error!(
-                    "Batch task failed ({}): {err}",
-                    task_label(&tasks[task_idx], task_idx)
-                );
-                dispatches.push(DispatchedTask {
-                    index: task_idx,
-                    task_id: None,
-                });
-            }
-        }
-    }
-    Ok(dispatches)
-}
-
-fn wait_for_any_completion(store: &Arc<Store>, active: &mut Vec<(usize, String)>) -> Result<Vec<CompletedTask>> {
-    loop {
-        let mut completed = Vec::new();
-        for (i, (_, task_id)) in active.iter().enumerate() {
-            if let Some(task) = store.get_task(task_id)?
-                && task.status.is_terminal()
-            {
-                completed.push(i);
-            }
-        }
-        if !completed.is_empty() {
-            let mut completed_tasks = Vec::with_capacity(completed.len());
-            for &i in completed.iter().rev() {
-                let (task_idx, task_id) = active.remove(i);
-                completed_tasks.push(CompletedTask {
-                    index: task_idx,
-                    outcome: load_task_outcome(store, &task_id)?,
-                    task_id,
-                });
-            }
-            return Ok(completed_tasks);
-        }
-        std::thread::sleep(COMPLETION_POLL_INTERVAL);
-    }
-}
 async fn maybe_dispatch_auto_fallback(
     store: Arc<Store>,
     tasks: &[batch::BatchTask],
@@ -350,30 +277,4 @@ async fn maybe_dispatch_auto_fallback(
     );
     let retry_id = run::run(store, run_args).await?;
     Ok(Some(retry_id.to_string()))
-}
-pub(crate) fn should_auto_fallback(
-    auto_fallback: bool,
-    already_retried: bool,
-    outcome: BatchTaskOutcome,
-) -> bool {
-    auto_fallback && !already_retried && outcome == BatchTaskOutcome::Failed
-}
-pub(crate) fn auto_fallback_agent(
-    store: &Store,
-    task_id: &str,
-    tasks: &[crate::batch::BatchTask],
-    task_idx: usize,
-) -> Result<Option<(String, crate::types::AgentKind)>> {
-    let Some(task) = store.get_task(task_id)? else {
-        anyhow::bail!("batch task not found after dispatch: {task_id}");
-    };
-    if let Some(fallback_str) = tasks.get(task_idx).and_then(|t| t.fallback.as_deref()) {
-        for agent_name in fallback_str.split(',').map(str::trim) {
-            if let Some(fallback_kind) = crate::types::AgentKind::parse_str(agent_name) {
-                return Ok(Some((task.agent.as_str().to_string(), fallback_kind)));
-            }
-        }
-    }
-    Ok(crate::agent::selection::coding_fallback_for(&task.agent)
-        .map(|fallback| (task.agent.as_str().to_string(), fallback)))
 }

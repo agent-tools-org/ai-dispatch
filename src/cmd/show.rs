@@ -152,6 +152,7 @@ fn task_json(store: &Arc<Store>, task_id: &str) -> Result<String> {
         "verify": task.verify,
         "exit_code": task.exit_code,
         "verify_status": task.verify_status.as_str(),
+        "pending_reason": task.pending_reason,
         "read_only": task.read_only,
         "budget": task.budget,
         "created_at": task.created_at.to_rfc3339(),
@@ -466,6 +467,7 @@ mod tests {
             completed_at: None,
             verify: None,
             verify_status: VerifyStatus::Skipped,
+            pending_reason: None,
             read_only: false,
             budget: false,
         };
@@ -515,6 +517,7 @@ mod tests {
             completed_at: None,
             verify: None,
             verify_status: VerifyStatus::Skipped,
+            pending_reason: None,
             read_only: false,
             budget: false,
         };
@@ -589,6 +592,7 @@ mod tests {
             completed_at: None,
             verify: None,
             verify_status: VerifyStatus::Skipped,
+            pending_reason: None,
             read_only: false,
             budget: false,
         };
@@ -630,6 +634,31 @@ mod tests {
         assert!(text.contains("--- Diff Stat ---"));
         assert!(text.contains("(no changes detected)"));
         assert!(text.contains("Conclusion: Summarized the research outcome."));
+    }
+
+    #[test]
+    fn audit_text_shows_pending_reason() {
+        let store = Arc::new(Store::open_memory().unwrap());
+        let mut task = research_task("t-show-pending-reason", Path::new("."));
+        task.status = TaskStatus::Failed;
+        task.pending_reason = Some("agent_starting".to_string());
+        store.insert_task(&task).unwrap();
+
+        let text = audit_text(&store, task.id.as_str()).unwrap();
+
+        assert!(text.contains("Pending reason: agent_starting"));
+    }
+
+    #[test]
+    fn task_json_includes_pending_reason() {
+        let store = Arc::new(Store::open_memory().unwrap());
+        let mut task = research_task("t-show-json", Path::new("."));
+        task.pending_reason = Some("unknown".to_string());
+        store.insert_task(&task).unwrap();
+
+        let payload: serde_json::Value = serde_json::from_str(&task_json(&store, task.id.as_str()).unwrap()).unwrap();
+
+        assert_eq!(payload["pending_reason"], "unknown");
     }
 
     fn init_git_repo(repo: &Path) {
@@ -690,6 +719,7 @@ mod tests {
             completed_at: None,
             verify: None,
             verify_status: VerifyStatus::Skipped,
+            pending_reason: None,
             read_only: false,
             budget: false,
         }

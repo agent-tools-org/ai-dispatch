@@ -289,6 +289,7 @@ fn make_failed_task(task_id: &str) -> Task {
         completed_at: None,
         verify: None,
         verify_status: VerifyStatus::Failed,
+        pending_reason: None,
         read_only: false,
         budget: false,
     }

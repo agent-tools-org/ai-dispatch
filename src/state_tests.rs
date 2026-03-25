@@ -245,6 +245,7 @@ fn make_task(
         completed_at: Some(Local::now() - Duration::minutes(minutes_ago - 1)),
         verify: None,
         verify_status,
+        pending_reason: None,
         read_only: false,
         budget: false,
     }

@@ -24,7 +24,7 @@ fn make_task(id: &str, status: TaskStatus, verify_status: VerifyStatus) -> Task 
         log_path: None, output_path: None, tokens: None, prompt_tokens: None, duration_ms: None,
         model: None, cost_usd: None, exit_code: None,
         created_at: Local::now(),
-        completed_at: None, verify: None, verify_status, read_only: false, budget: false,
+        completed_at: None, verify: None, verify_status, pending_reason: None, read_only: false, budget: false,
     }
 }
 

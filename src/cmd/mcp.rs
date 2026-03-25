@@ -296,6 +296,7 @@ mod tests {
             completed_at: Some(Local::now()),
             verify: None,
             verify_status: VerifyStatus::Skipped,
+            pending_reason: None,
             read_only: false,
             budget: false,
         }

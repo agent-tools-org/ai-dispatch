@@ -37,11 +37,12 @@ fn stores_recent_question_as_awaiting_prompt_metadata() {
             exit_code: None,
         created_at: Local::now(),
         completed_at: None,
-        verify: None,
+            verify: None,
             verify_status: VerifyStatus::Skipped,
+            pending_reason: None,
         read_only: false,
-        budget: false,
-    };
+            budget: false,
+        };
     store.insert_task(&task).unwrap();
 
     let prompt = "115:    use super::board::render_board;";

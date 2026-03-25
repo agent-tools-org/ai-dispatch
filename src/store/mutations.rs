@@ -31,9 +31,10 @@ impl Store {
             "INSERT INTO tasks (id, agent, prompt, resolved_prompt, status, parent_task_id, workgroup_id,
              caller_kind, caller_session_id, agent_session_id, repo_path, worktree_path, worktree_branch,
              log_path, output_path, tokens, prompt_tokens, duration_ms, model, cost_usd, created_at,
-             completed_at, verify, verify_status, read_only, budget, custom_agent_name, category)
+             completed_at, verify, verify_status, read_only, budget, custom_agent_name, category,
+             pending_reason)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17,
-             ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28)",
+             ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28, ?29)",
             params![
                 task.id.as_str(),
                 agent_value,
@@ -63,6 +64,7 @@ impl Store {
                 task.budget,
                 task.custom_agent_name,
                 task.category,
+                task.pending_reason,
             ],
         )?;
         Ok(())
@@ -90,7 +92,7 @@ impl Store {
              parent_task_id=?6, workgroup_id=?7, caller_kind=?8, caller_session_id=?9,
              agent_session_id=?10, repo_path=?11, worktree_path=?12, worktree_branch=?13,
              log_path=?14, output_path=?15, model=?16, verify=?17, verify_status=?18,
-             read_only=?19, budget=?20, custom_agent_name=?21, category=?22
+             read_only=?19, budget=?20, custom_agent_name=?21, category=?22, pending_reason=?23
              WHERE id=?1",
             params![
                 task.id.as_str(), agent_value, task.prompt, task.resolved_prompt,
@@ -99,7 +101,7 @@ impl Store {
                 task.repo_path, task.worktree_path, task.worktree_branch,
                 task.log_path, task.output_path, task.model, task.verify,
                 task.verify_status.as_str(), task.read_only, task.budget,
-                task.custom_agent_name, task.category,
+                task.custom_agent_name, task.category, task.pending_reason,
             ],
         )?;
         Ok(())
@@ -154,6 +156,15 @@ impl Store {
             "UPDATE tasks SET status = 'failed' WHERE id = ?1
              AND status IN ('running', 'waiting')",
             params![id],
+        )?;
+        Ok(rows > 0)
+    }
+
+    pub fn fail_pending_with_reason(&self, id: &str, pending_reason: PendingReason) -> Result<bool> {
+        let rows = self.db().execute(
+            "UPDATE tasks SET status = 'failed', pending_reason = ?2
+             WHERE id = ?1 AND status = 'pending'",
+            params![id, pending_reason.as_str()],
         )?;
         Ok(rows > 0)
     }

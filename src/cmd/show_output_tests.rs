@@ -39,6 +39,7 @@ fn test_task(id: &str) -> Task {
         completed_at: None,
         verify: None,
         verify_status: VerifyStatus::Skipped,
+        pending_reason: None,
         read_only: false,
         budget: false,
     }

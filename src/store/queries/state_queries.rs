@@ -21,7 +21,7 @@ impl Store {
             "SELECT id, agent, prompt, resolved_prompt, status, parent_task_id, workgroup_id,
              caller_kind, caller_session_id, agent_session_id, repo_path, worktree_path, worktree_branch,
              log_path, output_path, tokens, prompt_tokens, duration_ms, model, cost_usd, created_at,
-             completed_at, verify, read_only, budget, custom_agent_name, verify_status, category
+             completed_at, verify, read_only, budget, custom_agent_name, verify_status, exit_code, category, pending_reason
              FROM tasks
              WHERE repo_path = ?1
              ORDER BY created_at DESC

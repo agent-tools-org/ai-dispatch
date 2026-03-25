@@ -327,6 +327,7 @@ pub async fn run(store: Arc<Store>, mut args: RunArgs) -> Result<TaskId> {
         completed_at: None,
         verify: args.verify.clone(),
         verify_status: VerifyStatus::Skipped,
+        pending_reason: None,
         read_only: args.read_only,
         budget: args.budget,
     };

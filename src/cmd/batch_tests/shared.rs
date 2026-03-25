@@ -87,6 +87,7 @@ pub(super) fn make_stored_task(id: &str, agent: AgentKind, status: TaskStatus) -
         completed_at: None,
         verify: None,
         verify_status: VerifyStatus::Skipped,
+        pending_reason: None,
         read_only: false,
         budget: false,
     }

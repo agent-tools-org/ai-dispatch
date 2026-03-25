@@ -32,7 +32,8 @@ const CREATE_TABLES_SQL: &str = "CREATE TABLE IF NOT EXISTS tasks (
     completed_at TEXT,
     completion_summary TEXT,
     peer_review TEXT,
-    category TEXT
+    category TEXT,
+    pending_reason TEXT
 );
 CREATE TABLE IF NOT EXISTS workgroups (
     id TEXT PRIMARY KEY,
@@ -153,6 +154,7 @@ pub(super) fn migrate(store: &Store) -> Result<()> {
     let _ = conn.execute_batch("ALTER TABLE tasks ADD COLUMN completion_summary TEXT;");
     let _ = conn.execute_batch("ALTER TABLE tasks ADD COLUMN peer_review TEXT;");
     let _ = conn.execute_batch("ALTER TABLE tasks ADD COLUMN category TEXT;");
+    let _ = conn.execute_batch("ALTER TABLE tasks ADD COLUMN pending_reason TEXT;");
     let _ = conn.execute_batch(
         "ALTER TABLE tasks ADD COLUMN verify_status TEXT NOT NULL DEFAULT 'skipped';",
     );
@@ -205,6 +207,7 @@ pub(super) fn row_to_task(row: &Row) -> rusqlite::Result<Result<Task>> {
             .get::<_, Option<String>>(26)?
             .and_then(|s| VerifyStatus::parse_str(&s))
             .unwrap_or(VerifyStatus::Skipped),
+        pending_reason: row.get(29).ok().flatten(),
         read_only: row.get(23)?,
         budget: row.get(24)?,
     }))

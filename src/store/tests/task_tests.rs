@@ -15,6 +15,7 @@ fn insert_and_get_task() {
     assert_eq!(loaded.id, task.id);
     assert_eq!(loaded.agent, AgentKind::Codex);
     assert_eq!(loaded.status, TaskStatus::Running);
+    assert_eq!(loaded.pending_reason, None);
 }
 
 #[test]
@@ -78,6 +79,7 @@ fn migrate_adds_repo_path_column() {
     assert!(columns.contains(&"read_only".to_string()));
     assert!(columns.contains(&"budget".to_string()));
     assert!(columns.contains(&"category".to_string()));
+    assert!(columns.contains(&"pending_reason".to_string()));
 }
 
 #[test]
@@ -129,6 +131,22 @@ fn update_output_path_sets_field() {
     store.update_output_path("t-0005", "/tmp/output.md").unwrap();
     let loaded = store.get_task("t-0005").unwrap().unwrap();
     assert_eq!(loaded.output_path.as_deref(), Some("/tmp/output.md"));
+}
+
+#[test]
+fn fail_pending_with_reason_persists_reason() {
+    let store = Store::open_memory().unwrap();
+    let task = make_task("t-0006", AgentKind::Codex, TaskStatus::Pending);
+    store.insert_task(&task).unwrap();
+
+    let changed = store
+        .fail_pending_with_reason("t-0006", PendingReason::RateLimited)
+        .unwrap();
+
+    assert!(changed);
+    let loaded = store.get_task("t-0006").unwrap().unwrap();
+    assert_eq!(loaded.status, TaskStatus::Failed);
+    assert_eq!(loaded.pending_reason.as_deref(), Some("rate_limited"));
 }
 
 #[test]

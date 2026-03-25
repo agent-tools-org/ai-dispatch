@@ -1,13 +1,19 @@
-// CLI handler for `aid finding` — post and list workgroup findings.
-// Exports: add, list.
-// Deps: store::Store.
+// CLI handler for `aid finding` — post, list, get, and review workgroup findings.
+// Exports: add, list, get, update.
+// Deps: store::Store, cmd::finding_render, serde_json.
 
-use anyhow::Result;
-use chrono::{DateTime, Local};
-use serde_json;
+use anyhow::{Result, anyhow, bail};
 
-use crate::types::Finding;
+#[path = "finding_render.rs"]
+mod finding_render;
+
 use crate::store::Store;
+use finding_render::{
+    render_finding_human_output, render_finding_json_output, render_findings_human_output,
+    render_findings_json_output,
+};
+
+const FINDING_VERDICTS: [&str; 4] = ["CONFIRMED", "REJECTED", "DUPLICATE", "INVALID"];
 
 #[allow(clippy::too_many_arguments)]
 pub fn add(
@@ -22,9 +28,7 @@ pub fn add(
     category: Option<&str>,
     confidence: Option<&str>,
 ) -> Result<()> {
-    store
-        .get_workgroup(group_id)?
-        .ok_or_else(|| anyhow::anyhow!("Workgroup '{group_id}' not found"))?;
+    ensure_workgroup_exists(store, group_id)?;
     store.insert_finding(
         group_id,
         content,
@@ -40,234 +44,118 @@ pub fn add(
     Ok(())
 }
 
-pub fn list(store: &Store, group_id: &str, json: bool, count: bool) -> Result<()> {
-    let findings = store.list_findings(group_id)?;
+pub fn list(
+    store: &Store,
+    group_id: &str,
+    json: bool,
+    count: bool,
+    severity: Option<&str>,
+    verdict: Option<&str>,
+) -> Result<()> {
+    let verdict = normalize_optional_verdict(verdict)?;
+    let findings = store.list_findings_filtered(group_id, severity, verdict.as_deref())?;
     if count {
         println!("{}", findings.len());
         return Ok(());
     }
     if json {
-        println!("{}", render_json_output(group_id, &findings)?);
+        println!("{}", render_findings_json_output(group_id, &findings)?);
         return Ok(());
     }
-    println!("{}", render_human_output(group_id, &findings));
+    println!("{}", render_findings_human_output(group_id, &findings));
     Ok(())
 }
 
-fn render_json_output(group_id: &str, findings: &[Finding]) -> Result<String> {
-    let json_findings: Vec<serde_json::Value> = findings
-        .iter()
-        .map(|finding| {
-            serde_json::json!({
-                "content": finding.content,
-                "source_task_id": finding.source_task_id,
-                "group_id": group_id,
-                "severity": finding.severity,
-                "title": finding.title,
-                "file": finding.file,
-                "lines": finding.lines,
-                "category": finding.category,
-                "confidence": finding.confidence,
-                "created_at": finding.created_at.to_rfc3339(),
-            })
-        })
-        .collect();
-    Ok(serde_json::to_string_pretty(&json_findings)?)
-}
-
-fn render_human_output(group_id: &str, findings: &[Finding]) -> String {
-    if findings.is_empty() {
-        return format!("No findings for {group_id}.");
-    }
-
-    let mut output = format!("Findings for {group_id}:");
-    for finding in findings {
-        let source = finding.source_task_id.as_deref().unwrap_or("manual");
-        let age = format_age(&finding.created_at);
-        let severity_tag = finding
-            .severity
-            .as_deref()
-            .map(|s| format!(" [{}]", s))
-            .unwrap_or_default();
-        let title_part = finding
-            .title
-            .as_deref()
-            .map(|t| format!(" {} ", t))
-            .unwrap_or_default();
-        let category_part = finding
-            .category
-            .as_deref()
-            .map(|c| format!(" ({})", c))
-            .unwrap_or_default();
-        output.push_str(&format!(
-            "\n  [{}] ({}){}{}{}",
-            source, age, severity_tag, title_part, category_part
-        ));
-        output.push_str(&format!("\n    {}", finding.content));
-        if let (Some(f), Some(l)) = (finding.file.as_deref(), finding.lines.as_deref()) {
-            output.push_str(&format!("\n    File: {}:{}", f, l));
-        } else if let Some(f) = finding.file.as_deref() {
-            output.push_str(&format!("\n    File: {}", f));
-        }
-    }
-    output
-}
-
-fn format_age(created_at: &DateTime<Local>) -> String {
-    let duration = Local::now().signed_duration_since(*created_at);
-    let mins = duration.num_minutes();
-    if mins <= 0 {
-        format!("{}s", duration.num_seconds().max(0))
-    } else if mins < 60 {
-        format!("{}m", mins)
-    } else if mins < 24 * 60 {
-        format!("{}h", duration.num_hours())
+pub fn get(store: &Store, group_id: &str, finding_id: i64, json: bool) -> Result<()> {
+    ensure_workgroup_exists(store, group_id)?;
+    let finding = store
+        .get_finding(group_id, finding_id)?
+        .ok_or_else(|| anyhow!("Finding '{finding_id}' not found in workgroup '{group_id}'"))?;
+    if json {
+        println!("{}", render_finding_json_output(group_id, &finding)?);
     } else {
-        format!("{}d", duration.num_days())
+        println!("{}", render_finding_human_output(group_id, &finding));
     }
+    Ok(())
+}
+
+pub fn update(
+    store: &Store,
+    group_id: &str,
+    finding_id: i64,
+    verdict: Option<&str>,
+    score: Option<&str>,
+    note: Option<&str>,
+) -> Result<()> {
+    ensure_workgroup_exists(store, group_id)?;
+    let verdict = normalize_optional_verdict(verdict)?;
+    let score = normalize_score_json(score)?;
+    store.update_finding(
+        group_id,
+        finding_id,
+        verdict.as_deref(),
+        score.as_deref(),
+        note,
+    )?;
+    println!("Finding {finding_id} updated in {group_id}");
+    Ok(())
+}
+
+fn ensure_workgroup_exists(store: &Store, group_id: &str) -> Result<()> {
+    store
+        .get_workgroup(group_id)?
+        .ok_or_else(|| anyhow!("Workgroup '{group_id}' not found"))?;
+    Ok(())
+}
+
+fn normalize_optional_verdict(value: Option<&str>) -> Result<Option<String>> {
+    value.map(normalize_verdict).transpose()
+}
+
+fn normalize_verdict(value: &str) -> Result<String> {
+    let normalized = value.trim().to_ascii_uppercase();
+    if FINDING_VERDICTS.contains(&normalized.as_str()) {
+        Ok(normalized)
+    } else {
+        bail!(
+            "Invalid verdict '{value}'. Expected one of: {}",
+            FINDING_VERDICTS.join(", ")
+        )
+    }
+}
+
+fn normalize_score_json(value: Option<&str>) -> Result<Option<String>> {
+    value.map(parse_score_json).transpose()
+}
+
+fn parse_score_json(value: &str) -> Result<String> {
+    serde_json::from_str::<serde_json::Value>(value)
+        .map(|parsed| parsed.to_string())
+        .map_err(|err| anyhow!("Invalid score JSON: {err}"))
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{render_human_output, render_json_output};
-    use crate::store::Store;
-    use serde_json::Value;
+    use super::{normalize_optional_verdict, parse_score_json};
 
-    fn test_store() -> Store {
-        let store = Store::open_memory().unwrap();
-        store
-            .create_workgroup("dispatch", "Shared repo rules.", None, Some("wg-abc"))
-            .unwrap();
-        store
+    #[test]
+    fn normalize_optional_verdict_accepts_known_values() {
+        let verdict = normalize_optional_verdict(Some("confirmed")).unwrap();
+
+        assert_eq!(verdict.as_deref(), Some("CONFIRMED"));
     }
 
     #[test]
-    fn human_output_for_empty_findings_is_unchanged() {
-        let output = render_human_output("wg-abc", &[]);
+    fn normalize_optional_verdict_rejects_unknown_values() {
+        let error = normalize_optional_verdict(Some("maybe")).unwrap_err();
 
-        assert_eq!(output, "No findings for wg-abc.");
+        assert!(error.to_string().contains("Invalid verdict"));
     }
 
     #[test]
-    fn json_output_is_valid_json() {
-        let store = test_store();
-        store
-            .insert_finding(
-                "wg-abc",
-                "first finding",
-                Some("t-1234"),
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-            )
-            .unwrap();
+    fn parse_score_json_normalizes_valid_payloads() {
+        let score = parse_score_json(r#"{ "confidence": "high", "impact": 9 }"#).unwrap();
 
-        let findings = store.list_findings("wg-abc").unwrap();
-        let output = render_json_output("wg-abc", &findings).unwrap();
-        let parsed: Value = serde_json::from_str(&output).unwrap();
-
-        assert_eq!(parsed.as_array().unwrap().len(), 1);
-        assert_eq!(parsed[0]["content"], "first finding");
-        assert_eq!(parsed[0]["source_task_id"], "t-1234");
-        assert_eq!(parsed[0]["group_id"], "wg-abc");
-        assert!(parsed[0]["created_at"].as_str().is_some());
-    }
-
-    #[test]
-    fn human_output_lists_findings_in_existing_format() {
-        let store = test_store();
-        store
-            .insert_finding("wg-abc", "first finding", None, None, None, None, None, None, None)
-            .unwrap();
-
-        let findings = store.list_findings("wg-abc").unwrap();
-        let output = render_human_output("wg-abc", &findings);
-
-        assert!(output.starts_with("Findings for wg-abc:\n  [manual] ("));
-        assert!(output.contains("first finding"));
-    }
-
-    #[test]
-    fn structured_finding_renders_severity_and_title() {
-        let store = test_store();
-        store
-            .insert_finding(
-                "wg-abc",
-                "swap() accepts amountOutMin=0",
-                Some("t-1234"),
-                Some("HIGH"),
-                Some("Missing slippage protection"),
-                Some("src/Router.sol"),
-                Some("145-160"),
-                Some("MEV"),
-                Some("high"),
-            )
-            .unwrap();
-
-        let findings = store.list_findings("wg-abc").unwrap();
-        let output = render_human_output("wg-abc", &findings);
-
-        assert!(output.contains("[HIGH]"));
-        assert!(output.contains("Missing slippage protection"));
-        assert!(output.contains("(MEV)"));
-        assert!(output.contains("File: src/Router.sol:145-160"));
-    }
-
-    #[test]
-    fn json_output_includes_structured_fields() {
-        let store = test_store();
-        store
-            .insert_finding(
-                "wg-abc",
-                "body",
-                Some("t-1"),
-                Some("MEDIUM"),
-                Some("A title"),
-                Some("foo.rs"),
-                Some("10-20"),
-                Some("reentrancy"),
-                Some("low"),
-            )
-            .unwrap();
-
-        let findings = store.list_findings("wg-abc").unwrap();
-        let output = render_json_output("wg-abc", &findings).unwrap();
-        let parsed: Value = serde_json::from_str(&output).unwrap();
-
-        let obj = &parsed.as_array().unwrap()[0];
-        assert_eq!(obj["severity"], "MEDIUM");
-        assert_eq!(obj["title"], "A title");
-        assert_eq!(obj["file"], "foo.rs");
-        assert_eq!(obj["lines"], "10-20");
-        assert_eq!(obj["category"], "reentrancy");
-        assert_eq!(obj["confidence"], "low");
-    }
-
-    #[test]
-    fn count_output_matches_number_of_findings() {
-        let store = test_store();
-        store
-            .insert_finding("wg-abc", "first finding", None, None, None, None, None, None, None)
-            .unwrap();
-        store
-            .insert_finding(
-                "wg-abc",
-                "second finding",
-                Some("t-2"),
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-            )
-            .unwrap();
-
-        let findings = store.list_findings("wg-abc").unwrap();
-
-        assert_eq!(findings.len(), 2);
+        assert_eq!(score, r#"{"confidence":"high","impact":9}"#);
     }
 }

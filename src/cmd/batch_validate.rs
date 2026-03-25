@@ -164,12 +164,14 @@ fn validate_task_agents(tasks: &[batch::BatchTask]) -> Result<()> {
             task_label(task, task_idx)
         );
         if let Some(ref fallback) = task.fallback {
-            anyhow::ensure!(
-                batch::is_valid_agent(fallback),
-                "Unknown fallback agent '{}' for task {}",
-                fallback,
-                task_label(task, task_idx)
-            );
+            for agent in fallback.split(',').map(str::trim).filter(|s| !s.is_empty()) {
+                anyhow::ensure!(
+                    batch::is_valid_agent(agent),
+                    "Unknown fallback agent '{}' for task {}",
+                    agent,
+                    task_label(task, task_idx)
+                );
+            }
         }
     }
     Ok(())

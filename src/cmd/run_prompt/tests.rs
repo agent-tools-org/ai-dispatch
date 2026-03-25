@@ -144,6 +144,41 @@ fn build_prompt_bundle_omits_output_instruction_when_output_is_not_set() {
 }
 
 #[test]
+fn build_prompt_bundle_includes_git_staging_guard_for_writable_tasks() {
+    let store = Store::open_memory().unwrap();
+    let bundle = build_prompt_bundle(
+        &store,
+        &build_prompt_args(None),
+        &AgentKind::Codex,
+        None,
+        &[],
+        "task-1",
+    )
+    .unwrap();
+
+    assert!(bundle.effective_prompt.contains(crate::templates::git_staging_guard().trim()));
+}
+
+#[test]
+fn build_prompt_bundle_omits_git_staging_guard_for_read_only_tasks() {
+    let store = Store::open_memory().unwrap();
+    let bundle = build_prompt_bundle(
+        &store,
+        &RunArgs {
+            read_only: true,
+            ..build_prompt_args(None)
+        },
+        &AgentKind::Codex,
+        None,
+        &[],
+        "task-1",
+    )
+    .unwrap();
+
+    assert!(!bundle.effective_prompt.contains("git add <newfile>"));
+}
+
+#[test]
 fn build_prompt_bundle_includes_shared_dir_instruction_when_env_is_set() {
     let shared_dir = tempfile::tempdir().unwrap();
     let _guard = EnvVarGuard::set("AID_SHARED_DIR", shared_dir.path());

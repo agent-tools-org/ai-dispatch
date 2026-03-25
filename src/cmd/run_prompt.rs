@@ -114,6 +114,9 @@ pub(super) fn build_prompt_bundle(store: &Store, args: &RunArgs, agent_kind: &Ag
     let (edit_guard, milestone_instr) = templates::shared_system_fragments(&prompt);
     if let Some(guard) = edit_guard { effective_prompt = format!("{guard}{effective_prompt}"); }
     effective_prompt.push_str(milestone_instr);
+    if !args.read_only {
+        effective_prompt.push_str(templates::git_staging_guard());
+    }
 
     if let Some(parent_id) = args.parent_task_id.as_deref()
         && let Some(parent) = store.get_task(parent_id)?

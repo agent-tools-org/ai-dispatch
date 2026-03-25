@@ -153,9 +153,7 @@ pub(super) fn group(store: Arc<store::Store>, action: GroupAction) -> Result<()>
         GroupAction::Delete { group_id } => cmd::group::delete(&store, &group_id),
         GroupAction::Summary { group_id } => cmd::summary_cli::run(&store, &group_id),
         GroupAction::Finding { action } => group_finding(store, action),
-        GroupAction::Broadcast { group_id, message } => {
-            cmd::broadcast::run(&store, &group_id, &message)
-        }
+        GroupAction::Broadcast { group_id, message } => cmd::broadcast::run(&store, &group_id, &message),
     }
 }
 
@@ -165,7 +163,9 @@ fn group_finding(store: Arc<store::Store>, action: GroupFindingAction) -> Result
             let content = resolve_finding_content(content, stdin, file)?;
             cmd::finding::add(&store, &group, &content, task.as_deref(), severity.as_deref(), title.as_deref(), finding_file.as_deref(), lines.as_deref(), category.as_deref(), confidence.as_deref())
         }
-        GroupFindingAction::List { group, json, count } => cmd::finding::list(&store, &group, json, count),
+        GroupFindingAction::List { group, json, count, severity, verdict } => cmd::finding::list(&store, &group, json, count, severity.as_deref(), verdict.as_deref()),
+        GroupFindingAction::Get { group, finding_id, json } => cmd::finding::get(&store, &group, finding_id, json),
+        GroupFindingAction::Update { group, finding_id, verdict, score, note } => cmd::finding::update(&store, &group, finding_id, verdict.as_deref(), score.as_deref(), note.as_deref()),
     }
 }
 
@@ -246,7 +246,9 @@ pub(super) fn finding(store: Arc<store::Store>, action: FindingCommands) -> Resu
             let content = resolve_finding_content(content, stdin, file)?;
             cmd::finding::add(&store, &group, &content, task.as_deref(), severity.as_deref(), title.as_deref(), finding_file.as_deref(), lines.as_deref(), category.as_deref(), confidence.as_deref())
         }
-        FindingCommands::List { group, json, count } => cmd::finding::list(&store, &group, json, count),
+        FindingCommands::List { group, json, count, severity, verdict } => cmd::finding::list(&store, &group, json, count, severity.as_deref(), verdict.as_deref()),
+        FindingCommands::Get { group, finding_id, json } => cmd::finding::get(&store, &group, finding_id, json),
+        FindingCommands::Update { group, finding_id, verdict, score, note } => cmd::finding::update(&store, &group, finding_id, verdict.as_deref(), score.as_deref(), note.as_deref()),
     }
 }
 
@@ -290,8 +292,6 @@ pub(super) async fn experiment(store: Arc<store::Store>, subcommand: ExperimentC
             };
             cmd::experiment::run_experiment(store, config).await
         }
-        cli::ExperimentCommands::Status { dir } => {
-            cmd::experiment_status::run_status(dir.as_deref())
-        }
+        cli::ExperimentCommands::Status { dir } => cmd::experiment_status::run_status(dir.as_deref()),
     }
 }

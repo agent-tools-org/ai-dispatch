@@ -461,7 +461,11 @@ pub struct Finding {
     pub lines: Option<String>,
     pub category: Option<String>,
     pub confidence: Option<String>,
+    pub verdict: Option<String>,
+    pub score: Option<String>,
+    pub note: Option<String>,
     pub created_at: DateTime<Local>,
+    pub updated_at: Option<DateTime<Local>>,
 }
 
 #[derive(Debug, Clone, Serialize)]

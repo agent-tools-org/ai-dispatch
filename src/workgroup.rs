@@ -190,7 +190,11 @@ mod tests {
             lines: None,
             category: None,
             confidence: None,
+            verdict: None,
+            score: None,
+            note: None,
             created_at: Local::now(),
+            updated_at: None,
         }];
         let prompt = compose_prompt("investigate", None, None, &[], &findings);
         assert!(prompt.contains("[Shared Findings]"));
@@ -211,7 +215,11 @@ mod tests {
             lines: None,
             category: None,
             confidence: None,
+            verdict: None,
+            score: None,
+            note: None,
             created_at: Local::now(),
+            updated_at: None,
         }];
 
         let prompt = compose_prompt("investigate", None, None, &[], &findings);
@@ -243,7 +251,11 @@ mod tests {
             lines: None,
             category: None,
             confidence: None,
+            verdict: None,
+            score: None,
+            note: None,
             created_at: Local::now(),
+            updated_at: None,
         }];
 
         let prompt = compose_prompt("investigate", None, None, &[], &findings);

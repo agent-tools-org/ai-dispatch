@@ -48,24 +48,26 @@ pub fn run(
     let truncation = apply_limit(&mut tasks, limit, running, today, mine, group);
 
     // Detect repeated calls with no changes — warn or reject rapid polling
+    // Format: "timestamp\nfingerprint\ncount"
     let fingerprint = task_fingerprint(&tasks);
     let marker_path = crate::paths::aid_dir().join("board-last.txt");
+    let mut repeat_count: u32 = 0;
     if let Ok(prev) = std::fs::read_to_string(&marker_path) {
-        // Format: "timestamp\nfingerprint"
-        let mut lines = prev.splitn(2, '\n');
-        let prev_ts: i64 = lines.next().and_then(|s| s.parse().ok()).unwrap_or(0);
-        let prev_fp = lines.next().unwrap_or("");
+        let parts: Vec<&str> = prev.splitn(3, '\n').collect();
+        let prev_fp = parts.get(1).copied().unwrap_or("");
+        let prev_count: u32 = parts.get(2).and_then(|s| s.parse().ok()).unwrap_or(0);
         if prev_fp == fingerprint {
-            let now_ts = Local::now().timestamp();
-            if now_ts - prev_ts < 5 {
-                // Rapid repeated call with no changes — warning but still show board
-                aid_warn!("[aid] WARNING: No changes detected. Consider using `aid watch --quiet --group <wg-id>` instead.");
-            } else {
-                aid_hint!("[aid] No status changes since last check. Use `aid watch --quiet` for automatic notification instead of polling.");
+            repeat_count = prev_count + 1;
+            if repeat_count >= 3 {
+                aid_warn!("[aid] No changes after {} checks. Use `aid watch --quiet` instead of polling. Exiting.", repeat_count);
+                let content = format!("{}\n{}\n{}", Local::now().timestamp(), fingerprint, repeat_count);
+                let _ = std::fs::write(&marker_path, &content);
+                std::process::exit(1);
             }
+            aid_hint!("[aid] No status changes since last check ({repeat_count}x). Use `aid watch --quiet` for automatic notification instead of polling.");
         }
     }
-    let content = format!("{}\n{}", Local::now().timestamp(), fingerprint);
+    let content = format!("{}\n{}\n{}", Local::now().timestamp(), fingerprint, repeat_count);
     let _ = std::fs::write(&marker_path, &content);
 
     if json {

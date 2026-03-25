@@ -38,6 +38,26 @@ pub(crate) async fn post_run_lifecycle(
     if args.worktree.is_some() {
         run_agent::check_worktree_escape(repo_path.map(String::as_str));
     }
+    // Rescue untracked files before verify — ensures verify tests committed state
+    if let Some(dir) = effective_dir {
+        if !args.read_only {
+            match crate::commit::rescue_untracked_files(dir.as_str(), task_id.as_str()) {
+                Ok(rescued) if !rescued.is_empty() => {
+                    let files_list = rescued.join(", ");
+                    aid_warn!("[aid] Rescued {} untracked file(s) into commit: {}", rescued.len(), files_list);
+                    let _ = store.insert_event(&TaskEvent {
+                        task_id: task_id.clone(),
+                        timestamp: chrono::Local::now(),
+                        event_kind: EventKind::Milestone,
+                        detail: format!("Rescued untracked files: {files_list}"),
+                        metadata: None,
+                    });
+                }
+                Err(e) => aid_warn!("[aid] Untracked file rescue failed: {e}"),
+                _ => {}
+            }
+        }
+    }
     maybe_verify(
         store,
         task_id,

@@ -208,18 +208,7 @@ async fn run_task_inner(store: &Arc<Store>, spec: &BackgroundRunSpec) -> Result<
         container: spec.container.clone(),
         ..Default::default()
     };
-    let pre_verify_status = store.get_task(&spec.task_id)?.map(|task| task.status).unwrap_or(TaskStatus::Done);
-    crate::cmd::run::maybe_verify(store, &TaskId(spec.task_id.clone()), spec.verify.as_deref(), spec.dir.as_deref(), container_name.as_deref());
-    if let Some(task) = store.get_task(&spec.task_id)? {
-        crate::cmd::run::maybe_cleanup_fast_fail(store, &TaskId(spec.task_id.clone()), &task);
-    }
-    if crate::cmd::run::maybe_judge_retry(store, &retry_args, &TaskId(spec.task_id.clone()))
-        .await?
-        .is_some()
-    {
-        return Ok(());
-    }
-    notify_task_completion(store, &spec.task_id)?;
+    // Auto-commit + rescue untracked files BEFORE verify — ensures verify tests committed state
     let is_read_only = store.get_task(&spec.task_id)?.map(|t| t.read_only).unwrap_or(false);
     if !is_read_only
         && let Some(worktree_dir) = spec.dir.as_deref()
@@ -235,6 +224,30 @@ async fn run_task_inner(store: &Arc<Store>, spec: &BackgroundRunSpec) -> Result<
             metadata: None,
         });
     }
+    if !is_read_only {
+        if let Some(worktree_dir) = spec.dir.as_deref() {
+            match crate::commit::rescue_untracked_files(worktree_dir, &spec.task_id) {
+                Ok(rescued) if !rescued.is_empty() => {
+                    let files_list = rescued.join(", ");
+                    aid_warn!("[aid] Rescued {} untracked file(s) into commit: {}", rescued.len(), files_list);
+                }
+                Err(e) => aid_warn!("[aid] Untracked file rescue failed: {e}"),
+                _ => {}
+            }
+        }
+    }
+    let pre_verify_status = store.get_task(&spec.task_id)?.map(|task| task.status).unwrap_or(TaskStatus::Done);
+    crate::cmd::run::maybe_verify(store, &TaskId(spec.task_id.clone()), spec.verify.as_deref(), spec.dir.as_deref(), container_name.as_deref());
+    if let Some(task) = store.get_task(&spec.task_id)? {
+        crate::cmd::run::maybe_cleanup_fast_fail(store, &TaskId(spec.task_id.clone()), &task);
+    }
+    if crate::cmd::run::maybe_judge_retry(store, &retry_args, &TaskId(spec.task_id.clone()))
+        .await?
+        .is_some()
+    {
+        return Ok(());
+    }
+    notify_task_completion(store, &spec.task_id)?;
     if crate::cmd::run::maybe_auto_retry_after_verify_failure(
         store,
         &TaskId(spec.task_id.clone()),

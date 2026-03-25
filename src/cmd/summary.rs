@@ -145,6 +145,7 @@ mod tests {
             exit_code: Some(0),
             created_at: Local::now(), completed_at: None,
             verify: None, verify_status: VerifyStatus::Pending,
+            pending_reason: None,
             read_only: false,
             budget: false,
         }

@@ -59,6 +59,7 @@ fn make_task(id: &str, agent: AgentKind, status: TaskStatus) -> Task {
         completed_at: None,
         verify: None,
         verify_status: VerifyStatus::Skipped,
+        pending_reason: None,
         read_only: false,
         budget: false,
     }

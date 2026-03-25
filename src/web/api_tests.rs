@@ -46,6 +46,7 @@ fn make_task(id: &str) -> Task {
         completed_at: Some(Local::now()),
         verify: Some("cargo check".to_string()),
         verify_status: VerifyStatus::Passed,
+        pending_reason: None,
         read_only: false,
         budget: false,
     }

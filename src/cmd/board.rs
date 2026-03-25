@@ -71,23 +71,7 @@ pub fn run(
     if json {
         let payload: Vec<serde_json::Value> = tasks
             .iter()
-            .map(|t| {
-                serde_json::json!({
-                    "id": t.id.as_str(),
-                    "agent": t.agent_display_name(),
-                    "status": t.status.as_str(),
-                    "prompt": t.prompt,
-                    "model": t.model,
-                    "tokens": t.tokens,
-                    "duration_ms": t.duration_ms,
-                    "cost_usd": t.cost_usd,
-                    "workgroup_id": t.workgroup_id,
-                    "worktree_branch": t.worktree_branch,
-                    "verify_status": t.verify_status.as_str(),
-                    "created_at": t.created_at.to_rfc3339(),
-                    "completed_at": t.completed_at.map(|dt| dt.to_rfc3339()),
-                })
-            })
+            .map(board_json_row)
             .collect();
         println!("{}", serde_json::to_string(&payload)?);
         return Ok(());
@@ -168,9 +152,28 @@ fn long_running_warning(tasks: &[crate::types::Task], now: chrono::DateTime<Loca
     ))
 }
 
+fn board_json_row(task: &Task) -> serde_json::Value {
+    serde_json::json!({
+        "id": task.id.as_str(),
+        "agent": task.agent_display_name(),
+        "status": task.status.as_str(),
+        "prompt": task.prompt,
+        "model": task.model,
+        "tokens": task.tokens,
+        "duration_ms": task.duration_ms,
+        "cost_usd": task.cost_usd,
+        "workgroup_id": task.workgroup_id,
+        "worktree_branch": task.worktree_branch,
+        "verify_status": task.verify_status.as_str(),
+        "pending_reason": task.pending_reason,
+        "created_at": task.created_at.to_rfc3339(),
+        "completed_at": task.completed_at.map(|dt| dt.to_rfc3339()),
+    })
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{apply_limit, long_running_warning, truncation_notice_message, TruncationNotice};
+    use super::{apply_limit, board_json_row, long_running_warning, truncation_notice_message, TruncationNotice};
     use chrono::{Duration, Local};
 
     use crate::types::{AgentKind, Task, TaskId, TaskStatus, VerifyStatus};
@@ -208,6 +211,16 @@ mod tests {
         );
     }
 
+    #[test]
+    fn board_json_row_includes_pending_reason() {
+        let mut task = make_task("t-1004", TaskStatus::Failed, Local::now());
+        task.pending_reason = Some("worker_capacity".to_string());
+
+        let row = board_json_row(&task);
+
+        assert_eq!(row["pending_reason"], "worker_capacity");
+    }
+
     fn make_task(task_id: &str, status: TaskStatus, created_at: chrono::DateTime<Local>) -> Task {
         Task {
             id: TaskId(task_id.to_string()),
@@ -237,6 +250,7 @@ mod tests {
             completed_at: None,
             verify: None,
             verify_status: VerifyStatus::Skipped,
+            pending_reason: None,
             read_only: false,
             budget: false,
         }

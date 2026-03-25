@@ -101,6 +101,7 @@ fn make_task_with_worktree(id: &str, repo: &Path, wt: &Path, branch: &str) -> Ta
         completed_at: None,
         verify: None,
         verify_status: VerifyStatus::Skipped,
+        pending_reason: None,
         read_only: false,
         budget: false,
     }
@@ -482,6 +483,7 @@ fn merge_single_works_without_worktree_branch() {
         completed_at: None,
         verify: None,
         verify_status: VerifyStatus::Skipped,
+        pending_reason: None,
         read_only: false,
         budget: false,
     };

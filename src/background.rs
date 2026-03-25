@@ -22,7 +22,7 @@ use crate::paths;
 use crate::sanitize;
 use crate::store::Store;
 use crate::system_resources;
-use crate::types::{AgentKind, EventKind, TaskEvent, TaskFilter, TaskId, TaskStatus};
+use crate::types::{AgentKind, EventKind, PendingReason, Task, TaskEvent, TaskFilter, TaskId, TaskStatus};
 
 const ZOMBIE_FAILURE_DETAIL: &str = "Background worker died unexpectedly";
 const PENDING_TASK_TIMEOUT_SECS: i64 = 600;
@@ -427,27 +427,45 @@ fn cleanup_stale_pending_tasks(store: &Store) -> Result<Vec<String>> {
 
 fn fail_stale_pending_task(
     store: &Store,
-    task: &crate::types::Task,
+    task: &Task,
     now: chrono::DateTime<Local>,
     elapsed_secs: i64,
 ) -> Result<bool> {
     let task_id = task.id.as_str();
-    let rows = store.db().execute(
-        "UPDATE tasks SET status = 'failed' WHERE id = ?1 AND status = 'pending'",
-        rusqlite::params![task_id],
-    )?;
-    if rows == 0 {
+    let pending_reason = infer_pending_reason(store, task)?;
+    if !store.fail_pending_with_reason(task_id, pending_reason)? {
         return Ok(false);
     }
     store.insert_event(&TaskEvent {
         task_id: task.id.clone(),
         timestamp: now,
         event_kind: EventKind::Error,
-        detail: format!("Task timed out in pending state after {}s", elapsed_secs),
+        detail: format!(
+            "Task timed out in pending state after {}s (reason: {})",
+            elapsed_secs,
+            pending_reason.as_str()
+        ),
         metadata: None,
     })?;
     notify_task_completion(store, task_id)?;
     Ok(true)
+}
+
+fn infer_pending_reason(store: &Store, task: &Task) -> Result<PendingReason> {
+    if task.agent != AgentKind::Custom && crate::rate_limit::is_rate_limited(&task.agent) {
+        return Ok(PendingReason::RateLimited);
+    }
+    if store.list_tasks(TaskFilter::Running)?.len() >= MAX_WORKERS {
+        return Ok(PendingReason::WorkerCapacity);
+    }
+    let has_agent_pid = load_spec_if_exists(task.id.as_str())?
+        .and_then(|spec| spec.agent_pid)
+        .is_some();
+    if has_agent_pid {
+        Ok(PendingReason::AgentStarting)
+    } else {
+        Ok(PendingReason::Unknown)
+    }
 }
 
 fn record_failure(store: &Store, task_id: &str, stderr_detail: &str, event_detail: &str) -> Result<()> {

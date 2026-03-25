@@ -11,7 +11,7 @@ use super::{
 use crate::paths;
 use crate::store::Store;
 use crate::test_subprocess;
-use crate::types::{AgentKind, EventKind, Task, TaskId, TaskStatus, VerifyStatus};
+use crate::types::{AgentKind, EventKind, PendingReason, Task, TaskId, TaskStatus, VerifyStatus};
 
 #[test]
 fn serializes_spec_to_json() {
@@ -107,24 +107,114 @@ fn marks_running_background_tasks_failed_when_worker_is_missing() {
 
 #[test]
 fn marks_stale_pending_tasks_failed() {
+    let temp = tempfile::tempdir().unwrap();
+    let _aid_home = paths::AidHomeGuard::set(temp.path());
+    paths::ensure_dirs().unwrap();
+
     let store = Store::open_memory().unwrap();
-    let mut task = make_task("t-pend-old", TaskStatus::Pending);
+    let mut task = make_task("t-aa01", TaskStatus::Pending);
     task.created_at = Local::now() - Duration::seconds(601);
     store.insert_task(&task).unwrap();
 
     let cleaned = check_zombie_tasks_with(&store, |_| true).unwrap();
 
-    assert_eq!(cleaned, vec!["t-pend-old".to_string()]);
+    assert_eq!(cleaned, vec!["t-aa01".to_string()]);
     assert_eq!(
-        store.get_task("t-pend-old").unwrap().unwrap().status,
+        store.get_task("t-aa01").unwrap().unwrap().status,
         TaskStatus::Failed
     );
-    let events = store.get_events("t-pend-old").unwrap();
+    assert_eq!(
+        store.get_task("t-aa01").unwrap().unwrap().pending_reason.as_deref(),
+        Some(PendingReason::Unknown.as_str())
+    );
+    let events = store.get_events("t-aa01").unwrap();
     assert_eq!(events.len(), 1);
     assert_eq!(events[0].event_kind, EventKind::Error);
     assert!(events[0]
         .detail
-        .contains("Task timed out in pending state after"));
+        .contains("Task timed out in pending state after 601s (reason: unknown)"));
+}
+
+#[test]
+fn stale_pending_timeout_uses_rate_limited_reason() {
+    let temp = tempfile::tempdir().unwrap();
+    let _aid_home = paths::AidHomeGuard::set(temp.path());
+    paths::ensure_dirs().unwrap();
+
+    let store = Store::open_memory().unwrap();
+    let mut task = make_task("t-aa04", TaskStatus::Pending);
+    task.created_at = Local::now() - Duration::seconds(601);
+    store.insert_task(&task).unwrap();
+    crate::rate_limit::mark_rate_limited(&AgentKind::Codex, "rate limit exceeded");
+
+    let changed = fail_stale_pending_task(&store, &task, Local::now(), 601).unwrap();
+
+    assert!(changed);
+    let failed_task = store.get_task("t-aa04").unwrap().unwrap();
+    assert_eq!(
+        failed_task.pending_reason.as_deref(),
+        Some(PendingReason::RateLimited.as_str())
+    );
+    let events = store.get_events("t-aa04").unwrap();
+    assert_eq!(
+        events[0].detail,
+        "Task timed out in pending state after 601s (reason: rate_limited)"
+    );
+}
+
+#[test]
+fn stale_pending_timeout_uses_worker_capacity_reason() {
+    let temp = tempfile::tempdir().unwrap();
+    let _aid_home = paths::AidHomeGuard::set(temp.path());
+    paths::ensure_dirs().unwrap();
+
+    let store = Store::open_memory().unwrap();
+    let mut task = make_task("t-aa05", TaskStatus::Pending);
+    task.created_at = Local::now() - Duration::seconds(601);
+    store.insert_task(&task).unwrap();
+    for i in 0..super::MAX_WORKERS {
+        store
+            .insert_task(&make_task(&format!("t-cap{i:03}"), TaskStatus::Running))
+            .unwrap();
+    }
+
+    let changed = fail_stale_pending_task(&store, &task, Local::now(), 601).unwrap();
+
+    assert!(changed);
+    assert_eq!(
+        store.get_task("t-aa05").unwrap().unwrap().pending_reason.as_deref(),
+        Some(PendingReason::WorkerCapacity.as_str())
+    );
+}
+
+#[test]
+fn stale_pending_timeout_uses_agent_starting_reason_when_agent_pid_exists() {
+    let temp = tempfile::tempdir().unwrap();
+    let _aid_home = paths::AidHomeGuard::set(temp.path());
+    paths::ensure_dirs().unwrap();
+
+    let store = Store::open_memory().unwrap();
+    let mut task = make_task("t-a11e", TaskStatus::Pending);
+    task.created_at = Local::now() - Duration::seconds(601);
+    store.insert_task(&task).unwrap();
+    save_spec(&BackgroundRunSpec {
+        agent_pid: Some(12345),
+        ..make_spec("t-a11e")
+    })
+    .unwrap();
+
+    let changed = fail_stale_pending_task(&store, &task, Local::now(), 601).unwrap();
+
+    assert!(changed);
+    assert_eq!(
+        store
+            .get_task("t-a11e")
+            .unwrap()
+            .unwrap()
+            .pending_reason
+            .as_deref(),
+        Some(PendingReason::AgentStarting.as_str())
+    );
 }
 
 #[test]
@@ -157,7 +247,7 @@ fn check_zombie_tasks_auto_fails_old_running_tasks() {
 #[test]
 fn keeps_recent_pending_tasks_pending() {
     let store = Store::open_memory().unwrap();
-    let mut task = make_task("t-pend-new", TaskStatus::Pending);
+    let mut task = make_task("t-aa02", TaskStatus::Pending);
     task.created_at = Local::now() - Duration::seconds(599);
     store.insert_task(&task).unwrap();
 
@@ -165,30 +255,30 @@ fn keeps_recent_pending_tasks_pending() {
 
     assert!(cleaned.is_empty());
     assert_eq!(
-        store.get_task("t-pend-new").unwrap().unwrap().status,
+        store.get_task("t-aa02").unwrap().unwrap().status,
         TaskStatus::Pending
     );
-    assert!(store.get_events("t-pend-new").unwrap().is_empty());
+    assert!(store.get_events("t-aa02").unwrap().is_empty());
 }
 
 #[test]
 fn stale_pending_timeout_skips_tasks_that_already_moved_out_of_pending() {
     let store = Store::open_memory().unwrap();
-    let mut task = make_task("t-pend-race", TaskStatus::Pending);
+    let mut task = make_task("t-aa03", TaskStatus::Pending);
     task.created_at = Local::now() - Duration::seconds(601);
     store.insert_task(&task).unwrap();
     store
-        .update_task_status("t-pend-race", TaskStatus::Running)
+        .update_task_status("t-aa03", TaskStatus::Running)
         .unwrap();
 
     let changed = fail_stale_pending_task(&store, &task, Local::now(), 601).unwrap();
 
     assert!(!changed);
     assert_eq!(
-        store.get_task("t-pend-race").unwrap().unwrap().status,
+        store.get_task("t-aa03").unwrap().unwrap().status,
         TaskStatus::Running
     );
-    assert!(store.get_events("t-pend-race").unwrap().is_empty());
+    assert!(store.get_events("t-aa03").unwrap().is_empty());
 }
 
 #[test]
@@ -287,6 +377,7 @@ fn make_task(task_id: &str, status: TaskStatus) -> Task {
         completed_at: None,
         verify: None,
         verify_status: VerifyStatus::Skipped,
+        pending_reason: None,
         read_only: false,
         budget: false,
     }

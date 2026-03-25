@@ -428,6 +428,7 @@ fn build_prompt_bundle_skips_sibling_context_for_opencode() {
         completed_at: None,
         verify: None,
         verify_status: crate::types::VerifyStatus::Skipped,
+        pending_reason: None,
         read_only: false,
         budget: false,
     };
@@ -500,6 +501,7 @@ fn build_prompt_bundle_skips_sibling_context_for_kilo() {
         completed_at: None,
         verify: None,
         verify_status: crate::types::VerifyStatus::Skipped,
+        pending_reason: None,
         read_only: false,
         budget: false,
     };
@@ -572,6 +574,7 @@ fn build_prompt_bundle_includes_sibling_context_for_codex() {
         completed_at: None,
         verify: None,
         verify_status: crate::types::VerifyStatus::Skipped,
+        pending_reason: None,
         read_only: false,
         budget: false,
     };

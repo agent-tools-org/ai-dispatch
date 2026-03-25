@@ -3,7 +3,7 @@
 
 use chrono::{DateTime, Local};
 use rand::Rng;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::fmt;
 
 /// Short hex ID prefixed with "t-", e.g. "t-a3f1"
@@ -267,6 +267,42 @@ impl fmt::Display for TaskStatus {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PendingReason {
+    AgentStarting,
+    RateLimited,
+    WorkerCapacity,
+    Unknown,
+}
+
+impl PendingReason {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::AgentStarting => "agent_starting",
+            Self::RateLimited => "rate_limited",
+            Self::WorkerCapacity => "worker_capacity",
+            Self::Unknown => "unknown",
+        }
+    }
+
+    pub fn parse_str(s: &str) -> Option<Self> {
+        match s {
+            "agent_starting" => Some(Self::AgentStarting),
+            "rate_limited" => Some(Self::RateLimited),
+            "worker_capacity" => Some(Self::WorkerCapacity),
+            "unknown" => Some(Self::Unknown),
+            _ => None,
+        }
+    }
+}
+
+impl fmt::Display for PendingReason {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 pub enum VerifyStatus {
     Pending,
@@ -387,6 +423,7 @@ pub struct Task {
     pub completed_at: Option<DateTime<Local>>,
     pub verify: Option<String>,
     pub verify_status: VerifyStatus,
+    pub pending_reason: Option<String>,
     pub read_only: bool,
     pub budget: bool,
 }
@@ -568,6 +605,7 @@ mod tests {
             completed_at: None,
             verify: None,
             verify_status: VerifyStatus::Skipped,
+            pending_reason: None,
             read_only: false,
             budget: false,
         }
@@ -618,6 +656,19 @@ mod tests {
     fn all_builtin_matches_parse_str_coverage() {
         for kind in AgentKind::ALL_BUILTIN {
             assert_eq!(AgentKind::parse_str(kind.as_str()), Some(*kind));
+        }
+    }
+
+    #[test]
+    fn pending_reason_parse_str_roundtrip() {
+        for reason in [
+            PendingReason::AgentStarting,
+            PendingReason::RateLimited,
+            PendingReason::WorkerCapacity,
+            PendingReason::Unknown,
+        ] {
+            let text = reason.as_str();
+            assert_eq!(PendingReason::parse_str(text), Some(reason));
         }
     }
 

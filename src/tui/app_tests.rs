@@ -34,11 +34,12 @@ fn make_task(id: &str, group_id: Option<&str>) -> Task {
             exit_code: None,
             created_at: Local::now(),
         completed_at: None,
-        verify: None,
+            verify: None,
             verify_status: VerifyStatus::Skipped,
+            pending_reason: None,
         read_only: false,
-        budget: false,
-    }
+            budget: false,
+        }
 }
 
 #[test]

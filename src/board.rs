@@ -160,6 +160,9 @@ pub fn render_task_detail(task: &Task, events: &[TaskEvent], retry_chain: Option
         .map(format_duration)
         .unwrap_or_else(|| elapsed_since(task.created_at));
     out.push_str(&format!("Status: {}  Duration: {}\n", task.status.label(), duration));
+    if let Some(pending_reason) = task.pending_reason.as_deref() {
+        out.push_str(&format!("Pending reason: {pending_reason}\n"));
+    }
     if let Some(parent) = task.parent_task_id.as_deref() {
         out.push_str(&format!("Parent: {parent}\n"));
         if let Some(retry_chain) = retry_chain.as_deref()
@@ -309,6 +312,11 @@ fn short_repo(repo: Option<&str>) -> String {
 }
 
 fn task_status(task: &Task, milestone: Option<String>) -> String {
+    if task.status == TaskStatus::Failed
+        && let Some(pending_reason) = task.pending_reason.as_deref()
+    {
+        return truncate(&format!("{} — {}", task.status.label(), pending_reason), 30);
+    }
     if task.status == TaskStatus::Running
         && let Some(milestone) = milestone
     {
@@ -375,6 +383,7 @@ mod tests {
             completed_at: None,
             verify: None,
             verify_status: VerifyStatus::Skipped,
+            pending_reason: None,
             read_only: false,
             budget: false,
         }
@@ -451,6 +460,16 @@ mod tests {
     }
 
     #[test]
+    fn board_shows_pending_reason_for_failed_pending_timeout() {
+        let store = Store::open_memory().unwrap();
+        let mut task = make_task("t-0006", AgentKind::Codex, TaskStatus::Failed);
+        task.pending_reason = Some("rate_limited".to_string());
+
+        let output = render_board(&[task], &store).unwrap();
+        assert!(output.contains("FAIL — rate_limited"));
+    }
+
+    #[test]
     fn task_detail_rendering() {
         let task = make_task("t-0001", AgentKind::Codex, TaskStatus::Done);
         let events = vec![TaskEvent {
@@ -463,6 +482,15 @@ mod tests {
         let output = render_task_detail(&task, &events, None);
         assert!(output.contains("t-0001"));
         assert!(output.contains("cargo test"));
+    }
+
+    #[test]
+    fn task_detail_shows_pending_reason() {
+        let mut task = make_task("t-0007", AgentKind::Codex, TaskStatus::Failed);
+        task.pending_reason = Some("worker_capacity".to_string());
+
+        let output = render_task_detail(&task, &[], None);
+        assert!(output.contains("Pending reason: worker_capacity"));
     }
 
     #[test]

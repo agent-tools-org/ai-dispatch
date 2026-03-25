@@ -122,6 +122,7 @@ impl TaskResponse {
             completed_at: task.completed_at.map(|value| value.to_rfc3339()),
             verify: task.verify,
             verify_status: task.verify_status.as_str().to_string(),
+            pending_reason: None,
             read_only: task.read_only,
             budget: task.budget,
             latest_milestone,

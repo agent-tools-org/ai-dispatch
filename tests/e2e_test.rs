@@ -49,6 +49,30 @@ fn board_works_with_empty_db() {
 }
 
 #[test]
+fn board_rapid_calls_show_data_without_exit() {
+    let (mut cmd, _tmp) = aid_cmd();
+    let aid_home = _tmp.path().to_path_buf();
+
+    // First board call - creates marker file
+    let output1 = cmd.arg("board").output().unwrap();
+    assert!(output1.status.success());
+
+    // Second board call within 5s with same state (empty)
+    // Should show WARNING but NOT exit with code 1
+    let mut cmd2 = aid_cmd_in(&aid_home);
+    let output2 = cmd2.arg("board").output().unwrap();
+
+    // Must succeed - anti-polling is now a warning, not an error
+    assert!(
+        output2.status.success(),
+        "board should not exit on rapid calls"
+    );
+    let stdout = String::from_utf8_lossy(&output2.stdout);
+    // Board shows data even when called rapidly
+    assert!(stdout.contains("No tasks found") || stdout.contains("Tasks:"));
+}
+
+#[test]
 fn completions_prints_recent_lines() {
     let temp_dir = TempDir::new().unwrap();
     std::fs::write(

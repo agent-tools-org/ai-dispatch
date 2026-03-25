@@ -86,6 +86,7 @@ pub(crate) async fn run_agent_process_with_timeout(
         .unwrap_or(DEFAULT_FOREGROUND_TIMEOUT_MINS);
     let deadline = Duration::from_secs(timeout_mins * 60);
     let start = Instant::now();
+    let idle_timeout = crate::idle_timeout::idle_timeout_from_tokio_command(&cmd);
     #[cfg(unix)]
     cmd.process_group(0);
     let mut child = spawn_child_with_log(&mut cmd, log_path).context("Failed to spawn agent process")?;
@@ -103,6 +104,7 @@ pub(crate) async fn run_agent_process_with_timeout(
                 store,
                 log_path,
                 workgroup_id,
+                Some(idle_timeout),
                 max_task_cost,
             )
                 .await?

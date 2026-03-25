@@ -166,6 +166,7 @@ mod tests {
             judge: None,
             best_of: None,
             max_duration_mins: None,
+            idle_timeout: None,
             context: None,
             skills: None,
             hooks: None,

@@ -66,6 +66,8 @@ pub struct RunArgs {
     pub id: Option<String>,
     #[arg(long)]
     pub timeout: Option<u64>,
+    #[arg(long, value_name = "SECS")]
+    pub idle_timeout: Option<u64>,
 }
 
 #[derive(Args)]

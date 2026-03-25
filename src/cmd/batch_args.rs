@@ -71,7 +71,10 @@ pub(crate) fn task_to_run_args(
                 .collect()
         })
         .unwrap_or_else(|| auto_cascade_for_rate_limited(&agent_name));
-    let env = merged_env(task.env.as_ref(), task.env_forward.as_ref(), shared_dir_path);
+    let env = crate::idle_timeout::env_with_idle_timeout(
+        merged_env(task.env.as_ref(), task.env_forward.as_ref(), shared_dir_path),
+        task.idle_timeout,
+    );
     RunArgs {
         agent_name,
         prompt: task.prompt.clone(),

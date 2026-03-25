@@ -18,6 +18,7 @@ mod context;
 mod cost;
 mod explore;
 mod hooks;
+mod idle_timeout;
 mod input_signal;
 mod notify;
 mod paths;

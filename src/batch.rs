@@ -47,6 +47,8 @@ pub struct BatchDefaults {
     #[serde(default)]
     pub max_duration_mins: Option<u64>,
     #[serde(default)]
+    pub idle_timeout: Option<u64>,
+    #[serde(default)]
     pub best_of: Option<usize>,
     #[serde(default, deserialize_with = "deserialize_string_or_vec")]
     pub context: Option<Vec<String>>,
@@ -89,6 +91,8 @@ pub struct BatchTask {
     pub best_of: Option<usize>,
     #[serde(default)]
     pub max_duration_mins: Option<u64>,
+    #[serde(default)]
+    pub idle_timeout: Option<u64>,
     #[serde(default, deserialize_with = "deserialize_string_or_vec")]
     pub context: Option<Vec<String>>,
     #[serde(default, deserialize_with = "deserialize_string_or_vec")]

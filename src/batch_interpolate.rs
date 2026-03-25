@@ -140,6 +140,9 @@ fn apply_task_defaults(task: &mut BatchTask, defaults: &BatchDefaults) {
     if task.max_duration_mins.is_none() {
         task.max_duration_mins = defaults.max_duration_mins;
     }
+    if task.idle_timeout.is_none() {
+        task.idle_timeout = defaults.idle_timeout;
+    }
     if task.best_of.is_none() {
         task.best_of = defaults.best_of;
     }

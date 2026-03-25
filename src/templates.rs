@@ -45,6 +45,7 @@ pub fn estimate_tokens(text: &str) -> usize {
 pub fn milestone_instruction() -> &'static str { "\nAfter completing each major step, output on its own line: [MILESTONE] <brief description>\nDo NOT add println!/console.log/print statements with [MILESTONE] to source code — milestones go in your conversation output only." }
 pub fn inject_milestone_prompt(raw: &str) -> String { format!("{raw}{}", milestone_instruction()) }
 pub fn codex_guard() -> &'static str { "\nIMPORTANT: If no changes are needed, do NOT create an empty commit. Instead, print 'NO_CHANGES_NEEDED: <reason>' and exit." }
+pub fn git_staging_guard() -> &'static str { "\n[Git Staging Rule]\nAfter creating new files, always run `git add <newfile>` explicitly before committing. `git commit -a` and `git add -u` do NOT stage untracked files. Forgetting this causes data loss when the worktree is cleaned up.\n" }
 pub fn codex_commit_msg(msg: &str) -> String { format!("\nCommit with message: '{msg}'") }
 pub fn inject_codex_prompt(raw: &str, commit_msg: Option<&str>) -> String { format!("{raw}{}{}", codex_guard(), commit_msg.map(codex_commit_msg).unwrap_or_default()) }
 
@@ -84,6 +85,13 @@ mod tests {
     #[test]
     fn text_edit_guard_triggers_for_toml() {
         assert!(text_edit_guard("Update Cargo.toml version").is_some());
+    }
+
+    #[test]
+    fn git_staging_guard_mentions_untracked_files() {
+        let guard = git_staging_guard();
+        assert!(guard.contains("git add <newfile>"));
+        assert!(guard.contains("git add -u"));
     }
 
     #[test]

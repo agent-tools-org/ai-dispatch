@@ -18,7 +18,6 @@ use crate::types::{CompletionInfo, EventKind, TaskEvent, TaskId, TaskStatus};
 use crate::watcher::{self, SyntheticMilestoneTracker};
 
 const INPUT_POLL_INTERVAL: Duration = Duration::from_millis(500);
-pub(crate) const PTY_IDLE_TIMEOUT: Duration = Duration::from_secs(180);
 
 pub(crate) struct MonitorState {
     pub(crate) info: CompletionInfo,

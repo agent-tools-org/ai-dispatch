@@ -57,11 +57,9 @@ pub fn run(
         let prev_fp = lines.next().unwrap_or("");
         if prev_fp == fingerprint {
             let now_ts = Local::now().timestamp();
-            if now_ts - prev_ts < 10 {
-                // Rapid repeated call with no changes — hard error to break polling loops
-                aid_error!("[aid] ERROR: No changes detected. Stop polling — use `aid watch --quiet --group <wg-id>` instead.");
-                aid_error!("[aid] Board calls within 10s of identical state are rejected.");
-                std::process::exit(1);
+            if now_ts - prev_ts < 5 {
+                // Rapid repeated call with no changes — warning but still show board
+                aid_warn!("[aid] WARNING: No changes detected. Consider using `aid watch --quiet --group <wg-id>` instead.");
             } else {
                 aid_hint!("[aid] No status changes since last check. Use `aid watch --quiet` for automatic notification instead of polling.");
             }

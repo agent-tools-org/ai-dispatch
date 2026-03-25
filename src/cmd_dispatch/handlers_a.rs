@@ -127,7 +127,8 @@ fn build_run_args(
 ) -> cmd::run::RunArgs {
     let extras = *run_extras;
     let skills = if no_skill { vec![cmd::run::NO_SKILL_SENTINEL.to_string()] } else { extras.skill };
-    let env = crate::idle_timeout::env_with_idle_timeout(None, idle_timeout);
+    let effective_idle_timeout = idle_timeout.or_else(|| crate::agent_config::get_default_idle_timeout(&agent_name));
+    let env = crate::idle_timeout::env_with_idle_timeout(None, effective_idle_timeout);
 
     cmd::run::RunArgs {
         agent_name,

@@ -14,6 +14,9 @@ pub enum AgentCommands {
         name: String,
         #[arg(long)]
         model: Option<String>,
+        /// Default idle timeout in seconds (0 to clear)
+        #[arg(long)]
+        idle_timeout: Option<u64>,
     },
     /// Create a new custom agent definition
     Add { name: String },

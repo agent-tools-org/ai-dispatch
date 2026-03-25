@@ -22,7 +22,7 @@ use extract::{extract_finding_detail, parse_milestone_event};
 use progress::LoopDetector;
 pub(crate) use progress::SyntheticMilestoneTracker;
 pub(crate) use stream::{handle_streaming_line, handle_streaming_line_with_session, StreamLineContext};
-const HUNG_TIMEOUT: Duration = Duration::from_secs(180);
+const HUNG_TIMEOUT: Duration = Duration::from_secs(300);
 
 /// Watch a child process, parse output, store events, return completion info
 pub async fn watch_streaming(

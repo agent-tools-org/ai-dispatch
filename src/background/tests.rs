@@ -39,6 +39,7 @@ fn serializes_spec_to_json() {
         env_forward: None,
         agent_pid: None,
         sandbox: false,
+        read_only: false,
         container: None,
     };
 
@@ -344,6 +345,7 @@ fn make_spec(task_id: &str) -> BackgroundRunSpec {
         env_forward: None,
         agent_pid: None,
         sandbox: false,
+        read_only: false,
         container: None,
     }
 }

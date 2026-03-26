@@ -158,6 +158,7 @@ pub fn set_git_ceiling(cmd: &mut Command, dir: &str) {
 }
 
 pub fn apply_run_env(cmd: &mut Command, opts: &RunOpts) {
+    cmd.env("AID_HOME", crate::paths::aid_dir());
     if let Some(env) = opts.env.as_ref() {
         for (key, value) in env {
             cmd.env(key, value);
@@ -183,6 +184,7 @@ fn which_exists(name: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::{apply_run_env, is_rust_project, set_git_ceiling, shared_target_dir, target_dir_for_worktree, RunOpts};
+    use crate::paths::AidHomeGuard;
     use crate::test_subprocess;
     use std::collections::HashMap;
     use std::ffi::OsStr;
@@ -354,7 +356,10 @@ mod tests {
     }
 
     #[test]
-    fn apply_run_env_is_noop_for_empty_values() {
+    fn apply_run_env_sets_aid_home_on_command() {
+        let temp_dir = TempDir::new().unwrap();
+        let aid_home = temp_dir.path().join("aid-home");
+        let _guard = AidHomeGuard::set(&aid_home);
         let mut cmd = Command::new("echo");
         let opts = RunOpts {
             dir: None,
@@ -370,7 +375,13 @@ mod tests {
 
         apply_run_env(&mut cmd, &opts);
 
-        assert_eq!(cmd.get_envs().count(), 0);
+        let envs: Vec<_> = cmd.get_envs().collect();
+        let aid_home_env = envs
+            .iter()
+            .find(|(key, _)| *key == "AID_HOME")
+            .and_then(|(_, value)| value.as_ref())
+            .map(|value| value.to_string_lossy().to_string());
+        assert_eq!(aid_home_env.as_deref(), Some(aid_home.to_string_lossy().as_ref()));
     }
 
     #[test]

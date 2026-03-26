@@ -47,6 +47,8 @@ pub struct BackgroundRunSpec {
     #[serde(default)]
     pub sandbox: bool,
     #[serde(default)]
+    pub read_only: bool,
+    #[serde(default)]
     pub container: Option<String>,
 }
 
@@ -99,4 +101,61 @@ pub(crate) fn load_spec_if_exists(task_id: &str) -> Result<Option<BackgroundRunS
     let spec = serde_json::from_str(&content)
         .with_context(|| format!("Failed to parse background spec {}", path.display()))?;
     Ok(Some(spec))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::BackgroundRunSpec;
+    use std::collections::HashMap;
+
+    fn sample_spec(read_only: bool) -> BackgroundRunSpec {
+        BackgroundRunSpec {
+            task_id: "t-1234".to_string(),
+            worker_pid: Some(11),
+            agent_name: "codex".to_string(),
+            prompt: "fix the bug".to_string(),
+            dir: Some("/tmp/project".to_string()),
+            output: Some("json".to_string()),
+            model: Some("gpt-5.4".to_string()),
+            verify: Some("cargo check".to_string()),
+            judge: Some("cursor".to_string()),
+            max_duration_mins: Some(15),
+            idle_timeout_secs: Some(60),
+            retry: 2,
+            group: Some("core".to_string()),
+            skills: vec!["ai-coding".to_string()],
+            template: Some("default".to_string()),
+            interactive: true,
+            on_done: Some("echo done".to_string()),
+            cascade: vec!["notify".to_string()],
+            parent_task_id: Some("t-parent".to_string()),
+            env: Some(HashMap::from([("KEY".to_string(), "VALUE".to_string())])),
+            env_forward: Some(vec!["HOME".to_string()]),
+            agent_pid: Some(22),
+            sandbox: true,
+            read_only,
+            container: Some("aid:test".to_string()),
+        }
+    }
+
+    #[test]
+    fn background_run_spec_round_trips_read_only() {
+        let value = serde_json::to_value(sample_spec(true)).unwrap();
+        assert_eq!(value.get("read_only").and_then(|v| v.as_bool()), Some(true));
+
+        let decoded: BackgroundRunSpec = serde_json::from_value(value).unwrap();
+        assert!(decoded.read_only);
+    }
+
+    #[test]
+    fn background_run_spec_defaults_read_only_to_false_when_missing() {
+        let mut value = serde_json::to_value(sample_spec(false)).unwrap();
+        value
+            .as_object_mut()
+            .unwrap()
+            .remove("read_only");
+
+        let decoded: BackgroundRunSpec = serde_json::from_value(value).unwrap();
+        assert!(!decoded.read_only);
+    }
 }

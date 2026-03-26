@@ -58,7 +58,12 @@ fn escape_newlines(s: &str) -> String {
 }
 
 fn main() {
+    // Watch multiple git locations so changelog re-embeds when tags change.
+    // Tags can live as loose files (.git/refs/tags/) or packed (.git/packed-refs).
+    // Also watch Cargo.toml since version bumps always modify it.
     println!("cargo:rerun-if-changed=.git/refs/tags");
+    println!("cargo:rerun-if-changed=.git/packed-refs");
+    println!("cargo:rerun-if-changed=Cargo.toml");
     let text = build_embedded_changelog().unwrap_or_default();
     println!("cargo:rustc-env=AID_CHANGELOG={}", escape_newlines(&text));
 }

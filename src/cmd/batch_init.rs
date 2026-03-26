@@ -37,34 +37,58 @@ fn render_template(dir: &str, team: &str, verify: &str, language: &str) -> Strin
     let mut lines = vec![
         "# Batch task file for aid".to_string(),
         "# Docs: aid batch --help".to_string(),
+        "# All fields below also work as task-level overrides.".to_string(),
         String::new(),
     ];
 
-    // [defaults] section
+    // [defaults] section — core
     lines.push("[defaults]".to_string());
     if dir.is_empty() {
-        lines.push("# dir = \".\"                              # Working directory".to_string());
+        lines.push("# dir = \".\"                    # Working directory".to_string());
     } else {
         lines.push(format!("dir = \"{dir}\""));
     }
-    lines.push("# agent = \"codex\"                        # Default agent for all tasks".to_string());
+    lines.push("# agent = \"codex\"              # Default agent for all tasks".to_string());
     if team.is_empty() {
-        lines.push("# team = \"<TEAM_ID>\"                     # Team knowledge injection".to_string());
+        lines.push("# team = \"dev\"                 # Team knowledge context".to_string());
     } else {
         lines.push(format!("team = \"{team}\""));
     }
+    lines.push("# model = \"o3\"                 # Model override".to_string());
     if verify.is_empty() {
-        lines.push("# verify = \"<VERIFY_CMD>\"                # Auto-verify on completion".to_string());
+        lines.push("# verify = \"cargo check\"       # Auto-verify on completion".to_string());
     } else {
         lines.push(format!("verify = \"{verify}\""));
     }
-    lines.push("# fallback = \"cursor\"                    # Agent to try if primary fails".to_string());
-    lines.push("# model = \"<MODEL>\"                      # Model override for all tasks".to_string());
-    lines.push("# context = [\"src/types.rs\"]             # Files to inject as context".to_string());
-    lines.push("# skills = [\"implementer\"]               # Methodology skills".to_string());
-    lines.push("# read_only = false                      # Read-only mode".to_string());
-    lines.push("# budget = false                         # Budget/cheap mode".to_string());
-    lines.push("# max_duration_mins = 30                 # Per-task timeout".to_string());
+    lines.push("# fallback = \"cursor,opencode\" # Comma-separated fallback agents".to_string());
+    lines.push(String::new());
+
+    // [defaults] — context & constraints
+    lines.push("# --- Context & constraints ---".to_string());
+    lines.push("# context = [\"src/types.rs\"]    # Files to inject as context".to_string());
+    lines.push("# skills = [\"implementer\"]      # Methodology skills".to_string());
+    lines.push("# scope = [\"src/\"]              # Restrict file access".to_string());
+    lines.push("# checklist = [\"must compile\", \"must have tests\"]  # Quality checklist".to_string());
+    lines.push("# read_only = false             # Read-only mode".to_string());
+    lines.push("# budget = false                # Use budget-optimized model".to_string());
+    lines.push(String::new());
+
+    // [defaults] — execution
+    lines.push("# --- Execution ---".to_string());
+    lines.push("# max_duration_mins = 30        # Per-task hard timeout (minutes)".to_string());
+    lines.push("# idle_timeout = 120            # Kill if idle for N seconds".to_string());
+    lines.push("# judge = true                  # AI judge evaluates output quality".to_string());
+    lines.push("# best_of = 3                   # Run N copies, pick best".to_string());
+    lines.push("# container = \"node:20\"         # Run agent inside container".to_string());
+    lines.push("# hooks = [\"pre:lint\"]           # Hook specs".to_string());
+    lines.push(String::new());
+
+    // [defaults] — worktree & grouping
+    lines.push("# --- Worktree & grouping ---".to_string());
+    lines.push("# worktree_prefix = \"feat/v9\"   # Auto-generate worktree per task".to_string());
+    lines.push("# group = \"wg-abc1\"             # Assign all tasks to workgroup".to_string());
+    lines.push("# shared_dir = false            # Shared directory for inter-task files".to_string());
+    lines.push("# analyze = true                # Warn about overlapping file edits".to_string());
     lines.push(String::new());
 
     // First task
@@ -78,20 +102,33 @@ fn render_template(dir: &str, team: &str, verify: &str, language: &str) -> Strin
         lines.push(format!("Implement <FEATURE> in {language}."));
     }
     lines.push("\"\"\"".to_string());
-    lines.push("# worktree = \"feat/<BRANCH>\"             # Git worktree for isolation".to_string());
-    lines.push("# fallback = \"cursor\"                    # Fallback agent on failure".to_string());
-    lines.push("# context = [\"src/types.rs\"]             # Extra context files".to_string());
-    lines.push("# depends_on = [\"other-task\"]            # Run after named task(s)".to_string());
-    lines.push("# on_success = \"deploy\"                  # Trigger conditional task on success".to_string());
-    lines.push("# on_fail = \"notify\"                     # Trigger conditional task on failure".to_string());
+    lines.push("# worktree = \"feat/<BRANCH>\"    # Git worktree for isolation".to_string());
+    lines.push("# context = [\"src/types.rs\"]    # Extra context files".to_string());
+    lines.push("# context_from = [\"task-0\"]     # Inject output from previous tasks".to_string());
+    lines.push("# checklist = [\"no unwrap()\"]    # Quality checklist items".to_string());
+    lines.push("# idle_timeout = 120            # Kill if idle for N seconds".to_string());
+    lines.push("# scope = [\"src/parser/\"]       # Restrict file access".to_string());
+    lines.push("# depends_on = [\"other-task\"]   # Run after named task(s)".to_string());
+    lines.push("# on_success = \"deploy\"         # Trigger conditional task on success".to_string());
+    lines.push("# on_fail = \"notify\"            # Trigger conditional task on failure".to_string());
+    lines.push("# env = { RUST_LOG = \"debug\" }  # Task-specific env vars".to_string());
     lines.push(String::new());
 
-    // Second task (example)
+    // Second task (dependent example)
     lines.push("# [[task]]".to_string());
     lines.push("# name = \"task-2\"".to_string());
     lines.push("# agent = \"opencode\"".to_string());
     lines.push("# prompt = \"<DESCRIBE_TASK_HERE>\"".to_string());
     lines.push("# depends_on = [\"task-1\"]".to_string());
+    lines.push("# context_from = [\"task-1\"]     # Use task-1 output as context".to_string());
+    lines.push(String::new());
+
+    // Conditional task example
+    lines.push("# [[task]]".to_string());
+    lines.push("# name = \"deploy\"".to_string());
+    lines.push("# conditional = true             # Only runs when triggered".to_string());
+    lines.push("# agent = \"codex\"".to_string());
+    lines.push("# prompt = \"Run deploy script\"".to_string());
     lines.push(String::new());
 
     lines.join("\n") + "\n"
@@ -109,6 +146,13 @@ mod tests {
         assert!(template.contains("<DESCRIBE_TASK_HERE>"));
         assert!(template.contains("# fallback"));
         assert!(template.contains("# depends_on"));
+        // New fields present
+        assert!(template.contains("# idle_timeout"));
+        assert!(template.contains("# checklist"));
+        assert!(template.contains("# context_from"));
+        assert!(template.contains("# scope"));
+        assert!(template.contains("# conditional"));
+        assert!(template.contains("# env ="));
     }
 
     #[test]

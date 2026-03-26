@@ -1,3 +1,7 @@
+## v8.62.0 (2026-03-26)
+- v8.62.0: Support gemini-cli 0.35+ stream-json format
+- Support gemini-cli 0.35+ stream-json format
+
 ## v8.61.0 (2026-03-26)
 - v8.61.0: Fix changelog for crates.io installs + prominent upgrade banner
 - Fix embedded changelog for crates.io installs
@@ -39,8 +43,6 @@
 ## v8.53.0 (2026-03-26)
 - v8.53.0: Sprint contracts — --checklist prompt injection (Wave 1)
 - feat(run): add checklist prompt injection
-
-## v8.52.0 (2026-03-26)
 - v8.52.0: Full output by default, read_only background fix, --json output field
 - Preserve background read-only runs and AID_HOME
 - Make show and output default to full content

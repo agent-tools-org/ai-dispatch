@@ -1,0 +1,795 @@
+## v8.60.0 (2026-03-26)
+- v8.60.0: Batch TOML parity with aid run flags
+- Add missing `aid run` flags to batch TOML support. Currently
+- Add missing batch TOML run flag support
+- Custom ID conflict handling: block running, auto-suffix terminal
+
+## v8.59.0 (2026-03-26)
+- v8.59.0: Allow human-readable custom task IDs
+- chore: auto-commit changes to .aid-lock
+- Allow custom task IDs in dispatch flows
+
+## v8.58.0 (2026-03-26)
+- v8.58.0: Improve batch init template and changelog embedding reliability
+
+## v8.57.0 (2026-03-26)
+- v8.57.0: Fix TUI/web output display for custom agents
+- Fix TUI/web "No output available" for custom agents with plain-text logs
+
+## v8.56.0 (2026-03-26)
+- v8.56.0: Show error reasons for failed tasks on board
+
+## v8.55.0 (2026-03-26)
+- v8.55.0: Code Health Round 4 — split 4 oversized files
+- Split run_prompt into run_process and run_prompt_helpers modules
+- Split src/tui/ui.rs (453 lines) into focused modules. Target
+- Split show command into helpers, JSON, and test modules
+- Split TUI ui into ui_detail and ui_tree modules
+- Split agent module into env helpers and tests submodules
+
+## v8.54.0 (2026-03-26)
+- v8.54.0: Checklist Wave 2 — output scanning, auto-retry, show display
+- feat: checklist Wave 2 — output scanning, auto-retry, show display
+- Implement checklist output scanning in src/cmd/checklist_sca
+
+## v8.53.0 (2026-03-26)
+- v8.53.0: Sprint contracts — --checklist prompt injection (Wave 1)
+- feat(run): add checklist prompt injection
+
+## v8.52.0 (2026-03-26)
+- v8.52.0: Full output by default, read_only background fix, --json output field
+- Preserve background read-only runs and AID_HOME
+- Make show and output default to full content
+
+## v8.51.0 (2026-03-25)
+- v8.51.0: Untracked file rescue, git staging guard, batch [[task]] alias, board anti-polling
+- feat: rescue untracked files before verify, reorder background lifecycle
+- fix: accept [[task]] alias in batch TOML, exit on repeated board polling
+- Add git staging guard to writable prompts
+- Add untracked file rescue helpers
+- v8.50.0: Finding API, pending reason, read_only fix, idle timeout
+- chore: remove stale aid-lock
+- chore: auto-commit changes to .aid-lock
+- chore: auto-commit changes to .aid-lock
+- chore: auto-commit changes to .aid-lock
+- Implement GitHub issue #68: expose pending-timeout reason in
+- Add finding get/update commands and review fields
+- fix codex read-only findings writes
+- feat: increase default idle timeout to 300s and add per-agent config
+- v8.49.0: Worktree safety and CLAUDE.md overhaul
+- docs: update CLAUDE.md with full CLI coverage
+- fix: prevent worktree contention from concurrent agent access
+- v8.48.0: Reliability, dispatch intelligence, and UX polish
+- Remove unused PTY idle-timeout constant
+- Add configurable idle timeouts for runs and batches
+- Skip rate-limited agents before batch dispatch
+- Track new workgroup tasks during wait
+- Fix GH#58: `aid board` anti-polling is too aggressive — reje
+- Update Cargo.lock for v8.47.0
+- v8.47.0: Codex CLI v0.116+ compatibility and TUI polish
+- v8.46.0: UX fixes from dogfooding
+- Add --limit flag to `aid board` to control how many tasks ar
+- Reject unknown top-level batch keys
+- Suppress dir warning for non-writing runs
+- Reject unknown batch TOML fields
+- v8.45.0: Project runtime state file (.aid/state.toml)
+- chore: auto-commit changes to src/store/queries/state_queries.rs
+- Refresh project state after task completion
+- Inject recent project state into run prompts
+- Add project state CLI command
+- Create src/store/queries/state_queries.rs (~100 lines) with
+- Add project state management module
+- docs: add Show section to CLAUDE.md for research task output
+- v8.44.0: Research task output improvements for aid show
+- Relax research output truncation
+- Auto-save research task output after completion
+- Show research findings for no-change tasks
+- v8.43.0: Fix read_only batch false positive merge conflict warning (GH#60)
+- v8.42.0: Context pollution reduction — summary tools + smart skill injection
+- feat: skip skill methodology/gotchas for short prompts (<200 chars)
+- feat: summary-only tool injection — name + description, no command/args
+- v8.41.0: Smart tool injection + per-category agent routing
+- Track task categories for category-aware agent history
+- Filter toolbox injection by task category
+- v8.40.0: Fix cascade fallback for quota exhaustion (GH#57)
+- fix: cascade fallback for gemini quota exhaustion (GH#57)
+- chore: add GitHub issue templates (bug report + feature request)
+- v8.39.0: Fix stats panic (GH#52), zombie tasks (GH#53), pending dispatch (GH#54)
+- fix batch slot refill latency for pending tasks
+- Auto-fail stale running tasks after 24h
+- Fix stats panic on zero-duration tasks
+- docs: update CLAUDE.md with v8.38.0 features (worktree prune, context sync)
+- v8.38.0: Worktree context sync (GH#51), worktree prune, batch/background splits
+- refactor: split batch serde and interpolation helpers
+- Refactor background process and spec helpers
+- Sync missing context files into worktrees
+- Add stale worktree prune command
+- v8.37.0: Code health + UX — run.rs split, ETA, quota-aware scheduling, auto-commit
+- refactor(run): extract post-run lifecycle flow
+- Prevent dispatching rate-limited agents
+- Add ETA estimates for running board tasks
+- improve merge auto-commit messages and staging
+- docs: update CLAUDE.md with v8.36.0 features
+- v8.36.0: Stats dashboard, merge target, tool team, Cargo.lock sync, 4 bug fixes
+- Support comma-separated batch fallback agents
+- Treat 402 payment errors as fallback eligible
+- Accept string values for batch list fields
+- fix(run): restore full output fallback from logs
+- add aid stats command
+- Add target branch support to aid merge
+- fix merge Cargo.lock drift before worktree merge
+- Add team lookup to tool show and test
+- v8.35.0: Composer-2 default, output fix, batch fallback, agent config
+- Add per-agent default model configuration
+- Set Cursor composer-2 as default model
+- Fix batch auto fallback agent selection
+- fix(show-output): merge cursor assistant deltas
+- fix: VFAIL keeps Done status — stop downgrading to Failed
+- v8.34.0: Auto-sequence shared-worktree batch tasks + prompt size warning
+- Auto-sequence shared batch worktrees
+- Add team toolbox: configurable tools injected into agent prompts
+- chore: auto-commit agent changes before merge
+- Remove duplicate ToolAction enum, use cli_actions::ToolAction in tool.rs
+- task A
+- release: v8.32.0 — Python verify auto-detection
+- Add Python verify auto-detection
+- release: v8.31.1 — default TUI, foreground task visibility
+- fix: sort task IDs in TUI group filter test for deterministic ordering
+- fix: keep foreground tui tasks visible under group filter
+- Default bare aid to board
+- chore: remove accidentally committed build artifacts
+- task A
+- release: v8.31.0 — verify enforcement, quota rescue, rate limit quality, spawn logging, pending timeout
+- fix: update verify retry test for enforce_verify_status behavior
+- chore: auto-commit agent changes before merge
+- fix: timeout stale pending tasks
+- Fix: tasks that passed verify but failed due to quota exhaus
+- fix: fail tasks when verify fails without retry
+- Fix: when agent process fails to spawn, write an error event
+- fix: clean saved rate limit markers
+- release: v8.30.1 — batch [defaults] group support, close #42 & #33
+- fix: support group field in batch [defaults] for workgroup assignment (#42)
+- fix: add oz & droid to setup agent detection and rate_limit list
+- release: v8.30.0 — Web UI v2
+- Add web task action and diff endpoints
+- Add task detail actions and diff tab
+- release: v8.29.3 — code health round 3
+- refactor: code health round 3 — extract run/prompt tests and helpers
+- Extract the `#[cfg(test)]` test block from `src/cmd/run_prom
+- Extract run command tests into run_tests module
+- task B
+- task A
+- release: v8.29.1 — batch workgroup override (GH#40)
+- Add batch workgroup override flag
+- release: v8.29.0 — merge safety & batch analysis
+- Add merge check mode and post-merge group verify
+- add batch file overlap analysis
+- release: v8.28.2 — fix output file enforcement (GH#37, GH#39)
+- Fix output post-processing fallbacks
+- release: v8.28.1 — dev environment container mode
+- Add reusable dev container execution mode
+- release: v8.28.0 — shared batch directory + changelog fix
+- Add shared batch directory support
+- docs: update README — version badge, new agents, sandbox section
+- fix: aid changelog no longer shows other repo's tags
+- fix: panic on multi-byte chars in prompt preview truncation
+- release: v8.27.2 — code health round 2: split cli, config, watcher
+- split cli command definitions into modules
+- split watcher helpers into focused modules
+- refactor(config): split config command modules
+- release: v8.27.1 — code health: split 3 oversized files
+- Split src/main.rs (739 lines) by extracting the command disp
+- Split CLI command dispatch out of main
+- Split src/cmd/show_output.rs (836 lines) into focused format
+- Split aid show output formatters into focused modules
+- Split src/store/queries.rs (807 lines) into focused query mo
+- split store query modules
+- fix: include updated Cargo.lock for v8.27.0
+- release: v8.27.0 — container sandbox for agent isolation
+- - [Review Checklist](knowledge/review-checklist.md) — Pre-ac
+- feat: add container sandbox run option
+- release: v8.26.1 — single source of truth for agent lists
+- refactor: derive charts AGENTS from AgentKind::ALL_BUILTIN
+- - [Coding Conventions](coding-conventions.md) — File structu
+- Unify built-in agent metadata on AgentKind
+- release: v8.26.0 — skill scripts with structured metadata
+- Add script metadata parsing and structured injection to the
+- Add skill script metadata injection
+- release: v8.25.1 — fix 4 GitHub issues (#30-#35)
+- Fix GH#34: opencode crashes when sibling task context is inj
+- Fix GH#31: `read_only = true` tasks should NOT auto-commit a
+- Fix GH#32: Warn when multiple batch tasks target the same `d
+- task A
+- task A
+- task A
+- chore: auto-commit agent changes before merge
+- - [Coding Conventions](coding-conventions.md) — File structu
+- fix: correct test indentation in stop.rs
+- Fix `aid stop` and zombie detection to properly kill agent p
+- Fix the `aid changelog` command in src/cmd/changelog.rs and
+- Fix process leaking in the PTY bridge. When a PTY-spawned ag
+- release: v8.24.1 — changelog anywhere + cursor log cleanup
+- fix: add build.rs for embedded changelog
+- release: v8.24.0 — batch & UX polish
+- Add two new flags to `aid show`:
+- Add summary and file filters to aid show
+- Fix auto-commit failing on empty git repos (repos with no HE
+- Handle auto-commit in repos without HEAD
+- Make `aid watch --quiet` less verbose by suppressing milesto
+- Suppress quiet wait milestone progress output
+- Change droid's default auto approval level from "medium" to
+- agent: raise droid auto approval to high
+- release: v8.23.0 — skill system v2 with folders, gotchas, and scripts
+- fix: add missing test files from skill folder worktree
+- Upgrade the skill system to support folder-based skills with
+- release: v8.22.1 — add aid changelog command
+- Add changelog subcommand for release history
+- release: v8.22.0 — batch power-ups & cost visibility
+- Add `.env` forwarding to agent subprocesses.
+- Add synthetic progress events for droid agent (and any agent
+- Add aid cost reporting command
+- Add batch template variable interpolation
+- Preserve partial work on retry by default
+- release: v8.21.14 — custom agent docs clarification
+- fix: clarify custom agents are non-interactive CLIs, not Claude Code
+- feat: add --full flag to show --output and aid output
+- chore: update Cargo.lock for v8.21.12
+- fix: auto-commit message uses [Task] section instead of shared context
+- release: v8.21.12 — performance + test subprocess leak fix
+- Auto-created for batch dispatch
+- Auto-created for batch dispatch
+- Auto-created for batch dispatch
+- release: v8.21.11 — fix GH#22 gemini tool_call name parsing
+- fix: GH#22 gemini tool calls logged as 'unknown'
+- release: v8.21.10 — security hardening from core audit
+- fix: security hardening from core audit — 4 HIGH findings resolved
+- release: v8.21.9 — zombie detection false positive fix
+- fix: zombie detection false positives — waitpid ECHILD for non-child workers
+- Auto-created for batch dispatch
+- - [Agent System](agent-system.md) — Selection pipeline, prom
+- chore: update Cargo.lock for v8.21.8
+- refactor: ProcessGuard RAII subprocess abstraction + verify.rs migration
+- fix: GH#27 droid/codebuff rejected in batch — replace hardcoded VALID_AGENTS with AgentKind::parse_str
+- release: v8.21.6 — subprocess management perf fixes
+- Auto-created for batch dispatch
+- Auto-created for batch dispatch
+- Auto-created for batch dispatch
+- Auto-created for batch dispatch
+- release: v8.21.5 — eprintln to aid output macros bulk conversion
+- fix: GH#25 remove cursor from auto-skills, GH#26 batch auto-cascade for rate-limited agents
+- fix: agent subprocess leak — process group isolation for all spawn paths
+- Auto-created for batch dispatch
+- Auto-created for batch dispatch
+- fix: GH#22 gemini tool names, GH#23 auto-create group, GH#24 0B output, GH#28 judge bool
+- release: v8.21.1 — fix verify process leak (GH#27)
+- fix: verify process leak — process group isolation + timeout (GH#27)
+- release: v8.21.0 — attention space audit + quiet mode + droid parity
+- release: v8.20.9 — show-output extraction, verify isolation, auto-commit cleanup
+- fix: auto-commit uses git add -u instead of -A, skips context headers in message
+- fix: show-output extraction, verify isolation, batch audit safety, retry reset
+- release: v8.20.8 — code health cleanup
+- chore: extract inline tests to separate files — merge, selection, watcher
+- chore: remove last production unwrap() in usage.rs
+- chore: dead code cleanup — remove 4 dead items, 10 unnecessary annotations
+- release: v8.20.7 — context_from implicit dependencies + unwrap safety
+- fix: context_from creates implicit dependency in batch dispatch
+- release: v8.20.6 — zero production unwrap()
+- fix: remove all unwrap() from production code paths
+- release: v8.20.5 — data integrity fixes
+- fix: data integrity — auto-commit error events + workgroup creation rollback
+- release: v8.20.4 — zero clippy warnings
+- fix: eliminate all clippy warnings (11 → 0)
+- release: v8.20.3 — propagate workgroup env to agent subprocesses
+- fix: propagate AID_GROUP and AID_TASK_ID to agent subprocesses (#15)
+- release: v8.20.2 — --dir agent isolation via GIT_CEILING_DIRECTORIES
+- fix: set GIT_CEILING_DIRECTORIES to prevent --dir agent escape (#16)
+- release: v8.20.1 — subprocess concurrency limits
+- feat: subprocess concurrency limits for tests and runtime
+- feat: [Shared Context: batch] Auto-created for batch dispatch
+- feat: [Shared Context: batch] Auto-created for batch dispatch
+- feat: [Shared Context: batch] Auto-created for batch dispatch
+- release: v8.20.0 — Droid (Factory.ai) agent integration
+- chore: auto-commit agent changes before merge
+- release: v8.19.0 — agent quota + structured findings
+- chore: auto-commit agent changes before merge
+- feat: [Team Knowledge — ai-dispatch] - [Coding Conventions](coding
+- fix: pass --cascade through BackgroundRunSpec (closes #17)
+- chore: auto-commit agent changes before merge
+- release: v8.18.0 — process safety, idle timeout & double-dispatch fix
+- feat: v8.18.0 — process safety, idle timeout, double-dispatch fix
+- release: v8.17.2 — commit message sanitization + zero warnings
+- fix: strip aid tags from auto-commit messages + eliminate compiler warnings
+- release: v8.17.1 — process management audit fix
+- fix: reap on_done callback children to prevent process leak
+- release: v8.17.0 — batch resilience + process safety
+- feat: batch resilience, performance tuning, process group safety (v8.17.0)
+- release: v8.16.0 — comprehensive security hardening
+- feat: <aid-project-rules> - File size limit: 300 lines per file -
+- feat: <aid-project-rules> - File size limit: 300 lines per file -
+- feat: <aid-team-rules> - Do NOT run cargo fmt, rustfmt, or any aut
+- Harden worktree cleanup and branch reset safety
+- feat: <aid-team-rules> - Do NOT run cargo fmt, rustfmt, or any aut
+- feat: add sanitize module — input validation + path safety layer
+- release: v8.15.2 — defense-in-depth sandbox guards + docs update
+- feat: <aid-project-rules> - File size limit: 300 lines per file -
+- release: v8.15.1 — critical worktree sandbox guard
+- fix: sandbox guard for worktree cleanup — prevent data loss
+- release: v8.15.0 — local web UI dashboard
+- feat: local web UI dashboard + batch init + show anti-polling (v8.15.0)
+- release: v8.14.1 — code quality audit cleanup
+- refactor: code quality audit — simplify error handling, fix fragile matching
+- release: v8.14.0 — project init guidance, failure reasons, cursor-agent detection
+- feat: CLAUDE.md emphasizes aid as primary dev method, session-start hints project init
+- feat: <aid-project-rules> - File size limit: 300 lines per file -
+- fix: show failure reason in CLI output, detect cursor-agent binary, remove TUI hint
+- feat: <aid-project-rules> - File size limit: 300 lines per file -
+- feat: <aid-project-rules> - File size limit: 300 lines per file -
+- release: v8.13.0 — cursor agent overhaul, TUI failure reasons
+- fix: cursor agent overhaul — standalone binary, event parsing, TUI failure reasons
+- fix: correct install URL to aid.agent-tools.org
+- ci: fix release workflow — use macos-15 runner (macos-13 deprecated)
+- release: v8.12.0 — GitHub issues sprint, CI, repo cleanup
+- feat: <aid-project-rules> - File size limit: 300 lines per file -
+- fix: remove unused imports in upgrade.rs for Linux clippy
+- feat: [Team Knowledge — dev] - [Review Checklist](knowledge/review
+- feat: [Team Knowledge — dev] - [Review Checklist](knowledge/review
+- feat: [Team Knowledge — dev] - [Review Checklist](knowledge/review
+- fix: add #[cfg(target_os = "macos")] to home_cargo_bin to fix clippy on Linux CI
+- ci: build release binary instead of just cargo check
+- ci: add CI workflow for push/PR — cargo check, test, clippy
+- Revert "feat: <aid-project-rules>"
+- feat: <aid-project-rules> - File size limit: 300 lines per file -
+- Reuse batch default workgroups when present
+- Add stdin and file input for findings
+- feat: [Team Knowledge — dev] - [Review Checklist](knowledge/review
+- chore: move batch TOMLs to .aid/batches/, gitignore that directory
+- chore: repo cleanup — remove stale batch TOMLs, nanobanana-output, website dirs
+- ci: add GitHub Release workflow with cross-compiled binaries
+- release: v8.11.0 — prompt hardening, UX improvements, commit pollution fix
+- feat: UX improvements + fix commit message pollution
+- chore: remove batch dispatch file
+- fix: harden prompt injection pipeline against cross-task pollution
+- release: v8.10.0 — configurable pricing + command consolidation
+- feat: configurable pricing + command consolidation
+- fix: install script now shows aid setup + aid init next steps
+- feat: add /api/pricing endpoint and fix model prices
+- website: replace agent matrix with positioning cards
+- docs: remove ob1 references from README
+- docs: update README and website to v8.9.1
+- release: v8.9.1 — caller-controlled hiboss notifications
+- fix: remove auto hiboss notifications, caller-controlled only
+- release: v8.9.0 — interactive approval + batch organization
+- feat: hiboss Layer 1 rich notifications (v8.8.0)
+- release: v8.7.1 — auto-dir + background quota cascade
+- fix: improve batch help — show [defaults] fields including dir
+- release: v8.7.0 — reliability & cost control
+- docs: update CLAUDE.md with v8.6 project features
+- release: v8.6.0 — project & budget UX overhaul
+- Add project sync command
+- feat: <aid-system-context> [Shared Workspace] Path: /tmp/aid-wg-wg
+- feat: <aid-team-rules> - Do NOT run cargo fmt, rustfmt, or any aut
+- feat: <aid-system-context> [Shared Workspace] Path: /tmp/aid-wg-wg
+- feat: <aid-system-context> [Shared Workspace] Path: /tmp/aid-wg-wg
+- release: v8.5.3 — code quality + UX fixes
+- fix: warn when merging VFAIL tasks
+- fix: --context and --scope accept space-separated values
+- chore: zero clippy warnings (15 fixed across 10 files)
+- release: v8.5.2 — knowledge injection quality improvements
+- fix: improve knowledge injection quality — filter threshold, stop words, dedup, truncation
+- chore: auto-commit agent changes before merge
+- release: v8.5.1 — auto-stash merge + milestone prompt fix
+- fix: auto-stash local changes before merge + clarify milestone prompt
+- chore: auto-commit agent changes before merge
+- chore: populate project knowledge base with 5 entries
+- chore: update aid-website to v8.5.0 — add project profiles, project command
+- docs: add project profiles to README, CLAUDE.md, claude-prompt.md
+- release: v8.5.0 — project profiles (.aid/project.toml)
+- chore: suppress dead_code warnings for ProjectConfig/ProjectAgents schema fields
+- feat: <aid-system-context> [Shared Workspace] Path: /tmp/aid-wg-wg
+- feat: <aid-system-context> [Shared Workspace] Path: /tmp/aid-wg-wg
+- feat: <aid-system-context> [Shared Workspace] Path: /tmp/aid-wg-wg
+- chore: add mod project to main.rs
+- chore: auto-commit agent changes before merge
+- release: v8.4.0 — agent UX guardrails + team rules
+- feat: team rules — always-injected behavioral constraints
+- fix: UX improvements — parse hint, workspace tag, reuse test canonicalize
+- feat: [Shared Workspace] Path: /tmp/aid-wg-wg-f624 Use this direct
+- feat: [Shared Workspace] Path: /tmp/aid-wg-wg-f624 Use this direct
+- fix: replace global Mutex with thread_local for test isolation
+- feat: [Shared Workspace] Path: /tmp/aid-wg-wg-78d1 Use this direct
+- feat: [Shared Workspace] Path: /tmp/aid-wg-wg-78d1 Use this direct
+- feat: [Shared Workspace] Path: /tmp/aid-wg-wg-78d1 Use this direct
+- feat: hiboss notification channel + fix --id FK constraint
+- docs: update website for v8.3.0 — stop, kill, steer commands
+- v8.3.0: Live Task Control — stop, kill, steer
+- v8.2.0: Custom IDs, Cursor CLI Upgrade, Work Scope Verification
+- v8.1.0: Model-Level Scoring, Task Pre-creation, Rate Limit Auto-clear
+- feat: [Shared Workspace] Path: /tmp/aid-wg-wg-aae8 Use this direct
+- v8.0.0: Programmable Orchestration — validation, structured diff, loop detection
+- v7.9.1: binary size 67% reduction + SQLite index optimization
+- perf: add SQLite indexes on hot query paths + fix compiler warnings
+- perf: add release profile — strip + LTO + codegen-units=1
+- refactor: replace ureq with curl subprocess, drop rustls dependency
+- v7.9.0: Code Health — file splits + milestone strip
+- feat: [Shared Workspace] Path: /tmp/aid-wg-wg-bc39 Use this direct
+- feat: [Shared Workspace] Path: /tmp/aid-wg-wg-bc39 Use this direct
+- feat: [Shared Workspace] Path: /tmp/aid-wg-wg-bc39 Use this direct
+- feat: [Shared Workspace] Path: /tmp/aid-wg-wg-bc39 Use this direct
+- feat: improved TUI tree view — workgroup grouping, navigation, live status
+- perf: TUI performance optimization — batch queries + throttled metrics
+- release: v7.8.0 — Autonomous Experiment Loop + TUI Tree View
+- feat: add experiment loop core + CLI wiring
+- feat: add rolling context compression for workgroup prompts
+- feat: add tree view mode to TUI (toggle with 't' key)
+- feat: [Shared Workspace] Path: /tmp/aid-wg-wg-54ea Use this direct
+- fix: get_completion_summary NULL handling + experiment status/persist wiring
+- feat: [Shared Workspace] Path: /tmp/aid-wg-wg-ca3d Use this direct
+- feat: [Shared Workspace] Path: /tmp/aid-wg-wg-ca3d Use this direct
+- feat: [Shared Workspace] Path: /tmp/aid-wg-wg-ca3d Use this direct
+- feat: [Shared Workspace] Path: /tmp/aid-wg-wg-ca3d Use this direct
+- release: v7.7.0 — Collective Intelligence
+- feat: [Shared Workspace] Path: /tmp/aid-wg-wg-a6ea Use this direct
+- feat: [Shared Workspace] Path: /tmp/aid-wg-wg-a6ea Use this direct
+- feat: [Shared Workspace] Path: /tmp/aid-wg-wg-a6ea Use this direct
+- release: v7.6.0 — Shared Context Threads
+- feat: [Shared Workspace] Path: /tmp/aid-wg-wg-c886 Use this direct
+- feat: [Shared Workspace] Path: /tmp/aid-wg-wg-c886 Use this direct
+- feat: [Shared Workspace] Path: /tmp/aid-wg-wg-c886 Use this direct
+- chore: remove dispatch batch TOMLs from repo, update gitignore
+- release: v7.5.2 — stabilization (zero clippy warnings, SQL fix, 295 tests)
+- feat: Fix ALL clippy warnings in the codebase. Run `cargo clippy -
+- fix: include merged status in similar-tasks query, align batch test fields
+- fix: robust judge parsing, diff truncation, committed-diff support
+- release: v7.5.1 — memory quality + dispatch intelligence
+- feat: surprise-filter, cross-session hints, best-of-n dispatch (v7.5 P1)
+- release: v7.5.0 — routing intelligence (budget-aware routing + auto-judge)
+- feat: auto-judge review + budget-aware cost-efficiency routing (v7.5)
+- feat: budget-aware cost-efficiency routing for agent auto-selection
+- release: v7.4.0 — episodic memory, success routing, code health
+- feat: [Shared Workspace] Path: /tmp/aid-wg-wg-6c91 Use this direct
+- feat: [Shared Workspace] Path: /tmp/aid-wg-wg-6c91 Use this direct
+- feat: [Shared Workspace] Path: /tmp/aid-wg-wg-6c91 Use this direct
+- feat: [Shared Workspace] Path: /tmp/aid-wg-wg-6085 Use this direct
+- feat: [Shared Workspace] Path: /tmp/aid-wg-wg-6085 Use this direct
+- fix: add --events flag to aid show (no-op, documents default behavior)
+- feat: [Shared Workspace] Path: /tmp/aid-wg-wg-6085 Use this direct
+- fix: run merge verify command through shell for redirect support
+- release: v7.3.0 — code health, file splits, batch UX
+- feat: [Shared Workspace] Path: /tmp/aid-wg-wg-2f03 Use this direct
+- fix: accept both [[task]] and [[tasks]] in batch TOML files
+- feat: [Shared Workspace] Path: /tmp/aid-wg-wg-2f03 Use this direct
+- feat: [Shared Workspace] Path: /tmp/aid-wg-wg-2f03 Use this direct
+- feat: [Shared Workspace] Path: /tmp/aid-wg-wg-2f03 Use this direct
+- release: v7.2.2 — retry --dir override, fast-fail diagnostic hint
+- release: v7.2.1 — fix streaming -o, remove OB1 agent
+- fix: write output file for streaming agents (-o flag)
+- release: v7.2.0 — model cascade, conditional batch chains
+- feat: [Shared Workspace] Path: /tmp/aid-wg-wg-f652 Use this direct
+- feat: [Shared Workspace] Path: /tmp/aid-wg-wg-f652 Use this direct
+- release: v7.1.0 — empty diff guard, foreground timeout, zero warnings
+- feat: [Shared Workspace] Path: /tmp/aid-wg-wg-78b3 Use this direct
+- feat: [Shared Workspace] Path: /tmp/aid-wg-wg-78b3 Use this direct
+- feat: [Shared Workspace] Path: /tmp/aid-wg-wg-78b3 Use this direct
+- release: v7.0.1 — retry worktree reuse, exit_code in JSON output
+- fix: retry reuses existing worktree, exit_code in --json output
+- fix: rename task_hook_json to avoid duplicate definition after merge
+- feat: v7.0 foundation — JSON output, result forwarding, workspace, trust tiers
+- feat: [Shared Workspace] Path: /tmp/aid-wg-wg-bd59 Use this direct
+- feat: [Shared Workspace] Path: /tmp/aid-wg-wg-bd59 Use this direct
+- feat: [Shared Workspace] Path: /tmp/aid-wg-wg-bd59 Use this direct
+- feat: [Shared Workspace] Path: /tmp/aid-wg-wg-bd59 Use this direct
+- release: v6.1.0 — teams as knowledge context, not agent restrictions
+- feat: teams as knowledge context — soft preferences, not agent restrictions
+- docs: update website for v6.0.0 — add Teams section, team command, version bump
+- release: v6.0.1 — improved UX for in-place tasks
+- fix: improve UX for in-place (no worktree) tasks
+- feat: aid team — native team concept for role-based agent selection
+- release: v5.9.2 — merge-group test + real-world merge validation
+- chore: auto-commit agent changes before merge
+- release: v5.9.1 — fix merge data-loss, comprehensive merge tests
+- test: comprehensive merge tests — 17 new tests covering all data-loss scenarios
+- fix: prevent data loss in aid merge — validate commits, auto-commit, proper cleanup
+- chore: v5.9.0 — store v2 versioning, skill packages, graceful upgrade
+- feat: IMPORTANT: When editing text/config files, make targeted ed
+- feat: IMPORTANT: When editing text/config files, make targeted ed
+- feat: [Shared Context: v59-features] Auto-created for batch dispat
+- chore: bump version to 5.8.2
+- fix: improve show --diff and merge UX for non-worktree tasks
+- chore: v5.8.1 — update README, website docs for fast query & setup
+- fix: setup differentiates first-time vs returning users
+- fix: setup shows current config status when already configured
+- fix: setup wizard UI polish — sections, key masking, verify spinner
+- feat: setup detects all built-in agents + custom agents
+- fix: setup wizard shows "Press Enter to skip" hint
+- feat: aid setup — interactive configuration wizard
+- fix: default free tier to openrouter/free
+- feat: v5.8.0 — aid query (fast LLM via OpenRouter)
+- feat: auto-publish to crates.io on tag push + install.sh
+- fix: strip com.apple.provenance xattr in install command
+- chore: v5.7.0 — broadcast bridge, false-positive fix, workspace setup
+- feat: IMPORTANT: When editing text/config files, make targeted ed
+- feat: [Shared Context: v57-broadcast] Auto-created for batch dispa
+- feat: [Shared Context: v57-broadcast] Auto-created for batch dispa
+- docs: update README and website for v5.4-5.6 features
+- docs: add project CLAUDE.md with install instructions
+- chore: v5.6.1 — CLI arg ergonomics (group create optional context, summary positional group, run -g)
+- fix: improve CLI arg ergonomics
+- chore: v5.6.0 — shared findings for workgroup collaboration
+- feat: [Shared Context: v56-findings] Auto-created for batch dispat
+- feat: [Shared Context: v56-findings] Auto-created for batch dispat
+- feat: [Shared Context: v56-findings] Auto-created for batch dispat
+- feat: [Shared Context: v56-findings] Auto-created for batch dispat
+- feat: [Shared Context: v56-findings] Auto-created for batch dispat
+- feat: v5.5.0 — task tree visualization, workgroup summary
+- feat: [Shared Context: v55-tree-summary] Auto-created for batch di
+- feat: [Shared Context: v55-tree-summary] Auto-created for batch di
+- feat: [Shared Context: v55-tree-summary] Auto-created for batch di
+- chore: v5.4.2 — orchestrator-only memory, explicit --project flag
+- feat: memory update command + age in prompt injection
+- fix: memory list/search project-scoped by default, add --all flag
+- fix: memory list/search auto-scopes to current project
+- chore: v5.4.1 — bug fixes, task export, dogfood improvements
+- fix: update auto-retry test for verify_status behavior change
+- fix: revert unnecessary load_metrics expansion to completed tasks
+- fix: TUI Progress column shows milestones for completed tasks
+- feat: [Shared Context: v54-fixes-and-export] Auto-created for batc
+- fix: verify failure should not override task status to Failed
+- feat: [Shared Context: v54-fixes-and-export] Auto-created for batc
+- feat: [Shared Context: v54-fixes-and-export] Auto-created for batc
+- chore: v5.4.0 — agent memory system, verify status
+- feat: add VerifyStatus to distinguish execution failure from verify failure
+- fix: align memory CLI with canonical Memory struct
+- feat: add aid memory CLI commands
+- feat: add memory injection to prompt pipeline
+- feat: [Shared Context: v54-memory] Auto-created for batch dispatch
+- feat: [Shared Context: v54-memory] Auto-created for batch dispatch
+- feat: [Shared Context: v54-memory] Auto-created for batch dispatch
+- feat: [Shared Context: v54-memory] Auto-created for batch dispatch
+- feat: add agent store website at store.agent-tools.org
+- chore: v5.3.1 — migrate agent store to agent-tools-org, add script support
+- chore: migrate repo to agent-tools-org organization
+- docs: update README and website for v5.2-5.3 features
+- chore: v5.3.0 — hooks, prompt compaction, UTF-8 safety
+- fix: UTF-8 safe truncation + hooks test constructors
+- fix: align indentation in main.rs hooks wiring
+- feat: IMPORTANT: When editing text/config files, make targeted ed
+- feat: [Shared Context: v53-hooks-compaction] Auto-created for batc
+- chore: v5.2.0 — agent analytics, agent fork, test deadlock fix
+- feat: [Shared Context: v52-features] Auto-created for batch dispat
+- feat: IMPORTANT: When editing text/config files, make targeted ed
+- feat: [Shared Context: v52-features] Auto-created for batch dispat
+- feat: IMPORTANT: When editing text/config files, make targeted ed
+- feat: [Shared Context: v51-release] Auto-created for batch dispatc
+- chore: bump version to 5.1.0
+- feat: [Shared Context: v51-store-wave2] Auto-created for batch dis
+- fix: custom agent display name + background worker + retry resolution
+- feat: add aid store subcommand (browse, install, show)
+- fix: use correct custom agent TOML fields (id + display_name)
+- fix: escape AID_TASK_ID in custom agent example to fix tsc
+- feat: IMPORTANT: When editing text/config files, make targeted ed
+- chore: bump version to 5.0.1
+- fix: v5.0.1 — custom agent dogfood fixes + contention prevention
+- feat: [Shared Context: v50-contention] Auto-created for batch disp
+- feat: IMPORTANT: When editing text/config files, make targeted ed
+- feat: [Shared Context: v50-dogfood] Auto-created for batch dispatc
+- feat: [Shared Context: v50-dogfood] Auto-created for batch dispatc
+- feat: [Shared Context: v50-dogfood] Auto-created for batch dispatc
+- feat: v5.0 — custom agent definitions, agent CLI, worktree base branch fix
+- feat: IMPORTANT: When editing text/config files, make targeted ed
+- feat: [Shared Context: v50-wave1] Auto-created for batch dispatch
+- feat: IMPORTANT: When editing text/config files, make targeted ed
+- feat: IMPORTANT: When editing text/config files, make targeted ed
+- feat: add agent-optimized website at aid.agent-tools.org
+- feat: v4.8 — stabilization: codebuff cost, worktree escape, TUI dim
+- feat: [Shared Context: v48-bugs] Auto-created for batch dispatch
+- feat: IMPORTANT: When editing text/config files, make targeted ed
+- docs: update README for v4.7 — codebuff setup guide, cost warning, pricing update
+- feat: v4.7 — self-evaluation fixes, pricing update, codebuff cost tracking
+- chore: bump version to v4.7.0
+- feat: v4.6 — cost tracking overhaul, agent-aware cost labels
+- feat: [Context] [Context Files - read these before starting] - src
+- fix: upgrade codebuff SDK to v0.10 — local agent execution, no WebSocket
+- feat: v4.5 — codebuff plugin, TUI stats view, retry worktree fix
+- feat: [Context] [Context Files - read these before starting] - src
+- feat: v4.4 — intelligent task routing with classifier + capability matrix
+- fix: word-boundary matching for classifier, poison-safe AidHomeGuard
+- feat: [Context] [Context Files - read these before starting] - src
+- chore: bump version to v4.3.0
+- feat: v4.3 — ob1 coding support, cursor budget model, startup zombie cleanup
+- feat: [Shared Context: v43-fixes] Auto-created for batch dispatch
+- docs: update README for v4.2 — ob1 agent, worktree CLI, workspace isolation
+- chore: add ob1 to available agents list in error message
+- feat: add ob1 agent adapter — multi-model coding CLI
+- fix: worktree list handles macOS /private/tmp symlink
+- feat: add `aid worktree create/list/remove` CLI commands
+- feat: worktree escape detection — warn if agent modified main repo
+- fix: watch --group scope leak, auto cherry-pick on merge
+- chore: bump version to v4.1.0
+- refactor: split TUI modules — app.rs and ui.rs under 300-line limit
+- feat: workspace isolation — AID_GROUP env var, auto-cleanup, merge precheck
+- feat: upgrade agent capabilities — cursor/gemini coding support, fallback chain
+- chore: bump version to v4.0.1
+- feat: progress reporting in quiet watch + board poll detection
+- fix: TUI color palette — fix invisible selected text, improve contrast
+- docs: update README for v4.0 — clean, merge --group, CLI hints
+- chore: bump version to v4.0.0
+- feat: aid merge --group for bulk merging workgroup tasks
+- feat: watch hints after background dispatch and batch
+- feat: contextual CLI hints and after_help examples
+- feat: IMPORTANT: When editing text/config files, make targeted ed
+- chore: bump version to v3.9.0
+- fix: auto-retry after verify failures
+- feat: TUI detail view tab system — events/prompt/output
+- feat: [Shared Context: v39-wave2] Auto-created for batch dispatch
+- feat: [Shared Context: v39-wave2] Auto-created for batch dispatch
+- feat(batch): support defaults section
+- feat: [Shared Context: v39-wave1] Auto-created for batch dispatch
+- docs: update README for v3.8 — stream board, batch fields, kilo agent
+- chore: bump version to v3.8.0
+- feat: v3.8 — modular architecture, stream board, TUI polish
+- feat: batch read_only/budget fields, auto-budget detection, TUI duration fix
+- chore: bump version to v3.7.0
+- feat: v3.7 — rate-limit auto-expiry, batch pre-check, worktree lock fix
+- feat: [Shared Context: v37-tasks] Auto-created for batch dispatch
+- feat: [Shared Context: v37-tasks] Auto-created for batch dispatch
+- feat: [Shared Context: v37-tasks] Auto-created for batch dispatch
+- chore: bump version to v3.6.0
+- feat: clear-limit CLI, codex model passthrough, gpt-5.4 registry
+- chore: bump version to v3.5.1
+- feat: TUI multipane v2 — scrolling, rich headers, all tasks, Enter/Esc navigation
+- chore: bump version to v3.5.0
+- feat: enrich TUI multipane with duration, tokens, cost, model, milestone, metrics
+- feat: batch verify=true support, rate-limit precheck, diff exclude locks, CLI help
+- chore: bump version to v3.4.0
+- feat: model-level history stats, budget model auto-selection, improved CLI help
+- feat: [Shared Context: v34-wave1] Auto-created for batch dispatch
+- feat: [Shared Context: v34-wave1] Auto-created for batch dispatch
+- feat: [Shared Context: v34-wave1] Auto-created for batch dispatch
+- chore: bump version to v3.3.0
+- feat: multi-task watch support and indent fix
+- enhance rate-limit tracking to store recovery time and display in config
+- feat: IMPORTANT: When editing text/config files, make targeted ed
+- feat: IMPORTANT: When editing text/config files, make targeted ed
+- feat: IMPORTANT: When editing text/config files, make targeted ed
+- chore: bump version to v3.2.0
+- fix: align multipane bridge with structured PaneData events
+- feat: IMPORTANT: When editing text/config files, make targeted ed
+- feat: IMPORTANT: When editing text/config files, make targeted ed
+- chore: bump version to v3.1.0
+- feat: add --exit-on-await flag for manager notification
+- fix: add Kilo to agent usage stats iteration
+- feat: add history-based agent scoring for auto-selection
+- feat: IMPORTANT: When editing text/config files, make targeted ed
+- feat: IMPORTANT: When editing text/config files, make targeted ed
+- chore: bump version to v3.0.0
+- docs: add kilo to agent help text
+- feat: IMPORTANT: When editing text/config files, make targeted ed
+- fix: disable prompt detection for streaming agents
+- chore: remove batch dispatch files
+- chore: bump version to v2.9.0
+- feat: add OpenCode --session retry for session continuity
+- fix: add missing agent_session_id to test Task structs
+- feat: pass context files to OpenCode via -f flag
+- feat: IMPORTANT: When editing text/config files, make targeted ed
+- chore: rename crate to ai-dispatch for crates.io publish
+- chore: bump version to v2.8.0
+- feat(retry): add --agent flag to override agent for retries
+- feat: [Shared Context: v28-resilience] Auto-created for batch disp
+- feat: add text-edit prompt guard for non-code files
+- feat: sync Cargo.lock toworktrees to avoid redundant dependency resolution
+- feat: validate fallback agent in batch file parser
+- chore: bump version to v2.7.0
+- feat: [Shared Context: v27-native-flags] Auto-created for batch di
+- feat(gemini): upgrade to streaming mode with native CLI flags
+- feat: [Shared Context: v27-native-flags] Auto-created for batch di
+- feat: use native CLI flags for read-only and full-auto modes
+- feat: [Shared Context: v27-native-flags] Auto-created for batch di
+- chore: bump version to v2.6.0
+- feat: [Shared Context: v26-efficiency-opencode] Auto-created for b
+- feat: add auto rate-limit detection for codex
+- chore: bump version to v2.5.0
+- feat: [Shared Context: v25-polish] Auto-created for batch dispatch
+- feat: [Shared Context: v25-polish] Auto-created for batch dispatch
+- fix: parse OpenCode JSON token events
+- fix(cursor): parse stream-json token usage
+- feat: [Shared Context: v25-polish] Auto-created for batch dispatch
+- feat: add --fallback agent and fix codex worktree trust
+- feat: add `aid init` command with default skills
+- chore: prepare for open source release
+- chore: bump version to v2.2.0
+- feat: [Shared Context: v22-budget] Auto-created for batch dispatch
+- feat: add budget-aware agent selection
+- feat: [Shared Context: v22-budget] Auto-created for batch dispatch
+- fix(show): fall back to default log output
+- chore: bump version to v2.1.0
+- fix(board): show awaiting prompt instead of output context
+- feat: add completion notification feed
+- feat(respond): accept stdin and file input
+- feat: [Shared Context: v21-robustness] Auto-created for batch disp
+- fix(batch): persist skipped dependency tasks
+- feat: [Shared Context: v21-robustness] Auto-created for batch disp
+- feat: [Shared Context: v21-robustness] Auto-created for batch disp
+- feat: add show context prompt inspection
+- feat(batch): limit concurrent batch dispatches
+- feat: [Shared Context: v21-robustness] Auto-created for batch disp
+- docs: update README for v2.0.0 and add Claude Code prompt file
+- feat(cli): add merge command for completed tasks
+- feat: [Shared Context: v21-robustness] Auto-created for batch disp
+- feat: [Shared Context: v21-robustness] Auto-created for batch disp
+- feat: [Shared Context: v21-robustness] Auto-created for batch disp
+- feat: [Shared Context: v21-robustness] Auto-created for batch disp
+- chore: bump version to v2.0.0
+- feat: add multi-repo task dispatch
+- feat(templates): add prompt template support
+- feat: [Shared Context: v20-capabilities] Auto-created for batch di
+- feat: [Shared Context: v20-capabilities] Auto-created for batch di
+- feat: add task completion webhooks
+- feat: add benchmark command for multi-agent comparisons
+- docs: update README for v1.7.0 features
+- chore: bump version to v1.7.0
+- fix: inherit retry worktree base
+- feat: show retry chain history
+- feat: make task max duration configurable
+- feat(usage): add per-agent execution stats
+- feat: [Shared Context: v17-ux] Auto-created for batch dispatch
+- feat: [Shared Context: v17-ux] Auto-created for batch dispatch
+- feat: [Shared Context: v17-ux] Auto-created for batch dispatch
+- chore: bump version to v1.6.0
+- refactor(show): extract explain module
+- refactor(cmd): extract retry logic from run
+- feat: [Shared Context: v16-quality] Auto-created for batch dispatc
+- feat: [Shared Context: v16-quality] Auto-created for batch dispatc
+- feat: [Shared Context: v16-quality] Auto-created for batch dispatc
+- docs: update README for v1.5.0 features
+- chore: bump version to v1.5.0
+- feat: [Shared Context: v15-fixes] Auto-created for batch dispatch
+- feat: [Shared Context: v15-fixes] Auto-created for batch dispatch
+- feat: [Shared Context: v15-fixes] Auto-created for batch dispatch
+- feat: dependency-based DAG scheduling and v1.4.0 release
+- feat: add agent capability profiles and pricing table
+- feat: [Shared Context: v14-features] Auto-created for batch dispat
+- feat: [Shared Context: v14-features] Auto-created for batch dispat
+- feat: [Shared Context: v14-features] Auto-created for batch dispat
+- feat: [Shared Context: v14-features] Auto-created for batch dispat
+- feat: [Shared Context: v14-features] Auto-created for batch dispat
+- chore: release aid v1.3.0
+- fix: detect zombie/defunct processes in zombie task cleanup
+- feat: add skills parameter to aid_run MCP tool
+- feat: enforce post-task worktree commits
+- feat(tui): add dashboard view
+- feat(run): auto-apply default skills
+- chore: release aid v1.2.0
+- fix: revert unintended README changes from interactive-io task
+- feat: add PTY input forwarding for background tasks
+- docs: rewrite ai-dispatch readme
+- feat: share workgroup milestone findings
+- chore: release aid v1.1.1 — milestone reporting
+- feat: surface task milestones in dashboards
+- chore: release aid v1.1.0
+- feat: add skill injection for methodology-guided agent dispatch
+- feat: add MCP server mode for native Claude Code tool calls
+- feat: add smart agent auto-selection
+- feat: add process metrics to tui dashboard
+- feat: consolidate CLI from 17 to 11 commands for v1.0
+- feat: fix 4 reliability bugs for v1.0
+- chore: fix clippy warnings and bump to v0.9.0
+- feat: add task dependency DAG to batch dispatch
+- feat: add `aid explain` — AI-assisted task log explanation
+- feat: scope tui watch by task and workgroup
+- chore: release aid v0.8.0
+- feat: add workgroup lifecycle commands
+- chore: release aid v0.7.0
+- feat: extend workgroup task views
+- feat: add workgroup shared context
+- chore: release aid v0.6.0
+- feat: improve streaming usage tracking
+- feat: add wait commands for task orchestration
+- feat: release aid v0.5.0
+- feat: v0.5 Phase 0 — command stubs, store migration, audit/review extraction
+- chore: v0.5 foundation — add deps, Serialize derives, parent_task_id
+- feat: v0.4 verify + context + review (agent collaboration)
+- feat: v0.3 worktree isolation, batch dispatch, cursor adapter
+- feat: v0.2 observability — cost tracking, OpenCode adapter, stderr capture, richer events
+- feat: implement aid MVP v0.1 — multi-AI CLI team orchestrator
+- Initial commit: add DESIGN.md
+

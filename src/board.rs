@@ -47,6 +47,23 @@ pub fn render_board(tasks: &[Task], store: &Store) -> Result<String> {
         .collect();
     let latest_milestones = store.latest_milestones_batch(&running_ids)?;
     let awaiting_reasons = store.latest_awaiting_reasons_batch(&awaiting_ids)?;
+    let failed_ids: Vec<&str> = tasks
+        .iter()
+        .filter(|task| task.status == TaskStatus::Failed)
+        .map(|task| task.id.as_str())
+        .collect();
+    let latest_errors = store.latest_errors_batch(&failed_ids)?;
+    // Fallback: for tasks without a filtered error, use any latest error
+    let missing_error_ids: Vec<&str> = failed_ids.iter()
+        .filter(|id| !latest_errors.contains_key(**id))
+        .copied()
+        .collect();
+    let fallback_errors = store.latest_errors_batch_unfiltered(&missing_error_ids)?;
+    let latest_errors = {
+        let mut merged = latest_errors;
+        merged.extend(fallback_errors);
+        merged
+    };
 
     // Header
     if show_repo {
@@ -73,7 +90,8 @@ pub fn render_board(tasks: &[Task], store: &Store) -> Result<String> {
                 None => task.status.label().to_string(),
             }
         } else {
-            let base = task_status(task, latest_milestone(&latest_milestones, task.id.as_str()));
+            let error = latest_errors.get(task.id.as_str()).cloned();
+            let base = task_status(task, latest_milestone(&latest_milestones, task.id.as_str()), error);
             if task.verify_status == VerifyStatus::Failed {
                 format!("{} [VFAIL]", base)
             } else {
@@ -311,11 +329,14 @@ fn short_repo(repo: Option<&str>) -> String {
         .unwrap_or_else(|| "-".to_string())
 }
 
-fn task_status(task: &Task, milestone: Option<String>) -> String {
-    if task.status == TaskStatus::Failed
-        && let Some(pending_reason) = task.pending_reason.as_deref()
-    {
-        return truncate(&format!("{} — {}", task.status.label(), pending_reason), 30);
+fn task_status(task: &Task, milestone: Option<String>, latest_error: Option<String>) -> String {
+    if task.status == TaskStatus::Failed {
+        if let Some(pending_reason) = task.pending_reason.as_deref() {
+            return truncate(&format!("{} — {}", task.status.label(), pending_reason), 30);
+        }
+        if let Some(error) = latest_error {
+            return truncate(&format!("{} — {}", task.status.label(), error), 30);
+        }
     }
     if task.status == TaskStatus::Running
         && let Some(milestone) = milestone
@@ -467,6 +488,22 @@ mod tests {
 
         let output = render_board(&[task], &store).unwrap();
         assert!(output.contains("FAIL — rate_limited"));
+    }
+
+    #[test]
+    fn board_shows_latest_error_for_failed_task() {
+        let store = Store::open_memory().unwrap();
+        let task = make_task("t-err1", AgentKind::Codex, TaskStatus::Failed);
+        store.insert_task(&task).unwrap();
+        store.insert_event(&TaskEvent {
+            task_id: TaskId("t-err1".to_string()),
+            timestamp: Local::now(),
+            event_kind: EventKind::Error,
+            detail: "Quota exhausted".to_string(),
+            metadata: None,
+        }).unwrap();
+        let output = render_board(&[task], &store).unwrap();
+        assert!(output.contains("FAIL — Quota exhausted"), "output: {output}");
     }
 
     #[test]

@@ -22,14 +22,16 @@ impl super::Agent for GeminiAgent {
 
     fn build_command(&self, prompt: &str, opts: &RunOpts) -> Result<Command> {
         let mut cmd = Command::new("gemini");
+        cmd.args(["-o", "stream-json"]);
         if opts.read_only {
-            cmd.args(["-o", "stream-json", "--approval-mode", "plan", "-p", prompt]);
+            cmd.args(["--approval-mode", "plan"]);
         } else {
-            cmd.args(["-o", "stream-json", "--approval-mode", "yolo", "-p", prompt]);
+            cmd.arg("-y");
         }
         if let Some(ref model) = opts.model {
             cmd.args(["-m", model]);
         }
+        cmd.args(["-p", prompt]);
         if let Some(ref dir) = opts.dir {
             cmd.current_dir(dir);
         }
@@ -62,67 +64,44 @@ impl super::Agent for GeminiAgent {
 
 fn parse_stream_event(task_id: &TaskId, v: &serde_json::Value, now: chrono::DateTime<Local>) -> Option<TaskEvent> {
     let event_type = v.get("type")?.as_str()?;
-    match event_type {
+    let (kind, detail, metadata) = match event_type {
+        // "text" (pre-0.35) and "message" (0.35+) both carry assistant text
         "text" => {
-            let content = v
-                .get("content")
-                .and_then(|c| c.as_str())
+            let content = v.get("content").and_then(|c| c.as_str())
                 .or_else(|| v.get("text").and_then(|t| t.as_str()))?;
-            Some(TaskEvent {
-                task_id: task_id.clone(),
-                timestamp: now,
-                event_kind: EventKind::Reasoning,
-                detail: content.to_string(),
-                metadata: None,
-            })
+            (EventKind::Reasoning, content.to_string(), None)
+        }
+        "message" => {
+            if v.get("role").and_then(|r| r.as_str()) != Some("assistant") {
+                return None;
+            }
+            let content = v.get("content").and_then(|c| c.as_str())?;
+            (EventKind::Reasoning, content.to_string(), None)
         }
         "tool_call" | "tool_use" => {
             let name = extract_tool_name(v).unwrap_or("unknown");
-            let args = extract_tool_arguments(v).unwrap_or_default();
-            let truncated_args = if args.len() > 100 {
-                let mut end = 100;
-                while !args.is_char_boundary(end) { end -= 1; }
-                format!("{}...", &args[..end])
-            } else {
-                args
-            };
-            Some(TaskEvent {
-                task_id: task_id.clone(),
-                timestamp: now,
-                event_kind: EventKind::ToolCall,
-                detail: format!("{}({})", name, truncated_args),
-                metadata: None,
-            })
+            let args = truncate(&extract_tool_arguments(v).unwrap_or_default(), 100);
+            (EventKind::ToolCall, format!("{name}({args})"), None)
         }
         "tool_result" => {
             let name = extract_tool_name(v).unwrap_or("unknown");
             let output = v.get("output").and_then(|o| o.as_str()).unwrap_or("");
-            let (kind, detail) = classify_tool_result(name, output);
-            Some(TaskEvent {
-                task_id: task_id.clone(),
-                timestamp: now,
-                event_kind: kind,
-                detail,
-                metadata: None,
-            })
+            let (k, d) = classify_tool_result(name, output);
+            (k, d, None)
         }
-        "turn_complete" => {
-            let (tokens, model) = extract_turn_complete_stats(v);
+        // "turn_complete" (pre-0.35) and "result" (0.35+) carry completion stats
+        "turn_complete" | "result" => {
+            let (tokens, model) = extract_completion_stats(v);
             let detail = match tokens {
-                Some(t) => format!("completed with {} tokens", t),
+                Some(t) => format!("completed with {t} tokens"),
                 None => "completed".to_string(),
             };
-            let metadata = tokens.map(|t| json!({ "tokens": t, "model": model }));
-            Some(TaskEvent {
-                task_id: task_id.clone(),
-                timestamp: now,
-                event_kind: EventKind::Completion,
-                detail,
-                metadata,
-            })
+            let meta = tokens.map(|t| json!({ "tokens": t, "model": model }));
+            (EventKind::Completion, detail, meta)
         }
-        _ => None,
-    }
+        _ => return None,
+    };
+    Some(TaskEvent { task_id: task_id.clone(), timestamp: now, event_kind: kind, detail, metadata })
 }
 
 fn extract_tool_name<'a>(v: &'a serde_json::Value) -> Option<&'a str> {
@@ -189,49 +168,79 @@ fn truncate(s: &str, max_len: usize) -> String {
     }
 }
 
-fn extract_turn_complete_stats(v: &serde_json::Value) -> (Option<i64>, Option<String>) {
-    let models = match v.pointer("/stats/models").and_then(|m| m.as_array()) {
-        Some(arr) => arr,
+/// Extract tokens + model from stats in both old and new gemini-cli formats.
+/// Old (pre-0.35): stats.models = [{model, tokens:{total}}]
+/// New (0.35+):    stats.total_tokens at top level, stats.models = {"name": {total_tokens}}
+fn extract_completion_stats(v: &serde_json::Value) -> (Option<i64>, Option<String>) {
+    let stats = match v.get("stats") {
+        Some(s) => s,
         None => return (None, None),
     };
-    let first_model = match models.first() {
-        Some(m) => m,
-        None => return (None, None),
-    };
-    let tokens = first_model
-        .pointer("/tokens/total")
-        .and_then(|t| t.as_i64());
-    let model_name = first_model
-        .get("model")
-        .and_then(|m| m.as_str())
-        .map(|s| s.to_string());
-    (tokens, model_name)
+    // New format: top-level total_tokens
+    if let Some(total) = stats.get("total_tokens").and_then(|t| t.as_i64()) {
+        let model = stats
+            .get("models")
+            .and_then(|m| m.as_object())
+            .and_then(|obj| obj.keys().next().cloned());
+        return (Some(total), model);
+    }
+    // Old format: models array with tokens.total
+    if let Some(arr) = stats.get("models").and_then(|m| m.as_array()) {
+        let first = match arr.first() {
+            Some(m) => m,
+            None => return (None, None),
+        };
+        let tokens = first.pointer("/tokens/total").and_then(|t| t.as_i64());
+        let model = first.get("model").and_then(|m| m.as_str()).map(|s| s.to_string());
+        return (tokens, model);
+    }
+    (None, None)
 }
 
 pub fn extract_response(output: &str) -> Option<String> {
-    let lines: Vec<&str> = output.lines().collect();
-    
-    // Try stream-json format first: find the last "text" event
-    for line in lines.iter().rev() {
+    // Collect all assistant message chunks (new format) and last text event (old format).
+    // New gemini-cli streams delta messages; concatenate all assistant deltas.
+    let mut assistant_chunks = Vec::new();
+    let mut last_text_content: Option<String> = None;
+
+    for line in output.lines() {
         let trimmed = line.trim();
         if trimmed.is_empty() {
             continue;
         }
-        if let Ok(v) = serde_json::from_str::<serde_json::Value>(trimmed)
-            && v.get("type").and_then(|t| t.as_str()) == Some("text")
-        {
-            if let Some(content) = v.get("content").and_then(|c| c.as_str()) {
-                return Some(content.to_string());
+        let Ok(v) = serde_json::from_str::<serde_json::Value>(trimmed) else { continue };
+        let Some(event_type) = v.get("type").and_then(|t| t.as_str()) else { continue };
+        match event_type {
+            // New format (0.35+): assistant message deltas
+            "message" if v.get("role").and_then(|r| r.as_str()) == Some("assistant") => {
+                if let Some(content) = v.get("content").and_then(|c| c.as_str()) {
+                    assistant_chunks.push(content.to_string());
+                }
             }
-            if let Some(text) = v.get("text").and_then(|t| t.as_str()) {
-                return Some(text.to_string());
+            // Old format: text events
+            "text" => {
+                let content = v
+                    .get("content")
+                    .and_then(|c| c.as_str())
+                    .or_else(|| v.get("text").and_then(|t| t.as_str()));
+                if let Some(c) = content {
+                    last_text_content = Some(c.to_string());
+                }
             }
+            _ => {}
         }
     }
-    
+
+    // Prefer new format (concatenated deltas) over old format (last text event)
+    if !assistant_chunks.is_empty() {
+        return Some(assistant_chunks.concat());
+    }
+    if let Some(text) = last_text_content {
+        return Some(text);
+    }
+
     // Fallback: try legacy single JSON format
     let v: serde_json::Value = serde_json::from_str(output).ok()?;
-
     if let Some(resp) = v.get("response").and_then(|r| r.as_str()) {
         return Some(resp.to_string());
     }
@@ -247,14 +256,27 @@ pub fn extract_response(output: &str) -> Option<String> {
     None
 }
 
-/// Extract total token count from gemini stats
+/// Extract total token count from gemini stats (both old and new formats).
 fn extract_tokens(v: &serde_json::Value) -> Option<i64> {
-    if let Some(models) = v.pointer("/stats/models")
-        && let Some(arr) = models.as_array()
-    {
+    // New format: top-level stats.total_tokens
+    if let Some(total) = v.pointer("/stats/total_tokens").and_then(|t| t.as_i64()) {
+        return Some(total);
+    }
+    // Old format: stats.models array with tokens.total
+    if let Some(arr) = v.pointer("/stats/models").and_then(|m| m.as_array()) {
         let total: i64 = arr
             .iter()
             .filter_map(|m| m.pointer("/tokens/total").and_then(|t| t.as_i64()))
+            .sum();
+        if total > 0 {
+            return Some(total);
+        }
+    }
+    // New format: models as object with total_tokens per model
+    if let Some(obj) = v.pointer("/stats/models").and_then(|m| m.as_object()) {
+        let total: i64 = obj
+            .values()
+            .filter_map(|m| m.get("total_tokens").and_then(|t| t.as_i64()))
             .sum();
         if total > 0 {
             return Some(total);
@@ -268,6 +290,12 @@ fn extract_model(v: &serde_json::Value) -> Option<String> {
     for path in ["/modelVersion", "/model", "/stats/models/0/model"] {
         if let Some(m) = v.pointer(path).and_then(|v| v.as_str()) {
             return Some(m.to_string());
+        }
+    }
+    // New format: stats.models is an object keyed by model name
+    if let Some(obj) = v.pointer("/stats/models").and_then(|m| m.as_object()) {
+        if let Some(name) = obj.keys().next() {
+            return Some(name.clone());
         }
     }
     None
@@ -290,155 +318,5 @@ pub fn make_completion_event(task_id: &TaskId, info: &CompletionInfo) -> TaskEve
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_extract_model() {
-        let json = serde_json::json!({
-            "modelVersion": "gemini-2.5-pro",
-            "response": "test"
-        });
-        assert_eq!(extract_model(&json), Some("gemini-2.5-pro".to_string()));
-
-        let json2 = serde_json::json!({
-            "stats": {
-                "models": [{"model": "gemini-1.5-flash"}]
-            }
-        });
-        assert_eq!(extract_model(&json2), Some("gemini-1.5-flash".to_string()));
-
-        let json3 = serde_json::json!({ "response": "test" });
-        assert_eq!(extract_model(&json3), None);
-    }
-
-    #[test]
-    fn parses_text_event() {
-        let task_id = TaskId::generate();
-        let json = serde_json::json!({
-            "type": "text",
-            "content": "Hello world"
-        });
-        let event = parse_stream_event(&task_id, &json, Local::now()).unwrap();
-        assert_eq!(event.task_id, task_id);
-        assert_eq!(event.event_kind, EventKind::Reasoning);
-        assert_eq!(event.detail, "Hello world");
-    }
-
-    #[test]
-    fn parses_turn_complete_with_tokens() {
-        let task_id = TaskId::generate();
-        let json = serde_json::json!({
-            "type": "turn_complete",
-            "stats": {
-                "models": [{
-                    "model": "gemini-2.5-pro",
-                    "tokens": {
-                        "total": 1234,
-                        "input": 500,
-                        "output": 734
-                    }
-                }]
-            }
-        });
-        let event = parse_stream_event(&task_id, &json, Local::now()).unwrap();
-        assert_eq!(event.task_id, task_id);
-        assert_eq!(event.event_kind, EventKind::Completion);
-        assert!(event.detail.contains("1234"));
-        let metadata = event.metadata.unwrap();
-        assert_eq!(metadata["tokens"], 1234);
-        assert_eq!(metadata["model"], "gemini-2.5-pro");
-    }
-
-    #[test]
-    fn extract_response_from_stream_json() {
-        let output = r#"{"type":"text","content":"First line"}
-{"type":"text","content":"Second line"}
-{"type":"turn_complete"}"#;
-        let result = extract_response(output);
-        assert_eq!(result, Some("Second line".to_string()));
-    }
-
-    #[test]
-    fn parses_tool_call_event() {
-        let task_id = TaskId::generate();
-        let json = serde_json::json!({
-            "type": "tool_call",
-            "name": "Read",
-            "arguments": "{\"file\": \"test.rs\"}"
-        });
-        let event = parse_stream_event(&task_id, &json, Local::now()).unwrap();
-        assert_eq!(event.event_kind, EventKind::ToolCall);
-        assert!(event.detail.starts_with("Read("));
-    }
-
-    #[test]
-    fn parses_tool_call_event_from_function_call_object() {
-        let task_id = TaskId::generate();
-        let json = serde_json::json!({
-            "type": "tool_call",
-            "functionCall": {
-                "name": "Read",
-                "args": { "file": "src/main.rs" }
-            }
-        });
-        let event = parse_stream_event(&task_id, &json, Local::now()).unwrap();
-        assert_eq!(event.event_kind, EventKind::ToolCall);
-        assert_eq!(event.detail, r#"Read({"file":"src/main.rs"})"#);
-    }
-
-    #[test]
-    fn parses_tool_call_event_from_alternate_name_fields() {
-        let task_id = TaskId::generate();
-        let function_call = serde_json::json!({
-            "type": "tool_call",
-            "function_call": "Glob",
-            "parameters": { "pattern": "*.rs" }
-        });
-        let tool_name = serde_json::json!({
-            "type": "tool_call",
-            "toolName": "Read",
-            "input": { "file": "src/lib.rs" }
-        });
-        let tool = serde_json::json!({
-            "type": "tool_call",
-            "tool": "Write",
-            "arguments": "{\"file\":\"src/lib.rs\"}"
-        });
-
-        let function_call_event = parse_stream_event(&task_id, &function_call, Local::now()).unwrap();
-        let tool_name_event = parse_stream_event(&task_id, &tool_name, Local::now()).unwrap();
-        let tool_event = parse_stream_event(&task_id, &tool, Local::now()).unwrap();
-
-        assert_eq!(function_call_event.detail, r#"Glob({"pattern":"*.rs"})"#);
-        assert_eq!(tool_name_event.detail, r#"Read({"file":"src/lib.rs"})"#);
-        assert_eq!(tool_event.detail, r#"Write({"file":"src/lib.rs"})"#);
-    }
-
-    #[test]
-    fn parses_gemini_cli_tool_use_event() {
-        let task_id = TaskId::generate();
-        // Real gemini-cli format: "type": "tool_use" with "tool_name" field
-        let json = serde_json::json!({
-            "type": "tool_use",
-            "tool_name": "grep_search",
-            "tool_id": "grep_search_123_0",
-            "parameters": { "pattern": "dispatch" }
-        });
-        let event = parse_stream_event(&task_id, &json, Local::now()).unwrap();
-        assert_eq!(event.event_kind, EventKind::ToolCall);
-        assert_eq!(event.detail, r#"grep_search({"pattern":"dispatch"})"#);
-    }
-
-    #[test]
-    fn parses_tool_result_test_event() {
-        let task_id = TaskId::generate();
-        let json = serde_json::json!({
-            "type": "tool_result",
-            "name": "run_tests",
-            "output": "Tests passed successfully"
-        });
-        let event = parse_stream_event(&task_id, &json, Local::now()).unwrap();
-        assert_eq!(event.event_kind, EventKind::Test);
-    }
-}
+#[path = "gemini_tests.rs"]
+mod tests;

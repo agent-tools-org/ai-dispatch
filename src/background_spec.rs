@@ -29,6 +29,8 @@ pub struct BackgroundRunSpec {
     #[serde(default)]
     pub skills: Vec<String>,
     #[serde(default)]
+    pub checklist: Vec<String>,
+    #[serde(default)]
     pub template: Option<String>,
     #[serde(default)]
     pub interactive: bool,
@@ -124,6 +126,7 @@ mod tests {
             retry: 2,
             group: Some("core".to_string()),
             skills: vec!["ai-coding".to_string()],
+            checklist: vec!["confirm retry path".to_string()],
             template: Some("default".to_string()),
             interactive: true,
             on_done: Some("echo done".to_string()),

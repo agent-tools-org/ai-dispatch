@@ -88,6 +88,7 @@ pub(crate) fn task_to_run_args(
         judge: task.judge.clone(),
         max_duration_mins: task.max_duration_mins.map(|value| value as i64),
         context: task.context.clone().unwrap_or_default(),
+        checklist: task.checklist.clone().unwrap_or_default(),
         skills: task.skills.clone().unwrap_or_default(),
         hooks: task.hooks.clone().unwrap_or_default(),
         background,

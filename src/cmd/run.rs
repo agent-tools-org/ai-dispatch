@@ -48,6 +48,7 @@ pub struct RunArgs {
     pub max_task_cost: Option<f64>,
     pub retry: u32,
     pub context: Vec<String>,
+    pub checklist: Vec<String>,
     pub skills: Vec<String>,
     pub hooks: Vec<String>,
     pub template: Option<String>,
@@ -427,6 +428,7 @@ pub async fn run(store: Arc<Store>, mut args: RunArgs) -> Result<TaskId> {
             retry: args.retry,
             group: args.group.clone(),
             skills: args.skills.clone(),
+            checklist: args.checklist.clone(),
             template: args.template.clone(),
             interactive: true,
             on_done: args.on_done.clone(),
@@ -552,6 +554,10 @@ pub async fn run(store: Arc<Store>, mut args: RunArgs) -> Result<TaskId> {
 #[cfg(test)]
 #[path = "run_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "checklist_tests.rs"]
+mod checklist_tests;
 
 
 pub(crate) fn inherit_retry_base_branch(repo_dir: Option<&str>, task: &Task, retry_args: &mut RunArgs) { run_prompt::inherit_retry_base_branch_impl(repo_dir, task, retry_args); }

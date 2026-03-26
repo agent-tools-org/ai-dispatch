@@ -198,6 +198,7 @@ async fn run_task_inner(store: &Arc<Store>, spec: &BackgroundRunSpec) -> Result<
         judge: spec.judge.clone(),
         max_duration_mins: spec.max_duration_mins,
         retry: spec.retry,
+        checklist: spec.checklist.clone(),
         skills: spec.skills.clone(),
         template: spec.template.clone(),
         cascade: spec.cascade.clone(),

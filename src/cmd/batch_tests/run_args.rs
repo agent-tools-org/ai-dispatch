@@ -27,6 +27,7 @@ fn task_to_run_args_copies_context() {
             max_duration_mins: None,
             idle_timeout: None,
             context: Some(vec!["src/lib.rs".to_string(), "src/main.rs:run".to_string()]),
+            checklist: None,
             skills: None,
             hooks: None,
             depends_on: None,
@@ -57,6 +58,56 @@ fn task_to_run_args_copies_context() {
 }
 
 #[test]
+fn task_to_run_args_copies_checklist() {
+    let store = Arc::new(Store::open_memory().unwrap());
+    let run_args = task_to_run_args(
+        &batch::BatchTask {
+            id: None,
+            name: None,
+            agent: "codex".to_string(),
+            team: None,
+            prompt: "test".to_string(),
+            dir: None,
+            output: None,
+            model: None,
+            worktree: None,
+            group: None,
+            container: None,
+            verify: None,
+            max_duration_mins: None,
+            idle_timeout: None,
+            context: None,
+            checklist: Some(vec!["check item".to_string(), "confirm edge case".to_string()]),
+            skills: None,
+            hooks: None,
+            depends_on: None,
+            parent: None,
+            context_from: None,
+            fallback: None,
+            scope: None,
+            read_only: false,
+            budget: false,
+            env: None,
+            env_forward: None,
+            judge: None,
+            best_of: None,
+            on_success: None,
+            on_fail: None,
+            conditional: false,
+        },
+        &[],
+        true,
+        &store,
+        None,
+    );
+
+    assert_eq!(
+        run_args.checklist,
+        vec!["check item".to_string(), "confirm edge case".to_string()]
+    );
+}
+
+#[test]
 fn task_to_run_args_defaults_dry_run_to_false() {
     let store = Arc::new(Store::open_memory().unwrap());
     let run_args = task_to_run_args(
@@ -76,6 +127,7 @@ fn task_to_run_args_defaults_dry_run_to_false() {
             max_duration_mins: None,
             idle_timeout: None,
             context: None,
+            checklist: None,
             skills: None,
             hooks: None,
             depends_on: None,
@@ -121,6 +173,7 @@ fn task_to_run_args_includes_sibling_metadata() {
         max_duration_mins: None,
         idle_timeout: None,
         context: None,
+        checklist: None,
         skills: None,
         hooks: None,
         depends_on: None,
@@ -154,6 +207,7 @@ fn task_to_run_args_includes_sibling_metadata() {
         max_duration_mins: None,
         idle_timeout: None,
         context: None,
+        checklist: None,
         skills: None,
         hooks: None,
         depends_on: None,
@@ -205,6 +259,7 @@ fn task_to_run_args_applies_forwarded_env_after_explicit_env() {
             max_duration_mins: None,
             idle_timeout: None,
             context: None,
+            checklist: None,
             skills: None,
             hooks: None,
             depends_on: None,
@@ -255,6 +310,7 @@ fn task_to_run_args_includes_shared_dir_env() {
             max_duration_mins: None,
             idle_timeout: None,
             context: None,
+            checklist: None,
             skills: None,
             hooks: None,
             depends_on: None,

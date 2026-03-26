@@ -44,6 +44,7 @@ fn make_task(name: Option<&str>, depends_on: &[&str]) -> BatchTask {
         verify: None,
         judge: None,
         context: None,
+        checklist: None,
         skills: None,
         hooks: None,
         depends_on: (!depends_on.is_empty())

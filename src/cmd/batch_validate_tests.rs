@@ -27,6 +27,7 @@ fn stub_task(name: &str, depends_on: Option<Vec<&str>>) -> batch::BatchTask {
         verify: None,
         judge: None,
         context: None,
+        checklist: None,
         skills: None,
         hooks: None,
         depends_on: depends_on.map(|values| values.into_iter().map(String::from).collect()),

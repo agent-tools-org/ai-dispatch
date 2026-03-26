@@ -95,6 +95,8 @@ pub struct BatchTask {
     pub idle_timeout: Option<u64>,
     #[serde(default, deserialize_with = "deserialize_string_or_vec")]
     pub context: Option<Vec<String>>,
+    #[serde(default)]
+    pub checklist: Option<Vec<String>>,
     #[serde(default, deserialize_with = "deserialize_string_or_vec")]
     pub skills: Option<Vec<String>>,
     #[serde(default)]

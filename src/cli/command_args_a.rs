@@ -41,6 +41,10 @@ pub struct RunArgs {
     #[arg(long, num_args(1..))]
     pub context: Vec<String>,
     #[arg(long, num_args(1..))]
+    pub checklist: Vec<String>,
+    #[arg(long, value_name = "FILE")]
+    pub checklist_file: Option<String>,
+    #[arg(long, num_args(1..))]
     pub scope: Vec<String>,
     #[command(flatten)]
     pub run_extras: Box<RunExtrasArgs>,

@@ -8,6 +8,7 @@ pub mod batch;
 pub mod broadcast;
 pub mod board;
 pub mod board_stream;
+pub mod checklist;
 pub mod clean;
 pub mod changelog;
 pub mod container;

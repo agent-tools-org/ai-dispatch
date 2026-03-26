@@ -26,6 +26,7 @@ pub(super) fn make_task(name: &str, conditional: bool, on_success: Option<&str>)
         verify: None,
         judge: None,
         context: None,
+        checklist: None,
         skills: None,
         hooks: None,
         depends_on: None,

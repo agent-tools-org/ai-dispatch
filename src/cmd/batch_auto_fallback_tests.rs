@@ -131,6 +131,7 @@ fn auto_fallback_skips_rate_limited_toml_fallbacks() {
         max_duration_mins: None,
         idle_timeout: None,
         context: None,
+        checklist: None,
         skills: None,
         hooks: None,
         depends_on: None,

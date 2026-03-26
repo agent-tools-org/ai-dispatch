@@ -8,7 +8,11 @@ use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 pub struct FileOverlap {
     pub file: String,
     pub task_ids: Vec<String>,
+    pub severity: OverlapSeverity,
 }
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum OverlapSeverity { Warning, Error }
 
 pub(super) fn analyze_file_overlap(tasks: &[BatchTask], defaults: &BatchDefaults) -> Vec<FileOverlap> {
     let dependencies = batch::dependency_indices(tasks).unwrap_or_else(|_| vec![Vec::new(); tasks.len()]);
@@ -25,17 +29,18 @@ pub(super) fn analyze_file_overlap(tasks: &[BatchTask], defaults: &BatchDefaults
         .collect()
 }
 
-fn build_overlap(
-    file: String,
-    task_indices: &[usize],
-    tasks: &[BatchTask],
-    reachability: &[Vec<bool>],
-) -> Option<FileOverlap> {
+fn build_overlap(file: String, task_indices: &[usize], tasks: &[BatchTask], reachability: &[Vec<bool>]) -> Option<FileOverlap> {
     let mut overlap_tasks = BTreeSet::new();
+    let mut severity = OverlapSeverity::Warning;
     for (position, left_idx) in task_indices.iter().enumerate() {
         for right_idx in &task_indices[position + 1..] {
             if reachability[*left_idx][*right_idx] || reachability[*right_idx][*left_idx] {
                 continue;
+            }
+            if tasks[*left_idx].output.as_deref() == Some(file.as_str())
+                || tasks[*right_idx].output.as_deref() == Some(file.as_str())
+            {
+                severity = OverlapSeverity::Error;
             }
             overlap_tasks.insert(task_ref(tasks, *left_idx));
             overlap_tasks.insert(task_ref(tasks, *right_idx));
@@ -47,6 +52,7 @@ fn build_overlap(
     Some(FileOverlap {
         file,
         task_ids: overlap_tasks.into_iter().collect(),
+        severity,
     })
 }
 
@@ -93,6 +99,9 @@ fn task_files(task: &BatchTask, defaults: &BatchDefaults) -> BTreeSet<String> {
             }
         }
     }
+    if let Some(ref output) = task.output {
+        files.insert(output.clone());
+    }
     for file in extract_prompt_paths(&task.prompt) {
         files.insert(file);
     }
@@ -102,10 +111,7 @@ fn task_files(task: &BatchTask, defaults: &BatchDefaults) -> BTreeSet<String> {
 fn extract_prompt_paths(prompt: &str) -> BTreeSet<String> {
     prompt
         .split_whitespace()
-        .filter_map(|token| {
-            let candidate = trim_candidate(token);
-            is_file_path(candidate).then(|| candidate.to_string())
-        })
+        .filter_map(|token| is_file_path(trim_candidate(token)).then(|| trim_candidate(token).to_string()))
         .collect()
 }
 
@@ -127,7 +133,7 @@ fn is_file_path(candidate: &str) -> bool {
     if extension.is_empty() || !extension.chars().all(|ch| ch.is_ascii_alphanumeric()) {
         return false;
     }
-    candidate.contains('/') || matches!(extension, "rs" | "ts" | "tsx")
+    candidate.contains('/') || matches!(extension, "rs" | "ts" | "tsx" | "md" | "json" | "toml" | "yaml" | "yml" | "txt" | "csv" | "html" | "css" | "js" | "py" | "sh" | "sql")
 }
 
 fn trim_candidate(token: &str) -> &str {
@@ -198,16 +204,12 @@ mod tests {
         left.context = Some(vec!["src/types.rs".to_string()]);
         let mut right = stub_task("task-b", "right");
         right.context = Some(vec!["src/types.rs".to_string()]);
-
         let overlaps = analyze_file_overlap(&[left, right], &BatchDefaults::default());
-
-        assert_eq!(
-            overlaps,
-            vec![FileOverlap {
-                file: "src/types.rs".to_string(),
-                task_ids: vec!["task-a".to_string(), "task-b".to_string()],
-            }]
-        );
+        assert_eq!(overlaps, vec![FileOverlap {
+            file: "src/types.rs".to_string(),
+            task_ids: vec!["task-a".to_string(), "task-b".to_string()],
+            severity: OverlapSeverity::Warning,
+        }]);
     }
 
     #[test]
@@ -216,9 +218,7 @@ mod tests {
         parent.context = Some(vec!["src/types.rs".to_string()]);
         let mut child = stub_task("task-b", "touch src/types.rs");
         child.depends_on = Some(vec!["task-a".to_string()]);
-
         let overlaps = analyze_file_overlap(&[parent, child], &BatchDefaults::default());
-
         assert!(overlaps.is_empty());
     }
 
@@ -226,11 +226,10 @@ mod tests {
     fn analyze_extracts_paths_from_prompt() {
         let left = stub_task("task-a", "Update src/types.rs and keep tests green.");
         let right = stub_task("task-b", "Review src/types.rs for shared changes.");
-
         let overlaps = analyze_file_overlap(&[left, right], &BatchDefaults::default());
-
         assert_eq!(overlaps[0].file, "src/types.rs");
         assert_eq!(overlaps[0].task_ids, vec!["task-a".to_string(), "task-b".to_string()]);
+        assert_eq!(overlaps[0].severity, OverlapSeverity::Warning);
     }
 
     #[test]
@@ -240,9 +239,7 @@ mod tests {
         let mut reader = stub_task("reader", "review something");
         reader.context = Some(vec!["src/main.rs".to_string()]);
         reader.read_only = true;
-
         let overlaps = analyze_file_overlap(&[writer, reader], &BatchDefaults::default());
-
         assert!(overlaps.is_empty(), "read_only task should not trigger overlap warning");
     }
 
@@ -250,9 +247,48 @@ mod tests {
     fn analyze_no_false_positives_on_urls() {
         let left = stub_task("task-a", "See https://example.com/src/types.rs for context.");
         let right = stub_task("task-b", "No files mentioned here.");
-
         let overlaps = analyze_file_overlap(&[left, right], &BatchDefaults::default());
-
         assert!(overlaps.is_empty());
+    }
+
+    #[test]
+    fn analyze_detects_overlapping_output_files() {
+        let mut left = stub_task("task-a", "write findings");
+        left.output = Some("FINDINGS.md".to_string());
+        let mut right = stub_task("task-b", "write findings");
+        right.output = Some("FINDINGS.md".to_string());
+        let overlaps = analyze_file_overlap(&[left, right], &BatchDefaults::default());
+        assert_eq!(overlaps[0].file, "FINDINGS.md");
+        assert_eq!(overlaps[0].task_ids, vec!["task-a".to_string(), "task-b".to_string()]);
+        assert_eq!(overlaps[0].severity, OverlapSeverity::Error);
+    }
+
+    #[test]
+    fn analyze_output_overlap_ignored_with_dependency() {
+        let mut parent = stub_task("task-a", "write findings");
+        parent.output = Some("FINDINGS.md".to_string());
+        let mut child = stub_task("task-b", "write findings");
+        child.output = Some("FINDINGS.md".to_string());
+        child.depends_on = Some(vec!["task-a".to_string()]);
+        let overlaps = analyze_file_overlap(&[parent, child], &BatchDefaults::default());
+        assert!(overlaps.is_empty());
+    }
+
+    #[test]
+    fn analyze_detects_md_paths_in_prompt() {
+        let left = stub_task("task-a", "Write findings to FINDINGS.md.");
+        let right = stub_task("task-b", "Review FINDINGS.md before merge.");
+        let overlaps = analyze_file_overlap(&[left, right], &BatchDefaults::default());
+        assert_eq!(overlaps[0].file, "FINDINGS.md");
+        assert_eq!(overlaps[0].severity, OverlapSeverity::Warning);
+    }
+
+    #[test]
+    fn analyze_detects_json_paths_in_prompt() {
+        let left = stub_task("task-a", "Write results.json for the run.");
+        let right = stub_task("task-b", "Validate results.json structure.");
+        let overlaps = analyze_file_overlap(&[left, right], &BatchDefaults::default());
+        assert_eq!(overlaps[0].file, "results.json");
+        assert_eq!(overlaps[0].severity, OverlapSeverity::Warning);
     }
 }

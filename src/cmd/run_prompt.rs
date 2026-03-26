@@ -288,6 +288,9 @@ pub(super) fn build_prompt_bundle(store: &Store, args: &RunArgs, agent_kind: &Ag
     if args.output.is_some() {
         effective_prompt = format!("{effective_prompt}\n\n{}", output_file_instruction());
     }
+    if let Some(checklist_block) = crate::cmd::checklist::format_checklist_block(&args.checklist) {
+        effective_prompt = format!("{effective_prompt}\n\n{checklist_block}");
+    }
 
     // Compact prompt if it exceeds token budget
     let effective_prompt = maybe_compact_prompt(&effective_prompt, PROMPT_TOKEN_LIMIT);

@@ -26,6 +26,8 @@ pub(super) async fn run(
     peer_review: Option<String>,
     retry: u32,
     context: Vec<String>,
+    checklist: Vec<String>,
+    checklist_file: Option<String>,
     scope: Vec<String>,
     run_extras: Box<RunExtrasArgs>,
     no_skill: bool,
@@ -56,6 +58,7 @@ pub(super) async fn run(
         &team_flag,
         agent_name,
     );
+    let checklist = cmd::checklist::merge_checklist_items(checklist, checklist_file.as_deref())?;
     let args = build_run_args(
         agent_name,
         prompt,
@@ -71,6 +74,7 @@ pub(super) async fn run(
         peer_review,
         retry,
         context,
+        checklist,
         scope,
         run_extras,
         no_skill,
@@ -108,6 +112,7 @@ fn build_run_args(
     peer_review: Option<String>,
     retry: u32,
     context: Vec<String>,
+    checklist: Vec<String>,
     scope: Vec<String>,
     run_extras: Box<RunExtrasArgs>,
     no_skill: bool,
@@ -146,6 +151,7 @@ fn build_run_args(
         max_duration_mins: None,
         retry,
         context,
+        checklist,
         skills,
         hooks: extras.hook,
         template: extras.template,

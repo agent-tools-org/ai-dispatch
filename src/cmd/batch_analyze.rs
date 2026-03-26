@@ -168,6 +168,7 @@ mod tests {
             max_duration_mins: None,
             idle_timeout: None,
             context: None,
+            checklist: None,
             skills: None,
             hooks: None,
             depends_on: None,

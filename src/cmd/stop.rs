@@ -229,6 +229,7 @@ mod tests {
             retry: 0,
             group: None,
             skills: vec![],
+            checklist: vec![],
             template: None,
             interactive: false,
             on_done: None,

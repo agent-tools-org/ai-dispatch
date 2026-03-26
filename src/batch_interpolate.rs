@@ -37,6 +37,7 @@ fn interpolate_task(
     interpolate_string(&mut task.verify, vars, writer)?;
     interpolate_string(&mut task.judge, vars, writer)?;
     interpolate_vec(&mut task.context, vars, writer)?;
+    interpolate_vec(&mut task.checklist, vars, writer)?;
     interpolate_vec(&mut task.skills, vars, writer)?;
     interpolate_vec(&mut task.hooks, vars, writer)?;
     interpolate_vec(&mut task.depends_on, vars, writer)?;

@@ -9,6 +9,7 @@ pub mod broadcast;
 pub mod board;
 pub mod board_stream;
 pub mod checklist;
+pub(crate) mod checklist_scan;
 pub mod clean;
 pub mod changelog;
 pub mod container;

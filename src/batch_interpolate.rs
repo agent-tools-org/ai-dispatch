@@ -36,9 +36,12 @@ fn interpolate_task(
     interpolate_string(&mut task.group, vars, writer)?;
     interpolate_string(&mut task.verify, vars, writer)?;
     interpolate_string(&mut task.judge, vars, writer)?;
+    interpolate_string(&mut task.peer_review, vars, writer)?;
+    interpolate_string(&mut task.metric, vars, writer)?;
     interpolate_vec(&mut task.context, vars, writer)?;
     interpolate_vec(&mut task.checklist, vars, writer)?;
     interpolate_vec(&mut task.skills, vars, writer)?;
+    interpolate_string(&mut task.on_done, vars, writer)?;
     interpolate_vec(&mut task.hooks, vars, writer)?;
     interpolate_vec(&mut task.depends_on, vars, writer)?;
     interpolate_string(&mut task.parent, vars, writer)?;
@@ -138,8 +141,14 @@ fn apply_task_defaults(task: &mut BatchTask, defaults: &BatchDefaults, task_idx:
     if task.judge.is_none() {
         task.judge = defaults.judge.clone();
     }
+    if task.peer_review.is_none() {
+        task.peer_review = defaults.peer_review.clone();
+    }
     if task.max_duration_mins.is_none() {
         task.max_duration_mins = defaults.max_duration_mins;
+    }
+    if task.retry.is_none() {
+        task.retry = defaults.retry;
     }
     if task.idle_timeout.is_none() {
         task.idle_timeout = defaults.idle_timeout;
@@ -147,11 +156,17 @@ fn apply_task_defaults(task: &mut BatchTask, defaults: &BatchDefaults, task_idx:
     if task.best_of.is_none() {
         task.best_of = defaults.best_of;
     }
+    if task.metric.is_none() {
+        task.metric = defaults.metric.clone();
+    }
     if task.context.is_none() {
         task.context = defaults.context.clone();
     }
     if task.skills.is_none() {
         task.skills = defaults.skills.clone();
+    }
+    if task.on_done.is_none() {
+        task.on_done = defaults.on_done.clone();
     }
     if task.hooks.is_none() {
         task.hooks = defaults.hooks.clone();
@@ -164,6 +179,12 @@ fn apply_task_defaults(task: &mut BatchTask, defaults: &BatchDefaults, task_idx:
     }
     if !task.read_only && matches!(defaults.read_only, Some(true)) {
         task.read_only = true;
+    }
+    if !task.sandbox && matches!(defaults.sandbox, Some(true)) {
+        task.sandbox = true;
+    }
+    if !task.no_skill && matches!(defaults.no_skill, Some(true)) {
+        task.no_skill = true;
     }
     if !task.budget && matches!(defaults.budget, Some(true)) {
         task.budget = true;

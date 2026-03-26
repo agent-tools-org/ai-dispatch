@@ -2,7 +2,7 @@
 // Exports: task_to_run_args
 // Deps: crate::cmd::run::RunArgs, crate::batch, crate::store::Store
 use crate::batch;
-use crate::cmd::run::RunArgs;
+use crate::cmd::run::{RunArgs, NO_SKILL_SENTINEL};
 use crate::store::Store;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -75,6 +75,11 @@ pub(crate) fn task_to_run_args(
         merged_env(task.env.as_ref(), task.env_forward.as_ref(), shared_dir_path),
         task.idle_timeout,
     );
+    let skills = if task.no_skill {
+        vec![NO_SKILL_SENTINEL.to_string()]
+    } else {
+        task.skills.clone().unwrap_or_default()
+    };
     RunArgs {
         agent_name,
         prompt: task.prompt.clone(),
@@ -86,18 +91,23 @@ pub(crate) fn task_to_run_args(
         container: task.container.clone(),
         verify: task.verify.clone(),
         judge: task.judge.clone(),
+        peer_review: task.peer_review.clone(),
         max_duration_mins: task.max_duration_mins.map(|value| value as i64),
+        retry: task.retry.unwrap_or(0),
         context: task.context.clone().unwrap_or_default(),
         checklist: task.checklist.clone().unwrap_or_default(),
-        skills: task.skills.clone().unwrap_or_default(),
+        skills,
         hooks: task.hooks.clone().unwrap_or_default(),
         background,
         dry_run: false,
         announce: true,
+        on_done: task.on_done.clone(),
         cascade,
         read_only: task.read_only,
+        sandbox: task.sandbox,
         budget: task.budget,
         best_of: task.best_of,
+        metric: task.metric.clone(),
         team: task.team.clone(),
         context_from: task.context_from.clone().unwrap_or_default(),
         batch_siblings,

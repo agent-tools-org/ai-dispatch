@@ -127,15 +127,37 @@ fn validate_dispatch(args: &RunArgs, agent_kind: &AgentKind) -> Vec<String> {
     warnings
 }
 
-fn existing_task_replacement_warning(task: Option<&Task>) -> Option<String> {
-    let task = task?;
-    if task.status == TaskStatus::Waiting {
-        return None;
+/// Decide how to handle a custom ID that already exists in the store.
+/// Returns the (possibly suffixed) TaskId to use and whether to insert vs update.
+enum IdConflict {
+    /// No conflict — use the ID as-is, insert new row.
+    None,
+    /// Existing task is waiting — replace in place (retry semantics).
+    ReplaceWaiting,
+    /// Existing task is running — refuse.
+    Running,
+    /// Existing task is terminal (done/failed/stopped) — auto-suffix to preserve history.
+    AutoSuffix(String),
+}
+
+fn resolve_id_conflict(store: &Store, id: &str) -> Result<IdConflict> {
+    let Some(existing) = store.get_task(id)? else {
+        return Ok(IdConflict::None);
+    };
+    match existing.status {
+        TaskStatus::Waiting => Ok(IdConflict::ReplaceWaiting),
+        TaskStatus::Running => Ok(IdConflict::Running),
+        _ => {
+            // Find next available suffix: id-2, id-3, ...
+            for suffix in 2..=99 {
+                let candidate = format!("{id}-{suffix}");
+                if store.get_task(&candidate)?.is_none() {
+                    return Ok(IdConflict::AutoSuffix(candidate));
+                }
+            }
+            anyhow::bail!("Too many tasks with ID prefix '{id}' (checked up to -99)");
+        }
     }
-    Some(format!(
-        "[aid] Warning: replacing existing task '{}' (was: {})",
-        task.id, task.status
-    ))
 }
 
 pub async fn run(store: Arc<Store>, mut args: RunArgs) -> Result<TaskId> {
@@ -271,7 +293,7 @@ pub async fn run(store: Arc<Store>, mut args: RunArgs) -> Result<TaskId> {
     } else {
         agent::get_agent(agent_kind)
     };
-    let task_id = match args.existing_task_id.clone() {
+    let mut task_id = match args.existing_task_id.clone() {
         Some(id) => {
             crate::sanitize::validate_task_id(id.as_str())?;
             id
@@ -355,16 +377,27 @@ pub async fn run(store: Arc<Store>, mut args: RunArgs) -> Result<TaskId> {
     for warning in &dispatch_warnings {
         aid_warn!("[aid] Warning: {warning}");
     }
-    let existing_task = if args.existing_task_id.is_some() {
-        store.get_task(task_id.as_str())?
-    } else {
-        None
-    };
-    if let Some(warning) = existing_task_replacement_warning(existing_task.as_ref()) {
-        aid_warn!("{warning}");
-    }
-    if existing_task.is_some() {
-        store.replace_waiting_task(&task)?;
+    if args.existing_task_id.is_some() {
+        match resolve_id_conflict(&store, task_id.as_str())? {
+            IdConflict::None => {
+                store.insert_task(&task)?;
+            }
+            IdConflict::ReplaceWaiting => {
+                store.replace_waiting_task(&task)?;
+            }
+            IdConflict::Running => {
+                anyhow::bail!(
+                    "Task '{}' is still running. Stop it first: aid stop {}",
+                    task_id, task_id
+                );
+            }
+            IdConflict::AutoSuffix(new_id) => {
+                aid_info!("[aid] ID '{}' already exists, using '{}'", task_id, new_id);
+                task.id = TaskId(new_id.clone());
+                task_id = TaskId(new_id);
+                store.insert_task(&task)?;
+            }
+        }
     } else {
         store.insert_task(&task)?;
     }

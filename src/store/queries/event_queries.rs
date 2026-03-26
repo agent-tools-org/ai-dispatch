@@ -42,6 +42,71 @@ impl Store {
         Ok(milestone)
     }
 
+    pub fn latest_errors_batch(&self, task_ids: &[&str]) -> Result<HashMap<String, String>> {
+        if task_ids.is_empty() {
+            return Ok(HashMap::new());
+        }
+        let conn = self.db();
+        let placeholders: Vec<String> = (1..=task_ids.len()).map(|i| format!("?{i}")).collect();
+        // Exclude completion summary errors (start with "FAIL" or "DONE") — we want the actual cause
+        let sql = format!(
+            "SELECT task_id, detail FROM events e1
+             WHERE event_type = 'error'
+             AND detail NOT LIKE 'FAIL%' AND detail NOT LIKE 'DONE%'
+             AND timestamp = (
+                 SELECT MAX(timestamp) FROM events e2
+                 WHERE e2.task_id = e1.task_id AND e2.event_type = 'error'
+                 AND e2.detail NOT LIKE 'FAIL%' AND e2.detail NOT LIKE 'DONE%'
+             )
+             AND task_id IN ({})",
+            placeholders.join(",")
+        );
+        let mut stmt = conn.prepare(&sql)?;
+        let params: Vec<&dyn rusqlite::ToSql> =
+            task_ids.iter().map(|s| s as &dyn rusqlite::ToSql).collect();
+        let rows = stmt.query_map(params.as_slice(), |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+        })?;
+        let mut map = HashMap::new();
+        for row in rows {
+            let (task_id, detail) = row?;
+            map.insert(task_id, detail);
+        }
+        Ok(map)
+    }
+
+    /// Like `latest_errors_batch` but without filtering out completion summary errors.
+    /// Used as fallback when the filtered query returns nothing for a task.
+    pub fn latest_errors_batch_unfiltered(&self, task_ids: &[&str]) -> Result<HashMap<String, String>> {
+        if task_ids.is_empty() {
+            return Ok(HashMap::new());
+        }
+        let conn = self.db();
+        let placeholders: Vec<String> = (1..=task_ids.len()).map(|i| format!("?{i}")).collect();
+        let sql = format!(
+            "SELECT task_id, detail FROM events e1
+             WHERE event_type = 'error'
+             AND timestamp = (
+                 SELECT MAX(timestamp) FROM events e2
+                 WHERE e2.task_id = e1.task_id AND e2.event_type = 'error'
+             )
+             AND task_id IN ({})",
+            placeholders.join(",")
+        );
+        let mut stmt = conn.prepare(&sql)?;
+        let params: Vec<&dyn rusqlite::ToSql> =
+            task_ids.iter().map(|s| s as &dyn rusqlite::ToSql).collect();
+        let rows = stmt.query_map(params.as_slice(), |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+        })?;
+        let mut map = HashMap::new();
+        for row in rows {
+            let (task_id, detail) = row?;
+            map.insert(task_id, detail);
+        }
+        Ok(map)
+    }
+
     pub fn latest_milestones_batch(&self, task_ids: &[&str]) -> Result<HashMap<String, String>> {
         if task_ids.is_empty() {
             return Ok(HashMap::new());

@@ -4,6 +4,7 @@ use anyhow::Result;
 use chrono::Local;
 use std::sync::Arc;
 
+use crate::cmd::checklist_scan;
 use crate::store::Store;
 use crate::types::{AgentKind, EventKind, Task, TaskEvent, TaskId, TaskStatus};
 
@@ -108,5 +109,50 @@ pub(in crate::cmd) async fn maybe_auto_retry_after_verify_failure_impl(
         retry_args.session_id = task.agent_session_id.clone();
     }
 
+    Box::pin(super::super::run(store.clone(), retry_args)).await.map(Some)
+}
+
+pub(in crate::cmd) async fn maybe_auto_retry_after_checklist_miss_impl(
+    store: &Arc<Store>,
+    task_id: &TaskId,
+    args: &super::RunArgs,
+    checklist_result: Option<&checklist_scan::ChecklistResult>,
+) -> Result<Option<TaskId>> {
+    if args.checklist.is_empty() || args.retry == 0 {
+        return Ok(None);
+    }
+    let Some(result) = checklist_result else { return Ok(None) };
+    if result.all_addressed() {
+        return Ok(None);
+    }
+    let Some(task) = store.get_task(task_id.as_str())? else { return Ok(None) };
+    if task.status != TaskStatus::Done {
+        return Ok(None);
+    }
+    aid_warn!(
+        "[aid] Checklist incomplete, auto-retrying ({} retries left)",
+        args.retry.saturating_sub(1)
+    );
+    let missing = result.missing_items().join("\n");
+    let mut retry_args = args.clone();
+    retry_args.prompt = format!(
+        "[Checklist items not addressed]\nYou MUST address these items:\n{missing}\n\n[Original task]\n{}",
+        task.prompt
+    );
+    retry_args.retry = args.retry.saturating_sub(1);
+    retry_args.parent_task_id = Some(task_id.as_str().to_string());
+    retry_args.repo = task.repo_path.clone().or_else(|| retry_args.repo.clone());
+    retry_args.output = task.output_path.clone().or_else(|| retry_args.output.clone());
+    retry_args.model = task.model.clone().or_else(|| retry_args.model.clone());
+    retry_args.verify = task.verify.clone();
+    retry_args.read_only = task.read_only;
+    retry_args.budget = task.budget;
+    retry_args.background = false;
+    let (dir, worktree) = super::retry_target(&task);
+    retry_args.dir = dir.or_else(|| retry_args.dir.clone());
+    retry_args.worktree = worktree.or_else(|| retry_args.worktree.clone());
+    if task.agent == AgentKind::OpenCode {
+        retry_args.session_id = task.agent_session_id.clone();
+    }
     Box::pin(super::super::run(store.clone(), retry_args)).await.map(Some)
 }

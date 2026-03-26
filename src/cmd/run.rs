@@ -585,6 +585,14 @@ pub(crate) fn maybe_verify(
 pub(crate) async fn maybe_auto_retry_after_verify_failure(store: &Arc<Store>, task_id: &TaskId, args: &RunArgs, pre_verify_status: TaskStatus) -> Result<Option<TaskId>> {
     run_prompt::maybe_auto_retry_after_verify_failure_impl(store, task_id, args, pre_verify_status).await
 }
+pub(crate) async fn maybe_auto_retry_after_checklist_miss(
+    store: &Arc<Store>,
+    task_id: &TaskId,
+    args: &RunArgs,
+    checklist_result: Option<&crate::cmd::checklist_scan::ChecklistResult>,
+) -> Result<Option<TaskId>> {
+    run_prompt::maybe_auto_retry_after_checklist_miss_impl(store, task_id, args, checklist_result).await
+}
 pub(crate) async fn maybe_judge_retry(store: &Arc<Store>, args: &RunArgs, task_id: &TaskId) -> Result<Option<TaskId>> {
     if args.judge_retry {
         return Ok(None);

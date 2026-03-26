@@ -139,6 +139,7 @@ fn task_json(store: &Arc<Store>, task_id: &str) -> Result<String> {
                 )
             });
     let output = output_text_for_task(store.as_ref(), task_id, true).ok();
+    let checklist_status = cmd::show_checklist::render_checklist_status(store.as_ref(), &task);
     let payload = serde_json::json!({
         "id": task.id.as_str(),
         "agent": task.agent_display_name(),
@@ -157,6 +158,7 @@ fn task_json(store: &Arc<Store>, task_id: &str) -> Result<String> {
         "repo_path": task.repo_path,
         "output_path": task.output_path,
         "output": output,
+        "checklist_status": checklist_status,
         "verify": task.verify,
         "exit_code": task.exit_code,
         "verify_status": task.verify_status.as_str(),
@@ -214,6 +216,11 @@ pub fn audit_text(store: &Arc<Store>, task_id: &str) -> Result<String> {
         None
     };
     let mut out = render_task_detail(&task, &events, retry_chain);
+
+    if let Some(checklist) = cmd::show_checklist::render_checklist_status(store.as_ref(), &task) {
+        out.push('\n');
+        out.push_str(&checklist);
+    }
 
     if task.status == TaskStatus::Failed
         && let Some(stderr) = stderr_tail(task_id)
@@ -769,3 +776,7 @@ mod tests {
             .unwrap();
     }
 }
+
+#[cfg(test)]
+#[path = "show_checklist_tests.rs"]
+mod show_checklist_tests;

@@ -28,6 +28,7 @@ mod batch_helpers;
 #[path = "batch_types.rs"]
 mod batch_types;
 
+use batch_analyze::OverlapSeverity;
 use batch_validate::{analyze_file_overlap, task_has_dependencies, validate_batch_config};
 #[cfg(test)]
 pub(crate) use batch_dispatch_support::{auto_fallback_agent, pre_dispatch_fallback_choice, should_auto_fallback};
@@ -149,13 +150,19 @@ pub async fn run(store: Arc<Store>, args: BatchArgs) -> Result<()> {
     if args.analyze || config.defaults.analyze.unwrap_or(false) {
         let overlaps = analyze_file_overlap(&config.tasks, &config.defaults);
         if !overlaps.is_empty() {
-            aid_warn!("[aid] Warning: potential merge conflicts detected:");
-            for overlap in overlaps {
+            let has_errors = overlaps.iter().any(|o| o.severity == OverlapSeverity::Error);
+            let label = if has_errors { "output conflicts" } else { "potential merge conflicts" };
+            aid_warn!("[aid] Warning: {label} detected:");
+            for overlap in &overlaps {
+                let severity = if overlap.severity == OverlapSeverity::Error { "ERROR" } else { "WARN" };
                 aid_warn!(
-                    "  {} - referenced by: {}",
+                    "  [{severity}] {} - referenced by: {}",
                     overlap.file,
                     overlap.task_ids.join(", ")
                 );
+            }
+            if has_errors {
+                anyhow::bail!("Output file conflicts detected — parallel tasks would overwrite each other. Add depends_on or use different output paths.");
             }
             aid_warn!("[aid] Consider adding dependencies or using --worktree isolation");
         }

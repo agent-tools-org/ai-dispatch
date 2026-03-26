@@ -1,3 +1,7 @@
+## v8.61.0 (2026-03-26)
+- v8.61.0: Fix changelog for crates.io installs + prominent upgrade banner
+- Fix embedded changelog for crates.io installs
+
 ## v8.60.0 (2026-03-26)
 - v8.60.0: Batch TOML parity with aid run flags
 - Add missing `aid run` flags to batch TOML support. Currently
@@ -40,8 +44,6 @@
 - v8.52.0: Full output by default, read_only background fix, --json output field
 - Preserve background read-only runs and AID_HOME
 - Make show and output default to full content
-
-## v8.51.0 (2026-03-25)
 - v8.51.0: Untracked file rescue, git staging guard, batch [[task]] alias, board anti-polling
 - feat: rescue untracked files before verify, reorder background lifecycle
 - fix: accept [[task]] alias in batch TOML, exit on repeated board polling

@@ -28,11 +28,16 @@ pub fn maybe_check_update() {
     if let Some(latest) = latest
         && version_is_newer(env!("CARGO_PKG_VERSION"), &latest)
     {
-        aid_hint!(
-            "[aid] Update available: v{} → v{}. Run: aid upgrade",
-            env!("CARGO_PKG_VERSION"),
-            latest
-        );
+        let current = env!("CARGO_PKG_VERSION");
+        let msg = format!("Update available: v{current} → v{latest}");
+        let cmd = "Run:  aid upgrade";
+        let width = msg.len().max(cmd.len()) + 4;
+        aid_warn!("");
+        aid_warn!("  ╭{}╮", "─".repeat(width));
+        aid_warn!("  │  {:<w$}│", msg, w = width - 2);
+        aid_warn!("  │  {:<w$}│", cmd, w = width - 2);
+        aid_warn!("  ╰{}╯", "─".repeat(width));
+        aid_warn!("");
     }
 }
 

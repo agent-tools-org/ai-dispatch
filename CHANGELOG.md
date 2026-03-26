@@ -1,3 +1,8 @@
+## v8.63.0 (2026-03-26)
+- Detect output file conflicts in batch analyze (bail on guaranteed data loss)
+- Auto-suffix conflicting output paths in parallel batch dispatch
+- Expand file path detection to 16 extensions (md, json, toml, yaml, etc.)
+
 ## v8.62.0 (2026-03-26)
 - v8.62.0: Support gemini-cli 0.35+ stream-json format
 - Support gemini-cli 0.35+ stream-json format

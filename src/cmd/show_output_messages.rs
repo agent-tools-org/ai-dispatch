@@ -1,5 +1,5 @@
 // Output and log rendering helpers for `aid show`.
-// Exports: output_text, output_text_full, log_text, read_task_output, read_tail.
+// Exports: output_text, output_text_brief, output_text_full, log_text, read_task_output, read_tail.
 // Deps: paths, Store, Task, serde_json::Value.
 use anyhow::{Context, Result};
 use serde_json::Value;
@@ -12,21 +12,7 @@ use crate::types::Task;
 
 pub fn output_text_for_task(store: &Store, task_id: &str, full: bool) -> Result<String> {
     let task = load_task_for_output(task_id, store)?;
-    if let Ok(content) = read_task_output(&task) {
-        return Ok(content);
-    }
-    if is_research_task(&task) {
-        let path = task_log_path(&task, task_id);
-        if let Some(content) = extract_messages_research(&path) {
-            return Ok(content);
-        }
-    }
-    if let Some(content) = extract_messages_for_task(&task, task_id, full) {
-        return Ok(content);
-    }
-    let tail_lines = if full { 200 } else { 50 };
-    let path = task_log_path(&task, task_id);
-    Ok(read_tail(&path, tail_lines, "No output or log available"))
+    render_task_output(&task, task_id, full, 200)
 }
 
 fn load_task_for_output(task_id: &str, store: &Store) -> Result<Task> {
@@ -37,22 +23,15 @@ fn load_task_for_output(task_id: &str, store: &Store) -> Result<Task> {
 
 pub fn output_text(store: &Arc<Store>, task_id: &str) -> Result<String> {
     let task = super::super::load_task(store, task_id)?;
-    if let Ok(content) = read_task_output(&task) {
-        return Ok(content);
-    }
-    if is_research_task(&task) {
-        let path = task_log_path(&task, task_id);
-        if let Some(content) = extract_messages_research(&path) {
-            return Ok(content);
-        }
-    }
-    if let Some(content) = extract_messages_for_task(&task, task_id, false) {
-        return Ok(content);
-    }
-    let path = task_log_path(&task, task_id);
-    Ok(read_tail(&path, 50, "No output or log available"))
+    render_task_output(&task, task_id, true, 200)
 }
 
+pub fn output_text_brief(store: &Arc<Store>, task_id: &str) -> Result<String> {
+    let task = super::super::load_task(store, task_id)?;
+    render_task_output(&task, task_id, false, 50)
+}
+
+#[allow(dead_code)]
 pub fn output_text_full(store: &Arc<Store>, task_id: &str) -> Result<String> {
     let task = super::super::load_task(store, task_id)?;
     if let Ok(content) = read_task_output(&task) {
@@ -63,6 +42,23 @@ pub fn output_text_full(store: &Arc<Store>, task_id: &str) -> Result<String> {
     }
     let path = task_log_path(&task, task_id);
     Ok(read_tail(&path, 200, "No output or log available"))
+}
+
+fn render_task_output(task: &Task, task_id: &str, full: bool, tail_lines: usize) -> Result<String> {
+    if let Ok(content) = read_task_output(task) {
+        return Ok(content);
+    }
+    if is_research_task(task) {
+        let path = task_log_path(task, task_id);
+        if let Some(content) = extract_messages_research(&path) {
+            return Ok(content);
+        }
+    }
+    if let Some(content) = extract_messages_for_task(task, task_id, full) {
+        return Ok(content);
+    }
+    let path = task_log_path(task, task_id);
+    Ok(read_tail(&path, tail_lines, "No output or log available"))
 }
 
 fn task_log_path(task: &Task, task_id: &str) -> PathBuf {

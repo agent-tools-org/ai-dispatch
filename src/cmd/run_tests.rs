@@ -170,6 +170,10 @@ fn validate_dispatch_warns_long_prompt() {
 fn validate_dispatch_warns_research_worktree() {
     assert_eq!(validate_dispatch(&RunArgs { prompt: "valid prompt text".to_string(), worktree: Some("wt".to_string()), ..Default::default() }, &AgentKind::Gemini), vec!["Research agent with --worktree is unusual, did you mean a code agent?".to_string()]);
 }
+#[test]
+fn existing_task_replacement_warning_skips_waiting_placeholder() { let mut task = make_failed_task("audit-utilcap"); task.status = TaskStatus::Waiting; assert_eq!(existing_task_replacement_warning(Some(&task)), None); }
+#[test]
+fn existing_task_replacement_warning_reports_non_waiting_status() { assert_eq!(existing_task_replacement_warning(Some(&make_failed_task("audit-utilcap"))), Some("[aid] Warning: replacing existing task 'audit-utilcap' (was: failed)".to_string())); }
 
 #[test]
 fn validate_dispatch_skips_dir_warning_for_non_writing_tasks() {

@@ -126,6 +126,18 @@ fn validate_dispatch(args: &RunArgs, agent_kind: &AgentKind) -> Vec<String> {
     }
     warnings
 }
+
+fn existing_task_replacement_warning(task: Option<&Task>) -> Option<String> {
+    let task = task?;
+    if task.status == TaskStatus::Waiting {
+        return None;
+    }
+    Some(format!(
+        "[aid] Warning: replacing existing task '{}' (was: {})",
+        task.id, task.status
+    ))
+}
+
 pub async fn run(store: Arc<Store>, mut args: RunArgs) -> Result<TaskId> {
     args.max_duration_mins = resolve_max_duration_mins(args.timeout, args.max_duration_mins);
 
@@ -343,7 +355,15 @@ pub async fn run(store: Arc<Store>, mut args: RunArgs) -> Result<TaskId> {
     for warning in &dispatch_warnings {
         aid_warn!("[aid] Warning: {warning}");
     }
-    if args.existing_task_id.is_some() && store.get_task(task_id.as_str())?.is_some() {
+    let existing_task = if args.existing_task_id.is_some() {
+        store.get_task(task_id.as_str())?
+    } else {
+        None
+    };
+    if let Some(warning) = existing_task_replacement_warning(existing_task.as_ref()) {
+        aid_warn!("{warning}");
+    }
+    if existing_task.is_some() {
         store.replace_waiting_task(&task)?;
     } else {
         store.insert_task(&task)?;

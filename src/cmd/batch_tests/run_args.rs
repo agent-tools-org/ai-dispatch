@@ -343,3 +343,53 @@ fn task_to_run_args_includes_shared_dir_env() {
         Some("/tmp/shared-batch")
     );
 }
+
+#[test]
+fn task_to_run_args_copies_existing_task_id() {
+    let store = Arc::new(Store::open_memory().unwrap());
+    let run_args = task_to_run_args(
+        &batch::BatchTask {
+            id: Some("audit-utilcap".to_string()),
+            name: None,
+            agent: "codex".to_string(),
+            team: None,
+            prompt: "test".to_string(),
+            dir: None,
+            output: None,
+            model: None,
+            worktree: None,
+            group: None,
+            container: None,
+            verify: None,
+            max_duration_mins: None,
+            idle_timeout: None,
+            context: None,
+            checklist: None,
+            skills: None,
+            hooks: None,
+            depends_on: None,
+            parent: None,
+            context_from: None,
+            fallback: None,
+            scope: None,
+            read_only: false,
+            budget: false,
+            env: None,
+            env_forward: None,
+            judge: None,
+            best_of: None,
+            on_success: None,
+            on_fail: None,
+            conditional: false,
+        },
+        &[],
+        true,
+        &store,
+        None,
+    );
+
+    assert_eq!(
+        run_args.existing_task_id.as_ref().map(|id| id.as_str()),
+        Some("audit-utilcap")
+    );
+}

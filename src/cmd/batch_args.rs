@@ -103,6 +103,7 @@ pub(crate) fn task_to_run_args(
         batch_siblings,
         scope: task.scope.clone().unwrap_or_default(),
         parent_task_id: task.parent.clone(),
+        existing_task_id: task.id.as_ref().map(|id| crate::types::TaskId(id.clone())),
         env,
         env_forward: task.env_forward.clone(),
         ..Default::default()

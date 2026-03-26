@@ -213,8 +213,8 @@ pub struct CleanArgs {
 #[command(after_help = r#"Examples:
   aid show t-1234              # Events timeline
   aid show t-1234 --diff       # Full worktree diff
-  aid show t-1234 --output     # Task output (truncated)
-  aid show t-1234 --output --full  # Task output (no truncation)
+  aid show t-1234 --output     # Task output (full)
+  aid show t-1234 --output --brief  # Task output (truncated)
   aid show t-1234 --context    # Resolved prompt
   aid show t-1234 --explain    # AI explanation"#)]
 pub struct ShowArgs {
@@ -233,6 +233,8 @@ pub struct ShowArgs {
     pub output: bool,
     #[arg(long)]
     pub full: bool,
+    #[arg(long)]
+    pub brief: bool,
     #[arg(long)]
     pub explain: bool,
     #[arg(long)]

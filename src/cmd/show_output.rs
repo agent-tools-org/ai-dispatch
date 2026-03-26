@@ -10,7 +10,8 @@ mod show_output_messages;
 
 pub use show_output_diff::{diff_text, diff_text_file};
 pub use show_output_messages::{
-    log_text, output_text, output_text_for_task, output_text_full, read_task_output,
+    log_text, output_text, output_text_brief, output_text_for_task, output_text_full,
+    read_task_output,
 };
 pub(crate) use show_output_diff::{diff_stat, parse_diff_stat, worktree_diff};
 pub(crate) use show_output_messages::{extract_messages_from_log, read_tail};
@@ -18,3 +19,7 @@ pub(crate) use show_output_messages::{extract_messages_from_log, read_tail};
 #[cfg(test)]
 #[path = "show_output_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "show_output_brief_tests.rs"]
+mod brief_tests;

@@ -97,6 +97,7 @@ pub(super) async fn show(
     file: Option<String>,
     output: bool,
     full: bool,
+    brief: bool,
     explain: bool,
     log: bool,
     json: bool,
@@ -105,7 +106,21 @@ pub(super) async fn show(
 ) -> Result<()> {
     cmd::show::run(
         store,
-        cmd::show::ShowArgs { task_id, context, diff, summary, file, output, full, explain, log, json, agent, model },
+        cmd::show::ShowArgs {
+            task_id,
+            context,
+            diff,
+            summary,
+            file,
+            output,
+            full,
+            brief,
+            explain,
+            log,
+            json,
+            agent,
+            model,
+        },
     )
     .await
 }

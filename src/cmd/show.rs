@@ -15,7 +15,11 @@ use crate::types::{Task, TaskId, TaskStatus, VerifyStatus};
 #[path = "show_output.rs"]
 mod show_output;
 
-pub use show_output::{diff_text, log_text, output_text, output_text_for_task, output_text_full};
+pub use show_output::{
+    diff_text, log_text, output_text, output_text_brief, output_text_for_task,
+};
+#[allow(unused_imports)]
+pub use show_output::output_text_full;
 #[allow(unused_imports)]
 pub use show_output::read_task_output;
 pub(crate) use show_output::{
@@ -31,6 +35,7 @@ pub struct ShowArgs {
     pub file: Option<String>,
     pub output: bool,
     pub full: bool,
+    pub brief: bool,
     pub explain: bool,
     pub log: bool,
     pub json: bool,
@@ -73,9 +78,10 @@ pub async fn run(store: Arc<Store>, args: ShowArgs) -> Result<()> {
     } else {
         ShowMode::Summary
     };
+    let _ = args.full;
     let task = load_task(&store, &args.task_id)?;
-    let text = if matches!(mode, ShowMode::Output) && args.full {
-        output_text_full(&store, &args.task_id)?
+    let text = if matches!(mode, ShowMode::Output) && args.brief {
+        render_output_brief_text(&store, &args.task_id)?
     } else if matches!(mode, ShowMode::Diff) {
         if let Some(file) = args.file.as_deref() {
             diff_text_file(&store, &args.task_id, file)?
@@ -132,6 +138,7 @@ fn task_json(store: &Arc<Store>, task_id: &str) -> Result<String> {
                     del + entry["deletions"].as_u64().unwrap_or(0),
                 )
             });
+    let output = output_text_for_task(store.as_ref(), task_id, true).ok();
     let payload = serde_json::json!({
         "id": task.id.as_str(),
         "agent": task.agent_display_name(),
@@ -149,6 +156,7 @@ fn task_json(store: &Arc<Store>, task_id: &str) -> Result<String> {
         "worktree_path": task.worktree_path,
         "repo_path": task.repo_path,
         "output_path": task.output_path,
+        "output": output,
         "verify": task.verify,
         "exit_code": task.exit_code,
         "verify_status": task.verify_status.as_str(),
@@ -166,6 +174,22 @@ fn task_json(store: &Arc<Store>, task_id: &str) -> Result<String> {
         },
     });
     serde_json::to_string(&payload).map_err(Into::into)
+}
+
+fn render_output_brief_text(store: &Arc<Store>, task_id: &str) -> Result<String> {
+    let mut text = output_text_brief(store, task_id)?;
+    let truncated = output_text(store, task_id)
+        .map(|full_text| full_text != text)
+        .unwrap_or(false);
+    if truncated {
+        if !text.ends_with('\n') {
+            text.push('\n');
+        }
+        text.push_str(&format!(
+            "[truncated — use `aid show {task_id} --output` for full content]"
+        ));
+    }
+    Ok(text)
 }
 
 pub fn render_mode_text(store: &Arc<Store>, task_id: &str, mode: ShowMode) -> Result<String> {
@@ -223,7 +247,7 @@ pub fn audit_text(store: &Arc<Store>, task_id: &str) -> Result<String> {
         out.push_str(&findings);
         out.push('\n');
         aid_hint!(
-            "[aid] Research task. Full output: aid show {} --output [--full]",
+            "[aid] Research task. Full output: aid show {} --output",
             task.id
         );
     }
@@ -653,12 +677,16 @@ mod tests {
     fn task_json_includes_pending_reason() {
         let store = Arc::new(Store::open_memory().unwrap());
         let mut task = research_task("t-show-json", Path::new("."));
+        let output_file = tempfile::NamedTempFile::new().unwrap();
+        std::fs::write(output_file.path(), "full output\n").unwrap();
         task.pending_reason = Some("unknown".to_string());
+        task.output_path = Some(output_file.path().display().to_string());
         store.insert_task(&task).unwrap();
 
         let payload: serde_json::Value = serde_json::from_str(&task_json(&store, task.id.as_str()).unwrap()).unwrap();
 
         assert_eq!(payload["pending_reason"], "unknown");
+        assert_eq!(payload["output"], "full output\n");
     }
 
     fn init_git_repo(repo: &Path) {

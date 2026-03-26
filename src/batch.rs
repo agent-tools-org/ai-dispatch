@@ -43,17 +43,25 @@ pub struct BatchDefaults {
     #[serde(default, deserialize_with = "deserialize_verify")]
     pub verify: Option<String>,
     #[serde(default)]
+    pub peer_review: Option<String>,
+    #[serde(default)]
     pub container: Option<String>,
     #[serde(default)]
     pub max_duration_mins: Option<u64>,
     #[serde(default)]
+    pub retry: Option<u32>,
+    #[serde(default)]
     pub idle_timeout: Option<u64>,
     #[serde(default)]
     pub best_of: Option<usize>,
+    #[serde(default)]
+    pub metric: Option<String>,
     #[serde(default, deserialize_with = "deserialize_string_or_vec")]
     pub context: Option<Vec<String>>,
     #[serde(default, deserialize_with = "deserialize_string_or_vec")]
     pub skills: Option<Vec<String>>,
+    #[serde(default)]
+    pub on_done: Option<String>,
     #[serde(default)]
     pub hooks: Option<Vec<String>>,
     pub fallback: Option<String>,
@@ -61,6 +69,10 @@ pub struct BatchDefaults {
     pub scope: Option<Vec<String>>,
     #[serde(default)]
     pub read_only: Option<bool>,
+    #[serde(default)]
+    pub sandbox: Option<bool>,
+    #[serde(default)]
+    pub no_skill: Option<bool>,
     #[serde(default)]
     pub budget: Option<bool>,
     #[serde(default)]
@@ -88,17 +100,25 @@ pub struct BatchTask {
     #[serde(default, deserialize_with = "deserialize_judge")]
     pub judge: Option<String>,
     #[serde(default)]
+    pub peer_review: Option<String>,
+    #[serde(default)]
     pub best_of: Option<usize>,
     #[serde(default)]
     pub max_duration_mins: Option<u64>,
     #[serde(default)]
+    pub retry: Option<u32>,
+    #[serde(default)]
     pub idle_timeout: Option<u64>,
+    #[serde(default)]
+    pub metric: Option<String>,
     #[serde(default, deserialize_with = "deserialize_string_or_vec")]
     pub context: Option<Vec<String>>,
     #[serde(default)]
     pub checklist: Option<Vec<String>>,
     #[serde(default, deserialize_with = "deserialize_string_or_vec")]
     pub skills: Option<Vec<String>>,
+    #[serde(default)]
+    pub on_done: Option<String>,
     #[serde(default)]
     pub hooks: Option<Vec<String>>,
     pub depends_on: Option<Vec<String>>,
@@ -110,6 +130,10 @@ pub struct BatchTask {
     pub scope: Option<Vec<String>>,
     #[serde(default)]
     pub read_only: bool,
+    #[serde(default)]
+    pub sandbox: bool,
+    #[serde(default)]
+    pub no_skill: bool,
     #[serde(default)]
     pub budget: bool,
     #[serde(default)]

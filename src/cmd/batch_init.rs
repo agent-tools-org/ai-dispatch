@@ -67,19 +67,25 @@ fn render_template(dir: &str, team: &str, verify: &str, language: &str) -> Strin
     lines.push("# --- Context & constraints ---".to_string());
     lines.push("# context = [\"src/types.rs\"]    # Files to inject as context".to_string());
     lines.push("# skills = [\"implementer\"]      # Methodology skills".to_string());
+    lines.push("# no_skill = false              # Disable skill injection".to_string());
     lines.push("# scope = [\"src/\"]              # Restrict file access".to_string());
     lines.push("# checklist = [\"must compile\", \"must have tests\"]  # Quality checklist".to_string());
     lines.push("# read_only = false             # Read-only mode".to_string());
+    lines.push("# sandbox = false               # Run agent in sandbox mode".to_string());
     lines.push("# budget = false                # Use budget-optimized model".to_string());
     lines.push(String::new());
 
     // [defaults] — execution
     lines.push("# --- Execution ---".to_string());
     lines.push("# max_duration_mins = 30        # Per-task hard timeout (minutes)".to_string());
+    lines.push("# retry = 1                     # Retry failed runs N times".to_string());
     lines.push("# idle_timeout = 120            # Kill if idle for N seconds".to_string());
     lines.push("# judge = true                  # AI judge evaluates output quality".to_string());
+    lines.push("# peer_review = \"gemini\"       # Run a second-agent review".to_string());
     lines.push("# best_of = 3                   # Run N copies, pick best".to_string());
+    lines.push("# metric = \"cargo test\"        # Best-of scoring command".to_string());
     lines.push("# container = \"node:20\"         # Run agent inside container".to_string());
+    lines.push("# on_done = \"notify done\"      # Shell command after completion".to_string());
     lines.push("# hooks = [\"pre:lint\"]           # Hook specs".to_string());
     lines.push(String::new());
 
@@ -106,9 +112,16 @@ fn render_template(dir: &str, team: &str, verify: &str, language: &str) -> Strin
     lines.push("# context = [\"src/types.rs\"]    # Extra context files".to_string());
     lines.push("# context_from = [\"task-0\"]     # Inject output from previous tasks".to_string());
     lines.push("# checklist = [\"no unwrap()\"]    # Quality checklist items".to_string());
+    lines.push("# no_skill = true               # Disable skill injection".to_string());
+    lines.push("# sandbox = true                # Run in sandbox mode".to_string());
     lines.push("# idle_timeout = 120            # Kill if idle for N seconds".to_string());
+    lines.push("# retry = 2                     # Retry the task on failure".to_string());
+    lines.push("# peer_review = \"gemini\"       # Run a second-agent review".to_string());
+    lines.push("# best_of = 3                   # Run N copies, pick best".to_string());
+    lines.push("# metric = \"cargo test\"        # Best-of scoring command".to_string());
     lines.push("# scope = [\"src/parser/\"]       # Restrict file access".to_string());
     lines.push("# depends_on = [\"other-task\"]   # Run after named task(s)".to_string());
+    lines.push("# on_done = \"notify done\"      # Shell command after completion".to_string());
     lines.push("# on_success = \"deploy\"         # Trigger conditional task on success".to_string());
     lines.push("# on_fail = \"notify\"            # Trigger conditional task on failure".to_string());
     lines.push("# env = { RUST_LOG = \"debug\" }  # Task-specific env vars".to_string());
@@ -153,6 +166,12 @@ mod tests {
         assert!(template.contains("# scope"));
         assert!(template.contains("# conditional"));
         assert!(template.contains("# env ="));
+        assert!(template.contains("# sandbox"));
+        assert!(template.contains("# retry"));
+        assert!(template.contains("# peer_review"));
+        assert!(template.contains("# metric"));
+        assert!(template.contains("# on_done"));
+        assert!(template.contains("# no_skill"));
     }
 
     #[test]

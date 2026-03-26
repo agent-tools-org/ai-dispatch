@@ -276,6 +276,10 @@ fn read_task_output(task: &Task) -> String {
         if !output.is_empty() {
             return output;
         }
+        // Fall back to raw text (non-JSONL logs from custom agents)
+        if !content.trim().is_empty() {
+            return content;
+        }
     }
     "No output available".to_string()
 }

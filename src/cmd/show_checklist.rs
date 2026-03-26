@@ -39,7 +39,8 @@ pub(crate) fn extract_checklist_from_prompt(prompt: &str) -> Vec<String> {
 }
 
 pub(crate) fn render_checklist_status(store: &Store, task: &Task) -> Option<String> {
-    let items = extract_checklist_from_prompt(&task.prompt);
+    let prompt = task.resolved_prompt.as_deref().unwrap_or(&task.prompt);
+    let items = extract_checklist_from_prompt(prompt);
     if items.is_empty() {
         return None;
     }

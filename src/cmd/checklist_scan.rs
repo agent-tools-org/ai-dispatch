@@ -59,6 +59,14 @@ fn scan_one(item: &str, n: usize, output: &str) -> ChecklistItemStatus {
     if let Some(p) = output.find(&bracket) {
         anchors.push(p);
     }
+    // Match "N." at line start (with optional whitespace/markdown)
+    let num_prefix = format!("{n}.");
+    for (pos, _) in output.match_indices(&num_prefix) {
+        let before = if pos > 0 { output.as_bytes()[pos - 1] } else { b'\n' };
+        if before == b'\n' || before == b' ' || before == b'\t' || before == b'*' || pos == 0 {
+            anchors.push(pos);
+        }
+    }
     if !item.is_empty() {
         for (pos, _) in output.match_indices(item) {
             anchors.push(pos);

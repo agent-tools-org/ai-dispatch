@@ -37,6 +37,7 @@ pub mod judge;
 pub mod retry_logic;
 pub mod run;
 pub mod show;
+pub mod show_checklist;
 pub mod export;
 pub mod store;
 pub mod store_lock;

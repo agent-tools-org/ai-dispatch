@@ -20,7 +20,7 @@ mod run_verify;
 mod run_scope;
 pub(super) use run_output::{fill_empty_output_from_log, clean_output_if_jsonl, output_file_instruction};
 pub(super) use run_scope::warn_agent_committed_files_outside_scope;
-pub(super) use run_verify::{maybe_auto_retry_after_verify_failure_impl, maybe_cleanup_fast_fail_impl, maybe_verify_impl};
+pub(super) use run_verify::{maybe_auto_retry_after_checklist_miss_impl, maybe_auto_retry_after_verify_failure_impl, maybe_cleanup_fast_fail_impl, maybe_verify_impl};
 use super::RunArgs;
 
 const VERIFY_RETRY_FEEDBACK: &str =

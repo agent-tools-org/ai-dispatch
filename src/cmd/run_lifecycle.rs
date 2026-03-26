@@ -4,8 +4,8 @@
 use anyhow::Result;
 use std::{path::Path, sync::Arc};
 use crate::{agent, hooks, rate_limit, store::Store, types::*};
-use crate::cmd::{judge, retry_logic, show};
-use super::{RunArgs, inherit_retry_base_branch, maybe_auto_retry_after_verify_failure, maybe_cleanup_fast_fail, maybe_judge_retry, maybe_verify, run, run_agent, run_prompt};
+use crate::cmd::{checklist_scan, judge, retry_logic, show};
+use super::{RunArgs, inherit_retry_base_branch, maybe_auto_retry_after_checklist_miss, maybe_auto_retry_after_verify_failure, maybe_cleanup_fast_fail, maybe_judge_retry, maybe_verify, run, run_agent, run_prompt};
 
 pub(crate) async fn post_run_lifecycle(
     store: &Arc<Store>,
@@ -73,6 +73,32 @@ pub(crate) async fn post_run_lifecycle(
             effective_dir.map(String::as_str),
         );
     }
+    let checklist_result = if !args.checklist.is_empty() {
+        match store.get_task(task_id.as_str())? {
+            Some(ref task) if task.status == TaskStatus::Done => {
+                let output = show::output_text_for_task(store.as_ref(), task_id.as_str(), true)
+                    .unwrap_or_default();
+                let result = checklist_scan::scan_checklist(&args.checklist, &output);
+                if result.all_addressed() {
+                    aid_info!("[aid] Checklist: {}", result.summary());
+                } else {
+                    aid_warn!("[aid] Checklist: {} — missing: {}",
+                        result.summary(), result.missing_items().join(", "));
+                    let _ = store.insert_event(&TaskEvent {
+                        task_id: task_id.clone(),
+                        timestamp: chrono::Local::now(),
+                        event_kind: EventKind::Milestone,
+                        detail: format!("Checklist: {}", result.summary()),
+                        metadata: None,
+                    });
+                }
+                Some(result)
+            }
+            _ => None,
+        }
+    } else {
+        None
+    };
     let mut quota_error_message = None;
     if let Some(task) = store.get_task(task_id.as_str())? {
         if task.status == TaskStatus::Done && rate_limit::is_rate_limited(&agent_kind) {
@@ -210,6 +236,11 @@ pub(crate) async fn post_run_lifecycle(
     }
     if let Some(retry_id) =
         maybe_auto_retry_after_verify_failure(store, task_id, args, pre_verify_status).await?
+    {
+        return Ok(Some(retry_id));
+    }
+    if let Some(retry_id) =
+        maybe_auto_retry_after_checklist_miss(store, task_id, args, checklist_result.as_ref()).await?
     {
         return Ok(Some(retry_id));
     }

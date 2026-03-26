@@ -6,19 +6,29 @@ use anyhow::{bail, Result};
 #[cfg(test)]
 use std::path::{Path, PathBuf};
 
-/// Validate a task ID: must match `t-[0-9a-f]{4}` pattern.
+/// Validate a task ID for filesystem-safe task storage.
 pub fn validate_task_id(id: &str) -> Result<()> {
     if is_valid_task_id(id) {
         return Ok(());
     }
-    bail!("Invalid task ID '{id}': must match t-XXXX (hex)")
+    bail!(
+        "Invalid task ID: must be 1-64 alphanumeric/hyphen/underscore chars, starting with alphanumeric"
+    )
 }
 
 pub fn is_valid_task_id(id: &str) -> bool {
-    id.len() >= 3
-        && id.len() <= 6
-        && id.starts_with("t-")
-        && id[2..].chars().all(|c| c.is_ascii_hexdigit())
+    if id.is_empty() || id.len() > 64 {
+        return false;
+    }
+    if id.contains('/') || id.contains('\\') || id.contains("..") {
+        return false;
+    }
+    let mut chars = id.chars();
+    let Some(first) = chars.next() else {
+        return false;
+    };
+    first.is_ascii_alphanumeric()
+        && chars.all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
 }
 
 /// Validate a workgroup ID: must start with `wg-` followed by safe characters.
@@ -144,16 +154,31 @@ mod tests {
         assert!(validate_task_id("t-a3f1").is_ok());
         assert!(validate_task_id("t-0000").is_ok());
         assert!(validate_task_id("t-ffff").is_ok());
+        assert!(validate_task_id("audit-utilcap").is_ok());
+        assert!(validate_task_id("fix-lb-cache").is_ok());
+        assert!(validate_task_id("my_task_1").is_ok());
+        assert!(validate_task_id("t-custom-name").is_ok());
+        assert!(validate_task_id("a").is_ok());
     }
 
     #[test]
     fn invalid_task_ids() {
         assert!(validate_task_id("").is_err());
-        assert!(validate_task_id("t-").is_err());
-        assert!(validate_task_id("t-ZZZZ").is_err());
         assert!(validate_task_id("../etc").is_err());
-        assert!(validate_task_id("t-a3f1/../../etc").is_err());
-        assert!(validate_task_id("t-a3f1a3f1").is_err());
+        assert!(validate_task_id("foo/../bar").is_err());
+        assert!(validate_task_id("foo\\bar").is_err());
+        assert!(validate_task_id("bad id").is_err());
+        assert!(validate_task_id("bad.id").is_err());
+        assert!(validate_task_id("-bad").is_err());
+        assert!(validate_task_id(&"a".repeat(65)).is_err());
+    }
+
+    #[test]
+    fn invalid_task_id_error_is_human_readable() {
+        assert_eq!(
+            validate_task_id("bad.id").unwrap_err().to_string(),
+            "Invalid task ID: must be 1-64 alphanumeric/hyphen/underscore chars, starting with alphanumeric"
+        );
     }
 
     #[test]

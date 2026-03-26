@@ -109,7 +109,7 @@ async fn run_task_inner(store: &Arc<Store>, spec: &BackgroundRunSpec) -> Result<
         output: spec.output.clone(),
         model: spec.model.clone(),
         budget: false,
-        read_only: false,
+        read_only: spec.read_only,
         context_files: vec![],
         session_id: None,
         env: spec.env.clone(),
@@ -204,6 +204,7 @@ async fn run_task_inner(store: &Arc<Store>, spec: &BackgroundRunSpec) -> Result<
         parent_task_id: spec.parent_task_id.clone(),
         env: spec.env.clone(),
         env_forward: spec.env_forward.clone(),
+        read_only: spec.read_only,
         sandbox: spec.sandbox,
         container: spec.container.clone(),
         ..Default::default()

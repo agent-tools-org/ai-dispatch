@@ -436,6 +436,7 @@ pub async fn run(store: Arc<Store>, mut args: RunArgs) -> Result<TaskId> {
             env_forward: args.env_forward.clone(),
             agent_pid: None,
             sandbox: args.sandbox,
+            read_only: args.read_only,
             container: args.container.clone(),
         };
         background::save_spec(&spec)?;

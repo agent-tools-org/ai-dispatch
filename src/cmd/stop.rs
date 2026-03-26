@@ -237,6 +237,7 @@ mod tests {
             env: None,
             env_forward: None,
             sandbox: false,
+            read_only: false,
             container: None,
         };
         save_spec(&spec).unwrap();

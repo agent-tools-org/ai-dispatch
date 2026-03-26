@@ -26,9 +26,9 @@ pub(super) fn tree(store: Arc<store::Store>, task_id: String) -> Result<()> {
     cmd::tree::run(&store, &task_id)
 }
 
-pub(super) fn output(task_id: String, full: bool) -> Result<()> {
+pub(super) fn output(task_id: String, brief: bool) -> Result<()> {
     let store = store::Store::open(&crate::paths::db_path())?;
-    let text = cmd::show::output_text_for_task(&store, &task_id, full)?;
+    let text = cmd::show::output_text_for_task(&store, &task_id, !brief)?;
     print!("{text}");
     Ok(())
 }

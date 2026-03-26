@@ -103,6 +103,8 @@ pub struct OutputArgs {
     pub task_id: String,
     #[arg(long)]
     pub full: bool,
+    #[arg(long)]
+    pub brief: bool,
 }
 
 #[cfg(feature = "web")]

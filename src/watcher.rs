@@ -5,6 +5,9 @@ mod progress;
 mod stream;
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+#[path = "watcher/transcript_tests.rs"]
+mod transcript_tests;
 use anyhow::Result;
 use chrono::Local;
 use std::sync::Arc;
@@ -23,7 +26,6 @@ use progress::LoopDetector;
 pub(crate) use progress::SyntheticMilestoneTracker;
 pub(crate) use stream::{handle_streaming_line, handle_streaming_line_with_session, StreamLineContext};
 const HUNG_TIMEOUT: Duration = Duration::from_secs(300);
-
 /// Watch a child process, parse output, store events, return completion info
 pub async fn watch_streaming(
     agent: &dyn Agent,
@@ -193,7 +195,8 @@ pub async fn watch_buffered(
         .collect::<Vec<_>>()
         .join("\n");
     tokio::fs::write(log_path, &filtered).await?;
-
+    let _ = tokio::fs::create_dir_all(paths::task_dir(task_id.as_str())).await;
+    let _ = tokio::fs::write(paths::transcript_path(task_id.as_str()), &buffer).await;
     if let Some(out_path) = output_path {
         if let Some(response) = crate::agent::gemini::extract_response(&buffer) {
             let response_filtered: String = response

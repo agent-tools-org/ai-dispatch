@@ -257,6 +257,7 @@ fn mode_name(mode: ShowMode) -> &'static str {
         ShowMode::Context => "context",
         ShowMode::Diff => "diff",
         ShowMode::Output => "output",
+        ShowMode::Transcript => "transcript",
         ShowMode::Log => "log",
     }
 }

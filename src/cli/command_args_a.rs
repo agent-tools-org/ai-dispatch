@@ -218,6 +218,7 @@ pub struct CleanArgs {
   aid show t-1234              # Events timeline
   aid show t-1234 --diff       # Full worktree diff
   aid show t-1234 --output     # Task output (full)
+  aid show t-1234 --transcript # Raw complete agent transcript
   aid show t-1234 --output --brief  # Task output (truncated)
   aid show t-1234 --context    # Resolved prompt
   aid show t-1234 --explain    # AI explanation"#)]
@@ -235,6 +236,8 @@ pub struct ShowArgs {
     pub file: Option<String>,
     #[arg(long)]
     pub output: bool,
+    #[arg(long, conflicts_with_all = ["context", "diff", "summary", "output", "explain", "log", "json"])]
+    pub transcript: bool,
     #[arg(long)]
     pub full: bool,
     #[arg(long)]

@@ -255,3 +255,15 @@ fn show_result_flag_parses() {
         _ => panic!("expected Show"),
     }
 }
+
+#[test]
+fn show_transcript_flag_parses() {
+    let cli = Cli::try_parse_from(["aid", "show", "t-1234", "--transcript"]).unwrap();
+    match cli.command {
+        Some(Commands::Show(command_args_a::ShowArgs { task_id, transcript, .. })) => {
+            assert_eq!(task_id, "t-1234");
+            assert!(transcript);
+        }
+        _ => panic!("expected Show"),
+    }
+}

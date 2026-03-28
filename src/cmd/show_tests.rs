@@ -214,6 +214,22 @@ fn result_text_reads_task_result_file() {
     assert_eq!(text, "structured result\n");
 }
 
+#[test]
+fn render_mode_text_reads_transcript() {
+    let temp = tempfile::tempdir().unwrap();
+    let _aid_home = crate::paths::AidHomeGuard::set(temp.path());
+    let store = Arc::new(Store::open_memory().unwrap());
+    let task = task_fixture("t-show-transcript", "raw prompt", None, None);
+    store.insert_task(&task).unwrap();
+    let transcript = crate::paths::transcript_path(task.id.as_str());
+    std::fs::create_dir_all(transcript.parent().unwrap()).unwrap();
+    std::fs::write(&transcript, "raw transcript\n").unwrap();
+
+    let text = render_mode_text(&store, task.id.as_str(), ShowMode::Transcript).unwrap();
+
+    assert_eq!(text, "raw transcript\n");
+}
+
 fn init_git_repo(repo: &Path) {
     Command::new("git")
         .args(["init"])

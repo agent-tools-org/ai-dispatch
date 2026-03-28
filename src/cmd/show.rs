@@ -1,7 +1,7 @@
 // Handler for `aid show <task-id>` — unified task inspection.
 // Combines events, diff, output, log, and AI explanation into one command.
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use std::path::Path;
 use std::sync::Arc;
 
@@ -47,6 +47,7 @@ pub struct ShowArgs {
     pub file: Option<String>,
     pub output: bool,
     pub result: bool,
+    pub transcript: bool,
     pub full: bool,
     pub brief: bool,
     pub explain: bool,
@@ -63,6 +64,7 @@ pub enum ShowMode {
     Context,
     Diff,
     Output,
+    Transcript,
     Log,
 }
 
@@ -90,6 +92,8 @@ pub async fn run(store: Arc<Store>, args: ShowArgs) -> Result<()> {
         ShowMode::Diff
     } else if args.output {
         ShowMode::Output
+    } else if args.transcript {
+        ShowMode::Transcript
     } else if args.log {
         ShowMode::Log
     } else {
@@ -147,6 +151,7 @@ pub fn render_mode_text(store: &Arc<Store>, task_id: &str, mode: ShowMode) -> Re
         ShowMode::Context => context_text(store, task_id),
         ShowMode::Diff => diff_text(store, task_id),
         ShowMode::Output => output_text(store, task_id),
+        ShowMode::Transcript => transcript_text(task_id),
         ShowMode::Log => log_text(task_id),
     }
 }
@@ -157,6 +162,12 @@ fn result_text(task_id: &str) -> Result<String> {
         return Ok("No result file for this task\n".to_string());
     }
     Ok(std::fs::read_to_string(path)?)
+}
+
+fn transcript_text(task_id: &str) -> Result<String> {
+    let path = crate::paths::transcript_path(task_id);
+    std::fs::read_to_string(&path)
+        .with_context(|| format!("Failed to read transcript {}", path.display()))
 }
 
 // --- Default mode: events + stderr + diff stat ---

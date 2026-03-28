@@ -75,7 +75,7 @@ async fn dispatch_primary(store: Arc<crate::store::Store>, command: Commands) ->
         Commands::Changelog(command_args_a::ChangelogArgs { version, all, count, git }) => handlers_c::changelog(version, all, count, git),
         Commands::Agent(command_args_a::AgentArgs { action }) => handlers_c::agent(action),
         Commands::Clean(command_args_a::CleanArgs { older_than, worktrees, dry_run }) => handlers_c::clean(store, older_than, worktrees, dry_run),
-        Commands::Show(command_args_a::ShowArgs { task_id, events: _, context, diff, summary, file, output, result, full, brief, explain, log, json, agent, model }) => handlers_c::show(store, task_id, context, diff, summary, file, output, result, full, brief, explain, log, json, agent, model).await,
+        Commands::Show(command_args_a::ShowArgs { task_id, events: _, context, diff, summary, file, output, result, transcript, full, brief, explain, log, json, agent, model }) => handlers_c::show(store, task_id, context, diff, summary, file, output, result, transcript, full, brief, explain, log, json, agent, model).await,
         Commands::Export(command_args_b::ExportArgs { task_id, format, output }) => handlers_b::export(store, task_id, format, output).await,
         Commands::Tree(command_args_c::TreeArgs { task_id }) => handlers_b::tree(store, task_id),
         Commands::Output(command_args_c::OutputArgs { task_id, full: _, brief }) => handlers_b::output(task_id, brief),

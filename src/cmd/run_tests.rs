@@ -333,3 +333,9 @@ fn make_failed_task(task_id: &str) -> Task {
         budget: false,
     }
 }
+
+#[path = "run_transcript_tests.rs"]
+mod run_transcript_tests;
+
+#[path = "run_async_tests.rs"]
+mod run_async_tests;

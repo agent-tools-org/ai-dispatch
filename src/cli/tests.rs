@@ -86,6 +86,17 @@ fn run_container_flag_parses() {
 }
 
 #[test]
+fn run_result_file_flag_parses() {
+    let cli = Cli::try_parse_from(["aid", "run", "codex", "task", "--result-file", "/tmp/result.md"]).unwrap();
+    match cli.command {
+        Some(Commands::Run(command_args_a::RunArgs { result_file, .. })) => {
+            assert_eq!(result_file, Some("/tmp/result.md".to_string()))
+        }
+        _ => panic!("expected Run"),
+    }
+}
+
+#[test]
 fn watch_timeout_flag_parses() {
     let cli = Cli::try_parse_from(["aid", "watch", "--quiet", "--timeout", "60", "--group", "wg-a"]).unwrap();
     match cli.command {
@@ -232,6 +243,15 @@ fn show_diff_file_flag_parses() {
             assert!(!summary);
             assert_eq!(file, Some("src/cli.rs".to_string()));
         }
+        _ => panic!("expected Show"),
+    }
+}
+
+#[test]
+fn show_result_flag_parses() {
+    let cli = Cli::try_parse_from(["aid", "show", "t-1234", "--result"]).unwrap();
+    match cli.command {
+        Some(Commands::Show(command_args_a::ShowArgs { result, .. })) => assert!(result),
         _ => panic!("expected Show"),
     }
 }

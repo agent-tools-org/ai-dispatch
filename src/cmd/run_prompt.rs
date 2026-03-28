@@ -11,7 +11,7 @@ mod run_output;
 mod run_verify;
 #[path = "run_scope.rs"]
 mod run_scope;
-pub(super) use run_output::{fill_empty_output_from_log, clean_output_if_jsonl, output_file_instruction};
+pub(super) use run_output::{fill_empty_output_from_log, clean_output_if_jsonl, output_file_instruction, persist_result_file};
 pub(super) use run_scope::warn_agent_committed_files_outside_scope;
 pub(super) use run_verify::{maybe_auto_retry_after_checklist_miss_impl, maybe_auto_retry_after_verify_failure_impl, maybe_cleanup_fast_fail_impl, maybe_verify_impl};
 #[path = "run_process.rs"]
@@ -284,8 +284,8 @@ pub(super) fn build_prompt_bundle(store: &Store, args: &RunArgs, agent_kind: &Ag
             format_batch_siblings(&args.batch_siblings)
         );
     }
-    if args.output.is_some() {
-        effective_prompt = format!("{effective_prompt}\n\n{}", output_file_instruction());
+    if let Some(block) = output_file_instruction(args.output.as_deref(), args.result_file.as_deref()) {
+        effective_prompt = format!("{effective_prompt}\n\n{block}");
     }
     if let Some(checklist_block) = crate::cmd::checklist::format_checklist_block(&args.checklist) {
         effective_prompt = format!("{effective_prompt}\n\n{checklist_block}");

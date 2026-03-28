@@ -16,6 +16,8 @@ pub struct BackgroundRunSpec {
     pub prompt: String,
     pub dir: Option<String>,
     pub output: Option<String>,
+    #[serde(default)]
+    pub result_file: Option<String>,
     pub model: Option<String>,
     pub verify: Option<String>,
     #[serde(default)]
@@ -118,6 +120,7 @@ mod tests {
             prompt: "fix the bug".to_string(),
             dir: Some("/tmp/project".to_string()),
             output: Some("json".to_string()),
+            result_file: Some("result.md".to_string()),
             model: Some("gpt-5.4".to_string()),
             verify: Some("cargo check".to_string()),
             judge: Some("cursor".to_string()),
@@ -145,9 +148,11 @@ mod tests {
     fn background_run_spec_round_trips_read_only() {
         let value = serde_json::to_value(sample_spec(true)).unwrap();
         assert_eq!(value.get("read_only").and_then(|v| v.as_bool()), Some(true));
+        assert_eq!(value.get("result_file").and_then(|v| v.as_str()), Some("result.md"));
 
         let decoded: BackgroundRunSpec = serde_json::from_value(value).unwrap();
         assert!(decoded.read_only);
+        assert_eq!(decoded.result_file.as_deref(), Some("result.md"));
     }
 
     #[test]

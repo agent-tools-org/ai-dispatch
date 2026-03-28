@@ -85,6 +85,7 @@ pub(crate) fn task_to_run_args(
         prompt: task.prompt.clone(),
         dir: task.dir.clone(),
         output: task.output.clone(),
+        result_file: task.result_file.clone(),
         model: task.model.clone(),
         worktree: task.worktree.clone(),
         group: task.group.clone(),

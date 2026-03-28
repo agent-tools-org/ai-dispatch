@@ -34,6 +34,7 @@ fn make_task(name: Option<&str>, depends_on: &[&str]) -> BatchTask {
         prompt: "prompt".to_string(),
         dir: None,
         output: None,
+        result_file: None,
         model: None,
         worktree: None,
         group: None,
@@ -85,6 +86,12 @@ fn parse_valid_batch() {
     assert_eq!(cfg.tasks[0].worktree, Some("feat/x".into()));
     assert_eq!(cfg.tasks[1].dir, Some("src".into()));
     assert_eq!(cfg.tasks[1].group.as_deref(), Some("wg-demo"));
+}
+
+#[test]
+fn result_file_deserializes_from_batch_toml() {
+    let config: BatchConfig = toml::from_str("[[tasks]]\nagent = \"codex\"\nprompt = \"test\"\nresult_file = \"result.md\"\n").unwrap();
+    assert_eq!(config.tasks[0].result_file.as_deref(), Some("result.md"));
 }
 
 #[test]

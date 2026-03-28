@@ -201,6 +201,19 @@ fn task_json_includes_pending_reason() {
     assert_eq!(payload["output"], "full output\n");
 }
 
+#[test]
+fn result_text_reads_task_result_file() {
+    let temp = tempfile::tempdir().unwrap();
+    let _aid_home = crate::paths::AidHomeGuard::set(temp.path());
+    let path = crate::paths::task_dir("t-result").join("result.md");
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    std::fs::write(&path, "structured result\n").unwrap();
+
+    let text = result_text("t-result").unwrap();
+
+    assert_eq!(text, "structured result\n");
+}
+
 fn init_git_repo(repo: &Path) {
     Command::new("git")
         .args(["init"])

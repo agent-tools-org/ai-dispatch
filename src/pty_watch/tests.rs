@@ -2,7 +2,10 @@
 // Covers metadata written for board-facing AWAIT reasons.
 // Depends on pty_watch helpers and the in-memory Store.
 
-use super::{extract_awaiting_prompt, mark_awaiting_input, strip_ansi};
+use super::{
+    MonitorState, extract_awaiting_prompt, finalize_streaming, mark_awaiting_input, strip_ansi,
+};
+use crate::paths;
 use crate::store::Store;
 use crate::types::{AgentKind, Task, TaskId, TaskStatus, VerifyStatus};
 use chrono::Local;
@@ -117,4 +120,59 @@ fn strip_ansi_removes_escape_codes() {
 
     let input3 = "\x1b[38;5;202mColored\x1b[0m";
     assert_eq!(strip_ansi(input3), "Colored");
+}
+
+#[test]
+fn finalize_streaming_persists_transcript() {
+    let temp = tempfile::tempdir().unwrap();
+    let _aid_home = paths::AidHomeGuard::set(temp.path());
+    let store = Arc::new(Store::open_memory().unwrap());
+    let task = Task {
+        id: TaskId("t-pty-transcript".to_string()),
+        agent: AgentKind::Codex,
+        custom_agent_name: None,
+        prompt: "prompt".to_string(),
+        resolved_prompt: None,
+        category: None,
+        status: TaskStatus::Running,
+        parent_task_id: None,
+        workgroup_id: None,
+        caller_kind: None,
+        caller_session_id: None,
+        agent_session_id: None,
+        repo_path: None,
+        worktree_path: None,
+        worktree_branch: None,
+        log_path: None,
+        output_path: None,
+        tokens: None,
+        prompt_tokens: None,
+        duration_ms: None,
+        model: None,
+        cost_usd: None,
+        exit_code: None,
+        created_at: Local::now(),
+        completed_at: None,
+        verify: None,
+        verify_status: VerifyStatus::Skipped,
+        pending_reason: None,
+        read_only: false,
+        budget: false,
+    };
+    store.insert_task(&task).unwrap();
+    let mut state = MonitorState::new(true);
+    state.full_output.push_str("complete transcript");
+
+    finalize_streaming(
+        &task.id,
+        &store,
+        &portable_pty::ExitStatus::with_exit_code(0),
+        &mut state,
+    )
+    .unwrap();
+
+    assert_eq!(
+        std::fs::read_to_string(paths::transcript_path(task.id.as_str())).unwrap(),
+        "complete transcript"
+    );
 }

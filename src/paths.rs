@@ -51,6 +51,10 @@ pub fn task_dir(task_id: &str) -> PathBuf {
     aid_dir().join("tasks").join(task_id)
 }
 
+pub fn transcript_path(task_id: &str) -> PathBuf {
+    task_dir(task_id).join("transcript.md")
+}
+
 pub fn log_path(task_id: &str) -> PathBuf {
     // Takes a validated task ID from the input boundary.
     logs_dir().join(format!("{task_id}.jsonl"))

@@ -253,6 +253,7 @@ fn finalize_streaming(
     exit_status: &portable_pty::ExitStatus,
     state: &mut MonitorState,
 ) -> Result<()> {
+    persist_transcript(task_id, &state.full_output);
     let status = if exit_status.success() {
         TaskStatus::Done
     } else {
@@ -287,6 +288,7 @@ fn finalize_buffered(
     exit_status: &portable_pty::ExitStatus,
     state: &mut MonitorState,
 ) -> Result<()> {
+    persist_transcript(task_id, &state.full_output);
     if let Some(path) = output_path {
         write_output_file(path, &state.full_output)?;
     }
@@ -427,6 +429,11 @@ fn write_output_file(path: &str, buffer: &str) -> Result<()> {
         std::fs::write(path, buffer)?;
     }
     Ok(())
+}
+
+fn persist_transcript(task_id: &TaskId, buffer: &str) {
+    let _ = std::fs::create_dir_all(crate::paths::task_dir(task_id.as_str()));
+    let _ = std::fs::write(crate::paths::transcript_path(task_id.as_str()), buffer);
 }
 
 #[cfg(test)]

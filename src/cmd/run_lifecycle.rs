@@ -307,9 +307,11 @@ pub(crate) fn maybe_flag_empty_worktree_diff(store: &Store, task_id: &TaskId, ta
     }
 }
 pub(crate) fn auto_save_task_output(store: &Store, task: &Task) -> Result<()> {
+    let transcript = crate::paths::transcript_path(task.id.as_str());
     let log_path = task.log_path.as_deref().map(std::path::PathBuf::from)
         .unwrap_or_else(|| crate::paths::log_path(task.id.as_str()));
-    let Some(content) = crate::cmd::show::extract_messages_from_log(&log_path, true)
+    let Some(content) = [transcript, log_path].into_iter()
+        .find_map(|path| crate::cmd::show::extract_messages_from_log(&path, true))
         .filter(|content| !content.is_empty()) else { return Ok(()); };
     let output_dir = crate::paths::task_dir(task.id.as_str());
     std::fs::create_dir_all(&output_dir)?;

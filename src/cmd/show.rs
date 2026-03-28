@@ -46,6 +46,7 @@ pub struct ShowArgs {
     pub summary: bool,
     pub file: Option<String>,
     pub output: bool,
+    pub result: bool,
     pub full: bool,
     pub brief: bool,
     pub explain: bool,
@@ -66,6 +67,10 @@ pub enum ShowMode {
 }
 
 pub async fn run(store: Arc<Store>, args: ShowArgs) -> Result<()> {
+    if args.result {
+        print!("{}", result_text(&args.task_id)?);
+        return Ok(());
+    }
     if args.json {
         let text = task_json(&store, &args.task_id)?;
         println!("{text}");
@@ -144,6 +149,14 @@ pub fn render_mode_text(store: &Arc<Store>, task_id: &str, mode: ShowMode) -> Re
         ShowMode::Output => output_text(store, task_id),
         ShowMode::Log => log_text(task_id),
     }
+}
+
+fn result_text(task_id: &str) -> Result<String> {
+    let path = crate::paths::task_dir(task_id).join("result.md");
+    if !path.exists() {
+        return Ok("No result file for this task\n".to_string());
+    }
+    Ok(std::fs::read_to_string(path)?)
 }
 
 // --- Default mode: events + stderr + diff stat ---

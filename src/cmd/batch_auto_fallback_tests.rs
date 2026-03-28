@@ -121,6 +121,7 @@ fn auto_fallback_skips_rate_limited_toml_fallbacks() {
         prompt: String::new(),
         dir: None,
         output: None,
+        result_file: None,
         model: None,
         worktree: None,
         group: None,

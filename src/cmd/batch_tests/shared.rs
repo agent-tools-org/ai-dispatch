@@ -16,6 +16,7 @@ pub(super) fn make_task(name: &str, conditional: bool, on_success: Option<&str>)
         prompt: "prompt".to_string(),
         dir: None,
         output: None,
+        result_file: None,
         model: None,
         worktree: None,
         group: None,

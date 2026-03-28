@@ -20,6 +20,8 @@ pub struct RunArgs {
     pub dir: Option<String>,
     #[arg(short, long)]
     pub output: Option<String>,
+    #[arg(long, value_name = "FILE")]
+    pub result_file: Option<String>,
     #[arg(short, long)]
     pub model: Option<String>,
     #[arg(long)]
@@ -235,6 +237,8 @@ pub struct ShowArgs {
     pub file: Option<String>,
     #[arg(long)]
     pub output: bool,
+    #[arg(long)]
+    pub result: bool,
     #[arg(long)]
     pub full: bool,
     #[arg(long)]

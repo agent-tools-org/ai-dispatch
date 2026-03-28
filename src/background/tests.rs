@@ -22,6 +22,7 @@ fn serializes_spec_to_json() {
         prompt: "prompt".to_string(),
         dir: Some(".".to_string()),
         output: None,
+        result_file: Some("result.md".to_string()),
         model: None,
         verify: Some("auto".to_string()),
         judge: Some("gemini".to_string()),
@@ -47,6 +48,7 @@ fn serializes_spec_to_json() {
     let content = serde_json::to_string_pretty(&spec).unwrap();
     assert!(content.contains("\"agent_name\""));
     assert!(content.contains("\"codex\""));
+    assert!(content.contains("\"result_file\""));
 }
 
 #[test]
@@ -329,6 +331,7 @@ fn make_spec(task_id: &str) -> BackgroundRunSpec {
         prompt: "prompt".to_string(),
         dir: Some(".".to_string()),
         output: None,
+        result_file: None,
         model: None,
         verify: None,
         judge: None,

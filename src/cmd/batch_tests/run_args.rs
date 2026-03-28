@@ -19,6 +19,7 @@ fn task_to_run_args_copies_context() {
             prompt: "test".to_string(),
             dir: None,
             output: None,
+            result_file: None,
             model: None,
             worktree: None,
             group: None,
@@ -64,6 +65,60 @@ fn task_to_run_args_copies_context() {
 }
 
 #[test]
+fn task_to_run_args_copies_result_file() {
+    let store = Arc::new(Store::open_memory().unwrap());
+    let run_args = task_to_run_args(
+        &batch::BatchTask {
+            id: None,
+            name: None,
+            agent: "codex".to_string(),
+            team: None,
+            prompt: "test".to_string(),
+            dir: None,
+            output: None,
+            result_file: Some("result.md".to_string()),
+            model: None,
+            worktree: None,
+            group: None,
+            container: None,
+            verify: None,
+            judge: None,
+            peer_review: None,
+            max_duration_mins: None,
+            retry: None,
+            idle_timeout: None,
+            best_of: None,
+            metric: None,
+            context: None,
+            checklist: None,
+            skills: None,
+            on_done: None,
+            hooks: None,
+            depends_on: None,
+            parent: None,
+            context_from: None,
+            fallback: None,
+            scope: None,
+            read_only: false,
+            sandbox: false,
+            no_skill: false,
+            budget: false,
+            env: None,
+            env_forward: None,
+            on_success: None,
+            on_fail: None,
+            conditional: false,
+        },
+        &[],
+        true,
+        &store,
+        None,
+    );
+
+    assert_eq!(run_args.result_file.as_deref(), Some("result.md"));
+}
+
+#[test]
 fn task_to_run_args_copies_checklist() {
     let store = Arc::new(Store::open_memory().unwrap());
     let run_args = task_to_run_args(
@@ -75,6 +130,7 @@ fn task_to_run_args_copies_checklist() {
             prompt: "test".to_string(),
             dir: None,
             output: None,
+            result_file: None,
             model: None,
             worktree: None,
             group: None,
@@ -131,6 +187,7 @@ fn task_to_run_args_defaults_dry_run_to_false() {
             prompt: "test".to_string(),
             dir: None,
             output: None,
+            result_file: None,
             model: None,
             worktree: None,
             group: None,
@@ -183,6 +240,7 @@ fn task_to_run_args_includes_sibling_metadata() {
         prompt: "implement the feature".to_string(),
         dir: None,
         output: None,
+        result_file: None,
         model: None,
         worktree: None,
         group: None,
@@ -223,6 +281,7 @@ fn task_to_run_args_includes_sibling_metadata() {
         prompt: "review the implementation".to_string(),
         dir: None,
         output: None,
+        result_file: None,
         model: None,
         worktree: None,
         group: None,
@@ -281,6 +340,7 @@ fn task_to_run_args_applies_forwarded_env_after_explicit_env() {
             prompt: "test".to_string(),
             dir: None,
             output: None,
+            result_file: None,
             model: None,
             worktree: None,
             group: None,
@@ -338,6 +398,7 @@ fn task_to_run_args_includes_shared_dir_env() {
             prompt: "test".to_string(),
             dir: None,
             output: None,
+            result_file: None,
             model: None,
             worktree: None,
             group: None,
@@ -398,6 +459,7 @@ fn task_to_run_args_copies_existing_task_id_and_run_flags() {
             prompt: "test".to_string(),
             dir: None,
             output: None,
+            result_file: None,
             model: None,
             worktree: None,
             group: None,

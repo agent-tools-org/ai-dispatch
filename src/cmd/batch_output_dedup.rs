@@ -71,6 +71,7 @@ mod tests {
             prompt: "prompt".to_string(),
             dir: None,
             output: output.map(str::to_string),
+            result_file: None,
             model: None,
             worktree: None,
             group: None,

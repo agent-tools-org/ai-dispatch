@@ -64,7 +64,7 @@ pub(crate) async fn dispatch(store: Arc<crate::store::Store>, command: Commands)
 
 async fn dispatch_primary(store: Arc<crate::store::Store>, command: Commands) -> Result<()> {
     match command {
-        Commands::Run(command_args_a::RunArgs { agent, prompt, repo, dir, output, model, budget, worktree, team, group, verify, judge, peer_review, retry, context, checklist, checklist_file, scope, run_extras, no_skill, bg, dry_run, read_only, sandbox, container, best_of, metric, parent, id, timeout, idle_timeout }) => handlers_a::run(store, agent, prompt, repo, dir, output, model, budget, worktree, team, group, verify, judge, peer_review, retry, context, checklist, checklist_file, scope, run_extras, no_skill, bg, dry_run, read_only, sandbox, container, best_of, metric, parent, id, timeout, idle_timeout).await,
+        Commands::Run(command_args_a::RunArgs { agent, prompt, repo, dir, output, result_file, model, budget, worktree, team, group, verify, judge, peer_review, retry, context, checklist, checklist_file, scope, run_extras, no_skill, bg, dry_run, read_only, sandbox, container, best_of, metric, parent, id, timeout, idle_timeout }) => handlers_a::run(store, agent, prompt, repo, dir, output, result_file, model, budget, worktree, team, group, verify, judge, peer_review, retry, context, checklist, checklist_file, scope, run_extras, no_skill, bg, dry_run, read_only, sandbox, container, best_of, metric, parent, id, timeout, idle_timeout).await,
         Commands::Batch(command_args_a::BatchArgs { action, file, vars, group, parallel, analyze, wait, dry_run, max_concurrent, output }) => handlers_a::batch(store, action, file, vars, parallel, analyze, wait, dry_run, max_concurrent, output, group).await,
         Commands::Benchmark(command_args_a::BenchmarkArgs { prompt, agents, dir, verify }) => handlers_c::benchmark(store, prompt, agents, dir, verify).await,
         Commands::Watch(command_args_a::WatchArgs { task_ids, group, tui, quiet, exit_on_await, timeout }) => handlers_c::watch(store, task_ids, group, tui, quiet, exit_on_await, timeout).await,
@@ -75,7 +75,7 @@ async fn dispatch_primary(store: Arc<crate::store::Store>, command: Commands) ->
         Commands::Changelog(command_args_a::ChangelogArgs { version, all, count, git }) => handlers_c::changelog(version, all, count, git),
         Commands::Agent(command_args_a::AgentArgs { action }) => handlers_c::agent(action),
         Commands::Clean(command_args_a::CleanArgs { older_than, worktrees, dry_run }) => handlers_c::clean(store, older_than, worktrees, dry_run),
-        Commands::Show(command_args_a::ShowArgs { task_id, events: _, context, diff, summary, file, output, full, brief, explain, log, json, agent, model }) => handlers_c::show(store, task_id, context, diff, summary, file, output, full, brief, explain, log, json, agent, model).await,
+        Commands::Show(command_args_a::ShowArgs { task_id, events: _, context, diff, summary, file, output, result, full, brief, explain, log, json, agent, model }) => handlers_c::show(store, task_id, context, diff, summary, file, output, result, full, brief, explain, log, json, agent, model).await,
         Commands::Export(command_args_b::ExportArgs { task_id, format, output }) => handlers_b::export(store, task_id, format, output).await,
         Commands::Tree(command_args_c::TreeArgs { task_id }) => handlers_b::tree(store, task_id),
         Commands::Output(command_args_c::OutputArgs { task_id, full: _, brief }) => handlers_b::output(task_id, brief),

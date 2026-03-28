@@ -17,6 +17,7 @@ fn stub_task(name: &str, depends_on: Option<Vec<&str>>) -> batch::BatchTask {
         prompt: "test".to_string(),
         dir: None,
         output: None,
+        result_file: None,
         model: None,
         worktree: None,
         group: None,

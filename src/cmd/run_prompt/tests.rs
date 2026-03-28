@@ -38,11 +38,12 @@ fn run_args(skills: Vec<String>) -> RunArgs {
     }
 }
 
-fn build_prompt_args(output: Option<&str>) -> RunArgs {
+fn build_prompt_args(output: Option<&str>, result_file: Option<&str>) -> RunArgs {
     RunArgs {
         agent_name: "codex".to_string(),
         prompt: "Write the requested content".to_string(),
         output: output.map(str::to_string),
+        result_file: result_file.map(str::to_string),
         ..Default::default()
     }
 }
@@ -116,7 +117,7 @@ fn build_prompt_bundle_includes_output_instruction_when_output_is_set() {
     let store = Store::open_memory().unwrap();
     let bundle = build_prompt_bundle(
         &store,
-        &build_prompt_args(Some("out.txt")),
+        &build_prompt_args(Some("out.txt"), None),
         &AgentKind::Codex,
         None,
         &[],
@@ -128,11 +129,28 @@ fn build_prompt_bundle_includes_output_instruction_when_output_is_set() {
 }
 
 #[test]
+fn build_prompt_bundle_includes_result_file_instruction_when_result_file_is_set() {
+    let store = Store::open_memory().unwrap();
+    let bundle = build_prompt_bundle(
+        &store,
+        &build_prompt_args(None, Some("/tmp/result.md")),
+        &AgentKind::Codex,
+        None,
+        &[],
+        "task-1",
+    )
+    .unwrap();
+
+    assert!(bundle.effective_prompt.contains("<aid-result-file>/tmp/result.md</aid-result-file>"));
+    assert!(bundle.effective_prompt.contains("This file will be preserved as the task's official result."));
+}
+
+#[test]
 fn build_prompt_bundle_omits_output_instruction_when_output_is_not_set() {
     let store = Store::open_memory().unwrap();
     let bundle = build_prompt_bundle(
         &store,
-        &build_prompt_args(None),
+        &build_prompt_args(None, None),
         &AgentKind::Codex,
         None,
         &[],
@@ -148,7 +166,7 @@ fn build_prompt_bundle_includes_git_staging_guard_for_writable_tasks() {
     let store = Store::open_memory().unwrap();
     let bundle = build_prompt_bundle(
         &store,
-        &build_prompt_args(None),
+        &build_prompt_args(None, None),
         &AgentKind::Codex,
         None,
         &[],
@@ -166,7 +184,7 @@ fn build_prompt_bundle_omits_git_staging_guard_for_read_only_tasks() {
         &store,
         &RunArgs {
             read_only: true,
-            ..build_prompt_args(None)
+            ..build_prompt_args(None, None)
         },
         &AgentKind::Codex,
         None,
@@ -185,7 +203,7 @@ fn build_prompt_bundle_includes_shared_dir_instruction_when_env_is_set() {
     let store = Store::open_memory().unwrap();
     let bundle = build_prompt_bundle(
         &store,
-        &build_prompt_args(None),
+        &build_prompt_args(None, None),
         &AgentKind::Codex,
         None,
         &[],

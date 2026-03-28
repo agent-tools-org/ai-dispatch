@@ -192,6 +192,7 @@ async fn run_task_inner(store: &Arc<Store>, spec: &BackgroundRunSpec) -> Result<
         prompt: spec.prompt.clone(),
         dir: spec.dir.clone(),
         output: spec.output.clone(),
+        result_file: spec.result_file.clone(),
         model: spec.model.clone(),
         group: spec.group.clone(),
         verify: spec.verify.clone(),
@@ -250,6 +251,9 @@ async fn run_task_inner(store: &Arc<Store>, spec: &BackgroundRunSpec) -> Result<
         return Ok(());
     }
     notify_task_completion(store, &spec.task_id)?;
+    if let Err(err) = crate::cmd::run::persist_result_file(&spec.task_id, spec.result_file.as_deref(), spec.dir.as_deref()) {
+        aid_warn!("[aid] Failed to persist result file: {err}");
+    }
     if crate::cmd::run::maybe_auto_retry_after_verify_failure(
         store,
         &TaskId(spec.task_id.clone()),

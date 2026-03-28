@@ -24,6 +24,7 @@ fn background_spec(checklist: Vec<String>) -> BackgroundRunSpec {
         prompt: "prompt".to_string(),
         dir: None,
         output: None,
+        result_file: None,
         model: None,
         verify: None,
         judge: None,

@@ -221,6 +221,7 @@ mod tests {
             prompt: "test".to_string(),
             dir: None,
             output: None,
+            result_file: None,
             model: None,
             verify: None,
             judge: None,

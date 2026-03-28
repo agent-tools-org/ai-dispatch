@@ -37,6 +37,7 @@ pub struct RunArgs {
     pub repo: Option<String>,
     pub dir: Option<String>,
     pub output: Option<String>,
+    pub result_file: Option<String>,
     pub model: Option<String>,
     pub worktree: Option<String>,
     pub base_branch: Option<String>,
@@ -473,6 +474,7 @@ pub async fn run(store: Arc<Store>, mut args: RunArgs) -> Result<TaskId> {
             prompt: prompt_bundle.effective_prompt,
             dir: effective_dir,
             output: args.output.clone(),
+            result_file: args.result_file.clone(),
             model: effective_model.clone(),
             verify: args.verify.clone(),
             judge: args.judge.clone(),
@@ -625,6 +627,9 @@ pub(crate) fn read_quota_error_message(task_id: &TaskId) -> Option<String> { run
 fn worktree_is_empty_diff(worktree_dir: &Path) -> Option<bool> { run_lifecycle::worktree_is_empty_diff(worktree_dir) }
 
 pub(crate) fn maybe_cleanup_fast_fail(store: &Store, task_id: &TaskId, task: &Task) { run_prompt::maybe_cleanup_fast_fail_impl(store, task_id, task); }
+pub(crate) fn persist_result_file(task_id: &str, result_file: Option<&str>, base_dir: Option<&str>) -> Result<()> {
+    run_prompt::persist_result_file(task_id, result_file, base_dir)
+}
 /// Run verification if --verify was set and a working dir exists.
 pub(crate) fn maybe_verify(
     store: &Store,

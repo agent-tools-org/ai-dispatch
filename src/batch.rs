@@ -91,6 +91,8 @@ pub struct BatchTask {
     pub prompt: String,
     pub dir: Option<String>,
     pub output: Option<String>,
+    #[serde(default)]
+    pub result_file: Option<String>,
     pub model: Option<String>,
     pub worktree: Option<String>,
     pub group: Option<String>,

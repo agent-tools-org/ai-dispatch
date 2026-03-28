@@ -184,6 +184,9 @@ pub(crate) async fn post_run_lifecycle(
     {
         auto_save_task_output(store.as_ref(), &task)?;
     }
+    if let Err(err) = run_prompt::persist_result_file(task_id.as_str(), args.result_file.as_deref(), effective_dir.map(String::as_str)) {
+        aid_warn!("[aid] Failed to persist result file: {err}");
+    }
     let Some(task) = store.get_task(task_id.as_str())? else { return Ok(None) };
     let summary_json = serde_json::to_string(&crate::cmd::summary::generate_summary(&task)).unwrap_or_default();
     let _ = store.save_completion_summary(task_id.as_str(), &summary_json);

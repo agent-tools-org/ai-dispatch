@@ -48,7 +48,7 @@ fn render_task_output(task: &Task, task_id: &str, full: bool, tail_lines: usize)
     if let Ok(content) = read_task_output(task) {
         return Ok(content);
     }
-    if is_research_task(task) {
+    if !full && is_research_task(task) {
         let path = task_log_path(task, task_id);
         if let Some(content) = extract_messages_research(&path) {
             return Ok(content);

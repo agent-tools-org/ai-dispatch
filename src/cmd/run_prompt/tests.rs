@@ -99,6 +99,23 @@ fn effective_skills_respect_no_skill_sentinel() {
 }
 
 #[test]
+fn resolve_worktree_paths_rejects_read_only_worktrees() {
+    let err = resolve_worktree_paths(
+        &RunArgs {
+            worktree: Some("wt-readonly".to_string()),
+            read_only: true,
+            ..Default::default()
+        },
+        None,
+    )
+    .unwrap_err();
+
+    assert!(err
+        .to_string()
+        .contains("--read-only cannot be used with --worktree"));
+}
+
+#[test]
 fn extract_words_normalizes_keywords() {
     let text = "Refactor Foo::Bar and update src/lib.rs to fix Config::load().";
     let words = super::prompt_context::extract_words(text);

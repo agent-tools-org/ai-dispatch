@@ -152,7 +152,7 @@ async fn run_task_inner(store: &Arc<Store>, spec: &BackgroundRunSpec) -> Result<
         if !crate::sandbox::is_available() {
             anyhow::bail!("--sandbox requires container CLI");
         }
-        crate::sandbox::wrap_command(&std_cmd, &spec.task_id, agent.kind())
+        crate::sandbox::wrap_command(&std_cmd, &spec.task_id, agent.kind(), spec.read_only)
     } else {
         std_cmd
     };

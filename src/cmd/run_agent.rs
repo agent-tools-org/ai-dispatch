@@ -210,6 +210,7 @@ pub(crate) async fn run_agent_process_with_timeout(
 }
 
 fn spawn_child_with_log(cmd: &mut Command, log_path: &Path) -> Result<tokio::process::Child> {
+    crate::cmd::noninteractive_stdio::configure(cmd);
     match cmd.spawn() {
         Ok(child) => Ok(child),
         Err(err) => {

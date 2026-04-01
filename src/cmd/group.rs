@@ -122,11 +122,96 @@ pub fn delete(store: &Arc<Store>, workgroup_id: &str) -> Result<()> {
     Ok(())
 }
 
+pub fn cancel(store: &Arc<Store>, workgroup_id: &str) -> Result<()> {
+    store
+        .get_workgroup(workgroup_id)?
+        .ok_or_else(|| anyhow::anyhow!("Workgroup '{}' not found", workgroup_id))?;
+    let mut cancelled = 0;
+    for task in store.list_tasks_by_group(workgroup_id)? {
+        if task.status.is_terminal() {
+            continue;
+        }
+        crate::cmd::stop::terminate_any(store, task.id.as_str())?;
+        cancelled += 1;
+    }
+    println!("Cancelled {cancelled} tasks in group {workgroup_id}");
+    Ok(())
+}
+
 fn truncate(value: &str, max: usize) -> String {
     if value.len() <= max {
         value.to_string()
     } else {
         let safe = value.floor_char_boundary(max.saturating_sub(3));
         format!("{}...", &value[..safe])
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::paths::AidHomeGuard;
+    use crate::types::{AgentKind, Task, TaskId, TaskStatus, VerifyStatus};
+    use chrono::Local;
+    use tempfile::TempDir;
+
+    fn make_task(id: &str, group_id: &str, status: TaskStatus) -> Task {
+        Task {
+            id: TaskId(id.to_string()),
+            agent: AgentKind::Codex,
+            custom_agent_name: None,
+            prompt: "prompt".to_string(),
+            resolved_prompt: None,
+            category: None,
+            status,
+            parent_task_id: None,
+            workgroup_id: Some(group_id.to_string()),
+            caller_kind: None,
+            caller_session_id: None,
+            agent_session_id: None,
+            repo_path: None,
+            worktree_path: None,
+            worktree_branch: None,
+            log_path: None,
+            output_path: None,
+            tokens: None,
+            prompt_tokens: None,
+            duration_ms: None,
+            model: None,
+            cost_usd: None,
+            exit_code: None,
+            created_at: Local::now(),
+            completed_at: None,
+            verify: None,
+            verify_status: VerifyStatus::Skipped,
+            pending_reason: None,
+            read_only: false,
+            budget: false,
+        }
+    }
+
+    #[test]
+    fn cancel_group_stops_only_non_terminal_tasks() {
+        let temp = TempDir::new().unwrap();
+        let _guard = AidHomeGuard::set(temp.path());
+        let store = Arc::new(Store::open_memory().unwrap());
+        store.create_workgroup("demo", "", Some("cli"), Some("wg-1")).unwrap();
+        for task in [
+            make_task("t-wait", "wg-1", TaskStatus::Waiting),
+            make_task("t-pend", "wg-1", TaskStatus::Pending),
+            make_task("t-run", "wg-1", TaskStatus::Running),
+            make_task("t-done", "wg-1", TaskStatus::Done),
+            make_task("t-other", "wg-2", TaskStatus::Running),
+        ] {
+            store.insert_task(&task).unwrap();
+        }
+
+        cancel(&store, "wg-1").unwrap();
+
+        assert_eq!(store.get_task("t-wait").unwrap().unwrap().status, TaskStatus::Stopped);
+        assert_eq!(store.get_task("t-pend").unwrap().unwrap().status, TaskStatus::Stopped);
+        assert_eq!(store.get_task("t-run").unwrap().unwrap().status, TaskStatus::Stopped);
+        assert_eq!(store.get_task("t-done").unwrap().unwrap().status, TaskStatus::Done);
+        assert_eq!(store.get_task("t-other").unwrap().unwrap().status, TaskStatus::Running);
     }
 }

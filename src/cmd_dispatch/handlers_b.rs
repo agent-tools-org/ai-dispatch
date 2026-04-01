@@ -57,7 +57,6 @@ pub(super) fn cost(
 pub(super) fn summary(store: Arc<store::Store>, group: String) -> Result<()> {
     cmd::summary_cli::run(&store, &group)
 }
-
 pub(super) async fn retry(
     store: Arc<store::Store>,
     task_id: String,
@@ -129,7 +128,6 @@ pub(super) fn query(
 pub(super) async fn mcp(store: Arc<store::Store>) -> Result<()> {
     cmd::mcp::run(store).await
 }
-
 pub(super) fn hook(action: HookAction) -> Result<()> {
     match action {
         HookAction::SessionStart => cmd::hook::session_start(),
@@ -151,6 +149,7 @@ pub(super) fn group(store: Arc<store::Store>, action: GroupAction) -> Result<()>
             cmd::group::update(&store, &group_id, name.as_deref(), context.as_deref())
         }
         GroupAction::Delete { group_id } => cmd::group::delete(&store, &group_id),
+        GroupAction::Cancel { group_id } => cmd::group::cancel(&store, &group_id),
         GroupAction::Summary { group_id } => cmd::summary_cli::run(&store, &group_id),
         GroupAction::Finding { action } => group_finding(store, action),
         GroupAction::Broadcast { group_id, message } => cmd::broadcast::run(&store, &group_id, &message),

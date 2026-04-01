@@ -3,7 +3,7 @@
 
 use super::{BatchAction, Cli, Commands, ExperimentCommands, HookAction};
 use super::{command_args_a, command_args_b};
-use crate::cli_actions::ContainerAction;
+use crate::cli_actions::{ContainerAction, GroupAction};
 use clap::Parser;
 
 #[test]
@@ -151,6 +151,17 @@ fn container_subcommand_parses() {
             action: ContainerAction::Stop { name },
         })) => assert_eq!(name, "aid-dev-demo"),
         _ => panic!("expected Container stop"),
+    }
+}
+
+#[test]
+fn group_cancel_subcommand_parses() {
+    let cli = Cli::try_parse_from(["aid", "group", "cancel", "wg-a"]).unwrap();
+    match cli.command {
+        Some(Commands::Group(command_args_b::GroupArgs {
+            action: GroupAction::Cancel { group_id },
+        })) => assert_eq!(group_id, "wg-a"),
+        _ => panic!("expected Group cancel"),
     }
 }
 

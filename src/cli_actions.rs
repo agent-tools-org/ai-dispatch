@@ -64,6 +64,10 @@ pub enum GroupAction {
     Delete {
         group_id: String,
     },
+    /// Cancel all non-terminal tasks in a workgroup
+    Cancel {
+        group_id: String,
+    },
     /// Summarize workgroup results with milestones, findings, costs
     Summary {
         /// Workgroup ID (e.g. wg-abc1)

@@ -28,13 +28,15 @@ pub(crate) async fn post_run_lifecycle(
     if let Some(wt) = wt_path {
         crate::worktree::clear_worktree_lock(std::path::Path::new(wt));
     }
-    run_prompt::warn_agent_committed_files_outside_scope(
-        &args.scope,
-        args.dir.as_ref(),
-        effective_dir,
-        repo_path,
-        wt_path,
-    );
+    if !args.read_only {
+        run_prompt::warn_agent_committed_files_outside_scope(
+            &args.scope,
+            args.dir.as_ref(),
+            effective_dir,
+            repo_path,
+            wt_path,
+        );
+    }
     if args.worktree.is_some() {
         run_agent::check_worktree_escape(repo_path.map(String::as_str));
     }
@@ -65,7 +67,7 @@ pub(crate) async fn post_run_lifecycle(
         effective_dir.map(String::as_str),
         container_name,
     );
-    if !args.scope.is_empty() {
+    if !args.read_only && !args.scope.is_empty() {
         run_agent::check_scope_violations(
             store,
             task_id,
@@ -138,7 +140,8 @@ pub(crate) async fn post_run_lifecycle(
             ) {
                 aid_error!("[aid] Hook on_fail failed: {err}");
             }
-            if let Some(wt) = task.worktree_path.as_deref()
+            if !task.read_only
+                && let Some(wt) = task.worktree_path.as_deref()
                 && Path::new(wt).exists()
             {
                 // Don't remove worktree if other active tasks still reference it
@@ -296,7 +299,7 @@ pub(crate) async fn post_run_lifecycle(
     Ok(None)
 }
 pub(crate) fn maybe_flag_empty_worktree_diff(store: &Store, task_id: &TaskId, task: &Task) {
-    if task.status != TaskStatus::Done || task.verify_status != VerifyStatus::Skipped {
+    if task.read_only || task.status != TaskStatus::Done || task.verify_status != VerifyStatus::Skipped {
         return;
     }
     let Some(wt_path) = task.worktree_path.as_deref() else { return; };

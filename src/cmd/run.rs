@@ -551,7 +551,7 @@ pub async fn run(store: Arc<Store>, mut args: RunArgs) -> Result<TaskId> {
                 anyhow::bail!("--sandbox requires Apple Container CLI. Install: brew install container");
             }
             aid_info!("[aid] Sandbox: running {} in container aid-{}", agent_kind.as_str(), task_id);
-            crate::sandbox::wrap_command(&std_cmd, task_id.as_str(), agent_kind)
+            crate::sandbox::wrap_command(&std_cmd, task_id.as_str(), agent_kind, args.read_only)
         } else if args.sandbox {
             aid_warn!("[aid] Warning: {} does not support sandbox, running on host", agent_kind.as_str());
             std_cmd

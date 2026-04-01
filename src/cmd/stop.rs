@@ -14,27 +14,11 @@ use crate::types::{EventKind, Task, TaskEvent, TaskId, TaskStatus};
 const WAIT_TIMEOUT: Duration = Duration::from_secs(5);
 const POLL_INTERVAL: Duration = Duration::from_millis(200);
 
-pub fn stop(store: &Arc<Store>, task_id: &str) -> Result<()> {
-    terminate(
-        store,
-        task_id,
-        true,
-        "Task stopped by user",
-        "stopped",
-        "Stopped",
-    )
-}
+pub fn stop(store: &Arc<Store>, task_id: &str) -> Result<()> { terminate(store, task_id, true, "Task stopped by user", "stopped", Some("Stopped")) }
 
-pub fn kill(store: &Arc<Store>, task_id: &str) -> Result<()> {
-    terminate(
-        store,
-        task_id,
-        false,
-        "Task killed by user",
-        "killed",
-        "Killed",
-    )
-}
+pub fn kill(store: &Arc<Store>, task_id: &str) -> Result<()> { terminate(store, task_id, false, "Task killed by user", "killed", Some("Killed")) }
+
+pub fn terminate_any(store: &Arc<Store>, task_id: &str) -> Result<()> { terminate(store, task_id, true, "Task stopped by user", "stopped", None) }
 
 fn terminate(
     store: &Arc<Store>,
@@ -42,29 +26,31 @@ fn terminate(
     graceful: bool,
     detail: &'static str,
     preserve_label: &'static str,
-    print_label: &'static str,
+    print_label: Option<&'static str>,
 ) -> Result<()> {
-    let task = ensure_running_task(store, task_id)?;
-    if let Some(pid) = background::load_worker_pid(task_id)? {
-        if graceful {
-            background::kill_process(pid);
-            if wait_for_exit(pid) {
+    let task = ensure_non_terminal_task(store, task_id)?;
+    if matches!(task.status, TaskStatus::Running | TaskStatus::AwaitingInput) {
+        if let Some(pid) = background::load_worker_pid(task_id)? {
+            if graceful {
+                background::kill_process(pid);
+                if wait_for_exit(pid) {
+                    background::sigkill_process(pid);
+                }
+            } else {
                 background::sigkill_process(pid);
+                let _ = wait_for_exit(pid);
             }
-        } else {
-            background::sigkill_process(pid);
-            let _ = wait_for_exit(pid);
         }
-    }
-    if let Some(agent_pid) = background::load_agent_pid(task_id)? {
-        if graceful {
-            background::kill_process(agent_pid);
-        } else {
-            background::sigkill_process(agent_pid);
+        if let Some(agent_pid) = background::load_agent_pid(task_id)? {
+            if graceful {
+                background::kill_process(agent_pid);
+            } else {
+                background::sigkill_process(agent_pid);
+            }
         }
+        crate::sandbox::kill_container(task_id);
+        preserve_worktree(task_id, &task, preserve_label);
     }
-    crate::sandbox::kill_container(task_id);
-    preserve_worktree(task_id, &task, preserve_label);
     store.update_task_status(task_id, TaskStatus::Stopped)?;
     store.insert_event(&TaskEvent {
         task_id: TaskId(task_id.to_string()),
@@ -74,17 +60,19 @@ fn terminate(
         metadata: None,
     })?;
     background::clear_spec(task_id)?;
-    println!("{print_label} {task_id}");
+    if let Some(print_label) = print_label {
+        println!("{print_label} {task_id}");
+    }
     Ok(())
 }
 
-fn ensure_running_task(store: &Arc<Store>, task_id: &str) -> Result<Task> {
+fn ensure_non_terminal_task(store: &Arc<Store>, task_id: &str) -> Result<Task> {
     let task = store
         .get_task(task_id)?
         .ok_or_else(|| anyhow!("Task '{task_id}' not found"))?;
-    if !matches!(task.status, TaskStatus::Running | TaskStatus::AwaitingInput) {
+    if task.status.is_terminal() {
         bail!(
-            "Task '{task_id}' is not running (status: {})",
+            "Task '{task_id}' is already terminal (status: {})",
             task.status.as_str()
         );
     }
@@ -179,25 +167,48 @@ mod tests {
             let task = make_task("t-done", TaskStatus::Done);
             store.insert_task(&task).unwrap();
             let err = stop(&store, "t-done").unwrap_err();
-            assert!(err.to_string().contains("not running"));
+            assert!(err.to_string().contains("already terminal"));
             let reloaded = store.get_task("t-done").unwrap().unwrap();
             assert_eq!(reloaded.status, TaskStatus::Done);
         });
     }
 
-    #[test]
-    fn stop_running_task_sets_stopped() {
+    fn assert_termination_sets_stopped(
+        action: fn(&Arc<Store>, &str) -> Result<()>,
+        task_id: &str,
+        status: TaskStatus,
+        detail: &str,
+    ) {
         with_store(|store| {
-            let task = make_task("t-aa01", TaskStatus::Running);
-            store.insert_task(&task).unwrap();
-            stop(&store, "t-aa01").unwrap();
-            let updated = store.get_task("t-aa01").unwrap().unwrap();
+            store.insert_task(&make_task(task_id, status)).unwrap();
+            action(&store, task_id).unwrap();
+            let updated = store.get_task(task_id).unwrap().unwrap();
             assert_eq!(updated.status, TaskStatus::Stopped);
-            let events = store.get_events("t-aa01").unwrap();
+            let events = store.get_events(task_id).unwrap();
             assert_eq!(events.len(), 1);
-            assert_eq!(events[0].detail, "Task stopped by user");
+            assert_eq!(events[0].detail, detail);
             assert_eq!(events[0].event_kind, EventKind::Error);
         });
+    }
+
+    #[test]
+    fn stop_running_task_sets_stopped() {
+        assert_termination_sets_stopped(stop, "t-aa01", TaskStatus::Running, "Task stopped by user");
+    }
+
+    #[test]
+    fn stop_waiting_task_sets_stopped() {
+        assert_termination_sets_stopped(stop, "t-wait", TaskStatus::Waiting, "Task stopped by user");
+    }
+
+    #[test]
+    fn stop_pending_task_sets_stopped() {
+        assert_termination_sets_stopped(stop, "t-pend", TaskStatus::Pending, "Task stopped by user");
+    }
+
+    #[test]
+    fn kill_waiting_task_sets_stopped() {
+        assert_termination_sets_stopped(kill, "t-kill", TaskStatus::Waiting, "Task killed by user");
     }
 
     #[test]

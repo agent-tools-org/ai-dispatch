@@ -117,6 +117,10 @@ pub(crate) fn resolve_dir_in_target(base_dir: &str, dir: Option<&str>, repo_dir:
 type WorktreePaths = (Option<String>, Option<String>, Option<String>, Option<String>);
 pub(crate) fn resolve_worktree_paths(args: &RunArgs, repo_path: Option<&str>) -> Result<WorktreePaths> {
     if let Some(ref branch) = args.worktree {
+        anyhow::ensure!(
+            !args.read_only,
+            "--read-only cannot be used with --worktree"
+        );
         let repo_dir = repo_path.map(|path| path.to_string()).unwrap_or(resolve_repo_path(args.dir.as_deref().unwrap_or("."))?);
         // Use explicit base_branch, or default to current branch (not just HEAD)
         // so worktrees inherit the latest state of whatever branch the user is on

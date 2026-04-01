@@ -29,6 +29,7 @@ mod mcp_schema;
 mod mcp_tools;
 pub mod query;
 pub mod respond;
+pub(crate) mod report_mode;
 pub mod steer;
 pub mod stop;
 pub mod setup;
@@ -63,3 +64,5 @@ pub mod experiment_status;
 mod batch_auto_fallback_tests;
 #[cfg(test)]
 mod cost_tests;
+#[cfg(test)]
+mod show_result_tests;

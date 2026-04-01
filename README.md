@@ -667,6 +667,23 @@ Match effort to task importance:
 
 `--peer-review <agent>` sends the completed diff to a second agent for scored critique (1–10). Cheap agents like gemini make excellent reviewers.
 
+### Audit Report Mode
+
+Review-style tasks now default to a structured Markdown report flow. If the prompt looks like an audit, cross-audit, or code review task, `aid` automatically:
+
+- sets `--result-file result.md`
+- tells the agent to write the final answer as a Markdown audit report
+- makes `aid show --output`, the TUI Output tab, and the web UI prefer the saved report over raw logs
+
+Examples:
+
+```bash
+aid run codex "Cross-audit the split routing fix. List findings by severity with evidence." --read-only
+aid run codex "Review this diff for regressions and open questions." --read-only
+```
+
+Use `aid show <task-id> --result` to read the persisted report file directly.
+
 ### Agent Selection Guide
 
 `auto` uses a capability matrix to match agents to task types. The scores below reflect relative strengths (higher = better fit):

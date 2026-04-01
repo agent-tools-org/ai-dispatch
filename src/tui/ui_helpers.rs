@@ -135,26 +135,15 @@ pub fn prompt_text(task: &Task) -> String {
 }
 
 pub fn read_task_output_for_tui(task: &Task) -> String {
-    if let Some(path) = task.output_path.as_deref()
-        && let Ok(content) = std::fs::read_to_string(path)
-    {
+    if let Ok(content) = crate::cmd::show::read_task_output(task) {
         return content;
     }
     if let Some(path) = task.log_path.as_deref()
         && let Ok(content) = std::fs::read_to_string(path)
     {
-        let output = content
-            .lines()
-            .filter_map(|line| serde_json::from_str::<serde_json::Value>(line).ok())
-            .filter_map(|value| {
-                value
-                    .get("content")
-                    .and_then(|content| content.as_str())
-                    .map(String::from)
-            })
-            .collect::<Vec<_>>()
-            .join("");
-        if !output.is_empty() {
+        if let Some(output) =
+            crate::cmd::show::extract_messages_from_log(std::path::Path::new(path), true)
+        {
             return output;
         }
         // Fall back to raw text (non-JSONL logs from custom agents)
@@ -331,12 +320,16 @@ mod tests {
         let log_file = NamedTempFile::new().unwrap();
         std::fs::write(
             log_file.path(),
-            "{\"content\":\"hello\\n\"}\n{\"content\":\"world\"}\n",
+            concat!(
+                "not-json-prefix\n",
+                "{\"type\":\"item.completed\",\"item\":{\"type\":\"agent_message\",\"text\":\"hello\"}}\n",
+                "{\"type\":\"message\",\"role\":\"assistant\",\"content\":\" world\",\"delta\":true}\n"
+            ),
         )
         .unwrap();
         let mut task = make_task();
         task.log_path = Some(log_file.path().display().to_string());
 
-        assert_eq!(read_task_output_for_tui(&task), "hello\nworld");
+        assert_eq!(read_task_output_for_tui(&task), "hello\n---\n world");
     }
 }

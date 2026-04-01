@@ -53,6 +53,57 @@ fn stub_task(name: &str, depends_on: Option<Vec<&str>>) -> batch::BatchTask {
 }
 
 #[test]
+fn parallel_same_dir_without_worktree_errors() {
+    let mut first = stub_task("first", None);
+    first.dir = Some("src".to_string());
+    let mut second = stub_task("second", None);
+    second.dir = Some("src".to_string());
+
+    let err = validate_batch_config(&[first, second], true, false)
+        .unwrap_err()
+        .to_string();
+
+    assert_eq!(
+        err,
+        "Error: 2 tasks target 'src' without worktree isolation. This causes git index.lock contention. Add `worktree = \"branch-name\"` to each task, or use `--force` to override."
+    );
+}
+
+#[test]
+fn parallel_same_dir_with_force_warns() {
+    let mut first = stub_task("first", None);
+    first.dir = Some("src".to_string());
+    let mut second = stub_task("second", None);
+    second.dir = Some("src".to_string());
+
+    assert!(validate_batch_config(&[first, second], true, true).is_ok());
+
+    let mut warning_tasks = [stub_task("first", None), stub_task("second", None)];
+    warning_tasks[0].dir = Some("src".to_string());
+    warning_tasks[1].dir = Some("src".to_string());
+    let conflicts = shared_dir_conflicts(&warning_tasks);
+    assert_eq!(conflicts.len(), 1);
+    let warning = parallel_dir_conflict_warning(&conflicts[0]);
+    assert_eq!(
+        warning,
+        "[aid] Warning: 2 tasks target 'src' without worktree isolation. This causes git index.lock contention. Proceeding because --force is set."
+    );
+}
+
+#[test]
+fn parallel_same_dir_readonly_excluded() {
+    let mut first = stub_task("first", None);
+    first.dir = Some("src".to_string());
+    first.read_only = true;
+    let mut second = stub_task("second", None);
+    second.dir = Some("src".to_string());
+    let tasks = [first, second];
+
+    assert!(shared_dir_conflicts(&tasks).is_empty());
+    assert!(validate_batch_config(&tasks, true, false).is_ok());
+}
+
+#[test]
 fn find_ready_dispatches_when_individual_dep_satisfied() {
     let store = Arc::new(Store::open_memory().unwrap());
     let tasks = vec![

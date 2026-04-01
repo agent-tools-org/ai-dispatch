@@ -10,10 +10,17 @@ use crate::store::Store;
 use crate::types::{AgentKind, Task, TaskId, TaskStatus, VerifyStatus};
 use anyhow::Result;
 use chrono::Local;
-use std::collections::HashSet;
+use std::collections::{BTreeMap, HashSet};
 use std::sync::Arc;
-pub(super) fn validate_batch_config(tasks: &[batch::BatchTask]) -> Result<()> {
+pub(super) fn validate_batch_config(
+    tasks: &[batch::BatchTask],
+    parallel: bool,
+    force: bool,
+) -> Result<()> {
     validate_task_agents(tasks)?;
+    if parallel {
+        validate_parallel_dir_isolation(tasks, force)?;
+    }
     rate_limit_precheck(tasks);
     Ok(())
 }
@@ -176,6 +183,44 @@ fn validate_task_agents(tasks: &[batch::BatchTask]) -> Result<()> {
     }
     Ok(())
 }
+fn validate_parallel_dir_isolation(tasks: &[batch::BatchTask], force: bool) -> Result<()> {
+    for conflict in shared_dir_conflicts(tasks) {
+        if force {
+            aid_warn!("{}", parallel_dir_conflict_warning(&conflict));
+            continue;
+        }
+        anyhow::bail!("{}", parallel_dir_conflict_error(&conflict));
+    }
+    Ok(())
+}
+fn shared_dir_conflicts(tasks: &[batch::BatchTask]) -> Vec<SharedDirConflict<'_>> {
+    let mut dir_counts = BTreeMap::new();
+    for task in tasks {
+        if task.read_only || task.worktree.is_some() {
+            continue;
+        }
+        let Some(dir) = task.dir.as_deref() else {
+            continue;
+        };
+        *dir_counts.entry(dir).or_insert(0) += 1;
+    }
+    dir_counts
+        .into_iter()
+        .filter_map(|(dir, count)| (count > 1).then_some(SharedDirConflict { dir, count }))
+        .collect()
+}
+fn parallel_dir_conflict_error(conflict: &SharedDirConflict<'_>) -> String {
+    format!(
+        "Error: {} tasks target '{}' without worktree isolation. This causes git index.lock contention. Add `worktree = \"branch-name\"` to each task, or use `--force` to override.",
+        conflict.count, conflict.dir
+    )
+}
+fn parallel_dir_conflict_warning(conflict: &SharedDirConflict<'_>) -> String {
+    format!(
+        "[aid] Warning: {} tasks target '{}' without worktree isolation. This causes git index.lock contention. Proceeding because --force is set.",
+        conflict.count, conflict.dir
+    )
+}
 fn insert_skipped_task(store: &Arc<Store>, task: &batch::BatchTask) -> Result<TaskId> {
     let task_id = TaskId::generate();
     let now = Local::now();
@@ -222,6 +267,11 @@ fn insert_skipped_task(store: &Arc<Store>, task: &batch::BatchTask) -> Result<Ta
         completed_at: Some(now),
     })?;
     Ok(task_id)
+}
+
+struct SharedDirConflict<'a> {
+    dir: &'a str,
+    count: usize,
 }
 #[cfg(test)]
 #[path = "batch_validate_tests.rs"]

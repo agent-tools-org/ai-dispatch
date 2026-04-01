@@ -127,6 +127,8 @@ pub struct BatchArgs {
     #[arg(long)]
     pub dry_run: bool,
     #[arg(long)]
+    pub force: bool,
+    #[arg(long)]
     pub max_concurrent: Option<usize>,
     #[arg(short, long)]
     pub output: Option<String>,

@@ -78,6 +78,14 @@ pub fn wrap_command(cmd: &Command, task_id: &str, agent_kind: AgentKind) -> Comm
                 ));
             }
         }
+        let aid_home = home.join(".aid");
+        if aid_home.exists() {
+            wrapped
+                .arg("-v")
+                .arg(format!("{}:/root/.aid", aid_home.display()))
+                .arg("-e")
+                .arg("AID_HOME=/root/.aid");
+        }
     }
     wrapped.arg("-e").arg("HOME=/root");
     wrapped.arg(SANDBOX_IMAGE);
@@ -125,12 +133,55 @@ pub fn kill_container(task_id: &str) {
 mod tests {
     use super::{can_sandbox, wrap_command};
     use crate::types::AgentKind;
-    use std::process::Command;
+    use std::{
+        ffi::OsString,
+        fs,
+        process::Command,
+        sync::{Mutex, OnceLock},
+    };
+    use tempfile::tempdir;
 
     fn args(cmd: &Command) -> Vec<String> {
         cmd.get_args()
             .map(|arg| arg.to_string_lossy().into_owned())
             .collect()
+    }
+
+    fn env_lock() -> &'static Mutex<()> {
+        static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+        LOCK.get_or_init(|| Mutex::new(()))
+    }
+
+    struct HomeGuard(Option<OsString>);
+
+    impl Drop for HomeGuard {
+        fn drop(&mut self) {
+            match self.0.take() {
+                Some(home) => unsafe {
+                    std::env::set_var("HOME", home);
+                },
+                None => unsafe {
+                    std::env::remove_var("HOME");
+                },
+            }
+        }
+    }
+
+    fn with_home<F>(dirs: &[&str], test: F)
+    where
+        F: FnOnce(),
+    {
+        let _guard = env_lock().lock().expect("env lock poisoned");
+        let temp = tempdir().expect("tempdir");
+        for dir in dirs {
+            fs::create_dir_all(temp.path().join(dir)).expect("create home subdir");
+        }
+        let original_home = std::env::var_os("HOME");
+        let _home_guard = HomeGuard(original_home);
+        unsafe {
+            std::env::set_var("HOME", temp.path());
+        }
+        test();
     }
 
     #[test]
@@ -175,18 +226,40 @@ mod tests {
     }
 
     #[test]
-    fn wrap_command_mounts_cwd() {
-        let mut cmd = Command::new("codex");
-        cmd.current_dir("/tmp/project");
+    fn wrap_command_mounts_project_dir() {
+        with_home(&[".aid"], || {
+            let mut cmd = Command::new("codex");
+            cmd.current_dir("/tmp/project");
 
-        let wrapped = wrap_command(&cmd, "t-abcd", AgentKind::Codex);
-        let wrapped_args = args(&wrapped);
+            let wrapped = wrap_command(&cmd, "t-abcd", AgentKind::Codex);
+            let wrapped_args = args(&wrapped);
 
-        assert!(wrapped_args
-            .windows(2)
-            .any(|pair| pair == ["-v", "/tmp/project:/tmp/project"]));
-        assert!(wrapped_args
-            .windows(2)
-            .any(|pair| pair == ["-w", "/tmp/project"]));
+            assert!(wrapped_args
+                .windows(2)
+                .any(|pair| pair == ["-v", "/tmp/project:/tmp/project"]));
+            assert!(wrapped_args
+                .windows(2)
+                .any(|pair| pair == ["-w", "/tmp/project"]));
+            assert!(wrapped_args
+                .windows(2)
+                .any(|pair| pair[0] == "-v" && pair[1].ends_with(":/root/.aid")));
+        });
+    }
+
+    #[test]
+    fn wrap_command_mounts_aid_home() {
+        with_home(&[".aid"], || {
+            let cmd = Command::new("codex");
+
+            let wrapped = wrap_command(&cmd, "t-abcd", AgentKind::Codex);
+            let wrapped_args = args(&wrapped);
+
+            assert!(wrapped_args
+                .windows(2)
+                .any(|pair| pair[0] == "-v" && pair[1].ends_with(":/root/.aid")));
+            assert!(wrapped_args
+                .windows(2)
+                .any(|pair| pair == ["-e", "AID_HOME=/root/.aid"]));
+        });
     }
 }

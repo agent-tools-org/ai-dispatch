@@ -239,6 +239,7 @@ pub(super) async fn batch(
     analyze: bool,
     wait: bool,
     dry_run: bool,
+    force: bool,
     max_concurrent: Option<usize>,
     output: Option<String>,
     group: Option<String>,
@@ -260,6 +261,7 @@ pub(super) async fn batch(
                     analyze,
                     wait,
                     dry_run,
+                    force,
                     max_concurrent,
                 },
             )

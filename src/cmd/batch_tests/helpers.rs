@@ -115,6 +115,7 @@ prompt = "second prompt"
             analyze: false,
             wait: false,
             dry_run: true,
+            force: false,
             max_concurrent: None,
         },
     )

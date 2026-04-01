@@ -43,6 +43,7 @@ pub struct BatchArgs {
     pub analyze: bool,
     pub wait: bool,
     pub dry_run: bool,
+    pub force: bool,
     pub max_concurrent: Option<usize>,
 }
 
@@ -65,7 +66,7 @@ pub async fn run(store: Arc<Store>, args: BatchArgs) -> Result<()> {
     .with_context(|| format!("Failed to load batch file {}", path.display()))?;
     let total = config.tasks.len();
     let shared_dir_enabled = config.defaults.shared_dir.unwrap_or(false);
-    validate_batch_config(&config.tasks)?;
+    validate_batch_config(&config.tasks, args.parallel, args.force)?;
     let deps = batch::dependency_indices(&config.tasks)
         .unwrap_or_else(|_| vec![Vec::new(); config.tasks.len()]);
     let deduped = batch_output_dedup::dedup_output_paths(&mut config.tasks, &deps);

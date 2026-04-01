@@ -162,17 +162,19 @@ fn batch_dispatch_file_parses() {
         "tasks.toml",
         "--parallel",
         "--analyze",
+        "--force",
         "--var",
         "project=demo",
     ])
     .unwrap();
     match cli.command {
-        Some(Commands::Batch(command_args_a::BatchArgs { action, file, vars, parallel, analyze, .. })) => {
+        Some(Commands::Batch(command_args_a::BatchArgs { action, file, vars, parallel, analyze, force, .. })) => {
             assert!(action.is_none());
             assert_eq!(file, Some("tasks.toml".to_string()));
             assert_eq!(vars, vec!["project=demo".to_string()]);
             assert!(parallel);
             assert!(analyze);
+            assert!(force);
         }
         _ => panic!("expected Batch"),
     }

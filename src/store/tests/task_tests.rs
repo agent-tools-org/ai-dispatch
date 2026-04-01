@@ -110,6 +110,27 @@ fn update_completion() {
 }
 
 #[test]
+fn update_completion_does_not_override_stopped_status() {
+    let store = Store::open_memory().unwrap();
+    let task = make_task("t-0002s", AgentKind::Codex, TaskStatus::Stopped);
+    store.insert_task(&task).unwrap();
+    store
+        .update_task_completion(TaskCompletionUpdate {
+            id: "t-0002s",
+            status: TaskStatus::Failed,
+            tokens: None,
+            duration_ms: 1234,
+            model: Some("gpt-5.4"),
+            cost_usd: None,
+            exit_code: Some(1),
+        })
+        .unwrap();
+
+    let loaded = store.get_task("t-0002s").unwrap().unwrap();
+    assert_eq!(loaded.status, TaskStatus::Stopped);
+}
+
+#[test]
 fn update_resolved_prompt_persists() {
     let store = Store::open_memory().unwrap();
     let task = make_task("t-0003", AgentKind::Codex, TaskStatus::Pending);

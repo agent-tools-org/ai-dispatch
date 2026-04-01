@@ -208,7 +208,8 @@ impl Store {
         let now = Local::now().to_rfc3339();
         self.db().execute(
             "UPDATE tasks SET status = ?1, tokens = ?2, duration_ms = ?3, completed_at = ?4,
-             model = ?5, cost_usd = ?6, exit_code = ?7 WHERE id = ?8",
+             model = ?5, cost_usd = ?6, exit_code = ?7 WHERE id = ?8
+             AND status != 'stopped'",
             params![
                 payload.status.as_str(),
                 payload.tokens,
@@ -235,7 +236,8 @@ impl Store {
         let now = Local::now().to_rfc3339();
         tx.execute(
             "UPDATE tasks SET status = ?1, tokens = ?2, duration_ms = ?3, completed_at = ?4,
-             model = ?5, cost_usd = ?6, exit_code = ?7 WHERE id = ?8",
+             model = ?5, cost_usd = ?6, exit_code = ?7 WHERE id = ?8
+             AND status != 'stopped'",
             params![
                 payload.status.as_str(),
                 payload.tokens,

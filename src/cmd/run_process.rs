@@ -47,6 +47,7 @@ pub(crate) async fn run_agent_process_impl(args: RunProcessArgs<'_>) -> Result<(
     let idle_timeout = crate::idle_timeout::idle_timeout_from_tokio_command(&cmd);
     #[cfg(unix)]
     cmd.process_group(0);
+    crate::cmd::noninteractive_stdio::configure(&mut cmd);
     let mut child = cmd.spawn().context("Failed to spawn agent process")?;
     let info = if streaming {
         watcher::watch_streaming(agent, &mut child, task_id, store, log_path, workgroup_id, Some(idle_timeout), None).await?

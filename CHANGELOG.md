@@ -1,3 +1,7 @@
+## v8.66.1 (2026-04-01)
+- Fix Codex CLI v0.118.0 non-PTY runs hanging when stdin stays open
+- Preserve `stopped` task status so timeout/completion writes do not overwrite manual stop
+
 ## v8.63.0 (2026-03-26)
 - Detect output file conflicts in batch analyze (bail on guaranteed data loss)
 - Auto-suffix conflicting output paths in parallel batch dispatch
@@ -801,4 +805,3 @@
 - feat: v0.2 observability — cost tracking, OpenCode adapter, stderr capture, richer events
 - feat: implement aid MVP v0.1 — multi-AI CLI team orchestrator
 - Initial commit: add DESIGN.md
-

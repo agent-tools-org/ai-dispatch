@@ -24,6 +24,7 @@ pub mod finding;
 pub mod init;
 pub mod mcp;
 pub mod merge;
+pub(crate) mod noninteractive_stdio;
 mod mcp_schema;
 mod mcp_tools;
 pub mod query;

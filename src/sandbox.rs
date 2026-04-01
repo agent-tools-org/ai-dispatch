@@ -27,7 +27,12 @@ pub fn is_available() -> bool {
         .unwrap_or(false)
 }
 
-pub fn wrap_command(cmd: &Command, task_id: &str, agent_kind: AgentKind) -> Command {
+pub fn wrap_command(
+    cmd: &Command,
+    task_id: &str,
+    agent_kind: AgentKind,
+    read_only: bool,
+) -> Command {
     let cwd = cmd
         .get_current_dir()
         .map(|path| path.to_string_lossy().into_owned())
@@ -43,6 +48,10 @@ pub fn wrap_command(cmd: &Command, task_id: &str, agent_kind: AgentKind) -> Comm
         .arg("--init")
         .arg("--name")
         .arg(format!("aid-{task_id}"));
+    if read_only {
+        wrapped.arg("--read-only");
+        wrapped.arg("--tmpfs").arg("/tmp");
+    }
     if let Some(dir) = cwd.as_deref() {
         wrapped.arg("-v").arg(format!("{dir}:{dir}"));
         wrapped.arg("-w").arg(dir);
@@ -148,7 +157,7 @@ mod tests {
         let mut cmd = Command::new("codex");
         cmd.args(["exec", "ship it"]);
 
-        let wrapped = wrap_command(&cmd, "t-abcd", AgentKind::Codex);
+        let wrapped = wrap_command(&cmd, "t-abcd", AgentKind::Codex, false);
         let wrapped_args = args(&wrapped);
 
         assert_eq!(wrapped.get_program().to_string_lossy(), "container");
@@ -166,7 +175,7 @@ mod tests {
         let mut cmd = Command::new("codex");
         cmd.env("OPENAI_API_KEY", "test-key");
 
-        let wrapped = wrap_command(&cmd, "t-abcd", AgentKind::Codex);
+        let wrapped = wrap_command(&cmd, "t-abcd", AgentKind::Codex, false);
         let wrapped_args = args(&wrapped);
 
         assert!(wrapped_args
@@ -179,7 +188,7 @@ mod tests {
         let mut cmd = Command::new("codex");
         cmd.current_dir("/tmp/project");
 
-        let wrapped = wrap_command(&cmd, "t-abcd", AgentKind::Codex);
+        let wrapped = wrap_command(&cmd, "t-abcd", AgentKind::Codex, false);
         let wrapped_args = args(&wrapped);
 
         assert!(wrapped_args
@@ -188,5 +197,18 @@ mod tests {
         assert!(wrapped_args
             .windows(2)
             .any(|pair| pair == ["-w", "/tmp/project"]));
+    }
+
+    #[test]
+    fn wrap_command_readonly_adds_flag() {
+        let cmd = Command::new("codex");
+
+        let wrapped = wrap_command(&cmd, "t-abcd", AgentKind::Codex, true);
+        let wrapped_args = args(&wrapped);
+
+        assert!(wrapped_args.iter().any(|arg| arg == "--read-only"));
+        assert!(wrapped_args
+            .windows(2)
+            .any(|pair| pair == ["--tmpfs", "/tmp"]));
     }
 }

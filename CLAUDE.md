@@ -203,6 +203,8 @@ aid config agents | pricing | skills | templates         # configuration
 aid config clear-limit codex             # clear rate-limit marker
 ```
 
+Audit and review prompts now default to an audit-report flow: `aid run codex "Cross-audit ..."` auto-writes `result.md`, asks the agent for a Markdown report, and makes `aid show --output` / TUI / web prefer the saved report over raw logs.
+
 ## Teams
 
 Teams provide **knowledge context and soft agent preferences** — not hard restrictions. All agents remain available; `--team` boosts preferred agents in auto-selection and injects team knowledge into prompts.

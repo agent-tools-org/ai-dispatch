@@ -373,6 +373,14 @@ pub async fn run(store: Arc<Store>, mut args: RunArgs) -> Result<TaskId> {
         agent::classifier::count_file_mentions(&normalized_prompt),
         task.prompt.chars().count(),
     );
+    if crate::cmd::report_mode::apply_defaults(&mut args, profile.category)
+        && args.result_file.as_deref() == Some(crate::cmd::report_mode::DEFAULT_AUDIT_RESULT_FILE)
+    {
+        aid_info!(
+            "[aid] Audit report mode: auto-set --result-file {}",
+            crate::cmd::report_mode::DEFAULT_AUDIT_RESULT_FILE
+        );
+    }
     task.category = Some(profile.category.label().to_string());
     let dispatch_warnings = validate_dispatch(&args, &agent_kind);
     for warning in &dispatch_warnings {

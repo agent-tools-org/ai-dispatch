@@ -223,11 +223,16 @@ fn join_messages(messages: Vec<String>, full: bool, max_output_chars: usize) -> 
     output
 }
 pub fn read_task_output(task: &Task) -> Result<String> {
-    let path = task
-        .output_path
-        .as_deref()
-        .ok_or_else(|| anyhow::anyhow!("Task has no output file"))?;
-    std::fs::read_to_string(path).with_context(|| format!("Failed to read output file {path}"))
+    if let Some(path) = task.output_path.as_deref() {
+        return std::fs::read_to_string(path)
+            .with_context(|| format!("Failed to read output file {path}"));
+    }
+    let persisted = paths::task_dir(task.id.as_str()).join("result.md");
+    if persisted.exists() {
+        return std::fs::read_to_string(&persisted)
+            .with_context(|| format!("Failed to read result file {}", persisted.display()));
+    }
+    Err(anyhow::anyhow!("Task has no output file"))
 }
 
 pub fn log_text(task_id: &str) -> Result<String> {

@@ -255,25 +255,16 @@ fn ensure_task_exists(store: &Store, id: &str) -> Result<(), StatusCode> {
 }
 
 fn read_task_output(task: &Task) -> String {
-    if let Some(path) = task.output_path.as_deref()
-        && let Ok(content) = std::fs::read_to_string(path)
+    if let Ok(content) = crate::cmd::show::read_task_output(task)
     {
         return content;
     }
     if let Some(path) = task.log_path.as_deref()
         && let Ok(content) = std::fs::read_to_string(path)
     {
-        let output = content
-            .lines()
-            .filter_map(|line| serde_json::from_str::<serde_json::Value>(line).ok())
-            .filter_map(|value| {
-                value
-                    .get("content")
-                    .and_then(|content| content.as_str())
-                    .map(str::to_string)
-            })
-            .collect::<String>();
-        if !output.is_empty() {
+        if let Some(output) =
+            crate::cmd::show::extract_messages_from_log(std::path::Path::new(path), true)
+        {
             return output;
         }
         // Fall back to raw text (non-JSONL logs from custom agents)

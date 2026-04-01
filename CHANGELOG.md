@@ -1,3 +1,8 @@
+## v8.66.2 (2026-04-01)
+- Add default audit report mode: review and cross-audit tasks now auto-write `result.md`
+- Prefer persisted `result.md` in `show`, TUI, and web output views
+- Fix TUI/web Codex output rendering to extract final assistant messages instead of raw JSONL logs
+
 ## v8.66.1 (2026-04-01)
 - Fix Codex CLI v0.118.0 non-PTY runs hanging when stdin stays open
 - Preserve `stopped` task status so timeout/completion writes do not overwrite manual stop

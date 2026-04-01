@@ -199,9 +199,6 @@ pub(crate) fn parse_batch_file_with_vars(
     validate_dag(&config.tasks)?;
     validate_conditional_hooks(&config.tasks)?;
     warn_audit_without_readonly(&config.tasks);
-    for warning in warn_dir_overlap(&config.tasks) {
-        eprintln!("{}", warning);
-    }
     Ok(config)
 }
 fn validate_agents(tasks: &[BatchTask]) -> Result<()> {
@@ -392,6 +389,7 @@ fn resolve_dependencies(
 fn task_label(task: &BatchTask, task_idx: usize) -> String {
     task.name.clone().unwrap_or_else(|| format!("#{task_idx}"))
 }
+#[cfg_attr(not(test), allow(dead_code))]
 pub fn warn_dir_overlap(tasks: &[BatchTask]) -> Vec<String> {
     let mut dir_counts: HashMap<&str, usize> = HashMap::new();
     for task in tasks {

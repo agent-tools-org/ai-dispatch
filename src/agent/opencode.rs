@@ -36,6 +36,11 @@ impl super::Agent for OpenCodeAgent {
         let mut cmd = Command::new("opencode");
         cmd.arg("run");
         cmd.args(["--format", "json"]);
+        // Allow file access outside --dir (e.g. workgroup workspace symlinks)
+        cmd.env(
+            "OPENCODE_CONFIG_CONTENT",
+            r#"{"agent":{"build":{"permission":{"external_directory":"allow"}}}}"#,
+        );
         if let Some(ref session_id) = opts.session_id {
             cmd.args(["--session", session_id]);
             cmd.arg("--continue");

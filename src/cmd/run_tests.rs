@@ -161,6 +161,92 @@ fn validate_dispatch_warns_code_agent_without_dir() {
 }
 
 #[test]
+fn sandboxed_agents_identified() {
+    assert!(AgentKind::OpenCode.sandboxed_fs());
+    assert!(!AgentKind::Codex.sandboxed_fs());
+    assert!(!AgentKind::Gemini.sandboxed_fs());
+}
+
+#[test]
+fn build_prompt_bundle_uses_relative_workspace_for_sandboxed_agents() {
+    let temp = TempDir::new().unwrap();
+    let _aid_home = paths::AidHomeGuard::set(temp.path());
+    crate::paths::ensure_dirs().unwrap();
+    let store = Store::open_memory().unwrap();
+    let group = store.create_workgroup("batch", "desc", Some("seed"), None).unwrap();
+    let workspace = crate::paths::workspace_dir(group.id.as_str()).unwrap();
+    let bundle = run_prompt::build_prompt_bundle(
+        &store,
+        &RunArgs {
+            agent_name: "opencode".to_string(),
+            prompt: "Write the requested content".to_string(),
+            group: Some(group.id.to_string()),
+            ..Default::default()
+        },
+        &AgentKind::OpenCode,
+        None,
+        &[],
+        "task-opencode",
+    )
+    .unwrap();
+
+    assert!(bundle.effective_prompt.contains("[Shared Workspace] Path: .aid-workspace"));
+    assert!(!bundle.effective_prompt.contains(&workspace.display().to_string()));
+    let _ = std::fs::remove_dir_all(workspace);
+}
+
+#[test]
+fn build_prompt_bundle_keeps_absolute_workspace_for_non_sandboxed_agents() {
+    let temp = TempDir::new().unwrap();
+    let _aid_home = paths::AidHomeGuard::set(temp.path());
+    crate::paths::ensure_dirs().unwrap();
+    let store = Store::open_memory().unwrap();
+    let group = store.create_workgroup("batch", "desc", Some("seed"), None).unwrap();
+    let workspace = crate::paths::workspace_dir(group.id.as_str()).unwrap();
+    let bundle = run_prompt::build_prompt_bundle(
+        &store,
+        &RunArgs {
+            agent_name: "codex".to_string(),
+            prompt: "Write the requested content".to_string(),
+            group: Some(group.id.to_string()),
+            ..Default::default()
+        },
+        &AgentKind::Codex,
+        None,
+        &[],
+        "task-codex",
+    )
+    .unwrap();
+
+    assert!(bundle.effective_prompt.contains(&workspace.display().to_string()));
+    assert!(!bundle.effective_prompt.contains("[Shared Workspace] Path: .aid-workspace"));
+    let _ = std::fs::remove_dir_all(workspace);
+}
+
+#[test]
+fn workspace_symlink_guard_creates_and_cleans_up_link() {
+    let group_id = format!("wg-symlink-{:04x}", rand::random::<u16>());
+    let workspace = crate::paths::workspace_dir(&group_id).unwrap();
+    std::fs::create_dir_all(&workspace).unwrap();
+    let work_dir = TempDir::new().unwrap();
+    let link_path = work_dir.path().join(".aid-workspace");
+
+    {
+        let _guard = WorkspaceSymlinkGuard::create(
+            AgentKind::OpenCode,
+            Some(&group_id),
+            work_dir.path().to_str(),
+        )
+        .unwrap();
+        assert!(link_path.exists());
+        assert_eq!(std::fs::read_link(&link_path).unwrap(), workspace);
+    }
+
+    assert!(!link_path.exists());
+    let _ = std::fs::remove_dir_all(workspace);
+}
+
+#[test]
 fn validate_dispatch_warns_long_prompt() {
     let prompt = "a".repeat(5001);
     assert_eq!(validate_dispatch(&RunArgs { prompt, ..Default::default() }, &AgentKind::Gemini), vec!["Very long prompt (5001 chars), consider using --context files instead".to_string()]);

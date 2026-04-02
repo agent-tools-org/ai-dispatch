@@ -115,6 +115,11 @@ async fn run_task_inner(store: &Arc<Store>, spec: &BackgroundRunSpec) -> Result<
         env: spec.env.clone(),
         env_forward: spec.env_forward.clone(),
     };
+    let _workspace_symlink = crate::cmd::run::WorkspaceSymlinkGuard::create(
+        agent.kind(),
+        spec.group.as_deref(),
+        spec.dir.as_deref(),
+    )?;
     let mut std_cmd = agent
         .build_command(&spec.prompt, &opts)
         .context("Failed to build agent command")?;

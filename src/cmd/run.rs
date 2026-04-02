@@ -17,7 +17,7 @@ use crate::store::Store;
 use crate::types::*;
 use crate::usage;
 use std::collections::HashMap;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tokio::process::Command;
 #[path = "run_prompt.rs"]
@@ -126,6 +126,54 @@ fn validate_dispatch(args: &RunArgs, agent_kind: &AgentKind) -> Vec<String> {
         warnings.push("Research agent with --worktree is unusual, did you mean a code agent?".to_string());
     }
     warnings
+}
+
+pub(crate) struct WorkspaceSymlinkGuard {
+    link_path: Option<PathBuf>,
+}
+
+impl WorkspaceSymlinkGuard {
+    pub(crate) fn create(
+        agent_kind: AgentKind,
+        group_id: Option<&str>,
+        effective_dir: Option<&str>,
+    ) -> Result<Self> {
+        if !agent_kind.sandboxed_fs() {
+            return Ok(Self { link_path: None });
+        }
+        let Some(group_id) = group_id else {
+            return Ok(Self { link_path: None });
+        };
+        let workspace = crate::paths::workspace_dir(group_id)?;
+        if !workspace.is_dir() {
+            return Ok(Self { link_path: None });
+        }
+        let link_path = Path::new(effective_dir.unwrap_or(".")).join(".aid-workspace");
+        if link_path.exists() {
+            return Ok(Self { link_path: None });
+        }
+        #[cfg(unix)]
+        {
+            std::os::unix::fs::symlink(&workspace, &link_path)?;
+            return Ok(Self {
+                link_path: Some(link_path),
+            });
+        }
+        #[cfg(not(unix))]
+        {
+            let _ = workspace;
+            let _ = link_path;
+            Ok(Self { link_path: None })
+        }
+    }
+}
+
+impl Drop for WorkspaceSymlinkGuard {
+    fn drop(&mut self) {
+        if let Some(link_path) = self.link_path.take() {
+            let _ = std::fs::remove_file(link_path);
+        }
+    }
 }
 
 /// Decide how to handle a custom ID that already exists in the store.
@@ -433,6 +481,15 @@ pub async fn run(store: Arc<Store>, mut args: RunArgs) -> Result<TaskId> {
         println!("[dry-run] Estimated cost: {}", crate::cost::format_cost(estimated_cost));
         return Ok(task_id);
     }
+    let _workspace_symlink = if args.background {
+        None
+    } else {
+        Some(WorkspaceSymlinkGuard::create(
+            agent_kind,
+            args.group.as_deref(),
+            effective_dir.as_deref(),
+        )?)
+    };
     let opts = RunOpts {
         dir: effective_dir.clone(),
         output: args.output.clone(),

@@ -113,6 +113,10 @@ impl AgentKind {
         }
     }
 
+    pub fn sandboxed_fs(&self) -> bool {
+        matches!(self, Self::OpenCode)
+    }
+
     pub fn profile(
         &self,
     ) -> Option<(&'static str, &'static str, &'static str, &'static str, bool, &'static str)> {

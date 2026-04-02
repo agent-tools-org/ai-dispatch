@@ -271,9 +271,13 @@ pub(super) fn build_prompt_bundle(store: &Store, args: &RunArgs, agent_kind: &Ag
     if let Some(ref group_id) = args.group {
         let workspace = crate::paths::workspace_dir(group_id)?;
         if workspace.is_dir() {
+            let workspace_ref = if agent_kind.sandboxed_fs() {
+                ".aid-workspace".to_string()
+            } else {
+                workspace.display().to_string()
+            };
             effective_prompt = format!(
-                "{effective_prompt}\n\n<aid-system-context>\n[Shared Workspace] Path: {} — use for intermediate artifacts and inter-agent communication.\n</aid-system-context>",
-                workspace.display()
+                "{effective_prompt}\n\n<aid-system-context>\n[Shared Workspace] Path: {workspace_ref} — use for intermediate artifacts and inter-agent communication.\n</aid-system-context>",
             );
         }
     }

@@ -163,6 +163,45 @@ fn extract_messages_from_log_collects_supported_formats() {
 }
 
 #[test]
+fn extract_messages_strips_ansi_before_parsing() {
+    let file = NamedTempFile::new().unwrap();
+    let esc = String::from(char::from(0x1b));
+    let json1 = r#"{"type":"text","part":{"text":"hello from opencode"}}"#;
+    let json2 = r#"{"type":"text","content":"clean line"}"#;
+    let content = format!("{esc}[0m{esc}[32m{json1}{esc}[0m\n{json2}\n");
+    std::fs::write(file.path(), content).unwrap();
+
+    let output = extract_messages_from_log(file.path(), false);
+
+    assert!(output.is_some());
+    let output = output.unwrap();
+    assert!(output.contains("hello from opencode"), "got: {output}");
+    assert!(output.contains("clean line"), "got: {output}");
+}
+
+#[test]
+fn extract_messages_collects_opencode_tool_use_errors() {
+    let file = NamedTempFile::new().unwrap();
+    let content = [
+        json!({"type":"text","part":{"text":"I'll explore the workspace"}}),
+        json!({"type":"tool_use","part":{"tool":"glob","state":{"status":"error","input":{"path":"/tmp/test"},"error":"Permission denied"}}}),
+        json!({"type":"text","part":{"text":"Let me try another approach"}}),
+    ]
+    .iter()
+    .map(serde_json::to_string)
+    .collect::<Result<Vec<_>, _>>()
+    .unwrap()
+    .join("\n");
+    std::fs::write(file.path(), content).unwrap();
+
+    let output = extract_messages_from_log(file.path(), true).unwrap();
+
+    assert!(output.contains("I'll explore the workspace"), "got: {output}");
+    assert!(output.contains("[glob] Error: Permission denied"), "got: {output}");
+    assert!(output.contains("Let me try another approach"), "got: {output}");
+}
+
+#[test]
 fn extract_messages_from_log_returns_none_without_supported_messages() {
     let file = NamedTempFile::new().unwrap();
     std::fs::write(file.path(), "{\"type\":\"event\"}\nnot-json\n").unwrap();

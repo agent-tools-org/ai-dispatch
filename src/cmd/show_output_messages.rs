@@ -111,7 +111,8 @@ fn collect_messages(content: &str) -> Vec<String> {
     let mut messages = Vec::new();
     let mut streaming_message = String::new();
     for line in content.lines() {
-        let Ok(value) = serde_json::from_str::<Value>(line) else {
+        let cleaned = strip_ansi(line);
+        let Ok(value) = serde_json::from_str::<Value>(&cleaned) else {
             continue;
         };
         collect_message(&value, &mut messages, &mut streaming_message);
@@ -135,8 +136,30 @@ fn collect_message(value: &Value, messages: &mut Vec<String>, streaming_message:
             }
         }
         Some("text") => push_flushed_message(messages, text_message(value), streaming_message),
+        Some("tool_use") => collect_tool_use_message(value, messages, streaming_message),
         _ => {}
     }
+}
+
+fn strip_ansi(s: &str) -> String {
+    let mut result = String::with_capacity(s.len());
+    let bytes = s.as_bytes();
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == 0x1b && i + 1 < bytes.len() && bytes[i + 1] == b'[' {
+            let mut j = i + 2;
+            while j < bytes.len() && (bytes[j].is_ascii_digit() || bytes[j] == b';') {
+                j += 1;
+            }
+            if j < bytes.len() && bytes[j].is_ascii_alphabetic() {
+                i = j + 1;
+                continue;
+            }
+        }
+        result.push(bytes[i] as char);
+        i += 1;
+    }
+    result
 }
 
 fn completed_agent_message(value: &Value) -> Option<String> {
@@ -163,6 +186,43 @@ fn collect_assistant_message(
     } else {
         push_flushed_message(messages, Some(content), streaming_message);
     }
+}
+
+fn collect_tool_use_message(
+    value: &Value,
+    messages: &mut Vec<String>,
+    streaming_message: &mut String,
+) {
+    let tool = value
+        .pointer("/part/tool")
+        .and_then(|tool| tool.as_str())
+        .unwrap_or("tool");
+    let status = value
+        .pointer("/part/state/status")
+        .and_then(|status| status.as_str());
+    let detail = match status {
+        Some("error") => {
+            let error = value
+                .pointer("/part/state/error")
+                .and_then(|error| error.as_str())
+                .unwrap_or("error");
+            format!("[{tool}] Error: {error}")
+        }
+        _ => {
+            let output = value
+                .pointer("/part/state/output")
+                .and_then(|output| output.as_str())
+                .unwrap_or("");
+            if output.is_empty() {
+                return;
+            }
+            format!("[{tool}] {output}")
+        }
+    };
+    if !streaming_message.is_empty() {
+        messages.push(std::mem::take(streaming_message));
+    }
+    messages.push(detail);
 }
 
 fn push_flushed_message(

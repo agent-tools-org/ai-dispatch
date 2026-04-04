@@ -392,6 +392,7 @@ mod tests {
             repo_path: None,
             worktree_path: None,
             worktree_branch: Some("feat/test".to_string()),
+            start_sha: None,
             log_path: None,
             output_path: None,
             tokens: Some(45000),

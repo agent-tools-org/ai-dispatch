@@ -188,6 +188,7 @@ mod tests {
             custom_agent_name: None, resolved_prompt: None,
             caller_kind: None, caller_session_id: None, agent_session_id: None,
             repo_path: None, worktree_path: None, worktree_branch: None,
+            start_sha: None,
             log_path: None, output_path: None, tokens: None, prompt_tokens: None,
             duration_ms: None, model: None, cost_usd: None, exit_code: None,
             completed_at: None, verify: None, pending_reason: None, read_only: false, budget: false,

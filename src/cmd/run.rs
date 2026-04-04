@@ -418,6 +418,7 @@ pub async fn run(store: Arc<Store>, mut args: RunArgs) -> Result<TaskId> {
                 repo_path: explicit_repo_path.clone(),
                 worktree_path: None,
                 worktree_branch: args.worktree.clone(),
+                start_sha: None,
                 log_path: Some(log_path.to_string_lossy().to_string()),
                 output_path: args.output.clone(),
                 tokens: None,

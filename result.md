@@ -1,0 +1,8 @@
+## Findings
+No findings.
+
+## Verification
+- Added iterate integration across batch/default parsing, `RunArgs` mapping, CLI/background persistence, and background retry execution in [src/batch.rs](/tmp/aid-wt-feat/v868/iterate-batch-integration/src/batch.rs), [src/batch_interpolate.rs](/tmp/aid-wt-feat/v868/iterate-batch-integration/src/batch_interpolate.rs), [src/cmd/batch_args.rs](/tmp/aid-wt-feat/v868/iterate-batch-integration/src/cmd/batch_args.rs), [src/background_spec.rs](/tmp/aid-wt-feat/v868/iterate-batch-integration/src/background_spec.rs), [src/background.rs](/tmp/aid-wt-feat/v868/iterate-batch-integration/src/background.rs), [src/cmd/run.rs](/tmp/aid-wt-feat/v868/iterate-batch-integration/src/cmd/run.rs), and [src/cmd/run_iterate.rs](/tmp/aid-wt-feat/v868/iterate-batch-integration/src/cmd/run_iterate.rs).
+- Added/updated coverage for batch TOML defaults and task overrides, background spec round-trips, run-arg mapping, iterate-loop behavior, and event rendering in [src/batch/tests.rs](/tmp/aid-wt-feat/v868/iterate-batch-integration/src/batch/tests.rs), [src/cmd/batch_tests/run_args.rs](/tmp/aid-wt-feat/v868/iterate-batch-integration/src/cmd/batch_tests/run_args.rs), [src/cmd/run_iterate_tests.rs](/tmp/aid-wt-feat/v868/iterate-batch-integration/src/cmd/run_iterate_tests.rs), and [src/board.rs](/tmp/aid-wt-feat/v868/iterate-batch-integration/src/board.rs).
+- `aid show` now surfaces iterate eval output from event metadata via the task-detail renderer in [src/board.rs](/tmp/aid-wt-feat/v868/iterate-batch-integration/src/board.rs).
+- Verified with `cargo check -p ai-dispatch` and `cargo test -p ai-dispatch --no-run`.

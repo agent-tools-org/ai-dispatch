@@ -36,6 +36,12 @@ pub struct RunArgs {
     pub group: Option<String>,
     #[arg(long, num_args = 0..=1, default_missing_value = "auto")]
     pub verify: Option<String>,
+    #[arg(long, value_name = "N")]
+    pub iterate: Option<u32>,
+    #[arg(long, value_name = "COMMAND", requires = "iterate")]
+    pub eval: Option<String>,
+    #[arg(long, value_name = "TEMPLATE", requires = "iterate")]
+    pub eval_feedback_template: Option<String>,
     #[arg(long, value_name = "AGENT", num_args = 0..=1, default_missing_value = "gemini")]
     pub judge: Option<String>,
     #[arg(long, value_name = "AGENT")]

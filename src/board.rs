@@ -250,12 +250,16 @@ pub fn render_task_detail(task: &Task, events: &[TaskEvent], retry_chain: Option
         out.push_str("\nEvents:\n");
         for ev in events {
             let time = ev.timestamp.format("%H:%M:%S");
+            let detail_lines = event_detail_lines(ev);
             out.push_str(&format!(
                 "  {}  [{:>10}] {}\n",
                 time,
                 ev.event_kind.as_str(),
-                truncate(&ev.detail, 60),
+                detail_lines[0],
             ));
+            for line in &detail_lines[1..] {
+                out.push_str(&format!("                         {line}\n"));
+            }
         }
     }
     out
@@ -344,6 +348,25 @@ fn task_status(task: &Task, milestone: Option<String>, latest_error: Option<Stri
         return truncate(&format!("{} — {}", task.status.label(), milestone), 30);
     }
     task.status.label().to_string()
+}
+
+fn event_detail_lines(event: &TaskEvent) -> Vec<String> {
+    let mut lines = vec![truncate(&event.detail, 60)];
+    if let Some(eval_output) = iterate_eval_output(event) {
+        lines.push(format!("Eval output: {}", truncate(eval_output, 60)));
+    }
+    lines
+}
+
+fn iterate_eval_output(event: &TaskEvent) -> Option<&str> {
+    event
+        .metadata
+        .as_ref()?
+        .get("iterate")?
+        .get("eval_output")?
+        .as_str()
+        .map(str::trim)
+        .filter(|output| !output.is_empty() && *output != "(no output)")
 }
 
 fn retry_kind(task: &Task) -> &'static str {
@@ -551,5 +574,30 @@ mod tests {
         assert!(output.contains("t-1002 (retry)  → Failed"));
         assert!(output.contains("t-1003 (retry)  → Done"));
         assert!(output.contains("← current"));
+    }
+
+    #[test]
+    fn task_detail_shows_iteration_eval_output() {
+        let task = make_task("t-iter", AgentKind::Codex, TaskStatus::Done);
+        let output = render_task_detail(
+            &task,
+            &[TaskEvent {
+                task_id: task.id.clone(),
+                timestamp: Local::now(),
+                event_kind: EventKind::Milestone,
+                detail: "Iteration 1/3: eval failed (exit 1), retrying as t-next".to_string(),
+                metadata: Some(json!({
+                    "iterate": {
+                        "iteration": 1,
+                        "max_iterations": 3,
+                        "eval_output": "cargo test failed"
+                    }
+                })),
+            }],
+            None,
+        );
+
+        assert!(output.contains("Iteration 1/3: eval failed"));
+        assert!(output.contains("Eval output: cargo test failed"));
     }
 }

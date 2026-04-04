@@ -115,6 +115,35 @@ fn result_file_deserializes_from_batch_toml() {
 }
 
 #[test]
+fn iterate_fields_work_in_defaults_and_tasks() {
+    let cfg = parse_batch_file(
+        write_temp(concat!(
+            "[defaults]\nagent = \"codex\"\niterate = 3\neval = \"cargo test\"\n",
+            "eval_feedback_template = \"Round {iteration}/{max_iterations}: {eval_output}\"\n",
+            "[[tasks]]\nname = \"defaulted\"\nprompt = \"fix it\"\n",
+            "[[tasks]]\nname = \"overridden\"\nprompt = \"ship it\"\niterate = 5\n",
+            "eval = \"cargo clippy\"\n",
+            "eval_feedback_template = \"Retry {iteration}: {eval_output}\"\n"
+        ))
+        .path(),
+    )
+    .unwrap();
+
+    assert_eq!(cfg.tasks[0].iterate, Some(3));
+    assert_eq!(cfg.tasks[0].eval.as_deref(), Some("cargo test"));
+    assert_eq!(
+        cfg.tasks[0].eval_feedback_template.as_deref(),
+        Some("Round {iteration}/{max_iterations}: {eval_output}")
+    );
+    assert_eq!(cfg.tasks[1].iterate, Some(5));
+    assert_eq!(cfg.tasks[1].eval.as_deref(), Some("cargo clippy"));
+    assert_eq!(
+        cfg.tasks[1].eval_feedback_template.as_deref(),
+        Some("Retry {iteration}: {eval_output}")
+    );
+}
+
+#[test]
 fn parses_batch_with_dependencies() {
     let cfg = parse_batch_file(
         write_temp(concat!(

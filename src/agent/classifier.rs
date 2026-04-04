@@ -79,7 +79,7 @@ const FRONTEND_TERMS: &[&str] = &[
     "design",
     "responsive",
 ];
-const COMPLEX_IMPL_TERMS: &[&str] = &["implement", "create", "build"];
+const COMPLEX_IMPL_TERMS: &[&str] = &["implement", "create", "build", "write code"];
 const DEBUGGING_TERMS: &[&str] = &[
     "debug",
     "fix bug",
@@ -235,6 +235,12 @@ mod tests {
         let p = classify(&prompt, 5, prompt.len());
         assert_eq!(p.category, TaskCategory::ComplexImpl);
         assert_eq!(p.complexity, Complexity::High);
+    }
+
+    #[test]
+    fn write_code_is_complex_impl() {
+        let p = classify("write code", 0, 10);
+        assert_eq!(p.category, TaskCategory::ComplexImpl);
     }
 
     #[test]

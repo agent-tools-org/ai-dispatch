@@ -342,6 +342,7 @@ fn agent_color(agent: AgentKind) -> Color {
         AgentKind::Codebuff => Color::LightCyan,
         AgentKind::Droid => Color::LightMagenta,
         AgentKind::Oz => Color::LightBlue,
+        AgentKind::Claude => Color::White,
         AgentKind::Custom => Color::Gray,
     }
 }

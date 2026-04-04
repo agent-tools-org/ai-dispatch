@@ -15,6 +15,7 @@ pub fn can_sandbox(agent_kind: AgentKind) -> bool {
             | AgentKind::Cursor
             | AgentKind::Droid
             | AgentKind::Oz
+            | AgentKind::Claude
             | AgentKind::Custom
     )
 }
@@ -109,6 +110,7 @@ fn agent_env_keys(kind: AgentKind) -> &'static [&'static str] {
         AgentKind::Gemini => &["GOOGLE_API_KEY", "GEMINI_API_KEY"],
         AgentKind::Kilo => &["KILO_API_KEY", "OPENAI_API_KEY"],
         AgentKind::Codebuff => &["CODEBUFF_API_KEY", "ANTHROPIC_API_KEY"],
+        AgentKind::Claude => &["ANTHROPIC_API_KEY"],
         _ => &[],
     }
 }
@@ -120,6 +122,7 @@ fn agent_config_dirs(kind: AgentKind) -> &'static [&'static str] {
         AgentKind::Gemini => &[".gemini"],
         AgentKind::Kilo => &[".kilo"],
         AgentKind::Codebuff => &[".codebuff"],
+        AgentKind::Claude => &[".claude"],
         _ => &[],
     }
 }

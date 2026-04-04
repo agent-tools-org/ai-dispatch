@@ -68,7 +68,11 @@ pub(super) fn resolve_agent_setup(store: &Arc<Store>, args: &mut RunArgs) -> Res
         (AgentKind::Custom, Some(args.agent_name.clone()))
     } else {
         let custom = agent::registry::list_custom_agents();
-        let mut available = "gemini, codex, opencode, cursor, kilo, codebuff".to_string();
+        let mut available = AgentKind::ALL_BUILTIN
+            .iter()
+            .map(AgentKind::as_str)
+            .collect::<Vec<_>>()
+            .join(", ");
         for ca in &custom {
             available.push_str(&format!(", {}", ca.id));
         }
@@ -78,7 +82,14 @@ pub(super) fn resolve_agent_setup(store: &Arc<Store>, args: &mut RunArgs) -> Res
         && args.worktree.is_none()
         && matches!(
             agent_kind,
-            AgentKind::Codex | AgentKind::OpenCode | AgentKind::Cursor | AgentKind::Kilo | AgentKind::Codebuff | AgentKind::Droid | AgentKind::Custom
+            AgentKind::Codex
+                | AgentKind::Claude
+                | AgentKind::OpenCode
+                | AgentKind::Cursor
+                | AgentKind::Kilo
+                | AgentKind::Codebuff
+                | AgentKind::Droid
+                | AgentKind::Custom
         )
         && std::path::Path::new(".git").exists()
     {

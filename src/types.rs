@@ -58,6 +58,7 @@ pub enum AgentKind {
     Codebuff,
     Droid,
     Oz,
+    Claude,
     Custom,
 }
 
@@ -71,6 +72,7 @@ impl AgentKind {
         Self::Codebuff,
         Self::Droid,
         Self::Oz,
+        Self::Claude,
     ];
 
     pub const ALL: &'static [Self] = &[
@@ -82,6 +84,7 @@ impl AgentKind {
         Self::Codebuff,
         Self::Droid,
         Self::Oz,
+        Self::Claude,
         Self::Custom,
     ];
 
@@ -95,6 +98,7 @@ impl AgentKind {
             "codebuff" => Some(Self::Codebuff),
             "droid" => Some(Self::Droid),
             "oz" => Some(Self::Oz),
+            "claude" => Some(Self::Claude),
             _ => None,
         }
     }
@@ -109,6 +113,7 @@ impl AgentKind {
             Self::Codebuff => "codebuff",
             Self::Droid => "droid",
             Self::Oz => "oz",
+            Self::Claude => "claude",
             Self::Custom => "custom",
         }
     }
@@ -184,6 +189,14 @@ impl AgentKind {
                 "implement, create, build, refactor, test",
                 true,
                 "local",
+            )),
+            Self::Claude => Some((
+                "claude",
+                "General coding, review, refactoring, research",
+                "$1-$75/M blended",
+                "implement, review, refactor, explain, research, test",
+                true,
+                "api",
             )),
             Self::Custom => None,
         }

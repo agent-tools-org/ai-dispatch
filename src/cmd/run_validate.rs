@@ -15,7 +15,12 @@ pub(super) fn validate_dispatch(args: &RunArgs, agent_kind: &AgentKind) -> Vec<S
     }
     if matches!(
         agent_kind,
-        AgentKind::Codex | AgentKind::OpenCode | AgentKind::Cursor | AgentKind::Kilo | AgentKind::Codebuff
+        AgentKind::Codex
+            | AgentKind::Claude
+            | AgentKind::OpenCode
+            | AgentKind::Cursor
+            | AgentKind::Kilo
+            | AgentKind::Codebuff
     ) && args.dir.is_none() && !args.read_only
     {
         let profile = agent::classifier::classify(

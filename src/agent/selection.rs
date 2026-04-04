@@ -235,14 +235,41 @@ const CODING_FALLBACK_CHAIN: &[AgentKind] = &[
     AgentKind::OpenCode,
     AgentKind::Kilo,
 ];
+#[allow(dead_code)]
+const RESEARCH_FALLBACK_CHAIN: &[AgentKind] = &[
+    AgentKind::Gemini,
+    AgentKind::Claude,
+    AgentKind::Codex,
+    AgentKind::Cursor,
+    AgentKind::OpenCode,
+    AgentKind::Kilo,
+];
+
+fn next_fallback_in_chain(
+    agent: &AgentKind,
+    chain: &[AgentKind],
+    available: &[AgentKind],
+) -> Option<AgentKind> {
+    let start = chain.iter().position(|kind| kind == agent)?;
+    chain[start + 1..]
+        .iter()
+        .find(|kind| available.contains(kind) && !rate_limit::is_rate_limited(kind))
+        .copied()
+}
+
 pub(crate) fn coding_fallback_for(agent: &AgentKind) -> Option<AgentKind> {
     let available = detect_agents();
-    let start = CODING_FALLBACK_CHAIN.iter().position(|k| k == agent)?;
-    CODING_FALLBACK_CHAIN[start + 1..]
-        .iter()
-        .find(|k| available.contains(k) && !rate_limit::is_rate_limited(k))
-        .copied()
+    next_fallback_in_chain(agent, CODING_FALLBACK_CHAIN, &available)
+}
+
+#[allow(dead_code)]
+pub(crate) fn research_fallback_for(agent: &AgentKind) -> Option<AgentKind> {
+    let available = detect_agents();
+    next_fallback_in_chain(agent, RESEARCH_FALLBACK_CHAIN, &available)
 }
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+#[path = "selection_claude_tests.rs"]
+mod claude_tests;

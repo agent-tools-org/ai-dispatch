@@ -69,6 +69,7 @@ mod tests {
             agent: "codex".to_string(),
             team: None,
             prompt: "prompt".to_string(),
+            prompt_file: None,
             dir: None,
             output: output.map(str::to_string),
             result_file: None,

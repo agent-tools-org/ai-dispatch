@@ -35,6 +35,7 @@ pub const NO_SKILL_SENTINEL: &str = "__aid_no_skill__";
 pub struct RunArgs {
     pub agent_name: String,
     pub prompt: String,
+    pub prompt_file: Option<String>,
     pub repo: Option<String>,
     pub dir: Option<String>,
     pub output: Option<String>,
@@ -80,6 +81,16 @@ pub struct RunArgs {
 
 fn resolve_max_duration_mins(timeout: Option<u64>, max_duration_mins: Option<i64>) -> Option<i64> {
     max_duration_mins.or_else(|| timeout.map(|secs| secs.div_ceil(60) as i64))
+}
+
+pub(crate) fn resolve_prompt_input(prompt: &str, prompt_file: Option<&str>) -> Result<String> {
+    match (prompt_file, prompt) {
+        (Some(file), "") => std::fs::read_to_string(file)
+            .with_context(|| format!("Failed to read prompt file: {file}")),
+        (None, prompt) if !prompt.is_empty() => Ok(prompt.to_string()),
+        (Some(_), _) => anyhow::bail!("Cannot use both --prompt and --prompt-file"),
+        (None, _) => anyhow::bail!("Either prompt or --prompt-file is required"),
+    }
 }
 
 fn preview_prompt(prompt: &str, max_chars: usize) -> String {
@@ -211,6 +222,8 @@ fn resolve_id_conflict(store: &Store, id: &str) -> Result<IdConflict> {
 }
 
 pub async fn run(store: Arc<Store>, mut args: RunArgs) -> Result<TaskId> {
+    args.prompt = resolve_prompt_input(&args.prompt, args.prompt_file.as_deref())?;
+    args.prompt_file = None;
     args.max_duration_mins = resolve_max_duration_mins(args.timeout, args.max_duration_mins);
 
     if let Some(n) = args.best_of {

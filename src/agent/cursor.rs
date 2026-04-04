@@ -1,5 +1,5 @@
-// Cursor Agent CLI adapter: builds `cursor-agent` commands, parses stream-json output.
-// Uses the standalone cursor-agent binary (not the IDE CLI `cursor agent` subcommand).
+// Cursor Agent CLI adapter: builds `agent`/`cursor-agent` commands, parses stream-json output.
+// Uses the standalone Cursor binary, preferring `agent` over the legacy alias.
 
 use anyhow::Result;
 use chrono::Local;
@@ -22,7 +22,8 @@ impl super::Agent for CursorAgent {
     }
 
     fn build_command(&self, prompt: &str, opts: &RunOpts) -> Result<Command> {
-        let mut cmd = Command::new("cursor-agent");
+        let binary = if super::env::which_exists("agent") { "agent" } else { "cursor-agent" };
+        let mut cmd = Command::new(binary);
         if opts.read_only {
             cmd.args([
                 "-p",
@@ -363,8 +364,7 @@ mod tests {
             env_forward: None,
         };
         let cmd = agent.build_command("test prompt", &opts).unwrap();
-        assert_eq!(cmd.get_program(), "cursor-agent");
-        // Should NOT have "agent" as first arg (no longer a subcommand)
+        assert!(cmd.get_program() == "agent" || cmd.get_program() == "cursor-agent");
         let args: Vec<_> = cmd.get_args().collect();
         assert_eq!(args[0], "-p");
         assert!(args

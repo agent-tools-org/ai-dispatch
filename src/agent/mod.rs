@@ -75,6 +75,7 @@ pub fn detect_agents() -> Vec<AgentKind> {
         ("gemini", AgentKind::Gemini),
         ("codex", AgentKind::Codex),
         ("opencode", AgentKind::OpenCode),
+        ("agent", AgentKind::Cursor),
         ("cursor-agent", AgentKind::Cursor),
         ("droid", AgentKind::Droid),
         ("kilo", AgentKind::Kilo),
@@ -82,7 +83,7 @@ pub fn detect_agents() -> Vec<AgentKind> {
         ("oz", AgentKind::Oz),
         ("claude", AgentKind::Claude),
     ] {
-        if env::which_exists(name) {
+        if env::which_exists(name) && !found.contains(&kind) {
             found.push(kind);
         }
     }
@@ -112,5 +113,7 @@ pub fn get_agent(kind: AgentKind) -> Box<dyn Agent> {
     }
 }
 
+#[cfg(test)]
+mod cursor_binary_tests;
 #[cfg(test)]
 mod tests;

@@ -12,6 +12,28 @@ use std::time::{Duration, Instant};
 use super::super::batch_helpers::{batch_summary, ensure_batch_workgroup, resolve_batch_path};
 use super::super::batch_types::BatchTaskOutcome;
 
+struct EnvVarGuard {
+    key: &'static str,
+    original: Option<String>,
+}
+
+impl EnvVarGuard {
+    fn remove(key: &'static str) -> Self {
+        let original = std::env::var(key).ok();
+        unsafe { std::env::remove_var(key) };
+        Self { key, original }
+    }
+}
+
+impl Drop for EnvVarGuard {
+    fn drop(&mut self) {
+        match self.original.as_deref() {
+            Some(value) => unsafe { std::env::set_var(self.key, value) },
+            None => unsafe { std::env::remove_var(self.key) },
+        }
+    }
+}
+
 #[test]
 fn resolve_batch_path_uses_aid_batches_fallback() {
     let temp = tempfile::tempdir().unwrap();
@@ -77,6 +99,54 @@ fn ensure_batch_workgroup_creates_shared_dir_when_enabled() {
         crate::shared_dir::shared_dir_path("wg-custom")
     );
     assert!(shared_path.as_ref().is_some_and(|path| path.is_dir()));
+}
+
+#[tokio::test]
+async fn batch_title_sets_auto_created_workgroup_name() {
+    let temp = tempfile::tempdir().unwrap();
+    let _guard = AidHomeGuard::set(temp.path());
+    let _group_guard = EnvVarGuard::remove("AID_GROUP");
+    let store = Arc::new(Store::open_memory().unwrap());
+
+    let batch_file = temp.path().join("tasks.toml");
+    fs::write(
+        &batch_file,
+        r#"
+title = "My Batch"
+
+[[tasks]]
+name = "first"
+agent = "codex"
+prompt = "first prompt"
+
+[[tasks]]
+name = "second"
+agent = "codex"
+prompt = "second prompt"
+"#,
+    )
+    .unwrap();
+
+    crate::cmd::batch::run(
+        store.clone(),
+        crate::cmd::batch::BatchArgs {
+            file: batch_file.display().to_string(),
+            vars: vec![],
+            group: None,
+            parallel: false,
+            analyze: false,
+            wait: false,
+            dry_run: true,
+            force: false,
+            max_concurrent: None,
+        },
+    )
+    .await
+    .unwrap();
+
+    let workgroups = store.list_workgroups().unwrap();
+    assert_eq!(workgroups.len(), 1);
+    assert_eq!(workgroups[0].name, "My Batch");
 }
 
 #[tokio::test]

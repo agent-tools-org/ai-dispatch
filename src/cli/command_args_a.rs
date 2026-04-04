@@ -13,7 +13,9 @@ use clap::Args;
 Hint: If passing file paths, use --context <path> not positional args"#)]
 pub struct RunArgs {
     pub agent: String,
-    pub prompt: String,
+    pub prompt: Option<String>,
+    #[arg(long, value_name = "PATH")]
+    pub prompt_file: Option<String>,
     #[arg(long)]
     pub repo: Option<String>,
     #[arg(short, long)]

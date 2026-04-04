@@ -162,6 +162,7 @@ mod tests {
             agent: "codex".to_string(),
             team: None,
             prompt: prompt.to_string(),
+            prompt_file: None,
             dir: None,
             output: None,
             result_file: None,

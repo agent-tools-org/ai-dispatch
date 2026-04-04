@@ -10,7 +10,7 @@ use anyhow::{Context, Result};
 use serde::Deserialize;
 use std::collections::{HashMap, HashSet};
 use std::io::{self, Write};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -88,7 +88,10 @@ pub struct BatchTask {
     #[serde(default)]
     pub agent: String,
     pub team: Option<String>,
+    #[serde(default)]
     pub prompt: String,
+    #[serde(default)]
+    pub prompt_file: Option<String>,
     pub dir: Option<String>,
     pub output: Option<String>,
     #[serde(default)]
@@ -192,6 +195,7 @@ pub(crate) fn parse_batch_file_with_vars(
     let mut stderr = io::stderr().lock();
     interpolate_batch_config(&mut config, cli_vars, &mut stderr)?;
     apply_defaults(&mut config.tasks, &config.defaults);
+    resolve_task_prompts(&mut config.tasks, path)?;
     validate_agents(&config.tasks)?;
     validate_fallback_agents(&config.tasks)?;
     auto_sequence_shared_worktrees(&mut config.tasks, &mut stderr)?;
@@ -200,6 +204,44 @@ pub(crate) fn parse_batch_file_with_vars(
     validate_conditional_hooks(&config.tasks)?;
     warn_audit_without_readonly(&config.tasks);
     Ok(config)
+}
+
+fn resolve_task_prompts(tasks: &mut [BatchTask], batch_path: &Path) -> Result<()> {
+    let base_dir = batch_path.parent().unwrap_or_else(|| Path::new("."));
+    for (task_idx, task) in tasks.iter_mut().enumerate() {
+        let has_prompt = !task.prompt.trim().is_empty();
+        match (task.prompt_file.as_deref(), has_prompt) {
+            (Some(_), true) => anyhow::bail!(
+                "task {} cannot set both prompt and prompt_file",
+                task_label(task, task_idx)
+            ),
+            (None, false) => anyhow::bail!(
+                "task {} must set either prompt or prompt_file",
+                task_label(task, task_idx)
+            ),
+            (Some(file), false) => {
+                let prompt_path = batch_prompt_path(base_dir, file);
+                task.prompt = std::fs::read_to_string(&prompt_path).with_context(|| {
+                    format!(
+                        "failed to read prompt file for task {}: {}",
+                        task_label(task, task_idx),
+                        prompt_path.display()
+                    )
+                })?;
+            }
+            (None, true) => {}
+        }
+    }
+    Ok(())
+}
+
+fn batch_prompt_path(base_dir: &Path, file: &str) -> PathBuf {
+    let path = Path::new(file);
+    if path.is_absolute() {
+        path.to_path_buf()
+    } else {
+        base_dir.join(path)
+    }
 }
 fn validate_agents(tasks: &[BatchTask]) -> Result<()> {
     for (task_idx, task) in tasks.iter().enumerate() {

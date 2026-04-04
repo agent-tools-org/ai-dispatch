@@ -32,6 +32,7 @@ fn make_task(name: Option<&str>, depends_on: &[&str]) -> BatchTask {
         agent: "codex".to_string(),
         team: None,
         prompt: "prompt".to_string(),
+        prompt_file: None,
         dir: None,
         output: None,
         result_file: None,
@@ -380,6 +381,7 @@ fn warns_on_large_prompt() {
     let big_prompt = "x".repeat(7000);
     let task = BatchTask {
         prompt: big_prompt,
+        prompt_file: None,
         ..make_task(Some("huge"), &[])
     };
     let mut output = Vec::new();
@@ -534,6 +536,7 @@ fn context_from_deduplicates_with_explicit_depends_on() {
 fn warns_on_audit_prompt_without_read_only() {
     let task = BatchTask {
         prompt: "Audit this codebase and report only findings".to_string(),
+        prompt_file: None,
         ..make_task(Some("review"), &[])
     };
     let mut stderr = Vec::new();
@@ -548,6 +551,7 @@ fn warns_on_audit_prompt_without_read_only() {
 fn does_not_warn_on_normal_prompt() {
     let task = BatchTask {
         prompt: "Implement the parser changes".to_string(),
+        prompt_file: None,
         ..make_task(Some("implement"), &[])
     };
     let mut stderr = Vec::new();
@@ -561,6 +565,7 @@ fn does_not_warn_on_normal_prompt() {
 fn does_not_warn_when_read_only_is_true() {
     let task = BatchTask {
         prompt: "Do not modify files, analysis only".to_string(),
+        prompt_file: None,
         read_only: true,
         ..make_task(Some("analysis"), &[])
     };
@@ -575,6 +580,7 @@ fn does_not_warn_when_read_only_is_true() {
 fn does_not_warn_for_audit_log_prompt() {
     let task = BatchTask {
         prompt: "Add an audit log feature for admin actions".to_string(),
+        prompt_file: None,
         ..make_task(Some("feature"), &[])
     };
     let mut stderr = Vec::new();
@@ -700,6 +706,48 @@ fn no_vars_section_keeps_existing_behavior() {
 
     assert_eq!(cfg.tasks[0].prompt, "do something");
     assert!(stderr.is_empty());
+}
+
+#[test]
+fn resolves_prompt_file_relative_to_batch_dir() {
+    let dir = tempfile::TempDir::new().unwrap();
+    let prompt_dir = dir.path().join("prompts");
+    std::fs::create_dir_all(&prompt_dir).unwrap();
+    std::fs::write(prompt_dir.join("fix.md"), "Prompt from relative file").unwrap();
+    let batch_path = dir.path().join("tasks.toml");
+    std::fs::write(
+        &batch_path,
+        "[[tasks]]\nagent = \"codex\"\nprompt_file = \"prompts/fix.md\"\n",
+    )
+    .unwrap();
+
+    let cfg = parse_batch_file(&batch_path).unwrap();
+
+    assert_eq!(cfg.tasks[0].prompt, "Prompt from relative file");
+    assert_eq!(cfg.tasks[0].prompt_file.as_deref(), Some("prompts/fix.md"));
+}
+
+#[test]
+fn rejects_task_without_prompt_or_prompt_file() {
+    let err = parse_batch_file(write_temp("[[tasks]]\nagent = \"codex\"\n").path())
+        .unwrap_err()
+        .to_string();
+
+    assert!(err.contains("must set either prompt or prompt_file"));
+}
+
+#[test]
+fn rejects_task_with_prompt_and_prompt_file() {
+    let err = parse_batch_file(
+        write_temp(
+            "[[tasks]]\nagent = \"codex\"\nprompt = \"inline\"\nprompt_file = \"prompts/fix.md\"\n",
+        )
+        .path(),
+    )
+    .unwrap_err()
+    .to_string();
+
+    assert!(err.contains("cannot set both prompt and prompt_file"));
 }
 
 #[test]

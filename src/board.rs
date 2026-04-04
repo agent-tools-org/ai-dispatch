@@ -552,4 +552,27 @@ mod tests {
         assert!(output.contains("t-1003 (retry)  → Done"));
         assert!(output.contains("← current"));
     }
+
+    #[test]
+    fn task_detail_shows_iteration_event_detail() {
+        let task = make_task("t-iter", AgentKind::Codex, TaskStatus::Done);
+        let output = render_task_detail(
+            &task,
+            &[TaskEvent {
+                task_id: task.id.clone(),
+                timestamp: Local::now(),
+                event_kind: EventKind::Milestone,
+                detail: "Iteration 2/5".to_string(),
+                metadata: Some(json!({
+                    "iterate": {
+                        "iteration": 2,
+                        "max_iterations": 5
+                    }
+                })),
+            }],
+            None,
+        );
+
+        assert!(output.contains("Iteration 2/5"));
+    }
 }

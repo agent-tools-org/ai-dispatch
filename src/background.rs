@@ -201,6 +201,9 @@ async fn run_task_inner(store: &Arc<Store>, spec: &BackgroundRunSpec) -> Result<
         model: spec.model.clone(),
         group: spec.group.clone(),
         verify: spec.verify.clone(),
+        iterate: spec.iterate,
+        eval: spec.eval.clone(),
+        eval_feedback_template: spec.eval_feedback_template.clone(),
         judge: spec.judge.clone(),
         max_duration_mins: spec.max_duration_mins,
         retry: spec.retry,
@@ -259,14 +262,28 @@ async fn run_task_inner(store: &Arc<Store>, spec: &BackgroundRunSpec) -> Result<
     if let Err(err) = crate::cmd::run::persist_result_file(&spec.task_id, spec.result_file.as_deref(), spec.dir.as_deref()) {
         aid_warn!("[aid] Failed to persist result file: {err}");
     }
-    if crate::cmd::run::maybe_auto_retry_after_verify_failure(
-        store,
-        &TaskId(spec.task_id.clone()),
-        &retry_args,
-        pre_verify_status,
-    )
-    .await?
-    .is_some()
+    let iterate_config = crate::cmd::run::iterate_config(&retry_args)?;
+    if let Some(iterate_config) = iterate_config.as_ref()
+        && crate::cmd::run::maybe_iterate(
+            store,
+            &TaskId(spec.task_id.clone()),
+            &retry_args,
+            iterate_config,
+        )
+        .await?
+        .is_some()
+    {
+        return Ok(());
+    }
+    if iterate_config.is_none()
+        && crate::cmd::run::maybe_auto_retry_after_verify_failure(
+            store,
+            &TaskId(spec.task_id.clone()),
+            &retry_args,
+            pre_verify_status,
+        )
+        .await?
+        .is_some()
     {
         return Ok(());
     }

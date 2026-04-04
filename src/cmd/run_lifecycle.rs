@@ -4,8 +4,9 @@
 use anyhow::Result;
 use std::{path::Path, sync::Arc};
 use crate::{agent, hooks, rate_limit, store::Store, types::*};
+use crate::cmd::run_hung_recovery;
 use crate::cmd::{checklist_scan, judge, retry_logic, show};
-use super::{RunArgs, inherit_retry_base_branch, iterate_config, maybe_auto_retry_after_checklist_miss, maybe_auto_retry_after_verify_failure, maybe_cleanup_fast_fail, maybe_iterate, maybe_judge_retry, maybe_verify, run, run_agent, run_prompt};
+use super::{RunArgs, inherit_retry_base_branch, iterate_config, maybe_auto_retry_after_checklist_miss, maybe_auto_retry_after_verify_failure, maybe_cleanup_fast_fail, maybe_iterate, maybe_judge_retry, maybe_verify, retry_target, run, run_agent, run_prompt};
 
 pub(crate) async fn post_run_lifecycle(
     store: &Arc<Store>,
@@ -258,6 +259,9 @@ pub(crate) async fn post_run_lifecycle(
             return Ok(Some(retry_id));
         }
     }
+    if let Some(retry_id) = maybe_auto_retry_after_hang(store, task_id, args).await? {
+        return Ok(Some(retry_id));
+    }
     crate::verify::enforce_verify_status(store, task_id);
     let completed_normally = if let Some(mut retry_args) =
         retry_logic::prepare_retry(store.clone(), task_id, args).await?
@@ -306,6 +310,61 @@ pub(crate) async fn post_run_lifecycle(
     if completed_normally { aid_info!("[aid] View in TUI: aid board"); }
     Ok(None)
 }
+async fn maybe_auto_retry_after_hang(
+    store: &Arc<Store>,
+    task_id: &TaskId,
+    args: &RunArgs,
+) -> Result<Option<TaskId>> {
+    if args.retry == 0 {
+        return Ok(None);
+    }
+    let Some(task) = store.get_task(task_id.as_str())? else { return Ok(None) };
+    if task.status != TaskStatus::Failed {
+        return Ok(None);
+    }
+    let events = store.get_events(task_id.as_str())?;
+    let Some(context) = run_hung_recovery::hung_context(&events) else {
+        return Ok(None);
+    };
+    let retry_count = prior_hung_retry_count(store.as_ref(), &task)?;
+    let hung_task = run_hung_recovery::with_hung_context(&task, &context);
+    if !run_hung_recovery::should_auto_retry_hung(&hung_task, retry_count) {
+        return Ok(None);
+    }
+
+    aid_warn!(
+        "[aid] Agent hung, auto-retrying ({} retries left)",
+        args.retry.saturating_sub(1)
+    );
+
+    let feedback =
+        run_hung_recovery::build_hung_retry_feedback(&hung_task, context.hung_duration_secs);
+    let root_prompt = retry_logic::root_prompt(store.as_ref(), &task)
+        .unwrap_or_else(|| args.prompt.clone());
+    let mut retry_args = args.clone();
+    retry_args.prompt =
+        format!("[Previous attempt feedback]\n{feedback}\n\n[Original task]\n{root_prompt}");
+    retry_args.retry = args.retry.saturating_sub(1);
+    retry_args.parent_task_id = Some(task_id.as_str().to_string());
+    retry_args.repo = task.repo_path.clone().or_else(|| retry_args.repo.clone());
+    retry_args.output = task.output_path.clone().or_else(|| retry_args.output.clone());
+    retry_args.model = task.model.clone().or_else(|| retry_args.model.clone());
+    retry_args.verify = task.verify.clone();
+    retry_args.read_only = task.read_only;
+    retry_args.budget = task.budget;
+    retry_args.background = false;
+    let (dir, worktree) = retry_target(&task);
+    retry_args.dir = dir.or_else(|| retry_args.dir.clone());
+    retry_args.worktree = worktree.or_else(|| retry_args.worktree.clone());
+    inherit_retry_base_branch(args.dir.as_deref(), &task, &mut retry_args);
+    if task.agent == AgentKind::OpenCode {
+        retry_args.session_id = task.agent_session_id.clone();
+    }
+
+    let retry_id = Box::pin(run(store.clone(), retry_args)).await?;
+    let _ = run_hung_recovery::insert_hung_retry_event(store.as_ref(), task_id);
+    Ok(Some(retry_id))
+}
 pub(crate) fn maybe_flag_empty_worktree_diff(store: &Store, task_id: &TaskId, task: &Task) {
     if task.read_only || task.status != TaskStatus::Done || task.verify_status != VerifyStatus::Skipped {
         return;
@@ -332,6 +391,15 @@ pub(crate) fn auto_save_task_output(store: &Store, task: &Task) -> Result<()> {
     let output_path = output_dir.join("output.md");
     std::fs::write(&output_path, &content)?;
     store.update_output_path(task.id.as_str(), &output_path.display().to_string())
+}
+fn prior_hung_retry_count(store: &Store, task: &Task) -> Result<u32> {
+    let chain = store.get_retry_chain(task.id.as_str())?;
+    Ok(chain
+        .into_iter()
+        .filter(|entry| entry.id != task.id)
+        .filter_map(|entry| store.get_events(entry.id.as_str()).ok())
+        .filter(|events| run_hung_recovery::was_auto_retried_after_hang(events))
+        .count() as u32)
 }
 pub(crate) fn worktree_is_empty_diff(worktree_dir: &Path) -> Option<bool> {
     let head = git_diff_stat_output(worktree_dir, &["diff", "--stat", "HEAD"])?;

@@ -38,6 +38,7 @@ pub mod retry;
 pub mod judge;
 pub mod retry_logic;
 pub mod run;
+pub(crate) mod run_hung_recovery;
 pub mod show;
 pub mod show_checklist;
 pub mod export;

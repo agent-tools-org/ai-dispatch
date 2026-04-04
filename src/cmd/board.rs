@@ -10,7 +10,7 @@ use crate::background;
 use crate::board::render_board;
 use crate::session;
 use crate::store::Store;
-use crate::types::{Task, TaskFilter, TaskStatus};
+use crate::types::{Task, TaskFilter, TaskStatus, Workgroup};
 
 const DEFAULT_TASK_LIMIT: usize = 50;
 
@@ -84,6 +84,11 @@ pub fn run(
             TaskStatus::Done | TaskStatus::Failed | TaskStatus::Merged | TaskStatus::Skipped | TaskStatus::Stopped
         ) && task.worktree_path.is_some()
     });
+    if let Some(group_id) = group
+        && let Some(header) = group_header(store, group_id)?
+    {
+        print!("{header}");
+    }
     print!("{}", render_board(&tasks, store)?);
     if let Some(truncation) = truncation {
         println!("{}", truncation_notice_message(truncation));
@@ -98,6 +103,21 @@ pub fn run(
         println!("[aid] Tip: run `aid worktree prune` to clean up stale worktrees");
     }
     Ok(())
+}
+
+fn group_header(store: &Store, group_id: &str) -> Result<Option<String>> {
+    let Some(workgroup) = store.get_workgroup(group_id)? else {
+        return Ok(None);
+    };
+    Ok(Some(format_group_header(&workgroup)))
+}
+
+fn format_group_header(workgroup: &Workgroup) -> String {
+    if workgroup.name == workgroup.id.as_str() {
+        format!("Workgroup: {}\n\n", workgroup.id)
+    } else {
+        format!("Workgroup: {} ({})\n\n", workgroup.id, workgroup.name)
+    }
 }
 
 pub(crate) fn apply_limit(
@@ -178,6 +198,8 @@ mod tests {
     use super::{apply_limit, board_json_row, long_running_warning, truncation_notice_message, TruncationNotice};
     use chrono::{Duration, Local};
 
+    use crate::paths::AidHomeGuard;
+    use crate::store::Store;
     use crate::types::{AgentKind, Task, TaskId, TaskStatus, VerifyStatus};
 
     #[test]
@@ -221,6 +243,21 @@ mod tests {
         let row = board_json_row(&task);
 
         assert_eq!(row["pending_reason"], "worker_capacity");
+    }
+
+    #[test]
+    fn format_group_header_includes_custom_name() {
+        let temp = tempfile::tempdir().unwrap();
+        let _guard = AidHomeGuard::set(temp.path());
+        let store = Store::open_memory().unwrap();
+        let workgroup = store
+            .create_workgroup("My Batch", "", Some("seed"), Some("wg-batch"))
+            .unwrap();
+
+        assert_eq!(
+            super::format_group_header(&workgroup),
+            "Workgroup: wg-batch (My Batch)\n\n"
+        );
     }
 
     fn make_task(task_id: &str, status: TaskStatus, created_at: chrono::DateTime<Local>) -> Task {

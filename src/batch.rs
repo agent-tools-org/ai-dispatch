@@ -16,6 +16,10 @@ use std::path::Path;
 #[serde(deny_unknown_fields)]
 pub struct BatchConfig {
     #[serde(default)]
+    pub title: Option<String>,
+    #[serde(default)]
+    pub description: Option<String>,
+    #[serde(default)]
     pub defaults: BatchDefaults,
     #[serde(default)]
     pub vars: HashMap<String, String>,
@@ -158,7 +162,7 @@ fn validate_batch_keys(content: &str, path: &Path) -> Result<()> {
     let Some(table) = raw.as_table() else {
         return Ok(());
     };
-    let known_keys = ["defaults", "tasks", "task", "vars"];
+    let known_keys = ["title", "description", "defaults", "tasks", "task", "vars"];
     for key in table.keys() {
         if known_keys.contains(&key.as_str()) {
             continue;

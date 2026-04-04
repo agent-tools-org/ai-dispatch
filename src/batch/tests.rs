@@ -89,6 +89,22 @@ fn parse_valid_batch() {
 }
 
 #[test]
+fn parse_batch_metadata_fields() {
+    let cfg = parse_batch_file(
+        write_temp(concat!(
+            "title = \"My Batch\"\n",
+            "description = \"Batch metadata\"\n",
+            "[[tasks]]\nagent = \"codex\"\nprompt = \"test\"\n"
+        ))
+        .path(),
+    )
+    .unwrap();
+
+    assert_eq!(cfg.title.as_deref(), Some("My Batch"));
+    assert_eq!(cfg.description.as_deref(), Some("Batch metadata"));
+}
+
+#[test]
 fn result_file_deserializes_from_batch_toml() {
     let config: BatchConfig = toml::from_str("[[tasks]]\nagent = \"codex\"\nprompt = \"test\"\nresult_file = \"result.md\"\n").unwrap();
     assert_eq!(config.tasks[0].result_file.as_deref(), Some("result.md"));
@@ -477,6 +493,14 @@ fn rejects_unknown_top_level_key() {
     let file = write_temp("[bogus]\nfoo = 1\n\n[[tasks]]\nagent = \"codex\"\nprompt = \"implement\"\n");
     let err = parse_batch_file(file.path()).unwrap_err().to_string();
     assert!(err.contains("unknown top-level key `bogus`"));
+}
+
+#[test]
+fn rejects_unknown_metadata_top_level_key() {
+    let file = write_temp("titl = \"typo\"\n\n[[tasks]]\nagent = \"codex\"\nprompt = \"implement\"\n");
+    let err = parse_batch_file(file.path()).unwrap_err().to_string();
+
+    assert!(err.contains("unknown top-level key `titl`"));
 }
 
 #[test]

@@ -5,14 +5,15 @@ use crate::cli::{BatchAction, RunExtrasArgs};
 use crate::cmd;
 use crate::types::AgentKind;
 use crate::{agent, config, store, team};
-use anyhow::{Result, anyhow};
+use anyhow::{Context, Result, anyhow};
 use std::sync::Arc;
 
 #[allow(clippy::too_many_arguments)]
 pub(super) async fn run(
     store: Arc<store::Store>,
     agent_name: String,
-    prompt: String,
+    prompt: Option<String>,
+    prompt_file: Option<String>,
     repo: Option<String>,
     dir: Option<String>,
     output: Option<String>,
@@ -46,9 +47,15 @@ pub(super) async fn run(
 ) -> Result<()> {
     let config = config::load_config().unwrap_or_default();
     let budget = budget || config.selection.budget_mode;
+    let selection_prompt = match (&prompt, prompt_file.as_deref()) {
+        (Some(prompt), _) if !prompt.is_empty() => prompt.clone(),
+        (_, Some(file)) => std::fs::read_to_string(file)
+            .with_context(|| format!("Failed to read prompt file: {file}"))?,
+        _ => String::new(),
+    };
     let (agent_name, auto_model) = resolve_run_agent(
         &store,
-        &prompt,
+        &selection_prompt,
         &dir,
         &repo,
         &output,
@@ -62,7 +69,8 @@ pub(super) async fn run(
     let checklist = cmd::checklist::merge_checklist_items(checklist, checklist_file.as_deref())?;
     let args = build_run_args(
         agent_name,
-        prompt,
+        prompt.unwrap_or_default(),
+        prompt_file,
         repo,
         dir,
         output,
@@ -102,6 +110,7 @@ pub(super) async fn run(
 fn build_run_args(
     agent_name: String,
     prompt: String,
+    prompt_file: Option<String>,
     repo: Option<String>,
     dir: Option<String>,
     output: Option<String>,
@@ -141,6 +150,7 @@ fn build_run_args(
     cmd::run::RunArgs {
         agent_name,
         prompt,
+        prompt_file,
         repo,
         dir,
         output,

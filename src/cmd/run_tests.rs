@@ -161,6 +161,33 @@ fn validate_dispatch_warns_code_agent_without_dir() {
 }
 
 #[test]
+fn resolve_prompt_input_reads_prompt_file() {
+    let dir = TempDir::new().unwrap();
+    let prompt_file = dir.path().join("prompt.md");
+    std::fs::write(&prompt_file, "Prompt from file").unwrap();
+
+    let prompt = resolve_prompt_input("", Some(prompt_file.to_str().unwrap())).unwrap();
+
+    assert_eq!(prompt, "Prompt from file");
+}
+
+#[test]
+fn resolve_prompt_input_rejects_prompt_and_prompt_file() {
+    let err = resolve_prompt_input("inline prompt", Some("/tmp/prompt.md"))
+        .unwrap_err()
+        .to_string();
+
+    assert_eq!(err, "Cannot use both --prompt and --prompt-file");
+}
+
+#[test]
+fn resolve_prompt_input_requires_prompt_source() {
+    let err = resolve_prompt_input("", None).unwrap_err().to_string();
+
+    assert_eq!(err, "Either prompt or --prompt-file is required");
+}
+
+#[test]
 fn sandboxed_agents_identified() {
     assert!(AgentKind::OpenCode.sandboxed_fs());
     assert!(!AgentKind::Codex.sandboxed_fs());

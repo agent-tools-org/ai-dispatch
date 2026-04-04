@@ -1,9 +1,9 @@
 // Git worktree management: create, remove, and diff isolated worktrees.
 // Used by `aid run --worktree` and `aid batch` for parallel conflict-free dispatch.
 
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, anyhow};
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Command, Output};
 
 use crate::sanitize;
 
@@ -32,6 +32,64 @@ fn sync_cargo_lock(repo_dir: &Path, wt_path: &Path) {
     if src.exists() {
         let _ = std::fs::copy(&src, &dst);
     }
+}
+
+fn is_valid_git_worktree(path: &Path) -> Result<bool> {
+    let status = Command::new("git")
+        .args(["-C", &path.to_string_lossy(), "rev-parse", "--git-dir"])
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .context("Failed to run git rev-parse")?;
+    Ok(status.success())
+}
+
+fn canonical_worktree_path(path: &Path) -> PathBuf {
+    path.canonicalize().unwrap_or_else(|_| path.to_path_buf())
+}
+
+fn prune_worktrees(repo_dir: &Path) -> Result<()> {
+    let prune_status = Command::new("git")
+        .args(["-C", &repo_dir.to_string_lossy(), "worktree", "prune"])
+        .status()
+        .context("Failed to run git worktree prune")?;
+    anyhow::ensure!(prune_status.success(), "git worktree prune failed");
+    Ok(())
+}
+
+fn stale_worktree_warning(path: &Path) {
+    aid_warn!(
+        "[aid] Warning: Cleaned stale worktree at {}, re-creating",
+        path.display()
+    );
+}
+
+fn remove_stale_worktree_dir(path: &Path) -> Result<()> {
+    std::fs::remove_dir_all(path)
+        .with_context(|| format!("Failed to remove stale worktree at {}", path.display()))
+}
+
+fn worktree_create_error(path: &Path, branch: &str, reason: impl std::fmt::Display) -> anyhow::Error {
+    anyhow!(
+        "Failed to create worktree at {} for branch {}: {}. Try: aid worktree prune",
+        path.display(),
+        branch,
+        reason
+    )
+}
+
+fn worktree_add_reason(output: &Output) -> String {
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let stderr = stderr.trim();
+    if !stderr.is_empty() {
+        return stderr.lines().next().unwrap_or(stderr).to_string();
+    }
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stdout = stdout.trim();
+    if !stdout.is_empty() {
+        return stdout.lines().next().unwrap_or(stdout).to_string();
+    }
+    "git worktree add failed".to_string()
 }
 
 /// Sync repo-backed context files into the worktree when they are missing there.
@@ -137,11 +195,33 @@ pub fn create_worktree(
                 wt_path.display()
             );
         }
-        sync_cargo_lock(repo_dir, &wt_path);
-        return Ok(WorktreeInfo {
-            path: wt_path,
-            branch: branch.to_string(),
-        });
+        let expected_path = canonical_worktree_path(&wt_path);
+        if existing_worktree_path(repo_dir, branch)?
+            .is_some_and(|path| canonical_worktree_path(&path) != expected_path)
+        {
+            prune_worktrees(repo_dir)?;
+        }
+        if is_valid_git_worktree(&wt_path)? {
+            if let Some(existing_path) = existing_worktree_path(repo_dir, branch)? {
+                if existing_path.exists()
+                    && canonical_worktree_path(&existing_path) != expected_path
+                {
+                    sync_cargo_lock(repo_dir, &existing_path);
+                    return Ok(WorktreeInfo {
+                        path: existing_path,
+                        branch: branch.to_string(),
+                    });
+                }
+            }
+            sync_cargo_lock(repo_dir, &wt_path);
+            return Ok(WorktreeInfo {
+                path: wt_path,
+                branch: branch.to_string(),
+            });
+        }
+
+        stale_worktree_warning(&wt_path);
+        remove_stale_worktree_dir(&wt_path)?;
     }
 
     // Try new branch first
@@ -150,7 +230,7 @@ pub fn create_worktree(
         .args(["worktree", "add", &wt_path.to_string_lossy(), "-b", branch])
         .args(base_branch)
         .output()
-        .context("Failed to run git worktree add")?;
+        .map_err(|err| worktree_create_error(&wt_path, branch, format!("failed to run git worktree add: {err}")))?;
 
     if out.status.success() {
         sync_cargo_lock(repo_dir, &wt_path);
@@ -169,11 +249,7 @@ pub fn create_worktree(
             });
         }
 
-        let prune_status = Command::new("git")
-            .args(["-C", &repo_dir.to_string_lossy(), "worktree", "prune"])
-            .status()
-            .context("Failed to run git worktree prune")?;
-        anyhow::ensure!(prune_status.success(), "git worktree prune failed");
+        prune_worktrees(repo_dir)?;
     }
 
     // Fallback: existing branch — reset it to HEAD first to avoid stale checkout
@@ -203,13 +279,14 @@ pub fn create_worktree(
         .args(["-C", &repo_dir.to_string_lossy()])
         .args(["worktree", "add", &wt_path.to_string_lossy(), branch])
         .output()
-        .context("Failed to run git worktree add")?;
-
-    anyhow::ensure!(
-        out.status.success(),
-        "git worktree add failed: {}",
-        String::from_utf8_lossy(&out.stderr)
-    );
+        .map_err(|err| worktree_create_error(&wt_path, branch, format!("failed to run git worktree add: {err}")))?;
+    if !out.status.success() {
+        return Err(worktree_create_error(
+            &wt_path,
+            branch,
+            worktree_add_reason(&out),
+        ));
+    }
     sync_cargo_lock(repo_dir, &wt_path);
     Ok(WorktreeInfo {
         path: wt_path,

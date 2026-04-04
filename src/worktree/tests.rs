@@ -17,6 +17,17 @@ fn git(repo_dir: &Path, args: &[&str]) {
         .success());
 }
 
+fn git_output(repo_dir: &Path, args: &[&str]) -> String {
+    let repo_dir = repo_dir.to_string_lossy().to_string();
+    let out = Command::new("git")
+        .args(["-C", repo_dir.as_str()])
+        .args(args)
+        .output()
+        .unwrap();
+    assert!(out.status.success());
+    String::from_utf8(out.stdout).unwrap()
+}
+
 fn unique_branch(prefix: &str) -> String {
     format!(
         "{prefix}-{}-{}",
@@ -188,7 +199,39 @@ fn create_worktree_reuses_existing_branch_worktree() {
 }
 
 #[test]
-fn create_worktree_prunes_orphaned_branch_worktree() {
+fn create_worktree_cleans_stale_directory_and_recreates_worktree() {
+    let _permit = test_subprocess::acquire();
+    let repo = TempDir::new().unwrap();
+    git(repo.path(), &["init", "-b", "main"]);
+    git(repo.path(), &["config", "user.email", "test@example.com"]);
+    git(repo.path(), &["config", "user.name", "Test User"]);
+    std::fs::write(repo.path().join("file.txt"), "hello\n").unwrap();
+    git(repo.path(), &["add", "."]);
+    git(repo.path(), &["commit", "-m", "init"]);
+
+    let branch = unique_branch("feat/stale");
+    let expected_path = PathBuf::from(format!("/tmp/aid-wt-{branch}"));
+    std::fs::create_dir_all(&expected_path).unwrap();
+    std::fs::write(expected_path.join("stale.txt"), "stale\n").unwrap();
+
+    let info = create_worktree(repo.path(), branch.as_str(), None).unwrap();
+    assert_eq!(info.path, expected_path);
+    assert!(is_valid_git_worktree(&info.path).unwrap());
+    assert!(!info.path.join("stale.txt").exists());
+
+    git(
+        repo.path(),
+        &[
+            "worktree",
+            "remove",
+            "--force",
+            &info.path.to_string_lossy(),
+        ],
+    );
+}
+
+#[test]
+fn create_worktree_prunes_conflicting_branch_and_recreates_worktree() {
     let _permit = test_subprocess::acquire();
     let repo = TempDir::new().unwrap();
     git(repo.path(), &["init", "-b", "main"]);
@@ -216,6 +259,10 @@ fn create_worktree_prunes_orphaned_branch_worktree() {
     let info = create_worktree(repo.path(), branch.as_str(), None).unwrap();
     let expected_path = PathBuf::from(format!("/tmp/aid-wt-{branch}"));
     assert_eq!(info.path, expected_path);
+    assert!(is_valid_git_worktree(&info.path).unwrap());
+    let worktrees = git_output(repo.path(), &["worktree", "list", "--porcelain"]);
+    assert!(worktrees.contains(expected_path.to_string_lossy().as_ref()));
+    assert!(!worktrees.contains(orphan_path.to_string_lossy().as_ref()));
 
     git(
         repo.path(),

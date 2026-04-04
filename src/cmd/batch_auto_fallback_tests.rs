@@ -120,6 +120,7 @@ fn auto_fallback_skips_rate_limited_toml_fallbacks() {
         agent: String::new(),
         team: None,
         prompt: String::new(),
+        prompt_file: None,
         dir: None,
         output: None,
         result_file: None,

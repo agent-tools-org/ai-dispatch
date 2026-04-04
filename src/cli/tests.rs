@@ -97,6 +97,18 @@ fn run_result_file_flag_parses() {
 }
 
 #[test]
+fn run_prompt_file_flag_parses_without_positional_prompt() {
+    let cli = Cli::try_parse_from(["aid", "run", "codex", "--prompt-file", "/tmp/prompt.md"]).unwrap();
+    match cli.command {
+        Some(Commands::Run(command_args_a::RunArgs { prompt, prompt_file, .. })) => {
+            assert!(prompt.is_none());
+            assert_eq!(prompt_file, Some("/tmp/prompt.md".to_string()));
+        }
+        _ => panic!("expected Run"),
+    }
+}
+
+#[test]
 fn watch_timeout_flag_parses() {
     let cli = Cli::try_parse_from(["aid", "watch", "--quiet", "--timeout", "60", "--group", "wg-a"]).unwrap();
     match cli.command {

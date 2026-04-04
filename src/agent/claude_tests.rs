@@ -75,9 +75,9 @@ fn parses_tool_use_event() {
 #[test]
 fn parses_completion_event() {
     let line = r#"{"type":"result","subtype":"success","result":"Hello!","total_cost_usd":0.14359275,"session_id":"session-1","usage":{"input_tokens":4,"cache_creation_input_tokens":18821,"cache_read_input_tokens":44733,"output_tokens":143},"modelUsage":{"claude-opus-4-6[1m]":{"inputTokens":4}}}"#;
-        let event = ClaudeAgent
-            .parse_event(&TaskId("t-claude".to_string()), line)
-            .unwrap();
+    let event = ClaudeAgent
+        .parse_event(&TaskId("t-claude".to_string()), line)
+        .unwrap();
     assert_eq!(event.event_kind, EventKind::Completion);
     assert_eq!(
         event.metadata.as_ref().and_then(|value| value.get("tokens")).and_then(|value| value.as_i64()),

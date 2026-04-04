@@ -21,9 +21,8 @@ const AGENT_TEMPLATE: &str = r#"# Custom agent definition for aid.
 #   2. Performs the task autonomously
 #   3. Exits when done
 #
-# Compatible CLIs: gemini, codex, opencode, cursor, kilo, codebuff, aider, etc.
-# NOT compatible: interactive/session-based tools (e.g. Claude Code) — those
-# are orchestrators that call aid, not agents that aid dispatches.
+# Compatible CLIs: gemini, codex, opencode, cursor, claude, kilo, codebuff, aider, etc.
+# NOT compatible: interactive/session-based tools without a stable non-interactive mode.
 
 [agent]
 id = "{name}"

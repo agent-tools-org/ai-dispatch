@@ -1,8 +1,13 @@
 ## Findings
 No findings.
 
+## Result
+Added Claude Code as a built-in `aid` agent with `AgentKind::Claude`, command construction for `claude -p --output-format stream-json --verbose --dangerously-skip-permissions`, real stream-json parsing, selection/scoring integration, fallback-chain support, config/profile/model entries, and runtime wiring.
+
+Added targeted Claude adapter tests plus a selection test, and verified live execution with `aid run claude "say hello"` followed by `aid show` against an isolated writable `AID_HOME`.
+
 ## Verification
-- Added iterate integration across batch/default parsing, `RunArgs` mapping, CLI/background persistence, and background retry execution in [src/batch.rs](/tmp/aid-wt-feat/v868/iterate-batch-integration/src/batch.rs), [src/batch_interpolate.rs](/tmp/aid-wt-feat/v868/iterate-batch-integration/src/batch_interpolate.rs), [src/cmd/batch_args.rs](/tmp/aid-wt-feat/v868/iterate-batch-integration/src/cmd/batch_args.rs), [src/background_spec.rs](/tmp/aid-wt-feat/v868/iterate-batch-integration/src/background_spec.rs), [src/background.rs](/tmp/aid-wt-feat/v868/iterate-batch-integration/src/background.rs), [src/cmd/run.rs](/tmp/aid-wt-feat/v868/iterate-batch-integration/src/cmd/run.rs), and [src/cmd/run_iterate.rs](/tmp/aid-wt-feat/v868/iterate-batch-integration/src/cmd/run_iterate.rs).
-- Added/updated coverage for batch TOML defaults and task overrides, background spec round-trips, run-arg mapping, iterate-loop behavior, and event rendering in [src/batch/tests.rs](/tmp/aid-wt-feat/v868/iterate-batch-integration/src/batch/tests.rs), [src/cmd/batch_tests/run_args.rs](/tmp/aid-wt-feat/v868/iterate-batch-integration/src/cmd/batch_tests/run_args.rs), [src/cmd/run_iterate_tests.rs](/tmp/aid-wt-feat/v868/iterate-batch-integration/src/cmd/run_iterate_tests.rs), and [src/board.rs](/tmp/aid-wt-feat/v868/iterate-batch-integration/src/board.rs).
-- `aid show` now surfaces iterate eval output from event metadata via the task-detail renderer in [src/board.rs](/tmp/aid-wt-feat/v868/iterate-batch-integration/src/board.rs).
-- Verified with `cargo check -p ai-dispatch` and `cargo test -p ai-dispatch --no-run`.
+- `CARGO_TARGET_DIR=/tmp/cc-target-ai-dispatch-claude cargo check -p ai-dispatch`
+- `CARGO_TARGET_DIR=/tmp/cc-target-ai-dispatch-claude cargo test -p ai-dispatch claude -- --nocapture`
+- `AID_HOME=/tmp/aid-claude-check-2 CARGO_TARGET_DIR=/tmp/cc-target-ai-dispatch-claude cargo run -p ai-dispatch -- run claude "say hello"`
+- `AID_HOME=/tmp/aid-claude-check-2 /tmp/cc-target-ai-dispatch-claude/debug/aid show t-de37`

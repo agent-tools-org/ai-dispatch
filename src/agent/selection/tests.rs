@@ -32,9 +32,15 @@ fn select(prompt: &str, dir: &[&str], available: &[AgentKind]) -> (String, Strin
     let store = Store::open_memory().unwrap();
     select_agent_from(prompt, &opts(dir.first().copied(), false), available, &store, None)
 }
-fn all() -> [AgentKind; 5] {
-    [AgentKind::Gemini, AgentKind::OpenCode, AgentKind::Kilo,
-     AgentKind::Cursor, AgentKind::Codex]
+fn all() -> [AgentKind; 6] {
+    [
+        AgentKind::Gemini,
+        AgentKind::Claude,
+        AgentKind::OpenCode,
+        AgentKind::Kilo,
+        AgentKind::Cursor,
+        AgentKind::Codex,
+    ]
 }
 fn insert_task(store: &Store, id: &str, agent: AgentKind, status: &str, cost: Option<f64>) {
     let conn = store.db();
@@ -529,4 +535,19 @@ fn fallback_chain_skips_rate_limited() {
     // Should skip Codex (rate-limited) and pick the next available
     assert!(result.is_some());
     assert_ne!(result.unwrap(), AgentKind::Codex);
+}
+
+#[test]
+fn complex_tasks_prefer_claude_over_lightweight_agents() {
+    let (_temp, _guard) = isolated();
+    let store = Store::open_memory().unwrap();
+    let prompt = "Review the refactor plan, implement the retry flow, and validate the tests.";
+    let (kind, _) = select_agent_from(
+        prompt,
+        &opts(Some("src"), false),
+        &[AgentKind::Claude, AgentKind::OpenCode],
+        &store,
+        None,
+    );
+    assert_eq!(kind, AgentKind::Claude.as_str());
 }

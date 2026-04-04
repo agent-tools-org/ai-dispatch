@@ -1,6 +1,8 @@
 // Agent trait and registry for AI CLI adapters.
 // Each agent knows how to build its CLI command and parse its output.
 
+pub mod claude;
+pub(crate) mod claude_events;
 pub mod codebuff;
 pub mod codex;
 pub mod cursor;
@@ -78,6 +80,7 @@ pub fn detect_agents() -> Vec<AgentKind> {
         ("kilo", AgentKind::Kilo),
         ("aid-codebuff", AgentKind::Codebuff),
         ("oz", AgentKind::Oz),
+        ("claude", AgentKind::Claude),
     ] {
         if env::which_exists(name) {
             found.push(kind);
@@ -104,6 +107,7 @@ pub fn get_agent(kind: AgentKind) -> Box<dyn Agent> {
         AgentKind::Codebuff => Box::new(codebuff::CodebuffAgent),
         AgentKind::Droid => Box::new(droid::DroidAgent),
         AgentKind::Oz => Box::new(oz::OzAgent),
+        AgentKind::Claude => Box::new(claude::ClaudeAgent),
         AgentKind::Custom => panic!("Custom agents must be resolved via resolve_agent()"),
     }
 }

@@ -43,6 +43,9 @@ fn make_task(name: Option<&str>, depends_on: &[&str]) -> BatchTask {
         best_of: None,
         max_duration_mins: None,
         retry: None,
+        iterate: None,
+        eval: None,
+        eval_feedback_template: None,
         idle_timeout: None,
         verify: None,
         judge: None,
@@ -109,6 +112,35 @@ fn parse_batch_metadata_fields() {
 fn result_file_deserializes_from_batch_toml() {
     let config: BatchConfig = toml::from_str("[[tasks]]\nagent = \"codex\"\nprompt = \"test\"\nresult_file = \"result.md\"\n").unwrap();
     assert_eq!(config.tasks[0].result_file.as_deref(), Some("result.md"));
+}
+
+#[test]
+fn iterate_fields_work_in_defaults_and_tasks() {
+    let cfg = parse_batch_file(
+        write_temp(concat!(
+            "[defaults]\nagent = \"codex\"\niterate = 3\neval = \"cargo test\"\n",
+            "eval_feedback_template = \"Round {iteration}/{max_iterations}: {eval_output}\"\n",
+            "[[tasks]]\nname = \"defaulted\"\nprompt = \"fix it\"\n",
+            "[[tasks]]\nname = \"overridden\"\nprompt = \"ship it\"\niterate = 5\n",
+            "eval = \"cargo clippy\"\n",
+            "eval_feedback_template = \"Retry {iteration}: {eval_output}\"\n"
+        ))
+        .path(),
+    )
+    .unwrap();
+
+    assert_eq!(cfg.tasks[0].iterate, Some(3));
+    assert_eq!(cfg.tasks[0].eval.as_deref(), Some("cargo test"));
+    assert_eq!(
+        cfg.tasks[0].eval_feedback_template.as_deref(),
+        Some("Round {iteration}/{max_iterations}: {eval_output}")
+    );
+    assert_eq!(cfg.tasks[1].iterate, Some(5));
+    assert_eq!(cfg.tasks[1].eval.as_deref(), Some("cargo clippy"));
+    assert_eq!(
+        cfg.tasks[1].eval_feedback_template.as_deref(),
+        Some("Retry {iteration}: {eval_output}")
+    );
 }
 
 #[test]

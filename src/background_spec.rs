@@ -21,6 +21,12 @@ pub struct BackgroundRunSpec {
     pub model: Option<String>,
     pub verify: Option<String>,
     #[serde(default)]
+    pub iterate: Option<u32>,
+    #[serde(default)]
+    pub eval: Option<String>,
+    #[serde(default)]
+    pub eval_feedback_template: Option<String>,
+    #[serde(default)]
     pub judge: Option<String>,
     #[serde(default)]
     pub max_duration_mins: Option<i64>,
@@ -123,6 +129,9 @@ mod tests {
             result_file: Some("result.md".to_string()),
             model: Some("gpt-5.4".to_string()),
             verify: Some("cargo check".to_string()),
+            iterate: Some(3),
+            eval: Some("cargo test".to_string()),
+            eval_feedback_template: Some("Iteration {iteration}/{max_iterations}".to_string()),
             judge: Some("cursor".to_string()),
             max_duration_mins: Some(15),
             idle_timeout_secs: Some(60),
@@ -149,10 +158,12 @@ mod tests {
         let value = serde_json::to_value(sample_spec(true)).unwrap();
         assert_eq!(value.get("read_only").and_then(|v| v.as_bool()), Some(true));
         assert_eq!(value.get("result_file").and_then(|v| v.as_str()), Some("result.md"));
+        assert_eq!(value.get("iterate").and_then(|v| v.as_u64()), Some(3));
 
         let decoded: BackgroundRunSpec = serde_json::from_value(value).unwrap();
         assert!(decoded.read_only);
         assert_eq!(decoded.result_file.as_deref(), Some("result.md"));
+        assert_eq!(decoded.eval.as_deref(), Some("cargo test"));
     }
 
     #[test]

@@ -29,6 +29,8 @@ mod run_agent;
 mod run_bestof;
 #[path = "run_lifecycle.rs"]
 mod run_lifecycle;
+#[path = "run_iterate.rs"]
+mod run_iterate;
 use self::run_agent::run_agent_process_with_timeout;
 pub const NO_SKILL_SENTINEL: &str = "__aid_no_skill__";
 #[derive(Clone, Default)]
@@ -45,6 +47,9 @@ pub struct RunArgs {
     pub base_branch: Option<String>,
     pub group: Option<String>,
     pub verify: Option<String>,
+    pub iterate: Option<u32>,
+    pub eval: Option<String>,
+    pub eval_feedback_template: Option<String>,
     pub judge: Option<String>,
     pub peer_review: Option<String>,
     pub max_duration_mins: Option<i64>,
@@ -611,6 +616,9 @@ pub async fn run(store: Arc<Store>, mut args: RunArgs) -> Result<TaskId> {
             result_file: args.result_file.clone(),
             model: effective_model.clone(),
             verify: args.verify.clone(),
+            iterate: args.iterate,
+            eval: args.eval.clone(),
+            eval_feedback_template: args.eval_feedback_template.clone(),
             judge: args.judge.clone(),
             max_duration_mins: args.max_duration_mins,
             idle_timeout_secs: crate::idle_timeout::idle_timeout_secs_from_env(args.env.as_ref()),
@@ -751,6 +759,7 @@ mod checklist_tests;
 
 pub(crate) fn inherit_retry_base_branch(repo_dir: Option<&str>, task: &Task, retry_args: &mut RunArgs) { run_prompt::inherit_retry_base_branch_impl(repo_dir, task, retry_args); }
 pub(crate) use run_agent::run_agent_process;
+pub(crate) use run_iterate::IterateConfig;
 #[cfg(test)]
 fn take_next_cascade_agent(args: &RunArgs) -> Option<(String, Vec<String>)> { run_lifecycle::take_next_cascade_agent(args) }
 #[cfg(test)]
@@ -759,6 +768,16 @@ pub(crate) fn rescue_quota_failed_task(store: &Store, task_id: &TaskId, quota_er
 pub(crate) fn read_quota_error_message(task_id: &TaskId) -> Option<String> { run_lifecycle::read_quota_error_message(task_id) }
 #[cfg(test)]
 fn worktree_is_empty_diff(worktree_dir: &Path) -> Option<bool> { run_lifecycle::worktree_is_empty_diff(worktree_dir) }
+pub(crate) fn retry_target(task: &Task) -> (Option<String>, Option<String>) { run_prompt::retry_target(task) }
+pub(crate) fn iterate_config(args: &RunArgs) -> Result<Option<IterateConfig>> { run_iterate::iterate_config(args) }
+pub(crate) async fn maybe_iterate(
+    store: &Arc<Store>,
+    task_id: &TaskId,
+    args: &RunArgs,
+    iterate_config: &IterateConfig,
+) -> Result<Option<TaskId>> {
+    run_iterate::maybe_iterate(store, task_id, args, iterate_config).await
+}
 
 pub(crate) fn maybe_cleanup_fast_fail(store: &Store, task_id: &TaskId, task: &Task) { run_prompt::maybe_cleanup_fast_fail_impl(store, task_id, task); }
 pub(crate) fn persist_result_file(task_id: &str, result_file: Option<&str>, base_dir: Option<&str>) -> Result<()> {

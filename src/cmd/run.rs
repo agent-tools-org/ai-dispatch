@@ -21,6 +21,8 @@ mod run_agent;
 mod run_bestof;
 #[path = "run_lifecycle.rs"]
 mod run_lifecycle;
+#[path = "run_iterate.rs"]
+mod run_iterate;
 #[path = "run_dispatch_resolve.rs"]
 mod run_dispatch_resolve;
 #[path = "run_dispatch_prepare.rs"]
@@ -31,6 +33,10 @@ mod run_dispatch_execute;
 mod run_dispatch;
 pub(crate) use self::run_agent::run_agent_process;
 pub(crate) use self::run_dispatch::run;
+pub(crate) use self::run_iterate::iterate_config;
+#[allow(unused_imports)]
+pub(crate) use self::run_iterate::IterateConfig;
+pub(crate) use self::run_iterate::maybe_iterate;
 pub(crate) use self::run_args::{NO_SKILL_SENTINEL, RunArgs};
 use self::run_args::{context_file_from_spec, preview_prompt, resolve_max_duration_mins, resolve_prompt_input};
 #[cfg(test)]

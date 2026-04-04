@@ -55,6 +55,12 @@ pub struct BatchDefaults {
     #[serde(default)]
     pub retry: Option<u32>,
     #[serde(default)]
+    pub iterate: Option<u32>,
+    #[serde(default)]
+    pub eval: Option<String>,
+    #[serde(default)]
+    pub eval_feedback_template: Option<String>,
+    #[serde(default)]
     pub idle_timeout: Option<u64>,
     #[serde(default)]
     pub best_of: Option<usize>,
@@ -116,6 +122,12 @@ pub struct BatchTask {
     pub max_duration_mins: Option<u64>,
     #[serde(default)]
     pub retry: Option<u32>,
+    #[serde(default)]
+    pub iterate: Option<u32>,
+    #[serde(default)]
+    pub eval: Option<String>,
+    #[serde(default)]
+    pub eval_feedback_template: Option<String>,
     #[serde(default)]
     pub idle_timeout: Option<u64>,
     #[serde(default)]

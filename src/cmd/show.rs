@@ -200,7 +200,7 @@ pub fn audit_text(store: &Arc<Store>, task_id: &str) -> Result<String> {
         && Path::new(wt_path).exists()
     {
         out.push_str("\nChanges:\n");
-        out.push_str(&diff_stat(wt_path));
+        out.push_str(&diff_stat(wt_path, task.start_sha.as_deref()));
     } else if task.worktree_branch.is_none()
         && matches!(task.status, TaskStatus::Done | TaskStatus::Merged)
     {
@@ -244,7 +244,7 @@ pub fn summary_text(store: &Arc<Store>, task_id: &str) -> Result<String> {
         && Path::new(wt_path).exists()
     {
         out.push_str("\n--- Diff Stat ---\n");
-        out.push_str(&diff_stat(wt_path));
+        out.push_str(&diff_stat(wt_path, task.start_sha.as_deref()));
     } else if task.worktree_branch.is_none()
         && matches!(task.status, TaskStatus::Done | TaskStatus::Merged)
     {

@@ -34,6 +34,7 @@ fn make_task(id: &str) -> Task {
         repo_path: None,
         worktree_path: None,
         worktree_branch: None,
+        start_sha: None,
         log_path: None,
         output_path: None,
         tokens: Some(42),

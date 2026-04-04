@@ -10,6 +10,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use crate::agent::Agent;
+use crate::cmd::run_hung_recovery;
 use crate::input_signal;
 use crate::prompt::PromptDetector;
 use crate::pty_bridge::PtyBridge;
@@ -24,6 +25,7 @@ pub(crate) struct MonitorState {
     full_output: String,
     line_buffer: String,
     event_count: u32,
+    last_event_detail: Option<String>,
     synthetic_tracker: SyntheticMilestoneTracker,
     prompt_detector: PromptDetector,
     awaiting_input: bool,
@@ -43,6 +45,7 @@ impl MonitorState {
             full_output: String::new(),
             line_buffer: String::new(),
             event_count: 0,
+            last_event_detail: None,
             synthetic_tracker: SyntheticMilestoneTracker::new(),
             prompt_detector: PromptDetector::default(),
             awaiting_input: false,
@@ -63,15 +66,16 @@ impl MonitorState {
         self.full_output.push_str(&chunk);
         if streaming {
             self.line_buffer.push_str(&chunk);
-            flush_stream_lines(
-                agent,
-                task_id,
-                store,
-                &mut self.info,
-                &mut self.event_count,
-                &mut self.synthetic_tracker,
-                &mut self.line_buffer,
-            )?;
+                flush_stream_lines(
+                    agent,
+                    task_id,
+                    store,
+                    &mut self.info,
+                    &mut self.event_count,
+                    &mut self.last_event_detail,
+                    &mut self.synthetic_tracker,
+                    &mut self.line_buffer,
+                )?;
         }
         if !self.streaming
             && let Some(prompt) = self.prompt_detector.push_chunk(&chunk, Instant::now())
@@ -142,6 +146,26 @@ impl MonitorState {
         })?;
         Ok(())
     }
+
+    fn progress_count(&self) -> u32 {
+        self.event_count.max(
+            self.full_output
+                .lines()
+                .filter(|line| !line.trim().is_empty())
+                .count() as u32,
+        )
+    }
+
+    fn last_progress_detail(&self) -> Option<String> {
+        self.last_event_detail.clone().or_else(|| {
+            self.full_output
+                .lines()
+                .rev()
+                .map(str::trim)
+                .find(|line| !line.is_empty())
+                .map(str::to_string)
+        })
+    }
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -197,16 +221,13 @@ pub(crate) fn monitor_bridge(
                 if let Some(idle) = idle_timeout
                     && last_output_time.elapsed() > idle {
                         state.info.status = TaskStatus::Failed;
-                        store.insert_event(&TaskEvent {
-                            task_id: task_id.clone(),
-                            timestamp: chrono::Local::now(),
-                            event_kind: EventKind::Error,
-                            detail: format!(
-                                "Agent idle: no output for {} seconds",
-                                idle.as_secs()
-                            ),
-                            metadata: None,
-                        })?;
+                        run_hung_recovery::insert_hung_detected_events(
+                            store.as_ref(),
+                            task_id,
+                            idle.as_secs(),
+                            state.progress_count(),
+                            state.last_progress_detail().as_deref(),
+                        )?;
                         break;
                     }
             }
@@ -217,6 +238,7 @@ pub(crate) fn monitor_bridge(
     }
 
     if streaming && !state.line_buffer.trim().is_empty() {
+        let trailing = state.line_buffer.trim_end_matches(['\r', '\n']);
         watcher::handle_streaming_line(
             agent,
             task_id,
@@ -225,8 +247,11 @@ pub(crate) fn monitor_bridge(
             &mut state.event_count,
             &mut state.synthetic_tracker,
             None,
-            state.line_buffer.trim_end_matches(['\r', '\n']),
+            trailing,
         )?;
+        if !trailing.trim().is_empty() {
+            state.last_event_detail = Some(trailing.trim().to_string());
+        }
     }
     Ok(())
 }
@@ -317,21 +342,29 @@ fn flush_stream_lines(
     store: &Arc<Store>,
     info: &mut CompletionInfo,
     event_count: &mut u32,
+    last_event_detail: &mut Option<String>,
     synthetic_tracker: &mut SyntheticMilestoneTracker,
     line_buffer: &mut String,
 ) -> Result<()> {
     while let Some(pos) = line_buffer.find('\n') {
         let line = line_buffer[..pos].trim_end_matches('\r').to_string();
-        watcher::handle_streaming_line(
-            agent,
-            task_id,
-            store,
+        if let Some(detail) = watcher::handle_streaming_line_with_session(
+            watcher::StreamLineContext {
+                agent,
+                task_id,
+                store,
+                workgroup_id: None,
+                synthetic_tracker,
+            },
             info,
             event_count,
-            synthetic_tracker,
-            None,
             &line,
-        )?;
+            &mut false,
+        )? {
+            *last_event_detail = Some(detail);
+        } else if !line.trim().is_empty() {
+            *last_event_detail = Some(line.trim().to_string());
+        }
         line_buffer.drain(..=pos);
     }
     Ok(())

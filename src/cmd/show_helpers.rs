@@ -10,7 +10,7 @@ use std::sync::Arc;
 
 use crate::paths;
 use crate::store::Store;
-use crate::types::{Task, VerifyStatus};
+use crate::types::{EventKind, Task, TaskEvent, VerifyStatus};
 
 use super::extract_messages_from_log;
 
@@ -113,6 +113,26 @@ pub(super) fn stderr_tail(task_id: &str) -> Option<String> {
     }
     for line in &lines[start..] {
         out.push_str(&format!("  {line}\n"));
+    }
+    Some(out)
+}
+
+pub(super) fn failure_details(events: &[TaskEvent]) -> Option<String> {
+    let errors: Vec<&TaskEvent> = events
+        .iter()
+        .filter(|event| event.event_kind == EventKind::Error)
+        .collect();
+    if errors.is_empty() {
+        return None;
+    }
+    let start = errors.len().saturating_sub(3);
+    let mut out = String::new();
+    for event in &errors[start..] {
+        for line in event.detail.lines() {
+            out.push_str("  ");
+            out.push_str(line);
+            out.push('\n');
+        }
     }
     Some(out)
 }

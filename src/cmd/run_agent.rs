@@ -1,7 +1,7 @@
 // Agent process lifecycle helpers for `aid run`.
 // Exports run_agent_process, run_agent_process_with_timeout, and streaming/output helpers.
 // Depends on run_prompt, watcher, cost estimation, and store/event types.
-use anyhow::{Context, Result};
+use anyhow::Result;
 use chrono::Local;
 use serde_json::Value;
 use std::path::Path;
@@ -87,9 +87,25 @@ pub(crate) async fn run_agent_process_with_timeout(
     let deadline = Duration::from_secs(timeout_mins * 60);
     let start = Instant::now();
     let idle_timeout = crate::idle_timeout::idle_timeout_from_tokio_command(&cmd);
+    let failure_context = run_prompt::capture_failure_context(store.as_ref(), task_id, &cmd);
     #[cfg(unix)]
     cmd.process_group(0);
-    let mut child = spawn_child_with_log(&mut cmd, log_path).context("Failed to spawn agent process")?;
+    let mut child = match spawn_child_with_log(&mut cmd, log_path) {
+        Ok(child) => child,
+        Err(err) => {
+            let err = err.context("Failed to spawn agent process");
+            let stderr = run_prompt::stderr_excerpt(task_id)
+                .or_else(|| Some("unavailable (process did not start)".to_string()));
+            run_prompt::insert_phase_error_event(
+                store.as_ref(),
+                task_id,
+                "agent spawn",
+                &err.to_string(),
+                stderr.as_deref(),
+            );
+            return Err(err);
+        }
+    };
     if let Some(pid) = child.id() {
         if let Ok(task_id_str) = std::env::var("AID_TASK_ID") {
             let _ = crate::background::update_agent_pid(&task_id_str, pid);
@@ -146,6 +162,17 @@ pub(crate) async fn run_agent_process_with_timeout(
                 run_prompt::clean_output_if_jsonl(out_path)?;
             }
             let duration_ms = start.elapsed().as_millis() as i64;
+            let exit_code =
+                run_prompt::resolve_failure_exit_code(store.as_ref(), task_id, info.exit_code);
+            if info.status == TaskStatus::Failed {
+                run_prompt::record_execution_failure(
+                    store.as_ref(),
+                    task_id,
+                    duration_ms,
+                    exit_code,
+                    &failure_context,
+                );
+            }
             let final_model = info.model.as_deref().or(model);
             let cost_usd = info.cost_usd.or_else(|| {
                 info.tokens
@@ -158,7 +185,7 @@ pub(crate) async fn run_agent_process_with_timeout(
                 duration_ms,
                 model: final_model,
                 cost_usd,
-                exit_code: info.exit_code,
+                exit_code,
             })?;
             crate::state::refresh_project_state(store.as_ref(), task_id);
             let duration_str = format_duration(duration_ms);
@@ -181,7 +208,17 @@ pub(crate) async fn run_agent_process_with_timeout(
             );
             Ok(())
         }
-        Ok(Err(err)) => Err(err),
+        Ok(Err(err)) => {
+            let stderr = run_prompt::stderr_excerpt(task_id);
+            run_prompt::insert_phase_error_event(
+                store.as_ref(),
+                task_id,
+                "execution",
+                &err.to_string(),
+                stderr.as_deref(),
+            );
+            Err(err)
+        }
         Err(_) => {
             let duration_ms = start.elapsed().as_millis() as i64;
             store.update_task_completion(TaskCompletionUpdate {
@@ -194,12 +231,12 @@ pub(crate) async fn run_agent_process_with_timeout(
                 exit_code: None,
             })?;
             crate::state::refresh_project_state(store.as_ref(), task_id);
-            let detail = format!("Task killed: exceeded {timeout_mins}m timeout");
+            let detail = format!("exceeded {timeout_mins}m timeout");
             let event = TaskEvent {
                 task_id: task_id.clone(),
                 timestamp: Local::now(),
                 event_kind: EventKind::Error,
-                detail: detail.clone(),
+                detail: format!("Failed during execution: {detail}"),
                 metadata: None,
             };
             let _ = store.insert_event(&event);

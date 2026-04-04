@@ -4,7 +4,7 @@
 use super::show_json::task_json;
 use super::*;
 use crate::cmd::summary::CompletionSummary;
-use crate::types::{AgentKind, Task, TaskId, TaskStatus, VerifyStatus};
+use crate::types::{AgentKind, EventKind, Task, TaskEvent, TaskId, TaskStatus, VerifyStatus};
 use chrono::Local;
 use std::path::Path;
 use std::process::Command;
@@ -182,6 +182,29 @@ fn audit_text_shows_pending_reason() {
     let text = audit_text(&store, task.id.as_str()).unwrap();
 
     assert!(text.contains("Pending reason: agent_starting"));
+}
+
+#[test]
+fn audit_text_shows_full_failure_details() {
+    let store = Arc::new(Store::open_memory().unwrap());
+    let mut task = research_task("t-show-failure-details", Path::new("."));
+    task.status = TaskStatus::Failed;
+    store.insert_task(&task).unwrap();
+    store
+        .insert_event(&TaskEvent {
+            task_id: task.id.clone(),
+            timestamp: Local::now(),
+            event_kind: EventKind::Error,
+            detail: "Failed during execution: agent exited with code 1\nFailure context: working directory: /tmp/demo; agent binary: /bin/sh; worktree path: /tmp/aid-wt-demo; worktree created: true".to_string(),
+            metadata: None,
+        })
+        .unwrap();
+
+    let text = audit_text(&store, task.id.as_str()).unwrap();
+
+    assert!(text.contains("Failure details:"));
+    assert!(text.contains("Failed during execution: agent exited with code 1"));
+    assert!(text.contains("Failure context: working directory: /tmp/demo; agent binary: /bin/sh; worktree path: /tmp/aid-wt-demo; worktree created: true"));
 }
 
 #[test]

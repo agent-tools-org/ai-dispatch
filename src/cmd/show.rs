@@ -35,8 +35,8 @@ pub(crate) use show_json::task_hook_json;
 
 use show_json::task_json;
 use show_helpers::{
-    completion_conclusion, inplace_diff_stat, reconstruct_context, research_findings,
-    stderr_tail, task_has_changes,
+    completion_conclusion, failure_details, inplace_diff_stat, reconstruct_context,
+    research_findings, stderr_tail, task_has_changes,
 };
 
 pub struct ShowArgs {
@@ -185,6 +185,13 @@ pub fn audit_text(store: &Arc<Store>, task_id: &str) -> Result<String> {
     if let Some(checklist) = cmd::show_checklist::render_checklist_status(store.as_ref(), &task) {
         out.push('\n');
         out.push_str(&checklist);
+    }
+
+    if task.status == TaskStatus::Failed
+        && let Some(details) = failure_details(&events)
+    {
+        out.push_str("\nFailure details:\n");
+        out.push_str(&details);
     }
 
     if task.status == TaskStatus::Failed

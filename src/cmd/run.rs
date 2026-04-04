@@ -352,37 +352,85 @@ pub async fn run(store: Arc<Store>, mut args: RunArgs) -> Result<TaskId> {
     let log_path = paths::log_path(task_id.as_str());
     let workgroup = run_prompt::load_workgroup(&store, args.group.as_deref())?;
     let explicit_repo_path = args.repo.as_deref().map(run_prompt::resolve_repo_path).transpose()?;
-    // Create worktree if requested, override dir to point into it
-    let (wt_path, wt_branch, effective_dir, resolved_repo) = run_prompt::resolve_worktree_paths(&args, explicit_repo_path.as_deref())?;
-    // Use resolved repo_path (always set when worktree is created, even without --repo)
-    let repo_path = resolved_repo.clone().or(explicit_repo_path);
-    // Check worktree lock — prevent concurrent agent access to the same worktree
-    if let Some(ref wt) = wt_path {
-        if let Some(holder) = crate::worktree::check_worktree_lock(Path::new(wt)) {
-            anyhow::bail!(
-                "Worktree {wt} is locked by task {holder} — concurrent access prevented. \
-                 Use separate worktree names for parallel tasks."
-            );
-        }
-        crate::worktree::write_worktree_lock(Path::new(wt), task_id.as_str());
-    }
-    if let (Some(wt), Some(repo)) = (wt_path.as_deref(), repo_path.as_deref()) {
-        let context_files: Vec<String> =
-            args.context.iter().map(|spec| context_file_from_spec(spec)).collect();
-        let synced = crate::worktree::sync_context_files_into_worktree(
-            Path::new(repo),
-            Path::new(wt),
-            &context_files,
-        );
-        if !synced.is_empty() {
-            aid_info!(
-                "[aid] Synced {} context file(s) into worktree: {}",
-                synced.len(),
-                synced.join(", ")
-            );
-        }
-    }
     let caller = session::current_caller();
+    // Create worktree if requested, override dir to point into it
+    let worktree_setup = (|| -> Result<_> {
+        let (wt_path, wt_branch, effective_dir, resolved_repo) =
+            run_prompt::resolve_worktree_paths(&args, explicit_repo_path.as_deref())?;
+        let repo_path = resolved_repo.clone().or(explicit_repo_path.clone());
+        if let Some(ref wt) = wt_path {
+            if let Some(holder) = crate::worktree::check_worktree_lock(Path::new(wt)) {
+                anyhow::bail!(
+                    "Worktree {wt} is locked by task {holder} — concurrent access prevented. \
+                     Use separate worktree names for parallel tasks."
+                );
+            }
+            crate::worktree::write_worktree_lock(Path::new(wt), task_id.as_str());
+        }
+        if let (Some(wt), Some(repo)) = (wt_path.as_deref(), repo_path.as_deref()) {
+            let context_files: Vec<String> =
+                args.context.iter().map(|spec| context_file_from_spec(spec)).collect();
+            let synced = crate::worktree::sync_context_files_into_worktree(
+                Path::new(repo),
+                Path::new(wt),
+                &context_files,
+            );
+            if !synced.is_empty() {
+                aid_info!(
+                    "[aid] Synced {} context file(s) into worktree: {}",
+                    synced.len(),
+                    synced.join(", ")
+                );
+            }
+        }
+        Ok((wt_path, wt_branch, effective_dir, repo_path))
+    })();
+    let (wt_path, wt_branch, effective_dir, repo_path) = match worktree_setup {
+        Ok(paths) => paths,
+        Err(err) => {
+            let failed_task = Task {
+                id: task_id.clone(),
+                agent: agent_kind,
+                custom_agent_name: custom_agent_name.clone(),
+                prompt: args.prompt.clone(),
+                resolved_prompt: None,
+                category: None,
+                status: TaskStatus::Failed,
+                parent_task_id: args.parent_task_id.clone(),
+                workgroup_id: args.group.clone(),
+                caller_kind: caller.as_ref().map(|item| item.kind.clone()),
+                caller_session_id: caller.as_ref().map(|item| item.session_id.clone()),
+                agent_session_id: None,
+                repo_path: explicit_repo_path.clone(),
+                worktree_path: None,
+                worktree_branch: args.worktree.clone(),
+                log_path: Some(log_path.to_string_lossy().to_string()),
+                output_path: args.output.clone(),
+                tokens: None,
+                prompt_tokens: None,
+                duration_ms: Some(0),
+                model: effective_model.clone(),
+                cost_usd: None,
+                exit_code: None,
+                created_at: Local::now(),
+                completed_at: Some(Local::now()),
+                verify: args.verify.clone(),
+                verify_status: VerifyStatus::Skipped,
+                pending_reason: None,
+                read_only: args.read_only,
+                budget: args.budget,
+            };
+            let _ = store.insert_task(&failed_task);
+            run_prompt::insert_phase_error_event(
+                &store,
+                &task_id,
+                "worktree setup",
+                &err.to_string(),
+                None,
+            );
+            return Err(err);
+        }
+    };
     let mut task = Task {
         id: task_id.clone(),
         agent: agent_kind,

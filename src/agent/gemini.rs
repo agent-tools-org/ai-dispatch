@@ -6,7 +6,15 @@ use chrono::Local;
 use serde_json::json;
 use std::process::Command;
 
+#[path = "gemini_support.rs"]
+mod support;
+
+use self::support::{
+    classify_tool_result, extract_completion_stats, extract_error_detail, extract_model,
+    extract_tokens, extract_tool_arguments, extract_tool_name,
+};
 use super::RunOpts;
+use crate::rate_limit;
 use crate::types::*;
 
 pub struct GeminiAgent;
@@ -23,6 +31,7 @@ impl super::Agent for GeminiAgent {
     fn build_command(&self, prompt: &str, opts: &RunOpts) -> Result<Command> {
         let mut cmd = Command::new("gemini");
         cmd.args(["-o", "stream-json"]);
+        // Gemini v0.36 has native sandboxing, but aid manages sandboxing outside the adapter.
         if opts.read_only {
             cmd.args(["--approval-mode", "plan"]);
         } else {
@@ -30,6 +39,9 @@ impl super::Agent for GeminiAgent {
         }
         if let Some(ref model) = opts.model {
             cmd.args(["-m", model]);
+        }
+        for dir in support::gemini_include_directories(opts.dir.as_deref(), &opts.context_files) {
+            cmd.args(["--include-directories", &dir]);
         }
         cmd.args(["-p", prompt]);
         if let Some(ref dir) = opts.dir {
@@ -80,7 +92,7 @@ fn parse_stream_event(task_id: &TaskId, v: &serde_json::Value, now: chrono::Date
         }
         "tool_call" | "tool_use" => {
             let name = extract_tool_name(v).unwrap_or("unknown");
-            let args = truncate(&extract_tool_arguments(v).unwrap_or_default(), 100);
+            let args = support::truncate(&extract_tool_arguments(v).unwrap_or_default(), 100);
             (EventKind::ToolCall, format!("{name}({args})"), None)
         }
         "tool_result" => {
@@ -88,6 +100,13 @@ fn parse_stream_event(task_id: &TaskId, v: &serde_json::Value, now: chrono::Date
             let output = v.get("output").and_then(|o| o.as_str()).unwrap_or("");
             let (k, d) = classify_tool_result(name, output);
             (k, d, None)
+        }
+        "error" => {
+            let detail = extract_error_detail(v)?;
+            if support::is_gemini_rate_limit_error(&detail) {
+                rate_limit::mark_rate_limited(&AgentKind::Gemini, &detail);
+            }
+            (EventKind::Error, support::truncate(&detail, 80), None)
         }
         // "turn_complete" (pre-0.35) and "result" (0.35+) carry completion stats
         "turn_complete" | "result" => {
@@ -99,102 +118,12 @@ fn parse_stream_event(task_id: &TaskId, v: &serde_json::Value, now: chrono::Date
             let meta = tokens.map(|t| json!({ "tokens": t, "model": model }));
             (EventKind::Completion, detail, meta)
         }
+        kind if support::is_skill_or_hook_event(kind) => {
+            (EventKind::Milestone, support::milestone_detail(kind, v), None)
+        }
         _ => return None,
     };
     Some(TaskEvent { task_id: task_id.clone(), timestamp: now, event_kind: kind, detail, metadata })
-}
-
-fn extract_tool_name<'a>(v: &'a serde_json::Value) -> Option<&'a str> {
-    v.get("tool_name")
-        .and_then(|value| value.as_str())
-        .or_else(|| v.get("name").and_then(|value| value.as_str()))
-        .or_else(|| v.pointer("/functionCall/name").and_then(|value| value.as_str()))
-        .or_else(|| v.get("function_call").and_then(|value| value.as_str()))
-        .or_else(|| {
-            v.get("function_call")
-                .and_then(|value| value.get("name"))
-                .and_then(|value| value.as_str())
-        })
-        .or_else(|| v.get("toolName").and_then(|value| value.as_str()))
-        .or_else(|| v.get("tool").and_then(|value| value.as_str()))
-        .or_else(|| {
-            v.get("tool")
-                .and_then(|value| value.get("name"))
-                .and_then(|value| value.as_str())
-        })
-}
-
-fn extract_tool_arguments(v: &serde_json::Value) -> Option<String> {
-    [
-        v.get("arguments"),
-        v.pointer("/functionCall/args"),
-        v.get("parameters"),
-        v.get("input"),
-    ]
-    .into_iter()
-    .flatten()
-    .find_map(stringify_value)
-}
-
-fn stringify_value(value: &serde_json::Value) -> Option<String> {
-    match value {
-        serde_json::Value::Null => None,
-        serde_json::Value::String(text) => Some(text.clone()),
-        other => Some(other.to_string()),
-    }
-}
-
-fn classify_tool_result(name: &str, output: &str) -> (EventKind, String) {
-    let lower_output = output.to_lowercase();
-    let lower_name = name.to_lowercase();
-    
-    if lower_output.contains("error") || lower_output.contains("failed") || lower_output.contains("failure") {
-        (EventKind::Error, format!("{}: {}", name, truncate(output, 80)))
-    } else if lower_name.contains("test") || lower_output.contains("test") || lower_output.contains("passed") || lower_output.contains("failed") {
-        (EventKind::Test, format!("{}: {}", name, truncate(output, 80)))
-    } else if lower_name.contains("build") || lower_name.contains("compile") || lower_output.contains("compiled") || lower_output.contains("built") {
-        (EventKind::Build, format!("{}: {}", name, truncate(output, 80)))
-    } else {
-        (EventKind::ToolCall, format!("{}: {}", name, truncate(output, 80)))
-    }
-}
-
-fn truncate(s: &str, max_len: usize) -> String {
-    if s.len() <= max_len {
-        s.to_string()
-    } else {
-        let safe = s.floor_char_boundary(max_len.saturating_sub(3));
-        format!("{}...", &s[..safe])
-    }
-}
-
-/// Extract tokens + model from stats in both old and new gemini-cli formats.
-/// Old (pre-0.35): stats.models = [{model, tokens:{total}}]
-/// New (0.35+):    stats.total_tokens at top level, stats.models = {"name": {total_tokens}}
-fn extract_completion_stats(v: &serde_json::Value) -> (Option<i64>, Option<String>) {
-    let stats = match v.get("stats") {
-        Some(s) => s,
-        None => return (None, None),
-    };
-    // New format: top-level total_tokens
-    if let Some(total) = stats.get("total_tokens").and_then(|t| t.as_i64()) {
-        let model = stats
-            .get("models")
-            .and_then(|m| m.as_object())
-            .and_then(|obj| obj.keys().next().cloned());
-        return (Some(total), model);
-    }
-    // Old format: models array with tokens.total
-    if let Some(arr) = stats.get("models").and_then(|m| m.as_array()) {
-        let first = match arr.first() {
-            Some(m) => m,
-            None => return (None, None),
-        };
-        let tokens = first.pointer("/tokens/total").and_then(|t| t.as_i64());
-        let model = first.get("model").and_then(|m| m.as_str()).map(|s| s.to_string());
-        return (tokens, model);
-    }
-    (None, None)
 }
 
 pub fn extract_response(output: &str) -> Option<String> {
@@ -256,51 +185,6 @@ pub fn extract_response(output: &str) -> Option<String> {
     None
 }
 
-/// Extract total token count from gemini stats (both old and new formats).
-fn extract_tokens(v: &serde_json::Value) -> Option<i64> {
-    // New format: top-level stats.total_tokens
-    if let Some(total) = v.pointer("/stats/total_tokens").and_then(|t| t.as_i64()) {
-        return Some(total);
-    }
-    // Old format: stats.models array with tokens.total
-    if let Some(arr) = v.pointer("/stats/models").and_then(|m| m.as_array()) {
-        let total: i64 = arr
-            .iter()
-            .filter_map(|m| m.pointer("/tokens/total").and_then(|t| t.as_i64()))
-            .sum();
-        if total > 0 {
-            return Some(total);
-        }
-    }
-    // New format: models as object with total_tokens per model
-    if let Some(obj) = v.pointer("/stats/models").and_then(|m| m.as_object()) {
-        let total: i64 = obj
-            .values()
-            .filter_map(|m| m.get("total_tokens").and_then(|t| t.as_i64()))
-            .sum();
-        if total > 0 {
-            return Some(total);
-        }
-    }
-    v.pointer("/usageMetadata/totalTokenCount")
-        .and_then(|t| t.as_i64())
-}
-
-fn extract_model(v: &serde_json::Value) -> Option<String> {
-    for path in ["/modelVersion", "/model", "/stats/models/0/model"] {
-        if let Some(m) = v.pointer(path).and_then(|v| v.as_str()) {
-            return Some(m.to_string());
-        }
-    }
-    // New format: stats.models is an object keyed by model name
-    if let Some(obj) = v.pointer("/stats/models").and_then(|m| m.as_object()) {
-        if let Some(name) = obj.keys().next() {
-            return Some(name.clone());
-        }
-    }
-    None
-}
-
 /// Create a completion event for gemini tasks
 pub fn make_completion_event(task_id: &TaskId, info: &CompletionInfo) -> TaskEvent {
     let detail = match info.tokens {
@@ -320,3 +204,7 @@ pub fn make_completion_event(task_id: &TaskId, info: &CompletionInfo) -> TaskEve
 #[cfg(test)]
 #[path = "gemini_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "gemini_v036_tests.rs"]
+mod v036_tests;

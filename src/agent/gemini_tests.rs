@@ -2,7 +2,6 @@
 // Validates event parsing, token extraction, model detection, and response extraction.
 
 use super::*;
-
 #[test]
 fn test_extract_model() {
     let json = serde_json::json!({

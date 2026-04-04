@@ -351,6 +351,41 @@ async fn dry_run_returns_without_starting_task() {
 }
 
 #[tokio::test]
+async fn run_records_worktree_setup_failure_event() {
+    let temp = TempDir::new().unwrap();
+    let _aid_home = paths::AidHomeGuard::set(temp.path());
+    crate::paths::ensure_dirs().unwrap();
+    let store = Arc::new(Store::open_memory().unwrap());
+    let task_id = TaskId("t-worktree-fail".to_string());
+
+    let err = run(
+        store.clone(),
+        RunArgs {
+            agent_name: "codex".to_string(),
+            prompt: "Inspect the repository state".to_string(),
+            dir: Some(temp.path().display().to_string()),
+            worktree: Some("aid-worktree-fail".to_string()),
+            dry_run: true,
+            skills: vec![NO_SKILL_SENTINEL.to_string()],
+            existing_task_id: Some(task_id.clone()),
+            ..Default::default()
+        },
+    )
+    .await
+    .unwrap_err();
+
+    assert!(err.to_string().contains("Not a git repository"));
+    assert_eq!(
+        store.get_task(task_id.as_str()).unwrap().unwrap().status,
+        TaskStatus::Failed
+    );
+    let events = store.get_events(task_id.as_str()).unwrap();
+    assert!(events.iter().any(|event| {
+        event.detail.contains("Failed during worktree setup: Not a git repository")
+    }));
+}
+
+#[tokio::test]
 async fn rate_limited_agent_without_cascade_fails_early() {
     let temp = TempDir::new().unwrap();
     let _aid_home = paths::AidHomeGuard::set(temp.path());

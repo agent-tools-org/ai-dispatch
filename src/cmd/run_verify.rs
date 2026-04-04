@@ -57,12 +57,57 @@ pub(in crate::cmd) fn maybe_verify_impl(
             println!("{report}");
             crate::verify::record_verify_status(store, task_id, &result);
             if !result.success {
-                let event = TaskEvent { task_id: task_id.clone(), timestamp: Local::now(), event_kind: EventKind::Error, detail: format!("Verification failed: {}", result.command), metadata: None };
+                let detail = match verify_output_excerpt(&result.output) {
+                    Some(output) => {
+                        format!(
+                            "Failed during verification: {}\nOutput: {}",
+                            result.command, output
+                        )
+                    }
+                    None => format!("Failed during verification: {}", result.command),
+                };
+                let event = TaskEvent {
+                    task_id: task_id.clone(),
+                    timestamp: Local::now(),
+                    event_kind: EventKind::Error,
+                    detail,
+                    metadata: None,
+                };
                 let _ = store.insert_event(&event);
             }
         }
-        Err(e) => aid_error!("Verify error: {e}"),
+        Err(e) => {
+            let event = TaskEvent {
+                task_id: task_id.clone(),
+                timestamp: Local::now(),
+                event_kind: EventKind::Error,
+                detail: format!("Failed during verification: {e}"),
+                metadata: None,
+            };
+            let _ = store.insert_event(&event);
+            aid_error!("Verify error: {e}");
+        }
     }
+}
+
+fn verify_output_excerpt(output: &str) -> Option<String> {
+    let lines: Vec<&str> = output
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+        .collect();
+    if lines.is_empty() {
+        return None;
+    }
+    let start = lines.len().saturating_sub(8);
+    let excerpt = lines[start..].join(" | ");
+    Some(if excerpt.chars().count() > 400 {
+        let mut truncated: String = excerpt.chars().take(400).collect();
+        truncated.push_str("...");
+        truncated
+    } else {
+        excerpt
+    })
 }
 
 pub(in crate::cmd) async fn maybe_auto_retry_after_verify_failure_impl(
@@ -155,4 +200,24 @@ pub(in crate::cmd) async fn maybe_auto_retry_after_checklist_miss_impl(
         retry_args.session_id = task.agent_session_id.clone();
     }
     Box::pin(super::super::run(store.clone(), retry_args)).await.map(Some)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn verify_output_excerpt_keeps_last_lines() {
+        let output = (1..=10)
+            .map(|idx| format!("line {idx}"))
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        let excerpt = verify_output_excerpt(&output).unwrap();
+
+        assert_eq!(
+            excerpt,
+            "line 3 | line 4 | line 5 | line 6 | line 7 | line 8 | line 9 | line 10"
+        );
+    }
 }

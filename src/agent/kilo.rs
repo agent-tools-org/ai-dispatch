@@ -32,9 +32,14 @@ impl super::Agent for KiloAgent {
         cmd.arg("run");
         cmd.arg("--auto");
         cmd.args(["--format", "json"]);
+        cmd.arg("--thinking");
         if let Some(ref session_id) = opts.session_id {
             cmd.args(["--session", session_id]);
             cmd.arg("--continue");
+            cmd.arg("--fork");
+        }
+        if opts.budget {
+            cmd.args(["--variant", "minimal"]);
         }
         if let Some(ref model) = opts.model {
             cmd.args(["-m", model]);
@@ -99,7 +104,9 @@ mod tests {
             env: None,
             env_forward: None,
         };
-        let cmd = KiloAgent.build_command("test prompt", &opts).unwrap();
+        let cmd = KiloAgent
+            .build_command("test prompt", &opts)
+            .expect("command should build");
         let args: Vec<String> = cmd
             .get_args()
             .map(|a| a.to_string_lossy().to_string())
@@ -107,6 +114,7 @@ mod tests {
         assert!(args.contains(&"--auto".to_string()));
         assert!(args.contains(&"--format".to_string()));
         assert!(args.contains(&"json".to_string()));
+        assert!(args.contains(&"--thinking".to_string()));
     }
 
     #[test]
@@ -122,7 +130,9 @@ mod tests {
             env: None,
             env_forward: None,
         };
-        let cmd = KiloAgent.build_command("test", &opts).unwrap();
+        let cmd = KiloAgent
+            .build_command("test", &opts)
+            .expect("command should build");
         let args: Vec<String> = cmd
             .get_args()
             .map(|a| a.to_string_lossy().to_string())
@@ -130,6 +140,7 @@ mod tests {
         assert!(args.contains(&"--session".to_string()));
         assert!(args.contains(&"ses_abc".to_string()));
         assert!(args.contains(&"--continue".to_string()));
+        assert!(args.contains(&"--fork".to_string()));
     }
 
     #[test]
@@ -145,7 +156,9 @@ mod tests {
             env: None,
             env_forward: None,
         };
-        let cmd = KiloAgent.build_command("test", &opts).unwrap();
+        let cmd = KiloAgent
+            .build_command("test", &opts)
+            .expect("command should build");
         let args: Vec<String> = cmd
             .get_args()
             .map(|a| a.to_string_lossy().to_string())
@@ -167,8 +180,33 @@ mod tests {
             env: None,
             env_forward: None,
         };
-        let cmd = KiloAgent.build_command("test", &opts).unwrap();
-        let dir = cmd.get_current_dir().unwrap();
+        let cmd = KiloAgent
+            .build_command("test", &opts)
+            .expect("command should build");
+        let dir = cmd.get_current_dir().expect("dir should be set");
         assert_eq!(dir, std::path::Path::new("/tmp/wt"));
+    }
+
+    #[test]
+    fn build_command_sets_minimal_variant_in_budget_mode() {
+        let opts = RunOpts {
+            dir: None,
+            output: None,
+            model: None,
+            budget: true,
+            read_only: false,
+            context_files: vec![],
+            session_id: None,
+            env: None,
+            env_forward: None,
+        };
+        let cmd = KiloAgent
+            .build_command("test", &opts)
+            .expect("command should build");
+        let args: Vec<String> = cmd
+            .get_args()
+            .map(|a| a.to_string_lossy().to_string())
+            .collect();
+        assert!(args.windows(2).any(|pair| pair == ["--variant", "minimal"]));
     }
 }

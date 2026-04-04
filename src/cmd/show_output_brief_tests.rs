@@ -26,6 +26,7 @@ fn test_task(id: &str, worktree: &Path) -> Task {
         repo_path: None,
         worktree_path: Some(worktree.display().to_string()),
         worktree_branch: None,
+        start_sha: None,
         log_path: None,
         output_path: None,
         tokens: None,

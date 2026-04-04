@@ -7,6 +7,7 @@ use crate::agent::{self, RunOpts};
 use crate::agent_config;
 use crate::background::{self, BackgroundRunSpec};
 use crate::cmd::{config as cmd_config, judge, retry_logic, show};
+use crate::commit;
 use crate::config;
 use crate::hooks;
 use crate::paths;
@@ -399,6 +400,7 @@ pub async fn run(store: Arc<Store>, mut args: RunArgs) -> Result<TaskId> {
         repo_path: repo_path.clone(),
         worktree_path: wt_path.clone(),
         worktree_branch: wt_branch,
+        start_sha: None,
         log_path: Some(log_path.to_string_lossy().to_string()),
         output_path: args.output.clone(),
         tokens: None,
@@ -503,6 +505,11 @@ pub async fn run(store: Arc<Store>, mut args: RunArgs) -> Result<TaskId> {
     };
     let mut runtime_hooks = hooks::load_hooks()?;
     runtime_hooks.extend(hooks::parse_cli_hooks(&args.hooks)?);
+    if let Some(ref dir) = effective_dir
+        && let Ok(start_sha) = commit::head_sha(dir)
+    {
+        store.update_start_sha(task_id.as_str(), &start_sha)?;
+    }
     let container_name = if let Some(image) = args.container.as_deref() {
         let project_dir = effective_dir.as_deref().map(Path::new).unwrap_or_else(|| Path::new("."));
         let project_id = detected_project.as_ref().map(|project| project.id.as_str()).unwrap_or(task_id.as_str());

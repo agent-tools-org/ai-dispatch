@@ -21,6 +21,7 @@ fn make_task(id: &str, status: TaskStatus, verify_status: VerifyStatus) -> Task 
         category: None,
         parent_task_id: None, workgroup_id: None, caller_kind: None, caller_session_id: None,
         agent_session_id: None, repo_path: None, worktree_path: None, worktree_branch: None,
+        start_sha: None,
         log_path: None, output_path: None, tokens: None, prompt_tokens: None, duration_ms: None,
         model: None, cost_usd: None, exit_code: None,
         created_at: Local::now(),

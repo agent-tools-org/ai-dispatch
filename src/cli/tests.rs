@@ -109,6 +109,39 @@ fn run_prompt_file_flag_parses_without_positional_prompt() {
 }
 
 #[test]
+fn run_iterate_flags_parse() {
+    let cli = Cli::try_parse_from([
+        "aid",
+        "run",
+        "codex",
+        "task",
+        "--iterate",
+        "3",
+        "--eval",
+        "echo ok",
+        "--eval-feedback-template",
+        "Iteration {iteration}/{max_iterations}: {eval_output}",
+    ])
+    .unwrap();
+    match cli.command {
+        Some(Commands::Run(command_args_a::RunArgs {
+            iterate,
+            eval,
+            eval_feedback_template,
+            ..
+        })) => {
+            assert_eq!(iterate, Some(3));
+            assert_eq!(eval, Some("echo ok".to_string()));
+            assert_eq!(
+                eval_feedback_template,
+                Some("Iteration {iteration}/{max_iterations}: {eval_output}".to_string())
+            );
+        }
+        _ => panic!("expected Run"),
+    }
+}
+
+#[test]
 fn watch_timeout_flag_parses() {
     let cli = Cli::try_parse_from(["aid", "watch", "--quiet", "--timeout", "60", "--group", "wg-a"]).unwrap();
     match cli.command {

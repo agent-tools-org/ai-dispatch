@@ -60,6 +60,7 @@ fn resolve_pricing(model: Option<&str>, agent: AgentKind) -> Option<ModelPricing
             input_per_m: 0.0,
             output_per_m: 0.0,
         }),
+        AgentKind::Claude => None,
         AgentKind::Codebuff => None, // Cost tracked by codebuff SDK
         AgentKind::Droid => None,    // BYOK (API key)
         AgentKind::Oz => None,       // Reports own cost via events
@@ -150,12 +151,17 @@ fn model_pricing(model: &str, agent: AgentKind) -> Option<ModelPricing> {
             input_per_m: 1.25,
             output_per_m: 10.0,
         }
-    } else if m.contains("claude-sonnet-4") || m.contains("claude-4-sonnet") {
+    } else if m == "haiku" || m.contains("claude-haiku") {
+        ModelPricing {
+            input_per_m: 0.8,
+            output_per_m: 4.0,
+        }
+    } else if m == "sonnet" || m.contains("claude-sonnet-4") || m.contains("claude-4-sonnet") {
         ModelPricing {
             input_per_m: 3.0,
             output_per_m: 15.0,
         }
-    } else if m.contains("claude-opus-4") || m.contains("claude-opus-4-6") {
+    } else if m == "opus" || m.contains("claude-opus-4") || m.contains("claude-opus-4-6") {
         ModelPricing {
             input_per_m: 15.0,
             output_per_m: 75.0,

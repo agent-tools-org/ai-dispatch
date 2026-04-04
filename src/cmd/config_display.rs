@@ -123,7 +123,7 @@ fn render_rate_limit_line(kind: AgentKind) -> String {
 
 pub(crate) fn compute_agent_history(tasks: &[Task]) -> HashMap<AgentKind, AgentHistory> {
     let mut history = HashMap::new();
-    for agent in [AgentKind::Codex, AgentKind::Gemini, AgentKind::OpenCode, AgentKind::Cursor, AgentKind::Kilo] {
+    for &agent in AgentKind::ALL_BUILTIN {
         let agent_tasks: Vec<_> = tasks.iter().filter(|task| task.agent == agent).collect();
         if agent_tasks.is_empty() {
             continue;

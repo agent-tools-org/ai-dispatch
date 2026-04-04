@@ -137,13 +137,7 @@ fn print_pricing(update: bool) -> Result<()> {
         "Agent", "Model", "Tier", "Input/M", "Output/M"
     );
     println!("{}", "-".repeat(85));
-    for agent in [
-        AgentKind::Codex,
-        AgentKind::Gemini,
-        AgentKind::OpenCode,
-        AgentKind::Kilo,
-        AgentKind::Cursor,
-    ] {
+    for &agent in AgentKind::ALL_BUILTIN {
         for am in pricing.iter().filter(|model| model.agent == agent) {
             println!(
                 "{:<10} {:<25} {:>10} ${:>9.2} ${:>9.2} {}",

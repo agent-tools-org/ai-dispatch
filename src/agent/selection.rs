@@ -227,7 +227,13 @@ pub(crate) fn recommend_model(
 }
 
 const CODING_FALLBACK_CHAIN: &[AgentKind] = &[
-    AgentKind::Gemini, AgentKind::Codex, AgentKind::Cursor, AgentKind::Droid, AgentKind::OpenCode, AgentKind::Kilo,
+    AgentKind::Gemini,
+    AgentKind::Codex,
+    AgentKind::Claude,
+    AgentKind::Cursor,
+    AgentKind::Droid,
+    AgentKind::OpenCode,
+    AgentKind::Kilo,
 ];
 pub(crate) fn coding_fallback_for(agent: &AgentKind) -> Option<AgentKind> {
     let available = detect_agents();

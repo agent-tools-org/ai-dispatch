@@ -61,6 +61,12 @@ pub(super) const AGENT_CAPABILITIES: &[(AgentKind, &[(TaskCategory, i32)])] = &[
         (TaskCategory::SimpleEdit, 5), (TaskCategory::Research, 3),
         (TaskCategory::Frontend, 6), (TaskCategory::Documentation, 4),
     ]),
+    (AgentKind::Claude, &[
+        (TaskCategory::Research, 8), (TaskCategory::Documentation, 8),
+        (TaskCategory::Debugging, 8), (TaskCategory::SimpleEdit, 5),
+        (TaskCategory::ComplexImpl, 8), (TaskCategory::Frontend, 7),
+        (TaskCategory::Testing, 8), (TaskCategory::Refactoring, 8),
+    ]),
 ];
 
 pub(super) fn base_score(agent: AgentKind, category: TaskCategory) -> i32 {
@@ -74,6 +80,7 @@ pub(super) fn priority(kind: AgentKind) -> i32 {
     match kind {
         AgentKind::Gemini | AgentKind::Kilo => 0,
         AgentKind::OpenCode => 1, AgentKind::Cursor | AgentKind::Codebuff => 2, AgentKind::Codex | AgentKind::Droid | AgentKind::Oz => 3,
+        AgentKind::Claude => 3,
         AgentKind::Custom => 1,
     }
 }
@@ -182,7 +189,7 @@ pub(super) fn score_for(ctx: &CandidateContext<'_>, kind: AgentKind) -> f64 {
         s += bonus;
     }
     if matches!(ctx.profile.complexity, Complexity::High)
-        && matches!(kind, AgentKind::Codex | AgentKind::Cursor | AgentKind::Droid | AgentKind::Oz)
+        && matches!(kind, AgentKind::Codex | AgentKind::Cursor | AgentKind::Droid | AgentKind::Oz | AgentKind::Claude)
     {
         s += 2.0;
     }

@@ -98,9 +98,10 @@ pub async fn run(store: Arc<Store>, args: BatchArgs) -> Result<()> {
             aid_info!("[aid] Using workspace {env_group} from AID_GROUP");
         } else if total >= 2 {
             let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("batch");
+            let workgroup_name = config.title.as_deref().unwrap_or(stem);
             let (wg_id, shared_path) = batch_helpers::ensure_batch_workgroup(
                 &store,
-                stem,
+                workgroup_name,
                 config.defaults.group_id.as_deref(),
                 shared_dir_enabled,
             )?;

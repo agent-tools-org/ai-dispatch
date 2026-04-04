@@ -15,6 +15,7 @@ use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::Child;
 use tokio::time::{timeout, Duration};
 use crate::agent::Agent;
+use crate::cmd::run_hung_recovery;
 use crate::paths;
 use crate::rate_limit;
 use crate::store::Store;
@@ -55,6 +56,7 @@ pub async fn watch_streaming(
     let mut session_saved = false;
     let mut loop_detector = LoopDetector::new();
     let mut synthetic_tracker = SyntheticMilestoneTracker::new();
+    let mut last_event_detail: Option<String> = None;
     let mut stderr_handle = spawn_stderr_capture(child, task_id);
     let idle_timeout = idle_timeout.unwrap_or(HUNG_TIMEOUT);
     loop {
@@ -64,21 +66,18 @@ pub async fn watch_streaming(
             Ok(Err(e)) => return Err(e.into()),
             Err(_) => {
                 let _ = child.kill().await;
-                let event = TaskEvent {
-                    task_id: task_id.clone(),
-                    timestamp: Local::now(),
-                    event_kind: EventKind::Error,
-                    detail: format!(
-                        "Agent hung: no output for {} seconds",
-                        idle_timeout.as_secs()
-                    ),
-                    metadata: None,
-                };
-                let _ = store.insert_event(&event);
+                let _ = run_hung_recovery::insert_hung_detected_events(
+                    store.as_ref(),
+                    task_id,
+                    idle_timeout.as_secs(),
+                    event_count,
+                    last_event_detail.as_deref(),
+                );
                 info.status = TaskStatus::Failed;
                 break;
             }
         };
+        if !line.trim().is_empty() { last_event_detail = Some(line.trim().to_string()); }
 
         use tokio::io::AsyncWriteExt;
         if extract_milestone_detail(&line).is_none() && !is_thinking_delta(&line) {
@@ -99,6 +98,7 @@ pub async fn watch_streaming(
             &line,
             &mut session_saved,
         )? {
+            last_event_detail = Some(detail.clone());
             if exceeds_cost_ceiling(info.cost_usd, max_task_cost) {
                 let current_cost = info.cost_usd.unwrap_or_default();
                 let max_cost = max_task_cost.unwrap_or_default();
@@ -144,9 +144,7 @@ pub async fn watch_streaming(
         TaskStatus::Failed
     };
 
-    if status == TaskStatus::Done && rate_limit::is_rate_limited(&agent.kind()) {
-        rate_limit::clear_rate_limit(&agent.kind());
-    }
+    if status == TaskStatus::Done && rate_limit::is_rate_limited(&agent.kind()) { rate_limit::clear_rate_limit(&agent.kind()); }
     let stderr_note = failure_stderr_note(status, task_id, agent);
     let detail = format!(
         "{} — {} events, exit code {}{}",

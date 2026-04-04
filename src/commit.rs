@@ -10,15 +10,19 @@ pub fn has_uncommitted_changes(dir: &str) -> Result<bool> {
     Ok(!out.stdout.is_empty())
 }
 
+pub fn head_sha(dir: &str) -> Result<String> {
+    let out = Command::new("git")
+        .args(["-C", dir, "rev-parse", "HEAD"])
+        .output()
+        .context("Failed to check git HEAD")?;
+    anyhow::ensure!(out.status.success(), "git rev-parse HEAD failed: {}", String::from_utf8_lossy(&out.stderr));
+    Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
+}
+
 pub fn auto_commit(dir: &str, task_id: &str, prompt: &str) -> Result<()> {
     // Only stage tracked files that were modified — avoid committing aid-injected
     // temp files (batch TOML, team knowledge, shared context) via `git add -u`.
-    let has_head = Command::new("git")
-        .args(["-C", dir, "rev-parse", "HEAD"])
-        .output()
-        .context("Failed to check git HEAD")?
-        .status
-        .success();
+    let has_head = head_sha(dir).is_ok();
     let add_mode = if has_head { "-u" } else { "-A" };
     let add = Command::new("git")
         .args(["-C", dir, "add", add_mode])

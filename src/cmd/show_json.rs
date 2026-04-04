@@ -34,7 +34,7 @@ pub(super) fn task_json(store: &Arc<Store>, task_id: &str) -> Result<String> {
         .worktree_path
         .as_deref()
         .filter(|path| Path::new(path).exists())
-        .map(|path| parse_diff_stat(&diff_stat(path)))
+        .map(|path| parse_diff_stat(&diff_stat(path, task.start_sha.as_deref())))
         .unwrap_or_default();
     let files_changed = diff_entries.len();
     let (insertions, deletions) =

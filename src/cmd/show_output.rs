@@ -23,3 +23,7 @@ mod tests;
 #[cfg(test)]
 #[path = "show_output_brief_tests.rs"]
 mod brief_tests;
+
+#[cfg(test)]
+#[path = "show_output_diff_tests.rs"]
+mod diff_tests;

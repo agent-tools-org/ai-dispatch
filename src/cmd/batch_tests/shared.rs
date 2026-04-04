@@ -83,6 +83,7 @@ pub(super) fn make_stored_task(id: &str, agent: AgentKind, status: TaskStatus) -
         repo_path: None,
         worktree_path: None,
         worktree_branch: None,
+        start_sha: None,
         log_path: None,
         output_path: None,
         tokens: None,

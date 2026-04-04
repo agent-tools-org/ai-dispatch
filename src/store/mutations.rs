@@ -30,11 +30,11 @@ impl Store {
         self.db().execute(
             "INSERT INTO tasks (id, agent, prompt, resolved_prompt, status, parent_task_id, workgroup_id,
              caller_kind, caller_session_id, agent_session_id, repo_path, worktree_path, worktree_branch,
-             log_path, output_path, tokens, prompt_tokens, duration_ms, model, cost_usd, created_at,
-             completed_at, verify, verify_status, read_only, budget, custom_agent_name, category,
-             pending_reason)
+             start_sha, log_path, output_path, tokens, prompt_tokens, duration_ms, model, cost_usd,
+             created_at, completed_at, verify, verify_status, read_only, budget, custom_agent_name,
+             category, pending_reason)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17,
-             ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28, ?29)",
+             ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28, ?29, ?30)",
             params![
                 task.id.as_str(),
                 agent_value,
@@ -49,6 +49,7 @@ impl Store {
                 task.repo_path,
                 task.worktree_path,
                 task.worktree_branch,
+                task.start_sha,
                 task.log_path,
                 task.output_path,
                 task.tokens,
@@ -91,17 +92,19 @@ impl Store {
             "UPDATE tasks SET agent=?2, prompt=?3, resolved_prompt=?4, status=?5,
              parent_task_id=?6, workgroup_id=?7, caller_kind=?8, caller_session_id=?9,
              agent_session_id=?10, repo_path=?11, worktree_path=?12, worktree_branch=?13,
-             log_path=?14, output_path=?15, model=?16, verify=?17, verify_status=?18,
-             read_only=?19, budget=?20, custom_agent_name=?21, category=?22, pending_reason=?23
+             start_sha=?14, log_path=?15, output_path=?16, model=?17, verify=?18,
+             verify_status=?19, read_only=?20, budget=?21, custom_agent_name=?22,
+             category=?23, pending_reason=?24
              WHERE id=?1",
             params![
                 task.id.as_str(), agent_value, task.prompt, task.resolved_prompt,
                 task.status.as_str(), task.parent_task_id, task.workgroup_id,
                 task.caller_kind, task.caller_session_id, task.agent_session_id,
                 task.repo_path, task.worktree_path, task.worktree_branch,
-                task.log_path, task.output_path, task.model, task.verify,
-                task.verify_status.as_str(), task.read_only, task.budget,
-                task.custom_agent_name, task.category, task.pending_reason,
+                task.start_sha, task.log_path, task.output_path, task.model,
+                task.verify, task.verify_status.as_str(), task.read_only,
+                task.budget, task.custom_agent_name, task.category,
+                task.pending_reason,
             ],
         )?;
         Ok(())
@@ -181,6 +184,14 @@ impl Store {
         self.db().execute(
             "UPDATE tasks SET prompt_tokens = ?1 WHERE id = ?2",
             params![tokens, id],
+        )?;
+        Ok(())
+    }
+
+    pub fn update_start_sha(&self, id: &str, start_sha: &str) -> Result<()> {
+        self.db().execute(
+            "UPDATE tasks SET start_sha = ?1 WHERE id = ?2",
+            params![start_sha, id],
         )?;
         Ok(())
     }

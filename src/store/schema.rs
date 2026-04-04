@@ -22,6 +22,7 @@ const CREATE_TABLES_SQL: &str = "CREATE TABLE IF NOT EXISTS tasks (
     repo_path TEXT,
     worktree_path TEXT,
     worktree_branch TEXT,
+    start_sha TEXT,
     log_path TEXT,
     output_path TEXT,
     tokens INTEGER,
@@ -145,6 +146,7 @@ pub(super) fn migrate(store: &Store) -> Result<()> {
     let _ = conn.execute_batch("ALTER TABLE tasks ADD COLUMN agent_session_id TEXT;");
     let _ = conn.execute_batch("ALTER TABLE tasks ADD COLUMN repo_path TEXT;");
     let _ = conn.execute_batch("ALTER TABLE tasks ADD COLUMN resolved_prompt TEXT;");
+    let _ = conn.execute_batch("ALTER TABLE tasks ADD COLUMN start_sha TEXT;");
     let _ = conn.execute_batch(CREATE_WORKGROUPS_SQL);
     let _ = conn.execute_batch(CREATE_MEMORIES_SQL);
     let _ = conn.execute_batch("ALTER TABLE memories ADD COLUMN supersedes TEXT;");
@@ -204,24 +206,25 @@ pub(super) fn row_to_task(row: &Row) -> rusqlite::Result<Result<Task>> {
         repo_path: row.get(10)?,
         worktree_path: row.get(11)?,
         worktree_branch: row.get(12)?,
-        log_path: row.get(13)?,
-        output_path: row.get(14)?,
-        tokens: row.get(15)?,
-        prompt_tokens: row.get(16)?,
-        duration_ms: row.get(17)?,
-        model: row.get(18)?,
-        cost_usd: row.get(19)?,
-        exit_code: row.get(27).ok().flatten(),
-        created_at: parse_dt(&row.get::<_, String>(20)?),
-        completed_at: row.get::<_, Option<String>>(21)?.map(|s| parse_dt(&s)),
-        verify: row.get(22)?,
+        start_sha: row.get(13)?,
+        log_path: row.get(14)?,
+        output_path: row.get(15)?,
+        tokens: row.get(16)?,
+        prompt_tokens: row.get(17)?,
+        duration_ms: row.get(18)?,
+        model: row.get(19)?,
+        cost_usd: row.get(20)?,
+        exit_code: row.get(28).ok().flatten(),
+        created_at: parse_dt(&row.get::<_, String>(21)?),
+        completed_at: row.get::<_, Option<String>>(22)?.map(|s| parse_dt(&s)),
+        verify: row.get(23)?,
         verify_status: row
-            .get::<_, Option<String>>(26)?
+            .get::<_, Option<String>>(27)?
             .and_then(|s| VerifyStatus::parse_str(&s))
             .unwrap_or(VerifyStatus::Skipped),
-        pending_reason: row.get(29).ok().flatten(),
-        read_only: row.get(23)?,
-        budget: row.get(24)?,
+        pending_reason: row.get(30).ok().flatten(),
+        read_only: row.get(24)?,
+        budget: row.get(25)?,
     }))
 }
 

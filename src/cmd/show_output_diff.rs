@@ -32,7 +32,7 @@ fn diff_text_with_filter(store: &Arc<Store>, task_id: &str, file: Option<&str>) 
     if let Some(ref worktree_path) = task.worktree_path
         && Path::new(worktree_path).exists()
     {
-        out.push_str(&format_diff_output(worktree_path, file));
+        out.push_str(&format_diff_output(&task, worktree_path, file));
         out.push_str(&format!("\nWorktree: {worktree_path}\n"));
         return Ok(out);
     }
@@ -64,7 +64,7 @@ pub(crate) fn worktree_diff(task: &Task, task_id: &str) -> Result<String> {
     if let Some(ref worktree_path) = task.worktree_path
         && Path::new(worktree_path).exists()
     {
-        return Ok(format_diff_output(worktree_path, None));
+        return Ok(format_diff_output(task, worktree_path, None));
     }
     if let Some(fallback) = diff_artifact_fallback(task, task_id)? {
         return Ok(fallback);
@@ -105,18 +105,26 @@ fn format_recent_events(events: &[TaskEvent]) -> String {
     out
 }
 
-fn format_diff_output(worktree_path: &str, file: Option<&str>) -> String {
+fn format_diff_output(task: &Task, worktree_path: &str, file: Option<&str>) -> String {
+    if task.status == crate::types::TaskStatus::Failed
+        && task
+            .start_sha
+            .as_deref()
+            .is_some_and(|start_sha| head_matches_start(worktree_path, start_sha))
+    {
+        return "\n--- Diff Stat ---\nNo changes (task failed before making commits)\n".to_string();
+    }
     let mut out = String::new();
     out.push_str("\n--- Diff Stat ---\n");
     let stat = match file {
-        Some(path) => diff_stat_file(worktree_path, path),
-        None => diff_stat(worktree_path),
+        Some(path) => diff_stat_file(worktree_path, task.start_sha.as_deref(), path),
+        None => diff_stat(worktree_path, task.start_sha.as_deref()),
     };
     out.push_str(&stat);
     out.push_str("\n--- Full Diff ---\n");
     let diff = match file {
-        Some(path) => full_diff_file(worktree_path, path),
-        None => full_diff(worktree_path),
+        Some(path) => full_diff_file(worktree_path, task.start_sha.as_deref(), path),
+        None => full_diff(worktree_path, task.start_sha.as_deref()),
     };
     out.push_str(&diff);
     out
@@ -140,33 +148,22 @@ fn inplace_working_diff(repo_path: &str, file: Option<&str>) -> String {
     }
 }
 
-fn diff_args<'a>(base_args: &'a [&'a str]) -> Vec<&'a str> {
-    let mut args = base_args.to_vec();
-    args.extend_from_slice(&["--", "."]);
-    args.extend_from_slice(DIFF_EXCLUDE);
-    args
-}
-
-pub(crate) fn diff_stat(wt_path: &str) -> String {
+pub(crate) fn diff_stat(wt_path: &str, start_sha: Option<&str>) -> String {
+    let start_args =
+        start_sha.map(|sha| vec!["diff".to_string(), format!("{sha}..HEAD"), "--stat".to_string()]);
     generate_diff(
         wt_path,
-        &[
-            &["diff", "main...HEAD", "--stat"],
-            &["diff", "--stat"],
-            &["diff", "--stat", "HEAD~1"],
-        ],
+        diff_arg_sets(start_args, &[&["diff", "main...HEAD", "--stat"], &["diff", "--stat"], &["diff", "--stat", "HEAD~1"]]).as_slice(),
         "  (no changes detected)\n",
     )
 }
 
-pub(crate) fn diff_stat_file(wt_path: &str, file: &str) -> String {
+pub(crate) fn diff_stat_file(wt_path: &str, start_sha: Option<&str>, file: &str) -> String {
+    let start_args =
+        start_sha.map(|sha| vec!["diff".to_string(), format!("{sha}..HEAD"), "--stat".to_string()]);
     generate_diff_file(
         wt_path,
-        &[
-            &["diff", "main...HEAD", "--stat"],
-            &["diff", "--stat"],
-            &["diff", "--stat", "HEAD~1"],
-        ],
+        diff_arg_sets(start_args, &[&["diff", "main...HEAD", "--stat"], &["diff", "--stat"], &["diff", "--stat", "HEAD~1"]]).as_slice(),
         "  (no changes detected)\n",
         file,
     )
@@ -200,24 +197,26 @@ pub(crate) fn parse_diff_stat(diff_text: &str) -> Vec<serde_json::Value> {
         .collect()
 }
 
-fn full_diff(wt_path: &str) -> String {
+fn full_diff(wt_path: &str, start_sha: Option<&str>) -> String {
+    let start_args = start_sha.map(|sha| vec!["diff".to_string(), format!("{sha}..HEAD")]);
     generate_diff(
         wt_path,
-        &[&["diff", "main...HEAD"], &["diff"], &["diff", "HEAD~1"]],
+        diff_arg_sets(start_args, &[&["diff", "main...HEAD"], &["diff"], &["diff", "HEAD~1"]]).as_slice(),
         "  (no diff available)\n",
     )
 }
 
-fn full_diff_file(wt_path: &str, file: &str) -> String {
+fn full_diff_file(wt_path: &str, start_sha: Option<&str>, file: &str) -> String {
+    let start_args = start_sha.map(|sha| vec!["diff".to_string(), format!("{sha}..HEAD")]);
     generate_diff_file(
         wt_path,
-        &[&["diff", "main...HEAD"], &["diff"], &["diff", "HEAD~1"]],
+        diff_arg_sets(start_args, &[&["diff", "main...HEAD"], &["diff"], &["diff", "HEAD~1"]]).as_slice(),
         "  (no diff available)\n",
         file,
     )
 }
 
-fn generate_diff(wt_path: &str, args_sets: &[&[&str]], fallback: &str) -> String {
+fn generate_diff(wt_path: &str, args_sets: &[Vec<String>], fallback: &str) -> String {
     for args in args_sets {
         if let Some(output) = run_git_diff(wt_path, &diff_args(args))
             && !output.trim().is_empty()
@@ -228,7 +227,7 @@ fn generate_diff(wt_path: &str, args_sets: &[&[&str]], fallback: &str) -> String
     fallback.to_string()
 }
 
-fn generate_diff_file(wt_path: &str, args_sets: &[&[&str]], fallback: &str, file: &str) -> String {
+fn generate_diff_file(wt_path: &str, args_sets: &[Vec<String>], fallback: &str, file: &str) -> String {
     for args in args_sets {
         if let Some(output) = run_git_diff(wt_path, &diff_args_file(args, file))
             && !output.trim().is_empty()
@@ -239,13 +238,43 @@ fn generate_diff_file(wt_path: &str, args_sets: &[&[&str]], fallback: &str, file
     fallback.to_string()
 }
 
-fn diff_args_file<'a>(base_args: &'a [&'a str], file: &'a str) -> Vec<&'a str> {
+fn diff_args(base_args: &[String]) -> Vec<String> {
     let mut args = base_args.to_vec();
-    args.extend_from_slice(&["--", file]);
+    args.push("--".to_string());
+    args.push(".".to_string());
+    args.extend(DIFF_EXCLUDE.iter().map(|value| value.to_string()));
     args
 }
 
-fn run_git_diff(wt_path: &str, args: &[&str]) -> Option<String> {
+fn diff_args_file(base_args: &[String], file: &str) -> Vec<String> {
+    let mut args = base_args.to_vec();
+    args.push("--".to_string());
+    args.push(file.to_string());
+    args
+}
+
+fn diff_arg_sets(start_args: Option<Vec<String>>, fallback: &[&[&str]]) -> Vec<Vec<String>> {
+    let mut args_sets = Vec::with_capacity(fallback.len() + usize::from(start_args.is_some()));
+    if let Some(start_args) = start_args {
+        args_sets.push(start_args);
+    }
+    args_sets.extend(fallback.iter().map(|args| args.iter().map(|value| (*value).to_string()).collect()));
+    args_sets
+}
+
+fn head_matches_start(wt_path: &str, start_sha: &str) -> bool {
+    let output = Command::new("git")
+        .args(["-C", wt_path, "rev-parse", "HEAD"])
+        .output();
+    match output {
+        Ok(output) if output.status.success() => {
+            String::from_utf8_lossy(&output.stdout).trim() == start_sha
+        }
+        _ => false,
+    }
+}
+
+fn run_git_diff(wt_path: &str, args: &[String]) -> Option<String> {
     let output = Command::new("git")
         .arg("-C")
         .arg(wt_path)

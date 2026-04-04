@@ -37,6 +37,8 @@ fn interpolate_task(
     interpolate_string(&mut task.verify, vars, writer)?;
     interpolate_string(&mut task.judge, vars, writer)?;
     interpolate_string(&mut task.peer_review, vars, writer)?;
+    interpolate_string(&mut task.eval, vars, writer)?;
+    interpolate_string(&mut task.eval_feedback_template, vars, writer)?;
     interpolate_string(&mut task.metric, vars, writer)?;
     interpolate_vec(&mut task.context, vars, writer)?;
     interpolate_vec(&mut task.checklist, vars, writer)?;
@@ -149,6 +151,15 @@ fn apply_task_defaults(task: &mut BatchTask, defaults: &BatchDefaults, task_idx:
     }
     if task.retry.is_none() {
         task.retry = defaults.retry;
+    }
+    if task.iterate.is_none() {
+        task.iterate = defaults.iterate;
+    }
+    if task.eval.is_none() {
+        task.eval = defaults.eval.clone();
+    }
+    if task.eval_feedback_template.is_none() {
+        task.eval_feedback_template = defaults.eval_feedback_template.clone();
     }
     if task.idle_timeout.is_none() {
         task.idle_timeout = defaults.idle_timeout;

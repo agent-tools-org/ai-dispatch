@@ -5,7 +5,7 @@ use anyhow::Result;
 use std::{path::Path, sync::Arc};
 use crate::{agent, hooks, rate_limit, store::Store, types::*};
 use crate::cmd::{checklist_scan, judge, retry_logic, show};
-use super::{RunArgs, inherit_retry_base_branch, maybe_auto_retry_after_checklist_miss, maybe_auto_retry_after_verify_failure, maybe_cleanup_fast_fail, maybe_judge_retry, maybe_verify, run, run_agent, run_prompt};
+use super::{RunArgs, inherit_retry_base_branch, iterate_config, maybe_auto_retry_after_checklist_miss, maybe_auto_retry_after_verify_failure, maybe_cleanup_fast_fail, maybe_iterate, maybe_judge_retry, maybe_verify, run, run_agent, run_prompt};
 
 pub(crate) async fn post_run_lifecycle(
     store: &Arc<Store>,
@@ -240,15 +240,23 @@ pub(crate) async fn post_run_lifecycle(
             aid_hint!("{status_hint}");
         }
     }
-    if let Some(retry_id) =
-        maybe_auto_retry_after_verify_failure(store, task_id, args, pre_verify_status).await?
+    let iterate_config = iterate_config(args)?;
+    if let Some(iterate_config) = iterate_config.as_ref()
+        && let Some(retry_id) = maybe_iterate(store, task_id, args, iterate_config).await?
     {
         return Ok(Some(retry_id));
     }
-    if let Some(retry_id) =
-        maybe_auto_retry_after_checklist_miss(store, task_id, args, checklist_result.as_ref()).await?
-    {
-        return Ok(Some(retry_id));
+    if iterate_config.is_none() {
+        if let Some(retry_id) =
+            maybe_auto_retry_after_verify_failure(store, task_id, args, pre_verify_status).await?
+        {
+            return Ok(Some(retry_id));
+        }
+        if let Some(retry_id) =
+            maybe_auto_retry_after_checklist_miss(store, task_id, args, checklist_result.as_ref()).await?
+        {
+            return Ok(Some(retry_id));
+        }
     }
     crate::verify::enforce_verify_status(store, task_id);
     let completed_normally = if let Some(mut retry_args) =

@@ -39,6 +39,8 @@ fn build_overlap(file: String, task_indices: &[usize], tasks: &[BatchTask], reac
             }
             if tasks[*left_idx].output.as_deref() == Some(file.as_str())
                 || tasks[*right_idx].output.as_deref() == Some(file.as_str())
+                || tasks[*left_idx].result_file.as_deref() == Some(file.as_str())
+                || tasks[*right_idx].result_file.as_deref() == Some(file.as_str())
             {
                 severity = OverlapSeverity::Error;
             }
@@ -101,6 +103,9 @@ fn task_files(task: &BatchTask, defaults: &BatchDefaults) -> BTreeSet<String> {
     }
     if let Some(ref output) = task.output {
         files.insert(output.clone());
+    }
+    if let Some(ref result_file) = task.result_file {
+        files.insert(result_file.clone());
     }
     for file in extract_prompt_paths(&task.prompt) {
         files.insert(file);
@@ -295,5 +300,27 @@ mod tests {
         let overlaps = analyze_file_overlap(&[left, right], &BatchDefaults::default());
         assert_eq!(overlaps[0].file, "results.json");
         assert_eq!(overlaps[0].severity, OverlapSeverity::Warning);
+    }
+
+    #[test]
+    fn analyze_detects_result_file_overlap() {
+        let mut left = stub_task("task-a", "audit left");
+        left.result_file = Some("result.md".to_string());
+        let mut right = stub_task("task-b", "audit right");
+        right.result_file = Some("result.md".to_string());
+        let overlaps = analyze_file_overlap(&[left, right], &BatchDefaults::default());
+        assert_eq!(overlaps[0].file, "result.md");
+        assert_eq!(overlaps[0].severity, OverlapSeverity::Error);
+    }
+
+    #[test]
+    fn analyze_result_file_overlap_ignored_with_dependency() {
+        let mut parent = stub_task("task-a", "audit left");
+        parent.result_file = Some("result.md".to_string());
+        let mut child = stub_task("task-b", "audit right");
+        child.result_file = Some("result.md".to_string());
+        child.depends_on = Some(vec!["task-a".to_string()]);
+        let overlaps = analyze_file_overlap(&[parent, child], &BatchDefaults::default());
+        assert!(overlaps.is_empty());
     }
 }

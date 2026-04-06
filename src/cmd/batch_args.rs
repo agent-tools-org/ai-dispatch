@@ -85,7 +85,7 @@ pub(crate) fn task_to_run_args(
         prompt: task.prompt.clone(),
         dir: task.dir.clone(),
         output: task.output.clone(),
-        result_file: task.result_file.clone(),
+        result_file: auto_scope_result_file(task, siblings),
         model: task.model.clone(),
         worktree: task.worktree.clone(),
         group: task.group.clone(),
@@ -135,6 +135,29 @@ fn auto_cascade_for_rate_limited(agent_name: &str) -> Vec<String> {
     crate::agent::selection::coding_fallback_for(&agent)
         .map(|fallback| vec![fallback.as_str().to_string()])
         .unwrap_or_default()
+}
+
+/// Auto-scope result_file when sibling tasks share the same filename.
+/// Appends `-{task_name}` before the extension to prevent parallel overwrites.
+fn auto_scope_result_file(task: &batch::BatchTask, siblings: &[&batch::BatchTask]) -> Option<String> {
+    let result_file = task.result_file.as_deref()?;
+    let has_collision = siblings.iter().any(|s| s.result_file.as_deref() == Some(result_file));
+    if !has_collision {
+        return Some(result_file.to_string());
+    }
+    let task_name = task.name.as_deref()
+        .or(task.id.as_deref())
+        .unwrap_or("task");
+    let scoped = scope_filename(result_file, task_name);
+    aid_info!("[aid] Auto-scoped result_file: {result_file} → {scoped} (collision with sibling)");
+    Some(scoped)
+}
+
+fn scope_filename(path: &str, suffix: &str) -> String {
+    match path.rsplit_once('.') {
+        Some((stem, ext)) => format!("{stem}-{suffix}.{ext}"),
+        None => format!("{path}-{suffix}"),
+    }
 }
 
 fn merged_env(

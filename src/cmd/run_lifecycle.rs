@@ -59,6 +59,13 @@ pub(crate) async fn post_run_lifecycle(
                 Err(e) => aid_warn!("[aid] Untracked file rescue failed: {e}"),
                 _ => {}
             }
+            // If agent left uncommitted changes (modified files it forgot to commit),
+            // retry the agent to make it commit rather than silently losing the work.
+            if crate::commit::has_uncommitted_changes(dir.as_str()).unwrap_or(false) {
+                if let Some(retry_id) = maybe_retry_uncommitted(store, task_id, args, dir).await? {
+                    return Ok(Some(retry_id));
+                }
+            }
         }
     }
     maybe_verify(
@@ -309,6 +316,60 @@ pub(crate) async fn post_run_lifecycle(
     };
     if completed_normally { aid_info!("[aid] View in TUI: aid board"); }
     Ok(None)
+}
+async fn maybe_retry_uncommitted(
+    store: &Arc<Store>,
+    task_id: &TaskId,
+    args: &RunArgs,
+    dir: &str,
+) -> Result<Option<TaskId>> {
+    if args.retry == 0
+        && args.parent_task_id.is_some()
+        && args.prompt.starts_with("You have uncommitted changes in your worktree.")
+    {
+        return Ok(None);
+    }
+    let Some(task) = store.get_task(task_id.as_str())? else { return Ok(None) };
+    if task.status != TaskStatus::Done {
+        return Ok(None);
+    }
+    let Some(wt_path) = task.worktree_path.as_deref() else { return Ok(None) };
+    if !Path::new(wt_path).exists() {
+        return Ok(None);
+    }
+
+    aid_warn!("[aid] Agent left uncommitted changes — retrying to commit");
+    let _ = store.insert_event(&TaskEvent {
+        task_id: task_id.clone(),
+        timestamp: chrono::Local::now(),
+        event_kind: EventKind::Milestone,
+        detail: "Agent left uncommitted changes, dispatching commit retry".to_string(),
+        metadata: None,
+    });
+
+    let mut retry_args = args.clone();
+    retry_args.prompt = format!(
+        "You have uncommitted changes in your worktree. Please review them with `git status` and `git diff`, then commit ALL your changes with a descriptive message. Do not leave any files uncommitted.\n\n[Original task for context]\n{}",
+        task.prompt
+    );
+    retry_args.retry = 0;
+    retry_args.parent_task_id = Some(task_id.as_str().to_string());
+    retry_args.repo = task.repo_path.clone().or_else(|| retry_args.repo.clone());
+    retry_args.model = task.model.clone().or_else(|| retry_args.model.clone());
+    retry_args.verify = None;
+    retry_args.read_only = false;
+    retry_args.background = false;
+    retry_args.judge = None;
+    retry_args.peer_review = None;
+    retry_args.checklist = Vec::new();
+    let (retry_dir, worktree) = retry_target(&task);
+    retry_args.dir = Some(dir.to_string()).or(retry_dir).or_else(|| retry_args.dir.clone());
+    retry_args.worktree = worktree.or_else(|| retry_args.worktree.clone());
+    if task.agent == AgentKind::OpenCode {
+        retry_args.session_id = task.agent_session_id.clone();
+    }
+
+    Box::pin(run(store.clone(), retry_args)).await.map(Some)
 }
 async fn maybe_auto_retry_after_hang(
     store: &Arc<Store>,

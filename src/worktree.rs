@@ -394,6 +394,9 @@ pub fn clear_worktree_lock(wt_path: &Path) {
     let _ = std::fs::remove_file(wt_path.join(LOCK_FILENAME));
 }
 
+/// Check if a process is alive (used by lock cleanup in cmd::worktree).
+pub fn process_alive_check(pid: u32) -> bool { process_alive(pid) }
+
 #[cfg(unix)]
 fn process_alive(pid: u32) -> bool {
     unsafe { libc::kill(pid as i32, 0) == 0 }

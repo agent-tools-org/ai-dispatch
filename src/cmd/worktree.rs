@@ -41,9 +41,19 @@ pub fn list(repo: Option<&str>) -> Result<()> {
     Ok(())
 }
 
-/// Remove stale aid-managed worktrees older than 24 hours.
+/// Remove stale aid-managed worktrees older than 24 hours,
+/// and clear lock files left by dead processes on all worktrees.
 pub fn prune(repo: Option<&str>) -> Result<()> {
     let repo_dir = repo.unwrap_or(".");
+    let entries = aid_worktree_entries(repo_dir)?;
+    // First pass: clear stale locks on ALL worktrees (not just old ones)
+    let mut locks_cleared = 0usize;
+    for (path, _) in &entries {
+        if clear_dead_lock(Path::new(path)) {
+            locks_cleared += 1;
+        }
+    }
+    // Second pass: remove worktrees older than 24h
     let mut pruned = 0usize;
     for path in stale_worktree_paths(repo_dir)? {
         match super::merge::remove_worktree(repo_dir, &path) {
@@ -54,10 +64,11 @@ pub fn prune(repo: Option<&str>) -> Result<()> {
             Err(err) => aid_warn!("[aid] Failed to prune {path}: {err}"),
         }
     }
-    if pruned == 0 {
+    if pruned == 0 && locks_cleared == 0 {
         println!("[aid] No stale worktrees found");
     } else {
-        println!("[aid] Pruned {pruned} stale worktree(s)");
+        if pruned > 0 { println!("[aid] Pruned {pruned} stale worktree(s)"); }
+        if locks_cleared > 0 { println!("[aid] Cleared {locks_cleared} stale lock(s)"); }
     }
     Ok(())
 }
@@ -121,6 +132,28 @@ fn push_aid_worktree_entry(
     }
     current_path.clear();
     current_branch.clear();
+}
+
+/// Clear a .aid-lock file if the holding process is dead. Returns true if cleared.
+fn clear_dead_lock(wt_path: &Path) -> bool {
+    let lock_path = wt_path.join(".aid-lock");
+    let content = match std::fs::read_to_string(&lock_path) {
+        Ok(c) => c,
+        Err(_) => return false,
+    };
+    let pid = content.lines()
+        .find_map(|line| line.strip_prefix("pid="))
+        .and_then(|p| p.trim().parse::<u32>().ok());
+    let Some(pid) = pid else { return false };
+    if crate::worktree::process_alive_check(pid) {
+        return false;
+    }
+    let task = content.lines()
+        .find_map(|line| line.strip_prefix("task="))
+        .unwrap_or("unknown");
+    println!("[aid] Cleared stale lock in {} (task={}, pid={} dead)", wt_path.display(), task, pid);
+    let _ = std::fs::remove_file(&lock_path);
+    true
 }
 
 fn should_prune_worktree(wt_path: &str) -> bool {

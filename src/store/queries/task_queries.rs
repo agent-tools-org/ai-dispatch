@@ -92,6 +92,20 @@ impl Store {
                  FROM tasks ORDER BY created_at DESC",
                 vec![],
             ),
+            TaskFilter::Active => (
+                "SELECT id, agent, prompt, resolved_prompt, status, parent_task_id, workgroup_id,
+                 caller_kind, caller_session_id, agent_session_id, repo_path, worktree_path, worktree_branch,
+                 start_sha, log_path, output_path, tokens, prompt_tokens, duration_ms, model, cost_usd,
+                 created_at, completed_at, verify, read_only, budget, custom_agent_name, verify_status,
+                 exit_code, category, pending_reason
+                 FROM tasks WHERE status IN (?1, ?2, ?3, ?4) ORDER BY created_at DESC",
+                vec![
+                    "waiting".to_string(),
+                    "pending".to_string(),
+                    "running".to_string(),
+                    "awaiting_input".to_string(),
+                ],
+            ),
             TaskFilter::Running => (
                 "SELECT id, agent, prompt, resolved_prompt, status, parent_task_id, workgroup_id,
                  caller_kind, caller_session_id, agent_session_id, repo_path, worktree_path, worktree_branch,

@@ -499,6 +499,7 @@ pub struct TaskEvent {
 #[derive(Debug, Clone, Copy)]
 pub enum TaskFilter {
     All,
+    Active,
     Running,
     Today,
 }

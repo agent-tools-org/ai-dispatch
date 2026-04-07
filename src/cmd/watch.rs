@@ -46,7 +46,12 @@ pub async fn run(store: &Arc<Store>, task_ids: &[String], group: Option<&str>, q
             }
         } else if task_ids.is_empty() {
             // All running tasks mode
-            let mut running = store.list_tasks(TaskFilter::Running)?;
+            let filter = if group.is_some() {
+                TaskFilter::Active
+            } else {
+                TaskFilter::Running
+            };
+            let mut running = store.list_tasks(filter)?;
             if let Some(group_id) = group {
                 running.retain(|task| task.workgroup_id.as_deref() == Some(group_id));
             }

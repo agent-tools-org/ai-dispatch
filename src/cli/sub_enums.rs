@@ -68,6 +68,9 @@ pub enum MemoryCommands {
         memory_type: String,
         /// Content to remember
         content: String,
+        /// Memory tier: identity, critical, on_demand, deep
+        #[arg(long)]
+        tier: Option<String>,
         /// Project path (defaults to current git root)
         #[arg(long)]
         project: Option<String>,

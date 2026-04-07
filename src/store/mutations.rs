@@ -351,8 +351,8 @@ impl Store {
         self.db().execute(
             "INSERT OR IGNORE INTO memories (id, memory_type, content, source_task_id, agent,
               project_path, content_hash, created_at, expires_at, supersedes, version,
-              inject_count, last_injected_at, success_count)
-              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)",
+              inject_count, last_injected_at, success_count, tier)
+              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)",
             params![
                 memory.id.as_str(),
                 memory.memory_type.as_str(),
@@ -368,6 +368,7 @@ impl Store {
                 memory.inject_count,
                 memory.last_injected_at.map(|dt| dt.to_rfc3339()),
                 memory.success_count,
+                memory.tier.as_str(),
             ],
         )?;
         Ok(())
@@ -382,7 +383,7 @@ impl Store {
         let conn = self.db();
         let existing = match conn.query_row(
             "SELECT id, memory_type, content, source_task_id, agent, project_path, content_hash,
-             created_at, expires_at, supersedes, version, inject_count, last_injected_at, success_count
+             created_at, expires_at, supersedes, version, inject_count, last_injected_at, success_count, tier
              FROM memories WHERE id = ?1",
             params![id],
             row_to_memory,
@@ -394,6 +395,7 @@ impl Store {
         let Memory {
             id: old_id,
             memory_type,
+            tier,
             source_task_id,
             agent,
             project_path,
@@ -411,8 +413,8 @@ impl Store {
         conn.execute(
             "INSERT INTO memories (id, memory_type, content, source_task_id, agent, project_path,
              content_hash, created_at, expires_at, supersedes, version, inject_count, last_injected_at,
-             success_count)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)",
+             success_count, tier)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)",
             params![
                 new_id.as_str(),
                 memory_type.as_str(),
@@ -428,6 +430,7 @@ impl Store {
                 inject_count,
                 last_injected_at_str,
                 success_count,
+                tier.as_str(),
             ],
         )?;
         Ok(true)

@@ -6,6 +6,7 @@ fn make_memory(id: &str, content: &str) -> Memory {
     Memory {
         id: MemoryId(id.to_string()),
         memory_type: MemoryType::Fact,
+        tier: MemoryTier::OnDemand,
         content: content.to_string(),
         source_task_id: None,
         agent: None,
@@ -99,4 +100,41 @@ fn memory_history_returns_full_chain_from_mid_version() {
     );
     assert_eq!(history[0].content, "third");
     assert_eq!(history[2].content, "origin");
+}
+
+#[test]
+fn list_memories_by_tier_returns_identity_and_critical_memories() {
+    let store = Store::open_memory().unwrap();
+    let mut identity = make_memory("m-5000", "identity");
+    identity.tier = MemoryTier::Identity;
+    store.insert_memory(&identity).unwrap();
+
+    let mut critical = make_memory("m-5001", "critical");
+    critical.tier = MemoryTier::Critical;
+    store.insert_memory(&critical).unwrap();
+
+    let tiers = store
+        .list_memories_by_tier(None, &[MemoryTier::Identity, MemoryTier::Critical])
+        .unwrap();
+    assert_eq!(tiers.len(), 2);
+    assert!(tiers.iter().any(|memory| memory.tier == MemoryTier::Identity));
+    assert!(tiers.iter().any(|memory| memory.tier == MemoryTier::Critical));
+}
+
+#[test]
+fn list_memories_by_tier_excludes_on_demand_when_querying_identity() {
+    let store = Store::open_memory().unwrap();
+    let mut identity = make_memory("m-5100", "identity");
+    identity.tier = MemoryTier::Identity;
+    store.insert_memory(&identity).unwrap();
+
+    let on_demand = make_memory("m-5101", "on-demand");
+    store.insert_memory(&on_demand).unwrap();
+
+    let tiers = store
+        .list_memories_by_tier(None, &[MemoryTier::Identity])
+        .unwrap();
+    assert_eq!(tiers.len(), 1);
+    assert_eq!(tiers[0].id.as_str(), "m-5100");
+    assert_eq!(tiers[0].tier, MemoryTier::Identity);
 }

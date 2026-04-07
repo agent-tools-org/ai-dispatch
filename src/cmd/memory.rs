@@ -9,15 +9,17 @@ use std::env;
 use std::hash::{Hash, Hasher};
 
 use crate::store::Store;
-use crate::types::{Memory, MemoryId, MemoryType};
+use crate::types::{Memory, MemoryId, MemoryTier, MemoryType};
 
 pub fn add(
     store: &Store,
     memory_type: &str,
+    tier: Option<&str>,
     content: &str,
     project_path: Option<&str>,
 ) -> Result<()> {
     let parsed_type = parse_memory_type(memory_type)?;
+    let parsed_tier = parse_memory_tier(tier)?;
     if !is_surprising(content, parsed_type.as_str()) {
         let preview: String = content.chars().take(50).collect();
         aid_info!("[aid] Skipping trivial memory: {preview}...");
@@ -33,6 +35,7 @@ pub fn add(
     let memory = Memory {
         id,
         memory_type: parsed_type,
+        tier: parsed_tier,
         content: content.to_string(),
         source_task_id: None,
         agent: None,
@@ -83,7 +86,7 @@ pub fn search(store: &Store, query: &str, project_path: Option<&str>) -> Result<
     if project.is_none() {
         aid_info!("[aid] Not in a git repo. Searching across all projects.");
     }
-    let memories = store.search_memories(query, project.as_deref(), 20)?;
+    let memories = store.search_memories(query, project.as_deref(), 20, None)?;
     print_memory_table(&memories, false);
     Ok(())
 }
@@ -133,6 +136,14 @@ fn parse_optional_memory_type(value: Option<&str>) -> Result<Option<MemoryType>>
 
 fn parse_memory_type(value: &str) -> Result<MemoryType> {
     MemoryType::parse_str(value).ok_or_else(|| anyhow!("Invalid memory type: {}", value))
+}
+
+fn parse_memory_tier(value: Option<&str>) -> Result<MemoryTier> {
+    match value {
+        Some(value) => MemoryTier::parse_str(value)
+            .ok_or_else(|| anyhow!("Invalid memory tier: {}", value)),
+        None => Ok(MemoryTier::OnDemand),
+    }
 }
 
 fn hash_content(content: &str) -> String {

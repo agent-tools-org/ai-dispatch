@@ -576,10 +576,46 @@ impl fmt::Display for MemoryType {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+pub enum MemoryTier {
+    Identity,
+    Critical,
+    OnDemand,
+    Deep,
+}
+
+impl MemoryTier {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Identity => "identity",
+            Self::Critical => "critical",
+            Self::OnDemand => "on_demand",
+            Self::Deep => "deep",
+        }
+    }
+
+    pub fn parse_str(s: &str) -> Option<Self> {
+        match s {
+            "identity" => Some(Self::Identity),
+            "critical" => Some(Self::Critical),
+            "on_demand" => Some(Self::OnDemand),
+            "deep" => Some(Self::Deep),
+            _ => None,
+        }
+    }
+}
+
+impl fmt::Display for MemoryTier {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct Memory {
     pub id: MemoryId,
     pub memory_type: MemoryType,
+    pub tier: MemoryTier,
     pub content: String,
     pub source_task_id: Option<String>,
     pub agent: Option<String>,
@@ -663,6 +699,19 @@ mod tests {
         ] {
             let s = memory_type.as_str();
             assert_eq!(MemoryType::parse_str(s), Some(memory_type));
+        }
+    }
+
+    #[test]
+    fn memory_tier_parse_str_roundtrip() {
+        for memory_tier in [
+            MemoryTier::Identity,
+            MemoryTier::Critical,
+            MemoryTier::OnDemand,
+            MemoryTier::Deep,
+        ] {
+            let s = memory_tier.as_str();
+            assert_eq!(MemoryTier::parse_str(s), Some(memory_tier));
         }
     }
 

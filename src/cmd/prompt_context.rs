@@ -55,11 +55,11 @@ pub(super) fn inject_memories(store: &Store, prompt: &str, max_memories: usize) 
         store.increment_memory_inject(memory.id.as_str())?;
     }
 
-    let mut lines = vec!["[Agent Memory — knowledge from past tasks]".to_string()];
+    let mut lines = vec!["[Memory]".to_string()];
     let now = Local::now();
     for mem in &memories {
         let age = format_memory_age(now.signed_duration_since(mem.created_at));
-        lines.push(format!("- [{}] ({}) {}", mem.memory_type.label(), age, mem.content));
+        lines.push(format!("[{} {}] {}", compact_type_label(&mem.memory_type), age, mem.content));
     }
     let memory_ids = memories.iter().map(|mem| mem.id.as_str().to_string()).collect();
     let token_count = templates::estimate_tokens(&lines.join("\n"));
@@ -164,12 +164,21 @@ pub(super) fn extract_type_or_function_names(prompt: &str) -> Vec<String> {
 
 pub(super) fn format_memory_age(duration: chrono::Duration) -> String {
     let days = duration.num_days();
-    if days >= 30 { format!("{}mo ago", days / 30) }
-    else if days >= 1 { format!("{}d ago", days) }
+    if days >= 30 { format!("{}mo", days / 30) }
+    else if days >= 1 { format!("{}d", days) }
     else {
         let hours = duration.num_hours();
-        if hours >= 1 { format!("{}h ago", hours) }
-        else { format!("{}m ago", duration.num_minutes().max(1)) }
+        if hours >= 1 { format!("{}h", hours) }
+        else { format!("{}m", duration.num_minutes().max(1)) }
+    }
+}
+
+fn compact_type_label(memory_type: &MemoryType) -> &'static str {
+    match memory_type {
+        MemoryType::Discovery => "D",
+        MemoryType::Convention => "C",
+        MemoryType::Lesson => "L",
+        MemoryType::Fact => "F",
     }
 }
 

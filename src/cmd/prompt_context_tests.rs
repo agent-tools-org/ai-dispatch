@@ -75,6 +75,25 @@ fn make_entry(topic: &str, path: Option<&str>, description: &str, content: Optio
     }
 }
 
+fn make_memory(id: &str, memory_type: MemoryType, content: &str, age: chrono::Duration) -> Memory {
+    Memory {
+        id: MemoryId(id.to_string()),
+        memory_type,
+        content: content.to_string(),
+        source_task_id: None,
+        agent: None,
+        project_path: detect_project_path(),
+        content_hash: format!("hash-{id}"),
+        created_at: Local::now() - age,
+        expires_at: None,
+        supersedes: None,
+        version: 1,
+        inject_count: 0,
+        last_injected_at: None,
+        success_count: 0,
+    }
+}
+
 #[test]
 fn format_entry_block_with_content() {
     let entry = make_entry(
@@ -206,6 +225,39 @@ fn extract_words_filters_stop_words() {
         .map(String::from)
         .collect();
     assert_eq!(words, expected);
+}
+
+#[test]
+fn compact_type_label_uses_single_letter_codes() {
+    assert_eq!(compact_type_label(&MemoryType::Discovery), "D");
+    assert_eq!(compact_type_label(&MemoryType::Convention), "C");
+    assert_eq!(compact_type_label(&MemoryType::Lesson), "L");
+    assert_eq!(compact_type_label(&MemoryType::Fact), "F");
+}
+
+#[test]
+fn inject_memories_uses_compact_format() {
+    let store = Store::open_memory().unwrap();
+    let memory = make_memory(
+        "m-compact",
+        MemoryType::Fact,
+        "cache miss in pool sync when pool is cold",
+        chrono::Duration::days(3),
+    );
+    store.insert_memory(&memory).unwrap();
+
+    let (block, ids) = inject_memories(&store, &memory.content, 10).unwrap().unwrap();
+
+    assert_eq!(ids, vec!["m-compact".to_string()]);
+    assert_eq!(block, "[Memory]\n[F 3d] cache miss in pool sync when pool is cold");
+}
+
+#[test]
+fn format_memory_age_omits_ago_suffix() {
+    assert_eq!(format_memory_age(chrono::Duration::days(45)), "1mo");
+    assert_eq!(format_memory_age(chrono::Duration::days(3)), "3d");
+    assert_eq!(format_memory_age(chrono::Duration::hours(2)), "2h");
+    assert_eq!(format_memory_age(chrono::Duration::minutes(5)), "5m");
 }
 
 #[test]

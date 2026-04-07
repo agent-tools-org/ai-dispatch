@@ -226,13 +226,15 @@ pub(super) fn project(action: ProjectAction) -> Result<()> {
 
 pub(super) fn memory(store: Arc<store::Store>, action: MemoryCommands) -> Result<()> {
     match action {
-        MemoryCommands::Add { memory_type, content, project } => {
-            cmd::memory::add(&store, &memory_type, &content, project.as_deref())
+        MemoryCommands::Add { memory_type, content, tier, project } => {
+            cmd::memory::add(&store, &memory_type, tier.as_deref(), &content, project.as_deref())
         }
         MemoryCommands::List { memory_type, all, project, stats } => {
             cmd::memory::list(&store, memory_type.as_deref(), project.as_deref(), all, stats)
         }
-        MemoryCommands::Search { query, project } => cmd::memory::search(&store, &query, project.as_deref()),
+        MemoryCommands::Search { query, project } => {
+            cmd::memory::search(&store, &query, project.as_deref())
+        }
         MemoryCommands::Update { id, content } => cmd::memory::update(&store, &id, &content),
         MemoryCommands::Forget { id } => cmd::memory::forget(&store, &id),
         MemoryCommands::History { id } => cmd::memory::history(&store, &id),

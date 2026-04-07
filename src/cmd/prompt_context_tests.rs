@@ -75,6 +75,26 @@ fn make_entry(topic: &str, path: Option<&str>, description: &str, content: Optio
     }
 }
 
+fn make_memory(id: &str, tier: MemoryTier, content: &str, project_path: Option<String>) -> Memory {
+    Memory {
+        id: MemoryId(id.to_string()),
+        memory_type: MemoryType::Fact,
+        tier,
+        content: content.to_string(),
+        source_task_id: None,
+        agent: None,
+        project_path,
+        content_hash: format!("hash-{id}"),
+        created_at: Local::now(),
+        expires_at: None,
+        supersedes: None,
+        version: 1,
+        inject_count: 0,
+        last_injected_at: None,
+        success_count: 0,
+    }
+}
+
 #[test]
 fn format_entry_block_with_content() {
     let entry = make_entry(
@@ -218,6 +238,44 @@ fn sanitize_strips_aid_tags() {
 fn sanitize_preserves_normal_content() {
     let content = "fn main() {\n    println!(\"ok\");\n}";
     assert_eq!(sanitize_injected_content(content), content);
+}
+
+#[test]
+fn inject_memories_includes_identity_and_critical_without_keyword_matches() {
+    let store = Store::open_memory().unwrap();
+    let project_path = detect_project_path();
+    let identity = make_memory(
+        "m-identity",
+        MemoryTier::Identity,
+        "Project codename is Atlas.",
+        project_path.clone(),
+    );
+    let critical = make_memory(
+        "m-critical",
+        MemoryTier::Critical,
+        "Use cargo check -p ai-dispatch for verification.",
+        project_path.clone(),
+    );
+    let on_demand = make_memory(
+        "m-on-demand",
+        MemoryTier::OnDemand,
+        "GraphQL pagination uses cursors.",
+        project_path,
+    );
+    store.insert_memory(&identity).unwrap();
+    store.insert_memory(&critical).unwrap();
+    store.insert_memory(&on_demand).unwrap();
+
+    let injected = inject_memories(&store, "zebra pumpkin nebula", 10)
+        .unwrap()
+        .unwrap();
+
+    assert!(injected.0.contains("[L0] [FACT]"));
+    assert!(injected.0.contains("Project codename is Atlas."));
+    assert!(injected.0.contains("[L1] [FACT]"));
+    assert!(injected.0.contains("Use cargo check -p ai-dispatch for verification."));
+    assert!(!injected.0.contains("GraphQL pagination uses cursors."));
+    assert_eq!(injected.1, vec!["m-identity".to_string(), "m-critical".to_string()]);
 }
 
 #[test]

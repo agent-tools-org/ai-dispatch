@@ -247,11 +247,11 @@ fn search_memories_escapes_wildcards() {
     .unwrap();
     drop(conn);
 
-    let percent_results = store.search_memories("100%", None, 10).unwrap();
+    let percent_results = store.search_memories("100%", None, 10, None).unwrap();
     assert_eq!(percent_results.len(), 1);
     assert_eq!(percent_results[0].content, "100% success rate");
 
-    let plain_results = store.search_memories("100", None, 10).unwrap();
+    let plain_results = store.search_memories("100", None, 10, None).unwrap();
     assert_eq!(plain_results.len(), 1);
     assert_eq!(plain_results[0].content, "100% success rate");
 }

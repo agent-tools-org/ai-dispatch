@@ -107,6 +107,37 @@ pub enum MemoryCommands {
 }
 
 #[derive(Subcommand)]
+pub enum KgCommands {
+    /// Add a knowledge-graph triple
+    Add {
+        subject: String,
+        predicate: String,
+        object: String,
+        #[arg(long)]
+        valid_from: Option<String>,
+        #[arg(long)]
+        source: Option<String>,
+    },
+    /// Query relationships for an entity
+    Query {
+        entity: String,
+        #[arg(long)]
+        as_of: Option<String>,
+    },
+    /// Invalidate a fact (mark as no longer true)
+    Invalidate {
+        /// Triple ID to invalidate
+        id: i64,
+    },
+    /// Show chronological timeline for an entity
+    Timeline { entity: String },
+    /// Search the knowledge graph
+    Search { query: String },
+    /// Show knowledge graph statistics
+    Stats,
+}
+
+#[derive(Subcommand)]
 #[allow(clippy::large_enum_variant)]
 pub enum FindingCommands {
     /// Post a finding to a workgroup

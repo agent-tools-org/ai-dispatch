@@ -46,6 +46,7 @@ fn make_task(id: &str, agent: AgentKind, status: TaskStatus) -> Task {
 mod agent_tests;
 mod db_tests;
 mod event_tests;
+mod kg_tests;
 mod task_tests;
 mod workgroup_tests;
 mod memory_tests;

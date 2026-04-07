@@ -49,6 +49,7 @@ pub(crate) async fn dispatch(store: Arc<crate::store::Store>, command: Commands)
         command @ (
             Commands::Project(..)
             | Commands::Memory(..)
+            | Commands::Kg(..)
             | Commands::Finding(..)
             | Commands::Broadcast(..)
             | Commands::Upgrade(..)
@@ -116,6 +117,7 @@ async fn dispatch_tertiary(store: Arc<crate::store::Store>, command: Commands) -
     match command {
         Commands::Project(command_args_c::ProjectArgs { action }) => handlers_b::project(action),
         Commands::Memory(command_args_c::MemoryArgs { action }) => handlers_b::memory(store, action),
+        Commands::Kg(command_args_c::KgArgs { action }) => handlers_b::kg(store, action),
         Commands::Finding(command_args_c::FindingArgs { action }) => handlers_b::finding(store, action),
         Commands::Broadcast(command_args_c::BroadcastArgs { group, message }) => handlers_b::broadcast(store, group, message),
         Commands::Upgrade(command_args_c::UpgradeArgs { force }) => handlers_b::upgrade(force),

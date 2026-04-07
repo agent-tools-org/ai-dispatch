@@ -19,6 +19,7 @@ pub mod explain;
 pub mod eta;
 pub mod group;
 pub mod hook;
+pub mod kg;
 pub mod memory;
 pub mod finding;
 pub mod init;

@@ -3,7 +3,7 @@
 
 use super::{resolve_finding_content, resolve_group};
 use crate::cli::{
-    ExperimentCommands, FindingCommands, HookAction, MemoryCommands, StoreCommands,
+    ExperimentCommands, FindingCommands, HookAction, KgCommands, MemoryCommands, StoreCommands,
 };
 use crate::cli_actions::{ConfigAction, ContainerAction, GroupAction, GroupFindingAction, ProjectAction, TeamAction, ToolAction, WorktreeAction};
 use crate::cmd;
@@ -25,14 +25,12 @@ pub(super) async fn export(
 pub(super) fn tree(store: Arc<store::Store>, task_id: String) -> Result<()> {
     cmd::tree::run(&store, &task_id)
 }
-
 pub(super) fn output(task_id: String, brief: bool) -> Result<()> {
     let store = store::Store::open(&crate::paths::db_path())?;
     let text = cmd::show::output_text_for_task(&store, &task_id, !brief)?;
     print!("{text}");
     Ok(())
 }
-
 pub(super) fn usage(
     store: Arc<store::Store>,
     session: bool,
@@ -43,7 +41,6 @@ pub(super) fn usage(
 ) -> Result<()> {
     cmd::usage::run(&store, session, agent, team, period, json)
 }
-
 pub(super) fn cost(
     store: Arc<store::Store>,
     group: Option<String>,
@@ -53,7 +50,6 @@ pub(super) fn cost(
 ) -> Result<()> {
     cmd::cost::run(&store, group, summary, agent, period)
 }
-
 pub(super) fn summary(store: Arc<store::Store>, group: String) -> Result<()> {
     cmd::summary_cli::run(&store, &group)
 }
@@ -69,7 +65,6 @@ pub(super) async fn retry(
         .await
         .map(|_| ())
 }
-
 pub(super) fn merge(
     store: Arc<store::Store>,
     task_id: Option<String>,
@@ -81,11 +76,9 @@ pub(super) fn merge(
     let group = resolve_group(group);
     cmd::merge::run(store, task_id.as_deref(), group.as_deref(), approve, check, target.as_deref())
 }
-
 pub(super) fn respond(task_id: String, input: Option<String>, file: Option<String>) -> Result<()> {
     cmd::respond::run(&task_id, input.as_deref(), file.as_deref())
 }
-
 pub(super) fn stop(store: Arc<store::Store>, task_id: String, force: bool) -> Result<()> {
     if force {
         cmd::stop::kill(&store, &task_id)
@@ -93,15 +86,12 @@ pub(super) fn stop(store: Arc<store::Store>, task_id: String, force: bool) -> Re
         cmd::stop::stop(&store, &task_id)
     }
 }
-
 pub(super) fn kill(store: Arc<store::Store>, task_id: String) -> Result<()> {
     cmd::stop::kill(&store, &task_id)
 }
-
 pub(super) fn steer(store: Arc<store::Store>, task_id: String, message: String) -> Result<()> {
     cmd::steer::run(&store, &task_id, &message)
 }
-
 pub(super) async fn ask(
     store: Arc<store::Store>,
     prompt: String,
@@ -112,7 +102,6 @@ pub(super) async fn ask(
 ) -> Result<()> {
     cmd::ask::run(store, prompt, agent, model, files, output).await
 }
-
 pub(super) fn query(
     store: Arc<store::Store>,
     prompt: String,
@@ -124,7 +113,6 @@ pub(super) fn query(
     let group = group.or_else(|| resolve_group(None));
     cmd::query::run(&store, &prompt, model.as_deref(), auto, group.as_deref(), finding)
 }
-
 pub(super) async fn mcp(store: Arc<store::Store>) -> Result<()> {
     cmd::mcp::run(store).await
 }
@@ -137,7 +125,6 @@ pub(super) fn hook(action: HookAction) -> Result<()> {
 pub(super) fn config(store: Arc<store::Store>, action: ConfigAction) -> Result<()> {
     cmd::config::run(&store, action)
 }
-
 pub(super) fn group(store: Arc<store::Store>, action: GroupAction) -> Result<()> {
     match action {
         GroupAction::Create { name, context, id } => {
@@ -238,6 +225,19 @@ pub(super) fn memory(store: Arc<store::Store>, action: MemoryCommands) -> Result
         MemoryCommands::Update { id, content } => cmd::memory::update(&store, &id, &content),
         MemoryCommands::Forget { id } => cmd::memory::forget(&store, &id),
         MemoryCommands::History { id } => cmd::memory::history(&store, &id),
+    }
+}
+
+pub(super) fn kg(store: Arc<store::Store>, action: KgCommands) -> Result<()> {
+    match action {
+        KgCommands::Add { subject, predicate, object, valid_from, source } => {
+            cmd::kg::add(&store, &subject, &predicate, &object, valid_from.as_deref(), source.as_deref())
+        }
+        KgCommands::Query { entity, as_of } => cmd::kg::query(&store, &entity, as_of.as_deref()),
+        KgCommands::Invalidate { id } => cmd::kg::invalidate(&store, id),
+        KgCommands::Timeline { entity } => cmd::kg::timeline(&store, &entity),
+        KgCommands::Search { query } => cmd::kg::search(&store, &query),
+        KgCommands::Stats => cmd::kg::stats(&store),
     }
 }
 

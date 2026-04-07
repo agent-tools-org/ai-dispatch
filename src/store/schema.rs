@@ -6,6 +6,7 @@ use anyhow::Result;
 use chrono::{DateTime, Local};
 use rusqlite::Row;
 
+use super::kg_schema::CREATE_KG_SQL;
 use super::Store;
 use crate::types::*;
 
@@ -131,6 +132,7 @@ CREATE INDEX IF NOT EXISTS idx_findings_workgroup ON findings(workgroup_id);";
 
 pub(super) fn create_tables(store: &Store) -> Result<()> {
     store.db().execute_batch(CREATE_TABLES_SQL)?;
+    store.db().execute_batch(CREATE_KG_SQL)?;
     Ok(())
 }
 
@@ -183,6 +185,7 @@ pub(super) fn migrate(store: &Store) -> Result<()> {
     let _ = conn.execute_batch("ALTER TABLE findings ADD COLUMN score TEXT;");
     let _ = conn.execute_batch("ALTER TABLE findings ADD COLUMN note TEXT;");
     let _ = conn.execute_batch("ALTER TABLE findings ADD COLUMN updated_at TEXT;");
+    let _ = conn.execute_batch(CREATE_KG_SQL);
     // Performance indexes for hot query paths
     let _ = conn.execute_batch("CREATE INDEX IF NOT EXISTS idx_tasks_created_at ON tasks(created_at);");
     let _ = conn.execute_batch("CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);");

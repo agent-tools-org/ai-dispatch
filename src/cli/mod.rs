@@ -14,8 +14,8 @@ use clap::{Parser, Subcommand};
 
 pub(crate) use extras::RunExtrasArgs;
 pub use sub_enums::{
-    AgentCommands, BatchAction, ExperimentCommands, FindingCommands, HookAction, MemoryCommands,
-    StoreCommands,
+    AgentCommands, BatchAction, ExperimentCommands, FindingCommands, HookAction, KgCommands,
+    MemoryCommands, StoreCommands,
 };
 
 #[derive(Parser)]
@@ -67,6 +67,8 @@ pub enum Commands {
     Tool(command_args_c::ToolArgs),
     Project(command_args_c::ProjectArgs),
     Memory(command_args_c::MemoryArgs),
+    /// Knowledge graph — temporal entity relationships
+    Kg(command_args_c::KgArgs),
     #[command(hide = true)]
     Finding(command_args_c::FindingArgs),
     #[command(hide = true)]

@@ -1,7 +1,7 @@
 // aid CLI argument structs, part C.
 // Exports clap Args types for top-level commands from worktree through web.
 
-use crate::cli::{FindingCommands, MemoryCommands, StoreCommands};
+use crate::cli::{FindingCommands, KgCommands, MemoryCommands, StoreCommands};
 use crate::cli_actions::{ProjectAction, TeamAction, ToolAction, WorktreeAction};
 use clap::Args;
 
@@ -69,6 +69,12 @@ pub struct ProjectArgs {
 pub struct MemoryArgs {
     #[command(subcommand)]
     pub action: MemoryCommands,
+}
+
+#[derive(Args)]
+pub struct KgArgs {
+    #[command(subcommand)]
+    pub action: KgCommands,
 }
 
 #[derive(Args)]

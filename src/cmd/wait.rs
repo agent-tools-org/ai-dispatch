@@ -159,7 +159,10 @@ async fn wait_for_task_ids_inner(
                 return Ok(WaitOutcome::Completed);
             }
 
-            if matches!(status, TaskStatus::Pending | TaskStatus::Running | TaskStatus::AwaitingInput) {
+            if matches!(
+                status,
+                TaskStatus::Waiting | TaskStatus::Pending | TaskStatus::Running | TaskStatus::AwaitingInput
+            ) {
                 remaining += 1;
             }
         }
@@ -177,7 +180,7 @@ async fn wait_for_task_ids_inner(
 }
 
 fn current_running_ids(store: &Arc<Store>, group: Option<&str>) -> Result<Vec<String>> {
-    let mut tasks = store.list_tasks(TaskFilter::Running)?;
+    let mut tasks = store.list_tasks(TaskFilter::Active)?;
     if let Some(group_id) = group {
         tasks.retain(|t| t.workgroup_id.as_deref() == Some(group_id));
     }
@@ -287,6 +290,31 @@ mod tests {
         store.insert_task(&second).unwrap();
         store.update_task_status("t-first", TaskStatus::Done).unwrap();
         sleep(Duration::from_millis(2_100)).await;
+        assert!(!handle.is_finished());
+        store.update_task_status("t-second", TaskStatus::Done).unwrap();
+        let outcome = tokio::time::timeout(Duration::from_secs(3), handle).await.unwrap().unwrap().unwrap();
+        assert_eq!(outcome, WaitOutcome::Completed);
+    }
+
+    #[tokio::test]
+    async fn wait_for_task_ids_tracks_pending_group_tasks_added_mid_watch() {
+        let store = Arc::new(Store::open_memory().unwrap());
+        let mut first = make_task("t-first", TaskStatus::Running);
+        first.workgroup_id = Some("wg-dyn".to_string());
+        store.insert_task(&first).unwrap();
+        let wait_store = store.clone();
+        let handle = tokio::spawn(async move {
+            wait_for_task_ids(&wait_store, &[String::from("t-first")], Some("wg-dyn"), false, None).await
+        });
+        sleep(Duration::from_millis(100)).await;
+        let mut second = make_task("t-second", TaskStatus::Pending);
+        second.workgroup_id = Some("wg-dyn".to_string());
+        store.insert_task(&second).unwrap();
+        store.update_task_status("t-first", TaskStatus::Done).unwrap();
+        sleep(Duration::from_millis(2_100)).await;
+        assert!(!handle.is_finished());
+        store.update_task_status("t-second", TaskStatus::Running).unwrap();
+        sleep(Duration::from_millis(100)).await;
         assert!(!handle.is_finished());
         store.update_task_status("t-second", TaskStatus::Done).unwrap();
         let outcome = tokio::time::timeout(Duration::from_secs(3), handle).await.unwrap().unwrap().unwrap();

@@ -26,15 +26,26 @@ const STOP_WORDS: &[&str] = &[
 
 pub(super) fn inject_memories(store: &Store, prompt: &str, max_memories: usize) -> Result<Option<(String, Vec<String>)>> {
     let project_path = detect_project_path();
+    let mut always_memories = store.list_memories_by_tier(
+        project_path.as_deref(),
+        &[MemoryTier::Identity, MemoryTier::Critical],
+    )?;
+    always_memories.sort_by(|a, b| {
+        memory_tier_rank(a.tier)
+            .cmp(&memory_tier_rank(b.tier))
+            .then_with(|| b.created_at.cmp(&a.created_at))
+    });
+    let always_memories: Vec<_> = always_memories.into_iter().take(max_memories).collect();
     let keywords = extract_words(prompt);
     let queries = build_memory_queries(prompt, &keywords);
-    if queries.is_empty() {
-        return Ok(None);
-    }
-
     let mut scored: HashMap<String, (Memory, usize)> = HashMap::new();
     for query in queries {
-        for memory in store.search_memories(&query, project_path.as_deref(), max_memories)? {
+        for memory in store.search_memories(
+            &query,
+            project_path.as_deref(),
+            max_memories,
+            Some(&[MemoryTier::OnDemand]),
+        )? {
             let entry = scored
                 .entry(memory.id.as_str().to_string())
                 .or_insert((memory.clone(), 0));
@@ -47,7 +58,14 @@ pub(super) fn inject_memories(store: &Store, prompt: &str, max_memories: usize) 
         b.1.cmp(&a.1)
             .then_with(|| b.0.created_at.cmp(&a.0.created_at))
     });
-    let memories: Vec<_> = scored.into_iter().take(max_memories).map(|(mem, _)| mem).collect();
+    let remaining_slots = max_memories.saturating_sub(always_memories.len());
+    let mut memories = always_memories;
+    memories.extend(
+        scored
+            .into_iter()
+            .take(remaining_slots)
+            .map(|(memory, _)| memory),
+    );
     if memories.is_empty() {
         return Ok(None);
     }
@@ -59,12 +77,26 @@ pub(super) fn inject_memories(store: &Store, prompt: &str, max_memories: usize) 
     let now = Local::now();
     for mem in &memories {
         let age = format_memory_age(now.signed_duration_since(mem.created_at));
-        lines.push(format!("[{} {}] {}", compact_type_label(&mem.memory_type), age, mem.content));
+        let tier_prefix = match mem.tier {
+            MemoryTier::Identity => "L0 ",
+            MemoryTier::Critical => "L1 ",
+            _ => "",
+        };
+        lines.push(format!("[{}{} {}] {}", tier_prefix, compact_type_label(&mem.memory_type), age, mem.content));
     }
     let memory_ids = memories.iter().map(|mem| mem.id.as_str().to_string()).collect();
     let token_count = templates::estimate_tokens(&lines.join("\n"));
     aid_info!("[aid] Injected {} memories (~{} tokens)", memories.len(), token_count);
     Ok(Some((lines.join("\n"), memory_ids)))
+}
+
+fn memory_tier_rank(tier: MemoryTier) -> u8 {
+    match tier {
+        MemoryTier::Identity => 0,
+        MemoryTier::Critical => 1,
+        MemoryTier::OnDemand => 2,
+        MemoryTier::Deep => 3,
+    }
 }
 
 pub(super) fn inject_project_state() -> Option<String> {

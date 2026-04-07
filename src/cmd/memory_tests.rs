@@ -55,3 +55,16 @@ fn accepts_performance_notes() {
         "discovery"
     ));
 }
+
+#[test]
+fn parse_memory_tier_defaults_to_on_demand() {
+    assert_eq!(parse_memory_tier(None).unwrap(), MemoryTier::OnDemand);
+}
+
+#[test]
+fn parse_memory_tier_accepts_explicit_values() {
+    assert_eq!(
+        parse_memory_tier(Some("critical")).unwrap(),
+        MemoryTier::Critical
+    );
+}

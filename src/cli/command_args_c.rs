@@ -62,6 +62,7 @@ pub struct ProjectArgs {
 #[derive(Args)]
 #[command(after_help = r#"Examples:
   aid memory add discovery "The auth module uses bcrypt not argon2"
+  aid memory add convention "Use anyhow::Result in CLI handlers" --tier critical
   aid memory list --type convention
   aid memory search "auth"
   aid memory forget m-a3f1"#)]

@@ -72,6 +72,7 @@ CREATE INDEX IF NOT EXISTS idx_findings_workgroup ON findings(workgroup_id);
 CREATE TABLE IF NOT EXISTS memories (
     id TEXT PRIMARY KEY,
     memory_type TEXT NOT NULL,
+    tier TEXT NOT NULL DEFAULT 'on_demand',
     content TEXT NOT NULL,
     source_task_id TEXT,
     agent TEXT,
@@ -96,6 +97,7 @@ const CREATE_WORKGROUPS_SQL: &str = "CREATE TABLE IF NOT EXISTS workgroups (
 const CREATE_MEMORIES_SQL: &str = "CREATE TABLE IF NOT EXISTS memories (
     id TEXT PRIMARY KEY,
     memory_type TEXT NOT NULL,
+    tier TEXT NOT NULL DEFAULT 'on_demand',
     content TEXT NOT NULL,
     source_task_id TEXT,
     agent TEXT,
@@ -154,6 +156,7 @@ pub(super) fn migrate(store: &Store) -> Result<()> {
     let _ = conn.execute_batch("ALTER TABLE memories ADD COLUMN inject_count INTEGER NOT NULL DEFAULT 0;");
     let _ = conn.execute_batch("ALTER TABLE memories ADD COLUMN last_injected_at TEXT;");
     let _ = conn.execute_batch("ALTER TABLE memories ADD COLUMN success_count INTEGER NOT NULL DEFAULT 0;");
+    let _ = conn.execute_batch("ALTER TABLE memories ADD COLUMN tier TEXT NOT NULL DEFAULT 'on_demand';");
     let _ = conn.execute_batch("ALTER TABLE events ADD COLUMN metadata TEXT;");
     let _ = conn.execute_batch("ALTER TABLE tasks ADD COLUMN prompt_tokens INTEGER;");
     let _ = conn.execute_batch("ALTER TABLE tasks ADD COLUMN verify TEXT;");
@@ -244,6 +247,10 @@ pub(super) fn row_to_memory(row: &Row) -> rusqlite::Result<Result<Memory>> {
     Ok(Ok(Memory {
         id: MemoryId(row.get::<_, String>(0)?),
         memory_type: MemoryType::parse_str(&row.get::<_, String>(1)?).unwrap_or(MemoryType::Fact),
+        tier: row
+            .get::<_, Option<String>>(14)?
+            .and_then(|value| MemoryTier::parse_str(&value))
+            .unwrap_or(MemoryTier::OnDemand),
         content: row.get(2)?,
         source_task_id: row.get(3)?,
         agent: row.get(4)?,
@@ -253,7 +260,7 @@ pub(super) fn row_to_memory(row: &Row) -> rusqlite::Result<Result<Memory>> {
         expires_at: row.get::<_, Option<String>>(8)?.map(|s| parse_dt(&s)),
         supersedes: row
             .get::<_, Option<String>>(9)?
-                .map(MemoryId),
+            .map(MemoryId),
         version: row.get::<_, i64>(10)?,
         inject_count: row.get::<_, i64>(11)?,
         last_injected_at: row

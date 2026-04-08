@@ -1,3 +1,11 @@
+## v8.76.0 (2026-04-08)
+- Add time-based anti-polling cooldown (10s) for `aid board` — blocks rapid repeated calls with actionable hints
+- Add `--force` flag to `aid board` to bypass anti-polling cooldown
+- Tighten fingerprint-based repeat detection threshold from 3 to 2 identical checks
+- Surface ETA estimation in regular `aid board` output for running tasks (was only in `--stream` mode)
+- Add progress percentage display for running tasks based on historical median duration (capped at 99%)
+
+
 ## v8.75.1 (2026-04-08)
 - Fix batch `best_of` dispatches reusing active task IDs and harden best-result selection
 - Clarify the batch TOML rename from `timeout` to `max_duration_mins` in parser errors and docs

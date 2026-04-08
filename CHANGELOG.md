@@ -1,3 +1,10 @@
+## v8.78.0 (2026-04-08)
+- Fix `aid board` always showing data even when anti-poll triggers — warnings go to stderr, exit code 0 (#81)
+- Fix `best-of-N` output file collision — each candidate gets isolated output paths, winner's files promoted (#82)
+- Fix `aid batch --quiet` zero progress visibility — new `aid_progress!` macro emits flushed lifecycle events (#83)
+- Fix batch concurrency limiter: better I/O-bound defaults (cpu_count clamped 4-24), `max_concurrent` in TOML defaults, agent diversity includes fallback targets (#84)
+
+
 ## v8.77.0 (2026-04-08)
 - Strengthen anti-polling: remove `--force` bypass hints from board messages, add 30s force cooldown, escalating resistance (hard block after 3+ force calls in 2min)
 

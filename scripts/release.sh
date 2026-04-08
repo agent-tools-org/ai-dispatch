@@ -95,6 +95,11 @@ update_cargo_version() {
   mv "${tmp_file}" "${cargo_file}"
 }
 
+sync_cargo_lock() {
+  (cd "${repo_root}" && cargo metadata --format-version 1 >/dev/null) \
+    || fail "failed to sync Cargo.lock"
+}
+
 prepend_changelog_entry() {
   local version="$1"
   local notes_file="$2"
@@ -147,6 +152,7 @@ main() {
 
   run_release_tests
   update_cargo_version "${version}"
+  sync_cargo_lock
   prepend_changelog_entry "${version}" "${notes_file}"
   bash "${repo_root}/.github/scripts/check-changelog.sh" "${tag}"
 
@@ -155,6 +161,7 @@ main() {
 
   if [[ "${dry_run}" == "true" ]]; then
     echo "dry-run: updated Cargo.toml to ${version}"
+    echo "dry-run: synchronized Cargo.lock"
     echo "dry-run: prepended CHANGELOG.md entry for ${tag}"
     echo "dry-run: would commit with message: feat: release ${tag} — ${headline}"
     echo "dry-run: would create tag ${tag}"
@@ -162,7 +169,7 @@ main() {
     exit 0
   fi
 
-  git -C "${repo_root}" add Cargo.toml CHANGELOG.md
+  git -C "${repo_root}" add Cargo.toml Cargo.lock CHANGELOG.md
   git -C "${repo_root}" commit -m "feat: release ${tag} — ${headline}"
   git -C "${repo_root}" tag "${tag}"
   git -C "${repo_root}" push origin "${branch}"

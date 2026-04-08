@@ -1,3 +1,7 @@
+## v8.77.0 (2026-04-08)
+- Strengthen anti-polling: remove `--force` bypass hints from board messages, add 30s force cooldown, escalating resistance (hard block after 3+ force calls in 2min)
+
+
 ## v8.76.0 (2026-04-08)
 - Add time-based anti-polling cooldown (10s) for `aid board` — blocks rapid repeated calls with actionable hints
 - Add `--force` flag to `aid board` to bypass anti-polling cooldown

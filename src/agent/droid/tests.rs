@@ -4,6 +4,7 @@
 
 use super::DroidAgent;
 use crate::agent::{Agent, RunOpts};
+use crate::paths;
 use crate::rate_limit;
 use crate::types::{AgentKind, EventKind, TaskId};
 
@@ -105,6 +106,8 @@ fn parses_session_forked_events_as_milestones() {
 
 #[test]
 fn marks_droid_rate_limits_from_status_and_error_type() {
+    let temp = tempfile::tempdir().unwrap();
+    let _aid_home = paths::AidHomeGuard::set(temp.path());
     rate_limit::clear_rate_limit(&AgentKind::Droid);
     let agent = DroidAgent;
     let line = r#"{"type":"error","status":429,"error_type":"rate_limit_exceeded"}"#;

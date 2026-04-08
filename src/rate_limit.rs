@@ -15,6 +15,9 @@ fn marker_path(agent: &AgentKind) -> PathBuf {
 
 pub fn mark_rate_limited(agent: &AgentKind, message: &str) {
     let path = marker_path(agent);
+    if let Some(parent) = path.parent() {
+        let _ = fs::create_dir_all(parent);
+    }
     let recovery_at = parse_recovery_time(message);
     let truncated_message = if message.len() > 200 {
         let mut end = 200;

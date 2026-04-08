@@ -180,15 +180,15 @@ research = 6
     assert_eq!(kind, AgentKind::Gemini.as_str());
 }
 #[test]
-fn complex_tasks_go_to_codex() {
+fn complex_tasks_go_to_claude() {
     let prompt = format!(
         "Implement a retry-aware test suite across src/main.rs and src/cmd/run.rs. {}",
         "Add validation coverage and refactor the task dispatch flow. ".repeat(12)
     );
     let (kind, reason) = select(&prompt, &["src"], &all());
-    assert_eq!(kind, AgentKind::Codex.as_str());
+    assert_eq!(kind, AgentKind::Claude.as_str());
     assert!(reason.contains("complex-impl"));
-    assert!(reason.contains("codex"));
+    assert!(reason.contains("claude"));
 }
 #[test]
 fn unavailable_primary_agent_falls_back_to_next_best() {

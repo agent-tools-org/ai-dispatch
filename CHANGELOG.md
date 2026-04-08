@@ -1,3 +1,8 @@
+## v8.74.1 (2026-04-08)
+- Improve streamed CLI output formatting across `aid show`, TUI, and web views
+- Fix Gemini response extraction for content arrays, tool boundaries, and revision-style text events
+
+
 ## v8.74.0 (2026-04-08)
 - Allow read-only agents to write configured `result_file` outputs
 - Fix read-only mode blocking persisted result files

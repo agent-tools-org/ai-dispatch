@@ -13,6 +13,7 @@ fn build_command_uses_stream_json_and_verbose() {
     let opts = RunOpts {
         dir: Some(dir.path().to_string_lossy().to_string()),
         output: None,
+        result_file: None,
         model: Some("sonnet".to_string()),
         budget: false,
         read_only: false,
@@ -35,6 +36,26 @@ fn build_command_read_only_restricts_tools() {
     let opts = RunOpts {
         dir: None,
         output: None,
+        result_file: Some("result.md".to_string()),
+        model: None,
+        budget: false,
+        read_only: true,
+        context_files: vec![],
+        session_id: None,
+        env: None,
+        env_forward: None,
+    };
+    let cmd = ClaudeAgent.build_command("inspect", &opts).unwrap();
+    let args: Vec<String> = cmd.get_args().map(|arg| arg.to_string_lossy().into_owned()).collect();
+    assert!(args.windows(2).any(|pair| pair == ["--allowedTools", "Read,Glob,Grep,LS,Write"]));
+}
+
+#[test]
+fn build_command_read_only_without_result_file_keeps_strict_tools() {
+    let opts = RunOpts {
+        dir: None,
+        output: None,
+        result_file: None,
         model: None,
         budget: false,
         read_only: true,

@@ -33,7 +33,12 @@ impl super::Agent for ClaudeAgent {
             "--dangerously-skip-permissions",
         ]);
         if opts.read_only {
-            cmd.args(["--allowedTools", "Read,Glob,Grep,LS"]);
+            let allowed_tools = if opts.result_file.is_some() {
+                "Read,Glob,Grep,LS,Write"
+            } else {
+                "Read,Glob,Grep,LS"
+            };
+            cmd.args(["--allowedTools", allowed_tools]);
         }
         if let Some(ref model) = opts.model {
             cmd.args(["--model", model]);

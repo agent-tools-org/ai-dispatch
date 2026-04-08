@@ -62,6 +62,7 @@ pub(super) async fn run(
         &dir,
         &repo,
         &output,
+        &result_file,
         &model,
         budget,
         read_only,
@@ -209,6 +210,7 @@ fn resolve_run_agent(
     dir: &Option<String>,
     repo: &Option<String>,
     output: &Option<String>,
+    result_file: &Option<String>,
     model: &Option<String>,
     budget: bool,
     read_only: bool,
@@ -226,6 +228,7 @@ fn resolve_run_agent(
             .or_else(|| repo.clone())
             .or_else(|| worktree.as_ref().map(|_| ".".to_string())),
         output: output.clone(),
+        result_file: result_file.clone(),
         model: model.clone(),
         budget,
         read_only,

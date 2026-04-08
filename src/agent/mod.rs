@@ -59,6 +59,7 @@ pub trait Agent: Send + Sync {
 pub struct RunOpts {
     pub dir: Option<String>,
     pub output: Option<String>,
+    pub result_file: Option<String>,
     pub model: Option<String>,
     pub budget: bool,
     pub read_only: bool,

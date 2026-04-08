@@ -15,6 +15,7 @@ fn build_command_includes_external_context_directories() {
     let opts = RunOpts {
         dir: Some(repo.to_string_lossy().into_owned()),
         output: None,
+        result_file: None,
         model: None,
         budget: false,
         read_only: false,
@@ -45,6 +46,7 @@ fn build_command_skips_default_model_for_auto_routing() {
     let opts = RunOpts {
         dir: None,
         output: None,
+        result_file: None,
         model: None,
         budget: false,
         read_only: false,

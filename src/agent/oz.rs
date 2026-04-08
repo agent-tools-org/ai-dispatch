@@ -101,6 +101,7 @@ mod tests {
         let opts = RunOpts {
             dir: None,
             output: None,
+            result_file: None,
             model: None,
             budget: false,
             read_only: false,
@@ -125,6 +126,7 @@ mod tests {
         let opts = RunOpts {
             dir: Some("/tmp/test".to_string()),
             output: None,
+            result_file: None,
             model: None,
             budget: false,
             read_only: false,

@@ -26,10 +26,17 @@ impl super::Agent for OpenCodeAgent {
             aid_warn!("[aid] ⚠OpenCode read-only is prompt-level only, not enforced. Use --worktree for isolation.");
         }
         let effective_prompt = if opts.read_only {
-            format!(
-                "IMPORTANT: READ-ONLY MODE. Do NOT modify, create, or delete any files. Only read and analyze.\n\n{}",
-                prompt
-            )
+            if opts.result_file.is_some() {
+                format!(
+                    "IMPORTANT: READ-ONLY MODE. Do NOT modify, create, or delete any files, EXCEPT the result file specified in this prompt. Only read, analyze, and write your findings to the designated result file.\n\n{}",
+                    prompt
+                )
+            } else {
+                format!(
+                    "IMPORTANT: READ-ONLY MODE. Do NOT modify, create, or delete any files. Only read and analyze.\n\n{}",
+                    prompt
+                )
+            }
         } else {
             prompt.to_string()
         };

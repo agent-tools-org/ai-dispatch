@@ -153,6 +153,7 @@ fn apply_run_env_sets_explicit_vars_on_command() {
     let opts = RunOpts {
         dir: None,
         output: None,
+        result_file: None,
         model: None,
         budget: false,
         read_only: false,
@@ -182,6 +183,7 @@ fn apply_run_env_sets_aid_home_on_command() {
     let opts = RunOpts {
         dir: None,
         output: None,
+        result_file: None,
         model: None,
         budget: false,
         read_only: false,
@@ -224,6 +226,7 @@ fn reports_forwarded_env_for_subprocess() {
     let opts = RunOpts {
         dir: None,
         output: None,
+        result_file: None,
         model: None,
         budget: false,
         read_only: false,

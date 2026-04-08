@@ -211,6 +211,7 @@ mod tests {
         RunOpts {
             dir: None,
             output: None,
+            result_file: None,
             model: None,
             budget: false,
             read_only: false,

@@ -56,6 +56,7 @@ fn build_command_includes_file_flags_for_context_files() {
     let opts = RunOpts {
         dir: Some("/project".to_string()),
         output: None,
+        result_file: None,
         model: Some("test-model".to_string()),
         budget: false,
         read_only: false,
@@ -113,6 +114,7 @@ fn session_flags_appear_in_command() {
     let opts = RunOpts {
         dir: None,
         output: None,
+        result_file: None,
         model: None,
         budget: false,
         read_only: false,
@@ -140,6 +142,7 @@ fn budget_mode_sets_minimal_variant() {
     let opts = RunOpts {
         dir: None,
         output: None,
+        result_file: None,
         model: None,
         budget: true,
         read_only: false,
@@ -174,6 +177,7 @@ fn no_session_flags_when_session_id_absent() {
     let opts = RunOpts {
         dir: None,
         output: None,
+        result_file: None,
         model: None,
         budget: false,
         read_only: false,
@@ -201,6 +205,7 @@ fn build_command_read_only_prepends_readonly_prefix() {
     let opts = RunOpts {
         dir: None,
         output: None,
+        result_file: Some("result.md".to_string()),
         model: None,
         budget: false,
         read_only: true,
@@ -220,5 +225,32 @@ fn build_command_read_only_prepends_readonly_prefix() {
     let last_arg = args.last().expect("should have prompt as last arg");
     assert!(last_arg.contains("READ-ONLY MODE"));
     assert!(last_arg.starts_with("IMPORTANT: READ-ONLY MODE"));
+    assert!(last_arg.contains("EXCEPT the result file specified in this prompt"));
     assert!(last_arg.contains("analyze this code"));
+}
+
+#[test]
+fn build_command_read_only_without_result_file_keeps_strict_prefix() {
+    let opts = RunOpts {
+        dir: None,
+        output: None,
+        result_file: None,
+        model: None,
+        budget: false,
+        read_only: true,
+        context_files: vec![],
+        session_id: None,
+        env: None,
+        env_forward: None,
+    };
+    let cmd = OpenCodeAgent
+        .build_command("analyze this code", &opts)
+        .expect("command should build");
+    let args: Vec<String> = cmd
+        .get_args()
+        .map(|a| a.to_string_lossy().to_string())
+        .collect();
+
+    let last_arg = args.last().expect("should have prompt as last arg");
+    assert!(last_arg.contains("Do NOT modify, create, or delete any files. Only read and analyze."));
 }

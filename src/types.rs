@@ -52,6 +52,7 @@ impl fmt::Display for WorkgroupId {
 pub enum AgentKind {
     Gemini,
     Codex,
+    Copilot,
     OpenCode,
     Cursor,
     Kilo,
@@ -66,6 +67,7 @@ impl AgentKind {
     pub const ALL_BUILTIN: &'static [Self] = &[
         Self::Gemini,
         Self::Codex,
+        Self::Copilot,
         Self::OpenCode,
         Self::Cursor,
         Self::Kilo,
@@ -78,6 +80,7 @@ impl AgentKind {
     pub const ALL: &'static [Self] = &[
         Self::Gemini,
         Self::Codex,
+        Self::Copilot,
         Self::OpenCode,
         Self::Cursor,
         Self::Kilo,
@@ -92,6 +95,7 @@ impl AgentKind {
         match s.to_lowercase().as_str() {
             "gemini" => Some(Self::Gemini),
             "codex" => Some(Self::Codex),
+            "copilot" => Some(Self::Copilot),
             "opencode" => Some(Self::OpenCode),
             "cursor" => Some(Self::Cursor),
             "kilo" => Some(Self::Kilo),
@@ -107,6 +111,7 @@ impl AgentKind {
         match self {
             Self::Gemini => "gemini",
             Self::Codex => "codex",
+            Self::Copilot => "copilot",
             Self::OpenCode => "opencode",
             Self::Cursor => "cursor",
             Self::Kilo => "kilo",
@@ -141,6 +146,14 @@ impl AgentKind {
                 "implement, create, build, refactor, test",
                 true,
                 "local",
+            )),
+            Self::Copilot => Some((
+                "copilot",
+                "General coding, repo navigation, tool-assisted implementation",
+                "subscription",
+                "implement, build, refactor, test, explain, debug",
+                true,
+                "api",
             )),
             Self::OpenCode => Some((
                 "opencode",

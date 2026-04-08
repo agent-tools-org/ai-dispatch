@@ -5,6 +5,7 @@ pub mod claude;
 pub(crate) mod claude_events;
 pub mod codebuff;
 pub mod codex;
+pub mod copilot;
 pub mod cursor;
 pub mod droid;
 pub mod gemini;
@@ -76,6 +77,7 @@ pub fn detect_agents() -> Vec<AgentKind> {
         ("gemini", AgentKind::Gemini),
         ("codex", AgentKind::Codex),
         ("opencode", AgentKind::OpenCode),
+        ("copilot", AgentKind::Copilot),
         ("agent", AgentKind::Cursor),
         ("cursor-agent", AgentKind::Cursor),
         ("droid", AgentKind::Droid),
@@ -102,6 +104,7 @@ pub(crate) fn select_agent_with_reason(
 pub fn get_agent(kind: AgentKind) -> Box<dyn Agent> {
     match kind {
         AgentKind::Codex => Box::new(codex::CodexAgent),
+        AgentKind::Copilot => Box::new(copilot::CopilotAgent),
         AgentKind::Cursor => Box::new(cursor::CursorAgent),
         AgentKind::Gemini => Box::new(gemini::GeminiAgent),
         AgentKind::OpenCode => Box::new(opencode::OpenCodeAgent),

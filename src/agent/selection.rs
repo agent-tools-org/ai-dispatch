@@ -230,6 +230,7 @@ const CODING_FALLBACK_CHAIN: &[AgentKind] = &[
     AgentKind::Gemini,
     AgentKind::Codex,
     AgentKind::Claude,
+    AgentKind::Copilot,
     AgentKind::Cursor,
     AgentKind::Droid,
     AgentKind::OpenCode,
@@ -239,6 +240,7 @@ const CODING_FALLBACK_CHAIN: &[AgentKind] = &[
 const RESEARCH_FALLBACK_CHAIN: &[AgentKind] = &[
     AgentKind::Gemini,
     AgentKind::Claude,
+    AgentKind::Copilot,
     AgentKind::Codex,
     AgentKind::Cursor,
     AgentKind::OpenCode,

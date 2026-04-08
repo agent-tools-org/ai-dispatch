@@ -102,7 +102,12 @@ fn format_duration(duration_ms: Option<i64>) -> String {
 
 fn task_cost(task: &Task) -> f64 {
     task.cost_usd.unwrap_or_else(|| {
-        if task.agent == AgentKind::Cursor { 0.0 } else { cost::estimate_cost(task.tokens.unwrap_or(0), task.model.as_deref(), task.agent).unwrap_or(0.0) }
+        if matches!(task.agent, AgentKind::Cursor | AgentKind::Copilot) {
+            0.0
+        } else {
+            cost::estimate_cost(task.tokens.unwrap_or(0), task.model.as_deref(), task.agent)
+                .unwrap_or(0.0)
+        }
     })
 }
 
@@ -147,5 +152,25 @@ mod tests {
         let stats = StatsSnapshot { agent_rows: Vec::new(), failure_rows: Vec::new(), model_rows: Vec::new() };
 
         assert_eq!(render_output(&stats, UsageWindow::Days(7)), "No tasks matched the selected filters for last 7 days.\n");
+    }
+
+    #[test]
+    fn copilot_defaults_to_subscription_cost_when_cost_is_missing() {
+        let store = Store::open_memory().unwrap();
+        let task = task(
+            "t-copilot",
+            AgentKind::Copilot,
+            TaskStatus::Done,
+            0,
+            "gpt-5",
+            None,
+            Some(1_000),
+        );
+        store.insert_task(&task).unwrap();
+
+        let stats = collect(&store, UsageWindow::Days(7), None, Local::now()).unwrap();
+
+        assert_eq!(stats.agent_rows[0].cost, "subscription");
+        assert_eq!(stats.model_rows[0].cost, "subscription");
     }
 }

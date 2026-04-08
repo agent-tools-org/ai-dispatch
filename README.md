@@ -30,7 +30,7 @@ Without an orchestrator, a multi-agent CLI workflow breaks down fast:
 
 ### Prerequisites
 
-Install Rust (1.85 or later, required for edition 2024) and whichever AI CLIs you want `aid` to orchestrate. `aid` auto-detects supported agents on your `PATH`: `gemini`, `codex`, `opencode`, `cursor`, `kilo`, `codebuff`, `droid`, `oz`, and `auto`.
+Install Rust (1.85 or later, required for edition 2024) and whichever AI CLIs you want `aid` to orchestrate. `aid` auto-detects supported agents on your `PATH`: `gemini`, `codex`, `copilot`, `opencode`, `cursor`, `kilo`, `codebuff`, `droid`, `oz`, `claude`, and `auto`.
 
 ### Install
 
@@ -134,7 +134,7 @@ The model tier is auto-selected based on complexity: low → cheap/free models, 
 
 An agent is a **non-interactive CLI** that accepts a prompt, performs the task autonomously, and exits. `aid` normalizes command construction, logging, usage extraction, and completion handling behind one adapter trait.
 
-Built-in agents: `gemini`, `codex`, `opencode`, `cursor`, `kilo`, `codebuff`, `droid`, `oz`. Custom agents can be added via `aid agent add` for any compatible CLI (e.g. `aider`). Interactive/session-based tools like Claude Code are **not** agents — they are orchestrators that call `aid`, not targets that `aid` dispatches.
+Built-in agents: `gemini`, `codex`, `copilot`, `opencode`, `cursor`, `kilo`, `codebuff`, `droid`, `oz`, `claude`. Custom agents can be added via `aid agent add` for any compatible CLI (e.g. `aider`). `aid` supports non-interactive CLI modes such as `claude -p` and `copilot -p`; interactive chat sessions can still orchestrate `aid`, but they are not required.
 
 Examples:
 
@@ -145,6 +145,9 @@ aid run gemini "Compare SQLite and Postgres for local task state" \
 aid run codex "Implement retry-aware board filtering" \
   --dir . \
   --worktree feat/board-filter
+
+aid run copilot "Trace the retry path and simplify the error handling" \
+  --dir .
 
 aid run opencode "Rename TaskRow to BoardRow in src/board.rs" \
   --dir .
@@ -308,8 +311,8 @@ Run agents inside Apple Container micro-VMs for process isolation. The `--sandbo
 # Run a task in a sandboxed container
 aid run codex "Implement feature" --dir . --sandbox
 
-# Supported agents (node-based): codex, gemini, kilo, codebuff
-# Falls back to host for native agents: opencode, droid, oz, cursor
+# Container-ready agents: codex, gemini, kilo, codebuff
+# Falls back to host for unsandboxed/native agents: opencode, copilot, droid, oz, cursor, claude
 ```
 
 The sandbox image (`aid-sandbox:latest`) comes with Node.js and all node-based agent CLIs pre-installed. Build it from the included `Containerfile`:
@@ -357,7 +360,7 @@ Press `a` to toggle between today-only and all-time task views.
 
 Skills are methodology files loaded from `~/.aid/skills/` and appended to the effective prompt under a `--- Methodology ---` section. They make agent behavior more consistent across runs.
 
-Skills are auto-injected by default: coding agents (`codex`, `opencode`, `cursor`, `kilo`, `codebuff`) get the `implementer` skill, and `gemini` gets the `researcher` skill. Use `--skill` to add extras or `--no-skill` to disable auto-injection.
+Skills are auto-injected by default: coding agents (`codex`, `copilot`, `claude`, `opencode`, `kilo`, `codebuff`, `droid`, `oz`) get the `implementer` skill, `gemini` gets the `researcher` skill, and `cursor` keeps prompts unchanged unless you add skills explicitly. Use `--skill` to add extras or `--no-skill` to disable auto-injection.
 
 Examples:
 
@@ -692,14 +695,16 @@ Use `aid show <task-id> --result` to read the persisted report file directly.
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | `gemini` | **9** | 2 | 3 | 2 | 5 | 3 | 3 | 6 |
 | `codex` | 1 | 4 | **9** | 4 | 7 | 7 | **8** | 3 |
+| `copilot` | 4 | 6 | 8 | 6 | 7 | 7 | 7 | 5 |
 | `opencode` | 1 | **8** | 3 | 2 | 4 | 4 | 4 | 5 |
 | `kilo` | 1 | 7 | 2 | 2 | 3 | 3 | 3 | 4 |
 | `cursor` | 2 | 4 | 7 | **9** | 5 | 5 | 6 | 4 |
 | `codebuff` | 2 | 5 | 8 | 7 | 6 | 6 | 7 | 4 |
-| `droid` | 1 | 6 | 5 | 3 | 4 | 4 | 5 | 4 |
-| `oz` | 1 | 6 | 5 | 3 | 4 | 4 | 5 | 4 |
+| `droid` | 3 | 5 | **9** | 5 | 7 | 7 | **8** | 4 |
+| `oz` | 3 | 5 | 8 | 6 | 6 | 6 | 7 | 4 |
+| `claude` | **9** | 5 | **10** | 7 | **10** | **10** | **10** | **9** |
 
-Additional scoring adjustments: budget mode boosts cheap agents (+4) and penalizes expensive ones (-6); high-complexity tasks boost codex/cursor (+2); rate-limited agents get -10; historical success rates apply ±2-3.
+Additional scoring adjustments: budget mode boosts cheap agents (+4) and penalizes expensive ones (-6); high-complexity tasks boost codex/copilot/cursor/droid/oz/claude (+2); rate-limited agents get -10; historical success rates apply about +4/-5.
 
 Scores above are per-agent baselines. When `auto` selects, it also factors in model capability (1-10 scale): **Premium** (cap 9-10): gpt-5.4, gemini-pro, cursor opus-thinking. **Standard** (cap 6-8): gpt-4.1, gemini-flash, cursor-auto, opencode/glm-5. **Budget** (cap 3-5): gpt-4.1-nano, gemini-flash-lite, mimo-free. Final score = (agent_base × 0.4) + (model_capability × 0.6). Use `aid config agents` to see all model scores.
 
@@ -989,7 +994,7 @@ Webhooks fire automatically when background tasks reach a terminal state. Custom
 - **Worktree escape detection**: After each worktree task, `aid` checks if the agent accidentally modified the main repo and warns with a file list.
 - **Auto merge on `aid merge`**: Merges the worktree branch into the current branch, runs pre-merge verification, and cleans up the worktree directory.
 - **SQLite concurrency**: `busy_timeout=5000` prevents "database is locked" errors under parallel task access.
-- **Fallback chain**: When an agent is rate-limited, `aid` suggests the next capable alternative (codex → cursor → opencode → kilo).
+- **Fallback chain**: When an agent is rate-limited, `aid` suggests the next capable alternative from the current task class. The default coding chain is `codex → claude → copilot → cursor → droid → opencode → kilo`.
 - **Retry worktree preservation**: When a failed task's worktree is auto-cleaned, retries recreate a fresh worktree on the same branch instead of falling back to the main repo.
 
 ## Architecture
@@ -1013,9 +1018,9 @@ The diagram below is adapted from `DESIGN.md` to reflect the current `show` comm
 │       │          │          │       │
 ├───────┴──────────┴──────────┴───────┤
 │         Agent Adapters              │
-│  ┌──────┐ ┌─────┐ ┌────────┐ ┌──────┐ ┌────┐ ┌───┐ ┌────────┐ ┌──────┐
-│  │Gemini│ │Codex│ │OpenCode│ │Cursor│ │Kilo│ │Codebuff│ │Custom│
-│  └──────┘ └─────┘ └────────┘ └──────┘ └────┘ └───┘ └────────┘ └──────┘
+│  Gemini  Codex  Copilot  Claude     │
+│  OpenCode  Cursor  Kilo  Codebuff   │
+│  Droid  Oz  Custom                  │
 └─────────────────────────────────────┘
 ```
 
@@ -1023,7 +1028,7 @@ How the pieces fit together:
 
 - The CLI entrypoint parses commands and routes them to task-oriented handlers such as `run`, `watch`, `show`, `usage`, and `mcp`.
 - The task classifier categorizes prompts into eight task types and estimates complexity, then the capability matrix scores each agent to pick the best fit.
-- The agent registry selects and instantiates adapters for `gemini`, `codex`, `opencode`, `cursor`, `kilo`, and `codebuff`.
+- The agent registry selects and instantiates adapters for `gemini`, `codex`, `copilot`, `opencode`, `cursor`, `kilo`, `codebuff`, `droid`, `oz`, and `claude`.
 - The watcher parses streamed or buffered output into milestones, tool activity, usage totals, and completion events.
 - SQLite keeps task history, workgroups, and events queryable for `board`, `show`, `watch`, `usage`, and MCP clients.
 - Artifact files under `~/.aid/` preserve the raw execution trail so the dispatcher can review what actually happened.

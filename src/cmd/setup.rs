@@ -93,6 +93,7 @@ pub fn run() -> Result<()> {
     let builtin = [
         ("gemini", "gemini"),
         ("codex", "codex"),
+        ("copilot", "copilot"),
         ("opencode", "opencode"),
         ("cursor", "cursor"),
         ("kilo", "kilo"),

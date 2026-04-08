@@ -12,6 +12,7 @@ pub fn can_sandbox(agent_kind: AgentKind) -> bool {
     !matches!(
         agent_kind,
         AgentKind::OpenCode
+            | AgentKind::Copilot
             | AgentKind::Cursor
             | AgentKind::Droid
             | AgentKind::Oz
@@ -108,6 +109,7 @@ fn agent_env_keys(kind: AgentKind) -> &'static [&'static str] {
     match kind {
         AgentKind::Codex => &["OPENAI_API_KEY"],
         AgentKind::Gemini => &["GOOGLE_API_KEY", "GEMINI_API_KEY"],
+        AgentKind::Copilot => &[],
         AgentKind::Kilo => &["KILO_API_KEY", "OPENAI_API_KEY"],
         AgentKind::Codebuff => &["CODEBUFF_API_KEY", "ANTHROPIC_API_KEY"],
         AgentKind::Claude => &["ANTHROPIC_API_KEY"],
@@ -120,6 +122,7 @@ fn agent_config_dirs(kind: AgentKind) -> &'static [&'static str] {
     match kind {
         AgentKind::Codex => &[".codex"],
         AgentKind::Gemini => &[".gemini"],
+        AgentKind::Copilot => &[".copilot"],
         AgentKind::Kilo => &[".kilo"],
         AgentKind::Codebuff => &[".codebuff"],
         AgentKind::Claude => &[".claude"],
@@ -199,6 +202,7 @@ mod tests {
     #[test]
     fn cannot_sandbox_native_agents() {
         assert!(!can_sandbox(AgentKind::OpenCode));
+        assert!(!can_sandbox(AgentKind::Copilot));
         assert!(!can_sandbox(AgentKind::Cursor));
         assert!(!can_sandbox(AgentKind::Droid));
         assert!(!can_sandbox(AgentKind::Oz));

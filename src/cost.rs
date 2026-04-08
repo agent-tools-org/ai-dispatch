@@ -38,6 +38,10 @@ pub fn format_cost_label(cost_usd: Option<f64>, agent: AgentKind) -> String {
             Some(c) if c > 0.0 => format_cost(cost_usd),
             _ => "subscription".to_string(),
         },
+        AgentKind::Copilot => match cost_usd {
+            Some(c) if c > 0.0 => format_cost(cost_usd),
+            _ => "subscription".to_string(),
+        },
         AgentKind::Kilo if cost_usd == Some(0.0) => "included".to_string(),
         AgentKind::Kilo => format_cost(cost_usd),
         _ => format_cost(cost_usd),
@@ -51,6 +55,10 @@ fn resolve_pricing(model: Option<&str>, agent: AgentKind) -> Option<ModelPricing
     match agent {
         AgentKind::Gemini => model_pricing("gemini-2.5-flash", agent),
         AgentKind::Codex => model_pricing("gpt-4.1", agent),
+        AgentKind::Copilot => Some(ModelPricing {
+            input_per_m: 0.0,
+            output_per_m: 0.0,
+        }),
         AgentKind::OpenCode => None, // Unknown without model
         AgentKind::Cursor => Some(ModelPricing {
             input_per_m: 0.0,
@@ -253,6 +261,7 @@ mod tests {
     fn format_cost_label_special_cases() {
         assert_eq!(format_cost_label(Some(1.0), AgentKind::Cursor), "$1.00");
         assert_eq!(format_cost_label(None, AgentKind::Cursor), "subscription");
+        assert_eq!(format_cost_label(None, AgentKind::Copilot), "subscription");
         assert_eq!(format_cost_label(Some(0.0), AgentKind::Kilo), "included");
     }
 

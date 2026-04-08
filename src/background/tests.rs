@@ -150,18 +150,48 @@ fn marks_stale_waiting_tasks_failed() {
     paths::ensure_dirs().unwrap();
 
     let store = Store::open_memory().unwrap();
-    let mut task = make_task("t-wait", TaskStatus::Waiting);
-    task.created_at = Local::now() - Duration::minutes(61);
-    store.insert_task(&task).unwrap();
+    let mut orphan = make_task("t-wait", TaskStatus::Waiting);
+    orphan.created_at = Local::now() - Duration::minutes(61);
+    store.insert_task(&orphan).unwrap();
+
+    let mut orphaned_group = make_task("t-wait-group", TaskStatus::Waiting);
+    orphaned_group.workgroup_id = Some("wg-orphan".to_string());
+    orphaned_group.created_at = Local::now() - Duration::minutes(61);
+    store.insert_task(&orphaned_group).unwrap();
+
+    let mut blocked = make_task("t-wait-blocked", TaskStatus::Waiting);
+    blocked.workgroup_id = Some("wg-active".to_string());
+    blocked.created_at = Local::now() - Duration::minutes(61);
+    store.insert_task(&blocked).unwrap();
+
+    let mut blocker = make_task("t-run-blocker", TaskStatus::Running);
+    blocker.workgroup_id = Some("wg-active".to_string());
+    store.insert_task(&blocker).unwrap();
 
     let cleaned = background_waiting::cleanup_stale_waiting_tasks(&store, 60).unwrap();
 
-    assert_eq!(cleaned, vec!["t-wait".to_string()]);
+    assert_eq!(cleaned.len(), 2);
+    assert!(cleaned.contains(&"t-wait".to_string()));
+    assert!(cleaned.contains(&"t-wait-group".to_string()));
+
     let failed = store.get_task("t-wait").unwrap().unwrap();
     assert_eq!(failed.status, TaskStatus::Failed);
     assert_eq!(failed.pending_reason.as_deref(), Some(PendingReason::WaitTimeout.as_str()));
+    let orphaned_group_failed = store.get_task("t-wait-group").unwrap().unwrap();
+    assert_eq!(orphaned_group_failed.status, TaskStatus::Failed);
+    assert_eq!(
+        orphaned_group_failed.pending_reason.as_deref(),
+        Some(PendingReason::WaitTimeout.as_str())
+    );
+    let blocked_task = store.get_task("t-wait-blocked").unwrap().unwrap();
+    assert_eq!(blocked_task.status, TaskStatus::Waiting);
+    assert_eq!(blocked_task.pending_reason, None);
+    assert!(store.get_events("t-wait-blocked").unwrap().is_empty());
+
     let error = store.latest_error("t-wait").unwrap();
     assert!(error.contains("wait timeout: no agent slot available"));
+    let group_error = store.latest_error("t-wait-group").unwrap();
+    assert!(group_error.contains("wait timeout: no agent slot available"));
 }
 
 #[test]

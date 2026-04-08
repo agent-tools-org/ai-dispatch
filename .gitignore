@@ -22,3 +22,4 @@ website-store/
 # Claude prompt (content lives in CLAUDE.md)
 claude-prompt.md
 target-rate-limit/
+target-local/

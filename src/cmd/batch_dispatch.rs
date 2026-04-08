@@ -2,21 +2,21 @@
 // Exports: dispatch_parallel, dispatch_sequential, dispatch_parallel_with_dependencies, dispatch_sequential_with_dependencies
 // Deps: crate::batch, crate::cmd::run, crate::store::Store, super::{batch_args,batch_helpers,batch_types,batch_validate}
 use crate::batch;
-use crate::cmd::run;
 use crate::store::Store;
 use anyhow::Result;
 use std::sync::Arc;
-use super::batch_args::task_to_run_args;
+#[path = "batch_dispatch_concurrency.rs"]
+mod batch_dispatch_concurrency;
+use self::batch_dispatch_concurrency::effective_max_active;
 use super::batch_dispatch_support::{
-    auto_fallback_agent,
     dispatch_level_with_ids,
+    maybe_dispatch_auto_fallback,
     poll_completed_tasks,
-    should_auto_fallback,
 };
 use super::batch_helpers::{resolve_hook_targets, trigger_conditional};
 use super::batch_types::{BatchDispatchResult, BatchTaskOutcome};
 use super::batch_wait_timeout::ReadyWaitTracker;
-use super::batch_validate::{find_ready_tasks, resolve_dependencies, task_label};
+use super::batch_validate::{find_ready_tasks, resolve_dependencies};
 
 pub(crate) async fn dispatch_parallel(
     store: Arc<Store>,
@@ -26,17 +26,7 @@ pub(crate) async fn dispatch_parallel(
     shared_dir_path: Option<&str>,
 ) -> Result<BatchDispatchResult> {
     let dependencies = vec![Vec::new(); tasks.len()];
-    let default_max = crate::system_resources::recommended_max_concurrent().min(tasks.len());
-    let max_active = max_concurrent.unwrap_or(default_max).max(1);
-    dispatch_with_dependencies(
-        store,
-        tasks,
-        &dependencies,
-        max_active,
-        auto_fallback,
-        shared_dir_path,
-    )
-    .await
+    dispatch_with_dependencies(store, tasks, &dependencies, max_concurrent, auto_fallback, shared_dir_path).await
 }
 pub(crate) async fn dispatch_sequential(
     store: Arc<Store>,
@@ -45,7 +35,7 @@ pub(crate) async fn dispatch_sequential(
     shared_dir_path: Option<&str>,
 ) -> Result<BatchDispatchResult> {
     let dependencies = vec![Vec::new(); tasks.len()];
-    dispatch_with_dependencies(store, tasks, &dependencies, 1, auto_fallback, shared_dir_path).await
+    dispatch_with_dependencies(store, tasks, &dependencies, Some(1), auto_fallback, shared_dir_path).await
 }
 pub(crate) async fn dispatch_parallel_with_dependencies(
     store: Arc<Store>,
@@ -55,17 +45,7 @@ pub(crate) async fn dispatch_parallel_with_dependencies(
     shared_dir_path: Option<&str>,
 ) -> Result<BatchDispatchResult> {
     let dependencies = resolve_dependencies(tasks)?;
-    let default_max = crate::system_resources::recommended_max_concurrent().min(tasks.len());
-    let max_active = max_concurrent.unwrap_or(default_max).max(1);
-    dispatch_with_dependencies(
-        store,
-        tasks,
-        &dependencies,
-        max_active,
-        auto_fallback,
-        shared_dir_path,
-    )
-    .await
+    dispatch_with_dependencies(store, tasks, &dependencies, max_concurrent, auto_fallback, shared_dir_path).await
 }
 pub(crate) async fn dispatch_sequential_with_dependencies(
     store: Arc<Store>,
@@ -74,13 +54,13 @@ pub(crate) async fn dispatch_sequential_with_dependencies(
     shared_dir_path: Option<&str>,
 ) -> Result<BatchDispatchResult> {
     let dependencies = resolve_dependencies(tasks)?;
-    dispatch_with_dependencies(store, tasks, &dependencies, 1, auto_fallback, shared_dir_path).await
+    dispatch_with_dependencies(store, tasks, &dependencies, Some(1), auto_fallback, shared_dir_path).await
 }
 async fn dispatch_with_dependencies(
     store: Arc<Store>,
     tasks: &[batch::BatchTask],
     dependencies: &[Vec<usize>],
-    max_active: usize,
+    max_concurrent: Option<usize>,
     auto_fallback: bool,
     shared_dir_path: Option<&str>,
 ) -> Result<BatchDispatchResult> {
@@ -151,7 +131,6 @@ async fn dispatch_with_dependencies(
     let mut triggered: Vec<bool> = tasks.iter().map(|task| !task.conditional).collect();
     let mut active: Vec<(usize, String)> = Vec::new();
     let mut task_ids: Vec<String> = Vec::new();
-    let max_active = max_active.max(1);
     let default_max_wait_mins = default_max_wait_mins();
     let mut wait_tracker = ReadyWaitTracker::new(tasks, default_max_wait_mins);
     while outcomes.iter().any(Option::is_none) {
@@ -164,6 +143,7 @@ async fn dispatch_with_dependencies(
             &triggered,
         )?;
         wait_tracker.observe_ready(&ready, chrono::Local::now());
+        let max_active = effective_max_active(&store, tasks, &ready, &active, max_concurrent)?;
         let available = max_active.saturating_sub(active.len());
         if available > 0 && !ready.is_empty() {
             let dispatch_group: Vec<_> = ready.into_iter().take(available).collect();
@@ -292,46 +272,4 @@ fn default_max_wait_mins() -> Option<u64> {
         .ok()
         .and_then(|config| u64::try_from(config.background.max_task_duration_mins).ok())
         .filter(|mins| *mins > 0)
-}
-
-async fn maybe_dispatch_auto_fallback(
-    store: Arc<Store>,
-    tasks: &[batch::BatchTask],
-    task_idx: usize,
-    task_id: &str,
-    outcome: BatchTaskOutcome,
-    auto_fallback: bool,
-    retried: &mut [bool],
-    shared_dir_path: Option<&str>,
-) -> Result<Option<String>> {
-    if !should_auto_fallback(auto_fallback, retried[task_idx], outcome) {
-        return Ok(None);
-    }
-    let Some((original_agent, fallback_agent)) = auto_fallback_agent(&store, task_id, tasks, task_idx)? else {
-        return Ok(None);
-    };
-    let siblings: Vec<_> = tasks
-        .iter()
-        .enumerate()
-        .filter(|(idx, _)| *idx != task_idx)
-        .map(|(_, task)| task)
-        .collect();
-    let mut run_args = task_to_run_args(
-        &tasks[task_idx],
-        &siblings,
-        true,
-        &store,
-        shared_dir_path,
-    );
-    run_args.agent_name = fallback_agent.as_str().to_string();
-    run_args.parent_task_id = Some(task_id.to_string());
-    retried[task_idx] = true;
-    aid_info!(
-        "[batch] Auto-fallback: {} -> {} for task {}",
-        original_agent,
-        fallback_agent.as_str(),
-        task_label(&tasks[task_idx], task_idx),
-    );
-    let retry_id = run::run(store, run_args).await?;
-    Ok(Some(retry_id.to_string()))
 }

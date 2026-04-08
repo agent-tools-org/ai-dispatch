@@ -10,7 +10,7 @@ pub fn cpu_count() -> usize {
 }
 
 pub fn recommended_max_concurrent() -> usize {
-    (cpu_count() / 2).clamp(2, 16)
+    cpu_count().clamp(4, 24)
 }
 
 pub fn available_disk_mb(path: &str) -> Option<u64> {
@@ -40,7 +40,7 @@ mod tests {
 
     #[test]
     fn recommended_max_concurrent_is_in_range() {
-        assert!((2..=16).contains(&recommended_max_concurrent()));
+        assert!((4..=24).contains(&recommended_max_concurrent()));
     }
 
     #[test]

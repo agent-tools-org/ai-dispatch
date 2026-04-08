@@ -15,7 +15,10 @@ use crate::types::{Task, TaskFilter, TaskStatus, Workgroup};
 
 const DEFAULT_TASK_LIMIT: usize = 50;
 const BOARD_MIN_COOLDOWN_SECS: i64 = 10;
+const BOARD_FORCE_COOLDOWN_SECS: i64 = 30;
 const BOARD_REPEAT_LIMIT: u32 = 2;
+const FORCE_ESCALATION_LIMIT: u32 = 3;
+const FORCE_ESCALATION_WINDOW_SECS: i64 = 120;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) struct TruncationNotice {
@@ -24,7 +27,13 @@ pub(crate) struct TruncationNotice {
 }
 
 #[derive(Debug, PartialEq, Eq)]
-enum AntiPollStatus { Allowed(u32), Cooldown(i64), Repeat(u32) }
+enum AntiPollStatus { Allowed(u32), Cooldown(i64), Repeat(u32), ForceCooldown(i64), ForceBlocked }
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+struct ForceMarkerState {
+    count: u32,
+    window_start: i64,
+}
 
 pub fn run(store: &Arc<Store>, running: bool, today: bool, mine: bool, group: Option<&str>, limit: Option<usize>, force: bool, json: bool) -> Result<()> {
     let filter = if running {
@@ -48,25 +57,36 @@ pub fn run(store: &Arc<Store>, running: bool, today: bool, mine: bool, group: Op
     let fingerprint = task_fingerprint(&tasks);
     let marker_path = crate::paths::aid_dir().join("board-last.txt");
     let now = Local::now().timestamp();
-    let repeat_count = match anti_poll_status(&marker_path, &fingerprint, now, force) {
+    let (anti_poll, force_state) = anti_poll_status(&marker_path, &fingerprint, now, force);
+    let repeat_count = match anti_poll {
         AntiPollStatus::Allowed(repeat_count) => {
             if repeat_count > 0 {
-                aid_hint!("[aid] No status changes since last check ({repeat_count}x). Use `aid watch --quiet` for automatic notification instead of polling, or `--force` to bypass.");
+                aid_hint!("[aid] No status changes since last check ({repeat_count}x). Use `aid watch --quiet` for automatic notification instead of polling.");
             }
             repeat_count
         }
         AntiPollStatus::Cooldown(elapsed) => {
-            write_board_marker(&marker_path, &fingerprint, now, 0);
-            aid_hint!("[aid] Board checked {elapsed}s ago. Use `aid watch --quiet <id>` for live updates, or `--force` to bypass.");
+            write_board_marker(&marker_path, &fingerprint, now, 0, 0, 0);
+            aid_hint!("[aid] Board checked {elapsed}s ago. Use `aid watch --quiet <id>` for live updates.");
             std::process::exit(1);
         }
         AntiPollStatus::Repeat(repeat_count) => {
-            write_board_marker(&marker_path, &fingerprint, now, repeat_count);
-            aid_warn!("[aid] No changes after {} checks. Use `aid watch --quiet` instead of polling, or `--force` to bypass. Exiting.", repeat_count);
+            write_board_marker(&marker_path, &fingerprint, now, repeat_count, 0, 0);
+            aid_warn!("[aid] No changes after {repeat_count} checks. Use `aid watch --quiet` instead of polling. Exiting.");
+            std::process::exit(1);
+        }
+        AntiPollStatus::ForceCooldown(elapsed) => {
+            write_board_marker(&marker_path, &fingerprint, now, 0, force_state.count, force_state.window_start);
+            aid_hint!("[aid] Board is rate-limited ({elapsed}s/30s). Use `aid watch --quiet <id>` instead.");
+            std::process::exit(1);
+        }
+        AntiPollStatus::ForceBlocked => {
+            write_board_marker(&marker_path, &fingerprint, now, 0, force_state.count, force_state.window_start);
+            aid_warn!("[aid] Repeated polling detected. Board locked for 60s. Use `aid watch --quiet <id>` instead.");
             std::process::exit(1);
         }
     };
-    write_board_marker(&marker_path, &fingerprint, now, repeat_count);
+    write_board_marker(&marker_path, &fingerprint, now, repeat_count, force_state.count, force_state.window_start);
 
     if json {
         let payload: Vec<serde_json::Value> = tasks.iter().map(board_json_row).collect();
@@ -127,23 +147,64 @@ fn task_fingerprint(tasks: &[crate::types::Task]) -> String {
     parts.join(",")
 }
 
-fn anti_poll_status(marker_path: &Path, fingerprint: &str, now: i64, force: bool) -> AntiPollStatus {
-    if force { return AntiPollStatus::Allowed(0) }
-    if let Ok(prev) = std::fs::read_to_string(marker_path) {
-        let parts: Vec<&str> = prev.splitn(3, '\n').collect();
-        let prev_ts = parts.first().and_then(|s| s.parse().ok()).unwrap_or(0);
-        let elapsed = now - prev_ts;
-        if elapsed >= 0 && elapsed < BOARD_MIN_COOLDOWN_SECS { return AntiPollStatus::Cooldown(elapsed) }
-        if parts.get(1).copied().unwrap_or("") == fingerprint {
-            let repeat_count = parts.get(2).and_then(|s| s.parse().ok()).unwrap_or(0) + 1;
-            if repeat_count >= BOARD_REPEAT_LIMIT { return AntiPollStatus::Repeat(repeat_count) }
-            return AntiPollStatus::Allowed(repeat_count);
+fn anti_poll_status(marker_path: &Path, fingerprint: &str, now: i64, force: bool) -> (AntiPollStatus, ForceMarkerState) {
+    let marker = read_board_marker(marker_path);
+    let elapsed = now - marker.timestamp;
+    if force {
+        let force_state = next_force_state(&marker, now);
+        if elapsed >= 0 && elapsed < BOARD_FORCE_COOLDOWN_SECS { return (AntiPollStatus::ForceCooldown(elapsed), force_state) }
+        if is_force_window_active(marker.force_window_start, now) && marker.force_count >= FORCE_ESCALATION_LIMIT {
+            return (AntiPollStatus::ForceBlocked, force_state);
         }
+        return (AntiPollStatus::Allowed(0), force_state);
     }
-    AntiPollStatus::Allowed(0)
+    if elapsed >= 0 && elapsed < BOARD_MIN_COOLDOWN_SECS { return (AntiPollStatus::Cooldown(elapsed), ForceMarkerState::default()) }
+    if marker.fingerprint == fingerprint {
+        let repeat_count = marker.repeat_count + 1;
+        if repeat_count >= BOARD_REPEAT_LIMIT { return (AntiPollStatus::Repeat(repeat_count), ForceMarkerState::default()) }
+        return (AntiPollStatus::Allowed(repeat_count), ForceMarkerState::default());
+    }
+    (AntiPollStatus::Allowed(0), ForceMarkerState::default())
 }
 
-fn write_board_marker(marker_path: &Path, fingerprint: &str, now: i64, repeat_count: u32) { let _ = std::fs::write(marker_path, format!("{now}\n{fingerprint}\n{repeat_count}")); }
+#[derive(Debug, Default)]
+struct BoardMarker {
+    timestamp: i64,
+    fingerprint: String,
+    repeat_count: u32,
+    force_count: u32,
+    force_window_start: i64,
+}
+
+fn read_board_marker(marker_path: &Path) -> BoardMarker {
+    let Ok(prev) = std::fs::read_to_string(marker_path) else { return BoardMarker::default() };
+    let parts: Vec<&str> = prev.lines().collect();
+    BoardMarker {
+        timestamp: parts.first().and_then(|s| s.parse().ok()).unwrap_or(0),
+        fingerprint: parts.get(1).copied().unwrap_or("").to_string(),
+        repeat_count: parts.get(2).and_then(|s| s.parse().ok()).unwrap_or(0),
+        force_count: parts.get(3).and_then(|s| s.parse().ok()).unwrap_or(0),
+        force_window_start: parts.get(4).and_then(|s| s.parse().ok()).unwrap_or(0),
+    }
+}
+
+fn next_force_state(marker: &BoardMarker, now: i64) -> ForceMarkerState {
+    if is_force_window_active(marker.force_window_start, now) {
+        if marker.force_count >= FORCE_ESCALATION_LIMIT {
+            return ForceMarkerState { count: marker.force_count, window_start: marker.force_window_start };
+        }
+        return ForceMarkerState { count: marker.force_count + 1, window_start: marker.force_window_start };
+    }
+    ForceMarkerState { count: 1, window_start: now }
+}
+
+fn is_force_window_active(force_window_start: i64, now: i64) -> bool {
+    force_window_start > 0 && now - force_window_start >= 0 && now - force_window_start < FORCE_ESCALATION_WINDOW_SECS
+}
+
+fn write_board_marker(marker_path: &Path, fingerprint: &str, now: i64, repeat_count: u32, force_count: u32, force_window_start: i64) {
+    let _ = std::fs::write(marker_path, format!("{now}\n{fingerprint}\n{repeat_count}\n{force_count}\n{force_window_start}"));
+}
 
 fn long_running_warning(tasks: &[crate::types::Task], now: chrono::DateTime<Local>) -> Option<String> {
     let count = tasks.iter().filter(|task| task.status == TaskStatus::Running).filter(|task| (now - task.created_at).num_hours() >= 1).count();
@@ -172,7 +233,7 @@ fn board_json_row(task: &Task) -> serde_json::Value {
 
 #[cfg(test)]
 mod tests {
-    use super::{AntiPollStatus, TruncationNotice, anti_poll_status, apply_limit, board_json_row, long_running_warning, truncation_notice_message};
+    use super::{AntiPollStatus, TruncationNotice, anti_poll_status, apply_limit, board_json_row, long_running_warning, truncation_notice_message, write_board_marker};
     use chrono::{Duration, Local};
     use crate::paths::AidHomeGuard;
     use crate::store::Store;
@@ -230,7 +291,7 @@ mod tests {
         let _guard = AidHomeGuard::set(temp.path());
         let marker = crate::paths::aid_dir().join("board-last.txt");
         std::fs::write(&marker, "100\nfp\n0").unwrap();
-        assert_eq!(anti_poll_status(&marker, "changed", 103, false), AntiPollStatus::Cooldown(3))
+        assert_eq!(anti_poll_status(&marker, "changed", 103, false).0, AntiPollStatus::Cooldown(3))
     }
 
     #[test]
@@ -239,7 +300,55 @@ mod tests {
         let _guard = AidHomeGuard::set(temp.path());
         let marker = crate::paths::aid_dir().join("board-last.txt");
         std::fs::write(&marker, "100\nfp\n0").unwrap();
-        assert_eq!(anti_poll_status(&marker, "changed", 103, true), AntiPollStatus::Allowed(0))
+        assert_eq!(anti_poll_status(&marker, "changed", 103, true).0, AntiPollStatus::ForceCooldown(3))
+    }
+
+    #[test]
+    fn test_force_cooldown_blocks_within_30s() {
+        let temp = tempfile::tempdir().unwrap();
+        let _guard = AidHomeGuard::set(temp.path());
+        let marker = crate::paths::aid_dir().join("board-last.txt");
+        write_board_marker(&marker, "fp", 100, 0, 0, 0);
+        assert_eq!(anti_poll_status(&marker, "changed", 120, true).0, AntiPollStatus::ForceCooldown(20));
+    }
+
+    #[test]
+    fn test_force_cooldown_allows_after_30s() {
+        let temp = tempfile::tempdir().unwrap();
+        let _guard = AidHomeGuard::set(temp.path());
+        let marker = crate::paths::aid_dir().join("board-last.txt");
+        write_board_marker(&marker, "fp", 100, 0, 0, 0);
+        assert_eq!(anti_poll_status(&marker, "changed", 130, true).0, AntiPollStatus::Allowed(0));
+    }
+
+    #[test]
+    fn test_force_escalation_blocks_after_3_calls() {
+        let temp = tempfile::tempdir().unwrap();
+        let _guard = AidHomeGuard::set(temp.path());
+        let marker = crate::paths::aid_dir().join("board-last.txt");
+
+        write_board_marker(&marker, "fp", 100, 0, 1, 100);
+        let (_, force_state) = anti_poll_status(&marker, "changed", 131, true);
+        write_board_marker(&marker, "changed", 131, 0, force_state.count, force_state.window_start);
+
+        let (_, force_state) = anti_poll_status(&marker, "changed", 162, true);
+        write_board_marker(&marker, "changed", 162, 0, force_state.count, force_state.window_start);
+
+        assert_eq!(anti_poll_status(&marker, "changed", 193, true).0, AntiPollStatus::ForceBlocked);
+    }
+
+    #[test]
+    fn test_force_escalation_resets_after_window() {
+        let temp = tempfile::tempdir().unwrap();
+        let _guard = AidHomeGuard::set(temp.path());
+        let marker = crate::paths::aid_dir().join("board-last.txt");
+        write_board_marker(&marker, "fp", 100, 0, 3, 10);
+
+        let (status, force_state) = anti_poll_status(&marker, "changed", 231, true);
+
+        assert_eq!(status, AntiPollStatus::Allowed(0));
+        assert_eq!(force_state.count, 1);
+        assert_eq!(force_state.window_start, 231);
     }
 
     fn make_task(task_id: &str, status: TaskStatus, created_at: chrono::DateTime<Local>) -> Task {

@@ -23,6 +23,7 @@ pub(super) fn build_run_opts(
     RunOpts {
         dir: prepared.effective_dir.clone(),
         output: args.output.clone(),
+        result_file: args.result_file.clone(),
         model: prepared.effective_model.clone(),
         budget: prepared.budget_active,
         read_only: args.read_only,

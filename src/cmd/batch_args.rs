@@ -20,6 +20,7 @@ pub(crate) fn task_to_run_args(
         let selection_opts = crate::agent::RunOpts {
             dir: task.dir.clone(),
             output: task.output.clone(),
+            result_file: auto_scope_result_file(task, siblings),
             model: task.model.clone(),
             budget: task.budget,
             read_only: task.read_only,

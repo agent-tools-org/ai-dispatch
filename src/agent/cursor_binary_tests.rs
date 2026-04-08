@@ -102,6 +102,7 @@ fn run_opts() -> RunOpts {
     RunOpts {
         dir: None,
         output: None,
+        result_file: None,
         model: None,
         budget: false,
         read_only: false,

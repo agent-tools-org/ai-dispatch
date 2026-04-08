@@ -100,6 +100,7 @@ pub async fn run_best_of(store: Arc<Store>, args: RunArgs, n: usize) -> Result<T
     let selection_opts = RunOpts {
         dir: args.dir.clone(),
         output: args.output.clone(),
+        result_file: args.result_file.clone(),
         model: args.model.clone(),
         budget: true,
         read_only: args.read_only,

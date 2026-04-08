@@ -12,6 +12,7 @@ fn build_command_uses_droid_exec() {
     let opts = RunOpts {
         dir: None,
         output: None,
+        result_file: None,
         model: None,
         budget: false,
         read_only: false,
@@ -33,6 +34,7 @@ fn build_command_read_only_uses_auto_low() {
     let opts = RunOpts {
         dir: None,
         output: None,
+        result_file: None,
         model: None,
         budget: false,
         read_only: true,
@@ -51,6 +53,7 @@ fn build_command_adds_context_files() {
     let opts = RunOpts {
         dir: None,
         output: None,
+        result_file: None,
         model: None,
         budget: false,
         read_only: false,
@@ -117,6 +120,7 @@ fn build_command_with_dir_sets_cwd() {
     let opts = RunOpts {
         dir: Some("/tmp/test".to_string()),
         output: None,
+        result_file: None,
         model: None,
         budget: false,
         read_only: false,

@@ -109,6 +109,7 @@ async fn run_task_inner(store: &Arc<Store>, spec: &BackgroundRunSpec) -> Result<
     let opts = RunOpts {
         dir: spec.dir.clone(),
         output: spec.output.clone(),
+        result_file: spec.result_file.clone(),
         model: spec.model.clone(),
         budget: false,
         read_only: spec.read_only,

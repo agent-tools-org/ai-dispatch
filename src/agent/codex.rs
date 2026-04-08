@@ -59,10 +59,17 @@ impl super::Agent for CodexAgent {
 
     fn build_command(&self, prompt: &str, opts: &RunOpts) -> Result<Command> {
         let effective_prompt = if opts.read_only {
-            format!(
-                "IMPORTANT: READ-ONLY MODE. Do NOT modify, create, or delete any files. Only read and analyze.\n\n{}",
-                prompt
-            )
+            if opts.result_file.is_some() {
+                format!(
+                    "IMPORTANT: READ-ONLY MODE. Do NOT modify, create, or delete any files, EXCEPT the result file specified in this prompt. Only read, analyze, and write your findings to the designated result file.\n\n{}",
+                    prompt
+                )
+            } else {
+                format!(
+                    "IMPORTANT: READ-ONLY MODE. Do NOT modify, create, or delete any files. Only read and analyze.\n\n{}",
+                    prompt
+                )
+            }
         } else {
             prompt.to_string()
         };
@@ -511,6 +518,7 @@ mod tests {
         let opts = RunOpts {
             dir: None,
             output: None,
+            result_file: None,
             model: None,
             budget: false,
             read_only: false,
@@ -533,6 +541,7 @@ mod tests {
         let opts = RunOpts {
             dir: None,
             output: None,
+            result_file: None,
             model: None,
             budget: false,
             read_only: true,
@@ -557,6 +566,7 @@ mod tests {
         let opts = RunOpts {
             dir: None,
             output: None,
+            result_file: Some("result.md".to_string()),
             model: None,
             budget: false,
             read_only: true,
@@ -574,6 +584,31 @@ mod tests {
         let last_arg = args.last().expect("should have prompt as last arg");
         assert!(last_arg.contains("READ-ONLY MODE"));
         assert!(last_arg.starts_with("IMPORTANT: READ-ONLY MODE"));
+        assert!(last_arg.contains("EXCEPT the result file specified in this prompt"));
         assert!(last_arg.contains("analyze this code"));
+    }
+
+    #[test]
+    fn build_command_read_only_without_result_file_keeps_strict_prefix() {
+        let opts = RunOpts {
+            dir: None,
+            output: None,
+            result_file: None,
+            model: None,
+            budget: false,
+            read_only: true,
+            context_files: vec![],
+            session_id: None,
+            env: None,
+            env_forward: None,
+        };
+        let cmd = CodexAgent.build_command("analyze this code", &opts).unwrap();
+        let args: Vec<String> = cmd
+            .get_args()
+            .map(|arg| arg.to_string_lossy().to_string())
+            .collect();
+
+        let last_arg = args.last().expect("should have prompt as last arg");
+        assert!(last_arg.contains("Do NOT modify, create, or delete any files. Only read and analyze."));
     }
 }

@@ -13,6 +13,7 @@ fn opts() -> RunOpts {
     RunOpts {
         dir: Some("src".to_string()),
         output: None,
+        result_file: None,
         model: None,
         budget: false,
         read_only: false,

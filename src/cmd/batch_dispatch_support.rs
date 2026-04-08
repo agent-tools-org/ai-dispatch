@@ -52,17 +52,25 @@ pub(super) async fn dispatch_level_with_ids(
                 run_args.agent_name = fallback_agent.as_str().to_string();
                 run_args.cascade = remaining_cascade;
             }
-            tokio::spawn(async move { (task_idx, run::run(store, run_args).await) })
+            let progress_ref = format!(
+                "{}: {}",
+                run_args.agent_name,
+                dispatch_task_ref(&tasks[task_idx], task_idx),
+            );
+            tokio::spawn(async move { (task_idx, progress_ref, run::run(store, run_args).await) })
         })
         .collect();
     let mut dispatches = Vec::with_capacity(task_indices.len());
     for handle in handles {
-        let (task_idx, result) = handle.await.context("Batch task join failure")?;
+        let (task_idx, progress_ref, result) = handle.await.context("Batch task join failure")?;
         match result {
-            Ok(task_id) => dispatches.push(DispatchedTask {
-                index: task_idx,
-                task_id: Some(task_id.to_string()),
-            }),
+            Ok(task_id) => {
+                aid_progress!("[batch] {} dispatched ({})", task_id, progress_ref);
+                dispatches.push(DispatchedTask {
+                    index: task_idx,
+                    task_id: Some(task_id.to_string()),
+                });
+            }
             Err(err) => {
                 aid_error!(
                     "Batch task failed ({}): {err}",
@@ -110,6 +118,12 @@ pub(super) async fn maybe_dispatch_auto_fallback(
     run_args.agent_name = fallback_agent.as_str().to_string();
     run_args.parent_task_id = Some(task_id.to_string());
     retried[task_idx] = true;
+    aid_progress!(
+        "[batch] {} fallback {} → {}",
+        task_id,
+        original_agent,
+        fallback_agent.as_str(),
+    );
     aid_info!(
         "[batch] Auto-fallback: {} -> {} for task {}",
         original_agent,

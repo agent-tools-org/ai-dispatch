@@ -3,6 +3,7 @@
 // Deps: crate::batch, crate::cmd::run, crate::store::Store, super::{batch_args,batch_helpers,batch_types,batch_validate}
 use crate::batch;
 use crate::store::Store;
+use crate::types::Task;
 use anyhow::Result;
 use std::sync::Arc;
 #[path = "batch_dispatch_concurrency.rs"]
@@ -189,6 +190,7 @@ async fn dispatch_with_dependencies(
             let Some(task_idx) = waiting_ids.iter().position(|id| id == &timeout_task_id) else {
                 continue;
             };
+            aid_progress!("[batch] {} TIMEOUT", timeout_task_id);
             started[task_idx] = true;
             if let Some(retry_task_id) = maybe_dispatch_auto_fallback(
                 store.clone(),
@@ -224,6 +226,11 @@ async fn dispatch_with_dependencies(
             continue;
         }
         for completed in completed_tasks {
+            aid_progress!(
+                "[batch] {} {}",
+                completed.task_id,
+                completion_progress_label(store.as_ref(), &completed.task_id, completed.outcome)?
+            );
             if let Some(retry_task_id) = maybe_dispatch_auto_fallback(
                 store.clone(),
                 tasks,
@@ -272,4 +279,43 @@ fn default_max_wait_mins() -> Option<u64> {
         .ok()
         .and_then(|config| u64::try_from(config.background.max_task_duration_mins).ok())
         .filter(|mins| *mins > 0)
+}
+
+fn completion_progress_label(
+    store: &Store,
+    task_id: &str,
+    outcome: BatchTaskOutcome,
+) -> Result<String> {
+    let task = store.get_task(task_id)?;
+    Ok(match outcome {
+        BatchTaskOutcome::Done => format!("DONE ({})", progress_duration(task.as_ref())),
+        BatchTaskOutcome::Failed => format!("FAIL ({})", failure_reason(task.as_ref())),
+        BatchTaskOutcome::Skipped => "SKIP".to_string(),
+    })
+}
+
+fn progress_duration(task: Option<&Task>) -> String {
+    let Some(duration_ms) = task.and_then(|task| task.duration_ms) else {
+        return "unknown".to_string();
+    };
+    if duration_ms < 1_000 {
+        return format!("{duration_ms}ms");
+    }
+    let secs = duration_ms / 1_000;
+    let tenths = (duration_ms % 1_000) / 100;
+    if tenths == 0 {
+        format!("{secs}s")
+    } else {
+        format!("{secs}.{tenths}s")
+    }
+}
+
+fn failure_reason(task: Option<&Task>) -> String {
+    if let Some(reason) = task.and_then(|task| task.pending_reason.as_deref()) {
+        return reason.to_string();
+    }
+    if let Some(exit_code) = task.and_then(|task| task.exit_code) {
+        return format!("exit {exit_code}");
+    }
+    "failed".to_string()
 }

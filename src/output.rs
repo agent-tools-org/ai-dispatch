@@ -62,9 +62,20 @@ macro_rules! aid_error {
     }};
 }
 
+/// Progress update — always shown on stdout, even in quiet mode.
+#[macro_export]
+macro_rules! aid_progress {
+    ($($arg:tt)*) => {{
+        println!($($arg)*);
+        use std::io::Write;
+        let _ = std::io::stdout().flush();
+    }};
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::process::Command;
 
     #[test]
     fn quiet_mode_defaults_off() {
@@ -77,5 +88,28 @@ mod tests {
         assert!(is_quiet());
         set_quiet(false);
         assert!(!is_quiet());
+    }
+
+    #[test]
+    fn aid_progress_prints_to_stdout_even_in_quiet_mode() {
+        const CHILD_ENV: &str = "AID_PROGRESS_TEST_CHILD";
+        if std::env::var_os(CHILD_ENV).is_some() {
+            set_quiet(true);
+            aid_progress!("[batch] t-123 dispatched (codex: task)");
+            set_quiet(false);
+            return;
+        }
+        let output = Command::new(std::env::current_exe().unwrap())
+            .args([
+                "--exact",
+                "output::tests::aid_progress_prints_to_stdout_even_in_quiet_mode",
+                "--nocapture",
+            ])
+            .env(CHILD_ENV, "1")
+            .output()
+            .unwrap();
+        assert!(output.status.success());
+        let stdout = String::from_utf8(output.stdout).unwrap();
+        assert!(stdout.contains("[batch] t-123 dispatched (codex: task)\n"));
     }
 }

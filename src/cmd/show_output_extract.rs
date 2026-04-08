@@ -28,8 +28,24 @@ impl MessageCollector {
         match value.get("type").and_then(|kind| kind.as_str()) {
             Some("item.completed") => self.push_message(completed_agent_message(value)),
             Some("message") => self.collect_message_event(value),
+            Some("assistant.message") => self.collect_copilot_message_event(value),
+            Some("assistant.message_delta") => {
+                self.append_streaming(copilot_delta_text(value));
+            }
             Some("assistant") => self.append_streaming(assistant_event_text(value)),
             Some("text") => self.collect_text_event(value),
+            Some("tool.execution_start") => {
+                self.flush_pending();
+                if let Some(detail) = copilot_tool_start_message(value) {
+                    self.messages.push(detail);
+                }
+            }
+            Some("tool.execution_complete") => {
+                self.flush_pending();
+                if let Some(detail) = copilot_tool_error_message(value) {
+                    self.messages.push(detail);
+                }
+            }
             Some("tool_use" | "tool_call" | "function_call" | "tool_result") => {
                 self.flush_pending();
                 if let Some(detail) = tool_event_message(value) {
@@ -59,6 +75,19 @@ impl MessageCollector {
         } else {
             self.push_message(text);
         }
+    }
+
+    fn collect_copilot_message_event(&mut self, value: &Value) {
+        let text = value.pointer("/data/content").and_then(Value::as_str);
+        let Some(text) = text.filter(|text| !text.is_empty()) else {
+            self.flush_pending();
+            return;
+        };
+        if !self.streaming_message.is_empty() && self.streaming_message == text {
+            self.messages.push(std::mem::take(&mut self.streaming_message));
+            return;
+        }
+        self.push_message(Some(text.to_string()));
     }
 
     fn collect_text_event(&mut self, value: &Value) {
@@ -210,6 +239,30 @@ fn tool_name(value: &Value) -> Option<&str> {
         .or_else(|| value.pointer("/functionCall/name").and_then(Value::as_str))
         .or_else(|| value.get("tool").and_then(Value::as_str))
         .or_else(|| value.pointer("/tool/name").and_then(Value::as_str))
+        .or_else(|| value.pointer("/data/toolName").and_then(Value::as_str))
+}
+
+fn copilot_delta_text(value: &Value) -> Option<String> {
+    value.pointer("/data/deltaContent")
+        .and_then(Value::as_str)
+        .map(ToOwned::to_owned)
+}
+
+fn copilot_tool_start_message(value: &Value) -> Option<String> {
+    let tool = value.pointer("/data/toolName").and_then(Value::as_str)?;
+    let payload = value.pointer("/data/arguments").and_then(stringify_payload)?;
+    Some(format!("[{tool}] {payload}"))
+}
+
+fn copilot_tool_error_message(value: &Value) -> Option<String> {
+    if value.pointer("/data/success").and_then(Value::as_bool) != Some(false) {
+        return None;
+    }
+    let tool = value.pointer("/data/toolName").and_then(Value::as_str).unwrap_or("tool");
+    let message = value.pointer("/data/error").and_then(Value::as_str)
+        .or_else(|| value.pointer("/data/result/error").and_then(Value::as_str))
+        .unwrap_or("unknown error");
+    Some(format!("[{tool}] Error: {message}"))
 }
 
 fn extract_text_payload(value: &Value) -> Option<String> {

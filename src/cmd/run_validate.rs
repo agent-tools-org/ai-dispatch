@@ -16,6 +16,7 @@ pub(super) fn validate_dispatch(args: &RunArgs, agent_kind: &AgentKind) -> Vec<S
     if matches!(
         agent_kind,
         AgentKind::Codex
+            | AgentKind::Copilot
             | AgentKind::Claude
             | AgentKind::OpenCode
             | AgentKind::Cursor

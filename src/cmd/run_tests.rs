@@ -161,6 +161,11 @@ fn validate_dispatch_warns_code_agent_without_dir() {
 }
 
 #[test]
+fn validate_dispatch_warns_copilot_without_dir() {
+    assert_eq!(validate_dispatch(&RunArgs { prompt: "Implement the dispatcher".to_string(), ..Default::default() }, &AgentKind::Copilot), vec!["Code agent without --dir may not be able to write files".to_string()]);
+}
+
+#[test]
 fn resolve_prompt_input_reads_prompt_file() {
     let dir = TempDir::new().unwrap();
     let prompt_file = dir.path().join("prompt.md");

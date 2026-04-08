@@ -162,7 +162,7 @@ fn home_dir() -> Option<PathBuf> {
 fn mount_home_dirs_from(home: Option<PathBuf>) -> Vec<String> {
     let mut args = Vec::new();
     let Some(home) = home else { return args };
-    for subdir in [".codex", ".gemini", ".kilo", ".codebuff", ".opencode"] {
+    for subdir in [".codex", ".copilot", ".gemini", ".kilo", ".codebuff", ".opencode"] {
         let host_path = home.join(subdir);
         if host_path.exists() {
             let container_path = Path::new("/root").join(subdir);

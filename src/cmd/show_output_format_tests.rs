@@ -74,3 +74,46 @@ fn assistant_message_content_arrays_are_rendered_as_plain_text() {
 
     assert_eq!(output, "Alpha beta");
 }
+
+#[test]
+fn copilot_stream_dedupes_final_message_and_flushes_at_tool_boundaries() {
+    let file = NamedTempFile::new().unwrap();
+    write_jsonl(
+        &file,
+        &[
+            json!({"type":"assistant.message_delta","data":{"deltaContent":"Inspecting "}}),
+            json!({"type":"assistant.message_delta","data":{"deltaContent":"repo"}}),
+            json!({"type":"tool.execution_start","data":{"toolName":"view","arguments":{"path":"Cargo.toml"}}}),
+            json!({"type":"assistant.message_delta","data":{"deltaContent":"Done."}}),
+            json!({"type":"assistant.message","data":{"content":"Done."}}),
+            json!({"type":"result","exitCode":0}),
+        ],
+    );
+
+    let output = extract_messages_from_log(file.path(), true).unwrap();
+
+    assert_eq!(
+        output,
+        "Inspecting repo\n---\n[view] {\"path\":\"Cargo.toml\"}\n---\nDone."
+    );
+}
+
+#[test]
+fn copilot_tool_failure_renders_error_line() {
+    let file = NamedTempFile::new().unwrap();
+    write_jsonl(
+        &file,
+        &[json!({
+            "type":"tool.execution_complete",
+            "data":{
+                "toolName":"bash",
+                "success":false,
+                "error":"permission denied"
+            }
+        })],
+    );
+
+    let output = extract_messages_from_log(file.path(), true).unwrap();
+
+    assert_eq!(output, "[bash] Error: permission denied");
+}

@@ -22,6 +22,13 @@ pub const AGENT_PROFILES: &[(AgentKind, &str, &str, &str, bool)] = &[
         true,
     ),
     (
+        AgentKind::Copilot,
+        "General coding, repo navigation, tool-assisted implementation",
+        "subscription",
+        "implement, build, refactor, test, explain, debug",
+        true,
+    ),
+    (
         AgentKind::OpenCode,
         "Simple edits, renames, type annotations, quick fixes",
         "free-$2/M blended",

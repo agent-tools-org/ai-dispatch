@@ -83,6 +83,7 @@ pub(super) fn resolve_agent_setup(store: &Arc<Store>, args: &mut RunArgs) -> Res
         && matches!(
             agent_kind,
             AgentKind::Codex
+                | AgentKind::Copilot
                 | AgentKind::Claude
                 | AgentKind::OpenCode
                 | AgentKind::Cursor

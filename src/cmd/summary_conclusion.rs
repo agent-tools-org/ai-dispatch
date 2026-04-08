@@ -33,6 +33,27 @@ fn extract_last_log_message(content: &str) -> Option<String> {
             continue;
         };
         match value.get("type").and_then(|kind| kind.as_str()) {
+            Some("assistant.message_delta") => {
+                let Some(content) = value.pointer("/data/deltaContent").and_then(|text| text.as_str()) else {
+                    continue;
+                };
+                streaming_message.push_str(content);
+            }
+            Some("assistant.message") => {
+                let Some(content) = value.pointer("/data/content").and_then(|text| text.as_str()) else {
+                    continue;
+                };
+                if content.is_empty() {
+                    flush_streaming(&mut messages, &mut streaming_message);
+                    continue;
+                }
+                if !streaming_message.is_empty() && streaming_message != content {
+                    flush_streaming(&mut messages, &mut streaming_message);
+                } else {
+                    streaming_message.clear();
+                }
+                push_message(&mut messages, content);
+            }
             Some("item.completed") => {
                 let Some(item) = value.get("item") else { continue };
                 let is_agent_message =
@@ -41,51 +62,80 @@ fn extract_last_log_message(content: &str) -> Option<String> {
                     continue;
                 };
                 if is_agent_message {
-                    messages.push(text.to_string());
+                    push_message(&mut messages, text);
                 }
             }
             Some("message") => {
                 let is_assistant =
                     value.get("role").and_then(|role| role.as_str()) == Some("assistant");
-                let Some(content) = value.get("content").and_then(|text| text.as_str()) else {
+                let Some(content) = value.get("content").and_then(extract_text_payload) else {
                     continue;
                 };
                 if !is_assistant {
                     continue;
                 }
                 if value.get("delta").and_then(|delta| delta.as_bool()) == Some(true) {
-                    streaming_message.push_str(content);
+                    streaming_message.push_str(&content);
                 } else {
-                    if !streaming_message.is_empty() {
-                        messages.push(std::mem::take(&mut streaming_message));
-                    }
-                    messages.push(content.to_string());
+                    flush_streaming(&mut messages, &mut streaming_message);
+                    messages.push(content);
                 }
             }
             Some("text") => {
                 let Some(text) = value
                     .get("content")
-                    .and_then(|text| text.as_str())
-                    .or_else(|| value.get("text").and_then(|text| text.as_str()))
-                    .or_else(|| value.pointer("/part/text").and_then(|text| text.as_str()))
+                    .and_then(extract_text_payload)
+                    .or_else(|| value.get("text").and_then(extract_text_payload))
+                    .or_else(|| {
+                        value
+                            .pointer("/part/text")
+                            .and_then(|text| text.as_str())
+                            .map(ToOwned::to_owned)
+                    })
                 else {
                     continue;
                 };
-                if !streaming_message.is_empty() {
-                    messages.push(std::mem::take(&mut streaming_message));
-                }
-                messages.push(text.to_string());
+                flush_streaming(&mut messages, &mut streaming_message);
+                messages.push(text);
             }
+            Some("tool.execution_start" | "tool.execution_complete" | "tool_use" | "tool_call"
+            | "function_call" | "tool_result" | "result" | "turn_complete" | "completion"
+            | "done" | "step_finish") => flush_streaming(&mut messages, &mut streaming_message),
             _ => {}
         }
     }
-    if !streaming_message.is_empty() {
-        messages.push(streaming_message);
-    }
+    flush_streaming(&mut messages, &mut streaming_message);
     messages
         .into_iter()
         .rev()
         .find_map(|message| extract_last_text_block(&message))
+}
+
+fn flush_streaming(messages: &mut Vec<String>, streaming_message: &mut String) {
+    if !streaming_message.is_empty() {
+        messages.push(std::mem::take(streaming_message));
+    }
+}
+
+fn push_message(messages: &mut Vec<String>, text: &str) {
+    messages.push(text.to_string());
+}
+
+fn extract_text_payload(value: &Value) -> Option<String> {
+    match value {
+        Value::String(text) => Some(text.clone()),
+        Value::Array(parts) => {
+            let text = parts
+                .iter()
+                .filter_map(|part| match part.get("type").and_then(Value::as_str) {
+                    Some("text") => part.get("text").and_then(Value::as_str),
+                    _ => None,
+                })
+                .collect::<String>();
+            (!text.is_empty()).then_some(text)
+        }
+        _ => None,
+    }
 }
 
 fn extract_last_text_block(content: &str) -> Option<String> {
@@ -117,5 +167,34 @@ fn truncate_conclusion(text: &str) -> String {
     } else {
         let end = text.floor_char_boundary(2_000 - 3);
         format!("{}...", &text[..end])
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::extract_last_log_message;
+
+    #[test]
+    fn extracts_copilot_message_after_tool_boundary() {
+        let log = concat!(
+            "{\"type\":\"assistant.message_delta\",\"data\":{\"deltaContent\":\"Inspecting \"}}\n",
+            "{\"type\":\"assistant.message_delta\",\"data\":{\"deltaContent\":\"repo\"}}\n",
+            "{\"type\":\"tool.execution_start\",\"data\":{\"toolName\":\"view\",\"arguments\":{\"path\":\"Cargo.toml\"}}}\n",
+            "{\"type\":\"assistant.message_delta\",\"data\":{\"deltaContent\":\"Done.\"}}\n",
+            "{\"type\":\"assistant.message\",\"data\":{\"content\":\"Done.\"}}\n"
+        );
+
+        assert_eq!(extract_last_log_message(log).as_deref(), Some("Done."));
+    }
+
+    #[test]
+    fn extracts_text_from_content_arrays() {
+        let log = concat!(
+            "{\"type\":\"message\",\"role\":\"assistant\",\"content\":[",
+            "{\"type\":\"text\",\"text\":\"Alpha\"},",
+            "{\"type\":\"text\",\"text\":\" beta\"}]}\n"
+        );
+
+        assert_eq!(extract_last_log_message(log).as_deref(), Some("Alpha beta"));
     }
 }

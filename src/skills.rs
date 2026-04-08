@@ -242,6 +242,7 @@ pub fn auto_skills(agent: &AgentKind, has_worktree: bool) -> Vec<String> {
     let mut skills = Vec::new();
     match agent {
         AgentKind::Codex
+        | AgentKind::Copilot
         | AgentKind::Claude
         | AgentKind::OpenCode
         | AgentKind::Kilo

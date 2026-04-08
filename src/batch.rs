@@ -2,9 +2,12 @@
 // Each batch file declares tasks with agent, prompt, overrides, and dependencies.
 #[path = "batch_interpolate.rs"]
 mod batch_interpolate;
+#[path = "batch_legacy_fields.rs"]
+mod batch_legacy_fields;
 #[path = "batch_serde.rs"]
 mod batch_serde;
 use self::batch_interpolate::{apply_defaults, interpolate_batch_config};
+use self::batch_legacy_fields::validate_legacy_field_renames;
 use self::batch_serde::{deserialize_judge, deserialize_string_or_vec, deserialize_verify};
 use anyhow::{Context, Result};
 use serde::Deserialize;
@@ -207,6 +210,7 @@ pub(crate) fn parse_batch_file_with_vars(
     let content = std::fs::read_to_string(path)
         .with_context(|| format!("failed to read batch file: {}", path.display()))?;
     validate_batch_keys(&content, path)?;
+    validate_legacy_field_renames(&content, path)?;
     let mut config: BatchConfig = toml::from_str(&content)
         .with_context(|| format!("failed to parse TOML in {}", path.display()))?;
     if config.tasks.is_empty() {
@@ -524,3 +528,7 @@ fn visit_task(
 }
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+#[path = "batch/legacy_field_tests.rs"]
+mod legacy_field_tests;

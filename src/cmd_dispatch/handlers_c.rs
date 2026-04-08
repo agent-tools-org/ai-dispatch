@@ -48,6 +48,7 @@ pub(super) async fn board(
     mine: bool,
     group: Option<String>,
     limit: Option<usize>,
+    force: bool,
     stream: bool,
     json: bool,
 ) -> Result<()> {
@@ -55,7 +56,7 @@ pub(super) async fn board(
     if stream {
         cmd::board_stream::run(&store, running, today, mine, group.as_deref(), limit).await?;
     } else {
-        cmd::board::run(&store, running, today, mine, group.as_deref(), limit, json)?;
+        cmd::board::run(&store, running, today, mine, group.as_deref(), limit, force, json)?;
     }
     Ok(())
 }

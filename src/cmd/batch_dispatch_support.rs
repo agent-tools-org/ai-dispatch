@@ -78,6 +78,48 @@ pub(super) async fn dispatch_level_with_ids(
     Ok(dispatches)
 }
 
+pub(super) async fn maybe_dispatch_auto_fallback(
+    store: Arc<Store>,
+    tasks: &[batch::BatchTask],
+    task_idx: usize,
+    task_id: &str,
+    outcome: BatchTaskOutcome,
+    auto_fallback: bool,
+    retried: &mut [bool],
+    shared_dir_path: Option<&str>,
+) -> Result<Option<String>> {
+    if !should_auto_fallback(auto_fallback, retried[task_idx], outcome) {
+        return Ok(None);
+    }
+    let Some((original_agent, fallback_agent)) = auto_fallback_agent(&store, task_id, tasks, task_idx)? else {
+        return Ok(None);
+    };
+    let siblings: Vec<_> = tasks
+        .iter()
+        .enumerate()
+        .filter(|(idx, _)| *idx != task_idx)
+        .map(|(_, task)| task)
+        .collect();
+    let mut run_args = task_to_run_args(
+        &tasks[task_idx],
+        &siblings,
+        true,
+        &store,
+        shared_dir_path,
+    );
+    run_args.agent_name = fallback_agent.as_str().to_string();
+    run_args.parent_task_id = Some(task_id.to_string());
+    retried[task_idx] = true;
+    aid_info!(
+        "[batch] Auto-fallback: {} -> {} for task {}",
+        original_agent,
+        fallback_agent.as_str(),
+        dispatch_task_ref(&tasks[task_idx], task_idx),
+    );
+    let retry_id = run::run(store, run_args).await?;
+    Ok(Some(retry_id.to_string()))
+}
+
 pub(super) fn poll_completed_tasks(
     store: &Arc<Store>,
     active: &mut Vec<(usize, String)>,

@@ -66,6 +66,10 @@ pub async fn run(store: Arc<Store>, args: BatchArgs) -> Result<()> {
         batch::parse_batch_file_with_vars(path, &cli_vars)
     }
     .with_context(|| format!("Failed to load batch file {}", path.display()))?;
+    let max_concurrent = args.max_concurrent.or(config.defaults.max_concurrent);
+    if max_concurrent == Some(0) {
+        anyhow::bail!("max_concurrent must be at least 1");
+    }
     let total = config.tasks.len();
     let shared_dir_enabled = config.defaults.shared_dir.unwrap_or(false);
     validate_batch_config(&config.tasks, args.parallel, args.force)?;
@@ -179,7 +183,7 @@ pub async fn run(store: Arc<Store>, args: BatchArgs) -> Result<()> {
         batch_dispatch::dispatch_parallel_with_dependencies(
             store.clone(),
             &config.tasks,
-            args.max_concurrent,
+            max_concurrent,
             auto_fallback,
             shared_dir_path.as_deref(),
         )
@@ -196,7 +200,7 @@ pub async fn run(store: Arc<Store>, args: BatchArgs) -> Result<()> {
         batch_dispatch::dispatch_parallel(
             store.clone(),
             &config.tasks,
-            args.max_concurrent,
+            max_concurrent,
             auto_fallback,
             shared_dir_path.as_deref(),
         )

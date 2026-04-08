@@ -58,6 +58,8 @@ pub struct BatchDefaults {
     #[serde(default)]
     pub max_wait_mins: Option<u64>,
     #[serde(default)]
+    pub max_concurrent: Option<usize>,
+    #[serde(default)]
     pub retry: Option<u32>,
     #[serde(default)]
     pub iterate: Option<u32>,
@@ -532,3 +534,7 @@ mod tests;
 #[cfg(test)]
 #[path = "batch/legacy_field_tests.rs"]
 mod legacy_field_tests;
+
+#[cfg(test)]
+#[path = "batch/max_concurrent_tests.rs"]
+mod max_concurrent_tests;

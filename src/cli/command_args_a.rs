@@ -189,6 +189,9 @@ pub struct BoardArgs {
     /// Maximum number of tasks to display (default: 50 without filters, unlimited with --group/--running/--today)
     #[arg(short, long)]
     pub limit: Option<usize>,
+    /// Bypass anti-polling cooldown
+    #[arg(long)]
+    pub force: bool,
     #[arg(short, long)]
     pub stream: bool,
     #[arg(long)]

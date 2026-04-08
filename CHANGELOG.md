@@ -1,3 +1,44 @@
+## v8.74.0 (2026-04-08)
+- Allow read-only agents to write configured `result_file` outputs
+- Fix read-only mode blocking persisted result files
+
+## v8.73.0 (2026-04-08)
+- Fix batch waiting-task cleanup for active workgroups
+- Persist waiting-task retry configuration correctly
+- Add JSONL event streaming for `aid watch` and retry support for waiting batch tasks
+
+## v8.72.0 (2026-04-07)
+- Cherry-pick mempalace memory upgrades: tiered memory injection and compact prompt format
+- Add knowledge graph CLI and store support
+
+## v8.71.0 (2026-04-07)
+- Make `watch --group` track newly added pending and waiting tasks
+- Keep active workgroup tasks visible in wait and watch flows
+
+## v8.70.0 (2026-04-06)
+- Retry agents on dirty worktrees instead of auto-committing
+- Clear stale worktree locks during prune
+- Auto-scope conflicting `result_file` paths in batch dispatch
+
+## v8.69.0 (2026-04-04)
+- Add Claude Code as a first-class agent with auto-selection support
+- Update Cursor, Gemini, OpenCode, Kilo, and Droid adapters for newer CLI versions
+- Improve agent selection scoring
+
+## v8.68.0 (2026-04-04)
+- Add `aid run --iterate N --eval CMD` generator-evaluator loop
+- Integrate iterate mode with batch and background flows
+- Add hung-task auto-recovery and split oversized run command modules
+
+## v8.67.0 (2026-04-04)
+- Add `--prompt-file` support for long prompts in run and batch tasks
+- Support batch metadata fields
+- Improve failure diagnostics and stale diff/worktree recovery
+
+## v8.66.3 (2026-04-02)
+- Fix OpenCode workspace access for workgroup directories
+- Fix OpenCode output parsing and rendering in `aid show` and TUI
+
 ## v8.66.2 (2026-04-01)
 - Add default audit report mode: review and cross-audit tasks now auto-write `result.md`
 - Prefer persisted `result.md` in `show`, TUI, and web output views

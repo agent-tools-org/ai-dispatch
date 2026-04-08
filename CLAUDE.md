@@ -9,6 +9,26 @@
   cp "$CARGO_TARGET_DIR/release/aid" ~/.cargo/bin/aid && codesign --force --sign - ~/.cargo/bin/aid
   ```
 
+## Release
+
+Release must go through `scripts/release.sh`. Do not manually bump `Cargo.toml`, edit the top release entry in `CHANGELOG.md`, create the release commit, create the release tag, or push the release branch/tag by hand.
+
+Release flow requirements:
+- Prepare a Markdown notes file with one `- ` bullet per shipped change.
+- Run `scripts/release.sh --dry-run <version> <notes-file>` first and review the planned commit/tag/push.
+- Run `scripts/release.sh <version> <notes-file>` for the actual release.
+- Treat any direct `git tag`, manual version bump, or manual changelog-only release edit as an invalid release flow.
+
+```bash
+cat > /tmp/aid-release-notes.md <<'EOF'
+- Short release summary
+- Additional shipped change
+EOF
+
+scripts/release.sh 8.75.0 /tmp/aid-release-notes.md
+scripts/release.sh --dry-run 8.75.0 /tmp/aid-release-notes.md
+```
+
 ## Run
 
 Dispatch a task to an AI agent. Core command — most other features build on this.

@@ -54,8 +54,18 @@ async fn retry_failed_returns_ok_when_no_failed_tasks_exist() {
     task.workgroup_id = Some("wg-batch".to_string());
     store.insert_task(&task).unwrap();
 
-    let result = retry_failed(store, "wg-batch", None).await;
+    let result = retry_failed(store, "wg-batch", None, false).await;
 
     assert!(result.is_ok());
 }
 
+#[test]
+fn retry_filter_includes_waiting_only_when_requested() {
+    use super::super::batch_retry::should_retry_task;
+
+    assert!(should_retry_task(TaskStatus::Failed, false));
+    assert!(should_retry_task(TaskStatus::Skipped, false));
+    assert!(!should_retry_task(TaskStatus::Waiting, false));
+    assert!(should_retry_task(TaskStatus::Waiting, true));
+    assert!(!should_retry_task(TaskStatus::Running, true));
+}

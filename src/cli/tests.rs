@@ -238,16 +238,26 @@ fn batch_dispatch_file_parses() {
 
 #[test]
 fn batch_retry_parses() {
-    let cli = Cli::try_parse_from(["aid", "batch", "retry", "wg-a", "--agent", "cursor"]).unwrap();
+    let cli = Cli::try_parse_from([
+        "aid",
+        "batch",
+        "retry",
+        "wg-a",
+        "--agent",
+        "cursor",
+        "--include-waiting",
+    ])
+    .unwrap();
     match cli.command {
         Some(Commands::Batch(command_args_a::BatchArgs {
-            action: Some(BatchAction::Retry { group_id, agent }),
+            action: Some(BatchAction::Retry { group_id, agent, include_waiting }),
             file,
             vars,
             ..
         })) => {
             assert_eq!(group_id, "wg-a");
             assert_eq!(agent, Some("cursor".to_string()));
+            assert!(include_waiting);
             assert!(file.is_none());
             assert!(vars.is_empty());
         }

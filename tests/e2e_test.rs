@@ -536,7 +536,7 @@ fn batch_retry_with_no_failures_succeeds() {
 
     let stdout = String::from_utf8_lossy(&retry_output.stdout);
     let stderr = String::from_utf8_lossy(&retry_output.stderr);
-    assert!(stdout.contains("No failed tasks") || stderr.contains("No failed tasks"));
+    assert!(stdout.contains("No retryable tasks") || stderr.contains("No retryable tasks"));
 }
 
 #[test]

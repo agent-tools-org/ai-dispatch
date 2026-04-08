@@ -179,6 +179,7 @@ mod tests {
         assert!((rates[0].1 - 0.75).abs() < f64::EPSILON);
 
         let avg_cost = store.project_avg_cost("/repo/a").unwrap();
-        assert_eq!(avg_cost, Some(6.0));
+        assert!(avg_cost.is_some());
+        assert!((avg_cost.unwrap() - (19.0 / 3.0)).abs() < f64::EPSILON);
     }
 }

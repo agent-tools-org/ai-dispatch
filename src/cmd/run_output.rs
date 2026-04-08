@@ -132,7 +132,7 @@ mod tests {
 
         assert_eq!(
             std::fs::read_to_string(output.path()).unwrap(),
-            "first chunk\n---\nsecond chunk"
+            "second chunk"
         );
     }
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Prepares an ai-dispatch release from a curated Markdown notes file.
-# Updates Cargo.toml and CHANGELOG.md, validates metadata, then commits/tags/pushes.
-# Dependencies: bash, git, awk, grep, date.
+# Runs tests, updates Cargo.toml and CHANGELOG.md, validates metadata, then commits/tags/pushes.
+# Dependencies: bash, git, awk, grep, date, cargo.
 
 set -euo pipefail
 
@@ -29,6 +29,10 @@ fail() {
 
 require_cmd() {
   command -v "$1" >/dev/null 2>&1 || fail "missing required command: $1"
+}
+
+run_release_tests() {
+  (cd "${repo_root}" && cargo test) || fail "cargo test failed"
 }
 
 package_version() {
@@ -113,6 +117,7 @@ main() {
   require_cmd awk
   require_cmd grep
   require_cmd date
+  require_cmd cargo
 
   if [[ "${1:-}" == "--dry-run" ]]; then
     dry_run="true"
@@ -140,6 +145,7 @@ main() {
   [[ -n "${current_version}" ]] || fail "could not read current package version"
   [[ "${current_version}" != "${version}" ]] || fail "Cargo.toml is already at version ${version}"
 
+  run_release_tests
   update_cargo_version "${version}"
   prepend_changelog_entry "${version}" "${notes_file}"
   bash "${repo_root}/.github/scripts/check-changelog.sh" "${tag}"

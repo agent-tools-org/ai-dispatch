@@ -229,14 +229,21 @@ fn git_branch(repo_path: &str) -> Option<String> {
 }
 
 fn project_label() -> String {
-    detect_project()
-        .map(|config| config.id)
+    project_id_from_aid_dir()
+        .or_else(|| detect_project().map(|config| config.id))
         .or_else(|| {
             std::env::current_dir()
                 .ok()
                 .and_then(|dir| dir.file_name().map(|name| name.to_string_lossy().to_string()))
         })
         .unwrap_or_else(|| "unknown".to_string())
+}
+
+fn project_id_from_aid_dir() -> Option<String> {
+    let cwd = std::env::current_dir().ok()?;
+    let state_path = state_path_from(&cwd)?;
+    let project_path = state_path.parent()?.join("project.toml");
+    crate::project::load_project(&project_path).ok().map(|config| config.id)
 }
 
 fn format_relative_time(value: &str) -> String {

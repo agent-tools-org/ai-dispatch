@@ -5,6 +5,7 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::sync::{Mutex, OnceLock};
 
 use chrono::{Duration, Local};
 use tempfile::TempDir;
@@ -34,8 +35,14 @@ impl Drop for TempCwd {
     }
 }
 
+fn cwd_lock() -> &'static Mutex<()> {
+    static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+    LOCK.get_or_init(|| Mutex::new(()))
+}
+
 #[test]
 fn state_path_and_roundtrip_use_project_aid_dir() {
+    let _lock = cwd_lock().lock().unwrap();
     let dir = TempDir::new().unwrap();
     let nested = dir.path().join("repo/src");
     fs::create_dir_all(dir.path().join("repo/.aid")).unwrap();
@@ -85,20 +92,41 @@ fn compute_state_aggregates_project_metrics() {
             None,
             VerifyStatus::Skipped,
         ),
+        make_task(
+            "t-4",
+            AgentKind::Codex,
+            TaskStatus::Failed,
+            dir.path(),
+            35,
+            90.0,
+            Some(0.5),
+            VerifyStatus::Failed,
+        ),
+        make_task(
+            "t-5",
+            AgentKind::Codex,
+            TaskStatus::Done,
+            dir.path(),
+            45,
+            75.0,
+            Some(0.3),
+            VerifyStatus::Passed,
+        ),
     ] {
         store.insert_task(&task).unwrap();
     }
     let state = compute_state(&store, &dir.path().to_string_lossy()).unwrap();
-    assert_eq!(state.health.total_tasks, 3);
-    assert!((state.health.recent_success_rate - (2.0 / 3.0)).abs() < f64::EPSILON);
+    assert_eq!(state.health.total_tasks, 5);
+    assert!((state.health.recent_success_rate - 0.6).abs() < f64::EPSILON);
     assert_eq!(state.performance.best_agent.as_deref(), Some("codex"));
     assert_eq!(state.context.last_task_id.as_deref(), Some("t-1"));
-    assert_eq!(state.health.last_verify_status.as_deref(), Some("passed"));
+    assert_eq!(state.health.last_verify_status.as_deref(), None);
     assert_eq!(state.learned.effective_tools, Vec::<String>::new());
 }
 
 #[test]
 fn refresh_project_state_writes_state_after_completion_update() {
+    let _lock = cwd_lock().lock().unwrap();
     let dir = TempDir::new().unwrap();
     fs::create_dir_all(dir.path().join(".aid")).unwrap();
     fs::write(dir.path().join(".aid/project.toml"), "[project]\nid = \"alpha\"\n").unwrap();
@@ -139,6 +167,7 @@ fn refresh_project_state_writes_state_after_completion_update() {
 
 #[test]
 fn refresh_project_state_skips_tasks_without_repo_path() {
+    let _lock = cwd_lock().lock().unwrap();
     let dir = TempDir::new().unwrap();
     fs::create_dir_all(dir.path().join(".aid")).unwrap();
     fs::write(dir.path().join(".aid/project.toml"), "[project]\nid = \"alpha\"\n").unwrap();
@@ -164,6 +193,7 @@ fn refresh_project_state_skips_tasks_without_repo_path() {
 
 #[test]
 fn summary_formats_key_lines() {
+    let _lock = cwd_lock().lock().unwrap();
     let dir = TempDir::new().unwrap();
     fs::create_dir_all(dir.path().join(".aid")).unwrap();
     fs::write(dir.path().join(".aid/project.toml"), "[project]\nid = \"alpha\"\n").unwrap();

@@ -98,7 +98,7 @@ mod tests {
 
     #[test]
     fn rejects_invalid_task_id() {
-        let err = write_response("t-respond", "yes").unwrap_err();
+        let err = write_response("bad.id", "yes").unwrap_err();
         assert!(err.to_string().contains("Invalid task ID"));
     }
 }

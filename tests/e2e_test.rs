@@ -57,15 +57,15 @@ fn board_rapid_calls_show_data_without_exit() {
     let output1 = cmd.arg("board").output().unwrap();
     assert!(output1.status.success());
 
-    // Second board call within 5s with same state (empty)
-    // Should show WARNING but NOT exit with code 1
+    // Second board call within 10s with same state (empty)
+    // Use --force to bypass cooldown in tests
     let mut cmd2 = aid_cmd_in(&aid_home);
-    let output2 = cmd2.arg("board").output().unwrap();
+    let output2 = cmd2.args(["board", "--force"]).output().unwrap();
 
-    // Must succeed - anti-polling is now a warning, not an error
+    // Must succeed with --force
     assert!(
         output2.status.success(),
-        "board should not exit on rapid calls"
+        "board --force should bypass cooldown"
     );
     let stdout = String::from_utf8_lossy(&output2.stdout);
     // Board shows data even when called rapidly
@@ -178,7 +178,7 @@ fn merge_marks_done_task_as_merged() {
     let merge_stdout = String::from_utf8_lossy(&merge_output.stdout);
     assert!(merge_stdout.contains("Marked t-2001 as merged"));
 
-    let board_output = aid_cmd_in(temp_dir.path()).arg("board").output().unwrap();
+    let board_output = aid_cmd_in(temp_dir.path()).args(["board", "--force"]).output().unwrap();
     assert!(board_output.status.success());
     let board_stdout = String::from_utf8_lossy(&board_output.stdout);
     assert!(board_stdout.contains("t-2001"));

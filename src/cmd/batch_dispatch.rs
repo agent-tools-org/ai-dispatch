@@ -124,14 +124,19 @@ async fn dispatch_with_dependencies(
                 .map(|s| crate::types::TaskId(s.clone()))
                 .unwrap_or_else(crate::types::TaskId::generate);
             let agent = if task.agent.is_empty() { "auto" } else { &task.agent };
-            let prompt_preview = if task.prompt.len() > 120 {
-                let mut end = 120;
-                while !task.prompt.is_char_boundary(end) { end -= 1; }
-                &task.prompt[..end]
-            } else {
-                &task.prompt
-            };
-            if let Err(e) = store.insert_waiting_task(id.as_str(), agent, prompt_preview, task.group.as_deref()) {
+            if let Err(e) = store.insert_waiting_task(
+                id.as_str(),
+                agent,
+                &task.prompt,
+                None,
+                task.group.as_deref(),
+                task.dir.as_deref(),
+                task.worktree.as_deref(),
+                task.model.as_deref(),
+                task.verify.as_deref(),
+                task.read_only,
+                task.budget,
+            ) {
                 aid_warn!("[aid] Warning: failed to pre-create task {i}: {e}");
             }
             id.to_string()

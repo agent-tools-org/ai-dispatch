@@ -47,6 +47,38 @@ fn retry_task_to_run_args_prefers_existing_worktree_path() {
     assert_eq!(run_args.worktree, None);
 }
 
+#[test]
+fn retry_task_to_run_args_uses_waiting_placeholder_fields() {
+    let store = Arc::new(Store::open_memory().unwrap());
+    let prompt = "retry ".repeat(40);
+    store
+        .insert_waiting_task(
+            "t-5678",
+            "codex",
+            &prompt,
+            None,
+            Some("wg-batch"),
+            Some("/tmp/repo"),
+            Some("feat/retry"),
+            Some("o3"),
+            Some("cargo check -p ai-dispatch"),
+            true,
+            true,
+        )
+        .unwrap();
+
+    let task = store.get_task("t-5678").unwrap().unwrap();
+    let run_args = retry_task_to_run_args(&task, "wg-batch", None);
+
+    assert_eq!(run_args.prompt, prompt);
+    assert_eq!(run_args.dir, Some("/tmp/repo".to_string()));
+    assert_eq!(run_args.worktree, Some("feat/retry".to_string()));
+    assert_eq!(run_args.model, Some("o3".to_string()));
+    assert_eq!(run_args.verify, Some("cargo check -p ai-dispatch".to_string()));
+    assert!(run_args.read_only);
+    assert!(run_args.budget);
+}
+
 #[tokio::test]
 async fn retry_failed_returns_ok_when_no_failed_tasks_exist() {
     let store = Arc::new(Store::open_memory().unwrap());

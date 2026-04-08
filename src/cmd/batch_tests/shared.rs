@@ -57,7 +57,21 @@ pub(super) fn make_task(name: &str, conditional: bool, on_success: Option<&str>)
 }
 
 pub(super) fn seed_task(store: &Store, task_id: &str, status: TaskStatus, cost_usd: Option<f64>) {
-    store.insert_waiting_task(task_id, "codex", "prompt", None).unwrap();
+    store
+        .insert_waiting_task(
+            task_id,
+            "codex",
+            "prompt",
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            false,
+            false,
+        )
+        .unwrap();
     store
         .update_task_completion(TaskCompletionUpdate {
             id: task_id,

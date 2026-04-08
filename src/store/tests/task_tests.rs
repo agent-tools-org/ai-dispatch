@@ -34,6 +34,39 @@ fn insert_and_get_task_persists_dispatch_flags() {
 }
 
 #[test]
+fn insert_waiting_task_persists_retry_fields() {
+    let store = Store::open_memory().unwrap();
+    let prompt = "x".repeat(160);
+    store
+        .insert_waiting_task(
+            "t-0004w",
+            "codex",
+            &prompt,
+            Some("resolved prompt"),
+            Some("wg-batch"),
+            Some("/tmp/repo"),
+            Some("feat/retry"),
+            Some("o3"),
+            Some("cargo check"),
+            true,
+            true,
+        )
+        .unwrap();
+
+    let loaded = store.get_task("t-0004w").unwrap().unwrap();
+    assert_eq!(loaded.status, TaskStatus::Waiting);
+    assert_eq!(loaded.prompt, prompt);
+    assert_eq!(loaded.resolved_prompt.as_deref(), Some("resolved prompt"));
+    assert_eq!(loaded.workgroup_id.as_deref(), Some("wg-batch"));
+    assert_eq!(loaded.repo_path.as_deref(), Some("/tmp/repo"));
+    assert_eq!(loaded.worktree_branch.as_deref(), Some("feat/retry"));
+    assert_eq!(loaded.model.as_deref(), Some("o3"));
+    assert_eq!(loaded.verify.as_deref(), Some("cargo check"));
+    assert!(loaded.read_only);
+    assert!(loaded.budget);
+}
+
+#[test]
 fn migrate_adds_repo_path_column() {
     let conn = rusqlite::Connection::open_in_memory().unwrap();
     conn.execute_batch(

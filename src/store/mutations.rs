@@ -71,12 +71,40 @@ impl Store {
         Ok(())
     }
 
-    /// Insert a minimal waiting task placeholder (visible in TUI before dispatch).
-    pub fn insert_waiting_task(&self, id: &str, agent: &str, prompt: &str, workgroup_id: Option<&str>) -> Result<()> {
+    /// Insert a waiting task placeholder with enough config for faithful retry.
+    pub fn insert_waiting_task(
+        &self,
+        id: &str,
+        agent: &str,
+        prompt: &str,
+        resolved_prompt: Option<&str>,
+        workgroup_id: Option<&str>,
+        dir: Option<&str>,
+        worktree_branch: Option<&str>,
+        model: Option<&str>,
+        verify: Option<&str>,
+        read_only: bool,
+        budget: bool,
+    ) -> Result<()> {
         self.db().execute(
-            "INSERT INTO tasks (id, agent, prompt, status, workgroup_id, created_at, verify_status, read_only, budget)
-             VALUES (?1, ?2, ?3, 'waiting', ?4, ?5, 'skipped', 0, 0)",
-            params![id, agent, prompt, workgroup_id, Local::now().to_rfc3339()],
+            "INSERT INTO tasks (
+             id, agent, prompt, resolved_prompt, status, workgroup_id, repo_path,
+             worktree_branch, model, created_at, verify, verify_status, read_only, budget
+             ) VALUES (?1, ?2, ?3, ?4, 'waiting', ?5, ?6, ?7, ?8, ?9, ?10, 'skipped', ?11, ?12)",
+            params![
+                id,
+                agent,
+                prompt,
+                resolved_prompt,
+                workgroup_id,
+                dir,
+                worktree_branch,
+                model,
+                Local::now().to_rfc3339(),
+                verify,
+                read_only,
+                budget,
+            ],
         )?;
         Ok(())
     }

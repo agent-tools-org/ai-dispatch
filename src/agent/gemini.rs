@@ -127,10 +127,9 @@ fn parse_stream_event(task_id: &TaskId, v: &serde_json::Value, now: chrono::Date
 }
 
 pub fn extract_response(output: &str) -> Option<String> {
-    // Collect all assistant message chunks (new format) and last text event (old format).
-    // New gemini-cli streams delta messages; concatenate all assistant deltas.
-    let mut assistant_chunks = Vec::new();
-    let mut last_text_content: Option<String> = None;
+    let mut messages = Vec::new();
+    let mut streaming_message = String::new();
+    let mut replaceable_text: Option<String> = None;
 
     for line in output.lines() {
         let trimmed = line.trim();
@@ -140,32 +139,52 @@ pub fn extract_response(output: &str) -> Option<String> {
         let Ok(v) = serde_json::from_str::<serde_json::Value>(trimmed) else { continue };
         let Some(event_type) = v.get("type").and_then(|t| t.as_str()) else { continue };
         match event_type {
-            // New format (0.35+): assistant message deltas
             "message" if v.get("role").and_then(|r| r.as_str()) == Some("assistant") => {
-                if let Some(content) = v.get("content").and_then(|c| c.as_str()) {
-                    assistant_chunks.push(content.to_string());
+                if let Some(content) = extract_text_payload(v.get("content")) {
+                    if v.get("delta").and_then(|delta| delta.as_bool()) == Some(true) {
+                        if let Some(text) = replaceable_text.take() {
+                            messages.push(text);
+                        }
+                        streaming_message.push_str(&content);
+                    } else {
+                        if let Some(text) = replaceable_text.take() {
+                            messages.push(text);
+                        }
+                        if !streaming_message.is_empty() {
+                            messages.push(std::mem::take(&mut streaming_message));
+                        }
+                        messages.push(content);
+                    }
                 }
             }
-            // Old format: text events
             "text" => {
-                let content = v
-                    .get("content")
-                    .and_then(|c| c.as_str())
-                    .or_else(|| v.get("text").and_then(|t| t.as_str()));
-                if let Some(c) = content {
-                    last_text_content = Some(c.to_string());
+                if let Some(content) = extract_text_payload(v.get("content").or_else(|| v.get("text"))) {
+                    if !streaming_message.is_empty() {
+                        messages.push(std::mem::take(&mut streaming_message));
+                    }
+                    replaceable_text = Some(content);
+                }
+            }
+            "tool_call" | "tool_use" | "tool_result" | "result" | "turn_complete" | "error" => {
+                if let Some(text) = replaceable_text.take() {
+                    messages.push(text);
+                }
+                if !streaming_message.is_empty() {
+                    messages.push(std::mem::take(&mut streaming_message));
                 }
             }
             _ => {}
         }
     }
 
-    // Prefer new format (concatenated deltas) over old format (last text event)
-    if !assistant_chunks.is_empty() {
-        return Some(assistant_chunks.concat());
+    if let Some(text) = replaceable_text {
+        messages.push(text);
     }
-    if let Some(text) = last_text_content {
-        return Some(text);
+    if !streaming_message.is_empty() {
+        messages.push(streaming_message);
+    }
+    if !messages.is_empty() {
+        return Some(messages.join("\n\n"));
     }
 
     // Fallback: try legacy single JSON format
@@ -183,6 +202,32 @@ pub fn extract_response(output: &str) -> Option<String> {
         return Some(s.to_string());
     }
     None
+}
+
+fn extract_text_payload(value: Option<&serde_json::Value>) -> Option<String> {
+    match value? {
+        serde_json::Value::Null => None,
+        serde_json::Value::String(text) => Some(text.clone()),
+        serde_json::Value::Array(items) => {
+            let parts = items
+                .iter()
+                .filter_map(|item| extract_text_payload(Some(item)))
+                .filter(|text| !text.is_empty())
+                .collect::<Vec<_>>();
+            (!parts.is_empty()).then(|| parts.concat())
+        }
+        serde_json::Value::Object(map) => {
+            for key in ["text", "content", "parts"] {
+                if let Some(text) = map.get(key).and_then(|item| extract_text_payload(Some(item)))
+                    && !text.is_empty()
+                {
+                    return Some(text);
+                }
+            }
+            None
+        }
+        _ => None,
+    }
 }
 
 /// Create a completion event for gemini tasks

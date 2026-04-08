@@ -93,3 +93,16 @@ fn parses_gemini_rate_limit_errors() {
     assert_eq!(event.event_kind, EventKind::Error);
     assert!(crate::rate_limit::is_rate_limited(&AgentKind::Gemini));
 }
+
+#[test]
+fn extract_response_handles_content_arrays_and_tool_boundaries() {
+    let output = r#"{"type":"message","role":"assistant","content":[{"type":"text","text":"Alpha"}],"delta":true}
+{"type":"message","role":"assistant","content":[{"type":"text","text":" beta"}],"delta":true}
+{"type":"tool_call","name":"Read","arguments":{"file":"src/main.rs"}}
+{"type":"message","role":"assistant","content":[{"type":"text","text":"Gamma"}],"delta":true}
+{"type":"result","status":"success"}"#;
+
+    let result = extract_response(output);
+
+    assert_eq!(result, Some("Alpha beta\n\nGamma".to_string()));
+}

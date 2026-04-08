@@ -2,13 +2,13 @@
 // Exports: output_text, output_text_brief, output_text_full, log_text, read_task_output, read_tail.
 // Deps: paths, Store, Task, serde_json::Value.
 use anyhow::{Context, Result};
-use serde_json::Value;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use crate::paths;
 use crate::store::Store;
 use crate::types::Task;
+use super::show_output_extract::collect_messages;
 
 pub fn output_text_for_task(store: &Store, task_id: &str, full: bool) -> Result<String> {
     let task = load_task_for_output(task_id, store)?;
@@ -105,152 +105,6 @@ pub(crate) fn extract_messages_research(log_path: &Path) -> Option<String> {
     }
     truncate_messages(&mut messages, MAX_MESSAGE_CHARS);
     Some(join_messages(messages, false, MAX_OUTPUT_CHARS))
-}
-
-fn collect_messages(content: &str) -> Vec<String> {
-    let mut messages = Vec::new();
-    let mut streaming_message = String::new();
-    for line in content.lines() {
-        let cleaned = strip_ansi(line);
-        let Ok(value) = serde_json::from_str::<Value>(&cleaned) else {
-            continue;
-        };
-        collect_message(&value, &mut messages, &mut streaming_message);
-    }
-    if !streaming_message.is_empty() {
-        messages.push(streaming_message);
-    }
-    messages
-}
-
-fn collect_message(value: &Value, messages: &mut Vec<String>, streaming_message: &mut String) {
-    match value.get("type").and_then(|kind| kind.as_str()) {
-        Some("item.completed") => push_optional(messages, completed_agent_message(value)),
-        Some("message") => collect_assistant_message(value, messages, streaming_message),
-        Some("assistant") => {
-            let text = value
-                .pointer("/message/content/0/text")
-                .and_then(|text| text.as_str());
-            if let Some(text) = text {
-                streaming_message.push_str(text);
-            }
-        }
-        Some("text") => push_flushed_message(messages, text_message(value), streaming_message),
-        Some("tool_use") => collect_tool_use_message(value, messages, streaming_message),
-        _ => {}
-    }
-}
-
-fn strip_ansi(s: &str) -> String {
-    let mut result = String::with_capacity(s.len());
-    let bytes = s.as_bytes();
-    let mut i = 0;
-    while i < bytes.len() {
-        if bytes[i] == 0x1b && i + 1 < bytes.len() && bytes[i + 1] == b'[' {
-            let mut j = i + 2;
-            while j < bytes.len() && (bytes[j].is_ascii_digit() || bytes[j] == b';') {
-                j += 1;
-            }
-            if j < bytes.len() && bytes[j].is_ascii_alphabetic() {
-                i = j + 1;
-                continue;
-            }
-        }
-        result.push(bytes[i] as char);
-        i += 1;
-    }
-    result
-}
-
-fn completed_agent_message(value: &Value) -> Option<String> {
-    let item = value.get("item")?;
-    let is_agent_message = item.get("type").and_then(|kind| kind.as_str()) == Some("agent_message");
-    let text = item.get("text").and_then(|text| text.as_str())?;
-    is_agent_message.then(|| text.to_string())
-}
-
-fn collect_assistant_message(
-    value: &Value,
-    messages: &mut Vec<String>,
-    streaming_message: &mut String,
-) {
-    let is_assistant = value.get("role").and_then(|role| role.as_str()) == Some("assistant");
-    let Some(content) = value.get("content").and_then(|text| text.as_str()) else {
-        return;
-    };
-    if !is_assistant {
-        return;
-    }
-    if value.get("delta").and_then(|delta| delta.as_bool()) == Some(true) {
-        streaming_message.push_str(content);
-    } else {
-        push_flushed_message(messages, Some(content), streaming_message);
-    }
-}
-
-fn collect_tool_use_message(
-    value: &Value,
-    messages: &mut Vec<String>,
-    streaming_message: &mut String,
-) {
-    let tool = value
-        .pointer("/part/tool")
-        .and_then(|tool| tool.as_str())
-        .unwrap_or("tool");
-    let status = value
-        .pointer("/part/state/status")
-        .and_then(|status| status.as_str());
-    let detail = match status {
-        Some("error") => {
-            let error = value
-                .pointer("/part/state/error")
-                .and_then(|error| error.as_str())
-                .unwrap_or("error");
-            format!("[{tool}] Error: {error}")
-        }
-        _ => {
-            let output = value
-                .pointer("/part/state/output")
-                .and_then(|output| output.as_str())
-                .unwrap_or("");
-            if output.is_empty() {
-                return;
-            }
-            format!("[{tool}] {output}")
-        }
-    };
-    if !streaming_message.is_empty() {
-        messages.push(std::mem::take(streaming_message));
-    }
-    messages.push(detail);
-}
-
-fn push_flushed_message(
-    messages: &mut Vec<String>,
-    text: Option<&str>,
-    streaming_message: &mut String,
-) {
-    let Some(text) = text else {
-        return;
-    };
-    if !streaming_message.is_empty() {
-        messages.push(std::mem::take(streaming_message));
-    }
-    messages.push(text.to_string());
-}
-
-fn push_optional(messages: &mut Vec<String>, message: Option<String>) {
-    if let Some(message) = message {
-        messages.push(message);
-    }
-}
-
-fn text_message(value: &Value) -> Option<&str> {
-    value
-        .get("content")
-        .and_then(|text| text.as_str())
-        .or_else(|| value.get("text").and_then(|text| text.as_str()))
-        .or_else(|| value.pointer("/part/text").and_then(|text| text.as_str()))
 }
 
 fn truncate_messages(messages: &mut [String], max_chars: usize) {

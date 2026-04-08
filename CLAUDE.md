@@ -96,6 +96,7 @@ context = ["src/types.rs"]
 skills = ["implementer"]
 worktree_prefix = "feat/my-feature"    # auto-generates worktree per task
 analyze = true                          # warn about overlapping file edits
+max_duration_mins = 30                  # hard timeout in minutes for batch tasks
 
 [[task]]
 name = "parser"                         # REQUIRED if sharing worktree with other tasks
@@ -112,6 +113,7 @@ idle_timeout = 120
 - `context`, `skills`, `scope` accept both string and array: `context = "file.md"` or `context = ["a.md", "b.md"]`
 - `fallback` supports comma-separated agents: `fallback = "oz,opencode,codex"`
 - `worktree_prefix` auto-generates `{prefix}/{task-name}` (or `{prefix}/task-{index}` for unnamed tasks)
+- Batch hard timeout uses `max_duration_mins`; the old `timeout` key is rejected with a rename hint
 
 ## Watch & Board
 

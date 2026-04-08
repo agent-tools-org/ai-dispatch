@@ -737,6 +737,7 @@ A workgroup lets several agents collaborate without repeating shared context. Ba
 agent = "codex"
 dir = "."
 verify = "cargo check"
+max_duration_mins = 30
 
 # Phase 1: Research (free, fast)
 [[task]]
@@ -796,6 +797,7 @@ aid watch --quiet --group <wg-id>   # background, auto-notifies on completion
 ```
 
 Batch dispatches with 2+ tasks auto-create a workgroup. The batch file is archived to `~/.aid/batches/`.
+Use `max_duration_mins` for batch hard limits. The older `timeout` key is no longer accepted and now fails with a migration hint.
 
 For critical tasks within a batch, use `best_of = 3` to dispatch to multiple agents and keep the best result:
 

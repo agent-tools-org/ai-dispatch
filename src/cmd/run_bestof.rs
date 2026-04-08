@@ -14,6 +14,11 @@ use crate::team;
 use crate::types::*;
 use super::run_validate::{IdConflict, resolve_id_conflict};
 use super::{run, RunArgs};
+#[path = "run_bestof/output_files.rs"]
+mod output_files;
+use self::output_files::{
+    dispatch_artifacts_for_candidate, finalize_winner_artifacts,
+};
 
 struct BestOfDispatch {
     agent_hint: String,
@@ -172,6 +177,8 @@ fn best_of_task_id(
 
 pub async fn run_best_of(store: Arc<Store>, args: RunArgs, n: usize) -> Result<TaskId> {
     validate_best_of_count(n)?;
+    let original_artifacts =
+        dispatch_artifacts_for_candidate(args.output.as_deref(), args.result_file.as_deref(), 0);
     let team_config = args.team.as_deref().and_then(team::resolve_team);
     let selection_opts = RunOpts {
         dir: args.dir.clone(),
@@ -196,22 +203,33 @@ pub async fn run_best_of(store: Arc<Store>, args: RunArgs, n: usize) -> Result<T
     }
     let plan = expand_best_of_plan(agents.into_iter().take(n).collect(), n);
     let mut dispatches = Vec::new();
+    let mut candidate_artifacts = Vec::new();
     for (candidate_idx, kind) in plan.into_iter().enumerate() {
         let agent_label = kind.as_str().to_string();
         let mut child_args = args.clone();
+        let artifacts = dispatch_artifacts_for_candidate(
+            args.output.as_deref(),
+            args.result_file.as_deref(),
+            candidate_idx,
+        );
         child_args.agent_name = agent_label.clone();
         child_args.background = true;
         child_args.judge = None;
         child_args.announce = false;
         child_args.best_of = None;
+        child_args.output = artifacts.output.clone();
+        child_args.result_file = artifacts.result_file.clone();
         child_args.existing_task_id =
             best_of_task_id(store.as_ref(), args.existing_task_id.as_ref(), candidate_idx)?;
         let store = store.clone();
         match run(store, child_args).await {
-            Ok(task_id) => dispatches.push(BestOfDispatch {
-                agent_hint: agent_label,
-                task_id,
-            }),
+            Ok(task_id) => {
+                candidate_artifacts.push((task_id.clone(), artifacts));
+                dispatches.push(BestOfDispatch {
+                    agent_hint: agent_label,
+                    task_id,
+                });
+            }
             Err(err) => {
                 aid_error!("[aid] best-of-{n}: dispatch to {agent_label} failed: {err}");
             }
@@ -247,6 +265,7 @@ pub async fn run_best_of(store: Arc<Store>, args: RunArgs, n: usize) -> Result<T
     }
     let best = pick_best_result(&completed)
         .ok_or_else(|| anyhow!("best-of-{n}: no successful tasks"))?;
+    finalize_winner_artifacts(&original_artifacts, &candidate_artifacts, &best.task_id)?;
     let others = completed
         .iter()
         .filter(|candidate| candidate.task_id != best.task_id)

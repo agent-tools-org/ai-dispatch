@@ -268,8 +268,8 @@ pub(super) async fn batch(
 ) -> Result<()> {
     match action {
         Some(BatchAction::Init) => cmd::batch::init(output.as_deref())?,
-        Some(BatchAction::Retry { group_id, agent }) => {
-            cmd::batch::retry_failed(store, &group_id, agent.as_deref()).await?;
+        Some(BatchAction::Retry { group_id, agent, include_waiting }) => {
+            cmd::batch::retry_failed(store, &group_id, agent.as_deref(), include_waiting).await?;
         }
         None => {
             let file = file.ok_or_else(|| anyhow!("batch file is required"))?;

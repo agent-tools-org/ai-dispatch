@@ -249,5 +249,8 @@ pub enum BatchAction {
         /// Agent override for all retried tasks
         #[arg(long)]
         agent: Option<String>,
+        /// Include tasks still stuck in WAIT status
+        #[arg(long)]
+        include_waiting: bool,
     },
 }

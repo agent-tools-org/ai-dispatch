@@ -11,20 +11,21 @@ pub async fn retry_failed(
     store: Arc<Store>,
     group_id: &str,
     agent_override: Option<&str>,
+    include_waiting: bool,
 ) -> Result<()> {
     crate::sanitize::validate_workgroup_id(group_id)?;
     let tasks = store.list_tasks_by_group(group_id)?;
     let total = tasks.len();
     let retry_tasks: Vec<_> = tasks
         .into_iter()
-        .filter(|task| matches!(task.status, TaskStatus::Failed | TaskStatus::Skipped))
+        .filter(|task| should_retry_task(task.status, include_waiting))
         .collect();
     if retry_tasks.is_empty() {
-        println!("No failed tasks in {group_id}");
+        println!("No retryable tasks in {group_id}");
         return Ok(());
     }
     println!(
-        "[batch] Retrying {}/{} failed tasks in {group_id}",
+        "[batch] Retrying {}/{} task(s) in {group_id}",
         retry_tasks.len(),
         total
     );
@@ -33,6 +34,11 @@ pub async fn retry_failed(
         let _ = run::run(store.clone(), run_args).await?;
     }
     Ok(())
+}
+
+pub(super) fn should_retry_task(status: TaskStatus, include_waiting: bool) -> bool {
+    matches!(status, TaskStatus::Failed | TaskStatus::Skipped)
+        || (include_waiting && status == TaskStatus::Waiting)
 }
 
 pub(crate) fn retry_task_to_run_args(task: &Task, group_id: &str, agent_override: Option<&str>) -> RunArgs {

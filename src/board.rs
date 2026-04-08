@@ -5,6 +5,7 @@ use std::collections::HashMap;
 
 use anyhow::Result;
 
+use crate::cmd::eta;
 use crate::cost;
 use crate::session;
 use crate::store::Store;
@@ -103,7 +104,7 @@ pub fn render_board(tasks: &[Task], store: &Store) -> Result<String> {
         } else {
             task.duration_ms
                 .map(format_duration)
-                .unwrap_or_else(|| elapsed_since(task.created_at))
+                .unwrap_or_else(|| format_running_duration(task, store))
         };
         let tokens = if task.status == TaskStatus::Skipped {
             "-".to_string()
@@ -301,6 +302,16 @@ fn elapsed_since(start: chrono::DateTime<chrono::Local>) -> String {
     }
 }
 
+fn format_running_duration(task: &Task, store: &Store) -> String {
+    let elapsed = elapsed_since(task.created_at);
+    match (eta::estimate_eta(task, store), eta::estimate_progress(task, store)) {
+        (Some(eta_label), Some(progress)) => format!("{elapsed} (ETA {eta_label} {progress}%)"),
+        (Some(eta_label), None) => format!("{elapsed} (ETA {eta_label})"),
+        (None, Some(progress)) => format!("{elapsed} ({progress}%)"),
+        (None, None) => elapsed,
+    }
+}
+
 fn format_tokens(n: i64) -> String {
     if n >= 1_000_000 {
         format!("{:.1}M", n as f64 / 1_000_000.0)
@@ -395,6 +406,8 @@ fn retry_status(status: TaskStatus) -> &'static str {
 mod tests {
     use super::*;
     use chrono::Local;
+    use tempfile::TempDir;
+    use crate::paths::AidHomeGuard;
     use crate::store::Store;
     use serde_json::json;
 
@@ -434,15 +447,22 @@ mod tests {
         }
     }
 
+    fn isolated_store() -> (TempDir, AidHomeGuard, Store) {
+        let temp = TempDir::new().unwrap();
+        let guard = AidHomeGuard::set(temp.path());
+        let store = Store::open_memory().unwrap();
+        (temp, guard, store)
+    }
+
     #[test]
     fn empty_board() {
-        let store = Store::open_memory().unwrap();
+        let (_temp, _guard, store) = isolated_store();
         assert_eq!(render_board(&[], &store).unwrap(), "No tasks found.");
     }
 
     #[test]
     fn board_with_tasks() {
-        let store = Store::open_memory().unwrap();
+        let (_temp, _guard, store) = isolated_store();
         let tasks = vec![
             make_task("t-0001", AgentKind::Codex, TaskStatus::Done),
             make_task("t-0002", AgentKind::Gemini, TaskStatus::Running),
@@ -460,7 +480,7 @@ mod tests {
 
     #[test]
     fn board_shows_running_task_milestone() {
-        let store = Store::open_memory().unwrap();
+        let (_temp, _guard, store) = isolated_store();
         let task = make_task("t-0003", AgentKind::Codex, TaskStatus::Running);
         store.insert_task(&task).unwrap();
         store.insert_event(&TaskEvent {
@@ -477,7 +497,7 @@ mod tests {
 
     #[test]
     fn board_shows_awaiting_input_reason() {
-        let store = Store::open_memory().unwrap();
+        let (_temp, _guard, store) = isolated_store();
         let task = make_task("t-0004", AgentKind::Codex, TaskStatus::AwaitingInput);
         store.insert_task(&task).unwrap();
         store.insert_event(&TaskEvent {
@@ -495,7 +515,7 @@ mod tests {
 
     #[test]
     fn board_shows_repo_column_when_present() {
-        let store = Store::open_memory().unwrap();
+        let (_temp, _guard, store) = isolated_store();
         let mut task = make_task("t-0005", AgentKind::Codex, TaskStatus::Done);
         task.repo_path = Some("/tmp/example-repo".to_string());
 
@@ -506,7 +526,7 @@ mod tests {
 
     #[test]
     fn board_shows_pending_reason_for_failed_pending_timeout() {
-        let store = Store::open_memory().unwrap();
+        let (_temp, _guard, store) = isolated_store();
         let mut task = make_task("t-0006", AgentKind::Codex, TaskStatus::Failed);
         task.pending_reason = Some("rate_limited".to_string());
 
@@ -516,7 +536,7 @@ mod tests {
 
     #[test]
     fn board_shows_latest_error_for_failed_task() {
-        let store = Store::open_memory().unwrap();
+        let (_temp, _guard, store) = isolated_store();
         let task = make_task("t-err1", AgentKind::Codex, TaskStatus::Failed);
         store.insert_task(&task).unwrap();
         store.insert_event(&TaskEvent {
@@ -528,6 +548,31 @@ mod tests {
         }).unwrap();
         let output = render_board(&[task], &store).unwrap();
         assert!(output.contains("FAIL — Quota exhausted"), "output: {output}");
+    }
+
+    #[test]
+    fn test_board_shows_eta_for_running_task() {
+        let (_temp, _guard, store) = isolated_store();
+        let now = Local::now();
+        for (id, minutes_ago, duration_ms) in [
+            ("t-done-1", 10, 120_000),
+            ("t-done-2", 20, 180_000),
+            ("t-done-3", 30, 240_000),
+        ] {
+            let mut task = make_task(id, AgentKind::Codex, TaskStatus::Done);
+            task.created_at = now - chrono::Duration::minutes(minutes_ago);
+            task.duration_ms = Some(duration_ms);
+            store.insert_task(&task).unwrap();
+        }
+
+        let mut running = make_task("t-run", AgentKind::Codex, TaskStatus::Running);
+        running.created_at = now - chrono::Duration::seconds(90);
+        running.duration_ms = None;
+        store.insert_task(&running).unwrap();
+
+        let output = render_board(&[running], &store).unwrap();
+        assert!(output.contains("ETA"), "output: {output}");
+        assert!(output.contains('%'), "output: {output}");
     }
 
     #[test]

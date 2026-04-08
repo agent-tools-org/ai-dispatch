@@ -11,6 +11,10 @@ pub fn estimate_eta(task: &Task, store: &Store) -> Option<String> {
     estimate_eta_at(task, store, Local::now())
 }
 
+pub fn estimate_progress(task: &Task, store: &Store) -> Option<u8> {
+    estimate_progress_at(task, store, Local::now())
+}
+
 fn estimate_eta_at(task: &Task, store: &Store, now: DateTime<Local>) -> Option<String> {
     if task.status != TaskStatus::Running {
         return None;
@@ -34,6 +38,32 @@ fn estimate_eta_at(task: &Task, store: &Store, now: DateTime<Local>) -> Option<S
     Some(format_eta(remaining_ms))
 }
 
+fn estimate_progress_at(task: &Task, store: &Store, now: DateTime<Local>) -> Option<u8> {
+    if task.status != TaskStatus::Running {
+        return None;
+    }
+    let elapsed_ms = (now - task.created_at).num_milliseconds();
+    let durations: Vec<i64> = store
+        .recent_tasks_for_agent(task.agent, 50)
+        .ok()?
+        .into_iter()
+        .filter_map(|entry| entry.duration_ms)
+        .collect();
+    if durations.len() < 3 {
+        return None;
+    }
+    let mut sorted = durations;
+    sorted.sort_unstable();
+    let median_ms = sorted[sorted.len() / 2];
+    if median_ms <= 0 {
+        return None;
+    }
+    let pct = ((elapsed_ms as f64 / median_ms as f64) * 100.0)
+        .min(99.0)
+        .max(0.0) as u8;
+    Some(pct)
+}
+
 fn format_eta(ms: i64) -> String {
     let secs = (ms / 1_000).max(0);
     if secs < 60 {
@@ -49,6 +79,9 @@ fn format_eta(ms: i64) -> String {
 mod tests {
     use super::*;
     use chrono::Duration;
+    use tempfile::TempDir;
+    use crate::paths::AidHomeGuard;
+    use crate::store::Store;
     use crate::types::{AgentKind, TaskId, VerifyStatus};
 
     fn make_task(
@@ -93,9 +126,16 @@ mod tests {
         }
     }
 
+    fn isolated_store() -> (TempDir, AidHomeGuard, Store) {
+        let temp = TempDir::new().unwrap();
+        let guard = AidHomeGuard::set(temp.path());
+        let store = Store::open_memory().unwrap();
+        (temp, guard, store)
+    }
+
     #[test]
     fn estimate_eta_returns_none_without_history() {
-        let store = Store::open_memory().unwrap();
+        let (_temp, _guard, store) = isolated_store();
         let now = Local::now();
         store
             .insert_task(&make_task(
@@ -129,7 +169,7 @@ mod tests {
 
     #[test]
     fn estimate_eta_returns_remaining_time() {
-        let store = Store::open_memory().unwrap();
+        let (_temp, _guard, store) = isolated_store();
         let now = Local::now();
         for (id, minutes_ago, duration_ms) in [
             ("t-done-1", 10, 120_000),
@@ -156,6 +196,102 @@ mod tests {
         );
 
         assert_eq!(estimate_eta_at(&running, &store, now), Some("~2m".to_string()));
+    }
+
+    #[test]
+    fn test_estimate_progress_returns_percentage() {
+        let (_temp, _guard, store) = isolated_store();
+        let now = Local::now();
+        for (id, minutes_ago, duration_ms) in [
+            ("t-done-1", 10, 120_000),
+            ("t-done-2", 20, 180_000),
+            ("t-done-3", 30, 240_000),
+        ] {
+            store
+                .insert_task(&make_task(
+                    id,
+                    AgentKind::Codex,
+                    TaskStatus::Done,
+                    now - Duration::minutes(minutes_ago),
+                    Some(duration_ms),
+                ))
+                .unwrap();
+        }
+
+        let running = make_task(
+            "t-run",
+            AgentKind::Codex,
+            TaskStatus::Running,
+            now - Duration::seconds(90),
+            None,
+        );
+
+        assert_eq!(estimate_progress_at(&running, &store, now), Some(50));
+    }
+
+    #[test]
+    fn test_estimate_progress_caps_at_99() {
+        let (_temp, _guard, store) = isolated_store();
+        let now = Local::now();
+        for (id, minutes_ago, duration_ms) in [
+            ("t-done-1", 10, 120_000),
+            ("t-done-2", 20, 180_000),
+            ("t-done-3", 30, 240_000),
+        ] {
+            store
+                .insert_task(&make_task(
+                    id,
+                    AgentKind::Codex,
+                    TaskStatus::Done,
+                    now - Duration::minutes(minutes_ago),
+                    Some(duration_ms),
+                ))
+                .unwrap();
+        }
+
+        let running = make_task(
+            "t-run",
+            AgentKind::Codex,
+            TaskStatus::Running,
+            now - Duration::seconds(240),
+            None,
+        );
+
+        assert_eq!(estimate_progress_at(&running, &store, now), Some(99));
+    }
+
+    #[test]
+    fn test_estimate_progress_returns_none_without_history() {
+        let (_temp, _guard, store) = isolated_store();
+        let now = Local::now();
+        store
+            .insert_task(&make_task(
+                "t-done-1",
+                AgentKind::Codex,
+                TaskStatus::Done,
+                now - Duration::minutes(10),
+                Some(120_000),
+            ))
+            .unwrap();
+        store
+            .insert_task(&make_task(
+                "t-done-2",
+                AgentKind::Codex,
+                TaskStatus::Done,
+                now - Duration::minutes(20),
+                Some(180_000),
+            ))
+            .unwrap();
+
+        let running = make_task(
+            "t-run",
+            AgentKind::Codex,
+            TaskStatus::Running,
+            now - Duration::seconds(30),
+            None,
+        );
+
+        assert_eq!(estimate_progress_at(&running, &store, now), None);
     }
 
     #[test]

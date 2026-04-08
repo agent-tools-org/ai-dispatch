@@ -58,7 +58,13 @@ fn board_rapid_calls_show_data_without_exit() {
     assert!(output1.status.success());
 
     // Second board call within 10s with same state (empty)
-    // Use --force to bypass cooldown in tests
+    // Reset marker timestamp to old value so --force cooldown (30s) is satisfied
+    let marker = aid_home.join("board-last.txt");
+    if marker.exists() {
+        let content = std::fs::read_to_string(&marker).unwrap();
+        let patched = format!("0\n{}", content.splitn(2, '\n').nth(1).unwrap_or(""));
+        std::fs::write(&marker, patched).unwrap();
+    }
     let mut cmd2 = aid_cmd_in(&aid_home);
     let output2 = cmd2.args(["board", "--force"]).output().unwrap();
 
@@ -178,6 +184,13 @@ fn merge_marks_done_task_as_merged() {
     let merge_stdout = String::from_utf8_lossy(&merge_output.stdout);
     assert!(merge_stdout.contains("Marked t-2001 as merged"));
 
+    // Reset marker timestamp so --force cooldown (30s) is satisfied
+    let marker = temp_dir.path().join("board-last.txt");
+    if marker.exists() {
+        let content = std::fs::read_to_string(&marker).unwrap();
+        let patched = format!("0\n{}", content.splitn(2, '\n').nth(1).unwrap_or(""));
+        std::fs::write(&marker, patched).unwrap();
+    }
     let board_output = aid_cmd_in(temp_dir.path()).args(["board", "--force"]).output().unwrap();
     assert!(board_output.status.success());
     let board_stdout = String::from_utf8_lossy(&board_output.stdout);

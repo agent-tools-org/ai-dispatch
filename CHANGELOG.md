@@ -1,3 +1,9 @@
+## v8.75.1 (2026-04-08)
+- Fix batch `best_of` dispatches reusing active task IDs and harden best-result selection
+- Clarify the batch TOML rename from `timeout` to `max_duration_mins` in parser errors and docs
+- Stop tracking local `.aid/state.toml` so personal state no longer blocks status checks or releases
+
+
 ## v8.75.0 (2026-04-08)
 - Add GitHub Copilot CLI as a built-in agent with setup, selection, pricing, sandbox, and usage integration
 - Improve Copilot log formatting in `aid show` and summary extraction across streaming and tool boundaries

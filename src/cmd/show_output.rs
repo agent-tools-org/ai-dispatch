@@ -5,6 +5,8 @@
 mod show_output_diff;
 #[path = "show_output_artifacts.rs"]
 mod show_output_artifacts;
+#[path = "show_output_extract.rs"]
+mod show_output_extract;
 #[path = "show_output_messages.rs"]
 mod show_output_messages;
 
@@ -27,3 +29,7 @@ mod brief_tests;
 #[cfg(test)]
 #[path = "show_output_diff_tests.rs"]
 mod diff_tests;
+
+#[cfg(test)]
+#[path = "show_output_format_tests.rs"]
+mod format_tests;

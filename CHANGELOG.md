@@ -1,3 +1,9 @@
+## v8.75.0 (2026-04-08)
+- Add GitHub Copilot CLI as a built-in agent with setup, selection, pricing, sandbox, and usage integration
+- Improve Copilot log formatting in `aid show` and summary extraction across streaming and tool boundaries
+- Refresh project documentation for supported agents and scripted release flow
+
+
 ## v8.74.1 (2026-04-08)
 - Improve streamed CLI output formatting across `aid show`, TUI, and web views
 - Fix Gemini response extraction for content arrays, tool boundaries, and revision-style text events

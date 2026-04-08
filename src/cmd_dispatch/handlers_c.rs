@@ -24,12 +24,15 @@ pub(super) async fn watch(
     group: Option<String>,
     tui_enabled: bool,
     quiet: bool,
+    stream: bool,
     exit_on_await: bool,
     timeout: Option<u64>,
 ) -> Result<()> {
     let group = resolve_group(group);
     if tui_enabled {
         tui::run(&store, tui::RunOptions { task_id: task_ids.first().cloned(), group })?;
+    } else if stream {
+        cmd::watch_stream::run(&store, &task_ids, group.as_deref(), timeout).await?;
     } else if quiet {
         cmd::wait::run(&store, &task_ids, group.as_deref(), exit_on_await, timeout).await?;
     } else {

@@ -145,13 +145,36 @@ fn run_iterate_flags_parse() {
 fn watch_timeout_flag_parses() {
     let cli = Cli::try_parse_from(["aid", "watch", "--quiet", "--timeout", "60", "--group", "wg-a"]).unwrap();
     match cli.command {
-        Some(Commands::Watch(command_args_a::WatchArgs { timeout, group, quiet, .. })) => {
+        Some(Commands::Watch(command_args_a::WatchArgs { timeout, group, quiet, stream, .. })) => {
             assert!(quiet);
+            assert!(!stream);
             assert_eq!(timeout, Some(60));
             assert_eq!(group, Some("wg-a".to_string()));
         }
         _ => panic!("expected Watch"),
     }
+}
+
+#[test]
+fn watch_stream_flag_parses() {
+    let cli = Cli::try_parse_from(["aid", "watch", "--stream", "--group", "wg-a"]).unwrap();
+    match cli.command {
+        Some(Commands::Watch(command_args_a::WatchArgs { group, stream, quiet, .. })) => {
+            assert!(stream);
+            assert!(!quiet);
+            assert_eq!(group, Some("wg-a".to_string()));
+        }
+        _ => panic!("expected Watch"),
+    }
+}
+
+#[test]
+fn watch_stream_conflicts_with_quiet() {
+    let err = match Cli::try_parse_from(["aid", "watch", "--stream", "--quiet", "t-1234"]) {
+        Ok(_) => panic!("expected stream/quiet conflict"),
+        Err(err) => err,
+    };
+    assert!(err.to_string().contains("cannot be used with"));
 }
 
 #[test]

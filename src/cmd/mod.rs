@@ -54,6 +54,7 @@ pub mod summary_cli;
 pub mod upgrade;
 pub mod wait;
 pub mod watch;
+pub mod watch_stream;
 #[cfg(feature = "web")]
 pub mod web;
 pub mod worktree;

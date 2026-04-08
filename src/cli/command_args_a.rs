@@ -157,6 +157,7 @@ pub struct BenchmarkArgs {
 #[command(after_help = r#"Examples:
   aid watch t-1234               # Live TUI for one task
   aid watch --quiet t-1234       # Block until done (for scripts)
+  aid watch --stream --group wg-a # JSONL events for orchestrators
   aid watch --quiet --group wg-a # Block until group finishes
   aid watch --tui                # Full dashboard TUI"#)]
 pub struct WatchArgs {
@@ -167,6 +168,8 @@ pub struct WatchArgs {
     pub tui: bool,
     #[arg(long)]
     pub quiet: bool,
+    #[arg(long, conflicts_with_all = ["tui", "quiet", "exit_on_await"])]
+    pub stream: bool,
     #[arg(long)]
     pub exit_on_await: bool,
     #[arg(long)]

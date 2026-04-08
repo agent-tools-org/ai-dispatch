@@ -25,6 +25,7 @@ fn stub_task(name: &str, depends_on: Option<Vec<&str>>) -> batch::BatchTask {
         container: None,
         best_of: None,
         max_duration_mins: None,
+        max_wait_mins: None,
         retry: None,
         iterate: None,
         eval: None,

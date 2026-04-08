@@ -136,6 +136,7 @@ fn auto_fallback_skips_rate_limited_toml_fallbacks() {
         peer_review: None,
         best_of: None,
         max_duration_mins: None,
+        max_wait_mins: None,
         retry: None,
         idle_timeout: None,
         metric: None,

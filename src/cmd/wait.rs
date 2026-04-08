@@ -100,6 +100,7 @@ async fn wait_for_task_ids_inner(
     };
 
     loop {
+        let _ = crate::background::check_zombie_tasks(store);
         track_group_tasks(&mut task_ids, completed)?;
         let mut remaining = 0usize;
         let total = task_ids.len();

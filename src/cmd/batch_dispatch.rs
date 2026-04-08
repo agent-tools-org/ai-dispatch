@@ -10,11 +10,12 @@ use super::batch_args::task_to_run_args;
 use super::batch_dispatch_support::{
     auto_fallback_agent,
     dispatch_level_with_ids,
+    poll_completed_tasks,
     should_auto_fallback,
-    wait_for_any_completion,
 };
 use super::batch_helpers::{resolve_hook_targets, trigger_conditional};
 use super::batch_types::{BatchDispatchResult, BatchTaskOutcome};
+use super::batch_wait_timeout::ReadyWaitTracker;
 use super::batch_validate::{find_ready_tasks, resolve_dependencies, task_label};
 
 pub(crate) async fn dispatch_parallel(
@@ -146,6 +147,8 @@ async fn dispatch_with_dependencies(
     let mut active: Vec<(usize, String)> = Vec::new();
     let mut task_ids: Vec<String> = Vec::new();
     let max_active = max_active.max(1);
+    let default_max_wait_mins = default_max_wait_mins();
+    let mut wait_tracker = ReadyWaitTracker::new(tasks, default_max_wait_mins);
     while outcomes.iter().any(Option::is_none) {
         let ready = find_ready_tasks(
             &store,
@@ -155,6 +158,7 @@ async fn dispatch_with_dependencies(
             &mut outcomes,
             &triggered,
         )?;
+        wait_tracker.observe_ready(&ready, chrono::Local::now());
         let available = max_active.saturating_sub(active.len());
         if available > 0 && !ready.is_empty() {
             let dispatch_group: Vec<_> = ready.into_iter().take(available).collect();
@@ -167,6 +171,7 @@ async fn dispatch_with_dependencies(
             )
             .await? {
                 started[dispatch.index] = true;
+                wait_tracker.clear(dispatch.index);
                 match dispatch.task_id {
                     Some(task_id) => {
                         task_ids.push(task_id.clone());
@@ -190,10 +195,50 @@ async fn dispatch_with_dependencies(
                 }
             }
         }
+        for timeout_task_id in wait_tracker.fail_expired(
+            &store,
+            &waiting_ids,
+            &started,
+            chrono::Local::now(),
+        )? {
+            let Some(task_idx) = waiting_ids.iter().position(|id| id == &timeout_task_id) else {
+                continue;
+            };
+            started[task_idx] = true;
+            if let Some(retry_task_id) = maybe_dispatch_auto_fallback(
+                store.clone(),
+                tasks,
+                task_idx,
+                &timeout_task_id,
+                BatchTaskOutcome::Failed,
+                auto_fallback,
+                &mut retried,
+                shared_dir_path,
+            )
+            .await?
+            {
+                task_ids.push(retry_task_id.clone());
+                active.push((task_idx, retry_task_id));
+                continue;
+            }
+            outcomes[task_idx] = Some(BatchTaskOutcome::Failed);
+            trigger_conditional(
+                BatchTaskOutcome::Failed,
+                task_idx,
+                &mut triggered,
+                &success_targets,
+                &failure_targets,
+            );
+        }
         if active.is_empty() {
             break;
         }
-        for completed in wait_for_any_completion(&store, &mut active)? {
+        let completed_tasks = poll_completed_tasks(&store, &mut active)?;
+        if completed_tasks.is_empty() {
+            tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+            continue;
+        }
+        for completed in completed_tasks {
             if let Some(retry_task_id) = maybe_dispatch_auto_fallback(
                 store.clone(),
                 tasks,
@@ -235,6 +280,13 @@ async fn dispatch_with_dependencies(
             .map(|outcome| outcome.unwrap_or(BatchTaskOutcome::Skipped))
             .collect(),
     })
+}
+
+fn default_max_wait_mins() -> Option<u64> {
+    crate::config::load_config()
+        .ok()
+        .and_then(|config| u64::try_from(config.background.max_task_duration_mins).ok())
+        .filter(|mins| *mins > 0)
 }
 
 async fn maybe_dispatch_auto_fallback(

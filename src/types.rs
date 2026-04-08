@@ -290,6 +290,7 @@ pub enum PendingReason {
     AgentStarting,
     RateLimited,
     WorkerCapacity,
+    WaitTimeout,
     Unknown,
 }
 
@@ -299,6 +300,7 @@ impl PendingReason {
             Self::AgentStarting => "agent_starting",
             Self::RateLimited => "rate_limited",
             Self::WorkerCapacity => "worker_capacity",
+            Self::WaitTimeout => "wait_timeout",
             Self::Unknown => "unknown",
         }
     }
@@ -308,6 +310,7 @@ impl PendingReason {
             "agent_starting" => Some(Self::AgentStarting),
             "rate_limited" => Some(Self::RateLimited),
             "worker_capacity" => Some(Self::WorkerCapacity),
+            "wait_timeout" => Some(Self::WaitTimeout),
             "unknown" => Some(Self::Unknown),
             _ => None,
         }

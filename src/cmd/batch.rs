@@ -19,6 +19,8 @@ mod batch_retry;
 mod batch_dispatch;
 #[path = "batch_dispatch_support.rs"]
 mod batch_dispatch_support;
+#[path = "batch_wait_timeout.rs"]
+mod batch_wait_timeout;
 #[path = "batch_analyze.rs"]
 mod batch_analyze;
 #[path = "batch_output_dedup.rs"]

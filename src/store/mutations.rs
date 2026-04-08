@@ -172,6 +172,26 @@ impl Store {
         Ok(rows > 0)
     }
 
+    pub fn fail_waiting_with_reason(&self, id: &str, detail: &str) -> Result<bool> {
+        let now = Local::now();
+        let rows = self.db().execute(
+            "UPDATE tasks SET status = 'failed', completed_at = ?2, pending_reason = ?3
+             WHERE id = ?1 AND status = 'waiting'",
+            params![id, now.to_rfc3339(), PendingReason::WaitTimeout.as_str()],
+        )?;
+        if rows == 0 {
+            return Ok(false);
+        }
+        self.insert_event(&TaskEvent {
+            task_id: TaskId(id.to_string()),
+            timestamp: now,
+            event_kind: EventKind::Error,
+            detail: detail.to_string(),
+            metadata: Some(serde_json::json!({ "failure_kind": "wait_timeout" })),
+        })?;
+        Ok(true)
+    }
+
     pub fn update_resolved_prompt(&self, id: &str, resolved_prompt: &str) -> Result<()> {
         self.db().execute(
             "UPDATE tasks SET resolved_prompt = ?1 WHERE id = ?2",

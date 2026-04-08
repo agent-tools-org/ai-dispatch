@@ -5,6 +5,8 @@
 mod background_process;
 #[path = "background_spec.rs"]
 mod background_spec;
+#[path = "background_waiting.rs"]
+mod background_waiting;
 
 use anyhow::{Context, Result};
 use chrono::Local;
@@ -361,6 +363,10 @@ where
 {
     let config = config::load_config()?;
     let mut cleaned = cleanup_stale_pending_tasks(store)?;
+    cleaned.extend(background_waiting::cleanup_stale_waiting_tasks(
+        store,
+        config.background.max_task_duration_mins,
+    )?);
     let running_tasks = store.list_tasks(TaskFilter::Running)?;
     for task in &running_tasks {
         let task_id = task.id.as_str();

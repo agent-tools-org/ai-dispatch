@@ -180,6 +180,7 @@ mod tests {
             peer_review: None,
             best_of: None,
             max_duration_mins: None,
+            max_wait_mins: None,
             retry: None,
             iterate: None,
             eval: None,

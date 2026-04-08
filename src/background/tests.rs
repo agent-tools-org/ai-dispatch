@@ -4,6 +4,7 @@
 use chrono::{Duration, Local};
 
 use super::{
+    background_waiting,
     build_on_done_command, check_zombie_tasks_with, cleanup_stale_pending_tasks,
     fail_stale_pending_task, save_spec, BackgroundRunSpec,
     ZOMBIE_FAILURE_DETAIL,
@@ -140,6 +141,27 @@ fn marks_stale_pending_tasks_failed() {
     assert!(events[0]
         .detail
         .contains("Task timed out in pending state after 601s (reason: unknown)"));
+}
+
+#[test]
+fn marks_stale_waiting_tasks_failed() {
+    let temp = tempfile::tempdir().unwrap();
+    let _aid_home = paths::AidHomeGuard::set(temp.path());
+    paths::ensure_dirs().unwrap();
+
+    let store = Store::open_memory().unwrap();
+    let mut task = make_task("t-wait", TaskStatus::Waiting);
+    task.created_at = Local::now() - Duration::minutes(61);
+    store.insert_task(&task).unwrap();
+
+    let cleaned = background_waiting::cleanup_stale_waiting_tasks(&store, 60).unwrap();
+
+    assert_eq!(cleaned, vec!["t-wait".to_string()]);
+    let failed = store.get_task("t-wait").unwrap().unwrap();
+    assert_eq!(failed.status, TaskStatus::Failed);
+    assert_eq!(failed.pending_reason.as_deref(), Some(PendingReason::WaitTimeout.as_str()));
+    let error = store.latest_error("t-wait").unwrap();
+    assert!(error.contains("wait timeout: no agent slot available"));
 }
 
 #[test]

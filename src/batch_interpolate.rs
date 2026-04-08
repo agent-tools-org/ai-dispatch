@@ -149,6 +149,9 @@ fn apply_task_defaults(task: &mut BatchTask, defaults: &BatchDefaults, task_idx:
     if task.max_duration_mins.is_none() {
         task.max_duration_mins = defaults.max_duration_mins;
     }
+    if task.max_wait_mins.is_none() {
+        task.max_wait_mins = defaults.max_wait_mins;
+    }
     if task.retry.is_none() {
         task.retry = defaults.retry;
     }

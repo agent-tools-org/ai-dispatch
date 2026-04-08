@@ -53,6 +53,8 @@ pub struct BatchDefaults {
     #[serde(default)]
     pub max_duration_mins: Option<u64>,
     #[serde(default)]
+    pub max_wait_mins: Option<u64>,
+    #[serde(default)]
     pub retry: Option<u32>,
     #[serde(default)]
     pub iterate: Option<u32>,
@@ -120,6 +122,8 @@ pub struct BatchTask {
     pub best_of: Option<usize>,
     #[serde(default)]
     pub max_duration_mins: Option<u64>,
+    #[serde(default)]
+    pub max_wait_mins: Option<u64>,
     #[serde(default)]
     pub retry: Option<u32>,
     #[serde(default)]

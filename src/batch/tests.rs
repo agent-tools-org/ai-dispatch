@@ -42,6 +42,7 @@ fn make_task(name: Option<&str>, depends_on: &[&str]) -> BatchTask {
         container: None,
         best_of: None,
         max_duration_mins: None,
+        max_wait_mins: None,
         retry: None,
         iterate: None,
         eval: None,
@@ -226,7 +227,7 @@ fn applies_defaults_to_tasks() {
     let cfg = parse_batch_file(
         write_temp(concat!(
             "[defaults]\nauto_fallback = true\nagent = \"gemini\"\ndir = \"src\"\nmodel = \"gpt-5\"\n",
-            "worktree_prefix = \"feat\"\nverify = true\nmax_duration_mins = 25\n",
+            "worktree_prefix = \"feat\"\nverify = true\nmax_duration_mins = 25\nmax_wait_mins = 10\n",
             "retry = 2\npeer_review = \"cursor\"\nbest_of = 3\nmetric = \"cargo test\"\n",
             "context = [\"src/lib.rs\", \"src/main.rs:run\"]\n",
             "skills = [\"rust\", \"cli\"]\non_done = \"notify done\"\nfallback = \"cursor\"\n",
@@ -247,6 +248,7 @@ fn applies_defaults_to_tasks() {
     assert_eq!(task.worktree.as_deref(), Some("feat/impl"));
     assert_eq!(task.verify.as_deref(), Some("auto"));
     assert_eq!(task.max_duration_mins, Some(25));
+    assert_eq!(task.max_wait_mins, Some(10));
     assert_eq!(task.retry, Some(2));
     assert_eq!(task.peer_review.as_deref(), Some("cursor"));
     assert_eq!(task.best_of, Some(3));
@@ -287,7 +289,7 @@ fn task_values_override_defaults() {
     let cfg = parse_batch_file(
         write_temp(concat!(
             "[defaults]\nagent = \"gemini\"\ndir = \"src\"\nmodel = \"gpt-5\"\n",
-            "worktree_prefix = \"feat\"\nverify = true\nmax_duration_mins = 25\n",
+            "worktree_prefix = \"feat\"\nverify = true\nmax_duration_mins = 25\nmax_wait_mins = 10\n",
             "retry = 2\npeer_review = \"gemini\"\nbest_of = 3\nmetric = \"cargo test\"\n",
             "context = [\"src/default.rs\"]\nskills = [\"rust\"]\non_done = \"notify done\"\n",
             "fallback = \"cursor\"\n",
@@ -295,7 +297,7 @@ fn task_values_override_defaults() {
             "env_forward = [\"PATH\"]\n",
             "[[tasks]]\nname = \"impl\"\nagent = \"codex\"\nprompt = \"build it\"\n",
             "dir = \"custom\"\nmodel = \"gpt-4\"\nworktree = \"manual/impl\"\n",
-            "verify = \"manual\"\nmax_duration_mins = 5\nretry = 7\npeer_review = \"cursor\"\n",
+            "verify = \"manual\"\nmax_duration_mins = 5\nmax_wait_mins = 2\nretry = 7\npeer_review = \"cursor\"\n",
             "best_of = 5\nmetric = \"just verify\"\ncontext = [\"src/task.rs\"]\n",
             "skills = [\"own\"]\non_done = \"echo done\"\nfallback = \"opencode\"\n",
             "env = { SHARED = \"task\", TASK_ONLY = \"set\" }\n",
@@ -312,6 +314,7 @@ fn task_values_override_defaults() {
     assert_eq!(task.worktree.as_deref(), Some("manual/impl"));
     assert_eq!(task.verify.as_deref(), Some("manual"));
     assert_eq!(task.max_duration_mins, Some(5));
+    assert_eq!(task.max_wait_mins, Some(2));
     assert_eq!(task.retry, Some(7));
     assert_eq!(task.peer_review.as_deref(), Some("cursor"));
     assert_eq!(task.best_of, Some(5));

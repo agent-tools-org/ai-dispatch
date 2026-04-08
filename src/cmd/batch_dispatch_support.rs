@@ -1,5 +1,5 @@
 // Batch dispatch helpers for spawning, completion polling, and fallback selection.
-// Exports: dispatch_level_with_ids, wait_for_any_completion, pre_dispatch_fallback_choice, should_auto_fallback, auto_fallback_agent, dispatch_task_ref
+// Exports: dispatch_level_with_ids, poll_completed_tasks, pre_dispatch_fallback_choice, should_auto_fallback, auto_fallback_agent, dispatch_task_ref
 // Deps: crate::batch, crate::cmd::run, crate::rate_limit, crate::store::Store, super::batch_args, super::batch_types, super::batch_validate
 use crate::batch;
 use crate::cmd::run;
@@ -12,8 +12,6 @@ use std::sync::Arc;
 use super::batch_args::task_to_run_args;
 use super::batch_types::{BatchTaskOutcome, CompletedTask, DispatchedTask};
 use super::batch_validate::load_task_outcome;
-
-const COMPLETION_POLL_INTERVAL: std::time::Duration = std::time::Duration::from_millis(200);
 
 pub(super) async fn dispatch_level_with_ids(
     store: Arc<Store>,
@@ -80,33 +78,28 @@ pub(super) async fn dispatch_level_with_ids(
     Ok(dispatches)
 }
 
-pub(super) fn wait_for_any_completion(
+pub(super) fn poll_completed_tasks(
     store: &Arc<Store>,
     active: &mut Vec<(usize, String)>,
 ) -> Result<Vec<CompletedTask>> {
-    loop {
-        let mut completed = Vec::new();
-        for (i, (_, task_id)) in active.iter().enumerate() {
-            if let Some(task) = store.get_task(task_id)?
-                && task.status.is_terminal()
-            {
-                completed.push(i);
-            }
+    let mut completed = Vec::new();
+    for (i, (_, task_id)) in active.iter().enumerate() {
+        if let Some(task) = store.get_task(task_id)?
+            && task.status.is_terminal()
+        {
+            completed.push(i);
         }
-        if !completed.is_empty() {
-            let mut completed_tasks = Vec::with_capacity(completed.len());
-            for &i in completed.iter().rev() {
-                let (task_idx, task_id) = active.remove(i);
-                completed_tasks.push(CompletedTask {
-                    index: task_idx,
-                    outcome: load_task_outcome(store, &task_id)?,
-                    task_id,
-                });
-            }
-            return Ok(completed_tasks);
-        }
-        std::thread::sleep(COMPLETION_POLL_INTERVAL);
     }
+    let mut completed_tasks = Vec::with_capacity(completed.len());
+    for &i in completed.iter().rev() {
+        let (task_idx, task_id) = active.remove(i);
+        completed_tasks.push(CompletedTask {
+            index: task_idx,
+            outcome: load_task_outcome(store, &task_id)?,
+            task_id,
+        });
+    }
+    Ok(completed_tasks)
 }
 
 pub(super) fn dispatch_task_ref(task: &batch::BatchTask, task_idx: usize) -> String {

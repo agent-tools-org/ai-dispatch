@@ -220,7 +220,7 @@ async fn dispatch_with_dependencies(
         if active.is_empty() {
             break;
         }
-        let completed_tasks = poll_completed_tasks(&store, &mut active)?;
+        let completed_tasks = reconcile_and_poll_completed_tasks(&store, &mut active)?;
         if completed_tasks.is_empty() {
             tokio::time::sleep(std::time::Duration::from_millis(200)).await;
             continue;
@@ -272,6 +272,14 @@ async fn dispatch_with_dependencies(
             .map(|outcome| outcome.unwrap_or(BatchTaskOutcome::Skipped))
             .collect(),
     })
+}
+
+pub(super) fn reconcile_and_poll_completed_tasks(
+    store: &Arc<Store>,
+    active: &mut Vec<(usize, String)>,
+) -> Result<Vec<super::batch_types::CompletedTask>> {
+    let _ = crate::background::check_zombie_tasks(store.as_ref())?;
+    poll_completed_tasks(store, active)
 }
 
 fn default_max_wait_mins() -> Option<u64> {

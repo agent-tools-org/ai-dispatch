@@ -32,7 +32,8 @@ impl super::Agent for DroidAgent {
             cmd.arg("--auto").arg("high");
         }
         if let Some(ref model) = opts.model {
-            cmd.args(["-m", model]);
+            let mapped = map_model_name(model);
+            cmd.args(["-m", mapped.as_str()]);
         }
         for file in &opts.context_files {
             cmd.args(["-f", file]);
@@ -110,6 +111,17 @@ impl super::Agent for DroidAgent {
             cost_usd: None,
             exit_code: None,
         }
+    }
+}
+
+fn map_model_name(model: &str) -> String {
+    match model {
+        "haiku" => "claude-haiku-4-5-20251001".to_string(),
+        "sonnet" => "claude-sonnet-4-6".to_string(),
+        "opus" => "claude-opus-4-6".to_string(),
+        "gpt-4.1-nano" => "gpt-5.4-mini".to_string(),
+        "gpt-4.1-mini" => "gpt-5.4-fast".to_string(),
+        other => other.to_string(),
     }
 }
 
@@ -205,6 +217,28 @@ fn is_droid_rate_limit(v: &Value, detail: Option<&str>) -> bool {
         .and_then(|value| value.as_str())
         .or_else(|| v.pointer("/error/type").and_then(|value| value.as_str()))
         .is_some_and(|value| value.eq_ignore_ascii_case("rate_limit_exceeded"))
+}
+
+#[cfg(test)]
+mod model_name_tests {
+    use super::map_model_name;
+
+    #[test]
+    fn maps_common_shorthand_models() {
+        assert_eq!(map_model_name("haiku"), "claude-haiku-4-5-20251001");
+        assert_eq!(map_model_name("sonnet"), "claude-sonnet-4-6");
+        assert_eq!(map_model_name("opus"), "claude-opus-4-6");
+        assert_eq!(map_model_name("gpt-4.1-nano"), "gpt-5.4-mini");
+        assert_eq!(map_model_name("gpt-4.1-mini"), "gpt-5.4-fast");
+    }
+
+    #[test]
+    fn preserves_full_model_ids() {
+        assert_eq!(
+            map_model_name("claude-haiku-4-5-20251001"),
+            "claude-haiku-4-5-20251001"
+        );
+    }
 }
 
 #[cfg(test)]

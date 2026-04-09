@@ -2,7 +2,7 @@
 // Exports: run(). Deps: crate::store::Store, crate::types, crate::usage, crate::cost.
 
 use anyhow::Result;
-use chrono::{DateTime, Local};
+use chrono::{DateTime, Local, Timelike};
 use std::collections::{BTreeMap, HashMap};
 
 use crate::cost;
@@ -10,15 +10,16 @@ use crate::store::Store;
 use crate::types::{AgentKind, Task, TaskStatus};
 use crate::usage::UsageWindow;
 
-#[derive(Debug, PartialEq)] struct StatsSnapshot { agent_rows: Vec<AgentRow>, failure_rows: Vec<FailureRow>, model_rows: Vec<ModelRow> }
+#[derive(Debug, PartialEq)] struct StatsSnapshot { agent_rows: Vec<AgentRow>, failure_rows: Vec<FailureRow>, model_rows: Vec<ModelRow>, activity_by_day: Vec<(String, usize)>, activity_by_hour: Vec<(u32, usize)>, top_sessions: Vec<TopSession>, total_cost: f64, total_tokens: i64, total_tasks: usize }
 #[derive(Debug, PartialEq)] struct AgentRow { agent: String, tasks: usize, success_rate: f64, avg_duration_ms: Option<i64>, cost: String }
 #[derive(Debug, PartialEq)] struct FailureRow { label: String, tasks: usize, agents: Vec<(String, usize)> }
 #[derive(Debug, PartialEq)] struct ModelRow { model: String, tasks: usize, cost: String }
+#[derive(Debug, PartialEq)] struct TopSession { task_id: String, agent: String, label: &'static str, value: String }
 
-pub fn run(store: &Store, window: String, agent: Option<String>) -> Result<()> {
+pub fn run(store: &Store, window: String, agent: Option<String>, insights: bool) -> Result<()> {
     let window = UsageWindow::parse(&window)?;
     let stats = collect(store, window, agent.as_deref(), Local::now())?;
-    print!("{}", render_output(&stats, window));
+    print!("{}", render_output(&stats, window, insights));
     Ok(())
 }
 
@@ -27,17 +28,29 @@ fn collect(store: &Store, window: UsageWindow, agent: Option<&str>, now: DateTim
     let mut agents: BTreeMap<String, (AgentKind, usize, usize, usize, i64, usize, f64)> = BTreeMap::new();
     let mut failures: HashMap<String, (usize, BTreeMap<String, usize>)> = HashMap::new();
     let mut models: BTreeMap<String, (usize, f64, AgentKind)> = BTreeMap::new();
+    let (mut day_counts, mut hour_counts, mut total_cost, mut total_tokens, mut total_tasks) = (HashMap::new(), [0usize; 24], 0.0, 0, 0);
+    let (mut longest, mut most_tokens, mut highest_cost) = (None, None, None);
     for task in &tasks {
+        let cost_usd = task_cost(task);
         let row = agents.entry(task.agent_display_name().to_string()).or_insert((task.agent, 0, 0, 0, 0, 0, 0.0));
         row.1 += 1;
         row.2 += usize::from(matches!(task.status, TaskStatus::Done | TaskStatus::Merged));
         row.3 += usize::from(task.status != TaskStatus::Waiting);
         if let Some(ms) = task.duration_ms { row.4 += ms; row.5 += 1; }
-        row.6 += task_cost(task);
+        row.6 += cost_usd;
         let model = task.model.clone().unwrap_or_else(|| "unknown".to_string());
         let model_row = models.entry(model).or_insert((0, 0.0, task.agent));
         model_row.0 += 1;
-        model_row.1 += task_cost(task);
+        model_row.1 += cost_usd;
+        *day_counts.entry(task.created_at.format("%a").to_string()).or_default() += 1;
+        hour_counts[task.created_at.hour() as usize] += 1;
+        total_cost += cost_usd;
+        total_tokens += task.tokens.unwrap_or(0);
+        total_tasks += 1;
+        if let Some(ms) = task.duration_ms { if longest.as_ref().is_none_or(|(_, best)| ms > *best) { longest = Some((task, ms)); } }
+        let tokens = task.tokens.unwrap_or(0);
+        if most_tokens.as_ref().is_none_or(|(_, best)| tokens > *best) { most_tokens = Some((task, tokens)); }
+        if highest_cost.as_ref().is_none_or(|(_, best)| cost_usd > *best) { highest_cost = Some((task, cost_usd)); }
         if task.status == TaskStatus::Failed {
             let label = classify_failure(store.latest_error(task.id.as_str()).as_deref(), task.exit_code);
             let entry = failures.entry(label).or_insert((0, BTreeMap::new()));
@@ -60,17 +73,26 @@ fn collect(store: &Store, window: UsageWindow, agent: Option<&str>, now: DateTim
         model, tasks, cost: cost::format_cost_label(Some(cost_usd), kind),
     }).collect();
     model_rows.sort_by(|a, b| b.tasks.cmp(&a.tasks).then_with(|| a.model.cmp(&b.model)));
-    Ok(StatsSnapshot { agent_rows, failure_rows, model_rows })
+    Ok(StatsSnapshot {
+        agent_rows, failure_rows, model_rows, total_cost, total_tokens, total_tasks,
+        activity_by_day: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].into_iter().map(|day| (day.to_string(), *day_counts.get(day).unwrap_or(&0))).collect(),
+        activity_by_hour: hour_counts.into_iter().enumerate().map(|(hour, count)| (hour as u32, count)).collect(),
+        top_sessions: [
+            longest.map(|(task, ms)| TopSession { task_id: task.id.to_string(), agent: task.agent_display_name().to_string(), label: "Longest", value: format_duration(Some(ms)) }),
+            most_tokens.map(|(task, tokens)| TopSession { task_id: task.id.to_string(), agent: task.agent_display_name().to_string(), label: "Most tokens", value: format_tokens(tokens) }),
+            highest_cost.map(|(task, cost_usd)| TopSession { task_id: task.id.to_string(), agent: task.agent_display_name().to_string(), label: "Highest cost", value: cost::format_cost(Some(cost_usd)) }),
+        ].into_iter().flatten().collect(),
+    })
 }
 
-fn render_output(stats: &StatsSnapshot, window: UsageWindow) -> String {
+fn render_output(stats: &StatsSnapshot, window: UsageWindow, insights: bool) -> String {
     if stats.agent_rows.is_empty() {
         return format!("No tasks matched the selected filters for {}.\n", window.description());
     }
-    render(stats, window)
+    render(stats, window, insights)
 }
 
-fn render(stats: &StatsSnapshot, window: UsageWindow) -> String {
+fn render(stats: &StatsSnapshot, window: UsageWindow, insights: bool) -> String {
     let mut out = format!("Agent Performance ({})\n", window.description());
     for row in &stats.agent_rows { out.push_str(&format!("  {:<10} {:>3} tasks  {:>3.0}% success  avg {:<7}  {}\n", row.agent, row.tasks, row.success_rate, format_duration(row.avg_duration_ms), row.cost)); }
     if stats.agent_rows.is_empty() { out.push_str("  (none)\n"); }
@@ -83,7 +105,24 @@ fn render(stats: &StatsSnapshot, window: UsageWindow) -> String {
     out.push_str("\nModel Usage\n");
     for row in &stats.model_rows { out.push_str(&format!("  {:<18} {:>3} tasks  {}\n", row.model, row.tasks, row.cost)); }
     if stats.model_rows.is_empty() { out.push_str("  (none)\n"); }
+    out.push_str(&format!("\nOverview\n  Total: {} tasks  {} tokens  {}\n", stats.total_tasks, format_tokens(stats.total_tokens), cost::format_cost(Some(stats.total_cost))));
+    if insights {
+        push_bars(&mut out, "Activity by Day", &stats.activity_by_day);
+        push_bars(&mut out, "Activity by Hour", &stats.activity_by_hour.iter().map(|(hour, count)| (format!("{hour:02}"), *count)).collect::<Vec<_>>());
+    }
+    out.push_str("\nTop Sessions\n");
+    for row in &stats.top_sessions { out.push_str(&format!("  {:<13} {:<7} {:<7} {}\n", format!("{}:", row.label), row.task_id, row.agent, row.value)); }
+    if stats.top_sessions.is_empty() { out.push_str("  (none)\n"); }
     out
+}
+
+fn push_bars(out: &mut String, title: &str, rows: &[(String, usize)]) {
+    out.push_str(&format!("\n{title}\n"));
+    let max = rows.iter().map(|(_, count)| *count).max().unwrap_or(0);
+    for (label, count) in rows {
+        let width = if max == 0 { 0 } else { count * 30 / max };
+        out.push_str(&format!("  {:<3} {:<30} {}\n", label, "█".repeat(width), count));
+    }
 }
 
 fn classify_failure(detail: Option<&str>, exit_code: Option<i32>) -> String {
@@ -98,6 +137,10 @@ fn classify_failure(detail: Option<&str>, exit_code: Option<i32>) -> String {
 fn format_duration(duration_ms: Option<i64>) -> String {
     let secs = duration_ms.unwrap_or(0) / 1_000;
     match (secs / 60, secs % 60) { (0, s) => format!("{s}s"), (m, 0) => format!("{m}m"), (m, s) => format!("{m}m {s}s") }
+}
+
+fn format_tokens(tokens: i64) -> String {
+    if tokens >= 1_000_000 { format!("{:.1}M", tokens as f64 / 1_000_000.0) } else if tokens >= 1_000 { format!("{:.1}k", tokens as f64 / 1_000.0) } else { tokens.to_string() }
 }
 
 fn task_cost(task: &Task) -> f64 {
@@ -117,15 +160,15 @@ mod tests {
     use chrono::Duration;
     use crate::types::{EventKind, TaskEvent, TaskId, VerifyStatus};
 
-    fn task(id: &str, agent: AgentKind, status: TaskStatus, age_days: i64, model: &str, cost_usd: Option<f64>, duration_ms: Option<i64>) -> Task {
-        Task { id: TaskId(id.to_string()), agent, custom_agent_name: None, prompt: "prompt".to_string(), resolved_prompt: None, category: None, status, parent_task_id: None, workgroup_id: None, caller_kind: None, caller_session_id: None, agent_session_id: None, repo_path: None, worktree_path: None, worktree_branch: None, start_sha: None, log_path: None, output_path: None, tokens: Some(1_000), prompt_tokens: None, duration_ms, model: Some(model.to_string()), cost_usd, exit_code: None, created_at: Local::now() - Duration::days(age_days), completed_at: None, verify: None, verify_status: VerifyStatus::Skipped, pending_reason: None, read_only: false, budget: false }
+    fn task(id: &str, agent: AgentKind, status: TaskStatus, age_days: i64, model: &str, cost_usd: Option<f64>, duration_ms: Option<i64>, tokens: i64) -> Task {
+        Task { id: TaskId(id.to_string()), agent, custom_agent_name: None, prompt: "prompt".to_string(), resolved_prompt: None, category: None, status, parent_task_id: None, workgroup_id: None, caller_kind: None, caller_session_id: None, agent_session_id: None, repo_path: None, worktree_path: None, worktree_branch: None, start_sha: None, log_path: None, output_path: None, tokens: Some(tokens), prompt_tokens: None, duration_ms, model: Some(model.to_string()), cost_usd, exit_code: None, created_at: Local::now() - Duration::days(age_days), completed_at: None, verify: None, verify_status: VerifyStatus::Skipped, pending_reason: None, read_only: false, budget: false }
     }
 
     #[test]
     fn collects_agent_failure_and_model_stats() {
         let store = Store::open_memory().unwrap();
         let now = Local::now();
-        for task in [task("t-1", AgentKind::Codex, TaskStatus::Done, 1, "gpt-5.4", Some(10.0), Some(120_000)), task("t-2", AgentKind::Codex, TaskStatus::Failed, 2, "gpt-5.4", Some(5.0), Some(60_000)), task("t-3", AgentKind::Cursor, TaskStatus::Merged, 1, "composer-2", None, Some(90_000)), task("t-4", AgentKind::OpenCode, TaskStatus::Failed, 8, "glm-4.7", Some(1.0), Some(30_000))] {
+        for task in [task("t-1", AgentKind::Codex, TaskStatus::Done, 1, "gpt-5.4", Some(10.0), Some(120_000), 1_000), task("t-2", AgentKind::Codex, TaskStatus::Failed, 2, "gpt-5.4", Some(5.0), Some(60_000), 1_000), task("t-3", AgentKind::Cursor, TaskStatus::Merged, 1, "composer-2", None, Some(90_000), 1_000), task("t-4", AgentKind::OpenCode, TaskStatus::Failed, 8, "glm-4.7", Some(1.0), Some(30_000), 1_000)] {
             store.insert_task(&task).unwrap();
         }
         store.insert_event(&TaskEvent { task_id: TaskId("t-2".to_string()), timestamp: now, event_kind: EventKind::Error, detail: "verify failed (cargo check)".to_string(), metadata: None }).unwrap();
@@ -134,12 +177,13 @@ mod tests {
         assert_eq!(stats.agent_rows[1], AgentRow { agent: "cursor".to_string(), tasks: 1, success_rate: 100.0, avg_duration_ms: Some(90_000), cost: "subscription".to_string() });
         assert_eq!(stats.failure_rows, vec![FailureRow { label: "verify failed".to_string(), tasks: 1, agents: vec![("codex".to_string(), 1)] }]);
         assert_eq!(stats.model_rows[0], ModelRow { model: "gpt-5.4".to_string(), tasks: 2, cost: "$15.00".to_string() });
+        assert_eq!(stats.activity_by_day.len(), 7);
     }
 
     #[test]
     fn stats_does_not_panic_on_zero_duration_count() {
         let store = Store::open_memory().unwrap();
-        let task = task("t-no-dur", AgentKind::Codex, TaskStatus::Done, 1, "gpt-5.4", Some(1.0), None);
+        let task = task("t-no-dur", AgentKind::Codex, TaskStatus::Done, 1, "gpt-5.4", Some(1.0), None, 1_000);
         store.insert_task(&task).unwrap();
 
         let stats = collect(&store, UsageWindow::Days(7), None, Local::now()).unwrap();
@@ -149,9 +193,9 @@ mod tests {
 
     #[test]
     fn render_output_shows_friendly_message_when_no_tasks_match() {
-        let stats = StatsSnapshot { agent_rows: Vec::new(), failure_rows: Vec::new(), model_rows: Vec::new() };
+        let stats = StatsSnapshot { agent_rows: Vec::new(), failure_rows: Vec::new(), model_rows: Vec::new(), activity_by_day: Vec::new(), activity_by_hour: Vec::new(), top_sessions: Vec::new(), total_cost: 0.0, total_tokens: 0, total_tasks: 0 };
 
-        assert_eq!(render_output(&stats, UsageWindow::Days(7)), "No tasks matched the selected filters for last 7 days.\n");
+        assert_eq!(render_output(&stats, UsageWindow::Days(7), false), "No tasks matched the selected filters for last 7 days.\n");
     }
 
     #[test]
@@ -165,6 +209,7 @@ mod tests {
             "gpt-5",
             None,
             Some(1_000),
+            1_000,
         );
         store.insert_task(&task).unwrap();
 
@@ -172,5 +217,25 @@ mod tests {
 
         assert_eq!(stats.agent_rows[0].cost, "subscription");
         assert_eq!(stats.model_rows[0].cost, "subscription");
+    }
+
+    #[test]
+    fn top_sessions_pick_correct_extremes() {
+        let store = Store::open_memory().unwrap();
+        for task in [task("t-long", AgentKind::Codex, TaskStatus::Done, 0, "gpt-5.4", Some(1.0), Some(300_000), 1_000), task("t-tokens", AgentKind::Codex, TaskStatus::Done, 0, "gpt-5.4", Some(0.5), Some(10_000), 3_100_000), task("t-cost", AgentKind::Codex, TaskStatus::Done, 0, "gpt-5.4", Some(11.91), Some(20_000), 2_000)] {
+            store.insert_task(&task).unwrap();
+        }
+        let stats = collect(&store, UsageWindow::Days(7), None, Local::now()).unwrap();
+        assert_eq!(stats.top_sessions.iter().find(|row| row.label == "Longest").unwrap().task_id, "t-long");
+        assert_eq!(stats.top_sessions.iter().find(|row| row.label == "Most tokens").unwrap().task_id, "t-tokens");
+        assert_eq!(stats.top_sessions.iter().find(|row| row.label == "Highest cost").unwrap().task_id, "t-cost");
+    }
+
+    #[test]
+    fn render_includes_overview_section() {
+        let store = Store::open_memory().unwrap();
+        store.insert_task(&task("t-1", AgentKind::Codex, TaskStatus::Done, 0, "gpt-5.4", Some(2.5), Some(1_000), 2_000)).unwrap();
+        let output = render_output(&collect(&store, UsageWindow::Days(7), None, Local::now()).unwrap(), UsageWindow::Days(7), false);
+        assert!(output.contains("Overview\n  Total: 1 tasks  2.0k tokens  $2.50"));
     }
 }

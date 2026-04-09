@@ -34,6 +34,10 @@ fn default_check_updates() -> bool {
     true
 }
 
+fn default_true() -> bool {
+    true
+}
+
 impl Default for UpdateConfig {
     fn default() -> Self {
         Self {
@@ -42,10 +46,21 @@ impl Default for UpdateConfig {
     }
 }
 
-#[derive(Debug, Clone, Default, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct SelectionConfig {
     #[serde(default)]
     pub budget_mode: bool,
+    #[serde(default = "default_true")]
+    pub smart_routing: bool,
+}
+
+impl Default for SelectionConfig {
+    fn default() -> Self {
+        Self {
+            budget_mode: false,
+            smart_routing: default_true(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -354,6 +369,15 @@ mod tests {
         .unwrap();
 
         assert!(config.selection.budget_mode);
+        assert!(config.selection.smart_routing);
+    }
+
+    #[test]
+    fn selection_smart_routing_defaults_to_true() {
+        assert!(AidConfig::default().selection.smart_routing);
+
+        let config: AidConfig = toml::from_str("[selection]").unwrap();
+        assert!(config.selection.smart_routing);
     }
 
     #[test]

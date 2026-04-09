@@ -194,6 +194,21 @@ pub(crate) fn contains_any(prompt: &str, terms: &[&str]) -> bool {
     terms.iter().any(|term| prompt.contains(term))
 }
 
+/// Conservative gate for automatic cheap-model routing.
+pub fn is_simple_for_routing(prompt: &str) -> bool {
+    let chars = prompt.chars().count();
+    let words = prompt.split_whitespace().count();
+    let newlines = prompt.chars().filter(|&c| c == '\n').count();
+    let lower = prompt.to_lowercase();
+    chars <= 200
+        && words <= 35
+        && newlines <= 2
+        && !prompt.contains("```")
+        && !prompt.contains("http://")
+        && !prompt.contains("https://")
+        && !contains_any(&lower, &["implement", "create module", "design", "architect", "refactor across", "migrate", "security audit", "debug", "investigate", "root cause"])
+}
+
 /// Word-boundary aware match: "ui" matches " ui " but not "suite".
 fn contains_any_word(text: &str, terms: &[&str]) -> bool {
     let bytes = text.as_bytes();
@@ -212,65 +227,65 @@ mod tests {
     use super::*;
 
     #[test]
-    fn research_question() {
-        let p = classify("Explain the authentication flow?", 0, 35);
-        assert_eq!(p.category, TaskCategory::Research);
-    }
+    fn research_question() { assert_eq!(classify("Explain the authentication flow?", 0, 35).category, TaskCategory::Research); }
 
     #[test]
-    fn simple_edit_rename() {
-        let p = classify("rename field in types.rs", 1, 24);
-        assert_eq!(p.category, TaskCategory::SimpleEdit);
-    }
+    fn simple_edit_rename() { assert_eq!(classify("rename field in types.rs", 1, 24).category, TaskCategory::SimpleEdit); }
 
     #[test]
-    fn frontend_react() {
-        let p = classify("Create responsive React component", 0, 34);
-        assert_eq!(p.category, TaskCategory::Frontend);
-    }
+    fn frontend_react() { assert_eq!(classify("Create responsive React component", 0, 34).category, TaskCategory::Frontend); }
 
     #[test]
     fn complex_impl_long() {
         let prompt = "Implement a multi-file feature across many modules. ".repeat(12);
-        let p = classify(&prompt, 5, prompt.len());
-        assert_eq!(p.category, TaskCategory::ComplexImpl);
-        assert_eq!(p.complexity, Complexity::High);
+        assert_eq!(classify(&prompt, 5, prompt.len()).category, TaskCategory::ComplexImpl);
+        assert_eq!(classify(&prompt, 5, prompt.len()).complexity, Complexity::High);
     }
 
     #[test]
-    fn write_code_is_complex_impl() {
-        let p = classify("write code", 0, 10);
-        assert_eq!(p.category, TaskCategory::ComplexImpl);
-    }
+    fn write_code_is_complex_impl() { assert_eq!(classify("write code", 0, 10).category, TaskCategory::ComplexImpl); }
 
     #[test]
-    fn debugging_category() {
-        let p = classify("debug the panic in parser", 0, 25);
-        assert_eq!(p.category, TaskCategory::Debugging);
-    }
+    fn debugging_category() { assert_eq!(classify("debug the panic in parser", 0, 25).category, TaskCategory::Debugging); }
 
     #[test]
-    fn testing_category() {
-        let p = classify("add unit tests for auth module", 0, 30);
-        assert_eq!(p.category, TaskCategory::Testing);
-    }
+    fn testing_category() { assert_eq!(classify("add unit tests for auth module", 0, 30).category, TaskCategory::Testing); }
 
     #[test]
-    fn refactoring_category() {
-        let p = classify("refactor the dispatch module", 0, 28);
-        assert_eq!(p.category, TaskCategory::Refactoring);
-    }
+    fn refactoring_category() { assert_eq!(classify("refactor the dispatch module", 0, 28).category, TaskCategory::Refactoring); }
 
     #[test]
     fn low_complexity_short() {
-        let p = classify("fix typo in name", 0, 16);
-        assert_eq!(p.complexity, Complexity::Low);
+        assert_eq!(classify("fix typo in name", 0, 16).complexity, Complexity::Low);
     }
 
     #[test]
     fn high_complexity_long() {
-        let prompt = "x".repeat(600);
-        let p = classify(&prompt, 5, 600);
-        assert_eq!(p.complexity, Complexity::High);
+        assert_eq!(classify(&"x".repeat(600), 5, 600).complexity, Complexity::High);
+    }
+
+    #[test]
+    fn simple_prompt_is_routable() {
+        assert!(is_simple_for_routing("rename a field"));
+    }
+
+    #[test]
+    fn long_prompt_is_not_routable() {
+        assert!(!is_simple_for_routing(&"a ".repeat(36)));
+    }
+
+    #[test]
+    fn code_block_prompt_is_not_routable() {
+        assert!(!is_simple_for_routing("fix this:\n```rs\nfn main() {}\n```"));
+    }
+
+    #[test]
+    fn implement_prompt_is_not_routable() {
+        assert!(!is_simple_for_routing("implement a new handler"));
+    }
+
+    #[test]
+    fn url_prompt_is_not_routable() {
+        assert!(!is_simple_for_routing("check https://example.com"));
     }
 }

@@ -73,7 +73,8 @@ impl super::Agent for CodexAgent {
         } else {
             prompt.to_string()
         };
-        let injected = templates::inject_codex_prompt(&effective_prompt, None);
+        let with_context = super::embed_context_in_prompt(&effective_prompt, &opts.context_files)?;
+        let injected = templates::inject_codex_prompt(&with_context, None);
         let mut cmd = Command::new("codex");
         cmd.args(["exec", "--json", "--skip-git-repo-check", "--full-auto", &injected]);
         if let Some(ref model) = opts.model {
@@ -610,5 +611,29 @@ mod tests {
 
         let last_arg = args.last().expect("should have prompt as last arg");
         assert!(last_arg.contains("Do NOT modify, create, or delete any files. Only read and analyze."));
+    }
+
+    #[test]
+    fn build_command_includes_context_files_in_prompt() {
+        let opts = RunOpts {
+            dir: None,
+            output: None,
+            result_file: None,
+            model: None,
+            budget: false,
+            read_only: false,
+            context_files: vec!["Cargo.toml".to_string()],
+            session_id: None,
+            env: None,
+            env_forward: None,
+        };
+        let cmd = CodexAgent.build_command("test prompt", &opts).unwrap();
+        let args: Vec<String> = cmd
+            .get_args()
+            .map(|arg| arg.to_string_lossy().to_string())
+            .collect();
+
+        let last_arg = args.last().expect("should have prompt as last arg");
+        assert!(last_arg.contains("[Context File:"));
     }
 }

@@ -1,3 +1,9 @@
+## v8.79.2 (2026-04-09)
+- fix: `best_of` in batch no longer conflicts with running sibling copies — each copy gets unique task ID (#79)
+- fix: Result file isolation — shared-dir batch tasks write to `result-{task_id}.md` instead of overwriting each other's `result.md` (#85)
+- feat: `max_wait_mins` in batch TOML — WAIT tasks auto-fail after specified timeout, prevents indefinite hangs (#78)
+
+
 ## v8.79.1 (2026-04-09)
 - fix: Smart routing 503 loop — detect "no plan" 503 errors as rate-limit, skip smart routing for rate-limited agents (#88)
 - fix: `aid batch --quiet` hang — reconcile zombie tasks before polling completion, ensures exit when all tasks are terminal (#86)

@@ -67,6 +67,7 @@ pub enum Commands {
     Store(command_args_c::StoreArgs),
     Team(command_args_c::TeamArgs),
     Tool(command_args_c::ToolArgs),
+    Credential(command_args_c::CredentialArgs),
     Project(command_args_c::ProjectArgs),
     Memory(command_args_c::MemoryArgs),
     /// Knowledge graph — temporal entity relationships

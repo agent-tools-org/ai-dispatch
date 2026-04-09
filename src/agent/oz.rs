@@ -23,7 +23,7 @@ impl super::Agent for OzAgent {
     }
 
     fn build_command(&self, prompt: &str, opts: &RunOpts) -> Result<Command> {
-        let prompt_with_ctx = build_prompt(prompt, &opts.context_files)?;
+        let prompt_with_ctx = super::embed_context_in_prompt(prompt, &opts.context_files)?;
         let effective_prompt = if opts.read_only {
             if opts.result_file.is_some() {
                 format!(
@@ -106,21 +106,6 @@ impl super::Agent for OzAgent {
             exit_code: None,
         }
     }
-}
-
-fn build_prompt(prompt: &str, context_files: &[String]) -> Result<String> {
-    if context_files.is_empty() {
-        return Ok(prompt.to_string());
-    }
-    let mut combined = prompt.to_string();
-    for file in context_files {
-        let contents = std::fs::read_to_string(file)?;
-        combined.push_str("\n\n[Context File: ");
-        combined.push_str(file);
-        combined.push_str("]\n");
-        combined.push_str(&contents);
-    }
-    Ok(combined)
 }
 
 #[cfg(test)]

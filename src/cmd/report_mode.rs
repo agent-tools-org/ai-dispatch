@@ -44,10 +44,14 @@ pub(crate) fn apply_defaults(args: &mut RunArgs, category: TaskCategory) -> bool
     if !is_audit_report_task(&args.prompt, args.read_only, category) {
         return false;
     }
-    if args.result_file.is_none() {
+    if args.result_file.is_none() && args.output.is_none() {
         args.result_file = Some(DEFAULT_AUDIT_RESULT_FILE.to_string());
     }
     true
+}
+
+pub(crate) fn task_result_file(task_id: &str) -> String {
+    format!("result-{task_id}.md")
 }
 
 pub(crate) fn instruction(prompt: &str, read_only: bool, category: TaskCategory) -> Option<&'static str> {
@@ -105,5 +109,23 @@ mod tests {
 
         assert!(apply_defaults(&mut args, TaskCategory::Research));
         assert_eq!(args.result_file.as_deref(), Some(DEFAULT_AUDIT_RESULT_FILE));
+    }
+
+    #[test]
+    fn apply_defaults_skips_result_file_when_output_is_set() {
+        let mut args = RunArgs {
+            prompt: "Review the implementation and list findings.".to_string(),
+            read_only: true,
+            output: Some("report.md".to_string()),
+            ..Default::default()
+        };
+
+        assert!(apply_defaults(&mut args, TaskCategory::Research));
+        assert_eq!(args.result_file, None);
+    }
+
+    #[test]
+    fn task_result_file_uses_task_id_suffix() {
+        assert_eq!(task_result_file("t-123"), "result-t-123.md");
     }
 }

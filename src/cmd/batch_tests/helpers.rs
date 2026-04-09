@@ -1,10 +1,11 @@
 // Tests for batch helpers (path/workgroup/summary).
 // Exports: (tests only)
 // Deps: super::shared + batch_helpers
+use crate::background::{BackgroundRunSpec, save_spec};
 use super::shared::{make_task, seed_task};
 use crate::paths::AidHomeGuard;
 use crate::store::Store;
-use crate::types::{TaskFilter, TaskStatus};
+use crate::types::{AgentKind, TaskFilter, TaskStatus};
 use std::fs;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -239,4 +240,59 @@ fn batch_summary_skips_zero_cost_and_uses_seconds_under_minute() {
     );
 
     assert_eq!(summary, "[batch] 2/2 done, 0 failed, 0 skipped. Time: 42s");
+}
+#[test]
+fn reconcile_and_poll_completed_tasks_marks_zombies_failed() {
+    let temp = tempfile::tempdir().unwrap();
+    let _guard = AidHomeGuard::set(temp.path());
+    crate::paths::ensure_dirs().unwrap();
+    let store = Arc::new(Store::open_memory().unwrap());
+    store
+        .insert_task(&super::shared::make_stored_task(
+            "t-zombie",
+            AgentKind::Codex,
+            TaskStatus::Running,
+        ))
+        .unwrap();
+    save_spec(&BackgroundRunSpec {
+        task_id: "t-zombie".to_string(),
+        worker_pid: Some(999_999),
+        agent_name: "codex".to_string(),
+        prompt: "prompt".to_string(),
+        dir: Some(".".to_string()),
+        output: None,
+        result_file: None,
+        model: None,
+        verify: None,
+        iterate: None,
+        eval: None,
+        eval_feedback_template: None,
+        judge: None,
+        max_duration_mins: None,
+        idle_timeout_secs: None,
+        retry: 0,
+        group: None,
+        skills: vec![],
+        checklist: vec![],
+        template: None,
+        interactive: true,
+        on_done: None,
+        cascade: vec![],
+        parent_task_id: None,
+        env: None,
+        env_forward: None,
+        agent_pid: None,
+        sandbox: false,
+        read_only: false,
+        container: None,
+    })
+    .unwrap();
+    let mut active = vec![(0, "t-zombie".to_string())];
+    let completed =
+        super::super::batch_dispatch::reconcile_and_poll_completed_tasks(&store, &mut active)
+            .unwrap();
+    assert!(active.is_empty());
+    assert_eq!(completed.len(), 1);
+    assert_eq!(completed[0].task_id, "t-zombie");
+    assert_eq!(completed[0].outcome, BatchTaskOutcome::Failed);
 }

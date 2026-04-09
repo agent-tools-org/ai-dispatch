@@ -1,10 +1,8 @@
 // Claude stream-json parsing helpers shared by the Claude adapter and tests.
 // Exports parse_event_line() plus internal helpers for assistant, tool, and result events.
 // Depends on serde_json for decoding and truncate_text for concise event details.
-
 use chrono::Local;
 use serde_json::{Value, json};
-
 use super::truncate::truncate_text;
 use crate::types::*;
 
@@ -30,6 +28,7 @@ pub(crate) fn parse_event_line(task_id: &TaskId, line: &str) -> Option<TaskEvent
         "result" => parse_result_event(task_id, &v, now),
         "system" => parse_system_event(task_id, &v, now),
         "user" => parse_user_event(task_id, &v, now),
+        "error" => parse_error_event(task_id, &v, now),
         _ => None,
     }
 }
@@ -223,6 +222,17 @@ fn parse_user_event(task_id: &TaskId, v: &Value, now: chrono::DateTime<Local>) -
     if !is_error {
         return None;
     }
+    if crate::rate_limit::is_rate_limit_error(detail) {
+        crate::rate_limit::mark_rate_limited(&AgentKind::Claude, detail);
+    }
+    Some(TaskEvent { task_id: task_id.clone(), timestamp: now, event_kind: EventKind::Error, detail: truncate_text(detail, 80), metadata: None })
+}
+
+fn parse_error_event(task_id: &TaskId, v: &Value, now: chrono::DateTime<Local>) -> Option<TaskEvent> {
+    let detail = v.get("message").or_else(|| v.pointer("/error/message")).and_then(|value| value.as_str()).filter(|msg| !msg.is_empty())?;
+    if crate::rate_limit::is_rate_limit_error(detail) {
+        crate::rate_limit::mark_rate_limited(&AgentKind::Claude, detail);
+    }
     Some(TaskEvent {
         task_id: task_id.clone(),
         timestamp: now,
@@ -271,5 +281,19 @@ fn extract_noop_reason(line: &str) -> String {
         format!("NO_CHANGES_NEEDED: {}", line[pos + 18..].trim().trim_matches('"'))
     } else {
         "NO_CHANGES_NEEDED".to_string()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*; use crate::{paths, rate_limit};
+    #[test]
+    fn marks_claude_rate_limits_from_error_and_user_events() {
+        let temp = tempfile::tempdir().unwrap(); let _aid_home = paths::AidHomeGuard::set(temp.path()); rate_limit::clear_rate_limit(&AgentKind::Claude);
+        let task_id = TaskId("t-claude-rate".to_string());
+        let event = parse_event_line(&task_id, r#"{"type":"error","message":"rate limit exceeded"}"#).unwrap();
+        assert_eq!(event.event_kind, EventKind::Error); assert!(rate_limit::is_rate_limited(&AgentKind::Claude)); rate_limit::clear_rate_limit(&AgentKind::Claude);
+        let event = parse_event_line(&task_id, r#"{"type":"user","message":{"content":[{"content":"HTTP 429 too many requests","is_error":true}]}}"#).unwrap();
+        assert_eq!(event.event_kind, EventKind::Error); assert!(rate_limit::is_rate_limited(&AgentKind::Claude)); rate_limit::clear_rate_limit(&AgentKind::Claude);
     }
 }

@@ -68,17 +68,25 @@ impl super::Agent for KiloAgent {
         if trimmed.is_empty() {
             return None;
         }
-        if let Ok(v) = serde_json::from_str::<serde_json::Value>(trimmed) {
-            return parse_json_event(task_id, &v, now);
+        let event = if let Ok(v) = serde_json::from_str::<serde_json::Value>(trimmed) {
+            parse_json_event(task_id, &v, now)
+        } else {
+            let (kind, detail) = classify_text_line(trimmed);
+            kind.map(|k| TaskEvent {
+                task_id: task_id.clone(),
+                timestamp: now,
+                event_kind: k,
+                detail: super::truncate::truncate_text(detail, 80),
+                metadata: None,
+            })
+        };
+        if let Some(ref ev) = event
+            && ev.event_kind == EventKind::Error
+            && crate::rate_limit::is_rate_limit_error(&ev.detail)
+        {
+            crate::rate_limit::mark_rate_limited(&AgentKind::Kilo, &ev.detail);
         }
-        let (kind, detail) = classify_text_line(trimmed);
-        kind.map(|k| TaskEvent {
-            task_id: task_id.clone(),
-            timestamp: now,
-            event_kind: k,
-            detail: super::truncate::truncate_text(detail, 80),
-            metadata: None,
-        })
+        event
     }
 
     fn parse_completion(&self, output: &str) -> CompletionInfo {
@@ -97,6 +105,7 @@ impl super::Agent for KiloAgent {
 mod tests {
     use super::super::Agent;
     use super::*;
+    use crate::{paths, rate_limit};
 
     #[test]
     fn build_command_includes_auto_flag() {
@@ -266,5 +275,16 @@ mod tests {
             .collect();
         let last_arg = args.last().expect("should have prompt as last arg");
         assert!(last_arg.contains("Do NOT modify, create, or delete any files. Only read and analyze."));
+    }
+
+    #[test]
+    fn parse_event_marks_kilo_rate_limits() {
+        let temp = tempfile::tempdir().unwrap();
+        let _aid_home = paths::AidHomeGuard::set(temp.path());
+        rate_limit::clear_rate_limit(&AgentKind::Kilo);
+        let event = KiloAgent.parse_event(&TaskId("t-kilo".to_string()), r#"{"type":"error","message":"rate limit exceeded"}"#).unwrap();
+        assert_eq!(event.event_kind, EventKind::Error);
+        assert!(rate_limit::is_rate_limited(&AgentKind::Kilo));
+        rate_limit::clear_rate_limit(&AgentKind::Kilo);
     }
 }

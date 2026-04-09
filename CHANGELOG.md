@@ -1,3 +1,12 @@
+## v8.79.0 (2026-04-09)
+- feat: Prompt injection scanning — context files and skills scanned for adversarial patterns (role hijacking, system prompt injection, invisible Unicode, XML tag injection) with warnings
+- feat: Smart model routing — automatically uses cheaper models for simple prompts without --budget flag, configurable via `selection.smart_routing` (default: enabled), conservative heuristic (length, word count, code blocks, keywords)
+- feat: Shared `embed_context_in_prompt` helper — context files now embedded in prompts for codex, cursor, oz, and codebuff agents (previously silently dropped)
+- fix: Cursor read-only mode now passes `--trust` flag — fixes workspace trust prompt blocking plan-mode tasks
+- fix: Oz read-only mode — added prompt-level enforcement (was completely missing)
+- fix: Rate limit detection added for cursor, claude, opencode, kilo, and oz agents — enables cascade/fallback on quota errors
+
+
 ## v8.78.0 (2026-04-08)
 - Fix `aid board` always showing data even when anti-poll triggers — warnings go to stderr, exit code 0 (#81)
 - Fix `best-of-N` output file collision — each candidate gets isolated output paths, winner's files promoted (#82)

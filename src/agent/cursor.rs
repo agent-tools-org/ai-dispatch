@@ -25,7 +25,7 @@ impl super::Agent for CursorAgent {
     fn build_command(&self, prompt: &str, opts: &RunOpts) -> Result<Command> {
         let binary = if super::env::which_exists("agent") { "agent" } else { "cursor-agent" };
         let mut cmd = Command::new(binary);
-        let prompt_with_ctx = build_prompt(prompt, &opts.context_files)?;
+        let prompt_with_ctx = super::embed_context_in_prompt(prompt, &opts.context_files)?;
         if opts.read_only {
             cmd.args([
                 "-p",
@@ -94,21 +94,6 @@ impl super::Agent for CursorAgent {
             exit_code: None,
         }
     }
-}
-
-fn build_prompt(prompt: &str, context_files: &[String]) -> Result<String> {
-    if context_files.is_empty() {
-        return Ok(prompt.to_string());
-    }
-    let mut combined = prompt.to_string();
-    for file in context_files {
-        let contents = std::fs::read_to_string(file)?;
-        combined.push_str("\n\n[Context File: ");
-        combined.push_str(file);
-        combined.push_str("]\n");
-        combined.push_str(&contents);
-    }
-    Ok(combined)
 }
 
 fn parse_json_event(

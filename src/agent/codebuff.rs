@@ -32,7 +32,7 @@ impl super::Agent for CodebuffAgent {
         let mut cmd = Command::new("aid-codebuff");
         // SDK v0.10+ runs agent locally — needs extra heap for tokenizer + file scanning
         cmd.env("NODE_OPTIONS", "--max-old-space-size=8192");
-        let prompt_with_ctx = embed_context_in_prompt(prompt, &opts.context_files)?;
+        let prompt_with_ctx = super::embed_context_in_prompt(prompt, &opts.context_files)?;
         cmd.arg(&prompt_with_ctx);
         if let Some(ref dir) = opts.dir {
             cmd.args(["--cwd", dir]);
@@ -57,21 +57,6 @@ impl super::Agent for CodebuffAgent {
     fn parse_completion(&self, output: &str) -> CompletionInfo {
         CodexAgent.parse_completion(output)
     }
-}
-
-fn embed_context_in_prompt(prompt: &str, context_files: &[String]) -> Result<String> {
-    if context_files.is_empty() {
-        return Ok(prompt.to_string());
-    }
-    let mut combined = prompt.to_string();
-    for file in context_files {
-        let contents = std::fs::read_to_string(file)?;
-        combined.push_str("\n\n[Context File: ");
-        combined.push_str(file);
-        combined.push_str("]\n");
-        combined.push_str(&contents);
-    }
-    Ok(combined)
 }
 
 #[cfg(test)]

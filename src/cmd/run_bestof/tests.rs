@@ -125,13 +125,13 @@ fn best_of_completion_includes_awaiting_input() {
 }
 
 #[test]
-fn best_of_task_ids_reuse_base_while_it_is_unclaimed() {
+fn best_of_task_ids_always_use_candidate_suffixes() {
     let base = TaskId("t-batch".into());
     let store = Store::open_memory().unwrap();
     let first = best_of_task_id(&store, Some(&base), 0).unwrap();
     let third = best_of_task_id(&store, Some(&base), 2).unwrap();
-    assert_eq!(first, Some(TaskId("t-batch".into())));
-    assert_eq!(third, Some(TaskId("t-batch".into())));
+    assert_eq!(first, Some(TaskId("t-batch-bo1".into())));
+    assert_eq!(third, Some(TaskId("t-batch-bo3".into())));
 }
 
 #[test]
@@ -154,7 +154,7 @@ fn best_of_task_ids_truncate_to_fit_task_limit() {
         )
         .unwrap();
     store
-        .update_task_status(base.as_str(), TaskStatus::Pending)
+        .update_task_status(base.as_str(), TaskStatus::Running)
         .unwrap();
     let derived = best_of_task_id(&store, Some(&base), 4).unwrap().unwrap();
     assert_eq!(derived.as_str().len(), 64);
@@ -162,7 +162,7 @@ fn best_of_task_ids_truncate_to_fit_task_limit() {
 }
 
 #[test]
-fn best_of_task_ids_reuse_waiting_placeholder_until_claimed() {
+fn best_of_task_ids_ignore_running_base_for_siblings() {
     let store = Store::open_memory().unwrap();
     let base = TaskId("t-batch".into());
     store
@@ -180,13 +180,11 @@ fn best_of_task_ids_reuse_waiting_placeholder_until_claimed() {
             false,
         )
         .unwrap();
-    let second = best_of_task_id(&store, Some(&base), 1).unwrap();
-    assert_eq!(second, Some(base.clone()));
     store
         .update_task_status(base.as_str(), TaskStatus::Pending)
         .unwrap();
-    let after_claim = best_of_task_id(&store, Some(&base), 1).unwrap();
-    assert_eq!(after_claim, Some(TaskId("t-batch-bo2".into())));
+    let sibling = best_of_task_id(&store, Some(&base), 1).unwrap();
+    assert_eq!(sibling, Some(TaskId("t-batch-bo2".into())));
 }
 
 #[test]

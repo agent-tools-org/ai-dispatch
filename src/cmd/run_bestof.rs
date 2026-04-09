@@ -155,13 +155,6 @@ fn best_of_task_id(
         return Ok(None);
     };
     validate_task_id(base.as_str())?;
-    if candidate_idx == 0 {
-        return Ok(Some(base.clone()));
-    }
-    match resolve_id_conflict(store, base.as_str())? {
-        IdConflict::None | IdConflict::ReplaceWaiting => return Ok(Some(base.clone())),
-        IdConflict::Running | IdConflict::AutoSuffix(_) => {}
-    }
     let suffix = format!("-bo{}", candidate_idx + 1);
     let max_base_len = 64usize.saturating_sub(suffix.len());
     let prefix: String = base.as_str().chars().take(max_base_len).collect();

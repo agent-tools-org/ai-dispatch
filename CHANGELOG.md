@@ -1,3 +1,8 @@
+## v8.80.0 (2026-04-09)
+- feat: `aid export --sharegpt <task-id>` — export task conversations in ShareGPT JSONL format for fine-tuning (H4)
+- fix: Rate-limit false positives — removed 503/payment from rate-limit classification, reduced TTL from 1h to 5min, auto-clear on task success (#90)
+
+
 ## v8.79.2 (2026-04-09)
 - fix: `best_of` in batch no longer conflicts with running sibling copies — each copy gets unique task ID (#79)
 - fix: Result file isolation — shared-dir batch tasks write to `result-{task_id}.md` instead of overwriting each other's `result.md` (#85)

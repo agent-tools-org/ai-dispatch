@@ -8,6 +8,7 @@ use std::process::Command;
 
 use super::truncate::truncate_text;
 use super::RunOpts;
+use crate::rate_limit;
 use crate::types::*;
 
 pub struct CursorAgent;
@@ -24,10 +25,12 @@ impl super::Agent for CursorAgent {
     fn build_command(&self, prompt: &str, opts: &RunOpts) -> Result<Command> {
         let binary = if super::env::which_exists("agent") { "agent" } else { "cursor-agent" };
         let mut cmd = Command::new(binary);
+        let prompt_with_ctx = build_prompt(prompt, &opts.context_files)?;
         if opts.read_only {
             cmd.args([
                 "-p",
-                prompt,
+                "--trust",
+                &prompt_with_ctx,
                 "--mode",
                 "plan",
                 "--output-format",
@@ -37,7 +40,7 @@ impl super::Agent for CursorAgent {
         } else {
             cmd.args([
                 "-p",
-                prompt,
+                &prompt_with_ctx,
                 "--trust",
                 "--force",
                 "--output-format",
@@ -91,6 +94,21 @@ impl super::Agent for CursorAgent {
             exit_code: None,
         }
     }
+}
+
+fn build_prompt(prompt: &str, context_files: &[String]) -> Result<String> {
+    if context_files.is_empty() {
+        return Ok(prompt.to_string());
+    }
+    let mut combined = prompt.to_string();
+    for file in context_files {
+        let contents = std::fs::read_to_string(file)?;
+        combined.push_str("\n\n[Context File: ");
+        combined.push_str(file);
+        combined.push_str("]\n");
+        combined.push_str(&contents);
+    }
+    Ok(combined)
 }
 
 fn parse_json_event(
@@ -214,8 +232,21 @@ fn parse_json_event(
             }
             (EventKind::Completion, detail, Some(meta))
         }
+        "error" => {
+            let detail = v
+                .get("message")
+                .or_else(|| v.get("detail"))
+                .or_else(|| v.get("error"))
+                .and_then(|value| value.as_str())
+                .unwrap_or("unknown error")
+                .to_string();
+            (EventKind::Error, detail, None)
+        }
         _ => return None,
     };
+    if event_kind == EventKind::Error || is_error_line(&detail) {
+        maybe_mark_rate_limit(&detail);
+    }
 
     Some(TaskEvent {
         task_id: task_id.clone(),
@@ -227,7 +258,8 @@ fn parse_json_event(
 }
 
 fn classify_line(line: &str) -> (Option<EventKind>, &str) {
-    if line.contains("error[") || line.contains("FAILED") || line.starts_with("Error:") {
+    if is_error_line(line) {
+        maybe_mark_rate_limit(line);
         (Some(EventKind::Error), line)
     } else if line.contains("test result:") || (line.contains("running") && line.contains("test")) {
         (Some(EventKind::Test), line)
@@ -247,11 +279,25 @@ fn classify_line(line: &str) -> (Option<EventKind>, &str) {
     }
 }
 
+fn is_error_line(line: &str) -> bool {
+    line.contains("error[") || line.contains("FAILED") || line.starts_with("Error:")
+}
+
+fn maybe_mark_rate_limit(detail: &str) {
+    if rate_limit::is_rate_limit_error(detail) {
+        rate_limit::mark_rate_limited(&AgentKind::Cursor, detail);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::CursorAgent;
+    use crate::agent::RunOpts;
     use crate::agent::Agent;
+    use crate::rate_limit;
     use crate::types::{EventKind, TaskId};
+    use std::fs;
+    use std::sync::{Mutex, OnceLock};
 
     #[test]
     fn parses_result_event_with_usage() {
@@ -352,7 +398,103 @@ mod tests {
     #[test]
     fn uses_cursor_agent_binary() {
         let agent = CursorAgent;
-        let opts = crate::agent::RunOpts {
+        let opts = run_opts();
+        let cmd = agent.build_command("test prompt", &opts).unwrap();
+        assert!(cmd.get_program() == "agent" || cmd.get_program() == "cursor-agent");
+        let args: Vec<_> = cmd.get_args().collect();
+        assert_eq!(args[0], "-p");
+        assert!(args
+            .windows(2)
+            .any(|window| window[0] == "--model" && window[1] == "composer-2"));
+    }
+
+    #[test]
+    fn build_command_embeds_context_files_in_prompt() {
+        let dir = tempfile::tempdir().unwrap();
+        let context_file = dir.path().join("context.txt");
+        fs::write(&context_file, "cursor context").unwrap();
+
+        let agent = CursorAgent;
+        let mut opts = run_opts();
+        opts.context_files = vec![context_file.to_string_lossy().into_owned()];
+
+        let cmd = agent.build_command("test prompt", &opts).unwrap();
+        let args: Vec<_> = cmd.get_args().collect();
+        let prompt = args[1].to_string_lossy();
+        assert!(prompt.contains("test prompt"));
+        assert!(prompt.contains("[Context File:"));
+        assert!(prompt.contains("cursor context"));
+    }
+
+    #[test]
+    fn read_only_build_command_adds_trust_and_context() {
+        let dir = tempfile::tempdir().unwrap();
+        let context_file = dir.path().join("readonly.txt");
+        fs::write(&context_file, "readonly context").unwrap();
+
+        let agent = CursorAgent;
+        let mut opts = run_opts();
+        opts.read_only = true;
+        opts.context_files = vec![context_file.to_string_lossy().into_owned()];
+
+        let cmd = agent.build_command("plan prompt", &opts).unwrap();
+        let args: Vec<_> = cmd.get_args().collect();
+        assert_eq!(args[0], "-p");
+        assert_eq!(args[1], "--trust");
+        let prompt = args[2].to_string_lossy();
+        assert!(prompt.contains("plan prompt"));
+        assert!(prompt.contains("readonly context"));
+        assert!(args.windows(2).any(|window| window[0] == "--mode" && window[1] == "plan"));
+    }
+
+    #[test]
+    fn parse_event_marks_plain_text_rate_limits() {
+        let _guard = rate_limit_lock().lock().unwrap();
+        let _ = rate_limit::clear_rate_limit(&crate::types::AgentKind::Cursor);
+        let agent = CursorAgent;
+        let line = "Error: rate limit exceeded, try again later";
+
+        let event = agent
+            .parse_event(&TaskId("t-rate-text".to_string()), line)
+            .unwrap();
+
+        assert_eq!(event.event_kind, EventKind::Error);
+        assert_eq!(
+            rate_limit::get_rate_limit_info(&crate::types::AgentKind::Cursor)
+                .and_then(|info| info.message),
+            Some(line.to_string())
+        );
+        let _ = rate_limit::clear_rate_limit(&crate::types::AgentKind::Cursor);
+    }
+
+    #[test]
+    fn parse_event_marks_json_rate_limits() {
+        let _guard = rate_limit_lock().lock().unwrap();
+        let _ = rate_limit::clear_rate_limit(&crate::types::AgentKind::Cursor);
+        let agent = CursorAgent;
+        let line = r#"{"type":"error","message":"quota exceeded for this workspace"}"#;
+
+        let event = agent
+            .parse_event(&TaskId("t-rate-json".to_string()), line)
+            .unwrap();
+
+        assert_eq!(event.event_kind, EventKind::Error);
+        assert_eq!(event.detail, "quota exceeded for this workspace");
+        assert_eq!(
+            rate_limit::get_rate_limit_info(&crate::types::AgentKind::Cursor)
+                .and_then(|info| info.message),
+            Some("quota exceeded for this workspace".to_string())
+        );
+        let _ = rate_limit::clear_rate_limit(&crate::types::AgentKind::Cursor);
+    }
+
+    fn rate_limit_lock() -> &'static Mutex<()> {
+        static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+        LOCK.get_or_init(|| Mutex::new(()))
+    }
+
+    fn run_opts() -> RunOpts {
+        RunOpts {
             dir: None,
             output: None,
             result_file: None,
@@ -363,13 +505,6 @@ mod tests {
             session_id: None,
             env: None,
             env_forward: None,
-        };
-        let cmd = agent.build_command("test prompt", &opts).unwrap();
-        assert!(cmd.get_program() == "agent" || cmd.get_program() == "cursor-agent");
-        let args: Vec<_> = cmd.get_args().collect();
-        assert_eq!(args[0], "-p");
-        assert!(args
-            .windows(2)
-            .any(|window| window[0] == "--model" && window[1] == "composer-2"));
+        }
     }
 }

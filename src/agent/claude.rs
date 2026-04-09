@@ -23,7 +23,7 @@ impl super::Agent for ClaudeAgent {
 
     fn build_command(&self, prompt: &str, opts: &RunOpts) -> Result<Command> {
         let mut cmd = Command::new("claude");
-        let prompt = build_prompt(prompt, &opts.context_files)?;
+        let prompt = super::embed_context_in_prompt(prompt, &opts.context_files)?;
         cmd.args([
             "-p",
             &prompt,
@@ -66,21 +66,6 @@ impl super::Agent for ClaudeAgent {
             exit_code: None,
         }
     }
-}
-
-fn build_prompt(prompt: &str, context_files: &[String]) -> Result<String> {
-    if context_files.is_empty() {
-        return Ok(prompt.to_string());
-    }
-    let mut combined = prompt.to_string();
-    for file in context_files {
-        let contents = std::fs::read_to_string(file)?;
-        combined.push_str("\n\n[Context File: ");
-        combined.push_str(file);
-        combined.push_str("]\n");
-        combined.push_str(&contents);
-    }
-    Ok(combined)
 }
 
 #[cfg(test)]

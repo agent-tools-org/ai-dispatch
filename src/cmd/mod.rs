@@ -14,6 +14,7 @@ pub mod clean;
 pub mod changelog;
 pub mod container;
 pub mod config;
+pub mod credential;
 pub mod cost;
 pub mod explain;
 pub mod eta;

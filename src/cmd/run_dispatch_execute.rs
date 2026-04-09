@@ -158,6 +158,7 @@ pub(super) async fn run_foreground_task(
         .agent
         .build_command(&prompt_bundle.effective_prompt, &build_run_opts(args, prepared, prompt_bundle))
         .context("Failed to build agent command")?;
+    // TODO: integrate credential_pool rotation here
     let opts = build_run_opts(args, prepared, prompt_bundle);
     agent::apply_run_env(&mut std_cmd, &opts);
     if let Some(ref dir) = prepared.effective_dir {

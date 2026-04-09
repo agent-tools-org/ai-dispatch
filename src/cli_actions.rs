@@ -5,6 +5,23 @@
 use clap::Subcommand;
 
 #[derive(Subcommand)]
+pub enum CredentialAction {
+    /// List configured credential pools and key status
+    List,
+    /// Add a credential entry to the pool config
+    Add {
+        provider: String,
+        name: String,
+        env: String,
+    },
+    /// Remove a credential entry from the pool config
+    Remove {
+        provider: String,
+        name: String,
+    },
+}
+
+#[derive(Subcommand)]
 pub enum ConfigAction {
     /// List configured agents
     Agents,

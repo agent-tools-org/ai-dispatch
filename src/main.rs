@@ -23,6 +23,7 @@ mod input_signal;
 mod notify;
 mod paths;
 mod prompt;
+mod prompt_scan;
 mod process_guard;
 mod pty_bridge;
 mod pty_runner;

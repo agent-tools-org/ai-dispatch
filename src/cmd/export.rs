@@ -1,8 +1,13 @@
-// Handler for `aid export <task-id>` — dump task context (prompt, events, output, diff).
+// Task export handlers for markdown/json and ShareGPT JSONL output.
+// Exports: ExportArgs, ExportFormat, run().
+// Deps: show::worktree_diff, export_sharegpt, Store, Task/TaskEvent.
 use anyhow::{anyhow, Context, Result};
 use serde::Serialize;
 use std::{fs, sync::Arc};
 use crate::{cmd::show::worktree_diff, store::Store, types::{Task, TaskEvent}};
+
+#[path = "export_sharegpt.rs"]
+mod export_sharegpt;
 
 pub enum ExportFormat {
     Markdown,
@@ -20,9 +25,13 @@ impl ExportFormat {
 pub struct ExportArgs {
     pub task_id: String,
     pub format: ExportFormat,
+    pub sharegpt: bool,
     pub output: Option<String>,
 }
 pub async fn run(store: Arc<Store>, args: ExportArgs) -> Result<()> {
+    if args.sharegpt {
+        return export_sharegpt::export_sharegpt(store.as_ref(), &args.task_id, args.output.as_deref());
+    }
     let task = load_task(&store, &args.task_id)?;
     let events = store.get_events(&args.task_id)?;
     let output = read_output(&task)?;

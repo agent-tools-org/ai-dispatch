@@ -8,11 +8,14 @@ use clap::Args;
 #[derive(Args)]
 #[command(after_help = r#"Examples:
   aid export t-1234
+  aid export --sharegpt t-1234
   aid export t-1234 --format json --output task.json"#)]
 pub struct ExportArgs {
     pub task_id: String,
     #[arg(long, default_value = "md")]
     pub format: String,
+    #[arg(long)]
+    pub sharegpt: bool,
     #[arg(long)]
     pub output: Option<String>,
 }

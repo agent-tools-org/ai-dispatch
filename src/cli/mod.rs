@@ -9,6 +9,8 @@ mod sub_enums;
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod export_tests;
 
 use clap::{Parser, Subcommand};
 

@@ -16,10 +16,11 @@ pub(super) async fn export(
     store: Arc<store::Store>,
     task_id: String,
     format: String,
+    sharegpt: bool,
     output: Option<String>,
 ) -> Result<()> {
     let format = cmd::export::ExportFormat::parse(&format)?;
-    cmd::export::run(store, cmd::export::ExportArgs { task_id, format, output }).await
+    cmd::export::run(store, cmd::export::ExportArgs { task_id, format, sharegpt, output }).await
 }
 
 pub(super) fn tree(store: Arc<store::Store>, task_id: String) -> Result<()> {

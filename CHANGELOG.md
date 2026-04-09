@@ -1,3 +1,10 @@
+## v8.79.1 (2026-04-09)
+- fix: Smart routing 503 loop — detect "no plan" 503 errors as rate-limit, skip smart routing for rate-limited agents (#88)
+- fix: `aid batch --quiet` hang — reconcile zombie tasks before polling completion, ensures exit when all tasks are terminal (#86)
+- fix: Droid model shorthand mapping — map `haiku`/`sonnet`/`opus` to full model IDs required by factory-cli (#87)
+- fix: Agent binary pre-flight check — fail fast with clear message when agent binary not found, instead of leaving task stuck in RUN (#89)
+
+
 ## v8.79.0 (2026-04-09)
 - feat: Prompt injection scanning — context files and skills scanned for adversarial patterns (role hijacking, system prompt injection, invisible Unicode, XML tag injection) with warnings
 - feat: Smart model routing — automatically uses cheaper models for simple prompts without --budget flag, configurable via `selection.smart_routing` (default: enabled), conservative heuristic (length, word count, code blocks, keywords)

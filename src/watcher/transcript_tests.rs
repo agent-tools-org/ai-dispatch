@@ -4,6 +4,7 @@
 use super::watch_buffered;
 use crate::agent::{Agent, RunOpts};
 use crate::paths;
+use crate::rate_limit;
 use crate::store::Store;
 use crate::types::{
     AgentKind, CompletionInfo, Task, TaskEvent, TaskId, TaskStatus, VerifyStatus,
@@ -88,4 +89,70 @@ async fn watch_buffered_persists_transcript() {
         std::fs::read_to_string(paths::transcript_path(task.id.as_str())).unwrap(),
         "{\"type\":\"message\",\"role\":\"assistant\",\"content\":\"buffered transcript\"}\n"
     );
+}
+
+#[tokio::test]
+async fn watch_buffered_clears_rate_limit_on_success() {
+    let temp = tempfile::tempdir().unwrap();
+    let _aid_home = paths::AidHomeGuard::set(temp.path());
+    paths::ensure_dirs().unwrap();
+    let store = Arc::new(Store::open_memory().unwrap());
+    let task = Task {
+        id: TaskId("t-watch-clear-rate-limit".to_string()),
+        agent: AgentKind::Gemini,
+        custom_agent_name: None,
+        prompt: "prompt".to_string(),
+        resolved_prompt: None,
+        category: None,
+        status: TaskStatus::Running,
+        parent_task_id: None,
+        workgroup_id: None,
+        caller_kind: None,
+        caller_session_id: None,
+        agent_session_id: None,
+        repo_path: None,
+        worktree_path: None,
+        worktree_branch: None,
+        start_sha: None,
+        log_path: None,
+        output_path: None,
+        tokens: None,
+        prompt_tokens: None,
+        duration_ms: None,
+        model: None,
+        cost_usd: None,
+        exit_code: None,
+        created_at: Local::now(),
+        completed_at: None,
+        verify: None,
+        verify_status: VerifyStatus::Skipped,
+        pending_reason: None,
+        read_only: false,
+        budget: false,
+    };
+    store.insert_task(&task).unwrap();
+    rate_limit::mark_rate_limited(&AgentKind::Gemini, "rate limit exceeded");
+    assert!(rate_limit::is_rate_limited(&AgentKind::Gemini));
+
+    let mut child = tokio::process::Command::new("sh")
+        .arg("-c")
+        .arg("printf 'done\\n'")
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+
+    watch_buffered(
+        &BufferedTestAgent,
+        &mut child,
+        &task.id,
+        &store,
+        &paths::log_path(task.id.as_str()),
+        None,
+        None,
+    )
+    .await
+    .unwrap();
+
+    assert!(!rate_limit::is_rate_limited(&AgentKind::Gemini));
 }

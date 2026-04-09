@@ -144,7 +144,9 @@ pub async fn watch_streaming(
         TaskStatus::Failed
     };
 
-    if status == TaskStatus::Done && rate_limit::is_rate_limited(&agent.kind()) { rate_limit::clear_rate_limit(&agent.kind()); }
+    if status == TaskStatus::Done {
+        rate_limit::clear_rate_limit(&agent.kind());
+    }
     let stderr_note = failure_stderr_note(status, task_id, agent);
     let detail = format!(
         "{} — {} events, exit code {}{}",
@@ -223,6 +225,9 @@ pub async fn watch_buffered(
         }
     };
     info.exit_code = exit_status.code();
+    if info.status == TaskStatus::Done {
+        rate_limit::clear_rate_limit(&agent.kind());
+    }
     let event = crate::agent::gemini::make_completion_event(task_id, &info);
     store.insert_event(&event)?;
     Ok(info)

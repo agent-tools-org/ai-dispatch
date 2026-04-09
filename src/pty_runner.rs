@@ -14,7 +14,7 @@ use crate::pty_bridge::PtyBridge;
 use crate::pty_watch::{finalize_output, monitor_bridge, MonitorState};
 use crate::store::Store;
 use crate::store::TaskCompletionUpdate;
-use crate::types::{CompletionInfo, TaskId};
+use crate::types::{CompletionInfo, EventKind, TaskEvent, TaskId, TaskStatus};
 
 #[allow(clippy::too_many_arguments)]
 pub fn run_agent_process(
@@ -28,7 +28,19 @@ pub fn run_agent_process(
     streaming: bool,
 ) -> Result<()> {
     let start = std::time::Instant::now();
-    let mut bridge = spawn_bridge(cmd, log_path)?;
+    let mut bridge = match spawn_bridge(cmd, log_path) {
+        Ok(bridge) => bridge,
+        Err(err) => {
+            fail_task_on_spawn_error(
+                store,
+                task_id,
+                model,
+                start.elapsed().as_millis() as i64,
+                &err.to_string(),
+            );
+            return Err(err);
+        }
+    };
     let rx = spawn_reader_thread(bridge.take_reader()?);
     let mut log_file = std::fs::File::create(log_path)?;
     let mut state = MonitorState::new(streaming);
@@ -82,9 +94,39 @@ fn spawn_bridge(cmd: &std::process::Command, log_path: &Path) -> Result<PtyBridg
             let error_msg = format!("Failed to spawn agent process: {err}");
             aid_error!("[aid] {error_msg}");
             write_spawn_error_log(log_path, &error_msg);
-            Err(err)
+            Err(anyhow::anyhow!(error_msg))
         }
     }
+}
+
+fn fail_task_on_spawn_error(
+    store: &Arc<Store>,
+    task_id: &TaskId,
+    model: Option<&str>,
+    duration_ms: i64,
+    detail: &str,
+) {
+    let _ = std::fs::write(crate::paths::stderr_path(task_id.as_str()), format!("{detail}\n"));
+    let event = TaskEvent {
+        task_id: task_id.clone(),
+        timestamp: Local::now(),
+        event_kind: EventKind::Error,
+        detail: detail.to_string(),
+        metadata: None,
+    };
+    let _ = store.complete_task_atomic(
+        TaskCompletionUpdate {
+            id: task_id.as_str(),
+            status: TaskStatus::Failed,
+            tokens: None,
+            duration_ms,
+            model,
+            cost_usd: None,
+            exit_code: None,
+        },
+        &event,
+    );
+    crate::state::refresh_project_state(store.as_ref(), task_id);
 }
 
 fn spawn_reader_thread(mut reader: Box<dyn Read + Send>) -> mpsc::Receiver<Vec<u8>> {
@@ -209,3 +251,7 @@ fn write_spawn_error_log(log_path: &Path, message: &str) {
     });
     let _ = std::fs::write(log_path, format!("{event}\n"));
 }
+
+#[cfg(test)]
+#[path = "pty_runner_tests.rs"]
+mod tests;

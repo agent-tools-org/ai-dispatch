@@ -37,6 +37,7 @@ pub(super) fn prepare_dispatch(store: &Arc<Store>, args: &mut RunArgs) -> Result
     args.prompt = resolve_prompt_input(&args.prompt, args.prompt_file.as_deref())?;
     args.prompt_file = None;
     args.max_duration_mins = resolve_max_duration_mins(args.timeout, args.max_duration_mins);
+    let had_explicit_result_file = args.result_file.is_some();
 
     let detected_project = project::detect_project();
     apply_project_defaults(args, detected_project.as_ref());
@@ -169,14 +170,10 @@ pub(super) fn prepare_dispatch(store: &Arc<Store>, args: &mut RunArgs) -> Result
         agent::classifier::count_file_mentions(&normalized_prompt),
         task.prompt.chars().count(),
     );
-    if crate::cmd::report_mode::apply_defaults(args, profile.category)
-        && args.result_file.as_deref() == Some(crate::cmd::report_mode::DEFAULT_AUDIT_RESULT_FILE)
-    {
-        aid_info!(
-            "[aid] Audit report mode: auto-set --result-file {}",
-            crate::cmd::report_mode::DEFAULT_AUDIT_RESULT_FILE
-        );
-    }
+    let auto_result_file = crate::cmd::report_mode::apply_defaults(args, profile.category)
+        && !had_explicit_result_file
+        && args.output.is_none()
+        && args.result_file.as_deref() == Some(crate::cmd::report_mode::DEFAULT_AUDIT_RESULT_FILE);
     task.category = Some(profile.category.label().to_string());
     for warning in validate_dispatch(args, &agent_setup.agent_kind) {
         aid_warn!("[aid] Warning: {warning}");
@@ -201,6 +198,11 @@ pub(super) fn prepare_dispatch(store: &Arc<Store>, args: &mut RunArgs) -> Result
     } else {
         store.insert_task(&task)?;
     }
+    if auto_result_file {
+        let result_file = crate::cmd::report_mode::task_result_file(task_id.as_str());
+        args.result_file = Some(result_file.clone());
+        aid_info!("[aid] Audit report mode: auto-set --result-file {result_file}");
+    }
     Ok(PreparedDispatch {
         detected_project,
         agent_kind: agent_setup.agent_kind,
@@ -217,4 +219,47 @@ pub(super) fn prepare_dispatch(store: &Arc<Store>, args: &mut RunArgs) -> Result
         wt_path,
         effective_dir,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::Arc;
+
+    #[test]
+    fn prepare_dispatch_uses_task_specific_audit_result_file() {
+        let store = Arc::new(Store::open_memory().unwrap());
+        let mut args = RunArgs {
+            agent_name: "codex".to_string(),
+            prompt: "Review the implementation and list findings.".to_string(),
+            read_only: true,
+            ..Default::default()
+        };
+
+        let prepared = prepare_dispatch(&store, &mut args).unwrap();
+
+        assert_eq!(
+            args.result_file.as_deref(),
+            Some(crate::cmd::report_mode::task_result_file(
+                prepared.task_id.as_str()
+            )
+            .as_str())
+        );
+    }
+
+    #[test]
+    fn prepare_dispatch_skips_auto_result_file_when_output_is_set() {
+        let store = Arc::new(Store::open_memory().unwrap());
+        let mut args = RunArgs {
+            agent_name: "codex".to_string(),
+            prompt: "Review the implementation and list findings.".to_string(),
+            read_only: true,
+            output: Some("audit.md".to_string()),
+            ..Default::default()
+        };
+
+        prepare_dispatch(&store, &mut args).unwrap();
+
+        assert_eq!(args.result_file, None);
+    }
 }

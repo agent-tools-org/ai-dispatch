@@ -86,10 +86,13 @@ pub fn is_rate_limit_error(message: &str) -> bool {
         || lower.contains("rate_limit")
         || contains_status_code(&lower, "429")
         || contains_status_code(&lower, "402")
+        || contains_status_code(&lower, "503")
         || lower.contains("quota exceeded")
         || lower.contains("exhausted your capacity")
         || lower.contains("too many requests")
         || lower.contains("usage limit")
+        || lower.contains("no accounts with a plan")
+        || lower.contains("no plan supporting")
         || lower.contains("payment")
         || lower.contains("credits")
         || lower.contains("reload your tokens")
@@ -232,6 +235,9 @@ mod tests {
         assert!(is_rate_limit_error("payment required"));
         assert!(is_rate_limit_error("credits exhausted"));
         assert!(is_rate_limit_error("please reload your tokens"));
+        assert!(is_rate_limit_error(
+            "503 No accounts with a plan supporting gpt-4.1-nano"
+        ));
         assert!(!is_rate_limit_error("network timeout"));
         assert!(!is_rate_limit_error("connection refused"));
         // Must not match 429 inside larger numbers (token counts, IDs)

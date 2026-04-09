@@ -154,8 +154,12 @@ pub(super) fn resolve_agent_setup(store: &Arc<Store>, args: &mut RunArgs) -> Res
         && crate::agent::classifier::is_simple_for_routing(&args.prompt)
     {
         if let Some(bm) = cmd_config::budget_model(&agent_kind) {
-            aid_info!("[aid] Smart route: simple prompt -> {}", bm);
-            Some(bm.to_string())
+            if rate_limit::is_rate_limited(&agent_kind) {
+                None
+            } else {
+                aid_info!("[aid] Smart route: simple prompt -> {}", bm);
+                Some(bm.to_string())
+            }
         } else {
             None
         }

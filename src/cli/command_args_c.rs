@@ -2,7 +2,7 @@
 // Exports clap Args types for top-level commands from worktree through web.
 
 use crate::cli::{FindingCommands, KgCommands, MemoryCommands, StoreCommands};
-use crate::cli_actions::{ProjectAction, TeamAction, ToolAction, WorktreeAction};
+use crate::cli_actions::{CredentialAction, ProjectAction, TeamAction, ToolAction, WorktreeAction};
 use clap::Args;
 
 #[derive(Args)]
@@ -47,6 +47,16 @@ pub struct TeamArgs {
 pub struct ToolArgs {
     #[command(subcommand)]
     pub action: ToolAction,
+}
+
+#[derive(Args)]
+#[command(after_help = r#"Examples:
+  aid credential list
+  aid credential add codex personal OPENAI_API_KEY
+  aid credential remove codex personal"#)]
+pub struct CredentialArgs {
+    #[command(subcommand)]
+    pub action: CredentialAction,
 }
 
 #[derive(Args)]

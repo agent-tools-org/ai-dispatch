@@ -16,6 +16,7 @@ mod config;
 mod container;
 mod context;
 mod cost;
+pub mod credential_pool;
 mod explore;
 mod hooks;
 mod idle_timeout;

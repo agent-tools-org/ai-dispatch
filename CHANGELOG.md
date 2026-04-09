@@ -1,3 +1,7 @@
+## v8.82.0 (2026-04-09)
+- fix: resolve relative `dir` and `context` paths in batch TOML against the batch file's location, not CWD
+
+
 ## v8.81.0 (2026-04-09)
 - feat: Insights dashboard — `aid stats --insights` shows activity by day/hour, top sessions, overview totals with ASCII bar charts (H7)
 - feat: Credential pool — `~/.aid/credentials.toml` for multi-key rotation per provider (round_robin/fill_first/least_used), `aid credential list` CLI (H2)

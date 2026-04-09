@@ -132,8 +132,7 @@ async fn dispatch_with_dependencies(
     let mut triggered: Vec<bool> = tasks.iter().map(|task| !task.conditional).collect();
     let mut active: Vec<(usize, String)> = Vec::new();
     let mut task_ids: Vec<String> = Vec::new();
-    let default_max_wait_mins = default_max_wait_mins();
-    let mut wait_tracker = ReadyWaitTracker::new(tasks, default_max_wait_mins);
+    let mut wait_tracker = ReadyWaitTracker::new(tasks);
     while outcomes.iter().any(Option::is_none) {
         let ready = find_ready_tasks(
             &store,
@@ -280,13 +279,6 @@ pub(super) fn reconcile_and_poll_completed_tasks(
 ) -> Result<Vec<super::batch_types::CompletedTask>> {
     let _ = crate::background::check_zombie_tasks(store.as_ref())?;
     poll_completed_tasks(store, active)
-}
-
-fn default_max_wait_mins() -> Option<u64> {
-    crate::config::load_config()
-        .ok()
-        .and_then(|config| u64::try_from(config.background.max_task_duration_mins).ok())
-        .filter(|mins| *mins > 0)
 }
 
 fn completion_progress_label(

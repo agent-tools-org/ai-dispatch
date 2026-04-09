@@ -16,12 +16,12 @@ pub(super) struct ReadyWaitTracker {
 }
 
 impl ReadyWaitTracker {
-    pub(super) fn new(tasks: &[batch::BatchTask], default_max_wait_mins: Option<u64>) -> Self {
+    pub(super) fn new(tasks: &[batch::BatchTask]) -> Self {
         Self {
             ready_since: vec![None; tasks.len()],
             max_wait_mins: tasks
                 .iter()
-                .map(|task| effective_max_wait_mins(task, default_max_wait_mins))
+                .map(effective_max_wait_mins)
                 .collect(),
         }
     }
@@ -89,14 +89,8 @@ impl ReadyWaitTracker {
     }
 }
 
-fn effective_max_wait_mins(
-    task: &batch::BatchTask,
-    default_max_wait_mins: Option<u64>,
-) -> Option<u64> {
-    task.max_wait_mins
-        .or(task.max_duration_mins)
-        .or(default_max_wait_mins)
-        .filter(|mins| *mins > 0)
+fn effective_max_wait_mins(task: &batch::BatchTask) -> Option<u64> {
+    task.max_wait_mins.filter(|mins| *mins > 0)
 }
 
 #[cfg(test)]
@@ -104,13 +98,15 @@ mod tests {
     use super::*;
 
     #[test]
-    fn max_wait_prefers_task_then_duration_then_default() {
+    fn max_wait_uses_only_explicit_max_wait_mins() {
         let mut task = stub_task();
-        assert_eq!(effective_max_wait_mins(&task, Some(60)), Some(60));
+        assert_eq!(effective_max_wait_mins(&task), None);
         task.max_duration_mins = Some(20);
-        assert_eq!(effective_max_wait_mins(&task, Some(60)), Some(20));
+        assert_eq!(effective_max_wait_mins(&task), None);
         task.max_wait_mins = Some(5);
-        assert_eq!(effective_max_wait_mins(&task, Some(60)), Some(5));
+        assert_eq!(effective_max_wait_mins(&task), Some(5));
+        task.max_wait_mins = Some(0);
+        assert_eq!(effective_max_wait_mins(&task), None);
     }
 
     fn stub_task() -> batch::BatchTask {

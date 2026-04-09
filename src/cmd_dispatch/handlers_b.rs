@@ -5,7 +5,7 @@ use super::{resolve_finding_content, resolve_group};
 use crate::cli::{
     ExperimentCommands, FindingCommands, HookAction, KgCommands, MemoryCommands, StoreCommands,
 };
-use crate::cli_actions::{ConfigAction, ContainerAction, GroupAction, GroupFindingAction, ProjectAction, TeamAction, ToolAction, WorktreeAction};
+use crate::cli_actions::{ConfigAction, ContainerAction, CredentialAction, GroupAction, GroupFindingAction, ProjectAction, TeamAction, ToolAction, WorktreeAction};
 use crate::cmd;
 use crate::cmd::experiment_types::{ExperimentConfig, MetricDirection};
 use crate::{background, cli, store};
@@ -199,6 +199,16 @@ pub(super) fn team(action: TeamAction) -> Result<()> {
 
 pub(super) fn tool(action: ToolAction) -> Result<()> {
     cmd::tool::run_tool_command(action)
+}
+
+pub(super) fn credential(action: CredentialAction) -> Result<()> {
+    use cmd::credential::{CredentialAction as CredentialCommand, run_credential_command};
+    let action = match action {
+        CredentialAction::List => CredentialCommand::List,
+        CredentialAction::Add { provider, name, env } => CredentialCommand::Add { provider, name, env },
+        CredentialAction::Remove { provider, name } => CredentialCommand::Remove { provider, name },
+    };
+    run_credential_command(action)
 }
 
 pub(super) fn project(action: ProjectAction) -> Result<()> {

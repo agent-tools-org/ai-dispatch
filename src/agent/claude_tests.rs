@@ -3,7 +3,7 @@
 // Deps: super::ClaudeAgent, crate::agent::Agent, tempfile.
 
 use super::ClaudeAgent;
-use crate::agent::{Agent, RunOpts};
+use crate::agent::{Agent, RunOpts, embed_context_in_prompt};
 use crate::types::{EventKind, TaskId};
 use tempfile::tempdir;
 
@@ -67,6 +67,27 @@ fn build_command_read_only_without_result_file_keeps_strict_tools() {
     let cmd = ClaudeAgent.build_command("inspect", &opts).unwrap();
     let args: Vec<String> = cmd.get_args().map(|arg| arg.to_string_lossy().into_owned()).collect();
     assert!(args.windows(2).any(|pair| pair == ["--allowedTools", "Read,Glob,Grep,LS"]));
+}
+
+#[test]
+fn embed_context_in_prompt_appends_context_file_contents() {
+    let dir = tempdir().unwrap();
+    let context_path = dir.path().join("context.txt");
+    std::fs::write(&context_path, "shared context").unwrap();
+
+    let prompt = embed_context_in_prompt(
+        "inspect",
+        &[context_path.to_string_lossy().to_string()],
+    )
+    .unwrap();
+
+    assert_eq!(
+        prompt,
+        format!(
+            "inspect\n\n[Context File: {}]\nshared context",
+            context_path.to_string_lossy()
+        )
+    );
 }
 
 #[test]

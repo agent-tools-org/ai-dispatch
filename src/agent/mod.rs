@@ -117,6 +117,22 @@ pub fn get_agent(kind: AgentKind) -> Box<dyn Agent> {
     }
 }
 
+/// Embed context file contents into the prompt text for agents without native context file flags.
+pub fn embed_context_in_prompt(prompt: &str, context_files: &[String]) -> anyhow::Result<String> {
+    if context_files.is_empty() {
+        return Ok(prompt.to_string());
+    }
+    let mut combined = prompt.to_string();
+    for file in context_files {
+        let contents = std::fs::read_to_string(file)?;
+        combined.push_str("\n\n[Context File: ");
+        combined.push_str(file);
+        combined.push_str("]\n");
+        combined.push_str(&contents);
+    }
+    Ok(combined)
+}
+
 #[cfg(test)]
 mod cursor_binary_tests;
 #[cfg(test)]

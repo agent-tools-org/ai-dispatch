@@ -3,6 +3,7 @@
 // Deps: crate::paths, crate::types, anyhow, std::fs.
 
 use anyhow::{Context, Result};
+use crate::prompt_scan::scan_for_injection;
 use crate::types::AgentKind;
 use crate::sanitize;
 use std::collections::BTreeSet;
@@ -34,8 +35,15 @@ fn flat_skill_path(name: &str) -> PathBuf {
 }
 
 fn read_skill_file(path: &Path) -> Result<String> {
-    std::fs::read_to_string(path)
-        .with_context(|| format!("Failed to read skill {}", path.display()))
+    let content = std::fs::read_to_string(path)
+        .with_context(|| format!("Failed to read skill {}", path.display()))?;
+    if scan_for_injection(&content).has_critical {
+        aid_warn!(
+            "[aid] ⚠ Critical injection pattern detected in {} — content may be adversarial",
+            path.display()
+        );
+    }
+    Ok(content)
 }
 
 fn list_skill_files(name: &str, subdir: &str) -> Vec<String> {

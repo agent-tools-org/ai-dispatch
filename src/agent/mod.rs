@@ -22,6 +22,7 @@ use anyhow::Result;
 use std::collections::HashMap;
 use std::process::Command;
 
+use crate::prompt_scan::scan_for_injection;
 use crate::store;
 use crate::types::*;
 
@@ -125,6 +126,17 @@ pub fn embed_context_in_prompt(prompt: &str, context_files: &[String]) -> anyhow
     let mut combined = prompt.to_string();
     for file in context_files {
         let contents = std::fs::read_to_string(file)?;
+        let scan = scan_for_injection(&contents);
+        for warning in &scan.warnings {
+            aid_warn!(
+                "[aid] ⚠ Context file {file}: {} (line {})",
+                warning.pattern,
+                warning.line_num
+            );
+        }
+        if scan.has_critical {
+            aid_warn!("[aid] ⚠ Critical injection pattern detected in {file} — content may be adversarial");
+        }
         combined.push_str("\n\n[Context File: ");
         combined.push_str(file);
         combined.push_str("]\n");

@@ -78,7 +78,7 @@ fn render_template(dir: &str, team: &str, verify: &str, language: &str) -> Strin
     // [defaults] — execution
     lines.push("# --- Execution ---".to_string());
     lines.push("# max_duration_mins = 30        # Per-task hard timeout (minutes)".to_string());
-    lines.push("# max_wait_mins = 10            # Fail if ready task cannot get a slot".to_string());
+    lines.push("# max_wait_mins = 30            # Fail WAIT tasks after 30 minutes".to_string());
     lines.push("# retry = 1                     # Retry failed runs N times".to_string());
     lines.push("# idle_timeout = 120            # Kill if idle for N seconds".to_string());
     lines.push("# judge = true                  # AI judge evaluates output quality".to_string());
@@ -115,7 +115,7 @@ fn render_template(dir: &str, team: &str, verify: &str, language: &str) -> Strin
     lines.push("# checklist = [\"no unwrap()\"]    # Quality checklist items".to_string());
     lines.push("# no_skill = true               # Disable skill injection".to_string());
     lines.push("# sandbox = true                # Run in sandbox mode".to_string());
-    lines.push("# max_wait_mins = 10            # Fail if ready task cannot get a slot".to_string());
+    lines.push("# max_wait_mins = 30            # Fail WAIT tasks after 30 minutes".to_string());
     lines.push("# idle_timeout = 120            # Kill if idle for N seconds".to_string());
     lines.push("# retry = 2                     # Retry the task on failure".to_string());
     lines.push("# peer_review = \"gemini\"       # Run a second-agent review".to_string());
@@ -164,6 +164,7 @@ mod tests {
         // New fields present
         assert!(template.contains("# idle_timeout"));
         assert!(template.contains("# max_wait_mins"));
+        assert!(template.contains("# max_wait_mins = 30            # Fail WAIT tasks after 30 minutes"));
         assert!(template.contains("# checklist"));
         assert!(template.contains("# context_from"));
         assert!(template.contains("# scope"));

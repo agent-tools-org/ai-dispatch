@@ -4,13 +4,20 @@
 
 use super::*;
 use std::io::Write;
-use tempfile::NamedTempFile;
+use std::path::{Path, PathBuf};
+use tempfile::{NamedTempFile, tempdir};
 
 fn write_temp(content: &str) -> NamedTempFile {
     let mut file = NamedTempFile::new().unwrap();
     file.write_all(content.as_bytes()).unwrap();
     file.flush().unwrap();
     file
+}
+
+fn write_batch_file(dir: &Path, name: &str, content: &str) -> PathBuf {
+    let path = dir.join(name);
+    std::fs::write(&path, content).unwrap();
+    path
 }
 
 fn parse_batch_with_vars(content: &str, cli_vars: &[(&str, &str)]) -> (BatchConfig, String) {
@@ -77,19 +84,20 @@ fn make_task(name: Option<&str>, depends_on: &[&str]) -> BatchTask {
 
 #[test]
 fn parse_valid_batch() {
-    let cfg = parse_batch_file(
-        write_temp(concat!(
+    let file = write_temp(concat!(
             "[[tasks]]\nagent = \"gemini\"\nprompt = \"research X\"\nworktree = \"feat/x\"\n",
             "[[tasks]]\nagent = \"codex\"\nprompt = \"implement Y\"\ndir = \"src\"\nmodel = \"gpt-4\"\ngroup = \"wg-demo\""
-        ))
-        .path(),
-    )
-    .unwrap();
+        ));
+    let cfg = parse_batch_file(file.path()).unwrap();
+    let expected_dir = file.path().parent().unwrap().join("src");
 
     assert_eq!(cfg.tasks.len(), 2);
     assert_eq!(cfg.tasks[0].agent, "gemini");
     assert_eq!(cfg.tasks[0].worktree, Some("feat/x".into()));
-    assert_eq!(cfg.tasks[1].dir, Some("src".into()));
+    assert_eq!(
+        cfg.tasks[1].dir.as_deref(),
+        Some(expected_dir.to_string_lossy().as_ref())
+    );
     assert_eq!(cfg.tasks[1].group.as_deref(), Some("wg-demo"));
 }
 
@@ -224,8 +232,7 @@ prompt = "test"
 
 #[test]
 fn applies_defaults_to_tasks() {
-    let cfg = parse_batch_file(
-        write_temp(concat!(
+    let file = write_temp(concat!(
             "[defaults]\nauto_fallback = true\nagent = \"gemini\"\ndir = \"src\"\nmodel = \"gpt-5\"\n",
             "worktree_prefix = \"feat\"\nverify = true\nmax_duration_mins = 25\nmax_wait_mins = 10\n",
             "retry = 2\npeer_review = \"cursor\"\nbest_of = 3\nmetric = \"cargo test\"\n",
@@ -235,15 +242,17 @@ fn applies_defaults_to_tasks() {
             "env = { DEFAULT_ONLY = \"yes\", SHARED = \"default\" }\n",
             "env_forward = [\"PATH\"]\n",
             "[[tasks]]\nname = \"impl\"\nprompt = \"build it\"\n"
-        ))
-        .path(),
-    )
-    .unwrap();
+        ));
+    let cfg = parse_batch_file(file.path()).unwrap();
+    let batch_dir = file.path().parent().unwrap();
 
     assert_eq!(cfg.defaults.auto_fallback, Some(true));
     let task = &cfg.tasks[0];
     assert_eq!(task.agent, "gemini");
-    assert_eq!(task.dir.as_deref(), Some("src"));
+    assert_eq!(
+        task.dir.as_deref(),
+        Some(batch_dir.join("src").to_string_lossy().as_ref())
+    );
     assert_eq!(task.model.as_deref(), Some("gpt-5"));
     assert_eq!(task.worktree.as_deref(), Some("feat/impl"));
     assert_eq!(task.verify.as_deref(), Some("auto"));
@@ -255,7 +264,15 @@ fn applies_defaults_to_tasks() {
     assert_eq!(task.metric.as_deref(), Some("cargo test"));
     assert_eq!(
         task.context.as_deref(),
-        Some(&["src/lib.rs".to_string(), "src/main.rs:run".to_string()][..])
+        Some(
+            &[
+                batch_dir.join("src/lib.rs").to_string_lossy().into_owned(),
+                batch_dir
+                    .join("src/main.rs:run")
+                    .to_string_lossy()
+                    .into_owned(),
+            ][..]
+        )
     );
     assert_eq!(
         task.skills.as_deref(),
@@ -286,8 +303,7 @@ fn applies_defaults_to_tasks() {
 
 #[test]
 fn task_values_override_defaults() {
-    let cfg = parse_batch_file(
-        write_temp(concat!(
+    let file = write_temp(concat!(
             "[defaults]\nagent = \"gemini\"\ndir = \"src\"\nmodel = \"gpt-5\"\n",
             "worktree_prefix = \"feat\"\nverify = true\nmax_duration_mins = 25\nmax_wait_mins = 10\n",
             "retry = 2\npeer_review = \"gemini\"\nbest_of = 3\nmetric = \"cargo test\"\n",
@@ -302,14 +318,16 @@ fn task_values_override_defaults() {
             "skills = [\"own\"]\non_done = \"echo done\"\nfallback = \"opencode\"\n",
             "env = { SHARED = \"task\", TASK_ONLY = \"set\" }\n",
             "env_forward = [\"HOME\"]\n"
-        ))
-        .path(),
-    )
-    .unwrap();
+        ));
+    let cfg = parse_batch_file(file.path()).unwrap();
+    let batch_dir = file.path().parent().unwrap();
 
     let task = &cfg.tasks[0];
     assert_eq!(task.agent, "codex");
-    assert_eq!(task.dir.as_deref(), Some("custom"));
+    assert_eq!(
+        task.dir.as_deref(),
+        Some(batch_dir.join("custom").to_string_lossy().as_ref())
+    );
     assert_eq!(task.model.as_deref(), Some("gpt-4"));
     assert_eq!(task.worktree.as_deref(), Some("manual/impl"));
     assert_eq!(task.verify.as_deref(), Some("manual"));
@@ -321,7 +339,7 @@ fn task_values_override_defaults() {
     assert_eq!(task.metric.as_deref(), Some("just verify"));
     assert_eq!(
         task.context.as_deref(),
-        Some(&["src/task.rs".to_string()][..])
+        Some(&[batch_dir.join("src/task.rs").to_string_lossy().into_owned()][..])
     );
     assert_eq!(task.skills.as_deref(), Some(&["own".to_string()][..]));
     assert_eq!(task.on_done.as_deref(), Some("echo done"));
@@ -351,6 +369,87 @@ fn task_values_override_defaults() {
         task.env_forward.as_deref(),
         Some(&["PATH".to_string(), "HOME".to_string()][..])
     );
+}
+
+#[test]
+fn resolve_batch_paths_resolves_relative_dir_from_batch_parent() {
+    let temp = tempdir().unwrap();
+    let batch_dir = temp.path().join("batches");
+    std::fs::create_dir_all(&batch_dir).unwrap();
+    let batch_path = write_batch_file(
+        &batch_dir,
+        "tasks.toml",
+        "[[tasks]]\nagent = \"codex\"\nprompt = \"test\"\ndir = \"subdir\"\n",
+    );
+
+    let cfg = parse_batch_file(&batch_path).unwrap();
+
+    assert_eq!(
+        cfg.tasks[0].dir.as_deref(),
+        Some(batch_dir.join("subdir").to_string_lossy().as_ref())
+    );
+}
+
+#[test]
+fn resolve_batch_paths_leaves_absolute_dir_unchanged() {
+    let temp = tempdir().unwrap();
+    let batch_dir = temp.path().join("batches");
+    std::fs::create_dir_all(&batch_dir).unwrap();
+    let absolute_dir = temp.path().join("absolute-dir");
+    let batch_path = write_batch_file(
+        &batch_dir,
+        "tasks.toml",
+        &format!(
+            "[[tasks]]\nagent = \"codex\"\nprompt = \"test\"\ndir = {:?}\n",
+            absolute_dir
+        ),
+    );
+
+    let cfg = parse_batch_file(&batch_path).unwrap();
+
+    assert_eq!(cfg.tasks[0].dir.as_deref(), Some(absolute_dir.to_string_lossy().as_ref()));
+}
+
+#[test]
+fn resolve_batch_paths_resolves_context_entries() {
+    let temp = tempdir().unwrap();
+    let batch_dir = temp.path().join("batches");
+    std::fs::create_dir_all(&batch_dir).unwrap();
+    let absolute_context = temp.path().join("global.md");
+    let batch_path = write_batch_file(
+        &batch_dir,
+        "tasks.toml",
+        &format!(
+            "[[tasks]]\nagent = \"codex\"\nprompt = \"test\"\ncontext = [\"notes.md\", {:?}]\n",
+            absolute_context
+        ),
+    );
+
+    let cfg = parse_batch_file(&batch_path).unwrap();
+
+    assert_eq!(
+        cfg.tasks[0].context.as_deref(),
+        Some(
+            &[
+                batch_dir.join("notes.md").to_string_lossy().into_owned(),
+                absolute_context.to_string_lossy().into_owned(),
+            ][..]
+        )
+    );
+}
+
+#[test]
+fn resolve_batch_paths_handles_batch_file_in_current_dir() {
+    let mut tasks = [BatchTask {
+        dir: Some("subdir".to_string()),
+        context: Some(vec!["notes.md".to_string()]),
+        ..make_task(Some("task"), &[])
+    }];
+
+    resolve_batch_paths(&mut tasks, Path::new("tasks.toml"));
+
+    assert_eq!(tasks[0].dir.as_deref(), Some("subdir"));
+    assert_eq!(tasks[0].context.as_deref(), Some(&["notes.md".to_string()][..]));
 }
 
 #[test]

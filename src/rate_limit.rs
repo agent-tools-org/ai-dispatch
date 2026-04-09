@@ -1,5 +1,5 @@
 // Rate-limit detection: marks agents as rate-limited when quota errors occur.
-// Provides marker file tracking with 1-hour cooldown for automatic budget mode.
+// Provides marker file tracking with a 5-minute cooldown for automatic budget mode.
 
 use crate::paths::aid_dir;
 use crate::types::AgentKind;
@@ -7,7 +7,7 @@ use chrono::{Local, NaiveDateTime};
 use std::fs;
 use std::path::PathBuf;
 
-const RATE_LIMIT_WINDOW_SECS: u64 = 3600;
+const RATE_LIMIT_WINDOW_SECS: u64 = 300;
 
 fn marker_path(agent: &AgentKind) -> PathBuf {
     aid_dir().join(format!("rate-limit-{}", agent.as_str()))
@@ -59,11 +59,11 @@ pub fn is_rate_limited(agent: &AgentKind) -> bool {
             if let Some(recovery_at) = parse_recovery_datetime(&recovery_str) {
                 recovery_at > Local::now().naive_local()
             } else {
-                // Fall back to mtime-based 1h window
+                // Fall back to the mtime-based cooldown window
                 within_window()
             }
         } else {
-            // Fall back to mtime-based 1h window
+            // Fall back to the mtime-based cooldown window
             within_window()
         }
     } else {
@@ -86,14 +86,10 @@ pub fn is_rate_limit_error(message: &str) -> bool {
         || lower.contains("rate_limit")
         || contains_status_code(&lower, "429")
         || contains_status_code(&lower, "402")
-        || contains_status_code(&lower, "503")
         || lower.contains("quota exceeded")
         || lower.contains("exhausted your capacity")
         || lower.contains("too many requests")
         || lower.contains("usage limit")
-        || lower.contains("no accounts with a plan")
-        || lower.contains("no plan supporting")
-        || lower.contains("payment")
         || lower.contains("credits")
         || lower.contains("reload your tokens")
 }
@@ -232,19 +228,24 @@ mod tests {
         assert!(is_rate_limit_error("usage limit reached"));
         assert!(is_rate_limit_error("status: 429"));
         assert!(is_rate_limit_error("error 429 too many"));
-        assert!(is_rate_limit_error("payment required"));
         assert!(is_rate_limit_error("credits exhausted"));
         assert!(is_rate_limit_error("please reload your tokens"));
-        assert!(is_rate_limit_error(
-            "503 No accounts with a plan supporting gpt-4.1-nano"
-        ));
         assert!(!is_rate_limit_error("network timeout"));
         assert!(!is_rate_limit_error("connection refused"));
+        assert!(!is_rate_limit_error("payment required"));
+        assert!(!is_rate_limit_error(
+            "503 No accounts with a plan supporting gpt-4.1-nano"
+        ));
         // Must not match 429 inside larger numbers (token counts, IDs)
         assert!(!is_rate_limit_error(
             "tokens: 8714294 in + 27373 out = 8741667 (8442752 cached)"
         ));
         assert!(!is_rate_limit_error("invoice 1402 created"));
+    }
+
+    #[test]
+    fn test_rate_limit_window_matches_five_minutes() {
+        assert_eq!(RATE_LIMIT_WINDOW_SECS, 300);
     }
 
     #[test]

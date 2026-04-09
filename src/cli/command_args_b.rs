@@ -56,6 +56,8 @@ pub struct StatsArgs {
     pub window: String,
     #[arg(long)]
     pub agent: Option<String>,
+    #[arg(long)]
+    pub insights: bool,
 }
 
 #[derive(Args)]

@@ -221,6 +221,7 @@ pub(crate) fn parse_batch_file_with_vars(
     let mut stderr = io::stderr().lock();
     interpolate_batch_config(&mut config, cli_vars, &mut stderr)?;
     apply_defaults(&mut config.tasks, &config.defaults);
+    resolve_batch_paths(&mut config.tasks, path);
     resolve_task_prompts(&mut config.tasks, path)?;
     validate_agents(&config.tasks)?;
     validate_fallback_agents(&config.tasks)?;
@@ -230,6 +231,27 @@ pub(crate) fn parse_batch_file_with_vars(
     validate_conditional_hooks(&config.tasks)?;
     warn_audit_without_readonly(&config.tasks);
     Ok(config)
+}
+
+fn resolve_batch_paths(tasks: &mut [BatchTask], batch_path: &Path) {
+    let base_dir = batch_path.parent().unwrap_or_else(|| Path::new("."));
+    for task in tasks {
+        if let Some(dir) = task.dir.as_mut() {
+            resolve_batch_path(base_dir, dir);
+        }
+        if let Some(context) = task.context.as_mut() {
+            for entry in context {
+                resolve_batch_path(base_dir, entry);
+            }
+        }
+    }
+}
+
+fn resolve_batch_path(base_dir: &Path, value: &mut String) {
+    let path = Path::new(value);
+    if !value.is_empty() && path.is_relative() {
+        *value = base_dir.join(path).to_string_lossy().into_owned();
+    }
 }
 
 fn resolve_task_prompts(tasks: &mut [BatchTask], batch_path: &Path) -> Result<()> {

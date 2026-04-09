@@ -1,3 +1,9 @@
+## v8.81.0 (2026-04-09)
+- feat: Insights dashboard — `aid stats --insights` shows activity by day/hour, top sessions, overview totals with ASCII bar charts (H7)
+- feat: Credential pool — `~/.aid/credentials.toml` for multi-key rotation per provider (round_robin/fill_first/least_used), `aid credential list` CLI (H2)
+- fix: Rate-limit false positives — removed 503/payment from rate-limit classification, reduced TTL to 5min, auto-clear on success (#90)
+
+
 ## v8.80.0 (2026-04-09)
 - feat: `aid export --sharegpt <task-id>` — export task conversations in ShareGPT JSONL format for fine-tuning (H4)
 - fix: Rate-limit false positives — removed 503/payment from rate-limit classification, reduced TTL from 1h to 5min, auto-clear on task success (#90)

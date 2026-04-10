@@ -1,3 +1,8 @@
+## v8.84.0 (2026-04-10)
+- fix(batch-retry): `aid batch retry <wg>` now serializes retried tasks that share a worktree. Tasks are bucketed by `(worktree_path, worktree_branch)`; buckets with more than one task dispatch sequentially and wait for each task to reach a terminal status before starting the next. Distinct worktrees still retry in parallel. Previously, shared-worktree tasks all dispatched concurrently and trampled each other.
+- fix(commit): post-task `auto_commit` no longer scoops `.aid-lock`, `result-*.md`, or `aid-batch-*.toml` into stray commits. `git add -u` uses pathspec exclusion, untracked-file detection filters `result-*.md`, and the commit is skipped entirely via `git diff --cached --quiet` when nothing substantive is staged. Eliminates the "sandwich auto-commit" noise that every feature branch used to accumulate.
+
+
 ## v8.83.0 (2026-04-10)
 - feat(gitbutler): opt-in GitButler integration. New `[project] gitbutler = "off" | "auto" | "always"` field, auto-detected by `aid project init` when the `but` CLI is present.
 - feat(gitbutler): per-dispatch worktree integration — `but setup` runs in the worktree, Claude Code agents get `.claude/settings.local.json` with `but claude pre-tool|post-tool|stop` hooks, and non-Claude agents get an on-done `but -C <wt> commit -i` chained into `args.on_done`. Gated on `AID_GITBUTLER=0` escape hatch.

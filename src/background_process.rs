@@ -45,12 +45,23 @@ pub(crate) fn spawn_on_done_command(command: &str, task_id: &str, status: &str) 
 }
 
 pub(crate) fn build_on_done_command(command: &str) -> Result<Command> {
+    if contains_shell_metacharacters(command) {
+        let mut cmd = Command::new("sh");
+        cmd.args(["-c", command]);
+        return Ok(cmd);
+    }
     let mut parts = command.split_whitespace();
     let program = parts.next().context("on_done command is empty")?;
     let args: Vec<&str> = parts.collect();
     let mut cmd = Command::new(program);
     cmd.args(&args);
     Ok(cmd)
+}
+
+fn contains_shell_metacharacters(command: &str) -> bool {
+    ["&&", "||", "|", ";", ">", "<", "`", "$("]
+        .iter()
+        .any(|pattern| command.contains(pattern))
 }
 
 #[cfg(unix)]

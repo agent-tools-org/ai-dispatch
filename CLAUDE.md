@@ -178,9 +178,9 @@ aid merge --group <wg-id> --lanes        # apply each branch as a GitButler lane
 
 `aid` can integrate with [GitButler](https://gitbutler.com) (CLI: `but`) to add
 per-task auto-commit, oplog/undo, and a single-workspace "lane" view for whole
-batches. Integration is strictly opt-in and gated on two signals: the
-`[project] gitbutler` field in `.aid/project.toml`, and the `but` binary being
-on `PATH`.
+batches. Integration is strictly opt-in and gated by the
+`[project] gitbutler` field in `.aid/project.toml`; `auto` mode also requires
+the `but` binary on `PATH`.
 
 Enable during `aid project init` — if `but` is detected, you'll be prompted
 to set `gitbutler = "auto"`. Modes:
@@ -189,7 +189,7 @@ to set `gitbutler = "auto"`. Modes:
 |---|---|
 | `off` (default) | No GitButler integration |
 | `auto` | Active when `but` is on `PATH`; silent no-op otherwise |
-| `always` | Active unconditionally; errors out if `but` is missing |
+| `always` | Skips the PATH probe and attempts GitButler commands; downstream commands warn or fail if `but` is missing |
 
 What gets activated per dispatched task (when active):
 - `but setup` runs inside the task's worktree (idempotent).
@@ -199,7 +199,7 @@ What gets activated per dispatched task (when active):
   on session end.
 - Non-Claude agents get an `on-done` shell hook running `but -C <wt> commit -i`
   at task end — same outcome, different mechanism.
-- Escape hatch: `AID_GITBUTLER=0` disables everything for one invocation.
+- Escape hatch: `AID_GITBUTLER=0` disables all GitButler integration for one invocation — both dispatch hooks and `aid merge --lanes`.
 
 Post-batch lane assembly: `aid merge --group <wg> --lanes` uses `but apply`
 to apply each task's branch as a lane in the main repo's GitButler workspace

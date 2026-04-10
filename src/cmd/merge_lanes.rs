@@ -14,6 +14,18 @@ pub(super) fn merge_group_lanes(store: &Store, group_id: &str) -> Result<()> {
     if tasks.is_empty() {
         return Err(anyhow!("No tasks found in group '{group_id}'"));
     }
+    if std::env::var("AID_GITBUTLER").is_ok_and(|value| value == "0") {
+        return Err(anyhow!("GitButler integration disabled via AID_GITBUTLER=0"));
+    }
+    if crate::project::detect_project()
+        .unwrap_or_default()
+        .gitbutler_mode()
+        == crate::gitbutler::Mode::Off
+    {
+        return Err(anyhow!(
+            "GitButler integration is off for this project. Set [project] gitbutler = \"auto\" in .aid/project.toml"
+        ));
+    }
     let repo_dir = resolve_repo_dir(
         tasks.first().and_then(|task| task.repo_path.as_deref()),
         tasks.first().and_then(|task| task.worktree_path.as_deref()),
@@ -64,5 +76,8 @@ pub(super) fn merge_group_lanes(store: &Store, group_id: &str) -> Result<()> {
     println!("Applied {applied} lane(s) in group {group_id}. Skipped {skipped}.");
     println!("Review the workspace: but status. Push selectively: but push <branch>.");
     println!("Worktrees preserved. Run aid worktree prune to clean up later.");
+    if applied > 0 && skipped > 0 {
+        println!("[aid] Note: partial apply — earlier successful lanes remain applied. Use 'but unapply <branch>' to roll back individually.");
+    }
     Ok(())
 }

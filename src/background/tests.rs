@@ -364,18 +364,32 @@ fn completion_notifications_are_written_as_jsonl() {
 
 #[test]
 fn build_on_done_command_splits_simple_argv() {
-    let cmd = build_on_done_command("echo done").unwrap();
-    let debug = format!("{cmd:?}");
-    assert!(debug.contains("\"echo\""));
-    assert!(debug.contains("\"done\""));
+    let cmd = build_on_done_command("echo hi").unwrap();
+    let args: Vec<String> = cmd
+        .get_args()
+        .map(|arg| arg.to_string_lossy().into_owned())
+        .collect();
+    assert_eq!(cmd.get_program().to_string_lossy(), "echo");
+    assert_eq!(args, vec!["hi"]);
 }
 
 #[test]
-fn build_on_done_command_does_not_expand_shell_operators() {
-    let cmd = build_on_done_command("echo done && false").unwrap();
-    let debug = format!("{cmd:?}");
-    assert!(debug.contains("\"&&\""));
-    assert!(debug.contains("\"false\""));
+fn build_on_done_command_routes_shell_operators_through_sh() {
+    let chained = build_on_done_command("echo hi && echo bye").unwrap();
+    let chained_args: Vec<String> = chained
+        .get_args()
+        .map(|arg| arg.to_string_lossy().into_owned())
+        .collect();
+    assert_eq!(chained.get_program().to_string_lossy(), "sh");
+    assert_eq!(chained_args, vec!["-c", "echo hi && echo bye"]);
+
+    let fallback = build_on_done_command("cmd1 || cmd2").unwrap();
+    let fallback_args: Vec<String> = fallback
+        .get_args()
+        .map(|arg| arg.to_string_lossy().into_owned())
+        .collect();
+    assert_eq!(fallback.get_program().to_string_lossy(), "sh");
+    assert_eq!(fallback_args, vec!["-c", "cmd1 || cmd2"]);
 }
 
 fn make_spec(task_id: &str) -> BackgroundRunSpec {

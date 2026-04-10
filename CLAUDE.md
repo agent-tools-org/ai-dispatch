@@ -169,9 +169,43 @@ aid show <task-id> --json            # machine-readable JSON
 ```bash
 aid merge <task-id>                      # merge into current branch
 aid merge <task-id> --target release     # merge into specific branch
-aid merge --group <wg-id>               # merge all tasks in group
-aid merge --group <wg-id> --check       # dry-run conflict check
+aid merge --group <wg-id>                # merge all tasks in group
+aid merge --group <wg-id> --check        # dry-run conflict check
+aid merge --group <wg-id> --lanes        # apply each branch as a GitButler lane
 ```
+
+## GitButler Integration (optional)
+
+`aid` can integrate with [GitButler](https://gitbutler.com) (CLI: `but`) to add
+per-task auto-commit, oplog/undo, and a single-workspace "lane" view for whole
+batches. Integration is strictly opt-in and gated on two signals: the
+`[project] gitbutler` field in `.aid/project.toml`, and the `but` binary being
+on `PATH`.
+
+Enable during `aid project init` — if `but` is detected, you'll be prompted
+to set `gitbutler = "auto"`. Modes:
+
+| Mode | Behavior |
+|---|---|
+| `off` (default) | No GitButler integration |
+| `auto` | Active when `but` is on `PATH`; silent no-op otherwise |
+| `always` | Active unconditionally; errors out if `but` is missing |
+
+What gets activated per dispatched task (when active):
+- `but setup` runs inside the task's worktree (idempotent).
+- Claude Code agents get `.claude/settings.local.json` with `PreToolUse`,
+  `PostToolUse`, `Stop` hooks calling `but claude pre-tool|post-tool|stop` —
+  this auto-attributes edits to the task's virtual branch and auto-commits
+  on session end.
+- Non-Claude agents get an `on-done` shell hook running `but -C <wt> commit -i`
+  at task end — same outcome, different mechanism.
+- Escape hatch: `AID_GITBUTLER=0` disables everything for one invocation.
+
+Post-batch lane assembly: `aid merge --group <wg> --lanes` uses `but apply`
+to apply each task's branch as a lane in the main repo's GitButler workspace
+instead of sequentially `git merge`-ing them. Review the whole batch with
+`but status`, then push selectively. Worktrees are preserved in this mode
+(run `aid worktree prune` later to clean up).
 
 ## Workgroups
 

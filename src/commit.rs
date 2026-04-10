@@ -22,15 +22,18 @@ pub fn head_sha(dir: &str) -> Result<String> {
 pub fn auto_commit(dir: &str, task_id: &str, prompt: &str) -> Result<()> {
     // Only stage tracked files that were modified — avoid committing aid-injected
     // temp files (batch TOML, team knowledge, shared context) via `git add -u`.
-    let has_head = head_sha(dir).is_ok();
-    let add_mode = if has_head { "-u" } else { "-A" };
-    let add = Command::new("git")
-        .args(["-C", dir, "add", add_mode])
-        .output()
-        .context("Failed to run git add")?;
-    anyhow::ensure!(add.status.success(), "git add failed: {}", String::from_utf8_lossy(&add.stderr));
+    if head_sha(dir).is_ok() {
+        let add = Command::new("git")
+            .args(["-C", dir, "add", "-u", "--", ".", ":(exclude).aid-lock", ":(exclude)result-*.md", ":(exclude)aid-batch-*.toml"])
+            .output()
+            .context("Failed to run git add")?;
+        anyhow::ensure!(add.status.success(), "git add failed: {}", String::from_utf8_lossy(&add.stderr));
+    }
     // Also stage new source files the agent created, but not aid artifacts.
-    let _ = Command::new("git").args(["-C", dir, "add", "src/", "tests/", "crates/"]).output();
+    stage_untracked_source_files(dir, task_id)?;
+    if !has_staged_changes(dir)? {
+        return Ok(());
+    }
     let clean = strip_aid_tags(prompt);
     // Skip injected context prefixes like [Shared Context: ...] and [Team Knowledge — ...]
     let summary = extract_task_summary(&clean);
@@ -38,6 +41,19 @@ pub fn auto_commit(dir: &str, task_id: &str, prompt: &str) -> Result<()> {
     anyhow::ensure!(commit.status.success(), "git commit failed: {}", String::from_utf8_lossy(&commit.stderr));
     Ok(())
 }
+
+fn has_staged_changes(dir: &str) -> Result<bool> {
+    let out = Command::new("git")
+        .args(["-C", dir, "diff", "--cached", "--quiet"])
+        .output()
+        .context("Failed to run git diff --cached --quiet")?;
+    match out.status.code() {
+        Some(0) => Ok(false),
+        Some(1) => Ok(true),
+        _ => anyhow::bail!("git diff --cached --quiet failed: {}", String::from_utf8_lossy(&out.stderr)),
+    }
+}
+
 pub fn detect_untracked_source_files(dir: &str) -> Result<Vec<String>> {
     let out = Command::new("git").args(["-C", dir, "status", "--porcelain"]).output().context("Failed to run git status")?;
     anyhow::ensure!(out.status.success(), "git status failed: {}", String::from_utf8_lossy(&out.stderr));
@@ -47,12 +63,13 @@ pub fn detect_untracked_source_files(dir: &str) -> Result<Vec<String>> {
         .filter(|path| {
             !["target/", "node_modules/", "__pycache__/", ".aid-", "aid-batch-"].iter().any(|part| path.contains(part))
                 && ![".pyc", ".pyo", ".class", ".o", ".so", ".dylib"].iter().any(|suffix| path.ends_with(suffix))
+                && !(path.starts_with("result-") && path.ends_with(".md"))
         })
         .map(str::to_owned)
         .collect())
 }
 
-pub fn rescue_untracked_files(dir: &str, task_id: &str) -> Result<Vec<String>> {
+fn stage_untracked_source_files(dir: &str, task_id: &str) -> Result<Vec<String>> {
     let mut staged = Vec::new();
     let files = match detect_untracked_source_files(dir) {
         Ok(files) => files,
@@ -75,6 +92,11 @@ pub fn rescue_untracked_files(dir: &str, task_id: &str) -> Result<Vec<String>> {
         }
         staged.push(file);
     }
+    Ok(staged)
+}
+
+pub fn rescue_untracked_files(dir: &str, task_id: &str) -> Result<Vec<String>> {
+    let staged = stage_untracked_source_files(dir, task_id)?;
     if staged.is_empty() {
         return Ok(Vec::new());
     }
@@ -157,147 +179,82 @@ fn strip_aid_tags(text: &str) -> String {
 mod tests {
     use super::{auto_commit, detect_untracked_source_files, extract_task_summary, has_uncommitted_changes, rescue_untracked_files, strip_aid_tags};
     use crate::test_subprocess;
-    use std::process::Command;
+    use std::{path::Path, process::Command};
 
-    fn git(dir: &std::path::Path, args: &[&str]) {
-        assert!(Command::new("git")
-            .arg("-C")
-            .arg(dir)
-            .args(args)
-            .status()
-            .unwrap()
-            .success());
+    fn git(dir: &Path, args: &[&str]) {
+        assert!(Command::new("git").arg("-C").arg(dir).args(args).status().unwrap().success());
     }
 
-    fn git_stdout(dir: &std::path::Path, args: &[&str]) -> String {
-        String::from_utf8(
-            Command::new("git").arg("-C").arg(dir).args(args).output().unwrap().stdout,
-        )
-        .unwrap()
+    fn git_stdout(dir: &Path, args: &[&str]) -> String {
+        String::from_utf8(Command::new("git").arg("-C").arg(dir).args(args).output().unwrap().stdout).unwrap()
     }
 
-    fn init_repo(dir: &std::path::Path) {
+    fn init_repo(dir: &Path) {
         git(dir, &["init"]);
         git(dir, &["config", "user.email", "test@example.com"]);
         git(dir, &["config", "user.name", "Test User"]);
     }
-    #[test]
-    fn strip_aid_tags_removes_tag_blocks() {
-        let input = "Implement feature X\n<aid-team-rules>\nDo not format\nOnly add modified files\n</aid-team-rules>\nExtra context here";
-        let result = strip_aid_tags(input);
-        assert_eq!(result, "Implement feature X\nExtra context here");
-    }
 
-    #[test]
-    fn strip_aid_tags_handles_multiple_blocks() {
-        let input = "<aid-project-rules>\nrule1\n</aid-project-rules>\nDo the thing\n<aid-team-rules>\nrule2\n</aid-team-rules>";
-        let result = strip_aid_tags(input);
-        assert_eq!(result, "Do the thing");
-    }
-
-    #[test]
-    fn strip_aid_tags_passthrough_no_tags() {
-        let input = "Just a normal prompt with no tags";
-        assert_eq!(strip_aid_tags(input), input);
-    }
-
-    #[test]
-    fn extract_task_summary_prefers_task_section() {
-        let prompt = "[Shared Context: batch]\nAuto-created for batch dispatch\n\n[Team Knowledge — dev]\n- coding rules\n\n[Task]\nImplement the parser changes for v2";
-        assert_eq!(
-            extract_task_summary(prompt),
-            "Implement the parser changes for v2"
-        );
-    }
-
-    #[test]
-    fn extract_task_summary_plain_prompt() {
-        assert_eq!(extract_task_summary("Fix the login bug"), "Fix the login bug");
-    }
-
-    #[test]
-    fn detects_dirty_git_repo() {
-        let _permit = test_subprocess::acquire();
-        let dir = tempfile::tempdir().unwrap();
-        assert!(std::process::Command::new("git").arg("-C").arg(dir.path()).args(["init"]).status().unwrap().success());
-        assert!(!has_uncommitted_changes(dir.path().to_str().unwrap()).unwrap());
-        std::fs::write(dir.path().join("tracked.txt"), "change").unwrap();
-        assert!(has_uncommitted_changes(dir.path().to_str().unwrap()).unwrap());
-    }
-
-    #[test]
-    fn auto_commit_succeeds_on_repo_without_head() {
-        let _permit = test_subprocess::acquire();
+    fn repo() -> tempfile::TempDir {
         let dir = tempfile::tempdir().unwrap();
         init_repo(dir.path());
-        std::fs::write(dir.path().join("first.txt"), "hello").unwrap();
-
-        auto_commit(
-            dir.path().to_str().unwrap(),
-            "task-123",
-            "[Task]\nCreate the first file",
-        )
-        .unwrap();
-
-        let head = Command::new("git")
-            .arg("-C")
-            .arg(dir.path())
-            .args(["rev-parse", "HEAD"])
-            .output()
-            .unwrap();
-        assert!(head.status.success());
-
-        let tree = Command::new("git")
-            .arg("-C")
-            .arg(dir.path())
-            .args(["ls-tree", "-r", "--name-only", "HEAD"])
-            .output()
-            .unwrap();
-        assert!(tree.status.success());
-        assert_eq!(String::from_utf8_lossy(&tree.stdout).trim(), "first.txt");
+        dir
     }
 
-    #[test]
-    fn detect_untracked_finds_new_source_files() {
-        let _permit = test_subprocess::acquire();
-        let dir = tempfile::tempdir().unwrap();
-        init_repo(dir.path());
-        std::fs::write(dir.path().join("new_file.rs"), "fn main() {}\n").unwrap();
-        assert_eq!(
-            detect_untracked_source_files(dir.path().to_str().unwrap()).unwrap(),
-            vec!["new_file.rs"]
-        );
-    }
-
-    #[test]
-    fn detect_untracked_ignores_artifacts() {
-        let _permit = test_subprocess::acquire();
-        let dir = tempfile::tempdir().unwrap();
-        init_repo(dir.path());
-        for path in ["target/out.rs", "node_modules/pkg.js", "__pycache__/mod.pyc", ".aid-temp.rs", "aid-batch-note.ts", "native.so"] {
-            let file = dir.path().join(path);
-            if let Some(parent) = file.parent() {
-                std::fs::create_dir_all(parent).unwrap();
-            }
-            std::fs::write(file, "x").unwrap();
+    fn write_path(dir: &Path, path: &str, content: &str) {
+        let file = dir.join(path);
+        if let Some(parent) = file.parent() {
+            std::fs::create_dir_all(parent).unwrap();
         }
-        assert!(detect_untracked_source_files(dir.path().to_str().unwrap()).unwrap().is_empty());
+        std::fs::write(file, content).unwrap();
+    }
+
+    fn commit_path(dir: &Path, path: &str, content: &str) {
+        write_path(dir, path, content);
+        git(dir, &["add", path]);
+        git(dir, &["commit", "-m", "initial"]);
+    }
+
+    fn head(dir: &Path) -> String {
+        git_stdout(dir, &["rev-parse", "HEAD"])
     }
 
     #[test]
-    fn rescue_untracked_amends_commit() {
-        let _permit = test_subprocess::acquire();
-        let dir = tempfile::tempdir().unwrap();
-        init_repo(dir.path());
-        std::fs::write(dir.path().join("tracked.txt"), "tracked").unwrap();
-        git(dir.path(), &["add", "tracked.txt"]);
-        git(dir.path(), &["commit", "-m", "initial"]);
-        std::fs::write(dir.path().join("rescued.rs"), "pub fn rescued() {}\n").unwrap();
-        assert_eq!(
-            rescue_untracked_files(dir.path().to_str().unwrap(), "task-123").unwrap(),
-            vec!["rescued.rs"]
-        );
-        let tree = git_stdout(dir.path(), &["ls-tree", "-r", "--name-only", "HEAD"]);
-        assert!(tree.lines().any(|line| line == "rescued.rs"));
-    }
+    fn strip_aid_tags_removes_tag_blocks() { let input = "Implement feature X\n<aid-team-rules>\nDo not format\nOnly add modified files\n</aid-team-rules>\nExtra context here"; assert_eq!(strip_aid_tags(input), "Implement feature X\nExtra context here"); }
+
+    #[test]
+    fn strip_aid_tags_handles_multiple_blocks() { let input = "<aid-project-rules>\nrule1\n</aid-project-rules>\nDo the thing\n<aid-team-rules>\nrule2\n</aid-team-rules>"; assert_eq!(strip_aid_tags(input), "Do the thing"); }
+
+    #[test]
+    fn strip_aid_tags_passthrough_no_tags() { let input = "Just a normal prompt with no tags"; assert_eq!(strip_aid_tags(input), input); }
+
+    #[test]
+    fn extract_task_summary_prefers_task_section() { let prompt = "[Shared Context: batch]\nAuto-created for batch dispatch\n\n[Team Knowledge — dev]\n- coding rules\n\n[Task]\nImplement the parser changes for v2"; assert_eq!(extract_task_summary(prompt), "Implement the parser changes for v2"); }
+
+    #[test]
+    fn extract_task_summary_plain_prompt() { assert_eq!(extract_task_summary("Fix the login bug"), "Fix the login bug"); }
+
+    #[test]
+    fn detects_dirty_git_repo() { let _permit = test_subprocess::acquire(); let dir = repo(); assert!(!has_uncommitted_changes(dir.path().to_str().unwrap()).unwrap()); write_path(dir.path(), "tracked.txt", "change"); assert!(has_uncommitted_changes(dir.path().to_str().unwrap()).unwrap()); }
+
+    #[test]
+    fn auto_commit_succeeds_on_repo_without_head() { let _permit = test_subprocess::acquire(); let dir = repo(); write_path(dir.path(), "first.txt", "hello"); auto_commit(dir.path().to_str().unwrap(), "task-123", "[Task]\nCreate the first file").unwrap(); assert!(!head(dir.path()).is_empty()); assert_eq!(git_stdout(dir.path(), &["ls-tree", "-r", "--name-only", "HEAD"]).trim(), "first.txt"); }
+
+    #[test]
+    fn auto_commit_skips_when_only_aid_lock_changed() { let _permit = test_subprocess::acquire(); let dir = repo(); commit_path(dir.path(), ".aid-lock", "initial"); let before = head(dir.path()); write_path(dir.path(), ".aid-lock", "changed"); auto_commit(dir.path().to_str().unwrap(), "task-123", "[Task]\nIgnore lock").unwrap(); assert_eq!(head(dir.path()), before); }
+
+    #[test]
+    fn auto_commit_commits_real_source_changes() { let _permit = test_subprocess::acquire(); let dir = repo(); commit_path(dir.path(), "src/main.rs", "fn main() {}\n"); let before = head(dir.path()); write_path(dir.path(), "src/main.rs", "fn main() { println!(\"changed\"); }\n"); auto_commit(dir.path().to_str().unwrap(), "task-123", "[Task]\nChange source").unwrap(); assert_ne!(head(dir.path()), before); }
+
+    #[test]
+    fn auto_commit_ignores_result_files() { let _permit = test_subprocess::acquire(); let dir = repo(); commit_path(dir.path(), "src/main.rs", "fn main() {}\n"); commit_path(dir.path(), "result-t-1234.md", "transient"); write_path(dir.path(), "result-t-1234.md", "changed"); write_path(dir.path(), "src/main.rs", "fn main() { println!(\"changed\"); }\n"); auto_commit(dir.path().to_str().unwrap(), "task-123", "[Task]\nChange source").unwrap(); let changed = git_stdout(dir.path(), &["diff-tree", "--no-commit-id", "--name-only", "-r", "HEAD"]); assert!(changed.lines().any(|line| line == "src/main.rs")); assert!(!changed.lines().any(|line| line == "result-t-1234.md")); }
+
+    #[test]
+    fn detect_untracked_finds_new_source_files() { let _permit = test_subprocess::acquire(); let dir = repo(); write_path(dir.path(), "new_file.rs", "fn main() {}\n"); assert_eq!(detect_untracked_source_files(dir.path().to_str().unwrap()).unwrap(), vec!["new_file.rs"]); }
+
+    #[test]
+    fn detect_untracked_ignores_artifacts() { let _permit = test_subprocess::acquire(); let dir = repo(); for path in ["target/out.rs", "node_modules/pkg.js", "__pycache__/mod.pyc", ".aid-temp.rs", "aid-batch-note.ts", "native.so", "result-t-1234.md"] { write_path(dir.path(), path, "x"); } assert!(detect_untracked_source_files(dir.path().to_str().unwrap()).unwrap().is_empty()); }
+
+    #[test]
+    fn rescue_untracked_amends_commit() { let _permit = test_subprocess::acquire(); let dir = repo(); commit_path(dir.path(), "tracked.txt", "tracked"); write_path(dir.path(), "rescued.rs", "pub fn rescued() {}\n"); assert_eq!(rescue_untracked_files(dir.path().to_str().unwrap(), "task-123").unwrap(), vec!["rescued.rs"]); let tree = git_stdout(dir.path(), &["ls-tree", "-r", "--name-only", "HEAD"]); assert!(tree.lines().any(|line| line == "rescued.rs")); }
 }

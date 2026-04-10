@@ -602,6 +602,14 @@ fn merge_group_skips_empty_branches() {
     git(repo.path(), &["worktree", "remove", "--force", &empty_wt.path().to_string_lossy()]);
 }
 
+#[test]
+fn run_rejects_lanes_without_group() {
+    let store = Arc::new(Store::open_memory().unwrap());
+    let result = run(store, None, None, false, false, None, true);
+    assert!(result.is_err());
+    assert_eq!(result.unwrap_err().to_string(), "--lanes requires --group");
+}
+
 // --- Integration test for remove_worktree ---
 
 #[test]

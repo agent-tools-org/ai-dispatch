@@ -92,6 +92,8 @@ pub struct MergeArgs {
     pub check: bool,
     #[arg(long, help = "Merge into this branch instead of current")]
     pub target: Option<String>,
+    #[arg(long, help = "Apply group task branches as GitButler virtual branch lanes")]
+    pub lanes: bool,
 }
 
 #[derive(Args)]

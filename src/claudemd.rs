@@ -96,6 +96,7 @@ mod tests {
             profile: Some("standard".to_string()),
             team: Some("dev".to_string()),
             verify: Some("cargo check".to_string()),
+            gitbutler: None,
             language: Some("rust".to_string()),
             rules: vec!["All changes must have tests".to_string()],
             ..Default::default()

@@ -18,6 +18,7 @@ mod context;
 mod cost;
 pub mod credential_pool;
 mod explore;
+pub mod gitbutler;
 mod hooks;
 mod idle_timeout;
 mod input_signal;

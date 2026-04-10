@@ -1,3 +1,13 @@
+## v8.83.0 (2026-04-10)
+- feat(gitbutler): opt-in GitButler integration. New `[project] gitbutler = "off" | "auto" | "always"` field, auto-detected by `aid project init` when the `but` CLI is present.
+- feat(gitbutler): per-dispatch worktree integration — `but setup` runs in the worktree, Claude Code agents get `.claude/settings.local.json` with `but claude pre-tool|post-tool|stop` hooks, and non-Claude agents get an on-done `but -C <wt> commit -i` chained into `args.on_done`. Gated on `AID_GITBUTLER=0` escape hatch.
+- feat(gitbutler): `aid merge --group <wg-id> --lanes` applies each task branch as a GitButler virtual branch lane instead of sequentially `git merge`-ing them, so a whole batch becomes a single reviewable workspace via `but status` / `but apply` / `but unapply`. Worktrees are preserved in `--lanes` mode.
+- fix(background): `build_on_done_command` now routes commands containing shell metacharacters (`&&`, `||`, `|`, `;`, `>`, `<`, backticks, `$(`) through `sh -c` instead of naive `split_whitespace` + `Command::new`. Makes chained on_done commands actually work for any aid user, not just GitButler.
+- fix(merge): `--lanes --check` and `--lanes --target` now return clear errors instead of silently ignoring the flag; `--lanes` without `--group` still errors cleanly. All three combinations have unit tests.
+- fix(merge): `aid merge --group --lanes` now honors `AID_GITBUTLER=0` and the project `gitbutler` mode — previously the env var only gated dispatch hooks, letting `--lanes` still run.
+- docs: new "GitButler Integration (optional)" section in CLAUDE.md covering modes, per-task behavior, escape hatch, and `--lanes` post-batch assembly.
+
+
 ## v8.82.0 (2026-04-09)
 - fix: resolve relative `dir` and `context` paths in batch TOML against the batch file's location, not CWD
 

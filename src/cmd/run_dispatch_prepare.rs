@@ -66,6 +66,26 @@ pub(super) fn prepare_dispatch(store: &Arc<Store>, args: &mut RunArgs) -> Result
             }
             crate::worktree::write_worktree_lock(Path::new(wt), task_id.as_str());
         }
+        if let Some(ref wt) = wt_path
+            && std::env::var("AID_GITBUTLER").map(|value| value != "0").unwrap_or(true)
+            && let Some(ref project) = detected_project
+            && crate::gitbutler::is_active(project.gitbutler_mode())
+        {
+            let worktree = Path::new(wt);
+            if let Err(err) = crate::gitbutler::ensure_setup(worktree) {
+                aid_warn!("[aid] gitbutler: setup failed in {}: {err}", worktree.display());
+            } else if crate::gitbutler::agent_uses_claude_hooks(agent_setup.agent_kind.as_str()) {
+                if let Err(err) = crate::gitbutler::install_claude_hooks(worktree) {
+                    aid_warn!("[aid] gitbutler: failed to install claude hooks: {err}");
+                }
+            } else {
+                let command = crate::gitbutler::on_done_command(worktree);
+                args.on_done = Some(match args.on_done.take() {
+                    Some(existing) if !existing.trim().is_empty() => format!("{existing} && {command}"),
+                    _ => command,
+                });
+            }
+        }
         if let (Some(wt), Some(repo)) = (wt_path.as_deref(), repo_path.as_deref()) {
             let context_files: Vec<String> =
                 args.context.iter().map(|spec| context_file_from_spec(spec)).collect();

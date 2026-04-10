@@ -39,6 +39,7 @@ fn init() -> Result<()> {
     };
     let verify_default = default_verify_for_language(language.as_deref());
     let verify_command = prompt_line("Verify command", Some(verify_default), false)?;
+    let gitbutler = detect_gitbutler_mode()?;
     let (project_path, knowledge_index) = write_project_config(
         &git_root,
         &project_id,
@@ -47,6 +48,7 @@ fn init() -> Result<()> {
         Some(&budget_shorthand),
         team.as_deref(),
         Some(verify_command.as_str()),
+        gitbutler,
     )?;
     aid_config::upsert_budget(&project_id, budget_cost, budget_window.as_deref())?;
     println!("  Budget synced to ~/.aid/config.toml");
@@ -87,6 +89,12 @@ fn show() -> Result<()> {
     println!("  Language:   {}", config.language.as_deref().unwrap_or("-"));
     println!("  Verify:     {}", config.verify.as_deref().unwrap_or("-"));
     println!("  Container:  {}", config.container.as_deref().unwrap_or("-"));
+    let gitbutler_display = config
+        .gitbutler
+        .as_deref()
+        .map(|_| config.gitbutler_mode().as_str())
+        .unwrap_or("-");
+    println!("  GitButler:  {}", gitbutler_display);
     let budget_display = if let Some(shorthand) = config.budget.budget_shorthand() {
         format!("{shorthand} (shorthand)")
     } else if let Some(cost) = config.budget.cost_limit_usd {
@@ -133,6 +141,7 @@ fn write_project_config(
     budget: Option<&str>,
     team: Option<&str>,
     verify: Option<&str>,
+    gitbutler: Option<&str>,
 ) -> Result<(PathBuf, PathBuf)> {
     let aid_dir = git_root.join(".aid");
     let project_path = aid_dir.join("project.toml");
@@ -162,6 +171,9 @@ fn write_project_config(
     }
     if let Some(value) = verify && !value.trim().is_empty() {
         lines.push(format!("verify = \"{}\"", value.trim()));
+    }
+    if let Some(value) = gitbutler && !value.trim().is_empty() {
+        lines.push(format!("gitbutler = \"{}\"", value.trim()));
     }
     lines.push(String::new());
     fs::write(&project_path, lines.join("\n"))?;
@@ -293,6 +305,35 @@ fn default_verify_for_language(language: Option<&str>) -> &'static str {
             }
         }
         None => "cargo test",
+    }
+}
+
+fn detect_gitbutler_mode() -> Result<Option<&'static str>> {
+    if crate::gitbutler::but_available() {
+        if prompt_confirm("Enable GitButler auto-commit/oplog? [Y/n]", true)? {
+            return Ok(Some("auto"));
+        }
+        return Ok(None);
+    }
+
+    println!(
+        "  GitButler not found. Install: https://gitbutler.com (CLI provides auto-commit + per-task lanes). Re-run aid project init after install."
+    );
+    Ok(None)
+}
+
+fn prompt_confirm(label: &str, default_yes: bool) -> Result<bool> {
+    loop {
+        print!("{label}: ");
+        io::stdout().flush()?;
+        let mut input = String::new();
+        io::stdin().read_line(&mut input)?;
+        match input.trim().to_ascii_lowercase().as_str() {
+            "" => return Ok(default_yes),
+            "y" | "yes" => return Ok(true),
+            "n" | "no" => return Ok(false),
+            _ => aid_error!("Please answer yes or no."),
+        }
     }
 }
 fn prompt_line(label: &str, default: Option<&str>, allow_empty: bool) -> Result<String> {

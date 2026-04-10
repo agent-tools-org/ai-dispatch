@@ -1,6 +1,6 @@
 // Project config parsing for .aid/project.toml and built-in profiles.
-// Exports: ProjectConfig, ProjectBudget, ProjectAgents, detect_project, project_rules, project_knowledge_dir, read_project_knowledge.
-// Deps: serde, toml, anyhow, std::{env, fs, path}, crate::team.
+// Exports: ProjectConfig, ProjectBudget, ProjectAgents, detect_project, project_knowledge_dir, read_project_knowledge.
+// Deps: serde, toml, anyhow, std::{env, fs, path}, crate::{gitbutler, team}.
 
 use anyhow::{Context, Result};
 use serde::Deserialize;
@@ -31,6 +31,8 @@ pub struct ProjectConfig {
     pub verify: Option<String>,
     #[serde(default)]
     pub container: Option<String>,
+    #[serde(default)]
+    pub gitbutler: Option<String>,
     #[serde(default)]
     pub language: Option<String>,
     #[serde(default)]
@@ -85,6 +87,24 @@ pub struct ProjectAgents {
     pub research: Option<String>,
     #[serde(default)]
     pub simple_edit: Option<String>,
+}
+
+impl ProjectConfig {
+    pub fn gitbutler_mode(&self) -> crate::gitbutler::Mode {
+        let Some(value) = self.gitbutler.as_deref() else {
+            return crate::gitbutler::Mode::Off;
+        };
+
+        match crate::gitbutler::Mode::from_str(value) {
+            Ok(mode) => mode,
+            Err(err) => {
+                aid_warn!(
+                    "[aid] Warning: invalid project.gitbutler mode '{value}': {err}. Falling back to off."
+                );
+                crate::gitbutler::Mode::Off
+            }
+        }
+    }
 }
 
 fn deserialize_budget<'de, D>(deserializer: D) -> Result<ProjectBudget, D::Error>
@@ -422,6 +442,29 @@ container = "dev:latest"
 "#;
         let config = load_project(&write_project(dir.path(), contents)).unwrap();
         assert_eq!(config.container.as_deref(), Some("dev:latest"));
+    }
+
+    #[test]
+    fn gitbutler_mode_round_trips_from_toml() {
+        let dir = TempDir::new().unwrap();
+        let contents = r#"[project]
+id = "test"
+gitbutler = "auto"
+"#;
+        let config = load_project(&write_project(dir.path(), contents)).unwrap();
+        assert_eq!(config.gitbutler.as_deref(), Some("auto"));
+        assert_eq!(config.gitbutler_mode(), crate::gitbutler::Mode::Auto);
+    }
+
+    #[test]
+    fn gitbutler_mode_falls_back_to_off_for_invalid_values() {
+        let config = ProjectConfig {
+            id: "test".to_string(),
+            gitbutler: Some("broken".to_string()),
+            ..Default::default()
+        };
+
+        assert_eq!(config.gitbutler_mode(), crate::gitbutler::Mode::Off);
     }
 
     #[test]

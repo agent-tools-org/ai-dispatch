@@ -67,6 +67,7 @@ mod tests {
             team: Some("dev".to_string()),
             verify: None,
             container: None,
+            gitbutler: None,
             language: None,
             rules: vec!["project rule".to_string()],
             budget: ProjectBudget::default(),

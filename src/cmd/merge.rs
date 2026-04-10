@@ -13,8 +13,16 @@ use crate::types::{Task, TaskStatus, VerifyStatus};
 pub(crate) mod merge_git;
 use merge_git::*;
 pub use merge_git::remove_worktree;
+#[path = "merge_lanes.rs"]
+mod merge_lanes;
 
-pub fn run(store: Arc<Store>, task_id: Option<&str>, group: Option<&str>, approve: bool, check: bool, target: Option<&str>) -> Result<()> {
+pub fn run(store: Arc<Store>, task_id: Option<&str>, group: Option<&str>, approve: bool, check: bool, target: Option<&str>, lanes: bool) -> Result<()> {
+    if lanes {
+        let Some(group_id) = group else {
+            return Err(anyhow!("--lanes requires --group"));
+        };
+        return merge_lanes::merge_group_lanes(&store, group_id);
+    }
     match (task_id, group) {
         (Some(id), _) => merge_single(&store, id, approve, check, target),
         (_, Some(group_id)) => merge_group(&store, group_id, approve, check, target),
@@ -41,7 +49,6 @@ fn merge_single(store: &Store, task_id: &str, approve: bool, check: bool, target
         return check_single(task_id, &task, &repo_dir);
     }
 
-    // Pre-merge verification: run verify command in worktree
     if let Some(wt) = task.worktree_path.as_deref()
         && std::path::Path::new(wt).exists()
     {
@@ -57,16 +64,13 @@ fn merge_single(store: &Store, task_id: &str, approve: bool, check: bool, target
             }
         }
     }
-    // Auto cherry-pick worktree branch into current branch
     if let Some(ref branch) = task.worktree_branch {
-        // Auto-commit any uncommitted changes before merge
         if let Some(wt) = task.worktree_path.as_deref()
             && std::path::Path::new(wt).exists()
         {
             auto_commit_uncommitted(wt, branch);
             sync_cargo_lock_before_merge(&repo_dir, wt, branch);
         }
-        // Pre-check: verify branch has commits to merge
         let ahead = commits_ahead(&repo_dir, branch);
         if ahead == 0 {
             aid_error!("[aid] Error: branch {branch} has 0 commits ahead — nothing to merge");
@@ -97,13 +101,11 @@ fn merge_single(store: &Store, task_id: &str, approve: bool, check: bool, target
                     aid_warn!("  {}", line);
                 }
                 aid_hint!("[aid] Manual merge needed: git merge {branch}");
-                // Don't clean up worktree — user needs it for manual merge
                 store.update_task_status(task_id, TaskStatus::Done)?;
                 return Err(anyhow!("Merge failed — resolve manually, then re-run aid merge {task_id}"));
             }
         }
     } else {
-        // In-place edit: check if there are uncommitted changes
         let has_changes = Command::new("git")
             .args(["-C", &repo_dir, "status", "--porcelain"])
             .output()
@@ -119,7 +121,6 @@ fn merge_single(store: &Store, task_id: &str, approve: bool, check: bool, target
     }
     store.update_task_status(task_id, TaskStatus::Merged)?;
     println!("Marked {task_id} as merged");
-    // Clean up worktree only after successful merge
     if let Some(wt) = task.worktree_path.as_deref()
         && std::path::Path::new(wt).exists()
         && let Err(err) = remove_worktree(&repo_dir, wt) {
@@ -156,7 +157,6 @@ fn merge_group(store: &Store, group_id: &str, approve: bool, check: bool, target
         }
         let repo_dir = resolve_repo_dir(task.repo_path.as_deref(), task.worktree_path.as_deref());
         if let Some(ref branch) = task.worktree_branch {
-            // Auto-commit uncommitted changes
             if let Some(wt) = task.worktree_path.as_deref()
                 && std::path::Path::new(wt).exists()
             {
@@ -193,7 +193,6 @@ fn merge_group(store: &Store, group_id: &str, approve: bool, check: bool, target
         }
         store.update_task_status(task.id.as_str(), TaskStatus::Merged)?;
         merged += 1;
-        // Clean up worktree after successful merge
         if let Some(wt) = task.worktree_path.as_deref()
             && std::path::Path::new(wt).exists()
             && let Err(err) = remove_worktree(&repo_dir, wt)
@@ -205,7 +204,6 @@ fn merge_group(store: &Store, group_id: &str, approve: bool, check: bool, target
     if !skipped.is_empty() {
         aid_info!("[aid] Skipped: {}", skipped.join(", "));
     }
-    // Prune stale git worktree references
     let _ = Command::new("git")
         .args(["-C", &first_repo_dir, "worktree", "prune"])
         .output();

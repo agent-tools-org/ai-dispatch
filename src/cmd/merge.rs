@@ -5,10 +5,8 @@
 use anyhow::{anyhow, Result};
 use std::process::{Command, Stdio};
 use std::sync::Arc;
-
 use crate::store::Store;
 use crate::types::{Task, TaskStatus, VerifyStatus};
-
 #[path = "merge_git.rs"]
 pub(crate) mod merge_git;
 use merge_git::*;
@@ -21,6 +19,12 @@ pub fn run(store: Arc<Store>, task_id: Option<&str>, group: Option<&str>, approv
         let Some(group_id) = group else {
             return Err(anyhow!("--lanes requires --group"));
         };
+        if check {
+            return Err(anyhow!("--lanes does not yet support --check (dry-run); run without --check to apply lanes"));
+        }
+        if target.is_some() {
+            return Err(anyhow!("--lanes cannot be combined with --target; lanes apply to the GitButler workspace of the main repo"));
+        }
         return merge_lanes::merge_group_lanes(&store, group_id);
     }
     match (task_id, group) {
@@ -45,9 +49,7 @@ fn merge_single(store: &Store, task_id: &str, approve: bool, check: bool, target
         aid_hint!("[aid] Review carefully: aid show {task_id} --diff");
     }
     let repo_dir = resolve_repo_dir(task.repo_path.as_deref(), task.worktree_path.as_deref());
-    if check {
-        return check_single(task_id, &task, &repo_dir);
-    }
+    if check { return check_single(task_id, &task, &repo_dir); }
 
     if let Some(wt) = task.worktree_path.as_deref()
         && std::path::Path::new(wt).exists()
@@ -201,9 +203,7 @@ fn merge_group(store: &Store, group_id: &str, approve: bool, check: bool, target
         }
     }
     println!("Merged {merged} task(s) in group {group_id}");
-    if !skipped.is_empty() {
-        aid_info!("[aid] Skipped: {}", skipped.join(", "));
-    }
+    if !skipped.is_empty() { aid_info!("[aid] Skipped: {}", skipped.join(", ")); }
     let _ = Command::new("git")
         .args(["-C", &first_repo_dir, "worktree", "prune"])
         .output();

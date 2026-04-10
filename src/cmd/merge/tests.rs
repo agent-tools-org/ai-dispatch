@@ -5,6 +5,7 @@ use super::*;
 use crate::test_subprocess;
 use crate::types::*;
 use chrono::Local;
+use std::env;
 use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tempfile::TempDir;
@@ -608,6 +609,57 @@ fn run_rejects_lanes_without_group() {
     let result = run(store, None, None, false, false, None, true);
     assert!(result.is_err());
     assert_eq!(result.unwrap_err().to_string(), "--lanes requires --group");
+}
+
+#[test]
+fn run_rejects_unsupported_lanes_flags() {
+    let store = Arc::new(Store::open_memory().unwrap());
+
+    let check_result = run(store.clone(), None, Some("wg-lanes"), false, true, None, true);
+    assert!(check_result.is_err());
+    assert_eq!(
+        check_result.unwrap_err().to_string(),
+        "--lanes does not yet support --check (dry-run); run without --check to apply lanes"
+    );
+
+    let target_result = run(store, None, Some("wg-lanes"), false, false, Some("release"), true);
+    assert!(target_result.is_err());
+    assert_eq!(
+        target_result.unwrap_err().to_string(),
+        "--lanes cannot be combined with --target; lanes apply to the GitButler workspace of the main repo"
+    );
+}
+
+#[test]
+fn run_rejects_lanes_when_gitbutler_env_is_disabled() {
+    let store = Arc::new(Store::open_memory().unwrap());
+    let mut task = make_task_with_worktree("t-lanes-disabled", Path::new("."), Path::new("/tmp"), "lane-branch");
+    task.workgroup_id = Some("wg-lanes-disabled".to_string());
+    store.insert_task(&task).unwrap();
+
+    let previous = env::var("AID_GITBUTLER").ok();
+    unsafe {
+        env::set_var("AID_GITBUTLER", "0");
+    }
+    let result = run(
+        store,
+        None,
+        Some("wg-lanes-disabled"),
+        false,
+        false,
+        None,
+        true,
+    );
+    match previous {
+        Some(value) => unsafe { env::set_var("AID_GITBUTLER", value) },
+        None => unsafe { env::remove_var("AID_GITBUTLER") },
+    }
+
+    assert!(result.is_err());
+    assert_eq!(
+        result.unwrap_err().to_string(),
+        "GitButler integration disabled via AID_GITBUTLER=0"
+    );
 }
 
 // --- Integration test for remove_worktree ---

@@ -118,6 +118,19 @@ fn install_claude_hooks_preserves_existing_settings_keys() {
 }
 
 #[test]
+fn install_claude_hooks_is_idempotent_across_reruns() {
+    let temp = tempfile::tempdir().unwrap();
+    install_claude_hooks(temp.path()).unwrap();
+    install_claude_hooks(temp.path()).unwrap();
+
+    let value: Value =
+        serde_json::from_slice(&fs::read(temp.path().join(".claude/settings.local.json")).unwrap()).unwrap();
+    assert_eq!(value["hooks"]["PreToolUse"].as_array().map(Vec::len), Some(1));
+    assert_eq!(value["hooks"]["PostToolUse"].as_array().map(Vec::len), Some(1));
+    assert_eq!(value["hooks"]["Stop"].as_array().map(Vec::len), Some(1));
+}
+
+#[test]
 fn on_done_command_contains_gitbutler_commit_shell_command() {
     let temp = tempfile::tempdir().unwrap();
     let command = on_done_command(temp.path());

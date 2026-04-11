@@ -33,6 +33,11 @@ pub(super) struct PreparedDispatch {
     pub effective_dir: Option<String>,
 }
 
+fn stale_worktree_dir_error(dir: &str, branch: Option<&str>) -> String {
+    branch.map(|branch| format!("batch file / task dir missing in worktree: {dir} - workgroup state is stale, run aid worktree remove {branch} and retry"))
+        .unwrap_or_else(|| format!("working directory does not exist: {dir}"))
+}
+
 pub(super) fn prepare_dispatch(store: &Arc<Store>, args: &mut RunArgs) -> Result<PreparedDispatch> {
     args.prompt = resolve_prompt_input(&args.prompt, args.prompt_file.as_deref())?;
     args.prompt_file = None;
@@ -104,6 +109,12 @@ pub(super) fn prepare_dispatch(store: &Arc<Store>, args: &mut RunArgs) -> Result
                     synced.join(", ")
                 );
             }
+        }
+        if let (Some(_), Some(dir)) = (wt_path.as_deref(), effective_dir.as_deref()) && !Path::new(dir).is_dir() {
+            anyhow::bail!(
+                "{}",
+                stale_worktree_dir_error(dir, wt_branch.as_deref().or(args.worktree.as_deref()))
+            );
         }
         Ok((wt_path, wt_branch, effective_dir, repo_path))
     })();

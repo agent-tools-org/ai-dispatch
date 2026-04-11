@@ -45,11 +45,21 @@ pub(in crate::cmd) fn maybe_verify_impl(
     let Some(dir_path) = dir else { println!("Verify skipped: no working directory"); return; };
     let command = if verify_arg == "auto" { None } else { Some(verify_arg) };
     let path = std::path::Path::new(dir_path);
-    let worktree_branch = store
-        .get_task(task_id.as_str())
-        .ok()
-        .flatten()
-        .and_then(|task| task.worktree_branch);
+    let task = store.get_task(task_id.as_str()).ok().flatten();
+    let worktree_branch = task.as_ref().and_then(|task| task.worktree_branch.clone());
+    if !path.is_dir() {
+        let detail = stale_worktree_dir_error(dir_path, worktree_branch.as_deref());
+        let event = TaskEvent {
+            task_id: task_id.clone(),
+            timestamp: Local::now(),
+            event_kind: EventKind::Error,
+            detail: detail.clone(),
+            metadata: None,
+        };
+        let _ = store.insert_event(&event);
+        aid_error!("Verify error: {detail}");
+        return;
+    }
     let cargo_target_dir = crate::agent::target_dir_for_worktree(worktree_branch.as_deref());
     match crate::verify::run_verify(path, command, cargo_target_dir.as_deref(), container_name) {
         Ok(result) => {
@@ -87,6 +97,15 @@ pub(in crate::cmd) fn maybe_verify_impl(
             let _ = store.insert_event(&event);
             aid_error!("Verify error: {e}");
         }
+    }
+}
+
+fn stale_worktree_dir_error(dir: &str, branch: Option<&str>) -> String {
+    match branch {
+        Some(branch) => format!(
+            "batch file / task dir missing in worktree: {dir} - workgroup state is stale, run aid worktree remove {branch} and retry"
+        ),
+        None => format!("working directory does not exist: {dir}"),
     }
 }
 
@@ -205,6 +224,8 @@ pub(in crate::cmd) async fn maybe_auto_retry_after_checklist_miss_impl(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use chrono::Local;
+    use crate::types::{Task, VerifyStatus};
 
     #[test]
     fn verify_output_excerpt_keeps_last_lines() {
@@ -219,5 +240,58 @@ mod tests {
             excerpt,
             "line 3 | line 4 | line 5 | line 6 | line 7 | line 8 | line 9 | line 10"
         );
+    }
+
+    #[test]
+    fn maybe_verify_reports_stale_worktree_when_dir_is_missing() {
+        let store = Store::open_memory().unwrap();
+        let task_id = TaskId("t-stale-verify".to_string());
+        store
+            .insert_task(&Task {
+                id: task_id.clone(),
+                agent: AgentKind::Codex,
+                custom_agent_name: None,
+                prompt: "prompt".to_string(),
+                resolved_prompt: None,
+                category: None,
+                status: TaskStatus::Done,
+                parent_task_id: None,
+                workgroup_id: Some("wg-stale".to_string()),
+                caller_kind: None,
+                caller_session_id: None,
+                agent_session_id: None,
+                repo_path: None,
+                worktree_path: Some("/tmp/aid-wt-feat-stale".to_string()),
+                worktree_branch: Some("feat/stale".to_string()),
+                start_sha: None,
+                log_path: None,
+                output_path: None,
+                tokens: None,
+                prompt_tokens: None,
+                duration_ms: None,
+                model: None,
+                cost_usd: None,
+                exit_code: None,
+                created_at: Local::now(),
+                completed_at: None,
+                verify: Some("auto".to_string()),
+                verify_status: VerifyStatus::Skipped,
+                pending_reason: None,
+                read_only: false,
+                budget: false,
+            })
+            .unwrap();
+
+        maybe_verify_impl(
+            &store,
+            &task_id,
+            Some("auto"),
+            Some("/tmp/aid-wt-feat-stale/.aid/batches"),
+            None,
+        );
+
+        let error = store.latest_error(task_id.as_str()).unwrap();
+        assert!(error.contains("batch file / task dir missing in worktree"));
+        assert!(error.contains("aid worktree remove feat/stale"));
     }
 }

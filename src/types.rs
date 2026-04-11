@@ -370,6 +370,7 @@ impl VerifyStatus {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 pub enum EventKind {
+    Setup,
     ToolCall,
     Reasoning,
     Milestone,
@@ -389,6 +390,7 @@ pub enum EventKind {
 impl EventKind {
     pub fn as_str(&self) -> &'static str {
         match self {
+            Self::Setup => "setup",
             Self::ToolCall => "tool_call",
             Self::Reasoning => "reasoning",
             Self::Milestone => "milestone",
@@ -408,6 +410,7 @@ impl EventKind {
 
     pub fn parse_str(s: &str) -> Option<Self> {
         match s {
+            "setup" => Some(Self::Setup),
             "tool_call" => Some(Self::ToolCall),
             "reasoning" => Some(Self::Reasoning),
             "milestone" => Some(Self::Milestone),

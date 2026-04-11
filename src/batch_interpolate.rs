@@ -35,6 +35,7 @@ fn interpolate_task(
     interpolate_string(&mut task.worktree, vars, writer)?;
     interpolate_string(&mut task.group, vars, writer)?;
     interpolate_string(&mut task.verify, vars, writer)?;
+    interpolate_string(&mut task.setup, vars, writer)?;
     interpolate_string(&mut task.judge, vars, writer)?;
     interpolate_string(&mut task.peer_review, vars, writer)?;
     interpolate_string(&mut task.eval, vars, writer)?;
@@ -137,6 +138,9 @@ fn apply_task_defaults(task: &mut BatchTask, defaults: &BatchDefaults, task_idx:
     if task.verify.is_none() {
         task.verify = defaults.verify.clone();
     }
+    if task.setup.is_none() {
+        task.setup = defaults.setup.clone();
+    }
     if task.container.is_none() {
         task.container = defaults.container.clone();
     }
@@ -205,6 +209,9 @@ fn apply_task_defaults(task: &mut BatchTask, defaults: &BatchDefaults, task_idx:
     }
     task.env = merge_env_maps(defaults.env.as_ref(), task.env.as_ref());
     task.env_forward = merge_env_lists(defaults.env_forward.as_ref(), task.env_forward.as_ref());
+    if task.worktree_link_deps.is_none() {
+        task.worktree_link_deps = defaults.worktree_link_deps;
+    }
 }
 
 fn default_worktree(task: &BatchTask, defaults: &BatchDefaults, task_idx: usize) -> Option<String> {

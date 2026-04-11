@@ -66,6 +66,7 @@ mod tests {
             max_task_cost: None,
             team: Some("dev".to_string()),
             verify: None,
+            setup: None,
             container: None,
             gitbutler: None,
             language: None,

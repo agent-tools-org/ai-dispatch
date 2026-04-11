@@ -67,14 +67,21 @@ pub(in crate::cmd) fn maybe_verify_impl(
             println!("{report}");
             crate::verify::record_verify_status(store, task_id, &result);
             if !result.success {
+                let hint = verify_failure_hint(store, task_id);
                 let detail = match verify_output_excerpt(&result.output) {
                     Some(output) => {
                         format!(
-                            "Failed during verification: {}\nOutput: {}",
-                            result.command, output
+                            "Failed during verification: {}\nOutput: {}{}",
+                            result.command,
+                            output,
+                            hint.as_deref().map(|value| format!("\n{value}")).unwrap_or_default()
                         )
                     }
-                    None => format!("Failed during verification: {}", result.command),
+                    None => format!(
+                        "Failed during verification: {}{}",
+                        result.command,
+                        hint.as_deref().map(|value| format!("\n{value}")).unwrap_or_default()
+                    ),
                 };
                 let event = TaskEvent {
                     task_id: task_id.clone(),
@@ -127,6 +134,15 @@ fn verify_output_excerpt(output: &str) -> Option<String> {
     } else {
         excerpt
     })
+}
+
+fn verify_failure_hint(store: &Store, task_id: &TaskId) -> Option<String> {
+    let worktree = store
+        .get_task(task_id.as_str())
+        .ok()
+        .flatten()
+        .and_then(|task| task.worktree_path)?;
+    crate::worktree_deps::missing_deps_hint(std::path::Path::new(&worktree)).map(str::to_string)
 }
 
 pub(in crate::cmd) async fn maybe_auto_retry_after_verify_failure_impl(
@@ -220,78 +236,6 @@ pub(in crate::cmd) async fn maybe_auto_retry_after_checklist_miss_impl(
     }
     Box::pin(super::super::run(store.clone(), retry_args)).await.map(Some)
 }
-
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use chrono::Local;
-    use crate::types::{Task, VerifyStatus};
-
-    #[test]
-    fn verify_output_excerpt_keeps_last_lines() {
-        let output = (1..=10)
-            .map(|idx| format!("line {idx}"))
-            .collect::<Vec<_>>()
-            .join("\n");
-
-        let excerpt = verify_output_excerpt(&output).unwrap();
-
-        assert_eq!(
-            excerpt,
-            "line 3 | line 4 | line 5 | line 6 | line 7 | line 8 | line 9 | line 10"
-        );
-    }
-
-    #[test]
-    fn maybe_verify_reports_stale_worktree_when_dir_is_missing() {
-        let store = Store::open_memory().unwrap();
-        let task_id = TaskId("t-stale-verify".to_string());
-        store
-            .insert_task(&Task {
-                id: task_id.clone(),
-                agent: AgentKind::Codex,
-                custom_agent_name: None,
-                prompt: "prompt".to_string(),
-                resolved_prompt: None,
-                category: None,
-                status: TaskStatus::Done,
-                parent_task_id: None,
-                workgroup_id: Some("wg-stale".to_string()),
-                caller_kind: None,
-                caller_session_id: None,
-                agent_session_id: None,
-                repo_path: None,
-                worktree_path: Some("/tmp/aid-wt-feat-stale".to_string()),
-                worktree_branch: Some("feat/stale".to_string()),
-                start_sha: None,
-                log_path: None,
-                output_path: None,
-                tokens: None,
-                prompt_tokens: None,
-                duration_ms: None,
-                model: None,
-                cost_usd: None,
-                exit_code: None,
-                created_at: Local::now(),
-                completed_at: None,
-                verify: Some("auto".to_string()),
-                verify_status: VerifyStatus::Skipped,
-                pending_reason: None,
-                read_only: false,
-                budget: false,
-            })
-            .unwrap();
-
-        maybe_verify_impl(
-            &store,
-            &task_id,
-            Some("auto"),
-            Some("/tmp/aid-wt-feat-stale/.aid/batches"),
-            None,
-        );
-
-        let error = store.latest_error(task_id.as_str()).unwrap();
-        assert!(error.contains("batch file / task dir missing in worktree"));
-        assert!(error.contains("aid worktree remove feat/stale"));
-    }
-}
+#[path = "run_verify_tests.rs"]
+mod tests;

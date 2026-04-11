@@ -41,6 +41,11 @@ pub(super) fn apply_project_defaults(args: &mut RunArgs, detected_project: Optio
                 args.verify = Some(verify.clone());
                 defaults_applied = true;
             }
+        if args.setup.is_none()
+            && let Some(setup) = project.setup.as_ref() {
+                args.setup = Some(setup.clone());
+                defaults_applied = true;
+            }
         if args.container.is_none()
             && let Some(container) = project.container.as_ref() {
                 args.container = Some(container.clone());

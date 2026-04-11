@@ -25,18 +25,20 @@ pub(crate) async fn dispatch_parallel(
     max_concurrent: Option<usize>,
     auto_fallback: bool,
     shared_dir_path: Option<&str>,
+    repo_root: Option<&str>,
 ) -> Result<BatchDispatchResult> {
     let dependencies = vec![Vec::new(); tasks.len()];
-    dispatch_with_dependencies(store, tasks, &dependencies, max_concurrent, auto_fallback, shared_dir_path).await
+    dispatch_with_dependencies(store, tasks, &dependencies, max_concurrent, auto_fallback, shared_dir_path, repo_root).await
 }
 pub(crate) async fn dispatch_sequential(
     store: Arc<Store>,
     tasks: &[batch::BatchTask],
     auto_fallback: bool,
     shared_dir_path: Option<&str>,
+    repo_root: Option<&str>,
 ) -> Result<BatchDispatchResult> {
     let dependencies = vec![Vec::new(); tasks.len()];
-    dispatch_with_dependencies(store, tasks, &dependencies, Some(1), auto_fallback, shared_dir_path).await
+    dispatch_with_dependencies(store, tasks, &dependencies, Some(1), auto_fallback, shared_dir_path, repo_root).await
 }
 pub(crate) async fn dispatch_parallel_with_dependencies(
     store: Arc<Store>,
@@ -44,18 +46,20 @@ pub(crate) async fn dispatch_parallel_with_dependencies(
     max_concurrent: Option<usize>,
     auto_fallback: bool,
     shared_dir_path: Option<&str>,
+    repo_root: Option<&str>,
 ) -> Result<BatchDispatchResult> {
     let dependencies = resolve_dependencies(tasks)?;
-    dispatch_with_dependencies(store, tasks, &dependencies, max_concurrent, auto_fallback, shared_dir_path).await
+    dispatch_with_dependencies(store, tasks, &dependencies, max_concurrent, auto_fallback, shared_dir_path, repo_root).await
 }
 pub(crate) async fn dispatch_sequential_with_dependencies(
     store: Arc<Store>,
     tasks: &[batch::BatchTask],
     auto_fallback: bool,
     shared_dir_path: Option<&str>,
+    repo_root: Option<&str>,
 ) -> Result<BatchDispatchResult> {
     let dependencies = resolve_dependencies(tasks)?;
-    dispatch_with_dependencies(store, tasks, &dependencies, Some(1), auto_fallback, shared_dir_path).await
+    dispatch_with_dependencies(store, tasks, &dependencies, Some(1), auto_fallback, shared_dir_path, repo_root).await
 }
 async fn dispatch_with_dependencies(
     store: Arc<Store>,
@@ -64,6 +68,7 @@ async fn dispatch_with_dependencies(
     max_concurrent: Option<usize>,
     auto_fallback: bool,
     shared_dir_path: Option<&str>,
+    repo_root: Option<&str>,
 ) -> Result<BatchDispatchResult> {
     if tasks.is_empty() {
         return Ok(BatchDispatchResult {
@@ -153,6 +158,7 @@ async fn dispatch_with_dependencies(
                 &dispatch_group,
                 &waiting_ids,
                 shared_dir_path,
+                repo_root,
             )
             .await? {
                 started[dispatch.index] = true;
@@ -200,6 +206,7 @@ async fn dispatch_with_dependencies(
                 auto_fallback,
                 &mut retried,
                 shared_dir_path,
+                repo_root,
             )
             .await?
             {
@@ -239,6 +246,7 @@ async fn dispatch_with_dependencies(
                 auto_fallback,
                 &mut retried,
                 shared_dir_path,
+                repo_root,
             )
             .await?
             {

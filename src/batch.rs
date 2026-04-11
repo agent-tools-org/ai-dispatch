@@ -43,6 +43,7 @@ pub struct BatchDefaults {
     pub auto_fallback: Option<bool>,
     pub team: Option<String>,
     pub dir: Option<String>,
+    pub repo_root: Option<String>,
     pub model: Option<String>,
     pub worktree_prefix: Option<String>,
     #[serde(default, deserialize_with = "deserialize_judge")]

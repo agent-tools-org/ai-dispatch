@@ -9,7 +9,7 @@ use crate::agent;
 use crate::paths;
 use crate::project::{self, ProjectConfig};
 use crate::session;
-use crate::store::Store;
+use crate::store::{Store, TaskCompletionUpdate};
 use crate::types::*;
 use super::run_prompt;
 use super::run_dispatch_resolve::{apply_project_defaults, resolve_agent_setup};
@@ -62,7 +62,7 @@ pub(super) fn prepare_dispatch(store: &Arc<Store>, args: &mut RunArgs) -> Result
     )?;
     let caller = session::current_caller();
     let worktree_setup = (|| -> Result<_> {
-        let (wt_path, wt_branch, effective_dir, resolved_repo) =
+        let (wt_path, wt_branch, effective_dir, resolved_repo, fresh_worktree) =
             run_prompt::resolve_worktree_paths(args, explicit_repo_path.as_deref())?;
         let repo_path = resolved_repo.clone().or(explicit_repo_path.clone());
         if let Some(ref wt) = wt_path {
@@ -116,9 +116,9 @@ pub(super) fn prepare_dispatch(store: &Arc<Store>, args: &mut RunArgs) -> Result
                 stale_worktree_dir_error(dir, wt_branch.as_deref().or(args.worktree.as_deref()))
             );
         }
-        Ok((wt_path, wt_branch, effective_dir, repo_path))
+        Ok((wt_path, wt_branch, effective_dir, repo_path, fresh_worktree))
     })();
-    let (wt_path, wt_branch, effective_dir, repo_path) = match worktree_setup {
+    let (wt_path, wt_branch, effective_dir, repo_path, fresh_worktree) = match worktree_setup {
         Ok(paths) => paths,
         Err(err) => {
             let failed_task = Task {
@@ -232,6 +232,40 @@ pub(super) fn prepare_dispatch(store: &Arc<Store>, args: &mut RunArgs) -> Result
     } else {
         store.insert_task(&task)?;
     }
+    if !args.dry_run
+        && let (Some(wt), Some(repo)) = (wt_path.as_deref(), repo_path.as_deref())
+        && let Err(err) = crate::worktree_deps::prepare_worktree_dependencies(
+            store,
+            &task_id,
+            Path::new(repo),
+            Path::new(wt),
+            args.setup.as_deref(),
+            args.link_deps,
+            crate::idle_timeout::idle_timeout_secs_from_env(args.env.as_ref()),
+            fresh_worktree,
+        )
+    {
+        crate::worktree::clear_worktree_lock(Path::new(wt));
+        store.complete_task_atomic(
+            TaskCompletionUpdate {
+                id: task_id.as_str(),
+                status: TaskStatus::Failed,
+                tokens: None,
+                duration_ms: 0,
+                model: agent_setup.effective_model.as_deref(),
+                cost_usd: None,
+                exit_code: None,
+            },
+            &TaskEvent {
+                task_id: task_id.clone(),
+                timestamp: Local::now(),
+                event_kind: EventKind::Error,
+                detail: format!("Failed during worktree setup: {err}"),
+                metadata: None,
+            },
+        )?;
+        return Err(err);
+    }
     if auto_result_file {
         let result_file = crate::cmd::report_mode::task_result_file(task_id.as_str());
         args.result_file = Some(result_file.clone());
@@ -254,46 +288,6 @@ pub(super) fn prepare_dispatch(store: &Arc<Store>, args: &mut RunArgs) -> Result
         effective_dir,
     })
 }
-
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use std::sync::Arc;
-
-    #[test]
-    fn prepare_dispatch_uses_task_specific_audit_result_file() {
-        let store = Arc::new(Store::open_memory().unwrap());
-        let mut args = RunArgs {
-            agent_name: "codex".to_string(),
-            prompt: "Review the implementation and list findings.".to_string(),
-            read_only: true,
-            ..Default::default()
-        };
-
-        let prepared = prepare_dispatch(&store, &mut args).unwrap();
-
-        assert_eq!(
-            args.result_file.as_deref(),
-            Some(crate::cmd::report_mode::task_result_file(
-                prepared.task_id.as_str()
-            )
-            .as_str())
-        );
-    }
-
-    #[test]
-    fn prepare_dispatch_skips_auto_result_file_when_output_is_set() {
-        let store = Arc::new(Store::open_memory().unwrap());
-        let mut args = RunArgs {
-            agent_name: "codex".to_string(),
-            prompt: "Review the implementation and list findings.".to_string(),
-            read_only: true,
-            output: Some("audit.md".to_string()),
-            ..Default::default()
-        };
-
-        prepare_dispatch(&store, &mut args).unwrap();
-
-        assert_eq!(args.result_file, None);
-    }
-}
+#[path = "run_dispatch_prepare_tests.rs"]
+mod tests;

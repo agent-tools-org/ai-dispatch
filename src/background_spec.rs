@@ -21,6 +21,8 @@ pub struct BackgroundRunSpec {
     pub model: Option<String>,
     pub verify: Option<String>,
     #[serde(default)]
+    pub setup: Option<String>,
+    #[serde(default)]
     pub iterate: Option<u32>,
     #[serde(default)]
     pub eval: Option<String>,
@@ -60,7 +62,11 @@ pub struct BackgroundRunSpec {
     pub read_only: bool,
     #[serde(default)]
     pub container: Option<String>,
+    #[serde(default = "default_link_deps")]
+    pub link_deps: bool,
 }
+
+fn default_link_deps() -> bool { true }
 
 pub fn save_spec(spec: &BackgroundRunSpec) -> Result<()> {
     sanitize::validate_task_id(&spec.task_id)?;
@@ -129,6 +135,7 @@ mod tests {
             result_file: Some("result.md".to_string()),
             model: Some("gpt-5.4".to_string()),
             verify: Some("cargo check".to_string()),
+            setup: Some("cargo fetch".to_string()),
             iterate: Some(3),
             eval: Some("cargo test".to_string()),
             eval_feedback_template: Some("Iteration {iteration}/{max_iterations}".to_string()),
@@ -150,6 +157,7 @@ mod tests {
             sandbox: true,
             read_only,
             container: Some("aid:test".to_string()),
+            link_deps: true,
         }
     }
 

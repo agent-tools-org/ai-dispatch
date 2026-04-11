@@ -95,6 +95,7 @@ pub(super) fn run_background_task(
         result_file: args.result_file.clone(),
         model: prepared.effective_model.clone(),
         verify: args.verify.clone(),
+        setup: args.setup.clone(),
         iterate: args.iterate,
         eval: args.eval.clone(),
         eval_feedback_template: args.eval_feedback_template.clone(),
@@ -116,6 +117,7 @@ pub(super) fn run_background_task(
         sandbox: args.sandbox,
         read_only: args.read_only,
         container: args.container.clone(),
+        link_deps: args.link_deps,
     };
     background::save_spec(&spec)?;
     let mut worker = match background::spawn_worker(prepared.task_id.as_str()) {

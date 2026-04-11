@@ -27,6 +27,7 @@ fn background_spec(checklist: Vec<String>) -> BackgroundRunSpec {
         result_file: None,
         model: None,
         verify: None,
+        setup: None,
         iterate: None,
         eval: None,
         eval_feedback_template: None,
@@ -48,6 +49,7 @@ fn background_spec(checklist: Vec<String>) -> BackgroundRunSpec {
         sandbox: false,
         read_only: false,
         container: None,
+        link_deps: true,
     }
 }
 

@@ -62,6 +62,7 @@ mod webhook;
 #[cfg(feature = "web")]
 mod web;
 mod workgroup;
+mod worktree_deps;
 mod worktree;
 mod cli;
 

@@ -19,13 +19,16 @@ pub(super) async fn dispatch_level_with_ids(
     task_indices: &[usize],
     waiting_ids: &[String],
     shared_dir_path: Option<&str>,
+    repo_root: Option<&str>,
 ) -> Result<Vec<DispatchedTask>> {
     let shared_dir_path = shared_dir_path.map(str::to_string);
+    let repo_root = repo_root.map(str::to_string);
     let handles: Vec<_> = task_indices
         .iter()
         .map(|&task_idx| {
             let store = store.clone();
             let shared_dir_path = shared_dir_path.clone();
+            let repo_root = repo_root.clone();
             let siblings: Vec<_> = tasks
                 .iter()
                 .enumerate()
@@ -39,6 +42,8 @@ pub(super) async fn dispatch_level_with_ids(
                 &store,
                 shared_dir_path.as_deref(),
             );
+            run_args.repo_root = repo_root;
+            run_args.suppress_nested_repo_warning = true;
             run_args.existing_task_id = Some(crate::types::TaskId(waiting_ids[task_idx].clone()));
             if let Some((fallback_agent, remaining_cascade)) =
                 pre_dispatch_fallback_choice(&run_args.agent_name, tasks[task_idx].fallback.as_deref())
@@ -95,6 +100,7 @@ pub(super) async fn maybe_dispatch_auto_fallback(
     auto_fallback: bool,
     retried: &mut [bool],
     shared_dir_path: Option<&str>,
+    repo_root: Option<&str>,
 ) -> Result<Option<String>> {
     if !should_auto_fallback(auto_fallback, retried[task_idx], outcome) {
         return Ok(None);
@@ -115,6 +121,8 @@ pub(super) async fn maybe_dispatch_auto_fallback(
         &store,
         shared_dir_path,
     );
+    run_args.repo_root = repo_root.map(str::to_string);
+    run_args.suppress_nested_repo_warning = true;
     run_args.agent_name = fallback_agent.as_str().to_string();
     run_args.parent_task_id = Some(task_id.to_string());
     retried[task_idx] = true;

@@ -51,7 +51,10 @@ pub(super) fn prepare_dispatch(store: &Arc<Store>, args: &mut RunArgs) -> Result
     };
     let log_path = paths::log_path(task_id.as_str());
     let workgroup = run_prompt::load_workgroup(store, args.group.as_deref())?;
-    let explicit_repo_path = args.repo.as_deref().map(run_prompt::resolve_repo_path).transpose()?;
+    let explicit_repo_path = crate::repo_root::resolve_explicit_repo_path(
+        args.repo_root.as_deref(),
+        args.repo.as_deref(),
+    )?;
     let caller = session::current_caller();
     let worktree_setup = (|| -> Result<_> {
         let (wt_path, wt_branch, effective_dir, resolved_repo) =

@@ -1,6 +1,5 @@
 // aid CLI primary dispatch handlers.
 // Implements run, watch, show, and related command wrappers.
-
 use crate::cli::{BatchAction, RunExtrasArgs};
 use crate::cmd;
 use crate::types::AgentKind;
@@ -15,6 +14,7 @@ pub(super) async fn run(
     prompt: Option<String>,
     prompt_file: Option<String>,
     repo: Option<String>,
+    repo_root: Option<String>,
     dir: Option<String>,
     output: Option<String>,
     result_file: Option<String>,
@@ -76,6 +76,7 @@ pub(super) async fn run(
         prompt.unwrap_or_default(),
         prompt_file,
         repo,
+        repo_root,
         dir,
         output,
         result_file,
@@ -119,6 +120,7 @@ fn build_run_args(
     prompt: String,
     prompt_file: Option<String>,
     repo: Option<String>,
+    repo_root: Option<String>,
     dir: Option<String>,
     output: Option<String>,
     result_file: Option<String>,
@@ -162,6 +164,7 @@ fn build_run_args(
         prompt,
         prompt_file,
         repo,
+        repo_root,
         dir,
         output,
         result_file,
@@ -238,8 +241,7 @@ fn resolve_run_agent(
         env_forward: None,
     };
     let team_config = team_flag.as_deref().and_then(team::resolve_team);
-    let (selected, reason) =
-        agent::select_agent_with_reason(prompt, &selection_opts, store, team_config.as_ref());
+    let (selected, reason) = agent::select_agent_with_reason(prompt, &selection_opts, store, team_config.as_ref());
     aid_info!("[aid] Auto-selected: {selected} (reason: {reason})");
 
     let recommended = if model.is_none() && !budget {
@@ -254,7 +256,6 @@ fn resolve_run_agent(
     };
     (selected, recommended)
 }
-
 pub(super) async fn batch(
     store: Arc<store::Store>,
     action: Option<BatchAction>,
@@ -268,6 +269,7 @@ pub(super) async fn batch(
     max_concurrent: Option<usize>,
     output: Option<String>,
     group: Option<String>,
+    repo_root: Option<String>,
 ) -> Result<()> {
     match action {
         Some(BatchAction::Init) => cmd::batch::init(output.as_deref())?,
@@ -282,6 +284,7 @@ pub(super) async fn batch(
                     file,
                     vars,
                     group,
+                    repo_root,
                     parallel,
                     analyze,
                     wait,

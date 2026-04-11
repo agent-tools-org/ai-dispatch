@@ -8,6 +8,9 @@ use std::process::{Command, Output};
 use crate::sanitize;
 #[path = "worktree/reconcile.rs"]
 mod reconcile;
+#[path = "worktree/validation.rs"]
+mod validation;
+use validation::{canonical_worktree_path, is_valid_git_worktree};
 
 const AID_BRANCH_PREFIXES: &[&str] = &["feat/", "fix/", "docs/", "chore/", "test/", "refactor/"];
 
@@ -37,20 +40,6 @@ fn sync_cargo_lock(repo_dir: &Path, wt_path: &Path) {
     }
 }
 
-fn is_valid_git_worktree(path: &Path) -> Result<bool> {
-    let status = Command::new("git")
-        .args(["-C", &path.to_string_lossy(), "rev-parse", "--git-dir"])
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .status()
-        .context("Failed to run git rev-parse")?;
-    Ok(status.success())
-}
-
-fn canonical_worktree_path(path: &Path) -> PathBuf {
-    path.canonicalize().unwrap_or_else(|_| path.to_path_buf())
-}
-
 fn prune_worktrees(repo_dir: &Path) -> Result<()> {
     let prune_status = Command::new("git")
         .args(["-C", &repo_dir.to_string_lossy(), "worktree", "prune"])
@@ -60,9 +49,9 @@ fn prune_worktrees(repo_dir: &Path) -> Result<()> {
     Ok(())
 }
 
-fn stale_worktree_warning(path: &Path) {
+fn invalid_worktree_warning(path: &Path) {
     aid_warn!(
-        "[aid] Warning: Cleaned stale worktree at {}, re-creating",
+        "[aid] Warning: Existing path {} is not a shared-ref worktree for this repo; removing it and re-creating a linked worktree",
         path.display()
     );
 }
@@ -204,7 +193,7 @@ pub fn create_worktree(
         {
             prune_worktrees(repo_dir)?;
         }
-        if is_valid_git_worktree(&wt_path)? {
+        if is_valid_git_worktree(repo_dir, &wt_path)? {
             if let Some(existing_path) = existing_worktree_path(repo_dir, branch)? {
                 if existing_path.exists()
                     && canonical_worktree_path(&existing_path) != expected_path
@@ -232,7 +221,7 @@ pub fn create_worktree(
             });
         }
 
-        stale_worktree_warning(&wt_path);
+        invalid_worktree_warning(&wt_path);
         remove_stale_worktree_dir(&wt_path)?;
     }
 
@@ -439,3 +428,6 @@ mod tests;
 #[cfg(test)]
 #[path = "worktree/stale_tests.rs"]
 mod stale_tests;
+#[cfg(test)]
+#[path = "worktree/validation_tests.rs"]
+mod validation_tests;

@@ -216,7 +216,7 @@ fn create_worktree_cleans_stale_directory_and_recreates_worktree() {
 
     let info = create_worktree(repo.path(), branch.as_str(), None).unwrap();
     assert_eq!(info.path, expected_path);
-    assert!(is_valid_git_worktree(&info.path).unwrap());
+    assert!(is_valid_git_worktree(repo.path(), &info.path).unwrap());
     assert!(!info.path.join("stale.txt").exists());
 
     git(
@@ -259,7 +259,7 @@ fn create_worktree_prunes_conflicting_branch_and_recreates_worktree() {
     let info = create_worktree(repo.path(), branch.as_str(), None).unwrap();
     let expected_path = PathBuf::from(format!("/tmp/aid-wt-{branch}"));
     assert_eq!(info.path, expected_path);
-    assert!(is_valid_git_worktree(&info.path).unwrap());
+    assert!(is_valid_git_worktree(repo.path(), &info.path).unwrap());
     let worktrees = git_output(repo.path(), &["worktree", "list", "--porcelain"]);
     assert!(worktrees.contains(expected_path.to_string_lossy().as_ref()));
     assert!(!worktrees.contains(orphan_path.to_string_lossy().as_ref()));

@@ -4,13 +4,25 @@
 
 use anyhow::{Result, bail};
 use serde_json::{Map, Value, json};
+use std::collections::HashMap;
 use std::path::Path;
 use std::process::Command;
-use std::sync::OnceLock;
+use std::sync::{Mutex, OnceLock};
 
 static BUT_AVAILABLE: OnceLock<bool> = OnceLock::new();
+static MAIN_REPO_PROJECT_CACHE: OnceLock<Mutex<HashMap<String, bool>>> = OnceLock::new();
+static AUTO_NO_PROJECT_NOTICE: OnceLock<()> = OnceLock::new();
+static ALWAYS_NO_PROJECT_NOTICE: OnceLock<()> = OnceLock::new();
+static AUTO_SETUP_HINT_NOTICE: OnceLock<()> = OnceLock::new();
 const CLAUDE_TOOL_MATCHER: &str = "Edit|MultiEdit|Write";
 const CLAUDE_SETTINGS_PATH: &str = ".claude/settings.local.json";
+
+#[derive(Debug, Default, PartialEq, Eq)]
+pub(crate) struct TaskWorktreeIntegrationPlan {
+    pub install_claude_hooks: bool,
+    pub on_done_command: Option<String>,
+    pub emit_setup_hint: bool,
+}
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Mode {
     #[default]
@@ -51,13 +63,9 @@ pub fn is_active(mode: Mode) -> bool {
         Mode::Always => true,
     }
 }
-
-/// Run `but setup` in the worktree and ignore "already set up" failures.
-pub fn ensure_setup(worktree: &Path) -> Result<()> {
-    let output = Command::new("but")
-        .arg("setup")
-        .current_dir(worktree)
-        .output()?;
+/// Run `but setup` in the main repo and ignore "already set up" failures.
+pub fn ensure_setup(repo_dir: &Path) -> Result<()> {
+    let output = Command::new("but").arg("setup").current_dir(repo_dir).output()?;
     if output.status.success() || setup_already_done(&output) {
         return Ok(());
     }
@@ -106,6 +114,78 @@ pub fn on_done_command(worktree: &Path) -> String {
         "but -C {} commit -i || true",
         shell_quote(&worktree.to_string_lossy())
     )
+}
+
+pub(crate) fn task_worktree_integration_plan(
+    repo_dir: &Path,
+    worktree: &Path,
+    mode: Mode,
+    agent_kind: &str,
+) -> TaskWorktreeIntegrationPlan {
+    if !is_active(mode) {
+        return TaskWorktreeIntegrationPlan::default();
+    }
+
+    if !main_repo_has_project(repo_dir) {
+        match mode {
+            Mode::Auto => {
+                if AUTO_NO_PROJECT_NOTICE.set(()).is_ok() {
+                    aid_warn!(
+                        "[aid] gitbutler = auto but main repo has no GitButler project — skipping per-task GitButler hooks"
+                    );
+                }
+                return TaskWorktreeIntegrationPlan {
+                    emit_setup_hint: AUTO_SETUP_HINT_NOTICE.set(()).is_ok(),
+                    ..Default::default()
+                };
+            }
+            Mode::Always => {
+                if ALWAYS_NO_PROJECT_NOTICE.set(()).is_ok() {
+                    aid_warn!(
+                        "[aid] gitbutler = always but main repo has no GitButler project — skipping per-task GitButler hooks"
+                    );
+                }
+                return TaskWorktreeIntegrationPlan::default();
+            }
+            Mode::Off => return TaskWorktreeIntegrationPlan::default(),
+        }
+    }
+
+    if agent_uses_claude_hooks(agent_kind) {
+        return TaskWorktreeIntegrationPlan { install_claude_hooks: true, ..Default::default() };
+    }
+    TaskWorktreeIntegrationPlan {
+        on_done_command: Some(on_done_command(worktree)),
+        ..Default::default()
+    }
+}
+
+pub(crate) fn main_repo_has_project(repo_dir: &Path) -> bool {
+    #[cfg(test)]
+    if let Ok(value) = std::env::var("AID_GITBUTLER_TEST_PROJECT_PRESENT") {
+        return matches!(value.trim().to_ascii_lowercase().as_str(), "1" | "true" | "yes");
+    }
+
+    if !but_available() {
+        return false;
+    }
+
+    let key = repo_dir.canonicalize().unwrap_or_else(|_| repo_dir.to_path_buf()).to_string_lossy().to_string();
+    let cache = MAIN_REPO_PROJECT_CACHE.get_or_init(|| Mutex::new(HashMap::new()));
+    if let Some(status) = cache.lock().ok().and_then(|cache| cache.get(&key).copied()) {
+        return status;
+    }
+
+    let status = Command::new("but")
+        .args(["status", "--json"])
+        .current_dir(repo_dir)
+        .output()
+        .map(|output| output.status.success())
+        .unwrap_or(false);
+    if let Ok(mut cache) = cache.lock() {
+        cache.insert(key, status);
+    }
+    status
 }
 
 fn detect_but_available() -> bool {

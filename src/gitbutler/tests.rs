@@ -3,7 +3,7 @@
 
 use super::{
     Mode, agent_uses_claude_hooks, apply_branch, but_available, install_claude_hooks, is_active,
-    on_done_command,
+    on_done_command, task_worktree_integration_plan,
 };
 use serde_json::{Value, json};
 use std::fs;
@@ -140,4 +140,52 @@ fn on_done_command_contains_gitbutler_commit_shell_command() {
     assert!(command.contains(worktree.as_ref()));
     assert!(command.contains("commit -i"));
     assert!(command.contains("|| true"));
+}
+
+#[test]
+fn task_worktree_integration_plan_skips_hooks_and_emits_hint_without_main_repo_project() {
+    let temp = tempfile::tempdir().unwrap();
+    unsafe {
+        std::env::set_var("AID_GITBUTLER_TEST_PRESENT", "1");
+        std::env::set_var("AID_GITBUTLER_TEST_PROJECT_PRESENT", "0");
+    }
+
+    let first = task_worktree_integration_plan(temp.path(), temp.path(), Mode::Auto, "codex");
+    let second = task_worktree_integration_plan(temp.path(), temp.path(), Mode::Auto, "claude");
+
+    unsafe {
+        std::env::remove_var("AID_GITBUTLER_TEST_PRESENT");
+        std::env::remove_var("AID_GITBUTLER_TEST_PROJECT_PRESENT");
+    }
+
+    assert_eq!(first.on_done_command, None);
+    assert!(!first.install_claude_hooks);
+    assert!(first.emit_setup_hint);
+    assert_eq!(second.on_done_command, None);
+    assert!(!second.install_claude_hooks);
+    assert!(!second.emit_setup_hint);
+}
+
+#[test]
+fn task_worktree_integration_plan_preserves_hook_modes_when_main_repo_has_project() {
+    let temp = tempfile::tempdir().unwrap();
+    unsafe {
+        std::env::set_var("AID_GITBUTLER_TEST_PRESENT", "1");
+        std::env::set_var("AID_GITBUTLER_TEST_PROJECT_PRESENT", "1");
+    }
+
+    let claude = task_worktree_integration_plan(temp.path(), temp.path(), Mode::Auto, "claude");
+    let codex = task_worktree_integration_plan(temp.path(), temp.path(), Mode::Auto, "codex");
+
+    unsafe {
+        std::env::remove_var("AID_GITBUTLER_TEST_PRESENT");
+        std::env::remove_var("AID_GITBUTLER_TEST_PROJECT_PRESENT");
+    }
+
+    assert!(claude.install_claude_hooks);
+    assert_eq!(claude.on_done_command, None);
+    assert!(!claude.emit_setup_hint);
+    assert!(!codex.install_claude_hooks);
+    assert!(codex.on_done_command.as_deref().is_some_and(|value| value.contains("but -C")));
+    assert!(!codex.emit_setup_hint);
 }

@@ -15,7 +15,6 @@ use super::run_prompt;
 use super::run_dispatch_resolve::{apply_project_defaults, resolve_agent_setup};
 use super::run_validate::{IdConflict, resolve_id_conflict, validate_dispatch};
 use super::{RunArgs, context_file_from_spec, resolve_max_duration_mins, resolve_prompt_input};
-
 pub(super) struct PreparedDispatch {
     pub detected_project: Option<ProjectConfig>,
     pub agent_kind: AgentKind,
@@ -32,18 +31,15 @@ pub(super) struct PreparedDispatch {
     pub wt_path: Option<String>,
     pub effective_dir: Option<String>,
 }
-
 fn stale_worktree_dir_error(dir: &str, branch: Option<&str>) -> String {
     branch.map(|branch| format!("batch file / task dir missing in worktree: {dir} - workgroup state is stale, run aid worktree remove {branch} and retry"))
         .unwrap_or_else(|| format!("working directory does not exist: {dir}"))
 }
-
 pub(super) fn prepare_dispatch(store: &Arc<Store>, args: &mut RunArgs) -> Result<PreparedDispatch> {
     args.prompt = resolve_prompt_input(&args.prompt, args.prompt_file.as_deref())?;
     args.prompt_file = None;
     args.max_duration_mins = resolve_max_duration_mins(args.timeout, args.max_duration_mins);
     let had_explicit_result_file = args.result_file.is_some();
-
     let detected_project = project::detect_project();
     apply_project_defaults(args, detected_project.as_ref());
     let agent_setup = resolve_agent_setup(store, args)?;
@@ -56,15 +52,13 @@ pub(super) fn prepare_dispatch(store: &Arc<Store>, args: &mut RunArgs) -> Result
     };
     let log_path = paths::log_path(task_id.as_str());
     let workgroup = run_prompt::load_workgroup(store, args.group.as_deref())?;
-    let explicit_repo_path = crate::repo_root::resolve_explicit_repo_path(
-        args.repo_root.as_deref(),
-        args.repo.as_deref(),
-    )?;
+    let explicit_repo_path = crate::repo_root::resolve_explicit_repo_path(args.repo_root.as_deref(), args.repo.as_deref())?;
     let caller = session::current_caller();
     let worktree_setup = (|| -> Result<_> {
         let (wt_path, wt_branch, effective_dir, resolved_repo, fresh_worktree) =
             run_prompt::resolve_worktree_paths(args, explicit_repo_path.as_deref())?;
         let repo_path = resolved_repo.clone().or(explicit_repo_path.clone());
+        let mut emit_gitbutler_setup_hint = false;
         if let Some(ref wt) = wt_path {
             if let Some(holder) = crate::worktree::check_worktree_lock(Path::new(wt)) {
                 anyhow::bail!(
@@ -77,17 +71,21 @@ pub(super) fn prepare_dispatch(store: &Arc<Store>, args: &mut RunArgs) -> Result
         if let Some(ref wt) = wt_path
             && std::env::var("AID_GITBUTLER").map(|value| value != "0").unwrap_or(true)
             && let Some(ref project) = detected_project
-            && crate::gitbutler::is_active(project.gitbutler_mode())
+            && let Some(repo) = repo_path.as_deref()
         {
             let worktree = Path::new(wt);
-            if let Err(err) = crate::gitbutler::ensure_setup(worktree) {
-                aid_warn!("[aid] gitbutler: setup failed in {}: {err}", worktree.display());
-            } else if crate::gitbutler::agent_uses_claude_hooks(agent_setup.agent_kind.as_str()) {
+            let plan = crate::gitbutler::task_worktree_integration_plan(
+                Path::new(repo),
+                worktree,
+                project.gitbutler_mode(),
+                agent_setup.agent_kind.as_str(),
+            );
+            emit_gitbutler_setup_hint = plan.emit_setup_hint;
+            if plan.install_claude_hooks {
                 if let Err(err) = crate::gitbutler::install_claude_hooks(worktree) {
                     aid_warn!("[aid] gitbutler: failed to install claude hooks: {err}");
                 }
-            } else {
-                let command = crate::gitbutler::on_done_command(worktree);
+            } else if let Some(command) = plan.on_done_command {
                 args.on_done = Some(match args.on_done.take() {
                     Some(existing) if !existing.trim().is_empty() => format!("{existing} && {command}"),
                     _ => command,
@@ -95,8 +93,7 @@ pub(super) fn prepare_dispatch(store: &Arc<Store>, args: &mut RunArgs) -> Result
             }
         }
         if let (Some(wt), Some(repo)) = (wt_path.as_deref(), repo_path.as_deref()) {
-            let context_files: Vec<String> =
-                args.context.iter().map(|spec| context_file_from_spec(spec)).collect();
+            let context_files: Vec<String> = args.context.iter().map(|spec| context_file_from_spec(spec)).collect();
             let synced = crate::worktree::sync_context_files_into_worktree(
                 Path::new(repo),
                 Path::new(wt),
@@ -116,9 +113,9 @@ pub(super) fn prepare_dispatch(store: &Arc<Store>, args: &mut RunArgs) -> Result
                 stale_worktree_dir_error(dir, wt_branch.as_deref().or(args.worktree.as_deref()))
             );
         }
-        Ok((wt_path, wt_branch, effective_dir, repo_path, fresh_worktree))
+        Ok((wt_path, wt_branch, effective_dir, repo_path, fresh_worktree, emit_gitbutler_setup_hint))
     })();
-    let (wt_path, wt_branch, effective_dir, repo_path, fresh_worktree) = match worktree_setup {
+    let (wt_path, wt_branch, effective_dir, repo_path, fresh_worktree, emit_gitbutler_setup_hint) = match worktree_setup {
         Ok(paths) => paths,
         Err(err) => {
             let failed_task = Task {
@@ -231,6 +228,16 @@ pub(super) fn prepare_dispatch(store: &Arc<Store>, args: &mut RunArgs) -> Result
         }
     } else {
         store.insert_task(&task)?;
+    }
+    if emit_gitbutler_setup_hint {
+        let _ = store.insert_event(&TaskEvent {
+            task_id: task_id.clone(),
+            timestamp: Local::now(),
+            event_kind: EventKind::Milestone,
+            detail: "Hint: run `but setup` from the main repo to enable GitButler integration for future tasks."
+                .to_string(),
+            metadata: None,
+        });
     }
     if !args.dry_run
         && let (Some(wt), Some(repo)) = (wt_path.as_deref(), repo_path.as_deref())

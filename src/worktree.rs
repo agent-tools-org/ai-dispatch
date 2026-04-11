@@ -6,6 +6,8 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
 use crate::sanitize;
+#[path = "worktree/reconcile.rs"]
+mod reconcile;
 
 const AID_BRANCH_PREFIXES: &[&str] = &["feat/", "fix/", "docs/", "chore/", "test/", "refactor/"];
 
@@ -206,6 +208,12 @@ pub fn create_worktree(
                 if existing_path.exists()
                     && canonical_worktree_path(&existing_path) != expected_path
                 {
+                    reconcile::maybe_refresh_existing_worktree(
+                        repo_dir,
+                        &existing_path,
+                        branch,
+                        base_branch,
+                    )?;
                     sync_cargo_lock(repo_dir, &existing_path);
                     return Ok(WorktreeInfo {
                         path: existing_path,
@@ -213,6 +221,7 @@ pub fn create_worktree(
                     });
                 }
             }
+            reconcile::maybe_refresh_existing_worktree(repo_dir, &wt_path, branch, base_branch)?;
             sync_cargo_lock(repo_dir, &wt_path);
             return Ok(WorktreeInfo {
                 path: wt_path,
@@ -242,6 +251,7 @@ pub fn create_worktree(
 
     if let Some(existing_path) = existing_worktree_path(repo_dir, branch)? {
         if existing_path.exists() {
+            reconcile::maybe_refresh_existing_worktree(repo_dir, &existing_path, branch, base_branch)?;
             sync_cargo_lock(repo_dir, &existing_path);
             return Ok(WorktreeInfo {
                 path: existing_path,
@@ -420,3 +430,6 @@ fn commits_ahead_of_main(repo: &str) -> Option<u32> {
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+#[path = "worktree/stale_tests.rs"]
+mod stale_tests;

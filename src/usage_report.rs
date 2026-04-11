@@ -140,6 +140,7 @@ pub(crate) fn collect_agent_rows(tasks: &[Task]) -> Vec<AgentUsageRow> {
     for agent in [
         AgentKind::Codex,
         AgentKind::Gemini,
+        AgentKind::Qwen,
         AgentKind::Copilot,
         AgentKind::OpenCode,
         AgentKind::Kilo,

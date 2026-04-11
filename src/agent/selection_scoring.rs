@@ -19,6 +19,12 @@ pub(super) const AGENT_CAPABILITIES: &[(AgentKind, &[(TaskCategory, i32)])] = &[
         (TaskCategory::ComplexImpl, 3), (TaskCategory::Frontend, 2),
         (TaskCategory::Testing, 3), (TaskCategory::Refactoring, 3),
     ]),
+    (AgentKind::Qwen, &[
+        (TaskCategory::Research, 9), (TaskCategory::Documentation, 6),
+        (TaskCategory::Debugging, 5), (TaskCategory::SimpleEdit, 2),
+        (TaskCategory::ComplexImpl, 3), (TaskCategory::Frontend, 2),
+        (TaskCategory::Testing, 3), (TaskCategory::Refactoring, 3),
+    ]),
     (AgentKind::Codex, &[
         (TaskCategory::ComplexImpl, 9), (TaskCategory::Refactoring, 8),
         (TaskCategory::Testing, 7), (TaskCategory::Debugging, 7),
@@ -84,7 +90,7 @@ pub(super) fn base_score(agent: AgentKind, category: TaskCategory) -> i32 {
 
 pub(super) fn priority(kind: AgentKind) -> i32 {
     match kind {
-        AgentKind::Gemini | AgentKind::Kilo => 0,
+        AgentKind::Gemini | AgentKind::Qwen | AgentKind::Kilo => 0,
         AgentKind::OpenCode => 1,
         AgentKind::Copilot | AgentKind::Cursor | AgentKind::Codebuff => 2,
         AgentKind::Codex | AgentKind::Droid | AgentKind::Oz => 3,

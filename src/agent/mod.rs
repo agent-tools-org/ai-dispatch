@@ -12,6 +12,7 @@ pub mod gemini;
 pub mod kilo;
 pub mod opencode;
 pub mod oz;
+pub mod qwen;
 pub(crate) mod custom;
 pub(crate) mod registry;
 pub mod classifier;
@@ -76,6 +77,7 @@ pub fn detect_agents() -> Vec<AgentKind> {
     let mut found = Vec::new();
     for (name, kind) in [
         ("gemini", AgentKind::Gemini),
+        ("qwen", AgentKind::Qwen),
         ("codex", AgentKind::Codex),
         ("opencode", AgentKind::OpenCode),
         ("copilot", AgentKind::Copilot),
@@ -108,6 +110,7 @@ pub fn get_agent(kind: AgentKind) -> Box<dyn Agent> {
         AgentKind::Copilot => Box::new(copilot::CopilotAgent),
         AgentKind::Cursor => Box::new(cursor::CursorAgent),
         AgentKind::Gemini => Box::new(gemini::GeminiAgent),
+        AgentKind::Qwen => Box::new(qwen::QwenAgent),
         AgentKind::OpenCode => Box::new(opencode::OpenCodeAgent),
         AgentKind::Kilo => Box::new(kilo::KiloAgent),
         AgentKind::Codebuff => Box::new(codebuff::CodebuffAgent),

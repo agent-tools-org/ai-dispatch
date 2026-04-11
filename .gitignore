@@ -23,3 +23,5 @@ website-store/
 claude-prompt.md
 target-rate-limit/
 target-local/
+.aid-verify-deps-state
+result-t-*.md

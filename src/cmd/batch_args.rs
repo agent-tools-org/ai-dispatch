@@ -92,6 +92,7 @@ pub(crate) fn task_to_run_args(
         group: task.group.clone(),
         container: task.container.clone(),
         verify: task.verify.clone(),
+        setup: task.setup.clone(),
         iterate: task.iterate,
         eval: task.eval.clone(),
         eval_feedback_template: task.eval_feedback_template.clone(),
@@ -121,6 +122,7 @@ pub(crate) fn task_to_run_args(
         existing_task_id: task.id.as_ref().map(|id| crate::types::TaskId(id.clone())),
         env,
         env_forward: task.env_forward.clone(),
+        link_deps: task.worktree_link_deps.unwrap_or(true),
         ..Default::default()
     }
 }

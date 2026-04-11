@@ -7,7 +7,7 @@ use std::collections::HashMap;
 
 pub const NO_SKILL_SENTINEL: &str = "__aid_no_skill__";
 
-#[derive(Clone, Default)]
+#[derive(Clone)]
 pub struct RunArgs {
     pub agent_name: String,
     pub prompt: String,
@@ -21,6 +21,7 @@ pub struct RunArgs {
     pub base_branch: Option<String>,
     pub group: Option<String>,
     pub verify: Option<String>,
+    pub setup: Option<String>,
     pub iterate: Option<u32>,
     pub eval: Option<String>,
     pub eval_feedback_template: Option<String>,
@@ -56,6 +57,63 @@ pub struct RunArgs {
     pub judge_retry: bool,
     pub existing_task_id: Option<TaskId>,
     pub timeout: Option<u64>,
+    pub link_deps: bool,
+}
+
+impl Default for RunArgs {
+    fn default() -> Self {
+        Self {
+            agent_name: String::new(),
+            prompt: String::new(),
+            prompt_file: None,
+            repo: None,
+            dir: None,
+            output: None,
+            result_file: None,
+            model: None,
+            worktree: None,
+            base_branch: None,
+            group: None,
+            verify: None,
+            setup: None,
+            iterate: None,
+            eval: None,
+            eval_feedback_template: None,
+            judge: None,
+            peer_review: None,
+            max_duration_mins: None,
+            max_task_cost: None,
+            retry: 0,
+            context: Vec::new(),
+            checklist: Vec::new(),
+            skills: Vec::new(),
+            hooks: Vec::new(),
+            template: None,
+            background: false,
+            dry_run: false,
+            announce: false,
+            parent_task_id: None,
+            on_done: None,
+            cascade: Vec::new(),
+            read_only: false,
+            sandbox: false,
+            container: None,
+            budget: false,
+            best_of: None,
+            metric: None,
+            session_id: None,
+            team: None,
+            context_from: Vec::new(),
+            batch_siblings: Vec::new(),
+            scope: Vec::new(),
+            env: None,
+            env_forward: None,
+            judge_retry: false,
+            existing_task_id: None,
+            timeout: None,
+            link_deps: true,
+        }
+    }
 }
 
 pub(crate) fn resolve_max_duration_mins(

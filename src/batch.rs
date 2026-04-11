@@ -50,6 +50,8 @@ pub struct BatchDefaults {
     #[serde(default, deserialize_with = "deserialize_verify")]
     pub verify: Option<String>,
     #[serde(default)]
+    pub setup: Option<String>,
+    #[serde(default)]
     pub peer_review: Option<String>,
     #[serde(default)]
     pub container: Option<String>,
@@ -96,6 +98,8 @@ pub struct BatchDefaults {
     pub env: Option<HashMap<String, String>>,
     #[serde(default)]
     pub env_forward: Option<Vec<String>>,
+    #[serde(default)]
+    pub worktree_link_deps: Option<bool>,
 }
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -119,6 +123,8 @@ pub struct BatchTask {
     pub container: Option<String>,
     #[serde(default, deserialize_with = "deserialize_verify")]
     pub verify: Option<String>,
+    #[serde(default)]
+    pub setup: Option<String>,
     #[serde(default, deserialize_with = "deserialize_judge")]
     pub judge: Option<String>,
     #[serde(default)]
@@ -170,6 +176,8 @@ pub struct BatchTask {
     pub env: Option<HashMap<String, String>>,
     #[serde(default)]
     pub env_forward: Option<Vec<String>>,
+    #[serde(default)]
+    pub worktree_link_deps: Option<bool>,
     pub on_success: Option<String>,
     pub on_fail: Option<String>,
     #[serde(default)]

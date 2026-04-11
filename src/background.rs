@@ -204,6 +204,7 @@ async fn run_task_inner(store: &Arc<Store>, spec: &BackgroundRunSpec) -> Result<
         model: spec.model.clone(),
         group: spec.group.clone(),
         verify: spec.verify.clone(),
+        setup: spec.setup.clone(),
         iterate: spec.iterate,
         eval: spec.eval.clone(),
         eval_feedback_template: spec.eval_feedback_template.clone(),
@@ -220,6 +221,7 @@ async fn run_task_inner(store: &Arc<Store>, spec: &BackgroundRunSpec) -> Result<
         read_only: spec.read_only,
         sandbox: spec.sandbox,
         container: spec.container.clone(),
+        link_deps: spec.link_deps,
         ..Default::default()
     };
     // Auto-commit + rescue untracked files BEFORE verify — ensures verify tests committed state

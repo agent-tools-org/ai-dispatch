@@ -66,6 +66,17 @@ fn run_idle_timeout_flag_parses() {
 }
 
 #[test]
+fn run_no_link_deps_flag_parses() {
+    let cli = Cli::try_parse_from(["aid", "run", "codex", "task", "--no-link-deps"]).unwrap();
+    match cli.command {
+        Some(Commands::Run(command_args_a::RunArgs { no_link_deps, .. })) => {
+            assert!(no_link_deps)
+        }
+        _ => panic!("expected Run"),
+    }
+}
+
+#[test]
 fn run_sandbox_flag_parses() {
     let cli = Cli::try_parse_from(["aid", "run", "codex", "task", "--sandbox"]).unwrap();
     match cli.command {

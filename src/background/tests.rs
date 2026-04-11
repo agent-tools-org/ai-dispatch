@@ -26,6 +26,7 @@ fn serializes_spec_to_json() {
         result_file: Some("result.md".to_string()),
         model: None,
         verify: Some("auto".to_string()),
+        setup: None,
         iterate: None,
         eval: None,
         eval_feedback_template: None,
@@ -47,6 +48,7 @@ fn serializes_spec_to_json() {
         sandbox: false,
         read_only: false,
         container: None,
+        link_deps: true,
     };
 
     let content = serde_json::to_string_pretty(&spec).unwrap();
@@ -403,6 +405,7 @@ fn make_spec(task_id: &str) -> BackgroundRunSpec {
         result_file: None,
         model: None,
         verify: None,
+        setup: None,
         iterate: None,
         eval: None,
         eval_feedback_template: None,
@@ -424,6 +427,7 @@ fn make_spec(task_id: &str) -> BackgroundRunSpec {
         sandbox: false,
         read_only: false,
         container: None,
+        link_deps: true,
     }
 }
 

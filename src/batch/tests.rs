@@ -56,6 +56,7 @@ fn make_task(name: Option<&str>, depends_on: &[&str]) -> BatchTask {
         eval_feedback_template: None,
         idle_timeout: None,
         verify: None,
+        setup: None,
         judge: None,
         peer_review: None,
         metric: None,
@@ -76,6 +77,7 @@ fn make_task(name: Option<&str>, depends_on: &[&str]) -> BatchTask {
         budget: false,
         env: None,
         env_forward: None,
+        worktree_link_deps: None,
         on_success: None,
         on_fail: None,
         conditional: false,
@@ -121,6 +123,26 @@ fn parse_batch_metadata_fields() {
 fn result_file_deserializes_from_batch_toml() {
     let config: BatchConfig = toml::from_str("[[tasks]]\nagent = \"codex\"\nprompt = \"test\"\nresult_file = \"result.md\"\n").unwrap();
     assert_eq!(config.tasks[0].result_file.as_deref(), Some("result.md"));
+}
+
+#[test]
+fn setup_and_link_deps_defaults_parse_and_task_overrides() {
+    let cfg = parse_batch_file(
+        write_temp(concat!(
+            "[defaults]\nagent = \"codex\"\nsetup = \"npm ci\"\nworktree_link_deps = false\n",
+            "[[tasks]]\nname = \"defaulted\"\nprompt = \"fix it\"\n",
+            "[[tasks]]\nname = \"overridden\"\nprompt = \"ship it\"\nsetup = \"pnpm install\"\n"
+        ))
+        .path(),
+    )
+    .unwrap();
+
+    assert_eq!(cfg.defaults.setup.as_deref(), Some("npm ci"));
+    assert_eq!(cfg.defaults.worktree_link_deps, Some(false));
+    assert_eq!(cfg.tasks[0].setup.as_deref(), Some("npm ci"));
+    assert_eq!(cfg.tasks[0].worktree_link_deps, Some(false));
+    assert_eq!(cfg.tasks[1].setup.as_deref(), Some("pnpm install"));
+    assert_eq!(cfg.tasks[1].worktree_link_deps, Some(false));
 }
 
 #[test]

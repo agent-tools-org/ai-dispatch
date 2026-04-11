@@ -112,9 +112,9 @@ pub(crate) fn resolve_dir_in_target(base_dir: &str, dir: Option<&str>, repo_dir:
     std::path::Path::new(base_dir).join(dir_path).to_string_lossy().to_string()
 }
 
-/// Returns (wt_path, wt_branch, effective_dir, resolved_repo_path).
+/// Returns (wt_path, wt_branch, effective_dir, resolved_repo_path, fresh_worktree).
 /// The resolved_repo_path is always populated when a worktree is created, even if --repo wasn't passed.
-type WorktreePaths = (Option<String>, Option<String>, Option<String>, Option<String>);
+type WorktreePaths = (Option<String>, Option<String>, Option<String>, Option<String>, bool);
 pub(crate) fn resolve_worktree_paths(args: &RunArgs, repo_path: Option<&str>) -> Result<WorktreePaths> {
     if let Some(ref branch) = args.worktree {
         anyhow::ensure!(
@@ -127,12 +127,12 @@ pub(crate) fn resolve_worktree_paths(args: &RunArgs, repo_path: Option<&str>) ->
         let base = args.base_branch.clone().or_else(|| current_branch(std::path::Path::new(&repo_dir)));
         let info = crate::worktree::create_worktree(std::path::Path::new(&repo_dir), branch, base.as_deref())?;
         let p = info.path.to_string_lossy().to_string();
-        return Ok((Some(p.clone()), Some(info.branch), Some(resolve_dir_in_target(&p, args.dir.as_deref(), Some(&repo_dir))), Some(repo_dir)));
+        return Ok((Some(p.clone()), Some(info.branch), Some(resolve_dir_in_target(&p, args.dir.as_deref(), Some(&repo_dir))), Some(repo_dir), info.created));
     }
     if let Some(repo_dir) = repo_path {
-        return Ok((None, None, Some(resolve_dir_in_target(repo_dir, args.dir.as_deref(), Some(repo_dir))), Some(repo_dir.to_string())));
+        return Ok((None, None, Some(resolve_dir_in_target(repo_dir, args.dir.as_deref(), Some(repo_dir))), Some(repo_dir.to_string()), false));
     }
-    Ok((None, None, args.dir.clone(), None))
+    Ok((None, None, args.dir.clone(), None, false))
 }
 
 pub(crate) fn load_workgroup(store: &Store, group_id: Option<&str>) -> Result<Option<Workgroup>> {

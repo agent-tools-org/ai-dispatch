@@ -13,6 +13,7 @@ const AID_BRANCH_PREFIXES: &[&str] = &["feat/", "fix/", "docs/", "chore/", "test
 pub struct WorktreeInfo {
     pub path: PathBuf,
     pub branch: String,
+    pub created: bool,
 }
 
 pub fn validate_git_repo(path: &Path) -> Result<()> {
@@ -210,6 +211,7 @@ pub fn create_worktree(
                     return Ok(WorktreeInfo {
                         path: existing_path,
                         branch: branch.to_string(),
+                        created: false,
                     });
                 }
             }
@@ -217,6 +219,7 @@ pub fn create_worktree(
             return Ok(WorktreeInfo {
                 path: wt_path,
                 branch: branch.to_string(),
+                created: false,
             });
         }
 
@@ -237,6 +240,7 @@ pub fn create_worktree(
         return Ok(WorktreeInfo {
             path: wt_path,
             branch: branch.to_string(),
+            created: true,
         });
     }
 
@@ -246,6 +250,7 @@ pub fn create_worktree(
             return Ok(WorktreeInfo {
                 path: existing_path,
                 branch: branch.to_string(),
+                created: false,
             });
         }
 
@@ -291,6 +296,7 @@ pub fn create_worktree(
     Ok(WorktreeInfo {
         path: wt_path,
         branch: branch.to_string(),
+        created: true,
     })
 }
 

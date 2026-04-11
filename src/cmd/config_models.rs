@@ -15,6 +15,13 @@ pub const AGENT_PROFILES: &[(AgentKind, &str, &str, &str, bool)] = &[
         true,
     ),
     (
+        AgentKind::Qwen,
+        "Research, coding with Qwen3-Coder models",
+        "free (OAuth) or Alibaba Cloud subscription",
+        "implement, refactor, research, explain",
+        true,
+    ),
+    (
         AgentKind::Codex,
         "Complex implementation, multi-file refactors, test suites",
         "$0.10-$8/M blended",
@@ -156,6 +163,7 @@ pub const AGENT_MODELS: &[AgentModel] = &[
     AgentModel { agent: AgentKind::Gemini, model: "flash", input_per_m: 0.30, output_per_m: 2.50, tier: "cheap", description: "Fast, balanced (default)", capability: 7.3 },
     AgentModel { agent: AgentKind::Gemini, model: "pro", input_per_m: 1.25, output_per_m: 10.0, tier: "premium", description: "Complex reasoning", capability: 7.8 },
     AgentModel { agent: AgentKind::Gemini, model: "flash-lite", input_per_m: 0.0, output_per_m: 0.0, tier: "cheap", description: "Fastest, simple tasks", capability: 5.9 },
+    AgentModel { agent: AgentKind::Qwen, model: "coder-model", input_per_m: 0.0, output_per_m: 0.0, tier: "free", description: "Default Qwen Code model", capability: 7.4 },
     AgentModel { agent: AgentKind::OpenCode, model: "glm-4.7", input_per_m: 0.38, output_per_m: 1.98, tier: "cheap", description: "Paid, good quality", capability: 6.5 },
     AgentModel { agent: AgentKind::OpenCode, model: "kimi-k2.5", input_per_m: 0.45, output_per_m: 2.20, tier: "cheap", description: "Paid, good quality", capability: 6.1 },
     AgentModel { agent: AgentKind::OpenCode, model: "mimo-v2-flash-free", input_per_m: 0.0, output_per_m: 0.0, tier: "free", description: "Free tier", capability: 4.3 },

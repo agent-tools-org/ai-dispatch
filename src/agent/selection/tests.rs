@@ -33,9 +33,10 @@ fn select(prompt: &str, dir: &[&str], available: &[AgentKind]) -> (String, Strin
     let store = Store::open_memory().unwrap();
     select_agent_from(prompt, &opts(dir.first().copied(), false), available, &store, None)
 }
-fn all() -> [AgentKind; 6] {
+fn all() -> [AgentKind; 7] {
     [
         AgentKind::Gemini,
+        AgentKind::Qwen,
         AgentKind::Claude,
         AgentKind::OpenCode,
         AgentKind::Kilo,
@@ -85,6 +86,21 @@ fn research_tasks_go_to_gemini() {
     assert_eq!(kind, AgentKind::Gemini.as_str());
     assert!(reason.contains("research"));
     assert!(reason.contains("gemini"));
+}
+
+#[test]
+fn research_tasks_go_to_qwen_when_gemini_unavailable() {
+    let (_temp, _guard) = isolated();
+    let store = Store::open_memory().unwrap();
+    let (kind, reason) = select_agent_from(
+        "Explain the authentication flow and compare the docs?",
+        &opts(None, false),
+        &[AgentKind::Qwen, AgentKind::Codex],
+        &store,
+        None,
+    );
+    assert_eq!(kind, AgentKind::Qwen.as_str());
+    assert!(reason.contains("qwen"));
 }
 #[test]
 fn simple_edits_go_to_opencode() {
@@ -287,6 +303,23 @@ fn history_appears_in_reason() {
     seed_history(&store, AgentKind::Gemini, 8, 2);
     let (_, reason) = select_agent_from("research: what is MVP?", &opts(None, false), &all(), &store, None);
     assert!(reason.contains("80% success"));
+}
+
+#[test]
+fn qwen_history_can_drive_selection() {
+    let (_temp, _guard) = isolated();
+    let store = Store::open_memory().unwrap();
+    seed_history(&store, AgentKind::Qwen, 9, 1);
+    let (kind, reason) = select_agent_from(
+        "research: compare agent behavior",
+        &opts(None, false),
+        &[AgentKind::Qwen, AgentKind::Codex],
+        &store,
+        None,
+    );
+    assert_eq!(kind, AgentKind::Qwen.as_str());
+    assert!(reason.contains("qwen"));
+    assert!(reason.contains("90% success"));
 }
 #[test]
 fn similar_tasks_hint_appended() {
@@ -513,6 +546,38 @@ fn team_override_overrides_base_score() {
         Some(&team),
     );
     assert_eq!(kind, AgentKind::Gemini.as_str());
+}
+
+#[test]
+fn team_override_can_prefer_qwen() {
+    let (_temp, _guard) = isolated();
+    let store = Store::open_memory().unwrap();
+    let mut overrides = HashMap::new();
+    overrides.insert(
+        "qwen".to_string(),
+        CapabilityOverrides {
+            simple_edit: Some(10),
+            ..Default::default()
+        },
+    );
+    let team = TeamConfig {
+        id: "override-qwen".to_string(),
+        display_name: "Override Qwen".to_string(),
+        description: String::new(),
+        preferred_agents: vec![],
+        default_agent: None,
+        overrides,
+        rules: vec![],
+        toolbox: Default::default(),
+    };
+    let (kind, _) = select_agent_from(
+        "rename src/types.rs field name to task_name",
+        &opts(None, false),
+        &[AgentKind::Qwen, AgentKind::OpenCode],
+        &store,
+        Some(&team),
+    );
+    assert_eq!(kind, AgentKind::Qwen.as_str());
 }
 
 #[test]

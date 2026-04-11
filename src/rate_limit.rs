@@ -394,10 +394,16 @@ mod tests {
         assert_eq!(info.recovery_at, None);
         assert_eq!(info.message, Some("rate limit exceeded".to_string()));
 
+        mark_rate_limited(&AgentKind::Qwen, "rate limit exceeded");
+        let info = get_rate_limit_info(&AgentKind::Qwen).unwrap();
+        assert_eq!(info.recovery_at, None);
+        assert_eq!(info.message, Some("rate limit exceeded".to_string()));
+
         // Test non-existent file
         assert!(get_rate_limit_info(&AgentKind::Cursor).is_none());
 
         let _ = std::fs::remove_file(marker_path(&AgentKind::Codex));
         let _ = std::fs::remove_file(marker_path(&AgentKind::Gemini));
+        let _ = std::fs::remove_file(marker_path(&AgentKind::Qwen));
     }
 }

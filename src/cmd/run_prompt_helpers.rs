@@ -96,9 +96,7 @@ pub(crate) fn effective_skills(agent_kind: &AgentKind, args: &RunArgs) -> Vec<St
 }
 
 pub(crate) fn resolve_repo_path(path: &str) -> Result<String> {
-    let out = std::process::Command::new("git").args(["-C", path, "rev-parse", "--show-toplevel"]).output().context("Failed to run git")?;
-    anyhow::ensure!(out.status.success(), "Not a git repository: {path}");
-    Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
+    crate::repo_root::resolve_git_root_string(path)
 }
 
 pub(crate) fn resolve_dir_in_target(base_dir: &str, dir: Option<&str>, repo_dir: Option<&str>) -> String {

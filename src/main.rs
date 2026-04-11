@@ -31,6 +31,7 @@ mod pty_bridge;
 mod pty_runner;
 mod pty_watch;
 mod rate_limit;
+mod repo_root;
 pub(crate) mod sanitize;
 mod sandbox;
 mod session;

@@ -118,6 +118,16 @@ fn parse_batch_metadata_fields() {
 }
 
 #[test]
+fn defaults_accept_repo_root() {
+    let config: BatchConfig = toml::from_str(
+        "[defaults]\nrepo_root = \"..\"\n[[tasks]]\nagent = \"codex\"\nprompt = \"test\"\n",
+    )
+    .unwrap();
+
+    assert_eq!(config.defaults.repo_root.as_deref(), Some(".."));
+}
+
+#[test]
 fn result_file_deserializes_from_batch_toml() {
     let config: BatchConfig = toml::from_str("[[tasks]]\nagent = \"codex\"\nprompt = \"test\"\nresult_file = \"result.md\"\n").unwrap();
     assert_eq!(config.tasks[0].result_file.as_deref(), Some("result.md"));

@@ -57,14 +57,21 @@ pub(in crate::cmd) fn maybe_verify_impl(
             println!("{report}");
             crate::verify::record_verify_status(store, task_id, &result);
             if !result.success {
+                let hint = verify_failure_hint(store, task_id);
                 let detail = match verify_output_excerpt(&result.output) {
                     Some(output) => {
                         format!(
-                            "Failed during verification: {}\nOutput: {}",
-                            result.command, output
+                            "Failed during verification: {}\nOutput: {}{}",
+                            result.command,
+                            output,
+                            hint.as_deref().map(|value| format!("\n{value}")).unwrap_or_default()
                         )
                     }
-                    None => format!("Failed during verification: {}", result.command),
+                    None => format!(
+                        "Failed during verification: {}{}",
+                        result.command,
+                        hint.as_deref().map(|value| format!("\n{value}")).unwrap_or_default()
+                    ),
                 };
                 let event = TaskEvent {
                     task_id: task_id.clone(),
@@ -108,6 +115,15 @@ fn verify_output_excerpt(output: &str) -> Option<String> {
     } else {
         excerpt
     })
+}
+
+fn verify_failure_hint(store: &Store, task_id: &TaskId) -> Option<String> {
+    let worktree = store
+        .get_task(task_id.as_str())
+        .ok()
+        .flatten()
+        .and_then(|task| task.worktree_path)?;
+    crate::worktree_deps::missing_deps_hint(std::path::Path::new(&worktree)).map(str::to_string)
 }
 
 pub(in crate::cmd) async fn maybe_auto_retry_after_verify_failure_impl(
@@ -201,23 +217,6 @@ pub(in crate::cmd) async fn maybe_auto_retry_after_checklist_miss_impl(
     }
     Box::pin(super::super::run(store.clone(), retry_args)).await.map(Some)
 }
-
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn verify_output_excerpt_keeps_last_lines() {
-        let output = (1..=10)
-            .map(|idx| format!("line {idx}"))
-            .collect::<Vec<_>>()
-            .join("\n");
-
-        let excerpt = verify_output_excerpt(&output).unwrap();
-
-        assert_eq!(
-            excerpt,
-            "line 3 | line 4 | line 5 | line 6 | line 7 | line 8 | line 9 | line 10"
-        );
-    }
-}
+#[path = "run_verify_tests.rs"]
+mod tests;

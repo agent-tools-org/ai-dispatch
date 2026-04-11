@@ -1,6 +1,5 @@
 // aid CLI primary dispatch handlers.
 // Implements run, watch, show, and related command wrappers.
-
 use crate::cli::{BatchAction, RunExtrasArgs};
 use crate::cmd;
 use crate::types::AgentKind;
@@ -47,6 +46,7 @@ pub(super) async fn run(
     id: Option<String>,
     timeout: Option<u64>,
     idle_timeout: Option<u64>,
+    no_link_deps: bool,
 ) -> Result<()> {
     let config = config::load_config().unwrap_or_default();
     let budget = budget || config.selection.budget_mode;
@@ -108,6 +108,7 @@ pub(super) async fn run(
         id,
         timeout,
         idle_timeout,
+        no_link_deps,
     );
     cmd::run::run(store, args).await?;
     Ok(())
@@ -151,6 +152,7 @@ fn build_run_args(
     id: Option<String>,
     timeout: Option<u64>,
     idle_timeout: Option<u64>,
+    no_link_deps: bool,
 ) -> cmd::run::RunArgs {
     let extras = *run_extras;
     let skills = if no_skill { vec![cmd::run::NO_SKILL_SENTINEL.to_string()] } else { extras.skill };
@@ -200,6 +202,7 @@ fn build_run_args(
         env,
         existing_task_id: id.map(crate::types::TaskId),
         timeout,
+        link_deps: !no_link_deps,
         ..Default::default()
     }
 }

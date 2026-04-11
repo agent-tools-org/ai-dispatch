@@ -236,6 +236,7 @@ mod tests {
             result_file: None,
             model: None,
             verify: None,
+            setup: None,
             iterate: None,
             eval: None,
             eval_feedback_template: None,
@@ -256,6 +257,7 @@ mod tests {
             sandbox: false,
             read_only: false,
             container: None,
+            link_deps: true,
         };
         save_spec(&spec).unwrap();
         

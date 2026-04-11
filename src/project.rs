@@ -30,6 +30,8 @@ pub struct ProjectConfig {
     #[serde(default)]
     pub verify: Option<String>,
     #[serde(default)]
+    pub setup: Option<String>,
+    #[serde(default)]
     pub container: Option<String>,
     #[serde(default)]
     pub gitbutler: Option<String>,
@@ -369,6 +371,7 @@ id = "gamma"
 profile = "standard"
 max_task_cost = 3.5
 verify = "custom verify"
+setup = "npm ci"
 rules = ["explicit rule"]
 budget.window = "4h"
 budget.cost_limit_usd = 99.5
@@ -376,6 +379,7 @@ budget.cost_limit_usd = 99.5
         let config = load_project(&write_project(dir.path(), contents)).unwrap();
         assert_eq!(config.max_task_cost, Some(3.5));
         assert_eq!(config.verify.as_deref(), Some("custom verify"));
+        assert_eq!(config.setup.as_deref(), Some("npm ci"));
         assert!(config.rules.iter().any(|rule| rule == "explicit rule"));
         assert!(config
             .rules

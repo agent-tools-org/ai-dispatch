@@ -82,6 +82,8 @@ pub struct RunArgs {
     pub timeout: Option<u64>,
     #[arg(long, value_name = "SECS")]
     pub idle_timeout: Option<u64>,
+    #[arg(long)]
+    pub no_link_deps: bool,
 }
 
 #[derive(Args)]

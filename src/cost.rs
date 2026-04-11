@@ -54,6 +54,7 @@ fn resolve_pricing(model: Option<&str>, agent: AgentKind) -> Option<ModelPricing
     // Default pricing by agent
     match agent {
         AgentKind::Gemini => model_pricing("gemini-2.5-flash", agent),
+        AgentKind::Qwen => model_pricing("coder-model", agent),
         AgentKind::Codex => model_pricing("gpt-4.1", agent),
         AgentKind::Copilot => Some(ModelPricing {
             input_per_m: 0.0,
@@ -158,6 +159,16 @@ fn model_pricing(model: &str, agent: AgentKind) -> Option<ModelPricing> {
         ModelPricing {
             input_per_m: 1.25,
             output_per_m: 10.0,
+        }
+    } else if m.contains("coder-model") {
+        ModelPricing {
+            input_per_m: 0.0,
+            output_per_m: 0.0,
+        }
+    } else if m.contains("qwen") {
+        ModelPricing {
+            input_per_m: 0.30,
+            output_per_m: 2.50,
         }
     } else if m == "haiku" || m.contains("claude-haiku") {
         ModelPricing {

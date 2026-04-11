@@ -162,7 +162,7 @@ fn home_dir() -> Option<PathBuf> {
 fn mount_home_dirs_from(home: Option<PathBuf>) -> Vec<String> {
     let mut args = Vec::new();
     let Some(home) = home else { return args };
-    for subdir in [".codex", ".copilot", ".gemini", ".kilo", ".codebuff", ".opencode"] {
+    for subdir in [".codex", ".copilot", ".gemini", ".qwen", ".kilo", ".codebuff", ".opencode"] {
         let host_path = home.join(subdir);
         if host_path.exists() {
             let container_path = Path::new("/root").join(subdir);
@@ -200,6 +200,7 @@ mod tests {
         let home = TempDir::new().unwrap();
         fs::create_dir(home.path().join(".codex")).unwrap();
         fs::create_dir(home.path().join(".gemini")).unwrap();
+        fs::create_dir(home.path().join(".qwen")).unwrap();
 
         let args = mount_home_dirs_from(Some(home.path().to_path_buf()));
 
@@ -209,6 +210,9 @@ mod tests {
         assert!(args
             .windows(2)
             .any(|pair| pair[0] == "-v" && pair[1].contains(".gemini:/root/.gemini")));
+        assert!(args
+            .windows(2)
+            .any(|pair| pair[0] == "-v" && pair[1].contains(".qwen:/root/.qwen")));
     }
 
     #[test]

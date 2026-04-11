@@ -207,6 +207,7 @@ fn auto_skills_returns_agent_defaults_when_installed() {
 
     assert_eq!(auto_skills(&AgentKind::Codex, false), vec!["implementer"]);
     assert_eq!(auto_skills(&AgentKind::OpenCode, false), vec!["implementer"]);
+    assert_eq!(auto_skills(&AgentKind::Qwen, false), vec!["implementer"]);
     assert!(auto_skills(&AgentKind::Cursor, true).is_empty());
     assert_eq!(auto_skills(&AgentKind::Gemini, false), vec!["researcher"]);
     assert_eq!(auto_skills(&AgentKind::Kilo, false), vec!["implementer"]);
@@ -221,6 +222,7 @@ fn auto_skills_skips_missing_defaults() {
     std::fs::write(dir.join("implementer.md"), "# Implementer").unwrap();
 
     assert!(auto_skills(&AgentKind::Gemini, false).is_empty());
+    assert!(auto_skills(&AgentKind::Qwen, false).is_empty());
 }
 
 #[test]

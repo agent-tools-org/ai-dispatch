@@ -124,6 +124,7 @@ where
         AgentKind::Copilot => which("copilot"),
         AgentKind::Cursor => which("agent") || which("cursor-agent"),
         AgentKind::Gemini => which("gemini"),
+        AgentKind::Qwen => which("qwen"),
         AgentKind::OpenCode => which("opencode"),
         AgentKind::Kilo => which("kilo"),
         AgentKind::Codebuff => which("aid-codebuff"),

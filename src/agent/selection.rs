@@ -228,6 +228,7 @@ pub(crate) fn recommend_model(
 
 const CODING_FALLBACK_CHAIN: &[AgentKind] = &[
     AgentKind::Gemini,
+    AgentKind::Qwen,
     AgentKind::Codex,
     AgentKind::Claude,
     AgentKind::Copilot,
@@ -239,6 +240,7 @@ const CODING_FALLBACK_CHAIN: &[AgentKind] = &[
 #[allow(dead_code)]
 const RESEARCH_FALLBACK_CHAIN: &[AgentKind] = &[
     AgentKind::Gemini,
+    AgentKind::Qwen,
     AgentKind::Claude,
     AgentKind::Copilot,
     AgentKind::Codex,

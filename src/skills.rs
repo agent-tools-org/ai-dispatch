@@ -253,6 +253,7 @@ pub fn auto_skills(agent: &AgentKind, has_worktree: bool) -> Vec<String> {
         | AgentKind::Copilot
         | AgentKind::Claude
         | AgentKind::OpenCode
+        | AgentKind::Qwen
         | AgentKind::Kilo
         | AgentKind::Codebuff
         | AgentKind::Droid

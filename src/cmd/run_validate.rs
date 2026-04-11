@@ -20,6 +20,7 @@ pub(super) fn validate_dispatch(args: &RunArgs, agent_kind: &AgentKind) -> Vec<S
             | AgentKind::Claude
             | AgentKind::OpenCode
             | AgentKind::Cursor
+            | AgentKind::Qwen
             | AgentKind::Kilo
             | AgentKind::Codebuff
     ) && args.dir.is_none() && !args.read_only

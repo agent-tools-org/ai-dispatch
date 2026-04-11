@@ -18,6 +18,8 @@ pub struct RunArgs {
     pub prompt_file: Option<String>,
     #[arg(long)]
     pub repo: Option<String>,
+    #[arg(long, value_name = "PATH")]
+    pub repo_root: Option<String>,
     #[arg(short, long)]
     pub dir: Option<String>,
     #[arg(short, long)]
@@ -126,6 +128,8 @@ pub struct BatchArgs {
     pub vars: Vec<String>,
     #[arg(long)]
     pub group: Option<String>,
+    #[arg(long, value_name = "PATH")]
+    pub repo_root: Option<String>,
     #[arg(long)]
     pub parallel: bool,
     #[arg(long)]

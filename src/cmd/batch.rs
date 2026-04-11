@@ -41,6 +41,7 @@ pub struct BatchArgs {
     pub file: String,
     pub vars: Vec<String>,
     pub group: Option<String>,
+    pub repo_root: Option<String>,
     pub parallel: bool,
     pub analyze: bool,
     pub wait: bool,
@@ -72,6 +73,10 @@ pub async fn run(store: Arc<Store>, args: BatchArgs) -> Result<()> {
     }
     let total = config.tasks.len();
     let shared_dir_enabled = config.defaults.shared_dir.unwrap_or(false);
+    let configured_repo_root = args.repo_root.clone()
+        .or_else(|| config.defaults.repo_root.as_ref().map(|value| resolve_config_path(path, value)));
+    let explicit_repo_path = crate::repo_root::resolve_explicit_repo_path(configured_repo_root.as_deref(), None)?;
+    if explicit_repo_path.is_none() { warn_nested_repo_for_batch(&config.tasks); }
     validate_batch_config(&config.tasks, args.parallel, args.force)?;
     let deps = batch::dependency_indices(&config.tasks)
         .unwrap_or_else(|_| vec![Vec::new(); config.tasks.len()]);
@@ -145,6 +150,8 @@ pub async fn run(store: Arc<Store>, args: BatchArgs) -> Result<()> {
                 &store,
                 shared_dir_path.as_deref(),
             );
+            run_args.repo_root = explicit_repo_path.clone();
+            run_args.suppress_nested_repo_warning = true;
             run_args.dry_run = true;
             let _ = run::run(store.clone(), run_args).await?;
         }
@@ -186,6 +193,7 @@ pub async fn run(store: Arc<Store>, args: BatchArgs) -> Result<()> {
             max_concurrent,
             auto_fallback,
             shared_dir_path.as_deref(),
+            explicit_repo_path.as_deref(),
         )
         .await?
     } else if has_dependencies {
@@ -194,6 +202,7 @@ pub async fn run(store: Arc<Store>, args: BatchArgs) -> Result<()> {
             &config.tasks,
             auto_fallback,
             shared_dir_path.as_deref(),
+            explicit_repo_path.as_deref(),
         )
         .await?
     } else if args.parallel {
@@ -203,6 +212,7 @@ pub async fn run(store: Arc<Store>, args: BatchArgs) -> Result<()> {
             max_concurrent,
             auto_fallback,
             shared_dir_path.as_deref(),
+            explicit_repo_path.as_deref(),
         )
         .await?
     } else {
@@ -211,6 +221,7 @@ pub async fn run(store: Arc<Store>, args: BatchArgs) -> Result<()> {
             &config.tasks,
             auto_fallback,
             shared_dir_path.as_deref(),
+            explicit_repo_path.as_deref(),
         )
         .await?
     };
@@ -263,6 +274,20 @@ fn parse_cli_vars(raw_vars: &[String]) -> Result<HashMap<String, String>> {
         vars.insert(key.to_string(), value.to_string());
     }
     Ok(vars)
+}
+
+fn resolve_config_path(batch_path: &Path, value: &str) -> String {
+    let path = Path::new(value);
+    if path.is_absolute() {
+        return value.to_string();
+    }
+    batch_path.parent().unwrap_or_else(|| Path::new(".")).join(path).to_string_lossy().into_owned()
+}
+fn warn_nested_repo_for_batch(tasks: &[batch::BatchTask]) {
+    let Some(task) = tasks.iter().find(|task| task.worktree.is_some()) else {
+        return;
+    };
+    crate::repo_root::warn_if_nested_repo(task.dir.as_deref().unwrap_or("."));
 }
 #[cfg(test)]
 #[path = "batch_tests.rs"]

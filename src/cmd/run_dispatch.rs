@@ -23,6 +23,12 @@ pub async fn run(store: Arc<Store>, mut args: RunArgs) -> Result<TaskId> {
     if let Some(n) = args.best_of {
         return Box::pin(run_bestof::run_best_of(store, args, n)).await;
     }
+    if args.repo_root.is_none()
+        && !args.suppress_nested_repo_warning
+        && args.worktree.is_some()
+    {
+        crate::repo_root::warn_if_nested_repo(args.repo.as_deref().or(args.dir.as_deref()).unwrap_or("."));
+    }
     let prepared = prepare_dispatch(&store, &mut args)?;
     let before_worktree = prepared.task.worktree_path.clone();
     let prompt_bundle = run_prompt::build_prompt_bundle(

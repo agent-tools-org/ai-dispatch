@@ -13,6 +13,7 @@ pub struct RunArgs {
     pub prompt: String,
     pub prompt_file: Option<String>,
     pub repo: Option<String>,
+    pub repo_root: Option<String>,
     pub dir: Option<String>,
     pub output: Option<String>,
     pub result_file: Option<String>,
@@ -56,6 +57,7 @@ pub struct RunArgs {
     pub judge_retry: bool,
     pub existing_task_id: Option<TaskId>,
     pub timeout: Option<u64>,
+    pub suppress_nested_repo_warning: bool,
 }
 
 pub(crate) fn resolve_max_duration_mins(

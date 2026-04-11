@@ -6,6 +6,7 @@ use super::{create_worktree, is_valid_git_worktree};
 use crate::test_subprocess;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::time::{SystemTime, UNIX_EPOCH};
 use tempfile::TempDir;
 
 fn git(repo_dir: &Path, args: &[&str]) {
@@ -43,6 +44,14 @@ fn cleanup_worktree(repo_dir: &Path, worktree: &Path) {
     let _ = std::fs::remove_dir_all(worktree);
 }
 
+fn unique_worktree_path(prefix: &str) -> PathBuf {
+    let unique = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_nanos();
+    PathBuf::from(format!("/tmp/{prefix}-{}-{unique}", std::process::id()))
+}
+
 #[test]
 fn is_valid_git_worktree_rejects_standalone_repo() {
     let _permit = test_subprocess::acquire();
@@ -64,6 +73,28 @@ fn is_valid_git_worktree_accepts_linked_worktree() {
     );
 
     assert!(is_valid_git_worktree(main_repo.path(), &worktree).unwrap());
+
+    cleanup_worktree(main_repo.path(), &worktree);
+}
+
+#[test]
+#[cfg(target_os = "macos")]
+fn is_valid_git_worktree_accepts_tmp_and_private_tmp_spellings() {
+    let _permit = test_subprocess::acquire();
+    let main_repo = init_repo();
+    let worktree = unique_worktree_path("aid-94-alias");
+    let private_worktree = PathBuf::from(
+        worktree
+            .to_string_lossy()
+            .replacen("/tmp/", "/private/tmp/", 1),
+    );
+    git(
+        main_repo.path(),
+        &["worktree", "add", "-b", "feat/tmp-private-alias", &worktree.to_string_lossy()],
+    );
+
+    assert!(is_valid_git_worktree(main_repo.path(), &worktree).unwrap());
+    assert!(is_valid_git_worktree(main_repo.path(), &private_worktree).unwrap());
 
     cleanup_worktree(main_repo.path(), &worktree);
 }

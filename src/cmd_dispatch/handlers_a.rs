@@ -47,6 +47,7 @@ pub(super) async fn run(
     id: Option<String>,
     timeout: Option<u64>,
     idle_timeout: Option<u64>,
+    audit: bool,
     no_link_deps: bool,
 ) -> Result<()> {
     let config = config::load_config().unwrap_or_default();
@@ -110,6 +111,7 @@ pub(super) async fn run(
         id,
         timeout,
         idle_timeout,
+        audit,
         no_link_deps,
     );
     cmd::run::run(store, args).await?;
@@ -155,6 +157,7 @@ fn build_run_args(
     id: Option<String>,
     timeout: Option<u64>,
     idle_timeout: Option<u64>,
+    audit: bool,
     no_link_deps: bool,
 ) -> cmd::run::RunArgs {
     let extras = *run_extras;
@@ -206,6 +209,8 @@ fn build_run_args(
         env,
         existing_task_id: id.map(crate::types::TaskId),
         timeout,
+        audit,
+        audit_explicit: audit,
         link_deps: !no_link_deps,
         ..Default::default()
     }

@@ -106,6 +106,8 @@ fn make_task_with_worktree(id: &str, repo: &Path, wt: &Path, branch: &str) -> Ta
         pending_reason: None,
         read_only: false,
         budget: false,
+        audit_verdict: None,
+        audit_report_path: None,
     }
 }
 
@@ -489,6 +491,8 @@ fn merge_single_works_without_worktree_branch() {
         pending_reason: None,
         read_only: false,
         budget: false,
+        audit_verdict: None,
+        audit_report_path: None,
     };
     store.insert_task(&task).unwrap();
 

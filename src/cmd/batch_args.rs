@@ -122,6 +122,8 @@ pub(crate) fn task_to_run_args(
         existing_task_id: task.id.as_ref().map(|id| crate::types::TaskId(id.clone())),
         env,
         env_forward: task.env_forward.clone(),
+        audit: task.audit.unwrap_or(false),
+        audit_explicit: task.audit.is_some(),
         link_deps: task.worktree_link_deps.unwrap_or(true),
         ..Default::default()
     }

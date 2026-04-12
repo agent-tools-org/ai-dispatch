@@ -55,12 +55,17 @@ pub(super) fn apply_project_defaults(args: &mut RunArgs, detected_project: Optio
             args.budget = true;
             defaults_applied = true;
         }
+        if !args.audit_explicit && project.audit_auto() {
+            args.audit = true;
+            defaults_applied = true;
+        }
         if defaults_applied {
             aid_info!(
-                "[aid] Project '{}' defaults: team={}, verify={}",
+                "[aid] Project '{}' defaults: team={}, verify={}, audit={}",
                 project.id,
                 args.team.as_deref().unwrap_or("None"),
                 args.verify.as_deref().unwrap_or("None"),
+                if args.audit { "on" } else { "off" },
             );
         }
     }

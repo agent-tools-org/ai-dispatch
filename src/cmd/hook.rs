@@ -73,6 +73,7 @@ mod tests {
             rules: vec!["project rule".to_string()],
             budget: ProjectBudget::default(),
             agents: ProjectAgents::default(),
+            audit: Default::default(),
         };
         let team = TeamConfig {
             id: "dev".to_string(),

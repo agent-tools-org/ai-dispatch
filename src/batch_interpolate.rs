@@ -207,6 +207,9 @@ fn apply_task_defaults(task: &mut BatchTask, defaults: &BatchDefaults, task_idx:
     if !task.budget && matches!(defaults.budget, Some(true)) {
         task.budget = true;
     }
+    if task.audit.is_none() {
+        task.audit = defaults.audit;
+    }
     task.env = merge_env_maps(defaults.env.as_ref(), task.env.as_ref());
     task.env_forward = merge_env_lists(defaults.env_forward.as_ref(), task.env_forward.as_ref());
     if task.worktree_link_deps.is_none() {

@@ -96,6 +96,8 @@ pub struct BatchDefaults {
     #[serde(default)]
     pub budget: Option<bool>,
     #[serde(default)]
+    pub audit: Option<bool>,
+    #[serde(default)]
     pub env: Option<HashMap<String, String>>,
     #[serde(default)]
     pub env_forward: Option<Vec<String>>,
@@ -173,6 +175,8 @@ pub struct BatchTask {
     pub no_skill: bool,
     #[serde(default)]
     pub budget: bool,
+    #[serde(default)]
+    pub audit: Option<bool>,
     #[serde(default)]
     pub env: Option<HashMap<String, String>>,
     #[serde(default)]

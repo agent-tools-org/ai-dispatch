@@ -46,6 +46,8 @@ fn stores_recent_question_as_awaiting_prompt_metadata() {
             pending_reason: None,
         read_only: false,
             budget: false,
+            audit_verdict: None,
+            audit_report_path: None,
         };
     store.insert_task(&task).unwrap();
 
@@ -160,6 +162,8 @@ fn finalize_streaming_persists_transcript() {
         pending_reason: None,
         read_only: false,
         budget: false,
+        audit_verdict: None,
+        audit_report_path: None,
     };
     store.insert_task(&task).unwrap();
     let mut state = MonitorState::new(true);

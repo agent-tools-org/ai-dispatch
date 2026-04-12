@@ -100,7 +100,10 @@ pub(super) fn stage_untracked_source_files(dir: &str, task_id: &str) -> Result<V
 }
 
 fn detect_rescuable_files(dir: &str) -> Result<Vec<DirtyFile>> {
-    let out = Command::new("git").args(["-C", dir, "status", "--porcelain"]).output().context("Failed to run git status")?;
+    let out = Command::new("git")
+        .args(["-C", dir, "status", "--porcelain", "--untracked-files=all"])
+        .output()
+        .context("Failed to run git status")?;
     anyhow::ensure!(out.status.success(), "git status failed: {}", String::from_utf8_lossy(&out.stderr));
     Ok(String::from_utf8_lossy(&out.stdout)
         .lines()

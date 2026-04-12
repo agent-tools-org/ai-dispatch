@@ -420,7 +420,7 @@ pub(super) fn final_dirty_assertion(
 
 fn worktree_status_lines(dir: &str) -> Result<Vec<String>> {
     let out = std::process::Command::new("git")
-        .args(["-C", dir, "status", "--porcelain"])
+        .args(["-C", dir, "status", "--porcelain", "--untracked-files=all"])
         .output()
         .context("Failed to run git status")?;
     anyhow::ensure!(out.status.success(), "git status failed: {}", String::from_utf8_lossy(&out.stderr));

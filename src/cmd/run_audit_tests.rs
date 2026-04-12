@@ -107,12 +107,11 @@ fn audit_skipped_when_aic_not_found() {
 fn audit_records_pass_verdict() {
     let _guard = env_lock();
     let temp = tempfile::tempdir().unwrap();
-    let original_path = env::var("PATH").unwrap_or_default();
     install_aic_shim(
         temp.path(),
         "if [ \"$1\" = \"--version\" ]; then exit 0; fi\nprintf 'report: /tmp/foo.md\\n'\nexit 0",
     );
-    set_env("PATH", format!("{}:{}", temp.path().display(), original_path));
+    set_env("AIC_TEST_BINARY", temp.path().join("aic"));
     let store = Store::open_memory().unwrap();
     store.insert_task(&done_task("t-audit-pass")).unwrap();
 
@@ -121,19 +120,18 @@ fn audit_records_pass_verdict() {
     let task = store.get_task("t-audit-pass").unwrap().unwrap();
     assert_eq!(task.audit_verdict.as_deref(), Some("pass"));
     assert_eq!(task.audit_report_path.as_deref(), Some("/tmp/foo.md"));
-    set_env("PATH", original_path);
+    remove_env("AIC_TEST_BINARY");
 }
 
 #[test]
 fn audit_records_fail_verdict() {
     let _guard = env_lock();
     let temp = tempfile::tempdir().unwrap();
-    let original_path = env::var("PATH").unwrap_or_default();
     install_aic_shim(
         temp.path(),
         "if [ \"$1\" = \"--version\" ]; then exit 0; fi\nprintf 'report: /tmp/fail.md\\n'\nexit 1",
     );
-    set_env("PATH", format!("{}:{}", temp.path().display(), original_path));
+    set_env("AIC_TEST_BINARY", temp.path().join("aic"));
     let store = Store::open_memory().unwrap();
     store.insert_task(&done_task("t-audit-fail")).unwrap();
 
@@ -141,19 +139,18 @@ fn audit_records_fail_verdict() {
 
     let task = store.get_task("t-audit-fail").unwrap().unwrap();
     assert_eq!(task.audit_verdict.as_deref(), Some("fail"));
-    set_env("PATH", original_path);
+    remove_env("AIC_TEST_BINARY");
 }
 
 #[test]
 fn audit_records_error_verdict() {
     let _guard = env_lock();
     let temp = tempfile::tempdir().unwrap();
-    let original_path = env::var("PATH").unwrap_or_default();
     install_aic_shim(
         temp.path(),
         "if [ \"$1\" = \"--version\" ]; then exit 0; fi\nexit 200",
     );
-    set_env("PATH", format!("{}:{}", temp.path().display(), original_path));
+    set_env("AIC_TEST_BINARY", temp.path().join("aic"));
     let store = Store::open_memory().unwrap();
     store.insert_task(&done_task("t-audit-error")).unwrap();
 
@@ -161,19 +158,18 @@ fn audit_records_error_verdict() {
 
     let task = store.get_task("t-audit-error").unwrap().unwrap();
     assert_eq!(task.audit_verdict.as_deref(), Some("error"));
-    set_env("PATH", original_path);
+    remove_env("AIC_TEST_BINARY");
 }
 
 #[test]
 fn audit_respects_timeout() {
     let _guard = env_lock();
     let temp = tempfile::tempdir().unwrap();
-    let original_path = env::var("PATH").unwrap_or_default();
     install_aic_shim(
         temp.path(),
         "if [ \"$1\" = \"--version\" ]; then exit 0; fi\nsleep 2\nprintf 'report: /tmp/late.md\\n'\nexit 0",
     );
-    set_env("PATH", format!("{}:{}", temp.path().display(), original_path));
+    set_env("AIC_TEST_BINARY", temp.path().join("aic"));
     set_env("AID_AUDIT_TIMEOUT_SECS", "1");
     let store = Store::open_memory().unwrap();
     store.insert_task(&done_task("t-audit-timeout")).unwrap();
@@ -183,19 +179,18 @@ fn audit_respects_timeout() {
     let task = store.get_task("t-audit-timeout").unwrap().unwrap();
     assert_eq!(task.audit_verdict.as_deref(), Some("error"));
     remove_env("AID_AUDIT_TIMEOUT_SECS");
-    set_env("PATH", original_path);
+    remove_env("AIC_TEST_BINARY");
 }
 
 #[test]
 fn project_audit_auto_triggers_without_cli_flag() {
     let _guard = env_lock();
     let temp = tempfile::tempdir().unwrap();
-    let original_path = env::var("PATH").unwrap_or_default();
     install_aic_shim(
         temp.path(),
         "if [ \"$1\" = \"--version\" ]; then exit 0; fi\nprintf 'report: /tmp/project.md\\n'\nexit 0",
     );
-    set_env("PATH", format!("{}:{}", temp.path().display(), original_path));
+    set_env("AIC_TEST_BINARY", temp.path().join("aic"));
     let store = Store::open_memory().unwrap();
     store.insert_task(&done_task("t-project-audit")).unwrap();
     let mut args = RunArgs::default();
@@ -206,19 +201,18 @@ fn project_audit_auto_triggers_without_cli_flag() {
 
     let task = store.get_task("t-project-audit").unwrap().unwrap();
     assert_eq!(task.audit_verdict.as_deref(), Some("pass"));
-    set_env("PATH", original_path);
+    remove_env("AIC_TEST_BINARY");
 }
 
 #[test]
 fn no_audit_overrides_project_audit_auto() {
     let _guard = env_lock();
     let temp = tempfile::tempdir().unwrap();
-    let original_path = env::var("PATH").unwrap_or_default();
     install_aic_shim(
         temp.path(),
         "if [ \"$1\" = \"--version\" ]; then exit 0; fi\nprintf 'report: /tmp/no-audit.md\\n'\nexit 0",
     );
-    set_env("PATH", format!("{}:{}", temp.path().display(), original_path));
+    set_env("AIC_TEST_BINARY", temp.path().join("aic"));
     let store = Store::open_memory().unwrap();
     store.insert_task(&done_task("t-no-audit")).unwrap();
     let mut args = RunArgs { no_audit: true, ..Default::default() };
@@ -233,19 +227,18 @@ fn no_audit_overrides_project_audit_auto() {
 
     let task = store.get_task("t-no-audit").unwrap().unwrap();
     assert_eq!(task.audit_verdict, None);
-    set_env("PATH", original_path);
+    remove_env("AIC_TEST_BINARY");
 }
 
 #[test]
 fn batch_task_level_audit_override_wins() {
     let _guard = env_lock();
     let temp = tempfile::tempdir().unwrap();
-    let original_path = env::var("PATH").unwrap_or_default();
     install_aic_shim(
         temp.path(),
         "if [ \"$1\" = \"--version\" ]; then exit 0; fi\nprintf 'report: /tmp/batch.md\\n'\nexit 0",
     );
-    set_env("PATH", format!("{}:{}", temp.path().display(), original_path));
+    set_env("AIC_TEST_BINARY", temp.path().join("aic"));
     let batch_file = temp.path().join("tasks.toml");
     fs::write(&batch_file, "[defaults]\nagent = \"codex\"\naudit = false\n[[tasks]]\nname = \"plain\"\nprompt = \"plain\"\n[[tasks]]\nname = \"audited\"\nprompt = \"audited\"\naudit = true\n").unwrap();
     let config = parse_batch_file(&batch_file).unwrap();
@@ -273,7 +266,7 @@ fn batch_task_level_audit_override_wins() {
 
     let task = store.get_task("t-batch-audit").unwrap().unwrap();
     assert_eq!(task.audit_verdict.as_deref(), Some("pass"));
-    set_env("PATH", original_path);
+    remove_env("AIC_TEST_BINARY");
 }
 
 #[test]

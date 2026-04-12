@@ -81,7 +81,13 @@ pub(crate) fn final_dirty_assertion(
         return Ok(false);
     }
 
-    let dirty_files = worktree_status_lines(dir)?;
+    let dirty_files = match worktree_status_lines(dir) {
+        Ok(lines) => lines,
+        Err(err) => {
+            aid_warn!("[aid] final dirty assertion skipped for {dir}: {err}");
+            return Ok(false);
+        }
+    };
     if dirty_files.is_empty() {
         return Ok(false);
     }

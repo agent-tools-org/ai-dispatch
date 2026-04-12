@@ -45,7 +45,7 @@ pub fn estimate_tokens(text: &str) -> usize {
 pub fn milestone_instruction() -> &'static str { "\nAfter completing each major step, output on its own line: [MILESTONE] <brief description>\nDo NOT add println!/console.log/print statements with [MILESTONE] to source code — milestones go in your conversation output only." }
 pub fn inject_milestone_prompt(raw: &str) -> String { format!("{raw}{}", milestone_instruction()) }
 pub fn codex_guard() -> &'static str { "\nIMPORTANT: If no changes are needed, do NOT create an empty commit. Instead, print 'NO_CHANGES_NEEDED: <reason>' and exit." }
-pub fn git_staging_guard() -> &'static str { "\n[Git Staging Rule]\nAfter creating new files, always run `git add <newfile>` explicitly before committing. `git commit -a` and `git add -u` do NOT stage untracked files. Forgetting this causes data loss when the worktree is cleaned up.\n" }
+pub fn git_staging_guard() -> &'static str { "\n[Git Staging Rule — CHECK BEFORE EVERY COMMIT]\nBefore every `git commit`, run `git status --porcelain` and confirm zero `??` lines AND zero `M`/`MM` lines outside the staging area.\nIf any untracked files exist, stage them with `git add <file>` first.\nIf any tracked files are modified but unstaged, run `git add <file>` or `git add -u` first.\n`git commit -a` and `git add -u` do NOT stage untracked files — always use `git add <newfile>` for new files.\nA task that leaves untracked or unstaged files in the worktree will FAIL and the agent will be asked to re-commit. Repeat failure aborts the task with data-loss prevention.\n" }
 pub fn codex_commit_msg(msg: &str) -> String { format!("\nCommit with message: '{msg}'") }
 pub fn inject_codex_prompt(raw: &str, commit_msg: Option<&str>) -> String { format!("{raw}{}{}", codex_guard(), commit_msg.map(codex_commit_msg).unwrap_or_default()) }
 
@@ -92,6 +92,8 @@ mod tests {
         let guard = git_staging_guard();
         assert!(guard.contains("git add <newfile>"));
         assert!(guard.contains("git add -u"));
+        assert!(guard.contains("git status --porcelain"));
+        assert!(guard.contains("M`/`MM"));
     }
 
     #[test]

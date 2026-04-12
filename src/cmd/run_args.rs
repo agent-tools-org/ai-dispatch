@@ -60,6 +60,7 @@ pub struct RunArgs {
     pub timeout: Option<u64>,
     pub audit: bool,
     pub audit_explicit: bool,
+    pub no_audit: bool,
     pub suppress_nested_repo_warning: bool,
     pub link_deps: bool,
 }
@@ -118,6 +119,7 @@ impl Default for RunArgs {
             timeout: None,
             audit: false,
             audit_explicit: false,
+            no_audit: false,
             suppress_nested_repo_warning: false,
             link_deps: true,
         }

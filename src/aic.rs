@@ -144,10 +144,11 @@ fn verdict_for_exit_code(code: i32) -> &'static str {
 fn report_path_from_stdout(stdout: &str) -> Option<String> {
     stdout
         .lines()
-        .rev()
-        .find_map(|line| line.trim().strip_prefix("report: ").map(str::trim))
+        .last()
+        .and_then(|line| line.strip_prefix("report: "))
+        .map(str::trim)
         .filter(|path| !path.is_empty())
-        .map(ToString::to_string)
+        .map(str::to_owned)
 }
 
 fn read_pipe<R>(mut reader: R) -> std::thread::JoinHandle<std::io::Result<String>>
@@ -198,7 +199,10 @@ mod tests {
 
     fn env_lock() -> std::sync::MutexGuard<'static, ()> {
         static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
-        LOCK.get_or_init(|| Mutex::new(())).lock().unwrap()
+        match LOCK.get_or_init(|| Mutex::new(())).lock() {
+            Ok(guard) => guard,
+            Err(poison) => poison.into_inner(),
+        }
     }
 
     fn install_aic_shim(dir: &Path, body: &str) {
@@ -233,6 +237,14 @@ mod tests {
         assert_eq!(result.verdict, "pass");
         assert_eq!(result.report_path.as_deref(), Some("/tmp/report.md"));
         set_env("PATH", original_path);
+    }
+
+    #[test]
+    fn report_path_requires_terminal_stdout_line() {
+        assert_eq!(
+            report_path_from_stdout("report: /tmp/report.md\nsummary: complete\n"),
+            None
+        );
     }
 
     #[test]

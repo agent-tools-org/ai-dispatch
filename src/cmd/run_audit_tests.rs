@@ -16,7 +16,10 @@ use std::sync::{Arc, Mutex, OnceLock};
 
 fn env_lock() -> std::sync::MutexGuard<'static, ()> {
     static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
-    LOCK.get_or_init(|| Mutex::new(())).lock().unwrap()
+    match LOCK.get_or_init(|| Mutex::new(())).lock() {
+        Ok(guard) => guard,
+        Err(poison) => poison.into_inner(),
+    }
 }
 
 fn done_task(task_id: &str) -> Task {
@@ -83,11 +86,7 @@ fn audit_args(enabled: bool) -> RunArgs {
     }
 }
 
-fn run_audit_for_task(
-    store: &Store,
-    task_id: &str,
-    args: &RunArgs,
-) {
+fn run_audit_for_task(store: &Store, task_id: &str, args: &RunArgs) {
     maybe_run_post_done_audit(store, &TaskId(task_id.to_string()), args, None, None).unwrap();
 }
 
@@ -204,6 +203,29 @@ fn project_audit_auto_triggers_without_cli_flag() {
     let store = Store::open_memory().unwrap();
     store.insert_task(&done_task("t-project-audit")).unwrap();
     let mut args = RunArgs::default();
+    let project = ProjectConfig { id: "demo".to_string(), audit: ProjectAuditConfig { auto: true }, ..Default::default() };
+
+    super::run_dispatch_resolve::apply_project_defaults(&mut args, Some(&project));
+    run_audit_for_task(&store, "t-project-audit", &args);
+
+    let task = store.get_task("t-project-audit").unwrap().unwrap();
+    assert_eq!(task.audit_verdict.as_deref(), Some("pass"));
+    set_env("PATH", original_path);
+}
+
+#[test]
+fn no_audit_overrides_project_audit_auto() {
+    let _guard = env_lock();
+    let temp = tempfile::tempdir().unwrap();
+    let original_path = env::var("PATH").unwrap_or_default();
+    install_aic_shim(
+        temp.path(),
+        "if [ \"$1\" = \"--version\" ]; then exit 0; fi\nprintf 'report: /tmp/no-audit.md\\n'\nexit 0",
+    );
+    set_env("PATH", format!("{}:{}", temp.path().display(), original_path));
+    let store = Store::open_memory().unwrap();
+    store.insert_task(&done_task("t-no-audit")).unwrap();
+    let mut args = RunArgs { no_audit: true, ..Default::default() };
     let project = ProjectConfig {
         id: "demo".to_string(),
         audit: ProjectAuditConfig { auto: true },
@@ -211,10 +233,10 @@ fn project_audit_auto_triggers_without_cli_flag() {
     };
 
     super::run_dispatch_resolve::apply_project_defaults(&mut args, Some(&project));
-    run_audit_for_task(&store, "t-project-audit", &args);
+    run_audit_for_task(&store, "t-no-audit", &args);
 
-    let task = store.get_task("t-project-audit").unwrap().unwrap();
-    assert_eq!(task.audit_verdict.as_deref(), Some("pass"));
+    let task = store.get_task("t-no-audit").unwrap().unwrap();
+    assert_eq!(task.audit_verdict, None);
     set_env("PATH", original_path);
 }
 
@@ -229,11 +251,7 @@ fn batch_task_level_audit_override_wins() {
     );
     set_env("PATH", format!("{}:{}", temp.path().display(), original_path));
     let batch_file = temp.path().join("tasks.toml");
-    fs::write(
-        &batch_file,
-        "[defaults]\nagent = \"codex\"\naudit = false\n[[tasks]]\nname = \"plain\"\nprompt = \"plain\"\n[[tasks]]\nname = \"audited\"\nprompt = \"audited\"\naudit = true\n",
-    )
-    .unwrap();
+    fs::write(&batch_file, "[defaults]\nagent = \"codex\"\naudit = false\n[[tasks]]\nname = \"plain\"\nprompt = \"plain\"\n[[tasks]]\nname = \"audited\"\nprompt = \"audited\"\naudit = true\n").unwrap();
     let config = parse_batch_file(&batch_file).unwrap();
     let store = Arc::new(Store::open_memory().unwrap());
     let plain_args = RunArgs {

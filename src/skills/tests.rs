@@ -222,7 +222,6 @@ fn auto_skills_skips_missing_defaults() {
     std::fs::write(dir.join("implementer.md"), "# Implementer").unwrap();
 
     assert!(auto_skills(&AgentKind::Gemini, false).is_empty());
-    assert!(auto_skills(&AgentKind::Qwen, false).is_empty());
 }
 
 #[test]

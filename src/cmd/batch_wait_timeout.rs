@@ -151,6 +151,7 @@ mod tests {
             sandbox: false,
             no_skill: false,
             budget: false,
+            audit: None,
             env: None,
             env_forward: None,
             worktree_link_deps: None,

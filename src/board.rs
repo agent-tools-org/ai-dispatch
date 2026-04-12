@@ -246,6 +246,14 @@ pub fn render_task_detail(task: &Task, events: &[TaskEvent], retry_chain: Option
     if let Some(ref output) = task.output_path {
         out.push_str(&format!("Output: {}\n", output));
     }
+    if let Some(verdict) = task.audit_verdict.as_deref() {
+        out.push_str("Audit: ");
+        out.push_str(verdict);
+        if let Some(report_path) = task.audit_report_path.as_deref() {
+            out.push_str(&format!(" (report: {report_path})"));
+        }
+        out.push('\n');
+    }
 
     if !events.is_empty() {
         out.push_str("\nEvents:\n");
@@ -444,6 +452,8 @@ mod tests {
             pending_reason: None,
             read_only: false,
             budget: false,
+            audit_verdict: None,
+            audit_report_path: None,
         }
     }
 

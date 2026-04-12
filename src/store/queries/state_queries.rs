@@ -22,7 +22,7 @@ impl Store {
              caller_kind, caller_session_id, agent_session_id, repo_path, worktree_path, worktree_branch,
              start_sha, log_path, output_path, tokens, prompt_tokens, duration_ms, model, cost_usd,
              created_at, completed_at, verify, read_only, budget, custom_agent_name, verify_status,
-             exit_code, category, pending_reason
+             exit_code, category, pending_reason, audit_verdict, audit_report_path
              FROM tasks
              WHERE repo_path = ?1
              ORDER BY created_at DESC

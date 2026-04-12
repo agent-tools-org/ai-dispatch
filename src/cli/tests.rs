@@ -55,6 +55,15 @@ fn run_timeout_flag_parses() {
 }
 
 #[test]
+fn run_audit_flag_parses() {
+    let cli = Cli::try_parse_from(["aid", "run", "codex", "task", "--audit"]).unwrap();
+    match cli.command {
+        Some(Commands::Run(command_args_a::RunArgs { audit, .. })) => assert!(audit),
+        _ => panic!("expected Run"),
+    }
+}
+
+#[test]
 fn run_idle_timeout_flag_parses() {
     let cli = Cli::try_parse_from(["aid", "run", "codex", "task", "--idle-timeout", "240"]).unwrap();
     match cli.command {

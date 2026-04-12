@@ -69,6 +69,8 @@ fn render_all_confirmed_shows_checkmarks() {
         pending_reason: None,
         read_only: false,
         budget: false,
+        audit_verdict: None,
+        audit_report_path: None,
     };
     store.insert_task(&task).unwrap();
     let text = render_checklist_status(&store, &task).expect("expected checklist");
@@ -114,6 +116,8 @@ fn render_missing_item_shows_x() {
         pending_reason: None,
         read_only: false,
         budget: false,
+        audit_verdict: None,
+        audit_report_path: None,
     };
     store.insert_task(&task).unwrap();
     let text = render_checklist_status(&store, &task).expect("expected checklist");
@@ -156,6 +160,8 @@ fn render_without_checklist_returns_none() {
         pending_reason: None,
         read_only: false,
         budget: false,
+        audit_verdict: None,
+        audit_report_path: None,
     };
     store.insert_task(&task).unwrap();
     assert!(render_checklist_status(&store, &task).is_none());

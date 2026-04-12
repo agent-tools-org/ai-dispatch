@@ -1,7 +1,7 @@
 // Post-run lifecycle helpers for `aid run`.
 // Exports: post_run_lifecycle() and extracted quota/worktree helper functions.
 // Deps: run.rs wrappers, hooks, retry/judge flow, store, and task types.
-use anyhow::Result;
+use anyhow::{Context, Result};
 use std::{path::Path, sync::Arc};
 use crate::{agent, hooks, rate_limit, store::Store, types::*};
 use crate::cmd::run_hung_recovery;
@@ -44,27 +44,38 @@ pub(crate) async fn post_run_lifecycle(
     // Rescue untracked files before verify — ensures verify tests committed state
     if let Some(dir) = effective_dir {
         if !args.read_only {
-            match crate::commit::rescue_untracked_files(dir.as_str(), task_id.as_str()) {
-                Ok(rescued) if !rescued.is_empty() => {
-                    let files_list = rescued.join(", ");
-                    aid_warn!("[aid] Rescued {} untracked file(s) into commit: {}", rescued.len(), files_list);
+            match crate::commit::rescue_dirty_worktree(dir.as_str(), task_id.as_str()) {
+                Ok(outcome) if !outcome.staged.is_empty() => {
+                    let files_list = rescue_files_summary(&outcome);
+                    aid_warn!("[aid] rescue: staged {} file(s) in {} — {}", outcome.staged.len(), dir, files_list);
                     let _ = store.insert_event(&TaskEvent {
                         task_id: task_id.clone(),
                         timestamp: chrono::Local::now(),
                         event_kind: EventKind::Milestone,
-                        detail: format!("Rescued untracked files: {files_list}"),
+                        detail: format!("Rescued {} file(s): {files_list}", outcome.staged.len()),
                         metadata: None,
                     });
+                    if let Some(error) = outcome.error {
+                        aid_warn!("[aid] rescue: failed to commit rescued files in {dir}: {error}");
+                    }
                 }
-                Err(e) => aid_warn!("[aid] Untracked file rescue failed: {e}"),
+                Ok(outcome) if outcome.error.is_some() => {
+                    aid_warn!("[aid] rescue: dirty worktree rescue failed in {dir}: {}", outcome.error.unwrap_or_default());
+                }
+                Err(e) => aid_warn!("[aid] rescue: dirty worktree rescue failed in {dir}: {e}"),
                 _ => {}
             }
             // If agent left uncommitted changes (modified files it forgot to commit),
             // retry the agent to make it commit rather than silently losing the work.
+            let mut retry_id = None;
             if crate::commit::has_uncommitted_changes(dir.as_str()).unwrap_or(false) {
-                if let Some(retry_id) = maybe_retry_uncommitted(store, task_id, args, dir).await? {
-                    return Ok(Some(retry_id));
-                }
+                retry_id = maybe_retry_uncommitted(store, task_id, args, dir).await?;
+            }
+            if final_dirty_assertion(store.as_ref(), task_id, dir, args.read_only)? {
+                return Ok(None);
+            }
+            if let Some(retry_id) = retry_id {
+                return Ok(Some(retry_id));
             }
         }
     }
@@ -338,12 +349,13 @@ async fn maybe_retry_uncommitted(
         return Ok(None);
     }
 
-    aid_warn!("[aid] Agent left uncommitted changes — retrying to commit");
+    let dirty_files = worktree_status_lines(dir).unwrap_or_default().join(", ");
+    aid_warn!("[aid] retry: uncommitted changes remain in {dir} — {dirty_files}");
     let _ = store.insert_event(&TaskEvent {
         task_id: task_id.clone(),
         timestamp: chrono::Local::now(),
         event_kind: EventKind::Milestone,
-        detail: "Agent left uncommitted changes, dispatching commit retry".to_string(),
+        detail: format!("Retrying uncommitted changes: {dirty_files}"),
         metadata: None,
     });
 
@@ -370,6 +382,49 @@ async fn maybe_retry_uncommitted(
     }
 
     Box::pin(run(store.clone(), retry_args)).await.map(Some)
+}
+
+fn rescue_files_summary(outcome: &crate::commit::RescueOutcome) -> String {
+    let mut files = Vec::new();
+    files.extend(outcome.untracked.iter().map(|path| format!("untracked:{path}")));
+    files.extend(outcome.modified.iter().map(|path| format!("modified:{path}")));
+    files.join(", ")
+}
+
+pub(super) fn final_dirty_assertion(
+    store: &Store,
+    task_id: &TaskId,
+    dir: &str,
+    read_only: bool,
+) -> Result<bool> {
+    if read_only {
+        return Ok(false);
+    }
+    let dirty_files = worktree_status_lines(dir)?;
+    if dirty_files.is_empty() {
+        return Ok(false);
+    }
+    let files = dirty_files.join(", ");
+    let detail = format!("FAIL: agent left uncommitted changes after rescue and retry — aborting to prevent data loss. Files: {files}");
+    aid_warn!("[aid] {detail}");
+    store.insert_event(&TaskEvent {
+        task_id: task_id.clone(),
+        timestamp: chrono::Local::now(),
+        event_kind: EventKind::Milestone,
+        detail,
+        metadata: None,
+    })?;
+    store.update_task_status(task_id.as_str(), TaskStatus::Failed)?;
+    Ok(true)
+}
+
+fn worktree_status_lines(dir: &str) -> Result<Vec<String>> {
+    let out = std::process::Command::new("git")
+        .args(["-C", dir, "status", "--porcelain", "--untracked-files=all"])
+        .output()
+        .context("Failed to run git status")?;
+    anyhow::ensure!(out.status.success(), "git status failed: {}", String::from_utf8_lossy(&out.stderr));
+    Ok(String::from_utf8_lossy(&out.stdout).lines().map(str::to_owned).collect())
 }
 async fn maybe_auto_retry_after_hang(
     store: &Arc<Store>,

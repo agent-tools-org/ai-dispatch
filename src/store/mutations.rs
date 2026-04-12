@@ -32,9 +32,9 @@ impl Store {
              caller_kind, caller_session_id, agent_session_id, repo_path, worktree_path, worktree_branch,
              start_sha, log_path, output_path, tokens, prompt_tokens, duration_ms, model, cost_usd,
              created_at, completed_at, verify, verify_status, read_only, budget, custom_agent_name,
-             category, pending_reason)
+             category, pending_reason, audit_verdict, audit_report_path)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17,
-             ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28, ?29, ?30)",
+             ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28, ?29, ?30, ?31, ?32)",
             params![
                 task.id.as_str(),
                 agent_value,
@@ -66,6 +66,8 @@ impl Store {
                 task.custom_agent_name,
                 task.category,
                 task.pending_reason,
+                task.audit_verdict,
+                task.audit_report_path,
             ],
         )?;
         Ok(())
@@ -122,7 +124,7 @@ impl Store {
              agent_session_id=?10, repo_path=?11, worktree_path=?12, worktree_branch=?13,
              start_sha=?14, log_path=?15, output_path=?16, model=?17, verify=?18,
              verify_status=?19, read_only=?20, budget=?21, custom_agent_name=?22,
-             category=?23, pending_reason=?24
+             category=?23, pending_reason=?24, audit_verdict=?25, audit_report_path=?26
              WHERE id=?1",
             params![
                 task.id.as_str(), agent_value, task.prompt, task.resolved_prompt,
@@ -133,6 +135,8 @@ impl Store {
                 task.verify, task.verify_status.as_str(), task.read_only,
                 task.budget, task.custom_agent_name, task.category,
                 task.pending_reason,
+                task.audit_verdict,
+                task.audit_report_path,
             ],
         )?;
         Ok(())
@@ -328,6 +332,19 @@ impl Store {
         self.db().execute(
             "UPDATE tasks SET completion_summary = ?1 WHERE id = ?2",
             params![summary_json, task_id],
+        )?;
+        Ok(())
+    }
+
+    pub fn update_task_audit(
+        &self,
+        task_id: &str,
+        verdict: Option<&str>,
+        report_path: Option<&str>,
+    ) -> Result<()> {
+        self.db().execute(
+            "UPDATE tasks SET audit_verdict = ?1, audit_report_path = ?2 WHERE id = ?3",
+            params![verdict, report_path, task_id],
         )?;
         Ok(())
     }

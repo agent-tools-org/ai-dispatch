@@ -89,6 +89,7 @@ impl Drop for WorkspaceSymlinkGuard {
 #[cfg(test)] #[path = "run_tests.rs"] mod tests;
 #[cfg(test)] #[path = "checklist_tests.rs"] mod checklist_tests;
 #[cfg(test)] #[path = "run_lifecycle_tests.rs"] mod run_lifecycle_tests;
+#[cfg(test)] #[path = "run_audit_tests.rs"] mod audit;
 
 pub(crate) fn inherit_retry_base_branch(repo_dir: Option<&str>, task: &Task, retry_args: &mut RunArgs) { run_prompt::inherit_retry_base_branch_impl(repo_dir, task, retry_args); }
 pub(crate) fn retry_target(task: &Task) -> (Option<String>, Option<String>) { run_prompt::retry_target(task) }
@@ -100,6 +101,16 @@ pub(crate) fn rescue_quota_failed_task(store: &Store, task_id: &TaskId, quota_er
 pub(crate) fn read_quota_error_message(task_id: &TaskId) -> Option<String> { run_lifecycle::read_quota_error_message(task_id) }
 #[cfg(test)]
 fn worktree_is_empty_diff(worktree_dir: &Path) -> Option<bool> { run_lifecycle::worktree_is_empty_diff(worktree_dir) }
+#[cfg(test)]
+fn maybe_run_post_done_audit(
+    store: &Store,
+    task_id: &TaskId,
+    args: &RunArgs,
+    effective_dir: Option<&str>,
+    repo_path: Option<&str>,
+) -> Result<()> {
+    run_lifecycle::maybe_run_post_done_audit(store, task_id, args, effective_dir, repo_path)
+}
 
 pub(crate) fn maybe_cleanup_fast_fail(store: &Store, task_id: &TaskId, task: &Task) { run_prompt::maybe_cleanup_fast_fail_impl(store, task_id, task); }
 pub(crate) fn persist_result_file(task_id: &str, result_file: Option<&str>, base_dir: Option<&str>) -> Result<()> { run_prompt::persist_result_file(task_id, result_file, base_dir) }

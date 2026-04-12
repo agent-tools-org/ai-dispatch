@@ -264,6 +264,8 @@ fn insert_skipped_task(store: &Arc<Store>, task: &batch::BatchTask) -> Result<Ta
         pending_reason: None,
         read_only: task.read_only,
         budget: task.budget,
+        audit_verdict: None,
+        audit_report_path: None,
         created_at: now,
         completed_at: Some(now),
     })?;

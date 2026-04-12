@@ -11,6 +11,8 @@ mod sub_enums;
 mod tests;
 #[cfg(test)]
 mod export_tests;
+#[cfg(test)]
+mod run_audit_flag_tests;
 
 use clap::{Parser, Subcommand};
 

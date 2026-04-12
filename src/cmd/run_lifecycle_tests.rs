@@ -58,6 +58,8 @@ fn task(id: &str, status: TaskStatus) -> Task {
         pending_reason: None,
         read_only: false,
         budget: false,
+        audit_verdict: None,
+        audit_report_path: None,
     }
 }
 

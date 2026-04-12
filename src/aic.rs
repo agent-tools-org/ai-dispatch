@@ -51,7 +51,7 @@ pub fn audit_timeout_secs() -> u64 {
 
 pub fn run_audit(task_id: &str, current_dir: Option<&Path>) -> AuditResult {
     let timeout_secs = audit_timeout_secs();
-    let mut command = Command::new("aic");
+    let mut command = Command::new(aic_binary_path());
     command
         .args(["audit", task_id])
         .stdout(Stdio::piped())
@@ -132,13 +132,23 @@ fn detect_available() -> bool {
         );
     }
 
-    Command::new("aic")
+    Command::new(aic_binary_path())
         .arg("--version")
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .status()
         .map(|status| status.success())
         .unwrap_or(false)
+}
+
+fn aic_binary_path() -> String {
+    #[cfg(test)]
+    if let Ok(path) = std::env::var("AIC_TEST_BINARY") {
+        if !path.is_empty() {
+            return path;
+        }
+    }
+    "aic".to_string()
 }
 
 fn verdict_for_exit_code(code: i32) -> &'static str {
@@ -230,18 +240,17 @@ mod tests {
     fn run_audit_parses_pass_report_path() {
         let _guard = env_lock();
         let temp = tempfile::tempdir().unwrap();
-        let original_path = env::var("PATH").unwrap_or_default();
         install_aic_shim(
             temp.path(),
             "if [ \"$1\" = \"--version\" ]; then exit 0; fi\nprintf 'ok\\nreport: /tmp/report.md\\n'\nexit 0",
         );
-        set_env("PATH", format!("{}:{}", temp.path().display(), original_path));
+        set_env("AIC_TEST_BINARY", temp.path().join("aic"));
 
         let result = run_audit("t-audit", Some(temp.path()));
 
         assert_eq!(result.verdict, "pass");
         assert_eq!(result.report_path.as_deref(), Some("/tmp/report.md"));
-        set_env("PATH", original_path);
+        remove_env("AIC_TEST_BINARY");
     }
 
     #[test]
@@ -256,12 +265,11 @@ mod tests {
     fn run_audit_times_out() {
         let _guard = env_lock();
         let temp = tempfile::tempdir().unwrap();
-        let original_path = env::var("PATH").unwrap_or_default();
         install_aic_shim(
             temp.path(),
             "if [ \"$1\" = \"--version\" ]; then exit 0; fi\nsleep 2\nprintf 'report: /tmp/late.md\\n'\nexit 0",
         );
-        set_env("PATH", format!("{}:{}", temp.path().display(), original_path));
+        set_env("AIC_TEST_BINARY", temp.path().join("aic"));
         set_env("AID_AUDIT_TIMEOUT_SECS", "1");
 
         let result = run_audit("t-audit", Some(temp.path()));
@@ -269,6 +277,6 @@ mod tests {
         assert_eq!(result.verdict, "error");
         assert_eq!(result.report_path, None);
         remove_env("AID_AUDIT_TIMEOUT_SECS");
-        set_env("PATH", original_path);
+        remove_env("AIC_TEST_BINARY");
     }
 }

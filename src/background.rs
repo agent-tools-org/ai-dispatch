@@ -242,12 +242,25 @@ async fn run_task_inner(store: &Arc<Store>, spec: &BackgroundRunSpec) -> Result<
     }
     if !is_read_only {
         if let Some(worktree_dir) = spec.dir.as_deref() {
-            match crate::commit::rescue_untracked_files(worktree_dir, &spec.task_id) {
-                Ok(rescued) if !rescued.is_empty() => {
-                    let files_list = rescued.join(", ");
-                    aid_warn!("[aid] Rescued {} untracked file(s) into commit: {}", rescued.len(), files_list);
+            match crate::commit::rescue_dirty_worktree(worktree_dir, &spec.task_id) {
+                Ok(outcome) if !outcome.staged.is_empty() => {
+                    let files_list = rescue_files_summary(&outcome);
+                    aid_warn!("[aid] rescue: staged {} file(s) in {} — {}", outcome.staged.len(), worktree_dir, files_list);
+                    let _ = store.insert_event(&TaskEvent {
+                        task_id: TaskId(spec.task_id.clone()),
+                        timestamp: Local::now(),
+                        event_kind: EventKind::Milestone,
+                        detail: format!("Rescued {} file(s): {files_list}", outcome.staged.len()),
+                        metadata: None,
+                    });
+                    if let Some(error) = outcome.error {
+                        aid_warn!("[aid] rescue: failed to commit rescued files in {worktree_dir}: {error}");
+                    }
                 }
-                Err(e) => aid_warn!("[aid] Untracked file rescue failed: {e}"),
+                Ok(outcome) if outcome.error.is_some() => {
+                    aid_warn!("[aid] rescue: dirty worktree rescue failed in {worktree_dir}: {}", outcome.error.unwrap_or_default());
+                }
+                Err(e) => aid_warn!("[aid] rescue: dirty worktree rescue failed in {worktree_dir}: {e}"),
                 _ => {}
             }
         }
@@ -356,6 +369,13 @@ async fn run_task_inner(store: &Arc<Store>, spec: &BackgroundRunSpec) -> Result<
     }
 
     Ok(())
+}
+
+fn rescue_files_summary(outcome: &crate::commit::RescueOutcome) -> String {
+    let mut files = Vec::new();
+    files.extend(outcome.untracked.iter().map(|path| format!("untracked:{path}")));
+    files.extend(outcome.modified.iter().map(|path| format!("modified:{path}")));
+    files.join(", ")
 }
 
 fn record_worker_failure(store: &Store, task_id: &str, err: &anyhow::Error) -> Result<()> { record_failure(store, task_id, &format!("{err:#}"), &format!("Background worker failed: {err}")) }

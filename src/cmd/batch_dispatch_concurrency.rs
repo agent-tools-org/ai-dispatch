@@ -143,6 +143,7 @@ mod tests {
             sandbox: false,
             no_skill: false,
             budget: false,
+            audit: None,
             env: None,
             env_forward: None,
             worktree_link_deps: None,
@@ -185,6 +186,8 @@ mod tests {
             pending_reason: None,
             read_only: false,
             budget: false,
+            audit_verdict: None,
+            audit_report_path: None,
         }
     }
 

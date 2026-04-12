@@ -117,6 +117,8 @@ fn done_task(id: &str, resolved_prompt: Option<&str>) -> Task {
         pending_reason: None,
         read_only: false,
         budget: false,
+        audit_verdict: None,
+        audit_report_path: None,
     }
 }
 

@@ -49,6 +49,8 @@ fn stored_task(id: &str, agent: AgentKind) -> Task {
         pending_reason: None,
         read_only: false,
         budget: false,
+        audit_verdict: None,
+        audit_report_path: None,
     }
 }
 
@@ -155,6 +157,7 @@ fn auto_fallback_skips_rate_limited_toml_fallbacks() {
         sandbox: false,
         no_skill: false,
         budget: false,
+        audit: None,
         env: None,
         env_forward: None,
         worktree_link_deps: None,

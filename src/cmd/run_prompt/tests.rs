@@ -502,6 +502,8 @@ fn build_prompt_bundle_skips_sibling_context_for_opencode() {
         pending_reason: None,
         read_only: false,
         budget: false,
+        audit_verdict: None,
+        audit_report_path: None,
     };
     store.insert_task(&sibling_task).unwrap();
     let summary = crate::cmd::summary::CompletionSummary {
@@ -576,6 +578,8 @@ fn build_prompt_bundle_skips_sibling_context_for_kilo() {
         pending_reason: None,
         read_only: false,
         budget: false,
+        audit_verdict: None,
+        audit_report_path: None,
     };
     store.insert_task(&sibling_task).unwrap();
     let summary = crate::cmd::summary::CompletionSummary {
@@ -650,6 +654,8 @@ fn build_prompt_bundle_includes_sibling_context_for_codex() {
         pending_reason: None,
         read_only: false,
         budget: false,
+        audit_verdict: None,
+        audit_report_path: None,
     };
     store.insert_task(&sibling_task).unwrap();
     let summary = crate::cmd::summary::CompletionSummary {

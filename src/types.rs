@@ -476,6 +476,8 @@ pub struct Task {
     pub pending_reason: Option<String>,
     pub read_only: bool,
     pub budget: bool,
+    pub audit_verdict: Option<String>,
+    pub audit_report_path: Option<String>,
 }
 
 impl Task {
@@ -700,6 +702,8 @@ mod tests {
             pending_reason: None,
             read_only: false,
             budget: false,
+            audit_verdict: None,
+            audit_report_path: None,
         }
     }
 

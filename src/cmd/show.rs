@@ -244,6 +244,14 @@ pub fn summary_text(store: &Arc<Store>, task_id: &str) -> Result<String> {
         task.status.label(),
         task.prompt,
     ));
+    if let Some(verdict) = task.audit_verdict.as_deref() {
+        out.push_str("Audit: ");
+        out.push_str(verdict);
+        if let Some(report_path) = task.audit_report_path.as_deref() {
+            out.push_str(&format!(" (report: {report_path})"));
+        }
+        out.push('\n');
+    }
 
     if task.verify_status == VerifyStatus::EmptyDiff {
         out.push_str("\n--- Diff Stat ---\n  (no changes detected)\n");

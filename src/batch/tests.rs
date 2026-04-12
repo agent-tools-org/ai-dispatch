@@ -75,7 +75,8 @@ fn make_task(name: Option<&str>, depends_on: &[&str]) -> BatchTask {
         sandbox: false,
         no_skill: false,
         budget: false,
-        env: None,
+        audit: None,
+            env: None,
         env_forward: None,
         worktree_link_deps: None,
         on_success: None,
@@ -133,6 +134,23 @@ fn defaults_accept_repo_root() {
 fn result_file_deserializes_from_batch_toml() {
     let config: BatchConfig = toml::from_str("[[tasks]]\nagent = \"codex\"\nprompt = \"test\"\nresult_file = \"result.md\"\n").unwrap();
     assert_eq!(config.tasks[0].result_file.as_deref(), Some("result.md"));
+}
+
+#[test]
+fn audit_defaults_and_task_override_parse() {
+    let cfg = parse_batch_file(
+        write_temp(concat!(
+            "[defaults]\nagent = \"codex\"\naudit = false\n",
+            "[[tasks]]\nname = \"plain\"\nprompt = \"plain\"\n",
+            "[[tasks]]\nname = \"audited\"\nprompt = \"audited\"\naudit = true\n"
+        ))
+        .path(),
+    )
+    .unwrap();
+
+    assert_eq!(cfg.defaults.audit, Some(false));
+    assert_eq!(cfg.tasks[0].audit, Some(false));
+    assert_eq!(cfg.tasks[1].audit, Some(true));
 }
 
 #[test]

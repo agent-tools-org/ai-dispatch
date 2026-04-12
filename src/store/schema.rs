@@ -35,7 +35,9 @@ const CREATE_TABLES_SQL: &str = "CREATE TABLE IF NOT EXISTS tasks (
     completion_summary TEXT,
     peer_review TEXT,
     category TEXT,
-    pending_reason TEXT
+    pending_reason TEXT,
+    audit_verdict TEXT,
+    audit_report_path TEXT
 );
 CREATE TABLE IF NOT EXISTS workgroups (
     id TEXT PRIMARY KEY,
@@ -173,6 +175,8 @@ pub(super) fn migrate(store: &Store) -> Result<()> {
     let _ = conn.execute_batch(
         "ALTER TABLE tasks ADD COLUMN verify_status TEXT NOT NULL DEFAULT 'skipped';",
     );
+    let _ = conn.execute_batch("ALTER TABLE tasks ADD COLUMN audit_verdict TEXT;");
+    let _ = conn.execute_batch("ALTER TABLE tasks ADD COLUMN audit_report_path TEXT;");
     let _ = conn.execute_batch("ALTER TABLE workgroups ADD COLUMN created_by TEXT;");
     let _ = conn.execute_batch(CREATE_FINDINGS_SQL);
     let _ = conn.execute_batch("ALTER TABLE findings ADD COLUMN severity TEXT;");
@@ -199,10 +203,10 @@ pub(super) fn row_to_task(row: &Row) -> rusqlite::Result<Result<Task>> {
     Ok(Ok(Task {
         id: TaskId(row.get::<_, String>(0)?),
         agent: AgentKind::parse_str(&row.get::<_, String>(1)?).unwrap_or(AgentKind::Custom),
-        custom_agent_name: row.get(25).ok().flatten(),
+        custom_agent_name: row.get(26).ok().flatten(),
         prompt: row.get(2)?,
         resolved_prompt: row.get(3)?,
-        category: row.get(28).ok().flatten(),
+        category: row.get(29).ok().flatten(),
         status: TaskStatus::parse_str(&row.get::<_, String>(4)?).unwrap_or(TaskStatus::Pending),
         parent_task_id: row.get(5)?,
         workgroup_id: row.get(6)?,
@@ -231,6 +235,8 @@ pub(super) fn row_to_task(row: &Row) -> rusqlite::Result<Result<Task>> {
         pending_reason: row.get(30).ok().flatten(),
         read_only: row.get(24)?,
         budget: row.get(25)?,
+        audit_verdict: row.get(31).ok().flatten(),
+        audit_report_path: row.get(32).ok().flatten(),
     }))
 }
 

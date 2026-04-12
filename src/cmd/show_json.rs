@@ -73,6 +73,8 @@ pub(super) fn task_json(store: &Arc<Store>, task_id: &str) -> Result<String> {
         "pending_reason": task.pending_reason,
         "read_only": task.read_only,
         "budget": task.budget,
+        "audit_verdict": task.audit_verdict,
+        "audit_report_path": task.audit_report_path,
         "created_at": task.created_at.to_rfc3339(),
         "completed_at": task.completed_at.map(|dt| dt.to_rfc3339()),
         "events": event_list,

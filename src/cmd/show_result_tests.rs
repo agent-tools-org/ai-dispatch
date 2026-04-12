@@ -39,6 +39,8 @@ fn task(id: &str) -> Task {
         pending_reason: None,
         read_only: true,
         budget: false,
+        audit_verdict: None,
+        audit_report_path: None,
     }
 }
 

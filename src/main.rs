@@ -5,6 +5,7 @@
 pub mod output;
 mod agent;
 mod agent_config;
+mod aic;
 mod background;
 mod batch;
 mod board;

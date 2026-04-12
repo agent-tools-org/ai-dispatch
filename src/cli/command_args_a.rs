@@ -84,6 +84,8 @@ pub struct RunArgs {
     pub timeout: Option<u64>,
     #[arg(long, value_name = "SECS")]
     pub idle_timeout: Option<u64>,
+    #[arg(long, help = "Run aic cross-audit on this task after completion (requires `aic` binary on PATH)")]
+    pub audit: bool,
     #[arg(long)]
     pub no_link_deps: bool,
 }

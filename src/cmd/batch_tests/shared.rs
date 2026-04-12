@@ -49,6 +49,7 @@ pub(super) fn make_task(name: &str, conditional: bool, on_success: Option<&str>)
         sandbox: false,
         no_skill: false,
         budget: false,
+        audit: None,
         env: None,
         env_forward: None,
         worktree_link_deps: None,
@@ -120,5 +121,7 @@ pub(super) fn make_stored_task(id: &str, agent: AgentKind, status: TaskStatus) -
         pending_reason: None,
         read_only: false,
         budget: false,
+        audit_verdict: None,
+        audit_report_path: None,
     }
 }

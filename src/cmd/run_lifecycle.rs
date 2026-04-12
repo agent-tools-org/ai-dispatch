@@ -2,7 +2,7 @@
 // Exports: post_run_lifecycle() and extracted quota/worktree helper functions.
 // Deps: run.rs wrappers, hooks, retry/judge flow, store, and task types.
 use anyhow::Result;
-use std::{path::Path, sync::Arc};
+use std::{path::{Path, PathBuf}, sync::Arc};
 use crate::{agent, hooks, rate_limit, store::Store, types::*};
 use crate::cmd::run_hung_recovery;
 use crate::cmd::{checklist_scan, judge, retry_logic, show};
@@ -198,6 +198,13 @@ pub(crate) async fn post_run_lifecycle(
     if let Err(err) = run_prompt::persist_result_file(task_id.as_str(), args.result_file.as_deref(), effective_dir.map(String::as_str)) {
         aid_warn!("[aid] Failed to persist result file: {err}");
     }
+    maybe_run_post_done_audit(
+        store.as_ref(),
+        task_id,
+        args,
+        effective_dir.map(String::as_str),
+        repo_path.map(String::as_str),
+    )?;
     let Some(task) = store.get_task(task_id.as_str())? else { return Ok(None) };
     let summary_json = serde_json::to_string(&crate::cmd::summary::generate_summary(&task)).unwrap_or_default();
     let _ = store.save_completion_summary(task_id.as_str(), &summary_json);
@@ -317,6 +324,60 @@ pub(crate) async fn post_run_lifecycle(
     if completed_normally { aid_info!("[aid] View in TUI: aid board"); }
     Ok(None)
 }
+
+pub(crate) fn maybe_run_post_done_audit(
+    store: &Store,
+    task_id: &TaskId,
+    args: &RunArgs,
+    effective_dir: Option<&str>,
+    repo_path: Option<&str>,
+) -> Result<()> {
+    if !args.audit {
+        return Ok(());
+    }
+    let Some(task) = store.get_task(task_id.as_str())? else {
+        return Ok(());
+    };
+    if task.status != TaskStatus::Done || task.audit_verdict.is_some() {
+        return Ok(());
+    }
+    if !crate::aic::is_available() {
+        aid_warn!("[aid] --audit requested but 'aic' not found on PATH — skipping cross-audit");
+        store.update_task_audit(task_id.as_str(), Some("skipped"), None)?;
+        store.insert_event(&TaskEvent {
+            task_id: task_id.clone(),
+            timestamp: chrono::Local::now(),
+            event_kind: EventKind::Milestone,
+            detail: "audit skipped: aic binary not found".to_string(),
+            metadata: None,
+        })?;
+        return Ok(());
+    }
+
+    let audit_dir = audit_current_dir(effective_dir, repo_path);
+    let result = crate::aic::run_audit(task_id.as_str(), audit_dir.as_deref());
+    store.update_task_audit(
+        task_id.as_str(),
+        Some(result.verdict.as_str()),
+        result.report_path.as_deref(),
+    )?;
+    store.insert_event(&TaskEvent {
+        task_id: task_id.clone(),
+        timestamp: chrono::Local::now(),
+        event_kind: EventKind::Milestone,
+        detail: format!("Audit complete: {}", result.verdict),
+        metadata: None,
+    })?;
+    Ok(())
+}
+
+fn audit_current_dir(effective_dir: Option<&str>, repo_path: Option<&str>) -> Option<PathBuf> {
+    effective_dir
+        .or(repo_path)
+        .map(PathBuf::from)
+        .filter(|path| path.is_dir())
+}
+
 async fn maybe_retry_uncommitted(
     store: &Arc<Store>,
     task_id: &TaskId,

@@ -15,6 +15,8 @@ use crate::team::{self, KnowledgeEntry};
 struct ProjectFile {
     #[serde(rename = "project")]
     pub project: ProjectConfig,
+    #[serde(default)]
+    pub audit: ProjectAuditConfig,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -43,6 +45,15 @@ pub struct ProjectConfig {
     pub budget: ProjectBudget,
     #[serde(default)]
     pub agents: ProjectAgents,
+    #[serde(skip)]
+    pub audit: ProjectAuditConfig,
+}
+
+#[derive(Debug, Clone, Deserialize, Default)]
+#[serde(default, deny_unknown_fields)]
+pub struct ProjectAuditConfig {
+    #[serde(default)]
+    pub auto: bool,
 }
 
 
@@ -92,6 +103,10 @@ pub struct ProjectAgents {
 }
 
 impl ProjectConfig {
+    pub fn audit_auto(&self) -> bool {
+        self.audit.auto
+    }
+
     pub fn gitbutler_mode(&self) -> crate::gitbutler::Mode {
         let Some(value) = self.gitbutler.as_deref() else {
             return crate::gitbutler::Mode::Off;
@@ -197,6 +212,7 @@ pub fn load_project(path: &Path) -> Result<ProjectConfig> {
     let file: ProjectFile =
         toml::from_str(&contents).with_context(|| format!("Failed to parse {}", path.display()))?;
     let mut config = file.project;
+    config.audit = file.audit;
     apply_profile(&mut config);
     Ok(config)
 }
@@ -469,6 +485,20 @@ gitbutler = "auto"
         };
 
         assert_eq!(config.gitbutler_mode(), crate::gitbutler::Mode::Off);
+    }
+
+    #[test]
+    fn audit_auto_reads_top_level_section() {
+        let dir = TempDir::new().unwrap();
+        let contents = r#"
+[project]
+id = "test"
+
+[audit]
+auto = true
+"#;
+        let config = load_project(&write_project(dir.path(), contents)).unwrap();
+        assert!(config.audit_auto());
     }
 
     #[test]

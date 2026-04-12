@@ -12,6 +12,16 @@ static AIC_AVAILABLE: OnceLock<bool> = OnceLock::new();
 const DEFAULT_AUDIT_TIMEOUT_SECS: u64 = 300;
 const MAX_AUDIT_TIMEOUT_SECS: u64 = 1_800;
 
+#[cfg(test)]
+pub(crate) fn test_env_lock() -> std::sync::MutexGuard<'static, ()> {
+    use std::sync::Mutex;
+    static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+    match LOCK.get_or_init(|| Mutex::new(())).lock() {
+        Ok(guard) => guard,
+        Err(poison) => poison.into_inner(),
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AuditResult {
     pub verdict: String,
@@ -187,7 +197,6 @@ mod tests {
     use std::env;
     use std::fs;
     use std::os::unix::fs::PermissionsExt;
-    use std::sync::{Mutex, OnceLock};
 
     fn set_env(key: &str, value: impl AsRef<std::ffi::OsStr>) {
         unsafe { env::set_var(key, value) }
@@ -198,11 +207,7 @@ mod tests {
     }
 
     fn env_lock() -> std::sync::MutexGuard<'static, ()> {
-        static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
-        match LOCK.get_or_init(|| Mutex::new(())).lock() {
-            Ok(guard) => guard,
-            Err(poison) => poison.into_inner(),
-        }
+        crate::aic::test_env_lock()
     }
 
     fn install_aic_shim(dir: &Path, body: &str) {

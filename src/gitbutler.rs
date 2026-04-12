@@ -11,9 +11,23 @@ use std::sync::{Mutex, OnceLock};
 
 static BUT_AVAILABLE: OnceLock<bool> = OnceLock::new();
 static MAIN_REPO_PROJECT_CACHE: OnceLock<Mutex<HashMap<String, bool>>> = OnceLock::new();
-static AUTO_NO_PROJECT_NOTICE: OnceLock<()> = OnceLock::new();
-static ALWAYS_NO_PROJECT_NOTICE: OnceLock<()> = OnceLock::new();
-static AUTO_SETUP_HINT_NOTICE: OnceLock<()> = OnceLock::new();
+
+thread_local! {
+    static AUTO_NO_PROJECT_NOTICE: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    static ALWAYS_NO_PROJECT_NOTICE: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    static AUTO_SETUP_HINT_NOTICE: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+fn set_once(notice: &'static std::thread::LocalKey<std::cell::Cell<bool>>) -> bool {
+    notice.with(|cell| {
+        if cell.get() {
+            false
+        } else {
+            cell.set(true);
+            true
+        }
+    })
+}
 const CLAUDE_TOOL_MATCHER: &str = "Edit|MultiEdit|Write";
 const CLAUDE_SETTINGS_PATH: &str = ".claude/settings.local.json";
 
@@ -50,8 +64,15 @@ impl Mode {
     }
 }
 /// Returns true iff the `but` binary is on PATH and `but --version` succeeds.
-/// Result is cached for the process lifetime via OnceLock.
+/// Result is cached for the process lifetime via OnceLock in production;
+/// in test mode the check is evaluated on every call so tests can toggle
+/// `AID_GITBUTLER_TEST_PRESENT` without the first call poisoning the cache.
 pub fn but_available() -> bool {
+    #[cfg(test)]
+    {
+        return detect_but_available();
+    }
+    #[cfg(not(test))]
     *BUT_AVAILABLE.get_or_init(detect_but_available)
 }
 /// Resolves whether GitButler features should run for this dispatch.
@@ -129,18 +150,18 @@ pub(crate) fn task_worktree_integration_plan(
     if !main_repo_has_project(repo_dir) {
         match mode {
             Mode::Auto => {
-                if AUTO_NO_PROJECT_NOTICE.set(()).is_ok() {
+                if set_once(&AUTO_NO_PROJECT_NOTICE) {
                     aid_warn!(
                         "[aid] gitbutler = auto but main repo has no GitButler project — skipping per-task GitButler hooks"
                     );
                 }
                 return TaskWorktreeIntegrationPlan {
-                    emit_setup_hint: AUTO_SETUP_HINT_NOTICE.set(()).is_ok(),
+                    emit_setup_hint: set_once(&AUTO_SETUP_HINT_NOTICE),
                     ..Default::default()
                 };
             }
             Mode::Always => {
-                if ALWAYS_NO_PROJECT_NOTICE.set(()).is_ok() {
+                if set_once(&ALWAYS_NO_PROJECT_NOTICE) {
                     aid_warn!(
                         "[aid] gitbutler = always but main repo has no GitButler project — skipping per-task GitButler hooks"
                     );

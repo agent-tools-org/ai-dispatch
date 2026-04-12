@@ -7,6 +7,15 @@ use super::{
 };
 use serde_json::{Value, json};
 use std::fs;
+use std::sync::{Mutex, MutexGuard, OnceLock};
+
+fn env_lock() -> MutexGuard<'static, ()> {
+    static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+    match LOCK.get_or_init(|| Mutex::new(())).lock() {
+        Ok(guard) => guard,
+        Err(poison) => poison.into_inner(),
+    }
+}
 
 fn gitbutler_test_present() -> bool {
     std::env::var("AID_GITBUTLER_TEST_PRESENT")
@@ -144,6 +153,7 @@ fn on_done_command_contains_gitbutler_commit_shell_command() {
 
 #[test]
 fn task_worktree_integration_plan_skips_hooks_and_emits_hint_without_main_repo_project() {
+    let _guard = env_lock();
     let temp = tempfile::tempdir().unwrap();
     unsafe {
         std::env::set_var("AID_GITBUTLER_TEST_PRESENT", "1");
@@ -168,6 +178,7 @@ fn task_worktree_integration_plan_skips_hooks_and_emits_hint_without_main_repo_p
 
 #[test]
 fn task_worktree_integration_plan_preserves_hook_modes_when_main_repo_has_project() {
+    let _guard = env_lock();
     let temp = tempfile::tempdir().unwrap();
     unsafe {
         std::env::set_var("AID_GITBUTLER_TEST_PRESENT", "1");

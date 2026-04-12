@@ -55,7 +55,9 @@ pub(super) fn apply_project_defaults(args: &mut RunArgs, detected_project: Optio
             args.budget = true;
             defaults_applied = true;
         }
-        if !args.audit_explicit && project.audit_auto() {
+        if args.no_audit {
+            args.audit = false;
+        } else if !args.audit_explicit && project.audit_auto() {
             args.audit = true;
             defaults_applied = true;
         }

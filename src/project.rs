@@ -1,23 +1,21 @@
 // Project config parsing for .aid/project.toml and built-in profiles.
-// Exports: ProjectConfig, ProjectBudget, ProjectAgents, detect_project, project_knowledge_dir, read_project_knowledge.
-// Deps: serde, toml, anyhow, std::{env, fs, path}, crate::{gitbutler, team}.
+// Exports: ProjectConfig, ProjectBudget, ProjectAgents, detect_project, knowledge helpers.
+// Deps: serde, toml, anyhow, std::{env, fs, path}, and project submodules.
 
 use anyhow::{Context, Result};
-use serde::Deserialize;
 use serde::de::{Deserializer, IntoDeserializer};
+use serde::Deserialize;
 use std::path::{Path, PathBuf};
 use std::{env, fs};
 
-use crate::team::{self, KnowledgeEntry};
+#[path = "project/audit.rs"]
+mod audit;
+#[path = "project/team.rs"]
+mod project_team;
 
-#[derive(Debug, Clone, Deserialize)]
-#[serde(deny_unknown_fields)]
-struct ProjectFile {
-    #[serde(rename = "project")]
-    pub project: ProjectConfig,
-    #[serde(default)]
-    pub audit: ProjectAuditConfig,
-}
+use self::audit::ProjectFile;
+pub use self::audit::ProjectAuditConfig;
+pub use self::project_team::{project_knowledge_dir, read_project_knowledge};
 
 #[derive(Debug, Clone, Deserialize)]
 #[derive(Default)]
@@ -48,14 +46,6 @@ pub struct ProjectConfig {
     #[serde(skip)]
     pub audit: ProjectAuditConfig,
 }
-
-#[derive(Debug, Clone, Deserialize, Default)]
-#[serde(default, deny_unknown_fields)]
-pub struct ProjectAuditConfig {
-    #[serde(default)]
-    pub auto: bool,
-}
-
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(default)]
@@ -88,7 +78,6 @@ impl ProjectBudget {
         Some(shorthand)
     }
 }
-
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(default)]
@@ -216,23 +205,6 @@ pub fn load_project(path: &Path) -> Result<ProjectConfig> {
     apply_profile(&mut config);
     Ok(config)
 }
-
-pub fn project_knowledge_dir(git_root: &Path) -> PathBuf {
-    git_root.join(".aid").join("knowledge")
-}
-
-pub fn read_project_knowledge(git_root: &Path) -> Vec<KnowledgeEntry> {
-    let knowledge_dir = project_knowledge_dir(git_root);
-    let index_path = knowledge_dir.join("KNOWLEDGE.md");
-    let raw = match fs::read_to_string(&index_path) {
-        Ok(body) => body,
-        Err(_) => return Vec::new(),
-    };
-    raw.lines()
-        .filter_map(|line| team::parse_knowledge_line(line, &knowledge_dir))
-        .collect()
-}
-
 fn find_git_root_from(start_dir: &Path) -> Option<PathBuf> {
     let mut dir = start_dir.to_path_buf();
     loop {
@@ -320,262 +292,5 @@ fn append_rule(rules: &mut Vec<String>, rule: &str) {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use std::env;
-    use std::fs;
-    use std::path::Path;
-    use tempfile::TempDir;
-
-    fn write_project(dir: &Path, contents: &str) -> PathBuf {
-        let path = dir.join("project.toml");
-        fs::write(&path, contents).unwrap();
-        path
-    }
-
-    struct TempCwd {
-        previous: PathBuf,
-    }
-
-    impl TempCwd {
-        fn enter(target: &Path) -> Self {
-            let previous = env::current_dir().unwrap();
-            env::set_current_dir(target).unwrap();
-            Self { previous }
-        }
-    }
-
-    impl Drop for TempCwd {
-        fn drop(&mut self) {
-            env::set_current_dir(&self.previous).unwrap();
-        }
-    }
-
-    #[test]
-    fn parses_minimal_toml() {
-        let dir = TempDir::new().unwrap();
-        let contents = r#"[project]
-id = "alpha"
-"#;
-        let config = load_project(&write_project(dir.path(), contents)).unwrap();
-        assert_eq!(config.id, "alpha");
-        assert!(config.rules.is_empty());
-    }
-
-    #[test]
-    fn profile_expands_standard_defaults() {
-        let dir = TempDir::new().unwrap();
-        let contents = r#"[project]
-id = "beta"
-profile = "standard"
-"#;
-        let config = load_project(&write_project(dir.path(), contents)).unwrap();
-        assert_eq!(config.max_task_cost, Some(10.0));
-        assert_eq!(config.verify.as_deref(), Some("auto"));
-        assert_eq!(config.budget.cost_limit_usd, Some(20.0));
-        assert!(config
-            .rules
-            .iter()
-            .any(|rule| rule.contains("new functions")));
-    }
-
-    #[test]
-    fn profile_defaults_respect_explicit_values() {
-        let dir = TempDir::new().unwrap();
-        let contents = r#"[project]
-id = "gamma"
-profile = "standard"
-max_task_cost = 3.5
-verify = "custom verify"
-setup = "npm ci"
-rules = ["explicit rule"]
-budget.window = "4h"
-budget.cost_limit_usd = 99.5
-"#;
-        let config = load_project(&write_project(dir.path(), contents)).unwrap();
-        assert_eq!(config.max_task_cost, Some(3.5));
-        assert_eq!(config.verify.as_deref(), Some("custom verify"));
-        assert_eq!(config.setup.as_deref(), Some("npm ci"));
-        assert!(config.rules.iter().any(|rule| rule == "explicit rule"));
-        assert!(config
-            .rules
-            .iter()
-            .any(|rule| rule.contains("new functions")));
-        assert_eq!(config.budget.cost_limit_usd, Some(99.5));
-    }
-
-    #[test]
-    fn strict_toml_rejects_unknown_top_level() {
-        let dir = TempDir::new().unwrap();
-        let contents = r#"
-[project]
-id = "test"
-[budget]
-daily_limit = "$50"
-"#;
-        assert!(load_project(&write_project(dir.path(), contents)).is_err());
-    }
-
-    #[test]
-    fn budget_shorthand_day() {
-        let dir = TempDir::new().unwrap();
-        let contents = r#"[project]
-id = "test"
-budget = "$1000/day"
-"#;
-        let config = load_project(&write_project(dir.path(), contents)).unwrap();
-        assert_eq!(config.budget.cost_limit_usd, Some(1000.0));
-        assert_eq!(config.budget.window.as_deref(), Some("daily"));
-        assert_eq!(config.budget.budget_shorthand(), Some("$1000/day".to_string()));
-    }
-
-    #[test]
-    fn budget_shorthand_plain_number() {
-        let dir = TempDir::new().unwrap();
-        let contents = r#"[project]
-id = "test"
-budget = "$500"
-"#;
-        let config = load_project(&write_project(dir.path(), contents)).unwrap();
-        assert_eq!(config.budget.cost_limit_usd, Some(500.0));
-        assert!(config.budget.window.is_none());
-    }
-
-    #[test]
-    fn budget_shorthand_month() {
-        let dir = TempDir::new().unwrap();
-        let contents = r#"[project]
-id = "test"
-budget = "$2000/month"
-"#;
-        let config = load_project(&write_project(dir.path(), contents)).unwrap();
-        assert_eq!(config.budget.cost_limit_usd, Some(2000.0));
-        assert_eq!(config.budget.window.as_deref(), Some("monthly"));
-    }
-
-    #[test]
-    fn parses_container_image() {
-        let dir = TempDir::new().unwrap();
-        let contents = r#"[project]
-id = "test"
-container = "dev:latest"
-"#;
-        let config = load_project(&write_project(dir.path(), contents)).unwrap();
-        assert_eq!(config.container.as_deref(), Some("dev:latest"));
-    }
-
-    #[test]
-    fn gitbutler_mode_round_trips_from_toml() {
-        let dir = TempDir::new().unwrap();
-        let contents = r#"[project]
-id = "test"
-gitbutler = "auto"
-"#;
-        let config = load_project(&write_project(dir.path(), contents)).unwrap();
-        assert_eq!(config.gitbutler.as_deref(), Some("auto"));
-        assert_eq!(config.gitbutler_mode(), crate::gitbutler::Mode::Auto);
-    }
-
-    #[test]
-    fn gitbutler_mode_falls_back_to_off_for_invalid_values() {
-        let config = ProjectConfig {
-            id: "test".to_string(),
-            gitbutler: Some("broken".to_string()),
-            ..Default::default()
-        };
-
-        assert_eq!(config.gitbutler_mode(), crate::gitbutler::Mode::Off);
-    }
-
-    #[test]
-    fn audit_auto_reads_top_level_section() {
-        let dir = TempDir::new().unwrap();
-        let contents = r#"
-[project]
-id = "test"
-
-[audit]
-auto = true
-"#;
-        let config = load_project(&write_project(dir.path(), contents)).unwrap();
-        assert!(config.audit_auto());
-    }
-
-    #[test]
-    fn parses_max_task_cost_from_toml() {
-        let dir = TempDir::new().unwrap();
-        let contents = r#"[project]
-id = "delta"
-max_task_cost = 7.25
-"#;
-        let config = load_project(&write_project(dir.path(), contents)).unwrap();
-        assert_eq!(config.max_task_cost, Some(7.25));
-    }
-
-    #[test]
-    fn profile_sets_default_max_task_costs() {
-        let dir = TempDir::new().unwrap();
-
-        let hobby = load_project(&write_project(
-            dir.path(),
-            r#"[project]
-id = "hobby"
-profile = "hobby"
-"#,
-        ))
-        .unwrap();
-        assert_eq!(hobby.max_task_cost, Some(2.0));
-
-        let standard = load_project(&write_project(
-            dir.path(),
-            r#"[project]
-id = "standard"
-profile = "standard"
-"#,
-        ))
-        .unwrap();
-        assert_eq!(standard.max_task_cost, Some(10.0));
-
-        let production = load_project(&write_project(
-            dir.path(),
-            r#"[project]
-id = "production"
-profile = "production"
-"#,
-        ))
-        .unwrap();
-        assert_eq!(production.max_task_cost, Some(25.0));
-    }
-
-    #[test]
-    fn detect_project_returns_none_outside_git() {
-        let dir = TempDir::new().unwrap();
-        let _guard = TempCwd::enter(dir.path());
-        assert!(detect_project().is_none());
-    }
-
-    #[test]
-    fn test_read_project_knowledge() {
-        let dir = TempDir::new().unwrap();
-        let git_root = dir.path();
-        fs::create_dir_all(git_root.join(".git")).unwrap();
-        let knowledge_dir = project_knowledge_dir(git_root);
-        fs::create_dir_all(&knowledge_dir).unwrap();
-        fs::write(
-            knowledge_dir.join("KNOWLEDGE.md"),
-            "- [Guide](guide.md) — Useful knowledge\n- [Note] — Standalone note\n",
-        )
-        .unwrap();
-        fs::write(knowledge_dir.join("guide.md"), "Details\n").unwrap();
-
-        let entries = read_project_knowledge(git_root);
-        assert_eq!(entries.len(), 2);
-        let guide = entries
-            .into_iter()
-            .find(|entry| entry.topic == "Guide")
-            .unwrap();
-        assert_eq!(guide.path.as_deref(), Some("guide.md"));
-        assert_eq!(guide.description, "Useful knowledge");
-        assert_eq!(guide.content.as_deref(), Some("Details"));
-    }
-}
+#[path = "project/tests.rs"]
+mod tests;

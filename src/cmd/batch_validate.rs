@@ -18,6 +18,7 @@ pub(super) fn validate_batch_config(
     force: bool,
 ) -> Result<()> {
     validate_task_agents(tasks)?;
+    validate_read_only_worktree(tasks)?;
     if parallel {
         validate_parallel_dir_isolation(tasks, force)?;
     }
@@ -179,6 +180,19 @@ fn validate_task_agents(tasks: &[batch::BatchTask]) -> Result<()> {
                     task_label(task, task_idx)
                 );
             }
+        }
+    }
+    Ok(())
+}
+fn validate_read_only_worktree(tasks: &[batch::BatchTask]) -> Result<()> {
+    for (task_idx, task) in tasks.iter().enumerate() {
+        if task.read_only && task.worktree.is_some() {
+            anyhow::bail!(
+                "Task {} has both `read_only = true` and `worktree`. \
+                 Read-only mode runs in the main repo without a worktree. \
+                 Remove the `worktree` field or set `read_only = false`.",
+                task_label(task, task_idx)
+            );
         }
     }
     Ok(())

@@ -179,3 +179,20 @@ fn test_rate_limit_precheck_does_not_panic() {
     rate_limit_precheck(&tasks);
     drop(guard);
 }
+
+#[test]
+fn read_only_with_worktree_is_rejected() {
+    let mut task = stub_task("audit", None);
+    task.read_only = true;
+    task.worktree = Some("feat/audit".to_string());
+    let err = validate_batch_config(&[task], false, false).unwrap_err();
+    assert!(err.to_string().contains("read_only"));
+    assert!(err.to_string().contains("worktree"));
+}
+
+#[test]
+fn read_only_without_worktree_is_accepted() {
+    let mut task = stub_task("audit", None);
+    task.read_only = true;
+    validate_batch_config(&[task], false, false).unwrap();
+}

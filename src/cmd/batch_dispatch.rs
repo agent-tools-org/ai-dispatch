@@ -270,8 +270,13 @@ async fn dispatch_with_dependencies(
             let _ = store.update_task_status(&waiting_ids[i], crate::types::TaskStatus::Skipped);
         }
     }
+    // Only add retry/fallback IDs that aren't already in waiting_ids.
+    // Dispatch reuses waiting_ids via existing_task_id, so task_ids often
+    // contains duplicates — including them caused 2× cost reporting (#97).
+    let waiting_set: std::collections::HashSet<String> =
+        waiting_ids.iter().cloned().collect();
     let mut all_ids = waiting_ids;
-    all_ids.extend(task_ids);
+    all_ids.extend(task_ids.into_iter().filter(|id| !waiting_set.contains(id)));
     Ok(BatchDispatchResult {
         task_ids: all_ids,
         outcomes: outcomes

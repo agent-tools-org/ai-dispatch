@@ -1,3 +1,8 @@
+## v8.89.0 (2026-04-14)
+- fix(#102): `should_rescue_path` no longer excludes `result-*.md` files — audit/cross-audit tasks that write result files are now properly rescued instead of triggering a guaranteed dirty-worktree FAIL
+- fix(#102): `persist_result_file` now runs before Failed-task worktree cleanup, so result files are saved to `~/.aid/tasks/<id>/` while the worktree still exists
+
+
 ## v8.88.0 (2026-04-14)
 - fix(#99): `prompt_scan.rs` no longer panics on multi-byte UTF-8 characters (em-dashes, arrows, etc.) in context files during `--dry-run`. Replaced byte-based `truncate()` with char-based truncation in `truncate_snippet`.
 - fix(#97): batch cost total no longer double-counts — was exactly 2x the real sum because `waiting_ids` and dispatched `task_ids` overlapped. Now deduplicates before summing.

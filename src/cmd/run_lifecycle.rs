@@ -134,6 +134,12 @@ pub(crate) async fn post_run_lifecycle(
         }
         maybe_flag_empty_worktree_diff(store.as_ref(), task_id, &task);
         maybe_cleanup_fast_fail(store, task_id, &task);
+        // Persist result file BEFORE worktree cleanup — Failed tasks remove the
+        // worktree below, so the source file would be gone by the time the old
+        // call site (after auto_save_task_output) runs.
+        if let Err(err) = run_prompt::persist_result_file(task_id.as_str(), args.result_file.as_deref(), effective_dir.map(String::as_str)) {
+            aid_warn!("[aid] Failed to persist result file: {err}");
+        }
         if task.status == TaskStatus::Failed {
             quota_error_message = read_quota_error_message(task_id);
             if let Some(message) = quota_error_message.as_deref()
@@ -205,9 +211,6 @@ pub(crate) async fn post_run_lifecycle(
         && task.output_path.is_none()
     {
         auto_save_task_output(store.as_ref(), &task)?;
-    }
-    if let Err(err) = run_prompt::persist_result_file(task_id.as_str(), args.result_file.as_deref(), effective_dir.map(String::as_str)) {
-        aid_warn!("[aid] Failed to persist result file: {err}");
     }
     maybe_run_post_done_audit(
         store.as_ref(),

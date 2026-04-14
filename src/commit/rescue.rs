@@ -130,7 +130,6 @@ fn parse_dirty_line(line: &str) -> Option<DirtyFile> {
 fn should_rescue_path(path: &str) -> bool {
     !["target/", "node_modules/", "__pycache__/", ".aid-", "aid-batch-"].iter().any(|part| path.contains(part))
         && ![".pyc", ".pyo", ".class", ".o", ".so", ".dylib"].iter().any(|suffix| path.ends_with(suffix))
-        && !(path.starts_with("result-") && path.ends_with(".md"))
 }
 
 fn stage_file(dir: &str, file: &DirtyFile) -> std::result::Result<(), String> {
@@ -224,7 +223,7 @@ mod tests {
     fn detect_untracked_ignores_artifacts() {
         let _permit = test_subprocess::acquire();
         let dir = repo();
-        for path in ["target/out.rs", "node_modules/pkg.js", "__pycache__/mod.pyc", ".aid-temp.rs", "aid-batch-note.ts", "native.so", "result-t-1234.md"] {
+        for path in ["target/out.rs", "node_modules/pkg.js", "__pycache__/mod.pyc", ".aid-temp.rs", "aid-batch-note.ts", "native.so"] {
             write_path(dir.path(), path, "x");
         }
         assert!(detect_untracked_source_files(dir.path().to_str().unwrap()).unwrap().is_empty());

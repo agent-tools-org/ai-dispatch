@@ -33,13 +33,16 @@ pub(crate) fn resolve_finding_content_from<R: Read>(
     content: Option<String>,
     stdin: bool,
     file: Option<String>,
-    stdin_is_terminal: bool,
+    _stdin_is_terminal: bool,
     reader: &mut R,
 ) -> Result<String> {
     if let Some(path) = file {
         return Ok(fs::read_to_string(path)?);
     }
-    if stdin || (content.is_none() && !stdin_is_terminal) {
+    // Only read stdin when --stdin is explicitly passed (#101).
+    // Previously this also auto-read when stdin was not a terminal,
+    // but in background tasks stdin is /dev/null, causing empty reads.
+    if stdin {
         let mut buffer = String::new();
         reader.read_to_string(&mut buffer)?;
         return Ok(buffer);
@@ -47,7 +50,7 @@ pub(crate) fn resolve_finding_content_from<R: Read>(
     if let Some(content) = content {
         return Ok(content);
     }
-    bail!("No finding content provided")
+    bail!("No finding content provided. Pass content as an argument, --file <path>, or --stdin")
 }
 
 #[cfg(test)]
@@ -90,11 +93,10 @@ mod tests {
     }
 
     #[test]
-    fn resolve_finding_content_reads_stdin_when_piped_without_arg() -> Result<()> {
+    fn resolve_finding_content_errors_when_piped_without_stdin_flag() {
         let mut stdin = Cursor::new("from pipe");
-        let content = resolve_finding_content_from(None, false, None, false, &mut stdin)?;
-        assert_eq!(content, "from pipe");
-        Ok(())
+        let err = resolve_finding_content_from(None, false, None, false, &mut stdin).unwrap_err();
+        assert!(err.to_string().contains("No finding content provided"));
     }
 
     #[test]
@@ -115,6 +117,6 @@ mod tests {
     fn resolve_finding_content_errors_without_input() {
         let mut stdin = Cursor::new("");
         let error = resolve_finding_content_from(None, false, None, true, &mut stdin).unwrap_err();
-        assert_eq!(error.to_string(), "No finding content provided");
+        assert!(error.to_string().contains("No finding content provided"));
     }
 }

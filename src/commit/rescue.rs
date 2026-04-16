@@ -2,8 +2,11 @@
 // Exports rescue outcome types plus untracked/modified staging helpers.
 // Deps: git CLI via std::process and parent commit helpers.
 
-use anyhow::{Context, Result};
+use anyhow::Result;
+use std::path::Path;
 use std::process::Command;
+
+use crate::worktree::{WorktreeStatusEntry, WorktreeStatusKind};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RescueOutcome {
@@ -15,22 +18,10 @@ pub struct RescueOutcome {
     pub modified: Vec<String>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum DirtyKind {
-    Untracked,
-    Modified,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct DirtyFile {
-    path: String,
-    kind: DirtyKind,
-}
-
 pub fn detect_untracked_source_files(dir: &str) -> Result<Vec<String>> {
     Ok(detect_rescuable_files(dir)?
         .into_iter()
-        .filter(|file| file.kind == DirtyKind::Untracked)
+        .filter(|file| file.kind == WorktreeStatusKind::Untracked)
         .map(|file| file.path)
         .collect())
 }
@@ -53,8 +44,8 @@ pub fn rescue_dirty_worktree(dir: &str, task_id: &str) -> Result<RescueOutcome> 
         }
         outcome.staged.push(file.path.clone());
         match file.kind {
-            DirtyKind::Untracked => outcome.untracked.push(file.path),
-            DirtyKind::Modified => outcome.modified.push(file.path),
+            WorktreeStatusKind::Untracked => outcome.untracked.push(file.path),
+            WorktreeStatusKind::Modified => outcome.modified.push(file.path),
         }
     }
     if outcome.staged.is_empty() {
@@ -99,47 +90,18 @@ pub(super) fn stage_untracked_source_files(dir: &str, task_id: &str) -> Result<V
     Ok(staged)
 }
 
-fn detect_rescuable_files(dir: &str) -> Result<Vec<DirtyFile>> {
-    let out = Command::new("git")
-        .args(["-C", dir, "status", "--porcelain", "--untracked-files=all"])
-        .output()
-        .context("Failed to run git status")?;
-    anyhow::ensure!(out.status.success(), "git status failed: {}", String::from_utf8_lossy(&out.stderr));
-    Ok(String::from_utf8_lossy(&out.stdout)
-        .lines()
-        .filter_map(parse_dirty_line)
-        .filter(|file| should_rescue_path(&file.path))
-        .collect())
+fn detect_rescuable_files(dir: &str) -> Result<Vec<WorktreeStatusEntry>> {
+    Ok(crate::worktree::capture_worktree_snapshot(Path::new(dir))?.rescuable_entries())
 }
 
-fn parse_dirty_line(line: &str) -> Option<DirtyFile> {
-    if let Some(path) = line.strip_prefix("?? ") {
-        return Some(DirtyFile { path: path.to_string(), kind: DirtyKind::Untracked });
-    }
-    if line.len() < 4 {
-        return None;
-    }
-    let status = &line[..2];
-    let path = &line[3..];
-    if status.contains('M') {
-        return Some(DirtyFile { path: path.to_string(), kind: DirtyKind::Modified });
-    }
-    None
-}
-
-fn should_rescue_path(path: &str) -> bool {
-    !["target/", "node_modules/", "__pycache__/", ".aid-", "aid-batch-"].iter().any(|part| path.contains(part))
-        && ![".pyc", ".pyo", ".class", ".o", ".so", ".dylib"].iter().any(|suffix| path.ends_with(suffix))
-}
-
-fn stage_file(dir: &str, file: &DirtyFile) -> std::result::Result<(), String> {
+fn stage_file(dir: &str, file: &WorktreeStatusEntry) -> std::result::Result<(), String> {
     let mut add = Command::new("git");
     add.args(["-C", dir]);
     match file.kind {
-        DirtyKind::Untracked => {
+        WorktreeStatusKind::Untracked => {
             add.args(["add", "--"]);
         }
-        DirtyKind::Modified => {
+        WorktreeStatusKind::Modified => {
             add.args(["add", "-u", "--"]);
         }
     }

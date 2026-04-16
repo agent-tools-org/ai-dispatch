@@ -160,9 +160,9 @@ pub(crate) fn auto_save_task_output(store: &Store, task: &Task) -> Result<()> {
 }
 
 pub(crate) fn worktree_is_empty_diff(worktree_dir: &Path) -> Option<bool> {
-    let head = git_diff_stat_output(worktree_dir, &["diff", "--stat", "HEAD"])?;
-    let staged = git_diff_stat_output(worktree_dir, &["diff", "--cached", "--stat"])?;
-    Some(head.trim().is_empty() && staged.trim().is_empty())
+    crate::worktree::capture_worktree_snapshot(worktree_dir)
+        .ok()
+        .and_then(|snapshot| snapshot.empty_diff)
 }
 
 pub(crate) fn rescue_quota_failed_task(
@@ -222,18 +222,6 @@ fn audit_current_dir(effective_dir: Option<&str>, repo_path: Option<&str>) -> Op
         .or(repo_path)
         .map(PathBuf::from)
         .filter(|path| path.is_dir())
-}
-
-fn git_diff_stat_output(dir: &Path, args: &[&str]) -> Option<String> {
-    let output = std::process::Command::new("git")
-        .current_dir(dir)
-        .args(args)
-        .output()
-        .ok()?;
-    if !output.status.success() {
-        return None;
-    }
-    Some(String::from_utf8_lossy(&output.stdout).to_string())
 }
 
 fn find_rate_limit_line(content: &str) -> Option<String> {

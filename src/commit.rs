@@ -2,6 +2,7 @@
 // Exports dirty-state detection and automatic task commits via `git`.
 
 use anyhow::{Context, Result};
+use std::path::Path;
 use std::process::Command;
 
 mod rescue;
@@ -11,9 +12,7 @@ pub use rescue::{detect_untracked_source_files, rescue_untracked_files};
 use rescue::stage_untracked_source_files;
 
 pub fn has_uncommitted_changes(dir: &str) -> Result<bool> {
-    let out = Command::new("git").args(["-C", dir, "status", "--porcelain"]).output().context("Failed to run git status")?;
-    anyhow::ensure!(out.status.success(), "git status failed: {}", String::from_utf8_lossy(&out.stderr));
-    Ok(!out.stdout.is_empty())
+    Ok(crate::worktree::capture_worktree_snapshot(Path::new(dir))?.has_uncommitted_changes())
 }
 
 pub fn head_sha(dir: &str) -> Result<String> {

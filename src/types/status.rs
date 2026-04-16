@@ -125,6 +125,7 @@ pub enum VerifyStatus {
     Passed,
     Failed,
     EmptyDiff,
+    HollowOutput,
     Skipped,
 }
 
@@ -135,6 +136,7 @@ impl VerifyStatus {
             Self::Passed => "passed",
             Self::Failed => "failed",
             Self::EmptyDiff => "empty_diff",
+            Self::HollowOutput => "hollow_output",
             Self::Skipped => "skipped",
         }
     }
@@ -145,6 +147,7 @@ impl VerifyStatus {
             "passed" => Some(Self::Passed),
             "failed" => Some(Self::Failed),
             "empty_diff" => Some(Self::EmptyDiff),
+            "hollow_output" => Some(Self::HollowOutput),
             "skipped" => Some(Self::Skipped),
             _ => None,
         }

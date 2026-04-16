@@ -94,6 +94,15 @@ fn test_anti_poll_force_bypasses_cooldown() {
 }
 
 #[test]
+fn test_anti_poll_allows_first_empty_board_call() {
+    let temp = tempfile::tempdir().unwrap();
+    let _guard = AidHomeGuard::set(temp.path());
+    let marker = crate::paths::aid_dir().join("board-last.txt");
+
+    assert_eq!(anti_poll_status(&marker, "", 111, false).0, AntiPollStatus::Allowed(0));
+}
+
+#[test]
 fn test_anti_poll_repeat_blocks_on_second_same_fingerprint_call() {
     let temp = tempfile::tempdir().unwrap();
     let _guard = AidHomeGuard::set(temp.path());

@@ -67,7 +67,10 @@ pub(super) fn inplace_diff_stat(repo_path: &str) -> Option<String> {
 }
 
 pub(super) fn task_has_changes(task: &Task) -> bool {
-    if task.verify_status == VerifyStatus::EmptyDiff {
+    if matches!(
+        task.verify_status,
+        VerifyStatus::EmptyDiff | VerifyStatus::HollowOutput
+    ) {
         return false;
     }
     task.worktree_path

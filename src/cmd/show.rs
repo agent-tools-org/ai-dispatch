@@ -201,7 +201,10 @@ pub fn audit_text(store: &Arc<Store>, task_id: &str) -> Result<String> {
         out.push_str(&stderr);
     }
 
-    if task.verify_status == VerifyStatus::EmptyDiff {
+    if matches!(
+        task.verify_status,
+        VerifyStatus::EmptyDiff | VerifyStatus::HollowOutput
+    ) {
         out.push_str("\nChanges:\n[no changes]\n");
     } else if let Some(ref wt_path) = task.worktree_path
         && Path::new(wt_path).exists()
@@ -253,7 +256,10 @@ pub fn summary_text(store: &Arc<Store>, task_id: &str) -> Result<String> {
         out.push('\n');
     }
 
-    if task.verify_status == VerifyStatus::EmptyDiff {
+    if matches!(
+        task.verify_status,
+        VerifyStatus::EmptyDiff | VerifyStatus::HollowOutput
+    ) {
         out.push_str("\n--- Diff Stat ---\n  (no changes detected)\n");
     } else if let Some(ref wt_path) = task.worktree_path
         && Path::new(wt_path).exists()

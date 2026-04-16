@@ -21,8 +21,12 @@ mod run_agent;
 mod run_bestof;
 #[path = "run_lifecycle.rs"]
 mod run_lifecycle;
+#[path = "run_dirty.rs"]
+mod run_dirty;
 #[path = "run_iterate.rs"]
 mod run_iterate;
+#[path = "run_post.rs"]
+mod run_post;
 #[path = "run_dispatch_resolve.rs"]
 mod run_dispatch_resolve;
 #[path = "run_dispatch_prepare.rs"]
@@ -94,13 +98,13 @@ impl Drop for WorkspaceSymlinkGuard {
 pub(crate) fn inherit_retry_base_branch(repo_dir: Option<&str>, task: &Task, retry_args: &mut RunArgs) { run_prompt::inherit_retry_base_branch_impl(repo_dir, task, retry_args); }
 pub(crate) fn retry_target(task: &Task) -> (Option<String>, Option<String>) { run_prompt::retry_target(task) }
 #[cfg(test)]
-fn take_next_cascade_agent(args: &RunArgs) -> Option<(String, Vec<String>)> { run_lifecycle::take_next_cascade_agent(args) }
+fn take_next_cascade_agent(args: &RunArgs) -> Option<(String, Vec<String>)> { run_post::take_next_cascade_agent(args) }
 #[cfg(test)]
-fn auto_save_task_output(store: &Store, task: &Task) -> Result<()> { run_lifecycle::auto_save_task_output(store, task) }
-pub(crate) fn rescue_quota_failed_task(store: &Store, task_id: &TaskId, quota_error_message: Option<&str>) { run_lifecycle::rescue_quota_failed_task(store, task_id, quota_error_message); }
-pub(crate) fn read_quota_error_message(task_id: &TaskId) -> Option<String> { run_lifecycle::read_quota_error_message(task_id) }
+fn auto_save_task_output(store: &Store, task: &Task) -> Result<()> { run_post::auto_save_task_output(store, task) }
+pub(crate) fn rescue_quota_failed_task(store: &Store, task_id: &TaskId, quota_error_message: Option<&str>) { run_post::rescue_quota_failed_task(store, task_id, quota_error_message); }
+pub(crate) fn read_quota_error_message(task_id: &TaskId) -> Option<String> { run_post::read_quota_error_message(task_id) }
 #[cfg(test)]
-fn worktree_is_empty_diff(worktree_dir: &Path) -> Option<bool> { run_lifecycle::worktree_is_empty_diff(worktree_dir) }
+fn worktree_is_empty_diff(worktree_dir: &Path) -> Option<bool> { run_post::worktree_is_empty_diff(worktree_dir) }
 #[cfg(test)]
 fn maybe_run_post_done_audit(
     store: &Store,
@@ -109,7 +113,11 @@ fn maybe_run_post_done_audit(
     effective_dir: Option<&str>,
     repo_path: Option<&str>,
 ) -> Result<()> {
-    run_lifecycle::maybe_run_post_done_audit(store, task_id, args, effective_dir, repo_path)
+    run_post::maybe_run_post_done_audit(store, task_id, args, effective_dir, repo_path)
+}
+#[cfg(test)]
+fn final_dirty_assertion(store: &Store, task_id: &TaskId, dir: &str, read_only: bool) -> Result<bool> {
+    run_dirty::final_dirty_assertion(store, task_id, dir, read_only)
 }
 
 pub(crate) fn maybe_cleanup_fast_fail(store: &Store, task_id: &TaskId, task: &Task) { run_prompt::maybe_cleanup_fast_fail_impl(store, task_id, task); }

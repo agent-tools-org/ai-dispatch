@@ -3,7 +3,7 @@
 // Deps: run retry flow, rate-limit parsing, store, and task types.
 
 use anyhow::Result;
-use std::{path::Path, sync::Arc};
+use std::{path::{Path, PathBuf}, sync::Arc};
 
 use crate::{rate_limit, store::Store, types::*};
 use crate::cmd::{retry_logic, run_hung_recovery};
@@ -68,6 +68,52 @@ pub(crate) async fn maybe_auto_retry_after_hang(
     let retry_id = Box::pin(run(store.clone(), retry_args)).await?;
     let _ = run_hung_recovery::insert_hung_retry_event(store.as_ref(), task_id);
     Ok(Some(retry_id))
+}
+
+pub(crate) fn maybe_run_post_done_audit(
+    store: &Store,
+    task_id: &TaskId,
+    args: &RunArgs,
+    effective_dir: Option<&str>,
+    repo_path: Option<&str>,
+) -> Result<()> {
+    if !args.audit {
+        return Ok(());
+    }
+    let Some(task) = store.get_task(task_id.as_str())? else {
+        return Ok(());
+    };
+    if task.status != TaskStatus::Done || task.audit_verdict.is_some() {
+        return Ok(());
+    }
+    if !crate::aic::is_available() {
+        aid_warn!("[aid] --audit requested but 'aic' not found on PATH — skipping cross-audit");
+        store.update_task_audit(task_id.as_str(), Some("skipped"), None)?;
+        store.insert_event(&TaskEvent {
+            task_id: task_id.clone(),
+            timestamp: chrono::Local::now(),
+            event_kind: EventKind::Milestone,
+            detail: "audit skipped: aic binary not found".to_string(),
+            metadata: None,
+        })?;
+        return Ok(());
+    }
+
+    let audit_dir = audit_current_dir(effective_dir, repo_path);
+    let result = crate::aic::run_audit(task_id.as_str(), audit_dir.as_deref());
+    store.update_task_audit(
+        task_id.as_str(),
+        Some(result.verdict.as_str()),
+        result.report_path.as_deref(),
+    )?;
+    store.insert_event(&TaskEvent {
+        task_id: task_id.clone(),
+        timestamp: chrono::Local::now(),
+        event_kind: EventKind::Milestone,
+        detail: format!("Audit complete: {}", result.verdict),
+        metadata: None,
+    })?;
+    Ok(())
 }
 
 pub(crate) fn maybe_flag_empty_worktree_diff(store: &Store, task_id: &TaskId, task: &Task) {
@@ -166,6 +212,13 @@ fn prior_hung_retry_count(store: &Store, task: &Task) -> Result<u32> {
         .filter_map(|entry| store.get_events(entry.id.as_str()).ok())
         .filter(|events| run_hung_recovery::was_auto_retried_after_hang(events))
         .count() as u32)
+}
+
+fn audit_current_dir(effective_dir: Option<&str>, repo_path: Option<&str>) -> Option<PathBuf> {
+    effective_dir
+        .or(repo_path)
+        .map(PathBuf::from)
+        .filter(|path| path.is_dir())
 }
 
 fn git_diff_stat_output(dir: &Path, args: &[&str]) -> Option<String> {

@@ -2,7 +2,7 @@
 // Covers final dirty worktree assertion behavior around task status/events.
 // Deps: run_lifecycle helpers, Store, git CLI, tempfile.
 
-use super::run_lifecycle::final_dirty_assertion;
+use super::final_dirty_assertion;
 use crate::{store::Store, test_subprocess, types::*};
 use chrono::Local;
 use std::{path::Path, process::Command};

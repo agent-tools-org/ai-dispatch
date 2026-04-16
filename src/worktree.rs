@@ -8,10 +8,15 @@ use std::process::{Command, Output};
 use crate::sanitize;
 #[path = "worktree/reconcile.rs"]
 mod reconcile;
+#[path = "worktree/snapshot.rs"]
+mod snapshot;
 #[path = "worktree/state.rs"]
 mod state;
 #[path = "worktree/validation.rs"]
 mod validation;
+pub(crate) use snapshot::{
+    WorktreeStatusEntry, WorktreeStatusKind, capture_worktree_snapshot,
+};
 pub use state::{
     branch_has_commits_ahead_of_main, check_worktree_lock, clear_worktree_lock,
     process_alive_check, worktree_changed_files, write_worktree_lock,

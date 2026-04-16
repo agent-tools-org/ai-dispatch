@@ -2,7 +2,7 @@
 // Exports rescue/retry/final-assertion helpers plus the post-run action enum.
 // Deps: commit helpers, run retry flow, store, and task types.
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use std::{path::Path, sync::Arc};
 
 use crate::store::Store;
@@ -192,17 +192,5 @@ fn rescue_files_summary(outcome: &crate::commit::RescueOutcome) -> String {
 }
 
 fn worktree_status_lines(dir: &str) -> Result<Vec<String>> {
-    let output = std::process::Command::new("git")
-        .args(["-C", dir, "status", "--porcelain", "--untracked-files=all"])
-        .output()
-        .context("Failed to run git status")?;
-    anyhow::ensure!(
-        output.status.success(),
-        "git status failed: {}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-    Ok(String::from_utf8_lossy(&output.stdout)
-        .lines()
-        .map(str::to_owned)
-        .collect())
+    Ok(crate::worktree::capture_worktree_snapshot(Path::new(dir))?.status_lines)
 }

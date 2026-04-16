@@ -1,3 +1,11 @@
+## v8.91.0 (2026-04-16)
+- refactor: split delivery assessment from verify status and persist it as first-class task metadata, including migration of legacy hollow-output and empty-diff states
+- refactor: add a shared worktree snapshot boundary and reuse it across dirty checks, post-run settlement, commit, and rescue flows
+- refactor: extract lifecycle phase decisions for teardown, escape checks, worktree settlement, verify/scope handling, checklist handling, and task post-processing
+- fix: isolate agent rate-limit marker tests and ignore local `.aic/` audit artifacts so release status checks stay clean
+- chore: unblock release gates by sharing Gemini-family support code through one module path and making the current clippy warning policy explicit
+
+
 ## v8.90.0 (2026-04-16)
 - fix: `aid board` anti-poll enforcement strengthened — blocked states no longer output board data, repeat limit lowered to 1, hard blocks exit with code 1, hints include running task IDs
 

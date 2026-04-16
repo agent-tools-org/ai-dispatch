@@ -11,6 +11,7 @@ node_modules/
 # Batch TOML files (ephemeral dispatch files)
 .aid/batches/
 .aid/state.toml
+.aic/
 
 # Generated output dirs
 nanobanana-output/

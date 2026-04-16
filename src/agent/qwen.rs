@@ -6,10 +6,8 @@ use chrono::Local;
 use serde_json::json;
 use std::process::Command;
 
-#[path = "gemini_support.rs"]
-mod support;
-
-use self::support::{
+use super::gemini_support as support;
+use super::gemini_support::{
     classify_tool_result, extract_error_detail, extract_tool_arguments, extract_tool_name,
 };
 use super::RunOpts;

@@ -17,7 +17,7 @@ use crate::types::{Task, TaskFilter, TaskStatus, Workgroup};
 const DEFAULT_TASK_LIMIT: usize = 50;
 const BOARD_MIN_COOLDOWN_SECS: i64 = 10;
 const BOARD_FORCE_COOLDOWN_SECS: i64 = 30;
-const BOARD_REPEAT_LIMIT: u32 = 2;
+const BOARD_REPEAT_LIMIT: u32 = 1;
 const FORCE_ESCALATION_LIMIT: u32 = 3;
 const FORCE_ESCALATION_WINDOW_SECS: i64 = 120;
 
@@ -59,38 +59,37 @@ pub fn run(store: &Arc<Store>, running: bool, today: bool, mine: bool, group: Op
     let marker_path = crate::paths::aid_dir().join("board-last.txt");
     let now = Local::now().timestamp();
     let (anti_poll, force_state) = anti_poll_status(&marker_path, &fingerprint, now, force);
-    let mut stdout = std::io::stdout();
-    write_board_output(&mut stdout, store, &tasks, group, truncation, json)?;
-    stdout.flush()?;
+    let watch_hint = watch_instead_of_polling_hint(&tasks);
 
     let repeat_count = match anti_poll {
-        AntiPollStatus::Allowed(repeat_count) => {
-            if repeat_count > 0 {
-                aid_hint!("[aid] No status changes since last check ({repeat_count}x). Use `aid watch --quiet` for automatic notification instead of polling.");
-            }
-            repeat_count
-        }
+        AntiPollStatus::Allowed(repeat_count) => repeat_count,
         AntiPollStatus::Cooldown(elapsed) => {
             write_board_marker(&marker_path, &fingerprint, now, 0, 0, 0);
-            aid_hint!("[aid] Board checked {elapsed}s ago. Use `aid watch --quiet <id>` for live updates.");
+            aid_hint!("[aid] Board checked {elapsed}s ago. {watch_hint}");
             std::process::exit(0);
         }
         AntiPollStatus::Repeat(repeat_count) => {
             write_board_marker(&marker_path, &fingerprint, now, repeat_count, 0, 0);
-            aid_warn!("[aid] No changes after {repeat_count} checks. Use `aid watch --quiet` instead of polling. Exiting.");
-            std::process::exit(0);
+            aid_warn!("[aid] No changes after {repeat_count} checks. {watch_hint} Exiting.");
+            std::process::exit(1);
         }
         AntiPollStatus::ForceCooldown(elapsed) => {
             write_board_marker(&marker_path, &fingerprint, now, 0, force_state.count, force_state.window_start);
-            aid_hint!("[aid] Board is rate-limited ({elapsed}s/30s). Use `aid watch --quiet <id>` instead.");
+            aid_hint!("[aid] Board is rate-limited ({elapsed}s/30s). {watch_hint}");
             std::process::exit(0);
         }
         AntiPollStatus::ForceBlocked => {
             write_board_marker(&marker_path, &fingerprint, now, 0, force_state.count, force_state.window_start);
-            aid_warn!("[aid] Repeated polling detected. Board locked for 60s. Use `aid watch --quiet <id>` instead.");
-            std::process::exit(0);
+            aid_warn!("[aid] Repeated polling detected. Board locked for 60s. {watch_hint}");
+            std::process::exit(1);
         }
     };
+    let mut stdout = std::io::stdout();
+    write_board_output(&mut stdout, store, &tasks, group, truncation, json)?;
+    stdout.flush()?;
+    if repeat_count > 0 {
+        aid_hint!("[aid] No status changes since last check ({repeat_count}x). {watch_hint}");
+    }
     write_board_marker(&marker_path, &fingerprint, now, repeat_count, force_state.count, force_state.window_start);
     Ok(())
 }
@@ -153,6 +152,18 @@ fn task_fingerprint(tasks: &[crate::types::Task]) -> String {
     let mut parts: Vec<String> = tasks.iter().map(|t| format!("{}:{}", t.id, t.status.label())).collect();
     parts.sort();
     parts.join(",")
+}
+
+fn watch_instead_of_polling_hint(tasks: &[Task]) -> String {
+    let running_ids: Vec<&str> = tasks.iter().filter(|task| task.status == TaskStatus::Running).map(|task| task.id.as_str()).collect();
+    if running_ids.is_empty() {
+        return "Use `aid watch --quiet <id>` instead of polling.".to_string();
+    }
+    if running_ids.len() == 1 {
+        return format!("Use `aid watch --quiet {}` instead of polling.", running_ids[0]);
+    }
+    let commands = running_ids.iter().map(|task_id| format!("`aid watch --quiet {task_id}`")).collect::<Vec<_>>().join(", ");
+    format!("Use one of {commands} instead of polling.")
 }
 
 fn anti_poll_status(marker_path: &Path, fingerprint: &str, now: i64, force: bool) -> (AntiPollStatus, ForceMarkerState) {

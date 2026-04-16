@@ -55,20 +55,24 @@ fn format_group_header_includes_custom_name() {
 }
 
 #[test]
-fn board_output_is_written_before_anti_poll_exit() {
+fn board_output_is_not_written_when_anti_poll_blocks() {
     let temp = tempfile::tempdir().unwrap();
     let _guard = AidHomeGuard::set(temp.path());
     let marker = crate::paths::aid_dir().join("board-last.txt");
-    std::fs::write(&marker, "100\nfp\n0").unwrap();
     let store = Store::open_memory().unwrap();
     let tasks = vec![make_task("t-1001", TaskStatus::Done, Local::now())];
+    let fingerprint = format!("t-1001:{}", TaskStatus::Done.label());
+    write_board_marker(&marker, &fingerprint, 100, 0, 0, 0);
+
+    let anti_poll = anti_poll_status(&marker, &fingerprint, 111, false).0;
     let mut output = Vec::new();
 
-    write_board_output(&mut output, &store, &tasks, None, None, false).unwrap();
+    if let AntiPollStatus::Allowed(_) = anti_poll {
+        write_board_output(&mut output, &store, &tasks, None, None, false).unwrap();
+    }
 
-    let rendered = String::from_utf8(output).unwrap();
-    assert!(rendered.contains("t-1001"));
-    assert_eq!(anti_poll_status(&marker, "changed", 103, false).0, AntiPollStatus::Cooldown(3));
+    assert_eq!(anti_poll, AntiPollStatus::Repeat(1));
+    assert!(output.is_empty());
 }
 
 #[test]
@@ -87,6 +91,16 @@ fn test_anti_poll_force_bypasses_cooldown() {
     let marker = crate::paths::aid_dir().join("board-last.txt");
     std::fs::write(&marker, "100\nfp\n0").unwrap();
     assert_eq!(anti_poll_status(&marker, "changed", 103, true).0, AntiPollStatus::ForceCooldown(3))
+}
+
+#[test]
+fn test_anti_poll_repeat_blocks_on_second_same_fingerprint_call() {
+    let temp = tempfile::tempdir().unwrap();
+    let _guard = AidHomeGuard::set(temp.path());
+    let marker = crate::paths::aid_dir().join("board-last.txt");
+    write_board_marker(&marker, "fp", 100, 0, 0, 0);
+
+    assert_eq!(anti_poll_status(&marker, "fp", 111, false).0, AntiPollStatus::Repeat(1));
 }
 
 #[test]

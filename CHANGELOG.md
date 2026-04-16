@@ -1,3 +1,7 @@
+## v8.90.0 (2026-04-16)
+- fix: `aid board` anti-poll enforcement strengthened — blocked states no longer output board data, repeat limit lowered to 1, hard blocks exit with code 1, hints include running task IDs
+
+
 ## v8.89.0 (2026-04-14)
 - fix(#102): `should_rescue_path` no longer excludes `result-*.md` files — audit/cross-audit tasks that write result files are now properly rescued instead of triggering a guaranteed dirty-worktree FAIL
 - fix(#102): `persist_result_file` now runs before Failed-task worktree cleanup, so result files are saved to `~/.aid/tasks/<id>/` while the worktree still exists

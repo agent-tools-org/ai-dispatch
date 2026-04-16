@@ -4,7 +4,7 @@ version = 4
 
 [[package]]
 name = "ai-dispatch"
-version = "8.89.0"
+version = "8.90.0"
 dependencies = [
  "anyhow",
  "axum",

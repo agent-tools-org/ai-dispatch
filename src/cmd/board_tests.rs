@@ -48,7 +48,7 @@ fn board_json_row_includes_pending_reason() {
 #[test]
 fn board_json_row_includes_delivery_assessment() {
     let mut task = make_task("t-1005", TaskStatus::Done, Local::now());
-    task.verify_status = VerifyStatus::HollowOutput;
+    task.delivery_assessment = Some(crate::types::DeliveryAssessment::HollowOutput);
     let row = board_json_row(&task);
     assert_eq!(row["delivery_assessment"], "hollow_output");
 }
@@ -203,5 +203,6 @@ fn make_task(task_id: &str, status: TaskStatus, created_at: chrono::DateTime<Loc
         budget: false,
         audit_verdict: None,
         audit_report_path: None,
+        delivery_assessment: None,
     }
 }

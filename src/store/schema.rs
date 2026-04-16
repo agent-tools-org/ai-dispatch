@@ -37,7 +37,8 @@ const CREATE_TABLES_SQL: &str = "CREATE TABLE IF NOT EXISTS tasks (
     category TEXT,
     pending_reason TEXT,
     audit_verdict TEXT,
-    audit_report_path TEXT
+    audit_report_path TEXT,
+    delivery_assessment TEXT
 );
 CREATE TABLE IF NOT EXISTS workgroups (
     id TEXT PRIMARY KEY,
@@ -177,6 +178,18 @@ pub(super) fn migrate(store: &Store) -> Result<()> {
     );
     let _ = conn.execute_batch("ALTER TABLE tasks ADD COLUMN audit_verdict TEXT;");
     let _ = conn.execute_batch("ALTER TABLE tasks ADD COLUMN audit_report_path TEXT;");
+    let _ = conn.execute_batch("ALTER TABLE tasks ADD COLUMN delivery_assessment TEXT;");
+    let _ = conn.execute_batch(
+        "UPDATE tasks
+         SET delivery_assessment = verify_status
+         WHERE verify_status IN ('empty_diff', 'hollow_output')
+           AND delivery_assessment IS NULL;",
+    );
+    let _ = conn.execute_batch(
+        "UPDATE tasks
+         SET verify_status = 'skipped'
+         WHERE verify_status IN ('empty_diff', 'hollow_output');",
+    );
     let _ = conn.execute_batch("ALTER TABLE workgroups ADD COLUMN created_by TEXT;");
     let _ = conn.execute_batch(CREATE_FINDINGS_SQL);
     let _ = conn.execute_batch("ALTER TABLE findings ADD COLUMN severity TEXT;");
@@ -237,6 +250,11 @@ pub(super) fn row_to_task(row: &Row) -> rusqlite::Result<Result<Task>> {
         budget: row.get(25)?,
         audit_verdict: row.get(31).ok().flatten(),
         audit_report_path: row.get(32).ok().flatten(),
+        delivery_assessment: row
+            .get::<_, Option<String>>(33)
+            .ok()
+            .flatten()
+            .and_then(|value| DeliveryAssessment::parse_str(&value)),
     }))
 }
 

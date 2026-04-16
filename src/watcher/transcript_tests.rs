@@ -65,6 +65,7 @@ async fn watch_buffered_persists_transcript() {
         budget: false,
         audit_verdict: None,
         audit_report_path: None,
+        delivery_assessment: None,
     };
     store.insert_task(&task).unwrap();
     let mut child = tokio::process::Command::new("sh")
@@ -133,6 +134,7 @@ async fn watch_buffered_clears_rate_limit_on_success() {
         budget: false,
         audit_verdict: None,
         audit_report_path: None,
+        delivery_assessment: None,
     };
     store.insert_task(&task).unwrap();
     rate_limit::mark_rate_limited(&AgentKind::Gemini, "rate limit exceeded");

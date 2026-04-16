@@ -83,6 +83,7 @@ fn task_fixture(id: &str, repo: &Path, start_sha: &str, status: TaskStatus) -> T
         budget: false,
         audit_verdict: None,
         audit_report_path: None,
+        delivery_assessment: None,
     }
 }
 

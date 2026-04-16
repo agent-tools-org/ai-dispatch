@@ -34,6 +34,27 @@ fn insert_and_get_task_persists_dispatch_flags() {
 }
 
 #[test]
+fn insert_and_update_task_persists_delivery_assessment() {
+    let store = Store::open_memory().unwrap();
+    let mut task = make_task("t-0004d", AgentKind::Codex, TaskStatus::Done);
+    task.delivery_assessment = Some(DeliveryAssessment::HollowOutput);
+    store.insert_task(&task).unwrap();
+
+    let loaded = store.get_task("t-0004d").unwrap().unwrap();
+    assert_eq!(loaded.delivery_assessment, Some(DeliveryAssessment::HollowOutput));
+
+    store
+        .update_delivery_assessment("t-0004d", Some(DeliveryAssessment::EmptyDiff))
+        .unwrap();
+    let updated = store.get_task("t-0004d").unwrap().unwrap();
+    assert_eq!(updated.delivery_assessment, Some(DeliveryAssessment::EmptyDiff));
+
+    store.update_delivery_assessment("t-0004d", None).unwrap();
+    let cleared = store.get_task("t-0004d").unwrap().unwrap();
+    assert_eq!(cleared.delivery_assessment, None);
+}
+
+#[test]
 fn insert_waiting_task_persists_retry_fields() {
     let store = Store::open_memory().unwrap();
     let prompt = "x".repeat(160);
@@ -113,6 +134,48 @@ fn migrate_adds_repo_path_column() {
     assert!(columns.contains(&"budget".to_string()));
     assert!(columns.contains(&"category".to_string()));
     assert!(columns.contains(&"pending_reason".to_string()));
+    assert!(columns.contains(&"delivery_assessment".to_string()));
+}
+
+#[test]
+fn migrate_moves_legacy_delivery_status_out_of_verify_status() {
+    let conn = rusqlite::Connection::open_in_memory().unwrap();
+    conn.execute_batch(
+        "CREATE TABLE tasks (
+            id TEXT PRIMARY KEY,
+            agent TEXT NOT NULL,
+            prompt TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'pending',
+            created_at TEXT NOT NULL,
+            verify_status TEXT NOT NULL DEFAULT 'skipped'
+        );
+        INSERT INTO tasks (id, agent, prompt, status, created_at, verify_status)
+        VALUES ('t-empty', 'codex', 'prompt', 'done', '2026-04-16T00:00:00+00:00', 'empty_diff');
+        CREATE TABLE events (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            task_id TEXT NOT NULL,
+            timestamp TEXT NOT NULL,
+            event_type TEXT NOT NULL,
+            detail TEXT NOT NULL
+        );",
+    )
+    .unwrap();
+    let store = Store {
+        conn: std::sync::Mutex::new(conn),
+    };
+
+    store.migrate().unwrap();
+
+    let conn = store.db();
+    let (verify_status, delivery_assessment): (String, Option<String>) = conn
+        .query_row(
+            "SELECT verify_status, delivery_assessment FROM tasks WHERE id = 't-empty'",
+            [],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .unwrap();
+    assert_eq!(verify_status, "skipped");
+    assert_eq!(delivery_assessment.as_deref(), Some("empty_diff"));
 }
 
 #[test]

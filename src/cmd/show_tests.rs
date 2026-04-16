@@ -50,6 +50,7 @@ fn task_fixture(
         budget: false,
         audit_verdict: None,
         audit_report_path: None,
+        delivery_assessment: None,
     }
 }
 
@@ -231,7 +232,7 @@ fn task_json_includes_pending_reason() {
 fn task_json_includes_delivery_assessment() {
     let store = Arc::new(Store::open_memory().unwrap());
     let mut task = research_task("t-show-delivery", Path::new("."));
-    task.verify_status = VerifyStatus::EmptyDiff;
+    task.delivery_assessment = Some(crate::types::DeliveryAssessment::EmptyDiff);
     store.insert_task(&task).unwrap();
 
     let payload: serde_json::Value =

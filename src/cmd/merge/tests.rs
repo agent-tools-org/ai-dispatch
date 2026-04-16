@@ -108,6 +108,7 @@ fn make_task_with_worktree(id: &str, repo: &Path, wt: &Path, branch: &str) -> Ta
         budget: false,
         audit_verdict: None,
         audit_report_path: None,
+        delivery_assessment: None,
     }
 }
 
@@ -493,6 +494,7 @@ fn merge_single_works_without_worktree_branch() {
         budget: false,
         audit_verdict: None,
         audit_report_path: None,
+        delivery_assessment: None,
     };
     store.insert_task(&task).unwrap();
 

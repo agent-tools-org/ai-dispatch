@@ -161,7 +161,7 @@ mod tests {
     use crate::types::{EventKind, TaskEvent, TaskId, VerifyStatus};
 
     fn task(id: &str, agent: AgentKind, status: TaskStatus, age_days: i64, model: &str, cost_usd: Option<f64>, duration_ms: Option<i64>, tokens: i64) -> Task {
-        Task { id: TaskId(id.to_string()), agent, custom_agent_name: None, prompt: "prompt".to_string(), resolved_prompt: None, category: None, status, parent_task_id: None, workgroup_id: None, caller_kind: None, caller_session_id: None, agent_session_id: None, repo_path: None, worktree_path: None, worktree_branch: None, start_sha: None, log_path: None, output_path: None, tokens: Some(tokens), prompt_tokens: None, duration_ms, model: Some(model.to_string()), cost_usd, exit_code: None, created_at: Local::now() - Duration::days(age_days), completed_at: None, verify: None, verify_status: VerifyStatus::Skipped, pending_reason: None, read_only: false, budget: false, audit_verdict: None, audit_report_path: None }
+        Task { id: TaskId(id.to_string()), agent, custom_agent_name: None, prompt: "prompt".to_string(), resolved_prompt: None, category: None, status, parent_task_id: None, workgroup_id: None, caller_kind: None, caller_session_id: None, agent_session_id: None, repo_path: None, worktree_path: None, worktree_branch: None, start_sha: None, log_path: None, output_path: None, tokens: Some(tokens), prompt_tokens: None, duration_ms, model: Some(model.to_string()), cost_usd, exit_code: None, created_at: Local::now() - Duration::days(age_days), completed_at: None, verify: None, verify_status: VerifyStatus::Skipped, pending_reason: None, read_only: false, budget: false, audit_verdict: None, audit_report_path: None, delivery_assessment: None }
     }
 
     #[test]

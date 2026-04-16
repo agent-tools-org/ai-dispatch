@@ -32,9 +32,9 @@ impl Store {
              caller_kind, caller_session_id, agent_session_id, repo_path, worktree_path, worktree_branch,
              start_sha, log_path, output_path, tokens, prompt_tokens, duration_ms, model, cost_usd,
              created_at, completed_at, verify, verify_status, read_only, budget, custom_agent_name,
-             category, pending_reason, audit_verdict, audit_report_path)
+             category, pending_reason, audit_verdict, audit_report_path, delivery_assessment)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17,
-             ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28, ?29, ?30, ?31, ?32)",
+             ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28, ?29, ?30, ?31, ?32, ?33)",
             params![
                 task.id.as_str(),
                 agent_value,
@@ -68,6 +68,7 @@ impl Store {
                 task.pending_reason,
                 task.audit_verdict,
                 task.audit_report_path,
+                task.delivery_assessment.map(|value| value.as_str()),
             ],
         )?;
         Ok(())
@@ -124,7 +125,8 @@ impl Store {
              agent_session_id=?10, repo_path=?11, worktree_path=?12, worktree_branch=?13,
              start_sha=?14, log_path=?15, output_path=?16, model=?17, verify=?18,
              verify_status=?19, read_only=?20, budget=?21, custom_agent_name=?22,
-             category=?23, pending_reason=?24, audit_verdict=?25, audit_report_path=?26
+             category=?23, pending_reason=?24, audit_verdict=?25, audit_report_path=?26,
+             delivery_assessment=?27
              WHERE id=?1",
             params![
                 task.id.as_str(), agent_value, task.prompt, task.resolved_prompt,
@@ -137,6 +139,7 @@ impl Store {
                 task.pending_reason,
                 task.audit_verdict,
                 task.audit_report_path,
+                task.delivery_assessment.map(|value| value.as_str()),
             ],
         )?;
         Ok(())
@@ -527,6 +530,18 @@ impl Store {
         self.db().execute(
             "UPDATE tasks SET verify_status = ?1 WHERE id = ?2",
             params![verify_status.as_str(), id],
+        )?;
+        Ok(())
+    }
+
+    pub fn update_delivery_assessment(
+        &self,
+        id: &str,
+        delivery_assessment: Option<DeliveryAssessment>,
+    ) -> Result<()> {
+        self.db().execute(
+            "UPDATE tasks SET delivery_assessment = ?1 WHERE id = ?2",
+            params![delivery_assessment.map(|value| value.as_str()), id],
         )?;
         Ok(())
     }

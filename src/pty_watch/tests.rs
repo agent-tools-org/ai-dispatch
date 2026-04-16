@@ -48,6 +48,7 @@ fn stores_recent_question_as_awaiting_prompt_metadata() {
             budget: false,
             audit_verdict: None,
             audit_report_path: None,
+            delivery_assessment: None,
         };
     store.insert_task(&task).unwrap();
 
@@ -164,6 +165,7 @@ fn finalize_streaming_persists_transcript() {
         budget: false,
         audit_verdict: None,
         audit_report_path: None,
+        delivery_assessment: None,
     };
     store.insert_task(&task).unwrap();
     let mut state = MonitorState::new(true);

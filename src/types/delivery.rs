@@ -1,10 +1,8 @@
 // Delivery assessment derived from persisted task facts.
-// Exports: DeliveryAssessment plus mapping from VerifyStatus.
-// Deps: serde and parent VerifyStatus enum.
+// Exports: DeliveryAssessment parse/display helpers for stored task metadata.
+// Deps: serde only.
 
 use serde::Serialize;
-
-use super::VerifyStatus;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 pub enum DeliveryAssessment {
@@ -20,10 +18,10 @@ impl DeliveryAssessment {
         }
     }
 
-    pub fn from_verify_status(verify_status: VerifyStatus) -> Option<Self> {
-        match verify_status {
-            VerifyStatus::EmptyDiff => Some(Self::EmptyDiff),
-            VerifyStatus::HollowOutput => Some(Self::HollowOutput),
+    pub fn parse_str(value: &str) -> Option<Self> {
+        match value {
+            "empty_diff" => Some(Self::EmptyDiff),
+            "hollow_output" => Some(Self::HollowOutput),
             _ => None,
         }
     }

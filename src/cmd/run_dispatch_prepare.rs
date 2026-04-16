@@ -152,6 +152,7 @@ pub(super) fn prepare_dispatch(store: &Arc<Store>, args: &mut RunArgs) -> Result
                 budget: args.budget,
                 audit_verdict: None,
                 audit_report_path: None,
+                delivery_assessment: None,
             };
             let _ = store.insert_task(&failed_task);
             run_prompt::insert_phase_error_event(
@@ -198,6 +199,7 @@ pub(super) fn prepare_dispatch(store: &Arc<Store>, args: &mut RunArgs) -> Result
         budget: args.budget,
         audit_verdict: None,
         audit_report_path: None,
+        delivery_assessment: None,
     };
     let normalized_prompt = task.prompt.trim().to_lowercase();
     let profile = agent::classifier::classify(

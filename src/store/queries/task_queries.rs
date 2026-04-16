@@ -43,7 +43,7 @@ impl Store {
              caller_kind, caller_session_id, agent_session_id, repo_path, worktree_path, worktree_branch,
              start_sha, log_path, output_path, tokens, prompt_tokens, duration_ms, model, cost_usd,
              created_at, completed_at, verify, read_only, budget, custom_agent_name, verify_status,
-             exit_code, category, pending_reason, audit_verdict, audit_report_path
+             exit_code, category, pending_reason, audit_verdict, audit_report_path, delivery_assessment
              FROM tasks WHERE id = ?1",
         )?;
         let mut rows = stmt.query_map(params![id], row_to_task)?;
@@ -88,7 +88,7 @@ impl Store {
                  caller_kind, caller_session_id, agent_session_id, repo_path, worktree_path, worktree_branch,
                  start_sha, log_path, output_path, tokens, prompt_tokens, duration_ms, model, cost_usd,
                  created_at, completed_at, verify, read_only, budget, custom_agent_name, verify_status,
-                 exit_code, category, pending_reason, audit_verdict, audit_report_path
+                 exit_code, category, pending_reason, audit_verdict, audit_report_path, delivery_assessment
                  FROM tasks ORDER BY created_at DESC",
                 vec![],
             ),
@@ -97,7 +97,7 @@ impl Store {
                  caller_kind, caller_session_id, agent_session_id, repo_path, worktree_path, worktree_branch,
                  start_sha, log_path, output_path, tokens, prompt_tokens, duration_ms, model, cost_usd,
                  created_at, completed_at, verify, read_only, budget, custom_agent_name, verify_status,
-                 exit_code, category, pending_reason, audit_verdict, audit_report_path
+                 exit_code, category, pending_reason, audit_verdict, audit_report_path, delivery_assessment
                  FROM tasks WHERE status IN (?1, ?2, ?3, ?4) ORDER BY created_at DESC",
                 vec![
                     "waiting".to_string(),
@@ -111,7 +111,7 @@ impl Store {
                  caller_kind, caller_session_id, agent_session_id, repo_path, worktree_path, worktree_branch,
                  start_sha, log_path, output_path, tokens, prompt_tokens, duration_ms, model, cost_usd,
                  created_at, completed_at, verify, read_only, budget, custom_agent_name, verify_status,
-                 exit_code, category, pending_reason, audit_verdict, audit_report_path
+                 exit_code, category, pending_reason, audit_verdict, audit_report_path, delivery_assessment
                  FROM tasks WHERE status IN (?1, ?2) ORDER BY created_at DESC",
                 vec!["running".to_string(), "awaiting_input".to_string()],
             ),
@@ -122,7 +122,7 @@ impl Store {
                      caller_kind, caller_session_id, agent_session_id, repo_path, worktree_path, worktree_branch,
                      start_sha, log_path, output_path, tokens, prompt_tokens, duration_ms, model, cost_usd,
                      created_at, completed_at, verify, read_only, budget, custom_agent_name, verify_status,
-                     exit_code, category, pending_reason, audit_verdict, audit_report_path
+                     exit_code, category, pending_reason, audit_verdict, audit_report_path, delivery_assessment
                      FROM tasks WHERE created_at >= ?1 ORDER BY created_at DESC",
                     vec![today],
                 )
@@ -151,7 +151,7 @@ impl Store {
              caller_kind, caller_session_id, agent_session_id, repo_path, worktree_path, worktree_branch,
              start_sha, log_path, output_path, tokens, prompt_tokens, duration_ms, model, cost_usd,
              created_at, completed_at, verify, read_only, budget, custom_agent_name, verify_status,
-             exit_code, category, pending_reason, audit_verdict, audit_report_path
+             exit_code, category, pending_reason, audit_verdict, audit_report_path, delivery_assessment
              FROM tasks
              WHERE agent = ?1 AND status = ?2 AND duration_ms IS NOT NULL AND created_at >= ?3
              ORDER BY created_at DESC
@@ -185,7 +185,7 @@ impl Store {
              caller_kind, caller_session_id, agent_session_id, repo_path, worktree_path, worktree_branch,
              start_sha, log_path, output_path, tokens, prompt_tokens, duration_ms, model, cost_usd,
              created_at, completed_at, verify, read_only, budget, custom_agent_name, verify_status,
-             exit_code, category, pending_reason, audit_verdict, audit_report_path
+             exit_code, category, pending_reason, audit_verdict, audit_report_path, delivery_assessment
              FROM tasks WHERE caller_session_id = ?1 ORDER BY created_at DESC",
         )?;
         let rows = stmt.query_map(params![session_id], row_to_task)?;
@@ -199,7 +199,7 @@ impl Store {
              caller_kind, caller_session_id, agent_session_id, repo_path, worktree_path, worktree_branch,
              start_sha, log_path, output_path, tokens, prompt_tokens, duration_ms, model, cost_usd,
              created_at, completed_at, verify, read_only, budget, custom_agent_name, verify_status,
-             exit_code, category, pending_reason, audit_verdict, audit_report_path
+             exit_code, category, pending_reason, audit_verdict, audit_report_path, delivery_assessment
              FROM tasks WHERE workgroup_id = ?1 ORDER BY created_at DESC",
         )?;
         let rows = stmt.query_map(params![group_id], row_to_task)?;

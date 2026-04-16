@@ -13,6 +13,23 @@ use super::run_post::{
 };
 use super::{RunArgs, inherit_retry_base_branch, iterate_config, maybe_auto_retry_after_checklist_miss, maybe_auto_retry_after_verify_failure, maybe_cleanup_fast_fail, maybe_iterate, maybe_judge_retry, maybe_verify, run, run_agent, run_prompt};
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum LifecyclePhaseDecision {
+    Continue,
+    Retry(TaskId),
+    Stop,
+}
+
+impl From<DirtyWorktreeAction> for LifecyclePhaseDecision {
+    fn from(action: DirtyWorktreeAction) -> Self {
+        match action {
+            DirtyWorktreeAction::Continue => Self::Continue,
+            DirtyWorktreeAction::Retry(task_id) => Self::Retry(task_id),
+            DirtyWorktreeAction::Failed => Self::Stop,
+        }
+    }
+}
+
 pub(crate) async fn post_run_lifecycle(
     store: &Arc<Store>,
     task_id: &TaskId,
@@ -27,76 +44,21 @@ pub(crate) async fn post_run_lifecycle(
     prompt_bundle: &run_prompt::PromptBundle,
     pre_verify_status: TaskStatus,
 ) -> Result<Option<TaskId>> {
-    if args.sandbox {
-        crate::sandbox::kill_container(task_id.as_str());
+    run_teardown_phase(task_id, args, wt_path);
+    run_escape_checks_phase(args, effective_dir, repo_path, wt_path);
+    match run_worktree_settlement_phase(store, task_id, args, effective_dir).await? {
+        LifecyclePhaseDecision::Continue => {}
+        LifecyclePhaseDecision::Retry(retry_id) => return Ok(Some(retry_id)),
+        LifecyclePhaseDecision::Stop => return Ok(None),
     }
-    // Always clear worktree lock when task finishes (success or failure)
-    if let Some(wt) = wt_path {
-        crate::worktree::clear_worktree_lock(std::path::Path::new(wt));
-    }
-    if !args.read_only {
-        run_prompt::warn_agent_committed_files_outside_scope(
-            &args.scope,
-            args.dir.as_ref(),
-            effective_dir,
-            repo_path,
-            wt_path,
-        );
-    }
-    if args.worktree.is_some() {
-        run_agent::check_worktree_escape(repo_path.map(String::as_str));
-    }
-    // Rescue untracked files before verify — ensures verify tests committed state
-    if let Some(dir) = effective_dir {
-        if !args.read_only {
-            match post_agent_dirty_worktree_cleanup(store, task_id, args, dir).await? {
-                DirtyWorktreeAction::Continue => {}
-                DirtyWorktreeAction::Retry(retry_id) => return Ok(Some(retry_id)),
-                DirtyWorktreeAction::Failed => return Ok(None),
-            }
-        }
-    }
-    maybe_verify(
+    run_verify_scope_phase(
         store,
         task_id,
-        args.verify.as_deref(),
+        args,
         effective_dir.map(String::as_str),
         container_name,
     );
-    if !args.read_only && !args.scope.is_empty() {
-        run_agent::check_scope_violations(
-            store,
-            task_id,
-            &args.scope,
-            effective_dir.map(String::as_str),
-        );
-    }
-    let checklist_result = if !args.checklist.is_empty() {
-        match store.get_task(task_id.as_str())? {
-            Some(ref task) if task.status == TaskStatus::Done => {
-                let output = show::output_text_for_task(store.as_ref(), task_id.as_str(), true)
-                    .unwrap_or_default();
-                let result = checklist_scan::scan_checklist(&args.checklist, &output);
-                if result.all_addressed() {
-                    aid_info!("[aid] Checklist: {}", result.summary());
-                } else {
-                    aid_warn!("[aid] Checklist: {} — missing: {}",
-                        result.summary(), result.missing_items().join(", "));
-                    let _ = store.insert_event(&TaskEvent {
-                        task_id: task_id.clone(),
-                        timestamp: chrono::Local::now(),
-                        event_kind: EventKind::Milestone,
-                        detail: format!("Checklist: {}", result.summary()),
-                        metadata: None,
-                    });
-                }
-                Some(result)
-            }
-            _ => None,
-        }
-    } else {
-        None
-    };
+    let checklist_result = run_checklist_phase(store, task_id, args)?;
     let mut quota_error_message = None;
     if let Some(task) = store.get_task(task_id.as_str())? {
         if task.status == TaskStatus::Done && rate_limit::is_rate_limited(&agent_kind) {
@@ -317,6 +279,111 @@ pub(crate) async fn post_run_lifecycle(
     };
     if completed_normally { aid_info!("[aid] View in TUI: aid board"); }
     Ok(None)
+}
+
+fn run_teardown_phase(task_id: &TaskId, args: &RunArgs, wt_path: Option<&String>) {
+    if args.sandbox {
+        crate::sandbox::kill_container(task_id.as_str());
+    }
+    if let Some(wt) = wt_path {
+        crate::worktree::clear_worktree_lock(std::path::Path::new(wt));
+    }
+}
+
+fn run_escape_checks_phase(
+    args: &RunArgs,
+    effective_dir: Option<&String>,
+    repo_path: Option<&String>,
+    wt_path: Option<&String>,
+) {
+    if !args.read_only {
+        run_prompt::warn_agent_committed_files_outside_scope(
+            &args.scope,
+            args.dir.as_ref(),
+            effective_dir,
+            repo_path,
+            wt_path,
+        );
+    }
+    if args.worktree.is_some() {
+        run_agent::check_worktree_escape(repo_path.map(String::as_str));
+    }
+}
+
+async fn run_worktree_settlement_phase(
+    store: &Arc<Store>,
+    task_id: &TaskId,
+    args: &RunArgs,
+    effective_dir: Option<&String>,
+) -> Result<LifecyclePhaseDecision> {
+    if args.read_only {
+        return Ok(LifecyclePhaseDecision::Continue);
+    }
+    let Some(dir) = effective_dir else {
+        return Ok(LifecyclePhaseDecision::Continue);
+    };
+    let action = post_agent_dirty_worktree_cleanup(store, task_id, args, dir).await?;
+    Ok(action.into())
+}
+
+fn run_verify_scope_phase(
+    store: &Arc<Store>,
+    task_id: &TaskId,
+    args: &RunArgs,
+    effective_dir: Option<&str>,
+    container_name: Option<&str>,
+) {
+    maybe_verify(
+        store,
+        task_id,
+        args.verify.as_deref(),
+        effective_dir,
+        container_name,
+    );
+    if !args.read_only && !args.scope.is_empty() {
+        run_agent::check_scope_violations(store, task_id, &args.scope, effective_dir);
+    }
+}
+
+fn run_checklist_phase(
+    store: &Arc<Store>,
+    task_id: &TaskId,
+    args: &RunArgs,
+) -> Result<Option<checklist_scan::ChecklistResult>> {
+    if args.checklist.is_empty() {
+        return Ok(None);
+    }
+    let Some(task) = store.get_task(task_id.as_str())? else {
+        return Ok(None);
+    };
+    if task.status != TaskStatus::Done {
+        return Ok(None);
+    }
+    let output = show::output_text_for_task(store.as_ref(), task_id.as_str(), true)
+        .unwrap_or_default();
+    let result = checklist_scan::scan_checklist(&args.checklist, &output);
+    record_checklist_result(store, task_id, &result);
+    Ok(Some(result))
+}
+
+fn record_checklist_result(
+    store: &Arc<Store>,
+    task_id: &TaskId,
+    result: &checklist_scan::ChecklistResult,
+) {
+    if result.all_addressed() {
+        aid_info!("[aid] Checklist: {}", result.summary());
+        return;
+    }
+    aid_warn!("[aid] Checklist: {} — missing: {}",
+        result.summary(), result.missing_items().join(", "));
+    let _ = store.insert_event(&TaskEvent {
+        task_id: task_id.clone(),
+        timestamp: chrono::Local::now(),
+        event_kind: EventKind::Milestone,
+        detail: format!("Checklist: {}", result.summary()),
+        metadata: None,
+    });
 }
 
 pub(crate) fn maybe_flag_hollow_output(store: &Store, task_id: &TaskId, task: &Task) {

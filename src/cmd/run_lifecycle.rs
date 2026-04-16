@@ -59,68 +59,17 @@ pub(crate) async fn post_run_lifecycle(
         container_name,
     );
     let checklist_result = run_checklist_phase(store, task_id, args)?;
-    let mut quota_error_message = None;
-    if let Some(task) = store.get_task(task_id.as_str())? {
-        if task.status == TaskStatus::Done && rate_limit::is_rate_limited(&agent_kind) {
-            rate_limit::clear_rate_limit(&agent_kind);
-        }
-        if task.status == TaskStatus::Done && !prompt_bundle.injected_memory_ids.is_empty() {
-            for memory_id in &prompt_bundle.injected_memory_ids {
-                if let Err(err) = store.increment_memory_success(memory_id) {
-                    aid_error!("[aid] Failed to record memory success for {memory_id}: {err}");
-                }
-            }
-        }
-        maybe_flag_empty_worktree_diff(store.as_ref(), task_id, &task);
-        maybe_cleanup_fast_fail(store, task_id, &task);
-        // Persist result file BEFORE worktree cleanup — Failed tasks remove the
-        // worktree below, so the source file would be gone by the time the old
-        // call site (after auto_save_task_output) runs.
-        if let Err(err) = run_prompt::persist_result_file(task_id.as_str(), args.result_file.as_deref(), effective_dir.map(String::as_str)) {
-            aid_warn!("[aid] Failed to persist result file: {err}");
-        }
-        if task.status == TaskStatus::Failed {
-            quota_error_message = read_quota_error_message(task_id);
-            if let Some(message) = quota_error_message.as_deref()
-                && let Some(clean_message) = rate_limit::extract_rate_limit_message(message)
-            {
-                rate_limit::mark_rate_limited(&agent_kind, &clean_message);
-            }
-            let fail_payload = show::task_hook_json(
-                task_id,
-                agent_display_name,
-                TaskStatus::Failed,
-                &task.prompt,
-                task.worktree_path.as_deref(),
-                effective_dir.map(String::as_str),
-                task.exit_code,
-            );
-            if let Err(err) = hooks::run_hooks_with(
-                "on_fail",
-                &fail_payload,
-                Some(agent_display_name),
-                runtime_hooks,
-                false,
-            ) {
-                aid_error!("[aid] Hook on_fail failed: {err}");
-            }
-            if !task.read_only
-                && let Some(wt) = task.worktree_path.as_deref()
-                && Path::new(wt).exists()
-            {
-                // Don't remove worktree if other active tasks still reference it
-                let has_siblings = store.has_active_worktree_siblings(wt, task_id.as_str()).unwrap_or(false);
-                if has_siblings {
-                    aid_info!("[aid] Preserving worktree {wt} — other active tasks share it");
-                } else {
-                    let repo = repo_path.map(String::as_str).unwrap_or(".");
-                    if let Err(err) = crate::cmd::merge::remove_worktree(repo, wt) {
-                        aid_warn!("[aid] Warning: failed to clean up worktree {wt}: {err}");
-                    }
-                }
-            }
-        }
-    }
+    let quota_error_message = run_task_postprocess_phase(
+        store,
+        task_id,
+        args,
+        agent_kind,
+        agent_display_name,
+        effective_dir,
+        repo_path,
+        runtime_hooks,
+        prompt_bundle,
+    )?;
     rescue_quota_failed_task(store.as_ref(), task_id, quota_error_message.as_deref());
     if let Some(retry_id) = maybe_judge_retry(store, args, task_id).await? {
         return Ok(Some(retry_id));
@@ -384,6 +333,149 @@ fn record_checklist_result(
         detail: format!("Checklist: {}", result.summary()),
         metadata: None,
     });
+}
+
+fn run_task_postprocess_phase(
+    store: &Arc<Store>,
+    task_id: &TaskId,
+    args: &RunArgs,
+    agent_kind: AgentKind,
+    agent_display_name: &str,
+    effective_dir: Option<&String>,
+    repo_path: Option<&String>,
+    runtime_hooks: &[hooks::Hook],
+    prompt_bundle: &run_prompt::PromptBundle,
+) -> Result<Option<String>> {
+    let Some(task) = store.get_task(task_id.as_str())? else {
+        return Ok(None);
+    };
+    if task.status == TaskStatus::Done {
+        handle_done_postprocess(store, task_id, &task, agent_kind, prompt_bundle);
+    }
+    maybe_cleanup_fast_fail(store, task_id, &task);
+    persist_result_file(task_id, args, effective_dir);
+    if task.status == TaskStatus::Failed {
+        return Ok(handle_failed_postprocess(
+            store,
+            task_id,
+            &task,
+            agent_kind,
+            agent_display_name,
+            effective_dir,
+            repo_path,
+            runtime_hooks,
+        ));
+    }
+    Ok(None)
+}
+
+fn handle_done_postprocess(
+    store: &Arc<Store>,
+    task_id: &TaskId,
+    task: &Task,
+    agent_kind: AgentKind,
+    prompt_bundle: &run_prompt::PromptBundle,
+) {
+    if rate_limit::is_rate_limited(&agent_kind) {
+        rate_limit::clear_rate_limit(&agent_kind);
+    }
+    for memory_id in &prompt_bundle.injected_memory_ids {
+        if let Err(err) = store.increment_memory_success(memory_id) {
+            aid_error!("[aid] Failed to record memory success for {memory_id}: {err}");
+        }
+    }
+    maybe_flag_empty_worktree_diff(store.as_ref(), task_id, task);
+}
+
+fn persist_result_file(
+    task_id: &TaskId,
+    args: &RunArgs,
+    effective_dir: Option<&String>,
+) {
+    // Persist before failed-task worktree cleanup, otherwise the source file may disappear.
+    if let Err(err) = run_prompt::persist_result_file(
+        task_id.as_str(),
+        args.result_file.as_deref(),
+        effective_dir.map(String::as_str),
+    ) {
+        aid_warn!("[aid] Failed to persist result file: {err}");
+    }
+}
+
+fn handle_failed_postprocess(
+    store: &Arc<Store>,
+    task_id: &TaskId,
+    task: &Task,
+    agent_kind: AgentKind,
+    agent_display_name: &str,
+    effective_dir: Option<&String>,
+    repo_path: Option<&String>,
+    runtime_hooks: &[hooks::Hook],
+) -> Option<String> {
+    let quota_error_message = read_quota_error_message(task_id);
+    if let Some(message) = quota_error_message.as_deref()
+        && let Some(clean_message) = rate_limit::extract_rate_limit_message(message)
+    {
+        rate_limit::mark_rate_limited(&agent_kind, &clean_message);
+    }
+    run_fail_hook(task_id, task, agent_display_name, effective_dir, runtime_hooks);
+    cleanup_failed_worktree(store, task_id, task, repo_path);
+    quota_error_message
+}
+
+fn run_fail_hook(
+    task_id: &TaskId,
+    task: &Task,
+    agent_display_name: &str,
+    effective_dir: Option<&String>,
+    runtime_hooks: &[hooks::Hook],
+) {
+    let payload = show::task_hook_json(
+        task_id,
+        agent_display_name,
+        TaskStatus::Failed,
+        &task.prompt,
+        task.worktree_path.as_deref(),
+        effective_dir.map(String::as_str),
+        task.exit_code,
+    );
+    if let Err(err) = hooks::run_hooks_with(
+        "on_fail",
+        &payload,
+        Some(agent_display_name),
+        runtime_hooks,
+        false,
+    ) {
+        aid_error!("[aid] Hook on_fail failed: {err}");
+    }
+}
+
+fn cleanup_failed_worktree(
+    store: &Arc<Store>,
+    task_id: &TaskId,
+    task: &Task,
+    repo_path: Option<&String>,
+) {
+    if task.read_only {
+        return;
+    }
+    let Some(wt) = task.worktree_path.as_deref() else {
+        return;
+    };
+    if !Path::new(wt).exists() {
+        return;
+    }
+    let has_siblings = store
+        .has_active_worktree_siblings(wt, task_id.as_str())
+        .unwrap_or(false);
+    if has_siblings {
+        aid_info!("[aid] Preserving worktree {wt} — other active tasks share it");
+        return;
+    }
+    let repo = repo_path.map(String::as_str).unwrap_or(".");
+    if let Err(err) = crate::cmd::merge::remove_worktree(repo, wt) {
+        aid_warn!("[aid] Warning: failed to clean up worktree {wt}: {err}");
+    }
 }
 
 pub(crate) fn maybe_flag_hollow_output(store: &Store, task_id: &TaskId, task: &Task) {

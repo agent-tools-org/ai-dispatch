@@ -93,7 +93,7 @@ pub fn render_board(tasks: &[Task], store: &Store) -> Result<String> {
         } else {
             let error = latest_errors.get(task.id.as_str()).cloned();
             let base = task_status(task, latest_milestone(&latest_milestones, task.id.as_str()), error);
-            if task.verify_status == VerifyStatus::Failed {
+            if task.has_verify_failure() {
                 format!("{} [VFAIL]", base)
             } else {
                 base

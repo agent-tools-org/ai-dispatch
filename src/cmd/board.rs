@@ -253,6 +253,7 @@ fn board_json_row(task: &Task) -> serde_json::Value {
         "workgroup_id": task.workgroup_id,
         "worktree_branch": task.worktree_branch,
         "verify_status": task.verify_status.as_str(),
+        "delivery_assessment": task.delivery_assessment().map(|delivery| delivery.as_str()),
         "pending_reason": task.pending_reason,
         "created_at": task.created_at.to_rfc3339(),
         "completed_at": task.completed_at.map(|dt| dt.to_rfc3339()),

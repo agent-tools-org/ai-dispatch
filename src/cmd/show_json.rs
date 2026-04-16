@@ -70,6 +70,7 @@ pub(super) fn task_json(store: &Arc<Store>, task_id: &str) -> Result<String> {
         "verify": task.verify,
         "exit_code": task.exit_code,
         "verify_status": task.verify_status.as_str(),
+        "delivery_assessment": task.delivery_assessment().map(|delivery| delivery.as_str()),
         "pending_reason": task.pending_reason,
         "read_only": task.read_only,
         "budget": task.budget,

@@ -10,7 +10,7 @@ use std::sync::Arc;
 
 use crate::paths;
 use crate::store::Store;
-use crate::types::{EventKind, Task, TaskEvent, VerifyStatus};
+use crate::types::{EventKind, Task, TaskEvent};
 
 use super::extract_messages_from_log;
 
@@ -67,10 +67,10 @@ pub(super) fn inplace_diff_stat(repo_path: &str) -> Option<String> {
 }
 
 pub(super) fn task_has_changes(task: &Task) -> bool {
-    if matches!(
-        task.verify_status,
-        VerifyStatus::EmptyDiff | VerifyStatus::HollowOutput
-    ) {
+    if task
+        .delivery_assessment()
+        .is_some_and(|delivery| delivery.implies_no_changes())
+    {
         return false;
     }
     task.worktree_path

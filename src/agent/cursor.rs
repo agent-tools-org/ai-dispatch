@@ -279,7 +279,7 @@ mod tests {
     use super::CursorAgent;
     use crate::agent::RunOpts;
     use crate::agent::Agent;
-    use crate::rate_limit;
+    use crate::{paths, rate_limit};
     use crate::types::{EventKind, TaskId};
     use std::fs;
     use std::sync::{Mutex, OnceLock};
@@ -434,6 +434,8 @@ mod tests {
 
     #[test]
     fn parse_event_marks_plain_text_rate_limits() {
+        let temp = tempfile::tempdir().unwrap();
+        let _aid_home = paths::AidHomeGuard::set(temp.path());
         let _guard = rate_limit_lock().lock().unwrap();
         let _ = rate_limit::clear_rate_limit(&crate::types::AgentKind::Cursor);
         let agent = CursorAgent;
@@ -454,6 +456,8 @@ mod tests {
 
     #[test]
     fn parse_event_marks_json_rate_limits() {
+        let temp = tempfile::tempdir().unwrap();
+        let _aid_home = paths::AidHomeGuard::set(temp.path());
         let _guard = rate_limit_lock().lock().unwrap();
         let _ = rate_limit::clear_rate_limit(&crate::types::AgentKind::Cursor);
         let agent = CursorAgent;

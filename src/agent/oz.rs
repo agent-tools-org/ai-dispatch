@@ -112,7 +112,7 @@ impl super::Agent for OzAgent {
 mod tests {
     use super::OzAgent;
     use crate::agent::{Agent, RunOpts};
-    use crate::rate_limit;
+    use crate::{paths, rate_limit};
     use crate::types::{AgentKind, EventKind, TaskId};
     use std::process::Command;
     use std::time::{SystemTime, UNIX_EPOCH};
@@ -266,6 +266,8 @@ mod tests {
 
     #[test]
     fn parses_rate_limit_error_and_marks_agent() {
+        let temp = tempfile::tempdir().unwrap();
+        let _aid_home = paths::AidHomeGuard::set(temp.path());
         let _ = rate_limit::clear_rate_limit(&AgentKind::Oz);
         let agent = OzAgent;
         let line = r#"{"type":"error","message":"HTTP 429 too many requests"}"#;

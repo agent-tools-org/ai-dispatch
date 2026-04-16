@@ -9,6 +9,7 @@ pub mod copilot;
 pub mod cursor;
 pub mod droid;
 pub mod gemini;
+pub(crate) mod gemini_support;
 pub mod kilo;
 pub mod opencode;
 pub mod oz;

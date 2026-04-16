@@ -41,7 +41,8 @@ fn make_task(id: &str, group_id: Option<&str>) -> Task {
         read_only: false,
             budget: false,
             audit_verdict: None,
-            audit_report_path: None,
+        audit_report_path: None,
+        delivery_assessment: None,
         }
 }
 

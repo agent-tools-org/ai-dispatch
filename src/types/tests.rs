@@ -40,6 +40,7 @@ fn sample_task(agent: AgentKind, custom_agent_name: Option<&str>) -> Task {
         budget: false,
         audit_verdict: None,
         audit_report_path: None,
+        delivery_assessment: None,
     }
 }
 
@@ -129,14 +130,14 @@ fn profile_returns_none_for_custom() {
 #[test]
 fn task_delivery_assessment_maps_empty_diff() {
     let mut task = sample_task(AgentKind::Codex, None);
-    task.verify_status = VerifyStatus::EmptyDiff;
+    task.delivery_assessment = Some(DeliveryAssessment::EmptyDiff);
     assert_eq!(task.delivery_assessment(), Some(DeliveryAssessment::EmptyDiff));
 }
 
 #[test]
 fn task_delivery_assessment_maps_hollow_output() {
     let mut task = sample_task(AgentKind::Codex, None);
-    task.verify_status = VerifyStatus::HollowOutput;
+    task.delivery_assessment = Some(DeliveryAssessment::HollowOutput);
     assert_eq!(
         task.delivery_assessment(),
         Some(DeliveryAssessment::HollowOutput)

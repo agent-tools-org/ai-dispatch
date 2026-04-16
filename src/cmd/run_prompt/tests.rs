@@ -504,6 +504,7 @@ fn build_prompt_bundle_skips_sibling_context_for_opencode() {
         budget: false,
         audit_verdict: None,
         audit_report_path: None,
+        delivery_assessment: None,
     };
     store.insert_task(&sibling_task).unwrap();
     let summary = crate::cmd::summary::CompletionSummary {
@@ -580,6 +581,7 @@ fn build_prompt_bundle_skips_sibling_context_for_kilo() {
         budget: false,
         audit_verdict: None,
         audit_report_path: None,
+        delivery_assessment: None,
     };
     store.insert_task(&sibling_task).unwrap();
     let summary = crate::cmd::summary::CompletionSummary {
@@ -656,6 +658,7 @@ fn build_prompt_bundle_includes_sibling_context_for_codex() {
         budget: false,
         audit_verdict: None,
         audit_report_path: None,
+        delivery_assessment: None,
     };
     store.insert_task(&sibling_task).unwrap();
     let summary = crate::cmd::summary::CompletionSummary {

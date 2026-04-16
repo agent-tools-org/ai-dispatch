@@ -123,5 +123,6 @@ pub(super) fn make_stored_task(id: &str, agent: AgentKind, status: TaskStatus) -
         budget: false,
         audit_verdict: None,
         audit_report_path: None,
+        delivery_assessment: None,
     }
 }

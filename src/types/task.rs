@@ -44,6 +44,7 @@ pub struct Task {
     pub budget: bool,
     pub audit_verdict: Option<String>,
     pub audit_report_path: Option<String>,
+    pub delivery_assessment: Option<DeliveryAssessment>,
 }
 
 impl Task {
@@ -56,7 +57,7 @@ impl Task {
     }
 
     pub fn delivery_assessment(&self) -> Option<DeliveryAssessment> {
-        DeliveryAssessment::from_verify_status(self.verify_status)
+        self.delivery_assessment
     }
 
     pub fn has_verify_failure(&self) -> bool {

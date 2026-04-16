@@ -334,8 +334,11 @@ pub(crate) fn maybe_flag_hollow_output(store: &Store, task_id: &TaskId, task: &T
         return;
     }
     aid_warn!("[aid] Warning: agent completed but produced no substantive output");
-    if let Err(err) = store.update_verify_status(task_id.as_str(), VerifyStatus::HollowOutput) {
-        aid_error!("[aid] Failed to record hollow output status: {err}");
+    if let Err(err) = store.update_delivery_assessment(
+        task_id.as_str(),
+        Some(DeliveryAssessment::HollowOutput),
+    ) {
+        aid_error!("[aid] Failed to record hollow output delivery assessment: {err}");
     }
     let _ = store.insert_event(&TaskEvent {
         task_id: task_id.clone(),

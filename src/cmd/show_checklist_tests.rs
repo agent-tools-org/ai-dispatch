@@ -71,6 +71,7 @@ fn render_all_confirmed_shows_checkmarks() {
         budget: false,
         audit_verdict: None,
         audit_report_path: None,
+        delivery_assessment: None,
     };
     store.insert_task(&task).unwrap();
     let text = render_checklist_status(&store, &task).expect("expected checklist");
@@ -118,6 +119,7 @@ fn render_missing_item_shows_x() {
         budget: false,
         audit_verdict: None,
         audit_report_path: None,
+        delivery_assessment: None,
     };
     store.insert_task(&task).unwrap();
     let text = render_checklist_status(&store, &task).expect("expected checklist");
@@ -162,6 +164,7 @@ fn render_without_checklist_returns_none() {
         budget: false,
         audit_verdict: None,
         audit_report_path: None,
+        delivery_assessment: None,
     };
     store.insert_task(&task).unwrap();
     assert!(render_checklist_status(&store, &task).is_none());

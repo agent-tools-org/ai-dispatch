@@ -129,8 +129,11 @@ pub(crate) fn maybe_flag_empty_worktree_diff(store: &Store, task_id: &TaskId, ta
     }
     if let Some(true) = worktree_is_empty_diff(path) {
         aid_warn!("[aid] Warning: agent completed but made no code changes in worktree");
-        if let Err(err) = store.update_verify_status(task_id.as_str(), VerifyStatus::EmptyDiff) {
-            aid_error!("[aid] Failed to record empty diff status: {err}");
+        if let Err(err) = store.update_delivery_assessment(
+            task_id.as_str(),
+            Some(DeliveryAssessment::EmptyDiff),
+        ) {
+            aid_error!("[aid] Failed to record empty diff delivery assessment: {err}");
         }
     }
 }

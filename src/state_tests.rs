@@ -281,5 +281,6 @@ fn make_task(
         budget: false,
         audit_verdict: None,
         audit_report_path: None,
+        delivery_assessment: None,
     }
 }

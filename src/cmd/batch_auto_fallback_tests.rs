@@ -51,6 +51,7 @@ fn stored_task(id: &str, agent: AgentKind) -> Task {
         budget: false,
         audit_verdict: None,
         audit_report_path: None,
+        delivery_assessment: None,
     }
 }
 

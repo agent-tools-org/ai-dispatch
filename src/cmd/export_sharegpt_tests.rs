@@ -119,6 +119,7 @@ fn done_task(id: &str, resolved_prompt: Option<&str>) -> Task {
         budget: false,
         audit_verdict: None,
         audit_report_path: None,
+        delivery_assessment: None,
     }
 }
 

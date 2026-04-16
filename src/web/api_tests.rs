@@ -15,7 +15,9 @@ use super::api::{
     get_task_output, get_usage, list_tasks,
 };
 use crate::store::Store;
-use crate::types::{AgentKind, EventKind, Task, TaskEvent, TaskId, TaskStatus, VerifyStatus};
+use crate::types::{
+    AgentKind, DeliveryAssessment, EventKind, Task, TaskEvent, TaskId, TaskStatus, VerifyStatus,
+};
 
 fn make_task(id: &str) -> Task {
     Task {
@@ -50,6 +52,9 @@ fn make_task(id: &str) -> Task {
         pending_reason: None,
         read_only: false,
         budget: false,
+        audit_verdict: None,
+        audit_report_path: None,
+        delivery_assessment: None,
     }
 }
 
@@ -59,6 +64,18 @@ fn task_response_serializes_rfc3339_timestamps() {
     assert!(json["created_at"].as_str().unwrap().contains('T'));
     assert!(json["completed_at"].as_str().unwrap().contains('T'));
     assert_eq!(json["status"], "done");
+}
+
+#[test]
+fn task_response_serializes_delivery_assessment() {
+    let mut task = make_task("t-1");
+    task.pending_reason = Some("rate_limited".to_string());
+    task.delivery_assessment = Some(DeliveryAssessment::EmptyDiff);
+
+    let json = serde_json::to_value(TaskResponse::from_task(task, None, None)).unwrap();
+
+    assert_eq!(json["pending_reason"], "rate_limited");
+    assert_eq!(json["delivery_assessment"], "empty_diff");
 }
 
 #[test]

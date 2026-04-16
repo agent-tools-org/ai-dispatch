@@ -212,6 +212,9 @@ pub(crate) async fn post_run_lifecycle(
     {
         auto_save_task_output(store.as_ref(), &task)?;
     }
+    if let Some(task) = store.get_task(task_id.as_str())? {
+        maybe_flag_hollow_output(store.as_ref(), task_id, &task);
+    }
     maybe_run_post_done_audit(
         store.as_ref(),
         task_id,
@@ -564,6 +567,41 @@ pub(crate) fn maybe_flag_empty_worktree_diff(store: &Store, task_id: &TaskId, ta
             aid_error!("[aid] Failed to record empty diff status: {err}");
         }
     }
+}
+pub(crate) fn maybe_flag_hollow_output(store: &Store, task_id: &TaskId, task: &Task) {
+    if task.status != TaskStatus::Done || task.verify_status != VerifyStatus::Skipped {
+        return;
+    }
+    if output_content_length(task) >= 200 {
+        return;
+    }
+    let no_worktree_changes = match task.worktree_path.as_deref() {
+        Some(path) => worktree_is_empty_diff(Path::new(path)) == Some(true),
+        None => true,
+    };
+    if !no_worktree_changes {
+        return;
+    }
+    aid_warn!("[aid] Warning: agent completed but produced no substantive output");
+    if let Err(err) = store.update_verify_status(task_id.as_str(), VerifyStatus::HollowOutput) {
+        aid_error!("[aid] Failed to record hollow output status: {err}");
+    }
+    let _ = store.insert_event(&TaskEvent {
+        task_id: task_id.clone(),
+        timestamp: chrono::Local::now(),
+        event_kind: EventKind::Milestone,
+        detail: "Hollow output: agent produced no substantive deliverable".to_string(),
+        metadata: None,
+    });
+}
+fn output_content_length(task: &Task) -> usize {
+    if let Some(ref path) = task.output_path {
+        if let Ok(content) = std::fs::read_to_string(path) {
+            return content.trim().len();
+        }
+    }
+    let auto_path = crate::paths::task_dir(task.id.as_str()).join("output.md");
+    std::fs::read_to_string(auto_path).map(|content| content.trim().len()).unwrap_or(0)
 }
 pub(crate) fn auto_save_task_output(store: &Store, task: &Task) -> Result<()> {
     let transcript = crate::paths::transcript_path(task.id.as_str());

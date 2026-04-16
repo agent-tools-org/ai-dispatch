@@ -8,7 +8,7 @@ use std::sync::Arc;
 use crate::board::render_task_detail;
 use crate::cmd;
 use crate::store::Store;
-use crate::types::{TaskStatus, VerifyStatus};
+use crate::types::TaskStatus;
 
 #[path = "show_output.rs"]
 mod show_output;
@@ -201,10 +201,10 @@ pub fn audit_text(store: &Arc<Store>, task_id: &str) -> Result<String> {
         out.push_str(&stderr);
     }
 
-    if matches!(
-        task.verify_status,
-        VerifyStatus::EmptyDiff | VerifyStatus::HollowOutput
-    ) {
+    if task
+        .delivery_assessment()
+        .is_some_and(|delivery| delivery.implies_no_changes())
+    {
         out.push_str("\nChanges:\n[no changes]\n");
     } else if let Some(ref wt_path) = task.worktree_path
         && Path::new(wt_path).exists()
@@ -256,10 +256,10 @@ pub fn summary_text(store: &Arc<Store>, task_id: &str) -> Result<String> {
         out.push('\n');
     }
 
-    if matches!(
-        task.verify_status,
-        VerifyStatus::EmptyDiff | VerifyStatus::HollowOutput
-    ) {
+    if task
+        .delivery_assessment()
+        .is_some_and(|delivery| delivery.implies_no_changes())
+    {
         out.push_str("\n--- Diff Stat ---\n  (no changes detected)\n");
     } else if let Some(ref wt_path) = task.worktree_path
         && Path::new(wt_path).exists()

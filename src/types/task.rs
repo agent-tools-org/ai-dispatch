@@ -5,7 +5,9 @@
 use chrono::{DateTime, Local};
 use serde::Serialize;
 
-use super::{AgentKind, EventKind, TaskId, TaskStatus, VerifyStatus, WorkgroupId};
+use super::{
+    AgentKind, DeliveryAssessment, EventKind, TaskId, TaskStatus, VerifyStatus, WorkgroupId,
+};
 
 #[derive(Debug, Clone, Serialize)]
 pub struct Task {
@@ -51,6 +53,14 @@ impl Task {
         } else {
             self.agent.as_str()
         }
+    }
+
+    pub fn delivery_assessment(&self) -> Option<DeliveryAssessment> {
+        DeliveryAssessment::from_verify_status(self.verify_status)
+    }
+
+    pub fn has_verify_failure(&self) -> bool {
+        self.verify_status == VerifyStatus::Failed
     }
 }
 

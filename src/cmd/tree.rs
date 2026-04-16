@@ -1,10 +1,10 @@
 // Handler for `aid tree <task-id>` — render retry chain as ASCII tree.
 // Exports: `run(&Store, &str)`; relies on store queries and task metadata.
-// Deps: crate::store::Store, crate::types::{Task, TaskFilter, VerifyStatus}.
+// Deps: crate::store::Store and crate::types::{Task, TaskFilter}.
 use anyhow::Result;
 use std::collections::{HashMap, HashSet};
 use crate::store::Store;
-use crate::types::{Task, TaskFilter, VerifyStatus};
+use crate::types::{Task, TaskFilter};
 
 pub fn run(store: &Store, task_id: &str) -> Result<()> {
     let chain = store.get_retry_chain(task_id)?;
@@ -79,8 +79,11 @@ fn render_children(
 }
 fn format_task_line(task: &Task) -> String {
     let mut status = task.status.label().to_string();
-    if task.verify_status != VerifyStatus::Skipped {
-        status.push_str(&format!(" [{}]", task.verify_status.as_str()));
+    if task.has_verify_failure() {
+        status.push_str(" [verify:failed]");
+    }
+    if let Some(delivery) = task.delivery_assessment() {
+        status.push_str(&format!(" [delivery:{}]", delivery.as_str()));
     }
     let duration = format_duration(task.duration_ms);
     let mut parts = vec![duration];

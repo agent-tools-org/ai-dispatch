@@ -178,6 +178,9 @@ fn anti_poll_status(marker_path: &Path, fingerprint: &str, now: i64, force: bool
         return (AntiPollStatus::Allowed(0), force_state);
     }
     if elapsed >= 0 && elapsed < BOARD_MIN_COOLDOWN_SECS { return (AntiPollStatus::Cooldown(elapsed), ForceMarkerState::default()) }
+    if marker.is_uninitialized() {
+        return (AntiPollStatus::Allowed(0), ForceMarkerState::default());
+    }
     if marker.fingerprint == fingerprint {
         let repeat_count = marker.repeat_count + 1;
         if repeat_count >= BOARD_REPEAT_LIMIT { return (AntiPollStatus::Repeat(repeat_count), ForceMarkerState::default()) }
@@ -193,6 +196,12 @@ struct BoardMarker {
     repeat_count: u32,
     force_count: u32,
     force_window_start: i64,
+}
+
+impl BoardMarker {
+    fn is_uninitialized(&self) -> bool {
+        self.timestamp == 0 && self.fingerprint.is_empty() && self.repeat_count == 0 && self.force_count == 0 && self.force_window_start == 0
+    }
 }
 
 fn read_board_marker(marker_path: &Path) -> BoardMarker {

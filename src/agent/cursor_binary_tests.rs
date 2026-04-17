@@ -4,7 +4,7 @@
 
 use super::{cursor::CursorAgent, detect_agents, Agent, RunOpts};
 use crate::test_subprocess;
-use crate::types::AgentKind;
+use crate::types::{AgentKind, EventKind, TaskId};
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
@@ -31,6 +31,40 @@ fn detect_agents_deduplicates_cursor_aliases() {
         &bin_dir,
     );
     assert_eq!(extract_marker(&output, "CURSOR_COUNT="), "1");
+}
+
+#[test]
+fn build_command_omits_partial_output_flag() {
+    let agent = CursorAgent;
+    let cmd = agent.build_command("test prompt", &run_opts()).unwrap();
+    let args: Vec<_> = cmd.get_args().map(|arg| arg.to_string_lossy().into_owned()).collect();
+    assert!(!args.iter().any(|arg| arg == "--stream-partial-output"));
+}
+
+#[test]
+fn cursor_reasoning_stays_coherent_without_partial_output_flag() {
+    let bin_dir = streaming_fake_bin_dir();
+    let agent = CursorAgent;
+    let task_id = TaskId("t-cursor-stream".to_string());
+    let mut cmd = agent.build_command("test prompt", &run_opts()).unwrap();
+    cmd.env("PATH", bin_dir.path());
+
+    let output = cmd.output().unwrap();
+    assert!(
+        output.status.success(),
+        "fake cursor command failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    let reasoning: Vec<_> = stdout
+        .lines()
+        .filter_map(|line| agent.parse_event(&task_id, line))
+        .filter(|event| event.event_kind == EventKind::Reasoning)
+        .collect();
+
+    assert_eq!(reasoning.len(), 1);
+    assert_eq!(reasoning[0].detail, "that omits route artifacts.");
 }
 
 #[test]
@@ -67,6 +101,27 @@ fn fake_bin_dir() -> TempDir {
     );
     write_executable(&dir.path().join("agent"), "#!/bin/sh\nexit 0\n");
     write_executable(&dir.path().join("cursor-agent"), "#!/bin/sh\nexit 0\n");
+    dir
+}
+
+fn streaming_fake_bin_dir() -> TempDir {
+    let dir = tempfile::tempdir().unwrap();
+    let script = r#"#!/bin/sh
+case " $* " in
+  *" --stream-partial-output "*)
+    printf '%s\n' '{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"that"}]}}'
+    printf '%s\n' '{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":" omits"}]}}'
+    printf '%s\n' '{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":" route"}]}}'
+    printf '%s\n' '{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":" artifacts."}]}}'
+    ;;
+  *)
+    printf '%s\n' '{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"that omits route artifacts."}]}}'
+    ;;
+esac
+printf '%s\n' '{"type":"result","subtype":"success","result":"that omits route artifacts.","usage":{"inputTokens":1,"outputTokens":4,"cacheReadTokens":0}}'
+"#;
+    write_executable(&dir.path().join("agent"), script);
+    write_executable(&dir.path().join("cursor-agent"), script);
     dir
 }
 

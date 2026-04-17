@@ -23,4 +23,7 @@ pub(crate) struct RunExtrasArgs {
     /// Hook specs to run for the dispatched task
     #[arg(long)]
     pub(crate) hook: Vec<String>,
+    /// Auto-clean merged task worktrees and branches after completion
+    #[arg(long)]
+    pub(crate) auto_gc: bool,
 }

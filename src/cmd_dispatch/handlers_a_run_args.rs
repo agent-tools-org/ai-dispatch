@@ -106,6 +106,7 @@ pub(super) fn build_run_args(
         audit,
         audit_explicit: audit,
         no_audit,
+        auto_gc: extras.auto_gc,
         link_deps: !no_link_deps,
         ..Default::default()
     }

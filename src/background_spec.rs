@@ -64,6 +64,8 @@ pub struct BackgroundRunSpec {
     pub container: Option<String>,
     #[serde(default = "default_link_deps")]
     pub link_deps: bool,
+    #[serde(default)]
+    pub pre_task_dirty_paths: Option<Vec<String>>,
 }
 
 fn default_link_deps() -> bool { true }
@@ -158,6 +160,7 @@ mod tests {
             read_only,
             container: Some("aid:test".to_string()),
             link_deps: true,
+            pre_task_dirty_paths: Some(vec!["?? pre-existing.rs".to_string()]),
         }
     }
 
@@ -167,11 +170,16 @@ mod tests {
         assert_eq!(value.get("read_only").and_then(|v| v.as_bool()), Some(true));
         assert_eq!(value.get("result_file").and_then(|v| v.as_str()), Some("result.md"));
         assert_eq!(value.get("iterate").and_then(|v| v.as_u64()), Some(3));
+        assert!(value.get("pre_task_dirty_paths").is_some());
 
         let decoded: BackgroundRunSpec = serde_json::from_value(value).unwrap();
         assert!(decoded.read_only);
         assert_eq!(decoded.result_file.as_deref(), Some("result.md"));
         assert_eq!(decoded.eval.as_deref(), Some("cargo test"));
+        assert_eq!(
+            decoded.pre_task_dirty_paths.as_deref(),
+            Some(&["?? pre-existing.rs".to_string()][..])
+        );
     }
 
     #[test]

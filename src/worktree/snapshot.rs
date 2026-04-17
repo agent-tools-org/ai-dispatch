@@ -73,6 +73,11 @@ pub fn parse_status_entry(line: &str) -> Option<WorktreeStatusEntry> {
 }
 
 pub fn is_rescuable_path(path: &str) -> bool {
+    if path.starts_with(".aid/")
+        || (path.starts_with("result-t-") && path.ends_with(".md"))
+    {
+        return false;
+    }
     !["target/", "node_modules/", "__pycache__/", ".aid-", "aid-batch-"]
         .iter()
         .any(|part| path.contains(part))
@@ -139,5 +144,14 @@ mod tests {
         assert!(is_rescuable_path("src/lib.rs"));
         assert!(!is_rescuable_path("target/debug/app"));
         assert!(!is_rescuable_path("cache/file.pyc"));
+    }
+
+    #[test]
+    fn is_rescuable_path_excludes_aid_artifacts() {
+        assert!(!is_rescuable_path("result-t-abc123.md"));
+        assert!(!is_rescuable_path("result-t-0d8f.md"));
+        assert!(!is_rescuable_path(".aid/results/foo.md"));
+        assert!(is_rescuable_path("results/foo.md"));
+        assert!(is_rescuable_path("my-result-t.md"));
     }
 }

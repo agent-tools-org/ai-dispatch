@@ -50,6 +50,7 @@ fn background_spec(checklist: Vec<String>) -> BackgroundRunSpec {
         read_only: false,
         container: None,
         link_deps: true,
+        pre_task_dirty_paths: None,
     }
 }
 

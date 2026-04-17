@@ -6,7 +6,7 @@ use anyhow::Result;
 use std::path::Path;
 use std::process::Command;
 
-use crate::worktree::{WorktreeStatusEntry, WorktreeStatusKind};
+use crate::worktree::{WorktreeStatusEntry, WorktreeStatusKind, parse_status_entry};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RescueOutcome {
@@ -19,7 +19,7 @@ pub struct RescueOutcome {
 }
 
 pub fn detect_untracked_source_files(dir: &str) -> Result<Vec<String>> {
-    Ok(detect_rescuable_files(dir)?
+    Ok(detect_rescuable_files(dir, None)?
         .into_iter()
         .filter(|file| file.kind == WorktreeStatusKind::Untracked)
         .map(|file| file.path)
@@ -27,8 +27,16 @@ pub fn detect_untracked_source_files(dir: &str) -> Result<Vec<String>> {
 }
 
 pub fn rescue_dirty_worktree(dir: &str, task_id: &str) -> Result<RescueOutcome> {
+    rescue_dirty_worktree_with_baseline(dir, task_id, None)
+}
+
+pub fn rescue_dirty_worktree_with_baseline(
+    dir: &str,
+    task_id: &str,
+    baseline: Option<&[String]>,
+) -> Result<RescueOutcome> {
     let had_existing_head = crate::commit::head_sha(dir).is_ok();
-    let files = detect_rescuable_files(dir)?;
+    let files = detect_rescuable_files(dir, baseline)?;
     let mut outcome = RescueOutcome {
         staged: Vec::new(),
         committed: false,
@@ -90,8 +98,34 @@ pub(super) fn stage_untracked_source_files(dir: &str, task_id: &str) -> Result<V
     Ok(staged)
 }
 
-fn detect_rescuable_files(dir: &str) -> Result<Vec<WorktreeStatusEntry>> {
-    Ok(crate::worktree::capture_worktree_snapshot(Path::new(dir))?.rescuable_entries())
+fn detect_rescuable_files(
+    dir: &str,
+    baseline: Option<&[String]>,
+) -> Result<Vec<WorktreeStatusEntry>> {
+    let baseline_entries = baseline
+        .map(parse_baseline_entries)
+        .unwrap_or_default();
+    Ok(crate::worktree::capture_worktree_snapshot(Path::new(dir))?
+        .rescuable_entries()
+        .into_iter()
+        .filter(|entry| !baseline_contains(&baseline_entries, entry))
+        .collect())
+}
+
+fn parse_baseline_entries(baseline: &[String]) -> Vec<WorktreeStatusEntry> {
+    baseline
+        .iter()
+        .filter_map(|line| parse_status_entry(line))
+        .collect()
+}
+
+fn baseline_contains(
+    baseline: &[WorktreeStatusEntry],
+    entry: &WorktreeStatusEntry,
+) -> bool {
+    baseline
+        .iter()
+        .any(|base| base.path == entry.path && base.kind == entry.kind)
 }
 
 fn stage_file(dir: &str, file: &WorktreeStatusEntry) -> std::result::Result<(), String> {
@@ -114,8 +148,10 @@ fn stage_file(dir: &str, file: &WorktreeStatusEntry) -> std::result::Result<(), 
 }
 
 fn commit_rescue(dir: &str, task_id: &str, had_existing_head: bool) -> std::result::Result<(), String> {
-    let output = if had_existing_head {
-        Command::new("git").args(["-C", dir, "commit", "--amend", "--no-edit"]).output()
+    let output = if had_existing_head && !head_is_tagged(dir)? {
+        Command::new("git")
+            .args(["-C", dir, "commit", "--amend", "--no-edit"])
+            .output()
     } else {
         Command::new("git")
             .args(["-C", dir, "commit", "-m", &format!("[aid] rescue: stage files missed by agent (task: {task_id})")])
@@ -129,116 +165,25 @@ fn commit_rescue(dir: &str, task_id: &str, had_existing_head: bool) -> std::resu
     }
 }
 
+fn head_is_tagged(dir: &str) -> std::result::Result<bool, String> {
+    let output = Command::new("git")
+        .args(["-C", dir, "tag", "--points-at", "HEAD"])
+        .output()
+        .map_err(|err| err.to_string())?;
+    if !output.status.success() {
+        return Err(first_stderr_line(&output.stderr));
+    }
+    let tagged = !String::from_utf8_lossy(&output.stdout).trim().is_empty();
+    if tagged {
+        aid_warn!("[aid] rescue: skipped amend because HEAD is tagged; creating a new rescue commit instead");
+    }
+    Ok(tagged)
+}
+
 fn first_stderr_line(stderr: &[u8]) -> String {
     String::from_utf8_lossy(stderr).lines().next().unwrap_or("").to_string()
 }
 
 #[cfg(test)]
-mod tests {
-    use super::{detect_untracked_source_files, rescue_dirty_worktree, rescue_untracked_files};
-    use crate::test_subprocess;
-    use std::{path::Path, process::Command};
-
-    fn git(dir: &Path, args: &[&str]) {
-        assert!(Command::new("git").arg("-C").arg(dir).args(args).status().unwrap().success());
-    }
-
-    fn git_stdout(dir: &Path, args: &[&str]) -> String {
-        String::from_utf8(Command::new("git").arg("-C").arg(dir).args(args).output().unwrap().stdout).unwrap()
-    }
-
-    fn repo() -> tempfile::TempDir {
-        let dir = tempfile::tempdir().unwrap();
-        git(dir.path(), &["init"]);
-        git(dir.path(), &["config", "user.email", "test@example.com"]);
-        git(dir.path(), &["config", "user.name", "Test User"]);
-        dir
-    }
-
-    fn write_path(dir: &Path, path: &str, content: &str) {
-        let file = dir.join(path);
-        if let Some(parent) = file.parent() {
-            std::fs::create_dir_all(parent).unwrap();
-        }
-        std::fs::write(file, content).unwrap();
-    }
-
-    fn commit_path(dir: &Path, path: &str, content: &str) {
-        write_path(dir, path, content);
-        git(dir, &["add", path]);
-        git(dir, &["commit", "-m", "initial"]);
-    }
-
-    fn head(dir: &Path) -> String {
-        git_stdout(dir, &["rev-parse", "HEAD"])
-    }
-
-    #[test]
-    fn detect_untracked_finds_new_source_files() {
-        let _permit = test_subprocess::acquire();
-        let dir = repo();
-        write_path(dir.path(), "new_file.rs", "fn main() {}\n");
-        assert_eq!(detect_untracked_source_files(dir.path().to_str().unwrap()).unwrap(), vec!["new_file.rs"]);
-    }
-
-    #[test]
-    fn detect_untracked_ignores_artifacts() {
-        let _permit = test_subprocess::acquire();
-        let dir = repo();
-        for path in ["target/out.rs", "node_modules/pkg.js", "__pycache__/mod.pyc", ".aid-temp.rs", "aid-batch-note.ts", "native.so"] {
-            write_path(dir.path(), path, "x");
-        }
-        assert!(detect_untracked_source_files(dir.path().to_str().unwrap()).unwrap().is_empty());
-    }
-
-    #[test]
-    fn rescue_untracked_amends_commit() {
-        let _permit = test_subprocess::acquire();
-        let dir = repo();
-        commit_path(dir.path(), "tracked.txt", "tracked");
-        write_path(dir.path(), "rescued.rs", "pub fn rescued() {}\n");
-        assert_eq!(rescue_untracked_files(dir.path().to_str().unwrap(), "task-123").unwrap(), vec!["rescued.rs"]);
-        let tree = git_stdout(dir.path(), &["ls-tree", "-r", "--name-only", "HEAD"]);
-        assert!(tree.lines().any(|line| line == "rescued.rs"));
-    }
-
-    #[test]
-    fn rescue_dirty_worktree_stages_modified_file() {
-        let _permit = test_subprocess::acquire();
-        let dir = repo();
-        commit_path(dir.path(), "src/main.rs", "fn main() {}\n");
-        let before = head(dir.path());
-        write_path(dir.path(), "src/main.rs", "fn main() { println!(\"changed\"); }\n");
-        let outcome = rescue_dirty_worktree(dir.path().to_str().unwrap(), "task-123").unwrap();
-        assert_eq!(outcome.modified, vec!["src/main.rs"]);
-        assert!(outcome.committed);
-        assert!(outcome.had_existing_head);
-        assert_ne!(head(dir.path()), before);
-        assert!(git_stdout(dir.path(), &["show", "HEAD:src/main.rs"]).contains("changed"));
-    }
-
-    #[test]
-    fn rescue_dirty_worktree_creates_initial_commit_when_no_head() {
-        let _permit = test_subprocess::acquire();
-        let dir = repo();
-        write_path(dir.path(), "src/lib.rs", "pub fn value() -> u8 { 1 }\n");
-        let outcome = rescue_dirty_worktree(dir.path().to_str().unwrap(), "task-123").unwrap();
-        assert_eq!(outcome.untracked, vec!["src/lib.rs"]);
-        assert!(outcome.committed);
-        assert!(!outcome.had_existing_head);
-        assert_eq!(git_stdout(dir.path(), &["ls-tree", "-r", "--name-only", "HEAD"]).trim(), "src/lib.rs");
-    }
-
-    #[test]
-    fn rescue_dirty_worktree_respects_exclusions() {
-        let _permit = test_subprocess::acquire();
-        let dir = repo();
-        write_path(dir.path(), "target/foo.rs", "ignored");
-        write_path(dir.path(), "src/bar.rs", "pub fn bar() {}\n");
-        let outcome = rescue_dirty_worktree(dir.path().to_str().unwrap(), "task-123").unwrap();
-        assert_eq!(outcome.staged, vec!["src/bar.rs"]);
-        let tree = git_stdout(dir.path(), &["ls-tree", "-r", "--name-only", "HEAD"]);
-        assert!(tree.lines().any(|line| line == "src/bar.rs"));
-        assert!(!tree.lines().any(|line| line == "target/foo.rs"));
-    }
-}
+#[path = "rescue_tests.rs"]
+mod tests;

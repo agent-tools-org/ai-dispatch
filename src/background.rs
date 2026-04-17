@@ -242,7 +242,11 @@ async fn run_task_inner(store: &Arc<Store>, spec: &BackgroundRunSpec) -> Result<
     }
     if !is_read_only {
         if let Some(worktree_dir) = spec.dir.as_deref() {
-            match crate::commit::rescue_dirty_worktree(worktree_dir, &spec.task_id) {
+            match crate::commit::rescue_dirty_worktree_with_baseline(
+                worktree_dir,
+                &spec.task_id,
+                spec.pre_task_dirty_paths.as_deref(),
+            ) {
                 Ok(outcome) if !outcome.staged.is_empty() => {
                     let files_list = rescue_files_summary(&outcome);
                     aid_warn!("[aid] rescue: staged {} file(s) in {} — {}", outcome.staged.len(), worktree_dir, files_list);

@@ -1,3 +1,10 @@
+## v8.91.1 (2026-04-17)
+- fix(rescue): never amend tagged release commits — creates a new commit on top instead when HEAD has any tag (closes #102)
+- fix(rescue): honor pre-task dirty-file baseline so the user's pre-existing uncommitted work is never staged/committed by rescue
+- fix(rescue): exclude aid-internal artifacts (`.aid/`, `result-t-*.md`) from rescue staging
+- fix(rescue): baseline handles rename/delete/kind-transition status lines correctly (path-only match)
+
+
 ## v8.91.0 (2026-04-16)
 - refactor: split delivery assessment from verify status and persist it as first-class task metadata, including migration of legacy hollow-output and empty-diff states
 - refactor: add a shared worktree snapshot boundary and reuse it across dirty checks, post-run settlement, commit, and rescue flows

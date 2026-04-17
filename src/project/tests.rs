@@ -140,6 +140,19 @@ container = "dev:latest"
 }
 
 #[test]
+fn parses_auto_gc_mode() {
+    let dir = TempDir::new().unwrap();
+    let contents = r#"[project]
+id = "test"
+aid_gc = "auto"
+worktree_prefix = "feat/team"
+"#;
+    let config = load_project(&write_project(dir.path(), contents)).unwrap();
+    assert!(config.aid_gc_auto());
+    assert_eq!(config.worktree_prefix.as_deref(), Some("feat/team"));
+}
+
+#[test]
 fn gitbutler_mode_round_trips_from_toml() {
     let dir = TempDir::new().unwrap();
     let contents = r#"[project]

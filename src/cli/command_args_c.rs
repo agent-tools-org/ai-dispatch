@@ -124,6 +124,15 @@ pub struct OutputArgs {
     pub brief: bool,
 }
 
+#[derive(Args)]
+#[command(after_help = r#"Examples:
+  aid doctor
+  aid doctor --apply"#)]
+pub struct DoctorArgs {
+    #[arg(long)]
+    pub apply: bool,
+}
+
 #[cfg(feature = "web")]
 #[derive(Args)]
 pub struct WebArgs {

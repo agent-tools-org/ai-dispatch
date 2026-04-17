@@ -16,6 +16,7 @@ pub mod container;
 pub mod config;
 pub mod credential;
 pub mod cost;
+pub mod doctor;
 pub mod explain;
 pub mod eta;
 pub mod group;

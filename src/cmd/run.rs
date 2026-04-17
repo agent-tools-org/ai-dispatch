@@ -27,6 +27,8 @@ mod run_dirty;
 mod run_iterate;
 #[path = "run_post.rs"]
 mod run_post;
+#[path = "run_gc.rs"]
+mod run_gc;
 #[path = "run_dispatch_resolve.rs"]
 mod run_dispatch_resolve;
 #[path = "run_dispatch_prepare.rs"]
@@ -122,6 +124,14 @@ fn final_dirty_assertion(store: &Store, task_id: &TaskId, dir: &str, read_only: 
 
 pub(crate) fn maybe_cleanup_fast_fail(store: &Store, task_id: &TaskId, task: &Task) { run_prompt::maybe_cleanup_fast_fail_impl(store, task_id, task); }
 pub(crate) fn persist_result_file(task_id: &str, result_file: Option<&str>, base_dir: Option<&str>) -> Result<()> { run_prompt::persist_result_file(task_id, result_file, base_dir) }
+pub(crate) fn maybe_auto_gc_after_completion(
+    store: &Arc<Store>,
+    task_id: &TaskId,
+    args: &RunArgs,
+    repo_path_hint: Option<&str>,
+) -> Result<()> {
+    run_gc::maybe_auto_gc_after_completion(store, task_id, args, repo_path_hint)
+}
 pub(crate) fn maybe_verify(
     store: &Store,
     task_id: &TaskId,

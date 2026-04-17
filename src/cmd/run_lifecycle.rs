@@ -119,6 +119,12 @@ pub(crate) async fn post_run_lifecycle(
         effective_dir.map(String::as_str),
         repo_path.map(String::as_str),
     )?;
+    super::maybe_auto_gc_after_completion(
+        store,
+        task_id,
+        args,
+        repo_path.map(String::as_str),
+    )?;
     let Some(task) = store.get_task(task_id.as_str())? else { return Ok(None) };
     let summary_json = serde_json::to_string(&crate::cmd::summary::generate_summary(&task)).unwrap_or_default();
     let _ = store.save_completion_summary(task_id.as_str(), &summary_json);

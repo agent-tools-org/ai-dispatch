@@ -36,6 +36,7 @@ pub mod steer;
 pub mod stop;
 pub mod setup;
 pub mod stats;
+pub(crate) mod stats_hint;
 pub mod retry;
 pub mod judge;
 pub mod retry_logic;

@@ -1,3 +1,9 @@
+## v8.92.0 (2026-04-17)
+- fix(verify): detect when a task prompt declares new files (`Create a NEW file: <path>`) but the resulting commit does not add them — verify now fails with the missing paths instead of silently passing (closes #103)
+- feat(doctor): new `aid doctor` sub-command lists prunable worktrees and deletable merged/rebased branches under aid-managed prefixes; `--apply` runs `git worktree prune` + `git branch -d` (never `-D`)
+- feat(auto-gc): opt-in auto cleanup of fully-merged task worktrees + branches on task/group completion via `--auto-gc` flag or `aid_gc = "auto"` in `.aid/project.toml` (closes #104)
+
+
 ## v8.91.1 (2026-04-17)
 - fix(rescue): never amend tagged release commits — creates a new commit on top instead when HEAD has any tag (closes #102)
 - fix(rescue): honor pre-task dirty-file baseline so the user's pre-existing uncommitted work is never staged/committed by rescue

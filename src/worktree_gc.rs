@@ -6,7 +6,7 @@ use crate::project::ProjectConfig;
 use anyhow::{Context, Result};
 use std::collections::BTreeSet;
 use std::path::Path;
-use std::process::Command;
+use std::process::{Command, Stdio};
 
 pub(crate) const DEFAULT_BRANCH_PREFIXES: &[&str] = &["feat/", "fix/", "refactor/", "chore/"];
 
@@ -215,6 +215,8 @@ fn local_branch_exists(repo_dir: &Path, branch: &str) -> Result<bool> {
             "--verify",
             &format!("refs/heads/{branch}"),
         ])
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
         .status()
         .with_context(|| format!("Failed to inspect branch {branch}"))?;
     Ok(status.success())

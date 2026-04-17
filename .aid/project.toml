@@ -5,6 +5,7 @@ team = "dev"
 language = "rust"
 verify = "cargo check"
 gitbutler = "auto"
+aid_gc = "auto"
 rules = [
   "File size limit: 300 lines per file",
   "Never use features = [\"full\"] for dependencies",

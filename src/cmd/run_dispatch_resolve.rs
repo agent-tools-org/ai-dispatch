@@ -61,13 +61,18 @@ pub(super) fn apply_project_defaults(args: &mut RunArgs, detected_project: Optio
             args.audit = true;
             defaults_applied = true;
         }
+        if !args.auto_gc && project.aid_gc_auto() {
+            args.auto_gc = true;
+            defaults_applied = true;
+        }
         if defaults_applied {
             aid_info!(
-                "[aid] Project '{}' defaults: team={}, verify={}, audit={}",
+                "[aid] Project '{}' defaults: team={}, verify={}, audit={}, auto-gc={}",
                 project.id,
                 args.team.as_deref().unwrap_or("None"),
                 args.verify.as_deref().unwrap_or("None"),
                 if args.audit { "on" } else { "off" },
+                if args.auto_gc { "on" } else { "off" },
             );
         }
     }

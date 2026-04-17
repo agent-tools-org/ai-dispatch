@@ -13,6 +13,8 @@ mod tests;
 mod export_tests;
 #[cfg(test)]
 mod run_audit_flag_tests;
+#[cfg(test)]
+mod doctor_tests;
 
 use clap::{Parser, Subcommand};
 
@@ -69,6 +71,7 @@ pub enum Commands {
     Store(command_args_c::StoreArgs),
     Team(command_args_c::TeamArgs),
     Tool(command_args_c::ToolArgs),
+    Doctor(command_args_c::DoctorArgs),
     Credential(command_args_c::CredentialArgs),
     Project(command_args_c::ProjectArgs),
     Memory(command_args_c::MemoryArgs),

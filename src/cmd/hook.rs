@@ -74,6 +74,7 @@ mod tests {
             budget: ProjectBudget::default(),
             agents: ProjectAgents::default(),
             audit: Default::default(),
+            ..Default::default()
         };
         let team = TeamConfig {
             id: "dev".to_string(),

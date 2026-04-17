@@ -91,6 +91,10 @@ pub(super) fn clean(store: Arc<store::Store>, older_than: u64, worktrees: bool, 
     cmd::clean::run(store, older_than, worktrees, dry_run)
 }
 
+pub(super) fn doctor(store: Arc<store::Store>, apply: bool) -> Result<()> {
+    cmd::doctor::run(&store, apply)
+}
+
 #[allow(clippy::too_many_arguments)]
 pub(super) async fn show(
     store: Arc<store::Store>,

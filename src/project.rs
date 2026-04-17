@@ -10,10 +10,13 @@ use std::{env, fs};
 
 #[path = "project/audit.rs"]
 mod audit;
+#[path = "project/profile.rs"]
+mod profile;
 #[path = "project/team.rs"]
 mod project_team;
 
 use self::audit::ProjectFile;
+use self::profile::apply_profile;
 pub use self::audit::ProjectAuditConfig;
 pub use self::project_team::{project_knowledge_dir, read_project_knowledge};
 
@@ -35,6 +38,10 @@ pub struct ProjectConfig {
     pub container: Option<String>,
     #[serde(default)]
     pub gitbutler: Option<String>,
+    #[serde(default)]
+    pub aid_gc: Option<String>,
+    #[serde(default)]
+    pub worktree_prefix: Option<String>,
     #[serde(default)]
     pub language: Option<String>,
     #[serde(default)]
@@ -94,6 +101,10 @@ pub struct ProjectAgents {
 impl ProjectConfig {
     pub fn audit_auto(&self) -> bool {
         self.audit.auto
+    }
+
+    pub fn aid_gc_auto(&self) -> bool {
+        matches!(self.aid_gc.as_deref(), Some(value) if value.eq_ignore_ascii_case("auto"))
     }
 
     pub fn gitbutler_mode(&self) -> crate::gitbutler::Mode {
@@ -205,6 +216,7 @@ pub fn load_project(path: &Path) -> Result<ProjectConfig> {
     apply_profile(&mut config);
     Ok(config)
 }
+
 fn find_git_root_from(start_dir: &Path) -> Option<PathBuf> {
     let mut dir = start_dir.to_path_buf();
     loop {
@@ -216,79 +228,6 @@ fn find_git_root_from(start_dir: &Path) -> Option<PathBuf> {
         }
     }
     None
-}
-
-fn apply_profile(config: &mut ProjectConfig) {
-    let profile = config.profile.as_deref().map(str::to_lowercase);
-    let profile = match profile {
-        Some(ref value) => value.as_str(),
-        None => return,
-    };
-
-    match profile {
-        "hobby" => apply_hobby_profile(config),
-        "standard" => apply_standard_profile(config),
-        "production" => apply_production_profile(config),
-        _ => {}
-    }
-}
-
-fn apply_hobby_profile(config: &mut ProjectConfig) {
-    if config.max_task_cost.is_none() {
-        config.max_task_cost = Some(2.0);
-    }
-    if config.budget.cost_limit_usd.is_none() {
-        config.budget.cost_limit_usd = Some(5.0);
-    }
-    config.budget.prefer_budget = true;
-}
-
-fn apply_standard_profile(config: &mut ProjectConfig) {
-    if config.max_task_cost.is_none() {
-        config.max_task_cost = Some(10.0);
-    }
-    if config.verify.is_none() {
-        config.verify = Some("auto".to_string());
-    }
-    if config.budget.cost_limit_usd.is_none() {
-        config.budget.cost_limit_usd = Some(20.0);
-    }
-    append_rule(
-        &mut config.rules,
-        "All new functions must have at least one test",
-    );
-    config.budget.prefer_budget = false;
-}
-
-fn apply_production_profile(config: &mut ProjectConfig) {
-    if config.max_task_cost.is_none() {
-        config.max_task_cost = Some(25.0);
-    }
-    if config.verify.is_none() {
-        config.verify = Some(default_production_verify(config));
-    }
-    if config.budget.cost_limit_usd.is_none() {
-        config.budget.cost_limit_usd = Some(50.0);
-    }
-    append_rule(&mut config.rules, "All changes must have tests");
-    append_rule(&mut config.rules, "No unwrap() in production code");
-    append_rule(&mut config.rules, "Changes require cross-review");
-    config.budget.prefer_budget = false;
-}
-
-fn default_production_verify(config: &ProjectConfig) -> String {
-    let language = config.language.as_deref().unwrap_or("").to_lowercase();
-    if language == "typescript" || language == "javascript" || language == "node" {
-        "npm test".to_string()
-    } else {
-        "cargo test".to_string()
-    }
-}
-
-fn append_rule(rules: &mut Vec<String>, rule: &str) {
-    if !rules.iter().any(|existing| existing == rule) {
-        rules.push(rule.to_string());
-    }
 }
 
 #[cfg(test)]

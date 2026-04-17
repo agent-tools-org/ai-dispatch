@@ -5,6 +5,7 @@ mod dispatch_match;
 mod handlers_a;
 mod handlers_b;
 mod handlers_c;
+mod recommend_hint;
 
 use crate::cli::Commands;
 use anyhow::{Result, bail};

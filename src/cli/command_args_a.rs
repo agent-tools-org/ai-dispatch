@@ -4,6 +4,8 @@
 use crate::cli::{AgentCommands, BatchAction, RunExtrasArgs};
 use clap::Args;
 
+pub(crate) const NO_HINT_FLAG: &str = "no-hint";
+
 #[derive(Args)]
 #[command(after_help = r#"Examples:
   aid run codex "Add unit tests" --verify
@@ -30,6 +32,8 @@ pub struct RunArgs {
     pub model: Option<String>,
     #[arg(long)]
     pub budget: bool,
+    #[arg(long = NO_HINT_FLAG)]
+    pub no_hint: bool,
     #[arg(short, long)]
     pub worktree: Option<String>,
     #[arg(long)]

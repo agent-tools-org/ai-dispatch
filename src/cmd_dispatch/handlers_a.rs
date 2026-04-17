@@ -5,6 +5,7 @@ mod handlers_a_run_args;
 
 use crate::cli::{BatchAction, RunExtrasArgs};
 use crate::cmd;
+use crate::cmd_dispatch::recommend_hint;
 use crate::types::AgentKind;
 use crate::{agent, config, store, team};
 use anyhow::{Context, Result, anyhow};
@@ -25,6 +26,7 @@ pub(super) async fn run(
     result_file: Option<String>,
     model: Option<String>,
     budget: bool,
+    no_hint: bool,
     worktree: Option<String>,
     team_flag: Option<String>,
     group: Option<String>,
@@ -73,6 +75,7 @@ pub(super) async fn run(
         &result_file,
         &model,
         budget,
+        no_hint,
         read_only,
         &worktree,
         &team_flag,
@@ -134,15 +137,12 @@ fn resolve_run_agent(
     result_file: &Option<String>,
     model: &Option<String>,
     budget: bool,
+    no_hint: bool,
     read_only: bool,
     worktree: &Option<String>,
     team_flag: &Option<String>,
     agent_name: String,
 ) -> (String, Option<String>) {
-    if agent_name != "auto" {
-        return (agent_name, None);
-    }
-
     let selection_opts = agent::RunOpts {
         dir: dir
             .clone()
@@ -159,6 +159,18 @@ fn resolve_run_agent(
         env_forward: None,
     };
     let team_config = team_flag.as_deref().and_then(team::resolve_team);
+    if agent_name != "auto" {
+        recommend_hint::emit_if_recommended(
+            &agent_name,
+            prompt,
+            no_hint,
+            &selection_opts,
+            store,
+            team_config.as_ref(),
+        );
+        return (agent_name, None);
+    }
+
     let (selected, reason) = agent::select_agent_with_reason(prompt, &selection_opts, store, team_config.as_ref());
     aid_info!("[aid] Auto-selected: {selected} (reason: {reason})");
 

@@ -43,10 +43,19 @@ pub(crate) async fn post_run_lifecycle(
     runtime_hooks: &[hooks::Hook],
     prompt_bundle: &run_prompt::PromptBundle,
     pre_verify_status: TaskStatus,
+    pre_task_dirty_paths: Option<&[String]>,
 ) -> Result<Option<TaskId>> {
     run_teardown_phase(task_id, args, wt_path);
     run_escape_checks_phase(args, effective_dir, repo_path, wt_path);
-    match run_worktree_settlement_phase(store, task_id, args, effective_dir).await? {
+    match run_worktree_settlement_phase(
+        store,
+        task_id,
+        args,
+        effective_dir,
+        pre_task_dirty_paths,
+    )
+    .await?
+    {
         LifecyclePhaseDecision::Continue => {}
         LifecyclePhaseDecision::Retry(retry_id) => return Ok(Some(retry_id)),
         LifecyclePhaseDecision::Stop => return Ok(None),
@@ -264,6 +273,7 @@ async fn run_worktree_settlement_phase(
     task_id: &TaskId,
     args: &RunArgs,
     effective_dir: Option<&String>,
+    pre_task_dirty_paths: Option<&[String]>,
 ) -> Result<LifecyclePhaseDecision> {
     if args.read_only {
         return Ok(LifecyclePhaseDecision::Continue);
@@ -271,7 +281,14 @@ async fn run_worktree_settlement_phase(
     let Some(dir) = effective_dir else {
         return Ok(LifecyclePhaseDecision::Continue);
     };
-    let action = post_agent_dirty_worktree_cleanup(store, task_id, args, dir).await?;
+    let action = post_agent_dirty_worktree_cleanup(
+        store,
+        task_id,
+        args,
+        dir,
+        pre_task_dirty_paths,
+    )
+    .await?;
     Ok(action.into())
 }
 

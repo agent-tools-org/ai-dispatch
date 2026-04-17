@@ -22,12 +22,17 @@ pub(crate) async fn post_agent_dirty_worktree_cleanup(
     task_id: &TaskId,
     args: &RunArgs,
     dir: &str,
+    pre_task_dirty_paths: Option<&[String]>,
 ) -> Result<DirtyWorktreeAction> {
     if args.read_only {
         return Ok(DirtyWorktreeAction::Continue);
     }
 
-    match crate::commit::rescue_dirty_worktree(dir, task_id.as_str()) {
+    match crate::commit::rescue_dirty_worktree_with_baseline(
+        dir,
+        task_id.as_str(),
+        pre_task_dirty_paths,
+    ) {
         Ok(outcome) if !outcome.staged.is_empty() => {
             let files_list = rescue_files_summary(&outcome);
             aid_warn!(

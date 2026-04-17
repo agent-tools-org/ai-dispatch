@@ -6,7 +6,8 @@ use std::path::Path;
 use std::process::Command;
 
 mod rescue;
-pub use rescue::{RescueOutcome, rescue_dirty_worktree};
+#[allow(unused_imports)]
+pub use rescue::{RescueOutcome, rescue_dirty_worktree, rescue_dirty_worktree_with_baseline};
 #[allow(unused_imports)]
 pub use rescue::{detect_untracked_source_files, rescue_untracked_files};
 use rescue::stage_untracked_source_files;

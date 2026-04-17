@@ -53,6 +53,19 @@ pub(super) fn maybe_record_start_sha(
     Ok(())
 }
 
+fn capture_pre_task_dirty_paths(dir: Option<&String>) -> Option<Vec<String>> {
+    let Some(dir) = dir else {
+        return None;
+    };
+    match crate::worktree::capture_worktree_snapshot(Path::new(dir)) {
+        Ok(snapshot) => Some(snapshot.status_lines),
+        Err(err) => {
+            aid_warn!("[aid] rescue: failed to capture pre-task dirty baseline in {dir}: {err}");
+            None
+        }
+    }
+}
+
 pub(super) fn maybe_start_container(
     args: &RunArgs,
     prepared: &PreparedDispatch,
@@ -85,6 +98,11 @@ pub(super) fn run_background_task(
     prompt_bundle: &run_prompt::PromptBundle,
 ) -> Result<()> {
     background::check_worker_capacity(store)?;
+    let pre_task_dirty_paths = if args.read_only {
+        None
+    } else {
+        capture_pre_task_dirty_paths(prepared.effective_dir.as_ref())
+    };
     let spec = BackgroundRunSpec {
         task_id: prepared.task_id.as_str().to_string(),
         worker_pid: None,
@@ -118,6 +136,7 @@ pub(super) fn run_background_task(
         read_only: args.read_only,
         container: args.container.clone(),
         link_deps: args.link_deps,
+        pre_task_dirty_paths,
     };
     background::save_spec(&spec)?;
     let mut worker = match background::spawn_worker(prepared.task_id.as_str()) {
@@ -156,6 +175,11 @@ pub(super) async fn run_foreground_task(
     runtime_hooks: &[hooks::Hook],
     container_name: Option<&str>,
 ) -> Result<Option<TaskId>> {
+    let pre_task_dirty_paths = if args.read_only {
+        None
+    } else {
+        capture_pre_task_dirty_paths(prepared.effective_dir.as_ref())
+    };
     let mut std_cmd = prepared
         .agent
         .build_command(&prompt_bundle.effective_prompt, &build_run_opts(args, prepared, prompt_bundle))
@@ -261,6 +285,7 @@ pub(super) async fn run_foreground_task(
         runtime_hooks,
         prompt_bundle,
         pre_verify_status,
+        pre_task_dirty_paths.as_deref(),
     )
     .await
 }

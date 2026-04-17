@@ -15,7 +15,7 @@ mod state;
 #[path = "worktree/validation.rs"]
 mod validation;
 pub(crate) use snapshot::{
-    WorktreeStatusEntry, WorktreeStatusKind, capture_worktree_snapshot,
+    WorktreeStatusEntry, WorktreeStatusKind, capture_worktree_snapshot, parse_status_entry,
 };
 pub use state::{
     branch_has_commits_ahead_of_main, check_worktree_lock, clear_worktree_lock,

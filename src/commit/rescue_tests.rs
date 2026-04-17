@@ -2,7 +2,7 @@
 // Covers amend safety, artifact exclusions, and pre-task baseline filtering.
 
 use super::{
-    detect_untracked_source_files, rescue_dirty_worktree,
+    detect_untracked_source_files, extract_baseline_paths, rescue_dirty_worktree,
     rescue_dirty_worktree_with_baseline, rescue_untracked_files,
 };
 use crate::test_subprocess;
@@ -59,6 +59,12 @@ fn head(dir: &Path) -> String {
     git_stdout(dir, &["rev-parse", "HEAD"]).trim().to_string()
 }
 
+fn commit_count(dir: &Path) -> String {
+    git_stdout(dir, &["rev-list", "--count", "HEAD"])
+        .trim()
+        .to_string()
+}
+
 fn baseline(dir: &Path) -> Vec<String> {
     crate::worktree::capture_worktree_snapshot(dir)
         .unwrap()
@@ -102,11 +108,15 @@ fn rescue_untracked_amends_commit() {
     let _permit = test_subprocess::acquire();
     let dir = repo();
     commit_path(dir.path(), "tracked.txt", "tracked");
+    let before = head(dir.path());
+    let count_before = commit_count(dir.path());
     write_path(dir.path(), "rescued.rs", "pub fn rescued() {}\n");
     assert_eq!(
         rescue_untracked_files(dir.path().to_str().unwrap(), "task-123").unwrap(),
         vec!["rescued.rs"]
     );
+    assert_ne!(head(dir.path()), before);
+    assert_eq!(commit_count(dir.path()), count_before);
     let tree = git_stdout(dir.path(), &["ls-tree", "-r", "--name-only", "HEAD"]);
     assert!(tree.lines().any(|line| line == "rescued.rs"));
 }
@@ -200,4 +210,78 @@ fn rescue_preserves_pre_existing_dirty_files() {
     let status = git_stdout(dir.path(), &["status", "--porcelain"]);
     assert!(status.lines().any(|line| line == " M src/existing.rs"));
     assert!(status.lines().any(|line| line == "?? src/user.rs"));
+}
+
+#[test]
+fn rescue_path_baseline_handles_kind_transition() {
+    let _permit = test_subprocess::acquire();
+    let dir = repo();
+    commit_path(dir.path(), "tracked.txt", "tracked");
+    write_path(dir.path(), "src/foo.rs", "pub fn user() {}\n");
+    let baseline = baseline(dir.path());
+    git(dir.path(), &["add", "src/foo.rs"]);
+    write_path(dir.path(), "src/foo.rs", "pub fn user() {}\npub fn later() {}\n");
+
+    let outcome = rescue_dirty_worktree_with_baseline(
+        dir.path().to_str().unwrap(),
+        "task-123",
+        Some(&baseline),
+    )
+    .unwrap();
+
+    assert!(outcome.staged.is_empty());
+    assert!(!outcome.committed);
+    let status = git_stdout(dir.path(), &["status", "--porcelain"]);
+    assert!(status.lines().any(|line| line == "AM src/foo.rs"));
+}
+
+#[test]
+fn rescue_path_baseline_handles_rename_and_delete() {
+    let _permit = test_subprocess::acquire();
+    let dir = repo();
+    commit_path(dir.path(), "tracked.txt", "tracked");
+    let baseline = vec![
+        "R  src/old.rs -> src/new.rs".to_string(),
+        " D src/other.rs".to_string(),
+    ];
+
+    let baseline_paths = extract_baseline_paths(&baseline);
+    assert!(baseline_paths.contains("src/new.rs"));
+    assert!(baseline_paths.contains("src/other.rs"));
+
+    write_path(dir.path(), "src/new.rs", "pub fn renamed() {}\n");
+    write_path(dir.path(), "src/other.rs", "pub fn deleted() {}\n");
+    write_path(dir.path(), "src/agent.rs", "pub fn agent() {}\n");
+
+    let outcome = rescue_dirty_worktree_with_baseline(
+        dir.path().to_str().unwrap(),
+        "task-123",
+        Some(&baseline),
+    )
+    .unwrap();
+
+    assert_eq!(outcome.staged, vec!["src/agent.rs"]);
+    let tree = git_stdout(dir.path(), &["ls-tree", "-r", "--name-only", "HEAD"]);
+    assert!(tree.lines().any(|line| line == "src/agent.rs"));
+    assert!(!tree.lines().any(|line| line == "src/new.rs"));
+    assert!(!tree.lines().any(|line| line == "src/other.rs"));
+    let status = git_stdout(dir.path(), &["status", "--porcelain"]);
+    assert!(status.lines().any(|line| line == "?? src/new.rs"));
+    assert!(status.lines().any(|line| line == "?? src/other.rs"));
+}
+
+#[test]
+fn rescue_amends_untagged_head() {
+    let _permit = test_subprocess::acquire();
+    let dir = repo();
+    commit_path(dir.path(), "tracked.txt", "tracked");
+    let before = head(dir.path());
+    let count_before = commit_count(dir.path());
+    write_path(dir.path(), "src/amended.rs", "pub fn amended() {}\n");
+
+    let outcome = rescue_dirty_worktree(dir.path().to_str().unwrap(), "task-123").unwrap();
+
+    assert!(outcome.committed);
+    assert_ne!(head(dir.path()), before);
+    assert_eq!(commit_count(dir.path()), count_before);
 }

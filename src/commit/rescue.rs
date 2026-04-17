@@ -3,10 +3,11 @@
 // Deps: git CLI via std::process and parent commit helpers.
 
 use anyhow::Result;
+use std::collections::HashSet;
 use std::path::Path;
 use std::process::Command;
 
-use crate::worktree::{WorktreeStatusEntry, WorktreeStatusKind, parse_status_entry};
+use crate::worktree::{WorktreeStatusEntry, WorktreeStatusKind};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RescueOutcome {
@@ -102,30 +103,39 @@ fn detect_rescuable_files(
     dir: &str,
     baseline: Option<&[String]>,
 ) -> Result<Vec<WorktreeStatusEntry>> {
-    let baseline_entries = baseline
-        .map(parse_baseline_entries)
+    let baseline_paths = baseline
+        .map(extract_baseline_paths)
         .unwrap_or_default();
     Ok(crate::worktree::capture_worktree_snapshot(Path::new(dir))?
         .rescuable_entries()
         .into_iter()
-        .filter(|entry| !baseline_contains(&baseline_entries, entry))
+        .filter(|entry| !baseline_contains(&baseline_paths, entry))
         .collect())
 }
 
-fn parse_baseline_entries(baseline: &[String]) -> Vec<WorktreeStatusEntry> {
+fn extract_baseline_paths(baseline: &[String]) -> HashSet<String> {
     baseline
         .iter()
-        .filter_map(|line| parse_status_entry(line))
+        .filter_map(|line| extract_baseline_path(line))
         .collect()
 }
 
-fn baseline_contains(
-    baseline: &[WorktreeStatusEntry],
-    entry: &WorktreeStatusEntry,
-) -> bool {
-    baseline
-        .iter()
-        .any(|base| base.path == entry.path && base.kind == entry.kind)
+fn extract_baseline_path(line: &str) -> Option<String> {
+    if line.is_empty() || line.len() < 4 {
+        return None;
+    }
+    if let Some(path) = line.strip_prefix("?? ") {
+        return Some(path.to_string());
+    }
+    let path = &line[3..];
+    if let Some((_, renamed_path)) = path.split_once(" -> ") {
+        return Some(renamed_path.to_string());
+    }
+    Some(path.to_string())
+}
+
+fn baseline_contains(baseline: &HashSet<String>, entry: &WorktreeStatusEntry) -> bool {
+    baseline.contains(&entry.path)
 }
 
 fn stage_file(dir: &str, file: &WorktreeStatusEntry) -> std::result::Result<(), String> {

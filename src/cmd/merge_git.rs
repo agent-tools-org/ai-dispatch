@@ -84,8 +84,16 @@ pub(crate) fn auto_commit_uncommitted(wt_path: &str, branch: &str) -> bool {
             ":(exclude).build/",
             ":(exclude)dist/",
             ":(exclude)__pycache__/",
+            ":(exclude).aid-lock",
+            ":(exclude).aid-*",
+            ":(exclude)result-*.md",
+            ":(exclude)result-*.json",
+            ":(exclude)aid-batch-*.toml",
         ])
         .output();
+    if !has_staged_changes(wt_path) {
+        return false;
+    }
     let diff_stat = Command::new("git")
         .args(["-C", wt_path, "diff", "--cached", "--stat", "--stat-width=60"])
         .output()
@@ -124,6 +132,16 @@ pub(crate) fn auto_commit_uncommitted(wt_path: &str, branch: &str) -> bool {
             false
         }
         Err(e) => { aid_warn!("[aid] Warning: auto-commit failed: {e}"); false }
+    }
+}
+
+fn has_staged_changes(dir: &str) -> bool {
+    let out = Command::new("git")
+        .args(["-C", dir, "diff", "--cached", "--quiet"])
+        .output();
+    match out {
+        Ok(o) => o.status.code() == Some(1),
+        _ => false,
     }
 }
 

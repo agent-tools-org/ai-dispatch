@@ -25,4 +25,8 @@ claude-prompt.md
 target-rate-limit/
 target-local/
 .aid-verify-deps-state
+.aid-lock
+.aid-*
 result-t-*.md
+result-t-*.json
+aid-batch-*.toml

@@ -16,11 +16,23 @@ fn git(repo: &Path, args: &[&str]) {
         .args(args)
         .output()
         .unwrap();
-    assert!(s.status.success(), "git {:?} failed: {}", args, String::from_utf8_lossy(&s.stderr));
+    assert!(
+        s.status.success(),
+        "git {:?} failed: {}",
+        args,
+        String::from_utf8_lossy(&s.stderr)
+    );
 }
 
 fn unique(prefix: &str) -> String {
-    format!("{prefix}-{}-{}", std::process::id(), SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos())
+    format!(
+        "{prefix}-{}-{}",
+        std::process::id(),
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    )
 }
 
 /// Create a git repo with one commit. Returns the TempDir.
@@ -39,7 +51,16 @@ fn init_repo() -> TempDir {
 fn create_worktree_with_commit(repo: &Path) -> (TempDir, String) {
     let branch = unique("test-branch");
     let wt = TempDir::new().unwrap();
-    git(repo, &["worktree", "add", &wt.path().to_string_lossy(), "-b", &branch]);
+    git(
+        repo,
+        &[
+            "worktree",
+            "add",
+            &wt.path().to_string_lossy(),
+            "-b",
+            &branch,
+        ],
+    );
     std::fs::write(wt.path().join("agent-work.txt"), "agent output\n").unwrap();
     git(wt.path(), &["add", "agent-work.txt"]);
     git(wt.path(), &["commit", "-m", "agent: implement feature"]);
@@ -49,13 +70,31 @@ fn create_worktree_with_commit(repo: &Path) -> (TempDir, String) {
 fn create_empty_worktree_branch(repo: &Path) -> (TempDir, String) {
     let branch = unique("empty-branch");
     let wt = TempDir::new().unwrap();
-    git(repo, &["worktree", "add", &wt.path().to_string_lossy(), "-b", &branch]);
+    git(
+        repo,
+        &[
+            "worktree",
+            "add",
+            &wt.path().to_string_lossy(),
+            "-b",
+            &branch,
+        ],
+    );
     (wt, branch)
 }
 
 fn create_conflict_worktree(repo: &Path, branch: &str) -> TempDir {
     let wt = TempDir::new().unwrap();
-    git(repo, &["worktree", "add", &wt.path().to_string_lossy(), "-b", branch]);
+    git(
+        repo,
+        &[
+            "worktree",
+            "add",
+            &wt.path().to_string_lossy(),
+            "-b",
+            branch,
+        ],
+    );
     std::fs::write(wt.path().join("init.txt"), "branch version\n").unwrap();
     git(wt.path(), &["add", "init.txt"]);
     git(wt.path(), &["commit", "-m", "branch change"]);
@@ -120,7 +159,15 @@ fn commits_ahead_detects_branch_with_commits() {
     let repo = init_repo();
     let (wt, branch) = create_worktree_with_commit(repo.path());
     assert!(commits_ahead(&repo.path().to_string_lossy(), &branch) > 0);
-    git(repo.path(), &["worktree", "remove", "--force", &wt.path().to_string_lossy()]);
+    git(
+        repo.path(),
+        &[
+            "worktree",
+            "remove",
+            "--force",
+            &wt.path().to_string_lossy(),
+        ],
+    );
 }
 
 #[test]
@@ -136,7 +183,10 @@ fn commits_ahead_returns_zero_for_same_head() {
 fn commits_ahead_returns_zero_for_missing_branch() {
     let _permit = test_subprocess::acquire();
     let repo = init_repo();
-    assert_eq!(commits_ahead(&repo.path().to_string_lossy(), "nonexistent"), 0);
+    assert_eq!(
+        commits_ahead(&repo.path().to_string_lossy(), "nonexistent"),
+        0
+    );
 }
 
 #[test]
@@ -145,7 +195,16 @@ fn auto_commit_uncommitted_commits_dirty_worktree() {
     let repo = init_repo();
     let branch = unique("dirty-branch");
     let wt = TempDir::new().unwrap();
-    git(repo.path(), &["worktree", "add", &wt.path().to_string_lossy(), "-b", &branch]);
+    git(
+        repo.path(),
+        &[
+            "worktree",
+            "add",
+            &wt.path().to_string_lossy(),
+            "-b",
+            &branch,
+        ],
+    );
     // Leave changes uncommitted
     std::fs::write(wt.path().join("dirty.txt"), "uncommitted\n").unwrap();
 
@@ -154,7 +213,15 @@ fn auto_commit_uncommitted_commits_dirty_worktree() {
     // Now the branch should have commits ahead
     assert!(commits_ahead(&repo.path().to_string_lossy(), &branch) > 0);
 
-    git(repo.path(), &["worktree", "remove", "--force", &wt.path().to_string_lossy()]);
+    git(
+        repo.path(),
+        &[
+            "worktree",
+            "remove",
+            "--force",
+            &wt.path().to_string_lossy(),
+        ],
+    );
 }
 
 #[test]
@@ -163,14 +230,29 @@ fn auto_commit_message_includes_filename() {
     let repo = init_repo();
     let branch = unique("message-branch");
     let wt = TempDir::new().unwrap();
-    git(repo.path(), &["worktree", "add", &wt.path().to_string_lossy(), "-b", &branch]);
+    git(
+        repo.path(),
+        &[
+            "worktree",
+            "add",
+            &wt.path().to_string_lossy(),
+            "-b",
+            &branch,
+        ],
+    );
     std::fs::write(wt.path().join("named-file.txt"), "uncommitted\n").unwrap();
 
     let committed = auto_commit_uncommitted(&wt.path().to_string_lossy(), &branch);
     assert!(committed);
 
     let log = Command::new("git")
-        .args(["-C", &wt.path().to_string_lossy(), "log", "-1", "--pretty=%s"])
+        .args([
+            "-C",
+            &wt.path().to_string_lossy(),
+            "log",
+            "-1",
+            "--pretty=%s",
+        ])
         .output()
         .unwrap();
     assert_eq!(
@@ -178,7 +260,15 @@ fn auto_commit_message_includes_filename() {
         "chore: auto-commit changes to named-file.txt"
     );
 
-    git(repo.path(), &["worktree", "remove", "--force", &wt.path().to_string_lossy()]);
+    git(
+        repo.path(),
+        &[
+            "worktree",
+            "remove",
+            "--force",
+            &wt.path().to_string_lossy(),
+        ],
+    );
 }
 
 #[test]
@@ -188,7 +278,15 @@ fn auto_commit_uncommitted_returns_false_for_clean_worktree() {
     let (wt, branch) = create_worktree_with_commit(repo.path());
     let committed = auto_commit_uncommitted(&wt.path().to_string_lossy(), &branch);
     assert!(!committed);
-    git(repo.path(), &["worktree", "remove", "--force", &wt.path().to_string_lossy()]);
+    git(
+        repo.path(),
+        &[
+            "worktree",
+            "remove",
+            "--force",
+            &wt.path().to_string_lossy(),
+        ],
+    );
 }
 
 #[test]
@@ -202,7 +300,15 @@ fn git_merge_branch_merges_committed_branch() {
     // Verify the file landed in main
     assert!(repo.path().join("agent-work.txt").exists());
 
-    git(repo.path(), &["worktree", "remove", "--force", &wt.path().to_string_lossy()]);
+    git(
+        repo.path(),
+        &[
+            "worktree",
+            "remove",
+            "--force",
+            &wt.path().to_string_lossy(),
+        ],
+    );
 }
 
 #[test]
@@ -226,7 +332,12 @@ fn checkout_branch_switches_head() {
     checkout_branch(&repo.path().to_string_lossy(), &branch).unwrap();
 
     let output = Command::new("git")
-        .args(["-C", &repo.path().to_string_lossy(), "branch", "--show-current"])
+        .args([
+            "-C",
+            &repo.path().to_string_lossy(),
+            "branch",
+            "--show-current",
+        ])
         .output()
         .unwrap();
     assert_eq!(String::from_utf8_lossy(&output.stdout).trim(), branch);
@@ -242,8 +353,18 @@ fn git_merge_branch_detects_conflict() {
     let result = git_merge_branch(&repo.path().to_string_lossy(), &branch);
     assert!(matches!(result, MergeResult::Failed(_)));
     // Abort the failed merge
-    let _ = Command::new("git").args(["-C", &repo.path().to_string_lossy(), "merge", "--abort"]).output();
-    git(repo.path(), &["worktree", "remove", "--force", &wt.path().to_string_lossy()]);
+    let _ = Command::new("git")
+        .args(["-C", &repo.path().to_string_lossy(), "merge", "--abort"])
+        .output();
+    git(
+        repo.path(),
+        &[
+            "worktree",
+            "remove",
+            "--force",
+            &wt.path().to_string_lossy(),
+        ],
+    );
 }
 
 #[test]
@@ -257,7 +378,15 @@ fn check_merge_detects_clean_merge() {
     assert_eq!(worktree_status(repo.path()), "");
     assert!(!repo.path().join("agent-work.txt").exists());
 
-    git(repo.path(), &["worktree", "remove", "--force", &wt.path().to_string_lossy()]);
+    git(
+        repo.path(),
+        &[
+            "worktree",
+            "remove",
+            "--force",
+            &wt.path().to_string_lossy(),
+        ],
+    );
 }
 
 #[test]
@@ -270,11 +399,21 @@ fn check_merge_detects_conflict() {
     let result = check_merge(&repo.path().to_string_lossy(), &branch);
     match result {
         MergeCheckResult::Conflict(files) => assert_eq!(files, vec!["init.txt".to_string()]),
-        MergeCheckResult::Ok(commits) => panic!("expected conflict, got clean merge with {commits} commit(s)"),
+        MergeCheckResult::Ok(commits) => {
+            panic!("expected conflict, got clean merge with {commits} commit(s)")
+        }
     }
     assert_eq!(worktree_status(repo.path()), "");
 
-    git(repo.path(), &["worktree", "remove", "--force", &wt.path().to_string_lossy()]);
+    git(
+        repo.path(),
+        &[
+            "worktree",
+            "remove",
+            "--force",
+            &wt.path().to_string_lossy(),
+        ],
+    );
 }
 
 #[test]
@@ -287,9 +426,20 @@ fn git_merge_branch_stashes_local_changes() {
 
     let result = git_merge_branch(&repo.path().to_string_lossy(), &branch);
     assert!(matches!(result, MergeResult::Merged));
-    assert_eq!(std::fs::read_to_string(local_file).unwrap(), "local change\n");
+    assert_eq!(
+        std::fs::read_to_string(local_file).unwrap(),
+        "local change\n"
+    );
 
-    git(repo.path(), &["worktree", "remove", "--force", &wt.path().to_string_lossy()]);
+    git(
+        repo.path(),
+        &[
+            "worktree",
+            "remove",
+            "--force",
+            &wt.path().to_string_lossy(),
+        ],
+    );
 }
 
 #[test]
@@ -298,7 +448,16 @@ fn git_merge_branch_stashes_and_warns_on_pop_conflict() {
     let repo = init_repo();
     let branch = unique("pop-conflict");
     let wt = TempDir::new().unwrap();
-    git(repo.path(), &["worktree", "add", &wt.path().to_string_lossy(), "-b", &branch]);
+    git(
+        repo.path(),
+        &[
+            "worktree",
+            "add",
+            &wt.path().to_string_lossy(),
+            "-b",
+            &branch,
+        ],
+    );
     std::fs::write(wt.path().join("init.txt"), "branch change\n").unwrap();
     git(wt.path(), &["add", "init.txt"]);
     git(wt.path(), &["commit", "-m", "branch change"]);
@@ -315,7 +474,15 @@ fn git_merge_branch_stashes_and_warns_on_pop_conflict() {
 
     git(repo.path(), &["reset", "--hard", "HEAD~1"]);
     git(repo.path(), &["stash", "drop"]);
-    git(repo.path(), &["worktree", "remove", "--force", &wt.path().to_string_lossy()]);
+    git(
+        repo.path(),
+        &[
+            "worktree",
+            "remove",
+            "--force",
+            &wt.path().to_string_lossy(),
+        ],
+    );
 }
 
 #[test]
@@ -337,7 +504,15 @@ fn resolve_repo_dir_detects_from_worktree() {
     let canon_result = Path::new(&result).canonicalize().unwrap();
     assert_eq!(canon_result, canon_repo);
 
-    git(repo.path(), &["worktree", "remove", "--force", &wt.path().to_string_lossy()]);
+    git(
+        repo.path(),
+        &[
+            "worktree",
+            "remove",
+            "--force",
+            &wt.path().to_string_lossy(),
+        ],
+    );
 }
 
 #[test]
@@ -360,18 +535,42 @@ fn sync_cargo_lock_before_merge_commits_updated_lockfile() {
     git(repo.path(), &["add", "Cargo.lock"]);
     git(repo.path(), &["commit", "-m", "update lockfile"]);
 
-    sync_cargo_lock_before_merge(&repo.path().to_string_lossy(), &wt.path().to_string_lossy(), &branch);
+    sync_cargo_lock_before_merge(
+        &repo.path().to_string_lossy(),
+        &wt.path().to_string_lossy(),
+        &branch,
+    );
 
-    assert_eq!(std::fs::read_to_string(wt.path().join("Cargo.lock")).unwrap(), "version = 2\n");
+    assert_eq!(
+        std::fs::read_to_string(wt.path().join("Cargo.lock")).unwrap(),
+        "version = 2\n"
+    );
     assert!(commits_ahead(&repo.path().to_string_lossy(), &branch) > 0);
 
     let log = Command::new("git")
-        .args(["-C", &wt.path().to_string_lossy(), "log", "-1", "--pretty=%s"])
+        .args([
+            "-C",
+            &wt.path().to_string_lossy(),
+            "log",
+            "-1",
+            "--pretty=%s",
+        ])
         .output()
         .unwrap();
-    assert_eq!(String::from_utf8_lossy(&log.stdout).trim(), "chore: sync Cargo.lock from main");
+    assert_eq!(
+        String::from_utf8_lossy(&log.stdout).trim(),
+        "chore: sync Cargo.lock from main"
+    );
 
-    git(repo.path(), &["worktree", "remove", "--force", &wt.path().to_string_lossy()]);
+    git(
+        repo.path(),
+        &[
+            "worktree",
+            "remove",
+            "--force",
+            &wt.path().to_string_lossy(),
+        ],
+    );
 }
 
 // --- Integration tests for merge_single ---
@@ -399,21 +598,40 @@ fn merge_single_auto_commits_then_merges() {
     let repo = init_repo();
     let branch = unique("uncommitted");
     let wt = TempDir::new().unwrap();
-    git(repo.path(), &["worktree", "add", &wt.path().to_string_lossy(), "-b", &branch]);
+    git(
+        repo.path(),
+        &[
+            "worktree",
+            "add",
+            &wt.path().to_string_lossy(),
+            "-b",
+            &branch,
+        ],
+    );
     // Leave changes uncommitted — this is the data-loss scenario
-    std::fs::write(wt.path().join("uncommitted.txt"), "agent forgot to commit\n").unwrap();
+    std::fs::write(
+        wt.path().join("uncommitted.txt"),
+        "agent forgot to commit\n",
+    )
+    .unwrap();
 
     let store = Store::open_memory().unwrap();
     let task = make_task_with_worktree("t-autocommit", repo.path(), wt.path(), &branch);
     store.insert_task(&task).unwrap();
 
     let result = merge_single(&store, "t-autocommit", false, false, None);
-    assert!(result.is_ok(), "merge_single should auto-commit and merge: {result:?}");
+    assert!(
+        result.is_ok(),
+        "merge_single should auto-commit and merge: {result:?}"
+    );
 
     let loaded = store.get_task("t-autocommit").unwrap().unwrap();
     assert_eq!(loaded.status, TaskStatus::Merged);
     assert!(repo.path().join("uncommitted.txt").exists());
-    assert_eq!(std::fs::read_to_string(repo.path().join("uncommitted.txt")).unwrap(), "agent forgot to commit\n");
+    assert_eq!(
+        std::fs::read_to_string(repo.path().join("uncommitted.txt")).unwrap(),
+        "agent forgot to commit\n"
+    );
 }
 
 #[test]
@@ -422,7 +640,16 @@ fn merge_single_fails_when_no_commits_and_no_changes() {
     let repo = init_repo();
     let branch = unique("empty");
     let wt = TempDir::new().unwrap();
-    git(repo.path(), &["worktree", "add", &wt.path().to_string_lossy(), "-b", &branch]);
+    git(
+        repo.path(),
+        &[
+            "worktree",
+            "add",
+            &wt.path().to_string_lossy(),
+            "-b",
+            &branch,
+        ],
+    );
     // No changes at all — nothing to merge
 
     let store = Store::open_memory().unwrap();
@@ -432,7 +659,10 @@ fn merge_single_fails_when_no_commits_and_no_changes() {
     let result = merge_single(&store, "t-empty", false, false, None);
     assert!(result.is_err());
     let err = result.unwrap_err().to_string();
-    assert!(err.contains("No commits to merge"), "unexpected error: {err}");
+    assert!(
+        err.contains("No commits to merge"),
+        "unexpected error: {err}"
+    );
 
     // Task should still be Done (not Merged)
     let loaded = store.get_task("t-empty").unwrap().unwrap();
@@ -440,7 +670,15 @@ fn merge_single_fails_when_no_commits_and_no_changes() {
     // Worktree should be preserved
     assert!(wt.path().exists());
 
-    git(repo.path(), &["worktree", "remove", "--force", &wt.path().to_string_lossy()]);
+    git(
+        repo.path(),
+        &[
+            "worktree",
+            "remove",
+            "--force",
+            &wt.path().to_string_lossy(),
+        ],
+    );
 }
 
 #[test]
@@ -510,7 +748,16 @@ fn merge_single_preserves_worktree_on_conflict() {
     let repo = init_repo();
     let branch = unique("conflict");
     let wt = TempDir::new().unwrap();
-    git(repo.path(), &["worktree", "add", &wt.path().to_string_lossy(), "-b", &branch]);
+    git(
+        repo.path(),
+        &[
+            "worktree",
+            "add",
+            &wt.path().to_string_lossy(),
+            "-b",
+            &branch,
+        ],
+    );
     // Create conflicting changes
     std::fs::write(wt.path().join("init.txt"), "branch\n").unwrap();
     git(wt.path(), &["add", "init.txt"]);
@@ -531,8 +778,18 @@ fn merge_single_preserves_worktree_on_conflict() {
     let loaded = store.get_task("t-conflict").unwrap().unwrap();
     assert_eq!(loaded.status, TaskStatus::Done);
 
-    let _ = Command::new("git").args(["-C", &repo.path().to_string_lossy(), "merge", "--abort"]).output();
-    git(repo.path(), &["worktree", "remove", "--force", &wt.path().to_string_lossy()]);
+    let _ = Command::new("git")
+        .args(["-C", &repo.path().to_string_lossy(), "merge", "--abort"])
+        .output();
+    git(
+        repo.path(),
+        &[
+            "worktree",
+            "remove",
+            "--force",
+            &wt.path().to_string_lossy(),
+        ],
+    );
 }
 
 #[test]
@@ -547,7 +804,10 @@ fn merge_single_without_repo_path_resolves_from_worktree() {
     store.insert_task(&task).unwrap();
 
     let result = merge_single(&store, "t-no-repo", false, false, None);
-    assert!(result.is_ok(), "merge should resolve repo from worktree: {result:?}");
+    assert!(
+        result.is_ok(),
+        "merge should resolve repo from worktree: {result:?}"
+    );
     assert!(repo.path().join("agent-work.txt").exists());
 }
 
@@ -566,7 +826,12 @@ fn merge_single_merges_into_target_branch() {
     assert!(result.is_ok(), "merge_single failed: {result:?}");
 
     let current = Command::new("git")
-        .args(["-C", &repo.path().to_string_lossy(), "branch", "--show-current"])
+        .args([
+            "-C",
+            &repo.path().to_string_lossy(),
+            "branch",
+            "--show-current",
+        ])
         .output()
         .unwrap();
     assert_eq!(String::from_utf8_lossy(&current.stdout).trim(), target);
@@ -586,13 +851,21 @@ fn merge_group_skips_empty_branches() {
     let store = Store::open_memory().unwrap();
     let group_id = "wg-merge-group";
 
-    let mut committed_task =
-        make_task_with_worktree("t-merge-group", repo.path(), committed_wt.path(), &committed_branch);
+    let mut committed_task = make_task_with_worktree(
+        "t-merge-group",
+        repo.path(),
+        committed_wt.path(),
+        &committed_branch,
+    );
     committed_task.workgroup_id = Some(group_id.to_string());
     store.insert_task(&committed_task).unwrap();
 
-    let mut empty_task =
-        make_task_with_worktree("t-empty-branch", repo.path(), empty_wt.path(), &empty_branch);
+    let mut empty_task = make_task_with_worktree(
+        "t-empty-branch",
+        repo.path(),
+        empty_wt.path(),
+        &empty_branch,
+    );
     empty_task.workgroup_id = Some(group_id.to_string());
     store.insert_task(&empty_task).unwrap();
 
@@ -606,7 +879,15 @@ fn merge_group_skips_empty_branches() {
     let loaded_empty = store.get_task("t-empty-branch").unwrap().unwrap();
     assert_eq!(loaded_empty.status, TaskStatus::Done);
 
-    git(repo.path(), &["worktree", "remove", "--force", &empty_wt.path().to_string_lossy()]);
+    git(
+        repo.path(),
+        &[
+            "worktree",
+            "remove",
+            "--force",
+            &empty_wt.path().to_string_lossy(),
+        ],
+    );
 }
 
 #[test]
@@ -621,14 +902,30 @@ fn run_rejects_lanes_without_group() {
 fn run_rejects_unsupported_lanes_flags() {
     let store = Arc::new(Store::open_memory().unwrap());
 
-    let check_result = run(store.clone(), None, Some("wg-lanes"), false, true, None, true);
+    let check_result = run(
+        store.clone(),
+        None,
+        Some("wg-lanes"),
+        false,
+        true,
+        None,
+        true,
+    );
     assert!(check_result.is_err());
     assert_eq!(
         check_result.unwrap_err().to_string(),
         "--lanes does not yet support --check (dry-run); run without --check to apply lanes"
     );
 
-    let target_result = run(store, None, Some("wg-lanes"), false, false, Some("release"), true);
+    let target_result = run(
+        store,
+        None,
+        Some("wg-lanes"),
+        false,
+        false,
+        Some("release"),
+        true,
+    );
     assert!(target_result.is_err());
     assert_eq!(
         target_result.unwrap_err().to_string(),
@@ -639,7 +936,12 @@ fn run_rejects_unsupported_lanes_flags() {
 #[test]
 fn run_rejects_lanes_when_gitbutler_env_is_disabled() {
     let store = Arc::new(Store::open_memory().unwrap());
-    let mut task = make_task_with_worktree("t-lanes-disabled", Path::new("."), Path::new("/tmp"), "lane-branch");
+    let mut task = make_task_with_worktree(
+        "t-lanes-disabled",
+        Path::new("."),
+        Path::new("/tmp"),
+        "lane-branch",
+    );
     task.workgroup_id = Some("wg-lanes-disabled".to_string());
     store.insert_task(&task).unwrap();
 
@@ -686,7 +988,8 @@ fn remove_worktree_cleans_up_properly() {
     // git worktree list should not show it
     let out = Command::new("git")
         .args(["-C", &repo.path().to_string_lossy(), "worktree", "list"])
-        .output().unwrap();
+        .output()
+        .unwrap();
     let stdout = String::from_utf8_lossy(&out.stdout);
     assert!(!stdout.contains(&branch));
 }
@@ -707,7 +1010,10 @@ fn run_verify_handles_auto_without_error() {
 fn run_post_merge_verify_warns_on_failure() {
     let _permit = test_subprocess::acquire();
     let repo = init_repo();
-    run_post_merge_verify(&repo.path().to_string_lossy(), Some("git missing-subcommand"));
+    run_post_merge_verify(
+        &repo.path().to_string_lossy(),
+        Some("git missing-subcommand"),
+    );
     assert_eq!(worktree_status(repo.path()), "");
 }
 
@@ -747,7 +1053,10 @@ fn remove_worktree_refuses_unsafe_path() {
     );
     assert!(result.is_err());
     // Directory must still exist
-    assert!(unsafe_path.exists(), "Sandbox guard failed: unsafe path was deleted!");
+    assert!(
+        unsafe_path.exists(),
+        "Sandbox guard failed: unsafe path was deleted!"
+    );
 }
 
 #[test]
@@ -763,4 +1072,128 @@ fn approval_decision_defaults_to_merge() {
         ApprovalDecision::Merge
     };
     assert!(matches!(decision, ApprovalDecision::Merge));
+}
+
+#[test]
+fn auto_commit_skips_aid_lock_only_changes() {
+    let _permit = test_subprocess::acquire();
+    let repo = init_repo();
+    let branch = unique("aid-lock-only");
+    let wt = TempDir::new().unwrap();
+    git(
+        repo.path(),
+        &[
+            "worktree",
+            "add",
+            &wt.path().to_string_lossy(),
+            "-b",
+            &branch,
+        ],
+    );
+    // Write .aid-lock as the only change
+    std::fs::write(wt.path().join(".aid-lock"), "pid=1234\n").unwrap();
+
+    let before = Command::new("git")
+        .args(["-C", &wt.path().to_string_lossy(), "rev-parse", "HEAD"])
+        .output()
+        .unwrap();
+    let before_sha = String::from_utf8_lossy(&before.stdout).trim().to_string();
+
+    let committed = auto_commit_uncommitted(&wt.path().to_string_lossy(), &branch);
+    assert!(!committed, "should not commit when only .aid-lock changed");
+
+    let after = Command::new("git")
+        .args(["-C", &wt.path().to_string_lossy(), "rev-parse", "HEAD"])
+        .output()
+        .unwrap();
+    let after_sha = String::from_utf8_lossy(&after.stdout).trim().to_string();
+    assert_eq!(
+        before_sha, after_sha,
+        "HEAD should not change when only .aid-lock is dirty"
+    );
+
+    git(
+        repo.path(),
+        &[
+            "worktree",
+            "remove",
+            "--force",
+            &wt.path().to_string_lossy(),
+        ],
+    );
+}
+
+#[test]
+fn auto_commit_excludes_aid_lock_when_other_files_change() {
+    let _permit = test_subprocess::acquire();
+    let repo = init_repo();
+    let branch = unique("aid-lock-and-source");
+    let wt = TempDir::new().unwrap();
+    git(
+        repo.path(),
+        &[
+            "worktree",
+            "add",
+            &wt.path().to_string_lossy(),
+            "-b",
+            &branch,
+        ],
+    );
+    // Write both .aid-lock and a real source file
+    std::fs::write(wt.path().join(".aid-lock"), "pid=9999\n").unwrap();
+
+    let before = Command::new("git")
+        .args(["-C", &wt.path().to_string_lossy(), "rev-parse", "HEAD"])
+        .output()
+        .unwrap();
+    let before_sha = String::from_utf8_lossy(&before.stdout).trim().to_string();
+
+    // Create a real source file change
+    std::fs::create_dir_all(wt.path().join("src")).unwrap();
+    std::fs::write(wt.path().join("src/main.rs"), "fn main() {}\n").unwrap();
+
+    let committed = auto_commit_uncommitted(&wt.path().to_string_lossy(), &branch);
+    assert!(committed, "should commit when real source files changed");
+
+    let after = Command::new("git")
+        .args(["-C", &wt.path().to_string_lossy(), "rev-parse", "HEAD"])
+        .output()
+        .unwrap();
+    let after_sha = String::from_utf8_lossy(&after.stdout).trim().to_string();
+    assert_ne!(
+        before_sha, after_sha,
+        "HEAD should advance when source files changed"
+    );
+
+    // .aid-lock must NOT be in the commit
+    let show = Command::new("git")
+        .args([
+            "-C",
+            &wt.path().to_string_lossy(),
+            "show",
+            "--stat",
+            "--format=",
+            "HEAD",
+        ])
+        .output()
+        .unwrap();
+    let stat = String::from_utf8_lossy(&show.stdout);
+    assert!(
+        !stat.contains(".aid-lock"),
+        ".aid-lock should not be in the commit, but was: {stat}"
+    );
+    assert!(
+        stat.contains("src/main.rs"),
+        "src/main.rs should be in the commit"
+    );
+
+    git(
+        repo.path(),
+        &[
+            "worktree",
+            "remove",
+            "--force",
+            &wt.path().to_string_lossy(),
+        ],
+    );
 }

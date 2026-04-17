@@ -29,7 +29,7 @@ pub(crate) fn select_agent_with_reason(
     select_agent_from(prompt, opts, &available, store, team)
 }
 
-fn select_agent_from(
+pub(crate) fn select_agent_from(
     prompt: &str, opts: &RunOpts, available: &[AgentKind],
     store: &Store,
     team: Option<&TeamConfig>,

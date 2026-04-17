@@ -26,6 +26,8 @@ impl super::Agent for CursorAgent {
         let binary = if super::env::which_exists("agent") { "agent" } else { "cursor-agent" };
         let mut cmd = Command::new(binary);
         let prompt_with_ctx = super::embed_context_in_prompt(prompt, &opts.context_files)?;
+        // Cursor documents stream-json "assistant" events as deltas; only the terminal "result"
+        // event is complete, so requesting --stream-partial-output just degrades logs into tokens.
         if opts.read_only {
             cmd.args([
                 "-p",
@@ -35,7 +37,6 @@ impl super::Agent for CursorAgent {
                 "plan",
                 "--output-format",
                 "stream-json",
-                "--stream-partial-output",
             ]);
         } else {
             cmd.args([
@@ -45,7 +46,6 @@ impl super::Agent for CursorAgent {
                 "--force",
                 "--output-format",
                 "stream-json",
-                "--stream-partial-output",
             ]);
         }
         if let Some(ref dir) = opts.dir {

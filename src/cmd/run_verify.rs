@@ -63,6 +63,21 @@ pub(in crate::cmd) fn maybe_verify_impl(
     let cargo_target_dir = crate::agent::target_dir_for_worktree(worktree_branch.as_deref());
     match crate::verify::run_verify(path, command, cargo_target_dir.as_deref(), container_name) {
         Ok(result) => {
+            let result = match crate::verify::apply_declared_file_check(path, task.as_ref(), result) {
+                Ok(result) => result,
+                Err(e) => {
+                    let event = TaskEvent {
+                        task_id: task_id.clone(),
+                        timestamp: Local::now(),
+                        event_kind: EventKind::Error,
+                        detail: format!("Failed during declared-file verification: {e}"),
+                        metadata: None,
+                    };
+                    let _ = store.insert_event(&event);
+                    aid_error!("Verify error: {e}");
+                    return;
+                }
+            };
             let report = crate::verify::format_verify_report(&result);
             println!("{report}");
             crate::verify::record_verify_status(store, task_id, &result);

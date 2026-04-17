@@ -11,7 +11,7 @@ use std::time::Duration;
 
 use crate::process_guard::ProcessGuard;
 use crate::store::Store;
-use crate::types::{TaskId, TaskStatus, VerifyStatus};
+use crate::types::{Task, TaskId, TaskStatus, VerifyStatus};
 
 static VERIFY_LOCK: Mutex<()> = Mutex::new(());
 const VERIFY_TIMEOUT: Duration = Duration::from_secs(120);
@@ -75,6 +75,27 @@ pub fn run_verify(
         command: cmd_str,
     })
 }
+
+/// Downgrade a verify result when the prompt declared new files that were not added.
+pub(crate) fn apply_declared_file_check(
+    worktree_path: &Path,
+    task: Option<&Task>,
+    mut result: VerifyResult,
+) -> Result<VerifyResult> {
+    let Some(task) = task else {
+        return Ok(result);
+    };
+    if let Some(message) = crate::verify_declared_files::check_task_declared_files(worktree_path, task)? {
+        result.success = false;
+        if result.output.trim().is_empty() {
+            result.output = message;
+        } else {
+            result.output = format!("{}\n{message}", result.output.trim_end());
+        }
+    }
+    Ok(result)
+}
+
 /// Format a concise pass/fail report from verification result.
 pub fn format_verify_report(result: &VerifyResult) -> String {
     let status = if result.success { "PASS" } else { "FAIL" };
@@ -95,7 +116,7 @@ pub fn format_verify_report(result: &VerifyResult) -> String {
 
 /// Update the task's verify_status based on the latest verify result.
 pub fn record_verify_status(store: &Store, task_id: &TaskId, result: &VerifyResult) {
-    if result.command == "skip" {
+    if result.command == "skip" && result.success {
         return;
     }
     let status = if result.success {

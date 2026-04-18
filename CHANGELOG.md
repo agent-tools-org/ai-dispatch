@@ -1,3 +1,10 @@
+## v8.93.0 (2026-04-18)
+- feat(release): `scripts/release.sh` now pre-flights orphan branch and orphan worktree detection. Branches merged into `main` and worktrees pointing at merged or missing branches block the release unless `--skip-hygiene` is passed. Dry-run mode only warns.
+- feat(hygiene): new `scripts/session-preflight.sh` surveys repo health at session start — fetch, ahead/behind vs `origin/main`, dirty count, aid zombie tasks, aid worktrees for current repo, /tmp disk usage. Wired as a Claude Code SessionStart hook when `.claude/settings.json` enables it locally.
+- docs: `docs/ux-debt.md` records 14 UX debt items grouped by severity plus five non-negotiable principles (resource lifecycle, path-relative-to-file, cross-repo safety, error translation at config layer, board truthfulness) for the v9.0 overhaul.
+- docs: `docs/roadmap.md` and `docs/design/reply-unstick-spec.md` track the unreleased port work (reply/unstick/GH#89 background preflight) and the v9.0 plan. The reply/unstick feature spec is preserved for the follow-up port — see `ai-board` item `wi-273e`.
+
+
 ## v8.92.0 (2026-04-17)
 - fix(verify): detect when a task prompt declares new files (`Create a NEW file: <path>`) but the resulting commit does not add them — verify now fails with the missing paths instead of silently passing (closes #103)
 - feat(doctor): new `aid doctor` sub-command lists prunable worktrees and deletable merged/rebased branches under aid-managed prefixes; `--apply` runs `git worktree prune` + `git branch -d` (never `-D`)

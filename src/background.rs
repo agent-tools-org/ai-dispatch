@@ -118,6 +118,7 @@ async fn run_task_inner(store: &Arc<Store>, spec: &BackgroundRunSpec) -> Result<
         env: spec.env.clone(),
         env_forward: spec.env_forward.clone(),
     };
+    ensure_agent_binary_available(spec)?;
     let _workspace_symlink = crate::cmd::run::WorkspaceSymlinkGuard::create(
         agent.kind(),
         spec.group.as_deref(),
@@ -382,6 +383,23 @@ fn rescue_files_summary(outcome: &crate::commit::RescueOutcome) -> String {
     files.join(", ")
 }
 
+fn ensure_agent_binary_available(spec: &BackgroundRunSpec) -> Result<()> {
+    ensure_agent_binary_available_with(spec, agent::env::which_exists)
+}
+
+fn ensure_agent_binary_available_with<F>(spec: &BackgroundRunSpec, which: F) -> Result<()>
+where
+    F: Fn(&str) -> bool,
+{
+    if spec.container.is_some() || spec.sandbox {
+        return Ok(());
+    }
+    let Some(kind) = AgentKind::parse_str(&spec.agent_name) else {
+        return Ok(());
+    };
+    agent::ensure_agent_binary_available_with(kind, &spec.agent_name, which)
+}
+
 fn record_worker_failure(store: &Store, task_id: &str, err: &anyhow::Error) -> Result<()> { record_failure(store, task_id, &format!("{err:#}"), &format!("Background worker failed: {err}")) }
 
 fn check_zombie_tasks_with<F>(store: &Store, is_worker_alive: F) -> Result<Vec<String>>
@@ -567,5 +585,8 @@ fn notify_task_completion(store: &Store, task_id: &str) -> Result<()> {
     Ok(())
 }
 
+#[cfg(test)]
+#[path = "background_binary_tests.rs"]
+mod background_binary_tests;
 #[cfg(test)]
 mod tests;

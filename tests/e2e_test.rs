@@ -331,7 +331,9 @@ fn group_update_and_delete_work() {
     assert!(delete_output.status.success());
     let delete_stdout = String::from_utf8_lossy(&delete_output.stdout);
     assert!(delete_stdout.contains("deleted"));
-    assert!(delete_stdout.contains("Historical tasks still tagged: 0"));
+    assert!(delete_stdout.contains(
+        "Historical tasks still tagged: 0 — use --cascade to also delete them"
+    ));
 
     let list_output = aid_cmd_in(temp_dir.path())
         .args(["group", "list"])

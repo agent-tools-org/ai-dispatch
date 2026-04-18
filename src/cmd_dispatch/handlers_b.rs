@@ -140,7 +140,7 @@ pub(super) fn group(store: Arc<store::Store>, action: GroupAction) -> Result<()>
         GroupAction::Update { group_id, name, context } => {
             cmd::group::update(&store, &group_id, name.as_deref(), context.as_deref())
         }
-        GroupAction::Delete { group_id } => cmd::group::delete(&store, &group_id),
+        GroupAction::Delete { group_id, cascade } => cmd::group::delete(&store, &group_id, cascade),
         GroupAction::Cancel { group_id } => cmd::group::cancel(&store, &group_id),
         GroupAction::Summary { group_id } => cmd::summary_cli::run(&store, &group_id),
         GroupAction::Finding { action } => group_finding(store, action),

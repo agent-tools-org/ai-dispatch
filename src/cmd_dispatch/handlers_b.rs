@@ -72,6 +72,7 @@ pub(super) fn merge(
     group: Option<String>,
     approve: bool,
     check: bool,
+    force: bool,
     target: Option<String>,
     lanes: bool,
 ) -> Result<()> {
@@ -79,7 +80,7 @@ pub(super) fn merge(
         return Err(anyhow!("--lanes requires --group"));
     }
     let group = resolve_group(group);
-    cmd::merge::run(store, task_id.as_deref(), group.as_deref(), approve, check, target.as_deref(), lanes)
+    cmd::merge::run(store, task_id.as_deref(), group.as_deref(), approve, check, force, target.as_deref(), lanes)
 }
 pub(super) fn respond(task_id: String, input: Option<String>, file: Option<String>) -> Result<()> {
     cmd::respond::run(&task_id, input.as_deref(), file.as_deref())

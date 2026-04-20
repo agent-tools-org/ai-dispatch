@@ -8,6 +8,8 @@ use std::process::{Command, Output};
 use crate::sanitize;
 #[path = "worktree/reconcile.rs"]
 mod reconcile;
+#[path = "worktree/completion.rs"]
+mod completion;
 #[path = "worktree/snapshot.rs"]
 mod snapshot;
 #[path = "worktree/state.rs"]
@@ -21,6 +23,7 @@ pub use state::{
     branch_has_commits_ahead_of_main, check_worktree_lock, clear_worktree_lock,
     process_alive_check, worktree_changed_files, write_worktree_lock,
 };
+pub(crate) use completion::cleanup_completed_worktree;
 use state::{existing_worktree_path, local_branch_exists, prune_worktrees, sync_cargo_lock};
 use validation::{canonical_worktree_path, is_valid_git_worktree};
 
@@ -248,3 +251,6 @@ mod stale_tests;
 #[cfg(test)]
 #[path = "worktree/validation_tests.rs"]
 mod validation_tests;
+#[cfg(test)]
+#[path = "worktree/completion_tests.rs"]
+mod completion_tests;

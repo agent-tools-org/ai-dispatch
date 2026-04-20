@@ -10,12 +10,15 @@ use std::{env, fs};
 
 #[path = "project/audit.rs"]
 mod audit;
+#[path = "project/edit.rs"]
+mod edit;
 #[path = "project/profile.rs"]
 mod profile;
 #[path = "project/team.rs"]
 mod project_team;
 
 use self::audit::ProjectFile;
+pub use self::edit::{upsert_gitbutler_mode, upsert_gitbutler_prompt_suppressed};
 use self::profile::apply_profile;
 pub use self::audit::ProjectAuditConfig;
 pub use self::project_team::{project_knowledge_dir, read_project_knowledge};
@@ -38,6 +41,10 @@ pub struct ProjectConfig {
     pub container: Option<String>,
     #[serde(default)]
     pub gitbutler: Option<String>,
+    #[serde(default)]
+    pub keep_worktrees_after_done: bool,
+    #[serde(default)]
+    pub suppress_gitbutler_prompt: bool,
     #[serde(default)]
     pub aid_gc: Option<String>,
     #[serde(default)]
@@ -199,11 +206,15 @@ pub fn detect_project() -> Option<ProjectConfig> {
 
 pub fn detect_project_in(start_dir: &Path) -> Option<ProjectConfig> {
     let git_root = find_git_root_from(start_dir)?;
-    let project_path = git_root.join(".aid").join("project.toml");
+    let project_path = project_path_in_repo(&git_root);
     if !project_path.is_file() {
         return None;
     }
     load_project(&project_path).ok()
+}
+
+pub fn project_path_in_repo(repo_root: &Path) -> PathBuf {
+    repo_root.join(".aid").join("project.toml")
 }
 
 pub fn load_project(path: &Path) -> Result<ProjectConfig> {
@@ -233,3 +244,6 @@ fn find_git_root_from(start_dir: &Path) -> Option<PathBuf> {
 #[cfg(test)]
 #[path = "project/tests.rs"]
 mod tests;
+#[cfg(test)]
+#[path = "project/edit_tests.rs"]
+mod edit_tests;

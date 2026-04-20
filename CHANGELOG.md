@@ -1,3 +1,9 @@
+## Unreleased
+- fix(gitbutler): completed worktree tasks now auto-prune their aid-owned worktrees by default when the branch has committed changes, while preserving failed tasks, shared worktrees, and projects with `keep_worktrees_after_done = true`
+- fix(batch): `aid batch` now offers a one-time GitButler enable prompt for detected GitButler repos without `.aid/project.toml` integration, with `suppress_gitbutler_prompt = true` and `--yes` / `--no-prompt` escape hatches for non-interactive runs
+- fix(gitbutler): batch completion and `aid watch --quiet --group` now surface the GitButler lane merge-back path via `aid merge --lanes --group <wg-id>`
+- docs: add `docs/gitbutler.md` covering modes, batch review flow, `AID_GITBUTLER=0`, troubleshooting, and `keep_worktrees_after_done`
+
 ## v8.93.0 (2026-04-18)
 - feat(release): `scripts/release.sh` now pre-flights orphan branch and orphan worktree detection. Branches merged into `main` and worktrees pointing at merged or missing branches block the release unless `--skip-hygiene` is passed. Dry-run mode only warns.
 - feat(hygiene): new `scripts/session-preflight.sh` surveys repo health at session start — fetch, ahead/behind vs `origin/main`, dirty count, aid zombie tasks, aid worktrees for current repo, /tmp disk usage. Wired as a Claude Code SessionStart hook when `.claude/settings.json` enables it locally.

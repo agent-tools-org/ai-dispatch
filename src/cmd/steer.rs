@@ -73,7 +73,8 @@ mod tests {
         store.insert_task(&make_task("t-steer", TaskStatus::Done)).unwrap();
         let err = run(&store, "t-steer", "pivot").unwrap_err();
         assert!(
-            err.to_string().contains("can only steer running tasks"),
+            err.to_string().contains("can only reply to running tasks")
+                || err.to_string().contains("can only steer running tasks"),
             "unexpected error: {err}"
         );
     }

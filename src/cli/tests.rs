@@ -309,6 +309,30 @@ fn batch_retry_parses() {
 }
 
 #[test]
+fn batch_no_prompt_flag_parses() {
+    let cli = Cli::try_parse_from(["aid", "batch", "tasks.toml", "--no-prompt"]).unwrap();
+    match cli.command {
+        Some(Commands::Batch(command_args_a::BatchArgs { no_prompt, yes, .. })) => {
+            assert!(no_prompt);
+            assert!(!yes);
+        }
+        _ => panic!("expected Batch"),
+    }
+}
+
+#[test]
+fn batch_yes_flag_parses() {
+    let cli = Cli::try_parse_from(["aid", "batch", "tasks.toml", "--yes"]).unwrap();
+    match cli.command {
+        Some(Commands::Batch(command_args_a::BatchArgs { yes, no_prompt, .. })) => {
+            assert!(yes);
+            assert!(!no_prompt);
+        }
+        _ => panic!("expected Batch"),
+    }
+}
+
+#[test]
 fn changelog_version_parses() {
     let cli = Cli::try_parse_from(["aid", "changelog", "--version", "8.21.14"]).unwrap();
     match cli.command {

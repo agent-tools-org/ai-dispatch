@@ -589,6 +589,13 @@ fn cost_efficiency_calculates_ratio() {
 #[test]
 fn gemini_in_fallback_chain() {
     let (_temp, _guard) = isolated();
+    // Pin the detected agent set so the test is deterministic on CI hosts
+    // where no agent binaries are installed on PATH.
+    let _agents = crate::agent::DetectAgentsGuard::set(vec![
+        AgentKind::Gemini,
+        AgentKind::Qwen,
+        AgentKind::Codex,
+    ]);
     let result = super::coding_fallback_for(&AgentKind::Gemini);
     assert!(result.is_some(), "Gemini should have a fallback agent");
 }
@@ -596,9 +603,15 @@ fn gemini_in_fallback_chain() {
 #[test]
 fn fallback_chain_skips_rate_limited() {
     let (_temp, _guard) = isolated();
+    let _agents = crate::agent::DetectAgentsGuard::set(vec![
+        AgentKind::Gemini,
+        AgentKind::Qwen,
+        AgentKind::Codex,
+        AgentKind::Claude,
+    ]);
     crate::rate_limit::mark_rate_limited(&AgentKind::Codex, "quota exhausted");
     let result = super::coding_fallback_for(&AgentKind::Gemini);
-    // Should skip Codex (rate-limited) and pick the next available
+    // Should skip Codex (rate-limited) and pick the next available.
     assert!(result.is_some());
     assert_ne!(result.unwrap(), AgentKind::Codex);
 }

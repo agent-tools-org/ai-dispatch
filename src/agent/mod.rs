@@ -75,6 +75,13 @@ pub struct RunOpts {
 
 /// Detect which agents are installed on the system
 pub fn detect_agents() -> Vec<AgentKind> {
+    #[cfg(test)]
+    {
+        let maybe = DETECT_AGENTS_OVERRIDE.with(|cell| cell.borrow().clone());
+        if let Some(list) = maybe {
+            return list;
+        }
+    }
     let mut found = Vec::new();
     for (name, kind) in [
         ("gemini", AgentKind::Gemini),
@@ -95,6 +102,36 @@ pub fn detect_agents() -> Vec<AgentKind> {
         }
     }
     found
+}
+
+#[cfg(test)]
+std::thread_local! {
+    static DETECT_AGENTS_OVERRIDE: std::cell::RefCell<Option<Vec<AgentKind>>> =
+        const { std::cell::RefCell::new(None) };
+}
+
+/// RAII guard that pins `detect_agents()` to a test-supplied list on the
+/// current thread. Restores the previous value on drop so nested scopes
+/// compose correctly.
+#[cfg(test)]
+pub(crate) struct DetectAgentsGuard {
+    previous: Option<Vec<AgentKind>>,
+}
+
+#[cfg(test)]
+impl DetectAgentsGuard {
+    pub fn set(agents: Vec<AgentKind>) -> Self {
+        let previous = DETECT_AGENTS_OVERRIDE.with(|cell| cell.borrow().clone());
+        DETECT_AGENTS_OVERRIDE.with(|cell| *cell.borrow_mut() = Some(agents));
+        Self { previous }
+    }
+}
+
+#[cfg(test)]
+impl Drop for DetectAgentsGuard {
+    fn drop(&mut self) {
+        DETECT_AGENTS_OVERRIDE.with(|cell| *cell.borrow_mut() = self.previous.take());
+    }
 }
 
 pub(crate) fn ensure_agent_binary_available(agent_kind: AgentKind, agent_name: &str) -> Result<()> {

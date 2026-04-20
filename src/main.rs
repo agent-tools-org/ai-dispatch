@@ -46,6 +46,7 @@ mod prompt_scan;
 mod process_guard;
 mod pty_bridge;
 mod pty_runner;
+mod pty_watch_idle;
 mod pty_watch;
 mod rate_limit;
 mod repo_root;
@@ -63,6 +64,7 @@ mod project;
 mod team;
 mod templates;
 mod toolbox;
+mod unstick;
 #[cfg(test)]
 mod test_subprocess;
 mod compaction;

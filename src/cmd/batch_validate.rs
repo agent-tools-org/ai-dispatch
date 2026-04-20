@@ -159,6 +159,7 @@ pub(super) fn load_task_outcome(store: &Arc<Store>, task_id: &str) -> Result<Bat
         | TaskStatus::Pending
         | TaskStatus::Running
         | TaskStatus::AwaitingInput
+        | TaskStatus::Stalled
         | TaskStatus::Failed
         | TaskStatus::Stopped => BatchTaskOutcome::Failed,
     })

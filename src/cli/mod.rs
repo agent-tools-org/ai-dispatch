@@ -56,10 +56,12 @@ pub enum Commands {
     Retry(command_args_b::RetryArgs),
     Merge(command_args_b::MergeArgs),
     Respond(command_args_b::RespondArgs),
+    Reply(command_args_b::ReplyArgs),
     Stop(command_args_b::StopArgs),
     #[command(hide = true)]
     Kill(command_args_b::KillArgs),
     Steer(command_args_b::SteerArgs),
+    Unstick(command_args_b::UnstickArgs),
     Ask(command_args_b::AskArgs),
     Query(command_args_b::QueryArgs),
     Mcp,

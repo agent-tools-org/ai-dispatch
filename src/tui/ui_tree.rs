@@ -157,7 +157,10 @@ fn tree_duration(task: &Task) -> String {
         if secs < 60 { format!("{secs}s") }
         else if secs < 3600 { format!("{}m{:02}s", secs / 60, secs % 60) }
         else { format!("{}h{:02}m", secs / 3600, (secs % 3600) / 60) }
-    } else if matches!(task.status, TaskStatus::Running | TaskStatus::AwaitingInput) {
+    } else if matches!(
+        task.status,
+        TaskStatus::Running | TaskStatus::AwaitingInput | TaskStatus::Stalled
+    ) {
         let elapsed = (chrono::Local::now() - task.created_at).num_seconds();
         if elapsed < 60 { format!("{elapsed}s") }
         else if elapsed < 3600 { format!("{}m{:02}s", elapsed / 60, elapsed % 60) }

@@ -10,6 +10,8 @@ use std::fmt;
 mod agent;
 #[path = "types/delivery.rs"]
 mod delivery;
+#[path = "types/message.rs"]
+mod message;
 #[path = "types/status.rs"]
 mod status;
 #[path = "types/task.rs"]
@@ -19,6 +21,7 @@ mod memory;
 
 pub use self::agent::AgentKind;
 pub use self::delivery::DeliveryAssessment;
+pub use self::message::{MessageDirection, MessageSource, TaskMessage};
 pub use self::memory::{Memory, MemoryId, MemoryTier, MemoryType};
 pub use self::status::{EventKind, PendingReason, TaskStatus, VerifyStatus};
 pub use self::task::{CompletionInfo, Finding, Task, TaskEvent, TaskFilter, Workgroup};

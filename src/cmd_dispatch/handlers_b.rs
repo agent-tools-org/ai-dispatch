@@ -85,6 +85,32 @@ pub(super) fn merge(
 pub(super) fn respond(task_id: String, input: Option<String>, file: Option<String>) -> Result<()> {
     cmd::respond::run(&task_id, input.as_deref(), file.as_deref())
 }
+pub(super) fn reply(
+    store: Arc<store::Store>,
+    task_id: String,
+    message: Option<String>,
+    file: Option<String>,
+    async_mode: bool,
+    timeout_secs: u64,
+) -> Result<()> {
+    match cmd::reply::run(
+        &store,
+        &task_id,
+        message.as_deref(),
+        file.as_deref(),
+        async_mode,
+        timeout_secs,
+    )? {
+        cmd::reply::ReplyOutcome::Queued { id } => println!("Queued reply {id} for {task_id}"),
+        cmd::reply::ReplyOutcome::Acked { delivered } => {
+            println!("Reply acknowledged for {task_id} (delivered: {delivered})");
+        }
+        cmd::reply::ReplyOutcome::TimedOut { delivered } => {
+            println!("Reply timed out for {task_id} (delivered: {delivered})");
+        }
+    }
+    Ok(())
+}
 pub(super) fn stop(store: Arc<store::Store>, task_id: String, force: bool) -> Result<()> {
     if force {
         cmd::stop::kill(&store, &task_id)
@@ -97,6 +123,14 @@ pub(super) fn kill(store: Arc<store::Store>, task_id: String) -> Result<()> {
 }
 pub(super) fn steer(store: Arc<store::Store>, task_id: String, message: String) -> Result<()> {
     cmd::steer::run(&store, &task_id, &message)
+}
+pub(super) fn unstick(
+    store: Arc<store::Store>,
+    task_id: String,
+    message: Option<String>,
+    escalate: bool,
+) -> Result<()> {
+    cmd::unstick::run(&store, &task_id, message.as_deref(), escalate)
 }
 pub(super) async fn ask(
     store: Arc<store::Store>,

@@ -62,7 +62,10 @@ fn waiting_task_has_active_group(
     let has_active_tasks = store.list_tasks_by_group(group_id)?.into_iter().any(|group_task| {
         matches!(
             group_task.status,
-            TaskStatus::Pending | TaskStatus::Running | TaskStatus::AwaitingInput
+            TaskStatus::Pending
+                | TaskStatus::Running
+                | TaskStatus::AwaitingInput
+                | TaskStatus::Stalled
         )
     });
     active_groups.insert(group_id.to_string(), has_active_tasks);

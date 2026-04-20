@@ -1,22 +1,22 @@
 // Handler for `aid steer` — inject guidance into running PTY tasks.
-// Writes steer signal for the PTY monitor loop to pick up.
+// Delegates to persisted reply delivery with steer source tracking.
 
-use anyhow::{anyhow, bail, Result};
-use crate::input_signal;
+use anyhow::Result;
+
+use crate::cmd::reply;
 use crate::store::Store;
-use crate::types::TaskStatus;
+use crate::types::MessageSource;
 
 pub fn run(store: &Store, task_id: &str, message: &str) -> Result<()> {
-    // 1. Check task exists
-    let task = store
-        .get_task(task_id)?
-        .ok_or_else(|| anyhow!("Task {task_id} not found"))?;
-    // 2. Check task is Running or AwaitingInput
-    if task.status != TaskStatus::Running && task.status != TaskStatus::AwaitingInput {
-        bail!("Task {task_id} is {} — can only steer running tasks", task.status.label());
-    }
-    // 3. Write steer signal
-    input_signal::write_steer(task_id, message)?;
+    reply::run_with_source(
+        store,
+        task_id,
+        Some(message),
+        None,
+        true,
+        30,
+        MessageSource::Steer,
+    )?;
     println!("Steered {task_id}: {}", message.chars().take(80).collect::<String>());
     Ok(())
 }

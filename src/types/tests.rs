@@ -116,6 +116,37 @@ fn pending_reason_parse_str_roundtrip() {
 }
 
 #[test]
+fn task_status_stalled_roundtrip() {
+    assert_eq!(TaskStatus::parse_str("stalled"), Some(TaskStatus::Stalled));
+    assert_eq!(TaskStatus::Stalled.as_str(), "stalled");
+    assert_eq!(TaskStatus::Stalled.label(), "STALL");
+    assert_eq!(serde_json::to_string(&TaskStatus::Stalled).unwrap(), "\"stalled\"");
+    assert_eq!(
+        serde_json::from_str::<TaskStatus>("\"stalled\"").unwrap(),
+        TaskStatus::Stalled
+    );
+}
+
+#[test]
+fn message_direction_roundtrip() {
+    for direction in [MessageDirection::In, MessageDirection::Out] {
+        assert_eq!(MessageDirection::try_from(direction.as_str()).ok(), Some(direction));
+    }
+}
+
+#[test]
+fn message_source_roundtrip() {
+    for source in [
+        MessageSource::Reply,
+        MessageSource::Steer,
+        MessageSource::UnstickAuto,
+        MessageSource::AgentAck,
+    ] {
+        assert_eq!(MessageSource::try_from(source.as_str()).ok(), Some(source));
+    }
+}
+
+#[test]
 fn profile_returns_some_for_all_builtin() {
     for kind in AgentKind::ALL_BUILTIN {
         assert!(kind.profile().is_some(), "{} should have a profile", kind.as_str());

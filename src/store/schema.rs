@@ -209,6 +209,7 @@ pub(super) fn migrate(store: &Store) -> Result<()> {
     let _ = conn.execute_batch("CREATE INDEX IF NOT EXISTS idx_tasks_workgroup ON tasks(workgroup_id);");
     let _ = conn.execute_batch("CREATE INDEX IF NOT EXISTS idx_events_task_id ON events(task_id);");
     let _ = conn.execute_batch("CREATE INDEX IF NOT EXISTS idx_events_task_kind ON events(task_id, event_type);");
+    super::migrations::migrate_task_messages(&conn)?;
     Ok(())
 }
 

@@ -210,7 +210,10 @@ fn card_height(milestones: &[String]) -> u16 {
 fn milestone_progress(task: &Task, count: usize) -> String {
     if count == 0 {
         "0/0".to_string()
-    } else if matches!(task.status, TaskStatus::Running | TaskStatus::AwaitingInput) {
+    } else if matches!(
+        task.status,
+        TaskStatus::Running | TaskStatus::AwaitingInput | TaskStatus::Stalled
+    ) {
         format!("{}/{}", count.saturating_sub(1), count)
     } else {
         format!("{count}/{count}")
@@ -221,6 +224,7 @@ fn status_style(status: TaskStatus) -> Style {
         TaskStatus::Done | TaskStatus::Merged => Style::default().fg(Color::Green),
         TaskStatus::Running => Style::default().fg(Color::Yellow),
         TaskStatus::AwaitingInput => Style::default().fg(Color::Magenta),
+        TaskStatus::Stalled => Style::default().fg(Color::LightRed),
         TaskStatus::Failed => Style::default().fg(Color::Red),
         TaskStatus::Stopped => Style::default().fg(Color::Red),
         TaskStatus::Pending => Style::default().fg(Color::Gray),

@@ -184,7 +184,10 @@ fn list_filtered_tasks(
 }
 
 fn is_active(status: TaskStatus) -> bool {
-    matches!(status, TaskStatus::Pending | TaskStatus::Running | TaskStatus::AwaitingInput)
+    matches!(
+        status,
+        TaskStatus::Pending | TaskStatus::Running | TaskStatus::AwaitingInput | TaskStatus::Stalled
+    )
 }
 
 fn is_terminal(status: TaskStatus) -> bool {
@@ -202,6 +205,7 @@ fn colored_status(status: TaskStatus) -> String {
         TaskStatus::Stopped => color("Stopped", ANSI_RED),
         TaskStatus::Running => color("Running", ANSI_YELLOW),
         TaskStatus::AwaitingInput => color("Await", ANSI_BLUE),
+        TaskStatus::Stalled => color("Stalled", ANSI_RED),
         TaskStatus::Waiting => color("Waiting", ANSI_DIM),
         TaskStatus::Pending => color("Queued", ANSI_DIM),
         TaskStatus::Skipped => color("Skipped", ANSI_DIM),

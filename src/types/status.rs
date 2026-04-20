@@ -5,12 +5,14 @@
 use serde::{Deserialize, Serialize};
 use std::fmt;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum TaskStatus {
     Waiting,
     Pending,
     Running,
     AwaitingInput,
+    Stalled,
     Done,
     Merged,
     Failed,
@@ -25,6 +27,7 @@ impl TaskStatus {
             Self::Pending => "pending",
             Self::Running => "running",
             Self::AwaitingInput => "awaiting_input",
+            Self::Stalled => "stalled",
             Self::Done => "done",
             Self::Merged => "merged",
             Self::Failed => "failed",
@@ -43,6 +46,7 @@ impl TaskStatus {
             "pending" => Some(Self::Pending),
             "running" => Some(Self::Running),
             "awaiting_input" => Some(Self::AwaitingInput),
+            "stalled" => Some(Self::Stalled),
             "done" => Some(Self::Done),
             "merged" => Some(Self::Merged),
             "failed" => Some(Self::Failed),
@@ -58,6 +62,7 @@ impl TaskStatus {
             Self::Pending => "PEND",
             Self::Running => "RUN",
             Self::AwaitingInput => "AWAIT",
+            Self::Stalled => "STALL",
             Self::Done => "DONE",
             Self::Merged => "MERGED",
             Self::Failed => "FAIL",

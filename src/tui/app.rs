@@ -178,6 +178,7 @@ impl App {
                     t.status,
                     TaskStatus::Running
                         | TaskStatus::AwaitingInput
+                        | TaskStatus::Stalled
                         | TaskStatus::Done
                         | TaskStatus::Merged
                         | TaskStatus::Failed
@@ -185,8 +186,14 @@ impl App {
             })
             .collect();
         tasks.sort_by(|a, b| {
-            let running_a = matches!(a.status, TaskStatus::Running | TaskStatus::AwaitingInput);
-            let running_b = matches!(b.status, TaskStatus::Running | TaskStatus::AwaitingInput);
+            let running_a = matches!(
+                a.status,
+                TaskStatus::Running | TaskStatus::AwaitingInput | TaskStatus::Stalled
+            );
+            let running_b = matches!(
+                b.status,
+                TaskStatus::Running | TaskStatus::AwaitingInput | TaskStatus::Stalled
+            );
             running_b
                 .cmp(&running_a)
                 .then(b.created_at.cmp(&a.created_at))
@@ -228,7 +235,7 @@ impl App {
             .filter(|task| {
                 matches!(
                     task.status,
-                    TaskStatus::Running | TaskStatus::AwaitingInput
+                    TaskStatus::Running | TaskStatus::AwaitingInput | TaskStatus::Stalled
                 )
             })
             .map(|task| task.id.as_str().to_string())
@@ -248,7 +255,10 @@ impl App {
             // Always refresh running tasks, cache completed ones
             let is_running = self.tasks.iter().any(|t| {
                 t.id.as_str() == task_id
-                    && matches!(t.status, TaskStatus::Running | TaskStatus::AwaitingInput)
+                    && matches!(
+                        t.status,
+                        TaskStatus::Running | TaskStatus::AwaitingInput | TaskStatus::Stalled
+                    )
             });
             if is_running || !self.events_cache.contains_key(&task_id) {
                 self.events_cache

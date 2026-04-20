@@ -4,12 +4,12 @@
 use anyhow::Result;
 use chrono::Local;
 use std::sync::Arc;
-use crate::agent::env::which_exists;
+use crate::agent;
 use crate::hooks;
 use crate::cmd::show;
 use crate::store::Store;
 use crate::store::TaskCompletionUpdate;
-use crate::types::{AgentKind, EventKind, TaskEvent, TaskId, TaskStatus};
+use crate::types::{EventKind, TaskEvent, TaskId, TaskStatus};
 use super::run_bestof;
 use super::run_dispatch_execute::{
     load_runtime_hooks, maybe_record_start_sha, maybe_start_container, run_background_task,
@@ -87,52 +87,34 @@ fn ensure_agent_binary_available(
     prepared: &PreparedDispatch,
     args: &RunArgs,
 ) -> Result<()> {
-    if args.container.is_some()
-        || args.sandbox
-        || built_in_agent_binary_exists(prepared.agent_kind, which_exists)
-    {
+    if args.container.is_some() || args.sandbox {
         return Ok(());
     }
-    let detail = format!("Agent {} not found. Is it installed?", prepared.agent_display_name);
-    store.complete_task_atomic(
-        TaskCompletionUpdate {
-            id: prepared.task_id.as_str(),
-            status: TaskStatus::Failed,
-            tokens: None,
-            duration_ms: 0,
-            model: prepared.effective_model.as_deref(),
-            cost_usd: None,
-            exit_code: None,
-        },
-        &TaskEvent {
-            task_id: prepared.task_id.clone(),
-            timestamp: Local::now(),
-            event_kind: EventKind::Error,
-            detail: detail.clone(),
-            metadata: None,
-        },
-    )?;
-    Err(anyhow::anyhow!(detail))
-}
-
-fn built_in_agent_binary_exists<F>(agent_kind: AgentKind, which: F) -> bool
-where
-    F: Fn(&str) -> bool,
-{
-    match agent_kind {
-        AgentKind::Codex => which("codex"),
-        AgentKind::Copilot => which("copilot"),
-        AgentKind::Cursor => which("agent") || which("cursor-agent"),
-        AgentKind::Gemini => which("gemini"),
-        AgentKind::Qwen => which("qwen"),
-        AgentKind::OpenCode => which("opencode"),
-        AgentKind::Kilo => which("kilo"),
-        AgentKind::Codebuff => which("aid-codebuff"),
-        AgentKind::Droid => which("droid"),
-        AgentKind::Oz => which("oz"),
-        AgentKind::Claude => which("claude"),
-        AgentKind::Custom => true,
+    if let Err(err) =
+        agent::ensure_agent_binary_available(prepared.agent_kind, &prepared.agent_display_name)
+    {
+        let detail = err.to_string();
+        store.complete_task_atomic(
+            TaskCompletionUpdate {
+                id: prepared.task_id.as_str(),
+                status: TaskStatus::Failed,
+                tokens: None,
+                duration_ms: 0,
+                model: prepared.effective_model.as_deref(),
+                cost_usd: None,
+                exit_code: None,
+            },
+            &TaskEvent {
+                task_id: prepared.task_id.clone(),
+                timestamp: Local::now(),
+                event_kind: EventKind::Error,
+                detail,
+                metadata: None,
+            },
+        )?;
+        return Err(err);
     }
+    Ok(())
 }
 
 fn dry_run(
@@ -193,22 +175,4 @@ fn run_before_hook(
         return Err(err);
     }
     Ok(())
-}
-
-#[cfg(test)]
-mod tests {
-    use super::built_in_agent_binary_exists;
-    use crate::types::AgentKind;
-
-    #[test]
-    fn built_in_agent_binary_exists_rejects_missing_kilo_binary() {
-        assert!(!built_in_agent_binary_exists(AgentKind::Kilo, |_| false));
-    }
-
-    #[test]
-    fn built_in_agent_binary_exists_accepts_cursor_alias_binary() {
-        assert!(built_in_agent_binary_exists(AgentKind::Cursor, |name| {
-            name == "cursor-agent"
-        }));
-    }
 }

@@ -1,3 +1,19 @@
+## v8.94.0 (2026-04-20)
+- feat(reply): new `aid reply <task-id> <message>` command — persists messages in a new `task_messages` SQLite table, PTY monitor delivers them to the agent's stdin and records ack when the agent produces output after delivery. `aid steer` now routes through the same persisted path.
+- feat(unstick): new `aid unstick <task-id>` command — manual recovery for hung tasks. New `TaskStatus::Stalled` variant plus an `IdleDetector` policy module; the PTY monitor auto-nudges at warn threshold and escalates to `Stalled` past the escalation threshold.
+- feat(batch): `aid batch` auto-prunes aid-owned worktrees when tasks complete successfully. Failed and shared worktrees are preserved. Opt-out via `.aid/project.toml`'s new `keep_worktrees_after_done = true`.
+- feat(batch): on GitButler-active repos, `aid batch` completion and `aid watch --quiet --group` now print the `aid merge --lanes --group <wg-id>` merge-back hint alongside the existing `aid merge --group` suggestion.
+- feat(batch): first `aid batch` invocation in a GitButler repo without `.aid/project.toml` integration prompts once to enable `gitbutler = "auto"`. Non-interactive / `--yes` / `--no-prompt` contexts skip the prompt; a `suppress_gitbutler_prompt = true` marker prevents re-prompting after a decline.
+- feat(group): `aid group delete --cascade` deletes the group's member tasks transactionally rather than orphaning them. Without `--cascade`, the count of still-tagged historical tasks is printed with a pointer to `--cascade`.
+- feat(merge): `aid merge --force` unblocks FAIL-status tasks that verify failed but have a clean working tree. Previously required hand-running `git merge`.
+- fix(batch): `dir = "."` in a batch TOML now resolves relative to the TOML file's parent directory instead of the runtime's inherited cwd. First-wave tasks no longer fail with `Not a git repository: /tmp/.`.
+- fix(background): missing agent binary now fails fast on the background dispatch path with the same clear preflight error the foreground path gives (GH#89). Shared `ensure_agent_binary_available` helper lives in `src/agent/mod.rs` and is called from both paths.
+- fix(tests): workspace_dir test isolation — `/tmp/aid-wg-{id}` is now test-isolated via `AidHomeGuard` so parallel tests sharing workgroup IDs don't race on the same filesystem path. Production behavior unchanged.
+- fix(tests): agent fallback tests now deterministic on CI hosts without agent binaries on PATH — new `DetectAgentsGuard` pins `detect_agents()` return value per-thread under `cfg(test)`.
+- fix(clippy): clear 28 pre-existing `cargo clippy -- -D warnings` lints (rust-1.93 and rust-1.95 strictness). CI's build job is now green for the first time in several releases.
+- docs: add `docs/gitbutler.md` covering integration modes, the batch → review → `aid merge --lanes` pipeline, the `AID_GITBUTLER=0` escape hatch, troubleshooting, and the `keep_worktrees_after_done` knob.
+
+
 ## Unreleased
 - fix(gitbutler): completed worktree tasks now auto-prune their aid-owned worktrees by default when the branch has committed changes, while preserving failed tasks, shared worktrees, and projects with `keep_worktrees_after_done = true`
 - fix(batch): `aid batch` now offers a one-time GitButler enable prompt for detected GitButler repos without `.aid/project.toml` integration, with `suppress_gitbutler_prompt = true` and `--yes` / `--no-prompt` escape hatches for non-interactive runs

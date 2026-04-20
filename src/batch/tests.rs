@@ -91,6 +91,7 @@ fn parse_valid_batch() {
             "[[tasks]]\nagent = \"gemini\"\nprompt = \"research X\"\nworktree = \"feat/x\"\n",
             "[[tasks]]\nagent = \"codex\"\nprompt = \"implement Y\"\ndir = \"src\"\nmodel = \"gpt-4\"\ngroup = \"wg-demo\""
         ));
+    std::fs::create_dir_all(file.path().parent().unwrap().join("src")).unwrap();
     let cfg = parse_batch_file(file.path()).unwrap();
     let expected_dir = file.path().parent().unwrap().join("src");
 
@@ -293,8 +294,11 @@ fn applies_defaults_to_tasks() {
             "env_forward = [\"PATH\"]\n",
             "[[tasks]]\nname = \"impl\"\nprompt = \"build it\"\n"
         ));
-    let cfg = parse_batch_file(file.path()).unwrap();
     let batch_dir = file.path().parent().unwrap();
+    std::fs::create_dir_all(batch_dir.join("src")).unwrap();
+    std::fs::write(batch_dir.join("src/lib.rs"), "pub fn lib() {}\n").unwrap();
+    std::fs::write(batch_dir.join("src/main.rs"), "fn run() {}\n").unwrap();
+    let cfg = parse_batch_file(file.path()).unwrap();
 
     assert_eq!(cfg.defaults.auto_fallback, Some(true));
     let task = &cfg.tasks[0];
@@ -369,8 +373,11 @@ fn task_values_override_defaults() {
             "env = { SHARED = \"task\", TASK_ONLY = \"set\" }\n",
             "env_forward = [\"HOME\"]\n"
         ));
-    let cfg = parse_batch_file(file.path()).unwrap();
     let batch_dir = file.path().parent().unwrap();
+    std::fs::create_dir_all(batch_dir.join("custom")).unwrap();
+    std::fs::create_dir_all(batch_dir.join("src")).unwrap();
+    std::fs::write(batch_dir.join("src/task.rs"), "pub fn task() {}\n").unwrap();
+    let cfg = parse_batch_file(file.path()).unwrap();
 
     let task = &cfg.tasks[0];
     assert_eq!(task.agent, "codex");
@@ -426,6 +433,7 @@ fn resolve_batch_paths_resolves_relative_dir_from_batch_parent() {
     let temp = tempdir().unwrap();
     let batch_dir = temp.path().join("batches");
     std::fs::create_dir_all(&batch_dir).unwrap();
+    std::fs::create_dir_all(batch_dir.join("subdir")).unwrap();
     let batch_path = write_batch_file(
         &batch_dir,
         "tasks.toml",
@@ -446,6 +454,7 @@ fn resolve_batch_paths_leaves_absolute_dir_unchanged() {
     let batch_dir = temp.path().join("batches");
     std::fs::create_dir_all(&batch_dir).unwrap();
     let absolute_dir = temp.path().join("absolute-dir");
+    std::fs::create_dir_all(&absolute_dir).unwrap();
     let batch_path = write_batch_file(
         &batch_dir,
         "tasks.toml",
@@ -466,6 +475,8 @@ fn resolve_batch_paths_resolves_context_entries() {
     let batch_dir = temp.path().join("batches");
     std::fs::create_dir_all(&batch_dir).unwrap();
     let absolute_context = temp.path().join("global.md");
+    std::fs::write(batch_dir.join("notes.md"), "notes\n").unwrap();
+    std::fs::write(&absolute_context, "global\n").unwrap();
     let batch_path = write_batch_file(
         &batch_dir,
         "tasks.toml",
@@ -489,17 +500,81 @@ fn resolve_batch_paths_resolves_context_entries() {
 }
 
 #[test]
-fn resolve_batch_paths_handles_batch_file_in_current_dir() {
-    let mut tasks = [BatchTask {
-        dir: Some("subdir".to_string()),
-        context: Some(vec!["notes.md".to_string()]),
-        ..make_task(Some("task"), &[])
-    }];
+fn resolve_batch_paths_resolves_dot_relative_to_toml_dir() {
+    let temp = tempdir().unwrap();
+    let repo_dir = temp.path().join("repo");
+    std::fs::create_dir_all(&repo_dir).unwrap();
+    let batch_path = write_batch_file(
+        &repo_dir,
+        "tasks.toml",
+        "[[tasks]]\nagent = \"codex\"\nprompt = \"test\"\ndir = \".\"\n",
+    );
 
-    resolve_batch_paths(&mut tasks, Path::new("tasks.toml"));
+    let cfg = parse_batch_file(&batch_path).unwrap();
 
-    assert_eq!(tasks[0].dir.as_deref(), Some("subdir"));
-    assert_eq!(tasks[0].context.as_deref(), Some(&["notes.md".to_string()][..]));
+    assert_eq!(cfg.tasks[0].dir.as_deref(), Some(repo_dir.to_string_lossy().as_ref()));
+}
+
+#[test]
+fn resolve_batch_paths_fall_back_to_pwd_when_source_path_is_unavailable() {
+    let temp = tempdir().unwrap();
+    let pwd = temp.path().join("repo");
+    std::fs::create_dir_all(pwd.join("project")).unwrap();
+    std::fs::write(pwd.join("notes.md"), "notes\n").unwrap();
+    let archived_batch = write_batch_file(
+        temp.path(),
+        "archived.toml",
+        "[[tasks]]\nagent = \"codex\"\nprompt = \"test\"\ndir = \"project\"\ncontext = [\"notes.md\"]\n",
+    );
+
+    let cfg = parse_batch_file_with_vars_and_source(
+        &archived_batch,
+        &std::collections::HashMap::new(),
+        None,
+        Some(&pwd),
+    )
+    .unwrap();
+
+    assert_eq!(
+        cfg.tasks[0].dir.as_deref(),
+        Some(pwd.join("project").to_string_lossy().as_ref())
+    );
+    assert_eq!(
+        cfg.tasks[0].context.as_deref(),
+        Some(&[pwd.join("notes.md").to_string_lossy().into_owned()][..])
+    );
+}
+
+#[test]
+fn resolve_batch_paths_errors_when_relative_dir_cannot_be_resolved() {
+    let temp = tempdir().unwrap();
+    let batch_dir = temp.path().join("batches");
+    let pwd = temp.path().join("repo");
+    std::fs::create_dir_all(&batch_dir).unwrap();
+    std::fs::create_dir_all(&pwd).unwrap();
+    let batch_path = write_batch_file(
+        &batch_dir,
+        "tasks.toml",
+        "[[tasks]]\nagent = \"codex\"\nprompt = \"test\"\ndir = \"missing\"\n",
+    );
+
+    let err = parse_batch_file_with_vars_and_source(
+        &batch_path,
+        &std::collections::HashMap::new(),
+        Some(&batch_path),
+        Some(&pwd),
+    )
+    .unwrap_err()
+    .to_string();
+
+    assert_eq!(
+        err,
+        format!(
+            "dir = 'missing' in batch TOML could not be resolved: tried {} and {} — use an absolute path or place the TOML inside the target repo",
+            batch_dir.join("missing").display(),
+            pwd.join("missing").display()
+        )
+    );
 }
 
 #[test]

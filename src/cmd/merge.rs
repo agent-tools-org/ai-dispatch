@@ -1,12 +1,13 @@
 // Handler for `aid merge` — mark done task(s) as merged, optionally by workgroup.
 // Exports: run()
-// Deps: crate::store::Store, crate::types::TaskStatus
+// Deps: chrono, crate::store::Store, crate::types
 
 use anyhow::{anyhow, Result};
+use chrono::Local;
 use std::process::{Command, Stdio};
 use std::sync::Arc;
 use crate::store::Store;
-use crate::types::{Task, TaskStatus, VerifyStatus};
+use crate::types::{EventKind, Task, TaskEvent, TaskId, TaskStatus, VerifyStatus};
 #[path = "merge_git.rs"]
 pub(crate) mod merge_git;
 use merge_git::*;
@@ -14,7 +15,7 @@ pub use merge_git::remove_worktree;
 #[path = "merge_lanes.rs"]
 mod merge_lanes;
 
-pub fn run(store: Arc<Store>, task_id: Option<&str>, group: Option<&str>, approve: bool, check: bool, target: Option<&str>, lanes: bool) -> Result<()> {
+pub fn run(store: Arc<Store>, task_id: Option<&str>, group: Option<&str>, approve: bool, check: bool, force: bool, target: Option<&str>, lanes: bool) -> Result<()> {
     if lanes {
         let Some(group_id) = group else {
             return Err(anyhow!("--lanes requires --group"));
@@ -28,17 +29,18 @@ pub fn run(store: Arc<Store>, task_id: Option<&str>, group: Option<&str>, approv
         return merge_lanes::merge_group_lanes(&store, group_id);
     }
     match (task_id, group) {
-        (Some(id), _) => merge_single(&store, id, approve, check, target),
+        (Some(id), _) => merge_single(&store, id, approve, check, force, target),
         (_, Some(group_id)) => merge_group(&store, group_id, approve, check, target),
         (None, None) => Err(anyhow!("Provide either a task ID or --group <wg-id>")),
     }
 }
 
-fn merge_single(store: &Store, task_id: &str, approve: bool, check: bool, target: Option<&str>) -> Result<()> {
+fn merge_single(store: &Store, task_id: &str, approve: bool, check: bool, force: bool, target: Option<&str>) -> Result<()> {
     let task = store
         .get_task(task_id)?
         .ok_or_else(|| anyhow!("Task '{task_id}' not found"))?;
-    if task.status != TaskStatus::Done {
+    let original_status = task.status;
+    if task.status != TaskStatus::Done && (!force || !matches!(task.status, TaskStatus::Failed | TaskStatus::Stopped)) {
         return Err(anyhow!(
             "Task '{task_id}' is {} — only DONE tasks can be marked as merged",
             task.status.label()
@@ -51,7 +53,8 @@ fn merge_single(store: &Store, task_id: &str, approve: bool, check: bool, target
     let repo_dir = resolve_repo_dir(task.repo_path.as_deref(), task.worktree_path.as_deref());
     if check { return check_single(task_id, &task, &repo_dir); }
 
-    if let Some(wt) = task.worktree_path.as_deref()
+    if !force
+        && let Some(wt) = task.worktree_path.as_deref()
         && std::path::Path::new(wt).exists()
     {
         run_verify_in_worktree(wt, task.verify.as_deref());
@@ -67,7 +70,8 @@ fn merge_single(store: &Store, task_id: &str, approve: bool, check: bool, target
         }
     }
     if let Some(ref branch) = task.worktree_branch {
-        if let Some(wt) = task.worktree_path.as_deref()
+        if !force
+            && let Some(wt) = task.worktree_path.as_deref()
             && std::path::Path::new(wt).exists()
         {
             auto_commit_uncommitted(wt, branch);
@@ -103,11 +107,15 @@ fn merge_single(store: &Store, task_id: &str, approve: bool, check: bool, target
                     aid_warn!("  {}", line);
                 }
                 aid_hint!("[aid] Manual merge needed: git merge {branch}");
-                store.update_task_status(task_id, TaskStatus::Done)?;
+                let preserved_status = if force { original_status } else { TaskStatus::Done };
+                store.update_task_status(task_id, preserved_status)?;
                 return Err(anyhow!("Merge failed — resolve manually, then re-run aid merge {task_id}"));
             }
         }
     } else {
+        if force {
+            return Err(anyhow!("Force merge requires a committed worktree branch"));
+        }
         let has_changes = Command::new("git")
             .args(["-C", &repo_dir, "status", "--porcelain"])
             .output()
@@ -121,6 +129,9 @@ fn merge_single(store: &Store, task_id: &str, approve: bool, check: bool, target
             aid_info!("[aid] In-place edit — no uncommitted changes (may already be committed).");
         }
     }
+    if force {
+        record_force_merge_warning(store, task_id, original_status)?;
+    }
     store.update_task_status(task_id, TaskStatus::Merged)?;
     println!("Marked {task_id} as merged");
     if let Some(wt) = task.worktree_path.as_deref()
@@ -129,6 +140,21 @@ fn merge_single(store: &Store, task_id: &str, approve: bool, check: bool, target
             aid_warn!("[aid] Warning: failed to clean up worktree {wt}: {err}");
         }
     Ok(())
+}
+
+fn record_force_merge_warning(store: &Store, task_id: &str, status: TaskStatus) -> Result<()> {
+    let detail = format!(
+        "Force-merged task {task_id} from status {} — verify/tests were not run",
+        status.label()
+    );
+    aid_warn!("[aid] Warning: {detail}");
+    store.insert_event(&TaskEvent {
+        task_id: TaskId(task_id.to_string()),
+        timestamp: Local::now(),
+        event_kind: EventKind::Error,
+        detail,
+        metadata: None,
+    })
 }
 
 fn merge_group(store: &Store, group_id: &str, approve: bool, check: bool, target: Option<&str>) -> Result<()> {

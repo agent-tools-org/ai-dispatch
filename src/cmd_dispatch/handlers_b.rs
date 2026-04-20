@@ -72,6 +72,7 @@ pub(super) fn merge(
     group: Option<String>,
     approve: bool,
     check: bool,
+    force: bool,
     target: Option<String>,
     lanes: bool,
 ) -> Result<()> {
@@ -79,7 +80,7 @@ pub(super) fn merge(
         return Err(anyhow!("--lanes requires --group"));
     }
     let group = resolve_group(group);
-    cmd::merge::run(store, task_id.as_deref(), group.as_deref(), approve, check, target.as_deref(), lanes)
+    cmd::merge::run(store, task_id.as_deref(), group.as_deref(), approve, check, force, target.as_deref(), lanes)
 }
 pub(super) fn respond(task_id: String, input: Option<String>, file: Option<String>) -> Result<()> {
     cmd::respond::run(&task_id, input.as_deref(), file.as_deref())
@@ -140,7 +141,7 @@ pub(super) fn group(store: Arc<store::Store>, action: GroupAction) -> Result<()>
         GroupAction::Update { group_id, name, context } => {
             cmd::group::update(&store, &group_id, name.as_deref(), context.as_deref())
         }
-        GroupAction::Delete { group_id } => cmd::group::delete(&store, &group_id),
+        GroupAction::Delete { group_id, cascade } => cmd::group::delete(&store, &group_id, cascade),
         GroupAction::Cancel { group_id } => cmd::group::cancel(&store, &group_id),
         GroupAction::Summary { group_id } => cmd::summary_cli::run(&store, &group_id),
         GroupAction::Finding { action } => group_finding(store, action),

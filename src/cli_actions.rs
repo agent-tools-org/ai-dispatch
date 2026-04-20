@@ -80,6 +80,8 @@ pub enum GroupAction {
     /// Delete a workgroup definition
     Delete {
         group_id: String,
+        #[arg(long)]
+        cascade: bool,
     },
     /// Cancel all non-terminal tasks in a workgroup
     Cancel {

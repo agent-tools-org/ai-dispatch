@@ -8,6 +8,7 @@ mod kg_mutations;
 mod kg_queries;
 mod kg_schema;
 mod kg_types;
+mod migrations;
 mod queries;
 mod schema;
 pub use kg_types::{KgStats, KgTriple};

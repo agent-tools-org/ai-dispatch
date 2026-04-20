@@ -31,9 +31,11 @@ pub(crate) async fn dispatch(store: Arc<crate::store::Store>, command: Commands)
             Commands::Retry(..)
             | Commands::Merge(..)
             | Commands::Respond(..)
+            | Commands::Reply(..)
             | Commands::Stop(..)
             | Commands::Kill(..)
             | Commands::Steer(..)
+            | Commands::Unstick(..)
             | Commands::Ask(..)
             | Commands::Query(..)
             | Commands::Mcp
@@ -99,9 +101,15 @@ async fn dispatch_secondary(store: Arc<crate::store::Store>, command: Commands) 
             handlers_b::merge(store, task_id, group, approve, check, target, lanes)
         }
         Commands::Respond(command_args_b::RespondArgs { task_id, input, file }) => handlers_b::respond(task_id, input, file),
+        Commands::Reply(command_args_b::ReplyArgs { task_id, message, file, async_mode, timeout_secs }) => {
+            handlers_b::reply(store, task_id, message, file, async_mode, timeout_secs)
+        }
         Commands::Stop(command_args_b::StopArgs { task_id, force }) => handlers_b::stop(store, task_id, force),
         Commands::Kill(command_args_b::KillArgs { task_id }) => handlers_b::kill(store, task_id),
         Commands::Steer(command_args_b::SteerArgs { task_id, message }) => handlers_b::steer(store, task_id, message),
+        Commands::Unstick(command_args_b::UnstickArgs { task_id, message, escalate }) => {
+            handlers_b::unstick(store, task_id, message, escalate)
+        }
         Commands::Ask(command_args_b::AskArgs { prompt, agent, model, files, output }) => handlers_b::ask(store, prompt, agent, model, files, output).await,
         Commands::Query(command_args_b::QueryArgs { prompt, auto, model, group, finding }) => handlers_b::query(store, prompt, auto, model, group, finding),
         Commands::Mcp => handlers_b::mcp(store).await,

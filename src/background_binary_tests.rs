@@ -41,6 +41,7 @@ fn make_spec(task_id: &str) -> BackgroundRunSpec {
         result_file: None,
         model: None,
         verify: None,
+        setup: None,
         iterate: None,
         eval: None,
         eval_feedback_template: None,
@@ -62,5 +63,7 @@ fn make_spec(task_id: &str) -> BackgroundRunSpec {
         sandbox: false,
         read_only: false,
         container: None,
+        link_deps: false,
+        pre_task_dirty_paths: None,
     }
 }

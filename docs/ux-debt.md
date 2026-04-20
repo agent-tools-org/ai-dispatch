@@ -4,6 +4,28 @@ Systemic UX issues observed via dogfooding. Sorted by severity within category. 
 
 ---
 
+## Fixed in v8.94.0 (latest)
+
+### GitButler batch merge-back (issue #105)
+
+- **Aid worktrees leaked after batch completion, blocking `but apply`** — successful tasks now auto-prune their aid-owned worktree. Failed and shared worktrees preserved. Opt-out: `.aid/project.toml` → `keep_worktrees_after_done = true`.
+- **`aid merge --lanes` was undiscoverable on GitButler repos** — `aid batch` completion + `aid watch --quiet --group` now print the lane merge-back hint when GitButler integration is active.
+- **First `aid batch` on a GitButler repo without project.toml config required manual wiring** — batch now offers a one-time enable prompt. `--yes` / `--no-prompt` skip silently; declining writes a `suppress_gitbutler_prompt = true` marker.
+- **No end-to-end docs for `aid` + GitButler workflow** — new `docs/gitbutler.md` covers modes, batch→review→merge pipeline, `AID_GITBUTLER=0` escape hatch, troubleshooting, `keep_worktrees_after_done` knob.
+
+### A+B steer / reply / unstick (port completion)
+
+- **`aid steer` was fire-and-forget** — now delegates to persisted `aid reply` path: new `task_messages` table, delivery tracking, ack on first output-after-delivery.
+- **No way to detect or recover hung tasks** — new `aid unstick <task-id>` command + `TaskStatus::Stalled` variant + `IdleDetector` policy with auto-nudge-then-escalate thresholds wired into the PTY monitor.
+
+### CI / release reliability
+
+- **Flaky `workspace_dir` test isolation** — `/tmp/aid-wg-{id}` was hardcoded, so parallel tests sharing workgroup IDs raced on shared filesystem paths. Now test-isolated via `AidHomeGuard` (production behavior unchanged).
+- **Fallback tests failed in CI where no agent binaries are on PATH** — new `DetectAgentsGuard` pins `detect_agents()` return value per-thread under `cfg(test)`.
+- **28 pre-existing clippy `-D warnings` lints** (rust-1.93 + rust-1.95 strictness) blocked CI for 5+ releases — all mechanical rewrites, no behavior change. CI's build job is green again.
+
+---
+
 ## Fixed in v8.85 (this release cycle)
 
 ### Batch / dispatch

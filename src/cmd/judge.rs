@@ -212,7 +212,7 @@ mod tests {
     #[test]
     fn parse_retry_after_reasoning() {
         let text = "The task asked for tests but none were added.\nRETRY: add unit tests for the new function";
-        let result = parse_judge_response(&text).unwrap();
+        let result = parse_judge_response(text).unwrap();
         assert!(!result.passed);
         assert_eq!(result.feedback, "add unit tests for the new function");
     }

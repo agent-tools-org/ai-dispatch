@@ -113,12 +113,23 @@ pub fn update(
     Ok(())
 }
 
-pub fn delete(store: &Arc<Store>, workgroup_id: &str) -> Result<()> {
+pub fn delete(store: &Arc<Store>, workgroup_id: &str, cascade: bool) -> Result<()> {
+    if cascade {
+        let deleted_tasks = store
+            .delete_workgroup_cascade(workgroup_id)?
+            .ok_or_else(|| anyhow::anyhow!("Workgroup '{}' not found", workgroup_id))?;
+        println!("Deleted {} tasks and group {}", deleted_tasks, workgroup_id);
+        return Ok(());
+    }
+
     let tagged_tasks = store
         .delete_workgroup(workgroup_id)?
         .ok_or_else(|| anyhow::anyhow!("Workgroup '{}' not found", workgroup_id))?;
     println!("Workgroup {} deleted", workgroup_id);
-    println!("Historical tasks still tagged: {}", tagged_tasks);
+    println!(
+        "Historical tasks still tagged: {} — use --cascade to also delete them",
+        tagged_tasks
+    );
     Ok(())
 }
 
@@ -217,5 +228,37 @@ mod tests {
         assert_eq!(store.get_task("t-run").unwrap().unwrap().status, TaskStatus::Stopped);
         assert_eq!(store.get_task("t-done").unwrap().unwrap().status, TaskStatus::Done);
         assert_eq!(store.get_task("t-other").unwrap().unwrap().status, TaskStatus::Running);
+    }
+
+    #[test]
+    fn delete_group_without_cascade_keeps_tagged_tasks() {
+        let temp = TempDir::new().unwrap();
+        let _guard = AidHomeGuard::set(temp.path());
+        let store = Arc::new(Store::open_memory().unwrap());
+        store.create_workgroup("demo", "", Some("cli"), Some("wg-1")).unwrap();
+        store
+            .insert_task(&make_task("t-keep", "wg-1", TaskStatus::Done))
+            .unwrap();
+
+        delete(&store, "wg-1", false).unwrap();
+
+        assert!(store.get_workgroup("wg-1").unwrap().is_none());
+        assert!(store.get_task("t-keep").unwrap().is_some());
+    }
+
+    #[test]
+    fn delete_group_with_cascade_removes_group_and_tasks() {
+        let temp = TempDir::new().unwrap();
+        let _guard = AidHomeGuard::set(temp.path());
+        let store = Arc::new(Store::open_memory().unwrap());
+        store.create_workgroup("demo", "", Some("cli"), Some("wg-1")).unwrap();
+        store
+            .insert_task(&make_task("t-drop", "wg-1", TaskStatus::Done))
+            .unwrap();
+
+        delete(&store, "wg-1", true).unwrap();
+
+        assert!(store.get_workgroup("wg-1").unwrap().is_none());
+        assert!(store.get_task("t-drop").unwrap().is_none());
     }
 }

@@ -41,34 +41,60 @@ impl Store {
     }
 
     pub fn delete_workgroup(&self, id: &str) -> Result<Option<usize>> {
-        let tagged_tasks = self.count_workgroup_tasks(id)?;
-        let deleted = self
-            .db()
-            .execute("DELETE FROM workgroups WHERE id = ?1", params![id])?;
+        let mut conn = self.db();
+        let tx = conn.transaction()?;
+        let tagged_tasks = Self::count_workgroup_tasks_in_tx(&tx, id)?;
+        let deleted = tx.execute("DELETE FROM workgroups WHERE id = ?1", params![id])?;
         if deleted == 0 {
             return Ok(None);
         }
-        let workspace_dir = crate::paths::workspace_dir(id)?;
-        let ws = workspace_dir.to_string_lossy();
-        if ws.starts_with("/tmp/aid-wg-") || ws.starts_with("/private/tmp/aid-wg-") {
-            let _ = std::fs::remove_dir_all(&workspace_dir);
-        } else {
-            aid_warn!(
-                "[aid] SAFETY: refusing to remove workspace '{}' — not under /tmp/aid-wg-*",
-                ws
-            );
-        }
+        tx.commit()?;
+        drop(conn);
+        remove_workspace_dir(id)?;
         Ok(Some(tagged_tasks))
     }
 
-    fn count_workgroup_tasks(&self, id: &str) -> Result<usize> {
-        let count = self.db().query_row(
+    pub fn delete_workgroup_cascade(&self, id: &str) -> Result<Option<usize>> {
+        let mut conn = self.db();
+        let tx = conn.transaction()?;
+        tx.execute(
+            "DELETE FROM events
+             WHERE task_id IN (SELECT id FROM tasks WHERE workgroup_id = ?1)",
+            params![id],
+        )?;
+        let deleted_tasks = tx.execute("DELETE FROM tasks WHERE workgroup_id = ?1", params![id])?;
+        let deleted = tx.execute("DELETE FROM workgroups WHERE id = ?1", params![id])?;
+        if deleted == 0 {
+            return Ok(None);
+        }
+        tx.commit()?;
+        drop(conn);
+        remove_workspace_dir(id)?;
+        Ok(Some(deleted_tasks))
+    }
+
+    fn count_workgroup_tasks_in_tx(tx: &rusqlite::Transaction<'_>, id: &str) -> Result<usize> {
+        let count = tx.query_row(
             "SELECT COUNT(*) FROM tasks WHERE workgroup_id = ?1",
             params![id],
             |row| row.get::<_, i64>(0),
         )?;
         Ok(count as usize)
     }
+}
+
+fn remove_workspace_dir(id: &str) -> Result<()> {
+    let workspace_dir = crate::paths::workspace_dir(id)?;
+    let ws = workspace_dir.to_string_lossy();
+    if ws.starts_with("/tmp/aid-wg-") || ws.starts_with("/private/tmp/aid-wg-") {
+        let _ = std::fs::remove_dir_all(&workspace_dir);
+    } else {
+        aid_warn!(
+            "[aid] SAFETY: refusing to remove workspace '{}' — not under /tmp/aid-wg-*",
+            ws
+        );
+    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -152,6 +178,35 @@ mod tests {
 
         assert_eq!(tagged_tasks, Some(1));
         assert_eq!(task.workgroup_id.as_deref(), Some(workgroup.id.as_str()));
+        assert!(store
+            .get_workgroup(workgroup.id.as_str())
+            .unwrap()
+            .is_none());
+    }
+
+    #[test]
+    fn delete_workgroup_cascade_removes_group_tasks_and_events() {
+        let store = Store::open_memory().unwrap();
+        let workgroup = store
+            .create_workgroup("dispatch", "Shared repo rules.", None, None)
+            .unwrap();
+        store
+            .insert_task(&make_task("t-1001", workgroup.id.as_str()))
+            .unwrap();
+        store
+            .insert_event(&crate::types::TaskEvent {
+                task_id: crate::types::TaskId("t-1001".to_string()),
+                timestamp: Local::now(),
+                event_kind: crate::types::EventKind::Milestone,
+                detail: "deleted with task".to_string(),
+                metadata: None,
+            })
+            .unwrap();
+
+        let deleted_tasks = store.delete_workgroup_cascade(workgroup.id.as_str()).unwrap();
+
+        assert_eq!(deleted_tasks, Some(1));
+        assert!(store.get_task("t-1001").unwrap().is_none());
         assert!(store
             .get_workgroup(workgroup.id.as_str())
             .unwrap()

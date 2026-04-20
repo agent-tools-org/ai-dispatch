@@ -54,9 +54,7 @@ pub(super) fn maybe_record_start_sha(
 }
 
 fn capture_pre_task_dirty_paths(dir: Option<&String>) -> Option<Vec<String>> {
-    let Some(dir) = dir else {
-        return None;
-    };
+    let dir = dir?;
     match crate::worktree::capture_worktree_snapshot(Path::new(dir)) {
         Ok(snapshot) => Some(snapshot.status_lines),
         Err(err) => {

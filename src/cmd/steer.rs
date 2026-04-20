@@ -72,9 +72,12 @@ mod tests {
         let store = Store::open_memory().unwrap();
         store.insert_task(&make_task("t-steer", TaskStatus::Done)).unwrap();
         let err = run(&store, "t-steer", "pivot").unwrap_err();
+        // Steer now delegates to `aid reply`, so the error comes from the reply
+        // path. Accept either phrasing so future wording tweaks don't break it.
+        let msg = err.to_string();
         assert!(
-            err.to_string().contains("can only reply to running tasks")
-                || err.to_string().contains("can only steer running tasks"),
+            msg.contains("can only steer running tasks")
+                || msg.contains("can only reply to running tasks"),
             "unexpected error: {err}"
         );
     }

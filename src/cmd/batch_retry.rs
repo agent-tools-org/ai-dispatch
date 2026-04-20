@@ -229,6 +229,14 @@ mod tests {
     #[test]
     fn retry_uses_fallback_when_rate_limited() {
         let _guard = aid_home_guard("aid-retry-fallback-test-limited");
+        // CI hosts have no agent binaries on PATH, so pin the detected set
+        // to exercise the fallback logic deterministically.
+        let _agents = crate::agent::DetectAgentsGuard::set(vec![
+            AgentKind::Gemini,
+            AgentKind::Qwen,
+            AgentKind::Codex,
+            AgentKind::Claude,
+        ]);
         mark_rate_limited(&AgentKind::Codex, "rate limit exceeded");
         let task = make_task("t-002", AgentKind::Codex);
         let args = retry_task_to_run_args(&task, "wg-test", None);

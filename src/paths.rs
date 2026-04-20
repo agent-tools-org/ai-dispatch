@@ -80,10 +80,22 @@ pub fn steer_signal_path(task_id: &str) -> PathBuf {
     jobs_dir().join(format!("{task_id}.steer"))
 }
 
-/// Returns /tmp/aid-wg-{id}/ as the workspace directory for a workgroup.
+/// Returns the workspace directory for a workgroup.
+///
+/// Defaults to `/tmp/aid-wg-{id}/` in production. Under `#[cfg(test)]`, if
+/// `AidHomeGuard::set` has activated an override on the current thread, the
+/// workspace is rooted under that override instead — so parallel tests never
+/// collide on a shared `/tmp/aid-wg-*` path.
 pub fn workspace_dir(workgroup_id: &str) -> Result<PathBuf> {
     sanitize::validate_workgroup_id(workgroup_id)?;
-    Ok(std::path::PathBuf::from(format!("/tmp/aid-wg-{workgroup_id}")))
+    #[cfg(test)]
+    {
+        let maybe = AID_HOME_OVERRIDE.with(|cell| cell.borrow().clone());
+        if let Some(root) = maybe {
+            return Ok(root.join("workgroups").join(workgroup_id));
+        }
+    }
+    Ok(PathBuf::from(format!("/tmp/aid-wg-{workgroup_id}")))
 }
 
 pub fn ensure_dirs() -> Result<()> {
@@ -124,9 +136,18 @@ mod tests {
     use super::*;
 
     #[test]
-    fn workspace_dir_uses_tmp() {
+    fn workspace_dir_uses_tmp_without_override() {
+        // No AidHomeGuard active: keep the production /tmp/aid-wg-* path.
         let path = workspace_dir("wg-abcd").unwrap();
         assert_eq!(path.to_str().unwrap(), "/tmp/aid-wg-wg-abcd");
+    }
+
+    #[test]
+    fn workspace_dir_uses_override_in_tests() {
+        let temp = tempfile::TempDir::new().unwrap();
+        let _guard = AidHomeGuard::set(temp.path());
+        let path = workspace_dir("wg-abcd").unwrap();
+        assert_eq!(path, temp.path().join("workgroups").join("wg-abcd"));
     }
 
     #[test]

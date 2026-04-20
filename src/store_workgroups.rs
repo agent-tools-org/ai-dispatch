@@ -86,7 +86,14 @@ impl Store {
 fn remove_workspace_dir(id: &str) -> Result<()> {
     let workspace_dir = crate::paths::workspace_dir(id)?;
     let ws = workspace_dir.to_string_lossy();
-    if ws.starts_with("/tmp/aid-wg-") || ws.starts_with("/private/tmp/aid-wg-") {
+    let safe_prefix =
+        ws.starts_with("/tmp/aid-wg-") || ws.starts_with("/private/tmp/aid-wg-");
+    // In tests, AidHomeGuard reroutes workspace_dir under a TempDir — that path
+    // is isolated per-test, so it's safe to remove even though it lacks the
+    // /tmp/aid-wg-* prefix.
+    let test_override_active = cfg!(test)
+        && ws.contains("/workgroups/");
+    if safe_prefix || test_override_active {
         let _ = std::fs::remove_dir_all(&workspace_dir);
     } else {
         aid_warn!(

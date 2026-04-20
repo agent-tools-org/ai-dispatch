@@ -30,7 +30,7 @@ fn extract_similar_keywords(prompt: &str) -> Vec<String> {
             Some((lower, cleaned.len()))
         })
         .collect();
-    candidates.sort_unstable_by(|a, b| b.1.cmp(&a.1));
+    candidates.sort_unstable_by_key(|(_, len)| std::cmp::Reverse(*len));
     candidates.truncate(3);
     candidates.into_iter().map(|(word, _)| word).collect()
 }
@@ -310,7 +310,7 @@ impl Store {
                 scored.push((score, id, agent, status));
             }
         }
-        scored.sort_unstable_by(|a, b| b.0.cmp(&a.0));
+        scored.sort_unstable_by_key(|(score, _, _, _)| std::cmp::Reverse(*score));
         scored.truncate(limit);
         Ok(scored
             .into_iter()

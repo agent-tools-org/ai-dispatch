@@ -123,12 +123,11 @@ impl super::Agent for CustomAgent {
         }
 
         match self.config.prompt_mode.as_str() {
+            "flag" if !self.config.prompt_flag.is_empty() => {
+                cmd.args([&self.config.prompt_flag, prompt]);
+            }
             "flag" => {
-                if !self.config.prompt_flag.is_empty() {
-                    cmd.args([&self.config.prompt_flag, prompt]);
-                } else {
-                    cmd.arg(prompt);
-                }
+                cmd.arg(prompt);
             }
             "stdin" => {}
             _ => {

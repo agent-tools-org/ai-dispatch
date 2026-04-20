@@ -133,7 +133,7 @@ impl Store {
             }
         }
 
-        history.sort_by(|a, b| b.version.cmp(&a.version));
+        history.sort_by_key(|entry| std::cmp::Reverse(entry.version));
         Ok(history)
     }
 

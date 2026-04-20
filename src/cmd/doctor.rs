@@ -85,7 +85,7 @@ fn render_branch_section(
         branches.len(),
         base_branch
     );
-    let _ = writeln!(rendered, "{:<36} {}", "BRANCH", "REASON");
+    let _ = writeln!(rendered, "{:<36} REASON", "BRANCH");
     let _ = writeln!(rendered, "{}", "-".repeat(72));
     if branches.is_empty() {
         let _ = writeln!(rendered, "(none)");

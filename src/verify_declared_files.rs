@@ -113,7 +113,7 @@ fn normalize_declared_path(raw: &str) -> Option<String> {
         .next()
         .unwrap_or_default()
         .trim_matches(['"', '\'', '`'])
-        .trim_end_matches(|c| matches!(c, '.' | ';' | ':' | '!' | '?' | ')' | ']' | '}'));
+        .trim_end_matches(['.', ';', ':', '!', '?', ')', ']', '}']);
     let item = item.trim_start_matches("./");
     if is_probable_path(item) {
         Some(item.to_string())

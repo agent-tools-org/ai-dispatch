@@ -235,7 +235,7 @@ pub async fn retry_task(
 }
 
 pub async fn merge_task(Path(id): Path<String>, State(store): State<Arc<Store>>) -> impl IntoResponse {
-    match crate::cmd::merge::run(store, Some(&id), None, true, false, None, false) {
+    match crate::cmd::merge::run(store, Some(&id), None, true, false, false, None, false) {
         Ok(()) => (StatusCode::OK, Json(ActionResponse { ok: true, new_task_id: None, error: None })).into_response(),
         Err(error) => action_error(error).into_response(),
     }

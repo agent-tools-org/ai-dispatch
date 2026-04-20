@@ -584,7 +584,7 @@ fn merge_single_succeeds_with_committed_worktree() {
     let task = make_task_with_worktree("t-merge-ok", repo.path(), wt.path(), &branch);
     store.insert_task(&task).unwrap();
 
-    let result = merge_single(&store, "t-merge-ok", false, false, None);
+    let result = merge_single(&store, "t-merge-ok", false, false, false, None);
     assert!(result.is_ok(), "merge_single failed: {result:?}");
 
     let loaded = store.get_task("t-merge-ok").unwrap().unwrap();
@@ -619,7 +619,7 @@ fn merge_single_auto_commits_then_merges() {
     let task = make_task_with_worktree("t-autocommit", repo.path(), wt.path(), &branch);
     store.insert_task(&task).unwrap();
 
-    let result = merge_single(&store, "t-autocommit", false, false, None);
+    let result = merge_single(&store, "t-autocommit", false, false, false, None);
     assert!(
         result.is_ok(),
         "merge_single should auto-commit and merge: {result:?}"
@@ -656,7 +656,7 @@ fn merge_single_fails_when_no_commits_and_no_changes() {
     let task = make_task_with_worktree("t-empty", repo.path(), wt.path(), &branch);
     store.insert_task(&task).unwrap();
 
-    let result = merge_single(&store, "t-empty", false, false, None);
+    let result = merge_single(&store, "t-empty", false, false, false, None);
     assert!(result.is_err());
     let err = result.unwrap_err().to_string();
     assert!(
@@ -689,9 +689,67 @@ fn merge_single_rejects_non_done_task() {
     task.status = TaskStatus::Running;
     store.insert_task(&task).unwrap();
 
-    let result = merge_single(&store, "t-running", false, false, None);
+    let result = merge_single(&store, "t-running", false, false, false, None);
     assert!(result.is_err());
     assert!(result.unwrap_err().to_string().contains("only DONE"));
+}
+
+#[test]
+fn merge_single_rejects_failed_task_without_force() {
+    let _permit = test_subprocess::acquire();
+    let store = Store::open_memory().unwrap();
+    let mut task = make_task_with_worktree("t-failed", Path::new("."), Path::new("/tmp"), "b");
+    task.status = TaskStatus::Failed;
+    store.insert_task(&task).unwrap();
+
+    let result = merge_single(&store, "t-failed", false, false, false, None);
+    assert!(result.is_err());
+    assert!(result.unwrap_err().to_string().contains("only DONE"));
+}
+
+#[test]
+fn merge_single_force_merges_failed_task_with_committed_branch() {
+    let _permit = test_subprocess::acquire();
+    let repo = init_repo();
+    let (wt, branch) = create_worktree_with_commit(repo.path());
+    let store = Store::open_memory().unwrap();
+    let mut task = make_task_with_worktree("t-force-failed", repo.path(), wt.path(), &branch);
+    task.status = TaskStatus::Failed;
+    store.insert_task(&task).unwrap();
+
+    let result = merge_single(&store, "t-force-failed", false, false, true, None);
+    assert!(result.is_ok(), "force merge failed: {result:?}");
+
+    let loaded = store.get_task("t-force-failed").unwrap().unwrap();
+    assert_eq!(loaded.status, TaskStatus::Merged);
+    assert!(repo.path().join("agent-work.txt").exists());
+    let events = store.get_events("t-force-failed").unwrap();
+    assert!(events.iter().any(|event| {
+        event.event_kind == EventKind::Error
+            && event.detail == "Force-merged task t-force-failed from status FAIL — verify/tests were not run"
+    }));
+}
+
+#[test]
+fn merge_single_force_rejects_failed_task_without_commits() {
+    let _permit = test_subprocess::acquire();
+    let repo = init_repo();
+    let (wt, branch) = create_empty_worktree_branch(repo.path());
+    let store = Store::open_memory().unwrap();
+    let mut task = make_task_with_worktree("t-force-empty", repo.path(), wt.path(), &branch);
+    task.status = TaskStatus::Failed;
+    store.insert_task(&task).unwrap();
+
+    let result = merge_single(&store, "t-force-empty", false, false, true, None);
+    assert!(result.is_err());
+    let err = result.unwrap_err().to_string();
+    assert!(err.contains("No commits to merge"), "unexpected error: {err}");
+
+    let loaded = store.get_task("t-force-empty").unwrap().unwrap();
+    assert_eq!(loaded.status, TaskStatus::Failed);
+    assert!(wt.path().exists());
+
+    git(repo.path(), &["worktree", "remove", "--force", &wt.path().to_string_lossy()]);
 }
 
 #[test]
@@ -736,7 +794,7 @@ fn merge_single_works_without_worktree_branch() {
     };
     store.insert_task(&task).unwrap();
 
-    let result = merge_single(&store, "t-inplace", false, false, None);
+    let result = merge_single(&store, "t-inplace", false, false, false, None);
     assert!(result.is_ok());
     let loaded = store.get_task("t-inplace").unwrap().unwrap();
     assert_eq!(loaded.status, TaskStatus::Merged);
@@ -770,7 +828,7 @@ fn merge_single_preserves_worktree_on_conflict() {
     let task = make_task_with_worktree("t-conflict", repo.path(), wt.path(), &branch);
     store.insert_task(&task).unwrap();
 
-    let result = merge_single(&store, "t-conflict", false, false, None);
+    let result = merge_single(&store, "t-conflict", false, false, false, None);
     assert!(result.is_err());
     // Worktree must be preserved for manual resolution
     assert!(wt.path().exists());
@@ -803,7 +861,7 @@ fn merge_single_without_repo_path_resolves_from_worktree() {
     task.repo_path = None;
     store.insert_task(&task).unwrap();
 
-    let result = merge_single(&store, "t-no-repo", false, false, None);
+    let result = merge_single(&store, "t-no-repo", false, false, false, None);
     assert!(
         result.is_ok(),
         "merge should resolve repo from worktree: {result:?}"
@@ -822,7 +880,7 @@ fn merge_single_merges_into_target_branch() {
     let task = make_task_with_worktree("t-target", repo.path(), wt.path(), &branch);
     store.insert_task(&task).unwrap();
 
-    let result = merge_single(&store, "t-target", false, false, Some(&target));
+    let result = merge_single(&store, "t-target", false, false, false, Some(&target));
     assert!(result.is_ok(), "merge_single failed: {result:?}");
 
     let current = Command::new("git")
@@ -893,7 +951,7 @@ fn merge_group_skips_empty_branches() {
 #[test]
 fn run_rejects_lanes_without_group() {
     let store = Arc::new(Store::open_memory().unwrap());
-    let result = run(store, None, None, false, false, None, true);
+    let result = run(store, None, None, false, false, false, None, true);
     assert!(result.is_err());
     assert_eq!(result.unwrap_err().to_string(), "--lanes requires --group");
 }
@@ -908,6 +966,7 @@ fn run_rejects_unsupported_lanes_flags() {
         Some("wg-lanes"),
         false,
         true,
+        false,
         None,
         true,
     );
@@ -921,6 +980,7 @@ fn run_rejects_unsupported_lanes_flags() {
         store,
         None,
         Some("wg-lanes"),
+        false,
         false,
         false,
         Some("release"),
@@ -953,6 +1013,7 @@ fn run_rejects_lanes_when_gitbutler_env_is_disabled() {
         store,
         None,
         Some("wg-lanes-disabled"),
+        false,
         false,
         false,
         None,

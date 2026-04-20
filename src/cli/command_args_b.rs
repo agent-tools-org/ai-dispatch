@@ -90,6 +90,8 @@ pub struct MergeArgs {
     pub approve: bool,
     #[arg(long)]
     pub check: bool,
+    #[arg(long, help = "Allow merging a task in FAIL or STOPPED state (use when the task's code changes are good but verify failed).")]
+    pub force: bool,
     #[arg(long, help = "Merge into this branch instead of current")]
     pub target: Option<String>,
     #[arg(long, help = "Apply group task branches as GitButler virtual branch lanes")]

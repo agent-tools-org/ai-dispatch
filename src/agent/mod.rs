@@ -97,6 +97,44 @@ pub fn detect_agents() -> Vec<AgentKind> {
     found
 }
 
+pub(crate) fn ensure_agent_binary_available(agent_kind: AgentKind, agent_name: &str) -> Result<()> {
+    ensure_agent_binary_available_with(agent_kind, agent_name, env::which_exists)
+}
+
+pub(crate) fn ensure_agent_binary_available_with<F>(
+    agent_kind: AgentKind,
+    agent_name: &str,
+    which: F,
+) -> Result<()>
+where
+    F: Fn(&str) -> bool,
+{
+    if built_in_agent_binary_exists(agent_kind, which) {
+        return Ok(());
+    }
+    anyhow::bail!("Agent '{}' not found: binary missing from PATH", agent_name);
+}
+
+pub(crate) fn built_in_agent_binary_exists<F>(agent_kind: AgentKind, which: F) -> bool
+where
+    F: Fn(&str) -> bool,
+{
+    match agent_kind {
+        AgentKind::Codex => which("codex"),
+        AgentKind::Copilot => which("copilot"),
+        AgentKind::Cursor => which("agent") || which("cursor-agent"),
+        AgentKind::Gemini => which("gemini"),
+        AgentKind::Qwen => which("qwen"),
+        AgentKind::OpenCode => which("opencode"),
+        AgentKind::Kilo => which("kilo"),
+        AgentKind::Codebuff => which("aid-codebuff"),
+        AgentKind::Droid => which("droid"),
+        AgentKind::Oz => which("oz"),
+        AgentKind::Claude => which("claude"),
+        AgentKind::Custom => true,
+    }
+}
+
 pub(crate) fn select_agent_with_reason(
     prompt: &str, opts: &RunOpts, store: &store::Store,
     team: Option<&crate::team::TeamConfig>,
@@ -151,5 +189,33 @@ pub fn embed_context_in_prompt(prompt: &str, context_files: &[String]) -> anyhow
 
 #[cfg(test)]
 mod cursor_binary_tests;
+#[cfg(test)]
+mod binary_preflight_tests {
+    use super::{built_in_agent_binary_exists, ensure_agent_binary_available_with};
+    use crate::types::AgentKind;
+
+    #[test]
+    fn built_in_agent_binary_exists_rejects_missing_kilo_binary() {
+        assert!(!built_in_agent_binary_exists(AgentKind::Kilo, |_| false));
+    }
+
+    #[test]
+    fn built_in_agent_binary_exists_accepts_cursor_alias_binary() {
+        assert!(built_in_agent_binary_exists(AgentKind::Cursor, |name| {
+            name == "cursor-agent"
+        }));
+    }
+
+    #[test]
+    fn ensure_agent_binary_available_reports_missing_path_binary() {
+        let err = ensure_agent_binary_available_with(AgentKind::Kilo, "kilo", |_| false)
+            .unwrap_err();
+
+        assert_eq!(
+            err.to_string(),
+            "Agent 'kilo' not found: binary missing from PATH"
+        );
+    }
+}
 #[cfg(test)]
 mod tests;

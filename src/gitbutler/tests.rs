@@ -3,7 +3,7 @@
 
 use super::{
     Mode, agent_uses_claude_hooks, apply_branch, but_available, install_claude_hooks, is_active,
-    on_done_command, task_worktree_integration_plan,
+    on_done_command, repo_has_markers, task_worktree_integration_plan,
 };
 use serde_json::{Value, json};
 use std::fs;
@@ -199,4 +199,34 @@ fn task_worktree_integration_plan_preserves_hook_modes_when_main_repo_has_projec
     assert!(!codex.install_claude_hooks);
     assert!(codex.on_done_command.as_deref().is_some_and(|value| value.contains("but -C")));
     assert!(!codex.emit_setup_hint);
+}
+
+#[test]
+fn repo_has_markers_detects_gitbutler_directory() {
+    let temp = tempfile::tempdir().unwrap();
+    let status = std::process::Command::new("git")
+        .arg("-C")
+        .arg(temp.path())
+        .args(["init", "-q"])
+        .status()
+        .unwrap();
+    assert!(status.success());
+    fs::create_dir_all(temp.path().join(".git/gitbutler")).unwrap();
+
+    assert!(repo_has_markers(temp.path()));
+}
+
+#[test]
+fn repo_has_markers_detects_virtual_branches_file() {
+    let temp = tempfile::tempdir().unwrap();
+    let status = std::process::Command::new("git")
+        .arg("-C")
+        .arg(temp.path())
+        .args(["init", "-q"])
+        .status()
+        .unwrap();
+    assert!(status.success());
+    fs::write(temp.path().join(".git/virtual_branches.toml"), "[]\n").unwrap();
+
+    assert!(repo_has_markers(temp.path()));
 }

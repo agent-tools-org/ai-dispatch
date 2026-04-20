@@ -148,6 +148,10 @@ pub struct BatchArgs {
     pub wait: bool,
     #[arg(long)]
     pub dry_run: bool,
+    #[arg(long, help = "Skip interactive aid prompts and proceed without changing project config")]
+    pub no_prompt: bool,
+    #[arg(long, help = "Run non-interactively; skips interactive aid prompts")]
+    pub yes: bool,
     #[arg(long)]
     pub force: bool,
     #[arg(long)]

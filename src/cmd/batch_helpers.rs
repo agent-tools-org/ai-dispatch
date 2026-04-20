@@ -18,6 +18,7 @@ pub(crate) fn batch_summary(
     tasks: &[batch::BatchTask],
     store: &Store,
     start_time: Instant,
+    repo_path: Option<&str>,
 ) -> String {
     let done = outcomes
         .iter()
@@ -42,6 +43,13 @@ pub(crate) fn batch_summary(
         summary.push_str(&format!(". Cost: ${total_cost:.2}"));
     }
     summary.push_str(&format!(". Time: {}", format_elapsed(start_time.elapsed())));
+    if let (Some(repo_path), Some(group_id)) = (
+        repo_path,
+        tasks.first().and_then(|task| task.group.as_deref()),
+    ) && let Some(hint) = crate::cmd::batch_gitbutler::merge_back_hint(Path::new(repo_path), group_id) {
+        summary.push('\n');
+        summary.push_str(&hint);
+    }
     if failed == 0 {
         return summary;
     }

@@ -25,7 +25,11 @@ pub use sub_enums::{
 };
 
 #[derive(Parser)]
-#[command(name = "aid", version, about = "Multi-AI CLI team orchestrator")]
+#[command(
+    name = "aid",
+    version,
+    about = "Multi-AI CLI team orchestrator with optional GitButler integration"
+)]
 pub struct Cli {
     /// Suppress informational output (only errors/warnings shown). Also set via AID_QUIET=1.
     #[arg(long, short = 'q', global = true)]

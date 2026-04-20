@@ -254,7 +254,7 @@ pub(super) fn select_relevant_entries<'a>(entries: &'a [KnowledgeEntry], prompt:
             (score, entry)
         })
         .collect();
-    scored.sort_by(|a, b| b.0.cmp(&a.0));
+    scored.sort_by_key(|(score, _)| std::cmp::Reverse(*score));
     scored
         .into_iter()
         .filter(|(score, _)| *score >= 2)

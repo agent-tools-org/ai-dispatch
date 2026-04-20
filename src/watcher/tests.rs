@@ -209,23 +209,23 @@ where
 #[test]
 fn loop_detector_patterns() {
     loop_detector_case(false, ["a", "b", "c", "d", "e", "f", "g", "h", "i", "j"]);
-    loop_detector_case(true, std::iter::repeat("repeat").take(10));
+    loop_detector_case(true, std::iter::repeat_n("repeat", 10));
     loop_detector_case(
         false,
-        std::iter::repeat("dup").take(7).chain(["unique-1", "unique-2", "unique-3"]),
+        std::iter::repeat_n("dup", 7).chain(["unique-1", "unique-2", "unique-3"]),
     );
     loop_detector_case(
         true,
-        std::iter::repeat("dup").take(8).chain(["unique-1", "unique-2"]),
+        std::iter::repeat_n("dup", 8).chain(["unique-1", "unique-2"]),
     );
 }
 
 #[test]
 fn loop_detector_ignores_empty_details() {
     // Empty/whitespace details should not trigger loop detection
-    loop_detector_case(false, std::iter::repeat("").take(20));
-    loop_detector_case(false, std::iter::repeat("  ").take(20));
-    loop_detector_case(false, std::iter::repeat("\t").take(20));
+    loop_detector_case(false, std::iter::repeat_n("", 20));
+    loop_detector_case(false, std::iter::repeat_n("  ", 20));
+    loop_detector_case(false, std::iter::repeat_n("\t", 20));
     // Mix of empty and real events should not false-positive
     let mut events: Vec<&str> = Vec::new();
     for _ in 0..5 {
@@ -241,8 +241,7 @@ fn loop_detector_distinguishes_long_details() {
     let shared_prefix = "Read(".to_string() + &"a".repeat(110);
     let first = format!("{shared_prefix}file1.rs)");
     let second = format!("{shared_prefix}file2.rs)");
-    let events = std::iter::repeat(first.as_str())
-        .take(5)
-        .chain(std::iter::repeat(second.as_str()).take(5));
+    let events = std::iter::repeat_n(first.as_str(), 5)
+        .chain(std::iter::repeat_n(second.as_str(), 5));
     loop_detector_case(false, events);
 }

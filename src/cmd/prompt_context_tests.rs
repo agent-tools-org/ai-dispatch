@@ -140,7 +140,7 @@ fn format_entry_block_without_content() {
 
 #[test]
 fn format_entry_block_truncates_long_content() {
-    let long_content: String = std::iter::repeat('x').take(1_000).collect();
+    let long_content: String = "x".repeat(1_000);
     let entry = make_entry("Topic Long", None, "Long desc", Some(&long_content));
     let block = format_entry_block(&entry);
     assert!(block.ends_with("..."));

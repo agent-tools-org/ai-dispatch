@@ -139,6 +139,8 @@ prompt = "second prompt"
             analyze: false,
             wait: false,
             dry_run: true,
+            no_prompt: false,
+            yes: false,
             force: false,
             max_concurrent: None,
         },
@@ -188,6 +190,8 @@ prompt = "second prompt"
             analyze: false,
             wait: false,
             dry_run: true,
+            no_prompt: false,
+            yes: false,
             force: false,
             max_concurrent: None,
         },
@@ -218,6 +222,7 @@ fn batch_summary_formats_cost_and_time() {
         ],
         &store,
         Instant::now() - Duration::from_secs(83),
+        None,
     );
 
     assert_eq!(
@@ -239,6 +244,7 @@ fn batch_summary_skips_zero_cost_and_uses_seconds_under_minute() {
         &[make_task("first-task", false, None), make_task("second-task", false, None)],
         &store,
         Instant::now() - Duration::from_secs(42),
+        None,
     );
 
     assert_eq!(summary, "[batch] 2/2 done, 0 failed, 0 skipped. Time: 42s");

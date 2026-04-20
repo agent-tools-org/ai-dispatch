@@ -446,6 +446,8 @@ rules = [
 
 Project defaults act as CLI fallbacks — explicit flags always win. Rules are always injected into agent prompts (no relevance filtering). Knowledge in `.aid/knowledge/` is relevance-filtered like team knowledge.
 
+For GitButler-specific setup, batch review, lane merge-back, and troubleshooting, see [`docs/gitbutler.md`](docs/gitbutler.md).
+
 ## Agent Store
 
 `aid` includes a GitHub-backed community agent store for discovering and installing custom agent definitions.

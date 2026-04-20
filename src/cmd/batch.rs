@@ -46,6 +46,8 @@ pub struct BatchArgs {
     pub analyze: bool,
     pub wait: bool,
     pub dry_run: bool,
+    pub no_prompt: bool,
+    pub yes: bool,
     pub force: bool,
     pub max_concurrent: Option<usize>,
 }
@@ -86,6 +88,15 @@ pub async fn run(store: Arc<Store>, args: BatchArgs) -> Result<()> {
     let configured_repo_root = args.repo_root.clone()
         .or_else(|| config.defaults.repo_root.as_ref().map(|value| resolve_config_path(path, value)));
     let explicit_repo_path = crate::repo_root::resolve_explicit_repo_path(configured_repo_root.as_deref(), None)?;
+    let batch_repo_path = explicit_repo_path
+        .clone()
+        .or_else(|| crate::repo_root::resolve_git_root_string(".").ok());
+    if let Some(repo_path) = batch_repo_path.as_deref() {
+        crate::cmd::batch_gitbutler::maybe_prompt_gitbutler_batch_integration(
+            Path::new(repo_path),
+            args.no_prompt || args.yes,
+        )?;
+    }
     if explicit_repo_path.is_none() { warn_nested_repo_for_batch(&config.tasks); }
     validate_batch_config(&config.tasks, args.parallel, args.force)?;
     let deps = batch::dependency_indices(&config.tasks)
@@ -247,6 +258,7 @@ pub async fn run(store: Arc<Store>, args: BatchArgs) -> Result<()> {
             &config.tasks,
             &store,
             start_time,
+            batch_repo_path.as_deref(),
         )
     );
     let archive_dir = crate::paths::aid_dir().join("batches");

@@ -114,6 +114,23 @@ pub struct StopArgs {
 }
 
 #[derive(Args)]
+#[command(after_help = r#"Examples:
+  aid reply t-1234 "Need status update"
+  aid reply t-1234 -f reply.md
+  aid reply t-1234 "continue" --async
+  aid reply t-1234 "status?" --timeout 60"#)]
+pub struct ReplyArgs {
+    pub task_id: String,
+    pub message: Option<String>,
+    #[arg(long, short = 'f')]
+    pub file: Option<String>,
+    #[arg(long = "async")]
+    pub async_mode: bool,
+    #[arg(long = "timeout", default_value = "30")]
+    pub timeout_secs: u64,
+}
+
+#[derive(Args)]
 pub struct KillArgs {
     pub task_id: String,
 }
@@ -122,6 +139,19 @@ pub struct KillArgs {
 pub struct SteerArgs {
     pub task_id: String,
     pub message: String,
+}
+
+#[derive(Args)]
+#[command(after_help = r#"Examples:
+  aid unstick t-1234
+  aid unstick t-1234 -m "Please summarize current blocker"
+  aid unstick t-1234 --escalate"#)]
+pub struct UnstickArgs {
+    pub task_id: String,
+    #[arg(long, short = 'm')]
+    pub message: Option<String>,
+    #[arg(long)]
+    pub escalate: bool,
 }
 
 #[derive(Args)]

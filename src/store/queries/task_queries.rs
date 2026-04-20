@@ -98,12 +98,13 @@ impl Store {
                  start_sha, log_path, output_path, tokens, prompt_tokens, duration_ms, model, cost_usd,
                  created_at, completed_at, verify, read_only, budget, custom_agent_name, verify_status,
                  exit_code, category, pending_reason, audit_verdict, audit_report_path, delivery_assessment
-                 FROM tasks WHERE status IN (?1, ?2, ?3, ?4) ORDER BY created_at DESC",
+                 FROM tasks WHERE status IN (?1, ?2, ?3, ?4, ?5) ORDER BY created_at DESC",
                 vec![
                     "waiting".to_string(),
                     "pending".to_string(),
                     "running".to_string(),
                     "awaiting_input".to_string(),
+                    "stalled".to_string(),
                 ],
             ),
             TaskFilter::Running => (
@@ -112,8 +113,12 @@ impl Store {
                  start_sha, log_path, output_path, tokens, prompt_tokens, duration_ms, model, cost_usd,
                  created_at, completed_at, verify, read_only, budget, custom_agent_name, verify_status,
                  exit_code, category, pending_reason, audit_verdict, audit_report_path, delivery_assessment
-                 FROM tasks WHERE status IN (?1, ?2) ORDER BY created_at DESC",
-                vec!["running".to_string(), "awaiting_input".to_string()],
+                 FROM tasks WHERE status IN (?1, ?2, ?3) ORDER BY created_at DESC",
+                vec![
+                    "running".to_string(),
+                    "awaiting_input".to_string(),
+                    "stalled".to_string(),
+                ],
             ),
             TaskFilter::Today => {
                 let today = Local::now().format("%Y-%m-%d").to_string();

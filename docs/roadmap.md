@@ -4,18 +4,16 @@ Snapshot of where the project is heading. Maintained by hand; authoritative back
 
 ## Current state
 
-- Released on origin: **v8.92.0** — fix(verify): detect declared-but-unadded new files.
-- Unreleased on `gitbutler/workspace`: 14 merge commits (A+B reply/unstick, GH#89 bg preflight, release orphan-check, 6 UX hotfixes). **Not on origin/main**. See `ai-board` item `wi-273e` for port plan.
+- Released on origin: **v8.94.0** (2026-04-20) — A+B reply/unstick full port, `aid merge --force`, `aid group delete --cascade`, batch `dir = "."` resolve, GH#89 bg preflight, issue #105 GitButler batch UX (auto-prune worktrees, merge-back hint, detect-and-prompt, `docs/gitbutler.md`), 28-lint clippy cleanup that unblocked CI after 5+ red releases.
+- No stale unreleased work — `gitbutler/workspace` is fully caught up with origin via port PRs #106, #107, #108, #109, #110. `ai-board` item `wi-273e` is done.
 
-## Near-term (next release, v8.93-ish)
+## Near-term (next release cycle)
 
-**Goal**: port today's work onto origin/main and cut a release.
+**Goals**:
 
-- Port A+B reply/unstick (message_queries, IdleDetector, pty consumption, TaskStatus::Stalled).
-- Port GH#89 background-path agent binary preflight.
-- Port `scripts/release.sh` orphan-branch + orphan-worktree hygiene check.
-- Port `aid merge --force`, `aid group delete --cascade`, `aid batch dir="."` resolve, docs/ux-debt.md.
-- **Skip** (origin has different direction already): board anti-poll relaxation, lock PID check (origin's `aid doctor` / `aid_gc auto` handles same class), zombie reaper, clean --worktrees repo-scope.
+1. **Tidy up commit-message hygiene.** Several v8.94.0 port PRs landed with auto-generated "task N" commit messages from a Claude Code hook. Investigate the post-Stop / PostToolUse hook that generates those and either write meaningful messages or disable it during release flows.
+2. **Promote `DetectAgentsGuard` and `workspace_dir` override to production.** Both are test-only today; the same pattern (thread-local guards for "expensive discovery" logic) could give dispatch code a similar fast-path for `--sandbox` / CI usage.
+3. **Clippy gate in `release.sh`.** Now that CI runs clippy green, make `scripts/release.sh` also run `cargo clippy --all-targets -- -D warnings` as a pre-release check so we don't regress quietly between rust minor-version bumps.
 
 ## v9.0 — UX overhaul (semver major)
 
@@ -35,7 +33,7 @@ Systemic cleanup of the 14 debt items in [`docs/ux-debt.md`](./ux-debt.md). Trac
 
 ## v9.x — deferred ideas
 
-- **C: non-PTY agent message support** — original A+B+C plan had C for API/background agents (not just PTY). Requires agent-side polling hook or message-aware tick. Reopen after v9.0 lands.
+- **C: non-PTY agent message support** — original A+B+C plan had C for API/background agents (not just PTY). A and B shipped in v8.94.0; C requires agent-side polling hook or message-aware tick. Reopen after v9.0 lands.
 - **Batch resume by content hash** — `aid batch foo.toml` detects existing workgroup with matching content, offers resume. Kills the "49 zombie rows from 7 failed dispatches" class of UX bug.
 - **Session-preflight** — already shipped as a per-repo script + Claude Code SessionStart hook (`scripts/session-preflight.sh`, `.claude/settings.json`). Not yet promoted to user-level (`~/.claude/settings.json`) for all repos. Candidate for v9.x once the per-repo version proves stable.
 

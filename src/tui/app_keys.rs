@@ -82,18 +82,18 @@ impl App {
                     };
                 }
             }
-            KeyCode::Down | KeyCode::Char('j') => {
-                if self.active_pane < self.pane_scroll_offsets.len() {
-                    let offset = &mut self.pane_scroll_offsets[self.active_pane];
-                    if *offset > 0 {
-                        *offset -= 1;
-                    }
+            KeyCode::Down | KeyCode::Char('j')
+                if self.active_pane < self.pane_scroll_offsets.len() =>
+            {
+                let offset = &mut self.pane_scroll_offsets[self.active_pane];
+                if *offset > 0 {
+                    *offset -= 1;
                 }
             }
-            KeyCode::Up | KeyCode::Char('k') => {
-                if self.active_pane < self.pane_scroll_offsets.len() {
-                    self.pane_scroll_offsets[self.active_pane] += 1;
-                }
+            KeyCode::Up | KeyCode::Char('k')
+                if self.active_pane < self.pane_scroll_offsets.len() =>
+            {
+                self.pane_scroll_offsets[self.active_pane] += 1;
             }
             KeyCode::Enter => {
                 let tasks = self.multipane_tasks();
@@ -137,19 +137,15 @@ impl App {
 
     fn handle_tree_key(&mut self, key: KeyEvent) -> Result<()> {
         match key.code {
-            KeyCode::Down | KeyCode::Char('j') => {
-                if self.tree_node_count > 0 {
-                    self.tree_selected = (self.tree_selected + 1) % self.tree_node_count;
-                }
+            KeyCode::Down | KeyCode::Char('j') if self.tree_node_count > 0 => {
+                self.tree_selected = (self.tree_selected + 1) % self.tree_node_count;
             }
-            KeyCode::Up | KeyCode::Char('k') => {
-                if self.tree_node_count > 0 {
-                    self.tree_selected = if self.tree_selected == 0 {
-                        self.tree_node_count - 1
-                    } else {
-                        self.tree_selected - 1
-                    };
-                }
+            KeyCode::Up | KeyCode::Char('k') if self.tree_node_count > 0 => {
+                self.tree_selected = if self.tree_selected == 0 {
+                    self.tree_node_count - 1
+                } else {
+                    self.tree_selected - 1
+                };
             }
             KeyCode::Enter => {
                 // Map tree_selected back to app.tasks index for detail view

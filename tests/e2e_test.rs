@@ -62,7 +62,7 @@ fn board_rapid_calls_show_data_without_exit() {
     let marker = aid_home.join("board-last.txt");
     if marker.exists() {
         let content = std::fs::read_to_string(&marker).unwrap();
-        let patched = format!("0\n{}", content.splitn(2, '\n').nth(1).unwrap_or(""));
+        let patched = format!("0\n{}", content.split_once('\n').map(|x| x.1).unwrap_or(""));
         std::fs::write(&marker, patched).unwrap();
     }
     let mut cmd2 = aid_cmd_in(&aid_home);
@@ -188,7 +188,7 @@ fn merge_marks_done_task_as_merged() {
     let marker = temp_dir.path().join("board-last.txt");
     if marker.exists() {
         let content = std::fs::read_to_string(&marker).unwrap();
-        let patched = format!("0\n{}", content.splitn(2, '\n').nth(1).unwrap_or(""));
+        let patched = format!("0\n{}", content.split_once('\n').map(|x| x.1).unwrap_or(""));
         std::fs::write(&marker, patched).unwrap();
     }
     let board_output = aid_cmd_in(temp_dir.path()).args(["board", "--force"]).output().unwrap();

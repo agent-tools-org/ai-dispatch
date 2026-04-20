@@ -124,7 +124,7 @@ fn push_bars(out: &mut String, title: &str, rows: &[(String, usize)]) {
     out.push_str(&format!("\n{title}\n"));
     let max = rows.iter().map(|(_, count)| *count).max().unwrap_or(0);
     for (label, count) in rows {
-        let width = if max == 0 { 0 } else { count * 30 / max };
+        let width = (count * 30).checked_div(max).unwrap_or(0);
         out.push_str(&format!("  {:<3} {:<30} {}\n", label, "█".repeat(width), count));
     }
 }
@@ -148,7 +148,7 @@ fn format_tokens(tokens: i64) -> String {
 }
 
 fn usage_share(tasks: usize, total_tasks: usize) -> usize {
-    if total_tasks == 0 { 0 } else { tasks * 100 / total_tasks }
+    (tasks * 100).checked_div(total_tasks).unwrap_or(0)
 }
 
 fn task_cost(task: &Task) -> f64 {

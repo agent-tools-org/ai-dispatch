@@ -876,10 +876,7 @@ fn does_not_warn_for_audit_log_prompt() {
 #[test]
 fn judge_true_defaults_to_gemini() {
     let cfg = parse_batch_file(
-        write_temp(concat!(
-            "[[tasks]]\nagent = \"codex\"\nprompt = \"test\"\njudge = true\n"
-        ))
-        .path(),
+        write_temp("[[tasks]]\nagent = \"codex\"\nprompt = \"test\"\njudge = true\n").path(),
     )
     .unwrap();
 
@@ -889,10 +886,7 @@ fn judge_true_defaults_to_gemini() {
 #[test]
 fn judge_string_uses_specified_agent() {
     let cfg = parse_batch_file(
-        write_temp(concat!(
-            "[[tasks]]\nagent = \"codex\"\nprompt = \"test\"\njudge = \"cursor\"\n"
-        ))
-        .path(),
+        write_temp("[[tasks]]\nagent = \"codex\"\nprompt = \"test\"\njudge = \"cursor\"\n").path(),
     )
     .unwrap();
 
@@ -902,10 +896,7 @@ fn judge_string_uses_specified_agent() {
 #[test]
 fn judge_false_is_none() {
     let cfg = parse_batch_file(
-        write_temp(concat!(
-            "[[tasks]]\nagent = \"codex\"\nprompt = \"test\"\njudge = false\n"
-        ))
-        .path(),
+        write_temp("[[tasks]]\nagent = \"codex\"\nprompt = \"test\"\njudge = false\n").path(),
     )
     .unwrap();
 

@@ -107,11 +107,7 @@ fn render_success_chart(frame: &mut ratatui::Frame<'_>, app: &App, area: Rect) {
                 .filter(|task| task.agent == *agent)
                 .filter(|task| matches!(task.status, TaskStatus::Done | TaskStatus::Merged))
                 .count();
-            let rate = if total == 0 {
-                0
-            } else {
-                (success * 100 / total) as u64
-            };
+            let rate = (success * 100).checked_div(total).unwrap_or(0) as u64;
             Bar::default()
                 .label(Line::from(agent.as_str()))
                 .value(rate)

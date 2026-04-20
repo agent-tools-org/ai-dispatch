@@ -9,6 +9,9 @@ use std::path::Path;
 use std::process::Command;
 use std::sync::{Mutex, OnceLock};
 
+#[path = "gitbutler/repo.rs"]
+mod repo;
+
 static BUT_AVAILABLE: OnceLock<bool> = OnceLock::new();
 static MAIN_REPO_PROJECT_CACHE: OnceLock<Mutex<HashMap<String, bool>>> = OnceLock::new();
 
@@ -75,6 +78,8 @@ pub fn but_available() -> bool {
     #[cfg(not(test))]
     *BUT_AVAILABLE.get_or_init(detect_but_available)
 }
+
+pub(crate) use repo::repo_has_markers;
 /// Resolves whether GitButler features should run for this dispatch.
 /// `Always` => true. `Auto` => true iff `but_available()`. `Off` => false.
 pub fn is_active(mode: Mode) -> bool {

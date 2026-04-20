@@ -58,13 +58,23 @@ pub async fn run(store: Arc<Store>, args: BatchArgs) -> Result<()> {
     if args.max_concurrent == Some(0) {
         anyhow::bail!("--max-concurrent must be at least 1");
     }
-    let resolved_path = batch_helpers::resolve_batch_path(Path::new(&args.file));
+    let requested_path = Path::new(&args.file);
+    let source_path = requested_path.exists().then_some(requested_path);
+    let invoked_pwd = std::env::current_dir().ok();
+    let resolved_path = batch_helpers::resolve_batch_path(requested_path);
     let path = resolved_path.as_path();
     let cli_vars = parse_cli_vars(&args.vars)?;
-    let mut config = if cli_vars.is_empty() {
+    let mut config = if source_path == Some(path) && cli_vars.is_empty() {
         batch::parse_batch_file(path)
-    } else {
+    } else if source_path == Some(path) {
         batch::parse_batch_file_with_vars(path, &cli_vars)
+    } else {
+        batch::parse_batch_file_with_vars_and_source(
+            path,
+            &cli_vars,
+            source_path,
+            invoked_pwd.as_deref(),
+        )
     }
     .with_context(|| format!("Failed to load batch file {}", path.display()))?;
     let max_concurrent = args.max_concurrent.or(config.defaults.max_concurrent);

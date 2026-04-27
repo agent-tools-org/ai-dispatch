@@ -230,7 +230,6 @@ const CODING_FALLBACK_CHAIN: &[AgentKind] = &[
     AgentKind::Gemini,
     AgentKind::Qwen,
     AgentKind::Codex,
-    AgentKind::Claude,
     AgentKind::Copilot,
     AgentKind::Cursor,
     AgentKind::Droid,
@@ -241,7 +240,6 @@ const CODING_FALLBACK_CHAIN: &[AgentKind] = &[
 const RESEARCH_FALLBACK_CHAIN: &[AgentKind] = &[
     AgentKind::Gemini,
     AgentKind::Qwen,
-    AgentKind::Claude,
     AgentKind::Copilot,
     AgentKind::Codex,
     AgentKind::Cursor,
@@ -274,6 +272,3 @@ pub(crate) fn research_fallback_for(agent: &AgentKind) -> Option<AgentKind> {
 
 #[cfg(test)]
 mod tests;
-#[cfg(test)]
-#[path = "selection_claude_tests.rs"]
-mod claude_tests;

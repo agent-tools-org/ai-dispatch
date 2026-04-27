@@ -111,8 +111,15 @@ pub(super) fn reply(
     }
     Ok(())
 }
-pub(super) fn stop(store: Arc<store::Store>, task_id: String, force: bool) -> Result<()> {
-    if force {
+pub(super) fn stop(
+    store: Arc<store::Store>,
+    task_id: String,
+    force: bool,
+    retry_tree: bool,
+) -> Result<()> {
+    if retry_tree {
+        cmd::stop::stop_retry_tree(&store, &task_id, force)
+    } else if force {
         cmd::stop::kill(&store, &task_id)
     } else {
         cmd::stop::stop(&store, &task_id)

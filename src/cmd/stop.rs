@@ -20,6 +20,62 @@ pub fn kill(store: &Arc<Store>, task_id: &str) -> Result<()> { terminate(store, 
 
 pub fn terminate_any(store: &Arc<Store>, task_id: &str) -> Result<()> { terminate(store, task_id, true, "Task stopped by user", "stopped", None) }
 
+/// Stop the entire retry tree containing `task_id`. Resolves to the chain
+/// root, enumerates root + every transitive retry descendant, then stops
+/// every member still in a non-terminal state. Already-terminal members are
+/// silently skipped (not an error). Issue #112.
+pub fn stop_retry_tree(store: &Arc<Store>, task_id: &str, force: bool) -> Result<()> {
+    let root = store
+        .find_retry_root(task_id)?
+        .ok_or_else(|| anyhow!("Task '{task_id}' not found"))?;
+    let tree = store.get_retry_tree(root.id.as_str())?;
+    let total = tree.len();
+    let mut stopped = 0;
+    let mut skipped = 0;
+    let mut failed: Vec<String> = Vec::new();
+    for task in &tree {
+        if task.status.is_terminal() {
+            skipped += 1;
+            continue;
+        }
+        let outcome = if force {
+            terminate(
+                store,
+                task.id.as_str(),
+                false,
+                "Task killed by user (--retry-tree)",
+                "killed",
+                None,
+            )
+        } else {
+            terminate(
+                store,
+                task.id.as_str(),
+                true,
+                "Task stopped by user (--retry-tree)",
+                "stopped",
+                None,
+            )
+        };
+        match outcome {
+            Ok(()) => stopped += 1,
+            Err(err) => failed.push(format!("{}: {err}", task.id.as_str())),
+        }
+    }
+    let label = if force { "killed" } else { "stopped" };
+    println!(
+        "{label} {stopped}/{total} task(s) in retry tree of {} (skipped {skipped} already-terminal)",
+        root.id.as_str()
+    );
+    if !failed.is_empty() {
+        bail!(
+            "Some tasks could not be {label}:\n  {}",
+            failed.join("\n  ")
+        );
+    }
+    Ok(())
+}
+
 fn terminate(
     store: &Arc<Store>,
     task_id: &str,
@@ -290,7 +346,89 @@ mod tests {
 
         let mut task = make_task("t-write01", TaskStatus::Running);
         task.worktree_path = Some(temp_path.clone());
-        
+
         preserve_worktree("t-write01", &task, "stopped");
+    }
+
+    // Issue #112 — `aid stop --retry-tree`.
+    fn make_child(id: &str, parent: &str, status: TaskStatus) -> Task {
+        let mut t = make_task(id, status);
+        t.parent_task_id = Some(parent.to_string());
+        t
+    }
+
+    fn insert_chain(store: &Arc<Store>, tasks: &[Task]) {
+        for t in tasks {
+            store.insert_task(t).unwrap();
+        }
+    }
+
+    #[test]
+    fn stop_retry_tree_stops_root_and_running_descendants() {
+        with_store(|store| {
+            insert_chain(
+                &store,
+                &[
+                    make_task("t-root", TaskStatus::Running),
+                    make_child("t-a", "t-root", TaskStatus::Done),
+                    make_child("t-b", "t-root", TaskStatus::Running),
+                    make_child("t-c", "t-b", TaskStatus::Pending),
+                ],
+            );
+
+            stop_retry_tree(&store, "t-root", false).unwrap();
+
+            // Root + the two non-terminal descendants are now Stopped.
+            assert_eq!(
+                store.get_task("t-root").unwrap().unwrap().status,
+                TaskStatus::Stopped
+            );
+            assert_eq!(
+                store.get_task("t-b").unwrap().unwrap().status,
+                TaskStatus::Stopped
+            );
+            assert_eq!(
+                store.get_task("t-c").unwrap().unwrap().status,
+                TaskStatus::Stopped
+            );
+            // The already-terminal one is unchanged.
+            assert_eq!(
+                store.get_task("t-a").unwrap().unwrap().status,
+                TaskStatus::Done
+            );
+        });
+    }
+
+    #[test]
+    fn stop_retry_tree_resolves_to_root_from_descendant() {
+        with_store(|store| {
+            insert_chain(
+                &store,
+                &[
+                    make_task("t-root2", TaskStatus::Running),
+                    make_child("t-mid", "t-root2", TaskStatus::Running),
+                    make_child("t-leaf", "t-mid", TaskStatus::Running),
+                ],
+            );
+
+            // Pass a descendant — should still stop the entire tree.
+            stop_retry_tree(&store, "t-leaf", false).unwrap();
+
+            for id in ["t-root2", "t-mid", "t-leaf"] {
+                assert_eq!(
+                    store.get_task(id).unwrap().unwrap().status,
+                    TaskStatus::Stopped,
+                    "expected {id} stopped"
+                );
+            }
+        });
+    }
+
+    #[test]
+    fn stop_retry_tree_missing_task_errors() {
+        with_store(|store| {
+            let err = stop_retry_tree(&store, "t-nope", false).unwrap_err();
+            assert!(err.to_string().contains("not found"));
+        });
     }
 }

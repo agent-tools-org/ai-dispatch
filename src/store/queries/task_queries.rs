@@ -80,6 +80,51 @@ impl Store {
         Ok(chain)
     }
 
+    /// Returns the root of the retry chain that contains `task_id`.
+    /// If `task_id` has no parent, it IS the root.
+    pub fn find_retry_root(&self, task_id: &str) -> Result<Option<Task>> {
+        let chain = self.get_retry_chain(task_id)?;
+        Ok(chain.into_iter().next())
+    }
+
+    /// Returns `root_task` plus every transitive retry descendant (BFS),
+    /// ordered with the root first. Used by `aid stop --retry-tree`.
+    pub fn get_retry_tree(&self, root_id: &str) -> Result<Vec<Task>> {
+        let root = match self.get_task(root_id)? {
+            Some(t) => t,
+            None => return Ok(Vec::new()),
+        };
+        let mut out = vec![root];
+        let mut frontier = vec![root_id.to_string()];
+        while let Some(parent_id) = frontier.pop() {
+            let children = self.get_direct_retries(&parent_id)?;
+            for child in children {
+                frontier.push(child.id.0.clone());
+                out.push(child);
+            }
+        }
+        Ok(out)
+    }
+
+    /// Direct retry children: tasks where `parent_task_id == parent_id`.
+    pub fn get_direct_retries(&self, parent_id: &str) -> Result<Vec<Task>> {
+        let conn = self.db();
+        let mut stmt = conn.prepare(
+            "SELECT id, agent, prompt, resolved_prompt, status, parent_task_id, workgroup_id,
+             caller_kind, caller_session_id, agent_session_id, repo_path, worktree_path, worktree_branch,
+             start_sha, log_path, output_path, tokens, prompt_tokens, duration_ms, model, cost_usd,
+             created_at, completed_at, verify, read_only, budget, custom_agent_name, verify_status,
+             exit_code, category, pending_reason, audit_verdict, audit_report_path, delivery_assessment
+             FROM tasks WHERE parent_task_id = ?1 ORDER BY created_at",
+        )?;
+        let rows = stmt.query_map(params![parent_id], row_to_task)?;
+        let mut out = Vec::new();
+        for row in rows {
+            out.push(row??);
+        }
+        Ok(out)
+    }
+
     pub fn list_tasks(&self, filter: TaskFilter) -> Result<Vec<Task>> {
         let conn = self.db();
         let (sql, filter_params): (&str, Vec<String>) = match filter {

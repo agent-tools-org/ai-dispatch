@@ -104,7 +104,9 @@ async fn dispatch_secondary(store: Arc<crate::store::Store>, command: Commands) 
         Commands::Reply(command_args_b::ReplyArgs { task_id, message, file, async_mode, timeout_secs }) => {
             handlers_b::reply(store, task_id, message, file, async_mode, timeout_secs)
         }
-        Commands::Stop(command_args_b::StopArgs { task_id, force }) => handlers_b::stop(store, task_id, force),
+        Commands::Stop(command_args_b::StopArgs { task_id, force, retry_tree }) => {
+            handlers_b::stop(store, task_id, force, retry_tree)
+        }
         Commands::Kill(command_args_b::KillArgs { task_id }) => handlers_b::kill(store, task_id),
         Commands::Steer(command_args_b::SteerArgs { task_id, message }) => handlers_b::steer(store, task_id, message),
         Commands::Unstick(command_args_b::UnstickArgs { task_id, message, escalate }) => {

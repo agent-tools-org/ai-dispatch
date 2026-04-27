@@ -11,6 +11,13 @@ pub(super) fn maybe_refresh_existing_worktree(
     branch: &str,
     base_branch: Option<&str>,
 ) -> Result<()> {
+    // Issue #113: an agent (or operator) running `git checkout <other>` inside
+    // an aid-managed worktree silently steers subsequent dispatches onto the
+    // wrong branch. Their commits then never advance the requested branch ref
+    // and become invisible to the main repo. Re-anchor the worktree to the
+    // expected branch before any other reconciliation.
+    ensure_worktree_on_branch(wt_path, branch)?;
+
     let target_ref = base_branch.unwrap_or("HEAD");
     let repo_head = rev_parse(repo_dir, target_ref)?;
     let worktree_head = rev_parse(wt_path, "HEAD")?;
@@ -113,4 +120,64 @@ fn stale_worktree_error(wt_path: &Path, branch: &str, reason: String) -> anyhow:
         reason,
         branch
     )
+}
+
+fn ensure_worktree_on_branch(wt_path: &Path, branch: &str) -> Result<()> {
+    let current = current_branch(wt_path)?;
+    if current.as_deref() == Some(branch) {
+        return Ok(());
+    }
+    let observed = current.as_deref().unwrap_or("(detached HEAD)");
+    if has_uncommitted_changes(wt_path)? {
+        return Err(stale_worktree_error(
+            wt_path,
+            branch,
+            format!(
+                "HEAD is on {observed} (expected {branch}) and the worktree has uncommitted changes"
+            ),
+        ));
+    }
+    let status = Command::new("git")
+        .args(["-C", &wt_path.to_string_lossy(), "checkout", branch])
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .context("Failed to switch worktree to expected branch")?;
+    if !status.success() {
+        return Err(stale_worktree_error(
+            wt_path,
+            branch,
+            format!(
+                "HEAD is on {observed} (expected {branch}); auto-checkout to {branch} failed — branch may not exist"
+            ),
+        ));
+    }
+    aid_info!(
+        "[aid] Re-anchored worktree {} from {observed} to {branch}",
+        wt_path.display()
+    );
+    Ok(())
+}
+
+fn current_branch(wt_path: &Path) -> Result<Option<String>> {
+    let output = Command::new("git")
+        .args([
+            "-C",
+            &wt_path.to_string_lossy(),
+            "symbolic-ref",
+            "--short",
+            "-q",
+            "HEAD",
+        ])
+        .output()
+        .context("Failed to inspect worktree branch")?;
+    if !output.status.success() {
+        return Ok(None);
+    }
+    let raw = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    if raw.is_empty() {
+        Ok(None)
+    } else {
+        Ok(Some(raw))
+    }
 }

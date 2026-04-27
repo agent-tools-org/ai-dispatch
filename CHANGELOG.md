@@ -1,3 +1,12 @@
+## v8.95.0 (2026-04-27)
+- fix(droid): use `--append-system-prompt-file` for context files instead of `-f` (which means "read prompt from file" in droid and silently broke multi-context dispatches)
+- fix(droid): `--read-only` now uses `--use-spec` (true read-only / spec mode) instead of `--auto low` (which still allowed file modifications)
+- feat(droid): wire `RunOpts.session_id` to droid's `-s` flag for session continuity
+- chore(droid): map `opus` shorthand to `claude-opus-4-7` (droid's own default), was stale at 4-6
+- fix(worktree): re-anchor reused worktrees to the requested branch when an agent ran `git checkout` and steered HEAD elsewhere — was silently letting commits land on the wrong branch (#113)
+- feat(stop): add `aid stop --retry-tree <id>` to cancel a whole retry tree in one call — resolves the argument to the chain root, walks every transitive descendant, stops every non-terminal member; composes with `--force` (#112)
+
+
 ## v8.94.0 (2026-04-20)
 - feat(reply): new `aid reply <task-id> <message>` command — persists messages in a new `task_messages` SQLite table, PTY monitor delivers them to the agent's stdin and records ack when the agent produces output after delivery. `aid steer` now routes through the same persisted path.
 - feat(unstick): new `aid unstick <task-id>` command — manual recovery for hung tasks. New `TaskStatus::Stalled` variant plus an `IdleDetector` policy module; the PTY monitor auto-nudges at warn threshold and escalates to `Stalled` past the escalation threshold.

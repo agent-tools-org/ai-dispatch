@@ -31,7 +31,7 @@ fn build_command_uses_droid_exec() {
 }
 
 #[test]
-fn build_command_read_only_uses_auto_low() {
+fn build_command_read_only_uses_use_spec() {
     let opts = RunOpts {
         dir: None,
         output: None,
@@ -46,11 +46,14 @@ fn build_command_read_only_uses_auto_low() {
     };
     let cmd = DroidAgent.build_command("test", &opts).unwrap();
     let args: Vec<String> = cmd.get_args().map(|a| a.to_string_lossy().to_string()).collect();
-    assert!(args.contains(&"low".to_string()));
+    // True read-only: must be --use-spec, NOT --auto low (which still allows file mods).
+    assert!(args.contains(&"--use-spec".to_string()));
+    assert!(!args.contains(&"--auto".to_string()));
+    assert!(!args.contains(&"low".to_string()));
 }
 
 #[test]
-fn build_command_adds_context_files() {
+fn build_command_adds_context_files_via_append_system_prompt_file() {
     let opts = RunOpts {
         dir: None,
         output: None,
@@ -65,8 +68,53 @@ fn build_command_adds_context_files() {
     };
     let cmd = DroidAgent.build_command("test", &opts).unwrap();
     let args: Vec<String> = cmd.get_args().map(|a| a.to_string_lossy().to_string()).collect();
-    assert!(args.windows(2).any(|pair| pair == ["-f", "docs/spec.md"]));
-    assert!(args.windows(2).any(|pair| pair == ["-f", "notes/todo.txt"]));
+    // `-f` would replace the prompt source; we use --append-system-prompt-file instead.
+    assert!(args
+        .windows(2)
+        .any(|pair| pair == ["--append-system-prompt-file", "docs/spec.md"]));
+    assert!(args
+        .windows(2)
+        .any(|pair| pair == ["--append-system-prompt-file", "notes/todo.txt"]));
+    assert!(!args.iter().any(|a| a == "-f"));
+}
+
+#[test]
+fn build_command_wires_session_id() {
+    let opts = RunOpts {
+        dir: None,
+        output: None,
+        result_file: None,
+        model: None,
+        budget: false,
+        read_only: false,
+        context_files: vec![],
+        session_id: Some("sess_abc123".to_string()),
+        env: None,
+        env_forward: None,
+    };
+    let cmd = DroidAgent.build_command("continue work", &opts).unwrap();
+    let args: Vec<String> = cmd.get_args().map(|a| a.to_string_lossy().to_string()).collect();
+    assert!(args.windows(2).any(|pair| pair == ["-s", "sess_abc123"]));
+}
+
+#[test]
+fn build_command_default_uses_auto_high() {
+    let opts = RunOpts {
+        dir: None,
+        output: None,
+        result_file: None,
+        model: None,
+        budget: false,
+        read_only: false,
+        context_files: vec![],
+        session_id: None,
+        env: None,
+        env_forward: None,
+    };
+    let cmd = DroidAgent.build_command("test", &opts).unwrap();
+    let args: Vec<String> = cmd.get_args().map(|a| a.to_string_lossy().to_string()).collect();
+    assert!(args.windows(2).any(|pair| pair == ["--auto", "high"]));
+    assert!(!args.contains(&"--use-spec".to_string()));
 }
 
 #[test]

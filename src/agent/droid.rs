@@ -27,7 +27,10 @@ impl super::Agent for DroidAgent {
         let mut cmd = Command::new("droid");
         cmd.args(["exec", "--output-format", "stream-json"]);
         if opts.read_only {
-            cmd.arg("--auto").arg("low");
+            // `--use-spec` is droid's true read-only mode. `--auto low` still
+            // permits file creation/modification in non-system directories,
+            // so it is NOT a read-only mode despite the name.
+            cmd.arg("--use-spec");
         } else {
             cmd.arg("--auto").arg("high");
         }
@@ -35,8 +38,14 @@ impl super::Agent for DroidAgent {
             let mapped = map_model_name(model);
             cmd.args(["-m", mapped.as_str()]);
         }
+        if let Some(ref session_id) = opts.session_id {
+            cmd.args(["-s", session_id]);
+        }
+        // `-f` in droid means "read PROMPT from file" — using it for context
+        // files would override the prompt argument. `--append-system-prompt-file`
+        // is purpose-built for injecting extra context per file and is repeatable.
         for file in &opts.context_files {
-            cmd.args(["-f", file]);
+            cmd.args(["--append-system-prompt-file", file]);
         }
         if let Some(ref dir) = opts.dir {
             cmd.args(["--cwd", dir]);
@@ -118,7 +127,8 @@ fn map_model_name(model: &str) -> String {
     match model {
         "haiku" => "claude-haiku-4-5-20251001".to_string(),
         "sonnet" => "claude-sonnet-4-6".to_string(),
-        "opus" => "claude-opus-4-6".to_string(),
+        // droid's own default is claude-opus-4-7 per `droid exec --help`.
+        "opus" => "claude-opus-4-7".to_string(),
         "gpt-4.1-nano" => "gpt-5.4-mini".to_string(),
         "gpt-4.1-mini" => "gpt-5.4-fast".to_string(),
         other => other.to_string(),
@@ -227,7 +237,7 @@ mod model_name_tests {
     fn maps_common_shorthand_models() {
         assert_eq!(map_model_name("haiku"), "claude-haiku-4-5-20251001");
         assert_eq!(map_model_name("sonnet"), "claude-sonnet-4-6");
-        assert_eq!(map_model_name("opus"), "claude-opus-4-6");
+        assert_eq!(map_model_name("opus"), "claude-opus-4-7");
         assert_eq!(map_model_name("gpt-4.1-nano"), "gpt-5.4-mini");
         assert_eq!(map_model_name("gpt-4.1-mini"), "gpt-5.4-fast");
     }

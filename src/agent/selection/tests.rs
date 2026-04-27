@@ -33,11 +33,10 @@ fn select(prompt: &str, dir: &[&str], available: &[AgentKind]) -> (String, Strin
     let store = Store::open_memory().unwrap();
     select_agent_from(prompt, &opts(dir.first().copied(), false), available, &store, None)
 }
-fn all() -> [AgentKind; 7] {
+fn all() -> [AgentKind; 6] {
     [
         AgentKind::Gemini,
         AgentKind::Qwen,
-        AgentKind::Claude,
         AgentKind::OpenCode,
         AgentKind::Kilo,
         AgentKind::Cursor,
@@ -194,17 +193,6 @@ research = 6
         &opts(None, false), &all(), &store, None,
     );
     assert_eq!(kind, AgentKind::Gemini.as_str());
-}
-#[test]
-fn complex_tasks_go_to_claude() {
-    let prompt = format!(
-        "Implement a retry-aware test suite across src/main.rs and src/cmd/run.rs. {}",
-        "Add validation coverage and refactor the task dispatch flow. ".repeat(12)
-    );
-    let (kind, reason) = select(&prompt, &["src"], &all());
-    assert_eq!(kind, AgentKind::Claude.as_str());
-    assert!(reason.contains("complex-impl"));
-    assert!(reason.contains("claude"));
 }
 #[test]
 fn unavailable_primary_agent_falls_back_to_next_best() {
@@ -607,26 +595,11 @@ fn fallback_chain_skips_rate_limited() {
         AgentKind::Gemini,
         AgentKind::Qwen,
         AgentKind::Codex,
-        AgentKind::Claude,
+        AgentKind::Cursor,
     ]);
     crate::rate_limit::mark_rate_limited(&AgentKind::Codex, "quota exhausted");
     let result = super::coding_fallback_for(&AgentKind::Gemini);
     // Should skip Codex (rate-limited) and pick the next available.
     assert!(result.is_some());
     assert_ne!(result.unwrap(), AgentKind::Codex);
-}
-
-#[test]
-fn complex_tasks_prefer_claude_over_lightweight_agents() {
-    let (_temp, _guard) = isolated();
-    let store = Store::open_memory().unwrap();
-    let prompt = "Review the refactor plan, implement the retry flow, and validate the tests.";
-    let (kind, _) = select_agent_from(
-        prompt,
-        &opts(Some("src"), false),
-        &[AgentKind::Claude, AgentKind::OpenCode],
-        &store,
-        None,
-    );
-    assert_eq!(kind, AgentKind::Claude.as_str());
 }

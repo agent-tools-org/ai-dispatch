@@ -33,7 +33,6 @@ impl AgentKind {
         Self::Codebuff,
         Self::Droid,
         Self::Oz,
-        Self::Claude,
     ];
 
     pub const ALL: &'static [Self] = &[
@@ -47,7 +46,6 @@ impl AgentKind {
         Self::Codebuff,
         Self::Droid,
         Self::Oz,
-        Self::Claude,
         Self::Custom,
     ];
 

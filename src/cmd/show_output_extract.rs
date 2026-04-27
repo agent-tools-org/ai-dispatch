@@ -226,8 +226,71 @@ fn tool_event_message(value: &Value) -> Option<String> {
     ]
     .into_iter()
     .flatten()
-    .find_map(stringify_payload);
+    .find_map(format_tool_payload);
     payload.map(|payload| format!("[{tool}] {payload}"))
+}
+
+/// Render a tool's argument payload as a short, readable line.
+///
+/// JSON dumps like `{"file_path":"/very/long/path","limit":250,"offset":450}`
+/// are noisy in TUI/CLI output. When the payload has a single recognizable
+/// "primary" key (file/path/pattern/command/url/...), surface that value with
+/// a few salient extras (offset/limit/line_numbers) instead of the raw JSON.
+/// Falls back to a length-capped JSON string for unknown shapes.
+fn format_tool_payload(value: &Value) -> Option<String> {
+    if let Some(text) = extract_text_payload(value) {
+        return Some(truncate_payload(&text));
+    }
+    if let Value::Object(map) = value {
+        const PRIMARY_KEYS: &[&str] = &[
+            "file_path",
+            "path",
+            "directory_path",
+            "url",
+            "command",
+            "pattern",
+            "query",
+            "prompt",
+        ];
+        for key in PRIMARY_KEYS {
+            if let Some(primary) = map.get(*key).and_then(Value::as_str) {
+                let mut out = primary.to_string();
+                let extras: Vec<String> = map
+                    .iter()
+                    .filter(|(k, _)| k.as_str() != *key)
+                    .filter_map(|(k, v)| {
+                        let v_str = match v {
+                            Value::String(s) => s.clone(),
+                            Value::Number(n) => n.to_string(),
+                            Value::Bool(b) => b.to_string(),
+                            _ => return None,
+                        };
+                        Some(format!("{k}={v_str}"))
+                    })
+                    .collect();
+                if !extras.is_empty() {
+                    out.push_str(" (");
+                    out.push_str(&extras.join(", "));
+                    out.push(')');
+                }
+                return Some(truncate_payload(&out));
+            }
+        }
+    }
+    let raw = match value {
+        Value::Null => return None,
+        other => other.to_string(),
+    };
+    Some(truncate_payload(&raw))
+}
+
+fn truncate_payload(text: &str) -> String {
+    const MAX_LEN: usize = 160;
+    if text.chars().count() <= MAX_LEN {
+        return text.to_string();
+    }
+    let truncated: String = text.chars().take(MAX_LEN).collect();
+    format!("{truncated}…")
 }
 
 fn tool_name(value: &Value) -> Option<&str> {
@@ -296,4 +359,60 @@ fn stringify_payload(value: &Value) -> Option<String> {
         Value::Null => None,
         other => Some(other.to_string()),
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn collect_messages_renders_droid_tool_call_concisely() {
+        // Real droid stream-json line: dumping the full JSON arg blob is noisy.
+        // For known primary keys (file_path/path/pattern/...) we surface that
+        // value with a few salient extras instead.
+        let line = r#"{"type":"tool_call","toolName":"Read","parameters":{"file_path":"src/main.rs","limit":250,"offset":450}}"#;
+        let messages = collect_messages(line);
+        assert_eq!(messages.len(), 1);
+        let msg = &messages[0];
+        assert!(msg.starts_with("[Read] src/main.rs"), "msg={msg}");
+        assert!(msg.contains("limit=250"), "msg={msg}");
+        assert!(msg.contains("offset=450"), "msg={msg}");
+        // Must NOT be the raw JSON dump.
+        assert!(!msg.contains("\"file_path\""), "raw JSON leaked: {msg}");
+    }
+
+    #[test]
+    fn collect_messages_truncates_very_long_payloads() {
+        let big = "x".repeat(500);
+        let line = json!({
+            "type": "tool_call",
+            "toolName": "Bash",
+            "parameters": {"command": big.clone()}
+        })
+        .to_string();
+        let messages = collect_messages(&line);
+        assert_eq!(messages.len(), 1);
+        let msg = &messages[0];
+        assert!(msg.starts_with("[Bash] "), "msg={msg}");
+        assert!(msg.ends_with('…'), "expected ellipsis: {msg}");
+        assert!(msg.chars().count() < big.len(), "msg should be truncated");
+    }
+
+    #[test]
+    fn collect_messages_skips_droid_tool_result_to_avoid_dupes() {
+        // Two events for one logical Read invocation: tool_call + tool_result.
+        // Only the call is informative; the result blob is noise (and double-
+        // counted in older code).
+        let lines = "\
+{\"type\":\"tool_call\",\"toolName\":\"Read\",\"parameters\":{\"file_path\":\"a.rs\"}}\n\
+{\"type\":\"tool_result\",\"toolName\":\"Read\",\"output\":\"file body...\"}\n";
+        let messages = collect_messages(lines);
+        // tool_result still produces a [Read] entry today (best-effort fallback),
+        // but it must be SHORT and not the raw JSON. The key invariant: no entry
+        // contains the literal multi-key JSON `{\"toolName\":...}` blob.
+        for msg in &messages {
+            assert!(!msg.contains("\"toolName\""), "JSON blob leaked: {msg}");
+        }
+    }
 }

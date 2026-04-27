@@ -126,6 +126,30 @@ fn parses_tool_call_events_with_tool_name() {
     assert_eq!(event.detail, "Read");
 }
 
+// Regression: a single droid tool invocation emits BOTH `tool_call` and
+// `tool_result`. Treating the result as a second ToolCall doubled the
+// loop-detector input — 5 legit Reads → 10 events with detail "Read" and
+// the LoopDetector tripped on legitimate exploration. tool_result and
+// tool_use must not produce events.
+#[test]
+fn ignores_tool_result_and_tool_use_events_to_avoid_duplicates() {
+    let agent = DroidAgent;
+    let result_line = r#"{"type":"tool_result","toolName":"Read","output":"file contents"}"#;
+    assert!(
+        agent
+            .parse_event(&TaskId("t-droid".to_string()), result_line)
+            .is_none(),
+        "tool_result must not emit a separate event"
+    );
+    let use_line = r#"{"type":"tool_use","toolName":"Read","input":{"file_path":"x"}}"#;
+    assert!(
+        agent
+            .parse_event(&TaskId("t-droid".to_string()), use_line)
+            .is_none(),
+        "tool_use must not emit a separate event"
+    );
+}
+
 #[test]
 fn parses_mission_step_events_as_milestones() {
     let agent = DroidAgent;

@@ -77,8 +77,19 @@ impl super::Agent for DroidAgent {
                     metadata: None,
                 })
             }
-            "tool_use" | "tool_result" | "tool_call" => {
-                let name = v.get("toolName").or_else(|| v.get("toolId")).or_else(|| v.get("name")).and_then(|n| n.as_str()).unwrap_or("tool");
+            // Only emit on the request side. droid stream-json fires both
+            // `tool_call` (the model's request) and `tool_result` (the tool's
+            // response) for one logical operation, plus sometimes `tool_use`
+            // as an alias. Treating all three as ToolCall events doubled the
+            // event count, so the LoopDetector tripped after ~5 legit reads
+            // (10 events with detail "Read"). Keep only `tool_call`.
+            "tool_call" => {
+                let name = v
+                    .get("toolName")
+                    .or_else(|| v.get("toolId"))
+                    .or_else(|| v.get("name"))
+                    .and_then(|n| n.as_str())
+                    .unwrap_or("tool");
                 let detail = truncate_text(name, 80);
                 Some(TaskEvent {
                     task_id: task_id.clone(),
@@ -88,6 +99,7 @@ impl super::Agent for DroidAgent {
                     metadata: None,
                 })
             }
+            "tool_use" | "tool_result" => None,
             "mission_step" => parse_mission_step(task_id, &v, now),
             "session_forked" => parse_session_forked(task_id, &v, now),
             "usage" | "turn_complete" => {

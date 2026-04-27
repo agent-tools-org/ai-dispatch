@@ -1,3 +1,7 @@
+## v8.97.0 (2026-04-27)
+- fix(tui): the FAIL "Reason" line now surfaces the FIRST Error event (the trigger), not the LAST. On cascade failures (loop kill → process failed → rescue → verify failed) users were seeing "Reason: Failed during verification ..." even though the real cause was the loop kill — making it look like verify failure was the trigger when it was just a downstream symptom.
+
+
 ## v8.96.0 (2026-04-27)
 - fix(droid): stop emitting duplicate ToolCall events for `tool_result` and `tool_use` — these are already paired with `tool_call` and were doubling the LoopDetector input, causing false-positive loop kills (~5 legit reads → 10 events with detail "Read" → kill)
 - fix(tui): render tool calls concisely in the Output tab — known primary keys (`file_path`, `path`, `directory_path`, `url`, `command`, `pattern`, `query`, `prompt`) are surfaced as `[Tool] <value> (k=v, ...)` instead of dumping the raw single-line JSON; unknown shapes still fall back to JSON, capped at 160 chars with an ellipsis

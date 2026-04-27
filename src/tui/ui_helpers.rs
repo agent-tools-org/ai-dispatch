@@ -237,10 +237,24 @@ pub fn status_style(status: TaskStatus) -> Style {
     }
 }
 
+/// Pick the most informative Error event to surface as the failure reason.
+///
+/// The naive choice — the LAST error — is misleading on cascade failures.
+/// A typical loop-kill sequence is:
+///
+///   error "Agent appears stuck in a loop — killing process"   ← actual cause
+///   error "Failed during execution: agent process failed"     ← consequence
+///   milestone "Rescued N file(s)"                             ← rescue ran
+///   error "Failed during verification: cargo check ..."       ← verify on rescued
+///
+/// Showing the verify line as Reason makes it look like verify caused the
+/// failure. Prefer the FIRST error (the trigger) — downstream errors are
+/// almost always cascading consequences of the first one. Verify-failure
+/// events in particular are only informative on their own when they're the
+/// SOLE error event; otherwise they hide the real cause.
 fn last_error_detail(events: &[crate::types::TaskEvent]) -> Option<String> {
     events
         .iter()
-        .rev()
         .find(|e| e.event_kind == crate::types::EventKind::Error)
         .map(|e| e.detail.clone())
 }
@@ -321,6 +335,56 @@ mod tests {
         task.output_path = Some(output_file.path().display().to_string());
 
         assert_eq!(read_task_output_for_tui(&task), "stdout\n");
+    }
+
+    #[test]
+    fn last_error_detail_returns_first_error_not_last_to_avoid_cascade_masking() {
+        use crate::types::{EventKind, TaskEvent};
+        // Cascade scenario: loop kill triggers process-failed + verify-failed.
+        // Surfacing the LAST error ("Failed during verification: ...") would
+        // make it look like verify caused the failure, when the real cause
+        // was the loop kill 90s earlier.
+        let now = Local::now();
+        let events = vec![
+            TaskEvent {
+                task_id: TaskId("t-cascade".to_string()),
+                timestamp: now,
+                event_kind: EventKind::Error,
+                detail: "Agent appears stuck in a loop — killing process".to_string(),
+                metadata: None,
+            },
+            TaskEvent {
+                task_id: TaskId("t-cascade".to_string()),
+                timestamp: now,
+                event_kind: EventKind::Error,
+                detail: "Failed during execution: agent process failed".to_string(),
+                metadata: None,
+            },
+            TaskEvent {
+                task_id: TaskId("t-cascade".to_string()),
+                timestamp: now,
+                event_kind: EventKind::Milestone,
+                detail: "Rescued 5 file(s)".to_string(),
+                metadata: None,
+            },
+            TaskEvent {
+                task_id: TaskId("t-cascade".to_string()),
+                timestamp: now,
+                event_kind: EventKind::Error,
+                detail: "Failed during verification: cargo check ...".to_string(),
+                metadata: None,
+            },
+        ];
+
+        let reason = last_error_detail(&events).expect("expected a Reason");
+        assert!(
+            reason.contains("stuck in a loop"),
+            "expected the trigger error, got: {reason}"
+        );
+        assert!(
+            !reason.contains("verification"),
+            "verify-failure must not mask the trigger: {reason}"
+        );
     }
 
     #[test]

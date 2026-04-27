@@ -1,3 +1,8 @@
+## v8.96.0 (2026-04-27)
+- fix(droid): stop emitting duplicate ToolCall events for `tool_result` and `tool_use` — these are already paired with `tool_call` and were doubling the LoopDetector input, causing false-positive loop kills (~5 legit reads → 10 events with detail "Read" → kill)
+- fix(tui): render tool calls concisely in the Output tab — known primary keys (`file_path`, `path`, `directory_path`, `url`, `command`, `pattern`, `query`, `prompt`) are surfaced as `[Tool] <value> (k=v, ...)` instead of dumping the raw single-line JSON; unknown shapes still fall back to JSON, capped at 160 chars with an ellipsis
+
+
 ## v8.95.0 (2026-04-27)
 - fix(droid): use `--append-system-prompt-file` for context files instead of `-f` (which means "read prompt from file" in droid and silently broke multi-context dispatches)
 - fix(droid): `--read-only` now uses `--use-spec` (true read-only / spec mode) instead of `--auto low` (which still allowed file modifications)

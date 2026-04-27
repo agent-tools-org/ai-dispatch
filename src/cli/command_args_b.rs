@@ -111,6 +111,11 @@ pub struct StopArgs {
     pub task_id: String,
     #[arg(long)]
     pub force: bool,
+    /// Stop the entire retry tree containing this task — root + every retry
+    /// descendant in a non-terminal state. The argument may be the root or
+    /// any task in the chain; aid resolves to the root automatically.
+    #[arg(long = "retry-tree")]
+    pub retry_tree: bool,
 }
 
 #[derive(Args)]

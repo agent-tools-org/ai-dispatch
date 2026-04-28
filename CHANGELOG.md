@@ -1,3 +1,11 @@
+## v8.98.0 (2026-04-28)
+- feat(worktree): relocate aid-managed worktrees from `/tmp/aid-wt-{branch}` to `~/.aid/worktrees/{project-hash}/{branch}` so macOS `/tmp` cleanups no longer destroy in-progress work. Project ID is `{repo-basename}-{8-hex-hash-of-canonical-path}` to prevent same-basename repos from colliding. Old `/tmp/aid-wt-*` paths are still recognized by `aid worktree prune` and `aid clean --worktrees` for cleanup of pre-upgrade worktrees.
+- fix(worktree): harden sandbox checks across `clean`, `merge_git`, `run_verify`, and `worktree_gc` — `is_aid_managed_worktree_path` now normalizes paths before prefix matching, rejecting traversal-shaped paths like `~/.aid/worktrees/../../etc`. Added a sandbox guard to `worktree_gc::remove_worktree_path` that previously ran `git worktree remove` on any DB-stored path without verification.
+- fix(worktree): `aid run` invoked from inside a linked worktree now derives `{project}` from the main repo (via `git rev-parse --git-common-dir`) instead of the linked-worktree basename, so the resulting worktree lands under the correct project directory.
+- chore(agents): hide `claude` from the default agent registry to keep `aid run auto` selection focused on agents with reliable headless execution.
+- fix(test): update `retry_uses_fallback_when_rate_limited` to use Copilot instead of Claude in its pinned detected-agent set, since Claude was removed from the fallback chain in the same change above.
+
+
 ## v8.97.0 (2026-04-27)
 - fix(tui): the FAIL "Reason" line now surfaces the FIRST Error event (the trigger), not the LAST. On cascade failures (loop kill → process failed → rescue → verify failed) users were seeing "Reason: Failed during verification ..." even though the real cause was the loop kill — making it look like verify failure was the trigger when it was just a downstream symptom.
 

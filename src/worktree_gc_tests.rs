@@ -4,7 +4,7 @@
 
 use super::{
     MergeReason, branch_merge_reason, is_managed_branch, merge_reason_from_outputs,
-    same_tmp_worktree_path,
+    remove_worktree_path, same_tmp_worktree_path, WorktreeRemoveOutcome,
 };
 use crate::test_subprocess;
 use crate::worktree::is_aid_managed_worktree_path;
@@ -71,4 +71,42 @@ fn tmp_path_match_handles_private_tmp_alias() {
     ));
     assert!(is_aid_managed_worktree_path(Path::new("/tmp/aid-wt-demo")));
     assert!(is_aid_managed_worktree_path(Path::new("/private/tmp/aid-wt-demo")));
+}
+
+#[test]
+fn remove_worktree_path_allows_legacy_tmp_worktree() {
+    let _permit = test_subprocess::acquire();
+    let repo = init_repo();
+    let path_holder = tempfile::Builder::new()
+        .prefix("aid-wt-gc-legacy-")
+        .tempdir_in("/tmp")
+        .unwrap();
+    let worktree_path = path_holder.path().to_path_buf();
+    drop(path_holder);
+    git(
+        repo.path(),
+        &[
+            "worktree",
+            "add",
+            &worktree_path.to_string_lossy(),
+            "-b",
+            "feat/gc-legacy",
+        ],
+    );
+
+    let outcome = remove_worktree_path(repo.path(), &worktree_path).unwrap();
+
+    assert_eq!(outcome, WorktreeRemoveOutcome::Removed);
+    assert!(!worktree_path.exists());
+}
+
+#[test]
+fn remove_worktree_path_rejects_non_aid_path() {
+    let repo = init_repo();
+    let worktree = TempDir::new().unwrap();
+
+    let result = remove_worktree_path(repo.path(), worktree.path());
+
+    assert!(result.is_err());
+    assert!(worktree.path().exists());
 }

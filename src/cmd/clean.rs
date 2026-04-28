@@ -190,3 +190,39 @@ fn log_paths() -> Result<Vec<PathBuf>> {
     paths.sort();
     Ok(paths)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn contains_path(paths: &[PathBuf], needle: &Path) -> bool {
+        paths.iter().any(|path| path == needle)
+    }
+
+    #[test]
+    fn legacy_tmp_worktree_path_is_collectable() {
+        let worktree = tempfile::Builder::new()
+            .prefix("aid-wt-clean-legacy-")
+            .tempdir_in("/tmp")
+            .unwrap();
+        let mut paths = Vec::new();
+
+        collect_legacy_tmp_worktree_paths(Path::new("/tmp"), &mut paths).unwrap();
+
+        assert!(contains_path(&paths, worktree.path()));
+    }
+
+    #[test]
+    fn non_aid_tmp_path_is_rejected_by_clean_scan() {
+        let worktree = tempfile::Builder::new()
+            .prefix("not-aid-clean-")
+            .tempdir_in("/tmp")
+            .unwrap();
+        let mut paths = Vec::new();
+
+        collect_legacy_tmp_worktree_paths(Path::new("/tmp"), &mut paths).unwrap();
+
+        assert!(!contains_path(&paths, worktree.path()));
+        assert!(!is_aid_managed_worktree_path(worktree.path()));
+    }
+}

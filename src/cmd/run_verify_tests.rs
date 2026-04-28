@@ -7,6 +7,7 @@ use crate::store::Store;
 use crate::types::{AgentKind, Task, TaskStatus, VerifyStatus};
 use chrono::Local;
 use std::path::Path;
+use std::process::Command;
 use tempfile::TempDir;
 
 fn make_task(id: &str, worktree_path: &str) -> Task {
@@ -46,6 +47,24 @@ fn make_task(id: &str, worktree_path: &str) -> Task {
         audit_report_path: None,
         delivery_assessment: None,
     }
+}
+
+fn git(repo_dir: &Path, args: &[&str]) {
+    assert!(Command::new("git")
+        .args(["-C", &repo_dir.to_string_lossy()])
+        .args(args)
+        .status()
+        .unwrap()
+        .success());
+}
+
+fn init_repo(repo_dir: &Path) {
+    git(repo_dir, &["init", "-b", "main"]);
+    git(repo_dir, &["config", "user.email", "test@example.com"]);
+    git(repo_dir, &["config", "user.name", "Test User"]);
+    std::fs::write(repo_dir.join("file.txt"), "hello\n").unwrap();
+    git(repo_dir, &["add", "file.txt"]);
+    git(repo_dir, &["commit", "-m", "init"]);
 }
 
 #[test]
@@ -121,4 +140,53 @@ fn maybe_verify_reports_stale_worktree_when_dir_is_missing() {
     let error = store.latest_error(task_id.as_str()).unwrap();
     assert!(error.contains("batch file / task dir missing in worktree"));
     assert!(error.contains("aid worktree remove feat/stale"));
+}
+
+#[test]
+fn fast_fail_cleanup_allows_legacy_tmp_worktree_path() {
+    let store = Store::open_memory().unwrap();
+    let repo = TempDir::new().unwrap();
+    init_repo(repo.path());
+    let path_holder = tempfile::Builder::new()
+        .prefix("aid-wt-fast-fail-")
+        .tempdir_in("/tmp")
+        .unwrap();
+    let worktree_path = path_holder.path().to_path_buf();
+    drop(path_holder);
+    git(
+        repo.path(),
+        &[
+            "worktree",
+            "add",
+            &worktree_path.to_string_lossy(),
+            "-b",
+            "feat/fast-fail-legacy",
+        ],
+    );
+    let task_id = TaskId("t-fast-fail-legacy".to_string());
+    let mut task = make_task(task_id.as_str(), &worktree_path.to_string_lossy());
+    task.status = TaskStatus::Failed;
+    task.duration_ms = Some(100);
+    task.repo_path = Some(repo.path().to_string_lossy().to_string());
+    task.worktree_branch = Some("feat/fast-fail-legacy".to_string());
+    store.insert_task(&task).unwrap();
+
+    maybe_cleanup_fast_fail_impl(&store, &task_id, &task);
+
+    assert!(!worktree_path.exists());
+}
+
+#[test]
+fn fast_fail_cleanup_rejects_non_aid_path() {
+    let store = Store::open_memory().unwrap();
+    let worktree = TempDir::new().unwrap();
+    let task_id = TaskId("t-fast-fail-non-aid".to_string());
+    let mut task = make_task(task_id.as_str(), &worktree.path().to_string_lossy());
+    task.status = TaskStatus::Failed;
+    task.duration_ms = Some(100);
+    store.insert_task(&task).unwrap();
+
+    maybe_cleanup_fast_fail_impl(&store, &task_id, &task);
+
+    assert!(worktree.path().exists());
 }

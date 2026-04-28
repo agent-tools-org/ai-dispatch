@@ -129,6 +129,13 @@ pub(crate) fn branch_merge_reason(
 }
 
 pub(crate) fn remove_worktree_path(repo_dir: &Path, worktree_path: &Path) -> Result<WorktreeRemoveOutcome> {
+    if !is_aid_managed_worktree_path(worktree_path) {
+        aid_warn!(
+            "[aid] SAFETY: refusing to remove '{}' — not an aid worktree path. Only ~/.aid/worktrees/* and legacy /tmp/aid-wt-* paths are allowed.",
+            worktree_path.display()
+        );
+        anyhow::bail!("unsafe worktree path {}", worktree_path.display());
+    }
     if !worktree_path.exists() {
         return Ok(WorktreeRemoveOutcome::Missing);
     }
@@ -257,13 +264,9 @@ fn should_consider_worktree(path: &str, tracked_paths: &BTreeSet<String>) -> boo
         || tracked_paths.iter().any(|tracked| same_tmp_worktree_path(tracked, path))
 }
 
-fn same_tmp_worktree_path(left: &str, right: &str) -> bool {
-    normalize_tmp_path(left) == normalize_tmp_path(right)
-}
+fn same_tmp_worktree_path(left: &str, right: &str) -> bool { normalize_tmp_path(left) == normalize_tmp_path(right) }
 
-fn normalize_tmp_path(path: &str) -> &str {
-    path.strip_prefix("/private").unwrap_or(path)
-}
+fn normalize_tmp_path(path: &str) -> &str { path.strip_prefix("/private").unwrap_or(path) }
 
 #[derive(Debug)]
 struct WorktreeEntry {

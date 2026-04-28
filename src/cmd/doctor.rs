@@ -111,7 +111,7 @@ mod tests {
         let report = DoctorReport {
             base_branch: "main".to_string(),
             prunable_worktrees: vec![PrunableWorktree {
-                path: "/tmp/aid-wt-old".to_string(),
+                path: "/Users/test/.aid/worktrees/demo/feat/old".to_string(),
             }],
             deletable_branches: vec![DeletableBranch {
                 branch: "feat/merged".to_string(),
@@ -122,7 +122,7 @@ mod tests {
         let rendered = format_report(&report);
 
         assert!(rendered.contains("Prunable worktrees (1)"));
-        assert!(rendered.contains("/tmp/aid-wt-old"));
+        assert!(rendered.contains("/Users/test/.aid/worktrees/demo/feat/old"));
         assert!(rendered.contains("Deletable branches (1) against main"));
         assert!(rendered.contains("feat/merged"));
         assert!(rendered.contains("merged (git cherry empty)"));

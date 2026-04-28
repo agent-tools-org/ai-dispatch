@@ -10,7 +10,7 @@ const STALE_WORKTREE_AGE_SECS: u64 = 24 * 60 * 60;
 
 /// Check if a path is an aid-managed worktree (delegates to shared sandbox guard).
 fn is_aid_worktree(path: &str) -> bool {
-    super::merge::merge_git::is_safe_worktree_path(path)
+    crate::worktree::is_aid_managed_worktree_path(Path::new(path))
 }
 
 /// Create a worktree, print its path to stdout for capture.
@@ -27,7 +27,7 @@ pub fn create(branch: &str, base: Option<&str>, repo: Option<&str>) -> Result<()
     Ok(())
 }
 
-/// List all aid-managed worktrees (/tmp/aid-wt-*).
+/// List all aid-managed worktrees (~/.aid/worktrees/* plus legacy /tmp/aid-wt-*).
 pub fn list(repo: Option<&str>) -> Result<()> {
     let repo_dir = repo.unwrap_or(".");
     let mut count = 0;
@@ -79,11 +79,19 @@ pub(crate) fn stale_worktree_count(repo: Option<&str>) -> Result<usize> {
 
 /// Remove a worktree by branch name and prune stale references.
 pub fn remove(branch: &str, repo: Option<&str>) -> Result<()> {
-    let wt_path = format!("/tmp/aid-wt-{branch}");
-    if !Path::new(&wt_path).exists() {
-        anyhow::bail!("Worktree not found: {wt_path}");
-    }
     let repo_dir = repo.unwrap_or(".");
+    let repo_path = Path::new(repo_dir).canonicalize()?;
+    let mut wt_path = crate::worktree::aid_worktree_path(&repo_path, branch);
+    if !wt_path.exists() {
+        let legacy_path = Path::new("/tmp").join(format!("aid-wt-{branch}"));
+        if legacy_path.exists() {
+            wt_path = legacy_path;
+        }
+    }
+    if !wt_path.exists() {
+        anyhow::bail!("Worktree not found: {}", wt_path.display());
+    }
+    let wt_path = wt_path.to_string_lossy().to_string();
     super::merge::remove_worktree(repo_dir, &wt_path)?;
     Ok(())
 }

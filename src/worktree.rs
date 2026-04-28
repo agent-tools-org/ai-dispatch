@@ -16,9 +16,12 @@ mod snapshot;
 mod state;
 #[path = "worktree/validation.rs"]
 mod validation;
+#[path = "worktree/path.rs"]
+mod path;
 pub(crate) use snapshot::{
     WorktreeStatusEntry, WorktreeStatusKind, capture_worktree_snapshot,
 };
+pub use path::{aid_worktree_path, aid_worktree_root, is_aid_managed_worktree_path};
 pub use state::{
     branch_has_commits_ahead_of_main, check_worktree_lock, clear_worktree_lock,
     process_alive_check, worktree_changed_files, write_worktree_lock,
@@ -121,7 +124,15 @@ pub fn create_worktree(
         sanitize::validate_branch_name(base_branch)?;
     }
     validate_git_repo(repo_dir)?;
-    let wt_path = PathBuf::from(format!("/tmp/aid-wt-{branch}"));
+    let wt_path = aid_worktree_path(repo_dir, branch);
+    if let Some(parent) = wt_path.parent() {
+        std::fs::create_dir_all(parent).with_context(|| {
+            format!(
+                "Failed to create aid worktree parent directory {}",
+                parent.display()
+            )
+        })?;
+    }
 
     if wt_path.exists() {
         // Reject symlinks to prevent symlink-following attacks on /tmp paths
@@ -245,6 +256,9 @@ pub fn create_worktree(
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+#[path = "worktree/path_tests.rs"]
+mod path_tests;
 #[cfg(test)]
 #[path = "worktree/stale_tests.rs"]
 mod stale_tests;

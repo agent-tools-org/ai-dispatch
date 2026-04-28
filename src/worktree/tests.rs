@@ -2,7 +2,7 @@
 // Purpose: Guard worktree creation when branches already exist. Deps: tempfile, std.
 use super::*;
 use crate::test_subprocess;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process::Command;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tempfile::TempDir;
@@ -210,7 +210,7 @@ fn create_worktree_cleans_stale_directory_and_recreates_worktree() {
     git(repo.path(), &["commit", "-m", "init"]);
 
     let branch = unique_branch("feat/stale");
-    let expected_path = PathBuf::from(format!("/tmp/aid-wt-{branch}"));
+    let expected_path = aid_worktree_path(repo.path(), &branch);
     std::fs::create_dir_all(&expected_path).unwrap();
     std::fs::write(expected_path.join("stale.txt"), "stale\n").unwrap();
 
@@ -257,7 +257,7 @@ fn create_worktree_prunes_conflicting_branch_and_recreates_worktree() {
     std::fs::remove_dir_all(&orphan_path).unwrap();
 
     let info = create_worktree(repo.path(), branch.as_str(), None).unwrap();
-    let expected_path = PathBuf::from(format!("/tmp/aid-wt-{branch}"));
+    let expected_path = aid_worktree_path(repo.path(), &branch);
     assert_eq!(info.path, expected_path);
     assert!(is_valid_git_worktree(repo.path(), &info.path).unwrap());
     let worktrees = git_output(repo.path(), &["worktree", "list", "--porcelain"]);

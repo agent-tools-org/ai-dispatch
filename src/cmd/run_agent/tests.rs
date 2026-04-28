@@ -7,6 +7,7 @@ use crate::store::Store;
 use crate::types::{AgentKind, Task, TaskId, TaskStatus, VerifyStatus};
 use chrono::Local;
 use serde_json::{Value, json};
+use std::path::Path;
 use tempfile::NamedTempFile;
 
 #[test]
@@ -209,7 +210,9 @@ fn record_execution_failure_stores_phase_event_and_snapshot() {
     let _guard = crate::paths::AidHomeGuard::set(aid_home.path());
     crate::paths::ensure_dirs().unwrap();
     let store = Store::open_memory().unwrap();
-    let task = task_fixture("t-fast-fail", TaskStatus::Running, Some("/tmp/aid-wt-fast-fail"));
+    let worktree_path = crate::worktree::aid_worktree_path(Path::new(env!("CARGO_MANIFEST_DIR")), "feat/fast-fail");
+    let worktree_path = worktree_path.to_string_lossy().to_string();
+    let task = task_fixture("t-fast-fail", TaskStatus::Running, Some(&worktree_path));
     store.insert_task(&task).unwrap();
     std::fs::write(
         crate::paths::stderr_path(task.id.as_str()),
@@ -231,7 +234,7 @@ fn record_execution_failure_stores_phase_event_and_snapshot() {
     assert!(events.iter().any(|event| {
         event.detail.contains("Failure context: working directory:")
             && event.detail.contains("agent binary: /bin/sh")
-            && event.detail.contains("worktree path: /tmp/aid-wt-fast-fail")
+            && event.detail.contains(&format!("worktree path: {worktree_path}"))
             && event.detail.contains("worktree created: true")
     }));
 }

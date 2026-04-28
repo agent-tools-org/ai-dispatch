@@ -295,11 +295,17 @@ WT=$(aid worktree create feat/my-feature)
 aid run codex "Implement feature" --dir $WT
 aid run codex "Add tests" --dir $WT
 aid worktree list
+aid worktree list --json
+aid worktree list --active
 aid worktree remove feat/my-feature
 
 # Automatic worktree (created per-task)
 aid run codex "Implement feature" --worktree feat/my-feature --dir .
 ```
+
+`aid worktree list --json` emits machine-readable worktree state for cleanup tools, including path, branch, active lock status, lock pid/task ID, and directory mtime age. Use `aid worktree list --active` to show only worktrees whose `.aid-lock` contains a live task pid.
+
+Aid writes `.aid-lock` at task start with `pid=...` and `task=t-...`, then removes it on completion. External cleanup tools should refuse to delete a worktree when that lock's pid is still alive.
 
 `aid merge` auto-merges the worktree branch into the current branch and cleans up the worktree directory. Failed tasks auto-cleanup their worktrees. Worktree escape detection warns if an agent accidentally modifies the main repo.
 

@@ -205,7 +205,7 @@ fn group_finding(store: Arc<store::Store>, action: GroupFindingAction) -> Result
 pub(super) fn worktree(action: WorktreeAction) -> Result<()> {
     match action {
         WorktreeAction::Create { branch, base, repo } => cmd::worktree::create(&branch, base.as_deref(), repo.as_deref()),
-        WorktreeAction::List { repo } => cmd::worktree::list(repo.as_deref()),
+        WorktreeAction::List { repo, json, active } => cmd::worktree::list(repo.as_deref(), json, active),
         WorktreeAction::Prune { repo } => cmd::worktree::prune(repo.as_deref()),
         WorktreeAction::Remove { branch, repo } => cmd::worktree::remove(&branch, repo.as_deref()),
     }

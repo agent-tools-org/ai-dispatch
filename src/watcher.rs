@@ -2,6 +2,7 @@
 // Exports streaming and buffered watchers plus shared watcher state.
 mod extract;
 mod progress;
+mod stderr;
 mod stream;
 #[cfg(test)]
 mod tests;
@@ -17,6 +18,7 @@ use tokio::time::{timeout, Duration};
 use crate::agent::Agent;
 use crate::cmd::run_hung_recovery;
 use crate::paths;
+use crate::process_group::force_kill_process_group;
 use crate::rate_limit;
 use crate::store::Store;
 use crate::types::*;
@@ -24,6 +26,7 @@ use extract::extract_milestone_detail;
 #[cfg(test)]
 use extract::{extract_finding_detail, parse_milestone_event};
 use progress::LoopDetector;
+use stderr::{drain_stderr_capture, spawn_stderr_capture};
 pub(crate) use progress::SyntheticMilestoneTracker;
 pub(crate) use stream::{handle_streaming_line, handle_streaming_line_with_session, StreamLineContext};
 const HUNG_TIMEOUT: Duration = Duration::from_secs(300);
@@ -65,6 +68,7 @@ pub async fn watch_streaming(
             Ok(Ok(None)) => break,
             Ok(Err(e)) => return Err(e.into()),
             Err(_) => {
+                force_kill_process_group(child);
                 let _ = child.kill().await;
                 let _ = run_hung_recovery::insert_hung_detected_events(
                     store.as_ref(),
@@ -112,6 +116,7 @@ pub async fn watch_streaming(
                     ),
                     metadata: None,
                 });
+                force_kill_process_group(child);
                 let _ = child.kill().await;
                 info.status = TaskStatus::Failed;
                 break;
@@ -125,17 +130,18 @@ pub async fn watch_streaming(
                     detail: "Agent appears stuck in a loop — killing process".to_string(),
                     metadata: None,
                 });
+                force_kill_process_group(child);
                 let _ = child.kill().await;
                 info.status = TaskStatus::Failed;
                 if let Some(handle) = stderr_handle.take() {
-                    let _ = handle.await;
+                    drain_stderr_capture(handle).await;
                 }
                 return Ok(info);
             }
         }
     }
     if let Some(handle) = stderr_handle.take() {
-        let _ = handle.await;
+        drain_stderr_capture(handle).await;
     }
     let exit_status = child.wait().await?;
     let status = if exit_status.success() {
@@ -210,7 +216,7 @@ pub async fn watch_buffered(
         }
     }
     if let Some(handle) = stderr_handle {
-        let _ = handle.await;
+        drain_stderr_capture(handle).await;
     }
     let exit_status = child.wait().await?;
     let mut info = if exit_status.success() {
@@ -231,27 +237,6 @@ pub async fn watch_buffered(
     let event = crate::agent::gemini::make_completion_event(task_id, &info);
     store.insert_event(&event)?;
     Ok(info)
-}
-
-/// Spawn a background task to capture stderr to a file
-fn spawn_stderr_capture(
-    child: &mut Child,
-    task_id: &TaskId,
-) -> Option<tokio::task::JoinHandle<()>> {
-    let stderr = child.stderr.take()?;
-    let stderr_path = paths::stderr_path(task_id.as_str());
-    Some(tokio::spawn(async move {
-        let reader = BufReader::new(stderr);
-        let mut lines = reader.lines();
-        let mut collected = String::new();
-        while let Ok(Some(line)) = lines.next_line().await {
-            collected.push_str(&line);
-            collected.push('\n');
-        }
-        if !collected.is_empty() {
-            let _ = tokio::fs::write(&stderr_path, &collected).await;
-        }
-    }))
 }
 
 fn apply_completion_event(info: &mut CompletionInfo, event: &TaskEvent) {

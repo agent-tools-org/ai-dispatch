@@ -1083,6 +1083,8 @@ fn run_post_merge_verify_warns_on_failure() {
 #[test]
 fn sandbox_allows_aid_worktree_paths() {
     let _permit = test_subprocess::acquire();
+    let home_path = crate::worktree::aid_worktree_root().join("demo").join("feat/foo");
+    assert!(is_safe_worktree_path(&home_path.to_string_lossy()));
     assert!(is_safe_worktree_path("/tmp/aid-wt-feat-foo"));
     assert!(is_safe_worktree_path("/tmp/aid-wt-fix/bar"));
     assert!(is_safe_worktree_path("/private/tmp/aid-wt-test"));

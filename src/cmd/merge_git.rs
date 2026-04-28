@@ -308,19 +308,17 @@ pub fn is_safe_worktree_path(wt_path: &str) -> bool {
     }
     let canonical = match Path::new(wt_path).canonicalize() {
         Ok(p) => p,
-        Err(_) => return wt_path.starts_with("/tmp/aid-wt-")
-            || wt_path.starts_with("/private/tmp/aid-wt-"),
+        Err(_) => return crate::worktree::is_aid_managed_worktree_path(Path::new(wt_path)),
     };
-    let s = canonical.to_string_lossy();
-    s.starts_with("/tmp/aid-wt-") || s.starts_with("/private/tmp/aid-wt-")
+    crate::worktree::is_aid_managed_worktree_path(&canonical)
 }
 
 pub fn remove_worktree(repo_dir: &str, wt_path: &str) -> Result<()> {
-    // SANDBOX: refuse to touch anything outside /tmp/aid-wt-*
+    // SANDBOX: refuse to touch anything outside aid-managed worktree paths.
     if !is_safe_worktree_path(wt_path) {
         return Err(anyhow!(
             "[aid] SAFETY: refusing to remove '{}' — not an aid worktree path. \
-             Only /tmp/aid-wt-* paths are allowed.",
+             Only ~/.aid/worktrees/* and legacy /tmp/aid-wt-* paths are allowed.",
             wt_path
         ));
     }
@@ -348,7 +346,7 @@ pub fn remove_worktree(repo_dir: &str, wt_path: &str) -> Result<()> {
     let canonical_str = canonical.to_string_lossy().to_string();
     if !is_safe_worktree_path(&canonical_str) {
         return Err(anyhow!(
-            "[aid] SAFETY: refusing fallback removal for '{}' — canonical path '{}' is outside /tmp/aid-wt-*",
+            "[aid] SAFETY: refusing fallback removal for '{}' — canonical path '{}' is outside aid-managed worktree paths",
             wt_path,
             canonical_str
         ));

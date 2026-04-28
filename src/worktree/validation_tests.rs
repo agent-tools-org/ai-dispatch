@@ -2,7 +2,7 @@
 // Exports: none.
 // Deps: super helpers, tempfile, crate::test_subprocess, std::process::Command.
 
-use super::{create_worktree, is_valid_git_worktree};
+use super::{aid_worktree_path, create_worktree, is_valid_git_worktree};
 use crate::test_subprocess;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -121,7 +121,7 @@ fn create_worktree_recreates_when_existing_path_is_standalone() {
     let _permit = test_subprocess::acquire();
     let main_repo = init_repo();
     let branch = "test-branch";
-    let expected_path = PathBuf::from(format!("/tmp/aid-wt-{branch}"));
+    let expected_path = aid_worktree_path(main_repo.path(), branch);
     let _ = std::fs::remove_dir_all(&expected_path);
     std::fs::create_dir_all(&expected_path).unwrap();
     git(&expected_path, &["init", "-b", "main"]);

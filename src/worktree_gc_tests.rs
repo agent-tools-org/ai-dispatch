@@ -7,6 +7,7 @@ use super::{
     same_tmp_worktree_path,
 };
 use crate::test_subprocess;
+use crate::worktree::is_aid_managed_worktree_path;
 use std::path::Path;
 use std::process::Command;
 use tempfile::TempDir;
@@ -68,4 +69,6 @@ fn tmp_path_match_handles_private_tmp_alias() {
         "/tmp/aid-wt-demo",
         "/private/tmp/aid-wt-demo"
     ));
+    assert!(is_aid_managed_worktree_path(Path::new("/tmp/aid-wt-demo")));
+    assert!(is_aid_managed_worktree_path(Path::new("/private/tmp/aid-wt-demo")));
 }

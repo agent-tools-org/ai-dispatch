@@ -42,7 +42,7 @@ pub fn auto_commit(dir: &str, task_id: &str, prompt: &str) -> Result<()> {
     }
     let clean = strip_aid_tags(prompt);
     // Skip injected context prefixes like [Shared Context: ...] and [Team Knowledge — ...]
-    let summary = extract_task_summary(&clean);
+    let summary = extract_task_summary(&clean, task_id);
     let commit = Command::new("git").args(["-C", dir, "commit", "--allow-empty-message", "-m", &format!("{summary}\n\nTask: {task_id}")]).output().context("Failed to run git commit")?;
     anyhow::ensure!(commit.status.success(), "git commit failed: {}", String::from_utf8_lossy(&commit.stderr));
     Ok(())
@@ -61,7 +61,7 @@ fn has_staged_changes(dir: &str) -> Result<bool> {
 }
 /// Extract the actual task description from the [Task] section, falling back to
 /// the first non-header content line.
-fn extract_task_summary(prompt: &str) -> String {
+fn extract_task_summary(prompt: &str, task_id: &str) -> String {
     // Prefer content after [Task] header — that's the real task description
     let mut in_task_section = false;
     for line in prompt.lines() {
@@ -75,6 +75,7 @@ fn extract_task_summary(prompt: &str) -> String {
                 || trimmed.starts_with('[')
                 || trimmed.starts_with("---")
                 || trimmed.starts_with('#')
+                || is_markdown_bullet(trimmed)
             {
                 continue;
             }
@@ -88,12 +89,22 @@ fn extract_task_summary(prompt: &str) -> String {
             || trimmed.starts_with('[')
             || trimmed.starts_with("---")
             || trimmed.starts_with('#')
+            || is_markdown_bullet(trimmed)
         {
             continue;
         }
         return trimmed.chars().take(60).collect();
     }
-    prompt.chars().take(60).collect()
+    let task_id_short: String = task_id.chars().take(8).collect();
+    format!("agent commit (task {task_id_short})")
+}
+
+fn is_markdown_bullet(line: &str) -> bool {
+    if line.starts_with("- ") || line.starts_with("* ") || line.starts_with("+ ") {
+        return true;
+    }
+    let digit_count = line.bytes().take_while(u8::is_ascii_digit).count();
+    digit_count > 0 && line[digit_count..].starts_with(". ")
 }
 
 /// Strip `<aid-*>...</aid-*>` tag blocks from text to prevent prompt metadata
@@ -175,10 +186,16 @@ mod tests {
     fn strip_aid_tags_passthrough_no_tags() { let input = "Just a normal prompt with no tags"; assert_eq!(strip_aid_tags(input), input); }
 
     #[test]
-    fn extract_task_summary_prefers_task_section() { let prompt = "[Shared Context: batch]\nAuto-created for batch dispatch\n\n[Team Knowledge — dev]\n- coding rules\n\n[Task]\nImplement the parser changes for v2"; assert_eq!(extract_task_summary(prompt), "Implement the parser changes for v2"); }
+    fn extract_task_summary_prefers_task_section() { let prompt = "[Shared Context: batch]\nAuto-created for batch dispatch\n\n[Team Knowledge — dev]\n- coding rules\n\n[Task]\nImplement the parser changes for v2"; assert_eq!(extract_task_summary(prompt, "task-123"), "Implement the parser changes for v2"); }
 
     #[test]
-    fn extract_task_summary_plain_prompt() { assert_eq!(extract_task_summary("Fix the login bug"), "Fix the login bug"); }
+    fn extract_task_summary_skips_markdown_bullets() { let prompt = "[Team Knowledge]\n- [Review Checklist](knowledge/review-checklist.md)\n- [Other](knowledge/other.md)"; assert_eq!(extract_task_summary(prompt, "t-1234567890"), "agent commit (task t-123456)"); }
+
+    #[test]
+    fn extract_task_summary_skips_bullets_inside_task_section() { let prompt = "[Task]\n- bullet point\n\nReal task description"; assert_eq!(extract_task_summary(prompt, "task-123"), "Real task description"); }
+
+    #[test]
+    fn extract_task_summary_plain_prompt() { assert_eq!(extract_task_summary("Fix the login bug", "task-123"), "Fix the login bug"); }
 
     #[test]
     fn detects_dirty_git_repo() { let _permit = test_subprocess::acquire(); let dir = repo(); assert!(!has_uncommitted_changes(dir.path().to_str().unwrap()).unwrap()); write_path(dir.path(), "tracked.txt", "change"); assert!(has_uncommitted_changes(dir.path().to_str().unwrap()).unwrap()); }

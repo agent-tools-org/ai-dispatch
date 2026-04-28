@@ -271,6 +271,12 @@ pub enum WorktreeAction {
     },
     /// List active aid-managed worktrees
     List {
+        /// Emit machine-readable JSON
+        #[arg(long)]
+        json: bool,
+        /// Show only worktrees with live task locks
+        #[arg(long)]
+        active: bool,
         /// Repository path (defaults to current dir)
         #[arg(long)]
         repo: Option<String>,

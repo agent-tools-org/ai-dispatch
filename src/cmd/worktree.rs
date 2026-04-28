@@ -3,10 +3,26 @@
 // Deps: crate::worktree
 
 use anyhow::{Context, Result};
+use serde::Serialize;
 use std::path::Path;
 use std::time::SystemTime;
 
 const STALE_WORKTREE_AGE_SECS: u64 = 24 * 60 * 60;
+
+#[derive(Serialize)]
+struct AidWorktreeEntry {
+    path: String,
+    branch: String,
+    active: bool,
+    lock_pid: Option<u32>,
+    lock_task_id: Option<String>,
+    modified_age_secs: u64,
+}
+
+struct WorktreeLock {
+    pid: u32,
+    task_id: Option<String>,
+}
 
 /// Check if a path is an aid-managed worktree (delegates to shared sandbox guard).
 fn is_aid_worktree(path: &str) -> bool {
@@ -28,11 +44,16 @@ pub fn create(branch: &str, base: Option<&str>, repo: Option<&str>) -> Result<()
 }
 
 /// List all aid-managed worktrees (~/.aid/worktrees/* plus legacy /tmp/aid-wt-*).
-pub fn list(repo: Option<&str>) -> Result<()> {
+pub fn list(repo: Option<&str>, json: bool, active_only: bool) -> Result<()> {
     let repo_dir = repo.unwrap_or(".");
+    if json {
+        println!("{}", list_json(Some(repo_dir), active_only)?);
+        return Ok(());
+    }
+    let entries = filtered_worktree_entries(repo_dir, active_only)?;
     let mut count = 0;
-    for (path, branch) in aid_worktree_entries(repo_dir)? {
-        println!("{:<50} {}", path, branch);
+    for entry in entries {
+        println!("{:<50} {}", entry.path, entry.branch);
         count += 1;
     }
     if count == 0 {
@@ -48,20 +69,35 @@ pub fn prune(repo: Option<&str>) -> Result<()> {
     let entries = aid_worktree_entries(repo_dir)?;
     // First pass: clear stale locks on ALL worktrees (not just old ones)
     let mut locks_cleared = 0usize;
-    for (path, _) in &entries {
-        if clear_dead_lock(Path::new(path)) {
+    for entry in &entries {
+        if clear_dead_lock(Path::new(&entry.path)) {
             locks_cleared += 1;
         }
     }
     // Second pass: remove worktrees older than 24h
     let mut pruned = 0usize;
-    for path in stale_worktree_paths(repo_dir)? {
-        match super::merge::remove_worktree(repo_dir, &path) {
+    for entry in aid_worktree_entries(repo_dir)? {
+        if let Some(lock) = live_worktree_lock(Path::new(&entry.path)) {
+            if is_stale_worktree_path(Path::new(&entry.path)) {
+                let task = lock.task_id.as_deref().unwrap_or("unknown");
+                aid_warn!(
+                    "[aid] Skipping prune: {} has active task {} (pid {})",
+                    entry.path,
+                    task,
+                    lock.pid
+                );
+            }
+            continue;
+        }
+        if !should_prune_worktree(&entry.path) {
+            continue;
+        }
+        match super::merge::remove_worktree(repo_dir, &entry.path) {
             Ok(()) => {
-                println!("[aid] Pruned stale worktree: {path}");
+                println!("[aid] Pruned stale worktree: {}", entry.path);
                 pruned += 1;
             }
-            Err(err) => aid_warn!("[aid] Failed to prune {path}: {err}"),
+            Err(err) => aid_warn!("[aid] Failed to prune {}: {err}", entry.path),
         }
     }
     if pruned == 0 && locks_cleared == 0 {
@@ -99,12 +135,24 @@ pub fn remove(branch: &str, repo: Option<&str>) -> Result<()> {
 fn stale_worktree_paths(repo_dir: &str) -> Result<Vec<String>> {
     Ok(aid_worktree_entries(repo_dir)?
         .into_iter()
-        .map(|(path, _branch)| path)
+        .map(|entry| entry.path)
         .filter(|path| should_prune_worktree(path))
         .collect())
 }
 
-fn aid_worktree_entries(repo_dir: &str) -> Result<Vec<(String, String)>> {
+fn list_json(repo: Option<&str>, active_only: bool) -> Result<String> {
+    let entries = filtered_worktree_entries(repo.unwrap_or("."), active_only)?;
+    serde_json::to_string_pretty(&entries).map_err(Into::into)
+}
+
+fn filtered_worktree_entries(repo_dir: &str, active_only: bool) -> Result<Vec<AidWorktreeEntry>> {
+    Ok(aid_worktree_entries(repo_dir)?
+        .into_iter()
+        .filter(|entry| !active_only || entry.active)
+        .collect())
+}
+
+fn aid_worktree_entries(repo_dir: &str) -> Result<Vec<AidWorktreeEntry>> {
     let output = std::process::Command::new("git")
         .args(["-C", repo_dir, "worktree", "list", "--porcelain"])
         .output()
@@ -131,45 +179,87 @@ fn aid_worktree_entries(repo_dir: &str) -> Result<Vec<(String, String)>> {
 }
 
 fn push_aid_worktree_entry(
-    entries: &mut Vec<(String, String)>,
+    entries: &mut Vec<AidWorktreeEntry>,
     current_path: &mut String,
     current_branch: &mut String,
 ) {
     if is_aid_worktree(current_path) && !current_path.is_empty() {
-        entries.push((current_path.clone(), current_branch.clone()));
+        entries.push(aid_worktree_entry(current_path, current_branch));
     }
     current_path.clear();
     current_branch.clear();
 }
 
+fn aid_worktree_entry(path: &str, branch: &str) -> AidWorktreeEntry {
+    let lock = live_worktree_lock(Path::new(path));
+    AidWorktreeEntry {
+        path: path.to_string(),
+        branch: branch.to_string(),
+        active: lock.is_some(),
+        lock_pid: lock.as_ref().map(|lock| lock.pid),
+        lock_task_id: lock.and_then(|lock| lock.task_id),
+        modified_age_secs: modified_age_secs(Path::new(path)),
+    }
+}
+
+fn read_worktree_lock(wt_path: &Path) -> Option<WorktreeLock> {
+    let content = std::fs::read_to_string(wt_path.join(".aid-lock")).ok()?;
+    let mut pid = None;
+    let mut task_id = None;
+    for line in content.lines() {
+        if let Some(value) = line.strip_prefix("pid=") {
+            pid = value.trim().parse::<u32>().ok();
+        } else if let Some(value) = line.strip_prefix("task=") {
+            task_id = Some(value.trim().to_string());
+        }
+    }
+    Some(WorktreeLock { pid: pid?, task_id })
+}
+
+fn live_worktree_lock(wt_path: &Path) -> Option<WorktreeLock> {
+    let lock = read_worktree_lock(wt_path)?;
+    crate::worktree::process_alive_check(lock.pid).then_some(lock)
+}
+
 /// Clear a .aid-lock file if the holding process is dead. Returns true if cleared.
 fn clear_dead_lock(wt_path: &Path) -> bool {
-    let lock_path = wt_path.join(".aid-lock");
-    let content = match std::fs::read_to_string(&lock_path) {
-        Ok(c) => c,
-        Err(_) => return false,
-    };
-    let pid = content.lines()
-        .find_map(|line| line.strip_prefix("pid="))
-        .and_then(|p| p.trim().parse::<u32>().ok());
-    let Some(pid) = pid else { return false };
-    if crate::worktree::process_alive_check(pid) {
+    let Some(lock) = read_worktree_lock(wt_path) else { return false };
+    if crate::worktree::process_alive_check(lock.pid) {
         return false;
     }
-    let task = content.lines()
-        .find_map(|line| line.strip_prefix("task="))
-        .unwrap_or("unknown");
-    println!("[aid] Cleared stale lock in {} (task={}, pid={} dead)", wt_path.display(), task, pid);
-    let _ = std::fs::remove_file(&lock_path);
+    let task = lock.task_id.as_deref().unwrap_or("unknown");
+    println!(
+        "[aid] Cleared stale lock in {} (task={}, pid={} dead)",
+        wt_path.display(),
+        task,
+        lock.pid
+    );
+    let _ = std::fs::remove_file(wt_path.join(".aid-lock"));
     true
 }
 
 fn should_prune_worktree(wt_path: &str) -> bool {
+    if live_worktree_lock(Path::new(wt_path)).is_some() {
+        return false;
+    }
+    is_stale_worktree_path(Path::new(wt_path))
+}
+
+fn is_stale_worktree_path(wt_path: &Path) -> bool {
     std::fs::metadata(wt_path)
         .ok()
         .and_then(|meta| meta.modified().ok())
         .map(is_stale_worktree_time)
         .unwrap_or(true)
+}
+
+fn modified_age_secs(wt_path: &Path) -> u64 {
+    std::fs::metadata(wt_path)
+        .ok()
+        .and_then(|meta| meta.modified().ok())
+        .and_then(|modified| SystemTime::now().duration_since(modified).ok())
+        .map(|age| age.as_secs())
+        .unwrap_or(0)
 }
 
 fn is_stale_worktree_time(modified: SystemTime) -> bool {
@@ -180,29 +270,5 @@ fn is_stale_worktree_time(modified: SystemTime) -> bool {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::should_prune_worktree;
-    use std::process::Command;
-
-    #[test]
-    fn should_prune_worktree_old_path() {
-        let temp = tempfile::tempdir().expect("tempdir");
-        let path = temp.path().join("aid-wt-old");
-        std::fs::create_dir(&path).expect("create dir");
-        let status = Command::new("touch")
-            .args(["-t", "202001010000"])
-            .arg(&path)
-            .status()
-            .expect("touch status");
-        assert!(status.success());
-        assert!(should_prune_worktree(path.to_str().expect("utf8 path")));
-    }
-
-    #[test]
-    fn should_prune_worktree_recent_path() {
-        let temp = tempfile::tempdir().expect("tempdir");
-        let path = temp.path().join("aid-wt-recent");
-        std::fs::create_dir(&path).expect("create dir");
-        assert!(!should_prune_worktree(path.to_str().expect("utf8 path")));
-    }
-}
+#[path = "worktree/tests.rs"]
+mod tests;

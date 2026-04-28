@@ -2,9 +2,11 @@
 // Exports CodexAgent for streaming runs plus helpers for tool and usage events.
 // Depends on serde_json for metadata-rich completion events.
 
-use anyhow::Result;
+use anyhow::{bail, Result};
 use chrono::Local;
 use serde_json::{json, Map, Value};
+use std::fs;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::OnceLock;
 
@@ -88,6 +90,20 @@ impl super::Agent for CodexAgent {
             cmd.args(["-o", output]);
         }
         if let Some(ref dir) = opts.dir {
+            let dir_path = Path::new(dir);
+            if !dir_path.exists() {
+                bail!("codex working directory does not exist: {}", dir);
+            }
+            if let Some(gitdir) = resolve_worktree_gitdir(dir_path) {
+                if let Some(config) = writable_roots_config(&gitdir) {
+                    cmd.args(["-c", &config]);
+                } else {
+                    eprintln!(
+                        "warning: codex worktree gitdir is not valid UTF-8: {}",
+                        gitdir.display()
+                    );
+                }
+            }
             cmd.args(["-C", dir]);
             cmd.current_dir(dir);
         }
@@ -129,6 +145,61 @@ impl super::Agent for CodexAgent {
             exit_code: None,
         }
     }
+}
+
+fn resolve_worktree_gitdir(dir: &Path) -> Option<PathBuf> {
+    let git_path = dir.join(".git");
+    let gitfile = worktree_gitfile(&git_path)?;
+    let content = match fs::read_to_string(&gitfile) {
+        Ok(content) => content,
+        Err(err) => {
+            eprintln!("warning: failed to read codex worktree gitfile: {err}");
+            return None;
+        }
+    };
+    let Some(raw_path) = content.lines().find_map(|line| line.strip_prefix("gitdir:")) else {
+        eprintln!("warning: failed to parse codex worktree gitfile: {}", gitfile.display());
+        return None;
+    };
+    let path = Path::new(raw_path.trim());
+    let resolved = if path.is_absolute() { path.to_path_buf() } else { dir.join(path) };
+    match fs::canonicalize(resolved) {
+        Ok(path) => Some(path),
+        Err(err) => {
+            eprintln!("warning: failed to resolve codex worktree gitdir: {err}");
+            None
+        }
+    }
+}
+
+fn worktree_gitfile(git_path: &Path) -> Option<PathBuf> {
+    let (gitfile, metadata) = resolve_git_path(git_path)?;
+    if metadata.is_dir() {
+        return None;
+    }
+    if metadata.is_file() {
+        return Some(gitfile);
+    }
+    eprintln!(
+        "warning: codex .git path is neither file nor directory: {}",
+        gitfile.display()
+    );
+    None
+}
+
+fn resolve_git_path(git_path: &Path) -> Option<(PathBuf, fs::Metadata)> {
+    let metadata = fs::symlink_metadata(git_path).ok()?;
+    if metadata.file_type().is_symlink() {
+        let resolved = fs::canonicalize(git_path).ok()?;
+        let metadata = fs::metadata(&resolved).ok()?;
+        return Some((resolved, metadata));
+    }
+    Some((git_path.to_path_buf(), metadata))
+}
+
+fn writable_roots_config(path: &Path) -> Option<String> {
+    let value = toml::Value::Array(vec![toml::Value::String(path.to_str()?.to_string())]);
+    Some(format!("sandbox_workspace_write.writable_roots={value}"))
 }
 
 fn parse_item_event(
@@ -427,6 +498,8 @@ mod tests {
     use super::{parse_semver, CodexAgent};
     use crate::agent::{Agent, RunOpts};
     use crate::types::{EventKind, TaskId};
+    use std::fs;
+    use tempfile::tempdir;
 
     #[test]
     fn semver_parsing() {
@@ -535,6 +608,94 @@ mod tests {
             .collect();
 
         assert!(args.contains(&"--skip-git-repo-check".to_string()));
+    }
+
+    #[test]
+    fn build_command_adds_worktree_metadata_to_writable_roots() {
+        let temp = tempdir().unwrap();
+        let worktree = temp.path().join("worktree");
+        let metadata = temp.path().join("foo/.git/worktrees/bar");
+        fs::create_dir_all(&worktree).unwrap();
+        fs::create_dir_all(&metadata).unwrap();
+        fs::write(worktree.join(".git"), "gitdir: ../foo/.git/worktrees/bar\n").unwrap();
+        let metadata = metadata.canonicalize().unwrap();
+        let opts = RunOpts {
+            dir: Some(worktree.to_string_lossy().to_string()),
+            output: None,
+            result_file: None,
+            model: None,
+            budget: false,
+            read_only: false,
+            context_files: vec![],
+            session_id: None,
+            env: None,
+            env_forward: None,
+        };
+        let cmd = CodexAgent.build_command("test prompt", &opts).unwrap();
+        let args: Vec<String> = cmd
+            .get_args()
+            .map(|arg| arg.to_string_lossy().to_string())
+            .collect();
+
+        assert!(args.contains(&"-c".to_string()));
+        assert!(args.iter().any(|arg| {
+            arg.starts_with("sandbox_workspace_write.writable_roots=")
+                && arg.contains(metadata.to_string_lossy().as_ref())
+        }));
+    }
+
+    #[test]
+    fn build_command_skips_writable_roots_for_regular_repo() {
+        let temp = tempdir().unwrap();
+        let repo = temp.path().join("repo");
+        fs::create_dir_all(repo.join(".git")).unwrap();
+        let opts = RunOpts {
+            dir: Some(repo.to_string_lossy().to_string()),
+            output: None,
+            result_file: None,
+            model: None,
+            budget: false,
+            read_only: false,
+            context_files: vec![],
+            session_id: None,
+            env: None,
+            env_forward: None,
+        };
+        let cmd = CodexAgent.build_command("test prompt", &opts).unwrap();
+        let args: Vec<String> = cmd
+            .get_args()
+            .map(|arg| arg.to_string_lossy().to_string())
+            .collect();
+
+        assert!(!args.iter().any(|arg| {
+            arg.starts_with("sandbox_workspace_write.writable_roots=")
+        }));
+    }
+
+    #[test]
+    fn build_command_handles_missing_gitfile_gracefully() {
+        let temp = tempdir().unwrap();
+        let opts = RunOpts {
+            dir: Some(temp.path().to_string_lossy().to_string()),
+            output: None,
+            result_file: None,
+            model: None,
+            budget: false,
+            read_only: false,
+            context_files: vec![],
+            session_id: None,
+            env: None,
+            env_forward: None,
+        };
+        let cmd = CodexAgent.build_command("test prompt", &opts).unwrap();
+        let args: Vec<String> = cmd
+            .get_args()
+            .map(|arg| arg.to_string_lossy().to_string())
+            .collect();
+
+        assert!(!args.iter().any(|arg| {
+            arg.starts_with("sandbox_workspace_write.writable_roots=")
+        }));
     }
 
     #[test]

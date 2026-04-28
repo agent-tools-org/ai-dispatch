@@ -6,6 +6,7 @@ use tokio::process::Command;
 
 use crate::{store::Store, types::*, watcher};
 use crate::cmd::run::RunArgs;
+use crate::process_group::cleanup_process_group;
 use crate::store::TaskCompletionUpdate;
 
 use super::{clean_output_if_jsonl, fill_empty_output_from_log};
@@ -24,16 +25,6 @@ pub(crate) struct RunProcessArgs<'a> {
     pub model: Option<&'a str>,
     pub streaming: bool,
     pub workgroup_id: Option<&'a str>,
-}
-
-/// Clean up any lingering child processes in the process group (Unix only).
-#[cfg(unix)]
-fn cleanup_process_group(child: &tokio::process::Child) {
-    if let Some(pid) = child.id() {
-        unsafe {
-            libc::kill(-(pid as i32), libc::SIGTERM);
-        }
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -235,7 +226,6 @@ pub(crate) async fn run_agent_process_impl(args: RunProcessArgs<'_>) -> Result<(
         }
     };
     // SIGTERM orphaned child processes — no sleep needed on normal exit
-    #[cfg(unix)]
     cleanup_process_group(&child);
     let _ = child.kill().await;
     let _ = child.wait().await;

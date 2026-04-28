@@ -10,29 +10,8 @@ use std::sync::Arc;
 use std::time::Instant;
 use tokio::process::Command;
 use tokio::time::{timeout, Duration};
+use crate::process_group::{cleanup_process_group, force_kill_process_group};
 use crate::store::Store;
-
-/// Clean up any lingering child processes in the process group (Unix only).
-#[cfg(unix)]
-fn cleanup_process_group(child: &tokio::process::Child) {
-    if let Some(pid) = child.id() {
-        let pid = pid as i32;
-        unsafe {
-            libc::kill(-pid, libc::SIGTERM);
-        }
-    }
-}
-
-/// Forcibly kill the entire process group (Unix only). Used on timeout.
-#[cfg(unix)]
-fn force_kill_process_group(child: &tokio::process::Child) {
-    if let Some(pid) = child.id() {
-        let pid = pid as i32;
-        unsafe {
-            libc::kill(-pid, libc::SIGKILL);
-        }
-    }
-}
 use crate::store::TaskCompletionUpdate;
 use crate::types::{CompletionInfo, EventKind, TaskEvent, TaskId, TaskStatus};
 use crate::watcher;
@@ -143,7 +122,6 @@ pub(crate) async fn run_agent_process_with_timeout(
     let result = timeout(deadline, watch_future).await;
     let timed_out = result.is_err();
     // On timeout: force-kill immediately. On normal exit: just SIGTERM orphaned children.
-    #[cfg(unix)]
     if timed_out {
         force_kill_process_group(&child);
     } else {

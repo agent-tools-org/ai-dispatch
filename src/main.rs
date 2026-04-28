@@ -43,6 +43,7 @@ mod notify;
 mod paths;
 mod prompt;
 mod prompt_scan;
+pub mod process_group;
 mod process_guard;
 mod pty_bridge;
 mod pty_runner;

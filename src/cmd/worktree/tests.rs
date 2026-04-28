@@ -43,7 +43,7 @@ fn add_worktree(repo_dir: &Path, branch: &str, name: &str) -> PathBuf {
             branch,
         ],
     );
-    path
+    path.canonicalize().unwrap_or(path)
 }
 
 fn remove_worktree(repo_dir: &Path, path: &Path) {

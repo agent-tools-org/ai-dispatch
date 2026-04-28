@@ -235,7 +235,7 @@ mod tests {
             AgentKind::Gemini,
             AgentKind::Qwen,
             AgentKind::Codex,
-            AgentKind::Claude,
+            AgentKind::Copilot,
         ]);
         mark_rate_limited(&AgentKind::Codex, "rate limit exceeded");
         let task = make_task("t-002", AgentKind::Codex);

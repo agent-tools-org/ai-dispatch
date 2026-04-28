@@ -199,7 +199,7 @@ fn audit_text_shows_full_failure_details() {
             task_id: task.id.clone(),
             timestamp: Local::now(),
             event_kind: EventKind::Error,
-            detail: "Failed during execution: agent exited with code 1\nFailure context: working directory: /tmp/demo; agent binary: /bin/sh; worktree path: /tmp/aid-wt-demo; worktree created: true".to_string(),
+            detail: "Failed during execution: agent exited with code 1\nFailure context: working directory: /tmp/demo; agent binary: /bin/sh; worktree path: /Users/test/.aid/worktrees/demo/feat/demo; worktree created: true".to_string(),
             metadata: None,
         })
         .unwrap();
@@ -208,7 +208,7 @@ fn audit_text_shows_full_failure_details() {
 
     assert!(text.contains("Failure details:"));
     assert!(text.contains("Failed during execution: agent exited with code 1"));
-    assert!(text.contains("Failure context: working directory: /tmp/demo; agent binary: /bin/sh; worktree path: /tmp/aid-wt-demo; worktree created: true"));
+    assert!(text.contains("Failure context: working directory: /tmp/demo; agent binary: /bin/sh; worktree path: /Users/test/.aid/worktrees/demo/feat/demo; worktree created: true"));
 }
 
 #[test]

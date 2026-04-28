@@ -3,6 +3,7 @@
 // Deps: anyhow, crate::project::ProjectConfig, std::process::Command.
 
 use crate::project::ProjectConfig;
+use crate::worktree::is_aid_managed_worktree_path;
 use anyhow::{Context, Result};
 use std::collections::BTreeSet;
 use std::path::Path;
@@ -252,8 +253,7 @@ fn merge_reason_from_outputs(cherry: &str, log: &str) -> Option<MergeReason> {
 }
 
 fn should_consider_worktree(path: &str, tracked_paths: &BTreeSet<String>) -> bool {
-    path.starts_with("/tmp/aid-wt-")
-        || path.starts_with("/private/tmp/aid-wt-")
+    is_aid_managed_worktree_path(Path::new(path))
         || tracked_paths.iter().any(|tracked| same_tmp_worktree_path(tracked, path))
 }
 

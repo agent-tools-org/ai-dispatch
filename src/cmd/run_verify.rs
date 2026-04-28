@@ -12,7 +12,7 @@ use super::RunArgs;
 
 pub(in crate::cmd) fn maybe_cleanup_fast_fail_impl(store: &Store, task_id: &TaskId, task: &Task) {
     let Some(ref wt_path) = task.worktree_path else { return };
-    // SANDBOX: refuse to touch anything outside /tmp/aid-wt-*
+    // SANDBOX: refuse to touch anything outside aid-managed worktree paths.
     if !crate::cmd::merge::merge_git::is_safe_worktree_path(wt_path) {
         aid_warn!("[aid] SAFETY: refusing to remove '{}' — not an aid worktree path", wt_path);
         return;

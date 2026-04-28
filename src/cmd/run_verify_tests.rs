@@ -6,6 +6,7 @@ use super::*;
 use crate::store::Store;
 use crate::types::{AgentKind, Task, TaskStatus, VerifyStatus};
 use chrono::Local;
+use std::path::Path;
 use tempfile::TempDir;
 
 fn make_task(id: &str, worktree_path: &str) -> Task {
@@ -100,7 +101,9 @@ fn maybe_verify_records_missing_deps_hint_for_fresh_worktree() {
 fn maybe_verify_reports_stale_worktree_when_dir_is_missing() {
     let store = Store::open_memory().unwrap();
     let task_id = TaskId("t-stale-verify".to_string());
-    let mut task = make_task("t-stale-verify", "/tmp/aid-wt-feat-stale");
+    let worktree_path = crate::worktree::aid_worktree_path(Path::new(env!("CARGO_MANIFEST_DIR")), "feat/stale");
+    let worktree_path = worktree_path.to_string_lossy().to_string();
+    let mut task = make_task("t-stale-verify", &worktree_path);
     task.workgroup_id = Some("wg-stale".to_string());
     task.worktree_branch = Some("feat/stale".to_string());
     task.verify = Some("auto".to_string());
@@ -111,7 +114,7 @@ fn maybe_verify_reports_stale_worktree_when_dir_is_missing() {
         &store,
         &task_id,
         Some("auto"),
-        Some("/tmp/aid-wt-feat-stale/.aid/batches"),
+        Some(&format!("{worktree_path}/.aid/batches")),
         None,
     );
 

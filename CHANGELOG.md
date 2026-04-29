@@ -1,3 +1,7 @@
+## Unreleased
+- feat(byok): add bash+jq BYOK provider scaffolding for opencode custom providers, including apply/probe/remove scripts, a MiMo example manifest, sandboxed script coverage, and user docs for routing OpenAI-compatible providers through generated aid custom agents.
+
+
 ## v8.99.1 (2026-04-28)
 - fix(commit): skip markdown bullets in rescue commit subject (#122, #123) — `extract_task_summary` now skips lines starting with `- `, `* `, `+ `, or `<digits>. ` in both the `[Task]`-section parser and the fallback loop. When neither pass yields a usable line, falls back to a generic `agent commit (task <task-id-short>)`. Previously, when a brief lacked an explicit `[Task]` header, the rescue commit subject would be the first injected `[Team Knowledge]` markdown bullet, truncated to 60 chars.
 

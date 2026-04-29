@@ -1,0 +1,38 @@
+# Example BYOK manifest for the official Xiaomi MiMo OpenAI-compatible endpoint.
+# Used by scripts/aid-byok-apply.sh to configure opencode and generate an aid agent.
+# Dependencies: opencode custom providers, MIMO_API_KEY environment variable.
+
+[byok]
+id = "mimo"
+display_name = "MiMo (Xiaomi official)"
+protocol = "openai"
+base_url = "https://token-plan-sgp.xiaomimimo.com/v1"
+key_env = "MIMO_API_KEY"
+default_model = "mimo-v2.5-pro"
+timeout_ms = 300000
+
+[[byok.model]]
+id = "mimo-v2.5-pro"
+name = "MiMo v2.5 Pro"
+context = 131072
+output = 8192
+tool_call = true
+reasoning = false
+
+[[byok.model]]
+id = "mimo-v2.5"
+name = "MiMo v2.5"
+context = 131072
+output = 8192
+tool_call = true
+reasoning = false
+
+[byok.capabilities]
+research = 5
+simple_edit = 6
+complex_impl = 5
+frontend = 4
+debugging = 5
+testing = 5
+refactoring = 5
+documentation = 5

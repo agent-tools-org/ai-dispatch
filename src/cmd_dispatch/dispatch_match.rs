@@ -48,6 +48,7 @@ pub(crate) async fn dispatch(store: Arc<crate::store::Store>, command: Commands)
             | Commands::Team(..)
             | Commands::Tool(..)
             | Commands::Doctor(..)
+            | Commands::Byok(..)
             | Commands::Credential(..)
         ) => dispatch_secondary(store, command).await,
         command @ (
@@ -124,6 +125,7 @@ async fn dispatch_secondary(store: Arc<crate::store::Store>, command: Commands) 
         Commands::Team(command_args_c::TeamArgs { action }) => handlers_b::team(action),
         Commands::Tool(command_args_c::ToolArgs { action }) => handlers_b::tool(action),
         Commands::Doctor(command_args_c::DoctorArgs { apply }) => handlers_c::doctor(store, apply),
+        Commands::Byok(command_args_c::ByokArgs { action }) => handlers_b::byok(action),
         Commands::Credential(command_args_c::CredentialArgs { action }) => handlers_b::credential(action),
         _ => unreachable!("dispatch_secondary received unsupported command"),
     }

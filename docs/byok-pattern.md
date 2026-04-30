@@ -14,9 +14,24 @@ The BYOK pattern lets `aid` route an `opencode` custom provider as a normal aid 
 
 MiMo is the canonical real example. See `examples/byok/mimo.toml`; it uses `key_env = "MIMO_API_KEY"` and does not store the real API key in the repo.
 
+## Quick Start (`aid byok`)
+
+The everyday entry point is the built-in `aid byok` command — no checkout of the `aid` source tree is required.
+
+```bash
+aid byok example > ~/.aid/byok/acme.toml          # scaffold a manifest from MiMo
+aid byok apply --dry-run ~/.aid/byok/acme.toml    # preview the plan
+aid byok apply ~/.aid/byok/acme.toml --key sk-... # apply (or rely on key_env)
+aid byok probe ~/.aid/byok/acme.toml              # confirm /chat/completions emits tool_calls
+aid byok remove acme                              # tear down by provider id (or manifest path)
+aid byok doc | less                               # full BYOK pattern reference
+```
+
+`aid byok` ships the same shell scripts described below as embedded resources, so behavior, exit codes, and `OPENCODE_CONFIG_DIR` / `OPENCODE_AUTH_DIR` / `AID_HOME` overrides are identical. The raw `scripts/aid-byok-*.sh` entry points remain available for users who clone the repo or want to script around the lower-level helpers.
+
 ## Requirements
 
-The helper scripts require `bash`, `jq`, `python3` with stdlib `tomllib`, and `opencode` for non-dry-run apply/remove/probe flows.
+`aid byok` (and the underlying scripts) require `bash`, `jq`, `python3` with stdlib `tomllib`, and `opencode` for non-dry-run apply/remove/probe flows. `aid byok probe` additionally needs `curl`.
 
 ## Manifest Schema
 
@@ -180,19 +195,19 @@ EOF
 
 ```bash
 export ACME_API_KEY="sk-..."
-bash scripts/aid-byok-apply.sh --dry-run ~/.aid/byok/acme.toml
+aid byok apply --dry-run ~/.aid/byok/acme.toml
 ```
 
 3. Apply the provider:
 
 ```bash
-bash scripts/aid-byok-apply.sh ~/.aid/byok/acme.toml
+aid byok apply ~/.aid/byok/acme.toml
 ```
 
 4. Probe tool-call support:
 
 ```bash
-bash scripts/aid-byok-probe.sh ~/.aid/byok/acme.toml
+aid byok probe ~/.aid/byok/acme.toml
 ```
 
 The probe calls `/chat/completions` with a dummy `get_weather(city)` tool and reports `tool_calls: yes/no`, `finish_reason`, and a one-line content preview. It exits `0` when tool calls are present and `2` otherwise.
@@ -214,13 +229,13 @@ Routing is per call by model id. `opencode run --model acme/acme-pro` uses ACME,
 Remove by manifest path:
 
 ```bash
-bash scripts/aid-byok-remove.sh ~/.aid/byok/acme.toml
+aid byok remove ~/.aid/byok/acme.toml
 ```
 
 Or remove by provider id:
 
 ```bash
-bash scripts/aid-byok-remove.sh acme
+aid byok remove acme
 ```
 
 `remove` backs up opencode config and auth files, deletes only `provider.<id>`, removes only the auth entry named `<id>`, and deletes `~/.aid/agents/<id>.toml` only when the file contains the `# aid-byok-generated: <id>` marker. Hand-written agent files are left in place.

@@ -136,7 +136,7 @@ An agent is a **non-interactive CLI** that accepts a prompt, performs the task a
 
 Built-in agents: `gemini`, `codex`, `copilot`, `opencode`, `cursor`, `kilo`, `codebuff`, `droid`, `oz`, `claude`. Custom agents can be added via `aid agent add` for any compatible CLI (e.g. `aider`). `aid` supports non-interactive CLI modes such as `claude -p` and `copilot -p`; interactive chat sessions can still orchestrate `aid`, but they are not required.
 
-For BYOK OpenAI-compatible providers routed through opencode custom-provider config, see [`docs/byok-pattern.md`](docs/byok-pattern.md).
+For BYOK OpenAI-compatible providers routed through opencode custom-provider config, use the built-in `aid byok` command (`aid byok example > my.toml`, `aid byok apply ./my.toml`, `aid byok probe ./my.toml`, `aid byok remove <id>`). Full reference in [`docs/byok-pattern.md`](docs/byok-pattern.md) (or `aid byok doc`).
 
 Examples:
 

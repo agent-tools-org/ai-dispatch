@@ -239,6 +239,38 @@ pub enum ExperimentCommands {
 }
 
 #[derive(Subcommand)]
+pub enum ByokCommands {
+    /// Apply a BYOK manifest: patch opencode config + auth and generate the matching aid agent
+    Apply {
+        /// Path to the BYOK manifest TOML
+        manifest: std::path::PathBuf,
+        /// Print the plan and exit without modifying any files
+        #[arg(long)]
+        dry_run: bool,
+        /// API key override (else uses manifest api_key or key_env)
+        #[arg(long)]
+        key: Option<String>,
+    },
+    /// Remove a BYOK provider by manifest path or provider id
+    Remove {
+        /// Manifest path OR provider id (e.g. mimo)
+        target: String,
+    },
+    /// Probe an OpenAI-compatible endpoint to confirm it emits tool_calls
+    Probe {
+        /// Path to the BYOK manifest TOML
+        manifest: std::path::PathBuf,
+        /// API key override (else uses manifest api_key or key_env)
+        #[arg(long)]
+        key: Option<String>,
+    },
+    /// Print a canonical example BYOK manifest (MiMo) to stdout
+    Example,
+    /// Print the BYOK pattern documentation to stdout
+    Doc,
+}
+
+#[derive(Subcommand)]
 pub enum BatchAction {
     /// Generate a template batch TOML file
     Init,

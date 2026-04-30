@@ -7,6 +7,7 @@ pub mod benchmark;
 pub mod batch;
 pub(crate) mod batch_gitbutler;
 pub mod broadcast;
+pub mod byok;
 pub mod board;
 pub mod board_stream;
 pub mod checklist;

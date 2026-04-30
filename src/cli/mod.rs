@@ -20,8 +20,8 @@ use clap::{Parser, Subcommand};
 
 pub(crate) use extras::RunExtrasArgs;
 pub use sub_enums::{
-    AgentCommands, BatchAction, ExperimentCommands, FindingCommands, HookAction, KgCommands,
-    MemoryCommands, StoreCommands,
+    AgentCommands, BatchAction, ByokCommands, ExperimentCommands, FindingCommands, HookAction,
+    KgCommands, MemoryCommands, StoreCommands,
 };
 
 #[derive(Parser)]
@@ -78,6 +78,8 @@ pub enum Commands {
     Team(command_args_c::TeamArgs),
     Tool(command_args_c::ToolArgs),
     Doctor(command_args_c::DoctorArgs),
+    /// Manage BYOK providers (custom OpenAI-compatible endpoints) via opencode
+    Byok(command_args_c::ByokArgs),
     Credential(command_args_c::CredentialArgs),
     Project(command_args_c::ProjectArgs),
     Memory(command_args_c::MemoryArgs),

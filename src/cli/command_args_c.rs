@@ -1,7 +1,7 @@
 // aid CLI argument structs, part C.
 // Exports clap Args types for top-level commands from worktree through web.
 
-use crate::cli::{FindingCommands, KgCommands, MemoryCommands, StoreCommands};
+use crate::cli::{ByokCommands, FindingCommands, KgCommands, MemoryCommands, StoreCommands};
 use crate::cli_actions::{CredentialAction, ProjectAction, TeamAction, ToolAction, WorktreeAction};
 use clap::Args;
 
@@ -122,6 +122,19 @@ pub struct OutputArgs {
     pub full: bool,
     #[arg(long)]
     pub brief: bool,
+}
+
+#[derive(Args)]
+#[command(after_help = r#"Examples:
+  aid byok apply examples/byok/mimo.toml --dry-run
+  aid byok apply ./mimo.toml
+  aid byok probe ./mimo.toml
+  aid byok remove mimo
+  aid byok example > my-provider.toml
+  aid byok doc | less"#)]
+pub struct ByokArgs {
+    #[command(subcommand)]
+    pub action: ByokCommands,
 }
 
 #[derive(Args)]

@@ -5,6 +5,7 @@ use super::{resolve_finding_content, resolve_group};
 use crate::cli::{
     ExperimentCommands, FindingCommands, HookAction, KgCommands, MemoryCommands, StoreCommands,
 };
+use crate::cli::ByokCommands;
 use crate::cli_actions::{ConfigAction, ContainerAction, CredentialAction, GroupAction, GroupFindingAction, ProjectAction, TeamAction, ToolAction, WorktreeAction};
 use crate::cmd;
 use crate::cmd::experiment_types::{ExperimentConfig, MetricDirection};
@@ -245,6 +246,18 @@ pub(super) fn team(action: TeamAction) -> Result<()> {
 
 pub(super) fn tool(action: ToolAction) -> Result<()> {
     cmd::tool::run_tool_command(action)
+}
+
+pub(super) fn byok(action: ByokCommands) -> Result<()> {
+    use cmd::byok::{ByokAction, run_byok_command};
+    let action = match action {
+        ByokCommands::Apply { manifest, dry_run, key } => ByokAction::Apply { manifest, dry_run, key },
+        ByokCommands::Remove { target } => ByokAction::Remove { target },
+        ByokCommands::Probe { manifest, key } => ByokAction::Probe { manifest, key },
+        ByokCommands::Example => ByokAction::Example,
+        ByokCommands::Doc => ByokAction::Doc,
+    };
+    run_byok_command(action)
 }
 
 pub(super) fn credential(action: CredentialAction) -> Result<()> {

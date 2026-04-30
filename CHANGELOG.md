@@ -1,3 +1,7 @@
+## v8.99.2 (2026-04-30)
+- feat(byok): add `aid byok` subcommand (`apply`, `remove`, `probe`, `example`, `doc`) — wraps the embedded BYOK shell scripts so cargo-installed users get the full opencode custom-provider flow without cloning the repo. The raw `scripts/aid-byok-*.sh` entry points remain as a lower-level fallback; env overrides (`OPENCODE_CONFIG_DIR` / `OPENCODE_AUTH_DIR` / `AID_HOME`) and exit codes are identical.
+
+
 ## Unreleased
 - feat(byok): add bash+jq BYOK provider scaffolding for opencode custom providers, including apply/probe/remove scripts, a MiMo example manifest, sandboxed script coverage, and user docs for routing OpenAI-compatible providers through generated aid custom agents.
 

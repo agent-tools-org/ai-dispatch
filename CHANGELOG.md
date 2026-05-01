@@ -1,3 +1,7 @@
+## v8.99.4 (2026-05-01)
+- fix(watcher): include codex command in loop-detector key for ToolCall events — fixes false-positive loop kills when codex runs many distinct shell commands sharing an 80-char truncated prefix (e.g. `nl -ba <different-paths>`); same class as v8.99.3's FileWrite fix
+
+
 ## v8.99.3 (2026-05-01)
 - fix(codex): stop false-positive loop kills when bursty file_writes are 80-char-truncated to the same prefix — LoopDetector now keys on raw paths with a 15-write threshold, while non-file_write events still trip on 8/10 identical untruncated keys (#125)
 - fix(codex): tighten command-output classifier — `error[E<digits>]` line-prefix, `test result: FAILED`, and line-anchored `FAILED` only; substring matches in vendored crates / rg output no longer create fake Error events

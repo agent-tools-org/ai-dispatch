@@ -253,10 +253,33 @@ pub fn status_style(status: TaskStatus) -> Style {
 /// events in particular are only informative on their own when they're the
 /// SOLE error event; otherwise they hide the real cause.
 fn last_error_detail(events: &[crate::types::TaskEvent]) -> Option<String> {
-    events
-        .iter()
-        .find(|e| e.event_kind == crate::types::EventKind::Error)
-        .map(|e| e.detail.clone())
+    let mut first_error = None;
+    for event in events {
+        if event.event_kind != crate::types::EventKind::Error {
+            continue;
+        }
+        if first_error.is_none() {
+            first_error = Some(event.detail.clone());
+        }
+        if is_trigger_error(&event.detail) {
+            return Some(event.detail.clone());
+        }
+    }
+    first_error
+}
+
+fn is_trigger_error(detail: &str) -> bool {
+    const TRIGGERS: &[&str] = &[
+        "stuck in a loop",
+        "apply_patch",
+        "command failed",
+        "rate limit",
+        "killed:",
+        "task killed",
+        "exceeded ceiling",
+    ];
+    let detail = detail.to_ascii_lowercase();
+    TRIGGERS.iter().any(|trigger| detail.contains(trigger))
 }
 
 pub fn pending_prompt(events: &[crate::types::TaskEvent]) -> Option<&str> {
@@ -385,6 +408,62 @@ mod tests {
             !reason.contains("verification"),
             "verify-failure must not mask the trigger: {reason}"
         );
+    }
+
+    #[test]
+    fn last_error_detail_prefers_trigger_error_over_earlier_noise() {
+        use crate::types::{EventKind, TaskEvent};
+        let now = Local::now();
+        let events = vec![
+            TaskEvent {
+                task_id: TaskId("t-trigger".to_string()),
+                timestamp: now,
+                event_kind: EventKind::Error,
+                detail: "bot.rs:41: priority_baseline_ha".to_string(),
+                metadata: None,
+            },
+            TaskEvent {
+                task_id: TaskId("t-trigger".to_string()),
+                timestamp: now,
+                event_kind: EventKind::Error,
+                detail: "apply_patch verification failed: Failed to find expected lines".to_string(),
+                metadata: None,
+            },
+            TaskEvent {
+                task_id: TaskId("t-trigger".to_string()),
+                timestamp: now,
+                event_kind: EventKind::Error,
+                detail: "Failed during verification: cargo check ...".to_string(),
+                metadata: None,
+            },
+        ];
+
+        let reason = last_error_detail(&events).expect("expected a Reason");
+        assert!(reason.contains("apply_patch"));
+    }
+
+    #[test]
+    fn last_error_detail_falls_back_to_first_error_without_trigger() {
+        use crate::types::{EventKind, TaskEvent};
+        let now = Local::now();
+        let events = vec![
+            TaskEvent {
+                task_id: TaskId("t-fallback".to_string()),
+                timestamp: now,
+                event_kind: EventKind::Error,
+                detail: "first generic error".to_string(),
+                metadata: None,
+            },
+            TaskEvent {
+                task_id: TaskId("t-fallback".to_string()),
+                timestamp: now,
+                event_kind: EventKind::Error,
+                detail: "second generic error".to_string(),
+                metadata: None,
+            },
+        ];
+
+        assert_eq!(last_error_detail(&events).as_deref(), Some("first generic error"));
     }
 
     #[test]

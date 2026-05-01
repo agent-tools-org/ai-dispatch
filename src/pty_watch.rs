@@ -101,7 +101,7 @@ impl MonitorState {
             let line = self.line_buffer[..pos].trim_end_matches('\r').to_string();
             self.observe_output_line(task_id, store, &line)?;
             if self.streaming {
-                if let Some(detail) = watcher::handle_streaming_line_with_session(
+                if let Some(event_detail) = watcher::handle_streaming_line_with_session(
                     watcher::StreamLineContext {
                         agent,
                         task_id,
@@ -114,7 +114,7 @@ impl MonitorState {
                     &line,
                     &mut false,
                 )? {
-                    self.last_event_detail = Some(detail);
+                    self.last_event_detail = Some(event_detail.detail);
                 } else if !line.trim().is_empty() {
                     self.last_event_detail = Some(line.trim().to_string());
                 }

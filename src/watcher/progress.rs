@@ -120,26 +120,44 @@ impl SyntheticMilestoneTracker {
 
 pub(super) struct LoopDetector {
     recent_events: VecDeque<String>,
+    file_write_counts: HashMap<String, usize>,
+    last_file_write_key: Option<String>,
 }
 
 impl LoopDetector {
     pub(super) fn new() -> Self {
         Self {
             recent_events: VecDeque::new(),
+            file_write_counts: HashMap::new(),
+            last_file_write_key: None,
         }
     }
 
-    pub(super) fn push(&mut self, detail: &str) {
-        if detail.trim().is_empty() {
+    pub(super) fn push(&mut self, detail: &str, kind: EventKind, raw_key: Option<&str>) {
+        let key = raw_key.unwrap_or(detail);
+        if key.trim().is_empty() {
+            if kind != EventKind::FileWrite {
+                self.reset_file_write_counts();
+            }
             return;
         }
-        self.recent_events.push_back(detail.to_string());
+
+        if kind == EventKind::FileWrite {
+            self.push_file_write(key);
+            return;
+        }
+
+        self.reset_file_write_counts();
+        self.recent_events.push_back(key.to_string());
         if self.recent_events.len() > 20 {
             self.recent_events.pop_front();
         }
     }
 
     pub(super) fn is_looping(&self) -> bool {
+        if self.file_write_counts.values().any(|count| *count >= 15) {
+            return true;
+        }
         if self.recent_events.len() < 10 {
             return false;
         }
@@ -152,5 +170,22 @@ impl LoopDetector {
             }
         }
         false
+    }
+
+    fn push_file_write(&mut self, key: &str) {
+        if self.last_file_write_key.as_deref() != Some(key) {
+            self.file_write_counts.clear();
+            self.file_write_counts.insert(key.to_string(), 1);
+            self.last_file_write_key = Some(key.to_string());
+            return;
+        }
+
+        let counter = self.file_write_counts.entry(key.to_string()).or_insert(0);
+        *counter += 1;
+    }
+
+    fn reset_file_write_counts(&mut self) {
+        self.file_write_counts.clear();
+        self.last_file_write_key = None;
     }
 }

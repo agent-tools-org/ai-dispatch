@@ -7,7 +7,7 @@ use std::sync::Arc;
 use crate::agent::Agent;
 use crate::rate_limit;
 use crate::store::Store;
-use crate::types::{CompletionInfo, TaskId};
+use crate::types::{CompletionInfo, EventKind, TaskId};
 
 use super::extract::{append_to_broadcast, extract_finding_detail, parse_milestone_event};
 use super::{apply_completion_event, SyntheticMilestoneTracker};
@@ -18,6 +18,12 @@ pub(crate) struct StreamLineContext<'a> {
     pub store: &'a Arc<Store>,
     pub workgroup_id: Option<&'a str>,
     pub synthetic_tracker: &'a mut SyntheticMilestoneTracker,
+}
+
+pub(crate) struct EventDetail {
+    pub detail: String,
+    pub kind: EventKind,
+    pub raw_key: Option<String>,
 }
 
 pub(crate) fn handle_streaming_line(
@@ -47,7 +53,7 @@ pub(crate) fn handle_streaming_line_with_session(
     event_count: &mut u32,
     line: &str,
     session_saved: &mut bool,
-) -> Result<Option<String>> {
+) -> Result<Option<EventDetail>> {
     let StreamLineContext {
         agent,
         task_id,
@@ -77,7 +83,7 @@ pub(crate) fn handle_streaming_line_with_session(
         synthetic_tracker.observe(&event);
         store.insert_event(&event)?;
         *event_count += 1;
-        return Ok(Some(event.detail.clone()));
+        return Ok(Some(EventDetail::from_event(&event)));
     }
 
     if let Some(event) = agent.parse_event(task_id, line) {
@@ -93,10 +99,34 @@ pub(crate) fn handle_streaming_line_with_session(
             store.insert_event(&event)?;
             *event_count += 1;
         }
-        return Ok(Some(event.detail.clone()));
+        return Ok(Some(EventDetail::from_event(&event)));
     }
 
     Ok(None)
+}
+
+impl EventDetail {
+    fn from_event(event: &crate::types::TaskEvent) -> Self {
+        Self {
+            detail: event.detail.clone(),
+            kind: event.event_kind,
+            raw_key: raw_event_key(event),
+        }
+    }
+}
+
+fn raw_event_key(event: &crate::types::TaskEvent) -> Option<String> {
+    if event.event_kind != EventKind::FileWrite {
+        return None;
+    }
+    event
+        .metadata
+        .as_ref()
+        .and_then(|metadata| metadata.get("files"))
+        .and_then(|files| files.as_array())
+        .and_then(|files| files.first())
+        .and_then(|file| file.as_str())
+        .map(ToOwned::to_owned)
 }
 
 fn save_session_id(

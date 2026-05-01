@@ -2,6 +2,8 @@
 // Exports CodexAgent for streaming runs plus helpers for tool and usage events.
 // Depends on serde_json for metadata-rich completion events.
 
+mod output_classifier;
+
 use anyhow::{bail, Result};
 use chrono::Local;
 use serde_json::{json, Map, Value};
@@ -10,6 +12,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::OnceLock;
 
+use output_classifier::classify_output;
 use super::truncate::truncate_text;
 use super::RunOpts;
 use crate::rate_limit;
@@ -468,19 +471,6 @@ fn classify_command(command: &str) -> EventKind {
         EventKind::Lint
     } else {
         EventKind::ToolCall
-    }
-}
-
-/// Classify output lines for interesting events
-fn classify_output(output: &str) -> Option<EventKind> {
-    if output.contains("test result:") {
-        Some(EventKind::Test)
-    } else if output.contains("Finished") || output.contains("Compiling") {
-        Some(EventKind::Build)
-    } else if output.contains("error[") || output.contains("FAILED") {
-        Some(EventKind::Error)
-    } else {
-        None
     }
 }
 

@@ -1,6 +1,7 @@
 // Watcher engine: reads agent stdout/stderr and records events to store.
 // Exports streaming and buffered watchers plus shared watcher state.
 mod extract;
+mod loop_kill;
 mod progress;
 mod stderr;
 mod stream;
@@ -25,10 +26,13 @@ use crate::types::*;
 use extract::extract_milestone_detail;
 #[cfg(test)]
 use extract::{extract_finding_detail, parse_milestone_event};
+pub(crate) use loop_kill::loop_kill_detail;
 use progress::LoopDetector;
 use stderr::{drain_stderr_capture, spawn_stderr_capture};
 pub(crate) use progress::SyntheticMilestoneTracker;
-pub(crate) use stream::{handle_streaming_line, handle_streaming_line_with_session, StreamLineContext};
+pub(crate) use stream::{
+    handle_streaming_line, handle_streaming_line_with_session, StreamLineContext,
+};
 const HUNG_TIMEOUT: Duration = Duration::from_secs(300);
 /// Watch a child process, parse output, store events, return completion info
 pub async fn watch_streaming(
@@ -89,7 +93,7 @@ pub async fn watch_streaming(
             log_file.write_all(b"\n").await?;
         }
 
-        if let Some(detail) = handle_streaming_line_with_session(
+        if let Some(event_detail) = handle_streaming_line_with_session(
             StreamLineContext {
                 agent,
                 task_id,
@@ -102,6 +106,7 @@ pub async fn watch_streaming(
             &line,
             &mut session_saved,
         )? {
+            let detail = event_detail.detail;
             last_event_detail = Some(detail.clone());
             if exceeds_cost_ceiling(info.cost_usd, max_task_cost) {
                 let current_cost = info.cost_usd.unwrap_or_default();
@@ -121,13 +126,13 @@ pub async fn watch_streaming(
                 info.status = TaskStatus::Failed;
                 break;
             }
-            loop_detector.push(&detail);
+            loop_detector.push(&detail, event_detail.kind, event_detail.raw_key.as_deref());
             if loop_detector.is_looping() {
                 let _ = store.insert_event(&TaskEvent {
                     task_id: task_id.clone(),
                     timestamp: Local::now(),
                     event_kind: EventKind::Error,
-                    detail: "Agent appears stuck in a loop — killing process".to_string(),
+                    detail: loop_kill_detail(task_id),
                     metadata: None,
                 });
                 force_kill_process_group(child);

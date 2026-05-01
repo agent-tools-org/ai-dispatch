@@ -2,12 +2,14 @@
 // Deps: super::*, types
 
 use super::{
-    apply_completion_event, exceeds_cost_ceiling, parse_milestone_event, LoopDetector,
+    apply_completion_event, exceeds_cost_ceiling, loop_kill_detail, parse_milestone_event, LoopDetector,
     SyntheticMilestoneTracker,
 };
+use crate::paths;
 use crate::types::{CompletionInfo, EventKind, TaskEvent, TaskId, TaskStatus};
 use chrono::Local;
 use serde_json::json;
+use tempfile::tempdir;
 
 #[test]
 fn completion_metadata_updates_summary_fields() {
@@ -203,7 +205,7 @@ where
     let mut detector = LoopDetector::new();
     events
         .into_iter()
-        .for_each(|detail| detector.push(detail.as_ref()));
+        .for_each(|detail| detector.push(detail.as_ref(), EventKind::Reasoning, None));
     assert_eq!(detector.is_looping(), expected);
 }
 #[test]
@@ -244,4 +246,52 @@ fn loop_detector_distinguishes_long_details() {
     let events = std::iter::repeat_n(first.as_str(), 5)
         .chain(std::iter::repeat_n(second.as_str(), 5));
     loop_detector_case(false, events);
+}
+
+#[test]
+fn loop_detector_uses_file_write_raw_path_with_higher_threshold() {
+    let mut detector = LoopDetector::new();
+    for index in 0..20 {
+        let raw_key = format!("/tmp/worktree/evaluator-different-{index}.rs");
+        detector.push(".../evaluator-d...", EventKind::FileWrite, Some(&raw_key));
+    }
+    assert!(!detector.is_looping());
+
+    let mut detector = LoopDetector::new();
+    for _ in 0..14 {
+        detector.push(".../evaluator-d...", EventKind::FileWrite, Some("/tmp/worktree/evaluator.rs"));
+    }
+    assert!(!detector.is_looping());
+    detector.push(".../evaluator-d...", EventKind::FileWrite, Some("/tmp/worktree/evaluator.rs"));
+    assert!(detector.is_looping());
+}
+
+#[test]
+fn loop_detector_resets_file_write_counter_on_non_file_event() {
+    let mut detector = LoopDetector::new();
+    for _ in 0..14 {
+        detector.push("file.rs", EventKind::FileWrite, Some("/tmp/file.rs"));
+    }
+    detector.push("thinking", EventKind::Reasoning, None);
+    detector.push("file.rs", EventKind::FileWrite, Some("/tmp/file.rs"));
+
+    assert!(!detector.is_looping());
+}
+
+#[test]
+fn loop_kill_detail_appends_apply_patch_stderr_line() {
+    let temp = tempdir().unwrap();
+    let _aid_home = paths::AidHomeGuard::set(temp.path());
+    let task_id = TaskId("t-stderr".to_string());
+    std::fs::create_dir_all(paths::logs_dir()).unwrap();
+    std::fs::write(
+        paths::stderr_path(task_id.as_str()),
+        "note\napply_patch verification failed: Failed to find expected lines in evaluator.rs\n",
+    )
+    .unwrap();
+
+    let detail = loop_kill_detail(&task_id);
+
+    assert!(detail.contains("Agent appears stuck in a loop"));
+    assert!(detail.contains("apply_patch verification failed"));
 }

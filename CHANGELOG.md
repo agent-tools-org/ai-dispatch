@@ -1,3 +1,10 @@
+## v8.99.3 (2026-05-01)
+- fix(codex): stop false-positive loop kills when bursty file_writes are 80-char-truncated to the same prefix — LoopDetector now keys on raw paths with a 15-write threshold, while non-file_write events still trip on 8/10 identical untruncated keys (#125)
+- fix(codex): tighten command-output classifier — `error[E<digits>]` line-prefix, `test result: FAILED`, and line-anchored `FAILED` only; substring matches in vendored crates / rg output no longer create fake Error events
+- fix(tui): surface the real failure cause in the Reason column — pick the Error event whose detail matches a trigger phrase (`stuck in a loop`, `apply_patch`, `command failed`, `rate limit`, `killed:`, `task killed`, `exceeded ceiling`) before falling back to the first Error
+- feat(watcher): on loop-kill, best-effort scan captured stderr for `apply_patch verification failed` and append it to the kill detail so the actual codex error reaches the board
+
+
 ## v8.99.2 (2026-04-30)
 - feat(byok): add `aid byok` subcommand (`apply`, `remove`, `probe`, `example`, `doc`) — wraps the embedded BYOK shell scripts so cargo-installed users get the full opencode custom-provider flow without cloning the repo. The raw `scripts/aid-byok-*.sh` entry points remain as a lower-level fallback; env overrides (`OPENCODE_CONFIG_DIR` / `OPENCODE_AUTH_DIR` / `AID_HOME`) and exit codes are identical.
 

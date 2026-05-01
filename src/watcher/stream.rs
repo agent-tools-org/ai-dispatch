@@ -116,17 +116,20 @@ impl EventDetail {
 }
 
 fn raw_event_key(event: &crate::types::TaskEvent) -> Option<String> {
-    if event.event_kind != EventKind::FileWrite {
-        return None;
+    let metadata = event.metadata.as_ref()?;
+    match event.event_kind {
+        EventKind::FileWrite => metadata
+            .get("files")
+            .and_then(|files| files.as_array())
+            .and_then(|files| files.first())
+            .and_then(|file| file.as_str())
+            .map(ToOwned::to_owned),
+        EventKind::ToolCall => metadata
+            .get("command")
+            .and_then(|command| command.as_str())
+            .map(ToOwned::to_owned),
+        _ => None,
     }
-    event
-        .metadata
-        .as_ref()
-        .and_then(|metadata| metadata.get("files"))
-        .and_then(|files| files.as_array())
-        .and_then(|files| files.first())
-        .and_then(|file| file.as_str())
-        .map(ToOwned::to_owned)
 }
 
 fn save_session_id(

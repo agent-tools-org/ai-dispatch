@@ -70,7 +70,7 @@ pub enum ShowMode {
 
 pub async fn run(store: Arc<Store>, args: ShowArgs) -> Result<()> {
     if args.result {
-        print!("{}", result_text(&args.task_id)?);
+        print!("{}", result_text(&store, &args.task_id)?);
         return Ok(());
     }
     if args.json {
@@ -156,12 +156,41 @@ pub fn render_mode_text(store: &Arc<Store>, task_id: &str, mode: ShowMode) -> Re
     }
 }
 
-fn result_text(task_id: &str) -> Result<String> {
+fn result_text(store: &Arc<Store>, task_id: &str) -> Result<String> {
     let path = crate::paths::task_dir(task_id).join("result.md");
     if !path.exists() {
+        if let Ok(task) = load_task(store, task_id)
+            && let Some(banner) = audit_result_missing_banner(&task)
+        {
+            return Ok(banner);
+        }
         return Ok("No result file for this task\n".to_string());
     }
     Ok(std::fs::read_to_string(path)?)
+}
+
+/// When an audit-style task ends without producing the structured `result.md`,
+/// surface a clear retry hint instead of letting the caller fall back to the
+/// raw (often truncated) agent output.
+fn audit_result_missing_banner(task: &crate::types::Task) -> Option<String> {
+    if !matches!(task.status, TaskStatus::Done | TaskStatus::Merged) {
+        return None;
+    }
+    if !crate::cmd::report_mode::prompt_is_audit_report(&task.prompt) {
+        return None;
+    }
+    let result_path = crate::paths::task_dir(&task.id.0).join("result.md");
+    if result_path.exists() {
+        return None;
+    }
+    Some(format!(
+        "⚠ Structured audit result missing.\n\
+         The agent did not write result.md as instructed.\n\
+         Likely cause: weak model truncated mid-output or ignored the result-file instruction.\n\
+         Retry with a stronger agent:\n  \
+         aid retry {} --agent codex\n",
+        task.id.0
+    ))
 }
 
 fn transcript_text(task_id: &str) -> Result<String> {
@@ -222,7 +251,10 @@ pub fn audit_text(store: &Arc<Store>, task_id: &str) -> Result<String> {
         }
     }
 
-    if !task_has_changes(&task) && task.status.is_terminal()
+    if let Some(banner) = audit_result_missing_banner(&task) {
+        out.push('\n');
+        out.push_str(&banner);
+    } else if !task_has_changes(&task) && task.status.is_terminal()
         && let Some(findings) = research_findings(store.as_ref(), &task)
     {
         out.push_str("\nFindings:\n");

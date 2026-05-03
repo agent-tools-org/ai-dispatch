@@ -245,13 +245,55 @@ fn task_json_includes_delivery_assessment() {
 fn result_text_reads_task_result_file() {
     let temp = tempfile::tempdir().unwrap();
     let _aid_home = crate::paths::AidHomeGuard::set(temp.path());
+    let store = Arc::new(Store::open_memory().unwrap());
     let path = crate::paths::task_dir("t-result").join("result.md");
     std::fs::create_dir_all(path.parent().unwrap()).unwrap();
     std::fs::write(&path, "structured result\n").unwrap();
 
-    let text = result_text("t-result").unwrap();
+    let text = result_text(&store, "t-result").unwrap();
 
     assert_eq!(text, "structured result\n");
+}
+
+#[test]
+fn audit_text_with_missing_result_md_shows_banner() {
+    let temp = tempfile::tempdir().unwrap();
+    let _aid_home = crate::paths::AidHomeGuard::set(temp.path());
+    let store = Arc::new(Store::open_memory().unwrap());
+    let mut task = task_fixture(
+        "t-audit-missing",
+        "Cross-audit the parser changes and produce findings.",
+        None,
+        None,
+    );
+    task.status = TaskStatus::Done;
+    task.read_only = true;
+    store.insert_task(&task).unwrap();
+
+    let text = audit_text(&store, "t-audit-missing").unwrap();
+
+    assert!(text.contains("Structured audit result missing"));
+    assert!(text.contains("aid retry t-audit-missing --agent codex"));
+}
+
+#[test]
+fn result_text_for_audit_without_result_md_uses_banner() {
+    let temp = tempfile::tempdir().unwrap();
+    let _aid_home = crate::paths::AidHomeGuard::set(temp.path());
+    let store = Arc::new(Store::open_memory().unwrap());
+    let mut task = task_fixture(
+        "t-audit-result-missing",
+        "Review the implementation and list findings with severity.",
+        None,
+        None,
+    );
+    task.status = TaskStatus::Done;
+    task.read_only = true;
+    store.insert_task(&task).unwrap();
+
+    let text = result_text(&store, "t-audit-result-missing").unwrap();
+
+    assert!(text.contains("Structured audit result missing"));
 }
 
 #[test]

@@ -1,3 +1,7 @@
+## v8.99.7 (2026-05-04)
+- fix(droid): default to `--skip-permissions-unsafe` in non-read-only mode. `--auto high` still hit "insufficient permission to proceed" failures during headless aid runs and droid itself recommended escalation in the failure text. aid worktrees are sandboxed by branch and the caller has opted into autonomous orchestration, so the adapter now aligns with how aid already invokes other agents (`gemini -y`, `cursor --trust`). Read-only mode keeps using `--use-spec` and must not be silently upgraded.
+
+
 ## v8.99.6 (2026-05-03)
 - fix(custom-agent): `CustomAgent::kind()` now returns `AgentKind::Custom` instead of always claiming `Codex`, so per-BYOK stats and rate-limit markers stop being misattributed to codex. The dead `AgentKind::Custom` branches in `background.rs:547` and `skills.rs:266` are finally live.
 - fix(custom-agent): `build_command` mutates the prompt with the read-only / result-file prefix (mirroring opencode), so audit-report tasks dispatched to BYOK agents actually see the "DO NOT modify files except result.md" instruction. Previously the prefix was dropped on the floor and weak models silently dumped unstructured text on stdout.

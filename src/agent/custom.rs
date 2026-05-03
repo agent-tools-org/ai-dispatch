@@ -45,6 +45,13 @@ pub struct CustomAgentConfig {
     pub trust_tier: String,
     #[serde(default)]
     pub strengths: Vec<String>,
+    /// When set (currently only "opencode"), the registry returns an
+    /// adapter overlay around the named agent instead of the bash-wrapper
+    /// CustomAgent. Required `forced_model` accompanies it.
+    #[serde(default)]
+    pub delegate_to: Option<String>,
+    #[serde(default)]
+    pub forced_model: Option<String>,
 }
 
 fn default_trust_tier() -> String {
@@ -258,6 +265,8 @@ mod tests {
             capabilities: CapabilityScores::default(),
             trust_tier: default_trust_tier(),
             strengths: Vec::new(),
+            delegate_to: None,
+            forced_model: None,
         }
     }
 

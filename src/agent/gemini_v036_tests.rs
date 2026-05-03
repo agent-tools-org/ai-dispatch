@@ -42,6 +42,103 @@ fn build_command_includes_external_context_directories() {
 }
 
 #[test]
+fn build_command_sets_trust_workspace_env_by_default() {
+    let opts = RunOpts {
+        dir: None,
+        output: None,
+        result_file: None,
+        model: None,
+        budget: false,
+        read_only: false,
+        context_files: vec![],
+        session_id: None,
+        env: None,
+        env_forward: None,
+    };
+    // Ensure no inherited override leaks in from the test environment.
+    // Safety: tests in this file run single-threaded via cargo's default
+    // harness; we restore the previous value on drop below.
+    struct EnvGuard {
+        prev: Option<std::ffi::OsString>,
+    }
+    impl Drop for EnvGuard {
+        fn drop(&mut self) {
+            // Safety: setting/removing a process env var is unsafe in
+            // multi-threaded contexts; cargo test runs each test on its own
+            // thread but they may share process env. The override window is
+            // narrow and the value is restored deterministically.
+            unsafe {
+                match self.prev.take() {
+                    Some(v) => std::env::set_var("GEMINI_CLI_TRUST_WORKSPACE", v),
+                    None => std::env::remove_var("GEMINI_CLI_TRUST_WORKSPACE"),
+                }
+            }
+        }
+    }
+    let _guard = EnvGuard {
+        prev: std::env::var_os("GEMINI_CLI_TRUST_WORKSPACE"),
+    };
+    // Safety: see EnvGuard above.
+    unsafe {
+        std::env::remove_var("GEMINI_CLI_TRUST_WORKSPACE");
+    }
+
+    let cmd = GeminiAgent.build_command("test", &opts).unwrap();
+    let env_pair = cmd
+        .get_envs()
+        .find(|(key, _)| *key == std::ffi::OsStr::new("GEMINI_CLI_TRUST_WORKSPACE"));
+    let value = env_pair
+        .and_then(|(_, v)| v)
+        .map(|v| v.to_string_lossy().into_owned());
+    assert_eq!(value.as_deref(), Some("true"));
+}
+
+#[test]
+fn build_command_respects_pre_existing_trust_workspace_override() {
+    let opts = RunOpts {
+        dir: None,
+        output: None,
+        result_file: None,
+        model: None,
+        budget: false,
+        read_only: false,
+        context_files: vec![],
+        session_id: None,
+        env: None,
+        env_forward: None,
+    };
+    struct EnvGuard {
+        prev: Option<std::ffi::OsString>,
+    }
+    impl Drop for EnvGuard {
+        fn drop(&mut self) {
+            // Safety: see other EnvGuard in this file.
+            unsafe {
+                match self.prev.take() {
+                    Some(v) => std::env::set_var("GEMINI_CLI_TRUST_WORKSPACE", v),
+                    None => std::env::remove_var("GEMINI_CLI_TRUST_WORKSPACE"),
+                }
+            }
+        }
+    }
+    let _guard = EnvGuard {
+        prev: std::env::var_os("GEMINI_CLI_TRUST_WORKSPACE"),
+    };
+    // Safety: see EnvGuard.
+    unsafe {
+        std::env::set_var("GEMINI_CLI_TRUST_WORKSPACE", "false");
+    }
+
+    let cmd = GeminiAgent.build_command("test", &opts).unwrap();
+    let explicit = cmd
+        .get_envs()
+        .find(|(key, _)| *key == std::ffi::OsStr::new("GEMINI_CLI_TRUST_WORKSPACE"));
+    // When the caller already has the var set, we must NOT clobber it via
+    // Command::env — the child should inherit the existing value.
+    assert!(explicit.is_none());
+}
+
+#[test]
 fn build_command_skips_default_model_for_auto_routing() {
     let opts = RunOpts {
         dir: None,

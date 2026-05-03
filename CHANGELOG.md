@@ -1,3 +1,9 @@
+## v8.99.5 (2026-05-03)
+- feat(gemini): auto-detect latest gemini model from task DB instead of hardcoding gemini-2.5-flash. New `Store::latest_default_model()` queries the most-recent successful task's model; pricing fallback now picks gemini-3-flash-preview by default and `aid config agents` shows a `Recent:` line listing observed models that are not in the static registry. Adds explicit gemini-3.x preview pricing entries (`gemini-3.1-pro-preview`, `gemini-3-flash-preview`, `gemini-3-flash-lite-preview`) and version-agnostic `flash`/`pro`/`flash-lite` aliases. The legacy `gemini-2.5-*` entries are preserved for historical task lookups.
+- feat(config): `aid config agents` silently refreshes `~/.aid/pricing.json` from `https://aid.agent-tools.org/api/pricing` when the file is missing or older than 24h; gated by `cfg(not(test))` and overridable via `AID_NO_PRICING_REFRESH=1`.
+- refactor(cost): split `src/cost.rs` into `src/cost/{mod.rs,pricing_builtin.rs}` to keep each file under the 300-line cap; pricing-table substring matchers now live in `pricing_builtin::for_model_lower`.
+
+
 ## v8.99.4 (2026-05-01)
 - fix(watcher): include codex command in loop-detector key for ToolCall events — fixes false-positive loop kills when codex runs many distinct shell commands sharing an 80-char truncated prefix (e.g. `nl -ba <different-paths>`); same class as v8.99.3's FileWrite fix
 

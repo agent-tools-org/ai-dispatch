@@ -27,7 +27,7 @@ fn build_command_uses_droid_exec() {
     let args: Vec<String> = cmd.get_args().map(|a| a.to_string_lossy().to_string()).collect();
     assert!(args.contains(&"exec".to_string()));
     assert!(args.contains(&"stream-json".to_string()));
-    assert!(args.contains(&"high".to_string()));
+    assert!(args.contains(&"--skip-permissions-unsafe".to_string()));
 }
 
 #[test]

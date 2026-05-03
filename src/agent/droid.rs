@@ -32,7 +32,14 @@ impl super::Agent for DroidAgent {
             // so it is NOT a read-only mode despite the name.
             cmd.arg("--use-spec");
         } else {
-            cmd.arg("--auto").arg("high");
+            // `--auto high` still hits "insufficient permission to proceed.
+            // Re-run with --skip-permissions-unsafe" on a wide range of
+            // operations in headless aid runs. aid worktrees are sandboxed
+            // by branch and the user has opted into autonomous orchestration
+            // (parallel to `gemini -y` and `cursor --trust`), so adopt
+            // droid's own recommendation. Note: --skip-permissions-unsafe
+            // cannot be combined with --auto.
+            cmd.arg("--skip-permissions-unsafe");
         }
         if let Some(ref model) = opts.model {
             let mapped = map_model_name(model);

@@ -29,6 +29,13 @@ impl super::Agent for GeminiAgent {
     fn build_command(&self, prompt: &str, opts: &RunOpts) -> Result<Command> {
         let mut cmd = Command::new("gemini");
         cmd.args(["-o", "stream-json"]);
+        // aid runs gemini headlessly in worktrees outside the user's trusted
+        // folder list; without this env var, gemini overrides --approval-mode
+        // to "default" and refuses to run, producing only the trust-folder
+        // refusal text. Honor a pre-existing override if the caller set it.
+        if std::env::var_os("GEMINI_CLI_TRUST_WORKSPACE").is_none() {
+            cmd.env("GEMINI_CLI_TRUST_WORKSPACE", "true");
+        }
         // Gemini v0.36 has native sandboxing, but aid manages sandboxing outside the adapter.
         if opts.read_only {
             cmd.args(["--approval-mode", "plan"]);

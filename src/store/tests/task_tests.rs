@@ -343,3 +343,29 @@ fn recent_tasks_for_agent_filters_to_recent_done_tasks() {
         .collect::<Vec<_>>();
     assert_eq!(ids, vec!["t-2001".to_string()]);
 }
+
+#[test]
+fn latest_default_model_prefers_most_recent_successful_gemini() {
+    let store = Store::open_memory().unwrap();
+    let now = chrono::Local::now();
+    let mut g_old = make_task("t-la1", AgentKind::Gemini, TaskStatus::Done);
+    g_old.created_at = now - chrono::Duration::hours(10);
+    g_old.model = Some("gemini-2.5-flash".to_string());
+
+    let mut g_new = make_task("t-la2", AgentKind::Gemini, TaskStatus::Done);
+    g_new.created_at = now - chrono::Duration::hours(1);
+    g_new.model = Some("gemini-3.1-pro-preview".to_string());
+
+    let mut failed = make_task("t-la3", AgentKind::Gemini, TaskStatus::Failed);
+    failed.created_at = now;
+    failed.model = Some("should-ignore".to_string());
+
+    store.insert_task(&g_old).unwrap();
+    store.insert_task(&g_new).unwrap();
+    store.insert_task(&failed).unwrap();
+
+    assert_eq!(
+        store.latest_default_model(AgentKind::Gemini).unwrap().as_deref(),
+        Some("gemini-3.1-pro-preview")
+    );
+}

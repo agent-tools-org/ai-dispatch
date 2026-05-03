@@ -45,6 +45,13 @@ pub struct CustomAgentConfig {
     pub trust_tier: String,
     #[serde(default)]
     pub strengths: Vec<String>,
+    /// When set (currently only "opencode"), the registry returns an
+    /// adapter overlay around the named agent instead of the bash-wrapper
+    /// CustomAgent. Required `forced_model` accompanies it.
+    #[serde(default)]
+    pub delegate_to: Option<String>,
+    #[serde(default)]
+    pub forced_model: Option<String>,
 }
 
 fn default_trust_tier() -> String {
@@ -89,7 +96,7 @@ pub struct CustomAgent {
 
 impl super::Agent for CustomAgent {
     fn kind(&self) -> AgentKind {
-        AgentKind::Codex
+        AgentKind::Custom
     }
 
     fn streaming(&self) -> bool {
@@ -97,6 +104,10 @@ impl super::Agent for CustomAgent {
     }
 
     fn build_command(&self, prompt: &str, opts: &RunOpts) -> Result<Command> {
+        let effective_prompt = apply_read_only_prefix(prompt, opts);
+        if opts.read_only {
+            aid_warn!("[aid] ⚠ Custom agent read-only is prompt-level only, not enforced. Use --worktree for isolation.");
+        }
         let mut cmd = Command::new(&self.config.command);
 
         for arg in &self.config.fixed_args {
@@ -124,14 +135,14 @@ impl super::Agent for CustomAgent {
 
         match self.config.prompt_mode.as_str() {
             "flag" if !self.config.prompt_flag.is_empty() => {
-                cmd.args([&self.config.prompt_flag, prompt]);
+                cmd.args([&self.config.prompt_flag, &effective_prompt]);
             }
             "flag" => {
-                cmd.arg(prompt);
+                cmd.arg(&effective_prompt);
             }
             "stdin" => {}
             _ => {
-                cmd.arg(prompt);
+                cmd.arg(&effective_prompt);
             }
         }
 
@@ -200,6 +211,23 @@ pub fn parse_config(toml_content: &str) -> Result<CustomAgentConfig> {
     Ok(file.agent)
 }
 
+fn apply_read_only_prefix(prompt: &str, opts: &RunOpts) -> String {
+    if !opts.read_only {
+        return prompt.to_string();
+    }
+    if opts.result_file.is_some() {
+        format!(
+            "IMPORTANT: READ-ONLY MODE. Do NOT modify, create, or delete any files, EXCEPT the result file specified in this prompt. Only read, analyze, and write your findings to the designated result file.\n\n{}",
+            prompt
+        )
+    } else {
+        format!(
+            "IMPORTANT: READ-ONLY MODE. Do NOT modify, create, or delete any files. Only read and analyze.\n\n{}",
+            prompt
+        )
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::super::Agent;
@@ -237,6 +265,8 @@ mod tests {
             capabilities: CapabilityScores::default(),
             trust_tier: default_trust_tier(),
             strengths: Vec::new(),
+            delegate_to: None,
+            forced_model: None,
         }
     }
 
@@ -315,6 +345,60 @@ mod tests {
             .map(|arg| arg.to_string_lossy().into_owned())
             .collect();
         assert_eq!(args, vec!["--ready", "--message", "prompt"]);
+    }
+
+    #[test]
+    fn custom_agent_kind_is_custom() {
+        let agent = CustomAgent {
+            config: base_config("agent-cli"),
+        };
+        assert_eq!(agent.kind(), AgentKind::Custom);
+    }
+
+    #[test]
+    fn build_command_read_only_prepends_warning_to_prompt() {
+        let agent = CustomAgent {
+            config: base_config("agent-cli"),
+        };
+        let mut opts = base_opts();
+        opts.read_only = true;
+        let cmd = agent.build_command("ask", &opts).unwrap();
+        let args: Vec<_> = cmd
+            .get_args()
+            .map(|arg| arg.to_string_lossy().into_owned())
+            .collect();
+        assert!(args.last().unwrap().contains("READ-ONLY MODE"));
+        assert!(args.last().unwrap().ends_with("\n\nask"));
+    }
+
+    #[test]
+    fn build_command_read_only_with_result_file_uses_exception_text() {
+        let agent = CustomAgent {
+            config: base_config("agent-cli"),
+        };
+        let mut opts = base_opts();
+        opts.read_only = true;
+        opts.result_file = Some("result.md".into());
+        let cmd = agent.build_command("audit", &opts).unwrap();
+        let last = cmd
+            .get_args()
+            .last()
+            .map(|arg| arg.to_string_lossy().into_owned())
+            .unwrap();
+        assert!(last.contains("EXCEPT the result file"));
+    }
+
+    #[test]
+    fn build_command_normal_mode_does_not_mutate_prompt() {
+        let agent = CustomAgent {
+            config: base_config("agent-cli"),
+        };
+        let cmd = agent.build_command("hello", &base_opts()).unwrap();
+        let args: Vec<_> = cmd
+            .get_args()
+            .map(|arg| arg.to_string_lossy().into_owned())
+            .collect();
+        assert_eq!(args, vec!["hello"]);
     }
 
     #[test]

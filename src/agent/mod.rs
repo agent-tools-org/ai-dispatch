@@ -12,6 +12,7 @@ pub mod gemini;
 pub(crate) mod gemini_support;
 pub mod kilo;
 pub mod opencode;
+pub(crate) mod opencode_overlay;
 pub mod oz;
 pub mod qwen;
 pub(crate) mod custom;

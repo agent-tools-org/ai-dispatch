@@ -1,18 +1,35 @@
 // Cost estimation for AI agent tasks.
 // Maps model names to per-token pricing, computes task cost from token counts.
+// Deps: cmd::config, store::Store, types::AgentKind
+
+mod pricing_builtin;
+
 use crate::cmd::config;
+use crate::store::Store;
 use crate::types::AgentKind;
 use std::collections::HashMap;
 use std::sync::OnceLock;
 
 /// Price per 1M tokens (input, output) in USD
 #[derive(Clone, Copy)]
-struct ModelPricing {
-    input_per_m: f64,
-    output_per_m: f64,
+pub(crate) struct ModelPricing {
+    pub(crate) input_per_m: f64,
+    pub(crate) output_per_m: f64,
 }
 
 static PRICING_OVERRIDES: OnceLock<HashMap<(AgentKind, String), ModelPricing>> = OnceLock::new();
+
+/// Most recent completed model name for Gemini from the task DB (`None` = checked, no hits).
+/// Unset means warm has not run yet (`gemini_fallback_pricing` uses static fallback pricing).
+static GEMINI_DEFAULT_MODEL_CACHE: OnceLock<Option<String>> = OnceLock::new();
+
+/// Populate [`GEMINI_DEFAULT_MODEL_CACHE`] once per process from [`Store::latest_default_model`].
+pub fn warm_gemini_default_from_store(store: &Store) {
+    let _ = GEMINI_DEFAULT_MODEL_CACHE.get_or_init(|| match store.latest_default_model(AgentKind::Gemini) {
+        Ok(m) => m,
+        Err(_) => None,
+    });
+}
 
 /// Estimate cost in USD from total token count and model name.
 /// Uses blended rate (assumes ~70% input, ~30% output) when breakdown unavailable.
@@ -47,20 +64,20 @@ pub fn format_cost_label(cost_usd: Option<f64>, agent: AgentKind) -> String {
         _ => format_cost(cost_usd),
     }
 }
+
 fn resolve_pricing(model: Option<&str>, agent: AgentKind) -> Option<ModelPricing> {
     if let Some(m) = model {
         return model_pricing(m, agent);
     }
-    // Default pricing by agent
     match agent {
-        AgentKind::Gemini => model_pricing("gemini-2.5-flash", agent),
+        AgentKind::Gemini => gemini_fallback_pricing(agent),
         AgentKind::Qwen => model_pricing("coder-model", agent),
         AgentKind::Codex => model_pricing("gpt-4.1", agent),
         AgentKind::Copilot => Some(ModelPricing {
             input_per_m: 0.0,
             output_per_m: 0.0,
         }),
-        AgentKind::OpenCode => None, // Unknown without model
+        AgentKind::OpenCode => None,
         AgentKind::Cursor => Some(ModelPricing {
             input_per_m: 0.0,
             output_per_m: 0.0,
@@ -70,11 +87,22 @@ fn resolve_pricing(model: Option<&str>, agent: AgentKind) -> Option<ModelPricing
             output_per_m: 0.0,
         }),
         AgentKind::Claude => None,
-        AgentKind::Codebuff => None, // Cost tracked by codebuff SDK
-        AgentKind::Droid => None,    // BYOK (API key)
-        AgentKind::Oz => None,       // Reports own cost via events
+        AgentKind::Codebuff => None,
+        AgentKind::Droid => None,
+        AgentKind::Oz => None,
         AgentKind::Custom => None,
     }
+}
+
+fn gemini_fallback_pricing(agent: AgentKind) -> Option<ModelPricing> {
+    let model = GEMINI_DEFAULT_MODEL_CACHE
+        .get()
+        .and_then(|stored| stored.as_deref())
+        .filter(|m| !m.is_empty());
+    if let Some(m) = model {
+        return model_pricing(m, agent);
+    }
+    model_pricing("gemini-3-flash-preview", agent)
 }
 
 fn pricing_overrides() -> &'static HashMap<(AgentKind, String), ModelPricing> {
@@ -113,112 +141,7 @@ fn model_pricing(model: &str, agent: AgentKind) -> Option<ModelPricing> {
     if let Some(pricing) = override_pricing(model, agent) {
         return Some(pricing);
     }
-    // Normalize model name for matching
-    let m = model.to_lowercase();
-    let p = if m.contains("gpt-4.1") && !m.contains("mini") && !m.contains("nano") {
-        ModelPricing {
-            input_per_m: 2.0,
-            output_per_m: 8.0,
-        }
-    } else if m.contains("gpt-5.4") {
-        ModelPricing {
-            input_per_m: 2.5,
-            output_per_m: 15.0,
-        }
-    } else if m.contains("gpt-5") && m.contains("mini") {
-        ModelPricing {
-            input_per_m: 0.25,
-            output_per_m: 2.0,
-        }
-    } else if m.contains("gpt-5") && m.contains("nano") {
-        ModelPricing {
-            input_per_m: 0.05,
-            output_per_m: 0.40,
-        }
-    } else if m.contains("gpt-5") {
-        ModelPricing {
-            input_per_m: 1.25,
-            output_per_m: 10.0,
-        }
-    } else if m.contains("gpt-4.1-mini") {
-        ModelPricing {
-            input_per_m: 0.4,
-            output_per_m: 1.6,
-        }
-    } else if m.contains("gpt-4.1-nano") {
-        ModelPricing {
-            input_per_m: 0.1,
-            output_per_m: 0.4,
-        }
-    } else if m.contains("gemini-2.5-flash") {
-        ModelPricing {
-            input_per_m: 0.30,
-            output_per_m: 2.50,
-        }
-    } else if m.contains("gemini-2.5-pro") {
-        ModelPricing {
-            input_per_m: 1.25,
-            output_per_m: 10.0,
-        }
-    } else if m.contains("coder-model") {
-        ModelPricing {
-            input_per_m: 0.0,
-            output_per_m: 0.0,
-        }
-    } else if m.contains("qwen") {
-        ModelPricing {
-            input_per_m: 0.30,
-            output_per_m: 2.50,
-        }
-    } else if m == "haiku" || m.contains("claude-haiku") {
-        ModelPricing {
-            input_per_m: 0.8,
-            output_per_m: 4.0,
-        }
-    } else if m == "sonnet" || m.contains("claude-sonnet-4") || m.contains("claude-4-sonnet") {
-        ModelPricing {
-            input_per_m: 3.0,
-            output_per_m: 15.0,
-        }
-    } else if m == "opus" || m.contains("claude-opus-4") || m.contains("claude-opus-4-6") {
-        ModelPricing {
-            input_per_m: 15.0,
-            output_per_m: 75.0,
-        }
-    } else if m.contains("o3-mini") || m.contains("o4-mini") {
-        ModelPricing {
-            input_per_m: 1.10,
-            output_per_m: 4.40,
-        }
-    } else if m.contains("grok") {
-        ModelPricing {
-            input_per_m: 3.0,
-            output_per_m: 15.0,
-        }
-    } else if m.contains("free")
-        && (m.contains("mimo")
-            || m.contains("nemotron")
-            || m.contains("minimax")
-            || m.contains("kilo"))
-    {
-        return Some(ModelPricing {
-            input_per_m: 0.0,
-            output_per_m: 0.0,
-        });
-    } else if m.contains("glm-4") || m.contains("glm-5") || m.contains("kimi-k2") {
-        ModelPricing {
-            input_per_m: 0.42,
-            output_per_m: 2.10,
-        }
-    } else if m.contains("composer-2") {
-        ModelPricing {
-            input_per_m: 0.50,
-            output_per_m: 2.50,
-        }
-    } else {
-        return None;
-    };
-    Some(p)
+    pricing_builtin::for_model_lower(&model.to_lowercase())
 }
 
 #[cfg(test)]
@@ -279,6 +202,28 @@ mod tests {
     #[test]
     fn format_cost_label_codebuff() {
         assert_eq!(format_cost_label(Some(1.5), AgentKind::Codebuff), "$1.50");
+    }
+
+    #[test]
+    fn gemini_estimate_fallback_without_explicit_model_matches_gemini_three_flash_blend() {
+        let blended =
+            estimate_cost(1_000_000, None, AgentKind::Gemini).expect("gemini default pricing present");
+        let expected = model_pricing("gemini-3-flash-preview", AgentKind::Gemini).unwrap();
+        let blended_per_m = expected.input_per_m * 0.7 + expected.output_per_m * 0.3;
+        assert!((blended - blended_per_m).abs() < 0.001);
+    }
+
+    #[test]
+    fn gemini_3_preview_model_pricing() {
+        let p = model_pricing("gemini-3.1-pro-preview", AgentKind::Gemini).unwrap();
+        assert_eq!(p.input_per_m, 1.25);
+        assert_eq!(p.output_per_m, 10.0);
+        let p = model_pricing("gemini-3-flash-preview", AgentKind::Gemini).unwrap();
+        assert_eq!(p.input_per_m, 0.30);
+        assert_eq!(p.output_per_m, 2.50);
+        let p = model_pricing("gemini-3-flash-lite-preview", AgentKind::Gemini).unwrap();
+        assert_eq!(p.input_per_m, 0.10);
+        assert_eq!(p.output_per_m, 0.40);
     }
 
     #[test]

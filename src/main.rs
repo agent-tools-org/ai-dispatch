@@ -107,6 +107,7 @@ async fn main() -> Result<()> {
         update_check::maybe_check_update();
     }
     let store = Arc::new(store::Store::open(&paths::db_path())?);
+    cost::warm_gemini_default_from_store(store.as_ref());
     let _ = background::check_zombie_tasks(&store);
 
     match cli.command {

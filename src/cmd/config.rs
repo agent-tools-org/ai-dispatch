@@ -50,7 +50,44 @@ pub fn run(store: &Arc<Store>, action: ConfigAction) -> Result<()> {
     Ok(())
 }
 
+#[cfg(not(test))]
+fn maybe_refresh_pricing_if_stale() {
+    use std::time::{Duration, SystemTime};
+
+    if std::env::var_os("AID_NO_PRICING_REFRESH").is_some() {
+        return;
+    }
+    let path = crate::paths::pricing_path();
+    const DAY_SECS: u64 = 24 * 60 * 60;
+    let needs_refresh = match fs::metadata(&path) {
+        Err(_) => true,
+        Ok(meta) => match meta.modified() {
+            Err(_) => true,
+            Ok(mtime) => {
+                SystemTime::now()
+                    .duration_since(mtime)
+                    .unwrap_or(Duration::ZERO)
+                    > Duration::from_secs(DAY_SECS)
+            }
+        },
+    };
+    if !needs_refresh {
+        return;
+    }
+    let path_str = path.to_string_lossy().into_owned();
+    let url = "https://aid.agent-tools.org/api/pricing";
+    let _child = Command::new("curl")
+        .args(["-fsSL", "-o", &path_str, "-z", &path_str, url])
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .spawn();
+}
+
 fn print_agents(store: &Arc<Store>) {
+    #[cfg(not(test))]
+    maybe_refresh_pricing_if_stale();
+
     let installed = agent::detect_agents();
     let (history, model_history) = match store.list_tasks(TaskFilter::All) {
         Ok(tasks) => (compute_agent_history(&tasks), compute_model_history(&tasks)),

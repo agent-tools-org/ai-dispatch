@@ -3,7 +3,7 @@
 // Deps: config_models, agent selection, rate_limit, task types
 
 use std::cmp::Ordering;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use crate::agent::custom::CapabilityScores;
 use crate::cost;
@@ -19,9 +19,9 @@ pub(crate) struct AgentHistory {
 }
 
 pub(crate) struct ModelHistory {
-    task_count: usize,
-    success_rate: f64,
-    avg_cost: f64,
+    pub(crate) task_count: usize,
+    pub(crate) success_rate: f64,
+    pub(crate) avg_cost: f64,
 }
 
 pub(crate) fn format_capabilities(cap: &CapabilityScores) -> String {
@@ -71,6 +71,42 @@ pub(crate) fn agent_profile(
     )
 }
 
+pub(crate) fn recent_observed_models_line(
+    kind: AgentKind,
+    model_history: &HashMap<(AgentKind, String), ModelHistory>,
+) -> Option<String> {
+    let declared: HashSet<String> = AGENT_MODELS
+        .iter()
+        .filter(|model| model.agent == kind)
+        .map(|model| model.model.to_lowercase())
+        .collect();
+    let mut extras: Vec<(&String, usize)> = model_history
+        .iter()
+        .filter_map(|((agent, model_key), hist)| {
+            if *agent != kind {
+                return None;
+            }
+            if model_key.eq_ignore_ascii_case("default") {
+                return None;
+            }
+            if declared.contains(&model_key.to_lowercase()) {
+                return None;
+            }
+            Some((model_key, hist.task_count))
+        })
+        .collect();
+    if extras.is_empty() {
+        return None;
+    }
+    extras.sort_by(|left, right| right.1.cmp(&left.1));
+    let parts: Vec<String> = extras
+        .into_iter()
+        .take(3)
+        .map(|(name, count)| format!("{name} ({count})"))
+        .collect();
+    Some(format!("  Recent:    {}\n", parts.join(", ")))
+}
+
 fn render_models_line(
     kind: AgentKind,
     model_history: &HashMap<(AgentKind, String), ModelHistory>,
@@ -101,6 +137,9 @@ fn render_models_line(
             model.description,
             history_suffix
         ));
+    }
+    if let Some(recent) = recent_observed_models_line(kind, model_history) {
+        lines.push_str(&recent);
     }
     lines
 }

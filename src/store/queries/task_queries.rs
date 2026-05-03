@@ -185,6 +185,26 @@ impl Store {
         rows.map(|row| row?).collect()
     }
 
+    /// Latest model string from the most recently created successful builtin task for `agent`.
+    pub fn latest_default_model(&self, agent: AgentKind) -> Result<Option<String>> {
+        let tasks = self.list_tasks(TaskFilter::All)?;
+        for task in tasks {
+            if task.agent != agent {
+                continue;
+            }
+            if !matches!(task.status, TaskStatus::Done | TaskStatus::Merged) {
+                continue;
+            }
+            if let Some(raw) = task.model.as_deref() {
+                let trimmed = raw.trim();
+                if !trimmed.is_empty() {
+                    return Ok(Some(trimmed.to_string()));
+                }
+            }
+        }
+        Ok(None)
+    }
+
     pub fn list_running_tasks(&self) -> Result<Vec<Task>> {
         self.list_tasks(TaskFilter::Running)
     }

@@ -50,6 +50,8 @@ fn build_command_read_only_uses_use_spec() {
     assert!(args.contains(&"--use-spec".to_string()));
     assert!(!args.contains(&"--auto".to_string()));
     assert!(!args.contains(&"low".to_string()));
+    // Read-only must not escalate to skip-permissions-unsafe.
+    assert!(!args.contains(&"--skip-permissions-unsafe".to_string()));
 }
 
 #[test]
@@ -98,7 +100,7 @@ fn build_command_wires_session_id() {
 }
 
 #[test]
-fn build_command_default_uses_auto_high() {
+fn build_command_default_uses_skip_permissions_unsafe() {
     let opts = RunOpts {
         dir: None,
         output: None,
@@ -113,7 +115,9 @@ fn build_command_default_uses_auto_high() {
     };
     let cmd = DroidAgent.build_command("test", &opts).unwrap();
     let args: Vec<String> = cmd.get_args().map(|a| a.to_string_lossy().to_string()).collect();
-    assert!(args.windows(2).any(|pair| pair == ["--auto", "high"]));
+    assert!(args.contains(&"--skip-permissions-unsafe".to_string()));
+    // --skip-permissions-unsafe cannot be combined with --auto.
+    assert!(!args.contains(&"--auto".to_string()));
     assert!(!args.contains(&"--use-spec".to_string()));
 }
 

@@ -54,6 +54,14 @@ pub(crate) fn task_result_file(task_id: &str) -> String {
     format!("result-{task_id}.md")
 }
 
+/// Cheap prompt-only check used by `aid show` to decide whether to surface
+/// the "audit result missing" banner. Mirrors the explicit-audit branch of
+/// `is_audit_report_task` without requiring a TaskCategory.
+pub(crate) fn prompt_is_audit_report(prompt: &str) -> bool {
+    let normalized = prompt.trim().to_lowercase();
+    contains_any(&normalized, AUDIT_TERMS)
+}
+
 pub(crate) fn instruction(prompt: &str, read_only: bool, category: TaskCategory) -> Option<&'static str> {
     if !is_audit_report_task(prompt, read_only, category) {
         return None;

@@ -4,6 +4,7 @@
 #![allow(dead_code)]
 
 use super::custom::{parse_config, CustomAgent, CustomAgentConfig};
+use super::opencode_overlay::OpenCodeOverlayAgent;
 use crate::paths;
 use std::collections::HashMap;
 use std::fs;
@@ -52,11 +53,28 @@ fn resolve_from_registry(
     registry: &HashMap<String, CustomAgentConfig>,
     name: &str,
 ) -> Option<Box<dyn super::Agent>> {
-    registry.get(name).map(|config| {
-        Box::new(CustomAgent {
-            config: config.clone(),
-        }) as Box<dyn super::Agent>
-    })
+    registry.get(name).map(|config| build_agent(config))
+}
+
+fn build_agent(config: &CustomAgentConfig) -> Box<dyn super::Agent> {
+    if let (Some(target), Some(model)) = (config.delegate_to.as_deref(), config.forced_model.as_deref())
+        && target == "opencode"
+    {
+        return Box::new(OpenCodeOverlayAgent::new(
+            config.id.clone(),
+            config.display_name.clone(),
+            model.to_string(),
+        )) as Box<dyn super::Agent>;
+    }
+    if config.delegate_to.is_some() && config.forced_model.is_none() {
+        aid_warn!(
+            "[aid] Custom agent '{}' has delegate_to but no forced_model; falling back to bash wrapper.",
+            config.id
+        );
+    }
+    Box::new(CustomAgent {
+        config: config.clone(),
+    }) as Box<dyn super::Agent>
 }
 
 pub fn resolve_custom_agent(name: &str) -> Option<Box<dyn super::Agent>> {
@@ -140,5 +158,69 @@ command = "{id}"
         let list = list_from_registry(&map);
         let ids: Vec<_> = list.iter().map(|c| c.id.as_str()).collect();
         assert_eq!(ids, vec!["a", "b"]);
+    }
+
+    #[test]
+    fn delegate_to_opencode_returns_overlay_agent() {
+        let toml_data = r#"[agent]
+id = "mimo"
+display_name = "MiMo"
+command = "bash"
+delegate_to = "opencode"
+forced_model = "mimo/mimo-v2.5-pro"
+"#;
+        let config = parse_config(toml_data).unwrap();
+        let agent = build_agent(&config);
+        // Overlay reports Custom kind; bash CustomAgent does too now, so we
+        // additionally verify that build_command produces an `opencode` invocation
+        // with -m flag rather than a `bash -lc ...` wrapper.
+        let opts = super::super::RunOpts {
+            dir: None,
+            output: None,
+            result_file: None,
+            model: None,
+            budget: false,
+            read_only: false,
+            context_files: Vec::new(),
+            session_id: None,
+            env: None,
+            env_forward: None,
+        };
+        let cmd = agent.build_command("hello", &opts).unwrap();
+        let program = cmd.get_program().to_string_lossy().into_owned();
+        assert_eq!(program, "opencode");
+        let args: Vec<String> = cmd
+            .get_args()
+            .map(|a| a.to_string_lossy().into_owned())
+            .collect();
+        assert!(args.iter().any(|a| a == "-m"));
+        assert!(args.iter().any(|a| a == "mimo/mimo-v2.5-pro"));
+    }
+
+    #[test]
+    fn missing_forced_model_falls_back_to_bash_wrapper() {
+        let toml_data = r#"[agent]
+id = "broken"
+display_name = "Broken"
+command = "bash"
+delegate_to = "opencode"
+"#;
+        let config = parse_config(toml_data).unwrap();
+        let agent = build_agent(&config);
+        let opts = super::super::RunOpts {
+            dir: None,
+            output: None,
+            result_file: None,
+            model: None,
+            budget: false,
+            read_only: false,
+            context_files: Vec::new(),
+            session_id: None,
+            env: None,
+            env_forward: None,
+        };
+        let cmd = agent.build_command("hi", &opts).unwrap();
+        // Falls back to plain CustomAgent → command is "bash"
+        assert_eq!(cmd.get_program().to_string_lossy(), "bash");
     }
 }

@@ -1,3 +1,7 @@
+## v8.99.8 (2026-05-04)
+- fix(droid): include tool args in event detail + populate `metadata.command` so `LoopDetector` keys per-target. Previously every droid `tool_call` event was logged with `detail = tool_name` only (e.g. `"Read"`) and no metadata, so 8 consecutive Reads of *different* files all hashed to the same key and false-positive tripped the loop kill — `t-3601` was killed at 6m17s mid-legit-exploration of a multi-crate fix. Adapter now matches `cursor.rs:138-187`: detail becomes `"Read /abs/path"`, `"Bash <cmd>"`, `"Grep <pattern>"`, and `metadata.command` carries the per-target signature consumed by `raw_event_key`. 2 regression tests added.
+
+
 ## v8.99.7 (2026-05-04)
 - fix(droid): default to `--skip-permissions-unsafe` in non-read-only mode. `--auto high` still hit "insufficient permission to proceed" failures during headless aid runs and droid itself recommended escalation in the failure text. aid worktrees are sandboxed by branch and the caller has opted into autonomous orchestration, so the adapter now aligns with how aid already invokes other agents (`gemini -y`, `cursor --trust`). Read-only mode keeps using `--use-spec` and must not be silently upgraded.
 

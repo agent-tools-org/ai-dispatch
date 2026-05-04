@@ -127,7 +127,35 @@ fn parses_tool_call_events_with_tool_name() {
     let line = r#"{"type":"tool_call","id":"toolu_01","toolId":"Read","toolName":"Read","parameters":{"file_path":"src/main.rs"}}"#;
     let event = agent.parse_event(&TaskId("t-droid".to_string()), line).unwrap();
     assert_eq!(event.event_kind, EventKind::ToolCall);
-    assert_eq!(event.detail, "Read");
+    assert!(event.detail.starts_with("Read"));
+}
+
+#[test]
+fn parses_read_tool_call_with_path_and_metadata() {
+    let agent = DroidAgent;
+    let line1 = r#"{"type":"tool_call","toolName":"Read","parameters":{"file_path":"src/foo.rs"}}"#;
+    let line2 = r#"{"type":"tool_call","toolName":"Read","parameters":{"file_path":"src/bar.rs"}}"#;
+    let event1 = agent.parse_event(&TaskId("t-droid".to_string()), line1).unwrap();
+    let event2 = agent.parse_event(&TaskId("t-droid".to_string()), line2).unwrap();
+    assert!(event1.detail.contains("src/foo.rs"));
+    assert!(event2.detail.contains("src/bar.rs"));
+    assert_ne!(
+        event1.metadata.as_ref().and_then(|m| m.get("command")).and_then(|v| v.as_str()),
+        event2.metadata.as_ref().and_then(|m| m.get("command")).and_then(|v| v.as_str())
+    );
+}
+
+#[test]
+fn parses_bash_tool_call_and_populates_command_metadata() {
+    let agent = DroidAgent;
+    let line = r#"{"type":"tool_call","toolName":"Bash","parameters":{"command":"ls -la /tmp"}}"#;
+    let event = agent.parse_event(&TaskId("t-droid".to_string()), line).unwrap();
+    assert_eq!(event.event_kind, EventKind::ToolCall);
+    assert!(event.detail.starts_with("Bash "));
+    assert_eq!(
+        event.metadata.as_ref().and_then(|m| m.get("command")).and_then(|v| v.as_str()),
+        Some("ls -la /tmp")
+    );
 }
 
 // Regression: a single droid tool invocation emits BOTH `tool_call` and

@@ -97,13 +97,78 @@ impl super::Agent for DroidAgent {
                     .or_else(|| v.get("name"))
                     .and_then(|n| n.as_str())
                     .unwrap_or("tool");
-                let detail = truncate_text(name, 80);
+
+                // droid may include parameters under several keys; try common ones.
+                let params = v
+                    .get("parameters")
+                    .or_else(|| v.get("arguments"))
+                    .or_else(|| v.get("input"))
+                    .or_else(|| v.get("args"));
+
+                let mut signature: Option<String> = None;
+                if let Some(p) = params {
+                    let get_first = |keys: &[&str]| -> Option<String> {
+                        for k in keys {
+                            if let Some(val) = p.get(*k).and_then(|v| v.as_str()) {
+                                return Some(val.to_string());
+                            }
+                        }
+                        None
+                    };
+
+                    match name.to_lowercase().as_str() {
+                        // file operations: prefer explicit file path keys
+                        "read" | "readtool" | "readtoolcall" | "read_tool" => {
+                            if let Some(path) = get_first(&["file_path", "path", "filePath"]) {
+                                signature = Some(path);
+                            }
+                        }
+                        "write" | "edit" | "writetool" | "write_tool" => {
+                            if let Some(path) = get_first(&["file_path", "path", "filePath"]) {
+                                signature = Some(path);
+                            }
+                        }
+                        "grep" | "greet" => {
+                            let pattern = get_first(&["pattern", "globPattern", "query"]);
+                            let path = get_first(&["path", "targetDirectory", "file_path", "filePath"]);
+                            signature = match (pattern, path) {
+                                (Some(pat), Some(pth)) => Some(format!("{pat} {pth}")),
+                                (Some(pat), None) => Some(pat),
+                                (None, Some(pth)) => Some(pth),
+                                _ => None,
+                            };
+                        }
+                        "bash" | "shell" | "execute" | "sh" | "command" => {
+                            if let Some(cmd) = get_first(&["command", "cmd", "shell"]) {
+                                signature = Some(cmd);
+                            }
+                        }
+                        _ => {
+                            // Fallback: pick any string-ish parameter if present
+                            if let Some((k, v)) = p.as_object().and_then(|o| o.iter().next()) {
+                                if let Some(s) = v.as_str() {
+                                    signature = Some(s.to_string());
+                                } else {
+                                    signature = Some(k.to_string());
+                                }
+                            }
+                        }
+                    }
+                }
+
+                let detail = match &signature {
+                    Some(sig) => truncate_text(&format!("{} {}", name, sig), 80),
+                    None => truncate_text(name, 80),
+                };
+
+                let metadata = signature.as_ref().map(|s| json!({ "command": s }));
+
                 Some(TaskEvent {
                     task_id: task_id.clone(),
                     timestamp: now,
                     event_kind: EventKind::ToolCall,
                     detail,
-                    metadata: None,
+                    metadata,
                 })
             }
             "tool_use" | "tool_result" => None,

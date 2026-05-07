@@ -1,3 +1,7 @@
+## v8.99.9 (2026-05-07)
+- fix(byok): align embedded MiMo manifest with vendor spec — `mimo-v2.5-pro` / `mimo-v2.5` now declare `context = 1048576` (1M) and `output = 131072` (128K), up from the stale `131072 / 8192` defaults that were truncating long-output agent tasks at 8192 tokens. The `output` field flows through `scripts/aid-byok-lib.sh` into `opencode.json`'s `limit.output` and is sent as `max_tokens` by `@ai-sdk/openai-compatible`, so the prior value was an active cap, not just metadata. Authoritative numbers cross-verified against OpenRouter model registry, HuggingFace MiMo-V2.5-Pro/V2.5 model cards, and Pi catalog. Manifest also gains two preamble notes documenting the >256K pricing-tier doubling and opencode's `OPENCODE_EXPERIMENTAL_OUTPUT_TOKEN_MAX` (default 32000) — users wanting the full 131072 ceiling must raise that env var.
+
+
 ## v8.99.8 (2026-05-04)
 - fix(droid): include tool args in event detail + populate `metadata.command` so `LoopDetector` keys per-target. Previously every droid `tool_call` event was logged with `detail = tool_name` only (e.g. `"Read"`) and no metadata, so 8 consecutive Reads of *different* files all hashed to the same key and false-positive tripped the loop kill — `t-3601` was killed at 6m17s mid-legit-exploration of a multi-crate fix. Adapter now matches `cursor.rs:138-187`: detail becomes `"Read /abs/path"`, `"Bash <cmd>"`, `"Grep <pattern>"`, and `metadata.command` carries the per-target signature consumed by `raw_event_key`. 2 regression tests added.
 

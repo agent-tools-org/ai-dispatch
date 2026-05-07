@@ -1,6 +1,13 @@
 # Example BYOK manifest for the official Xiaomi MiMo OpenAI-compatible endpoint.
 # Used by scripts/aid-byok-apply.sh to configure opencode and generate an aid agent.
 # Dependencies: opencode custom providers, MIMO_API_KEY environment variable.
+#
+# Pricing note: MiMo-V2.5/V2.5-Pro support a 1M context window, but pricing
+# doubles above 256K input ($2/M input, $6/M output for V2.5-Pro vs $1/$3
+# under 256K). Watch usage when running long-context agents.
+#
+# Output cap: opencode also enforces OPENCODE_EXPERIMENTAL_OUTPUT_TOKEN_MAX
+# (default 32000). Raise that env var to actually use the full 131072 below.
 
 [byok]
 id = "mimo"
@@ -14,16 +21,16 @@ timeout_ms = 300000
 [[byok.model]]
 id = "mimo-v2.5-pro"
 name = "MiMo v2.5 Pro"
-context = 131072
-output = 8192
+context = 1048576
+output = 131072
 tool_call = true
 reasoning = false
 
 [[byok.model]]
 id = "mimo-v2.5"
 name = "MiMo v2.5"
-context = 131072
-output = 8192
+context = 1048576
+output = 131072
 tool_call = true
 reasoning = false
 

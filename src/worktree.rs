@@ -23,9 +23,11 @@ pub(crate) use snapshot::{
 };
 pub use path::{aid_worktree_path, aid_worktree_root, is_aid_managed_worktree_path};
 pub use state::{
-    branch_has_commits_ahead_of_main, check_worktree_lock, clear_worktree_lock,
-    process_alive_check, worktree_changed_files, write_worktree_lock,
+    branch_has_commits_ahead_of_main, clear_worktree_lock, process_alive_check,
+    try_acquire_worktree_lock, worktree_changed_files,
 };
+#[cfg(test)]
+pub use state::{check_worktree_lock, write_worktree_lock};
 pub(crate) use completion::cleanup_completed_worktree;
 use state::{existing_worktree_path, local_branch_exists, prune_worktrees, sync_cargo_lock};
 use validation::{canonical_worktree_path, is_valid_git_worktree};
@@ -83,6 +85,17 @@ fn worktree_add_reason(output: &Output) -> String {
         return stdout.lines().next().unwrap_or(stdout).to_string();
     }
     "git worktree add failed".to_string()
+}
+
+fn ensure_worktree_unlocked(path: &Path) -> Result<()> {
+    if let Some(holder) = state::check_worktree_lock(path) {
+        anyhow::bail!(
+            "Worktree {} is locked by task {holder} — concurrent access prevented. \
+             Use separate worktree names for parallel tasks.",
+            path.display()
+        );
+    }
+    Ok(())
 }
 
 /// Sync repo-backed context files into the worktree when they are missing there.
@@ -153,6 +166,7 @@ pub fn create_worktree(
                 if existing_path.exists()
                     && canonical_worktree_path(&existing_path) != expected_path
                 {
+                    ensure_worktree_unlocked(&existing_path)?;
                     reconcile::maybe_refresh_existing_worktree(
                         repo_dir,
                         &existing_path,
@@ -167,6 +181,7 @@ pub fn create_worktree(
                     });
                 }
             }
+            ensure_worktree_unlocked(&wt_path)?;
             reconcile::maybe_refresh_existing_worktree(repo_dir, &wt_path, branch, base_branch)?;
             sync_cargo_lock(repo_dir, &wt_path);
             return Ok(WorktreeInfo {
@@ -199,6 +214,7 @@ pub fn create_worktree(
 
     if let Some(existing_path) = existing_worktree_path(repo_dir, branch)? {
         if existing_path.exists() {
+            ensure_worktree_unlocked(&existing_path)?;
             reconcile::maybe_refresh_existing_worktree(repo_dir, &existing_path, branch, base_branch)?;
             sync_cargo_lock(repo_dir, &existing_path);
             return Ok(WorktreeInfo {
@@ -268,3 +284,6 @@ mod validation_tests;
 #[cfg(test)]
 #[path = "worktree/completion_tests.rs"]
 mod completion_tests;
+#[cfg(test)]
+#[path = "worktree/lock_tests.rs"]
+mod lock_tests;

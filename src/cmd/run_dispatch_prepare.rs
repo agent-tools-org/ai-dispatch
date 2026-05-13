@@ -5,16 +5,13 @@ use anyhow::Result;
 use chrono::Local;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use crate::agent;
-use crate::paths;
+use crate::{agent, paths, session};
 use crate::project::{self, ProjectConfig};
-use crate::session;
 use crate::store::{Store, TaskCompletionUpdate};
 use crate::types::*;
-use super::run_prompt;
 use super::run_dispatch_resolve::{apply_project_defaults, resolve_agent_setup};
 use super::run_validate::{IdConflict, resolve_id_conflict, validate_dispatch};
-use super::{RunArgs, context_file_from_spec, resolve_max_duration_mins, resolve_prompt_input};
+use super::{RunArgs, context_file_from_spec, resolve_max_duration_mins, resolve_prompt_input, run_prompt};
 pub(super) struct PreparedDispatch {
     pub detected_project: Option<ProjectConfig>,
     pub agent_kind: AgentKind,
@@ -60,13 +57,9 @@ pub(super) fn prepare_dispatch(store: &Arc<Store>, args: &mut RunArgs) -> Result
         let repo_path = resolved_repo.clone().or(explicit_repo_path.clone());
         let mut emit_gitbutler_setup_hint = false;
         if let Some(ref wt) = wt_path {
-            if let Some(holder) = crate::worktree::check_worktree_lock(Path::new(wt)) {
-                anyhow::bail!(
-                    "Worktree {wt} is locked by task {holder} — concurrent access prevented. \
-                     Use separate worktree names for parallel tasks."
-                );
+            if let Err(holder) = crate::worktree::try_acquire_worktree_lock(Path::new(wt), task_id.as_str()) {
+                anyhow::bail!("Worktree {wt} is locked by task {holder} — concurrent access prevented. Use separate worktree names for parallel tasks.");
             }
-            crate::worktree::write_worktree_lock(Path::new(wt), task_id.as_str());
         }
         if let Some(ref wt) = wt_path
             && std::env::var("AID_GITBUTLER").map(|value| value != "0").unwrap_or(true)

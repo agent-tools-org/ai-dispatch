@@ -292,7 +292,12 @@ pub(super) fn build_prompt_bundle(store: &Store, args: &RunArgs, agent_kind: &Ag
         effective_prompt = format!("{effective_prompt}\n\n{block}");
     }
     if let Some(block) =
-        crate::cmd::report_mode::instruction(&args.prompt, args.read_only, task_profile.category)
+        crate::cmd::report_mode::instruction(
+            &args.prompt,
+            args.read_only,
+            task_profile.category,
+            args.result_file.as_deref(),
+        )
     {
         effective_prompt = format!("{effective_prompt}\n\n{block}");
     }

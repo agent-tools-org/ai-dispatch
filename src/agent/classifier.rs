@@ -210,7 +210,7 @@ pub fn is_simple_for_routing(prompt: &str) -> bool {
 }
 
 /// Word-boundary aware match: "ui" matches " ui " but not "suite".
-fn contains_any_word(text: &str, terms: &[&str]) -> bool {
+pub(crate) fn contains_any_word(text: &str, terms: &[&str]) -> bool {
     let bytes = text.as_bytes();
     terms.iter().any(|term| {
         text.match_indices(term).any(|(i, _)| {

@@ -1,3 +1,10 @@
+## v8.100.1 (2026-05-20)
+- fix(agent/antigravity): probe `agy --help` once per process (cached via `OnceLock`) so the adapter auto-unlocks `--approval-mode`, `-m`, and `stream-json` when upstream agy ships them — no aid redeploy required.
+- fix(agent/antigravity): tiered `read_only` fallback — when agy lacks plan mode but `--sandbox` is on and the container CLI is available, aid lets the container enforce read-only at the OS layer instead of hard-bailing. Without sandbox, the error now names both `--sandbox` and `gemini` as concrete next steps.
+- fix(agent/antigravity): `parse_completion` now attributes `gemini-3-pro-preview` and `$0.00` (Google One free tier) so `aid stats` and usage rollups are no longer blind to agy runs.
+- feat(run): expose `RunOpts.sandbox` so adapters can branch on container availability (threaded through CLI, batch, background, and all `RunOpts` construction sites).
+
+
 ## v8.100.0 (2026-05-20)
 - feat(agent): add Antigravity CLI (`agy`) as a first-class agent — Google is migrating Gemini CLI users on Google One / Gemini Code Assist (individuals) to the new `agy` binary; the legacy `gemini` CLI stops serving those tiers on June 18, 2026. The new adapter is non-streaming (plain text, no model flag, no plan mode) with a long `--print-timeout 24h` so aid keeps managing task timeouts. `agy` is wired through detection, binary preflight, adapter dispatch, setup wizard, usage rollups, `aid config agents`, selection scoring, auto-skills (researcher), TUI color, and the `AgentKind::Antigravity` enum. Paying API users keep using `gemini`; both adapters coexist.
 - fix(agent/antigravity): bail with a clear error when `--read-only` is requested against `agy` (1.0 has no plan mode and would otherwise hang on an unanswerable permission prompt), warn when `--model` is supplied (silently ignored by `agy` 1.0), and make agy's own `--print-timeout` long enough that aid's task timeout always fires first.

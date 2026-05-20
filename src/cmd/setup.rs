@@ -92,6 +92,7 @@ pub fn run() -> Result<()> {
     section("Agents");
     let builtin = [
         ("gemini", "gemini"),
+        ("agy", "agy"),
         ("qwen", "qwen"),
         ("codex", "codex"),
         ("copilot", "copilot"),

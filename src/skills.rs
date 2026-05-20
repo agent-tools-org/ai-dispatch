@@ -260,7 +260,7 @@ pub fn auto_skills(agent: &AgentKind, has_worktree: bool) -> Vec<String> {
         | AgentKind::Oz => {
             skills.push("implementer".to_string());
         }
-        AgentKind::Gemini => {
+        AgentKind::Gemini | AgentKind::Antigravity => {
             skills.push("researcher".to_string());
         }
         AgentKind::Cursor | AgentKind::Custom => {}

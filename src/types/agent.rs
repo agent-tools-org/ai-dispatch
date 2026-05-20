@@ -18,6 +18,7 @@ pub enum AgentKind {
     Droid,
     Oz,
     Claude,
+    Antigravity,
     Custom,
 }
 
@@ -33,6 +34,7 @@ impl AgentKind {
         Self::Codebuff,
         Self::Droid,
         Self::Oz,
+        Self::Antigravity,
     ];
 
     pub const ALL: &'static [Self] = &[
@@ -46,6 +48,7 @@ impl AgentKind {
         Self::Codebuff,
         Self::Droid,
         Self::Oz,
+        Self::Antigravity,
         Self::Custom,
     ];
 
@@ -62,6 +65,8 @@ impl AgentKind {
             "droid" => Some(Self::Droid),
             "oz" => Some(Self::Oz),
             "claude" => Some(Self::Claude),
+            "agy" => Some(Self::Antigravity),
+            "antigravity" => Some(Self::Antigravity),
             _ => None,
         }
     }
@@ -79,6 +84,7 @@ impl AgentKind {
             Self::Droid => "droid",
             Self::Oz => "oz",
             Self::Claude => "claude",
+            Self::Antigravity => "agy",
             Self::Custom => "custom",
         }
     }
@@ -176,6 +182,14 @@ impl AgentKind {
                 "General coding, review, refactoring, research",
                 "$1-$75/M blended",
                 "implement, review, refactor, explain, research, test",
+                true,
+                "api",
+            )),
+            Self::Antigravity => Some((
+                "agy",
+                "Research, coding, web search, file editing (Antigravity CLI — replaces Gemini CLI for Google One / free tier)",
+                "free (Google One / Gemini Code Assist) or BYOK",
+                "research, explain, implement, create, analyze, build",
                 true,
                 "api",
             )),

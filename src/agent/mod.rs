@@ -1,6 +1,7 @@
 // Agent trait and registry for AI CLI adapters.
 // Each agent knows how to build its CLI command and parse its output.
 
+pub mod antigravity;
 pub mod claude;
 pub(crate) mod claude_events;
 pub mod codebuff;
@@ -86,6 +87,7 @@ pub fn detect_agents() -> Vec<AgentKind> {
     let mut found = Vec::new();
     for (name, kind) in [
         ("gemini", AgentKind::Gemini),
+        ("agy", AgentKind::Antigravity),
         ("qwen", AgentKind::Qwen),
         ("codex", AgentKind::Codex),
         ("opencode", AgentKind::OpenCode),
@@ -158,6 +160,7 @@ where
     F: Fn(&str) -> bool,
 {
     match agent_kind {
+        AgentKind::Antigravity => which("agy"),
         AgentKind::Codex => which("codex"),
         AgentKind::Copilot => which("copilot"),
         AgentKind::Cursor => which("agent") || which("cursor-agent"),
@@ -183,6 +186,7 @@ pub(crate) fn select_agent_with_reason(
 /// Get an agent adapter by kind
 pub fn get_agent(kind: AgentKind) -> Box<dyn Agent> {
     match kind {
+        AgentKind::Antigravity => Box::new(antigravity::AntigravityAgent),
         AgentKind::Codex => Box::new(codex::CodexAgent),
         AgentKind::Copilot => Box::new(copilot::CopilotAgent),
         AgentKind::Cursor => Box::new(cursor::CursorAgent),

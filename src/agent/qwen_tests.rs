@@ -13,6 +13,7 @@ fn build_command_uses_qwen_stream_json_flags() {
         model: Some("coder-model".to_string()),
         budget: false,
         read_only: false,
+        sandbox: false,
         context_files: vec![],
         session_id: None,
         env: None,

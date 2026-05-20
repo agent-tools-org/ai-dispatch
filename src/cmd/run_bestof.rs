@@ -180,6 +180,7 @@ pub async fn run_best_of(store: Arc<Store>, args: RunArgs, n: usize) -> Result<T
         model: args.model.clone(),
         budget: true,
         read_only: args.read_only,
+        sandbox: args.sandbox,
         context_files: Vec::new(),
         session_id: args.session_id.clone(),
         env: None,

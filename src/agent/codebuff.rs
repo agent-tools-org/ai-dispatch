@@ -122,6 +122,7 @@ mod tests {
             model: None,
             budget: false,
             read_only: false,
+            sandbox: false,
             context_files: vec![context.path().display().to_string()],
             session_id: None,
             env: None,

@@ -69,6 +69,7 @@ mod tests {
             model: None,
             budget: false,
             read_only: false,
+            sandbox: false,
             context_files: Vec::new(),
             session_id: None,
             env: None,

@@ -161,6 +161,7 @@ fn run_opts() -> RunOpts {
         model: None,
         budget: false,
         read_only: false,
+        sandbox: false,
         context_files: vec![],
         session_id: None,
         env: None,

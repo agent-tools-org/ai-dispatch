@@ -90,8 +90,16 @@ Do not include planning notes, tool logs, or meta-commentary in the final report
 }
 
 fn prompt_matches_audit_terms(normalized_prompt: &str) -> bool {
-    contains_any_word(normalized_prompt, AUDIT_TERMS)
-        && !contains_any_word(normalized_prompt, AUDIT_NOUN_PHRASES)
+    let stripped = strip_audit_noun_phrases(normalized_prompt);
+    contains_any_word(&stripped, AUDIT_TERMS)
+}
+
+fn strip_audit_noun_phrases(normalized_prompt: &str) -> String {
+    let mut stripped = normalized_prompt.to_string();
+    for phrase in AUDIT_NOUN_PHRASES {
+        stripped = stripped.replace(phrase, " ");
+    }
+    stripped
 }
 
 #[cfg(test)]
@@ -159,6 +167,44 @@ mod tests {
             TaskCategory::Research,
             None,
         ));
+    }
+
+    #[test]
+    fn read_only_audit_prompts_handle_case_spacing_and_punctuation() {
+        for prompt in [
+            "AUDIT THE API SURFACE",
+            "  cross-audit the calldata",
+            "cross-audit, the calldata",
+        ] {
+            assert!(is_audit_report_task(
+                prompt,
+                true,
+                TaskCategory::Research,
+                None,
+            ));
+        }
+    }
+
+    #[test]
+    fn audit_noun_phrase_does_not_mask_explicit_audit_term() {
+        assert!(is_audit_report_task(
+            "cross-audit the audit log feature",
+            true,
+            TaskCategory::Research,
+            None,
+        ));
+        assert!(prompt_is_audit_report("cross-audit the audit log feature"));
+    }
+
+    #[test]
+    fn audit_log_feature_prompt_does_not_enable_report_mode() {
+        assert!(!is_audit_report_task(
+            "Implement an audit log feature",
+            true,
+            TaskCategory::Research,
+            None,
+        ));
+        assert!(!prompt_is_audit_report("Implement an audit log feature"));
     }
 
     #[test]

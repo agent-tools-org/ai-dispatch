@@ -43,15 +43,17 @@ fn build_command_uses_agy_print_mode_and_skip_permissions() {
 
     assert_eq!(cmd.get_program().to_string_lossy(), "agy");
     assert!(args.windows(2).any(|pair| pair == ["-p", "test prompt"]));
-    assert!(args.windows(2).any(|pair| pair == ["--print-timeout", "60m"]));
+    assert!(args.windows(2).any(|pair| pair == ["--print-timeout", "24h"]));
     assert!(args.iter().any(|arg| arg == "--dangerously-skip-permissions"));
 }
 
 #[test]
-fn build_command_read_only_omits_skip_permissions() {
-    let args = args_for(&opts(true, vec![]));
+fn build_command_errors_when_read_only_requested() {
+    let err = AntigravityAgent
+        .build_command("test prompt", &opts(true, vec![]))
+        .unwrap_err();
 
-    assert!(!args.iter().any(|arg| arg == "--dangerously-skip-permissions"));
+    assert!(err.to_string().contains("read-only"));
 }
 
 #[test]

@@ -26,13 +26,18 @@ impl super::Agent for AntigravityAgent {
     }
 
     fn build_command(&self, prompt: &str, opts: &RunOpts) -> Result<Command> {
-        let mut cmd = Command::new("agy");
-        cmd.args(["-p", prompt, "--print-timeout", "60m"]);
-        // agy 1.0 has no plan/read-only flag; without permission skipping it will prompt.
-        if !opts.read_only {
-            cmd.arg("--dangerously-skip-permissions");
+        if opts.read_only {
+            anyhow::bail!(
+                "agy 1.0 does not support read-only/plan mode. \
+         Use `gemini` for read-only audit tasks, or wait for agy to gain a plan flag."
+            );
         }
-        // note: opts.model is ignored — agy 1.0 has no model flag.
+        if let Some(ref model) = opts.model {
+            aid_warn!("[aid] agy 1.0 has no model flag; ignoring --model {model}");
+        }
+        let mut cmd = Command::new("agy");
+        cmd.args(["-p", prompt, "--print-timeout", "24h"]);
+        cmd.arg("--dangerously-skip-permissions");
         for dir in agy_include_directories(opts.dir.as_deref(), &opts.context_files) {
             cmd.args(["--add-dir", &dir]);
         }

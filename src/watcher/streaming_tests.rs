@@ -127,6 +127,7 @@ async fn streaming_watch_populates_success_exit_code() {
     let _aid_home = paths::AidHomeGuard::set(temp.path());
     let store = Arc::new(Store::open_memory().unwrap());
     let task_id = TaskId("t-exit-code".to_string());
+    insert_running_task(store.as_ref(), &task_id);
     let log_path = temp.path().join("stream.log");
     let mut child = tokio::process::Command::new("sh")
         .arg("-c")

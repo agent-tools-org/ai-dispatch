@@ -12,6 +12,7 @@ node_modules/
 .aid/batches/
 .aid/state.toml
 .aic/
+.antigravitycli/
 
 # Generated output dirs
 nanobanana-output/

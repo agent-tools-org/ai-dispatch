@@ -71,6 +71,7 @@ fn resolve_pricing(model: Option<&str>, agent: AgentKind) -> Option<ModelPricing
     }
     match agent {
         AgentKind::Gemini => gemini_fallback_pricing(agent),
+        AgentKind::Antigravity => None,
         AgentKind::Qwen => model_pricing("coder-model", agent),
         AgentKind::Codex => model_pricing("gpt-4.1", agent),
         AgentKind::Copilot => Some(ModelPricing {

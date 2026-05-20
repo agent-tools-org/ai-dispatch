@@ -104,6 +104,11 @@ fn all_builtin_matches_parse_str_coverage() {
 }
 
 #[test]
+fn antigravity_alias_parses_to_agy_agent() {
+    assert_eq!(AgentKind::parse_str("antigravity"), Some(AgentKind::Antigravity));
+}
+
+#[test]
 fn pending_reason_parse_str_roundtrip() {
     for reason in [
         PendingReason::AgentStarting,

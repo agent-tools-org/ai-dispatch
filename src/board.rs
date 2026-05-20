@@ -11,6 +11,12 @@ use crate::session;
 use crate::store::Store;
 use crate::types::*;
 
+mod detail;
+#[cfg(test)]
+mod tests;
+
+pub use detail::render_task_detail;
+
 /// Render a summary table of tasks (for `aid board`)
 pub fn render_board(tasks: &[Task], store: &Store) -> Result<String> {
     if tasks.is_empty() {
@@ -164,116 +170,6 @@ fn latest_milestone(milestones: &HashMap<String, String>, task_id: &str) -> Opti
     milestones.get(task_id).cloned()
 }
 
-/// Render detailed view of a single task (for `aid audit`)
-pub fn render_task_detail(task: &Task, events: &[TaskEvent], retry_chain: Option<Vec<Task>>) -> String {
-    let mut out = String::new();
-
-    out.push_str(&format!(
-        "Task: {} — {}: {}\n",
-        task.id,
-        task.agent_display_name(),
-        truncate(&task.prompt, 60),
-    ));
-
-    let duration = task.duration_ms
-        .map(format_duration)
-        .unwrap_or_else(|| elapsed_since(task.created_at));
-    out.push_str(&format!("Status: {}  Duration: {}\n", task.status.label(), duration));
-    if let Some(pending_reason) = task.pending_reason.as_deref() {
-        out.push_str(&format!("Pending reason: {pending_reason}\n"));
-    }
-    if let Some(parent) = task.parent_task_id.as_deref() {
-        out.push_str(&format!("Parent: {parent}\n"));
-        if let Some(retry_chain) = retry_chain.as_deref()
-            && retry_chain.len() > 1
-        {
-            out.push_str("Retry chain:\n");
-            for retry_task in retry_chain {
-                let duration = retry_task.duration_ms
-                    .map(format_duration)
-                    .unwrap_or_else(|| elapsed_since(retry_task.created_at));
-                let current = if retry_task.id == task.id {
-                    "  ← current"
-                } else {
-                    ""
-                };
-                out.push_str(&format!(
-                    "  {} ({})  → {:<7} {:>5}  {}{}\n",
-                    retry_task.id,
-                    retry_kind(retry_task),
-                    retry_status(retry_task.status),
-                    duration,
-                    cost::format_cost(retry_task.cost_usd),
-                    current,
-                ));
-            }
-        }
-    }
-    if let Some(group_id) = task.workgroup_id.as_deref() {
-        out.push_str(&format!("Workgroup: {group_id}\n"));
-    }
-    if let Some(repo_path) = task.repo_path.as_deref() {
-        out.push_str(&format!("Repo: {repo_path}\n"));
-    }
-    if task.caller_kind.is_some() || task.caller_session_id.is_some() {
-        out.push_str(&format!("Caller: {}\n", session::display(task)));
-    }
-
-    if let Some(tokens) = task.tokens {
-        out.push_str(&format!("Tokens: {}", format_tokens(tokens)));
-        if let Some(c) = task.cost_usd {
-            out.push_str(&format!("  Cost: {}", cost::format_cost(Some(c))));
-        }
-        out.push('\n');
-    }
-    if let Some(prompt_tokens) = task.prompt_tokens {
-        let bytes = task.resolved_prompt.as_deref().map(|p| p.len()).unwrap_or(0);
-        out.push_str(&format!("Prompt: ~{} tokens ({} bytes)\n", prompt_tokens, bytes));
-    }
-    if let Some(ref model) = task.model {
-        out.push_str(&format!("Model: {}\n", model));
-    }
-    if let Some(ref wt) = task.worktree_path {
-        out.push_str(&format!("Worktree: {}", wt));
-        if let Some(ref branch) = task.worktree_branch {
-            out.push_str(&format!(" ({})", branch));
-        }
-        out.push('\n');
-    }
-    if let Some(ref log) = task.log_path {
-        out.push_str(&format!("Log: {}\n", log));
-    }
-    if let Some(ref output) = task.output_path {
-        out.push_str(&format!("Output: {}\n", output));
-    }
-    if let Some(verdict) = task.audit_verdict.as_deref() {
-        out.push_str("Audit: ");
-        out.push_str(verdict);
-        if let Some(report_path) = task.audit_report_path.as_deref() {
-            out.push_str(&format!(" (report: {report_path})"));
-        }
-        out.push('\n');
-    }
-
-    if !events.is_empty() {
-        out.push_str("\nEvents:\n");
-        for ev in events {
-            let time = ev.timestamp.format("%H:%M:%S");
-            let detail_lines = event_detail_lines(ev);
-            out.push_str(&format!(
-                "  {}  [{:>10}] {}\n",
-                time,
-                ev.event_kind.as_str(),
-                detail_lines[0],
-            ));
-            for line in &detail_lines[1..] {
-                out.push_str(&format!("                         {line}\n"));
-            }
-        }
-    }
-    out
-}
-
 fn count_statuses(tasks: &[Task]) -> (usize, usize, usize) {
     let mut done = 0;
     let mut running = 0;
@@ -353,308 +249,33 @@ fn short_repo(repo: Option<&str>) -> String {
 }
 
 fn task_status(task: &Task, milestone: Option<String>, latest_error: Option<String>) -> String {
-    if task.status == TaskStatus::Failed {
+    let base = if task.status == TaskStatus::Failed {
         if let Some(pending_reason) = task.pending_reason.as_deref() {
-            return truncate(&format!("{} — {}", task.status.label(), pending_reason), 30);
+            truncate(&format!("{} — {}", task.status.label(), pending_reason), 30)
+        } else if let Some(error) = latest_error {
+            truncate(&format!("{} — {}", task.status.label(), error), 30)
+        } else {
+            task.status.label().to_string()
         }
-        if let Some(error) = latest_error {
-            return truncate(&format!("{} — {}", task.status.label(), error), 30);
-        }
-    }
-    if task.status == TaskStatus::Running
+    } else if task.status == TaskStatus::Running
         && let Some(milestone) = milestone
     {
-        return truncate(&format!("{} — {}", task.status.label(), milestone), 30);
-    }
-    task.status.label().to_string()
-}
-
-fn event_detail_lines(event: &TaskEvent) -> Vec<String> {
-    let mut lines = vec![truncate(&event.detail, 60)];
-    if let Some(eval_output) = iterate_eval_output(event) {
-        lines.push(format!("Eval output: {}", truncate(eval_output, 60)));
-    }
-    lines
-}
-
-fn iterate_eval_output(event: &TaskEvent) -> Option<&str> {
-    event
-        .metadata
-        .as_ref()?
-        .get("iterate")?
-        .get("eval_output")?
-        .as_str()
-        .map(str::trim)
-        .filter(|output| !output.is_empty() && *output != "(no output)")
-}
-
-fn retry_kind(task: &Task) -> &'static str {
-    if task.parent_task_id.is_some() {
-        "retry"
+        truncate(&format!("{} — {}", task.status.label(), milestone), 30)
     } else {
-        "root"
-    }
+        task.status.label().to_string()
+    };
+    with_delivery_suffix(task, base)
 }
 
-fn retry_status(status: TaskStatus) -> &'static str {
-    match status {
-        TaskStatus::Waiting => "Waiting",
-        TaskStatus::Pending => "Pending",
-        TaskStatus::Running => "Running",
-        TaskStatus::AwaitingInput => "Await",
-        TaskStatus::Stalled => "Stalled",
-        TaskStatus::Done => "Done",
-        TaskStatus::Merged => "Merged",
-        TaskStatus::Failed => "Failed",
-        TaskStatus::Skipped => "Skipped",
-        TaskStatus::Stopped => "Stopped",
+fn with_delivery_suffix(task: &Task, base: String) -> String {
+    if !matches!(task.status, TaskStatus::Done | TaskStatus::Failed | TaskStatus::Stopped) {
+        return base;
     }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use chrono::Local;
-    use tempfile::TempDir;
-    use crate::paths::AidHomeGuard;
-    use crate::store::Store;
-    use serde_json::json;
-
-    fn make_task(id: &str, agent: AgentKind, status: TaskStatus) -> Task {
-        Task {
-            id: TaskId(id.to_string()),
-            agent,
-            custom_agent_name: None,
-            prompt: "test prompt".to_string(),
-            resolved_prompt: None,
-            category: None,
-            status,
-            parent_task_id: None,
-            workgroup_id: None,
-            caller_kind: None,
-            caller_session_id: None,
-            agent_session_id: None,
-            repo_path: None,
-            worktree_path: None,
-            worktree_branch: Some("feat/test".to_string()),
-            start_sha: None,
-            log_path: None,
-            output_path: None,
-            tokens: Some(45000),
-            prompt_tokens: None,
-            duration_ms: Some(227000),
-            model: None,
-            cost_usd: None,
-            exit_code: None,
-            created_at: Local::now(),
-            completed_at: None,
-            verify: None,
-            verify_status: VerifyStatus::Skipped,
-            pending_reason: None,
-            read_only: false,
-            budget: false,
-            audit_verdict: None,
-            audit_report_path: None,
-            delivery_assessment: None,
-        }
+    let Some(delivery) = task.delivery_assessment() else {
+        return base;
+    };
+    if !delivery.implies_no_changes() {
+        return base;
     }
-
-    fn isolated_store() -> (TempDir, AidHomeGuard, Store) {
-        let temp = TempDir::new().unwrap();
-        let guard = AidHomeGuard::set(temp.path());
-        let store = Store::open_memory().unwrap();
-        (temp, guard, store)
-    }
-
-    #[test]
-    fn empty_board() {
-        let (_temp, _guard, store) = isolated_store();
-        assert_eq!(render_board(&[], &store).unwrap(), "No tasks found.");
-    }
-
-    #[test]
-    fn board_with_tasks() {
-        let (_temp, _guard, store) = isolated_store();
-        let tasks = vec![
-            make_task("t-0001", AgentKind::Codex, TaskStatus::Done),
-            make_task("t-0002", AgentKind::Gemini, TaskStatus::Running),
-        ];
-        let output = render_board(&tasks, &store).unwrap();
-        assert!(output.contains("t-0001"));
-        assert!(output.contains("codex"));
-        assert!(output.contains("DONE"));
-        assert!(output.contains("RUN"));
-        assert!(output.contains("2 total"));
-        assert!(output.contains("Cost"));
-        assert!(output.contains("Caller"));
-        assert!(output.contains("Group"));
-    }
-
-    #[test]
-    fn board_shows_running_task_milestone() {
-        let (_temp, _guard, store) = isolated_store();
-        let task = make_task("t-0003", AgentKind::Codex, TaskStatus::Running);
-        store.insert_task(&task).unwrap();
-        store.insert_event(&TaskEvent {
-            task_id: task.id.clone(),
-            timestamp: Local::now(),
-            event_kind: EventKind::Milestone,
-            detail: "types defined".to_string(),
-            metadata: None,
-        }).unwrap();
-
-        let output = render_board(&[task], &store).unwrap();
-        assert!(output.contains("RUN — types defined"));
-    }
-
-    #[test]
-    fn board_shows_awaiting_input_reason() {
-        let (_temp, _guard, store) = isolated_store();
-        let task = make_task("t-0004", AgentKind::Codex, TaskStatus::AwaitingInput);
-        store.insert_task(&task).unwrap();
-        store.insert_event(&TaskEvent {
-            task_id: task.id.clone(),
-            timestamp: Local::now(),
-            event_kind: EventKind::Reasoning,
-            detail: "115:    use super::board::render_board;".to_string(),
-            metadata: Some(json!({ "awaiting_input": true, "awaiting_prompt": "Continue with fix?" })),
-        }).unwrap();
-
-        let output = render_board(&[task], &store).unwrap();
-        assert!(output.contains("AWAIT — Continue with fix?"));
-        assert!(!output.contains("115:    use super::board::render_board;"));
-    }
-
-    #[test]
-    fn board_shows_repo_column_when_present() {
-        let (_temp, _guard, store) = isolated_store();
-        let mut task = make_task("t-0005", AgentKind::Codex, TaskStatus::Done);
-        task.repo_path = Some("/tmp/example-repo".to_string());
-
-        let output = render_board(&[task], &store).unwrap();
-        assert!(output.contains("Repo"));
-        assert!(output.contains("/tmp/example-repo"));
-    }
-
-    #[test]
-    fn board_shows_pending_reason_for_failed_pending_timeout() {
-        let (_temp, _guard, store) = isolated_store();
-        let mut task = make_task("t-0006", AgentKind::Codex, TaskStatus::Failed);
-        task.pending_reason = Some("rate_limited".to_string());
-
-        let output = render_board(&[task], &store).unwrap();
-        assert!(output.contains("FAIL — rate_limited"));
-    }
-
-    #[test]
-    fn board_shows_latest_error_for_failed_task() {
-        let (_temp, _guard, store) = isolated_store();
-        let task = make_task("t-err1", AgentKind::Codex, TaskStatus::Failed);
-        store.insert_task(&task).unwrap();
-        store.insert_event(&TaskEvent {
-            task_id: TaskId("t-err1".to_string()),
-            timestamp: Local::now(),
-            event_kind: EventKind::Error,
-            detail: "Quota exhausted".to_string(),
-            metadata: None,
-        }).unwrap();
-        let output = render_board(&[task], &store).unwrap();
-        assert!(output.contains("FAIL — Quota exhausted"), "output: {output}");
-    }
-
-    #[test]
-    fn test_board_shows_eta_for_running_task() {
-        let (_temp, _guard, store) = isolated_store();
-        let now = Local::now();
-        for (id, minutes_ago, duration_ms) in [
-            ("t-done-1", 10, 120_000),
-            ("t-done-2", 20, 180_000),
-            ("t-done-3", 30, 240_000),
-        ] {
-            let mut task = make_task(id, AgentKind::Codex, TaskStatus::Done);
-            task.created_at = now - chrono::Duration::minutes(minutes_ago);
-            task.duration_ms = Some(duration_ms);
-            store.insert_task(&task).unwrap();
-        }
-
-        let mut running = make_task("t-run", AgentKind::Codex, TaskStatus::Running);
-        running.created_at = now - chrono::Duration::seconds(90);
-        running.duration_ms = None;
-        store.insert_task(&running).unwrap();
-
-        let output = render_board(&[running], &store).unwrap();
-        assert!(output.contains("ETA"), "output: {output}");
-        assert!(output.contains('%'), "output: {output}");
-    }
-
-    #[test]
-    fn task_detail_rendering() {
-        let task = make_task("t-0001", AgentKind::Codex, TaskStatus::Done);
-        let events = vec![TaskEvent {
-            task_id: TaskId("t-0001".to_string()),
-            timestamp: Local::now(),
-            event_kind: EventKind::ToolCall,
-            detail: "exec: cargo test".to_string(),
-            metadata: None,
-        }];
-        let output = render_task_detail(&task, &events, None);
-        assert!(output.contains("t-0001"));
-        assert!(output.contains("cargo test"));
-    }
-
-    #[test]
-    fn task_detail_shows_pending_reason() {
-        let mut task = make_task("t-0007", AgentKind::Codex, TaskStatus::Failed);
-        task.pending_reason = Some("worker_capacity".to_string());
-
-        let output = render_task_detail(&task, &[], None);
-        assert!(output.contains("Pending reason: worker_capacity"));
-    }
-
-    #[test]
-    fn task_detail_shows_retry_chain() {
-        let mut root = make_task("t-1001", AgentKind::Codex, TaskStatus::Done);
-        root.duration_ms = Some(12_000);
-        root.cost_usd = Some(0.03);
-        let mut retry_1 = make_task("t-1002", AgentKind::Codex, TaskStatus::Failed);
-        retry_1.parent_task_id = Some("t-1001".to_string());
-        retry_1.duration_ms = Some(8_000);
-        retry_1.cost_usd = Some(0.02);
-        let mut retry_2 = make_task("t-1003", AgentKind::Codex, TaskStatus::Done);
-        retry_2.parent_task_id = Some("t-1002".to_string());
-        retry_2.duration_ms = Some(15_000);
-        retry_2.cost_usd = Some(0.04);
-
-        let output = render_task_detail(&retry_2, &[], Some(vec![root, retry_1, retry_2.clone()]));
-        assert!(output.contains("Retry chain:"));
-        assert!(output.contains("t-1001 (root)  → Done"));
-        assert!(output.contains("t-1002 (retry)  → Failed"));
-        assert!(output.contains("t-1003 (retry)  → Done"));
-        assert!(output.contains("← current"));
-    }
-
-    #[test]
-    fn task_detail_shows_iteration_eval_output() {
-        let task = make_task("t-iter", AgentKind::Codex, TaskStatus::Done);
-        let output = render_task_detail(
-            &task,
-            &[TaskEvent {
-                task_id: task.id.clone(),
-                timestamp: Local::now(),
-                event_kind: EventKind::Milestone,
-                detail: "Iteration 1/3: eval failed (exit 1), retrying as t-next".to_string(),
-                metadata: Some(json!({
-                    "iterate": {
-                        "iteration": 1,
-                        "max_iterations": 3,
-                        "eval_output": "cargo test failed"
-                    }
-                })),
-            }],
-            None,
-        );
-
-        assert!(output.contains("Iteration 1/3: eval failed"));
-        assert!(output.contains("Eval output: cargo test failed"));
-    }
+    format!("{base} [delivery:{}]", delivery.as_str())
 }

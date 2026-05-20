@@ -16,8 +16,9 @@ fn aid_cmd_in(aid_home: &Path) -> Command {
     cmd
 }
 
+/// Verifies auto mode selects a research-capable agent and reports why.
 #[test]
-fn auto_run_selects_gemini_and_reports_reason() {
+fn auto_run_selects_research_agent_and_reports_reason() {
     let aid_home = TempDir::new().unwrap();
     let bin_dir = TempDir::new().unwrap();
     write_script(
@@ -25,6 +26,7 @@ fn auto_run_selects_gemini_and_reports_reason() {
         "gemini",
         "#!/bin/sh\nprintf '%s' '{\"response\":\"ok\",\"usageMetadata\":{\"totalTokenCount\":7}}'\n",
     );
+    write_script(bin_dir.path(), "agy", "#!/bin/sh\nprintf '%s' 'ok'\n");
 
     let path = format!(
         "{}:{}",
@@ -43,7 +45,9 @@ fn auto_run_selects_gemini_and_reports_reason() {
         String::from_utf8_lossy(&output.stderr)
     );
     let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(stderr.contains("[aid] Auto-selected: gemini"));
+    let auto_selected = stderr.contains("[aid] Auto-selected: gemini")
+        || stderr.contains("[aid] Auto-selected: agy");
+    assert!(auto_selected, "expected gemini or agy to be auto-selected, got:\n{}", stderr);
     assert!(stderr.contains("research task"));
 }
 

@@ -144,7 +144,7 @@ pub async fn watch_streaming(
                 if let Some(handle) = stderr_handle.take() {
                     drain_stderr_capture(handle).await;
                 }
-                return Ok(info);
+                break;
             }
         }
     }

@@ -69,6 +69,7 @@ pub struct RunOpts {
     pub model: Option<String>,
     pub budget: bool,
     pub read_only: bool,
+    pub sandbox: bool,
     pub context_files: Vec<String>,
     pub session_id: Option<String>,
     pub env: Option<HashMap<String, String>>,

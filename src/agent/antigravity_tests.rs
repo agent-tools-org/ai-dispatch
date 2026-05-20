@@ -15,6 +15,7 @@ fn opts(read_only: bool, context_files: Vec<String>) -> RunOpts {
         model: None,
         budget: false,
         read_only,
+        sandbox: false,
         context_files,
         session_id: None,
         env: None,
@@ -48,12 +49,23 @@ fn build_command_uses_agy_print_mode_and_skip_permissions() {
 }
 
 #[test]
-fn build_command_errors_when_read_only_requested() {
+fn build_command_with_sandbox_and_read_only_proceeds() {
+    let mut opts = opts(true, vec![]);
+    opts.sandbox = true;
+
+    assert!(crate::sandbox::can_sandbox(AgentKind::Antigravity));
+    assert!(AntigravityAgent.build_command("test prompt", &opts).is_ok());
+}
+
+#[test]
+fn build_command_read_only_no_sandbox_errors_actionably() {
     let err = AntigravityAgent
         .build_command("test prompt", &opts(true, vec![]))
         .unwrap_err();
 
-    assert!(err.to_string().contains("read-only"));
+    let message = err.to_string();
+    assert!(message.contains("--sandbox"));
+    assert!(message.contains("gemini"));
 }
 
 #[test]
@@ -100,13 +112,13 @@ fn streaming_is_false_and_parse_event_returns_none() {
 }
 
 #[test]
-fn parse_completion_returns_plain_done_status_for_empty_output() {
+fn parse_completion_attributes_default_model_and_zero_cost() {
     let completion = AntigravityAgent.parse_completion("  \n");
 
     assert_eq!(completion.tokens, None);
-    assert_eq!(completion.model, None);
+    assert_eq!(completion.model, Some("gemini-3-pro-preview".to_string()));
     assert_eq!(completion.status, TaskStatus::Done);
-    assert_eq!(completion.cost_usd, None);
+    assert_eq!(completion.cost_usd, Some(0.0));
     assert_eq!(completion.exit_code, None);
 }
 

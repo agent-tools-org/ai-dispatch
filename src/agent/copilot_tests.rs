@@ -14,6 +14,7 @@ fn opts() -> RunOpts {
         model: Some("gpt-5.2".to_string()),
         budget: false,
         read_only: false,
+        sandbox: false,
         context_files: vec!["/tmp/project/docs/spec.md".to_string()],
         session_id: None,
         env: None,

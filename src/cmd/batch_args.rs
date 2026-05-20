@@ -24,6 +24,7 @@ pub(crate) fn task_to_run_args(
             model: task.model.clone(),
             budget: task.budget,
             read_only: task.read_only,
+            sandbox: task.sandbox,
             context_files: vec![],
             session_id: None,
             env: None,

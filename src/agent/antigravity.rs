@@ -1,11 +1,12 @@
 // Antigravity CLI (`agy`) adapter: non-streaming, plain-text output.
-// agy 1.0.0 has no stream-json / no model flag / no plan mode — kept minimal
-// on purpose; revisit when upstream gains those features.
+// Probes runtime CLI capabilities once, then builds the safest command shape
+// supported by the installed agy version.
 
 use anyhow::Result;
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::sync::OnceLock;
 
 use super::RunOpts;
 use crate::types::*;
@@ -27,15 +28,43 @@ impl super::Agent for AntigravityAgent {
 
     fn build_command(&self, prompt: &str, opts: &RunOpts) -> Result<Command> {
         if opts.read_only {
-            anyhow::bail!(
-                "agy 1.0 does not support read-only/plan mode. \
-         Use `gemini` for read-only audit tasks, or wait for agy to gain a plan flag."
-            );
-        }
-        if let Some(ref model) = opts.model {
-            aid_warn!("[aid] agy 1.0 has no model flag; ignoring --model {model}");
+            let caps = agy_capabilities();
+            if !caps.has_plan_mode {
+                if opts.sandbox && crate::sandbox::can_sandbox(AgentKind::Antigravity) {
+                    aid_warn!(
+                        "[aid] agy has no plan mode; relying on --sandbox container for read-only enforcement"
+                    );
+                } else if crate::sandbox::is_available()
+                    && crate::sandbox::can_sandbox(AgentKind::Antigravity)
+                {
+                    anyhow::bail!(
+                        "agy 1.0 has no plan mode. Rerun with --sandbox (container available) \
+                         to let aid enforce read-only, or use `gemini` (--approval-mode plan)."
+                    );
+                } else {
+                    anyhow::bail!(
+                        "agy 1.0 has no plan mode and no container sandbox is available. \
+                         Use `gemini` for read-only audit tasks (--approval-mode plan), \
+                         or install Apple's container CLI and rerun with --sandbox."
+                    );
+                }
+            }
         }
         let mut cmd = Command::new("agy");
+        if opts.read_only && agy_capabilities().has_plan_mode {
+            cmd.args(["--approval-mode", "plan"]);
+        }
+        if let Some(ref model) = opts.model {
+            let caps = agy_capabilities();
+            if caps.has_model_flag {
+                cmd.args(["-m", model]);
+            } else {
+                aid_warn!(
+                    "[aid] agy {} has no model flag; ignoring --model {model}",
+                    agy_version_string().unwrap_or_else(|| "1.0".into())
+                );
+            }
+        }
         cmd.args(["-p", prompt, "--print-timeout", "24h"]);
         cmd.arg("--dangerously-skip-permissions");
         for dir in agy_include_directories(opts.dir.as_deref(), &opts.context_files) {
@@ -60,11 +89,53 @@ impl super::Agent for AntigravityAgent {
         CompletionInfo {
             tokens: None,
             status: TaskStatus::Done,
-            model: None,
-            cost_usd: None,
+            model: Some("gemini-3-pro-preview".to_string()),
+            cost_usd: Some(0.0),
             exit_code: None,
         }
     }
+}
+
+#[derive(Debug, Clone, Default)]
+struct AgyCapabilities {
+    has_plan_mode: bool,
+    has_model_flag: bool,
+    has_stream_json: bool,
+}
+
+fn agy_capabilities() -> &'static AgyCapabilities {
+    static CAPS: OnceLock<AgyCapabilities> = OnceLock::new();
+    CAPS.get_or_init(|| probe_agy_capabilities().unwrap_or_default())
+}
+
+#[cfg(not(test))]
+fn probe_agy_capabilities() -> Option<AgyCapabilities> {
+    let output = std::process::Command::new("agy")
+        .arg("--help")
+        .output()
+        .ok()?;
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let help = format!("{stdout}{stderr}");
+    Some(AgyCapabilities {
+        has_plan_mode: help.contains("--approval-mode") || help.contains("--plan"),
+        has_model_flag: help.contains("-m ") || help.contains("--model"),
+        has_stream_json: help.contains("stream-json"),
+    })
+}
+
+#[cfg(test)]
+fn probe_agy_capabilities() -> Option<AgyCapabilities> {
+    None
+}
+
+fn agy_version_string() -> Option<String> {
+    let output = std::process::Command::new("agy")
+        .arg("--version")
+        .output()
+        .ok()?;
+    let s = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    if s.is_empty() { None } else { Some(s) }
 }
 
 fn agy_include_directories(dir: Option<&str>, context_files: &[String]) -> Vec<String> {

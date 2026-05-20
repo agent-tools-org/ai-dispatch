@@ -15,6 +15,13 @@ pub const AGENT_PROFILES: &[(AgentKind, &str, &str, &str, bool)] = &[
         true,
     ),
     (
+        AgentKind::Antigravity,
+        "Research, coding, web search, file editing with Antigravity CLI",
+        "free (Google One / Gemini Code Assist) or BYOK",
+        "research, explain, implement, create, analyze, build",
+        true,
+    ),
+    (
         AgentKind::Qwen,
         "Research, coding with Qwen3-Coder models",
         "free (OAuth) or Alibaba Cloud subscription",

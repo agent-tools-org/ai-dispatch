@@ -332,7 +332,7 @@ fn agent_color(agent: AgentKind) -> Color {
     match agent {
         AgentKind::Codex => Color::Cyan,
         AgentKind::Gemini => Color::Green,
-        AgentKind::Antigravity => Color::LightGreen,
+        AgentKind::Antigravity => Color::LightYellow,
         AgentKind::Qwen => Color::LightRed,
         AgentKind::Copilot => Color::LightGreen,
         AgentKind::OpenCode => Color::Yellow,

@@ -41,7 +41,7 @@ aid run codex "Refactor" -w feat/refactor --bg        # background + worktree
 aid run auto "implement feature" --team dev           # auto-select agent with team context
 ```
 
-`agy` (Antigravity CLI) is a drop-in successor to `gemini` for Google One / Gemini Code Assist (individuals) users. After June 18, gemini stops serving those tiers — switch to `agy`. Paying API users keep using `gemini`.
+`agy` (Antigravity CLI) is a drop-in successor to `gemini` for Google One / Gemini Code Assist (individuals) users. After June 18, 2026, gemini stops serving those tiers — switch to `agy`. Paying API users keep using `gemini`.
 
 ### Key flags
 

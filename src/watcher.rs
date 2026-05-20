@@ -10,6 +10,9 @@ mod tests;
 #[cfg(test)]
 #[path = "watcher/transcript_tests.rs"]
 mod transcript_tests;
+#[cfg(test)]
+#[path = "watcher/streaming_tests.rs"]
+mod streaming_tests;
 use anyhow::Result;
 use chrono::Local;
 use std::sync::Arc;
@@ -154,6 +157,7 @@ pub async fn watch_streaming(
     } else {
         TaskStatus::Failed
     };
+    info.exit_code = exit_status.code();
 
     if status == TaskStatus::Done {
         rate_limit::clear_rate_limit(&agent.kind());

@@ -100,7 +100,7 @@ pub fn prune(repo: Option<&str>) -> Result<()> {
         }
         match super::merge::remove_worktree(repo_dir, &entry.path) {
             Ok(()) => {
-                println!("[aid] Pruned stale worktree: {}", entry.path);
+                println!("[aid] Pruned stale worktree dir: {}", entry.path);
                 pruned += 1;
             }
             Err(err) => aid_warn!("[aid] Failed to prune {}: {err}", entry.path),
@@ -109,7 +109,7 @@ pub fn prune(repo: Option<&str>) -> Result<()> {
     if pruned == 0 && locks_cleared == 0 {
         println!("[aid] No stale worktrees found");
     } else {
-        if pruned > 0 { println!("[aid] Pruned {pruned} stale worktree(s)"); }
+        if pruned > 0 { println!("[aid] Pruned {pruned} stale worktree dir(s)"); }
         if locks_cleared > 0 { println!("[aid] Cleared {locks_cleared} stale lock(s)"); }
     }
     Ok(())

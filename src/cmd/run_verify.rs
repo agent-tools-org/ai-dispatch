@@ -32,7 +32,9 @@ pub(in crate::cmd) fn maybe_cleanup_fast_fail_impl(store: &Store, task_id: &Task
         .args(["-C", repo_dir, "worktree", "remove", "--force", wt_path])
         .output();
     aid_info!(
-        "[aid] No commits made — pruned empty worktree for fast-failed task {} (failed in <10s, nothing to recover)",
+        "[aid] No commits on {} — pruned fast-failed worktree dir {} for task {} (failed in <10s)",
+        task.worktree_branch.as_deref().unwrap_or("<unknown>"),
+        wt_path,
         task_id
     );
 }

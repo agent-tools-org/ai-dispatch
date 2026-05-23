@@ -40,7 +40,9 @@ pub(crate) fn cleanup_completed_worktree(store: &Store, task_id: &TaskId) -> Res
         return Ok(());
     }
     crate::cmd::merge::remove_worktree(repo_dir, wt_path)?;
-    aid_info!("[aid] Removed completed worktree {wt_path}");
+    aid_info!(
+        "[aid] Commits preserved on {branch} — pruned worktree dir {wt_path} (restore: git worktree add <path> {branch})"
+    );
     Ok(())
 }
 

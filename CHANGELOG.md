@@ -1,3 +1,7 @@
+## v8.100.2 (2026-05-23)
+- fix(log): clarify worktree-cleanup messages across 6 sites. The old `[aid] Removed completed worktree {path}` (and its peers) read like aid destroyed the agent's work, when in reality those cleanups only run after commits are safely on the branch (or only on empty branches that fast-failed in <10s). New wording leads with the safety guarantee (or honestly states what's discarded) and adds a restore hint where applicable. Affected logs: `cleanup_completed_worktree`, `maybe_cleanup_fast_fail_impl`, `remove_worktree` (git + fallback path), `aid worktree prune`, `aid clean --worktrees`, and `aid retry --reset`. Cross-audited by codex (t-9808).
+
+
 ## v8.100.1 (2026-05-20)
 - fix(agent/antigravity): probe `agy --help` once per process (cached via `OnceLock`) so the adapter auto-unlocks `--approval-mode`, `-m`, and `stream-json` when upstream agy ships them — no aid redeploy required.
 - fix(agent/antigravity): tiered `read_only` fallback — when agy lacks plan mode but `--sandbox` is on and the container CLI is available, aid lets the container enforce read-only at the OS layer instead of hard-bailing. Without sandbox, the error now names both `--sandbox` and `gemini` as concrete next steps.

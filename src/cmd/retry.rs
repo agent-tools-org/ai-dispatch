@@ -122,7 +122,7 @@ fn save_partial_work(path: &str, task_id: &str) -> Result<()> {
 
 fn reset_dirty_worktree(path: &str) -> Result<()> {
     if worktree_is_dirty(path)? {
-        aid_info!("[aid] Worktree has uncommitted changes from prior attempt, resetting...");
+        aid_info!("[aid] Discarding uncommitted changes from prior attempt (--reset requested): git checkout . && git clean -fd");
         run_git(path, &["checkout", "."])?;
         run_git(path, &["clean", "-fd"])?;
     }

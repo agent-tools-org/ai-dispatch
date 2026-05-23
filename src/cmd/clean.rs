@@ -78,12 +78,12 @@ fn clean_orphaned_worktrees(store: &Store, dry_run: bool) -> Result<()> {
                 continue;
             }
             fs::remove_dir_all(&path)?;
-            println!("Removed orphaned worktree {}", path.display());
+            println!("Removed orphaned worktree dir {}", path.display());
         }
         removed += 1;
     }
     println!(
-        "{} {removed} orphaned worktrees",
+        "{} {removed} orphaned worktree dirs",
         if dry_run {
             "[dry-run] Would remove"
         } else {

@@ -327,7 +327,7 @@ pub fn remove_worktree(repo_dir: &str, wt_path: &str) -> Result<()> {
         .args(["-C", repo_dir, "worktree", "remove", "--force", wt_path])
         .output();
     if matches!(result, Ok(ref out) if out.status.success()) {
-        aid_info!("[aid] Cleaned up worktree {wt_path}");
+        aid_info!("[aid] Pruned worktree dir {wt_path}");
         return Ok(());
     }
 
@@ -354,7 +354,7 @@ pub fn remove_worktree(repo_dir: &str, wt_path: &str) -> Result<()> {
 
     match fs::remove_dir_all(&canonical) {
         Ok(()) => {
-            aid_info!("[aid] Cleaned up worktree {wt_path}");
+            aid_info!("[aid] Pruned worktree dir {wt_path}");
             let _ = Command::new("git")
                 .args(["-C", repo_dir, "worktree", "prune"])
                 .output();

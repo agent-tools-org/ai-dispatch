@@ -70,6 +70,16 @@ pub(crate) fn apply_defaults(args: &mut RunArgs, category: TaskCategory) -> bool
     true
 }
 
+/// Narrow predicate: should this task skip dirty-worktree enforcement?
+/// Only genuine report-only tasks qualify - not a write-capable task that merely
+/// has --result-file plus a broad audit word like "review".
+pub(crate) fn skips_dirty_enforcement(prompt: &str, read_only: bool, category: TaskCategory) -> bool {
+    if read_only { return true; }
+    let normalized = prompt.trim().to_lowercase();
+    matches!(category, TaskCategory::Research | TaskCategory::Documentation | TaskCategory::Debugging)
+        && prompt_matches_auto_report_terms(&normalized)
+}
+
 pub(crate) fn task_result_file(task_id: &str) -> String {
     format!("result-{task_id}.md")
 }

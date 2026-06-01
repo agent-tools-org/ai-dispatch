@@ -315,6 +315,7 @@ mod tests {
             env_forward: None,
             sandbox: false,
             read_only: false,
+            audit_report_mode: false,
             container: None,
             link_deps: true,
             pre_task_dirty_paths: None,

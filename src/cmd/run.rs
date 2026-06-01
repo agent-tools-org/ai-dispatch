@@ -118,8 +118,14 @@ fn maybe_run_post_done_audit(
     run_post::maybe_run_post_done_audit(store, task_id, args, effective_dir, repo_path)
 }
 #[cfg(test)]
-fn final_dirty_assertion(store: &Store, task_id: &TaskId, dir: &str, read_only: bool) -> Result<bool> {
-    run_dirty::final_dirty_assertion(store, task_id, dir, read_only)
+fn final_dirty_assertion(
+    store: &Store,
+    task_id: &TaskId,
+    dir: &str,
+    read_only: bool,
+    baseline: Option<&[String]>,
+) -> Result<bool> {
+    run_dirty::final_dirty_assertion(store, task_id, dir, read_only, baseline)
 }
 
 pub(crate) fn maybe_cleanup_fast_fail(store: &Store, task_id: &TaskId, task: &Task) { run_prompt::maybe_cleanup_fast_fail_impl(store, task_id, task); }

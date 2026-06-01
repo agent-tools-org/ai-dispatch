@@ -2,10 +2,14 @@
 // Covers final dirty worktree assertion behavior around task status/events.
 // Deps: run_lifecycle helpers, Store, git CLI, tempfile.
 
-use super::final_dirty_assertion;
+use super::{
+    final_dirty_assertion,
+    run_dirty::{post_agent_dirty_worktree_cleanup, DirtyWorktreeAction},
+    RunArgs,
+};
 use crate::{store::Store, test_subprocess, types::*};
 use chrono::Local;
-use std::{path::Path, process::Command};
+use std::{path::Path, process::Command, sync::Arc};
 
 fn git(dir: &Path, args: &[&str]) {
     assert!(Command::new("git").arg("-C").arg(dir).args(args).status().unwrap().success());
@@ -73,7 +77,7 @@ fn final_assertion_fails_task_when_worktree_still_dirty() {
     store.insert_task(&task(task_id.as_str(), TaskStatus::Done)).unwrap();
     write_path(dir.path(), "src/lib.rs", "pub fn value() -> u8 { 1 }\n");
 
-    let failed = final_dirty_assertion(&store, &task_id, dir.path().to_str().unwrap(), false).unwrap();
+    let failed = final_dirty_assertion(&store, &task_id, dir.path().to_str().unwrap(), false, None).unwrap();
 
     assert!(failed);
     assert_eq!(store.get_task(task_id.as_str()).unwrap().unwrap().status, TaskStatus::Failed);
@@ -91,10 +95,94 @@ fn final_assertion_skipped_for_read_only() {
     store.insert_task(&task(task_id.as_str(), TaskStatus::Done)).unwrap();
     write_path(dir.path(), "result-t-readonly.md", "audit output\n");
 
-    let failed = final_dirty_assertion(&store, &task_id, dir.path().to_str().unwrap(), true).unwrap();
+    let failed = final_dirty_assertion(&store, &task_id, dir.path().to_str().unwrap(), true, None).unwrap();
 
     assert!(!failed);
     assert_eq!(store.get_task(task_id.as_str()).unwrap().unwrap().status, TaskStatus::Done);
     let events = store.get_events(task_id.as_str()).unwrap();
     assert!(!events.iter().any(|event| event.detail.contains("FAIL: agent left uncommitted changes")));
+}
+
+#[test]
+fn final_assertion_ignores_dirty_files_in_baseline() {
+    let _permit = test_subprocess::acquire();
+    let dir = init_repo();
+    let store = Store::open_memory().unwrap();
+    let task_id = TaskId("t-baseline".to_string());
+    store.insert_task(&task(task_id.as_str(), TaskStatus::Done)).unwrap();
+    write_path(dir.path(), "src/user.rs", "pub fn user() {}\n");
+    let baseline = vec!["?? src/user.rs".to_string()];
+
+    let failed = final_dirty_assertion(
+        &store,
+        &task_id,
+        dir.path().to_str().unwrap(),
+        false,
+        Some(&baseline),
+    )
+    .unwrap();
+
+    assert!(!failed);
+    assert_eq!(store.get_task(task_id.as_str()).unwrap().unwrap().status, TaskStatus::Done);
+}
+
+#[test]
+fn final_assertion_fails_for_dirty_files_outside_baseline() {
+    let _permit = test_subprocess::acquire();
+    let dir = init_repo();
+    let store = Store::open_memory().unwrap();
+    let task_id = TaskId("t-outside-baseline".to_string());
+    store.insert_task(&task(task_id.as_str(), TaskStatus::Done)).unwrap();
+    write_path(dir.path(), "src/user.rs", "pub fn user() {}\n");
+    write_path(dir.path(), "src/agent.rs", "pub fn agent() {}\n");
+    let baseline = vec!["?? src/user.rs".to_string()];
+
+    let failed = final_dirty_assertion(
+        &store,
+        &task_id,
+        dir.path().to_str().unwrap(),
+        false,
+        Some(&baseline),
+    )
+    .unwrap();
+
+    assert!(failed);
+    assert_eq!(store.get_task(task_id.as_str()).unwrap().unwrap().status, TaskStatus::Failed);
+    let events = store.get_events(task_id.as_str()).unwrap();
+    assert!(events.iter().any(|event| event.detail.contains("?? src/agent.rs")));
+    assert!(!events.iter().any(|event| event.detail.contains("?? src/user.rs")));
+}
+
+#[tokio::test]
+async fn audit_report_mode_skips_dirty_worktree_enforcement() {
+    let _permit = test_subprocess::acquire();
+    let dir = init_repo();
+    let store = Arc::new(Store::open_memory().unwrap());
+    let task_id = TaskId("t-audit".to_string());
+    store.insert_task(&task(task_id.as_str(), TaskStatus::Done)).unwrap();
+    write_path(dir.path(), "src/user.rs", "pub fn user() {}\n");
+    let args = RunArgs {
+        audit_report_mode: true,
+        ..Default::default()
+    };
+
+    let action = post_agent_dirty_worktree_cleanup(
+        &store,
+        &task_id,
+        &args,
+        dir.path().to_str().unwrap(),
+        None,
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(action, DirtyWorktreeAction::Continue);
+    assert_eq!(store.get_task(task_id.as_str()).unwrap().unwrap().status, TaskStatus::Done);
+    assert!(!Command::new("git")
+        .arg("-C")
+        .arg(dir.path())
+        .args(["rev-parse", "--verify", "HEAD"])
+        .status()
+        .unwrap()
+        .success());
 }

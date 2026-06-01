@@ -48,6 +48,7 @@ fn background_spec(checklist: Vec<String>) -> BackgroundRunSpec {
         agent_pid: None,
         sandbox: false,
         read_only: false,
+        audit_report_mode: false,
         container: None,
         link_deps: true,
         pre_task_dirty_paths: None,

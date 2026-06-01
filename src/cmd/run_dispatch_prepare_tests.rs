@@ -32,6 +32,34 @@ fn report_mode_dirty_skip_uses_narrow_predicate() {
 }
 
 #[test]
+fn prepare_dispatch_updates_log_path_when_id_is_auto_suffixed() {
+    let temp = tempfile::tempdir().unwrap();
+    let _guard = crate::paths::AidHomeGuard::set(temp.path());
+    let store = Arc::new(Store::open_memory().unwrap());
+    let mut first = RunArgs {
+        agent_name: "codex".to_string(),
+        existing_task_id: Some(TaskId("t-ebcf".to_string())),
+        prompt: "Investigate a concrete task routing bug.".to_string(),
+        ..Default::default()
+    };
+    prepare_dispatch(&store, &mut first).unwrap();
+
+    let mut second = RunArgs {
+        agent_name: "codex".to_string(),
+        existing_task_id: Some(TaskId("t-ebcf".to_string())),
+        prompt: "Investigate a concrete task routing bug again.".to_string(),
+        ..Default::default()
+    };
+    let prepared = prepare_dispatch(&store, &mut second).unwrap();
+
+    let expected = crate::paths::log_path("t-ebcf-2");
+    let saved = store.get_task("t-ebcf-2").unwrap().unwrap();
+    assert_eq!(prepared.task_id.as_str(), "t-ebcf-2");
+    assert_eq!(prepared.log_path, expected);
+    assert_eq!(saved.log_path.as_deref(), Some(expected.to_str().unwrap()));
+}
+
+#[test]
 fn prepare_dispatch_uses_task_specific_audit_result_file() {
     let store = Arc::new(Store::open_memory().unwrap());
     let mut args = RunArgs {

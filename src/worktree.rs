@@ -27,10 +27,10 @@ pub(crate) use baseline::{baseline_contains, extract_baseline_path, extract_base
 pub use path::{aid_worktree_path, aid_worktree_root, is_aid_managed_worktree_path};
 pub use state::{
     branch_has_commits_ahead_of_main, clear_worktree_lock, process_alive_check,
-    try_acquire_worktree_lock, worktree_changed_files,
+    try_acquire_worktree_lock, worktree_changed_files, write_worktree_lock,
 };
 #[cfg(test)]
-pub use state::{check_worktree_lock, write_worktree_lock};
+pub use state::check_worktree_lock;
 pub(crate) use completion::cleanup_completed_worktree;
 use state::{existing_worktree_path, local_branch_exists, prune_worktrees, sync_cargo_lock};
 use validation::{canonical_worktree_path, is_valid_git_worktree};

@@ -5,10 +5,8 @@ use anyhow::Result;
 use chrono::Local;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use crate::{agent, paths, session};
-use crate::project::{self, ProjectConfig};
-use crate::store::{Store, TaskCompletionUpdate};
-use crate::types::*;
+use crate::{agent, paths, project::{self, ProjectConfig}, session};
+use crate::{store::{Store, TaskCompletionUpdate}, types::*};
 use super::run_dispatch_resolve::{apply_project_defaults, resolve_agent_setup};
 use super::run_validate::{IdConflict, resolve_id_conflict, validate_dispatch};
 use super::{RunArgs, context_file_from_spec, resolve_max_duration_mins, resolve_prompt_input, run_prompt};
@@ -47,7 +45,7 @@ pub(super) fn prepare_dispatch(store: &Arc<Store>, args: &mut RunArgs) -> Result
         }
         None => TaskId::generate(),
     };
-    let log_path = paths::log_path(task_id.as_str());
+    let mut log_path = paths::log_path(task_id.as_str());
     let workgroup = run_prompt::load_workgroup(store, args.group.as_deref())?;
     let explicit_repo_path = crate::repo_root::resolve_explicit_repo_path(args.repo_root.as_deref(), args.repo.as_deref())?;
     let caller = session::current_caller();
@@ -222,8 +220,15 @@ pub(super) fn prepare_dispatch(store: &Arc<Store>, args: &mut RunArgs) -> Result
             }
             IdConflict::AutoSuffix(new_id) => {
                 aid_info!("[aid] ID '{}' already exists, using '{}'", task_id, new_id);
-                task.id = TaskId(new_id.clone());
                 task_id = TaskId(new_id);
+                log_path = paths::log_path(task_id.as_str());
+                task.id = task_id.clone();
+                task.log_path = Some(log_path.to_string_lossy().to_string());
+                // Re-key the worktree lock: it was acquired with the pre-suffix ID
+                // before conflict resolution, so its owner field is now stale.
+                if let Some(ref wt) = wt_path {
+                    crate::worktree::write_worktree_lock(Path::new(wt), task_id.as_str());
+                }
                 store.insert_task(&task)?;
             }
         }
@@ -231,14 +236,7 @@ pub(super) fn prepare_dispatch(store: &Arc<Store>, args: &mut RunArgs) -> Result
         store.insert_task(&task)?;
     }
     if emit_gitbutler_setup_hint {
-        let _ = store.insert_event(&TaskEvent {
-            task_id: task_id.clone(),
-            timestamp: Local::now(),
-            event_kind: EventKind::Milestone,
-            detail: "Hint: run `but setup` from the main repo to enable GitButler integration for future tasks."
-                .to_string(),
-            metadata: None,
-        });
+        super::run_dispatch_resolve::insert_gitbutler_setup_hint(store, &task_id);
     }
     if !args.dry_run
         && let (Some(wt), Some(repo)) = (wt_path.as_deref(), repo_path.as_deref())

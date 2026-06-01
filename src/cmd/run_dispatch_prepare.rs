@@ -5,10 +5,8 @@ use anyhow::Result;
 use chrono::Local;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use crate::{agent, paths, session};
-use crate::project::{self, ProjectConfig};
-use crate::store::{Store, TaskCompletionUpdate};
-use crate::types::*;
+use crate::{agent, paths, project::{self, ProjectConfig}, session};
+use crate::{store::{Store, TaskCompletionUpdate}, types::*};
 use super::run_dispatch_resolve::{apply_project_defaults, resolve_agent_setup};
 use super::run_validate::{IdConflict, resolve_id_conflict, validate_dispatch};
 use super::{RunArgs, context_file_from_spec, resolve_max_duration_mins, resolve_prompt_input, run_prompt};
@@ -47,7 +45,7 @@ pub(super) fn prepare_dispatch(store: &Arc<Store>, args: &mut RunArgs) -> Result
         }
         None => TaskId::generate(),
     };
-    let log_path = paths::log_path(task_id.as_str());
+    let mut log_path = paths::log_path(task_id.as_str());
     let workgroup = run_prompt::load_workgroup(store, args.group.as_deref())?;
     let explicit_repo_path = crate::repo_root::resolve_explicit_repo_path(args.repo_root.as_deref(), args.repo.as_deref())?;
     let caller = session::current_caller();
@@ -222,8 +220,10 @@ pub(super) fn prepare_dispatch(store: &Arc<Store>, args: &mut RunArgs) -> Result
             }
             IdConflict::AutoSuffix(new_id) => {
                 aid_info!("[aid] ID '{}' already exists, using '{}'", task_id, new_id);
-                task.id = TaskId(new_id.clone());
                 task_id = TaskId(new_id);
+                log_path = paths::log_path(task_id.as_str());
+                task.id = task_id.clone();
+                task.log_path = Some(log_path.to_string_lossy().to_string());
                 store.insert_task(&task)?;
             }
         }

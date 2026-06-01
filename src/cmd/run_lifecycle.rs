@@ -284,7 +284,7 @@ async fn run_worktree_settlement_phase(
     effective_dir: Option<&String>,
     pre_task_dirty_paths: Option<&[String]>,
 ) -> Result<LifecyclePhaseDecision> {
-    if args.read_only {
+    if args.read_only || args.audit_report_mode {
         return Ok(LifecyclePhaseDecision::Continue);
     }
     let Some(dir) = effective_dir else {

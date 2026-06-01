@@ -61,6 +61,8 @@ pub struct BackgroundRunSpec {
     #[serde(default)]
     pub read_only: bool,
     #[serde(default)]
+    pub audit_report_mode: bool,
+    #[serde(default)]
     pub container: Option<String>,
     #[serde(default = "default_link_deps")]
     pub link_deps: bool,
@@ -158,6 +160,7 @@ mod tests {
             agent_pid: Some(22),
             sandbox: true,
             read_only,
+            audit_report_mode: true,
             container: Some("aid:test".to_string()),
             link_deps: true,
             pre_task_dirty_paths: Some(vec!["?? pre-existing.rs".to_string()]),
@@ -174,6 +177,7 @@ mod tests {
 
         let decoded: BackgroundRunSpec = serde_json::from_value(value).unwrap();
         assert!(decoded.read_only);
+        assert!(decoded.audit_report_mode);
         assert_eq!(decoded.result_file.as_deref(), Some("result.md"));
         assert_eq!(decoded.eval.as_deref(), Some("cargo test"));
         assert_eq!(
@@ -189,8 +193,13 @@ mod tests {
             .as_object_mut()
             .unwrap()
             .remove("read_only");
+        value
+            .as_object_mut()
+            .unwrap()
+            .remove("audit_report_mode");
 
         let decoded: BackgroundRunSpec = serde_json::from_value(value).unwrap();
         assert!(!decoded.read_only);
+        assert!(!decoded.audit_report_mode);
     }
 }

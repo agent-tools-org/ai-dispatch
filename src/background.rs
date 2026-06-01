@@ -221,6 +221,7 @@ async fn run_task_inner(store: &Arc<Store>, spec: &BackgroundRunSpec) -> Result<
         env: spec.env.clone(),
         env_forward: spec.env_forward.clone(),
         read_only: spec.read_only,
+        audit_report_mode: spec.audit_report_mode,
         sandbox: spec.sandbox,
         container: spec.container.clone(),
         link_deps: spec.link_deps,
@@ -229,6 +230,7 @@ async fn run_task_inner(store: &Arc<Store>, spec: &BackgroundRunSpec) -> Result<
     // Auto-commit + rescue untracked files BEFORE verify — ensures verify tests committed state
     let is_read_only = store.get_task(&spec.task_id)?.map(|t| t.read_only).unwrap_or(false);
     if !is_read_only
+        && !spec.audit_report_mode
         && let Some(worktree_dir) = spec.dir.as_deref()
         && crate::commit::has_uncommitted_changes(worktree_dir).unwrap_or(false)
         && let Err(e) = crate::commit::auto_commit(worktree_dir, &spec.task_id, &spec.prompt)
@@ -242,7 +244,7 @@ async fn run_task_inner(store: &Arc<Store>, spec: &BackgroundRunSpec) -> Result<
             metadata: None,
         });
     }
-    if !is_read_only {
+    if !is_read_only && !spec.audit_report_mode {
         if let Some(worktree_dir) = spec.dir.as_deref() {
             match crate::commit::rescue_dirty_worktree_with_baseline(
                 worktree_dir,
@@ -428,6 +430,7 @@ where
             }
             if let Some(task) = store.get_task(task_id)?
                 && !task.read_only
+                && !spec.audit_report_mode
                 && let Some(ref path) = task.worktree_path
                 && std::path::Path::new(path).exists()
                 && crate::commit::has_uncommitted_changes(path).unwrap_or(false)
@@ -458,6 +461,7 @@ where
 
         if let Some(task) = store.get_task(task_id)?
             && !task.read_only
+            && !spec.audit_report_mode
             && let Some(ref path) = task.worktree_path
             && std::path::Path::new(path).exists()
             && crate::commit::has_uncommitted_changes(path).unwrap_or(false)

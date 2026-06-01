@@ -12,6 +12,8 @@ mod reconcile;
 mod completion;
 #[path = "worktree/snapshot.rs"]
 mod snapshot;
+#[path = "worktree/baseline.rs"]
+mod baseline;
 #[path = "worktree/state.rs"]
 mod state;
 #[path = "worktree/validation.rs"]
@@ -21,6 +23,7 @@ mod path;
 pub(crate) use snapshot::{
     WorktreeStatusEntry, WorktreeStatusKind, capture_worktree_snapshot,
 };
+pub(crate) use baseline::{baseline_contains, extract_baseline_path, extract_baseline_paths};
 pub use path::{aid_worktree_path, aid_worktree_root, is_aid_managed_worktree_path};
 pub use state::{
     branch_has_commits_ahead_of_main, clear_worktree_lock, process_alive_check,

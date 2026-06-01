@@ -3,7 +3,7 @@
 // Deps: super worktree helpers, tempfile, std threading primitives.
 
 use super::{
-    clear_worktree_lock, create_worktree, try_acquire_worktree_lock,
+    check_worktree_lock, clear_worktree_lock, create_worktree, try_acquire_worktree_lock,
 };
 use super::path::WorktreeHomeGuard;
 use super::state::write_worktree_lock;
@@ -46,6 +46,19 @@ fn try_acquire_worktree_lock_rejects_existing_and_recovers_stale_lock() {
         .expect("stale lock should write");
 
     assert!(try_acquire_worktree_lock(dir.path(), "t-after-stale").is_ok());
+}
+
+#[test]
+fn write_worktree_lock_rekeys_owner_to_new_task_id() {
+    // Mirrors the AutoSuffix path: the lock is acquired with the pre-suffix ID,
+    // then re-keyed to the suffixed ID after conflict resolution.
+    let dir = TempDir::new().expect("tempdir should be created");
+
+    try_acquire_worktree_lock(dir.path(), "t-ebcf").expect("lock should be acquired");
+    assert_eq!(check_worktree_lock(dir.path()).as_deref(), Some("t-ebcf"));
+
+    write_worktree_lock(dir.path(), "t-ebcf-2");
+    assert_eq!(check_worktree_lock(dir.path()).as_deref(), Some("t-ebcf-2"));
 }
 
 #[test]

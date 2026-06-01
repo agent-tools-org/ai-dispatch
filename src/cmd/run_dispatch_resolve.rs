@@ -15,6 +15,18 @@ use crate::usage;
 use super::run_prompt;
 use super::RunArgs;
 
+/// Emit the one-time GitButler setup hint as a task milestone event.
+pub(super) fn insert_gitbutler_setup_hint(store: &Store, task_id: &crate::types::TaskId) {
+    let _ = store.insert_event(&crate::types::TaskEvent {
+        task_id: task_id.clone(),
+        timestamp: chrono::Local::now(),
+        event_kind: crate::types::EventKind::Milestone,
+        detail: "Hint: run `but setup` from the main repo to enable GitButler integration for future tasks."
+            .to_string(),
+        metadata: None,
+    });
+}
+
 pub(super) struct AgentSetup {
     pub agent_kind: AgentKind,
     pub custom_agent_name: Option<String>,

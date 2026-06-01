@@ -97,7 +97,7 @@ pub(super) fn run_background_task(
     prompt_bundle: &run_prompt::PromptBundle,
 ) -> Result<()> {
     background::check_worker_capacity(store)?;
-    let pre_task_dirty_paths = if args.read_only {
+    let pre_task_dirty_paths = if args.read_only || args.audit_report_mode {
         None
     } else {
         capture_pre_task_dirty_paths(prepared.effective_dir.as_ref())
@@ -133,6 +133,7 @@ pub(super) fn run_background_task(
         agent_pid: None,
         sandbox: args.sandbox,
         read_only: args.read_only,
+        audit_report_mode: args.audit_report_mode,
         container: args.container.clone(),
         link_deps: args.link_deps,
         pre_task_dirty_paths,
@@ -174,7 +175,7 @@ pub(super) async fn run_foreground_task(
     runtime_hooks: &[hooks::Hook],
     container_name: Option<&str>,
 ) -> Result<Option<TaskId>> {
-    let pre_task_dirty_paths = if args.read_only {
+    let pre_task_dirty_paths = if args.read_only || args.audit_report_mode {
         None
     } else {
         capture_pre_task_dirty_paths(prepared.effective_dir.as_ref())

@@ -2,8 +2,8 @@
 // Covers amend safety, artifact exclusions, and pre-task baseline filtering.
 
 use super::{
-    detect_untracked_source_files, extract_baseline_paths, rescue_dirty_worktree,
-    rescue_dirty_worktree_with_baseline, rescue_untracked_files,
+    detect_untracked_source_files, rescue_dirty_worktree, rescue_dirty_worktree_with_baseline,
+    rescue_untracked_files,
 };
 use crate::test_subprocess;
 use std::{path::Path, process::Command};
@@ -245,7 +245,7 @@ fn rescue_path_baseline_handles_rename_and_delete() {
         " D src/other.rs".to_string(),
     ];
 
-    let baseline_paths = extract_baseline_paths(&baseline);
+    let baseline_paths = crate::worktree::extract_baseline_paths(&baseline);
     assert!(baseline_paths.contains("src/new.rs"));
     assert!(baseline_paths.contains("src/other.rs"));
 

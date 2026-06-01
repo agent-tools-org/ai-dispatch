@@ -293,6 +293,7 @@ fn reconcile_and_poll_completed_tasks_marks_zombies_failed() {
         agent_pid: None,
         sandbox: false,
         read_only: false,
+        audit_report_mode: false,
         container: None,
         link_deps: true,
         pre_task_dirty_paths: None,

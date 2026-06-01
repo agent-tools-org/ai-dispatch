@@ -24,7 +24,7 @@ pub(crate) async fn post_agent_dirty_worktree_cleanup(
     dir: &str,
     pre_task_dirty_paths: Option<&[String]>,
 ) -> Result<DirtyWorktreeAction> {
-    if args.read_only {
+    if args.read_only || args.audit_report_mode {
         return Ok(DirtyWorktreeAction::Continue);
     }
 
@@ -66,7 +66,7 @@ pub(crate) async fn post_agent_dirty_worktree_cleanup(
     if crate::commit::has_uncommitted_changes(dir).unwrap_or(false) {
         retry_id = maybe_retry_uncommitted(store, task_id, args, dir).await?;
     }
-    if final_dirty_assertion(store.as_ref(), task_id, dir, args.read_only)? {
+    if final_dirty_assertion(store.as_ref(), task_id, dir, args.read_only, pre_task_dirty_paths)? {
         return Ok(DirtyWorktreeAction::Failed);
     }
 
@@ -81,18 +81,27 @@ pub(crate) fn final_dirty_assertion(
     task_id: &TaskId,
     dir: &str,
     read_only: bool,
+    baseline: Option<&[String]>,
 ) -> Result<bool> {
     if read_only {
         return Ok(false);
     }
 
-    let dirty_files = match worktree_status_lines(dir) {
+    let mut dirty_files = match worktree_status_lines(dir) {
         Ok(lines) => lines,
         Err(err) => {
             aid_warn!("[aid] final dirty assertion skipped for {dir}: {err}");
             return Ok(false);
         }
     };
+    if let Some(baseline) = baseline {
+        let baseline_paths = crate::worktree::extract_baseline_paths(baseline);
+        dirty_files.retain(|line| {
+            crate::worktree::extract_baseline_path(line)
+                .map(|path| !crate::worktree::baseline_contains(&baseline_paths, &path))
+                .unwrap_or(true)
+        });
+    }
     if dirty_files.is_empty() {
         return Ok(false);
     }

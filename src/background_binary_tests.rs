@@ -62,6 +62,7 @@ fn make_spec(task_id: &str) -> BackgroundRunSpec {
         agent_pid: None,
         sandbox: false,
         read_only: false,
+        audit_report_mode: false,
         container: None,
         link_deps: false,
         pre_task_dirty_paths: None,

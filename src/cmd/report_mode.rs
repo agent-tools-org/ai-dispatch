@@ -28,6 +28,13 @@ const AUDIT_NOUN_PHRASES: &[&str] = &[
     "add an audit",
     "add audit",
 ];
+const AUTO_REPORT_AUDIT_TERMS: &[&str] = &[
+    "cross-audit",
+    "cross audit",
+    "adversarial audit",
+    "code review",
+    "peer review",
+];
 
 pub(crate) fn is_audit_report_task(
     prompt: &str,
@@ -38,8 +45,13 @@ pub(crate) fn is_audit_report_task(
     let normalized = prompt.trim().to_lowercase();
     let explicit_audit =
         (read_only || result_file.is_some()) && prompt_matches_audit_terms(&normalized);
+    let auto_audit_report = matches!(
+        category,
+        TaskCategory::Research | TaskCategory::Documentation | TaskCategory::Debugging
+    ) && prompt_matches_auto_report_terms(&normalized);
     let structured_findings = contains_any(&normalized, STRUCTURED_FINDING_TERMS);
     explicit_audit
+        || auto_audit_report
         || (read_only
             && matches!(
                 category,
@@ -56,6 +68,16 @@ pub(crate) fn apply_defaults(args: &mut RunArgs, category: TaskCategory) -> bool
         args.result_file = Some(DEFAULT_AUDIT_RESULT_FILE.to_string());
     }
     true
+}
+
+/// Narrow predicate: should this task skip dirty-worktree enforcement?
+/// Only genuine report-only tasks qualify - not a write-capable task that merely
+/// has --result-file plus a broad audit word like "review".
+pub(crate) fn skips_dirty_enforcement(prompt: &str, read_only: bool, category: TaskCategory) -> bool {
+    if read_only { return true; }
+    let normalized = prompt.trim().to_lowercase();
+    matches!(category, TaskCategory::Research | TaskCategory::Documentation | TaskCategory::Debugging)
+        && prompt_matches_auto_report_terms(&normalized)
 }
 
 pub(crate) fn task_result_file(task_id: &str) -> String {
@@ -92,6 +114,11 @@ Do not include planning notes, tool logs, or meta-commentary in the final report
 fn prompt_matches_audit_terms(normalized_prompt: &str) -> bool {
     let stripped = strip_audit_noun_phrases(normalized_prompt);
     contains_any_word(&stripped, AUDIT_TERMS)
+}
+
+fn prompt_matches_auto_report_terms(normalized_prompt: &str) -> bool {
+    let stripped = strip_audit_noun_phrases(normalized_prompt);
+    contains_any_word(&stripped, AUTO_REPORT_AUDIT_TERMS)
 }
 
 fn strip_audit_noun_phrases(normalized_prompt: &str) -> String {
@@ -214,6 +241,26 @@ mod tests {
             false,
             TaskCategory::ComplexImpl,
             Some("result.md"),
+        ));
+    }
+
+    #[test]
+    fn non_read_only_cross_audit_enables_report_mode() {
+        assert!(is_audit_report_task(
+            "Cross-audit the split routing fix and produce findings.",
+            false,
+            TaskCategory::Research,
+            None,
+        ));
+    }
+
+    #[test]
+    fn non_read_only_bare_audit_prompt_does_not_enable_report_mode() {
+        assert!(!is_audit_report_task(
+            "Redesign the audit subsystem",
+            false,
+            TaskCategory::Research,
+            None,
         ));
     }
 

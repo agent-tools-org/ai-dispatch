@@ -224,6 +224,11 @@ pub(super) fn prepare_dispatch(store: &Arc<Store>, args: &mut RunArgs) -> Result
                 log_path = paths::log_path(task_id.as_str());
                 task.id = task_id.clone();
                 task.log_path = Some(log_path.to_string_lossy().to_string());
+                // Re-key the worktree lock: it was acquired with the pre-suffix ID
+                // before conflict resolution, so its owner field is now stale.
+                if let Some(ref wt) = wt_path {
+                    crate::worktree::write_worktree_lock(Path::new(wt), task_id.as_str());
+                }
                 store.insert_task(&task)?;
             }
         }

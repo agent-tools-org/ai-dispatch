@@ -200,9 +200,9 @@ pub(super) fn prepare_dispatch(store: &Arc<Store>, args: &mut RunArgs) -> Result
         agent::classifier::count_file_mentions(&normalized_prompt),
         task.prompt.chars().count(),
     );
-    let audit_report_mode = crate::cmd::report_mode::apply_defaults(args, profile.category);
-    args.audit_report_mode = audit_report_mode;
-    let auto_result_file = audit_report_mode
+    let report_output = crate::cmd::report_mode::apply_defaults(args, profile.category);
+    args.audit_report_mode = crate::cmd::report_mode::skips_dirty_enforcement(&args.prompt, args.read_only, profile.category);
+    let auto_result_file = report_output
         && !had_explicit_result_file
         && args.output.is_none()
         && args.result_file.as_deref() == Some(crate::cmd::report_mode::DEFAULT_AUDIT_RESULT_FILE);

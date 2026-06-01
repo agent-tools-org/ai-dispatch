@@ -3,7 +3,6 @@
 // Deps: git CLI via std::process and parent commit helpers.
 
 use anyhow::Result;
-use std::collections::HashSet;
 use std::path::Path;
 use std::process::Command;
 
@@ -104,38 +103,13 @@ fn detect_rescuable_files(
     baseline: Option<&[String]>,
 ) -> Result<Vec<WorktreeStatusEntry>> {
     let baseline_paths = baseline
-        .map(extract_baseline_paths)
+        .map(crate::worktree::extract_baseline_paths)
         .unwrap_or_default();
     Ok(crate::worktree::capture_worktree_snapshot(Path::new(dir))?
         .rescuable_entries()
         .into_iter()
-        .filter(|entry| !baseline_contains(&baseline_paths, entry))
+        .filter(|entry| !crate::worktree::baseline_contains(&baseline_paths, &entry.path))
         .collect())
-}
-
-fn extract_baseline_paths(baseline: &[String]) -> HashSet<String> {
-    baseline
-        .iter()
-        .filter_map(|line| extract_baseline_path(line))
-        .collect()
-}
-
-fn extract_baseline_path(line: &str) -> Option<String> {
-    if line.is_empty() || line.len() < 4 {
-        return None;
-    }
-    if let Some(path) = line.strip_prefix("?? ") {
-        return Some(path.to_string());
-    }
-    let path = &line[3..];
-    if let Some((_, renamed_path)) = path.split_once(" -> ") {
-        return Some(renamed_path.to_string());
-    }
-    Some(path.to_string())
-}
-
-fn baseline_contains(baseline: &HashSet<String>, entry: &WorktreeStatusEntry) -> bool {
-    baseline.contains(&entry.path)
 }
 
 fn stage_file(dir: &str, file: &WorktreeStatusEntry) -> std::result::Result<(), String> {

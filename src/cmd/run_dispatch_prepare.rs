@@ -236,14 +236,7 @@ pub(super) fn prepare_dispatch(store: &Arc<Store>, args: &mut RunArgs) -> Result
         store.insert_task(&task)?;
     }
     if emit_gitbutler_setup_hint {
-        let _ = store.insert_event(&TaskEvent {
-            task_id: task_id.clone(),
-            timestamp: Local::now(),
-            event_kind: EventKind::Milestone,
-            detail: "Hint: run `but setup` from the main repo to enable GitButler integration for future tasks."
-                .to_string(),
-            metadata: None,
-        });
+        super::run_dispatch_resolve::insert_gitbutler_setup_hint(store, &task_id);
     }
     if !args.dry_run
         && let (Some(wt), Some(repo)) = (wt_path.as_deref(), repo_path.as_deref())

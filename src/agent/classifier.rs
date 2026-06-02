@@ -206,7 +206,7 @@ pub fn is_simple_for_routing(prompt: &str) -> bool {
         && !prompt.contains("```")
         && !prompt.contains("http://")
         && !prompt.contains("https://")
-        && !contains_any(&lower, &["implement", "create module", "design", "architect", "refactor across", "migrate", "security audit", "debug", "investigate", "root cause"])
+        && !contains_any(&lower, &["implement", "create module", "design", "architect", "refactor across", "migrate", "audit", "review", "verify", "debug", "investigate", "root cause"])
 }
 
 /// Word-boundary aware match: "ui" matches " ui " but not "suite".
@@ -267,6 +267,9 @@ mod tests {
     #[test]
     fn simple_prompt_is_routable() {
         assert!(is_simple_for_routing("rename a field"));
+        assert!(!is_simple_for_routing("Cross-audit the parser.rs change"));
+        assert!(!is_simple_for_routing("review this diff"));
+        assert!(!is_simple_for_routing("verify the fix works"));
     }
 
     #[test]

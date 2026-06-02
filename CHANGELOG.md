@@ -1,3 +1,7 @@
+## v8.100.5 (2026-06-02)
+- fix(routing): guard `audit`/`review`/`verify` prompts from silent cheap-model downgrade. `is_simple_for_routing()` only denylisted `"security audit"`, so short audit/review/verify prompts slipped through as "simple" and got routed to the cheapest (nano) model — the wrong model for correctness-critical work. The denylist now uses substring `"audit"` (covers cross-audit/security-audit) plus `"review"` and `"verify"`; such prompts now defer to the agent's own configured model. No model version is pinned.
+
+
 ## v8.100.4 (2026-06-01)
 - fix(dispatch): correct dirty-worktree baseline subtraction in `final_dirty_assertion` — it now subtracts the pre-task dirty baseline (matching `rescue`), so a user's pre-existing uncommitted files in a shared `--dir .` no longer flip a completed audit/report task from Done to Failed after its report was already written. Baseline-path parsing promoted to a shared `src/worktree/baseline.rs` helper used by both rescue and the final assertion.
 - fix(dispatch): audit report-mode tasks skip dirty-worktree enforcement entirely (rescue + assertion), driven by a narrow `skips_dirty_enforcement` predicate. The skip is decoupled from result.md auto-set so a non-read-only write-intent task (e.g. "review and fix X" with --result-file) keeps its uncommitted-changes safety net.

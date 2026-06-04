@@ -533,12 +533,12 @@ pub(crate) fn maybe_flag_hollow_output(store: &Store, task_id: &TaskId, task: &T
         metadata: None,
     });
 }
-fn output_content_length(task: &Task) -> usize {
+pub(super) fn output_content_length(task: &Task) -> usize {
     if let Some(ref path) = task.output_path {
         if let Ok(content) = std::fs::read_to_string(path) {
-            return content.trim().len();
+            return content.trim().chars().count();
         }
     }
     let auto_path = crate::paths::task_dir(task.id.as_str()).join("output.md");
-    std::fs::read_to_string(auto_path).map(|content| content.trim().len()).unwrap_or(0)
+    std::fs::read_to_string(auto_path).map(|content| content.trim().chars().count()).unwrap_or(0)
 }

@@ -4,7 +4,13 @@
 use super::*;
 use crate::agent::{Agent, RunOpts};
 use crate::paths::AidHomeGuard;
+use std::sync::{Mutex, OnceLock};
 use tempfile::TempDir;
+
+fn env_lock() -> &'static Mutex<()> {
+    static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+    LOCK.get_or_init(|| Mutex::new(()))
+}
 
 #[test]
 fn build_command_includes_external_context_directories() {
@@ -44,6 +50,7 @@ fn build_command_includes_external_context_directories() {
 
 #[test]
 fn build_command_sets_trust_workspace_env_by_default() {
+    let _env = env_lock().lock().unwrap_or_else(|e| e.into_inner());
     let opts = RunOpts {
         dir: None,
         output: None,
@@ -97,6 +104,7 @@ fn build_command_sets_trust_workspace_env_by_default() {
 
 #[test]
 fn build_command_respects_pre_existing_trust_workspace_override() {
+    let _env = env_lock().lock().unwrap_or_else(|e| e.into_inner());
     let opts = RunOpts {
         dir: None,
         output: None,

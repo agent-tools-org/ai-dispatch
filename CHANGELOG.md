@@ -1,3 +1,9 @@
+## v8.100.6 (2026-06-04)
+- fix(dispatch): hollow-output guard now counts characters, not bytes (#131) — a 199-char/205-byte agent preamble was slipping past the 200-byte threshold, so zero-delivery audit tasks were silently marked Done with no HollowOutput flag. `output_content_length` now uses `chars().count()` in both branches.
+- fix(dispatch): broaden audit-report detection to auditor-role prompts (#132) — an adversarial read-only audit prompt dispatched without `--read-only`/`--result-file` failed to engage the `## Findings` report flow. Added `strong_audit_intent` (auditor-role declaration or "audit ... against <baseline>") as a trigger; `skips_dirty_enforcement` stays strict and decoupled.
+- test(gemini): serialize env-mutating trust-workspace tests (#133) — two tests mutating the process-global `GEMINI_CLI_TRUST_WORKSPACE` raced under parallel `cargo test`, intermittently failing `release.sh`. Now serialized via a shared mutex matching the existing `sandbox.rs`/`state_tests.rs` pattern.
+
+
 ## v8.100.5 (2026-06-02)
 - fix(routing): guard `audit`/`review`/`verify` prompts from silent cheap-model downgrade. `is_simple_for_routing()` only denylisted `"security audit"`, so short audit/review/verify prompts slipped through as "simple" and got routed to the cheapest (nano) model — the wrong model for correctness-critical work. The denylist now uses substring `"audit"` (covers cross-audit/security-audit) plus `"review"` and `"verify"`; such prompts now defer to the agent's own configured model. No model version is pinned.
 

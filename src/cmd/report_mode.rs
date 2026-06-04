@@ -35,6 +35,15 @@ const AUTO_REPORT_AUDIT_TERMS: &[&str] = &[
     "code review",
     "peer review",
 ];
+const AUDITOR_ROLE_PREFIXES: &[&str] = &[
+    "you are a",
+    "you are an",
+    "you are the",
+    "act as a",
+    "act as an",
+    "act as the",
+];
+const AUDIT_BASELINES: &[&str] = &["main", "base", "baseline"];
 
 pub(crate) fn is_audit_report_task(
     prompt: &str,
@@ -49,9 +58,11 @@ pub(crate) fn is_audit_report_task(
         category,
         TaskCategory::Research | TaskCategory::Documentation | TaskCategory::Debugging
     ) && prompt_matches_auto_report_terms(&normalized);
+    let strong_audit_intent = prompt_matches_strong_audit_intent(&normalized);
     let structured_findings = contains_any(&normalized, STRUCTURED_FINDING_TERMS);
     explicit_audit
         || auto_audit_report
+        || strong_audit_intent
         || (read_only
             && matches!(
                 category,
@@ -121,6 +132,25 @@ fn prompt_matches_auto_report_terms(normalized_prompt: &str) -> bool {
     contains_any_word(&stripped, AUTO_REPORT_AUDIT_TERMS)
 }
 
+fn prompt_matches_strong_audit_intent(normalized_prompt: &str) -> bool {
+    let stripped = strip_audit_noun_phrases(normalized_prompt);
+    prompt_has_auditor_role(&stripped) || prompt_has_audit_against_baseline(&stripped)
+}
+
+fn prompt_has_auditor_role(stripped_prompt: &str) -> bool {
+    (contains_any(stripped_prompt, AUDITOR_ROLE_PREFIXES)
+        || contains_any_word(stripped_prompt, &["adversarial"]))
+        && contains_any_word(stripped_prompt, &["auditor", "code auditor"])
+}
+
+fn prompt_has_audit_against_baseline(stripped_prompt: &str) -> bool {
+    let Some(audit_at) = stripped_prompt.find("audit") else { return false; };
+    let after_audit = &stripped_prompt[audit_at..];
+    contains_any_word(after_audit, &["audit"])
+        && contains_any(after_audit, &[" against "])
+        && contains_any_word(after_audit, AUDIT_BASELINES)
+}
+
 fn strip_audit_noun_phrases(normalized_prompt: &str) -> String {
     let mut stripped = normalized_prompt.to_string();
     for phrase in AUDIT_NOUN_PHRASES {
@@ -129,168 +159,4 @@ fn strip_audit_noun_phrases(normalized_prompt: &str) -> String {
     stripped
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn audit_prompt_enables_report_mode() {
-        assert!(is_audit_report_task(
-            "Cross-audit the split routing fix and produce findings.",
-            true,
-            TaskCategory::Research,
-            None,
-        ));
-    }
-
-    #[test]
-    fn read_only_findings_prompt_enables_report_mode() {
-        assert!(is_audit_report_task(
-            "Check PASS/FAIL with evidence and list findings.",
-            true,
-            TaskCategory::Documentation,
-            None,
-        ));
-    }
-
-    #[test]
-    fn generic_research_prompt_does_not_enable_report_mode() {
-        assert!(!is_audit_report_task(
-            "Explain how routing tiers work.",
-            true,
-            TaskCategory::Research,
-            None,
-        ));
-    }
-
-    #[test]
-    fn write_prompts_do_not_enable_report_mode_without_result_file() {
-        for prompt in [
-            "Add an audit log feature",
-            "Implement the requested fix",
-            "Redesign the audit subsystem",
-            "Investigate and fix the crash",
-        ] {
-            assert!(!is_audit_report_task(
-                prompt,
-                false,
-                TaskCategory::ComplexImpl,
-                None,
-            ));
-        }
-    }
-
-    #[test]
-    fn read_only_audit_prompts_enable_report_mode() {
-        assert!(is_audit_report_task(
-            "Cross-audit the calldata encoding",
-            true,
-            TaskCategory::Research,
-            None,
-        ));
-        assert!(is_audit_report_task(
-            "Code review of changes",
-            true,
-            TaskCategory::Research,
-            None,
-        ));
-    }
-
-    #[test]
-    fn read_only_audit_prompts_handle_case_spacing_and_punctuation() {
-        for prompt in [
-            "AUDIT THE API SURFACE",
-            "  cross-audit the calldata",
-            "cross-audit, the calldata",
-        ] {
-            assert!(is_audit_report_task(
-                prompt,
-                true,
-                TaskCategory::Research,
-                None,
-            ));
-        }
-    }
-
-    #[test]
-    fn audit_noun_phrase_does_not_mask_explicit_audit_term() {
-        assert!(is_audit_report_task(
-            "cross-audit the audit log feature",
-            true,
-            TaskCategory::Research,
-            None,
-        ));
-        assert!(prompt_is_audit_report("cross-audit the audit log feature"));
-    }
-
-    #[test]
-    fn audit_log_feature_prompt_does_not_enable_report_mode() {
-        assert!(!is_audit_report_task(
-            "Implement an audit log feature",
-            true,
-            TaskCategory::Research,
-            None,
-        ));
-        assert!(!prompt_is_audit_report("Implement an audit log feature"));
-    }
-
-    #[test]
-    fn explicit_result_file_enables_audit_prompt_report_mode() {
-        assert!(is_audit_report_task(
-            "Audit the API surface",
-            false,
-            TaskCategory::ComplexImpl,
-            Some("result.md"),
-        ));
-    }
-
-    #[test]
-    fn non_read_only_cross_audit_enables_report_mode() {
-        assert!(is_audit_report_task(
-            "Cross-audit the split routing fix and produce findings.",
-            false,
-            TaskCategory::Research,
-            None,
-        ));
-    }
-
-    #[test]
-    fn non_read_only_bare_audit_prompt_does_not_enable_report_mode() {
-        assert!(!is_audit_report_task(
-            "Redesign the audit subsystem",
-            false,
-            TaskCategory::Research,
-            None,
-        ));
-    }
-
-    #[test]
-    fn apply_defaults_sets_result_file_once() {
-        let mut args = RunArgs {
-            prompt: "Review the implementation and list findings.".to_string(),
-            read_only: true,
-            ..Default::default()
-        };
-
-        assert!(apply_defaults(&mut args, TaskCategory::Research));
-        assert_eq!(args.result_file.as_deref(), Some(DEFAULT_AUDIT_RESULT_FILE));
-    }
-
-    #[test]
-    fn apply_defaults_skips_result_file_when_output_is_set() {
-        let mut args = RunArgs {
-            prompt: "Review the implementation and list findings.".to_string(),
-            read_only: true,
-            output: Some("report.md".to_string()),
-            ..Default::default()
-        };
-
-        assert!(apply_defaults(&mut args, TaskCategory::Research));
-        assert_eq!(args.result_file, None);
-    }
-
-    #[test]
-    fn task_result_file_uses_task_id_suffix() {
-        assert_eq!(task_result_file("t-123"), "result-t-123.md");
-    }
-}
+#[cfg(test)] #[path = "report_mode_tests.rs"] mod tests;

@@ -1,3 +1,11 @@
+## v8.100.7 (2026-06-05)
+- fix(dispatch): task ID collisions (#134) — a 5-layer fix. `TaskId`/`WorkgroupId` widened from 16-bit (`t-{u16:04x}`, 65 536 values) to u32 hex (`t-`/`wg-{:08x}`), drastically cutting birthday-paradox collision odds.
+- fix(dispatch): generated task IDs now insert-and-retry on a UNIQUE/PRIMARY KEY conflict (bounded loop, rusqlite extended code 1555) instead of erroring — previously regenerate-retry only ran for explicit `--task-id`.
+- fix(dispatch): data-loss fix — the task row is now committed (claiming the ID) BEFORE any worktree/branch mutation, so a failed dispatch can no longer force-reset the target branch to base HEAD and orphan the prior commit.
+- fix(dispatch): symmetric failure handling — every post-insert error path marks the task Failed atomically, and the worktree lock is released on all error paths via an RAII guard.
+- fix(board): widen ID / Parent / Group columns to keep rows aligned with the new 8-hex IDs.
+
+
 ## v8.100.6 (2026-06-04)
 - fix(dispatch): hollow-output guard now counts characters, not bytes (#131) — a 199-char/205-byte agent preamble was slipping past the 200-byte threshold, so zero-delivery audit tasks were silently marked Done with no HollowOutput flag. `output_content_length` now uses `chars().count()` in both branches.
 - fix(dispatch): broaden audit-report detection to auditor-role prompts (#132) — an adversarial read-only audit prompt dispatched without `--read-only`/`--result-file` failed to engage the `## Findings` report flow. Added `strong_audit_intent` (auditor-role declaration or "audit ... against <baseline>") as a trigger; `skips_dirty_enforcement` stays strict and decoupled.

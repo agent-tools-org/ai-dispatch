@@ -7,8 +7,7 @@ mod output_classifier;
 use anyhow::{bail, Result};
 use chrono::Local;
 use serde_json::{json, Map, Value};
-use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process::Command;
 use std::sync::OnceLock;
 
@@ -18,6 +17,7 @@ use super::RunOpts;
 use crate::rate_limit;
 use crate::templates;
 use crate::types::*;
+use crate::worktree_layout::{read_commondir, resolve_worktree_gitdir};
 
 /// Parsed codex CLI version (major, minor, patch).
 /// Cached via OnceLock so `codex --version` runs at most once.
@@ -150,56 +150,6 @@ impl super::Agent for CodexAgent {
     }
 }
 
-fn resolve_worktree_gitdir(dir: &Path) -> Option<PathBuf> {
-    let git_path = dir.join(".git");
-    let gitfile = worktree_gitfile(&git_path)?;
-    let content = match fs::read_to_string(&gitfile) {
-        Ok(content) => content,
-        Err(err) => {
-            eprintln!("warning: failed to read codex worktree gitfile: {err}");
-            return None;
-        }
-    };
-    let Some(raw_path) = content.lines().find_map(|line| line.strip_prefix("gitdir:")) else {
-        eprintln!("warning: failed to parse codex worktree gitfile: {}", gitfile.display());
-        return None;
-    };
-    let path = Path::new(raw_path.trim());
-    let resolved = if path.is_absolute() { path.to_path_buf() } else { dir.join(path) };
-    match fs::canonicalize(resolved) {
-        Ok(path) => Some(path),
-        Err(err) => {
-            eprintln!("warning: failed to resolve codex worktree gitdir: {err}");
-            None
-        }
-    }
-}
-
-fn worktree_gitfile(git_path: &Path) -> Option<PathBuf> {
-    let (gitfile, metadata) = resolve_git_path(git_path)?;
-    if metadata.is_dir() {
-        return None;
-    }
-    if metadata.is_file() {
-        return Some(gitfile);
-    }
-    eprintln!(
-        "warning: codex .git path is neither file nor directory: {}",
-        gitfile.display()
-    );
-    None
-}
-
-fn resolve_git_path(git_path: &Path) -> Option<(PathBuf, fs::Metadata)> {
-    let metadata = fs::symlink_metadata(git_path).ok()?;
-    if metadata.file_type().is_symlink() {
-        let resolved = fs::canonicalize(git_path).ok()?;
-        let metadata = fs::metadata(&resolved).ok()?;
-        return Some((resolved, metadata));
-    }
-    Some((git_path.to_path_buf(), metadata))
-}
-
 fn writable_roots_config(path: &Path) -> Option<String> {
     let mut roots = vec![toml::Value::String(path.to_str()?.to_string())];
     if let Some(commondir) =
@@ -209,17 +159,6 @@ fn writable_roots_config(path: &Path) -> Option<String> {
     }
     let value = toml::Value::Array(roots);
     Some(format!("sandbox_workspace_write.writable_roots={value}"))
-}
-
-fn read_commondir(gitdir: &Path) -> Option<PathBuf> {
-    let content = fs::read_to_string(gitdir.join("commondir")).ok()?;
-    let path = Path::new(content.trim());
-    let resolved = if path.is_absolute() {
-        path.to_path_buf()
-    } else {
-        gitdir.join(path)
-    };
-    fs::canonicalize(resolved).ok()
 }
 
 fn parse_item_event(

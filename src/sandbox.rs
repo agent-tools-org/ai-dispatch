@@ -129,9 +129,13 @@ fn worktree_git_mounts(cwd: &str) -> Vec<(String, String)> {
         return Vec::new();
     };
     let mut mounts = Vec::new();
-    push_git_mount(&mut mounts, &cwd_mount, &gitdir);
     if let Some(commondir) = read_commondir(&gitdir) {
         push_git_mount(&mut mounts, &cwd_mount, &commondir);
+        if !gitdir.starts_with(&commondir) {
+            push_git_mount(&mut mounts, &cwd_mount, &gitdir);
+        }
+    } else {
+        push_git_mount(&mut mounts, &cwd_mount, &gitdir);
     }
     mounts
 }

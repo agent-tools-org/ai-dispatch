@@ -243,6 +243,20 @@ impl Store {
         Ok(())
     }
 
+    pub(crate) fn update_task_worktree(
+        &self,
+        id: &str,
+        repo_path: Option<&str>,
+        worktree_path: Option<&str>,
+        worktree_branch: Option<&str>,
+    ) -> Result<()> {
+        self.db().execute(
+            "UPDATE tasks SET repo_path = ?1, worktree_path = ?2, worktree_branch = ?3 WHERE id = ?4",
+            params![repo_path, worktree_path, worktree_branch, id],
+        )?;
+        Ok(())
+    }
+
     pub fn update_start_sha(&self, id: &str, start_sha: &str) -> Result<()> {
         self.db().execute(
             "UPDATE tasks SET start_sha = ?1 WHERE id = ?2",

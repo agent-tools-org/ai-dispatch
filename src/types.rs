@@ -5,6 +5,8 @@
 use rand::Rng;
 use serde::Serialize;
 use std::fmt;
+#[cfg(test)]
+use std::{cell::RefCell, collections::VecDeque};
 
 #[path = "types/agent.rs"]
 mod agent;
@@ -26,18 +28,34 @@ pub use self::memory::{Memory, MemoryId, MemoryTier, MemoryType};
 pub use self::status::{EventKind, PendingReason, TaskStatus, VerifyStatus};
 pub use self::task::{CompletionInfo, Finding, Task, TaskEvent, TaskFilter, Workgroup};
 
-/// Short hex ID prefixed with "t-", e.g. "t-a3f1"
+/// Short hex ID prefixed with "t-", e.g. "t-a3f1b2c4"
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct TaskId(pub String);
 
+#[cfg(test)]
+thread_local! {
+    static TASK_ID_SEQUENCE: RefCell<VecDeque<String>> = RefCell::new(VecDeque::new());
+}
+
 impl TaskId {
     pub fn generate() -> Self {
-        let val: u16 = rand::rng().random();
-        Self(format!("t-{val:04x}"))
+        #[cfg(test)]
+        if let Some(id) = TASK_ID_SEQUENCE.with(|ids| ids.borrow_mut().pop_front()) {
+            return Self(id);
+        }
+        let val: u32 = rand::rng().random();
+        Self(format!("t-{val:08x}"))
     }
 
     pub fn as_str(&self) -> &str {
         &self.0
+    }
+
+    #[cfg(test)]
+    pub(crate) fn set_generate_sequence_for_tests(ids: &[&str]) {
+        TASK_ID_SEQUENCE.with(|sequence| {
+            *sequence.borrow_mut() = ids.iter().map(|id| id.to_string()).collect();
+        });
     }
 }
 
@@ -47,14 +65,14 @@ impl fmt::Display for TaskId {
     }
 }
 
-/// Short hex ID prefixed with "wg-", e.g. "wg-a3f1"
+/// Short hex ID prefixed with "wg-", e.g. "wg-a3f1b2c4"
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct WorkgroupId(pub String);
 
 impl WorkgroupId {
     pub fn generate() -> Self {
-        let val: u16 = rand::rng().random();
-        Self(format!("wg-{val:04x}"))
+        let val: u32 = rand::rng().random();
+        Self(format!("wg-{val:08x}"))
     }
 
     pub fn as_str(&self) -> &str {

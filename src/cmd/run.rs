@@ -31,6 +31,8 @@ mod run_post;
 mod run_gc;
 #[path = "run_dispatch_resolve.rs"]
 mod run_dispatch_resolve;
+#[path = "run_dispatch_claim.rs"]
+mod run_dispatch_claim;
 #[path = "run_dispatch_prepare.rs"]
 mod run_dispatch_prepare;
 #[path = "run_dispatch_execute.rs"]

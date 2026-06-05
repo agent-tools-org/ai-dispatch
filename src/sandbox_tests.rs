@@ -148,12 +148,33 @@ fn wrap_command_mounts_linked_worktree_gitdirs() {
     let gitdir_mount = self_mount(&gitdir);
     let common_mount = self_mount(&common);
 
-    assert!(wrapped_args
+    assert!(!wrapped_args
         .windows(2)
         .any(|pair| pair[0] == "-v" && pair[1] == gitdir_mount));
     assert!(wrapped_args
         .windows(2)
         .any(|pair| pair[0] == "-v" && pair[1] == common_mount));
+}
+
+#[test]
+fn wrap_command_mounts_worktree_gitdir_without_commondir() {
+    let temp = tempdir().expect("tempdir");
+    let worktree = temp.path().join("worktree");
+    let gitdir = temp.path().join("gitdirs/feature");
+    fs::create_dir_all(&worktree).expect("create worktree");
+    fs::create_dir_all(&gitdir).expect("create gitdir");
+    fs::write(worktree.join(".git"), "gitdir: ../gitdirs/feature\n").expect("write gitfile");
+    let gitdir = gitdir.canonicalize().expect("canonical gitdir");
+    let mut cmd = Command::new("codex");
+    cmd.current_dir(&worktree);
+
+    let wrapped = wrap_command(&cmd, "t-abcd", AgentKind::Codex, false);
+    let wrapped_args = args(&wrapped);
+    let gitdir_mount = self_mount(&gitdir);
+
+    assert!(wrapped_args
+        .windows(2)
+        .any(|pair| pair[0] == "-v" && pair[1] == gitdir_mount));
 }
 
 #[test]

@@ -10,12 +10,12 @@ pub(crate) fn resolve_worktree_gitdir(dir: &Path) -> Option<PathBuf> {
     let content = match fs::read_to_string(&gitfile) {
         Ok(content) => content,
         Err(err) => {
-            eprintln!("warning: failed to read codex worktree gitfile: {err}");
+            eprintln!("warning: failed to read worktree gitfile: {err}");
             return None;
         }
     };
     let Some(raw_path) = content.lines().find_map(|line| line.strip_prefix("gitdir:")) else {
-        eprintln!("warning: failed to parse codex worktree gitfile: {}", gitfile.display());
+        eprintln!("warning: failed to parse worktree gitfile: {}", gitfile.display());
         return None;
     };
     let path = Path::new(raw_path.trim());
@@ -23,7 +23,7 @@ pub(crate) fn resolve_worktree_gitdir(dir: &Path) -> Option<PathBuf> {
     match fs::canonicalize(resolved) {
         Ok(path) => Some(path),
         Err(err) => {
-            eprintln!("warning: failed to resolve codex worktree gitdir: {err}");
+            eprintln!("warning: failed to resolve worktree gitdir: {err}");
             None
         }
     }
@@ -49,7 +49,7 @@ fn worktree_gitfile(git_path: &Path) -> Option<PathBuf> {
         return Some(gitfile);
     }
     eprintln!(
-        "warning: codex .git path is neither file nor directory: {}",
+        "warning: .git path is neither file nor directory: {}",
         gitfile.display()
     );
     None

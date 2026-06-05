@@ -75,14 +75,14 @@ pub fn render_board(tasks: &[Task], store: &Store) -> Result<String> {
     // Header
     if show_repo {
         out.push_str(&format!(
-            "{:<10} {:<10} {:<30} {:<10} {:<10} {:<8} {:<10} {:<10} {:<20} {:<16} {}\n",
+            "{:<11} {:<10} {:<30} {:<10} {:<10} {:<8} {:<11} {:<12} {:<20} {:<16} {}\n",
             "ID", "Agent", "Status", "Duration", "Tokens", "Cost", "Parent", "Group", "Repo", "Caller", "Model"
         ));
         out.push_str(&"-".repeat(165));
         out.push('\n');
     } else {
         out.push_str(&format!(
-            "{:<10} {:<10} {:<30} {:<10} {:<10} {:<8} {:<10} {:<10} {:<16} {}\n",
+            "{:<11} {:<10} {:<30} {:<10} {:<10} {:<8} {:<11} {:<12} {:<16} {}\n",
             "ID", "Agent", "Status", "Duration", "Tokens", "Cost", "Parent", "Group", "Caller", "Model"
         ));
         out.push_str(&"-".repeat(144));
@@ -134,7 +134,7 @@ pub fn render_board(tasks: &[Task], store: &Store) -> Result<String> {
 
         if show_repo {
             out.push_str(&format!(
-                "{:<10} {:<10} {:<30} {:<10} {:<10} {:<8} {:<10} {:<10} {:<20} {:<16} {}\n",
+                "{:<11} {:<10} {:<30} {:<10} {:<10} {:<8} {:<11} {:<12} {:<20} {:<16} {}\n",
                 task.id.as_str(),
                 task.agent_display_name(),
                 status,
@@ -149,7 +149,7 @@ pub fn render_board(tasks: &[Task], store: &Store) -> Result<String> {
             ));
         } else {
             out.push_str(&format!(
-                "{:<10} {:<10} {:<30} {:<10} {:<10} {:<8} {:<10} {:<10} {:<16} {}\n",
+                "{:<11} {:<10} {:<30} {:<10} {:<10} {:<8} {:<11} {:<12} {:<16} {}\n",
                 task.id.as_str(),
                 task.agent_display_name(),
                 status,

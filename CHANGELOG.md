@@ -1,3 +1,8 @@
+## v8.100.8 (2026-06-05)
+- fix(sandbox): mount linked-worktree git directories in container `--sandbox` mode (#127). When `cwd` is a linked git worktree, `wrap_command` now bind-mounts the worktree's commondir (and the per-worktree gitdir only when it lives outside commondir) so `git add`/`git commit` inside the Apple-container sandbox can reach the shared object database — the symmetric fix to #126's codex-sandbox case.
+- refactor: extract `resolve_worktree_gitdir`/`read_commondir` into a shared `src/worktree_layout.rs` used by both the codex adapter and the container sandbox; mounts are computed non-overlapping to avoid nested bind mounts.
+
+
 ## v8.100.7 (2026-06-05)
 - fix(dispatch): task ID collisions (#134) — a 5-layer fix. `TaskId`/`WorkgroupId` widened from 16-bit (`t-{u16:04x}`, 65 536 values) to u32 hex (`t-`/`wg-{:08x}`), drastically cutting birthday-paradox collision odds.
 - fix(dispatch): generated task IDs now insert-and-retry on a UNIQUE/PRIMARY KEY conflict (bounded loop, rusqlite extended code 1555) instead of erroring — previously regenerate-retry only ran for explicit `--task-id`.

@@ -53,6 +53,8 @@ mod rate_limit;
 mod repo_root;
 pub(crate) mod sanitize;
 mod sandbox;
+#[cfg(test)]
+mod sandbox_tests;
 mod session;
 mod shared_dir;
 mod skills;
@@ -86,6 +88,7 @@ mod workgroup;
 mod worktree_gc;
 mod worktree_deps;
 mod worktree;
+mod worktree_layout;
 mod cli;
 
 use crate::cli::{Cli, Commands};

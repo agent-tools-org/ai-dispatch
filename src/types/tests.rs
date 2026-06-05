@@ -51,6 +51,20 @@ fn agent_display_name_returns_custom_name() {
 }
 
 #[test]
+fn generated_ids_use_32_bit_hex() {
+    TaskId::set_generate_sequence_for_tests(&[]);
+    assert_eq!(TaskId::generate().as_str().len(), 10);
+    assert_eq!(WorkgroupId::generate().as_str().len(), 11);
+}
+
+#[test]
+fn task_id_generate_can_be_seeded_for_collision_tests() {
+    TaskId::set_generate_sequence_for_tests(&["t-collision", "t-retry"]);
+    assert_eq!(TaskId::generate().as_str(), "t-collision");
+    assert_eq!(TaskId::generate().as_str(), "t-retry");
+}
+
+#[test]
 fn agent_display_name_defaults_for_custom() {
     let task = sample_task(AgentKind::Custom, None);
     assert_eq!(task.agent_display_name(), "custom");

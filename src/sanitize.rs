@@ -32,7 +32,7 @@ pub fn is_valid_task_id(id: &str) -> bool {
 }
 
 /// Validate a workgroup ID: must start with `wg-` followed by safe characters.
-/// Accepts both generated hex IDs (wg-a3f1) and custom names (wg-my-feature).
+/// Accepts both generated hex IDs (wg-a3f1b2c4) and custom names (wg-my-feature).
 pub fn validate_workgroup_id(id: &str) -> Result<()> {
     if id.len() < 4 || !id.starts_with("wg-") {
         bail!("Invalid workgroup ID '{id}': must start with 'wg-'");
@@ -151,9 +151,9 @@ mod tests {
 
     #[test]
     fn valid_task_ids() {
-        assert!(validate_task_id("t-a3f1").is_ok());
-        assert!(validate_task_id("t-0000").is_ok());
-        assert!(validate_task_id("t-ffff").is_ok());
+        assert!(validate_task_id("t-a3f1b2c4").is_ok());
+        assert!(validate_task_id("t-00000000").is_ok());
+        assert!(validate_task_id("t-ffffffff").is_ok());
         assert!(validate_task_id("audit-utilcap").is_ok());
         assert!(validate_task_id("fix-lb-cache").is_ok());
         assert!(validate_task_id("my_task_1").is_ok());
@@ -183,8 +183,8 @@ mod tests {
 
     #[test]
     fn valid_workgroup_ids() {
-        assert!(validate_workgroup_id("wg-a3f1").is_ok());
-        assert!(validate_workgroup_id("wg-0000").is_ok());
+        assert!(validate_workgroup_id("wg-a3f1b2c4").is_ok());
+        assert!(validate_workgroup_id("wg-00000000").is_ok());
         assert!(validate_workgroup_id("wg-custom").is_ok());
         assert!(validate_workgroup_id("wg-my-feature").is_ok());
         assert!(validate_workgroup_id("wg-shared").is_ok());

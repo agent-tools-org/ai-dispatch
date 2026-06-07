@@ -245,6 +245,9 @@ pub fn create_worktree(
             AID_BRANCH_PREFIXES.join(", ")
         );
     }
+    if branch_exists {
+        reconcile::ensure_branch_force_reset_is_safe(repo_dir, branch, base_branch)?;
+    }
     let _ = Command::new("git")
         .args([
             "-C",

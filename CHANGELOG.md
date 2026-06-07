@@ -1,3 +1,8 @@
+## v8.100.9 (2026-06-07)
+- fix(worktree): reusing a `--worktree` branch name no longer orphans the prior task's unmerged commit (#137). The fallback "existing branch" path in `create_worktree` ran `git branch -f <branch> HEAD` unconditionally when the worktree dir was pruned but the branch ref remained — silently orphaning unmerged commits (reachable only via reflog). The lifecycle made this routine: on completion aid prunes the worktree dir but keeps the branch, so same-name reuse always missed the safe `reconcile` path and hit the unguarded force-reset.
+- New `reconcile::ensure_branch_force_reset_is_safe` resolves the base ref to a concrete OID once, refuses the force-reset with a clear `aid worktree remove` hint when `<base>..<branch>` has unmerged commits, and returns that OID so the same commit object is used for both the safety check and `git branch -f` — closing a TOCTOU window where symbolic `HEAD` could resolve differently between check and reset (found in cross-audit).
+
+
 ## v8.100.8 (2026-06-05)
 - fix(sandbox): mount linked-worktree git directories in container `--sandbox` mode (#127). When `cwd` is a linked git worktree, `wrap_command` now bind-mounts the worktree's commondir (and the per-worktree gitdir only when it lives outside commondir) so `git add`/`git commit` inside the Apple-container sandbox can reach the shared object database — the symmetric fix to #126's codex-sandbox case.
 - refactor: extract `resolve_worktree_gitdir`/`read_commondir` into a shared `src/worktree_layout.rs` used by both the codex adapter and the container sandbox; mounts are computed non-overlapping to avoid nested bind mounts.

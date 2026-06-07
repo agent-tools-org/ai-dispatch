@@ -188,3 +188,50 @@ fn create_worktree_errors_when_head_drifted_and_dirty() {
         &["worktree", "remove", "--force", &info.path.to_string_lossy()],
     );
 }
+
+#[test]
+fn create_worktree_rejects_pruned_branch_with_unmerged_commit() {
+    let _permit = test_subprocess::acquire();
+    let repo = init_repo();
+    let branch = unique_branch("feat/pruned-unmerged");
+    let info = create_worktree(repo.path(), branch.as_str(), None).unwrap();
+
+    std::fs::write(info.path.join("agent.txt"), "agent\n").unwrap();
+    git(info.path.as_path(), &["add", "agent.txt"]);
+    git(info.path.as_path(), &["commit", "-m", "agent commit"]);
+    std::fs::remove_dir_all(&info.path).unwrap();
+
+    let err = create_worktree(repo.path(), branch.as_str(), None).unwrap_err();
+    let msg = err.to_string();
+    assert!(msg.contains(branch.as_str()), "msg: {msg}");
+    assert!(msg.contains("unmerged commit(s)"), "msg: {msg}");
+    assert!(msg.contains("refusing to force-reset"), "msg: {msg}");
+    assert!(msg.contains("would orphan them"), "msg: {msg}");
+}
+
+#[test]
+fn create_worktree_allows_pruned_branch_without_unmerged_commit() {
+    let _permit = test_subprocess::acquire();
+    let repo = init_repo();
+    let branch = unique_branch("feat/pruned-merged");
+    let info = create_worktree(repo.path(), branch.as_str(), None).unwrap();
+
+    std::fs::write(info.path.join("merged.txt"), "merged\n").unwrap();
+    git(info.path.as_path(), &["add", "merged.txt"]);
+    git(info.path.as_path(), &["commit", "-m", "merged commit"]);
+    git(repo.path(), &["merge", "--no-edit", branch.as_str()]);
+    std::fs::remove_dir_all(&info.path).unwrap();
+
+    let recreated = create_worktree(repo.path(), branch.as_str(), None).unwrap();
+
+    assert_eq!(recreated.path, aid_worktree_path(repo.path(), &branch));
+    assert!(recreated.path.exists());
+    assert_eq!(
+        git_output(repo.path(), &["rev-parse", "HEAD"]),
+        git_output(recreated.path.as_path(), &["rev-parse", "HEAD"])
+    );
+    git(
+        repo.path(),
+        &["worktree", "remove", "--force", &recreated.path.to_string_lossy()],
+    );
+}

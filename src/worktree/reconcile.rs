@@ -75,9 +75,10 @@ pub(super) fn ensure_branch_force_reset_is_safe(
     repo_dir: &Path,
     branch: &str,
     base_branch: Option<&str>,
-) -> Result<()> {
+) -> Result<String> {
     let base_ref = base_branch.unwrap_or("HEAD");
-    let unique_commits = rev_list_count(repo_dir, &format!("{base_ref}..{branch}"))?;
+    let base_oid = rev_parse(repo_dir, base_ref)?;
+    let unique_commits = rev_list_count(repo_dir, &format!("{base_oid}..{branch}"))?;
     if unique_commits > 0 {
         anyhow::bail!(
             "Branch {branch} has {unique_commits} unmerged commit(s) not on {base_ref}; \
@@ -85,7 +86,7 @@ pub(super) fn ensure_branch_force_reset_is_safe(
              or use a different --worktree name."
         );
     }
-    Ok(())
+    Ok(base_oid)
 }
 
 fn rev_parse(repo_dir: &Path, rev: &str) -> Result<String> {

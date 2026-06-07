@@ -71,6 +71,24 @@ pub(super) fn maybe_refresh_existing_worktree(
     Ok(())
 }
 
+pub(super) fn ensure_branch_force_reset_is_safe(
+    repo_dir: &Path,
+    branch: &str,
+    base_branch: Option<&str>,
+) -> Result<String> {
+    let base_ref = base_branch.unwrap_or("HEAD");
+    let base_oid = rev_parse(repo_dir, base_ref)?;
+    let unique_commits = rev_list_count(repo_dir, &format!("{base_oid}..{branch}"))?;
+    if unique_commits > 0 {
+        anyhow::bail!(
+            "Branch {branch} has {unique_commits} unmerged commit(s) not on {base_ref}; \
+             refusing to force-reset (would orphan them). Run: aid worktree remove {branch}, \
+             or use a different --worktree name."
+        );
+    }
+    Ok(base_oid)
+}
+
 fn rev_parse(repo_dir: &Path, rev: &str) -> Result<String> {
     let output = Command::new("git")
         .args(["-C", &repo_dir.to_string_lossy(), "rev-parse", rev])

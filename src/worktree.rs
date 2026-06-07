@@ -245,6 +245,11 @@ pub fn create_worktree(
             AID_BRANCH_PREFIXES.join(", ")
         );
     }
+    let reset_base = if branch_exists {
+        reconcile::ensure_branch_force_reset_is_safe(repo_dir, branch, base_branch)?
+    } else {
+        base_branch.unwrap_or("HEAD").to_string()
+    };
     let _ = Command::new("git")
         .args([
             "-C",
@@ -252,7 +257,7 @@ pub fn create_worktree(
             "branch",
             "-f",
             branch,
-            base_branch.unwrap_or("HEAD"),
+            &reset_base,
         ])
         .output();
     let out = Command::new("git")

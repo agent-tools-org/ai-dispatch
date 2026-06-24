@@ -3,6 +3,8 @@
 
 #[path = "background_process.rs"]
 mod background_process;
+#[path = "background_orphan.rs"]
+mod background_orphan;
 #[path = "background_spec.rs"]
 mod background_spec;
 #[path = "background_waiting.rs"]
@@ -403,7 +405,10 @@ where
     agent::ensure_agent_binary_available_with(kind, &spec.agent_name, which)
 }
 
-fn record_worker_failure(store: &Store, task_id: &str, err: &anyhow::Error) -> Result<()> { record_failure(store, task_id, &format!("{err:#}"), &format!("Background worker failed: {err}")) }
+fn record_worker_failure(store: &Store, task_id: &str, err: &anyhow::Error) -> Result<()> {
+    record_failure(store, task_id, &format!("{err:#}"), &format!("Background worker failed: {err}"))?;
+    Ok(())
+}
 
 fn check_zombie_tasks_with<F>(store: &Store, is_worker_alive: F) -> Result<Vec<String>>
 where
@@ -416,8 +421,17 @@ where
         config.background.max_task_duration_mins,
     )?);
     let running_tasks = store.list_tasks(TaskFilter::Running)?;
+    cleaned.extend(background_orphan::cleanup_orphaned_idle_tasks(
+        store,
+        &running_tasks,
+        &cleaned,
+        &is_worker_alive,
+    )?);
     for task in &running_tasks {
         let task_id = task.id.as_str();
+        if cleaned.iter().any(|id| id == task_id) {
+            continue;
+        }
         let Some(spec) = load_spec_if_exists(task_id)? else {
             continue;
         };
@@ -565,12 +579,12 @@ fn infer_pending_reason(store: &Store, task: &Task) -> Result<PendingReason> {
     }
 }
 
-fn record_failure(store: &Store, task_id: &str, stderr_detail: &str, event_detail: &str) -> Result<()> {
+fn record_failure(store: &Store, task_id: &str, stderr_detail: &str, event_detail: &str) -> Result<bool> {
     sanitize::validate_task_id(task_id)?;
     // Only mark as failed if task is still running/waiting — prevents
     // zombie cleanup from clobbering a real completion status.
     if !store.fail_if_running(task_id)? {
-        return Ok(());
+        return Ok(false);
     }
     let stderr_path = paths::stderr_path(task_id);
     std::fs::write(&stderr_path, format!("{stderr_detail}\n"))?;
@@ -582,7 +596,7 @@ fn record_failure(store: &Store, task_id: &str, stderr_detail: &str, event_detai
         metadata: None,
     })?;
     notify_task_completion(store, task_id)?;
-    Ok(())
+    Ok(true)
 }
 
 fn notify_task_completion(store: &Store, task_id: &str) -> Result<()> {

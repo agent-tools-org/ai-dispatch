@@ -40,6 +40,13 @@ pub struct WorktreeStatusEntry {
 }
 
 pub fn capture_worktree_snapshot(dir: &Path) -> Result<WorktreeSnapshot> {
+    capture_worktree_snapshot_with_base(dir, None)
+}
+
+pub fn capture_worktree_snapshot_with_base(
+    dir: &Path,
+    base_branch: Option<&str>,
+) -> Result<WorktreeSnapshot> {
     let status_lines = read_status_lines(dir)?;
     let entries = status_lines
         .iter()
@@ -48,7 +55,7 @@ pub fn capture_worktree_snapshot(dir: &Path) -> Result<WorktreeSnapshot> {
     Ok(WorktreeSnapshot {
         status_lines,
         entries,
-        empty_diff: read_empty_diff(dir),
+        empty_diff: read_empty_diff(dir, base_branch),
     })
 }
 
@@ -104,10 +111,56 @@ fn read_status_lines(dir: &Path) -> Result<Vec<String>> {
         .collect())
 }
 
-fn read_empty_diff(dir: &Path) -> Option<bool> {
+fn read_empty_diff(dir: &Path, base_branch: Option<&str>) -> Option<bool> {
     let head = git_diff_stat_output(dir, &["diff", "--stat", "HEAD"])?;
     let staged = git_diff_stat_output(dir, &["diff", "--cached", "--stat"])?;
-    Some(head.trim().is_empty() && staged.trim().is_empty())
+    let committed = read_committed_diff_empty(dir, base_branch).unwrap_or(true);
+    Some(head.trim().is_empty() && staged.trim().is_empty() && committed)
+}
+
+fn read_committed_diff_empty(dir: &Path, base_branch: Option<&str>) -> Option<bool> {
+    let base = base_branch
+        .filter(|branch| git_ref_exists(dir, branch))
+        .map(str::to_string)
+        .or_else(|| detect_default_branch(dir))?;
+    let range = format!("{base}...HEAD");
+    let diff = git_diff_stat_output(dir, &["diff", "--stat", &range])?;
+    Some(diff.trim().is_empty())
+}
+
+fn detect_default_branch(dir: &Path) -> Option<String> {
+    git_output_line(dir, &["symbolic-ref", "--short", "refs/remotes/origin/HEAD"])
+        .or_else(|| git_ref_name_if_exists(dir, "main"))
+        .or_else(|| git_ref_name_if_exists(dir, "master"))
+}
+
+fn git_ref_name_if_exists(dir: &Path, name: &str) -> Option<String> {
+    git_ref_exists(dir, name).then(|| name.to_string())
+}
+
+fn git_ref_exists(dir: &Path, name: &str) -> bool {
+    Command::new("git")
+        .current_dir(dir)
+        .args(["rev-parse", "--verify", "--quiet"])
+        .arg(format!("{name}^{{commit}}"))
+        .output()
+        .map(|output| output.status.success())
+        .unwrap_or(false)
+}
+
+fn git_output_line(dir: &Path, args: &[&str]) -> Option<String> {
+    let output = Command::new("git")
+        .current_dir(dir)
+        .args(args)
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    String::from_utf8_lossy(&output.stdout)
+        .lines()
+        .next()
+        .map(str::to_string)
 }
 
 fn git_diff_stat_output(dir: &Path, args: &[&str]) -> Option<String> {
@@ -124,7 +177,45 @@ fn git_diff_stat_output(dir: &Path, args: &[&str]) -> Option<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{WorktreeStatusKind, is_rescuable_path, parse_status_entry};
+    use super::{
+        WorktreeStatusKind, capture_worktree_snapshot, capture_worktree_snapshot_with_base,
+        is_rescuable_path, parse_status_entry,
+    };
+    use std::path::Path;
+    use std::process::Command;
+    use tempfile::TempDir;
+
+    fn git(dir: &Path, args: &[&str]) {
+        let output = Command::new("git")
+            .current_dir(dir)
+            .args(args)
+            .output()
+            .expect("git command failed");
+        assert!(
+            output.status.success(),
+            "git {:?} failed: {}",
+            args,
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+
+    fn repo_with_main() -> TempDir {
+        let dir = TempDir::new().unwrap();
+        git(dir.path(), &["init", "-b", "main"]);
+        git(dir.path(), &["config", "user.email", "aid@example.com"]);
+        git(dir.path(), &["config", "user.name", "Aid Tester"]);
+        std::fs::write(dir.path().join("file.txt"), "initial").unwrap();
+        git(dir.path(), &["add", "file.txt"]);
+        git(dir.path(), &["commit", "-m", "initial"]);
+        dir
+    }
+
+    fn checkout_feature_with_change(dir: &Path) {
+        git(dir, &["checkout", "-b", "feature"]);
+        std::fs::write(dir.join("file.txt"), "updated").unwrap();
+        git(dir, &["add", "file.txt"]);
+        git(dir, &["commit", "-m", "feature change"]);
+    }
 
     #[test]
     fn worktree_snapshot_parses_status_entries() {
@@ -153,5 +244,46 @@ mod tests {
         assert!(!is_rescuable_path(".aid/results/foo.md"));
         assert!(is_rescuable_path("results/foo.md"));
         assert!(is_rescuable_path("my-result-t.md"));
+    }
+
+    #[test]
+    fn empty_diff_is_false_for_committed_only_change_against_base() {
+        let dir = repo_with_main();
+        checkout_feature_with_change(dir.path());
+
+        let snapshot = capture_worktree_snapshot_with_base(dir.path(), Some("main")).unwrap();
+
+        assert_eq!(snapshot.empty_diff, Some(false));
+        assert!(!snapshot.has_uncommitted_changes());
+    }
+
+    #[test]
+    fn empty_diff_is_true_for_clean_worktree_without_commits_ahead() {
+        let dir = repo_with_main();
+
+        let snapshot = capture_worktree_snapshot_with_base(dir.path(), Some("main")).unwrap();
+
+        assert_eq!(snapshot.empty_diff, Some(true));
+    }
+
+    #[test]
+    fn empty_diff_is_false_for_dirty_uncommitted_change() {
+        let dir = repo_with_main();
+        std::fs::write(dir.path().join("file.txt"), "dirty").unwrap();
+
+        let snapshot = capture_worktree_snapshot_with_base(dir.path(), Some("main")).unwrap();
+
+        assert_eq!(snapshot.empty_diff, Some(false));
+        assert!(snapshot.has_uncommitted_changes());
+    }
+
+    #[test]
+    fn empty_diff_uses_default_branch_fallback_for_committed_change() {
+        let dir = repo_with_main();
+        checkout_feature_with_change(dir.path());
+
+        let snapshot = capture_worktree_snapshot(dir.path()).unwrap();
+
+        assert_eq!(snapshot.empty_diff, Some(false));
     }
 }

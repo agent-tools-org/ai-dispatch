@@ -9,7 +9,7 @@ use super::run_dirty::{DirtyWorktreeAction, post_agent_dirty_worktree_cleanup};
 use super::run_post::{
     auto_save_task_output, maybe_auto_retry_after_hang, maybe_flag_empty_worktree_diff,
     maybe_run_post_done_audit, read_quota_error_message, rescue_quota_failed_task,
-    take_next_cascade_agent, worktree_is_empty_diff,
+    take_next_cascade_agent, worktree_is_empty_diff_with_base,
 };
 use super::{RunArgs, inherit_retry_base_branch, iterate_config, maybe_auto_retry_after_checklist_miss, maybe_auto_retry_after_verify_failure, maybe_cleanup_fast_fail, maybe_iterate, maybe_judge_retry, maybe_verify, run, run_agent, run_prompt};
 
@@ -110,7 +110,7 @@ pub(crate) async fn post_run_lifecycle(
         auto_save_task_output(store.as_ref(), &task)?;
     }
     if let Some(task) = store.get_task(task_id.as_str())? {
-        maybe_flag_hollow_output(store.as_ref(), task_id, &task);
+        maybe_flag_hollow_output(store.as_ref(), task_id, &task, args.base_branch.as_deref());
     }
     maybe_run_post_done_audit(
         store.as_ref(),
@@ -376,7 +376,7 @@ fn run_task_postprocess_phase(
         return Ok(None);
     };
     if task.status == TaskStatus::Done {
-        handle_done_postprocess(store, task_id, &task, agent_kind, prompt_bundle);
+        handle_done_postprocess(store, task_id, args, &task, agent_kind, prompt_bundle);
     }
     maybe_cleanup_fast_fail(store, task_id, &task);
     persist_result_file(task_id, args, effective_dir);
@@ -398,6 +398,7 @@ fn run_task_postprocess_phase(
 fn handle_done_postprocess(
     store: &Arc<Store>,
     task_id: &TaskId,
+    args: &RunArgs,
     task: &Task,
     agent_kind: AgentKind,
     prompt_bundle: &run_prompt::PromptBundle,
@@ -410,7 +411,7 @@ fn handle_done_postprocess(
             aid_error!("[aid] Failed to record memory success for {memory_id}: {err}");
         }
     }
-    maybe_flag_empty_worktree_diff(store.as_ref(), task_id, task);
+    maybe_flag_empty_worktree_diff(store.as_ref(), task_id, task, args.base_branch.as_deref());
 }
 
 fn persist_result_file(
@@ -504,7 +505,12 @@ fn cleanup_failed_worktree(
     }
 }
 
-pub(crate) fn maybe_flag_hollow_output(store: &Store, task_id: &TaskId, task: &Task) {
+pub(crate) fn maybe_flag_hollow_output(
+    store: &Store,
+    task_id: &TaskId,
+    task: &Task,
+    base_branch: Option<&str>,
+) {
     if task.status != TaskStatus::Done || task.verify_status != VerifyStatus::Skipped {
         return;
     }
@@ -512,7 +518,7 @@ pub(crate) fn maybe_flag_hollow_output(store: &Store, task_id: &TaskId, task: &T
         return;
     }
     let no_worktree_changes = match task.worktree_path.as_deref() {
-        Some(path) => worktree_is_empty_diff(Path::new(path)) == Some(true),
+        Some(path) => worktree_is_empty_diff_with_base(Path::new(path), base_branch) == Some(true),
         None => true,
     };
     if !no_worktree_changes {

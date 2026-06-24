@@ -116,7 +116,12 @@ pub(crate) fn maybe_run_post_done_audit(
     Ok(())
 }
 
-pub(crate) fn maybe_flag_empty_worktree_diff(store: &Store, task_id: &TaskId, task: &Task) {
+pub(crate) fn maybe_flag_empty_worktree_diff(
+    store: &Store,
+    task_id: &TaskId,
+    task: &Task,
+    base_branch: Option<&str>,
+) {
     if task.read_only || task.status != TaskStatus::Done || task.verify_status != VerifyStatus::Skipped {
         return;
     }
@@ -127,7 +132,7 @@ pub(crate) fn maybe_flag_empty_worktree_diff(store: &Store, task_id: &TaskId, ta
     if !path.exists() {
         return;
     }
-    if let Some(true) = worktree_is_empty_diff(path) {
+    if let Some(true) = worktree_is_empty_diff_with_base(path, base_branch) {
         aid_warn!("[aid] Warning: agent completed but made no code changes in worktree");
         if let Err(err) = store.update_delivery_assessment(
             task_id.as_str(),
@@ -160,7 +165,14 @@ pub(crate) fn auto_save_task_output(store: &Store, task: &Task) -> Result<()> {
 }
 
 pub(crate) fn worktree_is_empty_diff(worktree_dir: &Path) -> Option<bool> {
-    crate::worktree::capture_worktree_snapshot(worktree_dir)
+    worktree_is_empty_diff_with_base(worktree_dir, None)
+}
+
+pub(crate) fn worktree_is_empty_diff_with_base(
+    worktree_dir: &Path,
+    base_branch: Option<&str>,
+) -> Option<bool> {
+    crate::worktree::capture_worktree_snapshot_with_base(worktree_dir, base_branch)
         .ok()
         .and_then(|snapshot| snapshot.empty_diff)
 }

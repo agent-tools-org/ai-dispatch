@@ -20,9 +20,7 @@ mod state;
 mod validation;
 #[path = "worktree/path.rs"]
 mod path;
-pub(crate) use snapshot::{
-    WorktreeStatusEntry, WorktreeStatusKind, capture_worktree_snapshot,
-};
+pub(crate) use snapshot::{WorktreeStatusEntry, WorktreeStatusKind, capture_worktree_snapshot, capture_worktree_snapshot_with_base};
 pub(crate) use baseline::{baseline_contains, extract_baseline_path, extract_baseline_paths};
 pub use path::{aid_worktree_path, aid_worktree_root, is_aid_managed_worktree_path};
 pub use state::{

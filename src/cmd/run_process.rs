@@ -205,6 +205,9 @@ pub(crate) async fn run_agent_process_impl(args: RunProcessArgs<'_>) -> Result<(
             return Err(err);
         }
     };
+    if let Some(pid) = child.id() {
+        let _ = crate::background::update_agent_pid(task_id.as_str(), pid);
+    }
     let info = if streaming {
         watcher::watch_streaming(agent, &mut child, task_id, store, log_path, workgroup_id, Some(idle_timeout), None).await
     } else {

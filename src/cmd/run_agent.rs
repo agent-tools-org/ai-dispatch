@@ -86,9 +86,7 @@ pub(crate) async fn run_agent_process_with_timeout(
         }
     };
     if let Some(pid) = child.id() {
-        if let Ok(task_id_str) = std::env::var("AID_TASK_ID") {
-            let _ = crate::background::update_agent_pid(&task_id_str, pid);
-        }
+        let _ = crate::background::update_agent_pid(task_id.as_str(), pid);
     }
     let watch_future = async {
         let info = if streaming {

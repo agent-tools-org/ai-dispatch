@@ -41,6 +41,9 @@ pub fn run_agent_process(
             return Err(err);
         }
     };
+    if let Some(pid) = bridge.child_pid() {
+        let _ = crate::background::update_agent_pid(task_id.as_str(), pid);
+    }
     let rx = spawn_reader_thread(bridge.take_reader()?);
     let mut log_file = std::fs::File::create(log_path)?;
     let mut state = MonitorState::new(streaming);

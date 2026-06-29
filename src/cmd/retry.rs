@@ -48,7 +48,7 @@ pub async fn retry_task(store: Arc<Store>, args: RetryArgs, announce: bool) -> R
     }
 
     let agent_name = args.agent.unwrap_or_else(|| task.agent_display_name().to_string());
-    let session_id = if task.agent == crate::types::AgentKind::OpenCode {
+    let session_id = if task.agent.supports_session_resume() {
         task.agent_session_id.clone()
     } else {
         None

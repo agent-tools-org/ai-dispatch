@@ -61,7 +61,7 @@ pub(crate) async fn maybe_auto_retry_after_hang(
     retry_args.dir = dir.or_else(|| retry_args.dir.clone());
     retry_args.worktree = worktree.or_else(|| retry_args.worktree.clone());
     inherit_retry_base_branch(args.dir.as_deref(), &task, &mut retry_args);
-    if task.agent == AgentKind::OpenCode {
+    if task.agent.supports_session_resume() {
         retry_args.session_id = task.agent_session_id.clone();
     }
 

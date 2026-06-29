@@ -8,7 +8,7 @@ use std::process::Command;
 use std::sync::Arc;
 
 use crate::store::Store;
-use crate::types::{AgentKind, EventKind, Task, TaskEvent, TaskId, TaskStatus};
+use crate::types::{EventKind, Task, TaskEvent, TaskId, TaskStatus};
 
 use super::RunArgs;
 
@@ -140,7 +140,7 @@ pub async fn maybe_iterate(
     let (dir, worktree) = retry_target(&task);
     retry_args.dir = dir.or_else(|| retry_args.dir.clone());
     retry_args.worktree = worktree.or_else(|| retry_args.worktree.clone());
-    if task.agent == AgentKind::OpenCode {
+    if task.agent.supports_session_resume() {
         retry_args.session_id = task.agent_session_id.clone();
     }
 

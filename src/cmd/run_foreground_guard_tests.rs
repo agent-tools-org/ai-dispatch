@@ -107,7 +107,7 @@ fn interrupt_cleanup_records_failed_kills_agent_and_clears_spec() {
     background::save_spec(&make_spec("t-fg-int")).expect("save spec");
     let mut killed = Vec::new();
 
-    handle_foreground_interrupt_with(&store, &task.id, "SIGTERM", |pid| killed.push(pid))
+    handle_foreground_interrupt_with(&store, &task.id, "SIGTERM", |pid| killed.push(pid), None)
         .expect("interrupt cleanup");
 
     assert_eq!(killed, vec![456]);
@@ -118,4 +118,42 @@ fn interrupt_cleanup_records_failed_kills_agent_and_clears_spec() {
     );
     let events = store.get_events("t-fg-int").expect("events");
     assert!(events.iter().any(|event| event.detail == "interrupted by signal SIGTERM"));
+}
+
+#[tokio::test]
+async fn interrupt_cleanup_waits_for_late_pty_pid_before_clearing_spec() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    let _aid_home = paths::AidHomeGuard::set(temp.path());
+    paths::ensure_dirs().expect("ensure dirs");
+    let store = Store::open_memory().expect("store");
+    let task = make_task("t-fg-early-int");
+    store.insert_task(&task).expect("insert task");
+    let mut spec = make_spec("t-fg-early-int");
+    spec.agent_pid = None;
+    background::save_spec(&spec).expect("save spec");
+    let control = crate::pty_runner_control::PtyRunControl::default();
+    let control_for_spawn = control.clone();
+
+    tokio::spawn(async move {
+        tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+        control_for_spawn.set_agent_pid(789);
+    });
+    let fallback_pid = control.wait_agent_pid(std::time::Duration::from_secs(1)).await;
+    let mut killed = Vec::new();
+
+    handle_foreground_interrupt_with(
+        &store,
+        &task.id,
+        "SIGINT",
+        |pid| killed.push(pid),
+        fallback_pid,
+    )
+    .expect("interrupt cleanup");
+
+    assert_eq!(killed, vec![789]);
+    assert!(!paths::job_path("t-fg-early-int").exists());
+    assert_eq!(
+        store.get_task("t-fg-early-int").expect("get task").expect("task").status,
+        TaskStatus::Failed
+    );
 }

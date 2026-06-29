@@ -119,7 +119,7 @@ pub(super) async fn wait_for_foreground_signal() -> Result<ForegroundSignal> {
 }
 
 pub(super) fn handle_foreground_interrupt(store: &Store, task_id: &TaskId, signal_name: &str) -> Result<()> {
-    handle_foreground_interrupt_with(store, task_id, signal_name, background::kill_process)
+    handle_foreground_interrupt_with(store, task_id, signal_name, background::kill_process, None)
 }
 
 fn handle_foreground_interrupt_with<F>(
@@ -127,12 +127,13 @@ fn handle_foreground_interrupt_with<F>(
     task_id: &TaskId,
     signal_name: &str,
     mut kill_agent: F,
+    fallback_agent_pid: Option<u32>,
 ) -> Result<()>
 where
     F: FnMut(u32),
 {
     record_interrupted(store, task_id, signal_name)?;
-    if let Some(agent_pid) = background::load_agent_pid(task_id.as_str())? {
+    if let Some(agent_pid) = background::load_agent_pid(task_id.as_str())?.or(fallback_agent_pid) {
         kill_agent(agent_pid);
     }
     background::clear_spec(task_id.as_str())?;
@@ -222,9 +223,11 @@ async fn run_pty_agent_with_signal(
     let output_path = output_path.map(ToOwned::to_owned);
     let model = model.map(ToOwned::to_owned);
     let agent_display_name = agent_display_name.to_string();
+    let control = crate::pty_runner_control::PtyRunControl::default();
+    let control_for_run = control.clone();
     let mut run_handle = tokio::task::spawn_blocking(move || {
         let agent = foreground_agent(agent_kind, &agent_display_name)?;
-        crate::pty_runner::run_agent_process(
+        crate::pty_runner::run_agent_process_with_control(
             &*agent,
             &std_cmd,
             &task_id_for_run,
@@ -233,14 +236,23 @@ async fn run_pty_agent_with_signal(
             output_path.as_deref(),
             model.as_deref(),
             streaming,
+            Some(control_for_run),
         )
     });
     tokio::select! {
         result = &mut run_handle => result.context("foreground PTY runner panicked")?,
         signal = wait_for_foreground_signal() => {
             let signal = signal?;
-            handle_foreground_interrupt(&store_for_signal, &task_id_for_signal, signal.name())?;
-            let _ = run_handle.await;
+            control.mark_interrupted();
+            let fallback_pid = control.wait_agent_pid(std::time::Duration::from_secs(2)).await;
+            handle_foreground_interrupt_with(
+                &store_for_signal,
+                &task_id_for_signal,
+                signal.name(),
+                background::kill_process,
+                fallback_pid,
+            )?;
+            let _ = tokio::time::timeout(std::time::Duration::from_secs(2), &mut run_handle).await;
             anyhow::bail!("interrupted by signal {}", signal.name());
         }
     }

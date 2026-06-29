@@ -206,24 +206,31 @@ fn update_completion() {
 }
 
 #[test]
-fn update_completion_does_not_override_stopped_status() {
+fn update_completion_does_not_override_terminal_intent_statuses() {
     let store = Store::open_memory().unwrap();
-    let task = make_task("t-0002s", AgentKind::Codex, TaskStatus::Stopped);
-    store.insert_task(&task).unwrap();
-    store
-        .update_task_completion(TaskCompletionUpdate {
-            id: "t-0002s",
-            status: TaskStatus::Failed,
-            tokens: None,
-            duration_ms: 1234,
-            model: Some("gpt-5.4"),
-            cost_usd: None,
-            exit_code: Some(1),
-        })
-        .unwrap();
+    for (id, status) in [
+        ("t-0002s", TaskStatus::Stopped),
+        ("t-0002f", TaskStatus::Failed),
+    ] {
+        let task = make_task(id, AgentKind::Codex, status);
+        store.insert_task(&task).unwrap();
+        store
+            .update_task_completion(TaskCompletionUpdate {
+                id,
+                status: TaskStatus::Done,
+                tokens: Some(55),
+                duration_ms: 1234,
+                model: Some("gpt-5.4"),
+                cost_usd: Some(0.01),
+                exit_code: Some(0),
+            })
+            .unwrap();
 
-    let loaded = store.get_task("t-0002s").unwrap().unwrap();
-    assert_eq!(loaded.status, TaskStatus::Stopped);
+        let loaded = store.get_task(id).unwrap().unwrap();
+        assert_eq!(loaded.status, status);
+        assert_eq!(loaded.tokens, None);
+        assert_eq!(loaded.completed_at, None);
+    }
 }
 
 #[test]

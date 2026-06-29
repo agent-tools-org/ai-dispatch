@@ -1,3 +1,8 @@
+## v8.103.0 (2026-06-29)
+- fix(tui): TUI now shows all task types — newly-dispatched Waiting/Pending tasks (and Skipped/Stopped) are no longer hidden in the multipane view; previously the status filter only kept Running/AwaitingInput/Stalled/Done/Merged/Failed, so a freshly-dispatched task stayed invisible until it started running
+- feat(tui): add a Created timestamp column to the board table and a "Created {time}" line to each multipane pane (local time, %m-%d %H:%M)
+
+
 ## v8.102.0 (2026-06-29)
 - feat(model): auto-heal when an agent fails because its selected model id is unavailable (deprecated/renamed/unsupported — e.g. opencode "Model not found", codex "model not supported", mimo 400). aid now detects this class of failure and automatically retries once forcing the agent's own current default model, so a stale model selection no longer hard-fails the task.
 - feat(model): new `force_default_model` dispatch path bypasses smart-routing, budget, and configured defaults so the self-heal retry always lands on a guaranteed-valid model. Loop-guarded to run at most once per retry chain.

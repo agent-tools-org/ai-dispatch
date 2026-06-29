@@ -94,6 +94,7 @@ fn render_multipane_view(frame: &mut ratatui::Frame<'_>, app: &App) {
                 memory: task_memory(app, task),
                 workgroup: task.workgroup_id.clone().unwrap_or_default(),
                 worktree_branch: task.worktree_branch.clone().unwrap_or_default(),
+                created: task.created_at.format("%m-%d %H:%M").to_string(),
                 elapsed,
                 scroll_offset: app.pane_scroll_offsets.get(index).copied().unwrap_or(0),
                 total_events,
@@ -126,7 +127,7 @@ fn render_board(frame: &mut ratatui::Frame<'_>, app: &App) {
     );
 
     let header = Row::new(vec![
-        "ID", "Agent", "Status", "Progress", "CPU", "Mem", "Duration", "Tokens", "Cost", "Model", "Group",
+        "ID", "Agent", "Status", "Progress", "CPU", "Mem", "Created", "Duration", "Tokens", "Cost", "Model", "Group",
         "Prompt",
     ])
     .style(Style::default().add_modifier(Modifier::BOLD));
@@ -140,6 +141,7 @@ fn render_board(frame: &mut ratatui::Frame<'_>, app: &App) {
             Constraint::Length(32),
             Constraint::Length(7),
             Constraint::Length(7),
+            Constraint::Length(11),
             Constraint::Length(10),
             Constraint::Length(10),
             Constraint::Length(10),

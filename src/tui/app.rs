@@ -170,21 +170,7 @@ impl App {
             .unwrap_or_default()
     }
     pub fn multipane_tasks(&self) -> Vec<&Task> {
-        let mut tasks: Vec<&Task> = self
-            .tasks
-            .iter()
-            .filter(|t| {
-                matches!(
-                    t.status,
-                    TaskStatus::Running
-                        | TaskStatus::AwaitingInput
-                        | TaskStatus::Stalled
-                        | TaskStatus::Done
-                        | TaskStatus::Merged
-                        | TaskStatus::Failed
-                )
-            })
-            .collect();
+        let mut tasks: Vec<&Task> = self.tasks.iter().collect();
         tasks.sort_by(|a, b| {
             let running_a = matches!(
                 a.status,

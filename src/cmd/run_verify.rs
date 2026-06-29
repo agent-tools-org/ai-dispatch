@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 use crate::cmd::checklist_scan;
 use crate::store::Store;
-use crate::types::{AgentKind, EventKind, Task, TaskEvent, TaskId, TaskStatus};
+use crate::types::{EventKind, Task, TaskEvent, TaskId, TaskStatus};
 
 use super::RunArgs;
 
@@ -205,7 +205,7 @@ pub(in crate::cmd) async fn maybe_auto_retry_after_verify_failure_impl(
     let (dir, worktree) = super::retry_target(&task);
     retry_args.dir = dir.or_else(|| retry_args.dir.clone());
     retry_args.worktree = worktree.or_else(|| retry_args.worktree.clone());
-    if task.agent == AgentKind::OpenCode {
+    if task.agent.supports_session_resume() {
         retry_args.session_id = task.agent_session_id.clone();
     }
 
@@ -251,7 +251,7 @@ pub(in crate::cmd) async fn maybe_auto_retry_after_checklist_miss_impl(
     let (dir, worktree) = super::retry_target(&task);
     retry_args.dir = dir.or_else(|| retry_args.dir.clone());
     retry_args.worktree = worktree.or_else(|| retry_args.worktree.clone());
-    if task.agent == AgentKind::OpenCode {
+    if task.agent.supports_session_resume() {
         retry_args.session_id = task.agent_session_id.clone();
     }
     Box::pin(super::super::run(store.clone(), retry_args)).await.map(Some)

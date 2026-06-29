@@ -98,6 +98,13 @@ impl AgentKind {
         matches!(self, Self::OpenCode)
     }
 
+    /// Whether retries/iterations can resume the prior agent session via a
+    /// stored session id. True for the opencode family (opencode, kilo,
+    /// mimocode), which all expose `--session`/`--continue`/`--fork`.
+    pub fn supports_session_resume(&self) -> bool {
+        matches!(self, Self::OpenCode | Self::Kilo | Self::MiMoCode)
+    }
+
     pub fn profile(
         &self,
     ) -> Option<(&'static str, &'static str, &'static str, &'static str, bool, &'static str)> {

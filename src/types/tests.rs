@@ -193,3 +193,13 @@ fn task_delivery_assessment_maps_hollow_output() {
         Some(DeliveryAssessment::HollowOutput)
     );
 }
+
+#[test]
+fn opencode_family_supports_session_resume() {
+    for kind in [AgentKind::OpenCode, AgentKind::Kilo, AgentKind::MiMoCode] {
+        assert!(kind.supports_session_resume(), "{kind} should resume sessions");
+    }
+    for kind in [AgentKind::Codex, AgentKind::Gemini, AgentKind::Cursor, AgentKind::Claude, AgentKind::Custom] {
+        assert!(!kind.supports_session_resume(), "{kind} should not resume sessions");
+    }
+}

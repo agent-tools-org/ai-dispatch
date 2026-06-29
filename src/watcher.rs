@@ -34,7 +34,7 @@ use progress::LoopDetector;
 use stderr::{drain_stderr_capture, spawn_stderr_capture};
 pub(crate) use progress::SyntheticMilestoneTracker;
 pub(crate) use stream::{
-    handle_streaming_line, handle_streaming_line_with_session, StreamLineContext,
+    handle_streaming_line_with_session, StreamLineContext,
 };
 const HUNG_TIMEOUT: Duration = Duration::from_secs(300);
 /// Watch a child process, parse output, store events, return completion info

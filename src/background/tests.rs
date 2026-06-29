@@ -12,7 +12,7 @@ use super::{
 use crate::paths;
 use crate::store::Store;
 use crate::test_subprocess;
-use crate::types::{AgentKind, EventKind, PendingReason, Task, TaskId, TaskStatus, VerifyStatus};
+use crate::types::{AgentKind, EventKind, PendingReason, Task, TaskEvent, TaskId, TaskStatus, VerifyStatus};
 
 #[test]
 fn serializes_spec_to_json() {
@@ -115,6 +115,127 @@ fn marks_running_background_tasks_failed_when_worker_is_missing() {
 
     let stderr = std::fs::read_to_string(paths::stderr_path("t-2b2b")).unwrap();
     assert_eq!(stderr.trim(), ZOMBIE_FAILURE_DETAIL);
+}
+
+#[test]
+fn reaps_alive_worker_when_events_are_stale_beyond_idle_margin() {
+    let temp = tempfile::tempdir().unwrap();
+    let _aid_home = paths::AidHomeGuard::set(temp.path());
+    paths::ensure_dirs().unwrap();
+
+    let store = Store::open_memory().unwrap();
+    let task = make_task("t-wedged", TaskStatus::Running);
+    store.insert_task(&task).unwrap();
+    save_spec(&BackgroundRunSpec {
+        worker_pid: Some(202),
+        idle_timeout_secs: Some(30),
+        ..make_spec("t-wedged")
+    })
+    .unwrap();
+    insert_event(&store, "t-wedged", 61);
+
+    let cleaned = check_zombie_tasks_with(&store, |pid| pid == 202).unwrap();
+
+    assert_eq!(cleaned, vec!["t-wedged".to_string()]);
+    assert_eq!(
+        store.get_task("t-wedged").unwrap().unwrap().status,
+        TaskStatus::Failed
+    );
+    let events = store.get_events("t-wedged").unwrap();
+    assert!(events.iter().any(|event| event.detail.contains("monitor wedged")));
+    assert!(events.iter().any(|event| event.detail == "hung_detected"));
+    let completions = crate::notify::read_recent(10).unwrap();
+    assert!(completions.contains("\"task_id\":\"t-wedged\""));
+    let log = std::fs::read_to_string(paths::log_path("t-wedged")).unwrap();
+    assert!(log.contains("=== AID TASK t-wedged FAILED (hung detected (monitor wedged):"));
+}
+
+#[test]
+fn keeps_alive_worker_when_events_are_recent_within_idle_margin() {
+    let temp = tempfile::tempdir().unwrap();
+    let _aid_home = paths::AidHomeGuard::set(temp.path());
+    paths::ensure_dirs().unwrap();
+
+    let store = Store::open_memory().unwrap();
+    let task = make_task("t-healthy", TaskStatus::Running);
+    store.insert_task(&task).unwrap();
+    save_spec(&BackgroundRunSpec {
+        worker_pid: Some(202),
+        idle_timeout_secs: Some(30),
+        ..make_spec("t-healthy")
+    })
+    .unwrap();
+    insert_event(&store, "t-healthy", 20);
+
+    let cleaned = check_zombie_tasks_with(&store, |pid| pid == 202).unwrap();
+
+    assert!(cleaned.is_empty());
+    assert_eq!(
+        store.get_task("t-healthy").unwrap().unwrap().status,
+        TaskStatus::Running
+    );
+}
+
+#[test]
+#[cfg(unix)]
+fn skips_awaiting_input_live_worker_even_when_events_are_stale() {
+    let _permit = test_subprocess::acquire();
+    let temp = tempfile::tempdir().unwrap();
+    let _aid_home = paths::AidHomeGuard::set(temp.path());
+    paths::ensure_dirs().unwrap();
+
+    let store = Store::open_memory().unwrap();
+    let task = make_task("t-awaiting", TaskStatus::AwaitingInput);
+    store.insert_task(&task).unwrap();
+    let mut child = std::process::Command::new("sleep").arg("30").spawn().unwrap();
+    let worker_pid = child.id();
+    save_spec(&BackgroundRunSpec {
+        worker_pid: Some(worker_pid),
+        idle_timeout_secs: Some(30),
+        ..make_spec("t-awaiting")
+    })
+    .unwrap();
+    insert_event(&store, "t-awaiting", 61);
+
+    let cleaned = check_zombie_tasks_with(&store, |pid| pid == worker_pid).unwrap();
+    std::thread::sleep(std::time::Duration::from_millis(50));
+    let still_running = child.try_wait().unwrap().is_none();
+    let _ = child.kill();
+    let _ = child.wait();
+
+    assert!(cleaned.is_empty());
+    assert_eq!(
+        store.get_task("t-awaiting").unwrap().unwrap().status,
+        TaskStatus::AwaitingInput
+    );
+    assert!(still_running);
+}
+
+#[test]
+fn reaps_running_task_kept_alive_only_by_idle_bookkeeping_events() {
+    let temp = tempfile::tempdir().unwrap();
+    let _aid_home = paths::AidHomeGuard::set(temp.path());
+    paths::ensure_dirs().unwrap();
+
+    let store = Store::open_memory().unwrap();
+    let task = make_task("t-idle-bookkeeping", TaskStatus::Running);
+    store.insert_task(&task).unwrap();
+    save_spec(&BackgroundRunSpec {
+        worker_pid: Some(202),
+        idle_timeout_secs: Some(30),
+        ..make_spec("t-idle-bookkeeping")
+    })
+    .unwrap();
+    insert_event(&store, "t-idle-bookkeeping", 61);
+    insert_idle_escalation_event(&store, "t-idle-bookkeeping", 1);
+
+    let cleaned = check_zombie_tasks_with(&store, |pid| pid == 202).unwrap();
+
+    assert_eq!(cleaned, vec!["t-idle-bookkeeping".to_string()]);
+    assert_eq!(
+        store.get_task("t-idle-bookkeeping").unwrap().unwrap().status,
+        TaskStatus::Failed
+    );
 }
 
 #[test]
@@ -472,6 +593,30 @@ fn make_task(task_id: &str, status: TaskStatus) -> Task {
         audit_report_path: None,
         delivery_assessment: None,
     }
+}
+
+fn insert_event(store: &Store, task_id: &str, age_secs: i64) {
+    store
+        .insert_event(&TaskEvent {
+            task_id: TaskId(task_id.to_string()),
+            timestamp: Local::now() - Duration::seconds(age_secs),
+            event_kind: EventKind::Milestone,
+            detail: "last progress".to_string(),
+            metadata: None,
+        })
+        .unwrap();
+}
+
+fn insert_idle_escalation_event(store: &Store, task_id: &str, age_secs: i64) {
+    store
+        .insert_event(&TaskEvent {
+            task_id: TaskId(task_id.to_string()),
+            timestamp: Local::now() - Duration::seconds(age_secs),
+            event_kind: EventKind::Milestone,
+            detail: "Auto-escalated: task stalled".to_string(),
+            metadata: Some(serde_json::json!({ "auto_escalated": true })),
+        })
+        .unwrap();
 }
 
 #[test]

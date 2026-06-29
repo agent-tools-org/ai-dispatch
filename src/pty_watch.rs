@@ -30,7 +30,7 @@ pub(crate) struct MonitorState {
     synthetic_tracker: SyntheticMilestoneTracker,
     prompt_detector: PromptDetector,
     awaiting_input: bool,
-    last_output_time: Instant,
+    last_progress_time: Instant,
     idle_nudged: bool,
     idle_warned: bool,
     pending_inbound_acks: usize,
@@ -55,7 +55,7 @@ impl MonitorState {
             synthetic_tracker: SyntheticMilestoneTracker::new(),
             prompt_detector: PromptDetector::default(),
             awaiting_input: false,
-            last_output_time: Instant::now(),
+            last_progress_time: Instant::now(),
             idle_nudged: false,
             idle_warned: false,
             pending_inbound_acks: 0,
@@ -114,12 +114,11 @@ impl MonitorState {
                     &line,
                     &mut false,
                 )? {
-                    self.last_event_detail = Some(event_detail.detail);
-                } else if !line.trim().is_empty() {
-                    self.last_event_detail = Some(line.trim().to_string());
+                    if event_detail.kind.is_progress() {
+                        self.mark_progress();
+                        self.last_event_detail = Some(event_detail.detail);
+                    }
                 }
-            } else if !line.trim().is_empty() {
-                self.last_event_detail = Some(line.trim().to_string());
             }
             self.line_buffer.drain(..=pos);
         }
@@ -138,18 +137,25 @@ impl MonitorState {
         }
         self.observe_output_line(task_id, store, &trailing)?;
         if self.streaming {
-            watcher::handle_streaming_line(
-                agent,
-                task_id,
-                store,
+            if let Some(event_detail) = watcher::handle_streaming_line_with_session(
+                watcher::StreamLineContext {
+                    agent,
+                    task_id,
+                    store,
+                    workgroup_id: None,
+                    synthetic_tracker: &mut self.synthetic_tracker,
+                },
                 &mut self.info,
                 &mut self.event_count,
-                &mut self.synthetic_tracker,
-                None,
                 &trailing,
-            )?;
+                &mut false,
+            )? {
+                if event_detail.kind.is_progress() {
+                    self.mark_progress();
+                    self.last_event_detail = Some(event_detail.detail);
+                }
+            }
         }
-        self.last_event_detail = Some(trailing.trim().to_string());
         self.line_buffer.clear();
         Ok(())
     }
@@ -164,9 +170,6 @@ impl MonitorState {
         if trimmed.is_empty() {
             return Ok(());
         }
-        self.last_output_time = Instant::now();
-        self.idle_warned = false;
-        self.idle_nudged = false;
         if self.pending_inbound_acks == 0 {
             return Ok(());
         }
@@ -274,7 +277,7 @@ impl MonitorState {
 
     fn maybe_handle_idle(&mut self, store: &Arc<Store>, task_id: &TaskId) -> Result<()> {
         match self.idle_detector.tick(
-            self.last_output_time,
+            self.last_progress_time,
             load_monitor_status(store.as_ref(), task_id.as_str())?,
             self.idle_nudged,
         ) {
@@ -327,12 +330,7 @@ impl MonitorState {
     }
 
     fn progress_count(&self) -> u32 {
-        self.event_count.max(
-            self.full_output
-                .lines()
-                .filter(|line| !line.trim().is_empty())
-                .count() as u32,
-        )
+        self.event_count
     }
 
     fn last_progress_detail(&self) -> Option<String> {
@@ -344,6 +342,12 @@ impl MonitorState {
                 .find(|line| !line.is_empty())
                 .map(str::to_string)
         })
+    }
+
+    fn mark_progress(&mut self) {
+        self.last_progress_time = Instant::now();
+        self.idle_warned = false;
+        self.idle_nudged = false;
     }
 }
 
@@ -394,7 +398,7 @@ pub(crate) fn monitor_bridge(
                     break;
                 }
                 if let Some(idle) = idle_timeout
-                    && state.last_output_time.elapsed() > idle
+                    && state.last_progress_time.elapsed() > idle
                 {
                     state.info.status = TaskStatus::Failed;
                     run_hung_recovery::insert_hung_detected_events(
@@ -426,10 +430,12 @@ pub(crate) fn finalize_output(
     task_id: &TaskId,
     store: &Arc<Store>,
     output_path: Option<&str>,
+    log_path: &std::path::Path,
     streaming: bool,
     exit_status: &portable_pty::ExitStatus,
     state: &mut MonitorState,
 ) -> Result<()> {
+    append_terminal_sentinel(task_id, log_path, exit_status, state);
     if streaming {
         finalize_streaming(task_id, store, exit_status, state)
     } else {
@@ -443,8 +449,11 @@ fn finalize_streaming(
     exit_status: &portable_pty::ExitStatus,
     state: &mut MonitorState,
 ) -> Result<()> {
+    state.full_output.push_str(&terminal_sentinel(task_id, exit_status, state));
     persist_transcript(task_id, &state.full_output);
-    let status = if exit_status.success() {
+    let status = if state.info.status == TaskStatus::Failed {
+        TaskStatus::Failed
+    } else if exit_status.success() {
         TaskStatus::Done
     } else {
         TaskStatus::Failed
@@ -478,11 +487,20 @@ fn finalize_buffered(
     exit_status: &portable_pty::ExitStatus,
     state: &mut MonitorState,
 ) -> Result<()> {
+    state.full_output.push_str(&terminal_sentinel(task_id, exit_status, state));
     persist_transcript(task_id, &state.full_output);
     if let Some(path) = output_path {
         write_output_file(path, &state.full_output)?;
     }
-    state.info = if exit_status.success() {
+    state.info = if state.info.status == TaskStatus::Failed {
+        CompletionInfo {
+            tokens: None,
+            status: TaskStatus::Failed,
+            model: None,
+            cost_usd: None,
+            exit_code: None,
+        }
+    } else if exit_status.success() {
         agent.parse_completion(&state.full_output)
     } else {
         CompletionInfo {
@@ -499,6 +517,51 @@ fn finalize_buffered(
         &state.info,
     ))?;
     Ok(())
+}
+
+fn append_terminal_sentinel(
+    task_id: &TaskId,
+    log_path: &std::path::Path,
+    exit_status: &portable_pty::ExitStatus,
+    state: &MonitorState,
+) {
+    let sentinel = terminal_sentinel(task_id, exit_status, state);
+    append_terminal_sentinel_line(log_path, &sentinel);
+}
+
+pub(crate) fn append_failed_terminal_sentinel(
+    task_id: &TaskId,
+    log_path: &std::path::Path,
+    reason: &str,
+) {
+    let sentinel = format!("\n=== AID TASK {} FAILED ({}) ===\n", task_id, reason);
+    append_terminal_sentinel_line(log_path, &sentinel);
+    append_terminal_sentinel_line(&crate::paths::transcript_path(task_id.as_str()), &sentinel);
+}
+
+fn append_terminal_sentinel_line(log_path: &std::path::Path, sentinel: &str) {
+    let Ok(mut file) = std::fs::OpenOptions::new().create(true).append(true).open(log_path) else {
+        return;
+    };
+    let _ = file.write_all(sentinel.as_bytes());
+}
+
+fn terminal_sentinel(
+    task_id: &TaskId,
+    exit_status: &portable_pty::ExitStatus,
+    state: &MonitorState,
+) -> String {
+    let status = if state.info.status == TaskStatus::Failed || !exit_status.success() {
+        "FAILED"
+    } else {
+        "DONE"
+    };
+    format!(
+        "\n=== AID TASK {} {} (exit {}) ===\n",
+        task_id,
+        status,
+        exit_status.exit_code()
+    )
 }
 
 fn strip_ansi(s: &str) -> String {

@@ -173,6 +173,25 @@ pub enum EventKind {
 }
 
 impl EventKind {
+    pub(crate) fn is_progress(self) -> bool {
+        matches!(
+            self,
+            Self::Setup
+                | Self::ToolCall
+                | Self::Milestone
+                | Self::Build
+                | Self::Test
+                | Self::Commit
+                | Self::Completion
+                | Self::Error
+                | Self::FileWrite
+                | Self::FileRead
+                | Self::WebSearch
+                | Self::Lint
+                | Self::Format
+        )
+    }
+
     pub fn as_str(&self) -> &'static str {
         match self {
             Self::Setup => "setup",

@@ -75,6 +75,7 @@ pub fn run_agent_process(
         task_id,
         store,
         output_path,
+        log_path,
         streaming,
         &exit_status,
         &mut state,

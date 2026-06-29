@@ -21,6 +21,7 @@ use self::background_process::spawn_on_done_command;
 use self::background_spec::{load_spec, load_spec_if_exists, remove_spec};
 use crate::agent::{self, RunOpts};
 use crate::config;
+use crate::idle_timeout::DEFAULT_IDLE_TIMEOUT_SECS;
 use crate::notify;
 use crate::paths;
 use crate::sanitize;
@@ -31,6 +32,7 @@ use crate::types::{AgentKind, EventKind, PendingReason, Task, TaskEvent, TaskFil
 const ZOMBIE_FAILURE_DETAIL: &str = "Background worker died unexpectedly";
 const PENDING_TASK_TIMEOUT_SECS: i64 = 600;
 const MAX_RUN_HOURS: i64 = 24;
+const LIVE_WORKER_IDLE_MARGIN: u64 = 2;
 /// Hard limit on concurrent background workers — prevents process exhaustion.
 const MAX_WORKERS: usize = 32;
 
@@ -457,6 +459,10 @@ where
             continue;
         };
         if is_worker_alive(worker_pid) {
+            if cleanup_wedged_live_worker(store, task, &spec, worker_pid)? {
+                cleaned.push(task_id.to_string());
+                continue;
+            }
             let elapsed_mins = (Local::now() - task.created_at).num_minutes();
             let max_duration_mins = spec
                 .max_duration_mins
@@ -513,6 +519,38 @@ where
         cleaned.push(task_id.to_string());
     }
     Ok(cleaned)
+}
+
+fn cleanup_wedged_live_worker(
+    store: &Store,
+    task: &Task,
+    spec: &BackgroundRunSpec,
+    worker_pid: u32,
+) -> Result<bool> {
+    if task.status != TaskStatus::Running {
+        return Ok(false);
+    }
+    let idle_secs = spec.idle_timeout_secs.unwrap_or(DEFAULT_IDLE_TIMEOUT_SECS);
+    let stale_after_secs = idle_secs.saturating_mul(LIVE_WORKER_IDLE_MARGIN);
+    let activity = background_orphan::latest_activity(store, task)?;
+    if !background_orphan::is_stale(activity.timestamp, Local::now(), stale_after_secs) {
+        return Ok(false);
+    }
+    kill_process(worker_pid);
+    if let Some(agent_pid) = spec.agent_pid {
+        kill_process(agent_pid);
+    }
+    let detail = format!(
+        "hung detected (monitor wedged): no events for {stale_after_secs}s \
+         (idle timeout {idle_secs}s, margin {LIVE_WORKER_IDLE_MARGIN}x)"
+    );
+    background_orphan::record_hung_detected_failure(
+        store,
+        task.id.as_str(),
+        stale_after_secs,
+        &activity,
+        &detail,
+    )
 }
 
 fn cleanup_stale_pending_tasks(store: &Store) -> Result<Vec<String>> {
@@ -588,6 +626,11 @@ fn record_failure(store: &Store, task_id: &str, stderr_detail: &str, event_detai
     }
     let stderr_path = paths::stderr_path(task_id);
     std::fs::write(&stderr_path, format!("{stderr_detail}\n"))?;
+    crate::pty_watch::append_failed_terminal_sentinel(
+        &TaskId(task_id.to_string()),
+        &paths::log_path(task_id),
+        event_detail,
+    );
     store.insert_event(&TaskEvent {
         task_id: TaskId(task_id.to_string()),
         timestamp: Local::now(),

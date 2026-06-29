@@ -189,6 +189,33 @@ fn audit_text_shows_pending_reason() {
 }
 
 #[test]
+fn audit_text_shows_done_status_when_result_file_is_missing() {
+    let temp = tempfile::tempdir().unwrap();
+    let _aid_home = crate::paths::AidHomeGuard::set(temp.path());
+    let store = Arc::new(Store::open_memory().unwrap());
+    let task = task_fixture("t-done-no-result", "investigate issue", None, None);
+    store.insert_task(&task).unwrap();
+
+    let text = audit_text(&store, task.id.as_str()).unwrap();
+
+    assert!(text.contains("Status: DONE (no result file - see --output / output.md)"));
+}
+
+#[test]
+fn audit_text_shows_failed_status_when_result_file_is_missing() {
+    let temp = tempfile::tempdir().unwrap();
+    let _aid_home = crate::paths::AidHomeGuard::set(temp.path());
+    let store = Arc::new(Store::open_memory().unwrap());
+    let mut task = task_fixture("t-failed-no-result", "investigate issue", None, None);
+    task.status = TaskStatus::Failed;
+    store.insert_task(&task).unwrap();
+
+    let text = audit_text(&store, task.id.as_str()).unwrap();
+
+    assert!(text.contains("Status: FAILED"));
+}
+
+#[test]
 fn audit_text_shows_full_failure_details() {
     let store = Arc::new(Store::open_memory().unwrap());
     let mut task = research_task("t-show-failure-details", Path::new("."));

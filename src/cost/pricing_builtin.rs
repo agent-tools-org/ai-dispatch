@@ -104,8 +104,9 @@ pub(super) fn for_model_lower(m: &str) -> Option<ModelPricing> {
     } else if (m.contains("free")
         && (m.contains("nemotron")
             || m.contains("minimax")
-            || m.contains("kilo")))
-        || m.contains("mimo")
+            || m.contains("kilo")
+            || m.contains("mimo")))
+        || m.starts_with("mimo/")
     {
         return Some(ModelPricing {
             input_per_m: 0.0,
@@ -125,4 +126,30 @@ pub(super) fn for_model_lower(m: &str) -> Option<ModelPricing> {
         return None;
     };
     Some(p)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn is_free(m: &str) -> bool {
+        matches!(for_model_lower(m), Some(p) if p.input_per_m == 0.0 && p.output_per_m == 0.0)
+    }
+
+    #[test]
+    fn mimocode_native_provider_is_free() {
+        assert!(is_free("mimo/mimo-auto"));
+    }
+
+    #[test]
+    fn explicit_free_mimo_model_stays_free() {
+        assert!(is_free("opencode/mimo-v2-flash-free"));
+    }
+
+    #[test]
+    fn paid_mimo_named_model_is_not_zero_costed() {
+        // The old `m.contains("mimo")` substring wrongly zero-costed this.
+        assert!(!is_free("opencode/mimo-v2-flash"));
+        assert!(!is_free("xiaomi/mimo-v2.5-pro"));
+    }
 }

@@ -338,6 +338,7 @@ fn agent_color(agent: AgentKind) -> Color {
         AgentKind::OpenCode => Color::Yellow,
         AgentKind::Cursor => Color::Magenta,
         AgentKind::Kilo => Color::Blue,
+        AgentKind::MiMoCode => Color::Blue,
         AgentKind::Codebuff => Color::LightCyan,
         AgentKind::Droid => Color::LightMagenta,
         AgentKind::Oz => Color::LightBlue,

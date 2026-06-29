@@ -145,6 +145,7 @@ pub(crate) fn collect_agent_rows(tasks: &[Task]) -> Vec<AgentUsageRow> {
         AgentKind::Copilot,
         AgentKind::OpenCode,
         AgentKind::Kilo,
+        AgentKind::MiMoCode,
         AgentKind::Cursor,
         AgentKind::Droid,
     ] {

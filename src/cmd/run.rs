@@ -27,6 +27,8 @@ mod run_dirty;
 mod run_iterate;
 #[path = "run_post.rs"]
 mod run_post;
+#[path = "run_model_selfheal.rs"]
+mod run_model_selfheal;
 #[path = "run_gc.rs"]
 mod run_gc;
 #[path = "run_dispatch_resolve.rs"]

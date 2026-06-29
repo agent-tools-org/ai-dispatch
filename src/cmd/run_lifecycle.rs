@@ -6,9 +6,9 @@ use std::{path::Path, sync::Arc};
 use crate::{agent, hooks, rate_limit, store::Store, types::*};
 use crate::cmd::{checklist_scan, judge, retry_logic, show};
 use super::run_dirty::{DirtyWorktreeAction, post_agent_dirty_worktree_cleanup};
+use super::run_model_selfheal::maybe_auto_retry_after_model_unavailable;
 use super::run_post::{
-    auto_save_task_output, maybe_auto_retry_after_hang,
-    maybe_auto_retry_after_model_unavailable, maybe_flag_empty_worktree_diff,
+    auto_save_task_output, maybe_auto_retry_after_hang, maybe_flag_empty_worktree_diff,
     maybe_run_post_done_audit, read_quota_error_message, rescue_quota_failed_task,
     take_next_cascade_agent, worktree_is_empty_diff_with_base,
 };

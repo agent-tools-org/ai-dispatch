@@ -35,6 +35,8 @@ mod run_dispatch_resolve;
 mod run_dispatch_claim;
 #[path = "run_dispatch_prepare.rs"]
 mod run_dispatch_prepare;
+#[path = "run_foreground_guard.rs"]
+mod run_foreground_guard;
 #[path = "run_dispatch_execute.rs"]
 mod run_dispatch_execute;
 #[path = "run_dispatch.rs"]

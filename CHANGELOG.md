@@ -1,3 +1,7 @@
+## v8.101.1 (2026-06-29)
+- fix(retry): resume agent sessions across the whole opencode family (opencode, kilo, mimocode) plus droid, not just opencode. Retry/iterate/post-done/verify/dirty-rescue now propagate the stored `agent_session_id` for every agent that can replay it via `--session`/`--continue`/`--fork` (or droid's `-s`), via a new `AgentKind::supports_session_resume()` capability.
+
+
 ## v8.101.0 (2026-06-29)
 - feat(agent): add `mimocode` agent wrapping Xiaomi MiMo Code CLI (opencode-family fork). Dispatch via `aid run mimocode "<prompt>"`. Reuses the opencode JSON event parser like `kilo`; supports `--dir`, sessions, context files, and budget (`--variant minimal`).
 - fix(mimocode): always pass an explicit `-m`, defaulting to `mimo/mimo-auto`. MiMo's own CLI default (`mimo-v2.5-pro-ultraspeed`) is server-rejected (HTTP 400), which had made every non-routed/complex dispatch fail immediately.

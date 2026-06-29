@@ -422,15 +422,17 @@ async fn rate_limited_agent_without_cascade_fails_early() {
     let temp = TempDir::new().unwrap();
     let _aid_home = paths::AidHomeGuard::set(temp.path());
     crate::paths::ensure_dirs().unwrap();
-    crate::rate_limit::mark_rate_limited(&AgentKind::Kilo, "try again at Mar 21st, 2099 2:27 PM.");
+    // MiMoCode is the terminus of the coding fallback chain, so it has no
+    // auto-cascade target and must fail early when rate-limited.
+    crate::rate_limit::mark_rate_limited(&AgentKind::MiMoCode, "try again at Mar 21st, 2099 2:27 PM.");
     let err = run(Arc::new(Store::open_memory().unwrap()), RunArgs {
-        agent_name: "kilo".to_string(),
+        agent_name: "mimocode".to_string(),
         prompt: "Inspect the repository state".to_string(),
         dry_run: true,
         skills: vec![NO_SKILL_SENTINEL.to_string()],
         ..Default::default()
     }).await.unwrap_err();
-    assert!(err.to_string().contains("kilo is rate-limited until Mar 21st, 2099 2:27 PM"));
+    assert!(err.to_string().contains("mimocode is rate-limited until Mar 21st, 2099 2:27 PM"));
 }
 
 #[tokio::test]

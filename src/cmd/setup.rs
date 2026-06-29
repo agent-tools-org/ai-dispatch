@@ -99,6 +99,7 @@ pub fn run() -> Result<()> {
         ("opencode", "opencode"),
         ("cursor", "cursor"),
         ("kilo", "kilo"),
+        ("mimocode", "mimo"),
         ("codebuff", "codebuff"),
         ("droid", "droid"),
         ("oz", "oz"),

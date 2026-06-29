@@ -255,6 +255,7 @@ pub fn auto_skills(agent: &AgentKind, has_worktree: bool) -> Vec<String> {
         | AgentKind::OpenCode
         | AgentKind::Qwen
         | AgentKind::Kilo
+        | AgentKind::MiMoCode
         | AgentKind::Codebuff
         | AgentKind::Droid
         | AgentKind::Oz => {

@@ -101,11 +101,11 @@ pub(super) fn for_model_lower(m: &str) -> Option<ModelPricing> {
             input_per_m: 3.0,
             output_per_m: 15.0,
         }
-    } else if m.contains("free")
-        && (m.contains("mimo")
-            || m.contains("nemotron")
+    } else if (m.contains("free")
+        && (m.contains("nemotron")
             || m.contains("minimax")
-            || m.contains("kilo"))
+            || m.contains("kilo")))
+        || m.contains("mimo")
     {
         return Some(ModelPricing {
             input_per_m: 0.0,

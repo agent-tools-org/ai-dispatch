@@ -69,7 +69,7 @@ pub(crate) fn build_context_flags(agent_kind: &AgentKind, context_args: &[String
     if context_args.is_empty() { return Ok((None, vec![])); }
     let specs = crate::context::parse_context_specs(context_args)?;
     let context_files = expand_context_paths(&specs);
-    if *agent_kind == AgentKind::OpenCode || *agent_kind == AgentKind::Kilo {
+    if *agent_kind == AgentKind::OpenCode || *agent_kind == AgentKind::Kilo || *agent_kind == AgentKind::MiMoCode {
         let hints: Vec<String> = specs.iter().filter_map(|spec| spec.items.as_ref().map(|items| format!("Focus on: {} in {}", items.join(", "), spec.file))).collect();
         let file_context = (!hints.is_empty()).then(|| hints.join("\n"));
         return Ok((file_context, context_files));

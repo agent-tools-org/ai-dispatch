@@ -99,10 +99,11 @@ impl AgentKind {
     }
 
     /// Whether retries/iterations can resume the prior agent session via a
-    /// stored session id. True for the opencode family (opencode, kilo,
-    /// mimocode), which all expose `--session`/`--continue`/`--fork`.
+    /// stored `agent_session_id`. True for agents whose `build_command`
+    /// replays a captured session id: the opencode family (opencode, kilo,
+    /// mimocode) via `--session`/`--continue`/`--fork`, and droid via `-s`.
     pub fn supports_session_resume(&self) -> bool {
-        matches!(self, Self::OpenCode | Self::Kilo | Self::MiMoCode)
+        matches!(self, Self::OpenCode | Self::Kilo | Self::MiMoCode | Self::Droid)
     }
 
     pub fn profile(

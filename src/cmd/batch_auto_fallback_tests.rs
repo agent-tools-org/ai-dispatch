@@ -80,9 +80,10 @@ fn should_auto_fallback_only_once_for_failed_tasks() {
 #[test]
 fn auto_fallback_agent_returns_none_when_chain_ends() {
     let store = Store::open_memory().unwrap();
-    store.insert_task(&stored_task("t-kilo", AgentKind::Kilo)).unwrap();
+    // MiMoCode is the last agent in the coding fallback chain, so it has no successor.
+    store.insert_task(&stored_task("t-mimocode", AgentKind::MiMoCode)).unwrap();
 
-    assert!(auto_fallback_agent(&store, "t-kilo", &[], 0).unwrap().is_none());
+    assert!(auto_fallback_agent(&store, "t-mimocode", &[], 0).unwrap().is_none());
 }
 
 #[test]

@@ -289,7 +289,7 @@ impl Store {
         self.db().execute(
             "UPDATE tasks SET status = ?1, tokens = ?2, duration_ms = ?3, completed_at = ?4,
              model = ?5, cost_usd = ?6, exit_code = ?7 WHERE id = ?8
-             AND status != 'stopped'",
+             AND status NOT IN ('failed', 'stopped')",
             params![
                 payload.status.as_str(),
                 payload.tokens,
@@ -317,7 +317,7 @@ impl Store {
         tx.execute(
             "UPDATE tasks SET status = ?1, tokens = ?2, duration_ms = ?3, completed_at = ?4,
              model = ?5, cost_usd = ?6, exit_code = ?7 WHERE id = ?8
-             AND status != 'stopped'",
+             AND status NOT IN ('failed', 'stopped')",
             params![
                 payload.status.as_str(),
                 payload.tokens,
@@ -609,5 +609,45 @@ mod tests {
         assert_eq!(events.len(), 1);
         assert_eq!(events[0].event_kind, EventKind::Completion);
         assert_eq!(events[0].detail, "completed atomically");
+    }
+
+    #[test]
+    fn complete_task_atomic_does_not_override_failed_status() {
+        let store = Store::open_memory().unwrap();
+        let conn = store.db();
+        conn.execute(
+            "INSERT INTO tasks (id, agent, prompt, status, created_at)
+             VALUES ('t-atomic-failed', 'codex', 'test prompt', 'failed', '2026-03-18T00:00:00Z')",
+            [],
+        )
+        .unwrap();
+        drop(conn);
+
+        let event = TaskEvent {
+            task_id: TaskId("t-atomic-failed".to_string()),
+            timestamp: Local::now(),
+            event_kind: EventKind::Completion,
+            detail: "completed after interrupt".to_string(),
+            metadata: None,
+        };
+        store
+            .complete_task_atomic(
+                TaskCompletionUpdate {
+                    id: "t-atomic-failed",
+                    status: TaskStatus::Done,
+                    tokens: Some(1234),
+                    duration_ms: 5000,
+                    model: Some("test-model"),
+                    cost_usd: Some(0.05),
+                    exit_code: Some(0),
+                },
+                &event,
+            )
+            .unwrap();
+
+        let task = store.get_task("t-atomic-failed").unwrap().unwrap();
+        assert_eq!(task.status, TaskStatus::Failed);
+        assert_eq!(task.tokens, None);
+        assert_eq!(task.completed_at, None);
     }
 }

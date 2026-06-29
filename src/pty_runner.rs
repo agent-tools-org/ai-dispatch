@@ -11,6 +11,7 @@ use std::sync::Arc;
 use crate::agent::Agent;
 use crate::cost;
 use crate::pty_bridge::PtyBridge;
+use crate::pty_runner_control::PtyRunControl;
 use crate::pty_watch::{finalize_output, monitor_bridge, MonitorState};
 use crate::store::Store;
 use crate::store::TaskCompletionUpdate;
@@ -27,6 +28,21 @@ pub fn run_agent_process(
     model: Option<&str>,
     streaming: bool,
 ) -> Result<()> {
+    run_agent_process_with_control(agent, cmd, task_id, store, log_path, output_path, model, streaming, None)
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn run_agent_process_with_control(
+    agent: &dyn Agent,
+    cmd: &std::process::Command,
+    task_id: &TaskId,
+    store: &Arc<Store>,
+    log_path: &Path,
+    output_path: Option<&str>,
+    model: Option<&str>,
+    streaming: bool,
+    control: Option<PtyRunControl>,
+) -> Result<()> {
     let start = std::time::Instant::now();
     let mut bridge = match spawn_bridge(cmd, log_path) {
         Ok(bridge) => bridge,
@@ -42,7 +58,13 @@ pub fn run_agent_process(
         }
     };
     if let Some(pid) = bridge.child_pid() {
+        if let Some(control) = &control {
+            control.set_agent_pid(pid);
+        }
         let _ = crate::background::update_agent_pid(task_id.as_str(), pid);
+    }
+    if control.as_ref().is_some_and(PtyRunControl::is_interrupted) {
+        let _ = bridge.kill_group();
     }
     let rx = spawn_reader_thread(bridge.take_reader()?);
     let mut log_file = std::fs::File::create(log_path)?;

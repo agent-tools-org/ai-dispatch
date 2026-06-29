@@ -47,6 +47,7 @@ pub mod process_group;
 mod process_guard;
 mod pty_bridge;
 mod pty_runner;
+mod pty_runner_control;
 mod pty_watch_idle;
 mod pty_watch;
 mod rate_limit;

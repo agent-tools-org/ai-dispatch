@@ -175,10 +175,18 @@ pub(super) fn resolve_agent_setup(store: &Arc<Store>, args: &mut RunArgs) -> Res
     } else {
         false
     };
-    let requested_model =
-        args.model.clone().or_else(|| agent_config::get_default_model(&args.agent_name));
-    let budget_active = args.budget || auto_budget || cfg.selection.budget_mode;
-    let smart_routed = if !budget_active
+    // Self-heal retries (force_default_model) bypass model selection entirely so
+    // the agent runs on its own current default — the only always-valid choice
+    // after a "model unavailable" failure.
+    let requested_model = if args.force_default_model {
+        None
+    } else {
+        args.model.clone().or_else(|| agent_config::get_default_model(&args.agent_name))
+    };
+    let budget_active =
+        !args.force_default_model && (args.budget || auto_budget || cfg.selection.budget_mode);
+    let smart_routed = if !args.force_default_model
+        && !budget_active
         && requested_model.is_none()
         && cfg.selection.smart_routing
         && crate::agent::classifier::is_simple_for_routing(&args.prompt)

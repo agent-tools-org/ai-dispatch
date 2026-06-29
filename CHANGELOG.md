@@ -1,3 +1,10 @@
+## v8.102.0 (2026-06-29)
+- feat(model): auto-heal when an agent fails because its selected model id is unavailable (deprecated/renamed/unsupported — e.g. opencode "Model not found", codex "model not supported", mimo 400). aid now detects this class of failure and automatically retries once forcing the agent's own current default model, so a stale model selection no longer hard-fails the task.
+- feat(model): new `force_default_model` dispatch path bypasses smart-routing, budget, and configured defaults so the self-heal retry always lands on a guaranteed-valid model. Loop-guarded to run at most once per retry chain.
+- fix(model): refresh stale built-in model tables — codex now uses gpt-5.5 / gpt-5.4 / gpt-5.4-mini (the old gpt-4.1 lineup was rejected by the API); opencode now uses provider-prefixed current ids (opencode/glm-5.2, opencode/kimi-k2.6, opencode/deepseek-v4-flash-free, opencode/nemotron-3-ultra-free, opencode/mimo-v2.5-free — the old bare glm-4.7 etc. were "model not found").
+- fix(selection): budget mode now prefers free models — a paid model must be clearly stronger to win, so trivial budget-mode tasks route to free agents (kilo / qwen / free opencode) instead of a marginally better paid model.
+
+
 ## v8.101.1 (2026-06-29)
 - fix(retry): resume agent sessions across the whole opencode family (opencode, kilo, mimocode) plus droid, not just opencode. Retry/iterate/post-done/verify/dirty-rescue now propagate the stored `agent_session_id` for every agent that can replay it via `--session`/`--continue`/`--fork` (or droid's `-s`), via a new `AgentKind::supports_session_resume()` capability.
 

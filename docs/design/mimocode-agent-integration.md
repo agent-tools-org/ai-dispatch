@@ -1,8 +1,28 @@
 # MiMo Code CLI Agent Integration — Plan
 
-Status: **PLANNED** (research done 2026-06-29, implementation deferred to next session)
-Target version: **v8.101.0** (new agent = minor bump)
-Owner: dev-manager (老张) orchestrated; implement via `aid run codex` on `feat/mimocode-agent`.
+Status: **SHIPPED** (v8.101.0, 2026-06-29) — adapter + registration landed and cross-audited.
+Owner: dev-manager (老张) orchestrated; implemented via `aid run codex` on `feat/mimocode-agent`.
+
+## Implementation notes (resolved at build time)
+
+- Binary: `/Users/mingsun/.mimocode/bin/mimo` (binary name `mimo`, v0.1.3). Agent dispatch name is `mimocode`.
+- `mimo run` **has `--dir`** → adapter mirrors `kilo.rs` (`--dir` + `current_dir`).
+- **Default model MUST be `mimo/mimo-auto`.** MiMo's own CLI default (`mimo-v2.5-pro-ultraspeed`) is
+  rejected by the server (HTTP 400). The adapter injects `mimo/mimo-auto` whenever no model is set, so
+  complex/non-routed dispatches no longer fail in ~1s. (Caught by live smoke test, not the original plan.)
+- Streams opencode-shaped JSONL on stdout without a PTY; reuses `opencode::parse_json_event`.
+- Pricing zero-cost is scoped to the native `mimo/` provider (not a broad `contains("mimo")`).
+
+## Phase 2 / deferred follow-ups
+
+- **Retry session continuity.** `build_command` wires `--session`/`--continue`/`--fork`, but the retry/iterate
+  plumbing (`run_post.rs`, `run_dirty.rs`, `run_iterate.rs`, `run_verify.rs`, `retry.rs`) propagates `session_id`
+  for **OpenCode only**. MiMoCode retries therefore start fresh sessions. **Kilo has the identical gap** — fix
+  both together by generalizing the OpenCode-only session-propagation checks to the opencode-family agents.
+
+---
+
+## Original plan (for reference)
 
 ## Goal
 

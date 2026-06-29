@@ -235,6 +235,7 @@ const CODING_FALLBACK_CHAIN: &[AgentKind] = &[
     AgentKind::Droid,
     AgentKind::OpenCode,
     AgentKind::Kilo,
+    AgentKind::MiMoCode,
 ];
 #[allow(dead_code)]
 const RESEARCH_FALLBACK_CHAIN: &[AgentKind] = &[
@@ -245,6 +246,7 @@ const RESEARCH_FALLBACK_CHAIN: &[AgentKind] = &[
     AgentKind::Cursor,
     AgentKind::OpenCode,
     AgentKind::Kilo,
+    AgentKind::MiMoCode,
 ];
 
 fn next_fallback_in_chain(

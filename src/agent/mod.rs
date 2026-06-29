@@ -12,6 +12,7 @@ pub mod droid;
 pub mod gemini;
 pub(crate) mod gemini_support;
 pub mod kilo;
+pub mod mimocode;
 pub mod opencode;
 pub(crate) mod opencode_overlay;
 pub mod oz;
@@ -97,6 +98,7 @@ pub fn detect_agents() -> Vec<AgentKind> {
         ("cursor-agent", AgentKind::Cursor),
         ("droid", AgentKind::Droid),
         ("kilo", AgentKind::Kilo),
+        ("mimo", AgentKind::MiMoCode),
         ("aid-codebuff", AgentKind::Codebuff),
         ("oz", AgentKind::Oz),
         ("claude", AgentKind::Claude),
@@ -169,6 +171,7 @@ where
         AgentKind::Qwen => which("qwen"),
         AgentKind::OpenCode => which("opencode"),
         AgentKind::Kilo => which("kilo"),
+        AgentKind::MiMoCode => which("mimo"),
         AgentKind::Codebuff => which("aid-codebuff"),
         AgentKind::Droid => which("droid"),
         AgentKind::Oz => which("oz"),
@@ -195,6 +198,7 @@ pub fn get_agent(kind: AgentKind) -> Box<dyn Agent> {
         AgentKind::Qwen => Box::new(qwen::QwenAgent),
         AgentKind::OpenCode => Box::new(opencode::OpenCodeAgent),
         AgentKind::Kilo => Box::new(kilo::KiloAgent),
+        AgentKind::MiMoCode => Box::new(mimocode::MiMoCodeAgent),
         AgentKind::Codebuff => Box::new(codebuff::CodebuffAgent),
         AgentKind::Droid => Box::new(droid::DroidAgent),
         AgentKind::Oz => Box::new(oz::OzAgent),
@@ -240,6 +244,11 @@ mod binary_preflight_tests {
     #[test]
     fn built_in_agent_binary_exists_rejects_missing_kilo_binary() {
         assert!(!built_in_agent_binary_exists(AgentKind::Kilo, |_| false));
+    }
+
+    #[test]
+    fn built_in_agent_binary_exists_rejects_missing_mimocode_binary() {
+        assert!(!built_in_agent_binary_exists(AgentKind::MiMoCode, |_| false));
     }
 
     #[test]

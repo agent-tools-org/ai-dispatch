@@ -95,6 +95,7 @@ mod tests {
             AgentKind::Claude,
             AgentKind::OpenCode,
             AgentKind::Kilo,
+            AgentKind::MiMoCode,
             AgentKind::Cursor,
             AgentKind::Codex,
         ];

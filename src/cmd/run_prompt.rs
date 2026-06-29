@@ -127,7 +127,7 @@ pub(super) fn build_prompt_bundle(store: &Store, args: &RunArgs, agent_kind: &Ag
         effective_prompt = format!("{summary_block}\n\n{effective_prompt}");
     }
     if let Some(ref group_id) = args.group
-        && !matches!(agent_kind, AgentKind::OpenCode | AgentKind::Kilo)
+        && !matches!(agent_kind, AgentKind::OpenCode | AgentKind::Kilo | AgentKind::MiMoCode)
     {
         let sibling_summaries = prompt_context::collect_sibling_summaries(store, group_id, current_task_id)?;
         if !sibling_summaries.is_empty() {

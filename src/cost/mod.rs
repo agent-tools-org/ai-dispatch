@@ -59,8 +59,8 @@ pub fn format_cost_label(cost_usd: Option<f64>, agent: AgentKind) -> String {
             Some(c) if c > 0.0 => format_cost(cost_usd),
             _ => "subscription".to_string(),
         },
-        AgentKind::Kilo if cost_usd == Some(0.0) => "included".to_string(),
-        AgentKind::Kilo => format_cost(cost_usd),
+        AgentKind::Kilo | AgentKind::MiMoCode if cost_usd == Some(0.0) => "included".to_string(),
+        AgentKind::Kilo | AgentKind::MiMoCode => format_cost(cost_usd),
         _ => format_cost(cost_usd),
     }
 }
@@ -83,7 +83,7 @@ fn resolve_pricing(model: Option<&str>, agent: AgentKind) -> Option<ModelPricing
             input_per_m: 0.0,
             output_per_m: 0.0,
         }),
-        AgentKind::Kilo => Some(ModelPricing {
+        AgentKind::Kilo | AgentKind::MiMoCode => Some(ModelPricing {
             input_per_m: 0.0,
             output_per_m: 0.0,
         }),
@@ -160,8 +160,13 @@ mod tests {
             Some(0.0)
         );
         assert_eq!(estimate_cost(100_000, None, AgentKind::Kilo), Some(0.0));
+        assert_eq!(estimate_cost(100_000, None, AgentKind::MiMoCode), Some(0.0));
         assert_eq!(
             estimate_cost(100_000, Some("kilo/kilo/auto-free"), AgentKind::Kilo),
+            Some(0.0)
+        );
+        assert_eq!(
+            estimate_cost(100_000, Some("mimo/mimo-auto"), AgentKind::MiMoCode),
             Some(0.0)
         );
     }
@@ -198,6 +203,7 @@ mod tests {
         assert_eq!(format_cost_label(None, AgentKind::Cursor), "subscription");
         assert_eq!(format_cost_label(None, AgentKind::Copilot), "subscription");
         assert_eq!(format_cost_label(Some(0.0), AgentKind::Kilo), "included");
+        assert_eq!(format_cost_label(Some(0.0), AgentKind::MiMoCode), "included");
     }
 
     #[test]

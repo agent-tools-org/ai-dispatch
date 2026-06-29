@@ -58,36 +58,41 @@ pub fn run(store: &Arc<Store>, running: bool, today: bool, mine: bool, group: Op
     let fingerprint = task_fingerprint(&tasks);
     let marker_path = crate::paths::aid_dir().join("board-last.txt");
     let now = Local::now().timestamp();
-    let (anti_poll, force_state) = anti_poll_status(&marker_path, &fingerprint, now, force);
-    let watch_hint = watch_instead_of_polling_hint(&tasks);
-
-    let repeat_count = match anti_poll {
-        AntiPollStatus::Allowed(repeat_count) => repeat_count,
-        AntiPollStatus::Cooldown(elapsed) => {
-            write_board_marker(&marker_path, &fingerprint, now, 0, 0, 0);
-            aid_hint!("[aid] Board checked {elapsed}s ago. {watch_hint}");
-            std::process::exit(0);
-        }
-        AntiPollStatus::Repeat(repeat_count) => {
-            write_board_marker(&marker_path, &fingerprint, now, repeat_count, 0, 0);
-            aid_warn!("[aid] No changes after {repeat_count} checks. {watch_hint} Exiting.");
-            std::process::exit(1);
-        }
-        AntiPollStatus::ForceCooldown(elapsed) => {
-            write_board_marker(&marker_path, &fingerprint, now, 0, force_state.count, force_state.window_start);
-            aid_hint!("[aid] Board is rate-limited ({elapsed}s/30s). {watch_hint}");
-            std::process::exit(0);
-        }
-        AntiPollStatus::ForceBlocked => {
-            write_board_marker(&marker_path, &fingerprint, now, 0, force_state.count, force_state.window_start);
-            aid_warn!("[aid] Repeated polling detected. Board locked for 60s. {watch_hint}");
-            std::process::exit(1);
-        }
-    };
+    let mut repeat_count = 0;
+    let mut force_state = ForceMarkerState::default();
+    if !json {
+        let anti_poll = anti_poll_status(&marker_path, &fingerprint, now, force);
+        force_state = anti_poll.1;
+        let watch_hint = watch_instead_of_polling_hint(&tasks);
+        repeat_count = match anti_poll.0 {
+            AntiPollStatus::Allowed(repeat_count) => repeat_count,
+            AntiPollStatus::Cooldown(elapsed) => {
+                write_board_marker(&marker_path, &fingerprint, now, 0, 0, 0);
+                aid_hint!("[aid] Board checked {elapsed}s ago. {watch_hint}");
+                std::process::exit(0);
+            }
+            AntiPollStatus::Repeat(repeat_count) => {
+                write_board_marker(&marker_path, &fingerprint, now, repeat_count, 0, 0);
+                aid_warn!("[aid] No changes after {repeat_count} checks. {watch_hint} Exiting.");
+                std::process::exit(1);
+            }
+            AntiPollStatus::ForceCooldown(elapsed) => {
+                write_board_marker(&marker_path, &fingerprint, now, 0, force_state.count, force_state.window_start);
+                aid_hint!("[aid] Board is rate-limited ({elapsed}s/30s). {watch_hint}");
+                std::process::exit(0);
+            }
+            AntiPollStatus::ForceBlocked => {
+                write_board_marker(&marker_path, &fingerprint, now, 0, force_state.count, force_state.window_start);
+                aid_warn!("[aid] Repeated polling detected. Board locked for 60s. {watch_hint}");
+                std::process::exit(1);
+            }
+        };
+    }
     let mut stdout = std::io::stdout();
     write_board_output(&mut stdout, store, &tasks, group, truncation, json)?;
     stdout.flush()?;
-    if repeat_count > 0 {
+    if !json && repeat_count > 0 {
+        let watch_hint = watch_instead_of_polling_hint(&tasks);
         aid_hint!("[aid] No status changes since last check ({repeat_count}x). {watch_hint}");
     }
     write_board_marker(&marker_path, &fingerprint, now, repeat_count, force_state.count, force_state.window_start);

@@ -84,6 +84,36 @@ fn board_output_is_not_written_when_anti_poll_blocks() {
 }
 
 #[test]
+fn board_output_shows_terminal_status_when_result_file_is_missing() {
+    let temp = tempfile::tempdir().unwrap();
+    let _guard = AidHomeGuard::set(temp.path());
+    let store = Store::open_memory().unwrap();
+    let tasks = vec![make_task("t-done-no-result", TaskStatus::Done, Local::now())];
+    let mut output = Vec::new();
+
+    write_board_output(&mut output, &store, &tasks, None, None, false).unwrap();
+    let text = String::from_utf8(output).unwrap();
+
+    assert!(text.contains(
+        "Status: DONE t-done-no-result (no result file - see --output / output.md)"
+    ));
+}
+
+#[test]
+fn board_output_shows_failed_status_when_result_file_is_missing() {
+    let temp = tempfile::tempdir().unwrap();
+    let _guard = AidHomeGuard::set(temp.path());
+    let store = Store::open_memory().unwrap();
+    let tasks = vec![make_task("t-failed-no-result", TaskStatus::Failed, Local::now())];
+    let mut output = Vec::new();
+
+    write_board_output(&mut output, &store, &tasks, None, None, false).unwrap();
+    let text = String::from_utf8(output).unwrap();
+
+    assert!(text.contains("Status: FAILED t-failed-no-result"));
+}
+
+#[test]
 fn test_anti_poll_cooldown_blocks_rapid_calls() {
     let temp = tempfile::tempdir().unwrap();
     let _guard = AidHomeGuard::set(temp.path());

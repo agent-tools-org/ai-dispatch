@@ -10,7 +10,7 @@ use super::background_spec::load_spec_if_exists;
 use crate::cmd::run_hung_recovery;
 use crate::idle_timeout::DEFAULT_IDLE_TIMEOUT_SECS;
 use crate::store::Store;
-use crate::types::{Task, TaskId};
+use crate::types::{Task, TaskEvent, TaskId};
 
 pub(super) fn cleanup_orphaned_idle_tasks<F>(
     store: &Store,
@@ -49,20 +49,30 @@ where
     Ok(cleaned)
 }
 
-fn latest_activity(store: &Store, task: &Task) -> Result<TaskActivity> {
+pub(super) fn latest_activity(store: &Store, task: &Task) -> Result<TaskActivity> {
     let events = store.get_events(task.id.as_str())?;
-    let last_event = events.last();
+    let progress_events = events.iter()
+        .filter(|event| event.event_kind.is_progress() && !is_idle_bookkeeping_event(event))
+        .collect::<Vec<_>>();
+    let last_event = progress_events.last();
     Ok(TaskActivity {
-        timestamp: last_event
-            .map(|event| event.timestamp)
-            .unwrap_or(task.created_at),
-        event_count: events.len() as u32,
+        timestamp: last_event.map(|event| event.timestamp).unwrap_or(task.created_at),
+        event_count: progress_events.len() as u32,
         detail: last_event.map(|event| event.detail.clone()),
     })
 }
 
-fn is_stale(last_activity: DateTime<Local>, now: DateTime<Local>, idle_secs: u64) -> bool {
+pub(super) fn is_stale(last_activity: DateTime<Local>, now: DateTime<Local>, idle_secs: u64) -> bool {
     (now - last_activity).num_seconds() >= idle_secs as i64
+}
+
+fn is_idle_bookkeeping_event(event: &TaskEvent) -> bool {
+    let Some(metadata) = event.metadata.as_ref() else {
+        return false;
+    };
+    metadata.get("idle_warn").and_then(|value| value.as_bool()) == Some(true)
+        || metadata.get("auto_escalated").and_then(|value| value.as_bool()) == Some(true)
+        || metadata.get("source").and_then(|value| value.as_str()) == Some("unstick-auto")
 }
 
 fn record_orphaned_hung(
@@ -72,6 +82,16 @@ fn record_orphaned_hung(
     activity: &TaskActivity,
 ) -> Result<bool> {
     let detail = format!("hung detected (orphaned supervisor): no output for {idle_secs}s");
+    record_hung_detected_failure(store, task_id, idle_secs, activity, &detail)
+}
+
+pub(super) fn record_hung_detected_failure(
+    store: &Store,
+    task_id: &str,
+    idle_secs: u64,
+    activity: &TaskActivity,
+    detail: &str,
+) -> Result<bool> {
     if !super::record_failure(store, task_id, &detail, &detail)? {
         return Ok(false);
     }
@@ -85,10 +105,10 @@ fn record_orphaned_hung(
     Ok(true)
 }
 
-struct TaskActivity {
-    timestamp: DateTime<Local>,
-    event_count: u32,
-    detail: Option<String>,
+pub(super) struct TaskActivity {
+    pub(super) timestamp: DateTime<Local>,
+    pub(super) event_count: u32,
+    pub(super) detail: Option<String>,
 }
 
 #[cfg(test)]

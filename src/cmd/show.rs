@@ -210,6 +210,10 @@ pub fn audit_text(store: &Arc<Store>, task_id: &str) -> Result<String> {
         None
     };
     let mut out = render_task_detail(&task, &events, retry_chain);
+    if let Some(notice) = terminal_missing_result_notice(&task) {
+        out.push('\n');
+        out.push_str(&notice);
+    }
 
     if let Some(checklist) = cmd::show_checklist::render_checklist_status(store.as_ref(), &task) {
         out.push('\n');
@@ -267,6 +271,20 @@ pub fn audit_text(store: &Arc<Store>, task_id: &str) -> Result<String> {
     }
 
     Ok(out)
+}
+
+fn terminal_missing_result_notice(task: &crate::types::Task) -> Option<String> {
+    if !matches!(task.status, TaskStatus::Done | TaskStatus::Failed) {
+        return None;
+    }
+    let result_path = crate::paths::task_dir(task.id.as_str()).join("result.md");
+    if result_path.exists() {
+        return None;
+    }
+    if task.status == TaskStatus::Done {
+        return Some("Status: DONE (no result file - see --output / output.md)\n".to_string());
+    }
+    Some("Status: FAILED\n".to_string())
 }
 
 pub fn summary_text(store: &Arc<Store>, task_id: &str) -> Result<String> {

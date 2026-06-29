@@ -26,27 +26,6 @@ pub(crate) struct EventDetail {
     pub raw_key: Option<String>,
 }
 
-pub(crate) fn handle_streaming_line(
-    agent: &dyn Agent,
-    task_id: &TaskId,
-    store: &Arc<Store>,
-    info: &mut CompletionInfo,
-    event_count: &mut u32,
-    synthetic_tracker: &mut SyntheticMilestoneTracker,
-    workgroup_id: Option<&str>,
-    line: &str,
-) -> Result<()> {
-    let ctx = StreamLineContext {
-        agent,
-        task_id,
-        store,
-        workgroup_id,
-        synthetic_tracker,
-    };
-    let _ = handle_streaming_line_with_session(ctx, info, event_count, line, &mut false)?;
-    Ok(())
-}
-
 pub(crate) fn handle_streaming_line_with_session(
     ctx: StreamLineContext<'_>,
     info: &mut CompletionInfo,

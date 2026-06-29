@@ -107,6 +107,9 @@ fn write_board_output<W: Write>(writer: &mut W, store: &Store, tasks: &[Task], g
         write!(writer, "{header}")?;
     }
     write!(writer, "{}", render_board(tasks, store)?)?;
+    if let Some(notices) = terminal_missing_result_notices(tasks) {
+        write!(writer, "{notices}")?;
+    }
     if let Some(truncation) = truncation {
         writeln!(writer, "{}", truncation_notice_message(truncation))?;
     }
@@ -120,6 +123,28 @@ fn write_board_output<W: Write>(writer: &mut W, store: &Store, tasks: &[Task], g
         writeln!(writer, "[aid] Tip: run `aid worktree prune` to clean up stale worktrees")?;
     }
     Ok(())
+}
+
+fn terminal_missing_result_notices(tasks: &[Task]) -> Option<String> {
+    let mut notices = String::new();
+    for task in tasks {
+        if !matches!(task.status, TaskStatus::Done | TaskStatus::Failed) {
+            continue;
+        }
+        let result_path = crate::paths::task_dir(task.id.as_str()).join("result.md");
+        if result_path.exists() {
+            continue;
+        }
+        if task.status == TaskStatus::Done {
+            notices.push_str(&format!(
+                "Status: DONE {} (no result file - see --output / output.md)\n",
+                task.id
+            ));
+        } else {
+            notices.push_str(&format!("Status: FAILED {}\n", task.id));
+        }
+    }
+    if notices.is_empty() { None } else { Some(notices) }
 }
 
 fn group_header(store: &Store, group_id: &str) -> Result<Option<String>> {

@@ -31,3 +31,7 @@ target-local/
 result-t-*.md
 result-t-*.json
 aid-batch-*.toml
+
+# Agent audit/result report files (auto-written by audit-report mode)
+result.md
+result_*.md

@@ -1,3 +1,9 @@
+## v8.101.0 (2026-06-29)
+- feat(agent): add `mimocode` agent wrapping Xiaomi MiMo Code CLI (opencode-family fork). Dispatch via `aid run mimocode "<prompt>"`. Reuses the opencode JSON event parser like `kilo`; supports `--dir`, sessions, context files, and budget (`--variant minimal`).
+- fix(mimocode): always pass an explicit `-m`, defaulting to `mimo/mimo-auto`. MiMo's own CLI default (`mimo-v2.5-pro-ultraspeed`) is server-rejected (HTTP 400), which had made every non-routed/complex dispatch fail immediately.
+- fix(cost): scope MiMo zero-cost pricing to the native `mimo/` provider so paid models containing "mimo" (e.g. `opencode/mimo-v2-flash`) are no longer wrongly zero-costed.
+
+
 ## v8.100.13 (2026-06-29)
 - fix(board): `aid board --json` is no longer suppressed by the anti-poll throttle. The cooldown/repeat/rate-limit guard ran before JSON was emitted and could exit early with a human-readable "[aid] Board checked Ns ago" hint or a non-zero status, so a script polling `--json` intermittently got empty output, non-JSON text, or exit(1). JSON mode now bypasses the throttle entirely and always prints a valid JSON array; the human (non-json) path keeps its unchanged anti-poll behavior.
 

@@ -1,3 +1,7 @@
+## v8.100.13 (2026-06-29)
+- fix(board): `aid board --json` is no longer suppressed by the anti-poll throttle. The cooldown/repeat/rate-limit guard ran before JSON was emitted and could exit early with a human-readable "[aid] Board checked Ns ago" hint or a non-zero status, so a script polling `--json` intermittently got empty output, non-JSON text, or exit(1). JSON mode now bypasses the throttle entirely and always prints a valid JSON array; the human (non-json) path keeps its unchanged anti-poll behavior.
+
+
 ## v8.100.12 (2026-06-29)
 - fix(dispatch): idle watchdog now tracks real task progress (milestones/tool-calls) instead of raw PTY bytes — spinner/"thinking" chatter no longer masks a hung agent. Previously only Codex plain-text was safe; now correct across all PTY streaming agents (opencode/cursor/kilo/custom) whose status lines were classified as reasoning and reset the idle clock.
 - fix(dispatch): zombie reaper backstop for a live worker whose monitor is wedged — a running task with no progress event beyond 2x its idle timeout is now reaped and its orphaned agent killed. AwaitingInput/Stalled tasks (legitimately waiting on a human) are never killed.

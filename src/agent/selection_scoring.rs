@@ -131,6 +131,15 @@ fn model_capability_score(agent: AgentKind, model: &str) -> Option<f64> {
         .map(|m| m.capability)
 }
 
+/// True when the model has a non-zero price. Used to bias budget mode toward
+/// free models so a marginally stronger paid model doesn't win trivial tasks.
+fn model_is_paid(agent: AgentKind, model: &str) -> bool {
+    AGENT_MODELS.iter()
+        .find(|m| m.agent == agent && m.model == model)
+        .map(|m| m.input_per_m > 0.0 || m.output_per_m > 0.0)
+        .unwrap_or(false)
+}
+
 pub(super) fn custom_category_score(config: &CustomAgentConfig, category: TaskCategory) -> i32 {
     let caps = &config.capabilities;
     match category {
@@ -205,6 +214,11 @@ pub(super) fn score_for(ctx: &CandidateContext<'_>, kind: AgentKind) -> f64 {
     let model = super::recommend_model(&kind, &ctx.profile.complexity, ctx.budget);
     let capability = model.and_then(|m| model_capability_score(kind, m));
     let mut s = model_quality_score(base, capability);
+    // Budget mode favors free models: a paid agent must be clearly stronger to
+    // win, so trivial tasks route to free agents (kilo/qwen/free opencode).
+    if ctx.budget && model.is_some_and(|m| model_is_paid(kind, m)) {
+        s -= 3.0;
+    }
     if rate_limit::is_rate_limited(&kind) {
         s -= 10.0;
     }

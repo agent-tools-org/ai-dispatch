@@ -39,6 +39,7 @@ pub mod gitbutler;
 mod hooks;
 mod idle_timeout;
 mod input_signal;
+mod model_health;
 mod notify;
 mod paths;
 mod prompt;

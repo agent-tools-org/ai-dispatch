@@ -25,6 +25,7 @@ pub fn task_row(app: &App, task: &Task) -> Row<'static> {
         Cell::from(task_progress(app, task)),
         Cell::from(task_cpu(app, task)),
         Cell::from(task_memory(app, task)),
+        Cell::from(task.created_at.format("%m-%d %H:%M").to_string()),
         Cell::from(task_duration(task)),
         Cell::from(task_tokens(task)),
         Cell::from(cost::format_cost_label(task.cost_usd, task.agent)),

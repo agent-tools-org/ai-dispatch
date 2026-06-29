@@ -18,6 +18,7 @@ pub struct PaneData {
     pub memory: String,
     pub workgroup: String,
     pub worktree_branch: String,
+    pub created: String,
     pub elapsed: String,
     pub scroll_offset: usize,
     pub total_events: usize,
@@ -157,6 +158,9 @@ fn render_pane(pane: &PaneData, is_active: bool) -> List<'static> {
         }
         if !pane.model.is_empty() && pane.model != "-" {
             parts.push(pane.model.clone());
+        }
+        if !pane.created.is_empty() {
+            parts.push(format!("Created {}", pane.created));
         }
         if !pane.elapsed.is_empty() {
             let elapsed = if is_done {

@@ -96,6 +96,34 @@ fn keeps_ungrouped_tasks_visible_with_group_filter() {
 }
 
 #[test]
+fn multipane_tasks_includes_pending_and_waiting_tasks() {
+    let store = Arc::new(Store::open_memory().unwrap());
+    let mut pending = make_task("t-3000", None);
+    pending.status = TaskStatus::Pending;
+    store.insert_task(&pending).unwrap();
+    let mut waiting = make_task("t-3001", None);
+    waiting.status = TaskStatus::Waiting;
+    store.insert_task(&waiting).unwrap();
+
+    let app = App::new(
+        store,
+        super::super::RunOptions {
+            task_id: None,
+            group: None,
+        },
+    )
+    .unwrap();
+
+    let task_ids: Vec<&str> = app
+        .multipane_tasks()
+        .iter()
+        .map(|task| task.id.as_str())
+        .collect();
+    assert!(task_ids.contains(&"t-3000"));
+    assert!(task_ids.contains(&"t-3001"));
+}
+
+#[test]
 fn filters_specific_task_scope() {
     let store = Arc::new(Store::open_memory().unwrap());
     store

@@ -651,4 +651,7 @@ fn notify_task_completion(store: &Store, task_id: &str) -> Result<()> {
 #[path = "background_binary_tests.rs"]
 mod background_binary_tests;
 #[cfg(test)]
+#[path = "background_foreground_tests.rs"]
+mod foreground_tests;
+#[cfg(test)]
 mod tests;

@@ -4,16 +4,14 @@
 use anyhow::{Context, Result};
 use std::path::Path;
 use std::sync::Arc;
-use tokio::process::Command;
 use crate::agent::{self, RunOpts};
 use crate::background::{self, BackgroundRunSpec};
 use crate::commit;
 use crate::hooks;
 use crate::store::Store;
 use crate::types::{TaskId, TaskStatus};
-use super::run_agent::run_agent_process_with_timeout;
 use super::run_dispatch_prepare::PreparedDispatch;
-use super::{RunArgs, run_lifecycle, run_prompt};
+use super::{RunArgs, run_foreground_guard, run_lifecycle, run_prompt};
 
 pub(super) fn build_run_opts(
     args: &RunArgs,
@@ -238,36 +236,27 @@ pub(super) async fn run_foreground_task(
             crate::agent::truncate::truncate_text(&args.prompt, 50)
         );
     }
-    if prepared.agent.needs_pty() {
-        crate::pty_runner::run_agent_process(
-            &*prepared.agent,
-            &std_cmd,
-            &prepared.task_id,
-            store,
-            &prepared.log_path,
-            args.output.as_deref(),
-            prepared.effective_model.as_deref(),
-            prepared.agent.streaming(),
-        )?;
-    } else {
-        let mut tokio_cmd = Command::from(std_cmd);
-        tokio_cmd.stdout(std::process::Stdio::piped());
-        tokio_cmd.stderr(std::process::Stdio::piped());
-        run_agent_process_with_timeout(
-            &*prepared.agent,
-            tokio_cmd,
-            &prepared.task_id,
-            store,
-            &prepared.log_path,
-            args.output.as_deref(),
-            prepared.effective_model.as_deref(),
-            prepared.agent.streaming(),
-            prepared.task.workgroup_id.as_deref(),
-            args.max_duration_mins,
-            args.max_task_cost,
-        )
-        .await?;
-    }
+    let mut spec_guard = run_foreground_guard::save_foreground_spec(
+        args,
+        prepared,
+        prompt_bundle,
+        pre_task_dirty_paths.clone(),
+    )?;
+    run_foreground_guard::run_agent_with_signal(
+        &*prepared.agent,
+        &prepared.agent_display_name,
+        std_cmd,
+        &prepared.task_id,
+        store,
+        &prepared.log_path,
+        args.output.as_deref(),
+        prepared.effective_model.as_deref(),
+        prepared.task.workgroup_id.as_deref(),
+        args.max_duration_mins,
+        args.max_task_cost,
+    )
+    .await?;
+    spec_guard.clear_now()?;
     let pre_verify_status = store
         .get_task(prepared.task_id.as_str())?
         .map(|task| task.status)

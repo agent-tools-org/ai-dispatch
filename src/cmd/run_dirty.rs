@@ -162,7 +162,7 @@ async fn maybe_retry_uncommitted(
     });
 
     let mut retry_args = build_uncommitted_retry_args(args, &task, task_id, dir);
-    if task.agent == crate::types::AgentKind::OpenCode {
+    if task.agent.supports_session_resume() {
         retry_args.session_id = task.agent_session_id.clone();
     }
 

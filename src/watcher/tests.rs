@@ -6,7 +6,7 @@ use super::{
     SyntheticMilestoneTracker,
 };
 use crate::paths;
-use crate::types::{CompletionInfo, EventKind, TaskEvent, TaskId, TaskStatus};
+use crate::types::{CompletionInfo, EventKind, TaskEvent, TaskId, TaskStatus, Task, AgentKind};
 use chrono::Local;
 use serde_json::json;
 use tempfile::tempdir;
@@ -293,4 +293,67 @@ fn loop_kill_detail_appends_apply_patch_stderr_line() {
 
     assert!(detail.contains("Agent appears stuck in a loop"));
     assert!(detail.contains("apply_patch verification failed"));
+}
+
+#[test]
+fn term_escape_strip_allows_droid_stream_parse_via_stream_path() {
+    let temp = tempfile::tempdir().unwrap();
+    let _aid_home = paths::AidHomeGuard::set(temp.path());
+    let store = std::sync::Arc::new(crate::store::Store::open_memory().unwrap());
+    let task = Task {
+        id: TaskId("t-droid-osc".to_string()),
+        agent: AgentKind::Droid,
+        custom_agent_name: None,
+        prompt: "prompt".to_string(),
+        resolved_prompt: None,
+        category: None,
+        status: TaskStatus::Running,
+        parent_task_id: None,
+        workgroup_id: None,
+        caller_kind: None,
+        caller_session_id: None,
+        agent_session_id: None,
+        repo_path: None,
+        worktree_path: None,
+        worktree_branch: None,
+        start_sha: None,
+        log_path: None,
+        output_path: None,
+        tokens: None,
+        prompt_tokens: None,
+        duration_ms: None,
+        model: None,
+        cost_usd: None,
+        exit_code: None,
+        created_at: chrono::Local::now(),
+        completed_at: None,
+        verify: None,
+        verify_status: crate::types::VerifyStatus::Skipped,
+        pending_reason: None,
+        read_only: false,
+        budget: false,
+        audit_verdict: None,
+        audit_report_path: None,
+        delivery_assessment: None,
+    };
+    store.insert_task(&task).unwrap();
+
+    let mut synthetic = SyntheticMilestoneTracker::new();
+    let mut info = CompletionInfo { tokens: None, status: TaskStatus::Done, model: None, cost_usd: None, exit_code: None };
+    let mut event_count = 0u32;
+    let mut session_saved = false;
+    let agent = crate::agent::droid::DroidAgent;
+    let line = "\x1b]9;4;0;\x07{\"type\":\"usage\",\"input_tokens\":1,\"output_tokens\":2,\"cost_usd\":0.0,\"model\":\"x\"}";
+
+    let ctx = super::StreamLineContext {
+        agent: &agent,
+        task_id: &task.id,
+        store: &store,
+        workgroup_id: None,
+        synthetic_tracker: &mut synthetic,
+    };
+
+    let res = super::handle_streaming_line_with_session(ctx, &mut info, &mut event_count, line, &mut session_saved).unwrap();
+    assert!(res.is_some());
+    assert_eq!(res.unwrap().kind, EventKind::Completion);
 }

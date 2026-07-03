@@ -1,5 +1,6 @@
 // Watcher engine: reads agent stdout/stderr and records events to store.
 // Exports streaming and buffered watchers plus shared watcher state.
+mod esc;
 mod extract;
 mod loop_kill;
 mod progress;
@@ -13,6 +14,8 @@ mod transcript_tests;
 #[cfg(test)]
 #[path = "watcher/streaming_tests.rs"]
 mod streaming_tests;
+
+pub(crate) use esc::strip_terminal_escapes;
 use anyhow::Result;
 use chrono::Local;
 use std::sync::Arc;

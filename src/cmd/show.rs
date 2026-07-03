@@ -104,7 +104,9 @@ pub async fn run(store: Arc<Store>, args: ShowArgs) -> Result<()> {
         ShowMode::Default
     };
     let task = load_task(&store, &args.task_id)?;
-    let text = if matches!(mode, ShowMode::Output) {
+    let text = if matches!(mode, ShowMode::Events) {
+        events_text(&store, &args.task_id, args.full)?
+    } else if matches!(mode, ShowMode::Output) {
         render_output_text(&store, &args.task_id, args.full, args.brief)?
     } else if matches!(mode, ShowMode::Log) {
         render_log_text(&args.task_id, args.full)?
@@ -167,7 +169,7 @@ pub fn render_mode_text(store: &Arc<Store>, task_id: &str, mode: ShowMode) -> Re
     match mode {
         ShowMode::Default => audit_text(store, task_id),
         ShowMode::Summary => summary_text(store, task_id),
-        ShowMode::Events => events_text(store, task_id),
+        ShowMode::Events => events_text(store, task_id, false),
         ShowMode::Context => context_text(store, task_id),
         ShowMode::Diff => diff_text(store, task_id),
         ShowMode::Output => output_text(store, task_id),
@@ -189,18 +191,19 @@ fn result_text(store: &Arc<Store>, task_id: &str) -> Result<String> {
     Ok(std::fs::read_to_string(path)?)
 }
 
-fn events_text(store: &Arc<Store>, task_id: &str) -> Result<String> {
+fn events_text(store: &Arc<Store>, task_id: &str, full: bool) -> Result<String> {
     let events = store.get_events(task_id)?;
     if events.is_empty() {
         return Ok("No events.\n".to_string());
     }
     let mut out = String::from("Events:\n");
     for event in events {
+        let detail = if full { event.full_detail() } else { &event.detail };
         out.push_str(&format!(
             "  {}  [{:>10}] {}\n",
             event.timestamp.format("%H:%M:%S"),
             event.event_kind.as_str(),
-            event.detail,
+            detail,
         ));
     }
     Ok(out)

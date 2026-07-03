@@ -10,7 +10,7 @@ use std::path::Path;
 use std::process::Command;
 
 use super::RunOpts;
-use super::truncate::truncate_text;
+use super::truncate::{capped_detail, capped_detail_with};
 use crate::rate_limit;
 use crate::types::*;
 
@@ -125,28 +125,32 @@ fn parse_assistant_message(
     if content.is_empty() {
         return None;
     }
+    let (detail, metadata) = capped_detail_with(
+        content,
+        data.get("outputTokens")
+            .and_then(Value::as_i64)
+            .map(|tokens| json!({ "output_tokens": tokens })),
+    );
     Some(TaskEvent {
         task_id: task_id.clone(),
         timestamp: now,
         event_kind: EventKind::Reasoning,
-        detail: truncate_text(content, 80),
-        metadata: data
-            .get("outputTokens")
-            .and_then(Value::as_i64)
-            .map(|tokens| json!({ "output_tokens": tokens })),
+        detail,
+        metadata,
     })
 }
 
 fn parse_tool_start(task_id: &TaskId, value: &Value, now: chrono::DateTime<Local>) -> Option<TaskEvent> {
     let data = value.get("data")?;
     let tool_name = data.get("toolName").and_then(Value::as_str).unwrap_or("tool");
-    let detail = tool_start_detail(tool_name, data.get("arguments"))?;
+    let text = tool_start_detail(tool_name, data.get("arguments"))?;
+    let (detail, metadata) = capped_detail(&text);
     Some(TaskEvent {
         task_id: task_id.clone(),
         timestamp: now,
         event_kind: classify_tool_kind(tool_name, data.get("arguments")),
-        detail: truncate_text(&detail, 80),
-        metadata: None,
+        detail,
+        metadata,
     })
 }
 
@@ -161,12 +165,13 @@ fn parse_tool_error(task_id: &TaskId, value: &Value, now: chrono::DateTime<Local
         .and_then(Value::as_str)
         .or_else(|| data.pointer("/result/error").and_then(Value::as_str))
         .unwrap_or("unknown error");
+    let (detail, metadata) = capped_detail(&format!("{tool_name}: {detail}"));
     Some(TaskEvent {
         task_id: task_id.clone(),
         timestamp: now,
         event_kind: EventKind::Error,
-        detail: truncate_text(&format!("{tool_name}: {detail}"), 80),
-        metadata: None,
+        detail,
+        metadata,
     })
 }
 
@@ -186,30 +191,32 @@ fn parse_session_error(task_id: &TaskId, value: &Value, now: chrono::DateTime<Lo
     if data.get("errorType").and_then(Value::as_str) == Some("persistence") {
         return None;
     }
-    let detail = data.get("message").and_then(Value::as_str)?;
-    mark_rate_limit_if_needed(detail);
+    let text = data.get("message").and_then(Value::as_str)?;
+    mark_rate_limit_if_needed(text);
+    let (detail, metadata) = capped_detail(text);
     Some(TaskEvent {
         task_id: task_id.clone(),
         timestamp: now,
         event_kind: EventKind::Error,
-        detail: truncate_text(detail, 80),
-        metadata: None,
+        detail,
+        metadata,
     })
 }
 
 fn parse_plain_error(task_id: &TaskId, value: &Value, now: chrono::DateTime<Local>) -> Option<TaskEvent> {
-    let detail = value
+    let text = value
         .get("message")
         .and_then(Value::as_str)
         .or_else(|| value.pointer("/data/message").and_then(Value::as_str))
         .unwrap_or("unknown error");
-    mark_rate_limit_if_needed(detail);
+    mark_rate_limit_if_needed(text);
+    let (detail, metadata) = capped_detail(text);
     Some(TaskEvent {
         task_id: task_id.clone(),
         timestamp: now,
         event_kind: EventKind::Error,
-        detail: truncate_text(detail, 80),
-        metadata: None,
+        detail,
+        metadata,
     })
 }
 

@@ -265,7 +265,7 @@ pub(super) fn row_to_event(row: &Row) -> rusqlite::Result<TaskEvent> {
     Ok(TaskEvent {
         task_id: TaskId(row.get::<_, String>(0)?),
         timestamp: parse_dt(&row.get::<_, String>(1)?),
-        event_kind: EventKind::parse_str(&row.get::<_, String>(2)?).unwrap_or(EventKind::Reasoning),
+        event_kind: EventKind::parse_or_warn(&row.get::<_, String>(2)?),
         detail: row.get(3)?,
         metadata,
     })

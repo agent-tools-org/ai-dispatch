@@ -75,3 +75,22 @@ fn parses_qwen_result_event_with_usage() {
     assert_eq!(metadata["model"], "coder-model");
     assert_eq!(metadata["agent_session_id"], "session-123");
 }
+
+#[test]
+fn caps_long_assistant_reasoning_and_keeps_full_in_metadata() {
+    let task_id = TaskId::generate();
+    let long_text = format!("Deep reasoning {}", "z".repeat(120));
+    let json = serde_json::json!({
+        "type": "assistant",
+        "session_id": "session-123",
+        "message": { "content": [{ "type": "text", "text": long_text }] }
+    });
+
+    let event = parse_stream_event(&task_id, &json, Local::now()).unwrap();
+
+    assert!(event.detail.len() <= crate::agent::truncate::EVENT_DETAIL_MAX);
+    assert!(event.detail.ends_with("..."));
+    let metadata = event.metadata.expect("metadata with full text");
+    assert_eq!(metadata["full"].as_str(), Some(long_text.as_str()));
+    assert_eq!(metadata["agent_session_id"].as_str(), Some("session-123"));
+}

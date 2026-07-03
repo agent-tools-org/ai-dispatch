@@ -6,7 +6,7 @@ use anyhow::Result;
 use chrono::Local;
 use std::process::Command;
 
-use super::truncate::truncate_text;
+use super::truncate::capped_detail;
 use super::RunOpts;
 use crate::rate_limit;
 use crate::types::*;
@@ -61,22 +61,24 @@ impl super::Agent for OzAgent {
                 if text.is_empty() {
                     return None;
                 }
+                let (detail, metadata) = capped_detail(text);
                 Some(TaskEvent {
                     task_id: task_id.clone(),
                     timestamp: now,
                     event_kind: EventKind::Reasoning,
-                    detail: truncate_text(text, 80),
-                    metadata: None,
+                    detail,
+                    metadata,
                 })
             }
             "tool_call" => {
                 let tool = v.get("tool").and_then(|t| t.as_str()).unwrap_or("tool");
+                let (detail, metadata) = capped_detail(tool);
                 Some(TaskEvent {
                     task_id: task_id.clone(),
                     timestamp: now,
                     event_kind: EventKind::ToolCall,
-                    detail: truncate_text(tool, 80),
-                    metadata: None,
+                    detail,
+                    metadata,
                 })
             }
             "error" => {
@@ -84,12 +86,13 @@ impl super::Agent for OzAgent {
                 if rate_limit::is_rate_limit_error(msg) {
                     rate_limit::mark_rate_limited(&crate::types::AgentKind::Oz, msg);
                 }
+                let (detail, metadata) = capped_detail(msg);
                 Some(TaskEvent {
                     task_id: task_id.clone(),
                     timestamp: now,
                     event_kind: EventKind::Error,
-                    detail: truncate_text(msg, 80),
-                    metadata: None,
+                    detail,
+                    metadata,
                 })
             }
             "tool_result" | "system" => None,

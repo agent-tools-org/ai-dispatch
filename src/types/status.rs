@@ -192,6 +192,10 @@ impl EventKind {
         )
     }
 
+    pub(crate) fn is_liveness(self) -> bool {
+        !matches!(self, Self::NoOp)
+    }
+
     pub fn as_str(&self) -> &'static str {
         match self {
             Self::Setup => "setup",

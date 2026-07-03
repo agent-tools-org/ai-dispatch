@@ -73,7 +73,7 @@ pub(crate) async fn run_agent_process_with_timeout(
                     store,
                     log_path,
                     workgroup_id,
-                    Some(idle_timeout),
+                    idle_timeout,
                     max_task_cost,
                 )
                     .await?

@@ -52,7 +52,7 @@ where
 pub(super) fn latest_activity(store: &Store, task: &Task) -> Result<TaskActivity> {
     let events = store.get_events(task.id.as_str())?;
     let progress_events = events.iter()
-        .filter(|event| event.event_kind.is_progress() && !is_idle_bookkeeping_event(event))
+        .filter(|event| event.event_kind.is_liveness() && !is_idle_bookkeeping_event(event))
         .collect::<Vec<_>>();
     let last_event = progress_events.last();
     Ok(TaskActivity {
@@ -199,12 +199,12 @@ mod tests {
         }
     }
 
-    fn insert_event(store: &Store, task_id: &str, age_secs: i64) {
+    fn insert_event(store: &Store, task_id: &str, age_secs: i64, event_kind: EventKind) {
         store
             .insert_event(&TaskEvent {
                 task_id: TaskId(task_id.to_string()),
                 timestamp: Local::now() - chrono::Duration::seconds(age_secs),
-                event_kind: EventKind::Milestone,
+                event_kind,
                 detail: "last progress".to_string(),
                 metadata: None,
             })
@@ -220,7 +220,7 @@ mod tests {
         let task = make_task("t-orph1");
         store.insert_task(&task).expect("insert task");
         save_spec(&make_spec("t-orph1", Some(77), Some(120))).expect("save spec");
-        insert_event(&store, "t-orph1", 121);
+        insert_event(&store, "t-orph1", 121, EventKind::Milestone);
 
         let cleaned = cleanup_orphaned_idle_tasks(&store, &[task], &[], &|_| false).expect("cleanup");
 
@@ -243,7 +243,7 @@ mod tests {
         let task = make_task("t-live1");
         store.insert_task(&task).expect("insert task");
         save_spec(&make_spec("t-live1", Some(77), Some(120))).expect("save spec");
-        insert_event(&store, "t-live1", 1_000);
+        insert_event(&store, "t-live1", 1_000, EventKind::Milestone);
 
         let cleaned = cleanup_orphaned_idle_tasks(&store, &[task], &[], &|pid| pid == 77).expect("cleanup");
 
@@ -255,7 +255,7 @@ mod tests {
     }
 
     #[test]
-    fn orphan_reaper_uses_spec_idle_timeout() {
+    fn orphan_reaper_treats_reasoning_as_activity_before_idle_timeout() {
         let temp = tempfile::tempdir().expect("tempdir");
         let _aid_home = paths::AidHomeGuard::set(temp.path());
         paths::ensure_dirs().expect("ensure dirs");
@@ -263,7 +263,7 @@ mod tests {
         let task = make_task("t-idle1");
         store.insert_task(&task).expect("insert task");
         save_spec(&make_spec("t-idle1", Some(77), Some(600))).expect("save spec");
-        insert_event(&store, "t-idle1", 500);
+        insert_event(&store, "t-idle1", 500, EventKind::Reasoning);
 
         let cleaned = cleanup_orphaned_idle_tasks(&store, &[task], &[], &|_| false).expect("cleanup");
 
@@ -279,7 +279,7 @@ mod tests {
         let store = Store::open_memory().expect("store");
         let task = make_task("t-nospec");
         store.insert_task(&task).expect("insert task");
-        insert_event(&store, "t-nospec", 1_000);
+        insert_event(&store, "t-nospec", 1_000, EventKind::Milestone);
 
         let cleaned = cleanup_orphaned_idle_tasks(&store, &[task], &[], &|_| false).expect("cleanup");
 

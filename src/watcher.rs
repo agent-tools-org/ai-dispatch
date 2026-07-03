@@ -39,7 +39,6 @@ pub(crate) use progress::SyntheticMilestoneTracker;
 pub(crate) use stream::{
     handle_streaming_line_with_session, StreamLineContext,
 };
-const HUNG_TIMEOUT: Duration = Duration::from_secs(300);
 /// Watch a child process, parse output, store events, return completion info
 pub async fn watch_streaming(
     agent: &dyn Agent,
@@ -48,7 +47,7 @@ pub async fn watch_streaming(
     store: &Arc<Store>,
     log_path: &std::path::Path,
     workgroup_id: Option<&str>,
-    idle_timeout: Option<Duration>,
+    idle_timeout: Duration,
     max_task_cost: Option<f64>,
 ) -> Result<CompletionInfo> {
     let stdout = child
@@ -71,7 +70,6 @@ pub async fn watch_streaming(
     let mut synthetic_tracker = SyntheticMilestoneTracker::new();
     let mut last_event_detail: Option<String> = None;
     let mut stderr_handle = spawn_stderr_capture(child, task_id);
-    let idle_timeout = idle_timeout.unwrap_or(HUNG_TIMEOUT);
     loop {
         let line = match timeout(idle_timeout, lines.next_line()).await {
             Ok(Ok(Some(line))) => line,

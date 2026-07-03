@@ -1,5 +1,5 @@
 // aid CLI display-oriented dispatch handlers.
-// Implements benchmark, watch, board, show, and related wrappers.
+// Implements benchmark, watch, board, show, output, export, and related wrappers.
 
 use super::resolve_group;
 use crate::cli::AgentCommands;
@@ -7,6 +7,53 @@ use crate::cmd;
 use crate::{notify, store, tui};
 use anyhow::Result;
 use std::sync::Arc;
+
+pub(super) async fn export(
+    store: Arc<store::Store>,
+    task_id: String,
+    format: String,
+    sharegpt: bool,
+    output: Option<String>,
+) -> Result<()> {
+    let format = cmd::export::ExportFormat::parse(&format)?;
+    cmd::export::run(store, cmd::export::ExportArgs { task_id, format, sharegpt, output }).await
+}
+
+pub(super) fn tree(store: Arc<store::Store>, task_id: String) -> Result<()> {
+    cmd::tree::run(&store, &task_id)
+}
+
+pub(super) fn output(task_id: String, brief: bool) -> Result<()> {
+    let store = store::Store::open(&crate::paths::db_path())?;
+    let text = cmd::show::output_text_for_task(&store, &task_id, !brief)?;
+    print!("{text}");
+    Ok(())
+}
+
+pub(super) fn usage(
+    store: Arc<store::Store>,
+    session: bool,
+    agent: Option<String>,
+    team: Option<String>,
+    period: String,
+    json: bool,
+) -> Result<()> {
+    cmd::usage::run(&store, session, agent, team, period, json)
+}
+
+pub(super) fn cost(
+    store: Arc<store::Store>,
+    group: Option<String>,
+    summary: bool,
+    agent: Option<String>,
+    period: String,
+) -> Result<()> {
+    cmd::cost::run(&store, group, summary, agent, period)
+}
+
+pub(super) fn summary(store: Arc<store::Store>, group: String) -> Result<()> {
+    cmd::summary_cli::run(&store, &group)
+}
 
 pub(super) async fn benchmark(
     store: Arc<store::Store>,

@@ -1,7 +1,7 @@
-// aid CLI primary dispatch handlers.
-// Implements run, watch, show, and related command wrappers.
-#[path = "handlers_a_run_args.rs"]
-mod handlers_a_run_args;
+// aid CLI run and batch dispatch handlers.
+// Implements run and batch command wrappers.
+#[path = "run_batch_args.rs"]
+mod run_batch_args;
 
 use crate::cli::{BatchAction, RunExtrasArgs};
 use crate::cmd;
@@ -11,7 +11,7 @@ use crate::{agent, config, store, team};
 use anyhow::{Context, Result, anyhow};
 use std::sync::Arc;
 
-use self::handlers_a_run_args::build_run_args;
+use self::run_batch_args::build_run_args;
 
 #[allow(clippy::too_many_arguments)]
 pub(super) async fn run(

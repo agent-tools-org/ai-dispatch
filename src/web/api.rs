@@ -12,6 +12,8 @@ use axum::Json;
 use serde::{Deserialize, Serialize};
 
 use crate::store::Store;
+use crate::task_actions;
+use crate::task_view;
 use crate::types::{Task, TaskEvent, TaskFilter};
 
 #[derive(Debug, Deserialize)]
@@ -207,7 +209,7 @@ pub async fn get_usage(State(store): State<Arc<Store>>) -> Result<Json<UsageResp
 }
 
 pub async fn stop_task(Path(id): Path<String>, State(store): State<Arc<Store>>) -> impl IntoResponse {
-    match crate::cmd::stop::stop(&store, &id) {
+    match task_actions::stop(&store, &id) {
         Ok(()) => (StatusCode::OK, Json(ActionResponse { ok: true, new_task_id: None, error: None })).into_response(),
         Err(error) => action_error(error).into_response(),
     }
@@ -218,7 +220,7 @@ pub async fn retry_task(
     State(store): State<Arc<Store>>,
     Json(request): Json<RetryRequest>,
 ) -> impl IntoResponse {
-    match crate::cmd::retry::run(store, crate::cmd::retry::RetryArgs {
+    match task_actions::retry(store, task_actions::RetryArgs {
         task_id: id,
         feedback: request.feedback.unwrap_or_default(),
         agent: None,
@@ -236,14 +238,22 @@ pub async fn retry_task(
 }
 
 pub async fn merge_task(Path(id): Path<String>, State(store): State<Arc<Store>>) -> impl IntoResponse {
-    match crate::cmd::merge::run(store, Some(&id), None, true, false, false, None, false) {
+    match task_actions::merge(store, task_actions::MergeArgs {
+        task_id: Some(&id),
+        group: None,
+        approve: true,
+        check: false,
+        force: false,
+        target: None,
+        lanes: false,
+    }) {
         Ok(()) => (StatusCode::OK, Json(ActionResponse { ok: true, new_task_id: None, error: None })).into_response(),
         Err(error) => action_error(error).into_response(),
     }
 }
 
 pub async fn get_task_diff(Path(id): Path<String>, State(store): State<Arc<Store>>) -> impl IntoResponse {
-    match crate::cmd::show::diff_text(&store, &id) {
+    match task_view::diff_text(&store, &id) {
         Ok(diff) if diff_unavailable(&diff) => StatusCode::NOT_FOUND.into_response(),
         Ok(diff) => (StatusCode::OK, Json(DiffResponse { diff })).into_response(),
         Err(error) => internal_error(error).into_response(),
@@ -259,24 +269,7 @@ fn ensure_task_exists(store: &Store, id: &str) -> Result<(), StatusCode> {
 }
 
 fn read_task_output(task: &Task) -> String {
-    if let Ok(content) = crate::cmd::show::read_task_output(task)
-    {
-        return content;
-    }
-    if let Some(path) = task.log_path.as_deref()
-        && let Ok(content) = std::fs::read_to_string(path)
-    {
-        if let Some(output) =
-            crate::cmd::show::extract_messages_from_log(std::path::Path::new(path), true)
-        {
-            return output;
-        }
-        // Fall back to raw text (non-JSONL logs from custom agents)
-        if !content.trim().is_empty() {
-            return content;
-        }
-    }
-    "No output available".to_string()
+    task_view::read_output(task)
 }
 
 fn internal_error(_: anyhow::Error) -> StatusCode { StatusCode::INTERNAL_SERVER_ERROR }

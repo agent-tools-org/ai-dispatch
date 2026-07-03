@@ -16,6 +16,14 @@ use crate::worktree::remove_worktree;
 mod merge_lanes;
 
 pub fn run(store: Arc<Store>, task_id: Option<&str>, group: Option<&str>, approve: bool, check: bool, force: bool, target: Option<&str>, lanes: bool) -> Result<()> {
+    run_with_output(store, task_id, group, approve, check, force, target, lanes, true)
+}
+
+pub(crate) fn run_quiet(store: Arc<Store>, task_id: Option<&str>, group: Option<&str>, approve: bool, check: bool, force: bool, target: Option<&str>, lanes: bool) -> Result<()> {
+    run_with_output(store, task_id, group, approve, check, force, target, lanes, false)
+}
+
+fn run_with_output(store: Arc<Store>, task_id: Option<&str>, group: Option<&str>, approve: bool, check: bool, force: bool, target: Option<&str>, lanes: bool, print_summary: bool) -> Result<()> {
     if lanes {
         let Some(group_id) = group else {
             return Err(anyhow!("--lanes requires --group"));
@@ -29,13 +37,17 @@ pub fn run(store: Arc<Store>, task_id: Option<&str>, group: Option<&str>, approv
         return merge_lanes::merge_group_lanes(&store, group_id);
     }
     match (task_id, group) {
-        (Some(id), _) => merge_single(&store, id, approve, check, force, target),
-        (_, Some(group_id)) => merge_group(&store, group_id, approve, check, target),
+        (Some(id), _) => merge_single_with_output(&store, id, approve, check, force, target, print_summary),
+        (_, Some(group_id)) => merge_group_with_output(&store, group_id, approve, check, target, print_summary),
         (None, None) => Err(anyhow!("Provide either a task ID or --group <wg-id>")),
     }
 }
 
 fn merge_single(store: &Store, task_id: &str, approve: bool, check: bool, force: bool, target: Option<&str>) -> Result<()> {
+    merge_single_with_output(store, task_id, approve, check, force, target, true)
+}
+
+fn merge_single_with_output(store: &Store, task_id: &str, approve: bool, check: bool, force: bool, target: Option<&str>, print_summary: bool) -> Result<()> {
     let task = store
         .get_task(task_id)?
         .ok_or_else(|| anyhow!("Task '{task_id}' not found"))?;
@@ -133,7 +145,9 @@ fn merge_single(store: &Store, task_id: &str, approve: bool, check: bool, force:
         record_force_merge_warning(store, task_id, original_status)?;
     }
     crate::task_lifecycle::mark_merged(store, task_id)?;
-    println!("Marked {task_id} as merged");
+    if print_summary {
+        println!("Marked {task_id} as merged");
+    }
     if let Some(wt) = task.worktree_path.as_deref()
         && std::path::Path::new(wt).exists()
         && let Err(err) = remove_worktree(&repo_dir, wt) {
@@ -158,6 +172,10 @@ fn record_force_merge_warning(store: &Store, task_id: &str, status: TaskStatus) 
 }
 
 fn merge_group(store: &Store, group_id: &str, approve: bool, check: bool, target: Option<&str>) -> Result<()> {
+    merge_group_with_output(store, group_id, approve, check, target, true)
+}
+
+fn merge_group_with_output(store: &Store, group_id: &str, approve: bool, check: bool, target: Option<&str>, print_summary: bool) -> Result<()> {
     let tasks = store.list_tasks_by_group(group_id)?;
     if tasks.is_empty() {
         return Err(anyhow!("No tasks found in group '{group_id}'"));
@@ -228,7 +246,9 @@ fn merge_group(store: &Store, group_id: &str, approve: bool, check: bool, target
             aid_warn!("[aid] Warning: failed to clean up worktree {wt}: {err}");
         }
     }
-    println!("Merged {merged} task(s) in group {group_id}");
+    if print_summary {
+        println!("Merged {merged} task(s) in group {group_id}");
+    }
     if !skipped.is_empty() { aid_info!("[aid] Skipped: {}", skipped.join(", ")); }
     let _ = Command::new("git")
         .args(["-C", &first_repo_dir, "worktree", "prune"])

@@ -114,12 +114,16 @@ mod tests {
     }
 
     fn write_temp_context_file(contents: &str) -> String {
+        // pid+nanos alone collides when parallel tests hit the same clock tick;
+        // the counter makes every call unique within the process.
+        static SEQ: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+        let seq = SEQ.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         let unique = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .expect("system time should be after epoch")
             .as_nanos();
-        let path =
-            std::env::temp_dir().join(format!("oz-context-{}-{unique}.txt", std::process::id()));
+        let path = std::env::temp_dir()
+            .join(format!("oz-context-{}-{unique}-{seq}.txt", std::process::id()));
         std::fs::write(&path, contents).expect("context file should be written");
         path.to_string_lossy().to_string()
     }

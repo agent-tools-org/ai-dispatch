@@ -39,7 +39,7 @@ pub(crate) fn cleanup_completed_worktree(store: &Store, task_id: &TaskId) -> Res
     if !super::branch_has_commits_ahead_of_main(Path::new(repo_dir), branch)? {
         return Ok(());
     }
-    crate::cmd::merge::remove_worktree(repo_dir, wt_path)?;
+    super::remove_worktree(repo_dir, wt_path)?;
     aid_info!(
         "[aid] Commits preserved on {branch} — pruned worktree dir {wt_path} (restore: git worktree add <path> {branch})"
     );

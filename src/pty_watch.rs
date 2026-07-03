@@ -36,6 +36,7 @@ pub(crate) struct MonitorState {
     idle_detector: IdleDetector,
     streaming: bool,
     workgroup_id: Option<String>,
+    session_saved: bool,
 }
 
 impl MonitorState {
@@ -62,6 +63,7 @@ impl MonitorState {
             idle_detector: IdleDetector::load(),
             streaming,
             workgroup_id,
+            session_saved: false,
         }
     }
 
@@ -113,7 +115,7 @@ impl MonitorState {
                     &mut self.info,
                     &mut self.event_count,
                     &line,
-                    &mut false,
+                    &mut self.session_saved,
                 )? {
                     if event_detail.kind.is_liveness() {
                         self.mark_progress();
@@ -149,7 +151,7 @@ impl MonitorState {
                 &mut self.info,
                 &mut self.event_count,
                 &trailing,
-                &mut false,
+                &mut self.session_saved,
             )? {
                 if event_detail.kind.is_liveness() {
                     self.mark_progress();
@@ -436,11 +438,8 @@ pub(crate) fn finalize_output(
     state: &mut MonitorState,
 ) -> Result<()> {
     append_terminal_sentinel(task_id, log_path, exit_status, state);
-    if streaming {
-        finalize_streaming(task_id, store, exit_status, state)
-    } else {
-        finalize_buffered(agent, task_id, store, output_path, exit_status, state)
-    }
+    if streaming { return finalize_streaming(task_id, store, exit_status, state); }
+    finalize_buffered(agent, task_id, store, output_path, exit_status, state)
 }
 
 fn finalize_streaming(

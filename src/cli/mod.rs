@@ -15,6 +15,8 @@ mod export_tests;
 mod run_audit_flag_tests;
 #[cfg(test)]
 mod doctor_tests;
+#[cfg(test)]
+mod retry_flag_tests;
 
 use clap::{Parser, Subcommand};
 

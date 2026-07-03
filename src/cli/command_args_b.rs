@@ -79,6 +79,8 @@ pub struct RetryArgs {
     pub dir: Option<String>,
     #[arg(long)]
     pub reset: bool,
+    #[arg(long, help = "Run in background (non-blocking)")]
+    pub bg: bool,
 }
 
 #[derive(Args)]

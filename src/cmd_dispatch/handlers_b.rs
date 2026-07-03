@@ -62,8 +62,9 @@ pub(super) async fn retry(
     agent: Option<String>,
     dir: Option<String>,
     reset: bool,
+    bg: bool,
 ) -> Result<()> {
-    cmd::retry::run(store, cmd::retry::RetryArgs { task_id, feedback, agent, dir, reset })
+    cmd::retry::run(store, cmd::retry::RetryArgs { task_id, feedback, agent, dir, reset, bg })
         .await
         .map(|_| ())
 }

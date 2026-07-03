@@ -14,6 +14,7 @@ pub struct RetryArgs {
     pub agent: Option<String>,
     pub dir: Option<String>,
     pub reset: bool,
+    pub bg: bool,
 }
 
 pub async fn run(store: Arc<Store>, args: RetryArgs) -> Result<TaskId> {
@@ -69,6 +70,7 @@ pub async fn retry_task(store: Arc<Store>, args: RetryArgs, announce: bool) -> R
             parent_task_id: Some(task.id.as_str().to_string()),
             read_only: task.read_only,
             budget: task.budget,
+            background: args.bg,
             session_id,
             ..Default::default()
         },

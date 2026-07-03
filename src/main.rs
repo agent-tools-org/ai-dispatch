@@ -66,6 +66,7 @@ mod state;
 mod state_tests;
 mod store;
 mod store_workgroups;
+mod task_lifecycle;
 mod project;
 mod team;
 mod templates;

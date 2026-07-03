@@ -4,9 +4,10 @@
 
 use anyhow::Result;
 use chrono::Local;
-use rusqlite::params;
+use rusqlite::{OptionalExtension, params};
 
 use super::schema::row_to_memory;
+use super::status_guard::status_guard_warn_only;
 use super::Store;
 use crate::types::*;
 
@@ -179,38 +180,58 @@ impl Store {
         Ok(workgroup)
     }
 
-    pub fn update_task_status(&self, id: &str, status: TaskStatus) -> Result<()> {
+    pub fn update_task_status(&self, id: &str, status: TaskStatus) -> Result<bool> {
+        if !self.guard_status_transition(id, status, false)? {
+            return Ok(false);
+        }
         let rows = self.db().execute(
             "UPDATE tasks SET status = ?1 WHERE id = ?2",
             params![status.as_str(), id],
         )?;
-        self.maybe_salvage_failed_status(id, status, rows);
-        Ok(())
+        Ok(rows > 0)
+    }
+
+    pub(crate) fn rescue_task_to_done(&self, id: &str) -> Result<bool> {
+        if !self.guard_status_transition(id, TaskStatus::Done, true)? {
+            return Ok(false);
+        }
+        let rows = self.db().execute(
+            "UPDATE tasks SET status = 'done' WHERE id = ?1 AND status = 'failed'",
+            params![id],
+        )?;
+        Ok(rows > 0)
     }
 
     /// Set status to Failed only if currently Running or Waiting.
     /// Prevents zombie cleanup from clobbering a real completion status.
     pub fn fail_if_running(&self, id: &str) -> Result<bool> {
+        if !self.guard_current_status(id, &[TaskStatus::Running, TaskStatus::Waiting], TaskStatus::Failed)? {
+            return Ok(false);
+        }
         let rows = self.db().execute(
             "UPDATE tasks SET status = 'failed' WHERE id = ?1
              AND status IN ('running', 'waiting')",
             params![id],
         )?;
-        self.maybe_salvage_failed_status(id, TaskStatus::Failed, rows);
         Ok(rows > 0)
     }
 
     pub fn fail_pending_with_reason(&self, id: &str, pending_reason: PendingReason) -> Result<bool> {
+        if !self.guard_current_status(id, &[TaskStatus::Pending], TaskStatus::Failed)? {
+            return Ok(false);
+        }
         let rows = self.db().execute(
             "UPDATE tasks SET status = 'failed', pending_reason = ?2
              WHERE id = ?1 AND status = 'pending'",
             params![id, pending_reason.as_str()],
         )?;
-        self.maybe_salvage_failed_status(id, TaskStatus::Failed, rows);
         Ok(rows > 0)
     }
 
     pub fn fail_waiting_with_reason(&self, id: &str, detail: &str) -> Result<bool> {
+        if !self.guard_current_status(id, &[TaskStatus::Waiting], TaskStatus::Failed)? {
+            return Ok(false);
+        }
         let now = Local::now();
         let rows = self.db().execute(
             "UPDATE tasks SET status = 'failed', completed_at = ?2, pending_reason = ?3
@@ -227,7 +248,6 @@ impl Store {
             detail: detail.to_string(),
             metadata: Some(serde_json::json!({ "failure_kind": "wait_timeout" })),
         })?;
-        self.maybe_salvage_failed_status(id, TaskStatus::Failed, rows);
         Ok(true)
     }
 
@@ -288,7 +308,10 @@ impl Store {
     pub fn update_task_completion(
         &self,
         payload: TaskCompletionUpdate<'_>,
-    ) -> Result<()> {
+    ) -> Result<bool> {
+        if !self.guard_completion_transition(payload.id, payload.status)? {
+            return Ok(false);
+        }
         let now = Local::now().to_rfc3339();
         let rows = self.db().execute(
             "UPDATE tasks SET status = ?1, tokens = ?2, duration_ms = ?3, completed_at = ?4,
@@ -305,8 +328,7 @@ impl Store {
                 payload.id
             ],
         )?;
-        self.maybe_salvage_failed_status(payload.id, payload.status, rows);
-        Ok(())
+        Ok(rows > 0)
     }
 
     /// Atomically update task completion AND insert the completion event.
@@ -315,7 +337,10 @@ impl Store {
         &self,
         payload: TaskCompletionUpdate<'_>,
         event: &TaskEvent,
-    ) -> Result<()> {
+    ) -> Result<bool> {
+        if !self.guard_completion_transition(payload.id, payload.status)? {
+            return Ok(false);
+        }
         let conn = self.db();
         let tx = conn.unchecked_transaction()?;
         let now = Local::now().to_rfc3339();
@@ -348,15 +373,81 @@ impl Store {
         )?;
         tx.commit()?;
         drop(conn);
-        self.maybe_salvage_failed_status(payload.id, payload.status, rows);
-        Ok(())
+        Ok(rows > 0)
     }
 
-    fn maybe_salvage_failed_status(&self, id: &str, status: TaskStatus, rows: usize) {
-        if rows == 0 || status != TaskStatus::Failed {
-            return;
+    fn guard_completion_transition(&self, id: &str, next: TaskStatus) -> Result<bool> {
+        let Some(current) = self.current_task_status(id)? else {
+            return Ok(false);
+        };
+        if matches!(current, TaskStatus::Failed | TaskStatus::Stopped) {
+            return Ok(false);
         }
-        crate::failure_salvage::salvage_failed_task(self, &TaskId(id.to_string()));
+        self.guard_known_status_transition(id, current, next, false)
+    }
+
+    fn guard_current_status(
+        &self,
+        id: &str,
+        expected: &[TaskStatus],
+        next: TaskStatus,
+    ) -> Result<bool> {
+        let Some(current) = self.current_task_status(id)? else {
+            return Ok(false);
+        };
+        if !expected.contains(&current) {
+            return Ok(false);
+        }
+        self.guard_known_status_transition(id, current, next, false)
+    }
+
+    fn guard_status_transition(
+        &self,
+        id: &str,
+        next: TaskStatus,
+        allow_rescue: bool,
+    ) -> Result<bool> {
+        let Some(current) = self.current_task_status(id)? else {
+            return Ok(false);
+        };
+        self.guard_known_status_transition(id, current, next, allow_rescue)
+    }
+
+    fn guard_known_status_transition(
+        &self,
+        id: &str,
+        current: TaskStatus,
+        next: TaskStatus,
+        allow_rescue: bool,
+    ) -> Result<bool> {
+        if current.can_transition_to(next) || (allow_rescue && current.can_rescue_to_done(next)) {
+            return Ok(true);
+        }
+        if status_guard_warn_only() {
+            aid_warn!(
+                "[aid] Allowing illegal status transition for {id} due to AID_STATUS_GUARD=warn: {} -> {}",
+                current.as_str(),
+                next.as_str()
+            );
+            return Ok(true);
+        }
+        aid_warn!(
+            "[aid] Rejected illegal status transition for {id}: {} -> {}",
+            current.as_str(),
+            next.as_str()
+        );
+        Ok(false)
+    }
+
+    fn current_task_status(&self, id: &str) -> Result<Option<TaskStatus>> {
+        let status = self.db()
+            .query_row(
+                "SELECT status FROM tasks WHERE id = ?1",
+                params![id],
+                |row| row.get::<_, String>(0),
+            )
+            .optional()?;
+        Ok(status.and_then(|value| TaskStatus::parse_str(&value)))
     }
 
     pub fn save_completion_summary(&self, task_id: &str, summary_json: &str) -> Result<()> {
@@ -580,17 +671,20 @@ mod tests {
     use super::*;
     use crate::store::Store;
 
-    #[test]
-    fn complete_task_atomic_writes_both_task_and_event() {
-        let store = Store::open_memory().unwrap();
+    fn insert_task_status(store: &Store, task_id: &str, status: TaskStatus) {
         let conn = store.db();
         conn.execute(
             "INSERT INTO tasks (id, agent, prompt, status, created_at)
-             VALUES ('t-atomic', 'codex', 'test prompt', 'running', '2026-03-18T00:00:00Z')",
-            [],
+             VALUES (?1, 'codex', 'test prompt', ?2, '2026-03-18T00:00:00Z')",
+            params![task_id, status.as_str()],
         )
         .unwrap();
-        drop(conn);
+    }
+
+    #[test]
+    fn complete_task_atomic_writes_both_task_and_event() {
+        let store = Store::open_memory().unwrap();
+        insert_task_status(&store, "t-atomic", TaskStatus::Running);
 
         let event = TaskEvent {
             task_id: TaskId("t-atomic".to_string()),
@@ -628,14 +722,7 @@ mod tests {
     #[test]
     fn complete_task_atomic_does_not_override_failed_status() {
         let store = Store::open_memory().unwrap();
-        let conn = store.db();
-        conn.execute(
-            "INSERT INTO tasks (id, agent, prompt, status, created_at)
-             VALUES ('t-atomic-failed', 'codex', 'test prompt', 'failed', '2026-03-18T00:00:00Z')",
-            [],
-        )
-        .unwrap();
-        drop(conn);
+        insert_task_status(&store, "t-atomic-failed", TaskStatus::Failed);
 
         let event = TaskEvent {
             task_id: TaskId("t-atomic-failed".to_string()),
@@ -663,5 +750,62 @@ mod tests {
         assert_eq!(task.status, TaskStatus::Failed);
         assert_eq!(task.tokens, None);
         assert_eq!(task.completed_at, None);
+    }
+
+    #[test]
+    fn update_task_status_rejects_illegal_failed_to_done() {
+        let store = Store::open_memory().unwrap();
+        insert_task_status(&store, "t-guard-failed", TaskStatus::Failed);
+
+        let changed = store
+            .update_task_status("t-guard-failed", TaskStatus::Done)
+            .unwrap();
+
+        let task = store.get_task("t-guard-failed").unwrap().unwrap();
+        assert!(!changed);
+        assert_eq!(task.status, TaskStatus::Failed);
+    }
+
+    #[test]
+    fn rescue_task_to_done_allows_named_failed_to_done_exception() {
+        let store = Store::open_memory().unwrap();
+        insert_task_status(&store, "t-rescue", TaskStatus::Failed);
+
+        let changed = store.rescue_task_to_done("t-rescue").unwrap();
+
+        let task = store.get_task("t-rescue").unwrap().unwrap();
+        assert!(changed);
+        assert_eq!(task.status, TaskStatus::Done);
+    }
+
+    #[test]
+    fn complete_task_atomic_rejects_illegal_transition_without_event() {
+        let store = Store::open_memory().unwrap();
+        insert_task_status(&store, "t-atomic-merged", TaskStatus::Merged);
+        let event = TaskEvent {
+            task_id: TaskId("t-atomic-merged".to_string()),
+            timestamp: Local::now(),
+            event_kind: EventKind::Error,
+            detail: "late failure".to_string(),
+            metadata: None,
+        };
+
+        let changed = store
+            .complete_task_atomic(
+                TaskCompletionUpdate {
+                    id: "t-atomic-merged",
+                    status: TaskStatus::Failed,
+                    tokens: None,
+                    duration_ms: 5000,
+                    model: None,
+                    cost_usd: None,
+                    exit_code: Some(1),
+                },
+                &event,
+            )
+            .unwrap();
+
+        assert!(!changed);
+        assert_eq!(store.get_events("t-atomic-merged").unwrap().len(), 0);
     }
 }

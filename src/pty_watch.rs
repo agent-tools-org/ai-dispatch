@@ -329,7 +329,7 @@ impl MonitorState {
         if !self.awaiting_input {
             return Ok(());
         }
-        store.update_task_status(task_id.as_str(), TaskStatus::Running)?;
+        crate::task_lifecycle::mark_running(store.as_ref(), task_id)?;
         self.awaiting_input = false;
         self.prompt_detector.reset_after_input();
         Ok(())
@@ -616,7 +616,7 @@ fn mark_awaiting_input(
     if *awaiting_input {
         return Ok(());
     }
-    store.update_task_status(task_id.as_str(), TaskStatus::AwaitingInput)?;
+    crate::task_lifecycle::mark_awaiting_input(store.as_ref(), task_id)?;
     store.insert_event(&TaskEvent {
         task_id: task_id.clone(),
         timestamp: Local::now(),

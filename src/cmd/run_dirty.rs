@@ -118,7 +118,7 @@ pub(crate) fn final_dirty_assertion(
         detail,
         metadata: None,
     })?;
-    store.update_task_status(task_id.as_str(), TaskStatus::Failed)?;
+    crate::task_lifecycle::mark_failed(store, task_id)?;
     Ok(true)
 }
 

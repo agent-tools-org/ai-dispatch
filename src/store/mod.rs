@@ -11,6 +11,7 @@ mod kg_types;
 mod migrations;
 mod queries;
 mod schema;
+mod status_guard;
 pub use kg_types::{KgStats, KgTriple};
 
 #[cfg(test)]

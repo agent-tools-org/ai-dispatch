@@ -25,6 +25,7 @@ pub use self::project_team::{project_knowledge_dir, read_project_knowledge};
 
 #[derive(Debug, Clone, Deserialize)]
 #[derive(Default)]
+#[serde(deny_unknown_fields)]
 pub struct ProjectConfig {
     pub id: String,
     #[serde(default)]

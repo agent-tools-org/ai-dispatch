@@ -2,7 +2,7 @@
 // Exports clap Args types for top-level commands from run through show.
 
 use crate::cli::{AgentCommands, BatchAction, RunExtrasArgs};
-use clap::Args;
+use clap::{ArgGroup, Args};
 
 pub(crate) const NO_HINT_FLAG: &str = "no-hint";
 
@@ -171,29 +171,6 @@ pub struct BenchmarkArgs {
     pub verify: Option<String>,
 }
 
-#[derive(Args)]
-#[command(after_help = r#"Examples:
-  aid watch t-1234               # Live TUI for one task
-  aid watch --quiet t-1234       # Block until done (for scripts)
-  aid watch --stream --group wg-a # JSONL events for orchestrators
-  aid watch --quiet --group wg-a # Block until group finishes
-  aid watch --tui                # Full dashboard TUI"#)]
-pub struct WatchArgs {
-    pub task_ids: Vec<String>,
-    #[arg(long)]
-    pub group: Option<String>,
-    #[arg(long)]
-    pub tui: bool,
-    #[arg(long)]
-    pub quiet: bool,
-    #[arg(long, conflicts_with_all = ["tui", "quiet", "exit_on_await"])]
-    pub stream: bool,
-    #[arg(long)]
-    pub exit_on_await: bool,
-    #[arg(long)]
-    pub timeout: Option<u64>,
-}
-
 #[derive(Args, Default)]
 pub struct BoardArgs {
     #[arg(long)]
@@ -250,12 +227,18 @@ pub struct CleanArgs {
 }
 
 #[derive(Args)]
+#[command(group(
+    ArgGroup::new("show_mode")
+        .args(["events", "result", "json", "context", "explain", "summary", "diff", "output", "transcript", "log"])
+        .multiple(false)
+))]
 #[command(after_help = r#"Examples:
   aid show t-1234              # Events timeline
   aid show t-1234 --diff       # Full worktree diff
-  aid show t-1234 --output     # Task output (full)
+  aid show t-1234 --events     # Events only
+  aid show t-1234 --output     # Task output (truncated)
+  aid show t-1234 --output --full # Complete output
   aid show t-1234 --transcript # Raw complete agent transcript
-  aid show t-1234 --output --brief  # Task output (truncated)
   aid show t-1234 --context    # Resolved prompt
   aid show t-1234 --explain    # AI explanation"#)]
 pub struct ShowArgs {
@@ -266,19 +249,19 @@ pub struct ShowArgs {
     pub context: bool,
     #[arg(long)]
     pub diff: bool,
-    #[arg(long, conflicts_with_all = ["diff", "output", "log"])]
+    #[arg(long)]
     pub summary: bool,
     #[arg(long, requires = "diff")]
     pub file: Option<String>,
     #[arg(long)]
     pub output: bool,
-    #[arg(long, conflicts_with_all = ["context", "diff", "summary", "output", "explain", "log", "json"])]
+    #[arg(long)]
     pub transcript: bool,
     #[arg(long)]
     pub result: bool,
     #[arg(long)]
     pub full: bool,
-    #[arg(long)]
+    #[arg(long, conflicts_with = "full")]
     pub brief: bool,
     #[arg(long)]
     pub explain: bool,

@@ -23,7 +23,7 @@ pub(super) async fn watch(
     task_ids: Vec<String>,
     group: Option<String>,
     tui_enabled: bool,
-    quiet: bool,
+    wait: bool,
     stream: bool,
     exit_on_await: bool,
     timeout: Option<u64>,
@@ -33,12 +33,23 @@ pub(super) async fn watch(
         tui::run(&store, tui::RunOptions { task_id: task_ids.first().cloned(), group })?;
     } else if stream {
         cmd::watch_stream::run(&store, &task_ids, group.as_deref(), timeout).await?;
-    } else if quiet {
+    } else if wait {
         cmd::wait::run(&store, &task_ids, group.as_deref(), exit_on_await, timeout).await?;
     } else {
-        cmd::watch::run(&store, &task_ids, group.as_deref(), quiet, exit_on_await).await?;
+        cmd::watch::run(&store, &task_ids, group.as_deref(), exit_on_await, timeout).await?;
     }
     Ok(())
+}
+
+pub(super) async fn wait(
+    store: Arc<store::Store>,
+    task_ids: Vec<String>,
+    group: Option<String>,
+    exit_on_await: bool,
+    timeout: Option<u64>,
+) -> Result<()> {
+    let group = resolve_group(group);
+    cmd::wait::run(&store, &task_ids, group.as_deref(), exit_on_await, timeout).await
 }
 
 pub(super) async fn board(
@@ -101,6 +112,7 @@ pub(super) fn doctor(store: Arc<store::Store>, apply: bool) -> Result<()> {
 pub(super) async fn show(
     store: Arc<store::Store>,
     task_id: String,
+    events: bool,
     context: bool,
     diff: bool,
     summary: bool,
@@ -120,6 +132,7 @@ pub(super) async fn show(
         store,
         cmd::show::ShowArgs {
             task_id,
+            events,
             context,
             diff,
             summary,

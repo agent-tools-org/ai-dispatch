@@ -1,5 +1,5 @@
 // Output and log rendering helpers for `aid show`.
-// Exports: output_text, output_text_brief, output_text_full, log_text, read_task_output, read_tail.
+// Exports: output_text, output_text_brief, output_text_full, log_text, log_text_brief, read_task_output, read_tail.
 // Deps: paths, Store, Task, serde_json::Value.
 use anyhow::{Context, Result};
 use std::path::{Path, PathBuf};
@@ -153,6 +153,11 @@ pub fn log_text(task_id: &str) -> Result<String> {
     let path = paths::log_path(task_id);
     std::fs::read_to_string(&path)
         .with_context(|| format!("Failed to read log file {}", path.display()))
+}
+
+pub fn log_text_brief(task_id: &str) -> Result<String> {
+    let path = paths::log_path(task_id);
+    Ok(read_tail(&path, 200, "No log available"))
 }
 
 pub(crate) fn read_tail(path: &Path, limit: usize, unavailable: &str) -> String {

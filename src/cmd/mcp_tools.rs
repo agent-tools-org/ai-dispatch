@@ -208,9 +208,10 @@ fn parse_filter(filter: Option<&str>) -> Result<TaskFilter> {
 
 fn parse_show_mode(mode: Option<&str>) -> Result<ShowMode> {
     match mode.unwrap_or("summary") {
-        "summary" => Ok(ShowMode::Summary),
-        "stat" => Ok(ShowMode::StatOnly),
+        "summary" => Ok(ShowMode::Default),
+        "stat" => Ok(ShowMode::Summary),
         "context" => Ok(ShowMode::Context),
+        "events" => Ok(ShowMode::Events),
         "diff" => Ok(ShowMode::Diff),
         "output" => Ok(ShowMode::Output),
         "log" => Ok(ShowMode::Log),
@@ -253,8 +254,9 @@ fn format_elapsed(duration: chrono::Duration) -> String {
 
 fn mode_name(mode: ShowMode) -> &'static str {
     match mode {
-        ShowMode::Summary => "summary",
-        ShowMode::StatOnly => "stat",
+        ShowMode::Default => "summary",
+        ShowMode::Summary => "stat",
+        ShowMode::Events => "events",
         ShowMode::Context => "context",
         ShowMode::Diff => "diff",
         ShowMode::Output => "output",

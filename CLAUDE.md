@@ -123,8 +123,8 @@ idle_timeout = 120
 
 ```bash
 aid watch t-1234                         # live TUI for one task
-aid watch --quiet t-1234                 # block until done (for scripts)
-aid watch --quiet --group wg-abc1        # block until group finishes
+aid watch --wait t-1234                  # block until done (for scripts)
+aid watch --wait --group wg-abc1         # block until group finishes
 aid watch --tui                          # full dashboard TUI
 aid watch --exit-on-await t-1234         # exit when task awaits input
 aid watch --timeout 600 t-1234           # timeout after 10 minutes
@@ -159,9 +159,11 @@ aid respond t-1234 -f response.md        # respond with file contents
 
 ```bash
 aid show <task-id>                   # smart default: diff stat OR findings
+aid show <task-id> --events          # events only
 aid show <task-id> --diff            # full diff (code tasks)
-aid show <task-id> --output          # agent messages
+aid show <task-id> --output          # agent messages (truncated)
 aid show <task-id> --output --full   # complete untruncated output
+aid show <task-id> --log --full      # complete raw log
 aid show <task-id> --summary         # one-line status + conclusion
 aid show <task-id> --context         # original + resolved prompt
 aid show <task-id> --explain         # AI-generated explanation of changes

@@ -4,6 +4,7 @@
 pub(crate) mod command_args_a;
 pub(crate) mod command_args_b;
 pub(crate) mod command_args_c;
+pub(crate) mod command_args_watch;
 mod extras;
 mod sub_enums;
 
@@ -17,6 +18,10 @@ mod run_audit_flag_tests;
 mod doctor_tests;
 #[cfg(test)]
 mod retry_flag_tests;
+#[cfg(test)]
+mod show_flag_tests;
+#[cfg(test)]
+mod watch_wait_flag_tests;
 
 use clap::{Parser, Subcommand};
 
@@ -46,7 +51,8 @@ pub enum Commands {
     Run(command_args_a::RunArgs),
     Batch(command_args_a::BatchArgs),
     Benchmark(command_args_a::BenchmarkArgs),
-    Watch(command_args_a::WatchArgs),
+    Watch(command_args_watch::WatchArgs),
+    Wait(command_args_watch::WaitArgs),
     Board(command_args_a::BoardArgs),
     Completions,
     Changelog(command_args_a::ChangelogArgs),

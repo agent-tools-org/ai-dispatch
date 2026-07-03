@@ -8,7 +8,8 @@ use toml::value::{Table, Value};
 
 use crate::paths;
 
-pub(crate) const DEFAULT_MAX_TASK_DURATION_MINS: i64 = 60;
+pub(crate) const DEFAULT_MAX_TASK_DURATION_MINS: i64 =
+    crate::timeout_policy::DEFAULT_MAX_DURATION_MINS;
 
 #[derive(Debug, Clone, Default, Deserialize)]
 pub struct AidConfig {

@@ -73,10 +73,7 @@ pub(crate) fn task_to_run_args(
                 .collect()
         })
         .unwrap_or_else(|| auto_cascade_for_rate_limited(&agent_name));
-    let env = crate::idle_timeout::env_with_idle_timeout(
-        merged_env(task.env.as_ref(), task.env_forward.as_ref(), shared_dir_path),
-        task.idle_timeout,
-    );
+    let env = merged_env(task.env.as_ref(), task.env_forward.as_ref(), shared_dir_path);
     let skills = if task.no_skill {
         vec![NO_SKILL_SENTINEL.to_string()]
     } else {
@@ -123,6 +120,7 @@ pub(crate) fn task_to_run_args(
         existing_task_id: task.id.as_ref().map(|id| crate::types::TaskId(id.clone())),
         env,
         env_forward: task.env_forward.clone(),
+        idle_timeout_secs: task.idle_timeout,
         audit: task.audit.unwrap_or(false),
         audit_explicit: task.audit.is_some(),
         link_deps: task.worktree_link_deps.unwrap_or(true),

@@ -38,7 +38,7 @@ fn idle_task_past_deadline_times_out() {
 #[test]
 fn foreground_default_duration_uses_shared_config_constant() {
     assert_eq!(
-        resolved_max_duration_mins(None),
+        crate::timeout_policy::TimeoutPolicy::default().max_duration_mins(),
         crate::config::DEFAULT_MAX_TASK_DURATION_MINS
     );
 }

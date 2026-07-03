@@ -115,8 +115,8 @@ pub(super) fn run_background_task(
         eval: args.eval.clone(),
         eval_feedback_template: args.eval_feedback_template.clone(),
         judge: args.judge.clone(),
-        max_duration_mins: args.max_duration_mins,
-        idle_timeout_secs: crate::idle_timeout::idle_timeout_secs_from_env(args.env.as_ref()),
+        max_duration_mins: Some(args.timeout_policy.max_duration_mins()),
+        idle_timeout_secs: Some(args.timeout_policy.idle.as_secs()),
         retry: args.retry,
         group: args.group.clone(),
         skills: args.skills.clone(),
@@ -258,7 +258,7 @@ pub(super) async fn run_foreground_task(
         args.output.as_deref(),
         prepared.effective_model.as_deref(),
         prepared.task.workgroup_id.as_deref(),
-        args.max_duration_mins,
+        args.timeout_policy,
         args.max_task_cost,
     )
     .await?;

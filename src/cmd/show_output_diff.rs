@@ -9,8 +9,10 @@ use std::sync::Arc;
 
 use crate::store::Store;
 use crate::types::{EventKind, Task, TaskEvent};
+use crate::worktree::{capture_live_worktree_state, uncommitted_diff_text};
 
 use super::show_output_artifacts::diff_artifact_fallback;
+use super::worktree_state_section;
 
 const DIFF_EXCLUDE: &[&str] = &[":(exclude)*.lock", ":(exclude)package-lock.json"];
 
@@ -95,38 +97,39 @@ fn format_recent_events(events: &[TaskEvent]) -> String {
         let kind = event.event_kind.as_str();
         let time = event.timestamp.format("%H:%M:%S");
         let detail = truncate(&event.detail, 80);
-        let marker = if event.event_kind == EventKind::Error {
-            "!"
-        } else {
-            " "
-        };
+        let marker = if event.event_kind == EventKind::Error { "!" } else { " " };
         out.push_str(&format!("{marker} [{time}] {kind}: {detail}\n"));
     }
     out
 }
 
 fn format_diff_output(task: &Task, worktree_path: &str, file: Option<&str>) -> String {
-    if task.status == crate::types::TaskStatus::Failed
-        && task
-            .start_sha
-            .as_deref()
-            .is_some_and(|start_sha| head_matches_start(worktree_path, start_sha))
-    {
-        return "\n--- Diff Stat ---\nNo changes (task failed before making commits)\n".to_string();
-    }
     let mut out = String::new();
+    let live_state = capture_live_worktree_state(Path::new(worktree_path)).ok();
+    let failed_without_new_commits = task.status == crate::types::TaskStatus::Failed
+        && task.start_sha.as_deref().is_some_and(|start_sha| head_matches_start(worktree_path, start_sha));
+    out.push_str(&worktree_state_section(worktree_path, live_state.as_ref()));
     out.push_str("\n--- Diff Stat ---\n");
     let stat = match file {
         Some(path) => diff_stat_file(worktree_path, task.start_sha.as_deref(), path),
         None => diff_stat(worktree_path, task.start_sha.as_deref()),
     };
-    out.push_str(&stat);
+    if live_state.as_ref().is_some_and(|state| state.is_dirty())
+        && stat.contains("(no changes detected)")
+    {
+        out.push_str("  (no committed diff detected)\n");
+    } else if failed_without_new_commits {
+        out.push_str("No changes (task failed before making commits)\n");
+    } else {
+        out.push_str(&stat);
+    }
     out.push_str("\n--- Full Diff ---\n");
-    let diff = match file {
-        Some(path) => full_diff_file(worktree_path, task.start_sha.as_deref(), path),
-        None => full_diff(worktree_path, task.start_sha.as_deref()),
+    let diff = if failed_without_new_commits && file.is_none() {
+        uncommitted_diff_text(Path::new(worktree_path)).unwrap_or_default()
+    } else {
+        match file { Some(path) => full_diff_file(worktree_path, task.start_sha.as_deref(), path), None => full_diff(worktree_path, task.start_sha.as_deref()) }
     };
-    out.push_str(&diff);
+    out.push_str(if diff.trim().is_empty() { "  (no diff available)\n" } else { &diff });
     out
 }
 

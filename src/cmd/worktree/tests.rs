@@ -125,6 +125,23 @@ fn prune_clears_dead_lock_and_removes_old_worktree() {
 }
 
 #[test]
+fn prune_skips_old_worktree_with_uncommitted_changes() {
+    let _permit = test_subprocess::acquire();
+    let repo = tempfile::tempdir().unwrap();
+    init_repo(repo.path());
+    let wt = add_worktree(repo.path(), "feat/dirty-prune", "dirty-prune");
+    std::fs::write(wt.join("dirty.txt"), "partial\n").unwrap();
+    make_old(&wt);
+
+    assert!(!should_prune_worktree(wt.to_str().unwrap()));
+    prune(Some(repo.path().to_str().unwrap())).unwrap();
+    assert!(wt.exists());
+    assert!(wt.join("dirty.txt").exists());
+
+    remove_worktree(repo.path(), &wt);
+}
+
+#[test]
 fn list_json_reports_active_and_inactive_worktrees() {
     let _permit = test_subprocess::acquire();
     let repo = tempfile::tempdir().unwrap();

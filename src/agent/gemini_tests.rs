@@ -248,3 +248,26 @@ fn parses_tool_result_test_event() {
     let event = parse_stream_event(&task_id, &json, Local::now()).unwrap();
     assert_eq!(event.event_kind, EventKind::Test);
 }
+
+#[test]
+fn caps_long_reasoning_and_keeps_full_in_metadata() {
+    let task_id = TaskId::generate();
+    let long_text = format!("Long reasoning {}", "z".repeat(120));
+    let json = serde_json::json!({ "type": "text", "content": long_text });
+
+    let event = parse_stream_event(&task_id, &json, Local::now()).unwrap();
+
+    assert!(event.detail.len() <= crate::agent::truncate::EVENT_DETAIL_MAX);
+    assert!(event.detail.ends_with("..."));
+    let metadata = event.metadata.expect("metadata with full text");
+    assert_eq!(metadata["full"].as_str(), Some(long_text.as_str()));
+}
+
+#[test]
+fn short_reasoning_has_no_full_metadata() {
+    let task_id = TaskId::generate();
+    let json = serde_json::json!({ "type": "text", "content": "Hello world" });
+    let event = parse_stream_event(&task_id, &json, Local::now()).unwrap();
+    assert_eq!(event.detail, "Hello world");
+    assert!(event.metadata.is_none());
+}

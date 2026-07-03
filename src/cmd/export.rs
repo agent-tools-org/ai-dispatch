@@ -104,7 +104,7 @@ fn format_event_timeline(events: &[TaskEvent]) -> Vec<String> {
                 "- [{}] {}: {}",
                 event.timestamp.format("%H:%M:%S"),
                 event.event_kind.as_str(),
-                event.detail,
+                event.full_detail(),
             )
         })
         .collect()

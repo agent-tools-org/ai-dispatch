@@ -103,6 +103,18 @@ pub struct TaskEvent {
     pub metadata: Option<serde_json::Value>,
 }
 
+impl TaskEvent {
+    /// Untruncated detail: parsers stash text over the display cap in
+    /// metadata under `"full"`.
+    pub fn full_detail(&self) -> &str {
+        self.metadata
+            .as_ref()
+            .and_then(|meta| meta.get("full"))
+            .and_then(|value| value.as_str())
+            .unwrap_or(&self.detail)
+    }
+}
+
 #[derive(Debug, Clone, Copy)]
 pub enum TaskFilter {
     All,

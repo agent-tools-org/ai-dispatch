@@ -111,7 +111,7 @@ fn parse_stream_event(task_id: &TaskId, v: &serde_json::Value, now: chrono::Date
             if support::is_gemini_rate_limit_error(&detail) {
                 rate_limit::mark_rate_limited(&AgentKind::Gemini, &detail);
             }
-            (EventKind::Error, support::truncate(&detail, 80), None)
+            (EventKind::Error, detail, None)
         }
         // "turn_complete" (pre-0.35) and "result" (0.35+) carry completion stats
         "turn_complete" | "result" => {
@@ -128,6 +128,7 @@ fn parse_stream_event(task_id: &TaskId, v: &serde_json::Value, now: chrono::Date
         }
         _ => return None,
     };
+    let (detail, metadata) = super::truncate::capped_detail_with(&detail, metadata);
     Some(TaskEvent { task_id: task_id.clone(), timestamp: now, event_kind: kind, detail, metadata })
 }
 

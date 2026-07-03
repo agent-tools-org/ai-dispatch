@@ -270,4 +270,29 @@ impl EventKind {
             _ => None,
         }
     }
+
+    /// Parse a stored event kind, warning once per unknown value before
+    /// falling back to Reasoning.
+    pub fn parse_or_warn(s: &str) -> Self {
+        Self::parse_str(s).unwrap_or_else(|| {
+            if note_unknown_event_kind(s) {
+                crate::aid_warn!("[aid] Unknown event kind '{s}' in store; treating as reasoning");
+            }
+            Self::Reasoning
+        })
+    }
+}
+
+/// Returns true the first time `raw` is seen, so the caller warns only once
+/// per unknown kind per process.
+pub(crate) fn note_unknown_event_kind(raw: &str) -> bool {
+    use std::collections::HashSet;
+    use std::sync::Mutex;
+    static WARNED: Mutex<Option<HashSet<String>>> = Mutex::new(None);
+    match WARNED.lock() {
+        Ok(mut guard) => guard
+            .get_or_insert_with(HashSet::new)
+            .insert(raw.to_string()),
+        Err(_) => false,
+    }
 }

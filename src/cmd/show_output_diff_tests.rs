@@ -121,3 +121,22 @@ fn failed_task_without_new_commits_reports_no_changes() {
     assert!(text.contains("No changes (task failed before making commits)"));
     assert!(!text.contains("old.txt"), "got: {text}");
 }
+
+#[test]
+fn failed_task_with_untracked_only_worktree_reports_partial_work() {
+    let repo = tempfile::tempdir().unwrap();
+    init_repo(repo.path());
+    let start_sha = git_stdout(repo.path(), &["rev-parse", "HEAD"]);
+    std::fs::write(repo.path().join("new.txt"), "partial\n").unwrap();
+
+    let store = Arc::new(Store::open_memory().unwrap());
+    let task = task_fixture("t-untracked", repo.path(), &start_sha, TaskStatus::Failed);
+    store.insert_task(&task).unwrap();
+
+    let text = diff_text(&store, task.id.as_str()).unwrap();
+
+    assert!(text.contains("Partial work present (uncommitted) at"), "got: {text}");
+    assert!(text.contains("untracked: 1"), "got: {text}");
+    assert!(text.contains("?? new.txt"), "got: {text}");
+    assert!(!text.contains("(no changes detected)"), "got: {text}");
+}

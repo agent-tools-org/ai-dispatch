@@ -35,6 +35,7 @@ mod context;
 mod cost;
 pub mod credential_pool;
 mod explore;
+mod failure_salvage;
 pub mod gitbutler;
 mod hooks;
 mod idle_timeout;

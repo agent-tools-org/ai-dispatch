@@ -13,6 +13,7 @@ mod transcript_tests;
 #[cfg(test)]
 #[path = "watcher/streaming_tests.rs"]
 mod streaming_tests;
+
 use anyhow::Result;
 use chrono::Local;
 use std::sync::Arc;

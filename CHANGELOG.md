@@ -1,3 +1,16 @@
+## v9.0.0 (2026-07-03)
+- Architecture-audit release: 25 issues (#139-#151, #153-#164) from the 2026-07 three-lens architecture audit fixed and cross-audited; see docs/audit-architecture-2026-07.md for the full map
+- feat(lifecycle): task status transitions are now guarded by a legal-transition graph with intent-named methods (task_lifecycle); failure salvage moved out of store mutations; background/batch tasks run the full post-run lifecycle (checklist retry, hooks, peer review, audits) via LifecycleMode
+- feat(timeouts): one TimeoutPolicy resolved at dispatch replaces 14 scattered mechanisms; foreground max-duration is activity-aware (streams past the cap are no longer killed); idle detection counts any parsed event as liveness; hidden 300s fallback removed
+- fix(pty): PTY pipeline no longer loses workgroup findings, re-saves session ids, or corrupts split multi-byte UTF-8; PTY logs strip escapes; both pipelines kill with TERM-grace-KILL; three PTY end-to-end tests added
+- fix(retry): effective dispatch args persisted on the task and rehydrated by all retry paths — retries no longer silently drop team/context/scope/skills/worktree; cascade inherits the original worktree
+- fix(budget): name-only budgets aggregate real usage scoped to their project and only gate that project's dispatches; token limits enforced
+- fix(agents): agy read-only falls back to prompt-prefix instead of hard-failing; kilo/mimo rate limits no longer bench OpenCode; kilo/mimo declare needs_pty (piped stdout is swallowed, empirically verified); adapter layer collapsed via shared read-only helper, parse_completion default, and overlay delegate specs for kilo/mimo/qwen (net -170 LOC)
+- feat(cli): real `aid wait` subcommand and watch --wait; --timeout/--exit-on-await honored; show --full/--events implemented with mutually-exclusive mode flags; event details keep full text in metadata past the 80-char cap; `completions` renamed to `notifications`; unknown [project] keys rejected
+- refactor(layering): model catalog, worktree removal, hung recovery, task actions/views extracted from cmd/ — no lower layer imports CLI command modules; dispatch handlers grouped by verb domain; dead surface swept (~120 LOC) and ~/.aid/shared cleanup wired into aid clean
+- fix(release): scripts/release.sh --dry-run is side-effect free; dispatch aborts cleanly when the status guard rejects a transition; malformed-lock cleanup TOCTOU closed
+
+
 ## v8.105.0 (2026-07-03)
 - feat(agent): agents can now be disabled via `disabled = true` in agent_config.toml, managed by `aid agent config <name> --disable/--enable`; disabled agents are hidden from `aid config agents` (with a one-line summary), skipped by auto-selection, fallback chains, and team preferences, and explicit dispatch fails fast with an enable hint; `aid ask`/`aid explain` bail clearly when their default agent is disabled
 - fix(watcher): strip OSC (BEL/ST-terminated) and CSI terminal escape sequences at the stream choke point before event parsing — droid >=0.159 prefixes window-title/progress escapes to its stream-json lines under a PTY, which made every droid task since 2026-06-29 fail or be killed as hung; root cause documented in docs/investigation-droid-osc-escapes.md

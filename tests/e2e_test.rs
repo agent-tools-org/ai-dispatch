@@ -79,7 +79,7 @@ fn board_rapid_calls_show_data_without_exit() {
 }
 
 #[test]
-fn completions_prints_recent_lines() {
+fn notifications_prints_recent_lines() {
     let temp_dir = TempDir::new().unwrap();
     std::fs::write(
         temp_dir.path().join("completions.jsonl"),
@@ -88,7 +88,7 @@ fn completions_prints_recent_lines() {
     .unwrap();
 
     let output = aid_cmd_in(temp_dir.path())
-        .arg("completions")
+        .arg("notifications")
         .output()
         .unwrap();
     assert!(output.status.success());

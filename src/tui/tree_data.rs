@@ -6,11 +6,10 @@ use crate::types::Task;
 use std::collections::{HashMap, HashSet};
 
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
 pub struct TreeNode {
     pub task: Task,
+    #[allow(dead_code)]
     pub depth: usize,
-    pub is_last: bool,
     pub prefix: String,
     /// True if this is a workgroup header (virtual node reusing first task)
     pub is_group_header: bool,
@@ -61,7 +60,6 @@ pub fn build_task_tree_with_creators(tasks: &[Task], creators: &HashMap<String, 
             result.push(TreeNode {
                 task: header_task.clone(),
                 depth: 0,
-                is_last: false,
                 prefix: match creators.get(gid) {
                     Some(by) => format!("▸ {gid} ({by}) "),
                     None => format!("▸ {gid} "),
@@ -83,7 +81,6 @@ pub fn build_task_tree_with_creators(tasks: &[Task], creators: &HashMap<String, 
                 result.push(TreeNode {
                     task: (*root).clone(),
                     depth: 1,
-                    is_last,
                     prefix: connector.to_string(),
                     is_group_header: false,
                 });
@@ -104,7 +101,6 @@ pub fn build_task_tree_with_creators(tasks: &[Task], creators: &HashMap<String, 
                 result.push(TreeNode {
                     task: (*root).clone(),
                     depth: 0,
-                    is_last: false,
                     prefix: String::new(),
                     is_group_header: false,
                 });
@@ -150,7 +146,6 @@ fn add_children(
         result.push(TreeNode {
             task: (**child).clone(),
             depth,
-            is_last,
             prefix: format!("{parent_prefix}{}", if is_last { "└── " } else { "├── " }),
             is_group_header: false,
         });

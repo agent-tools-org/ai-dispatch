@@ -20,6 +20,7 @@ const DELETE_OLD_TASKS_SQL: &str =
     "DELETE FROM tasks WHERE status IN ('done', 'failed', 'merged', 'skipped') AND created_at < ?1";
 const ACTIVE_WORKTREES_SQL: &str = "SELECT DISTINCT worktree_path FROM tasks WHERE worktree_path IS NOT NULL AND status IN ('pending', 'running', 'awaiting_input')";
 const TASK_IDS_SQL: &str = "SELECT id FROM tasks";
+const WORKGROUP_IDS_SQL: &str = "SELECT id FROM workgroups";
 const LOG_SUFFIX: &str = ".jsonl";
 
 pub fn run(
@@ -40,6 +41,7 @@ pub fn run(
         clean_orphaned_worktrees(&store, dry_run)?;
     }
     clean_orphaned_logs(&store, dry_run)?;
+    clean_orphaned_shared_dirs(&store, dry_run)?;
     Ok(())
 }
 
@@ -126,6 +128,37 @@ fn clean_orphaned_logs(store: &Store, dry_run: bool) -> Result<()> {
         } else {
             "Removed"
         }
+    );
+    Ok(())
+}
+
+fn clean_orphaned_shared_dirs(store: &Store, dry_run: bool) -> Result<()> {
+    let known_wgs = query_string_set(store, WORKGROUP_IDS_SQL)?;
+    let shared_base = crate::paths::aid_dir().join("shared");
+    if !shared_base.exists() {
+        return Ok(());
+    }
+    let mut removed = 0usize;
+    for entry in fs::read_dir(&shared_base)? {
+        let entry = entry?;
+        if !entry.file_type()?.is_dir() {
+            continue;
+        }
+        let wg_id = entry.file_name().to_string_lossy().into_owned();
+        if known_wgs.contains(&wg_id) {
+            continue;
+        }
+        if dry_run {
+            println!("[dry-run] Would remove orphaned shared dir {}", entry.path().display());
+        } else {
+            crate::shared_dir::cleanup_shared_dir(&wg_id);
+            println!("Removed orphaned shared dir {}", entry.path().display());
+        }
+        removed += 1;
+    }
+    println!(
+        "{} {removed} orphaned shared dirs",
+        if dry_run { "[dry-run] Would remove" } else { "Removed" }
     );
     Ok(())
 }
@@ -231,5 +264,20 @@ mod tests {
 
         assert!(!contains_path(&paths, worktree.path()));
         assert!(!is_aid_managed_worktree_path(worktree.path()));
+    }
+
+    #[test]
+    fn clean_orphaned_shared_dirs_removes_unknown_workgroup_dirs() {
+        let temp = tempfile::tempdir().unwrap();
+        let _guard = crate::paths::AidHomeGuard::set(temp.path());
+        let store = Store::open_memory().unwrap();
+        crate::shared_dir::create_shared_dir("wg-orphanned").unwrap();
+        crate::shared_dir::create_shared_dir("wg-known").unwrap();
+        store.create_workgroup("Known", "", None, Some("wg-known")).unwrap();
+
+        clean_orphaned_shared_dirs(&store, false).unwrap();
+
+        assert!(crate::shared_dir::shared_dir_path("wg-orphanned").is_none());
+        assert!(crate::shared_dir::shared_dir_path("wg-known").is_some());
     }
 }

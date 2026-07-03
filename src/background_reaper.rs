@@ -16,7 +16,7 @@ use crate::types::{AgentKind, EventKind, PendingReason, Task, TaskEvent, TaskFil
 
 pub(crate) const ZOMBIE_FAILURE_DETAIL: &str = "Background worker died unexpectedly";
 const PENDING_TASK_TIMEOUT_SECS: i64 = 600;
-const MAX_RUN_HOURS: i64 = 24;
+const MAX_RUN_HOURS: i64 = crate::timeout_policy::DEFAULT_HARD_CAP_HOURS;
 const LIVE_WORKER_IDLE_MARGIN: u64 = 2;
 
 pub(super) fn record_worker_failure(store: &Store, task_id: &str, err: &anyhow::Error) -> Result<()> {
@@ -155,21 +155,14 @@ fn cleanup_old_running_tasks(
             continue;
         }
         let elapsed = (Local::now() - task.created_at).num_hours();
-        if elapsed <= MAX_RUN_HOURS {
+        let max_run_hours = load_spec_if_exists(task_id)?.map(|spec| {
+            crate::timeout_policy::TimeoutPolicy::from_env(spec.env.as_ref()).hard_cap_hours()
+        }).unwrap_or(MAX_RUN_HOURS);
+        if elapsed <= max_run_hours {
             continue;
         }
-        aid_info!(
-            "[aid] Auto-failing stale task {} (running {}h, max {}h)",
-            task.id,
-            elapsed,
-            MAX_RUN_HOURS
-        );
-        record_failure(
-            store,
-            task_id,
-            "Auto-failed: exceeded 24h maximum runtime",
-            "Task exceeded maximum runtime (24h)",
-        )?;
+        aid_info!("[aid] Auto-failing stale task {} (running {}h, max {}h)", task.id, elapsed, max_run_hours);
+        record_failure(store, task_id, &format!("Auto-failed: exceeded {max_run_hours}h maximum runtime"), &format!("Task exceeded maximum runtime ({max_run_hours}h)"))?;
         cleaned.push(task_id.to_string());
     }
     Ok(())

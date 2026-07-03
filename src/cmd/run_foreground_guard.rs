@@ -55,8 +55,8 @@ pub(super) fn save_foreground_spec(
         eval: args.eval.clone(),
         eval_feedback_template: args.eval_feedback_template.clone(),
         judge: args.judge.clone(),
-        max_duration_mins: args.max_duration_mins,
-        idle_timeout_secs: crate::idle_timeout::idle_timeout_secs_from_env(args.env.as_ref()),
+        max_duration_mins: Some(args.timeout_policy.max_duration_mins()),
+        idle_timeout_secs: Some(args.timeout_policy.idle.as_secs()),
         retry: args.retry,
         group: args.group.clone(),
         skills: args.skills.clone(),
@@ -167,13 +167,11 @@ pub(super) fn foreground_agent(agent_kind: AgentKind, agent_display_name: &str) 
 
 #[allow(clippy::too_many_arguments)]
 pub(super) async fn run_agent_with_signal(
-    agent: &dyn crate::agent::Agent, agent_display_name: &str,
-    std_cmd: std::process::Command,
-    task_id: &TaskId, store: &Arc<Store>, log_path: &Path,
-    output_path: Option<&str>,
+    agent: &dyn crate::agent::Agent, agent_display_name: &str, std_cmd: std::process::Command,
+    task_id: &TaskId, store: &Arc<Store>, log_path: &Path, output_path: Option<&str>,
     model: Option<&str>,
     workgroup_id: Option<&str>,
-    max_duration_mins: Option<i64>,
+    timeout_policy: crate::timeout_policy::TimeoutPolicy,
     max_task_cost: Option<f64>,
 ) -> Result<()> {
     if agent.needs_pty() {
@@ -187,6 +185,7 @@ pub(super) async fn run_agent_with_signal(
             output_path,
             model,
             agent.streaming(),
+            timeout_policy,
         )
         .await;
     }
@@ -199,7 +198,7 @@ pub(super) async fn run_agent_with_signal(
         output_path,
         model,
         workgroup_id,
-        max_duration_mins,
+        timeout_policy,
         max_task_cost,
     )
     .await
@@ -213,6 +212,7 @@ async fn run_pty_agent_with_signal(
     output_path: Option<&str>,
     model: Option<&str>,
     streaming: bool,
+    timeout_policy: crate::timeout_policy::TimeoutPolicy,
 ) -> Result<()> {
     let task_id_for_run = task_id.clone();
     let task_id_for_signal = task_id.clone();
@@ -235,6 +235,7 @@ async fn run_pty_agent_with_signal(
             output_path.as_deref(),
             model.as_deref(),
             streaming,
+            timeout_policy,
             Some(control_for_run),
         )
     });
@@ -264,7 +265,7 @@ async fn run_non_pty_agent_with_signal(
     output_path: Option<&str>,
     model: Option<&str>,
     workgroup_id: Option<&str>,
-    max_duration_mins: Option<i64>,
+    timeout_policy: crate::timeout_policy::TimeoutPolicy,
     max_task_cost: Option<f64>,
 ) -> Result<()> {
     let mut tokio_cmd = Command::from(std_cmd);
@@ -280,7 +281,7 @@ async fn run_non_pty_agent_with_signal(
         model,
         agent.streaming(),
         workgroup_id,
-        max_duration_mins,
+        timeout_policy,
         max_task_cost,
     );
     tokio::pin!(run);

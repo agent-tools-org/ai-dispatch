@@ -33,13 +33,13 @@ pub(crate) async fn run_agent_process_with_timeout(
     model: Option<&str>,
     streaming: bool,
     workgroup_id: Option<&str>,
-    max_duration_mins: Option<i64>,
+    timeout_policy: crate::timeout_policy::TimeoutPolicy,
     max_task_cost: Option<f64>,
 ) -> Result<()> {
-    let timeout_mins = resolved_max_duration_mins(max_duration_mins);
-    let deadline = Duration::from_secs(timeout_mins as u64 * 60);
+    let timeout_mins = timeout_policy.max_duration_mins();
+    let deadline = timeout_policy.max_duration;
     let start = Instant::now();
-    let idle_timeout = crate::idle_timeout::idle_timeout_from_tokio_command(&cmd);
+    let idle_timeout = timeout_policy.idle;
     let failure_context = run_prompt::capture_failure_context(store.as_ref(), task_id, &cmd);
     #[cfg(unix)]
     cmd.process_group(0);
@@ -274,12 +274,6 @@ fn current_event_count(store: &Arc<Store>, task_id: &TaskId) -> usize {
         .get_events(task_id.as_str())
         .map(|events| events.len())
         .unwrap_or_default()
-}
-
-fn resolved_max_duration_mins(max_duration_mins: Option<i64>) -> i64 {
-    max_duration_mins
-        .filter(|mins| *mins > 0)
-        .unwrap_or(crate::config::DEFAULT_MAX_TASK_DURATION_MINS)
 }
 
 fn foreground_timeout_expired(

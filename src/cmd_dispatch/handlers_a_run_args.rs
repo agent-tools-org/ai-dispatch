@@ -1,6 +1,6 @@
 // `aid run` argument assembly helpers for the primary dispatch handlers.
 // Exports: build_run_args().
-// Deps: crate::cli::RunExtrasArgs, crate::cmd::run::RunArgs, idle timeout helpers.
+// Deps: crate::cli::RunExtrasArgs, crate::cmd::run::RunArgs, group resolution.
 
 use crate::cli::RunExtrasArgs;
 use crate::cmd;
@@ -55,10 +55,6 @@ pub(super) fn build_run_args(
     } else {
         extras.skill
     };
-    let effective_idle_timeout =
-        idle_timeout.or_else(|| crate::agent_config::get_default_idle_timeout(&agent_name));
-    let env = crate::idle_timeout::env_with_idle_timeout(None, effective_idle_timeout);
-
     cmd::run::RunArgs {
         agent_name,
         prompt,
@@ -100,7 +96,7 @@ pub(super) fn build_run_args(
         context_from: extras.context_from,
         scope,
         parent_task_id: parent,
-        env,
+        idle_timeout_secs: idle_timeout,
         existing_task_id: id.map(crate::types::TaskId),
         timeout,
         audit,

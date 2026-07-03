@@ -17,8 +17,6 @@ pub use show_output::{
     diff_text, log_text, log_text_brief, output_text, output_text_brief, output_text_for_task,
 };
 #[allow(unused_imports)]
-pub use show_output::output_text_full;
-#[allow(unused_imports)]
 pub use show_output::read_task_output;
 pub(crate) use show_output::{
     diff_stat, diff_text_file, extract_messages_from_log, parse_diff_stat, read_tail,

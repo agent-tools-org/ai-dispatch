@@ -1,0 +1,300 @@
+// Background task reaper and stale-state cleanup.
+// Exports zombie checks, pending timeout cleanup, and failure recording.
+// Deps: background process/spec/orphan helpers, Store, task event types.
+
+use anyhow::Result;
+use chrono::Local;
+use super::background_orphan;
+use super::background_process::kill_process;
+use super::background_spec::{load_spec_if_exists, BackgroundRunSpec};
+use super::background_waiting;
+use super::MAX_WORKERS;
+use crate::idle_timeout::DEFAULT_IDLE_TIMEOUT_SECS;
+use crate::{config, notify, paths, sanitize};
+use crate::store::Store;
+use crate::types::{AgentKind, EventKind, PendingReason, Task, TaskEvent, TaskFilter, TaskId, TaskStatus};
+
+pub(crate) const ZOMBIE_FAILURE_DETAIL: &str = "Background worker died unexpectedly";
+const PENDING_TASK_TIMEOUT_SECS: i64 = 600;
+const MAX_RUN_HOURS: i64 = 24;
+const LIVE_WORKER_IDLE_MARGIN: u64 = 2;
+
+pub(super) fn record_worker_failure(store: &Store, task_id: &str, err: &anyhow::Error) -> Result<()> {
+    record_failure(store, task_id, &format!("{err:#}"), &format!("Background worker failed: {err}"))?;
+    Ok(())
+}
+
+pub(crate) fn check_zombie_tasks_with<F>(store: &Store, is_worker_alive: F) -> Result<Vec<String>>
+where
+    F: Fn(u32) -> bool,
+{
+    let config = config::load_config()?;
+    let mut cleaned = cleanup_stale_pending_tasks(store)?;
+    cleaned.extend(background_waiting::cleanup_stale_waiting_tasks(
+        store,
+        config.background.max_task_duration_mins,
+    )?);
+    let running_tasks = store.list_tasks(TaskFilter::Running)?;
+    cleaned.extend(background_orphan::cleanup_orphaned_idle_tasks(
+        store,
+        &running_tasks,
+        &cleaned,
+        &is_worker_alive,
+    )?);
+    cleanup_running_tasks(store, &running_tasks, &mut cleaned, &is_worker_alive, config.background.max_task_duration_mins)?;
+    cleanup_old_running_tasks(store, running_tasks, &mut cleaned)?;
+    Ok(cleaned)
+}
+
+fn cleanup_running_tasks<F>(
+    store: &Store,
+    running_tasks: &[Task],
+    cleaned: &mut Vec<String>,
+    is_worker_alive: &F,
+    default_max_duration_mins: i64,
+) -> Result<()>
+where
+    F: Fn(u32) -> bool,
+{
+    for task in running_tasks {
+        let task_id = task.id.as_str();
+        if cleaned.iter().any(|id| id == task_id) {
+            continue;
+        }
+        let Some(spec) = load_spec_if_exists(task_id)? else {
+            continue;
+        };
+        if let Some(worker_pid) = spec.worker_pid {
+            cleanup_pid_task(store, task, &spec, worker_pid, cleaned, is_worker_alive, default_max_duration_mins)?;
+        } else {
+            cleanup_missing_pid_task(store, task, &spec, cleaned)?;
+        }
+    }
+    Ok(())
+}
+
+fn cleanup_pid_task<F>(
+    store: &Store,
+    task: &Task,
+    spec: &BackgroundRunSpec,
+    worker_pid: u32,
+    cleaned: &mut Vec<String>,
+    is_worker_alive: &F,
+    default_max_duration_mins: i64,
+) -> Result<()>
+where
+    F: Fn(u32) -> bool,
+{
+    let task_id = task.id.as_str();
+    if is_worker_alive(worker_pid) {
+        if cleanup_wedged_live_worker(store, task, spec, worker_pid)? {
+            cleaned.push(task_id.to_string());
+            return Ok(());
+        }
+        let elapsed_mins = (Local::now() - task.created_at).num_minutes();
+        let max_duration_mins = spec.max_duration_mins.unwrap_or(default_max_duration_mins);
+        if elapsed_mins > max_duration_mins {
+            kill_process(worker_pid);
+            let detail = format!(
+                "Task exceeded max duration ({}m > {}m)",
+                elapsed_mins, max_duration_mins
+            );
+            record_failure(store, task_id, &detail, &detail)?;
+            cleaned.push(task_id.to_string());
+        }
+        return Ok(());
+    }
+    preserve_zombie_changes(store, task_id, spec)?;
+    record_failure(store, task_id, ZOMBIE_FAILURE_DETAIL, ZOMBIE_FAILURE_DETAIL)?;
+    if let Some(agent_pid) = spec.agent_pid {
+        kill_process(agent_pid);
+    }
+    cleaned.push(task_id.to_string());
+    Ok(())
+}
+
+fn cleanup_missing_pid_task(
+    store: &Store,
+    task: &Task,
+    spec: &BackgroundRunSpec,
+    cleaned: &mut Vec<String>,
+) -> Result<()> {
+    let task_id = task.id.as_str();
+    let age_secs = (Local::now() - task.created_at).num_seconds();
+    if age_secs < 60 {
+        return Ok(());
+    }
+    preserve_zombie_changes(store, task_id, spec)?;
+    record_failure(store, task_id, ZOMBIE_FAILURE_DETAIL, ZOMBIE_FAILURE_DETAIL)?;
+    cleaned.push(task_id.to_string());
+    Ok(())
+}
+
+fn preserve_zombie_changes(store: &Store, task_id: &str, spec: &BackgroundRunSpec) -> Result<()> {
+    if let Some(task) = store.get_task(task_id)?
+        && !task.read_only
+        && !spec.audit_report_mode
+        && let Some(ref path) = task.worktree_path
+        && std::path::Path::new(path).exists()
+        && crate::commit::has_uncommitted_changes(path).unwrap_or(false)
+    {
+        let _ = crate::commit::auto_commit(path, task_id, &task.prompt);
+        aid_info!("[aid] Preserved uncommitted changes for zombie task {task_id}");
+    }
+    Ok(())
+}
+
+fn cleanup_old_running_tasks(
+    store: &Store,
+    running_tasks: Vec<Task>,
+    cleaned: &mut Vec<String>,
+) -> Result<()> {
+    for task in running_tasks {
+        let task_id = task.id.as_str();
+        if cleaned.iter().any(|id| id == task_id) {
+            continue;
+        }
+        let elapsed = (Local::now() - task.created_at).num_hours();
+        if elapsed <= MAX_RUN_HOURS {
+            continue;
+        }
+        aid_info!(
+            "[aid] Auto-failing stale task {} (running {}h, max {}h)",
+            task.id,
+            elapsed,
+            MAX_RUN_HOURS
+        );
+        record_failure(
+            store,
+            task_id,
+            "Auto-failed: exceeded 24h maximum runtime",
+            "Task exceeded maximum runtime (24h)",
+        )?;
+        cleaned.push(task_id.to_string());
+    }
+    Ok(())
+}
+
+fn cleanup_wedged_live_worker(
+    store: &Store,
+    task: &Task,
+    spec: &BackgroundRunSpec,
+    worker_pid: u32,
+) -> Result<bool> {
+    if task.status != TaskStatus::Running {
+        return Ok(false);
+    }
+    let idle_secs = spec.idle_timeout_secs.unwrap_or(DEFAULT_IDLE_TIMEOUT_SECS);
+    let stale_after_secs = idle_secs.saturating_mul(LIVE_WORKER_IDLE_MARGIN);
+    let activity = background_orphan::latest_activity(store, task)?;
+    if !background_orphan::is_stale(activity.timestamp, Local::now(), stale_after_secs) {
+        return Ok(false);
+    }
+    kill_process(worker_pid);
+    if let Some(agent_pid) = spec.agent_pid {
+        kill_process(agent_pid);
+    }
+    let detail = format!(
+        "hung detected (monitor wedged): no events for {stale_after_secs}s \
+         (idle timeout {idle_secs}s, margin {LIVE_WORKER_IDLE_MARGIN}x)"
+    );
+    background_orphan::record_hung_detected_failure(
+        store,
+        task.id.as_str(),
+        stale_after_secs,
+        &activity,
+        &detail,
+    )
+}
+
+pub(crate) fn cleanup_stale_pending_tasks(store: &Store) -> Result<Vec<String>> {
+    let now = Local::now();
+    let mut cleaned = Vec::new();
+    for task in store.list_tasks(TaskFilter::All)? {
+        if task.status != TaskStatus::Pending {
+            continue;
+        }
+        let elapsed_secs = (now - task.created_at).num_seconds();
+        if elapsed_secs <= PENDING_TASK_TIMEOUT_SECS {
+            continue;
+        }
+        let task_id = task.id.as_str();
+        aid_warn!("[aid] Timing out stale pending task {} (pending for {}s)", task_id, elapsed_secs);
+        if !fail_stale_pending_task(store, &task, now, elapsed_secs)? {
+            continue;
+        }
+        cleaned.push(task_id.to_string());
+    }
+    Ok(cleaned)
+}
+
+pub(crate) fn fail_stale_pending_task(
+    store: &Store,
+    task: &Task,
+    now: chrono::DateTime<Local>,
+    elapsed_secs: i64,
+) -> Result<bool> {
+    let task_id = task.id.as_str();
+    let pending_reason = infer_pending_reason(store, task)?;
+    if !store.fail_pending_with_reason(task_id, pending_reason)? {
+        return Ok(false);
+    }
+    store.insert_event(&TaskEvent {
+        task_id: task.id.clone(),
+        timestamp: now,
+        event_kind: EventKind::Error,
+        detail: format!(
+            "Task timed out in pending state after {}s (reason: {})",
+            elapsed_secs,
+            pending_reason.as_str()
+        ),
+        metadata: None,
+    })?;
+    notify_task_completion(store, task_id)?;
+    Ok(true)
+}
+
+fn infer_pending_reason(store: &Store, task: &Task) -> Result<PendingReason> {
+    if task.agent != AgentKind::Custom && crate::rate_limit::is_rate_limited(&task.agent) {
+        return Ok(PendingReason::RateLimited);
+    }
+    if store.list_tasks(TaskFilter::Running)?.len() >= MAX_WORKERS {
+        return Ok(PendingReason::WorkerCapacity);
+    }
+    let has_agent_pid = load_spec_if_exists(task.id.as_str())?
+        .and_then(|spec| spec.agent_pid)
+        .is_some();
+    if has_agent_pid {
+        Ok(PendingReason::AgentStarting)
+    } else {
+        Ok(PendingReason::Unknown)
+    }
+}
+
+pub(crate) fn record_failure(store: &Store, task_id: &str, stderr_detail: &str, event_detail: &str) -> Result<bool> {
+    sanitize::validate_task_id(task_id)?;
+    if !store.fail_if_running(task_id)? {
+        return Ok(false);
+    }
+    let stderr_path = paths::stderr_path(task_id);
+    std::fs::write(&stderr_path, format!("{stderr_detail}\n"))?;
+    crate::pty_watch::append_failed_terminal_sentinel(
+        &TaskId(task_id.to_string()),
+        &paths::log_path(task_id),
+        event_detail,
+    );
+    store.insert_event(&TaskEvent {
+        task_id: TaskId(task_id.to_string()),
+        timestamp: Local::now(),
+        event_kind: EventKind::Error,
+        detail: event_detail.to_string(),
+        metadata: None,
+    })?;
+    notify_task_completion(store, task_id)?;
+    Ok(true)
+}
+
+fn notify_task_completion(store: &Store, task_id: &str) -> Result<()> {
+    if let Some(task) = store.get_task(task_id)? { notify::notify_completion(&task); }
+    Ok(())
+}

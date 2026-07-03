@@ -5,10 +5,11 @@
 use super::{
     final_dirty_assertion,
     run_dirty::{post_agent_dirty_worktree_cleanup, DirtyWorktreeAction},
-    run_lifecycle::output_content_length,
+    run_lifecycle::{post_run_lifecycle, output_content_length, LifecycleMode},
+    run_prompt::PromptBundle,
     RunArgs,
 };
-use crate::{store::Store, test_subprocess, types::*};
+use crate::{hooks::Hook, store::Store, test_subprocess, types::*};
 use chrono::Local;
 use std::{path::Path, process::Command, sync::Arc};
 
@@ -28,6 +29,10 @@ fn write_path(dir: &Path, path: &str, content: &str) {
         std::fs::create_dir_all(parent).unwrap();
     }
     std::fs::write(file, content).unwrap();
+}
+
+fn prompt_bundle() -> PromptBundle {
+    PromptBundle { effective_prompt: "prompt".to_string(), context_files: Vec::new(), prompt_tokens: 0, injected_memory_ids: Vec::new() }
 }
 
 fn task(id: &str, status: TaskStatus) -> Task {
@@ -211,4 +216,83 @@ async fn audit_report_mode_skips_dirty_worktree_enforcement() {
         .status()
         .unwrap()
         .success());
+}
+
+#[tokio::test]
+async fn background_lifecycle_runs_verify_and_checklist_scan() {
+    let _permit = test_subprocess::acquire();
+    let dir = tempfile::tempdir().unwrap();
+    let store = Arc::new(Store::open_memory().unwrap());
+    let task_id = TaskId("t-bg-lifecycle-ok".to_string());
+    let output_path = dir.path().join("output.md");
+    std::fs::write(&output_path, "implemented alpha\n").unwrap();
+    let mut stored = task(task_id.as_str(), TaskStatus::Done);
+    stored.output_path = Some(output_path.to_string_lossy().to_string());
+    store.insert_task(&stored).unwrap();
+    let args = RunArgs {
+        verify: Some("true".to_string()),
+        dir: Some(dir.path().to_string_lossy().to_string()),
+        checklist: vec!["alpha".to_string(), "beta".to_string()],
+        ..Default::default()
+    };
+
+    post_run_lifecycle(
+        LifecycleMode::Background,
+        &store,
+        &task_id,
+        &args,
+        AgentKind::Codex,
+        "codex",
+        args.dir.as_ref(),
+        None,
+        None,
+        None,
+        &[],
+        &prompt_bundle(),
+        TaskStatus::Done,
+        None,
+    )
+    .await
+    .unwrap();
+
+    let task = store.get_task(task_id.as_str()).unwrap().unwrap();
+    assert_eq!(task.verify_status, VerifyStatus::Passed);
+    let events = store.get_events(task_id.as_str()).unwrap();
+    assert!(events.iter().any(|event| event.detail.contains("Checklist:")));
+}
+
+#[tokio::test]
+async fn background_lifecycle_runs_on_fail_hook() {
+    let _permit = test_subprocess::acquire();
+    let dir = tempfile::tempdir().unwrap();
+    let store = Arc::new(Store::open_memory().unwrap());
+    let task_id = TaskId("t-bg-lifecycle-fail".to_string());
+    store.insert_task(&task(task_id.as_str(), TaskStatus::Failed)).unwrap();
+    let hook_path = dir.path().join("hook.txt");
+    let hook = Hook::new_trusted(
+        "on_fail".to_string(),
+        format!("printf failed > '{}'", hook_path.display()),
+        None,
+    );
+
+    post_run_lifecycle(
+        LifecycleMode::Background,
+        &store,
+        &task_id,
+        &RunArgs::default(),
+        AgentKind::Codex,
+        "codex",
+        None,
+        None,
+        None,
+        None,
+        &[hook],
+        &prompt_bundle(),
+        TaskStatus::Failed,
+        None,
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(std::fs::read_to_string(hook_path).unwrap(), "failed");
 }

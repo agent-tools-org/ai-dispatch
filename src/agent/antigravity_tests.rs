@@ -114,13 +114,13 @@ fn streaming_is_false_and_parse_event_returns_none() {
 }
 
 #[test]
-fn parse_completion_attributes_default_model_and_zero_cost() {
+fn parse_completion_emits_unknown_model_and_cost() {
     let completion = AntigravityAgent.parse_completion("  \n");
 
     assert_eq!(completion.tokens, None);
-    assert_eq!(completion.model, Some("gemini-3-pro-preview".to_string()));
+    assert_eq!(completion.model, None);
     assert_eq!(completion.status, TaskStatus::Done);
-    assert_eq!(completion.cost_usd, Some(0.0));
+    assert_eq!(completion.cost_usd, None);
     assert_eq!(completion.exit_code, None);
 }
 

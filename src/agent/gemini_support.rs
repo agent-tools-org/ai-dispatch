@@ -141,10 +141,10 @@ pub(super) fn extract_tool_arguments(value: &Value) -> Option<String> {
 pub(super) fn classify_tool_result(name: &str, output: &str) -> (crate::types::EventKind, String) {
     let lower_output = output.to_lowercase();
     let lower_name = name.to_lowercase();
-    if lower_output.contains("error") || lower_output.contains("failed") || lower_output.contains("failure") {
-        (crate::types::EventKind::Error, format!("{}: {}", name, truncate(output, super::truncate::EVENT_DETAIL_MAX)))
-    } else if lower_name.contains("test") || lower_output.contains("test") || lower_output.contains("passed") || lower_output.contains("failed") {
+    if lower_name.contains("test") || lower_output.contains("test") || lower_output.contains("passed") {
         (crate::types::EventKind::Test, format!("{}: {}", name, truncate(output, super::truncate::EVENT_DETAIL_MAX)))
+    } else if lower_output.contains("error") || lower_output.contains("failed") || lower_output.contains("failure") {
+        (crate::types::EventKind::Error, format!("{}: {}", name, truncate(output, super::truncate::EVENT_DETAIL_MAX)))
     } else if lower_name.contains("build") || lower_name.contains("compile") || lower_output.contains("compiled") || lower_output.contains("built") {
         (crate::types::EventKind::Build, format!("{}: {}", name, truncate(output, super::truncate::EVENT_DETAIL_MAX)))
     } else {

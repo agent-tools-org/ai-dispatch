@@ -76,7 +76,7 @@ fn parse_stream_event(task_id: &TaskId, v: &serde_json::Value, now: chrono::Date
             if v.get("role").and_then(|r| r.as_str()) != Some("assistant") {
                 return None;
             }
-            let content = v.get("content").and_then(|c| c.as_str())?;
+            let content = support::extract_text_payload(v.get("content"))?;
             (EventKind::Reasoning, content.to_string(), None)
         }
         "tool_call" | "tool_use" => {

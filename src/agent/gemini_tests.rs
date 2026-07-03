@@ -106,6 +106,19 @@ fn parses_message_event_new_format() {
 }
 
 #[test]
+fn parses_message_event_with_array_content() {
+    let task_id = TaskId::generate();
+    let json = serde_json::json!({
+        "type": "message",
+        "role": "assistant",
+        "content": [{ "type": "text", "text": "Array content works." }]
+    });
+    let event = parse_stream_event(&task_id, &json, Local::now()).unwrap();
+    assert_eq!(event.event_kind, EventKind::Reasoning);
+    assert_eq!(event.detail, "Array content works.");
+}
+
+#[test]
 fn skips_user_message_event() {
     let task_id = TaskId::generate();
     let json = serde_json::json!({
@@ -244,6 +257,18 @@ fn parses_tool_result_test_event() {
         "type": "tool_result",
         "name": "run_tests",
         "output": "Tests passed successfully"
+    });
+    let event = parse_stream_event(&task_id, &json, Local::now()).unwrap();
+    assert_eq!(event.event_kind, EventKind::Test);
+}
+
+#[test]
+fn parses_failed_tool_result_test_event_as_test() {
+    let task_id = TaskId::generate();
+    let json = serde_json::json!({
+        "type": "tool_result",
+        "name": "run_tests",
+        "output": "1 test failed"
     });
     let event = parse_stream_event(&task_id, &json, Local::now()).unwrap();
     assert_eq!(event.event_kind, EventKind::Test);

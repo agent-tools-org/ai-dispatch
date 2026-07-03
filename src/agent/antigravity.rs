@@ -70,16 +70,6 @@ impl super::Agent for AntigravityAgent {
     fn parse_event(&self, _task_id: &TaskId, _line: &str) -> Option<TaskEvent> {
         None
     }
-
-    fn parse_completion(&self, _output: &str) -> CompletionInfo {
-        CompletionInfo {
-            tokens: None,
-            status: TaskStatus::Done,
-            model: Some("gemini-3-pro-preview".to_string()),
-            cost_usd: Some(0.0),
-            exit_code: None,
-        }
-    }
 }
 
 #[derive(Debug, Clone, Default)]

@@ -566,7 +566,7 @@ fn terminal_sentinel(
 
 fn extract_awaiting_prompt(output: &str, prompt: &str) -> String {
     let prompt = prompt.trim();
-    let cleaned = crate::term_escape::strip_terminal_escapes(output);
+    let cleaned = crate::watcher::strip_terminal_escapes(output);
     let lines: Vec<&str> = cleaned
         .lines()
         .rev()

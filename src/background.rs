@@ -289,7 +289,12 @@ async fn run_task_inner(store: &Arc<Store>, spec: &BackgroundRunSpec) -> Result<
         return Ok(());
     }
     notify_task_completion(store, &spec.task_id)?;
-    if let Err(err) = crate::cmd::run::persist_result_file(&spec.task_id, spec.result_file.as_deref(), spec.dir.as_deref()) {
+    if let Err(err) = crate::cmd::run::persist_result_file(
+        &spec.task_id,
+        spec.result_file.as_deref(),
+        spec.dir.as_deref(),
+        &paths::log_path(&spec.task_id),
+    ) {
         aid_warn!("[aid] Failed to persist result file: {err}");
     }
     let iterate_config = crate::cmd::run::iterate_config(&retry_args)?;

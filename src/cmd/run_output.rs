@@ -14,11 +14,16 @@ pub(in crate::cmd) fn output_file_instruction(output_path: Option<&str>, result_
     (!sections.is_empty()).then(|| sections.join("\n\n"))
 }
 
-pub(in crate::cmd) fn persist_result_file(task_id: &str, result_file: Option<&str>, base_dir: Option<&str>) -> Result<()> {
+pub(in crate::cmd) fn persist_result_file(
+    task_id: &str,
+    result_file: Option<&str>,
+    base_dir: Option<&str>,
+    log_path: &Path,
+) -> Result<()> {
     let Some(result_file) = result_file else { return Ok(()); };
     let source = resolve_result_path(result_file, base_dir);
     if !source.exists() {
-        return Ok(());
+        return persist_result_from_log(task_id, log_path);
     }
     let dest = crate::paths::task_dir(task_id).join("result.md");
     if source.as_path() == dest.as_path() {
@@ -30,6 +35,18 @@ pub(in crate::cmd) fn persist_result_file(task_id: &str, result_file: Option<&st
     std::fs::copy(source, &dest)
         .with_context(|| format!("Failed to persist result file to {}", dest.display()))?;
     Ok(())
+}
+
+fn persist_result_from_log(task_id: &str, log_path: &Path) -> Result<()> {
+    let Some(content) = extract_output_fallback_from_log(log_path) else {
+        return Ok(());
+    };
+    let dest = crate::paths::task_dir(task_id).join("result.md");
+    if let Some(parent) = dest.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    std::fs::write(&dest, content)
+        .with_context(|| format!("Failed to persist result file to {}", dest.display()))
 }
 
 fn resolve_result_path(result_file: &str, base_dir: Option<&str>) -> PathBuf {
@@ -52,15 +69,16 @@ pub(in crate::cmd) fn fill_empty_output_from_log(log_path: &Path, output_path: O
     if !needs_fallback {
         return Ok(());
     }
-    let content = crate::cmd::show::extract_messages_from_log(log_path, true)
-        .or_else(|| extract_raw_text_from_log(log_path));
-    let Some(content) = content else { return Ok(()) };
-    if content.is_empty() {
-        return Ok(());
-    }
+    let Some(content) = extract_output_fallback_from_log(log_path) else { return Ok(()) };
     std::fs::write(output_path, content).with_context(|| {
         format!("Failed to write output fallback file {}", output_path.display())
     })
+}
+
+fn extract_output_fallback_from_log(log_path: &Path) -> Option<String> {
+    crate::cmd::show::extract_messages_from_log(log_path, true)
+        .or_else(|| extract_raw_text_from_log(log_path))
+        .filter(|content| !content.is_empty())
 }
 
 fn extract_raw_text_from_log(log_path: &Path) -> Option<String> {
@@ -156,9 +174,82 @@ mod tests {
         std::fs::create_dir_all(&work_dir).unwrap();
         std::fs::write(work_dir.join("result.md"), "structured result").unwrap();
 
-        persist_result_file("t-result", Some("result.md"), Some(work_dir.to_str().unwrap())).unwrap();
+        let log_path = crate::paths::log_path("t-result");
+        persist_result_file(
+            "t-result",
+            Some("result.md"),
+            Some(work_dir.to_str().unwrap()),
+            &log_path,
+        )
+        .unwrap();
 
         let saved = crate::paths::task_dir("t-result").join("result.md");
         assert_eq!(std::fs::read_to_string(saved).unwrap(), "structured result");
+    }
+
+    #[test]
+    fn persist_result_file_uses_log_when_source_missing() {
+        let temp = tempdir().unwrap();
+        let _aid_home = crate::paths::AidHomeGuard::set(temp.path());
+        let log_path = crate::paths::log_path("t-log-result");
+        std::fs::create_dir_all(log_path.parent().unwrap()).unwrap();
+        std::fs::write(&log_path, "{\"type\":\"text\",\"content\":\"stdout report\"}\n").unwrap();
+
+        persist_result_file("t-log-result", Some("result.md"), Some("/missing"), &log_path)
+            .unwrap();
+
+        let saved = crate::paths::task_dir("t-log-result").join("result.md");
+        assert_eq!(std::fs::read_to_string(saved).unwrap(), "stdout report");
+    }
+
+    #[test]
+    fn persist_result_file_uses_raw_text_log_when_source_missing() {
+        let temp = tempdir().unwrap();
+        let _aid_home = crate::paths::AidHomeGuard::set(temp.path());
+        let log_path = crate::paths::log_path("t-raw-log-result");
+        std::fs::create_dir_all(log_path.parent().unwrap()).unwrap();
+        std::fs::write(&log_path, "plain text report\nwith final findings").unwrap();
+
+        persist_result_file("t-raw-log-result", Some("result.md"), Some("/missing"), &log_path)
+            .unwrap();
+
+        let saved = crate::paths::task_dir("t-raw-log-result").join("result.md");
+        assert_eq!(
+            std::fs::read_to_string(saved).unwrap(),
+            "plain text report\nwith final findings"
+        );
+    }
+
+    #[test]
+    fn persist_result_file_skips_empty_or_missing_log_when_source_missing() {
+        let temp = tempdir().unwrap();
+        let _aid_home = crate::paths::AidHomeGuard::set(temp.path());
+        let missing_log = crate::paths::log_path("t-missing-log-result");
+
+        persist_result_file(
+            "t-missing-log-result",
+            Some("result.md"),
+            Some("/missing"),
+            &missing_log,
+        )
+        .unwrap();
+
+        let missing_saved = crate::paths::task_dir("t-missing-log-result").join("result.md");
+        assert!(!missing_saved.exists());
+
+        let empty_log = crate::paths::log_path("t-empty-log-result");
+        std::fs::create_dir_all(empty_log.parent().unwrap()).unwrap();
+        std::fs::write(&empty_log, "").unwrap();
+
+        persist_result_file(
+            "t-empty-log-result",
+            Some("result.md"),
+            Some("/missing"),
+            &empty_log,
+        )
+        .unwrap();
+
+        let empty_saved = crate::paths::task_dir("t-empty-log-result").join("result.md");
+        assert!(!empty_saved.exists());
     }
 }

@@ -135,7 +135,14 @@ fn final_dirty_assertion(
 }
 
 pub(crate) fn maybe_cleanup_fast_fail(store: &Store, task_id: &TaskId, task: &Task) { run_prompt::maybe_cleanup_fast_fail_impl(store, task_id, task); }
-pub(crate) fn persist_result_file(task_id: &str, result_file: Option<&str>, base_dir: Option<&str>) -> Result<()> { run_prompt::persist_result_file(task_id, result_file, base_dir) }
+pub(crate) fn persist_result_file(
+    task_id: &str,
+    result_file: Option<&str>,
+    base_dir: Option<&str>,
+    log_path: &Path,
+) -> Result<()> {
+    run_prompt::persist_result_file(task_id, result_file, base_dir, log_path)
+}
 pub(crate) fn maybe_auto_gc_after_completion(
     store: &Arc<Store>,
     task_id: &TaskId,

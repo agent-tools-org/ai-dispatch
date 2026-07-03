@@ -4,7 +4,7 @@
 use anyhow::{anyhow, Context, Result};
 use serde::Serialize;
 use std::{fs, sync::Arc};
-use crate::{cmd::show::worktree_diff, store::Store, types::{Task, TaskEvent}};
+use crate::{cmd::show::worktree_diff, paths, store::Store, types::{Task, TaskEvent}};
 
 #[path = "export_sharegpt.rs"]
 mod export_sharegpt;
@@ -128,10 +128,17 @@ fn format_cost(cost: Option<f64>) -> String {
 }
 fn read_output(task: &Task) -> Result<String> {
     if let Some(ref path) = task.output_path {
-        fs::read_to_string(path).with_context(|| format!("Failed to read output file {path}"))
-    } else {
-        Ok(String::new())
+        if !path.is_empty() {
+            return fs::read_to_string(path)
+                .with_context(|| format!("Failed to read output file {path}"));
+        }
     }
+    let persisted = paths::task_dir(task.id.as_str()).join("result.md");
+    if persisted.exists() {
+        return fs::read_to_string(&persisted)
+            .with_context(|| format!("Failed to read result file {}", persisted.display()));
+    }
+    Ok(String::new())
 }
 fn load_task(store: &Store, task_id: &str) -> Result<Task> {
     store
@@ -151,4 +158,64 @@ struct ExportPayload<'a> {
     events: Vec<String>,
     output: &'a str,
     diff: &'a str,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::paths::AidHomeGuard;
+    use crate::types::{AgentKind, TaskId, TaskStatus, VerifyStatus};
+    use chrono::Local;
+
+    fn task(id: &str) -> Task {
+        Task {
+            id: TaskId(id.to_string()),
+            agent: AgentKind::Codex,
+            custom_agent_name: None,
+            prompt: "prompt".to_string(),
+            resolved_prompt: None,
+            category: None,
+            status: TaskStatus::Done,
+            parent_task_id: None,
+            workgroup_id: None,
+            caller_kind: None,
+            caller_session_id: None,
+            agent_session_id: None,
+            repo_path: None,
+            worktree_path: None,
+            worktree_branch: None,
+            start_sha: None,
+            log_path: None,
+            output_path: None,
+            tokens: None,
+            prompt_tokens: None,
+            duration_ms: None,
+            model: None,
+            cost_usd: None,
+            exit_code: None,
+            created_at: Local::now(),
+            completed_at: None,
+            verify: None,
+            verify_status: VerifyStatus::Skipped,
+            pending_reason: None,
+            read_only: false,
+            budget: false,
+            audit_verdict: None,
+            audit_report_path: None,
+            delivery_assessment: None,
+        }
+    }
+
+    #[test]
+    fn read_output_uses_persisted_result_when_output_path_absent() {
+        let temp = tempfile::tempdir().unwrap();
+        let _aid_home = AidHomeGuard::set(temp.path());
+        let result_path = paths::task_dir("t-export-result").join("result.md");
+        std::fs::create_dir_all(result_path.parent().unwrap()).unwrap();
+        std::fs::write(&result_path, "exported report").unwrap();
+
+        let output = read_output(&task("t-export-result")).unwrap();
+
+        assert_eq!(output, "exported report");
+    }
 }

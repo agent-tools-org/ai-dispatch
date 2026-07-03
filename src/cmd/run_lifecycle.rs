@@ -385,7 +385,7 @@ fn run_task_postprocess_phase(
         handle_done_postprocess(store, task_id, args, &task, agent_kind, prompt_bundle);
     }
     maybe_cleanup_fast_fail(store, task_id, &task);
-    persist_result_file(task_id, args, effective_dir);
+    persist_result_file(task_id, args, &task, effective_dir);
     if task.status == TaskStatus::Failed {
         return Ok(handle_failed_postprocess(
             store,
@@ -423,13 +423,20 @@ fn handle_done_postprocess(
 fn persist_result_file(
     task_id: &TaskId,
     args: &RunArgs,
+    task: &Task,
     effective_dir: Option<&String>,
 ) {
     // Persist before failed-task worktree cleanup, otherwise the source file may disappear.
+    let log_path = task
+        .log_path
+        .as_deref()
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|| crate::paths::log_path(task_id.as_str()));
     if let Err(err) = run_prompt::persist_result_file(
         task_id.as_str(),
         args.result_file.as_deref(),
         effective_dir.map(String::as_str),
+        &log_path,
     ) {
         aid_warn!("[aid] Failed to persist result file: {err}");
     }

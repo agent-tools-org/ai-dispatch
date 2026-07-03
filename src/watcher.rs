@@ -15,9 +15,7 @@ mod transcript_tests;
 #[path = "watcher/streaming_tests.rs"]
 mod streaming_tests;
 
-// Re-export escape stripper for use by PTY and stream paths
 pub(crate) use esc::strip_terminal_escapes;
-
 use anyhow::Result;
 use chrono::Local;
 use std::sync::Arc;

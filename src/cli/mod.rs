@@ -19,6 +19,8 @@ mod doctor_tests;
 #[cfg(test)]
 mod retry_flag_tests;
 #[cfg(test)]
+mod respond_reply_flag_tests;
+#[cfg(test)]
 mod show_flag_tests;
 #[cfg(test)]
 mod watch_wait_flag_tests;

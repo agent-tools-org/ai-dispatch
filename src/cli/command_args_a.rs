@@ -171,29 +171,6 @@ pub struct BenchmarkArgs {
     pub verify: Option<String>,
 }
 
-#[derive(Args)]
-#[command(after_help = r#"Examples:
-  aid watch t-1234               # Live TUI for one task
-  aid watch --quiet t-1234       # Block until done (for scripts)
-  aid watch --stream --group wg-a # JSONL events for orchestrators
-  aid watch --quiet --group wg-a # Block until group finishes
-  aid watch --tui                # Full dashboard TUI"#)]
-pub struct WatchArgs {
-    pub task_ids: Vec<String>,
-    #[arg(long)]
-    pub group: Option<String>,
-    #[arg(long)]
-    pub tui: bool,
-    #[arg(long)]
-    pub quiet: bool,
-    #[arg(long, conflicts_with_all = ["tui", "quiet", "exit_on_await"])]
-    pub stream: bool,
-    #[arg(long)]
-    pub exit_on_await: bool,
-    #[arg(long)]
-    pub timeout: Option<u64>,
-}
-
 #[derive(Args, Default)]
 pub struct BoardArgs {
     #[arg(long)]

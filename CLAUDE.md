@@ -123,8 +123,8 @@ idle_timeout = 120
 
 ```bash
 aid watch t-1234                         # live TUI for one task
-aid watch --quiet t-1234                 # block until done (for scripts)
-aid watch --quiet --group wg-abc1        # block until group finishes
+aid watch --wait t-1234                  # block until done (for scripts)
+aid watch --wait --group wg-abc1         # block until group finishes
 aid watch --tui                          # full dashboard TUI
 aid watch --exit-on-await t-1234         # exit when task awaits input
 aid watch --timeout 600 t-1234           # timeout after 10 minutes

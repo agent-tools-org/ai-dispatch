@@ -2,7 +2,7 @@
 // Covers top-level command parsing; depends on clap Parser and cli module exports.
 
 use super::{BatchAction, Cli, Commands, ExperimentCommands, HookAction};
-use super::{command_args_a, command_args_b};
+use super::{command_args_a, command_args_b, command_args_watch};
 use crate::cli_actions::{ContainerAction, GroupAction};
 use clap::Parser;
 
@@ -163,10 +163,10 @@ fn run_iterate_flags_parse() {
 
 #[test]
 fn watch_timeout_flag_parses() {
-    let cli = Cli::try_parse_from(["aid", "watch", "--quiet", "--timeout", "60", "--group", "wg-a"]).unwrap();
+    let cli = Cli::try_parse_from(["aid", "watch", "--wait", "--timeout", "60", "--group", "wg-a"]).unwrap();
     match cli.command {
-        Some(Commands::Watch(command_args_a::WatchArgs { timeout, group, quiet, stream, .. })) => {
-            assert!(quiet);
+        Some(Commands::Watch(command_args_watch::WatchArgs { timeout, group, wait, stream, .. })) => {
+            assert!(wait);
             assert!(!stream);
             assert_eq!(timeout, Some(60));
             assert_eq!(group, Some("wg-a".to_string()));
@@ -179,9 +179,9 @@ fn watch_timeout_flag_parses() {
 fn watch_stream_flag_parses() {
     let cli = Cli::try_parse_from(["aid", "watch", "--stream", "--group", "wg-a"]).unwrap();
     match cli.command {
-        Some(Commands::Watch(command_args_a::WatchArgs { group, stream, quiet, .. })) => {
+        Some(Commands::Watch(command_args_watch::WatchArgs { group, stream, wait, .. })) => {
             assert!(stream);
-            assert!(!quiet);
+            assert!(!wait);
             assert_eq!(group, Some("wg-a".to_string()));
         }
         _ => panic!("expected Watch"),
@@ -190,8 +190,8 @@ fn watch_stream_flag_parses() {
 
 #[test]
 fn watch_stream_conflicts_with_quiet() {
-    let err = match Cli::try_parse_from(["aid", "watch", "--stream", "--quiet", "t-1234"]) {
-        Ok(_) => panic!("expected stream/quiet conflict"),
+    let err = match Cli::try_parse_from(["aid", "watch", "--stream", "--wait", "t-1234"]) {
+        Ok(_) => panic!("expected stream/wait conflict"),
         Err(err) => err,
     };
     assert!(err.to_string().contains("cannot be used with"));

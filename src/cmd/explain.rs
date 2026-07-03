@@ -4,6 +4,7 @@
 use anyhow::Result;
 use std::sync::Arc;
 
+use crate::agent_config;
 use crate::cmd::run::{self, RunArgs};
 use crate::cmd::show::{load_task, read_tail};
 use crate::paths;
@@ -16,7 +17,7 @@ pub(crate) async fn run_explain(store: Arc<Store>, task_id: &str, agent: Option<
     let log = read_tail(&paths::log_path(task_id), 50, "log unavailable");
     let context = build_explain_context(&task, &events, &stderr, &log);
     let prompt = build_explain_prompt(&context);
-    let agent_name = agent.unwrap_or_else(|| "gemini".to_string());
+    let agent_name = resolve_explain_agent(agent)?;
 
     println!("[explain] Analyzing task {task_id} via {agent_name}...");
     let _ = run::run(
@@ -32,6 +33,20 @@ pub(crate) async fn run_explain(store: Arc<Store>, task_id: &str, agent: Option<
     )
     .await?;
     Ok(())
+}
+
+fn resolve_explain_agent(agent: Option<String>) -> Result<String> {
+    match agent {
+        Some(agent) => Ok(agent),
+        None => {
+            if agent_config::is_agent_disabled("gemini") {
+                anyhow::bail!(
+                    "Default agent 'gemini' is disabled (choose another with: aid show --explain --agent <name>)"
+                );
+            }
+            Ok("gemini".to_string())
+        }
+    }
 }
 pub(crate) fn build_explain_context(task: &Task, events: &[TaskEvent], stderr_tail: &str, log_tail: &str) -> String {
     format!(
@@ -129,5 +144,21 @@ mod tests {
         let prompt = build_explain_prompt("task context");
         assert!(prompt.contains("Summary: exactly one sentence."));
         assert!(prompt.contains("[Execution Context]\ntask context"));
+    }
+
+    #[test]
+    fn resolve_explain_agent_rejects_disabled_default_agent() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let _guard = paths::AidHomeGuard::set(dir.path());
+        agent_config::save_agent_disabled("gemini", true).expect("disable agent");
+
+        let err = resolve_explain_agent(None)
+            .expect_err("disabled default should fail")
+            .to_string();
+
+        assert_eq!(
+            err,
+            "Default agent 'gemini' is disabled (choose another with: aid show --explain --agent <name>)"
+        );
     }
 }

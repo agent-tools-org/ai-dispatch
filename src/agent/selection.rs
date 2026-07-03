@@ -11,6 +11,7 @@ use selection_scoring::{
 };
 use super::classifier::{self, Complexity, TaskCategory};
 use super::{detect_agents, RunOpts};
+use crate::agent_config;
 use crate::rate_limit;
 use crate::store::Store;
 use crate::types::{AgentKind, TaskStatus};
@@ -26,6 +27,7 @@ pub(crate) fn select_agent_with_reason(
     team: Option<&TeamConfig>,
 ) -> (String, String) {
     let available = detect_agents();
+    let available = enabled_builtins(&available);
     select_agent_from(prompt, opts, &available, store, team)
 }
 
@@ -67,11 +69,13 @@ pub(crate) fn select_agent_from(
         team_default,
         budget,
     };
-    let primary_candidate = pick_best_candidate(BUILTIN_AGENTS, &ctx, budget);
-    let available_candidate = if available.is_empty() {
-        pick_best_candidate(BUILTIN_AGENTS, &ctx, budget)
+    let builtin_agents = enabled_builtins(BUILTIN_AGENTS);
+    let primary_candidate = pick_best_candidate(&builtin_agents, &ctx, budget);
+    let available_agents = enabled_builtins(available);
+    let available_candidate = if available_agents.is_empty() {
+        pick_best_candidate(&builtin_agents, &ctx, budget)
     } else {
-        pick_best_candidate(available, &ctx, budget)
+        pick_best_candidate(&available_agents, &ctx, budget)
     };
     let mut selected_name = available_candidate.kind.as_str().to_string();
     let mut selected_score = available_candidate.score;
@@ -79,6 +83,7 @@ pub(crate) fn select_agent_from(
     if let Some((custom_name, custom_score)) = load_custom_agents()
         .into_values()
         .filter(|config| AgentKind::parse_str(&config.id).is_none())
+        .filter(|config| !agent_config::is_agent_disabled(&config.id))
         .filter(|config| custom_command_installed(&config.command))
         .map(|config| {
             let mut score = custom_category_score(&config, profile.category);
@@ -207,6 +212,7 @@ pub(crate) fn budget_ranked_agents(
     };
     let mut candidates: Vec<Candidate> = BUILTIN_AGENTS
         .iter()
+        .filter(|kind| !agent_config::is_agent_disabled(kind.as_str()))
         .map(|&kind| candidate_for(kind, &ctx))
         .collect();
     candidates.sort_by(|a, b| compare_candidates(a, b, true).reverse());
@@ -224,6 +230,14 @@ pub(crate) fn recommend_model(
         Complexity::Low => "cheap", Complexity::Medium => "standard", Complexity::High => "premium",
     };
     models.iter().find(|m| m.tier == tier).or_else(|| models.first()).map(|m| m.model)
+}
+
+fn enabled_builtins(agents: &[AgentKind]) -> Vec<AgentKind> {
+    agents
+        .iter()
+        .copied()
+        .filter(|kind| !agent_config::is_agent_disabled(kind.as_str()))
+        .collect()
 }
 
 const CODING_FALLBACK_CHAIN: &[AgentKind] = &[
@@ -257,7 +271,11 @@ fn next_fallback_in_chain(
     let start = chain.iter().position(|kind| kind == agent)?;
     chain[start + 1..]
         .iter()
-        .find(|kind| available.contains(kind) && !rate_limit::is_rate_limited(kind))
+        .find(|kind| {
+            available.contains(kind)
+                && !agent_config::is_agent_disabled(kind.as_str())
+                && !rate_limit::is_rate_limited(kind)
+        })
         .copied()
 }
 
@@ -274,3 +292,5 @@ pub(crate) fn research_fallback_for(agent: &AgentKind) -> Option<AgentKind> {
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod disabled_tests;

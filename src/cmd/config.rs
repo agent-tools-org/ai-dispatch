@@ -11,6 +11,7 @@ use std::sync::Arc;
 
 use crate::agent;
 use crate::agent::registry;
+use crate::agent_config;
 use crate::cli_actions::ConfigAction;
 use crate::rate_limit;
 use crate::skills;
@@ -94,6 +95,9 @@ fn print_agents(store: &Arc<Store>) {
         Err(_) => (HashMap::new(), HashMap::new()),
     };
     for (kind, _, _, _, _) in AGENT_PROFILES {
+        if !builtin_agent_visible(*kind) {
+            continue;
+        }
         let status = if installed.contains(kind) { "✓" } else { "✗" };
         let profile = agent_profile(*kind, installed.contains(kind), history.get(kind), &model_history);
         println!("{} {}\n{}", status, kind.as_str(), profile);
@@ -101,20 +105,43 @@ fn print_agents(store: &Arc<Store>) {
     let custom_agents = registry::list_custom_agents();
     if custom_agents.is_empty() {
         println!("\nCustom agents: none found.");
-        return;
+    } else {
+        println!("\nCustom agents:");
+        for agent in custom_agents {
+            if agent_config::is_agent_disabled(&agent.id) {
+                continue;
+            }
+            let install_status = if command_installed(&agent.command) {
+                "installed"
+            } else {
+                "not installed"
+            };
+            println!("  - Name: {}", agent.id);
+            println!("    Display name: {}", agent.display_name);
+            println!("    Command: {} ({})", agent.command, install_status);
+            println!("    Capabilities: {}", format_capabilities(&agent.capabilities));
+        }
     }
-    println!("\nCustom agents:");
-    for agent in custom_agents {
-        let install_status = if command_installed(&agent.command) {
-            "installed"
-        } else {
-            "not installed"
-        };
-        println!("  - Name: {}", agent.id);
-        println!("    Display name: {}", agent.display_name);
-        println!("    Command: {} ({})", agent.command, install_status);
-        println!("    Capabilities: {}", format_capabilities(&agent.capabilities));
+    if let Some(line) = disabled_summary_line(&disabled_agent_names()) {
+        println!("\n{line}");
     }
+}
+
+fn builtin_agent_visible(kind: AgentKind) -> bool { !agent_config::is_agent_disabled(kind.as_str()) }
+
+fn disabled_agent_names() -> Vec<String> {
+    let mut names: Vec<String> = agent_config::load_agent_config()
+        .into_iter()
+        .filter_map(|(name, defaults)| defaults.disabled.then_some(name))
+        .collect();
+    names.sort();
+    names
+}
+
+fn disabled_summary_line(names: &[String]) -> Option<String> {
+    if names.is_empty() { return None; }
+    let hint = if names.len() == 1 { names[0].as_str() } else { "<name>" };
+    Some(format!("Disabled: {} (enable with aid agent config {hint} --enable)", names.join(", ")))
 }
 
 fn print_skills() -> Result<()> {

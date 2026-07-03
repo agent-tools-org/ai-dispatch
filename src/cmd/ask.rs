@@ -7,6 +7,7 @@ use std::sync::Arc;
 
 use crate::cmd::run::{self, RunArgs};
 use crate::cmd::show;
+use crate::agent_config;
 use crate::store::Store;
 use crate::types::TaskId;
 
@@ -61,8 +62,17 @@ fn prepare_request(
 ) -> Result<AskRequest> {
     let context_files = detect_context_files(&prompt, files);
     let prompt = inject_context(prompt, &context_files)?;
+    let agent_name = match agent {
+        Some(agent) => agent,
+        None => {
+            if agent_config::is_agent_disabled("gemini") {
+                anyhow::bail!("Default agent 'gemini' is disabled (choose another with: aid ask --agent <name>)");
+            }
+            "gemini".to_string()
+        }
+    };
     Ok(AskRequest {
-        agent_name: agent.unwrap_or_else(|| "gemini".to_string()),
+        agent_name,
         prompt,
         model,
         output,
@@ -119,4 +129,33 @@ fn read_answer(task_id: &TaskId, capture_path: &Path) -> Result<String> {
         return Ok(std::fs::read_to_string(capture_path)?);
     }
     show::log_text(task_id.as_str())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::paths::AidHomeGuard;
+
+    #[test]
+    fn prepare_request_rejects_disabled_default_agent() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let _guard = AidHomeGuard::set(dir.path());
+        agent_config::save_agent_disabled("gemini", true).expect("disable agent");
+
+        let err = match prepare_request(
+            "Explain this".to_string(),
+            None,
+            None,
+            vec![],
+            None,
+        ) {
+            Ok(_) => panic!("disabled default should fail"),
+            Err(err) => err.to_string(),
+        };
+
+        assert_eq!(
+            err,
+            "Default agent 'gemini' is disabled (choose another with: aid ask --agent <name>)"
+        );
+    }
 }

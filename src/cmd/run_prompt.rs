@@ -28,7 +28,7 @@ const PROMPT_TOKEN_LIMIT: usize = 30_000;
 const BATCH_SIBLING_LIMIT: usize = 10;
 const BATCH_SIBLING_PROMPT_LIMIT: usize = 80;
 
-pub(super) struct PromptBundle { pub effective_prompt: String, pub context_files: Vec<String>, pub prompt_tokens: i64, pub injected_memory_ids: Vec<String> }
+pub(crate) struct PromptBundle { pub effective_prompt: String, pub context_files: Vec<String>, pub prompt_tokens: i64, pub injected_memory_ids: Vec<String> }
 
 fn sanitize_injected_text(text: &str) -> String {
     let mut result = Vec::new();

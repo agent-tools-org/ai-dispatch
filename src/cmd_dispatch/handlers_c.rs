@@ -112,6 +112,7 @@ pub(super) fn doctor(store: Arc<store::Store>, apply: bool) -> Result<()> {
 pub(super) async fn show(
     store: Arc<store::Store>,
     task_id: String,
+    events: bool,
     context: bool,
     diff: bool,
     summary: bool,
@@ -131,6 +132,7 @@ pub(super) async fn show(
         store,
         cmd::show::ShowArgs {
             task_id,
+            events,
             context,
             diff,
             summary,

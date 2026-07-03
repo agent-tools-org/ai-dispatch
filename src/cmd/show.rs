@@ -14,7 +14,7 @@ use crate::types::TaskStatus;
 mod show_output;
 
 pub use show_output::{
-    diff_text, log_text, output_text, output_text_brief, output_text_for_task,
+    diff_text, log_text, log_text_brief, output_text, output_text_brief, output_text_for_task,
 };
 #[allow(unused_imports)]
 pub use show_output::output_text_full;
@@ -41,6 +41,7 @@ use show_helpers::{
 
 pub struct ShowArgs {
     pub task_id: String,
+    pub events: bool,
     pub context: bool,
     pub diff: bool,
     pub summary: bool,
@@ -59,8 +60,9 @@ pub struct ShowArgs {
 
 #[derive(Clone, Copy)]
 pub enum ShowMode {
+    Default,
     Summary,
-    StatOnly,
+    Events,
     Context,
     Diff,
     Output,
@@ -87,7 +89,9 @@ pub async fn run(store: Arc<Store>, args: ShowArgs) -> Result<()> {
         return cmd::explain::run_explain(store, &args.task_id, args.agent, args.model).await;
     }
     let mode = if args.summary {
-        ShowMode::StatOnly
+        ShowMode::Summary
+    } else if args.events {
+        ShowMode::Events
     } else if args.diff {
         ShowMode::Diff
     } else if args.output {
@@ -97,12 +101,13 @@ pub async fn run(store: Arc<Store>, args: ShowArgs) -> Result<()> {
     } else if args.log {
         ShowMode::Log
     } else {
-        ShowMode::Summary
+        ShowMode::Default
     };
-    let _ = args.full;
     let task = load_task(&store, &args.task_id)?;
-    let text = if matches!(mode, ShowMode::Output) && args.brief {
-        render_output_brief_text(&store, &args.task_id)?
+    let text = if matches!(mode, ShowMode::Output) {
+        render_output_text(&store, &args.task_id, args.full, args.brief)?
+    } else if matches!(mode, ShowMode::Log) {
+        render_log_text(&args.task_id, args.full)?
     } else if matches!(mode, ShowMode::Diff) {
         if let Some(file) = args.file.as_deref() {
             diff_text_file(&store, &args.task_id, file)?
@@ -128,6 +133,13 @@ pub async fn run(store: Arc<Store>, args: ShowArgs) -> Result<()> {
     Ok(())
 }
 
+fn render_output_text(store: &Arc<Store>, task_id: &str, full: bool, brief: bool) -> Result<String> {
+    if full && !brief {
+        return output_text(store, task_id);
+    }
+    render_output_brief_text(store, task_id)
+}
+
 fn render_output_brief_text(store: &Arc<Store>, task_id: &str) -> Result<String> {
     let mut text = output_text_brief(store, task_id)?;
     let truncated = output_text(store, task_id)
@@ -138,16 +150,24 @@ fn render_output_brief_text(store: &Arc<Store>, task_id: &str) -> Result<String>
             text.push('\n');
         }
         text.push_str(&format!(
-            "[truncated — use `aid show {task_id} --output` for full content]"
+            "[truncated — use `aid show {task_id} --output --full` for full content]"
         ));
     }
     Ok(text)
 }
 
+fn render_log_text(task_id: &str, full: bool) -> Result<String> {
+    if full {
+        return log_text(task_id);
+    }
+    log_text_brief(task_id)
+}
+
 pub fn render_mode_text(store: &Arc<Store>, task_id: &str, mode: ShowMode) -> Result<String> {
     match mode {
-        ShowMode::Summary => audit_text(store, task_id),
-        ShowMode::StatOnly => summary_text(store, task_id),
+        ShowMode::Default => audit_text(store, task_id),
+        ShowMode::Summary => summary_text(store, task_id),
+        ShowMode::Events => events_text(store, task_id),
         ShowMode::Context => context_text(store, task_id),
         ShowMode::Diff => diff_text(store, task_id),
         ShowMode::Output => output_text(store, task_id),
@@ -167,6 +187,23 @@ fn result_text(store: &Arc<Store>, task_id: &str) -> Result<String> {
         return Ok("No result file for this task\n".to_string());
     }
     Ok(std::fs::read_to_string(path)?)
+}
+
+fn events_text(store: &Arc<Store>, task_id: &str) -> Result<String> {
+    let events = store.get_events(task_id)?;
+    if events.is_empty() {
+        return Ok("No events.\n".to_string());
+    }
+    let mut out = String::from("Events:\n");
+    for event in events {
+        out.push_str(&format!(
+            "  {}  [{:>10}] {}\n",
+            event.timestamp.format("%H:%M:%S"),
+            event.event_kind.as_str(),
+            event.detail,
+        ));
+    }
+    Ok(out)
 }
 
 /// When an audit-style task ends without producing the structured `result.md`,
@@ -280,7 +317,7 @@ pub fn audit_text(store: &Arc<Store>, task_id: &str) -> Result<String> {
         out.push_str(&findings);
         out.push('\n');
         aid_hint!(
-            "[aid] Research task. Full output: aid show {} --output",
+            "[aid] Research task. Full output: aid show {} --output --full",
             task.id
         );
     }
@@ -401,6 +438,10 @@ pub fn context_text(store: &Arc<Store>, task_id: &str) -> Result<String> {
 #[cfg(test)]
 #[path = "show_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "show_mode_tests.rs"]
+mod show_mode_tests;
 
 #[cfg(test)]
 #[path = "show_checklist_tests.rs"]

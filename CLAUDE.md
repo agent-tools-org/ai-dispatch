@@ -159,9 +159,11 @@ aid respond t-1234 -f response.md        # respond with file contents
 
 ```bash
 aid show <task-id>                   # smart default: diff stat OR findings
+aid show <task-id> --events          # events only
 aid show <task-id> --diff            # full diff (code tasks)
-aid show <task-id> --output          # agent messages
+aid show <task-id> --output          # agent messages (truncated)
 aid show <task-id> --output --full   # complete untruncated output
+aid show <task-id> --log --full      # complete raw log
 aid show <task-id> --summary         # one-line status + conclusion
 aid show <task-id> --context         # original + resolved prompt
 aid show <task-id> --explain         # AI-generated explanation of changes

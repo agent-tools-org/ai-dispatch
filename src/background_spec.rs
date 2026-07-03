@@ -41,7 +41,19 @@ pub struct BackgroundRunSpec {
     #[serde(default)]
     pub checklist: Vec<String>,
     #[serde(default)]
+    pub hooks: Vec<String>,
+    #[serde(default)]
     pub template: Option<String>,
+    #[serde(default)]
+    pub worktree: Option<String>,
+    #[serde(default)]
+    pub base_branch: Option<String>,
+    #[serde(default)]
+    pub peer_review: Option<String>,
+    #[serde(default)]
+    pub audit: bool,
+    #[serde(default)]
+    pub scope: Vec<String>,
     #[serde(default)]
     pub interactive: bool,
     #[serde(default)]
@@ -150,7 +162,13 @@ mod tests {
             group: Some("core".to_string()),
             skills: vec!["ai-coding".to_string()],
             checklist: vec!["confirm retry path".to_string()],
+            hooks: vec!["on_fail:echo fail".to_string()],
             template: Some("default".to_string()),
+            worktree: Some("feature/retry".to_string()),
+            base_branch: Some("main".to_string()),
+            peer_review: Some("codex".to_string()),
+            audit: true,
+            scope: vec!["src".to_string()],
             interactive: true,
             on_done: Some("echo done".to_string()),
             cascade: vec!["notify".to_string()],
@@ -174,6 +192,7 @@ mod tests {
         assert_eq!(value.get("result_file").and_then(|v| v.as_str()), Some("result.md"));
         assert_eq!(value.get("iterate").and_then(|v| v.as_u64()), Some(3));
         assert!(value.get("pre_task_dirty_paths").is_some());
+        assert_eq!(value.get("audit").and_then(|v| v.as_bool()), Some(true));
 
         let decoded: BackgroundRunSpec = serde_json::from_value(value).unwrap();
         assert!(decoded.read_only);
@@ -184,6 +203,11 @@ mod tests {
             decoded.pre_task_dirty_paths.as_deref(),
             Some(&["?? pre-existing.rs".to_string()][..])
         );
+        assert_eq!(decoded.hooks, ["on_fail:echo fail".to_string()]);
+        assert_eq!(decoded.worktree.as_deref(), Some("feature/retry"));
+        assert_eq!(decoded.base_branch.as_deref(), Some("main"));
+        assert_eq!(decoded.peer_review.as_deref(), Some("codex"));
+        assert_eq!(decoded.scope, ["src".to_string()]);
     }
 
     #[test]
@@ -197,9 +221,19 @@ mod tests {
             .as_object_mut()
             .unwrap()
             .remove("audit_report_mode");
+        value
+            .as_object_mut()
+            .unwrap()
+            .remove("hooks");
+        value
+            .as_object_mut()
+            .unwrap()
+            .remove("audit");
 
         let decoded: BackgroundRunSpec = serde_json::from_value(value).unwrap();
         assert!(!decoded.read_only);
         assert!(!decoded.audit_report_mode);
+        assert!(decoded.hooks.is_empty());
+        assert!(!decoded.audit);
     }
 }

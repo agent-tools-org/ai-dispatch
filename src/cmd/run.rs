@@ -46,6 +46,8 @@ mod run_dispatch;
 pub(crate) use self::run_agent::run_agent_process;
 pub(crate) use self::run_dispatch::run;
 pub(crate) use self::run_iterate::iterate_config;
+pub(crate) use self::run_lifecycle::{post_run_lifecycle, LifecycleMode};
+pub(crate) use self::run_prompt::PromptBundle;
 #[allow(unused_imports)]
 pub(crate) use self::run_iterate::IterateConfig;
 pub(crate) use self::run_iterate::maybe_iterate;

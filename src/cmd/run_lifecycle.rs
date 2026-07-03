@@ -14,6 +14,18 @@ use super::run_post::{
 };
 use super::{RunArgs, inherit_retry_base_branch, iterate_config, maybe_auto_retry_after_checklist_miss, maybe_auto_retry_after_verify_failure, maybe_cleanup_fast_fail, maybe_iterate, maybe_judge_retry, maybe_verify, run, run_agent, run_prompt};
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum LifecycleMode {
+    Foreground,
+    Background,
+}
+
+impl LifecycleMode {
+    fn is_foreground(self) -> bool {
+        matches!(self, Self::Foreground)
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum LifecyclePhaseDecision {
     Continue,
@@ -32,6 +44,7 @@ impl From<DirtyWorktreeAction> for LifecyclePhaseDecision {
 }
 
 pub(crate) async fn post_run_lifecycle(
+    mode: LifecycleMode,
     store: &Arc<Store>,
     task_id: &TaskId,
     args: &RunArgs,
@@ -153,7 +166,7 @@ pub(crate) async fn post_run_lifecycle(
         }
     }
     crate::webhook::fire_task_webhooks(store, task_id.as_str()).await;
-    if args.announce {
+    if mode.is_foreground() && args.announce {
         let status_hint = if let Some(task) = store.get_task(task_id.as_str())? {
             match task.status {
                 TaskStatus::Done => format!("[aid] Next: aid show {task_id} --diff | aid merge {task_id}"),
@@ -250,7 +263,7 @@ pub(crate) async fn post_run_lifecycle(
     } else {
         true
     };
-    if completed_normally { aid_info!("[aid] View in TUI: aid board"); }
+    if mode.is_foreground() && completed_normally { aid_info!("[aid] View in TUI: aid board"); }
     Ok(None)
 }
 

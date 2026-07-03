@@ -224,6 +224,7 @@ pub async fn retry_task(
         agent: None,
         dir: None,
         reset: false,
+        bg: false,
     }).await {
         Ok(new_task_id) => (StatusCode::OK, Json(ActionResponse {
             ok: true,

@@ -97,7 +97,7 @@ async fn dispatch_primary(store: Arc<crate::store::Store>, command: Commands) ->
 
 async fn dispatch_secondary(store: Arc<crate::store::Store>, command: Commands) -> Result<()> {
     match command {
-        Commands::Retry(command_args_b::RetryArgs { task_id, feedback, agent, dir, reset }) => handlers_b::retry(store, task_id, feedback, agent, dir, reset).await,
+        Commands::Retry(command_args_b::RetryArgs { task_id, feedback, agent, dir, reset, bg }) => handlers_b::retry(store, task_id, feedback, agent, dir, reset, bg).await,
         Commands::Merge(command_args_b::MergeArgs { task_id, group, approve, check, force, target, lanes }) => {
             handlers_b::merge(store, task_id, group, approve, check, force, target, lanes)
         }

@@ -8,6 +8,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::OnceLock;
 
+use super::read_only::read_only_prompt;
 use super::RunOpts;
 use crate::types::*;
 
@@ -127,20 +128,6 @@ fn agy_version_string() -> Option<String> {
         .ok()?;
     let s = String::from_utf8_lossy(&output.stdout).trim().to_string();
     if s.is_empty() { None } else { Some(s) }
-}
-
-fn read_only_prompt(prompt: &str, opts: &RunOpts) -> String {
-    if opts.result_file.is_some() {
-        format!(
-            "IMPORTANT: READ-ONLY MODE. Do NOT modify, create, or delete any files, EXCEPT the result file specified in this prompt. Only read, analyze, and write your findings to the designated result file.\n\n{}",
-            prompt
-        )
-    } else {
-        format!(
-            "IMPORTANT: READ-ONLY MODE. Do NOT modify, create, or delete any files. Only read and analyze.\n\n{}",
-            prompt
-        )
-    }
 }
 
 fn agy_include_directories(dir: Option<&str>, context_files: &[String]) -> Vec<String> {

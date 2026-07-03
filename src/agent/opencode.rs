@@ -6,6 +6,7 @@ use chrono::Local;
 use serde_json::json;
 use std::process::Command;
 
+use super::read_only::read_only_prompt;
 use super::truncate::{capped_detail, capped_detail_with, truncate_text};
 use super::RunOpts;
 use crate::rate_limit;
@@ -27,17 +28,7 @@ impl super::Agent for OpenCodeAgent {
             aid_warn!("[aid] ⚠OpenCode read-only is prompt-level only, not enforced. Use --worktree for isolation.");
         }
         let effective_prompt = if opts.read_only {
-            if opts.result_file.is_some() {
-                format!(
-                    "IMPORTANT: READ-ONLY MODE. Do NOT modify, create, or delete any files, EXCEPT the result file specified in this prompt. Only read, analyze, and write your findings to the designated result file.\n\n{}",
-                    prompt
-                )
-            } else {
-                format!(
-                    "IMPORTANT: READ-ONLY MODE. Do NOT modify, create, or delete any files. Only read and analyze.\n\n{}",
-                    prompt
-                )
-            }
+            read_only_prompt(prompt, opts)
         } else {
             prompt.to_string()
         };

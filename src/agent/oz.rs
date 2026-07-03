@@ -6,6 +6,7 @@ use anyhow::Result;
 use chrono::Local;
 use std::process::Command;
 
+use super::read_only::read_only_prompt;
 use super::truncate::capped_detail;
 use super::RunOpts;
 use crate::rate_limit;
@@ -25,17 +26,7 @@ impl super::Agent for OzAgent {
     fn build_command(&self, prompt: &str, opts: &RunOpts) -> Result<Command> {
         let prompt_with_ctx = super::embed_context_in_prompt(prompt, &opts.context_files)?;
         let effective_prompt = if opts.read_only {
-            if opts.result_file.is_some() {
-                format!(
-                    "IMPORTANT: READ-ONLY MODE. Do NOT modify, create, or delete any files, EXCEPT the result file specified in this prompt. Only read, analyze, and write your findings to the designated result file.\n\n{}",
-                    prompt_with_ctx
-                )
-            } else {
-                format!(
-                    "IMPORTANT: READ-ONLY MODE. Do NOT modify, create, or delete any files. Only read and analyze.\n\n{}",
-                    prompt_with_ctx
-                )
-            }
+            read_only_prompt(&prompt_with_ctx, opts)
         } else {
             prompt_with_ctx
         };

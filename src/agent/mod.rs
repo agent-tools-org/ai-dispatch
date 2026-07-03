@@ -17,6 +17,7 @@ pub mod opencode;
 pub(crate) mod opencode_overlay;
 pub mod oz;
 pub mod qwen;
+pub(crate) mod read_only;
 pub(crate) mod custom;
 pub(crate) mod registry;
 pub mod classifier;

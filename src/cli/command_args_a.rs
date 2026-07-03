@@ -117,7 +117,7 @@ Batch TOML format:
   read_only = false                      # Read-only mode
   budget = false                         # Budget/cheap mode
 
-  [[tasks]]
+  [[task]]
   name = "types"                         # Task name (for depends_on)
   agent = "codex"                        # Override default agent
   prompt = "Create shared types"         # Task prompt

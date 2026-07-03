@@ -12,7 +12,7 @@ use tempfile::TempDir;
 
 use crate::state::{
     compute_state, format_state_summary, load_state, refresh_project_state, save_state,
-    state_path, ContextState, HealthState, LearnedState, PerformanceState, ProjectState,
+    state_path, ContextState, HealthState, PerformanceState, ProjectState,
 };
 use crate::store::{Store, TaskCompletionUpdate};
 use crate::types::{AgentKind, Task, TaskId, TaskStatus, VerifyStatus};
@@ -121,7 +121,6 @@ fn compute_state_aggregates_project_metrics() {
     assert_eq!(state.performance.best_agent.as_deref(), Some("codex"));
     assert_eq!(state.context.last_task_id.as_deref(), Some("t-1"));
     assert_eq!(state.health.last_verify_status.as_deref(), None);
-    assert_eq!(state.learned.effective_tools, Vec::<String>::new());
 }
 
 #[test]
@@ -229,10 +228,6 @@ fn sample_state() -> ProjectState {
             last_task_id: Some("t-abcd".to_string()),
             last_task_agent: Some("codex".to_string()),
             active_branch: Some("main".to_string()),
-        },
-        learned: LearnedState {
-            effective_tools: Vec::new(),
-            common_failure_patterns: Vec::new(),
         },
     }
 }

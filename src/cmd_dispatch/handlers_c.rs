@@ -72,7 +72,7 @@ pub(super) async fn board(
     Ok(())
 }
 
-pub(super) fn completions() -> Result<()> {
+pub(super) fn notifications() -> Result<()> {
     let text = notify::read_recent(20)?;
     if !text.is_empty() {
         println!("{text}");

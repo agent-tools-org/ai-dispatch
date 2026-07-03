@@ -2,7 +2,7 @@
 // Exports: make_task, seed_task, make_stored_task
 // Deps: crate::{batch,store,types}
 use crate::batch;
-use crate::store::{Store, TaskCompletionUpdate};
+use crate::store::Store;
 use crate::types::Task;
 use crate::types::{AgentKind, TaskId, TaskStatus, VerifyStatus};
 use chrono::Local;
@@ -60,32 +60,12 @@ pub(super) fn make_task(name: &str, conditional: bool, on_success: Option<&str>)
 }
 
 pub(super) fn seed_task(store: &Store, task_id: &str, status: TaskStatus, cost_usd: Option<f64>) {
-    store
-        .insert_waiting_task(
-            task_id,
-            "codex",
-            "prompt",
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            false,
-            false,
-        )
-        .unwrap();
-    store
-        .update_task_completion(TaskCompletionUpdate {
-            id: task_id,
-            status,
-            tokens: None,
-            duration_ms: 1_000,
-            model: Some("gpt-5"),
-            cost_usd,
-            exit_code: None,
-        })
-        .unwrap();
+    let mut task = make_stored_task(task_id, AgentKind::Codex, status);
+    task.duration_ms = Some(1_000);
+    task.model = Some("gpt-5".to_string());
+    task.cost_usd = cost_usd;
+    task.completed_at = Some(Local::now());
+    store.insert_task(&task).unwrap();
 }
 
 pub(super) fn make_stored_task(id: &str, agent: AgentKind, status: TaskStatus) -> Task {

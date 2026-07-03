@@ -191,7 +191,7 @@ pub(crate) fn rescue_quota_failed_task(
     };
     if task.status == TaskStatus::Failed && task.verify_status == VerifyStatus::Passed {
         aid_info!("[aid] Rescuing quota-failed task {} — verify passed", task_id);
-        let _ = store.update_task_status(task_id.as_str(), TaskStatus::Done);
+        let _ = crate::task_lifecycle::rescue_to_done(store, task_id);
     }
 }
 

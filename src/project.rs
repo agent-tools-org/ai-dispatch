@@ -41,6 +41,20 @@ pub struct ProjectConfig {
     #[serde(default)]
     pub container: Option<String>,
     #[serde(default)]
+    pub idle_timeout: Option<u64>,
+    #[serde(default)]
+    pub max_duration_mins: Option<i64>,
+    #[serde(default)]
+    pub hard_cap_hours: Option<i64>,
+    #[serde(default)]
+    pub idle_warn_secs: Option<u64>,
+    #[serde(default)]
+    pub idle_nudge_secs: Option<u64>,
+    #[serde(default)]
+    pub idle_escalate_secs: Option<u64>,
+    #[serde(default)]
+    pub unstick: ProjectUnstickConfig,
+    #[serde(default)]
     pub gitbutler: Option<String>,
     #[serde(default)]
     pub keep_worktrees_after_done: bool,
@@ -60,6 +74,18 @@ pub struct ProjectConfig {
     pub agents: ProjectAgents,
     #[serde(skip)]
     pub audit: ProjectAuditConfig,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+#[derive(Default)]
+pub struct ProjectUnstickConfig {
+    #[serde(default)]
+    pub warn_after_secs: Option<u64>,
+    #[serde(default)]
+    pub nudge_after_secs: Option<u64>,
+    #[serde(default)]
+    pub escalate_after_secs: Option<u64>,
 }
 
 #[derive(Debug, Clone, Deserialize)]

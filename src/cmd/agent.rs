@@ -102,7 +102,7 @@ fn config_agent(
         let disabled = agent_config::is_agent_disabled(&config_name);
         println!("[aid] {config_name} config:");
         println!("  model: {}", current_model.as_deref().unwrap_or("(default)"));
-        println!("  idle_timeout: {}", current_idle.map_or("(default 300s)".to_string(), |s| format!("{s}s")));
+        println!("  idle_timeout: {}", current_idle.map_or("(default 600s)".to_string(), |s| format!("{s}s")));
         println!("  disabled: {}", disabled);
     }
     Ok(())

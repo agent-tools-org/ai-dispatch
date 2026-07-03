@@ -28,7 +28,18 @@ pub fn run_agent_process(
     model: Option<&str>,
     streaming: bool,
 ) -> Result<()> {
-    run_agent_process_with_control(agent, cmd, task_id, store, log_path, output_path, model, streaming, None)
+    run_agent_process_with_control(
+        agent,
+        cmd,
+        task_id,
+        store,
+        log_path,
+        output_path,
+        model,
+        streaming,
+        crate::timeout_policy::TimeoutPolicy::from_command(cmd),
+        None,
+    )
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -41,6 +52,7 @@ pub(crate) fn run_agent_process_with_control(
     output_path: Option<&str>,
     model: Option<&str>,
     streaming: bool,
+    timeout_policy: crate::timeout_policy::TimeoutPolicy,
     control: Option<PtyRunControl>,
 ) -> Result<()> {
     let start = std::time::Instant::now();
@@ -69,7 +81,7 @@ pub(crate) fn run_agent_process_with_control(
     let rx = spawn_reader_thread(bridge.take_reader()?);
     let mut log_file = std::fs::File::create(log_path)?;
     let workgroup_id = store.get_task(task_id.as_str())?.and_then(|task| task.workgroup_id);
-    let mut state = MonitorState::new(streaming, workgroup_id);
+    let mut state = MonitorState::with_policy(streaming, workgroup_id, timeout_policy);
     monitor_bridge(
         agent,
         task_id,
@@ -78,8 +90,7 @@ pub(crate) fn run_agent_process_with_control(
         &rx,
         &mut log_file,
         &mut state,
-        Some(crate::idle_timeout::idle_timeout_from_command(cmd)),
-        None,
+        Some(timeout_policy.idle),
     )?;
     if bridge.is_alive() {
         let _ = bridge.kill_group();

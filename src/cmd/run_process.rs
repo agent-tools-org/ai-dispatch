@@ -16,15 +16,11 @@ const STDERR_EXCERPT_LINES: usize = 8;
 const STDERR_EXCERPT_CHARS: usize = 400;
 
 pub(crate) struct RunProcessArgs<'a> {
-    pub agent: &'a dyn crate::agent::Agent,
-    pub cmd: Command,
-    pub task_id: &'a TaskId,
-    pub store: &'a Arc<Store>,
-    pub log_path: &'a std::path::Path,
-    pub output_path: Option<&'a str>,
-    pub model: Option<&'a str>,
-    pub streaming: bool,
+    pub agent: &'a dyn crate::agent::Agent, pub cmd: Command, pub task_id: &'a TaskId,
+    pub store: &'a Arc<Store>, pub log_path: &'a std::path::Path,
+    pub output_path: Option<&'a str>, pub model: Option<&'a str>, pub streaming: bool,
     pub workgroup_id: Option<&'a str>,
+    pub timeout_policy: crate::timeout_policy::TimeoutPolicy,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -35,11 +31,7 @@ pub(crate) struct FailureContext {
     pub worktree_created: bool,
 }
 
-pub(crate) fn capture_failure_context(
-    store: &Store,
-    task_id: &TaskId,
-    cmd: &Command,
-) -> FailureContext {
+pub(crate) fn capture_failure_context(store: &Store, task_id: &TaskId, cmd: &Command) -> FailureContext {
     let std_cmd = cmd.as_std();
     let task = store.get_task(task_id.as_str()).ok().flatten();
     FailureContext {
@@ -55,13 +47,7 @@ pub(crate) fn capture_failure_context(
     }
 }
 
-pub(crate) fn insert_phase_error_event(
-    store: &Store,
-    task_id: &TaskId,
-    phase: &str,
-    error: &str,
-    stderr: Option<&str>,
-) {
+pub(crate) fn insert_phase_error_event(store: &Store, task_id: &TaskId, phase: &str, error: &str, stderr: Option<&str>) {
     let mut detail = format!("Failed during {phase}: {error}");
     if let Some(stderr) = stderr.filter(|stderr| !stderr.is_empty()) {
         detail.push_str("\nStderr: ");
@@ -91,11 +77,7 @@ pub(crate) fn stderr_excerpt(task_id: &TaskId) -> Option<String> {
     Some(compact_excerpt(&lines[start..].join(" | "), STDERR_EXCERPT_CHARS))
 }
 
-pub(crate) fn resolve_failure_exit_code(
-    store: &Store,
-    task_id: &TaskId,
-    exit_code: Option<i32>,
-) -> Option<i32> {
+pub(crate) fn resolve_failure_exit_code(store: &Store, task_id: &TaskId, exit_code: Option<i32>) -> Option<i32> {
     exit_code.or_else(|| {
         store
             .get_events(task_id.as_str())
@@ -112,13 +94,7 @@ pub(crate) fn resolve_failure_exit_code(
     })
 }
 
-pub(crate) fn record_execution_failure(
-    store: &Store,
-    task_id: &TaskId,
-    duration_ms: i64,
-    exit_code: Option<i32>,
-    context: &FailureContext,
-) {
+pub(crate) fn record_execution_failure(store: &Store, task_id: &TaskId, duration_ms: i64, exit_code: Option<i32>, context: &FailureContext) {
     let reason = match exit_code {
         Some(code) => format!("agent exited with code {code}"),
         None => "agent process failed".to_string(),
@@ -128,13 +104,7 @@ pub(crate) fn record_execution_failure(
     insert_fast_fail_snapshot_event(store, task_id, duration_ms, exit_code, context);
 }
 
-fn insert_fast_fail_snapshot_event(
-    store: &Store,
-    task_id: &TaskId,
-    duration_ms: i64,
-    exit_code: Option<i32>,
-    context: &FailureContext,
-) {
+fn insert_fast_fail_snapshot_event(store: &Store, task_id: &TaskId, duration_ms: i64, exit_code: Option<i32>, context: &FailureContext) {
     if duration_ms >= FAST_FAIL_SNAPSHOT_MS || !matches!(exit_code, Some(code) if code != 0) {
         return;
     }
@@ -182,11 +152,12 @@ pub(crate) async fn run_agent_process_impl(args: RunProcessArgs<'_>) -> Result<(
         model,
         streaming,
         workgroup_id,
+        timeout_policy,
     } = args;
     let start = std::time::Instant::now();
     // No max-duration monitor here: background reaping owns that policy using
-    // the shared default, while foreground runs use run_agent_process_with_timeout.
-    let idle_timeout = crate::idle_timeout::idle_timeout_from_tokio_command(&cmd);
+    // the persisted spec, while foreground runs use run_agent_process_with_timeout.
+    let idle_timeout = timeout_policy.idle;
     let failure_context = capture_failure_context(store.as_ref(), task_id, &cmd);
     #[cfg(unix)]
     cmd.process_group(0);

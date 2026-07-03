@@ -2,12 +2,11 @@
 // Exports env-based readers/writers plus the shared 600s default.
 
 use std::collections::HashMap;
-use std::ffi::OsStr;
 use std::time::Duration;
 
-pub(crate) const DEFAULT_IDLE_TIMEOUT_SECS: u64 = 600;
+pub(crate) const DEFAULT_IDLE_TIMEOUT_SECS: u64 = crate::timeout_policy::DEFAULT_IDLE_SECS;
 pub(crate) const DEFAULT_IDLE_TIMEOUT: Duration = Duration::from_secs(DEFAULT_IDLE_TIMEOUT_SECS);
-pub(crate) const IDLE_TIMEOUT_ENV: &str = "AID_IDLE_TIMEOUT_SECS";
+pub(crate) const IDLE_TIMEOUT_ENV: &str = crate::timeout_policy::ENV_IDLE_SECS;
 
 pub(crate) fn env_with_idle_timeout(
     env: Option<HashMap<String, String>>,
@@ -27,25 +26,11 @@ pub(crate) fn idle_timeout_secs_from_env(env: Option<&HashMap<String, String>>) 
 }
 
 pub(crate) fn idle_timeout_from_command(cmd: &std::process::Command) -> Duration {
-    idle_timeout_from_envs(cmd.get_envs())
+    crate::timeout_policy::TimeoutPolicy::from_command(cmd).idle
 }
 
 pub(crate) fn idle_timeout_from_tokio_command(cmd: &tokio::process::Command) -> Duration {
-    idle_timeout_from_envs(cmd.as_std().get_envs())
-}
-
-fn idle_timeout_from_envs<'a, I>(mut envs: I) -> Duration
-where
-    I: Iterator<Item = (&'a OsStr, Option<&'a OsStr>)>,
-{
-    envs.find_map(|(key, value)| {
-        if key != OsStr::new(IDLE_TIMEOUT_ENV) {
-            return None;
-        }
-        value.and_then(OsStr::to_str).and_then(parse_idle_timeout_secs)
-    })
-    .map(Duration::from_secs)
-    .unwrap_or(DEFAULT_IDLE_TIMEOUT)
+    crate::timeout_policy::TimeoutPolicy::from_tokio_command(cmd).idle
 }
 
 fn parse_idle_timeout_secs(value: &str) -> Option<u64> {

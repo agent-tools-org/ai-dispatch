@@ -27,6 +27,7 @@ pub(crate) async fn run_agent_process(
     model: Option<&str>,
     streaming: bool,
     workgroup_id: Option<&str>,
+    timeout_policy: crate::timeout_policy::TimeoutPolicy,
 ) -> Result<()> {
     run_prompt::run_agent_process_impl(run_prompt::RunProcessArgs {
         agent,
@@ -38,6 +39,7 @@ pub(crate) async fn run_agent_process(
         model,
         streaming,
         workgroup_id,
+        timeout_policy,
     })
     .await
 }

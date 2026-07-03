@@ -43,6 +43,18 @@ pub(crate) struct MonitorState {
 
 impl MonitorState {
     pub(crate) fn new(streaming: bool, workgroup_id: Option<String>) -> Self {
+        Self::with_policy(
+            streaming,
+            workgroup_id,
+            crate::timeout_policy::TimeoutPolicy::default(),
+        )
+    }
+
+    pub(crate) fn with_policy(
+        streaming: bool,
+        workgroup_id: Option<String>,
+        timeout_policy: crate::timeout_policy::TimeoutPolicy,
+    ) -> Self {
         Self {
             info: CompletionInfo {
                 tokens: None,
@@ -62,7 +74,7 @@ impl MonitorState {
             idle_nudged: false,
             idle_warned: false,
             pending_inbound_acks: 0,
-            idle_detector: IdleDetector::load(),
+            idle_detector: IdleDetector::from_policy(timeout_policy),
             streaming,
             workgroup_id,
             session_saved: false,
@@ -367,7 +379,6 @@ pub(crate) fn monitor_bridge(
     log_file: &mut std::fs::File,
     state: &mut MonitorState,
     idle_timeout: Option<Duration>,
-    deadline: Option<Instant>,
 ) -> Result<()> {
     let mut reader_done = false;
     let mut child_exited_at: Option<Instant> = None;
@@ -387,19 +398,6 @@ pub(crate) fn monitor_bridge(
             Ok(bytes) => state.handle_chunk(agent, task_id, store, log_file, decoder.push(bytes))?,
             Err(RecvTimeoutError::Timeout) => {
                 state.handle_timeout(store, task_id)?;
-                if let Some(dl) = deadline
-                    && Instant::now() > dl
-                {
-                    state.info.status = TaskStatus::Failed;
-                    store.insert_event(&TaskEvent {
-                        task_id: task_id.clone(),
-                        timestamp: chrono::Local::now(),
-                        event_kind: EventKind::Error,
-                        detail: "Task exceeded deadline".to_string(),
-                        metadata: None,
-                    })?;
-                    break;
-                }
                 if let Some(idle) = idle_timeout
                     && state.last_progress_time.elapsed() > idle
                 {

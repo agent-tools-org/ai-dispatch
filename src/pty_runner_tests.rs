@@ -2,7 +2,7 @@
 // Covers immediate task failure when the agent process cannot spawn.
 
 use super::run_agent_process;
-use crate::agent::kilo::KiloAgent;
+use crate::agent::get_agent;
 use crate::paths;
 use crate::store::Store;
 use crate::types::{AgentKind, Task, TaskId, TaskStatus, VerifyStatus};
@@ -23,7 +23,7 @@ fn run_agent_process_marks_task_failed_when_spawn_fails() {
     let cmd = std::process::Command::new("/definitely/missing/kilo");
 
     let err = run_agent_process(
-        &KiloAgent,
+        get_agent(AgentKind::Kilo).as_ref(),
         &cmd,
         &task_id,
         &store,

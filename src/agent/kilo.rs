@@ -1,108 +1,36 @@
-// KiloCode CLI adapter: thin wrapper over OpenCode-compatible JSON format.
-// KiloCode is an OpenCode fork with identical event streaming and --auto autonomous mode.
+// Kilo delegate spec for the OpenCode-compatible overlay engine.
+// Exports agent() for get_agent wiring.
+// Depends on opencode_overlay and AgentKind.
 
-use anyhow::Result;
-use std::process::Command;
+use super::opencode_overlay::{OpenCodeOverlayAgent, OpenCodeOverlaySpec};
+use crate::types::AgentKind;
 
-use super::opencode::{classify_text_line, extract_tokens_from_output, parse_json_event};
-use super::read_only::read_only_prompt;
-use super::RunOpts;
-use crate::types::*;
+pub(crate) fn agent() -> OpenCodeOverlayAgent {
+    OpenCodeOverlayAgent::from_spec(spec())
+}
 
-pub struct KiloAgent;
-
-impl super::Agent for KiloAgent {
-    fn kind(&self) -> AgentKind {
-        AgentKind::Kilo
-    }
-
-    fn streaming(&self) -> bool {
-        true
-    }
-
-    fn build_command(&self, prompt: &str, opts: &RunOpts) -> Result<Command> {
-        let effective_prompt = if opts.read_only {
-            read_only_prompt(prompt, opts)
-        } else {
-            prompt.to_string()
-        };
-        let mut cmd = Command::new("kilo");
-        cmd.arg("run");
-        cmd.arg("--auto");
-        cmd.args(["--format", "json"]);
-        cmd.arg("--thinking");
-        if let Some(ref session_id) = opts.session_id {
-            cmd.args(["--session", session_id]);
-            cmd.arg("--continue");
-            cmd.arg("--fork");
-        }
-        if opts.budget {
-            cmd.args(["--variant", "minimal"]);
-        }
-        if let Some(ref model) = opts.model {
-            cmd.args(["-m", model]);
-        }
-        if let Some(ref dir) = opts.dir {
-            cmd.args(["--dir", dir]);
-            cmd.current_dir(dir);
-        }
-        for file in &opts.context_files {
-            cmd.args(["-f", file]);
-        }
-        cmd.arg(&effective_prompt);
-        Ok(cmd)
-    }
-
-    fn parse_event(&self, task_id: &TaskId, line: &str) -> Option<TaskEvent> {
-        let now = chrono::Local::now();
-        let trimmed = line.trim();
-        if trimmed.is_empty() {
-            return None;
-        }
-        if let Ok(v) = serde_json::from_str::<serde_json::Value>(trimmed) {
-            parse_json_event(AgentKind::Kilo, task_id, &v, now)
-        } else {
-            let (kind, detail) = classify_text_line(AgentKind::Kilo, trimmed);
-            kind.map(|k| {
-                let (detail, metadata) = super::truncate::capped_detail(detail);
-                TaskEvent {
-                    task_id: task_id.clone(),
-                    timestamp: now,
-                    event_kind: k,
-                    detail,
-                    metadata,
-                }
-            })
-        }
-    }
-
-    fn parse_completion(&self, output: &str) -> CompletionInfo {
-        let (tokens, cost_usd) = extract_tokens_from_output(output);
-        CompletionInfo {
-            tokens,
-            status: TaskStatus::Done,
-            model: None,
-            cost_usd,
-            exit_code: None,
-        }
-    }
-
-    // Verified 2026-07-03 (kilo 7.0.47): `kilo run --format json "<prompt>"` with
-    // stdout piped writes 0 bytes and hangs; under a PTY it streams JSONL normally.
-    fn needs_pty(&self) -> bool {
-        true
+pub(crate) fn spec() -> OpenCodeOverlaySpec {
+    OpenCodeOverlaySpec {
+        id: "kilo".to_string(),
+        display_name: "Kilo".to_string(),
+        reported_kind: AgentKind::Kilo,
+        binary: "kilo".to_string(),
+        extra_args: vec!["--auto".to_string()],
+        default_model: None,
+        rate_limit_kind: AgentKind::Kilo,
+        allow_external_directories: false,
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::super::Agent;
+    use super::super::{Agent, RunOpts};
     use super::*;
     use crate::{paths, rate_limit};
+    use crate::types::{EventKind, TaskId};
 
-    #[test]
-    fn build_command_includes_auto_flag() {
-        let opts = RunOpts {
+    fn base_opts() -> RunOpts {
+        RunOpts {
             dir: None,
             output: None,
             result_file: None,
@@ -114,14 +42,27 @@ mod tests {
             session_id: None,
             env: None,
             env_forward: None,
-        };
-        let cmd = KiloAgent
-            .build_command("test prompt", &opts)
-            .expect("command should build");
+        }
+    }
+
+    fn args_of(prompt: &str, opts: &RunOpts) -> Vec<String> {
+        agent()
+            .build_command(prompt, opts)
+            .expect("command should build")
+            .get_args()
+            .map(|arg| arg.to_string_lossy().to_string())
+            .collect()
+    }
+
+    #[test]
+    fn build_command_uses_kilo_binary_and_auto_flag() {
+        let cmd = agent().build_command("test prompt", &base_opts()).unwrap();
+        assert_eq!(cmd.get_program().to_string_lossy(), "kilo");
         let args: Vec<String> = cmd
             .get_args()
-            .map(|a| a.to_string_lossy().to_string())
+            .map(|arg| arg.to_string_lossy().to_string())
             .collect();
+        assert_eq!(args.first().map(String::as_str), Some("run"));
         assert!(args.contains(&"--auto".to_string()));
         assert!(args.contains(&"--format".to_string()));
         assert!(args.contains(&"json".to_string()));
@@ -129,157 +70,39 @@ mod tests {
     }
 
     #[test]
-    fn build_command_includes_session_flags() {
+    fn build_command_includes_session_context_dir_and_budget_flags() {
         let opts = RunOpts {
-            dir: None,
-            output: None,
-            result_file: None,
-            model: None,
-            budget: false,
-            read_only: false,
-            sandbox: false,
-            context_files: vec![],
             session_id: Some("ses_abc".to_string()),
-            env: None,
-            env_forward: None,
+            context_files: vec!["src/main.rs".to_string()],
+            dir: Some("/tmp/wt".to_string()),
+            budget: true,
+            ..base_opts()
         };
-        let cmd = KiloAgent
-            .build_command("test", &opts)
-            .expect("command should build");
+        let cmd = agent().build_command("test", &opts).unwrap();
+        assert_eq!(cmd.get_current_dir().unwrap(), std::path::Path::new("/tmp/wt"));
         let args: Vec<String> = cmd
             .get_args()
-            .map(|a| a.to_string_lossy().to_string())
+            .map(|arg| arg.to_string_lossy().to_string())
             .collect();
-        assert!(args.contains(&"--session".to_string()));
-        assert!(args.contains(&"ses_abc".to_string()));
+        assert!(args.windows(2).any(|pair| pair == ["--session", "ses_abc"]));
         assert!(args.contains(&"--continue".to_string()));
         assert!(args.contains(&"--fork".to_string()));
-    }
-
-    #[test]
-    fn build_command_includes_context_files() {
-        let opts = RunOpts {
-            dir: None,
-            output: None,
-            result_file: None,
-            model: None,
-            budget: false,
-            read_only: false,
-            sandbox: false,
-            context_files: vec!["src/main.rs".to_string()],
-            session_id: None,
-            env: None,
-            env_forward: None,
-        };
-        let cmd = KiloAgent
-            .build_command("test", &opts)
-            .expect("command should build");
-        let args: Vec<String> = cmd
-            .get_args()
-            .map(|a| a.to_string_lossy().to_string())
-            .collect();
-        assert!(args.contains(&"-f".to_string()));
-        assert!(args.contains(&"src/main.rs".to_string()));
-    }
-
-    #[test]
-    fn build_command_sets_current_dir_when_dir_provided() {
-        let opts = RunOpts {
-            dir: Some("/tmp/wt".to_string()),
-            output: None,
-            result_file: None,
-            model: None,
-            budget: false,
-            read_only: false,
-            sandbox: false,
-            context_files: vec![],
-            session_id: None,
-            env: None,
-            env_forward: None,
-        };
-        let cmd = KiloAgent
-            .build_command("test", &opts)
-            .expect("command should build");
-        let dir = cmd.get_current_dir().expect("dir should be set");
-        assert_eq!(dir, std::path::Path::new("/tmp/wt"));
-    }
-
-    #[test]
-    fn build_command_sets_minimal_variant_in_budget_mode() {
-        let opts = RunOpts {
-            dir: None,
-            output: None,
-            result_file: None,
-            model: None,
-            budget: true,
-            read_only: false,
-            sandbox: false,
-            context_files: vec![],
-            session_id: None,
-            env: None,
-            env_forward: None,
-        };
-        let cmd = KiloAgent
-            .build_command("test", &opts)
-            .expect("command should build");
-        let args: Vec<String> = cmd
-            .get_args()
-            .map(|a| a.to_string_lossy().to_string())
-            .collect();
         assert!(args.windows(2).any(|pair| pair == ["--variant", "minimal"]));
+        assert!(args.windows(2).any(|pair| pair == ["-f", "src/main.rs"]));
     }
 
     #[test]
-    fn build_command_read_only_with_result_file_uses_exception_prefix() {
-        let opts = RunOpts {
-            dir: None,
-            output: None,
-            result_file: Some("result.md".to_string()),
-            model: None,
-            budget: false,
-            read_only: true,
-            sandbox: false,
-            context_files: vec![],
-            session_id: None,
-            env: None,
-            env_forward: None,
-        };
-        let cmd = KiloAgent.build_command("inspect", &opts).expect("command should build");
-        let args: Vec<String> = cmd
-            .get_args()
-            .map(|a| a.to_string_lossy().to_string())
-            .collect();
+    fn build_command_read_only_prefixes_prompt() {
+        let opts = RunOpts { read_only: true, ..base_opts() };
+        let args = args_of("inspect", &opts);
         let last_arg = args.last().expect("should have prompt as last arg");
-        assert!(last_arg.contains("EXCEPT the result file specified in this prompt"));
+        assert!(last_arg.contains("Do NOT modify, create, or delete any files."));
     }
 
     #[test]
-    fn build_command_read_only_without_result_file_keeps_strict_prefix() {
-        let opts = RunOpts {
-            dir: None,
-            output: None,
-            result_file: None,
-            model: None,
-            budget: false,
-            read_only: true,
-            sandbox: false,
-            context_files: vec![],
-            session_id: None,
-            env: None,
-            env_forward: None,
-        };
-        let cmd = KiloAgent.build_command("inspect", &opts).expect("command should build");
-        let args: Vec<String> = cmd
-            .get_args()
-            .map(|a| a.to_string_lossy().to_string())
-            .collect();
-        let last_arg = args.last().expect("should have prompt as last arg");
-        assert!(last_arg.contains("Do NOT modify, create, or delete any files. Only read and analyze."));
-    }
-
-    #[test]
-    fn kilo_needs_pty() {
-        assert!(KiloAgent.needs_pty());
+    fn kilo_reports_kind_and_needs_pty() {
+        assert_eq!(agent().kind(), AgentKind::Kilo);
+        assert!(agent().needs_pty());
     }
 
     #[test]
@@ -288,7 +111,7 @@ mod tests {
         let _aid_home = paths::AidHomeGuard::set(temp.path());
         rate_limit::clear_rate_limit(&AgentKind::Kilo);
         rate_limit::clear_rate_limit(&AgentKind::OpenCode);
-        let event = KiloAgent
+        let event = agent()
             .parse_event(&TaskId("t-kilo".to_string()), "Error: rate limit exceeded")
             .unwrap();
         assert_eq!(event.event_kind, EventKind::Error);

@@ -3,6 +3,8 @@
 use super::super::Agent;
 use super::*;
 use crate::{paths, rate_limit};
+use crate::agent::RunOpts;
+use crate::types::{EventKind, TaskId};
 
 fn base_opts() -> RunOpts {
     RunOpts {
@@ -21,7 +23,7 @@ fn base_opts() -> RunOpts {
 }
 
 fn args_of(prompt: &str, opts: &RunOpts) -> Vec<String> {
-    MiMoCodeAgent
+    agent()
         .build_command(prompt, opts)
         .expect("command should build")
         .get_args()
@@ -31,7 +33,7 @@ fn args_of(prompt: &str, opts: &RunOpts) -> Vec<String> {
 
 #[test]
 fn build_command_includes_mimocode_permission_flag() {
-    let cmd = MiMoCodeAgent
+    let cmd = agent()
         .build_command("test prompt", &base_opts())
         .expect("command should build");
     assert_eq!(cmd.get_program().to_string_lossy(), "mimo");
@@ -46,7 +48,8 @@ fn build_command_includes_mimocode_permission_flag() {
 
 #[test]
 fn mimocode_needs_pty() {
-    assert!(MiMoCodeAgent.needs_pty());
+    assert_eq!(agent().kind(), AgentKind::MiMoCode);
+    assert!(agent().needs_pty());
 }
 
 #[test]
@@ -85,7 +88,7 @@ fn build_command_includes_context_files() {
 #[test]
 fn build_command_sets_current_dir_when_dir_provided() {
     let opts = RunOpts { dir: Some("/tmp/wt".to_string()), ..base_opts() };
-    let cmd = MiMoCodeAgent.build_command("test", &opts).expect("command should build");
+    let cmd = agent().build_command("test", &opts).expect("command should build");
     assert_eq!(cmd.get_current_dir().expect("dir should be set"), std::path::Path::new("/tmp/wt"));
 }
 
@@ -118,7 +121,7 @@ fn parse_event_marks_mimocode_rate_limits() {
     let _aid_home = paths::AidHomeGuard::set(temp.path());
     rate_limit::clear_rate_limit(&AgentKind::MiMoCode);
     rate_limit::clear_rate_limit(&AgentKind::OpenCode);
-    let event = MiMoCodeAgent
+    let event = agent()
         .parse_event(&TaskId("t-mimocode".to_string()), r#"{"type":"error","message":"rate limit exceeded"}"#)
         .unwrap();
     assert_eq!(event.event_kind, EventKind::Error);

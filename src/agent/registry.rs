@@ -4,8 +4,9 @@
 #![allow(dead_code)]
 
 use super::custom::{parse_config, CustomAgent, CustomAgentConfig};
-use super::opencode_overlay::OpenCodeOverlayAgent;
+use super::opencode_overlay::{OpenCodeOverlayAgent, OpenCodeOverlaySpec};
 use crate::paths;
+use crate::types::AgentKind;
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -60,11 +61,8 @@ fn build_agent(config: &CustomAgentConfig) -> Box<dyn super::Agent> {
     if let (Some(target), Some(model)) = (config.delegate_to.as_deref(), config.forced_model.as_deref())
         && target == "opencode"
     {
-        return Box::new(OpenCodeOverlayAgent::new(
-            config.id.clone(),
-            config.display_name.clone(),
-            model.to_string(),
-        )) as Box<dyn super::Agent>;
+        return Box::new(OpenCodeOverlayAgent::from_spec(opencode_spec(config, model)))
+            as Box<dyn super::Agent>;
     }
     if config.delegate_to.is_some() && config.forced_model.is_none() {
         aid_warn!(
@@ -75,6 +73,33 @@ fn build_agent(config: &CustomAgentConfig) -> Box<dyn super::Agent> {
     Box::new(CustomAgent {
         config: config.clone(),
     }) as Box<dyn super::Agent>
+}
+
+fn opencode_spec(config: &CustomAgentConfig, model: &str) -> OpenCodeOverlaySpec {
+    OpenCodeOverlaySpec {
+        id: config.id.clone(),
+        display_name: config.display_name.clone(),
+        reported_kind: AgentKind::Custom,
+        binary: config.binary.clone().unwrap_or_else(|| "opencode".to_string()),
+        extra_args: config.extra_args.clone(),
+        default_model: Some(model.to_string()),
+        rate_limit_kind: parse_rate_limit_kind(config),
+        allow_external_directories: true,
+    }
+}
+
+fn parse_rate_limit_kind(config: &CustomAgentConfig) -> AgentKind {
+    match config.rate_limit_kind.as_deref() {
+        Some(kind) => AgentKind::parse_str(kind).unwrap_or_else(|| {
+            aid_warn!(
+                "[aid] Custom agent '{}' has unknown rate_limit_kind '{}'; using opencode.",
+                config.id,
+                kind
+            );
+            AgentKind::OpenCode
+        }),
+        None => AgentKind::OpenCode,
+    }
 }
 
 pub fn resolve_custom_agent(name: &str) -> Option<Box<dyn super::Agent>> {
@@ -196,6 +221,43 @@ forced_model = "mimo/mimo-v2.5-pro"
             .collect();
         assert!(args.iter().any(|a| a == "-m"));
         assert!(args.iter().any(|a| a == "mimo/mimo-v2.5-pro"));
+    }
+
+    #[test]
+    fn delegate_to_opencode_uses_binary_extra_args_and_rate_limit_kind() {
+        let toml_data = r#"[agent]
+id = "mimocode"
+display_name = "MiMo Code"
+command = "bash"
+delegate_to = "opencode"
+forced_model = "mimo/mimo-auto"
+binary = "mimo"
+extra_args = ["--dangerously-skip-permissions"]
+rate_limit_kind = "mimocode"
+"#;
+        let config = parse_config(toml_data).unwrap();
+        let agent = build_agent(&config);
+        let opts = super::super::RunOpts {
+            dir: None,
+            output: None,
+            result_file: None,
+            model: None,
+            budget: false,
+            read_only: false,
+            sandbox: false,
+            context_files: Vec::new(),
+            session_id: None,
+            env: None,
+            env_forward: None,
+        };
+        let cmd = agent.build_command("hello", &opts).unwrap();
+        assert_eq!(cmd.get_program().to_string_lossy(), "mimo");
+        let args: Vec<String> = cmd
+            .get_args()
+            .map(|arg| arg.to_string_lossy().into_owned())
+            .collect();
+        assert!(args.contains(&"--dangerously-skip-permissions".to_string()));
+        assert!(args.windows(2).any(|pair| pair == ["-m", "mimo/mimo-auto"]));
     }
 
     #[test]

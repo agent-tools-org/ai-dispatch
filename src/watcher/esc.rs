@@ -1,70 +1,139 @@
-// Strip terminal escape sequences (OSC and CSI) from watcher input lines.
-// Shared helper used by watcher stream and PTY watchers.
+// Terminal escape stripping shared by watcher stream and PTY monitor.
+// Exports strip_terminal_escapes: removes OSC and CSI sequences so
+// OSC-prefixed agent stream-json lines (e.g. droid >=0.159 under a PTY)
+// still parse as events.
 
-pub(crate) fn strip_terminal_escapes(s: &str) -> String {
-    let bytes = s.as_bytes();
-    let mut out = String::with_capacity(bytes.len());
+use std::borrow::Cow;
+
+/// Strip terminal escape sequences from agent output.
+///
+/// Removes OSC (`ESC ]` ... terminated by BEL or ST `ESC \`) and CSI
+/// (`ESC [` params/intermediates plus one final byte). An OSC left
+/// unterminated is dropped through end-of-line; a newline acts as an
+/// implicit terminator so multi-line input is never swallowed.
+pub(crate) fn strip_terminal_escapes(input: &str) -> Cow<'_, str> {
+    if !input.contains('\x1b') {
+        return Cow::Borrowed(input);
+    }
+    let bytes = input.as_bytes();
+    let mut out: Vec<u8> = Vec::with_capacity(bytes.len());
     let mut i = 0;
     while i < bytes.len() {
         if bytes[i] == 0x1b {
-            if i + 1 < bytes.len() {
-                let next = bytes[i + 1];
-                // OSC: ESC ] ... terminated by BEL (0x07) or ST (ESC \\)
-                if next == b']' {
-                    let mut j = i + 2;
-                    let mut terminated = false;
-                    while j < bytes.len() {
-                        if bytes[j] == 0x07 {
-                            j += 1;
-                            terminated = true;
-                            break;
-                        }
-                        if bytes[j] == 0x1b && j + 1 < bytes.len() && bytes[j + 1] == b'\\' {
-                            j += 2;
-                            terminated = true;
-                            break;
-                        }
-                        // Newline acts as implicit terminator for OSC; return at newline
-                        if bytes[j] == b'\n' {
-                            terminated = true;
-                            j += 1;
-                            break;
-                        }
-                        j += 1;
-                    }
-                    if terminated {
-                        i = j;
-                        continue;
-                    } else {
-                        // Unterminated OSC: skip the introducer and continue
-                        i += 2;
-                        continue;
-                    }
-                }
-                // CSI: ESC [ ... final byte in 0x40..=0x7E
-                if next == b'[' {
-                    let mut j = i + 2;
-                    while j < bytes.len() {
-                        let b = bytes[j];
-                        if (0x40..=0x7E).contains(&b) {
-                            j += 1;
-                            break;
-                        }
-                        j += 1;
-                    }
-                    i = j;
-                    continue;
-                }
-                // Unknown two-byte ESC sequence: skip both
-                i += 2;
-                continue;
-            }
-            // Lone ESC: skip
-            i += 1;
+            i = match bytes.get(i + 1) {
+                Some(b']') => skip_osc(bytes, i + 2),
+                Some(b'[') => skip_csi(bytes, i + 2),
+                // Lone or unknown escape: drop the ESC byte itself.
+                _ => i + 1,
+            };
             continue;
         }
-        out.push(bytes[i] as char);
+        out.push(bytes[i]);
         i += 1;
     }
-    out
+    // Escape sequences are pure ASCII, so removing them keeps valid UTF-8.
+    Cow::Owned(String::from_utf8_lossy(&out).into_owned())
+}
+
+/// Skip past an OSC body starting at `from` (after `ESC ]`).
+/// Returns the index of the first byte after the sequence.
+fn skip_osc(bytes: &[u8], from: usize) -> usize {
+    let mut j = from;
+    while j < bytes.len() {
+        match bytes[j] {
+            0x07 => return j + 1,
+            b'\n' => return j,
+            0x1b if bytes.get(j + 1) == Some(&b'\\') => return j + 2,
+            _ => j += 1,
+        }
+    }
+    bytes.len()
+}
+
+/// Skip past a CSI body starting at `from` (after `ESC [`).
+/// Returns the index of the first byte after the sequence.
+fn skip_csi(bytes: &[u8], from: usize) -> usize {
+    let mut j = from;
+    while j < bytes.len() && (0x20..=0x3f).contains(&bytes[j]) {
+        j += 1;
+    }
+    if j < bytes.len() && (0x40..=0x7e).contains(&bytes[j]) {
+        j + 1
+    } else {
+        j
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::strip_terminal_escapes;
+
+    #[test]
+    fn plain_lines_pass_through_borrowed() {
+        let line = r#"{"type":"message","text":"hi"}"#;
+        assert!(matches!(
+            strip_terminal_escapes(line),
+            std::borrow::Cow::Borrowed(_)
+        ));
+        assert_eq!(strip_terminal_escapes(line), line);
+    }
+
+    #[test]
+    fn real_droid_osc_prefixed_lines_parse_after_stripping() {
+        let samples = [
+            (
+                "\x1b]0;⛬ reply pong\x07{\"type\":\"system\",\"subtype\":\"init\"}",
+                "{\"type\":\"system\",\"subtype\":\"init\"}",
+            ),
+            (
+                "\x1b]9;4;0;\x07\x1b]9;4;3;\x07{\"type\":\"message\",\"role\":\"user\",\"text\":\"hi\"}",
+                "{\"type\":\"message\",\"role\":\"user\",\"text\":\"hi\"}",
+            ),
+            (
+                "\x1b]9;4;0;\x07{\"type\":\"completion\",\"finalText\":\"pong\"}",
+                "{\"type\":\"completion\",\"finalText\":\"pong\"}",
+            ),
+        ];
+        for (raw, expected) in samples {
+            let stripped = strip_terminal_escapes(raw);
+            assert_eq!(stripped, expected);
+            assert!(serde_json::from_str::<serde_json::Value>(&stripped).is_ok());
+        }
+    }
+
+    #[test]
+    fn osc_terminated_by_st_is_stripped() {
+        let line = "\x1b]0;title\x1b\\{\"type\":\"text\",\"text\":\"ok\"}";
+        assert_eq!(
+            strip_terminal_escapes(line),
+            "{\"type\":\"text\",\"text\":\"ok\"}"
+        );
+    }
+
+    #[test]
+    fn csi_sequences_still_stripped() {
+        let line = "\x1b[1m\x1b[32mHello\x1b[0m \x1b[38;5;202mWorld\x1b[0m";
+        assert_eq!(strip_terminal_escapes(line), "Hello World");
+        assert_eq!(strip_terminal_escapes("\x1b[?25lspinner\x1b[?25h"), "spinner");
+    }
+
+    #[test]
+    fn multibyte_text_outside_escapes_is_preserved() {
+        let line = "\x1b[1m⛬ 完成\x1b[0m";
+        assert_eq!(strip_terminal_escapes(line), "⛬ 完成");
+    }
+
+    #[test]
+    fn unterminated_osc_at_eol_does_not_panic_or_loop() {
+        assert_eq!(strip_terminal_escapes("\x1b]0;half-title"), "");
+        assert_eq!(strip_terminal_escapes("data\x1b]9;4;1"), "data");
+        assert_eq!(strip_terminal_escapes("\x1b]"), "");
+        assert_eq!(strip_terminal_escapes("\x1b"), "");
+    }
+
+    #[test]
+    fn newline_terminates_osc_in_multiline_input() {
+        let text = "\x1b]0;title\nnext line";
+        assert_eq!(strip_terminal_escapes(text), "\nnext line");
+    }
 }

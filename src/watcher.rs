@@ -6,7 +6,6 @@ mod loop_kill;
 mod progress;
 mod stderr;
 mod stream;
-mod esc;
 #[cfg(test)]
 mod tests;
 #[cfg(test)]
@@ -32,7 +31,6 @@ use crate::process_group::force_kill_process_group;
 use crate::rate_limit;
 use crate::store::Store;
 use crate::types::*;
-pub(crate) use esc::strip_terminal_escapes;
 use extract::extract_milestone_detail;
 #[cfg(test)]
 use extract::{extract_finding_detail, parse_milestone_event};

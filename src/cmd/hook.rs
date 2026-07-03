@@ -8,7 +8,7 @@ use crate::team::TeamConfig;
 
 const BASE_TEXT: &str = "[aid] ai-dispatch is installed for multi-agent orchestration. Key commands:
 - Dispatch: aid run <agent> \"<prompt>\" [--worktree <branch>]
-- Monitor:  aid watch --tui (dashboard) | aid watch --quiet <id> (blocking)
+- Monitor:  aid watch --tui (dashboard) | aid watch --wait <id> (blocking)
 - Review:   aid show <id> --diff | aid board
 - Batch:    aid batch <file> --parallel";
 

@@ -117,7 +117,20 @@ async fn main() -> Result<()> {
     let _ = background::check_zombie_tasks(&store);
 
     match cli.command {
-        Some(command) => cmd_dispatch::dispatch(store, command).await,
+        Some(command) => cmd_dispatch::dispatch(store, normalize_command(command, cli.quiet)).await,
         None => cmd_dispatch::dispatch(store, Commands::Board(Default::default())).await,
+    }
+}
+
+fn normalize_command(command: Commands, quiet: bool) -> Commands {
+    if !quiet {
+        return command;
+    }
+    match command {
+        Commands::Watch(mut args) => {
+            args.wait = true;
+            Commands::Watch(args)
+        }
+        other => other,
     }
 }

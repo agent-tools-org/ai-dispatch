@@ -2,7 +2,7 @@
 // Routes Commands variants to focused handler functions.
 
 use super::{handlers_a, handlers_b, handlers_c};
-use crate::cli::{Commands, command_args_a, command_args_b, command_args_c};
+use crate::cli::{Commands, command_args_a, command_args_b, command_args_c, command_args_watch};
 use anyhow::Result;
 use std::sync::Arc;
 
@@ -13,6 +13,7 @@ pub(crate) async fn dispatch(store: Arc<crate::store::Store>, command: Commands)
             | Commands::Batch(..)
             | Commands::Benchmark(..)
             | Commands::Watch(..)
+            | Commands::Wait(..)
             | Commands::Board(..)
             | Commands::Completions
             | Commands::Changelog(..)
@@ -73,7 +74,10 @@ async fn dispatch_primary(store: Arc<crate::store::Store>, command: Commands) ->
         Commands::Run(command_args_a::RunArgs { agent, prompt, prompt_file, repo, repo_root, dir, output, result_file, model, budget, no_hint, worktree, team, group, verify, iterate, eval, eval_feedback_template, judge, peer_review, retry, context, checklist, checklist_file, scope, run_extras, no_skill, bg, dry_run, read_only, sandbox, container, best_of, metric, parent, id, timeout, idle_timeout, audit, no_audit, no_link_deps }) => handlers_a::run(store, agent, prompt, prompt_file, repo, repo_root, dir, output, result_file, model, budget, no_hint, worktree, team, group, verify, iterate, eval, eval_feedback_template, judge, peer_review, retry, context, checklist, checklist_file, scope, run_extras, no_skill, bg, dry_run, read_only, sandbox, container, best_of, metric, parent, id, timeout, idle_timeout, audit, no_audit, no_link_deps).await,
         Commands::Batch(command_args_a::BatchArgs { action, file, vars, group, repo_root, parallel, analyze, wait, dry_run, no_prompt, yes, force, max_concurrent, output }) => handlers_a::batch(store, action, file, vars, parallel, analyze, wait, dry_run, no_prompt, yes, force, max_concurrent, output, group, repo_root).await,
         Commands::Benchmark(command_args_a::BenchmarkArgs { prompt, agents, dir, verify }) => handlers_c::benchmark(store, prompt, agents, dir, verify).await,
-        Commands::Watch(command_args_a::WatchArgs { task_ids, group, tui, quiet, stream, exit_on_await, timeout }) => handlers_c::watch(store, task_ids, group, tui, quiet, stream, exit_on_await, timeout).await,
+        Commands::Watch(command_args_watch::WatchArgs { task_ids, group, tui, wait, stream, exit_on_await, timeout }) => handlers_c::watch(store, task_ids, group, tui, wait, stream, exit_on_await, timeout).await,
+        Commands::Wait(command_args_watch::WaitArgs { task_ids, group, exit_on_await, timeout }) => {
+            handlers_c::wait(store, task_ids, group, exit_on_await, timeout).await
+        }
         Commands::Board(command_args_a::BoardArgs { running, today, mine, group, limit, force, stream, json }) => {
             handlers_c::board(store, running, today, mine, group, limit, force, stream, json).await
         }

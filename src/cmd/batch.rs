@@ -277,9 +277,9 @@ pub async fn run(store: Arc<Store>, args: BatchArgs) -> Result<()> {
     // Print watch hint for the caller
     let group_id = config.tasks.first().and_then(|t| t.group.as_deref());
     if let Some(gid) = group_id {
-        aid_hint!("[aid] Watch: aid watch --quiet --group {gid}");
+        aid_hint!("[aid] Watch: aid watch --wait --group {gid}");
     } else if task_ids.len() == 1 {
-        aid_hint!("[aid] Watch: aid watch --quiet {}", task_ids[0]);
+        aid_hint!("[aid] Watch: aid watch --wait {}", task_ids[0]);
     }
     aid_hint!("[aid] TUI:   aid watch --tui");
     Ok(())

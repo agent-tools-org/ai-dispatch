@@ -236,7 +236,7 @@ pub(crate) fn fail_stale_pending_task(
 ) -> Result<bool> {
     let task_id = task.id.as_str();
     let pending_reason = infer_pending_reason(store, task)?;
-    if !store.fail_pending_with_reason(task_id, pending_reason)? {
+    if !crate::task_lifecycle::fail_pending_with_reason(store, task_id, pending_reason)? {
         return Ok(false);
     }
     store.insert_event(&TaskEvent {
@@ -273,7 +273,7 @@ fn infer_pending_reason(store: &Store, task: &Task) -> Result<PendingReason> {
 
 pub(crate) fn record_failure(store: &Store, task_id: &str, stderr_detail: &str, event_detail: &str) -> Result<bool> {
     sanitize::validate_task_id(task_id)?;
-    if !store.fail_if_running(task_id)? {
+    if !crate::task_lifecycle::fail_if_running(store, task_id)? {
         return Ok(false);
     }
     let stderr_path = paths::stderr_path(task_id);

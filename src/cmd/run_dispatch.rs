@@ -94,7 +94,8 @@ fn ensure_agent_binary_available(
         agent::ensure_agent_binary_available(prepared.agent_kind, &prepared.agent_display_name)
     {
         let detail = err.to_string();
-        store.complete_task_atomic(
+        crate::task_lifecycle::complete_task_atomic(
+            store.as_ref(),
             TaskCompletionUpdate {
                 id: prepared.task_id.as_str(),
                 status: TaskStatus::Failed,
@@ -171,7 +172,7 @@ fn run_before_hook(
         runtime_hooks,
         true,
     ) {
-        store.update_task_status(prepared.task_id.as_str(), TaskStatus::Failed)?;
+        crate::task_lifecycle::mark_failed(store.as_ref(), &prepared.task_id)?;
         return Err(err);
     }
     Ok(())

@@ -147,7 +147,7 @@ pub(super) fn run_background_task(
         Ok(worker) => worker,
         Err(err) => {
             let _ = background::clear_spec(prepared.task_id.as_str());
-            store.update_task_status(prepared.task_id.as_str(), TaskStatus::Failed)?;
+            crate::task_lifecycle::mark_failed(store.as_ref(), &prepared.task_id)?;
             run_prompt::notify_task_completion(store, &prepared.task_id)?;
             return Err(err);
         }
@@ -155,7 +155,7 @@ pub(super) fn run_background_task(
     if let Err(err) = background::update_worker_pid(prepared.task_id.as_str(), worker.id()) {
         let _ = worker.kill();
         let _ = background::clear_spec(prepared.task_id.as_str());
-        store.update_task_status(prepared.task_id.as_str(), TaskStatus::Failed)?;
+        crate::task_lifecycle::mark_failed(store.as_ref(), &prepared.task_id)?;
         run_prompt::notify_task_completion(store, &prepared.task_id)?;
         return Err(err);
     }

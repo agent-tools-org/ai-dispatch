@@ -60,7 +60,7 @@ impl ReadyWaitTracker {
                 continue;
             }
             let detail = self.timeout_detail(task_idx, now);
-            if store.fail_waiting_with_reason(task_id, &detail)? {
+            if crate::task_lifecycle::fail_waiting_with_reason(store.as_ref(), task_id, &detail)? {
                 expired.push(task_id.clone());
             }
             self.clear(task_idx);

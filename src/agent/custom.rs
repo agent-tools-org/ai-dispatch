@@ -199,16 +199,6 @@ impl super::Agent for CustomAgent {
             metadata: None,
         })
     }
-
-    fn parse_completion(&self, _output: &str) -> CompletionInfo {
-        CompletionInfo {
-            tokens: None,
-            status: TaskStatus::Done,
-            model: None,
-            cost_usd: None,
-            exit_code: None,
-        }
-    }
 }
 
 pub fn parse_config(toml_content: &str) -> Result<CustomAgentConfig> {

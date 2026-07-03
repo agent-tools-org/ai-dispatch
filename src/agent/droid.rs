@@ -197,16 +197,6 @@ impl super::Agent for DroidAgent {
             _ => None,
         }
     }
-
-    fn parse_completion(&self, _output: &str) -> CompletionInfo {
-        CompletionInfo {
-            tokens: None,
-            status: TaskStatus::Done,
-            model: None,
-            cost_usd: None,
-            exit_code: None,
-        }
-    }
 }
 
 fn map_model_name(model: &str) -> String {

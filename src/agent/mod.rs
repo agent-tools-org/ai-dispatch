@@ -53,7 +53,15 @@ pub trait Agent: Send + Sync {
     fn parse_event(&self, task_id: &TaskId, line: &str) -> Option<TaskEvent>;
 
     /// Parse buffered output into completion info (non-streaming agents)
-    fn parse_completion(&self, output: &str) -> CompletionInfo;
+    fn parse_completion(&self, _output: &str) -> CompletionInfo {
+        CompletionInfo {
+            tokens: None,
+            status: TaskStatus::Done,
+            model: None,
+            cost_usd: None,
+            exit_code: None,
+        }
+    }
 
     /// Whether this agent requires a PTY even for foreground execution.
     /// Agents that don't produce stdout when piped (e.g. opencode) should return true.

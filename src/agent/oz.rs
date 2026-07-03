@@ -90,16 +90,6 @@ impl super::Agent for OzAgent {
             _ => None,
         }
     }
-
-    fn parse_completion(&self, _output: &str) -> CompletionInfo {
-        CompletionInfo {
-            tokens: None,
-            status: TaskStatus::Done,
-            model: None,
-            cost_usd: None,
-            exit_code: None,
-        }
-    }
 }
 
 #[cfg(test)]

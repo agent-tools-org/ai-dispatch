@@ -53,10 +53,6 @@ impl super::Agent for CodebuffAgent {
     fn parse_event(&self, task_id: &TaskId, line: &str) -> Option<TaskEvent> {
         CodexAgent.parse_event(task_id, line)
     }
-
-    fn parse_completion(&self, output: &str) -> CompletionInfo {
-        CodexAgent.parse_completion(output)
-    }
 }
 
 #[cfg(test)]

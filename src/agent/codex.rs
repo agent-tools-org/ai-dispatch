@@ -128,17 +128,6 @@ impl super::Agent for CodexAgent {
             _ => None,
         }
     }
-
-    fn parse_completion(&self, _output: &str) -> CompletionInfo {
-        // Codex is streaming — usage arrives in turn.completed events.
-        CompletionInfo {
-            tokens: None,
-            status: TaskStatus::Done,
-            model: None,
-            cost_usd: None,
-            exit_code: None,
-        }
-    }
 }
 
 fn writable_roots_config(path: &Path) -> Option<String> {

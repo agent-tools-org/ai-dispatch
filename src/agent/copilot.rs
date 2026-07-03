@@ -73,16 +73,6 @@ impl super::Agent for CopilotAgent {
             _ => None,
         }
     }
-
-    fn parse_completion(&self, _output: &str) -> CompletionInfo {
-        CompletionInfo {
-            tokens: None,
-            status: TaskStatus::Done,
-            model: None,
-            cost_usd: None,
-            exit_code: None,
-        }
-    }
 }
 
 fn effective_prompt(prompt: &str, opts: &RunOpts) -> String {

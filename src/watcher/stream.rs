@@ -44,7 +44,7 @@ pub(crate) fn handle_streaming_line_with_session(
 
     // PTY-attached agents (e.g. droid >=0.159) glue OSC/CSI escapes onto
     // their stream-json lines; strip them before any parser sees the line.
-    let cleaned = crate::term_escape::strip_terminal_escapes(line);
+    let cleaned = crate::watcher::strip_terminal_escapes(line);
     let line = cleaned.as_ref();
 
     if let Some(finding) = extract_finding_detail(line)

@@ -45,6 +45,11 @@ fn build_command_includes_mimocode_permission_flag() {
 }
 
 #[test]
+fn mimocode_needs_pty() {
+    assert!(MiMoCodeAgent.needs_pty());
+}
+
+#[test]
 fn build_command_defaults_to_auto_model_when_unset() {
     // MiMo's own CLI default is server-rejected, so we must inject a valid one.
     let args = args_of("test", &base_opts());

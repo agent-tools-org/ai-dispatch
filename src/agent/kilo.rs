@@ -95,6 +95,12 @@ impl super::Agent for KiloAgent {
             exit_code: None,
         }
     }
+
+    // Verified 2026-07-03 (kilo 7.0.47): `kilo run --format json "<prompt>"` with
+    // stdout piped writes 0 bytes and hangs; under a PTY it streams JSONL normally.
+    fn needs_pty(&self) -> bool {
+        true
+    }
 }
 
 #[cfg(test)]
@@ -278,6 +284,11 @@ mod tests {
             .collect();
         let last_arg = args.last().expect("should have prompt as last arg");
         assert!(last_arg.contains("Do NOT modify, create, or delete any files. Only read and analyze."));
+    }
+
+    #[test]
+    fn kilo_needs_pty() {
+        assert!(KiloAgent.needs_pty());
     }
 
     #[test]

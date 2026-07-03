@@ -12,7 +12,7 @@ use std::sync::Arc;
 
 use crate::paths;
 use crate::store::Store;
-use crate::worktree::{aid_worktree_root, is_aid_managed_worktree_path};
+use crate::worktree::{aid_worktree_root, is_aid_managed_worktree_path, worktree_has_uncommitted_changes};
 
 const COUNT_OLD_TASKS_SQL: &str = "SELECT COUNT(*) FROM tasks WHERE status IN ('done', 'failed', 'merged', 'skipped') AND created_at < ?1";
 const DELETE_OLD_EVENTS_SQL: &str = "DELETE FROM events WHERE task_id IN (SELECT id FROM tasks WHERE status IN ('done', 'failed', 'merged', 'skipped') AND created_at < ?1)";
@@ -61,6 +61,13 @@ fn clean_orphaned_worktrees(store: &Store, dry_run: bool) -> Result<()> {
     for path in worktree_paths()? {
         let path_str = path.to_string_lossy().into_owned();
         if active_paths.contains(&path_str) {
+            continue;
+        }
+        if worktree_has_uncommitted_changes(&path).unwrap_or(false) {
+            aid_warn!(
+                "[aid] Skipping clean: {} has uncommitted changes; review with `aid show <task>` or inspect manually",
+                path.display()
+            );
             continue;
         }
         if dry_run {

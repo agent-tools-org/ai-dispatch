@@ -98,6 +98,13 @@ pub fn prune(repo: Option<&str>) -> Result<()> {
         if !was_stale {
             continue;
         }
+        if worktree_has_dirty_status(path) {
+            aid_warn!(
+                "[aid] Skipping prune: {} has uncommitted changes; review with `aid show <task>` or inspect manually",
+                entry.path
+            );
+            continue;
+        }
         match super::merge::remove_worktree(repo_dir, &entry.path) {
             Ok(()) => {
                 println!("[aid] Pruned stale worktree dir: {}", entry.path);
@@ -231,7 +238,21 @@ fn should_prune_worktree(wt_path: &str) -> bool {
     if live_worktree_lock(Path::new(wt_path)).is_some() {
         return false;
     }
+    if worktree_has_dirty_status(Path::new(wt_path)) {
+        return false;
+    }
     is_stale_worktree_path(Path::new(wt_path))
+}
+
+fn worktree_has_dirty_status(wt_path: &Path) -> bool {
+    let Ok(state) = crate::worktree::capture_live_worktree_state(wt_path) else {
+        return false;
+    };
+    state.status_lines.iter().any(|line| status_line_path(line) != ".aid-lock")
+}
+
+fn status_line_path(line: &str) -> &str {
+    if line.len() > 3 { line[3..].trim() } else { line.trim() }
 }
 
 fn is_stale_worktree_path(wt_path: &Path) -> bool {

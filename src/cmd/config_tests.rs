@@ -5,7 +5,8 @@
 use std::collections::HashMap;
 
 use super::config_display::{ModelHistory, recent_observed_models_line};
-use super::{load_pricing_overrides, merged_agent_models};
+use super::{builtin_agent_visible, disabled_agent_names, disabled_summary_line, load_pricing_overrides, merged_agent_models};
+use crate::agent_config;
 use crate::paths::AidHomeGuard;
 use crate::types::AgentKind;
 
@@ -146,4 +147,19 @@ fn recent_observed_models_line_lists_top_three_unsorted_extras_only() {
     assert!(line.contains("actually-observed-gemini-98 (2)"));
     assert!(!line.contains("actually-observed-fourth"));
     assert!(!line.contains("gemini-3-flash-preview"));
+}
+
+#[test]
+fn disabled_agent_listing_hides_and_summarizes_agent() {
+    let temp = tempfile::tempdir().unwrap();
+    let _guard = AidHomeGuard::set(temp.path());
+    agent_config::save_agent_disabled("gemini", true).unwrap();
+
+    assert!(!builtin_agent_visible(AgentKind::Gemini));
+    let names = disabled_agent_names();
+    assert_eq!(names, vec!["gemini".to_string()]);
+    assert_eq!(
+        disabled_summary_line(&names).as_deref(),
+        Some("Disabled: gemini (enable with aid agent config gemini --enable)")
+    );
 }

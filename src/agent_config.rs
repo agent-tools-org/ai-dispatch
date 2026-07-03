@@ -1,6 +1,6 @@
-// Per-agent default config for persisted model overrides.
-// Exports: AgentDefaults, load_agent_config, save_agent_default_model, get_default_model.
-// Deps: anyhow, serde, toml, std::collections::HashMap, crate::paths.
+// Per-agent default config for persisted model, timeout, and disabled overrides.
+// Exports: AgentDefaults, load/save helpers, get_default_model, is_agent_disabled.
+// Deps: anyhow, serde, toml, HashMap, crate::paths, crate::types.
 
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
@@ -13,6 +13,8 @@ pub struct AgentDefaults {
     pub model: Option<String>,
     #[serde(default)]
     pub idle_timeout: Option<u64>,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub disabled: bool,
 }
 
 type AgentConfigMap = HashMap<String, AgentDefaults>;
@@ -36,6 +38,16 @@ fn save_to(path: &Path, config: &AgentConfigMap) -> Result<()> {
     Ok(())
 }
 
+fn is_false(value: &bool) -> bool {
+    !*value
+}
+
+fn config_key(agent_name: &str) -> String {
+    crate::types::AgentKind::parse_str(agent_name)
+        .map(|kind| kind.as_str().to_string())
+        .unwrap_or_else(|| agent_name.to_string())
+}
+
 pub fn load_agent_config() -> HashMap<String, AgentDefaults> {
     load_from(&config_path())
 }
@@ -50,6 +62,13 @@ pub fn get_default_idle_timeout(agent_name: &str) -> Option<u64> {
     load_agent_config()
         .get(agent_name)
         .and_then(|defaults| defaults.idle_timeout)
+}
+
+pub fn is_agent_disabled(agent_name: &str) -> bool {
+    load_agent_config()
+        .get(&config_key(agent_name))
+        .map(|defaults| defaults.disabled)
+        .unwrap_or(false)
 }
 
 pub fn save_agent_default_model(agent_name: &str, model: Option<&str>) -> Result<()> {
@@ -77,9 +96,17 @@ pub fn save_agent_idle_timeout(agent_name: &str, idle_timeout: Option<u64>) -> R
     save_to(&path, &config)
 }
 
+pub fn save_agent_disabled(agent_name: &str, disabled: bool) -> Result<()> {
+    let path = config_path();
+    let mut config = load_from(&path);
+    config.entry(config_key(agent_name)).or_default().disabled = disabled;
+    config.retain(|_, defaults| !defaults.is_empty());
+    save_to(&path, &config)
+}
+
 impl AgentDefaults {
     fn is_empty(&self) -> bool {
-        self.model.is_none() && self.idle_timeout.is_none()
+        self.model.is_none() && self.idle_timeout.is_none() && !self.disabled
     }
 }
 
@@ -140,5 +167,33 @@ mod tests {
         save_agent_default_model("cursor", None).expect("clear model");
         assert_eq!(get_default_model("cursor"), None);
         assert_eq!(get_default_idle_timeout("cursor"), Some(420));
+    }
+
+    #[test]
+    fn save_and_clear_disabled_roundtrip() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let _guard = AidHomeGuard::set(dir.path());
+
+        save_agent_disabled("gemini", true).expect("disable agent");
+        assert!(is_agent_disabled("gemini"));
+        assert!(load_agent_config()["gemini"].disabled);
+
+        save_agent_disabled("gemini", false).expect("enable agent");
+        assert!(!is_agent_disabled("gemini"));
+        assert!(load_agent_config().is_empty());
+    }
+
+    #[test]
+    fn disabled_true_preserves_section_when_model_is_cleared() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let _guard = AidHomeGuard::set(dir.path());
+
+        save_agent_default_model("gemini", Some("gemini-3-flash")).expect("save model");
+        save_agent_disabled("Gemini", true).expect("disable agent");
+        save_agent_default_model("gemini", None).expect("clear model");
+
+        let config = load_agent_config();
+        assert_eq!(config["gemini"].model, None);
+        assert!(config["gemini"].disabled);
     }
 }

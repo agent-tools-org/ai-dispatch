@@ -17,6 +17,10 @@ pub enum AgentCommands {
         /// Default idle timeout in seconds (0 to clear)
         #[arg(long)]
         idle_timeout: Option<u64>,
+        #[arg(long, conflicts_with = "enable")]
+        disable: bool,
+        #[arg(long, conflicts_with = "disable")]
+        enable: bool,
     },
     /// Create a new custom agent definition
     Add { name: String },

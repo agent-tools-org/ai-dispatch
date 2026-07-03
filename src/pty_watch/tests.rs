@@ -220,6 +220,32 @@ fn finding_line_with_workgroup_records_shared_finding() {
 }
 
 #[test]
+fn session_id_is_saved_once_across_stream_events() {
+    let store = Arc::new(Store::open_memory().unwrap());
+    let task = pty_task("t-pty-session", TaskStatus::Running);
+    store.insert_task(&task).unwrap();
+    let mut state = MonitorState::new(true, None);
+    let mut log = tempfile::NamedTempFile::new().unwrap();
+
+    state
+        .handle_chunk(
+            &crate::agent::codex::CodexAgent,
+            &task.id,
+            &store,
+            log.as_file_mut(),
+            concat!(
+                "{\"type\":\"thread.started\",\"thread_id\":\"session-first\"}\n",
+                "{\"type\":\"thread.started\",\"thread_id\":\"session-second\"}\n",
+            )
+            .to_string(),
+        )
+        .unwrap();
+
+    let task = store.get_task(task.id.as_str()).unwrap().unwrap();
+    assert_eq!(task.agent_session_id.as_deref(), Some("session-first"));
+}
+
+#[test]
 fn finalize_streaming_persists_transcript() {
     let temp = tempfile::tempdir().unwrap();
     let _aid_home = paths::AidHomeGuard::set(temp.path());

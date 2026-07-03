@@ -9,7 +9,7 @@ mod rescue;
 #[allow(unused_imports)]
 pub use rescue::{RescueOutcome, rescue_dirty_worktree, rescue_dirty_worktree_with_baseline};
 #[allow(unused_imports)]
-pub use rescue::{detect_untracked_source_files, rescue_untracked_files};
+pub use rescue::detect_untracked_source_files;
 use rescue::stage_untracked_source_files;
 
 pub fn has_uncommitted_changes(dir: &str) -> Result<bool> {

@@ -73,7 +73,7 @@ fn resolve_pricing(model: Option<&str>, agent: AgentKind) -> Option<ModelPricing
         AgentKind::Gemini => gemini_fallback_pricing(agent),
         AgentKind::Antigravity => None,
         AgentKind::Qwen => model_pricing("coder-model", agent),
-        AgentKind::Codex => model_pricing("gpt-4.1", agent),
+        AgentKind::Codex => codex_fallback_pricing(agent),
         AgentKind::Copilot => Some(ModelPricing {
             input_per_m: 0.0,
             output_per_m: 0.0,
@@ -104,6 +104,17 @@ fn gemini_fallback_pricing(agent: AgentKind) -> Option<ModelPricing> {
         return model_pricing(m, agent);
     }
     model_pricing("gemini-3-flash-preview", agent)
+}
+
+/// Codex fallback pricing derived from the merged model catalog (AGENT_MODELS).
+/// Picks the "standard" tier model; falls back to the first available.
+fn codex_fallback_pricing(agent: AgentKind) -> Option<ModelPricing> {
+    let models = model_catalog::models_for_agent(&agent);
+    let model = models.iter().find(|m| m.tier == "standard").or_else(|| models.first())?;
+    Some(ModelPricing {
+        input_per_m: model.input_per_m,
+        output_per_m: model.output_per_m,
+    })
 }
 
 fn pricing_overrides() -> &'static HashMap<(AgentKind, String), ModelPricing> {
@@ -175,6 +186,17 @@ mod tests {
     fn gpt41_cost_estimate() {
         let cost = estimate_cost(1_000_000, Some("gpt-4.1"), AgentKind::Codex).unwrap();
         assert!((cost - 3.8).abs() < 0.01);
+    }
+
+    #[test]
+    fn codex_fallback_uses_catalog_standard_tier() {
+        let cost = estimate_cost(1_000_000, None, AgentKind::Codex).unwrap();
+        let standard = model_catalog::models_for_agent(&AgentKind::Codex)
+            .into_iter()
+            .find(|m| m.tier == "standard")
+            .unwrap();
+        let blended = standard.input_per_m * 0.7 + standard.output_per_m * 0.3;
+        assert!((cost - blended).abs() < 0.01);
     }
 
     #[test]

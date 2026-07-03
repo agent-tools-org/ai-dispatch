@@ -251,17 +251,6 @@ const CODING_FALLBACK_CHAIN: &[AgentKind] = &[
     AgentKind::Kilo,
     AgentKind::MiMoCode,
 ];
-#[allow(dead_code)]
-const RESEARCH_FALLBACK_CHAIN: &[AgentKind] = &[
-    AgentKind::Gemini,
-    AgentKind::Qwen,
-    AgentKind::Copilot,
-    AgentKind::Codex,
-    AgentKind::Cursor,
-    AgentKind::OpenCode,
-    AgentKind::Kilo,
-    AgentKind::MiMoCode,
-];
 
 fn next_fallback_in_chain(
     agent: &AgentKind,
@@ -282,12 +271,6 @@ fn next_fallback_in_chain(
 pub(crate) fn coding_fallback_for(agent: &AgentKind) -> Option<AgentKind> {
     let available = detect_agents();
     next_fallback_in_chain(agent, CODING_FALLBACK_CHAIN, &available)
-}
-
-#[allow(dead_code)]
-pub(crate) fn research_fallback_for(agent: &AgentKind) -> Option<AgentKind> {
-    let available = detect_agents();
-    next_fallback_in_chain(agent, RESEARCH_FALLBACK_CHAIN, &available)
 }
 
 #[cfg(test)]

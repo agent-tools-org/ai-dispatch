@@ -3,7 +3,6 @@
 
 use super::{
     detect_untracked_source_files, rescue_dirty_worktree, rescue_dirty_worktree_with_baseline,
-    rescue_untracked_files,
 };
 use crate::test_subprocess;
 use std::{path::Path, process::Command};
@@ -101,24 +100,6 @@ fn detect_untracked_ignores_artifacts() {
             .unwrap()
             .is_empty()
     );
-}
-
-#[test]
-fn rescue_untracked_amends_commit() {
-    let _permit = test_subprocess::acquire();
-    let dir = repo();
-    commit_path(dir.path(), "tracked.txt", "tracked");
-    let before = head(dir.path());
-    let count_before = commit_count(dir.path());
-    write_path(dir.path(), "rescued.rs", "pub fn rescued() {}\n");
-    assert_eq!(
-        rescue_untracked_files(dir.path().to_str().unwrap(), "task-123").unwrap(),
-        vec!["rescued.rs"]
-    );
-    assert_ne!(head(dir.path()), before);
-    assert_eq!(commit_count(dir.path()), count_before);
-    let tree = git_stdout(dir.path(), &["ls-tree", "-r", "--name-only", "HEAD"]);
-    assert!(tree.lines().any(|line| line == "rescued.rs"));
 }
 
 #[test]

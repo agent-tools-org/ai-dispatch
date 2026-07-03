@@ -121,7 +121,13 @@ pub(super) fn run_background_task(
         group: args.group.clone(),
         skills: args.skills.clone(),
         checklist: args.checklist.clone(),
+        hooks: args.hooks.clone(),
         template: args.template.clone(),
+        worktree: args.worktree.clone(),
+        base_branch: args.base_branch.clone(),
+        peer_review: args.peer_review.clone(),
+        audit: args.audit,
+        scope: args.scope.clone(),
         interactive: true,
         on_done: args.on_done.clone(),
         cascade: args.cascade.clone(),
@@ -262,6 +268,7 @@ pub(super) async fn run_foreground_task(
         .map(|task| task.status)
         .unwrap_or(TaskStatus::Done);
     run_lifecycle::post_run_lifecycle(
+        run_lifecycle::LifecycleMode::Foreground,
         store,
         &prepared.task_id,
         args,

@@ -68,7 +68,8 @@ pub(crate) fn run_agent_process_with_control(
     }
     let rx = spawn_reader_thread(bridge.take_reader()?);
     let mut log_file = std::fs::File::create(log_path)?;
-    let mut state = MonitorState::new(streaming);
+    let workgroup_id = store.get_task(task_id.as_str())?.and_then(|task| task.workgroup_id);
+    let mut state = MonitorState::new(streaming, workgroup_id);
     monitor_bridge(
         agent,
         task_id,
@@ -77,7 +78,6 @@ pub(crate) fn run_agent_process_with_control(
         &rx,
         &mut log_file,
         &mut state,
-        streaming,
         Some(crate::idle_timeout::idle_timeout_from_command(cmd)),
         None,
     )?;

@@ -127,7 +127,7 @@ fn spinner_output_does_not_refresh_progress_clock() {
     let store = Arc::new(Store::open_memory().unwrap());
     let task = pty_task("t-spinner-progress", TaskStatus::Running);
     store.insert_task(&task).unwrap();
-    let mut state = MonitorState::new(true);
+    let mut state = MonitorState::new(true, None);
     state.last_progress_time = Instant::now() - Duration::from_secs(10);
     let before = state.last_progress_time;
     let mut log = tempfile::NamedTempFile::new().unwrap();
@@ -152,7 +152,7 @@ fn reasoning_events_refresh_liveness_clock() {
     let store = Arc::new(Store::open_memory().unwrap());
     let task = pty_task("t-opencode-reasoning-progress", TaskStatus::Running);
     store.insert_task(&task).unwrap();
-    let mut state = MonitorState::new(true);
+    let mut state = MonitorState::new(true, None);
     state.last_progress_time = Instant::now() - Duration::from_secs(10);
     let mut log = tempfile::NamedTempFile::new().unwrap();
 
@@ -175,7 +175,7 @@ fn milestone_output_refreshes_progress_clock() {
     let store = Arc::new(Store::open_memory().unwrap());
     let task = pty_task("t-milestone-progress", TaskStatus::Running);
     store.insert_task(&task).unwrap();
-    let mut state = MonitorState::new(true);
+    let mut state = MonitorState::new(true, None);
     state.last_progress_time = Instant::now() - Duration::from_secs(10);
     let mut log = tempfile::NamedTempFile::new().unwrap();
 
@@ -192,6 +192,31 @@ fn milestone_output_refreshes_progress_clock() {
     assert_eq!(state.event_count, 1);
     assert!(state.last_progress_time.elapsed() < Duration::from_secs(5));
     assert_eq!(store.get_events(task.id.as_str()).unwrap().len(), 1);
+}
+
+#[test]
+fn finding_line_with_workgroup_records_shared_finding() {
+    let store = Arc::new(Store::open_memory().unwrap());
+    let mut task = pty_task("t-pty-finding", TaskStatus::Running);
+    task.workgroup_id = Some("wg-pty-finding".to_string());
+    store.insert_task(&task).unwrap();
+    let mut state = MonitorState::new(true, task.workgroup_id.clone());
+    let mut log = tempfile::NamedTempFile::new().unwrap();
+
+    state
+        .handle_chunk(
+            &crate::agent::codex::CodexAgent,
+            &task.id,
+            &store,
+            log.as_file_mut(),
+            "[FINDING] PTY stream keeps group findings\n".to_string(),
+        )
+        .unwrap();
+
+    let findings = store.list_findings("wg-pty-finding").unwrap();
+    assert_eq!(findings.len(), 1);
+    assert_eq!(findings[0].content, "PTY stream keeps group findings");
+    assert_eq!(findings[0].source_task_id.as_deref(), Some(task.id.as_str()));
 }
 
 #[test]
@@ -236,7 +261,7 @@ fn finalize_streaming_persists_transcript() {
         delivery_assessment: None,
     };
     store.insert_task(&task).unwrap();
-    let mut state = MonitorState::new(true);
+    let mut state = MonitorState::new(true, None);
     state.full_output.push_str("complete transcript");
 
     finalize_streaming(

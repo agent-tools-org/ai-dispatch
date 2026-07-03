@@ -1,3 +1,11 @@
+## v8.105.0 (2026-07-03)
+- feat(agent): agents can now be disabled via `disabled = true` in agent_config.toml, managed by `aid agent config <name> --disable/--enable`; disabled agents are hidden from `aid config agents` (with a one-line summary), skipped by auto-selection, fallback chains, and team preferences, and explicit dispatch fails fast with an enable hint; `aid ask`/`aid explain` bail clearly when their default agent is disabled
+- fix(watcher): strip OSC (BEL/ST-terminated) and CSI terminal escape sequences at the stream choke point before event parsing — droid >=0.159 prefixes window-title/progress escapes to its stream-json lines under a PTY, which made every droid task since 2026-06-29 fail or be killed as hung; root cause documented in docs/investigation-droid-osc-escapes.md
+- feat(salvage): failed tasks with a worktree now deterministically write task_dir/partial-work.md (git status summary, diff stat incl. untracked, last activity before failure) and best-effort WIP-commit uncommitted changes on the task branch (hooks and signing disabled so the failure path never blocks)
+- feat(show): `aid show` reports a live Worktree State section; untracked/staged-only partial work no longer renders as "(no changes detected)"
+- fix(worktree): `aid worktree prune` skips worktrees with uncommitted changes instead of force-removing them
+
+
 ## v8.104.0 (2026-07-03)
 - fix(audit): stdout-only agents (agy/gemini) and read-only audits no longer produce empty results — persist_result_file() now falls back to extracting the agent's final output from the event log into task_dir/result.md when the agent emitted its report to stdout instead of writing the file
 - fix(export): aid export / .md export now reads the persisted task_dir/result.md when output_path is unset, so audit reports from stdout-only agents surface in exports too

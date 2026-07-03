@@ -27,35 +27,18 @@ impl super::Agent for AntigravityAgent {
     }
 
     fn build_command(&self, prompt: &str, opts: &RunOpts) -> Result<Command> {
-        if opts.read_only {
-            let caps = agy_capabilities();
-            if !caps.has_plan_mode {
-                if opts.sandbox && crate::sandbox::can_sandbox(AgentKind::Antigravity) {
-                    aid_warn!(
-                        "[aid] agy has no plan mode; relying on --sandbox container for read-only enforcement"
-                    );
-                } else if crate::sandbox::is_available()
-                    && crate::sandbox::can_sandbox(AgentKind::Antigravity)
-                {
-                    anyhow::bail!(
-                        "agy 1.0 has no plan mode. Rerun with --sandbox (container available) \
-                         to let aid enforce read-only, or use `gemini` (--approval-mode plan)."
-                    );
-                } else {
-                    anyhow::bail!(
-                        "agy 1.0 has no plan mode and no container sandbox is available. \
-                         Use `gemini` for read-only audit tasks (--approval-mode plan), \
-                         or install Apple's container CLI and rerun with --sandbox."
-                    );
-                }
-            }
-        }
+        let caps = agy_capabilities();
+        let effective_prompt = if opts.read_only && !caps.has_plan_mode {
+            aid_warn!("[aid] agy read-only is prompt-level only, not enforced. Use --worktree or --sandbox for isolation.");
+            read_only_prompt(prompt, opts)
+        } else {
+            prompt.to_string()
+        };
         let mut cmd = Command::new("agy");
-        if opts.read_only && agy_capabilities().has_plan_mode {
+        if opts.read_only && caps.has_plan_mode {
             cmd.args(["--approval-mode", "plan"]);
         }
         if let Some(ref model) = opts.model {
-            let caps = agy_capabilities();
             if caps.has_model_flag {
                 cmd.args(["-m", model]);
             } else {
@@ -65,7 +48,9 @@ impl super::Agent for AntigravityAgent {
                 );
             }
         }
-        cmd.args(["-p", prompt, "--print-timeout", "24h"]);
+        cmd.arg("-p");
+        cmd.arg(&effective_prompt);
+        cmd.args(["--print-timeout", "24h"]);
         cmd.arg("--dangerously-skip-permissions");
         for dir in agy_include_directories(opts.dir.as_deref(), &opts.context_files) {
             cmd.args(["--add-dir", &dir]);
@@ -105,7 +90,13 @@ struct AgyCapabilities {
 
 fn agy_capabilities() -> &'static AgyCapabilities {
     static CAPS: OnceLock<AgyCapabilities> = OnceLock::new();
-    CAPS.get_or_init(|| probe_agy_capabilities().unwrap_or_default())
+    CAPS.get_or_init(|| match probe_agy_capabilities() {
+        Some(caps) => caps,
+        None => {
+            aid_warn!("[aid] failed to probe agy capabilities; assuming no optional agy flags");
+            AgyCapabilities::default()
+        }
+    })
 }
 
 #[cfg(not(test))]
@@ -136,6 +127,20 @@ fn agy_version_string() -> Option<String> {
         .ok()?;
     let s = String::from_utf8_lossy(&output.stdout).trim().to_string();
     if s.is_empty() { None } else { Some(s) }
+}
+
+fn read_only_prompt(prompt: &str, opts: &RunOpts) -> String {
+    if opts.result_file.is_some() {
+        format!(
+            "IMPORTANT: READ-ONLY MODE. Do NOT modify, create, or delete any files, EXCEPT the result file specified in this prompt. Only read, analyze, and write your findings to the designated result file.\n\n{}",
+            prompt
+        )
+    } else {
+        format!(
+            "IMPORTANT: READ-ONLY MODE. Do NOT modify, create, or delete any files. Only read and analyze.\n\n{}",
+            prompt
+        )
+    }
 }
 
 fn agy_include_directories(dir: Option<&str>, context_files: &[String]) -> Vec<String> {

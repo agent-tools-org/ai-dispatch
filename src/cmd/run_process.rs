@@ -211,7 +211,7 @@ pub(crate) async fn run_agent_process_impl(args: RunProcessArgs<'_>) -> Result<(
         let _ = crate::background::update_agent_pid(task_id.as_str(), pid);
     }
     let info = if streaming {
-        watcher::watch_streaming(agent, &mut child, task_id, store, log_path, workgroup_id, Some(idle_timeout), None).await
+        watcher::watch_streaming(agent, &mut child, task_id, store, log_path, workgroup_id, idle_timeout, None).await
     } else {
         let out = output_path.map(std::path::Path::new);
         watcher::watch_buffered(agent, &mut child, task_id, store, log_path, out, workgroup_id).await

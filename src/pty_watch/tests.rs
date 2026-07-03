@@ -148,13 +148,12 @@ fn spinner_output_does_not_refresh_progress_clock() {
 }
 
 #[test]
-fn reasoning_events_do_not_refresh_progress_clock() {
+fn reasoning_events_refresh_liveness_clock() {
     let store = Arc::new(Store::open_memory().unwrap());
     let task = pty_task("t-opencode-reasoning-progress", TaskStatus::Running);
     store.insert_task(&task).unwrap();
     let mut state = MonitorState::new(true);
     state.last_progress_time = Instant::now() - Duration::from_secs(10);
-    let before = state.last_progress_time;
     let mut log = tempfile::NamedTempFile::new().unwrap();
 
     state
@@ -168,8 +167,7 @@ fn reasoning_events_do_not_refresh_progress_clock() {
         .unwrap();
 
     assert_eq!(state.event_count, 1);
-    assert_eq!(state.last_progress_time, before);
-    assert!(state.last_progress_time.elapsed() > Duration::from_secs(5));
+    assert!(state.last_progress_time.elapsed() < Duration::from_secs(5));
 }
 
 #[test]

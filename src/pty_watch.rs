@@ -114,7 +114,7 @@ impl MonitorState {
                     &line,
                     &mut false,
                 )? {
-                    if event_detail.kind.is_progress() {
+                    if event_detail.kind.is_liveness() {
                         self.mark_progress();
                         self.last_event_detail = Some(event_detail.detail);
                     }
@@ -150,7 +150,7 @@ impl MonitorState {
                 &trailing,
                 &mut false,
             )? {
-                if event_detail.kind.is_progress() {
+                if event_detail.kind.is_liveness() {
                     self.mark_progress();
                     self.last_event_detail = Some(event_detail.detail);
                 }

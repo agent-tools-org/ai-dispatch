@@ -166,7 +166,7 @@ pub(super) fn run_background_task(
             prepared.agent_display_name,
             crate::agent::truncate::truncate_text(&args.prompt, 50)
         );
-        aid_hint!("[aid] Watch: aid watch --quiet {}", prepared.task_id);
+        aid_hint!("[aid] Watch: aid watch --wait {}", prepared.task_id);
     }
     Ok(())
 }

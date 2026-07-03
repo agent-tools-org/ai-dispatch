@@ -2,13 +2,13 @@
 // Exports: retry_failed
 // Deps: crate::cmd::run, crate::store::Store, crate::types::Task
 use crate::cmd::run::{self, RunArgs};
+use crate::cmd::wait::{wait_for_task_ids, WaitOutcome};
 use crate::store::Store;
 use crate::types::{Task, TaskStatus};
 use anyhow::Result;
 use std::collections::HashMap;
 use std::sync::Arc;
-use tokio::time::{sleep, Duration, Instant};
-const SERIAL_RETRY_POLL_SECS: u64 = 2;
+use tokio::time::Duration;
 const SERIAL_RETRY_TIMEOUT_SECS: u64 = 30 * 60;
 type WorktreeIdentity = (Option<String>, Option<String>);
 #[derive(Debug)]
@@ -142,16 +142,12 @@ async fn dispatch_retry_bucket(
 
 async fn wait_for_retry_completion(store: &Arc<Store>, task_id: &str) -> Result<()> {
     let timeout = Duration::from_secs(SERIAL_RETRY_TIMEOUT_SECS);
-    let deadline = Instant::now() + timeout;
-    loop {
-        let _ = crate::background::check_zombie_tasks(store);
-        if let Some(task) = store.get_task(task_id)? && task.status.is_terminal() {
-            return Ok(());
+    let task_ids = [task_id.to_string()];
+    match wait_for_task_ids(store, &task_ids, None, false, Some(timeout)).await? {
+        WaitOutcome::Completed => Ok(()),
+        WaitOutcome::TimedOut(_) => {
+            anyhow::bail!("Timed out waiting for retried task {} after {}s", task_id, SERIAL_RETRY_TIMEOUT_SECS)
         }
-        if Instant::now() >= deadline {
-            anyhow::bail!("Timed out waiting for retried task {} after {}s", task_id, SERIAL_RETRY_TIMEOUT_SECS);
-        }
-        sleep(Duration::from_secs(SERIAL_RETRY_POLL_SECS)).await;
     }
 }
 

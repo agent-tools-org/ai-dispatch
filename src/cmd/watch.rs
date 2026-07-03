@@ -1,21 +1,23 @@
-// Handler for `aid watch` — live-updating text dashboard with optional quiet mode.
-// Polls store and redraws terminal every second. --quiet delegates to wait logic.
+// Handler for `aid watch` — live-updating text dashboard.
+// Polls store and redraws terminal while honoring wait-style exit flags.
 
 use anyhow::Result;
 use std::sync::Arc;
-use tokio::time::{sleep, Duration};
+use tokio::time::{sleep, Duration, Instant};
 
 use crate::board::{render_board, render_task_detail};
 use crate::store::Store;
-use crate::types::TaskFilter;
+use crate::types::{Task, TaskFilter, TaskStatus};
 
 /// Run the watch dashboard, refreshing every second.
-/// With `quiet`, delegates to wait logic (silent blocking).
-pub async fn run(store: &Arc<Store>, task_ids: &[String], group: Option<&str>, quiet: bool, exit_on_await: bool) -> Result<()> {
-    if quiet {
-        return crate::cmd::wait::run(store, task_ids, group, exit_on_await, None).await;
-    }
-
+pub async fn run(
+    store: &Arc<Store>,
+    task_ids: &[String],
+    group: Option<&str>,
+    exit_on_await: bool,
+    timeout_secs: Option<u64>,
+) -> Result<()> {
+    let deadline = timeout_secs.map(|secs| Instant::now() + Duration::from_secs(secs));
     loop {
         // Clear terminal
         print!("\x1b[2J\x1b[H");
@@ -36,6 +38,10 @@ pub async fn run(store: &Arc<Store>, task_ids: &[String], group: Option<&str>, q
                     // Exit when task is done
                     if task.status.is_terminal() {
                         println!("\nTask completed. Exiting watch.");
+                        return Ok(());
+                    }
+                    if exit_on_await && task.status == TaskStatus::AwaitingInput {
+                        print_awaiting_prompt(store, id)?;
                         return Ok(());
                     }
                 }
@@ -68,6 +74,9 @@ pub async fn run(store: &Arc<Store>, task_ids: &[String], group: Option<&str>, q
                 }
                 return Ok(());
             }
+            if exit_on_await && exit_on_awaiting_task(store, &running)? {
+                return Ok(());
+            }
             print!("{}", render_board(&running, store)?);
         } else {
             // Multiple specified tasks mode
@@ -82,6 +91,9 @@ pub async fn run(store: &Arc<Store>, task_ids: &[String], group: Option<&str>, q
                 return Ok(());
             }
             print!("{}", render_board(&tasks, store)?);
+            if exit_on_await && exit_on_awaiting_task(store, &tasks)? {
+                return Ok(());
+            }
 
             // Exit when all tasks are terminal
             if tasks.iter().all(|t| t.status.is_terminal()) {
@@ -90,6 +102,35 @@ pub async fn run(store: &Arc<Store>, task_ids: &[String], group: Option<&str>, q
             }
         }
 
+        if deadline.is_some_and(|deadline| Instant::now() >= deadline) {
+            aid_error!("[aid] Timeout after {}s.", timeout_secs.unwrap_or_default());
+            std::process::exit(124);
+        }
         sleep(Duration::from_secs(1)).await;
     }
+}
+
+fn exit_on_awaiting_task(store: &Store, tasks: &[Task]) -> Result<bool> {
+    let Some(task) = tasks.iter().find(|task| task.status == TaskStatus::AwaitingInput) else {
+        return Ok(false);
+    };
+    print_awaiting_prompt(store, task.id.as_str())?;
+    Ok(true)
+}
+
+fn print_awaiting_prompt(store: &Store, task_id: &str) -> Result<()> {
+    let events = store.get_events(task_id)?;
+    let prompt = events
+        .iter()
+        .rev()
+        .find_map(|e| {
+            e.metadata
+                .as_ref()
+                .and_then(|m| m.get("awaiting_prompt"))
+                .and_then(|v| v.as_str())
+        })
+        .unwrap_or("");
+    println!("{task_id} {prompt}");
+    println!("Use: aid respond {task_id} \"your answer\"");
+    Ok(())
 }

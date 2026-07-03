@@ -74,7 +74,7 @@ fn show_schema() -> Value {
         "type": "object",
         "properties": {
             "task_id": { "type": "string" },
-            "mode": { "type": "string", "enum": ["summary", "diff", "output", "log"] }
+            "mode": { "type": "string", "enum": ["summary", "stat", "events", "diff", "output", "log"] }
         },
         "required": ["task_id"],
         "additionalProperties": false

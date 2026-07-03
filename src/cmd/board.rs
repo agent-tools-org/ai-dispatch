@@ -187,12 +187,12 @@ fn task_fingerprint(tasks: &[crate::types::Task]) -> String {
 fn watch_instead_of_polling_hint(tasks: &[Task]) -> String {
     let running_ids: Vec<&str> = tasks.iter().filter(|task| task.status == TaskStatus::Running).map(|task| task.id.as_str()).collect();
     if running_ids.is_empty() {
-        return "Use `aid watch --quiet <id>` instead of polling.".to_string();
+        return "Use `aid watch --wait <id>` instead of polling.".to_string();
     }
     if running_ids.len() == 1 {
-        return format!("Use `aid watch --quiet {}` instead of polling.", running_ids[0]);
+        return format!("Use `aid watch --wait {}` instead of polling.", running_ids[0]);
     }
-    let commands = running_ids.iter().map(|task_id| format!("`aid watch --quiet {task_id}`")).collect::<Vec<_>>().join(", ");
+    let commands = running_ids.iter().map(|task_id| format!("`aid watch --wait {task_id}`")).collect::<Vec<_>>().join(", ");
     format!("Use one of {commands} instead of polling.")
 }
 

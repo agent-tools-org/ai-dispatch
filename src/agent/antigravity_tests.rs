@@ -58,14 +58,16 @@ fn build_command_with_sandbox_and_read_only_proceeds() {
 }
 
 #[test]
-fn build_command_read_only_no_sandbox_errors_actionably() {
-    let err = AntigravityAgent
-        .build_command("test prompt", &opts(true, vec![]))
-        .unwrap_err();
+fn build_command_read_only_without_plan_mode_prepends_prompt_prefix() {
+    let args = args_for(&opts(true, vec![]));
 
-    let message = err.to_string();
-    assert!(message.contains("--sandbox"));
-    assert!(message.contains("gemini"));
+    let prompt = args
+        .windows(2)
+        .find(|pair| pair[0] == "-p")
+        .map(|pair| pair[1].as_str())
+        .unwrap();
+    assert!(prompt.starts_with("IMPORTANT: READ-ONLY MODE."));
+    assert!(prompt.contains("test prompt"));
 }
 
 #[test]

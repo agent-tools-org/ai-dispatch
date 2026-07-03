@@ -1,7 +1,7 @@
 // Execution helpers for `aid run` after dispatch setup and prompt assembly.
 // Exports: load_runtime_hooks(), maybe_start_container(), run_background_task(), run_foreground_task().
 // Deps: hooks, background, container/sandbox wrappers, run lifecycle modules.
-use anyhow::{Context, Result};
+use anyhow::Result;
 use std::path::Path;
 use std::sync::Arc;
 use crate::agent::{self, RunOpts};
@@ -181,7 +181,7 @@ pub(super) async fn run_foreground_task(
     let mut std_cmd = prepared
         .agent
         .build_command(&prompt_bundle.effective_prompt, &build_run_opts(args, prepared, prompt_bundle))
-        .context("Failed to build agent command")?;
+        .map_err(|err| anyhow::anyhow!("Failed to build agent command: {err:#}"))?;
     // TODO: integrate credential_pool rotation here
     let opts = build_run_opts(args, prepared, prompt_bundle);
     agent::apply_run_env(&mut std_cmd, &opts);

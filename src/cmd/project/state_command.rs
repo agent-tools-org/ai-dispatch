@@ -123,7 +123,7 @@ fn format_relative_time(value: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::{render_state, AgentRate};
-    use crate::state::{ContextState, HealthState, LearnedState, PerformanceState, ProjectState};
+    use crate::state::{ContextState, HealthState, PerformanceState, ProjectState};
     use chrono::{Duration, Local};
     use std::collections::BTreeMap;
     use std::path::Path;
@@ -148,10 +148,6 @@ mod tests {
                 last_task_id: Some("t-abcd".to_string()),
                 last_task_agent: Some("codex".to_string()),
                 active_branch: Some("main".to_string()),
-            },
-            learned: LearnedState {
-                effective_tools: Vec::new(),
-                common_failure_patterns: Vec::new(),
             },
         };
         let agent_rates: Vec<AgentRate> = vec![("codex".to_string(), 0.92, 45)];

@@ -15,7 +15,7 @@ pub(crate) async fn dispatch(store: Arc<crate::store::Store>, command: Commands)
             | Commands::Watch(..)
             | Commands::Wait(..)
             | Commands::Board(..)
-            | Commands::Completions
+            | Commands::Notifications
             | Commands::Changelog(..)
             | Commands::Agent(..)
             | Commands::Clean(..)
@@ -81,7 +81,7 @@ async fn dispatch_primary(store: Arc<crate::store::Store>, command: Commands) ->
         Commands::Board(command_args_a::BoardArgs { running, today, mine, group, limit, force, stream, json }) => {
             handlers_c::board(store, running, today, mine, group, limit, force, stream, json).await
         }
-        Commands::Completions => handlers_c::completions(),
+        Commands::Notifications => handlers_c::notifications(),
         Commands::Changelog(command_args_a::ChangelogArgs { version, all, count, git }) => handlers_c::changelog(version, all, count, git),
         Commands::Agent(command_args_a::AgentArgs { action }) => handlers_c::agent(action),
         Commands::Clean(command_args_a::CleanArgs { older_than, worktrees, dry_run }) => handlers_c::clean(store, older_than, worktrees, dry_run),

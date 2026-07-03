@@ -104,7 +104,7 @@ pub struct MergeArgs {
 pub struct RespondArgs {
     pub task_id: String,
     pub input: Option<String>,
-    #[arg(long, short)]
+    #[arg(long, short = 'F')]
     pub file: Option<String>,
 }
 
@@ -123,13 +123,13 @@ pub struct StopArgs {
 #[derive(Args)]
 #[command(after_help = r#"Examples:
   aid reply t-1234 "Need status update"
-  aid reply t-1234 -f reply.md
+  aid reply t-1234 -F reply.md
   aid reply t-1234 "continue" --async
   aid reply t-1234 "status?" --timeout 60"#)]
 pub struct ReplyArgs {
     pub task_id: String,
     pub message: Option<String>,
-    #[arg(long, short = 'f')]
+    #[arg(long, short = 'F')]
     pub file: Option<String>,
     #[arg(long = "async")]
     pub async_mode: bool,

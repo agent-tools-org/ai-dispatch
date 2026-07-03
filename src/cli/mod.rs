@@ -19,6 +19,8 @@ mod doctor_tests;
 #[cfg(test)]
 mod retry_flag_tests;
 #[cfg(test)]
+mod respond_reply_flag_tests;
+#[cfg(test)]
 mod show_flag_tests;
 #[cfg(test)]
 mod watch_wait_flag_tests;
@@ -54,7 +56,8 @@ pub enum Commands {
     Watch(command_args_watch::WatchArgs),
     Wait(command_args_watch::WaitArgs),
     Board(command_args_a::BoardArgs),
-    Completions,
+    /// Print recent notifications
+    Notifications,
     Changelog(command_args_a::ChangelogArgs),
     Agent(command_args_a::AgentArgs),
     Clean(command_args_a::CleanArgs),

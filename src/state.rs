@@ -19,7 +19,6 @@ pub struct ProjectState {
     pub health: HealthState,
     pub performance: PerformanceState,
     pub context: ContextState,
-    pub learned: LearnedState,
 }
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct HealthState {
@@ -48,13 +47,6 @@ pub struct ContextState {
     pub last_task_agent: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub active_branch: Option<String>,
-}
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct LearnedState {
-    #[serde(default)]
-    pub effective_tools: Vec<String>,
-    #[serde(default)]
-    pub common_failure_patterns: Vec<String>,
 }
 pub fn state_path() -> Option<PathBuf> {
     let cwd = std::env::current_dir().ok()?;
@@ -147,10 +139,6 @@ pub fn compute_state(store: &Store, repo_path: &str) -> Result<ProjectState> {
             last_task_id: last_task.map(|task| task.id.to_string()),
             last_task_agent: last_task.map(|task| task.agent_display_name().to_string()),
             active_branch: git_branch(repo_path),
-        },
-        learned: LearnedState {
-            effective_tools: Vec::new(),
-            common_failure_patterns: Vec::new(),
         },
     })
 }

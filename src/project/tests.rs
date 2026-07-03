@@ -92,6 +92,16 @@ daily_limit = "$50"
 }
 
 #[test]
+fn strict_toml_rejects_unknown_project_key() {
+    let dir = TempDir::new().unwrap();
+    let contents = r#"[project]
+id = "test"
+unknown_key = "value"
+"#;
+    assert!(load_project(&write_project(dir.path(), contents)).is_err());
+}
+
+#[test]
 fn budget_shorthand_day() {
     let dir = TempDir::new().unwrap();
     let contents = r#"[project]

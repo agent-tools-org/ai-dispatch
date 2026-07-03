@@ -147,7 +147,7 @@ aid stop t-1234                          # graceful stop
 aid stop t-1234 --force                  # force kill
 aid steer t-1234 "Focus on the error handling, skip the logging changes"
 aid respond t-1234 "Yes, use the async version"
-aid respond t-1234 -f response.md        # respond with file contents
+aid respond t-1234 -F response.md        # respond with file contents
 ```
 
 ## Show

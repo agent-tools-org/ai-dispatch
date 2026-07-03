@@ -21,6 +21,19 @@ pub enum TaskStatus {
 }
 
 impl TaskStatus {
+    pub const ALL: [Self; 10] = [
+        Self::Waiting,
+        Self::Pending,
+        Self::Running,
+        Self::AwaitingInput,
+        Self::Stalled,
+        Self::Done,
+        Self::Merged,
+        Self::Failed,
+        Self::Skipped,
+        Self::Stopped,
+    ];
+
     pub fn as_str(&self) -> &'static str {
         match self {
             Self::Waiting => "waiting",
@@ -76,6 +89,27 @@ impl TaskStatus {
             self,
             Self::Done | Self::Merged | Self::Failed | Self::Skipped | Self::Stopped
         )
+    }
+
+    pub fn can_transition_to(self, next: Self) -> bool {
+        if self == next {
+            return true;
+        }
+        match self {
+            Self::Waiting => matches!(next, Self::Pending | Self::Running | Self::Skipped | Self::Failed | Self::Stopped),
+            Self::Pending => matches!(next, Self::Running | Self::Skipped | Self::Failed | Self::Stopped),
+            Self::Running => matches!(next, Self::AwaitingInput | Self::Stalled | Self::Done | Self::Failed | Self::Stopped),
+            Self::AwaitingInput => matches!(next, Self::Running | Self::Stalled | Self::Done | Self::Failed | Self::Stopped),
+            Self::Stalled => matches!(next, Self::Running | Self::Done | Self::Failed | Self::Stopped),
+            Self::Done => matches!(next, Self::Merged | Self::Failed),
+            Self::Failed => matches!(next, Self::Merged),
+            Self::Stopped => matches!(next, Self::Merged),
+            Self::Merged | Self::Skipped => false,
+        }
+    }
+
+    pub fn can_rescue_to_done(self, next: Self) -> bool {
+        self == Self::Failed && next == Self::Done
     }
 }
 

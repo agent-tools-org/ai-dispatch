@@ -57,7 +57,7 @@ pub async fn run(store: Arc<Store>, mut args: RunArgs) -> Result<TaskId> {
     let runtime_hooks = load_runtime_hooks(&args)?;
     maybe_record_start_sha(&store, &prepared.task_id, prepared.effective_dir.as_ref())?;
     let container_name = maybe_start_container(&args, &prepared)?;
-    store.update_task_status(prepared.task_id.as_str(), TaskStatus::Running)?;
+    crate::task_lifecycle::mark_running(store.as_ref(), &prepared.task_id)?;
     run_before_hook(
         &store,
         &prepared,

@@ -107,7 +107,7 @@ fn terminate(
         crate::sandbox::kill_container(task_id);
         preserve_worktree(task_id, &task, preserve_label);
     }
-    store.update_task_status(task_id, TaskStatus::Stopped)?;
+    crate::task_lifecycle::mark_stopped(store.as_ref(), task_id)?;
     store.insert_event(&TaskEvent {
         task_id: TaskId(task_id.to_string()),
         timestamp: Local::now(),

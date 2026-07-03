@@ -7,10 +7,49 @@ use anyhow::Result;
 use crate::store::{Store, TaskCompletionUpdate};
 use crate::types::{PendingReason, TaskEvent, TaskId, TaskStatus};
 
-pub(crate) fn mark_failed(store: &Store, task_id: &TaskId) -> Result<()> {
-    store.update_task_status(task_id.as_str(), TaskStatus::Failed)?;
+pub(crate) fn mark_running(store: &Store, task_id: &TaskId) -> Result<bool> {
+    store.update_task_status(task_id.as_str(), TaskStatus::Running)
+}
+
+pub(crate) fn mark_awaiting_input(store: &Store, task_id: &TaskId) -> Result<bool> {
+    store.update_task_status(task_id.as_str(), TaskStatus::AwaitingInput)
+}
+
+pub(crate) fn mark_stalled(store: &Store, task_id: &str) -> Result<bool> {
+    store.update_task_status(task_id, TaskStatus::Stalled)
+}
+
+pub(crate) fn mark_merged(store: &Store, task_id: &str) -> Result<bool> {
+    store.update_task_status(task_id, TaskStatus::Merged)
+}
+
+pub(crate) fn mark_skipped(store: &Store, task_id: &str) -> Result<bool> {
+    store.update_task_status(task_id, TaskStatus::Skipped)
+}
+
+pub(crate) fn mark_stopped(store: &Store, task_id: &str) -> Result<bool> {
+    store.update_task_status(task_id, TaskStatus::Stopped)
+}
+
+pub(crate) fn restore_after_merge_failure(
+    store: &Store,
+    task_id: &str,
+    status: TaskStatus,
+) -> Result<bool> {
+    store.update_task_status(task_id, status)
+}
+
+pub(crate) fn rescue_to_done(store: &Store, task_id: &TaskId) -> Result<bool> {
+    store.rescue_task_to_done(task_id.as_str())
+}
+
+pub(crate) fn mark_failed(store: &Store, task_id: &TaskId) -> Result<bool> {
+    let changed = store.update_task_status(task_id.as_str(), TaskStatus::Failed)?;
+    if !changed {
+        return Ok(false);
+    }
     salvage_failed_task(store, task_id);
-    Ok(())
+    Ok(true)
 }
 
 pub(crate) fn fail_if_running(store: &Store, task_id: &str) -> Result<bool> {

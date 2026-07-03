@@ -3,8 +3,6 @@
 // All user-controlled IDs must pass through these validators before filesystem use.
 
 use anyhow::{bail, Result};
-#[cfg(test)]
-use std::path::{Path, PathBuf};
 
 /// Validate a task ID for filesystem-safe task storage.
 pub fn validate_task_id(id: &str) -> Result<()> {
@@ -105,46 +103,6 @@ pub fn validate_branch_name(branch: &str) -> Result<()> {
     Ok(())
 }
 
-/// Join a user-supplied component under a base directory and verify containment.
-/// Returns the normalized path. Rejects traversal attempts.
-#[cfg(test)]
-pub fn safe_join(base: &Path, component: &str) -> Result<PathBuf> {
-    // Quick reject: component must not contain `..`
-    if component.contains("..") {
-        bail!(
-            "Path traversal blocked: '{}' contains '..'",
-            component
-        );
-    }
-    let joined = base.join(component);
-    let normalized = normalize_path(&joined);
-    let normalized_base = normalize_path(base);
-    if !normalized.starts_with(&normalized_base) {
-        bail!(
-            "Path traversal blocked: '{}' escapes base '{}'",
-            component,
-            base.display()
-        );
-    }
-    Ok(normalized)
-}
-
-/// Normalize a path without requiring it to exist (resolve `.` and `..` components).
-#[cfg(test)]
-fn normalize_path(path: &Path) -> PathBuf {
-    let mut components = Vec::new();
-    for component in path.components() {
-        match component {
-            std::path::Component::ParentDir => {
-                components.pop();
-            }
-            std::path::Component::CurDir => {}
-            other => components.push(other),
-        }
-    }
-    components.iter().collect()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -236,20 +194,5 @@ mod tests {
         assert!(validate_branch_name("branch$(cmd)").is_err());
         assert!(validate_branch_name("HEAD^{commit}").is_err());
         assert!(validate_branch_name("main~1").is_err());
-    }
-
-    #[test]
-    fn safe_join_blocks_traversal() {
-        let base = PathBuf::from("/tmp");
-        assert!(safe_join(&base, "good-dir").is_ok());
-        assert!(safe_join(&base, "../etc/passwd").is_err());
-        assert!(safe_join(&base, "foo/../../etc").is_err());
-    }
-
-    #[test]
-    fn safe_join_allows_nested() {
-        let base = PathBuf::from("/tmp");
-        let result = safe_join(&base, "aid-wt-feat/subdir").unwrap();
-        assert!(result.starts_with("/tmp") || result.starts_with("/private/tmp"));
     }
 }

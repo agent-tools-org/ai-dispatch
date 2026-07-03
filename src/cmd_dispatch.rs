@@ -1,11 +1,14 @@
 // aid CLI command dispatch support.
 // Exports shared dispatch helpers and finding-content resolution logic.
 
+mod admin_config;
 mod dispatch_match;
-mod handlers_a;
-mod handlers_b;
-mod handlers_c;
+mod display;
+mod knowledge;
+mod project_worktree;
 mod recommend_hint;
+mod run_batch;
+mod task_ops;
 
 use crate::cli::Commands;
 use anyhow::{Result, bail};

@@ -7,17 +7,14 @@ use serde_json::Value;
 use std::path::Path;
 use std::process;
 use std::sync::Arc;
-use std::time::Instant;
 use tokio::process::Command;
-use tokio::time::{timeout, Duration};
-use crate::process_group::{cleanup_process_group, force_kill_process_group};
 use crate::store::Store;
-use crate::store::TaskCompletionUpdate;
-use crate::types::{CompletionInfo, EventKind, TaskEvent, TaskId, TaskStatus};
-use crate::watcher;
-const DEFAULT_FOREGROUND_TIMEOUT_MINS: u64 = 30;
+use crate::types::TaskId;
 
 use super::run_prompt;
+#[path = "run_agent/timeout.rs"]
+mod timeout;
+pub(crate) use timeout::run_agent_process_with_timeout;
 
 #[allow(clippy::too_many_arguments)]
 pub(crate) async fn run_agent_process(
@@ -43,183 +40,6 @@ pub(crate) async fn run_agent_process(
         workgroup_id,
     })
     .await
-}
-
-#[allow(clippy::too_many_arguments)]
-pub(crate) async fn run_agent_process_with_timeout(
-    agent: &dyn crate::agent::Agent,
-    mut cmd: Command,
-    task_id: &TaskId,
-    store: &Arc<Store>,
-    log_path: &Path,
-    output_path: Option<&str>,
-    model: Option<&str>,
-    streaming: bool,
-    workgroup_id: Option<&str>,
-    max_duration_mins: Option<i64>,
-    max_task_cost: Option<f64>,
-) -> Result<()> {
-    let timeout_mins = max_duration_mins
-        .filter(|m| *m > 0)
-        .map(|m| m as u64)
-        .unwrap_or(DEFAULT_FOREGROUND_TIMEOUT_MINS);
-    let deadline = Duration::from_secs(timeout_mins * 60);
-    let start = Instant::now();
-    let idle_timeout = crate::idle_timeout::idle_timeout_from_tokio_command(&cmd);
-    let failure_context = run_prompt::capture_failure_context(store.as_ref(), task_id, &cmd);
-    #[cfg(unix)]
-    cmd.process_group(0);
-    let mut child = match spawn_child_with_log(&mut cmd, log_path) {
-        Ok(child) => child,
-        Err(err) => {
-            let err = err.context("Failed to spawn agent process");
-            let stderr = run_prompt::stderr_excerpt(task_id)
-                .or_else(|| Some("unavailable (process did not start)".to_string()));
-            run_prompt::insert_phase_error_event(
-                store.as_ref(),
-                task_id,
-                "agent spawn",
-                &err.to_string(),
-                stderr.as_deref(),
-            );
-            return Err(err);
-        }
-    };
-    if let Some(pid) = child.id() {
-        let _ = crate::background::update_agent_pid(task_id.as_str(), pid);
-    }
-    let watch_future = async {
-        let info = if streaming {
-            watcher::watch_streaming(
-                agent,
-                &mut child,
-                task_id,
-                store,
-                log_path,
-                workgroup_id,
-                Some(idle_timeout),
-                max_task_cost,
-            )
-                .await?
-        } else {
-            let output_path = output_path.map(Path::new);
-            watcher::watch_buffered(
-                agent,
-                &mut child,
-                task_id,
-                store,
-                log_path,
-                output_path,
-                workgroup_id,
-            )
-            .await?
-        };
-        Ok::<CompletionInfo, anyhow::Error>(info)
-    };
-
-    let result = timeout(deadline, watch_future).await;
-    let timed_out = result.is_err();
-    // On timeout: force-kill immediately. On normal exit: just SIGTERM orphaned children.
-    if timed_out {
-        force_kill_process_group(&child);
-    } else {
-        cleanup_process_group(&child);
-    }
-    let _ = child.kill().await;
-    let _ = child.wait().await;
-    match result {
-        Ok(Ok(info)) => {
-            if let Some(out_path) = output_path {
-                let out_path = Path::new(out_path);
-                if streaming {
-                    write_streaming_output(log_path, out_path);
-                }
-                run_prompt::fill_empty_output_from_log(log_path, Some(out_path))?;
-                run_prompt::clean_output_if_jsonl(out_path)?;
-            }
-            let duration_ms = start.elapsed().as_millis() as i64;
-            let exit_code =
-                run_prompt::resolve_failure_exit_code(store.as_ref(), task_id, info.exit_code);
-            if info.status == TaskStatus::Failed {
-                run_prompt::record_execution_failure(
-                    store.as_ref(),
-                    task_id,
-                    duration_ms,
-                    exit_code,
-                    &failure_context,
-                );
-            }
-            let final_model = info.model.as_deref().or(model);
-            let cost_usd = info.cost_usd.or_else(|| {
-                info.tokens
-                    .and_then(|tokens| crate::cost::estimate_cost(tokens, final_model, agent.kind()))
-            });
-            store.update_task_completion(TaskCompletionUpdate {
-                id: task_id.as_str(),
-                status: info.status,
-                tokens: info.tokens,
-                duration_ms,
-                model: final_model,
-                cost_usd,
-                exit_code,
-            })?;
-            crate::state::refresh_project_state(store.as_ref(), task_id);
-            let duration_str = format_duration(duration_ms);
-            let tokens_str = info
-                .tokens
-                .map(|t| format!(", {} tokens", t))
-                .unwrap_or_default();
-            let cost_str = if cost_usd.is_some() {
-                format!(", {}", crate::cost::format_cost(cost_usd))
-            } else {
-                String::new()
-            };
-            println!(
-                "Task {} {} ({}{}{})",
-                task_id,
-                info.status.label(),
-                duration_str,
-                tokens_str,
-                cost_str
-            );
-            Ok(())
-        }
-        Ok(Err(err)) => {
-            let stderr = run_prompt::stderr_excerpt(task_id);
-            run_prompt::insert_phase_error_event(
-                store.as_ref(),
-                task_id,
-                "execution",
-                &err.to_string(),
-                stderr.as_deref(),
-            );
-            Err(err)
-        }
-        Err(_) => {
-            let duration_ms = start.elapsed().as_millis() as i64;
-            store.update_task_completion(TaskCompletionUpdate {
-                id: task_id.as_str(),
-                status: TaskStatus::Failed,
-                tokens: None,
-                duration_ms,
-                model,
-                cost_usd: None,
-                exit_code: None,
-            })?;
-            crate::state::refresh_project_state(store.as_ref(), task_id);
-            let detail = format!("exceeded {timeout_mins}m timeout");
-            let event = TaskEvent {
-                task_id: task_id.clone(),
-                timestamp: Local::now(),
-                event_kind: EventKind::Error,
-                detail: format!("Failed during execution: {detail}"),
-                metadata: None,
-            };
-            let _ = store.insert_event(&event);
-            aid_error!("[aid] {detail}");
-            Err(anyhow::anyhow!(detail))
-        }
-    }
 }
 
 fn spawn_child_with_log(cmd: &mut Command, log_path: &Path) -> Result<tokio::process::Child> {

@@ -184,6 +184,8 @@ pub(crate) async fn run_agent_process_impl(args: RunProcessArgs<'_>) -> Result<(
         workgroup_id,
     } = args;
     let start = std::time::Instant::now();
+    // No max-duration monitor here: background reaping owns that policy using
+    // the shared default, while foreground runs use run_agent_process_with_timeout.
     let idle_timeout = crate::idle_timeout::idle_timeout_from_tokio_command(&cmd);
     let failure_context = capture_failure_context(store.as_ref(), task_id, &cmd);
     #[cfg(unix)]

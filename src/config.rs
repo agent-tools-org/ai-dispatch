@@ -8,6 +8,8 @@ use toml::value::{Table, Value};
 
 use crate::paths;
 
+pub(crate) const DEFAULT_MAX_TASK_DURATION_MINS: i64 = 60;
+
 #[derive(Debug, Clone, Default, Deserialize)]
 pub struct AidConfig {
     #[serde(default)]
@@ -140,7 +142,7 @@ impl Default for QueryConfig {
 }
 
 fn default_max_duration() -> i64 {
-    60
+    DEFAULT_MAX_TASK_DURATION_MINS
 }
 
 impl Default for BackgroundConfig {
@@ -319,7 +321,10 @@ mod tests {
     fn background_config_defaults_to_sixty_minutes() {
         let config = AidConfig::default();
 
-        assert_eq!(config.background.max_task_duration_mins, 60);
+        assert_eq!(
+            config.background.max_task_duration_mins,
+            crate::config::DEFAULT_MAX_TASK_DURATION_MINS
+        );
     }
 
     #[test]

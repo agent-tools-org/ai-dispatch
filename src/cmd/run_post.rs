@@ -5,7 +5,7 @@
 use anyhow::Result;
 use std::{path::{Path, PathBuf}, sync::Arc};
 
-use crate::{rate_limit, store::Store, types::*};
+use crate::{process_monitor, rate_limit, store::Store, types::*};
 use crate::cmd::{retry_logic, run_hung_recovery};
 
 use super::{RunArgs, inherit_retry_base_branch, run};
@@ -27,7 +27,7 @@ pub(crate) async fn maybe_auto_retry_after_hang(
     }
 
     let events = store.get_events(task_id.as_str())?;
-    let Some(context) = run_hung_recovery::hung_context(&events) else {
+    let Some(context) = process_monitor::hung_context(&events) else {
         return Ok(None);
     };
     let retry_count = prior_hung_retry_count(store.as_ref(), &task)?;
@@ -66,7 +66,7 @@ pub(crate) async fn maybe_auto_retry_after_hang(
     }
 
     let retry_id = Box::pin(run(store.clone(), retry_args)).await?;
-    let _ = run_hung_recovery::insert_hung_retry_event(store.as_ref(), task_id);
+    let _ = process_monitor::insert_hung_retry_event(store.as_ref(), task_id);
     Ok(Some(retry_id))
 }
 
@@ -226,7 +226,7 @@ fn prior_hung_retry_count(store: &Store, task: &Task) -> Result<u32> {
         .into_iter()
         .filter(|entry| entry.id != task.id)
         .filter_map(|entry| store.get_events(entry.id.as_str()).ok())
-        .filter(|events| run_hung_recovery::was_auto_retried_after_hang(events))
+        .filter(|events| process_monitor::was_auto_retried_after_hang(events))
         .count() as u32)
 }
 

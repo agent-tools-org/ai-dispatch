@@ -526,7 +526,7 @@ fn cleanup_failed_worktree(
         return;
     }
     let repo = repo_path.map(String::as_str).unwrap_or(".");
-    if let Err(err) = crate::cmd::merge::remove_worktree(repo, wt) {
+    if let Err(err) = crate::worktree::remove_worktree(repo, wt) {
         aid_warn!("[aid] Warning: failed to clean up worktree {wt}: {err}");
     }
 }

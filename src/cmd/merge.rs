@@ -9,9 +9,9 @@ use std::sync::Arc;
 use crate::store::Store;
 use crate::types::{EventKind, Task, TaskEvent, TaskId, TaskStatus, VerifyStatus};
 #[path = "merge_git.rs"]
-pub(crate) mod merge_git;
+mod merge_git;
 use merge_git::*;
-pub use merge_git::remove_worktree;
+use crate::worktree::remove_worktree;
 #[path = "merge_lanes.rs"]
 mod merge_lanes;
 

@@ -1,9 +1,8 @@
 // Handler for `aid config` subcommands.
-// Exports: run(), load_pricing_overrides(), merged_agent_models()
-// Deps: config_models, config_display, agent registry, store
+// Exports: run(), merged_agent_models(), model_catalog re-exports
+// Deps: model_catalog, config_display, agent registry, store
 
 use anyhow::Result;
-use serde::Deserialize;
 use std::collections::HashMap;
 use std::fs;
 use std::process::Command;
@@ -21,20 +20,15 @@ use crate::types::{AgentKind, TaskFilter};
 
 #[path = "config_display.rs"]
 mod config_display;
-#[path = "config_models.rs"]
-mod config_models;
 #[cfg(test)]
 #[path = "config_tests.rs"]
 mod tests;
 
-pub use config_display::{budget_model, models_for_agent};
 use config_display::{agent_profile, compute_agent_history, compute_model_history, format_capabilities};
-pub use config_models::{AGENT_MODELS, AGENT_PROFILES, PricingFileModel, ResolvedAgentModel};
-
-#[derive(Debug, Clone, Deserialize)]
-struct PricingResponse {
-    models: Vec<PricingFileModel>,
-}
+pub use crate::model_catalog::{
+    AGENT_MODELS, AGENT_PROFILES, ResolvedAgentModel, budget_model, load_pricing_overrides,
+};
+use crate::model_catalog::PricingResponse;
 
 pub fn run(store: &Arc<Store>, action: ConfigAction) -> Result<()> {
     match action {
@@ -235,16 +229,6 @@ fn clear_limit(agent: &str) -> Result<()> {
         println!("{} is not rate-limited", agent);
     }
     Ok(())
-}
-
-pub fn load_pricing_overrides() -> Result<Vec<PricingFileModel>> {
-    let path = crate::paths::pricing_path();
-    if !path.exists() {
-        return Ok(Vec::new());
-    }
-    let contents = fs::read_to_string(path)?;
-    let response: PricingResponse = serde_json::from_str(&contents)?;
-    Ok(response.models)
 }
 
 pub fn merged_agent_models() -> Result<Vec<ResolvedAgentModel>> {

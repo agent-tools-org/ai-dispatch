@@ -1,10 +1,10 @@
 // Cost estimation for AI agent tasks.
 // Maps model names to per-token pricing, computes task cost from token counts.
-// Deps: cmd::config, store::Store, types::AgentKind
+// Deps: model_catalog, store::Store, types::AgentKind
 
 mod pricing_builtin;
 
-use crate::cmd::config;
+use crate::model_catalog;
 use crate::store::Store;
 use crate::types::AgentKind;
 use std::collections::HashMap;
@@ -108,7 +108,7 @@ fn gemini_fallback_pricing(agent: AgentKind) -> Option<ModelPricing> {
 
 fn pricing_overrides() -> &'static HashMap<(AgentKind, String), ModelPricing> {
     PRICING_OVERRIDES.get_or_init(|| {
-        config::load_pricing_overrides()
+        model_catalog::load_pricing_overrides()
             .unwrap_or_default()
             .into_iter()
             .filter_map(|model| {

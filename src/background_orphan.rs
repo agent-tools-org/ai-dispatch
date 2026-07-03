@@ -7,8 +7,8 @@ use chrono::{DateTime, Local};
 
 use super::background_process::kill_process;
 use super::background_spec::load_spec_if_exists;
-use crate::cmd::run_hung_recovery;
 use crate::idle_timeout::DEFAULT_IDLE_TIMEOUT_SECS;
+use crate::process_monitor;
 use crate::store::Store;
 use crate::types::{Task, TaskEvent, TaskId};
 
@@ -95,7 +95,7 @@ pub(super) fn record_hung_detected_failure(
     if !super::record_failure(store, task_id, &detail, &detail)? {
         return Ok(false);
     }
-    run_hung_recovery::insert_hung_detected_events(
+    process_monitor::insert_hung_detected_events(
         store,
         &TaskId(task_id.to_string()),
         idle_secs,

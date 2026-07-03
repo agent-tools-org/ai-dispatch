@@ -4,6 +4,7 @@
 use anyhow::Result;
 use chrono::{DateTime, Duration, Local, LocalResult, TimeZone};
 use serde::Serialize;
+use std::path::Path;
 
 use crate::config::{AidConfig, UsageBudget};
 use crate::store::Store;
@@ -190,12 +191,24 @@ pub fn collect_usage_snapshot(
 }
 
 pub fn check_budget_status(store: &Store, config: &AidConfig) -> Result<BudgetStatus> {
+    let project_name = current_budget_project_name();
+    check_budget_status_for_project(store, config, project_name.as_deref())
+}
+
+fn check_budget_status_for_project(
+    store: &Store,
+    config: &AidConfig,
+    project_name: Option<&str>,
+) -> Result<BudgetStatus> {
     let now = Local::now();
     let mut over_limit = false;
     let mut near_limit = false;
     let mut messages: Vec<String> = Vec::new();
 
     for budget in &config.usage.budgets {
+        if budget.agent.is_none() && Some(budget.name.as_str()) != project_name {
+            continue;
+        }
         let since = budget
             .window
             .as_deref()
@@ -267,6 +280,18 @@ pub fn check_budget_status(store: &Store, config: &AidConfig) -> Result<BudgetSt
     })
 }
 
+fn current_budget_project_name() -> Option<String> {
+    crate::project::detect_project()
+        .map(|project| project.id)
+        .or_else(|| {
+            crate::repo_root::resolve_git_root_string(".").ok().and_then(|root| {
+                Path::new(&root)
+                    .file_name()
+                    .map(|name| name.to_string_lossy().to_string())
+            })
+        })
+}
+
 fn budget_usage_summary(
     store: &Store,
     budget: &UsageBudget,
@@ -274,7 +299,7 @@ fn budget_usage_summary(
 ) -> Result<(u32, i64, f64)> {
     match budget.agent.as_deref() {
         Some(agent) => store.budget_usage_summary(agent, since),
-        None => store.budget_usage_summary_all(since),
+        None => store.budget_usage_summary_for_project(&budget.name, since),
     }
 }
 
@@ -432,7 +457,8 @@ fn start_of_day(now: DateTime<Local>) -> DateTime<Local> {
 #[cfg(test)]
 mod tests {
     use super::{
-        agent_analytics, check_budget_status, collect_usage, collect_usage_from_tasks, UsageWindow,
+        agent_analytics, check_budget_status_for_project, collect_usage, collect_usage_from_tasks,
+        UsageWindow,
     };
     use crate::config::AidConfig;
     use crate::store::Store;
@@ -442,14 +468,14 @@ mod tests {
     use crate::usage_report::{render_agent_analytics, render_usage};
 
     fn make_task(id: &str, agent: AgentKind, tokens: i64, cost_usd: f64) -> Task {
-    Task {
-        id: TaskId(id.to_string()),
-        agent,
-        custom_agent_name: None,
-        prompt: "prompt".to_string(),
-        resolved_prompt: None,
-        category: None,
-        status: TaskStatus::Done,
+        Task {
+            id: TaskId(id.to_string()),
+            agent,
+            custom_agent_name: None,
+            prompt: "prompt".to_string(),
+            resolved_prompt: None,
+            category: None,
+            status: TaskStatus::Done,
             parent_task_id: None,
             workgroup_id: None,
             caller_kind: None,
@@ -480,6 +506,18 @@ mod tests {
         }
     }
 
+    fn make_project_task(
+        id: &str,
+        agent: AgentKind,
+        tokens: i64,
+        cost_usd: f64,
+        repo_path: &str,
+    ) -> Task {
+        let mut task = make_task(id, agent, tokens, cost_usd);
+        task.repo_path = Some(repo_path.to_string());
+        task
+    }
+
     #[test]
     fn renders_configured_budget_usage() {
         let store = Store::open_memory().unwrap();
@@ -508,46 +546,88 @@ mod tests {
     }
 
     #[test]
-    fn name_only_budget_cost_cap_counts_all_agents() {
+    fn project_budget_cost_cap_counts_matching_project() {
         let store = Store::open_memory().unwrap();
         store
-            .insert_task(&make_task("t-codex", AgentKind::Codex, 1_000, 0.45))
+            .insert_task(&make_project_task("t-a", AgentKind::Codex, 1_000, 1.20, "/work/project-a"))
             .unwrap();
         store
-            .insert_task(&make_task("t-gemini", AgentKind::Gemini, 1_000, 0.75))
+            .insert_task(&make_project_task("t-b", AgentKind::Gemini, 1_000, 0.75, "/work/project-b"))
             .unwrap();
         let config: AidConfig = toml::from_str(
             r#"
             [[usage.budget]]
-            name = "project"
+            name = "project-a"
             cost_limit_usd = 1.0
             "#,
         )
         .unwrap();
 
-        let status = check_budget_status(&store, &config).unwrap();
+        let status = check_budget_status_for_project(&store, &config, Some("project-a")).unwrap();
         assert!(status.over_limit);
         assert!(status.message.unwrap().contains("cost limit reached ($1.20/$1.00)"));
     }
 
     #[test]
-    fn token_cap_counts_all_agents() {
+    fn other_project_budget_does_not_block_dispatch() {
         let store = Store::open_memory().unwrap();
         store
-            .insert_task(&make_task("t-codex", AgentKind::Codex, 1_200, 0.10))
+            .insert_task(&make_project_task("t-a", AgentKind::Codex, 1_000, 25.00, "/work/project-a"))
+            .unwrap();
+        store
+            .insert_task(&make_project_task("t-b", AgentKind::Gemini, 1_000, 1.00, "/work/project-b"))
             .unwrap();
         let config: AidConfig = toml::from_str(
             r#"
             [[usage.budget]]
-            name = "project"
-            token_limit = 1000
+            name = "project-a"
+            cost_limit_usd = 20.0
+
+            [[usage.budget]]
+            name = "project-b"
+            cost_limit_usd = 20.0
             "#,
         )
         .unwrap();
 
-        let status = check_budget_status(&store, &config).unwrap();
-        assert!(status.over_limit);
-        assert!(status.message.unwrap().contains("token limit reached (1200/1000)"));
+        let status = check_budget_status_for_project(&store, &config, Some("project-b")).unwrap();
+        assert!(!status.over_limit);
+        assert!(!status.near_limit);
+    }
+
+    #[test]
+    fn unrelated_large_usage_does_not_trip_small_project_budget() {
+        let store = Store::open_memory().unwrap();
+        store
+            .insert_task(&make_project_task(
+                "t-smart-router",
+                AgentKind::Codex,
+                1_000,
+                1.00,
+                "/work/smart-router",
+            ))
+            .unwrap();
+        store
+            .insert_task(&make_project_task(
+                "t-global",
+                AgentKind::Gemini,
+                1_000,
+                30_000.00,
+                "/work/unrelated",
+            ))
+            .unwrap();
+        let config: AidConfig = toml::from_str(
+            r#"
+            [[usage.budget]]
+            name = "smart-router"
+            cost_limit_usd = 20.0
+            "#,
+        )
+        .unwrap();
+
+        let status = check_budget_status_for_project(&store, &config, Some("smart-router")).unwrap();
+        assert!(!status.over_limit);
+        assert!(!status.near_limit);
     }
 
     #[test]
@@ -570,7 +650,7 @@ mod tests {
         )
         .unwrap();
 
-        let status = check_budget_status(&store, &config).unwrap();
+        let status = check_budget_status_for_project(&store, &config, None).unwrap();
         assert!(!status.over_limit);
         assert!(!status.near_limit);
     }

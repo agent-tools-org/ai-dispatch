@@ -185,27 +185,27 @@ fn aggregates_budget_usage_by_agent_and_window() {
     let outside_window = (now - Duration::days(2)).to_rfc3339();
 
     conn.execute(
-        "INSERT INTO tasks (id, agent, prompt, status, tokens, cost_usd, created_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
-        params!["t-recent-1", "codex", "recent", "done", 120_i64, 1.25_f64, &within_window],
+        "INSERT INTO tasks (id, agent, prompt, status, repo_path, tokens, cost_usd, created_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+        params!["t-recent-1", "codex", "recent", "done", "/work/project-a", 120_i64, 1.25_f64, &within_window],
     )
     .unwrap();
     conn.execute(
-        "INSERT INTO tasks (id, agent, prompt, status, tokens, cost_usd, created_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
-        params!["t-recent-2", "codex", "recent", "done", 80_i64, 0.75_f64, &within_window],
+        "INSERT INTO tasks (id, agent, prompt, status, repo_path, tokens, cost_usd, created_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+        params!["t-recent-2", "codex", "recent", "done", "/work/project-a", 80_i64, 0.75_f64, &within_window],
     )
     .unwrap();
     conn.execute(
-        "INSERT INTO tasks (id, agent, prompt, status, tokens, cost_usd, created_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
-        params!["t-old", "codex", "old", "done", 500_i64, 4.0_f64, &outside_window],
+        "INSERT INTO tasks (id, agent, prompt, status, repo_path, tokens, cost_usd, created_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+        params!["t-old", "codex", "old", "done", "/work/project-a", 500_i64, 4.0_f64, &outside_window],
     )
     .unwrap();
     conn.execute(
-        "INSERT INTO tasks (id, agent, prompt, status, tokens, cost_usd, created_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
-        params!["t-other", "gemini", "other", "done", 999_i64, 9.0_f64, &within_window],
+        "INSERT INTO tasks (id, agent, prompt, status, repo_path, tokens, cost_usd, created_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+        params!["t-other", "gemini", "other", "done", "/work/project-b", 999_i64, 9.0_f64, &within_window],
     )
     .unwrap();
     drop(conn);
@@ -219,6 +219,11 @@ fn aggregates_budget_usage_by_agent_and_window() {
 
     let all_agents_recent = store.budget_usage_summary_all(Some(since)).unwrap();
     assert_eq!(all_agents_recent, (3, 1199, 11.0));
+
+    let project_recent = store
+        .budget_usage_summary_for_project("project-a", Some(since))
+        .unwrap();
+    assert_eq!(project_recent, (2, 200, 2.0));
 }
 
 #[test]

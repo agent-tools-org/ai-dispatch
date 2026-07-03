@@ -255,3 +255,26 @@ fn opencode_family_supports_session_resume() {
         assert!(!kind.supports_session_resume(), "{kind} should not resume sessions");
     }
 }
+
+#[test]
+fn event_kind_parse_or_warn_falls_back_and_warns_once() {
+    assert_eq!(EventKind::parse_or_warn("tool_call"), EventKind::ToolCall);
+    assert_eq!(EventKind::parse_or_warn("bogus_kind"), EventKind::Reasoning);
+    // Dedup: the first sighting of an unknown kind warns, repeats stay silent.
+    assert!(super::status::note_unknown_event_kind("bogus_kind_dedup"));
+    assert!(!super::status::note_unknown_event_kind("bogus_kind_dedup"));
+}
+
+#[test]
+fn task_event_full_detail_prefers_metadata_full() {
+    let mut event = TaskEvent {
+        task_id: TaskId("t-full".to_string()),
+        timestamp: Local::now(),
+        event_kind: EventKind::Reasoning,
+        detail: "truncated...".to_string(),
+        metadata: Some(serde_json::json!({ "full": "the complete untruncated text" })),
+    };
+    assert_eq!(event.full_detail(), "the complete untruncated text");
+    event.metadata = None;
+    assert_eq!(event.full_detail(), "truncated...");
+}

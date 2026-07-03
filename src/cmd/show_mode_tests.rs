@@ -76,11 +76,36 @@ fn events_text_lists_only_events() {
         })
         .unwrap();
 
-    let text = events_text(&store, task.id.as_str()).unwrap();
+    let text = events_text(&store, task.id.as_str(), false).unwrap();
 
     assert!(text.starts_with("Events:\n"));
     assert!(text.contains("[ milestone] started work"));
     assert!(!text.contains("Task:"));
+}
+
+#[test]
+fn events_text_full_renders_metadata_full_detail() {
+    let store = Arc::new(Store::open_memory().unwrap());
+    let task = task("t-events-full");
+    store.insert_task(&task).unwrap();
+    let full_text = format!("reasoning {}", "y".repeat(120));
+    let (detail, metadata) = crate::agent::truncate::capped_detail(&full_text);
+    store
+        .insert_event(&TaskEvent {
+            task_id: task.id.clone(),
+            timestamp: Local::now(),
+            event_kind: EventKind::Reasoning,
+            detail,
+            metadata,
+        })
+        .unwrap();
+
+    let brief = events_text(&store, task.id.as_str(), false).unwrap();
+    assert!(!brief.contains(&full_text));
+    assert!(brief.contains("..."));
+
+    let full = events_text(&store, task.id.as_str(), true).unwrap();
+    assert!(full.contains(&full_text));
 }
 
 #[test]

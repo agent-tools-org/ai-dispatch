@@ -116,7 +116,7 @@ fn parse_stream_event(task_id: &TaskId, v: &serde_json::Value, now: chrono::Date
             if support::is_gemini_rate_limit_error(&detail) {
                 rate_limit::mark_rate_limited(&AgentKind::Qwen, &detail);
             }
-            (EventKind::Error, support::truncate(&detail, 80), None)
+            (EventKind::Error, detail, None)
         }
         "result" | "turn_complete" => {
             let usage = extract_usage(v);
@@ -134,6 +134,7 @@ fn parse_stream_event(task_id: &TaskId, v: &serde_json::Value, now: chrono::Date
         }
         _ => return None,
     };
+    let (detail, metadata) = super::truncate::capped_detail_with(&detail, metadata);
     Some(TaskEvent { task_id: task_id.clone(), timestamp: now, event_kind: kind, detail, metadata })
 }
 

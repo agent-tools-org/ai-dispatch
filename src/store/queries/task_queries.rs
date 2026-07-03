@@ -258,6 +258,34 @@ impl Store {
         self.budget_usage_summary_for_agent(None, since)
     }
 
+    /// Summarize usage for a project budget by matching the persisted repo_path basename.
+    /// Tasks do not store project ids, so this mirrors project display fallback identity.
+    pub fn budget_usage_summary_for_project(
+        &self,
+        project_name: &str,
+        since: Option<DateTime<Local>>,
+    ) -> Result<(u32, i64, f64)> {
+        let conn = self.db();
+        let (task_count, total_tokens, total_cost): (i64, i64, f64) = conn.query_row(
+            "SELECT COUNT(*) as task_count,
+                    COALESCE(SUM(tokens), 0) as total_tokens,
+                    COALESCE(SUM(cost_usd), 0.0) as total_cost
+             FROM tasks
+             WHERE (
+                repo_path = ?1
+                OR (
+                    repo_path IS NOT NULL
+                    AND length(repo_path) > length(?1)
+                    AND substr(repo_path, length(repo_path) - length(?1) + 1) = ?1
+                    AND substr(repo_path, length(repo_path) - length(?1), 1) = '/'
+                )
+             ) AND (?2 IS NULL OR created_at >= ?2)",
+            params![project_name, since.map(|value| value.to_rfc3339())],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+        )?;
+        Ok((u32::try_from(task_count)?, total_tokens, total_cost))
+    }
+
     fn budget_usage_summary_for_agent(
         &self,
         agent: Option<&str>,

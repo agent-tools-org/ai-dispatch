@@ -246,6 +246,13 @@ main() {
   [[ -n "${current_version}" ]] || fail "could not read current package version"
   [[ "${current_version}" != "${version}" ]] || fail "Cargo.toml is already at version ${version}"
 
+  # Dry-run must leave the worktree exactly as it found it, even if a later
+  # validation step fails. The worktree is verified clean above, so a plain
+  # checkout restores the pre-run state.
+  if [[ "${dry_run}" == "true" ]]; then
+    trap 'git -C "${repo_root}" checkout -- Cargo.toml Cargo.lock CHANGELOG.md' EXIT
+  fi
+
   run_release_tests
   update_cargo_version "${version}"
   sync_cargo_lock
@@ -256,9 +263,9 @@ main() {
   [[ -n "${headline}" ]] || fail "could not derive release headline"
 
   if [[ "${dry_run}" == "true" ]]; then
-    echo "dry-run: updated Cargo.toml to ${version}"
-    echo "dry-run: synchronized Cargo.lock"
-    echo "dry-run: prepended CHANGELOG.md entry for ${tag}"
+    echo "dry-run: validated Cargo.toml bump to ${version} (reverted)"
+    echo "dry-run: validated Cargo.lock sync (reverted)"
+    echo "dry-run: validated CHANGELOG.md entry for ${tag} (reverted)"
     echo "dry-run: would commit with message: feat: release ${tag} — ${headline}"
     echo "dry-run: would create tag ${tag}"
     echo "dry-run: would push branch ${branch} and tag ${tag}"

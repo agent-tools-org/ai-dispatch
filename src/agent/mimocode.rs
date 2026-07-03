@@ -97,6 +97,12 @@ impl super::Agent for MiMoCodeAgent {
             exit_code: None,
         }
     }
+
+    // Verified 2026-07-03 (mimo 0.1.3): `mimo run --format json -m mimo/mimo-auto
+    // "<prompt>"` with stdout piped exits with 0 bytes; under a PTY it streams JSONL.
+    fn needs_pty(&self) -> bool {
+        true
+    }
 }
 
 #[cfg(test)]

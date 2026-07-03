@@ -5,8 +5,7 @@ use anyhow::Result;
 use chrono::Local;
 use serde_json::json;
 use std::io::Write;
-use std::sync::Arc;
-use std::sync::mpsc::{self, RecvTimeoutError};
+use std::sync::{Arc, mpsc::{self, RecvTimeoutError}};
 use std::time::{Duration, Instant};
 
 use crate::agent::Agent;
@@ -36,10 +35,11 @@ pub(crate) struct MonitorState {
     pending_inbound_acks: usize,
     idle_detector: IdleDetector,
     streaming: bool,
+    workgroup_id: Option<String>,
 }
 
 impl MonitorState {
-    pub(crate) fn new(streaming: bool) -> Self {
+    pub(crate) fn new(streaming: bool, workgroup_id: Option<String>) -> Self {
         Self {
             info: CompletionInfo {
                 tokens: None,
@@ -61,6 +61,7 @@ impl MonitorState {
             pending_inbound_acks: 0,
             idle_detector: IdleDetector::load(),
             streaming,
+            workgroup_id,
         }
     }
 
@@ -106,7 +107,7 @@ impl MonitorState {
                         agent,
                         task_id,
                         store,
-                        workgroup_id: None,
+                        workgroup_id: self.workgroup_id.as_deref(),
                         synthetic_tracker: &mut self.synthetic_tracker,
                     },
                     &mut self.info,
@@ -142,7 +143,7 @@ impl MonitorState {
                     agent,
                     task_id,
                     store,
-                    workgroup_id: None,
+                    workgroup_id: self.workgroup_id.as_deref(),
                     synthetic_tracker: &mut self.synthetic_tracker,
                 },
                 &mut self.info,
@@ -360,7 +361,6 @@ pub(crate) fn monitor_bridge(
     rx: &mpsc::Receiver<Vec<u8>>,
     log_file: &mut std::fs::File,
     state: &mut MonitorState,
-    _streaming: bool,
     idle_timeout: Option<Duration>,
     deadline: Option<Instant>,
 ) -> Result<()> {

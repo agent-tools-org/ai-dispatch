@@ -25,7 +25,7 @@ mod path;
 pub(crate) use snapshot::{WorktreeStatusEntry, WorktreeStatusKind, capture_worktree_snapshot, capture_worktree_snapshot_with_base};
 pub(crate) use live_state::{LiveWorktreeState, capture_live_worktree_state, uncommitted_diff_text, worktree_has_uncommitted_changes};
 pub(crate) use baseline::{baseline_contains, extract_baseline_path, extract_baseline_paths};
-pub use path::{aid_worktree_path, aid_worktree_root, is_aid_managed_worktree_path};
+pub use path::{aid_worktree_path, aid_worktree_root, is_aid_managed_worktree_path, is_safe_worktree_path, remove_worktree};
 pub use state::{
     branch_has_commits_ahead_of_main, clear_worktree_lock, process_alive_check,
     try_acquire_worktree_lock, worktree_changed_files,

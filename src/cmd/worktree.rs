@@ -105,7 +105,7 @@ pub fn prune(repo: Option<&str>) -> Result<()> {
             );
             continue;
         }
-        match super::merge::remove_worktree(repo_dir, &entry.path) {
+        match crate::worktree::remove_worktree(repo_dir, &entry.path) {
             Ok(()) => {
                 println!("[aid] Pruned stale worktree dir: {}", entry.path);
                 pruned += 1;
@@ -141,7 +141,7 @@ pub fn remove(branch: &str, repo: Option<&str>) -> Result<()> {
         anyhow::bail!("Worktree not found: {}", wt_path.display());
     }
     let wt_path = wt_path.to_string_lossy().to_string();
-    super::merge::remove_worktree(repo_dir, &wt_path)?;
+    crate::worktree::remove_worktree(repo_dir, &wt_path)?;
     Ok(())
 }
 

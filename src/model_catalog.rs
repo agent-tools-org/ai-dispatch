@@ -1,8 +1,12 @@
-// Agent config model data and pricing structures.
-// Exports: AGENT_PROFILES, AGENT_MODELS, AgentModel, PricingFileModel, ResolvedAgentModel
-// Deps: crate::types::AgentKind, serde
+// Shared agent model catalog: per-agent model/pricing data and catalog queries.
+// Exports: AGENT_PROFILES, AGENT_MODELS, AgentModel, PricingFileModel, ResolvedAgentModel,
+//          models_for_agent(), budget_model(), load_pricing_overrides()
+// Deps: crate::types::AgentKind, crate::paths, serde
 
+use anyhow::Result;
 use serde::Deserialize;
+use std::cmp::Ordering;
+use std::fs;
 
 use crate::types::AgentKind;
 
@@ -202,3 +206,41 @@ pub const AGENT_MODELS: &[AgentModel] = &[
     AgentModel { agent: AgentKind::Claude, model: "opus", input_per_m: 15.0, output_per_m: 75.0, tier: "premium", description: "Best quality", capability: 9.4 },
     AgentModel { agent: AgentKind::Claude, model: "haiku", input_per_m: 0.8, output_per_m: 4.0, tier: "cheap", description: "Fastest, lower-cost option", capability: 6.2 },
 ];
+
+pub fn models_for_agent(agent: &AgentKind) -> Vec<&'static AgentModel> {
+    AGENT_MODELS.iter().filter(|model| model.agent == *agent).collect()
+}
+
+pub fn budget_model(agent: &AgentKind) -> Option<&'static str> {
+    let models = models_for_agent(agent);
+    if models.is_empty() {
+        return None;
+    }
+    let non_free: Vec<_> = models.iter().filter(|model| model.tier != "free").collect();
+    if non_free.is_empty() {
+        return models.first().map(|model| model.model);
+    }
+    non_free
+        .iter()
+        .min_by(|left, right| {
+            let left_cost = left.input_per_m + left.output_per_m;
+            let right_cost = right.input_per_m + right.output_per_m;
+            left_cost.partial_cmp(&right_cost).unwrap_or(Ordering::Equal)
+        })
+        .map(|model| model.model)
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct PricingResponse {
+    pub models: Vec<PricingFileModel>,
+}
+
+pub fn load_pricing_overrides() -> Result<Vec<PricingFileModel>> {
+    let path = crate::paths::pricing_path();
+    if !path.exists() {
+        return Ok(Vec::new());
+    }
+    let contents = fs::read_to_string(path)?;
+    let response: PricingResponse = serde_json::from_str(&contents)?;
+    Ok(response.models)
+}

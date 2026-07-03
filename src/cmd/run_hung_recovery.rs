@@ -1,24 +1,13 @@
-// Hung recovery helpers for idle-timeout failures.
-// Exports retry policy, feedback text, and hung event metadata parsing.
-// Deps: serde_json, crate::store, crate::types.
+// Hung recovery retry policy for idle-timeout failures.
+// Exports retry limit, feedback text, and the auto-retry predicate.
+// Deps: crate::process_monitor, crate::types.
 
-use anyhow::Result;
-use chrono::Local;
-use serde_json::json;
-
-use crate::store::Store;
-use crate::types::{EventKind, Task, TaskEvent, TaskId, TaskStatus};
+use crate::process_monitor::HungContext;
+use crate::types::{Task, TaskStatus};
 
 pub const MAX_HUNG_RETRIES: u32 = 2;
 
 const MIN_PROGRESS_EVENTS: i64 = 6;
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) struct HungContext {
-    pub(crate) hung_duration_secs: u64,
-    pub(crate) event_count: u32,
-    pub(crate) last_event_detail: Option<String>,
-}
 
 pub fn build_hung_retry_feedback(task: &Task, hung_duration_secs: u64) -> String {
     let detail = task
@@ -42,86 +31,6 @@ pub fn should_auto_retry_hung(task: &Task, retry_count: u32) -> bool {
         && task.prompt_tokens.unwrap_or_default() >= MIN_PROGRESS_EVENTS
 }
 
-pub(crate) fn insert_hung_detected_events(
-    store: &Store,
-    task_id: &TaskId,
-    hung_duration_secs: u64,
-    event_count: u32,
-    last_event_detail: Option<&str>,
-) -> Result<()> {
-    let metadata = json!({
-        "hung_recovery_eligible": true,
-        "hung_duration_secs": hung_duration_secs,
-        "event_count": event_count,
-        "last_event_detail": last_event_detail,
-    });
-    store.insert_event(&TaskEvent {
-        task_id: task_id.clone(),
-        timestamp: Local::now(),
-        event_kind: EventKind::Milestone,
-        detail: "hung_detected".to_string(),
-        metadata: Some(metadata.clone()),
-    })?;
-    store.insert_event(&TaskEvent {
-        task_id: task_id.clone(),
-        timestamp: Local::now(),
-        event_kind: EventKind::Error,
-        detail: format!("Agent hung: no output for {hung_duration_secs} seconds"),
-        metadata: Some(metadata),
-    })?;
-    Ok(())
-}
-
-pub(crate) fn insert_hung_retry_event(store: &Store, task_id: &TaskId) -> Result<()> {
-    store.insert_event(&TaskEvent {
-        task_id: task_id.clone(),
-        timestamp: Local::now(),
-        event_kind: EventKind::Error,
-        detail: "HUNG → retry".to_string(),
-        metadata: Some(json!({ "hung_auto_retried": true })),
-    })?;
-    Ok(())
-}
-
-pub(crate) fn hung_context(events: &[TaskEvent]) -> Option<HungContext> {
-    events.iter().rev().find_map(|event| {
-        let metadata = event.metadata.as_ref()?;
-        if !metadata
-            .get("hung_recovery_eligible")
-            .and_then(|value| value.as_bool())
-            .unwrap_or(false)
-        {
-            return None;
-        }
-        Some(HungContext {
-            hung_duration_secs: metadata
-                .get("hung_duration_secs")
-                .and_then(|value| value.as_u64())
-                .unwrap_or_default(),
-            event_count: metadata
-                .get("event_count")
-                .and_then(|value| value.as_u64())
-                .and_then(|value| u32::try_from(value).ok())
-                .unwrap_or_default(),
-            last_event_detail: metadata
-                .get("last_event_detail")
-                .and_then(|value| value.as_str())
-                .map(str::to_string),
-        })
-    })
-}
-
-pub(crate) fn was_auto_retried_after_hang(events: &[TaskEvent]) -> bool {
-    events.iter().any(|event| {
-        event
-            .metadata
-            .as_ref()
-            .and_then(|value| value.get("hung_auto_retried"))
-            .and_then(|value| value.as_bool())
-            .unwrap_or(false)
-    })
-}
-
 pub(crate) fn with_hung_context(task: &Task, context: &HungContext) -> Task {
     let mut enriched = task.clone();
     enriched.resolved_prompt = context.last_event_detail.clone();
@@ -133,7 +42,7 @@ pub(crate) fn with_hung_context(task: &Task, context: &HungContext) -> Task {
 mod tests {
     use super::*;
     use chrono::Local;
-    use crate::types::{AgentKind, VerifyStatus};
+    use crate::types::{AgentKind, TaskId, VerifyStatus};
 
     fn task() -> Task {
         Task {

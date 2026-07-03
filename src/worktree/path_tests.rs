@@ -4,7 +4,7 @@
 
 use super::{
     aid_worktree_path, aid_worktree_root, create_worktree,
-    is_aid_managed_worktree_path,
+    is_aid_managed_worktree_path, is_safe_worktree_path, remove_worktree,
 };
 use super::path::WorktreeHomeGuard;
 use crate::test_subprocess;
@@ -39,6 +39,85 @@ fn init_repo(repo_dir: &Path) {
     std::fs::write(repo_dir.join("file.txt"), "hello\n").unwrap();
     git(repo_dir, &["add", "file.txt"]);
     git(repo_dir, &["commit", "-m", "init"]);
+}
+
+fn unique_branch(prefix: &str) -> String {
+    format!(
+        "{prefix}-{}-{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    )
+}
+
+#[test]
+fn remove_worktree_cleans_up_properly() {
+    let _permit = test_subprocess::acquire();
+    let repo = tempfile::tempdir().unwrap();
+    init_repo(repo.path());
+    let branch = unique_branch("cleanup");
+    // Use /tmp/aid-wt-* path to pass sandbox guard
+    let wt_path = format!("/tmp/aid-wt-test-{branch}");
+    git(repo.path(), &["worktree", "add", &wt_path, "-b", &branch]);
+
+    // Should not panic and worktree dir should be gone
+    remove_worktree(&repo.path().to_string_lossy(), &wt_path).unwrap();
+    assert!(!Path::new(&wt_path).exists());
+
+    // git worktree list should not show it
+    let out = Command::new("git")
+        .args(["-C", &repo.path().to_string_lossy(), "worktree", "list"])
+        .output()
+        .unwrap();
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(!stdout.contains(&branch));
+}
+
+#[test]
+fn sandbox_allows_aid_worktree_paths() {
+    let _permit = test_subprocess::acquire();
+    let home = tempfile::tempdir().unwrap();
+    let _home_guard = WorktreeHomeGuard::set(home.path());
+    let home_path = aid_worktree_root().join("demo").join("feat/foo");
+    assert!(is_safe_worktree_path(&home_path.to_string_lossy()));
+    assert!(is_safe_worktree_path("/tmp/aid-wt-feat-foo"));
+    assert!(is_safe_worktree_path("/tmp/aid-wt-fix/bar"));
+    assert!(is_safe_worktree_path("/private/tmp/aid-wt-test"));
+}
+
+#[test]
+fn sandbox_blocks_non_worktree_paths() {
+    let _permit = test_subprocess::acquire();
+    assert!(!is_safe_worktree_path("/home/user/project"));
+    assert!(!is_safe_worktree_path("/Users/someone/Develop/myrepo"));
+    assert!(!is_safe_worktree_path("/tmp/other-dir"));
+    assert!(!is_safe_worktree_path("/tmp/aid-wt")); // missing trailing dash
+    assert!(!is_safe_worktree_path("/tmp"));
+    assert!(!is_safe_worktree_path(""));
+    assert!(!is_safe_worktree_path("/"));
+}
+
+#[test]
+fn remove_worktree_refuses_unsafe_path() {
+    let _permit = test_subprocess::acquire();
+    let repo = tempfile::tempdir().unwrap();
+    init_repo(repo.path());
+    let unsafe_path = repo.path().join("subdir");
+    std::fs::create_dir_all(&unsafe_path).unwrap();
+
+    // This should NOT delete the directory — sandbox guard blocks it
+    let result = remove_worktree(
+        &repo.path().to_string_lossy(),
+        &unsafe_path.to_string_lossy(),
+    );
+    assert!(result.is_err());
+    // Directory must still exist
+    assert!(
+        unsafe_path.exists(),
+        "Sandbox guard failed: unsafe path was deleted!"
+    );
 }
 
 #[test]

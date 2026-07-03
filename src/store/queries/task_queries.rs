@@ -236,12 +236,27 @@ impl Store {
         agent: &str,
         since: Option<DateTime<Local>>,
     ) -> Result<(u32, i64, f64)> {
+        self.budget_usage_summary_for_agent(Some(agent), since)
+    }
+
+    pub fn budget_usage_summary_all(
+        &self,
+        since: Option<DateTime<Local>>,
+    ) -> Result<(u32, i64, f64)> {
+        self.budget_usage_summary_for_agent(None, since)
+    }
+
+    fn budget_usage_summary_for_agent(
+        &self,
+        agent: Option<&str>,
+        since: Option<DateTime<Local>>,
+    ) -> Result<(u32, i64, f64)> {
         let conn = self.db();
         let (task_count, total_tokens, total_cost): (i64, i64, f64) = conn.query_row(
             "SELECT COUNT(*) as task_count,
                     COALESCE(SUM(tokens), 0) as total_tokens,
                     COALESCE(SUM(cost_usd), 0.0) as total_cost
-             FROM tasks WHERE agent = ?1 AND (?2 IS NULL OR created_at >= ?2)",
+             FROM tasks WHERE (?1 IS NULL OR agent = ?1) AND (?2 IS NULL OR created_at >= ?2)",
             params![agent, since.map(|value| value.to_rfc3339())],
             |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
         )?;

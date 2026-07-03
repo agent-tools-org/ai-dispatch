@@ -52,21 +52,20 @@ pub fn render_usage(snapshot: &UsageSnapshot) -> String {
 
     out.push_str("\nConfigured Budgets\n");
     out.push_str(&format!(
-        "{:<16} {:<8} {:<8} {:<12} {:<14} {:<14} {:<14} {}\n",
-        "Name", "Plan", "Window", "Tasks", "Tokens", "Cost", "Requests", "Resets"
+        "{:<16} {:<8} {:<8} {:<12} {:<14} {:<14} {}\n",
+        "Name", "Plan", "Window", "Tasks", "Tokens", "Cost", "Resets"
     ));
-    out.push_str(&"-".repeat(118));
+    out.push_str(&"-".repeat(102));
     out.push('\n');
     for row in &snapshot.budget_rows {
         out.push_str(&format!(
-            "{:<16} {:<8} {:<8} {:<12} {:<14} {:<14} {:<14} {}\n",
+            "{:<16} {:<8} {:<8} {:<12} {:<14} {:<14} {}\n",
             row.name,
             row.plan.as_deref().unwrap_or("-"),
             row.window.as_deref().unwrap_or("-"),
             format_ratio_u32(row.tasks, row.task_limit),
             format_ratio_i64(row.tokens, row.token_limit, format_tokens),
             format_ratio_f64(row.cost_usd, row.cost_limit_usd),
-            format_ratio_u32(row.requests, row.request_limit),
             row.resets_at.as_deref().unwrap_or("-"),
         ));
         if let Some(notes) = row.notes.as_deref() {
@@ -218,8 +217,6 @@ pub(crate) fn collect_budget_rows(tasks: &[Task], budgets: &[UsageBudget]) -> Ve
                 token_limit: budget.token_limit,
                 cost_usd: cost_used,
                 cost_limit_usd: budget.cost_limit_usd,
-                requests: budget.external_requests,
-                request_limit: budget.request_limit,
                 resets_at: budget.resets_at.clone(),
                 notes: budget.notes.clone(),
             }

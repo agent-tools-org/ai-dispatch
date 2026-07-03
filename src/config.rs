@@ -80,15 +80,12 @@ pub struct UsageBudget {
     pub task_limit: Option<u32>,
     pub token_limit: Option<i64>,
     pub cost_limit_usd: Option<f64>,
-    pub request_limit: Option<u32>,
     #[serde(default)]
     pub external_tasks: u32,
     #[serde(default)]
     pub external_tokens: i64,
     #[serde(default)]
     pub external_cost_usd: f64,
-    #[serde(default)]
-    pub external_requests: u32,
     pub resets_at: Option<String>,
     pub notes: Option<String>,
 }
@@ -166,13 +163,28 @@ pub fn load_config() -> Result<AidConfig> {
 }
 
 /// Update or create a `[[usage.budget]]` entry in the global config file.
-/// If an entry with the same `name` already exists, update its cost_limit_usd and window.
+/// If an entry with the same `name` already exists, update its limits and window.
 /// If not, append a new entry.
 pub fn upsert_budget(name: &str, cost_limit_usd: f64, window: Option<&str>) -> Result<()> {
-    upsert_budget_at(&paths::config_path(), name, cost_limit_usd, window)
+    upsert_budget_at(&paths::config_path(), name, Some(cost_limit_usd), None, window)
 }
 
-fn upsert_budget_at(path: &Path, name: &str, cost_limit_usd: f64, window: Option<&str>) -> Result<()> {
+pub fn upsert_budget_limits(
+    name: &str,
+    cost_limit_usd: Option<f64>,
+    token_limit: Option<u64>,
+    window: Option<&str>,
+) -> Result<()> {
+    upsert_budget_at(&paths::config_path(), name, cost_limit_usd, token_limit, window)
+}
+
+fn upsert_budget_at(
+    path: &Path,
+    name: &str,
+    cost_limit_usd: Option<f64>,
+    token_limit: Option<u64>,
+    window: Option<&str>,
+) -> Result<()> {
     let mut document = if path.exists() {
         let content = fs::read_to_string(path)
             .with_context(|| format!("Failed to read {}", path.display()))?;
@@ -193,7 +205,7 @@ fn upsert_budget_at(path: &Path, name: &str, cost_limit_usd: f64, window: Option
         if let Value::Table(table) = entry
             && table.get("name").and_then(|n| n.as_str()) == Some(name)
         {
-            table.insert("cost_limit_usd".to_string(), Value::Float(cost_limit_usd));
+            apply_budget_limits(table, cost_limit_usd, token_limit)?;
             if let Some(window) = window {
                 table.insert("window".to_string(), Value::String(window.to_string()));
             } else {
@@ -207,7 +219,7 @@ fn upsert_budget_at(path: &Path, name: &str, cost_limit_usd: f64, window: Option
     if !updated {
         let mut entry = Table::new();
         entry.insert("name".to_string(), Value::String(name.to_string()));
-        entry.insert("cost_limit_usd".to_string(), Value::Float(cost_limit_usd));
+        apply_budget_limits(&mut entry, cost_limit_usd, token_limit)?;
         if let Some(window) = window {
             entry.insert("window".to_string(), Value::String(window.to_string()));
         }
@@ -222,6 +234,25 @@ fn upsert_budget_at(path: &Path, name: &str, cost_limit_usd: f64, window: Option
     let serialized = toml::to_string_pretty(&document).context("Failed to serialize config file")?;
     fs::write(path, serialized)
         .with_context(|| format!("Failed to write {}", path.display()))?;
+    Ok(())
+}
+
+fn apply_budget_limits(
+    table: &mut Table,
+    cost_limit_usd: Option<f64>,
+    token_limit: Option<u64>,
+) -> Result<()> {
+    if let Some(cost_limit_usd) = cost_limit_usd {
+        table.insert("cost_limit_usd".to_string(), Value::Float(cost_limit_usd));
+    } else {
+        table.remove("cost_limit_usd");
+    }
+    if let Some(token_limit) = token_limit {
+        let token_limit = i64::try_from(token_limit).context("token_limit exceeds TOML integer range")?;
+        table.insert("token_limit".to_string(), Value::Integer(token_limit));
+    } else {
+        table.remove("token_limit");
+    }
     Ok(())
 }
 
@@ -405,7 +436,7 @@ mod tests {
         let dir = TempDir::new()?;
         let path = dir.path().join("config.toml");
 
-        upsert_budget_at(&path, "project", 12.5, Some("24h"))?;
+        upsert_budget_at(&path, "project", Some(12.5), None, Some("24h"))?;
 
         let content = fs::read_to_string(&path)?;
         let parsed: Value = toml::from_str(&content)?;
@@ -437,7 +468,7 @@ mod tests {
             "#,
         )?;
 
-        upsert_budget_at(&path, "test", 20.0, Some("10h"))?;
+        upsert_budget_at(&path, "test", Some(20.0), None, Some("10h"))?;
 
         let parsed: Value = toml::from_str(&fs::read_to_string(&path)?)?;
         let budgets = parsed
@@ -448,6 +479,26 @@ mod tests {
         let entry = budgets[0].as_table().unwrap();
         assert_eq!(entry.get("cost_limit_usd").and_then(|c| c.as_float()), Some(20.0));
         assert_eq!(entry.get("window").and_then(|w| w.as_str()), Some("10h"));
+        Ok(())
+    }
+
+    #[test]
+    fn upsert_writes_token_limit() -> anyhow::Result<()> {
+        let dir = TempDir::new()?;
+        let path = dir.path().join("config.toml");
+
+        upsert_budget_at(&path, "tokenized", Some(3.0), Some(12_000), Some("24h"))?;
+
+        let parsed: Value = toml::from_str(&fs::read_to_string(&path)?)?;
+        let budgets = parsed
+            .get("usage")
+            .and_then(|u| u.get("budget"))
+            .and_then(|b| b.as_array())
+            .unwrap();
+        let entry = budgets[0].as_table().unwrap();
+        assert_eq!(entry.get("cost_limit_usd").and_then(|c| c.as_float()), Some(3.0));
+        assert_eq!(entry.get("token_limit").and_then(|t| t.as_integer()), Some(12_000));
+        assert_eq!(entry.get("window").and_then(|w| w.as_str()), Some("24h"));
         Ok(())
     }
 
@@ -467,7 +518,7 @@ mod tests {
             "#,
         )?;
 
-        upsert_budget_at(&path, "snapshot", 4.5, None)?;
+        upsert_budget_at(&path, "snapshot", Some(4.5), None, None)?;
 
         let parsed: Value = toml::from_str(&fs::read_to_string(&path)?)?;
         assert_eq!(parsed.get("query").and_then(|q| q.get("api_key")).and_then(|k| k.as_str()), Some("sk-xxx"));
@@ -487,7 +538,7 @@ mod tests {
             "#,
         )?;
 
-        upsert_budget_at(&path, "beta", 2.0, None)?;
+        upsert_budget_at(&path, "beta", Some(2.0), None, None)?;
 
         let parsed: Value = toml::from_str(&fs::read_to_string(&path)?)?;
         let budgets = parsed

@@ -1,4 +1,5 @@
 // Watcher stream handlers for per-line event processing.
+// Strips terminal escapes off each line before any event parsing.
 // Exports shared streaming helpers used by child-process and PTY watchers.
 
 use anyhow::Result;
@@ -40,6 +41,11 @@ pub(crate) fn handle_streaming_line_with_session(
         workgroup_id,
         synthetic_tracker,
     } = ctx;
+
+    // PTY-attached agents (e.g. droid >=0.159) glue OSC/CSI escapes onto
+    // their stream-json lines; strip them before any parser sees the line.
+    let cleaned = crate::watcher::strip_terminal_escapes(line);
+    let line = cleaned.as_ref();
 
     if let Some(finding) = extract_finding_detail(line)
         && let Some(group_id) = workgroup_id

@@ -3,7 +3,7 @@
 // Depends on pty_watch helpers and the in-memory Store.
 
 use super::{
-    MonitorState, extract_awaiting_prompt, finalize_streaming, mark_awaiting_input, strip_ansi,
+    MonitorState, extract_awaiting_prompt, finalize_streaming, mark_awaiting_input,
 };
 use crate::paths;
 use crate::store::Store;
@@ -116,15 +116,10 @@ fn falls_back_to_prompt_when_no_question() {
 }
 
 #[test]
-fn strip_ansi_removes_escape_codes() {
-    let input = "\x1b[1m\x1b[32mHello\x1b[0m \x1b[1mWorld\x1b[0m";
-    assert_eq!(strip_ansi(input), "Hello World");
-
-    let input2 = "Normal text";
-    assert_eq!(strip_ansi(input2), "Normal text");
-
-    let input3 = "\x1b[38;5;202mColored\x1b[0m";
-    assert_eq!(strip_ansi(input3), "Colored");
+fn handles_osc_escaped_output() {
+    let input = "\x1b]0;⛬ window title\x07\x1b[1mShould I proceed?\x1b[0m";
+    let result = extract_awaiting_prompt(input, "fallback");
+    assert_eq!(result, "Should I proceed?");
 }
 
 #[test]

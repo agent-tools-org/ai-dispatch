@@ -564,30 +564,9 @@ fn terminal_sentinel(
     )
 }
 
-fn strip_ansi(s: &str) -> String {
-    let mut result = String::with_capacity(s.len());
-    let bytes = s.as_bytes();
-    let mut i = 0;
-    while i < bytes.len() {
-        if bytes[i] == 0x1b && i + 1 < bytes.len() && bytes[i + 1] == b'[' {
-            let mut j = i + 2;
-            while j < bytes.len() && (bytes[j].is_ascii_digit() || bytes[j] == b';') {
-                j += 1;
-            }
-            if j < bytes.len() && bytes[j].is_ascii_alphabetic() {
-                i = j + 1;
-                continue;
-            }
-        }
-        result.push(bytes[i] as char);
-        i += 1;
-    }
-    result
-}
-
 fn extract_awaiting_prompt(output: &str, prompt: &str) -> String {
     let prompt = prompt.trim();
-    let cleaned = strip_ansi(output);
+    let cleaned = crate::watcher::strip_terminal_escapes(output);
     let lines: Vec<&str> = cleaned
         .lines()
         .rev()

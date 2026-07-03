@@ -1,6 +1,7 @@
 // Streaming watcher integration tests.
-// Covers process completion fields that must be returned to task persistence.
-// Deps: watcher::watch_streaming, Store, Tokio process, and a stub Agent.
+// Covers process completion fields that must be returned to task persistence
+// and OSC-prefixed line handling through the stream path (droid under PTY).
+// Deps: watcher::watch_streaming, Store, Tokio process, stub and droid agents.
 
 use std::process::{Command, Stdio};
 use std::sync::Arc;
@@ -152,6 +153,50 @@ async fn streaming_watch_populates_success_exit_code() {
 
     assert_eq!(info.status, TaskStatus::Done);
     assert_eq!(info.exit_code, Some(0));
+}
+
+#[tokio::test]
+async fn droid_osc_prefixed_completion_line_yields_completion_event() {
+    let temp = tempfile::tempdir().unwrap();
+    let _aid_home = paths::AidHomeGuard::set(temp.path());
+    let store = Arc::new(Store::open_memory().unwrap());
+    let task_id = TaskId("t-droid-osc".to_string());
+    insert_running_task(store.as_ref(), &task_id);
+    let log_path = temp.path().join("stream.log");
+    // Real droid >=0.159 PTY output shape: OSC window-title and OSC 9;4
+    // progress escapes glued to the front of stream-json lines.
+    let script = r#"printf '\033]0;\342\233\254 reply pong\007{"type":"text","text":"pong"}\n'; printf '\033]9;4;0;\007{"type":"turn_complete","input_tokens":10,"output_tokens":5}\n'"#;
+    let mut child = tokio::process::Command::new("sh")
+        .arg("-c")
+        .arg(script)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+
+    let info = watch_streaming(
+        &crate::agent::droid::DroidAgent,
+        &mut child,
+        &task_id,
+        &store,
+        &log_path,
+        None,
+        None,
+        None,
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(info.status, TaskStatus::Done);
+    assert_eq!(info.tokens, Some(15));
+    let events = store.get_events(task_id.as_str()).unwrap();
+    assert!(events.iter().any(|event| {
+        event.event_kind == EventKind::Completion
+            && event.detail == "tokens: 10 in + 5 out = 15"
+    }));
+    assert!(events
+        .iter()
+        .any(|event| event.event_kind == EventKind::Reasoning && event.detail == "pong"));
 }
 
 #[tokio::test]

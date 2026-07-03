@@ -22,14 +22,14 @@ const ENV_ESCALATE_SECS: &str = "AID_IDLE_ESCALATE_SECS";
 const ENV_MAX_DURATION_MINS: &str = "AID_MAX_DURATION_MINS";
 const ENV_HARD_CAP_HOURS: &str = "AID_HARD_CAP_HOURS";
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub(crate) struct NudgeLadder {
     pub(crate) warn: Duration,
     pub(crate) nudge: Duration,
     pub(crate) escalate: Duration,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub(crate) struct TimeoutPolicy {
     pub(crate) idle: Duration,
     pub(crate) nudge_ladder: NudgeLadder,

@@ -26,24 +26,7 @@ impl super::Agent for QwenAgent {
     }
 
     fn build_command(&self, prompt: &str, opts: &RunOpts) -> Result<Command> {
-        let mut cmd = Command::new("qwen");
-        cmd.args(["-o", "stream-json"]);
-        if opts.read_only {
-            cmd.args(["--approval-mode", "plan"]);
-        } else {
-            cmd.arg("-y");
-        }
-        if let Some(ref model) = opts.model {
-            cmd.args(["-m", model]);
-        }
-        for dir in support::gemini_include_directories(opts.dir.as_deref(), &opts.context_files) {
-            cmd.args(["--include-directories", &dir]);
-        }
-        cmd.args(["-p", prompt]);
-        if let Some(ref dir) = opts.dir {
-            cmd.current_dir(dir);
-        }
-        Ok(cmd)
+        support::build_gemini_family_command("qwen", prompt, opts, None)
     }
 
     fn parse_event(&self, task_id: &TaskId, line: &str) -> Option<TaskEvent> {
@@ -97,7 +80,7 @@ fn parse_stream_event(task_id: &TaskId, v: &serde_json::Value, now: chrono::Date
             if v.get("role").and_then(|r| r.as_str()) != Some("assistant") {
                 return None;
             }
-            let content = extract_text_payload(v.get("content"))?;
+            let content = support::extract_text_payload(v.get("content"))?;
             (EventKind::Reasoning, content, None)
         }
         "tool_call" | "tool_use" => {
@@ -218,37 +201,11 @@ fn extract_session_id(value: &serde_json::Value) -> Option<&str> {
 }
 
 fn extract_assistant_text(value: &serde_json::Value) -> Option<String> {
-    extract_text_payload(
+    support::extract_text_payload(
         value.get("message")
             .and_then(|message| message.get("content"))
             .or_else(|| value.get("content")),
     )
-}
-
-fn extract_text_payload(value: Option<&serde_json::Value>) -> Option<String> {
-    match value? {
-        serde_json::Value::Null => None,
-        serde_json::Value::String(text) => Some(text.clone()),
-        serde_json::Value::Array(items) => {
-            let parts = items
-                .iter()
-                .filter_map(|item| extract_text_payload(Some(item)))
-                .filter(|text| !text.is_empty())
-                .collect::<Vec<_>>();
-            (!parts.is_empty()).then(|| parts.concat())
-        }
-        serde_json::Value::Object(map) => {
-            for key in ["text", "content", "parts"] {
-                if let Some(text) = map.get(key).and_then(|item| extract_text_payload(Some(item)))
-                    && !text.is_empty()
-                {
-                    return Some(text);
-                }
-            }
-            None
-        }
-        _ => None,
-    }
 }
 
 #[cfg(test)]

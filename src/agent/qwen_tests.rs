@@ -31,6 +31,28 @@ fn build_command_uses_qwen_stream_json_flags() {
 }
 
 #[test]
+fn build_command_does_not_set_gemini_trust_env() {
+    let opts = RunOpts {
+        dir: None,
+        output: None,
+        result_file: None,
+        model: None,
+        budget: false,
+        read_only: false,
+        sandbox: false,
+        context_files: vec![],
+        session_id: None,
+        env: None,
+        env_forward: None,
+    };
+
+    let cmd = QwenAgent.build_command("hello", &opts).unwrap();
+    assert!(cmd
+        .get_envs()
+        .all(|(key, _)| key.to_string_lossy() != "GEMINI_CLI_TRUST_WORKSPACE"));
+}
+
+#[test]
 fn parses_qwen_assistant_event() {
     let task_id = TaskId::generate();
     let json = serde_json::json!({

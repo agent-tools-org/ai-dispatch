@@ -2,9 +2,44 @@
 // Exports: include-directory, milestone, rate-limit, and truncation helpers.
 // Deps: serde_json for event fields and std::path for workspace checks.
 
+use anyhow::Result;
 use serde_json::Value;
 use std::collections::BTreeSet;
 use std::path::{Component, Path, PathBuf};
+use std::process::Command;
+
+use super::RunOpts;
+
+pub(super) fn build_gemini_family_command(
+    binary: &str,
+    prompt: &str,
+    opts: &RunOpts,
+    trust_env: Option<(&str, &str)>,
+) -> Result<Command> {
+    let mut cmd = Command::new(binary);
+    cmd.args(["-o", "stream-json"]);
+    if let Some((key, value)) = trust_env
+        && std::env::var_os(key).is_none()
+    {
+        cmd.env(key, value);
+    }
+    if opts.read_only {
+        cmd.args(["--approval-mode", "plan"]);
+    } else {
+        cmd.arg("-y");
+    }
+    if let Some(ref model) = opts.model {
+        cmd.args(["-m", model]);
+    }
+    for dir in gemini_include_directories(opts.dir.as_deref(), &opts.context_files) {
+        cmd.args(["--include-directories", &dir]);
+    }
+    cmd.args(["-p", prompt]);
+    if let Some(ref dir) = opts.dir {
+        cmd.current_dir(dir);
+    }
+    Ok(cmd)
+}
 
 pub(super) fn gemini_include_directories(run_dir: Option<&str>, context_files: &[String]) -> Vec<String> {
     let run_dir = resolve_run_dir(run_dir);
@@ -177,6 +212,32 @@ pub(super) fn extract_model(value: &Value) -> Option<String> {
         }
     }
     value.pointer("/stats/models").and_then(Value::as_object).and_then(|obj| obj.keys().next().cloned())
+}
+
+pub(super) fn extract_text_payload(value: Option<&Value>) -> Option<String> {
+    match value? {
+        Value::Null => None,
+        Value::String(text) => Some(text.clone()),
+        Value::Array(items) => {
+            let parts = items
+                .iter()
+                .filter_map(|item| extract_text_payload(Some(item)))
+                .filter(|text| !text.is_empty())
+                .collect::<Vec<_>>();
+            (!parts.is_empty()).then(|| parts.concat())
+        }
+        Value::Object(map) => {
+            for key in ["text", "content", "parts"] {
+                if let Some(text) = map.get(key).and_then(|item| extract_text_payload(Some(item)))
+                    && !text.is_empty()
+                {
+                    return Some(text);
+                }
+            }
+            None
+        }
+        _ => None,
+    }
 }
 
 fn stringify_value(value: &Value) -> Option<String> {

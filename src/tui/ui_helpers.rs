@@ -138,23 +138,7 @@ pub fn prompt_text(task: &Task) -> String {
 }
 
 pub fn read_task_output_for_tui(task: &Task) -> String {
-    if let Ok(content) = crate::cmd::show::read_task_output(task) {
-        return content;
-    }
-    if let Some(path) = task.log_path.as_deref()
-        && let Ok(content) = std::fs::read_to_string(path)
-    {
-        if let Some(output) =
-            crate::cmd::show::extract_messages_from_log(std::path::Path::new(path), true)
-        {
-            return output;
-        }
-        // Fall back to raw text (non-JSONL logs from custom agents)
-        if !content.trim().is_empty() {
-            return content;
-        }
-    }
-    "No output available".to_string()
+    crate::task_view::read_output(task)
 }
 
 pub fn detail_scroll_offset(detail_scroll: usize) -> u16 {

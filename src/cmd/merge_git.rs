@@ -1,7 +1,7 @@
-// Git helpers for `aid merge`; exports merge, check, cleanup, and verify helpers.
+// Git helpers for `aid merge`; exports merge, check, and verify helpers.
 // Deps: crate::cmd::merge_verify, std::{fs, path::Path, process::Command}.
 
-use anyhow::{anyhow, Context, Result};
+use anyhow::{Context, Result};
 use std::fs;
 use std::path::Path;
 use std::process::Command;
@@ -300,66 +300,3 @@ fn conflict_files(repo_dir: &str) -> Vec<String> {
 }
 
 fn unknown_conflict_files() -> Vec<String> { vec!["merge failed without reported conflict files".to_string()] }
-
-/// Sandbox guard for worktree cleanup paths.
-pub fn is_safe_worktree_path(wt_path: &str) -> bool {
-    if !Path::new(wt_path).is_absolute() {
-        return false;
-    }
-    let canonical = match Path::new(wt_path).canonicalize() {
-        Ok(p) => p,
-        Err(_) => return crate::worktree::is_aid_managed_worktree_path(Path::new(wt_path)),
-    };
-    crate::worktree::is_aid_managed_worktree_path(&canonical)
-}
-
-pub fn remove_worktree(repo_dir: &str, wt_path: &str) -> Result<()> {
-    // SANDBOX: refuse to touch anything outside aid-managed worktree paths.
-    if !is_safe_worktree_path(wt_path) {
-        return Err(anyhow!(
-            "[aid] SAFETY: refusing to remove '{}' — not an aid worktree path. \
-             Only ~/.aid/worktrees/* and legacy /tmp/aid-wt-* paths are allowed.",
-            wt_path
-        ));
-    }
-
-    let result = Command::new("git")
-        .args(["-C", repo_dir, "worktree", "remove", "--force", wt_path])
-        .output();
-    if matches!(result, Ok(ref out) if out.status.success()) {
-        aid_info!("[aid] Pruned worktree dir {wt_path}");
-        return Ok(());
-    }
-
-    // Fallback: rm -rf, but ONLY after sandbox validation above
-    let delete_path = Path::new(wt_path);
-    let git_file = delete_path.join(".git");
-    if !git_file.is_file() {
-        return Err(anyhow!(
-            "[aid] SAFETY: refusing fallback removal for '{}' — missing worktree .git file",
-            wt_path
-        ));
-    }
-    let canonical = delete_path
-        .canonicalize()
-        .with_context(|| format!("failed to canonicalize worktree path '{wt_path}' before deletion"))?;
-    let canonical_str = canonical.to_string_lossy().to_string();
-    if !is_safe_worktree_path(&canonical_str) {
-        return Err(anyhow!(
-            "[aid] SAFETY: refusing fallback removal for '{}' — canonical path '{}' is outside aid-managed worktree paths",
-            wt_path,
-            canonical_str
-        ));
-    }
-
-    match fs::remove_dir_all(&canonical) {
-        Ok(()) => {
-            aid_info!("[aid] Pruned worktree dir {wt_path}");
-            let _ = Command::new("git")
-                .args(["-C", repo_dir, "worktree", "prune"])
-                .output();
-            Ok(())
-        }
-        Err(e) => Err(e).with_context(|| format!("failed to remove worktree '{wt_path}'")),
-    }
-}

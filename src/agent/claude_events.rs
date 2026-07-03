@@ -1,9 +1,9 @@
 // Claude stream-json parsing helpers shared by the Claude adapter and tests.
 // Exports parse_event_line() plus internal helpers for assistant, tool, and result events.
-// Depends on serde_json for decoding and truncate_text for concise event details.
+// Depends on serde_json for decoding and capped_detail for concise event details.
 use chrono::Local;
 use serde_json::{Value, json};
-use super::truncate::truncate_text;
+use super::truncate::{capped_detail, capped_detail_with};
 use crate::types::*;
 
 pub(crate) fn parse_event_line(task_id: &TaskId, line: &str) -> Option<TaskEvent> {
@@ -57,11 +57,12 @@ fn parse_assistant_event(
         message.get("model").and_then(|value| value.as_str()),
         v.get("session_id").and_then(|value| value.as_str()),
     );
+    let (detail, metadata) = capped_detail_with(text, metadata);
     Some(TaskEvent {
         task_id: task_id.clone(),
         timestamp: now,
         event_kind: EventKind::Reasoning,
-        detail: truncate_text(text, 80),
+        detail,
         metadata,
     })
 }
@@ -85,15 +86,16 @@ fn build_tool_event(
         .pointer("/input/command")
         .and_then(|value| value.as_str())
         .or_else(|| tool.pointer("/input/description").and_then(|value| value.as_str()));
-    let detail = command
+    let text = command
         .map(|value| format!("{name}: {value}"))
         .unwrap_or_else(|| name.to_string());
+    let (detail, metadata) = capped_detail(&text);
     Some(TaskEvent {
         task_id: task_id.clone(),
         timestamp: now,
         event_kind: EventKind::ToolCall,
-        detail: truncate_text(&detail, 80),
-        metadata: None,
+        detail,
+        metadata,
     })
 }
 
@@ -157,12 +159,13 @@ fn parse_result_event(
     if let Some(session_id) = session_id {
         metadata["agent_session_id"] = json!(session_id);
     }
+    let (detail, metadata) = capped_detail_with(&detail, Some(metadata));
     Some(TaskEvent {
         task_id: task_id.clone(),
         timestamp: now,
         event_kind: EventKind::Completion,
-        detail: truncate_text(&detail, 80),
-        metadata: Some(metadata),
+        detail,
+        metadata,
     })
 }
 
@@ -182,26 +185,28 @@ fn parse_system_event(
             v.get("model").and_then(|value| value.as_str()),
             v.get("session_id").and_then(|value| value.as_str()),
         );
+        let (detail, metadata) = capped_detail_with(&detail, metadata);
         return Some(TaskEvent {
             task_id: task_id.clone(),
             timestamp: now,
             event_kind: EventKind::Reasoning,
-            detail: truncate_text(&detail, 80),
+            detail,
             metadata,
         });
     }
     if subtype == "hook_response" && v.get("outcome").and_then(|value| value.as_str()) == Some("error")
     {
-        let detail = v
+        let text = v
             .get("stderr")
             .or_else(|| v.get("output"))
             .and_then(|value| value.as_str())?;
+        let (detail, metadata) = capped_detail(text);
         return Some(TaskEvent {
             task_id: task_id.clone(),
             timestamp: now,
             event_kind: EventKind::Error,
-            detail: truncate_text(detail, 80),
-            metadata: None,
+            detail,
+            metadata,
         });
     }
     None
@@ -225,7 +230,8 @@ fn parse_user_event(task_id: &TaskId, v: &Value, now: chrono::DateTime<Local>) -
     if crate::rate_limit::is_rate_limit_error(detail) {
         crate::rate_limit::mark_rate_limited(&AgentKind::Claude, detail);
     }
-    Some(TaskEvent { task_id: task_id.clone(), timestamp: now, event_kind: EventKind::Error, detail: truncate_text(detail, 80), metadata: None })
+    let (detail, metadata) = capped_detail(detail);
+    Some(TaskEvent { task_id: task_id.clone(), timestamp: now, event_kind: EventKind::Error, detail, metadata })
 }
 
 fn parse_error_event(task_id: &TaskId, v: &Value, now: chrono::DateTime<Local>) -> Option<TaskEvent> {
@@ -233,12 +239,13 @@ fn parse_error_event(task_id: &TaskId, v: &Value, now: chrono::DateTime<Local>) 
     if crate::rate_limit::is_rate_limit_error(detail) {
         crate::rate_limit::mark_rate_limited(&AgentKind::Claude, detail);
     }
+    let (detail, metadata) = capped_detail(detail);
     Some(TaskEvent {
         task_id: task_id.clone(),
         timestamp: now,
         event_kind: EventKind::Error,
-        detail: truncate_text(detail, 80),
-        metadata: None,
+        detail,
+        metadata,
     })
 }
 
@@ -285,15 +292,5 @@ fn extract_noop_reason(line: &str) -> String {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*; use crate::{paths, rate_limit};
-    #[test]
-    fn marks_claude_rate_limits_from_error_and_user_events() {
-        let temp = tempfile::tempdir().unwrap(); let _aid_home = paths::AidHomeGuard::set(temp.path()); rate_limit::clear_rate_limit(&AgentKind::Claude);
-        let task_id = TaskId("t-claude-rate".to_string());
-        let event = parse_event_line(&task_id, r#"{"type":"error","message":"rate limit exceeded"}"#).unwrap();
-        assert_eq!(event.event_kind, EventKind::Error); assert!(rate_limit::is_rate_limited(&AgentKind::Claude)); rate_limit::clear_rate_limit(&AgentKind::Claude);
-        let event = parse_event_line(&task_id, r#"{"type":"user","message":{"content":[{"content":"HTTP 429 too many requests","is_error":true}]}}"#).unwrap();
-        assert_eq!(event.event_kind, EventKind::Error); assert!(rate_limit::is_rate_limited(&AgentKind::Claude)); rate_limit::clear_rate_limit(&AgentKind::Claude);
-    }
-}
+#[path = "claude_events_tests.rs"]
+mod tests;

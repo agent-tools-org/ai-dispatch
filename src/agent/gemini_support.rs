@@ -33,7 +33,7 @@ pub(super) fn milestone_detail(event_type: &str, value: &Value) -> String {
     .flatten()
     .find_map(Value::as_str)
     {
-        return format!("{label}: {}", truncate(message, 80));
+        return format!("{label}: {}", truncate(message, super::truncate::EVENT_DETAIL_MAX));
     }
 
     let name = [
@@ -107,13 +107,13 @@ pub(super) fn classify_tool_result(name: &str, output: &str) -> (crate::types::E
     let lower_output = output.to_lowercase();
     let lower_name = name.to_lowercase();
     if lower_output.contains("error") || lower_output.contains("failed") || lower_output.contains("failure") {
-        (crate::types::EventKind::Error, format!("{}: {}", name, truncate(output, 80)))
+        (crate::types::EventKind::Error, format!("{}: {}", name, truncate(output, super::truncate::EVENT_DETAIL_MAX)))
     } else if lower_name.contains("test") || lower_output.contains("test") || lower_output.contains("passed") || lower_output.contains("failed") {
-        (crate::types::EventKind::Test, format!("{}: {}", name, truncate(output, 80)))
+        (crate::types::EventKind::Test, format!("{}: {}", name, truncate(output, super::truncate::EVENT_DETAIL_MAX)))
     } else if lower_name.contains("build") || lower_name.contains("compile") || lower_output.contains("compiled") || lower_output.contains("built") {
-        (crate::types::EventKind::Build, format!("{}: {}", name, truncate(output, 80)))
+        (crate::types::EventKind::Build, format!("{}: {}", name, truncate(output, super::truncate::EVENT_DETAIL_MAX)))
     } else {
-        (crate::types::EventKind::ToolCall, format!("{}: {}", name, truncate(output, 80)))
+        (crate::types::EventKind::ToolCall, format!("{}: {}", name, truncate(output, super::truncate::EVENT_DETAIL_MAX)))
     }
 }
 

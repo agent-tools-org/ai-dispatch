@@ -6,7 +6,7 @@ use chrono::Local;
 use serde_json::json;
 use std::process::Command;
 
-use super::truncate::truncate_text;
+use super::truncate::{capped_detail, capped_detail_with, truncate_text};
 use super::RunOpts;
 use crate::rate_limit;
 use crate::types::*;
@@ -83,12 +83,15 @@ impl super::Agent for OpenCodeAgent {
             return parse_json_event(AgentKind::OpenCode, task_id, &v, now);
         }
         let (kind, detail) = classify_text_line(AgentKind::OpenCode, trimmed);
-        kind.map(|k| TaskEvent {
-            task_id: task_id.clone(),
-            timestamp: now,
-            event_kind: k,
-            detail: truncate_text(detail, 80),
-            metadata: None,
+        kind.map(|k| {
+            let (detail, metadata) = capped_detail(detail);
+            TaskEvent {
+                task_id: task_id.clone(),
+                timestamp: now,
+                event_kind: k,
+                detail,
+                metadata,
+            }
         })
     }
 
@@ -190,11 +193,12 @@ pub(crate) fn parse_json_event(
         metadata
     };
 
+    let (detail, metadata) = capped_detail_with(&detail, metadata);
     Some(TaskEvent {
         task_id: task_id.clone(),
         timestamp: now,
         event_kind,
-        detail: truncate_text(&detail, 80),
+        detail,
         metadata,
     })
 }

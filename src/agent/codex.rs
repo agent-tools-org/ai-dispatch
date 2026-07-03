@@ -12,7 +12,7 @@ use std::process::Command;
 use std::sync::OnceLock;
 
 use output_classifier::classify_output;
-use super::truncate::truncate_text;
+use super::truncate::{capped_detail, capped_detail_with, truncate_text};
 use super::RunOpts;
 use crate::rate_limit;
 use crate::templates;
@@ -180,12 +180,13 @@ fn parse_item_event(
             if text.is_empty() {
                 return None;
             }
+            let (detail, metadata) = capped_detail(text);
             Some(TaskEvent {
                 task_id: task_id.clone(),
                 timestamp: now,
                 event_kind: EventKind::Reasoning,
-                detail: truncate_text(text, 80),
-                metadata: None,
+                detail,
+                metadata,
             })
         }
         "command_execution" => parse_command_event(task_id, item, event_type, now),
@@ -198,12 +199,13 @@ fn parse_item_event(
             if rate_limit::is_rate_limit_error(message) {
                 rate_limit::mark_rate_limited(&AgentKind::Codex, message);
             }
+            let (detail, metadata) = capped_detail(message);
             Some(TaskEvent {
                 task_id: task_id.clone(),
                 timestamp: now,
                 event_kind: EventKind::Error,
-                detail: truncate_text(message, 80),
-                metadata: None,
+                detail,
+                metadata,
             })
         }
         _ => None,
@@ -222,12 +224,14 @@ fn parse_command_event(
     }
 
     if event_type == "item.started" {
+        let (detail, metadata) =
+            capped_detail_with(command, Some(json!({ "command": command, "status": "in_progress" })));
         return Some(TaskEvent {
             task_id: task_id.clone(),
             timestamp: now,
             event_kind: classify_command(command),
-            detail: truncate_text(command, 80),
-            metadata: Some(json!({ "command": command, "status": "in_progress" })),
+            detail,
+            metadata,
         });
     }
 
@@ -251,12 +255,14 @@ fn parse_command_event(
         .and_then(|v| v.as_str())
         .unwrap_or("");
     let event_kind = classify_output(output)?;
+    let (detail, metadata) =
+        capped_detail_with(output, Some(json!({ "command": command, "exit_code": exit_code })));
     Some(TaskEvent {
         task_id: task_id.clone(),
         timestamp: now,
         event_kind,
-        detail: truncate_text(output, 80),
-        metadata: Some(json!({ "command": command, "exit_code": exit_code })),
+        detail,
+        metadata,
     })
 }
 
@@ -323,12 +329,13 @@ fn parse_error_event(
         rate_limit::mark_rate_limited(&AgentKind::Codex, detail);
     }
 
+    let (detail, metadata) = capped_detail(detail);
     Some(TaskEvent {
         task_id: task_id.clone(),
         timestamp: now,
         event_kind: EventKind::Error,
-        detail: truncate_text(detail, 80),
-        metadata: None,
+        detail,
+        metadata,
     })
 }
 
@@ -360,17 +367,18 @@ fn parse_file_change_event(
     if paths.is_empty() {
         return None;
     }
-    let detail = if paths.len() == 1 {
-        truncate_text(paths[0], 80)
+    let text = if paths.len() == 1 {
+        paths[0].to_string()
     } else {
         format!("{} files changed", paths.len())
     };
+    let (detail, metadata) = capped_detail_with(&text, Some(json!({ "files": paths })));
     Some(TaskEvent {
         task_id: task_id.clone(),
         timestamp: now,
         event_kind: EventKind::FileWrite,
         detail,
-        metadata: Some(json!({ "files": paths })),
+        metadata,
     })
 }
 

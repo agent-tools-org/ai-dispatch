@@ -7,7 +7,7 @@ use chrono::Local;
 use serde_json::{Value, json};
 use std::process::Command;
 
-use super::truncate::truncate_text;
+use super::truncate::{capped_detail, capped_detail_with};
 use super::RunOpts;
 use crate::rate_limit;
 use crate::types::*;
@@ -76,12 +76,13 @@ impl super::Agent for DroidAgent {
                 if text.is_empty() {
                     return None;
                 }
+                let (detail, metadata) = capped_detail(text);
                 Some(TaskEvent {
                     task_id: task_id.clone(),
                     timestamp: now,
                     event_kind: EventKind::Reasoning,
-                    detail: truncate_text(text, 80),
-                    metadata: None,
+                    detail,
+                    metadata,
                 })
             }
             // Only emit on the request side. droid stream-json fires both
@@ -156,12 +157,13 @@ impl super::Agent for DroidAgent {
                     }
                 }
 
-                let detail = match &signature {
-                    Some(sig) => truncate_text(&format!("{} {}", name, sig), 80),
-                    None => truncate_text(name, 80),
+                let text = match &signature {
+                    Some(sig) => format!("{} {}", name, sig),
+                    None => name.to_string(),
                 };
 
                 let metadata = signature.as_ref().map(|s| json!({ "command": s }));
+                let (detail, metadata) = capped_detail_with(&text, metadata);
 
                 Some(TaskEvent {
                     task_id: task_id.clone(),
@@ -228,16 +230,17 @@ fn parse_mission_step(
     if description.is_empty() {
         return None;
     }
-    let detail = match v.get("step").and_then(|value| value.as_str()) {
-        Some(step) if !step.is_empty() => truncate_text(&format!("{step} {description}"), 80),
-        _ => truncate_text(description, 80),
+    let text = match v.get("step").and_then(|value| value.as_str()) {
+        Some(step) if !step.is_empty() => format!("{step} {description}"),
+        _ => description.to_string(),
     };
+    let (detail, metadata) = capped_detail(&text);
     Some(TaskEvent {
         task_id: task_id.clone(),
         timestamp: now,
         event_kind: EventKind::Milestone,
         detail,
-        metadata: None,
+        metadata,
     })
 }
 
@@ -270,12 +273,13 @@ fn parse_error_event(
         let rate_limit_message = detail.clone().unwrap_or_else(|| "status 429".to_string());
         rate_limit::mark_rate_limited(&AgentKind::Droid, &rate_limit_message);
     }
+    let (detail, metadata) = capped_detail(detail.as_deref().unwrap_or("unknown error"));
     Some(TaskEvent {
         task_id: task_id.clone(),
         timestamp: now,
         event_kind: EventKind::Error,
-        detail: truncate_text(detail.as_deref().unwrap_or("unknown error"), 80),
-        metadata: None,
+        detail,
+        metadata,
     })
 }
 

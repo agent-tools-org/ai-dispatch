@@ -72,12 +72,15 @@ impl super::Agent for KiloAgent {
             parse_json_event(AgentKind::Kilo, task_id, &v, now)
         } else {
             let (kind, detail) = classify_text_line(AgentKind::Kilo, trimmed);
-            kind.map(|k| TaskEvent {
-                task_id: task_id.clone(),
-                timestamp: now,
-                event_kind: k,
-                detail: super::truncate::truncate_text(detail, 80),
-                metadata: None,
+            kind.map(|k| {
+                let (detail, metadata) = super::truncate::capped_detail(detail);
+                TaskEvent {
+                    task_id: task_id.clone(),
+                    timestamp: now,
+                    event_kind: k,
+                    detail,
+                    metadata,
+                }
             })
         }
     }

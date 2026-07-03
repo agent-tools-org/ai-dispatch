@@ -18,6 +18,8 @@ use crate::store::Store;
 use crate::types::{CompletionInfo, EventKind, TaskEvent, TaskId, TaskStatus};
 use crate::watcher::{self, SyntheticMilestoneTracker};
 
+mod utf8;
+
 const INPUT_POLL_INTERVAL: Duration = Duration::from_millis(500);
 
 pub(crate) struct MonitorState {
@@ -368,6 +370,7 @@ pub(crate) fn monitor_bridge(
 ) -> Result<()> {
     let mut reader_done = false;
     let mut child_exited_at: Option<Instant> = None;
+    let mut decoder = utf8::Utf8Chunks::default();
     const CHILD_EXIT_DRAIN: Duration = Duration::from_secs(2);
     loop {
         if reader_done && !bridge.is_alive() {
@@ -380,10 +383,7 @@ pub(crate) fn monitor_bridge(
             }
         }
         match rx.recv_timeout(INPUT_POLL_INTERVAL) {
-            Ok(bytes) => {
-                let chunk = String::from_utf8_lossy(&bytes).into_owned();
-                state.handle_chunk(agent, task_id, store, log_file, chunk)?;
-            }
+            Ok(bytes) => state.handle_chunk(agent, task_id, store, log_file, decoder.push(bytes))?,
             Err(RecvTimeoutError::Timeout) => {
                 state.handle_timeout(store, task_id)?;
                 if let Some(dl) = deadline
@@ -413,7 +413,7 @@ pub(crate) fn monitor_bridge(
                     break;
                 }
             }
-            Err(RecvTimeoutError::Disconnected) => reader_done = true,
+            Err(RecvTimeoutError::Disconnected) => { state.handle_chunk(agent, task_id, store, log_file, decoder.flush())?; reader_done = true; }
         }
         state.maybe_forward_input(bridge, store, task_id)?;
         state.maybe_forward_steer(bridge, store, task_id)?;

@@ -222,7 +222,7 @@ pub(crate) fn budget_ranked_agents(
 pub(crate) fn recommend_model(
     agent: &AgentKind, complexity: &Complexity, budget: bool,
 ) -> Option<&'static str> {
-    use crate::cmd::config::{budget_model, models_for_agent};
+    use crate::model_catalog::{budget_model, models_for_agent};
     if budget { return budget_model(agent); }
     let models = models_for_agent(agent);
     if models.is_empty() { return None; }

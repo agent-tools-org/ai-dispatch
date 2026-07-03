@@ -27,32 +27,16 @@ impl super::Agent for GeminiAgent {
     }
 
     fn build_command(&self, prompt: &str, opts: &RunOpts) -> Result<Command> {
-        let mut cmd = Command::new("gemini");
-        cmd.args(["-o", "stream-json"]);
         // aid runs gemini headlessly in worktrees outside the user's trusted
         // folder list; without this env var, gemini overrides --approval-mode
         // to "default" and refuses to run, producing only the trust-folder
         // refusal text. Honor a pre-existing override if the caller set it.
-        if std::env::var_os("GEMINI_CLI_TRUST_WORKSPACE").is_none() {
-            cmd.env("GEMINI_CLI_TRUST_WORKSPACE", "true");
-        }
-        // Gemini v0.36 has native sandboxing, but aid manages sandboxing outside the adapter.
-        if opts.read_only {
-            cmd.args(["--approval-mode", "plan"]);
-        } else {
-            cmd.arg("-y");
-        }
-        if let Some(ref model) = opts.model {
-            cmd.args(["-m", model]);
-        }
-        for dir in support::gemini_include_directories(opts.dir.as_deref(), &opts.context_files) {
-            cmd.args(["--include-directories", &dir]);
-        }
-        cmd.args(["-p", prompt]);
-        if let Some(ref dir) = opts.dir {
-            cmd.current_dir(dir);
-        }
-        Ok(cmd)
+        support::build_gemini_family_command(
+            "gemini",
+            prompt,
+            opts,
+            Some(("GEMINI_CLI_TRUST_WORKSPACE", "true")),
+        )
     }
 
     fn parse_event(&self, task_id: &TaskId, line: &str) -> Option<TaskEvent> {
@@ -146,7 +130,7 @@ pub fn extract_response(output: &str) -> Option<String> {
         let Some(event_type) = v.get("type").and_then(|t| t.as_str()) else { continue };
         match event_type {
             "message" if v.get("role").and_then(|r| r.as_str()) == Some("assistant") => {
-                if let Some(content) = extract_text_payload(v.get("content")) {
+                if let Some(content) = support::extract_text_payload(v.get("content")) {
                     if v.get("delta").and_then(|delta| delta.as_bool()) == Some(true) {
                         if let Some(text) = replaceable_text.take() {
                             messages.push(text);
@@ -164,7 +148,9 @@ pub fn extract_response(output: &str) -> Option<String> {
                 }
             }
             "text" => {
-                if let Some(content) = extract_text_payload(v.get("content").or_else(|| v.get("text"))) {
+                if let Some(content) =
+                    support::extract_text_payload(v.get("content").or_else(|| v.get("text")))
+                {
                     if !streaming_message.is_empty() {
                         messages.push(std::mem::take(&mut streaming_message));
                     }
@@ -208,32 +194,6 @@ pub fn extract_response(output: &str) -> Option<String> {
         return Some(s.to_string());
     }
     None
-}
-
-fn extract_text_payload(value: Option<&serde_json::Value>) -> Option<String> {
-    match value? {
-        serde_json::Value::Null => None,
-        serde_json::Value::String(text) => Some(text.clone()),
-        serde_json::Value::Array(items) => {
-            let parts = items
-                .iter()
-                .filter_map(|item| extract_text_payload(Some(item)))
-                .filter(|text| !text.is_empty())
-                .collect::<Vec<_>>();
-            (!parts.is_empty()).then(|| parts.concat())
-        }
-        serde_json::Value::Object(map) => {
-            for key in ["text", "content", "parts"] {
-                if let Some(text) = map.get(key).and_then(|item| extract_text_payload(Some(item)))
-                    && !text.is_empty()
-                {
-                    return Some(text);
-                }
-            }
-            None
-        }
-        _ => None,
-    }
 }
 
 /// Create a completion event for gemini tasks

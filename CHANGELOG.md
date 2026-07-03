@@ -1,3 +1,10 @@
+## v8.104.0 (2026-07-03)
+- fix(audit): stdout-only agents (agy/gemini) and read-only audits no longer produce empty results — persist_result_file() now falls back to extracting the agent's final output from the event log into task_dir/result.md when the agent emitted its report to stdout instead of writing the file
+- fix(export): aid export / .md export now reads the persisted task_dir/result.md when output_path is unset, so audit reports from stdout-only agents surface in exports too
+- feat(retry): add --bg flag to aid retry for non-blocking dispatch, matching aid run --bg (previously retry always blocked in the foreground)
+- feat(watchdog): raise the default idle timeout from 300s to 600s so agents are not falsely reaped during long silent phases like a cold cargo build (per-agent/per-task overrides still apply)
+
+
 ## v8.103.0 (2026-06-29)
 - fix(tui): TUI now shows all task types — newly-dispatched Waiting/Pending tasks (and Skipped/Stopped) are no longer hidden in the multipane view; previously the status filter only kept Running/AwaitingInput/Stalled/Done/Merged/Failed, so a freshly-dispatched task stayed invisible until it started running
 - feat(tui): add a Created timestamp column to the board table and a "Created {time}" line to each multipane pane (local time, %m-%d %H:%M)

@@ -140,7 +140,8 @@ fn fail_task_on_spawn_error(
         detail: detail.to_string(),
         metadata: None,
     };
-    let _ = store.complete_task_atomic(
+    let _ = crate::task_lifecycle::complete_task_atomic(
+        store.as_ref(),
         TaskCompletionUpdate {
             id: task_id.as_str(),
             status: TaskStatus::Failed,
@@ -209,7 +210,8 @@ fn record_completion(
         ),
         metadata: None,
     };
-    store.complete_task_atomic(
+    crate::task_lifecycle::complete_task_atomic(
+        store.as_ref(),
         TaskCompletionUpdate {
             id: task_id.as_str(),
             status: info.status,

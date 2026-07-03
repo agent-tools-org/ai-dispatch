@@ -252,7 +252,7 @@ pub(crate) async fn run_agent_process_impl(args: RunProcessArgs<'_>) -> Result<(
     }
     let final_model = info.model.as_deref().or(model);
     let cost_usd = info.cost_usd.or_else(|| info.tokens.and_then(|tokens| crate::cost::estimate_cost(tokens, final_model, agent.kind())));
-    store.update_task_completion(TaskCompletionUpdate {
+    crate::task_lifecycle::update_task_completion(store.as_ref(), TaskCompletionUpdate {
         id: task_id.as_str(),
         status: info.status,
         tokens: info.tokens,

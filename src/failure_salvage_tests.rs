@@ -125,8 +125,7 @@ fn salvage_writes_partial_work_and_commits_dirty_worktree() {
     store.insert_task(&task).expect("insert");
     insert_activity(&store, &task.id);
 
-    store
-        .update_task_completion(TaskCompletionUpdate {
+    crate::task_lifecycle::update_task_completion(&store, TaskCompletionUpdate {
             id: task.id.as_str(),
             status: TaskStatus::Failed,
             tokens: None,
@@ -159,7 +158,7 @@ fn salvage_noops_when_worktree_is_clean() {
     task.status = TaskStatus::Running;
     store.insert_task(&task).expect("insert");
 
-    store.update_task_status(task.id.as_str(), TaskStatus::Failed).expect("fail");
+    crate::task_lifecycle::mark_failed(&store, &task.id).expect("fail");
 
     assert_eq!(git_stdout(repo.path(), &["rev-parse", "HEAD"]), before);
     assert!(!paths::task_dir(task.id.as_str()).join("partial-work.md").exists());
@@ -174,7 +173,7 @@ fn salvage_error_does_not_change_failed_status() {
     task.status = TaskStatus::Running;
     store.insert_task(&task).expect("insert");
 
-    store.update_task_status(task.id.as_str(), TaskStatus::Failed).expect("fail");
+    crate::task_lifecycle::mark_failed(&store, &task.id).expect("fail");
 
     let loaded = store
         .get_task(task.id.as_str())

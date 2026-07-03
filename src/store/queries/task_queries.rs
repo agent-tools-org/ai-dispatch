@@ -65,6 +65,18 @@ impl Store {
         Ok(summary.flatten().filter(|value| !value.is_empty()))
     }
 
+    pub fn get_task_dispatch_args(&self, task_id: &str) -> Result<Option<String>> {
+        let conn = self.db();
+        conn.query_row(
+            "SELECT dispatch_args FROM tasks WHERE id = ?1",
+            params![task_id],
+            |row| row.get::<_, Option<String>>(0),
+        )
+        .optional()
+        .map(|value| value.flatten())
+        .map_err(Into::into)
+    }
+
     pub fn get_retry_chain(&self, task_id: &str) -> Result<Vec<Task>> {
         let mut chain = Vec::new();
         let mut current = self.get_task(task_id)?;

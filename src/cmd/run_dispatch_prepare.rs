@@ -40,7 +40,6 @@ impl WorktreeLockGuard {
     fn hold(&mut self, path: &str) { self.path = Some(path.to_string()); }
     fn disarm(&mut self) { self.path = None; }
 }
-
 impl Drop for WorktreeLockGuard {
     fn drop(&mut self) {
         if let Some(path) = self.path.take() {
@@ -95,6 +94,9 @@ pub(super) fn prepare_dispatch(store: &Arc<Store>, args: &mut RunArgs) -> Result
         args.result_file = Some(result_file.clone());
         aid_info!("[aid] Audit report mode: auto-set --result-file {result_file}");
     }
+    let mut dispatch_args = args.clone();
+    dispatch_args.model = agent_setup.effective_model.clone();
+    store.update_task_dispatch_args(task_id.as_str(), &dispatch_args.dispatch_args_json()?)?;
     Ok(prepared_dispatch(detected_project, agent_setup, task_id, task, log_path, workgroup, setup))
 }
 

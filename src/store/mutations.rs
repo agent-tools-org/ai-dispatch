@@ -259,6 +259,14 @@ impl Store {
         Ok(())
     }
 
+    pub fn update_task_dispatch_args(&self, id: &str, dispatch_args: &str) -> Result<()> {
+        self.db().execute(
+            "UPDATE tasks SET dispatch_args = ?1 WHERE id = ?2",
+            params![dispatch_args, id],
+        )?;
+        Ok(())
+    }
+
     pub fn update_prompt_tokens(&self, id: &str, tokens: i64) -> Result<()> {
         self.db().execute(
             "UPDATE tasks SET prompt_tokens = ?1 WHERE id = ?2",

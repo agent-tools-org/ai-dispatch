@@ -61,7 +61,7 @@ pub(super) fn merge_group_lanes(store: &Store, group_id: &str) -> Result<()> {
         match crate::gitbutler::apply_branch(Path::new(&repo_dir), branch) {
             Ok(()) => {
                 aid_info!("[aid] Applied branch {branch} as GitButler lane");
-                store.update_task_status(task.id.as_str(), TaskStatus::Merged)?;
+                crate::task_lifecycle::mark_merged(store, task.id.as_str())?;
                 applied += 1;
             }
             Err(err) => {

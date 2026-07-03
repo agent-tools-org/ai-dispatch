@@ -263,7 +263,8 @@ fn clear_worktree_lock(wt_path: Option<&str>) {
 }
 
 fn fail_claimed_task(store: &Store, task_id: &TaskId, model: Option<&str>, err: &anyhow::Error) -> Result<()> {
-    store.complete_task_atomic(
+    crate::task_lifecycle::complete_task_atomic(
+        store,
         TaskCompletionUpdate {
             id: task_id.as_str(), status: TaskStatus::Failed, tokens: None, duration_ms: 0,
             model, cost_usd: None, exit_code: None,

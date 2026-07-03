@@ -147,6 +147,58 @@ fn task_status_stalled_roundtrip() {
 }
 
 #[test]
+fn task_status_transition_graph_matches_expected_edges() {
+    let legal = [
+        (TaskStatus::Waiting, TaskStatus::Pending),
+        (TaskStatus::Waiting, TaskStatus::Running),
+        (TaskStatus::Waiting, TaskStatus::Skipped),
+        (TaskStatus::Waiting, TaskStatus::Failed),
+        (TaskStatus::Waiting, TaskStatus::Stopped),
+        (TaskStatus::Pending, TaskStatus::Running),
+        (TaskStatus::Pending, TaskStatus::Skipped),
+        (TaskStatus::Pending, TaskStatus::Failed),
+        (TaskStatus::Pending, TaskStatus::Stopped),
+        (TaskStatus::Running, TaskStatus::AwaitingInput),
+        (TaskStatus::Running, TaskStatus::Stalled),
+        (TaskStatus::Running, TaskStatus::Done),
+        (TaskStatus::Running, TaskStatus::Failed),
+        (TaskStatus::Running, TaskStatus::Stopped),
+        (TaskStatus::AwaitingInput, TaskStatus::Running),
+        (TaskStatus::AwaitingInput, TaskStatus::Stalled),
+        (TaskStatus::AwaitingInput, TaskStatus::Done),
+        (TaskStatus::AwaitingInput, TaskStatus::Failed),
+        (TaskStatus::AwaitingInput, TaskStatus::Stopped),
+        (TaskStatus::Stalled, TaskStatus::Running),
+        (TaskStatus::Stalled, TaskStatus::Done),
+        (TaskStatus::Stalled, TaskStatus::Failed),
+        (TaskStatus::Stalled, TaskStatus::Stopped),
+        (TaskStatus::Done, TaskStatus::Merged),
+        (TaskStatus::Done, TaskStatus::Failed),
+        (TaskStatus::Failed, TaskStatus::Merged),
+        (TaskStatus::Stopped, TaskStatus::Merged),
+    ];
+    for current in TaskStatus::ALL {
+        for next in TaskStatus::ALL {
+            let expected = current == next || legal.contains(&(current, next));
+            assert_eq!(
+                current.can_transition_to(next),
+                expected,
+                "{} -> {}",
+                current.as_str(),
+                next.as_str()
+            );
+        }
+    }
+}
+
+#[test]
+fn failed_to_done_is_only_a_rescue_transition() {
+    assert!(!TaskStatus::Failed.can_transition_to(TaskStatus::Done));
+    assert!(TaskStatus::Failed.can_rescue_to_done(TaskStatus::Done));
+    assert!(!TaskStatus::Stopped.can_rescue_to_done(TaskStatus::Done));
+}
+
+#[test]
 fn message_direction_roundtrip() {
     for direction in [MessageDirection::In, MessageDirection::Out] {
         assert_eq!(MessageDirection::try_from(direction.as_str()).ok(), Some(direction));

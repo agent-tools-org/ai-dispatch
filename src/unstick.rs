@@ -29,8 +29,7 @@ pub fn mark_task_stalled(store: &Store, task_id: &str) -> Result<bool> {
     if task.status != TaskStatus::Running {
         return Ok(false);
     }
-    store.update_task_status(task_id, TaskStatus::Stalled)?;
-    Ok(true)
+    crate::task_lifecycle::mark_stalled(store, task_id)
 }
 
 #[cfg(test)]

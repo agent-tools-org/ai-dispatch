@@ -141,7 +141,7 @@ where
 
 fn record_interrupted(store: &Store, task_id: &TaskId, signal_name: &str) -> Result<()> {
     let detail = format!("interrupted by signal {signal_name}");
-    if !store.fail_if_running(task_id.as_str())? {
+    if !crate::task_lifecycle::fail_if_running(store, task_id.as_str())? {
         return Ok(());
     }
     std::fs::write(crate::paths::stderr_path(task_id.as_str()), format!("{detail}\n"))?;

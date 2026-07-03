@@ -169,6 +169,19 @@ pub fn check_worktree_lock(wt_path: &Path) -> Option<String> {
     task_id
 }
 
+/// True when the file at `path` parses as a well-formed lock (task id present).
+/// Liveness of the pid is deliberately not checked here: this validates whether
+/// a rename during malformed-lock cleanup stole a competitor's fresh lock.
+fn lock_content_is_valid(path: &Path) -> bool {
+    let Ok(content) = std::fs::read_to_string(path) else {
+        return false;
+    };
+    content.lines().any(|line| {
+        line.strip_prefix("task=")
+            .is_some_and(|t| !t.trim().is_empty())
+    })
+}
+
 pub fn write_worktree_lock(wt_path: &Path, task_id: &str) {
     let lock_path = wt_path.join(LOCK_FILENAME);
     let content = format!("task={task_id}\npid={}\n", std::process::id());
@@ -217,6 +230,18 @@ pub fn try_acquire_worktree_lock(wt_path: &Path, task_id: &str) -> std::result::
                     let cleanup_path = lock_path.with_extension(unique_lock_extension("malformed"));
                     match std::fs::rename(&lock_path, &cleanup_path) {
                         Ok(()) => {
+                            // A competitor may have cleaned up and re-acquired between our
+                            // staleness read and the rename — in that case we just stole a
+                            // VALID lock. Re-validate the renamed file and put it back.
+                            if lock_content_is_valid(&cleanup_path) {
+                                match std::fs::rename(&cleanup_path, &lock_path) {
+                                    Ok(()) => continue,
+                                    Err(_) => {
+                                        let _ = std::fs::remove_file(&cleanup_path);
+                                        continue;
+                                    }
+                                }
+                            }
                             let _ = std::fs::remove_file(&cleanup_path);
                             continue;
                         }

@@ -4,6 +4,11 @@
 use anyhow::{Context, Result};
 use portable_pty::{native_pty_system, Child, CommandBuilder, ExitStatus, MasterPty, PtySize};
 use std::io::{Read, Write};
+#[cfg(unix)]
+use std::time::Duration;
+
+#[cfg(unix)]
+const PTY_KILL_GRACE: Duration = Duration::from_secs(3);
 
 pub struct PtyBridge {
     _master: Box<dyn MasterPty + Send>,
@@ -77,10 +82,8 @@ impl PtyBridge {
     #[cfg(unix)]
     pub fn kill_group(&mut self) -> Result<()> {
         if let Some(pid) = self.child.process_id() {
-            let pid = pid as i32;
-            unsafe {
-                libc::kill(-pid, libc::SIGTERM);
-            }
+            crate::process_group::kill_with_grace(pid as i32, PTY_KILL_GRACE);
+            return Ok(());
         }
         self.child
             .kill()

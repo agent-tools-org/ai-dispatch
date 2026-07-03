@@ -67,9 +67,14 @@ fn sync() -> Result<()> {
     let config = project::detect_project()
         .ok_or_else(|| anyhow!("No project configuration found. Run `aid project init` first."))?;
 
-    if let Some(cost) = config.budget.cost_limit_usd {
+    if config.budget.cost_limit_usd.is_some() || config.budget.token_limit.is_some() {
         let window = config.budget.window.as_deref();
-        aid_config::upsert_budget(&config.id, cost, window)?;
+        aid_config::upsert_budget_limits(
+            &config.id,
+            config.budget.cost_limit_usd,
+            config.budget.token_limit,
+            window,
+        )?;
         println!("Budget synced to ~/.aid/config.toml");
     }
 

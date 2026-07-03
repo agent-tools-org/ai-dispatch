@@ -162,8 +162,6 @@ pub(crate) struct BudgetUsageRow {
     pub(crate) token_limit: Option<i64>,
     pub(crate) cost_usd: f64,
     pub(crate) cost_limit_usd: Option<f64>,
-    pub(crate) requests: u32,
-    pub(crate) request_limit: Option<u32>,
     pub(crate) resets_at: Option<String>,
     pub(crate) notes: Option<String>,
 }
@@ -203,12 +201,9 @@ pub fn check_budget_status(store: &Store, config: &AidConfig) -> Result<BudgetSt
             .as_deref()
             .and_then(parse_window)
             .map(|window| now - window);
-        let (task_count, total_tokens, total_cost) = match budget.agent.as_deref() {
-            Some(agent) => store.budget_usage_summary(agent, since)?,
-            None => (0, 0, 0.0),
-        };
+        let (task_count, total_tokens, total_cost) = budget_usage_summary(store, budget, since)?;
         let tasks = task_count + budget.external_tasks;
-        let _tokens = total_tokens + budget.external_tokens;
+        let tokens = total_tokens + budget.external_tokens;
         let cost_usd = total_cost + budget.external_cost_usd;
 
         if let Some(limit) = budget.task_limit {
@@ -243,6 +238,22 @@ pub fn check_budget_status(store: &Store, config: &AidConfig) -> Result<BudgetSt
                 ));
             }
         }
+        if let Some(limit) = budget.token_limit {
+            if tokens >= limit {
+                over_limit = true;
+                messages.push(format!(
+                    "Budget '{}': token limit reached ({}/{})",
+                    budget.name, tokens, limit
+                ));
+            } else if tokens as f64 / limit as f64 > 0.8 {
+                near_limit = true;
+                messages.push(format!(
+                    "Budget '{}': token usage at {}%",
+                    budget.name,
+                    (tokens as f64 / limit as f64 * 100.0) as u32
+                ));
+            }
+        }
     }
 
     Ok(BudgetStatus {
@@ -254,6 +265,17 @@ pub fn check_budget_status(store: &Store, config: &AidConfig) -> Result<BudgetSt
             Some(messages.join("\n"))
         },
     })
+}
+
+fn budget_usage_summary(
+    store: &Store,
+    budget: &UsageBudget,
+    since: Option<DateTime<Local>>,
+) -> Result<(u32, i64, f64)> {
+    match budget.agent.as_deref() {
+        Some(agent) => store.budget_usage_summary(agent, since),
+        None => store.budget_usage_summary_all(since),
+    }
 }
 
 pub fn agent_analytics(
@@ -374,7 +396,7 @@ pub(crate) fn filter_budget_tasks<'a>(tasks: &'a [Task], budget: &UsageBudget) -
                 .agent
                 .as_deref()
                 .map(|name| task.agent_display_name() == name)
-                .unwrap_or(false);
+                .unwrap_or(true);
             let window_matches = window_start
                 .map(|start| task.created_at >= start)
                 .unwrap_or(true);
@@ -410,7 +432,7 @@ fn start_of_day(now: DateTime<Local>) -> DateTime<Local> {
 #[cfg(test)]
 mod tests {
     use super::{
-        agent_analytics, collect_usage, collect_usage_from_tasks, UsageWindow,
+        agent_analytics, check_budget_status, collect_usage, collect_usage_from_tasks, UsageWindow,
     };
     use crate::config::AidConfig;
     use crate::store::Store;
@@ -483,6 +505,74 @@ mod tests {
         assert!(rendered.contains("Configured Budgets"));
         assert!(rendered.contains("1/5"));
         assert!(rendered.contains("12.0k/50.0k"));
+    }
+
+    #[test]
+    fn name_only_budget_cost_cap_counts_all_agents() {
+        let store = Store::open_memory().unwrap();
+        store
+            .insert_task(&make_task("t-codex", AgentKind::Codex, 1_000, 0.45))
+            .unwrap();
+        store
+            .insert_task(&make_task("t-gemini", AgentKind::Gemini, 1_000, 0.75))
+            .unwrap();
+        let config: AidConfig = toml::from_str(
+            r#"
+            [[usage.budget]]
+            name = "project"
+            cost_limit_usd = 1.0
+            "#,
+        )
+        .unwrap();
+
+        let status = check_budget_status(&store, &config).unwrap();
+        assert!(status.over_limit);
+        assert!(status.message.unwrap().contains("cost limit reached ($1.20/$1.00)"));
+    }
+
+    #[test]
+    fn token_cap_counts_all_agents() {
+        let store = Store::open_memory().unwrap();
+        store
+            .insert_task(&make_task("t-codex", AgentKind::Codex, 1_200, 0.10))
+            .unwrap();
+        let config: AidConfig = toml::from_str(
+            r#"
+            [[usage.budget]]
+            name = "project"
+            token_limit = 1000
+            "#,
+        )
+        .unwrap();
+
+        let status = check_budget_status(&store, &config).unwrap();
+        assert!(status.over_limit);
+        assert!(status.message.unwrap().contains("token limit reached (1200/1000)"));
+    }
+
+    #[test]
+    fn per_agent_budget_ignores_other_agents() {
+        let store = Store::open_memory().unwrap();
+        store
+            .insert_task(&make_task("t-codex", AgentKind::Codex, 500, 0.25))
+            .unwrap();
+        store
+            .insert_task(&make_task("t-gemini", AgentKind::Gemini, 5_000, 5.00))
+            .unwrap();
+        let config: AidConfig = toml::from_str(
+            r#"
+            [[usage.budget]]
+            name = "codex-only"
+            agent = "codex"
+            token_limit = 1000
+            cost_limit_usd = 1.0
+            "#,
+        )
+        .unwrap();
+
+        let status = check_budget_status(&store, &config).unwrap();
+        assert!(!status.over_limit);
+        assert!(!status.near_limit);
     }
 
     #[test]

@@ -216,6 +216,9 @@ fn aggregates_budget_usage_by_agent_and_window() {
     let since = parse_window("24h").map(|window| now - window).unwrap();
     let recent = store.budget_usage_summary("codex", Some(since)).unwrap();
     assert_eq!(recent, (2, 200, 2.0));
+
+    let all_agents_recent = store.budget_usage_summary_all(Some(since)).unwrap();
+    assert_eq!(all_agents_recent, (3, 1199, 11.0));
 }
 
 #[test]

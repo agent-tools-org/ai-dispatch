@@ -100,7 +100,9 @@ fn commit_partial_work(worktree: &Path, task_id: &str) -> Result<()> {
         return Ok(());
     }
     let message = format!("wip: partial work salvage (task {task_id} failed)");
-    run_git(worktree, &["commit", "-m", &message])?;
+    // Salvage runs on the failure path: skip hooks and signing so a slow or
+    // interactive hook (GitButler, gpg pinentry) can never block it.
+    run_git(worktree, &["-c", "commit.gpgsign=false", "commit", "--no-verify", "-m", &message])?;
     Ok(())
 }
 

@@ -344,3 +344,7 @@ Use `aid run` to dispatch coding tasks to AI agents instead of writing code dire
 - Project config: `.aid/project.toml`
 
 <!-- aid:end -->
+
+## Test Layout Rule
+
+One convention (audit 2026-07, issue #164): tests are **inline** (`#[cfg(test)] mod tests`) while the file stays ≤300 lines; otherwise a **sibling `<name>_tests.rs`** included via `#[path]`. Cross-binary integration tests live in `tests/`. Do not introduce new `*_tests/` subdirectories.

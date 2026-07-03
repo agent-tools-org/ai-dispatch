@@ -70,10 +70,10 @@ impl super::Agent for MiMoCodeAgent {
         if trimmed.is_empty() {
             return None;
         }
-        let event = if let Ok(v) = serde_json::from_str::<serde_json::Value>(trimmed) {
-            parse_json_event(task_id, &v, now)
+        if let Ok(v) = serde_json::from_str::<serde_json::Value>(trimmed) {
+            parse_json_event(AgentKind::MiMoCode, task_id, &v, now)
         } else {
-            let (kind, detail) = classify_text_line(trimmed);
+            let (kind, detail) = classify_text_line(AgentKind::MiMoCode, trimmed);
             kind.map(|k| TaskEvent {
                 task_id: task_id.clone(),
                 timestamp: now,
@@ -81,14 +81,7 @@ impl super::Agent for MiMoCodeAgent {
                 detail: super::truncate::truncate_text(detail, 80),
                 metadata: None,
             })
-        };
-        if let Some(ref ev) = event
-            && ev.event_kind == EventKind::Error
-            && crate::rate_limit::is_rate_limit_error(&ev.detail)
-        {
-            crate::rate_limit::mark_rate_limited(&AgentKind::MiMoCode, &ev.detail);
         }
-        event
     }
 
     fn parse_completion(&self, output: &str) -> CompletionInfo {

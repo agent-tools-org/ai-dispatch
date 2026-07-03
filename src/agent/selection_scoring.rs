@@ -4,7 +4,7 @@
 
 use crate::agent::classifier::{self, Complexity, TaskCategory};
 use crate::agent::custom::CustomAgentConfig;
-use crate::cmd::config::AGENT_MODELS;
+use crate::model_catalog::AGENT_MODELS;
 use crate::rate_limit;
 use crate::team::TeamConfig;
 use crate::types::AgentKind;

@@ -9,6 +9,8 @@ mod show_output_artifacts;
 mod show_output_extract;
 #[path = "show_output_messages.rs"]
 mod show_output_messages;
+#[path = "show_worktree_state.rs"]
+mod show_worktree_state;
 
 pub use show_output_diff::{diff_text, diff_text_file};
 pub use show_output_messages::{
@@ -17,6 +19,7 @@ pub use show_output_messages::{
 };
 pub(crate) use show_output_diff::{diff_stat, parse_diff_stat, worktree_diff};
 pub(crate) use show_output_messages::{extract_messages_from_log, read_tail};
+pub(crate) use show_worktree_state::worktree_state_section;
 
 #[cfg(test)]
 #[path = "show_output_tests.rs"]

@@ -180,10 +180,11 @@ impl Store {
     }
 
     pub fn update_task_status(&self, id: &str, status: TaskStatus) -> Result<()> {
-        self.db().execute(
+        let rows = self.db().execute(
             "UPDATE tasks SET status = ?1 WHERE id = ?2",
             params![status.as_str(), id],
         )?;
+        self.maybe_salvage_failed_status(id, status, rows);
         Ok(())
     }
 
@@ -195,6 +196,7 @@ impl Store {
              AND status IN ('running', 'waiting')",
             params![id],
         )?;
+        self.maybe_salvage_failed_status(id, TaskStatus::Failed, rows);
         Ok(rows > 0)
     }
 
@@ -204,6 +206,7 @@ impl Store {
              WHERE id = ?1 AND status = 'pending'",
             params![id, pending_reason.as_str()],
         )?;
+        self.maybe_salvage_failed_status(id, TaskStatus::Failed, rows);
         Ok(rows > 0)
     }
 
@@ -224,6 +227,7 @@ impl Store {
             detail: detail.to_string(),
             metadata: Some(serde_json::json!({ "failure_kind": "wait_timeout" })),
         })?;
+        self.maybe_salvage_failed_status(id, TaskStatus::Failed, rows);
         Ok(true)
     }
 
@@ -286,7 +290,7 @@ impl Store {
         payload: TaskCompletionUpdate<'_>,
     ) -> Result<()> {
         let now = Local::now().to_rfc3339();
-        self.db().execute(
+        let rows = self.db().execute(
             "UPDATE tasks SET status = ?1, tokens = ?2, duration_ms = ?3, completed_at = ?4,
              model = ?5, cost_usd = ?6, exit_code = ?7 WHERE id = ?8
              AND status NOT IN ('failed', 'stopped')",
@@ -301,6 +305,7 @@ impl Store {
                 payload.id
             ],
         )?;
+        self.maybe_salvage_failed_status(payload.id, payload.status, rows);
         Ok(())
     }
 
@@ -314,7 +319,7 @@ impl Store {
         let conn = self.db();
         let tx = conn.unchecked_transaction()?;
         let now = Local::now().to_rfc3339();
-        tx.execute(
+        let rows = tx.execute(
             "UPDATE tasks SET status = ?1, tokens = ?2, duration_ms = ?3, completed_at = ?4,
              model = ?5, cost_usd = ?6, exit_code = ?7 WHERE id = ?8
              AND status NOT IN ('failed', 'stopped')",
@@ -342,7 +347,16 @@ impl Store {
             ],
         )?;
         tx.commit()?;
+        drop(conn);
+        self.maybe_salvage_failed_status(payload.id, payload.status, rows);
         Ok(())
+    }
+
+    fn maybe_salvage_failed_status(&self, id: &str, status: TaskStatus, rows: usize) {
+        if rows == 0 || status != TaskStatus::Failed {
+            return;
+        }
+        crate::failure_salvage::salvage_failed_task(self, &TaskId(id.to_string()));
     }
 
     pub fn save_completion_summary(&self, task_id: &str, summary_json: &str) -> Result<()> {

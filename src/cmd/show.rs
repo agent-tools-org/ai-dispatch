@@ -22,7 +22,7 @@ pub use show_output::output_text_full;
 pub use show_output::read_task_output;
 pub(crate) use show_output::{
     diff_stat, diff_text_file, extract_messages_from_log, parse_diff_stat, read_tail,
-    worktree_diff,
+    worktree_diff, worktree_state_section,
 };
 
 #[path = "show_helpers.rs"]
@@ -234,16 +234,31 @@ pub fn audit_text(store: &Arc<Store>, task_id: &str) -> Result<String> {
         out.push_str(&stderr);
     }
 
+    let mut live_dirty = false;
+    if let Some(ref wt_path) = task.worktree_path
+        && Path::new(wt_path).exists()
+    {
+        let state = crate::worktree::capture_live_worktree_state(Path::new(wt_path)).ok();
+        live_dirty = state.as_ref().is_some_and(|state| state.is_dirty());
+        out.push_str(&worktree_state_section(wt_path, state.as_ref()));
+    }
+
     if task
         .delivery_assessment()
         .is_some_and(|delivery| delivery.implies_no_changes())
+        && !live_dirty
     {
         out.push_str("\nChanges:\n[no changes]\n");
     } else if let Some(ref wt_path) = task.worktree_path
         && Path::new(wt_path).exists()
     {
         out.push_str("\nChanges:\n");
-        out.push_str(&diff_stat(wt_path, task.start_sha.as_deref()));
+        let stat = diff_stat(wt_path, task.start_sha.as_deref());
+        if live_dirty && stat.contains("(no changes detected)") {
+            out.push_str("  (no committed diff detected)\n");
+        } else {
+            out.push_str(&stat);
+        }
     } else if task.worktree_branch.is_none()
         && matches!(task.status, TaskStatus::Done | TaskStatus::Merged)
     {
@@ -306,16 +321,31 @@ pub fn summary_text(store: &Arc<Store>, task_id: &str) -> Result<String> {
         out.push('\n');
     }
 
+    let mut live_dirty = false;
+    if let Some(ref wt_path) = task.worktree_path
+        && Path::new(wt_path).exists()
+    {
+        let state = crate::worktree::capture_live_worktree_state(Path::new(wt_path)).ok();
+        live_dirty = state.as_ref().is_some_and(|state| state.is_dirty());
+        out.push_str(&worktree_state_section(wt_path, state.as_ref()));
+    }
+
     if task
         .delivery_assessment()
         .is_some_and(|delivery| delivery.implies_no_changes())
+        && !live_dirty
     {
         out.push_str("\n--- Diff Stat ---\n  (no changes detected)\n");
     } else if let Some(ref wt_path) = task.worktree_path
         && Path::new(wt_path).exists()
     {
         out.push_str("\n--- Diff Stat ---\n");
-        out.push_str(&diff_stat(wt_path, task.start_sha.as_deref()));
+        let stat = diff_stat(wt_path, task.start_sha.as_deref());
+        if live_dirty && stat.contains("(no changes detected)") {
+            out.push_str("  (no committed diff detected)\n");
+        } else {
+            out.push_str(&stat);
+        }
     } else if task.worktree_branch.is_none()
         && matches!(task.status, TaskStatus::Done | TaskStatus::Merged)
     {

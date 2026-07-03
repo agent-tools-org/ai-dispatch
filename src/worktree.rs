@@ -14,6 +14,8 @@ mod completion;
 mod snapshot;
 #[path = "worktree/baseline.rs"]
 mod baseline;
+#[path = "worktree/live_state.rs"]
+mod live_state;
 #[path = "worktree/state.rs"]
 mod state;
 #[path = "worktree/validation.rs"]
@@ -21,6 +23,7 @@ mod validation;
 #[path = "worktree/path.rs"]
 mod path;
 pub(crate) use snapshot::{WorktreeStatusEntry, WorktreeStatusKind, capture_worktree_snapshot, capture_worktree_snapshot_with_base};
+pub(crate) use live_state::{LiveWorktreeState, capture_live_worktree_state, uncommitted_diff_text, worktree_has_uncommitted_changes};
 pub(crate) use baseline::{baseline_contains, extract_baseline_path, extract_baseline_paths};
 pub use path::{aid_worktree_path, aid_worktree_root, is_aid_managed_worktree_path};
 pub use state::{

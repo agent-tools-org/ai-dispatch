@@ -8,6 +8,7 @@ use super::*;
 fn parses_step_finish_token_event() {
     let task_id = TaskId("t-step".to_string());
     let event = parse_json_event(
+        AgentKind::OpenCode,
         &task_id,
         &serde_json::json!({
             "type": "step_finish",
@@ -44,8 +45,13 @@ fn parses_new_milestone_events() {
         serde_json::json!({"type": "auto_compact", "message": "compacted session"}),
         serde_json::json!({"type": "git_snapshot", "text": "snapshot saved"}),
     ] {
-        let event = parse_json_event(&TaskId("t-ms".to_string()), &value, Local::now())
-            .expect("milestone events should parse");
+        let event = parse_json_event(
+            AgentKind::OpenCode,
+            &TaskId("t-ms".to_string()),
+            &value,
+            Local::now(),
+        )
+        .expect("milestone events should parse");
         assert_eq!(event.event_kind, EventKind::Milestone);
         assert!(!event.detail.is_empty());
     }
@@ -91,6 +97,7 @@ fn build_command_includes_file_flags_for_context_files() {
 fn extracts_session_id_from_json_event() {
     let task_id = TaskId("t-sess".to_string());
     let event = parse_json_event(
+        AgentKind::OpenCode,
         &task_id,
         &serde_json::json!({
             "type": "message",

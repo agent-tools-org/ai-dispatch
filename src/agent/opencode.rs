@@ -80,9 +80,9 @@ impl super::Agent for OpenCodeAgent {
             return None;
         }
         if let Ok(v) = serde_json::from_str::<serde_json::Value>(trimmed) {
-            return parse_json_event(task_id, &v, now);
+            return parse_json_event(AgentKind::OpenCode, task_id, &v, now);
         }
-        let (kind, detail) = classify_text_line(trimmed);
+        let (kind, detail) = classify_text_line(AgentKind::OpenCode, trimmed);
         kind.map(|k| TaskEvent {
             task_id: task_id.clone(),
             timestamp: now,
@@ -109,6 +109,7 @@ impl super::Agent for OpenCodeAgent {
 }
 
 pub(crate) fn parse_json_event(
+    agent_kind: AgentKind,
     task_id: &TaskId,
     v: &serde_json::Value,
     now: chrono::DateTime<Local>,
@@ -156,7 +157,7 @@ pub(crate) fn parse_json_event(
         }
         "error" => {
             let detail = v.get("message").or(v.get("text")).and_then(|t| t.as_str()).unwrap_or("unknown error");
-            if rate_limit::is_rate_limit_error(detail) { rate_limit::mark_rate_limited(&AgentKind::OpenCode, detail); }
+            if rate_limit::is_rate_limit_error(detail) { rate_limit::mark_rate_limited(&agent_kind, detail); }
             (detail.to_string(), None)
         }
         _ => return None,
@@ -211,9 +212,9 @@ fn milestone_detail(v: &serde_json::Value, event_type: &str) -> String {
         .unwrap_or_else(|| event_type.replace('_', " "))
 }
 
-pub(crate) fn classify_text_line(line: &str) -> (Option<EventKind>, &str) {
+pub(crate) fn classify_text_line(agent_kind: AgentKind, line: &str) -> (Option<EventKind>, &str) {
     if line.contains("error[") || line.contains("FAILED") || line.starts_with("Error:") {
-        if rate_limit::is_rate_limit_error(line) { rate_limit::mark_rate_limited(&AgentKind::OpenCode, line); }
+        if rate_limit::is_rate_limit_error(line) { rate_limit::mark_rate_limited(&agent_kind, line); }
         (Some(EventKind::Error), line)
     } else if line.contains("test result:") || line.contains("running") && line.contains("test") {
         (Some(EventKind::Test), line)
@@ -286,6 +287,6 @@ mod rate_limit_tests {
     fn marks_opencode_rate_limits_from_text_and_json_errors() {
         let temp = tempfile::tempdir().unwrap(); let _aid_home = paths::AidHomeGuard::set(temp.path()); rate_limit::clear_rate_limit(&AgentKind::OpenCode); let agent = OpenCodeAgent;
         assert_eq!(agent.parse_event(&TaskId("t-opencode".to_string()), "Error: rate limit exceeded").unwrap().event_kind, EventKind::Error); assert!(rate_limit::is_rate_limited(&AgentKind::OpenCode)); rate_limit::clear_rate_limit(&AgentKind::OpenCode);
-        assert_eq!(parse_json_event(&TaskId("t-opencode".to_string()), &serde_json::json!({"type":"error","message":"HTTP 429 too many requests"}), Local::now()).unwrap().event_kind, EventKind::Error); assert!(rate_limit::is_rate_limited(&AgentKind::OpenCode)); rate_limit::clear_rate_limit(&AgentKind::OpenCode);
+        assert_eq!(parse_json_event(AgentKind::OpenCode, &TaskId("t-opencode".to_string()), &serde_json::json!({"type":"error","message":"HTTP 429 too many requests"}), Local::now()).unwrap().event_kind, EventKind::Error); assert!(rate_limit::is_rate_limited(&AgentKind::OpenCode)); rate_limit::clear_rate_limit(&AgentKind::OpenCode);
     }
 }

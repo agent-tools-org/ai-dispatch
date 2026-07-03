@@ -112,10 +112,13 @@ fn parse_event_marks_mimocode_rate_limits() {
     let temp = tempfile::tempdir().unwrap();
     let _aid_home = paths::AidHomeGuard::set(temp.path());
     rate_limit::clear_rate_limit(&AgentKind::MiMoCode);
+    rate_limit::clear_rate_limit(&AgentKind::OpenCode);
     let event = MiMoCodeAgent
         .parse_event(&TaskId("t-mimocode".to_string()), r#"{"type":"error","message":"rate limit exceeded"}"#)
         .unwrap();
     assert_eq!(event.event_kind, EventKind::Error);
     assert!(rate_limit::is_rate_limited(&AgentKind::MiMoCode));
+    assert!(!rate_limit::is_rate_limited(&AgentKind::OpenCode));
     rate_limit::clear_rate_limit(&AgentKind::MiMoCode);
+    rate_limit::clear_rate_limit(&AgentKind::OpenCode);
 }

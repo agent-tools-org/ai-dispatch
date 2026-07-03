@@ -77,6 +77,7 @@ impl MonitorState {
         log_file: &mut std::fs::File,
         chunk: String,
     ) -> Result<()> {
+        let chunk = watcher::strip_terminal_escapes(&chunk);
         log_file.write_all(chunk.as_bytes())?;
         self.full_output.push_str(&chunk);
         self.line_buffer.push_str(&chunk);
@@ -653,3 +654,5 @@ fn load_monitor_status(store: &Store, task_id: &str) -> Result<MonitorTaskStatus
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod log_tests;

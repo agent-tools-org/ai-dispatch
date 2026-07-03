@@ -111,22 +111,6 @@ impl ProcessGuard {
         let _ = self.child.kill();
         self.killed = true;
     }
-
-    /// Consume the guard without running Drop cleanup.
-    /// Use when you need to transfer ownership of the child process.
-    pub fn into_child(mut self) -> Child {
-        self.killed = true; // prevent Drop cleanup
-        std::mem::replace(
-            &mut self.child,
-            // Dummy — never used because killed=true prevents Drop from touching child
-            Command::new("true")
-                .stdin(Stdio::null())
-                .stdout(Stdio::null())
-                .stderr(Stdio::null())
-                .spawn()
-                .expect("failed to spawn dummy"),
-        )
-    }
 }
 
 impl Drop for ProcessGuard {

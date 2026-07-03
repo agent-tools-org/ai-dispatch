@@ -67,11 +67,6 @@ pub fn rescue_dirty_worktree_with_baseline(
     Ok(outcome)
 }
 
-#[allow(dead_code)]
-pub fn rescue_untracked_files(dir: &str, task_id: &str) -> Result<Vec<String>> {
-    Ok(rescue_dirty_worktree(dir, task_id)?.untracked)
-}
-
 pub(super) fn stage_untracked_source_files(dir: &str, task_id: &str) -> Result<Vec<String>> {
     let mut staged = Vec::new();
     let files = match detect_untracked_source_files(dir) {

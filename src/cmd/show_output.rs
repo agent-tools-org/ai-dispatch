@@ -14,7 +14,7 @@ mod show_worktree_state;
 
 pub use show_output_diff::{diff_text, diff_text_file};
 pub use show_output_messages::{
-    log_text, log_text_brief, output_text, output_text_brief, output_text_for_task, output_text_full,
+    log_text, log_text_brief, output_text, output_text_brief, output_text_for_task,
     read_task_output,
 };
 pub(crate) use show_output_diff::{diff_stat, parse_diff_stat, worktree_diff};

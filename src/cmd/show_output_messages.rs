@@ -1,5 +1,5 @@
 // Output and log rendering helpers for `aid show`.
-// Exports: output_text, output_text_brief, output_text_full, log_text, log_text_brief, read_task_output, read_tail.
+// Exports: output_text, output_text_brief, log_text, log_text_brief, read_task_output, read_tail.
 // Deps: paths, Store, Task, serde_json::Value.
 use anyhow::{Context, Result};
 use std::path::{Path, PathBuf};
@@ -29,19 +29,6 @@ pub fn output_text(store: &Arc<Store>, task_id: &str) -> Result<String> {
 pub fn output_text_brief(store: &Arc<Store>, task_id: &str) -> Result<String> {
     let task = super::super::load_task(store, task_id)?;
     render_task_output(&task, task_id, false, 50)
-}
-
-#[allow(dead_code)]
-pub fn output_text_full(store: &Arc<Store>, task_id: &str) -> Result<String> {
-    let task = super::super::load_task(store, task_id)?;
-    if let Ok(content) = read_task_output(&task) {
-        return Ok(content);
-    }
-    if let Some(content) = extract_messages_for_task(&task, task_id, true) {
-        return Ok(content);
-    }
-    let path = task_log_path(&task, task_id);
-    Ok(read_tail(&path, 200, "No output or log available"))
 }
 
 fn render_task_output(task: &Task, task_id: &str, full: bool, tail_lines: usize) -> Result<String> {

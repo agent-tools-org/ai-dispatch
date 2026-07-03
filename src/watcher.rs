@@ -23,9 +23,9 @@ use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::Child;
 use tokio::time::{timeout, Duration};
 use crate::agent::Agent;
-use crate::cmd::run_hung_recovery;
 use crate::paths;
 use crate::process_group::force_kill_process_group;
+use crate::process_monitor;
 use crate::rate_limit;
 use crate::store::Store;
 use crate::types::*;
@@ -78,7 +78,7 @@ pub async fn watch_streaming(
             Err(_) => {
                 force_kill_process_group(child);
                 let _ = child.kill().await;
-                let _ = run_hung_recovery::insert_hung_detected_events(
+                let _ = process_monitor::insert_hung_detected_events(
                     store.as_ref(),
                     task_id,
                     idle_timeout.as_secs(),

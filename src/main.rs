@@ -48,6 +48,7 @@ mod prompt;
 mod prompt_scan;
 pub mod process_group;
 mod process_guard;
+mod process_monitor;
 mod pty_bridge;
 mod pty_runner;
 mod pty_runner_control;

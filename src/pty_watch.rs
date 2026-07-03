@@ -9,8 +9,8 @@ use std::sync::{Arc, mpsc::{self, RecvTimeoutError}};
 use std::time::{Duration, Instant};
 
 use crate::agent::Agent;
-use crate::cmd::run_hung_recovery;
 use crate::input_signal;
+use crate::process_monitor;
 use crate::prompt::PromptDetector;
 use crate::pty_bridge::PtyBridge;
 use crate::pty_watch_idle::{IdleAction, IdleDetector, MonitorTaskStatus};
@@ -404,7 +404,7 @@ pub(crate) fn monitor_bridge(
                     && state.last_progress_time.elapsed() > idle
                 {
                     state.info.status = TaskStatus::Failed;
-                    run_hung_recovery::insert_hung_detected_events(
+                    process_monitor::insert_hung_detected_events(
                         store.as_ref(),
                         task_id,
                         idle.as_secs(),

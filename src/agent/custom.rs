@@ -9,6 +9,7 @@ use serde::Deserialize;
 use serde_json::Value;
 use std::process::Command;
 
+use super::read_only::read_only_prompt;
 use super::RunOpts;
 use crate::types::*;
 
@@ -104,7 +105,11 @@ impl super::Agent for CustomAgent {
     }
 
     fn build_command(&self, prompt: &str, opts: &RunOpts) -> Result<Command> {
-        let effective_prompt = apply_read_only_prefix(prompt, opts);
+        let effective_prompt = if opts.read_only {
+            read_only_prompt(prompt, opts)
+        } else {
+            prompt.to_string()
+        };
         if opts.read_only {
             aid_warn!("[aid] ⚠ Custom agent read-only is prompt-level only, not enforced. Use --worktree for isolation.");
         }
@@ -209,23 +214,6 @@ impl super::Agent for CustomAgent {
 pub fn parse_config(toml_content: &str) -> Result<CustomAgentConfig> {
     let file: CustomAgentFile = toml::from_str(toml_content)?;
     Ok(file.agent)
-}
-
-fn apply_read_only_prefix(prompt: &str, opts: &RunOpts) -> String {
-    if !opts.read_only {
-        return prompt.to_string();
-    }
-    if opts.result_file.is_some() {
-        format!(
-            "IMPORTANT: READ-ONLY MODE. Do NOT modify, create, or delete any files, EXCEPT the result file specified in this prompt. Only read, analyze, and write your findings to the designated result file.\n\n{}",
-            prompt
-        )
-    } else {
-        format!(
-            "IMPORTANT: READ-ONLY MODE. Do NOT modify, create, or delete any files. Only read and analyze.\n\n{}",
-            prompt
-        )
-    }
 }
 
 #[cfg(test)]

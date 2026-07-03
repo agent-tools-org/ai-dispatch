@@ -5,6 +5,7 @@ use anyhow::Result;
 use std::process::Command;
 
 use super::opencode::{classify_text_line, extract_tokens_from_output, parse_json_event};
+use super::read_only::read_only_prompt;
 use super::RunOpts;
 use crate::types::*;
 
@@ -21,17 +22,7 @@ impl super::Agent for MiMoCodeAgent {
 
     fn build_command(&self, prompt: &str, opts: &RunOpts) -> Result<Command> {
         let effective_prompt = if opts.read_only {
-            if opts.result_file.is_some() {
-                format!(
-                    "IMPORTANT: READ-ONLY MODE. Do NOT modify, create, or delete any files, EXCEPT the result file specified in this prompt. Only read, analyze, and write your findings to the designated result file.\n\n{}",
-                    prompt
-                )
-            } else {
-                format!(
-                    "IMPORTANT: READ-ONLY MODE. Do NOT modify, create, or delete any files. Only read and analyze.\n\n{}",
-                    prompt
-                )
-            }
+            read_only_prompt(prompt, opts)
         } else {
             prompt.to_string()
         };

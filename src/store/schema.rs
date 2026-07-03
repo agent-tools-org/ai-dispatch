@@ -1,15 +1,11 @@
 // Schema helpers and row mappers for the store.
 // Exports: create_tables, row_to_task, row_to_event.
 // Deps: rusqlite, chrono, crate::types.
-
 use anyhow::Result;
 use chrono::{DateTime, Local};
 use rusqlite::Row;
-
-use super::kg_schema::CREATE_KG_SQL;
-use super::Store;
+use super::{kg_schema::CREATE_KG_SQL, Store};
 use crate::types::*;
-
 const CREATE_TABLES_SQL: &str = "CREATE TABLE IF NOT EXISTS tasks (
     id TEXT PRIMARY KEY,
     agent TEXT NOT NULL,
@@ -38,7 +34,7 @@ const CREATE_TABLES_SQL: &str = "CREATE TABLE IF NOT EXISTS tasks (
     pending_reason TEXT,
     audit_verdict TEXT,
     audit_report_path TEXT,
-    delivery_assessment TEXT
+    delivery_assessment TEXT, dispatch_args TEXT
 );
 CREATE TABLE IF NOT EXISTS workgroups (
     id TEXT PRIMARY KEY,
@@ -89,7 +85,6 @@ CREATE INDEX IF NOT EXISTS idx_memories_project ON memories(project_path);
 CREATE INDEX IF NOT EXISTS idx_memories_type ON memories(memory_type);
 CREATE INDEX IF NOT EXISTS idx_memories_hash ON memories(content_hash);
 ";
-
 const CREATE_WORKGROUPS_SQL: &str = "CREATE TABLE IF NOT EXISTS workgroups (
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
@@ -97,7 +92,6 @@ const CREATE_WORKGROUPS_SQL: &str = "CREATE TABLE IF NOT EXISTS workgroups (
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
 );";
-
 const CREATE_MEMORIES_SQL: &str = "CREATE TABLE IF NOT EXISTS memories (
     id TEXT PRIMARY KEY,
     memory_type TEXT NOT NULL,
@@ -113,7 +107,6 @@ const CREATE_MEMORIES_SQL: &str = "CREATE TABLE IF NOT EXISTS memories (
 CREATE INDEX IF NOT EXISTS idx_memories_project ON memories(project_path);
 CREATE INDEX IF NOT EXISTS idx_memories_type ON memories(memory_type);
 CREATE INDEX IF NOT EXISTS idx_memories_hash ON memories(content_hash);";
-
 const CREATE_FINDINGS_SQL: &str = "CREATE TABLE IF NOT EXISTS findings (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     workgroup_id TEXT NOT NULL,
@@ -179,6 +172,7 @@ pub(super) fn migrate(store: &Store) -> Result<()> {
     let _ = conn.execute_batch("ALTER TABLE tasks ADD COLUMN audit_verdict TEXT;");
     let _ = conn.execute_batch("ALTER TABLE tasks ADD COLUMN audit_report_path TEXT;");
     let _ = conn.execute_batch("ALTER TABLE tasks ADD COLUMN delivery_assessment TEXT;");
+    let _ = conn.execute_batch("ALTER TABLE tasks ADD COLUMN dispatch_args TEXT;");
     let _ = conn.execute_batch(
         "UPDATE tasks
          SET delivery_assessment = verify_status

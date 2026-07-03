@@ -240,6 +240,7 @@ pub(crate) async fn post_run_lifecycle(
         cascade_args.agent_name = next_agent;
         cascade_args.cascade = remaining_cascade;
         cascade_args.parent_task_id = Some(task_id.as_str().to_string());
+        inherit_cascade_target(&mut cascade_args, &task);
         Box::pin(run(store.clone(), cascade_args)).await?;
         false
     } else if let Some(task) = store.get_task(task_id.as_str())?
@@ -258,6 +259,7 @@ pub(crate) async fn post_run_lifecycle(
         let mut cascade_args = args.clone();
         cascade_args.agent_name = fallback.as_str().to_string();
         cascade_args.parent_task_id = Some(task_id.as_str().to_string());
+        inherit_cascade_target(&mut cascade_args, &task);
         Box::pin(run(store.clone(), cascade_args)).await?;
         false
     } else {
@@ -265,6 +267,17 @@ pub(crate) async fn post_run_lifecycle(
     };
     if mode.is_foreground() && completed_normally { aid_info!("[aid] View in TUI: aid board"); }
     Ok(None)
+}
+
+pub(crate) fn inherit_cascade_target(cascade_args: &mut RunArgs, task: &Task) {
+    let (dir, worktree) = super::retry_target(task);
+    if let Some(dir) = dir {
+        cascade_args.dir = Some(dir);
+        cascade_args.worktree = worktree;
+    } else if let Some(worktree) = worktree {
+        cascade_args.worktree = Some(worktree);
+    }
+    cascade_args.existing_task_id = None;
 }
 
 fn run_teardown_phase(task_id: &TaskId, args: &RunArgs, wt_path: Option<&String>) {

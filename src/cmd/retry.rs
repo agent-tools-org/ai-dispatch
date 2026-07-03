@@ -28,6 +28,16 @@ pub async fn retry_task(store: Arc<Store>, args: RetryArgs, announce: bool) -> R
     let task = store
         .get_task(&args.task_id)?
         .ok_or_else(|| anyhow::anyhow!("Task '{}' not found", args.task_id))?;
+    let run_args = retry_task_to_run_args(store.as_ref(), &task, args, announce)?;
+    run::run(store, run_args).await
+}
+
+fn retry_task_to_run_args(
+    store: &Store,
+    task: &crate::types::Task,
+    args: RetryArgs,
+    announce: bool,
+) -> Result<RunArgs> {
     let prompt = format!(
         "[Previous attempt feedback]\n{feedback}\n\n[Original task]\n{prompt}",
         feedback = args.feedback,
@@ -54,28 +64,28 @@ pub async fn retry_task(store: Arc<Store>, args: RetryArgs, announce: bool) -> R
     } else {
         None
     };
-    run::run(
-        store,
+    let mut run_args = RunArgs::saved_for_task(store, task.id.as_str())?.unwrap_or_else(|| {
         RunArgs {
-            agent_name,
-            prompt,
             repo: task.repo_path.clone(),
-            dir,
             output: task.output_path.clone(),
             model: task.model.clone(),
-            worktree: worktree_arg,
             group: task.workgroup_id.clone(),
             verify: task.verify.clone(),
-            announce,
-            parent_task_id: Some(task.id.as_str().to_string()),
             read_only: task.read_only,
             budget: task.budget,
-            background: args.bg,
-            session_id,
             ..Default::default()
-        },
-    )
-    .await
+        }
+    });
+    run_args.agent_name = agent_name;
+    run_args.prompt = prompt;
+    run_args.dir = dir;
+    run_args.worktree = worktree_arg;
+    run_args.announce = announce;
+    run_args.parent_task_id = Some(task.id.as_str().to_string());
+    run_args.background = args.bg;
+    run_args.session_id = session_id;
+    run_args.existing_task_id = None;
+    Ok(run_args)
 }
 
 fn reusable_worktree(task: &crate::types::Task) -> Option<String> {
@@ -265,3 +275,7 @@ mod tests {
         assert!(output.status.success());
     }
 }
+
+#[cfg(test)]
+#[path = "retry_saved_args_tests.rs"]
+mod saved_args_tests;

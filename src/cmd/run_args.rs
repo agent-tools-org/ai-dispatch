@@ -1,13 +1,16 @@
 // Run argument types and lightweight helpers for `aid run`.
 // Exports: RunArgs, NO_SKILL_SENTINEL, prompt/timeout resolution helpers.
-// Deps: anyhow, crate::types::TaskId, std collections.
+// Deps: anyhow, serde, Store, crate::types::TaskId, std collections.
 use anyhow::{Context, Result};
+use crate::store::Store;
 use crate::types::TaskId;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 pub const NO_SKILL_SENTINEL: &str = "__aid_no_skill__";
 
-#[derive(Clone)]
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(default)]
 pub struct RunArgs {
     pub agent_name: String,
     pub prompt: String,
@@ -69,6 +72,28 @@ pub struct RunArgs {
     /// model selection (smart-route/budget/configured default) so the agent runs
     /// on its own current default model.
     pub force_default_model: bool,
+}
+
+impl RunArgs {
+    pub(crate) fn dispatch_args_json(&self) -> Result<String> {
+        let mut args = self.clone();
+        // CLI env values can contain secrets, so persisted dispatch args omit
+        // them entirely; env_forward keeps variable names without values.
+        args.env = None;
+        args.existing_task_id = None;
+        serde_json::to_string(&args).context("Failed to serialize dispatch args")
+    }
+
+    pub(crate) fn from_dispatch_args_json(json: &str) -> Result<Self> {
+        serde_json::from_str(json).context("Failed to parse dispatch args")
+    }
+
+    pub(crate) fn saved_for_task(store: &Store, task_id: &str) -> Result<Option<Self>> {
+        store
+            .get_task_dispatch_args(task_id)?
+            .map(|json| Self::from_dispatch_args_json(&json))
+            .transpose()
+    }
 }
 
 impl Default for RunArgs {

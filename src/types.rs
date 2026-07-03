@@ -3,7 +3,7 @@
 // Deps: rand, serde, std::fmt.
 
 use rand::Rng;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::fmt;
 #[cfg(test)]
 use std::{cell::RefCell, collections::VecDeque};
@@ -29,7 +29,7 @@ pub use self::status::{EventKind, PendingReason, TaskStatus, VerifyStatus};
 pub use self::task::{CompletionInfo, Finding, Task, TaskEvent, TaskFilter, Workgroup};
 
 /// Short hex ID prefixed with "t-", e.g. "t-a3f1b2c4"
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TaskId(pub String);
 
 #[cfg(test)]

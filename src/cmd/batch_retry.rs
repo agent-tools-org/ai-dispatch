@@ -6,15 +6,13 @@ use crate::cmd::wait::{wait_for_task_ids, WaitOutcome};
 use crate::store::Store;
 use crate::types::{Task, TaskStatus};
 use anyhow::Result;
-use std::collections::HashMap;
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 use tokio::time::Duration;
 const SERIAL_RETRY_TIMEOUT_SECS: u64 = 30 * 60;
 type WorktreeIdentity = (Option<String>, Option<String>);
 #[derive(Debug)]
 struct RetryBucket {
-    worktree_path: Option<String>,
-    worktree_branch: Option<String>,
+    worktree_path: Option<String>, worktree_branch: Option<String>,
     tasks: Vec<Task>,
 }
 impl RetryBucket {
@@ -56,7 +54,7 @@ pub(super) fn should_retry_task(status: TaskStatus, include_waiting: bool) -> bo
         || (include_waiting && status == TaskStatus::Waiting)
 }
 
-pub(crate) fn retry_task_to_run_args(task: &Task, group_id: &str, agent_override: Option<&str>) -> RunArgs {
+pub(crate) fn retry_task_to_run_args(store: &Store, task: &Task, group_id: &str, agent_override: Option<&str>) -> Result<RunArgs> {
     let (dir, worktree) = retry_target(task);
     let agent_name = if let Some(override_name) = agent_override {
         override_name.to_string()
@@ -81,23 +79,27 @@ pub(crate) fn retry_task_to_run_args(task: &Task, group_id: &str, agent_override
             original
         }
     };
-    RunArgs {
-        agent_name,
-        prompt: task.prompt.clone(),
-        repo: task.repo_path.clone(),
-        dir,
-        output: task.output_path.clone(),
-        model: task.model.clone(),
-        worktree,
-        group: Some(group_id.to_string()),
-        verify: task.verify.clone(),
-        background: true,
-        announce: true,
-        parent_task_id: Some(task.id.to_string()),
-        read_only: task.read_only,
-        budget: task.budget,
-        ..Default::default()
-    }
+    let mut run_args = RunArgs::saved_for_task(store, task.id.as_str())?.unwrap_or_else(|| {
+        RunArgs {
+            repo: task.repo_path.clone(),
+            output: task.output_path.clone(),
+            model: task.model.clone(),
+            verify: task.verify.clone(),
+            read_only: task.read_only,
+            budget: task.budget,
+            ..Default::default()
+        }
+    });
+    run_args.agent_name = agent_name;
+    run_args.prompt = task.prompt.clone();
+    run_args.dir = dir;
+    run_args.worktree = worktree;
+    run_args.group = Some(group_id.to_string());
+    run_args.background = true;
+    run_args.announce = true;
+    run_args.parent_task_id = Some(task.id.to_string());
+    run_args.existing_task_id = None;
+    Ok(run_args)
 }
 
 fn bucket_retry_tasks(tasks: Vec<Task>) -> Vec<RetryBucket> {
@@ -125,14 +127,14 @@ async fn dispatch_retry_bucket(
     agent_override: Option<&str>,
 ) -> Result<()> {
     if bucket.tasks.len() == 1 {
-        let run_args = retry_task_to_run_args(&bucket.tasks[0], group_id, agent_override);
+        let run_args = retry_task_to_run_args(store, &bucket.tasks[0], group_id, agent_override)?;
         let _ = run::run(store.clone(), run_args).await?;
         return Ok(());
     }
     let label = bucket.label();
     println!("[aid] Serializing {} retries in worktree {}", bucket.tasks.len(), label);
     for task in bucket.tasks {
-        let run_args = retry_task_to_run_args(&task, group_id, agent_override);
+        let run_args = retry_task_to_run_args(store, &task, group_id, agent_override)?;
         let task_id = run::run(store.clone(), run_args).await?;
         wait_for_retry_completion(store, task_id.as_str()).await?;
     }
@@ -217,7 +219,7 @@ mod tests {
     fn retry_uses_original_when_not_rate_limited() {
         let _guard = aid_home_guard("aid-retry-fallback-test-normal");
         let task = make_task("t-001", AgentKind::Codex);
-        let args = retry_task_to_run_args(&task, "wg-test", None);
+        let args = retry_task_to_run_args(&Store::open_memory().unwrap(), &task, "wg-test", None).unwrap();
         assert_eq!(args.agent_name, "codex");
         clear_rate_limit(&AgentKind::Codex);
     }
@@ -235,7 +237,7 @@ mod tests {
         ]);
         mark_rate_limited(&AgentKind::Codex, "rate limit exceeded");
         let task = make_task("t-002", AgentKind::Codex);
-        let args = retry_task_to_run_args(&task, "wg-test", None);
+        let args = retry_task_to_run_args(&Store::open_memory().unwrap(), &task, "wg-test", None).unwrap();
         assert_ne!(args.agent_name, "codex", "Should use fallback when rate-limited");
         clear_rate_limit(&AgentKind::Codex);
     }
@@ -245,7 +247,7 @@ mod tests {
         let _guard = aid_home_guard("aid-retry-fallback-test-override");
         mark_rate_limited(&AgentKind::Codex, "rate limit exceeded");
         let task = make_task("t-003", AgentKind::Codex);
-        let args = retry_task_to_run_args(&task, "wg-test", Some("gemini"));
+        let args = retry_task_to_run_args(&Store::open_memory().unwrap(), &task, "wg-test", Some("gemini")).unwrap();
         assert_eq!(args.agent_name, "gemini", "Override should bypass rate limit check");
         clear_rate_limit(&AgentKind::Codex);
     }
@@ -254,7 +256,7 @@ mod tests {
     fn retry_unchanged_for_unknown_agent() {
         let _guard = aid_home_guard("aid-retry-fallback-test-unknown");
         let task = make_task("t-004", AgentKind::Custom);
-        let args = retry_task_to_run_args(&task, "wg-test", None);
+        let args = retry_task_to_run_args(&Store::open_memory().unwrap(), &task, "wg-test", None).unwrap();
         assert_eq!(args.agent_name, "custom");
     }
 

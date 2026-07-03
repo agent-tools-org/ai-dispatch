@@ -2,6 +2,7 @@
 // Exports: (tests only)
 // Deps: super::shared + batch_retry
 use super::shared::make_stored_task;
+use crate::cmd::run::RunArgs;
 use crate::store::Store;
 use crate::types::{AgentKind, TaskStatus};
 use std::sync::Arc;
@@ -20,7 +21,8 @@ fn retry_task_to_run_args_uses_parent_and_original_fields() {
     task.read_only = true;
     task.budget = true;
 
-    let run_args = retry_task_to_run_args(&task, "wg-batch", Some("cursor"));
+    let store = Store::open_memory().unwrap();
+    let run_args = retry_task_to_run_args(&store, &task, "wg-batch", Some("cursor")).unwrap();
 
     assert_eq!(run_args.agent_name, "cursor");
     assert_eq!(run_args.prompt, "retry me");
@@ -41,10 +43,39 @@ fn retry_task_to_run_args_prefers_existing_worktree_path() {
     task.worktree_path = Some(temp.path().display().to_string());
     task.worktree_branch = Some("feat/retry".to_string());
 
-    let run_args = retry_task_to_run_args(&task, "wg-batch", None);
+    let store = Store::open_memory().unwrap();
+    let run_args = retry_task_to_run_args(&store, &task, "wg-batch", None).unwrap();
 
     assert_eq!(run_args.dir, task.worktree_path);
     assert_eq!(run_args.worktree, None);
+}
+
+#[test]
+fn retry_task_to_run_args_rehydrates_saved_args_and_keeps_worktree() {
+    let store = Store::open_memory().unwrap();
+    let temp = tempfile::tempdir().unwrap();
+    let mut task = make_stored_task("t-7777", AgentKind::Codex, TaskStatus::Failed);
+    task.worktree_path = Some(temp.path().display().to_string());
+    task.worktree_branch = Some("feat/retry".to_string());
+    store.insert_task(&task).unwrap();
+    let saved = RunArgs {
+        agent_name: "codex".to_string(),
+        prompt: "retry me".to_string(),
+        team: Some("dev".to_string()),
+        context: vec!["AGENTS.md".to_string()],
+        scope: vec!["src/**".to_string()],
+        ..Default::default()
+    };
+    store.update_task_dispatch_args(task.id.as_str(), &saved.dispatch_args_json().unwrap()).unwrap();
+
+    let run_args = retry_task_to_run_args(&store, &task, "wg-batch", None).unwrap();
+
+    assert_eq!(run_args.dir, task.worktree_path);
+    assert_eq!(run_args.worktree, None);
+    assert_eq!(run_args.team, Some("dev".to_string()));
+    assert_eq!(run_args.context, vec!["AGENTS.md".to_string()]);
+    assert_eq!(run_args.scope, vec!["src/**".to_string()]);
+    assert!(run_args.background);
 }
 
 #[test]
@@ -68,7 +99,7 @@ fn retry_task_to_run_args_uses_waiting_placeholder_fields() {
         .unwrap();
 
     let task = store.get_task("t-5678").unwrap().unwrap();
-    let run_args = retry_task_to_run_args(&task, "wg-batch", None);
+    let run_args = retry_task_to_run_args(store.as_ref(), &task, "wg-batch", None).unwrap();
 
     assert_eq!(run_args.prompt, prompt);
     assert_eq!(run_args.dir, Some("/tmp/repo".to_string()));

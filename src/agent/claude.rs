@@ -56,16 +56,6 @@ impl super::Agent for ClaudeAgent {
     fn parse_event(&self, task_id: &TaskId, line: &str) -> Option<TaskEvent> {
         parse_event_line(task_id, line)
     }
-
-    fn parse_completion(&self, _output: &str) -> CompletionInfo {
-        CompletionInfo {
-            tokens: None,
-            status: TaskStatus::Done,
-            model: None,
-            cost_usd: None,
-            exit_code: None,
-        }
-    }
 }
 
 #[cfg(test)]

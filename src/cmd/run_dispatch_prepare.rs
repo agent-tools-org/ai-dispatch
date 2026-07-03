@@ -59,11 +59,13 @@ pub(super) fn prepare_dispatch(store: &Arc<Store>, args: &mut RunArgs) -> Result
     args.prompt_file = None;
     args.max_duration_mins = resolve_max_duration_mins(args.timeout, args.max_duration_mins);
     let had_explicit_result_file = args.result_file.is_some();
-    let detected_project = project::detect_project();
-    apply_project_defaults(args, detected_project.as_ref());
+    let detected_project = project::detect_project(); apply_project_defaults(args, detected_project.as_ref());
     let agent_setup = resolve_agent_setup(store, args)?;
-    let explicit_id = args.existing_task_id.is_some();
-    let mut task_id = initial_task_id(args)?;
+    let agent_name = agent_setup.custom_agent_name.as_deref().unwrap_or_else(|| agent_setup.agent_kind.as_str());
+    let policy = crate::timeout_policy::TimeoutPolicy::resolve(agent_name, args.idle_timeout_secs, args.max_duration_mins, detected_project.as_ref());
+    args.timeout_policy = policy; args.max_duration_mins = Some(policy.max_duration_mins());
+    args.env = crate::timeout_policy::env_with_policy(args.env.take(), policy);
+    let explicit_id = args.existing_task_id.is_some(); let mut task_id = initial_task_id(args)?;
     let mut log_path = paths::log_path(task_id.as_str());
     let workgroup = run_prompt::load_workgroup(store, args.group.as_deref())?;
     let explicit_repo_path = crate::repo_root::resolve_explicit_repo_path(args.repo_root.as_deref(), args.repo.as_deref())?;

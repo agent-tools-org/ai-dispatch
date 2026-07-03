@@ -172,7 +172,7 @@ async fn run_task_inner(store: &Arc<Store>, spec: &BackgroundRunSpec) -> Result<
         std_cmd
     };
     if spec.interactive {
-        crate::pty_runner::run_agent_process(
+        crate::pty_runner::run_agent_process_with_control(
             &*agent,
             &std_cmd,
             &TaskId(spec.task_id.clone()),
@@ -181,6 +181,8 @@ async fn run_task_inner(store: &Arc<Store>, spec: &BackgroundRunSpec) -> Result<
             spec.output.as_deref(),
             spec.model.as_deref(),
             agent.streaming(),
+            crate::timeout_policy::TimeoutPolicy::from_env(spec.env.as_ref()),
+            None,
         )?;
     } else {
         let mut tokio_cmd = tokio::process::Command::from(std_cmd);
@@ -196,6 +198,7 @@ async fn run_task_inner(store: &Arc<Store>, spec: &BackgroundRunSpec) -> Result<
             spec.model.as_deref(),
             agent.streaming(),
             spec.group.as_deref(),
+            crate::timeout_policy::TimeoutPolicy::from_env(spec.env.as_ref()),
         )
         .await?;
     }

@@ -9,6 +9,7 @@ use anyhow::Result;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::time::Duration;
+/// Caps the serialized retry waiter only; the retried task keeps running.
 const SERIAL_RETRY_TIMEOUT_SECS: u64 = 30 * 60;
 type WorktreeIdentity = (Option<String>, Option<String>);
 #[derive(Debug)]

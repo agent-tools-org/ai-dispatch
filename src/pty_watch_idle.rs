@@ -1,13 +1,9 @@
 // Idle policy for PTY-backed reply and unstick handling.
 // Exports: IdleDetector, IdleAction, and MonitorTaskStatus for pty_watch.
-// Deps: std::time and toml parsing for project overrides.
+// Deps: std::time and the resolved timeout policy.
 
 use std::time::{Duration, Instant};
 
-const DEFAULT_WARN_AFTER: Duration = Duration::from_secs(180);
-const DEFAULT_NUDGE_AFTER: Duration = Duration::from_secs(300);
-const DEFAULT_ESCALATE_AFTER: Duration = Duration::from_secs(600);
-const PROJECT_PATH: &str = ".aid/project.toml";
 const DEFAULT_NUDGE_MESSAGE: &str = "Task appears idle. Status update please?";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -36,44 +32,20 @@ pub(crate) struct IdleDetector {
 impl Default for IdleDetector {
     fn default() -> Self {
         Self {
-            warn_after: DEFAULT_WARN_AFTER,
-            nudge_after: DEFAULT_NUDGE_AFTER,
-            escalate_after: DEFAULT_ESCALATE_AFTER,
+            warn_after: Duration::from_secs(crate::timeout_policy::DEFAULT_WARN_SECS),
+            nudge_after: Duration::from_secs(crate::timeout_policy::DEFAULT_NUDGE_SECS),
+            escalate_after: Duration::from_secs(crate::timeout_policy::DEFAULT_ESCALATE_SECS),
         }
     }
 }
 
 impl IdleDetector {
-    pub(crate) fn load() -> Self {
-        let mut detector = Self::default();
-        let Ok(content) = std::fs::read_to_string(PROJECT_PATH) else {
-            return detector;
-        };
-        let Ok(value) = content.parse::<toml::Value>() else {
-            return detector;
-        };
-        if let Some(value) = duration_key(
-            &value,
-            &[&["project", "unstick", "warn_after_secs"], &["project", "idle_warn_secs"]],
-        ) {
-            detector.warn_after = value;
+    pub(crate) fn from_policy(policy: crate::timeout_policy::TimeoutPolicy) -> Self {
+        Self {
+            warn_after: policy.nudge_ladder.warn,
+            nudge_after: policy.nudge_ladder.nudge,
+            escalate_after: policy.nudge_ladder.escalate,
         }
-        if let Some(value) = duration_key(
-            &value,
-            &[&["project", "unstick", "nudge_after_secs"], &["project", "idle_nudge_secs"]],
-        ) {
-            detector.nudge_after = value;
-        }
-        if let Some(value) = duration_key(
-            &value,
-            &[
-                &["project", "unstick", "escalate_after_secs"],
-                &["project", "idle_escalate_secs"],
-            ],
-        ) {
-            detector.escalate_after = value;
-        }
-        detector
     }
 
     pub(crate) fn tick(
@@ -106,22 +78,6 @@ impl IdleDetector {
 
 pub(crate) fn default_nudge_message() -> String {
     DEFAULT_NUDGE_MESSAGE.to_string()
-}
-
-fn duration_key(value: &toml::Value, paths: &[&[&str]]) -> Option<Duration> {
-    paths
-        .iter()
-        .find_map(|path| lookup_value(value, path).and_then(toml::Value::as_integer))
-        .and_then(|secs| u64::try_from(secs).ok())
-        .map(Duration::from_secs)
-}
-
-fn lookup_value<'a>(value: &'a toml::Value, path: &[&str]) -> Option<&'a toml::Value> {
-    let mut current = value;
-    for key in path {
-        current = current.get(*key)?;
-    }
-    Some(current)
 }
 
 #[cfg(test)]

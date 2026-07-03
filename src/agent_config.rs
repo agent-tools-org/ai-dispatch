@@ -54,13 +54,13 @@ pub fn load_agent_config() -> HashMap<String, AgentDefaults> {
 
 pub fn get_default_model(agent_name: &str) -> Option<String> {
     load_agent_config()
-        .get(agent_name)
+        .get(&config_key(agent_name))
         .and_then(|defaults| defaults.model.clone())
 }
 
 pub fn get_default_idle_timeout(agent_name: &str) -> Option<u64> {
     load_agent_config()
-        .get(agent_name)
+        .get(&config_key(agent_name))
         .and_then(|defaults| defaults.idle_timeout)
 }
 
@@ -74,12 +74,13 @@ pub fn is_agent_disabled(agent_name: &str) -> bool {
 pub fn save_agent_default_model(agent_name: &str, model: Option<&str>) -> Result<()> {
     let path = config_path();
     let mut config = load_from(&path);
+    let key = config_key(agent_name);
     match model {
         Some(model) => {
-            config.entry(agent_name.to_string()).or_default().model = Some(model.to_string());
+            config.entry(key).or_default().model = Some(model.to_string());
         }
         None => {
-            if let Some(defaults) = config.get_mut(agent_name) {
+            if let Some(defaults) = config.get_mut(&key) {
                 defaults.model = None;
             }
         }
@@ -91,7 +92,7 @@ pub fn save_agent_default_model(agent_name: &str, model: Option<&str>) -> Result
 pub fn save_agent_idle_timeout(agent_name: &str, idle_timeout: Option<u64>) -> Result<()> {
     let path = config_path();
     let mut config = load_from(&path);
-    config.entry(agent_name.to_string()).or_default().idle_timeout = idle_timeout;
+    config.entry(config_key(agent_name)).or_default().idle_timeout = idle_timeout;
     config.retain(|_, defaults| !defaults.is_empty());
     save_to(&path, &config)
 }
@@ -195,5 +196,26 @@ mod tests {
         let config = load_agent_config();
         assert_eq!(config["gemini"].model, None);
         assert!(config["gemini"].disabled);
+    }
+
+    #[test]
+    fn alias_names_round_trip_through_normalization() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let _guard = AidHomeGuard::set(dir.path());
+
+        // config_key normalizes both "agy" and "antigravity" to the canonical
+        // AgentKind::Antigravity as_str value ("agy"), so alias reads/writes
+        // land in the same config section regardless of spelling.
+        save_agent_default_model("agy", Some("gemini-3")).expect("save model via alias");
+        save_agent_idle_timeout("AGY", Some(300)).expect("save timeout via alias");
+
+        assert_eq!(get_default_model("antigravity").as_deref(), Some("gemini-3"));
+        assert_eq!(get_default_idle_timeout("Antigravity"), Some(300));
+        assert!(is_agent_disabled("antigravity") == false);
+
+        let config = load_agent_config();
+        assert_eq!(config["agy"].model.as_deref(), Some("gemini-3"));
+        assert_eq!(config["agy"].idle_timeout, Some(300));
+        assert!(!config.contains_key("antigravity"));
     }
 }

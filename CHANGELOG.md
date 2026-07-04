@@ -1,3 +1,12 @@
+## v9.1.0 (2026-07-04)
+- feat(hang): first-token dead-stream detection — reap a streaming agent that emits no raw PTY output within 180s (env AID_FIRST_TOKEN_TIMEOUT_SECS) while still at zero real progress, instead of waiting the full idle timeout; gated to streaming agents and reset on any raw byte so live tasks are never falsely reaped
+- feat(hang): transient auto-recovery — a first-token dead-stream hang auto-retries once with a fresh session (and first cascade agent, if configured) even without --retry, loop-capped via the retry-chain marker; ordinary idle hangs keep their existing gating
+- fix(budget): parse daily/weekly/monthly (and day/week/month) budget windows — previously only Nh/Nd/Nm suffixes were understood, so a "daily" window silently fell back to counting all tasks ever (a lifetime cap masquerading as daily); also warn when a non-empty window is unrecognized
+- fix(idle): skip the idle auto-nudge for non-interactive exec agents (codex) that never read stdin — such agents now go straight to escalate instead of emitting a useless nudge; new Agent::accepts_idle_nudge() capability
+- fix(cost): price codex gpt-5.5 at the premium tier ($2.5/$15) instead of the generic gpt-5 rate
+- fix(cost): correct the stale gpt-5.4 catalog price ($2/$12 standard -> $2.5/$15 premium) and stop mis-pricing gpt-5.4-mini as the flagship (it matched the "gpt-5.4" substring and was billed ~6x; now correctly $0.4/$1.6)
+
+
 ## v9.0.0 (2026-07-03)
 - Architecture-audit release: 25 issues (#139-#151, #153-#164) from the 2026-07 three-lens architecture audit fixed and cross-audited; see docs/audit-architecture-2026-07.md for the full map
 - feat(lifecycle): task status transitions are now guarded by a legal-transition graph with intent-named methods (task_lifecycle); failure salvage moved out of store mutations; background/batch tasks run the full post-run lifecycle (checklist retry, hooks, peer review, audits) via LifecycleMode

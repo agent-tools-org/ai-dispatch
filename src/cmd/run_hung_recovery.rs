@@ -6,6 +6,7 @@ use crate::process_monitor::HungContext;
 use crate::types::{Task, TaskStatus};
 
 pub const MAX_HUNG_RETRIES: u32 = 2;
+pub const MAX_TRANSIENT_HUNG_RETRIES: u32 = 1;
 
 const MIN_PROGRESS_EVENTS: i64 = 6;
 
@@ -25,10 +26,14 @@ pub fn build_hung_retry_feedback(task: &Task, hung_duration_secs: u64) -> String
     )
 }
 
-pub fn should_auto_retry_hung(task: &Task, retry_count: u32) -> bool {
-    task.status == TaskStatus::Failed
-        && retry_count < MAX_HUNG_RETRIES
-        && task.prompt_tokens.unwrap_or_default() >= MIN_PROGRESS_EVENTS
+pub fn should_auto_retry_hung(task: &Task, context: &HungContext, retry_count: u32) -> bool {
+    if task.status != TaskStatus::Failed {
+        return false;
+    }
+    if context.transient {
+        return retry_count < MAX_TRANSIENT_HUNG_RETRIES;
+    }
+    retry_count < MAX_HUNG_RETRIES && i64::from(context.event_count) >= MIN_PROGRESS_EVENTS
 }
 
 pub(crate) fn with_hung_context(task: &Task, context: &HungContext) -> Task {
@@ -85,16 +90,34 @@ mod tests {
 
     #[test]
     fn should_auto_retry_hung_for_progressing_task() {
-        let mut task = task();
-        task.prompt_tokens = Some(6);
-        assert!(should_auto_retry_hung(&task, 0));
+        let task = task();
+        let context = hung_context(6, false);
+        assert!(should_auto_retry_hung(&task, &context, 0));
     }
 
     #[test]
     fn should_not_auto_retry_immediate_failures() {
-        let mut task = task();
-        task.prompt_tokens = Some(5);
-        assert!(!should_auto_retry_hung(&task, 0));
+        let task = task();
+        let context = hung_context(5, false);
+        assert!(!should_auto_retry_hung(&task, &context, 0));
+    }
+
+    #[test]
+    fn should_auto_retry_transient_without_progress_gate() {
+        let task = task();
+        let context = hung_context(1, true);
+        assert!(should_auto_retry_hung(&task, &context, 0));
+    }
+
+    #[test]
+    fn should_not_retry_transient_past_hung_limit() {
+        let task = task();
+        let context = hung_context(1, true);
+        assert!(!should_auto_retry_hung(
+            &task,
+            &context,
+            MAX_TRANSIENT_HUNG_RETRIES
+        ));
     }
 
     #[test]
@@ -107,8 +130,17 @@ mod tests {
 
     #[test]
     fn should_not_retry_past_hung_limit() {
-        let mut task = task();
-        task.prompt_tokens = Some(9);
-        assert!(!should_auto_retry_hung(&task, MAX_HUNG_RETRIES));
+        let task = task();
+        let context = hung_context(9, false);
+        assert!(!should_auto_retry_hung(&task, &context, MAX_HUNG_RETRIES));
+    }
+
+    fn hung_context(event_count: u32, transient: bool) -> HungContext {
+        HungContext {
+            hung_duration_secs: 300,
+            event_count,
+            last_event_detail: None,
+            transient,
+        }
     }
 }

@@ -90,6 +90,7 @@ pub(crate) fn run_agent_process_with_control(
         &rx,
         &mut log_file,
         &mut state,
+        Some(timeout_policy.first_token),
         Some(timeout_policy.idle),
     )?;
     if bridge.is_alive() {

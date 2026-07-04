@@ -101,6 +101,7 @@ pub(super) fn record_hung_detected_failure(
         idle_secs,
         activity.event_count,
         activity.detail.as_deref(),
+        false,
     )?;
     Ok(true)
 }

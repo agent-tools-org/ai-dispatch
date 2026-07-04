@@ -9,6 +9,7 @@ use std::time::Duration;
 use crate::project::ProjectConfig;
 
 pub(crate) const DEFAULT_IDLE_SECS: u64 = 600;
+pub(crate) const DEFAULT_FIRST_TOKEN_SECS: u64 = 180;
 pub(crate) const DEFAULT_WARN_SECS: u64 = 180;
 pub(crate) const DEFAULT_NUDGE_SECS: u64 = 300;
 pub(crate) const DEFAULT_ESCALATE_SECS: u64 = 600;
@@ -16,6 +17,7 @@ pub(crate) const DEFAULT_MAX_DURATION_MINS: i64 = 60;
 pub(crate) const DEFAULT_HARD_CAP_HOURS: i64 = 24;
 
 pub(crate) const ENV_IDLE_SECS: &str = "AID_IDLE_TIMEOUT_SECS";
+const ENV_FIRST_TOKEN_SECS: &str = "AID_FIRST_TOKEN_TIMEOUT_SECS";
 const ENV_WARN_SECS: &str = "AID_IDLE_WARN_SECS";
 const ENV_NUDGE_SECS: &str = "AID_IDLE_NUDGE_SECS";
 const ENV_ESCALATE_SECS: &str = "AID_IDLE_ESCALATE_SECS";
@@ -32,6 +34,7 @@ pub(crate) struct NudgeLadder {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub(crate) struct TimeoutPolicy {
     pub(crate) idle: Duration,
+    pub(crate) first_token: Duration,
     pub(crate) nudge_ladder: NudgeLadder,
     pub(crate) max_duration: Duration,
     pub(crate) hard_cap: Duration,
@@ -41,6 +44,7 @@ impl Default for TimeoutPolicy {
     fn default() -> Self {
         Self {
             idle: Duration::from_secs(DEFAULT_IDLE_SECS),
+            first_token: Duration::from_secs(DEFAULT_FIRST_TOKEN_SECS),
             nudge_ladder: NudgeLadder {
                 warn: Duration::from_secs(DEFAULT_WARN_SECS),
                 nudge: Duration::from_secs(DEFAULT_NUDGE_SECS),
@@ -74,6 +78,7 @@ impl TimeoutPolicy {
         let ladder = project.map_or(defaults.nudge_ladder, project_ladder);
         Self {
             idle: Duration::from_secs(idle_secs),
+            first_token: defaults.first_token,
             nudge_ladder: ladder,
             max_duration: Duration::from_secs(max_duration_mins as u64 * 60),
             hard_cap: Duration::from_secs(hard_cap_hours as u64 * 60 * 60),
@@ -87,6 +92,9 @@ impl TimeoutPolicy {
         };
         Self {
             idle: Duration::from_secs(env_u64(env, ENV_IDLE_SECS).unwrap_or(DEFAULT_IDLE_SECS)),
+            first_token: Duration::from_secs(
+                env_u64(env, ENV_FIRST_TOKEN_SECS).unwrap_or(DEFAULT_FIRST_TOKEN_SECS),
+            ),
             nudge_ladder: NudgeLadder {
                 warn: Duration::from_secs(env_u64(env, ENV_WARN_SECS).unwrap_or(DEFAULT_WARN_SECS)),
                 nudge: Duration::from_secs(env_u64(env, ENV_NUDGE_SECS).unwrap_or(DEFAULT_NUDGE_SECS)),
@@ -138,6 +146,10 @@ pub(crate) fn env_with_policy(
 ) -> Option<HashMap<String, String>> {
     let mut env = env.unwrap_or_default();
     env.insert(ENV_IDLE_SECS.to_string(), policy.idle.as_secs().to_string());
+    env.insert(
+        ENV_FIRST_TOKEN_SECS.to_string(),
+        policy.first_token.as_secs().to_string(),
+    );
     env.insert(
         ENV_WARN_SECS.to_string(),
         policy.nudge_ladder.warn.as_secs().to_string(),
@@ -192,107 +204,4 @@ fn env_i64(env: &HashMap<String, String>, key: &str) -> Option<i64> {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::project::{ProjectConfig, ProjectUnstickConfig};
-    use crate::paths::AidHomeGuard;
-    use std::fs;
-
-    #[test]
-    fn policy_resolution_precedence_is_cli_agent_project_default() {
-        let dir = tempfile::tempdir().expect("tempdir");
-        let _guard = AidHomeGuard::set(dir.path());
-        crate::agent_config::save_agent_idle_timeout("codex", Some(420)).expect("save config");
-        let project = ProjectConfig {
-            idle_timeout: Some(300),
-            max_duration_mins: Some(20),
-            ..Default::default()
-        };
-
-        let policy = TimeoutPolicy::resolve("codex", Some(240), Some(10), Some(&project));
-        assert_eq!(policy.idle, Duration::from_secs(240));
-        assert_eq!(policy.max_duration, Duration::from_secs(10 * 60));
-
-        let policy = TimeoutPolicy::resolve("codex", None, None, Some(&project));
-        assert_eq!(policy.idle, Duration::from_secs(420));
-        assert_eq!(policy.max_duration, Duration::from_secs(20 * 60));
-
-        let policy = TimeoutPolicy::resolve("project-only-agent", None, None, Some(&project));
-        assert_eq!(policy.idle, Duration::from_secs(300));
-
-        let policy = TimeoutPolicy::resolve("project-only-agent", None, None, None);
-        assert_eq!(policy.idle, Duration::from_secs(DEFAULT_IDLE_SECS));
-        assert_eq!(
-            policy.max_duration,
-            Duration::from_secs(DEFAULT_MAX_DURATION_MINS as u64 * 60)
-        );
-    }
-
-    #[test]
-    fn policy_env_round_trips_all_fields() {
-        let project = ProjectConfig {
-            idle_timeout: Some(222),
-            max_duration_mins: Some(33),
-            hard_cap_hours: Some(7),
-            unstick: ProjectUnstickConfig {
-                warn_after_secs: Some(11),
-                nudge_after_secs: Some(22),
-                escalate_after_secs: Some(44),
-            },
-            ..Default::default()
-        };
-        let policy = TimeoutPolicy::resolve("project-only-agent", None, None, Some(&project));
-        let env = env_with_policy(None, policy);
-
-        assert_eq!(TimeoutPolicy::from_env(env.as_ref()), policy);
-    }
-
-    #[test]
-    fn project_toml_timeout_fields_parse() {
-        let dir = tempfile::tempdir().expect("tempdir");
-        let path = dir.path().join("project.toml");
-        fs::write(
-            &path,
-            r#"[project]
-id = "demo"
-idle_timeout = 222
-max_duration_mins = 33
-hard_cap_hours = 7
-
-[project.unstick]
-warn_after_secs = 11
-nudge_after_secs = 22
-escalate_after_secs = 44
-"#,
-        )
-        .expect("write project");
-
-        let project = crate::project::load_project(&path).expect("load project");
-        let policy = TimeoutPolicy::resolve("project-only-agent", None, None, Some(&project));
-
-        assert_eq!(policy.idle, Duration::from_secs(222));
-        assert_eq!(policy.max_duration, Duration::from_secs(33 * 60));
-        assert_eq!(policy.hard_cap, Duration::from_secs(7 * 60 * 60));
-        assert_eq!(policy.nudge_ladder.warn, Duration::from_secs(11));
-    }
-
-    #[test]
-    fn std_and_tokio_command_pipelines_read_same_idle_value() {
-        let policy = TimeoutPolicy {
-            idle: Duration::from_secs(123),
-            ..TimeoutPolicy::default()
-        };
-        let env = env_with_policy(None, policy).expect("policy env");
-        let mut std_cmd = std::process::Command::new("true");
-        let mut tokio_std_cmd = std::process::Command::new("true");
-        for (key, value) in env {
-            std_cmd.env(&key, &value);
-            tokio_std_cmd.env(key, value);
-        }
-        let tokio_cmd = tokio::process::Command::from(tokio_std_cmd);
-
-        assert_eq!(TimeoutPolicy::from_command(&std_cmd).idle, policy.idle);
-        assert_eq!(TimeoutPolicy::from_tokio_command(&tokio_cmd).idle, policy.idle);
-        assert_eq!(crate::idle_timeout::idle_timeout_from_tokio_command(&tokio_cmd), policy.idle);
-    }
-}
+mod tests;

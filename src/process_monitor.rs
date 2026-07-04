@@ -14,6 +14,7 @@ pub(crate) struct HungContext {
     pub(crate) hung_duration_secs: u64,
     pub(crate) event_count: u32,
     pub(crate) last_event_detail: Option<String>,
+    pub(crate) transient: bool,
 }
 
 pub(crate) fn insert_hung_detected_events(
@@ -22,12 +23,14 @@ pub(crate) fn insert_hung_detected_events(
     hung_duration_secs: u64,
     event_count: u32,
     last_event_detail: Option<&str>,
+    transient: bool,
 ) -> Result<()> {
     let metadata = json!({
         "hung_recovery_eligible": true,
         "hung_duration_secs": hung_duration_secs,
         "event_count": event_count,
         "last_event_detail": last_event_detail,
+        "transient": transient,
     });
     store.insert_event(&TaskEvent {
         task_id: task_id.clone(),
@@ -81,6 +84,10 @@ pub(crate) fn hung_context(events: &[TaskEvent]) -> Option<HungContext> {
                 .get("last_event_detail")
                 .and_then(|value| value.as_str())
                 .map(str::to_string),
+            transient: metadata
+                .get("transient")
+                .and_then(|value| value.as_bool())
+                .unwrap_or(false),
         })
     })
 }
@@ -117,11 +124,13 @@ mod tests {
             "hung_duration_secs": 300,
             "event_count": 7,
             "last_event_detail": "compiling watcher",
+            "transient": true,
         }))];
         let context = hung_context(&events).expect("context");
         assert_eq!(context.hung_duration_secs, 300);
         assert_eq!(context.event_count, 7);
         assert_eq!(context.last_event_detail.as_deref(), Some("compiling watcher"));
+        assert!(context.transient);
     }
 
     #[test]

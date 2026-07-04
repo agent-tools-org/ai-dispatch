@@ -189,13 +189,16 @@ mod tests {
     }
 
     #[test]
-    fn codex_fallback_uses_catalog_standard_tier() {
+    fn codex_fallback_uses_standard_tier_or_first_catalog_model() {
         let cost = estimate_cost(1_000_000, None, AgentKind::Codex).unwrap();
-        let standard = model_catalog::models_for_agent(&AgentKind::Codex)
-            .into_iter()
+        // Mirrors codex_fallback_pricing: prefer a "standard" tier model, else the first.
+        let models = model_catalog::models_for_agent(&AgentKind::Codex);
+        let fallback = models
+            .iter()
             .find(|m| m.tier == "standard")
+            .or_else(|| models.first())
             .unwrap();
-        let blended = standard.input_per_m * 0.7 + standard.output_per_m * 0.3;
+        let blended = fallback.input_per_m * 0.7 + fallback.output_per_m * 0.3;
         assert!((cost - blended).abs() < 0.01);
     }
 

@@ -32,6 +32,7 @@ pub(crate) struct MonitorState {
     prompt_detector: PromptDetector,
     awaiting_input: bool,
     last_progress_time: Instant,
+    last_raw_chunk_time: Instant,
     idle_nudged: bool,
     idle_warned: bool,
     pending_inbound_acks: usize,
@@ -71,6 +72,7 @@ impl MonitorState {
             prompt_detector: PromptDetector::default(),
             awaiting_input: false,
             last_progress_time: Instant::now(),
+            last_raw_chunk_time: Instant::now(),
             idle_nudged: false,
             idle_warned: false,
             pending_inbound_acks: 0,
@@ -351,8 +353,14 @@ impl MonitorState {
         self.event_count
     }
 
-    fn first_token_hang_elapsed(&self, first_token_timeout: Duration) -> bool {
-        self.progress_count() <= 1 && self.last_progress_time.elapsed() > first_token_timeout
+    fn first_token_hang_elapsed(
+        &self,
+        agent_streaming: bool,
+        first_token_timeout: Duration,
+    ) -> bool {
+        agent_streaming
+            && self.progress_count() <= 1
+            && self.last_raw_chunk_time.elapsed() > first_token_timeout
     }
 
     fn last_progress_detail(&self) -> Option<String> {
@@ -400,11 +408,14 @@ pub(crate) fn monitor_bridge(
             }
         }
         match rx.recv_timeout(INPUT_POLL_INTERVAL) {
-            Ok(bytes) => state.handle_chunk(agent, task_id, store, log_file, decoder.push(bytes))?,
+            Ok(bytes) => {
+                state.last_raw_chunk_time = Instant::now();
+                state.handle_chunk(agent, task_id, store, log_file, decoder.push(bytes))?;
+            }
             Err(RecvTimeoutError::Timeout) => {
                 state.handle_timeout(store, task_id)?;
                 if let Some(first_token) = first_token_timeout
-                    && state.first_token_hang_elapsed(first_token)
+                    && state.first_token_hang_elapsed(agent.streaming(), first_token)
                 {
                     state.info.status = TaskStatus::Failed;
                     process_monitor::insert_hung_detected_events(

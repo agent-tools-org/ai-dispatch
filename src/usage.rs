@@ -204,6 +204,7 @@ fn check_budget_status_for_project(
     let mut over_limit = false;
     let mut near_limit = false;
     let mut messages: Vec<String> = Vec::new();
+    let mut warned_unrecognized_window = false;
 
     for budget in &config.usage.budgets {
         if budget.agent.is_none() && Some(budget.name.as_str()) != project_name {
@@ -212,7 +213,22 @@ fn check_budget_status_for_project(
         let since = budget
             .window
             .as_deref()
-            .and_then(parse_window)
+            .and_then(|window| {
+                let trimmed = window.trim();
+                if trimmed.is_empty() {
+                    return None;
+                }
+                let parsed = parse_window(trimmed);
+                if parsed.is_none() && !warned_unrecognized_window {
+                    crate::aid_warn!(
+                        "[aid] Warning: budget '{}' has unrecognized window '{}'; treating budget as all-time (lifetime)",
+                        budget.name,
+                        trimmed
+                    );
+                    warned_unrecognized_window = true;
+                }
+                parsed
+            })
             .map(|window| now - window);
         let (task_count, total_tokens, total_cost) = budget_usage_summary(store, budget, since)?;
         let tasks = task_count + budget.external_tasks;
@@ -432,6 +448,12 @@ pub(crate) fn filter_budget_tasks<'a>(tasks: &'a [Task], budget: &UsageBudget) -
 
 pub(crate) fn parse_window(value: &str) -> Option<Duration> {
     let trimmed = value.trim();
+    match trimmed.to_lowercase().as_str() {
+        "daily" | "day" => return Some(Duration::days(1)),
+        "weekly" | "week" => return Some(Duration::days(7)),
+        "monthly" | "month" => return Some(Duration::days(30)),
+        _ => {}
+    }
     if let Some(hours) = trimmed.strip_suffix('h') {
         return hours.parse::<i64>().ok().map(Duration::hours);
     }
@@ -725,3 +747,7 @@ mod tests {
         assert!(rendered.contains("Top 5 most expensive tasks"));
     }
 }
+
+#[cfg(test)]
+#[path = "usage_window_tests.rs"]
+mod window_tests;

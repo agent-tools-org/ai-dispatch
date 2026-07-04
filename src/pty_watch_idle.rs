@@ -53,10 +53,20 @@ impl IdleDetector {
         last_output_time: Instant,
         status: MonitorTaskStatus,
         idle_nudged: bool,
+        accepts_nudge: bool,
     ) -> IdleAction {
         let idle_for = last_output_time.elapsed();
         if status != MonitorTaskStatus::Running || idle_for < self.warn_after {
             return IdleAction::None;
+        }
+        if !accepts_nudge {
+            return if idle_for >= self.escalate_after {
+                IdleAction::Escalate
+            } else if idle_for >= self.nudge_after {
+                IdleAction::None
+            } else {
+                IdleAction::WarnEvent
+            };
         }
         if idle_for >= self.escalate_after {
             return if idle_nudged {
@@ -99,6 +109,7 @@ mod tests {
                 Instant::now() - Duration::from_secs(9),
                 MonitorTaskStatus::Running,
                 false,
+                true,
             ),
             IdleAction::None
         );
@@ -107,6 +118,7 @@ mod tests {
                 Instant::now() - Duration::from_secs(10),
                 MonitorTaskStatus::Running,
                 false,
+                true,
             ),
             IdleAction::WarnEvent
         );
@@ -115,6 +127,7 @@ mod tests {
                 Instant::now() - Duration::from_secs(20),
                 MonitorTaskStatus::Running,
                 false,
+                true,
             ),
             IdleAction::SendNudge(default_nudge_message())
         );
@@ -122,6 +135,7 @@ mod tests {
             detector().tick(
                 Instant::now() - Duration::from_secs(30),
                 MonitorTaskStatus::Running,
+                true,
                 true,
             ),
             IdleAction::Escalate
@@ -136,9 +150,48 @@ mod tests {
             MonitorTaskStatus::Inactive,
         ] {
             assert_eq!(
-                detector().tick(Instant::now() - Duration::from_secs(60), status, true),
+                detector().tick(Instant::now() - Duration::from_secs(60), status, true, true),
                 IdleAction::None
             );
         }
+    }
+
+    #[test]
+    fn tick_skips_nudge_for_agents_that_do_not_accept_nudges() {
+        assert_eq!(
+            detector().tick(
+                Instant::now() - Duration::from_secs(20),
+                MonitorTaskStatus::Running,
+                false,
+                false,
+            ),
+            IdleAction::None
+        );
+    }
+
+    #[test]
+    fn tick_escalates_without_prior_nudge_when_agent_does_not_accept_nudges() {
+        assert_eq!(
+            detector().tick(
+                Instant::now() - Duration::from_secs(30),
+                MonitorTaskStatus::Running,
+                false,
+                false,
+            ),
+            IdleAction::Escalate
+        );
+    }
+
+    #[test]
+    fn tick_still_sends_nudge_for_agents_that_accept_nudges() {
+        assert_eq!(
+            detector().tick(
+                Instant::now() - Duration::from_secs(20),
+                MonitorTaskStatus::Running,
+                false,
+                true,
+            ),
+            IdleAction::SendNudge(default_nudge_message())
+        );
     }
 }

@@ -46,6 +46,12 @@ pub trait Agent: Send + Sync {
     /// Whether this agent streams JSONL (true) or outputs a single JSON blob (false)
     fn streaming(&self) -> bool;
 
+    /// Interactive agents that read stdin mid-run can be nudged to unstick.
+    /// Exec/batch agents that ignore stdin must return false so aid does not waste a nudge on them.
+    fn accepts_idle_nudge(&self) -> bool {
+        true
+    }
+
     /// Build the OS command to execute this agent
     fn build_command(&self, prompt: &str, opts: &RunOpts) -> Result<Command>;
 

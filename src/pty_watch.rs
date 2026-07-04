@@ -295,11 +295,17 @@ impl MonitorState {
         Ok(())
     }
 
-    fn maybe_handle_idle(&mut self, store: &Arc<Store>, task_id: &TaskId) -> Result<()> {
+    fn maybe_handle_idle(
+        &mut self,
+        store: &Arc<Store>,
+        task_id: &TaskId,
+        accepts_nudge: bool,
+    ) -> Result<()> {
         match self.idle_detector.tick(
             self.last_progress_time,
             load_monitor_status(store.as_ref(), task_id.as_str())?,
             self.idle_nudged,
+            accepts_nudge,
         ) {
             IdleAction::None => {}
             IdleAction::WarnEvent if !self.idle_warned => {
@@ -448,7 +454,7 @@ pub(crate) fn monitor_bridge(
         state.maybe_forward_input(bridge, store, task_id)?;
         state.maybe_forward_steer(bridge, store, task_id)?;
         state.maybe_consume_reply(bridge, store, task_id)?;
-        state.maybe_handle_idle(store, task_id)?;
+        state.maybe_handle_idle(store, task_id, agent.accepts_idle_nudge())?;
     }
 
     if !state.line_buffer.trim().is_empty() {

@@ -15,10 +15,6 @@ pub(crate) async fn maybe_auto_retry_after_hang(
     task_id: &TaskId,
     args: &RunArgs,
 ) -> Result<Option<TaskId>> {
-    if args.retry == 0 {
-        return Ok(None);
-    }
-
     let Some(task) = store.get_task(task_id.as_str())? else {
         return Ok(None);
     };
@@ -31,25 +27,64 @@ pub(crate) async fn maybe_auto_retry_after_hang(
         return Ok(None);
     };
     let retry_count = prior_hung_retry_count(store.as_ref(), &task)?;
+    let Some(retries_left) = hung_retry_retries_left(args, &context, retry_count) else {
+        return Ok(None);
+    };
     let hung_task = run_hung_recovery::with_hung_context(&task, &context);
-    if !run_hung_recovery::should_auto_retry_hung(&hung_task, retry_count) {
+    if !run_hung_recovery::should_auto_retry_hung(&task, &context, retry_count) {
         return Ok(None);
     }
 
     aid_warn!(
         "[aid] Agent hung, auto-retrying ({} retries left)",
-        args.retry.saturating_sub(1)
+        retries_left
     );
 
     let feedback =
         run_hung_recovery::build_hung_retry_feedback(&hung_task, context.hung_duration_secs);
     let root_prompt = retry_logic::root_prompt(store.as_ref(), &task)
         .unwrap_or_else(|| args.prompt.clone());
+    let retry_args = build_hung_retry_args(args, &task, &context, &feedback, &root_prompt);
+
+    process_monitor::insert_hung_retry_event(store.as_ref(), task_id)?;
+    let retry_id = Box::pin(run(store.clone(), retry_args)).await?;
+    Ok(Some(retry_id))
+}
+
+fn hung_retry_retries_left(
+    args: &RunArgs,
+    context: &process_monitor::HungContext,
+    retry_count: u32,
+) -> Option<u32> {
+    if context.transient {
+        return Some(
+            run_hung_recovery::MAX_TRANSIENT_HUNG_RETRIES
+                .saturating_sub(retry_count)
+                .saturating_sub(1),
+        );
+    }
+    if args.retry == 0 {
+        return None;
+    }
+    Some(args.retry.saturating_sub(1))
+}
+
+fn build_hung_retry_args(
+    args: &RunArgs,
+    task: &Task,
+    context: &process_monitor::HungContext,
+    feedback: &str,
+    root_prompt: &str,
+) -> RunArgs {
     let mut retry_args = args.clone();
     retry_args.prompt =
         format!("[Previous attempt feedback]\n{feedback}\n\n[Original task]\n{root_prompt}");
-    retry_args.retry = args.retry.saturating_sub(1);
-    retry_args.parent_task_id = Some(task_id.as_str().to_string());
+    retry_args.retry = if context.transient {
+        args.retry
+    } else {
+        args.retry.saturating_sub(1)
+    };
+    retry_args.parent_task_id = Some(task.id.as_str().to_string());
     retry_args.repo = task.repo_path.clone().or_else(|| retry_args.repo.clone());
     retry_args.output = task.output_path.clone().or_else(|| retry_args.output.clone());
     retry_args.model = task.model.clone().or_else(|| retry_args.model.clone());
@@ -57,17 +92,20 @@ pub(crate) async fn maybe_auto_retry_after_hang(
     retry_args.read_only = task.read_only;
     retry_args.budget = task.budget;
     retry_args.background = false;
-    let (dir, worktree) = super::retry_target(&task);
+    let (dir, worktree) = super::retry_target(task);
     retry_args.dir = dir.or_else(|| retry_args.dir.clone());
     retry_args.worktree = worktree.or_else(|| retry_args.worktree.clone());
-    inherit_retry_base_branch(args.dir.as_deref(), &task, &mut retry_args);
-    if task.agent.supports_session_resume() {
+    inherit_retry_base_branch(args.dir.as_deref(), task, &mut retry_args);
+    if context.transient {
+        retry_args.session_id = None;
+        if let Some((next_agent, remaining_cascade)) = take_next_cascade_agent(args) {
+            retry_args.agent_name = next_agent;
+            retry_args.cascade = remaining_cascade;
+        }
+    } else if task.agent.supports_session_resume() {
         retry_args.session_id = task.agent_session_id.clone();
     }
-
-    let retry_id = Box::pin(run(store.clone(), retry_args)).await?;
-    let _ = process_monitor::insert_hung_retry_event(store.as_ref(), task_id);
-    Ok(Some(retry_id))
+    retry_args
 }
 
 
@@ -242,3 +280,7 @@ fn find_rate_limit_line(content: &str) -> Option<String> {
         .lines()
         .find_map(rate_limit::extract_rate_limit_message)
 }
+
+#[cfg(test)]
+#[path = "run_post_tests.rs"]
+mod tests;

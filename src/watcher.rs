@@ -84,6 +84,7 @@ pub async fn watch_streaming(
                     idle_timeout.as_secs(),
                     event_count,
                     last_event_detail.as_deref(),
+                    false,
                 );
                 info.status = TaskStatus::Failed;
                 break;

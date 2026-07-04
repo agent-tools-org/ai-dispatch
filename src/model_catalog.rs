@@ -175,7 +175,7 @@ impl ResolvedAgentModel {
 
 pub const AGENT_MODELS: &[AgentModel] = &[
     AgentModel { agent: AgentKind::Codex, model: "gpt-5.5", input_per_m: 2.5, output_per_m: 15.0, tier: "premium", description: "Latest, best quality", capability: 9.6 },
-    AgentModel { agent: AgentKind::Codex, model: "gpt-5.4", input_per_m: 2.0, output_per_m: 12.0, tier: "standard", description: "Reliable, good quality", capability: 9.3 },
+    AgentModel { agent: AgentKind::Codex, model: "gpt-5.4", input_per_m: 2.5, output_per_m: 15.0, tier: "premium", description: "Reliable, good quality", capability: 9.3 },
     AgentModel { agent: AgentKind::Codex, model: "gpt-5.4-mini", input_per_m: 0.4, output_per_m: 1.6, tier: "cheap", description: "Balanced cost/quality", capability: 7.0 },
     AgentModel { agent: AgentKind::Gemini, model: "flash", input_per_m: 0.30, output_per_m: 2.50, tier: "cheap", description: "(version selected by gemini CLI)", capability: 8.0 },
     AgentModel { agent: AgentKind::Gemini, model: "pro", input_per_m: 1.25, output_per_m: 10.0, tier: "premium", description: "(version selected by gemini CLI)", capability: 9.0 },

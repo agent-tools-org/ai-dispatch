@@ -351,6 +351,10 @@ impl MonitorState {
         self.event_count
     }
 
+    fn first_token_hang_elapsed(&self, first_token_timeout: Duration) -> bool {
+        self.progress_count() <= 1 && self.last_progress_time.elapsed() > first_token_timeout
+    }
+
     fn last_progress_detail(&self) -> Option<String> {
         self.last_event_detail.clone().or_else(|| {
             self.full_output
@@ -378,6 +382,7 @@ pub(crate) fn monitor_bridge(
     rx: &mpsc::Receiver<Vec<u8>>,
     log_file: &mut std::fs::File,
     state: &mut MonitorState,
+    first_token_timeout: Option<Duration>,
     idle_timeout: Option<Duration>,
 ) -> Result<()> {
     let mut reader_done = false;
@@ -398,6 +403,20 @@ pub(crate) fn monitor_bridge(
             Ok(bytes) => state.handle_chunk(agent, task_id, store, log_file, decoder.push(bytes))?,
             Err(RecvTimeoutError::Timeout) => {
                 state.handle_timeout(store, task_id)?;
+                if let Some(first_token) = first_token_timeout
+                    && state.first_token_hang_elapsed(first_token)
+                {
+                    state.info.status = TaskStatus::Failed;
+                    process_monitor::insert_hung_detected_events(
+                        store.as_ref(),
+                        task_id,
+                        first_token.as_secs(),
+                        state.progress_count(),
+                        state.last_progress_detail().as_deref(),
+                        true,
+                    )?;
+                    break;
+                }
                 if let Some(idle) = idle_timeout
                     && state.last_progress_time.elapsed() > idle
                 {
@@ -408,6 +427,7 @@ pub(crate) fn monitor_bridge(
                         idle.as_secs(),
                         state.progress_count(),
                         state.last_progress_detail().as_deref(),
+                        false,
                     )?;
                     break;
                 }
@@ -654,3 +674,5 @@ fn load_monitor_status(store: &Store, task_id: &str) -> Result<MonitorTaskStatus
 mod tests;
 #[cfg(test)]
 mod log_tests;
+#[cfg(test)]
+mod first_token_tests;

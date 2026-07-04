@@ -63,6 +63,10 @@ impl super::Agent for CodexAgent {
         true
     }
 
+    fn accepts_idle_nudge(&self) -> bool {
+        false
+    }
+
     fn build_command(&self, prompt: &str, opts: &RunOpts) -> Result<Command> {
         let effective_prompt = if opts.read_only {
             read_only_prompt(prompt, opts)
@@ -784,3 +788,6 @@ mod tests {
         assert!(last_arg.contains("[Context File:"));
     }
 }
+
+#[cfg(test)]
+mod codex_nudge_tests;

@@ -266,6 +266,9 @@ mod tests {
         let pricing = model_pricing("gpt-5.4", AgentKind::Codex).unwrap();
         assert_eq!(pricing.input_per_m, 2.5);
         assert_eq!(pricing.output_per_m, 15.0);
+        let pricing = model_pricing("gpt-5.5", AgentKind::Codex).unwrap();
+        assert_eq!(pricing.input_per_m, 2.5);
+        assert_eq!(pricing.output_per_m, 15.0);
         let pricing = model_pricing("gpt-5-mini", AgentKind::Codex).unwrap();
         assert_eq!(pricing.input_per_m, 0.25);
         assert_eq!(pricing.output_per_m, 2.0);

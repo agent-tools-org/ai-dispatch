@@ -11,7 +11,7 @@ pub(super) fn for_model_lower(m: &str) -> Option<ModelPricing> {
             input_per_m: 2.0,
             output_per_m: 8.0,
         }
-    } else if m.contains("gpt-5.4") {
+    } else if m.contains("gpt-5.4") || m.contains("gpt-5.5") {
         ModelPricing {
             input_per_m: 2.5,
             output_per_m: 15.0,

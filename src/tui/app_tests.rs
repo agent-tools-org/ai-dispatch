@@ -2,7 +2,7 @@
 // Covers filtering, milestone loading, detail mode navigation, and key handling.
 
 use super::*;
-use chrono::Local;
+use chrono::{Duration, Local};
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 use crate::types::{AgentKind, TaskId, TaskStatus, VerifyStatus};
@@ -67,7 +67,7 @@ fn filters_today_view_by_group() {
 
     assert_eq!(app.tasks.len(), 1);
     assert_eq!(app.tasks[0].id.as_str(), "t-1000");
-    assert_eq!(app.scope_label(), "today | group wg-a");
+    assert_eq!(app.scope_label(), "today+active | group wg-a");
 }
 
 #[test]
@@ -93,6 +93,36 @@ fn keeps_ungrouped_tasks_visible_with_group_filter() {
     let mut task_ids: Vec<&str> = app.tasks.iter().map(|task| task.id.as_str()).collect();
     task_ids.sort();
     assert_eq!(task_ids, vec!["t-2000", "t-2002"]);
+}
+
+#[test]
+fn default_scope_includes_active_tasks_from_previous_days() {
+    let store = Arc::new(Store::open_memory().unwrap());
+    let yesterday = Local::now() - Duration::days(1);
+    let mut active_yesterday = make_task("t-2500", None);
+    active_yesterday.status = TaskStatus::Running;
+    active_yesterday.created_at = yesterday;
+    store.insert_task(&active_yesterday).unwrap();
+
+    let mut done_yesterday = make_task("t-2501", None);
+    done_yesterday.created_at = yesterday;
+    store.insert_task(&done_yesterday).unwrap();
+
+    store.insert_task(&make_task("t-2502", None)).unwrap();
+
+    let app = App::new(
+        store,
+        super::super::RunOptions {
+            task_id: None,
+            group: None,
+        },
+    )
+    .unwrap();
+
+    let task_ids: Vec<&str> = app.tasks.iter().map(|task| task.id.as_str()).collect();
+    assert!(task_ids.contains(&"t-2500"));
+    assert!(task_ids.contains(&"t-2502"));
+    assert!(!task_ids.contains(&"t-2501"));
 }
 
 #[test]

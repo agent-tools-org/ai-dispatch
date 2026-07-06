@@ -585,5 +585,19 @@ pub(super) fn output_content_length(task: &Task) -> usize {
         }
     }
     let auto_path = crate::paths::task_dir(task.id.as_str()).join("output.md");
-    std::fs::read_to_string(auto_path).map(|content| content.trim().chars().count()).unwrap_or(0)
+    if let Ok(content) = std::fs::read_to_string(auto_path) {
+        return content.trim().chars().count();
+    }
+    let transcript = crate::paths::transcript_path(task.id.as_str());
+    if let Some(content) = super::run_prompt::extract_output_fallback_from_path(&transcript) {
+        return content.trim().chars().count();
+    }
+    let log_path = task
+        .log_path
+        .as_deref()
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|| crate::paths::log_path(task.id.as_str()));
+    super::run_prompt::extract_output_fallback_from_path(&log_path)
+        .map(|content| content.trim().chars().count())
+        .unwrap_or(0)
 }

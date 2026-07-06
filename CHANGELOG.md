@@ -1,3 +1,8 @@
+## v9.1.1 (2026-07-06)
+- fix(tui): default `aid watch --tui` scope now shows active tasks from previous days as well as today's tasks, so a task that started yesterday but is still Running/AwaitingInput/Stalled/Waiting/Pending stays visible after midnight
+- fix(output): stdout/transcript-only agents such as agy now autosave plain Markdown transcripts to task output and count transcript/log fallback content in hollow-output detection, avoiding false `hollow_output` assessments when the agent produced a substantive deliverable
+
+
 ## v9.1.0 (2026-07-04)
 - feat(hang): first-token dead-stream detection — reap a streaming agent that emits no raw PTY output within 180s (env AID_FIRST_TOKEN_TIMEOUT_SECS) while still at zero real progress, instead of waiting the full idle timeout; gated to streaming agents and reset on any raw byte so live tasks are never falsely reaped
 - feat(hang): transient auto-recovery — a first-token dead-stream hang auto-retries once with a fresh session (and first cascade agent, if configured) even without --retry, loop-capped via the retry-chain marker; ordinary idle hangs keep their existing gating

@@ -49,3 +49,28 @@ fn auto_save_prefers_transcript_over_log() {
         Some(output_path.display().to_string())
     );
 }
+
+#[test]
+fn auto_save_persists_plain_text_transcript() {
+    let temp = TempDir::new().unwrap();
+    let _aid_home = paths::AidHomeGuard::set(temp.path());
+    let store = Store::open_memory().unwrap();
+    let transcript = paths::transcript_path("t-plain-transcript");
+    std::fs::create_dir_all(transcript.parent().unwrap()).unwrap();
+    std::fs::write(&transcript, "### Research Summary\n\nplain markdown output").unwrap();
+    let mut task = make_failed_task("t-plain-transcript");
+    task.status = TaskStatus::Done;
+    store.insert_task(&task).unwrap();
+
+    auto_save_task_output(&store, &task).unwrap();
+
+    let output_path = paths::task_dir(task.id.as_str()).join("output.md");
+    assert_eq!(
+        std::fs::read_to_string(&output_path).unwrap(),
+        "### Research Summary\n\nplain markdown output"
+    );
+    assert_eq!(
+        store.get_task(task.id.as_str()).unwrap().unwrap().output_path,
+        Some(output_path.display().to_string())
+    );
+}

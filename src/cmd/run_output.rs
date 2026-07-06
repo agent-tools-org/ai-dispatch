@@ -75,10 +75,14 @@ pub(in crate::cmd) fn fill_empty_output_from_log(log_path: &Path, output_path: O
     })
 }
 
-fn extract_output_fallback_from_log(log_path: &Path) -> Option<String> {
-    crate::cmd::show::extract_messages_from_log(log_path, true)
-        .or_else(|| extract_raw_text_from_log(log_path))
+pub(in crate::cmd::run) fn extract_output_fallback_from_path(path: &Path) -> Option<String> {
+    crate::cmd::show::extract_messages_from_log(path, true)
+        .or_else(|| extract_raw_text_from_log(path))
         .filter(|content| !content.is_empty())
+}
+
+fn extract_output_fallback_from_log(log_path: &Path) -> Option<String> {
+    extract_output_fallback_from_path(log_path)
 }
 
 fn extract_raw_text_from_log(log_path: &Path) -> Option<String> {

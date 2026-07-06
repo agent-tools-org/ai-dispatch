@@ -1,0 +1,115 @@
+// Task loading helpers for the TUI App state.
+// Exports App methods for scoped task lists, metrics, and milestone caches.
+// Deps: Store queries, background worker pid lookup, and process metrics.
+
+use anyhow::Result;
+use std::collections::{HashMap, HashSet};
+
+use super::App;
+use super::super::metrics::{get_process_metrics, ProcessMetrics};
+use crate::background;
+use crate::types::{Task, TaskFilter, TaskStatus};
+
+impl App {
+    pub(super) fn reload_tasks(&mut self) -> Result<()> {
+        let tasks = self.load_tasks()?;
+        self.milestones = self.load_milestones_batch(&tasks)?;
+        if let Ok(wgs) = self.store.list_workgroups() {
+            self.wg_creators = wgs
+                .into_iter()
+                .filter_map(|w| w.created_by.map(|by| (w.id.to_string(), by)))
+                .collect();
+        }
+        self.tasks = tasks;
+        if self.selected >= self.tasks.len() && !self.tasks.is_empty() {
+            self.selected = self.tasks.len() - 1;
+        }
+        Ok(())
+    }
+
+    fn load_tasks(&self) -> Result<Vec<Task>> {
+        if let Some(task_id) = self.task_id_filter.as_deref() {
+            return self.load_task_scope(task_id);
+        }
+        let mut tasks = if self.show_all {
+            self.store.list_tasks(TaskFilter::All)?
+        } else {
+            self.load_today_with_active_tasks()?
+        };
+        self.apply_group_filter(&mut tasks);
+        Ok(tasks)
+    }
+
+    fn load_today_with_active_tasks(&self) -> Result<Vec<Task>> {
+        let mut tasks = self.store.list_tasks(TaskFilter::Today)?;
+        let mut seen: HashSet<String> = tasks.iter().map(|task| task.id.0.clone()).collect();
+        for task in self.store.list_tasks(TaskFilter::Active)? {
+            if seen.insert(task.id.0.clone()) {
+                tasks.push(task);
+            }
+        }
+        Ok(tasks)
+    }
+
+    fn load_task_scope(&self, task_id: &str) -> Result<Vec<Task>> {
+        let mut tasks = self
+            .store
+            .get_task(task_id)?
+            .into_iter()
+            .collect::<Vec<_>>();
+        self.apply_group_filter(&mut tasks);
+        Ok(tasks)
+    }
+
+    fn apply_group_filter(&self, tasks: &mut Vec<Task>) {
+        if let Some(group_id) = self.group_filter.as_deref() {
+            tasks.retain(|task| {
+                task.workgroup_id.as_deref() == Some(group_id) || task.workgroup_id.is_none()
+            });
+        }
+    }
+
+    pub(super) fn load_metrics(&self, tasks: &[Task]) -> HashMap<String, ProcessMetrics> {
+        let mut metrics = HashMap::new();
+        for task in tasks.iter().filter(|task| {
+            matches!(task.status, TaskStatus::Running | TaskStatus::AwaitingInput)
+        }) {
+            let Ok(Some(pid)) = background::load_worker_pid(task.id.as_str()) else {
+                continue;
+            };
+            let Some(process_metrics) = get_process_metrics(pid) else {
+                continue;
+            };
+            metrics.insert(task.id.as_str().to_string(), process_metrics);
+        }
+        metrics
+    }
+
+    fn load_milestones_batch(&mut self, tasks: &[Task]) -> Result<HashMap<String, String>> {
+        let mut need_query: Vec<&str> = Vec::new();
+        let mut result = HashMap::new();
+        for task in tasks.iter().filter(|task| task.status != TaskStatus::Pending) {
+            if task.status.is_terminal()
+                && let Some(cached) = self.cached_terminal_milestones.get(task.id.as_str())
+            {
+                result.insert(task.id.as_str().to_string(), cached.clone());
+                continue;
+            }
+            need_query.push(task.id.as_str());
+        }
+        if need_query.is_empty() {
+            return Ok(result);
+        }
+        let fresh = self.store.latest_milestones_batch(&need_query)?;
+        for (task_id, detail) in &fresh {
+            if let Some(task) = tasks.iter().find(|task| task.id.as_str() == task_id)
+                && task.status.is_terminal()
+            {
+                self.cached_terminal_milestones
+                    .insert(task_id.clone(), detail.clone());
+            }
+        }
+        result.extend(fresh);
+        Ok(result)
+    }
+}

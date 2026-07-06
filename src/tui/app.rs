@@ -7,13 +7,14 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Instant;
 
-use super::metrics::{get_process_metrics, ProcessMetrics};
-use crate::background;
+use super::metrics::ProcessMetrics;
 use crate::store::Store;
-use crate::types::{EventKind, Task, TaskEvent, TaskFilter, TaskStatus};
+use crate::types::{EventKind, Task, TaskEvent, TaskStatus};
 
 #[path = "app_keys.rs"]
 mod app_keys;
+#[path = "app_tasks.rs"]
+mod app_tasks;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum DetailTab {
@@ -193,7 +194,7 @@ impl App {
         let scope = if self.show_all && self.task_id_filter.is_none() {
             "all"
         } else {
-            "today"
+            "today+active"
         };
         match (self.task_id_filter.as_deref(), self.group_filter.as_deref()) {
             (Some(task_id), Some(group_id)) => format!("task {task_id} | group {group_id}"),
@@ -252,98 +253,6 @@ impl App {
             }
         }
         Ok(())
-    }
-    fn reload_tasks(&mut self) -> Result<()> {
-        let tasks = self.load_tasks()?;
-        self.milestones = self.load_milestones_batch(&tasks)?;
-        // Load workgroup creators for tree display
-        if let Ok(wgs) = self.store.list_workgroups() {
-            self.wg_creators = wgs.into_iter()
-                .filter_map(|w| w.created_by.map(|by| (w.id.to_string(), by)))
-                .collect();
-        }
-        self.tasks = tasks;
-        if self.selected >= self.tasks.len() && !self.tasks.is_empty() {
-            self.selected = self.tasks.len() - 1;
-        }
-        Ok(())
-    }
-    fn load_tasks(&self) -> Result<Vec<Task>> {
-        if let Some(task_id) = self.task_id_filter.as_deref() {
-            return self.load_task_scope(task_id);
-        }
-        let filter = if self.show_all {
-            TaskFilter::All
-        } else {
-            TaskFilter::Today
-        };
-        let mut tasks = self.store.list_tasks(filter)?;
-        self.apply_group_filter(&mut tasks);
-        Ok(tasks)
-    }
-    fn load_task_scope(&self, task_id: &str) -> Result<Vec<Task>> {
-        let mut tasks = self
-            .store
-            .get_task(task_id)?
-            .into_iter()
-            .collect::<Vec<_>>();
-        self.apply_group_filter(&mut tasks);
-        Ok(tasks)
-    }
-    fn apply_group_filter(&self, tasks: &mut Vec<Task>) {
-        if let Some(group_id) = self.group_filter.as_deref() {
-            tasks.retain(|task| {
-                task.workgroup_id.as_deref() == Some(group_id)
-                    || task.workgroup_id.is_none()
-            });
-        }
-    }
-    fn load_metrics(&self, tasks: &[Task]) -> HashMap<String, ProcessMetrics> {
-        let mut metrics = HashMap::new();
-        for task in tasks.iter().filter(|task| {
-            matches!(
-                task.status,
-                crate::types::TaskStatus::Running
-                    | crate::types::TaskStatus::AwaitingInput
-            )
-        }) {
-            let Ok(Some(pid)) = background::load_worker_pid(task.id.as_str()) else {
-                continue;
-            };
-            let Some(process_metrics) = get_process_metrics(pid) else {
-                continue;
-            };
-            metrics.insert(task.id.as_str().to_string(), process_metrics);
-        }
-        metrics
-    }
-    fn load_milestones_batch(&mut self, tasks: &[Task]) -> Result<HashMap<String, String>> {
-        // Only query milestones for non-terminal tasks (running/pending change)
-        // For terminal tasks, use cached values
-        let mut need_query: Vec<&str> = Vec::new();
-        let mut result = HashMap::new();
-        for task in tasks.iter().filter(|t| !matches!(t.status, TaskStatus::Pending)) {
-            if task.status.is_terminal() {
-                // Use cached milestone for completed tasks
-                if let Some(cached) = self.cached_terminal_milestones.get(task.id.as_str()) {
-                    result.insert(task.id.as_str().to_string(), cached.clone());
-                    continue;
-                }
-            }
-            need_query.push(task.id.as_str());
-        }
-        if !need_query.is_empty() {
-            let fresh = self.store.latest_milestones_batch(&need_query)?;
-            for (tid, detail) in &fresh {
-                // Cache milestones for terminal tasks so we never re-query them
-                if let Some(task) = tasks.iter().find(|t| t.id.as_str() == tid)
-                    && task.status.is_terminal() {
-                        self.cached_terminal_milestones.insert(tid.clone(), detail.clone());
-                    }
-            }
-            result.extend(fresh);
-        }
-        Ok(result)
     }
 }
 

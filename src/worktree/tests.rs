@@ -354,7 +354,7 @@ fn worktree_lock_write_and_read() {
     let holder = check_worktree_lock(dir.path());
     assert_eq!(holder.as_deref(), Some("t-1234"));
 
-    clear_worktree_lock(dir.path());
+    clear_worktree_lock(dir.path(), "t-1234").unwrap();
     assert!(check_worktree_lock(dir.path()).is_none());
 }
 
@@ -363,7 +363,7 @@ fn worktree_lock_stale_pid_is_cleared() {
     let dir = TempDir::new().unwrap();
     let lock_path = dir.path().join(".aid-lock");
     // Write a lock with a PID that definitely doesn't exist
-    std::fs::write(&lock_path, "task=t-stale\npid=999999999\n").unwrap();
+    std::fs::write(&lock_path, "version=1\ntask_id=t-stale\nowner_pid=999999999\n").unwrap();
 
     // Should return None because the PID is dead
     assert!(check_worktree_lock(dir.path()).is_none());

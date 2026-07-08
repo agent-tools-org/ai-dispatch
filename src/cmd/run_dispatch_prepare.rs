@@ -33,17 +33,17 @@ struct WorktreeSetup {
     repo_path: Option<String>, fresh_worktree: bool, emit_gitbutler_setup_hint: bool,
 }
 
-struct WorktreeLockGuard { path: Option<String> }
+struct WorktreeLockGuard { path: Option<String>, task_id: String }
 
 impl WorktreeLockGuard {
-    fn new() -> Self { Self { path: None } }
+    fn new(task_id: &TaskId) -> Self { Self { path: None, task_id: task_id.as_str().to_string() } }
     fn hold(&mut self, path: &str) { self.path = Some(path.to_string()); }
     fn disarm(&mut self) { self.path = None; }
 }
 impl Drop for WorktreeLockGuard {
     fn drop(&mut self) {
         if let Some(path) = self.path.take() {
-            crate::worktree::clear_worktree_lock(Path::new(&path));
+            let _ = crate::worktree::clear_worktree_lock(Path::new(&path), &self.task_id);
         }
     }
 }
@@ -75,7 +75,7 @@ pub(super) fn prepare_dispatch(store: &Arc<Store>, args: &mut RunArgs) -> Result
         aid_warn!("[aid] Warning: {warning}");
     }
     insert_task_claiming_id(store, &mut task, &mut task_id, &mut log_path, explicit_id)?;
-    let setup = match setup_worktree(args, detected_project.as_ref(), &agent_setup, &task_id, explicit_repo_path.as_deref()) {
+    let setup = match setup_worktree(store, args, detected_project.as_ref(), &agent_setup, &task_id, explicit_repo_path.as_deref()) {
         Ok(setup) => setup,
         Err(err) => {
             fail_claimed_task(store, &task_id, agent_setup.effective_model.as_deref(), &err)?;
@@ -83,7 +83,7 @@ pub(super) fn prepare_dispatch(store: &Arc<Store>, args: &mut RunArgs) -> Result
         }
     };
     if let Err(err) = persist_worktree_setup(store, &task_id, &mut task, &setup) {
-        clear_worktree_lock(setup.wt_path.as_deref());
+        clear_worktree_lock(setup.wt_path.as_deref(), task_id.as_str());
         fail_claimed_task(store, &task_id, agent_setup.effective_model.as_deref(), &err)?;
         return Err(err);
     }
@@ -158,18 +158,15 @@ fn should_auto_result_file(args: &RunArgs, had_explicit_result_file: bool) -> bo
 }
 
 fn setup_worktree(
-    args: &mut RunArgs,
-    detected_project: Option<&ProjectConfig>,
-    agent_setup: &AgentSetup,
-    task_id: &TaskId,
-    explicit_repo_path: Option<&str>,
+    store: &Store, args: &mut RunArgs, detected_project: Option<&ProjectConfig>,
+    agent_setup: &AgentSetup, task_id: &TaskId, explicit_repo_path: Option<&str>,
 ) -> Result<WorktreeSetup> {
     let (wt_path, wt_branch, effective_dir, resolved_repo, fresh_worktree) =
         run_prompt::resolve_worktree_paths(args, explicit_repo_path)?;
     let repo_path = resolved_repo.or_else(|| explicit_repo_path.map(str::to_string));
-    let mut lock = WorktreeLockGuard::new();
+    let mut lock = WorktreeLockGuard::new(task_id);
     if let Some(ref wt) = wt_path {
-        if let Err(holder) = crate::worktree::try_acquire_worktree_lock(Path::new(wt), task_id.as_str()) {
+        if let Err(holder) = crate::worktree::try_acquire_worktree_lock_with_store(Path::new(wt), task_id.as_str(), Some(store)) {
             anyhow::bail!("Worktree {wt} is locked by task {holder} — concurrent access prevented. Use separate worktree names for parallel tasks.");
         }
         lock.hold(wt);
@@ -253,16 +250,16 @@ fn prepare_worktree_deps(
         store, task_id, Path::new(repo), Path::new(wt), args.setup.as_deref(), args.link_deps,
         crate::idle_timeout::idle_timeout_secs_from_env(args.env.as_ref()), setup.fresh_worktree,
     ) {
-        clear_worktree_lock(Some(wt));
+        clear_worktree_lock(Some(wt), task_id.as_str());
         fail_claimed_task(store, task_id, agent_setup.effective_model.as_deref(), &err)?;
         return Err(err);
     }
     Ok(())
 }
 
-fn clear_worktree_lock(wt_path: Option<&str>) {
+fn clear_worktree_lock(wt_path: Option<&str>, task_id: &str) {
     if let Some(wt) = wt_path {
-        crate::worktree::clear_worktree_lock(Path::new(wt));
+        let _ = crate::worktree::clear_worktree_lock(Path::new(wt), task_id);
     }
 }
 

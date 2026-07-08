@@ -285,7 +285,7 @@ fn run_teardown_phase(task_id: &TaskId, args: &RunArgs, wt_path: Option<&String>
         crate::sandbox::kill_container(task_id.as_str());
     }
     if let Some(wt) = wt_path {
-        crate::worktree::clear_worktree_lock(std::path::Path::new(wt));
+        let _ = crate::worktree::clear_worktree_lock(std::path::Path::new(wt), task_id.as_str());
     }
 }
 

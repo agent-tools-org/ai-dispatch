@@ -220,9 +220,11 @@ fn read_worktree_lock(wt_path: &Path) -> Option<WorktreeLock> {
     let mut pid = None;
     let mut task_id = None;
     for line in content.lines() {
-        if let Some(value) = line.strip_prefix("pid=") {
+        if let Some(value) = line.strip_prefix("worker_pid=") {
+            pid = value.trim().parse::<u32>().ok().or(pid);
+        } else if let Some(value) = line.strip_prefix("owner_pid=") {
             pid = value.trim().parse::<u32>().ok();
-        } else if let Some(value) = line.strip_prefix("task=") {
+        } else if let Some(value) = line.strip_prefix("task_id=") {
             task_id = Some(value.trim().to_string());
         }
     }

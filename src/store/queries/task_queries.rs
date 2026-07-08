@@ -3,37 +3,12 @@
 // Deps: super::super::Store, rusqlite, chrono, crate::types.
 
 use anyhow::Result;
-use chrono::{DateTime, Local};
+use chrono::Local;
 use rusqlite::{params, OptionalExtension};
 
 use super::super::schema::row_to_task;
 use super::super::Store;
-use crate::types::{AgentKind, Task, TaskFilter, TaskStatus};
-
-const SIMILAR_TASK_STOPWORDS: &[&str] = &[
-    "the", "and", "for", "with", "from", "that", "this", "have", "your", "task", "code",
-    "into", "using", "while", "when", "then", "which",
-];
-
-fn extract_similar_keywords(prompt: &str) -> Vec<String> {
-    let mut candidates: Vec<(String, usize)> = prompt
-        .split_whitespace()
-        .filter_map(|word| {
-            let cleaned = word.trim_matches(|c: char| !c.is_alphanumeric());
-            if cleaned.len() < 4 {
-                return None;
-            }
-            let lower = cleaned.to_lowercase();
-            if SIMILAR_TASK_STOPWORDS.contains(&lower.as_str()) {
-                return None;
-            }
-            Some((lower, cleaned.len()))
-        })
-        .collect();
-    candidates.sort_unstable_by_key(|(_, len)| std::cmp::Reverse(*len));
-    candidates.truncate(3);
-    candidates.into_iter().map(|(word, _)| word).collect()
-}
+use crate::types::{AgentKind, Task, TaskFilter, TaskStatus, ACTIVE_TASK_STATUSES};
 
 impl Store {
     pub fn get_task(&self, id: &str) -> Result<Option<Task>> {
@@ -156,13 +131,10 @@ impl Store {
                  created_at, completed_at, verify, read_only, budget, custom_agent_name, verify_status,
                  exit_code, category, pending_reason, audit_verdict, audit_report_path, delivery_assessment
                  FROM tasks WHERE status IN (?1, ?2, ?3, ?4, ?5) ORDER BY created_at DESC",
-                vec![
-                    "waiting".to_string(),
-                    "pending".to_string(),
-                    "running".to_string(),
-                    "awaiting_input".to_string(),
-                    "stalled".to_string(),
-                ],
+                ACTIVE_TASK_STATUSES
+                    .iter()
+                    .map(|status| status.as_str().to_string())
+                    .collect(),
             ),
             TaskFilter::Running => (
                 "SELECT id, agent, prompt, resolved_prompt, status, parent_task_id, workgroup_id,
@@ -243,66 +215,6 @@ impl Store {
         rows.map(|row| row?).collect()
     }
 
-    pub fn budget_usage_summary(
-        &self,
-        agent: &str,
-        since: Option<DateTime<Local>>,
-    ) -> Result<(u32, i64, f64)> {
-        self.budget_usage_summary_for_agent(Some(agent), since)
-    }
-
-    pub fn budget_usage_summary_all(
-        &self,
-        since: Option<DateTime<Local>>,
-    ) -> Result<(u32, i64, f64)> {
-        self.budget_usage_summary_for_agent(None, since)
-    }
-
-    /// Summarize usage for a project budget by matching the persisted repo_path basename.
-    /// Tasks do not store project ids, so this mirrors project display fallback identity.
-    pub fn budget_usage_summary_for_project(
-        &self,
-        project_name: &str,
-        since: Option<DateTime<Local>>,
-    ) -> Result<(u32, i64, f64)> {
-        let conn = self.db();
-        let (task_count, total_tokens, total_cost): (i64, i64, f64) = conn.query_row(
-            "SELECT COUNT(*) as task_count,
-                    COALESCE(SUM(tokens), 0) as total_tokens,
-                    COALESCE(SUM(cost_usd), 0.0) as total_cost
-             FROM tasks
-             WHERE (
-                repo_path = ?1
-                OR (
-                    repo_path IS NOT NULL
-                    AND length(repo_path) > length(?1)
-                    AND substr(repo_path, length(repo_path) - length(?1) + 1) = ?1
-                    AND substr(repo_path, length(repo_path) - length(?1), 1) = '/'
-                )
-             ) AND (?2 IS NULL OR created_at >= ?2)",
-            params![project_name, since.map(|value| value.to_rfc3339())],
-            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
-        )?;
-        Ok((u32::try_from(task_count)?, total_tokens, total_cost))
-    }
-
-    fn budget_usage_summary_for_agent(
-        &self,
-        agent: Option<&str>,
-        since: Option<DateTime<Local>>,
-    ) -> Result<(u32, i64, f64)> {
-        let conn = self.db();
-        let (task_count, total_tokens, total_cost): (i64, i64, f64) = conn.query_row(
-            "SELECT COUNT(*) as task_count,
-                    COALESCE(SUM(tokens), 0) as total_tokens,
-                    COALESCE(SUM(cost_usd), 0.0) as total_cost
-             FROM tasks WHERE (?1 IS NULL OR agent = ?1) AND (?2 IS NULL OR created_at >= ?2)",
-            params![agent, since.map(|value| value.to_rfc3339())],
-            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
-        )?;
-        Ok((u32::try_from(task_count)?, total_tokens, total_cost))
-    }
-
     pub fn list_tasks_by_session(&self, session_id: &str) -> Result<Vec<Task>> {
         let conn = self.db();
         let mut stmt = conn.prepare(
@@ -331,123 +243,4 @@ impl Store {
         rows.map(|row| row?).collect()
     }
 
-    pub fn agent_success_rates(&self) -> Result<Vec<(AgentKind, f64, usize)>> {
-        let conn = self.db();
-        let mut stmt = conn.prepare(
-            "SELECT agent,
-                    SUM(CASE WHEN status IN ('done', 'merged') THEN 1 ELSE 0 END) as successes,
-                    COUNT(*) as total
-             FROM tasks
-             WHERE status IN ('done', 'merged', 'failed')
-             GROUP BY agent
-             HAVING total >= 5",
-        )?;
-        let rows = stmt.query_map([], |row| {
-            let agent_str: String = row.get(0)?;
-            let successes: i64 = row.get(1)?;
-            let total: i64 = row.get(2)?;
-            let agent = AgentKind::parse_str(&agent_str).unwrap_or(AgentKind::Custom);
-            let rate = successes as f64 / total as f64;
-            Ok((agent, rate, total as usize))
-        })?;
-        rows.map(|row| Ok(row?)).collect()
-    }
-
-    pub fn agent_success_rates_by_category(&self, category: &str) -> Result<Vec<(AgentKind, f64, usize)>> {
-        let conn = self.db();
-        let mut stmt = conn.prepare(
-            "SELECT agent,
-                    SUM(CASE WHEN status IN ('done', 'merged') THEN 1 ELSE 0 END) as successes,
-                    COUNT(*) as total
-             FROM tasks
-             WHERE status IN ('done', 'merged', 'failed') AND category = ?1
-             GROUP BY agent
-             HAVING total >= 5",
-        )?;
-        let rows = stmt.query_map(params![category], |row| {
-            let agent_str: String = row.get(0)?;
-            let successes: i64 = row.get(1)?;
-            let total: i64 = row.get(2)?;
-            let agent = AgentKind::parse_str(&agent_str).unwrap_or(AgentKind::Custom);
-            let rate = successes as f64 / total as f64;
-            Ok((agent, rate, total as usize))
-        })?;
-        rows.map(|row| Ok(row?)).collect()
-    }
-
-    pub fn agent_avg_costs(&self) -> Result<Vec<(AgentKind, f64)>> {
-        let conn = self.db();
-        let mut stmt = conn.prepare(
-            "SELECT agent, AVG(cost_usd) as avg_cost
-             FROM tasks
-             WHERE cost_usd IS NOT NULL AND cost_usd > 0
-             GROUP BY agent
-             HAVING COUNT(*) >= 3",
-        )?;
-        let rows = stmt.query_map([], |row| {
-            let agent_str: String = row.get(0)?;
-            let avg_cost: f64 = row.get(1)?;
-            let agent = AgentKind::parse_str(&agent_str).unwrap_or(AgentKind::Custom);
-            Ok((agent, avg_cost))
-        })?;
-        rows.map(|row| Ok(row?)).collect()
-    }
-
-    pub fn find_similar_tasks(
-        &self,
-        prompt: &str,
-        limit: usize,
-    ) -> Result<Vec<(String, AgentKind, TaskStatus)>> {
-        let keywords = extract_similar_keywords(prompt);
-        if limit == 0 || keywords.is_empty() {
-            return Ok(vec![]);
-        }
-        let conn = self.db();
-        let mut stmt = conn.prepare(
-            "SELECT id, agent, status, prompt FROM tasks
-             WHERE status IN ('done', 'failed', 'merged')
-             ORDER BY created_at DESC
-             LIMIT 200",
-        )?;
-        let rows = stmt.query_map([], |row| {
-            let id: String = row.get(0)?;
-            let agent_str: String = row.get(1)?;
-            let status_str: String = row.get(2)?;
-            let task_prompt: String = row.get(3)?;
-            let agent = AgentKind::parse_str(&agent_str).unwrap_or(AgentKind::Custom);
-            let status = TaskStatus::parse_str(&status_str).unwrap_or(TaskStatus::Failed);
-            Ok((id, agent, status, task_prompt))
-        })?;
-        let mut scored = Vec::new();
-        for row in rows {
-            let (id, agent, status, task_prompt) = row?;
-            let lower_prompt = task_prompt.to_lowercase();
-            let score: usize = keywords
-                .iter()
-                .map(|keyword| lower_prompt.matches(keyword).count())
-                .sum();
-            if score > 0 {
-                scored.push((score, id, agent, status));
-            }
-        }
-        scored.sort_unstable_by_key(|(score, _, _, _)| std::cmp::Reverse(*score));
-        scored.truncate(limit);
-        Ok(scored
-            .into_iter()
-            .map(|(_, id, agent, status)| (id, agent, status))
-            .collect())
-    }
-
-    /// Check if any non-terminal tasks share the same worktree path, excluding a given task.
-    pub fn has_active_worktree_siblings(&self, worktree_path: &str, exclude_task_id: &str) -> Result<bool> {
-        let conn = self.db();
-        let count: i64 = conn.query_row(
-            "SELECT COUNT(*) FROM tasks \
-             WHERE worktree_path = ?1 AND id != ?2 \
-             AND status IN ('pending', 'running', 'waiting', 'awaiting_input')",
-            params![worktree_path, exclude_task_id],
-            |row| row.get(0),
-        )?;
-        Ok(count > 0)
-    }
 }

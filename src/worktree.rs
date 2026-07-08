@@ -4,7 +4,6 @@
 use anyhow::{Context, Result, anyhow};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
-
 use crate::sanitize;
 #[path = "worktree/reconcile.rs"]
 mod reconcile;
@@ -16,6 +15,8 @@ mod snapshot;
 mod baseline;
 #[path = "worktree/live_state.rs"]
 mod live_state;
+#[path = "worktree/lock.rs"]
+mod lock;
 #[path = "worktree/state.rs"]
 mod state;
 #[path = "worktree/validation.rs"]
@@ -26,14 +27,13 @@ pub(crate) use snapshot::{WorktreeStatusEntry, WorktreeStatusKind, capture_workt
 pub(crate) use live_state::{LiveWorktreeState, capture_live_worktree_state, uncommitted_diff_text, worktree_has_uncommitted_changes};
 pub(crate) use baseline::{baseline_contains, extract_baseline_path, extract_baseline_paths};
 pub use path::{aid_worktree_path, aid_worktree_root, is_aid_managed_worktree_path, is_safe_worktree_path, remove_worktree};
-pub use state::{
-    branch_has_commits_ahead_of_main, clear_worktree_lock, process_alive_check,
-    try_acquire_worktree_lock, worktree_changed_files,
+pub use state::{branch_has_commits_ahead_of_main, process_alive_check, worktree_changed_files};
+pub use lock::{clear_worktree_lock, rekey_worktree_lock_to_worker, try_acquire_worktree_lock_with_store};
+#[cfg(test)]
+pub(crate) use lock::{
+    check_worktree_lock, check_worktree_lock_with_store, simulate_stale_recovery_race,
+    try_acquire_worktree_lock, write_worktree_lock,
 };
-#[cfg(test)]
-pub use state::write_worktree_lock;
-#[cfg(test)]
-pub use state::check_worktree_lock;
 pub(crate) use completion::cleanup_completed_worktree;
 use state::{existing_worktree_path, local_branch_exists, prune_worktrees, sync_cargo_lock};
 use validation::{canonical_worktree_path, is_valid_git_worktree};
@@ -94,7 +94,7 @@ fn worktree_add_reason(output: &Output) -> String {
 }
 
 fn ensure_worktree_unlocked(path: &Path) -> Result<()> {
-    if let Some(holder) = state::check_worktree_lock(path) {
+    if let Some(holder) = lock::check_worktree_lock(path) {
         anyhow::bail!(
             "Worktree {} is locked by task {holder} — concurrent access prevented. \
              Use separate worktree names for parallel tasks.",

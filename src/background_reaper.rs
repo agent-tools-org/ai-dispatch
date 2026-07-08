@@ -73,7 +73,7 @@ where
     Ok(())
 }
 
-fn cleanup_pid_task<F>(
+pub(super) fn cleanup_pid_task<F>(
     store: &Store,
     task: &Task,
     spec: &BackgroundRunSpec,
@@ -98,16 +98,17 @@ where
                 "Task exceeded max duration ({}m > {}m)",
                 elapsed_mins, max_duration_mins
             );
+            // Kill unconditionally: a concurrently-terminalized row must still get its processes reaped.
+            terminate_task_processes(Some(worker_pid), spec);
             if record_failure(store, task_id, &detail, &detail)? {
-                terminate_task_processes(Some(worker_pid), spec);
                 cleaned.push(task_id.to_string());
             }
         }
         return Ok(());
     }
     preserve_zombie_changes(store, task_id, spec)?;
+    terminate_task_processes(Some(worker_pid), spec);
     if record_failure(store, task_id, ZOMBIE_FAILURE_DETAIL, ZOMBIE_FAILURE_DETAIL)? {
-        terminate_task_processes(Some(worker_pid), spec);
         cleaned.push(task_id.to_string());
     }
     Ok(())
@@ -125,8 +126,8 @@ fn cleanup_missing_pid_task(
         return Ok(());
     }
     preserve_zombie_changes(store, task_id, spec)?;
+    terminate_task_processes(None, spec);
     if record_failure(store, task_id, ZOMBIE_FAILURE_DETAIL, ZOMBIE_FAILURE_DETAIL)? {
-        terminate_task_processes(None, spec);
         cleaned.push(task_id.to_string());
     }
     Ok(())
@@ -165,10 +166,10 @@ fn cleanup_old_running_tasks(
             continue;
         }
         aid_info!("[aid] Auto-failing stale task {} (running {}h, max {}h)", task.id, elapsed, max_run_hours);
+        if let Some(spec) = spec.as_ref() {
+            terminate_task_processes(spec.worker_pid, spec);
+        }
         if record_failure(store, task_id, &format!("Auto-failed: exceeded {max_run_hours}h maximum runtime"), &format!("Task exceeded maximum runtime ({max_run_hours}h)"))? {
-            if let Some(spec) = spec.as_ref() {
-                terminate_task_processes(spec.worker_pid, spec);
-            }
             cleaned.push(task_id.to_string());
         }
     }
@@ -194,6 +195,7 @@ fn cleanup_wedged_live_worker(
         "hung detected (monitor wedged): no events for {stale_after_secs}s \
          (idle timeout {idle_secs}s, margin {LIVE_WORKER_IDLE_MARGIN}x)"
     );
+    terminate_task_processes(Some(worker_pid), spec);
     let failed = background_orphan::record_hung_detected_failure(
         store,
         task.id.as_str(),
@@ -201,9 +203,6 @@ fn cleanup_wedged_live_worker(
         &activity,
         &detail,
     )?;
-    if failed {
-        terminate_task_processes(Some(worker_pid), spec);
-    }
     Ok(failed)
 }
 

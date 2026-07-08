@@ -40,6 +40,28 @@ async fn inner_error_runs_post_lifecycle_once_without_duplicate_callbacks() {
     assert_eq!(webhook_count.recv_timeout(Duration::from_secs(3)).unwrap(), 1);
 }
 
+#[tokio::test]
+async fn inner_error_appends_completion_exactly_once() {
+    let temp = tempfile::tempdir().unwrap();
+    let _aid_home = paths::AidHomeGuard::set(temp.path());
+    paths::ensure_dirs().unwrap();
+    let store = Arc::new(Store::open_memory().unwrap());
+    store
+        .insert_task(&task("t-bg-completion", TaskStatus::Running))
+        .unwrap();
+    let spec = spec("t-bg-completion");
+
+    let _ = handle_run_task_inner_error(&store, &spec, anyhow::anyhow!("boom")).await;
+
+    let completions_path = paths::aid_dir().join("completions.jsonl");
+    let content = std::fs::read_to_string(&completions_path).unwrap_or_default();
+    let count = content.lines().filter(|l| !l.is_empty()).count();
+    assert_eq!(
+        count, 1,
+        "expected exactly one completions.jsonl entry, got: {content}"
+    );
+}
+
 fn start_webhook_counter() -> (String, mpsc::Receiver<usize>) {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let addr = listener.local_addr().unwrap();

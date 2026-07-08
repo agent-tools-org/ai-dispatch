@@ -21,7 +21,7 @@ use std::sync::Arc;
 #[cfg(test)]
 use self::background_process::build_on_done_command;
 use self::background_process::spawn_on_done_command;
-use self::background_reaper::record_worker_failure;
+use self::background_reaper::record_worker_failure_skip_notify;
 use self::background_spec::{load_spec, remove_spec};
 use crate::agent::{self, RunOpts};
 use crate::paths;
@@ -103,7 +103,7 @@ async fn handle_run_task_inner_error(
     spec: &BackgroundRunSpec,
     err: anyhow::Error,
 ) -> Result<()> {
-    let recorded_failure = record_worker_failure(store, &spec.task_id, &err)?;
+    let recorded_failure = record_worker_failure_skip_notify(store, &spec.task_id, &err)?;
     if recorded_failure {
         if let Err(lifecycle_err) = run_failed_post_lifecycle(store, spec).await {
             aid_error!("[aid] Background post-run lifecycle failed: {lifecycle_err}");
@@ -120,15 +120,22 @@ async fn run_failed_post_lifecycle(store: &Arc<Store>, spec: &BackgroundRunSpec)
     background_lifecycle::run_post_lifecycle(store, spec, &*agent, None).await
 }
 
+fn resolve_agent_for_spec(agent_name: &str) -> Result<Box<dyn agent::Agent>> {
+    if let Some(kind) = AgentKind::parse_str(agent_name) {
+        return Ok(agent::get_agent(kind));
+    }
+    if let Some(custom) = agent::registry::resolve_custom_agent(agent_name) {
+        return Ok(custom);
+    }
+    anyhow::bail!("Unknown agent '{}'", agent_name)
+}
+
 fn lifecycle_agent_for_spec(
     store: &Arc<Store>,
     spec: &BackgroundRunSpec,
 ) -> Result<Box<dyn agent::Agent>> {
-    if let Some(kind) = AgentKind::parse_str(&spec.agent_name) {
-        return Ok(agent::get_agent(kind));
-    }
-    if let Some(custom) = agent::registry::resolve_custom_agent(&spec.agent_name) {
-        return Ok(custom);
+    if let Ok(agent) = resolve_agent_for_spec(&spec.agent_name) {
+        return Ok(agent);
     }
     if let Some(task) = store.get_task(&spec.task_id)?
         && task.agent != AgentKind::Custom
@@ -139,13 +146,7 @@ fn lifecycle_agent_for_spec(
 }
 
 async fn run_task_inner(store: &Arc<Store>, spec: &BackgroundRunSpec) -> Result<()> {
-    let agent: Box<dyn agent::Agent> = if let Some(kind) = AgentKind::parse_str(&spec.agent_name) {
-        agent::get_agent(kind)
-    } else if let Some(custom) = agent::registry::resolve_custom_agent(&spec.agent_name) {
-        custom
-    } else {
-        anyhow::bail!("Unknown agent '{}'", spec.agent_name);
-    };
+    let agent: Box<dyn agent::Agent> = resolve_agent_for_spec(&spec.agent_name)?;
     let opts = RunOpts {
         dir: spec.dir.clone(),
         output: spec.output.clone(),

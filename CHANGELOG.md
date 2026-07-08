@@ -1,3 +1,11 @@
+## v9.2.0 (2026-07-08)
+- fix(reaper): terminalize awaiting_input/stalled tasks with dead workers — failure writes were SQL no-ops for those states, leaving tasks non-terminal forever; named status sets (ACTIVE_TASK_STATUSES / ACTIVE_EXECUTION_FAILURE_STATUSES) now shared by store and lifecycle
+- fix(reaper): kill worker+agent processes unconditionally once a reap condition holds — kills were gated on the DB row transition, leaking processes when a concurrent path had already terminalized the task; aid stop now also kills Stalled tasks' processes
+- fix(worktree): lease-based .aid-lock {task_id, owner_pid, worker_pid} — background workers re-key the lock to their own PID so it survives launcher exit; clears require matching task_id; lock checks are side-effect-free; stale-lock recovery re-validates captured content and restores a concurrently acquired fresh lock instead of clobbering it
+- fix(lifecycle): route foreground max-duration timeouts and background worker errors through post_run_lifecycle — on_fail hooks, failed-worktree cleanup, retry/cascade, hung recovery and webhooks now fire on those paths; exactly-once completions.jsonl append
+- refactor(store): split task_queries into metrics/similarity/worktree query modules (300-line rule compliance)
+
+
 ## v9.1.1 (2026-07-06)
 - fix(tui): default `aid watch --tui` scope now shows active tasks from previous days as well as today's tasks, so a task that started yesterday but is still Running/AwaitingInput/Stalled/Waiting/Pending stays visible after midnight
 - fix(output): stdout/transcript-only agents such as agy now autosave plain Markdown transcripts to task output and count transcript/log fallback content in hollow-output detection, avoiding false `hollow_output` assessments when the agent produced a substantive deliverable

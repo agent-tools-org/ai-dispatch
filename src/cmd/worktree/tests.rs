@@ -96,7 +96,7 @@ fn prune_skips_worktree_with_live_lock() {
     let wt = add_worktree(repo.path(), "feat/live-lock", "live-lock");
     std::fs::write(
         wt.join(".aid-lock"),
-        format!("pid={}\ntask=t-live\n", std::process::id()),
+        format!("version=1\ntask_id=t-live\nowner_pid={}\nworker_pid=\n", std::process::id()),
     )
     .unwrap();
     make_old(&wt);
@@ -115,7 +115,11 @@ fn prune_clears_dead_lock_and_removes_old_worktree() {
     let repo = tempfile::tempdir().unwrap();
     init_repo(repo.path());
     let wt = add_worktree(repo.path(), "feat/dead-lock", "dead-lock");
-    std::fs::write(wt.join(".aid-lock"), "pid=999999999\ntask=t-dead\n").unwrap();
+    std::fs::write(
+        wt.join(".aid-lock"),
+        "version=1\ntask_id=t-dead\nowner_pid=999999999\nworker_pid=\n",
+    )
+    .unwrap();
     make_old(&wt);
 
     assert!(should_prune_worktree(wt.to_str().unwrap()));
@@ -151,10 +155,14 @@ fn list_json_reports_active_and_inactive_worktrees() {
     let dead_locked = add_worktree(repo.path(), "feat/json-dead", "json-dead");
     std::fs::write(
         active.join(".aid-lock"),
-        format!("pid={}\ntask=t-json\n", std::process::id()),
+        format!("version=1\ntask_id=t-json\nowner_pid={}\nworker_pid=\n", std::process::id()),
     )
     .unwrap();
-    std::fs::write(dead_locked.join(".aid-lock"), "pid=999999999\ntask=t-dead\n").unwrap();
+    std::fs::write(
+        dead_locked.join(".aid-lock"),
+        "version=1\ntask_id=t-dead\nowner_pid=999999999\nworker_pid=\n",
+    )
+    .unwrap();
 
     let json = list_json(Some(repo.path().to_str().unwrap()), false).unwrap();
     let entries = serde_json::from_str::<Vec<Value>>(&json).unwrap();

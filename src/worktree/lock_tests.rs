@@ -5,6 +5,7 @@
 use super::{
     check_worktree_lock, check_worktree_lock_with_store, clear_worktree_lock, create_worktree,
     rekey_worktree_lock_to_worker, simulate_stale_recovery_race, try_acquire_worktree_lock,
+    try_acquire_worktree_lock_with_store,
 };
 use super::path::WorktreeHomeGuard;
 use super::write_worktree_lock;
@@ -46,10 +47,48 @@ fn try_acquire_worktree_lock_rejects_existing_and_recovers_stale_lock() {
 
     clear_worktree_lock(dir.path(), "t-first").expect("lock should clear");
     write_worktree_lock(dir.path(), "t-stale");
-    std::fs::write(dir.path().join(".aid-lock"), "version=1\ntask_id=t-stale\nowner_pid=999999999\n")
-        .expect("stale lock should write");
+    std::fs::write(
+        dir.path().join(".aid-lock"),
+        "version=1\ntask_id=t-stale\nowner_pid=999999999\nworker_pid=999999998\n",
+    )
+    .expect("stale lock should write");
 
     assert!(try_acquire_worktree_lock(dir.path(), "t-after-stale").is_ok());
+}
+
+#[test]
+fn storeless_check_treats_dead_owner_without_worker_as_held() {
+    // Re-key window: launcher exited, worker has not re-keyed yet. Without a
+    // store there is no way to rule the lease out, so it must stay held and
+    // the check must not touch the file.
+    let dir = TempDir::new().expect("tempdir should be created");
+    let lock = dir.path().join(".aid-lock");
+    std::fs::write(&lock, "version=1\ntask_id=t-window\nowner_pid=999999999\n")
+        .expect("lock should write");
+
+    assert_eq!(check_worktree_lock(dir.path()).as_deref(), Some("t-window"));
+    assert!(lock.exists());
+
+    let err = try_acquire_worktree_lock(dir.path(), "t-thief")
+        .expect_err("rekey-window lock must refuse store-less acquisition");
+    assert_eq!(err, "t-window");
+    assert!(lock.exists());
+}
+
+#[test]
+fn store_terminal_status_releases_dead_owner_lock() {
+    let store = Store::open_memory().expect("store should open");
+    store
+        .insert_task(&make_task("t-done", TaskStatus::Done))
+        .expect("task should insert");
+    let dir = TempDir::new().expect("tempdir should be created");
+    let lock = dir.path().join(".aid-lock");
+    std::fs::write(&lock, "version=1\ntask_id=t-done\nowner_pid=999999999\n")
+        .expect("lock should write");
+
+    assert!(check_worktree_lock_with_store(dir.path(), Some(&store)).is_none());
+    assert!(lock.exists(), "check must be side-effect-free");
+    assert!(try_acquire_worktree_lock_with_store(dir.path(), "t-next", Some(&store)).is_ok());
 }
 
 #[test]
@@ -69,7 +108,7 @@ fn write_worktree_lock_rekeys_owner_to_new_task_id() {
 fn worker_pid_keeps_background_lock_live_when_launcher_pid_is_dead() {
     let dir = TempDir::new().expect("tempdir should be created");
     let content = format!(
-        "version=1\ntask_id=t-bg\nowner_pid=999999999\nworker_pid={}\ngeneration=2\n",
+        "version=1\ntask_id=t-bg\nowner_pid=999999999\nworker_pid={}\n",
         std::process::id()
     );
     std::fs::write(dir.path().join(".aid-lock"), content).expect("lock should write");
@@ -141,11 +180,38 @@ fn stale_lock_recovery_does_not_clobber_concurrent_fresh_lock() {
     std::fs::write(dir.path().join(".aid-lock"), "").expect("empty lock should write");
     let competitor_path = dir.path().to_path_buf();
 
-    let result = simulate_stale_recovery_race(dir.path(), "P1", || {
+    let result = simulate_stale_recovery_race(dir.path(), "P1", || {}, || {
         try_acquire_worktree_lock(&competitor_path, "P2").expect("competitor should acquire");
     });
 
     assert_eq!(result.expect_err("recovery should lose the race"), "P2");
+    assert_eq!(check_worktree_lock(dir.path()).as_deref(), Some("P2"));
+}
+
+#[test]
+fn stale_lock_recovery_loses_when_competitor_recovers_before_rename() {
+    // Dangerous ordering: the competitor completes a full independent
+    // stale-recovery + acquisition BEFORE the holder's rename, so the
+    // holder's rename captures the competitor's fresh lock. The holder must
+    // detect the mismatch, restore the fresh lock, and lose the race.
+    let dir = TempDir::new().expect("tempdir should be created");
+    std::fs::write(
+        dir.path().join(".aid-lock"),
+        "version=1\ntask_id=t-stale\nowner_pid=999999999\nworker_pid=999999998\n",
+    )
+    .expect("stale lock should write");
+    let competitor_path = dir.path().to_path_buf();
+
+    let result = simulate_stale_recovery_race(
+        dir.path(),
+        "P1",
+        || {
+            try_acquire_worktree_lock(&competitor_path, "P2").expect("competitor should acquire");
+        },
+        || {},
+    );
+
+    assert_eq!(result.expect_err("holder must lose after competitor recovery"), "P2");
     assert_eq!(check_worktree_lock(dir.path()).as_deref(), Some("P2"));
 }
 
@@ -167,6 +233,17 @@ fn clear_worktree_lock_sweeps_orphan_temp_files() {
 }
 
 #[test]
+fn clear_worktree_lock_leaves_malformed_record_for_acquisition() {
+    let dir = TempDir::new().expect("tempdir should be created");
+    let lock = dir.path().join(".aid-lock");
+    std::fs::write(&lock, "not-a-lock-record\n").expect("malformed lock should write");
+
+    clear_worktree_lock(dir.path(), "t-any").expect("clear should succeed");
+
+    assert!(lock.exists(), "malformed lock must be left for acquisition-path recovery");
+}
+
+#[test]
 fn clear_worktree_lock_refuses_wrong_task_id() {
     let dir = TempDir::new().expect("tempdir should be created");
     try_acquire_worktree_lock(dir.path(), "t-owner").expect("lock should be acquired");
@@ -184,7 +261,7 @@ fn missing_pid_lock_uses_store_status_before_stale_cleanup() {
         .insert_task(&make_task("t-running", TaskStatus::Running))
         .expect("task should insert");
     let dir = TempDir::new().expect("tempdir should be created");
-    std::fs::write(dir.path().join(".aid-lock"), "version=1\ntask_id=t-running\ngeneration=1\n")
+    std::fs::write(dir.path().join(".aid-lock"), "version=1\ntask_id=t-running\n")
         .expect("lock should write");
 
     assert_eq!(

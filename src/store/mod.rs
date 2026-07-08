@@ -4,6 +4,7 @@
 
 mod mutations;
 pub use mutations::TaskCompletionUpdate;
+mod execution_mutations;
 mod kg_mutations;
 mod kg_queries;
 mod kg_schema;

@@ -5,7 +5,7 @@
 use anyhow::Result;
 use chrono::{DateTime, Local};
 
-use super::background_process::kill_process;
+use super::background_kill::terminate_task_processes;
 use super::background_spec::load_spec_if_exists;
 use crate::idle_timeout::DEFAULT_IDLE_TIMEOUT_SECS;
 use crate::process_monitor;
@@ -39,10 +39,8 @@ where
         if !is_stale(activity.timestamp, now, idle_secs) {
             continue;
         }
-        if let Some(agent_pid) = spec.agent_pid {
-            kill_process(agent_pid);
-        }
         if record_orphaned_hung(store, task_id, idle_secs, &activity)? {
+            terminate_task_processes(spec.worker_pid, &spec);
             cleaned.push(task_id.to_string());
         }
     }

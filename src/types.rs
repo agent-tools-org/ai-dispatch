@@ -16,6 +16,8 @@ mod delivery;
 mod message;
 #[path = "types/status.rs"]
 mod status;
+#[path = "types/status_sets.rs"]
+mod status_sets;
 #[path = "types/task.rs"]
 mod task;
 #[path = "types/memory.rs"]
@@ -26,6 +28,7 @@ pub use self::delivery::DeliveryAssessment;
 pub use self::message::{MessageDirection, MessageSource, TaskMessage};
 pub use self::memory::{Memory, MemoryId, MemoryTier, MemoryType};
 pub use self::status::{EventKind, PendingReason, TaskStatus, VerifyStatus};
+pub use self::status_sets::{ACTIVE_EXECUTION_FAILURE_STATUSES, ACTIVE_TASK_STATUSES};
 pub use self::task::{CompletionInfo, Finding, Task, TaskEvent, TaskFilter, Workgroup};
 
 /// Short hex ID prefixed with "t-", e.g. "t-a3f1b2c4"

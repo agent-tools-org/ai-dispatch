@@ -58,6 +58,12 @@ pub(crate) fn fail_if_running(store: &Store, task_id: &str) -> Result<bool> {
     Ok(failed)
 }
 
+pub(crate) fn fail_active_execution(store: &Store, task_id: &str) -> Result<bool> {
+    let failed = store.fail_active_execution(task_id)?;
+    salvage_failed_id(store, task_id, failed);
+    Ok(failed)
+}
+
 pub(crate) fn fail_pending_with_reason(
     store: &Store,
     task_id: &str,

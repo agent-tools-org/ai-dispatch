@@ -5,7 +5,7 @@
 use anyhow::Result;
 use chrono::Local;
 use super::background_orphan;
-use super::background_process::kill_process;
+use super::background_kill::terminate_task_processes;
 use super::background_spec::{load_spec_if_exists, BackgroundRunSpec};
 use super::background_waiting;
 use super::MAX_WORKERS;
@@ -73,7 +73,7 @@ where
     Ok(())
 }
 
-fn cleanup_pid_task<F>(
+pub(super) fn cleanup_pid_task<F>(
     store: &Store,
     task: &Task,
     spec: &BackgroundRunSpec,
@@ -94,22 +94,23 @@ where
         let elapsed_mins = (Local::now() - task.created_at).num_minutes();
         let max_duration_mins = spec.max_duration_mins.unwrap_or(default_max_duration_mins);
         if elapsed_mins > max_duration_mins {
-            kill_process(worker_pid);
             let detail = format!(
                 "Task exceeded max duration ({}m > {}m)",
                 elapsed_mins, max_duration_mins
             );
-            record_failure(store, task_id, &detail, &detail)?;
-            cleaned.push(task_id.to_string());
+            // Kill unconditionally: a concurrently-terminalized row must still get its processes reaped.
+            terminate_task_processes(Some(worker_pid), spec);
+            if record_failure(store, task_id, &detail, &detail)? {
+                cleaned.push(task_id.to_string());
+            }
         }
         return Ok(());
     }
     preserve_zombie_changes(store, task_id, spec)?;
-    record_failure(store, task_id, ZOMBIE_FAILURE_DETAIL, ZOMBIE_FAILURE_DETAIL)?;
-    if let Some(agent_pid) = spec.agent_pid {
-        kill_process(agent_pid);
+    terminate_task_processes(Some(worker_pid), spec);
+    if record_failure(store, task_id, ZOMBIE_FAILURE_DETAIL, ZOMBIE_FAILURE_DETAIL)? {
+        cleaned.push(task_id.to_string());
     }
-    cleaned.push(task_id.to_string());
     Ok(())
 }
 
@@ -125,8 +126,10 @@ fn cleanup_missing_pid_task(
         return Ok(());
     }
     preserve_zombie_changes(store, task_id, spec)?;
-    record_failure(store, task_id, ZOMBIE_FAILURE_DETAIL, ZOMBIE_FAILURE_DETAIL)?;
-    cleaned.push(task_id.to_string());
+    terminate_task_processes(None, spec);
+    if record_failure(store, task_id, ZOMBIE_FAILURE_DETAIL, ZOMBIE_FAILURE_DETAIL)? {
+        cleaned.push(task_id.to_string());
+    }
     Ok(())
 }
 
@@ -155,15 +158,20 @@ fn cleanup_old_running_tasks(
             continue;
         }
         let elapsed = (Local::now() - task.created_at).num_hours();
-        let max_run_hours = load_spec_if_exists(task_id)?.map(|spec| {
+        let spec = load_spec_if_exists(task_id)?;
+        let max_run_hours = spec.as_ref().map(|spec| {
             crate::timeout_policy::TimeoutPolicy::from_env(spec.env.as_ref()).hard_cap_hours()
         }).unwrap_or(MAX_RUN_HOURS);
         if elapsed <= max_run_hours {
             continue;
         }
         aid_info!("[aid] Auto-failing stale task {} (running {}h, max {}h)", task.id, elapsed, max_run_hours);
-        record_failure(store, task_id, &format!("Auto-failed: exceeded {max_run_hours}h maximum runtime"), &format!("Task exceeded maximum runtime ({max_run_hours}h)"))?;
-        cleaned.push(task_id.to_string());
+        if let Some(spec) = spec.as_ref() {
+            terminate_task_processes(spec.worker_pid, spec);
+        }
+        if record_failure(store, task_id, &format!("Auto-failed: exceeded {max_run_hours}h maximum runtime"), &format!("Task exceeded maximum runtime ({max_run_hours}h)"))? {
+            cleaned.push(task_id.to_string());
+        }
     }
     Ok(())
 }
@@ -183,21 +191,19 @@ fn cleanup_wedged_live_worker(
     if !background_orphan::is_stale(activity.timestamp, Local::now(), stale_after_secs) {
         return Ok(false);
     }
-    kill_process(worker_pid);
-    if let Some(agent_pid) = spec.agent_pid {
-        kill_process(agent_pid);
-    }
     let detail = format!(
         "hung detected (monitor wedged): no events for {stale_after_secs}s \
          (idle timeout {idle_secs}s, margin {LIVE_WORKER_IDLE_MARGIN}x)"
     );
-    background_orphan::record_hung_detected_failure(
+    terminate_task_processes(Some(worker_pid), spec);
+    let failed = background_orphan::record_hung_detected_failure(
         store,
         task.id.as_str(),
         stale_after_secs,
         &activity,
         &detail,
-    )
+    )?;
+    Ok(failed)
 }
 
 pub(crate) fn cleanup_stale_pending_tasks(store: &Store) -> Result<Vec<String>> {
@@ -266,7 +272,7 @@ fn infer_pending_reason(store: &Store, task: &Task) -> Result<PendingReason> {
 
 pub(crate) fn record_failure(store: &Store, task_id: &str, stderr_detail: &str, event_detail: &str) -> Result<bool> {
     sanitize::validate_task_id(task_id)?;
-    if !crate::task_lifecycle::fail_if_running(store, task_id)? {
+    if !crate::task_lifecycle::fail_active_execution(store, task_id)? {
         return Ok(false);
     }
     let stderr_path = paths::stderr_path(task_id);

@@ -359,14 +359,14 @@ fn worktree_lock_write_and_read() {
 }
 
 #[test]
-fn worktree_lock_stale_pid_is_cleared() {
+fn worktree_lock_dead_owner_without_worker_is_held_and_untouched() {
     let dir = TempDir::new().unwrap();
     let lock_path = dir.path().join(".aid-lock");
-    // Write a lock with a PID that definitely doesn't exist
+    // Dead owner with no worker_pid: the launcher may have exited before the
+    // background worker re-keyed the lease, so a store-less check must treat
+    // the lock as held and never delete it (checks are side-effect-free).
     std::fs::write(&lock_path, "version=1\ntask_id=t-stale\nowner_pid=999999999\n").unwrap();
 
-    // Should return None because the PID is dead
-    assert!(check_worktree_lock(dir.path()).is_none());
-    // Lock file should have been cleaned up
-    assert!(!lock_path.exists());
+    assert_eq!(check_worktree_lock(dir.path()).as_deref(), Some("t-stale"));
+    assert!(lock_path.exists());
 }

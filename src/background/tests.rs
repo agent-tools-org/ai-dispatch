@@ -4,7 +4,7 @@
 use chrono::{Duration, Local};
 
 use super::{
-    background_waiting,
+    background_kill, background_reaper, background_waiting,
     build_on_done_command, check_zombie_tasks_with, cleanup_stale_pending_tasks,
     fail_stale_pending_task, save_spec, BackgroundRunSpec,
     ZOMBIE_FAILURE_DETAIL,
@@ -778,4 +778,42 @@ fn zombie_cleanup_skips_autocommit_for_read_only() {
 
     let failed_task = store.get_task("t-a1b2").unwrap().unwrap();
     assert_eq!(failed_task.status, TaskStatus::Failed);
+}
+
+#[test]
+fn reaper_kills_processes_even_when_row_is_already_terminal() {
+    // Race regression: a task the reaper snapshotted can be terminalized by a
+    // concurrent path (e.g. `aid stop`) before record_failure runs. The DB
+    // write is then a no-op, but the processes must still be killed.
+    let temp = tempfile::tempdir().unwrap();
+    let _aid_home = paths::AidHomeGuard::set(temp.path());
+    paths::ensure_dirs().unwrap();
+
+    let store = Store::open_memory().unwrap();
+    let mut task = make_task("t-race", TaskStatus::Running);
+    task.status = TaskStatus::Stopped; // already terminal via concurrent stop
+    store.insert_task(&task).unwrap();
+    let spec = BackgroundRunSpec {
+        worker_pid: Some(303),
+        agent_pid: Some(404),
+        ..make_spec("t-race")
+    };
+    save_spec(&spec).unwrap();
+
+    background_kill::RECORDED_KILLS.with(|kills| kills.borrow_mut().clear());
+    let mut cleaned = Vec::new();
+    background_reaper::cleanup_pid_task(
+        &store,
+        &store.get_task("t-race").unwrap().unwrap(),
+        &spec,
+        303,
+        &mut cleaned,
+        &|_pid| false, // dead worker => zombie reap condition established
+        60,
+    )
+    .unwrap();
+
+    assert!(cleaned.is_empty(), "no-op transition must not be reported as cleaned");
+    let kills = background_kill::RECORDED_KILLS.with(|kills| kills.borrow().clone());
+    assert_eq!(kills, vec![vec![303, 404]], "processes must be killed despite terminal row");
 }

@@ -14,7 +14,15 @@ struct KillTargets {
 
 pub(super) fn terminate_task_processes(worker_pid: Option<u32>, spec: &BackgroundRunSpec) {
     let targets = kill_targets(worker_pid, spec);
+    #[cfg(test)]
+    RECORDED_KILLS.with(|kills| kills.borrow_mut().push(targets.pids()));
     terminate_targets(&targets);
+}
+
+#[cfg(test)]
+thread_local! {
+    pub(super) static RECORDED_KILLS: std::cell::RefCell<Vec<Vec<u32>>> =
+        const { std::cell::RefCell::new(Vec::new()) };
 }
 
 #[cfg(not(test))]

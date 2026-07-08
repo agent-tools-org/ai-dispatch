@@ -85,7 +85,7 @@ fn terminate(
     print_label: Option<&'static str>,
 ) -> Result<()> {
     let task = ensure_non_terminal_task(store, task_id)?;
-    if matches!(task.status, TaskStatus::Running | TaskStatus::AwaitingInput) {
+    if matches!(task.status, TaskStatus::Running | TaskStatus::AwaitingInput | TaskStatus::Stalled) {
         if let Some(pid) = background::load_worker_pid(task_id)? {
             if graceful {
                 background::kill_process(pid);

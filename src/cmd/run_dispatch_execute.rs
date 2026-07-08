@@ -159,6 +159,19 @@ pub(super) fn run_background_task(
         run_prompt::notify_task_completion(store, &prepared.task_id)?;
         return Err(err);
     }
+    if let Some(wt_path) = prepared.wt_path.as_deref()
+        && let Err(holder) = crate::worktree::rekey_worktree_lock_to_worker(
+            Path::new(wt_path),
+            prepared.task_id.as_str(),
+            worker.id(),
+        )
+    {
+        let _ = worker.kill();
+        let _ = background::clear_spec(prepared.task_id.as_str());
+        crate::task_lifecycle::mark_failed(store.as_ref(), &prepared.task_id)?;
+        run_prompt::notify_task_completion(store, &prepared.task_id)?;
+        anyhow::bail!("Worktree {wt_path} lock is owned by task {holder}; background dispatch aborted");
+    }
     if args.announce {
         println!(
             "Task {} started in background ({}: {})",

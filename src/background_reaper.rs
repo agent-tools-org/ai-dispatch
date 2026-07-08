@@ -19,8 +19,8 @@ const PENDING_TASK_TIMEOUT_SECS: i64 = 600;
 const MAX_RUN_HOURS: i64 = crate::timeout_policy::DEFAULT_HARD_CAP_HOURS;
 const LIVE_WORKER_IDLE_MARGIN: u64 = 2;
 
-pub(super) fn record_worker_failure(store: &Store, task_id: &str, err: &anyhow::Error) -> Result<bool> {
-    record_failure(store, task_id, &format!("{err:#}"), &format!("Background worker failed: {err}"))
+pub(super) fn record_worker_failure_skip_notify(store: &Store, task_id: &str, err: &anyhow::Error) -> Result<bool> {
+    record_failure_skip_notify(store, task_id, &format!("{err:#}"), &format!("Background worker failed: {err}"))
 }
 
 pub(crate) fn check_zombie_tasks_with<F>(store: &Store, is_worker_alive: F) -> Result<Vec<String>>
@@ -263,7 +263,7 @@ fn infer_pending_reason(store: &Store, task: &Task) -> Result<PendingReason> {
     }
 }
 
-pub(crate) fn record_failure(store: &Store, task_id: &str, stderr_detail: &str, event_detail: &str) -> Result<bool> {
+pub(super) fn record_failure_skip_notify(store: &Store, task_id: &str, stderr_detail: &str, event_detail: &str) -> Result<bool> {
     sanitize::validate_task_id(task_id)?;
     if !crate::task_lifecycle::fail_if_running(store, task_id)? {
         return Ok(false);
@@ -282,8 +282,15 @@ pub(crate) fn record_failure(store: &Store, task_id: &str, stderr_detail: &str, 
         detail: event_detail.to_string(),
         metadata: None,
     })?;
-    notify_task_completion(store, task_id)?;
     Ok(true)
+}
+
+pub(crate) fn record_failure(store: &Store, task_id: &str, stderr_detail: &str, event_detail: &str) -> Result<bool> {
+    let recorded = record_failure_skip_notify(store, task_id, stderr_detail, event_detail)?;
+    if recorded {
+        notify_task_completion(store, task_id)?;
+    }
+    Ok(recorded)
 }
 
 fn notify_task_completion(store: &Store, task_id: &str) -> Result<()> {

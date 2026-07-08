@@ -394,7 +394,7 @@ impl Store {
         self.guard_known_status_transition(id, current, next, false)
     }
 
-    fn guard_current_status(
+    pub(crate) fn guard_current_status(
         &self,
         id: &str,
         expected: &[TaskStatus],

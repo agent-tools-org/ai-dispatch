@@ -5,6 +5,8 @@
 mod background_process;
 #[path = "background_lifecycle.rs"]
 mod background_lifecycle;
+#[path = "background_kill.rs"]
+mod background_kill;
 #[path = "background_orphan.rs"]
 mod background_orphan;
 #[path = "background_reaper.rs"]
@@ -232,5 +234,8 @@ mod background_binary_tests;
 #[cfg(test)]
 #[path = "background_foreground_tests.rs"]
 mod foreground_tests;
+#[cfg(test)]
+#[path = "background_reaper_tests.rs"]
+mod background_reaper_tests;
 #[cfg(test)]
 mod tests;

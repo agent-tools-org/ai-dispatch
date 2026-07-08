@@ -177,6 +177,29 @@ fn latest_awaiting_reasons_batch_skips_missing_prompts() {
 }
 
 #[test]
+fn active_worktree_siblings_counts_stalled_tasks() {
+    let store = Store::open_memory().unwrap();
+    let conn = store.db();
+    conn.execute(
+        "INSERT INTO tasks (id, agent, prompt, status, worktree_path, created_at)
+         VALUES (?1, 'codex', 'prompt', ?2, ?3, '2026-03-15T00:00:00Z')",
+        params!["t-current", TaskStatus::Done.as_str(), "/tmp/shared-wt"],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO tasks (id, agent, prompt, status, worktree_path, created_at)
+         VALUES (?1, 'codex', 'prompt', ?2, ?3, '2026-03-15T00:00:00Z')",
+        params!["t-stalled", TaskStatus::Stalled.as_str(), "/tmp/shared-wt"],
+    )
+    .unwrap();
+    drop(conn);
+
+    assert!(store
+        .has_active_worktree_siblings("/tmp/shared-wt", "t-current")
+        .unwrap());
+}
+
+#[test]
 fn aggregates_budget_usage_by_agent_and_window() {
     let store = Store::open_memory().unwrap();
     let conn = store.db();

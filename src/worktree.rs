@@ -4,7 +4,6 @@
 use anyhow::{Context, Result, anyhow};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
-
 use crate::sanitize;
 #[path = "worktree/reconcile.rs"]
 mod reconcile;
@@ -28,12 +27,8 @@ pub(crate) use snapshot::{WorktreeStatusEntry, WorktreeStatusKind, capture_workt
 pub(crate) use live_state::{LiveWorktreeState, capture_live_worktree_state, uncommitted_diff_text, worktree_has_uncommitted_changes};
 pub(crate) use baseline::{baseline_contains, extract_baseline_path, extract_baseline_paths};
 pub use path::{aid_worktree_path, aid_worktree_root, is_aid_managed_worktree_path, is_safe_worktree_path, remove_worktree};
-pub use state::{
-    branch_has_commits_ahead_of_main, process_alive_check, worktree_changed_files,
-};
-pub use lock::{
-    clear_worktree_lock, rekey_worktree_lock_to_worker, try_acquire_worktree_lock_with_store,
-};
+pub use state::{branch_has_commits_ahead_of_main, process_alive_check, worktree_changed_files};
+pub use lock::{clear_worktree_lock, rekey_worktree_lock_to_worker, try_acquire_worktree_lock_with_store};
 #[cfg(test)]
 pub(crate) use lock::{
     check_worktree_lock, check_worktree_lock_with_store, simulate_stale_recovery_race,

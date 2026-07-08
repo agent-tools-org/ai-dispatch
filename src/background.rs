@@ -23,7 +23,7 @@ use std::sync::Arc;
 #[cfg(test)]
 use self::background_process::build_on_done_command;
 use self::background_process::spawn_on_done_command;
-use self::background_reaper::record_worker_failure;
+use self::background_reaper::record_worker_failure_skip_notify;
 use self::background_spec::{load_spec, remove_spec};
 use crate::agent::{self, RunOpts};
 use crate::paths;
@@ -90,12 +90,7 @@ pub async fn run_task(store: Arc<Store>, task_id: &str) -> Result<()> {
     let _ = crate::input_signal::clear_response(task_id);
     let _ = crate::input_signal::clear_steer(task_id);
     if let Err(err) = result {
-        record_worker_failure(&store, task_id, &err)?;
-        crate::webhook::fire_task_webhooks(&store, task_id).await;
-        if let Some(ref cmd) = spec.on_done {
-            let _ = spawn_on_done_command(cmd, task_id, "failed");
-        }
-        return Err(err);
+        return handle_run_task_inner_error(&store, &spec, err).await;
     }
     if let Some(ref cmd) = spec.on_done {
         let _ = spawn_on_done_command(cmd, task_id, "done");
@@ -105,14 +100,55 @@ pub async fn run_task(store: Arc<Store>, task_id: &str) -> Result<()> {
 
 pub fn check_zombie_tasks(store: &Store) -> Result<Vec<String>> { check_zombie_tasks_with(store, is_process_running) }
 
+async fn handle_run_task_inner_error(
+    store: &Arc<Store>,
+    spec: &BackgroundRunSpec,
+    err: anyhow::Error,
+) -> Result<()> {
+    let recorded_failure = record_worker_failure_skip_notify(store, &spec.task_id, &err)?;
+    if recorded_failure {
+        if let Err(lifecycle_err) = run_failed_post_lifecycle(store, spec).await {
+            aid_error!("[aid] Background post-run lifecycle failed: {lifecycle_err}");
+        }
+        if let Some(ref cmd) = spec.on_done {
+            let _ = spawn_on_done_command(cmd, &spec.task_id, "failed");
+        }
+    }
+    Err(err)
+}
+
+async fn run_failed_post_lifecycle(store: &Arc<Store>, spec: &BackgroundRunSpec) -> Result<()> {
+    let agent = lifecycle_agent_for_spec(store, spec)?;
+    background_lifecycle::run_post_lifecycle(store, spec, &*agent, None).await
+}
+
+fn resolve_agent_for_spec(agent_name: &str) -> Result<Box<dyn agent::Agent>> {
+    if let Some(kind) = AgentKind::parse_str(agent_name) {
+        return Ok(agent::get_agent(kind));
+    }
+    if let Some(custom) = agent::registry::resolve_custom_agent(agent_name) {
+        return Ok(custom);
+    }
+    anyhow::bail!("Unknown agent '{}'", agent_name)
+}
+
+fn lifecycle_agent_for_spec(
+    store: &Arc<Store>,
+    spec: &BackgroundRunSpec,
+) -> Result<Box<dyn agent::Agent>> {
+    if let Ok(agent) = resolve_agent_for_spec(&spec.agent_name) {
+        return Ok(agent);
+    }
+    if let Some(task) = store.get_task(&spec.task_id)?
+        && task.agent != AgentKind::Custom
+    {
+        return Ok(agent::get_agent(task.agent));
+    }
+    anyhow::bail!("Unknown agent '{}'", spec.agent_name)
+}
+
 async fn run_task_inner(store: &Arc<Store>, spec: &BackgroundRunSpec) -> Result<()> {
-    let agent: Box<dyn agent::Agent> = if let Some(kind) = AgentKind::parse_str(&spec.agent_name) {
-        agent::get_agent(kind)
-    } else if let Some(custom) = agent::registry::resolve_custom_agent(&spec.agent_name) {
-        custom
-    } else {
-        anyhow::bail!("Unknown agent '{}'", spec.agent_name);
-    };
+    let agent: Box<dyn agent::Agent> = resolve_agent_for_spec(&spec.agent_name)?;
     let opts = RunOpts {
         dir: spec.dir.clone(),
         output: spec.output.clone(),
@@ -237,5 +273,8 @@ mod foreground_tests;
 #[cfg(test)]
 #[path = "background_reaper_tests.rs"]
 mod background_reaper_tests;
+#[cfg(test)]
+#[path = "background_lifecycle_bypass_tests.rs"]
+mod lifecycle_bypass_tests;
 #[cfg(test)]
 mod tests;

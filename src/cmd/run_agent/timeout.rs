@@ -15,7 +15,10 @@ use crate::watcher;
 
 use super::{format_duration, run_prompt, spawn_child_with_log, write_streaming_output};
 
+#[cfg(not(test))]
 const FOREGROUND_TIMEOUT_CHECK_INTERVAL: Duration = Duration::from_secs(30);
+#[cfg(test)]
+const FOREGROUND_TIMEOUT_CHECK_INTERVAL: Duration = Duration::from_millis(10);
 
 enum ForegroundRunResult {
     Completed(Result<CompletionInfo>),
@@ -241,7 +244,7 @@ fn handle_timeout(
     };
     let _ = store.insert_event(&event);
     aid_error!("[aid] {detail}");
-    Err(anyhow::anyhow!(detail))
+    Ok(())
 }
 
 async fn wait_for_activity_aware_timeout(

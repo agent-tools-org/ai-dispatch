@@ -19,9 +19,8 @@ const PENDING_TASK_TIMEOUT_SECS: i64 = 600;
 const MAX_RUN_HOURS: i64 = crate::timeout_policy::DEFAULT_HARD_CAP_HOURS;
 const LIVE_WORKER_IDLE_MARGIN: u64 = 2;
 
-pub(super) fn record_worker_failure(store: &Store, task_id: &str, err: &anyhow::Error) -> Result<()> {
-    record_failure(store, task_id, &format!("{err:#}"), &format!("Background worker failed: {err}"))?;
-    Ok(())
+pub(super) fn record_worker_failure(store: &Store, task_id: &str, err: &anyhow::Error) -> Result<bool> {
+    record_failure(store, task_id, &format!("{err:#}"), &format!("Background worker failed: {err}"))
 }
 
 pub(crate) fn check_zombie_tasks_with<F>(store: &Store, is_worker_alive: F) -> Result<Vec<String>>

@@ -14,6 +14,8 @@ use crate::types::*;
 mod detail;
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod detail_tests;
 
 pub use detail::render_task_detail;
 

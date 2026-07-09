@@ -107,6 +107,8 @@ fn failed_task_with_id(task_id: &str, parent_task_id: Option<&str>) -> Task {
         repo_path: None,
         worktree_path: None,
         worktree_branch: None,
+        final_head_sha: None,
+        final_branch: None,
         start_sha: None,
         log_path: None,
         output_path: None,

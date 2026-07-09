@@ -26,6 +26,8 @@ pub struct Task {
     pub repo_path: Option<String>,
     pub worktree_path: Option<String>,
     pub worktree_branch: Option<String>,
+    pub final_head_sha: Option<String>,
+    pub final_branch: Option<String>,
     pub start_sha: Option<String>,
     pub log_path: Option<String>,
     pub output_path: Option<String>,

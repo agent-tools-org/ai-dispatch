@@ -46,6 +46,7 @@ mod run_dispatch;
 pub(crate) use self::run_agent::run_agent_process;
 pub(crate) use self::run_dispatch::run;
 pub(crate) use self::run_iterate::iterate_config;
+pub(crate) use self::run_lifecycle::capture_final_worktree_state;
 pub(crate) use self::run_lifecycle::{post_run_lifecycle, LifecycleMode};
 pub(crate) use self::run_prompt::PromptBundle;
 #[allow(unused_imports)]
@@ -104,6 +105,7 @@ impl Drop for WorkspaceSymlinkGuard {
 #[cfg(test)] #[path = "checklist_tests.rs"] mod checklist_tests;
 #[cfg(test)] #[path = "run_lifecycle_tests.rs"] mod run_lifecycle_tests;
 #[cfg(test)] #[path = "run_lifecycle_output_tests.rs"] mod run_lifecycle_output_tests;
+#[cfg(test)] #[path = "run_lifecycle/final_state_tests.rs"] mod run_lifecycle_final_state_tests;
 #[cfg(test)] #[path = "run_cascade_tests.rs"] mod run_cascade_tests;
 #[cfg(test)] #[path = "run_audit_tests.rs"] mod audit;
 

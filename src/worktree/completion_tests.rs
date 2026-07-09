@@ -47,6 +47,8 @@ fn stored_task(id: &str, repo: &Path, wt: &Path, branch: &str, status: TaskStatu
         repo_path: Some(repo.display().to_string()),
         worktree_path: Some(wt.display().to_string()),
         worktree_branch: Some(branch.to_string()),
+        final_head_sha: None,
+        final_branch: None,
         start_sha: None,
         log_path: None,
         output_path: None,

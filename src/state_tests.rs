@@ -258,6 +258,8 @@ fn make_task(
         repo_path: Some(repo_path.to_string_lossy().to_string()),
         worktree_path: None,
         worktree_branch: None,
+        final_head_sha: None,
+        final_branch: None,
         start_sha: None,
         log_path: None,
         output_path: None,

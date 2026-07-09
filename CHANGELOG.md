@@ -1,3 +1,11 @@
+## v9.3.0 (2026-07-09)
+- Track each task's FINAL worktree HEAD/branch (agents that `git switch -c` to a new branch are now recorded correctly)
+- `aid show` reports what was delivered: diff-stat + final commit subject + real final branch, with a prominent warning when the agent switched away from the dispatch branch
+- `aid merge` now targets the agent's real final branch instead of the dispatch-time branch, preventing silent merges of the wrong (empty/stale) branch; drift requires `--force`
+- Capture final state before worktree cleanup on all completion exits (done / fail / stop), so failed and stopped tasks also record their real branch
+- schema: add nullable `final_head_sha` / `final_branch` columns (idempotent migration)
+
+
 ## v9.2.0 (2026-07-08)
 - fix(reaper): terminalize awaiting_input/stalled tasks with dead workers — failure writes were SQL no-ops for those states, leaving tasks non-terminal forever; named status sets (ACTIVE_TASK_STATUSES / ACTIVE_EXECUTION_FAILURE_STATUSES) now shared by store and lifecycle
 - fix(reaper): kill worker+agent processes unconditionally once a reap condition holds — kills were gated on the DB row transition, leaking processes when a concurrent path had already terminalized the task; aid stop now also kills Stalled tasks' processes

@@ -55,6 +55,21 @@ fn insert_and_update_task_persists_delivery_assessment() {
 }
 
 #[test]
+fn update_task_final_state_persists_terminal_git_state() {
+    let store = Store::open_memory().unwrap();
+    let task = make_task("t-final-state", AgentKind::Codex, TaskStatus::Done);
+    store.insert_task(&task).unwrap();
+
+    store
+        .update_task_final_state("t-final-state", Some("abc123"), Some("feat/final"))
+        .unwrap();
+
+    let loaded = store.get_task("t-final-state").unwrap().unwrap();
+    assert_eq!(loaded.final_head_sha.as_deref(), Some("abc123"));
+    assert_eq!(loaded.final_branch.as_deref(), Some("feat/final"));
+}
+
+#[test]
 fn insert_waiting_task_persists_retry_fields() {
     let store = Store::open_memory().unwrap();
     let prompt = "x".repeat(160);
@@ -135,6 +150,8 @@ fn migrate_adds_repo_path_column() {
     assert!(columns.contains(&"category".to_string()));
     assert!(columns.contains(&"pending_reason".to_string()));
     assert!(columns.contains(&"delivery_assessment".to_string()));
+    assert!(columns.contains(&"final_head_sha".to_string()));
+    assert!(columns.contains(&"final_branch".to_string()));
 }
 
 #[test]

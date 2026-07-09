@@ -316,6 +316,8 @@ fn term_escape_strip_allows_droid_stream_parse_via_stream_path() {
         repo_path: None,
         worktree_path: None,
         worktree_branch: None,
+        final_head_sha: None,
+        final_branch: None,
         start_sha: None,
         log_path: None,
         output_path: None,

@@ -5,6 +5,9 @@ use anyhow::Result;
 use std::{path::Path, sync::Arc};
 use crate::{agent, hooks, rate_limit, store::Store, types::*};
 use crate::cmd::{checklist_scan, judge, retry_logic, show};
+#[path = "run_lifecycle/final_state.rs"]
+mod final_state;
+pub(crate) use final_state::capture_final_worktree_state;
 use super::run_dirty::{DirtyWorktreeAction, post_agent_dirty_worktree_cleanup};
 use super::run_model_selfheal::maybe_auto_retry_after_model_unavailable;
 use super::run_post::{
@@ -404,6 +407,7 @@ fn run_task_postprocess_phase(
     runtime_hooks: &[hooks::Hook],
     prompt_bundle: &run_prompt::PromptBundle,
 ) -> Result<Option<String>> {
+    capture_final_worktree_state(store.as_ref(), task_id)?;
     let Some(task) = store.get_task(task_id.as_str())? else {
         return Ok(None);
     };

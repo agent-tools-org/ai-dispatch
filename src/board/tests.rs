@@ -27,6 +27,8 @@ fn make_task(id: &str, agent: AgentKind, status: TaskStatus) -> Task {
         repo_path: None,
         worktree_path: None,
         worktree_branch: Some("feat/test".to_string()),
+        final_head_sha: None,
+        final_branch: None,
         start_sha: None,
         log_path: None,
         output_path: None,

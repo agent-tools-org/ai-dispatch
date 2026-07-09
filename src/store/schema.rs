@@ -1,8 +1,7 @@
 // Schema helpers and row mappers for the store.
 // Exports: create_tables, row_to_task, row_to_event.
 // Deps: rusqlite, chrono, crate::types.
-use anyhow::Result;
-use chrono::{DateTime, Local};
+use anyhow::Result; use chrono::{DateTime, Local};
 use rusqlite::Row;
 use super::{kg_schema::CREATE_KG_SQL, Store};
 use crate::types::*;
@@ -18,7 +17,7 @@ const CREATE_TABLES_SQL: &str = "CREATE TABLE IF NOT EXISTS tasks (
     caller_session_id TEXT,
     repo_path TEXT,
     worktree_path TEXT,
-    worktree_branch TEXT,
+    worktree_branch TEXT, final_head_sha TEXT, final_branch TEXT,
     start_sha TEXT,
     log_path TEXT,
     output_path TEXT,
@@ -32,9 +31,7 @@ const CREATE_TABLES_SQL: &str = "CREATE TABLE IF NOT EXISTS tasks (
     peer_review TEXT,
     category TEXT,
     pending_reason TEXT,
-    audit_verdict TEXT,
-    audit_report_path TEXT,
-    delivery_assessment TEXT, dispatch_args TEXT
+    audit_verdict TEXT, audit_report_path TEXT, delivery_assessment TEXT, dispatch_args TEXT
 );
 CREATE TABLE IF NOT EXISTS workgroups (
     id TEXT PRIMARY KEY,
@@ -173,6 +170,8 @@ pub(super) fn migrate(store: &Store) -> Result<()> {
     let _ = conn.execute_batch("ALTER TABLE tasks ADD COLUMN audit_report_path TEXT;");
     let _ = conn.execute_batch("ALTER TABLE tasks ADD COLUMN delivery_assessment TEXT;");
     let _ = conn.execute_batch("ALTER TABLE tasks ADD COLUMN dispatch_args TEXT;");
+    let _ = conn.execute_batch("ALTER TABLE tasks ADD COLUMN final_head_sha TEXT;");
+    let _ = conn.execute_batch("ALTER TABLE tasks ADD COLUMN final_branch TEXT;");
     let _ = conn.execute_batch(
         "UPDATE tasks
          SET delivery_assessment = verify_status
@@ -223,7 +222,8 @@ pub(super) fn row_to_task(row: &Row) -> rusqlite::Result<Result<Task>> {
         agent_session_id: row.get(9)?,
         repo_path: row.get(10)?,
         worktree_path: row.get(11)?,
-        worktree_branch: row.get(12)?,
+        worktree_branch: row.get(12)?, final_head_sha: row.get(34).ok().flatten(),
+        final_branch: row.get(35).ok().flatten(),
         start_sha: row.get(13)?,
         log_path: row.get(14)?,
         output_path: row.get(15)?,

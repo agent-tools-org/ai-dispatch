@@ -8,6 +8,9 @@ use std::process::{Command, Stdio};
 use std::sync::Arc;
 use crate::store::Store;
 use crate::types::{EventKind, Task, TaskEvent, TaskId, TaskStatus, VerifyStatus};
+#[path = "merge/final_branch.rs"]
+mod final_branch;
+use final_branch::*;
 #[path = "merge_git.rs"]
 mod merge_git;
 use merge_git::*;
@@ -38,7 +41,7 @@ fn run_with_output(store: Arc<Store>, task_id: Option<&str>, group: Option<&str>
     }
     match (task_id, group) {
         (Some(id), _) => merge_single_with_output(&store, id, approve, check, force, target, print_summary),
-        (_, Some(group_id)) => merge_group_with_output(&store, group_id, approve, check, target, print_summary),
+        (_, Some(group_id)) => merge_group_with_output(&store, group_id, approve, check, force, target, print_summary),
         (None, None) => Err(anyhow!("Provide either a task ID or --group <wg-id>")),
     }
 }
@@ -81,7 +84,8 @@ fn merge_single_with_output(store: &Store, task_id: &str, approve: bool, check: 
             }
         }
     }
-    if let Some(ref branch) = task.worktree_branch {
+    if let Some(branch) = merge_source_branch(&task) {
+        ensure_branch_drift_confirmed(&task, force)?;
         if !force
             && let Some(wt) = task.worktree_path.as_deref()
             && std::path::Path::new(wt).exists()
@@ -172,10 +176,10 @@ fn record_force_merge_warning(store: &Store, task_id: &str, status: TaskStatus) 
 }
 
 fn merge_group(store: &Store, group_id: &str, approve: bool, check: bool, target: Option<&str>) -> Result<()> {
-    merge_group_with_output(store, group_id, approve, check, target, true)
+    merge_group_with_output(store, group_id, approve, check, false, target, true)
 }
 
-fn merge_group_with_output(store: &Store, group_id: &str, approve: bool, check: bool, target: Option<&str>, print_summary: bool) -> Result<()> {
+fn merge_group_with_output(store: &Store, group_id: &str, approve: bool, check: bool, force: bool, target: Option<&str>, print_summary: bool) -> Result<()> {
     let tasks = store.list_tasks_by_group(group_id)?;
     if tasks.is_empty() {
         return Err(anyhow!("No tasks found in group '{group_id}'"));
@@ -202,7 +206,8 @@ fn merge_group_with_output(store: &Store, group_id: &str, approve: bool, check: 
             continue;
         }
         let repo_dir = resolve_repo_dir(task.repo_path.as_deref(), task.worktree_path.as_deref());
-        if let Some(ref branch) = task.worktree_branch {
+        if let Some(branch) = merge_source_branch(task) {
+            ensure_branch_drift_confirmed(task, force)?;
             if let Some(wt) = task.worktree_path.as_deref()
                 && std::path::Path::new(wt).exists()
             {
@@ -257,8 +262,11 @@ fn merge_group_with_output(store: &Store, group_id: &str, approve: bool, check: 
 }
 
 fn check_single(task_id: &str, task: &Task, repo_dir: &str) -> Result<()> {
-    match task.worktree_branch.as_deref() {
-        Some(branch) => print_check_result(task_id, &check_merge(repo_dir, branch)),
+    match merge_source_branch(task) {
+        Some(branch) => {
+            warn_branch_drift(task);
+            print_check_result(task_id, &check_merge(repo_dir, branch));
+        }
         None => println!("{task_id}: OK (in-place edit)"),
     }
     Ok(())
@@ -268,8 +276,9 @@ fn check_group(group_id: &str, tasks: &[Task]) -> Result<()> {
     let mut conflicts = 0;
     for task in tasks {
         let repo_dir = resolve_repo_dir(task.repo_path.as_deref(), task.worktree_path.as_deref());
-        match task.worktree_branch.as_deref() {
+        match merge_source_branch(task) {
             Some(branch) => {
+                warn_branch_drift(task);
                 let result = check_merge(&repo_dir, branch);
                 if matches!(result, MergeCheckResult::Conflict(_)) {
                     conflicts += 1;
@@ -297,7 +306,7 @@ enum ApprovalDecision {
 }
 
 fn ask_approval(task: &Task) -> Result<ApprovalDecision> {
-    let branch = task.worktree_branch.as_deref().unwrap_or("-");
+    let branch = merge_source_branch(task).unwrap_or("-");
     let prompt = format!(
         "Task {} ready to merge:\n- Agent: {}\n- Branch: {}\n\nApprove?",
         task.id,
@@ -314,7 +323,7 @@ fn ask_approval(task: &Task) -> Result<ApprovalDecision> {
 fn ask_group_approval(group_id: &str, tasks: &[Task]) -> Result<ApprovalDecision> {
     let details = tasks
         .iter()
-        .map(|task| format!("- {}: {} ({})", task.id, task.agent_display_name(), task.worktree_branch.as_deref().unwrap_or("-")))
+        .map(|task| format!("- {}: {} ({})", task.id, task.agent_display_name(), merge_source_branch(task).unwrap_or("-")))
         .collect::<Vec<_>>()
         .join("\n");
     let prompt = format!("Group {group_id} ready to merge:\n{details}\n\nApprove?");
@@ -344,3 +353,6 @@ fn run_approval_prompt(merge_action: &str, retry_action: &str, prompt: &str) -> 
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+#[path = "merge/final_branch_tests.rs"]
+mod final_branch_tests;

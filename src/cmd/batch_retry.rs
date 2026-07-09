@@ -185,7 +185,7 @@ mod tests {
             agent_session_id: None,
             repo_path: None,
             worktree_path: None,
-            worktree_branch: None,
+            worktree_branch: None, final_head_sha: None, final_branch: None,
             start_sha: None,
             log_path: None,
             output_path: None,

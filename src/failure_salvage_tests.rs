@@ -67,6 +67,8 @@ fn task(id: &str, worktree_path: Option<String>) -> Task {
         repo_path: worktree_path.clone(),
         worktree_path,
         worktree_branch: Some("feat/salvage".to_string()),
+        final_head_sha: None,
+        final_branch: None,
         start_sha: None,
         log_path: None,
         output_path: None,

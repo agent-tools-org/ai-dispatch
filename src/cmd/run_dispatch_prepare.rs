@@ -126,7 +126,7 @@ fn pending_task(
         parent_task_id: args.parent_task_id.clone(), workgroup_id: args.group.clone(),
         caller_kind: caller.as_ref().map(|item| item.kind.clone()),
         caller_session_id: caller.as_ref().map(|item| item.session_id.clone()),
-        agent_session_id: None, repo_path, worktree_path: None, worktree_branch: None, start_sha: None,
+        agent_session_id: None, repo_path, worktree_path: None, worktree_branch: None, final_head_sha: None, final_branch: None, start_sha: None,
         log_path: Some(log_path.to_string_lossy().to_string()), output_path: args.output.clone(),
         tokens: None, prompt_tokens: None, duration_ms: None, model: agent_setup.effective_model.clone(),
         cost_usd: None, exit_code: None, created_at: Local::now(), completed_at: None,

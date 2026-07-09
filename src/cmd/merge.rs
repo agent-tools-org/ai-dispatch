@@ -8,6 +8,9 @@ use std::process::{Command, Stdio};
 use std::sync::Arc;
 use crate::store::Store;
 use crate::types::{EventKind, Task, TaskEvent, TaskId, TaskStatus, VerifyStatus};
+#[path = "merge/final_branch.rs"]
+mod final_branch;
+use final_branch::*;
 #[path = "merge_git.rs"]
 mod merge_git;
 use merge_git::*;
@@ -287,42 +290,6 @@ fn check_group(group_id: &str, tasks: &[Task]) -> Result<()> {
     }
     println!("Checked {} task(s) in group {group_id}; conflicts: {conflicts}", tasks.len());
     Ok(())
-}
-
-fn merge_source_branch(task: &Task) -> Option<&str> {
-    task.final_branch
-        .as_deref()
-        .or(task.worktree_branch.as_deref())
-}
-
-fn branch_drift(task: &Task) -> Option<(&str, &str)> {
-    let original = task.worktree_branch.as_deref()?;
-    let final_branch = task.final_branch.as_deref()?;
-    (original != final_branch).then_some((original, final_branch))
-}
-
-fn warn_branch_drift(task: &Task) {
-    if let Some((original, final_branch)) = branch_drift(task) {
-        aid_warn!(
-            "[aid] Warning: task {} agent switched branch: {original} -> {final_branch}",
-            task.id
-        );
-    }
-}
-
-fn ensure_branch_drift_confirmed(task: &Task, force: bool) -> Result<()> {
-    let Some((original, final_branch)) = branch_drift(task) else {
-        return Ok(());
-    };
-    warn_branch_drift(task);
-    if force {
-        return Ok(());
-    }
-    aid_hint!("[aid] Re-run with --force to merge the final branch {final_branch}");
-    Err(anyhow!(
-        "Task {} final branch differs from dispatch branch ({original} -> {final_branch})",
-        task.id
-    ))
 }
 
 fn print_check_result(task_id: &str, result: &MergeCheckResult) {

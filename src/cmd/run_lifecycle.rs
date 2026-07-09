@@ -3,8 +3,11 @@
 // Deps: run.rs wrappers, hooks, retry/judge flow, store, and task types.
 use anyhow::Result;
 use std::{path::Path, sync::Arc};
-use crate::{agent, commit, hooks, rate_limit, store::Store, types::*};
+use crate::{agent, hooks, rate_limit, store::Store, types::*};
 use crate::cmd::{checklist_scan, judge, retry_logic, show};
+#[path = "run_lifecycle/final_state.rs"]
+mod final_state;
+pub(crate) use final_state::capture_final_worktree_state;
 use super::run_dirty::{DirtyWorktreeAction, post_agent_dirty_worktree_cleanup};
 use super::run_model_selfheal::maybe_auto_retry_after_model_unavailable;
 use super::run_post::{
@@ -133,7 +136,6 @@ pub(crate) async fn post_run_lifecycle(
         effective_dir.map(String::as_str),
         repo_path.map(String::as_str),
     )?;
-    capture_final_worktree_state(store.as_ref(), task_id)?;
     if let Err(err) = crate::worktree::cleanup_completed_worktree(store.as_ref(), task_id) {
         aid_warn!("[aid] Warning: failed to remove completed worktree for {task_id}: {err}");
     }
@@ -405,6 +407,7 @@ fn run_task_postprocess_phase(
     runtime_hooks: &[hooks::Hook],
     prompt_bundle: &run_prompt::PromptBundle,
 ) -> Result<Option<String>> {
+    capture_final_worktree_state(store.as_ref(), task_id)?;
     let Some(task) = store.get_task(task_id.as_str())? else {
         return Ok(None);
     };
@@ -601,43 +604,4 @@ pub(super) fn output_content_length(task: &Task) -> usize {
     super::run_prompt::extract_output_fallback_from_path(&log_path)
         .map(|content| content.trim().chars().count())
         .unwrap_or(0)
-}
-
-pub(super) fn capture_final_worktree_state(store: &Store, task_id: &TaskId) -> Result<()> {
-    let Some(task) = store.get_task(task_id.as_str())? else {
-        return Ok(());
-    };
-    let Some(worktree_path) = task.worktree_path.as_deref() else {
-        return Ok(());
-    };
-    if !Path::new(worktree_path).exists() {
-        return Ok(());
-    }
-    let final_head_sha = match commit::head_sha(worktree_path) {
-        Ok(sha) => Some(sha),
-        Err(err) => {
-            aid_warn!("[aid] Warning: failed to capture final HEAD for {task_id}: {err}");
-            None
-        }
-    };
-    let final_branch = current_branch(Path::new(worktree_path));
-    store.update_task_final_state(
-        task_id.as_str(),
-        final_head_sha.as_deref(),
-        final_branch.as_deref(),
-    )
-}
-
-fn current_branch(repo_dir: &Path) -> Option<String> {
-    let out = std::process::Command::new("git")
-        .arg("-C")
-        .arg(repo_dir)
-        .args(["branch", "--show-current"])
-        .output()
-        .ok()?;
-    if !out.status.success() {
-        return None;
-    }
-    let branch = String::from_utf8(out.stdout).ok()?.trim().to_string();
-    if branch.is_empty() { None } else { Some(branch) }
 }

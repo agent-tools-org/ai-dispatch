@@ -8,6 +8,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use crate::background;
+use crate::cmd::run::capture_final_worktree_state;
 use crate::store::Store;
 use crate::types::{EventKind, Task, TaskEvent, TaskId, TaskStatus};
 
@@ -107,6 +108,7 @@ fn terminate(
         crate::sandbox::kill_container(task_id);
         preserve_worktree(task_id, &task, preserve_label);
     }
+    capture_final_worktree_state(store.as_ref(), &TaskId(task_id.to_string()))?;
     crate::task_lifecycle::mark_stopped(store.as_ref(), task_id)?;
     store.insert_event(&TaskEvent {
         task_id: TaskId(task_id.to_string()),
@@ -156,6 +158,10 @@ fn preserve_worktree(task_id: &str, task: &Task, action: &str) {
         aid_info!("[aid] Preserved uncommitted changes for {action} task {task_id}");
     }
 }
+
+#[cfg(test)]
+#[path = "stop/final_state_tests.rs"]
+mod final_state_tests;
 
 #[cfg(test)]
 mod tests {

@@ -106,6 +106,8 @@ fn capture_final_worktree_state_records_switched_branch() {
     store.insert_task(&task).unwrap();
 
     capture_final_worktree_state(&store, &task.id).unwrap();
+    git(repo.path(), &["switch", "-c", "agent/later"]);
+    capture_final_worktree_state(&store, &task.id).unwrap();
 
     let loaded = store.get_task(task.id.as_str()).unwrap().unwrap();
     assert_eq!(loaded.final_head_sha.as_deref(), Some(head.as_str()));

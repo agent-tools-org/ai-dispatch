@@ -108,12 +108,12 @@ fn terminate(
         crate::sandbox::kill_container(task_id);
         preserve_worktree(task_id, &task, preserve_label);
     }
+    capture_final_worktree_state(store.as_ref(), &TaskId(task_id.to_string()))?;
     if let Some(ref path) = task.worktree_path
         && let Err(err) = crate::worktree::clear_worktree_lock(Path::new(path), task_id)
     {
         aid_warn!("[aid] Warning: failed to release worktree lock for task {task_id}: {err}");
     }
-    capture_final_worktree_state(store.as_ref(), &TaskId(task_id.to_string()))?;
     crate::task_lifecycle::mark_stopped(store.as_ref(), task_id)?;
     store.insert_event(&TaskEvent {
         task_id: TaskId(task_id.to_string()),

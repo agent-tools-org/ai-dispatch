@@ -1,3 +1,9 @@
+## v9.3.2 (2026-07-16)
+- Fix: `aid run`'s process exit code now reflects the dispatched task's real outcome (0=Done, non-zero=Failed/Stopped/verify-failed) instead of always exiting 0 regardless of task result; `--bg` and `--dry-run` continue to exit 0 immediately as before
+- Fix: foreground `aid run` completion now always prints one unambiguous, tagged status line (`[STATUS=DONE]`/`[STATUS=FAILED]`/`[STATUS=VERIFY_FAILED]`/`[STATUS=BG_RUNNING]`) so it can no longer be confused with a background-dispatch message, including when the task's own `--verify` step fails but the task status is kept as Done
+- Fix: retry/cascade chains now propagate the correct final task ID back to the top-level `aid run` caller instead of the stale original task ID
+
+
 ## v9.3.1 (2026-07-16)
 - Fix: `aid stop`/`aid kill` now release the task's `.aid-lock` on termination (including a race found in cross-audit where a still-Pending task's lock was skipped), so redispatching to the same worktree no longer permanently fails with "Worktree ... is locked" after a stopped or dead task (fixes #166)
 - Fix: worktree reuse now uses a liveness-only lock preflight (`ensure_live_worktree_unlocked`) instead of a store-less check that could never recognize a stopped task's lock as stale, while still correctly rejecting reuse when a concurrent task's lock PID is genuinely alive

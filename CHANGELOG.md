@@ -1,3 +1,10 @@
+## v9.3.1 (2026-07-16)
+- Fix: `aid stop`/`aid kill` now release the task's `.aid-lock` on termination (including a race found in cross-audit where a still-Pending task's lock was skipped), so redispatching to the same worktree no longer permanently fails with "Worktree ... is locked" after a stopped or dead task (fixes #166)
+- Fix: worktree reuse now uses a liveness-only lock preflight (`ensure_live_worktree_unlocked`) instead of a store-less check that could never recognize a stopped task's lock as stale, while still correctly rejecting reuse when a concurrent task's lock PID is genuinely alive
+- Fix: `preserve_worktree`'s auto-commit failure is no longer swallowed silently — it now emits a warning
+- Fix: `aid unstick` (default nudge mode) now checks worker/agent process liveness before sending a nudge and fails fast with a pointer to `--escalate`/`aid stop` instead of reporting false success against a dead worker (fixes #167)
+
+
 ## v9.3.0 (2026-07-09)
 - Track each task's FINAL worktree HEAD/branch (agents that `git switch -c` to a new branch are now recorded correctly)
 - `aid show` reports what was delivered: diff-stat + final commit subject + real final branch, with a prominent warning when the agent switched away from the dispatch branch

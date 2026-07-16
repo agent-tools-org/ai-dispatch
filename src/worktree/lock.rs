@@ -207,7 +207,12 @@ fn write_lock_record(lock_path: &Path, record: &LockRecord) -> std::io::Result<(
 fn read_lock_record(lock_path: &Path) -> Option<LockRecord> {
     LockRecord::parse(&std::fs::read_to_string(lock_path).ok()?)
 }
-pub(super) fn live_lock_holder(wt_path: &Path) -> Option<String> { let record = read_lock_record(&wt_path.join(LOCK_FILENAME))?; super::state::process_alive(record.worker_pid.or(record.owner_pid)?).then_some(record.task_id) }
+
+pub(super) fn live_lock_holder(wt_path: &Path) -> Option<String> {
+    let record = read_lock_record(&wt_path.join(LOCK_FILENAME))?;
+    let pid = record.worker_pid.or(record.owner_pid)?;
+    super::state::process_alive(pid).then_some(record.task_id)
+}
 
 fn sweep_orphan_lock_files(wt_path: &Path) {
     let Ok(entries) = std::fs::read_dir(wt_path) else { return };
@@ -290,11 +295,5 @@ pub(crate) fn simulate_stale_recovery_race(
     before_stale_rename: impl FnOnce(),
     after_stale_rename: impl FnOnce(),
 ) -> std::result::Result<(), String> {
-    try_acquire_worktree_lock_with_hooks(
-        wt_path,
-        task_id,
-        None,
-        before_stale_rename,
-        after_stale_rename,
-    )
+    try_acquire_worktree_lock_with_hooks(wt_path, task_id, None, before_stale_rename, after_stale_rename)
 }

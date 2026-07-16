@@ -93,8 +93,8 @@ fn worktree_add_reason(output: &Output) -> String {
     "git worktree add failed".to_string()
 }
 
-fn ensure_worktree_unlocked(path: &Path) -> Result<()> {
-    if let Some(holder) = lock::check_worktree_lock(path) {
+fn ensure_live_worktree_unlocked(path: &Path) -> Result<()> {
+    if let Some(holder) = lock::live_lock_holder(path) {
         anyhow::bail!(
             "Worktree {} is locked by task {holder} — concurrent access prevented. \
              Use separate worktree names for parallel tasks.",
@@ -172,7 +172,7 @@ pub fn create_worktree(
                 if existing_path.exists()
                     && canonical_worktree_path(&existing_path) != expected_path
                 {
-                    ensure_worktree_unlocked(&existing_path)?;
+                    ensure_live_worktree_unlocked(&existing_path)?;
                     reconcile::maybe_refresh_existing_worktree(
                         repo_dir,
                         &existing_path,
@@ -187,7 +187,7 @@ pub fn create_worktree(
                     });
                 }
             }
-            ensure_worktree_unlocked(&wt_path)?;
+            ensure_live_worktree_unlocked(&wt_path)?;
             reconcile::maybe_refresh_existing_worktree(repo_dir, &wt_path, branch, base_branch)?;
             sync_cargo_lock(repo_dir, &wt_path);
             return Ok(WorktreeInfo {
@@ -220,7 +220,7 @@ pub fn create_worktree(
 
     if let Some(existing_path) = existing_worktree_path(repo_dir, branch)? {
         if existing_path.exists() {
-            ensure_worktree_unlocked(&existing_path)?;
+            ensure_live_worktree_unlocked(&existing_path)?;
             reconcile::maybe_refresh_existing_worktree(repo_dir, &existing_path, branch, base_branch)?;
             sync_cargo_lock(repo_dir, &existing_path);
             return Ok(WorktreeInfo {

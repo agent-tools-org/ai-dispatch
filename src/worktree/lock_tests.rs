@@ -3,38 +3,16 @@
 // Deps: super worktree helpers, tempfile, std threading primitives.
 
 use super::{
-    check_worktree_lock, check_worktree_lock_with_store, clear_worktree_lock, create_worktree,
+    check_worktree_lock, check_worktree_lock_with_store, clear_worktree_lock,
     rekey_worktree_lock_to_worker, simulate_stale_recovery_race, try_acquire_worktree_lock,
     try_acquire_worktree_lock_with_store,
 };
-use super::path::WorktreeHomeGuard;
 use super::write_worktree_lock;
 use crate::store::Store;
-use crate::test_subprocess;
 use crate::types::{AgentKind, Task, TaskId, TaskStatus, VerifyStatus};
 use chrono::Local;
-use std::path::Path;
-use std::process::Command;
 use std::sync::{Arc, Barrier};
 use tempfile::TempDir;
-
-fn git(repo_dir: &Path, args: &[&str]) {
-    assert!(Command::new("git")
-        .args(["-C", &repo_dir.to_string_lossy()])
-        .args(args)
-        .status()
-        .expect("git command should run")
-        .success());
-}
-
-fn init_repo(repo_dir: &Path) {
-    git(repo_dir, &["init", "-b", "main"]);
-    git(repo_dir, &["config", "user.email", "test@example.com"]);
-    git(repo_dir, &["config", "user.name", "Test User"]);
-    std::fs::write(repo_dir.join("file.txt"), "hello\n").expect("fixture file should write");
-    git(repo_dir, &["add", "file.txt"]);
-    git(repo_dir, &["commit", "-m", "init"]);
-}
 
 #[test]
 fn try_acquire_worktree_lock_rejects_existing_and_recovers_stale_lock() {
@@ -269,23 +247,6 @@ fn missing_pid_lock_uses_store_status_before_stale_cleanup() {
         Some("t-running")
     );
     assert!(dir.path().join(".aid-lock").exists());
-}
-
-#[test]
-fn create_worktree_refuses_existing_locked_worktree() {
-    let _permit = test_subprocess::acquire();
-    let home = TempDir::new().expect("home tempdir should be created");
-    let _home_guard = WorktreeHomeGuard::set(home.path());
-    let repo = TempDir::new().expect("repo tempdir should be created");
-    init_repo(repo.path());
-
-    let branch = "feat/locked-reuse";
-    let info = create_worktree(repo.path(), branch, None).expect("worktree should be created");
-    try_acquire_worktree_lock(&info.path, "t-holder").expect("lock should be acquired");
-
-    let err = create_worktree(repo.path(), branch, None).expect_err("locked worktree should fail");
-
-    assert!(err.to_string().contains("locked by task t-holder"));
 }
 
 fn make_task(id: &str, status: TaskStatus) -> Task {

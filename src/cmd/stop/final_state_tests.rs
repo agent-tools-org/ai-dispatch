@@ -2,7 +2,7 @@
 // Covers stopped tasks preserving readable worktree branch state.
 // Deps: stop command, Store, git CLI, worktree creation.
 
-use super::stop;
+use super::{kill, stop};
 use crate::store::Store;
 use crate::test_subprocess;
 use crate::types::{AgentKind, Task, TaskId, TaskStatus, VerifyStatus};
@@ -91,4 +91,28 @@ fn stop_captures_final_branch_before_marking_stopped() {
     assert_eq!(loaded.final_branch.as_deref(), Some("agent/stop-final"));
     assert!(loaded.final_head_sha.is_some());
     assert!(info.path.exists());
+}
+
+#[test]
+fn stop_and_kill_release_worktree_locks() {
+    let _permit = test_subprocess::acquire();
+    let repo = init_repo();
+    let store = Arc::new(Store::open_memory().unwrap());
+
+    for (task_id, branch, status, action) in [
+        ("t-stop-lock", "fix/stop-lock", TaskStatus::Running, stop as fn(&Arc<Store>, &str) -> anyhow::Result<()>),
+        ("t-kill-lock", "fix/kill-lock", TaskStatus::Running, kill as fn(&Arc<Store>, &str) -> anyhow::Result<()>),
+        ("t-pending-lock", "fix/pending-lock", TaskStatus::Pending, stop as fn(&Arc<Store>, &str) -> anyhow::Result<()>),
+    ] {
+        let info = crate::worktree::create_worktree(repo.path(), branch, None).unwrap();
+        let mut task = running_task(task_id, repo.path(), &info.path, branch);
+        task.status = status;
+        store.insert_task(&task).unwrap();
+        crate::worktree::try_acquire_worktree_lock(&info.path, task_id).unwrap();
+
+        action(&store, task_id).unwrap();
+
+        assert!(!info.path.join(".aid-lock").exists());
+        assert!(crate::worktree::check_worktree_lock(&info.path).is_none());
+    }
 }

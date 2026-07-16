@@ -115,6 +115,28 @@ fn create_worktree_reuses_non_diverged_worktree() {
     );
 }
 
+#[test]
+fn create_worktree_rejects_reuse_when_worker_lock_pid_is_alive() {
+    let _permit = test_subprocess::acquire();
+    let repo = init_repo();
+    let branch = unique_branch("feat/live-lock");
+    let info = create_worktree(repo.path(), branch.as_str(), None).unwrap();
+    let lock = format!(
+        "version=1\ntask_id=t-running\nowner_pid=999999999\nworker_pid={}\n",
+        std::process::id()
+    );
+    std::fs::write(info.path.join(".aid-lock"), lock).unwrap();
+
+    let err = create_worktree(repo.path(), branch.as_str(), None).unwrap_err();
+
+    assert!(err.to_string().contains("locked by task t-running"));
+    std::fs::remove_file(info.path.join(".aid-lock")).unwrap();
+    git(
+        repo.path(),
+        &["worktree", "remove", "--force", &info.path.to_string_lossy()],
+    );
+}
+
 // Issue #113 regression: worktree drifts off the requested branch (e.g. agent
 // ran `git checkout --detach` or switched to another branch). Subsequent
 // dispatches must re-anchor the worktree to the requested branch, not silently

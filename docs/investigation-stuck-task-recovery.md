@@ -1,5 +1,15 @@
 # Investigation: why `aid unstick` / `aid stop` fail to recover stuck tasks
 
+**Status: fixed in v9.3.1.** Root Cause A → issue #167 (shipped, audit: SHIP, no
+findings). Root Cause B → issue #166 (shipped, took two fix→audit rounds — the
+first attempt deleted `ensure_worktree_unlocked` outright and cross-audit
+caught a regression: that check was also the only protection against a
+genuinely-concurrent *live* task mutating the worktree before the store-aware
+check downstream gets a chance to run. Final fix keeps a liveness-only
+preflight instead of deleting it — see `worktree::lock::live_lock_holder`).
+The "Fix directions" section below reflects the original diagnosis, not
+necessarily the exact shipped implementation.
+
 ## Symptom
 During a 2026-07-16 session, three background tasks (Fix A/B/C) went stuck with
 dead worker processes. Recovery attempts failed in sequence:

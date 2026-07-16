@@ -228,8 +228,7 @@ pub(crate) async fn post_run_lifecycle(
         if let Some(task) = store.get_task(task_id.as_str())? {
             inherit_retry_base_branch(args.dir.as_deref(), &task, &mut retry_args);
         }
-        Box::pin(run(store.clone(), retry_args)).await?;
-        false
+        return Box::pin(run(store.clone(), retry_args)).await.map(Some);
     } else if let Some(task) = store.get_task(task_id.as_str())?
         && task.status == TaskStatus::Failed
         && let Some((next_agent, remaining_cascade)) = take_next_cascade_agent(args)
@@ -244,8 +243,7 @@ pub(crate) async fn post_run_lifecycle(
         cascade_args.cascade = remaining_cascade;
         cascade_args.parent_task_id = Some(task_id.as_str().to_string());
         inherit_cascade_target(&mut cascade_args, &task);
-        Box::pin(run(store.clone(), cascade_args)).await?;
-        false
+        return Box::pin(run(store.clone(), cascade_args)).await.map(Some);
     } else if let Some(task) = store.get_task(task_id.as_str())?
         && task.status == TaskStatus::Failed
         && args.cascade.is_empty()
@@ -263,8 +261,7 @@ pub(crate) async fn post_run_lifecycle(
         cascade_args.agent_name = fallback.as_str().to_string();
         cascade_args.parent_task_id = Some(task_id.as_str().to_string());
         inherit_cascade_target(&mut cascade_args, &task);
-        Box::pin(run(store.clone(), cascade_args)).await?;
-        false
+        return Box::pin(run(store.clone(), cascade_args)).await.map(Some);
     } else {
         true
     };

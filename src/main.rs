@@ -122,10 +122,17 @@ async fn main() -> Result<()> {
     cost::warm_gemini_default_from_store(store.as_ref());
     let _ = background::check_zombie_tasks(&store);
 
-    match cli.command {
-        Some(command) => cmd_dispatch::dispatch(store, normalize_command(command, cli.quiet)).await,
-        None => cmd_dispatch::dispatch(store, Commands::Board(Default::default())).await,
+    let outcome = match cli.command {
+        Some(command) => cmd_dispatch::dispatch(store.clone(), normalize_command(command, cli.quiet)).await?,
+        None => cmd_dispatch::dispatch(store.clone(), Commands::Board(Default::default())).await?,
+    };
+    if let Some(run_status) = outcome.run_exit_status(store.as_ref())? {
+        println!("{}", run_status.summary_line());
+        if run_status.exit_code() != 0 {
+            std::process::exit(run_status.exit_code());
+        }
     }
+    Ok(())
 }
 
 fn normalize_command(command: Commands, quiet: bool) -> Commands {

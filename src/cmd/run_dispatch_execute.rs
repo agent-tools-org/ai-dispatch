@@ -173,12 +173,11 @@ pub(super) fn run_background_task(
         anyhow::bail!("Worktree {wt_path} lock is owned by task {holder}; background dispatch aborted");
     }
     if args.announce {
-        println!(
-            "Task {} started in background ({}: {})",
-            prepared.task_id,
-            prepared.agent_display_name,
-            crate::agent::truncate::truncate_text(&args.prompt, 50)
-        );
+        println!("{}", crate::cmd_dispatch::background_status_line(
+            &prepared.task_id,
+            &prepared.agent_display_name,
+            &args.prompt,
+        ));
         aid_hint!("[aid] Watch: aid watch --wait {}", prepared.task_id);
     }
     Ok(())

@@ -6,7 +6,7 @@ mod run_batch_args;
 use crate::cli::{BatchAction, RunExtrasArgs};
 use crate::cmd;
 use crate::cmd_dispatch::recommend_hint;
-use crate::types::AgentKind;
+use crate::types::{AgentKind, TaskId};
 use crate::{agent, config, store, team};
 use anyhow::{Context, Result, anyhow};
 use std::sync::Arc;
@@ -57,7 +57,7 @@ pub(super) async fn run(
     audit: bool,
     no_audit: bool,
     no_link_deps: bool,
-) -> Result<()> {
+) -> Result<TaskId> {
     let config = config::load_config().unwrap_or_default();
     let budget = budget || config.selection.budget_mode;
     let selection_prompt = match (&prompt, prompt_file.as_deref()) {
@@ -125,8 +125,7 @@ pub(super) async fn run(
         no_audit,
         no_link_deps,
     );
-    cmd::run::run(store, args).await?;
-    Ok(())
+    cmd::run::run(store, args).await
 }
 
 fn resolve_run_agent(

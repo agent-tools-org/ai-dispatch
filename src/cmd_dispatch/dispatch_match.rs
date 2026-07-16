@@ -1,16 +1,22 @@
 // aid CLI command matching.
 // Routes Commands variants to focused handler functions.
 
-use super::{admin_config, display, knowledge, project_worktree, run_batch, task_ops};
+use super::{
+    DispatchOutcome, RunDispatch, admin_config, display, knowledge, project_worktree, run_batch,
+    task_ops,
+};
 use crate::cli::{Commands, command_args_a, command_args_b, command_args_c, command_args_watch};
 use anyhow::Result;
 use std::sync::Arc;
 
-pub(crate) async fn dispatch(store: Arc<crate::store::Store>, command: Commands) -> Result<()> {
+pub(crate) async fn dispatch(
+    store: Arc<crate::store::Store>,
+    command: Commands,
+) -> Result<DispatchOutcome> {
     match command {
+        Commands::Run(args) => dispatch_run(store, args).await.map(DispatchOutcome::Run),
         command @ (
-            Commands::Run(..)
-            | Commands::Batch(..)
+            Commands::Batch(..)
             | Commands::Benchmark(..)
             | Commands::Watch(..)
             | Commands::Wait(..)
@@ -27,7 +33,7 @@ pub(crate) async fn dispatch(store: Arc<crate::store::Store>, command: Commands)
             | Commands::Cost(..)
             | Commands::Stats(..)
             | Commands::Summary(..)
-        ) => dispatch_primary(store, command).await,
+        ) => dispatch_primary(store, command).await.map(|()| DispatchOutcome::CommandCompleted),
         command @ (
             Commands::Retry(..)
             | Commands::Merge(..)
@@ -51,7 +57,7 @@ pub(crate) async fn dispatch(store: Arc<crate::store::Store>, command: Commands)
             | Commands::Doctor(..)
             | Commands::Byok(..)
             | Commands::Credential(..)
-        ) => dispatch_secondary(store, command).await,
+        ) => dispatch_secondary(store, command).await.map(|()| DispatchOutcome::CommandCompleted),
         command @ (
             Commands::Project(..)
             | Commands::Memory(..)
@@ -63,15 +69,25 @@ pub(crate) async fn dispatch(store: Arc<crate::store::Store>, command: Commands)
             | Commands::Setup
             | Commands::InternalRunTask(..)
             | Commands::Experiment(..)
-        ) => dispatch_tertiary(store, command).await,
+        ) => dispatch_tertiary(store, command).await.map(|()| DispatchOutcome::CommandCompleted),
         #[cfg(feature = "web")]
-        Commands::Web(command_args_c::WebArgs { port }) => admin_config::run_web(port).await,
+        Commands::Web(command_args_c::WebArgs { port }) => admin_config::run_web(port)
+            .await
+            .map(|()| DispatchOutcome::CommandCompleted),
     }
+}
+
+async fn dispatch_run(
+    store: Arc<crate::store::Store>,
+    args: command_args_a::RunArgs,
+) -> Result<RunDispatch> {
+    let command_args_a::RunArgs { agent, prompt, prompt_file, repo, repo_root, dir, output, result_file, model, budget, no_hint, worktree, team, group, verify, iterate, eval, eval_feedback_template, judge, peer_review, retry, context, checklist, checklist_file, scope, run_extras, no_skill, bg, dry_run, read_only, sandbox, container, best_of, metric, parent, id, timeout, idle_timeout, audit, no_audit, no_link_deps } = args;
+    let task_id = run_batch::run(store, agent, prompt, prompt_file, repo, repo_root, dir, output, result_file, model, budget, no_hint, worktree, team, group, verify, iterate, eval, eval_feedback_template, judge, peer_review, retry, context, checklist, checklist_file, scope, run_extras, no_skill, bg, dry_run, read_only, sandbox, container, best_of, metric, parent, id, timeout, idle_timeout, audit, no_audit, no_link_deps).await?;
+    Ok(RunDispatch::new(task_id, bg, dry_run))
 }
 
 async fn dispatch_primary(store: Arc<crate::store::Store>, command: Commands) -> Result<()> {
     match command {
-        Commands::Run(command_args_a::RunArgs { agent, prompt, prompt_file, repo, repo_root, dir, output, result_file, model, budget, no_hint, worktree, team, group, verify, iterate, eval, eval_feedback_template, judge, peer_review, retry, context, checklist, checklist_file, scope, run_extras, no_skill, bg, dry_run, read_only, sandbox, container, best_of, metric, parent, id, timeout, idle_timeout, audit, no_audit, no_link_deps }) => run_batch::run(store, agent, prompt, prompt_file, repo, repo_root, dir, output, result_file, model, budget, no_hint, worktree, team, group, verify, iterate, eval, eval_feedback_template, judge, peer_review, retry, context, checklist, checklist_file, scope, run_extras, no_skill, bg, dry_run, read_only, sandbox, container, best_of, metric, parent, id, timeout, idle_timeout, audit, no_audit, no_link_deps).await,
         Commands::Batch(command_args_a::BatchArgs { action, file, vars, group, repo_root, parallel, analyze, wait, dry_run, no_prompt, yes, force, max_concurrent, output }) => run_batch::batch(store, action, file, vars, parallel, analyze, wait, dry_run, no_prompt, yes, force, max_concurrent, output, group, repo_root).await,
         Commands::Benchmark(command_args_a::BenchmarkArgs { prompt, agents, dir, verify }) => display::benchmark(store, prompt, agents, dir, verify).await,
         Commands::Watch(command_args_watch::WatchArgs { task_ids, group, tui, wait, stream, exit_on_await, timeout }) => display::watch(store, task_ids, group, tui, wait, stream, exit_on_await, timeout).await,

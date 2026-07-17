@@ -67,6 +67,7 @@ fn retry_task_to_run_args(
     let mut run_args = RunArgs::saved_for_task(store, task.id.as_str())?.unwrap_or_else(|| {
         RunArgs {
             repo: task.repo_path.clone(),
+            dir: task.repo_path.clone(),
             output: task.output_path.clone(),
             model: task.model.clone(),
             group: task.workgroup_id.clone(),
@@ -78,7 +79,9 @@ fn retry_task_to_run_args(
     });
     run_args.agent_name = agent_name;
     run_args.prompt = prompt;
-    run_args.dir = dir;
+    if let Some(dir) = dir {
+        run_args.dir = Some(dir);
+    }
     run_args.worktree = worktree_arg;
     run_args.announce = announce;
     run_args.parent_task_id = Some(task.id.as_str().to_string());

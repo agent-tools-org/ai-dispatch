@@ -1,5 +1,5 @@
 // Tests for `aid retry` dispatch-args rehydration.
-// Covers saved RunArgs reuse, secret env omission, and CLI override precedence.
+// Covers saved RunArgs reuse, target resolution, and CLI override precedence.
 // Deps: retry builder, run::RunArgs, Store, task domain types.
 
 use super::{retry_task_to_run_args, RetryArgs};
@@ -62,4 +62,106 @@ fn retry_rehydrates_saved_context_scope_team_and_agent_override_wins() {
     assert_eq!(args.team, Some("dev".to_string()));
     assert_eq!(args.parent_task_id, Some("t-retry".to_string()));
     assert!(args.env.is_none());
+}
+
+#[test]
+fn retry_without_worktree_preserves_saved_dir() {
+    let store = Store::open_memory().unwrap();
+    let task = failed_task("t-saved-dir");
+    let saved_dir = "/tmp/original-manual-worktree";
+    insert_task_with_saved_dir(&store, &task, saved_dir);
+
+    let args = retry_args(&store, &task, None);
+
+    assert_eq!(args.dir.as_deref(), Some(saved_dir));
+    assert!(args.worktree.is_none());
+}
+
+#[test]
+fn retry_dir_override_wins_over_existing_worktree() {
+    let store = Store::open_memory().unwrap();
+    let worktree = tempfile::tempdir().unwrap();
+    let mut task = failed_task("t-dir-override");
+    task.worktree_path = Some(worktree.path().to_string_lossy().to_string());
+    task.worktree_branch = Some("aid/existing".to_string());
+    insert_task_with_saved_dir(&store, &task, "/tmp/original-dir");
+
+    let args = retry_args(&store, &task, Some("/tmp/retry-override"));
+
+    assert_eq!(args.dir.as_deref(), Some("/tmp/retry-override"));
+    assert!(args.worktree.is_none());
+}
+
+#[test]
+fn retry_existing_worktree_overrides_saved_dir() {
+    let store = Store::open_memory().unwrap();
+    let worktree = tempfile::tempdir().unwrap();
+    let worktree_path = worktree.path().to_string_lossy().to_string();
+    let mut task = failed_task("t-existing-worktree");
+    task.worktree_path = Some(worktree_path.clone());
+    task.worktree_branch = Some("aid/existing".to_string());
+    insert_task_with_saved_dir(&store, &task, "/tmp/original-repo");
+
+    let args = retry_args(&store, &task, None);
+
+    assert_eq!(args.dir.as_deref(), Some(worktree_path.as_str()));
+    assert!(args.worktree.is_none());
+}
+
+#[test]
+fn retry_cleaned_worktree_preserves_saved_dir_and_recreates_branch() {
+    let store = Store::open_memory().unwrap();
+    let missing_worktree = tempfile::tempdir().unwrap().path().join("cleaned");
+    let mut task = failed_task("t-cleaned-worktree");
+    task.worktree_path = Some(missing_worktree.to_string_lossy().to_string());
+    task.worktree_branch = Some("aid/recreate".to_string());
+    insert_task_with_saved_dir(&store, &task, "/tmp/original-repo");
+
+    let args = retry_args(&store, &task, None);
+
+    assert_eq!(args.dir.as_deref(), Some("/tmp/original-repo"));
+    assert_eq!(args.worktree.as_deref(), Some("aid/recreate"));
+    assert_ne!(args.dir, task.worktree_path);
+}
+
+#[test]
+fn retry_without_saved_args_uses_task_repo_path() {
+    let store = Store::open_memory().unwrap();
+    let mut task = failed_task("t-legacy-task");
+    task.repo_path = Some("/tmp/recorded-repo".to_string());
+    store.insert_task(&task).unwrap();
+
+    let args = retry_args(&store, &task, None);
+
+    assert_eq!(args.dir.as_deref(), Some("/tmp/recorded-repo"));
+}
+
+fn insert_task_with_saved_dir(store: &Store, task: &Task, dir: &str) {
+    store.insert_task(task).unwrap();
+    let saved = RunArgs {
+        agent_name: "codex".to_string(),
+        prompt: task.prompt.clone(),
+        dir: Some(dir.to_string()),
+        ..Default::default()
+    };
+    store
+        .update_task_dispatch_args(task.id.as_str(), &saved.dispatch_args_json().unwrap())
+        .unwrap();
+}
+
+fn retry_args(store: &Store, task: &Task, dir: Option<&str>) -> RunArgs {
+    retry_task_to_run_args(
+        store,
+        task,
+        RetryArgs {
+            task_id: task.id.to_string(),
+            feedback: "fix it".to_string(),
+            agent: None,
+            dir: dir.map(str::to_string),
+            reset: false,
+            bg: false,
+        },
+        false,
+    )
+    .unwrap()
 }

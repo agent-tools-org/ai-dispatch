@@ -10,7 +10,7 @@ use crate::types::Task;
 
 pub(crate) fn retry_target(task: &Task) -> (Option<String>, Option<String>) {
     match task.worktree_path.as_ref() {
-        Some(path) if Path::new(path).is_dir() => (Some(path.clone()), None),
+        Some(path) if Path::new(path).is_dir() => (Some(path.clone()), task.worktree_branch.clone()),
         Some(_) => (None, task.worktree_branch.clone()),
         None => (None, None),
     }
@@ -20,7 +20,9 @@ pub(crate) fn apply_retry_target(task: &Task, retry_args: &mut RunArgs) -> Resul
     let (dir, worktree) = retry_target(task);
     if let Some(dir) = dir {
         retry_args.dir = Some(dir);
-        retry_args.worktree = None;
+        retry_args.worktree = worktree
+            .or_else(|| task.worktree_branch.clone())
+            .or_else(|| retry_args.worktree.clone());
         return Ok(());
     }
     retry_args.dir = existing_retry_dir(task, retry_args)

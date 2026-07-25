@@ -48,7 +48,7 @@ fn retry_task_to_run_args_prefers_existing_worktree_path() {
     let run_args = retry_task_to_run_args(&store, &task, "wg-batch", None).unwrap();
 
     assert_eq!(run_args.dir, task.worktree_path);
-    assert_eq!(run_args.worktree, None);
+    assert_eq!(run_args.worktree, task.worktree_branch);
 }
 
 #[test]
@@ -146,7 +146,7 @@ fn retry_task_to_run_args_rehydrates_saved_args_and_keeps_worktree() {
     let run_args = retry_task_to_run_args(&store, &task, "wg-batch", None).unwrap();
 
     assert_eq!(run_args.dir, task.worktree_path);
-    assert_eq!(run_args.worktree, None);
+    assert_eq!(run_args.worktree, task.worktree_branch);
     assert_eq!(run_args.team, Some("dev".to_string()));
     assert_eq!(run_args.context, vec!["AGENTS.md".to_string()]);
     assert_eq!(run_args.scope, vec!["src/**".to_string()]);
@@ -154,7 +154,7 @@ fn retry_task_to_run_args_rehydrates_saved_args_and_keeps_worktree() {
 }
 
 #[test]
-fn retry_task_to_run_args_clears_saved_worktree_when_live_path_exists() {
+fn retry_task_to_run_args_preserves_saved_worktree_when_live_path_exists() {
     let store = Store::open_memory().unwrap();
     let temp = tempfile::tempdir().unwrap();
     let mut task = make_stored_task("t-live-saved-worktree", AgentKind::Codex, TaskStatus::Failed);
@@ -170,7 +170,7 @@ fn retry_task_to_run_args_clears_saved_worktree_when_live_path_exists() {
     let run_args = retry_task_to_run_args(&store, &task, "wg-batch", None).unwrap();
 
     assert_eq!(run_args.dir, task.worktree_path);
-    assert_eq!(run_args.worktree, None);
+    assert_eq!(run_args.worktree, task.worktree_branch);
 }
 
 #[test]

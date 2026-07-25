@@ -7,6 +7,7 @@ use crate::paths;
 use crate::rate_limit::{clear_rate_limit, mark_rate_limited};
 use crate::types::{AgentKind, TaskId, VerifyStatus};
 use chrono::Local;
+use tempfile::TempDir;
 
 fn make_task(id: &str, agent: AgentKind) -> Task {
     Task {
@@ -49,6 +50,10 @@ fn make_task(id: &str, agent: AgentKind) -> Task {
     }
 }
 
+fn set_repo(task: &mut Task, repo: &TempDir) {
+    task.repo_path = Some(repo.path().display().to_string());
+}
+
 fn task_ids(bucket: &RetryBucket) -> Vec<String> {
     bucket.tasks.iter().map(|task| task.id.to_string()).collect()
 }
@@ -63,7 +68,9 @@ fn aid_home_guard(name: &str) -> paths::AidHomeGuard {
 #[test]
 fn retry_uses_original_when_not_rate_limited() {
     let _guard = aid_home_guard("aid-retry-fallback-test-normal");
-    let task = make_task("t-001", AgentKind::Codex);
+    let repo = TempDir::new().unwrap();
+    let mut task = make_task("t-001", AgentKind::Codex);
+    set_repo(&mut task, &repo);
     let args = retry_task_to_run_args(&Store::open_memory().unwrap(), &task, "wg-test", None)
         .unwrap();
     assert_eq!(args.agent_name, "codex");
@@ -80,7 +87,9 @@ fn retry_uses_fallback_when_rate_limited() {
         AgentKind::Copilot,
     ]);
     mark_rate_limited(&AgentKind::Codex, "rate limit exceeded");
-    let task = make_task("t-002", AgentKind::Codex);
+    let repo = TempDir::new().unwrap();
+    let mut task = make_task("t-002", AgentKind::Codex);
+    set_repo(&mut task, &repo);
     let args = retry_task_to_run_args(&Store::open_memory().unwrap(), &task, "wg-test", None)
         .unwrap();
     assert_ne!(args.agent_name, "codex", "Should use fallback when rate-limited");
@@ -91,7 +100,9 @@ fn retry_uses_fallback_when_rate_limited() {
 fn retry_uses_override_regardless_of_rate_limit() {
     let _guard = aid_home_guard("aid-retry-fallback-test-override");
     mark_rate_limited(&AgentKind::Codex, "rate limit exceeded");
-    let task = make_task("t-003", AgentKind::Codex);
+    let repo = TempDir::new().unwrap();
+    let mut task = make_task("t-003", AgentKind::Codex);
+    set_repo(&mut task, &repo);
     let args =
         retry_task_to_run_args(&Store::open_memory().unwrap(), &task, "wg-test", Some("gemini"))
             .unwrap();
@@ -102,7 +113,9 @@ fn retry_uses_override_regardless_of_rate_limit() {
 #[test]
 fn retry_unchanged_for_unknown_agent() {
     let _guard = aid_home_guard("aid-retry-fallback-test-unknown");
-    let task = make_task("t-004", AgentKind::Custom);
+    let repo = TempDir::new().unwrap();
+    let mut task = make_task("t-004", AgentKind::Custom);
+    set_repo(&mut task, &repo);
     let args = retry_task_to_run_args(&Store::open_memory().unwrap(), &task, "wg-test", None)
         .unwrap();
     assert_eq!(args.agent_name, "custom");

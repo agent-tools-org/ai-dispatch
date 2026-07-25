@@ -100,7 +100,7 @@ pub(crate) fn retry_task_to_run_args(store: &Store, task: &Task, group_id: &str,
     });
     run_args.agent_name = agent_name;
     run_args.prompt = task.prompt.clone();
-    apply_retry_target(task, &mut run_args);
+    apply_retry_target(task, &mut run_args)?;
     run_args.group = Some(group_id.to_string());
     run_args.background = true;
     run_args.announce = true;

@@ -53,7 +53,7 @@ pub(crate) async fn maybe_auto_retry_after_model_unavailable(
     retry_args.verify = task.verify.clone();
     retry_args.read_only = task.read_only;
     retry_args.background = false;
-    apply_retry_target(&task, &mut retry_args);
+    apply_retry_target(&task, &mut retry_args)?;
     inherit_retry_base_branch(args.dir.as_deref(), &task, &mut retry_args);
     if task.agent.supports_session_resume() {
         retry_args.session_id = task.agent_session_id.clone();

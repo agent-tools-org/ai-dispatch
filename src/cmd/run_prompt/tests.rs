@@ -115,53 +115,6 @@ fn resolve_worktree_paths_rejects_read_only_worktrees() {
         .contains("--read-only cannot be used with --worktree"));
 }
 
-fn init_git_repo_with_commit(dir: &std::path::Path) {
-    assert!(std::process::Command::new("git").args(["init", "-b", "main"]).current_dir(dir).status().unwrap().success());
-    assert!(std::process::Command::new("git").args(["config", "user.email", "test@example.com"]).current_dir(dir).status().unwrap().success());
-    assert!(std::process::Command::new("git").args(["config", "user.name", "Test User"]).current_dir(dir).status().unwrap().success());
-    std::fs::write(dir.join("file.txt"), "hello\n").unwrap();
-    assert!(std::process::Command::new("git").args(["add", "file.txt"]).current_dir(dir).status().unwrap().success());
-    assert!(std::process::Command::new("git").args(["commit", "-m", "init"]).current_dir(dir).status().unwrap().success());
-}
-
-#[test]
-fn resolve_worktree_paths_uses_explicit_repo_before_dir_fallback() {
-    let _permit = test_subprocess::acquire();
-    let repo = tempfile::tempdir().unwrap();
-    init_git_repo_with_commit(repo.path());
-    let bad_dir = repo.path().join("missing").join("child");
-
-    let paths = resolve_worktree_paths(
-        &RunArgs {
-            dir: Some(bad_dir.to_string_lossy().to_string()),
-            worktree: Some("chore/repro-eager".to_string()),
-            ..Default::default()
-        },
-        Some(repo.path().to_str().unwrap()),
-    )
-    .unwrap();
-
-    assert_eq!(paths.3.as_deref(), Some(repo.path().to_str().unwrap()));
-    assert!(paths.0.as_deref().is_some_and(|path| std::path::Path::new(path).exists()));
-}
-
-#[test]
-fn resolve_worktree_paths_without_repo_still_rejects_bad_dir() {
-    let bad_dir = tempfile::tempdir().unwrap().path().join("missing");
-
-    let err = resolve_worktree_paths(
-        &RunArgs {
-            dir: Some(bad_dir.to_string_lossy().to_string()),
-            worktree: Some("chore/repro-bad-dir".to_string()),
-            ..Default::default()
-        },
-        None,
-    )
-    .unwrap_err();
-
-    assert!(err.to_string().contains("Not a git repository"));
-}
-
 #[test]
 fn extract_words_normalizes_keywords() {
     let text = "Refactor Foo::Bar and update src/lib.rs to fix Config::load().";

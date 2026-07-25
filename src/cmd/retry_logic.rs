@@ -5,7 +5,7 @@ use anyhow::Result;
 use std::sync::Arc;
 use tokio::time::{Duration, sleep};
 
-use super::run::RunArgs;
+use super::run::{RunArgs, apply_retry_target};
 use crate::paths;
 use crate::store::Store;
 use crate::types::{Task, TaskId, TaskStatus};
@@ -34,8 +34,19 @@ pub(crate) async fn prepare_retry(
     let backoff_secs = backoff_for_attempt(attempt);
     println!("Retry {attempt}/{}: re-dispatching after {backoff_secs}s...", depth + args.retry);
     sleep(Duration::from_secs(backoff_secs)).await;
-    let prompt = root_prompt(&store, &task).unwrap_or_else(|| args.prompt.clone());
-    let mut retry_args = RunArgs::saved_for_task(store.as_ref(), task_id.as_str())?
+    let retry_args = build_failed_retry_args(store.as_ref(), task_id, args, &task, &stderr_tail)?;
+    Ok(Some(retry_args))
+}
+
+fn build_failed_retry_args(
+    store: &Store,
+    task_id: &TaskId,
+    args: &RunArgs,
+    task: &Task,
+    stderr_tail: &str,
+) -> Result<RunArgs> {
+    let prompt = root_prompt(store, task).unwrap_or_else(|| args.prompt.clone());
+    let mut retry_args = RunArgs::saved_for_task(store, task_id.as_str())?
         .unwrap_or_else(|| args.clone());
     retry_args.prompt =
         format!("[Previous attempt failed]\nError: {stderr_tail}\n\n[Original task]\n{prompt}");
@@ -43,15 +54,8 @@ pub(crate) async fn prepare_retry(
     retry_args.background = false;
     retry_args.parent_task_id = Some(task_id.as_str().to_string());
     retry_args.existing_task_id = None;
-    // Reuse existing worktree instead of creating a duplicate
-    if let Some(ref wt) = task.worktree_path {
-        retry_args.worktree = None;
-        if std::path::Path::new(wt).is_dir() {
-            aid_info!("[aid] Retry reusing worktree: {wt}");
-            retry_args.dir = Some(wt.clone());
-        }
-    }
-    Ok(Some(retry_args))
+    apply_retry_target(task, &mut retry_args)?;
+    Ok(retry_args)
 }
 
 pub(crate) fn read_stderr_tail(task_id: &str, lines: usize) -> String {
@@ -166,3 +170,7 @@ mod tests {
         assert_eq!(backoff_for_attempt(10), backoff_for_attempt(3));
     }
 }
+
+#[cfg(test)]
+#[path = "retry_logic_tests.rs"]
+mod retry_logic_tests;

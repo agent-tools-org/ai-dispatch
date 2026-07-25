@@ -64,8 +64,9 @@ fn retry_task_to_run_args_uses_parent_and_original_fields() {
 
 #[test]
 fn retry_task_to_run_args_prefers_existing_worktree_path() {
-    let (_repo, _linked_root, worktree) = linked_worktree("feat/retry");
+    let (repo, _linked_root, worktree) = linked_worktree("feat/retry");
     let mut task = make_stored_task("t-1234", AgentKind::Codex, TaskStatus::Failed);
+    task.repo_path = Some(repo.path().display().to_string());
     task.worktree_path = Some(worktree.display().to_string());
     task.worktree_branch = Some("feat/retry".to_string());
 
@@ -172,8 +173,9 @@ fn retry_task_to_run_args_refuses_poisoned_worktree_path() {
 #[test]
 fn retry_task_to_run_args_rehydrates_saved_args_and_keeps_worktree() {
     let store = Store::open_memory().unwrap();
-    let (_repo, _linked_root, worktree) = linked_worktree("feat/retry-saved");
+    let (repo, _linked_root, worktree) = linked_worktree("feat/retry-saved");
     let mut task = make_stored_task("t-7777", AgentKind::Codex, TaskStatus::Failed);
+    task.repo_path = Some(repo.path().display().to_string());
     task.worktree_path = Some(worktree.display().to_string());
     task.worktree_branch = Some("feat/retry".to_string());
     store.insert_task(&task).unwrap();

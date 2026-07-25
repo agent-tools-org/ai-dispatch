@@ -110,6 +110,7 @@ impl Drop for WorkspaceSymlinkGuard {
 #[cfg(test)] #[path = "run_lifecycle/final_state_tests.rs"] mod run_lifecycle_final_state_tests;
 #[cfg(test)] #[path = "run_cascade_tests.rs"] mod run_cascade_tests;
 #[cfg(test)] #[path = "run_audit_tests.rs"] mod audit;
+#[cfg(test)] #[path = "run_retry_target_tests.rs"] mod run_retry_target_tests;
 
 pub(crate) fn inherit_retry_base_branch(repo_dir: Option<&str>, task: &Task, retry_args: &mut RunArgs) { run_prompt::inherit_retry_base_branch_impl(repo_dir, task, retry_args); }
 pub(crate) fn retry_target(task: &Task) -> Result<(Option<String>, Option<String>)> { run_prompt::retry_target(task) }

@@ -31,6 +31,14 @@ pub(crate) fn apply_retry_target(task: &Task, retry_args: &mut RunArgs) -> Resul
         retry_args.repo = task.repo_path.clone();
     }
     let (dir, worktree) = retry_target(task)?;
+    if dir.is_some() && retry_args.repo.is_none() {
+        // Without a repo anchor the worktree dir below would be resolved as its own repo
+        // root, and the isolation guard would then reject a legitimate re-entry.
+        anyhow::bail!(
+            "cannot retry task {}: legacy task metadata has no repo_path, so its live worktree cannot be anchored to a repository",
+            task.id
+        );
+    }
     if let Some(dir) = dir {
         retry_args.dir = Some(dir);
         retry_args.worktree = worktree

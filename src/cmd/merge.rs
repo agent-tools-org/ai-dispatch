@@ -185,6 +185,11 @@ fn merge_group_with_output(store: &Store, group_id: &str, approve: bool, check: 
     if tasks.is_empty() {
         return Err(anyhow!("No tasks found in group '{group_id}'"));
     }
+    // Refuse before prompting or deriving any group repo state: a poisoned first task
+    // would otherwise seed that state from a main checkout.
+    if let Some(first) = tasks.first() {
+        ensure_task_worktree_is_safe(first)?;
+    }
     if check {
         return check_group(group_id, &tasks);
     }
@@ -371,6 +376,9 @@ fn run_approval_prompt(merge_action: &str, retry_action: &str, prompt: &str) -> 
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+#[path = "merge_guard_tests.rs"]
+mod merge_guard_tests;
 #[cfg(test)]
 #[path = "merge/final_branch_tests.rs"]
 mod final_branch_tests;

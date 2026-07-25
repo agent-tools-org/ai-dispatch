@@ -103,6 +103,14 @@ fn verify_no_project_file_skips() {
 }
 
 #[test]
+fn configured_skip_command_fails() {
+    let dir = TempDir::new().unwrap();
+    let result = run_verify(dir.path(), Some("skip"), None, None).unwrap();
+    assert!(!result.success);
+    assert!(result.output.contains("did not run"));
+}
+
+#[test]
 fn format_report_pass() {
     let result = VerifyResult {
         success: true,
@@ -126,14 +134,16 @@ fn format_report_fail_shows_output() {
 }
 
 #[test]
-fn enforce_verify_status_keeps_done_on_vfail() {
+fn enforce_verify_status_fails_done_on_vfail() {
     let store = Store::open_memory().unwrap();
-    let task = make_task("t-verify-failed", TaskStatus::Done, VerifyStatus::Failed);
+    let mut task = make_task("t-verify-failed", TaskStatus::Done, VerifyStatus::Failed);
+    task.exit_code = Some(0);
     store.insert_task(&task).unwrap();
     enforce_verify_status(&store, &task.id);
     let loaded = store.get_task(task.id.as_str()).unwrap().unwrap();
-    assert_eq!(loaded.status, TaskStatus::Done, "VFAIL should keep Done status");
+    assert_eq!(loaded.status, TaskStatus::Failed);
     assert_eq!(loaded.verify_status, VerifyStatus::Failed);
+    assert_eq!(loaded.exit_code, Some(1));
 }
 
 #[test]

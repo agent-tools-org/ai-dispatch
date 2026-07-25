@@ -9,6 +9,16 @@ use super::Store;
 use crate::types::{ACTIVE_EXECUTION_FAILURE_STATUSES, TaskStatus};
 
 impl Store {
+    pub fn fail_completed_verify_gate(&self, id: &str) -> Result<bool> {
+        let rows = self.db().execute(
+            "UPDATE tasks SET status = 'failed',
+             exit_code = CASE WHEN exit_code IS NULL OR exit_code = 0 THEN 1 ELSE exit_code END
+             WHERE id = ?1 AND status = 'done'",
+            params![id],
+        )?;
+        Ok(rows > 0)
+    }
+
     pub fn fail_active_execution(&self, id: &str) -> Result<bool> {
         if !self.guard_current_status(id, &ACTIVE_EXECUTION_FAILURE_STATUSES, TaskStatus::Failed)? {
             return Ok(false);
@@ -75,5 +85,17 @@ mod tests {
             store.get_task("t-done").expect("get").expect("task").status,
             TaskStatus::Done
         );
+    }
+
+    #[test]
+    fn fail_completed_verify_gate_marks_done_failed_with_nonzero_exit() {
+        let store = Store::open_memory().expect("store");
+        insert_task(&store, "t-vfail", TaskStatus::Done);
+
+        assert!(store.fail_completed_verify_gate("t-vfail").expect("fail"));
+
+        let task = store.get_task("t-vfail").expect("get").expect("task");
+        assert_eq!(task.status, TaskStatus::Failed);
+        assert_eq!(task.exit_code, Some(1));
     }
 }

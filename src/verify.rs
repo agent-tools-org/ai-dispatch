@@ -31,6 +31,13 @@ pub fn run_verify(
     cargo_target_dir: Option<&str>,
     container_name: Option<&str>,
 ) -> Result<VerifyResult> {
+    if command.is_some_and(|command| command.trim() == "skip") {
+        return Ok(VerifyResult {
+            success: false,
+            output: "Configured verify command was 'skip' and did not run".to_string(),
+            command: "skip".to_string(),
+        });
+    }
     let Some((cmd_str, mut cmd)) =
         build_verify_command(worktree_path, command, container_name, cargo_target_dir)?
     else {
@@ -125,12 +132,15 @@ pub fn record_verify_status(store: &Store, task_id: &TaskId, result: &VerifyResu
     };
     let _ = store.update_verify_status(task_id.as_str(), status);
 }
-/// Log when verify failed but keep task as Done — the agent's work is preserved.
-/// The verify_status = Failed tag signals the failure without losing the output.
+/// Fail a completed task when verification failed.
 pub fn enforce_verify_status(store: &Store, task_id: &TaskId) {
     let Some(task) = store.get_task(task_id.as_str()).ok().flatten() else { return };
     if task.status == TaskStatus::Done && task.verify_status == VerifyStatus::Failed {
-        eprintln!("[aid] Task {task_id} completed but verify failed — status kept as DONE [VFAIL]");
+        match crate::task_lifecycle::fail_completed_verify_gate(store, task_id) {
+            Ok(true) => eprintln!("[aid] Task {task_id} failed because verification failed"),
+            Ok(false) => {}
+            Err(err) => aid_error!("[aid] Failed to enforce verify result for {task_id}: {err}"),
+        }
     }
 }
 fn auto_detect_command(path: &Path) -> String {

@@ -242,7 +242,7 @@ pub(crate) async fn post_run_lifecycle(
         cascade_args.agent_name = next_agent;
         cascade_args.cascade = remaining_cascade;
         cascade_args.parent_task_id = Some(task_id.as_str().to_string());
-        inherit_cascade_target(&mut cascade_args, &task);
+        inherit_cascade_target(&mut cascade_args, &task)?;
         return Box::pin(run(store.clone(), cascade_args)).await.map(Some);
     } else if let Some(task) = store.get_task(task_id.as_str())?
         && task.status == TaskStatus::Failed
@@ -260,7 +260,7 @@ pub(crate) async fn post_run_lifecycle(
         let mut cascade_args = args.clone();
         cascade_args.agent_name = fallback.as_str().to_string();
         cascade_args.parent_task_id = Some(task_id.as_str().to_string());
-        inherit_cascade_target(&mut cascade_args, &task);
+        inherit_cascade_target(&mut cascade_args, &task)?;
         return Box::pin(run(store.clone(), cascade_args)).await.map(Some);
     } else {
         true
@@ -269,8 +269,8 @@ pub(crate) async fn post_run_lifecycle(
     Ok(None)
 }
 
-pub(crate) fn inherit_cascade_target(cascade_args: &mut RunArgs, task: &Task) {
-    let (dir, worktree) = super::retry_target(task);
+pub(crate) fn inherit_cascade_target(cascade_args: &mut RunArgs, task: &Task) -> Result<()> {
+    let (dir, worktree) = super::retry_target(task)?;
     if let Some(dir) = dir {
         cascade_args.dir = Some(dir);
         cascade_args.worktree = worktree;
@@ -278,6 +278,7 @@ pub(crate) fn inherit_cascade_target(cascade_args: &mut RunArgs, task: &Task) {
         cascade_args.worktree = Some(worktree);
     }
     cascade_args.existing_task_id = None;
+    Ok(())
 }
 
 fn run_teardown_phase(task_id: &TaskId, args: &RunArgs, wt_path: Option<&String>) {

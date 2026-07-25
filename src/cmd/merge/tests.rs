@@ -112,6 +112,14 @@ fn worktree_status(repo: &Path) -> String {
     String::from_utf8_lossy(&output.stdout).trim().to_string()
 }
 
+fn head_message(repo: &Path) -> String {
+    let output = Command::new("git")
+        .args(["-C", &repo.to_string_lossy(), "log", "-1", "--pretty=%s"])
+        .output()
+        .unwrap();
+    String::from_utf8_lossy(&output.stdout).trim().to_string()
+}
+
 fn make_task_with_worktree(id: &str, repo: &Path, wt: &Path, branch: &str) -> Task {
     Task {
         id: TaskId(id.to_string()),
@@ -225,6 +233,32 @@ fn auto_commit_uncommitted_commits_dirty_worktree() {
         ],
     );
 }
+
+#[test]
+fn merge_refuses_persisted_worktree_that_equals_repo_path() {
+    let _permit = test_subprocess::acquire();
+    let repo = init_repo();
+    std::fs::write(repo.path().join("dirty.txt"), "do not commit\n").unwrap();
+    let task = make_task_with_worktree("t-poisoned-merge", repo.path(), repo.path(), "main");
+    let store = Store::open_memory().unwrap();
+    store.insert_task(&task).unwrap();
+
+    let err = merge_single_with_output(
+        &store,
+        task.id.as_str(),
+        false,
+        false,
+        false,
+        None,
+        false,
+    )
+    .unwrap_err();
+
+    assert!(err.to_string().contains("recorded worktree path"));
+    assert_eq!(head_message(repo.path()), "init");
+    assert!(!worktree_status(repo.path()).is_empty());
+}
+
 
 #[test]
 fn auto_commit_message_includes_filename() {

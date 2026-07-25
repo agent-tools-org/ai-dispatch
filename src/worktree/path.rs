@@ -65,7 +65,39 @@ pub fn aid_worktree_path(repo_dir: &Path, branch: &str) -> PathBuf {
         .join(branch)
 }
 
-fn main_repo_dir(repo_dir: &Path) -> PathBuf {
+pub(super) fn main_repo_dir(repo_dir: &Path) -> PathBuf {
+    main_working_tree_dir(repo_dir).unwrap_or_else(|_| legacy_main_repo_dir(repo_dir))
+}
+
+pub(super) fn main_working_tree_dir(repo_dir: &Path) -> Result<PathBuf> {
+    let output = Command::new("git")
+        .args(["-C", &repo_dir.to_string_lossy()])
+        .args(["worktree", "list", "--porcelain"])
+        .output()
+        .with_context(|| format!("cannot determine main checkout for {}", repo_dir.display()))?;
+    if !output.status.success() {
+        return Err(anyhow!(
+            "cannot determine main checkout for {}: {}",
+            repo_dir.display(),
+            String::from_utf8_lossy(&output.stderr).trim()
+        ));
+    }
+    for line in String::from_utf8_lossy(&output.stdout).lines() {
+        let Some(path) = line.strip_prefix("worktree ") else {
+            continue;
+        };
+        let path = path.trim();
+        if !path.is_empty() {
+            return Ok(PathBuf::from(path));
+        }
+    }
+    Err(anyhow!(
+        "cannot determine main checkout for {}: git worktree list returned no worktree entries",
+        repo_dir.display()
+    ))
+}
+
+fn legacy_main_repo_dir(repo_dir: &Path) -> PathBuf {
     let output = Command::new("git")
         .args([
             "-C",

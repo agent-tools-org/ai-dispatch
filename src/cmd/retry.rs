@@ -110,6 +110,11 @@ fn resolve_retry_target(
 ) -> Result<(Option<String>, Option<String>)> {
     match task.worktree_path.as_ref() {
         Some(path) if std::path::Path::new(path).exists() => {
+            crate::worktree::ensure_consumed_worktree_path_is_isolated(
+                task.repo_path.as_deref(),
+                path,
+                &format!("recorded worktree path for task {}", task.id),
+            )?;
             if reset {
                 reset_dirty_worktree(path)?;
             } else {

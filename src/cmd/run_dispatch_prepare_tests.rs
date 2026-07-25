@@ -238,3 +238,28 @@ fn prepare_dispatch_keeps_dirty_enforcement_for_write_intent_result_file() {
     assert!(!args.audit_report_mode);
     assert_eq!(args.result_file.as_deref(), Some("out.md"));
 }
+
+#[test]
+fn prepare_dispatch_rejects_requested_worktree_when_it_is_the_repo_root() {
+    let _permit = crate::test_subprocess::acquire();
+    let repo = init_repo();
+    let store = Arc::new(Store::open_memory().unwrap());
+    git(repo.path(), &["checkout", "-b", "chore/main-dispatch"]);
+    let mut args = RunArgs {
+        agent_name: "codex".to_string(),
+        prompt: "Investigate a concrete task routing bug.".to_string(),
+        repo_root: Some(repo.path().display().to_string()),
+        worktree: Some("chore/main-dispatch".to_string()),
+        ..Default::default()
+    };
+
+    let err = match prepare_dispatch(&store, &mut args) {
+        Ok(prepared) => panic!(
+            "dispatch should reject repo-root worktree: repo={:?} worktree={:?}",
+            prepared.repo_path, prepared.wt_path
+        ),
+        Err(err) => err,
+    };
+
+    assert!(err.to_string().contains("main working tree"));
+}

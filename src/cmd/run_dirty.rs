@@ -161,7 +161,7 @@ async fn maybe_retry_uncommitted(
         metadata: None,
     });
 
-    let mut retry_args = build_uncommitted_retry_args(args, &task, task_id, dir);
+    let mut retry_args = build_uncommitted_retry_args(args, &task, task_id, dir)?;
     if task.agent.supports_session_resume() {
         retry_args.session_id = task.agent_session_id.clone();
     }
@@ -174,7 +174,7 @@ fn build_uncommitted_retry_args(
     task: &Task,
     task_id: &TaskId,
     dir: &str,
-) -> RunArgs {
+) -> Result<RunArgs> {
     let mut retry_args = args.clone();
     retry_args.prompt = format!(
         "You have uncommitted changes in your worktree. Please review them with `git status` and `git diff`, then commit ALL your changes with a descriptive message. Do not leave any files uncommitted.\n\n[Original task for context]\n{}",
@@ -190,12 +190,12 @@ fn build_uncommitted_retry_args(
     retry_args.judge = None;
     retry_args.peer_review = None;
     retry_args.checklist = Vec::new();
-    let (retry_dir, worktree) = retry_target(task);
+    let (retry_dir, worktree) = retry_target(task)?;
     retry_args.dir = Some(dir.to_string())
         .or(retry_dir)
         .or_else(|| retry_args.dir.clone());
     retry_args.worktree = worktree.or_else(|| retry_args.worktree.clone());
-    retry_args
+    Ok(retry_args)
 }
 
 fn rescue_files_summary(outcome: &crate::commit::RescueOutcome) -> String {

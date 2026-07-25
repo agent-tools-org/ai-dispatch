@@ -65,6 +65,7 @@ fn merge_single_with_output(store: &Store, task_id: &str, approve: bool, check: 
         aid_warn!("[aid] Warning: task '{task_id}' has VFAIL status — verify failed before merge");
         aid_hint!("[aid] Review carefully: aid show {task_id} --diff");
     }
+    ensure_task_worktree_is_safe(&task)?;
     let repo_dir = resolve_repo_dir(task.repo_path.as_deref(), task.worktree_path.as_deref());
     if check { return check_single(task_id, &task, &repo_dir); }
 
@@ -205,6 +206,7 @@ fn merge_group_with_output(store: &Store, group_id: &str, approve: bool, check: 
             skipped.push(format!("{} ({})", task.id, task.status.label()));
             continue;
         }
+        ensure_task_worktree_is_safe(task)?;
         let repo_dir = resolve_repo_dir(task.repo_path.as_deref(), task.worktree_path.as_deref());
         if let Some(branch) = merge_source_branch(task) {
             ensure_branch_drift_confirmed(task, force)?;
@@ -262,6 +264,7 @@ fn merge_group_with_output(store: &Store, group_id: &str, approve: bool, check: 
 }
 
 fn check_single(task_id: &str, task: &Task, repo_dir: &str) -> Result<()> {
+    ensure_task_worktree_is_safe(task)?;
     match merge_source_branch(task) {
         Some(branch) => {
             warn_branch_drift(task);
@@ -275,6 +278,7 @@ fn check_single(task_id: &str, task: &Task, repo_dir: &str) -> Result<()> {
 fn check_group(group_id: &str, tasks: &[Task]) -> Result<()> {
     let mut conflicts = 0;
     for task in tasks {
+        ensure_task_worktree_is_safe(task)?;
         let repo_dir = resolve_repo_dir(task.repo_path.as_deref(), task.worktree_path.as_deref());
         match merge_source_branch(task) {
             Some(branch) => {
@@ -297,6 +301,20 @@ fn print_check_result(task_id: &str, result: &MergeCheckResult) {
         MergeCheckResult::Ok(commits) => println!("{task_id}: OK ({commits} commit(s))"),
         MergeCheckResult::Conflict(files) => println!("{task_id}: CONFLICT ({})", files.join(", ")),
     }
+}
+
+pub(super) fn ensure_task_worktree_is_safe(task: &Task) -> Result<()> {
+    let Some(wt) = task.worktree_path.as_deref() else {
+        return Ok(());
+    };
+    if !std::path::Path::new(wt).exists() {
+        return Ok(());
+    }
+    crate::worktree::ensure_consumed_worktree_path_is_isolated(
+        task.repo_path.as_deref(),
+        wt,
+        &format!("recorded worktree path for task {}", task.id),
+    )
 }
 
 enum ApprovalDecision {

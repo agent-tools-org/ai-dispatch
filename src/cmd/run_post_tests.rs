@@ -27,7 +27,9 @@ fn maybe_auto_retry_non_transient_plan_still_requires_cli_retry() {
 
 #[test]
 fn transient_hung_retry_args_take_first_cascade_agent_and_clear_session() {
+    let repo = tempfile::tempdir().unwrap();
     let mut task = failed_task(AgentKind::OpenCode);
+    task.repo_path = Some(repo.path().display().to_string());
     task.agent_session_id = Some("old-session".to_string());
     let args = RunArgs {
         agent_name: "opencode".to_string(),
@@ -37,7 +39,8 @@ fn transient_hung_retry_args_take_first_cascade_agent_and_clear_session() {
         ..Default::default()
     };
 
-    let retry_args = build_hung_retry_args(&args, &task, &hung_context(true), "feedback", "root");
+    let retry_args = build_hung_retry_args(&args, &task, &hung_context(true), "feedback", "root")
+        .unwrap();
 
     assert_eq!(retry_args.agent_name, "codex");
     assert_eq!(retry_args.cascade, vec!["cursor".to_string()]);
@@ -48,7 +51,9 @@ fn transient_hung_retry_args_take_first_cascade_agent_and_clear_session() {
 
 #[test]
 fn non_transient_hung_retry_args_resume_session_and_decrement_retry() {
+    let repo = tempfile::tempdir().unwrap();
     let mut task = failed_task(AgentKind::OpenCode);
+    task.repo_path = Some(repo.path().display().to_string());
     task.agent_session_id = Some("resume-session".to_string());
     let args = RunArgs {
         agent_name: "opencode".to_string(),
@@ -56,7 +61,8 @@ fn non_transient_hung_retry_args_resume_session_and_decrement_retry() {
         ..Default::default()
     };
 
-    let retry_args = build_hung_retry_args(&args, &task, &hung_context(false), "feedback", "root");
+    let retry_args = build_hung_retry_args(&args, &task, &hung_context(false), "feedback", "root")
+        .unwrap();
 
     assert_eq!(retry_args.agent_name, "opencode");
     assert_eq!(retry_args.session_id.as_deref(), Some("resume-session"));

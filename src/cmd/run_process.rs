@@ -11,6 +11,10 @@ use crate::store::TaskCompletionUpdate;
 
 use super::{clean_output_if_jsonl, fill_empty_output_from_log};
 
+#[path = "run_retry_target.rs"]
+mod run_retry_target;
+pub(crate) use run_retry_target::{apply_retry_target, retry_target};
+
 const FAST_FAIL_SNAPSHOT_MS: i64 = 5_000;
 const STDERR_EXCERPT_LINES: usize = 8;
 const STDERR_EXCERPT_CHARS: usize = 400;
@@ -271,22 +275,6 @@ pub(crate) fn inherit_retry_base_branch_impl(repo_dir: Option<&str>, task: &Task
     if retry_args.worktree.as_deref() == Some(branch) { return; }
     let repo_dir = std::path::Path::new(task.repo_path.as_deref().or(retry_args.repo.as_deref()).or(repo_dir).unwrap_or("."));
     if let Ok(true) = crate::worktree::branch_has_commits_ahead_of_main(repo_dir, branch) { retry_args.base_branch = Some(branch.to_string()); }
-}
-
-pub(crate) fn retry_target(task: &Task) -> (Option<String>, Option<String>) {
-    match task.worktree_path.as_ref() {
-        Some(path) if std::path::Path::new(path).exists() => (Some(path.clone()), None),
-        Some(_) => (None, task.worktree_branch.clone()),
-        None => (None, None),
-    }
-}
-
-pub(crate) fn apply_retry_target(task: &Task, retry_args: &mut RunArgs) {
-    let (dir, worktree) = retry_target(task);
-    retry_args.dir = dir
-        .or_else(|| task.repo_path.clone())
-        .or_else(|| retry_args.dir.clone());
-    retry_args.worktree = worktree.or_else(|| retry_args.worktree.clone());
 }
 
 fn format_duration(ms: i64) -> String {

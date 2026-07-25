@@ -3,11 +3,11 @@
 // Deps: tokio process/io, Store events, build request and diagnostic modules.
 
 use anyhow::{Context, Result};
-use std::process::Stdio;
+use std::process::{ExitStatus, Stdio};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::io::{AsyncBufReadExt, AsyncRead, BufReader};
-use tokio::process::Command;
+use tokio::process::{Child, Command};
 use tokio::sync::mpsc;
 
 use super::build_diag::{render_digest, BuildReport, Diagnostic, DiagnosticCollector};
@@ -33,6 +33,14 @@ enum StreamEvent {
     Done,
 }
 
+#[derive(Debug, Default)]
+struct CargoStreamState {
+    collector: DiagnosticCollector,
+    stderr_lines: Vec<String>,
+    compiled_units: usize,
+    done_streams: usize,
+}
+
 pub(crate) async fn run_cargo_process(
     store: Arc<Store>,
     request: BuildRequest,
@@ -51,34 +59,56 @@ pub(crate) async fn run_cargo_process(
     tokio::spawn(pump_lines(stdout, tx.clone(), StreamEvent::Stdout));
     tokio::spawn(pump_lines(stderr, tx, StreamEvent::Stderr));
 
-    let mut collector = DiagnosticCollector::default();
-    let mut stderr_lines = Vec::new();
     let mut progress_state = ProgressState::new(progress);
-    let mut done_streams = 0usize;
-    let status = loop {
-        tokio::select! {
-            event = rx.recv(), if done_streams < 2 => {
-                handle_stream_event(event, &store, &task_id, &mut collector, &mut stderr_lines, &mut done_streams);
-            }
-            status = child.wait() => {
-                break status.context("Failed to wait for cargo process")?;
-            }
-            _ = tokio::time::sleep(Duration::from_millis(100)) => {
-                progress_state.emit_due(start.elapsed(), &store, &task_id, &command);
-            }
-        }
-    };
-    drain_streams(&mut rx, &store, &task_id, &mut collector, &mut stderr_lines, &mut done_streams).await;
+    let mut stream_state = CargoStreamState::default();
+    let status = wait_for_cargo(
+        &mut child,
+        &mut rx,
+        &store,
+        &task_id,
+        &command,
+        start,
+        &mut progress_state,
+        &mut stream_state,
+    )
+    .await?;
+    drain_streams(&mut rx, &store, &task_id, &mut stream_state).await;
+    let compiled_units = stream_state.compiled_units;
     let report = BuildReport {
         success: status.success(),
         command: command.clone(),
         elapsed: start.elapsed(),
-        diagnostics: collector.into_diagnostics(),
-        stderr_lines,
+        diagnostics: stream_state.collector.into_diagnostics(),
+        stderr_lines: stream_state.stderr_lines,
     };
     println!("{}", render_digest(&report, request.include_warnings));
-    emit_event(&store, &task_id, finished_detail(&command, &report));
+    emit_event(&store, &task_id, finished_detail(&command, &report, compiled_units));
     Ok(status.code().unwrap_or(1))
+}
+
+async fn wait_for_cargo(
+    child: &mut Child,
+    rx: &mut mpsc::Receiver<StreamEvent>,
+    store: &Store,
+    task_id: &Option<String>,
+    command: &str,
+    start: Instant,
+    progress_state: &mut ProgressState,
+    stream_state: &mut CargoStreamState,
+) -> Result<ExitStatus> {
+    loop {
+        tokio::select! {
+            event = rx.recv(), if stream_state.done_streams < 2 => {
+                handle_stream_event(event, store, task_id, stream_state);
+            }
+            status = child.wait() => {
+                return status.context("Failed to wait for cargo process");
+            }
+            _ = tokio::time::sleep(Duration::from_millis(100)) => {
+                progress_state.emit_due(start.elapsed(), store, task_id, command, stream_state.compiled_units);
+            }
+        }
+    }
 }
 
 impl ProgressConfig {
@@ -113,19 +143,39 @@ impl ProgressState {
         Self { config, emitted: 0, next_after }
     }
 
-    fn emit_due(&mut self, elapsed: Duration, store: &Store, task_id: &Option<String>, command: &str) {
-        if self.emitted >= self.config.limit || elapsed < self.next_after {
+    fn emit_due(
+        &mut self,
+        elapsed: Duration,
+        store: &Store,
+        task_id: &Option<String>,
+        command: &str,
+        compiled_units: usize,
+    ) {
+        let Some(detail) = self.next_detail(elapsed, command, compiled_units) else {
             return;
-        }
-        let detail = format!("{command} still running after {}s", elapsed.as_secs());
+        };
         if task_id.is_some() {
             emit_event(store, task_id, detail);
         } else {
             eprintln!("[aid] {detail}");
         }
+    }
+
+    fn next_detail(&mut self, elapsed: Duration, command: &str, compiled_units: usize) -> Option<String> {
+        if self.emitted >= self.config.limit || elapsed < self.next_after {
+            return None;
+        }
         self.emitted += 1;
         self.next_after += self.config.interval;
+        Some(progress_detail(command, elapsed, compiled_units))
     }
+}
+
+fn progress_detail(command: &str, elapsed: Duration, compiled_units: usize) -> String {
+    format!(
+        "{command} still running after {}s, {compiled_units} units compiled",
+        elapsed.as_secs()
+    )
 }
 
 fn spawn_cargo(cargo_args: &[String], target_dir: Option<&str>) -> Result<tokio::process::Child> {
@@ -155,13 +205,11 @@ async fn drain_streams(
     rx: &mut mpsc::Receiver<StreamEvent>,
     store: &Store,
     task_id: &Option<String>,
-    collector: &mut DiagnosticCollector,
-    stderr_lines: &mut Vec<String>,
-    done_streams: &mut usize,
+    stream_state: &mut CargoStreamState,
 ) {
-    while *done_streams < 2 {
+    while stream_state.done_streams < 2 {
         let event = rx.recv().await;
-        handle_stream_event(event, store, task_id, collector, stderr_lines, done_streams);
+        handle_stream_event(event, store, task_id, stream_state);
     }
 }
 
@@ -169,19 +217,28 @@ fn handle_stream_event(
     event: Option<StreamEvent>,
     store: &Store,
     task_id: &Option<String>,
-    collector: &mut DiagnosticCollector,
-    stderr_lines: &mut Vec<String>,
-    done_streams: &mut usize,
+    stream_state: &mut CargoStreamState,
 ) {
     match event {
         Some(StreamEvent::Stdout(line)) => {
-            if let Some(diagnostic) = collector.push_json_line(&line) {
+            if is_compiler_artifact_line(&line) {
+                stream_state.compiled_units += 1;
+            }
+            if let Some(diagnostic) = stream_state.collector.push_json_line(&line) {
                 emit_diagnostic_event(store, task_id, &diagnostic);
             }
         }
-        Some(StreamEvent::Stderr(line)) => stderr_lines.push(line),
-        Some(StreamEvent::Done) | None => *done_streams += 1,
+        Some(StreamEvent::Stderr(line)) => stream_state.stderr_lines.push(line),
+        Some(StreamEvent::Done) | None => stream_state.done_streams += 1,
     }
+}
+
+fn is_compiler_artifact_line(line: &str) -> bool {
+    serde_json::from_str::<serde_json::Value>(line)
+        .ok()
+        .and_then(|value| value.get("reason").and_then(|reason| reason.as_str()).map(str::to_string))
+        .as_deref()
+        == Some("compiler-artifact")
 }
 
 fn emit_diagnostic_event(store: &Store, task_id: &Option<String>, diagnostic: &Diagnostic) {
@@ -200,10 +257,10 @@ fn emit_event(store: &Store, task_id: &Option<String>, detail: String) {
     }
 }
 
-fn finished_detail(command: &str, report: &BuildReport) -> String {
+fn finished_detail(command: &str, report: &BuildReport, compiled_units: usize) -> String {
     let errors = report.diagnostics.iter().filter(|diagnostic| diagnostic.is_error()).count();
     let warnings = report.diagnostics.len().saturating_sub(errors);
-    format!("{command} finished: {errors} errors, {warnings} warnings")
+    format!("{command} finished: {errors} errors, {warnings} warnings, {compiled_units} units compiled")
 }
 
 fn env_duration(name: &str, default_ms: u64) -> Duration {
@@ -223,21 +280,5 @@ fn env_usize(name: &str, default_value: usize) -> usize {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn progress_starts_after_threshold_and_rate_limits() {
-        let progress = ProgressConfig::for_tests(100, 50, 2);
-        let mut state = ProgressState::new(progress);
-        let store = Store::open_memory().expect("in-memory store");
-        let task_id = None;
-        state.emit_due(Duration::from_millis(99), &store, &task_id, "cargo check");
-        assert_eq!(state.emitted, 0);
-        state.emit_due(Duration::from_millis(100), &store, &task_id, "cargo check");
-        state.emit_due(Duration::from_millis(120), &store, &task_id, "cargo check");
-        state.emit_due(Duration::from_millis(150), &store, &task_id, "cargo check");
-        state.emit_due(Duration::from_millis(200), &store, &task_id, "cargo check");
-        assert_eq!(state.emitted, 2);
-    }
-}
+#[path = "build_process_tests.rs"]
+mod tests;

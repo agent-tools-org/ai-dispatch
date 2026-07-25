@@ -169,11 +169,12 @@ fn link_deps_false_disables_symlink_fallback() {
 
 #[test]
 fn rust_worktree_setup_records_cargo_target_seed() {
+    let _clone = crate::agent::cargo_target::CloneSeedGuard::regular_copy();
     let store = Store::open_memory().unwrap();
     let id = task_id();
     store.insert_task(&make_task(id.clone())).unwrap();
     let cache = TempDir::new().unwrap();
-    let _target_dir = EnvVarGuard::set("CARGO_TARGET_DIR", cache.path().join("_base"));
+    let _target_dir = EnvVarGuard::set("CARGO_TARGET_DIR", cache.path());
     let repo = TempDir::new().unwrap();
     let worktree = TempDir::new().unwrap();
     let source = cache.path().join("_base/debug");

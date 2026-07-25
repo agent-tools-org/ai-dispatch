@@ -3,23 +3,17 @@
 // Deps: crate::paths, std::process::Command, super::RunOpts.
 
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
-use std::time::Instant;
+use std::process::Command;
 
 use crate::types::AgentKind;
 
 use super::RunOpts;
+pub(crate) use super::cargo_target::BranchTargetSeedOutcome;
 
 const CARGO_TARGET_DIR_ENV: &str = "CARGO_TARGET_DIR";
 const CARGO_MANIFEST_NAME: &str = "Cargo.toml";
 const BASE_TARGET_DIR_NAME: &str = "_base";
 const SHARED_TARGET_DIR_NAME: &str = "cargo-target";
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) enum BranchTargetSeedOutcome {
-    Seeded { target: String, source: String, elapsed_ms: u128 },
-    Skipped { target: String, reason: String },
-}
 
 struct CargoTargetLayout {
     source: PathBuf,
@@ -58,12 +52,34 @@ pub fn target_dir_for_worktree(worktree_branch: Option<&str>) -> Option<String> 
     }
 }
 
+pub(crate) fn branch_target_root() -> Option<PathBuf> {
+    Some(target_layout()?.branch_root)
+}
+
+pub(crate) fn branch_target_name(branch: &str) -> String {
+    branch.replace('/', "-")
+}
+
 pub(crate) fn seed_branch_target_dir(
     worktree_branch: &str,
 ) -> Option<BranchTargetSeedOutcome> {
     let layout = target_layout()?;
     let target = target_dir_for_branch(&layout.branch_root, worktree_branch);
-    Some(seed_branch_target_from_source(&layout.source, &target))
+    Some(super::cargo_target::seed_branch_target_from_source(&layout.source, &target))
+}
+
+pub(crate) fn remove_branch_target_dir_if_unused(repo_dir: &Path, branch: &str) -> anyhow::Result<bool> {
+    let Some(layout) = target_layout() else {
+        return Ok(false);
+    };
+    let target = target_dir_for_branch(&layout.branch_root, branch);
+    if target.file_name().and_then(|name| name.to_str()) == Some(BASE_TARGET_DIR_NAME) {
+        return Ok(false);
+    }
+    if branch_has_live_worktree(repo_dir, branch)? {
+        return Ok(false);
+    }
+    super::cargo_target::remove_branch_target_dir(&target)
 }
 
 pub fn apply_rust_build_cache_env(
@@ -90,69 +106,27 @@ pub fn cargo_target_env_arg(cargo_target_dir: &str) -> String {
 }
 
 fn target_dir_for_branch(base: &Path, branch: &str) -> PathBuf {
-    base.join(branch.replace('/', "-"))
+    base.join(branch_target_name(branch))
 }
 
-fn seed_branch_target_from_source(source: &Path, target: &Path) -> BranchTargetSeedOutcome {
-    let target_display = target.to_string_lossy().into_owned();
-    if target.exists() {
-        return skipped(target_display, "destination exists");
-    }
-    if !source.is_dir() {
-        return skipped(target_display, "base target directory is missing");
-    }
-    let Some(parent) = target.parent() else {
-        return skipped(target_display, "destination has no parent directory");
-    };
-    if let Err(err) = std::fs::create_dir_all(parent) {
-        return skipped(target_display, format!("failed to create parent directory: {err}"));
-    }
-    let temp_target = temp_seed_target(target);
-    let start = Instant::now();
-    let output = Command::new("cp")
-        .arg("-Rc")
-        .arg(source)
-        .arg(&temp_target)
-        .stdin(Stdio::null())
-        .output();
-    let output = match output {
-        Ok(output) => output,
-        Err(err) => return skipped(target_display, format!("failed to start clone copy: {err}")),
-    };
+fn branch_has_live_worktree(repo_dir: &Path, branch: &str) -> anyhow::Result<bool> {
+    let output = Command::new("git")
+        .args(["-C", &repo_dir.to_string_lossy(), "worktree", "list", "--porcelain"])
+        .output()?;
     if !output.status.success() {
-        let _ = std::fs::remove_dir_all(&temp_target);
-        return skipped(target_display, format!("clone copy failed: {}", copy_stderr(&output.stderr)));
+        return Ok(true);
     }
-    if let Err(err) = std::fs::rename(&temp_target, target) {
-        let _ = std::fs::remove_dir_all(&temp_target);
-        return skipped(target_display, format!("failed to move seeded target into place: {err}"));
-    }
-    BranchTargetSeedOutcome::Seeded {
-        target: target_display,
-        source: source.to_string_lossy().into_owned(),
-        elapsed_ms: start.elapsed().as_millis(),
-    }
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    Ok(worktree_list_has_branch(&stdout, branch))
 }
 
-fn temp_seed_target(target: &Path) -> PathBuf {
-    let name = target
-        .file_name()
-        .and_then(|name| name.to_str())
-        .unwrap_or("target");
-    target.with_file_name(format!(".{name}.seed-{}", std::process::id()))
-}
-
-fn skipped(target: String, reason: impl Into<String>) -> BranchTargetSeedOutcome {
-    BranchTargetSeedOutcome::Skipped { target, reason: reason.into() }
-}
-
-fn copy_stderr(stderr: &[u8]) -> String {
-    let message = String::from_utf8_lossy(stderr).trim().to_string();
-    if message.is_empty() {
-        "cp -Rc exited unsuccessfully".to_string()
-    } else {
-        message
-    }
+fn worktree_list_has_branch(output: &str, branch: &str) -> bool {
+    output.split("\n\n").any(|block| {
+        !block.lines().any(|line| line.starts_with("prunable "))
+            && block.lines().any(|line| {
+                line.strip_prefix("branch refs/heads/") == Some(branch)
+            })
+    })
 }
 
 pub fn is_rust_project(dir: Option<&str>) -> bool {

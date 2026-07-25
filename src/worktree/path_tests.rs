@@ -7,6 +7,7 @@ use super::{
     is_aid_managed_worktree_path, is_safe_worktree_path, remove_worktree,
 };
 use super::path::WorktreeHomeGuard;
+use crate::test_env::CargoTargetDirGuard;
 use crate::test_subprocess;
 use std::path::Path;
 use std::process::Command;
@@ -73,6 +74,29 @@ fn remove_worktree_cleans_up_properly() {
         .unwrap();
     let stdout = String::from_utf8_lossy(&out.stdout);
     assert!(!stdout.contains(&branch));
+}
+
+#[test]
+fn remove_worktree_reaps_branch_target_and_keeps_base() {
+    let _permit = test_subprocess::acquire();
+    let aid_home = tempfile::tempdir().unwrap();
+    let _aid_guard = crate::paths::AidHomeGuard::set(aid_home.path());
+    let repo = tempfile::tempdir().unwrap();
+    init_repo(repo.path());
+    let branch = unique_branch("feat/reap-target");
+    let wt_path = format!("/tmp/aid-wt-test-{}", branch.replace('/', "-"));
+    let target_root = aid_home.path().join("cargo-target");
+    let _target_guard = CargoTargetDirGuard::set(&target_root);
+    let base = target_root.join("_base");
+    let branch_target = target_root.join(branch.replace('/', "-"));
+    std::fs::create_dir_all(&base).unwrap();
+    std::fs::create_dir_all(&branch_target).unwrap();
+    git(repo.path(), &["worktree", "add", &wt_path, "-b", &branch]);
+
+    remove_worktree(&repo.path().to_string_lossy(), &wt_path).unwrap();
+
+    assert!(base.exists());
+    assert!(!branch_target.exists());
 }
 
 #[test]

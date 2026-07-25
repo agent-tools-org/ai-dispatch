@@ -96,7 +96,7 @@ pub fn verify_in_container(
     cmd.arg("exec");
     if let Some(cargo_target_dir) = cargo_target_dir {
         cmd.arg("-e")
-            .arg(format!("CARGO_TARGET_DIR={cargo_target_dir}"));
+            .arg(crate::agent::cargo_target_env_arg(cargo_target_dir));
     }
     cmd.arg("-w")
         .arg(worktree_path)
@@ -179,8 +179,9 @@ fn mount_home_dirs_from(home: Option<PathBuf>) -> Vec<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{container_name, exec_in_container, mount_home_dirs_from};
+    use super::{container_name, exec_in_container, mount_home_dirs_from, verify_in_container};
     use std::fs;
+    use std::path::Path;
     use std::process::Command;
     use tempfile::TempDir;
 
@@ -235,5 +236,20 @@ mod tests {
         assert_eq!(wrapped_args[wrapped_args.len() - 3], "codex");
         assert_eq!(wrapped_args[wrapped_args.len() - 2], "exec");
         assert_eq!(wrapped_args[wrapped_args.len() - 1], "ship it");
+    }
+
+    #[test]
+    fn verify_in_container_sets_cargo_target_env_arg() {
+        let cmd = verify_in_container(
+            "aid-dev-demo",
+            Path::new("/tmp/project"),
+            "cargo check",
+            Some("/tmp/cache/_base"),
+        );
+        let wrapped_args = args(&cmd);
+
+        assert!(wrapped_args
+            .windows(2)
+            .any(|pair| pair == ["-e", "CARGO_TARGET_DIR=/tmp/cache/_base"]));
     }
 }

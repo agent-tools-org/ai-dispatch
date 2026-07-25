@@ -13,6 +13,7 @@ pub mod board_stream;
 pub mod checklist;
 pub(crate) mod checklist_scan;
 pub mod clean;
+pub(crate) mod clean_cargo_target;
 pub mod changelog;
 pub mod container;
 pub mod config;

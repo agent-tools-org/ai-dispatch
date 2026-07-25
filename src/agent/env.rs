@@ -1,46 +1,132 @@
 // Agent environment helpers: shared target dirs, git ceiling, cwd resolution, run env.
-// Exports: path and process helpers for agent runs. Deps: crate::paths, super::RunOpts.
+// Exports: path and process helpers for agent runs.
+// Deps: crate::paths, std::process::Command, super::RunOpts.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use crate::types::AgentKind;
 
 use super::RunOpts;
+pub(crate) use super::cargo_target::BranchTargetSeedOutcome;
 
 const CARGO_TARGET_DIR_ENV: &str = "CARGO_TARGET_DIR";
 const CARGO_MANIFEST_NAME: &str = "Cargo.toml";
+const BASE_TARGET_DIR_NAME: &str = "_base";
 const SHARED_TARGET_DIR_NAME: &str = "cargo-target";
+
+struct CargoTargetLayout {
+    source: PathBuf,
+    branch_root: PathBuf,
+}
 
 pub fn agent_has_fs_access(_kind: &AgentKind) -> bool {
     true // all supported agents have file system access
 }
 
 pub fn shared_target_dir() -> Option<String> {
-    if let Some(target_dir) = std::env::var_os(CARGO_TARGET_DIR_ENV) {
-        return Some(target_dir.to_string_lossy().into_owned());
-    }
+    Some(target_layout()?.source.to_string_lossy().into_owned())
+}
 
-    Some(
-        crate::paths::aid_dir()
-            .join(SHARED_TARGET_DIR_NAME)
-            .to_string_lossy()
-            .into_owned(),
-    )
+fn target_layout() -> Option<CargoTargetLayout> {
+    if let Some(branch_root) = std::env::var_os(CARGO_TARGET_DIR_ENV).map(PathBuf::from) {
+        let source = branch_root.join(BASE_TARGET_DIR_NAME);
+        return Some(CargoTargetLayout { source, branch_root });
+    }
+    let branch_root = crate::paths::aid_dir().join(SHARED_TARGET_DIR_NAME);
+    let source = branch_root.join(BASE_TARGET_DIR_NAME);
+    Some(CargoTargetLayout { source, branch_root })
 }
 
 /// Returns a target directory isolated per worktree branch.
 /// Worktree tasks get `{base}/{sanitized_branch}` to avoid lock contention.
 /// Non-worktree tasks share the base directory.
 pub fn target_dir_for_worktree(worktree_branch: Option<&str>) -> Option<String> {
-    let base = shared_target_dir()?;
+    let layout = target_layout()?;
     match worktree_branch {
         Some(branch) => {
-            let sanitized = branch.replace('/', "-");
-            Some(format!("{base}/{sanitized}"))
+            let target = target_dir_for_branch(&layout.branch_root, branch);
+            Some(target.to_string_lossy().into_owned())
         }
-        None => Some(base),
+        None => shared_target_dir(),
     }
+}
+
+pub(crate) fn branch_target_root() -> Option<PathBuf> {
+    Some(target_layout()?.branch_root)
+}
+
+pub(crate) fn branch_target_name(branch: &str) -> String {
+    branch.replace('/', "-")
+}
+
+pub(crate) fn seed_branch_target_dir(
+    worktree_branch: &str,
+) -> Option<BranchTargetSeedOutcome> {
+    let layout = target_layout()?;
+    let target = target_dir_for_branch(&layout.branch_root, worktree_branch);
+    Some(super::cargo_target::seed_branch_target_from_source(&layout.source, &target))
+}
+
+pub(crate) fn remove_branch_target_dir_if_unused(repo_dir: &Path, branch: &str) -> anyhow::Result<bool> {
+    let Some(layout) = target_layout() else {
+        return Ok(false);
+    };
+    let target = target_dir_for_branch(&layout.branch_root, branch);
+    if target.file_name().and_then(|name| name.to_str()) == Some(BASE_TARGET_DIR_NAME) {
+        return Ok(false);
+    }
+    if branch_has_live_worktree(repo_dir, branch)? {
+        return Ok(false);
+    }
+    super::cargo_target::remove_branch_target_dir(&target)
+}
+
+pub fn apply_rust_build_cache_env(
+    cmd: &mut Command,
+    project_dir: Option<&str>,
+    worktree_branch: Option<&str>,
+) {
+    if !is_rust_project(project_dir) {
+        return;
+    }
+    if let Some(target_dir) = target_dir_for_worktree(worktree_branch) {
+        apply_cargo_target_env(cmd, Some(target_dir.as_str()));
+    }
+}
+
+pub fn apply_cargo_target_env(cmd: &mut Command, cargo_target_dir: Option<&str>) {
+    if let Some(target_dir) = cargo_target_dir {
+        cmd.env(CARGO_TARGET_DIR_ENV, target_dir);
+    }
+}
+
+pub fn cargo_target_env_arg(cargo_target_dir: &str) -> String {
+    format!("{CARGO_TARGET_DIR_ENV}={cargo_target_dir}")
+}
+
+fn target_dir_for_branch(base: &Path, branch: &str) -> PathBuf {
+    base.join(branch_target_name(branch))
+}
+
+fn branch_has_live_worktree(repo_dir: &Path, branch: &str) -> anyhow::Result<bool> {
+    let output = Command::new("git")
+        .args(["-C", &repo_dir.to_string_lossy(), "worktree", "list", "--porcelain"])
+        .output()?;
+    if !output.status.success() {
+        return Ok(true);
+    }
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    Ok(worktree_list_has_branch(&stdout, branch))
+}
+
+fn worktree_list_has_branch(output: &str, branch: &str) -> bool {
+    output.split("\n\n").any(|block| {
+        !block.lines().any(|line| line.starts_with("prunable "))
+            && block.lines().any(|line| {
+                line.strip_prefix("branch refs/heads/") == Some(branch)
+            })
+    })
 }
 
 pub fn is_rust_project(dir: Option<&str>) -> bool {
@@ -86,3 +172,7 @@ pub(crate) fn which_exists(name: &str) -> bool {
         .map(|o| o.status.success())
         .unwrap_or(false)
 }
+
+#[cfg(test)]
+#[path = "env_tests.rs"]
+mod tests;

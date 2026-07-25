@@ -17,6 +17,8 @@ mod run_audit_flag_tests;
 #[cfg(test)]
 mod doctor_tests;
 #[cfg(test)]
+mod build_flag_tests;
+#[cfg(test)]
 mod retry_flag_tests;
 #[cfg(test)]
 mod respond_reply_flag_tests;

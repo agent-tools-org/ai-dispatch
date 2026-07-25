@@ -141,7 +141,7 @@ async fn dispatch_secondary(store: Arc<crate::store::Store>, command: Commands) 
         Commands::Config(command_args_b::ConfigArgs { action }) => admin_config::config(store, action),
         Commands::Group(command_args_b::GroupArgs { action }) => knowledge::group(store, action),
         Commands::Container(command_args_b::ContainerArgs { action }) => admin_config::container(action),
-        Commands::Build(command_args_b::BuildArgs { args }) => {
+        Commands::Build(args) => {
             let code = crate::cmd::build::run(store, args).await?;
             std::process::exit(code);
         }

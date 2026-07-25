@@ -1,391 +1,237 @@
-// Cargo build and check orchestration for agent context reduction.
+// Cargo verification command orchestration for compact agent digests.
 // Exports: run().
-// Deps: tokio::process, serde_json, anyhow, std::process, std::collections.
+// Deps: build_diag, build_process, CLI build args, agent cargo-target helpers.
 
-use anyhow::{Context, Result};
-use std::collections::HashSet;
+use anyhow::{bail, Result};
 use std::sync::Arc;
-use tokio::io::{AsyncBufReadExt, BufReader};
-use tokio::process::Command;
 
+use crate::cli::command_args_b::{BuildArgs, BuildCommandArg};
 use crate::store::Store;
 
-#[derive(Debug, serde::Deserialize)]
-struct CompilerMessageReason {
-    message: Message,
+#[path = "build_diag.rs"]
+mod build_diag;
+#[path = "build_process.rs"]
+mod build_process;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum BuildCommand {
+    Check,
+    Test,
+    Clippy,
 }
 
-#[derive(Debug, serde::Deserialize)]
-struct Message {
-    level: String,
-    message: String,
-    #[serde(default)]
-    spans: Vec<Span>,
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct BuildRequest {
+    command: BuildCommand,
+    package: Option<String>,
+    test_filter: Option<String>,
+    include_warnings: bool,
+    extra_args: Vec<String>,
 }
 
-#[derive(Debug, serde::Deserialize)]
-struct Span {
-    file_name: String,
-    line_start: usize,
-    is_primary: bool,
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct CargoTargetChoice {
+    value: Option<String>,
+    inherited: bool,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-struct DeduppedMessage {
-    level: String,
-    file_name: String,
-    line: usize,
-    message: String,
-}
-
-pub async fn run(store: Arc<Store>, args: Vec<String>) -> Result<i32> {
+pub async fn run(store: Arc<Store>, args: BuildArgs) -> Result<i32> {
     if !crate::agent::is_rust_project(None) {
-        anyhow::bail!("This is not a Rust project (no Cargo.toml found).");
+        bail!("This is not a Rust project (no Cargo.toml found).");
     }
-
-    let target_dir = resolve_target_dir(&store);
-    let (subcommand, cargo_args) = resolve_cargo_args(&args)?;
-
-    let task_id = std::env::var("AID_TASK_ID").ok();
-    let progress_interval_ms = std::env::var("AID_BUILD_PROGRESS_INTERVAL_MS")
-        .ok()
-        .and_then(|v| v.parse::<u64>().ok())
-        .unwrap_or(10_000);
-
-    run_cargo_process(
-        &subcommand,
-        cargo_args,
-        target_dir,
-        store,
-        task_id,
-        progress_interval_ms,
-    )
-    .await
+    let request = BuildRequest::from_args(args)?;
+    let target = resolve_cargo_target_choice(&store);
+    let progress = build_process::ProgressConfig::from_env();
+    build_process::run_cargo_process(store, request, target, progress).await
 }
 
-fn resolve_target_dir(store: &Store) -> Option<String> {
-    let mut cargo_target_dir = std::env::var("CARGO_TARGET_DIR").ok();
-    if cargo_target_dir.is_none() {
-        let task_branch = if let Ok(task_id_str) = std::env::var("AID_TASK_ID") {
-            store.get_task(&task_id_str).ok().flatten().and_then(|t| t.worktree_branch)
-        } else {
-            None
-        };
-        
-        let branch = task_branch.or_else(|| {
-            std::env::current_dir().ok().and_then(|cwd| current_branch(&cwd))
-        });
-        
-        cargo_target_dir = crate::agent::target_dir_for_worktree(branch.as_deref());
+impl BuildRequest {
+    fn from_args(args: BuildArgs) -> Result<Self> {
+        let (command, mut extra_args) = default_command_and_args(args.command);
+        if args.test_filter.is_some() && command != BuildCommand::Test {
+            bail!("--test is only valid with `aid build test`");
+        }
+        extra_args.extend(args.extra_args);
+        Ok(Self {
+            command,
+            package: args.package,
+            test_filter: args.test_filter,
+            include_warnings: args.warnings,
+            extra_args,
+        })
     }
-    cargo_target_dir
+
+    pub(crate) fn cargo_args(&self) -> Vec<String> {
+        let mut args = vec![self.command.as_str().to_string(), "--message-format=json".to_string()];
+        if let Some(package) = self.package.as_ref() {
+            args.push("-p".to_string());
+            args.push(package.clone());
+        }
+        args.extend(self.extra_args.clone());
+        if let Some(filter) = self.test_filter.as_ref() {
+            args.push(filter.clone());
+        }
+        args
+    }
+
+    pub(crate) fn display_command(&self, target: &CargoTargetChoice) -> String {
+        let mut parts = Vec::new();
+        if !target.inherited {
+            if let Some(value) = target.value.as_ref() {
+                parts.push(crate::agent::cargo_target_env_arg(value));
+            }
+        }
+        parts.push("cargo".to_string());
+        parts.extend(self.display_args());
+        parts.join(" ")
+    }
+
+    fn display_args(&self) -> Vec<String> {
+        let mut args = vec![self.command.as_str().to_string()];
+        if let Some(package) = self.package.as_ref() {
+            args.push("-p".to_string());
+            args.push(package.clone());
+        }
+        args.extend(self.extra_args.clone());
+        if let Some(filter) = self.test_filter.as_ref() {
+            args.push("--test".to_string());
+            args.push(filter.clone());
+        }
+        args
+    }
 }
 
-fn current_branch(repo_dir: &std::path::Path) -> Option<String> {
-    let out = std::process::Command::new("git")
-        .args(["-C", &repo_dir.to_string_lossy(), "rev-parse", "--abbrev-ref", "HEAD"])
+impl BuildCommand {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Check => "check",
+            Self::Test => "test",
+            Self::Clippy => "clippy",
+        }
+    }
+}
+
+fn default_command_and_args(command: Option<BuildCommandArg>) -> (BuildCommand, Vec<String>) {
+    if let Some(command) = command {
+        return (BuildCommand::from(command), Vec::new());
+    }
+    let Some(project) = crate::project::detect_project() else {
+        return (BuildCommand::Check, Vec::new());
+    };
+    parse_verify_command(project.verify.as_deref())
+}
+
+fn parse_verify_command(verify: Option<&str>) -> (BuildCommand, Vec<String>) {
+    let Some(verify) = verify.map(str::trim).filter(|value| !value.is_empty()) else {
+        return (BuildCommand::Check, Vec::new());
+    };
+    let parts = verify.split_whitespace().collect::<Vec<_>>();
+    let cargo_args = parts.strip_prefix(&["cargo"]).unwrap_or(&parts);
+    match cargo_args.first().copied() {
+        Some("check") => (BuildCommand::Check, cargo_args[1..].iter().map(|s| s.to_string()).collect()),
+        Some("test") => (BuildCommand::Test, cargo_args[1..].iter().map(|s| s.to_string()).collect()),
+        Some("clippy") => (BuildCommand::Clippy, cargo_args[1..].iter().map(|s| s.to_string()).collect()),
+        _ => (BuildCommand::Check, Vec::new()),
+    }
+}
+
+impl From<BuildCommandArg> for BuildCommand {
+    fn from(value: BuildCommandArg) -> Self {
+        match value {
+            BuildCommandArg::Check => Self::Check,
+            BuildCommandArg::Test => Self::Test,
+            BuildCommandArg::Clippy => Self::Clippy,
+        }
+    }
+}
+
+fn resolve_cargo_target_choice(store: &Store) -> CargoTargetChoice {
+    if let Ok(value) = std::env::var("CARGO_TARGET_DIR") {
+        return CargoTargetChoice { value: Some(value), inherited: true };
+    }
+    let branch = task_branch(store).or_else(current_branch);
+    CargoTargetChoice {
+        value: crate::agent::target_dir_for_worktree(branch.as_deref()),
+        inherited: false,
+    }
+}
+
+fn task_branch(store: &Store) -> Option<String> {
+    let task_id = std::env::var("AID_TASK_ID").ok()?;
+    store.get_task(&task_id).ok().flatten()?.worktree_branch
+}
+
+fn current_branch() -> Option<String> {
+    let cwd = std::env::current_dir().ok()?;
+    let output = std::process::Command::new("git")
+        .args(["-C", &cwd.to_string_lossy(), "rev-parse", "--abbrev-ref", "HEAD"])
         .output()
         .ok()?;
-    if !out.status.success() { return None; }
-    let branch = String::from_utf8(out.stdout).ok()?.trim().to_string();
-    if branch == "HEAD" { return None; }
-    Some(branch)
-}
-
-fn resolve_cargo_args(args: &Vec<String>) -> Result<(String, Vec<String>)> {
-    let mut cargo_args = if !args.is_empty() {
-        args.clone()
-    } else {
-        let verify_cmd = crate::project::detect_project().and_then(|p| p.verify);
-        if let Some(cmd_str) = verify_cmd {
-            let trimmed = cmd_str.trim();
-            if let Some(rest) = trimmed.strip_prefix("cargo ") {
-                rest.split_whitespace().map(|s| s.to_string()).collect()
-            } else if trimmed == "cargo" {
-                vec!["check".to_string()]
-            } else {
-                eprintln!("[aid] Warning: project verify command '{}' is not a cargo command. Defaulting to 'cargo check'.", trimmed);
-                vec!["check".to_string()]
-            }
-        } else {
-            vec!["check".to_string()]
-        }
-    };
-
-    if !cargo_args.is_empty() && cargo_args[0] == "cargo" {
-        cargo_args.remove(0);
+    if !output.status.success() {
+        return None;
     }
-    if cargo_args.is_empty() {
-        cargo_args.push("check".to_string());
-    }
-
-    let subcommand = cargo_args[0].clone();
-
-    if let Some(pos) = cargo_args.iter().position(|x| x == "--") {
-        cargo_args.insert(pos, "--message-format=json".to_string());
-    } else {
-        if cargo_args.len() > 1 {
-            cargo_args.insert(1, "--message-format=json".to_string());
-        } else {
-            cargo_args.push("--message-format=json".to_string());
-        }
-    }
-
-    Ok((subcommand, cargo_args))
-}
-
-async fn run_cargo_process(
-    subcommand: &str,
-    cargo_args: Vec<String>,
-    target_dir: Option<String>,
-    store: Arc<Store>,
-    task_id: Option<String>,
-    progress_interval_ms: u64,
-) -> Result<i32> {
-    let mut cmd = Command::new("cargo");
-    cmd.args(&cargo_args);
-    if let Some(ref target_dir) = target_dir {
-        cmd.env("CARGO_TARGET_DIR", target_dir);
-    }
-    cmd.stdout(std::process::Stdio::piped());
-    cmd.stderr(std::process::Stdio::piped());
-
-    let mut child = cmd.spawn().context("Failed to spawn cargo process")?;
-    let stdout = child.stdout.take().context("Failed to get cargo stdout")?;
-    let stderr = child.stderr.take().context("Failed to get cargo stderr")?;
-
-    if let Some(tid) = task_id.as_ref() {
-        let _ = store.insert_event(&crate::types::TaskEvent {
-            task_id: crate::types::TaskId(tid.clone()),
-            timestamp: chrono::Local::now(),
-            event_kind: crate::types::EventKind::Build,
-            detail: format!("cargo {} started", subcommand),
-            metadata: None,
-        });
-    }
-
-    let (ordered_messages, stderr_captured, success) = read_streams(
-        &mut child,
-        stdout,
-        stderr,
-        &store,
-        &task_id,
-        progress_interval_ms,
-    ).await?;
-
-    print_digest(subcommand, &ordered_messages, &stderr_captured, success);
-
-    if let Some(tid) = task_id.as_ref() {
-        let mut error_count = 0;
-        let mut warning_count = 0;
-        for msg in &ordered_messages {
-            if msg.level == "error" {
-                error_count += 1;
-            } else if msg.level == "warning" {
-                warning_count += 1;
-            }
-        }
-        let _ = store.insert_event(&crate::types::TaskEvent {
-            task_id: crate::types::TaskId(tid.clone()),
-            timestamp: chrono::Local::now(),
-            event_kind: crate::types::EventKind::Build,
-            detail: format!("cargo {} finished: {} errors, {} warnings", subcommand, error_count, warning_count),
-            metadata: None,
-        });
-    }
-
-    let status = child.wait().await?;
-    Ok(status.code().unwrap_or(1))
-}
-
-fn print_digest(
-    subcommand: &str,
-    ordered_messages: &[DeduppedMessage],
-    stderr_captured: &[String],
-    success: bool,
-) {
-    let mut error_count = 0;
-    let mut warning_count = 0;
-    for msg in ordered_messages {
-        if msg.level == "error" {
-            error_count += 1;
-        } else if msg.level == "warning" {
-            warning_count += 1;
-        }
-    }
-
-    let status_str = if success && error_count == 0 { "succeeded" } else { "failed" };
-    println!("Cargo {} {}: {} errors, {} warnings", subcommand, status_str, error_count, warning_count);
-
-    if !ordered_messages.is_empty() {
-        println!();
-        for msg in ordered_messages {
-            let level_upper = msg.level.to_uppercase();
-            if msg.line > 0 && !msg.file_name.is_empty() {
-                println!("[{}] {}:{}: {}", level_upper, msg.file_name, msg.line, msg.message);
-            } else {
-                println!("[{}] {}", level_upper, msg.message);
-            }
-        }
-    } else if !success {
-        eprintln!();
-        for line in stderr_captured {
-            eprintln!("{}", line);
-        }
-    }
-}
-
-async fn read_streams(
-    child: &mut tokio::process::Child,
-    stdout: tokio::process::ChildStdout,
-    stderr: tokio::process::ChildStderr,
-    store: &Store,
-    task_id: &Option<String>,
-    progress_interval_ms: u64,
-) -> Result<(Vec<DeduppedMessage>, Vec<String>, bool)> {
-    let mut stdout_lines = BufReader::new(stdout).lines();
-    let mut stderr_lines = BufReader::new(stderr).lines();
-
-    let start = std::time::Instant::now();
-    let mut last_progress = std::time::Instant::now();
-
-    let mut dedupped = HashSet::new();
-    let mut ordered_messages = Vec::new();
-    let mut stderr_captured = Vec::new();
-
-    loop {
-        tokio::select! {
-            line_res = stdout_lines.next_line() => {
-                if let Ok(Some(line)) = line_res {
-                    parse_stdout_line(&line, store, task_id, &mut dedupped, &mut ordered_messages);
-                }
-            }
-            line_res = stderr_lines.next_line() => {
-                if let Ok(Some(line)) = line_res {
-                    stderr_captured.push(line);
-                }
-            }
-            _ = tokio::time::sleep(tokio::time::Duration::from_millis(50)) => {
-                let elapsed = start.elapsed();
-                if elapsed.as_millis() >= 100 {
-                    let last_elapsed_ms = last_progress.elapsed().as_millis();
-                    if last_elapsed_ms >= progress_interval_ms as u128 {
-                        eprintln!("[aid] cargo build: still running... (elapsed: {}s)", elapsed.as_secs());
-                        last_progress = std::time::Instant::now();
-                    }
-                }
-            }
-        }
-
-        if let Ok(Some(status)) = child.try_wait() {
-            while let Ok(Some(line)) = stdout_lines.next_line().await {
-                parse_stdout_line(&line, store, task_id, &mut dedupped, &mut ordered_messages);
-            }
-            while let Ok(Some(line)) = stderr_lines.next_line().await {
-                stderr_captured.push(line);
-            }
-            return Ok((ordered_messages, stderr_captured, status.success()));
-        }
-    }
-}
-
-fn parse_stdout_line(
-    line: &str,
-    store: &Store,
-    task_id: &Option<String>,
-    dedupped: &mut HashSet<DeduppedMessage>,
-    ordered_messages: &mut Vec<DeduppedMessage>,
-) {
-    if let Ok(val) = serde_json::from_str::<serde_json::Value>(line) {
-        let reason = val.get("reason").and_then(|r| r.as_str());
-        if reason == Some("compiler-message") {
-            if let Ok(msg_reason) = serde_json::from_value::<CompilerMessageReason>(val) {
-                let msg = msg_reason.message;
-                let level = msg.level;
-                if level == "error" || level == "warning" {
-                    let primary_span = msg.spans.iter().find(|s| s.is_primary).or_else(|| msg.spans.first());
-                    let (file_name, line_num) = if let Some(span) = primary_span {
-                        (span.file_name.clone(), span.line_start)
-                    } else {
-                        ("".to_string(), 0)
-                    };
-                    let dedupped_msg = DeduppedMessage {
-                        level,
-                        file_name,
-                        line: line_num,
-                        message: msg.message,
-                    };
-                    if dedupped.insert(dedupped_msg.clone()) {
-                        log_build_event(store, task_id, &dedupped_msg);
-                        ordered_messages.push(dedupped_msg);
-                    }
-                }
-            }
-        } else if reason == Some("compiler-artifact") {
-            if let Some(pkg_id) = val.get("package_id").and_then(|p| p.as_str()) {
-                let pkg_name = pkg_id.split_whitespace().next().unwrap_or(pkg_id);
-                if let Some(tid) = task_id.as_ref() {
-                    let _ = store.insert_event(&crate::types::TaskEvent {
-                        task_id: crate::types::TaskId(tid.clone()),
-                        timestamp: chrono::Local::now(),
-                        event_kind: crate::types::EventKind::Build,
-                        detail: format!("Compiled {}", pkg_name),
-                        metadata: None,
-                    });
-                }
-            }
-        }
-    }
-}
-
-fn log_build_event(store: &Store, task_id: &Option<String>, msg: &DeduppedMessage) {
-    if let Some(tid) = task_id.as_ref() {
-        let detail = format!(
-            "cargo {}: {} at {}:{}",
-            msg.level, msg.message, msg.file_name, msg.line
-        );
-        let _ = store.insert_event(&crate::types::TaskEvent {
-            task_id: crate::types::TaskId(tid.clone()),
-            timestamp: chrono::Local::now(),
-            event_kind: crate::types::EventKind::Build,
-            detail,
-            metadata: None,
-        });
-    }
+    let branch = String::from_utf8(output.stdout).ok()?.trim().to_string();
+    (branch != "HEAD").then_some(branch)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    #[test]
-    fn test_resolve_cargo_args_defaults() {
-        let (sub, args) = resolve_cargo_args(&vec![]).unwrap();
-        assert_eq!(sub, "check");
-        assert!(args.contains(&"--message-format=json".to_string()));
+    fn args(command: Option<BuildCommandArg>) -> BuildArgs {
+        BuildArgs {
+            command,
+            package: None,
+            test_filter: None,
+            warnings: false,
+            extra_args: Vec::new(),
+        }
     }
 
     #[test]
-    fn test_resolve_cargo_args_with_cmd() {
-        let (sub, args) = resolve_cargo_args(&vec!["build".to_string(), "--release".to_string()]).unwrap();
-        assert_eq!(sub, "build");
-        assert_eq!(args[0], "build");
-        assert_eq!(args[1], "--message-format=json");
-        assert_eq!(args[2], "--release");
+    fn request_builds_check_cargo_args() {
+        let mut cli_args = args(Some(BuildCommandArg::Check));
+        cli_args.package = Some("ai-dispatch".to_string());
+        cli_args.extra_args = vec!["--all-targets".to_string()];
+        let request = BuildRequest::from_args(cli_args).expect("valid check request");
+        assert_eq!(
+            request.cargo_args(),
+            ["check", "--message-format=json", "-p", "ai-dispatch", "--all-targets"]
+        );
     }
 
     #[test]
-    fn test_resolve_cargo_args_with_dashdash() {
-        let (sub, args) = resolve_cargo_args(&vec![
-            "test".to_string(),
-            "--".to_string(),
-            "--test-threads=1".to_string(),
-        ])
-        .unwrap();
-        assert_eq!(sub, "test");
-        assert_eq!(args[0], "test");
-        assert_eq!(args[1], "--message-format=json");
-        assert_eq!(args[2], "--");
-        assert_eq!(args[3], "--test-threads=1");
+    fn request_rejects_test_filter_for_check() {
+        let mut cli_args = args(Some(BuildCommandArg::Check));
+        cli_args.test_filter = Some("smoke".to_string());
+        assert!(BuildRequest::from_args(cli_args).is_err());
+    }
+
+    #[test]
+    fn request_places_test_filter_as_cargo_test_filter() {
+        let mut cli_args = args(Some(BuildCommandArg::Test));
+        cli_args.test_filter = Some("retry_flow".to_string());
+        let request = BuildRequest::from_args(cli_args).expect("valid test request");
+        assert_eq!(request.cargo_args(), ["test", "--message-format=json", "retry_flow"]);
+    }
+
+    #[test]
+    fn verify_config_selects_supported_cargo_command() {
+        let (command, args) = parse_verify_command(Some("cargo clippy --all-targets"));
+        assert_eq!(command, BuildCommand::Clippy);
+        assert_eq!(args, ["--all-targets"]);
+    }
+
+    #[test]
+    fn display_command_marks_only_non_inherited_target_dir() {
+        let request = BuildRequest::from_args(args(Some(BuildCommandArg::Check))).expect("valid check request");
+        let inherited = CargoTargetChoice { value: Some("/tmp/warm".to_string()), inherited: true };
+        assert_eq!(request.display_command(&inherited), "cargo check");
+
+        let explicit = CargoTargetChoice { value: Some("/tmp/warm".to_string()), inherited: false };
+        assert_eq!(
+            request.display_command(&explicit),
+            "CARGO_TARGET_DIR=/tmp/warm cargo check"
+        );
     }
 }

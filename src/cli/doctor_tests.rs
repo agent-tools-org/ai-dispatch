@@ -7,13 +7,9 @@ use clap::Parser;
 
 #[test]
 fn doctor_command_parses() {
-    let cli = Cli::try_parse_from(["aid", "doctor", "--apply"]).unwrap();
+    let cli = Cli::try_parse_from(["aid", "doctor", "--apply"]).expect("doctor command parses");
     match cli.command {
         Some(Commands::Doctor(command_args_c::DoctorArgs { apply })) => assert!(apply),
         _ => panic!("expected Doctor"),
     }
-}
-
-fn compile_error_here() {
-    let y: u64 = "not a number";
 }

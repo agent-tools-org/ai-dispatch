@@ -34,43 +34,48 @@ helpers to select a shared or branch-specific target directory.
 
 ## Verification
 
-Environment:
+Measured by the maintainer outside the agent sandbox (the dispatched agent could not complete these:
+its inherited `CARGO_TARGET_DIR` lock was not writable under the sandbox, and it reported that
+honestly rather than estimating).
+
+Binary under test: release build of this branch. A real type error was injected into
+`src/cli/doctor_tests.rs`, measured, then reverted.
+
+### Context reduction, cold target directory
+
+| Command | Lines | Bytes |
+|---|---:|---:|
+| `cargo check --all-targets` | 132 | 4340 |
+| of which `Compiling`/`Checking` progress lines | 122 (92%) | - |
+| `aid build check -- --all-targets` | **2** | **133** |
+
+**66x fewer lines, 33x fewer bytes.** ai-dispatch is a small crate; a project with a large dependency
+graph produces far more progress noise, so this is a conservative floor.
+
+The digest still carries everything needed to act:
 
 ```text
-CARGO_TARGET_DIR=/Users/mingsun/.cargo-target/ai-dispatch/_base
+failed: 1 errors, 0 warnings; command: cargo check --all-targets; elapsed: 39.1s
+error: src/cli/doctor_tests.rs:17: mismatched types
 ```
 
-Completed:
+Exit code on failure: `101`.
+
+### Progress events and rate limiting
+
+Run with `AID_TASK_ID` set, threshold 3000ms, interval 5000ms, limit 3, against a cold target dir:
 
 ```text
-$ cargo check -p ai-dispatch --tests
-Finished `dev` profile [unoptimized + debuginfo] target(s) in 11.88s
-
-$ cargo check --all-targets
-Finished `dev` profile [unoptimized + debuginfo] target(s) in 4.62s
+21:16:43  [build] cargo check --all-targets started
+21:16:46  [build] cargo check --all-targets still running after 3s
+21:16:51  [build] cargo check --all-targets still running after 8s
+21:16:56  [build] cargo check --all-targets still running after 13s
+21:17:29  [build] cargo check --all-targets finished: 0 errors, 0 warnings
 ```
 
-Blocked in this sandbox:
+Agent-facing stdout for that 45.7s build was **one line**. Progress stopped after 3 messages and did
+not resume for the remaining 32 seconds, confirming the limit is enforced.
 
-```text
-$ cargo test --bin aid
-error: failed to open: /Users/mingsun/.cargo-target/ai-dispatch/_base/debug/.cargo-build-lock
+### Test suite
 
-Caused by:
-  Operation not permitted (os error 1)
-```
-
-The same inherited target lock prevented building or running a fresh `aid` binary, so the required
-runtime measurements for `aid build` could not be completed without changing or clearing the inherited
-`CARGO_TARGET_DIR`, which this task explicitly disallowed.
-
-Temporary compile-error measurement attempt:
-
-```text
-$ cargo check --all-targets 2>&1 | wc -l -c
-       4     145
-```
-
-The output was the target-lock failure above, so no valid Cargo-vs-`aid build` reduction factor could
-be measured in this environment. The temporary compile-error scaffold was removed after the attempt,
-and `src/cli/doctor_tests.rs` now contains only the real parser coverage.
+`cargo test --bin aid` with default parallelism: 1624 passed, 0 failed, 6 ignored.

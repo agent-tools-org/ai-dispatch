@@ -65,7 +65,12 @@ pub(crate) fn seed_branch_target_dir(
 ) -> Option<BranchTargetSeedOutcome> {
     let layout = target_layout()?;
     let target = target_dir_for_branch(&layout.branch_root, worktree_branch);
-    Some(super::cargo_target::seed_branch_target_from_source(&layout.source, &target))
+    let outcome = if layout.source.is_dir() {
+        super::cargo_target::seed_branch_target_from_source(&layout.source, &target)
+    } else {
+        super::cargo_target::seed_branch_target_from_root_entries(&layout.branch_root, &target)
+    };
+    Some(outcome)
 }
 
 pub(crate) fn remove_branch_target_dir_if_unused(repo_dir: &Path, branch: &str) -> anyhow::Result<bool> {

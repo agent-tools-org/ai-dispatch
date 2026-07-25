@@ -43,7 +43,7 @@ fn failed_task(id: &str) -> Task {
 }
 
 #[test]
-fn live_worktree_retry_without_repo_path_fails_with_legacy_metadata_message() {
+fn live_worktree_retry_without_repo_path_derives_repo_anchor() {
     let _permit = crate::test_subprocess::acquire();
     let repo = init_repo();
     let worktree_root = tempfile::tempdir().unwrap();
@@ -60,8 +60,9 @@ fn live_worktree_retry_without_repo_path_fails_with_legacy_metadata_message() {
         ..Default::default()
     };
 
-    let err = apply_retry_target(&task, &mut args).unwrap_err();
+    apply_retry_target(&task, &mut args).unwrap();
 
-    assert!(err.to_string().contains("legacy task metadata"));
-    assert!(err.to_string().contains("repo_path"));
+    assert_eq!(args.repo.as_deref(), Some(repo.path().to_str().unwrap()));
+    assert_eq!(args.dir.as_deref(), Some(worktree.to_str().unwrap()));
+    assert_eq!(args.worktree.as_deref(), Some("aid/retry-legacy"));
 }

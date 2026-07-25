@@ -53,6 +53,7 @@ fn target_dir_for_worktree_keeps_source_and_branches_as_siblings() {
 #[test]
 fn seed_branch_target_dir_copies_base_without_existing_branches() {
     let _env = env_lock();
+    let _clone = super::super::cargo_target::CloneSeedGuard::regular_copy();
     let temp = tempfile::tempdir().unwrap();
     let root = temp.path().join("target");
     let source = root.join("_base");
@@ -76,6 +77,7 @@ fn seed_branch_target_dir_copies_base_without_existing_branches() {
 #[test]
 fn seed_branch_target_dir_keeps_multiple_branch_targets_flat() {
     let _env = env_lock();
+    let _clone = super::super::cargo_target::CloneSeedGuard::regular_copy();
     let temp = tempfile::tempdir().unwrap();
     let root = temp.path().join("target");
     let source = root.join("_base/debug");

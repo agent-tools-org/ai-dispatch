@@ -184,11 +184,13 @@ pub fn remove_worktree(repo_dir: &str, wt_path: &str) -> Result<()> {
         ));
     }
 
+    let branch = current_worktree_branch(Path::new(wt_path));
     let result = Command::new("git")
         .args(["-C", repo_dir, "worktree", "remove", "--force", wt_path])
         .output();
     if matches!(result, Ok(ref out) if out.status.success()) {
         aid_info!("[aid] Pruned worktree dir {wt_path}");
+        reap_branch_target(repo_dir, branch.as_deref());
         return Ok(());
     }
 
@@ -219,9 +221,31 @@ pub fn remove_worktree(repo_dir: &str, wt_path: &str) -> Result<()> {
             let _ = Command::new("git")
                 .args(["-C", repo_dir, "worktree", "prune"])
                 .output();
+            reap_branch_target(repo_dir, branch.as_deref());
             Ok(())
         }
         Err(e) => Err(e).with_context(|| format!("failed to remove worktree '{wt_path}'")),
+    }
+}
+
+fn current_worktree_branch(wt_path: &Path) -> Option<String> {
+    let output = Command::new("git")
+        .args(["-C", &wt_path.to_string_lossy(), "rev-parse", "--abbrev-ref", "HEAD"])
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let branch = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    (!branch.is_empty() && branch != "HEAD").then_some(branch)
+}
+
+fn reap_branch_target(repo_dir: &str, branch: Option<&str>) {
+    let Some(branch) = branch else {
+        return;
+    };
+    if let Err(err) = crate::agent::env::remove_branch_target_dir_if_unused(Path::new(repo_dir), branch) {
+        aid_warn!("[aid] Warning: failed to remove Cargo target dir for {branch}: {err}");
     }
 }
 

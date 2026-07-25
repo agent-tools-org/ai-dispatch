@@ -39,6 +39,7 @@ pub fn run(
     }
     if clean_worktrees {
         clean_orphaned_worktrees(&store, dry_run)?;
+        crate::cmd::clean_cargo_target::clean_orphaned_branch_targets(dry_run)?;
     }
     clean_orphaned_logs(&store, dry_run)?;
     clean_orphaned_shared_dirs(&store, dry_run)?;

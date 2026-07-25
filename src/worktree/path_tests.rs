@@ -8,8 +8,31 @@ use super::{
 };
 use super::path::WorktreeHomeGuard;
 use crate::test_subprocess;
+use std::ffi::{OsStr, OsString};
 use std::path::Path;
 use std::process::Command;
+
+struct EnvVarGuard {
+    key: &'static str,
+    previous: Option<OsString>,
+}
+
+impl EnvVarGuard {
+    fn set(key: &'static str, value: impl AsRef<OsStr>) -> Self {
+        let previous = std::env::var_os(key);
+        unsafe { std::env::set_var(key, value) };
+        Self { key, previous }
+    }
+}
+
+impl Drop for EnvVarGuard {
+    fn drop(&mut self) {
+        match &self.previous {
+            Some(value) => unsafe { std::env::set_var(self.key, value) },
+            None => unsafe { std::env::remove_var(self.key) },
+        }
+    }
+}
 
 fn expected_project_id(repo_dir: &Path) -> String {
     let canonical = repo_dir.canonicalize().unwrap();
@@ -73,6 +96,29 @@ fn remove_worktree_cleans_up_properly() {
         .unwrap();
     let stdout = String::from_utf8_lossy(&out.stdout);
     assert!(!stdout.contains(&branch));
+}
+
+#[test]
+fn remove_worktree_reaps_branch_target_and_keeps_base() {
+    let _permit = test_subprocess::acquire();
+    let aid_home = tempfile::tempdir().unwrap();
+    let _aid_guard = crate::paths::AidHomeGuard::set(aid_home.path());
+    let repo = tempfile::tempdir().unwrap();
+    init_repo(repo.path());
+    let branch = unique_branch("feat/reap-target");
+    let wt_path = format!("/tmp/aid-wt-test-{}", branch.replace('/', "-"));
+    let target_root = aid_home.path().join("cargo-target");
+    let _target_guard = EnvVarGuard::set("CARGO_TARGET_DIR", &target_root);
+    let base = target_root.join("_base");
+    let branch_target = target_root.join(branch.replace('/', "-"));
+    std::fs::create_dir_all(&base).unwrap();
+    std::fs::create_dir_all(&branch_target).unwrap();
+    git(repo.path(), &["worktree", "add", &wt_path, "-b", &branch]);
+
+    remove_worktree(&repo.path().to_string_lossy(), &wt_path).unwrap();
+
+    assert!(base.exists());
+    assert!(!branch_target.exists());
 }
 
 #[test]

@@ -16,7 +16,7 @@ pub(super) use run_output::{
     output_file_instruction, persist_result_file,
 };
 pub(super) use run_scope::warn_agent_committed_files_outside_scope;
-pub(super) use run_verify::{maybe_auto_retry_after_checklist_miss_impl, maybe_auto_retry_after_verify_failure_impl, maybe_cleanup_fast_fail_impl, maybe_verify_impl};
+pub(super) use run_verify::{maybe_auto_retry_after_checklist_miss_impl, maybe_auto_retry_after_verify_failure_impl, maybe_cleanup_fast_fail_impl, maybe_verify_impl, record_verify_not_run};
 #[path = "run_process.rs"]
 mod run_process;
 #[path = "run_prompt_helpers.rs"]

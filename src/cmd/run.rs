@@ -110,6 +110,8 @@ impl Drop for WorkspaceSymlinkGuard {
 #[cfg(test)] #[path = "run_lifecycle_cleanup_tests.rs"] mod run_lifecycle_cleanup_tests;
 #[cfg(test)] #[path = "run_lifecycle_output_tests.rs"] mod run_lifecycle_output_tests;
 #[cfg(test)] #[path = "run_lifecycle/final_state_tests.rs"] mod run_lifecycle_final_state_tests;
+#[cfg(test)] #[path = "run_lifecycle_verify_gate_tests.rs"] mod run_lifecycle_verify_gate_tests;
+#[cfg(test)] #[path = "run_verify_gate_tests.rs"] mod run_verify_gate_tests;
 #[cfg(test)] #[path = "run_cascade_tests.rs"] mod run_cascade_tests;
 #[cfg(test)] #[path = "run_audit_tests.rs"] mod audit;
 #[cfg(test)] #[path = "run_retry_target_tests.rs"] mod run_retry_target_tests;

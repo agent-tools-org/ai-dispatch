@@ -31,11 +31,11 @@ impl Store {
         self.db().execute(
             "INSERT INTO tasks (id, agent, prompt, resolved_prompt, status, parent_task_id, workgroup_id,
              caller_kind, caller_session_id, agent_session_id, repo_path, worktree_path, worktree_branch,
-             final_head_sha, final_branch, start_sha, log_path, output_path, tokens, prompt_tokens, duration_ms, model, cost_usd,
+             final_head_sha, final_branch, start_sha, log_path, output_path, tokens, prompt_tokens, duration_ms, model, cost_usd, exit_code,
              created_at, completed_at, verify, verify_status, read_only, budget, custom_agent_name,
              category, pending_reason, audit_verdict, audit_report_path, delivery_assessment)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17,
-             ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28, ?29, ?30, ?31, ?32, ?33, ?34, ?35)",
+             ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28, ?29, ?30, ?31, ?32, ?33, ?34, ?35, ?36)",
             params![
                 task.id.as_str(),
                 agent_value,
@@ -60,6 +60,7 @@ impl Store {
                 task.duration_ms,
                 task.model,
                 task.cost_usd,
+                task.exit_code,
                 task.created_at.to_rfc3339(),
                 task.completed_at.map(|t| t.to_rfc3339()),
                 task.verify,

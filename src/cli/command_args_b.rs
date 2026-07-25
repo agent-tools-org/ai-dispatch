@@ -3,7 +3,7 @@
 
 use crate::cli::HookAction;
 use crate::cli_actions::{ConfigAction, ContainerAction, GroupAction};
-use clap::Args;
+use clap::{Args, ValueEnum};
 
 #[derive(Args)]
 #[command(after_help = r#"Examples:
@@ -216,4 +216,35 @@ pub struct GroupArgs {
 pub struct ContainerArgs {
     #[command(subcommand)]
     pub action: ContainerAction,
+}
+
+#[derive(Args)]
+#[command(after_help = r#"Examples:
+  aid build
+  aid build check
+  aid build test --test retry
+  aid build clippy -- --all-targets"#)]
+pub struct BuildArgs {
+    /// Cargo verification command. Defaults to project verify config, then check.
+    #[arg(value_enum)]
+    pub command: Option<BuildCommandArg>,
+    /// Cargo package to verify.
+    #[arg(short = 'p', long)]
+    pub package: Option<String>,
+    /// Test name filter. Valid only with the test command.
+    #[arg(long = "test")]
+    pub test_filter: Option<String>,
+    /// Include warning diagnostics instead of reporting only their count.
+    #[arg(long)]
+    pub warnings: bool,
+    /// Extra cargo arguments appended after aid's generated arguments.
+    #[arg(last = true, allow_hyphen_values = true)]
+    pub extra_args: Vec<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+pub enum BuildCommandArg {
+    Check,
+    Test,
+    Clippy,
 }

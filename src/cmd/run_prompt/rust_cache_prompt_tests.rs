@@ -29,7 +29,7 @@ fn build_prompt_bundle_includes_rust_cache_line_for_rust_project() {
     .unwrap();
 
     assert!(bundle.effective_prompt.starts_with(
-        "Rust project: CARGO_TARGET_DIR already points at a warm shared target directory; do not override it."
+        "Rust project: CARGO_TARGET_DIR points at a warm shared target; do not override."
     ));
 }
 
@@ -48,5 +48,5 @@ fn build_prompt_bundle_omits_rust_cache_line_for_non_rust_project() {
     )
     .unwrap();
 
-    assert!(!bundle.effective_prompt.contains("CARGO_TARGET_DIR already points"));
+    assert!(!bundle.effective_prompt.contains("CARGO_TARGET_DIR points at a warm shared target"));
 }

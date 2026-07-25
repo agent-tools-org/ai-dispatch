@@ -84,6 +84,8 @@ pub enum Commands {
     Config(command_args_b::ConfigArgs),
     Group(command_args_b::GroupArgs),
     Container(command_args_b::ContainerArgs),
+    /// Run cargo build/check and parse/deduplicate JSON compiler errors
+    Build(command_args_b::BuildArgs),
     Worktree(command_args_c::WorktreeArgs),
     Store(command_args_c::StoreArgs),
     Team(command_args_c::TeamArgs),

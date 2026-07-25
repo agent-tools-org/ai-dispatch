@@ -119,7 +119,10 @@ pub(crate) fn resolve_worktree_paths(args: &RunArgs, repo_path: Option<&str>) ->
             !args.read_only,
             "--read-only cannot be used with --worktree"
         );
-        let repo_dir = repo_path.map(|path| path.to_string()).unwrap_or(resolve_repo_path(args.dir.as_deref().unwrap_or("."))?);
+        let repo_dir = match repo_path {
+            Some(path) => path.to_string(),
+            None => resolve_repo_path(args.dir.as_deref().unwrap_or("."))?,
+        };
         // Use explicit base_branch, or default to current branch (not just HEAD)
         // so worktrees inherit the latest state of whatever branch the user is on
         let base = args.base_branch.clone().or_else(|| current_branch(std::path::Path::new(&repo_dir)));

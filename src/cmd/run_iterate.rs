@@ -10,22 +10,7 @@ use std::sync::Arc;
 use crate::store::Store;
 use crate::types::{EventKind, Task, TaskEvent, TaskId, TaskStatus};
 
-use super::RunArgs;
-
-fn retry_target(task: &Task) -> Result<(Option<String>, Option<String>)> {
-    match task.worktree_path.as_ref() {
-        Some(path) if std::path::Path::new(path).exists() => {
-            crate::worktree::ensure_consumed_worktree_path_is_isolated(
-                task.repo_path.as_deref(),
-                path,
-                &format!("recorded worktree path for task {}", task.id),
-            )?;
-            Ok((Some(path.clone()), None))
-        }
-        Some(_) => Ok((None, task.worktree_branch.clone())),
-        None => Ok((None, None)),
-    }
-}
+use super::{RunArgs, apply_retry_target};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct IterateConfig {
@@ -144,9 +129,7 @@ pub async fn maybe_iterate(
     retry_args.verify = task.verify.clone();
     retry_args.read_only = task.read_only;
     retry_args.budget = task.budget;
-    let (dir, worktree) = retry_target(&task)?;
-    retry_args.dir = dir.or_else(|| retry_args.dir.clone());
-    retry_args.worktree = worktree.or_else(|| retry_args.worktree.clone());
+    apply_retry_target(&task, &mut retry_args)?;
     if task.agent.supports_session_resume() {
         retry_args.session_id = task.agent_session_id.clone();
     }

@@ -3,6 +3,7 @@
 // Deps: super::prepare_dispatch, crate::store, RunArgs.
 
 use super::*;
+use crate::cmd::run::apply_retry_target;
 use chrono::Local;
 use std::path::Path;
 use std::process::Command;
@@ -159,6 +160,34 @@ fn generated_id_exhaustion_does_not_reset_worktree_branch() {
 
     assert!(err.to_string().contains("failed to allocate unique task ID"));
     assert_eq!(git_output(repo.path(), &["rev-parse", branch]), branch_before);
+}
+
+#[test]
+fn retry_prepare_persists_live_worktree_metadata() {
+    let _permit = crate::test_subprocess::acquire();
+    let repo = init_repo();
+    let store = Arc::new(Store::open_memory().unwrap());
+    let branch = "fix/retry-live-persist";
+    let worktree = crate::worktree::create_worktree(repo.path(), branch, Some("main")).unwrap();
+    let worktree_path = worktree.path.to_string_lossy().to_string();
+    let mut parent = test_task("t-parent-retry-live");
+    parent.repo_path = Some(repo.path().display().to_string());
+    parent.worktree_path = Some(worktree_path.clone());
+    parent.worktree_branch = Some(branch.to_string());
+    store.insert_task(&parent).unwrap();
+    let mut args = RunArgs {
+        agent_name: "codex".to_string(),
+        prompt: "Retry the prior task.".to_string(),
+        parent_task_id: Some(parent.id.to_string()),
+        ..Default::default()
+    };
+
+    apply_retry_target(&parent, &mut args).unwrap();
+    let prepared = prepare_dispatch(&store, &mut args).unwrap();
+
+    let saved = store.get_task(prepared.task_id.as_str()).unwrap().unwrap();
+    assert_eq!(saved.worktree_path.as_deref(), Some(worktree_path.as_str()));
+    assert_eq!(saved.worktree_branch.as_deref(), Some(branch));
 }
 
 #[test]

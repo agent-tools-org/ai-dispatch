@@ -36,9 +36,10 @@ fn linked_worktree(branch: &str) -> (tempfile::TempDir, tempfile::TempDir, PathB
 
 #[test]
 fn retry_task_to_run_args_uses_parent_and_original_fields() {
+    let repo = tempfile::tempdir().unwrap();
     let mut task = make_stored_task("t-1234", AgentKind::Codex, TaskStatus::Failed);
     task.prompt = "retry me".to_string();
-    task.repo_path = Some("/tmp/repo".to_string());
+    task.repo_path = Some(repo.path().display().to_string());
     task.worktree_branch = Some("feat/retry".to_string());
     task.output_path = Some("out.txt".to_string());
     task.model = Some("o3".to_string());
@@ -51,7 +52,7 @@ fn retry_task_to_run_args_uses_parent_and_original_fields() {
 
     assert_eq!(run_args.agent_name, "cursor");
     assert_eq!(run_args.prompt, "retry me");
-    assert_eq!(run_args.repo, Some("/tmp/repo".to_string()));
+    assert_eq!(run_args.repo, Some(repo.path().display().to_string()));
     assert_eq!(run_args.worktree, Some("feat/retry".to_string()));
     assert_eq!(run_args.verify, Some("cargo check".to_string()));
     assert_eq!(run_args.parent_task_id, Some("t-1234".to_string()));
@@ -72,6 +73,80 @@ fn retry_task_to_run_args_prefers_existing_worktree_path() {
     let run_args = retry_task_to_run_args(&store, &task, "wg-batch", None).unwrap();
 
     assert_eq!(run_args.dir, task.worktree_path);
+    assert_eq!(run_args.worktree, task.worktree_branch);
+}
+
+#[test]
+fn retry_task_to_run_args_uses_repo_path_when_worktree_is_absent() {
+    let repo = tempfile::tempdir().unwrap();
+    let mut task = make_stored_task("t-no-worktree", AgentKind::Codex, TaskStatus::Failed);
+    task.repo_path = Some(repo.path().display().to_string());
+    task.worktree_path = None;
+    task.worktree_branch = None;
+
+    let store = Store::open_memory().unwrap();
+    let run_args = retry_task_to_run_args(&store, &task, "wg-batch", None).unwrap();
+
+    assert_eq!(run_args.dir, Some(repo.path().display().to_string()));
+    assert_eq!(run_args.worktree, None);
+}
+
+#[test]
+fn retry_task_to_run_args_errors_when_stale_worktree_has_no_repo() {
+    let temp = tempfile::tempdir().unwrap();
+    let stale_dir = temp.path().join("missing-worktree");
+    let mut task = make_stored_task("t-stale-no-repo", AgentKind::Codex, TaskStatus::Failed);
+    task.worktree_path = Some(stale_dir.display().to_string());
+    task.worktree_branch = Some("feat/retry".to_string());
+
+    let store = Store::open_memory().unwrap();
+    store.insert_task(&task).unwrap();
+    let saved = RunArgs {
+        dir: task.worktree_path.clone(),
+        worktree: task.worktree_branch.clone(),
+        ..Default::default()
+    };
+    store.update_task_dispatch_args(task.id.as_str(), &saved.dispatch_args_json().unwrap()).unwrap();
+
+    let err = retry_task_to_run_args(&store, &task, "wg-batch", None)
+        .err()
+        .expect("retry should fail without a usable target");
+
+    assert!(err.to_string().contains("no usable worktree path, retry dir, or repo path"));
+}
+
+#[test]
+fn retry_task_to_run_args_errors_without_worktree_or_repo() {
+    let task = make_stored_task("t-no-target", AgentKind::Codex, TaskStatus::Failed);
+    let store = Store::open_memory().unwrap();
+
+    let err = retry_task_to_run_args(&store, &task, "wg-batch", None)
+        .err()
+        .expect("retry should fail without a usable target");
+
+    assert!(err.to_string().contains("no usable worktree path, retry dir, or repo path"));
+}
+
+#[test]
+fn retry_task_to_run_args_preserves_saved_subdir_inside_repo() {
+    let repo = tempfile::tempdir().unwrap();
+    let subdir = repo.path().join("crate");
+    std::fs::create_dir(&subdir).unwrap();
+    let mut task = make_stored_task("t-subdir", AgentKind::Codex, TaskStatus::Failed);
+    task.repo_path = Some(repo.path().display().to_string());
+
+    let store = Store::open_memory().unwrap();
+    store.insert_task(&task).unwrap();
+    let saved = RunArgs {
+        repo: task.repo_path.clone(),
+        dir: Some(subdir.display().to_string()),
+        ..Default::default()
+    };
+    store.update_task_dispatch_args(task.id.as_str(), &saved.dispatch_args_json().unwrap()).unwrap();
+
+    let run_args = retry_task_to_run_args(&store, &task, "wg-batch", None).unwrap();
+
+    assert_eq!(run_args.dir, Some(subdir.display().to_string()));
     assert_eq!(run_args.worktree, None);
 }
 
@@ -115,7 +190,7 @@ fn retry_task_to_run_args_rehydrates_saved_args_and_keeps_worktree() {
     let run_args = retry_task_to_run_args(&store, &task, "wg-batch", None).unwrap();
 
     assert_eq!(run_args.dir, task.worktree_path);
-    assert_eq!(run_args.worktree, None);
+    assert_eq!(run_args.worktree, task.worktree_branch);
     assert_eq!(run_args.team, Some("dev".to_string()));
     assert_eq!(run_args.context, vec!["AGENTS.md".to_string()]);
     assert_eq!(run_args.scope, vec!["src/**".to_string()]);
@@ -123,8 +198,32 @@ fn retry_task_to_run_args_rehydrates_saved_args_and_keeps_worktree() {
 }
 
 #[test]
+fn retry_task_to_run_args_preserves_saved_worktree_when_live_path_exists() {
+    let store = Store::open_memory().unwrap();
+    // Real repo + linked worktree: the isolation guard resolves the main checkout via git
+    // and fails closed on paths it cannot place, so a plain temp dir will not do here.
+    let (repo, _linked_root, worktree_path) = linked_worktree("feat/retry");
+    let mut task = make_stored_task("t-live-saved-worktree", AgentKind::Codex, TaskStatus::Failed);
+    task.repo_path = Some(repo.path().display().to_string());
+    task.worktree_path = Some(worktree_path.display().to_string());
+    task.worktree_branch = Some("feat/retry".to_string());
+    store.insert_task(&task).unwrap();
+    let saved = RunArgs {
+        worktree: Some("feat/retry".to_string()),
+        ..Default::default()
+    };
+    store.update_task_dispatch_args(task.id.as_str(), &saved.dispatch_args_json().unwrap()).unwrap();
+
+    let run_args = retry_task_to_run_args(&store, &task, "wg-batch", None).unwrap();
+
+    assert_eq!(run_args.dir, task.worktree_path);
+    assert_eq!(run_args.worktree, task.worktree_branch);
+}
+
+#[test]
 fn retry_task_to_run_args_uses_waiting_placeholder_fields() {
     let store = Arc::new(Store::open_memory().unwrap());
+    let repo = tempfile::tempdir().unwrap();
     let prompt = "retry ".repeat(40);
     store
         .insert_waiting_task(
@@ -133,7 +232,7 @@ fn retry_task_to_run_args_uses_waiting_placeholder_fields() {
             &prompt,
             None,
             Some("wg-batch"),
-            Some("/tmp/repo"),
+            Some(repo.path().to_str().unwrap()),
             Some("feat/retry"),
             Some("o3"),
             Some("cargo check -p ai-dispatch"),
@@ -146,7 +245,7 @@ fn retry_task_to_run_args_uses_waiting_placeholder_fields() {
     let run_args = retry_task_to_run_args(store.as_ref(), &task, "wg-batch", None).unwrap();
 
     assert_eq!(run_args.prompt, prompt);
-    assert_eq!(run_args.dir, Some("/tmp/repo".to_string()));
+    assert_eq!(run_args.dir, Some(repo.path().display().to_string()));
     assert_eq!(run_args.worktree, Some("feat/retry".to_string()));
     assert_eq!(run_args.model, Some("o3".to_string()));
     assert_eq!(run_args.verify, Some("cargo check -p ai-dispatch".to_string()));

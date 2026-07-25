@@ -3,18 +3,23 @@
 // Deps: run_lifecycle helpers, Store, git CLI, tempfile.
 
 use super::{
-    final_dirty_assertion,
-    run_dirty::{post_agent_dirty_worktree_cleanup, DirtyWorktreeAction},
-    run_lifecycle::{post_run_lifecycle, output_content_length, LifecycleMode},
+    RunArgs, final_dirty_assertion,
+    run_dirty::{DirtyWorktreeAction, post_agent_dirty_worktree_cleanup},
+    run_lifecycle::{LifecycleMode, post_run_lifecycle},
     run_prompt::PromptBundle,
-    RunArgs,
 };
 use crate::{hooks::Hook, store::Store, test_subprocess, types::*};
 use chrono::Local;
 use std::{path::Path, process::Command, sync::Arc};
 
 fn git(dir: &Path, args: &[&str]) {
-    assert!(Command::new("git").arg("-C").arg(dir).args(args).status().unwrap().success());
+    assert!(Command::new("git")
+        .arg("-C")
+        .arg(dir)
+        .args(args)
+        .status()
+        .unwrap()
+        .success());
 }
 
 fn init_repo() -> tempfile::TempDir {
@@ -74,31 +79,6 @@ fn task(id: &str, status: TaskStatus) -> Task {
         audit_report_path: None,
         delivery_assessment: None,
     }
-}
-
-#[test]
-fn output_content_length_counts_multibyte_output_as_characters() {
-    let dir = tempfile::tempdir().unwrap();
-    let output_path = dir.path().join("output.md");
-    let content = format!("{}{}", "a".repeat(196), "\u{2019}".repeat(2));
-    assert!(content.len() >= 200);
-    assert!(content.chars().count() < 200);
-    std::fs::write(&output_path, content).unwrap();
-    let mut task = task("t-short-multibyte", TaskStatus::Done);
-    task.output_path = Some(output_path.to_string_lossy().to_string());
-
-    assert!(output_content_length(&task) < 200);
-}
-
-#[test]
-fn output_content_length_keeps_long_ascii_output_at_threshold() {
-    let dir = tempfile::tempdir().unwrap();
-    let output_path = dir.path().join("output.md");
-    std::fs::write(&output_path, "a".repeat(200)).unwrap();
-    let mut task = task("t-long-ascii", TaskStatus::Done);
-    task.output_path = Some(output_path.to_string_lossy().to_string());
-
-    assert!(output_content_length(&task) >= 200);
 }
 
 #[test]

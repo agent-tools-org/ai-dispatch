@@ -74,8 +74,24 @@ pub(crate) async fn post_run_lifecycle(
     .await?
     {
         LifecyclePhaseDecision::Continue => {}
-        LifecyclePhaseDecision::Retry(retry_id) => return Ok(Some(retry_id)),
-        LifecyclePhaseDecision::Stop => return Ok(None),
+        LifecyclePhaseDecision::Retry(retry_id) => {
+            record_skipped_configured_verify(
+                store,
+                task_id,
+                args,
+                format!("dirty worktree rescue dispatched retry {retry_id} before verify"),
+            );
+            return Ok(Some(retry_id));
+        }
+        LifecyclePhaseDecision::Stop => {
+            record_skipped_configured_verify(
+                store,
+                task_id,
+                args,
+                "dirty worktree settlement failed before verify".to_string(),
+            );
+            return Ok(None);
+        }
     }
     run_verify_scope_phase(
         store,
@@ -348,8 +364,20 @@ fn run_verify_scope_phase(
         effective_dir,
         container_name,
     );
+    crate::verify::enforce_verify_status(store, task_id);
     if !args.read_only && !args.scope.is_empty() {
         run_agent::check_scope_violations(store, task_id, &args.scope, effective_dir);
+    }
+}
+
+fn record_skipped_configured_verify(
+    store: &Arc<Store>,
+    task_id: &TaskId,
+    args: &RunArgs,
+    reason: String,
+) {
+    if args.verify.is_some() {
+        run_prompt::record_verify_not_run(store.as_ref(), task_id, reason);
     }
 }
 

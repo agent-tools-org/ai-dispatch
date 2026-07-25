@@ -94,6 +94,8 @@ fn maybe_verify_records_missing_deps_hint_for_fresh_worktree() {
         None, false, None, true, None,
     )
     .unwrap();
+    let script = worktree.path().join("missing-deps.sh");
+    std::fs::write(&script, "#!/bin/sh\necho \"Error: Cannot find module 'vite'\" >&2\nexit 1\n").unwrap();
     store
         .insert_task(&make_task("t-verify-hint", &worktree_str))
         .unwrap();
@@ -101,7 +103,7 @@ fn maybe_verify_records_missing_deps_hint_for_fresh_worktree() {
     maybe_verify_impl(
         &store,
         &TaskId("t-verify-hint".to_string()),
-        Some("false"),
+        Some(&format!("sh {}", script.display())),
         Some(&worktree_str),
         None,
     );

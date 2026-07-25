@@ -52,6 +52,12 @@ pub(crate) fn mark_failed(store: &Store, task_id: &TaskId) -> Result<bool> {
     Ok(true)
 }
 
+pub(crate) fn fail_completed_verify_gate(store: &Store, task_id: &TaskId) -> Result<bool> {
+    let changed = store.fail_completed_verify_gate(task_id.as_str())?;
+    salvage_failed_id(store, task_id.as_str(), changed);
+    Ok(changed)
+}
+
 pub(crate) fn fail_if_running(store: &Store, task_id: &str) -> Result<bool> {
     let failed = store.fail_if_running(task_id)?;
     salvage_failed_id(store, task_id, failed);

@@ -28,64 +28,8 @@ use super::RunArgs;
 const VERIFY_RETRY_FEEDBACK: &str =
     "Verification failed. Please fix the compilation/test errors and try again.";
 const PROMPT_TOKEN_LIMIT: usize = 30_000;
-const BATCH_SIBLING_LIMIT: usize = 10;
-const BATCH_SIBLING_PROMPT_LIMIT: usize = 80;
 
 pub(crate) struct PromptBundle { pub effective_prompt: String, pub context_files: Vec<String>, pub prompt_tokens: i64, pub injected_memory_ids: Vec<String> }
-
-fn sanitize_injected_text(text: &str) -> String {
-    let mut result = Vec::new();
-    let mut inside = false;
-    for line in text.lines() {
-        let trimmed = line.trim_start();
-        if trimmed.starts_with("<aid-") && !trimmed.starts_with("</aid-") {
-            inside = true;
-            continue;
-        }
-        if trimmed.starts_with("</aid-") {
-            inside = false;
-            continue;
-        }
-        if !inside {
-            result.push(line);
-        }
-    }
-    result.join("\n")
-}
-
-fn truncate_batch_sibling_prompt(prompt: &str) -> String {
-    let mut preview: String = prompt.chars().take(BATCH_SIBLING_PROMPT_LIMIT).collect();
-    if prompt.chars().count() > BATCH_SIBLING_PROMPT_LIMIT {
-        preview.push_str("...");
-    }
-    preview
-}
-
-pub(super) fn format_batch_siblings(siblings: &[(String, String, String)]) -> String {
-    let shown = siblings
-        .iter()
-        .take(BATCH_SIBLING_LIMIT)
-        .map(|(name, agent, prompt)| {
-            format!(
-                "- \"{}\" ({}): {}",
-                name,
-                agent,
-                truncate_batch_sibling_prompt(prompt)
-            )
-        })
-        .collect::<Vec<_>>();
-    let remaining = siblings.len().saturating_sub(BATCH_SIBLING_LIMIT);
-    let mut lines = vec![
-        "<aid-batch-siblings>".to_string(),
-        "Other tasks running in this batch:".to_string(),
-    ];
-    lines.extend(shown);
-    if remaining > 0 {
-        lines.push(format!("+ {remaining} more"));
-    }
-    lines.push("</aid-batch-siblings>".to_string());
-    lines.join("\n")
-}
 
 pub(super) fn build_prompt_bundle(store: &Store, args: &RunArgs, agent_kind: &AgentKind, workgroup: Option<&Workgroup>, requested_skills: &[String], current_task_id: &str) -> Result<PromptBundle> {
     let (file_context, context_files) = build_context_flags(agent_kind, &args.context)?;
@@ -306,6 +250,9 @@ pub(super) fn build_prompt_bundle(store: &Store, args: &RunArgs, agent_kind: &Ag
     }
     if let Some(checklist_block) = crate::cmd::checklist::format_checklist_block(&args.checklist) {
         effective_prompt = format!("{effective_prompt}\n\n{checklist_block}");
+    }
+    if let Some(line) = rust_cache_prompt_line(args.dir.as_deref()) {
+        effective_prompt = format!("{line}\n\n{effective_prompt}");
     }
 
     // Compact prompt if it exceeds token budget

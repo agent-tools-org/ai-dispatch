@@ -210,11 +210,11 @@ pub(super) async fn run_foreground_task(
         std_cmd.env("AID_GROUP", group);
     }
     std_cmd.env("AID_TASK_ID", prepared.task_id.as_str());
-    if agent::is_rust_project(prepared.effective_dir.as_deref())
-        && let Some(target_dir) = agent::target_dir_for_worktree(args.worktree.as_deref())
-    {
-        std_cmd.env("CARGO_TARGET_DIR", &target_dir);
-    }
+    agent::apply_rust_build_cache_env(
+        &mut std_cmd,
+        prepared.effective_dir.as_deref(),
+        args.worktree.as_deref(),
+    );
     let std_cmd = if let Some(container_name) = container_name {
         aid_info!(
             "[aid] Container: running {} in {}",

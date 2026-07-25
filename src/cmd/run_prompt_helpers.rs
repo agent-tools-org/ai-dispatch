@@ -19,6 +19,64 @@ pub(crate) fn resolve_prompt(prompt: &str, template: Option<&str>) -> Result<Str
 /// Minimum prompt length to inject full methodology + gotchas.
 /// Short prompts (trivial tasks) get references-only to avoid context pollution.
 const SKILL_FULL_INJECT_MIN_CHARS: usize = 200;
+const RUST_CACHE_PROMPT_LINE: &str =
+    "Rust project: CARGO_TARGET_DIR already points at a warm shared target directory; do not override it.";
+const BATCH_SIBLING_LIMIT: usize = 10;
+const BATCH_SIBLING_PROMPT_LIMIT: usize = 80;
+
+pub(crate) fn sanitize_injected_text(text: &str) -> String {
+    let mut result = Vec::new();
+    let mut inside = false;
+    for line in text.lines() {
+        let trimmed = line.trim_start();
+        if trimmed.starts_with("<aid-") && !trimmed.starts_with("</aid-") {
+            inside = true;
+            continue;
+        }
+        if trimmed.starts_with("</aid-") {
+            inside = false;
+            continue;
+        }
+        if !inside {
+            result.push(line);
+        }
+    }
+    result.join("\n")
+}
+
+fn truncate_batch_sibling_prompt(prompt: &str) -> String {
+    let mut preview: String = prompt.chars().take(BATCH_SIBLING_PROMPT_LIMIT).collect();
+    if prompt.chars().count() > BATCH_SIBLING_PROMPT_LIMIT {
+        preview.push_str("...");
+    }
+    preview
+}
+
+pub(super) fn format_batch_siblings(siblings: &[(String, String, String)]) -> String {
+    let shown = siblings
+        .iter()
+        .take(BATCH_SIBLING_LIMIT)
+        .map(|(name, agent, prompt)| {
+            format!(
+                "- \"{}\" ({}): {}",
+                name,
+                agent,
+                truncate_batch_sibling_prompt(prompt)
+            )
+        })
+        .collect::<Vec<_>>();
+    let remaining = siblings.len().saturating_sub(BATCH_SIBLING_LIMIT);
+    let mut lines = vec![
+        "<aid-batch-siblings>".to_string(),
+        "Other tasks running in this batch:".to_string(),
+    ];
+    lines.extend(shown);
+    if remaining > 0 {
+        lines.push(format!("+ {remaining} more"));
+    }
+    lines.push("</aid-batch-siblings>".to_string());
+    lines.join("\n")
+}
 
 pub(crate) fn inject_skill(prompt: &str, agent_kind: &AgentKind, requested_skills: &[String], raw_prompt_len: usize) -> Result<String> {
     if requested_skills.is_empty() { return Ok(prompt.to_string()); }
@@ -81,6 +139,10 @@ pub(crate) fn build_context_flags(agent_kind: &AgentKind, context_args: &[String
         blocks.join("\n\n")
     } else { crate::context::resolve_context(&specs)? };
     Ok((Some(file_context), vec![]))
+}
+
+pub(crate) fn rust_cache_prompt_line(dir: Option<&str>) -> Option<&'static str> {
+    agent::is_rust_project(dir).then_some(RUST_CACHE_PROMPT_LINE)
 }
 
 pub(crate) fn expand_context_paths(specs: &[crate::context::ContextSpec]) -> Vec<String> { specs.iter().map(|spec| spec.file.clone()).collect() }

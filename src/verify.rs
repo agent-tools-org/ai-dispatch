@@ -44,9 +44,8 @@ pub fn run_verify(
     // Verify commands are user-authored, but we still execute them as argv to avoid
     // handing arbitrary strings to a shell. This preserves simple commands like
     // `cargo test` while refusing shell metacharacter expansion by default.
-    if container_name.is_none()
-        && let Some(target_dir) = cargo_target_dir {
-        cmd.env("CARGO_TARGET_DIR", target_dir);
+    if container_name.is_none() {
+        crate::agent::apply_cargo_target_env(&mut cmd, cargo_target_dir);
     }
 
     let _lock = VERIFY_LOCK.lock().unwrap_or_else(|e| e.into_inner());

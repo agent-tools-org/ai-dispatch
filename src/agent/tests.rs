@@ -68,11 +68,12 @@ fn returns_false_when_manifest_is_missing() {
 fn shared_target_dir_prefers_explicit_env_var() {
     let _permit = test_subprocess::acquire();
     let temp_dir = TempDir::new().unwrap();
-    let expected = temp_dir.path().join("shared-target");
+    let root = temp_dir.path().join("shared-target");
+    let expected = root.join("_base");
     let output = run_helper(
         "agent::tests::reports_shared_target_dir_for_subprocess",
         None,
-        &[("CARGO_TARGET_DIR", Some(expected.as_os_str()))],
+        &[("CARGO_TARGET_DIR", Some(root.as_os_str()))],
     );
     assert_eq!(
         extract_marker(&output, "SHARED_TARGET_DIR="),
@@ -85,7 +86,7 @@ fn shared_target_dir_defaults_under_aid_home() {
     let _permit = test_subprocess::acquire();
     let temp_dir = TempDir::new().unwrap();
     let aid_home = temp_dir.path().join("aid-home");
-    let expected = aid_home.join("cargo-target");
+    let expected = aid_home.join("cargo-target").join("_base");
     let output = run_helper(
         "agent::tests::reports_shared_target_dir_for_subprocess",
         None,
@@ -105,7 +106,7 @@ fn shared_target_dir_defaults_to_home_aid_path() {
     let _permit = test_subprocess::acquire();
     let temp_dir = TempDir::new().unwrap();
     let home_dir = temp_dir.path().join("home");
-    let expected = PathBuf::from(&home_dir).join(".aid").join("cargo-target");
+    let expected = PathBuf::from(&home_dir).join(".aid").join("cargo-target").join("_base");
     let output = run_helper(
         "agent::tests::reports_shared_target_dir_for_subprocess",
         None,
@@ -142,7 +143,8 @@ fn reports_shared_target_dir_for_subprocess() {
 fn target_dir_for_worktree_isolates_branches() {
     let base = shared_target_dir().unwrap();
     let isolated = target_dir_for_worktree(Some("feat/my-feature")).unwrap();
-    assert_eq!(isolated, format!("{base}/feat-my-feature"));
+    let root = Path::new(&base).parent().unwrap();
+    assert_eq!(isolated, root.join("feat-my-feature").to_string_lossy().as_ref());
     let shared = target_dir_for_worktree(None).unwrap();
     assert_eq!(shared, base);
 }

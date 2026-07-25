@@ -249,7 +249,7 @@ fn prepare_worktree_deps(
     };
     if let Err(err) = crate::worktree_deps::prepare_worktree_dependencies(
         store, task_id, Path::new(repo), Path::new(wt), args.setup.as_deref(), args.link_deps,
-        crate::idle_timeout::idle_timeout_secs_from_env(args.env.as_ref()), setup.fresh_worktree,
+        crate::idle_timeout::idle_timeout_secs_from_env(args.env.as_ref()), setup.fresh_worktree, setup.wt_branch.as_deref(),
     ) {
         clear_worktree_lock(Some(wt), task_id.as_str());
         fail_claimed_task(store, task_id, agent_setup.effective_model.as_deref(), &err)?;

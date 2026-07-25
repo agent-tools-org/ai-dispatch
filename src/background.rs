@@ -180,12 +180,7 @@ async fn run_task_inner(store: &Arc<Store>, spec: &BackgroundRunSpec) -> Result<
     }
     std_cmd.env("AID_TASK_ID", &spec.task_id);
     let worktree_branch = store.get_task(&spec.task_id)?.and_then(|task| task.worktree_branch);
-    if agent::is_rust_project(spec.dir.as_deref())
-        && let Some(target_dir) =
-            agent::target_dir_for_worktree(worktree_branch.as_deref())
-    {
-        std_cmd.env("CARGO_TARGET_DIR", &target_dir);
-    }
+    agent::apply_rust_build_cache_env(&mut std_cmd, spec.dir.as_deref(), worktree_branch.as_deref());
     let container_name = if let Some(image) = spec.container.as_deref() {
         let project_dir = spec
             .dir

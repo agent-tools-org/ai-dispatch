@@ -34,7 +34,7 @@ fn target_dir_for_worktree_keeps_source_and_branches_as_siblings() {
     let temp = tempfile::tempdir().unwrap();
     let root = temp.path().join("target");
     let source = root.join("_base");
-    let _target_dir = EnvVarGuard::set("CARGO_TARGET_DIR", &source);
+    let _target_dir = EnvVarGuard::set("CARGO_TARGET_DIR", &root);
 
     let branch_target = target_dir_for_worktree(Some("feat/shared-cache")).unwrap();
     let source_target = target_dir_for_worktree(None).unwrap();
@@ -61,7 +61,7 @@ fn seed_branch_target_dir_copies_base_without_existing_branches() {
     std::fs::create_dir_all(&debug).unwrap();
     std::fs::create_dir_all(&existing_branch).unwrap();
     std::fs::write(debug.join("artifact.txt"), "cached").unwrap();
-    let _target_dir = EnvVarGuard::set("CARGO_TARGET_DIR", &source);
+    let _target_dir = EnvVarGuard::set("CARGO_TARGET_DIR", &root);
 
     let outcome = seed_branch_target_dir("feat/shared-cache").unwrap();
 
@@ -81,7 +81,7 @@ fn seed_branch_target_dir_keeps_multiple_branch_targets_flat() {
     let source = root.join("_base/debug");
     std::fs::create_dir_all(&source).unwrap();
     std::fs::write(source.join("artifact.txt"), "cached").unwrap();
-    let _target_dir = EnvVarGuard::set("CARGO_TARGET_DIR", root.join("_base"));
+    let _target_dir = EnvVarGuard::set("CARGO_TARGET_DIR", &root);
 
     for branch in ["feat/cache-a", "feat/cache-b", "feat/cache-c"] {
         let outcome = seed_branch_target_dir(branch).unwrap();
@@ -97,6 +97,50 @@ fn seed_branch_target_dir_keeps_multiple_branch_targets_flat() {
 }
 
 #[test]
+fn explicit_cargo_target_dir_keeps_branch_target_inside_project_root() {
+    let _env = env_lock();
+    let temp = tempfile::tempdir().unwrap();
+    let root = temp.path().join("some/root/project");
+    let escaped = temp.path().join("some/root/fix-foo");
+    let _target_dir = EnvVarGuard::set("CARGO_TARGET_DIR", &root);
+
+    let branch_target = PathBuf::from(target_dir_for_worktree(Some("fix/foo")).unwrap());
+    let source_target = PathBuf::from(target_dir_for_worktree(None).unwrap());
+
+    assert!(branch_target.starts_with(&root));
+    assert_eq!(branch_target, root.join("fix-foo"));
+    assert_ne!(branch_target, escaped);
+    assert_eq!(source_target, root.join("_base"));
+}
+
+#[test]
+fn explicit_cargo_target_dir_namespaces_same_branch_per_project() {
+    let _env = env_lock();
+    let temp = tempfile::tempdir().unwrap();
+    let first_project = temp.path().join("root/project-a");
+    let second_project = temp.path().join("root/project-b");
+
+    let first_target = {
+        let _target_dir = EnvVarGuard::set("CARGO_TARGET_DIR", &first_project);
+        target_dir_for_worktree(Some("fix/shared")).unwrap()
+    };
+    let second_target = {
+        let _target_dir = EnvVarGuard::set("CARGO_TARGET_DIR", &second_project);
+        target_dir_for_worktree(Some("fix/shared")).unwrap()
+    };
+
+    assert_eq!(
+        first_target,
+        first_project.join("fix-shared").to_string_lossy()
+    );
+    assert_eq!(
+        second_target,
+        second_project.join("fix-shared").to_string_lossy()
+    );
+    assert_ne!(first_target, second_target);
+}
+
+#[test]
 fn apply_rust_build_cache_env_sets_target_only() {
     let _env = env_lock();
     let temp = tempfile::tempdir().unwrap();
@@ -109,7 +153,7 @@ fn apply_rust_build_cache_env_sets_target_only() {
 
     apply_rust_build_cache_env(&mut cmd, project.to_str(), None);
 
-    let expected = target.to_string_lossy().to_string();
+    let expected = target.join("_base").to_string_lossy().to_string();
     assert_eq!(
         command_env(&cmd, "CARGO_TARGET_DIR").as_deref(),
         Some(expected.as_str())

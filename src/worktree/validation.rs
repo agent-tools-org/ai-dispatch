@@ -1,13 +1,18 @@
 // Linked-worktree validation helpers for aid-managed /tmp worktrees.
-// Exports: canonical_worktree_path() and is_valid_git_worktree() to parent module.
+// Exports: path canonicalization, main-checkout detection, and git worktree validation.
 // Deps: anyhow, std::path, std::process::Command.
 
 use anyhow::{Context, Result};
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use super::path::main_repo_dir;
 
 pub(super) fn canonical_worktree_path(path: &Path) -> PathBuf {
     path.canonicalize().unwrap_or_else(|_| path.to_path_buf())
+}
+
+pub(crate) fn is_main_working_tree_path(repo_dir: &Path, wt_path: &Path) -> bool {
+    canonical_worktree_path(wt_path) == canonical_worktree_path(&main_repo_dir(repo_dir))
 }
 
 pub(super) fn is_valid_git_worktree(repo_dir: &Path, wt_path: &Path) -> Result<bool> {

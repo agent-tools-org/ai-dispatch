@@ -23,12 +23,14 @@ fn insert_and_get_task_persists_dispatch_flags() {
     let store = Store::open_memory().unwrap();
     let mut task = make_task("t-0004", AgentKind::Codex, TaskStatus::Pending);
     task.verify = Some("cargo test".to_string());
+    task.exit_code = Some(0);
     task.read_only = true;
     task.budget = true;
     store.insert_task(&task).unwrap();
 
     let loaded = store.get_task("t-0004").unwrap().unwrap();
     assert_eq!(loaded.verify.as_deref(), Some("cargo test"));
+    assert_eq!(loaded.exit_code, Some(0));
     assert!(loaded.read_only);
     assert!(loaded.budget);
 }

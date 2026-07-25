@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 use crate::cmd::checklist_scan;
 use crate::store::Store;
-use crate::types::{EventKind, Task, TaskEvent, TaskId, TaskStatus};
+use crate::types::{EventKind, Task, TaskEvent, TaskId, TaskStatus, VerifyStatus};
 
 use super::RunArgs;
 
@@ -47,21 +47,18 @@ pub(in crate::cmd) fn maybe_verify_impl(
     container_name: Option<&str>,
 ) {
     let Some(verify_arg) = verify else { return };
-    let Some(dir_path) = dir else { println!("Verify skipped: no working directory"); return; };
+    let Some(dir_path) = dir else {
+        record_verify_not_run(store, task_id, "no working directory".to_string());
+        aid_error!("Verify error: no working directory");
+        return;
+    };
     let command = if verify_arg == "auto" { None } else { Some(verify_arg) };
     let path = std::path::Path::new(dir_path);
     let task = store.get_task(task_id.as_str()).ok().flatten();
     let worktree_branch = task.as_ref().and_then(|task| task.worktree_branch.clone());
     if !path.is_dir() {
         let detail = stale_worktree_dir_error(dir_path, worktree_branch.as_deref());
-        let event = TaskEvent {
-            task_id: task_id.clone(),
-            timestamp: Local::now(),
-            event_kind: EventKind::Error,
-            detail: detail.clone(),
-            metadata: None,
-        };
-        let _ = store.insert_event(&event);
+        record_verify_not_run(store, task_id, detail.clone());
         aid_error!("Verify error: {detail}");
         return;
     }
@@ -71,14 +68,11 @@ pub(in crate::cmd) fn maybe_verify_impl(
             let result = match crate::verify::apply_declared_file_check(path, task.as_ref(), result) {
                 Ok(result) => result,
                 Err(e) => {
-                    let event = TaskEvent {
-                        task_id: task_id.clone(),
-                        timestamp: Local::now(),
-                        event_kind: EventKind::Error,
-                        detail: format!("Failed during declared-file verification: {e}"),
-                        metadata: None,
-                    };
-                    let _ = store.insert_event(&event);
+                    record_verify_failed(
+                        store,
+                        task_id,
+                        format!("Failed during declared-file verification: {e}"),
+                    );
                     aid_error!("Verify error: {e}");
                     return;
                 }
@@ -87,7 +81,7 @@ pub(in crate::cmd) fn maybe_verify_impl(
             println!("{report}");
             crate::verify::record_verify_status(store, task_id, &result);
             if !result.success {
-                let hint = verify_failure_hint(store, task_id);
+                let hint = verify_failure_hint(store, task_id, &result.output);
                 let detail = match verify_output_excerpt(&result.output) {
                     Some(output) => {
                         format!(
@@ -103,28 +97,34 @@ pub(in crate::cmd) fn maybe_verify_impl(
                         hint.as_deref().map(|value| format!("\n{value}")).unwrap_or_default()
                     ),
                 };
-                let event = TaskEvent {
-                    task_id: task_id.clone(),
-                    timestamp: Local::now(),
-                    event_kind: EventKind::Error,
-                    detail,
-                    metadata: None,
-                };
-                let _ = store.insert_event(&event);
+                record_verify_failed(store, task_id, detail);
             }
         }
         Err(e) => {
-            let event = TaskEvent {
-                task_id: task_id.clone(),
-                timestamp: Local::now(),
-                event_kind: EventKind::Error,
-                detail: format!("Failed during verification: {e}"),
-                metadata: None,
-            };
-            let _ = store.insert_event(&event);
+            record_verify_failed(store, task_id, format!("Failed during verification: {e}"));
             aid_error!("Verify error: {e}");
         }
     }
+}
+
+pub(in crate::cmd) fn record_verify_not_run(store: &Store, task_id: &TaskId, reason: String) {
+    record_verify_failed(
+        store,
+        task_id,
+        format!("Configured verification did not run: {reason}"),
+    );
+}
+
+fn record_verify_failed(store: &Store, task_id: &TaskId, detail: String) {
+    let _ = store.update_verify_status(task_id.as_str(), VerifyStatus::Failed);
+    let _ = store.insert_event(&TaskEvent {
+        task_id: task_id.clone(),
+        timestamp: Local::now(),
+        event_kind: EventKind::Error,
+        detail,
+        metadata: None,
+    });
+    crate::verify::enforce_verify_status(store, task_id);
 }
 
 fn stale_worktree_dir_error(dir: &str, branch: Option<&str>) -> String {
@@ -156,13 +156,36 @@ fn verify_output_excerpt(output: &str) -> Option<String> {
     })
 }
 
-fn verify_failure_hint(store: &Store, task_id: &TaskId) -> Option<String> {
+fn verify_failure_hint(store: &Store, task_id: &TaskId, output: &str) -> Option<String> {
+    if !verify_output_suggests_missing_deps(output) {
+        return None;
+    }
     let worktree = store
         .get_task(task_id.as_str())
         .ok()
         .flatten()
         .and_then(|task| task.worktree_path)?;
     crate::worktree_deps::missing_deps_hint(std::path::Path::new(&worktree)).map(str::to_string)
+}
+
+fn verify_output_suggests_missing_deps(output: &str) -> bool {
+    let lower = output.to_lowercase();
+    [
+        "cannot find module",
+        "module not found",
+        "modulenotfounderror",
+        "no module named",
+        "command not found",
+        "executable file not found",
+        "not found in path",
+        "npm: not found",
+        "pnpm: not found",
+        "yarn: not found",
+        "env: node: no such file",
+        "env: npm: no such file",
+    ]
+    .iter()
+    .any(|needle| lower.contains(needle))
 }
 
 pub(in crate::cmd) async fn maybe_auto_retry_after_verify_failure_impl(

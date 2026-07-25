@@ -51,6 +51,20 @@ fn retry_task_to_run_args_prefers_existing_worktree_path() {
 }
 
 #[test]
+fn retry_task_to_run_args_uses_repo_path_when_worktree_is_absent() {
+    let mut task = make_stored_task("t-no-worktree", AgentKind::Codex, TaskStatus::Failed);
+    task.repo_path = Some("/tmp/batch-retry-repo".to_string());
+    task.worktree_path = None;
+    task.worktree_branch = None;
+
+    let store = Store::open_memory().unwrap();
+    let run_args = retry_task_to_run_args(&store, &task, "wg-batch", None).unwrap();
+
+    assert_eq!(run_args.dir, Some("/tmp/batch-retry-repo".to_string()));
+    assert_eq!(run_args.worktree, None);
+}
+
+#[test]
 fn retry_task_to_run_args_rehydrates_saved_args_and_keeps_worktree() {
     let store = Store::open_memory().unwrap();
     let temp = tempfile::tempdir().unwrap();

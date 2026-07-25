@@ -383,7 +383,7 @@ async fn dry_run_returns_without_starting_task() {
 }
 
 #[tokio::test]
-async fn dry_run_with_explicit_repo_allows_bad_dir_for_worktree_setup() {
+async fn dry_run_with_explicit_repo_rejects_missing_effective_dir() {
     let aid_home = TempDir::new().unwrap();
     let _aid_home = paths::AidHomeGuard::set(aid_home.path());
     crate::paths::ensure_dirs().unwrap();
@@ -396,7 +396,7 @@ async fn dry_run_with_explicit_repo_allows_bad_dir_for_worktree_setup() {
     git(repo.path(), &["commit", "-m", "initial"]);
     let store = Arc::new(Store::open_memory().unwrap());
 
-    let task_id = run(store.clone(), RunArgs {
+    let err = run(store.clone(), RunArgs {
         agent_name: "codex".to_string(),
         prompt: "repro".to_string(),
         repo: Some(repo.path().to_string_lossy().to_string()),
@@ -405,15 +405,9 @@ async fn dry_run_with_explicit_repo_allows_bad_dir_for_worktree_setup() {
         dry_run: true,
         skills: vec![NO_SKILL_SENTINEL.to_string()],
         ..Default::default()
-    }).await.unwrap();
+    }).await.unwrap_err();
 
-    let task = store.get_task(task_id.as_str()).unwrap().unwrap();
-    assert_eq!(task.status, TaskStatus::Pending);
-    assert_eq!(
-        std::fs::canonicalize(task.repo_path.as_deref().unwrap()).unwrap(),
-        std::fs::canonicalize(repo.path()).unwrap()
-    );
-    assert!(task.worktree_path.is_some());
+    assert!(err.to_string().contains("batch file / task dir missing in worktree"));
 }
 
 #[tokio::test]

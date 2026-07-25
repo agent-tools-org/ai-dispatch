@@ -43,7 +43,7 @@ fn failed_task(id: &str) -> Task {
 }
 
 #[test]
-fn live_worktree_retry_without_repo_path_fails_with_legacy_metadata_message() {
+fn live_worktree_retry_without_repo_path_derives_repo_anchor() {
     let _permit = crate::test_subprocess::acquire();
     let repo = init_repo();
     let worktree_root = tempfile::tempdir().unwrap();
@@ -60,8 +60,15 @@ fn live_worktree_retry_without_repo_path_fails_with_legacy_metadata_message() {
         ..Default::default()
     };
 
-    let err = apply_retry_target(&task, &mut args).unwrap_err();
+    apply_retry_target(&task, &mut args).unwrap();
 
-    assert!(err.to_string().contains("legacy task metadata"));
-    assert!(err.to_string().contains("repo_path"));
+    // The repo anchor is derived via git, which reports the canonical path. On macOS the
+    // tempdir lives under /var, a symlink to /private/var, so compare canonicalized forms.
+    let expected_repo = repo.path().canonicalize().expect("canonicalize repo path");
+    let actual_repo = std::path::Path::new(args.repo.as_deref().expect("repo anchor"))
+        .canonicalize()
+        .expect("canonicalize derived repo anchor");
+    assert_eq!(actual_repo, expected_repo);
+    assert_eq!(args.dir.as_deref(), Some(worktree.to_str().unwrap()));
+    assert_eq!(args.worktree.as_deref(), Some("aid/retry-legacy"));
 }

@@ -193,6 +193,8 @@ fn fast_fail_cleanup_rejects_non_aid_path() {
 fn retry_target_application_replaces_stale_worktree_dir_with_repo() {
     let stale_dir = "/tmp/aid-stale-worktree-dir";
     let repo = TempDir::new().unwrap();
+    init_repo(repo.path());
+    git(repo.path(), &["branch", "chore/retry-stale"]);
     let repo_dir = repo.path().to_string_lossy().to_string();
     let mut task = make_task("t-stale-retry", stale_dir);
     task.repo_path = Some(repo_dir.clone());
@@ -248,7 +250,7 @@ fn retry_target_application_preserves_live_worktree_across_generations() {
 }
 
 #[test]
-fn retry_target_application_keeps_existing_dir_without_repo_fallback() {
+fn retry_target_application_errors_without_recoverable_repo() {
     let stale_dir = "/tmp/aid-stale-worktree-dir-without-repo";
     let fallback_dir = TempDir::new().unwrap();
     let fallback_dir = fallback_dir.path().to_string_lossy().to_string();
@@ -260,10 +262,9 @@ fn retry_target_application_keeps_existing_dir_without_repo_fallback() {
         ..Default::default()
     };
 
-    super::super::apply_retry_target(&task, &mut retry_args).unwrap();
+    let err = super::super::apply_retry_target(&task, &mut retry_args).unwrap_err();
 
-    assert_eq!(retry_args.dir.as_deref(), Some(fallback_dir.as_str()));
-    assert_eq!(retry_args.worktree.as_deref(), Some("chore/retry-stale"));
+    assert!(err.to_string().contains("no recoverable repo_path"));
 }
 
 #[test]
@@ -282,7 +283,7 @@ fn retry_target_application_errors_when_stale_worktree_has_no_repo() {
 
     let err = super::super::apply_retry_target(&task, &mut retry_args).unwrap_err();
 
-    assert!(err.to_string().contains("no usable worktree path, retry dir, or repo path"));
+    assert!(err.to_string().contains("no recoverable repo_path"));
 }
 
 #[test]

@@ -90,14 +90,8 @@ fn maybe_verify_records_missing_deps_hint_for_fresh_worktree() {
     let worktree = TempDir::new().unwrap();
     let worktree_str = worktree.path().to_string_lossy().to_string();
     crate::worktree_deps::prepare_worktree_dependencies(
-        &store,
-        &TaskId("t-verify-hint".to_string()),
-        worktree.path(),
-        worktree.path(),
-        None,
-        false,
-        None,
-        true,
+        &store, &TaskId("t-verify-hint".to_string()), worktree.path(), worktree.path(),
+        None, false, None, true, None,
     )
     .unwrap();
     store

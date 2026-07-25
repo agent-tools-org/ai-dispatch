@@ -6,8 +6,9 @@ use std::path::Path;
 use std::process::Command;
 
 pub(crate) fn run_verify_in_worktree(wt: &str, verify: Option<&str>) {
-    let worktree_branch = Path::new(wt).file_name().and_then(|name| name.to_str());
-    let cargo_target_dir = crate::agent::target_dir_for_worktree(worktree_branch);
+    let worktree_branch = worktree_branch_name(wt)
+        .or_else(|| Path::new(wt).file_name().and_then(|name| name.to_str()).map(str::to_string));
+    let cargo_target_dir = crate::agent::target_dir_for_worktree(worktree_branch.as_deref());
     run_verify(wt, verify, cargo_target_dir.as_deref());
 }
 
@@ -27,9 +28,7 @@ fn run_verify(dir: &str, verify: Option<&str>, cargo_target_dir: Option<&str>) {
     let verify_cmd = verify_parts.join(" ");
     let mut command = Command::new(program);
     command.args(args).current_dir(dir);
-    if let Some(target_dir) = cargo_target_dir {
-        command.env("CARGO_TARGET_DIR", target_dir);
-    }
+    crate::agent::apply_cargo_target_env(&mut command, cargo_target_dir);
     match command.output() {
         Ok(output) if !output.status.success() => warn_verify_failure(&verify_cmd, dir, &output.stderr),
         Err(err) => aid_warn!("[aid] Warning: could not run `{verify_cmd}`: {err}"),
@@ -45,8 +44,25 @@ fn warn_verify_failure(verify_cmd: &str, dir: &str, stderr: &[u8]) {
     }
 }
 
+fn worktree_branch_name(wt: &str) -> Option<String> {
+    let output = Command::new("git")
+        .args(["-C", wt, "branch", "--show-current"])
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    branch_name_from_stdout(&output.stdout)
+}
+
+fn branch_name_from_stdout(stdout: &[u8]) -> Option<String> {
+    let branch = String::from_utf8_lossy(stdout).trim().to_string();
+    (!branch.is_empty()).then_some(branch)
+}
+
 #[cfg(test)]
 mod tests {
+    use super::branch_name_from_stdout;
     use std::process::Command;
 
     #[test]
@@ -57,5 +73,13 @@ mod tests {
         let debug = format!("{cmd:?}");
         assert!(debug.contains("\"echo\""));
         assert_eq!(args, &["ok", "&&", "false"]);
+    }
+
+    #[test]
+    fn branch_name_from_stdout_preserves_slashes() {
+        assert_eq!(
+            branch_name_from_stdout(b"feat/shared-cache\n").as_deref(),
+            Some("feat/shared-cache")
+        );
     }
 }

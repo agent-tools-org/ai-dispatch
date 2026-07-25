@@ -7,11 +7,19 @@ Command under test: `cargo check --all-targets`.
 
 | Run | Environment | Fresh target dir | Wall clock | Notes |
 | --- | --- | --- | ---: | --- |
-| Cold baseline | `env -u RUSTC_WRAPPER CARGO_TARGET_DIR=<A>` | `/tmp/aid-shared-cache-A.*` | 88.31s | Full fresh target build. |
-| sccache | `RUSTC_WRAPPER=sccache CARGO_TARGET_DIR=<B>` after `sccache --zero-stats` | `/tmp/aid-shared-cache-B.*` | 60.47s | Low hit rate; see stats below. |
-| Clone seed | `cp -Rc <A> <C>`, then `env -u RUSTC_WRAPPER CARGO_TARGET_DIR=<C>` | `/tmp/aid-shared-cache-C.*` | 12.97s | Clone copy itself took 0.83s. |
+| Cold baseline | `env -u RUSTC_WRAPPER CARGO_TARGET_DIR=<root>/cold` | `/tmp/aid-shared-cache-realpath.rEmRjh/cold` | 37.13s | Full fresh target build on a warm machine. |
+| Source base | `env -u RUSTC_WRAPPER CARGO_TARGET_DIR=<root>/_base` | `/tmp/aid-shared-cache-realpath.rEmRjh/_base` | 38.01s | Populates the shared source target used by the shipped layout. |
+| Real-path clone seed | `CARGO_TARGET_DIR=<root>/_base aid run noop ... --worktree feat/shared-cache-realpath-fixed`, then `CARGO_TARGET_DIR=<root>/feat-shared-cache-realpath-fixed cargo check --all-targets` | `/tmp/aid-shared-cache-realpath.rEmRjh/feat-shared-cache-realpath-fixed` | 8.45s | Worktree setup recorded clone seeding from `_base` in 284ms. |
 
-## sccache Stats
+## Layout
+
+The aid-managed default uses `<root>/_base` for non-worktree Rust builds and `<root>/<sanitized-branch>` for worktree builds. When the user explicitly sets `CARGO_TARGET_DIR`, that value remains the source target directory, and branch targets are created beside it. Branch target dirs are siblings of the source target, not children of it, so a branch target cannot recursively contain another branch target.
+
+The real-path measurement created `<root>/existing-branch` before dispatch. After seeding `feat/shared-cache-realpath-fixed`, a `find` check for nested branch dirs returned 0. A unit test also creates `feat/cache-a`, `feat/cache-b`, and `feat/cache-c` target dirs in sequence and asserts none contains another.
+
+The `aid run noop` dispatch used `HOME` under `/tmp` so the sandbox could create an aid-managed worktree. It used `--verify true` to keep the dispatch focused on setup; the timed `cargo check` was run separately against the seeded target.
+
+## Rejected: sccache
 
 Initial sccache run into fresh dir B:
 
@@ -32,4 +40,4 @@ Investigation with `cargo check -p ai-dispatch -vv` showed target-dir-specific a
 
 ## Decision
 
-APFS clone seeding pays clearly on this repo: a clone-seeded target checked in 12.97s versus 88.31s cold. The implementation keeps clone seeding and uses `RUSTC_WRAPPER=sccache` when available and not explicitly overridden, but does not force `CARGO_INCREMENTAL=0`.
+APFS clone seeding pays on this repo when it runs through the shipped worktree setup path: the seeded target checked in 8.45s versus 37.13s cold. The implementation keeps clone seeding, records seeded/skipped outcomes as setup events, and removes `RUSTC_WRAPPER=sccache` because the measured Rust hit rate was 0.00%.

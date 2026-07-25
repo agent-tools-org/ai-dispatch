@@ -31,7 +31,9 @@ pub fn prepare_worktree_dependencies(
     link_deps: bool,
     idle_timeout_secs: Option<u64>,
     fresh: bool,
+    worktree_branch: Option<&str>,
 ) -> Result<()> {
+    maybe_seed_cargo_target(store, task_id, worktree_dir, worktree_branch);
     let setup_defined = setup.is_some();
     let linked_any = if let Some(command) = setup {
         maybe_run_setup(store, task_id, worktree_dir, command, idle_timeout_secs)?;
@@ -43,6 +45,31 @@ pub fn prepare_worktree_dependencies(
     };
     write_verify_state(worktree_dir, fresh, setup_defined, linked_any)?;
     Ok(())
+}
+
+fn maybe_seed_cargo_target(
+    store: &Store,
+    task_id: &TaskId,
+    worktree_dir: &Path,
+    worktree_branch: Option<&str>,
+) {
+    if !crate::agent::is_rust_project(worktree_dir.to_str()) {
+        return;
+    }
+    let Some(branch) = worktree_branch else { return };
+    let Some(outcome) = crate::agent::env::seed_branch_target_dir(branch) else { return };
+    match outcome {
+        crate::agent::env::BranchTargetSeedOutcome::Seeded { target, source, elapsed_ms } => {
+            insert_setup_event(store, task_id, &format!(
+                "Cargo target seeded: {target} from {source} in {elapsed_ms}ms"
+            ));
+        }
+        crate::agent::env::BranchTargetSeedOutcome::Skipped { target, reason } => {
+            insert_setup_event(store, task_id, &format!(
+                "Cargo target seed skipped for {target}: {reason}"
+            ));
+        }
+    }
 }
 
 pub fn missing_deps_hint(worktree_dir: &Path) -> Option<&'static str> {

@@ -217,3 +217,15 @@ pub struct ContainerArgs {
     #[command(subcommand)]
     pub action: ContainerAction,
 }
+
+#[derive(Args)]
+#[command(after_help = r#"Examples:
+  aid build
+  aid build check
+  aid build clippy --all-targets"#)]
+pub struct BuildArgs {
+    /// The cargo subcommand/arguments (e.g. check, build, test --all-targets).
+    /// If not specified, defaults to the project verify config (or cargo check).
+    pub args: Vec<String>,
+}
+

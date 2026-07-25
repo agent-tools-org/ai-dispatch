@@ -13,3 +13,7 @@ fn doctor_command_parses() {
         _ => panic!("expected Doctor"),
     }
 }
+
+fn compile_error_here() {
+    let y: u64 = "not a number";
+}

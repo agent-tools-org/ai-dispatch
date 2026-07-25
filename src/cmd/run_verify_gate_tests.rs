@@ -51,7 +51,10 @@ fn task(id: &str, status: TaskStatus, dir: Option<&str>, verify: Option<&str>) -
 }
 
 #[test]
-fn configured_verify_without_working_dir_fails_not_skipped() {
+fn configured_verify_without_working_dir_is_a_legitimate_skip() {
+    // A task dispatched without --dir has nothing to verify. The project's default verify
+    // command is injected into every task in the repo, research runs included, so treating
+    // this as a did-not-run failure would fail every dir-less task.
     let store = Store::open_memory().unwrap();
     let task_id = TaskId("t-verify-no-dir".to_string());
     store
@@ -61,10 +64,9 @@ fn configured_verify_without_working_dir_fails_not_skipped() {
     maybe_verify(&store, &task_id, Some("true"), None, None);
 
     let task = store.get_task(task_id.as_str()).unwrap().unwrap();
-    assert_eq!(task.verify_status, VerifyStatus::Failed);
-    assert_eq!(task.status, TaskStatus::Failed);
-    assert_eq!(task.exit_code, Some(1));
-    assert!(store.latest_error(task_id.as_str()).unwrap().contains("no working directory"));
+    assert_eq!(task.verify_status, VerifyStatus::Skipped);
+    assert_eq!(task.status, TaskStatus::Done);
+    assert!(store.latest_error(task_id.as_str()).is_none());
 }
 
 #[test]

@@ -47,9 +47,12 @@ pub(in crate::cmd) fn maybe_verify_impl(
     container_name: Option<&str>,
 ) {
     let Some(verify_arg) = verify else { return };
+    // A task with no working directory has nothing to verify — research runs dispatched without
+    // --dir are the common case, and the project's default verify command is injected into every
+    // task in the repo including those. That is a legitimate skip, not a verify that failed to run.
+    // A dir that was expected and is now missing is handled below and does count as a failure.
     let Some(dir_path) = dir else {
-        record_verify_not_run(store, task_id, "no working directory".to_string());
-        aid_error!("Verify error: no working directory");
+        aid_info!("[aid] Verify skipped: task has no working directory");
         return;
     };
     let command = if verify_arg == "auto" { None } else { Some(verify_arg) };

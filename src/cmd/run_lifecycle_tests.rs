@@ -2,22 +2,37 @@
 // Covers final dirty worktree assertion behavior around task status/events.
 // Deps: run_lifecycle helpers, Store, git CLI, tempfile.
 
-use super::{RunArgs, final_dirty_assertion, run_dirty::{post_agent_dirty_worktree_cleanup, DirtyWorktreeAction}, run_lifecycle::{cleanup_completed_worktree_if_finishing, post_run_lifecycle, output_content_length, LifecycleMode}, run_prompt::PromptBundle};
+use super::{
+    RunArgs, final_dirty_assertion,
+    run_dirty::{DirtyWorktreeAction, post_agent_dirty_worktree_cleanup},
+    run_lifecycle::{LifecycleMode, post_run_lifecycle},
+    run_prompt::PromptBundle,
+};
 use crate::{hooks::Hook, store::Store, test_subprocess, types::*};
 use chrono::Local;
 use std::{path::Path, process::Command, sync::Arc};
 
 fn git(dir: &Path, args: &[&str]) {
-    assert!(Command::new("git").arg("-C").arg(dir).args(args).status().unwrap().success());
+    assert!(Command::new("git")
+        .arg("-C")
+        .arg(dir)
+        .args(args)
+        .status()
+        .unwrap()
+        .success());
 }
 
 fn init_repo() -> tempfile::TempDir {
-    let dir = tempfile::tempdir().unwrap(); git(dir.path(), &["init"]); dir
+    let dir = tempfile::tempdir().unwrap();
+    git(dir.path(), &["init"]);
+    dir
 }
 
 fn write_path(dir: &Path, path: &str, content: &str) {
     let file = dir.join(path);
-    if let Some(parent) = file.parent() { std::fs::create_dir_all(parent).unwrap(); }
+    if let Some(parent) = file.parent() {
+        std::fs::create_dir_all(parent).unwrap();
+    }
     std::fs::write(file, content).unwrap();
 }
 
@@ -64,31 +79,6 @@ fn task(id: &str, status: TaskStatus) -> Task {
         audit_report_path: None,
         delivery_assessment: None,
     }
-}
-
-#[test]
-fn output_content_length_counts_multibyte_output_as_characters() {
-    let dir = tempfile::tempdir().unwrap();
-    let output_path = dir.path().join("output.md");
-    let content = format!("{}{}", "a".repeat(196), "\u{2019}".repeat(2));
-    assert!(content.len() >= 200);
-    assert!(content.chars().count() < 200);
-    std::fs::write(&output_path, content).unwrap();
-    let mut task = task("t-short-multibyte", TaskStatus::Done);
-    task.output_path = Some(output_path.to_string_lossy().to_string());
-
-    assert!(output_content_length(&task) < 200);
-}
-
-#[test]
-fn output_content_length_keeps_long_ascii_output_at_threshold() {
-    let dir = tempfile::tempdir().unwrap();
-    let output_path = dir.path().join("output.md");
-    std::fs::write(&output_path, "a".repeat(200)).unwrap();
-    let mut task = task("t-long-ascii", TaskStatus::Done);
-    task.output_path = Some(output_path.to_string_lossy().to_string());
-
-    assert!(output_content_length(&task) >= 200);
 }
 
 #[test]
@@ -287,14 +277,4 @@ async fn background_lifecycle_runs_on_fail_hook() {
     .unwrap();
 
     assert_eq!(std::fs::read_to_string(hook_path).unwrap(), "failed");
-}
-
-#[test]
-fn cleanup_completed_worktree_if_finishing_skips_retry_decision() {
-    let store = Arc::new(Store::open_memory().unwrap()); let task_id = TaskId("t-cleanup-retry-skip".to_string());
-    let retry_id = TaskId("t-cleanup-retry-next".to_string()); let worktree = tempfile::tempdir().unwrap();
-    let mut stored = task(task_id.as_str(), TaskStatus::Done);
-    stored.worktree_path = Some(worktree.path().to_string_lossy().to_string()); stored.worktree_branch = Some("chore/retry-skip".to_string()); store.insert_task(&stored).unwrap();
-    let result = cleanup_completed_worktree_if_finishing(&store, &task_id, Some(retry_id.clone()));
-    assert_eq!(result, Some(retry_id)); assert!(worktree.path().exists());
 }

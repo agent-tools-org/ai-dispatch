@@ -262,25 +262,11 @@ pub(crate) async fn post_run_lifecycle(
     } else {
         true
     };
-    if let Some(retry_id) = cleanup_completed_worktree_if_finishing(store, task_id, None) {
-        return Ok(Some(retry_id));
-    }
-    if mode.is_foreground() && completed_normally { aid_info!("[aid] View in TUI: aid board"); }
-    Ok(None)
-}
-
-pub(super) fn cleanup_completed_worktree_if_finishing(
-    store: &Arc<Store>,
-    task_id: &TaskId,
-    retry_id: Option<TaskId>,
-) -> Option<TaskId> {
-    if retry_id.is_some() {
-        return retry_id;
-    }
     if let Err(err) = crate::worktree::cleanup_completed_worktree(store.as_ref(), task_id) {
         aid_warn!("[aid] Warning: failed to remove completed worktree for {task_id}: {err}");
     }
-    None
+    if mode.is_foreground() && completed_normally { aid_info!("[aid] View in TUI: aid board"); }
+    Ok(None)
 }
 
 pub(crate) fn inherit_cascade_target(cascade_args: &mut RunArgs, task: &Task) {

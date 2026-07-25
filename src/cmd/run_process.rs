@@ -283,14 +283,9 @@ pub(crate) fn retry_target(task: &Task) -> (Option<String>, Option<String>) {
 
 pub(crate) fn apply_retry_target(task: &Task, retry_args: &mut RunArgs) {
     let (dir, worktree) = retry_target(task);
-    let has_stale_worktree_branch = dir.is_none() && worktree.is_some();
-    retry_args.dir = dir.or_else(|| {
-        if has_stale_worktree_branch {
-            task.repo_path.clone()
-        } else {
-            retry_args.dir.clone()
-        }
-    });
+    retry_args.dir = dir
+        .or_else(|| task.repo_path.clone())
+        .or_else(|| retry_args.dir.clone());
     retry_args.worktree = worktree.or_else(|| retry_args.worktree.clone());
 }
 

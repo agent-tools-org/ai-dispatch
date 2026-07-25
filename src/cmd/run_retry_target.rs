@@ -40,15 +40,18 @@ pub(crate) fn apply_retry_target(task: &Task, retry_args: &mut RunArgs) -> Resul
         retry_args.repo = task.repo_path.clone();
     }
     let (dir, worktree) = retry_target(task)?;
-    if dir.is_some() && retry_args.repo.is_none() {
-        // Without a repo anchor the worktree dir below would be resolved as its own repo
-        // root, and the isolation guard would then reject a legitimate re-entry.
-        anyhow::bail!(
-            "cannot retry task {}: legacy task metadata has no repo_path, so its live worktree cannot be anchored to a repository",
-            task.id
-        );
-    }
     if let Some(dir) = dir {
+        if retry_args.repo.is_none() {
+            retry_args.repo = find_repo_dir(task, retry_args)?;
+        }
+        if retry_args.repo.is_none() {
+            // Without a repo anchor the worktree dir below would be resolved as its own repo
+            // root, and the isolation guard would then reject a legitimate re-entry.
+            anyhow::bail!(
+                "cannot retry task {}: legacy task metadata has no repo_path, so its live worktree cannot be anchored to a repository",
+                task.id
+            );
+        }
         retry_args.dir = Some(dir);
         retry_args.worktree = worktree
             .or_else(|| task.worktree_branch.clone())
@@ -80,23 +83,58 @@ pub(crate) fn apply_retry_target(task: &Task, retry_args: &mut RunArgs) -> Resul
 }
 
 fn recover_repo_dir(task: &Task, retry_args: &RunArgs, branch: &str) -> Result<String> {
-    for candidate in [
-        task.repo_path.as_deref(),
-        retry_args.repo.as_deref(),
-        retry_args.dir.as_deref(),
-    ]
-    .into_iter()
-    .flatten()
-    {
-        if let Some(repo) = git_root(candidate)? {
-            return Ok(repo);
-        }
+    if let Some(repo) = find_repo_dir(task, retry_args)? {
+        return Ok(repo);
     }
     anyhow::bail!(
         "cannot retry task {} on branch {}: no recoverable repo_path for missing worktree; refusing to run in repo root",
         task.id,
         branch
     )
+}
+
+fn find_repo_dir(task: &Task, retry_args: &RunArgs) -> Result<Option<String>> {
+    for candidate in [
+        task.repo_path.as_deref(),
+        retry_args.repo.as_deref(),
+        retry_args.dir.as_deref(),
+        task.worktree_path.as_deref(),
+    ]
+    .into_iter()
+    .flatten()
+    {
+        if let Some(repo) = main_worktree_root(candidate)? {
+            return Ok(Some(repo));
+        }
+    }
+    Ok(None)
+}
+
+fn main_worktree_root(path: &str) -> Result<Option<String>> {
+    if !Path::new(path).is_dir() {
+        return Ok(None);
+    }
+    if let Some(repo) = worktree_list_root(path)? {
+        return Ok(Some(repo));
+    }
+    git_root(path)
+}
+
+fn worktree_list_root(path: &str) -> Result<Option<String>> {
+    let output = Command::new("git")
+        .args(["-C", path, "worktree", "list", "--porcelain"])
+        .output()
+        .with_context(|| format!("Failed to inspect git worktrees at {path}"))?;
+    if !output.status.success() {
+        return Ok(None);
+    }
+    for line in String::from_utf8_lossy(&output.stdout).lines() {
+        let Some(root) = line.strip_prefix("worktree ") else {
+            continue;
+        };
+        return git_root(root.trim());
+    }
+    Ok(None)
 }
 
 fn repo_dir(task: &Task) -> Option<String> {

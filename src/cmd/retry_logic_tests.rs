@@ -124,8 +124,10 @@ fn failed_retry_errors_when_recorded_branch_is_gone() {
     task.worktree_branch = Some(branch.clone());
     store.insert_task(&task).unwrap();
 
-    let err = retry_args_for(&store, &task).unwrap_err();
-    let message = err.to_string();
+    let message = match retry_args_for(&store, &task) {
+        Ok(_) => panic!("retry unexpectedly recovered missing branch"),
+        Err(err) => err.to_string(),
+    };
 
     assert!(message.contains("t-unrecoverable-retry"));
     assert!(message.contains(&branch));

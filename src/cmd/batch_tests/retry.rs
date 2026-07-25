@@ -20,7 +20,7 @@ fn git(repo_dir: &Path, args: &[&str]) {
         .success());
 }
 
-fn linked_worktree(branch: &str) -> (tempfile::TempDir, tempfile::TempDir, PathBuf) {
+fn init_repo() -> tempfile::TempDir {
     let repo = tempfile::tempdir().unwrap();
     git(repo.path(), &["init", "-b", "main"]);
     git(repo.path(), &["config", "user.email", "test@example.com"]);
@@ -28,6 +28,11 @@ fn linked_worktree(branch: &str) -> (tempfile::TempDir, tempfile::TempDir, PathB
     std::fs::write(repo.path().join("file.txt"), "hello\n").unwrap();
     git(repo.path(), &["add", "file.txt"]);
     git(repo.path(), &["commit", "-m", "init"]);
+    repo
+}
+
+fn linked_worktree(branch: &str) -> (tempfile::TempDir, tempfile::TempDir, PathBuf) {
+    let repo = init_repo();
     let linked_root = tempfile::tempdir().unwrap();
     let linked = linked_root.path().join("linked");
     git(repo.path(), &["worktree", "add", "-b", branch, &linked.to_string_lossy()]);
@@ -36,7 +41,8 @@ fn linked_worktree(branch: &str) -> (tempfile::TempDir, tempfile::TempDir, PathB
 
 #[test]
 fn retry_task_to_run_args_uses_parent_and_original_fields() {
-    let repo = tempfile::tempdir().unwrap();
+    let repo = init_repo();
+    git(repo.path(), &["branch", "feat/retry"]);
     let mut task = make_stored_task("t-1234", AgentKind::Codex, TaskStatus::Failed);
     task.prompt = "retry me".to_string();
     task.repo_path = Some(repo.path().display().to_string());
@@ -113,7 +119,7 @@ fn retry_task_to_run_args_errors_when_stale_worktree_has_no_repo() {
         .err()
         .expect("retry should fail without a usable target");
 
-    assert!(err.to_string().contains("no usable worktree path, retry dir, or repo path"));
+    assert!(err.to_string().contains("no recoverable repo_path"));
 }
 
 #[test]
@@ -173,7 +179,7 @@ fn retry_task_to_run_args_refuses_poisoned_worktree_path() {
 #[test]
 fn retry_task_to_run_args_rehydrates_saved_args_and_keeps_worktree() {
     let store = Store::open_memory().unwrap();
-    let (repo, _linked_root, worktree) = linked_worktree("feat/retry-saved");
+    let (repo, _linked_root, worktree) = linked_worktree("feat/retry");
     let mut task = make_stored_task("t-7777", AgentKind::Codex, TaskStatus::Failed);
     task.repo_path = Some(repo.path().display().to_string());
     task.worktree_path = Some(worktree.display().to_string());
@@ -225,7 +231,8 @@ fn retry_task_to_run_args_preserves_saved_worktree_when_live_path_exists() {
 #[test]
 fn retry_task_to_run_args_uses_waiting_placeholder_fields() {
     let store = Arc::new(Store::open_memory().unwrap());
-    let repo = tempfile::tempdir().unwrap();
+    let repo = init_repo();
+    git(repo.path(), &["branch", "feat/retry"]);
     let prompt = "retry ".repeat(40);
     store
         .insert_waiting_task(

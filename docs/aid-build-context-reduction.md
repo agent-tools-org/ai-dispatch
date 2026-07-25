@@ -22,6 +22,7 @@ agent-facing digest only after Cargo exits. The digest contains:
 
 - One status line with outcome, error count, warning count, command, and elapsed time.
 - Deduplicated compiler diagnostics with `file:line`.
+- A `(xN)` suffix on a diagnostic line when the same unique diagnostic occurred more than once.
 - Warning detail only when `--warnings` is set.
 - An explicit `... N more diagnostics suppressed` marker when the hard digest line cap is reached.
 
@@ -63,19 +64,28 @@ Exit code on failure: `101`.
 
 ### Progress events and rate limiting
 
-Run with `AID_TASK_ID` set, threshold 3000ms, interval 5000ms, limit 3, against a cold target dir:
+Progress event details now include the number of completed Cargo compilation units:
 
 ```text
 21:16:43  [build] cargo check --all-targets started
-21:16:46  [build] cargo check --all-targets still running after 3s
-21:16:51  [build] cargo check --all-targets still running after 8s
-21:16:56  [build] cargo check --all-targets still running after 13s
-21:17:29  [build] cargo check --all-targets finished: 0 errors, 0 warnings
+21:16:56  [build] cargo check --all-targets still running after 13s, 187 units compiled
+21:17:29  [build] cargo check --all-targets finished: 0 errors, 0 warnings, 312 units compiled
 ```
 
-Agent-facing stdout for that 45.7s build was **one line**. Progress stopped after 3 messages and did
-not resume for the remaining 32 seconds, confirming the limit is enforced.
+The threshold, interval, and 3-message limit remain unchanged. In the earlier 45.7s cold-target run,
+agent-facing stdout was **one line** and progress stopped after 3 messages.
 
 ### Test suite
 
 `cargo test --bin aid` with default parallelism: 1624 passed, 0 failed, 6 ignored.
+
+## 2026-07-25 follow-up verification
+
+Change under test: compiled-unit progress events and diagnostic occurrence suffixes.
+
+| Command | Result |
+|---|---|
+| `cargo check --all-targets` | Passed in 3.88s |
+| `cargo test --bin aid build_` | Blocked before compilation: inherited `CARGO_TARGET_DIR` build lock returned `Operation not permitted` |
+| `cargo test --bin aid` | Blocked before compilation: inherited `CARGO_TARGET_DIR` build lock returned `Operation not permitted` |
+| Cold-target one-error digest remeasurement | Not run; this task was explicitly constrained not to override inherited `CARGO_TARGET_DIR`, and rebuilding `aid` for measurement hit the same lock error |

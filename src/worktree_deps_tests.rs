@@ -3,32 +3,10 @@
 // Deps: super helpers, crate::store, tempfile.
 
 use super::*;
+use crate::test_env::CargoTargetDirGuard;
 use crate::types::{AgentKind, Task, TaskStatus, VerifyStatus};
 use chrono::Local;
-use std::ffi::{OsStr, OsString};
 use tempfile::TempDir;
-
-struct EnvVarGuard {
-    key: &'static str,
-    previous: Option<OsString>,
-}
-
-impl EnvVarGuard {
-    fn set(key: &'static str, value: impl AsRef<OsStr>) -> Self {
-        let previous = std::env::var_os(key);
-        unsafe { std::env::set_var(key, value) };
-        Self { key, previous }
-    }
-}
-
-impl Drop for EnvVarGuard {
-    fn drop(&mut self) {
-        match &self.previous {
-            Some(value) => unsafe { std::env::set_var(self.key, value) },
-            None => unsafe { std::env::remove_var(self.key) },
-        }
-    }
-}
 
 fn task_id() -> TaskId {
     TaskId("t-worktree-deps".to_string())
@@ -174,7 +152,7 @@ fn rust_worktree_setup_records_cargo_target_seed() {
     let id = task_id();
     store.insert_task(&make_task(id.clone())).unwrap();
     let cache = TempDir::new().unwrap();
-    let _target_dir = EnvVarGuard::set("CARGO_TARGET_DIR", cache.path());
+    let _target_dir = CargoTargetDirGuard::set(cache.path());
     let repo = TempDir::new().unwrap();
     let worktree = TempDir::new().unwrap();
     let source = cache.path().join("_base/debug");

@@ -79,6 +79,8 @@ mod toolbox;
 mod unstick;
 #[cfg(test)]
 mod test_subprocess;
+#[cfg(test)]
+mod test_env;
 mod compaction;
 pub mod claudemd;
 mod tui;

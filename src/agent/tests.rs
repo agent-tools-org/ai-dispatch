@@ -68,11 +68,12 @@ fn returns_false_when_manifest_is_missing() {
 fn shared_target_dir_prefers_explicit_env_var() {
     let _permit = test_subprocess::acquire();
     let temp_dir = TempDir::new().unwrap();
-    let expected = temp_dir.path().join("shared-target");
+    let root = temp_dir.path().join("shared-target");
+    let expected = root.join("_base");
     let output = run_helper(
         "agent::tests::reports_shared_target_dir_for_subprocess",
         None,
-        &[("CARGO_TARGET_DIR", Some(expected.as_os_str()))],
+        &[("CARGO_TARGET_DIR", Some(root.as_os_str()))],
     );
     assert_eq!(
         extract_marker(&output, "SHARED_TARGET_DIR="),

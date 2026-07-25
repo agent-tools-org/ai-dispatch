@@ -7,32 +7,10 @@ use super::{
     is_aid_managed_worktree_path, is_safe_worktree_path, remove_worktree,
 };
 use super::path::WorktreeHomeGuard;
+use crate::test_env::CargoTargetDirGuard;
 use crate::test_subprocess;
-use std::ffi::{OsStr, OsString};
 use std::path::Path;
 use std::process::Command;
-
-struct EnvVarGuard {
-    key: &'static str,
-    previous: Option<OsString>,
-}
-
-impl EnvVarGuard {
-    fn set(key: &'static str, value: impl AsRef<OsStr>) -> Self {
-        let previous = std::env::var_os(key);
-        unsafe { std::env::set_var(key, value) };
-        Self { key, previous }
-    }
-}
-
-impl Drop for EnvVarGuard {
-    fn drop(&mut self) {
-        match &self.previous {
-            Some(value) => unsafe { std::env::set_var(self.key, value) },
-            None => unsafe { std::env::remove_var(self.key) },
-        }
-    }
-}
 
 fn expected_project_id(repo_dir: &Path) -> String {
     let canonical = repo_dir.canonicalize().unwrap();
@@ -108,7 +86,7 @@ fn remove_worktree_reaps_branch_target_and_keeps_base() {
     let branch = unique_branch("feat/reap-target");
     let wt_path = format!("/tmp/aid-wt-test-{}", branch.replace('/', "-"));
     let target_root = aid_home.path().join("cargo-target");
-    let _target_guard = EnvVarGuard::set("CARGO_TARGET_DIR", &target_root);
+    let _target_guard = CargoTargetDirGuard::set(&target_root);
     let base = target_root.join("_base");
     let branch_target = target_root.join(branch.replace('/', "-"));
     std::fs::create_dir_all(&base).unwrap();

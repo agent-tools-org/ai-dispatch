@@ -27,6 +27,12 @@ Seeding now probes clone support in the destination parent before copying `_base
 
 Branch target directories are reclaimed with their worktree lifecycle. Removing or pruning an aid worktree removes the matching `<project-target-root>/<sanitized-branch>` directory after confirming the branch is not still checked out in a live worktree. `aid clean --worktrees` also removes orphaned branch target directories, while preserving `_base`, standard Cargo target subdirectories such as `debug` and `release`, and target dirs for live aid worktrees.
 
+## Root Artifact Fallback
+
+On machines that already used a shared `CARGO_TARGET_DIR`, warm Cargo artifacts may exist directly under the project target root before aid ever creates `_base`. Worktree seeding now prefers `_base` when it exists, then falls back to cloning only the root artifact entries Cargo owns there: `debug`, `release`, and `.rustc_info.json`.
+
+The fallback deliberately does not clone the whole project target root. Branch target directories are still siblings of the source entries, so existing or future branch targets cannot be nested into a newly seeded branch target.
+
 ## Rejected: sccache
 
 Initial sccache run into fresh dir B:

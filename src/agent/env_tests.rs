@@ -50,6 +50,83 @@ fn seed_branch_target_dir_copies_base_without_existing_branches() {
 }
 
 #[test]
+fn seed_branch_target_dir_falls_back_to_root_artifact_entries() {
+    let clone_guard = super::super::cargo_target::CloneSeedGuard::regular_copy();
+    let temp = tempfile::tempdir().unwrap();
+    let root = temp.path().join("target");
+    let debug = root.join("debug");
+    let release = root.join("release");
+    let existing_branch = root.join("existing-branch");
+    std::fs::create_dir_all(&debug).unwrap();
+    std::fs::create_dir_all(&release).unwrap();
+    std::fs::create_dir_all(&existing_branch).unwrap();
+    std::fs::write(debug.join("artifact.txt"), "debug").unwrap();
+    std::fs::write(release.join("artifact.txt"), "release").unwrap();
+    std::fs::write(root.join(".rustc_info.json"), "{}").unwrap();
+    let target_dir_guard = CargoTargetDirGuard::set(&root);
+
+    let outcome = seed_branch_target_dir("feat/shared-cache").unwrap();
+
+    assert!(matches!(outcome, BranchTargetSeedOutcome::Seeded { .. }));
+    assert_eq!(
+        std::fs::read_to_string(root.join("feat-shared-cache/debug/artifact.txt")).unwrap(),
+        "debug"
+    );
+    assert_eq!(
+        std::fs::read_to_string(root.join("feat-shared-cache/release/artifact.txt")).unwrap(),
+        "release"
+    );
+    assert!(root.join("feat-shared-cache/.rustc_info.json").is_file());
+    assert!(!root.join("feat-shared-cache/existing-branch").exists());
+    drop((target_dir_guard, clone_guard));
+}
+
+#[test]
+fn seed_branch_target_dir_prefers_base_over_root_artifact_entries() {
+    let clone_guard = super::super::cargo_target::CloneSeedGuard::regular_copy();
+    let temp = tempfile::tempdir().unwrap();
+    let root = temp.path().join("target");
+    let base_debug = root.join("_base/debug");
+    let root_debug = root.join("debug");
+    std::fs::create_dir_all(&base_debug).unwrap();
+    std::fs::create_dir_all(&root_debug).unwrap();
+    std::fs::create_dir_all(root.join("release")).unwrap();
+    std::fs::write(base_debug.join("artifact.txt"), "base").unwrap();
+    std::fs::write(root_debug.join("artifact.txt"), "fallback").unwrap();
+    let target_dir_guard = CargoTargetDirGuard::set(&root);
+
+    let outcome = seed_branch_target_dir("feat/shared-cache").unwrap();
+
+    assert!(matches!(outcome, BranchTargetSeedOutcome::Seeded { .. }));
+    assert_eq!(
+        std::fs::read_to_string(root.join("feat-shared-cache/debug/artifact.txt")).unwrap(),
+        "base"
+    );
+    assert!(!root.join("feat-shared-cache/release").exists());
+    drop((target_dir_guard, clone_guard));
+}
+
+#[test]
+fn seed_branch_target_dir_skips_when_no_seed_source_exists() {
+    let clone_guard = super::super::cargo_target::CloneSeedGuard::regular_copy();
+    let temp = tempfile::tempdir().unwrap();
+    let root = temp.path().join("target");
+    let target_dir_guard = CargoTargetDirGuard::set(&root);
+
+    let outcome = seed_branch_target_dir("feat/shared-cache").unwrap();
+
+    assert_eq!(
+        outcome,
+        BranchTargetSeedOutcome::Skipped {
+            target: root.join("feat-shared-cache").to_string_lossy().into_owned(),
+            reason: "base target directory is missing and no root cargo artifacts are present"
+                .to_string(),
+        }
+    );
+    drop((target_dir_guard, clone_guard));
+}
+
+#[test]
 fn seed_branch_target_dir_keeps_multiple_branch_targets_flat() {
     let _clone = super::super::cargo_target::CloneSeedGuard::regular_copy();
     let temp = tempfile::tempdir().unwrap();

@@ -396,16 +396,28 @@ async fn run_auto_retries_after_verify_failure() {
     let path_value = OsString::from(format!("{}:/bin:/usr/bin", bin_dir.display()));
     let _path = EnvVarGuard::set("PATH", &path_value);
 
+    let verify_counter_path = temp.path().join("verify-count");
+    let verify_path = temp.path().join("verify-on-retry.sh");
+    std::fs::write(
+        &verify_path,
+        "#!/bin/sh\ncount=0\nif [ -f \"$1\" ]; then count=$(cat \"$1\"); fi\ncount=$((count + 1))\nprintf '%s\\n' \"$count\" > \"$1\"\nif [ \"$count\" -eq 1 ]; then exit 1; fi\nexit 0\n",
+    )
+    .unwrap();
+
     let work_dir = temp.path().join("work");
     std::fs::create_dir_all(&work_dir).unwrap();
     let store = Arc::new(Store::open_memory().unwrap());
-    let root_id = crate::cmd::run::run(
+    let final_id = crate::cmd::run::run(
         store.clone(),
         RunArgs {
             agent_name: "opencode".to_string(),
             prompt: "Fix the build".to_string(),
             dir: Some(work_dir.to_string_lossy().to_string()),
-            verify: Some("false".to_string()),
+            verify: Some(format!(
+                "sh {} {}",
+                verify_path.display(),
+                verify_counter_path.display()
+            )),
             retry: 1,
             skills: vec![crate::cmd::run::NO_SKILL_SENTINEL.to_string()],
             ..Default::default()
@@ -414,22 +426,28 @@ async fn run_auto_retries_after_verify_failure() {
     .await
     .unwrap();
 
-    let retried = store.get_task(root_id.as_str()).unwrap().unwrap();
+    let retried = store.get_task(final_id.as_str()).unwrap().unwrap();
     let all_tasks = store.list_tasks(TaskFilter::All).unwrap();
     let original = all_tasks
         .iter()
         .find(|task| task.parent_task_id.is_none())
         .unwrap();
+    let run_status = crate::cmd_dispatch::DispatchOutcome::Run(
+        crate::cmd_dispatch::RunDispatch::new(final_id, false, false),
+    )
+    .run_exit_status(store.as_ref())
+    .unwrap()
+    .unwrap();
 
     assert_eq!(all_tasks.len(), 2);
-    // Original stays Done because auto-retry triggered (enforce skipped via early return)
-    // Retried stays Done with VFAIL — verify failed but work is preserved
-    assert_eq!(original.status, TaskStatus::Done);
+    assert_eq!(original.status, TaskStatus::Failed);
     assert_eq!(original.verify_status, VerifyStatus::Failed);
+    assert_eq!(original.exit_code, Some(1));
     assert_eq!(retried.parent_task_id.as_deref(), Some(original.id.as_str()));
-    assert_eq!(retried.verify.as_deref(), Some("false"));
     assert_eq!(retried.status, TaskStatus::Done);
-    assert_eq!(retried.verify_status, VerifyStatus::Failed);
+    assert_eq!(retried.verify_status, VerifyStatus::Passed);
+    assert_eq!(retried.exit_code, Some(0));
+    assert_eq!(run_status.exit_code(), 0);
     assert!(retried.prompt.contains(VERIFY_RETRY_FEEDBACK));
 }
 

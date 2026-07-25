@@ -1,0 +1,197 @@
+// Tests for merge worktree isolation before group-level side effects.
+// Covers group approval and GitButler lane setup guard ordering.
+// Deps: merge handlers, Store, temp repos, command shims.
+
+use super::*;
+use crate::test_subprocess;
+use crate::types::{AgentKind, Task, TaskId, TaskStatus, VerifyStatus};
+use chrono::Local;
+use std::env;
+use std::path::{Path, PathBuf};
+
+fn git(repo: &Path, args: &[&str]) {
+    let status = Command::new("git")
+        .args(["-C", &repo.to_string_lossy()])
+        .args(args)
+        .status()
+        .unwrap();
+    assert!(status.success());
+}
+
+fn init_repo() -> tempfile::TempDir {
+    let repo = tempfile::tempdir().unwrap();
+    git(repo.path(), &["init", "-b", "main"]);
+    git(repo.path(), &["config", "user.email", "test@aid.dev"]);
+    git(repo.path(), &["config", "user.name", "Test"]);
+    std::fs::write(repo.path().join("init.txt"), "init\n").unwrap();
+    git(repo.path(), &["add", "init.txt"]);
+    git(repo.path(), &["commit", "-m", "init"]);
+    repo
+}
+
+fn grouped_task(id: &str, group: &str, repo: &Path) -> Task {
+    Task {
+        id: TaskId(id.to_string()),
+        agent: AgentKind::Codex,
+        custom_agent_name: None,
+        prompt: "test".to_string(),
+        resolved_prompt: None,
+        category: None,
+        status: TaskStatus::Done,
+        parent_task_id: None,
+        workgroup_id: Some(group.to_string()),
+        caller_kind: None,
+        caller_session_id: None,
+        agent_session_id: None,
+        repo_path: Some(repo.to_string_lossy().to_string()),
+        worktree_path: Some(repo.to_string_lossy().to_string()),
+        worktree_branch: Some("main".to_string()),
+        final_head_sha: None,
+        final_branch: None,
+        start_sha: None,
+        log_path: None,
+        output_path: None,
+        tokens: None,
+        prompt_tokens: None,
+        duration_ms: None,
+        model: None,
+        cost_usd: None,
+        exit_code: None,
+        created_at: Local::now(),
+        completed_at: None,
+        verify: None,
+        verify_status: VerifyStatus::Skipped,
+        pending_reason: None,
+        read_only: false,
+        budget: false,
+        audit_verdict: None,
+        audit_report_path: None,
+        delivery_assessment: None,
+    }
+}
+
+#[test]
+fn merge_group_with_output_refuses_first_poisoned_task_before_approval() {
+    let _permit = test_subprocess::acquire();
+    let repo = init_repo();
+    let temp = tempfile::tempdir().unwrap();
+    let log = temp.path().join("hiboss.log");
+    let _path = PathGuard::prepend(temp.path());
+    write_command(temp.path(), "hiboss", &format!("printf called > '{}'\n", log.display()));
+    let store = Store::open_memory().unwrap();
+    let group = "wg-poisoned-merge";
+    let mut task = grouped_task("t-poisoned-first", group, repo.path());
+    task.created_at = Local::now();
+    store.insert_task(&task).unwrap();
+
+    let err = merge_group_with_output(&store, group, true, false, false, None, false)
+        .unwrap_err();
+
+    assert!(err.to_string().contains("recorded worktree path"));
+    assert!(!log.exists(), "approval ran before poisoned worktree validation");
+}
+
+#[test]
+fn merge_group_lanes_refuses_first_poisoned_task_before_gitbutler_setup() {
+    let _permit = test_subprocess::acquire();
+    let repo = init_repo();
+    std::fs::create_dir(repo.path().join(".aid")).unwrap();
+    std::fs::write(
+        repo.path().join(".aid/project.toml"),
+        "[project]\nid = \"demo\"\ngitbutler = \"auto\"\n",
+    )
+    .unwrap();
+    let temp = tempfile::tempdir().unwrap();
+    let setup_log = temp.path().join("setup.log");
+    let _cwd = CurrentDirGuard::set(repo.path());
+    let _path = PathGuard::prepend(temp.path());
+    let _but = EnvGuard::set("AID_GITBUTLER_TEST_PRESENT", "1");
+    write_command(temp.path(), "but", &format!("pwd > '{}'\n", setup_log.display()));
+    let store = Store::open_memory().unwrap();
+    let group = "wg-poisoned-lanes";
+    let mut task = grouped_task("t-poisoned-lanes-first", group, repo.path());
+    task.created_at = Local::now();
+    store.insert_task(&task).unwrap();
+
+    let err = merge_lanes::merge_group_lanes(&store, group).unwrap_err();
+
+    assert!(err.to_string().contains("recorded worktree path"));
+    assert!(!setup_log.exists(), "GitButler setup ran before worktree validation");
+}
+
+fn write_command(dir: &Path, name: &str, body: &str) {
+    let path = dir.join(name);
+    std::fs::write(&path, format!("#!/bin/sh\n{body}")).unwrap();
+    let mut perms = std::fs::metadata(&path).unwrap().permissions();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        perms.set_mode(0o755);
+    }
+    std::fs::set_permissions(path, perms).unwrap();
+}
+
+struct EnvGuard {
+    key: &'static str,
+    previous: Option<String>,
+}
+
+impl EnvGuard {
+    fn set(key: &'static str, value: &str) -> Self {
+        let previous = env::var(key).ok();
+        unsafe { env::set_var(key, value) };
+        Self { key, previous }
+    }
+}
+
+impl Drop for EnvGuard {
+    fn drop(&mut self) {
+        match self.previous.take() {
+            Some(value) => unsafe { env::set_var(self.key, value) },
+            None => unsafe { env::remove_var(self.key) },
+        }
+    }
+}
+
+struct PathGuard {
+    previous: Option<String>,
+}
+
+impl PathGuard {
+    fn prepend(dir: &Path) -> Self {
+        let previous = env::var("PATH").ok();
+        let next = match previous.as_deref() {
+            Some(path) => format!("{}:{path}", dir.display()),
+            None => dir.display().to_string(),
+        };
+        unsafe { env::set_var("PATH", next) };
+        Self { previous }
+    }
+}
+
+impl Drop for PathGuard {
+    fn drop(&mut self) {
+        match self.previous.take() {
+            Some(value) => unsafe { env::set_var("PATH", value) },
+            None => unsafe { env::remove_var("PATH") },
+        }
+    }
+}
+
+struct CurrentDirGuard {
+    previous: PathBuf,
+}
+
+impl CurrentDirGuard {
+    fn set(path: &Path) -> Self {
+        let previous = env::current_dir().unwrap();
+        env::set_current_dir(path).unwrap();
+        Self { previous }
+    }
+}
+
+impl Drop for CurrentDirGuard {
+    fn drop(&mut self) {
+        env::set_current_dir(&self.previous).unwrap();
+    }
+}

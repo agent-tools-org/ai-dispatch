@@ -27,6 +27,12 @@ pub(super) fn merge_group_lanes(store: &Store, group_id: &str) -> Result<()> {
             "GitButler integration is off for this project. Set [project] gitbutler = \"auto\" in .aid/project.toml"
         ));
     }
+    // Validate the task the derivation below actually consumes, before it is consumed:
+    // a poisoned first task would otherwise seed repo_dir from a main checkout and then
+    // have GitButler setup run inside it.
+    if let Some(first) = tasks.first() {
+        ensure_task_worktree_is_safe(first)?;
+    }
     let repo_dir = resolve_repo_dir(
         tasks.first().and_then(|task| task.repo_path.as_deref()),
         tasks.first().and_then(|task| task.worktree_path.as_deref()),

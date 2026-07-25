@@ -5,9 +5,34 @@ use super::shared::make_stored_task;
 use crate::cmd::run::RunArgs;
 use crate::store::Store;
 use crate::types::{AgentKind, TaskStatus};
+use std::path::{Path, PathBuf};
+use std::process::Command;
 use std::sync::Arc;
 
 use super::super::batch_retry::{retry_failed, retry_task_to_run_args};
+
+fn git(repo_dir: &Path, args: &[&str]) {
+    assert!(Command::new("git")
+        .args(["-C", &repo_dir.to_string_lossy()])
+        .args(args)
+        .status()
+        .unwrap()
+        .success());
+}
+
+fn linked_worktree(branch: &str) -> (tempfile::TempDir, tempfile::TempDir, PathBuf) {
+    let repo = tempfile::tempdir().unwrap();
+    git(repo.path(), &["init", "-b", "main"]);
+    git(repo.path(), &["config", "user.email", "test@example.com"]);
+    git(repo.path(), &["config", "user.name", "Test User"]);
+    std::fs::write(repo.path().join("file.txt"), "hello\n").unwrap();
+    git(repo.path(), &["add", "file.txt"]);
+    git(repo.path(), &["commit", "-m", "init"]);
+    let linked_root = tempfile::tempdir().unwrap();
+    let linked = linked_root.path().join("linked");
+    git(repo.path(), &["worktree", "add", "-b", branch, &linked.to_string_lossy()]);
+    (repo, linked_root, linked)
+}
 
 #[test]
 fn retry_task_to_run_args_uses_parent_and_original_fields() {
@@ -38,9 +63,9 @@ fn retry_task_to_run_args_uses_parent_and_original_fields() {
 
 #[test]
 fn retry_task_to_run_args_prefers_existing_worktree_path() {
-    let temp = tempfile::tempdir().unwrap();
+    let (_repo, _linked_root, worktree) = linked_worktree("feat/retry");
     let mut task = make_stored_task("t-1234", AgentKind::Codex, TaskStatus::Failed);
-    task.worktree_path = Some(temp.path().display().to_string());
+    task.worktree_path = Some(worktree.display().to_string());
     task.worktree_branch = Some("feat/retry".to_string());
 
     let store = Store::open_memory().unwrap();
@@ -51,11 +76,30 @@ fn retry_task_to_run_args_prefers_existing_worktree_path() {
 }
 
 #[test]
+fn retry_task_to_run_args_refuses_poisoned_worktree_path() {
+    let temp = tempfile::tempdir().unwrap();
+    let repo_path = temp.path().display().to_string();
+    let mut task = make_stored_task("t-poisoned-batch", AgentKind::Codex, TaskStatus::Failed);
+    task.repo_path = Some(repo_path.clone());
+    task.worktree_path = Some(repo_path);
+    task.worktree_branch = Some("feat/retry".to_string());
+
+    let store = Store::open_memory().unwrap();
+    let err = match retry_task_to_run_args(&store, &task, "wg-batch", None) {
+        Ok(_) => panic!("poisoned worktree path was accepted"),
+        Err(err) => err,
+    };
+
+    assert!(err.to_string().contains("recorded worktree path"));
+}
+
+
+#[test]
 fn retry_task_to_run_args_rehydrates_saved_args_and_keeps_worktree() {
     let store = Store::open_memory().unwrap();
-    let temp = tempfile::tempdir().unwrap();
+    let (_repo, _linked_root, worktree) = linked_worktree("feat/retry-saved");
     let mut task = make_stored_task("t-7777", AgentKind::Codex, TaskStatus::Failed);
-    task.worktree_path = Some(temp.path().display().to_string());
+    task.worktree_path = Some(worktree.display().to_string());
     task.worktree_branch = Some("feat/retry".to_string());
     store.insert_task(&task).unwrap();
     let saved = RunArgs {

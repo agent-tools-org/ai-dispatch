@@ -36,8 +36,8 @@ pub(crate) use lock::{
 };
 pub(crate) use completion::cleanup_completed_worktree;
 use state::{existing_worktree_path, local_branch_exists, prune_worktrees, sync_cargo_lock};
-use validation::{canonical_worktree_path, is_valid_git_worktree};
-pub(crate) use validation::is_main_working_tree_path;
+use validation::{canonical_worktree_path, ensure_current_checkout_is_not_task_target, ensure_worktree_path_is_isolated, is_valid_git_worktree};
+pub(crate) use validation::ensure_consumed_worktree_path_is_isolated;
 
 const AID_BRANCH_PREFIXES: &[&str] = &["feat/", "fix/", "docs/", "chore/", "test/", "refactor/"];
 
@@ -96,11 +96,7 @@ fn worktree_add_reason(output: &Output) -> String {
 
 fn ensure_live_worktree_unlocked(path: &Path) -> Result<()> {
     if let Some(holder) = lock::live_lock_holder(path) {
-        anyhow::bail!(
-            "Worktree {} is locked by task {holder} — concurrent access prevented. \
-             Use separate worktree names for parallel tasks.",
-            path.display()
-        );
+        anyhow::bail!("Worktree {} is locked by task {holder} — concurrent access prevented. Use separate worktree names for parallel tasks.", path.display());
     }
     Ok(())
 }
@@ -113,12 +109,11 @@ pub(crate) fn ensure_requested_worktree_is_isolated(
     requested_branch: Option<&str>, repo_path: Option<&str>, wt_path: Option<&str>,
 ) -> Result<()> {
     let (Some(branch), Some(repo), Some(wt)) = (requested_branch, repo_path, wt_path) else { return Ok(()) };
-    if is_main_working_tree_path(Path::new(repo), Path::new(wt)) { return Err(main_worktree_branch_error(branch)); }
-    Ok(())
+    ensure_worktree_path_is_isolated(Path::new(repo), Path::new(wt), &format!("--worktree branch '{branch}'"))
 }
 
 fn main_checkout_has_branch(repo_dir: &Path, branch: &str) -> Result<bool> {
-    let main_dir = path::main_repo_dir(repo_dir);
+    let main_dir = path::main_working_tree_dir(repo_dir)?;
     let out = Command::new("git")
         .args(["-C", &main_dir.to_string_lossy(), "rev-parse", "--abbrev-ref", "HEAD"])
         .output()
@@ -127,7 +122,7 @@ fn main_checkout_has_branch(repo_dir: &Path, branch: &str) -> Result<bool> {
 }
 
 fn checked_worktree_info(repo_dir: &Path, path: PathBuf, branch: &str, created: bool) -> Result<WorktreeInfo> {
-    if is_main_working_tree_path(repo_dir, &path) { return Err(main_worktree_branch_error(branch)); }
+    ensure_worktree_path_is_isolated(repo_dir, &path, &format!("--worktree branch '{branch}'"))?;
     Ok(WorktreeInfo { path, branch: branch.to_string(), created })
 }
 
@@ -160,16 +155,13 @@ fn is_aid_managed_branch(branch: &str) -> bool {
         .any(|prefix| branch.starts_with(prefix))
 }
 
-pub fn create_worktree(
-    repo_dir: &Path,
-    branch: &str,
-    base_branch: Option<&str>,
-) -> Result<WorktreeInfo> {
+pub fn create_worktree(repo_dir: &Path, branch: &str, base_branch: Option<&str>) -> Result<WorktreeInfo> {
     sanitize::validate_branch_name(branch)?;
     if let Some(base_branch) = base_branch {
         sanitize::validate_branch_name(base_branch)?;
     }
     validate_git_repo(repo_dir)?;
+    ensure_current_checkout_is_not_task_target(repo_dir, branch)?;
     let wt_path = aid_worktree_path(repo_dir, branch);
     if let Some(parent) = wt_path.parent() {
         std::fs::create_dir_all(parent).with_context(|| {
@@ -199,6 +191,7 @@ pub fn create_worktree(
                 if existing_path.exists()
                     && canonical_worktree_path(&existing_path) != expected_path
                 {
+                    ensure_worktree_path_is_isolated(repo_dir, &existing_path, &format!("--worktree branch '{branch}'"))?;
                     ensure_live_worktree_unlocked(&existing_path)?;
                     reconcile::maybe_refresh_existing_worktree(
                         repo_dir,
@@ -210,6 +203,7 @@ pub fn create_worktree(
                     return checked_worktree_info(repo_dir, existing_path, branch, false);
                 }
             }
+            ensure_worktree_path_is_isolated(repo_dir, &wt_path, &format!("--worktree branch '{branch}'"))?;
             ensure_live_worktree_unlocked(&wt_path)?;
             reconcile::maybe_refresh_existing_worktree(repo_dir, &wt_path, branch, base_branch)?;
             sync_cargo_lock(repo_dir, &wt_path);
@@ -229,12 +223,14 @@ pub fn create_worktree(
         .map_err(|err| worktree_create_error(&wt_path, branch, format!("failed to run git worktree add: {err}")))?;
 
     if out.status.success() {
+        ensure_worktree_path_is_isolated(repo_dir, &wt_path, &format!("--worktree branch '{branch}'"))?;
         sync_cargo_lock(repo_dir, &wt_path);
         return checked_worktree_info(repo_dir, wt_path, branch, true);
     }
 
     if let Some(existing_path) = existing_worktree_path(repo_dir, branch)? {
         if existing_path.exists() {
+            ensure_worktree_path_is_isolated(repo_dir, &existing_path, &format!("--worktree branch '{branch}'"))?;
             ensure_live_worktree_unlocked(&existing_path)?;
             reconcile::maybe_refresh_existing_worktree(repo_dir, &existing_path, branch, base_branch)?;
             sync_cargo_lock(repo_dir, &existing_path);
@@ -285,6 +281,7 @@ pub fn create_worktree(
             worktree_add_reason(&out),
         ));
     }
+    ensure_worktree_path_is_isolated(repo_dir, &wt_path, &format!("--worktree branch '{branch}'"))?;
     sync_cargo_lock(repo_dir, &wt_path);
     checked_worktree_info(repo_dir, wt_path, branch, true)
 }

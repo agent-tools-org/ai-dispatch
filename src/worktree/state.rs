@@ -5,7 +5,7 @@
 use anyhow::{Context, Result};
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use super::validation::is_main_working_tree_path;
+use super::{path::main_working_tree_dir, validation::canonical_worktree_path};
 
 pub fn sync_cargo_lock(repo_dir: &Path, wt_path: &Path) {
     let src = repo_dir.join("Cargo.lock");
@@ -25,6 +25,12 @@ pub fn prune_worktrees(repo_dir: &Path) -> Result<()> {
 }
 
 pub fn existing_worktree_path(repo_dir: &Path, branch: &str) -> Result<Option<PathBuf>> {
+    let caller_checkout = repo_dir
+        .canonicalize()
+        .with_context(|| format!("failed to canonicalize repo path {}", repo_dir.display()))?;
+    let main_checkout = main_working_tree_dir(repo_dir)?
+        .canonicalize()
+        .with_context(|| format!("failed to canonicalize main checkout for {}", repo_dir.display()))?;
     let out = Command::new("git")
         .args(["-C", &repo_dir.to_string_lossy()])
         .args(["worktree", "list", "--porcelain"])
@@ -53,7 +59,8 @@ pub fn existing_worktree_path(repo_dir: &Path, branch: &str) -> Result<Option<Pa
                 .trim()
                 .strip_prefix("refs/heads/")
                 .unwrap_or(branch_line.trim());
-            if branch_name == branch && !is_main_working_tree_path(repo_dir, path) {
+            let candidate = canonical_worktree_path(path);
+            if branch_name == branch && candidate != caller_checkout && candidate != main_checkout {
                 return Ok(Some(path.clone()));
             }
         }

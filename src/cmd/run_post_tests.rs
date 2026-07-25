@@ -37,7 +37,7 @@ fn transient_hung_retry_args_take_first_cascade_agent_and_clear_session() {
         ..Default::default()
     };
 
-    let retry_args = build_hung_retry_args(&args, &task, &hung_context(true), "feedback", "root");
+    let retry_args = build_hung_retry_args(&args, &task, &hung_context(true), "feedback", "root").unwrap();
 
     assert_eq!(retry_args.agent_name, "codex");
     assert_eq!(retry_args.cascade, vec!["cursor".to_string()]);
@@ -56,7 +56,7 @@ fn non_transient_hung_retry_args_resume_session_and_decrement_retry() {
         ..Default::default()
     };
 
-    let retry_args = build_hung_retry_args(&args, &task, &hung_context(false), "feedback", "root");
+    let retry_args = build_hung_retry_args(&args, &task, &hung_context(false), "feedback", "root").unwrap();
 
     assert_eq!(retry_args.agent_name, "opencode");
     assert_eq!(retry_args.session_id.as_deref(), Some("resume-session"));

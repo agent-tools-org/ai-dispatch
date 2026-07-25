@@ -8,6 +8,7 @@ use crate::store::Store;
 use crate::types::TaskStatus;
 
 use super::merge_git::{auto_commit_uncommitted, commits_ahead, resolve_repo_dir};
+use super::ensure_task_worktree_is_safe;
 
 pub(super) fn merge_group_lanes(store: &Store, group_id: &str) -> Result<()> {
     let tasks = store.list_tasks_by_group(group_id)?;
@@ -42,6 +43,7 @@ pub(super) fn merge_group_lanes(store: &Store, group_id: &str) -> Result<()> {
             skipped += 1;
             continue;
         }
+        ensure_task_worktree_is_safe(task)?;
         let Some(branch) = task.worktree_branch.as_deref() else {
             aid_warn!("[aid] Warning: {} — no worktree branch, skipping", task.id);
             skipped += 1;

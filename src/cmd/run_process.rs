@@ -273,11 +273,18 @@ pub(crate) fn inherit_retry_base_branch_impl(repo_dir: Option<&str>, task: &Task
     if let Ok(true) = crate::worktree::branch_has_commits_ahead_of_main(repo_dir, branch) { retry_args.base_branch = Some(branch.to_string()); }
 }
 
-pub(crate) fn retry_target(task: &Task) -> (Option<String>, Option<String>) {
+pub(crate) fn retry_target(task: &Task) -> Result<(Option<String>, Option<String>)> {
     match task.worktree_path.as_ref() {
-        Some(path) if std::path::Path::new(path).exists() => (Some(path.clone()), None),
-        Some(_) => (None, task.worktree_branch.clone()),
-        None => (None, None),
+        Some(path) if std::path::Path::new(path).exists() => {
+            crate::worktree::ensure_consumed_worktree_path_is_isolated(
+                task.repo_path.as_deref(),
+                path,
+                &format!("recorded worktree path for task {}", task.id),
+            )?;
+            Ok((Some(path.clone()), None))
+        }
+        Some(_) => Ok((None, task.worktree_branch.clone())),
+        None => Ok((None, None)),
     }
 }
 

@@ -108,30 +108,8 @@ fn is_reserved_target_dir_name(name: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_env::CargoTargetDirGuard;
     use crate::test_subprocess;
-    use std::ffi::{OsStr, OsString};
-
-    struct EnvVarGuard {
-        key: &'static str,
-        previous: Option<OsString>,
-    }
-
-    impl EnvVarGuard {
-        fn set(key: &'static str, value: impl AsRef<OsStr>) -> Self {
-            let previous = std::env::var_os(key);
-            unsafe { std::env::set_var(key, value) };
-            Self { key, previous }
-        }
-    }
-
-    impl Drop for EnvVarGuard {
-        fn drop(&mut self) {
-            match &self.previous {
-                Some(value) => unsafe { std::env::set_var(self.key, value) },
-                None => unsafe { std::env::remove_var(self.key) },
-            }
-        }
-    }
 
     fn git(repo_dir: &Path, args: &[&str]) {
         assert!(Command::new("git")
@@ -159,7 +137,7 @@ mod tests {
         let repo = tempfile::tempdir().unwrap();
         init_repo(repo.path());
         let root = aid_home.path().join("cargo-target");
-        let _target_guard = EnvVarGuard::set("CARGO_TARGET_DIR", &root);
+        let _target_guard = CargoTargetDirGuard::set(&root);
         let live_branch = "feat/live-clean-target";
         let stale_target = root.join("feat-stale-clean-target");
         let live_target = root.join("feat-live-clean-target");

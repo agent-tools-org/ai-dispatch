@@ -275,6 +275,6 @@ mod tests {
         };
         let digest = render_digest(&report, true);
         assert_eq!(digest.lines().count(), MAX_DIGEST_LINES);
-        assert!(digest.contains("... 11 more diagnostics suppressed"));
+        assert!(digest.contains("... 12 more diagnostics suppressed"));
     }
 }

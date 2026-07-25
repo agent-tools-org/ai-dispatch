@@ -62,7 +62,13 @@ fn live_worktree_retry_without_repo_path_derives_repo_anchor() {
 
     apply_retry_target(&task, &mut args).unwrap();
 
-    assert_eq!(args.repo.as_deref(), Some(repo.path().to_str().unwrap()));
+    // The repo anchor is derived via git, which reports the canonical path. On macOS the
+    // tempdir lives under /var, a symlink to /private/var, so compare canonicalized forms.
+    let expected_repo = repo.path().canonicalize().expect("canonicalize repo path");
+    let actual_repo = std::path::Path::new(args.repo.as_deref().expect("repo anchor"))
+        .canonicalize()
+        .expect("canonicalize derived repo anchor");
+    assert_eq!(actual_repo, expected_repo);
     assert_eq!(args.dir.as_deref(), Some(worktree.to_str().unwrap()));
     assert_eq!(args.worktree.as_deref(), Some("aid/retry-legacy"));
 }

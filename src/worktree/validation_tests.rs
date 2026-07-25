@@ -2,7 +2,7 @@
 // Exports: none.
 // Deps: super helpers, tempfile, crate::test_subprocess, std::process::Command.
 
-use super::{aid_worktree_path, create_worktree, is_valid_git_worktree};
+use super::{aid_worktree_path, create_worktree, ensure_worktree_path_is_isolated, is_valid_git_worktree};
 use crate::test_subprocess;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -134,4 +134,14 @@ fn create_worktree_recreates_when_existing_path_is_standalone() {
     assert!(!info.path.join("standalone.txt").exists());
 
     cleanup_worktree(main_repo.path(), &info.path);
+}
+
+#[test]
+fn isolated_guard_refuses_when_main_checkout_detection_fails() {
+    let repo = TempDir::new().unwrap();
+    let candidate = TempDir::new().unwrap();
+
+    let err = ensure_worktree_path_is_isolated(repo.path(), candidate.path(), "test").unwrap_err();
+
+    assert!(err.to_string().contains("cannot determine main checkout"));
 }

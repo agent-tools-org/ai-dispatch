@@ -1,7 +1,7 @@
 // Batch retry logic for failed/skipped tasks.
 // Exports: retry_failed
 // Deps: crate::cmd::run, crate::store::Store, crate::types::Task
-use crate::cmd::run::{self, RunArgs};
+use crate::cmd::run::{self, RunArgs, apply_retry_target};
 use crate::cmd::wait::{wait_for_task_ids, WaitOutcome};
 use crate::store::Store;
 use crate::types::{Task, TaskStatus};
@@ -56,7 +56,6 @@ pub(super) fn should_retry_task(status: TaskStatus, include_waiting: bool) -> bo
 }
 
 pub(crate) fn retry_task_to_run_args(store: &Store, task: &Task, group_id: &str, agent_override: Option<&str>) -> Result<RunArgs> {
-    let (dir, worktree) = retry_target(task);
     let agent_name = if let Some(override_name) = agent_override {
         override_name.to_string()
     } else {
@@ -93,8 +92,7 @@ pub(crate) fn retry_task_to_run_args(store: &Store, task: &Task, group_id: &str,
     });
     run_args.agent_name = agent_name;
     run_args.prompt = task.prompt.clone();
-    run_args.dir = dir;
-    run_args.worktree = worktree;
+    apply_retry_target(task, &mut run_args);
     run_args.group = Some(group_id.to_string());
     run_args.background = true;
     run_args.announce = true;
@@ -151,14 +149,6 @@ async fn wait_for_retry_completion(store: &Arc<Store>, task_id: &str) -> Result<
         WaitOutcome::TimedOut(_) => {
             anyhow::bail!("Timed out waiting for retried task {} after {}s", task_id, SERIAL_RETRY_TIMEOUT_SECS)
         }
-    }
-}
-
-fn retry_target(task: &Task) -> (Option<String>, Option<String>) {
-    match task.worktree_path.as_ref() {
-        Some(path) if std::path::Path::new(path).exists() => (Some(path.clone()), None),
-        Some(_) => (None, task.worktree_branch.clone()),
-        None => (task.repo_path.clone(), task.worktree_branch.clone()),
     }
 }
 

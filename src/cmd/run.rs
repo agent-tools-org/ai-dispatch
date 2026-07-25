@@ -111,6 +111,7 @@ impl Drop for WorkspaceSymlinkGuard {
 
 pub(crate) fn inherit_retry_base_branch(repo_dir: Option<&str>, task: &Task, retry_args: &mut RunArgs) { run_prompt::inherit_retry_base_branch_impl(repo_dir, task, retry_args); }
 pub(crate) fn retry_target(task: &Task) -> (Option<String>, Option<String>) { run_prompt::retry_target(task) }
+pub(crate) fn apply_retry_target(task: &Task, retry_args: &mut RunArgs) { run_prompt::apply_retry_target(task, retry_args); }
 #[cfg(test)]
 fn take_next_cascade_agent(args: &RunArgs) -> Option<(String, Vec<String>)> { run_post::take_next_cascade_agent(args) }
 #[cfg(test)]

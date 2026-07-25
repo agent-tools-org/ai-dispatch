@@ -173,7 +173,7 @@ fn setup_worktree(
     }
     let emit_gitbutler_setup_hint = configure_gitbutler(args, detected_project, agent_setup, wt_path.as_deref(), repo_path.as_deref());
     sync_context_files(args, wt_path.as_deref(), repo_path.as_deref());
-    ensure_effective_dir(effective_dir.as_deref(), wt_path.as_deref(), wt_branch.as_deref().or(args.worktree.as_deref()))?;
+    if !args.dry_run { ensure_effective_dir(effective_dir.as_deref(), wt_path.as_deref(), wt_branch.as_deref().or(args.worktree.as_deref()))?; }
     lock.disarm();
     Ok(WorktreeSetup { wt_path, wt_branch, effective_dir, repo_path, fresh_worktree, emit_gitbutler_setup_hint })
 }

@@ -85,6 +85,31 @@ fn output_content_length_counts_plain_text_transcript() {
 }
 
 #[test]
+fn output_content_length_counts_multibyte_output_as_characters() {
+    let dir = tempfile::tempdir().unwrap();
+    let output_path = dir.path().join("output.md");
+    let content = format!("{}{}", "a".repeat(196), "\u{2019}".repeat(2));
+    assert!(content.len() >= 200);
+    assert!(content.chars().count() < 200);
+    std::fs::write(&output_path, content).unwrap();
+    let mut task = task("t-short-multibyte");
+    task.output_path = Some(output_path.to_string_lossy().to_string());
+
+    assert!(output_content_length(&task) < 200);
+}
+
+#[test]
+fn output_content_length_keeps_long_ascii_output_at_threshold() {
+    let dir = tempfile::tempdir().unwrap();
+    let output_path = dir.path().join("output.md");
+    std::fs::write(&output_path, "a".repeat(200)).unwrap();
+    let mut task = task("t-long-ascii");
+    task.output_path = Some(output_path.to_string_lossy().to_string());
+
+    assert!(output_content_length(&task) >= 200);
+}
+
+#[test]
 fn capture_final_worktree_state_records_switched_branch() {
     let _permit = test_subprocess::acquire();
     let repo = tempfile::tempdir().unwrap();

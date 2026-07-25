@@ -92,9 +92,7 @@ fn build_hung_retry_args(
     retry_args.read_only = task.read_only;
     retry_args.budget = task.budget;
     retry_args.background = false;
-    let (dir, worktree) = super::retry_target(task)?;
-    retry_args.dir = dir.or_else(|| retry_args.dir.clone());
-    retry_args.worktree = worktree.or_else(|| retry_args.worktree.clone());
+    super::apply_retry_target(task, &mut retry_args)?;
     inherit_retry_base_branch(args.dir.as_deref(), task, &mut retry_args);
     if context.transient {
         retry_args.session_id = None;

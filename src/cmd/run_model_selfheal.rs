@@ -8,7 +8,7 @@ use std::sync::Arc;
 use crate::cmd::retry_logic;
 use crate::{store::Store, types::*};
 
-use super::{RunArgs, inherit_retry_base_branch, run};
+use super::{RunArgs, apply_retry_target, inherit_retry_base_branch, run};
 
 /// When a task fails because its model id is unavailable (deprecated/renamed/
 /// unsupported), auto-retry once on the agent's own current default model. This
@@ -53,9 +53,7 @@ pub(crate) async fn maybe_auto_retry_after_model_unavailable(
     retry_args.verify = task.verify.clone();
     retry_args.read_only = task.read_only;
     retry_args.background = false;
-    let (dir, worktree) = super::retry_target(&task)?;
-    retry_args.dir = dir.or_else(|| retry_args.dir.clone());
-    retry_args.worktree = worktree.or_else(|| retry_args.worktree.clone());
+    apply_retry_target(&task, &mut retry_args)?;
     inherit_retry_base_branch(args.dir.as_deref(), &task, &mut retry_args);
     if task.agent.supports_session_resume() {
         retry_args.session_id = task.agent_session_id.clone();

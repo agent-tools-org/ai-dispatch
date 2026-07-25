@@ -136,9 +136,6 @@ pub(crate) async fn post_run_lifecycle(
         effective_dir.map(String::as_str),
         repo_path.map(String::as_str),
     )?;
-    if let Err(err) = crate::worktree::cleanup_completed_worktree(store.as_ref(), task_id) {
-        aid_warn!("[aid] Warning: failed to remove completed worktree for {task_id}: {err}");
-    }
     super::maybe_auto_gc_after_completion(
         store,
         task_id,
@@ -265,6 +262,9 @@ pub(crate) async fn post_run_lifecycle(
     } else {
         true
     };
+    if let Err(err) = crate::worktree::cleanup_completed_worktree(store.as_ref(), task_id) {
+        aid_warn!("[aid] Warning: failed to remove completed worktree for {task_id}: {err}");
+    }
     if mode.is_foreground() && completed_normally { aid_info!("[aid] View in TUI: aid board"); }
     Ok(None)
 }

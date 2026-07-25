@@ -130,7 +130,7 @@ fn retry_existing_worktree_overrides_saved_dir() {
     let args = retry_args(&store, &task, None);
 
     assert_eq!(args.dir.as_deref(), Some(worktree_path.as_str()));
-    assert!(args.worktree.is_none());
+    assert_eq!(args.worktree.as_deref(), Some("aid/existing"));
 }
 
 #[test]

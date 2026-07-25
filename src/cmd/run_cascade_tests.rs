@@ -69,7 +69,9 @@ fn cascade_inherits_existing_worktree_dir() {
     inherit_cascade_target(&mut args, &task).unwrap();
 
     assert_eq!(args.dir, task.worktree_path);
-    assert_eq!(args.worktree, None);
+    // The cascade keeps the worktree branch so the follow-up task is persisted with its
+    // worktree metadata intact; dropping it strips isolation from later generations.
+    assert_eq!(args.worktree.as_deref(), Some("feat/cascade"));
     git(repo.path(), &["worktree", "remove", "--force", &linked.to_string_lossy()]);
 }
 

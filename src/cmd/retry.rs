@@ -120,7 +120,7 @@ fn resolve_retry_target(
             } else {
                 save_partial_work(path, task_id)?;
             }
-            Ok((Some(path.clone()), None))
+            Ok((Some(path.clone()), worktree))
         }
         Some(_) => {
             // Worktree was cleaned up (e.g. auto-cleanup after failure) —

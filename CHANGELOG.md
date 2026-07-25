@@ -1,3 +1,13 @@
+## v9.4.0 (2026-07-25)
+- Fix: post-completion auto-retries of background tasks no longer fail instantly with `Failed during worktree setup: Not a git repository` — an explicit `--repo` is now honored instead of being discarded by an eagerly-evaluated `--dir` fallback
+- Fix: a completed task's worktree is no longer pruned before aid decides whether to dispatch a verify/checklist/hang/model-selfheal retry, so the retry no longer inherits a directory aid just deleted
+- Fix: retries whose worktree is gone now target the task's repository instead of a stale or empty directory, and refuse to dispatch when no usable directory can be determined
+- Fix: `aid batch retry` keeps a task's configured subdirectory instead of silently redirecting the retry to the repository root
+- Fix: retries preserve worktree path and branch metadata, so isolation is no longer lost across successive retry generations
+- Safety: a task worktree can never be the repository's main checkout or the checkout it was dispatched from — `existing_worktree_path` skips the main working tree and `create_worktree` rejects any candidate equal to the repo path on every return path
+- Safety: tasks whose stored worktree path equals their repository path are refused by retry, cascade, batch retry and merge, so historical records cannot commit into a main checkout
+
+
 ## v9.3.2 (2026-07-16)
 - Fix: `aid run`'s process exit code now reflects the dispatched task's real outcome (0=Done, non-zero=Failed/Stopped/verify-failed) instead of always exiting 0 regardless of task result; `--bg` and `--dry-run` continue to exit 0 immediately as before
 - Fix: foreground `aid run` completion now always prints one unambiguous, tagged status line (`[STATUS=DONE]`/`[STATUS=FAILED]`/`[STATUS=VERIFY_FAILED]`/`[STATUS=BG_RUNNING]`) so it can no longer be confused with a background-dispatch message, including when the task's own `--verify` step fails but the task status is kept as Done

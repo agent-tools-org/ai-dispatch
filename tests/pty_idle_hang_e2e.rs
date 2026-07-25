@@ -18,6 +18,11 @@ fn aid_cmd_in(aid_home: &Path) -> Command {
     let mut cmd = Command::new(env!("CARGO_BIN_EXE_aid"));
     cmd.env("AID_HOME", aid_home);
     cmd.env("AID_NO_DETACH", "1");
+    // Project config is discovered from the working directory. Left at the repo root, this test's
+    // dispatched task inherits ai-dispatch's own verify command and runs the whole unit suite as
+    // verification, which blows past the idle-reap window this test measures. The temp AID_HOME is
+    // not a git repo, so discovery finds nothing and the task is verified against nothing.
+    cmd.current_dir(aid_home);
     cmd
 }
 

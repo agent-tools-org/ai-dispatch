@@ -20,7 +20,7 @@ pub(crate) fn resolve_prompt(prompt: &str, template: Option<&str>) -> Result<Str
 /// Short prompts (trivial tasks) get references-only to avoid context pollution.
 const SKILL_FULL_INJECT_MIN_CHARS: usize = 200;
 const RUST_CACHE_PROMPT_LINE: &str =
-    "Rust project: CARGO_TARGET_DIR already points at a warm shared target directory; do not override it.";
+    "Rust project: CARGO_TARGET_DIR points at a warm shared target; do not override. Use 'aid build' to run cargo check/build for clean, deduplicated compiler errors.";
 const BATCH_SIBLING_LIMIT: usize = 10;
 const BATCH_SIBLING_PROMPT_LIMIT: usize = 80;
 

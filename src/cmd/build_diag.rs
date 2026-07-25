@@ -2,7 +2,7 @@
 // Exports: DiagnosticCollector, BuildReport, render_digest().
 // Deps: serde_json, std collections/time.
 
-use std::collections::HashSet;
+use std::collections::HashMap;
 use std::time::Duration;
 
 const MAX_DIGEST_LINES: usize = 50;
@@ -33,18 +33,27 @@ pub(crate) enum DiagnosticLevel {
     Warning,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct Diagnostic {
     level: DiagnosticLevel,
     file_name: String,
     line: usize,
     message: String,
+    occurrences: usize,
 }
 
 #[derive(Debug, Default)]
 pub(crate) struct DiagnosticCollector {
-    seen: HashSet<Diagnostic>,
+    counts: HashMap<DiagnosticKey, usize>,
     ordered: Vec<Diagnostic>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+struct DiagnosticKey {
+    level: DiagnosticLevel,
+    file_name: String,
+    line: usize,
+    message: String,
 }
 
 pub(crate) struct BuildReport {
@@ -58,15 +67,24 @@ pub(crate) struct BuildReport {
 impl DiagnosticCollector {
     pub(crate) fn push_json_line(&mut self, line: &str) -> Option<Diagnostic> {
         let diagnostic = parse_diagnostic(line)?;
-        if self.seen.insert(diagnostic.clone()) {
-            self.ordered.push(diagnostic.clone());
-            return Some(diagnostic);
+        let key = diagnostic.key();
+        if let Some(count) = self.counts.get_mut(&key) {
+            *count += 1;
+            return None;
         }
-        None
+        self.counts.insert(key, 1);
+        self.ordered.push(diagnostic.clone());
+        Some(diagnostic)
     }
 
-    pub(crate) fn into_diagnostics(self) -> Vec<Diagnostic> {
+    pub(crate) fn into_diagnostics(mut self) -> Vec<Diagnostic> {
         self.ordered
+            .into_iter()
+            .map(|mut diagnostic| {
+                diagnostic.occurrences = self.counts.remove(&diagnostic.key()).unwrap_or(1);
+                diagnostic
+            })
+            .collect()
     }
 }
 
@@ -83,6 +101,15 @@ impl Diagnostic {
 
     pub(crate) fn is_error(&self) -> bool {
         self.level == DiagnosticLevel::Error
+    }
+
+    fn key(&self) -> DiagnosticKey {
+        DiagnosticKey {
+            level: self.level,
+            file_name: self.file_name.clone(),
+            line: self.line,
+            message: self.message.clone(),
+        }
     }
 }
 
@@ -114,12 +141,20 @@ fn render_diagnostic_lines(report: &BuildReport, include_warnings: bool) -> Vec<
 
 fn render_diagnostic(diagnostic: &Diagnostic) -> String {
     format!(
-        "{}: {}:{}: {}",
+        "{}: {}:{}: {}{}",
         diagnostic.level.as_str(),
         diagnostic.file_name,
         diagnostic.line,
-        diagnostic.message
+        diagnostic.message,
+        occurrence_suffix(diagnostic.occurrences)
     )
+}
+
+fn occurrence_suffix(occurrences: usize) -> String {
+    if occurrences > 1 {
+        return format!(" (x{occurrences})");
+    }
+    String::new()
 }
 
 fn render_stderr_line(line: &str) -> Option<String> {
@@ -172,6 +207,7 @@ fn parse_diagnostic(line: &str) -> Option<Diagnostic> {
         file_name,
         line,
         message: normalize_message(&message.message),
+        occurrences: 1,
     })
 }
 
@@ -209,72 +245,5 @@ impl DiagnosticLevel {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn compiler_message(level: &str, file: &str, line: usize, message: &str) -> String {
-        format!(
-            r#"{{"reason":"compiler-message","message":{{"level":"{level}","message":"{message}","spans":[{{"file_name":"{file}","line_start":{line},"is_primary":true}}]}}}}"#
-        )
-    }
-
-    #[test]
-    fn collector_deduplicates_matching_messages() {
-        let line = compiler_message("error", "src/main.rs", 9, "missing semicolon");
-        let mut collector = DiagnosticCollector::default();
-        assert!(collector.push_json_line(&line).is_some());
-        assert!(collector.push_json_line(&line).is_none());
-        assert_eq!(collector.into_diagnostics().len(), 1);
-    }
-
-    #[test]
-    fn digest_counts_warnings_without_rendering_by_default() {
-        let report = BuildReport {
-            success: false,
-            command: "cargo check".to_string(),
-            elapsed: Duration::from_millis(120),
-            diagnostics: vec![
-                parse_diagnostic(&compiler_message("error", "src/lib.rs", 2, "bad type")).expect("error diagnostic"),
-                parse_diagnostic(&compiler_message("warning", "src/lib.rs", 4, "unused")).expect("warning diagnostic"),
-            ],
-            stderr_lines: Vec::new(),
-        };
-        let digest = render_digest(&report, false);
-        assert!(digest.contains("failed: 1 errors, 1 warnings"));
-        assert!(digest.contains("error: src/lib.rs:2: bad type"));
-        assert!(!digest.contains("warning: src/lib.rs:4: unused"));
-    }
-
-    #[test]
-    fn digest_renders_warnings_when_requested() {
-        let report = BuildReport {
-            success: true,
-            command: "cargo clippy".to_string(),
-            elapsed: Duration::from_secs(1),
-            diagnostics: vec![
-                parse_diagnostic(&compiler_message("warning", "src/lib.rs", 4, "unused")).expect("warning diagnostic"),
-            ],
-            stderr_lines: Vec::new(),
-        };
-        assert!(render_digest(&report, true).contains("warning: src/lib.rs:4: unused"));
-    }
-
-    #[test]
-    fn digest_marks_suppressed_diagnostics() {
-        let diagnostics = (0..60)
-            .map(|idx| {
-                parse_diagnostic(&compiler_message("error", "src/lib.rs", idx + 1, "bad type")).expect("error diagnostic")
-            })
-            .collect();
-        let report = BuildReport {
-            success: false,
-            command: "cargo check".to_string(),
-            elapsed: Duration::from_secs(1),
-            diagnostics,
-            stderr_lines: Vec::new(),
-        };
-        let digest = render_digest(&report, true);
-        assert_eq!(digest.lines().count(), MAX_DIGEST_LINES);
-        assert!(digest.contains("... 12 more diagnostics suppressed"));
-    }
-}
+#[path = "build_diag_tests.rs"]
+mod tests;

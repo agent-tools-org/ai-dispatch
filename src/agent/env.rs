@@ -1,8 +1,8 @@
 // Agent environment helpers: shared target dirs, git ceiling, cwd resolution, run env.
 // Exports: path and process helpers for agent runs. Deps: crate::paths, super::RunOpts.
 
-use std::path::PathBuf;
-use std::process::Command;
+use std::path::{Path, PathBuf};
+use std::process::{Command, Stdio};
 
 use crate::types::AgentKind;
 
@@ -10,6 +10,8 @@ use super::RunOpts;
 
 const CARGO_TARGET_DIR_ENV: &str = "CARGO_TARGET_DIR";
 const CARGO_MANIFEST_NAME: &str = "Cargo.toml";
+const RUSTC_WRAPPER_ENV: &str = "RUSTC_WRAPPER";
+const SCCACHE_BIN: &str = "sccache";
 const SHARED_TARGET_DIR_NAME: &str = "cargo-target";
 
 pub fn agent_has_fs_access(_kind: &AgentKind) -> bool {
@@ -36,11 +38,53 @@ pub fn target_dir_for_worktree(worktree_branch: Option<&str>) -> Option<String> 
     let base = shared_target_dir()?;
     match worktree_branch {
         Some(branch) => {
-            let sanitized = branch.replace('/', "-");
-            Some(format!("{base}/{sanitized}"))
+            let target = target_dir_for_branch(Path::new(&base), branch);
+            seed_branch_target_dir(Path::new(&base), &target);
+            Some(target.to_string_lossy().into_owned())
         }
         None => Some(base),
     }
+}
+
+pub fn apply_rust_build_cache_env(
+    cmd: &mut Command,
+    project_dir: Option<&str>,
+    worktree_branch: Option<&str>,
+) {
+    if !is_rust_project(project_dir) {
+        return;
+    }
+    if let Some(target_dir) = target_dir_for_worktree(worktree_branch) {
+        cmd.env(CARGO_TARGET_DIR_ENV, target_dir);
+    }
+    if std::env::var_os(RUSTC_WRAPPER_ENV).is_none()
+        && !command_has_env(cmd, RUSTC_WRAPPER_ENV)
+        && which_exists(SCCACHE_BIN)
+    {
+        cmd.env(RUSTC_WRAPPER_ENV, SCCACHE_BIN);
+    }
+}
+
+fn target_dir_for_branch(base: &Path, branch: &str) -> PathBuf {
+    base.join(branch.replace('/', "-"))
+}
+
+fn seed_branch_target_dir(base: &Path, target: &Path) {
+    if target.exists() || !base.is_dir() {
+        return;
+    }
+    let _ = Command::new("cp")
+        .arg("-Rc")
+        .arg(base)
+        .arg(target)
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status();
+}
+
+fn command_has_env(cmd: &Command, name: &str) -> bool {
+    cmd.get_envs().any(|(key, _)| key == name)
 }
 
 pub fn is_rust_project(dir: Option<&str>) -> bool {
@@ -86,3 +130,7 @@ pub(crate) fn which_exists(name: &str) -> bool {
         .map(|o| o.status.success())
         .unwrap_or(false)
 }
+
+#[cfg(test)]
+#[path = "env_tests.rs"]
+mod tests;

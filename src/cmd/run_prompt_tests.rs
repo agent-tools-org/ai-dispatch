@@ -13,6 +13,9 @@ mod skill_tests;
 #[path = "run_prompt/worktree_paths_tests.rs"]
 mod worktree_paths_tests;
 
+#[path = "run_prompt/rust_cache_prompt_tests.rs"]
+mod rust_cache_prompt_tests;
+
 #[test]
 fn sanitize_strips_structural_tags() {
     let input = "keep\n<aid-project-rules>\ninside\n</aid-team-rules>\nend";

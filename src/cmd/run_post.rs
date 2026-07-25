@@ -44,7 +44,7 @@ pub(crate) async fn maybe_auto_retry_after_hang(
         run_hung_recovery::build_hung_retry_feedback(&hung_task, context.hung_duration_secs);
     let root_prompt = retry_logic::root_prompt(store.as_ref(), &task)
         .unwrap_or_else(|| args.prompt.clone());
-    let retry_args = build_hung_retry_args(args, &task, &context, &feedback, &root_prompt);
+    let retry_args = build_hung_retry_args(args, &task, &context, &feedback, &root_prompt)?;
 
     process_monitor::insert_hung_retry_event(store.as_ref(), task_id)?;
     let retry_id = Box::pin(run(store.clone(), retry_args)).await?;
@@ -75,7 +75,7 @@ fn build_hung_retry_args(
     context: &process_monitor::HungContext,
     feedback: &str,
     root_prompt: &str,
-) -> RunArgs {
+) -> Result<RunArgs> {
     let mut retry_args = args.clone();
     retry_args.prompt =
         format!("[Previous attempt feedback]\n{feedback}\n\n[Original task]\n{root_prompt}");
@@ -92,7 +92,7 @@ fn build_hung_retry_args(
     retry_args.read_only = task.read_only;
     retry_args.budget = task.budget;
     retry_args.background = false;
-    let (dir, worktree) = super::retry_target(task);
+    let (dir, worktree) = super::retry_target(task)?;
     retry_args.dir = dir.or_else(|| retry_args.dir.clone());
     retry_args.worktree = worktree.or_else(|| retry_args.worktree.clone());
     inherit_retry_base_branch(args.dir.as_deref(), task, &mut retry_args);
@@ -105,7 +105,7 @@ fn build_hung_retry_args(
     } else if task.agent.supports_session_resume() {
         retry_args.session_id = task.agent_session_id.clone();
     }
-    retry_args
+    Ok(retry_args)
 }
 
 

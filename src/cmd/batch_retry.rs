@@ -25,7 +25,6 @@ impl RetryBucket {
             .unwrap_or_else(|| "unknown".to_string())
     }
 }
-
 pub async fn retry_failed(
     store: Arc<Store>,
     group_id: &str,
@@ -49,14 +48,12 @@ pub async fn retry_failed(
     }
     Ok(())
 }
-
 pub(super) fn should_retry_task(status: TaskStatus, include_waiting: bool) -> bool {
     matches!(status, TaskStatus::Failed | TaskStatus::Skipped)
         || (include_waiting && status == TaskStatus::Waiting)
 }
-
 pub(crate) fn retry_task_to_run_args(store: &Store, task: &Task, group_id: &str, agent_override: Option<&str>) -> Result<RunArgs> {
-    let (dir, worktree) = retry_target(task);
+    let (dir, worktree) = retry_target(task)?;
     let agent_name = if let Some(override_name) = agent_override {
         override_name.to_string()
     } else {
@@ -102,7 +99,6 @@ pub(crate) fn retry_task_to_run_args(store: &Store, task: &Task, group_id: &str,
     run_args.existing_task_id = None;
     Ok(run_args)
 }
-
 fn bucket_retry_tasks(tasks: Vec<Task>) -> Vec<RetryBucket> {
     let mut buckets = Vec::new();
     let mut bucket_indexes = HashMap::<WorktreeIdentity, usize>::new();
@@ -118,9 +114,7 @@ fn bucket_retry_tasks(tasks: Vec<Task>) -> Vec<RetryBucket> {
     }
     buckets
 }
-
 fn retry_bucket_identity(task: &Task) -> Option<WorktreeIdentity> { if task.worktree_path.is_none() && task.worktree_branch.is_none() { None } else { Some((task.worktree_path.clone(), task.worktree_branch.clone())) } }
-
 async fn dispatch_retry_bucket(
     store: &Arc<Store>,
     bucket: RetryBucket,
@@ -142,7 +136,6 @@ async fn dispatch_retry_bucket(
     println!("[aid] Worktree {} bucket complete", label);
     Ok(())
 }
-
 async fn wait_for_retry_completion(store: &Arc<Store>, task_id: &str) -> Result<()> {
     let timeout = Duration::from_secs(SERIAL_RETRY_TIMEOUT_SECS);
     let task_ids = [task_id.to_string()];
@@ -153,15 +146,16 @@ async fn wait_for_retry_completion(store: &Arc<Store>, task_id: &str) -> Result<
         }
     }
 }
-
-fn retry_target(task: &Task) -> (Option<String>, Option<String>) {
+fn retry_target(task: &Task) -> Result<(Option<String>, Option<String>)> {
     match task.worktree_path.as_ref() {
-        Some(path) if std::path::Path::new(path).exists() => (Some(path.clone()), None),
-        Some(_) => (None, task.worktree_branch.clone()),
-        None => (task.repo_path.clone(), task.worktree_branch.clone()),
+        Some(path) if std::path::Path::new(path).exists() => {
+            crate::worktree::ensure_consumed_worktree_path_is_isolated(task.repo_path.as_deref(), path, &format!("recorded worktree path for task {}", task.id))?;
+            Ok((Some(path.clone()), None))
+        }
+        Some(_) => Ok((None, task.worktree_branch.clone())),
+        None => Ok((task.repo_path.clone(), task.worktree_branch.clone())),
     }
 }
-
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -192,3 +192,22 @@ fn fast_fail_cleanup_rejects_non_aid_path() {
 
     assert!(worktree.path().exists());
 }
+
+#[test]
+fn retry_target_application_replaces_stale_worktree_dir_with_repo() {
+    let stale_dir = "/tmp/aid-stale-worktree-dir";
+    let repo_dir = "/tmp/aid-task-repo";
+    let mut task = make_task("t-stale-retry", stale_dir);
+    task.repo_path = Some(repo_dir.to_string());
+    task.worktree_branch = Some("chore/retry-stale".to_string());
+    let mut retry_args = RunArgs {
+        dir: Some(stale_dir.to_string()),
+        worktree: Some("old-worktree".to_string()),
+        ..Default::default()
+    };
+
+    super::super::apply_retry_target(&task, &mut retry_args);
+
+    assert_eq!(retry_args.dir.as_deref(), Some(repo_dir));
+    assert_eq!(retry_args.worktree.as_deref(), Some("chore/retry-stale"));
+}

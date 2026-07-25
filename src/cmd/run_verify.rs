@@ -202,9 +202,7 @@ pub(in crate::cmd) async fn maybe_auto_retry_after_verify_failure_impl(
     retry_args.read_only = task.read_only;
     retry_args.budget = task.budget;
     retry_args.background = false;
-    let (dir, worktree) = super::retry_target(&task);
-    retry_args.dir = dir.or_else(|| retry_args.dir.clone());
-    retry_args.worktree = worktree.or_else(|| retry_args.worktree.clone());
+    super::apply_retry_target(&task, &mut retry_args);
     if task.agent.supports_session_resume() {
         retry_args.session_id = task.agent_session_id.clone();
     }
@@ -248,9 +246,7 @@ pub(in crate::cmd) async fn maybe_auto_retry_after_checklist_miss_impl(
     retry_args.read_only = task.read_only;
     retry_args.budget = task.budget;
     retry_args.background = false;
-    let (dir, worktree) = super::retry_target(&task);
-    retry_args.dir = dir.or_else(|| retry_args.dir.clone());
-    retry_args.worktree = worktree.or_else(|| retry_args.worktree.clone());
+    super::apply_retry_target(&task, &mut retry_args);
     if task.agent.supports_session_resume() {
         retry_args.session_id = task.agent_session_id.clone();
     }

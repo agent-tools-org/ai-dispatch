@@ -94,20 +94,40 @@ fn recover_repo_dir(task: &Task, retry_args: &RunArgs, branch: &str) -> Result<S
 }
 
 fn find_repo_dir(task: &Task, retry_args: &RunArgs) -> Result<Option<String>> {
-    for candidate in [
-        task.repo_path.as_deref(),
-        retry_args.repo.as_deref(),
-        retry_args.dir.as_deref(),
-        task.worktree_path.as_deref(),
-    ]
-    .into_iter()
-    .flatten()
-    {
+    for candidate in [task.repo_path.as_deref(), retry_args.repo.as_deref()].into_iter().flatten() {
+        if let Some(repo) = preserved_repo_root(candidate)? {
+            return Ok(Some(repo));
+        }
+    }
+    for candidate in [retry_args.dir.as_deref(), task.worktree_path.as_deref()].into_iter().flatten() {
         if let Some(repo) = main_worktree_root(candidate)? {
             return Ok(Some(repo));
         }
     }
     Ok(None)
+}
+
+fn preserved_repo_root(path: &str) -> Result<Option<String>> {
+    if !Path::new(path).is_dir() {
+        return Ok(None);
+    }
+    let Some(root) = git_root(path)? else {
+        return Ok(None);
+    };
+    if same_existing_path(path, &root)? {
+        return Ok(Some(path.to_string()));
+    }
+    Ok(Some(root))
+}
+
+fn same_existing_path(left: &str, right: &str) -> Result<bool> {
+    let left = Path::new(left)
+        .canonicalize()
+        .with_context(|| format!("failed to canonicalize {left}"))?;
+    let right = Path::new(right)
+        .canonicalize()
+        .with_context(|| format!("failed to canonicalize {right}"))?;
+    Ok(left == right)
 }
 
 fn main_worktree_root(path: &str) -> Result<Option<String>> {

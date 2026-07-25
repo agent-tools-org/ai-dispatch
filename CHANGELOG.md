@@ -1,3 +1,15 @@
+## v9.5.0 (2026-07-25)
+- New `aid build [check|test|clippy]` runs cargo for a dispatched agent and returns a compact digest instead of raw cargo output: a cold `cargo check --all-targets` with two errors drops from 140 lines / 4496 bytes to 3 lines / 185 bytes. Build progress goes to the task event stream (visible in `aid watch`, the TUI, and `aid board`) rather than into the agent's context, rate-limited to 3 messages with a configurable threshold and interval.
+- `aid build` progress reports a compiled-unit count taken from cargo's `compiler-artifact` records, so a slow build is distinguishable from a wedged one. Repeated diagnostics are deduplicated but keep their multiplicity as an `(xN)` suffix; status-line error and warning counts remain unique-diagnostic counts.
+- The Rust build cache is now shared across aid worktrees. A new branch's target directory is seeded from a shared `_base` with an APFS clone, bringing `cargo check --all-targets` from 37.13s cold to 8.45s; cloning 1.8 GB takes about 1 second and consumes 8 MB of real disk instead of 1833 MB.
+- Clone availability is probed with `clonefile(2)` before seeding, so `cp -c` can no longer silently degrade to a full byte copy on non-APFS or cross-filesystem setups. Seeding records a `seeded` or `skipped` setup event with its reason and elapsed time.
+- Branch target directories are seeded from pre-existing `debug/`, `release/`, and `.rustc_info.json` when `_base` does not exist yet, so the cache activates on machines that already have warm artifacts instead of waiting for a non-worktree build that may never happen.
+- Branch target directories are now reclaimed when their worktree is removed or pruned and by `aid clean`, preserving `_base` and any branch with a live worktree. Previously nothing ever deleted them.
+- Branch target directories stay namespaced inside the project's target root, so two projects using the same branch name no longer collide, and a branch can no longer be created beside unrelated projects' caches.
+- `CARGO_TARGET_DIR` injection is centralized in one helper covering dispatch, background runs, verify, merge-verify, and container runs. Dispatched prompts for Rust projects state that a warm shared target directory is already configured and must not be overridden.
+- `RUSTC_WRAPPER=sccache` was evaluated and rejected: the measured Rust cache hit rate across fresh target directories was 0.00% (1 hit / 114 misses, reproduced twice), because rustc invocations embed target-dir-specific absolute paths. The negative result is recorded in `docs/shared-cargo-cache-measurements.md`.
+
+
 ## v9.4.0 (2026-07-25)
 - Fix: post-completion auto-retries of background tasks no longer fail instantly with `Failed during worktree setup: Not a git repository` — an explicit `--repo` is now honored instead of being discarded by an eagerly-evaluated `--dir` fallback
 - Fix: a completed task's worktree is no longer pruned before aid decides whether to dispatch a verify/checklist/hang/model-selfheal retry, so the retry no longer inherits a directory aid just deleted

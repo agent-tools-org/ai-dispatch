@@ -87,8 +87,11 @@ pub(super) fn prepare_dispatch(store: &Arc<Store>, args: &mut RunArgs) -> Result
         fail_claimed_task(store, &task_id, agent_setup.effective_model.as_deref(), &err)?;
         return Err(err);
     }
-    if setup.emit_gitbutler_setup_hint {
-        super::run_dispatch_resolve::insert_gitbutler_setup_hint(store, &task_id);
+    if setup.emit_gitbutler_setup_hint { super::run_dispatch_resolve::insert_gitbutler_setup_hint(store, &task_id); }
+    if let Err(err) = super::run_dispatch_guard::ensure_worktree_task_not_repo_root(&task, setup.effective_dir.as_deref(), setup.repo_path.as_deref()) {
+        clear_worktree_lock(setup.wt_path.as_deref(), task_id.as_str());
+        fail_claimed_task(store, &task_id, agent_setup.effective_model.as_deref(), &err)?;
+        return Err(err);
     }
     prepare_worktree_deps(store, args, &task_id, &agent_setup, &setup)?;
     if should_auto_result_file(args, had_explicit_result_file) {
@@ -103,13 +106,9 @@ pub(super) fn prepare_dispatch(store: &Arc<Store>, args: &mut RunArgs) -> Result
 }
 
 fn initial_task_id(args: &RunArgs) -> Result<TaskId> {
-    match args.existing_task_id.clone() {
-        Some(id) => {
-            crate::sanitize::validate_task_id(id.as_str())?;
-            Ok(id)
-        }
-        None => Ok(TaskId::generate()),
-    }
+    let Some(id) = args.existing_task_id.clone() else { return Ok(TaskId::generate()) };
+    crate::sanitize::validate_task_id(id.as_str())?;
+    Ok(id)
 }
 
 fn pending_task(

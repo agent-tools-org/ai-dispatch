@@ -13,7 +13,9 @@ Command under test: `cargo check --all-targets`.
 
 ## Layout
 
-The aid-managed default uses `<root>/_base` for non-worktree Rust builds and `<root>/<sanitized-branch>` for worktree builds. When the user explicitly sets `CARGO_TARGET_DIR`, that value remains the source target directory, and branch targets are created beside it. Branch target dirs are siblings of the source target, not children of it, so a branch target cannot recursively contain another branch target.
+The aid-managed layout uses a project target root with `<project-target-root>/_base` for non-worktree Rust builds and `<project-target-root>/<sanitized-branch>` for worktree builds. With the default configuration, `<project-target-root>` is `~/.aid/cargo-target`. When the user explicitly sets `CARGO_TARGET_DIR`, that value is treated as the project target root. This keeps every branch target inside the user-provided project namespace instead of creating branch targets beside it.
+
+The source target remains the `_base` leaf in both layouts, so branch target dirs are siblings of the source target, not children of it. A branch target cannot recursively contain another branch target. If a user already has a warm explicit `CARGO_TARGET_DIR`, the first aid-managed non-worktree build now warms `CARGO_TARGET_DIR/_base`; this accepts one cold `_base` build to preserve project namespacing and keep the seed source isolated.
 
 The real-path measurement created `<root>/existing-branch` before dispatch. After seeding `feat/shared-cache-realpath-fixed`, a `find` check for nested branch dirs returned 0. A unit test also creates `feat/cache-a`, `feat/cache-b`, and `feat/cache-c` target dirs in sequence and asserts none contains another.
 

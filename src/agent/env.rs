@@ -35,12 +35,8 @@ pub fn shared_target_dir() -> Option<String> {
 }
 
 fn target_layout() -> Option<CargoTargetLayout> {
-    if let Some(source) = std::env::var_os(CARGO_TARGET_DIR_ENV).map(PathBuf::from) {
-        let branch_root = source
-            .parent()
-            .filter(|parent| !parent.as_os_str().is_empty())
-            .map(Path::to_path_buf)
-            .unwrap_or_else(|| PathBuf::from("."));
+    if let Some(branch_root) = std::env::var_os(CARGO_TARGET_DIR_ENV).map(PathBuf::from) {
+        let source = branch_root.join(BASE_TARGET_DIR_NAME);
         return Some(CargoTargetLayout { source, branch_root });
     }
     let branch_root = crate::paths::aid_dir().join(SHARED_TARGET_DIR_NAME);

@@ -214,6 +214,39 @@ fn retry_target_application_replaces_stale_worktree_dir_with_repo() {
 }
 
 #[test]
+fn retry_target_application_preserves_live_worktree_across_generations() {
+    let repo = TempDir::new().unwrap();
+    let worktree = TempDir::new().unwrap();
+    let repo_dir = repo.path().to_string_lossy().to_string();
+    let worktree_dir = worktree.path().to_string_lossy().to_string();
+    let mut first = make_task("t-live-retry", &worktree_dir);
+    first.repo_path = Some(repo_dir.clone());
+    first.worktree_branch = Some("chore/retry-live".to_string());
+    let mut first_retry = RunArgs {
+        dir: Some(repo_dir.clone()),
+        ..Default::default()
+    };
+
+    super::super::apply_retry_target(&first, &mut first_retry).unwrap();
+
+    assert_eq!(first_retry.dir.as_deref(), Some(worktree_dir.as_str()));
+    assert_eq!(first_retry.worktree.as_deref(), Some("chore/retry-live"));
+
+    let mut second = make_task("t-live-retry-child", &worktree_dir);
+    second.repo_path = Some(repo_dir.clone());
+    second.worktree_branch = first_retry.worktree.clone();
+    let mut second_retry = RunArgs {
+        dir: Some(repo_dir.clone()),
+        ..Default::default()
+    };
+
+    super::super::apply_retry_target(&second, &mut second_retry).unwrap();
+
+    assert_eq!(second_retry.dir.as_deref(), Some(worktree_dir.as_str()));
+    assert_eq!(second_retry.worktree.as_deref(), Some("chore/retry-live"));
+}
+
+#[test]
 fn retry_target_application_keeps_existing_dir_without_repo_fallback() {
     let stale_dir = "/tmp/aid-stale-worktree-dir-without-repo";
     let fallback_dir = TempDir::new().unwrap();

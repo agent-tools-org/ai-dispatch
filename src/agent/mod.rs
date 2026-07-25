@@ -35,8 +35,9 @@ use crate::types::*;
 pub(crate) mod env;
 #[allow(unused_imports)]
 pub use env::{
-    agent_has_fs_access, apply_run_env, apply_rust_build_cache_env, is_rust_project,
-    set_git_ceiling, shared_target_dir, target_dir_for_worktree,
+    agent_has_fs_access, apply_cargo_target_env, apply_run_env, apply_rust_build_cache_env,
+    cargo_target_env_arg, is_rust_project, set_git_ceiling, shared_target_dir,
+    target_dir_for_worktree,
 };
 
 /// Adapter trait for AI CLI tools

@@ -65,7 +65,7 @@ pub fn aid_worktree_path(repo_dir: &Path, branch: &str) -> PathBuf {
         .join(branch)
 }
 
-fn main_repo_dir(repo_dir: &Path) -> PathBuf {
+pub(super) fn main_repo_dir(repo_dir: &Path) -> PathBuf {
     let output = Command::new("git")
         .args([
             "-C",

@@ -164,6 +164,7 @@ fn setup_worktree(
     let (wt_path, wt_branch, effective_dir, resolved_repo, fresh_worktree) =
         run_prompt::resolve_worktree_paths(args, explicit_repo_path)?;
     let repo_path = resolved_repo.or_else(|| explicit_repo_path.map(str::to_string));
+    crate::worktree::ensure_requested_worktree_is_isolated(args.worktree.as_deref(), repo_path.as_deref(), wt_path.as_deref())?;
     let mut lock = WorktreeLockGuard::new(task_id);
     if let Some(ref wt) = wt_path {
         if let Err(holder) = crate::worktree::try_acquire_worktree_lock_with_store(Path::new(wt), task_id.as_str(), Some(store)) {

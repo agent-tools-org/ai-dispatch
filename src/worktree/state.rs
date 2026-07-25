@@ -5,6 +5,7 @@
 use anyhow::{Context, Result};
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use super::validation::is_main_working_tree_path;
 
 pub fn sync_cargo_lock(repo_dir: &Path, wt_path: &Path) {
     let src = repo_dir.join("Cargo.lock");
@@ -52,7 +53,7 @@ pub fn existing_worktree_path(repo_dir: &Path, branch: &str) -> Result<Option<Pa
                 .trim()
                 .strip_prefix("refs/heads/")
                 .unwrap_or(branch_line.trim());
-            if branch_name == branch {
+            if branch_name == branch && !is_main_working_tree_path(repo_dir, path) {
                 return Ok(Some(path.clone()));
             }
         }

@@ -133,7 +133,7 @@ pub struct ReplyArgs {
     pub file: Option<String>,
     #[arg(long = "async")]
     pub async_mode: bool,
-    #[arg(long = "timeout", default_value = "30")]
+    #[arg(long = "timeout", value_name = "SECS", default_value = "30", help = "Wait this many seconds for an acknowledgement")]
     pub timeout_secs: u64,
 }
 

@@ -21,7 +21,7 @@ pub struct WatchArgs {
     pub stream: bool,
     #[arg(long, conflicts_with_all = ["tui", "stream"])]
     pub exit_on_await: bool,
-    #[arg(long, conflicts_with = "tui")]
+    #[arg(long, value_name = "SECS", conflicts_with = "tui", help = "Stop waiting after this many seconds")]
     pub timeout: Option<u64>,
 }
 
@@ -36,6 +36,6 @@ pub struct WaitArgs {
     pub group: Option<String>,
     #[arg(long)]
     pub exit_on_await: bool,
-    #[arg(long)]
+    #[arg(long, value_name = "SECS", help = "Stop waiting after this many seconds")]
     pub timeout: Option<u64>,
 }

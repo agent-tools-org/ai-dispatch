@@ -84,9 +84,9 @@ pub struct RunArgs {
     pub parent: Option<String>,
     #[arg(long, value_name = "ID")]
     pub id: Option<String>,
-    #[arg(long)]
+    #[arg(long, value_name = "SECS", help = "Hard cap for the run in seconds; for minutes, multiply by 60")]
     pub timeout: Option<u64>,
-    #[arg(long, value_name = "SECS")]
+    #[arg(long, value_name = "SECS", help = "Kill the agent after this many seconds without parsed activity")]
     pub idle_timeout: Option<u64>,
     #[arg(long, help = "Run aic cross-audit on this task after completion (requires `aic` binary on PATH)")]
     pub audit: bool,
@@ -218,7 +218,7 @@ pub struct AgentArgs {
 
 #[derive(Args)]
 pub struct CleanArgs {
-    #[arg(long, default_value = "7")]
+    #[arg(long, value_name = "DAYS", default_value = "7", help = "Remove records older than this many days")]
     pub older_than: u64,
     #[arg(long)]
     pub worktrees: bool,

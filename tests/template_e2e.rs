@@ -3,18 +3,13 @@
 // Deps: compiled `aid` binary, tempfile, and a POSIX shell.
 
 use std::path::Path;
-use std::process::Command;
 
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
 use tempfile::TempDir;
 
-fn aid_cmd_in(aid_home: &Path) -> Command {
-    let mut cmd = Command::new(env!("CARGO_BIN_EXE_aid"));
-    cmd.env("AID_HOME", aid_home);
-    cmd.env("AID_NO_DETACH", "1");
-    cmd
-}
+mod common;
+use common::aid_cmd_in;
 
 #[test]
 fn config_templates_lists_installed_templates() {

@@ -2,16 +2,10 @@
 // Verifies machine-readable board output is not throttled by rapid polling.
 // Deps: compiled `aid` binary, tempfile, serde_json.
 
-use std::path::Path;
-use std::process::Command;
 use tempfile::TempDir;
 
-fn aid_cmd_in(aid_home: &Path) -> Command {
-    let mut cmd = Command::new(env!("CARGO_BIN_EXE_aid"));
-    cmd.env("AID_HOME", aid_home);
-    cmd.env("AID_NO_DETACH", "1");
-    cmd
-}
+mod common;
+use common::aid_cmd_in;
 
 #[test]
 fn board_json_rapid_calls_emit_parseable_arrays() {

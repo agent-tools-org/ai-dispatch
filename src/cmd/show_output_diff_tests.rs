@@ -46,9 +46,10 @@ fn init_repo(dir: &Path) {
     git(dir, &["config", "user.email", "test@example.com"]);
     git(dir, &["config", "user.name", "Test User"]);
     write_and_commit(dir, "base.txt", "base\n", "base");
+    git(dir, &["branch", "-M", "main"]);
 }
 
-fn task_fixture(id: &str, repo: &Path, start_sha: &str, status: TaskStatus) -> Task {
+fn task_fixture(id: &str, repo: &Path, start_sha: Option<&str>, status: TaskStatus) -> Task {
     Task {
         id: TaskId(id.to_string()),
         agent: AgentKind::Codex,
@@ -67,7 +68,7 @@ fn task_fixture(id: &str, repo: &Path, start_sha: &str, status: TaskStatus) -> T
         worktree_branch: Some("task-branch".to_string()),
         final_head_sha: None,
         final_branch: None,
-        start_sha: Some(start_sha.to_string()),
+        start_sha: start_sha.map(|sha| sha.to_string()),
         log_path: None,
         output_path: None,
         tokens: None,
@@ -98,7 +99,7 @@ fn diff_text_uses_start_sha_to_exclude_prior_task_commits() {
     write_and_commit(repo.path(), "new.txt", "new task\n", "current task");
 
     let store = Arc::new(Store::open_memory().unwrap());
-    let task = task_fixture("t-start-sha", repo.path(), &start_sha, TaskStatus::Done);
+    let task = task_fixture("t-start-sha", repo.path(), Some(&start_sha), TaskStatus::Done);
     store.insert_task(&task).unwrap();
 
     let text = diff_text(&store, task.id.as_str()).unwrap();
@@ -115,7 +116,7 @@ fn failed_task_without_new_commits_reports_no_changes() {
     let start_sha = git_stdout(repo.path(), &["rev-parse", "HEAD"]);
 
     let store = Arc::new(Store::open_memory().unwrap());
-    let task = task_fixture("t-no-commit", repo.path(), &start_sha, TaskStatus::Failed);
+    let task = task_fixture("t-no-commit", repo.path(), Some(&start_sha), TaskStatus::Failed);
     store.insert_task(&task).unwrap();
 
     let text = diff_text(&store, task.id.as_str()).unwrap();
@@ -132,7 +133,7 @@ fn failed_task_with_untracked_only_worktree_reports_partial_work() {
     std::fs::write(repo.path().join("new.txt"), "partial\n").unwrap();
 
     let store = Arc::new(Store::open_memory().unwrap());
-    let task = task_fixture("t-untracked", repo.path(), &start_sha, TaskStatus::Failed);
+    let task = task_fixture("t-untracked", repo.path(), Some(&start_sha), TaskStatus::Failed);
     store.insert_task(&task).unwrap();
 
     let text = diff_text(&store, task.id.as_str()).unwrap();
@@ -141,4 +142,57 @@ fn failed_task_with_untracked_only_worktree_reports_partial_work() {
     assert!(text.contains("untracked: 1"), "got: {text}");
     assert!(text.contains("?? new.txt"), "got: {text}");
     assert!(!text.contains("(no changes detected)"), "got: {text}");
+}
+
+#[test]
+fn branch_tip_equal_to_base_with_no_start_sha_shows_empty_diff() {
+    let repo = tempfile::tempdir().unwrap();
+    init_repo(repo.path());
+    write_and_commit(repo.path(), "release.txt", "release\n", "release");
+    git(repo.path(), &["checkout", "-b", "task-branch"]);
+
+    let store = Arc::new(Store::open_memory().unwrap());
+    let task = task_fixture("t-clean-base", repo.path(), None, TaskStatus::Done);
+    store.insert_task(&task).unwrap();
+
+    let text = diff_text(&store, task.id.as_str()).unwrap();
+
+    assert!(text.contains("(no changes detected)"), "got: {text}");
+    assert!(!text.contains("release.txt"), "got: {text}");
+}
+
+#[test]
+fn branch_with_one_commit_shows_only_task_commit_changes() {
+    let repo = tempfile::tempdir().unwrap();
+    init_repo(repo.path());
+    write_and_commit(repo.path(), "release.txt", "release\n", "release");
+    git(repo.path(), &["checkout", "-b", "task-branch"]);
+    write_and_commit(repo.path(), "task.txt", "task\n", "task");
+
+    let store = Arc::new(Store::open_memory().unwrap());
+    let task = task_fixture("t-one-commit", repo.path(), None, TaskStatus::Done);
+    store.insert_task(&task).unwrap();
+
+    let text = diff_text(&store, task.id.as_str()).unwrap();
+
+    assert!(text.contains("task.txt"), "got: {text}");
+    assert!(!text.contains("release.txt"), "got: {text}");
+}
+
+#[test]
+fn branch_with_tracked_worktree_changes_still_shows_them() {
+    let repo = tempfile::tempdir().unwrap();
+    init_repo(repo.path());
+    write_and_commit(repo.path(), "release.txt", "release\n", "release");
+    git(repo.path(), &["checkout", "-b", "task-branch"]);
+    std::fs::write(repo.path().join("release.txt"), "release\nedited\n").unwrap();
+
+    let store = Arc::new(Store::open_memory().unwrap());
+    let task = task_fixture("t-dirty-tracked", repo.path(), None, TaskStatus::Done);
+    store.insert_task(&task).unwrap();
+
+    let text = diff_text(&store, task.id.as_str()).unwrap();
+
+    assert!(text.contains("release.txt"), "got: {text}");
+    assert!(text.contains("+edited"), "got: {text}");
 }

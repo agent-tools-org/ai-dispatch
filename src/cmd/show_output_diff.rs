@@ -156,7 +156,7 @@ pub(crate) fn diff_stat(wt_path: &str, start_sha: Option<&str>) -> String {
         start_sha.map(|sha| vec!["diff".to_string(), format!("{sha}..HEAD"), "--stat".to_string()]);
     generate_diff(
         wt_path,
-        diff_arg_sets(start_args, &[&["diff", "main...HEAD", "--stat"], &["diff", "--stat"], &["diff", "--stat", "HEAD~1"]]).as_slice(),
+        diff_arg_sets(start_args, &[&["diff", "main...HEAD", "--stat"], &["diff", "--stat"]]).as_slice(),
         "  (no changes detected)\n",
     )
 }
@@ -166,7 +166,7 @@ pub(crate) fn diff_stat_file(wt_path: &str, start_sha: Option<&str>, file: &str)
         start_sha.map(|sha| vec!["diff".to_string(), format!("{sha}..HEAD"), "--stat".to_string()]);
     generate_diff_file(
         wt_path,
-        diff_arg_sets(start_args, &[&["diff", "main...HEAD", "--stat"], &["diff", "--stat"], &["diff", "--stat", "HEAD~1"]]).as_slice(),
+        diff_arg_sets(start_args, &[&["diff", "main...HEAD", "--stat"], &["diff", "--stat"]]).as_slice(),
         "  (no changes detected)\n",
         file,
     )
@@ -204,7 +204,7 @@ fn full_diff(wt_path: &str, start_sha: Option<&str>) -> String {
     let start_args = start_sha.map(|sha| vec!["diff".to_string(), format!("{sha}..HEAD")]);
     generate_diff(
         wt_path,
-        diff_arg_sets(start_args, &[&["diff", "main...HEAD"], &["diff"], &["diff", "HEAD~1"]]).as_slice(),
+        diff_arg_sets(start_args, &[&["diff", "main...HEAD"], &["diff"]]).as_slice(),
         "  (no diff available)\n",
     )
 }
@@ -213,7 +213,7 @@ fn full_diff_file(wt_path: &str, start_sha: Option<&str>, file: &str) -> String 
     let start_args = start_sha.map(|sha| vec!["diff".to_string(), format!("{sha}..HEAD")]);
     generate_diff_file(
         wt_path,
-        diff_arg_sets(start_args, &[&["diff", "main...HEAD"], &["diff"], &["diff", "HEAD~1"]]).as_slice(),
+        diff_arg_sets(start_args, &[&["diff", "main...HEAD"], &["diff"]]).as_slice(),
         "  (no diff available)\n",
         file,
     )

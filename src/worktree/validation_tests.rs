@@ -117,7 +117,7 @@ fn is_valid_git_worktree_rejects_worktree_of_different_repo() {
 }
 
 #[test]
-fn create_worktree_recreates_when_existing_path_is_standalone() {
+fn create_worktree_refuses_when_existing_path_is_standalone() {
     let _permit = test_subprocess::acquire();
     let main_repo = init_repo();
     let branch = "test-branch";
@@ -127,13 +127,12 @@ fn create_worktree_recreates_when_existing_path_is_standalone() {
     git(&expected_path, &["init", "-b", "main"]);
     std::fs::write(expected_path.join("standalone.txt"), "stale\n").unwrap();
 
-    let info = create_worktree(main_repo.path(), branch, None).unwrap();
+    let err = create_worktree(main_repo.path(), branch, None).unwrap_err();
+    let msg = err.to_string();
+    assert!(msg.contains("already exists"), "msg: {msg}");
+    assert!(msg.contains("not a shared-ref worktree"), "msg: {msg}");
 
-    assert_eq!(info.path, expected_path);
-    assert!(is_valid_git_worktree(main_repo.path(), &info.path).unwrap());
-    assert!(!info.path.join("standalone.txt").exists());
-
-    cleanup_worktree(main_repo.path(), &info.path);
+    let _ = std::fs::remove_dir_all(&expected_path);
 }
 
 #[test]

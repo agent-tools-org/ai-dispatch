@@ -139,11 +139,9 @@ fn create_worktree_rejects_reuse_when_worker_lock_pid_is_alive() {
 
 // Issue #113 regression: worktree drifts off the requested branch (e.g. agent
 // ran `git checkout --detach` or switched to another branch). Subsequent
-// dispatches must re-anchor the worktree to the requested branch, not silently
-// use whatever HEAD is — otherwise commits land on the wrong branch and never
-// advance the requested branch ref in the main repo.
+// dispatches must refuse the wrong HEAD instead of silently using it.
 #[test]
-fn create_worktree_reanchors_when_head_drifted_detached() {
+fn create_worktree_refuses_when_head_drifted_detached() {
     let _permit = test_subprocess::acquire();
     let repo = init_repo();
     let branch = unique_branch("feat/stale-drift");
@@ -165,22 +163,14 @@ fn create_worktree_reanchors_when_head_drifted_detached() {
         .unwrap();
     assert!(!symref_status.success(), "expected detached HEAD");
 
-    // Re-dispatch on the original branch.
-    let refreshed = create_worktree(repo.path(), branch.as_str(), None).unwrap();
-
-    assert_eq!(refreshed.path, info.path);
-    // Worktree must be re-anchored to the requested branch.
-    assert_eq!(
-        git_output(
-            refreshed.path.as_path(),
-            &["symbolic-ref", "--short", "HEAD"]
-        ),
-        branch.as_str()
-    );
+    let err = create_worktree(repo.path(), branch.as_str(), None).unwrap_err();
+    let msg = err.to_string();
+    assert!(msg.contains("(detached HEAD)"), "msg: {msg}");
+    assert!(msg.contains(branch.as_str()), "msg: {msg}");
 
     git(
         repo.path(),
-        &["worktree", "remove", "--force", &refreshed.path.to_string_lossy()],
+        &["worktree", "remove", "--force", &info.path.to_string_lossy()],
     );
 }
 
@@ -212,7 +202,27 @@ fn create_worktree_errors_when_head_drifted_and_dirty() {
 }
 
 #[test]
-fn create_worktree_rejects_pruned_branch_with_unmerged_commit() {
+fn create_worktree_refuses_when_worktree_is_on_different_branch() {
+    let _permit = test_subprocess::acquire();
+    let repo = init_repo();
+    let branch = unique_branch("feat/stale-other");
+    let other = unique_branch("feat/stale-other-current");
+    let info = create_worktree(repo.path(), branch.as_str(), None).unwrap();
+    git(info.path.as_path(), &["checkout", "-b", other.as_str()]);
+
+    let err = create_worktree(repo.path(), branch.as_str(), None).unwrap_err();
+    let msg = err.to_string();
+    assert!(msg.contains(other.as_str()), "msg: {msg}");
+    assert!(msg.contains(branch.as_str()), "msg: {msg}");
+
+    git(
+        repo.path(),
+        &["worktree", "remove", "--force", &info.path.to_string_lossy()],
+    );
+}
+
+#[test]
+fn create_worktree_recreates_pruned_branch_with_unmerged_commit() {
     let _permit = test_subprocess::acquire();
     let repo = init_repo();
     let branch = unique_branch("feat/pruned-unmerged");
@@ -223,12 +233,20 @@ fn create_worktree_rejects_pruned_branch_with_unmerged_commit() {
     git(info.path.as_path(), &["commit", "-m", "agent commit"]);
     std::fs::remove_dir_all(&info.path).unwrap();
 
-    let err = create_worktree(repo.path(), branch.as_str(), None).unwrap_err();
-    let msg = err.to_string();
-    assert!(msg.contains(branch.as_str()), "msg: {msg}");
-    assert!(msg.contains("unmerged commit(s)"), "msg: {msg}");
-    assert!(msg.contains("refusing to force-reset"), "msg: {msg}");
-    assert!(msg.contains("would orphan them"), "msg: {msg}");
+    let branch_head = git_output(repo.path(), &["rev-parse", branch.as_str()]);
+
+    let recreated = create_worktree(repo.path(), branch.as_str(), None).unwrap();
+
+    assert_eq!(git_output(repo.path(), &["rev-parse", branch.as_str()]), branch_head);
+    assert_eq!(std::fs::read_to_string(recreated.path.join("agent.txt")).unwrap(), "agent\n");
+    assert_eq!(
+        git_output(recreated.path.as_path(), &["merge-base", "--is-ancestor", &branch_head, "HEAD"]),
+        ""
+    );
+    git(
+        repo.path(),
+        &["worktree", "remove", "--force", &recreated.path.to_string_lossy()],
+    );
 }
 
 #[test]

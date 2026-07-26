@@ -82,7 +82,8 @@ pub(super) fn ensure_branch_force_reset_is_safe(
     if unique_commits > 0 {
         anyhow::bail!(
             "Branch {branch} has {unique_commits} unmerged commit(s) not on {base_ref}; \
-             refusing to force-reset (would orphan them). Run: aid worktree remove {branch}, \
+             refusing to force-reset (would orphan them). Run: aid worktree remove {branch} \
+             (removes only the worktree; branch commits are preserved), \
              or use a different --worktree name."
         );
     }
@@ -133,7 +134,7 @@ fn has_uncommitted_changes(wt_path: &Path) -> Result<bool> {
 
 fn stale_worktree_error(wt_path: &Path, branch: &str, reason: String) -> anyhow::Error {
     anyhow!(
-        "Worktree {} is stale and cannot be auto-refreshed because {}. Run: aid worktree remove {}",
+        "Worktree {} is stale and cannot be auto-refreshed because {}. Run: aid worktree remove {} (removes only the worktree; branch commits are preserved)",
         wt_path.display(),
         reason,
         branch
@@ -146,35 +147,16 @@ fn ensure_worktree_on_branch(wt_path: &Path, branch: &str) -> Result<()> {
         return Ok(());
     }
     let observed = current.as_deref().unwrap_or("(detached HEAD)");
-    if has_uncommitted_changes(wt_path)? {
-        return Err(stale_worktree_error(
-            wt_path,
-            branch,
-            format!(
-                "HEAD is on {observed} (expected {branch}) and the worktree has uncommitted changes"
-            ),
-        ));
-    }
-    let status = Command::new("git")
-        .args(["-C", &wt_path.to_string_lossy(), "checkout", branch])
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .status()
-        .context("Failed to switch worktree to expected branch")?;
-    if !status.success() {
-        return Err(stale_worktree_error(
-            wt_path,
-            branch,
-            format!(
-                "HEAD is on {observed} (expected {branch}); auto-checkout to {branch} failed — branch may not exist"
-            ),
-        ));
-    }
-    aid_info!(
-        "[aid] Re-anchored worktree {} from {observed} to {branch}",
-        wt_path.display()
-    );
-    Ok(())
+    let reason = if has_uncommitted_changes(wt_path)? {
+        format!("HEAD is on {observed} but expected {branch} and the worktree has uncommitted changes")
+    } else {
+        format!("HEAD is on {observed} but expected {branch}")
+    };
+    Err(stale_worktree_error(
+        wt_path,
+        branch,
+        reason,
+    ))
 }
 
 fn current_branch(wt_path: &Path) -> Result<Option<String>> {

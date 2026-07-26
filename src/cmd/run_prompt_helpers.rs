@@ -187,7 +187,13 @@ pub(crate) fn resolve_worktree_paths(args: &RunArgs, repo_path: Option<&str>) ->
         };
         // Use explicit base_branch, or default to current branch (not just HEAD)
         // so worktrees inherit the latest state of whatever branch the user is on
-        let base = args.base_branch.clone().or_else(|| current_branch(std::path::Path::new(&repo_dir)));
+        let default_base = args.base_branch.clone().or_else(|| current_branch(std::path::Path::new(&repo_dir)));
+        let base = if args.base_branch.is_none() {
+            crate::worktree::branch_tip_resume_base(std::path::Path::new(&repo_dir), branch)?
+                .or(default_base)
+        } else {
+            default_base
+        };
         let info = crate::worktree::create_worktree(std::path::Path::new(&repo_dir), branch, base.as_deref())?;
         let p = info.path.to_string_lossy().to_string();
         return Ok((Some(p.clone()), Some(info.branch), Some(resolve_dir_in_target(&p, args.dir.as_deref(), Some(&repo_dir))), Some(repo_dir), info.created));

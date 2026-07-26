@@ -3,18 +3,13 @@
 
 use rusqlite::params;
 use std::io::Write;
-use std::path::Path;
 use std::process::Command;
 use std::process::Stdio;
 use tempfile::NamedTempFile;
 use tempfile::TempDir;
 
-fn aid_cmd_in(aid_home: &Path) -> Command {
-    let mut cmd = Command::new(env!("CARGO_BIN_EXE_aid"));
-    cmd.env("AID_HOME", aid_home);
-    cmd.env("AID_NO_DETACH", "1");
-    cmd
-}
+mod common;
+use common::aid_cmd_in;
 
 fn aid_cmd() -> (Command, TempDir) {
     let temp_dir = TempDir::new().unwrap();

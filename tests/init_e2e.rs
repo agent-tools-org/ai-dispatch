@@ -2,16 +2,10 @@
 // Verifies default files are installed and existing customizations are preserved.
 // Deps: compiled `aid` binary and tempfile.
 
-use std::path::Path;
-use std::process::Command;
 use tempfile::TempDir;
 
-fn aid_cmd_in(aid_home: &Path) -> Command {
-    let mut cmd = Command::new(env!("CARGO_BIN_EXE_aid"));
-    cmd.env("AID_HOME", aid_home);
-    cmd.env("AID_NO_DETACH", "1");
-    cmd
-}
+mod common;
+use common::aid_cmd_in;
 
 #[test]
 fn init_creates_default_skills_and_templates() {

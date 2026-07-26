@@ -60,12 +60,19 @@ pub(crate) fn apply_retry_target(task: &Task, retry_args: &mut RunArgs) -> Resul
     }
     if let Some(branch) = worktree.clone().or_else(|| task.worktree_branch.clone()) {
         let repo = recover_repo_dir(task, retry_args, &branch)?;
-        ensure_branch_exists(&repo, &branch, task)?;
+        let Some(base_branch) = crate::worktree::branch_tip_resume_base(Path::new(&repo), &branch)? else {
+            anyhow::bail!(
+                "cannot retry task {} on branch {}: recorded worktree is missing and branch does not exist in {}; refusing to run in repo root",
+                task.id,
+                branch,
+                repo
+            );
+        };
         retry_args.repo = Some(repo.clone());
         retry_args.dir = Some(repo);
         retry_args.worktree = Some(branch.clone());
         if retry_args.base_branch.is_none() {
-            retry_args.base_branch = Some(branch);
+            retry_args.base_branch = Some(base_branch);
         }
         return Ok(());
     }
@@ -193,24 +200,6 @@ fn git_root(path: &str) -> Result<Option<String>> {
         return Ok(None);
     }
     Ok(Some(String::from_utf8_lossy(&output.stdout).trim().to_string()))
-}
-
-fn ensure_branch_exists(repo: &str, branch: &str, task: &Task) -> Result<()> {
-    let status = Command::new("git")
-        .args(["-C", repo, "rev-parse", "--verify", &format!("refs/heads/{branch}")])
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .status()
-        .with_context(|| format!("Failed to inspect branch {branch}"))?;
-    if status.success() {
-        return Ok(());
-    }
-    anyhow::bail!(
-        "cannot retry task {} on branch {}: recorded worktree is missing and branch does not exist in {}; refusing to run in repo root",
-        task.id,
-        branch,
-        repo
-    )
 }
 
 fn ensure_live_worktree_branch(task: &Task, path: &str) -> Result<()> {

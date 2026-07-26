@@ -137,7 +137,7 @@ fn maybe_verify_reports_stale_worktree_when_dir_is_missing() {
 
     let error = store.latest_error(task_id.as_str()).unwrap();
     assert!(error.contains("batch file / task dir missing in worktree"));
-    assert!(error.contains("aid worktree remove feat/stale"));
+    assert!(error.contains("aid worktree remove feat/stale") && error.contains("branch commits are preserved"));
 }
 
 #[test]

@@ -15,6 +15,8 @@ mod export_tests;
 #[cfg(test)]
 mod run_audit_flag_tests;
 #[cfg(test)]
+mod run_timeout_help_tests;
+#[cfg(test)]
 mod doctor_tests;
 #[cfg(test)]
 mod build_flag_tests;

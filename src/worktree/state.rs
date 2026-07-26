@@ -85,6 +85,10 @@ pub fn local_branch_exists(repo_dir: &Path, branch: &str) -> Result<bool> {
     Ok(status.success())
 }
 
+pub(crate) fn branch_tip_resume_base(repo_dir: &Path, branch: &str) -> Result<Option<String>> {
+    Ok(local_branch_exists(repo_dir, branch)?.then(|| branch.to_string()))
+}
+
 pub fn branch_has_commits_ahead_of_main(repo_dir: &Path, branch: &str) -> Result<bool> {
     super::validate_git_repo(repo_dir)?;
     let status = Command::new("git")

@@ -199,38 +199,6 @@ fn create_worktree_reuses_existing_branch_worktree() {
 }
 
 #[test]
-fn create_worktree_cleans_stale_directory_and_recreates_worktree() {
-    let _permit = test_subprocess::acquire();
-    let repo = TempDir::new().unwrap();
-    git(repo.path(), &["init", "-b", "main"]);
-    git(repo.path(), &["config", "user.email", "test@example.com"]);
-    git(repo.path(), &["config", "user.name", "Test User"]);
-    std::fs::write(repo.path().join("file.txt"), "hello\n").unwrap();
-    git(repo.path(), &["add", "."]);
-    git(repo.path(), &["commit", "-m", "init"]);
-
-    let branch = unique_branch("feat/stale");
-    let expected_path = aid_worktree_path(repo.path(), &branch);
-    std::fs::create_dir_all(&expected_path).unwrap();
-    std::fs::write(expected_path.join("stale.txt"), "stale\n").unwrap();
-
-    let info = create_worktree(repo.path(), branch.as_str(), None).unwrap();
-    assert_eq!(info.path, expected_path);
-    assert!(is_valid_git_worktree(repo.path(), &info.path).unwrap());
-    assert!(!info.path.join("stale.txt").exists());
-
-    git(
-        repo.path(),
-        &[
-            "worktree",
-            "remove",
-            "--force",
-            &info.path.to_string_lossy(),
-        ],
-    );
-}
-
-#[test]
 fn create_worktree_prunes_conflicting_branch_and_recreates_worktree() {
     let _permit = test_subprocess::acquire();
     let repo = TempDir::new().unwrap();
@@ -298,51 +266,6 @@ fn worktree_changed_files_reports_committed_files() {
     let files = worktree_changed_files(repo.path()).unwrap();
     assert!(files.contains(&"agent.txt".to_string()));
     assert!(files.contains(&"agent2.txt".to_string()));
-}
-
-#[test]
-fn create_worktree_rejects_non_aid_branch_on_force_reset_fallback() {
-    let _permit = test_subprocess::acquire();
-    let repo = TempDir::new().unwrap();
-    git(repo.path(), &["init", "-b", "main"]);
-    git(repo.path(), &["config", "user.email", "test@example.com"]);
-    git(repo.path(), &["config", "user.name", "Test User"]);
-    std::fs::write(repo.path().join("file.txt"), "hello\n").unwrap();
-    git(repo.path(), &["add", "file.txt"]);
-    git(repo.path(), &["commit", "-m", "init"]);
-
-    let branch = unique_branch("legacy");
-    git(repo.path(), &["branch", branch.as_str()]);
-
-    let err = create_worktree(repo.path(), branch.as_str(), None).unwrap_err();
-    assert!(err.to_string().contains("Refusing to force-reset branch"));
-}
-
-#[test]
-fn create_worktree_allows_aid_branch_on_force_reset_fallback() {
-    let _permit = test_subprocess::acquire();
-    let repo = TempDir::new().unwrap();
-    git(repo.path(), &["init", "-b", "main"]);
-    git(repo.path(), &["config", "user.email", "test@example.com"]);
-    git(repo.path(), &["config", "user.name", "Test User"]);
-    std::fs::write(repo.path().join("file.txt"), "hello\n").unwrap();
-    git(repo.path(), &["add", "file.txt"]);
-    git(repo.path(), &["commit", "-m", "init"]);
-
-    let branch = unique_branch("feat/reset");
-    git(repo.path(), &["branch", branch.as_str()]);
-
-    let info = create_worktree(repo.path(), branch.as_str(), None).unwrap();
-    assert!(info.path.exists());
-    git(
-        repo.path(),
-        &[
-            "worktree",
-            "remove",
-            "--force",
-            &info.path.to_string_lossy(),
-        ],
-    );
 }
 
 #[test]

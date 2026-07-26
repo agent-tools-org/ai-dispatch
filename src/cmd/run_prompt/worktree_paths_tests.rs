@@ -16,6 +16,16 @@ fn git(dir: &Path, args: &[&str]) {
         .success());
 }
 
+fn git_output(dir: &Path, args: &[&str]) -> String {
+    let output = Command::new("git")
+        .args(args)
+        .current_dir(dir)
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+    String::from_utf8(output.stdout).unwrap().trim().to_string()
+}
+
 fn init_git_repo_with_commit(dir: &Path) {
     git(dir, &["init", "-b", "main"]);
     git(dir, &["config", "user.email", "test@example.com"]);
@@ -23,6 +33,34 @@ fn init_git_repo_with_commit(dir: &Path) {
     std::fs::write(dir.join("file.txt"), "hello\n").unwrap();
     git(dir, &["add", "file.txt"]);
     git(dir, &["commit", "-m", "init"]);
+}
+
+#[test]
+fn resolve_worktree_paths_recreates_pruned_existing_branch_at_tip() {
+    let _permit = test_subprocess::acquire();
+    let repo = tempfile::tempdir().unwrap();
+    init_git_repo_with_commit(repo.path());
+    let branch = format!("feat/run-resume-{}", std::process::id());
+    let first = crate::worktree::create_worktree(repo.path(), &branch, Some("main")).unwrap();
+    std::fs::write(first.path.join("agent.txt"), "agent\n").unwrap();
+    git(&first.path, &["add", "agent.txt"]);
+    git(&first.path, &["commit", "-m", "agent commit"]);
+    let branch_head = git_output(repo.path(), &["rev-parse", &branch]);
+    std::fs::remove_dir_all(&first.path).unwrap();
+
+    let paths = resolve_worktree_paths(
+        &RunArgs {
+            dir: Some(repo.path().to_string_lossy().to_string()),
+            worktree: Some(branch.clone()),
+            ..Default::default()
+        },
+        Some(repo.path().to_str().unwrap()),
+    )
+    .unwrap();
+
+    let worktree_path = Path::new(paths.0.as_deref().expect("worktree path"));
+    assert_eq!(git_output(repo.path(), &["rev-parse", &branch]), branch_head);
+    assert_eq!(std::fs::read_to_string(worktree_path.join("agent.txt")).unwrap(), "agent\n");
 }
 
 #[test]

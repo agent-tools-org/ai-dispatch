@@ -49,7 +49,7 @@ impl Drop for WorktreeLockGuard {
 }
 
 fn stale_worktree_dir_error(dir: &str, branch: Option<&str>) -> String {
-    branch.map(|branch| format!("batch file / task dir missing in worktree: {dir} - workgroup state is stale, run aid worktree remove {branch} and retry"))
+    branch.map(|branch| format!("batch file / task dir missing in worktree: {dir} - workgroup state is stale, run aid worktree remove {branch} (removes only the worktree; branch commits are preserved) and retry"))
         .unwrap_or_else(|| format!("working directory does not exist: {dir}"))
 }
 

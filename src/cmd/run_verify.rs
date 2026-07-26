@@ -133,7 +133,7 @@ fn record_verify_failed(store: &Store, task_id: &TaskId, detail: String) {
 fn stale_worktree_dir_error(dir: &str, branch: Option<&str>) -> String {
     match branch {
         Some(branch) => format!(
-            "batch file / task dir missing in worktree: {dir} - workgroup state is stale, run aid worktree remove {branch} and retry"
+            "batch file / task dir missing in worktree: {dir} - workgroup state is stale, run aid worktree remove {branch} (removes only the worktree; branch commits are preserved) and retry"
         ),
         None => format!("working directory does not exist: {dir}"),
     }

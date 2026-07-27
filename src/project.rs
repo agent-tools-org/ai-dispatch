@@ -57,11 +57,7 @@ pub struct ProjectConfig {
     #[serde(default)]
     pub gitbutler: Option<String>,
     #[serde(default)]
-    pub keep_worktrees_after_done: bool,
-    #[serde(default)]
     pub suppress_gitbutler_prompt: bool,
-    #[serde(default)]
-    pub aid_gc: Option<String>,
     #[serde(default)]
     pub worktree_prefix: Option<String>,
     #[serde(default)]
@@ -135,10 +131,6 @@ pub struct ProjectAgents {
 impl ProjectConfig {
     pub fn audit_auto(&self) -> bool {
         self.audit.auto
-    }
-
-    pub fn aid_gc_auto(&self) -> bool {
-        matches!(self.aid_gc.as_deref(), Some(value) if value.eq_ignore_ascii_case("auto"))
     }
 
     pub fn gitbutler_mode(&self) -> crate::gitbutler::Mode {

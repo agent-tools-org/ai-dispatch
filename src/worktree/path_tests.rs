@@ -96,7 +96,7 @@ fn remove_worktree_reaps_branch_target_and_keeps_base() {
     remove_worktree(&repo.path().to_string_lossy(), &wt_path).unwrap();
 
     assert!(base.exists());
-    assert!(!branch_target.exists());
+    assert!(branch_target.exists());
 }
 
 #[test]

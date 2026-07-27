@@ -119,5 +119,5 @@ async fn failed_lifecycle_captures_final_branch_before_fast_fail_cleanup() {
     let loaded = store.get_task(task.id.as_str()).unwrap().unwrap();
     assert_eq!(loaded.final_branch.as_deref(), Some("agent/failure-final"));
     assert!(loaded.final_head_sha.is_some());
-    assert!(!info.path.exists());
+    assert!(info.path.exists());
 }

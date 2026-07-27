@@ -25,7 +25,7 @@ The `aid run noop` dispatch used `HOME` under `/tmp` so the sandbox could create
 
 Seeding now probes clone support in the destination parent before copying `_base`. On macOS the probe calls `clonefile` for a one-byte file; on Linux it uses `cp --reflink=always`. If the probe fails, aid records a skipped seed reason and leaves the branch target cold instead of doing a full recursive copy.
 
-Branch target directories are reclaimed with their worktree lifecycle. Removing or pruning an aid worktree removes the matching `<project-target-root>/<sanitized-branch>` directory after confirming the branch is not still checked out in a live worktree. `aid clean --worktrees` also removes orphaned branch target directories, while preserving `_base`, standard Cargo target subdirectories such as `debug` and `release`, and target dirs for live aid worktrees.
+Branch target directories are reclaimed only after accepted-task custody GC removes the worktree. `aid clean --worktrees` may remove orphaned build-cache directories, while preserving `_base`, standard Cargo target subdirectories such as `debug` and `release`, and target dirs for live aid worktrees.
 
 ## Root Artifact Fallback
 

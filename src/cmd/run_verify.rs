@@ -11,32 +11,7 @@ use crate::types::{EventKind, Task, TaskEvent, TaskId, TaskStatus, VerifyStatus}
 use super::RunArgs;
 
 pub(in crate::cmd) fn maybe_cleanup_fast_fail_impl(store: &Store, task_id: &TaskId, task: &Task) {
-    let Some(ref wt_path) = task.worktree_path else { return };
-    // SANDBOX: refuse to touch anything outside aid-managed worktree paths.
-    if !crate::worktree::is_safe_worktree_path(wt_path) {
-        aid_warn!("[aid] SAFETY: refusing to remove '{}' — not an aid worktree path", wt_path);
-        return;
-    }
-    let path = std::path::Path::new(wt_path);
-    if !path.exists() { return }
-    let Some(task) = store.get_task(task_id.as_str()).ok().flatten() else { return };
-    if task.status != TaskStatus::Failed { return }
-    let Some(duration_ms) = task.duration_ms else { return };
-    if duration_ms > 10_000 { return }
-    if crate::worktree::branch_has_commits_ahead_of_main(path, task.worktree_branch.as_deref().unwrap_or("unknown")).unwrap_or(true) { return; }
-    let Some(repo_dir) = task.repo_path.as_deref() else {
-        aid_warn!("[aid] Warning: skipping fast-fail cleanup for {} — missing repo_path", task_id);
-        return;
-    };
-    let _ = std::process::Command::new("git")
-        .args(["-C", repo_dir, "worktree", "remove", "--force", wt_path])
-        .output();
-    aid_info!(
-        "[aid] No commits on {} — pruned fast-failed worktree dir {} for task {} (failed in <10s)",
-        task.worktree_branch.as_deref().unwrap_or("<unknown>"),
-        wt_path,
-        task_id
-    );
+    let _ = (store, task_id, task);
 }
 
 pub(in crate::cmd) fn maybe_verify_impl(
@@ -133,7 +108,7 @@ fn record_verify_failed(store: &Store, task_id: &TaskId, detail: String) {
 fn stale_worktree_dir_error(dir: &str, branch: Option<&str>) -> String {
     match branch {
         Some(branch) => format!(
-            "batch file / task dir missing in worktree: {dir} - workgroup state is stale, run aid worktree remove {branch} (removes only the worktree; branch commits are preserved) and retry"
+            "batch file / task dir missing in worktree: {dir} - workgroup state is stale; resolve task {branch} through principal acceptance and custody GC"
         ),
         None => format!("working directory does not exist: {dir}"),
     }

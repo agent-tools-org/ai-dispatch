@@ -148,9 +148,7 @@ print_orphan_report() {
       [[ -n "${line}" ]] && printf '  - %s\n' "${line}" >&2
     done <<< "${orphan_branches}"
   fi
-  printf '\nRun:\n' >&2
-  printf '  git worktree prune\n' >&2
-  printf "  git branch --merged main | grep -vE '(^\\\\*|^[[:space:]]*(main|gitbutler/workspace)$|^[[:space:]]*keep/)' | xargs -r git branch -D\n" >&2
+  printf '\nTask artifacts require explicit principal acceptance and custody GC.\n' >&2
 }
 
 # Fails on merged-orphan branches or worktrees unless hygiene checks are skipped.
@@ -159,7 +157,6 @@ check_orphans() {
   local orphan_branches="" orphan_worktrees=""
   current_branch="$(ensure_branch_ready)"
 
-  git -C "${repo_root}" worktree prune -v >&2 || fail "git worktree prune failed"
   merged_output="$(git -C "${repo_root}" branch --merged main)"
 
   while IFS= read -r line; do

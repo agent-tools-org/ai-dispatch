@@ -299,7 +299,8 @@ aid run codex "Add tests" --dir $WT
 aid worktree list
 aid worktree list --json
 aid worktree list --active
-aid worktree remove feat/my-feature
+aid accept t-1234
+aid gc --task t-1234
 
 # Automatic worktree (created per-task)
 aid run codex "Implement feature" --worktree feat/my-feature --dir .
@@ -614,9 +615,10 @@ The board displays `[VFAIL]` next to tasks that completed but failed verificatio
 | `aid ask` | Run a quick research or exploration task, optionally with file context. | `aid ask "What changed in src/main.rs?" --files src/main.rs` |
 | `aid mcp` | Start the stdio MCP server so another tool can call `aid` natively. | `aid mcp` |
 | `aid merge` | Mark done task(s) as merged. Supports `--group` for bulk merge, `--approve` for interactive approval via hiboss. | `aid merge t-1234`, `aid merge --group wg-a3f1 --approve` |
-| `aid clean` | Remove old tasks/events and orphaned worktrees/logs. Supports `--dry-run`. | `aid clean --older-than 7 --worktrees` |
+| `aid clean` | Remove disposable logs and caches while retaining custody evidence. Supports `--dry-run`. | `aid clean --older-than 7 --worktrees` |
 | `aid config` | Inspect agent profiles, skills, pricing (with `--update` to fetch latest), and prompt token budget. | `aid config agents`, `aid config pricing --update` |
-| `aid worktree` | Explicit worktree lifecycle management: create, list, remove. | `aid worktree create feat/x`, `aid worktree list`, `aid worktree remove feat/x` |
+| `aid worktree` | Create and list task worktrees. Destruction is handled by accepted-task custody GC. | `aid worktree create feat/x`, `aid worktree list` |
+| `aid accept`, `aid reject`, `aid gc` | Record the principal's decision and delete only accepted, recursively durable artifacts. | `aid accept t-1234`, `aid gc --task t-1234` |
 | `aid group` | Workgroup management: create, list, show, update, delete, summary, finding, broadcast. | `aid group create dispatch -c "Shared rollout notes"`, `aid group summary wg-a3f1` |
 | `aid store` | Browse, install (with version pinning), update community agent/skill packages. | `aid store install community/aider@1.0.0`, `aid store update --apply` |
 | `aid upgrade` | Upgrade aid to latest crates.io version (checks for running tasks). | `aid upgrade`, `aid upgrade --force` |

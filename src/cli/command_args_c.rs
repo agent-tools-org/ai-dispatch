@@ -9,9 +9,7 @@ use clap::Args;
 #[command(after_help = r#"Examples:
   aid worktree create feat/my-feature
   aid worktree create fix/bug --base develop
-  aid worktree list
-  aid worktree prune
-  aid worktree remove feat/my-feature"#)]
+  aid worktree list"#)]
 pub struct WorktreeArgs {
     #[command(subcommand)]
     pub action: WorktreeAction,

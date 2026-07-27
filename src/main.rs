@@ -69,6 +69,7 @@ mod state;
 mod state_tests;
 mod store;
 mod store_workgroups;
+mod artifact_custody;
 mod task_actions;
 mod task_lifecycle;
 mod task_view;

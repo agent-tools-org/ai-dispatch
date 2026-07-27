@@ -137,7 +137,7 @@ fn maybe_verify_reports_stale_worktree_when_dir_is_missing() {
 
     let error = store.latest_error(task_id.as_str()).unwrap();
     assert!(error.contains("batch file / task dir missing in worktree"));
-    assert!(error.contains("aid worktree remove feat/stale") && error.contains("branch commits are preserved"));
+    assert!(error.contains("principal acceptance") && error.contains("custody GC"));
 }
 
 #[test]
@@ -171,7 +171,7 @@ fn fast_fail_cleanup_allows_legacy_tmp_worktree_path() {
 
     maybe_cleanup_fast_fail_impl(&store, &task_id, &task);
 
-    assert!(!worktree_path.exists());
+    assert!(worktree_path.exists());
 }
 
 #[test]

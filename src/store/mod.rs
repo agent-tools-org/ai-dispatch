@@ -3,6 +3,8 @@
 // Deps: rusqlite, anyhow.
 
 mod mutations;
+mod artifact_custody;
+pub use artifact_custody::{AcceptanceDecision, AcceptanceRecord};
 pub use mutations::TaskCompletionUpdate;
 mod execution_mutations;
 mod kg_mutations;

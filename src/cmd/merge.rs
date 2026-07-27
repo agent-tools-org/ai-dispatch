@@ -14,7 +14,6 @@ use final_branch::*;
 #[path = "merge_git.rs"]
 mod merge_git;
 use merge_git::*;
-use crate::worktree::remove_worktree;
 #[path = "merge_lanes.rs"]
 mod merge_lanes;
 
@@ -153,11 +152,6 @@ fn merge_single_with_output(store: &Store, task_id: &str, approve: bool, check: 
     if print_summary {
         println!("Marked {task_id} as merged");
     }
-    if let Some(wt) = task.worktree_path.as_deref()
-        && std::path::Path::new(wt).exists()
-        && let Err(err) = remove_worktree(&repo_dir, wt) {
-            aid_warn!("[aid] Warning: failed to clean up worktree {wt}: {err}");
-        }
     Ok(())
 }
 
@@ -205,7 +199,6 @@ fn merge_group_with_output(store: &Store, group_id: &str, approve: bool, check: 
     }
     let mut merged = 0;
     let mut skipped = Vec::new();
-    let first_repo_dir = resolve_repo_dir(tasks.first().and_then(|t| t.repo_path.as_deref()), tasks.first().and_then(|t| t.worktree_path.as_deref()));
     for task in &tasks {
         if task.status != TaskStatus::Done {
             skipped.push(format!("{} ({})", task.id, task.status.label()));
@@ -251,20 +244,11 @@ fn merge_group_with_output(store: &Store, group_id: &str, approve: bool, check: 
         }
         crate::task_lifecycle::mark_merged(store, task.id.as_str())?;
         merged += 1;
-        if let Some(wt) = task.worktree_path.as_deref()
-            && std::path::Path::new(wt).exists()
-            && let Err(err) = remove_worktree(&repo_dir, wt)
-        {
-            aid_warn!("[aid] Warning: failed to clean up worktree {wt}: {err}");
-        }
     }
     if print_summary {
         println!("Merged {merged} task(s) in group {group_id}");
     }
     if !skipped.is_empty() { aid_info!("[aid] Skipped: {}", skipped.join(", ")); }
-    let _ = Command::new("git")
-        .args(["-C", &first_repo_dir, "worktree", "prune"])
-        .output();
     Ok(())
 }
 

@@ -100,7 +100,7 @@ that runs first has no way to ask the store "is that task actually dead?"
 
 Compounding risk: because `terminate()` never touches `worker_pid` in the
 lock file, if that PID is later reused by an unrelated OS process before
-someone runs `aid worktree prune` or retries, `lock_record_is_held` returns
+someone clears the stale lock or retries, `lock_record_is_held` returns
 `true` straight from the direct `process_alive(worker_pid)` check
 (`worktree/lock.rs:34-36`) — bypassing the store fallback entirely — and the
 lock becomes falsely "held" indefinitely.
@@ -110,15 +110,12 @@ swallows the auto-commit result — `let _ = crate::commit::auto_commit(...)`
 — so if the commit fails (e.g. git lock contention right after a `sigkill`),
 the operator gets **no warning** that in-flight edits weren't preserved.
 
-### Existing but non-obvious workaround
-`aid worktree prune` (`src/cmd/worktree.rs:67-123`) already does the right
-thing: for every aid-managed worktree it reads the lock's `worker_pid` (or
-`owner_pid` if no worker_pid), checks `process_alive_check(pid)` directly
-(no store needed — pure PID liveness), and deletes `.aid-lock` if dead,
-independent of the worktree's age. This is not gated to the task that was
-just stopped, isn't surfaced by `aid stop`'s output, and isn't documented as
-"run this if a locked-worktree error blocks a retry" — hence the operator
-didn't know to reach for it and instead inspected/cleared lock state by hand.
+### Historical workaround
+The former `aid worktree prune` command cleared dead lock files, but also
+deleted task worktrees without principal acceptance. It was removed by the
+artifact-custody lifecycle. Lock recovery must remain independent from
+artifact deletion; no lock repair path may prune a worktree or its Git
+metadata.
 
 ## Correction — `aid retry`'s "discards work" belief is stale
 Checked against current `src/cmd/retry.rs` (`resolve_retry_target`,

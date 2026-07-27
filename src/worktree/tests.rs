@@ -224,23 +224,8 @@ fn create_worktree_prunes_conflicting_branch_and_recreates_worktree() {
     );
     std::fs::remove_dir_all(&orphan_path).unwrap();
 
-    let info = create_worktree(repo.path(), branch.as_str(), None).unwrap();
-    let expected_path = aid_worktree_path(repo.path(), &branch);
-    assert_eq!(info.path, expected_path);
-    assert!(is_valid_git_worktree(repo.path(), &info.path).unwrap());
-    let worktrees = git_output(repo.path(), &["worktree", "list", "--porcelain"]);
-    assert!(worktrees.contains(expected_path.to_string_lossy().as_ref()));
-    assert!(!worktrees.contains(orphan_path.to_string_lossy().as_ref()));
-
-    git(
-        repo.path(),
-        &[
-            "worktree",
-            "remove",
-            "--force",
-            &info.path.to_string_lossy(),
-        ],
-    );
+    let error = create_worktree(repo.path(), branch.as_str(), None).unwrap_err();
+    assert!(error.to_string().contains("automatic pruning is forbidden"));
 }
 
 #[test]

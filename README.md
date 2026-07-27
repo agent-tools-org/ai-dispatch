@@ -376,6 +376,9 @@ Examples:
 ```bash
 aid config skills
 
+# Ask an agent to use the release-matched official operating guide
+aid run codex "Explain the safe review and cleanup flow" --skill aid-guide
+
 aid run codex "Refactor the retry code path" \
   --dir . \
   --skill code-scout \
@@ -854,6 +857,7 @@ The default skill directory is `~/.aid/skills/`.
 | `researcher` | Collects verified information from primary sources, records confidence, and extracts facts that are safe to use downstream. |
 | `implementer` | Makes the requested change with a minimal diff, matches the local style, and verifies the result. |
 | `debugger` | Reproduces issues, traces execution, isolates the root cause, and validates the fix with evidence. |
+| `aid-guide` | Official comprehensive guide for installing, configuring, operating, reviewing, troubleshooting, and safely cleaning up AID tasks. Refreshed from each release by `aid init`. |
 
 ## MCP Integration
 

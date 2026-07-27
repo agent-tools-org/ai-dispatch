@@ -1,0 +1,4 @@
+interface:
+  display_name: "AID Official Guide"
+  short_description: "Operate every AID workflow safely and effectively"
+  default_prompt: "Use $aid-guide to explain or operate the relevant AID workflow safely."

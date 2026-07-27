@@ -50,7 +50,16 @@ pub fn run(force: bool) -> Result<()> {
     let output = Command::new("aid").arg("--version").output()?;
     let new_version = String::from_utf8_lossy(&output.stdout);
     aid_info!("[aid] Upgraded: {current} -> {}", new_version.trim());
+    refresh_bundled_guide()?;
 
+    Ok(())
+}
+
+fn refresh_bundled_guide() -> Result<()> {
+    let status = Command::new("aid").arg("init").status()?;
+    if !status.success() {
+        bail!("upgrade installed, but bundled skill refresh failed");
+    }
     Ok(())
 }
 

@@ -152,6 +152,8 @@ pub fn run() -> Result<()> {
     if needs_init {
         section("Skills & Templates");
         crate::cmd::init::run()?;
+    } else {
+        crate::cmd::init::refresh_official_guide()?;
     }
 
     // 5. Summary

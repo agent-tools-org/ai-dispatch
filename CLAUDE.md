@@ -30,6 +30,20 @@ scripts/release.sh --dry-run 8.75.0 /tmp/aid-release-notes.md
 scripts/release.sh 8.75.0 /tmp/aid-release-notes.md
 ```
 
+## Official Guide Maintenance
+
+`default-skills/aid-guide/` is the release-managed, authoritative AID operating
+guide. Any change to a public command, flag, lifecycle transition, safety
+invariant, configuration key, or recommended workflow must update the relevant
+guide reference in the same commit. Keep `references/command-index.md`
+complete. Run:
+
+```bash
+python3 ~/.codex/skills/.system/skill-creator/scripts/quick_validate.py \
+  default-skills/aid-guide
+cargo test --test aid_guide_e2e --test init_e2e
+```
+
 ## Run
 
 Dispatch a task to an AI agent. Core command — most other features build on this.

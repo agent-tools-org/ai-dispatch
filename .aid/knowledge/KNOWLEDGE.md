@@ -12,5 +12,5 @@
 - [Lifecycle Postprocess Phase Audit](lifecycle-postprocess-phase-audit.md) — Audit result for task post-processing phase extraction
 - [Coding Conventions](coding-conventions.md) — File structure, Rust patterns, testing, CLI command pattern, how to add commands
 - [Agent System](agent-system.md) — Selection pipeline, prompt injection order, event protocol, how to add agents
-- [Build & Release](build-and-release.md) — Build commands, release checklist, website deploy, macOS signing
+- [Build & Release](build-and-release.md) — Release script, local installation, tags, and official guide maintenance
 - [Common Pitfalls](common-pitfalls.md) — Agent behavior issues, test isolation, worktree edge cases, SQLite, RunArgs

@@ -82,8 +82,8 @@ pub(super) fn ensure_branch_force_reset_is_safe(
     if unique_commits > 0 {
         anyhow::bail!(
             "Branch {branch} has {unique_commits} unmerged commit(s) not on {base_ref}; \
-             refusing to force-reset (would orphan them). Run: aid worktree remove {branch} \
-             (removes only the worktree; branch commits are preserved), \
+             refusing to force-reset because it would orphan task artifacts. \
+             Resolve the owning task through principal acceptance and custody GC, \
              or use a different --worktree name."
         );
     }
@@ -134,7 +134,7 @@ fn has_uncommitted_changes(wt_path: &Path) -> Result<bool> {
 
 fn stale_worktree_error(wt_path: &Path, branch: &str, reason: String) -> anyhow::Error {
     anyhow!(
-        "Worktree {} is stale and cannot be auto-refreshed because {}. Run: aid worktree remove {} (removes only the worktree; branch commits are preserved)",
+        "Worktree {} is stale and cannot be auto-refreshed because {}. Resolve branch {} through principal acceptance and custody GC",
         wt_path.display(),
         reason,
         branch

@@ -31,8 +31,6 @@ mod run_post;
 mod run_model_selfheal;
 #[path = "run_delivery_recovery.rs"]
 mod run_delivery_recovery;
-#[path = "run_gc.rs"]
-mod run_gc;
 #[path = "run_dispatch_resolve.rs"]
 mod run_dispatch_resolve;
 #[path = "run_dispatch_claim.rs"]
@@ -158,14 +156,6 @@ pub(crate) fn persist_result_file(
     log_path: &Path,
 ) -> Result<()> {
     run_prompt::persist_result_file(task_id, result_file, base_dir, log_path)
-}
-pub(crate) fn maybe_auto_gc_after_completion(
-    store: &Arc<Store>,
-    task_id: &TaskId,
-    args: &RunArgs,
-    repo_path_hint: Option<&str>,
-) -> Result<()> {
-    run_gc::maybe_auto_gc_after_completion(store, task_id, args, repo_path_hint)
 }
 pub(crate) fn maybe_verify(
     store: &Store,

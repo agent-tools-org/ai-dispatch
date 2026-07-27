@@ -6,13 +6,12 @@ use crate::project;
 use crate::repo_root;
 use crate::store::Store;
 use crate::worktree_gc::{
-    BranchDeleteOutcome, DeletableBranch, DoctorReport, PrunableWorktree, collect_doctor_report,
-    delete_local_branch, managed_branch_prefixes, tracked_worktree_paths,
+    DeletableBranch, DoctorReport, PrunableWorktree, collect_doctor_report,
+    managed_branch_prefixes, tracked_worktree_paths,
 };
 use anyhow::Result;
 use std::fmt::Write as _;
 use std::path::Path;
-use std::process::Command;
 use std::sync::Arc;
 
 pub fn run(store: &Arc<Store>, apply: bool) -> Result<()> {
@@ -27,24 +26,10 @@ pub fn run(store: &Arc<Store>, apply: bool) -> Result<()> {
         return Ok(());
     }
 
-    if !report.prunable_worktrees.is_empty() {
-        let status = Command::new("git")
-            .args(["-C", &repo_dir.to_string_lossy(), "worktree", "prune"])
-            .status()?;
-        anyhow::ensure!(status.success(), "git worktree prune failed");
-    }
-    for branch in &report.deletable_branches {
-        match delete_local_branch(repo_dir, &branch.branch)? {
-            BranchDeleteOutcome::Deleted => {
-                println!("applied branch delete: {}", branch.branch);
-            }
-            BranchDeleteOutcome::Missing => {
-                println!("branch already gone: {}", branch.branch);
-            }
-            BranchDeleteOutcome::Kept(note) => {
-                println!("branch kept: {} ({note})", branch.branch);
-            }
-        }
+    if !report.prunable_worktrees.is_empty() || !report.deletable_branches.is_empty() {
+        anyhow::bail!(
+            "Doctor will not delete task artifacts; use explicit principal acceptance followed by `aid gc --task <task>`"
+        );
     }
     Ok(())
 }

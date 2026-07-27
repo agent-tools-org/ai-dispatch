@@ -125,7 +125,7 @@ fn write_board_output<W: Write>(writer: &mut W, store: &Store, tasks: &[Task], g
         && let Ok(stale_count) = crate::cmd::worktree::stale_worktree_count(None)
         && stale_count > 3
     {
-        writeln!(writer, "[aid] Tip: run `aid worktree prune` to clean up stale worktrees")?;
+        writeln!(writer, "[aid] Stale worktrees remain preserved until principal acceptance and custody GC")?;
     }
     Ok(())
 }

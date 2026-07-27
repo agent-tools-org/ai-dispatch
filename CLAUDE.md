@@ -210,8 +210,8 @@ What gets activated per dispatched task (when active):
 Post-batch lane assembly: `aid merge --group <wg> --lanes` uses `but apply`
 to apply each task's branch as a lane in the main repo's GitButler workspace
 instead of sequentially `git merge`-ing them. Review the whole batch with
-`but status`, then push selectively. Worktrees are preserved in this mode
-(run `aid worktree prune` later to clean up).
+`but status`, then push selectively. Worktrees remain in custody until the
+principal runs `aid accept <task>` and `aid gc --task <task>`.
 
 ## Workgroups
 
@@ -231,8 +231,8 @@ aid group delete wg-abc1                        # delete group definition
 ```bash
 aid worktree create feat/my-feature      # create worktree
 aid worktree list                        # list aid-managed worktrees
-aid worktree prune                       # clean up stale worktrees (>24h old)
-aid worktree remove feat/my-feature      # remove specific worktree
+aid accept t-1234                        # principal accepts delivered artifacts
+aid gc --task t-1234                     # delete after recursive durability proof
 ```
 
 Context files specified via `--context` are automatically synced into worktrees if they don't exist there (e.g., files created by earlier batch waves).

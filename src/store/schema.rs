@@ -81,6 +81,29 @@ CREATE TABLE IF NOT EXISTS memories (
 CREATE INDEX IF NOT EXISTS idx_memories_project ON memories(project_path);
 CREATE INDEX IF NOT EXISTS idx_memories_type ON memories(memory_type);
 CREATE INDEX IF NOT EXISTS idx_memories_hash ON memories(content_hash);
+CREATE TABLE IF NOT EXISTS task_acceptance (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    task_id TEXT NOT NULL REFERENCES tasks(id),
+    decision TEXT NOT NULL CHECK(decision IN ('accepted', 'rejected')),
+    decided_at TEXT NOT NULL,
+    principal_id TEXT NOT NULL,
+    source TEXT NOT NULL,
+    accepted_head_sha TEXT,
+    accepted_branch TEXT,
+    artifact_manifest_digest TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_task_acceptance_task
+    ON task_acceptance(task_id, id);
+CREATE TABLE IF NOT EXISTS artifact_durability (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    task_id TEXT NOT NULL REFERENCES tasks(id),
+    checked_at TEXT NOT NULL,
+    accepted_head_sha TEXT NOT NULL,
+    manifest_digest TEXT NOT NULL,
+    certificate_json TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_artifact_durability_task
+    ON artifact_durability(task_id, id);
 ";
 const CREATE_WORKGROUPS_SQL: &str = "CREATE TABLE IF NOT EXISTS workgroups (
     id TEXT PRIMARY KEY,

@@ -175,5 +175,5 @@ async fn completed_worktree_is_pruned_when_no_retry_dispatches() {
     let retry_id = run_lifecycle(&store, &task_id, &args).await;
 
     assert!(retry_id.is_none());
-    assert!(!wt.exists());
+    assert!(wt.exists());
 }

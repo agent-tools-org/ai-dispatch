@@ -74,6 +74,12 @@ pub enum Commands {
     Summary(command_args_b::SummaryArgs),
     Retry(command_args_b::RetryArgs),
     Merge(command_args_b::MergeArgs),
+    /// Accept a completed task's delivered artifact as its principal.
+    Accept(command_args_b::ArtifactDecisionArgs),
+    /// Reject a completed task while preserving every artifact.
+    Reject(command_args_b::ArtifactDecisionArgs),
+    /// Delete accepted artifacts after recursive durability proof.
+    Gc(command_args_b::ArtifactGcArgs),
     Respond(command_args_b::RespondArgs),
     Reply(command_args_b::ReplyArgs),
     Stop(command_args_b::StopArgs),

@@ -150,16 +150,15 @@ container = "dev:latest"
 }
 
 #[test]
-fn parses_auto_gc_mode() {
+fn rejects_removed_auto_gc_mode() {
     let dir = TempDir::new().unwrap();
     let contents = r#"[project]
 id = "test"
 aid_gc = "auto"
 worktree_prefix = "feat/team"
 "#;
-    let config = load_project(&write_project(dir.path(), contents)).unwrap();
-    assert!(config.aid_gc_auto());
-    assert_eq!(config.worktree_prefix.as_deref(), Some("feat/team"));
+    let error = load_project(&write_project(dir.path(), contents)).unwrap_err();
+    assert!(!error.to_string().is_empty());
 }
 
 #[test]
@@ -168,13 +167,11 @@ fn gitbutler_mode_round_trips_from_toml() {
     let contents = r#"[project]
 id = "test"
 gitbutler = "auto"
-keep_worktrees_after_done = true
 suppress_gitbutler_prompt = true
 "#;
     let config = load_project(&write_project(dir.path(), contents)).unwrap();
     assert_eq!(config.gitbutler.as_deref(), Some("auto"));
     assert_eq!(config.gitbutler_mode(), crate::gitbutler::Mode::Auto);
-    assert!(config.keep_worktrees_after_done);
     assert!(config.suppress_gitbutler_prompt);
 }
 

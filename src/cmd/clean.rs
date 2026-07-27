@@ -4,7 +4,6 @@
 
 use anyhow::Result;
 use chrono::{Duration, Local};
-use rusqlite::params;
 use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -12,12 +11,8 @@ use std::sync::Arc;
 
 use crate::paths;
 use crate::store::Store;
-use crate::worktree::{aid_worktree_root, is_aid_managed_worktree_path, worktree_has_uncommitted_changes};
+use crate::worktree::{aid_worktree_root, is_aid_managed_worktree_path};
 
-const COUNT_OLD_TASKS_SQL: &str = "SELECT COUNT(*) FROM tasks WHERE status IN ('done', 'failed', 'merged', 'skipped') AND created_at < ?1";
-const DELETE_OLD_EVENTS_SQL: &str = "DELETE FROM events WHERE task_id IN (SELECT id FROM tasks WHERE status IN ('done', 'failed', 'merged', 'skipped') AND created_at < ?1)";
-const DELETE_OLD_TASKS_SQL: &str =
-    "DELETE FROM tasks WHERE status IN ('done', 'failed', 'merged', 'skipped') AND created_at < ?1";
 const ACTIVE_WORKTREES_SQL: &str = "SELECT DISTINCT worktree_path FROM tasks WHERE worktree_path IS NOT NULL AND status IN ('pending', 'running', 'awaiting_input')";
 const TASK_IDS_SQL: &str = "SELECT id FROM tasks";
 const WORKGROUP_IDS_SQL: &str = "SELECT id FROM workgroups";
@@ -29,13 +24,11 @@ pub fn run(
     clean_worktrees: bool,
     dry_run: bool,
 ) -> Result<()> {
-    let cutoff_str = (Local::now() - Duration::days(older_than_days as i64)).to_rfc3339();
-    let task_count = count_old_tasks(&store, &cutoff_str)?;
+    let _cutoff = Local::now() - Duration::days(older_than_days as i64);
     if dry_run {
-        println!("[dry-run] Would delete {task_count} tasks older than {older_than_days} days");
+        println!("[dry-run] Task records and events are retained as custody evidence");
     } else {
-        let (tasks_deleted, events_deleted) = delete_old_tasks(&store, &cutoff_str)?;
-        println!("Cleaned {tasks_deleted} tasks and {events_deleted} events older than {older_than_days} days");
+        println!("Task records and events retained as custody evidence");
     }
     if clean_worktrees {
         clean_orphaned_worktrees(&store, dry_run)?;
@@ -46,60 +39,9 @@ pub fn run(
     Ok(())
 }
 
-fn count_old_tasks(store: &Store, cutoff_str: &str) -> Result<i64> {
-    let conn = store.db();
-    Ok(conn.query_row(COUNT_OLD_TASKS_SQL, params![cutoff_str], |row| row.get(0))?)
-}
-
-fn delete_old_tasks(store: &Store, cutoff_str: &str) -> Result<(usize, usize)> {
-    let conn = store.db();
-    let events_deleted = conn.execute(DELETE_OLD_EVENTS_SQL, params![cutoff_str])?;
-    let tasks_deleted = conn.execute(DELETE_OLD_TASKS_SQL, params![cutoff_str])?;
-    Ok((tasks_deleted, events_deleted))
-}
-
 fn clean_orphaned_worktrees(store: &Store, dry_run: bool) -> Result<()> {
-    let active_paths = query_string_set(store, ACTIVE_WORKTREES_SQL)?;
-    let mut removed = 0usize;
-    for path in worktree_paths()? {
-        let path_str = path.to_string_lossy().into_owned();
-        if active_paths.contains(&path_str) {
-            continue;
-        }
-        if worktree_has_uncommitted_changes(&path).unwrap_or(false) {
-            aid_warn!(
-                "[aid] Skipping clean: {} has uncommitted changes; review with `aid show <task>` or inspect manually",
-                path.display()
-            );
-            continue;
-        }
-        if dry_run {
-            println!(
-                "[dry-run] Would remove orphaned worktree {}",
-                path.display()
-            );
-        } else {
-            // SANDBOX: double-check path is under aid-managed worktree roots before deletion.
-            if !is_aid_managed_worktree_path(&path) {
-                aid_warn!(
-                    "[aid] SAFETY: refusing to remove '{}' — not an aid worktree",
-                    path.display()
-                );
-                continue;
-            }
-            fs::remove_dir_all(&path)?;
-            println!("Removed orphaned worktree dir {}", path.display());
-        }
-        removed += 1;
-    }
-    println!(
-        "{} {removed} orphaned worktree dirs",
-        if dry_run {
-            "[dry-run] Would remove"
-        } else {
-            "Removed"
-        }
-    );
+    let _ = (store, dry_run);
+    println!("Preserved orphaned worktree dirs; task artifacts require explicit acceptance and custody GC");
     Ok(())
 }
 

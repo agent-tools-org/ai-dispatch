@@ -128,6 +128,7 @@ pub(crate) fn branch_merge_reason(
     Ok(merge_reason_from_outputs(&cherry, &log))
 }
 
+#[cfg(test)]
 pub(crate) fn remove_worktree_path(repo_dir: &Path, worktree_path: &Path) -> Result<WorktreeRemoveOutcome> {
     if !is_aid_managed_worktree_path(worktree_path) {
         aid_warn!(
@@ -155,6 +156,7 @@ pub(crate) fn remove_worktree_path(repo_dir: &Path, worktree_path: &Path) -> Res
     Ok(WorktreeRemoveOutcome::Removed)
 }
 
+#[cfg(test)]
 pub(crate) fn delete_local_branch(repo_dir: &Path, branch: &str) -> Result<BranchDeleteOutcome> {
     if !local_branch_exists(repo_dir, branch)? {
         return Ok(BranchDeleteOutcome::Missing);

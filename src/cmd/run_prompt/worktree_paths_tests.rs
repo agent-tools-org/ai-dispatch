@@ -48,7 +48,7 @@ fn resolve_worktree_paths_recreates_pruned_existing_branch_at_tip() {
     let branch_head = git_output(repo.path(), &["rev-parse", &branch]);
     std::fs::remove_dir_all(&first.path).unwrap();
 
-    let paths = resolve_worktree_paths(
+    let error = resolve_worktree_paths(
         &RunArgs {
             dir: Some(repo.path().to_string_lossy().to_string()),
             worktree: Some(branch.clone()),
@@ -56,11 +56,10 @@ fn resolve_worktree_paths_recreates_pruned_existing_branch_at_tip() {
         },
         Some(repo.path().to_str().unwrap()),
     )
-    .unwrap();
+    .unwrap_err();
 
-    let worktree_path = Path::new(paths.0.as_deref().expect("worktree path"));
     assert_eq!(git_output(repo.path(), &["rev-parse", &branch]), branch_head);
-    assert_eq!(std::fs::read_to_string(worktree_path.join("agent.txt")).unwrap(), "agent\n");
+    assert!(error.to_string().contains("automatic pruning is forbidden"));
 }
 
 #[test]

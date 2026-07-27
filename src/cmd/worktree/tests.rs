@@ -124,7 +124,7 @@ fn prune_clears_dead_lock_and_removes_old_worktree() {
 
     assert!(should_prune_worktree(wt.to_str().unwrap()));
     prune(Some(repo.path().to_str().unwrap())).unwrap();
-    assert!(!wt.exists());
+    assert!(wt.exists());
     assert!(!wt.join(".aid-lock").exists());
 }
 

@@ -153,12 +153,6 @@ pub(crate) async fn post_run_lifecycle(
         effective_dir.map(String::as_str),
         repo_path.map(String::as_str),
     )?;
-    super::maybe_auto_gc_after_completion(
-        store,
-        task_id,
-        args,
-        repo_path.map(String::as_str),
-    )?;
     let Some(task) = store.get_task(task_id.as_str())? else { return Ok(None) };
     let summary_json = serde_json::to_string(&crate::cmd::summary::generate_summary(&task)).unwrap_or_default();
     let _ = store.save_completion_summary(task_id.as_str(), &summary_json);
@@ -284,9 +278,6 @@ pub(crate) async fn post_run_lifecycle(
     } else {
         true
     };
-    if let Err(err) = crate::worktree::cleanup_completed_worktree(store.as_ref(), task_id) {
-        aid_warn!("[aid] Warning: failed to remove completed worktree for {task_id}: {err}");
-    }
     if mode.is_foreground() && completed_normally { aid_info!("[aid] View in TUI: aid board"); }
     Ok(None)
 }
@@ -505,13 +496,13 @@ fn persist_result_file(
 }
 
 fn handle_failed_postprocess(
-    store: &Arc<Store>,
+    _store: &Arc<Store>,
     task_id: &TaskId,
     task: &Task,
     agent_kind: AgentKind,
     agent_display_name: &str,
     effective_dir: Option<&String>,
-    repo_path: Option<&String>,
+    _repo_path: Option<&String>,
     runtime_hooks: &[hooks::Hook],
 ) -> Option<String> {
     let quota_error_message = read_quota_error_message(task_id);
@@ -521,7 +512,6 @@ fn handle_failed_postprocess(
         rate_limit::mark_rate_limited(&agent_kind, &clean_message);
     }
     run_fail_hook(task_id, task, agent_display_name, effective_dir, runtime_hooks);
-    cleanup_failed_worktree(store, task_id, task, repo_path);
     quota_error_message
 }
 
@@ -549,34 +539,6 @@ fn run_fail_hook(
         false,
     ) {
         aid_error!("[aid] Hook on_fail failed: {err}");
-    }
-}
-
-fn cleanup_failed_worktree(
-    store: &Arc<Store>,
-    task_id: &TaskId,
-    task: &Task,
-    repo_path: Option<&String>,
-) {
-    if task.read_only {
-        return;
-    }
-    let Some(wt) = task.worktree_path.as_deref() else {
-        return;
-    };
-    if !Path::new(wt).exists() {
-        return;
-    }
-    let has_siblings = store
-        .has_active_worktree_siblings(wt, task_id.as_str())
-        .unwrap_or(false);
-    if has_siblings {
-        aid_info!("[aid] Preserving worktree {wt} — other active tasks share it");
-        return;
-    }
-    let repo = repo_path.map(String::as_str).unwrap_or(".");
-    if let Err(err) = crate::worktree::remove_worktree(repo, wt) {
-        aid_warn!("[aid] Warning: failed to clean up worktree {wt}: {err}");
     }
 }
 

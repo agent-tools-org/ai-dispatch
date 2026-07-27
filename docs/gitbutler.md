@@ -10,7 +10,6 @@ Set the mode in `.aid/project.toml`:
 [project]
 id = "my-repo"
 gitbutler = "auto"
-keep_worktrees_after_done = false
 ```
 
 Supported values:
@@ -19,7 +18,8 @@ Supported values:
 - `gitbutler = "auto"` enables GitButler features when the `but` CLI is installed.
 - `gitbutler = "always"` forces GitButler behavior and expects `but` to be available.
 
-`keep_worktrees_after_done = false` is the default. When a task finishes successfully and its branch has commits, `aid` removes the task worktree automatically so GitButler can apply the branch cleanly. Set it to `true` if you want to inspect completed worktrees before removing them manually.
+Task completion never deletes its worktree. After review, the principal must
+accept the task and run custody GC before GitButler applies the branch.
 
 If `aid batch` detects a GitButler repo and you have no `gitbutler = ...` setting yet, it will prompt once to enable `gitbutler = "auto"`. Declining writes `suppress_gitbutler_prompt = true` so the prompt does not repeat.
 
@@ -65,8 +65,8 @@ Cause: the branch is still checked out in `/tmp/aid-wt-<branch>/`.
 
 What to do:
 
-- Leave `keep_worktrees_after_done = false` so finished task worktrees are pruned automatically.
-- If you intentionally kept worktrees, remove the specific one with `aid worktree remove <branch>` or `git worktree remove --force /tmp/aid-wt-<branch>`.
+- Run `aid accept <task>` only after reviewing the delivered result.
+- Run `aid gc --task <task>`; deletion proceeds only after recursive durability proof.
 - Re-run `but apply <branch>` after the worktree is gone.
 
 ### `but apply` says the workspace commit is not at the top
@@ -97,15 +97,9 @@ Check all of these:
 
 ### I want to inspect the completed worktree before merge-back
 
-Set:
-
-```toml
-[project]
-keep_worktrees_after_done = true
-```
-
-Then prune manually later with:
+After review, record principal acceptance and run custody GC:
 
 ```bash
-aid worktree prune
+aid accept t-1234
+aid gc --task t-1234
 ```

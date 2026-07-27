@@ -8,10 +8,10 @@ Systemic UX issues observed via dogfooding. Sorted by severity within category. 
 
 ### GitButler batch merge-back (issue #105)
 
-- **Aid worktrees leaked after batch completion, blocking `but apply`** — successful tasks now auto-prune their aid-owned worktree. Failed and shared worktrees preserved. Opt-out: `.aid/project.toml` → `keep_worktrees_after_done = true`.
+- **Aid worktree custody** — task completion no longer destroys worktrees. Review is followed by explicit principal acceptance and durability-gated GC.
 - **`aid merge --lanes` was undiscoverable on GitButler repos** — `aid batch` completion + `aid watch --quiet --group` now print the lane merge-back hint when GitButler integration is active.
 - **First `aid batch` on a GitButler repo without project.toml config required manual wiring** — batch now offers a one-time enable prompt. `--yes` / `--no-prompt` skip silently; declining writes a `suppress_gitbutler_prompt = true` marker.
-- **No end-to-end docs for `aid` + GitButler workflow** — new `docs/gitbutler.md` covers modes, batch→review→merge pipeline, `AID_GITBUTLER=0` escape hatch, troubleshooting, `keep_worktrees_after_done` knob.
+- **GitButler workflow documentation** — `docs/gitbutler.md` covers modes, batch-to-review flow, custody acceptance, and the `AID_GITBUTLER=0` escape hatch.
 
 ### A+B steer / reply / unstick (port completion)
 
@@ -79,6 +79,6 @@ Systemic UX issues observed via dogfooding. Sorted by severity within category. 
 
 1. **Every write operation must have a documented recovery path.** lock, worktree, workgroup, task row — if aid creates it, aid must be able to clean it without manual SQL.
 2. **Paths default to relative to the declaring file, not pwd.** Batch TOML's `dir`, `context`, `scope`, etc. all resolve against the TOML file's parent; absolute paths stay absolute; clear error if neither works.
-3. **Cross-repo safety is default.** Any command that might affect another repo's state (clean, worktree prune, lock release) skips foreign worktrees unless explicitly opted in.
+3. **Cross-repo safety is default.** Any command that might affect another repo's state (clean, custody GC, lock release) skips foreign worktrees unless explicitly opted in.
 4. **Errors translate to the user's configuration layer.** The user's model is the TOML they wrote and the command they typed, not `git rev-parse --show-toplevel`.
 5. **The board does not lie.** If a task's process is dead, its status is FAIL. Not RUN, not indefinite "please wait".

@@ -7,8 +7,6 @@ use std::process::{Command, Output};
 use crate::sanitize;
 #[path = "worktree/reconcile.rs"]
 mod reconcile;
-#[path = "worktree/completion.rs"]
-mod completion;
 #[path = "worktree/snapshot.rs"]
 mod snapshot;
 #[path = "worktree/baseline.rs"]
@@ -24,9 +22,13 @@ mod validation;
 #[path = "worktree/path.rs"]
 mod path;
 pub(crate) use snapshot::{WorktreeStatusEntry, WorktreeStatusKind, capture_worktree_snapshot, capture_worktree_snapshot_with_base};
-pub(crate) use live_state::{LiveWorktreeState, capture_live_worktree_state, uncommitted_diff_text, worktree_has_uncommitted_changes};
+pub(crate) use live_state::{LiveWorktreeState, capture_live_worktree_state, uncommitted_diff_text};
 pub(crate) use baseline::{baseline_contains, extract_baseline_path, extract_baseline_paths};
-pub use path::{aid_worktree_path, aid_worktree_root, is_aid_managed_worktree_path, is_safe_worktree_path, remove_worktree};
+pub use path::{aid_worktree_path, aid_worktree_root, is_aid_managed_worktree_path};
+#[cfg(test)]
+pub use path::is_safe_worktree_path;
+#[cfg(test)]
+pub(crate) use path::remove_worktree;
 pub(crate) use state::branch_tip_resume_base;
 pub use state::{branch_has_commits_ahead_of_main, process_alive_check, worktree_changed_files};
 pub use lock::{clear_worktree_lock, rekey_worktree_lock_to_worker, try_acquire_worktree_lock_with_store};
@@ -35,8 +37,7 @@ pub(crate) use lock::{
     check_worktree_lock, check_worktree_lock_with_store, simulate_stale_recovery_race,
     try_acquire_worktree_lock, write_worktree_lock,
 };
-pub(crate) use completion::cleanup_completed_worktree;
-use state::{existing_worktree_path, local_branch_exists, prune_worktrees, sync_cargo_lock};
+use state::{existing_worktree_path, local_branch_exists, sync_cargo_lock};
 use validation::{canonical_worktree_path, ensure_current_checkout_is_not_task_target, ensure_worktree_path_is_isolated, is_valid_git_worktree};
 pub(crate) use validation::ensure_consumed_worktree_path_is_isolated;
 
@@ -69,7 +70,7 @@ fn invalid_worktree_error(path: &Path, branch: &str) -> anyhow::Error {
 
 fn worktree_create_error(path: &Path, branch: &str, reason: impl std::fmt::Display) -> anyhow::Error {
     anyhow!(
-        "Failed to create worktree at {} for branch {}: {}. Try: aid worktree prune",
+        "Failed to create worktree at {} for branch {}: {}. Destructive cleanup requires principal acceptance and custody GC",
         path.display(),
         branch,
         reason
@@ -180,7 +181,9 @@ pub fn create_worktree(repo_dir: &Path, branch: &str, base_branch: Option<&str>)
         if existing_worktree_path(repo_dir, branch)?
             .is_some_and(|path| canonical_worktree_path(&path) != expected_path)
         {
-            prune_worktrees(repo_dir)?;
+            anyhow::bail!(
+                "Branch '{branch}' has conflicting worktree metadata; automatic pruning is forbidden because the registration may own unaccepted artifacts"
+            );
         }
         if is_valid_git_worktree(repo_dir, &wt_path)? {
             if let Some(existing_path) = existing_worktree_path(repo_dir, branch)? {
@@ -232,7 +235,9 @@ pub fn create_worktree(repo_dir: &Path, branch: &str, base_branch: Option<&str>)
             return checked_worktree_info(repo_dir, existing_path, branch, false);
         }
 
-        prune_worktrees(repo_dir)?;
+        anyhow::bail!(
+            "Branch '{branch}' has a missing worktree registration; automatic pruning is forbidden because its private object store may contain unaccepted artifacts"
+        );
     }
 
     // Fallback after `git worktree add -b` fails, usually because the branch already exists.
@@ -290,5 +295,4 @@ pub fn create_worktree(repo_dir: &Path, branch: &str, base_branch: Option<&str>)
 #[cfg(test)] #[path = "worktree/resume_tests.rs"] mod resume_tests;
 #[cfg(test)] #[path = "worktree/stale_tests.rs"] mod stale_tests;
 #[cfg(test)] #[path = "worktree/validation_tests.rs"] mod validation_tests;
-#[cfg(test)] #[path = "worktree/completion_tests.rs"] mod completion_tests;
 #[cfg(test)] #[path = "worktree/lock_tests.rs"] mod lock_tests;

@@ -38,6 +38,33 @@ pub(super) fn merge(
     cmd::merge::run(store, task_id.as_deref(), group.as_deref(), approve, check, force, target.as_deref(), lanes)
 }
 
+pub(super) fn accept(store: Arc<store::Store>, task_id: String) -> Result<()> {
+    let principal = local_principal();
+    crate::artifact_custody::accept(&store, &task_id, &principal)?;
+    println!("[aid] Principal {principal} accepted task {task_id}; artifacts remain preserved");
+    Ok(())
+}
+
+pub(super) fn reject(store: Arc<store::Store>, task_id: String) -> Result<()> {
+    let principal = local_principal();
+    crate::artifact_custody::reject(&store, &task_id, &principal)?;
+    println!("[aid] Principal {principal} rejected task {task_id}; artifacts remain preserved");
+    Ok(())
+}
+
+pub(super) fn gc(store: Arc<store::Store>, task_id: String) -> Result<()> {
+    crate::artifact_custody::delete_accepted_worktree(&store, &task_id)?;
+    println!("[aid] Deleted durable artifacts for accepted task {task_id}");
+    Ok(())
+}
+
+fn local_principal() -> String {
+    std::env::var("USER")
+        .ok()
+        .filter(|value| !value.trim().is_empty())
+        .unwrap_or_else(|| "local-principal".to_string())
+}
+
 pub(super) fn respond(task_id: String, input: Option<String>, file: Option<String>) -> Result<()> {
     cmd::respond::run(&task_id, input.as_deref(), file.as_deref())
 }

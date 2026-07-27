@@ -83,7 +83,7 @@ pub(super) fn merge_group_lanes(store: &Store, group_id: &str) -> Result<()> {
 
     println!("Applied {applied} lane(s) in group {group_id}. Skipped {skipped}.");
     println!("Review the workspace: but status. Push selectively: but push <branch>.");
-    println!("Worktrees preserved. Run aid worktree prune to clean up later.");
+    println!("Worktrees preserved. The principal may accept tasks and run custody GC later.");
     if applied > 0 && skipped > 0 {
         println!("[aid] Note: partial apply — earlier successful lanes remain applied. Use 'but unapply <branch>' to roll back individually.");
     }

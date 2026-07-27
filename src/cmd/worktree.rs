@@ -62,13 +62,11 @@ pub fn list(repo: Option<&str>, json: bool, active_only: bool) -> Result<()> {
     Ok(())
 }
 
-/// Remove stale aid-managed worktrees older than 24 hours,
-/// and clear lock files left by dead processes on all worktrees.
+/// Clear dead lock files while preserving all task artifacts.
 pub fn prune(repo: Option<&str>) -> Result<()> {
     let repo_dir = repo.unwrap_or(".");
     let entries = aid_worktree_entries(repo_dir)?;
     let mut locks_cleared = 0usize;
-    let mut pruned = 0usize;
     for entry in entries {
         let path = Path::new(&entry.path);
         let was_stale = is_stale_worktree_path(path);
@@ -95,28 +93,16 @@ pub fn prune(repo: Option<&str>) -> Result<()> {
             let _ = std::fs::remove_file(path.join(".aid-lock"));
             locks_cleared += 1;
         }
-        if !was_stale {
-            continue;
-        }
-        if worktree_has_dirty_status(path) {
+        if was_stale {
             aid_warn!(
-                "[aid] Skipping prune: {} has uncommitted changes; review with `aid show <task>` or inspect manually",
+                "[aid] Preserved stale worktree {}: deletion requires principal acceptance and `aid gc --task <task>`",
                 entry.path
             );
-            continue;
-        }
-        match crate::worktree::remove_worktree(repo_dir, &entry.path) {
-            Ok(()) => {
-                println!("[aid] Pruned stale worktree dir: {}", entry.path);
-                pruned += 1;
-            }
-            Err(err) => aid_warn!("[aid] Failed to prune {}: {err}", entry.path),
         }
     }
-    if pruned == 0 && locks_cleared == 0 {
+    if locks_cleared == 0 {
         println!("[aid] No stale worktrees found");
     } else {
-        if pruned > 0 { println!("[aid] Pruned {pruned} stale worktree dir(s)"); }
         if locks_cleared > 0 { println!("[aid] Cleared {locks_cleared} stale lock(s)"); }
     }
     Ok(())
@@ -140,9 +126,9 @@ pub fn remove(branch: &str, repo: Option<&str>) -> Result<()> {
     if !wt_path.exists() {
         anyhow::bail!("Worktree not found: {}", wt_path.display());
     }
-    let wt_path = wt_path.to_string_lossy().to_string();
-    crate::worktree::remove_worktree(repo_dir, &wt_path)?;
-    Ok(())
+    anyhow::bail!(
+        "Direct removal of branch '{branch}' is forbidden; identify its task, run `aid accept <task>`, then `aid gc --task <task>`"
+    )
 }
 
 fn stale_worktree_paths(repo_dir: &str) -> Result<Vec<String>> {

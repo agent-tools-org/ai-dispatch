@@ -15,15 +15,6 @@ pub fn sync_cargo_lock(repo_dir: &Path, wt_path: &Path) {
     }
 }
 
-pub fn prune_worktrees(repo_dir: &Path) -> Result<()> {
-    let prune_status = Command::new("git")
-        .args(["-C", &repo_dir.to_string_lossy(), "worktree", "prune"])
-        .status()
-        .context("Failed to run git worktree prune")?;
-    anyhow::ensure!(prune_status.success(), "git worktree prune failed");
-    Ok(())
-}
-
 pub fn existing_worktree_path(repo_dir: &Path, branch: &str) -> Result<Option<PathBuf>> {
     let caller_checkout = repo_dir
         .canonicalize()

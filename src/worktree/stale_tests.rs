@@ -64,7 +64,7 @@ fn create_worktree_errors_when_stale_worktree_has_local_changes() {
     let err = create_worktree(repo.path(), branch.as_str(), None).unwrap_err();
 
     assert!(err.to_string().contains("cannot be auto-refreshed"));
-    assert!(err.to_string().contains("aid worktree remove"));
+    assert!(err.to_string().contains("principal acceptance and custody GC"));
     git(
         repo.path(),
         &["worktree", "remove", "--force", &info.path.to_string_lossy()],
@@ -235,18 +235,10 @@ fn create_worktree_recreates_pruned_branch_with_unmerged_commit() {
 
     let branch_head = git_output(repo.path(), &["rev-parse", branch.as_str()]);
 
-    let recreated = create_worktree(repo.path(), branch.as_str(), None).unwrap();
+    let error = create_worktree(repo.path(), branch.as_str(), None).unwrap_err();
 
     assert_eq!(git_output(repo.path(), &["rev-parse", branch.as_str()]), branch_head);
-    assert_eq!(std::fs::read_to_string(recreated.path.join("agent.txt")).unwrap(), "agent\n");
-    assert_eq!(
-        git_output(recreated.path.as_path(), &["merge-base", "--is-ancestor", &branch_head, "HEAD"]),
-        ""
-    );
-    git(
-        repo.path(),
-        &["worktree", "remove", "--force", &recreated.path.to_string_lossy()],
-    );
+    assert!(error.to_string().contains("automatic pruning is forbidden"));
 }
 
 #[test]
@@ -262,16 +254,7 @@ fn create_worktree_allows_pruned_branch_without_unmerged_commit() {
     git(repo.path(), &["merge", "--no-edit", branch.as_str()]);
     std::fs::remove_dir_all(&info.path).unwrap();
 
-    let recreated = create_worktree(repo.path(), branch.as_str(), None).unwrap();
+    let error = create_worktree(repo.path(), branch.as_str(), None).unwrap_err();
 
-    assert_eq!(recreated.path, aid_worktree_path(repo.path(), &branch));
-    assert!(recreated.path.exists());
-    assert_eq!(
-        git_output(repo.path(), &["rev-parse", "HEAD"]),
-        git_output(recreated.path.as_path(), &["rev-parse", "HEAD"])
-    );
-    git(
-        repo.path(),
-        &["worktree", "remove", "--force", &recreated.path.to_string_lossy()],
-    );
+    assert!(error.to_string().contains("automatic pruning is forbidden"));
 }

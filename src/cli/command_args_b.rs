@@ -101,6 +101,19 @@ pub struct MergeArgs {
 }
 
 #[derive(Args)]
+pub struct ArtifactDecisionArgs {
+    /// Task whose delivered artifacts are being accepted or rejected.
+    pub task_id: String,
+}
+
+#[derive(Args)]
+pub struct ArtifactGcArgs {
+    /// Accepted task whose worktree may be deleted after durability proof.
+    #[arg(long)]
+    pub task: String,
+}
+
+#[derive(Args)]
 pub struct RespondArgs {
     pub task_id: String,
     pub input: Option<String>,

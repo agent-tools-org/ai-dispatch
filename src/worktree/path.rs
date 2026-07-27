@@ -5,7 +5,6 @@
 use anyhow::{Context, Result, anyhow};
 #[cfg(test)]
 use std::cell::RefCell;
-use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -174,79 +173,14 @@ pub fn is_safe_worktree_path(wt_path: &str) -> bool {
     is_aid_managed_worktree_path(&canonical)
 }
 
-pub fn remove_worktree(repo_dir: &str, wt_path: &str) -> Result<()> {
-    // SANDBOX: refuse to touch anything outside aid-managed worktree paths.
-    if !is_safe_worktree_path(wt_path) {
-        return Err(anyhow!(
-            "[aid] SAFETY: refusing to remove '{}' — not an aid worktree path. \
-             Only ~/.aid/worktrees/* and legacy /tmp/aid-wt-* paths are allowed.",
-            wt_path
-        ));
-    }
-
-    let branch = current_worktree_branch(Path::new(wt_path));
-    let result = Command::new("git")
+#[cfg(test)]
+pub(crate) fn remove_worktree(repo_dir: &str, wt_path: &str) -> Result<()> {
+    anyhow::ensure!(is_safe_worktree_path(wt_path), "unsafe worktree path");
+    let status = Command::new("git")
         .args(["-C", repo_dir, "worktree", "remove", "--force", wt_path])
-        .output();
-    if matches!(result, Ok(ref out) if out.status.success()) {
-        aid_info!("[aid] Pruned worktree dir {wt_path}");
-        reap_branch_target(repo_dir, branch.as_deref());
-        return Ok(());
-    }
-
-    // Fallback: rm -rf, but ONLY after sandbox validation above
-    let delete_path = Path::new(wt_path);
-    let git_file = delete_path.join(".git");
-    if !git_file.is_file() {
-        return Err(anyhow!(
-            "[aid] SAFETY: refusing fallback removal for '{}' — missing worktree .git file",
-            wt_path
-        ));
-    }
-    let canonical = delete_path
-        .canonicalize()
-        .with_context(|| format!("failed to canonicalize worktree path '{wt_path}' before deletion"))?;
-    let canonical_str = canonical.to_string_lossy().to_string();
-    if !is_safe_worktree_path(&canonical_str) {
-        return Err(anyhow!(
-            "[aid] SAFETY: refusing fallback removal for '{}' — canonical path '{}' is outside aid-managed worktree paths",
-            wt_path,
-            canonical_str
-        ));
-    }
-
-    match fs::remove_dir_all(&canonical) {
-        Ok(()) => {
-            aid_info!("[aid] Pruned worktree dir {wt_path}");
-            let _ = Command::new("git")
-                .args(["-C", repo_dir, "worktree", "prune"])
-                .output();
-            reap_branch_target(repo_dir, branch.as_deref());
-            Ok(())
-        }
-        Err(e) => Err(e).with_context(|| format!("failed to remove worktree '{wt_path}'")),
-    }
-}
-
-fn current_worktree_branch(wt_path: &Path) -> Option<String> {
-    let output = Command::new("git")
-        .args(["-C", &wt_path.to_string_lossy(), "rev-parse", "--abbrev-ref", "HEAD"])
-        .output()
-        .ok()?;
-    if !output.status.success() {
-        return None;
-    }
-    let branch = String::from_utf8_lossy(&output.stdout).trim().to_string();
-    (!branch.is_empty() && branch != "HEAD").then_some(branch)
-}
-
-fn reap_branch_target(repo_dir: &str, branch: Option<&str>) {
-    let Some(branch) = branch else {
-        return;
-    };
-    if let Err(err) = crate::agent::env::remove_branch_target_dir_if_unused(Path::new(repo_dir), branch) {
-        aid_warn!("[aid] Warning: failed to remove Cargo target dir for {branch}: {err}");
-    }
+        .status()?;
+    anyhow::ensure!(status.success(), "git worktree remove failed");
+    Ok(())
 }
 
 fn logical_normalize(path: &Path) -> PathBuf {

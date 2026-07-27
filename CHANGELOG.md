@@ -1,3 +1,11 @@
+## v9.9.0 (2026-07-27)
+- Task artifacts now remain in custody after completion, failure, merge, doctor, clean, and stale-worktree recovery; implicit auto-GC and direct worktree deletion commands are removed.
+- New `aid accept`, `aid reject`, and `aid gc --task` commands separate principal acceptance from execution status and make acceptance records append-only.
+- Custody GC requires a clean, unchanged artifact manifest and recursively proves every superproject and submodule commit has both an object and a durable ref outside worktree-private Git storage.
+- The #866 submodule-loss topology is covered by regression tests: a commit present only under a linked worktree's private `modules/` object store blocks deletion and preserves the worktree.
+- Release hygiene no longer runs `git worktree prune` or recommends bulk branch deletion.
+
+
 ## v9.8.0 (2026-07-27)
 - Codex tasks no longer report success merely because the CLI exits with code 0. AID now requires a substantive final message after the last tool or todo event, so investigations that consume their turn before writing the report are recorded as missing final deliveries instead of Done.
 - Read-only Codex tasks with a missing final delivery automatically resume the captured Codex session once with a focused instruction to write the report from existing evidence. A repeated hollow turn fails cleanly without starting a third attempt.

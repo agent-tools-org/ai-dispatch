@@ -1,3 +1,9 @@
+## v9.10.0 (2026-07-27)
+- Ship the comprehensive, release-matched AID operating guide as the built-in `aid-guide` skill
+- Refresh the official guide through `aid init`, `aid setup`, and `aid upgrade` while preserving user-owned skills
+- Enforce guide maintenance with public-command coverage and installation lifecycle tests
+
+
 ## v9.9.0 (2026-07-27)
 - Task artifacts now remain in custody after completion, failure, merge, doctor, clean, and stale-worktree recovery; implicit auto-GC and direct worktree deletion commands are removed.
 - New `aid accept`, `aid reject`, and `aid gc --task` commands separate principal acceptance from execution status and make acceptance records append-only.

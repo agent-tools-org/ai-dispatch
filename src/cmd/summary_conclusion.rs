@@ -1,11 +1,16 @@
 // Extract conclusion text for task summaries.
 // Exports: extract_conclusion().
 // Deps: crate::types::Task, serde_json.
-use crate::types::Task;
+use crate::types::{DeliveryAssessment, Task};
 use serde_json::Value;
 use std::path::Path;
 
 pub(crate) fn extract_conclusion(task: &Task) -> String {
+    if task.delivery_assessment()
+        == Some(DeliveryAssessment::MissingFinalDelivery)
+    {
+        return String::new();
+    }
     if let Some(conclusion) = task.output_path.as_deref().and_then(read_conclusion_from_output) {
         return conclusion;
     }

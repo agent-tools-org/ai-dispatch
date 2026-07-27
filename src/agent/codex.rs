@@ -76,7 +76,18 @@ impl super::Agent for CodexAgent {
         let with_context = super::embed_context_in_prompt(&effective_prompt, &opts.context_files)?;
         let injected = templates::inject_codex_prompt(&with_context, None);
         let mut cmd = Command::new("codex");
-        cmd.args(["exec", "--json", "--skip-git-repo-check", "--full-auto", &injected]);
+        if let Some(session_id) = opts.session_id.as_deref() {
+            cmd.args([
+                "exec",
+                "resume",
+                "--json",
+                "--skip-git-repo-check",
+                session_id,
+                &injected,
+            ]);
+        } else {
+            cmd.args(["exec", "--json", "--skip-git-repo-check", "--full-auto", &injected]);
+        }
         if let Some(ref model) = opts.model {
             if has_native_model_flag() {
                 cmd.args(["-m", model]);
@@ -102,7 +113,9 @@ impl super::Agent for CodexAgent {
                     );
                 }
             }
-            cmd.args(["-C", dir]);
+            if opts.session_id.is_none() {
+                cmd.args(["-C", dir]);
+            }
             cmd.current_dir(dir);
         }
         Ok(cmd)
@@ -786,6 +799,33 @@ mod tests {
 
         let last_arg = args.last().expect("should have prompt as last arg");
         assert!(last_arg.contains("[Context File:"));
+    }
+
+    #[test]
+    fn build_command_resumes_saved_session() {
+        let opts = RunOpts {
+            dir: None,
+            output: None,
+            result_file: None,
+            model: None,
+            budget: false,
+            read_only: false,
+            sandbox: false,
+            context_files: vec![],
+            session_id: Some("019e3e49-6b83-7563-a3d8-b51a3a716dd1".to_string()),
+            env: None,
+            env_forward: None,
+        };
+        let cmd = CodexAgent.build_command("write the final report", &opts).unwrap();
+        let args: Vec<String> = cmd
+            .get_args()
+            .map(|arg| arg.to_string_lossy().to_string())
+            .collect();
+
+        assert_eq!(&args[..4], ["exec", "resume", "--json", "--skip-git-repo-check"]);
+        assert_eq!(args[4], "019e3e49-6b83-7563-a3d8-b51a3a716dd1");
+        assert!(args[5].contains("write the final report"));
+        assert!(!args.iter().any(|arg| arg == "--full-auto"));
     }
 }
 

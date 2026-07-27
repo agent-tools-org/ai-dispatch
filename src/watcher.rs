@@ -23,6 +23,7 @@ use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::Child;
 use tokio::time::{timeout, Duration};
 use crate::agent::Agent;
+use crate::delivery_guard::{DeliveryEvidence, DeliveryOutcome};
 use crate::paths;
 use crate::process_group::force_kill_process_group;
 use crate::process_monitor;
@@ -68,6 +69,7 @@ pub async fn watch_streaming(
     let mut session_saved = false;
     let mut loop_detector = LoopDetector::new();
     let mut synthetic_tracker = SyntheticMilestoneTracker::new();
+    let mut delivery_evidence = DeliveryEvidence::default();
     let mut last_event_detail: Option<String> = None;
     let mut stderr_handle = spawn_stderr_capture(child, task_id);
     loop {
@@ -91,6 +93,9 @@ pub async fn watch_streaming(
             }
         };
         if !line.trim().is_empty() { last_event_detail = Some(line.trim().to_string()); }
+        if agent.kind() == AgentKind::Codex {
+            delivery_evidence.observe_codex_jsonl(&line);
+        }
 
         use tokio::io::AsyncWriteExt;
         if extract_milestone_detail(&line).is_none() && !is_thinking_delta(&line) {
@@ -154,12 +159,37 @@ pub async fn watch_streaming(
         drain_stderr_capture(handle).await;
     }
     let exit_status = child.wait().await?;
-    let status = if exit_status.success() {
+    let mut status = if exit_status.success() {
         TaskStatus::Done
     } else {
         TaskStatus::Failed
     };
     info.exit_code = exit_status.code();
+    if status == TaskStatus::Done
+        && agent.kind() == AgentKind::Codex
+        && let DeliveryOutcome::MissingFinalDelivery {
+            last_work_kind,
+            last_message_chars,
+        } = delivery_evidence.validate()
+    {
+        status = TaskStatus::Failed;
+        let _ = store.update_delivery_assessment(
+            task_id.as_str(),
+            Some(DeliveryAssessment::MissingFinalDelivery),
+        );
+        let _ = store.insert_event(&TaskEvent {
+            task_id: task_id.clone(),
+            timestamp: Local::now(),
+            event_kind: EventKind::Error,
+            detail: "Missing final delivery: Codex exited after work without a substantive final message".to_string(),
+            metadata: Some(serde_json::json!({
+                "delivery_guard": "missing_final_delivery",
+                "last_work_kind": last_work_kind,
+                "last_message_chars": last_message_chars,
+                "exit_code": exit_status.code(),
+            })),
+        });
+    }
 
     if status == TaskStatus::Done {
         rate_limit::clear_rate_limit(&agent.kind());

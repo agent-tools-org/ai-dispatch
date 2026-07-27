@@ -10,6 +10,7 @@ mod final_state;
 pub(crate) use final_state::capture_final_worktree_state;
 use super::run_dirty::{DirtyWorktreeAction, post_agent_dirty_worktree_cleanup};
 use super::run_model_selfheal::maybe_auto_retry_after_model_unavailable;
+use super::run_delivery_recovery::maybe_auto_recover_missing_delivery;
 use super::run_post::{
     auto_save_task_output, maybe_auto_retry_after_hang, maybe_flag_empty_worktree_diff,
     maybe_run_post_done_audit, read_quota_error_message, rescue_quota_failed_task,
@@ -231,6 +232,11 @@ pub(crate) async fn post_run_lifecycle(
     }
     if let Some(retry_id) =
         maybe_auto_retry_after_model_unavailable(store, task_id, args).await?
+    {
+        return Ok(Some(retry_id));
+    }
+    if let Some(retry_id) =
+        maybe_auto_recover_missing_delivery(store, task_id, args).await?
     {
         return Ok(Some(retry_id));
     }

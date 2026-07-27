@@ -216,7 +216,7 @@ pub(crate) async fn run_agent_process_impl(args: RunProcessArgs<'_>) -> Result<(
     }
     let duration_ms = start.elapsed().as_millis() as i64;
     let exit_code = resolve_failure_exit_code(store.as_ref(), task_id, info.exit_code);
-    if info.status == TaskStatus::Failed {
+    if info.status == TaskStatus::Failed && exit_code != Some(0) {
         record_execution_failure(
             store.as_ref(),
             task_id,

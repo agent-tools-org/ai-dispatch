@@ -8,6 +8,7 @@ use serde::Serialize;
 pub enum DeliveryAssessment {
     EmptyDiff,
     HollowOutput,
+    MissingFinalDelivery,
 }
 
 impl DeliveryAssessment {
@@ -15,6 +16,7 @@ impl DeliveryAssessment {
         match self {
             Self::EmptyDiff => "empty_diff",
             Self::HollowOutput => "hollow_output",
+            Self::MissingFinalDelivery => "missing_final_delivery",
         }
     }
 
@@ -22,11 +24,15 @@ impl DeliveryAssessment {
         match value {
             "empty_diff" => Some(Self::EmptyDiff),
             "hollow_output" => Some(Self::HollowOutput),
+            "missing_final_delivery" => Some(Self::MissingFinalDelivery),
             _ => None,
         }
     }
 
     pub fn implies_no_changes(self) -> bool {
-        matches!(self, Self::EmptyDiff | Self::HollowOutput)
+        matches!(
+            self,
+            Self::EmptyDiff | Self::HollowOutput | Self::MissingFinalDelivery
+        )
     }
 }

@@ -29,6 +29,8 @@ mod run_iterate;
 mod run_post;
 #[path = "run_model_selfheal.rs"]
 mod run_model_selfheal;
+#[path = "run_delivery_recovery.rs"]
+mod run_delivery_recovery;
 #[path = "run_gc.rs"]
 mod run_gc;
 #[path = "run_dispatch_resolve.rs"]

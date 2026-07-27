@@ -1,3 +1,10 @@
+## v9.8.0 (2026-07-27)
+- Codex tasks no longer report success merely because the CLI exits with code 0. AID now requires a substantive final message after the last tool or todo event, so investigations that consume their turn before writing the report are recorded as missing final deliveries instead of Done.
+- Read-only Codex tasks with a missing final delivery automatically resume the captured Codex session once with a focused instruction to write the report from existing evidence. A repeated hollow turn fails cleanly without starting a third attempt.
+- Completion summaries no longer promote an early progress update into the task conclusion when final delivery validation failed.
+- End-to-end coverage exercises both successful same-session recovery and the repeated-hollow stop condition through a fake Codex CLI and the real task database.
+
+
 ## v9.7.0 (2026-07-26)
 - A task that committed to its worktree branch can be continued again. Auto-GC prunes a finished task's worktree directory, after which both `aid run --worktree <branch>` and `aid retry` refused with "Branch <b> has N unmerged commit(s) not on main; refusing to force-reset (would orphan them)". The guard was right that a force-reset would orphan the commits and wrong that a missing directory implies a reset: the branch is intact and only needs its worktree recreated at the tip. This blocked the ordinary review-then-retry loop, and the remedy suggested in the error text read as if it would discard the work.
 - `aid run --timeout` now states its unit. The flag had no value name and no help text while being interpreted as seconds, so `--timeout 120` intending minutes silently capped a task at two minutes and killed it with nothing produced.

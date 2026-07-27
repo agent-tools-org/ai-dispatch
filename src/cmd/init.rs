@@ -5,6 +5,9 @@
 use anyhow::Result;
 use std::path::Path;
 
+#[path = "init_official_guide.rs"]
+mod official_guide;
+
 const SKILL_IMPLEMENTER: &str = include_str!("../../default-skills/implementer.md");
 const SKILL_RESEARCHER: &str = include_str!("../../default-skills/researcher.md");
 const SKILL_CODE_SCOUT: &str = include_str!("../../default-skills/code-scout.md");
@@ -28,13 +31,19 @@ const TEMPLATES: &[(&str, &str)] = &[
 
 pub fn run() -> Result<()> {
     let base = crate::paths::aid_dir();
-    let created_skills = write_defaults(&base.join("skills"), "skill", SKILLS)?;
+    let default_skills = write_defaults(&base.join("skills"), "skill", SKILLS)?;
+    official_guide::refresh(&base.join("skills"))?;
+    let created_skills = default_skills + 1;
     let created_templates = write_defaults(&base.join("templates"), "template", TEMPLATES)?;
     println!(
         "Initialized {created_skills} skills and {created_templates} templates in {}",
         base.display()
     );
     Ok(())
+}
+
+pub(crate) fn refresh_official_guide() -> Result<()> {
+    official_guide::refresh(&crate::paths::aid_dir().join("skills"))
 }
 
 fn write_defaults(dir: &Path, label: &str, files: &[(&str, &str)]) -> Result<usize> {

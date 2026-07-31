@@ -29,19 +29,20 @@ impl super::Agent for AntigravityAgent {
 
     fn build_command(&self, prompt: &str, opts: &RunOpts) -> Result<Command> {
         let caps = agy_capabilities();
-        let effective_prompt = if opts.read_only && !caps.has_plan_mode {
+        let plan_flag = caps.plan_mode_flag;
+        let effective_prompt = if opts.read_only && plan_flag.is_none() {
             aid_warn!("[aid] agy read-only is prompt-level only, not enforced. Use --worktree or --sandbox for isolation.");
             read_only_prompt(prompt, opts)
         } else {
             prompt.to_string()
         };
         let mut cmd = Command::new("agy");
-        if opts.read_only && caps.has_plan_mode {
-            cmd.args(["--approval-mode", "plan"]);
+        if opts.read_only && let Some(flag) = plan_flag {
+            cmd.args([flag, "plan"]);
         }
         if let Some(ref model) = opts.model {
             if caps.has_model_flag {
-                cmd.args(["-m", model]);
+                cmd.args(["--model", model]);
             } else {
                 aid_warn!(
                     "[aid] agy {} has no model flag; ignoring --model {model}",
@@ -74,9 +75,10 @@ impl super::Agent for AntigravityAgent {
 
 #[derive(Debug, Clone, Default)]
 struct AgyCapabilities {
-    has_plan_mode: bool,
+    /// Flag name that puts agy in plan (read-only) mode, if the CLI supports one.
+    /// agy >= 1.1 spells it `--mode`; older builds used `--approval-mode`.
+    plan_mode_flag: Option<&'static str>,
     has_model_flag: bool,
-    has_stream_json: bool,
 }
 
 fn agy_capabilities() -> &'static AgyCapabilities {
@@ -99,11 +101,21 @@ fn probe_agy_capabilities() -> Option<AgyCapabilities> {
     let stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
     let help = format!("{stdout}{stderr}");
-    Some(AgyCapabilities {
-        has_plan_mode: help.contains("--approval-mode") || help.contains("--plan"),
-        has_model_flag: help.contains("-m ") || help.contains("--model"),
-        has_stream_json: help.contains("stream-json"),
-    })
+    Some(parse_agy_capabilities(&help))
+}
+
+fn parse_agy_capabilities(help: &str) -> AgyCapabilities {
+    let plan_mode_flag = if help.contains("--approval-mode") {
+        Some("--approval-mode")
+    } else if help.contains("--mode") {
+        Some("--mode")
+    } else {
+        None
+    };
+    AgyCapabilities {
+        plan_mode_flag,
+        has_model_flag: help.contains("--model"),
+    }
 }
 
 #[cfg(test)]
@@ -120,24 +132,28 @@ fn agy_version_string() -> Option<String> {
     if s.is_empty() { None } else { Some(s) }
 }
 
+/// agy rejects any non-absolute `--add-dir` ("must be an absolute path") and keeps the
+/// unresolved entry in its workspace list, which leaves its Search tool without an app
+/// root for the whole session. Every path handed to agy must therefore be absolutized.
 fn agy_include_directories(dir: Option<&str>, context_files: &[String]) -> Vec<String> {
+    let run_dir = dir
+        .filter(|run_dir| !run_dir.is_empty())
+        .and_then(|run_dir| absolute_dir(Path::new(run_dir)));
     let mut directories = BTreeSet::new();
-    if let Some(run_dir) = dir {
-        if !run_dir.is_empty() {
-            directories.insert(run_dir.to_string());
-        }
+    if let Some(ref run_dir) = run_dir {
+        directories.insert(run_dir.to_string_lossy().into_owned());
     }
     for file in context_files {
-        if let Some(include_dir) = context_include_directory(dir, file) {
+        if let Some(include_dir) = context_include_directory(run_dir.as_deref(), file) {
             directories.insert(include_dir);
         }
     }
     directories.into_iter().collect()
 }
 
-fn context_include_directory(run_dir: Option<&str>, context_file: &str) -> Option<String> {
+fn context_include_directory(run_dir: Option<&Path>, context_file: &str) -> Option<String> {
     if context_file.is_empty() {
-        return run_dir.map(ToOwned::to_owned);
+        return run_dir.map(|run_dir| run_dir.to_string_lossy().into_owned());
     }
     let path = Path::new(context_file);
     let include_path = if path.is_dir() {
@@ -145,9 +161,26 @@ fn context_include_directory(run_dir: Option<&str>, context_file: &str) -> Optio
     } else if let Some(parent) = path.parent().filter(|parent| !parent.as_os_str().is_empty()) {
         parent.to_path_buf()
     } else {
-        PathBuf::from(run_dir.unwrap_or("."))
+        // Bare filename: it lives in the agent's cwd.
+        PathBuf::from(".")
     };
-    Some(include_path.to_string_lossy().into_owned())
+    // Context paths are relative to the run directory, which is the agent's cwd.
+    let include_path = match (include_path.is_absolute(), run_dir) {
+        (false, Some(run_dir)) => run_dir.join(include_path),
+        _ => include_path,
+    };
+    absolute_dir(&include_path).map(|path| path.to_string_lossy().into_owned())
+}
+
+/// Absolutize, resolving symlinks when the directory exists so that `/tmp/x` and
+/// `/private/tmp/x` collapse to one workspace entry. Falls back to a lexical
+/// absolutization for paths that do not exist yet. Returns `None` only when the process
+/// has no usable cwd, in which case the entry is dropped rather than handed to agy as a
+/// path it will reject.
+fn absolute_dir(path: &Path) -> Option<PathBuf> {
+    std::fs::canonicalize(path)
+        .ok()
+        .or_else(|| std::path::absolute(path).ok())
 }
 
 #[cfg(test)]

@@ -57,6 +57,16 @@ id = "example"
 verify = "cargo test --bin app"
 ```
 
+## Result delivery
+
+When `--result-file` is set (audit and review prompts set it automatically) and
+the agent never writes that file, AID salvages the captured agent output into
+the task's `result.md` so evidence is not lost. If that output is pre-tool
+narration rather than a report, AID records a `missing_final_delivery`
+assessment and an error event. `aid show` then prints the missing-result banner
+instead of presenting the tool log as findings. Treat that banner as "no audit
+happened" and re-dispatch.
+
 ## Worktree safety
 
 ```bash

@@ -160,7 +160,10 @@ fn context_entry_that_is_directory_is_used_as_is() {
 
 #[test]
 fn include_directories_adds_run_dir_and_sorts() {
-    let dirs = agy_include_directories(Some("/work/workspace"), &["src/main.rs".to_string()]);
+    let dirs = agy_include_directories(
+        Some(std::path::Path::new("/work/workspace")),
+        &["src/main.rs".to_string()],
+    );
 
     assert_eq!(
         dirs,

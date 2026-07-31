@@ -7,6 +7,8 @@ use serde_json::Value;
 pub(crate) const MIN_FINAL_MESSAGE_CHARS: usize = 200;
 
 /// Openers plain-text agents use to announce the tool call they are about to make.
+/// Deliberately first-person-singular: "we will monitor the logs" is a sentence a real
+/// report writes, and treating it as narration would discard the report around it.
 const NARRATION_OPENERS: &[&str] = &[
     "i will ",
     "i'll ",
@@ -15,9 +17,6 @@ const NARRATION_OPENERS: &[&str] = &[
     "i am now ",
     "i'm now ",
     "let me ",
-    "let's ",
-    "we will ",
-    "we'll ",
     "now i ",
 ];
 
@@ -34,7 +33,17 @@ pub(crate) fn looks_like_delivered_report(text: &str) -> bool {
     let substance = substance_after_narration(text.trim());
     // A heading is the shape the report instruction asks for, and a legitimate report can
     // be as short as "## Findings\nNo findings." - do not hold length against it.
-    has_markdown_heading(&substance) || substance.chars().count() >= MIN_FINAL_MESSAGE_CHARS
+    if has_markdown_heading(&substance) {
+        return true;
+    }
+    // Without a heading, require prose: bulk alone would accept a directory listing or
+    // other raw tool output that happened to trail the last announced tool call.
+    substance.chars().count() >= MIN_FINAL_MESSAGE_CHARS && has_sentence(&substance)
+}
+
+fn has_sentence(text: &str) -> bool {
+    text.lines()
+        .any(|line| line.trim_end().ends_with(['.', '!', '?']))
 }
 
 /// Text left after the last line announcing a tool call. Milestones are progress
@@ -250,6 +259,29 @@ I will inspect the indexer snapshot file `crates/sr-indexer/src/snapshot.rs` to 
     fn rejects_narration_under_a_heading() {
         let planning = format!("# Investigation Plan\n{NARRATION_CAPTURE}{NARRATION_CAPTURE}");
         assert!(!super::looks_like_delivered_report(&planning));
+    }
+
+    /// Audit t-b4423393: a report may legitimately end on a sentence that starts like an
+    /// announcement. First-person-plural is prose, not a tool call.
+    #[test]
+    fn accepts_report_ending_on_a_forward_looking_sentence() {
+        let report = "## Findings\n\
+No vulnerabilities were found in the codebase.\n\
+We will monitor the application logs for any errors.\n";
+        assert!(super::looks_like_delivered_report(report));
+    }
+
+    /// Audit t-b4423393: bulk alone must not pass raw tool output off as a report.
+    #[test]
+    fn rejects_raw_tool_output_trailing_a_narration_line() {
+        let capture = "I'll list the directory to see the files.\n\
+total 0\n\
+-rw-r--r--  1 user  group    0 Jul 31 22:00 Cargo.toml\n\
+-rw-r--r--  1 user  group    0 Jul 31 22:00 src/lib.rs\n\
+-rw-r--r--  1 user  group    0 Jul 31 22:00 src/main.rs\n\
+-rw-r--r--  1 user  group    0 Jul 31 22:00 tests/integration.rs\n\
+-rw-r--r--  1 user  group    0 Jul 31 22:00 docs/readme.md\n";
+        assert!(!super::looks_like_delivered_report(capture));
     }
 
     #[test]

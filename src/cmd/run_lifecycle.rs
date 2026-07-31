@@ -438,7 +438,7 @@ fn run_task_postprocess_phase(
         handle_done_postprocess(store, task_id, args, &task, agent_kind, prompt_bundle);
     }
     maybe_cleanup_fast_fail(store, task_id, &task);
-    persist_result_file(task_id, args, &task, effective_dir);
+    persist_result_file(store, task_id, args, &task, effective_dir);
     if task.status == TaskStatus::Failed {
         return Ok(handle_failed_postprocess(
             store,
@@ -474,6 +474,7 @@ fn handle_done_postprocess(
 }
 
 fn persist_result_file(
+    store: &Arc<Store>,
     task_id: &TaskId,
     args: &RunArgs,
     task: &Task,
@@ -485,14 +486,44 @@ fn persist_result_file(
         .as_deref()
         .map(std::path::PathBuf::from)
         .unwrap_or_else(|| crate::paths::log_path(task_id.as_str()));
-    if let Err(err) = run_prompt::persist_result_file(
+    match run_prompt::persist_result_file(
         task_id.as_str(),
         args.result_file.as_deref(),
         effective_dir.map(String::as_str),
         &log_path,
     ) {
-        aid_warn!("[aid] Failed to persist result file: {err}");
+        Ok(delivery) => record_missing_report(store.as_ref(), task_id, delivery),
+        Err(err) => aid_warn!("[aid] Failed to persist result file: {err}"),
     }
+}
+
+/// A requested report that never materialized used to be papered over with whatever the
+/// agent had printed, leaving a `done` task whose `result.md` is a tool log. Record the
+/// miss so `aid show`, `aid board`, and the JSON view all report it.
+fn record_missing_report(
+    store: &Store,
+    task_id: &TaskId,
+    delivery: run_prompt::ResultDelivery,
+) {
+    if delivery != (run_prompt::ResultDelivery::LogFallback { looks_like_report: false }) {
+        return;
+    }
+    if let Err(err) = store.update_delivery_assessment(
+        task_id.as_str(),
+        Some(DeliveryAssessment::MissingFinalDelivery),
+    ) {
+        aid_warn!("[aid] Failed to record missing delivery: {err}");
+    }
+    let _ = store.insert_event(&TaskEvent {
+        task_id: task_id.clone(),
+        timestamp: chrono::Local::now(),
+        event_kind: EventKind::Error,
+        detail: "Missing final delivery: no result file written and captured output is tool narration, not a report".to_string(),
+        metadata: Some(serde_json::json!({
+            "delivery_guard": "missing_final_delivery",
+            "source": "result_file_fallback",
+        })),
+    });
 }
 
 fn handle_failed_postprocess(

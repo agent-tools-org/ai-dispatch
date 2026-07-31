@@ -325,6 +325,37 @@ fn result_text_for_audit_without_result_md_uses_banner() {
     assert!(text.contains("Structured audit result missing"));
 }
 
+/// A result.md salvaged from the log must not silence the banner: that file holds the
+/// tool narration aid rescued, not the audit the caller asked for.
+#[test]
+fn result_text_for_audit_warns_when_result_md_is_a_salvaged_log() {
+    let temp = tempfile::tempdir().unwrap();
+    let _aid_home = crate::paths::AidHomeGuard::set(temp.path());
+    let store = Arc::new(Store::open_memory().unwrap());
+    let mut task = task_fixture(
+        "t-audit-salvaged",
+        "Review the implementation and list findings with severity.",
+        None,
+        None,
+    );
+    task.status = TaskStatus::Done;
+    task.read_only = true;
+    store.insert_task(&task).unwrap();
+    store
+        .update_delivery_assessment(
+            "t-audit-salvaged",
+            Some(crate::types::DeliveryAssessment::MissingFinalDelivery),
+        )
+        .unwrap();
+    let result_path = crate::paths::task_dir("t-audit-salvaged").join("result.md");
+    std::fs::create_dir_all(result_path.parent().unwrap()).unwrap();
+    std::fs::write(&result_path, "I will run `git diff main..HEAD` to see the changes.\n").unwrap();
+
+    let text = result_text(&store, "t-audit-salvaged").unwrap();
+
+    assert!(text.contains("Structured audit result missing"));
+}
+
 #[test]
 fn render_mode_text_reads_transcript() {
     let temp = tempfile::tempdir().unwrap();

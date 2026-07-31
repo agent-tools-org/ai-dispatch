@@ -70,39 +70,140 @@ fn build_command_read_only_without_plan_mode_prepends_prompt_prefix() {
     assert!(prompt.contains("test prompt"));
 }
 
+/// Every value agy receives for `--add-dir` must be absolute; a relative one is rejected
+/// outright and poisons the workspace root for the rest of the session.
+fn add_dir_values(args: &[String]) -> Vec<String> {
+    args.windows(2)
+        .filter(|pair| pair[0] == "--add-dir")
+        .map(|pair| pair[1].clone())
+        .collect()
+}
+
+fn opts_in(dir: &str, context_files: Vec<String>) -> RunOpts {
+    let mut run_opts = opts(false, context_files);
+    run_opts.dir = Some(dir.to_string());
+    run_opts
+}
+
 #[test]
 fn context_files_dedupe_shared_parent() {
-    let context_files = vec!["src/one.rs".to_string(), "src/two.rs".to_string()];
-    let args = args_for(&opts(false, context_files));
+    let dirs = add_dir_values(&args_for(&opts_in(
+        "/work/repo",
+        vec!["src/one.rs".to_string(), "src/two.rs".to_string()],
+    )));
 
-    assert_eq!(args.iter().filter(|arg| arg.as_str() == "--add-dir").count(), 1);
-    assert!(args.windows(2).any(|pair| pair == ["--add-dir", "src"]));
+    assert_eq!(dirs, vec!["/work/repo".to_string(), "/work/repo/src".to_string()]);
 }
 
 #[test]
 fn context_files_include_distinct_parent_dirs() {
-    let context_files = vec!["src/one.rs".to_string(), "tests/two.rs".to_string()];
-    let args = args_for(&opts(false, context_files));
+    let dirs = add_dir_values(&args_for(&opts_in(
+        "/work/repo",
+        vec!["src/one.rs".to_string(), "tests/two.rs".to_string()],
+    )));
 
-    assert_eq!(args.iter().filter(|arg| arg.as_str() == "--add-dir").count(), 2);
-    assert!(args.windows(2).any(|pair| pair == ["--add-dir", "src"]));
-    assert!(args.windows(2).any(|pair| pair == ["--add-dir", "tests"]));
+    assert_eq!(
+        dirs,
+        vec![
+            "/work/repo".to_string(),
+            "/work/repo/src".to_string(),
+            "/work/repo/tests".to_string(),
+        ]
+    );
+}
+
+#[test]
+fn relative_run_dir_is_absolutized_before_reaching_agy() {
+    let dirs = add_dir_values(&args_for(&opts_in(".", vec![])));
+    let cwd = std::env::current_dir().unwrap().to_string_lossy().into_owned();
+
+    assert_eq!(dirs, vec![cwd]);
+}
+
+#[test]
+fn bare_context_filename_maps_to_run_dir() {
+    let dirs = add_dir_values(&args_for(&opts_in("/work/repo", vec!["notes.md".to_string()])));
+
+    assert_eq!(dirs, vec!["/work/repo".to_string()]);
+}
+
+#[test]
+fn every_add_dir_value_is_absolute() {
+    let args = args_for(&opts_in(
+        ".",
+        vec!["src/one.rs".to_string(), "notes.md".to_string()],
+    ));
+
+    let dirs = add_dir_values(&args);
+    assert!(!dirs.is_empty());
+    for dir in dirs {
+        assert!(
+            std::path::Path::new(&dir).is_absolute(),
+            "agy rejects non-absolute --add-dir, got {dir}"
+        );
+    }
 }
 
 #[test]
 fn context_entry_that_is_directory_is_used_as_is() {
     let dir = tempdir().unwrap();
     let path = dir.path().to_string_lossy().to_string();
-    let args = args_for(&opts(false, vec![path.clone()]));
+    // Symlinked temp roots (/var -> /private/var on macOS) resolve to their real path.
+    let canonical = std::fs::canonicalize(dir.path())
+        .unwrap()
+        .to_string_lossy()
+        .into_owned();
+    let args = args_for(&opts(false, vec![path]));
 
-    assert!(args.windows(2).any(|pair| pair == ["--add-dir", path.as_str()]));
+    assert_eq!(add_dir_values(&args), vec![canonical]);
 }
 
 #[test]
 fn include_directories_adds_run_dir_and_sorts() {
-    let dirs = agy_include_directories(Some("workspace"), &["src/main.rs".to_string()]);
+    let dirs = agy_include_directories(
+        Some(std::path::Path::new("/work/workspace")),
+        &["src/main.rs".to_string()],
+    );
 
-    assert_eq!(dirs, vec!["src".to_string(), "workspace".to_string()]);
+    assert_eq!(
+        dirs,
+        vec!["/work/workspace".to_string(), "/work/workspace/src".to_string()]
+    );
+}
+
+#[test]
+fn capabilities_prefer_mode_flag_when_approval_mode_is_absent() {
+    let help = "  --mode  Set the agent execution mode for this session (accept-edits, plan)\n  \
+                --model  Model for the current CLI session\n";
+    let caps = super::parse_agy_capabilities(help);
+
+    assert_eq!(caps.plan_mode_flag, Some("--mode"));
+    assert!(caps.has_model_flag);
+}
+
+#[test]
+fn capabilities_prefer_approval_mode_when_present() {
+    let caps = super::parse_agy_capabilities("  --approval-mode plan\n  --mode x\n");
+
+    assert_eq!(caps.plan_mode_flag, Some("--approval-mode"));
+}
+
+#[test]
+fn capabilities_report_no_plan_mode_when_cli_has_neither() {
+    let caps = super::parse_agy_capabilities("  --print\n  --add-dir\n");
+
+    assert_eq!(caps.plan_mode_flag, None);
+    assert!(!caps.has_model_flag);
+}
+
+#[test]
+fn model_is_passed_with_long_flag_only() {
+    // agy has no `-m` short alias; passing one aborts the CLI with "flags provided but not defined".
+    let mut run_opts = opts(false, vec![]);
+    run_opts.model = Some("gemini-3-pro".to_string());
+    let args = args_for(&run_opts);
+
+    assert!(!args.iter().any(|arg| arg == "-m"));
 }
 
 #[test]

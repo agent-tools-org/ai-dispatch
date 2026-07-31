@@ -38,12 +38,30 @@ pub(crate) fn looks_like_delivered_report(text: &str) -> bool {
     }
     // Without a heading, require prose: bulk alone would accept a directory listing or
     // other raw tool output that happened to trail the last announced tool call.
-    substance.chars().count() >= MIN_FINAL_MESSAGE_CHARS && has_sentence(&substance)
+    substance.chars().count() >= MIN_FINAL_MESSAGE_CHARS && looks_like_prose(&substance)
 }
 
-fn has_sentence(text: &str) -> bool {
-    text.lines()
-        .any(|line| line.trim_end().ends_with(['.', '!', '?']))
+/// Sentence terminators across the scripts agents actually write in - ASCII plus the
+/// ideographic stops used by Chinese and Japanese and the Devanagari danda.
+const SENTENCE_ENDINGS: &[char] =
+    &['.', '!', '?', '。', '！', '？', '．', '｡', '।', '؟', '۔'];
+
+const LIST_MARKERS: &[&str] = &["- ", "* ", "+ ", "• "];
+
+/// Prose, or a structured list - as opposed to raw tool output that merely happens to be
+/// long. A directory listing has neither sentence punctuation nor list markers.
+fn looks_like_prose(text: &str) -> bool {
+    text.lines().any(|line| {
+        let line = line.trim();
+        line.ends_with(SENTENCE_ENDINGS)
+            || LIST_MARKERS.iter().any(|marker| line.starts_with(marker))
+            || starts_with_numbered_marker(line)
+    })
+}
+
+fn starts_with_numbered_marker(line: &str) -> bool {
+    let digits = line.chars().take_while(char::is_ascii_digit).count();
+    digits > 0 && line[digits..].starts_with(['.', ')']) && line[digits + 1..].starts_with(' ')
 }
 
 /// Text left after the last line announcing a tool call. Milestones are progress
@@ -74,6 +92,11 @@ fn has_markdown_heading(text: &str) -> bool {
 }
 
 fn is_narration_line(line: &str) -> bool {
+    // An announcement of the next tool call is a short sentence. Anything report-length
+    // is a report, even when it opens with "I will present the findings: ...".
+    if line.chars().count() >= MIN_FINAL_MESSAGE_CHARS {
+        return false;
+    }
     let lowered = line.to_lowercase();
     let mut rest = lowered
         .strip_prefix("[milestone]")
@@ -164,133 +187,5 @@ fn is_work_event(value: &Value, item_kind: &str) -> bool {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::{DeliveryEvidence, DeliveryOutcome};
-
-    const LONG_MESSAGE: &str = "A final report with enough detail. A final report with enough detail. A final report with enough detail. A final report with enough detail. A final report with enough detail. A final report with enough detail.";
-
-    fn observe(evidence: &mut DeliveryEvidence, event: serde_json::Value) {
-        evidence.observe_codex_jsonl(&event.to_string());
-    }
-
-    #[test]
-    fn accepts_substantive_message_after_work() {
-        let mut evidence = DeliveryEvidence::default();
-        observe(&mut evidence, serde_json::json!({"type":"item.completed","item":{"type":"command_execution"}}));
-        observe(&mut evidence, serde_json::json!({"type":"item.completed","item":{"type":"agent_message","text":LONG_MESSAGE}}));
-        assert_eq!(evidence.validate(), DeliveryOutcome::Delivered);
-    }
-
-    #[test]
-    fn rejects_progress_message_followed_by_work() {
-        let mut evidence = DeliveryEvidence::default();
-        observe(&mut evidence, serde_json::json!({"type":"item.completed","item":{"type":"agent_message","text":LONG_MESSAGE}}));
-        observe(&mut evidence, serde_json::json!({"type":"item.completed","item":{"type":"command_execution"}}));
-        assert!(matches!(
-            evidence.validate(),
-            DeliveryOutcome::MissingFinalDelivery { .. }
-        ));
-    }
-
-    #[test]
-    fn rejects_short_trailing_fragment() {
-        let mut evidence = DeliveryEvidence::default();
-        observe(&mut evidence, serde_json::json!({"type":"item.completed","item":{"type":"command_execution"}}));
-        observe(&mut evidence, serde_json::json!({"type":"item.completed","item":{"type":"agent_message","text":"done"}}));
-        assert!(matches!(
-            evidence.validate(),
-            DeliveryOutcome::MissingFinalDelivery { last_message_chars: 4, .. }
-        ));
-    }
-
-    #[test]
-    fn accepts_tool_free_answer() {
-        let mut evidence = DeliveryEvidence::default();
-        observe(&mut evidence, serde_json::json!({"type":"item.completed","item":{"type":"agent_message","text":LONG_MESSAGE}}));
-        assert_eq!(evidence.validate(), DeliveryOutcome::Delivered);
-    }
-
-    /// Verbatim shape of the t-f2f1e7c1 capture: agy died mid-audit and left only the
-    /// lines announcing each tool call, which aid then persisted as the audit report.
-    const NARRATION_CAPTURE: &str = "I will start by checking the list of permissions to see what actions and directories are available to us.\n\
-I will run `pwd` to identify the current working directory of our workspace.\n\
-I will run `git diff main..HEAD` to get the list of changes made in the branch.\n\
-I will output the full git diff to a file in the scratch folder so we can read it without truncation.\n\
-I will inspect the indexer snapshot file `crates/sr-indexer/src/snapshot.rs` to answer Q2.\n\
-[MILESTONE] Analyzed Q2 regarding serialization determinism across indexer restarts.\n";
-
-    #[test]
-    fn rejects_pre_tool_narration_capture() {
-        assert!(!super::looks_like_delivered_report(NARRATION_CAPTURE));
-    }
-
-    #[test]
-    fn accepts_markdown_report() {
-        let report = format!("## Findings\n\nQ1 PASS. {LONG_MESSAGE}");
-        assert!(super::looks_like_delivered_report(&report));
-    }
-
-    #[test]
-    fn accepts_prose_report_without_headings() {
-        assert!(super::looks_like_delivered_report(LONG_MESSAGE));
-    }
-
-    /// The report instruction explicitly asks for this when an audit is clean, so the
-    /// shortest valid report must not be mistaken for a missing one.
-    #[test]
-    fn accepts_the_shortest_valid_report() {
-        assert!(super::looks_like_delivered_report("## Findings\nNo findings."));
-    }
-
-    #[test]
-    fn rejects_short_text_without_a_heading() {
-        assert!(!super::looks_like_delivered_report("done"));
-    }
-
-    #[test]
-    fn narration_followed_by_a_real_report_still_counts_as_delivered() {
-        let mixed = format!("{NARRATION_CAPTURE}\n## Findings\n\n{LONG_MESSAGE}");
-        assert!(super::looks_like_delivered_report(&mixed));
-    }
-
-    /// A heading must not launder narration: an agent that died after printing a plan
-    /// heading has still delivered nothing.
-    #[test]
-    fn rejects_narration_under_a_heading() {
-        let planning = format!("# Investigation Plan\n{NARRATION_CAPTURE}{NARRATION_CAPTURE}");
-        assert!(!super::looks_like_delivered_report(&planning));
-    }
-
-    /// Audit t-b4423393: a report may legitimately end on a sentence that starts like an
-    /// announcement. First-person-plural is prose, not a tool call.
-    #[test]
-    fn accepts_report_ending_on_a_forward_looking_sentence() {
-        let report = "## Findings\n\
-No vulnerabilities were found in the codebase.\n\
-We will monitor the application logs for any errors.\n";
-        assert!(super::looks_like_delivered_report(report));
-    }
-
-    /// Audit t-b4423393: bulk alone must not pass raw tool output off as a report.
-    #[test]
-    fn rejects_raw_tool_output_trailing_a_narration_line() {
-        let capture = "I'll list the directory to see the files.\n\
-total 0\n\
--rw-r--r--  1 user  group    0 Jul 31 22:00 Cargo.toml\n\
--rw-r--r--  1 user  group    0 Jul 31 22:00 src/lib.rs\n\
--rw-r--r--  1 user  group    0 Jul 31 22:00 src/main.rs\n\
--rw-r--r--  1 user  group    0 Jul 31 22:00 tests/integration.rs\n\
--rw-r--r--  1 user  group    0 Jul 31 22:00 docs/readme.md\n";
-        assert!(!super::looks_like_delivered_report(capture));
-    }
-
-    #[test]
-    fn rejects_narration_behind_discourse_markers() {
-        let text = "First, I'll search the repository for the affected call sites.\n\
-Next, I will read the snapshot module to confirm the encoding order.\n\
-Then I'll check whether the digest guard agrees with the content hash.\n\
-Let's inspect the drop accounting path afterwards.\n\
-We will finish by summarizing the three answers.\n";
-        assert!(!super::looks_like_delivered_report(text));
-    }
-}
+#[path = "delivery_guard_tests.rs"]
+mod tests;

@@ -14,39 +14,53 @@ pub(in crate::cmd) fn output_file_instruction(output_path: Option<&str>, result_
     (!sections.is_empty()).then(|| sections.join("\n\n"))
 }
 
+/// How the task's `result.md` was obtained. The log fallback keeps evidence around when
+/// an agent ignores the result-file instruction, but it must never be mistaken for a
+/// report the agent actually wrote.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(in crate::cmd) enum ResultDelivery {
+    NotRequested,
+    /// The agent wrote the declared result file.
+    File,
+    /// The declared file was missing; captured output stood in for it.
+    LogFallback { looks_like_report: bool },
+}
+
 pub(in crate::cmd) fn persist_result_file(
     task_id: &str,
     result_file: Option<&str>,
     base_dir: Option<&str>,
     log_path: &Path,
-) -> Result<()> {
-    let Some(result_file) = result_file else { return Ok(()); };
+) -> Result<ResultDelivery> {
+    let Some(result_file) = result_file else { return Ok(ResultDelivery::NotRequested); };
     let source = resolve_result_path(result_file, base_dir);
     if !source.exists() {
         return persist_result_from_log(task_id, log_path);
     }
     let dest = crate::paths::task_dir(task_id).join("result.md");
     if source.as_path() == dest.as_path() {
-        return Ok(());
+        return Ok(ResultDelivery::File);
     }
     if let Some(parent) = dest.parent() {
         std::fs::create_dir_all(parent)?;
     }
     std::fs::copy(source, &dest)
         .with_context(|| format!("Failed to persist result file to {}", dest.display()))?;
-    Ok(())
+    Ok(ResultDelivery::File)
 }
 
-fn persist_result_from_log(task_id: &str, log_path: &Path) -> Result<()> {
+fn persist_result_from_log(task_id: &str, log_path: &Path) -> Result<ResultDelivery> {
     let Some(content) = extract_output_fallback_from_log(log_path) else {
-        return Ok(());
+        return Ok(ResultDelivery::LogFallback { looks_like_report: false });
     };
+    let looks_like_report = crate::delivery_guard::looks_like_delivered_report(&content);
     let dest = crate::paths::task_dir(task_id).join("result.md");
     if let Some(parent) = dest.parent() {
         std::fs::create_dir_all(parent)?;
     }
     std::fs::write(&dest, content)
-        .with_context(|| format!("Failed to persist result file to {}", dest.display()))
+        .with_context(|| format!("Failed to persist result file to {}", dest.display()))?;
+    Ok(ResultDelivery::LogFallback { looks_like_report })
 }
 
 fn resolve_result_path(result_file: &str, base_dir: Option<&str>) -> PathBuf {
@@ -179,7 +193,7 @@ mod tests {
         std::fs::write(work_dir.join("result.md"), "structured result").unwrap();
 
         let log_path = crate::paths::log_path("t-result");
-        persist_result_file(
+        let delivery = persist_result_file(
             "t-result",
             Some("result.md"),
             Some(work_dir.to_str().unwrap()),
@@ -189,6 +203,27 @@ mod tests {
 
         let saved = crate::paths::task_dir("t-result").join("result.md");
         assert_eq!(std::fs::read_to_string(saved).unwrap(), "structured result");
+        assert_eq!(delivery, ResultDelivery::File);
+    }
+
+    /// The failure that produced a "done" audit with a tool log for a report: the agent
+    /// never wrote the result file and printed only what it was about to do.
+    #[test]
+    fn persist_result_file_flags_narration_only_log_fallback() {
+        let temp = tempdir().unwrap();
+        let _aid_home = crate::paths::AidHomeGuard::set(temp.path());
+        let log_path = crate::paths::log_path("t-narration-result");
+        std::fs::create_dir_all(log_path.parent().unwrap()).unwrap();
+        let narration = "I will run `git diff main..HEAD` to get the list of changes made in the branch.\n\
+I will read the generated diff file using the `view_file` tool to inspect the full set of changes.\n\
+I will inspect the indexer snapshot file to answer the second question about determinism.\n";
+        std::fs::write(&log_path, narration).unwrap();
+
+        let delivery =
+            persist_result_file("t-narration-result", Some("result.md"), Some("/missing"), &log_path)
+                .unwrap();
+
+        assert_eq!(delivery, ResultDelivery::LogFallback { looks_like_report: false });
     }
 
     #[test]
@@ -214,14 +249,17 @@ mod tests {
         std::fs::create_dir_all(log_path.parent().unwrap()).unwrap();
         std::fs::write(&log_path, "plain text report\nwith final findings").unwrap();
 
-        persist_result_file("t-raw-log-result", Some("result.md"), Some("/missing"), &log_path)
-            .unwrap();
+        let delivery =
+            persist_result_file("t-raw-log-result", Some("result.md"), Some("/missing"), &log_path)
+                .unwrap();
 
         let saved = crate::paths::task_dir("t-raw-log-result").join("result.md");
         assert_eq!(
             std::fs::read_to_string(saved).unwrap(),
             "plain text report\nwith final findings"
         );
+        // Short, but not narration - it is still salvaged, just not blessed as a report.
+        assert_eq!(delivery, ResultDelivery::LogFallback { looks_like_report: false });
     }
 
     #[test]

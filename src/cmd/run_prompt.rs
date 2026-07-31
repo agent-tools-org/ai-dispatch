@@ -12,8 +12,8 @@ mod run_verify;
 #[path = "run_scope.rs"]
 mod run_scope;
 pub(super) use run_output::{
-    clean_output_if_jsonl, extract_output_fallback_from_path, fill_empty_output_from_log,
-    output_file_instruction, persist_result_file,
+    ResultDelivery, clean_output_if_jsonl, extract_output_fallback_from_path,
+    fill_empty_output_from_log, output_file_instruction, persist_result_file,
 };
 pub(super) use run_scope::warn_agent_committed_files_outside_scope;
 pub(super) use run_verify::{maybe_auto_retry_after_checklist_miss_impl, maybe_auto_retry_after_verify_failure_impl, maybe_cleanup_fast_fail_impl, maybe_verify_impl, record_verify_not_run};

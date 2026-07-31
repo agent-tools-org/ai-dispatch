@@ -178,15 +178,19 @@ pub fn render_mode_text(store: &Arc<Store>, task_id: &str, mode: ShowMode) -> Re
 
 fn result_text(store: &Arc<Store>, task_id: &str) -> Result<String> {
     let path = crate::paths::task_dir(task_id).join("result.md");
+    let banner = load_task(store, task_id)
+        .ok()
+        .and_then(|task| audit_result_missing_banner(&task));
     if !path.exists() {
-        if let Ok(task) = load_task(store, task_id)
-            && let Some(banner) = audit_result_missing_banner(&task)
-        {
-            return Ok(banner);
-        }
-        return Ok("No result file for this task\n".to_string());
+        return Ok(banner.unwrap_or_else(|| "No result file for this task\n".to_string()));
     }
-    Ok(std::fs::read_to_string(path)?)
+    let body = std::fs::read_to_string(path)?;
+    // The banner fires here only when the file was salvaged from the log, so keep the
+    // salvaged text visible but never let it be read as the report on its own.
+    Ok(match banner {
+        Some(banner) => format!("{banner}\n{body}"),
+        None => body,
+    })
 }
 
 fn events_text(store: &Arc<Store>, task_id: &str, full: bool) -> Result<String> {
@@ -217,14 +221,19 @@ fn audit_result_missing_banner(task: &crate::types::Task) -> Option<String> {
     if !crate::cmd::report_mode::prompt_is_audit_report(&task.prompt) {
         return None;
     }
+    // A result.md salvaged from the log is not a delivered report, so the delivery
+    // assessment recorded at persist time outranks the file merely existing.
+    let missing_delivery =
+        task.delivery_assessment() == Some(crate::types::DeliveryAssessment::MissingFinalDelivery);
     let result_path = crate::paths::task_dir(&task.id.0).join("result.md");
-    if result_path.exists() {
+    if result_path.exists() && !missing_delivery {
         return None;
     }
     Some(format!(
         "⚠ Structured audit result missing.\n\
          The agent did not write result.md as instructed.\n\
-         Likely cause: weak model truncated mid-output or ignored the result-file instruction.\n\
+         Likely cause: the agent ended its turn mid-investigation, or ignored the result-file instruction.\n\
+         Anything shown below is captured tool output, not a report.\n\
          Retry with a stronger agent:\n  \
          aid retry {} --agent codex\n",
         task.id.0

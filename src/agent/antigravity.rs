@@ -54,7 +54,12 @@ impl super::Agent for AntigravityAgent {
         cmd.arg(&effective_prompt);
         cmd.args(["--print-timeout", "24h"]);
         cmd.arg("--dangerously-skip-permissions");
-        for dir in agy_include_directories(opts.dir.as_deref(), &opts.context_files) {
+        let run_dir = opts
+            .dir
+            .as_deref()
+            .filter(|dir| !dir.is_empty())
+            .and_then(|dir| absolute_dir(Path::new(dir)));
+        for dir in agy_include_directories(run_dir.as_deref(), &opts.context_files) {
             cmd.args(["--add-dir", &dir]);
         }
         if let Ok(log_file) = std::env::var("AGY_LOG_FILE") {
@@ -62,7 +67,10 @@ impl super::Agent for AntigravityAgent {
                 cmd.args(["--log-file", &log_file]);
             }
         }
-        if let Some(ref dir) = opts.dir {
+        if let Some(ref dir) = run_dir {
+            // The sandbox and container wrappers mount this cwd verbatim (`-v dir:dir`),
+            // so it must name the same directory as the workspace paths above -
+            // otherwise the mount and `--add-dir` disagree and agy loses the workspace.
             cmd.current_dir(dir);
         }
         Ok(cmd)
@@ -105,17 +113,29 @@ fn probe_agy_capabilities() -> Option<AgyCapabilities> {
 }
 
 fn parse_agy_capabilities(help: &str) -> AgyCapabilities {
-    let plan_mode_flag = if help.contains("--approval-mode") {
+    let plan_mode_flag = if help_defines_flag(help, "--approval-mode") {
         Some("--approval-mode")
-    } else if help.contains("--mode") {
+    } else if help_defines_flag(help, "--mode") {
         Some("--mode")
     } else {
         None
     };
     AgyCapabilities {
         plan_mode_flag,
-        has_model_flag: help.contains("--model"),
+        has_model_flag: help_defines_flag(help, "--model"),
     }
+}
+
+/// Does the help text *define* this flag, rather than merely mention it? A bare
+/// `contains` matches prefixes (`--model` inside `--model-fallback`) and prose in another
+/// flag's description, either of which can pick a flag the installed agy does not accept.
+fn help_defines_flag(help: &str, flag: &str) -> bool {
+    help.lines().any(|line| {
+        let line = line.trim_start();
+        line.strip_prefix(flag).is_some_and(|rest| {
+            rest.is_empty() || rest.starts_with([' ', '\t', '=', ','])
+        })
+    })
 }
 
 #[cfg(test)]
@@ -135,16 +155,13 @@ fn agy_version_string() -> Option<String> {
 /// agy rejects any non-absolute `--add-dir` ("must be an absolute path") and keeps the
 /// unresolved entry in its workspace list, which leaves its Search tool without an app
 /// root for the whole session. Every path handed to agy must therefore be absolutized.
-fn agy_include_directories(dir: Option<&str>, context_files: &[String]) -> Vec<String> {
-    let run_dir = dir
-        .filter(|run_dir| !run_dir.is_empty())
-        .and_then(|run_dir| absolute_dir(Path::new(run_dir)));
+fn agy_include_directories(run_dir: Option<&Path>, context_files: &[String]) -> Vec<String> {
     let mut directories = BTreeSet::new();
-    if let Some(ref run_dir) = run_dir {
+    if let Some(run_dir) = run_dir {
         directories.insert(run_dir.to_string_lossy().into_owned());
     }
     for file in context_files {
-        if let Some(include_dir) = context_include_directory(run_dir.as_deref(), file) {
+        if let Some(include_dir) = context_include_directory(run_dir, file) {
             directories.insert(include_dir);
         }
     }

@@ -6,35 +6,55 @@ use serde_json::Value;
 
 pub(crate) const MIN_FINAL_MESSAGE_CHARS: usize = 200;
 
-/// Fraction of narration lines above which captured text is treated as a tool log
-/// rather than a deliverable.
-const NARRATION_DOMINANCE: f32 = 0.6;
-
 /// Openers plain-text agents use to announce the tool call they are about to make.
 const NARRATION_OPENERS: &[&str] = &[
     "i will ",
     "i'll ",
     "i am going to ",
     "i'm going to ",
+    "i am now ",
+    "i'm now ",
     "let me ",
+    "let's ",
+    "we will ",
+    "we'll ",
     "now i ",
-    "next, i ",
-    "next i ",
 ];
+
+/// Discourse markers that can precede an opener ("First, I'll ...").
+const NARRATION_PREFIXES: &[&str] = &["first, ", "first ", "next, ", "next ", "then, ", "then ", "now, "];
 
 /// Do the captured bytes look like a report the agent actually wrote, or like a
 /// transcript of what it was about to do? Non-streaming agents (agy, gemini) print
 /// both to the same stream, so a run that dies mid-investigation leaves behind a
 /// plausible-looking file made entirely of pre-tool narration.
 pub(crate) fn looks_like_delivered_report(text: &str) -> bool {
-    let trimmed = text.trim();
-    if trimmed.chars().count() < MIN_FINAL_MESSAGE_CHARS {
-        return false;
-    }
-    if has_markdown_heading(trimmed) {
-        return true;
-    }
-    !is_narration_dominated(trimmed)
+    // Only what follows the last announced tool call can be the deliverable - the same
+    // ordering rule the Codex JSONL guard applies to messages versus work events.
+    let substance = substance_after_narration(text.trim());
+    // A heading is the shape the report instruction asks for, and a legitimate report can
+    // be as short as "## Findings\nNo findings." - do not hold length against it.
+    has_markdown_heading(&substance) || substance.chars().count() >= MIN_FINAL_MESSAGE_CHARS
+}
+
+/// Text left after the last line announcing a tool call. Milestones are progress
+/// markers, never deliverables, so they are not substance either.
+fn substance_after_narration(text: &str) -> String {
+    let lines: Vec<&str> = text.lines().map(str::trim).collect();
+    let start = lines
+        .iter()
+        .rposition(|line| is_narration_line(line))
+        .map_or(0, |index| index + 1);
+    lines[start..]
+        .iter()
+        .filter(|line| !line.is_empty() && !is_milestone_line(line))
+        .copied()
+        .collect::<Vec<&str>>()
+        .join("\n")
+}
+
+fn is_milestone_line(line: &str) -> bool {
+    line.to_lowercase().starts_with("[milestone]")
 }
 
 fn has_markdown_heading(text: &str) -> bool {
@@ -44,28 +64,21 @@ fn has_markdown_heading(text: &str) -> bool {
     })
 }
 
-fn is_narration_dominated(text: &str) -> bool {
-    let lines: Vec<&str> = text
-        .lines()
-        .map(str::trim)
-        .filter(|line| !line.is_empty())
-        .collect();
-    if lines.is_empty() {
-        return true;
-    }
-    let narration = lines.iter().filter(|line| is_narration_line(line)).count();
-    narration as f32 / lines.len() as f32 >= NARRATION_DOMINANCE
-}
-
 fn is_narration_line(line: &str) -> bool {
     let lowered = line.to_lowercase();
-    let lowered = lowered
+    let mut rest = lowered
         .strip_prefix("[milestone]")
         .unwrap_or(&lowered)
         .trim_start();
+    if let Some(prefix) = NARRATION_PREFIXES
+        .iter()
+        .find(|prefix| rest.starts_with(**prefix))
+    {
+        rest = rest[prefix.len()..].trim_start();
+    }
     NARRATION_OPENERS
         .iter()
-        .any(|opener| lowered.starts_with(opener))
+        .any(|opener| rest.starts_with(opener))
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -213,14 +226,39 @@ I will inspect the indexer snapshot file `crates/sr-indexer/src/snapshot.rs` to 
         assert!(super::looks_like_delivered_report(LONG_MESSAGE));
     }
 
+    /// The report instruction explicitly asks for this when an audit is clean, so the
+    /// shortest valid report must not be mistaken for a missing one.
     #[test]
-    fn rejects_text_below_minimum_length() {
-        assert!(!super::looks_like_delivered_report("## Findings\nNo findings."));
+    fn accepts_the_shortest_valid_report() {
+        assert!(super::looks_like_delivered_report("## Findings\nNo findings."));
+    }
+
+    #[test]
+    fn rejects_short_text_without_a_heading() {
+        assert!(!super::looks_like_delivered_report("done"));
     }
 
     #[test]
     fn narration_followed_by_a_real_report_still_counts_as_delivered() {
         let mixed = format!("{NARRATION_CAPTURE}\n## Findings\n\n{LONG_MESSAGE}");
         assert!(super::looks_like_delivered_report(&mixed));
+    }
+
+    /// A heading must not launder narration: an agent that died after printing a plan
+    /// heading has still delivered nothing.
+    #[test]
+    fn rejects_narration_under_a_heading() {
+        let planning = format!("# Investigation Plan\n{NARRATION_CAPTURE}{NARRATION_CAPTURE}");
+        assert!(!super::looks_like_delivered_report(&planning));
+    }
+
+    #[test]
+    fn rejects_narration_behind_discourse_markers() {
+        let text = "First, I'll search the repository for the affected call sites.\n\
+Next, I will read the snapshot module to confirm the encoding order.\n\
+Then I'll check whether the digest guard agrees with the content hash.\n\
+Let's inspect the drop accounting path afterwards.\n\
+We will finish by summarizing the three answers.\n";
+        assert!(!super::looks_like_delivered_report(text));
     }
 }

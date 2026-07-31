@@ -1,3 +1,11 @@
+## v9.11.0 (2026-07-31)
+- Fix agy runs delivering tool narration instead of a report: aid no longer presents a result.md salvaged from the agent log as if it were the requested report, and records a missing-delivery assessment plus an `aid show` banner when the capture is pre-tool narration
+- Fix agy `--add-dir` receiving relative paths, which agy rejects outright ("must be an absolute path") while keeping the unresolved entry in its workspace list; the command's working directory now resolves the same way, so sandbox and container mounts agree with the workspace paths
+- Fix `aid run agy --model <name>` aborting immediately: agy has no `-m` short alias, so the long `--model` flag is now used
+- Fix agy `--read-only` silently degrading to a prompt hint by probing for a plan-mode flag no agy version defines; `--mode plan` (agy 1.1.x) and `--approval-mode plan` (older) are now both detected, and flag probing requires the flag to open a help line rather than appear anywhere in it
+- Tell agents that a `[MILESTONE]` line is progress, never a deliverable, and that a turn must not end on one
+
+
 ## v9.10.0 (2026-07-27)
 - Ship the comprehensive, release-matched AID operating guide as the built-in `aid-guide` skill
 - Refresh the official guide through `aid init`, `aid setup`, and `aid upgrade` while preserving user-owned skills

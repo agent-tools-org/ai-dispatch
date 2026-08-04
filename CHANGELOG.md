@@ -1,3 +1,10 @@
+## v9.12.0 (2026-08-04)
+- Stop failing codex tasks that already delivered their report: the delivery guard counted codex's closing `todo_list` update as a work event, so a run whose report was written was still marked `missing_final_delivery` and its verdict discarded
+- Stop erasing reports that contain a `[MILESTONE]` line: the log writer skipped any line containing that tag anywhere, and aid's own prompt asks agents to emit it, so a report opening with a milestone line never reached the task log
+- Dispatch read-only audits as report tasks instead of implementation tasks: prompts phrased `read-only ... audit` are detected from the prompt alone, and such tasks no longer receive the implementer methodology or the git staging guard telling an auditor its deliverable is a commit
+- Keep write-capable tasks fully scaffolded: scaffolding suppression requires explicit no-write intent, is clause-scoped around negated verbs (`do not modify` reads as an audit, `then fix the bug` does not), and is kept deliberately separate from dirty-worktree enforcement
+
+
 ## v9.11.0 (2026-07-31)
 - Fix agy runs delivering tool narration instead of a report: aid no longer presents a result.md salvaged from the agent log as if it were the requested report, and records a missing-delivery assessment plus an `aid show` banner when the capture is pre-tool narration
 - Fix agy `--add-dir` receiving relative paths, which agy rejects outright ("must be an absolute path") while keeping the unresolved entry in its workspace list; the command's working directory now resolves the same way, so sandbox and container mounts agree with the workspace paths

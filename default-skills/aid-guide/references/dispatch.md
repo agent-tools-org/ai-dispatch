@@ -69,6 +69,8 @@ formatting decision is independent of dirty-worktree enforcement.
 Implementation noun phrases such as `add an audit log` and write requests such as
 `add tests for the read-only audit module` or
 `make changes to the read-only audit logic` remain normal writable tasks.
+Write verbs after the audit phrase also keep implementation scaffolding unless
+they are negated, as in `do not modify` or `without modifying`.
 An explicit `--result-file` controls report formatting and delivery; it does not
 by itself remove implementation methodology or Git staging instructions.
 

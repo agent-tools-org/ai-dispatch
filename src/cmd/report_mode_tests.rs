@@ -228,6 +228,28 @@ fn common_write_verbs_before_read_only_audit_stay_out_of_report_mode() {
 }
 
 #[test]
+fn scaffolding_suppression_distinguishes_negated_and_active_write_intent() {
+    for prompt in [
+        "READ-ONLY audit. Do not modify, commit, or amend anything in any checkout.",
+        "Read-only re-audit, round 3. Read ONLY <path>. Do not write, commit or push anywhere.",
+        "Read-only comparative audit of the arbitrage module in this repo.",
+        "Read-only cross-audit. Work ONLY in <path>.",
+        "Read-only adversarial audit of commit 3ec12a8, without modifying anything.",
+    ] {
+        assert!(suppresses_implementation_scaffolding(prompt, false), "{prompt}");
+    }
+
+    for prompt in [
+        "Read-only audit of the codebase, then fix the security bug.",
+        "Add tests for the read-only audit module",
+        "make changes to the read-only audit logic",
+        "Do a code review of the auth module, then fix the security bug",
+    ] {
+        assert!(!suppresses_implementation_scaffolding(prompt, false), "{prompt}");
+    }
+}
+
+#[test]
 fn apply_defaults_sets_result_file_once() {
     let mut args = RunArgs {
         prompt: "Review the implementation and list findings.".to_string(),

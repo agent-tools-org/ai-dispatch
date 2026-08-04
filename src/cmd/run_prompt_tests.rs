@@ -107,26 +107,33 @@ fn code_review_then_fix_keeps_implementation_instructions() {
     std::fs::create_dir_all(&skills_dir).unwrap();
     std::fs::write(skills_dir.join("implementer.md"), "implementation method").unwrap();
     let store = Store::open_memory().unwrap();
-    let args = RunArgs {
-        prompt: format!(
-            "Do a code review of the auth module, then fix the security bug. {}",
-            "Trace all relevant behavior. ".repeat(8),
+    for (prompt, task_id) in [
+        (
+            "Do a code review of the auth module, then fix the security bug.",
+            "task-review-fix",
         ),
-        ..Default::default()
-    };
+        (
+            "Read-only audit of the codebase, then fix the security bug.",
+            "task-audit-fix",
+        ),
+    ] {
+        let args = RunArgs {
+            prompt: format!("{prompt} {}", "Trace all relevant behavior. ".repeat(8)),
+            ..Default::default()
+        };
+        let bundle = build_prompt_bundle(
+            &store,
+            &args,
+            &AgentKind::Codex,
+            None,
+            &["implementer".to_string()],
+            task_id,
+        )
+        .unwrap();
 
-    let bundle = build_prompt_bundle(
-        &store,
-        &args,
-        &AgentKind::Codex,
-        None,
-        &["implementer".to_string()],
-        "task-review-fix",
-    )
-    .unwrap();
-
-    assert!(bundle.effective_prompt.contains("Git Staging Rule"));
-    assert!(bundle.effective_prompt.contains("implementation method"));
+        assert!(bundle.effective_prompt.contains("Git Staging Rule"), "{prompt}");
+        assert!(bundle.effective_prompt.contains("implementation method"), "{prompt}");
+    }
 }
 
 #[test]

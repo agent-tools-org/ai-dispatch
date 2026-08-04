@@ -50,7 +50,7 @@ pub(super) fn build_prompt_bundle(store: &Store, args: &RunArgs, agent_kind: &Ag
         prompt.len(),
     );
     let suppress_implementation_scaffolding = crate::cmd::report_mode::suppresses_implementation_scaffolding(
-        &prompt, args.read_only, task_profile.category,
+        &prompt, args.read_only,
     );
     let task_category_label = task_profile.category.label();
     let mut effective_prompt = crate::workgroup::compose_prompt(

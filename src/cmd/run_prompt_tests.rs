@@ -68,7 +68,7 @@ fn audit_report_bundle_omits_implementation_instructions() {
 }
 
 #[test]
-fn explicit_result_file_review_omits_implementation_instructions() {
+fn explicit_result_file_write_review_keeps_implementation_instructions() {
     let temp = tempfile::tempdir().unwrap();
     let _aid_home = crate::paths::AidHomeGuard::set(temp.path());
     let skills_dir = crate::paths::aid_dir().join("skills");
@@ -77,7 +77,7 @@ fn explicit_result_file_review_omits_implementation_instructions() {
     let store = Store::open_memory().unwrap();
     let args = RunArgs {
         prompt: format!(
-            "Review and report findings for the routing behavior. {}",
+            "Review and fix the parser bug. {}",
             "Inspect all relevant behavior. ".repeat(8),
         ),
         result_file: Some("review.md".to_string()),
@@ -94,8 +94,8 @@ fn explicit_result_file_review_omits_implementation_instructions() {
     )
     .unwrap();
 
-    assert!(!bundle.effective_prompt.contains("Git Staging Rule"));
-    assert!(!bundle.effective_prompt.contains("implementation method"));
+    assert!(bundle.effective_prompt.contains("Git Staging Rule"));
+    assert!(bundle.effective_prompt.contains("implementation method"));
     assert!(bundle.effective_prompt.contains("## Findings"));
 }
 

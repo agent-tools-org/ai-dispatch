@@ -34,6 +34,16 @@ fn official_guide_covers_every_public_command() {
     }
 }
 
+#[test]
+fn official_guide_documents_prompt_only_audit_dispatch() {
+    let dispatch = include_str!("../default-skills/aid-guide/references/dispatch.md");
+
+    assert!(dispatch.contains("`read-only audit`"));
+    assert!(dispatch.contains("`read-only re-audit`"));
+    assert!(dispatch.contains("Omit `--read-only`"));
+    assert!(dispatch.contains("`add an audit log`"));
+}
+
 fn public_commands(help: &str) -> Vec<String> {
     help.lines()
         .skip_while(|line| *line != "Commands:")

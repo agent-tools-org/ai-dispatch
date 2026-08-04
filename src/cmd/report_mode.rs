@@ -37,8 +37,9 @@ const AUTO_REPORT_AUDIT_TERMS: &[&str] = &[
 ];
 const READ_ONLY_TERMS: &[&str] = &["read-only", "read only"];
 const WRITE_INTENT_TERMS: &[&str] = &[
-    "add", "build", "change", "create", "debug", "edit", "fix", "implement", "investigate",
-    "modify", "refactor", "remove", "rename", "repair", "replace", "test", "update", "write",
+    "add", "build", "change", "create", "debug", "document", "edit", "fix", "generate",
+    "implement", "investigate", "make", "modify", "optimize", "refactor", "remove", "rename",
+    "repair", "replace", "setup", "test", "update", "write",
 ];
 const AUDITOR_ROLE_PREFIXES: &[&str] = &[
     "you are a",

@@ -44,6 +44,7 @@ fn official_guide_documents_prompt_only_audit_dispatch() {
     assert!(dispatch.contains("`read-only re-audit`"));
     assert!(dispatch.contains("Omit `--read-only`"));
     assert!(dispatch.contains("`add an audit log`"));
+    assert!(dispatch.contains("`make changes to the read-only audit logic`"));
     assert!(dispatch.contains("independent of dirty-worktree enforcement"));
 }
 

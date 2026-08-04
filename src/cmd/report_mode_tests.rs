@@ -210,6 +210,24 @@ fn counter_examples_stay_out_of_report_mode() {
 }
 
 #[test]
+fn common_write_verbs_before_read_only_audit_stay_out_of_report_mode() {
+    for prompt in [
+        "Make changes to the read-only audit logic",
+        "Optimize the read-only audit logic",
+        "Generate tests for the read-only audit logic",
+        "Setup fixtures for the read-only audit logic",
+        "Document the read-only audit logic",
+    ] {
+        assert!(!is_audit_report_task(
+            prompt,
+            false,
+            TaskCategory::ComplexImpl,
+            None,
+        ));
+    }
+}
+
+#[test]
 fn apply_defaults_sets_result_file_once() {
     let mut args = RunArgs {
         prompt: "Review the implementation and list findings.".to_string(),

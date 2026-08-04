@@ -41,9 +41,32 @@ fn rejects_short_trailing_fragment() {
 }
 
 #[test]
+fn rejects_138_char_final_message() {
+    let mut evidence = DeliveryEvidence::default();
+    let short_message = "x".repeat(138);
+    observe(&mut evidence, serde_json::json!({"type":"item.completed","item":{"type":"command_execution"}}));
+    observe(&mut evidence, serde_json::json!({"type":"item.completed","item":{"type":"agent_message","text":short_message}}));
+    assert!(matches!(
+        evidence.validate(),
+        DeliveryOutcome::MissingFinalDelivery { last_message_chars: 138, .. }
+    ));
+}
+
+#[test]
 fn accepts_tool_free_answer() {
     let mut evidence = DeliveryEvidence::default();
     observe(&mut evidence, serde_json::json!({"type":"item.completed","item":{"type":"agent_message","text":LONG_MESSAGE}}));
+    assert_eq!(evidence.validate(), DeliveryOutcome::Delivered);
+}
+
+#[test]
+fn accepts_final_message_followed_by_todo_list_update() {
+    let mut evidence = DeliveryEvidence::default();
+    observe(&mut evidence, serde_json::json!({"type":"item.completed","item":{"type":"command_execution"}}));
+    observe(&mut evidence, serde_json::json!({"type":"item.completed","item":{"type":"agent_message","text":LONG_MESSAGE}}));
+    observe(&mut evidence, serde_json::json!({"type":"item.started","item":{"type":"todo_list","items":[]}}));
+    observe(&mut evidence, serde_json::json!({"type":"item.updated","item":{"type":"todo_list","items":[]}}));
+    observe(&mut evidence, serde_json::json!({"type":"item.completed","item":{"type":"todo_list","items":[]}}));
     assert_eq!(evidence.validate(), DeliveryOutcome::Delivered);
 }
 

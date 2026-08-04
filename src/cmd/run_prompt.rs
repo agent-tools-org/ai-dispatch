@@ -50,7 +50,7 @@ pub(super) fn build_prompt_bundle(store: &Store, args: &RunArgs, agent_kind: &Ag
         prompt.len(),
     );
     let report_prompt_mode = crate::cmd::report_mode::is_audit_report_task(
-        &prompt, args.read_only, task_profile.category, None,
+        &prompt, args.read_only, task_profile.category, args.result_file.as_deref(),
     );
     let task_category_label = task_profile.category.label();
     let mut effective_prompt = crate::workgroup::compose_prompt(

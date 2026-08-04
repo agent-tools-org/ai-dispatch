@@ -76,12 +76,20 @@ fn append_recent_activity(out: &mut String, events: &[TaskEvent]) {
     let mut recent = events
         .iter()
         .rev()
-        .filter(|event| matches!(event.event_kind, EventKind::Milestone | EventKind::ToolCall))
+        .filter(|event| {
+            matches!(
+                event.event_kind,
+                EventKind::Milestone
+                    | EventKind::ToolCall
+                    | EventKind::FileRead
+                    | EventKind::FileWrite
+            )
+        })
         .take(5)
         .collect::<Vec<_>>();
     recent.reverse();
     if recent.is_empty() {
-        out.push_str("(no milestone/tool_call events recorded)\n");
+        out.push_str("(no milestone/tool_call/file_read/file_write events recorded)\n");
         return;
     }
     for event in recent {

@@ -64,6 +64,15 @@ fn official_guide_documents_watcher_safeguards() {
     assert!(operations.contains("activity-aware rather than a hard wall-clock cap"));
 }
 
+#[test]
+fn official_guide_documents_event_fallback_coverage() {
+    let operations = include_str!("../default-skills/aid-guide/references/task-operations.md");
+
+    assert!(operations.contains("`aid export --sharegpt` falls back to"));
+    assert!(operations.contains("preserve tool calls, file reads, and file writes"));
+    assert!(operations.contains("only edited or only read files is still represented"));
+}
+
 fn public_commands(help: &str) -> Vec<String> {
     help.lines()
         .skip_while(|line| *line != "Commands:")

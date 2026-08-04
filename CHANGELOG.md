@@ -1,3 +1,10 @@
+## v9.12.2 (2026-08-05)
+- Show which files an oz task touched: `tool_call` events carried only the tool name, so every `edit_files` call rendered as the bare string `edit_files` in `aid board`, `aid show --events` and the TUI while the event's own `file_paths` and `title` were discarded
+- Build oz tool details from the title plus every touched path, attach the paths as `files` metadata, and classify `edit_files` as a file write
+- Preserve file activity in task fallbacks: `aid export --sharegpt` fallback and a failed task's salvaged `partial-work.md` matched tool calls only, so a task that just edited or just read files reported that nothing had been recorded — both now cover file reads and file writes for every agent
+- Split oz's inline tests into a sibling `oz_tests.rs` to stay under the 300-line file limit
+
+
 ## v9.12.1 (2026-08-04)
 - Stop killing healthy Cursor tasks as "stuck in a loop"
 - Fix Cursor event parsing picking the wrong key: `tool_call` objects now carry sibling metadata (`hookAdditionalContexts`, `startedAtMs`, `completedAtMs`, `toolCallId`), and taking the alphabetically first key collapsed every read/shell/write call into one identical event string, lost FileWrite/FileRead classification, and rendered every completed call as `completed: completedAtMs`

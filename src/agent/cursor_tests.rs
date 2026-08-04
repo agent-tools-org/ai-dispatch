@@ -35,7 +35,7 @@ fn parses_assistant_message() {
 }
 
 #[test]
-fn tool_call_ignores_sibling_metadata_and_preserves_raw_keys() {
+fn tool_call_ignores_sibling_metadata_and_preserves_arguments() {
     let cases = [
         ("readToolCall", "path", "src/read.rs", EventKind::FileRead, "completed: read", "files"),
         ("writeToolCall", "filePath", "src/write.rs", EventKind::FileWrite, "completed: write", "files"),
@@ -69,7 +69,7 @@ fn parses_tool_call_glob_as_tool_evidence() {
 }
 
 #[test]
-fn distinct_unknown_tools_produce_distinct_loop_keys() {
+fn distinct_unknown_tools_preserve_distinct_command_metadata() {
     let first = parse(r#"{"type":"tool_call","subtype":"started","tool_call":{"alphaToolCall":{"args":{"query":"one"}}}}"#);
     let second = parse(r#"{"type":"tool_call","subtype":"started","tool_call":{"betaToolCall":{"args":{"query":"two"}}}}"#);
 

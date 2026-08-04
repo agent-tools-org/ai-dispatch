@@ -51,15 +51,13 @@ fn official_guide_documents_prompt_only_audit_dispatch() {
 }
 
 #[test]
-fn official_guide_documents_sustained_loop_protection() {
+fn official_guide_documents_watcher_safeguards() {
     let operations = include_str!("../default-skills/aid-guide/references/task-operations.md");
 
-    assert!(operations.contains("persists for at least two minutes"));
-    assert!(operations.contains("ten consecutive"));
-    assert!(operations.contains("format, or lint activity"));
-    assert!(operations.contains("For custom text agents"));
-    assert!(operations.contains("structured-agent reasoning narration alone never justifies"));
-    assert!(operations.contains("`aid show <task-id> --events`"));
+    assert!(operations.contains("configured idle, hung-task, cost, and hard timeout safeguards"));
+    assert!(operations.contains("`--idle-timeout SECS`"));
+    assert!(operations.contains("`--timeout SECS`"));
+    assert!(operations.contains("Repeated activity is not itself a stop condition"));
 }
 
 fn public_commands(help: &str) -> Vec<String> {

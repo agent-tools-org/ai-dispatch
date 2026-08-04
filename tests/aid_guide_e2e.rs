@@ -50,6 +50,15 @@ fn official_guide_documents_prompt_only_audit_dispatch() {
     assert!(dispatch.contains("`--result-file` controls report formatting and delivery"));
 }
 
+#[test]
+fn official_guide_documents_sustained_loop_protection() {
+    let operations = include_str!("../default-skills/aid-guide/references/task-operations.md");
+
+    assert!(operations.contains("persists\nfor at least two minutes"));
+    assert!(operations.contains("reasoning narration alone never justifies"));
+    assert!(operations.contains("`aid show <task-id> --events`"));
+}
+
 fn public_commands(help: &str) -> Vec<String> {
     help.lines()
         .skip_while(|line| *line != "Commands:")

@@ -237,7 +237,7 @@ async fn droid_osc_prefixed_completion_line_yields_completion_event() {
 }
 
 #[tokio::test]
-async fn streaming_watch_loop_kill_reaches_exit_finalization() {
+async fn streaming_watch_fast_burst_reaches_exit_finalization_without_loop_kill() {
     let temp = tempfile::tempdir().unwrap();
     let _aid_home = paths::AidHomeGuard::set(temp.path());
     let store = Arc::new(Store::open_memory().unwrap());
@@ -246,7 +246,7 @@ async fn streaming_watch_loop_kill_reaches_exit_finalization() {
     let log_path = temp.path().join("stream.log");
     let mut child = tokio::process::Command::new("sh")
         .arg("-c")
-        .arg("for i in 1 2 3 4 5 6 7 8 9 10 11 12; do printf 'repeat\\n'; done; sleep 5")
+        .arg("for i in 1 2 3 4 5 6 7 8 9 10 11 12; do printf 'repeat\\n'; done")
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
@@ -265,12 +265,12 @@ async fn streaming_watch_loop_kill_reaches_exit_finalization() {
     .await
     .unwrap();
 
-    assert_eq!(info.status, TaskStatus::Failed);
+    assert_eq!(info.status, TaskStatus::Done);
     let events = store.get_events(task_id.as_str()).unwrap();
-    assert!(events.iter().any(|event| event.detail == super::loop_kill_detail(&task_id)));
+    assert!(!events.iter().any(|event| event.detail == super::loop_kill_detail(&task_id)));
     assert!(events.iter().any(|event| {
-        event.event_kind == EventKind::Error
-            && event.detail.starts_with("FAIL")
+        event.event_kind == EventKind::Completion
+            && event.detail.starts_with("DONE")
             && event.detail.contains("exit code")
     }));
 }

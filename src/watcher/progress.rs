@@ -2,12 +2,18 @@
 // Exports tracker types shared by watcher flows and PTY monitoring.
 
 use std::collections::{HashMap, VecDeque};
+use std::time::{Duration, Instant};
 
 use chrono::Local;
 
 use crate::types::{EventKind, TaskEvent, TaskId};
 
 const SYNTHETIC_PROGRESS_WINDOW: usize = 10;
+const LOOP_MIN_DURATION: Duration = Duration::from_secs(120);
+const RECENT_EVENT_LIMIT: usize = 20;
+const LOOP_SAMPLE_SIZE: usize = 10;
+const LOOP_REPEAT_THRESHOLD: usize = 8;
+const FILE_WRITE_REPEAT_THRESHOLD: usize = 15;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum SyntheticToolKind {
@@ -118,18 +124,35 @@ impl SyntheticMilestoneTracker {
     }
 }
 
-pub(super) struct LoopDetector {
-    recent_events: VecDeque<String>,
-    file_write_counts: HashMap<String, usize>,
-    last_file_write_key: Option<String>,
+struct LoopObservation {
+    key: String,
+    observed_at: Instant,
 }
 
-impl LoopDetector {
+pub(super) struct LoopDetector<C = fn() -> Instant> {
+    clock: C,
+    recent_events: VecDeque<LoopObservation>,
+    file_write_count: usize,
+    last_file_write_key: Option<String>,
+    file_write_started_at: Option<Instant>,
+    last_file_write_at: Option<Instant>,
+}
+
+impl LoopDetector<fn() -> Instant> {
     pub(super) fn new() -> Self {
+        Self::with_clock(Instant::now)
+    }
+}
+
+impl<C: Fn() -> Instant> LoopDetector<C> {
+    pub(super) fn with_clock(clock: C) -> Self {
         Self {
+            clock,
             recent_events: VecDeque::new(),
-            file_write_counts: HashMap::new(),
+            file_write_count: 0,
             last_file_write_key: None,
+            file_write_started_at: None,
+            last_file_write_at: None,
         }
     }
 
@@ -142,50 +165,83 @@ impl LoopDetector {
             return;
         }
 
+        let observed_at = (self.clock)();
         if kind == EventKind::FileWrite {
-            self.push_file_write(key);
+            self.push_file_write(key, observed_at);
             return;
         }
 
         self.reset_file_write_counts();
-        self.recent_events.push_back(key.to_string());
-        if self.recent_events.len() > 20 {
+        if !Self::is_loop_evidence(kind) {
+            return;
+        }
+        self.recent_events.push_back(LoopObservation { key: key.to_string(), observed_at });
+        if self.recent_events.len() > RECENT_EVENT_LIMIT {
             self.recent_events.pop_front();
         }
     }
 
     pub(super) fn is_looping(&self) -> bool {
-        if self.file_write_counts.values().any(|count| *count >= 15) {
+        if self.file_write_count >= FILE_WRITE_REPEAT_THRESHOLD
+            && self.file_write_persisted()
+        {
             return true;
         }
-        if self.recent_events.len() < 10 {
+        if self.recent_events.len() < LOOP_SAMPLE_SIZE {
             return false;
         }
-        let mut counts = HashMap::new();
-        for detail in self.recent_events.iter().rev().take(10) {
-            let counter = counts.entry(detail.as_str()).or_insert(0);
-            *counter += 1;
-            if *counter >= 8 {
+        self.repeated_run_persisted()
+    }
+
+    fn push_file_write(&mut self, key: &str, observed_at: Instant) {
+        if self.last_file_write_key.as_deref() != Some(key) {
+            self.file_write_count = 1;
+            self.last_file_write_key = Some(key.to_string());
+            self.file_write_started_at = Some(observed_at);
+            self.last_file_write_at = Some(observed_at);
+            return;
+        }
+
+        self.file_write_count += 1;
+        self.last_file_write_at = Some(observed_at);
+    }
+
+    fn reset_file_write_counts(&mut self) {
+        self.file_write_count = 0;
+        self.last_file_write_key = None;
+        self.file_write_started_at = None;
+        self.last_file_write_at = None;
+    }
+
+    fn is_loop_evidence(kind: EventKind) -> bool {
+        matches!(
+            kind,
+            EventKind::ToolCall
+                | EventKind::FileRead
+                | EventKind::Build
+                | EventKind::Test
+                | EventKind::Commit
+        )
+    }
+
+    fn file_write_persisted(&self) -> bool {
+        match (self.file_write_started_at, self.last_file_write_at) {
+            (Some(started_at), Some(last_at)) => last_at.duration_since(started_at) >= LOOP_MIN_DURATION,
+            _ => false,
+        }
+    }
+
+    fn repeated_run_persisted(&self) -> bool {
+        let mut repeats: HashMap<&str, (usize, Instant)> = HashMap::new();
+        for observation in self.recent_events.iter().rev().take(LOOP_SAMPLE_SIZE) {
+            let entry = repeats.entry(observation.key.as_str()).or_insert((0, observation.observed_at));
+            entry.0 += 1;
+            if entry.0 >= LOOP_REPEAT_THRESHOLD
+                && entry.1.duration_since(observation.observed_at) >= LOOP_MIN_DURATION
+            {
                 return true;
             }
         }
         false
-    }
-
-    fn push_file_write(&mut self, key: &str) {
-        if self.last_file_write_key.as_deref() != Some(key) {
-            self.file_write_counts.clear();
-            self.file_write_counts.insert(key.to_string(), 1);
-            self.last_file_write_key = Some(key.to_string());
-            return;
-        }
-
-        let counter = self.file_write_counts.entry(key.to_string()).or_insert(0);
-        *counter += 1;
-    }
-
-    fn reset_file_write_counts(&mut self) {
-        self.file_write_counts.clear();
-        self.last_file_write_key = None;
     }
 }

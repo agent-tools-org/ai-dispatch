@@ -103,7 +103,7 @@ impl EventDetail {
 fn raw_event_key(event: &crate::types::TaskEvent) -> Option<String> {
     let metadata = event.metadata.as_ref()?;
     match event.event_kind {
-        EventKind::FileWrite => metadata
+        EventKind::FileWrite | EventKind::FileRead => metadata
             .get("files")
             .and_then(|files| files.as_array())
             .and_then(|files| files.first())

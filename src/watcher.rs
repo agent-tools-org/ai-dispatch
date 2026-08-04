@@ -10,6 +10,9 @@ mod stream;
 #[cfg(test)]
 mod tests;
 #[cfg(test)]
+#[path = "watcher/loop_detector_tests.rs"]
+mod loop_detector_tests;
+#[cfg(test)]
 #[path = "watcher/transcript_tests.rs"]
 mod transcript_tests;
 #[cfg(test)]

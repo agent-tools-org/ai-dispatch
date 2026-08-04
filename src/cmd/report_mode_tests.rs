@@ -132,6 +132,8 @@ fn prompt_only_read_only_audits_enable_report_mode() {
         "Read-only re-audit, round 3.",
         "Read-only audit of branch X",
         "Read only re-audit the current branch.",
+        "Read-only comparative audit of the arbitrage module",
+        "Read-only cross-audit. Work ONLY in the assigned branch.",
     ] {
         assert!(is_audit_report_task(
             prompt,
@@ -139,12 +141,16 @@ fn prompt_only_read_only_audits_enable_report_mode() {
             TaskCategory::ComplexImpl,
             None,
         ));
-        assert!(skips_dirty_enforcement(
-            prompt,
-            false,
-            TaskCategory::ComplexImpl,
-        ));
     }
+}
+
+#[test]
+fn prompt_only_report_mode_does_not_imply_dirty_enforcement_bypass() {
+    assert!(!skips_dirty_enforcement(
+        "Read-only comparative audit of parser.rs",
+        false,
+        TaskCategory::ComplexImpl,
+    ));
 }
 
 #[test]
@@ -186,6 +192,7 @@ fn counter_examples_stay_out_of_report_mode() {
     for prompt in [
         "add an audit log",
         "Add a read-only audit log viewer",
+        "Add unit tests for the read-only audit module",
         "review and refactor this module",
     ] {
         assert!(!is_audit_report_task(
@@ -193,6 +200,11 @@ fn counter_examples_stay_out_of_report_mode() {
             false,
             TaskCategory::ComplexImpl,
             None,
+        ));
+        assert!(!skips_dirty_enforcement(
+            prompt,
+            false,
+            TaskCategory::ComplexImpl,
         ));
     }
 }

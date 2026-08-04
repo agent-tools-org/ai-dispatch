@@ -49,6 +49,9 @@ pub(super) fn build_prompt_bundle(store: &Store, args: &RunArgs, agent_kind: &Ag
         agent::classifier::count_file_mentions(&prompt),
         prompt.len(),
     );
+    let report_prompt_mode = crate::cmd::report_mode::is_audit_report_task(
+        &prompt, args.read_only, task_profile.category, None,
+    );
     let task_category_label = task_profile.category.label();
     let mut effective_prompt = crate::workgroup::compose_prompt(
         &prompt,
@@ -60,7 +63,7 @@ pub(super) fn build_prompt_bundle(store: &Store, args: &RunArgs, agent_kind: &Ag
     let (edit_guard, milestone_instr) = templates::shared_system_fragments(&prompt);
     if let Some(guard) = edit_guard { effective_prompt = format!("{guard}{effective_prompt}"); }
     effective_prompt.push_str(milestone_instr);
-    if !args.read_only && !args.audit_report_mode {
+    if !args.read_only && !report_prompt_mode {
         effective_prompt.push_str(templates::git_staging_guard());
     }
 
@@ -84,7 +87,7 @@ pub(super) fn build_prompt_bundle(store: &Store, args: &RunArgs, agent_kind: &Ag
     }
     let prompt_skills = requested_skills
         .iter()
-        .filter(|skill| !args.audit_report_mode || skill.as_str() != "implementer")
+        .filter(|skill| !report_prompt_mode || skill.as_str() != "implementer")
         .cloned()
         .collect::<Vec<_>>();
     let mut effective_prompt = inject_skill(&effective_prompt, agent_kind, &prompt_skills, prompt.len())?;

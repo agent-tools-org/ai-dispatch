@@ -35,11 +35,10 @@ const AUTO_REPORT_AUDIT_TERMS: &[&str] = &[
     "code review",
     "peer review",
 ];
-const READ_ONLY_AUDIT_TERMS: &[&str] = &[
-    "read-only audit",
-    "read only audit",
-    "read-only re-audit",
-    "read only re-audit",
+const READ_ONLY_TERMS: &[&str] = &["read-only", "read only"];
+const WRITE_INTENT_TERMS: &[&str] = &[
+    "add", "build", "change", "create", "debug", "edit", "fix", "implement", "investigate",
+    "modify", "refactor", "remove", "rename", "repair", "replace", "test", "update", "write",
 ];
 const AUDITOR_ROLE_PREFIXES: &[&str] = &[
     "you are a",
@@ -95,9 +94,8 @@ pub(crate) fn apply_defaults(args: &mut RunArgs, category: TaskCategory) -> bool
 pub(crate) fn skips_dirty_enforcement(prompt: &str, read_only: bool, category: TaskCategory) -> bool {
     if read_only { return true; }
     let normalized = prompt.trim().to_lowercase();
-    prompt_matches_read_only_audit_terms(&normalized)
-        || (matches!(category, TaskCategory::Research | TaskCategory::Documentation | TaskCategory::Debugging)
-            && prompt_matches_auto_report_terms(&normalized))
+    matches!(category, TaskCategory::Research | TaskCategory::Documentation | TaskCategory::Debugging)
+        && prompt_matches_auto_report_terms(&normalized)
 }
 
 pub(crate) fn task_result_file(task_id: &str) -> String {
@@ -143,7 +141,32 @@ fn prompt_matches_auto_report_terms(normalized_prompt: &str) -> bool {
 
 fn prompt_matches_read_only_audit_terms(normalized_prompt: &str) -> bool {
     let stripped = strip_audit_noun_phrases(normalized_prompt);
-    contains_any_word(&stripped, READ_ONLY_AUDIT_TERMS)
+    let Some((read_only_at, read_only_len)) = first_word_match(&stripped, READ_ONLY_TERMS) else {
+        return false;
+    };
+    if contains_any_word(&stripped[..read_only_at], WRITE_INTENT_TERMS) {
+        return false;
+    }
+    contains_any_word(&stripped[read_only_at + read_only_len..], &["audit"])
+}
+
+fn first_word_match(text: &str, terms: &[&str]) -> Option<(usize, usize)> {
+    terms
+        .iter()
+        .filter_map(|term| {
+            text.match_indices(*term)
+                .find(|(at, _)| is_word_match(text, *at, term.len()))
+                .map(|(at, _)| (at, term.len()))
+        })
+        .min_by_key(|(at, _)| *at)
+}
+
+fn is_word_match(text: &str, at: usize, len: usize) -> bool {
+    let bytes = text.as_bytes();
+    let before = at == 0 || !bytes[at - 1].is_ascii_alphanumeric();
+    let end = at + len;
+    let after = end >= bytes.len() || !bytes[end].is_ascii_alphanumeric();
+    before && after
 }
 
 fn prompt_matches_strong_audit_intent(normalized_prompt: &str) -> bool {

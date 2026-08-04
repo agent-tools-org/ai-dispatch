@@ -48,7 +48,6 @@ fn audit_report_bundle_omits_implementation_instructions() {
             "Inspect all relevant behavior. ".repeat(8),
         ),
         result_file: Some("result-task.md".to_string()),
-        audit_report_mode: true,
         ..Default::default()
     };
 
@@ -66,4 +65,34 @@ fn audit_report_bundle_omits_implementation_instructions() {
     assert!(!bundle.effective_prompt.contains("Git Staging Rule"));
     assert!(bundle.effective_prompt.contains("## Findings"));
     assert!(bundle.effective_prompt.contains("<aid-result-file>result-task.md</aid-result-file>"));
+}
+
+#[test]
+fn write_task_mentioning_read_only_audit_keeps_implementation_instructions() {
+    let temp = tempfile::tempdir().unwrap();
+    let _aid_home = crate::paths::AidHomeGuard::set(temp.path());
+    let skills_dir = crate::paths::aid_dir().join("skills");
+    std::fs::create_dir_all(&skills_dir).unwrap();
+    std::fs::write(skills_dir.join("implementer.md"), "implementation method").unwrap();
+    let store = Store::open_memory().unwrap();
+    let args = RunArgs {
+        prompt: format!(
+            "Add unit tests for the read-only audit module. {}",
+            "Validate the behavior thoroughly. ".repeat(8),
+        ),
+        ..Default::default()
+    };
+
+    let bundle = build_prompt_bundle(
+        &store,
+        &args,
+        &AgentKind::Codex,
+        None,
+        &["implementer".to_string()],
+        "task-write",
+    )
+    .unwrap();
+
+    assert!(bundle.effective_prompt.contains("Git Staging Rule"));
+    assert!(bundle.effective_prompt.contains("implementation method"));
 }

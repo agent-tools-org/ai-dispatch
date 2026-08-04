@@ -41,6 +41,9 @@ const WRITE_INTENT_TERMS: &[&str] = &[
     "implement", "investigate", "make", "modify", "optimize", "refactor", "remove", "rename",
     "repair", "replace", "setup", "test", "update", "write",
 ];
+const SUFFIX_WRITE_INTENT_TERMS: &[&str] = &[
+    "amend", "commit", "commits", "modifying", "push",
+];
 const AUDITOR_ROLE_PREFIXES: &[&str] = &[
     "you are a",
     "you are an",
@@ -160,7 +163,50 @@ fn prompt_matches_read_only_audit_terms(normalized_prompt: &str) -> bool {
     if contains_any_word(&stripped[..read_only_at], WRITE_INTENT_TERMS) {
         return false;
     }
-    contains_any_word(&stripped[read_only_at + read_only_len..], &["audit"])
+    let suffix = &stripped[read_only_at + read_only_len..];
+    contains_any_word(suffix, &["audit"]) && !contains_unnegated_write_intent(suffix)
+}
+
+fn contains_unnegated_write_intent(text: &str) -> bool {
+    WRITE_INTENT_TERMS
+        .iter()
+        .chain(SUFFIX_WRITE_INTENT_TERMS)
+        .any(|term| {
+            text.match_indices(term).any(|(at, _)| {
+                is_word_match(text, at, term.len())
+                    && !write_intent_is_noun_reference(text, at, term)
+                    && !write_intent_is_negated(text, at)
+            })
+        })
+}
+
+fn write_intent_is_noun_reference(text: &str, at: usize, term: &str) -> bool {
+    term == "commit"
+        && text[..at]
+            .split_whitespace()
+            .next_back()
+            .is_some_and(|word| word.trim_matches(|ch: char| !ch.is_ascii_alphanumeric()) == "of")
+}
+
+fn write_intent_is_negated(text: &str, at: usize) -> bool {
+    let before = &text[..at];
+    let punctuation_start = before
+        .char_indices()
+        .rev()
+        .find(|(_, ch)| matches!(ch, '.' | ';' | ':' | '!' | '?' | '\n'))
+        .map_or(0, |(index, ch)| index + ch.len_utf8());
+    let clause_start = [" then ", " but ", " however "]
+        .iter()
+        .filter_map(|boundary| before.rfind(boundary).map(|index| index + boundary.len()))
+        .fold(punctuation_start, usize::max);
+    let clause = &before[clause_start..];
+    if contains_any(clause, &["do not", "don't", "never", "without"]) {
+        return true;
+    }
+    clause
+        .split_whitespace()
+        .next_back()
+        .is_some_and(|word| word.trim_matches(|ch: char| !ch.is_ascii_alphanumeric()) == "no")
 }
 
 fn first_word_match(text: &str, terms: &[&str]) -> Option<(usize, usize)> {

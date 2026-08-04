@@ -100,6 +100,36 @@ fn explicit_result_file_write_review_keeps_implementation_instructions() {
 }
 
 #[test]
+fn code_review_then_fix_keeps_implementation_instructions() {
+    let temp = tempfile::tempdir().unwrap();
+    let _aid_home = crate::paths::AidHomeGuard::set(temp.path());
+    let skills_dir = crate::paths::aid_dir().join("skills");
+    std::fs::create_dir_all(&skills_dir).unwrap();
+    std::fs::write(skills_dir.join("implementer.md"), "implementation method").unwrap();
+    let store = Store::open_memory().unwrap();
+    let args = RunArgs {
+        prompt: format!(
+            "Do a code review of the auth module, then fix the security bug. {}",
+            "Trace all relevant behavior. ".repeat(8),
+        ),
+        ..Default::default()
+    };
+
+    let bundle = build_prompt_bundle(
+        &store,
+        &args,
+        &AgentKind::Codex,
+        None,
+        &["implementer".to_string()],
+        "task-review-fix",
+    )
+    .unwrap();
+
+    assert!(bundle.effective_prompt.contains("Git Staging Rule"));
+    assert!(bundle.effective_prompt.contains("implementation method"));
+}
+
+#[test]
 fn write_task_mentioning_read_only_audit_keeps_implementation_instructions() {
     let temp = tempfile::tempdir().unwrap();
     let _aid_home = crate::paths::AidHomeGuard::set(temp.path());

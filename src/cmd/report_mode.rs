@@ -89,19 +89,19 @@ pub(crate) fn apply_defaults(args: &mut RunArgs, category: TaskCategory) -> bool
     true
 }
 
+/// Deliberately separate from dirty enforcement: only explicit no-write intent
+/// may remove implementation instructions from the resolved prompt.
 pub(crate) fn suppresses_implementation_scaffolding(
     prompt: &str,
     read_only: bool,
-    category: TaskCategory,
 ) -> bool {
     if read_only { return true; }
     let normalized = prompt.trim().to_lowercase();
     prompt_matches_read_only_audit_terms(&normalized)
-        || (matches!(category, TaskCategory::Research | TaskCategory::Documentation | TaskCategory::Debugging)
-            && prompt_matches_auto_report_terms(&normalized))
 }
 
 /// Narrow predicate: should this task skip dirty-worktree enforcement?
+/// Deliberately separate from scaffolding suppression to preserve this safety policy.
 /// Only genuine report-only tasks qualify - not a write-capable task that merely
 /// has --result-file plus a broad audit word like "review".
 pub(crate) fn skips_dirty_enforcement(prompt: &str, read_only: bool, category: TaskCategory) -> bool {

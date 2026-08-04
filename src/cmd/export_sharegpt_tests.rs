@@ -98,6 +98,33 @@ fn export_sharegpt_fallback_includes_file_writes() {
 }
 
 #[test]
+fn export_sharegpt_fallback_includes_file_reads() {
+    let temp = TempDir::new().unwrap();
+    let _aid_home = AidHomeGuard::set(temp.path());
+    let store = Store::open_memory().unwrap();
+    let task = done_task("t-sharegpt-file-read", Some("resolved system prompt"));
+    store.insert_task(&task).unwrap();
+    store
+        .insert_event(&TaskEvent {
+            task_id: task.id.clone(),
+            timestamp: Local::now(),
+            event_kind: EventKind::FileRead,
+            detail: "Read file: src/main.rs".to_string(),
+            metadata: None,
+        })
+        .unwrap();
+
+    let output = temp.path().join("sharegpt-file-read.jsonl");
+    export_sharegpt(&store, task.id.as_str(), Some(output.to_str().unwrap())).unwrap();
+
+    let record = read_record(&output);
+    assert_eq!(
+        record.conversations[2].value,
+        "function_call: Read file: src/main.rs"
+    );
+}
+
+#[test]
 fn export_sharegpt_rejects_failed_tasks() {
     let temp = TempDir::new().unwrap();
     let _aid_home = AidHomeGuard::set(temp.path());

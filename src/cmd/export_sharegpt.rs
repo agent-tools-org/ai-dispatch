@@ -115,7 +115,7 @@ fn fallback_response(events: &[TaskEvent]) -> String {
     events
         .iter()
         .filter_map(|event| match event.event_kind {
-            EventKind::ToolCall | EventKind::FileWrite => {
+            EventKind::ToolCall | EventKind::FileRead | EventKind::FileWrite => {
                 Some(format!("function_call: {}", event.detail))
             }
             EventKind::Reasoning | EventKind::Milestone | EventKind::Completion => Some(event.detail.clone()),

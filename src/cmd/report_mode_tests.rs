@@ -126,6 +126,28 @@ fn non_read_only_cross_audit_enables_report_mode() {
 }
 
 #[test]
+fn prompt_only_read_only_audits_enable_report_mode() {
+    for prompt in [
+        "READ-ONLY audit.",
+        "Read-only re-audit, round 3.",
+        "Read-only audit of branch X",
+        "Read only re-audit the current branch.",
+    ] {
+        assert!(is_audit_report_task(
+            prompt,
+            false,
+            TaskCategory::ComplexImpl,
+            None,
+        ));
+        assert!(skips_dirty_enforcement(
+            prompt,
+            false,
+            TaskCategory::ComplexImpl,
+        ));
+    }
+}
+
+#[test]
 fn non_read_only_bare_audit_prompt_does_not_enable_report_mode() {
     assert!(!is_audit_report_task(
         "Redesign the audit subsystem",
@@ -161,7 +183,11 @@ fn audit_against_baseline_enables_report_mode() {
 
 #[test]
 fn counter_examples_stay_out_of_report_mode() {
-    for prompt in ["add an audit log", "review and refactor this module"] {
+    for prompt in [
+        "add an audit log",
+        "Add a read-only audit log viewer",
+        "review and refactor this module",
+    ] {
         assert!(!is_audit_report_task(
             prompt,
             false,

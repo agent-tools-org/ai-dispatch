@@ -162,7 +162,7 @@ async fn watch_streaming_with_clock<C: Fn() -> std::time::Instant>(
                 info.status = TaskStatus::Failed;
                 break;
             }
-            let loop_kind = if agent.kind() == AgentKind::Custom
+            let loop_kind = if !agent.emits_structured_events()
                 && event_detail.kind == EventKind::Reasoning
             {
                 EventKind::ToolCall

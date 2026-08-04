@@ -13,6 +13,7 @@ const LOOP_MIN_DURATION: Duration = Duration::from_secs(120);
 const RECENT_EVENT_LIMIT: usize = 20;
 const LOOP_SAMPLE_SIZE: usize = 10;
 const LOOP_REPEAT_THRESHOLD: usize = 8;
+const LOOP_PATTERN_END_GRACE: usize = LOOP_SAMPLE_SIZE;
 const FILE_WRITE_REPEAT_THRESHOLD: usize = 15;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -133,6 +134,7 @@ struct RepeatedRun {
     key: String,
     started_at: Instant,
     last_seen_at: Instant,
+    below_threshold_count: usize,
 }
 
 pub(super) struct LoopDetector<C = fn() -> Instant> {
@@ -241,22 +243,35 @@ impl<C: Fn() -> Instant> LoopDetector<C> {
 
     fn repeated_run_persisted(&self) -> bool {
         self.repeated_run.as_ref().is_some_and(|run| {
-            run.last_seen_at.duration_since(run.started_at) >= LOOP_MIN_DURATION
+            run.below_threshold_count == 0
+                && run.last_seen_at.duration_since(run.started_at) >= LOOP_MIN_DURATION
         })
     }
 
     fn refresh_repeated_run(&mut self) {
         let Some((key, started_at, last_seen_at)) = self.repeated_pattern() else {
-            self.repeated_run = None;
+            let should_reset = self.repeated_run.as_mut().is_some_and(|run| {
+                run.below_threshold_count += 1;
+                run.below_threshold_count >= LOOP_PATTERN_END_GRACE
+            });
+            if should_reset {
+                self.repeated_run = None;
+            }
             return;
         };
         if let Some(run) = &mut self.repeated_run
             && run.key == key
         {
             run.last_seen_at = last_seen_at;
+            run.below_threshold_count = 0;
             return;
         }
-        self.repeated_run = Some(RepeatedRun { key, started_at, last_seen_at });
+        self.repeated_run = Some(RepeatedRun {
+            key,
+            started_at,
+            last_seen_at,
+            below_threshold_count: 0,
+        });
     }
 
     fn repeated_pattern(&self) -> Option<(String, Instant, Instant)> {

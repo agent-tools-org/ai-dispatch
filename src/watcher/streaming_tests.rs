@@ -158,6 +158,41 @@ async fn streaming_watch_populates_success_exit_code() {
 }
 
 #[tokio::test]
+async fn streaming_watch_logs_report_containing_milestone_and_emits_event() {
+    let temp = tempfile::tempdir().unwrap();
+    let _aid_home = paths::AidHomeGuard::set(temp.path());
+    let store = Arc::new(Store::open_memory().unwrap());
+    let task_id = TaskId("t-milestone-report".to_string());
+    insert_running_task(store.as_ref(), &task_id);
+    let log_path = temp.path().join("stream.log");
+    let standalone = "[MILESTONE] preliminary work complete";
+    let line = r#"{"type":"item.completed","item":{"type":"agent_message","text":"[MILESTONE] implementation complete\n## Report\nThe full report remains available."}}"#;
+    let mut child = tokio::process::Command::new("printf")
+        .args(["%s\n%s\n", standalone, line])
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+
+    let info = watch_streaming(
+        &StubStreamingAgent, &mut child, &task_id, &store, &log_path, None,
+        crate::idle_timeout::DEFAULT_IDLE_TIMEOUT, None,
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(info.status, TaskStatus::Done);
+    assert_eq!(std::fs::read_to_string(log_path).unwrap(), format!("{line}\n"));
+    let events = store.get_events(task_id.as_str()).unwrap();
+    assert!(events.iter().any(|event| {
+        event.event_kind == EventKind::Milestone && event.detail == "preliminary work complete"
+    }));
+    assert!(events.iter().any(|event| {
+        event.event_kind == EventKind::Milestone && event.detail == "implementation complete"
+    }));
+}
+
+#[tokio::test]
 async fn droid_osc_prefixed_completion_line_yields_completion_event() {
     let temp = tempfile::tempdir().unwrap();
     let _aid_home = paths::AidHomeGuard::set(temp.path());

@@ -7,12 +7,27 @@ use chrono::Local;
 use std::process::Command;
 
 use super::read_only::read_only_prompt;
-use super::truncate::capped_detail;
+use super::truncate::{capped_detail, capped_detail_with};
 use super::RunOpts;
 use crate::rate_limit;
 use crate::types::*;
 
 pub struct OzAgent;
+
+fn parse_tool_call(v: &serde_json::Value) -> (EventKind, String, Option<serde_json::Value>) {
+    let tool = v.get("tool").and_then(|t| t.as_str()).unwrap_or("tool");
+    let title = v.get("title").and_then(|t| t.as_str()).unwrap_or(tool);
+    let paths: Vec<&str> = v.get("file_paths").and_then(|p| p.as_array())
+        .into_iter().flatten().filter_map(|p| p.as_str()).collect();
+    let detail = match paths.is_empty() {
+        true => title.to_string(),
+        false => format!("{title}: {}", paths.join(", ")),
+    };
+    let metadata = (!paths.is_empty()).then(|| serde_json::json!({ "files": paths }));
+    let kind = if tool == "edit_files" { EventKind::FileWrite } else { EventKind::ToolCall };
+    let (detail, metadata) = capped_detail_with(&detail, metadata);
+    (kind, detail, metadata)
+}
 
 impl super::Agent for OzAgent {
     fn kind(&self) -> AgentKind {
@@ -62,12 +77,11 @@ impl super::Agent for OzAgent {
                 })
             }
             "tool_call" => {
-                let tool = v.get("tool").and_then(|t| t.as_str()).unwrap_or("tool");
-                let (detail, metadata) = capped_detail(tool);
+                let (event_kind, detail, metadata) = parse_tool_call(&v);
                 Some(TaskEvent {
                     task_id: task_id.clone(),
                     timestamp: now,
-                    event_kind: EventKind::ToolCall,
+                    event_kind,
                     detail,
                     metadata,
                 })
@@ -237,12 +251,19 @@ mod tests {
     #[test]
     fn parses_tool_call_event() {
         let agent = OzAgent;
-        let line = r#"{"type":"tool_call","tool":"edit_files","title":"Edit files","file_paths":["src/main.rs"]}"#;
-        let event = agent
-            .parse_event(&TaskId("t-oz".to_string()), line)
-            .unwrap();
-        assert_eq!(event.event_kind, EventKind::ToolCall);
-        assert_eq!(event.detail, "edit_files");
+        let cases = [
+            (r#"{"type":"tool_call","tool":"edit_files","title":"Edit files","file_paths":["src/main.rs"]}"#, EventKind::FileWrite, "Edit files: src/main.rs", Some(1)),
+            (r#"{"type":"tool_call","tool":"edit_files","title":"Edit files","file_paths":["src/main.rs","src/lib.rs"]}"#, EventKind::FileWrite, "Edit files: src/main.rs, src/lib.rs", Some(2)),
+            (r#"{"type":"tool_call","tool":"search","title":"Search code"}"#, EventKind::ToolCall, "Search code", None),
+        ];
+        for (line, kind, detail, expected_file_count) in cases {
+            let event = agent.parse_event(&TaskId("t-oz".to_string()), line).unwrap();
+            assert_eq!(event.event_kind, kind);
+            assert_eq!(event.detail, detail);
+            let file_count = event.metadata.as_ref()
+                .and_then(|metadata| metadata["files"].as_array()).map(Vec::len);
+            assert_eq!(file_count, expected_file_count);
+        }
     }
 
     #[test]

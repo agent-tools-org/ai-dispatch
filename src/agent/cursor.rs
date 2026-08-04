@@ -193,10 +193,15 @@ fn parse_tool_call(
         .find(|(key, data)| key.ends_with("ToolCall") && data.is_object())?;
     let path = tool_path(tool_data);
     let argument = match tool_name.as_str() {
-        "globToolCall" => tool_argument(tool_data, &["globPattern", "pattern"], "*"),
-        "grepToolCall" => tool_argument(tool_data, &["pattern"], "?"),
-        "shellToolCall" | "terminalToolCall" => tool_argument(tool_data, &["command"], "?"),
-        _ => path,
+        "globToolCall" => tool_argument(tool_data, &["globPattern", "pattern"], "*").to_string(),
+        "grepToolCall" => tool_argument(tool_data, &["pattern"], "?").to_string(),
+        "shellToolCall" | "terminalToolCall" => {
+            tool_argument(tool_data, &["command"], "?").to_string()
+        }
+        "writeToolCall" | "editToolCall" | "deleteToolCall" | "readToolCall" => {
+            path.to_string()
+        }
+        _ => unknown_tool_key(tool_name, tool_data),
     };
     let action = match tool_name.as_str() {
         "writeToolCall" => "write",
@@ -214,11 +219,16 @@ fn parse_tool_call(
         _ => EventKind::ToolCall,
     };
     let metadata = match kind {
-        EventKind::FileWrite | EventKind::FileRead => Some(json!({ "files": [argument] })),
-        EventKind::ToolCall => Some(json!({ "command": argument })),
+        EventKind::FileWrite | EventKind::FileRead => Some(json!({ "files": [&argument] })),
+        EventKind::ToolCall => Some(json!({ "command": &argument })),
         _ => None,
     };
     Some((kind, format!("{subtype}: {action} {argument}"), metadata))
+}
+
+fn unknown_tool_key(tool_name: &str, value: &serde_json::Value) -> String {
+    let arguments = value.get("args").unwrap_or(&serde_json::Value::Null);
+    format!("{tool_name}:{arguments}")
 }
 
 fn tool_path(value: &serde_json::Value) -> &str {

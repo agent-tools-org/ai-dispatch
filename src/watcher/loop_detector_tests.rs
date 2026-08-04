@@ -69,6 +69,30 @@ fn loop_detector_kills_sustained_repeat() {
 }
 
 #[test]
+fn loop_detector_kills_fast_loop_after_duration_threshold() {
+    let (mut detector, elapsed) = timed_detector();
+    for _ in 0..120 {
+        detector.push("same command", EventKind::ToolCall, None);
+        assert!(!detector.is_looping());
+        advance(&elapsed, 1);
+    }
+    detector.push("same command", EventKind::ToolCall, None);
+    assert!(detector.is_looping());
+}
+
+#[test]
+fn loop_detector_counts_format_and_lint_as_evidence() {
+    for kind in [EventKind::Format, EventKind::Lint] {
+        let (mut detector, elapsed) = timed_detector();
+        for _ in 0..10 {
+            detector.push("same command", kind, None);
+            advance(&elapsed, 20);
+        }
+        assert!(detector.is_looping(), "{kind:?} should count as loop evidence");
+    }
+}
+
+#[test]
 fn loop_detector_never_kills_pure_narration() {
     let (mut detector, elapsed) = timed_detector();
     for _ in 0..20 {

@@ -69,6 +69,16 @@ fn parses_tool_call_glob_as_tool_evidence() {
 }
 
 #[test]
+fn distinct_unknown_tools_produce_distinct_loop_keys() {
+    let first = parse(r#"{"type":"tool_call","subtype":"started","tool_call":{"alphaToolCall":{"args":{"query":"one"}}}}"#);
+    let second = parse(r#"{"type":"tool_call","subtype":"started","tool_call":{"betaToolCall":{"args":{"query":"two"}}}}"#);
+
+    assert_eq!(metadata_str(&first, "command"), Some("alphaToolCall:{\"query\":\"one\"}"));
+    assert_eq!(metadata_str(&second, "command"), Some("betaToolCall:{\"query\":\"two\"}"));
+    assert_ne!(metadata_str(&first, "command"), metadata_str(&second, "command"));
+}
+
+#[test]
 fn skips_all_thinking_deltas() {
     let line = r#"{"type":"thinking","subtype":"delta","text":"analyzing the code"}"#;
     assert!(CursorAgent.parse_event(&TaskId("t-think".to_string()), line).is_none());

@@ -129,9 +129,16 @@ struct LoopObservation {
     observed_at: Instant,
 }
 
+struct RepeatedRun {
+    key: String,
+    started_at: Instant,
+    last_seen_at: Instant,
+}
+
 pub(super) struct LoopDetector<C = fn() -> Instant> {
     clock: C,
     recent_events: VecDeque<LoopObservation>,
+    repeated_run: Option<RepeatedRun>,
     file_write_count: usize,
     last_file_write_key: Option<String>,
     file_write_started_at: Option<Instant>,
@@ -149,6 +156,7 @@ impl<C: Fn() -> Instant> LoopDetector<C> {
         Self {
             clock,
             recent_events: VecDeque::new(),
+            repeated_run: None,
             file_write_count: 0,
             last_file_write_key: None,
             file_write_started_at: None,
@@ -179,6 +187,7 @@ impl<C: Fn() -> Instant> LoopDetector<C> {
         if self.recent_events.len() > RECENT_EVENT_LIMIT {
             self.recent_events.pop_front();
         }
+        self.refresh_repeated_run();
     }
 
     pub(super) fn is_looping(&self) -> bool {
@@ -186,9 +195,6 @@ impl<C: Fn() -> Instant> LoopDetector<C> {
             && self.file_write_persisted()
         {
             return true;
-        }
-        if self.recent_events.len() < LOOP_SAMPLE_SIZE {
-            return false;
         }
         self.repeated_run_persisted()
     }
@@ -221,6 +227,8 @@ impl<C: Fn() -> Instant> LoopDetector<C> {
                 | EventKind::Build
                 | EventKind::Test
                 | EventKind::Commit
+                | EventKind::Lint
+                | EventKind::Format
         )
     }
 
@@ -232,16 +240,40 @@ impl<C: Fn() -> Instant> LoopDetector<C> {
     }
 
     fn repeated_run_persisted(&self) -> bool {
-        let mut repeats: HashMap<&str, (usize, Instant)> = HashMap::new();
-        for observation in self.recent_events.iter().rev().take(LOOP_SAMPLE_SIZE) {
-            let entry = repeats.entry(observation.key.as_str()).or_insert((0, observation.observed_at));
-            entry.0 += 1;
-            if entry.0 >= LOOP_REPEAT_THRESHOLD
-                && entry.1.duration_since(observation.observed_at) >= LOOP_MIN_DURATION
-            {
-                return true;
-            }
+        self.repeated_run.as_ref().is_some_and(|run| {
+            run.last_seen_at.duration_since(run.started_at) >= LOOP_MIN_DURATION
+        })
+    }
+
+    fn refresh_repeated_run(&mut self) {
+        let Some((key, started_at, last_seen_at)) = self.repeated_pattern() else {
+            self.repeated_run = None;
+            return;
+        };
+        if let Some(run) = &mut self.repeated_run
+            && run.key == key
+        {
+            run.last_seen_at = last_seen_at;
+            return;
         }
-        false
+        self.repeated_run = Some(RepeatedRun { key, started_at, last_seen_at });
+    }
+
+    fn repeated_pattern(&self) -> Option<(String, Instant, Instant)> {
+        if self.recent_events.len() < LOOP_SAMPLE_SIZE {
+            return None;
+        }
+        let sample = self.recent_events.iter().rev().take(LOOP_SAMPLE_SIZE);
+        let mut repeats: HashMap<&str, usize> = HashMap::new();
+        for observation in sample {
+            *repeats.entry(observation.key.as_str()).or_default() += 1;
+        }
+        let key = repeats.into_iter().find_map(|(key, count)| {
+            (count >= LOOP_REPEAT_THRESHOLD).then_some(key)
+        })?;
+        let sample = || self.recent_events.iter().rev().take(LOOP_SAMPLE_SIZE);
+        let started_at = sample().filter(|item| item.key == key).last()?.observed_at;
+        let last_seen_at = sample().find(|item| item.key == key)?.observed_at;
+        Some((key.to_string(), started_at, last_seen_at))
     }
 }

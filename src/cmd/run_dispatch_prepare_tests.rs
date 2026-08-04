@@ -223,8 +223,7 @@ fn prepare_dispatch_uses_task_specific_audit_result_file() {
     let store = Arc::new(Store::open_memory().unwrap());
     let mut args = RunArgs {
         agent_name: "codex".to_string(),
-        prompt: "Review the implementation and list findings.".to_string(),
-        read_only: true,
+        prompt: "Read-only audit of branch X.".to_string(),
         ..Default::default()
     };
 
@@ -234,6 +233,7 @@ fn prepare_dispatch_uses_task_specific_audit_result_file() {
         args.result_file.as_deref(),
         Some(crate::cmd::report_mode::task_result_file(prepared.task_id.as_str()).as_str())
     );
+    assert!(!args.audit_report_mode);
 }
 
 #[test]
@@ -253,19 +253,18 @@ fn prepare_dispatch_skips_auto_result_file_when_output_is_set() {
 }
 
 #[test]
-fn prepare_dispatch_keeps_dirty_enforcement_for_write_intent_result_file() {
+fn prepare_dispatch_keeps_write_intent_out_of_report_mode() {
     let store = Arc::new(Store::open_memory().unwrap());
     let mut args = RunArgs {
         agent_name: "codex".to_string(),
-        prompt: "review and fix the parser bug".to_string(),
-        result_file: Some("out.md".to_string()),
+        prompt: "Add unit tests for the read-only audit module".to_string(),
         ..Default::default()
     };
 
     prepare_dispatch(&store, &mut args).unwrap();
 
     assert!(!args.audit_report_mode);
-    assert_eq!(args.result_file.as_deref(), Some("out.md"));
+    assert_eq!(args.result_file, None);
 }
 
 #[test]

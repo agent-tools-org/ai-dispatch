@@ -35,6 +35,15 @@ const AUTO_REPORT_AUDIT_TERMS: &[&str] = &[
     "code review",
     "peer review",
 ];
+const READ_ONLY_TERMS: &[&str] = &["read-only", "read only"];
+const WRITE_INTENT_TERMS: &[&str] = &[
+    "add", "build", "change", "create", "debug", "document", "edit", "fix", "generate",
+    "implement", "investigate", "make", "modify", "optimize", "refactor", "remove", "rename",
+    "repair", "replace", "setup", "test", "update", "write",
+];
+const SUFFIX_WRITE_INTENT_TERMS: &[&str] = &[
+    "amend", "commit", "commits", "modifying", "push",
+];
 const AUDITOR_ROLE_PREFIXES: &[&str] = &[
     "you are a",
     "you are an",
@@ -54,10 +63,12 @@ pub(crate) fn is_audit_report_task(
     let normalized = prompt.trim().to_lowercase();
     let explicit_audit =
         (read_only || result_file.is_some()) && prompt_matches_audit_terms(&normalized);
-    let auto_audit_report = matches!(
-        category,
-        TaskCategory::Research | TaskCategory::Documentation | TaskCategory::Debugging
-    ) && prompt_matches_auto_report_terms(&normalized);
+    let prompt_read_only_audit = prompt_matches_read_only_audit_terms(&normalized);
+    let auto_audit_report = prompt_read_only_audit
+        || (matches!(
+            category,
+            TaskCategory::Research | TaskCategory::Documentation | TaskCategory::Debugging
+        ) && prompt_matches_auto_report_terms(&normalized));
     let strong_audit_intent = prompt_matches_strong_audit_intent(&normalized);
     let structured_findings = contains_any(&normalized, STRUCTURED_FINDING_TERMS);
     explicit_audit
@@ -81,7 +92,19 @@ pub(crate) fn apply_defaults(args: &mut RunArgs, category: TaskCategory) -> bool
     true
 }
 
+/// Deliberately separate from dirty enforcement: only explicit no-write intent
+/// may remove implementation instructions from the resolved prompt.
+pub(crate) fn suppresses_implementation_scaffolding(
+    prompt: &str,
+    read_only: bool,
+) -> bool {
+    if read_only { return true; }
+    let normalized = prompt.trim().to_lowercase();
+    prompt_matches_read_only_audit_terms(&normalized)
+}
+
 /// Narrow predicate: should this task skip dirty-worktree enforcement?
+/// Deliberately separate from scaffolding suppression to preserve this safety policy.
 /// Only genuine report-only tasks qualify - not a write-capable task that merely
 /// has --result-file plus a broad audit word like "review".
 pub(crate) fn skips_dirty_enforcement(prompt: &str, read_only: bool, category: TaskCategory) -> bool {
@@ -130,6 +153,79 @@ fn prompt_matches_audit_terms(normalized_prompt: &str) -> bool {
 fn prompt_matches_auto_report_terms(normalized_prompt: &str) -> bool {
     let stripped = strip_audit_noun_phrases(normalized_prompt);
     contains_any_word(&stripped, AUTO_REPORT_AUDIT_TERMS)
+}
+
+fn prompt_matches_read_only_audit_terms(normalized_prompt: &str) -> bool {
+    let stripped = strip_audit_noun_phrases(normalized_prompt);
+    let Some((read_only_at, read_only_len)) = first_word_match(&stripped, READ_ONLY_TERMS) else {
+        return false;
+    };
+    if contains_any_word(&stripped[..read_only_at], WRITE_INTENT_TERMS) {
+        return false;
+    }
+    let suffix = &stripped[read_only_at + read_only_len..];
+    contains_any_word(suffix, &["audit"]) && !contains_unnegated_write_intent(suffix)
+}
+
+fn contains_unnegated_write_intent(text: &str) -> bool {
+    WRITE_INTENT_TERMS
+        .iter()
+        .chain(SUFFIX_WRITE_INTENT_TERMS)
+        .any(|term| {
+            text.match_indices(term).any(|(at, _)| {
+                is_word_match(text, at, term.len())
+                    && !write_intent_is_noun_reference(text, at, term)
+                    && !write_intent_is_negated(text, at)
+            })
+        })
+}
+
+fn write_intent_is_noun_reference(text: &str, at: usize, term: &str) -> bool {
+    term == "commit"
+        && text[..at]
+            .split_whitespace()
+            .next_back()
+            .is_some_and(|word| word.trim_matches(|ch: char| !ch.is_ascii_alphanumeric()) == "of")
+}
+
+fn write_intent_is_negated(text: &str, at: usize) -> bool {
+    let before = &text[..at];
+    let punctuation_start = before
+        .char_indices()
+        .rev()
+        .find(|(_, ch)| matches!(ch, '.' | ';' | ':' | '!' | '?' | '\n'))
+        .map_or(0, |(index, ch)| index + ch.len_utf8());
+    let clause_start = [" then ", " but ", " however "]
+        .iter()
+        .filter_map(|boundary| before.rfind(boundary).map(|index| index + boundary.len()))
+        .fold(punctuation_start, usize::max);
+    let clause = &before[clause_start..];
+    if contains_any(clause, &["do not", "don't", "never", "without"]) {
+        return true;
+    }
+    clause
+        .split_whitespace()
+        .next_back()
+        .is_some_and(|word| word.trim_matches(|ch: char| !ch.is_ascii_alphanumeric()) == "no")
+}
+
+fn first_word_match(text: &str, terms: &[&str]) -> Option<(usize, usize)> {
+    terms
+        .iter()
+        .filter_map(|term| {
+            text.match_indices(*term)
+                .find(|(at, _)| is_word_match(text, *at, term.len()))
+                .map(|(at, _)| (at, term.len()))
+        })
+        .min_by_key(|(at, _)| *at)
+}
+
+fn is_word_match(text: &str, at: usize, len: usize) -> bool {
+    let bytes = text.as_bytes();
+    let before = at == 0 || !bytes[at - 1].is_ascii_alphanumeric();
+    let end = at + len;
+    let after = end >= bytes.len() || !bytes[end].is_ascii_alphanumeric();
+    before && after
 }
 
 fn prompt_matches_strong_audit_intent(normalized_prompt: &str) -> bool {

@@ -69,6 +69,8 @@ formatting decision is independent of dirty-worktree enforcement.
 Implementation noun phrases such as `add an audit log` and write requests such as
 `add tests for the read-only audit module` or
 `make changes to the read-only audit logic` remain normal writable tasks.
+An explicit `--result-file` controls report formatting and delivery; it does not
+by itself remove implementation methodology or Git staging instructions.
 
 When `--result-file` is set (audit and review prompts set it automatically) and
 the agent never writes that file, AID salvages the captured agent output into

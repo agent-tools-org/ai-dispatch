@@ -34,17 +34,12 @@ aid unstick <task-id>
 
 Do not send repeated polling messages; inspect events first.
 
-## Automatic loop protection
+## Automatic safeguards
 
-The streaming watcher stops an agent only when repeated tool, file, build,
-test, commit, format, or lint activity both exceeds the repetition threshold
-and persists for at least two minutes. A fast burst of duplicate events is not
-enough. Brief density dips preserve the persistence clock; ten consecutive
-below-threshold observations or a different dominant pattern end the run.
-For custom text agents, repeated identical lines classified as reasoning also count
-because their streams provide no richer event type;
-structured-agent reasoning narration alone never justifies an automatic loop kill. Inspect
-`aid show <task-id> --events` when a task reports that it was stopped as stuck.
+AID enforces configured idle, hung-task, cost, and hard timeout safeguards.
+Use `--idle-timeout SECS` to stop a task that produces no parsed activity and
+`--timeout SECS` to set a wall-clock cap.
+Repeated activity is not itself a stop condition.
 
 ## Stop and retry
 

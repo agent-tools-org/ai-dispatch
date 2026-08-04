@@ -1,15 +1,13 @@
-// Tests for watcher event parsing — milestone/finding extraction, loop detection, cost ceiling.
+// Tests for watcher event parsing, synthetic milestones, and cost ceilings.
 // Deps: super::*, types
 
 use super::{
-    apply_completion_event, exceeds_cost_ceiling, loop_kill_detail, parse_milestone_event,
-    SyntheticMilestoneTracker,
+    apply_completion_event, exceeds_cost_ceiling, parse_milestone_event, SyntheticMilestoneTracker,
 };
 use crate::paths;
 use crate::types::{CompletionInfo, EventKind, TaskEvent, TaskId, TaskStatus, Task, AgentKind};
 use chrono::Local;
 use serde_json::json;
-use tempfile::tempdir;
 
 #[test]
 fn completion_metadata_updates_summary_fields() {
@@ -195,24 +193,6 @@ fn synthetic_tracker_stays_disabled_when_reasoning_exists() {
     tracker.observe(&tool);
 
     assert!(tracker.synthetic_event(&task_id, &tool).is_none());
-}
-
-#[test]
-fn loop_kill_detail_appends_apply_patch_stderr_line() {
-    let temp = tempdir().unwrap();
-    let _aid_home = paths::AidHomeGuard::set(temp.path());
-    let task_id = TaskId("t-stderr".to_string());
-    std::fs::create_dir_all(paths::logs_dir()).unwrap();
-    std::fs::write(
-        paths::stderr_path(task_id.as_str()),
-        "note\napply_patch verification failed: Failed to find expected lines in evaluator.rs\n",
-    )
-    .unwrap();
-
-    let detail = loop_kill_detail(&task_id);
-
-    assert!(detail.contains("Agent appears stuck in a loop"));
-    assert!(detail.contains("apply_patch verification failed"));
 }
 
 #[test]

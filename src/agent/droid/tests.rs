@@ -163,11 +163,9 @@ fn parses_bash_tool_call_and_populates_command_metadata() {
     );
 }
 
-// Regression: a single droid tool invocation emits BOTH `tool_call` and
-// `tool_result`. Treating the result as a second ToolCall doubled the
-// loop-detector input — 5 legit Reads → 10 events with detail "Read" and
-// the LoopDetector tripped on legitimate exploration. tool_result and
-// tool_use must not produce events.
+// A single droid tool invocation emits both `tool_call` and `tool_result`,
+// with `tool_use` sometimes used as an alias. Only the request should produce
+// an event.
 #[test]
 fn ignores_tool_result_and_tool_use_events_to_avoid_duplicates() {
     let agent = DroidAgent;

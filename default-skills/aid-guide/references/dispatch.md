@@ -59,11 +59,15 @@ verify = "cargo test --bin app"
 
 ## Result delivery
 
-Prompts containing `read-only audit` or `read-only re-audit` are dispatched as
-report tasks from the prompt alone. Omit `--read-only` when the auditor must
+Prompts expressing `read-only … audit`, including `read-only audit` and
+modifiers such as `read-only comparative audit`, `read-only cross-audit`, or
+`read-only re-audit`, are dispatched as report tasks from the prompt alone.
+Omit `--read-only` when the auditor must
 write its result artifact: AID auto-selects a task-specific result file and
-omits implementation methodology and Git staging instructions. Implementation
-noun phrases such as `add an audit log` remain normal writable tasks.
+omits implementation methodology and Git staging instructions. This prompt
+formatting decision is independent of dirty-worktree enforcement.
+Implementation noun phrases such as `add an audit log` and write requests such
+as `add tests for the read-only audit module` remain normal writable tasks.
 
 When `--result-file` is set (audit and review prompts set it automatically) and
 the agent never writes that file, AID salvages the captured agent output into

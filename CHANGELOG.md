@@ -1,3 +1,11 @@
+## v9.12.1 (2026-08-04)
+- Stop killing healthy Cursor tasks as "stuck in a loop"
+- Fix Cursor event parsing picking the wrong key: `tool_call` objects now carry sibling metadata (`hookAdditionalContexts`, `startedAtMs`, `completedAtMs`, `toolCallId`), and taking the alphabetically first key collapsed every read/shell/write call into one identical event string, lost FileWrite/FileRead classification, and rendered every completed call as `completed: completedAtMs`
+- Select the real tool entry by its `ToolCall` suffix, map write/edit/delete to FileWrite and read to FileRead, and keep unknown tools distinct by including the tool name and arguments in the key
+- Remove repetition-counting loop detection entirely: it killed healthy tasks (8 identical events within 2 seconds was enough) while any non-pure pattern evaded it — a plain 8A/8B alternating loop survived 30 simulated minutes. Idle, hung-task, cost and maximum-duration safeguards are unchanged and remain the protection
+- Correct the official guide on foreground idle and `--timeout`: idle detection waits on raw output lines, so unparseable output resets it despite no parsed activity, and `--timeout` is activity-aware rather than a hard wall-clock cap
+
+
 ## v9.12.0 (2026-08-04)
 - Stop failing codex tasks that already delivered their report: the delivery guard counted codex's closing `todo_list` update as a work event, so a run whose report was written was still marked `missing_final_delivery` and its verdict discarded
 - Stop erasing reports that contain a `[MILESTONE]` line: the log writer skipped any line containing that tag anywhere, and aid's own prompt asks agents to emit it, so a report opening with a milestone line never reached the task log

@@ -66,9 +66,9 @@ Omit `--read-only` when the auditor must
 write its result artifact: AID auto-selects a task-specific result file and
 omits implementation methodology and Git staging instructions. This prompt
 formatting decision is independent of dirty-worktree enforcement.
-Implementation noun phrases such as `add an audit log` and write requests such
-as `add tests for the read-only audit module` or `make changes to the read-only
-audit logic` remain normal writable tasks.
+Implementation noun phrases such as `add an audit log` and write requests such as
+`add tests for the read-only audit module` or
+`make changes to the read-only audit logic` remain normal writable tasks.
 
 When `--result-file` is set (audit and review prompts set it automatically) and
 the agent never writes that file, AID salvages the captured agent output into

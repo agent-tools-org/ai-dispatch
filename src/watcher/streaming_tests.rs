@@ -17,7 +17,6 @@ use chrono::Local;
 use super::watch_streaming;
 
 struct StubStreamingAgent;
-struct LoopingStreamingAgent;
 
 impl Agent for StubStreamingAgent {
     fn kind(&self) -> AgentKind {
@@ -47,41 +46,7 @@ impl Agent for StubStreamingAgent {
     }
 }
 
-impl Agent for LoopingStreamingAgent {
-    fn kind(&self) -> AgentKind {
-        AgentKind::Custom
-    }
-
-    fn streaming(&self) -> bool {
-        true
-    }
-
-    fn build_command(&self, _prompt: &str, _opts: &RunOpts) -> anyhow::Result<Command> {
-        Ok(Command::new("true"))
-    }
-
-    fn parse_event(&self, task_id: &TaskId, line: &str) -> Option<TaskEvent> {
-        Some(TaskEvent {
-            task_id: task_id.clone(),
-            timestamp: Local::now(),
-            event_kind: EventKind::Reasoning,
-            detail: line.to_string(),
-            metadata: None,
-        })
-    }
-
-    fn parse_completion(&self, _output: &str) -> CompletionInfo {
-        CompletionInfo {
-            tokens: None,
-            status: TaskStatus::Done,
-            model: None,
-            cost_usd: None,
-            exit_code: None,
-        }
-    }
-}
-
-fn insert_running_task(store: &Store, task_id: &TaskId) {
+pub(super) fn insert_running_task(store: &Store, task_id: &TaskId) {
     store
         .insert_task(&Task {
             id: task_id.clone(),
@@ -234,43 +199,4 @@ async fn droid_osc_prefixed_completion_line_yields_completion_event() {
     assert!(events
         .iter()
         .any(|event| event.event_kind == EventKind::Reasoning && event.detail == "pong"));
-}
-
-#[tokio::test]
-async fn streaming_watch_fast_burst_reaches_exit_finalization_without_loop_kill() {
-    let temp = tempfile::tempdir().unwrap();
-    let _aid_home = paths::AidHomeGuard::set(temp.path());
-    let store = Arc::new(Store::open_memory().unwrap());
-    let task_id = TaskId("t-loop-kill".to_string());
-    insert_running_task(store.as_ref(), &task_id);
-    let log_path = temp.path().join("stream.log");
-    let mut child = tokio::process::Command::new("sh")
-        .arg("-c")
-        .arg("for i in 1 2 3 4 5 6 7 8 9 10 11 12; do printf 'repeat\\n'; done")
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .unwrap();
-
-    let info = watch_streaming(
-        &LoopingStreamingAgent,
-        &mut child,
-        &task_id,
-        &store,
-        &log_path,
-        None,
-        crate::idle_timeout::DEFAULT_IDLE_TIMEOUT,
-        None,
-    )
-    .await
-    .unwrap();
-
-    assert_eq!(info.status, TaskStatus::Done);
-    let events = store.get_events(task_id.as_str()).unwrap();
-    assert!(!events.iter().any(|event| event.detail == super::loop_kill_detail(&task_id)));
-    assert!(events.iter().any(|event| {
-        event.event_kind == EventKind::Completion
-            && event.detail.starts_with("DONE")
-            && event.detail.contains("exit code")
-    }));
 }

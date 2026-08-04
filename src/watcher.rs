@@ -18,6 +18,9 @@ mod transcript_tests;
 #[cfg(test)]
 #[path = "watcher/streaming_tests.rs"]
 mod streaming_tests;
+#[cfg(test)]
+#[path = "watcher/loop_streaming_tests.rs"]
+mod loop_streaming_tests;
 
 pub(crate) use buffered::watch_buffered;
 pub(crate) use esc::strip_terminal_escapes;
@@ -44,9 +47,7 @@ pub(crate) use loop_kill::loop_kill_detail;
 use progress::LoopDetector;
 use stderr::{drain_stderr_capture, spawn_stderr_capture};
 pub(crate) use progress::SyntheticMilestoneTracker;
-pub(crate) use stream::{
-    handle_streaming_line_with_session, StreamLineContext,
-};
+pub(crate) use stream::{handle_streaming_line_with_session, StreamLineContext};
 /// Watch a child process, parse output, store events, return completion info
 pub async fn watch_streaming(
     agent: &dyn Agent,
@@ -57,6 +58,24 @@ pub async fn watch_streaming(
     workgroup_id: Option<&str>,
     idle_timeout: Duration,
     max_task_cost: Option<f64>,
+) -> Result<CompletionInfo> {
+    watch_streaming_with_clock(
+        agent, child, task_id, store, log_path, workgroup_id, idle_timeout, max_task_cost,
+        std::time::Instant::now,
+    )
+    .await
+}
+
+async fn watch_streaming_with_clock<C: Fn() -> std::time::Instant>(
+    agent: &dyn Agent,
+    child: &mut Child,
+    task_id: &TaskId,
+    store: &Arc<Store>,
+    log_path: &std::path::Path,
+    workgroup_id: Option<&str>,
+    idle_timeout: Duration,
+    max_task_cost: Option<f64>,
+    clock: C,
 ) -> Result<CompletionInfo> {
     let stdout = child
         .stdout
@@ -74,7 +93,7 @@ pub async fn watch_streaming(
     };
     let mut event_count = 0u32;
     let mut session_saved = false;
-    let mut loop_detector = LoopDetector::new();
+    let mut loop_detector = LoopDetector::with_clock(clock);
     let mut synthetic_tracker = SyntheticMilestoneTracker::new();
     let mut delivery_evidence = DeliveryEvidence::default();
     let mut last_event_detail: Option<String> = None;
@@ -143,7 +162,14 @@ pub async fn watch_streaming(
                 info.status = TaskStatus::Failed;
                 break;
             }
-            loop_detector.push(&detail, event_detail.kind, event_detail.raw_key.as_deref());
+            let loop_kind = if agent.kind() == AgentKind::Custom
+                && event_detail.kind == EventKind::Reasoning
+            {
+                EventKind::ToolCall
+            } else {
+                event_detail.kind
+            };
+            loop_detector.push(&detail, loop_kind, event_detail.raw_key.as_deref());
             if loop_detector.is_looping() {
                 let _ = store.insert_event(&TaskEvent {
                     task_id: task_id.clone(),

@@ -54,8 +54,10 @@ fn official_guide_documents_prompt_only_audit_dispatch() {
 fn official_guide_documents_sustained_loop_protection() {
     let operations = include_str!("../default-skills/aid-guide/references/task-operations.md");
 
-    assert!(operations.contains("persists\nfor at least two minutes"));
-    assert!(operations.contains("reasoning narration alone never justifies"));
+    assert!(operations.contains("persists for at least two minutes"));
+    assert!(operations.contains("format, or lint activity"));
+    assert!(operations.contains("For custom text agents"));
+    assert!(operations.contains("structured-agent reasoning narration alone never justifies"));
     assert!(operations.contains("`aid show <task-id> --events`"));
 }
 

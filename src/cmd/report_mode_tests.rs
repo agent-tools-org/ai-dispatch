@@ -126,6 +126,34 @@ fn non_read_only_cross_audit_enables_report_mode() {
 }
 
 #[test]
+fn prompt_only_read_only_audits_enable_report_mode() {
+    for prompt in [
+        "READ-ONLY audit.",
+        "Read-only re-audit, round 3.",
+        "Read-only audit of branch X",
+        "Read only re-audit the current branch.",
+        "Read-only comparative audit of the arbitrage module",
+        "Read-only cross-audit. Work ONLY in the assigned branch.",
+    ] {
+        assert!(is_audit_report_task(
+            prompt,
+            false,
+            TaskCategory::ComplexImpl,
+            None,
+        ));
+    }
+}
+
+#[test]
+fn prompt_only_report_mode_does_not_imply_dirty_enforcement_bypass() {
+    assert!(!skips_dirty_enforcement(
+        "Read-only comparative audit of parser.rs",
+        false,
+        TaskCategory::ComplexImpl,
+    ));
+}
+
+#[test]
 fn non_read_only_bare_audit_prompt_does_not_enable_report_mode() {
     assert!(!is_audit_report_task(
         "Redesign the audit subsystem",
@@ -161,13 +189,63 @@ fn audit_against_baseline_enables_report_mode() {
 
 #[test]
 fn counter_examples_stay_out_of_report_mode() {
-    for prompt in ["add an audit log", "review and refactor this module"] {
+    for prompt in [
+        "add an audit log",
+        "Add a read-only audit log viewer",
+        "Add unit tests for the read-only audit module",
+        "review and refactor this module",
+    ] {
         assert!(!is_audit_report_task(
             prompt,
             false,
             TaskCategory::ComplexImpl,
             None,
         ));
+        assert!(!skips_dirty_enforcement(
+            prompt,
+            false,
+            TaskCategory::ComplexImpl,
+        ));
+    }
+}
+
+#[test]
+fn common_write_verbs_before_read_only_audit_stay_out_of_report_mode() {
+    for prompt in [
+        "Make changes to the read-only audit logic",
+        "Optimize the read-only audit logic",
+        "Generate tests for the read-only audit logic",
+        "Setup fixtures for the read-only audit logic",
+        "Document the read-only audit logic",
+    ] {
+        assert!(!is_audit_report_task(
+            prompt,
+            false,
+            TaskCategory::ComplexImpl,
+            None,
+        ));
+    }
+}
+
+#[test]
+fn scaffolding_suppression_distinguishes_negated_and_active_write_intent() {
+    for prompt in [
+        "READ-ONLY audit. Do not modify, commit, or amend anything in any checkout.",
+        "Read-only re-audit, round 3. Read ONLY <path>. Do not write, commit or push anywhere.",
+        "Read-only comparative audit of the arbitrage module in this repo.",
+        "Read-only cross-audit. Work ONLY in <path>.",
+        "Read-only adversarial audit of commit 3ec12a8, without modifying anything.",
+    ] {
+        assert!(suppresses_implementation_scaffolding(prompt, false), "{prompt}");
+    }
+
+    for prompt in [
+        "Read-only audit of the codebase, then fix the security bug.",
+        "Add tests for the read-only audit module",
+        "make changes to the read-only audit logic",
+        "Do a code review of the auth module, then fix the security bug",
+    ] {
+        assert!(!suppresses_implementation_scaffolding(prompt, false), "{prompt}");
     }
 }
 

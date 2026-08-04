@@ -39,11 +39,12 @@ Do not send repeated polling messages; inspect events first.
 The streaming watcher stops an agent only when repeated tool, file, build,
 test, commit, format, or lint activity both exceeds the repetition threshold
 and persists for at least two minutes. A fast burst of duplicate events is not
-enough. For custom text agents, repeated identical lines classified as
-reasoning also count because their streams provide no richer event type;
-structured-agent reasoning narration alone never justifies an automatic loop
-kill. Inspect `aid show <task-id> --events` when a task reports that it was
-stopped as stuck.
+enough. Brief density dips preserve the persistence clock; ten consecutive
+below-threshold observations or a different dominant pattern end the run.
+For custom text agents, repeated identical lines classified as reasoning also count
+because their streams provide no richer event type;
+structured-agent reasoning narration alone never justifies an automatic loop kill. Inspect
+`aid show <task-id> --events` when a task reports that it was stopped as stuck.
 
 ## Stop and retry
 

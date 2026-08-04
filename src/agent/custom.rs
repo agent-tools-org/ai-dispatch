@@ -109,6 +109,10 @@ impl super::Agent for CustomAgent {
         self.config.streaming
     }
 
+    fn emits_structured_events(&self) -> bool {
+        self.config.output_format == "jsonl"
+    }
+
     fn build_command(&self, prompt: &str, opts: &RunOpts) -> Result<Command> {
         let effective_prompt = if opts.read_only {
             read_only_prompt(prompt, opts)
@@ -270,6 +274,7 @@ mod tests {
         assert_eq!(config.prompt_mode, "arg");
         assert_eq!(config.output_format, "text");
         assert_eq!(config.capabilities.simple_edit, 0);
+        assert!(!CustomAgent { config }.emits_structured_events());
     }
 
     #[test]
@@ -303,6 +308,7 @@ mod tests {
         assert_eq!(config.prompt_mode, "flag");
         assert_eq!(config.capabilities.complex_impl, 8);
         assert_eq!(config.fixed_args.len(), 2);
+        assert!(CustomAgent { config }.emits_structured_events());
     }
 
     #[test]

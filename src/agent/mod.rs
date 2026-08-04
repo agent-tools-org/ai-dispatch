@@ -48,6 +48,11 @@ pub trait Agent: Send + Sync {
     /// Whether this agent streams JSONL (true) or outputs a single JSON blob (false)
     fn streaming(&self) -> bool;
 
+    /// Whether streamed lines use an event schema instead of plain-text narration.
+    fn emits_structured_events(&self) -> bool {
+        true
+    }
+
     /// Interactive agents that read stdin mid-run can be nudged to unstick.
     /// Exec/batch agents that ignore stdin must return false so aid does not waste a nudge on them.
     fn accepts_idle_nudge(&self) -> bool {

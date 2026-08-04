@@ -81,6 +81,46 @@ fn loop_detector_kills_fast_loop_after_duration_threshold() {
 }
 
 #[test]
+fn loop_detector_tolerates_periodic_density_dips() {
+    let (mut detector, elapsed) = timed_detector();
+    for _ in 0..10 {
+        detector.push("same command", EventKind::ToolCall, None);
+        advance(&elapsed, 1);
+    }
+
+    for cycle in 0..11 {
+        for detail in ["other one", "other two", "other three"] {
+            detector.push(detail, EventKind::ToolCall, None);
+            advance(&elapsed, 1);
+        }
+        assert!(!detector.is_looping(), "7-of-10 dropout should not trigger a kill");
+        for _ in 0..8 {
+            detector.push("same command", EventKind::ToolCall, None);
+            advance(&elapsed, 1);
+        }
+        assert_eq!(detector.is_looping(), cycle == 10);
+    }
+}
+
+#[test]
+fn loop_detector_resets_after_sustained_density_loss() {
+    let (mut detector, elapsed) = timed_detector();
+    for _ in 0..10 {
+        detector.push("same command", EventKind::ToolCall, None);
+    }
+    for index in 0..12 {
+        detector.push(&format!("unrelated {index}"), EventKind::ToolCall, None);
+        advance(&elapsed, 20);
+    }
+    for _ in 0..8 {
+        detector.push("same command", EventKind::ToolCall, None);
+        advance(&elapsed, 1);
+    }
+
+    assert!(!detector.is_looping());
+}
+
+#[test]
 fn loop_detector_counts_format_and_lint_as_evidence() {
     for kind in [EventKind::Format, EventKind::Lint] {
         let (mut detector, elapsed) = timed_detector();

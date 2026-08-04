@@ -151,6 +151,33 @@ fn salvage_writes_partial_work_and_commits_dirty_worktree() {
 }
 
 #[test]
+fn salvage_records_file_write_only_activity() {
+    let (_home, _guard) = isolated_home();
+    let repo = init_repo();
+    std::fs::write(repo.path().join("base.txt"), "edited\n").expect("write");
+    let store = Store::open_memory().expect("store");
+    let mut task = task("t-salvage-file-write", Some(repo.path().display().to_string()));
+    task.status = TaskStatus::Running;
+    store.insert_task(&task).expect("insert");
+    store
+        .insert_event(&TaskEvent {
+            task_id: task.id.clone(),
+            timestamp: Local::now(),
+            event_kind: EventKind::FileWrite,
+            detail: "Edit files: src/lib.rs".to_string(),
+            metadata: None,
+        })
+        .expect("event");
+
+    crate::task_lifecycle::mark_failed(&store, &task.id).expect("fail");
+
+    let partial = std::fs::read_to_string(paths::task_dir(task.id.as_str()).join("partial-work.md"))
+        .expect("partial");
+    assert!(partial.contains("file_write: Edit files: src/lib.rs"));
+    assert!(!partial.contains("no milestone/tool_call/file_write events recorded"));
+}
+
+#[test]
 fn salvage_noops_when_worktree_is_clean() {
     let (_home, _guard) = isolated_home();
     let repo = init_repo();

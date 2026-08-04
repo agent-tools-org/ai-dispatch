@@ -4,7 +4,7 @@
 use super::{ShareGptRecord, export_sharegpt};
 use crate::paths::{self, AidHomeGuard};
 use crate::store::Store;
-use crate::types::{AgentKind, Task, TaskId, TaskStatus, VerifyStatus};
+use crate::types::{AgentKind, EventKind, Task, TaskEvent, TaskId, TaskStatus, VerifyStatus};
 use chrono::Local;
 use tempfile::TempDir;
 
@@ -68,6 +68,33 @@ fn export_sharegpt_handles_empty_transcript() {
     assert_eq!(record.conversations.len(), 3);
     assert_eq!(record.conversations[2].from, "gpt");
     assert!(record.conversations[2].value.is_empty());
+}
+
+#[test]
+fn export_sharegpt_fallback_includes_file_writes() {
+    let temp = TempDir::new().unwrap();
+    let _aid_home = AidHomeGuard::set(temp.path());
+    let store = Store::open_memory().unwrap();
+    let task = done_task("t-sharegpt-file-write", Some("resolved system prompt"));
+    store.insert_task(&task).unwrap();
+    store
+        .insert_event(&TaskEvent {
+            task_id: task.id.clone(),
+            timestamp: Local::now(),
+            event_kind: EventKind::FileWrite,
+            detail: "Edit files: src/main.rs".to_string(),
+            metadata: None,
+        })
+        .unwrap();
+
+    let output = temp.path().join("sharegpt-file-write.jsonl");
+    export_sharegpt(&store, task.id.as_str(), Some(output.to_str().unwrap())).unwrap();
+
+    let record = read_record(&output);
+    assert_eq!(
+        record.conversations[2].value,
+        "function_call: Edit files: src/main.rs"
+    );
 }
 
 #[test]

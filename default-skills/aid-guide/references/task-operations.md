@@ -94,6 +94,13 @@ aid changelog
 
 Use exports for sharing, not as a substitute for the stored task record.
 
+When a task has no assistant transcript, `aid export --sharegpt` falls back to
+the recorded events, and a failed task's salvaged `partial-work.md` summarises
+its recent activity. Both preserve tool calls, file reads, and file writes, so a
+task that only edited or only read files is still represented rather than
+reported as having recorded nothing. Reasoning narration is not treated as tool
+activity in either place.
+
 ## Recovery rules
 
 1. Inspect `aid show <task> --events` and the worktree before acting.

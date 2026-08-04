@@ -36,9 +36,17 @@ Do not send repeated polling messages; inspect events first.
 
 ## Automatic safeguards
 
-AID enforces configured idle, hung-task, cost, and hard timeout safeguards.
-Use `--idle-timeout SECS` to stop a task that produces no parsed activity and
-`--timeout SECS` to set a wall-clock cap.
+AID enforces configured idle, hung-task, cost, and maximum-duration safeguards.
+
+`--idle-timeout SECS` stops a task whose stream goes quiet. Foreground streaming
+measures this on raw output lines, so an agent that keeps emitting unparseable
+output (a spinner, for example) resets the timer even though it produces no
+parsed activity; the PTY watcher is what catches that case.
+
+`--timeout SECS` is activity-aware rather than a hard wall-clock cap: an active
+foreground run may continue past it, and the value is rounded up to whole
+minutes.
+
 Repeated activity is not itself a stop condition.
 
 ## Stop and retry

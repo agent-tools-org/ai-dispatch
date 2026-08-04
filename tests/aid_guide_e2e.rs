@@ -54,10 +54,14 @@ fn official_guide_documents_prompt_only_audit_dispatch() {
 fn official_guide_documents_watcher_safeguards() {
     let operations = include_str!("../default-skills/aid-guide/references/task-operations.md");
 
-    assert!(operations.contains("configured idle, hung-task, cost, and hard timeout safeguards"));
+    assert!(operations.contains("configured idle, hung-task, cost, and maximum-duration safeguards"));
     assert!(operations.contains("`--idle-timeout SECS`"));
     assert!(operations.contains("`--timeout SECS`"));
     assert!(operations.contains("Repeated activity is not itself a stop condition"));
+    // The guide must not re-acquire the two inaccuracies the removal audit caught:
+    // foreground idle measures raw lines, and --timeout is activity-aware, not a hard cap.
+    assert!(operations.contains("measures this on raw output lines"));
+    assert!(operations.contains("activity-aware rather than a hard wall-clock cap"));
 }
 
 fn public_commands(help: &str) -> Vec<String> {

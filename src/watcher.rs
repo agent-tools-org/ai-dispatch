@@ -3,7 +3,6 @@
 mod buffered;
 mod esc;
 mod extract;
-mod loop_kill;
 mod progress;
 mod stderr;
 mod stream;
@@ -37,13 +36,9 @@ use extract::is_standalone_milestone_line;
 use extract::{
     extract_finding_detail, extract_milestone_detail, parse_milestone_event,
 };
-pub(crate) use loop_kill::loop_kill_detail;
-use progress::LoopDetector;
 use stderr::{drain_stderr_capture, spawn_stderr_capture};
 pub(crate) use progress::SyntheticMilestoneTracker;
-pub(crate) use stream::{
-    handle_streaming_line_with_session, StreamLineContext,
-};
+pub(crate) use stream::{handle_streaming_line_with_session, StreamLineContext};
 /// Watch a child process, parse output, store events, return completion info
 pub async fn watch_streaming(
     agent: &dyn Agent,
@@ -71,11 +66,10 @@ pub async fn watch_streaming(
     };
     let mut event_count = 0u32;
     let mut session_saved = false;
-    let mut loop_detector = LoopDetector::new();
     let mut synthetic_tracker = SyntheticMilestoneTracker::new();
     let mut delivery_evidence = DeliveryEvidence::default();
     let mut last_event_detail: Option<String> = None;
-    let mut stderr_handle = spawn_stderr_capture(child, task_id);
+    let stderr_handle = spawn_stderr_capture(child, task_id);
     loop {
         let line = match timeout(idle_timeout, lines.next_line()).await {
             Ok(Ok(Some(line))) => line,
@@ -140,26 +134,9 @@ pub async fn watch_streaming(
                 info.status = TaskStatus::Failed;
                 break;
             }
-            loop_detector.push(&detail, event_detail.kind, event_detail.raw_key.as_deref());
-            if loop_detector.is_looping() {
-                let _ = store.insert_event(&TaskEvent {
-                    task_id: task_id.clone(),
-                    timestamp: Local::now(),
-                    event_kind: EventKind::Error,
-                    detail: loop_kill_detail(task_id),
-                    metadata: None,
-                });
-                force_kill_process_group(child);
-                let _ = child.kill().await;
-                info.status = TaskStatus::Failed;
-                if let Some(handle) = stderr_handle.take() {
-                    drain_stderr_capture(handle).await;
-                }
-                break;
-            }
         }
     }
-    if let Some(handle) = stderr_handle.take() {
+    if let Some(handle) = stderr_handle {
         drain_stderr_capture(handle).await;
     }
     let exit_status = child.wait().await?;

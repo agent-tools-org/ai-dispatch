@@ -183,7 +183,7 @@ fn is_completed_message(value: &Value, item_kind: &str) -> bool {
 fn is_work_event(value: &Value, item_kind: &str) -> bool {
     let event_kind = value.get("type").and_then(Value::as_str).unwrap_or_default();
     matches!(event_kind, "item.started" | "item.completed" | "item.updated")
-        && !matches!(item_kind, "agent_message" | "reasoning")
+        && !matches!(item_kind, "agent_message" | "reasoning" | "todo_list")
 }
 
 #[cfg(test)]

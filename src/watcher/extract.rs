@@ -35,6 +35,13 @@ pub(super) fn extract_milestone_detail(line: &str) -> Option<String> {
     extract_milestone_from_text(line)
 }
 
+pub(super) fn is_standalone_milestone_line(line: &str) -> bool {
+    if serde_json::from_str::<serde_json::Value>(line).is_ok() {
+        return false;
+    }
+    extract_milestone_detail(line).is_some()
+}
+
 pub(super) fn extract_finding_detail(line: &str) -> Option<String> {
     if !line.contains(FINDING_TAG) {
         return None;

@@ -1,5 +1,6 @@
 // Watcher engine: reads agent stdout/stderr and records events to store.
 // Exports streaming and buffered watchers plus shared watcher state.
+mod buffered;
 mod esc;
 mod extract;
 mod loop_kill;
@@ -15,6 +16,7 @@ mod transcript_tests;
 #[path = "watcher/streaming_tests.rs"]
 mod streaming_tests;
 
+pub(crate) use buffered::watch_buffered;
 pub(crate) use esc::strip_terminal_escapes;
 use anyhow::Result;
 use chrono::Local;
@@ -30,9 +32,11 @@ use crate::process_monitor;
 use crate::rate_limit;
 use crate::store::Store;
 use crate::types::*;
-use extract::extract_milestone_detail;
+use extract::is_standalone_milestone_line;
 #[cfg(test)]
-use extract::{extract_finding_detail, parse_milestone_event};
+use extract::{
+    extract_finding_detail, extract_milestone_detail, parse_milestone_event,
+};
 pub(crate) use loop_kill::loop_kill_detail;
 use progress::LoopDetector;
 use stderr::{drain_stderr_capture, spawn_stderr_capture};
@@ -98,7 +102,7 @@ pub async fn watch_streaming(
         }
 
         use tokio::io::AsyncWriteExt;
-        if extract_milestone_detail(&line).is_none() && !is_thinking_delta(&line) {
+        if !is_standalone_milestone_line(&line) && !is_thinking_delta(&line) {
             log_file.write_all(line.as_bytes()).await?;
             log_file.write_all(b"\n").await?;
         }
@@ -214,69 +218,6 @@ pub async fn watch_streaming(
         metadata: None,
     })?;
     info.status = status;
-    Ok(info)
-}
-
-/// Watch a non-streaming agent: buffer all output, parse at end
-pub async fn watch_buffered(
-    agent: &dyn Agent,
-    child: &mut Child,
-    task_id: &TaskId,
-    store: &Arc<Store>,
-    log_path: &std::path::Path,
-    output_path: Option<&std::path::Path>,
-    _workgroup_id: Option<&str>,
-) -> Result<CompletionInfo> {
-    let stdout = child
-        .stdout
-        .take()
-        .ok_or_else(|| anyhow::anyhow!("No stdout on child process"))?;
-    let mut reader = BufReader::new(stdout);
-    let mut buffer = String::new();
-    let stderr_handle = spawn_stderr_capture(child, task_id);
-    use tokio::io::AsyncReadExt;
-    reader.read_to_string(&mut buffer).await?;
-    let filtered: String = buffer
-        .lines()
-        .filter(|line| extract_milestone_detail(line).is_none())
-        .collect::<Vec<_>>()
-        .join("\n");
-    tokio::fs::write(log_path, &filtered).await?;
-    let _ = tokio::fs::create_dir_all(paths::task_dir(task_id.as_str())).await;
-    let _ = tokio::fs::write(paths::transcript_path(task_id.as_str()), &buffer).await;
-    if let Some(out_path) = output_path {
-        if let Some(response) = crate::agent::gemini::extract_response(&buffer) {
-            let response_filtered: String = response
-                .lines()
-                .filter(|line| extract_milestone_detail(line).is_none())
-                .collect::<Vec<_>>()
-                .join("\n");
-            tokio::fs::write(out_path, &response_filtered).await?;
-        } else {
-            tokio::fs::write(out_path, &filtered).await?;
-        }
-    }
-    if let Some(handle) = stderr_handle {
-        drain_stderr_capture(handle).await;
-    }
-    let exit_status = child.wait().await?;
-    let mut info = if exit_status.success() {
-        agent.parse_completion(&buffer)
-    } else {
-        CompletionInfo {
-            tokens: None,
-            status: TaskStatus::Failed,
-            model: None,
-            cost_usd: None,
-            exit_code: None,
-        }
-    };
-    info.exit_code = exit_status.code();
-    if info.status == TaskStatus::Done {
-        rate_limit::clear_rate_limit(&agent.kind());
-    }
-    let event = crate::agent::gemini::make_completion_event(task_id, &info);
-    store.insert_event(&event)?;
     Ok(info)
 }
 

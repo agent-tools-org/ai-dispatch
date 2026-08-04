@@ -88,9 +88,8 @@ impl super::Agent for DroidAgent {
             // Only emit on the request side. droid stream-json fires both
             // `tool_call` (the model's request) and `tool_result` (the tool's
             // response) for one logical operation, plus sometimes `tool_use`
-            // as an alias. Treating all three as ToolCall events doubled the
-            // event count, so the LoopDetector tripped after ~5 legit reads
-            // (10 events with detail "Read"). Keep only `tool_call`.
+            // as an alias. Keep only `tool_call` so one operation produces
+            // one event.
             "tool_call" => {
                 let name = v
                     .get("toolName")

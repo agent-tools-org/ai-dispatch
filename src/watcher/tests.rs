@@ -1,15 +1,13 @@
-// Tests for watcher event parsing — milestone/finding extraction, loop detection, cost ceiling.
+// Tests for watcher event parsing, synthetic milestones, and cost ceilings.
 // Deps: super::*, types
 
 use super::{
-    apply_completion_event, exceeds_cost_ceiling, loop_kill_detail, parse_milestone_event, LoopDetector,
-    SyntheticMilestoneTracker,
+    apply_completion_event, exceeds_cost_ceiling, parse_milestone_event, SyntheticMilestoneTracker,
 };
 use crate::paths;
 use crate::types::{CompletionInfo, EventKind, TaskEvent, TaskId, TaskStatus, Task, AgentKind};
 use chrono::Local;
 use serde_json::json;
-use tempfile::tempdir;
 
 #[test]
 fn completion_metadata_updates_summary_fields() {
@@ -195,104 +193,6 @@ fn synthetic_tracker_stays_disabled_when_reasoning_exists() {
     tracker.observe(&tool);
 
     assert!(tracker.synthetic_event(&task_id, &tool).is_none());
-}
-
-fn loop_detector_case<I: IntoIterator<Item = S>, S: AsRef<str>>(expected: bool, events: I) {
-    let mut detector = LoopDetector::new();
-    for detail in events {
-        detector.push(detail.as_ref(), EventKind::Reasoning, None);
-    }
-    assert_eq!(detector.is_looping(), expected);
-}
-
-fn push_tool_call(detector: &mut LoopDetector, raw_key: &str) {
-    detector.push("/bin/zsh -lc \"nl -ba .../aggregat...", EventKind::ToolCall, Some(raw_key));
-}
-
-#[test]
-fn loop_detector_patterns() {
-    loop_detector_case(false, ["a", "b", "c", "d", "e", "f", "g", "h", "i", "j"]);
-    loop_detector_case(true, std::iter::repeat_n("repeat", 10));
-    loop_detector_case(false, std::iter::repeat_n("dup", 7).chain(["unique-1", "unique-2", "unique-3"]));
-    loop_detector_case(true, std::iter::repeat_n("dup", 8).chain(["unique-1", "unique-2"]));
-}
-
-#[test]
-fn loop_detector_ignores_empty_details() {
-    loop_detector_case(false, std::iter::repeat_n("", 20));
-    loop_detector_case(false, std::iter::repeat_n("  ", 20));
-    loop_detector_case(false, std::iter::repeat_n("\t", 20));
-    loop_detector_case(false, ["", "working", "  "].repeat(5));
-}
-
-#[test]
-fn loop_detector_distinguishes_long_details() {
-    let shared_prefix = "Read(".to_string() + &"a".repeat(110);
-    let first = format!("{shared_prefix}file1.rs)");
-    let second = format!("{shared_prefix}file2.rs)");
-    let events = std::iter::repeat_n(first.as_str(), 5).chain(std::iter::repeat_n(second.as_str(), 5));
-    loop_detector_case(false, events);
-}
-
-#[test]
-fn loop_detector_uses_file_write_raw_path_with_higher_threshold() {
-    let mut detector = LoopDetector::new();
-    for index in 0..20 {
-        let raw_key = format!("/tmp/worktree/evaluator-different-{index}.rs");
-        detector.push(".../evaluator-d...", EventKind::FileWrite, Some(&raw_key));
-    }
-    assert!(!detector.is_looping());
-
-    let mut detector = LoopDetector::new();
-    for _ in 0..14 { detector.push(".../evaluator-d...", EventKind::FileWrite, Some("/tmp/worktree/evaluator.rs")); }
-    assert!(!detector.is_looping());
-    detector.push(".../evaluator-d...", EventKind::FileWrite, Some("/tmp/worktree/evaluator.rs"));
-    assert!(detector.is_looping());
-}
-
-#[test]
-fn loop_detector_uses_tool_call_raw_command() {
-    let mut detector = LoopDetector::new();
-    for index in 0..10 {
-        let raw_key = format!("/bin/zsh -lc \"nl -ba uniswapx-filler-rs/crates/filler-{index}/src/lib.rs\"");
-        push_tool_call(&mut detector, &raw_key);
-    }
-    assert!(!detector.is_looping());
-}
-
-#[test]
-fn loop_detector_still_flags_repeated_tool_call_raw_command() {
-    let mut detector = LoopDetector::new();
-    for _ in 0..10 { push_tool_call(&mut detector, "/bin/zsh -lc \"nl -ba uniswapx-filler-rs/crates/filler/src/lib.rs\""); }
-    assert!(detector.is_looping());
-}
-
-#[test]
-fn loop_detector_resets_file_write_counter_on_non_file_event() {
-    let mut detector = LoopDetector::new();
-    for _ in 0..14 { detector.push("file.rs", EventKind::FileWrite, Some("/tmp/file.rs")); }
-    detector.push("thinking", EventKind::Reasoning, None);
-    detector.push("file.rs", EventKind::FileWrite, Some("/tmp/file.rs"));
-
-    assert!(!detector.is_looping());
-}
-
-#[test]
-fn loop_kill_detail_appends_apply_patch_stderr_line() {
-    let temp = tempdir().unwrap();
-    let _aid_home = paths::AidHomeGuard::set(temp.path());
-    let task_id = TaskId("t-stderr".to_string());
-    std::fs::create_dir_all(paths::logs_dir()).unwrap();
-    std::fs::write(
-        paths::stderr_path(task_id.as_str()),
-        "note\napply_patch verification failed: Failed to find expected lines in evaluator.rs\n",
-    )
-    .unwrap();
-
-    let detail = loop_kill_detail(&task_id);
-
-    assert!(detail.contains("Agent appears stuck in a loop"));
-    assert!(detail.contains("apply_patch verification failed"));
 }
 
 #[test]

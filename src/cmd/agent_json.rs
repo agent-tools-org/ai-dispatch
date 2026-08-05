@@ -96,6 +96,7 @@ fn build_agent_json(
     } else {
         kind.supports_session_resume()
     };
+    let (provider, metering) = crate::types::provider_for_cli(kind);
     
     let quota = {
         let rlk = if let Some(config) = custom_config {
@@ -178,6 +179,8 @@ fn build_agent_json(
         trust_tier,
         description,
         supports_session_resume,
+        provider: provider.as_str().to_string(),
+        metering: metering_label(metering),
         quota,
         capabilities,
         models,
@@ -200,4 +203,22 @@ fn catalog_default_model(kind: AgentKind) -> Option<String> {
         .find(|m| m.description.to_ascii_lowercase().contains("default"))
         .or_else(|| models.first())
         .map(|m| m.model.to_string())
+}
+
+/// Machine-readable metering shape, so the caller can route on it. An exhausted
+/// `spend_budget` does not recover with time — only a top-up clears it — and a
+/// `per_model_family` pool says nothing about that provider's other families.
+/// Collapsing these into one "limited" flag is what stranded a working agy
+/// claude allowance behind an exhausted gemini one.
+fn metering_label(shape: crate::types::MeteringShape) -> String {
+    use crate::types::MeteringShape as M;
+    match shape {
+        M::AccountPool => "account_pool",
+        M::PerModelFamily => "per_model_family",
+        M::SpendBudget => "spend_budget",
+        M::Subscription => "subscription",
+        M::None => "none",
+        M::Unknown => "unknown",
+    }
+    .to_string()
 }

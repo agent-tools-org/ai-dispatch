@@ -20,7 +20,7 @@ pub struct TeamConfig {
     pub display_name: String,
     #[serde(default)]
     pub description: String,
-    /// Soft preference for auto-selection — NOT a hard filter.
+    /// Soft preference for `aid advise` scoring — NOT a hard filter.
     /// All agents remain available; these just get a scoring boost.
     #[serde(alias = "agents")]
     pub preferred_agents: Vec<String>,

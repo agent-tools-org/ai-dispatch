@@ -12,9 +12,10 @@ aid batch tasks.toml --parallel --max-concurrent 3 --wait
 
 Use `[defaults]` for shared agent, directory, verification, team, fallback,
 context, skill, and declared `difficulty`, `budget`, `urgency`, and `rigor`.
-Each `[[task]]` may override those dimensions and `kind`. Use unique names,
-prompts, worktrees, and `depends_on` edges. Prefer dependencies over parallel
-tasks editing overlapping files.
+Each `[[task]]` may override those dimensions and `kind`. Every task needs an
+explicit `agent` — `auto` and empty agent are rejected; use `aid advise` to
+choose. Use unique names, prompts, worktrees, and `depends_on` edges. Prefer
+dependencies over parallel tasks editing overlapping files.
 
 Useful controls:
 
@@ -66,7 +67,8 @@ aid team create dev
 ```
 
 Teams provide reusable agent and instruction groupings. Select them with
-`aid run --team` or batch defaults.
+`aid run --team` or batch defaults. Preferred agents boost `aid advise` scoring;
+they do not silently pick an agent for dispatch.
 
 ## Memory
 

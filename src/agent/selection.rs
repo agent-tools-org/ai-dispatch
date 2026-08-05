@@ -1,6 +1,6 @@
-// Auto-selection heuristics for `aid run auto`.
+// Agent scoring for `aid advise`, `--best-of`, and recommendation hints.
 // Scores prompt signals via capability matrix, respects installed CLIs, returns concise reason.
-// Exports select_agent() helpers; deps: super::detect_agents, super::RunOpts.
+// Exports select_agent() helpers and the removed-`auto` error; deps: detect_agents, RunOpts.
 
 #[path = "selection_scoring.rs"]
 mod selection_scoring;
@@ -27,6 +27,14 @@ use std::collections::HashMap;
 
 pub(crate) const AGENT_CAPABILITIES: &[(AgentKind, &[(TaskCategory, i32)])] =
     selection_capabilities::AGENT_CAPABILITIES;
+
+/// Hard-error text when callers pass `auto` or leave agent empty.
+pub(crate) const AUTO_AGENT_REMOVED_MSG: &str =
+    "agent 'auto' was removed; declare a task profile and use `aid advise` to choose an agent";
+
+pub(crate) fn is_removed_auto_agent(name: &str) -> bool {
+    name.trim().is_empty() || name.eq_ignore_ascii_case("auto")
+}
 
 pub(crate) fn select_agent_with_reason(
     prompt: &str, opts: &RunOpts, store: &Store,

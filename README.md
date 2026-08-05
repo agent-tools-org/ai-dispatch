@@ -30,7 +30,7 @@ Without an orchestrator, a multi-agent CLI workflow breaks down fast:
 
 ### Prerequisites
 
-Install Rust (1.85 or later, required for edition 2024) and whichever AI CLIs you want `aid` to orchestrate. `aid` auto-detects supported agents on your `PATH`: `gemini`, `codex`, `copilot`, `opencode`, `cursor`, `kilo`, `mimocode`, `codebuff`, `droid`, `oz`, `claude`, and `auto`.
+Install Rust (1.85 or later, required for edition 2024) and whichever AI CLIs you want `aid` to orchestrate. `aid` auto-detects supported agents on your `PATH`: `gemini`, `codex`, `copilot`, `opencode`, `cursor`, `kilo`, `mimocode`, `codebuff`, `droid`, `oz`, and `claude`.
 
 ### Install
 
@@ -114,19 +114,17 @@ aid show t-1234 --diff
 aid retry t-1234 --feedback "Tighten the configuration example and keep it source-accurate."
 ```
 
-### Run With Auto Agent Selection
+### Preview Routing With `aid advise`
 
-Let `aid` choose the best available agent using its task classifier and capability matrix:
+Declare the task profile and ask for a recommendation without dispatching:
 
 ```bash
-aid run auto "Create a responsive settings UI for the usage dashboard" --dir .
-# [aid] Auto-selected agent: cursor (reason: frontend task (medium) → cursor (score: 9))
-# [aid] Auto-selected model: auto (complexity: medium)
+aid advise "Create a responsive settings UI for the usage dashboard" \
+  --difficulty moderate --budget standard --urgency normal --rigor standard \
+  --kind frontend --top 5
 ```
 
-`auto` classifies each prompt into one of eight task categories — research, simple-edit, complex-impl, frontend, debugging, testing, refactoring, documentation — estimates complexity (low/medium/high), then scores every installed agent against a capability matrix. The best-scoring agent wins, with adjustments for budget mode, rate limits, and historical success rates.
-
-The model tier is auto-selected based on complexity: low → cheap/free models, medium → standard, high → premium.
+`aid advise` scores installed agents against the capability matrix using your declared difficulty, budget, urgency, and rigor, plus rate limits, team preferences, and history. There is no `auto` agent — choose explicitly after advice.
 
 ## Core Concepts
 
@@ -160,8 +158,8 @@ aid run cursor "Refine the TUI layout for narrow terminals" \
 aid run codebuff "Refactor the auth module into separate files" \
   --dir .
 
-aid run auto "Explain the best agent for a multi-file refactor in this repo" \
-  --dir .
+aid advise "Explain the best agent for a multi-file refactor in this repo" \
+  --difficulty complex --budget premium --urgency normal --rigor standard
 ```
 
 ### Tasks
@@ -704,7 +702,7 @@ Use `aid show <task-id> --result` to read the persisted report file directly.
 
 ### Agent Selection Guide
 
-`auto` uses a capability matrix to match agents to task types. The scores below reflect relative strengths (higher = better fit):
+`aid advise` uses a capability matrix to match agents to task types. The scores below reflect relative strengths (higher = better fit):
 
 | Agent | Research | Simple Edit | Complex Impl | Frontend | Debugging | Testing | Refactoring | Documentation |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -722,9 +720,9 @@ Use `aid show <task-id> --result` to read the persisted report file directly.
 
 Additional scoring adjustments: budget mode boosts cheap agents (+4) and penalizes expensive ones (-6); high-complexity tasks boost codex/copilot/cursor/droid/oz/claude (+2); rate-limited agents get -10; historical success rates apply about +4/-5.
 
-Scores above are per-agent baselines. When `auto` selects, it also factors in model capability (1-10 scale): **Premium** (cap 9-10): gpt-5.4, gemini-pro, cursor opus-thinking. **Standard** (cap 6-8): gpt-4.1, gemini-flash, cursor-auto, opencode/glm-5. **Budget** (cap 3-5): gpt-4.1-nano, gemini-flash-lite, mimo-free. Final score = (agent_base × 0.4) + (model_capability × 0.6). Use `aid config agents` to see all model scores.
+Scores above are per-agent baselines. `aid advise` also factors in model capability (1-10 scale): **Premium** (cap 9-10): gpt-5.4, gemini-pro, cursor opus-thinking. **Standard** (cap 6-8): gpt-4.1, gemini-flash, cursor-auto, opencode/glm-5. **Budget** (cap 3-5): gpt-4.1-nano, gemini-flash-lite, mimo-free. Final score = (agent_base × 0.4) + (model_capability × 0.6). Use `aid config agents` to see all model scores.
 
-If you are unsure, start with `aid ask` or `aid run auto`, then escalate to a more expensive agent only when the task scope is clear.
+If you are unsure, start with `aid ask` or `aid advise`, then dispatch an explicit agent.
 
 ### Use Skills To Enforce Quality
 
@@ -832,7 +830,7 @@ verify = "cargo test"
 
 - Use `aid ask` or `gemini` first when the task is still exploratory.
 - Prefer `opencode` for straightforward single-file edits or rename work.
-- Use `auto` when you want a reasonable default without thinking about the agent first.
+- Use `aid advise` when you want a scored comparison before picking an agent.
 - Set `[[usage.budget]]` entries and check `aid usage` before long coding sessions.
 - Reuse workgroups so shared context is stored once instead of repeated in every prompt.
 - Use `--model` only when you need a specific backend behavior or cost profile.

@@ -11,7 +11,7 @@ pub fn diversification_hint(agent: &str, share_pct: usize, total_tasks: usize, f
     Some(match agent {
         "codex" => format!("Tip: {agent} handled {share_pct}% of tasks. For simple edits, try `opencode` (5-20x cheaper). For research/docs, try `gemini -p \"...\"`."),
         "cursor" => format!("Tip: {agent} handled {share_pct}% of tasks. For backend-heavy work, try `codex`. For simple edits, try `opencode`."),
-        _ => format!("Tip: {agent} handled {share_pct}% of tasks. Try `aid run auto <prompt>` to let aid pick the best agent per task."),
+        _ => format!("Tip: {agent} handled {share_pct}% of tasks. Run `aid advise` to compare agents before the next dispatch."),
     })
 }
 

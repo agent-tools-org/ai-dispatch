@@ -182,6 +182,11 @@ pub struct RateLimitInfo {
     pub message: Option<String>,
 }
 
+pub fn recovery_datetime(agent: &AgentKind) -> Option<NaiveDateTime> {
+    let recovery_at = get_rate_limit_info(agent)?.recovery_at?;
+    parse_recovery_datetime(&recovery_at)
+}
+
 pub fn get_rate_limit_info(agent: &AgentKind) -> Option<RateLimitInfo> {
     let path = marker_path(agent);
     let content = fs::read_to_string(&path).ok()?;

@@ -18,7 +18,7 @@ pub fn mark_rate_limited(agent: &AgentKind, message: &str) {
     if let Some(parent) = path.parent() {
         let _ = fs::create_dir_all(parent);
     }
-    let recovery_at = parse_recovery_time(message);
+    let recovery_at = parse_recovery_time(message).or_else(|| resolved_recovery(message));
     let truncated_message = if message.len() > 200 {
         let mut end = 200;
         while !message.is_char_boundary(end) { end -= 1; }
@@ -80,7 +80,33 @@ pub fn rate_limited_agents() -> Vec<(AgentKind, String)> {
     .collect()
 }
 
+/// Absolute recovery time for messages that state their reset relatively
+/// ("resets in 1 day", "5-hour quota") or not at all. Falling back to the
+/// 5-minute default sent work straight back to a provider that was still
+/// refusing it — droid's weekly cap read as recovered after five minutes.
+fn resolved_recovery(message: &str) -> Option<String> {
+    let format_at =
+        |at: chrono::NaiveDateTime| at.format("%b %d, %Y %I:%M %p").to_string();
+    if let Some(at) = crate::rate_limit_signatures::parse_relative_recovery(message) {
+        return Some(format_at(at));
+    }
+    let (_, fallback_minutes) = crate::rate_limit_signatures::match_quota_signature(message)?;
+    Some(format_at(
+        Local::now().naive_local() + chrono::Duration::minutes(fallback_minutes),
+    ))
+}
+
+/// The agent a quota message names, when the provider's wording identifies it.
+/// Lets a caller mark the right agent even when the failure surfaced somewhere
+/// that does not know which CLI produced it.
+pub fn quota_signature_agent(message: &str) -> Option<AgentKind> {
+    crate::rate_limit_signatures::match_quota_signature(message).map(|(agent, _)| agent)
+}
+
 pub fn is_rate_limit_error(message: &str) -> bool {
+    if crate::rate_limit_signatures::match_quota_signature(message).is_some() {
+        return true;
+    }
     let lower = message.to_lowercase();
     lower.contains("rate limit")
         || lower.contains("rate_limit")

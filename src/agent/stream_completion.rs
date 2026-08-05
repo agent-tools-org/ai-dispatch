@@ -127,3 +127,55 @@ mod tests {
         );
     }
 }
+
+/// Detect a provider's quota-exhaustion message anywhere in the captured output
+/// and record it, regardless of exit code or envelope shape.
+///
+/// This runs on the SUCCESS path on purpose. qwen reports an exhausted plan as
+/// ordinary result text with `is_error:false` and exit 0, so every check that
+/// hangs off the failure path — including `mark_rate_limited`'s existing call
+/// sites — never sees it. The observed result was an exhausted provider still
+/// reported as healthy by `aid agent quota`, its refusal recorded as a success,
+/// and the previous rate-limit marker cleared by that same "success".
+///
+/// Returns true when a signature matched, so the caller can fail the task.
+pub(crate) fn record_quota_exhaustion(output: &str, agent: crate::types::AgentKind) -> bool {
+    if !crate::rate_limit::is_rate_limit_error(output) {
+        return false;
+    }
+    // Record the sentence that actually reports the quota, not the head of the
+    // transcript: the marker is what `aid agent quota` shows a human, and the
+    // first 200 bytes of a JSONL stream are the session init line.
+    let detail = quota_line(output)
+        .or_else(|| crate::rate_limit::extract_rate_limit_message(output))
+        .unwrap_or_else(|| output.chars().take(200).collect());
+    crate::rate_limit::mark_rate_limited(&agent, &detail);
+    true
+}
+
+/// The quota sentence itself, windowed around the phrase that reports it.
+///
+/// Taking the first 200 characters of the matching line is not enough: these
+/// arrive as JSONL, whose leading 200 characters are `type`/`uuid`/`session_id`
+/// metadata. Truncating there discarded the reset time along with the message,
+/// so the marker showed raw JSON and fell back to a "~1h" guess for a five-hour
+/// window.
+fn quota_line(output: &str) -> Option<String> {
+    let line = output.lines().find(|line| {
+        let lower = line.to_lowercase();
+        (lower.contains("quota") || lower.contains("usage limit"))
+            && crate::rate_limit::is_rate_limit_error(line)
+    })?;
+    let lower = line.to_lowercase();
+    let anchor = lower
+        .find("quota")
+        .or_else(|| lower.find("usage limit"))
+        .unwrap_or(0);
+    let start = line
+        .char_indices()
+        .map(|(idx, _)| idx)
+        .take_while(|idx| *idx <= anchor.saturating_sub(40))
+        .last()
+        .unwrap_or(0);
+    Some(line[start..].chars().take(240).collect::<String>().trim().to_string())
+}

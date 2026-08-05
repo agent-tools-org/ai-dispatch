@@ -188,7 +188,14 @@ pub async fn watch_streaming(
     // Checked before the clear below: a quota refusal arrives as ordinary result
     // text with exit 0, so treating it as success would both hide the outage and
     // wipe the marker that records it.
-    if crate::agent::stream_completion::record_quota_exhaustion(&full_output, agent.kind()) {
+                                        // agy and other plain-text CLIs never echo their model, so the group a
+                                        // quota belongs to is only knowable from what aid dispatched.
+                                        let dispatched_model = store
+                                            .get_task(task_id.as_str())
+                                            .ok()
+                                            .flatten()
+                                            .and_then(|task| task.model);
+    if crate::agent::stream_completion::record_quota_exhaustion(&full_output, agent.kind(), info.model.as_deref().or(dispatched_model.as_deref())) {
         status = TaskStatus::Failed;
         info.status = status;
     }

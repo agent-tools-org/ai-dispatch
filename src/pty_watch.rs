@@ -514,7 +514,14 @@ fn finalize_streaming(
     }
     // Same reason as the streaming watcher: a quota refusal exits 0 and carries
     // no error envelope, so it must be caught on the success path or not at all.
-    if crate::agent::stream_completion::record_quota_exhaustion(&state.full_output, agent.kind()) {
+                                        // agy and other plain-text CLIs never echo their model, so the group a
+                                        // quota belongs to is only knowable from what aid dispatched.
+                                        let dispatched_model = store
+                                            .get_task(task_id.as_str())
+                                            .ok()
+                                            .flatten()
+                                            .and_then(|task| task.model);
+    if crate::agent::stream_completion::record_quota_exhaustion(&state.full_output, agent.kind(), state.info.model.as_deref().or(dispatched_model.as_deref())) {
         status = TaskStatus::Failed;
     }
     state.info.status = status;

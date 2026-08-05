@@ -296,3 +296,4 @@ pub fn create_worktree(repo_dir: &Path, branch: &str, base_branch: Option<&str>)
 #[cfg(test)] #[path = "worktree/stale_tests.rs"] mod stale_tests;
 #[cfg(test)] #[path = "worktree/validation_tests.rs"] mod validation_tests;
 #[cfg(test)] #[path = "worktree/lock_tests.rs"] mod lock_tests;
+#[cfg(test)] #[path = "worktree/lock_reentry_tests.rs"] mod lock_reentry_tests;

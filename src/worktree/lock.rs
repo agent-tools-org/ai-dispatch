@@ -9,6 +9,9 @@ use std::path::Path;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 
+#[path = "lock_reentry.rs"]
+mod lock_reentry;
+
 const LOCK_FILENAME: &str = ".aid-lock";
 static LOCK_TEMP_COUNTER: AtomicU64 = AtomicU64::new(0);
 
@@ -23,8 +26,7 @@ pub fn check_worktree_lock(wt_path: &Path) -> Option<String> {
     check_worktree_lock_with_store(wt_path, None)
 }
 
-// Read-only: never removes the lock file. Stale-lock removal happens only in
-// the acquisition path, so a check can never race a live lease off disk.
+// Read-only check; stale removal is acquisition-only to avoid racing live leases.
 pub fn check_worktree_lock_with_store(wt_path: &Path, store: Option<&Store>) -> Option<String> {
     let record = read_lock_record(&wt_path.join(LOCK_FILENAME))?;
     lock_record_is_held(&record, store).then_some(record.task_id)
@@ -39,9 +41,8 @@ fn lock_record_is_held(record: &LockRecord, store: Option<&Store>) -> bool {
     {
         return true;
     }
-    // A dead or missing owner with no worker_pid is ambiguous: the launcher
-    // may have exited before the background worker re-keyed the lease. Only
-    // the store can rule the lease out; without one, treat the lock as held.
+    // Dead/missing owner without worker_pid: ambiguous re-key window. Store
+    // decides; without one, treat as held.
     match store {
         Some(store) => task_status_keeps_lock(store, &record.task_id),
         None => true,
@@ -106,6 +107,9 @@ where
                 if let Some(record) = &holder
                     && lock_record_is_held(record, store)
                 {
+                    if lock_reentry::holder_allows_reentry(store, task_id, &record.task_id) {
+                        return Ok(());
+                    }
                     return Err(record.task_id.clone());
                 }
                 if attempt == 0 {
@@ -134,8 +138,7 @@ pub fn clear_worktree_lock(
             let _ = std::fs::remove_file(&lock_path);
         }
         Some(record) => return Err(record.task_id),
-        // Missing lock: nothing to clear. Malformed lock: leave it for the
-        // acquisition path to recover instead of deleting an unattributable file.
+        // Missing: ok. Malformed: leave for acquisition recovery.
         None => {}
     }
     sweep_orphan_lock_files(wt_path);
@@ -160,10 +163,7 @@ fn create_lock_file(lock_path: &Path, task_id: &str) -> std::io::Result<()> {
     link_result
 }
 
-// Removes a lock the caller decided is stale, guarding against a competitor
-// re-acquiring between the staleness read and the rename: the renamed file is
-// re-read and, if it no longer matches the stale content, the captured fresh
-// lock is restored and the acquisition is aborted as a lost race.
+// Drop a stale lock; restore if a competitor wrote a fresh lease mid-rename.
 fn remove_stale_lock<B, A>(
     lock_path: &Path,
     stale_content: &str,
@@ -184,8 +184,7 @@ where
                 let _ = std::fs::remove_file(&cleanup_path);
                 return Ok(());
             }
-            // hard_link never clobbers an existing .aid-lock, so a competitor
-            // that acquired after our rename keeps its lock either way.
+            // hard_link never clobbers; a post-rename winner keeps its lease.
             if std::fs::hard_link(&cleanup_path, lock_path).is_ok() {
                 let _ = std::fs::remove_file(&cleanup_path);
             }

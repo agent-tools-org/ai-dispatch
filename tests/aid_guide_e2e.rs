@@ -95,6 +95,17 @@ fn official_guide_documents_declared_profiles_and_advice() {
     assert!(configuration.contains("`require_task_profile = true`"));
 }
 
+#[test]
+fn official_guide_documents_recursive_delegation() {
+    let dispatch = include_str!("../default-skills/aid-guide/references/dispatch.md");
+
+    assert!(dispatch.contains("## Recursive delegation"));
+    assert!(dispatch.contains("`AID_TASK_DEPTH`"));
+    assert!(dispatch.contains("dispatch beyond depth `2` is refused"));
+    assert!(dispatch.contains("`--bg` is refused"));
+    assert!(dispatch.contains("may re-enter the same worktree"));
+}
+
 fn public_commands(help: &str) -> Vec<String> {
     help.lines()
         .skip_while(|line| *line != "Commands:")

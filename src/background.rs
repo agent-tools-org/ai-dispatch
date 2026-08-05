@@ -182,6 +182,8 @@ async fn run_task_inner(store: &Arc<Store>, spec: &BackgroundRunSpec) -> Result<
         std_cmd.env("AID_GROUP", group);
     }
     std_cmd.env("AID_TASK_ID", &spec.task_id);
+    let depth = crate::cmd::run::task_depth(store, &spec.task_id).unwrap_or(0);
+    std_cmd.env("AID_TASK_DEPTH", depth.to_string());
     let worktree_branch = store.get_task(&spec.task_id)?.and_then(|task| task.worktree_branch);
     agent::apply_rust_build_cache_env(&mut std_cmd, spec.dir.as_deref(), worktree_branch.as_deref());
     let container_name = if let Some(image) = spec.container.as_deref() {

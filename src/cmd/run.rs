@@ -39,6 +39,8 @@ mod run_dispatch_claim;
 mod run_dispatch_prepare;
 #[path = "run_task_profile.rs"]
 mod run_task_profile;
+#[path = "run_delegation.rs"]
+mod run_delegation;
 #[path = "run_dispatch_guard.rs"]
 mod run_dispatch_guard;
 #[path = "run_foreground_guard.rs"]
@@ -57,6 +59,7 @@ pub(crate) use self::run_prompt::PromptBundle;
 pub(crate) use self::run_iterate::IterateConfig;
 pub(crate) use self::run_iterate::maybe_iterate;
 pub(crate) use self::run_args::{NO_SKILL_SENTINEL, RunArgs};
+pub(crate) use self::run_delegation::task_depth;
 use self::run_args::{context_file_from_spec, preview_prompt, resolve_max_duration_mins, resolve_prompt_input};
 #[cfg(test)]
 use self::run_validate::{IdConflict, resolve_id_conflict, validate_dispatch};

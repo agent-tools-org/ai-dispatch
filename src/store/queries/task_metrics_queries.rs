@@ -131,4 +131,22 @@ impl Store {
         })?;
         rows.map(|row| Ok(row?)).collect()
     }
+
+    pub fn agent_avg_durations(&self) -> Result<Vec<(AgentKind, i64)>> {
+        let conn = self.db();
+        let mut stmt = conn.prepare(
+            "SELECT agent, AVG(duration_ms) / 1000.0 as avg_duration_secs
+             FROM tasks
+             WHERE duration_ms IS NOT NULL AND duration_ms > 0
+             GROUP BY agent
+             HAVING COUNT(*) >= 3",
+        )?;
+        let rows = stmt.query_map([], |row| {
+            let agent_str: String = row.get(0)?;
+            let duration: f64 = row.get(1)?;
+            let agent = AgentKind::parse_str(&agent_str).unwrap_or(AgentKind::Custom);
+            Ok((agent, duration.round() as i64))
+        })?;
+        rows.map(|row| Ok(row?)).collect()
+    }
 }

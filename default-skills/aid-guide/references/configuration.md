@@ -31,6 +31,10 @@ Common project controls include:
 - worktree naming prefix;
 - audit and idle-recovery policy.
 
+Set `require_task_profile = true` to reject `aid run` calls that omit any of
+`--difficulty`, `--budget`, `--urgency`, or `--rigor`. The built-in production
+profile enables this automatically.
+
 The removed `aid_gc` and `keep_worktrees_after_done` settings are invalid.
 Artifact deletion is controlled only by explicit acceptance and custody GC.
 

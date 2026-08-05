@@ -15,33 +15,28 @@ pub(crate) fn task_to_run_args(
     shared_dir_path: Option<&str>,
 ) -> RunArgs {
     // If team is set and agent is empty/auto, auto-select from team members
-    let agent_name = if (task.agent.is_empty() || task.agent == "auto") && task.team.is_some() {
+    let (agent_name, advised_model) = if (task.agent.is_empty() || task.agent == "auto") && task.team.is_some() {
         let team_config = task.team.as_deref().and_then(crate::team::resolve_team);
-        let selection_opts = crate::agent::RunOpts {
-            dir: task.dir.clone(),
-            output: task.output.clone(),
-            result_file: auto_scope_result_file(task, siblings),
-            model: task.model.clone(),
-            budget: task.budget,
-            read_only: task.read_only,
-            sandbox: task.sandbox,
-            context_files: vec![],
-            session_id: None,
-            env: None,
-            env_forward: None,
+        let declared = crate::types::DeclaredTaskProfile {
+            difficulty: task.difficulty.unwrap_or_default(),
+            budget: task.budget.unwrap_or_default(),
+            urgency: task.urgency.unwrap_or_default(),
+            rigor: task.rigor.unwrap_or_default(),
         };
-        let (selected, reason) = crate::agent::select_agent_with_reason(
-            &task.prompt,
-            &selection_opts,
-            store,
-            team_config.as_ref(),
+        let advice = crate::agent::selection::advise(
+            &task.prompt, declared, task.kind, team_config.as_ref(), Some(store.as_ref()), 0,
         );
-        aid_info!("[aid] Batch auto-selected: {selected} (reason: {reason})");
-        selected
+        let recommended = advice.recommended;
+        if let Some(item) = recommended {
+            aid_info!("[aid] Batch auto-selected: {} (reason: {})", item.agent, item.reason);
+            (item.agent, item.model)
+        } else {
+            ("auto".to_string(), None)
+        }
     } else if task.agent.is_empty() {
-        "auto".to_string()
+        ("auto".to_string(), None)
     } else {
-        task.agent.clone()
+        (task.agent.clone(), None)
     };
     let batch_siblings = siblings
         .iter()
@@ -79,13 +74,23 @@ pub(crate) fn task_to_run_args(
     } else {
         task.skills.clone().unwrap_or_default()
     };
+    let profile_model = advised_model.or_else(|| {
+        task.budget.and_then(|budget| crate::types::AgentKind::parse_str(&agent_name)
+            .and_then(|kind| crate::agent::selection::model_for_task_budget(kind, budget))
+            .map(str::to_string))
+    });
     RunArgs {
         agent_name,
         prompt: task.prompt.clone(),
         dir: task.dir.clone(),
         output: task.output.clone(),
         result_file: auto_scope_result_file(task, siblings),
-        model: task.model.clone(),
+        model: task.model.clone().or(profile_model),
+        declared_difficulty: task.difficulty,
+        declared_budget: task.budget,
+        declared_urgency: task.urgency,
+        declared_rigor: task.rigor,
+        kind: task.kind,
         worktree: task.worktree.clone(),
         group: task.group.clone(),
         container: task.container.clone(),
@@ -109,7 +114,7 @@ pub(crate) fn task_to_run_args(
         cascade,
         read_only: task.read_only,
         sandbox: task.sandbox,
-        budget: task.budget,
+        budget: task.budget.is_some_and(crate::types::TaskBudget::uses_budget_mode),
         best_of: task.best_of,
         metric: task.metric.clone(),
         team: task.team.clone(),

@@ -2,6 +2,7 @@
 // Exports parser structs and subcommands; depends on clap derive and cli helper modules.
 
 pub(crate) mod command_args_a;
+pub(crate) mod command_args_advise;
 pub(crate) mod command_args_b;
 pub(crate) mod command_args_c;
 pub(crate) mod command_args_watch;
@@ -55,6 +56,8 @@ pub struct Cli {
 #[allow(clippy::large_enum_variant)]
 pub enum Commands {
     Run(command_args_a::RunArgs),
+    /// Show agent routing advice without dispatching
+    Advise(command_args_advise::AdviseArgs),
     Batch(command_args_a::BatchArgs),
     Benchmark(command_args_a::BenchmarkArgs),
     Watch(command_args_watch::WatchArgs),

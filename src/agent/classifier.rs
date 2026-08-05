@@ -2,7 +2,11 @@
 // Categorizes prompts by type and estimates complexity.
 // Exports: TaskCategory, Complexity, TaskProfile, classify()
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+use clap::ValueEnum;
+use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ValueEnum)]
+#[serde(rename_all = "kebab-case")]
 pub enum TaskCategory {
     Research,
     SimpleEdit,
@@ -67,6 +71,9 @@ const SIMPLE_EDIT_TERMS: &[&str] = &[
     "fix typo",
     "add type",
     "annotation",
+    "null check",
+    "nil check",
+    "guard clause",
 ];
 const FRONTEND_TERMS: &[&str] = &[
     "ui",
@@ -231,6 +238,9 @@ mod tests {
 
     #[test]
     fn simple_edit_rename() { assert_eq!(classify("rename field in types.rs", 1, 24).category, TaskCategory::SimpleEdit); }
+
+    #[test]
+    fn simple_edit_null_check() { assert_eq!(classify("add a null check to the parser", 0, 30).category, TaskCategory::SimpleEdit); }
 
     #[test]
     fn frontend_react() { assert_eq!(classify("Create responsive React component", 0, 34).category, TaskCategory::Frontend); }

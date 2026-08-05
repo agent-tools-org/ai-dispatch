@@ -14,14 +14,16 @@ mod kg_types;
 mod migrations;
 mod queries;
 mod schema;
+mod schema_rows;
 mod status_guard;
+mod task_profile;
 pub use kg_types::{KgStats, KgTriple};
 
 #[cfg(test)]
 mod tests;
 
 use anyhow::{Context, Result};
-use rusqlite::Connection;
+use rusqlite::{Connection, OpenFlags};
 use std::path::Path;
 use std::sync::Mutex;
 
@@ -47,6 +49,15 @@ pub fn optimize_for_concurrency(conn: &Connection) -> Result<()> {
 }
 
 impl Store {
+    pub fn open_read_only(path: &Path) -> Result<Option<Self>> {
+        if !path.is_file() {
+            return Ok(None);
+        }
+        let conn = Connection::open_with_flags(path, OpenFlags::SQLITE_OPEN_READ_ONLY)
+            .with_context(|| format!("Failed to open database read-only at {}", path.display()))?;
+        Ok(Some(Self { conn: Mutex::new(conn) }))
+    }
+
     pub fn open(path: &Path) -> Result<Self> {
         let conn = Connection::open(path)
             .with_context(|| format!("Failed to open database at {}", path.display()))?;

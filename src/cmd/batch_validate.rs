@@ -255,7 +255,7 @@ fn insert_skipped_task(store: &Arc<Store>, task: &batch::BatchTask) -> Result<Ta
         custom_agent_name,
         prompt: task.prompt.clone(),
         resolved_prompt: None,
-        category: Some(profile.category.label().to_string()),
+        category: Some(task.kind.unwrap_or(profile.category).label().to_string()),
         status: TaskStatus::Skipped,
         parent_task_id: None,
         workgroup_id: task.group.clone(),
@@ -280,16 +280,17 @@ fn insert_skipped_task(store: &Arc<Store>, task: &batch::BatchTask) -> Result<Ta
         verify_status: VerifyStatus::Skipped,
         pending_reason: None,
         read_only: task.read_only,
-        budget: task.budget,
+        budget: task.budget.is_some_and(crate::types::TaskBudget::uses_budget_mode),
         audit_verdict: None,
         audit_report_path: None,
         delivery_assessment: None,
         created_at: now,
         completed_at: Some(now),
     })?;
+    store.update_task_profile(task_id.as_str(), crate::types::TaskProfileDeclaration {
+        difficulty: task.difficulty, budget: task.budget, urgency: task.urgency, rigor: task.rigor })?;
     Ok(task_id)
 }
-
 struct SharedDirConflict<'a> {
     dir: &'a str,
     count: usize,

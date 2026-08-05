@@ -1,3 +1,10 @@
+## v10.5.0 (2026-08-06)
+- BREAKING: aid no longer picks a skill for you. `auto_skills` chose by agent kind alone and never looked at the task — every implementation CLI was handed `implementer`, gemini and agy were handed `researcher`, whatever the work was. Skills now come from `--skill`, then `--no-skill` as an explicit none, then a project default (`skills = ["implementer"]` in `.aid/project.toml`), then nothing. A project that wants the old behaviour declares it once.
+- BREAKING: omitting `--kind` now describes every resolved toolbox tool instead of filtering by a guessed category. A multi-file refactor described in one tight sentence classified as `simple_edit` and received 2 of 24 tools with nothing in the output to say what had been dropped. Narrowing is opt-in: declare `--kind` and tools are filtered to that category, because omission is not a decision.
+- `aid show --context` and `aid export` report the skills a task was actually dispatched with, read from its stored args. They used to re-derive them from the agent kind, which reported `implementer` for a codex task even when the caller had passed `--skill reviewer`. Tasks dispatched before skills became declared report none, which is what their record says.
+- A `--tool` flag for finer selection is deliberately not included yet: it would have to thread through a 45-parameter dispatch chain, and removing the guessing did not need it — `--kind` is the caller's narrowing mechanism and already exists.
+
+
 ## v10.4.0 (2026-08-06)
 - Fixed: `aid run --kind <category>` was accepted and then ignored. The classifier only ever saw the prompt text, so the declared kind never reached the task profile and toolbox filtering and skill auto-apply kept using the keyword guess. Declaring the kind is now how a caller stops aid from guessing which tools and skill it gets.
 - Caught by using it: dispatching research about aid's own tool selection with `--kind research` still printed "Injected 2/24 toolbox tool(s) (filtered by frontend)". Accepting a declaration and then discarding it is worse than not offering the flag, because the caller believes it decided something.

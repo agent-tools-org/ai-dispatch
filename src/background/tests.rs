@@ -245,6 +245,76 @@ fn reaps_running_task_kept_alive_only_by_idle_bookkeeping_events() {
 }
 
 #[test]
+fn reaps_running_task_kept_alive_only_by_acked_reply_bookkeeping() {
+    let temp = tempfile::tempdir().unwrap();
+    let _aid_home = paths::AidHomeGuard::set(temp.path());
+    paths::ensure_dirs().unwrap();
+
+    let store = Store::open_memory().unwrap();
+    let task = make_task("t-acked-bookkeeping", TaskStatus::Running);
+    store.insert_task(&task).unwrap();
+    save_spec(&BackgroundRunSpec {
+        worker_pid: Some(202),
+        idle_timeout_secs: Some(30),
+        ..make_spec("t-acked-bookkeeping")
+    })
+    .unwrap();
+    insert_event(&store, "t-acked-bookkeeping", 61);
+    store
+        .insert_event(&TaskEvent {
+            task_id: TaskId("t-acked-bookkeeping".to_string()),
+            timestamp: Local::now() - Duration::seconds(1),
+            event_kind: EventKind::Reasoning,
+            detail: "Acked reply".to_string(),
+            metadata: Some(serde_json::json!({ "acked_reply": true })),
+        })
+        .unwrap();
+
+    let cleaned = check_zombie_tasks_with(&store, |pid| pid == 202).unwrap();
+
+    assert_eq!(cleaned, vec!["t-acked-bookkeeping".to_string()]);
+    assert_eq!(
+        store.get_task("t-acked-bookkeeping").unwrap().unwrap().status,
+        TaskStatus::Failed
+    );
+}
+
+#[test]
+fn reaps_running_task_kept_alive_only_by_nudge_echo_reasoning() {
+    let temp = tempfile::tempdir().unwrap();
+    let _aid_home = paths::AidHomeGuard::set(temp.path());
+    paths::ensure_dirs().unwrap();
+
+    let store = Store::open_memory().unwrap();
+    let task = make_task("t-nudge-echo-reaper", TaskStatus::Running);
+    store.insert_task(&task).unwrap();
+    save_spec(&BackgroundRunSpec {
+        worker_pid: Some(202),
+        idle_timeout_secs: Some(30),
+        ..make_spec("t-nudge-echo-reaper")
+    })
+    .unwrap();
+    insert_event(&store, "t-nudge-echo-reaper", 61);
+    store
+        .insert_event(&TaskEvent {
+            task_id: TaskId("t-nudge-echo-reaper".to_string()),
+            timestamp: Local::now() - Duration::seconds(1),
+            event_kind: EventKind::Reasoning,
+            detail: crate::unstick::default_nudge_message(),
+            metadata: None,
+        })
+        .unwrap();
+
+    let cleaned = check_zombie_tasks_with(&store, |pid| pid == 202).unwrap();
+
+    assert_eq!(cleaned, vec!["t-nudge-echo-reaper".to_string()]);
+    assert_eq!(
+        store.get_task("t-nudge-echo-reaper").unwrap().unwrap().status,
+        TaskStatus::Failed
+    );
+}
+
+#[test]
 fn marks_stale_pending_tasks_failed() {
     let temp = tempfile::tempdir().unwrap();
     let _aid_home = paths::AidHomeGuard::set(temp.path());

@@ -150,6 +150,98 @@ fn spinner_output_does_not_refresh_progress_clock() {
 }
 
 #[test]
+fn auto_nudge_echo_does_not_reset_idle_progress_clock() {
+    let store = Arc::new(Store::open_memory().unwrap());
+    let task = pty_task("t-nudge-echo-idle", TaskStatus::Running);
+    store.insert_task(&task).unwrap();
+    let mut state = MonitorState::new(true, None);
+    let idle = Duration::from_secs(2);
+    let stale = Instant::now() - idle - Duration::from_millis(50);
+    state.last_progress_time = stale;
+    state.idle_nudged = true;
+    let nudge = crate::pty_watch_idle::default_nudge_message();
+    state.inbound_echo_suppress.push(nudge.clone());
+    state.inbound_echo_suppress.push(nudge.clone());
+    let mut log = tempfile::NamedTempFile::new().unwrap();
+
+    // Stream goes silent except for aid's own nudge echoes (the live failure shape).
+    state
+        .handle_chunk(
+            &crate::agent::opencode::OpenCodeAgent,
+            &task.id,
+            &store,
+            log.as_file_mut(),
+            format!("{nudge}\n{nudge}\n"),
+        )
+        .unwrap();
+
+    assert_eq!(state.event_count, 0);
+    assert!(state.idle_nudged);
+    assert_eq!(state.last_progress_time, stale);
+    let would_hang = state.last_progress_time.elapsed() > idle;
+    assert!(
+        would_hang,
+        "nudge-only stream must still be past idle timeout for hung_detected"
+    );
+    let events = store.get_events(task.id.as_str()).unwrap();
+    assert!(
+        events.iter().all(|event| event.detail != nudge),
+        "nudge echo must not be stored as agent progress: {events:?}"
+    );
+    println!(
+        "PROOF nudge-only: events={} idle_nudged={} elapsed_ms={} idle_ms={} would_hung_detected={}",
+        state.event_count,
+        state.idle_nudged,
+        state.last_progress_time.elapsed().as_millis(),
+        idle.as_millis(),
+        would_hang
+    );
+}
+
+#[test]
+fn agent_resume_after_nudge_echo_does_reset_idle_progress_clock() {
+    let store = Arc::new(Store::open_memory().unwrap());
+    let task = pty_task("t-nudge-then-resume", TaskStatus::Running);
+    store.insert_task(&task).unwrap();
+    let mut state = MonitorState::new(true, None);
+    let idle = Duration::from_secs(2);
+    state.last_progress_time = Instant::now() - idle - Duration::from_millis(50);
+    state.idle_nudged = true;
+    let nudge = crate::pty_watch_idle::default_nudge_message();
+    state.inbound_echo_suppress.push(nudge.clone());
+    let mut log = tempfile::NamedTempFile::new().unwrap();
+
+    state
+        .handle_chunk(
+            &crate::agent::opencode::OpenCodeAgent,
+            &task.id,
+            &store,
+            log.as_file_mut(),
+            format!(
+                "{nudge}\n{}\n",
+                r#"{"type":"tool_call","name":"bash","arguments":"ls"}"#
+            ),
+        )
+        .unwrap();
+
+    assert!(state.event_count >= 1);
+    assert!(!state.idle_nudged);
+    let would_hang = state.last_progress_time.elapsed() > idle;
+    assert!(
+        !would_hang,
+        "agent resume after nudge must refresh progress and clear hung"
+    );
+    println!(
+        "PROOF nudge-then-resume: events={} idle_nudged={} elapsed_ms={} idle_ms={} would_hung_detected={}",
+        state.event_count,
+        state.idle_nudged,
+        state.last_progress_time.elapsed().as_millis(),
+        idle.as_millis(),
+        would_hang
+    );
+}
+
+#[test]
 fn reasoning_events_refresh_liveness_clock() {
     let store = Arc::new(Store::open_memory().unwrap());
     let task = pty_task("t-opencode-reasoning-progress", TaskStatus::Running);

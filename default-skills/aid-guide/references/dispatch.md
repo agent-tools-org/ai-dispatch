@@ -40,7 +40,9 @@ Important controls:
 - `--read-only` forbids writing intent.
 - `--sandbox` requests sandboxed execution.
 - `--timeout SECS` is a hard wall-clock cap in seconds.
-- `--idle-timeout SECS` stops a task without parsed activity.
+- `--idle-timeout SECS` stops a task without parsed agent activity. Aid's own
+  idle nudges, PTY echoes of those nudges, and reply/ack bookkeeping do not
+  reset the idle clock.
 - `--audit` runs the configured cross-audit.
 - `--result-file` requires a durable result artifact.
 - `--output` selects a task output path.

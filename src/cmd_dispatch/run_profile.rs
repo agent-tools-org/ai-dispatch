@@ -4,14 +4,15 @@
 
 use std::sync::Arc;
 
-use anyhow::{Result, anyhow};
+use anyhow::Result;
 
 use crate::agent;
 use crate::agent::classifier::TaskCategory;
+use crate::agent::selection::{AUTO_AGENT_REMOVED_MSG, is_removed_auto_agent};
 use crate::cmd_dispatch::recommend_hint;
 use crate::store;
 use crate::team;
-use crate::types::{AgentKind, DeclaredTaskProfile, TaskBudget, TaskDifficulty, TaskRigor, TaskUrgency};
+use crate::types::{AgentKind, TaskBudget, TaskDifficulty, TaskRigor, TaskUrgency};
 
 pub(super) fn validate_task_profile(
     difficulty: Option<TaskDifficulty>,
@@ -41,11 +42,14 @@ pub(super) fn validate_task_profile(
 pub(super) fn resolve_run_agent(
     store: &Arc<store::Store>, prompt: &str, dir: &Option<String>, repo: &Option<String>,
     output: &Option<String>, result_file: &Option<String>, model: &Option<String>, budget: bool,
-    difficulty: Option<TaskDifficulty>, declared_budget: Option<TaskBudget>,
-    urgency: Option<TaskUrgency>, rigor: Option<TaskRigor>, kind: Option<TaskCategory>,
+    _difficulty: Option<TaskDifficulty>, declared_budget: Option<TaskBudget>,
+    _urgency: Option<TaskUrgency>, rigor: Option<TaskRigor>, _kind: Option<TaskCategory>,
     no_hint: bool, read_only: bool, sandbox: bool, worktree: &Option<String>,
     team_flag: &Option<String>, agent_name: String,
 ) -> Result<(String, Option<String>)> {
+    if is_removed_auto_agent(&agent_name) {
+        anyhow::bail!("{AUTO_AGENT_REMOVED_MSG}");
+    }
     let selection_opts = agent::RunOpts {
         dir: dir.clone().or_else(|| repo.clone())
             .or_else(|| worktree.as_ref().map(|_| ".".to_string())),
@@ -54,28 +58,10 @@ pub(super) fn resolve_run_agent(
         env: None, env_forward: None,
     };
     let team_config = team_flag.as_deref().and_then(team::resolve_team);
-    if agent_name != "auto" {
-        recommend_hint::emit_if_recommended(
-            &agent_name, prompt, no_hint, &selection_opts, store, team_config.as_ref(),
-        );
-        return explicit_agent(agent_name, model, declared_budget, rigor);
-    }
-    let declared = DeclaredTaskProfile {
-        difficulty: difficulty.unwrap_or_default(),
-        budget: declared_budget.unwrap_or_else(|| {
-            if budget { TaskBudget::Cheap } else { TaskBudget::Standard }
-        }),
-        urgency: urgency.unwrap_or_default(),
-        rigor: rigor.unwrap_or_default(),
-    };
-    let advice = agent::selection::advise(
-        prompt, declared, kind, team_config.as_ref(), Some(store.as_ref()), 0,
+    recommend_hint::emit_if_recommended(
+        &agent_name, prompt, no_hint, &selection_opts, store, team_config.as_ref(),
     );
-    let recommended = advice.recommended
-        .ok_or_else(|| anyhow!("No eligible agent for the declared task profile"))?;
-    aid_info!("[aid] Auto-selected: {} (reason: {})", recommended.agent, recommended.reason);
-    let recommended_model = model.is_none().then_some(recommended.model).flatten();
-    Ok((recommended.agent, recommended_model))
+    explicit_agent(agent_name, model, declared_budget, rigor)
 }
 
 fn explicit_agent(

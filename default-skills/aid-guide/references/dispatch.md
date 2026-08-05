@@ -72,6 +72,10 @@ separately because their configured capability values are not on the built-in
 score scale. Inferred kind is advisory; pass `--kind` when the caller knows the
 task kind. Advice exits successfully even when every agent is rate-limited.
 
+`aid run auto` and batch `agent = "auto"` (or an empty agent) are hard errors.
+There is no silent routing shim: declare a task profile, run `aid advise`, then
+dispatch an explicit agent.
+
 ## Context and instructions
 
 Use `--context <path>...` for source material, not extra positional arguments.

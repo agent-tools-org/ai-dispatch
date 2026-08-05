@@ -11,33 +11,12 @@ pub(crate) fn task_to_run_args(
     task: &batch::BatchTask,
     siblings: &[&batch::BatchTask],
     background: bool,
-    store: &Arc<Store>,
+    store: &Arc<Store>, // retained for call-site stability; selection no longer reads it
     shared_dir_path: Option<&str>,
 ) -> RunArgs {
-    // If team is set and agent is empty/auto, auto-select from team members
-    let (agent_name, advised_model) = if (task.agent.is_empty() || task.agent == "auto") && task.team.is_some() {
-        let team_config = task.team.as_deref().and_then(crate::team::resolve_team);
-        let declared = crate::types::DeclaredTaskProfile {
-            difficulty: task.difficulty.unwrap_or_default(),
-            budget: task.budget.unwrap_or_default(),
-            urgency: task.urgency.unwrap_or_default(),
-            rigor: task.rigor.unwrap_or_default(),
-        };
-        let advice = crate::agent::selection::advise(
-            &task.prompt, declared, task.kind, team_config.as_ref(), Some(store.as_ref()), 0,
-        );
-        let recommended = advice.recommended;
-        if let Some(item) = recommended {
-            aid_info!("[aid] Batch auto-selected: {} (reason: {})", item.agent, item.reason);
-            (item.agent, item.model)
-        } else {
-            ("auto".to_string(), None)
-        }
-    } else if task.agent.is_empty() {
-        ("auto".to_string(), None)
-    } else {
-        (task.agent.clone(), None)
-    };
+    let _ = store;
+    // Empty/`auto` agents are rejected in batch validation; require an explicit name.
+    let agent_name = task.agent.clone();
     let batch_siblings = siblings
         .iter()
         .map(|sibling| {
@@ -47,11 +26,7 @@ pub(crate) fn task_to_run_args(
                     .clone()
                     .or_else(|| sibling.id.clone())
                     .unwrap_or_else(|| "<unnamed>".to_string()),
-                if sibling.agent.is_empty() {
-                    "auto".to_string()
-                } else {
-                    sibling.agent.clone()
-                },
+                sibling.agent.clone(),
                 sibling.prompt.clone(),
             )
         })
@@ -74,10 +49,10 @@ pub(crate) fn task_to_run_args(
     } else {
         task.skills.clone().unwrap_or_default()
     };
-    let profile_model = advised_model.or_else(|| {
-        task.budget.and_then(|budget| crate::types::AgentKind::parse_str(&agent_name)
+    let profile_model = task.budget.and_then(|budget| {
+        crate::types::AgentKind::parse_str(&agent_name)
             .and_then(|kind| crate::agent::selection::model_for_task_budget(kind, budget))
-            .map(str::to_string))
+            .map(str::to_string)
     });
     RunArgs {
         agent_name,

@@ -10,13 +10,14 @@ use super::BatchTask;
 
 pub(super) fn validate_agents(tasks: &[BatchTask]) -> Result<()> {
     for (task_idx, task) in tasks.iter().enumerate() {
-        if task.agent.trim().is_empty() {
-            if task.team.is_some() {
-                continue;
-            }
-            anyhow::bail!("task {} is missing agent", task_label(task, task_idx));
+        if crate::agent::selection::is_removed_auto_agent(&task.agent) {
+            anyhow::bail!(
+                "task {}: {}",
+                task_label(task, task_idx),
+                crate::agent::selection::AUTO_AGENT_REMOVED_MSG
+            );
         }
-        if task.agent != "auto" && !is_valid_agent(&task.agent) {
+        if !is_valid_agent(&task.agent) {
             anyhow::bail!("unknown agent: {}", task.agent);
         }
         if let Some(judge_agent) = task.judge.as_deref()

@@ -14,7 +14,7 @@ id = "{name}"
 display_name = "{display_name}"
 description = ""
 
-# Soft preference for auto-selection (all agents remain available)
+# Soft preference for aid advise scoring (all agents remain available)
 preferred_agents = []
 # default_agent = "codex"
 

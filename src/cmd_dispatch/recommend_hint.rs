@@ -48,12 +48,12 @@ fn recommendation_hint(
         _ => "",
     };
     Some(format!(
-        "[tip] For this prompt, `{recommended_agent}` would likely work too{detail}. Run with `aid run auto ...` next time to let aid choose. Pass --{NO_HINT_FLAG} to suppress."
+        "[tip] For this prompt, `{recommended_agent}` would likely work too{detail}. Run `aid advise` to compare agents, then `aid run <agent> ...`. Pass --{NO_HINT_FLAG} to suppress."
     ))
 }
 
-fn hint_suppressed(user_agent: &str, prompt: &str, no_hint: bool) -> bool {
-    no_hint || user_agent == "auto" || prompt.chars().count() < MIN_HINT_PROMPT_CHARS
+fn hint_suppressed(_user_agent: &str, prompt: &str, no_hint: bool) -> bool {
+    no_hint || prompt.chars().count() < MIN_HINT_PROMPT_CHARS
 }
 
 #[cfg(test)]
@@ -110,7 +110,7 @@ mod tests {
         assert_eq!(recommended, AgentKind::OpenCode.as_str());
         assert_eq!(
             recommendation_hint("codex", prompt, false, &recommended),
-            Some("[tip] For this prompt, `opencode` would likely work too (5-20x cheaper, good for simple edits). Run with `aid run auto ...` next time to let aid choose. Pass --no-hint to suppress.".to_string())
+            Some("[tip] For this prompt, `opencode` would likely work too (5-20x cheaper, good for simple edits). Run `aid advise` to compare agents, then `aid run <agent> ...`. Pass --no-hint to suppress.".to_string())
         );
     }
 
@@ -125,14 +125,6 @@ mod tests {
     #[test]
     fn hint_suppressed_for_short_prompts() {
         assert_eq!(recommendation_hint("codex", "rename field", false, "opencode"), None);
-    }
-
-    #[test]
-    fn hint_suppressed_when_user_picked_auto() {
-        assert_eq!(
-            recommendation_hint("auto", "rename src/types.rs field name", false, "opencode"),
-            None
-        );
     }
 
     #[test]

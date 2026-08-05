@@ -1,5 +1,38 @@
 # Dispatch and Execution
 
+## Routes: CLI x provider x model
+
+An execution route is three independent things, not one opaque agent id:
+
+```text
+opencode / opencode-zen / glm-5.2
+└ CLI      └ provider     └ model
+```
+
+| Dimension | Owns |
+|---|---|
+| CLI | invocation: flags, output shape, session resume, sandboxing |
+| provider | metering and billing: the quota pool and its reset semantics |
+| model | capability per category, context window, per-token price |
+
+`aid advise` names the recommended route in this form. `aid agent list --json`
+carries `provider` and `metering` per agent. Agent names keep working unchanged:
+`aid run codex` resolves to a route.
+
+`metering` says how a provider meters, which decides what one outage implies:
+
+| Value | Meaning |
+|---|---|
+| `account_pool` | one pool for the whole account, shared by every model it serves |
+| `per_model_family` | separate pools per family; one exhausted family says nothing about the others |
+| `spend_budget` | a currency budget that does not refill with time — only a top-up clears it |
+| `subscription` | not metered per task, though model tiers cost the plan differently |
+| `none` | no pool: billed per token against your own key |
+| `unknown` | not established — aid has never observed this provider refuse |
+
+`unknown` is a real answer rather than a gap to be filled with a plausible
+guess, and it appears for every provider whose metering aid has not seen.
+
 ## Choose the entry point
 
 - Use `aid run` for one accountable task with a stored lifecycle.

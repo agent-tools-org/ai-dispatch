@@ -131,11 +131,11 @@ pub(super) fn changelog(version: Option<String>, all: bool, count: usize, git: b
     cmd::changelog::run(version, all, count, git)
 }
 
-pub(super) fn agent(action: AgentCommands) -> Result<()> {
+pub(super) fn agent(store: Arc<store::Store>, action: AgentCommands) -> Result<()> {
     use cmd::agent::{AgentAction, run_agent_command};
     let action = match action {
-        AgentCommands::List => AgentAction::List,
-        AgentCommands::Show { name } => AgentAction::Show { name },
+        AgentCommands::List { json } => AgentAction::List { json },
+        AgentCommands::Show { name, json } => AgentAction::Show { name, json },
         AgentCommands::Config { name, model, idle_timeout, disable, enable } => {
             AgentAction::Config { name, model, idle_timeout, disable, enable }
         }
@@ -144,7 +144,7 @@ pub(super) fn agent(action: AgentCommands) -> Result<()> {
         AgentCommands::Fork { name, new_name } => AgentAction::Fork { name, new_name },
         AgentCommands::Quota => AgentAction::Quota,
     };
-    run_agent_command(action)
+    run_agent_command(&store, action)
 }
 
 pub(super) fn clean(store: Arc<store::Store>, older_than: u64, worktrees: bool, dry_run: bool) -> Result<()> {

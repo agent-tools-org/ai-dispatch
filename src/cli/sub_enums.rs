@@ -6,9 +6,16 @@ use clap::Subcommand;
 #[derive(Subcommand)]
 pub enum AgentCommands {
     /// List all agents (built-in + custom)
-    List,
+    List {
+        #[arg(long)]
+        json: bool,
+    },
     /// Show agent details and configuration
-    Show { name: String },
+    Show {
+        name: String,
+        #[arg(long)]
+        json: bool,
+    },
     /// Set or clear per-agent defaults
     Config {
         name: String,
@@ -37,7 +44,6 @@ pub enum AgentCommands {
     /// Show rate-limit / quota status for all agents
     Quota,
 }
-
 #[derive(Subcommand)]
 pub enum HookAction {
     /// Print session-start hook text for Claude Code

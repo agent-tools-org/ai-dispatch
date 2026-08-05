@@ -12,17 +12,22 @@ use crate::paths;
 use crate::sanitize;
 use crate::types::AgentKind;
 
+use crate::store::Store;
+
 #[path = "agent_template.rs"]
 mod agent_template;
 use agent_template::{build_builtin_agent_toml, custom_agent_template, title_case};
-#[path = "agent_display.rs"]
-mod agent_display;
-use agent_display::{print_custom_summary, show_builtin_profile};
+
+use crate::cmd::agent_display::{print_custom_summary, show_builtin_profile, show_quota, list_agents};
+use crate::cmd::agent_json;
 
 pub enum AgentAction {
-    List,
+    List {
+        json: bool,
+    },
     Show {
         name: String,
+        json: bool,
     },
     Config {
         name: String,
@@ -44,10 +49,22 @@ pub enum AgentAction {
     Quota,
 }
 
-pub fn run_agent_command(action: AgentAction) -> Result<()> {
+pub fn run_agent_command(store: &Store, action: AgentAction) -> Result<()> {
     match action {
-        AgentAction::List => list_agents(),
-        AgentAction::Show { name } => show_agent(&name),
+        AgentAction::List { json } => {
+            if json {
+                agent_json::print_agents_json(store)
+            } else {
+                list_agents()
+            }
+        }
+        AgentAction::Show { name, json } => {
+            if json {
+                agent_json::print_agent_json(store, &name)
+            } else {
+                show_agent(&name)
+            }
+        }
         AgentAction::Config { name, model, idle_timeout, disable, enable } => {
             config_agent(&name, model.as_deref(), idle_timeout, disable, enable)
         }
@@ -108,51 +125,7 @@ fn config_agent(
     Ok(())
 }
 
-fn show_quota() -> Result<()> {
-    use crate::rate_limit;
-    let limited = rate_limit::rate_limited_agents();
-    println!("{:<12} {:<10} DETAIL", "AGENT", "STATUS");
-    for kind in AgentKind::ALL_BUILTIN {
-        if let Some((_, msg)) = limited.iter().find(|(a, _)| *a == *kind) {
-            let info = rate_limit::get_rate_limit_info(kind);
-            let recovery = info
-                .as_ref()
-                .and_then(|i| i.recovery_at.as_deref())
-                .unwrap_or("~1h");
-            println!(
-                "{:<12} {:<10} resets {recovery} — {msg}",
-                kind.as_str(), "LIMITED"
-            );
-        } else {
-            println!("{:<12} {:<10}", kind.as_str(), "OK");
-        }
-    }
-    Ok(())
-}
 
-fn list_agents() -> Result<()> {
-    println!("Built-in agents:");
-    println!("  {:<10} {:<6} DESCRIPTION", "NAME", "TRUST");
-    for kind in AgentKind::ALL_BUILTIN {
-        if let Some((_, description, _, _, _, trust_tier)) = kind.profile() {
-            println!("  {:<10} {:<6} {}", kind.as_str(), trust_tier, description);
-        }
-    }
-    println!("\nCustom agents:");
-    let custom = registry::list_custom_agents();
-    if custom.is_empty() {
-        println!("  (none installed — use `aid agent add <name>` to create one)");
-        return Ok(());
-    }
-    println!("  {:<10} {:<6} DISPLAY NAME", "NAME", "TRUST");
-    for config in custom {
-        println!(
-            "  {:<10} {:<6} {}",
-            config.id, config.trust_tier, config.display_name
-        );
-    }
-    Ok(())
-}
 
 fn show_agent(name: &str) -> Result<()> {
     if let Some(kind) = builtin_profile(name) {

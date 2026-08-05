@@ -11,7 +11,9 @@ use tokio::process::{Child, Command};
 use tokio::sync::mpsc;
 
 use super::build_diag::{render_digest, BuildReport, DiagnosticCollector};
-use super::build_fallback::{fallback_digest_note, should_retry_with_fallback};
+use super::build_fallback::{
+    fallback_digest_note, is_permission_os_error_text, should_retry_with_fallback,
+};
 use super::{BuildRequest, CargoTargetChoice};
 use crate::store::Store;
 use crate::types::{EventKind, TaskEvent, TaskId};
@@ -225,6 +227,11 @@ fn handle_stream_event(
                 stream_state.compiled_units += 1;
             }
             if let Some(diagnostic) = stream_state.collector.push_json_line(&line) {
+                // JSON compiler-message path: EPERM never hits stderr, but fallback
+                // detection keys off the human message text.
+                if is_permission_os_error_text(&diagnostic.message) {
+                    stream_state.stderr_lines.push(diagnostic.message.clone());
+                }
                 emit_event(store, task_id, diagnostic.event_detail());
             }
         }

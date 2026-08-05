@@ -29,9 +29,19 @@ agent-facing digest only after Cargo exits. The digest contains:
 Cargo progress lines such as `Compiling ...` are not emitted in the digest. Long-running progress is
 sent to the task event stream when `AID_TASK_ID` is set; otherwise it is rate-limited on stderr.
 
-`aid build` does not override an inherited `CARGO_TARGET_DIR`. If `CARGO_TARGET_DIR` is already set,
-the child Cargo process inherits it. If it is not set, the command uses the existing agent cargo target
-helpers to select a shared or branch-specific target directory.
+`aid build` does not override an inherited `CARGO_TARGET_DIR` for the first attempt.
+If `CARGO_TARGET_DIR` is already set, the child Cargo process inherits it. If it is
+not set, the command uses the existing agent cargo target helpers to select a shared
+or branch-specific target directory.
+
+When cargo fails because that chosen target directory is not writable (sandbox
+`Operation not permitted` / read-only `Permission denied` at a path under the
+target), `aid build` retries once under the system temp directory at
+`aid-build-target/<project-key>/` and adds a digest note naming both paths. This
+is keyed off cargo's real OS error, not a preflight write probe. Inherited
+`CARGO_TARGET_DIR` still wins selection; fallback only runs after the permission
+failure. Temp is used because some agent sandboxes block cargo writes under the
+worktree even when plain file creation there succeeds.
 
 ## Verification
 

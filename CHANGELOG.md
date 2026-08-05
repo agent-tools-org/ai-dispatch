@@ -1,3 +1,9 @@
+## v10.4.0 (2026-08-06)
+- Fixed: `aid run --kind <category>` was accepted and then ignored. The classifier only ever saw the prompt text, so the declared kind never reached the task profile and toolbox filtering and skill auto-apply kept using the keyword guess. Declaring the kind is now how a caller stops aid from guessing which tools and skill it gets.
+- Caught by using it: dispatching research about aid's own tool selection with `--kind research` still printed "Injected 2/24 toolbox tool(s) (filtered by frontend)". Accepting a declaration and then discarding it is worse than not offering the flag, because the caller believes it decided something.
+- Added a regression test pinning the exact codex quota string captured on 2026-08-05, including its ordinal day suffix. If that format ever stops parsing, `is_rate_limited` silently falls back to a 300-second window and a six-day outage reads as available again after five minutes.
+
+
 ## v10.3.0 (2026-08-06)
 - An execution route is now three things rather than one opaque agent id: the CLI that is invoked, the provider that meters and bills it, and the model that does the work. `aid advise` names the recommended route as `codex/openai-chatgpt-plan/gpt-5.6-luna`, and `aid agent list --json` carries `provider` and `metering` per agent. Agent names are unchanged — `aid run codex` resolves to a route.
 - `metering` says how a provider meters, which decides what one outage implies: `account_pool` (one pool for the whole account), `per_model_family` (one exhausted family says nothing about the others), `spend_budget` (a currency budget that does not refill with time — only a top-up clears it), `subscription`, `none`, and `unknown`.

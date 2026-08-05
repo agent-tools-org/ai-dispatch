@@ -10,8 +10,12 @@ use crate::store::Store;
 
 #[path = "build_diag.rs"]
 mod build_diag;
+#[path = "build_fallback.rs"]
+mod build_fallback;
 #[path = "build_process.rs"]
 mod build_process;
+#[path = "build_progress.rs"]
+mod build_progress;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum BuildCommand {

@@ -13,8 +13,30 @@ fn marker_path(agent: &AgentKind) -> PathBuf {
     aid_dir().join(format!("rate-limit-{}", agent.as_str()))
 }
 
+/// Marker for one model group of an agent whose plan meters families
+/// separately. agy's gemini allowance can be exhausted while its claude
+/// allowance still serves; a per-agent marker would strand the working one.
+fn group_marker_path(agent: &AgentKind, group: &str) -> PathBuf {
+    aid_dir().join(format!("rate-limit-{}--{}", agent.as_str(), group))
+}
+
+pub fn mark_group_rate_limited(agent: &AgentKind, group: &str, message: &str) {
+    write_marker(&group_marker_path(agent, group), message);
+}
+
+pub fn is_group_rate_limited(agent: &AgentKind, group: &str) -> bool {
+    marker_is_active(&group_marker_path(agent, group))
+}
+
+pub fn clear_group_rate_limit(agent: &AgentKind, group: &str) -> bool {
+    fs::remove_file(group_marker_path(agent, group)).is_ok()
+}
+
 pub fn mark_rate_limited(agent: &AgentKind, message: &str) {
-    let path = marker_path(agent);
+    write_marker(&marker_path(agent), message);
+}
+
+fn write_marker(path: &std::path::Path, message: &str) {
     if let Some(parent) = path.parent() {
         let _ = fs::create_dir_all(parent);
     }
@@ -31,7 +53,28 @@ pub fn mark_rate_limited(agent: &AgentKind, message: &str) {
         recovery_at.unwrap_or_default(),
         truncated_message
     );
-    let _ = fs::write(&path, content);
+    let _ = fs::write(path, content);
+}
+
+/// Shared liveness check for a marker file: honour a parsed recovery time when
+/// present, otherwise fall back to the mtime cooldown window.
+fn marker_is_active(path: &std::path::Path) -> bool {
+    let Ok(content) = fs::read_to_string(path) else {
+        return false;
+    };
+    let recovery = content
+        .lines()
+        .find_map(|line| line.strip_prefix("recovery_at: "))
+        .filter(|value| !value.is_empty())
+        .and_then(parse_recovery_datetime);
+    if let Some(recovery_at) = recovery {
+        return recovery_at > Local::now().naive_local();
+    }
+    fs::metadata(path)
+        .and_then(|meta| meta.modified())
+        .ok()
+        .and_then(|modified| modified.elapsed().ok())
+        .is_some_and(|elapsed| elapsed.as_secs() < RATE_LIMIT_WINDOW_SECS)
 }
 
 pub fn clear_rate_limit(agent: &AgentKind) -> bool {

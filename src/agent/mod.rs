@@ -12,6 +12,7 @@ pub mod droid;
 pub mod gemini;
 pub(crate) mod gemini_support;
 pub mod kilo;
+pub(crate) mod model_group;
 pub mod mimocode;
 pub mod opencode;
 pub(crate) mod opencode_overlay;

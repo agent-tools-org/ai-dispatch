@@ -60,3 +60,14 @@ fn hyphenated_window_is_used_when_no_reset_time_is_given() {
 fn messages_without_a_reset_hint_return_none() {
     assert!(parse_relative_recovery("quota exhausted").is_none());
 }
+
+#[test]
+fn oz_quota_limit_reached_is_recognized() {
+    // Verbatim from `oz agent run`, exit code 1. Note it matches none of the
+    // other four providers' wordings — "quota exceeded", "usage limit",
+    // "quota has been exhausted" and "individual quota reached" all miss it.
+    let (agent, minutes) = match_quota_signature("Error: Quota limit reached.")
+        .expect("oz quota message must match");
+    assert_eq!(agent, AgentKind::Oz);
+    assert_eq!(minutes, 60);
+}

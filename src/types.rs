@@ -10,6 +10,8 @@ use std::{cell::RefCell, collections::VecDeque};
 
 #[path = "types/agent.rs"]
 mod agent;
+#[path = "types/attribution.rs"]
+mod attribution;
 #[path = "types/delivery.rs"]
 mod delivery;
 #[path = "types/message.rs"]
@@ -26,6 +28,7 @@ mod task_profile;
 mod memory;
 
 pub use self::agent::AgentKind;
+pub use self::attribution::{grade_observation, AttributionSource};
 pub use self::delivery::DeliveryAssessment;
 pub use self::message::{MessageDirection, MessageSource, TaskMessage};
 pub use self::memory::{Memory, MemoryId, MemoryTier, MemoryType};

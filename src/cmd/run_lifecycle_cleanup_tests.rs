@@ -60,7 +60,7 @@ fn task(id: &str, repo: &Path, wt: &Path, branch: &str, output_path: &Path) -> T
         tokens: None,
         prompt_tokens: None,
         duration_ms: Some(1_000),
-        requested_model: None, observed_model: None,
+        requested_model: None, observed_model: None, attribution_source: None,
         cost_usd: None,
         exit_code: None,
         created_at: Local::now(),

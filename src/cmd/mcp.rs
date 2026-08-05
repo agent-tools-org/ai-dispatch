@@ -292,7 +292,7 @@ mod tests {
             tokens: Some(42),
             prompt_tokens: None,
             duration_ms: Some(1_500),
-            requested_model: Some("gpt-5".to_string()), observed_model: None,
+            requested_model: Some("gpt-5".to_string()), observed_model: None, attribution_source: None,
             cost_usd: Some(0.01),
             exit_code: None,
             created_at: Local::now(),

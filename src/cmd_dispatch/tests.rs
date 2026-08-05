@@ -130,7 +130,7 @@ fn task_with_verify_status(verify_status: VerifyStatus) -> Task {
         caller_kind: None, caller_session_id: None, agent_session_id: None, repo_path: None,
         worktree_path: None, worktree_branch: None, final_head_sha: None, final_branch: None,
         start_sha: None, log_path: None, output_path: None, tokens: None, prompt_tokens: None,
-        duration_ms: Some(2_500), requested_model: None, observed_model: None, cost_usd: None, exit_code: None,
+        duration_ms: Some(2_500), requested_model: None, observed_model: None, attribution_source: None, cost_usd: None, exit_code: None,
         created_at: Local::now(), completed_at: None, verify: None, verify_status,
         pending_reason: None, read_only: false, budget: false, audit_verdict: None,
         audit_report_path: None, delivery_assessment: None,

@@ -216,7 +216,7 @@ fn completion_without_a_reported_model_leaves_the_request_alone() {
             status: TaskStatus::Done,
             tokens: Some(10),
             duration_ms: 1000,
-            observed_model: None,
+            observed_model: None, attribution_source: None,
             cost_usd: None,
             exit_code: Some(0),
         })
@@ -245,6 +245,7 @@ fn a_later_silent_completion_does_not_erase_an_observation() {
                 tokens: Some(10),
                 duration_ms: 1000,
                 observed_model: observed,
+                attribution_source: observed.map(|_| AttributionSource::Echoed),
                 cost_usd: None,
                 exit_code: Some(0),
             })
@@ -266,7 +267,7 @@ fn update_completion() {
             status: TaskStatus::Done,
             tokens: Some(3000),
             duration_ms: 47000,
-            observed_model: Some("gemini-2.5-flash"),
+            observed_model: Some("gemini-2.5-flash"), attribution_source: None,
             cost_usd: Some(0.0038),
             exit_code: None,
         })
@@ -297,7 +298,7 @@ fn update_completion_does_not_override_terminal_intent_statuses() {
                 status: TaskStatus::Done,
                 tokens: Some(55),
                 duration_ms: 1234,
-                observed_model: Some("gpt-5.4"),
+                observed_model: Some("gpt-5.4"), attribution_source: None,
                 cost_usd: Some(0.01),
                 exit_code: Some(0),
             })
@@ -435,14 +436,17 @@ fn latest_default_model_prefers_most_recent_successful_gemini() {
     let mut g_old = make_task("t-la1", AgentKind::Gemini, TaskStatus::Done);
     g_old.created_at = now - chrono::Duration::hours(10);
     g_old.observed_model = Some("gemini-2.5-flash".to_string());
+    g_old.attribution_source = Some(AttributionSource::Echoed);
 
     let mut g_new = make_task("t-la2", AgentKind::Gemini, TaskStatus::Done);
     g_new.created_at = now - chrono::Duration::hours(1);
     g_new.observed_model = Some("gemini-3.1-pro-preview".to_string());
+    g_new.attribution_source = Some(AttributionSource::Echoed);
 
     let mut failed = make_task("t-la3", AgentKind::Gemini, TaskStatus::Failed);
     failed.created_at = now;
     failed.observed_model = Some("should-ignore".to_string());
+    failed.attribution_source = Some(AttributionSource::Echoed);
 
     store.insert_task(&g_old).unwrap();
     store.insert_task(&g_new).unwrap();
@@ -451,5 +455,30 @@ fn latest_default_model_prefers_most_recent_successful_gemini() {
     assert_eq!(
         store.latest_default_model(AgentKind::Gemini).unwrap().as_deref(),
         Some("gemini-3.1-pro-preview")
+    );
+}
+
+/// An agent's learned default model must come from the CLI naming it, not from
+/// aid inferring it because a run did not fail. Otherwise the first
+/// confirmed-by-success row pins a default that nothing ever confirmed, and
+/// every later dispatch inherits the inference as though it were fact.
+#[test]
+fn latest_default_model_ignores_a_merely_inferred_model() {
+    let store = Store::open_memory().unwrap();
+    let mut inferred = make_task("t-inf1", AgentKind::Codex, TaskStatus::Done);
+    inferred.observed_model = Some("gpt-5.6-luna".to_string());
+    inferred.attribution_source = Some(AttributionSource::ConfirmedBySuccess);
+    store.insert_task(&inferred).unwrap();
+
+    assert_eq!(store.latest_default_model(AgentKind::Codex).unwrap(), None);
+
+    let mut echoed = make_task("t-inf2", AgentKind::Codex, TaskStatus::Done);
+    echoed.observed_model = Some("gpt-5.6".to_string());
+    echoed.attribution_source = Some(AttributionSource::Echoed);
+    store.insert_task(&echoed).unwrap();
+
+    assert_eq!(
+        store.latest_default_model(AgentKind::Codex).unwrap().as_deref(),
+        Some("gpt-5.6")
     );
 }

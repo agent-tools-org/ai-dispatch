@@ -43,7 +43,7 @@ fn done_task(task_id: &str) -> Task {
         tokens: None,
         prompt_tokens: None,
         duration_ms: Some(1_000),
-        requested_model: None, observed_model: None,
+        requested_model: None, observed_model: None, attribution_source: None,
         cost_usd: None,
         exit_code: Some(0),
         created_at: Local::now(),

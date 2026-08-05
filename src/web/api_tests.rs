@@ -45,7 +45,7 @@ fn make_task(id: &str) -> Task {
         prompt_tokens: Some(11),
         duration_ms: Some(5000),
         requested_model: Some("gpt".to_string()),
-        observed_model: None,
+        observed_model: None, attribution_source: None,
         cost_usd: Some(0.5),
         exit_code: Some(0),
         created_at: Local::now(),

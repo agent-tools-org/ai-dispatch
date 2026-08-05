@@ -286,7 +286,7 @@ fn render_board_task(task: Task) -> Value {
         "duration": task_duration(&task),
         "tokens": task.tokens,
         "cost": task.cost_usd,
-        "requested_model": task.requested_model, "observed_model": task.observed_model,
+        "requested_model": task.requested_model, "observed_model": task.observed_model, "attribution_source": task.attribution_source.map(|value| value.as_str()),
         "prompt_preview": truncate(&task.prompt, 80),
     })
 }

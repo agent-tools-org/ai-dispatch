@@ -41,7 +41,7 @@ fn make_task(
         tokens: Some(tokens),
         prompt_tokens: None,
         duration_ms: Some(1_000),
-        requested_model: None, observed_model: None,
+        requested_model: None, observed_model: None, attribution_source: None,
         cost_usd: Some(cost_usd),
         exit_code: None,
         created_at,

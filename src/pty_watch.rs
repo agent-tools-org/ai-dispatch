@@ -502,6 +502,11 @@ fn finalize_streaming(
         crate::agent::stream_completion::merge_parsed_completion(&mut state.info, parsed);
         status = state.info.status;
     }
+    // Same reason as the streaming watcher: a quota refusal exits 0 and carries
+    // no error envelope, so it must be caught on the success path or not at all.
+    if crate::agent::stream_completion::record_quota_exhaustion(&state.full_output, agent.kind()) {
+        status = TaskStatus::Failed;
+    }
     state.info.status = status;
     state.info.exit_code = i32::try_from(exit_status.exit_code()).ok();
     store.insert_event(&TaskEvent {

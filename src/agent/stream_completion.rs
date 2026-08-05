@@ -139,7 +139,11 @@ mod tests {
 /// and the previous rate-limit marker cleared by that same "success".
 ///
 /// Returns true when a signature matched, so the caller can fail the task.
-pub(crate) fn record_quota_exhaustion(output: &str, agent: crate::types::AgentKind) -> bool {
+pub(crate) fn record_quota_exhaustion(
+    output: &str,
+    agent: crate::types::AgentKind,
+    model: Option<&str>,
+) -> bool {
     if !crate::rate_limit::is_rate_limit_error(output) {
         return false;
     }
@@ -149,7 +153,13 @@ pub(crate) fn record_quota_exhaustion(output: &str, agent: crate::types::AgentKi
     let detail = quota_line(output)
         .or_else(|| crate::rate_limit::extract_rate_limit_message(output))
         .unwrap_or_else(|| output.chars().take(200).collect());
-    crate::rate_limit::mark_rate_limited(&agent, &detail);
+    // An agent whose plan meters model families separately must only lose the
+    // family that ran out. agy's gemini allowance and its claude allowance are
+    // independent: marking the whole agent would strand a working one.
+    match crate::agent::model_group::model_group(agent, model) {
+        Some(group) => crate::rate_limit::mark_group_rate_limited(&agent, group, &detail),
+        None => crate::rate_limit::mark_rate_limited(&agent, &detail),
+    }
     true
 }
 

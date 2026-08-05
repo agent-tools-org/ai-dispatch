@@ -61,6 +61,10 @@ Stopping preserves the worktree and attempts to preserve in-flight changes.
 Inspect the artifact afterward. A retry creates linked history; use `tree` to
 understand the chain.
 
+When the recorded linked worktree still exists, retry reuses it with the
+original repository checkout as its anchor. Retry still refuses a target branch
+that is genuinely checked out in the checkout that dispatched the task.
+
 ## Merge
 
 ```bash

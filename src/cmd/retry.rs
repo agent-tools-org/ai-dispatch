@@ -77,6 +77,7 @@ fn retry_task_to_run_args(
             ..Default::default()
         }
     });
+    run_args.repo = run_args.repo.or_else(|| task.repo_path.clone());
     run_args.agent_name = agent_name;
     run_args.prompt = prompt;
     if let Some(dir) = dir {

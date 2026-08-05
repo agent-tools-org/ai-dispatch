@@ -120,17 +120,54 @@ fn retry_dir_override_wins_over_existing_worktree() {
 #[test]
 fn retry_existing_worktree_overrides_saved_dir() {
     let store = Store::open_memory().unwrap();
-    let (_repo, _linked_root, worktree) = linked_worktree("aid/existing");
+    let (repo, _linked_root, worktree) = linked_worktree("aid/existing");
+    let repo_path = repo.path().to_string_lossy().to_string();
     let worktree_path = worktree.to_string_lossy().to_string();
     let mut task = failed_task("t-existing-worktree");
+    task.repo_path = Some(repo_path.clone());
     task.worktree_path = Some(worktree_path.clone());
     task.worktree_branch = Some("aid/existing".to_string());
     insert_task_with_saved_dir(&store, &task, "/tmp/original-repo");
 
     let args = retry_args(&store, &task, None);
+    let reused = crate::worktree::create_worktree(
+        Path::new(args.repo.as_deref().expect("retry repo anchor")),
+        args.worktree.as_deref().expect("retry worktree branch"),
+        None,
+    ).unwrap();
 
+    assert_eq!(args.repo.as_deref(), Some(repo_path.as_str()));
     assert_eq!(args.dir.as_deref(), Some(worktree_path.as_str()));
     assert_eq!(args.worktree.as_deref(), Some("aid/existing"));
+    assert_eq!(reused.path.canonicalize().unwrap(), worktree.canonicalize().unwrap());
+}
+
+#[test]
+fn retry_refuses_branch_checked_out_in_dispatching_checkout() {
+    let store = Store::open_memory().unwrap();
+    let repo = tempfile::tempdir().unwrap();
+    git(repo.path(), &["init", "-b", "main"]);
+    git(repo.path(), &["config", "user.email", "test@example.com"]);
+    git(repo.path(), &["config", "user.name", "Test User"]);
+    std::fs::write(repo.path().join("file.txt"), "hello\n").unwrap();
+    git(repo.path(), &["add", "file.txt"]);
+    git(repo.path(), &["commit", "-m", "init"]);
+    git(repo.path(), &["checkout", "-b", "aid/caller-branch"]);
+    let repo_path = repo.path().to_string_lossy().to_string();
+    let mut task = failed_task("t-caller-branch");
+    task.repo_path = Some(repo_path.clone());
+    task.worktree_path = Some(repo.path().join("missing-worktree").display().to_string());
+    task.worktree_branch = Some("aid/caller-branch".to_string());
+    insert_task_with_saved_dir(&store, &task, &repo_path);
+
+    let args = retry_args(&store, &task, None);
+    let err = crate::worktree::create_worktree(
+        Path::new(args.repo.as_deref().expect("retry repo anchor")),
+        args.worktree.as_deref().expect("retry worktree branch"),
+        None,
+    ).unwrap_err();
+
+    assert!(err.to_string().contains("main working tree"));
 }
 
 #[test]

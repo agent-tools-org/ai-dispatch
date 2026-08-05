@@ -31,6 +31,8 @@ pub struct ProjectConfig {
     #[serde(default)]
     pub profile: Option<String>,
     #[serde(default)]
+    pub require_task_profile: bool,
+    #[serde(default)]
     pub max_task_cost: Option<f64>,
     #[serde(default)]
     pub team: Option<String>,

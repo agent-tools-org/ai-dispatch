@@ -20,6 +20,8 @@ mod status;
 mod status_sets;
 #[path = "types/task.rs"]
 mod task;
+#[path = "types/task_profile.rs"]
+mod task_profile;
 #[path = "types/memory.rs"]
 mod memory;
 
@@ -30,6 +32,10 @@ pub use self::memory::{Memory, MemoryId, MemoryTier, MemoryType};
 pub use self::status::{EventKind, PendingReason, TaskStatus, VerifyStatus};
 pub use self::status_sets::{ACTIVE_EXECUTION_FAILURE_STATUSES, ACTIVE_TASK_STATUSES};
 pub use self::task::{CompletionInfo, Finding, Task, TaskEvent, TaskFilter, Workgroup};
+pub use self::task_profile::{
+    DeclaredTaskProfile, TaskBudget, TaskDifficulty, TaskProfileDeclaration, TaskRigor,
+    TaskUrgency,
+};
 
 /// Short hex ID prefixed with "t-", e.g. "t-a3f1b2c4"
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

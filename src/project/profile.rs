@@ -47,6 +47,7 @@ fn apply_standard_profile(config: &mut ProjectConfig) {
 }
 
 fn apply_production_profile(config: &mut ProjectConfig) {
+    config.require_task_profile = true;
     if config.max_task_cost.is_none() {
         config.max_task_cost = Some(25.0);
     }

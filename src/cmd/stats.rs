@@ -11,11 +11,12 @@ use crate::store::Store;
 use crate::types::{AgentKind, Task, TaskStatus};
 use crate::usage::UsageWindow;
 
-#[derive(Debug, PartialEq)] struct StatsSnapshot { agent_rows: Vec<AgentRow>, failure_rows: Vec<FailureRow>, model_rows: Vec<ModelRow>, activity_by_day: Vec<(String, usize)>, activity_by_hour: Vec<(u32, usize)>, top_sessions: Vec<TopSession>, total_cost: f64, total_tokens: i64, total_tasks: usize }
+#[derive(Debug, PartialEq)] struct StatsSnapshot { agent_rows: Vec<AgentRow>, failure_rows: Vec<FailureRow>, model_rows: Vec<ModelRow>, declared_rows: Vec<DeclaredRow>, activity_by_day: Vec<(String, usize)>, activity_by_hour: Vec<(u32, usize)>, top_sessions: Vec<TopSession>, total_cost: f64, total_tokens: i64, total_tasks: usize }
 #[derive(Debug, PartialEq)] struct AgentRow { agent: String, tasks: usize, share_pct: usize, success_rate: f64, avg_duration_ms: Option<i64>, cost: String }
 #[derive(Debug, PartialEq)] struct FailureRow { label: String, tasks: usize, agents: Vec<(String, usize)> }
 #[derive(Debug, PartialEq)] struct ModelRow { model: String, tasks: usize, cost: String }
 #[derive(Debug, PartialEq)] struct TopSession { task_id: String, agent: String, label: &'static str, value: String }
+#[derive(Debug, PartialEq)] struct DeclaredRow { difficulty: String, tasks: usize, avg_duration_ms: Option<i64>, failures: usize }
 
 pub fn run(store: &Store, window: String, agent: Option<String>, insights: bool) -> Result<()> {
     let window = UsageWindow::parse(&window)?;
@@ -29,6 +30,7 @@ fn collect(store: &Store, window: UsageWindow, agent: Option<&str>, now: DateTim
     let mut agents: BTreeMap<String, (AgentKind, usize, usize, usize, i64, usize, f64)> = BTreeMap::new();
     let mut failures: HashMap<String, (usize, BTreeMap<String, usize>)> = HashMap::new();
     let mut models: BTreeMap<String, (usize, f64, AgentKind)> = BTreeMap::new();
+    let mut declared: BTreeMap<String, (usize, i64, usize, usize)> = BTreeMap::new();
     let (mut day_counts, mut hour_counts, mut total_cost, mut total_tokens, mut total_tasks) = (HashMap::new(), [0usize; 24], 0.0, 0, 0);
     let (mut longest, mut most_tokens, mut highest_cost) = (None, None, None);
     for task in &tasks {
@@ -43,6 +45,12 @@ fn collect(store: &Store, window: UsageWindow, agent: Option<&str>, now: DateTim
         let model_row = models.entry(model).or_insert((0, 0.0, task.agent));
         model_row.0 += 1;
         model_row.1 += cost_usd;
+        if let Some(difficulty) = store.get_task_profile(task.id.as_str())?.difficulty {
+            let row = declared.entry(difficulty.label().to_string()).or_default();
+            row.0 += 1;
+            if let Some(duration) = task.duration_ms { row.1 += duration; row.2 += 1; }
+            row.3 += usize::from(task.status == TaskStatus::Failed || task.has_verify_failure());
+        }
         *day_counts.entry(task.created_at.format("%a").to_string()).or_default() += 1;
         hour_counts[task.created_at.hour() as usize] += 1;
         total_cost += cost_usd;
@@ -74,8 +82,11 @@ fn collect(store: &Store, window: UsageWindow, agent: Option<&str>, now: DateTim
         model, tasks, cost: cost::format_cost_label(Some(cost_usd), kind),
     }).collect();
     model_rows.sort_by(|a, b| b.tasks.cmp(&a.tasks).then_with(|| a.model.cmp(&b.model)));
+    let declared_rows = declared.into_iter().map(|(difficulty, (tasks, duration, count, failures))| DeclaredRow {
+        difficulty, tasks, avg_duration_ms: (count > 0).then(|| duration / count as i64), failures,
+    }).collect();
     Ok(StatsSnapshot {
-        agent_rows, failure_rows, model_rows, total_cost, total_tokens, total_tasks,
+        agent_rows, failure_rows, model_rows, declared_rows, total_cost, total_tokens, total_tasks,
         activity_by_day: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].into_iter().map(|day| (day.to_string(), *day_counts.get(day).unwrap_or(&0))).collect(),
         activity_by_hour: hour_counts.into_iter().enumerate().map(|(hour, count)| (hour as u32, count)).collect(),
         top_sessions: [
@@ -106,6 +117,9 @@ fn render(stats: &StatsSnapshot, window: UsageWindow, insights: bool, filtered_a
     out.push_str("\nModel Usage\n");
     for row in &stats.model_rows { out.push_str(&format!("  {:<18} {:>3} tasks  {}\n", row.model, row.tasks, row.cost)); }
     if stats.model_rows.is_empty() { out.push_str("  (none)\n"); }
+    out.push_str("\nDeclared vs Outcome\n");
+    for row in &stats.declared_rows { out.push_str(&format!("  {:<10} {:>3} tasks  avg {:<7}  {:>3} failed/verify-failed\n", row.difficulty, row.tasks, format_duration(row.avg_duration_ms), row.failures)); }
+    if stats.declared_rows.is_empty() { out.push_str("  (no declared profiles)\n"); }
     out.push_str(&format!("\nOverview\n  Total: {} tasks  {} tokens  {}\n", stats.total_tasks, format_tokens(stats.total_tokens), cost::format_cost(Some(stats.total_cost))));
     if let Some(hint) = stats.agent_rows.first().and_then(|row| stats_hint::diversification_hint(&row.agent, row.share_pct, stats.total_tasks, filtered_agent)) {
         out.push_str(&format!("  {hint}\n"));
@@ -201,7 +215,7 @@ mod tests {
 
     #[test]
     fn render_output_shows_friendly_message_when_no_tasks_match() {
-        let stats = StatsSnapshot { agent_rows: Vec::new(), failure_rows: Vec::new(), model_rows: Vec::new(), activity_by_day: Vec::new(), activity_by_hour: Vec::new(), top_sessions: Vec::new(), total_cost: 0.0, total_tokens: 0, total_tasks: 0 };
+        let stats = StatsSnapshot { agent_rows: Vec::new(), failure_rows: Vec::new(), model_rows: Vec::new(), declared_rows: Vec::new(), activity_by_day: Vec::new(), activity_by_hour: Vec::new(), top_sessions: Vec::new(), total_cost: 0.0, total_tokens: 0, total_tasks: 0 };
 
         assert_eq!(render_output(&stats, UsageWindow::Days(7), false, false), "No tasks matched the selected filters for last 7 days.\n");
     }
@@ -245,6 +259,24 @@ mod tests {
         store.insert_task(&task("t-1", AgentKind::Codex, TaskStatus::Done, 0, "gpt-5.4", Some(2.5), Some(1_000), 2_000)).unwrap();
         let output = render_output(&collect(&store, UsageWindow::Days(7), None, Local::now()).unwrap(), UsageWindow::Days(7), false, false);
         assert!(output.contains("Overview\n  Total: 1 tasks  2.0k tokens  $2.50"));
+    }
+
+    #[test]
+    fn render_includes_declared_difficulty_outcomes() {
+        let store = Store::open_memory().unwrap();
+        let task = task("t-declared", AgentKind::Codex, TaskStatus::Failed, 0, "gpt-5.4", Some(2.5), Some(120_000), 2_000);
+        store.insert_task(&task).unwrap();
+        store.update_task_profile("t-declared", crate::types::TaskProfileDeclaration {
+            difficulty: Some(crate::types::TaskDifficulty::Simple),
+            ..Default::default()
+        }).unwrap();
+
+        let stats = collect(&store, UsageWindow::Days(7), None, Local::now()).unwrap();
+        let output = render_output(&stats, UsageWindow::Days(7), false, false);
+
+        assert!(output.contains("Declared vs Outcome"));
+        assert!(output.contains("simple"));
+        assert!(output.contains("1 failed/verify-failed"));
     }
 
     #[test]

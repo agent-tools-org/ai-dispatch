@@ -121,7 +121,7 @@ async fn dispatch_with_dependencies(
                 task.model.as_deref(),
                 task.verify.as_deref(),
                 task.read_only,
-                task.budget,
+                task.budget.is_some_and(crate::types::TaskBudget::uses_budget_mode),
             ) {
                 aid_warn!("[aid] Warning: failed to pre-create task {i}: {e}");
             }

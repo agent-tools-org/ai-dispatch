@@ -5,6 +5,8 @@
 use serde::Deserialize;
 use std::collections::HashMap;
 
+use crate::agent::classifier::TaskCategory;
+use crate::types::{TaskBudget, TaskDifficulty, TaskRigor, TaskUrgency};
 use super::batch_serde::{deserialize_judge, deserialize_string_or_vec, deserialize_verify};
 
 #[derive(Debug, Deserialize)]
@@ -86,8 +88,11 @@ pub struct BatchDefaults {
     pub sandbox: Option<bool>,
     #[serde(default)]
     pub no_skill: Option<bool>,
-    #[serde(default)]
-    pub budget: Option<bool>,
+    pub difficulty: Option<TaskDifficulty>,
+    pub budget: Option<TaskBudget>,
+    pub urgency: Option<TaskUrgency>,
+    pub rigor: Option<TaskRigor>,
+    pub kind: Option<TaskCategory>,
     #[serde(default)]
     pub audit: Option<bool>,
     #[serde(default)]
@@ -167,8 +172,11 @@ pub struct BatchTask {
     pub sandbox: bool,
     #[serde(default)]
     pub no_skill: bool,
-    #[serde(default)]
-    pub budget: bool,
+    pub difficulty: Option<TaskDifficulty>,
+    pub budget: Option<TaskBudget>,
+    pub urgency: Option<TaskUrgency>,
+    pub rigor: Option<TaskRigor>,
+    pub kind: Option<TaskCategory>,
     #[serde(default)]
     pub audit: Option<bool>,
     #[serde(default)]

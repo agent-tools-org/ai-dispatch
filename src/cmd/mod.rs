@@ -2,6 +2,7 @@
 // Each module implements one subcommand.
 
 pub mod agent;
+pub mod advise;
 pub mod ask;
 pub mod benchmark;
 pub mod batch;

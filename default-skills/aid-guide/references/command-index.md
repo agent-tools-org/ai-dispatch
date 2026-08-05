@@ -8,6 +8,7 @@ current arguments.
 | Command | Purpose |
 |---|---|
 | `aid run` | Dispatch one agent task with optional worktree, verification, retry, audit, context, skills, or background execution. |
+| `aid advise` | Preview declared-profile agent/model routing without dispatching or writing task state. |
 | `aid batch` | Dispatch a dependency-aware TOML task graph. |
 | `aid benchmark` | Run the same task through multiple agents and compare results. |
 | `aid ask` | Run a focused research or exploration request with optional files. |
@@ -79,6 +80,6 @@ current arguments.
 |---|---|
 | `aid usage` | Report token and usage totals. |
 | `aid cost` | Report estimated costs by group, agent, or period. |
-| `aid stats` | Report task outcomes, models, failures, and usage concentration. |
+| `aid stats` | Report task outcomes, declared difficulty versus outcomes, models, failures, and usage concentration. |
 
 Global options include `--quiet`, `--help`, and `--version`.

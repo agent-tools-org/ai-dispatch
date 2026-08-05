@@ -249,6 +249,9 @@ fn task_label(task: &BatchTask, task_idx: usize) -> String {
 }
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+#[path = "batch/task_profile_tests.rs"]
+mod task_profile_tests;
 
 #[cfg(test)]
 #[path = "batch/legacy_field_tests.rs"]

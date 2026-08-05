@@ -243,3 +243,83 @@ shim, no alias.
 - Network quota probes feeding `quota.source = "probe"` (aidbar integration).
 - Category-aware fallback chains and the `aid run` pre-dispatch guard.
 - Learning loop that tunes the capability matrix from declared-vs-outcome drift.
+
+---
+
+## Revisions from the 2026-08-05 implementation round
+
+Four assumptions in the sections above were falsified by building the thing. They are corrected
+here rather than edited in place, so the reasoning that produced them stays visible.
+
+### 1. "The classifier is reliable for `kind`" — false
+
+Surface 0 kept `kind` inferred on the argument that keyword matching for research/refactor/frontend
+is dependable, unlike the length-based complexity guess. The first real invocation inferred
+`kind: research` for `add a null check to the parser`. Inference is unreliable on both axes.
+
+`--kind` is therefore a first-class declared flag, and an inferred kind must never be the dominant
+term in a recommendation. Report it as a hint with its source (`inferred` vs `declared`), which the
+shipped output already does.
+
+### 2. "Verification is the compensation cheap agents need" — false
+
+Both tiers shipped non-compiling code on their first delivery. The expensive tier did it *after*
+its own `aid build check` exited 101, and reported DONE anyway. Tier does not predict whether an
+agent verifies its work.
+
+Verification is the dispatcher's, unconditionally. `--rigor` does not decide *whether* to verify;
+it decides *what proof is owed*:
+
+| rigor | proof the dispatcher requires |
+|---|---|
+| `draft` | compiles |
+| `standard` | compiles + the changed path executed, real output captured |
+| `critical` | end-to-end dispatch + independent cross-audit |
+
+aid should inject the corresponding proof requirement into the brief, so the requirement scales
+with the declared rigor instead of depending on the dispatcher remembering it. Every round this
+session that tightened the requirement caught the agent taking the cheapest compliant path one
+level down: "verify" → skipped the build; "paste the build line" → built but never ran; "paste real
+output" → pasted a unit test. The requirement must name the artifact, not the activity.
+
+### 3. "`--rigor critical` should restrict trust tier" — false
+
+The shipped rule is `eligible = base >= difficulty.capability_floor() && budget_allows(...) &&
+trust_allows_builtin(kind, rigor)`, with `complex` requiring base ≥ 8 and `critical` admitting only
+`local`-tier agents. On the refactoring category that leaves exactly one eligible agent: codex. On
+the day codex ran out of quota, `aid advise` for a complex/critical task offered no alternative —
+failing precisely in the scenario that motivated the feature.
+
+It is also empirically backwards. codex (local, top tier) shipped non-compiling code twice; cursor
+(api tier, ineligible for `critical` under this rule) produced the best-evidenced delivery of the
+session and the cross-audit that blocked a bad merge. Trust tier did not predict delivery quality;
+proof level did.
+
+Required changes:
+- Eligibility becomes a penalty, not a gate. A hard binary must not be derived from hand-authored
+  capability integers where 7 vs 8 is not an evidenced difference.
+- Whenever the eligible set is empty or a single agent, the output must still surface the best
+  remaining options with the reason each was excluded (`cursor: base 6 < floor 8 for complex`).
+  The caller decides; that is the premise of the whole design.
+- `--rigor` drives the proof table in §2, not agent whitelisting.
+
+### 4. "Completion status lives in each adapter's `parse_completion`" — false
+
+`watch_streaming` (`src/watcher.rs`) and `finalize_streaming` (`src/pty_watch.rs`) set final status
+from the exit code alone and never call `Agent::parse_completion`; only the buffered paths call it.
+For every `streaming() -> true` adapter — which is all of them — that function is dead code. A CLI
+that exits 0 while reporting an API error records as **Done**. qwen does this on a 403.
+
+Established by cross-audit `t-799e30a3` (verdict BLOCK) against a branch that "fixed" the status
+logic in eight adapters' `parse_completion`: 287 lines that would never execute, plus detectors
+keyed to invented output shapes (real cursor/claude success ends `{"type":"result","is_error":false}`,
+while the detectors matched only `type == "error"`; gemini's rule failed any line carrying a
+top-level `message`, which ordinary skill/hook events do).
+
+The fix belongs in the streaming finalize path, keyed to each CLI's real result envelope, covered by
+an integration test in both directions: exit 0 + error envelope → Failed, exit 0 + real success log
+→ Done.
+
+This matters beyond one bug: success-rate history is fleet-wide corrupted by exit-0 failures
+recorded as successes, and that history is exactly what `aid advise` weights its recommendations
+with. The advice surface is only as honest as the outcome data feeding it.

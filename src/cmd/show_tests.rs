@@ -78,8 +78,12 @@ fn context_text_prefers_stored_resolved_prompt() {
     assert!(!text.contains("(reconstructed"));
 }
 
+/// Reconstruction reports the skills the task was actually dispatched with,
+/// read from its stored args. It used to re-derive them from the agent kind,
+/// which reported `implementer` for a codex task even when the caller had
+/// passed `--skill reviewer`, or none at all.
 #[test]
-fn context_text_reconstructs_skills_when_resolved_prompt_missing() {
+fn context_text_reports_the_skills_the_task_was_dispatched_with() {
     let temp = tempfile::tempdir().unwrap();
     let _aid_home = crate::paths::AidHomeGuard::set(temp.path());
     let dir = crate::paths::aid_dir().join("skills");
@@ -89,6 +93,9 @@ fn context_text_reconstructs_skills_when_resolved_prompt_missing() {
     let store = Arc::new(Store::open_memory().unwrap());
     let task = task_fixture("t-reconstruct", "raw prompt", None, None);
     store.insert_task(&task).unwrap();
+    store
+        .update_task_dispatch_args("t-reconstruct", r#"{"skills":["implementer"]}"#)
+        .unwrap();
 
     let text = context_text(&store, "t-reconstruct").unwrap();
 
@@ -96,6 +103,25 @@ fn context_text_reconstructs_skills_when_resolved_prompt_missing() {
     assert!(text.contains("=== Injected Skills ===\n# Implementer"));
     assert!(text.contains("=== Resolved Prompt ===\nraw prompt"));
     assert!(text.contains("[MILESTONE] <brief description>"));
+}
+
+/// A task dispatched with no skills reports none, rather than having one
+/// invented for it from the agent kind.
+#[test]
+fn context_text_reports_no_skills_when_none_were_dispatched() {
+    let temp = tempfile::tempdir().unwrap();
+    let _aid_home = crate::paths::AidHomeGuard::set(temp.path());
+    let dir = crate::paths::aid_dir().join("skills");
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(dir.join("implementer.md"), "# Implementer").unwrap();
+
+    let store = Arc::new(Store::open_memory().unwrap());
+    let task = task_fixture("t-noskill", "raw prompt", None, None);
+    store.insert_task(&task).unwrap();
+
+    let text = context_text(&store, "t-noskill").unwrap();
+
+    assert!(!text.contains("# Implementer"), "no skill was dispatched, none may be reported");
 }
 
 #[test]

@@ -31,7 +31,7 @@ pub(super) fn reconstruct_context(store: &Arc<Store>, task: &Task) -> Result<(St
     } else {
         vec![]
     };
-    let skill_names = crate::skills::auto_skills(&task.agent, task.worktree_path.is_some());
+    let skill_names = crate::skills::dispatched_skills(store, task.id.as_str());
     let skill_parts = skill_names
         .iter()
         .map(|skill| {

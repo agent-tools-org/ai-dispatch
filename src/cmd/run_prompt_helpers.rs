@@ -151,10 +151,35 @@ pub(crate) fn read_context_file(path: &str) -> Result<String> { std::fs::read_to
 
 pub(crate) fn format_context_block(path: &str, content: &str) -> String { format!("### {}\n```rust\n{}\n```", path, content.trim()) }
 
-pub(crate) fn effective_skills(agent_kind: &AgentKind, args: &RunArgs) -> Vec<String> {
-    let manual_skills: Vec<String> = args.skills.iter().filter(|skill| skill.as_str() != NO_SKILL_SENTINEL).cloned().collect();
-    if !manual_skills.is_empty() || args.skills.iter().any(|skill| skill.as_str() == NO_SKILL_SENTINEL) { return manual_skills; }
-    skills::auto_skills(agent_kind, args.worktree.is_some())
+/// Skills come from the caller, then the project, then nowhere.
+///
+/// The third step used to be `skills::auto_skills`, which chose by **agent kind
+/// alone** and never looked at the task: every implementation CLI was handed
+/// `implementer`, and gemini and agy were handed `researcher`, whatever the
+/// work actually was. A skill injects a substantial block of methodology text
+/// and a persona, so that guess spent the caller's tokens steering the agent
+/// toward something nobody had asked for.
+///
+/// A project that wants the old behaviour declares it once, in
+/// `.aid/project.toml`: `skills = ["implementer"]`.
+pub(crate) fn effective_skills(args: &RunArgs) -> Vec<String> {
+    let declared: Vec<String> = args
+        .skills
+        .iter()
+        .filter(|skill| skill.as_str() != NO_SKILL_SENTINEL)
+        .cloned()
+        .collect();
+    if !declared.is_empty() {
+        return declared;
+    }
+    // An explicit "no skills" is a decision, not an omission, so it must not
+    // fall through to the project default.
+    if args.skills.iter().any(|skill| skill.as_str() == NO_SKILL_SENTINEL) {
+        return Vec::new();
+    }
+    crate::project::detect_project()
+        .map(|config| config.skills)
+        .unwrap_or_default()
 }
 
 pub(crate) fn resolve_repo_path(path: &str) -> Result<String> {

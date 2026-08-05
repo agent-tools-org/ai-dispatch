@@ -51,7 +51,7 @@ fn resolved_prompt(store: &Store, task: &Task) -> Result<String> {
         .map(|id| store.get_workgroup_milestones(id))
         .transpose()?
         .unwrap_or_default();
-    let skills = crate::skills::auto_skills(&task.agent, task.worktree_path.is_some())
+    let skills = crate::skills::dispatched_skills(store, task.id.as_str())
         .into_iter()
         .map(|skill| {
             crate::skills::resolve_skill_content(skill.as_ref())

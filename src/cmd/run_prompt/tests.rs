@@ -69,16 +69,27 @@ fn format_batch_siblings_truncates_and_limits_output() {
     assert!(formatted.contains("+ 2 more"));
 }
 
+/// Omitting `--skill` means no skill, not a skill chosen from the agent kind.
+/// `auto_skills` used to hand `implementer` to every implementation CLI and
+/// `researcher` to gemini and agy regardless of the task, spending the caller's
+/// tokens on a persona nobody asked for.
 #[test]
-fn effective_skills_auto_apply_defaults() {
+fn effective_skills_default_to_none_when_nothing_is_declared() {
     let temp = tempfile::tempdir().unwrap();
     let _aid_home = crate::paths::AidHomeGuard::set(temp.path());
     let dir = crate::paths::aid_dir().join("skills");
     std::fs::create_dir_all(&dir).unwrap();
     std::fs::write(dir.join("implementer.md"), "# Implementer").unwrap();
+    assert!(effective_skills(&run_args(vec![])).is_empty());
+}
+
+#[test]
+fn a_declared_skill_is_used_verbatim() {
+    let temp = tempfile::tempdir().unwrap();
+    let _aid_home = crate::paths::AidHomeGuard::set(temp.path());
     assert_eq!(
-        effective_skills(&AgentKind::Codex, &run_args(vec![])),
-        vec!["implementer"]
+        effective_skills(&run_args(vec!["reviewer".to_string()])),
+        vec!["reviewer"]
     );
 }
 
@@ -90,11 +101,8 @@ fn effective_skills_respect_no_skill_sentinel() {
     std::fs::create_dir_all(&dir).unwrap();
     std::fs::write(dir.join("implementer.md"), "# Implementer").unwrap();
     assert!(
-        effective_skills(
-            &AgentKind::Codex,
-            &run_args(vec![crate::cmd::run::NO_SKILL_SENTINEL.to_string()])
-        )
-        .is_empty()
+        effective_skills(&run_args(vec![crate::cmd::run::NO_SKILL_SENTINEL.to_string()]))
+            .is_empty()
     );
 }
 

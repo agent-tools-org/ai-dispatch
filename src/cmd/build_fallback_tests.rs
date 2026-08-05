@@ -5,9 +5,9 @@
 use super::*;
 
 #[test]
-fn detects_sandbox_eperm_on_exact_target_path() {
+fn detects_error_writing_dependencies_backtick_path() {
     let stderr = vec![
-        "error: Operation not permitted (os error 1) at path \"/Users/me/.cargo-target/ai-dispatch/feat-x\""
+        "error: error writing dependencies to `/Users/me/.cargo-target/ai-dispatch/feat-x/debug/deps/foo.d`: Operation not permitted (os error 1)"
             .to_string(),
     ];
     assert!(target_dir_permission_blocked(

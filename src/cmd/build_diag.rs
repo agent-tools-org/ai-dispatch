@@ -35,10 +35,10 @@ pub(crate) enum DiagnosticLevel {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct Diagnostic {
-    level: DiagnosticLevel,
-    file_name: String,
-    line: usize,
-    message: String,
+    pub(crate) level: DiagnosticLevel,
+    pub(crate) file_name: String,
+    pub(crate) line: usize,
+    pub(crate) message: String,
     occurrences: usize,
 }
 

@@ -392,8 +392,23 @@ and the model is not among the fields they inherit. Anything model-dimensioned �
 marking, cost attribution, model-level history — silently degrades to "unknown" exactly on the paths
 aid takes when something has already gone wrong, which is when the record matters most.
 
-The `model=unknown` mass in `aid stats` is therefore not one bug: part is historical rows predating
-model capture, part is derived dispatches, and the split has not been measured.
+Measured rather than assumed (6643 task rows, 2026-08-05):
+
+| Slice | Rows | Model missing |
+|---|---|---|
+| derived (cascade / retry / best-of) | 582 | 92.6% |
+| direct | 6061 | 84.6% |
+
+Per agent, today only: cursor 0/18 missing, claude 0/1, qwen 4/14, agy 14/17, codex 61/65,
+opencode 13/13. The spread is not explained by time or by derivation — it is per adapter. The model
+is stored when the CLI echoes it in its output, or when the caller passed `--model` explicitly.
+**A model aid resolved itself — a budget model, a smart-routing choice, an agent default — is not
+recorded at all**, and adapters whose CLI stays silent about the model lose it entirely.
+
+So this is the `attribution` column of the CLI audit matrix, not a store bug: the same gap the
+gemini-family audit flagged for agy under plain-text output. Two fixes are needed and they are
+independent — record what aid passed at dispatch, and teach each adapter to read the model its CLI
+reports.
 
 ### Status
 

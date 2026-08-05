@@ -149,6 +149,9 @@ fn lifecycle_agent_for_spec(
 
 async fn run_task_inner(store: &Arc<Store>, spec: &BackgroundRunSpec) -> Result<()> {
     let agent: Box<dyn agent::Agent> = resolve_agent_for_spec(&spec.agent_name)?;
+    crate::rate_limit_wait::wait_for_declared_reset(
+        store.as_ref(), &spec.task_id, agent.kind(),
+    ).await?;
     let opts = RunOpts {
         dir: spec.dir.clone(),
         output: spec.output.clone(),

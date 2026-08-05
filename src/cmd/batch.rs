@@ -13,6 +13,8 @@ mod batch_validate;
 mod batch_init;
 #[path = "batch_args.rs"]
 mod batch_args;
+#[path = "batch_profile.rs"]
+mod batch_profile;
 #[path = "batch_retry.rs"]
 mod batch_retry;
 #[path = "batch_dispatch.rs"]
@@ -98,6 +100,7 @@ pub async fn run(store: Arc<Store>, args: BatchArgs) -> Result<()> {
         )?;
     }
     if explicit_repo_path.is_none() { warn_nested_repo_for_batch(&config.tasks); }
+    batch_profile::validate_required_profiles(&config.tasks)?;
     validate_batch_config(&config.tasks, args.parallel, args.force)?;
     let deps = batch::dependency_indices(&config.tasks)
         .unwrap_or_else(|_| vec![Vec::new(); config.tasks.len()]);

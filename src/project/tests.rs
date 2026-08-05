@@ -244,6 +244,7 @@ profile = "production"
     ))
     .unwrap();
     assert_eq!(production.max_task_cost, Some(25.0));
+    assert!(production.require_task_profile);
 }
 
 #[test]

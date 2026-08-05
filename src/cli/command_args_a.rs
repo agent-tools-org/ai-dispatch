@@ -2,6 +2,8 @@
 // Exports clap Args types for top-level commands from run through show.
 
 use crate::cli::{AgentCommands, BatchAction, RunExtrasArgs};
+use crate::agent::classifier::TaskCategory;
+use crate::types::{TaskBudget, TaskDifficulty, TaskRigor, TaskUrgency};
 use clap::{ArgGroup, Args};
 
 pub(crate) const NO_HINT_FLAG: &str = "no-hint";
@@ -31,7 +33,15 @@ pub struct RunArgs {
     #[arg(short, long)]
     pub model: Option<String>,
     #[arg(long)]
-    pub budget: bool,
+    pub difficulty: Option<TaskDifficulty>,
+    #[arg(long)]
+    pub budget: Option<TaskBudget>,
+    #[arg(long)]
+    pub urgency: Option<TaskUrgency>,
+    #[arg(long)]
+    pub rigor: Option<TaskRigor>,
+    #[arg(long)]
+    pub kind: Option<TaskCategory>,
     #[arg(long = NO_HINT_FLAG)]
     pub no_hint: bool,
     #[arg(short, long)]
@@ -115,7 +125,10 @@ Batch TOML format:
   context = ["src/types.rs"]             # Files to inject as context
   skills = ["implementer"]               # Methodology skills
   read_only = false                      # Read-only mode
-  budget = false                         # Budget/cheap mode
+  difficulty = "moderate"                # Task capability floor
+  budget = "standard"                    # Model/cost tier
+  urgency = "normal"                     # Rate-limit policy
+  rigor = "standard"                     # Verification rigor
 
   [[task]]
   name = "types"                         # Task name (for depends_on)

@@ -195,6 +195,21 @@ fn apply_task_defaults(task: &mut BatchTask, defaults: &BatchDefaults, task_idx:
     if task.scope.is_none() {
         task.scope = defaults.scope.clone();
     }
+    if task.difficulty.is_none() {
+        task.difficulty = defaults.difficulty;
+    }
+    if task.budget.is_none() {
+        task.budget = defaults.budget;
+    }
+    if task.urgency.is_none() {
+        task.urgency = defaults.urgency;
+    }
+    if task.rigor.is_none() {
+        task.rigor = defaults.rigor;
+    }
+    if task.kind.is_none() {
+        task.kind = defaults.kind;
+    }
     if !task.read_only && matches!(defaults.read_only, Some(true)) {
         task.read_only = true;
     }
@@ -203,9 +218,6 @@ fn apply_task_defaults(task: &mut BatchTask, defaults: &BatchDefaults, task_idx:
     }
     if !task.no_skill && matches!(defaults.no_skill, Some(true)) {
         task.no_skill = true;
-    }
-    if !task.budget && matches!(defaults.budget, Some(true)) {
-        task.budget = true;
     }
     if task.audit.is_none() {
         task.audit = defaults.audit;

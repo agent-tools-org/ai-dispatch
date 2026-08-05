@@ -2,6 +2,7 @@
 // Each module implements one subcommand.
 
 pub mod agent;
+pub mod advise;
 pub mod agent_display;
 pub mod agent_json;
 pub mod agent_json_helpers;

@@ -56,6 +56,7 @@ mod pty_runner_control;
 mod pty_watch_idle;
 mod pty_watch;
 mod rate_limit;
+mod rate_limit_wait;
 mod repo_root;
 pub(crate) mod sanitize;
 mod sandbox;
@@ -117,6 +118,15 @@ async fn main() -> Result<()> {
         output::set_quiet(true);
     }
 
+    let command = match cli.command {
+        Some(Commands::Advise(args)) => {
+            let store = store::Store::open_read_only(&paths::db_path())?;
+            cmd::advise::run(store.as_ref(), args)?;
+            return Ok(());
+        }
+        other => other,
+    };
+
     paths::ensure_dirs()?;
     let config = config::load_config().unwrap_or_default();
     if config.updates.check {
@@ -126,7 +136,7 @@ async fn main() -> Result<()> {
     cost::warm_gemini_default_from_store(store.as_ref());
     let _ = background::check_zombie_tasks(&store);
 
-    let outcome = match cli.command {
+    let outcome = match command {
         Some(command) => cmd_dispatch::dispatch(store.clone(), normalize_command(command, cli.quiet)).await?,
         None => cmd_dispatch::dispatch(store.clone(), Commands::Board(Default::default())).await?,
     };

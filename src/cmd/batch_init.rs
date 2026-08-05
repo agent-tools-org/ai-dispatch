@@ -72,7 +72,7 @@ fn render_template(dir: &str, team: &str, verify: &str, language: &str) -> Strin
     lines.push("# checklist = [\"must compile\", \"must have tests\"]  # Quality checklist".to_string());
     lines.push("# read_only = false             # Read-only mode".to_string());
     lines.push("# sandbox = false               # Run agent in sandbox mode".to_string());
-    lines.push("# budget = false                # Use budget-optimized model".to_string());
+    lines.push("# budget = \"standard\"         # free, cheap, standard, or premium".to_string());
     lines.push(String::new());
 
     // [defaults] — execution

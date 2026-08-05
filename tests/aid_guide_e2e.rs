@@ -82,6 +82,19 @@ fn official_guide_documents_retry_worktree_safety() {
     assert!(operations.contains("genuinely checked out in the checkout that dispatched the task"));
 }
 
+#[test]
+fn official_guide_documents_declared_profiles_and_advice() {
+    let dispatch = include_str!("../default-skills/aid-guide/references/dispatch.md");
+    let collaboration = include_str!("../default-skills/aid-guide/references/collaboration.md");
+    let configuration = include_str!("../default-skills/aid-guide/references/configuration.md");
+
+    assert!(dispatch.contains("`aid advise`"));
+    assert!(dispatch.contains("without launching an agent or writing the task store"));
+    assert!(dispatch.contains("--difficulty complex --budget premium --urgency urgent --rigor critical"));
+    assert!(collaboration.contains("declared `difficulty`, `budget`, `urgency`, and `rigor`"));
+    assert!(configuration.contains("`require_task_profile = true`"));
+}
+
 fn public_commands(help: &str) -> Vec<String> {
     help.lines()
         .skip_while(|line| *line != "Commands:")

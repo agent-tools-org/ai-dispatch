@@ -1,104 +1,19 @@
 // Scoring internals for agent auto-selection.
-// Exports: AGENT_CAPABILITIES, Candidate, CandidateContext, score_for, pick_best_candidate, etc.
-// Deps: classifier, rate_limit, types.
+// Exports: Candidate, CandidateContext, ScoreBreakdown, score_for, comparison helpers.
+// Deps: classifier, capability matrix, model catalog, rate limits, task profiles.
 
-use crate::agent::classifier::{self, Complexity, TaskCategory};
-use crate::agent::custom::CustomAgentConfig;
+use crate::agent::classifier::{self, Complexity};
 use crate::model_catalog::AGENT_MODELS;
 use crate::rate_limit;
 use crate::team::TeamConfig;
-use crate::types::AgentKind;
+use crate::types::{AgentKind, TaskBudget};
 use std::cmp::Ordering;
 use std::collections::HashMap;
-use std::process::Command;
-
-pub(super) const AGENT_CAPABILITIES: &[(AgentKind, &[(TaskCategory, i32)])] = &[
-    (AgentKind::Gemini, &[
-        (TaskCategory::Research, 9), (TaskCategory::Documentation, 6),
-        (TaskCategory::Debugging, 5), (TaskCategory::SimpleEdit, 2),
-        (TaskCategory::ComplexImpl, 3), (TaskCategory::Frontend, 2),
-        (TaskCategory::Testing, 3), (TaskCategory::Refactoring, 3),
-    ]),
-    (AgentKind::Antigravity, &[
-        (TaskCategory::Research, 9), (TaskCategory::Documentation, 6),
-        (TaskCategory::Debugging, 5), (TaskCategory::SimpleEdit, 2),
-        (TaskCategory::ComplexImpl, 3), (TaskCategory::Frontend, 2),
-        (TaskCategory::Testing, 3), (TaskCategory::Refactoring, 3),
-    ]),
-    (AgentKind::Qwen, &[
-        (TaskCategory::Research, 8), (TaskCategory::Documentation, 5),
-        (TaskCategory::Debugging, 5), (TaskCategory::SimpleEdit, 2),
-        (TaskCategory::ComplexImpl, 3), (TaskCategory::Frontend, 2),
-        (TaskCategory::Testing, 3), (TaskCategory::Refactoring, 3),
-    ]),
-    (AgentKind::Codex, &[
-        (TaskCategory::ComplexImpl, 9), (TaskCategory::Refactoring, 8),
-        (TaskCategory::Testing, 7), (TaskCategory::Debugging, 7),
-        (TaskCategory::SimpleEdit, 4), (TaskCategory::Research, 1),
-        (TaskCategory::Frontend, 4), (TaskCategory::Documentation, 3),
-    ]),
-    (AgentKind::Copilot, &[
-        (TaskCategory::ComplexImpl, 8), (TaskCategory::Refactoring, 7),
-        (TaskCategory::Testing, 7), (TaskCategory::Debugging, 7),
-        (TaskCategory::SimpleEdit, 6), (TaskCategory::Research, 4),
-        (TaskCategory::Frontend, 6), (TaskCategory::Documentation, 5),
-    ]),
-    (AgentKind::OpenCode, &[
-        (TaskCategory::SimpleEdit, 8), (TaskCategory::Documentation, 5),
-        (TaskCategory::Testing, 4), (TaskCategory::Debugging, 4),
-        (TaskCategory::ComplexImpl, 3), (TaskCategory::Research, 1),
-        (TaskCategory::Frontend, 2), (TaskCategory::Refactoring, 4),
-    ]),
-    (AgentKind::Kilo, &[
-        (TaskCategory::SimpleEdit, 7), (TaskCategory::Documentation, 4),
-        (TaskCategory::Testing, 3), (TaskCategory::Debugging, 3),
-        (TaskCategory::ComplexImpl, 2), (TaskCategory::Research, 1),
-        (TaskCategory::Frontend, 2), (TaskCategory::Refactoring, 3),
-    ]),
-    (AgentKind::MiMoCode, &[
-        (TaskCategory::SimpleEdit, 7), (TaskCategory::Documentation, 4),
-        (TaskCategory::Testing, 3), (TaskCategory::Debugging, 3),
-        (TaskCategory::ComplexImpl, 2), (TaskCategory::Research, 1),
-        (TaskCategory::Frontend, 2), (TaskCategory::Refactoring, 3),
-    ]),
-    (AgentKind::Cursor, &[
-        (TaskCategory::Frontend, 9), (TaskCategory::ComplexImpl, 7),
-        (TaskCategory::Refactoring, 6), (TaskCategory::Testing, 5),
-        (TaskCategory::Debugging, 5), (TaskCategory::SimpleEdit, 4),
-        (TaskCategory::Research, 2), (TaskCategory::Documentation, 4),
-    ]),
-    (AgentKind::Codebuff, &[
-        (TaskCategory::ComplexImpl, 8), (TaskCategory::Refactoring, 7),
-        (TaskCategory::Frontend, 7), (TaskCategory::Testing, 6),
-        (TaskCategory::Debugging, 6), (TaskCategory::SimpleEdit, 5),
-        (TaskCategory::Research, 2), (TaskCategory::Documentation, 4),
-    ]),
-    (AgentKind::Droid, &[
-        (TaskCategory::ComplexImpl, 9), (TaskCategory::Refactoring, 8),
-        (TaskCategory::Testing, 7), (TaskCategory::Debugging, 7),
-        (TaskCategory::SimpleEdit, 5), (TaskCategory::Research, 3),
-        (TaskCategory::Frontend, 5), (TaskCategory::Documentation, 4),
-    ]),
-    (AgentKind::Oz, &[
-        (TaskCategory::ComplexImpl, 8), (TaskCategory::Refactoring, 7),
-        (TaskCategory::Testing, 6), (TaskCategory::Debugging, 6),
-        (TaskCategory::SimpleEdit, 5), (TaskCategory::Research, 3),
-        (TaskCategory::Frontend, 6), (TaskCategory::Documentation, 4),
-    ]),
-    (AgentKind::Claude, &[
-        (TaskCategory::Research, 9), (TaskCategory::Documentation, 9),
-        (TaskCategory::Debugging, 10), (TaskCategory::SimpleEdit, 5),
-        (TaskCategory::ComplexImpl, 10), (TaskCategory::Frontend, 7),
-        (TaskCategory::Testing, 10), (TaskCategory::Refactoring, 10),
-    ]),
-];
-
-pub(super) fn base_score(agent: AgentKind, category: TaskCategory) -> i32 {
-    AGENT_CAPABILITIES.iter()
-        .find(|(k, _)| *k == agent)
-        .and_then(|(_, scores)| scores.iter().find(|(c, _)| *c == category))
-        .map(|(_, s)| *s).unwrap_or(1)
-}
+use serde::{Deserialize, Serialize};
+pub(super) use super::selection_capabilities::{
+    base_score, custom_category_score, custom_command_installed, custom_strength_bonus,
+    team_override_score,
+};
 
 pub(super) fn priority(kind: AgentKind) -> i32 {
     match kind {
@@ -140,50 +55,6 @@ fn model_is_paid(agent: AgentKind, model: &str) -> bool {
         .unwrap_or(false)
 }
 
-pub(super) fn custom_category_score(config: &CustomAgentConfig, category: TaskCategory) -> i32 {
-    let caps = &config.capabilities;
-    match category {
-        TaskCategory::Research => caps.research,
-        TaskCategory::SimpleEdit => caps.simple_edit,
-        TaskCategory::ComplexImpl => caps.complex_impl,
-        TaskCategory::Frontend => caps.frontend,
-        TaskCategory::Debugging => caps.debugging,
-        TaskCategory::Testing => caps.testing,
-        TaskCategory::Refactoring => caps.refactoring,
-        TaskCategory::Documentation => caps.documentation,
-    }
-}
-
-pub(super) fn category_strength_key(category: TaskCategory) -> &'static str {
-    match category {
-        TaskCategory::Research => "research",
-        TaskCategory::SimpleEdit => "simple_edit",
-        TaskCategory::ComplexImpl => "complex_impl",
-        TaskCategory::Frontend => "frontend",
-        TaskCategory::Debugging => "debugging",
-        TaskCategory::Testing => "testing",
-        TaskCategory::Refactoring => "refactoring",
-        TaskCategory::Documentation => "documentation",
-    }
-}
-
-pub(super) fn custom_strength_bonus(config: &CustomAgentConfig, category: TaskCategory) -> i32 {
-    let key = category_strength_key(category);
-    if config.strengths.iter().any(|s| s.eq_ignore_ascii_case(key)) {
-        5
-    } else {
-        0
-    }
-}
-
-pub(super) fn custom_command_installed(command: &str) -> bool {
-    Command::new("which")
-        .arg(command)
-        .output()
-        .map(|output| output.status.success())
-        .unwrap_or(false)
-}
-
 pub(super) const BUILTIN_AGENTS: &[AgentKind] = AgentKind::ALL_BUILTIN;
 
 #[derive(Clone)]
@@ -202,50 +73,121 @@ pub(super) struct CandidateContext<'a> {
     pub(super) avg_cost_map: &'a HashMap<AgentKind, f64>,
     pub(super) team_default: Option<AgentKind>,
     pub(super) budget: bool,
+    pub(super) declared_budget: Option<TaskBudget>,
+    pub(super) penalize_rate_limit: bool,
 }
 
-pub(super) fn score_for(ctx: &CandidateContext<'_>, kind: AgentKind) -> f64 {
-    let base = if let Some(tc) = ctx.team {
-        team_override_score(tc, kind.as_str(), ctx.profile.category)
-            .unwrap_or_else(|| base_score(kind, ctx.profile.category))
-    } else {
-        base_score(kind, ctx.profile.category)
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub(crate) struct ScoreBreakdown {
+    pub base: f64,
+    pub model_capability: f64,
+    pub budget_penalty: f64,
+    pub rate_limit_penalty: f64,
+    pub history_bonus: f64,
+    pub complexity_bonus: f64,
+    pub team_bonus: f64,
+    pub total: f64,
+}
+
+pub(crate) fn model_for_task_budget(
+    kind: AgentKind,
+    budget: TaskBudget,
+) -> Option<&'static str> {
+    let tiers: &[&str] = match budget {
+        TaskBudget::Free => &["free"],
+        TaskBudget::Cheap => &["cheap", "free"],
+        TaskBudget::Standard => &["standard", "cheap", "free"],
+        TaskBudget::Premium => &["premium", "standard", "cheap", "free"],
     };
-    let model = super::recommend_model(&kind, &ctx.profile.complexity, ctx.budget);
-    let capability = model.and_then(|m| model_capability_score(kind, m));
-    let mut s = model_quality_score(base, capability);
+    for tier in tiers {
+        if let Some(model) = AGENT_MODELS.iter()
+            .filter(|model| model.agent == kind && model.tier == *tier)
+            .max_by(|left, right| left.capability.partial_cmp(&right.capability).unwrap_or(Ordering::Equal))
+        {
+            return Some(model.model);
+        }
+    }
+    None
+}
+
+pub(super) fn score_breakdown(
+    ctx: &CandidateContext<'_>,
+    kind: AgentKind,
+) -> ScoreBreakdown {
+    let (base, model, initial) = initial_score(ctx, kind);
+    let mut s = initial;
+    let mut budget_penalty = 0.0;
     // Budget mode favors free models: a paid agent must be clearly stronger to
     // win, so trivial tasks route to free agents (kilo/qwen/free opencode).
     if ctx.budget && model.is_some_and(|m| model_is_paid(kind, m)) {
         s -= 3.0;
+        budget_penalty = -3.0;
     }
-    if rate_limit::is_rate_limited(&kind) {
+    let mut rate_limit_penalty = 0.0;
+    if ctx.penalize_rate_limit && rate_limit::is_rate_limited(&kind) {
         s -= 10.0;
+        rate_limit_penalty = -10.0;
     }
-    if let Some((rate, count)) = ctx.history_map.get(&kind)
-        && *count >= 5
-    {
-        let bonus = ((*rate - 0.75) * 16.0).round().clamp(-5.0, 4.0);
+    let mut history_bonus = 0.0;
+    if let Some(bonus) = history_score_bonus(ctx, kind) {
         s += bonus;
+        history_bonus = bonus;
     }
-    if matches!(ctx.profile.complexity, Complexity::High)
-        && matches!(
-            kind,
-            AgentKind::Codex | AgentKind::Copilot | AgentKind::Cursor | AgentKind::Droid | AgentKind::Oz | AgentKind::Claude
-        )
-    {
+    let mut complexity_bonus = 0.0;
+    if has_complexity_bonus(ctx, kind) {
         s += 2.0;
+        complexity_bonus = 2.0;
     }
     // Boost preferred agents from team (soft preference, not hard filter)
-    if let Some(tc) = ctx.team
-        && tc
-            .preferred_agents
-            .iter()
-            .any(|a| a.eq_ignore_ascii_case(kind.as_str()))
-    {
+    let mut team_bonus = 0.0;
+    if has_team_bonus(ctx, kind) {
         s += 3.0;
+        team_bonus = 3.0;
     }
-    s
+    ScoreBreakdown {
+        base: base as f64,
+        model_capability: initial - base as f64,
+        budget_penalty,
+        rate_limit_penalty,
+        history_bonus,
+        complexity_bonus,
+        team_bonus,
+        total: s,
+    }
+}
+
+fn initial_score(
+    ctx: &CandidateContext<'_>,
+    kind: AgentKind,
+) -> (i32, Option<&'static str>, f64) {
+    let base = ctx.team
+        .and_then(|team| team_override_score(team, kind.as_str(), ctx.profile.category))
+        .unwrap_or_else(|| base_score(kind, ctx.profile.category));
+    let model = ctx.declared_budget
+        .and_then(|budget| model_for_task_budget(kind, budget))
+        .or_else(|| super::recommend_model(&kind, &ctx.profile.complexity, ctx.budget));
+    let capability = model.and_then(|value| model_capability_score(kind, value));
+    (base, model, model_quality_score(base, capability))
+}
+
+fn history_score_bonus(ctx: &CandidateContext<'_>, kind: AgentKind) -> Option<f64> {
+    let (rate, count) = ctx.history_map.get(&kind)?;
+    (*count >= 5).then(|| ((*rate - 0.75) * 16.0).round().clamp(-5.0, 4.0))
+}
+
+fn has_complexity_bonus(ctx: &CandidateContext<'_>, kind: AgentKind) -> bool {
+    matches!(ctx.profile.complexity, Complexity::High)
+        && matches!(kind, AgentKind::Codex | AgentKind::Copilot | AgentKind::Cursor
+            | AgentKind::Droid | AgentKind::Oz | AgentKind::Claude)
+}
+
+fn has_team_bonus(ctx: &CandidateContext<'_>, kind: AgentKind) -> bool {
+    ctx.team.is_some_and(|team| team.preferred_agents.iter()
+        .any(|agent| agent.eq_ignore_ascii_case(kind.as_str())))
+}
+
+pub(super) fn score_for(ctx: &CandidateContext<'_>, kind: AgentKind) -> f64 {
+    score_breakdown(ctx, kind).total
 }
 
 pub(super) fn candidate_for(kind: AgentKind, ctx: &CandidateContext<'_>) -> Candidate {
@@ -291,18 +233,4 @@ pub(super) fn pick_best_candidate(agents: &[AgentKind], ctx: &CandidateContext<'
         .map(|&kind| candidate_for(kind, ctx))
         .max_by(|a, b| compare_candidates(a, b, budget))
         .unwrap_or_else(|| candidate_for(AgentKind::Codex, ctx))
-}
-
-pub(super) fn team_override_score(team: &TeamConfig, agent_name: &str, category: TaskCategory) -> Option<i32> {
-    let overrides = team.overrides.get(agent_name)?;
-    match category {
-        TaskCategory::Research => overrides.research,
-        TaskCategory::SimpleEdit => overrides.simple_edit,
-        TaskCategory::ComplexImpl => overrides.complex_impl,
-        TaskCategory::Frontend => overrides.frontend,
-        TaskCategory::Debugging => overrides.debugging,
-        TaskCategory::Testing => overrides.testing,
-        TaskCategory::Refactoring => overrides.refactoring,
-        TaskCategory::Documentation => overrides.documentation,
-    }
 }

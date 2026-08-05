@@ -3,6 +3,7 @@
 ## Choose the entry point
 
 - Use `aid run` for one accountable task with a stored lifecycle.
+- Use `aid advise` to inspect routing without dispatching or changing the store.
 - Use `aid batch` for multiple dependent or parallel tasks.
 - Use `aid ask` for quick research with file context.
 - Use `aid query` for a direct model query that does not need a task worktree.
@@ -15,6 +16,7 @@
 ```bash
 aid run codex "Implement request validation" \
   --dir . \
+  --difficulty moderate --budget standard --urgency normal --rigor standard \
   --worktree feat/request-validation \
   --verify \
   --retry 1 \
@@ -23,6 +25,11 @@ aid run codex "Implement request validation" \
 
 Important controls:
 
+- `--difficulty` declares `trivial`, `simple`, `moderate`, or `complex` capability needs.
+- `--budget` declares the eligible `free`, `cheap`, `standard`, or `premium` model tier.
+- `--urgency` declares `background`, `normal`, or `urgent` rate-limit handling.
+- `--rigor` declares `draft`, `standard`, or `critical`; critical runs require verification and cross-audit.
+- `--kind` overrides the inferred task kind while difficulty remains caller-declared.
 - `--dir` sets the task working directory.
 - `--repo` or `--repo-root` supplies the repository anchor.
 - `--worktree` creates or reuses an isolated task branch.
@@ -41,6 +48,28 @@ Important controls:
 Run `aid run --help` for iteration, evaluation, judging, peer review, best-of,
 model, budget, context, scope, checklist, skill, template, hook, container, and
 cascade options.
+
+Missing task-profile dimensions produce one warning and persist as null. Projects
+with `require_task_profile = true` reject incomplete runs; the production profile
+enables this requirement.
+
+## Preview routing without dispatch
+
+```bash
+aid advise "Refactor the scheduler" \
+  --difficulty complex --budget premium --urgency urgent --rigor critical \
+  --kind refactoring --top 5 --json
+```
+
+`aid advise` requires all four declared dimensions. It reads the live inventory,
+rate-limit markers, team preferences, and task history, then runs the production
+selector without launching an agent or writing the task store. Use `--top 0` for
+all candidates, `--team` for team preferences, and omit `--json` for a concise
+human-readable breakdown. Eligible installed built-ins rank first; custom agents
+are reported separately because their configured capability values are not on
+the built-in score scale. Inferred kind is advisory; pass `--kind` when the
+caller knows the task kind. Advice exits successfully even when every agent is
+rate-limited.
 
 ## Context and instructions
 

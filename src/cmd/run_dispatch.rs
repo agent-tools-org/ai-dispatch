@@ -44,6 +44,11 @@ pub async fn run(store: Arc<Store>, mut args: RunArgs) -> Result<TaskId> {
     if args.dry_run {
         return dry_run(&prepared, &args, &prompt_bundle);
     }
+    if !args.background {
+        crate::rate_limit_wait::wait_for_declared_reset(
+            store.as_ref(), prepared.task_id.as_str(), prepared.agent_kind,
+        ).await?;
+    }
     ensure_agent_binary_available(&store, &prepared, &args)?;
     let _workspace_symlink = if args.background {
         None

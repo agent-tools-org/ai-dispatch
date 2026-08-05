@@ -1,5 +1,6 @@
-// Cursor Agent CLI adapter: builds `agent`/`cursor-agent` commands, parses stream-json output.
-// Uses the standalone Cursor binary, preferring `agent` over the legacy alias.
+// Cursor Agent CLI adapter: builds `cursor-agent` commands, parses stream-json output.
+// Prefers the vendor-specific binary name; the bare `agent` is used only when it
+// identifies itself as Cursor's, because other vendors also install that name.
 
 use anyhow::Result;
 use chrono::Local;
@@ -13,6 +14,42 @@ use crate::types::*;
 
 pub struct CursorAgent;
 
+/// Cursor's binary, preferring the vendor-specific name.
+///
+/// `agent` is a name any vendor can claim. On 2026-08-05 installing grok put a
+/// symlink at `~/.local/bin/agent` pointing at its own binary, and because this
+/// adapter probed the bare name first, every cursor dispatch began invoking grok
+/// with cursor's flags — `error: unexpected argument '--force' found`, from a
+/// CLI whose usage line reads `agent --single <PROMPT>`. Cursor had run 18 tasks
+/// that day without trouble; the only thing that changed was another vendor
+/// taking the generic name.
+///
+/// So `cursor-agent` wins whenever it exists, and the bare `agent` is accepted
+/// only when it is verifiably Cursor's.
+fn cursor_binary() -> &'static str {
+    if super::env::which_exists("cursor-agent") {
+        return "cursor-agent";
+    }
+    if super::env::which_exists("agent") && bare_agent_is_cursor() {
+        return "agent";
+    }
+    "cursor-agent"
+}
+
+/// Ask the bare `agent` binary who it is. Cursor reports a dated build such as
+/// `2026.07.23-e383d2b`; grok answers `grok 0.2.118 (...)`.
+fn bare_agent_is_cursor() -> bool {
+    std::process::Command::new("agent")
+        .arg("--version")
+        .output()
+        .ok()
+        .filter(|out| out.status.success())
+        .map(|out| String::from_utf8_lossy(&out.stdout).to_lowercase())
+        .is_some_and(|version| {
+            !version.contains("grok") && !version.contains("qwen") && !version.contains("gemini")
+        })
+}
+
 impl super::Agent for CursorAgent {
     fn kind(&self) -> AgentKind {
         AgentKind::Cursor
@@ -23,7 +60,7 @@ impl super::Agent for CursorAgent {
     }
 
     fn build_command(&self, prompt: &str, opts: &RunOpts) -> Result<Command> {
-        let binary = if super::env::which_exists("agent") { "agent" } else { "cursor-agent" };
+        let binary = cursor_binary();
         let mut cmd = Command::new(binary);
         let prompt_with_ctx = super::embed_context_in_prompt(prompt, &opts.context_files)?;
         // Cursor documents stream-json "assistant" events as deltas; only the terminal "result"

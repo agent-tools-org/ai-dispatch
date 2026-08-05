@@ -84,3 +84,25 @@ fn prose_that_merely_mentions_quota_is_not_a_quota_failure() {
         "documentation prose must not match a provider quota signature"
     );
 }
+
+#[test]
+fn opencode_insufficient_balance_is_recognized() {
+    // Verbatim from t-76181278's log: an HTTP 401 body, not a 429 or 402, so
+    // the status-code checks in `is_rate_limit_error` miss it, and no generic
+    // needle contains "insufficient balance". aid reported opencode as OK and
+    // kept dispatching to an account that could not pay.
+    let body = r#"{"type":"error","error":{"name":"APIError","data":{"message":"Insufficient balance. Manage your billing here: https://opencode.ai/workspace/wrk_01/billing","statusCode":401}}}"#;
+    let (agent, minutes) = match_quota_signature(body).expect("opencode balance message must match");
+    assert_eq!(agent, AgentKind::OpenCode);
+    // A day, not the usual hour: a balance does not refill with time.
+    assert_eq!(minutes, 1440);
+}
+
+#[test]
+fn a_balance_failure_reads_as_a_rate_limit_error() {
+    // The signature is only useful if the generic entry point agrees, since
+    // that is what dispatch consults before routing.
+    assert!(crate::rate_limit::is_rate_limit_error(
+        "APIError: Insufficient balance. Manage your billing here: https://opencode.ai/"
+    ));
+}

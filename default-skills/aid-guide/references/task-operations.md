@@ -103,6 +103,35 @@ Use exports for sharing, not as a substitute for the stored task record.
 `aid stats` and `aid cost` show `unknown` when a task's model has no known
 pricing. Unknown costs are omitted from totals rather than recorded as `$0.00`.
 
+## Model attribution: requested versus observed
+
+A task records two models, never one:
+
+- `requested_model` — what aid dispatched with, from `--model`, the configured
+  default, budget mode, or smart routing. It is a request, and it is kept even
+  when the CLI refused to serve it.
+- `observed_model` — what the CLI reported it actually ran. It is `null` when
+  the CLI reported nothing, which is **not** the same as the requested model
+  having run.
+
+`aid show --json`, `aid board --json`, the MCP task view, and the web API emit
+both fields. There is no single `model` field.
+
+Human surfaces render the pair: `gpt-5.6` when the two agree, `gpt-5.6?` when a
+request was never confirmed, and `composer-2 (asked auto)` when the CLI served
+something other than what was asked for.
+
+`aid stats`'s per-model breakdown and an agent's learned default model read
+`observed_model` only, so an unconfirmed model reads as `unknown` rather than
+being reported as fact. Cost estimation falls back to `requested_model` when
+there is no observation; because both fields are stored, a reader can tell which
+basis a given row used. Per-family quota marking also reads the request on
+purpose — it asks which family aid aimed at, and plain-text CLIs never echo a
+model at all.
+
+Several CLIs never report a model, codex and agy among them, so `unknown` is the
+honest and expected value for many tasks rather than a defect.
+
 When a task has no assistant transcript, `aid export --sharegpt` falls back to
 the recorded events, and a failed task's salvaged `partial-work.md` summarises
 its recent activity. Both preserve tool calls, file reads, and file writes, so a

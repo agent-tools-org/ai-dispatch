@@ -44,6 +44,21 @@ pub(crate) const QUOTA_SIGNATURES: &[QuotaSignature] = &[
     // 12-hour cooldown; it matched unrelated output and would have stranded a
     // working claude allowance for twelve hours over a 59-minute gemini outage.
     QuotaSignature { agent: AgentKind::Antigravity, needle: "individual quota reached", fallback_minutes: 60 },
+    // opencode Zen, captured 2026-08-05 from t-76181278 as an HTTP 401 body:
+    // {"type":"error","error":{"name":"APIError","data":{"message":"Insufficient
+    //  balance. Manage your billing here: ...","statusCode":401}}}
+    //
+    // Unlike every other entry here this is not a time-based quota and it does
+    // not recover on its own — it ends when the account is topped up. The table
+    // has no way to say that, so the cooldown is a day: long enough to stop aid
+    // feeding work to an account that cannot pay for it, short enough that a
+    // top-up is not ignored for a week. `aid config clear-limit opencode` is the
+    // escape hatch after paying.
+    //
+    // Neither the generic phrase list nor a status-code check caught this: 401
+    // is neither 429 nor 402, and no needle contained "insufficient balance", so
+    // aid kept reporting opencode as OK and kept dispatching to it.
+    QuotaSignature { agent: AgentKind::OpenCode, needle: "insufficient balance", fallback_minutes: 1440 },
 ];
 
 /// Match a message against every provider signature. Returns the agent the

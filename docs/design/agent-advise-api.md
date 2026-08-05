@@ -415,3 +415,59 @@ reports.
 `src/agent/model_group.rs` (2026-08-05) implements per-family quota for agy. It is a special case of
 this design, added before the general shape was clear, and should fold into the model table rather
 than grow more per-CLI special cases.
+
+---
+
+## Three dimensions, not two: CLI × provider × model
+
+The section above corrected "agent" into CLI + model. That was still one short. An execution route
+is identified by three independent things, and aid currently collapses all of them into a single
+opaque agent id:
+
+    opencode / byok / deepseek-v4-flash
+    └ CLI      └ provider   └ model
+
+| Dimension | Owns |
+|---|---|
+| **CLI** | How to invoke: flags, output format, event shapes, session resume, sandboxing, read-only mode |
+| **Provider** | Who meters and bills: the quota pool and its reset semantics, credentials, base URL, cost basis |
+| **Model** | What the work is done by: capability per category, context window, per-token price |
+
+### Why the provider dimension is not optional
+
+Quota — the thing that broke routing repeatedly on 2026-08-05 — belongs to the provider, and the
+three shapes observed cannot be expressed by a per-CLI marker:
+
+| Provider | Metering |
+|---|---|
+| qwen / ModelStudio token plan | one 5-hour pool shared by all 17 served models |
+| agy / individual tier | separate pools per model family: gemini exhausted at 59m while claude still served |
+| opencode / BYOK | no pool at all — billed per token against the user's own key |
+| cursor / subscription | not metered per task, but model tiers differ in what they cost the plan |
+
+`rate-limit-<agent>` cannot represent any of that faithfully. The per-family markers added today
+(`rate-limit-agy--gemini`) are a special case of the provider dimension, reached by patching rather
+than by modelling.
+
+### aid already has the data
+
+`examples/byok/mimo.toml` carries all three — `base_url` and `key_env` (provider),
+`default_model` (model), and a note that it "configures opencode and generates an aid agent" (CLI).
+The manifest then collapses them into `id = "mimo"`. Custom agents do the same: `glm5` is really
+`bash-wrapper / NVIDIA NIM / z-ai/glm5`, and the name says none of it. Nothing in the identity
+survives to tell a scheduler what would still work when one dimension fails.
+
+### What changes
+
+- **Identity**: a route is `<cli>/<provider>/<model>`. Existing names stay as aliases so `aid run
+  glm5` keeps working, but they resolve to a triple.
+- **Quota**: keyed on the provider pool, with an optional family within it. One exhausted pool must
+  not remove routes that draw on a different one.
+- **Cost**: model price × provider basis. A subscription route and a BYOK route to the same model
+  cost differently and must not be averaged.
+- **Capability and history**: keyed on the model. Today `agy` carries one capability score across
+  Gemini Flash and Claude Opus, and `cursor` carries one across 193 models including Opus 5 and
+  GPT-5.6.
+- **Routing**: the declared profile picks a model class; reachability then picks a (CLI, provider)
+  pair that can serve it right now. When codex's quota ran out, `claude-opus-5-thinking-high` was
+  reachable through cursor the whole time and nothing in the data model could say so.

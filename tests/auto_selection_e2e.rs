@@ -1,57 +1,32 @@
-// E2E coverage for `aid run auto`.
-// Verifies the stderr selection message and dispatch through a fake agent CLI.
-// Deps: compiled `aid` binary, tempfile, and a POSIX shell.
+// E2E coverage: `aid run auto` is a hard error naming `aid advise`.
+// Verifies the removed-agent message; scoring stays available via advise.
+// Deps: compiled `aid` binary, tempfile.
 
-use std::path::Path;
-
-#[cfg(unix)]
-use std::os::unix::fs::PermissionsExt;
 use tempfile::TempDir;
 
 mod common;
 use common::aid_cmd_in;
 
-/// Verifies auto mode selects a research-capable agent and reports why.
 #[test]
-fn auto_run_selects_research_agent_and_reports_reason() {
+fn auto_run_errors_with_advise_replacement() {
     let aid_home = TempDir::new().unwrap();
-    let bin_dir = TempDir::new().unwrap();
-    write_script(
-        bin_dir.path(),
-        "gemini",
-        "#!/bin/sh\nprintf '%s' '{\"response\":\"ok\",\"usageMetadata\":{\"totalTokenCount\":7}}'\n",
-    );
-    write_script(bin_dir.path(), "agy", "#!/bin/sh\nprintf '%s' 'ok'\n");
-
-    let path = format!(
-        "{}:{}",
-        bin_dir.path().display(),
-        std::env::var("PATH").unwrap_or_default()
-    );
     let output = aid_cmd_in(aid_home.path())
-        .env("PATH", path)
-        .args(["run", "auto", "Explain the retry flow?"])
+        .args(["run", "auto", "x"])
         .output()
         .unwrap();
 
     assert!(
-        output.status.success(),
-        "run failed: {}",
+        !output.status.success(),
+        "expected failure, got success: {}",
         String::from_utf8_lossy(&output.stderr)
     );
     let stderr = String::from_utf8_lossy(&output.stderr);
-    let auto_selected = stderr.contains("[aid] Auto-selected: gemini")
-        || stderr.contains("[aid] Auto-selected: agy");
-    assert!(auto_selected, "expected gemini or agy to be auto-selected, got:\n{}", stderr);
-    assert!(stderr.contains("research task"));
-}
-
-fn write_script(dir: &Path, name: &str, contents: &str) {
-    let path = dir.join(name);
-    std::fs::write(&path, contents).unwrap();
-    #[cfg(unix)]
-    {
-        let permissions = std::fs::Permissions::from_mode(0o755);
-        std::fs::set_permissions(&path, permissions).unwrap();
-    }
+    assert!(
+        stderr.contains("aid advise"),
+        "expected advise replacement hint, got:\n{stderr}"
+    );
+    assert!(
+        stderr.contains("auto") && stderr.contains("removed"),
+        "expected removed-auto message, got:\n{stderr}"
+    );
 }

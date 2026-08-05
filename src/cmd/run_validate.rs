@@ -23,6 +23,7 @@ pub(super) fn validate_dispatch(args: &RunArgs, agent_kind: &AgentKind) -> Vec<S
             | AgentKind::Qwen
             | AgentKind::Kilo
             | AgentKind::MiMoCode
+            | AgentKind::Grok
             | AgentKind::Codebuff
     ) && args.dir.is_none() && !args.read_only
     {

@@ -1,0 +1,103 @@
+use super::*;
+use crate::agent::Agent;
+use crate::types::{AgentKind, TaskId, TaskStatus};
+
+fn opts(read_only: bool) -> RunOpts {
+    RunOpts {
+        dir: Some("/tmp".to_string()),
+        output: None,
+        result_file: None,
+        model: Some("grok-4.5".to_string()),
+        budget: false,
+        read_only,
+        sandbox: false,
+        context_files: Vec::new(),
+        session_id: Some("sess-1".to_string()),
+        env: None,
+        env_forward: None,
+    }
+}
+
+fn args_for(opts: &RunOpts) -> Vec<String> {
+    GrokAgent
+        .build_command("hello", opts)
+        .expect("build command")
+        .get_args()
+        .map(|arg| arg.to_string_lossy().into_owned())
+        .collect()
+}
+
+#[test]
+fn build_command_uses_grok_binary_and_json_flags() {
+    let args = args_for(&opts(false));
+    assert_eq!(
+        GrokAgent
+            .build_command("hello", &opts(false))
+            .expect("build")
+            .get_program()
+            .to_string_lossy(),
+        "grok"
+    );
+    assert!(args.windows(2).any(|pair| pair == ["-p", "hello"]));
+    assert!(args.windows(2).any(|pair| pair == ["--output-format", "json"]));
+    assert!(args.windows(2).any(|pair| pair == ["--model", "grok-4.5"]));
+    assert!(args.windows(2).any(|pair| pair == ["--cwd", "/tmp"]));
+    assert!(args.windows(2).any(|pair| pair == ["-r", "sess-1"]));
+}
+
+#[test]
+fn read_only_uses_plan_permission_mode() {
+    let args = args_for(&opts(true));
+    assert!(args.windows(2).any(|pair| pair == ["--permission-mode", "plan"]));
+}
+
+#[test]
+fn streaming_is_false_and_parse_event_returns_none() {
+    let task_id = TaskId::generate();
+    assert!(!GrokAgent.streaming());
+    assert!(GrokAgent.parse_event(&task_id, "anything").is_none());
+}
+
+#[test]
+fn parse_completion_reads_model_tokens_and_cost_from_model_usage() {
+    let output = r#"{
+      "text": "OK",
+      "usage": {
+        "input_tokens": 100,
+        "output_tokens": 5,
+        "total_tokens": 105
+      },
+      "total_cost_usd": 0.42,
+      "modelUsage": {
+        "grok-4.5-build": {
+          "inputTokens": 100,
+          "outputTokens": 5,
+          "costUSD": 0.42
+        }
+      }
+    }"#;
+    let completion = GrokAgent.parse_completion(output);
+    assert_eq!(completion.status, TaskStatus::Done);
+    assert_eq!(completion.tokens, Some(105));
+    assert_eq!(completion.model.as_deref(), Some("grok-4.5-build"));
+    assert_eq!(completion.cost_usd, Some(0.42));
+}
+
+#[test]
+fn parse_completion_marks_unknown_model_errors_failed() {
+    let output = r#"{"type":"error","message":"Couldn't set model 'x': Invalid params: \"unknown model id\"."}"#;
+    let completion = GrokAgent.parse_completion(output);
+    assert_eq!(completion.status, TaskStatus::Failed);
+    assert!(completion.model.is_none());
+}
+
+#[test]
+fn extract_response_returns_text_field() {
+    let output = r#"{"text":"OK","usage":{"total_tokens":1}}"#;
+    assert_eq!(extract_response(output).as_deref(), Some("OK"));
+}
+
+#[test]
+fn kind_returns_grok() {
+    assert_eq!(GrokAgent.kind(), AgentKind::Grok);
+}

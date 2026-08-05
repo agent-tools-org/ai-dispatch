@@ -20,6 +20,7 @@ pub enum AgentKind {
     Oz,
     Claude,
     Antigravity,
+    Grok,
     Custom,
 }
 
@@ -37,6 +38,7 @@ impl AgentKind {
         Self::Droid,
         Self::Oz,
         Self::Antigravity,
+        Self::Grok,
     ];
 
     pub const ALL: &'static [Self] = &[
@@ -52,6 +54,7 @@ impl AgentKind {
         Self::Droid,
         Self::Oz,
         Self::Antigravity,
+        Self::Grok,
         Self::Custom,
     ];
 
@@ -71,6 +74,7 @@ impl AgentKind {
             "claude" => Some(Self::Claude),
             "agy" => Some(Self::Antigravity),
             "antigravity" => Some(Self::Antigravity),
+            "grok" => Some(Self::Grok),
             _ => None,
         }
     }
@@ -90,6 +94,7 @@ impl AgentKind {
             Self::Oz => "oz",
             Self::Claude => "claude",
             Self::Antigravity => "agy",
+            Self::Grok => "grok",
             Self::Custom => "custom",
         }
     }
@@ -107,6 +112,7 @@ impl AgentKind {
         matches!(
             self,
             Self::OpenCode | Self::Kilo | Self::MiMoCode | Self::Droid | Self::Codex | Self::Qwen
+                | Self::Grok
         )
     }
 
@@ -216,6 +222,14 @@ impl AgentKind {
                 "Research, coding, web search, file editing (Antigravity CLI — replaces Gemini CLI for Google One / free tier)",
                 "free (Google One / Gemini Code Assist) or BYOK",
                 "research, explain, implement, create, analyze, build",
+                true,
+                "api",
+            )),
+            Self::Grok => Some((
+                "grok",
+                "General coding via Grok CLI",
+                "grok.com subscription",
+                "implement, explain, refactor, research",
                 true,
                 "api",
             )),

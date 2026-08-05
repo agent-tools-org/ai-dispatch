@@ -88,6 +88,13 @@ pub const AGENT_PROFILES: &[(AgentKind, &str, &str, &str, bool)] = &[
         "implement, review, refactor, explain, research, test",
         true,
     ),
+    (
+        AgentKind::Grok,
+        "General coding via Grok CLI",
+        "grok.com subscription",
+        "implement, explain, refactor, research",
+        true,
+    ),
 ];
 
 pub struct AgentModel {
@@ -205,6 +212,7 @@ pub const AGENT_MODELS: &[AgentModel] = &[
     AgentModel { agent: AgentKind::Claude, model: "sonnet", input_per_m: 3.0, output_per_m: 15.0, tier: "standard", description: "Balanced coding and review", capability: 8.8 },
     AgentModel { agent: AgentKind::Claude, model: "opus", input_per_m: 15.0, output_per_m: 75.0, tier: "premium", description: "Best quality", capability: 9.4 },
     AgentModel { agent: AgentKind::Claude, model: "haiku", input_per_m: 0.8, output_per_m: 4.0, tier: "cheap", description: "Fastest, lower-cost option", capability: 6.2 },
+    AgentModel { agent: AgentKind::Grok, model: "grok-4.5", input_per_m: 3.0, output_per_m: 15.0, tier: "standard", description: "Default (grok models)", capability: 5.0 },
 ];
 
 use std::sync::OnceLock;

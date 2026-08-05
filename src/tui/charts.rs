@@ -343,6 +343,7 @@ fn agent_color(agent: AgentKind) -> Color {
         AgentKind::Droid => Color::LightMagenta,
         AgentKind::Oz => Color::LightBlue,
         AgentKind::Claude => Color::White,
+        AgentKind::Grok => Color::Rgb(255, 107, 53),
         AgentKind::Custom => Color::Gray,
     }
 }

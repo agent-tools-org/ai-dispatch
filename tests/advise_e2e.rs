@@ -56,8 +56,11 @@ fn advise_ranks_actionable_builtins_before_separate_custom_context() {
     let candidates = payload["candidates"].as_array().expect("built-in candidates");
     let recommended = payload["recommended"]["agent"].as_str().expect("recommended agent");
     assert_eq!(candidates[0]["agent"], recommended);
-    assert!(candidates.iter().position(|item| item["eligible"] == false)
-        .is_none_or(|first| candidates[..first].iter().all(|item| item["eligible"] == true)));
+    // Soft eligibility: floor/budget shortfalls are ranking penalties with reasons, not a hard gate.
+    let with_reason = candidates.iter().find(|item| item["eligible"] == false);
+    if let Some(item) = with_reason {
+        assert!(item["exclusion_reason"].as_str().is_some_and(|text| !text.is_empty()));
+    }
     assert!(candidates.iter().all(|item| item["agent"] != "researcher"));
     assert_eq!(payload["custom_candidates"][0]["agent"], "researcher");
     assert!(payload["custom_candidates"][0].get("score").is_none());

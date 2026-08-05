@@ -1,3 +1,23 @@
+## v10.0.0 (2026-08-05)
+- BREAKING: the `auto` agent is removed. Declare a task profile and use `aid advise` to pick an agent; `aid run auto` and batch `agent = "auto"` now fail with that hint.
+- BREAKING: agent success rates recorded before this release are inflated. Streaming agents took their final status from the exit code alone, so a CLI that exited 0 while reporting an API, auth, or quota error was stored as done. Historical rows are not rewritten — treat pre-v10 success rates as an upper bound.
+- Tasks now carry a declared profile: `--difficulty`, `--budget`, `--urgency`, `--rigor`, persisted on the task and accepted by `aid run`, `aid advise`, and batch TOML.
+- New `aid advise "<prompt>"` prints the agent aid would choose, with a per-term score breakdown, cost and duration estimates, and the reason every other candidate fell short. It dispatches nothing and writes nothing.
+- New `aid agent list --json` and `aid agent show <name> --json` expose the fleet inventory: install state, quota and reset time, per-category history, available models, and current load.
+- New MCP tools `aid_agents` and `aid_advise`, and `aid hook session-start` reports agent quota state when any agent is limited.
+- New built-in agent `grok`, wired from captured CLI behaviour: it reports its real model, tokens and cost, which most adapters do not.
+- Dispatched agents can now delegate: a descendant task may re-enter an ancestor's worktree lease, `AID_TASK_ID` links sub-tasks into the task tree, nesting is capped at depth 2, and a child may not exceed its parent's declared budget or difficulty.
+- Quota exhaustion is recognised per provider from captured wording — codex, droid, qwen, agy and oz each phrase it differently, and none matched the previous generic phrase list. Reset times parse four real formats instead of defaulting to "~1h".
+- agy meters model families separately: an exhausted gemini allowance no longer takes its working claude allowance out of rotation, and dispatch switches to a healthy family.
+- The idle watchdog no longer counts aid's own nudges as agent activity, so a stalled task is detected instead of running to its hard timeout.
+- Auto-cascade is category-aware and skips unhealthy routes, including a gemini account that no longer serves individual tiers.
+- Advice eligibility is a ranking penalty rather than a hard gate, so a caller always sees usable alternatives with the reason each fell short.
+- `aid build` falls back to a writable target directory when the configured one is not, so agents under a sandbox can verify their own work.
+- The model catalog is refreshed from live CLI output: current defaults such as codex's gpt-5.6-sol are present, oz gains a profile row, and a task whose model is unknown reports unknown cost instead of $0.00.
+- qwen works again: it no longer receives flags its CLI does not accept, its model comes from the configured plan rather than a byte-order accident, and session resume is supported.
+- The cursor adapter identifies its binary by asking it: another vendor installing a binary named `agent` was silently hijacking every cursor dispatch. Its default model is composer-2.5; composer-2 has been delisted.
+
+
 ## v9.12.2 (2026-08-05)
 - Show which files an oz task touched: `tool_call` events carried only the tool name, so every `edit_files` call rendered as the bare string `edit_files` in `aid board`, `aid show --events` and the TUI while the event's own `file_paths` and `title` were discarded
 - Build oz tool details from the title plus every touched path, attach the paths as `files` metadata, and classify `edit_files` as a file write

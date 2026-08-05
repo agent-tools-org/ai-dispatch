@@ -12,6 +12,7 @@ pub(crate) fn aid_cmd_in(aid_home: &Path) -> Command {
     // Clear orchestrator environment variables that would pollute tests
     cmd.env_remove("AID_GROUP");
     cmd.env_remove("AID_TASK_ID");
+    cmd.env_remove("AID_TASK_DEPTH");
     cmd.env_remove("AID_TASK_NAME");
     cmd.env_remove("AID_ITERATION");
     cmd.env_remove("AID_PARENT_TASK_ID");

@@ -43,6 +43,16 @@ impl TaskDifficulty {
             Self::Complex => 8,
         }
     }
+
+    /// Ordered capability ladder for nested-delegation ceilings.
+    pub(crate) fn rank(self) -> u8 {
+        match self {
+            Self::Trivial => 0,
+            Self::Simple => 1,
+            Self::Moderate => 2,
+            Self::Complex => 3,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, ValueEnum)]
@@ -77,6 +87,16 @@ impl TaskBudget {
 
     pub(crate) fn uses_budget_mode(self) -> bool {
         matches!(self, Self::Free | Self::Cheap)
+    }
+
+    /// Ordered spend ladder for nested-delegation ceilings.
+    pub(crate) fn rank(self) -> u8 {
+        match self {
+            Self::Free => 0,
+            Self::Cheap => 1,
+            Self::Standard => 2,
+            Self::Premium => 3,
+        }
     }
 }
 

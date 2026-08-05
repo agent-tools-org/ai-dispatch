@@ -210,6 +210,8 @@ pub(super) async fn run_foreground_task(
         std_cmd.env("AID_GROUP", group);
     }
     std_cmd.env("AID_TASK_ID", prepared.task_id.as_str());
+    let depth = crate::cmd::run::task_depth(store, prepared.task_id.as_str()).unwrap_or(0);
+    std_cmd.env("AID_TASK_DEPTH", depth.to_string());
     agent::apply_rust_build_cache_env(
         &mut std_cmd,
         prepared.effective_dir.as_deref(),

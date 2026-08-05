@@ -31,9 +31,10 @@ impl super::Agent for QwenAgent {
         }
         let mut cmd = Command::new("qwen");
         cmd.args(["-o", "stream-json"]);
-        if let Some(ref model) = opts.model {
-            cmd.args(["-m", model]);
-        }
+        let model = opts.model.clone()
+            .or_else(|| crate::model_catalog::get_qwen_selected_model())
+            .unwrap_or_else(|| "coder-model".to_string());
+        cmd.args(["-m", &model]);
         if opts.sandbox {
             cmd.arg("--sandbox");
         }
@@ -48,7 +49,6 @@ impl super::Agent for QwenAgent {
         Ok(cmd)
     }
 
-
     fn parse_event(&self, task_id: &TaskId, line: &str) -> Option<TaskEvent> {
         let trimmed = line.trim();
         if trimmed.is_empty() {
@@ -59,11 +59,50 @@ impl super::Agent for QwenAgent {
     }
 
     fn parse_completion(&self, output: &str) -> CompletionInfo {
-        let v: serde_json::Value = serde_json::from_str(output).unwrap_or_default();
+        let mut tokens = None;
+        let mut model = None;
+        let mut status = TaskStatus::Done;
+
+        if output.contains("[API Error:") || output.contains("API Error:") {
+            status = TaskStatus::Failed;
+        }
+
+        for line in output.lines() {
+            let trimmed = line.trim();
+            if trimmed.is_empty() {
+                continue;
+            }
+            if let Ok(v) = serde_json::from_str::<serde_json::Value>(trimmed) {
+                if let Some(m) = extract_model(&v) {
+                    model = Some(m);
+                }
+                if let Some(usage) = extract_usage(&v) {
+                    tokens = Some(usage.total_tokens);
+                }
+                if let Some(event_type) = v.get("type").and_then(|t| t.as_str()) {
+                    if event_type == "error" {
+                        status = TaskStatus::Failed;
+                    }
+                    if event_type == "result" {
+                        if v.get("error").is_some() || v.get("status").and_then(|s| s.as_str()) == Some("failed") {
+                            status = TaskStatus::Failed;
+                        }
+                    }
+                    if event_type == "assistant" {
+                        if let Some(content) = extract_assistant_text(&v) {
+                            if content.contains("[API Error:") || content.contains("API Error:") {
+                                status = TaskStatus::Failed;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         CompletionInfo {
-            tokens: extract_usage(&v).map(|usage| usage.total_tokens),
-            status: TaskStatus::Done,
-            model: extract_model(&v),
+            tokens,
+            status,
+            model,
             cost_usd: None,
             exit_code: None,
         }

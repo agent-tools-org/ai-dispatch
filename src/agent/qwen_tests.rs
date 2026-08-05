@@ -4,13 +4,12 @@
 use super::*;
 use crate::agent::{Agent, RunOpts};
 
-#[test]
-fn build_command_uses_qwen_stream_json_flags() {
-    let opts = RunOpts {
+fn base_opts() -> RunOpts {
+    RunOpts {
         dir: None,
         output: None,
         result_file: None,
-        model: Some("coder-model".to_string()),
+        model: None,
         budget: false,
         read_only: false,
         sandbox: false,
@@ -18,6 +17,14 @@ fn build_command_uses_qwen_stream_json_flags() {
         session_id: None,
         env: None,
         env_forward: None,
+    }
+}
+
+#[test]
+fn build_command_uses_qwen_stream_json_flags() {
+    let opts = RunOpts {
+        model: Some("coder-model".to_string()),
+        ..base_opts()
     };
 
     let cmd = QwenAgent.build_command("hello", &opts).unwrap();
@@ -35,17 +42,8 @@ fn build_command_uses_qwen_stream_json_flags() {
 #[test]
 fn build_command_fails_on_read_only() {
     let opts = RunOpts {
-        dir: None,
-        output: None,
-        result_file: None,
-        model: None,
-        budget: false,
         read_only: true,
-        sandbox: false,
-        context_files: vec![],
-        session_id: None,
-        env: None,
-        env_forward: None,
+        ..base_opts()
     };
 
     let res = QwenAgent.build_command("hello", &opts);
@@ -56,17 +54,8 @@ fn build_command_fails_on_read_only() {
 #[test]
 fn build_command_sets_sandbox_flag() {
     let opts = RunOpts {
-        dir: None,
-        output: None,
-        result_file: None,
-        model: None,
-        budget: false,
-        read_only: false,
         sandbox: true,
-        context_files: vec![],
-        session_id: None,
-        env: None,
-        env_forward: None,
+        ..base_opts()
     };
 
     let cmd = QwenAgent.build_command("hello", &opts).unwrap();
@@ -77,17 +66,8 @@ fn build_command_sets_sandbox_flag() {
 #[test]
 fn build_command_sets_session_id_flag() {
     let opts = RunOpts {
-        dir: None,
-        output: None,
-        result_file: None,
-        model: None,
-        budget: false,
-        read_only: false,
-        sandbox: false,
-        context_files: vec![],
         session_id: Some("session-123".to_string()),
-        env: None,
-        env_forward: None,
+        ..base_opts()
     };
 
     let cmd = QwenAgent.build_command("hello", &opts).unwrap();
@@ -99,16 +79,10 @@ fn build_command_sets_session_id_flag() {
 fn print_qwen_command_line() {
     let opts = RunOpts {
         dir: Some("/path/to/project".to_string()),
-        output: None,
-        result_file: None,
         model: Some("qwen3.8-max".to_string()),
-        budget: false,
-        read_only: false,
         sandbox: true,
-        context_files: vec![],
         session_id: Some("session-abc-123".to_string()),
-        env: None,
-        env_forward: None,
+        ..base_opts()
     };
     let cmd = QwenAgent.build_command("fix the bug in main.rs", &opts).unwrap();
     let args: Vec<String> = cmd.get_args().map(|arg| arg.to_string_lossy().into_owned()).collect();
@@ -117,19 +91,7 @@ fn print_qwen_command_line() {
 
 #[test]
 fn build_command_does_not_set_gemini_trust_env() {
-    let opts = RunOpts {
-        dir: None,
-        output: None,
-        result_file: None,
-        model: None,
-        budget: false,
-        read_only: false,
-        sandbox: false,
-        context_files: vec![],
-        session_id: None,
-        env: None,
-        env_forward: None,
-    };
+    let opts = base_opts();
 
     let cmd = QwenAgent.build_command("hello", &opts).unwrap();
     assert!(cmd
@@ -201,4 +163,98 @@ fn caps_long_assistant_reasoning_and_keeps_full_in_metadata() {
     let metadata = event.metadata.expect("metadata with full text");
     assert_eq!(metadata["full"].as_str(), Some(long_text.as_str()));
     assert_eq!(metadata["agent_session_id"].as_str(), Some("session-123"));
+}
+
+#[test]
+fn get_qwen_selected_model_reads_settings_json() {
+    let temp_dir = tempfile::tempdir().unwrap();
+    let qwen_dir = temp_dir.path().join(".qwen");
+    std::fs::create_dir_all(&qwen_dir).unwrap();
+    let settings_path = qwen_dir.join("settings.json");
+    
+    let settings_json = serde_json::json!({
+        "model": {
+            "name": "my-selected-qwen-model"
+        },
+        "modelProviders": {
+            "openai": [
+                {
+                    "id": "my-selected-qwen-model"
+                },
+                {
+                    "id": "other-qwen-model"
+                }
+            ]
+        }
+    });
+    std::fs::write(&settings_path, serde_json::to_string(&settings_json).unwrap()).unwrap();
+
+    let old_home = std::env::var_os("HOME");
+    unsafe {
+        std::env::set_var("HOME", temp_dir.path());
+    }
+
+    let selected = crate::model_catalog::get_qwen_selected_model();
+    assert_eq!(selected, Some("my-selected-qwen-model".to_string()));
+
+    // Test that build_command defaults to this selected model
+    let opts = base_opts();
+    let cmd = QwenAgent.build_command("hello", &opts).unwrap();
+    let args: Vec<String> = cmd.get_args().map(|arg| arg.to_string_lossy().into_owned()).collect();
+    assert!(args.windows(2).any(|pair| pair == ["-m", "my-selected-qwen-model"]));
+
+    // Restore HOME
+    unsafe {
+        if let Some(h) = old_home {
+            std::env::set_var("HOME", h);
+        } else {
+            std::env::remove_var("HOME");
+        }
+    }
+}
+
+#[test]
+fn parse_completion_detects_api_errors_and_returns_failed() {
+    // Test case 1: Raw text containing [API Error: ...]
+    let output1 = "some logs\n[API Error: 403 Access to model denied]\nmore logs";
+    let info1 = QwenAgent.parse_completion(output1);
+    assert_eq!(info1.status, TaskStatus::Failed);
+
+    // Test case 2: JSON line with type error
+    let output2 = serde_json::json!({
+        "type": "error",
+        "message": "Access to model denied"
+    }).to_string();
+    let info2 = QwenAgent.parse_completion(&output2);
+    assert_eq!(info2.status, TaskStatus::Failed);
+
+    // Test case 3: JSON line with type result and error payload
+    let output3 = serde_json::json!({
+        "type": "result",
+        "status": "failed",
+        "error": "Access to model denied"
+    }).to_string();
+    let info3 = QwenAgent.parse_completion(&output3);
+    assert_eq!(info3.status, TaskStatus::Failed);
+
+    // Test case 4: JSON line with type assistant containing API Error in text
+    let output4 = serde_json::json!({
+        "type": "assistant",
+        "content": "Received [API Error: 403 Access to model denied]"
+    }).to_string();
+    let info4 = QwenAgent.parse_completion(&output4);
+    assert_eq!(info4.status, TaskStatus::Failed);
+
+    // Test case 5: Successful completion
+    let output5 = serde_json::json!({
+        "type": "result",
+        "usage": {
+            "total_tokens": 120
+        },
+        "model": "my-qwen-model"
+    }).to_string();
+    let info5 = QwenAgent.parse_completion(&output5);
+    assert_eq!(info5.status, TaskStatus::Done);
+    assert_eq!(info5.tokens, Some(120));
+    assert_eq!(info5.model, Some("my-qwen-model".to_string()));
 }

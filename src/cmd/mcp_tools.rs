@@ -7,7 +7,10 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 use std::sync::Arc;
 
+use crate::agent::classifier::TaskCategory;
 use crate::background;
+use crate::cmd::advise;
+use crate::cmd::agent_json;
 use crate::cmd::ask;
 use crate::cmd::mcp_schema;
 use crate::cmd::retry::{self, RetryArgs};
@@ -15,9 +18,15 @@ use crate::cmd::run::{self, RunArgs};
 use crate::cmd::show::{self, ShowMode};
 use crate::config;
 use crate::store::Store;
-use crate::types::{Task, TaskFilter};
+use crate::types::{
+    DeclaredTaskProfile, Task, TaskBudget, TaskDifficulty, TaskFilter, TaskRigor, TaskUrgency,
+};
 use crate::usage;
 use crate::usage_report;
+
+#[cfg(test)]
+#[path = "mcp_tools_tests.rs"]
+mod tests;
 
 pub fn tool_definitions() -> Vec<Value> {
     mcp_schema::tool_definitions()
@@ -32,6 +41,8 @@ pub async fn call_tool(store: Arc<Store>, name: &str, arguments: Value) -> Resul
         "aid_usage" => usage_tool(store),
         "aid_get_findings" => get_findings_tool(store, arguments),
         "aid_ask" => ask_tool(store, arguments).await,
+        "aid_agents" => agents_tool(store),
+        "aid_advise" => advise_tool(store, arguments),
         _ => Ok(error_payload(format!("Unknown tool '{name}'"))),
     } {
         Ok(payload) => payload,
@@ -83,6 +94,19 @@ struct AskToolArgs {
 #[derive(Deserialize)]
 struct GetFindingsToolArgs {
     group: String,
+}
+
+#[derive(Deserialize)]
+struct AdviseToolArgs {
+    prompt: String,
+    difficulty: String,
+    budget: String,
+    urgency: String,
+    rigor: String,
+    kind: Option<String>,
+    team: Option<String>,
+    #[serde(default = "default_top")]
+    top: usize,
 }
 
 async fn run_tool(store: Arc<Store>, arguments: Value) -> Result<Value> {
@@ -188,6 +212,41 @@ async fn ask_tool(store: Arc<Store>, arguments: Value) -> Result<Value> {
     }
 }
 
+fn agents_tool(store: Arc<Store>) -> Result<Value> {
+    agent_json::agents_list_value(store.as_ref())
+}
+
+fn advise_tool(store: Arc<Store>, arguments: Value) -> Result<Value> {
+    let args: AdviseToolArgs = parse_args(arguments, "aid_advise")?;
+    let declared = DeclaredTaskProfile {
+        difficulty: parse_dimension(&args.difficulty, "difficulty", TaskDifficulty::parse_str)?,
+        budget: parse_dimension(&args.budget, "budget", TaskBudget::parse_str)?,
+        urgency: parse_dimension(&args.urgency, "urgency", TaskUrgency::parse_str)?,
+        rigor: parse_dimension(&args.rigor, "rigor", TaskRigor::parse_str)?,
+    };
+    let kind = match args.kind.as_deref() {
+        Some(value) => Some(parse_dimension(value, "kind", TaskCategory::parse_str)?),
+        None => None,
+    };
+    let report = advise::build_report(
+        Some(store.as_ref()),
+        &args.prompt,
+        declared,
+        kind,
+        args.team.as_deref(),
+        args.top,
+    );
+    Ok(serde_json::to_value(&report)?)
+}
+
+fn parse_dimension<T>(
+    value: &str,
+    name: &str,
+    parse: impl Fn(&str) -> Option<T>,
+) -> Result<T> {
+    parse(value).ok_or_else(|| anyhow::anyhow!("Unknown {name} '{value}'"))
+}
+
 fn parse_args<T: for<'de> Deserialize<'de>>(arguments: Value, tool_name: &str) -> Result<T> {
     let arguments = if arguments.is_null() {
         json!({})
@@ -288,6 +347,10 @@ fn error_payload(message: String) -> Value {
 
 fn default_true() -> bool {
     true
+}
+
+fn default_top() -> usize {
+    5
 }
 
 fn truncate(value: &str, max: usize) -> String {

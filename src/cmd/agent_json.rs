@@ -22,6 +22,10 @@ pub fn print_agents_json(store: &Store) -> Result<()> {
     Ok(())
 }
 
+pub(crate) fn agents_list_value(store: &Store) -> Result<serde_json::Value> {
+    Ok(serde_json::to_value(get_agents_list(store)?)?)
+}
+
 pub fn print_agent_json(store: &Store, name: &str) -> Result<()> {
     if let Some(kind) = builtin_profile(name) {
         let running_tasks = store.list_tasks(TaskFilter::Running).unwrap_or_default();

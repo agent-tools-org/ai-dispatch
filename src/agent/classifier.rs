@@ -43,6 +43,20 @@ impl TaskCategory {
             Self::Documentation => "documentation",
         }
     }
+
+    pub(crate) fn parse_str(value: &str) -> Option<Self> {
+        match value {
+            "research" => Some(Self::Research),
+            "simple-edit" => Some(Self::SimpleEdit),
+            "complex-impl" => Some(Self::ComplexImpl),
+            "frontend" => Some(Self::Frontend),
+            "debugging" => Some(Self::Debugging),
+            "testing" => Some(Self::Testing),
+            "refactoring" => Some(Self::Refactoring),
+            "documentation" => Some(Self::Documentation),
+            _ => None,
+        }
+    }
 }
 
 impl Complexity {

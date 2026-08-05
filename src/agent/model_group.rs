@@ -21,7 +21,16 @@ use crate::types::AgentKind;
 /// working claude allowance and hand the work to a weaker agent — the mirror of
 /// the failures-reported-as-success class: a usable resource reported as dead.
 pub(crate) fn has_grouped_quota(agent: AgentKind) -> bool {
-    matches!(agent, AgentKind::Antigravity)
+    // Was `matches!(agent, AgentKind::Antigravity)` — a hardcoded special case
+    // written the day agy's per-family metering was discovered, before the
+    // provider dimension existed to express it. Whether quota is metered per
+    // family is a fact about the provider doing the metering, not about the CLI
+    // that happens to reach it, so the provider table answers it now and a
+    // second such provider needs no change here at all.
+    matches!(
+        crate::types::provider_for_cli(agent).1,
+        crate::types::MeteringShape::PerModelFamily
+    )
 }
 
 /// The quota group a model belongs to, by family prefix. Returns None when the
@@ -35,16 +44,11 @@ pub(crate) fn model_group(agent: AgentKind, model: Option<&str>) -> Option<&'sta
     Some(family_of(&model))
 }
 
+/// Delegates to the types layer: how a provider partitions its allowance is a
+/// fact about the provider, and keeping a second copy here had already produced
+/// two different answers for `gpt-*`.
 fn family_of(model: &str) -> &'static str {
-    if model.starts_with("gemini") {
-        "gemini"
-    } else if model.starts_with("claude") {
-        "claude"
-    } else if model.starts_with("gpt") {
-        "gpt-oss"
-    } else {
-        "other"
-    }
+    crate::types::model_family(model)
 }
 
 /// Every group an agent can draw on, most capable first within each family.

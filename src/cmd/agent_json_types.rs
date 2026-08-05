@@ -16,6 +16,10 @@ pub struct AgentJson {
     pub trust_tier: String,
     pub description: String,
     pub supports_session_resume: bool,
+    /// The billing entity behind this CLI, and how it meters. `unknown` when
+    /// aid has never observed the provider refuse and so cannot name it.
+    pub provider: String,
+    pub metering: String,
     pub quota: QuotaJson,
     pub capabilities: HashMap<String, i32>,
     pub models: ModelsJson,

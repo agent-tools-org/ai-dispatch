@@ -90,7 +90,7 @@ fn uses_cursor_agent_binary() {
     assert!(cmd.get_program() == "agent" || cmd.get_program() == "cursor-agent");
     let args: Vec<_> = cmd.get_args().collect();
     assert_eq!(args[0], "-p");
-    assert!(args.windows(2).any(|window| window[0] == "--model" && window[1] == "composer-2"));
+    assert!(args.windows(2).any(|window| window[0] == "--model" && window[1] == "auto"));
 }
 
 #[test]

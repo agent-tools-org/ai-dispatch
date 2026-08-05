@@ -100,6 +100,9 @@ aid changelog
 
 Use exports for sharing, not as a substitute for the stored task record.
 
+`aid stats` and `aid cost` show `unknown` when a task's model has no known
+pricing. Unknown costs are omitted from totals rather than recorded as `$0.00`.
+
 When a task has no assistant transcript, `aid export --sharegpt` falls back to
 the recorded events, and a failed task's salvaged `partial-work.md` summarises
 its recent activity. Both preserve tool calls, file reads, and file writes, so a

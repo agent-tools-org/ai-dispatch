@@ -11,12 +11,19 @@ pub(super) fn for_model_lower(m: &str) -> Option<ModelPricing> {
             input_per_m: 2.0,
             output_per_m: 8.0,
         }
-    } else if (m.contains("gpt-5.4") || m.contains("gpt-5.5")) && m.contains("mini") {
+    } else if m.contains("gpt-5.6-luna") {
         ModelPricing {
             input_per_m: 0.4,
             output_per_m: 1.6,
         }
-    } else if (m.contains("gpt-5.4") || m.contains("gpt-5.5"))
+    } else if (m.contains("gpt-5.4") || m.contains("gpt-5.5") || m.contains("gpt-5.6"))
+        && m.contains("mini")
+    {
+        ModelPricing {
+            input_per_m: 0.4,
+            output_per_m: 1.6,
+        }
+    } else if (m.contains("gpt-5.4") || m.contains("gpt-5.5") || m.contains("gpt-5.6"))
         && !m.contains("mini")
         && !m.contains("nano")
     {

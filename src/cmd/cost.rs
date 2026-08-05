@@ -11,14 +11,14 @@ use crate::store::Store;
 use crate::types::{Task, TaskFilter};
 use crate::usage::UsageWindow;
 
-type Totals = (usize, i64, f64);
+type Totals = (usize, i64, Option<f64>);
 
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct DailyCostRow {
     pub(crate) date: NaiveDate,
     pub(crate) tasks: usize,
     pub(crate) tokens: i64,
-    pub(crate) cost_usd: f64,
+    pub(crate) cost_usd: Option<f64>,
 }
 
 pub fn run(
@@ -75,17 +75,17 @@ pub(crate) fn daily_summary_rows(
     window: UsageWindow,
     now: DateTime<Local>,
 ) -> (Vec<DailyCostRow>, Totals) {
-    let mut rows: BTreeMap<NaiveDate, (usize, i64, f64)> = BTreeMap::new();
-    let mut totals = (0, 0, 0.0);
+    let mut rows: BTreeMap<NaiveDate, (usize, i64, Option<f64>)> = BTreeMap::new();
+    let mut totals: Totals = (0, 0, None);
     for task in tasks.iter().filter(|task| in_window(task, window, now)) {
         let cost_usd = task_cost(task);
-        let entry = rows.entry(task.created_at.date_naive()).or_insert((0, 0, 0.0));
+        let entry = rows.entry(task.created_at.date_naive()).or_insert((0, 0, None));
         entry.0 += 1;
         entry.1 += task.tokens.unwrap_or(0);
-        entry.2 += cost_usd;
+        add_known_cost(&mut entry.2, cost_usd);
         totals.0 += 1;
         totals.1 += task.tokens.unwrap_or(0);
-        totals.2 += cost_usd;
+        add_known_cost(&mut totals.2, cost_usd);
     }
     let rows = rows
         .into_iter()
@@ -104,20 +104,20 @@ fn render_task_report(title: &str, tasks: &[&Task]) -> String {
     let mut out = format!("{title}\n{:<10} {:<12} {:<8} {:<10} {:<10} {}\n", "Task ID", "Agent", "Status", "Tokens", "Cost", "Duration");
     out.push_str(&"-".repeat(68));
     out.push('\n');
-    let mut totals = (0, 0, 0.0);
+    let mut totals: Totals = (0, 0, None);
     for task in tasks {
         let tokens = task.tokens.unwrap_or(0);
         let cost_usd = task_cost(task);
         totals.0 += 1;
         totals.1 += tokens;
-        totals.2 += cost_usd;
+        add_known_cost(&mut totals.2, cost_usd);
         out.push_str(&format!(
             "{:<10} {:<12} {:<8} {:<10} {:<10} {}\n",
             task.id,
             task.agent_display_name(),
             task.status.label(),
             tokens,
-            cost::format_cost(Some(cost_usd)),
+            cost::format_cost(cost_usd),
             format_duration(task.duration_ms),
         ));
     }
@@ -125,7 +125,7 @@ fn render_task_report(title: &str, tasks: &[&Task]) -> String {
         "Total: {} tasks | {} tokens | {}\n",
         totals.0,
         totals.1,
-        cost::format_cost(Some(totals.2))
+        cost::format_cost(totals.2)
     ));
     out
 }
@@ -140,10 +140,10 @@ fn render_daily_report((rows, totals): &(Vec<DailyCostRow>, Totals)) -> String {
             row.date,
             row.tasks,
             row.tokens,
-            cost::format_cost(Some(row.cost_usd)),
+            cost::format_cost(row.cost_usd),
         ));
     }
-    out.push_str(&format!("Total: {} tasks | {} tokens | {}\n", totals.0, totals.1, cost::format_cost(Some(totals.2))));
+    out.push_str(&format!("Total: {} tasks | {} tokens | {}\n", totals.0, totals.1, cost::format_cost(totals.2)));
     out
 }
 
@@ -161,8 +161,13 @@ fn format_duration(duration_ms: Option<i64>) -> String {
     }
 }
 
-fn task_cost(task: &Task) -> f64 {
+fn add_known_cost(total: &mut Option<f64>, cost: Option<f64>) {
+    if let Some(cost) = cost {
+        *total.get_or_insert(0.0) += cost;
+    }
+}
+
+fn task_cost(task: &Task) -> Option<f64> {
     task.cost_usd
         .or_else(|| cost::estimate_cost(task.tokens.unwrap_or(0), task.model.as_deref(), task.agent))
-        .unwrap_or(0.0)
 }

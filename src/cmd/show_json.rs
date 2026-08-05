@@ -18,6 +18,7 @@ use super::{diff_stat, output_text_for_task, parse_diff_stat};
 /// Serialize task as JSON with events and metrics.
 pub(super) fn task_json(store: &Arc<Store>, task_id: &str) -> Result<String> {
     let task = load_task(store, task_id)?;
+    let declared = store.get_task_profile(task_id)?;
     let events = store.get_events(task_id)?;
     let event_list: Vec<serde_json::Value> = events
         .iter()
@@ -74,6 +75,12 @@ pub(super) fn task_json(store: &Arc<Store>, task_id: &str) -> Result<String> {
         "pending_reason": task.pending_reason,
         "read_only": task.read_only,
         "budget": task.budget,
+        "declared": {
+            "difficulty": declared.difficulty.map(|value| value.label()),
+            "budget": declared.budget.map(|value| value.label()),
+            "urgency": declared.urgency.map(|value| value.label()),
+            "rigor": declared.rigor.map(|value| value.label()),
+        },
         "audit_verdict": task.audit_verdict,
         "audit_report_path": task.audit_report_path,
         "created_at": task.created_at.to_rfc3339(),

@@ -2,8 +2,9 @@
 // Exports: RunArgs, NO_SKILL_SENTINEL, prompt/timeout resolution helpers.
 // Deps: anyhow, serde, Store, crate::types::TaskId, std collections.
 use anyhow::{Context, Result};
+use crate::agent::classifier::TaskCategory;
 use crate::store::Store;
-use crate::types::TaskId;
+use crate::types::{TaskBudget, TaskDifficulty, TaskId, TaskRigor, TaskUrgency};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -21,6 +22,11 @@ pub struct RunArgs {
     pub output: Option<String>,
     pub result_file: Option<String>,
     pub model: Option<String>,
+    pub declared_difficulty: Option<TaskDifficulty>,
+    pub declared_budget: Option<TaskBudget>,
+    pub declared_urgency: Option<TaskUrgency>,
+    pub declared_rigor: Option<TaskRigor>,
+    pub kind: Option<TaskCategory>,
     pub worktree: Option<String>,
     pub base_branch: Option<String>,
     pub group: Option<String>,
@@ -109,6 +115,11 @@ impl Default for RunArgs {
             output: None,
             result_file: None,
             model: None,
+            declared_difficulty: None,
+            declared_budget: None,
+            declared_urgency: None,
+            declared_rigor: None,
+            kind: None,
             worktree: None,
             base_branch: None,
             group: None,

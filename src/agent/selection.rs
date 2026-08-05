@@ -4,6 +4,12 @@
 
 #[path = "selection_scoring.rs"]
 mod selection_scoring;
+#[path = "selection_capabilities.rs"]
+mod selection_capabilities;
+#[path = "selection_advice.rs"]
+mod selection_advice;
+pub(crate) use selection_advice::{AdviceReport, advise};
+pub(crate) use selection_scoring::model_for_task_budget;
 use selection_scoring::{
     BUILTIN_AGENTS, Candidate, CandidateContext, candidate_for, compare_candidates, cost_efficiency,
     custom_category_score, custom_command_installed, custom_strength_bonus, pick_best_candidate,
@@ -20,7 +26,7 @@ use crate::team::TeamConfig;
 use std::collections::HashMap;
 
 pub(crate) const AGENT_CAPABILITIES: &[(AgentKind, &[(TaskCategory, i32)])] =
-    selection_scoring::AGENT_CAPABILITIES;
+    selection_capabilities::AGENT_CAPABILITIES;
 
 pub(crate) fn select_agent_with_reason(
     prompt: &str, opts: &RunOpts, store: &Store,
@@ -68,6 +74,8 @@ pub(crate) fn select_agent_from(
         avg_cost_map: &avg_cost_map,
         team_default,
         budget,
+        declared_budget: None,
+        penalize_rate_limit: true,
     };
     let builtin_agents = enabled_builtins(BUILTIN_AGENTS);
     let primary_candidate = pick_best_candidate(&builtin_agents, &ctx, budget);
@@ -209,6 +217,8 @@ pub(crate) fn budget_ranked_agents(
         avg_cost_map: &avg_cost_map,
         team_default,
         budget: false,
+        declared_budget: None,
+        penalize_rate_limit: true,
     };
     let mut candidates: Vec<Candidate> = BUILTIN_AGENTS
         .iter()
@@ -277,3 +287,6 @@ pub(crate) fn coding_fallback_for(agent: &AgentKind) -> Option<AgentKind> {
 mod tests;
 #[cfg(test)]
 mod disabled_tests;
+#[cfg(test)]
+#[path = "selection_score_tests.rs"]
+mod score_tests;

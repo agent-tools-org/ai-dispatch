@@ -2,16 +2,20 @@
 // Implements run and batch command wrappers.
 #[path = "run_batch_args.rs"]
 mod run_batch_args;
+#[path = "run_profile.rs"]
+mod run_profile;
 
 use crate::cli::{BatchAction, RunExtrasArgs};
 use crate::cmd;
-use crate::cmd_dispatch::recommend_hint;
-use crate::types::{AgentKind, TaskId};
-use crate::{agent, config, store, team};
+use crate::types::TaskId;
+use crate::types::{TaskBudget, TaskDifficulty, TaskRigor, TaskUrgency};
+use crate::agent::classifier::TaskCategory;
+use crate::{config, store};
 use anyhow::{Context, Result, anyhow};
 use std::sync::Arc;
 
 use self::run_batch_args::build_run_args;
+use self::run_profile::{resolve_run_agent, validate_task_profile};
 
 #[allow(clippy::too_many_arguments)]
 pub(super) async fn run(
@@ -25,7 +29,11 @@ pub(super) async fn run(
     output: Option<String>,
     result_file: Option<String>,
     model: Option<String>,
-    budget: bool,
+    difficulty: Option<TaskDifficulty>,
+    budget: Option<TaskBudget>,
+    urgency: Option<TaskUrgency>,
+    rigor: Option<TaskRigor>,
+    kind: Option<TaskCategory>,
     no_hint: bool,
     worktree: Option<String>,
     team_flag: Option<String>,
@@ -58,8 +66,10 @@ pub(super) async fn run(
     no_audit: bool,
     no_link_deps: bool,
 ) -> Result<TaskId> {
+    validate_task_profile(difficulty, budget, urgency, rigor)?;
     let config = config::load_config().unwrap_or_default();
-    let budget = budget || config.selection.budget_mode;
+    let budget_mode = budget.is_some_and(TaskBudget::uses_budget_mode)
+        || config.selection.budget_mode;
     let selection_prompt = match (&prompt, prompt_file.as_deref()) {
         (Some(prompt), _) if !prompt.is_empty() => prompt.clone(),
         (_, Some(file)) => std::fs::read_to_string(file)
@@ -74,14 +84,19 @@ pub(super) async fn run(
         &output,
         &result_file,
         &model,
+        budget_mode,
+        difficulty,
         budget,
+        urgency,
+        rigor,
+        kind,
         no_hint,
         read_only,
         sandbox,
         &worktree,
         &team_flag,
         agent_name,
-    );
+    )?;
     let checklist = cmd::checklist::merge_checklist_items(checklist, checklist_file.as_deref())?;
     let args = build_run_args(
         agent_name,
@@ -113,7 +128,12 @@ pub(super) async fn run(
         read_only,
         sandbox,
         container,
+        budget_mode,
+        difficulty,
         budget,
+        urgency,
+        rigor,
+        kind,
         best_of,
         metric,
         team_flag,
@@ -128,66 +148,6 @@ pub(super) async fn run(
     cmd::run::run(store, args).await
 }
 
-fn resolve_run_agent(
-    store: &Arc<store::Store>,
-    prompt: &str,
-    dir: &Option<String>,
-    repo: &Option<String>,
-    output: &Option<String>,
-    result_file: &Option<String>,
-    model: &Option<String>,
-    budget: bool,
-    no_hint: bool,
-    read_only: bool,
-    sandbox: bool,
-    worktree: &Option<String>,
-    team_flag: &Option<String>,
-    agent_name: String,
-) -> (String, Option<String>) {
-    let selection_opts = agent::RunOpts {
-        dir: dir
-            .clone()
-            .or_else(|| repo.clone())
-            .or_else(|| worktree.as_ref().map(|_| ".".to_string())),
-        output: output.clone(),
-        result_file: result_file.clone(),
-        model: model.clone(),
-        budget,
-        read_only,
-        sandbox,
-        context_files: vec![],
-        session_id: None,
-        env: None,
-        env_forward: None,
-    };
-    let team_config = team_flag.as_deref().and_then(team::resolve_team);
-    if agent_name != "auto" {
-        recommend_hint::emit_if_recommended(
-            &agent_name,
-            prompt,
-            no_hint,
-            &selection_opts,
-            store,
-            team_config.as_ref(),
-        );
-        return (agent_name, None);
-    }
-
-    let (selected, reason) = agent::select_agent_with_reason(prompt, &selection_opts, store, team_config.as_ref());
-    aid_info!("[aid] Auto-selected: {selected} (reason: {reason})");
-
-    let recommended = if model.is_none() && !budget {
-        let normalized = prompt.trim().to_lowercase();
-        let file_count = agent::classifier::count_file_mentions(&normalized);
-        let profile = agent::classifier::classify(prompt, file_count, prompt.len());
-        AgentKind::parse_str(&selected)
-            .and_then(|kind| agent::selection::recommend_model(&kind, &profile.complexity, false))
-            .map(str::to_string)
-    } else {
-        None
-    };
-    (selected, recommended)
-}
 pub(super) async fn batch(
     store: Arc<store::Store>,
     action: Option<BatchAction>,

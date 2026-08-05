@@ -8,6 +8,10 @@ use crate::{agent, paths, project::{self, ProjectConfig}, session};
 use crate::{store::{Store, TaskCompletionUpdate}, types::*};
 use super::run_dispatch_claim::insert_task_claiming_id;
 use super::run_dispatch_resolve::{AgentSetup, apply_project_defaults, resolve_agent_setup};
+use super::run_task_profile::{
+    apply_category_and_result_defaults, persist_declaration, should_auto_result_file,
+    validate_critical_rigor,
+};
 use super::run_validate::validate_dispatch;
 use super::{RunArgs, context_file_from_spec, resolve_max_duration_mins, resolve_prompt_input, run_prompt};
 
@@ -59,6 +63,7 @@ pub(super) fn prepare_dispatch(store: &Arc<Store>, args: &mut RunArgs) -> Result
     args.max_duration_mins = resolve_max_duration_mins(args.timeout, args.max_duration_mins);
     let had_explicit_result_file = args.result_file.is_some();
     let detected_project = project::detect_project(); apply_project_defaults(args, detected_project.as_ref());
+    validate_critical_rigor(args)?;
     let agent_setup = resolve_agent_setup(store, args)?;
     let agent_name = agent_setup.custom_agent_name.as_deref().unwrap_or_else(|| agent_setup.agent_kind.as_str());
     let policy = crate::timeout_policy::TimeoutPolicy::resolve(agent_name, args.idle_timeout_secs, args.max_duration_mins, detected_project.as_ref());
@@ -75,6 +80,7 @@ pub(super) fn prepare_dispatch(store: &Arc<Store>, args: &mut RunArgs) -> Result
         aid_warn!("[aid] Warning: {warning}");
     }
     insert_task_claiming_id(store, &mut task, &mut task_id, &mut log_path, explicit_id)?;
+    persist_declaration(store, &task_id, args)?;
     let setup = match setup_worktree(store, args, detected_project.as_ref(), &agent_setup, &task_id, explicit_repo_path.as_deref()) {
         Ok(setup) => setup,
         Err(err) => {
@@ -133,27 +139,6 @@ fn pending_task(
         read_only: args.read_only, budget: args.budget, audit_verdict: None, audit_report_path: None,
         delivery_assessment: None,
     }
-}
-
-fn apply_category_and_result_defaults(args: &mut RunArgs, task: &mut Task, had_explicit_result_file: bool) {
-    let normalized_prompt = task.prompt.trim().to_lowercase();
-    let profile = agent::classifier::classify(
-        &task.prompt,
-        agent::classifier::count_file_mentions(&normalized_prompt),
-        task.prompt.chars().count(),
-    );
-    let report_output = crate::cmd::report_mode::apply_defaults(args, profile.category);
-    args.audit_report_mode = crate::cmd::report_mode::skips_dirty_enforcement(&args.prompt, args.read_only, profile.category);
-    if report_output && !had_explicit_result_file && args.output.is_none() {
-        args.result_file = Some(crate::cmd::report_mode::DEFAULT_AUDIT_RESULT_FILE.to_string());
-    }
-    task.category = Some(profile.category.label().to_string());
-}
-
-fn should_auto_result_file(args: &RunArgs, had_explicit_result_file: bool) -> bool {
-    !had_explicit_result_file
-        && args.output.is_none()
-        && args.result_file.as_deref() == Some(crate::cmd::report_mode::DEFAULT_AUDIT_RESULT_FILE)
 }
 
 fn setup_worktree(

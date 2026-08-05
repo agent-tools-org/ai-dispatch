@@ -5,6 +5,8 @@
 use crate::cli::RunExtrasArgs;
 use crate::cmd;
 use crate::cmd_dispatch::resolve_group;
+use crate::agent::classifier::TaskCategory;
+use crate::types::{TaskBudget, TaskDifficulty, TaskRigor, TaskUrgency};
 
 #[allow(clippy::too_many_arguments)]
 pub(super) fn build_run_args(
@@ -38,6 +40,11 @@ pub(super) fn build_run_args(
     sandbox: bool,
     container: Option<String>,
     budget: bool,
+    difficulty: Option<TaskDifficulty>,
+    declared_budget: Option<TaskBudget>,
+    urgency: Option<TaskUrgency>,
+    rigor: Option<TaskRigor>,
+    kind: Option<TaskCategory>,
     best_of: Option<usize>,
     metric: Option<String>,
     team_flag: Option<String>,
@@ -65,6 +72,11 @@ pub(super) fn build_run_args(
         output,
         result_file,
         model: model.or(auto_model),
+        declared_difficulty: difficulty,
+        declared_budget,
+        declared_urgency: urgency,
+        declared_rigor: rigor,
+        kind,
         worktree,
         base_branch: None,
         group: resolve_group(group),

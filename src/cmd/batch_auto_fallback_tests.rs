@@ -160,7 +160,7 @@ fn auto_fallback_skips_rate_limited_toml_fallbacks() {
         read_only: false,
         sandbox: false,
         no_skill: false,
-        budget: false,
+        difficulty: None, budget: None, urgency: None, rigor: None, kind: None,
         audit: None,
         env: None,
         env_forward: None,

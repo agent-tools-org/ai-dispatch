@@ -130,7 +130,14 @@ pub(super) fn resolve_agent_setup(store: &Arc<Store>, args: &mut RunArgs) -> Res
         args.dir = Some(".".to_string());
         aid_info!("[aid] Auto-set --dir . (git repo detected)");
     }
-    if let Some(info) = rate_limit::get_rate_limit_info(&agent_kind)
+    if args.declared_urgency == Some(crate::types::TaskUrgency::Background)
+        && rate_limit::is_rate_limited(&agent_kind)
+    {
+        aid_warn!(
+            "[aid] {} is rate-limited; background urgency keeps this agent selected",
+            agent_kind.as_str()
+        );
+    } else if let Some(info) = rate_limit::get_rate_limit_info(&agent_kind)
         && let Some(ref recovery) = info.recovery_at
     {
         if let Some(next_agent) = args.cascade.first() {

@@ -74,7 +74,7 @@ fn make_task(name: Option<&str>, depends_on: &[&str]) -> BatchTask {
         read_only: false,
         sandbox: false,
         no_skill: false,
-        budget: false,
+        difficulty: None, budget: None, urgency: None, rigor: None, kind: None,
         audit: None,
             env: None,
         env_forward: None,
@@ -289,7 +289,7 @@ fn applies_defaults_to_tasks() {
             "retry = 2\npeer_review = \"cursor\"\nbest_of = 3\nmetric = \"cargo test\"\n",
             "context = [\"src/lib.rs\", \"src/main.rs:run\"]\n",
             "skills = [\"rust\", \"cli\"]\non_done = \"notify done\"\nfallback = \"cursor\"\n",
-            "read_only = true\nsandbox = true\nno_skill = true\nbudget = true\n",
+            "read_only = true\nsandbox = true\nno_skill = true\nbudget = \"cheap\"\n",
             "env = { DEFAULT_ONLY = \"yes\", SHARED = \"default\" }\n",
             "env_forward = [\"PATH\"]\n",
             "[[tasks]]\nname = \"impl\"\nprompt = \"build it\"\n"
@@ -337,7 +337,7 @@ fn applies_defaults_to_tasks() {
     assert!(task.read_only);
     assert!(task.sandbox);
     assert!(task.no_skill);
-    assert!(task.budget);
+    assert_eq!(task.budget, Some(crate::types::TaskBudget::Cheap));
     assert_eq!(
         task.env
             .as_ref()
@@ -593,7 +593,7 @@ fn empty_defaults_do_not_change_existing_behavior() {
     assert!(task.dir.is_none());
     assert!(task.verify.is_none());
     assert!(!task.read_only);
-    assert!(!task.budget);
+    assert!(task.budget.is_none());
 }
 
 #[test]

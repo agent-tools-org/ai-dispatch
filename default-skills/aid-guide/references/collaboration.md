@@ -11,7 +11,8 @@ aid batch tasks.toml --parallel --max-concurrent 3 --wait
 ```
 
 Use `[defaults]` for shared agent, directory, verification, team, fallback,
-context, skill, and budget settings. Use `[[task]]` entries with unique names,
+context, skill, and declared `difficulty`, `budget`, `urgency`, and `rigor`.
+Each `[[task]]` may override those dimensions and `kind`. Use unique names,
 prompts, worktrees, and `depends_on` edges. Prefer dependencies over parallel
 tasks editing overlapping files.
 

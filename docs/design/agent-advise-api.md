@@ -324,3 +324,71 @@ an integration test in both directions: exit 0 + error envelope → Failed, exit
 This matters beyond one bug: success-rate history is fleet-wide corrupted by exit-0 failures
 recorded as successes, and that history is exactly what `aid advise` weights its recommendations
 with. The advice surface is only as honest as the outcome data feeding it.
+
+---
+
+## The dimension we got wrong: CLI is a provider, the model does the work
+
+Established 2026-08-05, after a day of fixes that were all patches on the same misconception.
+
+### The mistake
+
+aid treats an "agent" as the unit of capability, cost, quota and history. It is none of those.
+An agent is a **CLI** — a gateway. The **model** is what performs the task.
+
+Captured the same day:
+
+| CLI | Models it actually serves |
+|---|---|
+| `agy` | 8 gemini-\*, 2 claude-\*, 1 gpt-oss-\* — three vendors |
+| `qwen` | 17, incl. qwen3.8-max, deepseek-v4-pro, kimi-k2.7-code, glm-5.2, MiniMax-M2.5 |
+| `opencode` | 177 |
+| `kilo` | 432 |
+| `cursor` | ~195 |
+
+Everything keyed on the CLI is therefore an average over things that are not alike:
+
+- **Capability.** `agy` scores `research 9 / complex_impl 3`, yet it can run
+  `claude-opus-4-6-thinking` or `gemini-3.6-flash-low`. One score cannot describe both.
+- **History.** `agy`'s "84% success" blends Claude Opus outcomes with Gemini Flash outcomes. The
+  number describes nothing that exists.
+- **Cost.** Priced per model; recorded per agent.
+- **Quota.** Metered per model family. agy's gemini allowance was exhausted while its claude
+  allowance still served — and marking the CLI took the working one out with it.
+
+The concrete loss, observed: a task dispatched to `agy --model gemini-3.6-flash-low` hit the gemini
+quota, aid marked the whole CLI unavailable, cascaded to a different CLI with different models, and
+failed there — while `claude-opus-4-6-thinking` sat available behind the CLI it had just abandoned.
+
+### The correction
+
+Two tables and a reachability relation:
+
+- **Model** — capability by category, price, context window, quota group. Decides *what the task
+  needs*.
+- **CLI** — tool use, sandboxing, session resume, streaming fidelity, observed reliability. Decides
+  *how the work gets done*.
+- **Reachability** — which CLI can reach which model, and the current quota state of that pair.
+
+Routing becomes two steps: the declared profile selects a **model class**, then reachability selects
+the CLI that can serve it right now. `aid advise` should recommend an (model, CLI) pair and say
+which dimension drove the choice.
+
+This makes a capability we cannot currently express: **the same model is often reachable more than
+one way.** When codex's quota ran out, the useful question was not "which other CLI" but "what else
+reaches a model of this class" — and `agy`'s claude family was a valid answer that nothing in the
+data model could surface.
+
+### Prerequisite
+
+**Persist the model at dispatch.** aid dispatched `--model gemini-3.6-flash-low` and stored
+`model: None`; the field is only filled by parsing CLI output, and plain-text CLIs never report it.
+That is why 265 of 335 tasks record `model=unknown`, and why per-group quota marking could not tell
+which family had been exhausted. Nothing model-dimensioned — history, cost, quota groups, advice —
+can be trusted until the model aid itself chose is recorded when it chooses it.
+
+### Status
+
+`src/agent/model_group.rs` (2026-08-05) implements per-family quota for agy. It is a special case of
+this design, added before the general shape was clear, and should fold into the model table rather
+than grow more per-CLI special cases.

@@ -41,7 +41,7 @@ fn collect(store: &Store, window: UsageWindow, agent: Option<&str>, now: DateTim
         row.3 += usize::from(task.status != TaskStatus::Waiting);
         if let Some(ms) = task.duration_ms { row.4 += ms; row.5 += 1; }
         add_known_cost(&mut row.6, cost_usd);
-        let model = task.model.clone().unwrap_or_else(|| "unknown".to_string());
+        let model = task.attributed_model().unwrap_or("unknown").to_string();
         let model_row = models.entry(model).or_insert((0, None, task.agent));
         model_row.0 += 1;
         add_known_cost(&mut model_row.1, cost_usd);
@@ -180,7 +180,7 @@ fn task_cost(task: &Task) -> Option<f64> {
     if matches!(task.agent, AgentKind::Cursor | AgentKind::Copilot) {
         return Some(0.0);
     }
-    cost::estimate_cost(task.tokens.unwrap_or(0), task.model.as_deref(), task.agent)
+    cost::estimate_cost(task.tokens.unwrap_or(0), task.costing_model(), task.agent)
 }
 
 #[cfg(test)]

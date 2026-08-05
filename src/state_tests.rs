@@ -151,7 +151,7 @@ fn refresh_project_state_writes_state_after_completion_update() {
             status: TaskStatus::Done,
             tokens: Some(42),
             duration_ms: 12_000,
-            model: Some("gpt-5.4"),
+            observed_model: Some("gpt-5.4"),
             cost_usd: Some(0.5),
             exit_code: Some(0),
         })
@@ -266,7 +266,7 @@ fn make_task(
         tokens: None,
         prompt_tokens: None,
         duration_ms: Some((duration_secs * 1000.0) as i64),
-        model: None,
+        requested_model: None, observed_model: None,
         cost_usd,
         exit_code: None,
         created_at: Local::now() - Duration::minutes(minutes_ago),

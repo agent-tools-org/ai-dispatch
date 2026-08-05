@@ -198,7 +198,7 @@ pub(in crate::cmd) async fn maybe_auto_retry_after_verify_failure_impl(
         .output_path
         .clone()
         .or_else(|| retry_args.output.clone());
-    retry_args.model = task.model.clone().or_else(|| retry_args.model.clone());
+    retry_args.model = task.requested_model.clone().or_else(|| retry_args.model.clone());
     retry_args.verify = task.verify.clone();
     retry_args.read_only = task.read_only;
     retry_args.budget = task.budget;
@@ -242,7 +242,7 @@ pub(in crate::cmd) async fn maybe_auto_retry_after_checklist_miss_impl(
     retry_args.parent_task_id = Some(task_id.as_str().to_string());
     retry_args.repo = task.repo_path.clone().or_else(|| retry_args.repo.clone());
     retry_args.output = task.output_path.clone().or_else(|| retry_args.output.clone());
-    retry_args.model = task.model.clone().or_else(|| retry_args.model.clone());
+    retry_args.model = task.requested_model.clone().or_else(|| retry_args.model.clone());
     retry_args.verify = task.verify.clone();
     retry_args.read_only = task.read_only;
     retry_args.budget = task.budget;

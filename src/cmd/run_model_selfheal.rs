@@ -33,7 +33,7 @@ pub(crate) async fn maybe_auto_retry_after_model_unavailable(
         return Ok(None);
     };
 
-    let failed_model = task.model.clone().unwrap_or_else(|| "(selected)".to_string());
+    let failed_model = task.requested_model.clone().unwrap_or_else(|| "(selected)".to_string());
     aid_warn!(
         "[aid] Model '{}' unavailable for {} — auto-retrying on its default model",
         failed_model,
@@ -146,7 +146,7 @@ mod tests {
             tokens: None,
             prompt_tokens: None,
             duration_ms: None,
-            model: None,
+            requested_model: None, observed_model: None,
             cost_usd: None,
             exit_code: None,
             created_at: Local::now(),

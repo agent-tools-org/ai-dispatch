@@ -17,7 +17,7 @@ fn task_with_branch(id: &str, branch: Option<&str>) -> Task {
         repo_path: None, worktree_path: None, worktree_branch: branch.map(str::to_string),
         final_head_sha: None, final_branch: None, start_sha: None, log_path: None,
         output_path: None, tokens: None, prompt_tokens: None, duration_ms: None,
-        model: None, cost_usd: None, exit_code: None, created_at: Local::now(),
+        requested_model: None, cost_usd: None, exit_code: None, created_at: Local::now(), observed_model: None,
         completed_at: None, verify: None, verify_status: VerifyStatus::Skipped,
         pending_reason: None, read_only: false, budget: false, audit_verdict: None,
         audit_report_path: None, delivery_assessment: None,

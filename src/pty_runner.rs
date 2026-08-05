@@ -62,7 +62,6 @@ pub(crate) fn run_agent_process_with_control(
             fail_task_on_spawn_error(
                 store,
                 task_id,
-                model,
                 start.elapsed().as_millis() as i64,
                 &err.to_string(),
             );
@@ -140,7 +139,6 @@ fn spawn_bridge(cmd: &std::process::Command, log_path: &Path) -> Result<PtyBridg
 fn fail_task_on_spawn_error(
     store: &Arc<Store>,
     task_id: &TaskId,
-    model: Option<&str>,
     duration_ms: i64,
     detail: &str,
 ) {
@@ -159,7 +157,8 @@ fn fail_task_on_spawn_error(
             status: TaskStatus::Failed,
             tokens: None,
             duration_ms,
-            model,
+            // Nothing ran, so nothing was observed.
+            observed_model: None,
             cost_usd: None,
             exit_code: None,
         },
@@ -196,10 +195,19 @@ fn record_completion(
     duration_ms: i64,
     info: &CompletionInfo,
 ) -> Result<()> {
-    let final_model = info.model.as_deref().or(model);
+    // `info.model` is what the CLI said it ran; `model` is what aid asked for.
+    // They are kept apart from here on. Collapsing them with `.or()` is what
+    // recorded `gemini-3.6-flash-low` as the model the `claude` CLI ran
+    // (`t-bd455a68`, which failed for exactly that reason) and cursor's
+    // `composer-2` as an `agy` model (`t-702f7bcb`).
+    let observed_model = info.model.as_deref();
+    // Costing still falls back to the request, because an estimate is openly an
+    // estimate — and with both values now stored, a reader can tell which basis
+    // any given row used instead of having to assume.
+    let costing_model = observed_model.or(model);
     let cost_usd = info.cost_usd.or_else(|| {
         info.tokens
-            .and_then(|tokens| cost::estimate_cost(tokens, final_model, agent.kind()))
+            .and_then(|tokens| cost::estimate_cost(tokens, costing_model, agent.kind()))
     });
     let event = crate::types::TaskEvent {
         task_id: task_id.clone(),
@@ -229,7 +237,7 @@ fn record_completion(
             status: info.status,
             tokens: info.tokens,
             duration_ms,
-            model: final_model,
+            observed_model,
             cost_usd,
             exit_code: info.exit_code,
         },

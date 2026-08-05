@@ -67,7 +67,7 @@ fn task(id: &str, repo: &Path, wt: &Path, branch: &str) -> Task {
         tokens: None,
         prompt_tokens: None,
         duration_ms: Some(1_000),
-        model: None,
+        requested_model: None, observed_model: None,
         cost_usd: None,
         exit_code: Some(0),
         created_at: Local::now(),

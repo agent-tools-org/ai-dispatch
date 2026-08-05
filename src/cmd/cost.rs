@@ -169,5 +169,5 @@ fn add_known_cost(total: &mut Option<f64>, cost: Option<f64>) {
 
 fn task_cost(task: &Task) -> Option<f64> {
     task.cost_usd
-        .or_else(|| cost::estimate_cost(task.tokens.unwrap_or(0), task.model.as_deref(), task.agent))
+        .or_else(|| cost::estimate_cost(task.tokens.unwrap_or(0), task.costing_model(), task.agent))
 }

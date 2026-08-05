@@ -69,7 +69,7 @@ fn retry_task_to_run_args(
             repo: task.repo_path.clone(),
             dir: task.repo_path.clone(),
             output: task.output_path.clone(),
-            model: task.model.clone(),
+            model: task.requested_model.clone(),
             group: task.workgroup_id.clone(),
             verify: task.verify.clone(),
             read_only: task.read_only,

@@ -90,6 +90,21 @@ pub(crate) fn default_nudge_message() -> String {
     DEFAULT_NUDGE_MESSAGE.to_string()
 }
 
+/// True when a stream line is only an echo of text aid itself wrote to the PTY.
+/// Those echoes must not reset the idle / hung clocks (see idle-watchdog self-nudge).
+pub(crate) fn take_inbound_echo(pending: &mut Vec<String>, line: &str) -> bool {
+    let trimmed = line.trim();
+    if trimmed.is_empty() {
+        return false;
+    }
+    if let Some(idx) = pending.iter().position(|msg| msg.trim() == trimmed) {
+        pending.remove(idx);
+        true
+    } else {
+        false
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -193,5 +208,15 @@ mod tests {
             ),
             IdleAction::SendNudge(default_nudge_message())
         );
+    }
+
+    #[test]
+    fn take_inbound_echo_matches_exact_trim_once() {
+        let mut pending = vec![default_nudge_message(), "other".to_string()];
+        assert!(take_inbound_echo(&mut pending, "  Task appears idle. Status update please?  "));
+        assert_eq!(pending, vec!["other".to_string()]);
+        assert!(!take_inbound_echo(&mut pending, &default_nudge_message()));
+        assert!(take_inbound_echo(&mut pending, "other"));
+        assert!(pending.is_empty());
     }
 }

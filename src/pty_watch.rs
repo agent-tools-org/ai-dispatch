@@ -13,7 +13,9 @@ use crate::input_signal;
 use crate::process_monitor;
 use crate::prompt::PromptDetector;
 use crate::pty_bridge::PtyBridge;
-use crate::pty_watch_idle::{IdleAction, IdleDetector, MonitorTaskStatus};
+use crate::pty_watch_idle::{
+    take_inbound_echo, IdleAction, IdleDetector, MonitorTaskStatus,
+};
 use crate::store::Store;
 use crate::types::{CompletionInfo, EventKind, TaskEvent, TaskId, TaskStatus};
 use crate::watcher::{self, SyntheticMilestoneTracker};
@@ -36,6 +38,8 @@ pub(crate) struct MonitorState {
     idle_nudged: bool,
     idle_warned: bool,
     pending_inbound_acks: usize,
+    /// Payloads aid wrote to the PTY; matching stream lines are echoes, not agent progress.
+    inbound_echo_suppress: Vec<String>,
     idle_detector: IdleDetector,
     streaming: bool,
     workgroup_id: Option<String>,
@@ -76,6 +80,7 @@ impl MonitorState {
             idle_nudged: false,
             idle_warned: false,
             pending_inbound_acks: 0,
+            inbound_echo_suppress: Vec::new(),
             idle_detector: IdleDetector::from_policy(timeout_policy),
             streaming,
             workgroup_id,
@@ -119,8 +124,9 @@ impl MonitorState {
     ) -> Result<()> {
         while let Some(pos) = self.line_buffer.find('\n') {
             let line = self.line_buffer[..pos].trim_end_matches('\r').to_string();
+            let is_echo = take_inbound_echo(&mut self.inbound_echo_suppress, &line);
             self.observe_output_line(task_id, store, &line)?;
-            if self.streaming {
+            if self.streaming && !is_echo {
                 if let Some(event_detail) = watcher::handle_streaming_line_with_session(
                     watcher::StreamLineContext {
                         agent,
@@ -155,8 +161,9 @@ impl MonitorState {
         if trailing.trim().is_empty() {
             return Ok(());
         }
+        let is_echo = take_inbound_echo(&mut self.inbound_echo_suppress, &trailing);
         self.observe_output_line(task_id, store, &trailing)?;
-        if self.streaming {
+        if self.streaming && !is_echo {
             if let Some(event_detail) = watcher::handle_streaming_line_with_session(
                 watcher::StreamLineContext {
                     agent,
@@ -237,6 +244,7 @@ impl MonitorState {
             return Ok(());
         };
         bridge.write_input(&input)?;
+        self.inbound_echo_suppress.push(input);
         self.finish_input_delivery(store, task_id)?;
         Ok(())
     }
@@ -251,6 +259,7 @@ impl MonitorState {
             return Ok(());
         };
         bridge.write_input(&message)?;
+        self.inbound_echo_suppress.push(message.clone());
         let delivered = store.mark_delivered_matching_inbound(task_id.as_str(), &message)?;
         if delivered {
             self.pending_inbound_acks += 1;
@@ -274,6 +283,7 @@ impl MonitorState {
     ) -> Result<()> {
         for message in store.pending_inbound_for_task(task_id.as_str())? {
             bridge.write_input(&message.content)?;
+            self.inbound_echo_suppress.push(message.content.clone());
             if store.mark_delivered(message.id)? {
                 self.pending_inbound_acks += 1;
             }

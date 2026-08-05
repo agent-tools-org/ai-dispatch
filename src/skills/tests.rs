@@ -196,33 +196,7 @@ fn measure_skill_tokens_includes_gotchas_and_script_listing() {
     assert_eq!(tokens, expected);
 }
 
-#[test]
-fn auto_skills_returns_agent_defaults_when_installed() {
-    let temp = tempfile::tempdir().unwrap();
-    let _aid_home = crate::paths::AidHomeGuard::set(temp.path());
-    let dir = skills_dir();
-    std::fs::create_dir_all(&dir).unwrap();
-    std::fs::write(dir.join("implementer.md"), "# Implementer").unwrap();
-    std::fs::write(dir.join("researcher.md"), "# Researcher").unwrap();
 
-    assert_eq!(auto_skills(&AgentKind::Codex, false), vec!["implementer"]);
-    assert_eq!(auto_skills(&AgentKind::OpenCode, false), vec!["implementer"]);
-    assert_eq!(auto_skills(&AgentKind::Qwen, false), vec!["implementer"]);
-    assert!(auto_skills(&AgentKind::Cursor, true).is_empty());
-    assert_eq!(auto_skills(&AgentKind::Gemini, false), vec!["researcher"]);
-    assert_eq!(auto_skills(&AgentKind::Kilo, false), vec!["implementer"]);
-}
-
-#[test]
-fn auto_skills_skips_missing_defaults() {
-    let temp = tempfile::tempdir().unwrap();
-    let _aid_home = crate::paths::AidHomeGuard::set(temp.path());
-    let dir = skills_dir();
-    std::fs::create_dir_all(&dir).unwrap();
-    std::fs::write(dir.join("implementer.md"), "# Implementer").unwrap();
-
-    assert!(auto_skills(&AgentKind::Gemini, false).is_empty());
-}
 
 #[test]
 fn estimate_tokens_uses_length_divided_by_four() {

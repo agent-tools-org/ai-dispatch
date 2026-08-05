@@ -244,33 +244,36 @@ pub fn list_skill_references(name: &str) -> Vec<String> {
     list_skill_files(name, "references")
 }
 
-pub fn auto_skills(agent: &AgentKind, has_worktree: bool) -> Vec<String> {
-    let _ = has_worktree;
-    let available = list_skills().unwrap_or_default();
-    let mut skills = Vec::new();
-    match agent {
-        AgentKind::Codex
-        | AgentKind::Copilot
-        | AgentKind::Claude
-        | AgentKind::OpenCode
-        | AgentKind::Qwen
-        | AgentKind::Kilo
-        | AgentKind::MiMoCode
-        | AgentKind::Codebuff
-        | AgentKind::Droid
-        | AgentKind::Oz
-        | AgentKind::Grok => {
-            skills.push("implementer".to_string());
-        }
-        AgentKind::Gemini | AgentKind::Antigravity => {
-            skills.push("researcher".to_string());
-        }
-        AgentKind::Cursor | AgentKind::Custom => {}
-    }
-    skills.retain(|skill| available.iter().any(|available_skill| available_skill == skill));
-    skills
-}
-
 #[cfg(test)]
 #[path = "skills/tests.rs"]
 mod tests;
+
+/// The skills a stored task was actually dispatched with, read from its
+/// recorded args.
+///
+/// Replaces `auto_skills`, which reconstructed them by guessing from the agent
+/// kind. That guess was wrong the moment skills became caller-declared, and it
+/// was always wrong for a caller who had passed `--skill` explicitly — the
+/// reconstruction ignored the flag entirely and reported whatever the agent
+/// kind implied. Historical rows dispatched before skills were declared will
+/// report none, which is what their record says.
+pub fn dispatched_skills(store: &crate::store::Store, task_id: &str) -> Vec<String> {
+    let Ok(Some(raw)) = store.get_task_dispatch_args(task_id) else {
+        return Vec::new();
+    };
+    let Ok(value) = serde_json::from_str::<serde_json::Value>(&raw) else {
+        return Vec::new();
+    };
+    value
+        .get("skills")
+        .and_then(|skills| skills.as_array())
+        .map(|skills| {
+            skills
+                .iter()
+                .filter_map(|skill| skill.as_str())
+                .filter(|skill| *skill != crate::cmd::run::NO_SKILL_SENTINEL)
+                .map(ToOwned::to_owned)
+                .collect()
+        })
+        .unwrap_or_default()
+}

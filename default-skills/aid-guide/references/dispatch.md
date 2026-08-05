@@ -126,6 +126,29 @@ If AID reports missing worktree registration or conflicting metadata, stop and
 identify the owning task. Automatic pruning is intentionally forbidden because
 linked-worktree Git metadata may contain unique submodule objects.
 
+Each worktree holds a `.aid-lock` lease for the active task. Unrelated tasks
+still collide and are refused. A nested child whose `parent_task_id` chain
+reaches the lease holder may re-enter the same worktree so edits stay on the
+parent branch.
+
+## Recursive delegation
+
+Agents already receive `AID_TASK_ID` (and now `AID_TASK_DEPTH`) and can run
+`aid run` from inside a task. When `AID_TASK_ID` is set:
+
+- `aid run` fills `parent_task_id` from it so `aid tree` shows the child.
+- Depth is parent depth + 1 and dispatch beyond depth `2` is refused.
+- `--bg` is refused; the child must finish before the parent releases the lease.
+- Child `--difficulty` / `--budget` may not exceed the parent's declared values.
+
+```bash
+# inside an agent process (AID_TASK_ID already set):
+aid run opencode "Extract the parser helper" \
+  --dir . \
+  --worktree feat/request-validation \
+  --difficulty simple --budget cheap --urgency normal --rigor draft
+```
+
 ## Build
 
 ```bash

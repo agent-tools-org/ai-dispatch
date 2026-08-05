@@ -381,11 +381,19 @@ data model could surface.
 
 ### Prerequisite
 
-**Persist the model at dispatch.** aid dispatched `--model gemini-3.6-flash-low` and stored
-`model: None`; the field is only filled by parsing CLI output, and plain-text CLIs never report it.
-That is why 265 of 335 tasks record `model=unknown`, and why per-group quota marking could not tell
-which family had been exhausted. Nothing model-dimensioned — history, cost, quota groups, advice —
-can be trusted until the model aid itself chose is recorded when it chooses it.
+**Carry the model through derived dispatches.** An earlier draft of this section claimed aid never
+persists the dispatched model. That was wrong, and the error is worth keeping visible: the task I
+inspected was a *cascade child*, and I attributed its empty model to its parent. Direct dispatches do
+record it — `t-bd455a68` stored `gemini-3.6-flash-low`, `t-efd78b6f` stored `MiniMax-M2.5`.
+
+The real gap is narrower: **tasks derived from another task lose the model.** The cascade child
+`t-c9a80dbf` stored `model: None`. Retries, cascades and best-of children all construct fresh args,
+and the model is not among the fields they inherit. Anything model-dimensioned — per-family quota
+marking, cost attribution, model-level history — silently degrades to "unknown" exactly on the paths
+aid takes when something has already gone wrong, which is when the record matters most.
+
+The `model=unknown` mass in `aid stats` is therefore not one bug: part is historical rows predating
+model capture, part is derived dispatches, and the split has not been measured.
 
 ### Status
 

@@ -1,3 +1,12 @@
+## v10.3.0 (2026-08-06)
+- An execution route is now three things rather than one opaque agent id: the CLI that is invoked, the provider that meters and bills it, and the model that does the work. `aid advise` names the recommended route as `codex/openai-chatgpt-plan/gpt-5.6-luna`, and `aid agent list --json` carries `provider` and `metering` per agent. Agent names are unchanged — `aid run codex` resolves to a route.
+- `metering` says how a provider meters, which decides what one outage implies: `account_pool` (one pool for the whole account), `per_model_family` (one exhausted family says nothing about the others), `spend_budget` (a currency budget that does not refill with time — only a top-up clears it), `subscription`, `none`, and `unknown`.
+- Every provider in the table was established from a real refusal captured by this repo: codex's usage-limit page, qwen's ModelStudio token-plan base URL, agy's per-family "Individual quota reached", opencode Zen's HTTP 401 "Insufficient balance", oz's Warp log path, droid's weekly 402. Providers nobody has watched refuse are `unknown`, which is a real answer rather than a gap to fill with a plausible name.
+- The change is additive. `AgentKind` is not renamed or deleted — it always was the CLI dimension carrying two extra jobs, and it appears in 203 files, so the two extra jobs were taken away from it instead of rewriting it.
+- Retired a hardcoded special case: whether quota is metered per model family was `matches!(agent, AgentKind::Antigravity)`, written the day agy's per-family metering was discovered. It is a fact about the provider, so the provider table answers it now and a second such provider needs no code change.
+- Removed a duplicate that had already diverged: model-family classification existed in two places with two different answers for `gpt-*`. One copy now, in the types layer.
+
+
 ## v10.2.0 (2026-08-06)
 - A task's observed model now carries an evidence grade. `attribution_source` is `echoed` when the CLI named the model in its own output, and `confirmed_by_success` when aid passed an explicit model and the run succeeded — a CLI handed a model it cannot serve fails instead. It moves with `observed_model` and is null whenever that is.
 - The second grade exists because some CLIs never name a model: codex emits 593 KB of JSONL with no model string anywhere, and agy's plain-text output has nothing to read. Without it their tasks stay permanently unknown, which starves the model-level history that routing is built on.

@@ -24,6 +24,8 @@ fn test_agent_json_serialization_roundtrip() {
         trust_tier: "local".to_string(),
         description: "Complex implementation, multi-file refactors".to_string(),
         supports_session_resume: true,
+        provider: "openai-chatgpt-plan".to_string(),
+        metering: "account_pool".to_string(),
         quota: QuotaJson {
             state: "limited".to_string(),
             recovery_at: Some("2026-08-05T18:27:00+08:00".to_string()),

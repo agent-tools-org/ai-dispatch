@@ -58,13 +58,15 @@ fn print_human(report: &AdviceReport, kind_was_overridden: bool) {
         source,
     );
     if let Some(recommended) = &report.recommended {
-        let model = recommended.model.as_deref()
-            .map(|value| format!("/{value}"))
-            .unwrap_or_default();
+        // The recommendation names a route, not an agent id. `codex` alone
+        // cannot say which quota pool the work will draw on, and that was the
+        // question that mattered every time routing broke on 2026-08-05: an
+        // exhausted route says nothing about a different provider that reaches
+        // a model of the same class.
+        let route = recommended_route(&recommended.agent, recommended.model.clone());
         println!(
-            "Recommended: {}{}   score {:.1}   {}  {}",
-            recommended.agent,
-            model,
+            "Recommended: {}   score {:.1}   {}  {}",
+            route,
             recommended.score,
             cost_label(recommended.est_cost_usd),
             duration_label(recommended.est_duration_secs),
@@ -185,5 +187,43 @@ mod tests {
                 "expected floor shortfall, got {reason:?}"
             );
         }
+    }
+}
+
+/// `<cli>/<provider>/<model>` for a recommendation. A custom agent has no
+/// builtin `AgentKind`, and its provider is genuinely unestablished rather than
+/// absent — say `unknown` rather than dropping the dimension, so the caller can
+/// see which part aid could not answer.
+fn recommended_route(agent: &str, model: Option<String>) -> String {
+    match crate::types::AgentKind::parse_str(agent) {
+        Some(cli) if cli != crate::types::AgentKind::Custom => {
+            crate::types::Route::for_cli(cli).with_model(model).id()
+        }
+        _ => format!("{agent}/unknown/{}", model.as_deref().unwrap_or("-")),
+    }
+}
+
+#[cfg(test)]
+mod recommended_route_tests {
+    use super::recommended_route;
+
+    #[test]
+    fn a_builtin_agent_resolves_to_its_provider() {
+        assert_eq!(
+            recommended_route("codex", Some("gpt-5.6".to_string())),
+            "codex/openai-chatgpt-plan/gpt-5.6"
+        );
+    }
+
+    #[test]
+    fn an_unpinned_model_is_shown_as_unpinned() {
+        assert_eq!(recommended_route("cursor", None), "cursor/cursor-subscription/-");
+    }
+
+    /// A custom agent's provider is unestablished, not absent. Dropping the
+    /// dimension would hide that aid does not know where the bill lands.
+    #[test]
+    fn a_custom_agent_keeps_the_dimension_and_admits_ignorance() {
+        assert_eq!(recommended_route("glm5", Some("z-ai/glm5".to_string())), "glm5/unknown/z-ai/glm5");
     }
 }

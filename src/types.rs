@@ -12,6 +12,10 @@ use std::{cell::RefCell, collections::VecDeque};
 mod agent;
 #[path = "types/attribution.rs"]
 mod attribution;
+#[path = "types/provider.rs"]
+mod provider;
+#[path = "types/route.rs"]
+mod route;
 #[path = "types/delivery.rs"]
 mod delivery;
 #[path = "types/message.rs"]
@@ -29,6 +33,8 @@ mod memory;
 
 pub use self::agent::AgentKind;
 pub use self::attribution::{grade_observation, AttributionSource};
+pub use self::provider::{model_family, provider_for_cli, MeteringShape, ProviderId};
+pub use self::route::Route;
 pub use self::delivery::DeliveryAssessment;
 pub use self::message::{MessageDirection, MessageSource, TaskMessage};
 pub use self::memory::{Memory, MemoryId, MemoryTier, MemoryType};

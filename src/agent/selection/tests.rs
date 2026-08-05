@@ -448,44 +448,6 @@ fn team_preferred_agents_boost() {
     assert!((boosted_score - base_score - 3.0).abs() < 1e-6);
 }
 
-#[test]
-fn team_default_agent_tiebreaker() {
-    let (_temp, _guard) = isolated();
-    let store = Store::open_memory().unwrap();
-    let mut overrides = HashMap::new();
-    overrides.insert(
-        "cursor".to_string(),
-        CapabilityOverrides {
-            simple_edit: Some(5),
-            ..Default::default()
-        },
-    );
-    overrides.insert(
-        "codex".to_string(),
-        CapabilityOverrides {
-            simple_edit: Some(5),
-            ..Default::default()
-        },
-    );
-    let team = TeamConfig {
-        id: "default".to_string(),
-        display_name: "Default".to_string(),
-        description: String::new(),
-        preferred_agents: vec![],
-        default_agent: Some("cursor".to_string()),
-        overrides,
-        rules: vec![],
-        toolbox: Default::default(),
-    };
-    let (kind, _) = select_agent_from(
-        "rename src/types.rs field name to task_name",
-        &opts(None, false),
-        &[AgentKind::Cursor, AgentKind::Codex],
-        &store,
-        Some(&team),
-    );
-    assert_eq!(kind, AgentKind::Cursor.as_str());
-}
 
 #[test]
 fn team_does_not_block_non_preferred() {

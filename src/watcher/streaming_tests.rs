@@ -46,7 +46,7 @@ impl Agent for StubStreamingAgent {
     }
 }
 
-pub(super) fn insert_running_task(store: &Store, task_id: &TaskId) {
+pub(crate) fn insert_running_task(store: &Store, task_id: &TaskId) {
     store
         .insert_task(&Task {
             id: task_id.clone(),

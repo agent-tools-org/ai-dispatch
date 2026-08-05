@@ -92,13 +92,11 @@ impl super::Agent for OpenCodeAgent {
 
     fn parse_completion(&self, output: &str) -> CompletionInfo {
         let (tokens, cost_usd) = extract_tokens_from_output(output);
-        CompletionInfo {
-            tokens,
-            status: TaskStatus::Done,
-            model: None,
-            cost_usd,
-            exit_code: None,
-        }
+        // Real failures emit {"type":"error","error":{...}}; no plaintext heuristics.
+        let mut info = super::stream_completion::status_from_error_type_jsonl(output);
+        info.tokens = tokens;
+        info.cost_usd = cost_usd;
+        info
     }
 }
 

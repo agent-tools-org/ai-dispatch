@@ -87,6 +87,11 @@ impl super::Agent for CursorAgent {
             }
         })
     }
+
+    fn parse_completion(&self, output: &str) -> CompletionInfo {
+        // Real Cursor success ends with type:result + is_error:false; failures set is_error:true.
+        super::stream_completion::status_from_result_jsonl(output)
+    }
 }
 
 fn parse_json_event(

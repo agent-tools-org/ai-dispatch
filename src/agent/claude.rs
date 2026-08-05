@@ -56,6 +56,11 @@ impl super::Agent for ClaudeAgent {
     fn parse_event(&self, task_id: &TaskId, line: &str) -> Option<TaskEvent> {
         parse_event_line(task_id, line)
     }
+
+    fn parse_completion(&self, output: &str) -> CompletionInfo {
+        // Same stream-json result envelope as Cursor: is_error / non-success subtype.
+        super::stream_completion::status_from_result_jsonl(output)
+    }
 }
 
 #[cfg(test)]

@@ -295,6 +295,7 @@ fn finalize_streaming_persists_transcript() {
     state.full_output.push_str("complete transcript");
 
     finalize_streaming(
+        &crate::agent::codex::CodexAgent,
         &task.id,
         &store,
         &portable_pty::ExitStatus::with_exit_code(0),

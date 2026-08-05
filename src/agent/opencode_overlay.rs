@@ -124,13 +124,10 @@ impl Agent for OpenCodeOverlayAgent {
 
     fn parse_completion(&self, output: &str) -> CompletionInfo {
         let (tokens, cost_usd) = extract_tokens_from_output(output);
-        CompletionInfo {
-            tokens,
-            status: TaskStatus::Done,
-            model: None,
-            cost_usd,
-            exit_code: None,
-        }
+        let mut info = super::stream_completion::status_from_error_type_jsonl(output);
+        info.tokens = tokens;
+        info.cost_usd = cost_usd;
+        info
     }
 
     fn needs_pty(&self) -> bool {

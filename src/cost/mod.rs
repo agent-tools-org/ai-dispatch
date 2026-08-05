@@ -72,7 +72,11 @@ fn resolve_pricing(model: Option<&str>, agent: AgentKind) -> Option<ModelPricing
     match agent {
         AgentKind::Gemini => gemini_fallback_pricing(agent),
         AgentKind::Antigravity => None,
-        AgentKind::Qwen => model_pricing("coder-model", agent),
+        AgentKind::Qwen => {
+            let m = crate::model_catalog::get_qwen_selected_model()
+                .unwrap_or_else(|| "coder-model".to_string());
+            model_pricing(&m, agent)
+        }
         AgentKind::Codex => codex_fallback_pricing(agent),
         AgentKind::Copilot => Some(ModelPricing {
             input_per_m: 0.0,

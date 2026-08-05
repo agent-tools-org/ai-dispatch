@@ -311,6 +311,20 @@ pub fn budget_model(agent: &AgentKind) -> Option<&'static str> {
     if models.is_empty() {
         return None;
     }
+    // Qwen's models come from the user's plan config and all carry the same
+    // subscription price, so "cheapest" is meaningless and `models.first()` is a
+    // byte-order accident — it picked MiniMax-M2.5 out of a 17-model plan and every
+    // short prompt 403'd. The model the user selected is the only defensible answer.
+    if *agent == AgentKind::Qwen {
+        return get_qwen_selected_model()
+            .and_then(|selected| {
+                models
+                    .iter()
+                    .find(|model| model.model == selected)
+                    .map(|model| model.model)
+            })
+            .or_else(|| models.first().map(|model| model.model));
+    }
     let non_free: Vec<_> = models.iter().filter(|model| model.tier != "free").collect();
     if non_free.is_empty() {
         return models.first().map(|model| model.model);

@@ -60,3 +60,27 @@ fn hyphenated_window_is_used_when_no_reset_time_is_given() {
 fn messages_without_a_reset_hint_return_none() {
     assert!(parse_relative_recovery("quota exhausted").is_none());
 }
+
+#[test]
+fn oz_quota_limit_reached_is_recognized() {
+    // Verbatim from `oz agent run`, exit code 1. Note it matches none of the
+    // other four providers' wordings — "quota exceeded", "usage limit",
+    // "quota has been exhausted" and "individual quota reached" all miss it.
+    let (agent, minutes) = match_quota_signature("Error: Quota limit reached.")
+        .expect("oz quota message must match");
+    assert_eq!(agent, AgentKind::Oz);
+    assert_eq!(minutes, 60);
+}
+
+#[test]
+fn prose_that_merely_mentions_quota_is_not_a_quota_failure() {
+    // Verbatim from docs/design/cli-adapter-audit.md, which an agent read during
+    // a task. A bare "quota" needle matched it and locked the agent out for
+    // twelve hours while the task had actually succeeded.
+    let doc = "be exercised (no credentials, exhausted quota), say so explicitly \
+               — an honest gap is worth more than an assumed pass.";
+    assert!(
+        match_quota_signature(doc).is_none(),
+        "documentation prose must not match a provider quota signature"
+    );
+}

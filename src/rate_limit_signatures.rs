@@ -31,8 +31,19 @@ pub(crate) const QUOTA_SIGNATURES: &[QuotaSignature] = &[
     // codex-cli, captured previously:
     // "You have hit your usage limit ... try again at <date>."
     QuotaSignature { agent: AgentKind::Codex, needle: "hit your usage limit", fallback_minutes: 300 },
-    // agy 1.1.10, individual tier daily cap.
-    QuotaSignature { agent: AgentKind::Antigravity, needle: "quota", fallback_minutes: 720 },
+    // oz (Warp cloud agents), captured 2026-08-05 with exit code 1:
+    // "Error: Quota limit reached."
+    // No reset time is given at all, so the cooldown is a guess; an hour keeps
+    // the agent out of rotation without writing it off for the day.
+    QuotaSignature { agent: AgentKind::Oz, needle: "quota limit reached", fallback_minutes: 60 },
+    // agy 1.1.10, captured 2026-08-05 against the gemini group while the claude
+    // group was still serving:
+    // "Individual quota reached. Please upgrade your subscription to increase
+    //  your limits. Resets in 59m21s."
+    // The earlier entry here used the bare needle "quota" with an invented
+    // 12-hour cooldown; it matched unrelated output and would have stranded a
+    // working claude allowance for twelve hours over a 59-minute gemini outage.
+    QuotaSignature { agent: AgentKind::Antigravity, needle: "individual quota reached", fallback_minutes: 60 },
 ];
 
 /// Match a message against every provider signature. Returns the agent the
@@ -54,6 +65,9 @@ pub(crate) fn parse_relative_recovery(message: &str) -> Option<NaiveDateTime> {
     let lower = message.to_lowercase();
     let now = Local::now().naive_local();
 
+    if let Some(duration) = parse_compact_duration(&lower) {
+        return Some(now + duration);
+    }
     if let Some(duration) = parse_resets_in(&lower) {
         return Some(now + duration);
     }
@@ -78,6 +92,40 @@ fn parse_reset_at_utc(lower: &str) -> Option<NaiveDateTime> {
         NaiveDateTime::parse_from_str(&format!("{year}-{stamp}"), "%Y-%m-%d %H:%M:%S").ok()?;
     let utc_offset = Local::now().offset().local_minus_utc();
     Some(candidate + Duration::seconds(i64::from(utc_offset)))
+}
+
+/// "resets in 59m21s" / "1h30m" — the compact form agy uses. The spaced parser
+/// cannot read it, and falling through to a default cooldown turned a 59-minute
+/// outage into a multi-hour one.
+fn parse_compact_duration(lower: &str) -> Option<Duration> {
+    let idx = lower.find("resets in ").or_else(|| lower.find("try again in "))?;
+    let rest = lower[idx..].split_once(" in ")?.1.trim();
+    let token: String = rest
+        .chars()
+        .take_while(|c| c.is_ascii_digit() || matches!(c, 'd' | 'h' | 'm' | 's'))
+        .collect();
+    if token.is_empty() || !token.chars().any(|c| c.is_ascii_alphabetic()) {
+        return None;
+    }
+    let mut total = Duration::zero();
+    let mut number = String::new();
+    for ch in token.chars() {
+        if ch.is_ascii_digit() {
+            number.push(ch);
+            continue;
+        }
+        let amount: i64 = number.parse().ok()?;
+        number.clear();
+        total = total
+            + match ch {
+                'd' => Duration::days(amount),
+                'h' => Duration::hours(amount),
+                'm' => Duration::minutes(amount),
+                's' => Duration::seconds(amount),
+                _ => return None,
+            };
+    }
+    (total > Duration::zero()).then_some(total)
 }
 
 /// "resets in 1 day" / "resets in 45 minutes" / "try again in 2 hours"

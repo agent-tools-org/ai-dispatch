@@ -5,6 +5,7 @@ use anyhow::Result;
 use chrono::Local;
 use serde_json::json;
 use std::process::Command;
+use std::sync::OnceLock;
 
 use super::truncate::{capped_detail, capped_detail_with};
 use super::RunOpts;
@@ -12,6 +13,40 @@ use crate::rate_limit;
 use crate::types::*;
 
 pub struct CursorAgent;
+
+/// Cursor renamed `cursor-agent` to `agent`, so `agent` stays the preferred name — but it
+/// is far too generic to take on faith. xAI's Grok Build CLI installs a binary called
+/// exactly that, and handing Cursor's flags to it fails instantly with an unrelated
+/// argument error that reads like a Cursor bug. Accept `agent` only when it says it is
+/// Cursor's, and fall back to the unambiguous alias otherwise.
+fn cursor_binary() -> &'static str {
+    static RESOLVED: OnceLock<&'static str> = OnceLock::new();
+    *RESOLVED.get_or_init(|| {
+        if super::env::which_exists("agent") && identifies_as_cursor("agent") {
+            return "agent";
+        }
+        "cursor-agent"
+    })
+}
+
+fn identifies_as_cursor(binary: &str) -> bool {
+    Command::new(binary)
+        .arg("--help")
+        .output()
+        .map(|output| {
+            let text = format!(
+                "{}{}",
+                String::from_utf8_lossy(&output.stdout),
+                String::from_utf8_lossy(&output.stderr)
+            );
+            help_mentions_cursor(&text)
+        })
+        .unwrap_or(false)
+}
+
+fn help_mentions_cursor(help: &str) -> bool {
+    help.to_ascii_lowercase().contains("cursor")
+}
 
 impl super::Agent for CursorAgent {
     fn kind(&self) -> AgentKind {
@@ -23,8 +58,7 @@ impl super::Agent for CursorAgent {
     }
 
     fn build_command(&self, prompt: &str, opts: &RunOpts) -> Result<Command> {
-        let binary = if super::env::which_exists("agent") { "agent" } else { "cursor-agent" };
-        let mut cmd = Command::new(binary);
+        let mut cmd = Command::new(cursor_binary());
         let prompt_with_ctx = super::embed_context_in_prompt(prompt, &opts.context_files)?;
         // Cursor documents stream-json "assistant" events as deltas; only the terminal "result"
         // event is complete, so requesting --stream-partial-output just degrades logs into tokens.
@@ -59,7 +93,15 @@ impl super::Agent for CursorAgent {
         if let Some(ref model) = opts.model {
             cmd.args(["--model", model]);
         } else {
-            cmd.args(["--model", "auto"]);
+            // Cursor's own mid-tier model, kept as the default so an unspecified
+            // run does not silently draw on the premium families it also serves
+            // (Opus 5, GPT-5.6, Grok 4.5 are all reachable through this CLI).
+            //
+            // Model names rot: this said `composer-2` until 2026-08-05, by which
+            // point `cursor-agent models` no longer listed it at all — only
+            // composer-2.5 and composer-2.5-fast, with 2.5 marked "(current)".
+            // Re-check against `cursor-agent models`.
+            cmd.args(["--model", "composer-2.5"]);
         }
         Ok(cmd)
     }

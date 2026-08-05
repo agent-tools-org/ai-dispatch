@@ -21,7 +21,7 @@ pub(super) fn priority(kind: AgentKind) -> i32 {
         AgentKind::OpenCode => 1,
         AgentKind::Copilot | AgentKind::Cursor | AgentKind::Codebuff => 2,
         AgentKind::Codex | AgentKind::Droid | AgentKind::Oz => 3,
-        AgentKind::Claude => 3,
+        AgentKind::Claude | AgentKind::Grok => 3,
         AgentKind::Custom => 1,
     }
 }

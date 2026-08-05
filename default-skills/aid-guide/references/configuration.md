@@ -49,8 +49,9 @@ aid byok --help
 aid credential --help
 ```
 
-Use `aid config agents` to see configured and detected agents. Register a local
-custom agent with `config add-agent`. Use `clear-limit` only after confirming a
+Use `aid config agents` to see configured and detected agents. Built-in dispatch
+probes the `grok` binary by that name (not the generic `agent` alias). Register a
+local custom agent with `config add-agent`. Use `clear-limit` only after confirming a
 provider's rate-limit condition has cleared.
 
 Use `aid byok` for custom OpenAI-compatible endpoints. Use `aid credential` to

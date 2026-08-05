@@ -185,6 +185,14 @@ pub async fn watch_streaming(
         status = info.status;
     }
 
+    // Checked before the clear below: a quota refusal arrives as ordinary result
+    // text with exit 0, so treating it as success would both hide the outage and
+    // wipe the marker that records it.
+    if crate::agent::stream_completion::record_quota_exhaustion(&full_output, agent.kind()) {
+        status = TaskStatus::Failed;
+        info.status = status;
+    }
+
     if status == TaskStatus::Done {
         rate_limit::clear_rate_limit(&agent.kind());
     }

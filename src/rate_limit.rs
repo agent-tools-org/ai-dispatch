@@ -290,6 +290,19 @@ mod tests {
     use super::*;
     use crate::paths;
 
+    /// The exact string codex produced on 2026-08-05. If this fails to parse,
+    /// `is_rate_limited` falls back to a 300-second mtime window and a six-day
+    /// outage reads as available again after five minutes.
+    #[test]
+    fn codex_recovery_timestamp_parses() {
+        let message = "You've hit your usage limit. Visit https://chatgpt.com/codex/settings/usage \
+                       to purchase more credits or try again at Aug 11th, 2026 2:23 PM.";
+        let extracted = parse_recovery_time(message).expect("recovery phrase must be extracted");
+        assert_eq!(extracted, "Aug 11th, 2026 2:23 PM");
+        let parsed = parse_recovery_datetime(&extracted).expect("recovery timestamp must parse");
+        assert!(parsed > Local::now().naive_local(), "parsed {parsed} must be in the future");
+    }
+
     #[test]
     fn test_is_rate_limit_error() {
         assert!(is_rate_limit_error("rate limit exceeded"));

@@ -2,6 +2,10 @@
 // Each module implements one subcommand.
 
 pub mod agent;
+pub mod agent_display;
+pub mod agent_json;
+pub mod agent_json_helpers;
+pub mod agent_json_types;
 pub mod ask;
 pub mod benchmark;
 pub mod batch;

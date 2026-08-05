@@ -62,7 +62,7 @@ pub fn get_agent_history(
     let limit_date = (Local::now() - chrono::Duration::days(30)).to_rfc3339();
 
     // Check if overall count >= 5
-    let (total, successes, avg_duration_secs, avg_cost_usd): (i64, i64, Option<f64>, Option<f64>) = conn.query_row(
+    let (total, successes_opt, avg_duration_secs, avg_cost_usd): (i64, Option<i64>, Option<f64>, Option<f64>) = conn.query_row(
         "SELECT
             COUNT(*) as total,
             SUM(CASE WHEN status IN ('done', 'merged') THEN 1 ELSE 0 END) as successes,
@@ -86,6 +86,7 @@ pub fn get_agent_history(
             ))
         },
     )?;
+    let successes = successes_opt.unwrap_or(0);
 
     if total < 5 {
         return Ok(None);
@@ -116,7 +117,8 @@ pub fn get_agent_history(
         |row| {
             let category: String = row.get(0)?;
             let cat_total: i64 = row.get(1)?;
-            let cat_successes: i64 = row.get(2)?;
+            let cat_successes_opt: Option<i64> = row.get(2)?;
+            let cat_successes = cat_successes_opt.unwrap_or(0);
             let cat_avg_duration: Option<f64> = row.get(3)?;
             Ok((
                 category,

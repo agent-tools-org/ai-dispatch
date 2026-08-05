@@ -61,7 +61,7 @@ fn failed_task(id: &str, repo: &Path, wt: &Path, branch: &str) -> Task {
         tokens: None,
         prompt_tokens: None,
         duration_ms: Some(100),
-        requested_model: None, observed_model: None,
+        requested_model: None, observed_model: None, attribution_source: None,
         cost_usd: None,
         exit_code: Some(1),
         created_at: Local::now(),

@@ -34,7 +34,7 @@ fn task(id: &str, status: TaskStatus, dir: Option<&str>, verify: Option<&str>) -
         tokens: None,
         prompt_tokens: None,
         duration_ms: Some(10),
-        requested_model: None, observed_model: None,
+        requested_model: None, observed_model: None, attribution_source: None,
         cost_usd: None,
         exit_code: Some(0),
         created_at: Local::now(),

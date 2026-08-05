@@ -146,7 +146,9 @@ pub(super) fn resolve_agent_setup(store: &Arc<Store>, args: &mut RunArgs) -> Res
                 agent_kind.as_str(),
                 next_agent
             );
-        } else if let Some(fallback) = crate::agent::selection::coding_fallback_for(&agent_kind) {
+        } else if let Some(fallback) =
+            crate::agent::selection::coding_fallback_for_prompt(&agent_kind, &args.prompt)
+        {
             aid_warn!(
                 "[aid] {} is rate-limited (until {}), auto-cascading to {}",
                 agent_kind.as_str(),

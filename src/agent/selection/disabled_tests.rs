@@ -55,7 +55,7 @@ fn fallback_chain_skips_disabled_agent() {
     ]);
     agent_config::save_agent_disabled("qwen", true).expect("disable agent");
 
-    let result = coding_fallback_for(&AgentKind::Gemini);
+    let result = coding_fallback_for(&AgentKind::Gemini, None, None);
 
     assert_eq!(result, Some(AgentKind::Codex));
 }

@@ -92,6 +92,9 @@ pub fn is_rate_limit_error(message: &str) -> bool {
         || lower.contains("usage limit")
         || lower.contains("credits")
         || lower.contains("reload your tokens")
+        // Permanent auth/tier death — treat like quota so auto-cascade can fire.
+        || lower.contains("ineligibletier")
+        || lower.contains("migrate to antigravity")
 }
 
 pub fn extract_rate_limit_message(raw: &str) -> Option<String> {
@@ -235,6 +238,9 @@ mod tests {
         assert!(is_rate_limit_error("error 429 too many"));
         assert!(is_rate_limit_error("credits exhausted"));
         assert!(is_rate_limit_error("please reload your tokens"));
+        assert!(is_rate_limit_error(
+            "IneligibleTierError: This client is no longer supported for Gemini Code Assist for individuals; migrate to Antigravity"
+        ));
         assert!(!is_rate_limit_error("network timeout"));
         assert!(!is_rate_limit_error("connection refused"));
         assert!(!is_rate_limit_error("payment required"));

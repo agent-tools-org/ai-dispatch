@@ -42,7 +42,7 @@ pub(crate) fn task_to_run_args(
                 .map(ToString::to_string)
                 .collect()
         })
-        .unwrap_or_else(|| auto_cascade_for_rate_limited(&agent_name));
+        .unwrap_or_else(|| auto_cascade_for_rate_limited(&agent_name, &task.prompt));
     let env = merged_env(task.env.as_ref(), task.env_forward.as_ref(), shared_dir_path);
     let skills = if task.no_skill {
         vec![NO_SKILL_SENTINEL.to_string()]
@@ -109,14 +109,14 @@ pub(crate) fn task_to_run_args(
 }
 
 /// If the agent is rate-limited, return the suggested fallback as an auto-cascade.
-fn auto_cascade_for_rate_limited(agent_name: &str) -> Vec<String> {
+fn auto_cascade_for_rate_limited(agent_name: &str, prompt: &str) -> Vec<String> {
     let Some(agent) = crate::types::AgentKind::parse_str(agent_name) else {
         return vec![];
     };
     if !crate::rate_limit::is_rate_limited(&agent) {
         return vec![];
     }
-    crate::agent::selection::coding_fallback_for(&agent)
+    crate::agent::selection::coding_fallback_for_prompt(&agent, prompt)
         .map(|fallback| vec![fallback.as_str().to_string()])
         .unwrap_or_default()
 }

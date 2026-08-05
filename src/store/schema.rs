@@ -34,7 +34,8 @@ const CREATE_TABLES_SQL: &str = "CREATE TABLE IF NOT EXISTS tasks (
     pending_reason TEXT,
     audit_verdict TEXT, audit_report_path TEXT, delivery_assessment TEXT, dispatch_args TEXT,
     declared_difficulty TEXT, declared_budget TEXT, declared_urgency TEXT, declared_rigor TEXT,
-    observed_model TEXT
+    observed_model TEXT,
+    attribution_source TEXT
 );
 CREATE TABLE IF NOT EXISTS workgroups (
     id TEXT PRIMARY KEY,
@@ -265,6 +266,11 @@ pub(super) fn row_to_task(row: &Row) -> rusqlite::Result<Result<Task>> {
         // reason, not by position.
         requested_model: row.get(19)?,
         observed_model: row.get("observed_model").ok().flatten(),
+        attribution_source: row
+            .get::<_, Option<String>>("attribution_source")
+            .ok()
+            .flatten()
+            .and_then(|value| AttributionSource::parse_str(&value)),
         cost_usd: row.get(20)?,
         exit_code: row.get(28).ok().flatten(),
         created_at: parse_dt(&row.get::<_, String>(21)?),

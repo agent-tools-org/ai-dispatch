@@ -134,7 +134,7 @@ fn pending_task(
         caller_session_id: caller.as_ref().map(|item| item.session_id.clone()),
         agent_session_id: None, repo_path, worktree_path: None, worktree_branch: None, final_head_sha: None, final_branch: None, start_sha: None,
         log_path: Some(log_path.to_string_lossy().to_string()), output_path: args.output.clone(),
-        tokens: None, prompt_tokens: None, duration_ms: None, requested_model: agent_setup.effective_model.clone(), observed_model: None,
+        tokens: None, prompt_tokens: None, duration_ms: None, requested_model: agent_setup.effective_model.clone(), observed_model: None, attribution_source: None,
         cost_usd: None, exit_code: None, created_at: Local::now(), completed_at: None,
         verify: args.verify.clone(), verify_status: VerifyStatus::Skipped, pending_reason: None,
         read_only: args.read_only, budget: args.budget, audit_verdict: None, audit_report_path: None,
@@ -253,7 +253,7 @@ fn fail_claimed_task(store: &Store, task_id: &TaskId, err: &anyhow::Error) -> Re
         store,
         TaskCompletionUpdate {
             id: task_id.as_str(), status: TaskStatus::Failed, tokens: None, duration_ms: 0,
-            observed_model: None, cost_usd: None, exit_code: None,
+            observed_model: None, attribution_source: None, cost_usd: None, exit_code: None,
         },
         &TaskEvent {
             task_id: task_id.clone(), timestamp: Local::now(), event_kind: EventKind::Error,

@@ -601,7 +601,28 @@ fn rejects_missing_agent_without_defaults() {
     let err = parse_batch_file(write_temp("[[tasks]]\nprompt = \"do something\"\n").path())
         .unwrap_err()
         .to_string();
-    assert!(err.contains("missing agent"));
+    assert!(err.contains("aid advise"), "expected advise hint, got: {err}");
+}
+
+#[test]
+fn rejects_auto_agent() {
+    let err = parse_batch_file(
+        write_temp("[[tasks]]\nagent = \"auto\"\nprompt = \"do something\"\n").path(),
+    )
+    .unwrap_err()
+    .to_string();
+    assert!(err.contains("aid advise"), "expected advise hint, got: {err}");
+    assert!(err.contains("removed"), "expected removed message, got: {err}");
+}
+
+#[test]
+fn rejects_empty_agent_even_with_team() {
+    let err = parse_batch_file(
+        write_temp("[[tasks]]\nteam = \"dev\"\nprompt = \"do something\"\n").path(),
+    )
+    .unwrap_err()
+    .to_string();
+    assert!(err.contains("aid advise"), "expected advise hint, got: {err}");
 }
 
 #[test]

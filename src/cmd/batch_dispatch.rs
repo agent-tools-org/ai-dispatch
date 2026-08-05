@@ -109,7 +109,7 @@ async fn dispatch_with_dependencies(
                 .filter(|s| crate::sanitize::is_valid_task_id(s))
                 .map(|s| crate::types::TaskId(s.clone()))
                 .unwrap_or_else(crate::types::TaskId::generate);
-            let agent = if task.agent.is_empty() { "auto" } else { &task.agent };
+            let agent = task.agent.as_str();
             if let Err(e) = store.insert_waiting_task(
                 id.as_str(),
                 agent,

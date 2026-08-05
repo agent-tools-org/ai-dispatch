@@ -52,10 +52,10 @@ Dispatch a task to an AI agent. Core command — most other features build on th
 aid run codex "Add unit tests" --verify              # with auto-verify
 aid run gemini "Research topic" -o notes.md           # research with output file
 aid run codex "Refactor" -w feat/refactor --bg        # background + worktree
-aid run auto "implement feature" --team dev           # auto-select agent with team context
+aid advise "implement feature" --difficulty moderate --budget standard --urgency normal --rigor standard
 ```
 
-Built-in run agents: `gemini`, `agy`, `qwen`, `codex`, `copilot`, `opencode`, `cursor`, `kilo`, `mimocode`, `codebuff`, `droid`, `oz`, `claude`, and `auto`.
+Built-in run agents: `gemini`, `agy`, `qwen`, `codex`, `copilot`, `opencode`, `cursor`, `kilo`, `mimocode`, `codebuff`, `droid`, `oz`, and `claude`. Use `aid advise` to compare agents; there is no `auto` agent.
 
 `agy` (Antigravity CLI) is a drop-in successor to `gemini` for Google One / Gemini Code Assist (individuals) users. After June 18, 2026, gemini stops serving those tiers — switch to `agy`. Paying API users keep using `gemini`.
 
@@ -284,7 +284,7 @@ Audit and review prompts now default to an audit-report flow: `aid run codex "Cr
 
 ## Teams
 
-Teams provide **knowledge context and soft agent preferences** — not hard restrictions. All agents remain available; `--team` boosts preferred agents in auto-selection and injects team knowledge into prompts.
+Teams provide **knowledge context and soft agent preferences** — not hard restrictions. All agents remain available; `--team` boosts preferred agents in `aid advise` scoring and injects team knowledge into prompts.
 
 ```toml
 [team]

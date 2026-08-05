@@ -91,7 +91,9 @@ fn official_guide_documents_declared_profiles_and_advice() {
     assert!(dispatch.contains("`aid advise`"));
     assert!(dispatch.contains("without launching an agent or writing the task store"));
     assert!(dispatch.contains("--difficulty complex --budget premium --urgency urgent --rigor critical"));
+    assert!(dispatch.contains("`aid run auto`") && dispatch.contains("hard errors"));
     assert!(collaboration.contains("declared `difficulty`, `budget`, `urgency`, and `rigor`"));
+    assert!(collaboration.contains("`auto` and empty agent are rejected"));
     assert!(configuration.contains("`require_task_profile = true`"));
 }
 

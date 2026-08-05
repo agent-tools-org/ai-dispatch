@@ -10,7 +10,7 @@ use crate::agent::Agent;
 use crate::paths;
 use crate::rate_limit;
 use crate::store::Store;
-use crate::types::{CompletionInfo, TaskId, TaskStatus};
+use crate::types::{AgentKind, CompletionInfo, TaskId, TaskStatus};
 
 use super::extract::is_standalone_milestone_line;
 use super::stderr::{drain_stderr_capture, spawn_stderr_capture};
@@ -53,7 +53,10 @@ pub(crate) async fn watch_buffered(
     if info.status == TaskStatus::Done {
         rate_limit::clear_rate_limit(&agent.kind());
     }
-    let event = crate::agent::gemini::make_completion_event(task_id, &info);
+    let event = match agent.kind() {
+        AgentKind::Grok => crate::agent::grok::make_completion_event(task_id, &info),
+        _ => crate::agent::gemini::make_completion_event(task_id, &info),
+    };
     store.insert_event(&event)?;
     Ok(info)
 }
@@ -73,7 +76,14 @@ async fn persist_outputs(
     let _ = tokio::fs::create_dir_all(paths::task_dir(task_id.as_str())).await;
     let _ = tokio::fs::write(paths::transcript_path(task_id.as_str()), &buffer).await;
     if let Some(out_path) = output_path {
-        if let Some(response) = crate::agent::gemini::extract_response(&buffer) {
+        if let Some(response) = crate::agent::grok::extract_response(&buffer) {
+            let response_filtered: String = response
+                .lines()
+                .filter(|line| !is_standalone_milestone_line(line))
+                .collect::<Vec<_>>()
+                .join("\n");
+            tokio::fs::write(out_path, &response_filtered).await?;
+        } else if let Some(response) = crate::agent::gemini::extract_response(&buffer) {
             let response_filtered: String = response
                 .lines()
                 .filter(|line| !is_standalone_milestone_line(line))

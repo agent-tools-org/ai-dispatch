@@ -123,6 +123,7 @@ pub(super) fn resolve_agent_setup(store: &Arc<Store>, args: &mut RunArgs) -> Res
                 | AgentKind::MiMoCode
                 | AgentKind::Codebuff
                 | AgentKind::Droid
+                | AgentKind::Grok
                 | AgentKind::Custom
         )
         && std::path::Path::new(".git").exists()

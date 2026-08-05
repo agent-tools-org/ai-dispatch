@@ -224,7 +224,7 @@ fn term_escape_strip_allows_droid_stream_parse_via_stream_path() {
         tokens: None,
         prompt_tokens: None,
         duration_ms: None,
-        model: None,
+        requested_model: None, observed_model: None,
         cost_usd: None,
         exit_code: None,
         created_at: chrono::Local::now(),

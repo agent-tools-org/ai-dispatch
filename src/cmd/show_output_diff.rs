@@ -83,7 +83,7 @@ fn format_diff_header(task: &Task) -> String {
         task.status.label(),
         truncate(&task.prompt, 60),
     ));
-    if let Some(ref model) = task.model {
+    if let Some(model) = task.display_model() {
         out.push_str(&format!("Model: {model}\n"));
     }
     out

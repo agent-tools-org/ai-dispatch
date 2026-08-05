@@ -95,7 +95,7 @@ pub(crate) fn retry_task_to_run_args(store: &Store, task: &Task, group_id: &str,
         RunArgs {
             repo: task.repo_path.clone(),
             output: task.output_path.clone(),
-            model: task.model.clone(),
+            model: task.requested_model.clone(),
             verify: task.verify.clone(),
             read_only: task.read_only,
             budget: task.budget,

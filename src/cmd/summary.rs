@@ -143,7 +143,7 @@ mod tests {
             tokens: Some(42),
             prompt_tokens: Some(5),
             duration_ms: Some(2_500),
-            model: None,
+            requested_model: None, observed_model: None,
             cost_usd: None,
             exit_code: Some(0),
             created_at: Local::now(), completed_at: None,

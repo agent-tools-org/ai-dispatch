@@ -276,7 +276,7 @@ fn board_json_row(task: &Task) -> serde_json::Value {
         "agent": task.agent_display_name(),
         "status": task.status.as_str(),
         "prompt": task.prompt,
-        "model": task.model,
+        "requested_model": task.requested_model, "observed_model": task.observed_model,
         "tokens": task.tokens,
         "duration_ms": task.duration_ms,
         "cost_usd": task.cost_usd,

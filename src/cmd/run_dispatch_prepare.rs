@@ -85,22 +85,22 @@ pub(super) fn prepare_dispatch(store: &Arc<Store>, args: &mut RunArgs) -> Result
     let setup = match setup_worktree(store, args, detected_project.as_ref(), &agent_setup, &task_id, explicit_repo_path.as_deref()) {
         Ok(setup) => setup,
         Err(err) => {
-            fail_claimed_task(store, &task_id, agent_setup.effective_model.as_deref(), &err)?;
+            fail_claimed_task(store, &task_id, &err)?;
             return Err(err);
         }
     };
     if let Err(err) = persist_worktree_setup(store, &task_id, &mut task, &setup) {
         clear_worktree_lock(setup.wt_path.as_deref(), task_id.as_str());
-        fail_claimed_task(store, &task_id, agent_setup.effective_model.as_deref(), &err)?;
+        fail_claimed_task(store, &task_id, &err)?;
         return Err(err);
     }
     if setup.emit_gitbutler_setup_hint { super::run_dispatch_resolve::insert_gitbutler_setup_hint(store, &task_id); }
     if let Err(err) = super::run_dispatch_guard::ensure_worktree_task_not_repo_root(&task, setup.effective_dir.as_deref(), setup.repo_path.as_deref()) {
         clear_worktree_lock(setup.wt_path.as_deref(), task_id.as_str());
-        fail_claimed_task(store, &task_id, agent_setup.effective_model.as_deref(), &err)?;
+        fail_claimed_task(store, &task_id, &err)?;
         return Err(err);
     }
-    prepare_worktree_deps(store, args, &task_id, &agent_setup, &setup)?;
+    prepare_worktree_deps(store, args, &task_id, &setup)?;
     if should_auto_result_file(args, had_explicit_result_file) {
         let result_file = crate::cmd::report_mode::task_result_file(task_id.as_str());
         args.result_file = Some(result_file.clone());
@@ -134,7 +134,7 @@ fn pending_task(
         caller_session_id: caller.as_ref().map(|item| item.session_id.clone()),
         agent_session_id: None, repo_path, worktree_path: None, worktree_branch: None, final_head_sha: None, final_branch: None, start_sha: None,
         log_path: Some(log_path.to_string_lossy().to_string()), output_path: args.output.clone(),
-        tokens: None, prompt_tokens: None, duration_ms: None, model: agent_setup.effective_model.clone(),
+        tokens: None, prompt_tokens: None, duration_ms: None, requested_model: agent_setup.effective_model.clone(), observed_model: None,
         cost_usd: None, exit_code: None, created_at: Local::now(), completed_at: None,
         verify: args.verify.clone(), verify_status: VerifyStatus::Skipped, pending_reason: None,
         read_only: args.read_only, budget: args.budget, audit_verdict: None, audit_report_path: None,
@@ -225,7 +225,6 @@ fn prepare_worktree_deps(
     store: &Arc<Store>,
     args: &RunArgs,
     task_id: &TaskId,
-    agent_setup: &AgentSetup,
     setup: &WorktreeSetup,
 ) -> Result<()> {
     if args.dry_run { return Ok(()); }
@@ -237,7 +236,7 @@ fn prepare_worktree_deps(
         crate::idle_timeout::idle_timeout_secs_from_env(args.env.as_ref()), setup.fresh_worktree, setup.wt_branch.as_deref(),
     ) {
         clear_worktree_lock(Some(wt), task_id.as_str());
-        fail_claimed_task(store, task_id, agent_setup.effective_model.as_deref(), &err)?;
+        fail_claimed_task(store, task_id, &err)?;
         return Err(err);
     }
     Ok(())
@@ -249,12 +248,12 @@ fn clear_worktree_lock(wt_path: Option<&str>, task_id: &str) {
     }
 }
 
-fn fail_claimed_task(store: &Store, task_id: &TaskId, model: Option<&str>, err: &anyhow::Error) -> Result<()> {
+fn fail_claimed_task(store: &Store, task_id: &TaskId, err: &anyhow::Error) -> Result<()> {
     crate::task_lifecycle::complete_task_atomic(
         store,
         TaskCompletionUpdate {
             id: task_id.as_str(), status: TaskStatus::Failed, tokens: None, duration_ms: 0,
-            model, cost_usd: None, exit_code: None,
+            observed_model: None, cost_usd: None, exit_code: None,
         },
         &TaskEvent {
             task_id: task_id.clone(), timestamp: Local::now(), event_kind: EventKind::Error,

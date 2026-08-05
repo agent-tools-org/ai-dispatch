@@ -75,7 +75,7 @@ fn task(id: &str, worktree_path: Option<String>) -> Task {
         tokens: None,
         prompt_tokens: None,
         duration_ms: None,
-        model: None,
+        requested_model: None, observed_model: None,
         cost_usd: None,
         exit_code: None,
         created_at: Local::now(),
@@ -132,7 +132,7 @@ fn salvage_writes_partial_work_and_commits_dirty_worktree() {
             status: TaskStatus::Failed,
             tokens: None,
             duration_ms: 10,
-            model: None,
+            observed_model: None,
             cost_usd: None,
             exit_code: Some(1),
         })

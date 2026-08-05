@@ -223,7 +223,7 @@ fn make_task(task_id: &str, status: TaskStatus, created_at: chrono::DateTime<Loc
         tokens: None,
         prompt_tokens: None,
         duration_ms: None,
-        model: None,
+        requested_model: None, observed_model: None,
         cost_usd: None,
         exit_code: None,
         created_at,

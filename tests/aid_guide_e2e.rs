@@ -73,6 +73,15 @@ fn official_guide_documents_event_fallback_coverage() {
     assert!(operations.contains("only edited or only read files is still represented"));
 }
 
+#[test]
+fn official_guide_documents_retry_worktree_safety() {
+    let operations = include_str!("../default-skills/aid-guide/references/task-operations.md");
+
+    assert!(operations.contains("When the recorded linked worktree still exists, retry reuses it"));
+    assert!(operations.contains("original repository checkout as its anchor"));
+    assert!(operations.contains("genuinely checked out in the checkout that dispatched the task"));
+}
+
 fn public_commands(help: &str) -> Vec<String> {
     help.lines()
         .skip_while(|line| *line != "Commands:")

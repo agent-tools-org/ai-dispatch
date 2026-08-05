@@ -1,11 +1,11 @@
-// Cursor Agent CLI adapter: builds `cursor-agent` commands, parses stream-json output.
-// Prefers the vendor-specific binary name; the bare `agent` is used only when it
-// identifies itself as Cursor's, because other vendors also install that name.
+// Cursor Agent CLI adapter: builds `agent`/`cursor-agent` commands, parses stream-json output.
+// Uses the standalone Cursor binary, preferring `agent` over the legacy alias.
 
 use anyhow::Result;
 use chrono::Local;
 use serde_json::json;
 use std::process::Command;
+use std::sync::OnceLock;
 
 use super::truncate::{capped_detail, capped_detail_with};
 use super::RunOpts;
@@ -14,40 +14,38 @@ use crate::types::*;
 
 pub struct CursorAgent;
 
-/// Cursor's binary, preferring the vendor-specific name.
-///
-/// `agent` is a name any vendor can claim. On 2026-08-05 installing grok put a
-/// symlink at `~/.local/bin/agent` pointing at its own binary, and because this
-/// adapter probed the bare name first, every cursor dispatch began invoking grok
-/// with cursor's flags — `error: unexpected argument '--force' found`, from a
-/// CLI whose usage line reads `agent --single <PROMPT>`. Cursor had run 18 tasks
-/// that day without trouble; the only thing that changed was another vendor
-/// taking the generic name.
-///
-/// So `cursor-agent` wins whenever it exists, and the bare `agent` is accepted
-/// only when it is verifiably Cursor's.
+/// Cursor renamed `cursor-agent` to `agent`, so `agent` stays the preferred name — but it
+/// is far too generic to take on faith. xAI's Grok Build CLI installs a binary called
+/// exactly that, and handing Cursor's flags to it fails instantly with an unrelated
+/// argument error that reads like a Cursor bug. Accept `agent` only when it says it is
+/// Cursor's, and fall back to the unambiguous alias otherwise.
 fn cursor_binary() -> &'static str {
-    if super::env::which_exists("cursor-agent") {
-        return "cursor-agent";
-    }
-    if super::env::which_exists("agent") && bare_agent_is_cursor() {
-        return "agent";
-    }
-    "cursor-agent"
+    static RESOLVED: OnceLock<&'static str> = OnceLock::new();
+    *RESOLVED.get_or_init(|| {
+        if super::env::which_exists("agent") && identifies_as_cursor("agent") {
+            return "agent";
+        }
+        "cursor-agent"
+    })
 }
 
-/// Ask the bare `agent` binary who it is. Cursor reports a dated build such as
-/// `2026.07.23-e383d2b`; grok answers `grok 0.2.118 (...)`.
-fn bare_agent_is_cursor() -> bool {
-    std::process::Command::new("agent")
-        .arg("--version")
+fn identifies_as_cursor(binary: &str) -> bool {
+    Command::new(binary)
+        .arg("--help")
         .output()
-        .ok()
-        .filter(|out| out.status.success())
-        .map(|out| String::from_utf8_lossy(&out.stdout).to_lowercase())
-        .is_some_and(|version| {
-            !version.contains("grok") && !version.contains("qwen") && !version.contains("gemini")
+        .map(|output| {
+            let text = format!(
+                "{}{}",
+                String::from_utf8_lossy(&output.stdout),
+                String::from_utf8_lossy(&output.stderr)
+            );
+            help_mentions_cursor(&text)
         })
+        .unwrap_or(false)
+}
+
+fn help_mentions_cursor(help: &str) -> bool {
+    help.to_ascii_lowercase().contains("cursor")
 }
 
 impl super::Agent for CursorAgent {
@@ -60,8 +58,7 @@ impl super::Agent for CursorAgent {
     }
 
     fn build_command(&self, prompt: &str, opts: &RunOpts) -> Result<Command> {
-        let binary = cursor_binary();
-        let mut cmd = Command::new(binary);
+        let mut cmd = Command::new(cursor_binary());
         let prompt_with_ctx = super::embed_context_in_prompt(prompt, &opts.context_files)?;
         // Cursor documents stream-json "assistant" events as deltas; only the terminal "result"
         // event is complete, so requesting --stream-partial-output just degrades logs into tokens.
@@ -103,9 +100,7 @@ impl super::Agent for CursorAgent {
             // Model names rot: this said `composer-2` until 2026-08-05, by which
             // point `cursor-agent models` no longer listed it at all — only
             // composer-2.5 and composer-2.5-fast, with 2.5 marked "(current)".
-            // The stale name went unnoticed because a local agent_config set
-            // `model = "auto"`, masking the default for the one machine that
-            // would have caught it. Re-check against `cursor-agent models`.
+            // Re-check against `cursor-agent models`.
             cmd.args(["--model", "composer-2.5"]);
         }
         Ok(cmd)

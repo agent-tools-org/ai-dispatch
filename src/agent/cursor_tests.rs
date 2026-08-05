@@ -90,7 +90,10 @@ fn uses_cursor_agent_binary() {
     assert!(cmd.get_program() == "agent" || cmd.get_program() == "cursor-agent");
     let args: Vec<_> = cmd.get_args().collect();
     assert_eq!(args[0], "-p");
-    assert!(args.windows(2).any(|window| window[0] == "--model" && window[1] == "composer-2"));
+    // composer-2 was delisted by 2026-08-05; `cursor-agent models` marks
+    // composer-2.5 as current. This assertion guarded the dead name for as long
+    // as it was green.
+    assert!(args.windows(2).any(|window| window[0] == "--model" && window[1] == "composer-2.5"));
 }
 
 #[test]
@@ -171,4 +174,18 @@ fn run_opts() -> RunOpts {
         read_only: false, sandbox: false, context_files: vec![], session_id: None,
         env: None, env_forward: None,
     }
+}
+
+#[test]
+fn only_accepts_a_bare_agent_binary_that_identifies_as_cursor() {
+    // Cursor's own help text names the product; xAI's Grok Build CLI ships a binary with
+    // the same `agent` name and must not be mistaken for it.
+    assert!(super::help_mentions_cursor(
+        "Usage: cursor-agent [OPTIONS]\n  -p, --print  Print response\n"
+    ));
+    assert!(super::help_mentions_cursor("Cursor Agent CLI\n"));
+    assert!(!super::help_mentions_cursor(
+        "Grok Build TUI\n\nUsage: agent [OPTIONS] [PROMPT] [COMMAND]\n"
+    ));
+    assert!(!super::help_mentions_cursor(""));
 }

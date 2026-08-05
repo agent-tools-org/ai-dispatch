@@ -58,6 +58,7 @@ fn stale_worktree_dir_error(dir: &str, branch: Option<&str>) -> String {
 }
 
 pub(super) fn prepare_dispatch(store: &Arc<Store>, args: &mut RunArgs) -> Result<PreparedDispatch> {
+    super::run_delegation::apply_nested_delegation(store, args)?;
     args.prompt = resolve_prompt_input(&args.prompt, args.prompt_file.as_deref())?;
     args.prompt_file = None;
     args.max_duration_mins = resolve_max_duration_mins(args.timeout, args.max_duration_mins);

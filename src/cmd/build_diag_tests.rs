@@ -30,6 +30,7 @@ fn digest_counts_warnings_without_rendering_by_default() {
             parse_diagnostic(&compiler_message("warning", "src/lib.rs", 4, "unused")).expect("warning diagnostic"),
         ],
         stderr_lines: Vec::new(),
+        note: None,
     };
     let digest = render_digest(&report, false);
     assert!(digest.contains("failed: 1 errors, 1 warnings"));
@@ -47,8 +48,28 @@ fn digest_renders_warnings_when_requested() {
             parse_diagnostic(&compiler_message("warning", "src/lib.rs", 4, "unused")).expect("warning diagnostic"),
         ],
         stderr_lines: Vec::new(),
+        note: None,
     };
     assert!(render_digest(&report, true).contains("warning: src/lib.rs:4: unused"));
+}
+
+#[test]
+fn digest_includes_fallback_note_after_status_line() {
+    let report = BuildReport {
+        success: true,
+        command: "cargo check".to_string(),
+        elapsed: Duration::from_millis(200),
+        diagnostics: Vec::new(),
+        stderr_lines: Vec::new(),
+        note: Some("note: CARGO_TARGET_DIR unwritable; fell back from /shared to /local/target".into()),
+    };
+    let digest = render_digest(&report, false);
+    let lines: Vec<_> = digest.lines().collect();
+    assert!(lines[0].starts_with("succeeded:"));
+    assert_eq!(
+        lines[1],
+        "note: CARGO_TARGET_DIR unwritable; fell back from /shared to /local/target"
+    );
 }
 
 #[test]
@@ -103,6 +124,7 @@ fn digest_marks_suppressed_diagnostics() {
         elapsed: Duration::from_secs(1),
         diagnostics,
         stderr_lines: Vec::new(),
+        note: None,
     };
     let digest = render_digest(&report, true);
     assert_eq!(digest.lines().count(), MAX_DIGEST_LINES);
@@ -116,5 +138,6 @@ fn report_with_diagnostics(diagnostics: Vec<Diagnostic>) -> BuildReport {
         elapsed: Duration::from_secs(1),
         diagnostics,
         stderr_lines: Vec::new(),
+        note: None,
     }
 }

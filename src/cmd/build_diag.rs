@@ -62,6 +62,7 @@ pub(crate) struct BuildReport {
     pub(crate) elapsed: Duration,
     pub(crate) diagnostics: Vec<Diagnostic>,
     pub(crate) stderr_lines: Vec<String>,
+    pub(crate) note: Option<String>,
 }
 
 impl DiagnosticCollector {
@@ -122,6 +123,9 @@ pub(crate) fn render_digest(report: &BuildReport, include_warnings: bool) -> Str
         report.command,
         format_duration(report.elapsed)
     )];
+    if let Some(note) = report.note.as_ref() {
+        lines.push(note.clone());
+    }
     lines.extend(render_diagnostic_lines(report, include_warnings));
     cap_digest_lines(lines).join("\n")
 }

@@ -107,6 +107,13 @@ aid build test --package my-crate
 Use `aid build --help` for supported Cargo command and filter options. It emits
 compact, deduplicated diagnostics and integrates progress into task events.
 
+Inherited `CARGO_TARGET_DIR` wins for the first attempt. If cargo cannot write
+that directory (common under agent OS sandboxes that only allow the worktree
+and temp dirs), `aid build` retries once under the system temp directory
+(`aid-build-target/<project-key>/`) and records the fallback paths in the
+digest. Do not preflight with a generic write probe — the fallback is keyed
+off cargo's real permission error.
+
 ## Retry and fallback
 
 ```bash

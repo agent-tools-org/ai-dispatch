@@ -23,6 +23,17 @@ fn build_command_prefers_agent_binary() {
 }
 
 #[test]
+fn build_command_ignores_a_foreign_binary_named_agent() {
+    let _permit = test_subprocess::acquire();
+    let bin_dir = grok_shadowed_bin_dir();
+    let output = run_helper(
+        "agent::cursor_binary_tests::reports_cursor_binary_for_subprocess",
+        &bin_dir,
+    );
+    assert_eq!(extract_marker(&output, "CURSOR_BINARY="), "cursor-agent");
+}
+
+#[test]
 fn detect_agents_deduplicates_cursor_aliases() {
     let _permit = test_subprocess::acquire();
     let bin_dir = fake_bin_dir();
@@ -99,8 +110,23 @@ fn fake_bin_dir() -> TempDir {
         &dir.path().join("which"),
         &format!("#!/bin/sh\nexec {} \"$@\"\n", which.trim()),
     );
-    write_executable(&dir.path().join("agent"), "#!/bin/sh\nexit 0\n");
+    // A real Cursor `agent` names the product in its help; the adapter checks for that
+    // before trusting so generic a binary name.
+    write_executable(
+        &dir.path().join("agent"),
+        "#!/bin/sh\necho 'Cursor Agent CLI'\nexit 0\n",
+    );
     write_executable(&dir.path().join("cursor-agent"), "#!/bin/sh\nexit 0\n");
+    dir
+}
+
+/// Same layout, except `agent` is xAI's Grok Build CLI rather than Cursor's.
+fn grok_shadowed_bin_dir() -> TempDir {
+    let dir = fake_bin_dir();
+    write_executable(
+        &dir.path().join("agent"),
+        "#!/bin/sh\necho 'Grok Build TUI'\necho 'Usage: agent [OPTIONS] [PROMPT] [COMMAND]'\nexit 0\n",
+    );
     dir
 }
 

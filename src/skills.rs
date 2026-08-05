@@ -258,7 +258,8 @@ pub fn auto_skills(agent: &AgentKind, has_worktree: bool) -> Vec<String> {
         | AgentKind::MiMoCode
         | AgentKind::Codebuff
         | AgentKind::Droid
-        | AgentKind::Oz => {
+        | AgentKind::Oz
+        | AgentKind::Grok => {
             skills.push("implementer".to_string());
         }
         AgentKind::Gemini | AgentKind::Antigravity => {

@@ -324,3 +324,150 @@ an integration test in both directions: exit 0 + error envelope → Failed, exit
 This matters beyond one bug: success-rate history is fleet-wide corrupted by exit-0 failures
 recorded as successes, and that history is exactly what `aid advise` weights its recommendations
 with. The advice surface is only as honest as the outcome data feeding it.
+
+---
+
+## The dimension we got wrong: CLI is a provider, the model does the work
+
+Established 2026-08-05, after a day of fixes that were all patches on the same misconception.
+
+### The mistake
+
+aid treats an "agent" as the unit of capability, cost, quota and history. It is none of those.
+An agent is a **CLI** — a gateway. The **model** is what performs the task.
+
+Captured the same day:
+
+| CLI | Models it actually serves |
+|---|---|
+| `agy` | 8 gemini-\*, 2 claude-\*, 1 gpt-oss-\* — three vendors |
+| `qwen` | 17, incl. qwen3.8-max, deepseek-v4-pro, kimi-k2.7-code, glm-5.2, MiniMax-M2.5 |
+| `opencode` | 177 |
+| `kilo` | 432 |
+| `cursor` | ~195 |
+
+Everything keyed on the CLI is therefore an average over things that are not alike:
+
+- **Capability.** `agy` scores `research 9 / complex_impl 3`, yet it can run
+  `claude-opus-4-6-thinking` or `gemini-3.6-flash-low`. One score cannot describe both.
+- **History.** `agy`'s "84% success" blends Claude Opus outcomes with Gemini Flash outcomes. The
+  number describes nothing that exists.
+- **Cost.** Priced per model; recorded per agent.
+- **Quota.** Metered per model family. agy's gemini allowance was exhausted while its claude
+  allowance still served — and marking the CLI took the working one out with it.
+
+The concrete loss, observed: a task dispatched to `agy --model gemini-3.6-flash-low` hit the gemini
+quota, aid marked the whole CLI unavailable, cascaded to a different CLI with different models, and
+failed there — while `claude-opus-4-6-thinking` sat available behind the CLI it had just abandoned.
+
+### The correction
+
+Two tables and a reachability relation:
+
+- **Model** — capability by category, price, context window, quota group. Decides *what the task
+  needs*.
+- **CLI** — tool use, sandboxing, session resume, streaming fidelity, observed reliability. Decides
+  *how the work gets done*.
+- **Reachability** — which CLI can reach which model, and the current quota state of that pair.
+
+Routing becomes two steps: the declared profile selects a **model class**, then reachability selects
+the CLI that can serve it right now. `aid advise` should recommend an (model, CLI) pair and say
+which dimension drove the choice.
+
+This makes a capability we cannot currently express: **the same model is often reachable more than
+one way.** When codex's quota ran out, the useful question was not "which other CLI" but "what else
+reaches a model of this class" — and `agy`'s claude family was a valid answer that nothing in the
+data model could surface.
+
+### Prerequisite
+
+**Carry the model through derived dispatches.** An earlier draft of this section claimed aid never
+persists the dispatched model. That was wrong, and the error is worth keeping visible: the task I
+inspected was a *cascade child*, and I attributed its empty model to its parent. Direct dispatches do
+record it — `t-bd455a68` stored `gemini-3.6-flash-low`, `t-efd78b6f` stored `MiniMax-M2.5`.
+
+The real gap is narrower: **tasks derived from another task lose the model.** The cascade child
+`t-c9a80dbf` stored `model: None`. Retries, cascades and best-of children all construct fresh args,
+and the model is not among the fields they inherit. Anything model-dimensioned — per-family quota
+marking, cost attribution, model-level history — silently degrades to "unknown" exactly on the paths
+aid takes when something has already gone wrong, which is when the record matters most.
+
+Measured rather than assumed (6643 task rows, 2026-08-05):
+
+| Slice | Rows | Model missing |
+|---|---|---|
+| derived (cascade / retry / best-of) | 582 | 92.6% |
+| direct | 6061 | 84.6% |
+
+Per agent, today only: cursor 0/18 missing, claude 0/1, qwen 4/14, agy 14/17, codex 61/65,
+opencode 13/13. The spread is not explained by time or by derivation — it is per adapter. The model
+is stored when the CLI echoes it in its output, or when the caller passed `--model` explicitly.
+**A model aid resolved itself — a budget model, a smart-routing choice, an agent default — is not
+recorded at all**, and adapters whose CLI stays silent about the model lose it entirely.
+
+So this is the `attribution` column of the CLI audit matrix, not a store bug: the same gap the
+gemini-family audit flagged for agy under plain-text output. Two fixes are needed and they are
+independent — record what aid passed at dispatch, and teach each adapter to read the model its CLI
+reports.
+
+### Status
+
+`src/agent/model_group.rs` (2026-08-05) implements per-family quota for agy. It is a special case of
+this design, added before the general shape was clear, and should fold into the model table rather
+than grow more per-CLI special cases.
+
+---
+
+## Three dimensions, not two: CLI × provider × model
+
+The section above corrected "agent" into CLI + model. That was still one short. An execution route
+is identified by three independent things, and aid currently collapses all of them into a single
+opaque agent id:
+
+    opencode / byok / deepseek-v4-flash
+    └ CLI      └ provider   └ model
+
+| Dimension | Owns |
+|---|---|
+| **CLI** | How to invoke: flags, output format, event shapes, session resume, sandboxing, read-only mode |
+| **Provider** | Who meters and bills: the quota pool and its reset semantics, credentials, base URL, cost basis |
+| **Model** | What the work is done by: capability per category, context window, per-token price |
+
+### Why the provider dimension is not optional
+
+Quota — the thing that broke routing repeatedly on 2026-08-05 — belongs to the provider, and the
+three shapes observed cannot be expressed by a per-CLI marker:
+
+| Provider | Metering |
+|---|---|
+| qwen / ModelStudio token plan | one 5-hour pool shared by all 17 served models |
+| agy / individual tier | separate pools per model family: gemini exhausted at 59m while claude still served |
+| opencode / BYOK | no pool at all — billed per token against the user's own key |
+| cursor / subscription | not metered per task, but model tiers differ in what they cost the plan |
+
+`rate-limit-<agent>` cannot represent any of that faithfully. The per-family markers added today
+(`rate-limit-agy--gemini`) are a special case of the provider dimension, reached by patching rather
+than by modelling.
+
+### aid already has the data
+
+`examples/byok/mimo.toml` carries all three — `base_url` and `key_env` (provider),
+`default_model` (model), and a note that it "configures opencode and generates an aid agent" (CLI).
+The manifest then collapses them into `id = "mimo"`. Custom agents do the same: `glm5` is really
+`bash-wrapper / NVIDIA NIM / z-ai/glm5`, and the name says none of it. Nothing in the identity
+survives to tell a scheduler what would still work when one dimension fails.
+
+### What changes
+
+- **Identity**: a route is `<cli>/<provider>/<model>`. Existing names stay as aliases so `aid run
+  glm5` keeps working, but they resolve to a triple.
+- **Quota**: keyed on the provider pool, with an optional family within it. One exhausted pool must
+  not remove routes that draw on a different one.
+- **Cost**: model price × provider basis. A subscription route and a BYOK route to the same model
+  cost differently and must not be averaged.
+- **Capability and history**: keyed on the model. Today `agy` carries one capability score across
+  Gemini Flash and Claude Opus, and `cursor` carries one across 193 models including Opus 5 and
+  GPT-5.6.
+- **Routing**: the declared profile picks a model class; reachability then picks a (CLI, provider)
+  pair that can serve it right now. When codex's quota ran out, `claude-opus-5-thinking-high` was
+  reachable through cursor the whole time and nothing in the data model could say so.

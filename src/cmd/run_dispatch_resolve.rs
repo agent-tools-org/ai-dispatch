@@ -123,6 +123,7 @@ pub(super) fn resolve_agent_setup(store: &Arc<Store>, args: &mut RunArgs) -> Res
                 | AgentKind::MiMoCode
                 | AgentKind::Codebuff
                 | AgentKind::Droid
+                | AgentKind::Grok
                 | AgentKind::Custom
         )
         && std::path::Path::new(".git").exists()
@@ -228,6 +229,27 @@ pub(super) fn resolve_agent_setup(store: &Arc<Store>, args: &mut RunArgs) -> Res
             requested_model.clone()
         }
     });
+    // An agent whose plan meters model families separately can have one family
+    // exhausted while another still serves. Switch groups rather than treating
+    // the agent as unavailable — and say so, because a silent model swap is the
+    // same defect as a CLI quietly substituting a model the caller did not ask
+    // for.
+    let effective_model = match agent::model_group::healthy_model_for(
+        agent_kind,
+        effective_model.as_deref(),
+        |group| rate_limit::is_group_rate_limited(&agent_kind, group),
+    ) {
+        Some(replacement) => {
+            aid_warn!(
+                "[aid] {} model group exhausted; switching {} -> {}",
+                agent_kind.as_str(),
+                effective_model.as_deref().unwrap_or("(default)"),
+                replacement
+            );
+            Some(replacement.to_string())
+        }
+        None => effective_model,
+    };
     let agent: Box<dyn agent::Agent> = if agent_kind == AgentKind::Custom {
         agent::registry::resolve_custom_agent(custom_agent_name.as_deref().unwrap_or(""))
             .ok_or_else(|| anyhow::anyhow!("Custom agent '{}' not found in registry", args.agent_name))?

@@ -144,9 +144,17 @@ pub(crate) fn record_quota_exhaustion(
     agent: crate::types::AgentKind,
     model: Option<&str>,
 ) -> bool {
-    if !crate::rate_limit::is_rate_limit_error(output) {
+    // Only the tail is evidence. A quota refusal terminates the run, so its
+    // message is at the end of the output; scanning the whole transcript instead
+    // matched prose the agent had merely READ. On 2026-08-05 a cursor task that
+    // opened docs/design/cli-adapter-audit.md — which contains the words
+    // "exhausted quota" — was marked failed and cursor was locked out for twelve
+    // hours, while the task had in fact succeeded.
+    let tail = quota_scan_tail(output);
+    if !crate::rate_limit::is_rate_limit_error(tail) {
         return false;
     }
+    let output = tail;
     // Record the sentence that actually reports the quota, not the head of the
     // transcript: the marker is what `aid agent quota` shows a human, and the
     // first 200 bytes of a JSONL stream are the session init line.
@@ -188,4 +196,17 @@ fn quota_line(output: &str) -> Option<String> {
         .last()
         .unwrap_or(0);
     Some(line[start..].chars().take(240).collect::<String>().trim().to_string())
+}
+
+/// The last few lines of output, where a terminal failure reports itself.
+fn quota_scan_tail(output: &str) -> &str {
+    const TAIL_BYTES: usize = 4000;
+    if output.len() <= TAIL_BYTES {
+        return output;
+    }
+    let mut start = output.len() - TAIL_BYTES;
+    while start < output.len() && !output.is_char_boundary(start) {
+        start += 1;
+    }
+    &output[start..]
 }

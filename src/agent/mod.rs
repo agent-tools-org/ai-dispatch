@@ -11,6 +11,7 @@ pub mod cursor;
 pub mod droid;
 pub mod gemini;
 pub(crate) mod gemini_support;
+pub mod grok;
 pub mod kilo;
 pub mod mimocode;
 pub mod opencode;
@@ -121,6 +122,7 @@ pub fn detect_agents() -> Vec<AgentKind> {
         ("aid-codebuff", AgentKind::Codebuff),
         ("oz", AgentKind::Oz),
         ("claude", AgentKind::Claude),
+        ("grok", AgentKind::Grok),
     ] {
         if env::which_exists(name) && !found.contains(&kind) {
             found.push(kind);
@@ -195,6 +197,7 @@ where
         AgentKind::Droid => which("droid"),
         AgentKind::Oz => which("oz"),
         AgentKind::Claude => which("claude"),
+        AgentKind::Grok => which("grok"),
         AgentKind::Custom => true,
     }
 }
@@ -222,6 +225,7 @@ pub fn get_agent(kind: AgentKind) -> Box<dyn Agent> {
         AgentKind::Droid => Box::new(droid::DroidAgent),
         AgentKind::Oz => Box::new(oz::OzAgent),
         AgentKind::Claude => Box::new(claude::ClaudeAgent),
+        AgentKind::Grok => Box::new(grok::GrokAgent),
         AgentKind::Custom => panic!("Custom agents must be resolved via resolve_agent()"),
     }
 }

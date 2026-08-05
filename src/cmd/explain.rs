@@ -98,7 +98,7 @@ fn format_task_info(task: &Task) -> String {
         format!("Status: {}", task.status.label()),
         format!("Prompt: {}", task.prompt),
         format!("Parent Task ID: {}", task.parent_task_id.as_deref().unwrap_or("(none)")),
-        format!("Model: {}", task.model.as_deref().unwrap_or("(none)")),
+        format!("Model: {}", task.display_model().unwrap_or_else(|| "(none)".to_string())),
         format!("Created At: {}", task.created_at.to_rfc3339()),
         format!("Completed At: {completed}"),
         format!("Duration: {duration}"),

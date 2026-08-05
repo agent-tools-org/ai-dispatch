@@ -16,7 +16,10 @@ pub struct TaskCompletionUpdate<'a> {
     pub status: TaskStatus,
     pub tokens: Option<i64>,
     pub duration_ms: i64,
-    pub model: Option<&'a str>,
+    /// What the CLI reported it actually ran, or `None` when it reported
+    /// nothing. Never the dispatched request — writing that here is what made
+    /// `t-bd455a68` claim the `claude` CLI ran `gemini-3.6-flash-low`.
+    pub observed_model: Option<&'a str>,
     pub cost_usd: Option<f64>,
     pub exit_code: Option<i32>,
 }
@@ -33,9 +36,9 @@ impl Store {
              caller_kind, caller_session_id, agent_session_id, repo_path, worktree_path, worktree_branch,
              final_head_sha, final_branch, start_sha, log_path, output_path, tokens, prompt_tokens, duration_ms, model, cost_usd, exit_code,
              created_at, completed_at, verify, verify_status, read_only, budget, custom_agent_name,
-             category, pending_reason, audit_verdict, audit_report_path, delivery_assessment)
+             category, pending_reason, audit_verdict, audit_report_path, delivery_assessment, observed_model)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17,
-             ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28, ?29, ?30, ?31, ?32, ?33, ?34, ?35, ?36)",
+             ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28, ?29, ?30, ?31, ?32, ?33, ?34, ?35, ?36, ?37)",
             params![
                 task.id.as_str(),
                 agent_value,
@@ -58,7 +61,7 @@ impl Store {
                 task.tokens,
                 task.prompt_tokens,
                 task.duration_ms,
-                task.model,
+                task.requested_model,
                 task.cost_usd,
                 task.exit_code,
                 task.created_at.to_rfc3339(),
@@ -73,6 +76,7 @@ impl Store {
                 task.audit_verdict,
                 task.audit_report_path,
                 task.delivery_assessment.map(|value| value.as_str()),
+                task.observed_model,
             ],
         )?;
         Ok(())
@@ -138,7 +142,7 @@ impl Store {
                 task.caller_kind, task.caller_session_id, task.agent_session_id,
                 task.repo_path, task.worktree_path, task.worktree_branch,
                 task.final_head_sha, task.final_branch,
-                task.start_sha, task.log_path, task.output_path, task.model,
+                task.start_sha, task.log_path, task.output_path, task.requested_model,
                 task.verify, task.verify_status.as_str(), task.read_only,
                 task.budget, task.custom_agent_name, task.category,
                 task.pending_reason,
@@ -339,15 +343,19 @@ impl Store {
         }
         let now = Local::now().to_rfc3339();
         let rows = self.db().execute(
+            // COALESCE, not assignment: a second completion write that learned
+            // nothing must not erase a model the first one observed. The
+            // requested model in `model` is never touched here — a completion
+            // has no business rewriting what was asked for.
             "UPDATE tasks SET status = ?1, tokens = ?2, duration_ms = ?3, completed_at = ?4,
-             model = ?5, cost_usd = ?6, exit_code = ?7 WHERE id = ?8
+             observed_model = COALESCE(?5, observed_model), cost_usd = ?6, exit_code = ?7 WHERE id = ?8
              AND status NOT IN ('failed', 'stopped')",
             params![
                 payload.status.as_str(),
                 payload.tokens,
                 payload.duration_ms,
                 now,
-                payload.model,
+                payload.observed_model,
                 payload.cost_usd,
                 payload.exit_code,
                 payload.id
@@ -370,15 +378,19 @@ impl Store {
         let tx = conn.unchecked_transaction()?;
         let now = Local::now().to_rfc3339();
         let rows = tx.execute(
+            // COALESCE, not assignment: a second completion write that learned
+            // nothing must not erase a model the first one observed. The
+            // requested model in `model` is never touched here — a completion
+            // has no business rewriting what was asked for.
             "UPDATE tasks SET status = ?1, tokens = ?2, duration_ms = ?3, completed_at = ?4,
-             model = ?5, cost_usd = ?6, exit_code = ?7 WHERE id = ?8
+             observed_model = COALESCE(?5, observed_model), cost_usd = ?6, exit_code = ?7 WHERE id = ?8
              AND status NOT IN ('failed', 'stopped')",
             params![
                 payload.status.as_str(),
                 payload.tokens,
                 payload.duration_ms,
                 now,
-                payload.model,
+                payload.observed_model,
                 payload.cost_usd,
                 payload.exit_code,
                 payload.id
@@ -725,7 +737,7 @@ mod tests {
                     status: TaskStatus::Done,
                     tokens: Some(1234),
                     duration_ms: 5000,
-                    model: Some("test-model"),
+                    observed_model: Some("test-model"),
                     cost_usd: Some(0.05),
                     exit_code: Some(0),
                 },
@@ -763,7 +775,7 @@ mod tests {
                     status: TaskStatus::Done,
                     tokens: Some(1234),
                     duration_ms: 5000,
-                    model: Some("test-model"),
+                    observed_model: Some("test-model"),
                     cost_usd: Some(0.05),
                     exit_code: Some(0),
                 },
@@ -822,7 +834,7 @@ mod tests {
                     status: TaskStatus::Failed,
                     tokens: None,
                     duration_ms: 5000,
-                    model: None,
+                    observed_model: None,
                     cost_usd: None,
                     exit_code: Some(1),
                 },

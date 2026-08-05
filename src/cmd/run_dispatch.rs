@@ -111,7 +111,9 @@ fn ensure_agent_binary_available(
                 status: TaskStatus::Failed,
                 tokens: None,
                 duration_ms: 0,
-                model: prepared.effective_model.as_deref(),
+                // Dispatch failed before the agent ran: the request is already on
+                // the row, and no model was observed.
+                observed_model: None,
                 cost_usd: None,
                 exit_code: None,
             },

@@ -30,7 +30,7 @@ fn sample_task(agent: AgentKind, custom_agent_name: Option<&str>) -> Task {
         tokens: None,
         prompt_tokens: None,
         duration_ms: None,
-        model: None,
+        requested_model: None, observed_model: None,
         cost_usd: None,
         exit_code: None,
         created_at: Local::now(),

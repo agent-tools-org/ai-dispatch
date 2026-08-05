@@ -33,7 +33,8 @@ const CREATE_TABLES_SQL: &str = "CREATE TABLE IF NOT EXISTS tasks (
     category TEXT,
     pending_reason TEXT,
     audit_verdict TEXT, audit_report_path TEXT, delivery_assessment TEXT, dispatch_args TEXT,
-    declared_difficulty TEXT, declared_budget TEXT, declared_urgency TEXT, declared_rigor TEXT
+    declared_difficulty TEXT, declared_budget TEXT, declared_urgency TEXT, declared_rigor TEXT,
+    observed_model TEXT
 );
 CREATE TABLE IF NOT EXISTS workgroups (
     id TEXT PRIMARY KEY,
@@ -229,6 +230,7 @@ pub(super) fn migrate(store: &Store) -> Result<()> {
     let _ = conn.execute_batch("CREATE INDEX IF NOT EXISTS idx_events_task_kind ON events(task_id, event_type);");
     super::migrations::migrate_task_messages(&conn)?;
     super::migrations::migrate_declared_task_profile(&conn)?;
+    super::migrations::migrate_observed_model(&conn)?;
     Ok(())
 }
 
@@ -256,7 +258,13 @@ pub(super) fn row_to_task(row: &Row) -> rusqlite::Result<Result<Task>> {
         tokens: row.get(16)?,
         prompt_tokens: row.get(17)?,
         duration_ms: row.get(18)?,
-        model: row.get(19)?,
+        // Column 19 is still named `model` on disk. Renaming it would move
+        // ordinals that the rest of this mapper depends on, and those ordinals
+        // already disagree with CREATE_TABLES_SQL's declared order for columns
+        // added by ALTER over time. The new column is read by name for that
+        // reason, not by position.
+        requested_model: row.get(19)?,
+        observed_model: row.get("observed_model").ok().flatten(),
         cost_usd: row.get(20)?,
         exit_code: row.get(28).ok().flatten(),
         created_at: parse_dt(&row.get::<_, String>(21)?),

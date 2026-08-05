@@ -29,7 +29,7 @@ pub fn task_row(app: &App, task: &Task) -> Row<'static> {
         Cell::from(task_duration(task)),
         Cell::from(task_tokens(task)),
         Cell::from(cost::format_cost_label(task.cost_usd, task.agent)),
-        Cell::from(truncate(task.model.as_deref().unwrap_or("-"), 14)),
+        Cell::from(truncate(&task.display_model().unwrap_or_else(|| "-".to_string()), 14)),
         Cell::from(task.workgroup_id.clone().unwrap_or_else(|| "-".to_string())),
         Cell::from(truncate(&task.prompt, 60)),
     ])
@@ -64,7 +64,7 @@ pub fn task_header(task: &Task, events: &[crate::types::TaskEvent]) -> Paragraph
         Span::styled("  Cost: ", Style::default().fg(Color::Indexed(243))),
         Span::raw(cost::format_cost_label(task.cost_usd, task.agent)),
         Span::styled("  Model: ", Style::default().fg(Color::Indexed(243))),
-        Span::raw(task.model.as_deref().unwrap_or("-").to_string()),
+        Span::raw(task.display_model().unwrap_or_else(|| "-".to_string())),
     ]);
     let scope = task_scope_line(task);
     let mut lines = vec![line1, line2];
@@ -309,7 +309,7 @@ mod tests {
             tokens: None,
             prompt_tokens: None,
             duration_ms: None,
-            model: None,
+            requested_model: None, observed_model: None,
             cost_usd: None,
             exit_code: None,
             created_at: Local::now(),

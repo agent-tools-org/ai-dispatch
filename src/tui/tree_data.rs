@@ -187,7 +187,7 @@ mod tests {
         final_branch: None,
             start_sha: None,
             log_path: None, output_path: None, tokens: None, prompt_tokens: None,
-            duration_ms: None, model: None, cost_usd: None, exit_code: None,
+            duration_ms: None, requested_model: None, observed_model: None, cost_usd: None, exit_code: None,
             completed_at: None, verify: None, pending_reason: None, read_only: false, budget: false,
             audit_verdict: None, audit_report_path: None, delivery_assessment: None,
             category: None,

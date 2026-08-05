@@ -88,7 +88,7 @@ fn render_multipane_view(frame: &mut ratatui::Frame<'_>, app: &App) {
                 events,
                 tokens: task_tokens(task),
                 cost: cost::format_cost_label(task.cost_usd, task.agent),
-                model: task.model.as_deref().unwrap_or("-").to_string(),
+                model: task.display_model().unwrap_or_else(|| "-".to_string()),
                 milestone: app.get_milestone(task.id.as_str()).unwrap_or("").to_string(),
                 cpu: task_cpu(app, task),
                 memory: task_memory(app, task),

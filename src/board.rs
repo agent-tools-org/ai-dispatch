@@ -130,9 +130,8 @@ pub fn render_board(tasks: &[Task], store: &Store) -> Result<String> {
         let group = short_group(task.workgroup_id.as_deref());
         let repo = short_repo(task.repo_path.as_deref());
         let caller = session::display(task);
-        let model = task.model
-            .as_deref()
-            .unwrap_or("-");
+        let model_display = task.display_model();
+        let model = model_display.as_deref().unwrap_or("-");
 
         if show_repo {
             out.push_str(&format!(

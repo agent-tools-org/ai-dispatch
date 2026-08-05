@@ -98,7 +98,7 @@ fn insert_waiting_task_persists_retry_fields() {
     assert_eq!(loaded.workgroup_id.as_deref(), Some("wg-batch"));
     assert_eq!(loaded.repo_path.as_deref(), Some("/tmp/repo"));
     assert_eq!(loaded.worktree_branch.as_deref(), Some("feat/retry"));
-    assert_eq!(loaded.model.as_deref(), Some("o3"));
+    assert_eq!(loaded.requested_model.as_deref(), Some("o3"));
     assert_eq!(loaded.verify.as_deref(), Some("cargo check"));
     assert!(loaded.read_only);
     assert!(loaded.budget);
@@ -197,6 +197,64 @@ fn migrate_moves_legacy_delivery_status_out_of_verify_status() {
     assert_eq!(delivery_assessment.as_deref(), Some("empty_diff"));
 }
 
+/// The defect this split exists for: a CLI that reports no model must leave
+/// `observed_model` NULL rather than having the dispatched request copied into
+/// it. Before the split, `info.model.as_deref().or(model)` recorded
+/// `gemini-3.6-flash-low` as the model the `claude` CLI ran (`t-bd455a68`) and
+/// cursor's `composer-2` as an `agy` model (`t-702f7bcb`) — both failed runs,
+/// both stored as fact.
+#[test]
+fn completion_without_a_reported_model_leaves_the_request_alone() {
+    let store = Store::open_memory().unwrap();
+    let mut task = make_task("t-attr1", AgentKind::Claude, TaskStatus::Running);
+    task.requested_model = Some("gemini-3.6-flash-low".to_string());
+    store.insert_task(&task).unwrap();
+
+    store
+        .update_task_completion(TaskCompletionUpdate {
+            id: "t-attr1",
+            status: TaskStatus::Done,
+            tokens: Some(10),
+            duration_ms: 1000,
+            observed_model: None,
+            cost_usd: None,
+            exit_code: Some(0),
+        })
+        .unwrap();
+
+    let loaded = store.get_task("t-attr1").unwrap().unwrap();
+    assert_eq!(loaded.requested_model.as_deref(), Some("gemini-3.6-flash-low"));
+    assert_eq!(loaded.observed_model, None, "a silent CLI must not be quoted");
+    assert_eq!(loaded.attributed_model(), None, "unknown must stay unknown");
+    assert_eq!(loaded.costing_model(), Some("gemini-3.6-flash-low"));
+}
+
+/// A later completion write that learned nothing must not erase an observation
+/// an earlier one made — hence COALESCE rather than plain assignment.
+#[test]
+fn a_later_silent_completion_does_not_erase_an_observation() {
+    let store = Store::open_memory().unwrap();
+    let task = make_task("t-attr2", AgentKind::Cursor, TaskStatus::Running);
+    store.insert_task(&task).unwrap();
+
+    for observed in [Some("composer-2"), None] {
+        store
+            .update_task_completion(TaskCompletionUpdate {
+                id: "t-attr2",
+                status: TaskStatus::Done,
+                tokens: Some(10),
+                duration_ms: 1000,
+                observed_model: observed,
+                cost_usd: None,
+                exit_code: Some(0),
+            })
+            .unwrap();
+    }
+
+    let loaded = store.get_task("t-attr2").unwrap().unwrap();
+    assert_eq!(loaded.observed_model.as_deref(), Some("composer-2"));
+}
+
 #[test]
 fn update_completion() {
     let store = Store::open_memory().unwrap();
@@ -208,7 +266,7 @@ fn update_completion() {
             status: TaskStatus::Done,
             tokens: Some(3000),
             duration_ms: 47000,
-            model: Some("gemini-2.5-flash"),
+            observed_model: Some("gemini-2.5-flash"),
             cost_usd: Some(0.0038),
             exit_code: None,
         })
@@ -218,7 +276,7 @@ fn update_completion() {
     assert_eq!(loaded.status, TaskStatus::Done);
         assert_eq!(loaded.tokens, Some(3000));
         assert_eq!(loaded.duration_ms, Some(47000));
-        assert_eq!(loaded.model.as_deref(), Some("gemini-2.5-flash"));
+        assert_eq!(loaded.observed_model.as_deref(), Some("gemini-2.5-flash"));
         assert!((loaded.cost_usd.unwrap() - 0.0038).abs() < 0.0001);
         assert_eq!(loaded.exit_code, None);
         assert!(loaded.completed_at.is_some());
@@ -239,7 +297,7 @@ fn update_completion_does_not_override_terminal_intent_statuses() {
                 status: TaskStatus::Done,
                 tokens: Some(55),
                 duration_ms: 1234,
-                model: Some("gpt-5.4"),
+                observed_model: Some("gpt-5.4"),
                 cost_usd: Some(0.01),
                 exit_code: Some(0),
             })
@@ -376,15 +434,15 @@ fn latest_default_model_prefers_most_recent_successful_gemini() {
     let now = chrono::Local::now();
     let mut g_old = make_task("t-la1", AgentKind::Gemini, TaskStatus::Done);
     g_old.created_at = now - chrono::Duration::hours(10);
-    g_old.model = Some("gemini-2.5-flash".to_string());
+    g_old.observed_model = Some("gemini-2.5-flash".to_string());
 
     let mut g_new = make_task("t-la2", AgentKind::Gemini, TaskStatus::Done);
     g_new.created_at = now - chrono::Duration::hours(1);
-    g_new.model = Some("gemini-3.1-pro-preview".to_string());
+    g_new.observed_model = Some("gemini-3.1-pro-preview".to_string());
 
     let mut failed = make_task("t-la3", AgentKind::Gemini, TaskStatus::Failed);
     failed.created_at = now;
-    failed.model = Some("should-ignore".to_string());
+    failed.observed_model = Some("should-ignore".to_string());
 
     store.insert_task(&g_old).unwrap();
     store.insert_task(&g_new).unwrap();

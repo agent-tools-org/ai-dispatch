@@ -514,7 +514,7 @@ mod tests {
             tokens: Some(tokens),
             prompt_tokens: None,
             duration_ms: Some(1000),
-            model: None,
+            requested_model: None, observed_model: None,
             cost_usd: Some(cost_usd),
             exit_code: None,
             created_at: Local::now(),

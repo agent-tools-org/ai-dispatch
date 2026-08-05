@@ -35,7 +35,7 @@ fn make_task(id: &str, agent: AgentKind, status: TaskStatus) -> Task {
         tokens: Some(45000),
         prompt_tokens: None,
         duration_ms: Some(227000),
-        model: None,
+        requested_model: None, observed_model: None,
         cost_usd: None,
         exit_code: None,
         created_at: Local::now(),

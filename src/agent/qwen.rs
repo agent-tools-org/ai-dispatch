@@ -26,8 +26,28 @@ impl super::Agent for QwenAgent {
     }
 
     fn build_command(&self, prompt: &str, opts: &RunOpts) -> Result<Command> {
-        support::build_gemini_family_command("qwen", prompt, opts, None)
+        if opts.read_only {
+            anyhow::bail!("qwen agent does not support read-only mode");
+        }
+        let mut cmd = Command::new("qwen");
+        cmd.args(["-o", "stream-json"]);
+        if let Some(ref model) = opts.model {
+            cmd.args(["-m", model]);
+        }
+        if opts.sandbox {
+            cmd.arg("--sandbox");
+        }
+        if let Some(ref session_id) = opts.session_id {
+            cmd.args(["-r", session_id]);
+        }
+        let prompt = super::embed_context_in_prompt(prompt, &opts.context_files)?;
+        cmd.args(["-p", &prompt]);
+        if let Some(ref dir) = opts.dir {
+            cmd.current_dir(dir);
+        }
+        Ok(cmd)
     }
+
 
     fn parse_event(&self, task_id: &TaskId, line: &str) -> Option<TaskEvent> {
         let trimmed = line.trim();

@@ -25,9 +25,94 @@ fn build_command_uses_qwen_stream_json_flags() {
 
     assert_eq!(cmd.get_program().to_string_lossy(), "qwen");
     assert!(args.windows(2).any(|pair| pair == ["-o", "stream-json"]));
-    assert!(args.iter().any(|arg| arg == "-y"));
+    assert!(!args.iter().any(|arg| arg == "-y"));
+    assert!(!args.iter().any(|arg| arg == "--approval-mode"));
+    assert!(!args.iter().any(|arg| arg == "--include-directories"));
     assert!(args.windows(2).any(|pair| pair == ["-m", "coder-model"]));
     assert!(args.windows(2).any(|pair| pair == ["-p", "hello"]));
+}
+
+#[test]
+fn build_command_fails_on_read_only() {
+    let opts = RunOpts {
+        dir: None,
+        output: None,
+        result_file: None,
+        model: None,
+        budget: false,
+        read_only: true,
+        sandbox: false,
+        context_files: vec![],
+        session_id: None,
+        env: None,
+        env_forward: None,
+    };
+
+    let res = QwenAgent.build_command("hello", &opts);
+    assert!(res.is_err());
+    assert_eq!(res.unwrap_err().to_string(), "qwen agent does not support read-only mode");
+}
+
+#[test]
+fn build_command_sets_sandbox_flag() {
+    let opts = RunOpts {
+        dir: None,
+        output: None,
+        result_file: None,
+        model: None,
+        budget: false,
+        read_only: false,
+        sandbox: true,
+        context_files: vec![],
+        session_id: None,
+        env: None,
+        env_forward: None,
+    };
+
+    let cmd = QwenAgent.build_command("hello", &opts).unwrap();
+    let args: Vec<String> = cmd.get_args().map(|arg| arg.to_string_lossy().into_owned()).collect();
+    assert!(args.iter().any(|arg| arg == "--sandbox"));
+}
+
+#[test]
+fn build_command_sets_session_id_flag() {
+    let opts = RunOpts {
+        dir: None,
+        output: None,
+        result_file: None,
+        model: None,
+        budget: false,
+        read_only: false,
+        sandbox: false,
+        context_files: vec![],
+        session_id: Some("session-123".to_string()),
+        env: None,
+        env_forward: None,
+    };
+
+    let cmd = QwenAgent.build_command("hello", &opts).unwrap();
+    let args: Vec<String> = cmd.get_args().map(|arg| arg.to_string_lossy().into_owned()).collect();
+    assert!(args.windows(2).any(|pair| pair == ["-r", "session-123"]));
+}
+
+#[test]
+fn print_qwen_command_line() {
+    let opts = RunOpts {
+        dir: Some("/path/to/project".to_string()),
+        output: None,
+        result_file: None,
+        model: Some("qwen3.8-max".to_string()),
+        budget: false,
+        read_only: false,
+        sandbox: true,
+        context_files: vec![],
+        session_id: Some("session-abc-123".to_string()),
+        env: None,
+        env_forward: None,
+    };
+    let cmd = QwenAgent.build_command("fix the bug in main.rs", &opts).unwrap();
+    let args: Vec<String> = cmd.get_args().map(|arg| arg.to_string_lossy().into_owned()).collect();
+    println!("QWEN_CMD: qwen {}", args.join(" "));
 }
 
 #[test]
@@ -51,6 +136,7 @@ fn build_command_does_not_set_gemini_trust_env() {
         .get_envs()
         .all(|(key, _)| key.to_string_lossy() != "GEMINI_CLI_TRUST_WORKSPACE"));
 }
+
 
 #[test]
 fn parses_qwen_assistant_event() {

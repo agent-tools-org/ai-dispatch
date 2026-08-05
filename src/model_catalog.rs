@@ -207,14 +207,123 @@ pub const AGENT_MODELS: &[AgentModel] = &[
     AgentModel { agent: AgentKind::Claude, model: "haiku", input_per_m: 0.8, output_per_m: 4.0, tier: "cheap", description: "Fastest, lower-cost option", capability: 6.2 },
 ];
 
+use std::sync::OnceLock;
+use std::path::PathBuf;
+
+static QWEN_MODELS_CACHE: OnceLock<Vec<AgentModel>> = OnceLock::new();
+
+fn load_qwen_models() -> Vec<String> {
+    let Some(home) = std::env::var_os("HOME").map(PathBuf::from) else {
+        return vec!["coder-model".to_string()];
+    };
+    let path = home.join(".qwen").join("settings.json");
+    if !path.exists() {
+        return vec!["coder-model".to_string()];
+    }
+    let content = match fs::read_to_string(&path) {
+        Ok(c) => c,
+        Err(_) => return vec!["coder-model".to_string()],
+    };
+    let settings: serde_json::Value = match serde_json::from_str(&content) {
+        Ok(s) => s,
+        Err(_) => return vec!["coder-model".to_string()],
+    };
+
+    let mut models = std::collections::BTreeSet::new();
+
+    // Try modelProviders.openai[].id
+    let mut has_providers = false;
+    if let Some(providers) = settings.get("modelProviders") {
+        if let Some(openai) = providers.get("openai").and_then(|v| v.as_array()) {
+            for item in openai {
+                if let Some(id) = item.get("id").and_then(|v| v.as_str()) {
+                    models.insert(id.to_string());
+                    has_providers = true;
+                }
+            }
+        }
+    }
+
+    // Try model.name
+    let mut selected_model = None;
+    if let Some(model) = settings.get("model") {
+        if let Some(name) = model.get("name").and_then(|v| v.as_str()) {
+            selected_model = Some(name.to_string());
+        }
+    }
+
+    if !has_providers {
+        if let Some(ref name) = selected_model {
+            models.insert(name.clone());
+        }
+    } else {
+        if let Some(ref name) = selected_model {
+            models.insert(name.clone());
+        }
+    }
+
+    if models.is_empty() {
+        return vec!["coder-model".to_string()];
+    }
+
+    models.into_iter().collect()
+}
+
+pub fn get_qwen_selected_model() -> Option<String> {
+    let home = std::env::var_os("HOME").map(PathBuf::from)?;
+    let path = home.join(".qwen").join("settings.json");
+    if !path.exists() {
+        return None;
+    }
+    let content = fs::read_to_string(&path).ok()?;
+    let settings: serde_json::Value = serde_json::from_str(&content).ok()?;
+    settings.get("model")
+        .and_then(|model| model.get("name"))
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string())
+}
+
+fn get_qwen_models() -> &'static [AgentModel] {
+    QWEN_MODELS_CACHE.get_or_init(|| {
+        let models = load_qwen_models();
+        models.into_iter().map(|m| AgentModel {
+            agent: AgentKind::Qwen,
+            model: Box::leak(m.into_boxed_str()),
+            input_per_m: 0.0,
+            output_per_m: 0.0,
+            tier: "free",
+            description: "Default Qwen Code model",
+            capability: 7.4,
+        }).collect()
+    })
+}
+
 pub fn models_for_agent(agent: &AgentKind) -> Vec<&'static AgentModel> {
+    if *agent == AgentKind::Qwen {
+        return get_qwen_models().iter().collect();
+    }
     AGENT_MODELS.iter().filter(|model| model.agent == *agent).collect()
 }
+
 
 pub fn budget_model(agent: &AgentKind) -> Option<&'static str> {
     let models = models_for_agent(agent);
     if models.is_empty() {
         return None;
+    }
+    // Qwen's models come from the user's plan config and all carry the same
+    // subscription price, so "cheapest" is meaningless and `models.first()` is a
+    // byte-order accident — it picked MiniMax-M2.5 out of a 17-model plan and every
+    // short prompt 403'd. The model the user selected is the only defensible answer.
+    if *agent == AgentKind::Qwen {
+        return get_qwen_selected_model()
+            .and_then(|selected| {
+                models
+                    .iter()
+                    .find(|model| model.model == selected)
+                    .map(|model| model.model)
+            })
+            .or_else(|| models.first().map(|model| model.model));
     }
     let non_free: Vec<_> = models.iter().filter(|model| model.tier != "free").collect();
     if non_free.is_empty() {

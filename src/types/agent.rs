@@ -106,9 +106,10 @@ impl AgentKind {
     pub fn supports_session_resume(&self) -> bool {
         matches!(
             self,
-            Self::OpenCode | Self::Kilo | Self::MiMoCode | Self::Droid | Self::Codex
+            Self::OpenCode | Self::Kilo | Self::MiMoCode | Self::Droid | Self::Codex | Self::Qwen
         )
     }
+
 
     pub fn profile(
         &self,

@@ -44,11 +44,12 @@ pub(super) fn build_prompt_bundle(store: &Store, args: &RunArgs, agent_kind: &Ag
         vec![]
     };
     let prompt = resolve_prompt(&args.prompt, args.template.as_deref())?;
-    let task_profile = agent::classifier::classify(
+    let mut task_profile = agent::classifier::classify(
         &prompt,
         agent::classifier::count_file_mentions(&prompt),
         prompt.len(),
     );
+    task_profile.category = effective_category(task_profile.category, args.kind);
     let suppress_implementation_scaffolding = crate::cmd::report_mode::suppresses_implementation_scaffolding(
         &prompt, args.read_only,
     );
@@ -270,3 +271,47 @@ pub(super) fn build_prompt_bundle(store: &Store, args: &RunArgs, agent_kind: &Ag
 }
 
 #[cfg(test)] #[path = "run_prompt_tests.rs"] mod tests;
+
+/// The category that drives toolbox filtering and skill auto-apply: a declared
+/// `--kind` beats the keyword guess.
+///
+/// The declaration was being dropped entirely. `classifier::classify` only ever
+/// saw the prompt text, so `aid run agy --kind research ...` still announced
+/// "filtered by frontend" and chose its toolbox and skills from the guess.
+/// Accepting a declaration and then ignoring it is worse than not offering the
+/// flag at all, because the caller believes it decided something.
+fn effective_category(
+    guessed: crate::agent::classifier::TaskCategory,
+    declared: Option<crate::agent::classifier::TaskCategory>,
+) -> crate::agent::classifier::TaskCategory {
+    declared.unwrap_or(guessed)
+}
+
+#[cfg(test)]
+mod effective_category_tests {
+    use super::effective_category;
+    use crate::agent::classifier::TaskCategory;
+
+    #[test]
+    fn a_declared_kind_overrides_the_guess() {
+        assert_eq!(
+            effective_category(TaskCategory::Frontend, Some(TaskCategory::Research)),
+            TaskCategory::Research
+        );
+    }
+
+    #[test]
+    fn the_guess_stands_when_nothing_is_declared() {
+        assert_eq!(effective_category(TaskCategory::Frontend, None), TaskCategory::Frontend);
+    }
+
+    /// Declaring the same category the guess produced must be a no-op rather
+    /// than an error, so a caller can declare defensively.
+    #[test]
+    fn declaring_the_guessed_kind_changes_nothing() {
+        assert_eq!(
+            effective_category(TaskCategory::Testing, Some(TaskCategory::Testing)),
+            TaskCategory::Testing
+        );
+    }
+}

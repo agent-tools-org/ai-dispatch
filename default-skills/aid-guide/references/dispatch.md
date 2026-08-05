@@ -62,7 +62,10 @@ Important controls:
 - `--budget` declares the eligible `free`, `cheap`, `standard`, or `premium` model tier.
 - `--urgency` declares `background`, `normal`, or `urgent` rate-limit handling.
 - `--rigor` declares `draft`, `standard`, or `critical` proof level (compiles / path exercised / cross-audit); it does not whitelist trust tiers.
-- `--kind` overrides the inferred task kind while difficulty remains caller-declared.
+- `--kind` overrides the inferred task kind while difficulty remains caller-declared. On `aid run`
+  it also decides which toolbox tools are injected and which skill is auto-applied, so declaring it
+  is how a caller stops the keyword classifier from choosing those. Without it, aid guesses from
+  prompt text alone.
 - `--dir` sets the task working directory.
 - `--repo` or `--repo-root` supplies the repository anchor.
 - `--worktree` creates or reuses an isolated task branch.

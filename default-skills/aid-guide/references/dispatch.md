@@ -1,5 +1,22 @@
 # Dispatch and Execution
 
+## Tools and skills are the caller's choice
+
+aid does not choose either on the caller's behalf.
+
+- **Skills**: `--skill <name>` declares them, `--no-skill` declares none, and a project sets a
+  default once with `skills = ["implementer"]` in `.aid/project.toml`. Omitting all three means no
+  skill. aid previously picked one from the **agent kind alone**, never looking at the task, so
+  every implementation CLI was handed `implementer` and gemini and agy were handed `researcher`
+  whatever the work was — a large block of methodology text and a persona nobody had asked for.
+- **Tools**: omitting `--kind` describes every resolved toolbox tool. Narrowing is opt-in because
+  omission is not a decision: a guessed category once cut a multi-file refactor down to 2 of 24
+  tools, with nothing to tell the caller what had been hidden.
+
+`aid show --context` and `aid export` report the skills a task was actually dispatched with, read
+from its stored args rather than re-derived from its agent. Tasks dispatched before skills became
+declared report none, which is what their record says.
+
 ## Routes: CLI x provider x model
 
 An execution route is three independent things, not one opaque agent id:
@@ -63,9 +80,8 @@ Important controls:
 - `--urgency` declares `background`, `normal`, or `urgent` rate-limit handling.
 - `--rigor` declares `draft`, `standard`, or `critical` proof level (compiles / path exercised / cross-audit); it does not whitelist trust tiers.
 - `--kind` overrides the inferred task kind while difficulty remains caller-declared. On `aid run`
-  it also decides which toolbox tools are injected and which skill is auto-applied, so declaring it
-  is how a caller stops the keyword classifier from choosing those. Without it, aid guesses from
-  prompt text alone.
+  it is also how a caller narrows the injected toolbox: declare it and tools are filtered to that
+  category, omit it and every resolved tool is described.
 - `--dir` sets the task working directory.
 - `--repo` or `--repo-root` supplies the repository anchor.
 - `--worktree` creates or reuses an isolated task branch.

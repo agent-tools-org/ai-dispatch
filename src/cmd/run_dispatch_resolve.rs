@@ -165,7 +165,7 @@ pub(super) fn resolve_agent_setup(store: &Arc<Store>, args: &mut RunArgs) -> Res
             );
         }
     }
-    let requested_skills = run_prompt::effective_skills(&agent_kind, args);
+    let requested_skills = run_prompt::effective_skills(args);
     if args.skills.is_empty() {
         for skill in &requested_skills {
             aid_info!("[aid] Auto-applied skill: {skill}");

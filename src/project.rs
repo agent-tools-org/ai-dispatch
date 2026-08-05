@@ -66,6 +66,10 @@ pub struct ProjectConfig {
     pub language: Option<String>,
     #[serde(default)]
     pub rules: Vec<String>,
+    /// Skills injected when the caller declares none. Empty means none:
+    /// aid no longer picks a skill on the caller's behalf.
+    #[serde(default)]
+    pub skills: Vec<String>,
     #[serde(default, deserialize_with = "deserialize_budget")]
     pub budget: ProjectBudget,
     #[serde(default)]

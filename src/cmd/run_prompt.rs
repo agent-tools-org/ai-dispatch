@@ -195,12 +195,22 @@ pub(super) fn build_prompt_bundle(store: &Store, args: &RunArgs, agent_kind: &Ag
             tools
         };
         let before_count = tools.len();
-        let tools = toolbox::filter_by_task_category(tools, task_category_label);
+        // Narrowing happens only when the caller declared a kind. A guessed
+        // category used to decide it, so a multi-file refactor described in one
+        // sentence got 2 of 24 tools and never learned what it was missing.
+        // Omission now means everything, because omission is not a decision.
+        let (tools, filter_note) = match args.kind {
+            Some(_) => (
+                toolbox::filter_by_task_category(tools, task_category_label),
+                format!("declared kind: {task_category_label}"),
+            ),
+            None => (tools, "no kind declared".to_string()),
+        };
         aid_info!(
-            "[aid] Injected {}/{} toolbox tool(s) (filtered by {})",
+            "[aid] Injected {}/{} toolbox tool(s) ({})",
             tools.len(),
             before_count,
-            task_category_label
+            filter_note
         );
         if !tools.is_empty() {
             let toolbox_block = toolbox::format_toolbox_instructions(&tools);

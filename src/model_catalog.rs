@@ -269,6 +269,20 @@ fn load_qwen_models() -> Vec<String> {
     models.into_iter().collect()
 }
 
+pub fn get_qwen_selected_model() -> Option<String> {
+    let home = std::env::var_os("HOME").map(PathBuf::from)?;
+    let path = home.join(".qwen").join("settings.json");
+    if !path.exists() {
+        return None;
+    }
+    let content = fs::read_to_string(&path).ok()?;
+    let settings: serde_json::Value = serde_json::from_str(&content).ok()?;
+    settings.get("model")
+        .and_then(|model| model.get("name"))
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string())
+}
+
 fn get_qwen_models() -> &'static [AgentModel] {
     QWEN_MODELS_CACHE.get_or_init(|| {
         let models = load_qwen_models();

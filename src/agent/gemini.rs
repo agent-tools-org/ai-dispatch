@@ -53,13 +53,11 @@ impl super::Agent for GeminiAgent {
         let v: serde_json::Value = serde_json::from_str(output).unwrap_or_default();
         let tokens = extract_tokens(&v);
         let model = extract_model(&v);
-        CompletionInfo {
-            tokens,
-            status: TaskStatus::Done,
-            model,
-            cost_usd: None,
-            exit_code: None,
-        }
+        // Only type=="error" is a failure; skill/hook events also carry `message`.
+        let mut info = super::stream_completion::status_from_error_type_jsonl(output);
+        info.tokens = tokens;
+        info.model = model;
+        info
     }
 }
 

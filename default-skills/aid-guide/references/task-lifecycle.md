@@ -10,8 +10,15 @@ principal review: Unreviewed -> Accepted | Rejected
 artifact custody: Preserved -> Durability proved -> Deleted
 ```
 
-`Done` means the agent execution completed. `Merged` means code was integrated.
-Neither means the principal accepted the result.
+`Done` means the agent process exited successfully **and** its CLI result
+envelope did not report a terminal error. Streaming agents that exit 0 while
+emitting a real failure envelope (for example Cursor/Claude
+`{"type":"result","is_error":true}`, OpenCode/Gemini `{"type":"error",...}`,
+or Qwen `[API Error: ...]`) are recorded as `Failed`. Ambiguous envelopes stay
+`Done` rather than risk a false failure.
+
+`Merged` means code was integrated. Neither means the principal accepted the
+result.
 
 ## Review
 

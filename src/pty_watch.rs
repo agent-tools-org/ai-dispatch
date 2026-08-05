@@ -474,11 +474,14 @@ pub(crate) fn finalize_output(
     state: &mut MonitorState,
 ) -> Result<()> {
     append_terminal_sentinel(task_id, log_path, exit_status, state);
-    if streaming { return finalize_streaming(task_id, store, exit_status, state); }
+    if streaming {
+        return finalize_streaming(agent, task_id, store, exit_status, state);
+    }
     finalize_buffered(agent, task_id, store, output_path, exit_status, state)
 }
 
 fn finalize_streaming(
+    agent: &dyn Agent,
     task_id: &TaskId,
     store: &Arc<Store>,
     exit_status: &portable_pty::ExitStatus,
@@ -486,13 +489,19 @@ fn finalize_streaming(
 ) -> Result<()> {
     state.full_output.push_str(&terminal_sentinel(task_id, exit_status, state));
     persist_transcript(task_id, &state.full_output);
-    let status = if state.info.status == TaskStatus::Failed {
+    let mut status = if state.info.status == TaskStatus::Failed {
         TaskStatus::Failed
     } else if exit_status.success() {
         TaskStatus::Done
     } else {
         TaskStatus::Failed
     };
+    if status == TaskStatus::Done {
+        state.info.status = status;
+        let parsed = agent.parse_completion(&state.full_output);
+        crate::agent::stream_completion::merge_parsed_completion(&mut state.info, parsed);
+        status = state.info.status;
+    }
     state.info.status = status;
     state.info.exit_code = i32::try_from(exit_status.exit_code()).ok();
     store.insert_event(&TaskEvent {

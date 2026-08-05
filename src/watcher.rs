@@ -14,6 +14,9 @@ mod transcript_tests;
 #[cfg(test)]
 #[path = "watcher/streaming_tests.rs"]
 mod streaming_tests;
+#[cfg(test)]
+#[path = "watcher/streaming_completion_tests.rs"]
+mod streaming_completion_tests;
 
 pub(crate) use buffered::watch_buffered;
 pub(crate) use esc::strip_terminal_escapes;
@@ -69,6 +72,7 @@ pub async fn watch_streaming(
     let mut synthetic_tracker = SyntheticMilestoneTracker::new();
     let mut delivery_evidence = DeliveryEvidence::default();
     let mut last_event_detail: Option<String> = None;
+    let mut full_output = String::new();
     let stderr_handle = spawn_stderr_capture(child, task_id);
     loop {
         let line = match timeout(idle_timeout, lines.next_line()).await {
@@ -99,6 +103,8 @@ pub async fn watch_streaming(
         if !is_standalone_milestone_line(&line) && !is_thinking_delta(&line) {
             log_file.write_all(line.as_bytes()).await?;
             log_file.write_all(b"\n").await?;
+            full_output.push_str(&line);
+            full_output.push('\n');
         }
 
         if let Some(event_detail) = handle_streaming_line_with_session(
@@ -170,6 +176,13 @@ pub async fn watch_streaming(
                 "exit_code": exit_status.code(),
             })),
         });
+    }
+
+    if status == TaskStatus::Done {
+        info.status = status;
+        let parsed = agent.parse_completion(&full_output);
+        crate::agent::stream_completion::merge_parsed_completion(&mut info, parsed);
+        status = info.status;
     }
 
     if status == TaskStatus::Done {

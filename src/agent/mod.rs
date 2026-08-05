@@ -23,6 +23,7 @@ pub(crate) mod cargo_target;
 pub(crate) mod registry;
 pub mod classifier;
 pub(crate) mod selection;
+pub(crate) mod stream_completion;
 pub(crate) mod truncate;
 
 use anyhow::Result;
@@ -60,7 +61,8 @@ pub trait Agent: Send + Sync {
     /// Parse a single line of output into an event (streaming agents only)
     fn parse_event(&self, task_id: &TaskId, line: &str) -> Option<TaskEvent>;
 
-    /// Parse buffered output into completion info (non-streaming agents)
+    /// Parse full agent output into completion info.
+    /// Called by buffered finalize always, and by streaming finalize when exit code is 0.
     fn parse_completion(&self, _output: &str) -> CompletionInfo {
         CompletionInfo {
             tokens: None,

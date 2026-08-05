@@ -115,7 +115,7 @@ mod tests {
             tokens: None,
             prompt_tokens: None,
             duration_ms,
-            model: None,
+            requested_model: None, observed_model: None,
             cost_usd: None,
             exit_code: None,
             created_at,

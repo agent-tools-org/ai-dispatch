@@ -55,7 +55,7 @@ pub(super) fn task_json(store: &Arc<Store>, task_id: &str) -> Result<String> {
         "custom_agent": task.custom_agent_name,
         "status": task.status.as_str(),
         "prompt": task.prompt,
-        "model": task.model,
+        "requested_model": task.requested_model, "observed_model": task.observed_model,
         "tokens": task.tokens,
         "prompt_tokens": task.prompt_tokens,
         "duration_ms": task.duration_ms,

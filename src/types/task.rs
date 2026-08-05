@@ -34,7 +34,22 @@ pub struct Task {
     pub tokens: Option<i64>,
     pub prompt_tokens: Option<i64>,
     pub duration_ms: Option<i64>,
-    pub model: Option<String>,
+    /// The model aid dispatched with — a request, not an outcome. Set at
+    /// dispatch from `--model`, the configured default, budget mode or smart
+    /// routing, and kept as aid passed it even when the CLI refused to serve
+    /// it: `t-bd455a68` asked the `claude` CLI for `gemini-3.6-flash-low` and
+    /// failed, and the request is still the honest record of what was asked.
+    pub requested_model: Option<String>,
+    /// The model the CLI reported it actually ran. `None` means the CLI never
+    /// said so — which is not the same as the requested model having run.
+    /// Collapsing the two is what stored a cursor model on an `agy` task
+    /// (`t-702f7bcb`) and `auto`, a router, as though it were a model.
+    ///
+    /// Cost, capability history and model-level routing must read this, never
+    /// `requested_model`. Per-family quota marking is the one legitimate reader
+    /// of the request: it asks which family aid *aimed at*, and plain-text CLIs
+    /// such as agy never echo a model at all.
+    pub observed_model: Option<String>,
     pub cost_usd: Option<f64>,
     pub exit_code: Option<i32>,
     pub created_at: DateTime<Local>,
@@ -50,6 +65,34 @@ pub struct Task {
 }
 
 impl Task {
+    /// The model an outcome may be attributed to: what the CLI reported, never
+    /// what aid asked for. `None` means nobody knows, and it must stay unknown
+    /// — capability history, per-model success rates and model-level routing
+    /// read this, and a guessed model there poisons the advice built on it.
+    pub fn attributed_model(&self) -> Option<&str> {
+        self.observed_model.as_deref()
+    }
+
+    /// The model to price against, and the model a derived dispatch should ask
+    /// for again: the observation when there is one, otherwise the original
+    /// request. The fallback is legitimate here only because both values are
+    /// stored, so a reader can see which basis was used.
+    pub fn costing_model(&self) -> Option<&str> {
+        self.observed_model
+            .as_deref()
+            .or(self.requested_model.as_deref())
+    }
+
+    /// What to show a human. A request that was never confirmed is marked, and
+    /// an observation that contradicts the request is shown as both — that
+    /// disagreement means the CLI served something other than what was asked.
+    pub fn display_model(&self) -> Option<String> {
+        format_model_display(
+            self.observed_model.as_deref(),
+            self.requested_model.as_deref(),
+        )
+    }
+
     pub fn agent_display_name(&self) -> &str {
         if self.agent == AgentKind::Custom {
             self.custom_agent_name.as_deref().unwrap_or("custom")
@@ -132,4 +175,52 @@ pub struct CompletionInfo {
     pub model: Option<String>,
     pub cost_usd: Option<f64>,
     pub exit_code: Option<i32>,
+}
+
+/// Renders model attribution for humans. An unconfirmed request is marked with
+/// `?` so a reader can tell a guess from an observation at a glance, and a
+/// disagreement is shown in full because it means the CLI served something
+/// other than what was asked for.
+pub fn format_model_display(observed: Option<&str>, requested: Option<&str>) -> Option<String> {
+    match (observed, requested) {
+        (Some(observed), Some(requested)) if observed != requested => {
+            Some(format!("{observed} (asked {requested})"))
+        }
+        (Some(observed), _) => Some(observed.to_string()),
+        (None, Some(requested)) => Some(format!("{requested}?")),
+        (None, None) => None,
+    }
+}
+
+#[cfg(test)]
+mod model_display_tests {
+    use super::format_model_display;
+
+    #[test]
+    fn an_unconfirmed_request_is_marked_as_one() {
+        assert_eq!(format_model_display(None, Some("gpt-5.6")), Some("gpt-5.6?".to_string()));
+    }
+
+    #[test]
+    fn a_confirmed_model_is_shown_plainly() {
+        assert_eq!(
+            format_model_display(Some("gpt-5.6"), Some("gpt-5.6")),
+            Some("gpt-5.6".to_string())
+        );
+    }
+
+    /// The case worth surfacing: aid asked for one model and the CLI served
+    /// another. Showing only one of the two hides a substitution.
+    #[test]
+    fn a_substitution_shows_both() {
+        assert_eq!(
+            format_model_display(Some("composer-2"), Some("auto")),
+            Some("composer-2 (asked auto)".to_string())
+        );
+    }
+
+    #[test]
+    fn nothing_known_renders_as_nothing() {
+        assert_eq!(format_model_display(None, None), None);
+    }
 }

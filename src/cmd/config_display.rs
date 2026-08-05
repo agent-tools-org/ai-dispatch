@@ -185,7 +185,7 @@ pub(crate) fn compute_agent_history(tasks: &[Task]) -> HashMap<AgentKind, AgentH
 pub(crate) fn compute_model_history(tasks: &[Task]) -> HashMap<(AgentKind, String), ModelHistory> {
     let mut accum: HashMap<(AgentKind, String), (usize, usize, f64)> = HashMap::new();
     for task in tasks {
-        let model = task.model.clone().unwrap_or_else(|| "default".to_string());
+        let model = task.costing_model().unwrap_or("default").to_string();
         let entry = accum.entry((task.agent, model)).or_insert((0, 0, 0.0));
         entry.0 += 1;
         if matches!(task.status, TaskStatus::Done | TaskStatus::Merged) {

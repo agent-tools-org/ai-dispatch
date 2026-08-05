@@ -149,7 +149,7 @@ pub(crate) async fn run_agent_process_with_timeout(
             Err(err)
         }
         ForegroundRunResult::TimedOut => {
-            handle_timeout(store, task_id, model, start, timeout_mins, idle_timeout)
+            handle_timeout(store, task_id, start, timeout_mins, idle_timeout)
         }
     }
 }
@@ -186,17 +186,20 @@ fn handle_success(
             failure_context,
         );
     }
-    let final_model = info.model.as_deref().or(model);
+    // Same split as pty_runner::record_completion: the observation stands alone,
+    // only the cost estimate may fall back to what was requested.
+    let observed_model = info.model.as_deref();
+    let costing_model = observed_model.or(model);
     let cost_usd = info.cost_usd.or_else(|| {
         info.tokens
-            .and_then(|tokens| crate::cost::estimate_cost(tokens, final_model, agent.kind()))
+            .and_then(|tokens| crate::cost::estimate_cost(tokens, costing_model, agent.kind()))
     });
     crate::task_lifecycle::update_task_completion(store.as_ref(), TaskCompletionUpdate {
         id: task_id.as_str(),
         status: info.status,
         tokens: info.tokens,
         duration_ms,
-        model: final_model,
+        observed_model,
         cost_usd,
         exit_code,
     })?;
@@ -215,7 +218,6 @@ fn handle_success(
 fn handle_timeout(
     store: &Arc<Store>,
     task_id: &TaskId,
-    model: Option<&str>,
     start: Instant,
     timeout_mins: i64,
     idle_timeout: Duration,
@@ -226,7 +228,9 @@ fn handle_timeout(
         status: TaskStatus::Failed,
         tokens: None,
         duration_ms,
-        model,
+        // A timeout kills the CLI before it reports anything, so there is no
+        // observation to record. The request lives in `model` on the row.
+        observed_model: None,
         cost_usd: None,
         exit_code: None,
     })?;

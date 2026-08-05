@@ -48,7 +48,7 @@ fn retry_task_to_run_args_uses_parent_and_original_fields() {
     task.repo_path = Some(repo.path().display().to_string());
     task.worktree_branch = Some("feat/retry".to_string());
     task.output_path = Some("out.txt".to_string());
-    task.model = Some("o3".to_string());
+    task.requested_model = Some("o3".to_string());
     task.verify = Some("cargo check".to_string());
     task.read_only = true;
     task.budget = true;

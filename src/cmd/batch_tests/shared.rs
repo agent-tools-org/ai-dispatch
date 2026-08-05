@@ -62,7 +62,7 @@ pub(super) fn make_task(name: &str, conditional: bool, on_success: Option<&str>)
 pub(super) fn seed_task(store: &Store, task_id: &str, status: TaskStatus, cost_usd: Option<f64>) {
     let mut task = make_stored_task(task_id, AgentKind::Codex, status);
     task.duration_ms = Some(1_000);
-    task.model = Some("gpt-5".to_string());
+    task.requested_model = Some("gpt-5".to_string());
     task.cost_usd = cost_usd;
     task.completed_at = Some(Local::now());
     store.insert_task(&task).unwrap();
@@ -93,7 +93,7 @@ pub(super) fn make_stored_task(id: &str, agent: AgentKind, status: TaskStatus) -
         tokens: None,
         prompt_tokens: None,
         duration_ms: None,
-        model: None,
+        requested_model: None, observed_model: None,
         cost_usd: None,
         exit_code: None,
         created_at: Local::now(),

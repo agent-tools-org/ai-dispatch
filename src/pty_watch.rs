@@ -520,7 +520,7 @@ fn finalize_streaming(
                                             .get_task(task_id.as_str())
                                             .ok()
                                             .flatten()
-                                            .and_then(|task| task.model);
+                                            .and_then(|task| task.requested_model);
     if crate::agent::stream_completion::record_quota_exhaustion(&state.full_output, agent.kind(), state.info.model.as_deref().or(dispatched_model.as_deref())) {
         status = TaskStatus::Failed;
     }

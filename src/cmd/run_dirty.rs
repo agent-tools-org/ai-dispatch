@@ -183,7 +183,7 @@ fn build_uncommitted_retry_args(
     retry_args.retry = 0;
     retry_args.parent_task_id = Some(task_id.as_str().to_string());
     retry_args.repo = task.repo_path.clone().or_else(|| retry_args.repo.clone());
-    retry_args.model = task.model.clone().or_else(|| retry_args.model.clone());
+    retry_args.model = task.requested_model.clone().or_else(|| retry_args.model.clone());
     retry_args.verify = task.verify.clone().or_else(|| args.verify.clone());
     retry_args.read_only = false;
     retry_args.background = false;

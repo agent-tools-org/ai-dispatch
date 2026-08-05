@@ -1,9 +1,10 @@
 // Human and JSON output for read-only declared-profile agent advice.
-// Exports: run().
+// Exports: run(), build_report().
 // Deps: CLI args, selection advice payload, optional read-only store, teams.
 
 use anyhow::Result;
 
+use crate::agent::classifier::TaskCategory;
 use crate::agent::selection::{AdviceReport, advise};
 use crate::cli::command_args_advise::AdviseArgs;
 use crate::store::Store;
@@ -16,14 +17,13 @@ pub(crate) fn run(store: Option<&Store>, args: AdviseArgs) -> Result<()> {
         urgency: args.urgency,
         rigor: args.rigor,
     };
-    let team = args.team.as_deref().and_then(crate::team::resolve_team);
     let kind_was_overridden = args.kind.is_some();
-    let report = advise(
+    let report = build_report(
+        store,
         &args.prompt,
         declared,
         args.kind,
-        team.as_ref(),
-        store,
+        args.team.as_deref(),
         args.top,
     );
     if args.json {
@@ -32,6 +32,18 @@ pub(crate) fn run(store: Option<&Store>, args: AdviseArgs) -> Result<()> {
         print_human(&report, kind_was_overridden);
     }
     Ok(())
+}
+
+pub(crate) fn build_report(
+    store: Option<&Store>,
+    prompt: &str,
+    declared: DeclaredTaskProfile,
+    kind: Option<TaskCategory>,
+    team: Option<&str>,
+    top: usize,
+) -> AdviceReport {
+    let team = team.and_then(crate::team::resolve_team);
+    advise(prompt, declared, kind, team.as_ref(), store, top)
 }
 
 fn print_human(report: &AdviceReport, kind_was_overridden: bool) {

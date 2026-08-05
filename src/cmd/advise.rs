@@ -58,14 +58,10 @@ fn print_human(report: &AdviceReport, kind_was_overridden: bool) {
             duration_label(recommended.est_duration_secs),
         );
     } else {
-        println!("Recommended: none (no eligible agents)");
+        println!("Recommended: none (no installed agents)");
     }
     for (index, candidate) in report.candidates.iter().enumerate() {
-        let availability = match (candidate.installed, candidate.eligible) {
-            (false, _) => " [not installed]",
-            (_, false) => " [ineligible]",
-            _ => "",
-        };
+        let availability = candidate_mark(candidate.installed, candidate.exclusion_reason.as_deref());
         let item = &candidate.breakdown;
         println!(
             "  {}. {:<10} {:>5.1}  base {:.1}  {:+.1} model  {:+.1} budget  {:+.1} limit  {:+.1} history  {:+.1} complexity  {:+.1} team{}",
@@ -85,11 +81,7 @@ fn print_human(report: &AdviceReport, kind_was_overridden: bool) {
     if !report.custom_candidates.is_empty() {
         println!("Custom agents (separate capability scale):");
         for candidate in &report.custom_candidates {
-            let availability = match (candidate.installed, candidate.eligible) {
-                (false, _) => " [not installed]",
-                (_, false) => " [ineligible]",
-                _ => "",
-            };
+            let availability = candidate_mark(candidate.installed, candidate.exclusion_reason.as_deref());
             let preference = if candidate.team_preferred { "  team preferred" } else { "" };
             println!(
                 "  {:<20} capability {}  +{} strength{}{}",
@@ -103,6 +95,14 @@ fn print_human(report: &AdviceReport, kind_was_overridden: bool) {
     }
     if !report.notes.is_empty() {
         println!("Notes: {}", report.notes.join("; "));
+    }
+}
+
+fn candidate_mark(installed: bool, exclusion_reason: Option<&str>) -> String {
+    match (installed, exclusion_reason) {
+        (false, _) => " [not installed]".to_string(),
+        (_, Some(reason)) => format!("  [{reason}]"),
+        _ => String::new(),
     }
 }
 
@@ -144,5 +144,34 @@ mod tests {
         let encoded = serde_json::to_value(&report).expect("serialize advice");
         let decoded: AdviceReport = serde_json::from_value(encoded).expect("parse advice");
         assert_eq!(decoded, report);
+    }
+
+    #[test]
+    fn complex_critical_surfaces_alternatives_with_shortfall_reasons() {
+        let declared = DeclaredTaskProfile {
+            difficulty: crate::types::TaskDifficulty::Complex,
+            budget: crate::types::TaskBudget::Premium,
+            urgency: crate::types::TaskUrgency::Normal,
+            rigor: crate::types::TaskRigor::Critical,
+        };
+        let report = advise(
+            "Refactor the scheduler across modules",
+            declared,
+            Some(crate::agent::classifier::TaskCategory::Refactoring),
+            None,
+            None,
+            5,
+        );
+        assert!(report.recommended.is_some());
+        let eligible = report.candidates.iter().filter(|c| c.eligible).count();
+        assert!(eligible >= 2, "rigor must not collapse alternatives to one local agent");
+        let cursor = report.candidates.iter().find(|c| c.agent == "cursor");
+        if let Some(cursor) = cursor {
+            let reason = cursor.exclusion_reason.as_deref().unwrap_or("");
+            assert!(
+                reason.contains("base 6 < floor 8 for complex"),
+                "expected floor shortfall, got {reason:?}"
+            );
+        }
     }
 }

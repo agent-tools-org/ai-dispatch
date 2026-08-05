@@ -70,15 +70,24 @@ fn is_permission_block_for_target(line: &str, target_dir: &str) -> bool {
 }
 
 fn is_permission_os_error(line: &str) -> bool {
+    is_permission_os_error_text(line)
+}
+
+pub(crate) fn is_permission_os_error_text(line: &str) -> bool {
     // Sandbox: EPERM (os error 1). Read-only dir simulation: EACCES (os error 13).
     line.contains("Operation not permitted (os error 1)")
         || line.contains("Permission denied (os error 13)")
 }
 
 fn extract_at_path(line: &str) -> Option<&str> {
-    let (_, rest) = line.split_once("at path \"")?;
-    let (path, _) = rest.split_once('"')?;
-    Some(path)
+    if let Some((_, rest)) = line.split_once("at path \"") {
+        return rest.split_once('"').map(|(path, _)| path);
+    }
+    // cargo check: error writing dependencies to `/path/file.d`: Operation not permitted
+    if let Some((_, rest)) = line.split_once(" to `") {
+        return rest.split_once('`').map(|(path, _)| path);
+    }
+    None
 }
 
 fn path_matches_target(error_path: &str, target_dir: &str) -> bool {

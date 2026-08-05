@@ -28,7 +28,7 @@ Important controls:
 - `--difficulty` declares `trivial`, `simple`, `moderate`, or `complex` capability needs.
 - `--budget` declares the eligible `free`, `cheap`, `standard`, or `premium` model tier.
 - `--urgency` declares `background`, `normal`, or `urgent` rate-limit handling.
-- `--rigor` declares `draft`, `standard`, or `critical`; critical runs require verification and cross-audit.
+- `--rigor` declares `draft`, `standard`, or `critical` proof level (compiles / path exercised / cross-audit); it does not whitelist trust tiers.
 - `--kind` overrides the inferred task kind while difficulty remains caller-declared.
 - `--dir` sets the task working directory.
 - `--repo` or `--repo-root` supplies the repository anchor.
@@ -65,11 +65,12 @@ aid advise "Refactor the scheduler" \
 rate-limit markers, team preferences, and task history, then runs the production
 selector without launching an agent or writing the task store. Use `--top 0` for
 all candidates, `--team` for team preferences, and omit `--json` for a concise
-human-readable breakdown. Eligible installed built-ins rank first; custom agents
-are reported separately because their configured capability values are not on
-the built-in score scale. Inferred kind is advisory; pass `--kind` when the
-caller knows the task kind. Advice exits successfully even when every agent is
-rate-limited.
+human-readable breakdown. Missing the declared capability floor or budget is a
+ranking penalty, not a hard gate: alternatives still appear with an exclusion
+reason such as `base 6 < floor 8 for complex`. Custom agents are reported
+separately because their configured capability values are not on the built-in
+score scale. Inferred kind is advisory; pass `--kind` when the caller knows the
+task kind. Advice exits successfully even when every agent is rate-limited.
 
 ## Context and instructions
 

@@ -75,6 +75,22 @@ pub fn parse_grok_completion(output: &str) -> CompletionInfo {
         }
         return failed_completion();
     }
+    // grok reports a cut-short run in the same envelope shape as a good one: no
+    // `type: "error"`, a populated `text`, real usage and real cost. Only
+    // `stopReason` tells them apart, and without this check every truncated run
+    // recorded as Done — `t-560628e5` and `t-2a1b09aa` are still stored that
+    // way, and `t-c7ae82a8` stopped mid-sentence inside its own Findings
+    // section after 5 turns and $0.22, having spent real money on a report
+    // nobody could use.
+    //
+    // Keyed to values actually captured rather than to a guessed enum:
+    // `end_turn` on completed runs, `cancelled` on truncated ones. An
+    // unrecognised value is left alone instead of failed — inventing the shape
+    // of output we have not seen is what got the previous round of completion
+    // detectors blocked.
+    if value.get("stopReason").and_then(Value::as_str) == Some("cancelled") {
+        return failed_completion();
+    }
     let tokens = value
         .pointer("/usage/total_tokens")
         .and_then(Value::as_i64)

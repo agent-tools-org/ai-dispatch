@@ -101,3 +101,37 @@ fn extract_response_returns_text_field() {
 fn kind_returns_grok() {
     assert_eq!(GrokAgent.kind(), AgentKind::Grok);
 }
+
+/// Taken verbatim in shape from `t-c7ae82a8`: no `type: "error"`, a populated
+/// `text`, real usage and real cost — the only thing separating it from a good
+/// run is `stopReason`. It was stored as Done.
+#[test]
+fn parse_completion_marks_a_cancelled_run_failed() {
+    let output = r#"{"text":"Findings. Severity: Critical. File: web/api.","stopReason":"cancelled","num_turns":5,"total_cost_usd":0.2196304,"modelUsage":{"grok-4.5-build":{"costUSD":0.2196304}}}"#;
+    let completion = GrokAgent.parse_completion(output);
+    assert_eq!(completion.status, TaskStatus::Failed);
+}
+
+/// The negative control the paired check needs: the same envelope with the
+/// value real completed runs carry (`t-7aeb222c`, `t-bdbfa210`) must stay Done,
+/// keeping its model and cost attribution.
+#[test]
+fn parse_completion_keeps_an_end_turn_run_done() {
+    let output = r#"{"text":"done","stopReason":"end_turn","usage":{"total_tokens":249713},"total_cost_usd":0.1616412,"modelUsage":{"grok-4.5-build":{"costUSD":0.1616412}}}"#;
+    let completion = GrokAgent.parse_completion(output);
+    assert_eq!(completion.status, TaskStatus::Done);
+    assert_eq!(completion.model.as_deref(), Some("grok-4.5-build"));
+    assert_eq!(completion.tokens, Some(249713));
+}
+
+/// An envelope with no `stopReason` at all, and one carrying a value we have
+/// never captured, must not be failed on a guess.
+#[test]
+fn parse_completion_does_not_fail_on_an_unseen_stop_reason() {
+    for output in [
+        r#"{"text":"ok","usage":{"total_tokens":5}}"#,
+        r#"{"text":"ok","stopReason":"max_tokens","usage":{"total_tokens":5}}"#,
+    ] {
+        assert_eq!(GrokAgent.parse_completion(output).status, TaskStatus::Done);
+    }
+}

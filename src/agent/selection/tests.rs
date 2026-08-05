@@ -592,8 +592,9 @@ fn gemini_in_fallback_chain() {
         AgentKind::Qwen,
         AgentKind::Codex,
     ]);
-    let result = super::coding_fallback_for(&AgentKind::Gemini);
+    let result = super::coding_fallback_for(&AgentKind::Gemini, None, None);
     assert!(result.is_some(), "Gemini should have a fallback agent");
+    assert_ne!(result, Some(AgentKind::Gemini));
 }
 
 #[test]
@@ -606,7 +607,7 @@ fn fallback_chain_skips_rate_limited() {
         AgentKind::Cursor,
     ]);
     crate::rate_limit::mark_rate_limited(&AgentKind::Codex, "quota exhausted");
-    let result = super::coding_fallback_for(&AgentKind::Gemini);
+    let result = super::coding_fallback_for(&AgentKind::Gemini, None, None);
     // Should skip Codex (rate-limited) and pick the next available.
     assert!(result.is_some());
     assert_ne!(result.unwrap(), AgentKind::Codex);

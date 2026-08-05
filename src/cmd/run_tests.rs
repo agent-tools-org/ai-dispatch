@@ -422,8 +422,8 @@ async fn rate_limited_agent_without_cascade_fails_early() {
     let temp = TempDir::new().unwrap();
     let _aid_home = paths::AidHomeGuard::set(temp.path());
     crate::paths::ensure_dirs().unwrap();
-    // MiMoCode is the terminus of the coding fallback chain, so it has no
-    // auto-cascade target and must fail early when rate-limited.
+    // No installed peers → category-aware fallback correctly returns None.
+    let _agents = crate::agent::DetectAgentsGuard::set(vec![AgentKind::MiMoCode]);
     crate::rate_limit::mark_rate_limited(&AgentKind::MiMoCode, "try again at Mar 21st, 2099 2:27 PM.");
     let err = run(Arc::new(Store::open_memory().unwrap()), RunArgs {
         agent_name: "mimocode".to_string(),

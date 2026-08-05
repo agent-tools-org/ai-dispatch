@@ -80,9 +80,10 @@ fn should_auto_fallback_only_once_for_failed_tasks() {
 }
 
 #[test]
-fn auto_fallback_agent_returns_none_when_chain_ends() {
+fn auto_fallback_agent_returns_none_when_no_usable_peer() {
     let store = Store::open_memory().unwrap();
-    // MiMoCode is the last agent in the coding fallback chain, so it has no successor.
+    // Only the exhausted agent is installed — category-aware fallback must not invent peers.
+    let _agents = crate::agent::DetectAgentsGuard::set(vec![AgentKind::MiMoCode]);
     store.insert_task(&stored_task("t-mimocode", AgentKind::MiMoCode)).unwrap();
 
     assert!(auto_fallback_agent(&store, "t-mimocode", &[], 0).unwrap().is_none());

@@ -211,8 +211,12 @@ pub(crate) fn auto_fallback_agent(
     if tasks.get(task_idx).and_then(|task_spec| task_spec.fallback.as_deref()).is_some() {
         return Ok(None);
     }
-    Ok(crate::agent::selection::coding_fallback_for(&task.agent)
-        .map(|fallback| (task.agent.as_str().to_string(), fallback)))
+    Ok(crate::agent::selection::coding_fallback_for(
+        &task.agent,
+        task.category.as_deref(),
+        Some(task.prompt.as_str()),
+    )
+    .map(|fallback| (task.agent.as_str().to_string(), fallback)))
 }
 
 fn available_fallback_after(

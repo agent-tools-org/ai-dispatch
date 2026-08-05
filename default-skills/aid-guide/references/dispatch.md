@@ -181,6 +181,13 @@ aid run codex "Task" --cascade opencode,cursor
 A retry is a new attempt linked to its parent. It does not erase or rewrite the
 failed attempt. Inspect the tree with `aid tree <task-id>`.
 
+When `--cascade` is omitted and the primary agent is rate-limited or hits a
+quota/auth dead path, aid auto-cascades to the best installed peer for the
+task category (capability matrix), skipping rate-limited, disabled, not
+installed, and known-unhealthy agents (for example gemini when `agy` is
+present). A frontend task falling off codex prefers cursor; a research task
+prefers agy — not gemini.
+
 ## Verify before review
 
 ```bash

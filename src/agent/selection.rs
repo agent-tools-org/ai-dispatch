@@ -8,7 +8,10 @@ mod selection_scoring;
 mod selection_capabilities;
 #[path = "selection_advice.rs"]
 mod selection_advice;
+#[path = "selection_fallback.rs"]
+mod selection_fallback;
 pub(crate) use selection_advice::{AdviceReport, advise};
+pub(crate) use selection_fallback::{coding_fallback_for, coding_fallback_for_prompt};
 pub(crate) use selection_scoring::model_for_task_budget;
 use selection_scoring::{
     BUILTIN_AGENTS, Candidate, CandidateContext, candidate_for, compare_candidates, cost_efficiency,
@@ -256,39 +259,6 @@ fn enabled_builtins(agents: &[AgentKind]) -> Vec<AgentKind> {
         .copied()
         .filter(|kind| !agent_config::is_agent_disabled(kind.as_str()))
         .collect()
-}
-
-const CODING_FALLBACK_CHAIN: &[AgentKind] = &[
-    AgentKind::Gemini,
-    AgentKind::Qwen,
-    AgentKind::Codex,
-    AgentKind::Copilot,
-    AgentKind::Cursor,
-    AgentKind::Droid,
-    AgentKind::OpenCode,
-    AgentKind::Kilo,
-    AgentKind::MiMoCode,
-];
-
-fn next_fallback_in_chain(
-    agent: &AgentKind,
-    chain: &[AgentKind],
-    available: &[AgentKind],
-) -> Option<AgentKind> {
-    let start = chain.iter().position(|kind| kind == agent)?;
-    chain[start + 1..]
-        .iter()
-        .find(|kind| {
-            available.contains(kind)
-                && !agent_config::is_agent_disabled(kind.as_str())
-                && !rate_limit::is_rate_limited(kind)
-        })
-        .copied()
-}
-
-pub(crate) fn coding_fallback_for(agent: &AgentKind) -> Option<AgentKind> {
-    let available = detect_agents();
-    next_fallback_in_chain(agent, CODING_FALLBACK_CHAIN, &available)
 }
 
 #[cfg(test)]

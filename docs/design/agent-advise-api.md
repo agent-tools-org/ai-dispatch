@@ -217,8 +217,9 @@ shim, no alias.
   as the replacement.
 - Keep the scoring engine: `aid advise` needs it, and `--best-of N` selects its fleet through
   `budget_ranked_agents` (`src/cmd/run_bestof.rs:189`).
-- `coding_fallback_for` and `CODING_FALLBACK_CHAIN` are independent of scoring and stay as they
-  are.
+- `coding_fallback_for` ranks installed peers by the capability matrix for the
+  task category and skips rate-limited / disabled / known-unhealthy agents
+  (gemini when agy is present). It is not a second scoring engine.
 - Update `CLAUDE.md`, team docs, and `default-skills/aid-guide/` in the same commit.
 
 ## Invariants
@@ -241,7 +242,7 @@ shim, no alias.
 ## Out of scope (tracked separately)
 
 - Network quota probes feeding `quota.source = "probe"` (aidbar integration).
-- Category-aware fallback chains and the `aid run` pre-dispatch guard.
+- The `aid run` pre-dispatch guard beyond rate-limit auto-cascade.
 - Learning loop that tunes the capability matrix from declared-vs-outcome drift.
 
 ---

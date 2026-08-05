@@ -262,7 +262,8 @@ pub(crate) async fn post_run_lifecycle(
         && args.cascade.is_empty()
         && let Some(message) = quota_error_message.as_deref()
         && let Some(clean_message) = rate_limit::extract_rate_limit_message(message)
-        && let Some(fallback) = agent::selection::coding_fallback_for(&agent_kind)
+        && let Some(fallback) =
+            agent::selection::coding_fallback_for_prompt(&agent_kind, &args.prompt)
     {
         rate_limit::mark_rate_limited(&agent_kind, &clean_message);
         aid_info!(

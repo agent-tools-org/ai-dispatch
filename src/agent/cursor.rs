@@ -59,7 +59,7 @@ impl super::Agent for CursorAgent {
         if let Some(ref model) = opts.model {
             cmd.args(["--model", model]);
         } else {
-            cmd.args(["--model", "composer-2"]);
+            cmd.args(["--model", "auto"]);
         }
         Ok(cmd)
     }

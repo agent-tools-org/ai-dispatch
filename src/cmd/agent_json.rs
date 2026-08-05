@@ -123,7 +123,14 @@ fn build_agent_json(
     
     let models = {
         let default_model = crate::agent_config::get_default_model(&name)
-            .or_else(|| custom_config.and_then(|c| c.forced_model.clone()));
+            .or_else(|| custom_config.and_then(|c| c.forced_model.clone()))
+            .or_else(|| {
+                if is_custom {
+                    None
+                } else {
+                    catalog_default_model(kind)
+                }
+            });
         let budget_model = if is_custom {
             None
         } else {
@@ -184,4 +191,13 @@ fn builtin_profile(name: &str) -> Option<AgentKind> {
         .iter()
         .copied()
         .find(|kind| kind.as_str().eq_ignore_ascii_case(name))
+}
+
+fn catalog_default_model(kind: AgentKind) -> Option<String> {
+    let models = crate::model_catalog::models_for_agent(&kind);
+    models
+        .iter()
+        .find(|m| m.description.to_ascii_lowercase().contains("default"))
+        .or_else(|| models.first())
+        .map(|m| m.model.to_string())
 }

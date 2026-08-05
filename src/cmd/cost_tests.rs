@@ -86,10 +86,10 @@ fn aggregates_daily_summary_rows() {
     assert_eq!(rows.len(), 2);
     assert_eq!(rows[0].tasks, 2);
     assert_eq!(rows[0].tokens, 300);
-    assert!((rows[0].cost_usd - 2.0).abs() < 0.0001);
+    assert!((rows[0].cost_usd.unwrap_or(0.0) - 2.0).abs() < 0.0001);
     assert_eq!(totals.0, 3);
     assert_eq!(totals.1, 600);
-    assert!((totals.2 - 4.5).abs() < 0.0001);
+    assert!((totals.2.unwrap_or(0.0) - 4.5).abs() < 0.0001);
 }
 
 #[test]

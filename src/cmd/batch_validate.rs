@@ -275,6 +275,7 @@ fn insert_skipped_task(store: &Arc<Store>, task: &batch::BatchTask) -> Result<Ta
         duration_ms: Some(0),
         requested_model: None,
         observed_model: None,
+        attribution_source: None,
         cost_usd: None,
         exit_code: None,
         verify: task.verify.clone(),

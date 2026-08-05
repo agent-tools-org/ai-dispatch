@@ -36,6 +36,7 @@ pub(super) fn migrate_task_messages(conn: &Connection) -> Result<()> {
 /// launder guesses into observations.
 pub(super) fn migrate_observed_model(conn: &Connection) -> Result<()> {
     let _ = conn.execute_batch("ALTER TABLE tasks ADD COLUMN observed_model TEXT;");
+    let _ = conn.execute_batch("ALTER TABLE tasks ADD COLUMN attribution_source TEXT;");
     Ok(())
 }
 

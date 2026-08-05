@@ -114,16 +114,31 @@ A task records two models, never one:
   the CLI reported nothing, which is **not** the same as the requested model
   having run.
 
+A third field, `attribution_source`, records how `observed_model` was
+established. It moves with it and is `null` whenever the model is:
+
+| Value | Meaning |
+|---|---|
+| `echoed` | The CLI named the model in its own output. The strongest evidence available. |
+| `confirmed_by_success` | aid passed an explicit model and the run succeeded, so that model ran — a CLI handed a model it cannot serve fails instead. Inferred from the absence of a refusal, not from a statement. |
+
 `aid show --json`, `aid board --json`, the MCP task view, and the web API emit
-both fields. There is no single `model` field.
+all three fields. There is no single `model` field.
 
-Human surfaces render the pair: `gpt-5.6` when the two agree, `gpt-5.6?` when a
-request was never confirmed, and `composer-2 (asked auto)` when the CLI served
-something other than what was asked for.
+Human surfaces render them together: `gpt-5.6` when request and observation
+agree and the CLI said so, `gpt-5.6 (inferred)` when the model was confirmed by
+the run succeeding rather than stated, `gpt-5.6?` when a request was never
+confirmed at all, and `composer-2 (asked auto)` when the CLI served something
+other than what was asked for.
 
-`aid stats`'s per-model breakdown and an agent's learned default model read
-`observed_model` only, so an unconfirmed model reads as `unknown` rather than
-being reported as fact. Cost estimation falls back to `requested_model` when
+A router alias such as `auto` is never confirmed by success: it selects a model
+rather than being one, and confirming it would put a router back in the model
+column.
+
+`aid stats`'s per-model breakdown reads `observed_model` at either grade. An
+agent's learned default model accepts `echoed` only, because a model inferred
+from a run not failing is not evidence that model performed well — and a CLI
+that silently substitutes on success would defeat the inference. Cost estimation falls back to `requested_model` when
 there is no observation; because both fields are stored, a reader can tell which
 basis a given row used. Per-family quota marking also reads the request on
 purpose — it asks which family aid aimed at, and plain-text CLIs never echo a

@@ -6,7 +6,8 @@ use chrono::{DateTime, Local};
 use serde::Serialize;
 
 use super::{
-    AgentKind, DeliveryAssessment, EventKind, TaskId, TaskStatus, VerifyStatus, WorkgroupId,
+    AgentKind, AttributionSource, DeliveryAssessment, EventKind, TaskId, TaskStatus, VerifyStatus,
+    WorkgroupId,
 };
 
 #[derive(Debug, Clone, Serialize)]
@@ -50,6 +51,9 @@ pub struct Task {
     /// of the request: it asks which family aid *aimed at*, and plain-text CLIs
     /// such as agy never echo a model at all.
     pub observed_model: Option<String>,
+    /// How `observed_model` was established. Always `None` when
+    /// `observed_model` is `None` — the two move together.
+    pub attribution_source: Option<AttributionSource>,
     pub cost_usd: Option<f64>,
     pub exit_code: Option<i32>,
     pub created_at: DateTime<Local>,
@@ -73,6 +77,17 @@ impl Task {
         self.observed_model.as_deref()
     }
 
+    /// The model, but only when the CLI itself said so. Capability scoring and
+    /// an agent's learned default model read this rather than
+    /// `attributed_model`, because a model inferred from a run merely not
+    /// failing is not evidence that model performed well — or even that a
+    /// substitution did not happen behind a successful exit.
+    pub fn conclusive_model(&self) -> Option<&str> {
+        self.attribution_source
+            .filter(|source| source.is_conclusive())
+            .and(self.observed_model.as_deref())
+    }
+
     /// The model to price against, and the model a derived dispatch should ask
     /// for again: the observation when there is one, otherwise the original
     /// request. The fallback is legitimate here only because both values are
@@ -90,6 +105,7 @@ impl Task {
         format_model_display(
             self.observed_model.as_deref(),
             self.requested_model.as_deref(),
+            self.attribution_source,
         )
     }
 
@@ -172,6 +188,8 @@ pub enum TaskFilter {
 pub struct CompletionInfo {
     pub tokens: Option<i64>,
     pub status: TaskStatus,
+    /// The model the CLI named in its own output, if it named one at all. An
+    /// adapter must never put the dispatched request here.
     pub model: Option<String>,
     pub cost_usd: Option<f64>,
     pub exit_code: Option<i32>,
@@ -181,10 +199,20 @@ pub struct CompletionInfo {
 /// `?` so a reader can tell a guess from an observation at a glance, and a
 /// disagreement is shown in full because it means the CLI served something
 /// other than what was asked for.
-pub fn format_model_display(observed: Option<&str>, requested: Option<&str>) -> Option<String> {
+pub fn format_model_display(
+    observed: Option<&str>,
+    requested: Option<&str>,
+    source: Option<AttributionSource>,
+) -> Option<String> {
     match (observed, requested) {
         (Some(observed), Some(requested)) if observed != requested => {
             Some(format!("{observed} (asked {requested})"))
+        }
+        // Inferred from the run not failing rather than from the CLI saying so.
+        // Rendering it identically to an echo would hide the weaker evidence,
+        // which is the whole reason the grade is stored.
+        (Some(observed), _) if source == Some(AttributionSource::ConfirmedBySuccess) => {
+            Some(format!("{observed} (inferred)"))
         }
         (Some(observed), _) => Some(observed.to_string()),
         (None, Some(requested)) => Some(format!("{requested}?")),
@@ -198,13 +226,13 @@ mod model_display_tests {
 
     #[test]
     fn an_unconfirmed_request_is_marked_as_one() {
-        assert_eq!(format_model_display(None, Some("gpt-5.6")), Some("gpt-5.6?".to_string()));
+        assert_eq!(format_model_display(None, Some("gpt-5.6"), None), Some("gpt-5.6?".to_string()));
     }
 
     #[test]
     fn a_confirmed_model_is_shown_plainly() {
         assert_eq!(
-            format_model_display(Some("gpt-5.6"), Some("gpt-5.6")),
+            format_model_display(Some("gpt-5.6"), Some("gpt-5.6"), None),
             Some("gpt-5.6".to_string())
         );
     }
@@ -214,13 +242,51 @@ mod model_display_tests {
     #[test]
     fn a_substitution_shows_both() {
         assert_eq!(
-            format_model_display(Some("composer-2"), Some("auto")),
+            format_model_display(Some("composer-2"), Some("auto"), None),
             Some("composer-2 (asked auto)".to_string())
         );
     }
 
     #[test]
     fn nothing_known_renders_as_nothing() {
-        assert_eq!(format_model_display(None, None), None);
+        assert_eq!(format_model_display(None, None, None), None);
+    }
+}
+
+#[cfg(test)]
+mod attribution_grade_display_tests {
+    use super::{format_model_display, AttributionSource};
+
+    /// A model inferred from a run not failing must not read the same as one the
+    /// CLI named. Storing the grade and then rendering both identically would
+    /// waste it.
+    #[test]
+    fn an_inferred_model_is_marked() {
+        assert_eq!(
+            format_model_display(
+                Some("gpt-5.6"),
+                Some("gpt-5.6"),
+                Some(AttributionSource::ConfirmedBySuccess)
+            ),
+            Some("gpt-5.6 (inferred)".to_string())
+        );
+    }
+
+    #[test]
+    fn an_echoed_model_stays_plain() {
+        assert_eq!(
+            format_model_display(Some("gpt-5.6"), Some("gpt-5.6"), Some(AttributionSource::Echoed)),
+            Some("gpt-5.6".to_string())
+        );
+    }
+
+    /// A disagreement outranks the grade: the CLI serving something other than
+    /// what was asked is the more important thing to show.
+    #[test]
+    fn a_substitution_still_shows_both() {
+        assert_eq!(
+            format_model_display(Some("composer-2"), Some("auto"), Some(AttributionSource::Echoed)),
+            Some("composer-2 (asked auto)".to_string())
+        );
     }
 }

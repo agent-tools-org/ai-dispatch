@@ -248,7 +248,7 @@ mod tests {
             tokens: None,
             prompt_tokens: None,
             duration_ms: None,
-            requested_model: None, observed_model: None,
+            requested_model: None, observed_model: None, attribution_source: None,
             cost_usd: None,
             exit_code: None,
             created_at: Local::now(),

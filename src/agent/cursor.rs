@@ -96,7 +96,17 @@ impl super::Agent for CursorAgent {
         if let Some(ref model) = opts.model {
             cmd.args(["--model", model]);
         } else {
-            cmd.args(["--model", "composer-2"]);
+            // Cursor's own mid-tier model, kept as the default so an unspecified
+            // run does not silently draw on the premium families it also serves
+            // (Opus 5, GPT-5.6, Grok 4.5 are all reachable through this CLI).
+            //
+            // Model names rot: this said `composer-2` until 2026-08-05, by which
+            // point `cursor-agent models` no longer listed it at all — only
+            // composer-2.5 and composer-2.5-fast, with 2.5 marked "(current)".
+            // The stale name went unnoticed because a local agent_config set
+            // `model = "auto"`, masking the default for the one machine that
+            // would have caught it. Re-check against `cursor-agent models`.
+            cmd.args(["--model", "composer-2.5"]);
         }
         Ok(cmd)
     }

@@ -56,6 +56,7 @@ mod pty_runner_control;
 mod pty_watch_idle;
 mod pty_watch;
 mod rate_limit;
+mod rate_limit_signatures;
 mod rate_limit_wait;
 mod repo_root;
 pub(crate) mod sanitize;

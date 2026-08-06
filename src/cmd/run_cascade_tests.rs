@@ -165,12 +165,12 @@ fn refused_quota_rescue_preserves_failed_status_for_cascade() {
 
     let args = RunArgs {
         agent_name: "oz".to_string(),
-        cascade: vec!["codebuff".to_string()],
+        cascade: vec!["kilo".to_string()],
         ..Default::default()
     };
     assert_eq!(saved_task.status, TaskStatus::Failed);
     let next_cascade = super::run_post::take_next_cascade_agent(&args);
-    assert_eq!(next_cascade, Some(("codebuff".to_string(), vec![])));
+    assert_eq!(next_cascade, Some(("kilo".to_string(), vec![])));
 
     git(repo.path(), &["worktree", "remove", "--force", &linked.to_string_lossy()]);
 }

@@ -55,7 +55,7 @@ aid run codex "Refactor" -w feat/refactor --bg        # background + worktree
 aid advise "implement feature" --difficulty moderate --budget standard --urgency normal --rigor standard
 ```
 
-Built-in run agents: `gemini`, `agy`, `qwen`, `codex`, `copilot`, `opencode`, `commandcode`, `cursor`, `kilo`, `mimocode`, `codebuff`, `droid`, `oz`, `claude`, and `grok`. Use `aid advise` to compare agents; there is no `auto` agent.
+Built-in run agents: `gemini`, `agy`, `qwen`, `codex`, `copilot`, `opencode`, `commandcode`, `cursor`, `kilo`, `mimocode`, `droid`, `oz`, `claude`, and `grok`. Use `aid advise` to compare agents; there is no `auto` agent.
 
 `agy` (Antigravity CLI) is a drop-in successor to `gemini` for Google One / Gemini Code Assist (individuals) users. After June 18, 2026, gemini stops serving those tiers — switch to `agy`. Paying API users keep using `gemini`.
 

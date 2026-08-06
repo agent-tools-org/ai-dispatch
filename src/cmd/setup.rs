@@ -100,7 +100,6 @@ pub fn run() -> Result<()> {
         ("cursor", "cursor"),
         ("kilo", "kilo"),
         ("mimocode", "mimo"),
-        ("codebuff", "codebuff"),
         ("droid", "droid"),
         ("oz", "oz"),
     ];

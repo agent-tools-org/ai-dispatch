@@ -138,7 +138,7 @@ pub fn provider_for_cli(cli: AgentKind) -> (ProviderId, MeteringShape) {
         AgentKind::Copilot => ("github-copilot", MeteringShape::Subscription),
         // Never observed refusing, so nothing is known about how they meter.
         // Naming a provider here would be invention.
-        AgentKind::Kilo | AgentKind::MiMoCode | AgentKind::Codebuff | AgentKind::Custom => {
+        AgentKind::Kilo | AgentKind::MiMoCode | AgentKind::Custom => {
             ("unknown", MeteringShape::Unknown)
         }
     };

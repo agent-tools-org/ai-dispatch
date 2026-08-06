@@ -30,7 +30,7 @@ Without an orchestrator, a multi-agent CLI workflow breaks down fast:
 
 ### Prerequisites
 
-Install Rust (1.85 or later, required for edition 2024) and whichever AI CLIs you want `aid` to orchestrate. `aid` auto-detects supported agents on your `PATH`: `gemini`, `codex`, `copilot`, `opencode`, `cursor`, `kilo`, `mimocode`, `codebuff`, `droid`, `oz`, and `claude`.
+Install Rust (1.85 or later, required for edition 2024) and whichever AI CLIs you want `aid` to orchestrate. `aid` auto-detects supported agents on your `PATH`: `gemini`, `codex`, `copilot`, `opencode`, `cursor`, `kilo`, `mimocode`, `droid`, `oz`, and `claude`.
 
 ### Install
 
@@ -132,7 +132,7 @@ aid advise "Create a responsive settings UI for the usage dashboard" \
 
 An agent is a **non-interactive CLI** that accepts a prompt, performs the task autonomously, and exits. `aid` normalizes command construction, logging, usage extraction, and completion handling behind one adapter trait.
 
-Built-in agents: `gemini`, `codex`, `copilot`, `opencode`, `cursor`, `kilo`, `mimocode`, `codebuff`, `droid`, `oz`, `claude`. Custom agents can be added via `aid agent add` for any compatible CLI (e.g. `aider`). `aid` supports non-interactive CLI modes such as `claude -p` and `copilot -p`; interactive chat sessions can still orchestrate `aid`, but they are not required.
+Built-in agents: `gemini`, `codex`, `copilot`, `opencode`, `cursor`, `kilo`, `mimocode`, `droid`, `oz`, `claude`. Custom agents can be added via `aid agent add` for any compatible CLI (e.g. `aider`). `aid` supports non-interactive CLI modes such as `claude -p` and `copilot -p`; interactive chat sessions can still orchestrate `aid`, but they are not required.
 
 For BYOK OpenAI-compatible providers routed through opencode custom-provider config, use the built-in `aid byok` command (`aid byok example > my.toml`, `aid byok apply ./my.toml`, `aid byok probe ./my.toml`, `aid byok remove <id>`). Full reference in [`docs/byok-pattern.md`](docs/byok-pattern.md) (or `aid byok doc`).
 
@@ -153,9 +153,6 @@ aid run opencode "Rename TaskRow to BoardRow in src/board.rs" \
   --dir .
 
 aid run cursor "Refine the TUI layout for narrow terminals" \
-  --dir .
-
-aid run codebuff "Refactor the auth module into separate files" \
   --dir .
 
 aid advise "Explain the best agent for a multi-file refactor in this repo" \
@@ -318,7 +315,7 @@ Run agents inside Apple Container micro-VMs for process isolation. The `--sandbo
 # Run a task in a sandboxed container
 aid run codex "Implement feature" --dir . --sandbox
 
-# Container-ready agents: codex, gemini, kilo, mimocode, codebuff
+# Container-ready agents: codex, gemini, kilo, mimocode
 # Falls back to host for unsandboxed/native agents: opencode, copilot, droid, oz, cursor, claude
 ```
 
@@ -329,28 +326,6 @@ container build -t aid-sandbox:latest .
 ```
 
 Agent authentication is handled by mounting config directories (`~/.codex`, `~/.gemini`, etc.) and forwarding API key env vars into the container.
-
-### Codebuff Plugin (Optional)
-
-`codebuff` is an optional agent that requires separate installation. It bridges the [Codebuff SDK](https://www.codebuff.com/docs/advanced/sdk) to `aid`'s event protocol via a Node.js wrapper.
-
-```bash
-# 1. Install the plugin
-cd plugins/codebuff && npm install && npm install -g .
-
-# 2. Get an API key at https://www.codebuff.com/api-keys
-export CODEBUFF_API_KEY=cb-pat-...
-
-# 3. Add to your shell profile to persist across sessions
-echo 'export CODEBUFF_API_KEY=cb-pat-...' >> ~/.zshrc
-
-# 4. Run a task
-aid run codebuff "Refactor the auth module" --dir .
-```
-
-The plugin outputs codex-compatible JSONL events, so `aid show`, `aid watch`, and the TUI work seamlessly. If `CODEBUFF_API_KEY` is not set, `aid` will show setup instructions instead of failing silently.
-
-**Cost note**: Codebuff SDK v0.10 runs sub-agents (Context Pruner, Nit Pick Nick) automatically, which can make even simple tasks expensive. Use `--mode free` via `--budget` flag for cost-sensitive work.
 
 ### TUI Stats View
 
@@ -367,7 +342,7 @@ Press `a` to toggle between today-only and all-time task views.
 
 Skills are methodology files loaded from `~/.aid/skills/` and appended to the effective prompt under a `--- Methodology ---` section. They make agent behavior more consistent across runs.
 
-Skills are auto-injected by default: coding agents (`codex`, `copilot`, `claude`, `opencode`, `kilo`, `mimocode`, `codebuff`, `droid`, `oz`) get the `implementer` skill, `gemini` gets the `researcher` skill, and `cursor` keeps prompts unchanged unless you add skills explicitly. Use `--skill` to add extras or `--no-skill` to disable auto-injection.
+Skills are auto-injected by default: coding agents (`codex`, `copilot`, `claude`, `opencode`, `kilo`, `mimocode`, `droid`, `oz`) get the `implementer` skill, `gemini` gets the `researcher` skill, and `cursor` keeps prompts unchanged unless you add skills explicitly. Use `--skill` to add extras or `--no-skill` to disable auto-injection.
 
 Examples:
 
@@ -713,7 +688,6 @@ Use `aid show <task-id> --result` to read the persisted report file directly.
 | `kilo` | 1 | 7 | 2 | 2 | 3 | 3 | 3 | 4 |
 | `mimocode` | 1 | 7 | 2 | 2 | 3 | 3 | 3 | 4 |
 | `cursor` | 2 | 4 | 7 | **9** | 5 | 5 | 6 | 4 |
-| `codebuff` | 2 | 5 | 8 | 7 | 6 | 6 | 7 | 4 |
 | `droid` | 3 | 5 | **9** | 5 | 7 | 7 | **8** | 4 |
 | `oz` | 3 | 5 | 8 | 6 | 6 | 6 | 7 | 4 |
 | `claude` | **9** | 5 | **10** | 7 | **10** | **10** | **10** | **9** |
@@ -841,7 +815,6 @@ verify = "cargo test"
 - Low-value tasks (tests, formatting, linting, docs) auto-detect as budget mode.
 - Use `read_only = true` in batch tasks for research/review that should not modify files.
 - Use `aid benchmark` to compare agent quality/speed/cost on the same task.
-- Use `codebuff` with `--budget` for cost-sensitive tasks — the SDK's sub-agents can make simple tasks expensive in normal mode.
 - Configure webhooks in `config.toml` for Slack/Discord notifications on task completion.
 
 ## Built-in Skills
@@ -1037,7 +1010,7 @@ The diagram below is adapted from `DESIGN.md` to reflect the current `show` comm
 │         Agent Adapters              │
 │  Gemini  Codex  Copilot  Claude     │
 │  OpenCode  Cursor  Kilo  MiMoCode   │
-│  Codebuff  Droid  Oz  Custom        │
+│  Droid  Oz  Custom                  │
 └─────────────────────────────────────┘
 ```
 
@@ -1045,7 +1018,7 @@ How the pieces fit together:
 
 - The CLI entrypoint parses commands and routes them to task-oriented handlers such as `run`, `watch`, `show`, `usage`, and `mcp`.
 - The task classifier categorizes prompts into eight task types and estimates complexity, then the capability matrix scores each agent to pick the best fit.
-- The agent registry selects and instantiates adapters for `gemini`, `codex`, `copilot`, `opencode`, `cursor`, `kilo`, `mimocode`, `codebuff`, `droid`, `oz`, and `claude`.
+- The agent registry selects and instantiates adapters for `gemini`, `codex`, `copilot`, `opencode`, `cursor`, `kilo`, `mimocode`, `droid`, `oz`, and `claude`.
 - The watcher parses streamed or buffered output into milestones, tool activity, usage totals, and completion events.
 - SQLite keeps task history, workgroups, and events queryable for `board`, `show`, `watch`, `usage`, and MCP clients.
 - Artifact files under `~/.aid/` preserve the raw execution trail so the dispatcher can review what actually happened.

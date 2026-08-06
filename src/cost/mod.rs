@@ -193,7 +193,6 @@ fn resolve_pricing(model: Option<&str>, agent: AgentKind) -> Option<ModelPricing
         AgentKind::OpenCode => None,
         AgentKind::Claude => None,
         AgentKind::Grok => None,
-        AgentKind::Codebuff => None,
         AgentKind::Droid => None,
         AgentKind::Oz => None,
         AgentKind::Custom => None,

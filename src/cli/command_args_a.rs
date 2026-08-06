@@ -3,7 +3,7 @@
 
 use crate::cli::{AgentCommands, BatchAction, RunExtrasArgs};
 use crate::agent::classifier::TaskCategory;
-use crate::types::{TaskBudget, TaskDifficulty, TaskRigor, TaskUrgency};
+use crate::types::{TaskBudget, TaskDifficulty, TaskEgress, TaskRigor, TaskUrgency};
 use clap::{ArgGroup, Args};
 
 pub(crate) const NO_HINT_FLAG: &str = "no-hint";
@@ -40,6 +40,8 @@ pub struct RunArgs {
     pub urgency: Option<TaskUrgency>,
     #[arg(long)]
     pub rigor: Option<TaskRigor>,
+    #[arg(long, default_value = "any", help = "Data egress: any (default) or local (loopback provider only)")]
+    pub egress: TaskEgress,
     #[arg(long)]
     pub kind: Option<TaskCategory>,
     #[arg(long = NO_HINT_FLAG)]
@@ -129,6 +131,7 @@ Batch TOML format:
   budget = "standard"                    # Model/cost tier
   urgency = "normal"                     # Rate-limit policy
   rigor = "standard"                     # Verification rigor
+  egress = "any"                         # Data egress: any | local
 
   [[task]]
   name = "types"                         # Task name (for depends_on)

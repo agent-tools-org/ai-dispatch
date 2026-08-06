@@ -8,11 +8,12 @@ use anyhow::Result;
 
 use crate::agent;
 use crate::agent::classifier::TaskCategory;
-use crate::agent::selection::{AUTO_AGENT_REMOVED_MSG, is_removed_auto_agent};
 use crate::cmd_dispatch::recommend_hint;
 use crate::store;
 use crate::team;
-use crate::types::{AgentKind, TaskBudget, TaskDifficulty, TaskRigor, TaskUrgency};
+use crate::types::{
+    AgentKind, TaskBudget, TaskDifficulty, TaskEgress, TaskRigor, TaskUrgency,
+};
 
 pub(super) fn validate_task_profile(
     difficulty: Option<TaskDifficulty>,
@@ -43,12 +44,12 @@ pub(super) fn resolve_run_agent(
     store: &Arc<store::Store>, prompt: &str, dir: &Option<String>, repo: &Option<String>,
     output: &Option<String>, result_file: &Option<String>, model: &Option<String>, budget: bool,
     _difficulty: Option<TaskDifficulty>, declared_budget: Option<TaskBudget>,
-    _urgency: Option<TaskUrgency>, rigor: Option<TaskRigor>, _kind: Option<TaskCategory>,
-    no_hint: bool, read_only: bool, sandbox: bool, worktree: &Option<String>,
-    team_flag: &Option<String>, agent_name: String,
+    _urgency: Option<TaskUrgency>, _rigor: Option<TaskRigor>, egress: TaskEgress,
+    _kind: Option<TaskCategory>, no_hint: bool, read_only: bool, sandbox: bool,
+    worktree: &Option<String>, team_flag: &Option<String>, agent_name: String,
 ) -> Result<(String, Option<String>)> {
-    if is_removed_auto_agent(&agent_name) {
-        anyhow::bail!("{AUTO_AGENT_REMOVED_MSG}");
+    if agent::selection::is_removed_auto_agent(&agent_name) {
+        anyhow::bail!("{}", agent::selection::AUTO_AGENT_REMOVED_MSG);
     }
     let selection_opts = agent::RunOpts {
         dir: dir.clone().or_else(|| repo.clone())
@@ -61,19 +62,19 @@ pub(super) fn resolve_run_agent(
     recommend_hint::emit_if_recommended(
         &agent_name, prompt, no_hint, &selection_opts, store, team_config.as_ref(),
     );
-    explicit_agent(agent_name, model, declared_budget, rigor)
+    explicit_agent(agent_name, model, declared_budget, egress)
 }
 
 fn explicit_agent(
     agent_name: String,
     model: &Option<String>,
     declared_budget: Option<TaskBudget>,
-    rigor: Option<TaskRigor>,
+    egress: TaskEgress,
 ) -> Result<(String, Option<String>)> {
-    let selected_kind = AgentKind::parse_str(&agent_name);
-    if rigor == Some(TaskRigor::Critical) && !is_local_trust(&agent_name, selected_kind) {
-        anyhow::bail!("Agent '{agent_name}' is not eligible for --rigor critical (local trust required)");
+    if egress.requires_local() {
+        agent::egress::require_local_egress(&agent_name)?;
     }
+    let selected_kind = AgentKind::parse_str(&agent_name);
     let selected_model = if model.is_none() {
         selected_kind.and_then(|kind| agent::selection::model_for_task_budget(
             kind, declared_budget.unwrap_or(TaskBudget::Standard),
@@ -91,10 +92,41 @@ fn explicit_agent(
     Ok((agent_name, selected_model))
 }
 
-fn is_local_trust(agent_name: &str, kind: Option<AgentKind>) -> bool {
-    if let Some(kind) = kind {
-        return kind.profile().is_some_and(|profile| profile.5 == "local");
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn rigor_no_longer_gates_agent_identity() {
+        let result = explicit_agent(
+            "claude".into(),
+            &None,
+            Some(TaskBudget::Standard),
+            TaskEgress::Any,
+        );
+        assert!(result.is_ok(), "identity gate must be gone: {result:?}");
     }
-    agent::registry::load_custom_agents().get(agent_name)
-        .is_some_and(|config| config.trust_tier == "local")
+
+    #[test]
+    fn egress_local_refuses_builtin_third_party() {
+        let err = explicit_agent(
+            "codex".into(),
+            &None,
+            Some(TaskBudget::Standard),
+            TaskEgress::Local,
+        )
+        .expect_err("codex must fail --egress local");
+        assert!(err.to_string().contains("--egress local"));
+    }
+
+    #[test]
+    fn egress_any_admits_third_party() {
+        assert!(explicit_agent(
+            "codex".into(),
+            &None,
+            Some(TaskBudget::Standard),
+            TaskEgress::Any,
+        )
+        .is_ok());
+    }
 }

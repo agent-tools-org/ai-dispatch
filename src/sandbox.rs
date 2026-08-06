@@ -161,6 +161,7 @@ fn push_git_mount(
 fn agent_env_keys(kind: AgentKind) -> &'static [&'static str] {
     match kind {
         AgentKind::Codex => &["OPENAI_API_KEY"],
+        AgentKind::CommandCode => &[],
         AgentKind::Gemini => &["GOOGLE_API_KEY", "GEMINI_API_KEY"],
         AgentKind::Qwen => &[],
         AgentKind::Copilot => &[],
@@ -176,6 +177,7 @@ fn agent_env_keys(kind: AgentKind) -> &'static [&'static str] {
 fn agent_config_dirs(kind: AgentKind) -> &'static [&'static str] {
     match kind {
         AgentKind::Codex => &[".codex"],
+        AgentKind::CommandCode => &[".commandcode"],
         AgentKind::Gemini => &[".gemini"],
         AgentKind::Qwen => &[".qwen"],
         AgentKind::Copilot => &[".copilot"],

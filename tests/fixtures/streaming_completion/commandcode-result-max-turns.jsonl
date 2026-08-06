@@ -1,0 +1,4 @@
+{"type":"event","event":{"type":"run_start","sessionId":"b4d4fba3-4636-4e6e-a9e2-36c58ccfda83"}}
+{"type":"event","event":{"type":"model_request_start","model":"deepseek/deepseek-v4-flash"}}
+{"type":"event","event":{"type":"turn_end","turnNumber":1,"hadToolCalls":true,"usage":{"inputTokens":21874,"outputTokens":129,"cacheReadTokens":5760,"cacheWriteTokens":0}}}
+{"type":"result","subtype":"max_turns","sessionId":"b4d4fba3-4636-4e6e-a9e2-36c58ccfda83","stopReason":"max_turns","usage":{"inputTokens":21874,"outputTokens":129,"cacheReadTokens":5760,"cacheWriteTokens":0},"durationMs":4651,"finalText":""}

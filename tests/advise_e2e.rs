@@ -70,8 +70,9 @@ fn advise_ranks_actionable_builtins_before_separate_custom_context() {
 fn advise_succeeds_when_every_builtin_is_rate_limited() {
     let aid_home = TempDir::new().expect("temp AID_HOME");
     for agent in [
-        "gemini", "qwen", "codex", "copilot", "opencode", "cursor", "kilo",
-        "mimocode", "codebuff", "droid", "oz", "claude", "agy", "grok",
+        "gemini", "qwen", "codex", "copilot", "opencode", "commandcode",
+        "cursor", "kilo", "mimocode", "codebuff", "droid", "oz", "claude",
+        "agy", "grok",
     ] {
         std::fs::write(
             aid_home.path().join(format!("rate-limit-{agent}")),

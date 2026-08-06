@@ -79,6 +79,32 @@ impl super::Agent for AntigravityAgent {
     fn parse_event(&self, _task_id: &TaskId, _line: &str) -> Option<TaskEvent> {
         None
     }
+
+    fn served_models(&self) -> Result<Option<Vec<String>>> {
+        let mut cmd = Command::new("agy");
+        cmd.arg("models");
+        let Some(output) = super::model_validation::run_cmd_with_timeout(cmd, std::time::Duration::from_secs(2)) else {
+            return Ok(None);
+        };
+        let models = parse_agy_models_output(&output);
+        Ok(if models.is_empty() { None } else { Some(models) })
+    }
+}
+
+fn parse_agy_models_output(output: &str) -> Vec<String> {
+    let mut models = Vec::new();
+    for line in output.lines() {
+        let trimmed = line.trim();
+        if trimmed.is_empty() || trimmed.starts_with('#') || trimmed.starts_with("Available") {
+            continue;
+        }
+        let first = trimmed.split_whitespace().next().unwrap_or("");
+        let clean = first.trim_matches(|c: char| !c.is_alphanumeric() && c != '-' && c != '.');
+        if !clean.is_empty() && !models.contains(&clean.to_string()) {
+            models.push(clean.to_string());
+        }
+    }
+    models
 }
 
 #[derive(Debug, Clone, Default)]

@@ -149,3 +149,48 @@ fn parse_completion_does_not_fail_on_an_unseen_stop_reason() {
         assert_eq!(GrokAgent.parse_completion(output).status, TaskStatus::Done);
     }
 }
+
+/// aid writes its auto-nudge into the same PTY grok is reading, and the terminal
+/// echoes it back ahead of grok's envelope. Requiring the whole buffer to be one
+/// JSON document failed every run idle long enough to be nudged: t-cd0bb8dd ran
+/// 8m16s, reported `end_turn`, committed real work, and was stored Failed.
+#[test]
+fn completion_survives_an_echoed_nudge_before_the_envelope() {
+    let output = concat!(
+        "Task appears idle. Status update please?\n",
+        r#"{"text":"done","stopReason":"end_turn","usage":{"total_tokens":42},"#,
+        r#""total_cost_usd":0.75}"#,
+    );
+    let info = GrokAgent.parse_completion(output);
+    assert_eq!(info.status, TaskStatus::Done);
+    assert_eq!(info.tokens, Some(42));
+    assert_eq!(extract_response(output).as_deref(), Some("done"));
+}
+
+/// The terminal sentinel aid appends after the run must not break it either.
+#[test]
+fn completion_survives_a_trailing_sentinel() {
+    let output = concat!(
+        "Task appears idle. Status update please?\n",
+        r#"{"text":"done","stopReason":"cancelled"}"#,
+        "\n\n=== AID TASK t-abc DONE (exit 0) ===\n",
+    );
+    // Still failed — but now for the real reason, not a parse error.
+    assert_eq!(GrokAgent.parse_completion(output).status, TaskStatus::Failed);
+}
+
+/// The common case, and the one the first version of extract_envelope missed:
+/// grok's envelope starts at offset 0 and aid's terminal sentinel follows it.
+/// finalize_buffered appends that sentinel before parse_completion runs, so this
+/// shape — not the nudged one — is what every grok run actually produces.
+#[test]
+fn completion_survives_a_sentinel_after_an_envelope_at_offset_zero() {
+    let output = concat!(
+        r#"{"text":"done","usage":{"total_tokens":7},"total_cost_usd":0.24}"#,
+        "\n\n=== AID TASK t-abc DONE (exit 0) ===\n",
+    );
+    let info = GrokAgent.parse_completion(output);
+    assert_eq!(info.status, TaskStatus::Done);
+    assert_eq!(info.tokens, Some(7));
+    assert_eq!(extract_response(output).as_deref(), Some("done"));
+}

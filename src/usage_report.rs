@@ -143,6 +143,7 @@ pub(crate) fn collect_agent_rows(tasks: &[Task]) -> Vec<AgentUsageRow> {
         AgentKind::Qwen,
         AgentKind::Copilot,
         AgentKind::OpenCode,
+        AgentKind::CommandCode,
         AgentKind::Kilo,
         AgentKind::MiMoCode,
         AgentKind::Cursor,

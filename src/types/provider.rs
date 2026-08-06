@@ -1,5 +1,6 @@
-// The billing and metering entity behind a route: who meters quota and bills.
-// Exports: ProviderId, MeteringShape, provider_for_cli.
+// The billing and metering entity behind a route: who meters quota and bills,
+// and whether task data stays on-machine or leaves for a third party.
+// Exports: ProviderId, MeteringShape, EgressTier, provider_for_cli, egress_*.
 // Deps: crate::types::AgentKind, serde.
 
 use serde::Serialize;
@@ -35,6 +36,38 @@ impl ProviderId {
 
     pub fn is_unknown(&self) -> bool {
         self.0 == "unknown"
+    }
+}
+
+/// Where task data goes when a provider runs. Independent of the CLI that
+/// invokes it: codex is not "local" because its binary runs on the laptop; its
+/// provider is openai-chatgpt-plan, and the prompts leave the machine.
+///
+/// This is the dimension `--egress` reads. It lived as a per-CLI constant on
+/// `AgentKind::profile()` and mislabelled codex/oz as local while refusing
+/// claude for being "api" — same third-party class.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+pub enum EgressTier {
+    /// Endpoint is loopback only (`localhost` / `127.0.0.1` / `::1`). The only
+    /// tier that satisfies `--egress local`.
+    Local,
+    /// Data leaves the machine for a third party.
+    ThirdParty,
+    /// Not established. Must not be admitted by `--egress local`.
+    Unknown,
+}
+
+impl EgressTier {
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Local => "local",
+            Self::ThirdParty => "third-party",
+            Self::Unknown => "unknown",
+        }
+    }
+
+    pub fn admits_local(self) -> bool {
+        matches!(self, Self::Local)
     }
 }
 
@@ -86,6 +119,10 @@ pub fn provider_for_cli(cli: AgentKind) -> (ProviderId, MeteringShape) {
         // HTTP 401 "Insufficient balance. Manage your billing here:
         //  https://opencode.ai/workspace/.../billing" — t-76181278.
         AgentKind::OpenCode => ("opencode-zen", MeteringShape::SpendBudget),
+        // `commandcode status` verified a native Command Code login; the CLI
+        // is its own billing entity and resells multiple vendors behind one
+        // account, so only the provider identity is established here.
+        AgentKind::CommandCode => ("commandcode.ai", MeteringShape::Unknown),
         // "Error: Quota limit reached. ... check Warp logs at
         //  ~/Library/Logs/oz/warp.log" — t-2d3827e5.
         AgentKind::Oz => ("warp", MeteringShape::AccountPool),
@@ -106,6 +143,65 @@ pub fn provider_for_cli(cli: AgentKind) -> (ProviderId, MeteringShape) {
         }
     };
     (ProviderId::new(id), shape)
+}
+
+/// Egress for a named provider without a separate endpoint observation.
+///
+/// A known id is still third-party: every provider aid has established so far
+/// reaches a remote endpoint. Local is established only by a loopback
+/// `base_url` (see [`egress_for_base_url`]), never by CLI identity.
+pub fn egress_for_provider(provider: &ProviderId) -> EgressTier {
+    if provider.is_unknown() {
+        EgressTier::Unknown
+    } else {
+        EgressTier::ThirdParty
+    }
+}
+
+/// Egress for a CLI's default provider. Every current built-in is third-party
+/// or unknown; none qualify for `--egress local`.
+pub fn egress_for_cli(cli: AgentKind) -> EgressTier {
+    let (provider, _) = provider_for_cli(cli);
+    egress_for_provider(&provider)
+}
+
+/// Establish egress from an OpenAI-compatible `base_url`. Loopback hosts are
+/// Local; any other host is ThirdParty; an unparseable empty value is Unknown.
+pub fn egress_for_base_url(base_url: &str) -> EgressTier {
+    let trimmed = base_url.trim();
+    if trimmed.is_empty() {
+        return EgressTier::Unknown;
+    }
+    match loopback_host(trimmed) {
+        Some(true) => EgressTier::Local,
+        Some(false) => EgressTier::ThirdParty,
+        None => EgressTier::Unknown,
+    }
+}
+
+/// `Some(true)` when the URL/host is loopback, `Some(false)` when a non-loopback
+/// host is visible, `None` when no host can be read.
+fn loopback_host(base_url: &str) -> Option<bool> {
+    let host = host_from_base_url(base_url)?;
+    let host = host.trim_matches(|c| c == '[' || c == ']').to_ascii_lowercase();
+    Some(host == "localhost" || host == "127.0.0.1" || host == "::1")
+}
+
+fn host_from_base_url(base_url: &str) -> Option<&str> {
+    let rest = base_url
+        .split_once("://")
+        .map(|(_, after)| after)
+        .unwrap_or(base_url);
+    let authority = rest.split('/').next().unwrap_or(rest);
+    if authority.is_empty() {
+        return None;
+    }
+    // Strip userinfo and port; IPv6 stays bracketed until loopback_host.
+    let hostport = authority.rsplit('@').next().unwrap_or(authority);
+    if hostport.starts_with('[') {
+        return hostport.split(']').next().map(|h| h.trim_start_matches('['));
+    }
+    Some(hostport.split(':').next().unwrap_or(hostport)).filter(|h| !h.is_empty())
 }
 
 /// The family a model is metered under, by vendor prefix — only meaningful for

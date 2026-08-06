@@ -44,6 +44,14 @@ fn a_known_vendor_may_still_have_unknown_metering() {
     assert_eq!(shape, MeteringShape::Unknown);
 }
 
+#[test]
+fn commandcode_is_its_own_provider() {
+    let (provider, shape) = provider_for_cli(AgentKind::CommandCode);
+    assert_eq!(provider.as_str(), "commandcode.ai");
+    assert!(!provider.is_unknown());
+    assert_eq!(shape, MeteringShape::Unknown);
+}
+
 /// Two CLIs from the same vendor must not collapse into one provider: agy and
 /// gemini both reach Google models, but an exhausted Antigravity tier says
 /// nothing about a Gemini API key.
@@ -52,4 +60,40 @@ fn one_vendor_two_cli_routes_are_two_providers() {
     let (agy, _) = provider_for_cli(AgentKind::Antigravity);
     let (gemini, _) = provider_for_cli(AgentKind::Gemini);
     assert_ne!(agy, gemini);
+}
+
+/// Every built-in CLI is third-party or unknown. None of them are local: the
+/// CLI binary running on the laptop does not make the provider local.
+#[test]
+fn no_builtin_cli_is_local_egress() {
+    for cli in AgentKind::ALL_BUILTIN {
+        let tier = egress_for_cli(*cli);
+        assert!(
+            !tier.admits_local(),
+            "{} must not admit --egress local (got {})",
+            cli.as_str(),
+            tier.label()
+        );
+    }
+}
+
+/// Local is established only by a loopback base_url, never by a provider name.
+#[test]
+fn only_loopback_base_url_is_local() {
+    assert_eq!(egress_for_base_url("http://127.0.0.1:11434/v1"), EgressTier::Local);
+    assert_eq!(egress_for_base_url("http://localhost:8080/v1"), EgressTier::Local);
+    assert_eq!(egress_for_base_url("http://[::1]:8080/v1"), EgressTier::Local);
+    assert_eq!(
+        egress_for_base_url("https://token-plan-sgp.xiaomimimo.com/v1"),
+        EgressTier::ThirdParty
+    );
+    assert_eq!(egress_for_base_url(""), EgressTier::Unknown);
+}
+
+/// An unknown provider is not admitted by --egress local even when a custom
+/// agent config claims trust_tier = "local" by hand.
+#[test]
+fn unknown_provider_does_not_admit_local() {
+    assert!(!egress_for_provider(&ProviderId::unknown()).admits_local());
+    assert!(!egress_for_provider(&ProviderId::new("openai-chatgpt-plan")).admits_local());
 }

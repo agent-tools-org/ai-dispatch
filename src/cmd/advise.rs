@@ -160,8 +160,17 @@ mod tests {
         assert_eq!(decoded, report);
     }
 
+    /// `advise` reads the real `~/.aid/rate-limit-*` markers and
+    /// `agent_config.toml`, so without an isolated home this asserts against
+    /// whatever quota state the developer's machine happens to be in. It failed
+    /// twice in five full-suite runs on 2026-08-06 — codex was marked limited
+    /// until Aug 11 and codebuff carried `disabled = true`, which puts the
+    /// eligible count right at the threshold — while passing in isolation. An
+    /// empty AID_HOME gives every agent its unlimited default.
     #[test]
     fn complex_critical_surfaces_alternatives_with_shortfall_reasons() {
+        let home = tempfile::tempdir().expect("temp aid home");
+        let _guard = crate::paths::AidHomeGuard::set(home.path());
         let declared = DeclaredTaskProfile {
             difficulty: crate::types::TaskDifficulty::Complex,
             budget: crate::types::TaskBudget::Premium,

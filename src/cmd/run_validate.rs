@@ -19,6 +19,7 @@ pub(super) fn validate_dispatch(args: &RunArgs, agent_kind: &AgentKind) -> Vec<S
             | AgentKind::Copilot
             | AgentKind::Claude
             | AgentKind::OpenCode
+            | AgentKind::CommandCode
             | AgentKind::Cursor
             | AgentKind::Qwen
             | AgentKind::Kilo

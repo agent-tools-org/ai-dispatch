@@ -59,11 +59,11 @@ impl AttributionSource {
 /// `cursor.model = "auto"` is a real, valid entry in `~/.aid/agent_config.toml`,
 /// so this is not a hypothetical: a successful cursor run would otherwise
 /// confirm `auto` as the model that did the work.
+pub const ROUTER_ALIASES: &[&str] = &["auto", "default", "router"];
+
 pub fn is_router_alias(model: &str) -> bool {
-    matches!(
-        model.trim().to_ascii_lowercase().as_str(),
-        "auto" | "default" | "router"
-    )
+    let clean = model.trim().to_ascii_lowercase();
+    ROUTER_ALIASES.iter().any(|&alias| alias == clean)
 }
 
 /// Decide what model to record and how strongly it is believed, from what the

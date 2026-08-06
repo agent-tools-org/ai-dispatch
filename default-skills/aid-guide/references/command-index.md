@@ -13,7 +13,8 @@ current arguments.
 | `aid benchmark` | Run the same task through multiple agents and compare results. |
 | `aid ask` | Run a focused research or exploration request with optional files. |
 | `aid query` | Query an LLM directly, optionally using automatic routing. |
-| `aid build` | Run supported Cargo checks and present compact diagnostics. |
+| `aid build` | Run supported Cargo checks (check/clippy) and present compact diagnostics. |
+| `aid test` | Run Cargo tests with trusted guarantees: zero-match filters fail, executed tests are named, failures stay compact. |
 | `aid experiment` | Run and inspect metric-driven iterative experiments. |
 
 ## Observe and control tasks

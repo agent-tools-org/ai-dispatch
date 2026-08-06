@@ -55,6 +55,7 @@ pub(crate) async fn dispatch(
             | Commands::Group(..)
             | Commands::Container(..)
             | Commands::Build(..)
+            | Commands::Test(..)
             | Commands::Worktree(..)
             | Commands::Store(..)
             | Commands::Team(..)
@@ -155,6 +156,10 @@ async fn dispatch_secondary(store: Arc<crate::store::Store>, command: Commands) 
         Commands::Container(command_args_b::ContainerArgs { action }) => admin_config::container(action),
         Commands::Build(args) => {
             let code = crate::cmd::build::run(store, args).await?;
+            std::process::exit(code);
+        }
+        Commands::Test(args) => {
+            let code = crate::cmd::test_cmd::run(store, args).await?;
             std::process::exit(code);
         }
         Commands::Worktree(command_args_c::WorktreeArgs { action }) => project_worktree::worktree(action),

@@ -56,6 +56,7 @@ struct DiagnosticKey {
     message: String,
 }
 
+#[derive(Debug)]
 pub(crate) struct BuildReport {
     pub(crate) success: bool,
     pub(crate) command: String,

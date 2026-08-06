@@ -145,22 +145,15 @@ fn fast_fail_cleanup_allows_legacy_tmp_worktree_path() {
     let store = Store::open_memory().unwrap();
     let repo = TempDir::new().unwrap();
     init_repo(repo.path());
+    // Unique /tmp/aid-wt-* path (sandbox prefix); guard owns teardown on panic too.
     let path_holder = tempfile::Builder::new()
         .prefix("aid-wt-fast-fail-")
         .tempdir_in("/tmp")
         .unwrap();
     let worktree_path = path_holder.path().to_path_buf();
     drop(path_holder);
-    git(
-        repo.path(),
-        &[
-            "worktree",
-            "add",
-            &worktree_path.to_string_lossy(),
-            "-b",
-            "feat/fast-fail-legacy",
-        ],
-    );
+    let _guard = crate::test_env::TmpWorktreeGuard::with_repo(repo.path(), worktree_path.clone());
+    git(repo.path(), &["worktree", "add", &worktree_path.to_string_lossy(), "-b", "feat/fast-fail-legacy"]);
     let task_id = TaskId("t-fast-fail-legacy".to_string());
     let mut task = make_task(task_id.as_str(), &worktree_path.to_string_lossy());
     task.status = TaskStatus::Failed;

@@ -143,6 +143,7 @@ mod tests {
         let live_target = root.join("feat-live-clean-target");
         let wt_path = Path::new("/tmp").join(format!("aid-wt-live-clean-target-{}", std::process::id()));
         let _ = fs::remove_dir_all(&wt_path);
+        let _wt_guard = crate::test_env::TmpWorktreeGuard::with_repo(repo.path(), wt_path.clone());
         fs::create_dir_all(root.join(BASE_TARGET_DIR_NAME)).unwrap();
         fs::create_dir_all(&stale_target).unwrap();
         fs::create_dir_all(&live_target).unwrap();
@@ -153,6 +154,5 @@ mod tests {
         assert!(root.join(BASE_TARGET_DIR_NAME).exists());
         assert!(live_target.exists());
         assert!(!stale_target.exists());
-        git(repo.path(), &["worktree", "remove", "--force", &wt_path.to_string_lossy()]);
     }
 }

@@ -206,22 +206,32 @@ fn quota_scan_tail_captures_refusal_before_large_diagnostics() {
 
 #[test]
 fn quota_scan_tail_aligns_start_to_line_boundary() {
-    let mut output = String::with_capacity(90_000);
-    output.push_str("header line\n");
-    while output.len() < 20_000 {
-        output.push_str("some preliminary lines in output...\n");
+    let refusal = "Quota exhausted: Your token-plan 5-hour quota has been exhausted.";
+    let prefix = "header line\n";
+    let split_line_header = "split line start ";
+    let split_line_y = "y".repeat(100);
+
+    let mut suffix = String::with_capacity(65_440);
+    while suffix.len() < 65_440 {
+        suffix.push_str("trailing diagnostic line...\n");
     }
-    output.push_str("split line start ");
-    output.push_str(&"y".repeat(100));
-    output.push_str("\nQuota exhausted: Your token-plan 5-hour quota has been exhausted.\n");
-    while output.len() < 85_000 {
-        output.push_str("trailing diagnostic line...\n");
-    }
+    suffix.truncate(65_440);
+
+    let output = format!("{prefix}{split_line_header}{split_line_y}\n{refusal}\n{suffix}");
+    assert_eq!(output.len(), 65_636);
+    let raw_start = output.len() - 65_536;
+    assert_eq!(raw_start, 100);
+    assert_ne!(output.as_bytes()[raw_start - 1], b'\n');
 
     let tail = quota_scan_tail(&output);
     let first_line = tail.lines().next().unwrap_or("");
+    assert_eq!(
+        first_line,
+        format!("{split_line_header}{split_line_y}"),
+        "window start must rewind to line boundary and keep full line"
+    );
     assert!(
-        !first_line.starts_with("y"),
+        !first_line.starts_with('y'),
         "window start must align to line boundary and not start mid-line"
     );
 }
@@ -230,10 +240,9 @@ fn quota_scan_tail_aligns_start_to_line_boundary() {
 fn quota_scan_tail_keeps_line_when_start_lands_on_line_boundary() {
     let refusal = "Quota exhausted: Your token-plan 5-hour quota has been exhausted.";
     let tail_bytes = 65_536;
-    let refusal_with_newline_len = refusal.len() + 1; // 66
-    let suffix_len_needed = tail_bytes - refusal_with_newline_len; // 65470
+    let refusal_with_newline_len = refusal.len() + 1;
+    let suffix_len_needed = tail_bytes - refusal_with_newline_len;
 
-    // Construct suffix of exact length ending with newline
     let mut suffix = String::with_capacity(suffix_len_needed);
     while suffix.len() + 2 <= suffix_len_needed {
         suffix.push_str("a\n");
@@ -244,6 +253,10 @@ fn quota_scan_tail_keeps_line_when_start_lands_on_line_boundary() {
 
     let prefix = "line\n".repeat(100);
     let output = format!("{prefix}{refusal}\n{suffix}");
+
+    let raw_start = output.len() - tail_bytes;
+    assert_eq!(raw_start, prefix.len());
+    assert_eq!(output.as_bytes()[raw_start - 1], b'\n');
 
     let tail = quota_scan_tail(&output);
     let first_line = tail.lines().next().unwrap_or("");

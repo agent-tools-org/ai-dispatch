@@ -82,13 +82,16 @@ fn render_multipane_view(frame: &mut ratatui::Frame<'_>, app: &App) {
             };
             multipane::PaneData {
                 task_id: task.id.as_str().to_string(),
-                agent: task.agent_display_name().to_string(),
+                // Pane title budget is tight; model still lands in the bottom bar.
+                agent: crate::tui::route_display::format_route_fit(task, 28),
                 status: task.status.label().to_string(),
                 prompt: task.prompt.clone(),
                 events,
                 tokens: task_tokens(task),
                 cost: cost::format_cost_label(task.cost_usd, task.agent),
-                model: task.display_model().unwrap_or_else(|| "-".to_string()),
+                model: task
+                    .display_model()
+                    .unwrap_or_else(|| "unknown".to_string()),
                 milestone: app.get_milestone(task.id.as_str()).unwrap_or("").to_string(),
                 cpu: task_cpu(app, task),
                 memory: task_memory(app, task),
@@ -127,7 +130,7 @@ fn render_board(frame: &mut ratatui::Frame<'_>, app: &App) {
     );
 
     let header = Row::new(vec![
-        "ID", "Agent", "Status", "Progress", "CPU", "Mem", "Created", "Duration", "Tokens", "Cost", "Model", "Group",
+        "ID", "Route", "Status", "Progress", "CPU", "Mem", "Created", "Duration", "Tokens", "Cost", "Model", "Group",
         "Prompt",
     ])
     .style(Style::default().add_modifier(Modifier::BOLD));
@@ -136,16 +139,17 @@ fn render_board(frame: &mut ratatui::Frame<'_>, app: &App) {
         rows,
         [
             Constraint::Length(10),
-            Constraint::Length(10),
+            // cli/provider/model — longer than the old opaque agent column.
+            Constraint::Length(28),
             Constraint::Length(8),
-            Constraint::Length(32),
+            Constraint::Length(24),
             Constraint::Length(7),
             Constraint::Length(7),
             Constraint::Length(11),
             Constraint::Length(10),
-            Constraint::Length(10),
-            Constraint::Length(10),
-            Constraint::Length(14),
+            Constraint::Length(8),
+            Constraint::Length(8),
+            Constraint::Length(18),
             Constraint::Length(10),
             Constraint::Min(20),
         ],

@@ -79,6 +79,25 @@ fn agent_display_name_for_built_in_agents() {
 }
 
 #[test]
+fn display_route_is_cli_provider_model_and_keeps_unknown() {
+    let task = sample_task(AgentKind::Codex, None);
+    assert_eq!(task.display_route(), "codex/openai-chatgpt-plan/unknown");
+    assert!(task.route().model.is_none());
+}
+
+#[test]
+fn display_route_marks_inferred_attribution() {
+    let mut task = sample_task(AgentKind::Codex, None);
+    task.requested_model = Some("gpt-5.6".to_string());
+    task.observed_model = Some("gpt-5.6".to_string());
+    task.attribution_source = Some(AttributionSource::ConfirmedBySuccess);
+    assert_eq!(
+        task.display_route(),
+        "codex/openai-chatgpt-plan/gpt-5.6 (inferred)"
+    );
+}
+
+#[test]
 fn memory_type_parse_str_roundtrip() {
     for memory_type in [
         MemoryType::Discovery,

@@ -52,9 +52,9 @@ pub async fn run(store: Arc<Store>, args: ExportArgs) -> Result<()> {
 }
 fn build_markdown(task: &Task, timeline: &[String], output: &str, diff: &str) -> String {
     let header = format!(
-        "# Task {}\n- Agent: {}\n- Status: {}\n- Duration: {}\n- Cost: {}\n- Created: {}\n\n## Prompt\n",
+        "# Task {}\n- Route: {}\n- Status: {}\n- Duration: {}\n- Cost: {}\n- Created: {}\n\n## Prompt\n",
         task.id,
-        task.agent_display_name(),
+        task.display_route(),
         task.status.as_str(),
         format_duration(task.duration_ms),
         format_cost(task.cost_usd),

@@ -17,7 +17,7 @@ pub fn run(force: bool) -> Result<()> {
             aid_info!(
                 "  {} — {} ({})",
                 task.id,
-                task.agent_display_name(),
+                task.display_route(),
                 task.status.label()
             );
         }

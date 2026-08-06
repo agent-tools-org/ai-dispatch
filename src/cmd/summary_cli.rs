@@ -50,7 +50,7 @@ fn print_results(tasks: &[Task]) {
             "{} {} {} — \"{}\" ({})",
             symbol,
             task.id.as_str(),
-            task.agent_display_name(),
+            task.display_route(),
             snippet,
             attrs
         );

@@ -9,6 +9,42 @@ Use this skill as the authoritative operating guide for the installed AID
 release. Prefer the installed binary's `aid <command> --help` when exact flags
 may differ from the reference.
 
+## What the dispatcher owns
+
+AID's premise is that the caller dispatching work is the best-informed
+component in the system. AID therefore declines to guess what that caller
+already knows, which puts these responsibilities on the caller:
+
+1. **Declare the task profile.** `--difficulty --budget --urgency --rigor`, and
+   `--kind` when the category matters. Undeclared values are stored as null
+   rather than inferred, and a null tells every downstream decision that nobody
+   knows.
+2. **Declare tools and skills.** AID applies no skill unless one is declared
+   (`--skill`, or a project default). Omitting `--kind` describes every
+   resolved toolbox tool rather than hiding some behind a guessed category.
+3. **Route by provider, not by agent name.** A route is
+   `<cli>/<provider>/<model>`. One exhausted route says nothing about another
+   provider that reaches a model of the same class. Never dispatch to a weaker
+   model on the provider pool the caller is already running on: a different
+   provider is delegation, the same pool for a worse model is waste.
+4. **Verify by running.** An agent's own report of success is not evidence.
+   `--rigor` states the proof owed — `draft` compiles, `standard` runs the
+   changed path and captures real output, `critical` adds an independent audit.
+5. **Read `unknown` as unknown.** A model, provider, or cost AID could not
+   establish is reported as unknown rather than filled in with a plausible
+   value. Several CLIs never name the model they ran, so unknown is the honest
+   and expected answer for many tasks.
+6. **Keep briefs short.** State the goal and the red lines; the implementation
+   path is the thing being delegated.
+7. **Do not edit a directory while an agent is working in it.** AID snapshots
+   the dirty paths once, at dispatch, and excludes them when it rescues an
+   agent's uncommitted output — so edits made *before* dispatch are safe. Edits
+   made *during* the run are not in that snapshot and are indistinguishable
+   from the agent's, so they are swept into the same rescue commit. Dispatch
+   with `--worktree <branch>` and the agent works somewhere else entirely.
+   Every rescue prints the files it staged; read that line rather than
+   discovering it later.
+
 ## Operating method
 
 1. Identify the user's goal and current task state.

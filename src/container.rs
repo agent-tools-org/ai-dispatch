@@ -72,6 +72,9 @@ pub fn exec_in_container(cmd: &Command, container_name: &str) -> Command {
         wrapped.current_dir(dir);
     }
     for (key, value) in cmd.get_envs() {
+        if key == std::ffi::OsStr::new("HOME") {
+            continue;
+        }
         if let Some(value) = value {
             wrapped.arg("-e").arg(format!(
                 "{}={}",
@@ -80,6 +83,7 @@ pub fn exec_in_container(cmd: &Command, container_name: &str) -> Command {
             ));
         }
     }
+    wrapped.arg("-e").arg("HOME=/root");
     wrapped.arg(container_name);
     wrapped.arg(cmd.get_program());
     wrapped.args(cmd.get_args());
@@ -221,6 +225,7 @@ mod tests {
         let mut cmd = Command::new("codex");
         cmd.current_dir("/tmp/project");
         cmd.env("OPENAI_API_KEY", "test-key");
+        cmd.env("HOME", "/host/isolated/home");
         cmd.args(["exec", "ship it"]);
 
         let wrapped = exec_in_container(&cmd, "aid-dev-demo");
@@ -232,6 +237,15 @@ mod tests {
         assert!(wrapped_args
             .windows(2)
             .any(|pair| pair == ["-e", "OPENAI_API_KEY=test-key"]));
+        assert!(
+            !wrapped_args
+                .windows(2)
+                .any(|pair| pair[1].starts_with("HOME=/host")),
+            "host HOME must not be forwarded into the container"
+        );
+        assert!(wrapped_args
+            .windows(2)
+            .any(|pair| pair == ["-e", "HOME=/root"]));
         assert_eq!(wrapped_args[wrapped_args.len() - 4], "aid-dev-demo");
         assert_eq!(wrapped_args[wrapped_args.len() - 3], "codex");
         assert_eq!(wrapped_args[wrapped_args.len() - 2], "exec");

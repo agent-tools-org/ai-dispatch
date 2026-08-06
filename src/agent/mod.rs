@@ -39,7 +39,6 @@ use crate::store;
 use crate::types::*;
 
 pub mod home_isolation;
-pub use home_isolation::IsolatedHomeGuard;
 
 pub(crate) mod env;
 #[allow(unused_imports)]

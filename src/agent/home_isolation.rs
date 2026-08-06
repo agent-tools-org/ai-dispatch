@@ -12,8 +12,6 @@ use anyhow::Context;
 use std::os::unix::ffi::OsStrExt;
 
 pub const DEFAULT_DENYLIST: &[&str] = &[
-    ".claude",
-    ".claude.json",
     ".anthropic",
     ".agents",
     ".agent",
@@ -138,6 +136,12 @@ impl IsolatedHomeGuard {
             }
             let link_dest = isolated_path.join(&file_name);
             let target_path = entry.path();
+
+            if name_str == ".claude" && target_path.is_dir() {
+                materialize_claude_dir(&target_path, &link_dest)?;
+                continue;
+            }
+
             #[cfg(unix)]
             std::os::unix::fs::symlink(&target_path, &link_dest).with_context(|| {
                 format!(
@@ -149,6 +153,55 @@ impl IsolatedHomeGuard {
         }
         Ok(())
     }
+}
+
+fn is_claude_instruction_file(name: &str) -> bool {
+    name == "CLAUDE.md"
+        || name.starts_with("CLAUDE.md.")
+        || name.starts_with("CLAUDE.md-")
+        || name == "settings.json"
+        || name.starts_with("settings.json.")
+        || name.starts_with("settings.json-")
+        || name == "settings.local.json"
+        || name.starts_with("settings.local.json.")
+        || name.starts_with("settings.local.json-")
+}
+
+fn materialize_claude_dir(real_claude_dir: &Path, isolated_claude_dir: &Path) -> anyhow::Result<()> {
+    fs::create_dir_all(isolated_claude_dir).with_context(|| {
+        format!(
+            "cannot create isolated .claude directory at '{}'",
+            isolated_claude_dir.display()
+        )
+    })?;
+
+    let entries = fs::read_dir(real_claude_dir).with_context(|| {
+        format!("cannot read real .claude directory '{}'", real_claude_dir.display())
+    })?;
+
+    for entry in entries {
+        let entry = entry.with_context(|| {
+            format!("cannot read entry in real .claude '{}'", real_claude_dir.display())
+        })?;
+        let file_name = entry.file_name();
+        let name_str = file_name.to_string_lossy();
+
+        if is_claude_instruction_file(name_str.as_ref()) {
+            continue;
+        }
+
+        let link_dest = isolated_claude_dir.join(&file_name);
+        let target_path = entry.path();
+        #[cfg(unix)]
+        std::os::unix::fs::symlink(&target_path, &link_dest).with_context(|| {
+            format!(
+                "cannot symlink '{}' -> '{}' in isolated .claude",
+                target_path.display(),
+                link_dest.display()
+            )
+        })?;
+    }
+    Ok(())
 }
 
 impl Drop for IsolatedHomeGuard {

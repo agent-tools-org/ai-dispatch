@@ -28,9 +28,9 @@ fn isolation_negative_control() {
     // 2. Positive check with isolation:
     let guard = IsolatedHomeGuard::create_from_home(Some(&mock_real_home), None).unwrap();
 
-    // The instruction file and .claude directory MUST be absent in the isolated HOME.
+    // The instruction file MUST be absent while .claude directory is present.
     assert!(!guard.path().join(".claude/CLAUDE.md").exists());
-    assert!(!guard.path().join(".claude").exists());
+    assert!(guard.path().join(".claude").exists());
 
     // The shared .agents directory MUST be absent in the isolated HOME.
     assert!(!guard.path().join(".agents").exists());
@@ -73,12 +73,105 @@ fn isolated_home_cleanup_on_drop() {
 }
 
 #[test]
-fn denylist_contains_claude_and_agents_identity_surfaces() {
-    assert!(DEFAULT_DENYLIST.contains(&".claude"));
-    assert!(DEFAULT_DENYLIST.contains(&".claude.json"));
+fn denylist_contains_agents_identity_surfaces() {
+    assert!(!DEFAULT_DENYLIST.contains(&".claude"));
+    assert!(!DEFAULT_DENYLIST.contains(&".claude.json"));
     assert!(DEFAULT_DENYLIST.contains(&".anthropic"));
     assert!(DEFAULT_DENYLIST.contains(&".agents"));
     assert!(DEFAULT_DENYLIST.contains(&".agent"));
+}
+
+#[test]
+fn claude_credential_reachability_and_instruction_masking_under_isolation() {
+    let temp = tempfile::tempdir().unwrap();
+    let mock_home = temp.path().join("mock_home");
+
+    // Auth credentials file in HOME
+    let claude_json = mock_home.join(".claude.json");
+    fs::create_dir_all(&mock_home).unwrap();
+    fs::write(&claude_json, "{\"oauthAccount\": {\"email\": \"user@example.com\"}}").unwrap();
+
+    // .claude directory mixing instructions and credentials/data
+    let claude_dir = mock_home.join(".claude");
+    fs::create_dir_all(claude_dir.join("sessions")).unwrap();
+    fs::write(claude_dir.join("CLAUDE.md"), "# Orchestrator Secret Prompt").unwrap();
+    fs::write(claude_dir.join("CLAUDE.md.bak"), "# Backup Prompt").unwrap();
+    fs::write(claude_dir.join("settings.json"), "{\"permissions\": {}}").unwrap();
+    fs::write(claude_dir.join("settings.local.json"), "{\"local\": true}").unwrap();
+    fs::write(claude_dir.join("history.jsonl"), "{\"session\": \"123\"}").unwrap();
+    fs::write(claude_dir.join("sessions").join("sess.json"), "{}").unwrap();
+
+    let guard = IsolatedHomeGuard::create_from_home(Some(&mock_home), None).unwrap();
+    let iso_path = guard.path();
+
+    // 1. .claude.json auth file MUST be present and reachable
+    assert!(iso_path.join(".claude.json").exists());
+    assert_eq!(
+        fs::read_to_string(iso_path.join(".claude.json")).unwrap(),
+        "{\"oauthAccount\": {\"email\": \"user@example.com\"}}"
+    );
+
+    // 2. .claude directory MUST exist
+    assert!(iso_path.join(".claude").is_dir());
+
+    // 3. Instruction files MUST be masked (absent)
+    assert!(!iso_path.join(".claude/CLAUDE.md").exists());
+    assert!(!iso_path.join(".claude/CLAUDE.md.bak").exists());
+    assert!(!iso_path.join(".claude/settings.json").exists());
+    assert!(!iso_path.join(".claude/settings.local.json").exists());
+
+    // 4. Non-instruction runtime data (sessions, history) MUST be present
+    assert!(iso_path.join(".claude/history.jsonl").exists());
+    assert!(iso_path.join(".claude/sessions/sess.json").exists());
+}
+
+#[test]
+fn aid_directory_reachability_under_isolation() {
+    let temp = tempfile::tempdir().unwrap();
+    let mock_home = temp.path().join("mock_home");
+    let aid_dir = mock_home.join(".aid");
+    fs::create_dir_all(&aid_dir).unwrap();
+    fs::write(aid_dir.join("credentials.toml"), "[auth]\ntoken = \"xyz\"\n").unwrap();
+
+    let guard = IsolatedHomeGuard::create_from_home(Some(&mock_home), None).unwrap();
+    let iso_path = guard.path();
+
+    // .aid MUST be reachable in isolated home
+    assert!(iso_path.join(".aid/credentials.toml").exists());
+    assert_eq!(
+        fs::read_to_string(iso_path.join(".aid/credentials.toml")).unwrap(),
+        "[auth]\ntoken = \"xyz\"\n"
+    );
+}
+
+#[test]
+fn container_sandbox_home_interplay() {
+    let guard = IsolatedHomeGuard::create(None).unwrap();
+    let mut cmd = Command::new("claude");
+    cmd.env("HOME", guard.path());
+
+    // 1. Sandbox wrap_command test:
+    let wrapped_sandbox = crate::sandbox::wrap_command(&cmd, "t-test", crate::types::AgentKind::Claude, false);
+    let sandbox_args: Vec<String> = wrapped_sandbox
+        .get_args()
+        .map(|a| a.to_string_lossy().into_owned())
+        .collect();
+
+    // Host HOME path must NOT be forwarded as env var
+    let host_home_str = guard.path().to_string_lossy().into_owned();
+    assert!(!sandbox_args.iter().any(|arg| arg.contains(&format!("HOME={host_home_str}"))));
+    // Container HOME=/root must be set
+    assert!(sandbox_args.iter().any(|arg| arg == "HOME=/root"));
+
+    // 2. Container exec_in_container test:
+    let wrapped_container = crate::container::exec_in_container(&cmd, "aid-container");
+    let container_args: Vec<String> = wrapped_container
+        .get_args()
+        .map(|a| a.to_string_lossy().into_owned())
+        .collect();
+
+    assert!(!container_args.iter().any(|arg| arg.contains(&format!("HOME={host_home_str}"))));
+    assert!(container_args.iter().any(|arg| arg == "HOME=/root"));
 }
 
 #[test]

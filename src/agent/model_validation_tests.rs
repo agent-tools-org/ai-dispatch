@@ -73,8 +73,27 @@ fn cursor_auto_model_is_allowed() {
             "composer-2.5".to_string(),
             "auto".to_string(),
             "default".to_string(),
+            "router".to_string(),
         ]),
     };
 
     assert!(validate_model_for_agent(&mock, "auto").is_ok());
+    assert!(validate_model_for_agent(&mock, "composer-2.5").is_ok());
+    assert!(validate_model_for_agent(&mock, "unserved-model").is_err());
 }
+
+#[test]
+fn cursor_probe_failure_returns_none_and_allows_non_alias_models() {
+    clear_served_models_cache();
+    let mock = MockQueryableAgent {
+        kind: AgentKind::Cursor,
+        models: None,
+    };
+
+    // When the probe fails (returns None), unknown means ALLOW.
+    // Both real models like composer-2.5 and aliases like auto must be allowed.
+    assert!(validate_model_for_agent(&mock, "composer-2.5").is_ok());
+    assert!(validate_model_for_agent(&mock, "auto").is_ok());
+    assert!(validate_model_for_agent(&mock, "custom-model-xyz").is_ok());
+}
+

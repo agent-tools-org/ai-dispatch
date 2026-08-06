@@ -140,22 +140,44 @@ impl super::Agent for CursorAgent {
         let mut cmd = Command::new(binary);
         cmd.arg("models");
         let output = super::model_validation::run_cmd_with_timeout(cmd, std::time::Duration::from_secs(2));
-        let mut models = match output {
-            Some(text) => parse_cursor_models_output(&text),
-            None => Vec::new(),
+        let Some(text) = output else {
+            return Ok(None);
         };
-        for alias in ["auto", "default", "router"] {
-            if !models.contains(&alias.to_string()) {
-                models.push(alias.to_string());
+        let mut models = parse_cursor_models_output(&text);
+        for alias in crate::types::ROUTER_ALIASES {
+            if !models.iter().any(|m| m.eq_ignore_ascii_case(alias)) {
+                models.push((*alias).to_string());
             }
         }
         Ok(Some(models))
     }
 }
 
+fn strip_ansi(s: &str) -> String {
+    let mut result = String::with_capacity(s.len());
+    let bytes = s.as_bytes();
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == 0x1b && i + 1 < bytes.len() && bytes[i + 1] == b'[' {
+            let mut j = i + 2;
+            while j < bytes.len() && (bytes[j].is_ascii_digit() || bytes[j] == b';') {
+                j += 1;
+            }
+            if j < bytes.len() && bytes[j].is_ascii_alphabetic() {
+                i = j + 1;
+                continue;
+            }
+        }
+        result.push(bytes[i] as char);
+        i += 1;
+    }
+    result
+}
+
 fn parse_cursor_models_output(output: &str) -> Vec<String> {
     let mut models = Vec::new();
-    for line in output.lines() {
+    let cleaned = strip_ansi(output);
+    for line in cleaned.lines() {
         let trimmed = line.trim();
         if trimmed.is_empty() || trimmed.starts_with('<') {
             continue;

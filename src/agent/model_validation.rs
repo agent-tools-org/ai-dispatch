@@ -1,6 +1,6 @@
 // Pre-dispatch model validation and CLI served model probing.
 // Exports: validate_model_for_agent, get_served_models_cached, clear_served_models_cache.
-// Deps: Agent, AgentKind, is_router_alias.
+// Deps: Agent, AgentKind.
 
 use anyhow::{Result, anyhow};
 use std::collections::HashMap;

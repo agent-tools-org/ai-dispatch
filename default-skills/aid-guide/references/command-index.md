@@ -32,7 +32,7 @@ current arguments.
 | `aid steer` | Inject updated direction into a running task. |
 | `aid unstick` | Request recovery or escalation for a stalled task. |
 | `aid stop` | Stop one task or its retry tree while preserving artifacts. |
-| `aid retry` | Start a new attempt using prior task context and artifacts. |
+| `aid retry` | Start a new attempt using prior task context and artifacts; supersedes a non-terminal task by stopping its live worker first. |
 | `aid merge` | Merge delivered code and mark the task merged; this is not principal acceptance. |
 
 ## Review and artifact custody

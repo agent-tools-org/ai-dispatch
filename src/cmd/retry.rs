@@ -28,8 +28,40 @@ pub async fn retry_task(store: Arc<Store>, args: RetryArgs, announce: bool) -> R
     let task = store
         .get_task(&args.task_id)?
         .ok_or_else(|| anyhow::anyhow!("Task '{}' not found", args.task_id))?;
+    supersede_live_holder(&store, &task)?;
     let run_args = retry_task_to_run_args(store.as_ref(), &task, args, announce)?;
     run::run(store, run_args).await
+}
+
+// `aid retry <id>` supersedes the task's own run: the caller's intent is
+// unambiguous, so if the task still holds a live lease on its recorded
+// worktree (a stalled run whose worker outlived its status transition), stop
+// the worker first and refuse only if it cannot actually be stopped — never
+// proceed into a worktree that still has a live process.
+fn supersede_live_holder(store: &Arc<Store>, task: &crate::types::Task) -> Result<()> {
+    let Some(path) = task.worktree_path.as_deref().map(std::path::Path::new) else {
+        return Ok(());
+    };
+    let Some(holder) = crate::worktree::live_lock_holder_with_store(path, store) else {
+        return Ok(());
+    };
+    if holder != task.id.as_str() {
+        anyhow::bail!(
+            "Worktree {} is locked by task {holder} — concurrent access prevented. Use separate worktree names for parallel tasks.",
+            path.display()
+        );
+    }
+    // Holder is this task itself (or an ancestor): stop the live worker first,
+    // then verify the lease is actually released before proceeding.
+    crate::cmd::stop::terminate_any(store, &holder)?;
+    if let Some(still_holder) = crate::worktree::live_lock_holder_with_store(path, store) {
+        anyhow::bail!(
+            "Worktree {} is still locked by task {still_holder} — the worker could not be stopped. Refusing to share a live worktree.",
+            path.display()
+        );
+    }
+    aid_info!("[aid] Stopped prior run of {holder} before retry");
+    Ok(())
 }
 
 fn retry_task_to_run_args(
@@ -189,107 +221,8 @@ fn truncate(s: &str, max: usize) -> String {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::{reset_dirty_worktree, save_partial_work};
-    use crate::test_subprocess;
-    use std::path::Path;
-    use std::process::Command;
-
-    #[test]
-    fn save_partial_work_commits_dirty_files() {
-        let _permit = test_subprocess::acquire();
-        let temp = tempfile::tempdir().unwrap();
-        init_repo(temp.path());
-        write_file(temp.path(), "tracked.txt", "base\n");
-        git(temp.path(), &["add", "tracked.txt"]);
-        git(temp.path(), &["commit", "-m", "initial"]);
-
-        write_file(temp.path(), "tracked.txt", "changed\n");
-        write_file(temp.path(), "new.txt", "new\n");
-
-        save_partial_work(temp.path().to_str().unwrap(), "t-1234").unwrap();
-
-        assert_eq!(head_message(temp.path()), "[aid] partial work from t-1234");
-        assert!(git_stdout(temp.path(), &["status", "--porcelain"]).is_empty());
-        assert_eq!(
-            git_stdout(temp.path(), &["show", "--name-only", "--format=", "HEAD"]),
-            "new.txt\ntracked.txt\n"
-        );
-    }
-
-    #[test]
-    fn reset_dirty_worktree_discards_dirty_files() {
-        let _permit = test_subprocess::acquire();
-        let temp = tempfile::tempdir().unwrap();
-        init_repo(temp.path());
-        write_file(temp.path(), "tracked.txt", "base\n");
-        git(temp.path(), &["add", "tracked.txt"]);
-        git(temp.path(), &["commit", "-m", "initial"]);
-
-        write_file(temp.path(), "tracked.txt", "changed\n");
-        write_file(temp.path(), "new.txt", "new\n");
-
-        reset_dirty_worktree(temp.path().to_str().unwrap()).unwrap();
-
-        assert_eq!(
-            std::fs::read_to_string(temp.path().join("tracked.txt")).unwrap(),
-            "base\n"
-        );
-        assert!(!temp.path().join("new.txt").exists());
-        assert!(git_stdout(temp.path(), &["status", "--porcelain"]).is_empty());
-        assert_eq!(head_message(temp.path()), "initial");
-    }
-
-    #[test]
-    fn clean_worktree_is_not_modified() {
-        let _permit = test_subprocess::acquire();
-        let temp = tempfile::tempdir().unwrap();
-        init_repo(temp.path());
-        write_file(temp.path(), "tracked.txt", "base\n");
-        git(temp.path(), &["add", "tracked.txt"]);
-        git(temp.path(), &["commit", "-m", "initial"]);
-
-        save_partial_work(temp.path().to_str().unwrap(), "t-1234").unwrap();
-
-        assert_eq!(head_message(temp.path()), "initial");
-        assert!(git_stdout(temp.path(), &["status", "--porcelain"]).is_empty());
-    }
-
-    fn init_repo(path: &Path) {
-        git(path, &["init"]);
-        git(path, &["config", "user.name", "Test User"]);
-        git(path, &["config", "user.email", "test@example.com"]);
-    }
-
-    fn write_file(path: &Path, name: &str, contents: &str) {
-        std::fs::write(path.join(name), contents).unwrap();
-    }
-
-    fn head_message(path: &Path) -> String {
-        git_stdout(path, &["log", "-1", "--pretty=%s"]).trim().to_string()
-    }
-
-    fn git_stdout(path: &Path, args: &[&str]) -> String {
-        let output = Command::new("git")
-            .arg("-C")
-            .arg(path)
-            .args(args)
-            .output()
-            .unwrap();
-        assert!(output.status.success());
-        String::from_utf8(output.stdout).unwrap()
-    }
-
-    fn git(path: &Path, args: &[&str]) {
-        let output = Command::new("git")
-            .arg("-C")
-            .arg(path)
-            .args(args)
-            .output()
-            .unwrap();
-        assert!(output.status.success());
-    }
-}
+#[path = "retry_tests.rs"]
+mod tests;
 
 #[cfg(test)]
 #[path = "retry_saved_args_tests.rs"]

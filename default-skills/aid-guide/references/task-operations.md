@@ -63,6 +63,11 @@ Stopping preserves the worktree and attempts to preserve in-flight changes.
 Inspect the artifact afterward. A retry creates linked history; use `tree` to
 understand the chain.
 
+`aid retry <task-id>` on a non-terminal task supersedes that task's own run: aid
+stops the still-live worker first, then starts the new attempt in the same
+worktree. If the worker cannot be stopped, the retry is refused. A retry still
+refuses a worktree genuinely held by a different live task.
+
 When the recorded linked worktree still exists, retry reuses it with the
 original repository checkout as its anchor. Retry still refuses a target branch
 that is genuinely checked out in the checkout that dispatched the task.

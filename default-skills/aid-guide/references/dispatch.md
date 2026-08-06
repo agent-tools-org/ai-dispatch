@@ -124,6 +124,15 @@ Missing task-profile dimensions produce one warning and persist as null. Project
 with `require_task_profile = true` reject incomplete runs; the production profile
 enables this requirement.
 
+## Task Execution Isolation
+
+When dispatches are executed, `aid` isolates the agent process's `HOME` directory to prevent identity and instruction leaks from the orchestrator (e.g. `~/.claude/CLAUDE.md`, `~/.claude/settings.json`):
+
+- **Isolated Per-Task HOME**: At dispatch time, `HOME` is set to an isolated directory created under the task directory (`<task_dir>/home`).
+- **Default-Allow Symlink Policy**: Every top-level entry in the host `$HOME` (e.g. `.cargo`, `.rustup`, `.gitconfig`, `.ssh`, `.gemini`, `.grok`, `.cursor`, `.codex`, etc.) is symlinked into the isolated `HOME` so development toolchains and CLI auth directories function without interruption.
+- **Orchestrator Surface Denylist**: Orchestrator-scoped instruction files and permission configurations (such as `.claude` and `.claude.json`) are denylisted and excluded from the symlinked environment.
+- **Automatic Lifecycle Cleanup**: The isolated `HOME` directory is created per task and automatically cleaned up upon task execution completion.
+
 ## Preview routing without dispatch
 
 ```bash

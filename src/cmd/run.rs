@@ -126,6 +126,7 @@ pub(crate) fn retry_target(task: &Task) -> Result<(Option<String>, Option<String
 pub(crate) fn apply_retry_target(task: &Task, retry_args: &mut RunArgs) -> Result<()> { run_prompt::apply_retry_target(task, retry_args) }
 #[cfg(test)]
 fn take_next_cascade_agent(args: &RunArgs) -> Option<(String, Vec<String>)> { run_post::take_next_cascade_agent(args) }
+pub(crate) fn switch_agent(args: &mut RunArgs, next_agent: String) { run_post::switch_agent(args, next_agent) }
 #[cfg(test)]
 fn auto_save_task_output(store: &Store, task: &Task) -> Result<()> { run_post::auto_save_task_output(store, task) }
 pub(crate) fn rescue_quota_failed_task(store: &Store, task_id: &TaskId, quota_error_message: Option<&str>) { run_post::rescue_quota_failed_task(store, task_id, quota_error_message); }

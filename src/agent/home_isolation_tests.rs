@@ -94,6 +94,8 @@ fn claude_credential_reachability_and_instruction_masking_under_isolation() {
     // .claude directory mixing instructions and credentials/data
     let claude_dir = mock_home.join(".claude");
     fs::create_dir_all(claude_dir.join("sessions")).unwrap();
+    fs::create_dir_all(claude_dir.join("skills").join("my-skill")).unwrap();
+    fs::create_dir_all(claude_dir.join("agents").join("my-agent")).unwrap();
     fs::write(claude_dir.join("CLAUDE.md"), "# Orchestrator Secret Prompt").unwrap();
     fs::write(claude_dir.join("CLAUDE.md.bak"), "# Backup Prompt").unwrap();
     fs::write(claude_dir.join("settings.json"), "{\"permissions\": {}}").unwrap();
@@ -114,11 +116,13 @@ fn claude_credential_reachability_and_instruction_masking_under_isolation() {
     // 2. .claude directory MUST exist
     assert!(iso_path.join(".claude").is_dir());
 
-    // 3. Instruction files MUST be masked (absent)
+    // 3. Instruction files and directories MUST be masked (absent)
     assert!(!iso_path.join(".claude/CLAUDE.md").exists());
     assert!(!iso_path.join(".claude/CLAUDE.md.bak").exists());
     assert!(!iso_path.join(".claude/settings.json").exists());
     assert!(!iso_path.join(".claude/settings.local.json").exists());
+    assert!(!iso_path.join(".claude/skills").exists());
+    assert!(!iso_path.join(".claude/agents").exists());
 
     // 4. Non-instruction runtime data (sessions, history) MUST be present
     assert!(iso_path.join(".claude/history.jsonl").exists());

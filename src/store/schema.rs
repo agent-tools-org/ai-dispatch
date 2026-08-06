@@ -236,10 +236,22 @@ pub(super) fn migrate(store: &Store) -> Result<()> {
 }
 
 pub(super) fn row_to_task(row: &Row) -> rusqlite::Result<Result<Task>> {
+    let stored_agent = row.get::<_, String>(1)?;
+    let parsed_agent = AgentKind::parse_str(&stored_agent);
     Ok(Ok(Task {
         id: TaskId(row.get::<_, String>(0)?),
-        agent: AgentKind::parse_str(&row.get::<_, String>(1)?).unwrap_or(AgentKind::Custom),
-        custom_agent_name: row.get(26).ok().flatten(),
+        agent: parsed_agent.unwrap_or(AgentKind::Custom),
+        // An agent name this binary cannot parse is not a custom agent — it is an
+        // agent we do not recognise, and the difference is what the reader needs.
+        // A task written by a newer aid (t-8e9194dc, agent `commandcode`) used to
+        // render as `custom/unknown/unknown` with the real name discarded, so you
+        // could not tell which agent had run. Keep the raw string; a genuine
+        // custom agent's own name still wins when the column holds one.
+        custom_agent_name: row
+            .get::<_, Option<String>>(26)
+            .ok()
+            .flatten()
+            .or_else(|| parsed_agent.is_none().then(|| stored_agent.clone())),
         prompt: row.get(2)?,
         resolved_prompt: row.get(3)?,
         category: row.get(29).ok().flatten(),

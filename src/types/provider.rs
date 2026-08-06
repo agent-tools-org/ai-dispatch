@@ -86,6 +86,10 @@ pub fn provider_for_cli(cli: AgentKind) -> (ProviderId, MeteringShape) {
         // HTTP 401 "Insufficient balance. Manage your billing here:
         //  https://opencode.ai/workspace/.../billing" — t-76181278.
         AgentKind::OpenCode => ("opencode-zen", MeteringShape::SpendBudget),
+        // `commandcode status` verified a native Command Code login; the CLI
+        // is its own billing entity and resells multiple vendors behind one
+        // account, so only the provider identity is established here.
+        AgentKind::CommandCode => ("commandcode.ai", MeteringShape::Unknown),
         // "Error: Quota limit reached. ... check Warp logs at
         //  ~/Library/Logs/oz/warp.log" — t-2d3827e5.
         AgentKind::Oz => ("warp", MeteringShape::AccountPool),

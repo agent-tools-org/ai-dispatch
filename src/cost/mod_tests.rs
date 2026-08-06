@@ -59,6 +59,20 @@ fn unknown_model_returns_none() {
 }
 
 #[test]
+fn commandcode_unknown_model_stays_unknown() {
+    assert_eq!(
+        estimate_cost(100_000, Some("deepseek/deepseek-v4-flash"), AgentKind::CommandCode),
+        None
+    );
+}
+
+#[test]
+fn commandcode_reuses_known_vendor_pricing_without_zero_fallback() {
+    let cost = estimate_cost(1_000_000, Some("gpt-5.6-sol"), AgentKind::CommandCode).unwrap();
+    assert!((cost - 6.25).abs() < 0.01);
+}
+
+#[test]
 fn format_cost_variants() {
     assert_eq!(format_cost(Some(0.0)), "free");
     assert_eq!(format_cost(Some(0.0038)), "$0.0038");

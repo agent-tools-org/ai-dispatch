@@ -12,6 +12,7 @@ pub enum AgentKind {
     Codex,
     Copilot,
     OpenCode,
+    CommandCode,
     Cursor,
     Kilo,
     MiMoCode,
@@ -31,6 +32,7 @@ impl AgentKind {
         Self::Codex,
         Self::Copilot,
         Self::OpenCode,
+        Self::CommandCode,
         Self::Cursor,
         Self::Kilo,
         Self::MiMoCode,
@@ -47,6 +49,7 @@ impl AgentKind {
         Self::Codex,
         Self::Copilot,
         Self::OpenCode,
+        Self::CommandCode,
         Self::Cursor,
         Self::Kilo,
         Self::MiMoCode,
@@ -65,6 +68,7 @@ impl AgentKind {
             "codex" => Some(Self::Codex),
             "copilot" => Some(Self::Copilot),
             "opencode" => Some(Self::OpenCode),
+            "commandcode" => Some(Self::CommandCode),
             "cursor" => Some(Self::Cursor),
             "kilo" => Some(Self::Kilo),
             "mimocode" => Some(Self::MiMoCode),
@@ -86,6 +90,7 @@ impl AgentKind {
             Self::Codex => "codex",
             Self::Copilot => "copilot",
             Self::OpenCode => "opencode",
+            Self::CommandCode => "commandcode",
             Self::Cursor => "cursor",
             Self::Kilo => "kilo",
             Self::MiMoCode => "mimocode",
@@ -111,7 +116,13 @@ impl AgentKind {
     pub fn supports_session_resume(&self) -> bool {
         matches!(
             self,
-            Self::OpenCode | Self::Kilo | Self::MiMoCode | Self::Droid | Self::Codex | Self::Qwen
+            Self::OpenCode
+                | Self::CommandCode
+                | Self::Kilo
+                | Self::MiMoCode
+                | Self::Droid
+                | Self::Codex
+                | Self::Qwen
                 | Self::Grok
         )
     }
@@ -158,6 +169,14 @@ impl AgentKind {
                 "Simple edits, renames, type annotations",
                 "free-$2/M blended",
                 "rename, change, update, fix typo, add type",
+                true,
+                "api",
+            )),
+            Self::CommandCode => Some((
+                "commandcode",
+                "General coding via Command Code CLI",
+                "commandcode.ai subscription / credits",
+                "implement, create, build, refactor, test, explain",
                 true,
                 "api",
             )),

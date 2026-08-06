@@ -64,6 +64,36 @@ impl super::Agent for GrokAgent {
     fn parse_completion(&self, output: &str) -> CompletionInfo {
         parse_grok_completion(output)
     }
+
+    fn served_models(&self) -> Result<Option<Vec<String>>> {
+        let mut cmd = Command::new("grok");
+        cmd.arg("models");
+        let Some(output) = super::model_validation::run_cmd_with_timeout(cmd, std::time::Duration::from_secs(2)) else {
+            return Ok(None);
+        };
+        let models = parse_grok_models_output(&output);
+        Ok(if models.is_empty() { None } else { Some(models) })
+    }
+}
+
+fn parse_grok_models_output(output: &str) -> Vec<String> {
+    let mut models = Vec::new();
+    let mut in_models_section = false;
+    for line in output.lines() {
+        let trimmed = line.trim();
+        if trimmed.contains("Available models:") {
+            in_models_section = true;
+            continue;
+        }
+        if in_models_section || trimmed.starts_with('*') {
+            let clean = trimmed.trim_start_matches('*').trim();
+            let model_name = clean.split_whitespace().next().unwrap_or(clean);
+            if !model_name.is_empty() && !models.contains(&model_name.to_string()) {
+                models.push(model_name.to_string());
+            }
+        }
+    }
+    models
 }
 
 /// Find grok's JSON envelope inside a buffer that also carries aid's own writes.

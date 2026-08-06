@@ -136,7 +136,6 @@ fn rescue_quota_failed_task_refuses_empty_worktree_rescue() {
         &store,
         &task.id,
         read_quota_error_message(&task.id).as_deref(),
-        None,
     );
 
     let task = store.get_task("t-empty-wt").unwrap().unwrap();
@@ -175,7 +174,6 @@ fn rescue_quota_failed_task_rescues_worktree_with_modified_code() {
         &store,
         &task.id,
         read_quota_error_message(&task.id).as_deref(),
-        None,
     );
     let checked_task = store.get_task("t-work-wt").unwrap().unwrap();
     assert_eq!(checked_task.status, TaskStatus::Failed);
@@ -186,7 +184,6 @@ fn rescue_quota_failed_task_rescues_worktree_with_modified_code() {
         &store,
         &task.id,
         read_quota_error_message(&task.id).as_deref(),
-        None,
     );
 
     let task = store.get_task("t-work-wt").unwrap().unwrap();
@@ -220,13 +217,25 @@ fn rescue_quota_failed_task_rescues_untracked_source_files() {
     task.verify_status = VerifyStatus::Passed;
     store.insert_task(&task).unwrap();
 
+    // Nothing written yet, so the guard must refuse. Without this half the test
+    // passes even when `produced_work` is forced to return true — a cross-audit
+    // caught it doing exactly that, and a mutation run confirmed it.
+    rescue_quota_failed_task(
+        &store,
+        &task.id,
+        read_quota_error_message(&task.id).as_deref(),
+    );
+    let checked = store.get_task("t-untracked-wt").unwrap().unwrap();
+    assert_eq!(checked.status, TaskStatus::Failed);
+
+    // The agent's only output is an untracked file. `git diff` cannot see it,
+    // which is how the first version of this guard threw such work away.
     std::fs::write(wt_dir.join("new_file.txt"), "untracked work").unwrap();
 
     rescue_quota_failed_task(
         &store,
         &task.id,
         read_quota_error_message(&task.id).as_deref(),
-        None,
     );
 
     let task = store.get_task("t-untracked-wt").unwrap().unwrap();
@@ -268,7 +277,6 @@ fn rescue_quota_failed_task_rescues_committed_work_non_standard_branch() {
         &store,
         &task.id,
         read_quota_error_message(&task.id).as_deref(),
-        None,
     );
     let checked = store.get_task("t-custom-branch").unwrap().unwrap();
     assert_eq!(checked.status, TaskStatus::Failed);
@@ -282,7 +290,6 @@ fn rescue_quota_failed_task_rescues_committed_work_non_standard_branch() {
         &store,
         &task.id,
         read_quota_error_message(&task.id).as_deref(),
-        None,
     );
     let rescued = store.get_task("t-custom-branch").unwrap().unwrap();
     assert_eq!(rescued.status, TaskStatus::Done);
@@ -307,7 +314,6 @@ fn rescue_quota_failed_task_marks_passed_verify_as_done() {
         &store,
         &task.id,
         read_quota_error_message(&task.id).as_deref(),
-        None,
     );
     let task = store.get_task("t-rescue-pass").unwrap().unwrap();
     assert_eq!(task.status, TaskStatus::Done);
@@ -330,7 +336,6 @@ fn rescue_quota_failed_task_keeps_failed_verify_failed() {
         &store,
         &task.id,
         read_quota_error_message(&task.id).as_deref(),
-        None,
     );
     let task = store.get_task("t-rescue-fail").unwrap().unwrap();
     assert_eq!(task.status, TaskStatus::Failed);

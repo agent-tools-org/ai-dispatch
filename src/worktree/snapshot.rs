@@ -114,7 +114,7 @@ fn read_status_lines(dir: &Path) -> Result<Vec<String>> {
 fn read_empty_diff(dir: &Path, base_branch: Option<&str>) -> Option<bool> {
     let head = git_diff_stat_output(dir, &["diff", "--stat", "HEAD"])?;
     let staged = git_diff_stat_output(dir, &["diff", "--cached", "--stat"])?;
-    let committed = read_committed_diff_empty(dir, base_branch)?;
+    let committed = read_committed_diff_empty(dir, base_branch).unwrap_or(true);
     Some(head.trim().is_empty() && staged.trim().is_empty() && committed)
 }
 

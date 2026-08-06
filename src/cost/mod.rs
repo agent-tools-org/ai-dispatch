@@ -1,14 +1,15 @@
 // Cost estimation for AI agent tasks.
 // Maps model names to per-token pricing, computes task cost from token counts.
-// Deps: model_catalog, store::Store, types::AgentKind
+// Deps: model_catalog, store::Store, types::AgentKind, price_feed
 
+mod price_feed;
 mod pricing_builtin;
 
 use crate::model_catalog;
 use crate::store::Store;
-use crate::types::AgentKind;
+use crate::types::{provider_for_cli, AgentKind, MeteringShape};
 use std::collections::HashMap;
-use std::sync::OnceLock;
+use std::sync::{Arc, Mutex, OnceLock};
 
 /// Price per 1M tokens (input, output) in USD
 #[derive(Clone, Copy)]
@@ -29,6 +30,12 @@ pub fn warm_gemini_default_from_store(store: &Store) {
         Ok(m) => m,
         Err(_) => None,
     });
+}
+
+/// Refresh the price-feed cache out of band. Never blocks or fails a run; a
+/// network failure keeps the old cache.
+pub fn maybe_refresh_prices() {
+    price_feed::maybe_refresh();
 }
 
 /// Estimate cost in USD from total token count and model name.
@@ -65,9 +72,107 @@ pub fn format_cost_label(cost_usd: Option<f64>, agent: AgentKind) -> String {
     }
 }
 
+/// How a model's cost is established. The three states must stay distinct:
+/// collapsing "unknown" into "included" is the $0.00 bug this replaces.
+enum PricingSource {
+    /// The feed knows this model and carries a real price.
+    Priced,
+    /// A flat-rate subscription: marginal cost is genuinely ~0
+    /// (Cursor, Copilot — `MeteringShape::Subscription`).
+    Included,
+    /// The built-in offline matcher priced it.
+    Builtin,
+    /// Nobody knows. The caller must see unknown, never $0.00 and never "free".
+    Unknown,
+}
+
+/// Cached feed lookup index, populated once per process from the local cache.
+/// Refresh happens out of band (never on the dispatch path); a cold or stale
+/// cache degrades to the built-in matcher instead of blocking a run.
+static FEED_INDEX: OnceLock<Mutex<Option<FeedIndex>>> = OnceLock::new();
+
+type FeedIndex = (Arc<price_feed::Feed>, Arc<HashMap<String, usize>>);
+
+fn feed_index() -> Option<FeedIndex> {
+    let cache = FEED_INDEX.get_or_init(|| Mutex::new(None));
+    let mut guard = cache.lock().ok()?;
+    if let Some(pair) = guard.as_ref() {
+        return Some(pair.clone());
+    }
+    // First load from the local cache; store the index so the dispatch path is
+    // a lock + Arc clone, never a file read.
+    let loaded = price_feed::load_cache()
+        .map(|feed| {
+            let index = feed.index();
+            (Arc::new(feed), Arc::new(index))
+        });
+    if let Some(pair) = loaded {
+        *guard = Some(pair.clone());
+        return Some(pair);
+    }
+    None
+}
+
+/// Test seam: force the process feed index from a constructed feed. The real
+/// cache lives under the aid home, which tests redirect, so this is how feed
+/// precedence gets exercised deterministically.
+#[cfg(test)]
+fn set_feed_for_tests(feed: price_feed::Feed) {
+    let index = feed.index();
+    let cache = FEED_INDEX.get_or_init(|| Mutex::new(None));
+    if let Ok(mut guard) = cache.lock() {
+        *guard = Some((Arc::new(feed), Arc::new(index)));
+    }
+}
+
+/// Test seam: clear the process feed index so a seeded feed cannot leak into
+/// other tests running in the same process.
+#[cfg(test)]
+fn clear_feed_for_tests() {
+    let cache = FEED_INDEX.get_or_init(|| Mutex::new(None));
+    if let Ok(mut guard) = cache.lock() {
+        *guard = None;
+    }
+}
+
+/// The resolution outcome: priced feed first, then builtin, else unknown.
+fn classify_pricing(model: &str, agent: AgentKind) -> (PricingSource, Option<ModelPricing>) {
+    if let Some((feed, index)) = feed_index()
+        && let Some(entry) = price_feed::feed_lookup(&feed, &index, model)
+    {
+        return (
+            PricingSource::Priced,
+            Some(ModelPricing {
+                input_per_m: entry.input_per_mtok,
+                output_per_m: entry.output_per_mtok,
+            }),
+        );
+    }
+    if matches!(
+        provider_for_cli(agent).1,
+        MeteringShape::Subscription
+    ) {
+        return (PricingSource::Included, Some(ModelPricing {
+            input_per_m: 0.0,
+            output_per_m: 0.0,
+        }));
+    }
+    if let Some(pricing) = pricing_builtin::for_model_lower(&model.to_lowercase()) {
+        return (PricingSource::Builtin, Some(pricing));
+    }
+    (PricingSource::Unknown, None)
+}
+
 fn resolve_pricing(model: Option<&str>, agent: AgentKind) -> Option<ModelPricing> {
     if let Some(m) = model {
-        return model_pricing(m, agent);
+        let (source, pricing) = classify_pricing(m, agent);
+        return match source {
+            // Priced by the feed or the built-in matcher, or a subscription
+            // where marginal cost is really ~0. All three are known.
+            PricingSource::Priced | PricingSource::Included | PricingSource::Builtin => pricing,
+            // Unknown stays unknown — never synthesize $0.00.
+            PricingSource::Unknown => None,
+        };
     }
     match agent {
         AgentKind::Gemini => gemini_fallback_pricing(agent),
@@ -79,19 +184,13 @@ fn resolve_pricing(model: Option<&str>, agent: AgentKind) -> Option<ModelPricing
         }
         AgentKind::Codex => codex_fallback_pricing(agent),
         AgentKind::CommandCode => None,
-        AgentKind::Copilot => Some(ModelPricing {
-            input_per_m: 0.0,
-            output_per_m: 0.0,
-        }),
+        AgentKind::Copilot | AgentKind::Cursor | AgentKind::Kilo | AgentKind::MiMoCode => {
+            Some(ModelPricing {
+                input_per_m: 0.0,
+                output_per_m: 0.0,
+            })
+        }
         AgentKind::OpenCode => None,
-        AgentKind::Cursor => Some(ModelPricing {
-            input_per_m: 0.0,
-            output_per_m: 0.0,
-        }),
-        AgentKind::Kilo | AgentKind::MiMoCode => Some(ModelPricing {
-            input_per_m: 0.0,
-            output_per_m: 0.0,
-        }),
         AgentKind::Claude => None,
         AgentKind::Grok => None,
         AgentKind::Codebuff => None,
@@ -158,6 +257,15 @@ fn override_pricing(model: &str, agent: AgentKind) -> Option<ModelPricing> {
 fn model_pricing(model: &str, agent: AgentKind) -> Option<ModelPricing> {
     if let Some(pricing) = override_pricing(model, agent) {
         return Some(pricing);
+    }
+    // The feed takes precedence over the built-in matcher when present.
+    if let Some((feed, index)) = feed_index()
+        && let Some(entry) = price_feed::feed_lookup(&feed, &index, model)
+    {
+        return Some(ModelPricing {
+            input_per_m: entry.input_per_mtok,
+            output_per_m: entry.output_per_mtok,
+        });
     }
     pricing_builtin::for_model_lower(&model.to_lowercase())
 }

@@ -463,8 +463,10 @@ fn handle_done_postprocess(
     agent_kind: AgentKind,
     prompt_bundle: &run_prompt::PromptBundle,
 ) {
+    // Only a marker that predates this run is stale. One written *during* it was
+    // written by this run's own refusal, and success here does not disprove it.
     if rate_limit::is_rate_limited(&agent_kind) {
-        rate_limit::clear_rate_limit(&agent_kind);
+        rate_limit::clear_rate_limit_if_stale(&agent_kind, task.created_at);
     }
     for memory_id in &prompt_bundle.injected_memory_ids {
         if let Err(err) = store.increment_memory_success(memory_id) {

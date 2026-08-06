@@ -3,7 +3,7 @@
 
 use crate::paths::aid_dir;
 use crate::types::AgentKind;
-use chrono::{Local, NaiveDateTime};
+use chrono::{DateTime, Local, NaiveDateTime};
 use std::fs;
 use std::path::PathBuf;
 
@@ -77,6 +77,27 @@ fn marker_is_active(path: &std::path::Path) -> bool {
         .is_some_and(|elapsed| elapsed.as_secs() < RATE_LIMIT_WINDOW_SECS)
 }
 
+/// Clear a marker only when it predates `task_start`.
+///
+/// A successful task is not evidence that a provider has quota. When the same
+/// run just observed a refusal and recorded it, clearing on "success" erases the
+/// outage microseconds after it was captured and hands routing back a provider
+/// that is out — which is how a marker written by `record_quota_exhaustion`
+/// survived the watcher and then died in `handle_done_postprocess`.
+///
+/// Returns true when a marker was actually removed.
+pub fn clear_rate_limit_if_stale(agent: &AgentKind, task_start: DateTime<Local>) -> bool {
+    let path = marker_path(agent);
+    let written_after_start = fs::metadata(&path)
+        .and_then(|meta| meta.modified())
+        .map(|modified| DateTime::<Local>::from(modified) >= task_start)
+        .unwrap_or(false);
+    if written_after_start {
+        return false;
+    }
+    clear_rate_limit(agent)
+}
+
 pub fn clear_rate_limit(agent: &AgentKind) -> bool {
     let path = marker_path(agent);
     fs::remove_file(&path).is_ok()
@@ -146,53 +167,49 @@ pub fn quota_signature_agent(message: &str) -> Option<AgentKind> {
     crate::rate_limit_signatures::match_quota_signature(message).map(|(agent, _)| agent)
 }
 
+/// Where a quota signal was observed. Generic tokens (429, "rate limit") are
+/// evidence on channels the agent does not author; they must never match prose.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum QuotaEvidence {
+    /// Structured CLI error events, stderr, HTTP status lines.
+    NonAgentChannel,
+    /// Assistant-authored text — per-agent templates only.
+    AgentProse,
+}
+
 pub fn is_rate_limit_error(message: &str) -> bool {
+    is_rate_limit_error_with_evidence(message, QuotaEvidence::AgentProse)
+}
+
+pub fn is_rate_limit_error_with_evidence(message: &str, evidence: QuotaEvidence) -> bool {
     if crate::rate_limit_signatures::match_quota_signature(message).is_some() {
         return true;
     }
+    evidence == QuotaEvidence::NonAgentChannel && generic_quota_signal(message)
+}
+
+pub fn is_rate_limit_error_for_agent(message: &str, agent: &AgentKind) -> bool {
+    is_rate_limit_error_for_agent_with_evidence(message, agent, QuotaEvidence::NonAgentChannel)
+}
+
+pub fn is_rate_limit_error_for_agent_with_evidence(
+    message: &str,
+    agent: &AgentKind,
+    evidence: QuotaEvidence,
+) -> bool {
+    if crate::rate_limit_signatures::match_quota_signature_for_agent(message, *agent).is_some() {
+        return true;
+    }
+    evidence == QuotaEvidence::NonAgentChannel && generic_quota_signal(message)
+}
+
+fn generic_quota_signal(message: &str) -> bool {
     let lower = message.to_lowercase();
     lower.contains("rate limit")
         || lower.contains("rate_limit")
         || contains_status_code(&lower, "429")
         || contains_status_code(&lower, "402")
-        || lower.contains("quota exceeded")
-        || lower.contains("exhausted your capacity")
         || lower.contains("too many requests")
-        || lower.contains("usage limit")
-        || lower.contains("credits")
-        || lower.contains("reload your tokens")
-        // Permanent auth/tier death — treat like quota so auto-cascade can fire.
-        || lower.contains("ineligibletier")
-        || lower.contains("migrate to antigravity")
-}
-
-pub fn extract_rate_limit_message(raw: &str) -> Option<String> {
-    let trimmed = raw.trim();
-    if trimmed.is_empty() {
-        return None;
-    }
-    if trimmed.starts_with('{') && trimmed.contains("\"type\"") {
-        return extract_from_json_error(trimmed);
-    }
-    if is_rate_limit_error(trimmed) && trimmed.len() < 500 {
-        Some(trimmed.to_string())
-    } else {
-        None
-    }
-}
-
-fn extract_from_json_error(json_str: &str) -> Option<String> {
-    let value: serde_json::Value = serde_json::from_str(json_str).ok()?;
-    let is_error_event = value.get("error").is_some()
-        || value.get("type").and_then(serde_json::Value::as_str) == Some("error");
-    if !is_error_event {
-        return None;
-    }
-    let message = value.get("message")?.as_str()?.trim();
-    if message.is_empty() || !is_rate_limit_error(message) {
-        return None;
-    }
-    Some(message.to_string())
 }
 
 /// Match an HTTP status code only as a standalone number, not inside larger numbers.
@@ -212,6 +229,50 @@ fn contains_status_code(s: &str, code: &str) -> bool {
         }
     }
     false
+}
+
+pub fn extract_rate_limit_message(raw: &str) -> Option<String> {
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+    if trimmed.starts_with('{') && trimmed.contains("\"type\"") {
+        return extract_from_json_error(trimmed);
+    }
+    if is_rate_limit_error_with_evidence(trimmed, QuotaEvidence::NonAgentChannel) && trimmed.len() < 500
+    {
+        Some(trimmed.to_string())
+    } else {
+        None
+    }
+}
+
+fn extract_from_json_error(json_str: &str) -> Option<String> {
+    let value: serde_json::Value = serde_json::from_str(json_str).ok()?;
+    let is_error_event = value.get("error").is_some()
+        || value.get("type").and_then(serde_json::Value::as_str) == Some("error");
+    if !is_error_event {
+        return None;
+    }
+    if let Some(message) = json_error_message(&value)
+        && is_rate_limit_error_with_evidence(message, QuotaEvidence::NonAgentChannel)
+    {
+        return Some(message.to_string());
+    }
+    if is_rate_limit_error_with_evidence(json_str, QuotaEvidence::NonAgentChannel) {
+        return Some(json_str.chars().take(240).collect());
+    }
+    None
+}
+
+fn json_error_message(value: &serde_json::Value) -> Option<&str> {
+    value
+        .get("message")
+        .and_then(serde_json::Value::as_str)
+        .or_else(|| value.pointer("/error/message").and_then(serde_json::Value::as_str))
+        .or_else(|| value.pointer("/error/data/message").and_then(serde_json::Value::as_str))
+        .map(str::trim)
+        .filter(|message| !message.is_empty())
 }
 
 fn parse_recovery_time(message: &str) -> Option<String> {
@@ -305,21 +366,14 @@ mod tests {
 
     #[test]
     fn test_is_rate_limit_error() {
-        assert!(is_rate_limit_error("rate limit exceeded"));
-        assert!(is_rate_limit_error("RATE LIMIT"));
-        assert!(is_rate_limit_error("error: rate_limit hit"));
-        assert!(is_rate_limit_error("HTTP 429"));
-        assert!(is_rate_limit_error("HTTP 402 Payment Required"));
-        assert!(is_rate_limit_error("quota exceeded"));
         assert!(is_rate_limit_error(
-            "You have exhausted your capacity for today."
+            "You have hit your usage limit. try again at Mar 19th, 2026 2:27 PM."
         ));
-        assert!(is_rate_limit_error("too many requests"));
-        assert!(is_rate_limit_error("usage limit reached"));
-        assert!(is_rate_limit_error("status: 429"));
-        assert!(is_rate_limit_error("error 429 too many"));
-        assert!(is_rate_limit_error("credits exhausted"));
-        assert!(is_rate_limit_error("please reload your tokens"));
+        assert!(is_rate_limit_error(
+            "Quota exhausted: Your token-plan 5-hour quota has been exhausted."
+        ));
+        assert!(is_rate_limit_error("APIError: Insufficient balance. Manage your billing here"));
+        assert!(is_rate_limit_error("402 payment required: reload your tokens"));
         assert!(is_rate_limit_error(
             "IneligibleTierError: This client is no longer supported for Gemini Code Assist for individuals; migrate to Antigravity"
         ));
@@ -329,11 +383,60 @@ mod tests {
         assert!(!is_rate_limit_error(
             "503 No accounts with a plan supporting gpt-4.1-nano"
         ));
-        // Must not match 429 inside larger numbers (token counts, IDs)
         assert!(!is_rate_limit_error(
             "tokens: 8714294 in + 27373 out = 8741667 (8442752 cached)"
         ));
         assert!(!is_rate_limit_error("invoice 1402 created"));
+    }
+
+    #[test]
+    fn prose_mentions_rate_limit_is_not_quota_failure() {
+        assert!(!is_rate_limit_error(
+            "rate_limit_kind now returns AgentKind::Custom for custom agents"
+        ));
+        assert!(!is_rate_limit_error(
+            "The RPC provider throttles us; we saw a 429 and burned Alchemy credits"
+        ));
+        assert!(!is_rate_limit_error(
+            "We must respect the rate limit on the Base sequencer feed"
+        ));
+        assert!(!is_rate_limit_error("The parser handles nested arrays correctly"));
+    }
+
+    #[test]
+    fn generic_quota_signals_apply_on_non_agent_channels() {
+        assert!(is_rate_limit_error_with_evidence(
+            "rate limit exceeded",
+            QuotaEvidence::NonAgentChannel
+        ));
+        assert!(is_rate_limit_error_with_evidence(
+            "HTTP 429 Too Many Requests",
+            QuotaEvidence::NonAgentChannel
+        ));
+        assert!(is_rate_limit_error_for_agent_with_evidence(
+            "rate limit exceeded",
+            &AgentKind::Claude,
+            QuotaEvidence::NonAgentChannel
+        ));
+        assert!(is_rate_limit_error_for_agent_with_evidence(
+            "429 Too Many Requests",
+            &AgentKind::Grok,
+            QuotaEvidence::NonAgentChannel
+        ));
+        assert!(!is_rate_limit_error_with_evidence(
+            "We must respect the rate limit on the Base sequencer feed",
+            QuotaEvidence::AgentProse
+        ));
+    }
+
+    #[test]
+    fn extract_rate_limit_message_from_nested_429_json() {
+        assert_eq!(
+            extract_rate_limit_message(
+                r#"{"type":"error","error":{"message":"429 rate limit exceeded"}}"#
+            ),
+            Some("429 rate limit exceeded".to_string())
+        );
     }
 
     #[test]
@@ -344,8 +447,8 @@ mod tests {
     #[test]
     fn test_extract_rate_limit_message_plain_text() {
         assert_eq!(
-            extract_rate_limit_message("rate limit exceeded"),
-            Some("rate limit exceeded".to_string())
+            extract_rate_limit_message("You have hit your usage limit."),
+            Some("You have hit your usage limit.".to_string())
         );
     }
 
@@ -360,8 +463,10 @@ mod tests {
     #[test]
     fn test_extract_rate_limit_message_from_error_json() {
         assert_eq!(
-            extract_rate_limit_message(r#"{"type":"error","message":"429 Too Many Requests"}"#),
-            Some("429 Too Many Requests".to_string())
+            extract_rate_limit_message(
+                r#"{"type":"error","message":"You have hit your usage limit."}"#
+            ),
+            Some("You have hit your usage limit.".to_string())
         );
     }
 
@@ -498,5 +603,42 @@ mod tests {
         let _ = std::fs::remove_file(marker_path(&AgentKind::Codex));
         let _ = std::fs::remove_file(marker_path(&AgentKind::Gemini));
         let _ = std::fs::remove_file(marker_path(&AgentKind::Qwen));
+    }
+}
+
+#[cfg(test)]
+mod stale_clear_tests {
+    use super::*;
+    use crate::types::AgentKind;
+
+    /// A marker this run wrote must outlive this run's success. Clearing it is
+    /// how an outage recorded by `record_quota_exhaustion` was handed straight
+    /// back to routing by `handle_done_postprocess`.
+    #[test]
+    fn a_marker_written_during_the_run_is_not_cleared_by_success() {
+        let temp = tempfile::tempdir().unwrap();
+        let _guard = crate::paths::AidHomeGuard::set(temp.path());
+        clear_rate_limit(&AgentKind::Qwen);
+
+        let task_start = Local::now() - chrono::Duration::minutes(5);
+        mark_rate_limited(&AgentKind::Qwen, "Your token-plan 5-hour quota has been exhausted.");
+
+        assert!(!clear_rate_limit_if_stale(&AgentKind::Qwen, task_start));
+        assert!(is_rate_limited(&AgentKind::Qwen));
+    }
+
+    /// A marker left by an earlier run is stale and a fresh success clears it,
+    /// exactly as before this change.
+    #[test]
+    fn a_marker_from_an_earlier_run_is_still_cleared() {
+        let temp = tempfile::tempdir().unwrap();
+        let _guard = crate::paths::AidHomeGuard::set(temp.path());
+        clear_rate_limit(&AgentKind::Qwen);
+
+        mark_rate_limited(&AgentKind::Qwen, "Your token-plan 5-hour quota has been exhausted.");
+        let task_start = Local::now() + chrono::Duration::minutes(5);
+
+        assert!(clear_rate_limit_if_stale(&AgentKind::Qwen, task_start));
+        assert!(!is_rate_limited(&AgentKind::Qwen));
     }
 }

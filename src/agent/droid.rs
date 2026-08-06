@@ -290,7 +290,7 @@ fn droid_error_detail(v: &Value) -> Option<String> {
 }
 
 fn is_droid_rate_limit(v: &Value, detail: Option<&str>) -> bool {
-    if detail.is_some_and(rate_limit::is_rate_limit_error) {
+    if detail.is_some_and(|detail| rate_limit::is_rate_limit_error_for_agent(detail, &AgentKind::Droid)) {
         return true;
     }
     let status = v

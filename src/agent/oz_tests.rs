@@ -202,7 +202,7 @@ fn parses_rate_limit_error_and_marks_agent() {
     let _aid_home = paths::AidHomeGuard::set(temp.path());
     let _ = rate_limit::clear_rate_limit(&AgentKind::Oz);
     let agent = OzAgent;
-    let line = r#"{"type":"error","message":"HTTP 429 too many requests"}"#;
+    let line = r#"{"type":"error","message":"Error: Quota limit reached."}"#;
     let event = agent
         .parse_event(&TaskId("t-oz".to_string()), line)
         .expect("error event should parse");
@@ -210,7 +210,7 @@ fn parses_rate_limit_error_and_marks_agent() {
     assert_eq!(event.event_kind, EventKind::Error);
     let info =
         rate_limit::get_rate_limit_info(&AgentKind::Oz).expect("rate limit marker should be created");
-    assert_eq!(info.message.as_deref(), Some("HTTP 429 too many requests"));
+    assert_eq!(info.message.as_deref(), Some("Error: Quota limit reached."));
 
     let _ = rate_limit::clear_rate_limit(&AgentKind::Oz);
 }

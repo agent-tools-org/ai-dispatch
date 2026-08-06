@@ -37,13 +37,18 @@ pub fn render_multipane(frame: &mut ratatui::Frame<'_>, panes: &[PaneData], acti
         .zip(pane_areas.iter())
         .enumerate()
     {
-        frame.render_widget(render_pane(pane, index == active_pane), *pane_area);
+        frame.render_widget(
+            render_pane(pane, index == active_pane, pane_area.height),
+            *pane_area,
+        );
     }
     let extra = panes.len().saturating_sub(6);
     let footer = if extra > 0 {
-        format!("Tab=pane j/k=scroll Enter=detail Esc=board q=quit | +{extra} more")
+        format!(
+            "Tab=pane j/k PgUp/PgDn Home/End Enter=detail Esc=board q=quit | +{extra} more"
+        )
     } else {
-        "Tab=pane j/k=scroll Enter=detail Esc=board q=quit".into()
+        "Tab=pane j/k PgUp/PgDn Home/End Enter=detail Esc=board q=quit".into()
     };
     frame.render_widget(
         Paragraph::new(ratatui::text::Line::from(ratatui::text::Span::styled(
@@ -118,7 +123,7 @@ fn compute_pane_layout(area: Rect, count: usize) -> Vec<Rect> {
     }
 }
 
-fn render_pane(pane: &PaneData, is_active: bool) -> List<'static> {
+fn render_pane(pane: &PaneData, is_active: bool, area_height: u16) -> List<'static> {
     let is_done = matches!(pane.status.as_str(), "done" | "merged");
     let is_running = pane.status == "running";
     let is_failed = pane.status == "failed";
@@ -192,11 +197,8 @@ fn render_pane(pane: &PaneData, is_active: bool) -> List<'static> {
     } else {
         Style::default().fg(status_color)
     };
-    let prompt = if pane.prompt.len() <= 60 {
-        pane.prompt.clone()
-    } else {
-        { let mut end = 57; while !pane.prompt.is_char_boundary(end) { end -= 1; } format!("{}...", &pane.prompt[..end]) }
-    };
+    // Ellipsis truncation is intentional and visible ("...").
+    let prompt = truncate_visible(&pane.prompt, 60);
     let mut items = vec![ListItem::new(format!("Prompt: {prompt}"))];
     let summary = format!(
         "Tokens: {}  Cost: {}  CPU: {}  Mem: {}",
@@ -205,15 +207,20 @@ fn render_pane(pane: &PaneData, is_active: bool) -> List<'static> {
     items.push(ListItem::new(summary).style(Style::default().fg(Color::Indexed(243))));
     if !pane.milestone.is_empty() {
         items.push(
-            ListItem::new(format!("Progress: {}", pane.milestone))
-                .style(Style::default().fg(Color::Green)),
+            ListItem::new(format!(
+                "Progress: {}",
+                truncate_visible(&pane.milestone, 48)
+            ))
+            .style(Style::default().fg(Color::Green)),
         );
     }
-    // Scrollable event window
+    // Scrollable event window sized to the real pane height (not a fixed 12).
     let header_lines = items.len();
-    let pane_height: usize = 12;
-    let visible_count = pane_height.saturating_sub(header_lines + 1); // +1 for scroll indicator
-    let end = pane.events.len().saturating_sub(pane.scroll_offset);
+    let inner_h = (area_height as usize).saturating_sub(2); // borders
+    let visible_count = inner_h.saturating_sub(header_lines + 1).max(1); // +1 indicator
+    let max_offset = pane.events.len().saturating_sub(1);
+    let scroll = pane.scroll_offset.min(max_offset);
+    let end = pane.events.len().saturating_sub(scroll);
     let start = end.saturating_sub(visible_count);
     let visible = &pane.events[start..end];
     for (ts, kind, detail) in visible {
@@ -228,12 +235,14 @@ fn render_pane(pane: &PaneData, is_active: bool) -> List<'static> {
                 _ => Style::default(),
             }
         };
+        // Cap detail so a single long line cannot stretch the pane layout.
+        let detail = truncate_visible(detail, 72);
         items.push(ListItem::new(format!("{ts} [{kind}] {detail}")).style(event_style));
     }
     if pane.total_events > visible_count {
         let pos = format!(
             "[{}/{}]",
-            pane.total_events.saturating_sub(pane.scroll_offset),
+            pane.total_events.saturating_sub(scroll),
             pane.total_events
         );
         items.push(ListItem::new(pos).style(Style::default().fg(Color::Indexed(243))));
@@ -246,4 +255,13 @@ fn render_pane(pane: &PaneData, is_active: bool) -> List<'static> {
             .borders(Borders::ALL)
             .border_style(Style::default().fg(border_color)),
     )
+}
+
+fn truncate_visible(value: &str, max: usize) -> String {
+    if value.chars().count() <= max {
+        return value.to_string();
+    }
+    let end = max.saturating_sub(3);
+    let clipped: String = value.chars().take(end).collect();
+    format!("{clipped}...")
 }

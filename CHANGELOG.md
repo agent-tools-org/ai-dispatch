@@ -1,3 +1,10 @@
+## v10.6.0 (2026-08-06)
+- `aid hook session-start` and the official guide now state what the dispatcher owns rather than repeating a command list available from `--help`. The session-start text is injected into every session, so it is the one place a caller reliably reads.
+- It leads with what aid refuses to guess: declare the task profile, declare `--skill` because aid picks none, declare `--kind` to narrow the injected toolbox because omitting it describes every tool. Undeclared is stored as null, not inferred.
+- It states the two routing rules learned by breaking them: a route is `<cli>/<provider>/<model>` and one exhausted route says nothing about another provider reaching a model of the same class; and never dispatch to a weaker model on the provider pool the caller is already running on, because a different provider is delegation while the same pool for a worse model is waste.
+- It documents a hazard that is easy to misdiagnose. aid snapshots a directory's dirty paths once, at dispatch, and excludes them when rescuing an agent's uncommitted output — so edits made before dispatch are protected, and edits made during the run are not, being indistinguishable from the agent's. The rule is not "commit before dispatching" but "do not edit a directory an agent is working in"; `--worktree` puts the agent somewhere else entirely.
+
+
 ## v10.5.1 (2026-08-06)
 - Fixed: `aid run --dry-run` left a phantom failure behind. A dry run builds a real task row to resolve the prompt and then returns without dispatching; left in `pending`, the background reaper found it ten minutes later and recorded "Task timed out in pending state after 602s (reason: unknown)" against an agent that was never invoked. Dry runs now end as `skipped`.
 - That was corrupting routing, not just the board. `agent_success_rates` counts `done|merged|failed` and is what `aid advise` weights recommendations with, so every dry run quietly lowered an agent's score. Sixteen phantom rows accumulated in one day; agy's 30-day success rate read 73.7% where excluding only those rows it is 79.7%. `skipped` is excluded from both the reaper and the success-rate queries.

@@ -12,6 +12,12 @@ use crate::types::{Task, TaskFilter, TaskStatus};
 
 impl App {
     pub(super) fn reload_tasks(&mut self) -> Result<()> {
+        // Selection is identity-based: follow the selected task across reorders.
+        let selected_id = self
+            .tasks
+            .get(self.selected)
+            .map(|task| task.id.as_str().to_string());
+        let prev_selected = self.selected;
         let tasks = self.load_tasks()?;
         self.milestones = self.load_milestones_batch(&tasks)?;
         if let Ok(wgs) = self.store.list_workgroups() {
@@ -21,10 +27,32 @@ impl App {
                 .collect();
         }
         self.tasks = tasks;
-        if self.selected >= self.tasks.len() && !self.tasks.is_empty() {
-            self.selected = self.tasks.len() - 1;
-        }
+        self.selected = resolve_selected_index(&self.tasks, selected_id.as_deref(), prev_selected);
         Ok(())
+    }
+
+    /// When the previously selected task is gone, keep a nearby clamped index
+    /// (not jump to 0). Empty list → index 0.
+    pub(super) fn resolve_tree_selected(
+        nodes: &[super::super::tree_data::TreeNode],
+        anchor: Option<(String, bool)>,
+        prev: usize,
+    ) -> usize {
+        if nodes.is_empty() {
+            return 0;
+        }
+        if let Some((id, is_header)) = anchor.as_ref() {
+            if let Some(idx) = nodes
+                .iter()
+                .position(|n| n.task.id.as_str() == id && n.is_group_header == *is_header)
+            {
+                return idx;
+            }
+            if let Some(idx) = nodes.iter().position(|n| n.task.id.as_str() == id) {
+                return idx;
+            }
+        }
+        prev.min(nodes.len() - 1)
     }
 
     fn load_tasks(&self) -> Result<Vec<Task>> {
@@ -112,4 +140,18 @@ impl App {
         result.extend(fresh);
         Ok(result)
     }
+}
+
+fn resolve_selected_index(tasks: &[Task], selected_id: Option<&str>, prev: usize) -> usize {
+    if tasks.is_empty() {
+        return 0;
+    }
+    if let Some(id) = selected_id {
+        if let Some(idx) = tasks.iter().position(|task| task.id.as_str() == id) {
+            return idx;
+        }
+        // Task genuinely gone: clamp previous index into the new list.
+        return prev.min(tasks.len() - 1);
+    }
+    0
 }

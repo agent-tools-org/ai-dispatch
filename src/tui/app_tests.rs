@@ -252,7 +252,10 @@ fn loads_running_task_milestone() {
 #[test]
 fn detail_mode_cycles_tabs_and_resets_scroll() {
     let store = Arc::new(Store::open_memory().unwrap());
-    store.insert_task(&make_task("t-1003", None)).unwrap();
+    let mut task = make_task("t-1003", None);
+    // Multi-line prompt so j can advance scroll past 0 under clamp.
+    task.prompt = (0..20).map(|i| format!("line {i}")).collect::<Vec<_>>().join("\n");
+    store.insert_task(&task).unwrap();
     let mut app = App::new(
         store,
         super::super::RunOptions {
@@ -300,6 +303,7 @@ fn detail_mode_keeps_selection_stable_and_resets_on_escape() {
 
     app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
         .unwrap();
+    // Empty events: j is clamped; selection must stay put.
     app.handle_key(KeyEvent::new(KeyCode::Char('j'), KeyModifiers::NONE))
         .unwrap();
     assert_eq!(app.selected, 0);

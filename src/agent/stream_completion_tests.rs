@@ -191,3 +191,35 @@ fn a_delivered_run_that_hit_a_refusal_keeps_its_marker() {
     // What watcher.rs consults before clearing.
     assert!(crate::rate_limit::is_rate_limited(&crate::types::AgentKind::Qwen));
 }
+
+#[test]
+fn quota_scan_tail_captures_refusal_before_large_diagnostics() {
+    let refusal = "Quota exhausted: Your token-plan 5-hour quota has been exhausted.";
+    let diagnostics = "x".repeat(10_000);
+    let output = format!("{refusal}\n{diagnostics}");
+    let tail = quota_scan_tail(&output);
+    assert!(
+        agent_prose_quota_match(tail, crate::types::AgentKind::Qwen),
+        "refusal must be preserved even when followed by >4 KB of diagnostics"
+    );
+}
+
+#[test]
+fn quota_scan_tail_aligns_start_to_line_boundary() {
+    let mut output = String::with_capacity(70_000);
+    output.push_str("header line\n");
+    while output.len() < 50_000 {
+        output.push_str("some preliminary lines in output...\n");
+    }
+    output.push_str("split line start ");
+    output.push_str(&"y".repeat(100));
+    output.push_str("\nQuota exhausted: Your token-plan 5-hour quota has been exhausted.\n");
+    output.push_str(&"z".repeat(10_000));
+
+    let tail = quota_scan_tail(&output);
+    let first_line = tail.lines().next().unwrap_or("");
+    assert!(
+        !first_line.starts_with("y"),
+        "window start must align to line boundary and not start mid-line"
+    );
+}

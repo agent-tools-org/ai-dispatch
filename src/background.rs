@@ -174,7 +174,7 @@ async fn run_task_inner(store: &Arc<Store>, spec: &BackgroundRunSpec) -> Result<
     let mut std_cmd = agent
         .build_command(&spec.prompt, &opts)
         .map_err(|err| anyhow::anyhow!("Failed to build agent command: {err:#}"))?;
-    agent::apply_run_env(&mut std_cmd, &opts);
+    let _home_guard = agent::apply_run_env(&mut std_cmd, &opts, Some(&spec.task_id))?;
     if let Some(ref dir) = spec.dir {
         agent::set_git_ceiling(&mut std_cmd, dir);
     }

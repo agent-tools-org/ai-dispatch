@@ -154,7 +154,11 @@ pub fn set_git_ceiling(cmd: &mut Command, dir: &str) {
     }
 }
 
-pub fn apply_run_env(cmd: &mut Command, opts: &RunOpts) {
+pub fn apply_run_env(
+    cmd: &mut Command,
+    opts: &RunOpts,
+    task_id: Option<&str>,
+) -> anyhow::Result<super::home_isolation::IsolatedHomeGuard> {
     cmd.env("AID_HOME", crate::paths::aid_dir());
     if let Some(env) = opts.env.as_ref() {
         for (key, value) in env {
@@ -168,6 +172,9 @@ pub fn apply_run_env(cmd: &mut Command, opts: &RunOpts) {
             }
         }
     }
+    let guard = super::home_isolation::IsolatedHomeGuard::create(task_id)?;
+    cmd.env("HOME", guard.path());
+    Ok(guard)
 }
 
 pub(crate) fn which_exists(name: &str) -> bool {

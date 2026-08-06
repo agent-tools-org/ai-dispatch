@@ -38,6 +38,9 @@ use crate::prompt_scan::scan_for_injection;
 use crate::store;
 use crate::types::*;
 
+pub mod home_isolation;
+pub use home_isolation::IsolatedHomeGuard;
+
 pub(crate) mod env;
 #[allow(unused_imports)]
 pub use env::{

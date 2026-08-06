@@ -202,7 +202,7 @@ pub(super) async fn run_foreground_task(
         .map_err(|err| anyhow::anyhow!("Failed to build agent command: {err:#}"))?;
     // TODO: integrate credential_pool rotation here
     let opts = build_run_opts(args, prepared, prompt_bundle);
-    agent::apply_run_env(&mut std_cmd, &opts);
+    let _home_guard = agent::apply_run_env(&mut std_cmd, &opts, Some(prepared.task_id.as_str()))?;
     if let Some(ref dir) = prepared.effective_dir {
         agent::set_git_ceiling(&mut std_cmd, dir);
     }

@@ -131,3 +131,47 @@ fn cascading_to_the_same_agent_keeps_the_model() {
     }
     assert_eq!(args.model.as_deref(), Some("gpt-5.6-luna"));
 }
+
+#[test]
+fn refused_quota_rescue_preserves_failed_status_for_cascade() {
+    let repo = init_repo();
+    let linked_root = tempfile::tempdir().unwrap();
+    let linked = linked_root.path().join("linked");
+    git(repo.path(), &["worktree", "add", "-b", "feat/cascade-refuse", &linked.to_string_lossy()]);
+
+    let home_dir = tempfile::tempdir().unwrap();
+    let _guard = crate::paths::AidHomeGuard::set(home_dir.path());
+    std::fs::create_dir_all(crate::paths::logs_dir()).unwrap();
+    std::fs::write(
+        crate::paths::stderr_path("t-empty-cascade"),
+        "Error: Quota limit reached.",
+    )
+    .unwrap();
+
+    let store = crate::store::Store::open_memory().unwrap();
+    let mut task = failed_task(&linked.display().to_string());
+    task.id = TaskId("t-empty-cascade".to_string());
+    task.verify_status = VerifyStatus::Passed;
+    store.insert_task(&task).unwrap();
+
+    super::run_post::rescue_quota_failed_task(
+        &store,
+        &task.id,
+        super::run_post::read_quota_error_message(&task.id).as_deref(),
+        None,
+    );
+
+    let saved_task = store.get_task("t-empty-cascade").unwrap().unwrap();
+    assert_eq!(saved_task.status, TaskStatus::Failed);
+
+    let args = RunArgs {
+        agent_name: "oz".to_string(),
+        cascade: vec!["codebuff".to_string()],
+        ..Default::default()
+    };
+    assert_eq!(saved_task.status, TaskStatus::Failed);
+    let next_cascade = super::run_post::take_next_cascade_agent(&args);
+    assert_eq!(next_cascade, Some(("codebuff".to_string(), vec![])));
+
+    git(repo.path(), &["worktree", "remove", "--force", &linked.to_string_lossy()]);
+}

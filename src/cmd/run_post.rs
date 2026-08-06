@@ -15,17 +15,11 @@ pub(crate) async fn maybe_auto_retry_after_hang(
     task_id: &TaskId,
     args: &RunArgs,
 ) -> Result<Option<TaskId>> {
-    let Some(task) = store.get_task(task_id.as_str())? else {
-        return Ok(None);
-    };
-    if task.status != TaskStatus::Failed {
-        return Ok(None);
-    }
+    let Some(task) = store.get_task(task_id.as_str())? else { return Ok(None); };
+    if task.status != TaskStatus::Failed { return Ok(None); }
 
     let events = store.get_events(task_id.as_str())?;
-    let Some(context) = process_monitor::hung_context(&events) else {
-        return Ok(None);
-    };
+    let Some(context) = process_monitor::hung_context(&events) else { return Ok(None); };
     let retry_count = prior_hung_retry_count(store.as_ref(), &task)?;
     let Some(retries_left) = hung_retry_retries_left(args, &context, retry_count) else {
         return Ok(None);
@@ -35,15 +29,9 @@ pub(crate) async fn maybe_auto_retry_after_hang(
         return Ok(None);
     }
 
-    aid_warn!(
-        "[aid] Agent hung, auto-retrying ({} retries left)",
-        retries_left
-    );
-
-    let feedback =
-        run_hung_recovery::build_hung_retry_feedback(&hung_task, context.hung_duration_secs);
-    let root_prompt = retry_logic::root_prompt(store.as_ref(), &task)
-        .unwrap_or_else(|| args.prompt.clone());
+    aid_warn!("[aid] Agent hung, auto-retrying ({} retries left)", retries_left);
+    let feedback = run_hung_recovery::build_hung_retry_feedback(&hung_task, context.hung_duration_secs);
+    let root_prompt = retry_logic::root_prompt(store.as_ref(), &task).unwrap_or_else(|| args.prompt.clone());
     let retry_args = build_hung_retry_args(args, &task, &context, &feedback, &root_prompt)?;
 
     process_monitor::insert_hung_retry_event(store.as_ref(), task_id)?;
@@ -57,15 +45,9 @@ fn hung_retry_retries_left(
     retry_count: u32,
 ) -> Option<u32> {
     if context.transient {
-        return Some(
-            run_hung_recovery::MAX_TRANSIENT_HUNG_RETRIES
-                .saturating_sub(retry_count)
-                .saturating_sub(1),
-        );
+        return Some(run_hung_recovery::MAX_TRANSIENT_HUNG_RETRIES.saturating_sub(retry_count).saturating_sub(1));
     }
-    if args.retry == 0 {
-        return None;
-    }
+    if args.retry == 0 { return None; }
     Some(args.retry.saturating_sub(1))
 }
 
@@ -77,13 +59,8 @@ fn build_hung_retry_args(
     root_prompt: &str,
 ) -> Result<RunArgs> {
     let mut retry_args = args.clone();
-    retry_args.prompt =
-        format!("[Previous attempt feedback]\n{feedback}\n\n[Original task]\n{root_prompt}");
-    retry_args.retry = if context.transient {
-        args.retry
-    } else {
-        args.retry.saturating_sub(1)
-    };
+    retry_args.prompt = format!("[Previous attempt feedback]\n{feedback}\n\n[Original task]\n{root_prompt}");
+    retry_args.retry = if context.transient { args.retry } else { args.retry.saturating_sub(1) };
     retry_args.parent_task_id = Some(task.id.as_str().to_string());
     retry_args.repo = task.repo_path.clone().or_else(|| retry_args.repo.clone());
     retry_args.output = task.output_path.clone().or_else(|| retry_args.output.clone());
@@ -97,17 +74,7 @@ fn build_hung_retry_args(
     if context.transient {
         retry_args.session_id = None;
         if let Some((next_agent, remaining_cascade)) = take_next_cascade_agent(args) {
-            // A model name means something only inside one CLI. Carrying the
-            // parent's across a cascade sent agy `gpt-5.6-luna` — codex's model
-            // — and agy refused it by listing its own (`t-ac9a7a9d`, cascaded
-            // from `t-90371f9e`). The cascade exists to escape a failing route;
-            // inheriting half of that route defeats the point.
-            //
-            // Dropped only when the agent actually changes. A same-agent retry
-            // must still ask for what was asked before.
-            if retry_args.agent_name != next_agent {
-                retry_args.model = None;
-            }
+            if retry_args.agent_name != next_agent { retry_args.model = None; }
             retry_args.agent_name = next_agent;
             retry_args.cascade = remaining_cascade;
         }
@@ -117,7 +84,6 @@ fn build_hung_retry_args(
     Ok(retry_args)
 }
 
-
 pub(crate) fn maybe_run_post_done_audit(
     store: &Store,
     task_id: &TaskId,
@@ -125,15 +91,9 @@ pub(crate) fn maybe_run_post_done_audit(
     effective_dir: Option<&str>,
     repo_path: Option<&str>,
 ) -> Result<()> {
-    if !args.audit {
-        return Ok(());
-    }
-    let Some(task) = store.get_task(task_id.as_str())? else {
-        return Ok(());
-    };
-    if task.status != TaskStatus::Done || task.audit_verdict.is_some() {
-        return Ok(());
-    }
+    if !args.audit { return Ok(()); }
+    let Some(task) = store.get_task(task_id.as_str())? else { return Ok(()); };
+    if task.status != TaskStatus::Done || task.audit_verdict.is_some() { return Ok(()); }
     if !crate::aic::is_available() {
         aid_warn!("[aid] --audit requested but 'aic' not found on PATH — skipping cross-audit");
         store.update_task_audit(task_id.as_str(), Some("skipped"), None)?;
@@ -149,11 +109,7 @@ pub(crate) fn maybe_run_post_done_audit(
 
     let audit_dir = audit_current_dir(effective_dir, repo_path);
     let result = crate::aic::run_audit(task_id.as_str(), audit_dir.as_deref());
-    store.update_task_audit(
-        task_id.as_str(),
-        Some(result.verdict.as_str()),
-        result.report_path.as_deref(),
-    )?;
+    store.update_task_audit(task_id.as_str(), Some(result.verdict.as_str()), result.report_path.as_deref())?;
     store.insert_event(&TaskEvent {
         task_id: task_id.clone(),
         timestamp: chrono::Local::now(),
@@ -173,19 +129,12 @@ pub(crate) fn maybe_flag_empty_worktree_diff(
     if task.read_only || task.status != TaskStatus::Done || task.verify_status != VerifyStatus::Skipped {
         return;
     }
-    let Some(wt_path) = task.worktree_path.as_deref() else {
-        return;
-    };
+    let Some(wt_path) = task.worktree_path.as_deref() else { return; };
     let path = Path::new(wt_path);
-    if !path.exists() {
-        return;
-    }
+    if !path.exists() { return; }
     if let Some(true) = worktree_is_empty_diff_with_base(path, base_branch) {
         aid_warn!("[aid] Warning: agent completed but made no code changes in worktree");
-        if let Err(err) = store.update_delivery_assessment(
-            task_id.as_str(),
-            Some(DeliveryAssessment::EmptyDiff),
-        ) {
+        if let Err(err) = store.update_delivery_assessment(task_id.as_str(), Some(DeliveryAssessment::EmptyDiff)) {
             aid_error!("[aid] Failed to record empty diff delivery assessment: {err}");
         }
     }
@@ -193,11 +142,7 @@ pub(crate) fn maybe_flag_empty_worktree_diff(
 
 pub(crate) fn auto_save_task_output(store: &Store, task: &Task) -> Result<()> {
     let transcript = crate::paths::transcript_path(task.id.as_str());
-    let log_path = task
-        .log_path
-        .as_deref()
-        .map(std::path::PathBuf::from)
-        .unwrap_or_else(|| crate::paths::log_path(task.id.as_str()));
+    let log_path = task.log_path.as_deref().map(PathBuf::from).unwrap_or_else(|| crate::paths::log_path(task.id.as_str()));
     let Some(content) = [transcript, log_path]
         .into_iter()
         .find_map(|path| super::run_prompt::extract_output_fallback_from_path(&path))
@@ -229,6 +174,7 @@ pub(crate) fn rescue_quota_failed_task(
     store: &Store,
     task_id: &TaskId,
     quota_error_message: Option<&str>,
+    base_branch: Option<&str>,
 ) {
     if quota_error_message.is_none() {
         return;
@@ -236,10 +182,28 @@ pub(crate) fn rescue_quota_failed_task(
     let Ok(Some(task)) = store.get_task(task_id.as_str()) else {
         return;
     };
-    if task.status == TaskStatus::Failed && task.verify_status == VerifyStatus::Passed {
+    if task.status == TaskStatus::Failed
+        && task.verify_status == VerifyStatus::Passed
+        && has_task_done_work(store, &task, base_branch)
+    {
         aid_info!("[aid] Rescuing quota-failed task {} — verify passed", task_id);
         let _ = crate::task_lifecycle::rescue_to_done(store, task_id);
     }
+}
+
+fn has_task_done_work(store: &Store, task: &Task, base_branch: Option<&str>) -> bool {
+    if let Some(wt_path) = task.worktree_path.as_deref() {
+        let path = Path::new(wt_path);
+        if path.exists() {
+            if let Some(empty) = worktree_is_empty_diff_with_base(path, base_branch) {
+                return !empty;
+            }
+        }
+    }
+    let Ok(events) = store.get_events(task.id.as_str()) else {
+        return false;
+    };
+    !events.is_empty()
 }
 
 pub(crate) fn read_quota_error_message(task_id: &TaskId) -> Option<String> {
@@ -260,11 +224,7 @@ pub(crate) fn read_quota_error_message(task_id: &TaskId) -> Option<String> {
 
 pub(crate) fn take_next_cascade_agent(args: &RunArgs) -> Option<(String, Vec<String>)> {
     let mut cascade = args.cascade.clone();
-    if cascade.is_empty() {
-        None
-    } else {
-        Some((cascade.remove(0), cascade))
-    }
+    if cascade.is_empty() { None } else { Some((cascade.remove(0), cascade)) }
 }
 
 fn prior_hung_retry_count(store: &Store, task: &Task) -> Result<u32> {
@@ -278,16 +238,11 @@ fn prior_hung_retry_count(store: &Store, task: &Task) -> Result<u32> {
 }
 
 fn audit_current_dir(effective_dir: Option<&str>, repo_path: Option<&str>) -> Option<PathBuf> {
-    effective_dir
-        .or(repo_path)
-        .map(PathBuf::from)
-        .filter(|path| path.is_dir())
+    effective_dir.or(repo_path).map(PathBuf::from).filter(|path| path.is_dir())
 }
 
 fn find_rate_limit_line(content: &str) -> Option<String> {
-    content
-        .lines()
-        .find_map(rate_limit::extract_rate_limit_message)
+    content.lines().find_map(rate_limit::extract_rate_limit_message)
 }
 
 #[cfg(test)]

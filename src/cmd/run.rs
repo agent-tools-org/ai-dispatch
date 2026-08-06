@@ -128,7 +128,7 @@ pub(crate) fn apply_retry_target(task: &Task, retry_args: &mut RunArgs) -> Resul
 fn take_next_cascade_agent(args: &RunArgs) -> Option<(String, Vec<String>)> { run_post::take_next_cascade_agent(args) }
 #[cfg(test)]
 fn auto_save_task_output(store: &Store, task: &Task) -> Result<()> { run_post::auto_save_task_output(store, task) }
-pub(crate) fn rescue_quota_failed_task(store: &Store, task_id: &TaskId, quota_error_message: Option<&str>) { run_post::rescue_quota_failed_task(store, task_id, quota_error_message); }
+pub(crate) fn rescue_quota_failed_task(store: &Store, task_id: &TaskId, quota_error_message: Option<&str>, base_branch: Option<&str>) { run_post::rescue_quota_failed_task(store, task_id, quota_error_message, base_branch); }
 pub(crate) fn read_quota_error_message(task_id: &TaskId) -> Option<String> { run_post::read_quota_error_message(task_id) }
 #[cfg(test)]
 fn worktree_is_empty_diff(worktree_dir: &Path) -> Option<bool> { run_post::worktree_is_empty_diff(worktree_dir) }

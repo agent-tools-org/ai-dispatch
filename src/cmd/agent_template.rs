@@ -92,7 +92,7 @@ pub(super) fn build_builtin_agent_toml(target_name: &str, kind: AgentKind) -> St
     toml.push_str(&format!("streaming = {}\n", streaming));
     toml.push_str("output_format = \"text\"  # text | jsonl\n\n");
     toml.push_str(
-        "# Egress is derived from base_url (loopback => local for --egress local).\n",
+        "# Egress is derived from base_url (loopback => local; RFC1918/link-local => private-network).\n",
     );
     toml.push_str("# base_url = \"http://127.0.0.1:11434/v1\"\n\n");
     toml.push_str("# Strength categories for auto-selection boosts\n");

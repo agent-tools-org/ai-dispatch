@@ -48,9 +48,12 @@ impl ProviderId {
 /// claude for being "api" — same third-party class.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 pub enum EgressTier {
-    /// Endpoint is loopback only (`localhost` / `127.0.0.1` / `::1`). The only
+    /// Endpoint is loopback only (`localhost` / `127.0.0.0/8` / `::1`). The only
     /// tier that satisfies `--egress local`.
     Local,
+    /// Endpoint is on the operator's private network (RFC1918 / link-local).
+    /// Satisfies `--egress private-network` but not `--egress local`.
+    PrivateNetwork,
     /// Data leaves the machine for a third party.
     ThirdParty,
     /// Not established. Must not be admitted by `--egress local`.
@@ -61,6 +64,7 @@ impl EgressTier {
     pub fn label(self) -> &'static str {
         match self {
             Self::Local => "local",
+            Self::PrivateNetwork => "private-network",
             Self::ThirdParty => "third-party",
             Self::Unknown => "unknown",
         }
@@ -68,6 +72,10 @@ impl EgressTier {
 
     pub fn admits_local(self) -> bool {
         matches!(self, Self::Local)
+    }
+
+    pub fn admits_private_network(self) -> bool {
+        matches!(self, Self::Local | Self::PrivateNetwork)
     }
 }
 
@@ -145,63 +153,37 @@ pub fn provider_for_cli(cli: AgentKind) -> (ProviderId, MeteringShape) {
     (ProviderId::new(id), shape)
 }
 
-/// Egress for a named provider without a separate endpoint observation.
-///
-/// A known id is still third-party: every provider aid has established so far
-/// reaches a remote endpoint. Local is established only by a loopback
-/// `base_url` (see [`egress_for_base_url`]), never by CLI identity.
-pub fn egress_for_provider(provider: &ProviderId) -> EgressTier {
-    if provider.is_unknown() {
-        EgressTier::Unknown
-    } else {
-        EgressTier::ThirdParty
-    }
+/// Provider identity for a custom agent. Declared in the agent TOML (or BYOK
+/// manifest that generated it); never inferred from `base_url`.
+pub fn provider_for_custom(
+    declared_provider: Option<&str>,
+    declared_metering: Option<&str>,
+) -> (ProviderId, MeteringShape) {
+    let provider = match declared_provider.map(str::trim).filter(|s| !s.is_empty()) {
+        Some(id) => ProviderId::new(id),
+        None => ProviderId::unknown(),
+    };
+    let metering = declared_metering
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(parse_metering_label)
+        .unwrap_or(MeteringShape::Unknown);
+    (provider, metering)
 }
 
-/// Egress for a CLI's default provider. Every current built-in is third-party
-/// or unknown; none qualify for `--egress local`.
-pub fn egress_for_cli(cli: AgentKind) -> EgressTier {
-    let (provider, _) = provider_for_cli(cli);
-    egress_for_provider(&provider)
-}
+mod provider_egress;
+pub use provider_egress::{egress_for_base_url, egress_for_cli, egress_for_provider};
 
-/// Establish egress from an OpenAI-compatible `base_url`. Loopback hosts are
-/// Local; any other host is ThirdParty; an unparseable empty value is Unknown.
-pub fn egress_for_base_url(base_url: &str) -> EgressTier {
-    let trimmed = base_url.trim();
-    if trimmed.is_empty() {
-        return EgressTier::Unknown;
+fn parse_metering_label(label: &str) -> MeteringShape {
+    match label {
+        "account_pool" => MeteringShape::AccountPool,
+        "per_model_family" => MeteringShape::PerModelFamily,
+        "spend_budget" => MeteringShape::SpendBudget,
+        "subscription" => MeteringShape::Subscription,
+        "none" => MeteringShape::None,
+        "unknown" => MeteringShape::Unknown,
+        _ => MeteringShape::Unknown,
     }
-    match loopback_host(trimmed) {
-        Some(true) => EgressTier::Local,
-        Some(false) => EgressTier::ThirdParty,
-        None => EgressTier::Unknown,
-    }
-}
-
-/// `Some(true)` when the URL/host is loopback, `Some(false)` when a non-loopback
-/// host is visible, `None` when no host can be read.
-fn loopback_host(base_url: &str) -> Option<bool> {
-    let host = host_from_base_url(base_url)?;
-    let host = host.trim_matches(|c| c == '[' || c == ']').to_ascii_lowercase();
-    Some(host == "localhost" || host == "127.0.0.1" || host == "::1")
-}
-
-fn host_from_base_url(base_url: &str) -> Option<&str> {
-    let rest = base_url
-        .split_once("://")
-        .map(|(_, after)| after)
-        .unwrap_or(base_url);
-    let authority = rest.split('/').next().unwrap_or(rest);
-    if authority.is_empty() {
-        return None;
-    }
-    // Strip userinfo and port; IPv6 stays bracketed until loopback_host.
-    let hostport = authority.rsplit('@').next().unwrap_or(authority);
-    if hostport.starts_with('[') {
-        return hostport.split(']').next().map(|h| h.trim_start_matches('['));
-    }
-    Some(hostport.split(':').next().unwrap_or(hostport)).filter(|h| !h.is_empty())
 }
 
 /// The family a model is metered under, by vendor prefix — only meaningful for

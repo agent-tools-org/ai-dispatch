@@ -173,6 +173,8 @@ mod tests {
         assert!(BYOK_APPLY.contains("Usage: scripts/aid-byok-apply.sh"));
         assert!(BYOK_REMOVE.contains("Usage: scripts/aid-byok-remove.sh"));
         assert!(BYOK_PROBE.contains("tool_calls: yes"));
+        assert!(BYOK_PROBE.contains("tool_calls: inconclusive"));
+        assert!(BYOK_PROBE.contains("3  inconclusive"));
     }
 
     #[test]

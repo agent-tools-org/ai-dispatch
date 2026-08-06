@@ -40,7 +40,7 @@ pub struct RunArgs {
     pub urgency: Option<TaskUrgency>,
     #[arg(long)]
     pub rigor: Option<TaskRigor>,
-    #[arg(long, default_value = "any", help = "Data egress: any (default) or local (loopback provider only)")]
+    #[arg(long, default_value = "any", help = "Data egress: any (default), local (loopback only), or private-network (loopback or RFC1918/link-local)")]
     pub egress: TaskEgress,
     #[arg(long)]
     pub kind: Option<TaskCategory>,

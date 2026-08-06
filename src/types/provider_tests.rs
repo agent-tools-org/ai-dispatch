@@ -81,6 +81,7 @@ fn no_builtin_cli_is_local_egress() {
 #[test]
 fn only_loopback_base_url_is_local() {
     assert_eq!(egress_for_base_url("http://127.0.0.1:11434/v1"), EgressTier::Local);
+    assert_eq!(egress_for_base_url("http://127.0.0.2/v1"), EgressTier::Local);
     assert_eq!(egress_for_base_url("http://localhost:8080/v1"), EgressTier::Local);
     assert_eq!(egress_for_base_url("http://[::1]:8080/v1"), EgressTier::Local);
     assert_eq!(
@@ -90,10 +91,103 @@ fn only_loopback_base_url_is_local() {
     assert_eq!(egress_for_base_url(""), EgressTier::Unknown);
 }
 
+/// Private-network hosts are distinct from loopback and from public third-party.
+#[test]
+fn private_network_base_url_is_not_local_or_third_party() {
+    assert_eq!(
+        egress_for_base_url("http://10.0.32.184:11434/v1"),
+        EgressTier::PrivateNetwork
+    );
+    assert_eq!(
+        egress_for_base_url("http://192.168.1.50:8080/v1"),
+        EgressTier::PrivateNetwork
+    );
+    assert!(!egress_for_base_url("http://10.0.32.184:11434/v1").admits_local());
+    assert!(
+        egress_for_base_url("http://10.0.32.184:11434/v1").admits_private_network()
+    );
+}
+
+/// Declared custom providers are not inferred from the endpoint host.
+#[test]
+fn custom_provider_is_declared_not_inferred() {
+    let (known, metering) = provider_for_custom(Some("ollama"), Some("none"));
+    assert_eq!(known.as_str(), "ollama");
+    assert_eq!(metering, MeteringShape::None);
+    let (unknown, shape) = provider_for_custom(None, None);
+    assert!(unknown.is_unknown());
+    assert_eq!(shape, MeteringShape::Unknown);
+}
+
 /// An unknown provider is not admitted by --egress local even when a custom
 /// agent config claims trust_tier = "local" by hand.
 #[test]
 fn unknown_provider_does_not_admit_local() {
     assert!(!egress_for_provider(&ProviderId::unknown()).admits_local());
     assert!(!egress_for_provider(&ProviderId::new("openai-chatgpt-plan")).admits_local());
+}
+
+/// Hostnames are never classified by leading characters; only parsed IPs get
+/// IPv6 ULA/link-local rules.
+#[test]
+fn public_hostnames_with_fc_or_fd_prefix_are_third_party() {
+    assert_eq!(
+        egress_for_base_url("http://fc2.com/v1"),
+        EgressTier::ThirdParty
+    );
+    assert_eq!(
+        egress_for_base_url("http://fd-cdn.example.com/v1"),
+        EgressTier::ThirdParty
+    );
+}
+
+/// mDNS and private DNS suffixes classify as private-network, not third-party.
+#[test]
+fn mdns_and_home_arpa_hosts_are_private_network() {
+    assert_eq!(
+        egress_for_base_url("http://MingdeiMac.local:11434/v1"),
+        EgressTier::PrivateNetwork
+    );
+    assert_eq!(
+        egress_for_base_url("http://printer.home.arpa/v1"),
+        EgressTier::PrivateNetwork
+    );
+}
+
+/// RFC1918 boundary: 172.15 is public; 172.16–172.31 private; 172.32 public.
+#[test]
+fn rfc1918_172_boundary_octets() {
+    assert_eq!(
+        egress_for_base_url("http://172.15.255.1/v1"),
+        EgressTier::ThirdParty
+    );
+    assert_eq!(
+        egress_for_base_url("http://172.16.0.1/v1"),
+        EgressTier::PrivateNetwork
+    );
+    assert_eq!(
+        egress_for_base_url("http://172.31.255.254/v1"),
+        EgressTier::PrivateNetwork
+    );
+    assert_eq!(
+        egress_for_base_url("http://172.32.0.1/v1"),
+        EgressTier::ThirdParty
+    );
+}
+
+/// Parsed IPv6 ULA and link-local addresses are private-network.
+#[test]
+fn ipv6_ula_and_link_local_are_private_network() {
+    assert_eq!(
+        egress_for_base_url("http://[fc00::1]/v1"),
+        EgressTier::PrivateNetwork
+    );
+    assert_eq!(
+        egress_for_base_url("http://[fd12:3456:789a:1::1]/v1"),
+        EgressTier::PrivateNetwork
+    );
+    assert_eq!(
+        egress_for_base_url("http://[fe80::1]/v1"),
+        EgressTier::PrivateNetwork
+    );
 }

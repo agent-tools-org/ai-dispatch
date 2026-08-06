@@ -50,6 +50,12 @@ pub struct CustomAgentConfig {
     /// is the only evidence that admits `--egress local`.
     #[serde(default)]
     pub base_url: Option<String>,
+    /// Declared metering entity for this route. Never inferred from the host.
+    #[serde(default)]
+    pub provider: Option<String>,
+    /// Declared metering shape (`none`, `account_pool`, ...). Stays unknown when unset.
+    #[serde(default)]
+    pub metering: Option<String>,
     #[serde(default)]
     pub strengths: Vec<String>,
     /// When set (currently only "opencode"), the registry returns a
@@ -255,6 +261,8 @@ mod tests {
             capabilities: CapabilityScores::default(),
             trust_tier: default_trust_tier(),
             base_url: None,
+            provider: None,
+            metering: None,
             strengths: Vec::new(),
             delegate_to: None,
             forced_model: None,

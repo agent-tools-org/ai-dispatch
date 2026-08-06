@@ -36,7 +36,7 @@ pub use self::attribution::{grade_observation, AttributionSource, ROUTER_ALIASES
 #[allow(unused_imports)] // re-export public provider API for external callers
 pub use self::provider::{
     egress_for_base_url, egress_for_cli, egress_for_provider, model_family, provider_for_cli,
-    EgressTier, MeteringShape, ProviderId,
+    provider_for_custom, EgressTier, MeteringShape, ProviderId,
 };
 pub use self::route::Route;
 pub use self::delivery::DeliveryAssessment;

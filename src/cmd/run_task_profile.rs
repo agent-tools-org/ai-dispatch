@@ -20,11 +20,15 @@ pub(super) fn validate_critical_rigor(args: &RunArgs) -> Result<()> {
 }
 
 /// `--egress local` is independent of rigor: only a loopback provider passes.
+/// `--egress private-network` admits loopback or RFC1918/link-local endpoints.
 pub(super) fn validate_egress(args: &RunArgs) -> Result<()> {
-    if !args.declared_egress.requires_local() {
-        return Ok(());
+    if args.declared_egress.requires_local() {
+        crate::agent::egress::require_local_egress(&args.agent_name)?;
     }
-    crate::agent::egress::require_local_egress(&args.agent_name)
+    if args.declared_egress.requires_private_network() {
+        crate::agent::egress::require_private_network_egress(&args.agent_name)?;
+    }
+    Ok(())
 }
 
 pub(super) fn persist_declaration(store: &Store, task_id: &TaskId, args: &RunArgs) -> Result<()> {

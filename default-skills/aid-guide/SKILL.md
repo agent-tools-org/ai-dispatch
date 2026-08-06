@@ -18,8 +18,11 @@ already knows, which puts these responsibilities on the caller:
 1. **Declare the task profile.** `--difficulty --budget --urgency --rigor`, and
    `--kind` when the category matters. Undeclared values are stored as null
    rather than inferred, and a null tells every downstream decision that nobody
-   knows. Data locality is a separate declaration: `--egress any|local`
+   knows. Data locality is a separate declaration: `--egress any|local|private-network`
    (default `any`), decided by the provider endpoint — not by CLI identity.
+   `local` admits loopback only (`localhost`, `127.0.0.0/8`, `::1`); `private-network`
+   admits loopback or RFC1918/link-local IPs plus `.local` / `.home.arpa` hostnames
+   and does not widen `local`.
 2. **Declare tools and skills.** AID applies no skill unless one is declared
    (`--skill`, or a project default). Omitting `--kind` describes every
    resolved toolbox tool rather than hiding some behind a guessed category.

@@ -1,0 +1,33 @@
+# Example BYOK manifest for Ollama on a private-network host.
+# Used by scripts/aid-byok-apply.sh to configure opencode and generate an aid agent.
+# Replace your-ollama-host.local with your LAN hostname or IP (e.g. mingdeimac.local).
+# Dependencies: opencode custom providers. Ollama does not authenticate; api_key is ignored.
+
+[byok]
+id = "ollama"
+display_name = "Ollama (LAN)"
+protocol = "openai"
+provider = "ollama"
+metering = "none"
+base_url = "http://your-ollama-host.local:11434/v1"
+api_key = "ollama"
+default_model = "qwen3:4b"
+timeout_ms = 300000
+
+[[byok.model]]
+id = "qwen3:4b"
+name = "Qwen3 4B"
+context = 32768
+output = 8192
+tool_call = true
+reasoning = true
+
+[byok.capabilities]
+research = 4
+simple_edit = 5
+complex_impl = 4
+frontend = 3
+debugging = 4
+testing = 4
+refactoring = 4
+documentation = 4

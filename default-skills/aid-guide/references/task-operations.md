@@ -38,12 +38,14 @@ Do not send repeated polling messages; inspect events first.
 
 AID enforces configured idle, hung-task, cost, and maximum-duration safeguards.
 
-`--idle-timeout SECS` stops a task whose stream goes quiet. Foreground streaming
-measures this on raw output lines, so an agent that keeps emitting unparseable
-output (a spinner, for example) resets the timer even though it produces no
-parsed activity; the PTY watcher is what catches that case. Idle auto-nudges and
-their PTY echoes (plus aid's own reply/ack bookkeeping events) do not count as
-agent progress, so a stalled agent is still reaped after the idle window.
+`--idle-timeout SECS` stops a task whose stream goes quiet. Meaningful text
+output refreshes the liveness clock even when aid cannot parse it into an event
+(a Grok/agy-style CLI, for example), so unparseable output does not read as
+silence. This signal only sees what the agent emits: silent work is not
+observable by it. Pure terminal-control noise (spinners, cursor hides), idle
+auto-nudges, their PTY echoes, and aid's own reply/ack bookkeeping do not count
+as agent progress, so a genuinely stalled or silent agent is still reaped after
+the idle window.
 
 `--timeout SECS` is activity-aware rather than a hard wall-clock cap: an active
 foreground run may continue past it, and the value is rounded up to whole

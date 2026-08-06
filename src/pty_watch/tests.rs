@@ -125,31 +125,6 @@ fn handles_osc_escaped_output() {
 }
 
 #[test]
-fn spinner_output_does_not_refresh_progress_clock() {
-    let store = Arc::new(Store::open_memory().unwrap());
-    let task = pty_task("t-spinner-progress", TaskStatus::Running);
-    store.insert_task(&task).unwrap();
-    let mut state = MonitorState::new(true, None);
-    state.last_progress_time = Instant::now() - Duration::from_secs(10);
-    let before = state.last_progress_time;
-    let mut log = tempfile::NamedTempFile::new().unwrap();
-
-    state
-        .handle_chunk(
-            &crate::agent::codex::CodexAgent,
-            &task.id,
-            &store,
-            log.as_file_mut(),
-            "Thinking...\n".to_string(),
-        )
-        .unwrap();
-
-    assert_eq!(state.event_count, 0);
-    assert_eq!(state.last_progress_time, before);
-    assert!(state.last_progress_time.elapsed() > Duration::from_secs(5));
-}
-
-#[test]
 fn auto_nudge_echo_does_not_reset_idle_progress_clock() {
     let store = Arc::new(Store::open_memory().unwrap());
     let task = pty_task("t-nudge-echo-idle", TaskStatus::Running);
@@ -400,7 +375,7 @@ fn finalize_streaming_persists_transcript() {
     assert!(transcript.contains("=== AID TASK t-pty-transcript DONE (exit 0) ==="));
 }
 
-fn pty_task(task_id: &str, status: TaskStatus) -> Task {
+pub(super) fn pty_task(task_id: &str, status: TaskStatus) -> Task {
     Task {
         id: TaskId(task_id.to_string()),
         agent: AgentKind::Codex,

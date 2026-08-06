@@ -106,6 +106,196 @@ fn read_quota_error_message_detects_402_payment_errors() {
 }
 
 #[test]
+fn rescue_quota_failed_task_refuses_empty_worktree_rescue() {
+    let dir = TempDir::new().unwrap();
+    let _guard = paths::AidHomeGuard::set(dir.path());
+    std::fs::create_dir_all(paths::logs_dir()).unwrap();
+
+    let wt_dir = dir.path().join("wt");
+    std::fs::create_dir_all(&wt_dir).unwrap();
+    git(&wt_dir, &["init"]);
+    git(&wt_dir, &["config", "user.email", "aid@example.com"]);
+    git(&wt_dir, &["config", "user.name", "Aid Tester"]);
+    std::fs::write(wt_dir.join("file.txt"), "initial").unwrap();
+    git(&wt_dir, &["add", "file.txt"]);
+    git(&wt_dir, &["commit", "-m", "initial"]);
+
+    std::fs::write(
+        paths::stderr_path("t-empty-wt"),
+        "Error: You have hit your usage limit.",
+    )
+    .unwrap();
+
+    let store = Store::open_memory().unwrap();
+    let mut task = make_failed_task("t-empty-wt");
+    task.worktree_path = Some(wt_dir.to_str().unwrap().to_string());
+    task.verify_status = VerifyStatus::Passed;
+    store.insert_task(&task).unwrap();
+
+    rescue_quota_failed_task(
+        &store,
+        &task.id,
+        read_quota_error_message(&task.id).as_deref(),
+    );
+
+    let task = store.get_task("t-empty-wt").unwrap().unwrap();
+    assert_eq!(task.status, TaskStatus::Failed);
+}
+
+#[test]
+fn rescue_quota_failed_task_rescues_worktree_with_modified_code() {
+    let dir = TempDir::new().unwrap();
+    let _guard = paths::AidHomeGuard::set(dir.path());
+    std::fs::create_dir_all(paths::logs_dir()).unwrap();
+
+    let wt_dir = dir.path().join("wt");
+    std::fs::create_dir_all(&wt_dir).unwrap();
+    git(&wt_dir, &["init"]);
+    git(&wt_dir, &["config", "user.email", "aid@example.com"]);
+    git(&wt_dir, &["config", "user.name", "Aid Tester"]);
+    std::fs::write(wt_dir.join("file.txt"), "initial").unwrap();
+    git(&wt_dir, &["add", "file.txt"]);
+    git(&wt_dir, &["commit", "-m", "initial"]);
+
+    std::fs::write(
+        paths::stderr_path("t-work-wt"),
+        "Error: You have hit your usage limit.",
+    )
+    .unwrap();
+
+    let store = Store::open_memory().unwrap();
+    let mut task = make_failed_task("t-work-wt");
+    task.worktree_path = Some(wt_dir.to_str().unwrap().to_string());
+    task.verify_status = VerifyStatus::Passed;
+    store.insert_task(&task).unwrap();
+
+    // Clean worktree: guard must refuse rescue so task stays Failed.
+    rescue_quota_failed_task(
+        &store,
+        &task.id,
+        read_quota_error_message(&task.id).as_deref(),
+    );
+    let checked_task = store.get_task("t-work-wt").unwrap().unwrap();
+    assert_eq!(checked_task.status, TaskStatus::Failed);
+
+    // Modify file: guard allows rescue to Done.
+    std::fs::write(wt_dir.join("file.txt"), "modified").unwrap();
+    rescue_quota_failed_task(
+        &store,
+        &task.id,
+        read_quota_error_message(&task.id).as_deref(),
+    );
+
+    let task = store.get_task("t-work-wt").unwrap().unwrap();
+    assert_eq!(task.status, TaskStatus::Done);
+}
+
+#[test]
+fn rescue_quota_failed_task_rescues_untracked_source_files() {
+    let dir = TempDir::new().unwrap();
+    let _guard = paths::AidHomeGuard::set(dir.path());
+    std::fs::create_dir_all(paths::logs_dir()).unwrap();
+
+    let wt_dir = dir.path().join("wt");
+    std::fs::create_dir_all(&wt_dir).unwrap();
+    git(&wt_dir, &["init"]);
+    git(&wt_dir, &["config", "user.email", "aid@example.com"]);
+    git(&wt_dir, &["config", "user.name", "Aid Tester"]);
+    std::fs::write(wt_dir.join("file.txt"), "initial").unwrap();
+    git(&wt_dir, &["add", "file.txt"]);
+    git(&wt_dir, &["commit", "-m", "initial"]);
+
+    std::fs::write(
+        paths::stderr_path("t-untracked-wt"),
+        "Error: You have hit your usage limit.",
+    )
+    .unwrap();
+
+    let store = Store::open_memory().unwrap();
+    let mut task = make_failed_task("t-untracked-wt");
+    task.worktree_path = Some(wt_dir.to_str().unwrap().to_string());
+    task.verify_status = VerifyStatus::Passed;
+    store.insert_task(&task).unwrap();
+
+    // Nothing written yet, so the guard must refuse. Without this half the test
+    // passes even when `produced_work` is forced to return true — a cross-audit
+    // caught it doing exactly that, and a mutation run confirmed it.
+    rescue_quota_failed_task(
+        &store,
+        &task.id,
+        read_quota_error_message(&task.id).as_deref(),
+    );
+    let checked = store.get_task("t-untracked-wt").unwrap().unwrap();
+    assert_eq!(checked.status, TaskStatus::Failed);
+
+    // The agent's only output is an untracked file. `git diff` cannot see it,
+    // which is how the first version of this guard threw such work away.
+    std::fs::write(wt_dir.join("new_file.txt"), "untracked work").unwrap();
+
+    rescue_quota_failed_task(
+        &store,
+        &task.id,
+        read_quota_error_message(&task.id).as_deref(),
+    );
+
+    let task = store.get_task("t-untracked-wt").unwrap().unwrap();
+    assert_eq!(task.status, TaskStatus::Done);
+}
+
+#[test]
+fn rescue_quota_failed_task_rescues_committed_work_non_standard_branch() {
+    let dir = TempDir::new().unwrap();
+    let _guard = paths::AidHomeGuard::set(dir.path());
+    std::fs::create_dir_all(paths::logs_dir()).unwrap();
+
+    let wt_dir = dir.path().join("wt");
+    std::fs::create_dir_all(&wt_dir).unwrap();
+    git(&wt_dir, &["init", "-b", "feature-custom"]);
+    git(&wt_dir, &["config", "user.email", "aid@example.com"]);
+    git(&wt_dir, &["config", "user.name", "Aid Tester"]);
+    std::fs::write(wt_dir.join("file.txt"), "initial").unwrap();
+    git(&wt_dir, &["add", "file.txt"]);
+    git(&wt_dir, &["commit", "-m", "initial"]);
+
+    let start_sha = crate::commit::head_sha(wt_dir.to_str().unwrap()).unwrap();
+
+    std::fs::write(
+        paths::stderr_path("t-custom-branch"),
+        "Error: You have hit your usage limit.",
+    )
+    .unwrap();
+
+    let store = Store::open_memory().unwrap();
+    let mut task = make_failed_task("t-custom-branch");
+    task.worktree_path = Some(wt_dir.to_str().unwrap().to_string());
+    task.start_sha = Some(start_sha);
+    task.verify_status = VerifyStatus::Passed;
+    store.insert_task(&task).unwrap();
+
+    // Untouched: guard refuses rescue even on non-standard branch with base_branch=None.
+    rescue_quota_failed_task(
+        &store,
+        &task.id,
+        read_quota_error_message(&task.id).as_deref(),
+    );
+    let checked = store.get_task("t-custom-branch").unwrap().unwrap();
+    assert_eq!(checked.status, TaskStatus::Failed);
+
+    // Agent commits work on feature-custom branch.
+    std::fs::write(wt_dir.join("file.txt"), "agent commit").unwrap();
+    git(&wt_dir, &["add", "file.txt"]);
+    git(&wt_dir, &["commit", "-m", "agent commit"]);
+
+    rescue_quota_failed_task(
+        &store,
+        &task.id,
+        read_quota_error_message(&task.id).as_deref(),
+    );
+    let rescued = store.get_task("t-custom-branch").unwrap().unwrap();
+    assert_eq!(rescued.status, TaskStatus::Done);
+}
+
+#[test]
 fn rescue_quota_failed_task_marks_passed_verify_as_done() {
     let dir = TempDir::new().unwrap();
     let _guard = paths::AidHomeGuard::set(dir.path());
@@ -119,6 +309,7 @@ fn rescue_quota_failed_task_marks_passed_verify_as_done() {
     let mut task = make_failed_task("t-rescue-pass");
     task.verify_status = VerifyStatus::Passed;
     store.insert_task(&task).unwrap();
+
     rescue_quota_failed_task(
         &store,
         &task.id,

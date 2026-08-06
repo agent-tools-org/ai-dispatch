@@ -66,27 +66,37 @@ impl super::Agent for GrokAgent {
     }
 }
 
-/// Find grok's JSON envelope inside a buffer that may also carry aid's own
-/// echoed writes. Scans from each `{` that starts a line and keeps the last
-/// value that parses, so trailing sentinels and leading nudges are both
-/// tolerated without guessing at their exact wording.
+/// Find grok's JSON envelope inside a buffer that also carries aid's own writes.
+///
+/// `finalize_buffered` appends the terminal sentinel to `full_output` *before*
+/// calling `parse_completion`, so the buffer is never bare JSON — every grok run
+/// failed a whole-buffer parse, not just the nudged ones. An echoed auto-nudge
+/// adds a second contaminant, ahead of the envelope instead of after it.
+///
+/// So candidates are the start of the buffer plus every line beginning with `{`,
+/// each parsed with a streaming deserializer that stops at the end of one value
+/// and ignores whatever follows. The last value that parses wins; aid's own
+/// wording is never matched on.
 fn extract_envelope(output: &str) -> Option<Value> {
     let trimmed = output.trim();
-    if let Ok(value) = serde_json::from_str::<Value>(trimmed) {
-        return Some(value);
-    }
-    let mut found = None;
+    let mut found = first_value(trimmed);
     for (idx, _) in trimmed.match_indices('\n') {
         let rest = trimmed[idx + 1..].trim_start();
-        if !rest.starts_with('{') {
-            continue;
-        }
-        let mut stream = serde_json::Deserializer::from_str(rest).into_iter::<Value>();
-        if let Some(Ok(value)) = stream.next() {
+        if rest.starts_with('{')
+            && let Some(value) = first_value(rest)
+        {
             found = Some(value);
         }
     }
     found
+}
+
+fn first_value(input: &str) -> Option<Value> {
+    serde_json::Deserializer::from_str(input)
+        .into_iter::<Value>()
+        .next()
+        .and_then(Result::ok)
+        .filter(Value::is_object)
 }
 
 pub fn extract_response(output: &str) -> Option<String> {

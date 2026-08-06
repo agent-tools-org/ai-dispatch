@@ -178,3 +178,19 @@ fn completion_survives_a_trailing_sentinel() {
     // Still failed — but now for the real reason, not a parse error.
     assert_eq!(GrokAgent.parse_completion(output).status, TaskStatus::Failed);
 }
+
+/// The common case, and the one the first version of extract_envelope missed:
+/// grok's envelope starts at offset 0 and aid's terminal sentinel follows it.
+/// finalize_buffered appends that sentinel before parse_completion runs, so this
+/// shape — not the nudged one — is what every grok run actually produces.
+#[test]
+fn completion_survives_a_sentinel_after_an_envelope_at_offset_zero() {
+    let output = concat!(
+        r#"{"text":"done","usage":{"total_tokens":7},"total_cost_usd":0.24}"#,
+        "\n\n=== AID TASK t-abc DONE (exit 0) ===\n",
+    );
+    let info = GrokAgent.parse_completion(output);
+    assert_eq!(info.status, TaskStatus::Done);
+    assert_eq!(info.tokens, Some(7));
+    assert_eq!(extract_response(output).as_deref(), Some("done"));
+}

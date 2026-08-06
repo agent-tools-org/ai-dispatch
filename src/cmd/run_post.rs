@@ -105,10 +105,7 @@ fn build_hung_retry_args(
             //
             // Dropped only when the agent actually changes. A same-agent retry
             // must still ask for what was asked before.
-            if retry_args.agent_name != next_agent {
-                retry_args.model = None;
-            }
-            retry_args.agent_name = next_agent;
+            switch_agent(&mut retry_args, next_agent);
             retry_args.cascade = remaining_cascade;
         }
     } else if task.agent.supports_session_resume() {
@@ -382,3 +379,24 @@ fn find_rate_limit_line(content: &str) -> Option<String> {
 #[cfg(test)]
 #[path = "run_post_tests.rs"]
 mod tests;
+
+/// Point `args` at a different agent, dropping any pinned model when the agent
+/// actually changes.
+///
+/// A model id means something only inside one CLI. codex's `gpt-5.6-sol`
+/// reaching agy is refused outright — agy answers by listing its Gemini models
+/// (`t-94d5f8ab`, auto-cascaded from `t-9269aab8` after codex hit its quota).
+/// The cascade exists to escape a failing route; inheriting half of that route
+/// defeats it.
+///
+/// This lives in one place because the rule was previously copied into three
+/// call sites and missed at four others — including both primary cascades in
+/// `run_lifecycle`, which is how the bug survived the v10.5.1 fix that claimed
+/// to cover every switch path. A same-agent retry keeps its model: it must
+/// still ask for what was asked before.
+pub(crate) fn switch_agent(args: &mut RunArgs, next_agent: String) {
+    if args.agent_name != next_agent {
+        args.model = None;
+    }
+    args.agent_name = next_agent;
+}

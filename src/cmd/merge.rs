@@ -315,9 +315,9 @@ enum ApprovalDecision {
 fn ask_approval(task: &Task) -> Result<ApprovalDecision> {
     let branch = merge_source_branch(task).unwrap_or("-");
     let prompt = format!(
-        "Task {} ready to merge:\n- Agent: {}\n- Branch: {}\n\nApprove?",
+        "Task {} ready to merge:\n- Route: {}\n- Branch: {}\n\nApprove?",
         task.id,
-        task.agent_display_name(),
+        task.display_route(),
         branch
     );
     run_approval_prompt(
@@ -330,7 +330,7 @@ fn ask_approval(task: &Task) -> Result<ApprovalDecision> {
 fn ask_group_approval(group_id: &str, tasks: &[Task]) -> Result<ApprovalDecision> {
     let details = tasks
         .iter()
-        .map(|task| format!("- {}: {} ({})", task.id, task.agent_display_name(), merge_source_branch(task).unwrap_or("-")))
+        .map(|task| format!("- {}: {} ({})", task.id, task.display_route(), merge_source_branch(task).unwrap_or("-")))
         .collect::<Vec<_>>()
         .join("\n");
     let prompt = format!("Group {group_id} ready to merge:\n{details}\n\nApprove?");

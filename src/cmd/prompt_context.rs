@@ -351,7 +351,7 @@ pub(super) fn resolve_context_from(store: &Store, task_ids: &[String]) -> Result
         if content.is_empty()
             && let Some(ref log_path) = task.log_path
         {
-            if let Some(text) = extract_messages_from_log(std::path::Path::new(log_path), false) {
+            if let Some(text) = extract_messages_from_log(std::path::Path::new(log_path), false, Some(task.agent_display_name())) {
                 content = truncate_context_content(&text, 2_000);
             } else if let Ok(text) = std::fs::read_to_string(log_path) {
                 let lines: Vec<&str> = text.lines().collect();

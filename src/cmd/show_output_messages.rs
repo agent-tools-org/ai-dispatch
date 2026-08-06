@@ -59,11 +59,21 @@ fn is_research_task(task: &Task) -> bool {
     task.worktree_path.is_none() && task.worktree_branch.is_none()
 }
 
-fn extract_messages_for_task(task: &Task, task_id: &str, full: bool) -> Option<String> {
-    extract_messages_from_log(&task_log_path(task, task_id), full)
+pub(crate) const UNRECOGNIZED_JSON_NOTICE_PREFIX: &str = "[Unrecognized JSON log format";
+
+pub(crate) fn is_unrecognized_json_notice(text: &str) -> bool {
+    text.trim().starts_with(UNRECOGNIZED_JSON_NOTICE_PREFIX)
 }
 
-pub(crate) fn extract_messages_from_log(log_path: &Path, full: bool) -> Option<String> {
+fn extract_messages_for_task(task: &Task, task_id: &str, full: bool) -> Option<String> {
+    extract_messages_from_log(&task_log_path(task, task_id), full, Some(task.agent_display_name()))
+}
+
+pub(crate) fn extract_messages_from_log(
+    log_path: &Path,
+    full: bool,
+    agent_name: Option<&str>,
+) -> Option<String> {
     const MAX_MESSAGE_CHARS: usize = 1_000;
     const MAX_OUTPUT_CHARS: usize = 8_000;
     const HEAD_MESSAGE_COUNT: usize = 3;
@@ -72,7 +82,7 @@ pub(crate) fn extract_messages_from_log(log_path: &Path, full: bool) -> Option<S
     let content = std::fs::read_to_string(log_path).ok()?;
     let mut messages = collect_messages(&content);
     if messages.is_empty() {
-        if let Some(notice) = unrecognized_json_log_notice(&content, log_path) {
+        if let Some(notice) = unrecognized_json_log_notice(&content, log_path, agent_name) {
             return Some(notice);
         }
         return None;
@@ -84,25 +94,25 @@ pub(crate) fn extract_messages_from_log(log_path: &Path, full: bool) -> Option<S
     Some(join_messages(messages, full, MAX_OUTPUT_CHARS))
 }
 
-pub(crate) fn unrecognized_json_log_notice(content: &str, log_path: &Path) -> Option<String> {
+pub(crate) fn unrecognized_json_log_notice(
+    content: &str,
+    log_path: &Path,
+    agent_name: Option<&str>,
+) -> Option<String> {
     let mut total_lines = 0;
     let mut json_lines = 0;
     let mut first_sample: Option<String> = None;
-    let mut agent_name: Option<String> = None;
 
     for line in content.lines() {
         let trimmed = line.trim();
-        if trimmed.is_empty() || is_aid_sentinel_line(trimmed) {
+        if trimmed.is_empty() || is_non_output_line(trimmed) {
             continue;
         }
         total_lines += 1;
-        if let Ok(v) = serde_json::from_str::<serde_json::Value>(trimmed) {
+        if serde_json::from_str::<serde_json::Value>(trimmed).is_ok() {
             json_lines += 1;
             if first_sample.is_none() {
                 first_sample = Some(trimmed.to_string());
-            }
-            if agent_name.is_none() {
-                agent_name = detect_agent_name_from_json(&v);
             }
         }
     }
@@ -114,9 +124,9 @@ pub(crate) fn unrecognized_json_log_notice(content: &str, log_path: &Path) -> Op
         } else {
             sample
         };
-        let agent = agent_name.unwrap_or_else(|| "agent".to_string());
+        let agent = agent_name.unwrap_or("unknown agent");
         Some(format!(
-            "[Unrecognized JSON log format from {agent}]\nSample line: {sample_truncated}\nSee transcript at {}",
+            "{UNRECOGNIZED_JSON_NOTICE_PREFIX} from {agent}]\nSample line: {sample_truncated}\nSee transcript at {}",
             log_path.display()
         ))
     } else {
@@ -126,23 +136,17 @@ pub(crate) fn unrecognized_json_log_notice(content: &str, log_path: &Path) -> Op
 
 pub(crate) fn is_aid_sentinel_line(line: &str) -> bool {
     let trimmed = line.trim();
-    trimmed.starts_with("=== AID TASK")
-        || trimmed.starts_with("=== AID")
-        || trimmed.starts_with("Warning: Reached maximum")
+    trimmed.starts_with("=== AID TASK") || trimmed.starts_with("=== AID")
 }
 
-fn detect_agent_name_from_json(v: &serde_json::Value) -> Option<String> {
-    let event = v.get("event").unwrap_or(v);
-    if event.get("sessionId").is_some() || v.get("sessionId").is_some() {
-        return Some("commandcode".to_string());
-    }
-    if let Some(agent) = event.get("agent").or_else(|| v.get("agent")).and_then(serde_json::Value::as_str) {
-        return Some(agent.to_string());
-    }
-    if let Some(model) = event.get("model").or_else(|| v.get("model")).and_then(serde_json::Value::as_str) {
-        return Some(model.to_string());
-    }
-    None
+/// Diagnostic warning emitted by CLI runners (such as Claude or Codex) when max turns are reached.
+/// This is runner state rather than task deliverable output.
+pub(crate) fn is_agent_runner_warning_line(line: &str) -> bool {
+    line.trim().starts_with("Warning: Reached maximum")
+}
+
+pub(crate) fn is_non_output_line(line: &str) -> bool {
+    is_aid_sentinel_line(line) || is_agent_runner_warning_line(line)
 }
 
 pub(crate) fn extract_messages_research(log_path: &Path) -> Option<String> {
@@ -209,7 +213,7 @@ pub fn read_task_output(task: &Task) -> Result<String> {
 fn is_valid_output_content(content: &str) -> bool {
     content
         .lines()
-        .any(|line| !line.trim().is_empty() && !is_aid_sentinel_line(line))
+        .any(|line| !line.trim().is_empty() && !is_non_output_line(line))
 }
 
 pub fn log_text(task_id: &str) -> Result<String> {

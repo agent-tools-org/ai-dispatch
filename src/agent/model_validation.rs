@@ -13,6 +13,12 @@ use super::Agent;
 
 static SERVED_CACHE: OnceLock<Mutex<HashMap<AgentKind, Option<Vec<String>>>>> = OnceLock::new();
 
+#[cfg(test)]
+thread_local! {
+    static TEST_OVERRIDE: std::cell::RefCell<HashMap<AgentKind, Option<Vec<String>>>> =
+        std::cell::RefCell::new(HashMap::new());
+}
+
 fn cache() -> &'static Mutex<HashMap<AgentKind, Option<Vec<String>>>> {
     SERVED_CACHE.get_or_init(|| Mutex::new(HashMap::new()))
 }
@@ -20,6 +26,28 @@ fn cache() -> &'static Mutex<HashMap<AgentKind, Option<Vec<String>>>> {
 pub(crate) fn clear_served_models_cache() {
     if let Ok(mut guard) = cache().lock() {
         guard.clear();
+    }
+}
+
+#[cfg(test)]
+pub(crate) struct MockServedModelsGuard;
+
+#[cfg(test)]
+impl MockServedModelsGuard {
+    pub fn set(kind: AgentKind, models: Option<Vec<String>>) -> Self {
+        TEST_OVERRIDE.with(|cell| {
+            cell.borrow_mut().insert(kind, models);
+        });
+        Self
+    }
+}
+
+#[cfg(test)]
+impl Drop for MockServedModelsGuard {
+    fn drop(&mut self) {
+        TEST_OVERRIDE.with(|cell| {
+            cell.borrow_mut().clear();
+        });
     }
 }
 
@@ -60,6 +88,13 @@ pub(crate) fn validate_model_for_agent(agent: &dyn Agent, model: &str) -> Result
 
 pub(crate) fn get_served_models_cached(agent: &dyn Agent) -> Option<Vec<String>> {
     let kind = agent.kind();
+    #[cfg(test)]
+    {
+        let thread_mock = TEST_OVERRIDE.with(|cell| cell.borrow().get(&kind).cloned());
+        if let Some(res) = thread_mock {
+            return res;
+        }
+    }
     if let Ok(guard) = cache().lock() {
         if let Some(cached) = guard.get(&kind) {
             return cached.clone();

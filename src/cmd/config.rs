@@ -214,7 +214,7 @@ fn print_pricing(update: bool) -> Result<()> {
 fn clear_limit(agent: &str) -> Result<()> {
     if agent == "all" {
         for (kind, _, _, _, _) in AGENT_PROFILES {
-            if rate_limit::clear_rate_limit(kind) {
+            if rate_limit::clear_all_rate_limits_for_agent(kind) {
                 println!("Cleared rate-limit for {}", kind.as_str());
             }
         }
@@ -223,7 +223,7 @@ fn clear_limit(agent: &str) -> Result<()> {
     let Some(kind) = AgentKind::parse_str(agent) else {
         anyhow::bail!("Unknown agent: {agent}");
     };
-    if rate_limit::clear_rate_limit(&kind) {
+    if rate_limit::clear_all_rate_limits_for_agent(&kind) {
         println!("Cleared rate-limit for {}", kind.as_str());
     } else {
         println!("{} is not rate-limited", agent);

@@ -53,7 +53,7 @@ fn different_clis_do_not_share_a_pool() {
 #[test]
 fn unknown_providers_never_share() {
     let a = Route::for_cli(AgentKind::Kilo);
-    let b = Route::for_cli(AgentKind::Codebuff);
+    let b = Route::for_cli(AgentKind::Custom);
     assert!(a.provider.is_unknown() && b.provider.is_unknown());
     assert!(!a.shares_pool_with(&b));
     assert!(!a.shares_pool_with(&a.clone()));

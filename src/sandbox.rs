@@ -167,7 +167,6 @@ fn agent_env_keys(kind: AgentKind) -> &'static [&'static str] {
         AgentKind::Copilot => &[],
         AgentKind::Kilo => &["KILO_API_KEY", "OPENAI_API_KEY"],
         AgentKind::MiMoCode => &["MIMOCODE_SERVER_PASSWORD"],
-        AgentKind::Codebuff => &["CODEBUFF_API_KEY", "ANTHROPIC_API_KEY"],
         AgentKind::Claude => &["ANTHROPIC_API_KEY"],
         _ => &[],
     }
@@ -183,7 +182,6 @@ fn agent_config_dirs(kind: AgentKind) -> &'static [&'static str] {
         AgentKind::Copilot => &[".copilot"],
         AgentKind::Kilo => &[".kilo"],
         AgentKind::MiMoCode => &[".mimocode"],
-        AgentKind::Codebuff => &[".codebuff"],
         AgentKind::Claude => &[".claude"],
         _ => &[],
     }

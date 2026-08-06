@@ -71,7 +71,7 @@ fn advise_succeeds_when_every_builtin_is_rate_limited() {
     let aid_home = TempDir::new().expect("temp AID_HOME");
     for agent in [
         "gemini", "qwen", "codex", "copilot", "opencode", "commandcode",
-        "cursor", "kilo", "mimocode", "codebuff", "droid", "oz", "claude",
+        "cursor", "kilo", "mimocode", "droid", "oz", "claude",
         "agy", "grok",
     ] {
         std::fs::write(

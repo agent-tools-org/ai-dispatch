@@ -17,7 +17,7 @@ src/
 │   ├── selection.rs   — Capability matrix scoring, team/history adjustments
 │   ├── selection_scoring.rs — Score calculation helpers
 │   ├── registry.rs    — Custom agent TOML loading from ~/.aid/agents/
-│   ├── codex.rs, gemini.rs, opencode.rs, cursor.rs, kilo.rs, codebuff.rs — Per-agent adapters
+│   ├── codex.rs, gemini.rs, opencode.rs, cursor.rs, kilo.rs, droid.rs — Per-agent adapters
 │   └── custom.rs      — Generic adapter for user-defined agents
 ├── cmd/               — Command handlers (one file per command)
 │   ├── run.rs         — Main dispatch: run() → spawn agent → watcher
@@ -44,7 +44,7 @@ src/
 ## Key Types
 
 - `TaskId` — wrapped String, format `t-NNNN`
-- `AgentKind` — enum: Gemini, Codex, OpenCode, Cursor, Kilo, Codebuff, Custom
+- `AgentKind` — enum: Gemini, Codex, OpenCode, Cursor, Kilo, Droid, Custom
 - `TaskStatus` — Running, Done, Failed, Merged, Stopped, Skipped
 - `Store` — SQLite wrapper, thread-safe via `Arc<Store>`
 - `RunArgs` — all `aid run` parameters (40+ fields, `Default` impl)

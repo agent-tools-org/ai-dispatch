@@ -121,7 +121,6 @@ pub(super) fn resolve_agent_setup(store: &Arc<Store>, args: &mut RunArgs) -> Res
                 | AgentKind::Cursor
                 | AgentKind::Kilo
                 | AgentKind::MiMoCode
-                | AgentKind::Codebuff
                 | AgentKind::Droid
                 | AgentKind::Grok
                 | AgentKind::Custom

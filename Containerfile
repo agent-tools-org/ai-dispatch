@@ -18,14 +18,13 @@ RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - && \
 # Install AI CLI agents (node-based)
 RUN npm install -g --no-fund --no-audit \
     @openai/codex \
-    @kilocode/cli \
-    codebuff
+    @kilocode/cli
 
 # Gemini CLI
 RUN npm install -g --no-fund --no-audit @google/gemini-cli
 
 # Verify installations
 RUN node --version && npm --version && \
-    which codex && which kilo && which codebuff && which gemini
+    which codex && which kilo && which gemini
 
 WORKDIR /work

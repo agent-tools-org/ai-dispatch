@@ -4,7 +4,6 @@
 pub mod antigravity;
 pub mod claude;
 pub(crate) mod claude_events;
-pub mod codebuff;
 pub mod commandcode;
 pub mod codex;
 pub mod copilot;
@@ -130,7 +129,6 @@ pub fn detect_agents() -> Vec<AgentKind> {
         ("droid", AgentKind::Droid),
         ("kilo", AgentKind::Kilo),
         ("mimo", AgentKind::MiMoCode),
-        ("aid-codebuff", AgentKind::Codebuff),
         ("oz", AgentKind::Oz),
         ("claude", AgentKind::Claude),
         ("grok", AgentKind::Grok),
@@ -190,28 +188,55 @@ where
     anyhow::bail!("Agent '{}' not found: binary missing from PATH", agent_name);
 }
 
+/// The binaries a built-in adapter may invoke. Single source of truth: the
+/// PATH preflight and the custom-agent guard both read it, so a new agent
+/// cannot be reachable by one and invisible to the other.
+pub(crate) fn built_in_binaries(agent_kind: AgentKind) -> &'static [&'static str] {
+    match agent_kind {
+        AgentKind::Antigravity => &["agy"],
+        AgentKind::Codex => &["codex"],
+        AgentKind::CommandCode => &["commandcode"],
+        AgentKind::Copilot => &["copilot"],
+        AgentKind::Cursor => &["agent", "cursor-agent"],
+        AgentKind::Gemini => &["gemini"],
+        AgentKind::Qwen => &["qwen"],
+        AgentKind::OpenCode => &["opencode"],
+        AgentKind::Kilo => &["kilo"],
+        AgentKind::MiMoCode => &["mimo"],
+        AgentKind::Droid => &["droid"],
+        AgentKind::Oz => &["oz"],
+        AgentKind::Claude => &["claude"],
+        AgentKind::Grok => &["grok"],
+        AgentKind::Custom => &[],
+    }
+}
+
+/// The built-in agent a bare command name belongs to, if any.
+///
+/// A custom agent naming one of these is a fork of that adapter, not a new
+/// route: it re-declares the invocation by hand and therefore inherits none of
+/// the adapter's flags, event parsing, quota accounting, model attribution or
+/// session resume, and it reports `provider = unknown` while spending the
+/// built-in's quota.
+pub(crate) fn builtin_binary_owner(command: &str) -> Option<AgentKind> {
+    let name = std::path::Path::new(command)
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or(command);
+    AgentKind::ALL_BUILTIN
+        .iter()
+        .copied()
+        .find(|kind| built_in_binaries(*kind).contains(&name))
+}
+
 pub(crate) fn built_in_agent_binary_exists<F>(agent_kind: AgentKind, which: F) -> bool
 where
     F: Fn(&str) -> bool,
 {
-    match agent_kind {
-        AgentKind::Antigravity => which("agy"),
-        AgentKind::Codex => which("codex"),
-        AgentKind::CommandCode => which("commandcode"),
-        AgentKind::Copilot => which("copilot"),
-        AgentKind::Cursor => which("agent") || which("cursor-agent"),
-        AgentKind::Gemini => which("gemini"),
-        AgentKind::Qwen => which("qwen"),
-        AgentKind::OpenCode => which("opencode"),
-        AgentKind::Kilo => which("kilo"),
-        AgentKind::MiMoCode => which("mimo"),
-        AgentKind::Codebuff => which("aid-codebuff"),
-        AgentKind::Droid => which("droid"),
-        AgentKind::Oz => which("oz"),
-        AgentKind::Claude => which("claude"),
-        AgentKind::Grok => which("grok"),
-        AgentKind::Custom => true,
+    if matches!(agent_kind, AgentKind::Custom) {
+        return true;
     }
+    built_in_binaries(agent_kind).iter().any(|name| which(name))
 }
 
 pub(crate) fn select_agent_with_reason(
@@ -234,7 +259,6 @@ pub fn get_agent(kind: AgentKind) -> Box<dyn Agent> {
         AgentKind::OpenCode => Box::new(opencode::OpenCodeAgent),
         AgentKind::Kilo => Box::new(kilo::agent()),
         AgentKind::MiMoCode => Box::new(mimocode::agent()),
-        AgentKind::Codebuff => Box::new(codebuff::CodebuffAgent),
         AgentKind::Droid => Box::new(droid::DroidAgent),
         AgentKind::Oz => Box::new(oz::OzAgent),
         AgentKind::Claude => Box::new(claude::ClaudeAgent),

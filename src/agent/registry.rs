@@ -26,6 +26,10 @@ fn load_from_dir(dir: &Path) -> HashMap<String, CustomAgentConfig> {
             match fs::read_to_string(&path) {
                 Ok(contents) => match parse_config(&contents) {
                     Ok(config) => {
+                        if let Some(reason) = fork_of_builtin_reason(&config) {
+                            aid_warn!("Ignoring {}: {}", path.display(), reason);
+                            continue;
+                        }
                         let id = config.id.clone();
                         agents.insert(id, config);
                     }
@@ -40,6 +44,34 @@ fn load_from_dir(dir: &Path) -> HashMap<String, CustomAgentConfig> {
         }
     }
     agents
+}
+
+/// A custom agent declares a route aid cannot otherwise reach: a different CLI,
+/// or a different provider/model behind a wrapper. Naming a built-in's own
+/// binary declares no new route — it re-implements that adapter by hand and
+/// loses everything the adapter knows. Measured on droid: the built-in sends
+/// `exec --output-format stream-json --skip-permissions-unsafe`, while four
+/// forks sent the bare binary, which opens droid's interactive TUI and asks
+/// "Trust this folder?" on a worktree path that is new every dispatch.
+///
+/// The two supported replacements are named in the message because they are
+/// what the author actually wanted: `--skill` for a persona on a real route,
+/// `delegate_to` + `forced_model` for a different model on a built-in CLI.
+fn fork_of_builtin_reason(config: &CustomAgentConfig) -> Option<String> {
+    if config.delegate_to.is_some() {
+        return None;
+    }
+    let owner = super::builtin_binary_owner(&config.command)?;
+    Some(format!(
+        "custom agent '{}' runs the built-in '{}' binary ('{}'), so it is a fork of that adapter, not a new route — \
+it inherits none of the adapter's flags, event parsing, quota accounting or session resume, and reports provider=unknown while spending {}'s quota. \
+For a persona use `--skill {}` on a real route; for a different model on that CLI use `delegate_to` + `forced_model`.",
+        config.id,
+        owner.as_str(),
+        config.command,
+        owner.as_str(),
+        config.id,
+    ))
 }
 
 fn load_registry() -> HashMap<String, CustomAgentConfig> {
@@ -134,6 +166,69 @@ mod tests {
 
     fn write_agent(dir: &Path, file: &str, contents: &str) {
         fs::write(dir.join(file), contents).unwrap();
+    }
+
+    /// A fork of a built-in adapter is not a route and must not load. The
+    /// negative half matters as much: a wrapper around an unrelated binary is
+    /// exactly what custom agents are for and must still load.
+    #[test]
+    fn a_custom_agent_naming_a_builtin_binary_is_refused() {
+        let dir = TempDir::new().unwrap();
+        write_agent(
+            dir.path(),
+            "fork.toml",
+            r#"[agent]
+id = "l2-researcher"
+display_name = "L2 Researcher"
+command = "droid"
+prompt_mode = "arg"
+"#,
+        );
+        write_agent(
+            dir.path(),
+            "wrapper.toml",
+            r#"[agent]
+id = "goose"
+display_name = "Goose"
+command = "goose"
+prompt_mode = "arg"
+"#,
+        );
+        let agents = load_from_dir(dir.path());
+        assert!(!agents.contains_key("l2-researcher"), "a droid fork must not load");
+        assert!(agents.contains_key("goose"), "a genuinely different CLI must still load");
+    }
+
+    #[test]
+    fn a_path_qualified_builtin_binary_is_refused_too() {
+        let config = parse_config(
+            r#"[agent]
+id = "sneaky"
+display_name = "Sneaky"
+command = "/usr/local/bin/codex"
+prompt_mode = "arg"
+"#,
+        )
+        .unwrap();
+        assert!(fork_of_builtin_reason(&config).is_some());
+    }
+
+    /// `delegate_to` is the supported way to reach a different model through a
+    /// built-in CLI, so it is a route and stays allowed.
+    #[test]
+    fn a_delegating_agent_is_still_allowed() {
+        let config = parse_config(
+            r#"[agent]
+id = "mimo"
+display_name = "MiMo"
+command = "opencode"
+prompt_mode = "arg"
+delegate_to = "opencode"
+forced_model = "mimo/mimo-v2.5-pro"
+"#,
+        )
+        .unwrap();
+        assert!(fork_of_builtin_reason(&config).is_none());
     }
 
     fn sample_agent_toml(id: &str) -> String {

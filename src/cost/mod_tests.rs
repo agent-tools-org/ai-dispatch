@@ -137,11 +137,6 @@ fn format_cost_label_special_cases() {
 }
 
 #[test]
-fn format_cost_label_codebuff() {
-    assert_eq!(format_cost_label(Some(1.5), AgentKind::Codebuff), "$1.50");
-}
-
-#[test]
 fn gemini_estimate_fallback_without_explicit_model_matches_gemini_three_flash_blend() {
     let _guard = isolated();
     let blended =

@@ -26,7 +26,7 @@ fn a_spend_budget_is_not_a_time_windowed_pool() {
 /// dimension is to stop recording plausible values that were never established.
 #[test]
 fn unobserved_providers_are_unknown_not_invented() {
-    for cli in [AgentKind::Kilo, AgentKind::MiMoCode, AgentKind::Codebuff, AgentKind::Custom] {
+    for cli in [AgentKind::Kilo, AgentKind::MiMoCode, AgentKind::Custom] {
         let (provider, shape) = provider_for_cli(cli);
         assert!(provider.is_unknown(), "{} must not be given an invented provider", cli.as_str());
         assert_eq!(shape, MeteringShape::Unknown);

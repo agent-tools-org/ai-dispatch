@@ -138,7 +138,6 @@ pub const AGENT_MODELS: &[AgentModel] = &[
     AgentModel { agent: AgentKind::Cursor, model: "auto", input_per_m: 0.0, output_per_m: 0.0, tier: "cheap", description: "CLI default auto routing", capability: 7.0 },
     AgentModel { agent: AgentKind::Cursor, model: "composer-2.5", input_per_m: 0.50, output_per_m: 2.50, tier: "standard", description: "Composer 2.5 frontier coding", capability: 8.5 },
     AgentModel { agent: AgentKind::Cursor, model: "gpt-5.4-high", input_per_m: 0.0, output_per_m: 0.0, tier: "premium", description: "GPT-5.4 High, premium pool", capability: 9.0 },
-    AgentModel { agent: AgentKind::Codebuff, model: "auto", input_per_m: 0.0, output_per_m: 0.0, tier: "standard", description: "SDK-managed pricing", capability: 6.8 },
     AgentModel { agent: AgentKind::Droid, model: "claude-opus-5", input_per_m: 15.0, output_per_m: 75.0, tier: "premium", description: "CLI default", capability: 9.5 },
     AgentModel { agent: AgentKind::Droid, model: "sonnet", input_per_m: 3.0, output_per_m: 15.0, tier: "standard", description: "Balanced cost/quality", capability: 8.5 },
     AgentModel { agent: AgentKind::Droid, model: "opus", input_per_m: 15.0, output_per_m: 75.0, tier: "premium", description: "Strongest reasoning", capability: 9.5 },

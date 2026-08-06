@@ -174,3 +174,36 @@ fn refused_quota_rescue_preserves_failed_status_for_cascade() {
 
     git(repo.path(), &["worktree", "remove", "--force", &linked.to_string_lossy()]);
 }
+
+/// A model id means something only inside one CLI. codex's `gpt-5.6-sol`
+/// reaching agy is refused outright, and agy answers by listing its Gemini
+/// models — t-94d5f8ab, auto-cascaded from t-9269aab8 after codex hit quota.
+///
+/// v10.5.1 claimed to drop the model in every switch path and dropped it in
+/// three, missing four — including both cascades in run_lifecycle, which is the
+/// path a quota failure actually takes. The rule now lives in one function; this
+/// pins it there so a sixth call site cannot quietly reintroduce the bug.
+#[test]
+fn switching_agent_drops_a_model_that_belongs_to_the_old_cli() {
+    let mut args = RunArgs {
+        agent_name: "codex".to_string(),
+        model: Some("gpt-5.6-sol".to_string()),
+        ..Default::default()
+    };
+    super::run_post::switch_agent(&mut args, "agy".to_string());
+    assert_eq!(args.agent_name, "agy");
+    assert_eq!(args.model, None, "a codex model must not survive into agy");
+}
+
+/// A same-agent retry is not a route change and must still ask for what was
+/// asked before.
+#[test]
+fn retrying_the_same_agent_keeps_its_model() {
+    let mut args = RunArgs {
+        agent_name: "codex".to_string(),
+        model: Some("gpt-5.6-sol".to_string()),
+        ..Default::default()
+    };
+    super::run_post::switch_agent(&mut args, "codex".to_string());
+    assert_eq!(args.model.as_deref(), Some("gpt-5.6-sol"));
+}

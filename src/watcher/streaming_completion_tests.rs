@@ -6,6 +6,7 @@ use std::process::Stdio;
 use std::sync::Arc;
 
 use crate::agent::claude::ClaudeAgent;
+use crate::agent::commandcode::CommandCodeAgent;
 use crate::agent::cursor::CursorAgent;
 use crate::agent::opencode::OpenCodeAgent;
 use crate::agent::qwen::QwenAgent;
@@ -117,4 +118,15 @@ async fn exit0_opencode_success_fixture_records_done() {
     );
     let status = watch_exit0(&OpenCodeAgent, &output, "t-stream-oc-ok").await;
     assert_eq!(status, TaskStatus::Done);
+}
+
+#[tokio::test]
+async fn exit0_commandcode_failed_result_fixture_records_failed() {
+    let output = fixture("commandcode-result-max-turns.jsonl");
+    assert!(
+        output.contains("\"subtype\":\"max_turns\""),
+        "fixture must carry real Command Code result failure"
+    );
+    let status = watch_exit0(&CommandCodeAgent, &output, "t-stream-commandcode-max").await;
+    assert_eq!(status, TaskStatus::Failed);
 }

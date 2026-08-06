@@ -64,10 +64,73 @@ impl super::Agent for GrokAgent {
     fn parse_completion(&self, output: &str) -> CompletionInfo {
         parse_grok_completion(output)
     }
+
+    fn served_models(&self) -> Result<Option<Vec<String>>> {
+        let mut cmd = Command::new("grok");
+        cmd.arg("models");
+        let Some(output) = super::model_validation::run_cmd_with_timeout(cmd, std::time::Duration::from_secs(2)) else {
+            return Ok(None);
+        };
+        let models = parse_grok_models_output(&output);
+        Ok(if models.is_empty() { None } else { Some(models) })
+    }
+}
+
+fn parse_grok_models_output(output: &str) -> Vec<String> {
+    let mut models = Vec::new();
+    let mut in_models_section = false;
+    for line in output.lines() {
+        let trimmed = line.trim();
+        if trimmed.contains("Available models:") {
+            in_models_section = true;
+            continue;
+        }
+        if in_models_section || trimmed.starts_with('*') {
+            let clean = trimmed.trim_start_matches('*').trim();
+            let model_name = clean.split_whitespace().next().unwrap_or(clean);
+            if !model_name.is_empty() && !models.contains(&model_name.to_string()) {
+                models.push(model_name.to_string());
+            }
+        }
+    }
+    models
+}
+
+/// Find grok's JSON envelope inside a buffer that also carries aid's own writes.
+///
+/// `finalize_buffered` appends the terminal sentinel to `full_output` *before*
+/// calling `parse_completion`, so the buffer is never bare JSON — every grok run
+/// failed a whole-buffer parse, not just the nudged ones. An echoed auto-nudge
+/// adds a second contaminant, ahead of the envelope instead of after it.
+///
+/// So candidates are the start of the buffer plus every line beginning with `{`,
+/// each parsed with a streaming deserializer that stops at the end of one value
+/// and ignores whatever follows. The last value that parses wins; aid's own
+/// wording is never matched on.
+fn extract_envelope(output: &str) -> Option<Value> {
+    let trimmed = output.trim();
+    let mut found = first_value(trimmed);
+    for (idx, _) in trimmed.match_indices('\n') {
+        let rest = trimmed[idx + 1..].trim_start();
+        if rest.starts_with('{')
+            && let Some(value) = first_value(rest)
+        {
+            found = Some(value);
+        }
+    }
+    found
+}
+
+fn first_value(input: &str) -> Option<Value> {
+    serde_json::Deserializer::from_str(input)
+        .into_iter::<Value>()
+        .next()
+        .and_then(Result::ok)
+        .filter(Value::is_object)
 }
 
 pub fn extract_response(output: &str) -> Option<String> {
-    let value: Value = serde_json::from_str(output.trim()).ok()?;
+    let value = extract_envelope(output)?;
     value
         .get("text")
         .and_then(Value::as_str)
@@ -75,9 +138,16 @@ pub fn extract_response(output: &str) -> Option<String> {
         .map(ToOwned::to_owned)
 }
 
+/// The buffer handed here is not grok's stdout alone. aid writes into the same
+/// PTY, and the terminal echoes it back: an auto-nudge lands as a bare line
+/// *before* grok's envelope, and the terminal sentinel lands after it. Requiring
+/// the whole buffer to be one JSON document therefore failed every run that was
+/// idle long enough to be nudged — measured on t-cd0bb8dd (8m16s, `end_turn`,
+/// real work committed) and t-137fe385, both stored Failed, while a 27s run that
+/// was never nudged parsed fine. The stopReason check below never ran in exactly
+/// the cases it was written for.
 pub fn parse_grok_completion(output: &str) -> CompletionInfo {
-    let trimmed = output.trim();
-    let Ok(value) = serde_json::from_str::<Value>(trimmed) else {
+    let Some(value) = extract_envelope(output) else {
         return failed_completion();
     };
     if value.get("type").and_then(Value::as_str) == Some("error") {

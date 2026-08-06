@@ -107,6 +107,36 @@ impl super::Agent for QwenAgent {
             exit_code: None,
         }
     }
+
+    /// Note: This is a local config read from ~/.qwen/settings.json, not a served list
+    /// returned by the Qwen CLI directly.
+    fn served_models(&self) -> Result<Option<Vec<String>>> {
+        let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
+        let settings_path = std::path::Path::new(&home).join(".qwen/settings.json");
+        if let Ok(content) = std::fs::read_to_string(&settings_path) {
+            if let Ok(val) = serde_json::from_str::<serde_json::Value>(&content) {
+                let mut models = Vec::new();
+                if let Some(name) = val.pointer("/model/name").and_then(|n| n.as_str()) {
+                    models.push(name.to_string());
+                }
+                if let Some(providers) = val.get("modelProviders").and_then(|p| p.as_object()) {
+                    for items in providers.values().filter_map(|v| v.as_array()) {
+                        for item in items {
+                            if let Some(id) = item.get("id").and_then(|i| i.as_str()) {
+                                if !models.contains(&id.to_string()) {
+                                    models.push(id.to_string());
+                                }
+                            }
+                        }
+                    }
+                }
+                if !models.is_empty() {
+                    return Ok(Some(models));
+                }
+            }
+        }
+        Ok(None)
+    }
 }
 
 fn parse_stream_event(task_id: &TaskId, v: &serde_json::Value, now: chrono::DateTime<Local>) -> Option<TaskEvent> {

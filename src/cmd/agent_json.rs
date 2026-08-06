@@ -83,12 +83,22 @@ fn build_agent_json(
     
     let disabled = crate::agent_config::is_agent_disabled(&name);
     
+    // `trust_tier` keeps the JSON field name for callers; the value is the
+    // provider-derived egress label (local | third-party | unknown).
     let (description, trust_tier) = if let Some(config) = custom_config {
-        (config.display_name.clone(), config.trust_tier.clone())
-    } else if let Some((_, desc, _, _, _, trust)) = kind.profile() {
-        (desc.to_string(), trust.to_string())
+        (
+            config.display_name.clone(),
+            crate::agent::egress::resolve_agent_egress(&config.id)
+                .label()
+                .to_string(),
+        )
+    } else if let Some((_, desc, _, _, _)) = kind.profile() {
+        (
+            desc.to_string(),
+            crate::types::egress_for_cli(kind).label().to_string(),
+        )
     } else {
-        ("".to_string(), "".to_string())
+        ("".to_string(), crate::types::EgressTier::Unknown.label().to_string())
     };
     
     let supports_session_resume = if is_custom {

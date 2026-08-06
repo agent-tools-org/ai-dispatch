@@ -5,6 +5,7 @@ pub mod antigravity;
 pub mod claude;
 pub(crate) mod claude_events;
 pub mod codebuff;
+pub mod commandcode;
 pub mod codex;
 pub mod copilot;
 pub mod cursor;
@@ -14,6 +15,7 @@ pub(crate) mod gemini_support;
 pub mod grok;
 pub mod kilo;
 pub(crate) mod model_group;
+pub(crate) mod model_validation;
 pub mod mimocode;
 pub mod opencode;
 pub(crate) mod opencode_overlay;
@@ -22,6 +24,7 @@ pub mod qwen;
 pub(crate) mod read_only;
 pub(crate) mod custom;
 pub(crate) mod cargo_target;
+pub(crate) mod egress;
 pub(crate) mod registry;
 pub mod classifier;
 pub(crate) mod selection;
@@ -80,6 +83,12 @@ pub trait Agent: Send + Sync {
     fn needs_pty(&self) -> bool {
         false
     }
+
+    /// Query served models from CLI or local config.
+    /// Returns Ok(Some(list)) if positively known, or Ok(None) if unqueryable.
+    fn served_models(&self) -> Result<Option<Vec<String>>> {
+        Ok(None)
+    }
 }
 
 /// Options passed to agent for command construction
@@ -113,6 +122,7 @@ pub fn detect_agents() -> Vec<AgentKind> {
         ("agy", AgentKind::Antigravity),
         ("qwen", AgentKind::Qwen),
         ("codex", AgentKind::Codex),
+        ("commandcode", AgentKind::CommandCode),
         ("opencode", AgentKind::OpenCode),
         ("copilot", AgentKind::Copilot),
         ("agent", AgentKind::Cursor),
@@ -187,6 +197,7 @@ where
     match agent_kind {
         AgentKind::Antigravity => which("agy"),
         AgentKind::Codex => which("codex"),
+        AgentKind::CommandCode => which("commandcode"),
         AgentKind::Copilot => which("copilot"),
         AgentKind::Cursor => which("agent") || which("cursor-agent"),
         AgentKind::Gemini => which("gemini"),
@@ -215,6 +226,7 @@ pub fn get_agent(kind: AgentKind) -> Box<dyn Agent> {
     match kind {
         AgentKind::Antigravity => Box::new(antigravity::AntigravityAgent),
         AgentKind::Codex => Box::new(codex::CodexAgent),
+        AgentKind::CommandCode => Box::new(commandcode::CommandCodeAgent),
         AgentKind::Copilot => Box::new(copilot::CopilotAgent),
         AgentKind::Cursor => Box::new(cursor::CursorAgent),
         AgentKind::Gemini => Box::new(gemini::GeminiAgent),
@@ -261,37 +273,6 @@ pub fn embed_context_in_prompt(prompt: &str, context_files: &[String]) -> anyhow
 #[cfg(test)]
 mod cursor_binary_tests;
 #[cfg(test)]
-mod binary_preflight_tests {
-    use super::{built_in_agent_binary_exists, ensure_agent_binary_available_with};
-    use crate::types::AgentKind;
-
-    #[test]
-    fn built_in_agent_binary_exists_rejects_missing_kilo_binary() {
-        assert!(!built_in_agent_binary_exists(AgentKind::Kilo, |_| false));
-    }
-
-    #[test]
-    fn built_in_agent_binary_exists_rejects_missing_mimocode_binary() {
-        assert!(!built_in_agent_binary_exists(AgentKind::MiMoCode, |_| false));
-    }
-
-    #[test]
-    fn built_in_agent_binary_exists_accepts_cursor_alias_binary() {
-        assert!(built_in_agent_binary_exists(AgentKind::Cursor, |name| {
-            name == "cursor-agent"
-        }));
-    }
-
-    #[test]
-    fn ensure_agent_binary_available_reports_missing_path_binary() {
-        let err = ensure_agent_binary_available_with(AgentKind::Kilo, "kilo", |_| false)
-            .unwrap_err();
-
-        assert_eq!(
-            err.to_string(),
-            "Agent 'kilo' not found: binary missing from PATH"
-        );
-    }
-}
+mod binary_preflight_tests;
 #[cfg(test)]
 mod tests;

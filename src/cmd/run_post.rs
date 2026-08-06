@@ -265,7 +265,62 @@ fn produced_work(task: &Task, base_branch: Option<&str>) -> bool {
     if !path.exists() {
         return true;
     }
+    if match crate::commit::detect_untracked_source_files(wt_path) {
+        Ok(files) => !files.is_empty(),
+        Err(_) => true,
+    } {
+        return true;
+    }
+    if let Some(start_sha) = task.start_sha.as_deref() {
+        match has_committed_work_since_start(path, start_sha) {
+            Ok(true) => return true,
+            Err(_) => return true,
+            Ok(false) => match has_uncommitted_changes(path) {
+                Ok(has_changes) => return has_changes,
+                Err(_) => return true,
+            },
+        }
+    }
     !matches!(worktree_is_empty_diff_with_base(path, base_branch), Some(true))
+}
+
+fn has_committed_work_since_start(dir: &Path, start_sha: &str) -> Result<bool> {
+    let head = std::process::Command::new("git")
+        .current_dir(dir)
+        .args(["rev-parse", "--verify", "--quiet", "HEAD^{commit}"])
+        .output()?;
+    let start = std::process::Command::new("git")
+        .current_dir(dir)
+        .args(["rev-parse", "--verify", "--quiet"])
+        .arg(format!("{start_sha}^{{commit}}"))
+        .output()?;
+    if !head.status.success() || !start.status.success() {
+        anyhow::bail!("git rev-parse failed");
+    }
+    let head_sha = String::from_utf8_lossy(&head.stdout).trim().to_string();
+    let start_commit_sha = String::from_utf8_lossy(&start.stdout).trim().to_string();
+    Ok(head_sha != start_commit_sha)
+}
+
+fn has_uncommitted_changes(dir: &Path) -> Result<bool> {
+    let head = std::process::Command::new("git")
+        .current_dir(dir)
+        .args(["diff", "--stat", "HEAD"])
+        .output()?;
+    if !head.status.success() {
+        anyhow::bail!("git diff HEAD failed");
+    }
+    if !String::from_utf8_lossy(&head.stdout).trim().is_empty() {
+        return Ok(true);
+    }
+    let staged = std::process::Command::new("git")
+        .current_dir(dir)
+        .args(["diff", "--cached", "--stat"])
+        .output()?;
+    if !staged.status.success() {
+        anyhow::bail!("git diff --cached failed");
+    }
+    Ok(!String::from_utf8_lossy(&staged.stdout).trim().is_empty())
 }
 
 pub(crate) fn read_quota_error_message(task_id: &TaskId) -> Option<String> {

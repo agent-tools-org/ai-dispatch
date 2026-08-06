@@ -235,18 +235,17 @@ pub struct ContainerArgs {
 #[command(after_help = r#"Examples:
   aid build
   aid build check
-  aid build test --test retry
-  aid build clippy -- --all-targets"#)]
+  aid build clippy -- --all-targets
+
+For trusted test runs (zero-match is an error, named executed tests), use `aid test`."#)]
 pub struct BuildArgs {
     /// Cargo verification command. Defaults to project verify config, then check.
+    /// Project verify of `cargo test …` maps to check; use `aid test` for tests.
     #[arg(value_enum)]
     pub command: Option<BuildCommandArg>,
     /// Cargo package to verify.
     #[arg(short = 'p', long)]
     pub package: Option<String>,
-    /// Test name filter. Valid only with the test command.
-    #[arg(long = "test")]
-    pub test_filter: Option<String>,
     /// Include warning diagnostics instead of reporting only their count.
     #[arg(long)]
     pub warnings: bool,
@@ -258,6 +257,44 @@ pub struct BuildArgs {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
 pub enum BuildCommandArg {
     Check,
-    Test,
     Clippy,
+}
+
+#[derive(Args)]
+#[command(after_help = r#"Examples:
+  aid test
+  aid test --bin aid
+  aid test --bin aid paths::aid_dir -- --exact
+  aid test --lib
+  aid test --isolated --bin aid my_test
+
+Guarantees (unlike raw `cargo test`):
+  - A filter matching zero tests exits non-zero and names the filter
+  - A run with no test targets never looks like a pass
+  - The digest lists which tests ran
+  - Failure output is compact (panics/assertions, not pass noise)"#)]
+pub struct TestArgs {
+    /// Cargo package (-p).
+    #[arg(short = 'p', long)]
+    pub package: Option<String>,
+    /// Only run tests for this binary target.
+    #[arg(long)]
+    pub bin: Option<String>,
+    /// Only run library unit tests (`cargo test --lib`).
+    #[arg(long)]
+    pub lib: bool,
+    /// Integration test target name (`cargo test --test NAME`).
+    #[arg(long = "test")]
+    pub test_target: Option<String>,
+    /// Libtest name filter (substring or exact with `-- --exact`).
+    pub filter: Option<String>,
+    /// Run cargo test with a temporary AID_HOME (does not read/write ~/.aid).
+    #[arg(long)]
+    pub isolated: bool,
+    /// Include warning diagnostics instead of reporting only their count.
+    #[arg(long)]
+    pub warnings: bool,
+    /// Extra args after `--` are passed to the test harness (e.g. --exact).
+    #[arg(last = true, allow_hyphen_values = true)]
+    pub extra_args: Vec<String>,
 }

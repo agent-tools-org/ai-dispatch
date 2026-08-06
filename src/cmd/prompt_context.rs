@@ -367,7 +367,7 @@ pub(super) fn resolve_context_from(store: &Store, task_ids: &[String]) -> Result
         blocks.push(format!(
             "[Prior Task Result — {} ({}, {})]\n<prior-task-output task=\"{}\">\n{}\n</prior-task-output>",
             task_id,
-            task.agent_display_name(),
+            task.display_route(),
             task.status.as_str(),
             task_id,
             sanitized.trim()

@@ -1,11 +1,12 @@
 // Width-aware formatting of a task's CLI / provider / model route for the TUI.
-// Exports: format_route_fit. Deps: crate::types::{provider_for_cli, Task}.
+// Exports: format_route_fit. Deps: crate::types::Task (via display_route).
 
-use crate::types::{provider_for_cli, Task};
+use crate::types::Task;
 
 /// Format `cli/provider/model` for a given width budget.
 ///
-/// Truncation order (deliberate):
+/// Builds on `Task::display_route` so attribution grades stay consistent with
+/// every other human surface. Truncation order (deliberate):
 /// 1. Shrink the provider first — longest segment, least needed at a glance.
 /// 2. Shrink the model next — attribution suffix may clip.
 /// 3. Fall back to the CLI alone so the row never wraps into garbage.
@@ -15,17 +16,18 @@ pub fn format_route_fit(task: &Task, max_width: usize) -> String {
     if max_width == 0 {
         return String::new();
     }
-    let cli = task.agent_display_name();
-    let (provider, _) = provider_for_cli(task.agent);
-    let provider = provider.as_str();
-    let model = task
-        .display_model()
-        .unwrap_or_else(|| "unknown".to_string());
-
-    let full = format!("{cli}/{provider}/{model}");
+    let full = task.display_route();
     if char_len(&full) <= max_width {
         return full;
     }
+
+    let cli = task.agent_display_name();
+    // Split on the first two segments so attribution on the model is preserved
+    // as one unit (e.g. "gpt-5.6 (inferred)" stays together).
+    let mut parts = full.splitn(3, '/');
+    let _cli_seg = parts.next().unwrap_or(cli);
+    let provider = parts.next().unwrap_or("unknown");
+    let model = parts.next().unwrap_or("unknown");
 
     // cli + two slashes already spent; remaining budget for provider+model.
     let fixed = char_len(cli) + 2;
@@ -38,7 +40,7 @@ pub fn format_route_fit(task: &Task, max_width: usize) -> String {
     let prov_budget = (remaining / 2).max(4).min(remaining.saturating_sub(1));
     let model_budget = remaining.saturating_sub(prov_budget);
     let prov = truncate_chars(provider, prov_budget);
-    let modl = truncate_chars(&model, model_budget.max(1));
+    let modl = truncate_chars(model, model_budget.max(1));
     let fitted = format!("{cli}/{prov}/{modl}");
     if char_len(&fitted) <= max_width {
         return fitted;

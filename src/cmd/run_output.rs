@@ -90,7 +90,7 @@ pub(in crate::cmd) fn fill_empty_output_from_log(log_path: &Path, output_path: O
 }
 
 pub(in crate::cmd::run) fn extract_output_fallback_from_path(path: &Path) -> Option<String> {
-    crate::cmd::show::extract_messages_from_log(path, true)
+    crate::cmd::show::extract_messages_from_log(path, true, None)
         .or_else(|| extract_raw_text_from_log(path))
         .filter(|content| !content.is_empty())
 }
@@ -103,6 +103,7 @@ fn extract_raw_text_from_log(log_path: &Path) -> Option<String> {
     let content = std::fs::read_to_string(log_path).ok()?;
     let raw_lines: Vec<&str> = content
         .lines()
+        .filter(|line| !crate::cmd::show::is_non_output_line(line))
         .filter(|line| serde_json::from_str::<serde_json::Value>(line).is_err())
         .collect();
     raw_lines
@@ -137,7 +138,7 @@ pub(in crate::cmd) fn clean_output_if_jsonl(output_path: &Path) -> Result<()> {
     if json_lines * 2 <= non_empty_lines.len() {
         return Ok(());
     }
-    let Some(cleaned) = crate::cmd::show::extract_messages_from_log(output_path, true) else {
+    let Some(cleaned) = crate::cmd::show::extract_messages_from_log(output_path, true, None) else {
         return Ok(());
     };
     std::fs::write(output_path, cleaned).with_context(|| {

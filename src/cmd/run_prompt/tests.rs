@@ -374,6 +374,24 @@ fn clean_output_if_jsonl_preserves_mixed_content() {
 }
 
 #[test]
+fn extract_raw_text_from_log_ignores_aid_sentinel_lines() {
+    let file = tempfile::NamedTempFile::new().unwrap();
+    let lines = concat!(
+        "{\"type\":\"unknown\"}\n",
+        "Warning: Reached maximum conversation turns (100).\n",
+        "=== AID TASK t-test FAILED (exit 8) ===\n"
+    );
+    std::fs::write(file.path(), lines).unwrap();
+
+    let raw = extract_output_fallback_from_path(file.path());
+    assert_ne!(
+        raw.as_deref(),
+        Some("=== AID TASK t-test FAILED (exit 8) ==="),
+        "Sentinel line must not be returned as output"
+    );
+}
+
+#[test]
 fn build_prompt_bundle_appends_batch_siblings_after_system_context() {
     let temp = tempfile::tempdir().unwrap();
     let _aid_home = crate::paths::AidHomeGuard::set(temp.path());

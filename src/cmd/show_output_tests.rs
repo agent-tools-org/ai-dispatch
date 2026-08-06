@@ -157,7 +157,7 @@ fn extract_messages_from_log_collects_supported_formats() {
     .join("\n");
     std::fs::write(file.path(), content).unwrap();
 
-    let output = extract_messages_from_log(file.path(), false);
+    let output = extract_messages_from_log(file.path(), false, None);
 
     assert_eq!(
         output,
@@ -177,7 +177,7 @@ fn extract_messages_strips_ansi_before_parsing() {
     let content = format!("{esc}[0m{esc}[32m{json1}{esc}[0m\n{json2}\n");
     std::fs::write(file.path(), content).unwrap();
 
-    let output = extract_messages_from_log(file.path(), false);
+    let output = extract_messages_from_log(file.path(), false, None);
 
     assert!(output.is_some());
     let output = output.unwrap();
@@ -200,7 +200,7 @@ fn extract_messages_collects_opencode_tool_use_errors() {
     .join("\n");
     std::fs::write(file.path(), content).unwrap();
 
-    let output = extract_messages_from_log(file.path(), true).unwrap();
+    let output = extract_messages_from_log(file.path(), true, None).unwrap();
 
     assert!(output.contains("I'll explore the workspace"), "got: {output}");
     assert!(output.contains("[glob] Error: Permission denied"), "got: {output}");
@@ -212,7 +212,7 @@ fn extract_messages_from_log_returns_none_without_supported_messages() {
     let file = NamedTempFile::new().unwrap();
     std::fs::write(file.path(), "{\"type\":\"event\"}\nnot-json\n").unwrap();
 
-    assert_eq!(extract_messages_from_log(file.path(), false), None);
+    assert_eq!(extract_messages_from_log(file.path(), false, None), None);
 }
 
 #[test]
@@ -220,7 +220,7 @@ fn extract_messages_accumulates_cursor_assistant_deltas() {
     let log = "{\"type\":\"system\",\"subtype\":\"init\",\"model\":\"composer-2\"}\n{\"type\":\"assistant\",\"message\":{\"role\":\"assistant\",\"content\":[{\"type\":\"text\",\"text\":\"Hello \"}]}}\n{\"type\":\"assistant\",\"message\":{\"role\":\"assistant\",\"content\":[{\"type\":\"text\",\"text\":\"world!\"}]}}\n{\"type\":\"tool_call\",\"subtype\":\"started\",\"tool_call\":{\"readToolCall\":{\"args\":{\"filePath\":\"src/main.rs\"}}}}\n{\"type\":\"assistant\",\"message\":{\"role\":\"assistant\",\"content\":[{\"type\":\"text\",\"text\":\"Done.\"}]}}";
     let file = NamedTempFile::new().unwrap();
     std::fs::write(file.path(), log).unwrap();
-    let output = extract_messages_from_log(file.path(), true).unwrap();
+    let output = extract_messages_from_log(file.path(), true, None).unwrap();
     assert!(output.contains("Hello world!"), "Expected merged deltas, got: {output}");
     assert!(output.contains("Done."), "Expected separate message after tool_call");
 }
@@ -230,7 +230,7 @@ fn extract_messages_from_log_caps_message_count_and_size() {
     let file = NamedTempFile::new().unwrap();
     write_log(file.path(), numbered_assistant_log(22, 500));
 
-    let output = extract_messages_from_log(file.path(), false).unwrap();
+    let output = extract_messages_from_log(file.path(), false, None).unwrap();
     let parts = output.split("\n---\n").collect::<Vec<_>>();
 
     assert_eq!(output.matches("\n---\n").count(), 10);
@@ -247,7 +247,7 @@ fn extract_messages_full_skips_truncation() {
     let file = NamedTempFile::new().unwrap();
     write_log(file.path(), numbered_assistant_log(22, 500));
 
-    let output = extract_messages_from_log(file.path(), true).unwrap();
+    let output = extract_messages_from_log(file.path(), true, None).unwrap();
     let parts: Vec<&str> = output.split("\n---\n").collect();
 
     assert_eq!(parts.len(), 22);
@@ -342,4 +342,42 @@ fn output_text_uses_research_mode_for_no_worktree() {
     assert_eq!(parts.len(), 12);
     assert!(parts.iter().all(|part| part.len() > 1_000));
     assert!(!output.contains("[... "));
+}
+
+#[test]
+fn extract_messages_from_log_parses_commandcode_event_wrapper() {
+    let file = NamedTempFile::new().unwrap();
+    let lines = concat!(
+        "{\"type\":\"event\",\"event\":{\"type\":\"run_start\",\"sessionId\":\"sess-123\"}}\n",
+        "{\"type\":\"event\",\"event\":{\"type\":\"thinking_delta\",\"delta\":\"Let me analyze\"}}\n",
+        "{\"type\":\"event\",\"event\":{\"type\":\"message_update\",\"content\":[{\"type\":\"thinking\",\"thinking\":\"internal thought\"},{\"type\":\"text\",\"text\":\"Auditing the changes:\"}]}}\n",
+        "{\"type\":\"event\",\"event\":{\"type\":\"tool_queued\",\"toolName\":\"shell_command\",\"input\":{\"command\":\"git diff\"}}}\n",
+        "{\"type\":\"result\",\"subtype\":\"success\",\"sessionId\":\"sess-123\",\"finalText\":\"Audit completed: no issues found.\"}\n"
+    );
+    write_log(file.path(), lines.to_string());
+
+    let output = extract_messages_from_log(file.path(), true, Some("commandcode")).unwrap();
+    assert!(output.contains("Auditing the changes:"), "Output was: {output}");
+    assert!(output.contains("[shell_command]"), "Output was: {output}");
+    assert!(output.contains("Audit completed: no issues found."), "Output was: {output}");
+    assert!(!output.contains("internal thought"), "Thinking should be dropped: {output}");
+    assert!(!output.contains("Let me analyze"), "Thinking deltas should be dropped: {output}");
+}
+
+#[test]
+fn extract_messages_from_log_returns_notice_for_unrecognized_json_stream() {
+    let file = NamedTempFile::new().unwrap();
+    let lines = concat!(
+        "{\"unsupported_schema\":true,\"data\":\"line1\"}\n",
+        "{\"unsupported_schema\":true,\"data\":\"line2\"}\n"
+    );
+    write_log(file.path(), lines.to_string());
+
+    let output = extract_messages_from_log(file.path(), true, Some("custom_agent")).unwrap();
+    assert!(output.contains("[Unrecognized JSON log format from custom_agent]"), "Output: {output}");
+    assert!(output.contains("Sample line: {\"unsupported_schema\":true"), "Output: {output}");
+    assert!(output.contains("See transcript at"), "Output: {output}");
+
+    let output_unknown = extract_messages_from_log(file.path(), true, None).unwrap();
+    assert!(output_unknown.contains("[Unrecognized JSON log format from unknown agent]"), "Output: {output_unknown}");
 }

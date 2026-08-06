@@ -16,12 +16,29 @@ fn kilo_and_free_models_zero_cost() {
     );
     assert_eq!(estimate_cost(100_000, None, AgentKind::Kilo), Some(0.0));
     assert_eq!(estimate_cost(100_000, None, AgentKind::MiMoCode), Some(0.0));
+    // Without an explicit model the zero fallback is honest: nothing has been
+    // named, so nothing is being mis-priced. With a named model the model
+    // itself is priced (or unknown), never blanket-zeroed.
     assert_eq!(
         estimate_cost(100_000, Some("kilo/kilo/auto-free"), AgentKind::Kilo),
         Some(0.0)
     );
     assert_eq!(
         estimate_cost(100_000, Some("mimo/mimo-auto"), AgentKind::MiMoCode),
+        Some(0.0)
+    );
+}
+
+#[test]
+fn subscription_agents_stay_included_not_unknown() {
+    // Cursor/Copilot are flat-rate subscriptions: marginal cost is genuinely
+    // ~0, and the model name must not flip that to "unknown".
+    assert_eq!(
+        estimate_cost(100_000, Some("composer-2"), AgentKind::Cursor),
+        Some(0.0)
+    );
+    assert_eq!(
+        estimate_cost(100_000, Some("some-copilot-model"), AgentKind::Copilot),
         Some(0.0)
     );
 }
@@ -47,9 +64,12 @@ fn codex_fallback_uses_standard_tier_or_first_catalog_model() {
 }
 
 #[test]
-fn composer2_cost_estimate() {
+fn composer2_cursor_subscription_is_included() {
+    // Cursor is a flat-rate subscription: a named model costs ~0 marginal,
+    // not the old blanket builtin 0.50/2.50. The "included" state is what the
+    // three-state split must preserve for subscription agents.
     let cost = estimate_cost(1_000_000, Some("composer-2"), AgentKind::Cursor).unwrap();
-    assert!((cost - 1.10).abs() < 0.01);
+    assert_eq!(cost, 0.0);
 }
 
 #[test]
@@ -155,4 +175,50 @@ fn new_model_pricing_entries() {
     let pricing = model_pricing("o3-mini", AgentKind::Custom).unwrap();
     assert_eq!(pricing.input_per_m, 1.10);
     assert_eq!(pricing.output_per_m, 4.40);
+}
+
+/// A model the feed does not carry must resolve to `None` — never `Some(0.0)`
+/// and never "free". That is the whole point of the three-state split.
+#[test]
+fn unknown_model_yields_none_not_zero() {
+    // `unknown-model` is absent from both the feed and the built-in matcher.
+    let cost = estimate_cost(1000, Some("unknown-model"), AgentKind::OpenCode);
+    assert_eq!(cost, None);
+    assert_eq!(format_cost(cost), "unknown");
+    // A vendor-prefixed name nobody knows is equally unknown, not free.
+    let cost = estimate_cost(1000, Some("nobody/has-this-model"), AgentKind::OpenCode);
+    assert_eq!(cost, None);
+    assert_eq!(format_cost(cost), "unknown");
+}
+
+/// A model the feed prices resolves to the feed's numbers; a feed miss with a
+/// built-in hit falls back to builtin. Seeded via the test seam with a model id
+/// no other test asserts on, then cleared so nothing leaks into the process.
+#[test]
+fn feed_precedence_and_builtin_fallback() {
+    use crate::cost::price_feed::{Feed, FeedModel};
+    set_feed_for_tests(Feed {
+        built_at: chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, true),
+        age_seconds: Some(60),
+        stale: Some(false),
+        count: Some(1),
+        models: vec![FeedModel {
+            id: "gpt-5.9-mini".to_string(),
+            aliases: vec![],
+            input_per_mtok: 0.75,
+            output_per_mtok: 4.5,
+            cached_input_per_mtok: None,
+            context_length: None,
+            source: Some("openrouter".to_string()),
+        }],
+    });
+    // Feed knows gpt-5.9-mini: feed rate (0.75/4.5), not any builtin.
+    let p = model_pricing("gpt-5.9-mini", AgentKind::Codex).unwrap();
+    assert_eq!(p.input_per_m, 0.75);
+    assert_eq!(p.output_per_m, 4.5);
+    // builtin-only model still resolves offline.
+    let p = model_pricing("composer-2", AgentKind::Codex).unwrap();
+    assert_eq!(p.input_per_m, 0.50);
+    assert_eq!(p.output_per_m, 2.50);
+    clear_feed_for_tests();
 }

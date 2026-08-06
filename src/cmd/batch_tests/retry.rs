@@ -230,6 +230,12 @@ fn retry_task_to_run_args_preserves_saved_worktree_when_live_path_exists() {
 
 #[test]
 fn retry_task_to_run_args_uses_waiting_placeholder_fields() {
+    // Isolated home: without it this test reads the machine's live rate-limit
+    // markers, and flips behaviour depending on whether codex happens to be
+    // exhausted right now. When it was, the fallback switched the agent to agy
+    // and the assertions below silently described a different code path.
+    let aid_home = tempfile::tempdir().unwrap();
+    let _aid_home_guard = crate::paths::AidHomeGuard::set(aid_home.path());
     let store = Arc::new(Store::open_memory().unwrap());
     let repo = init_repo();
     git(repo.path(), &["branch", "feat/retry"]);
@@ -256,6 +262,8 @@ fn retry_task_to_run_args_uses_waiting_placeholder_fields() {
     assert_eq!(run_args.prompt, prompt);
     assert_eq!(run_args.dir, Some(repo.path().display().to_string()));
     assert_eq!(run_args.worktree, Some("feat/retry".to_string()));
+    // No agent switch here, so the requested model is carried as before. The
+    // cross-agent case is covered in run_cascade_tests.
     assert_eq!(run_args.model, Some("o3".to_string()));
     assert_eq!(run_args.verify, Some("cargo check -p ai-dispatch".to_string()));
     assert!(run_args.read_only);

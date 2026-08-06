@@ -97,6 +97,17 @@ fn build_hung_retry_args(
     if context.transient {
         retry_args.session_id = None;
         if let Some((next_agent, remaining_cascade)) = take_next_cascade_agent(args) {
+            // A model name means something only inside one CLI. Carrying the
+            // parent's across a cascade sent agy `gpt-5.6-luna` — codex's model
+            // — and agy refused it by listing its own (`t-ac9a7a9d`, cascaded
+            // from `t-90371f9e`). The cascade exists to escape a failing route;
+            // inheriting half of that route defeats the point.
+            //
+            // Dropped only when the agent actually changes. A same-agent retry
+            // must still ask for what was asked before.
+            if retry_args.agent_name != next_agent {
+                retry_args.model = None;
+            }
             retry_args.agent_name = next_agent;
             retry_args.cascade = remaining_cascade;
         }

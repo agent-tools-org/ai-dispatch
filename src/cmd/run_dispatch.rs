@@ -42,7 +42,7 @@ pub async fn run(store: Arc<Store>, mut args: RunArgs) -> Result<TaskId> {
     store.update_resolved_prompt(prepared.task_id.as_str(), &prompt_bundle.effective_prompt)?;
     store.update_prompt_tokens(prepared.task_id.as_str(), prompt_bundle.prompt_tokens)?;
     if args.dry_run {
-        return dry_run(&prepared, &args, &prompt_bundle);
+        return dry_run(&store, &prepared, &args, &prompt_bundle);
     }
     if !args.background {
         crate::rate_limit_wait::wait_for_declared_reset(
@@ -132,10 +132,27 @@ fn ensure_agent_binary_available(
 }
 
 fn dry_run(
+    store: &Arc<Store>,
     prepared: &PreparedDispatch,
     args: &RunArgs,
     prompt_bundle: &run_prompt::PromptBundle,
 ) -> Result<TaskId> {
+    // A dry run builds a real task row in order to resolve the prompt, then
+    // returns without dispatching. Left in `pending`, the background reaper
+    // found it ten minutes later and recorded "Task timed out in pending state
+    // after 602s (reason: unknown)" — a failure that never happened, against an
+    // agent that was never invoked.
+    //
+    // That is not only board noise: `agent_success_rates` counts
+    // `done|merged|failed`, so every dry run quietly lowered an agent's score in
+    // the history `aid advise` recommends from. Sixteen such rows accumulated in
+    // a single day of verification runs, and agy's 30-day success rate read
+    // 73.7% where the truth was 79.7%.
+    //
+    // `Skipped` is the honest terminal state — the task was deliberately not
+    // executed — and it is excluded from both the reaper and the success-rate
+    // queries.
+    crate::task_lifecycle::mark_skipped(store.as_ref(), prepared.task_id.as_str())?;
     let estimated_cost = crate::cost::estimate_cost(
         prompt_bundle.prompt_tokens,
         prepared.effective_model.as_deref(),

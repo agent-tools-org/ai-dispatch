@@ -31,21 +31,48 @@ fn make_task(id: &str, group_id: Option<&str>) -> Task {
         output_path: None,
         tokens: None,
         prompt_tokens: None,
-            duration_ms: None,
-            requested_model: None, observed_model: None, attribution_source: None,
-            cost_usd: None,
-            exit_code: None,
-            created_at: Local::now(),
+        duration_ms: None,
+        // Fixture leaves model unattributed so route display keeps "unknown".
+        requested_model: None,
+        observed_model: None,
+        attribution_source: None,
+        cost_usd: None,
+        exit_code: None,
+        created_at: Local::now(),
         completed_at: None,
-            verify: None,
-            verify_status: VerifyStatus::Skipped,
-            pending_reason: None,
+        verify: None,
+        verify_status: VerifyStatus::Skipped,
+        pending_reason: None,
         read_only: false,
-            budget: false,
-            audit_verdict: None,
+        budget: false,
+        audit_verdict: None,
         audit_report_path: None,
         delivery_assessment: None,
-        }
+    }
+}
+
+#[test]
+fn loaded_task_route_exposes_provider_and_attribution() {
+    use crate::types::AttributionSource;
+    let store = Arc::new(Store::open_memory().unwrap());
+    let mut task = make_task("t-route-1", None);
+    task.requested_model = Some("gpt-5.6".to_string());
+    task.observed_model = Some("gpt-5.6".to_string());
+    task.attribution_source = Some(AttributionSource::Echoed);
+    store.insert_task(&task).unwrap();
+
+    let app = App::new(
+        store,
+        super::super::RunOptions {
+            task_id: None,
+            group: None,
+        },
+    )
+    .unwrap();
+    let loaded = app.tasks.iter().find(|t| t.id.as_str() == "t-route-1").unwrap();
+    assert_eq!(loaded.route().provider.as_str(), "openai-chatgpt-plan");
+    assert_eq!(loaded.display_route(), "codex/openai-chatgpt-plan/gpt-5.6");
+    assert_eq!(loaded.attribution_source, Some(AttributionSource::Echoed));
 }
 
 #[test]

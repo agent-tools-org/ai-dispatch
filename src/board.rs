@@ -74,20 +74,20 @@ pub fn render_board(tasks: &[Task], store: &Store) -> Result<String> {
         merged
     };
 
-    // Header
+    // Header — Route is cli/provider/model (attribution rides on the model segment).
     if show_repo {
         out.push_str(&format!(
-            "{:<11} {:<10} {:<30} {:<10} {:<10} {:<8} {:<11} {:<12} {:<20} {:<16} {}\n",
-            "ID", "Agent", "Status", "Duration", "Tokens", "Cost", "Parent", "Group", "Repo", "Caller", "Model"
+            "{:<11} {:<36} {:<30} {:<10} {:<10} {:<8} {:<11} {:<12} {:<20} {:<16} {}\n",
+            "ID", "Route", "Status", "Duration", "Tokens", "Cost", "Parent", "Group", "Repo", "Caller", "Model"
         ));
-        out.push_str(&"-".repeat(165));
+        out.push_str(&"-".repeat(191));
         out.push('\n');
     } else {
         out.push_str(&format!(
-            "{:<11} {:<10} {:<30} {:<10} {:<10} {:<8} {:<11} {:<12} {:<16} {}\n",
-            "ID", "Agent", "Status", "Duration", "Tokens", "Cost", "Parent", "Group", "Caller", "Model"
+            "{:<11} {:<36} {:<30} {:<10} {:<10} {:<8} {:<11} {:<12} {:<16} {}\n",
+            "ID", "Route", "Status", "Duration", "Tokens", "Cost", "Parent", "Group", "Caller", "Model"
         ));
-        out.push_str(&"-".repeat(144));
+        out.push_str(&"-".repeat(170));
         out.push('\n');
     }
 
@@ -131,13 +131,15 @@ pub fn render_board(tasks: &[Task], store: &Store) -> Result<String> {
         let repo = short_repo(task.repo_path.as_deref());
         let caller = session::display(task);
         let model_display = task.display_model();
-        let model = model_display.as_deref().unwrap_or("-");
+        let model = model_display.as_deref().unwrap_or("unknown");
+        // Fixed column: keep the triple scannable without wrapping the row.
+        let route = truncate(&task.display_route(), 36);
 
         if show_repo {
             out.push_str(&format!(
-                "{:<11} {:<10} {:<30} {:<10} {:<10} {:<8} {:<11} {:<12} {:<20} {:<16} {}\n",
+                "{:<11} {:<36} {:<30} {:<10} {:<10} {:<8} {:<11} {:<12} {:<20} {:<16} {}\n",
                 task.id.as_str(),
-                task.agent_display_name(),
+                route,
                 status,
                 duration,
                 tokens,
@@ -150,9 +152,9 @@ pub fn render_board(tasks: &[Task], store: &Store) -> Result<String> {
             ));
         } else {
             out.push_str(&format!(
-                "{:<11} {:<10} {:<30} {:<10} {:<10} {:<8} {:<11} {:<12} {:<16} {}\n",
+                "{:<11} {:<36} {:<30} {:<10} {:<10} {:<8} {:<11} {:<12} {:<16} {}\n",
                 task.id.as_str(),
-                task.agent_display_name(),
+                route,
                 status,
                 duration,
                 tokens,

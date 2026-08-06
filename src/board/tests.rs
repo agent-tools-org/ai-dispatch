@@ -80,6 +80,29 @@ fn board_with_tasks() {
     assert!(output.contains("Cost"));
     assert!(output.contains("Caller"));
     assert!(output.contains("Group"));
+    assert!(output.contains("Route"), "header should say Route, not Agent: {output}");
+    assert!(
+        output.contains("codex/openai-chatgpt-plan/unknown"),
+        "unknown model stays literal unknown: {output}"
+    );
+}
+
+#[test]
+fn board_route_shows_attribution_and_substitution() {
+    let (_temp, _guard, store) = isolated_store();
+    let mut task = make_task("t-route", AgentKind::Cursor, TaskStatus::Done);
+    task.requested_model = Some("auto".to_string());
+    task.observed_model = Some("composer-2".to_string());
+    task.attribution_source = Some(AttributionSource::Echoed);
+    let output = render_board(&[task], &store).unwrap();
+    assert!(
+        output.contains("composer-2 (asked auto)"),
+        "substitution must show both models: {output}"
+    );
+    assert!(
+        output.contains("cursor/cursor-subscription/"),
+        "provider is part of the route: {output}"
+    );
 }
 
 #[test]

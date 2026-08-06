@@ -92,9 +92,9 @@ fn collect(store: &Store, window: UsageWindow, agent: Option<&str>, now: DateTim
         activity_by_day: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].into_iter().map(|day| (day.to_string(), *day_counts.get(day).unwrap_or(&0))).collect(),
         activity_by_hour: hour_counts.into_iter().enumerate().map(|(hour, count)| (hour as u32, count)).collect(),
         top_sessions: [
-            longest.map(|(task, ms)| TopSession { task_id: task.id.to_string(), agent: task.agent_display_name().to_string(), label: "Longest", value: format_duration(Some(ms)) }),
-            most_tokens.map(|(task, tokens)| TopSession { task_id: task.id.to_string(), agent: task.agent_display_name().to_string(), label: "Most tokens", value: format_tokens(tokens) }),
-            highest_cost.map(|(task, cost_usd)| TopSession { task_id: task.id.to_string(), agent: task.agent_display_name().to_string(), label: "Highest cost", value: cost::format_cost(Some(cost_usd)) }),
+            longest.map(|(task, ms)| TopSession { task_id: task.id.to_string(), agent: task.display_route(), label: "Longest", value: format_duration(Some(ms)) }),
+            most_tokens.map(|(task, tokens)| TopSession { task_id: task.id.to_string(), agent: task.display_route(), label: "Most tokens", value: format_tokens(tokens) }),
+            highest_cost.map(|(task, cost_usd)| TopSession { task_id: task.id.to_string(), agent: task.display_route(), label: "Highest cost", value: cost::format_cost(Some(cost_usd)) }),
         ].into_iter().flatten().collect(),
     })
 }

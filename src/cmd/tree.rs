@@ -93,7 +93,7 @@ fn format_task_line(task: &Task) -> String {
     format!(
         "{} {} {} ({})",
         task.id.as_str(),
-        task.agent_display_name(),
+        task.display_route(),
         status,
         parts.join(", ")
     )
@@ -117,5 +117,80 @@ fn format_token_count(count: i64) -> String {
         format!("{:.1}k", count as f64 / 1_000.0)
     } else {
         count.to_string()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::types::{
+        AgentKind, AttributionSource, TaskId, TaskStatus, VerifyStatus,
+    };
+    use chrono::Local;
+
+    fn sample(agent: AgentKind) -> Task {
+        Task {
+            id: TaskId("t-tree".to_string()),
+            agent,
+            custom_agent_name: None,
+            prompt: "p".to_string(),
+            resolved_prompt: None,
+            category: None,
+            status: TaskStatus::Done,
+            parent_task_id: None,
+            workgroup_id: None,
+            caller_kind: None,
+            caller_session_id: None,
+            agent_session_id: None,
+            repo_path: None,
+            worktree_path: None,
+            worktree_branch: None,
+            final_head_sha: None,
+            final_branch: None,
+            start_sha: None,
+            log_path: None,
+            output_path: None,
+            tokens: Some(1_500),
+            prompt_tokens: None,
+            duration_ms: Some(12_000),
+            requested_model: None,
+            observed_model: None,
+            attribution_source: None,
+            cost_usd: None,
+            exit_code: None,
+            created_at: Local::now(),
+            completed_at: None,
+            verify: None,
+            verify_status: VerifyStatus::Skipped,
+            pending_reason: None,
+            read_only: false,
+            budget: false,
+            audit_verdict: None,
+            audit_report_path: None,
+            delivery_assessment: None,
+        }
+    }
+
+    #[test]
+    fn tree_line_shows_route_triple_not_opaque_cli() {
+        let line = format_task_line(&sample(AgentKind::Codex));
+        assert!(
+            line.contains("codex/openai-chatgpt-plan/unknown"),
+            "expected route triple in tree line: {line}"
+        );
+        assert!(line.contains("1.5k tokens"), "{line}");
+    }
+
+    #[test]
+    fn tree_line_marks_inferred_attribution() {
+        let mut task = sample(AgentKind::Codex);
+        task.requested_model = Some("gpt-5.6".to_string());
+        task.observed_model = Some("gpt-5.6".to_string());
+        task.attribution_source = Some(AttributionSource::ConfirmedBySuccess);
+        let line = format_task_line(&task);
+        assert!(
+            line.contains("gpt-5.6 (inferred)"),
+            "attribution grade must ride the model segment: {line}"
+        );
     }
 }

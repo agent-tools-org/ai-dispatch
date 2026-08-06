@@ -25,15 +25,25 @@ pub(super) fn collect_messages(content: &str) -> Vec<String> {
 
 impl MessageCollector {
     fn collect(&mut self, value: &Value) {
+        let value = if value.get("type").and_then(|k| k.as_str()) == Some("event") {
+            value.get("event").unwrap_or(value)
+        } else {
+            value
+        };
         match value.get("type").and_then(|kind| kind.as_str()) {
             Some("item.completed") => self.push_message(completed_agent_message(value)),
-            Some("message") => self.collect_message_event(value),
+            Some("message" | "message_end") => self.collect_message_event(value),
+            Some("message_update") => self.collect_message_update_event(value),
             Some("assistant.message") => self.collect_copilot_message_event(value),
             Some("assistant.message_delta") => {
                 self.append_streaming(copilot_delta_text(value));
             }
+            Some("text_delta") => {
+                self.append_streaming(text_delta_text(value));
+            }
             Some("assistant") => self.append_streaming(assistant_event_text(value)),
             Some("text") => self.collect_text_event(value),
+            Some("thinking" | "thinking_start" | "thinking_delta" | "thinking_end") => {}
             Some("tool.execution_start") => {
                 self.flush_pending();
                 if let Some(detail) = copilot_tool_start_message(value) {
@@ -46,7 +56,7 @@ impl MessageCollector {
                     self.messages.push(detail);
                 }
             }
-            Some("tool_use" | "tool_call" | "function_call" | "tool_result") => {
+            Some("tool_use" | "tool_call" | "function_call" | "tool_result" | "tool_queued" | "tool_running" | "tool_completed") => {
                 self.flush_pending();
                 if let Some(detail) = tool_event_message(value) {
                     self.messages.push(detail);
@@ -58,11 +68,41 @@ impl MessageCollector {
                     self.messages.push(detail);
                 }
             }
-            Some("result" | "turn_complete" | "completion" | "done" | "step_finish") => {
-                self.flush_pending();
+            Some("result" | "turn_complete" | "completion" | "done" | "step_finish" | "turn_end" | "run_end") => {
+                if let Some(text) = result_event_text(value) {
+                    self.push_message(Some(text));
+                } else {
+                    self.flush_pending();
+                }
             }
-            _ => {}
+            // For any unrecognized event shape from any agent adapter (including commandcode
+            // or custom agents), check if the payload contains a top-level `finalText` or `/result/text`.
+            // For existing adapters (e.g. commandcode's `{"type":"result","finalText":"..."}` or
+            // third-party wrappers with `result.text`), this extracts the final response text
+            // even if the event envelope type is not explicitly enumerated in the match.
+            _ => {
+                if let Some(text) = result_event_text(value) {
+                    self.push_message(Some(text));
+                }
+            }
         }
+    }
+
+    fn collect_message_update_event(&mut self, value: &Value) {
+        let text = extract_text_payload(value);
+        let Some(text) = text.filter(|text| !text.is_empty()) else {
+            return;
+        };
+        if !self.streaming_message.is_empty() {
+            if text == self.streaming_message || text.starts_with(&self.streaming_message) {
+                self.streaming_message = text;
+                return;
+            }
+            if self.streaming_message.starts_with(&text) {
+                return;
+            }
+        }
+        self.streaming_message = text;
     }
 
     fn collect_message_event(&mut self, value: &Value) {
@@ -311,6 +351,22 @@ fn copilot_delta_text(value: &Value) -> Option<String> {
         .map(ToOwned::to_owned)
 }
 
+fn text_delta_text(value: &Value) -> Option<String> {
+    value
+        .get("delta")
+        .and_then(Value::as_str)
+        .or_else(|| value.pointer("/data/deltaContent").and_then(Value::as_str))
+        .map(ToOwned::to_owned)
+}
+
+fn result_event_text(value: &Value) -> Option<String> {
+    value
+        .get("finalText")
+        .and_then(Value::as_str)
+        .or_else(|| value.pointer("/result/text").and_then(Value::as_str))
+        .map(ToOwned::to_owned)
+}
+
 fn copilot_tool_start_message(value: &Value) -> Option<String> {
     let tool = value.pointer("/data/toolName").and_then(Value::as_str)?;
     let payload = value.pointer("/data/arguments").and_then(stringify_payload)?;
@@ -341,7 +397,10 @@ fn extract_text_payload(value: &Value) -> Option<String> {
             (!parts.is_empty()).then(|| parts.concat())
         }
         Value::Object(map) => {
-            for key in ["text", "content", "parts"] {
+            if map.get("type").and_then(Value::as_str) == Some("thinking") {
+                return None;
+            }
+            for key in ["text", "content", "parts", "finalText"] {
                 if let Some(text) = map.get(key).and_then(extract_text_payload)
                     && !text.is_empty()
                 {

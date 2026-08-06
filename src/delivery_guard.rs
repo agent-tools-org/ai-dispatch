@@ -28,9 +28,13 @@ const NARRATION_PREFIXES: &[&str] = &["first, ", "first ", "next, ", "next ", "t
 /// both to the same stream, so a run that dies mid-investigation leaves behind a
 /// plausible-looking file made entirely of pre-tool narration.
 pub(crate) fn looks_like_delivered_report(text: &str) -> bool {
+    let trimmed = text.trim();
+    if crate::cmd::show::is_unrecognized_json_notice(trimmed) {
+        return true;
+    }
     // Only what follows the last announced tool call can be the deliverable - the same
     // ordering rule the Codex JSONL guard applies to messages versus work events.
-    let substance = substance_after_narration(text.trim());
+    let substance = substance_after_narration(trimmed);
     // A heading is the shape the report instruction asks for, and a legitimate report can
     // be as short as "## Findings\nNo findings." - do not hold length against it.
     if has_markdown_heading(&substance) {

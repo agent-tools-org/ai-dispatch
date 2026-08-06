@@ -30,7 +30,7 @@ fn gemini_delta_messages_flush_across_tool_boundaries() {
         ],
     );
 
-    let output = extract_messages_from_log(file.path(), true).unwrap();
+    let output = extract_messages_from_log(file.path(), true, None).unwrap();
 
     assert_eq!(
         output,
@@ -50,7 +50,7 @@ fn gemini_top_level_text_events_keep_only_latest_revision() {
         ],
     );
 
-    let output = extract_messages_from_log(file.path(), true).unwrap();
+    let output = extract_messages_from_log(file.path(), true, None).unwrap();
 
     assert_eq!(output, "Draft updated");
 }
@@ -70,7 +70,7 @@ fn assistant_message_content_arrays_are_rendered_as_plain_text() {
         })],
     );
 
-    let output = extract_messages_from_log(file.path(), true).unwrap();
+    let output = extract_messages_from_log(file.path(), true, None).unwrap();
 
     assert_eq!(output, "Alpha beta");
 }
@@ -90,7 +90,7 @@ fn copilot_stream_dedupes_final_message_and_flushes_at_tool_boundaries() {
         ],
     );
 
-    let output = extract_messages_from_log(file.path(), true).unwrap();
+    let output = extract_messages_from_log(file.path(), true, None).unwrap();
 
     assert_eq!(
         output,
@@ -113,7 +113,7 @@ fn copilot_tool_failure_renders_error_line() {
         })],
     );
 
-    let output = extract_messages_from_log(file.path(), true).unwrap();
+    let output = extract_messages_from_log(file.path(), true, None).unwrap();
 
     assert_eq!(output, "[bash] Error: permission denied");
 }

@@ -34,8 +34,13 @@ fn extract_last_log_message(content: &str) -> Option<String> {
     let mut messages = Vec::new();
     let mut streaming_message = String::new();
     for line in content.lines() {
-        let Ok(value) = serde_json::from_str::<Value>(line) else {
+        let Ok(raw_value) = serde_json::from_str::<Value>(line) else {
             continue;
+        };
+        let value = if raw_value.get("type").and_then(|k| k.as_str()) == Some("event") {
+            raw_value.get("event").unwrap_or(&raw_value)
+        } else {
+            &raw_value
         };
         match value.get("type").and_then(|kind| kind.as_str()) {
             Some("assistant.message_delta") => {

@@ -59,11 +59,21 @@ fn is_research_task(task: &Task) -> bool {
     task.worktree_path.is_none() && task.worktree_branch.is_none()
 }
 
-fn extract_messages_for_task(task: &Task, task_id: &str, full: bool) -> Option<String> {
-    extract_messages_from_log(&task_log_path(task, task_id), full)
+pub(crate) const UNRECOGNIZED_JSON_NOTICE_PREFIX: &str = "[Unrecognized JSON log format";
+
+pub(crate) fn is_unrecognized_json_notice(text: &str) -> bool {
+    text.trim().starts_with(UNRECOGNIZED_JSON_NOTICE_PREFIX)
 }
 
-pub(crate) fn extract_messages_from_log(log_path: &Path, full: bool) -> Option<String> {
+fn extract_messages_for_task(task: &Task, task_id: &str, full: bool) -> Option<String> {
+    extract_messages_from_log(&task_log_path(task, task_id), full, Some(task.agent_display_name()))
+}
+
+pub(crate) fn extract_messages_from_log(
+    log_path: &Path,
+    full: bool,
+    agent_name: Option<&str>,
+) -> Option<String> {
     const MAX_MESSAGE_CHARS: usize = 1_000;
     const MAX_OUTPUT_CHARS: usize = 8_000;
     const HEAD_MESSAGE_COUNT: usize = 3;
@@ -72,6 +82,9 @@ pub(crate) fn extract_messages_from_log(log_path: &Path, full: bool) -> Option<S
     let content = std::fs::read_to_string(log_path).ok()?;
     let mut messages = collect_messages(&content);
     if messages.is_empty() {
+        if let Some(notice) = unrecognized_json_log_notice(&content, log_path, agent_name) {
+            return Some(notice);
+        }
         return None;
     }
     if !full {
@@ -79,6 +92,61 @@ pub(crate) fn extract_messages_from_log(log_path: &Path, full: bool) -> Option<S
         messages = cap_message_count(messages, HEAD_MESSAGE_COUNT, TAIL_MESSAGE_COUNT);
     }
     Some(join_messages(messages, full, MAX_OUTPUT_CHARS))
+}
+
+pub(crate) fn unrecognized_json_log_notice(
+    content: &str,
+    log_path: &Path,
+    agent_name: Option<&str>,
+) -> Option<String> {
+    let mut total_lines = 0;
+    let mut json_lines = 0;
+    let mut first_sample: Option<String> = None;
+
+    for line in content.lines() {
+        let trimmed = line.trim();
+        if trimmed.is_empty() || is_non_output_line(trimmed) {
+            continue;
+        }
+        total_lines += 1;
+        if serde_json::from_str::<serde_json::Value>(trimmed).is_ok() {
+            json_lines += 1;
+            if first_sample.is_none() {
+                first_sample = Some(trimmed.to_string());
+            }
+        }
+    }
+
+    if total_lines > 0 && json_lines == total_lines {
+        let sample = first_sample.unwrap_or_default();
+        let sample_truncated = if sample.chars().count() > 120 {
+            format!("{}…", sample.chars().take(120).collect::<String>())
+        } else {
+            sample
+        };
+        let agent = agent_name.unwrap_or("unknown agent");
+        Some(format!(
+            "{UNRECOGNIZED_JSON_NOTICE_PREFIX} from {agent}]\nSample line: {sample_truncated}\nSee transcript at {}",
+            log_path.display()
+        ))
+    } else {
+        None
+    }
+}
+
+pub(crate) fn is_aid_sentinel_line(line: &str) -> bool {
+    let trimmed = line.trim();
+    trimmed.starts_with("=== AID TASK") || trimmed.starts_with("=== AID")
+}
+
+/// Diagnostic warning emitted by CLI runners (such as Claude or Codex) when max turns are reached.
+/// This is runner state rather than task deliverable output.
+pub(crate) fn is_agent_runner_warning_line(line: &str) -> bool {
+    line.trim().starts_with("Warning: Reached maximum")
+}
+
+pub(crate) fn is_non_output_line(line: &str) -> bool {
+    is_aid_sentinel_line(line) || is_agent_runner_warning_line(line)
 }
 
 pub(crate) fn extract_messages_research(log_path: &Path) -> Option<String> {
@@ -125,15 +193,27 @@ fn join_messages(messages: Vec<String>, full: bool, max_output_chars: usize) -> 
 }
 pub fn read_task_output(task: &Task) -> Result<String> {
     if let Some(path) = task.output_path.as_deref() {
-        return std::fs::read_to_string(path)
-            .with_context(|| format!("Failed to read output file {path}"));
+        if let Ok(content) = std::fs::read_to_string(path) {
+            if is_valid_output_content(&content) {
+                return Ok(content);
+            }
+        }
     }
     let persisted = paths::task_dir(task.id.as_str()).join("result.md");
     if persisted.exists() {
-        return std::fs::read_to_string(&persisted)
-            .with_context(|| format!("Failed to read result file {}", persisted.display()));
+        if let Ok(content) = std::fs::read_to_string(&persisted) {
+            if is_valid_output_content(&content) {
+                return Ok(content);
+            }
+        }
     }
     Err(anyhow::anyhow!("Task has no output file"))
+}
+
+fn is_valid_output_content(content: &str) -> bool {
+    content
+        .lines()
+        .any(|line| !line.trim().is_empty() && !is_non_output_line(line))
 }
 
 pub fn log_text(task_id: &str) -> Result<String> {
@@ -170,4 +250,44 @@ pub(crate) fn tail_lines(content: &str, limit: usize) -> String {
         .rev()
         .collect::<Vec<_>>()
         .join("\n")
+}
+
+#[cfg(test)]
+mod notice_delivery_tests {
+    use super::unrecognized_json_log_notice;
+
+    #[test]
+    fn an_unparsed_stream_produces_a_notice_the_delivery_guard_accepts() {
+        // The round trip that matters: aid cannot parse an agent's envelope, says so,
+        // and the delivery guard reads that as work delivered. Treating it as no
+        // delivery is what recorded a completed 18-minute cross-audit as FAILED
+        // (t-d1f7374e) while its transcript held the finished report.
+        let dir = tempfile::tempdir().unwrap();
+        let log = dir.path().join("t-x.jsonl");
+        std::fs::write(
+            &log,
+            "{\"type\":\"event\",\"event\":{\"type\":\"unknown_shape\"}}\n\
+             === AID TASK t-x DONE (exit 0) ===\n",
+        )
+        .unwrap();
+
+        let notice = unrecognized_json_log_notice(
+            &std::fs::read_to_string(&log).unwrap(),
+            &log,
+            Some("commandcode"),
+        )
+        .expect("an all-JSON stream with no recognised arm must produce a notice");
+
+        assert!(notice.contains("commandcode"), "notice must name the agent: {notice}");
+        assert!(
+            crate::delivery_guard::looks_like_delivered_report(&notice),
+            "the guard must not read aid's own parse failure as a missing delivery"
+        );
+        assert!(
+            !crate::delivery_guard::looks_like_delivered_report(
+                "First, I will read the file. Next, I will check the tests."
+            ),
+            "narration must still be refused"
+        );
+    }
 }

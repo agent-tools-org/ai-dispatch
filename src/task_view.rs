@@ -21,7 +21,7 @@ pub fn read_output(task: &Task) -> String {
     if let Some(path) = task.log_path.as_deref()
         && let Ok(content) = std::fs::read_to_string(path)
     {
-        if let Some(output) = extract_messages(Path::new(path), true) {
+        if let Some(output) = extract_messages(Path::new(path), true, Some(task.agent_display_name())) {
             return output;
         }
         if !content.trim().is_empty() {
@@ -31,6 +31,6 @@ pub fn read_output(task: &Task) -> String {
     "No output available".to_string()
 }
 
-pub fn extract_messages(log_path: &Path, full: bool) -> Option<String> {
-    cmd::show::extract_messages_from_log(log_path, full)
+pub fn extract_messages(log_path: &Path, full: bool, agent_name: Option<&str>) -> Option<String> {
+    cmd::show::extract_messages_from_log(log_path, full, agent_name)
 }

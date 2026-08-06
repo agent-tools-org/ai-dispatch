@@ -130,7 +130,7 @@ pub(crate) fn switch_agent(args: &mut RunArgs, next_agent: String) { run_post::s
 #[cfg(test)]
 fn auto_save_task_output(store: &Store, task: &Task) -> Result<()> { run_post::auto_save_task_output(store, task) }
 pub(crate) fn rescue_quota_failed_task(store: &Store, task_id: &TaskId, quota_error_message: Option<&str>) { run_post::rescue_quota_failed_task(store, task_id, quota_error_message); }
-pub(crate) fn read_quota_error_message(task_id: &TaskId) -> Option<String> { run_post::read_quota_error_message(task_id) }
+pub(crate) fn read_quota_error_message(task_id: &TaskId, agent: &crate::types::AgentKind) -> Option<String> { run_post::read_quota_error_message(task_id, agent) }
 #[cfg(test)]
 fn worktree_is_empty_diff(worktree_dir: &Path) -> Option<bool> { run_post::worktree_is_empty_diff(worktree_dir) }
 #[cfg(test)]

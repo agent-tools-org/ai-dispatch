@@ -215,9 +215,15 @@ pub fn task_progress(app: &App, task: &Task) -> String {
     }
 }
 
+/// Row style for the default board view.
+///
+/// Success is green. It rendered as grey 245 here while the identically-named
+/// `dashboard::status_style` used green for the same status, so which colour a
+/// completed task got depended on which view you were in — and the default view,
+/// the one `aid watch --tui` opens, was the grey one.
 pub fn status_style(status: TaskStatus) -> Style {
     match status {
-        TaskStatus::Done | TaskStatus::Merged => Style::default().fg(Color::Indexed(245)),
+        TaskStatus::Done | TaskStatus::Merged => Style::default().fg(Color::Green),
         TaskStatus::Running => Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD),
         TaskStatus::AwaitingInput => Style::default().fg(Color::Magenta).add_modifier(Modifier::BOLD),
         TaskStatus::Stalled => Style::default().fg(Color::LightRed).add_modifier(Modifier::BOLD),

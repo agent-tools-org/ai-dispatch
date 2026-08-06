@@ -133,6 +133,9 @@ async fn main() -> Result<()> {
     if config.updates.check {
         update_check::maybe_check_update();
     }
+    // Refresh the model price feed out of band: never on the dispatch path, so
+    // a cold or stale cache cannot delay or fail a run.
+    cost::maybe_refresh_prices();
     let store = Arc::new(store::Store::open(&paths::db_path())?);
     cost::warm_gemini_default_from_store(store.as_ref());
     let _ = background::check_zombie_tasks(&store);

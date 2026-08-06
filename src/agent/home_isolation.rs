@@ -155,16 +155,32 @@ impl IsolatedHomeGuard {
     }
 }
 
-fn is_claude_instruction_file(name: &str) -> bool {
-    name == "CLAUDE.md"
-        || name.starts_with("CLAUDE.md.")
-        || name.starts_with("CLAUDE.md-")
-        || name == "settings.json"
-        || name.starts_with("settings.json.")
-        || name.starts_with("settings.json-")
-        || name == "settings.local.json"
-        || name.starts_with("settings.local.json.")
-        || name.starts_with("settings.local.json-")
+fn is_claude_instruction_entry(name: &str) -> bool {
+    const INSTRUCTION_PREFIXES: &[&str] = &[
+        "CLAUDE.md",
+        "settings.json",
+        "settings.local.json",
+        ".mcp.json",
+        "skills",
+        "agents",
+        "commands",
+        "plugins",
+        "hooks",
+        "tools",
+        "rules",
+        "workflows",
+        "agent-memory",
+        "memory",
+        "plans",
+        "config-sync",
+        "config-sync-repo",
+    ];
+
+    INSTRUCTION_PREFIXES.iter().any(|prefix| {
+        name == *prefix
+            || name.starts_with(&format!("{prefix}."))
+            || name.starts_with(&format!("{prefix}-"))
+    })
 }
 
 fn materialize_claude_dir(real_claude_dir: &Path, isolated_claude_dir: &Path) -> anyhow::Result<()> {
@@ -186,7 +202,7 @@ fn materialize_claude_dir(real_claude_dir: &Path, isolated_claude_dir: &Path) ->
         let file_name = entry.file_name();
         let name_str = file_name.to_string_lossy();
 
-        if is_claude_instruction_file(name_str.as_ref()) {
+        if is_claude_instruction_entry(name_str.as_ref()) {
             continue;
         }
 

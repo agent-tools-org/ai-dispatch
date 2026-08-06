@@ -526,7 +526,7 @@ fn finalize_streaming(
                                             .ok()
                                             .flatten()
                                             .and_then(|task| task.requested_model);
-    if crate::agent::stream_completion::record_quota_exhaustion(&state.full_output, agent.kind(), state.info.model.as_deref().or(dispatched_model.as_deref())) {
+    if crate::agent::stream_completion::record_quota_exhaustion(&state.full_output, agent.kind(), state.info.model.as_deref().or(dispatched_model.as_deref())).should_fail() {
         status = TaskStatus::Failed;
     }
     state.info.status = status;

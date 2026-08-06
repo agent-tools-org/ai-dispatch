@@ -148,8 +148,10 @@ pub(crate) fn parse_json_event(
             (tokens.map(|t| format!("completed with {t} tokens")).unwrap_or_else(|| "completed".to_string()), tokens.map(|value| json!({ "tokens": value })))
         }
         "error" => {
-            let detail = v.get("message").or(v.get("text")).and_then(|t| t.as_str()).unwrap_or("unknown error");
-            if rate_limit::is_rate_limit_error(detail) { rate_limit::mark_rate_limited(&agent_kind, detail); }
+            let detail = error_detail(v).unwrap_or("unknown error");
+            if rate_limit::is_rate_limit_error_for_agent(detail, &agent_kind) {
+                rate_limit::mark_rate_limited(&agent_kind, detail);
+            }
             (detail.to_string(), None)
         }
         _ => return None,
@@ -207,7 +209,7 @@ fn milestone_detail(v: &serde_json::Value, event_type: &str) -> String {
 
 pub(crate) fn classify_text_line(agent_kind: AgentKind, line: &str) -> (Option<EventKind>, &str) {
     if line.contains("error[") || line.contains("FAILED") || line.starts_with("Error:") {
-        if rate_limit::is_rate_limit_error(line) { rate_limit::mark_rate_limited(&agent_kind, line); }
+        if rate_limit::is_rate_limit_error_for_agent(line, &agent_kind) { rate_limit::mark_rate_limited(&agent_kind, line); }
         (Some(EventKind::Error), line)
     } else if line.contains("test result:") || line.contains("running") && line.contains("test") {
         (Some(EventKind::Test), line)
@@ -239,6 +241,13 @@ pub(crate) fn classify_tool_detail(detail: &str) -> EventKind {
     } else {
         EventKind::ToolCall
     }
+}
+
+fn error_detail(v: &serde_json::Value) -> Option<&str> {
+    [v.get("message"), v.get("text"), v.pointer("/error/message"), v.pointer("/error/data/message")]
+        .into_iter()
+        .flatten()
+        .find_map(|value| value.as_str().filter(|msg| !msg.is_empty()))
 }
 
 pub(crate) fn extract_tokens_from_output(output: &str) -> (Option<i64>, Option<f64>) {
@@ -279,7 +288,7 @@ mod rate_limit_tests {
     #[test]
     fn marks_opencode_rate_limits_from_text_and_json_errors() {
         let temp = tempfile::tempdir().unwrap(); let _aid_home = paths::AidHomeGuard::set(temp.path()); rate_limit::clear_rate_limit(&AgentKind::OpenCode); let agent = OpenCodeAgent;
-        assert_eq!(agent.parse_event(&TaskId("t-opencode".to_string()), "Error: rate limit exceeded").unwrap().event_kind, EventKind::Error); assert!(rate_limit::is_rate_limited(&AgentKind::OpenCode)); rate_limit::clear_rate_limit(&AgentKind::OpenCode);
-        assert_eq!(parse_json_event(AgentKind::OpenCode, &TaskId("t-opencode".to_string()), &serde_json::json!({"type":"error","message":"HTTP 429 too many requests"}), Local::now()).unwrap().event_kind, EventKind::Error); assert!(rate_limit::is_rate_limited(&AgentKind::OpenCode)); rate_limit::clear_rate_limit(&AgentKind::OpenCode);
+        assert_eq!(agent.parse_event(&TaskId("t-opencode".to_string()), "Error: Insufficient balance. Manage your billing here").unwrap().event_kind, EventKind::Error); assert!(rate_limit::is_rate_limited(&AgentKind::OpenCode)); rate_limit::clear_rate_limit(&AgentKind::OpenCode);
+        assert_eq!(parse_json_event(AgentKind::OpenCode, &TaskId("t-opencode".to_string()), &serde_json::json!({"type":"error","error":{"name":"APIError","data":{"message":"Insufficient balance. Manage your billing here"}}}), Local::now()).unwrap().event_kind, EventKind::Error); assert!(rate_limit::is_rate_limited(&AgentKind::OpenCode)); rate_limit::clear_rate_limit(&AgentKind::OpenCode);
     }
 }

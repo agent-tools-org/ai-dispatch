@@ -98,14 +98,11 @@ pub(super) fn milestone_detail(event_type: &str, value: &Value) -> String {
 }
 
 pub(super) fn is_gemini_rate_limit_error(message: &str) -> bool {
-    let lower = message.to_lowercase();
-    crate::rate_limit::is_rate_limit_error(message)
-        || lower.contains("resourceexhausted")
-        || lower.contains("resource exhausted")
-        || lower.contains("rate_limit_exceeded")
-        // Dead individual-tier accounts must cascade away from gemini permanently.
-        || lower.contains("ineligibletier")
-        || lower.contains("migrate to antigravity")
+    crate::rate_limit_signatures::match_quota_signature_for_agent(
+        message,
+        crate::types::AgentKind::Gemini,
+    )
+        .is_some()
 }
 
 pub(super) fn truncate(text: &str, max_len: usize) -> String {

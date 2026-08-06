@@ -59,14 +59,66 @@ pub(crate) const QUOTA_SIGNATURES: &[QuotaSignature] = &[
     // is neither 429 nor 402, and no needle contained "insufficient balance", so
     // aid kept reporting opencode as OK and kept dispatching to it.
     QuotaSignature { agent: AgentKind::OpenCode, needle: "insufficient balance", fallback_minutes: 1440 },
+    // OpenCode-compatible overlays share the same Zen billing refusal shape.
+    QuotaSignature { agent: AgentKind::MiMoCode, needle: "insufficient balance", fallback_minutes: 1440 },
+    QuotaSignature { agent: AgentKind::Kilo, needle: "insufficient balance", fallback_minutes: 1440 },
+    // droid 0.183.0, captured as HTTP 402 body:
+    // "402 payment required: reload your tokens"
+    QuotaSignature { agent: AgentKind::Droid, needle: "reload your tokens", fallback_minutes: 1440 },
+    // gemini Code Assist, captured 2026-08-05:
+    // "IneligibleTierError: ... migrate to Antigravity"
+    QuotaSignature { agent: AgentKind::Gemini, needle: "ineligibletier", fallback_minutes: 1440 },
+    QuotaSignature { agent: AgentKind::Gemini, needle: "resource exhausted", fallback_minutes: 60 },
+    QuotaSignature { agent: AgentKind::Gemini, needle: "resourceexhausted", fallback_minutes: 60 },
+    QuotaSignature { agent: AgentKind::Antigravity, needle: "migrate to antigravity", fallback_minutes: 1440 },
+    // cursor workspace quota (structured error event)
+    QuotaSignature { agent: AgentKind::Cursor, needle: "quota exceeded for this workspace", fallback_minutes: 300 },
+    // copilot CLI refusal when premium allowance is spent:
+    // "You've reached your premium request limit for this billing cycle."
+    QuotaSignature { agent: AgentKind::Copilot, needle: "premium request limit", fallback_minutes: 1440 },
 ];
+
+/// True when a line is quoting this module's own signature table, not a live refusal.
+pub(crate) fn is_signature_source_citation(line: &str) -> bool {
+    let lower = line.to_lowercase();
+    lower.contains("quotasignature")
+        || lower.contains("needle:")
+        || lower.contains("fallback_minutes:")
+        || lower.contains("rate_limit_signatures")
+}
+
+/// Match only signatures owned by one agent — used when scanning agent-authored
+/// output so prose about another provider's quota cannot flip this run.
+pub(crate) fn match_quota_signature_for_agent(
+    message: &str,
+    agent: AgentKind,
+) -> Option<i64> {
+    let lower = message.to_lowercase();
+    QUOTA_SIGNATURES
+        .iter()
+        .find(|signature| signature.agent == agent && lower.contains(signature.needle))
+        .map(|signature| signature.fallback_minutes)
+}
 
 /// Match a message against every provider signature. Returns the agent the
 /// signature belongs to and its fallback cooldown, so a caller can both mark the
 /// right agent and avoid the 5-minute default that expires while the provider is
 /// still refusing work.
 pub(crate) fn match_quota_signature(message: &str) -> Option<(AgentKind, i64)> {
+    match_quota_signature_with_agent(message, None)
+}
+
+/// Prefer `preferred` when several agents share the same needle (e.g. Zen overlays).
+pub(crate) fn match_quota_signature_with_agent(
+    message: &str,
+    preferred: Option<AgentKind>,
+) -> Option<(AgentKind, i64)> {
     let lower = message.to_lowercase();
+    if let Some(agent) = preferred {
+        if let Some(minutes) = match_quota_signature_for_agent(message, agent) {
+            return Some((agent, minutes));
+        }
+    }
     QUOTA_SIGNATURES
         .iter()
         .find(|signature| lower.contains(signature.needle))

@@ -226,7 +226,10 @@ mod tests {
         assert!(args.contains(&"--dangerously-skip-permissions".to_string()));
         assert!(args.windows(2).any(|pair| pair == ["-m", "mimo/mimo-auto"]));
         let event = agent
-            .parse_event(&TaskId("t-mimo".into()), "Error: rate limit exceeded")
+            .parse_event(
+                &TaskId("t-mimo".into()),
+                r#"{"type":"error","error":{"name":"APIError","data":{"message":"Insufficient balance. Manage your billing here"}}}"#,
+            )
             .unwrap();
         assert_eq!(event.event_kind, EventKind::Error);
         assert!(rate_limit::is_rate_limited(&AgentKind::MiMoCode));

@@ -6,12 +6,26 @@ use crate::{paths, rate_limit};
 
 #[test]
 fn marks_claude_rate_limits_from_error_and_user_events() {
-    let temp = tempfile::tempdir().unwrap(); let _aid_home = paths::AidHomeGuard::set(temp.path()); rate_limit::clear_rate_limit(&AgentKind::Claude);
+    let temp = tempfile::tempdir().unwrap();
+    let _aid_home = paths::AidHomeGuard::set(temp.path());
+    rate_limit::clear_rate_limit(&AgentKind::Claude);
     let task_id = TaskId("t-claude-rate".to_string());
-    let event = parse_event_line(&task_id, r#"{"type":"error","message":"rate limit exceeded"}"#).unwrap();
-    assert_eq!(event.event_kind, EventKind::Error); assert!(rate_limit::is_rate_limited(&AgentKind::Claude)); rate_limit::clear_rate_limit(&AgentKind::Claude);
-    let event = parse_event_line(&task_id, r#"{"type":"user","message":{"content":[{"content":"HTTP 429 too many requests","is_error":true}]}}"#).unwrap();
-    assert_eq!(event.event_kind, EventKind::Error); assert!(rate_limit::is_rate_limited(&AgentKind::Claude)); rate_limit::clear_rate_limit(&AgentKind::Claude);
+    let event = parse_event_line(
+        &task_id,
+        r#"{"type":"error","message":"rate limit exceeded"}"#,
+    )
+    .unwrap();
+    assert_eq!(event.event_kind, EventKind::Error);
+    assert!(rate_limit::is_rate_limited(&AgentKind::Claude));
+    rate_limit::clear_rate_limit(&AgentKind::Claude);
+    let event = parse_event_line(
+        &task_id,
+        r#"{"type":"user","message":{"content":[{"content":"HTTP 429 too many requests","is_error":true}]}}"#,
+    )
+    .unwrap();
+    assert_eq!(event.event_kind, EventKind::Error);
+    assert!(rate_limit::is_rate_limited(&AgentKind::Claude));
+    rate_limit::clear_rate_limit(&AgentKind::Claude);
 }
 
 #[test]

@@ -214,7 +214,7 @@ fn model_usage_cost(value: &Value) -> Option<f64> {
 }
 
 fn maybe_mark_rate_limit(detail: &str) {
-    if rate_limit::is_rate_limit_error(detail) {
+    if rate_limit::is_rate_limit_error_for_agent(detail, &AgentKind::Grok) {
         rate_limit::mark_rate_limited(&AgentKind::Grok, detail);
     }
 }

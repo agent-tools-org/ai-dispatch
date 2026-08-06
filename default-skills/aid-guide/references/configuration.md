@@ -53,7 +53,11 @@ Use `aid config agents` to see configured and detected agents. Built-in dispatch
 probes binaries by their real CLI names, for example `grok` and `commandcode`
 (not the generic `agent` alias used by cursor). Register a local custom agent
 with `config add-agent`. Use `clear-limit` only after confirming a provider's
-rate-limit condition has cleared.
+rate-limit condition has cleared. Quota exhaustion is detected from per-CLI
+refusal templates (stderr, structured error events, or provider-specific exit
+text). Generic tokens like `429` or `rate limit` count in agent-authored prose
+only when the whole line is essentially the refusal (for example `429 Too Many
+Requests`), not when they appear inside discussion.
 
 Use `aid byok` for custom OpenAI-compatible endpoints. Use `aid credential` to
 manage named credential-pool entries; never place secret values in prompts,

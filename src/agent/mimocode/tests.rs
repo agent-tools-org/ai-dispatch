@@ -122,7 +122,10 @@ fn parse_event_marks_mimocode_rate_limits() {
     rate_limit::clear_rate_limit(&AgentKind::MiMoCode);
     rate_limit::clear_rate_limit(&AgentKind::OpenCode);
     let event = agent()
-        .parse_event(&TaskId("t-mimocode".to_string()), r#"{"type":"error","message":"rate limit exceeded"}"#)
+        .parse_event(
+            &TaskId("t-mimocode".to_string()),
+            r#"{"type":"error","error":{"name":"APIError","data":{"message":"Insufficient balance. Manage your billing here"}}}"#,
+        )
         .unwrap();
     assert_eq!(event.event_kind, EventKind::Error);
     assert!(rate_limit::is_rate_limited(&AgentKind::MiMoCode));

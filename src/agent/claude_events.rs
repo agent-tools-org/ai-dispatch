@@ -227,7 +227,7 @@ fn parse_user_event(task_id: &TaskId, v: &Value, now: chrono::DateTime<Local>) -
     if !is_error {
         return None;
     }
-    if crate::rate_limit::is_rate_limit_error(detail) {
+    if crate::rate_limit::is_rate_limit_error_for_agent(detail, &AgentKind::Claude) {
         crate::rate_limit::mark_rate_limited(&AgentKind::Claude, detail);
     }
     let (detail, metadata) = capped_detail(detail);
@@ -236,7 +236,7 @@ fn parse_user_event(task_id: &TaskId, v: &Value, now: chrono::DateTime<Local>) -
 
 fn parse_error_event(task_id: &TaskId, v: &Value, now: chrono::DateTime<Local>) -> Option<TaskEvent> {
     let detail = v.get("message").or_else(|| v.pointer("/error/message")).and_then(|value| value.as_str()).filter(|msg| !msg.is_empty())?;
-    if crate::rate_limit::is_rate_limit_error(detail) {
+    if crate::rate_limit::is_rate_limit_error_for_agent(detail, &AgentKind::Claude) {
         crate::rate_limit::mark_rate_limited(&AgentKind::Claude, detail);
     }
     let (detail, metadata) = capped_detail(detail);

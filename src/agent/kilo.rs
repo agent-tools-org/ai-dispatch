@@ -112,7 +112,10 @@ mod tests {
         rate_limit::clear_rate_limit(&AgentKind::Kilo);
         rate_limit::clear_rate_limit(&AgentKind::OpenCode);
         let event = agent()
-            .parse_event(&TaskId("t-kilo".to_string()), "Error: rate limit exceeded")
+            .parse_event(
+                &TaskId("t-kilo".to_string()),
+                r#"{"type":"error","error":{"name":"APIError","data":{"message":"Insufficient balance. Manage your billing here"}}}"#,
+            )
             .unwrap();
         assert_eq!(event.event_kind, EventKind::Error);
         assert!(rate_limit::is_rate_limited(&AgentKind::Kilo));

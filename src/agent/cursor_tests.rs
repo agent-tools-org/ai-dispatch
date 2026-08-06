@@ -127,7 +127,14 @@ fn read_only_build_command_adds_trust_and_context() {
 
 #[test]
 fn parse_event_marks_plain_text_rate_limits() {
-    assert_rate_limit("Error: rate limit exceeded, try again later", false);
+    let temp = tempfile::tempdir().unwrap();
+    let _aid_home = paths::AidHomeGuard::set(temp.path());
+    let _guard = rate_limit_lock().lock().unwrap();
+    let _ = rate_limit::clear_rate_limit(&AgentKind::Cursor);
+    let event = parse("Error: rate limit exceeded, try again later");
+    assert_eq!(event.event_kind, EventKind::Error);
+    assert!(rate_limit::is_rate_limited(&AgentKind::Cursor));
+    rate_limit::clear_rate_limit(&AgentKind::Cursor);
 }
 
 #[test]

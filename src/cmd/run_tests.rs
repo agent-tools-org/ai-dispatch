@@ -56,11 +56,11 @@ fn read_quota_error_message_uses_stderr() {
     std::fs::create_dir_all(paths::logs_dir()).unwrap();
     std::fs::write(
         paths::stderr_path("t-quota-stderr"),
-        "You have exhausted your capacity for today.",
+        "You have hit your usage limit.",
     )
     .unwrap();
     let message = read_quota_error_message(&TaskId("t-quota-stderr".to_string()));
-    assert_eq!(message.as_deref(), Some("You have exhausted your capacity for today."));
+    assert_eq!(message.as_deref(), Some("You have hit your usage limit."));
 }
 
 #[test]
@@ -84,11 +84,11 @@ fn read_quota_error_message_extracts_rate_limit_line_only() {
     std::fs::create_dir_all(paths::logs_dir()).unwrap();
     std::fs::write(
         paths::stderr_path("t-quota-mixed"),
-        "tokens: 8714294 in + 27373 out = 8741667 (8442752 cached)\nYou have exhausted your capacity for today.\nsome other line\n",
+        "tokens: 8714294 in + 27373 out = 8741667 (8442752 cached)\nYou have hit your usage limit.\nsome other line\n",
     )
     .unwrap();
     let message = read_quota_error_message(&TaskId("t-quota-mixed".to_string()));
-    assert_eq!(message.as_deref(), Some("You have exhausted your capacity for today."));
+    assert_eq!(message.as_deref(), Some("You have hit your usage limit."));
 }
 
 #[test]

@@ -86,10 +86,46 @@ fn prose_that_merely_mentions_quota_is_not_a_quota_failure() {
 }
 
 #[test]
+fn droid_reload_tokens_is_recognized() {
+    let (agent, minutes) = match_quota_signature("402 payment required: reload your tokens")
+        .expect("droid reload-tokens message must match");
+    assert_eq!(agent, AgentKind::Droid);
+    assert_eq!(minutes, 1440);
+}
+
+#[test]
+fn gemini_ineligible_tier_is_recognized() {
+    let msg = "IneligibleTierError: This client is no longer supported for Gemini Code Assist for individuals; migrate to Antigravity";
+    let (agent, minutes) = match_quota_signature(msg).expect("gemini tier message must match");
+    assert_eq!(agent, AgentKind::Gemini);
+    assert_eq!(minutes, 1440);
+}
+
+#[test]
+fn cursor_workspace_quota_is_recognized() {
+    let (agent, _) = match_quota_signature("quota exceeded for this workspace")
+        .expect("cursor workspace quota must match");
+    assert_eq!(agent, AgentKind::Cursor);
+}
+
+#[test]
+fn agent_scoped_match_ignores_other_providers() {
+    assert!(match_quota_signature_for_agent(
+        "You have hit your usage limit.",
+        AgentKind::Codex
+    )
+        .is_some());
+    assert!(match_quota_signature_for_agent(
+        "You have hit your usage limit.",
+        AgentKind::Cursor
+    )
+        .is_none());
+}
+
+#[test]
 fn opencode_insufficient_balance_is_recognized() {
     // Verbatim from t-76181278's log: an HTTP 401 body, not a 429 or 402, so
-    // the status-code checks in `is_rate_limit_error` miss it, and no generic
-    // needle contains "insufficient balance". aid reported opencode as OK and
+    // generic phrase matching would miss it. aid reported opencode as OK and
     // kept dispatching to an account that could not pay.
     let body = r#"{"type":"error","error":{"name":"APIError","data":{"message":"Insufficient balance. Manage your billing here: https://opencode.ai/workspace/wrk_01/billing","statusCode":401}}}"#;
     let (agent, minutes) = match_quota_signature(body).expect("opencode balance message must match");
@@ -100,9 +136,24 @@ fn opencode_insufficient_balance_is_recognized() {
 
 #[test]
 fn a_balance_failure_reads_as_a_rate_limit_error() {
-    // The signature is only useful if the generic entry point agrees, since
-    // that is what dispatch consults before routing.
     assert!(crate::rate_limit::is_rate_limit_error(
         "APIError: Insufficient balance. Manage your billing here: https://opencode.ai/"
     ));
+}
+
+#[test]
+fn insufficient_balance_prefers_dispatched_overlay_agent() {
+    let body = "APIError: Insufficient balance. Manage your billing here";
+    let (agent, _) = match_quota_signature_with_agent(body, Some(AgentKind::MiMoCode))
+        .expect("mimocode balance message must match");
+    assert_eq!(agent, AgentKind::MiMoCode);
+    let (agent, _) = match_quota_signature_with_agent(body, Some(AgentKind::Kilo))
+        .expect("kilo balance message must match");
+    assert_eq!(agent, AgentKind::Kilo);
+}
+
+#[test]
+fn copilot_premium_request_limit_is_recognized() {
+    let msg = "You've reached your premium request limit for this billing cycle.";
+    assert!(match_quota_signature_for_agent(msg, AgentKind::Copilot).is_some());
 }

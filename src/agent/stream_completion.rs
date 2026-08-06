@@ -96,38 +96,6 @@ pub(crate) fn merge_parsed_completion(info: &mut CompletionInfo, parsed: Complet
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn result_is_error_true_fails() {
-        let v: Value = serde_json::from_str(
-            r#"{"type":"result","subtype":"error_during_execution","is_error":true}"#,
-        )
-        .unwrap();
-        assert!(result_envelope_failed(&v));
-    }
-
-    #[test]
-    fn result_success_is_error_false_ok() {
-        let v: Value = serde_json::from_str(
-            r#"{"type":"result","subtype":"success","is_error":false,"result":"ok"}"#,
-        )
-        .unwrap();
-        assert!(!result_envelope_failed(&v));
-    }
-
-    #[test]
-    fn nested_opencode_error_type_fails() {
-        let out = r#"{"type":"error","error":{"name":"UnknownError","data":{"message":"x"}}}"#;
-        assert_eq!(
-            status_from_result_jsonl(out).status,
-            TaskStatus::Failed
-        );
-    }
-}
-
 /// Detect a provider's quota-exhaustion message anywhere in the captured output
 /// and record it, regardless of exit code or envelope shape.
 ///
@@ -138,29 +106,23 @@ mod tests {
 /// reported as healthy by `aid agent quota`, its refusal recorded as a success,
 /// and the previous rate-limit marker cleared by that same "success".
 ///
-/// Returns true when a signature matched, so the caller can fail the task.
+/// Detection and marker writes always run when a refusal is present; only the
+/// task verdict considers deliverables. Callers need both facts separately: a
+/// run that delivered *and* hit a refusal keeps its Done status, but its marker
+/// must survive — `watcher.rs` clears the marker on every Done, so collapsing
+/// the two into one bool wiped the outage we had just recorded.
 pub(crate) fn record_quota_exhaustion(
     output: &str,
     agent: crate::types::AgentKind,
     model: Option<&str>,
-) -> bool {
-    // Only the tail is evidence. A quota refusal terminates the run, so its
-    // message is at the end of the output; scanning the whole transcript instead
-    // matched prose the agent had merely READ. On 2026-08-05 a cursor task that
-    // opened docs/design/cli-adapter-audit.md — which contains the words
-    // "exhausted quota" — was marked failed and cursor was locked out for twelve
-    // hours, while the task had in fact succeeded.
+) -> QuotaOutcome {
     let tail = quota_scan_tail(output);
-    if !crate::rate_limit::is_rate_limit_error(tail) {
-        return false;
+    if !agent_prose_quota_match(tail, agent) {
+        return QuotaOutcome::None;
     }
-    let output = tail;
-    // Record the sentence that actually reports the quota, not the head of the
-    // transcript: the marker is what `aid agent quota` shows a human, and the
-    // first 200 bytes of a JSONL stream are the session init line.
-    let detail = quota_line(output)
-        .or_else(|| crate::rate_limit::extract_rate_limit_message(output))
-        .unwrap_or_else(|| output.chars().take(200).collect());
+    let detail = quota_line(tail, agent)
+        .or_else(|| crate::rate_limit::extract_rate_limit_message(tail))
+        .unwrap_or_else(|| tail.chars().take(200).collect());
     // An agent whose plan meters model families separately must only lose the
     // family that ran out. agy's gemini allowance and its claude allowance are
     // independent: marking the whole agent would strand a working one.
@@ -168,7 +130,55 @@ pub(crate) fn record_quota_exhaustion(
         Some(group) => crate::rate_limit::mark_group_rate_limited(&agent, group, &detail),
         None => crate::rate_limit::mark_rate_limited(&agent, &detail),
     }
-    true
+    if output_has_substantive_deliverable(output) {
+        QuotaOutcome::RecordedDelivered
+    } else {
+        QuotaOutcome::RecordedFailed
+    }
+}
+
+/// What a completed run's output said about its provider's quota.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum QuotaOutcome {
+    /// No refusal present.
+    None,
+    /// A refusal was recorded, but the run still delivered. The provider is
+    /// marked so routing avoids it; the task itself is not a failure.
+    RecordedDelivered,
+    /// A refusal was recorded and the run delivered nothing.
+    RecordedFailed,
+}
+
+impl QuotaOutcome {
+    /// A marker was written — the caller must not clear it as part of "success".
+    pub(crate) fn recorded(self) -> bool {
+        !matches!(self, Self::None)
+    }
+
+    pub(crate) fn should_fail(self) -> bool {
+        matches!(self, Self::RecordedFailed)
+    }
+}
+
+fn agent_prose_quota_match(output: &str, agent: crate::types::AgentKind) -> bool {
+    output.lines().any(|line| prose_line_is_quota_refusal(line, agent))
+}
+
+/// A refusal in assistant-authored text is only recognised by its provider's own
+/// anchored template. A generic token — `429`, `rate limit` — carries no
+/// information here: on a standalone line it is as likely to be a task id or a
+/// markdown heading the agent wrote as a provider status. Providers whose
+/// refusal wording nobody has captured are undetectable on this channel, and
+/// that is the honest answer rather than a guess.
+fn prose_line_is_quota_refusal(line: &str, agent: crate::types::AgentKind) -> bool {
+    if crate::rate_limit_signatures::is_signature_source_citation(line) {
+        return false;
+    }
+    crate::rate_limit_signatures::match_quota_signature_for_agent(line, agent).is_some()
+}
+
+fn output_has_substantive_deliverable(output: &str) -> bool {
+    crate::delivery_guard::looks_like_delivered_report(output)
 }
 
 /// The quota sentence itself, windowed around the phrase that reports it.
@@ -178,16 +188,15 @@ pub(crate) fn record_quota_exhaustion(
 /// metadata. Truncating there discarded the reset time along with the message,
 /// so the marker showed raw JSON and fell back to a "~1h" guess for a five-hour
 /// window.
-fn quota_line(output: &str) -> Option<String> {
-    let line = output.lines().find(|line| {
-        let lower = line.to_lowercase();
-        (lower.contains("quota") || lower.contains("usage limit"))
-            && crate::rate_limit::is_rate_limit_error(line)
-    })?;
+pub(super) fn quota_line(output: &str, agent: crate::types::AgentKind) -> Option<String> {
+    let line = output
+        .lines()
+        .find(|line| prose_line_is_quota_refusal(line, agent))?;
     let lower = line.to_lowercase();
     let anchor = lower
         .find("quota")
         .or_else(|| lower.find("usage limit"))
+        .or_else(|| quota_signature_anchor(&lower, agent))
         .unwrap_or(0);
     let start = line
         .char_indices()
@@ -196,6 +205,13 @@ fn quota_line(output: &str) -> Option<String> {
         .last()
         .unwrap_or(0);
     Some(line[start..].chars().take(240).collect::<String>().trim().to_string())
+}
+
+fn quota_signature_anchor(lower: &str, agent: crate::types::AgentKind) -> Option<usize> {
+    crate::rate_limit_signatures::QUOTA_SIGNATURES
+        .iter()
+        .find(|signature| signature.agent == agent && lower.contains(signature.needle))
+        .and_then(|signature| lower.find(signature.needle))
 }
 
 /// The last few lines of output, where a terminal failure reports itself.
@@ -210,3 +226,7 @@ fn quota_scan_tail(output: &str) -> &str {
     }
     &output[start..]
 }
+
+#[cfg(test)]
+#[path = "stream_completion_tests.rs"]
+mod tests;

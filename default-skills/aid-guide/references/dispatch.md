@@ -240,6 +240,13 @@ and integrates progress into task events. `aid build` no longer accepts `test`
 as a command — use `aid test` so agents cannot mistake a zero-match filter or
 empty target set for a green suite.
 
+`aid build` guarantees:
+
+- A run that matched no build targets never looks like a pass (for example
+  `cargo check --lib` on a binary-only crate).
+- A cached no-op build (cargo exit 0, everything already fresh) is still success.
+- Task events say `succeeded` or `failed`, not an ambiguous `finished` line.
+
 `aid test` reuses the same cargo process supervision and diagnostic pipeline as
 `aid build`, then parses libtest stdout. Guarantees:
 

@@ -49,6 +49,7 @@ fn stdout_artifact_lines_increment_compiled_unit_count() {
 
 #[test]
 fn final_detail_includes_compiled_unit_count() {
+    use crate::cmd::build_parse::event_detail_for;
     let report = BuildReport {
         success: true,
         command: "cargo check".to_string(),
@@ -58,7 +59,7 @@ fn final_detail_includes_compiled_unit_count() {
         note: None,
     };
     assert_eq!(
-        finished_detail("cargo check", &report, 187),
-        "cargo check finished: 0 errors, 0 warnings, 187 units compiled"
+        event_detail_for("cargo check", &report, 187, true),
+        "cargo check succeeded: 0 errors, 0 warnings, 187 units compiled"
     );
 }

@@ -13,6 +13,7 @@ pub mod batch;
 pub(crate) mod batch_gitbutler;
 pub mod broadcast;
 pub mod build;
+pub(crate) mod build_parse;
 pub mod test_cmd;
 pub(crate) mod test_parse;
 pub mod byok;

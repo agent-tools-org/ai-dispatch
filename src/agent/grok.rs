@@ -28,6 +28,17 @@ impl super::Agent for GrokAgent {
         cmd.args(["-p", &prompt_with_ctx, "--output-format", "json"]);
         if opts.read_only {
             cmd.args(["--permission-mode", "plan"]);
+        } else {
+            // Without this grok asks for approval it can never receive: in
+            // headless `-p` mode it renders no prompt, it just abandons the tool
+            // call, returns `stopReason: "cancelled"` and exits 0. Measured in a
+            // scratch repo — "add a line to a.txt" left the file untouched and
+            // still billed, and a real 32-turn run burned $1.04 before being
+            // cancelled the same way. `--permission-mode auto` is NOT enough; it
+            // cancels identically. Every other adapter passes its own form of
+            // this (codex `--full-auto`, agy/claude `--dangerously-skip-
+            // permissions`, droid `--skip-permissions-unsafe`, kilo `--auto`).
+            cmd.arg("--always-approve");
         }
         if let Some(ref model) = opts.model {
             cmd.args(["--model", model]);

@@ -49,6 +49,20 @@ fn build_command_uses_grok_binary_and_json_flags() {
 fn read_only_uses_plan_permission_mode() {
     let args = args_for(&opts(true));
     assert!(args.windows(2).any(|pair| pair == ["--permission-mode", "plan"]));
+    assert!(
+        !args.iter().any(|arg| arg == "--always-approve"),
+        "a read-only run must never carry blanket approval"
+    );
+}
+
+/// A write run without this cancels its own tool calls and still bills: headless
+/// grok renders no approval prompt, it abandons the call and exits 0 with
+/// `stopReason: "cancelled"`.
+#[test]
+fn write_run_carries_blanket_approval() {
+    let args = args_for(&opts(false));
+    assert!(args.iter().any(|arg| arg == "--always-approve"));
+    assert!(!args.iter().any(|arg| arg == "plan"));
 }
 
 #[test]

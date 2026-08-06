@@ -9,7 +9,14 @@ use std::path::PathBuf;
 
 const RATE_LIMIT_WINDOW_SECS: u64 = 300;
 
+#[cfg(test)]
+fn assert_marker_path_isolated() {
+    crate::paths::assert_aid_home_isolated("rate_limit::marker_path");
+}
+
 fn marker_path(agent: &AgentKind) -> PathBuf {
+    #[cfg(test)]
+    assert_marker_path_isolated();
     aid_dir().join(format!("rate-limit-{}", agent.as_str()))
 }
 
@@ -17,6 +24,8 @@ fn marker_path(agent: &AgentKind) -> PathBuf {
 /// separately. agy's gemini allowance can be exhausted while its claude
 /// allowance still serves; a per-agent marker would strand the working one.
 fn group_marker_path(agent: &AgentKind, group: &str) -> PathBuf {
+    #[cfg(test)]
+    assert_marker_path_isolated();
     aid_dir().join(format!("rate-limit-{}--{}", agent.as_str(), group))
 }
 
@@ -686,5 +695,42 @@ mod stale_clear_tests {
 
         assert!(clear_rate_limit_if_stale(&AgentKind::Qwen, task_start));
         assert!(!is_rate_limited(&AgentKind::Qwen));
+    }
+}
+
+#[cfg(test)]
+mod home_guard_tests {
+    use super::*;
+    use crate::paths::{self, AidHomeGuard};
+
+    #[test]
+    fn marker_path_writes_under_isolated_home() {
+        let temp = tempfile::tempdir().unwrap();
+        let _guard = AidHomeGuard::set(temp.path());
+        std::fs::create_dir_all(paths::aid_dir()).unwrap();
+
+        mark_rate_limited(&AgentKind::Codex, "rate limit exceeded");
+        let marker = paths::aid_dir().join("rate-limit-codex");
+        assert!(marker.exists());
+        assert!(marker.starts_with(temp.path()));
+    }
+
+    #[test]
+    fn marker_path_refuses_real_home_without_guard() {
+        let resolved = paths::aid_dir();
+        let home = std::env::var("HOME")
+            .map(std::path::PathBuf::from)
+            .unwrap_or_else(|_| std::path::PathBuf::from("."));
+        let real = home.join(".aid");
+        if resolved != real {
+            return;
+        }
+        let err = std::panic::catch_unwind(|| {
+            let _ = marker_path(&AgentKind::Codex);
+        });
+        assert!(
+            err.is_err(),
+            "marker_path must refuse real ~/.aid without AidHomeGuard"
+        );
     }
 }

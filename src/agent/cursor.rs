@@ -134,6 +134,38 @@ impl super::Agent for CursorAgent {
         // Real Cursor success ends with type:result + is_error:false; failures set is_error:true.
         super::stream_completion::status_from_result_jsonl(output)
     }
+
+    fn served_models(&self) -> Result<Option<Vec<String>>> {
+        let binary = cursor_binary();
+        let mut cmd = Command::new(binary);
+        cmd.arg("models");
+        let output = super::model_validation::run_cmd_with_timeout(cmd, std::time::Duration::from_secs(2));
+        let mut models = match output {
+            Some(text) => parse_cursor_models_output(&text),
+            None => Vec::new(),
+        };
+        for alias in ["auto", "default", "router"] {
+            if !models.contains(&alias.to_string()) {
+                models.push(alias.to_string());
+            }
+        }
+        Ok(Some(models))
+    }
+}
+
+fn parse_cursor_models_output(output: &str) -> Vec<String> {
+    let mut models = Vec::new();
+    for line in output.lines() {
+        let trimmed = line.trim();
+        if trimmed.is_empty() || trimmed.starts_with('<') {
+            continue;
+        }
+        let name = trimmed.split_whitespace().next().unwrap_or("");
+        if !name.is_empty() && !models.contains(&name.to_string()) {
+            models.push(name.to_string());
+        }
+    }
+    models
 }
 
 fn parse_json_event(

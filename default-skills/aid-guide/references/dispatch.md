@@ -32,6 +32,8 @@ opencode / opencode-zen / glm-5.2
 | provider | metering and billing: the quota pool and its reset semantics |
 | model | capability per category, context window, per-token price |
 
+Before dispatching, `aid` validates requested `--model` parameters against the target CLI's served model list (e.g. `grok models`, `agy models`, `cursor-agent models`, or local CLI config). Only models positively reported as absent by the CLI are rejected before execution.
+
 `aid advise` names the recommended route in this form. `aid agent list --json`
 carries `provider` and `metering` per agent. Agent names keep working unchanged:
 `aid run codex` resolves to a route.

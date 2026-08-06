@@ -256,6 +256,9 @@ pub(super) fn resolve_agent_setup(store: &Arc<Store>, args: &mut RunArgs) -> Res
     } else {
         agent::get_agent(agent_kind)
     };
+    if let Some(ref model) = effective_model {
+        agent::model_validation::validate_model_for_agent(agent.as_ref(), model)?;
+    }
     Ok(AgentSetup {
         agent_kind,
         custom_agent_name: custom_agent_name.clone(),
@@ -271,30 +274,5 @@ pub(super) fn resolve_agent_setup(store: &Arc<Store>, args: &mut RunArgs) -> Res
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::paths::AidHomeGuard;
-
-    #[test]
-    fn resolve_agent_setup_rejects_disabled_agent() {
-        let dir = tempfile::tempdir().expect("tempdir");
-        let _guard = AidHomeGuard::set(dir.path());
-        agent_config::save_agent_disabled("gemini", true).expect("disable agent");
-        let store = Arc::new(Store::open_memory().expect("store"));
-        let mut args = RunArgs {
-            agent_name: "gemini".to_string(),
-            prompt: "Explain the current architecture".to_string(),
-            ..Default::default()
-        };
-
-        let err = match resolve_agent_setup(&store, &mut args) {
-            Ok(_) => panic!("disabled agent should fail"),
-            Err(err) => err.to_string(),
-        };
-
-        assert_eq!(
-            err,
-            "Agent 'gemini' is disabled (enable with: aid agent config gemini --enable)"
-        );
-    }
-}
+#[path = "run_dispatch_resolve_tests.rs"]
+mod tests;

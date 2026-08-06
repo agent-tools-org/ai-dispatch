@@ -145,6 +145,25 @@ impl super::Agent for CodexAgent {
             _ => None,
         }
     }
+
+    fn served_models(&self) -> Result<Option<Vec<String>>> {
+        let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
+        let cache_path = std::path::Path::new(&home).join(".codex/models_cache.json");
+        if let Ok(content) = std::fs::read_to_string(&cache_path) {
+            if let Ok(val) = serde_json::from_str::<serde_json::Value>(&content) {
+                if let Some(arr) = val.get("models").and_then(|m| m.as_array()) {
+                    let slugs: Vec<String> = arr
+                        .iter()
+                        .filter_map(|item| item.get("slug").and_then(|s| s.as_str()).map(String::from))
+                        .collect();
+                    if !slugs.is_empty() {
+                        return Ok(Some(slugs));
+                    }
+                }
+            }
+        }
+        Ok(None)
+    }
 }
 
 fn writable_roots_config(path: &Path) -> Option<String> {

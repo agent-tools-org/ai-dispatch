@@ -100,7 +100,7 @@ pub(super) fn research_findings(store: &Store, task: &Task) -> Option<String> {
         .as_ref()
         .map(std::path::PathBuf::from)
         .unwrap_or_else(|| crate::paths::log_path(task.id.as_str()));
-    extract_messages_from_log(&log_path, false).filter(|messages| !messages.is_empty())
+    extract_messages_from_log(&log_path, false, Some(task.agent_display_name())).filter(|messages| !messages.is_empty())
 }
 
 pub(super) fn stderr_tail(task_id: &str) -> Option<String> {

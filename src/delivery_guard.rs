@@ -29,7 +29,7 @@ const NARRATION_PREFIXES: &[&str] = &["first, ", "first ", "next, ", "next ", "t
 /// plausible-looking file made entirely of pre-tool narration.
 pub(crate) fn looks_like_delivered_report(text: &str) -> bool {
     let trimmed = text.trim();
-    if trimmed.starts_with("[Unrecognized JSON") {
+    if crate::cmd::show::is_unrecognized_json_notice(trimmed) {
         return true;
     }
     // Only what follows the last announced tool call can be the deliverable - the same

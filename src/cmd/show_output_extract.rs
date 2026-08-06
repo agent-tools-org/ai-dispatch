@@ -75,6 +75,11 @@ impl MessageCollector {
                     self.flush_pending();
                 }
             }
+            // For any unrecognized event shape from any agent adapter (including commandcode
+            // or custom agents), check if the payload contains a top-level `finalText` or `/result/text`.
+            // For existing adapters (e.g. commandcode's `{"type":"result","finalText":"..."}` or
+            // third-party wrappers with `result.text`), this extracts the final response text
+            // even if the event envelope type is not explicitly enumerated in the match.
             _ => {
                 if let Some(text) = result_event_text(value) {
                     self.push_message(Some(text));

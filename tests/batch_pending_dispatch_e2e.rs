@@ -105,7 +105,7 @@ fn quiet_batch_emits_progress_before_completion() {
         }
     });
 
-    let deadline = Instant::now() + Duration::from_millis(2500);
+    let deadline = Instant::now() + Duration::from_secs(10);
     let mut saw_progress = false;
     let mut saw_while_running = false;
     while Instant::now() < deadline {

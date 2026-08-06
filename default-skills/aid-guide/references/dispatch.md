@@ -80,7 +80,13 @@ Important controls:
 - `--difficulty` declares `trivial`, `simple`, `moderate`, or `complex` capability needs.
 - `--budget` declares the eligible `free`, `cheap`, `standard`, or `premium` model tier.
 - `--urgency` declares `background`, `normal`, or `urgent` rate-limit handling.
-- `--rigor` declares `draft`, `standard`, or `critical` proof level (compiles / path exercised / cross-audit); it does not whitelist trust tiers.
+- `--rigor` declares `draft`, `standard`, or `critical` proof level (compiles / path exercised /
+  cross-audit). `critical` forces `--verify` and `--audit`; it does **not** restrict which agent
+  may run.
+- `--egress` declares `any` (default) or `local`. `local` admits only a provider whose established
+  endpoint is loopback (`localhost` / `127.0.0.1`). Every current built-in agent is third-party or
+  unknown and therefore ineligible. Egress is decided by the provider (or a custom agent's
+  `base_url`), not by CLI identity or a hand-set `trust_tier`.
 - `--kind` overrides the inferred task kind while difficulty remains caller-declared. On `aid run`
   it is also how a caller narrows the injected toolbox: declare it and tools are filtered to that
   category, omit it and every resolved tool is described.

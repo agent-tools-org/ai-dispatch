@@ -135,7 +135,7 @@ display_name = "ACME (corporate plan)"
 command = "bash"
 prompt_mode = "arg"
 fixed_args = ["-lc", "exec opencode run --model acme/acme-pro \"$@\"", "aid-byok-acme"]
-trust_tier = "api"
+base_url = "https://api.acme.example/v1"
 ```
 
 When aid dispatches this custom agent, the user prompt is passed through the bash wrapper to:

@@ -78,6 +78,19 @@ mod tests {
         assert_eq!(args.budget, Some(TaskBudget::Premium));
         assert_eq!(args.urgency, Some(TaskUrgency::Urgent));
         assert_eq!(args.rigor, Some(TaskRigor::Critical));
+        assert_eq!(args.egress, crate::types::TaskEgress::Any);
         assert_eq!(args.kind, Some(crate::agent::classifier::TaskCategory::Refactoring));
+    }
+
+    #[test]
+    fn run_parses_egress_local() {
+        let cli = Cli::try_parse_from([
+            "aid", "run", "codex", "secret work",
+            "--egress", "local",
+        ]).expect("parse egress");
+        let Some(Commands::Run(args)) = cli.command else {
+            panic!("expected run command");
+        };
+        assert_eq!(args.egress, crate::types::TaskEgress::Local);
     }
 }

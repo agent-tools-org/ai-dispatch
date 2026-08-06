@@ -33,7 +33,11 @@ mod memory;
 
 pub use self::agent::AgentKind;
 pub use self::attribution::{grade_observation, AttributionSource, ROUTER_ALIASES};
-pub use self::provider::{model_family, provider_for_cli, MeteringShape, ProviderId};
+#[allow(unused_imports)] // re-export public provider API for external callers
+pub use self::provider::{
+    egress_for_base_url, egress_for_cli, egress_for_provider, model_family, provider_for_cli,
+    EgressTier, MeteringShape, ProviderId,
+};
 pub use self::route::Route;
 pub use self::delivery::DeliveryAssessment;
 pub use self::message::{MessageDirection, MessageSource, TaskMessage};
@@ -42,7 +46,7 @@ pub use self::status::{EventKind, PendingReason, TaskStatus, VerifyStatus};
 pub use self::status_sets::{ACTIVE_EXECUTION_FAILURE_STATUSES, ACTIVE_TASK_STATUSES};
 pub use self::task::{CompletionInfo, Finding, Task, TaskEvent, TaskFilter, Workgroup};
 pub use self::task_profile::{
-    DeclaredTaskProfile, TaskBudget, TaskDifficulty, TaskProfileDeclaration, TaskRigor,
+    DeclaredTaskProfile, TaskBudget, TaskDifficulty, TaskEgress, TaskProfileDeclaration, TaskRigor,
     TaskUrgency,
 };
 

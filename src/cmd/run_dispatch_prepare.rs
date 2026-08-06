@@ -10,7 +10,7 @@ use super::run_dispatch_claim::insert_task_claiming_id;
 use super::run_dispatch_resolve::{AgentSetup, apply_project_defaults, resolve_agent_setup};
 use super::run_task_profile::{
     apply_category_and_result_defaults, persist_declaration, should_auto_result_file,
-    validate_critical_rigor,
+    validate_critical_rigor, validate_egress,
 };
 use super::run_validate::validate_dispatch;
 use super::{RunArgs, context_file_from_spec, resolve_max_duration_mins, resolve_prompt_input, run_prompt};
@@ -65,6 +65,7 @@ pub(super) fn prepare_dispatch(store: &Arc<Store>, args: &mut RunArgs) -> Result
     let had_explicit_result_file = args.result_file.is_some();
     let detected_project = project::detect_project(); apply_project_defaults(args, detected_project.as_ref());
     validate_critical_rigor(args)?;
+    validate_egress(args)?;
     let agent_setup = resolve_agent_setup(store, args)?;
     let agent_name = agent_setup.custom_agent_name.as_deref().unwrap_or_else(|| agent_setup.agent_kind.as_str());
     let policy = crate::timeout_policy::TimeoutPolicy::resolve(agent_name, args.idle_timeout_secs, args.max_duration_mins, detected_project.as_ref());

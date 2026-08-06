@@ -117,9 +117,12 @@ impl AgentKind {
     }
 
 
+    /// Display metadata: (command, description, cost, best_for, streaming).
+    /// Egress is not here — it is a property of the provider (see
+    /// [`crate::types::egress_for_cli`]), not of the CLI binary.
     pub fn profile(
         &self,
-    ) -> Option<(&'static str, &'static str, &'static str, &'static str, bool, &'static str)> {
+    ) -> Option<(&'static str, &'static str, &'static str, &'static str, bool)> {
         match self {
             Self::Gemini => Some((
                 "gemini",
@@ -127,7 +130,6 @@ impl AgentKind {
                 "$0.10-$10/M blended",
                 "research, explain, implement, create, analyze, build",
                 true,
-                "api",
             )),
             Self::Qwen => Some((
                 "qwen",
@@ -135,7 +137,6 @@ impl AgentKind {
                 "free (OAuth) or Alibaba Cloud subscription",
                 "implement, refactor, research, explain",
                 true,
-                "api",
             )),
             Self::Codex => Some((
                 "codex",
@@ -143,7 +144,6 @@ impl AgentKind {
                 "$0.10-$8/M blended",
                 "implement, create, build, refactor, test",
                 true,
-                "local",
             )),
             Self::Copilot => Some((
                 "copilot",
@@ -151,7 +151,6 @@ impl AgentKind {
                 "subscription",
                 "implement, build, refactor, test, explain, debug",
                 true,
-                "api",
             )),
             Self::OpenCode => Some((
                 "opencode",
@@ -159,7 +158,6 @@ impl AgentKind {
                 "free-$2/M blended",
                 "rename, change, update, fix typo, add type",
                 true,
-                "api",
             )),
             Self::Cursor => Some((
                 "cursor",
@@ -167,7 +165,6 @@ impl AgentKind {
                 "$20/mo subscription",
                 "implement, create, build, refactor, ui, frontend, css",
                 true,
-                "api",
             )),
             Self::Kilo => Some((
                 "kilo",
@@ -175,7 +172,6 @@ impl AgentKind {
                 "free",
                 "rename, change, update, fix typo, add type",
                 true,
-                "api",
             )),
             Self::MiMoCode => Some((
                 "mimocode",
@@ -183,7 +179,6 @@ impl AgentKind {
                 "free / key-store",
                 "implement, change, update, refactor, add type",
                 true,
-                "api",
             )),
             Self::Codebuff => Some((
                 "aid-codebuff",
@@ -191,7 +186,6 @@ impl AgentKind {
                 "SDK-managed",
                 "complex coding, frontend",
                 true,
-                "local",
             )),
             Self::Droid => Some((
                 "droid",
@@ -199,7 +193,6 @@ impl AgentKind {
                 "BYOK (API key)",
                 "implement, create, build, refactor, test, orchestrate",
                 true,
-                "api",
             )),
             Self::Oz => Some((
                 "oz",
@@ -207,7 +200,6 @@ impl AgentKind {
                 "Warp subscription",
                 "implement, create, build, refactor, test",
                 true,
-                "local",
             )),
             Self::Claude => Some((
                 "claude",
@@ -215,7 +207,6 @@ impl AgentKind {
                 "$1-$75/M blended",
                 "implement, review, refactor, explain, research, test",
                 true,
-                "api",
             )),
             Self::Antigravity => Some((
                 "agy",
@@ -223,7 +214,6 @@ impl AgentKind {
                 "free (Google One / Gemini Code Assist) or BYOK",
                 "research, explain, implement, create, analyze, build",
                 true,
-                "api",
             )),
             Self::Grok => Some((
                 "grok",
@@ -231,7 +221,6 @@ impl AgentKind {
                 "grok.com subscription",
                 "implement, explain, refactor, research",
                 true,
-                "api",
             )),
             Self::Custom => None,
         }

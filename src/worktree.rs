@@ -32,6 +32,7 @@ pub(crate) use path::remove_worktree;
 pub(crate) use state::branch_tip_resume_base;
 pub use state::{branch_has_commits_ahead_of_main, process_alive_check, worktree_changed_files};
 pub use lock::{clear_worktree_lock, rekey_worktree_lock_to_worker, try_acquire_worktree_lock_with_store};
+pub(crate) use lock::live_lock_holder_with_store;
 #[cfg(test)]
 pub(crate) use lock::{
     check_worktree_lock, check_worktree_lock_with_store, simulate_stale_recovery_race,

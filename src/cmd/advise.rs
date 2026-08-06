@@ -183,7 +183,7 @@ mod tests {
             Some(crate::agent::classifier::TaskCategory::Refactoring),
             None,
             None,
-            5,
+            0,
         );
         assert!(report.recommended.is_some());
         let eligible = report.candidates.iter().filter(|c| c.eligible).count();

@@ -38,6 +38,11 @@ Before dispatching, `aid` validates requested `--model` parameters against the t
 carries `provider` and `metering` per agent. Agent names keep working unchanged:
 `aid run codex` resolves to a route.
 
+Some CLIs are themselves the provider. For example, `aid run commandcode`
+routes through the `commandcode` CLI and the `commandcode.ai` provider even
+when the observed model belongs to Anthropic, OpenAI, Google, xAI, or another
+upstream vendor served by that account.
+
 `metering` says how a provider meters, which decides what one outage implies:
 
 | Value | Meaning |

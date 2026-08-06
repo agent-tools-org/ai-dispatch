@@ -5,6 +5,7 @@ pub mod antigravity;
 pub mod claude;
 pub(crate) mod claude_events;
 pub mod codebuff;
+pub mod commandcode;
 pub mod codex;
 pub mod copilot;
 pub mod cursor;
@@ -121,6 +122,7 @@ pub fn detect_agents() -> Vec<AgentKind> {
         ("agy", AgentKind::Antigravity),
         ("qwen", AgentKind::Qwen),
         ("codex", AgentKind::Codex),
+        ("commandcode", AgentKind::CommandCode),
         ("opencode", AgentKind::OpenCode),
         ("copilot", AgentKind::Copilot),
         ("agent", AgentKind::Cursor),
@@ -195,6 +197,7 @@ where
     match agent_kind {
         AgentKind::Antigravity => which("agy"),
         AgentKind::Codex => which("codex"),
+        AgentKind::CommandCode => which("commandcode"),
         AgentKind::Copilot => which("copilot"),
         AgentKind::Cursor => which("agent") || which("cursor-agent"),
         AgentKind::Gemini => which("gemini"),
@@ -223,6 +226,7 @@ pub fn get_agent(kind: AgentKind) -> Box<dyn Agent> {
     match kind {
         AgentKind::Antigravity => Box::new(antigravity::AntigravityAgent),
         AgentKind::Codex => Box::new(codex::CodexAgent),
+        AgentKind::CommandCode => Box::new(commandcode::CommandCodeAgent),
         AgentKind::Copilot => Box::new(copilot::CopilotAgent),
         AgentKind::Cursor => Box::new(cursor::CursorAgent),
         AgentKind::Gemini => Box::new(gemini::GeminiAgent),

@@ -59,8 +59,10 @@ fn official_guide_documents_watcher_safeguards() {
     assert!(operations.contains("`--timeout SECS`"));
     assert!(operations.contains("Repeated activity is not itself a stop condition"));
     // The guide must not re-acquire the two inaccuracies the removal audit caught:
-    // foreground idle measures raw lines, and --timeout is activity-aware, not a hard cap.
-    assert!(operations.contains("measures this on raw output lines"));
+    // idle is refreshed by meaningful raw output aid cannot parse, and --timeout
+    // is activity-aware, not a hard cap.
+    assert!(operations.contains("Meaningful text"));
+    assert!(operations.contains("refreshes the liveness clock"));
     assert!(operations.contains("activity-aware rather than a hard wall-clock cap"));
 }
 

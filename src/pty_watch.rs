@@ -14,7 +14,7 @@ use crate::process_monitor;
 use crate::prompt::PromptDetector;
 use crate::pty_bridge::PtyBridge;
 use crate::pty_watch_idle::{
-    take_inbound_echo, IdleAction, IdleDetector, MonitorTaskStatus,
+    is_agent_output, load_monitor_status, take_inbound_echo, IdleAction, IdleDetector,
 };
 use crate::store::Store;
 use crate::types::{CompletionInfo, EventKind, TaskEvent, TaskId, TaskStatus};
@@ -126,6 +126,9 @@ impl MonitorState {
             let line = self.line_buffer[..pos].trim_end_matches('\r').to_string();
             let is_echo = take_inbound_echo(&mut self.inbound_echo_suppress, &line);
             self.observe_output_line(task_id, store, &line)?;
+            if !is_echo && is_agent_output(&line) {
+                self.mark_progress();
+            }
             if self.streaming && !is_echo {
                 if let Some(event_detail) = watcher::handle_streaming_line_with_session(
                     watcher::StreamLineContext {
@@ -141,7 +144,6 @@ impl MonitorState {
                     &mut self.session_saved,
                 )? {
                     if event_detail.kind.is_liveness() {
-                        self.mark_progress();
                         self.last_event_detail = Some(event_detail.detail);
                     }
                 }
@@ -163,6 +165,9 @@ impl MonitorState {
         }
         let is_echo = take_inbound_echo(&mut self.inbound_echo_suppress, &trailing);
         self.observe_output_line(task_id, store, &trailing)?;
+        if !is_echo && is_agent_output(&trailing) {
+            self.mark_progress();
+        }
         if self.streaming && !is_echo {
             if let Some(event_detail) = watcher::handle_streaming_line_with_session(
                 watcher::StreamLineContext {
@@ -708,19 +713,12 @@ fn persist_transcript(task_id: &TaskId, buffer: &str) {
     let _ = std::fs::write(crate::paths::transcript_path(task_id.as_str()), buffer);
 }
 
-fn load_monitor_status(store: &Store, task_id: &str) -> Result<MonitorTaskStatus> {
-    let status = store.get_task(task_id)?.map(|task| task.status);
-    Ok(match status {
-        Some(TaskStatus::Running) => MonitorTaskStatus::Running,
-        Some(TaskStatus::AwaitingInput) => MonitorTaskStatus::AwaitingInput,
-        Some(TaskStatus::Stalled) => MonitorTaskStatus::Stalled,
-        _ => MonitorTaskStatus::Inactive,
-    })
-}
-
 #[cfg(test)]
 mod tests;
 #[cfg(test)]
 mod log_tests;
 #[cfg(test)]
 mod first_token_tests;
+#[cfg(test)]
+#[path = "pty_watch_activity_tests.rs"]
+mod activity_tests;

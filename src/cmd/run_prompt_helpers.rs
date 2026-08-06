@@ -163,6 +163,18 @@ pub(crate) fn format_context_block(path: &str, content: &str) -> String { format
 /// A project that wants the old behaviour declares it once, in
 /// `.aid/project.toml`: `skills = ["implementer"]`.
 pub(crate) fn effective_skills(args: &RunArgs) -> Vec<String> {
+    let project_skills = crate::project::detect_project()
+        .map(|config| config.skills)
+        .unwrap_or_default();
+    effective_skills_with(args, project_skills)
+}
+
+/// The project default is a parameter so a caller — a test above all — can
+/// state it rather than inherit whatever `.aid/project.toml` the developer
+/// happens to have. The test for "omitting `--skill` invents nothing" passed
+/// for months only because this repo's project file failed to deserialize and
+/// `detect_project` discarded the error.
+pub(crate) fn effective_skills_with(args: &RunArgs, project_skills: Vec<String>) -> Vec<String> {
     let declared: Vec<String> = args
         .skills
         .iter()
@@ -177,9 +189,7 @@ pub(crate) fn effective_skills(args: &RunArgs) -> Vec<String> {
     if args.skills.iter().any(|skill| skill.as_str() == NO_SKILL_SENTINEL) {
         return Vec::new();
     }
-    crate::project::detect_project()
-        .map(|config| config.skills)
-        .unwrap_or_default()
+    project_skills
 }
 
 pub(crate) fn resolve_repo_path(path: &str) -> Result<String> {

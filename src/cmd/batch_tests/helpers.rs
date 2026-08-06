@@ -115,6 +115,15 @@ async fn batch_title_sets_auto_created_workgroup_name() {
         r#"
 title = "My Batch"
 
+# Profiles are declared so the fixture is valid whether or not the developer's
+# own .aid/project.toml sets require_task_profile. This test is about workgroup
+# naming, not about profile enforcement.
+[defaults]
+difficulty = "simple"
+budget = "standard"
+urgency = "normal"
+rigor = "standard"
+
 [[tasks]]
 name = "first"
 agent = "codex"
@@ -166,6 +175,15 @@ async fn batch_group_flag_assigns_existing_workgroup() {
     fs::write(
         &batch_file,
         r#"
+# Declared for the same reason as the fixture above: this test is about
+# workgroup assignment, not about profile enforcement, so it must not depend
+# on the developer's own require_task_profile setting.
+[defaults]
+difficulty = "simple"
+budget = "standard"
+urgency = "normal"
+rigor = "standard"
+
 [[tasks]]
 name = "first"
 agent = "codex"

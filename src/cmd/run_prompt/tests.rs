@@ -86,7 +86,32 @@ fn effective_skills_default_to_none_when_nothing_is_declared() {
     let dir = crate::paths::aid_dir().join("skills");
     std::fs::create_dir_all(&dir).unwrap();
     std::fs::write(dir.join("implementer.md"), "# Implementer").unwrap();
-    assert!(effective_skills(&run_args(vec![])).is_empty());
+    // The project default is passed in rather than detected, so this asserts
+    // what it claims — that nothing is invented from the agent kind — instead
+    // of asserting that the developer's own project declares no skill.
+    assert!(effective_skills_with(&run_args(vec![]), Vec::new()).is_empty());
+}
+
+/// A project default is used only when the caller declared nothing, and an
+/// explicit "no skills" still beats it.
+#[test]
+fn project_default_skill_applies_only_when_nothing_is_declared() {
+    let project = vec!["implementer".to_string()];
+    assert_eq!(
+        effective_skills_with(&run_args(vec![]), project.clone()),
+        vec!["implementer"]
+    );
+    assert_eq!(
+        effective_skills_with(&run_args(vec!["reviewer".to_string()]), project.clone()),
+        vec!["reviewer"]
+    );
+    assert!(
+        effective_skills_with(
+            &run_args(vec![crate::cmd::run::NO_SKILL_SENTINEL.to_string()]),
+            project
+        )
+        .is_empty()
+    );
 }
 
 #[test]

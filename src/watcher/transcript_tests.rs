@@ -243,7 +243,7 @@ async fn watch_buffered_records_quota_refusal_and_fails_task() {
 
     let mut child = tokio::process::Command::new("sh")
         .arg("-c")
-        .arg("printf '429 Resource has been exhausted (e.g. check quota).\\n'")
+        .arg("printf 'Error: Individual quota reached.\\n'")
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()

@@ -103,6 +103,7 @@ fn extract_raw_text_from_log(log_path: &Path) -> Option<String> {
     let content = std::fs::read_to_string(log_path).ok()?;
     let raw_lines: Vec<&str> = content
         .lines()
+        .filter(|line| !crate::cmd::show::is_aid_sentinel_line(line))
         .filter(|line| serde_json::from_str::<serde_json::Value>(line).is_err())
         .collect();
     raw_lines

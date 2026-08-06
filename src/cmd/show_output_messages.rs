@@ -72,6 +72,9 @@ pub(crate) fn extract_messages_from_log(log_path: &Path, full: bool) -> Option<S
     let content = std::fs::read_to_string(log_path).ok()?;
     let mut messages = collect_messages(&content);
     if messages.is_empty() {
+        if let Some(notice) = unrecognized_json_log_notice(&content, log_path) {
+            return Some(notice);
+        }
         return None;
     }
     if !full {
@@ -79,6 +82,67 @@ pub(crate) fn extract_messages_from_log(log_path: &Path, full: bool) -> Option<S
         messages = cap_message_count(messages, HEAD_MESSAGE_COUNT, TAIL_MESSAGE_COUNT);
     }
     Some(join_messages(messages, full, MAX_OUTPUT_CHARS))
+}
+
+pub(crate) fn unrecognized_json_log_notice(content: &str, log_path: &Path) -> Option<String> {
+    let mut total_lines = 0;
+    let mut json_lines = 0;
+    let mut first_sample: Option<String> = None;
+    let mut agent_name: Option<String> = None;
+
+    for line in content.lines() {
+        let trimmed = line.trim();
+        if trimmed.is_empty() || is_aid_sentinel_line(trimmed) {
+            continue;
+        }
+        total_lines += 1;
+        if let Ok(v) = serde_json::from_str::<serde_json::Value>(trimmed) {
+            json_lines += 1;
+            if first_sample.is_none() {
+                first_sample = Some(trimmed.to_string());
+            }
+            if agent_name.is_none() {
+                agent_name = detect_agent_name_from_json(&v);
+            }
+        }
+    }
+
+    if total_lines > 0 && json_lines == total_lines {
+        let sample = first_sample.unwrap_or_default();
+        let sample_truncated = if sample.chars().count() > 120 {
+            format!("{}…", sample.chars().take(120).collect::<String>())
+        } else {
+            sample
+        };
+        let agent = agent_name.unwrap_or_else(|| "agent".to_string());
+        Some(format!(
+            "[Unrecognized JSON log format from {agent}]\nSample line: {sample_truncated}\nSee transcript at {}",
+            log_path.display()
+        ))
+    } else {
+        None
+    }
+}
+
+pub(crate) fn is_aid_sentinel_line(line: &str) -> bool {
+    let trimmed = line.trim();
+    trimmed.starts_with("=== AID TASK")
+        || trimmed.starts_with("=== AID")
+        || trimmed.starts_with("Warning: Reached maximum")
+}
+
+fn detect_agent_name_from_json(v: &serde_json::Value) -> Option<String> {
+    let event = v.get("event").unwrap_or(v);
+    if event.get("sessionId").is_some() || v.get("sessionId").is_some() {
+        return Some("commandcode".to_string());
+    }
+    if let Some(agent) = event.get("agent").or_else(|| v.get("agent")).and_then(serde_json::Value::as_str) {
+        return Some(agent.to_string());
+    }
+    if let Some(model) = event.get("model").or_else(|| v.get("model")).and_then(serde_json::Value::as_str) {
+        return Some(model.to_string());
+    }
+    None
 }
 
 pub(crate) fn extract_messages_research(log_path: &Path) -> Option<String> {
@@ -125,15 +189,27 @@ fn join_messages(messages: Vec<String>, full: bool, max_output_chars: usize) -> 
 }
 pub fn read_task_output(task: &Task) -> Result<String> {
     if let Some(path) = task.output_path.as_deref() {
-        return std::fs::read_to_string(path)
-            .with_context(|| format!("Failed to read output file {path}"));
+        if let Ok(content) = std::fs::read_to_string(path) {
+            if is_valid_output_content(&content) {
+                return Ok(content);
+            }
+        }
     }
     let persisted = paths::task_dir(task.id.as_str()).join("result.md");
     if persisted.exists() {
-        return std::fs::read_to_string(&persisted)
-            .with_context(|| format!("Failed to read result file {}", persisted.display()));
+        if let Ok(content) = std::fs::read_to_string(&persisted) {
+            if is_valid_output_content(&content) {
+                return Ok(content);
+            }
+        }
     }
     Err(anyhow::anyhow!("Task has no output file"))
+}
+
+fn is_valid_output_content(content: &str) -> bool {
+    content
+        .lines()
+        .any(|line| !line.trim().is_empty() && !is_aid_sentinel_line(line))
 }
 
 pub fn log_text(task_id: &str) -> Result<String> {

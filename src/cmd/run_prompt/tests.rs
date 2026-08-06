@@ -18,6 +18,12 @@ impl EnvVarGuard {
         unsafe { std::env::set_var(key, value) };
         Self { key, previous }
     }
+
+    fn remove(key: &'static str) -> Self {
+        let previous = std::env::var_os(key);
+        unsafe { std::env::remove_var(key) };
+        Self { key, previous }
+    }
 }
 
 impl Drop for EnvVarGuard {
@@ -403,6 +409,7 @@ async fn run_auto_retries_after_verify_failure() {
 
     let path_value = OsString::from(format!("{}:/bin:/usr/bin", bin_dir.display()));
     let _path = EnvVarGuard::set("PATH", &path_value);
+    let _task_id_guard = EnvVarGuard::remove("AID_TASK_ID");
 
     let verify_counter_path = temp.path().join("verify-count");
     let verify_path = temp.path().join("verify-on-retry.sh");

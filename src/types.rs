@@ -32,7 +32,7 @@ mod task_profile;
 mod memory;
 
 pub use self::agent::AgentKind;
-pub use self::attribution::{grade_observation, AttributionSource};
+pub use self::attribution::{grade_observation, AttributionSource, ROUTER_ALIASES};
 pub use self::provider::{model_family, provider_for_cli, MeteringShape, ProviderId};
 pub use self::route::Route;
 pub use self::delivery::DeliveryAssessment;

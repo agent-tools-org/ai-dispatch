@@ -83,6 +83,7 @@ fn is_valid_git_worktree_accepts_tmp_and_private_tmp_spellings() {
     let _permit = test_subprocess::acquire();
     let main_repo = init_repo();
     let worktree = unique_worktree_path("aid-94-alias");
+    let _guard = crate::test_env::TmpWorktreeGuard::with_repo(main_repo.path(), worktree.clone());
     let private_worktree = PathBuf::from(
         worktree
             .to_string_lossy()
@@ -95,8 +96,6 @@ fn is_valid_git_worktree_accepts_tmp_and_private_tmp_spellings() {
 
     assert!(is_valid_git_worktree(main_repo.path(), &worktree).unwrap());
     assert!(is_valid_git_worktree(main_repo.path(), &private_worktree).unwrap());
-
-    cleanup_worktree(main_repo.path(), &worktree);
 }
 
 #[test]

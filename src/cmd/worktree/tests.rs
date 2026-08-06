@@ -1,8 +1,9 @@
 // Tests for `aid worktree` list/prune lock behavior.
 // Covers live-lock pruning protection, dead-lock cleanup, and JSON listing shape.
-// Deps: super command helpers, git CLI, tempfile.
+// Deps: super command helpers, git CLI, tempfile, TmpWorktreeGuard.
 
 use super::{list_json, prune, should_prune_worktree};
+use crate::test_env::TmpWorktreeGuard;
 use crate::test_subprocess;
 use serde_json::Value;
 use std::path::{Path, PathBuf};
@@ -30,7 +31,8 @@ fn legacy_path(name: &str) -> PathBuf {
     Path::new("/tmp").join(format!("aid-wt-{}-{name}", std::process::id()))
 }
 
-fn add_worktree(repo_dir: &Path, branch: &str, name: &str) -> PathBuf {
+/// Create a legacy `/tmp/aid-wt-*` worktree guarded for Drop cleanup (panic-safe).
+fn add_worktree(repo_dir: &Path, branch: &str, name: &str) -> TmpWorktreeGuard {
     let path = legacy_path(name);
     let _ = std::fs::remove_dir_all(&path);
     git(
@@ -43,15 +45,8 @@ fn add_worktree(repo_dir: &Path, branch: &str, name: &str) -> PathBuf {
             branch,
         ],
     );
-    path.canonicalize().unwrap_or(path)
-}
-
-fn remove_worktree(repo_dir: &Path, path: &Path) {
-    let _ = Command::new("git")
-        .args(["-C", &repo_dir.to_string_lossy()])
-        .args(["worktree", "remove", "--force", &path.to_string_lossy()])
-        .status();
-    let _ = std::fs::remove_dir_all(path);
+    let path = path.canonicalize().unwrap_or(path);
+    TmpWorktreeGuard::with_repo(repo_dir, path)
 }
 
 fn make_old(path: &Path) {
@@ -95,18 +90,16 @@ fn prune_skips_worktree_with_live_lock() {
     init_repo(repo.path());
     let wt = add_worktree(repo.path(), "feat/live-lock", "live-lock");
     std::fs::write(
-        wt.join(".aid-lock"),
+        wt.path().join(".aid-lock"),
         format!("version=1\ntask_id=t-live\nowner_pid={}\nworker_pid=\n", std::process::id()),
     )
     .unwrap();
-    make_old(&wt);
+    make_old(wt.path());
 
-    assert!(!should_prune_worktree(wt.to_str().unwrap()));
+    assert!(!should_prune_worktree(wt.path().to_str().unwrap()));
     prune(Some(repo.path().to_str().unwrap())).unwrap();
-    assert!(wt.exists());
-    assert!(wt.join(".aid-lock").exists());
-
-    remove_worktree(repo.path(), &wt);
+    assert!(wt.path().exists());
+    assert!(wt.path().join(".aid-lock").exists());
 }
 
 #[test]
@@ -116,16 +109,18 @@ fn prune_clears_dead_lock_and_removes_old_worktree() {
     init_repo(repo.path());
     let wt = add_worktree(repo.path(), "feat/dead-lock", "dead-lock");
     std::fs::write(
-        wt.join(".aid-lock"),
+        wt.path().join(".aid-lock"),
         "version=1\ntask_id=t-dead\nowner_pid=999999999\nworker_pid=\n",
     )
     .unwrap();
-    make_old(&wt);
+    make_old(wt.path());
 
-    assert!(should_prune_worktree(wt.to_str().unwrap()));
+    assert!(should_prune_worktree(wt.path().to_str().unwrap()));
     prune(Some(repo.path().to_str().unwrap())).unwrap();
-    assert!(wt.exists());
-    assert!(!wt.join(".aid-lock").exists());
+    // Prune clears the stale lock but leaves the worktree dir (dirty/abandoned policy).
+    // Fixture cleanup is owned by TmpWorktreeGuard on Drop — including panic paths.
+    assert!(wt.path().exists());
+    assert!(!wt.path().join(".aid-lock").exists());
 }
 
 #[test]
@@ -134,15 +129,13 @@ fn prune_skips_old_worktree_with_uncommitted_changes() {
     let repo = tempfile::tempdir().unwrap();
     init_repo(repo.path());
     let wt = add_worktree(repo.path(), "feat/dirty-prune", "dirty-prune");
-    std::fs::write(wt.join("dirty.txt"), "partial\n").unwrap();
-    make_old(&wt);
+    std::fs::write(wt.path().join("dirty.txt"), "partial\n").unwrap();
+    make_old(wt.path());
 
-    assert!(!should_prune_worktree(wt.to_str().unwrap()));
+    assert!(!should_prune_worktree(wt.path().to_str().unwrap()));
     prune(Some(repo.path().to_str().unwrap())).unwrap();
-    assert!(wt.exists());
-    assert!(wt.join("dirty.txt").exists());
-
-    remove_worktree(repo.path(), &wt);
+    assert!(wt.path().exists());
+    assert!(wt.path().join("dirty.txt").exists());
 }
 
 #[test]
@@ -154,21 +147,21 @@ fn list_json_reports_active_and_inactive_worktrees() {
     let inactive = add_worktree(repo.path(), "feat/json-inactive", "json-inactive");
     let dead_locked = add_worktree(repo.path(), "feat/json-dead", "json-dead");
     std::fs::write(
-        active.join(".aid-lock"),
+        active.path().join(".aid-lock"),
         format!("version=1\ntask_id=t-json\nowner_pid={}\nworker_pid=\n", std::process::id()),
     )
     .unwrap();
     std::fs::write(
-        dead_locked.join(".aid-lock"),
+        dead_locked.path().join(".aid-lock"),
         "version=1\ntask_id=t-dead\nowner_pid=999999999\nworker_pid=\n",
     )
     .unwrap();
 
     let json = list_json(Some(repo.path().to_str().unwrap()), false).unwrap();
     let entries = serde_json::from_str::<Vec<Value>>(&json).unwrap();
-    let active_entry = entry_for_path(&entries, &active);
-    let inactive_entry = entry_for_path(&entries, &inactive);
-    let dead_entry = entry_for_path(&entries, &dead_locked);
+    let active_entry = entry_for_path(&entries, active.path());
+    let inactive_entry = entry_for_path(&entries, inactive.path());
+    let dead_entry = entry_for_path(&entries, dead_locked.path());
 
     assert_eq!(active_entry.get("branch").and_then(Value::as_str), Some("feat/json-active"));
     assert_eq!(active_entry.get("active").and_then(Value::as_bool), Some(true));
@@ -187,10 +180,6 @@ fn list_json_reports_active_and_inactive_worktrees() {
     assert_eq!(active_only.len(), 1);
     assert_eq!(
         active_only[0].get("path").and_then(Value::as_str),
-        Some(active.to_string_lossy().as_ref())
+        Some(active.path().to_string_lossy().as_ref())
     );
-
-    remove_worktree(repo.path(), &active);
-    remove_worktree(repo.path(), &inactive);
-    remove_worktree(repo.path(), &dead_locked);
 }

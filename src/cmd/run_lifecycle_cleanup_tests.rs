@@ -1,5 +1,6 @@
 // Tests for lifecycle ordering around completed worktree cleanup.
 // Covers retry dispatch preserving worktrees and normal finish pruning them.
+// Isolates AID_HOME so post-run rate-limit cleanup never touches ~/.aid.
 // Deps: post_run_lifecycle, Store, worktree helpers, git CLI, tempfile.
 
 use super::{
@@ -8,12 +9,20 @@ use super::{
     run_prompt::PromptBundle,
 };
 use crate::{
+    paths::{self, AidHomeGuard},
     store::Store,
     test_subprocess,
     types::{AgentKind, Task, TaskId, TaskStatus, VerifyStatus},
 };
 use chrono::Local;
 use std::{path::Path, process::Command, sync::Arc};
+
+fn isolated_home() -> (tempfile::TempDir, AidHomeGuard) {
+    let home = tempfile::tempdir().expect("home");
+    let guard = AidHomeGuard::set(home.path());
+    paths::ensure_dirs().expect("dirs");
+    (home, guard)
+}
 
 fn git(repo_dir: &Path, args: &[&str]) {
     assert!(Command::new("git")
@@ -121,6 +130,7 @@ async fn run_lifecycle(
 #[tokio::test]
 async fn completed_worktree_survives_when_checklist_retry_dispatches() {
     let _permit = test_subprocess::acquire();
+    let (_home, _guard) = isolated_home();
     let repo = init_repo();
     let branch = "fix/lifecycle-retry-keep";
     let wt = committed_worktree(repo.path(), branch);
@@ -152,6 +162,7 @@ async fn completed_worktree_survives_when_checklist_retry_dispatches() {
 #[tokio::test]
 async fn completed_worktree_is_pruned_when_no_retry_dispatches() {
     let _permit = test_subprocess::acquire();
+    let (_home, _guard) = isolated_home();
     let repo = init_repo();
     let branch = "fix/lifecycle-finish-prune";
     let wt = committed_worktree(repo.path(), branch);

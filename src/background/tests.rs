@@ -523,6 +523,8 @@ fn keeps_recent_pending_tasks_pending() {
 
 #[test]
 fn stale_pending_timeout_skips_tasks_that_already_moved_out_of_pending() {
+    let temp = tempfile::tempdir().unwrap();
+    let _aid_home = paths::AidHomeGuard::set(temp.path());
     let store = Store::open_memory().unwrap();
     let mut task = make_task("t-aa03", TaskStatus::Pending);
     task.created_at = Local::now() - Duration::seconds(601);

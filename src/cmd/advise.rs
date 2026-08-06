@@ -136,6 +136,8 @@ mod tests {
 
     #[test]
     fn advice_payload_round_trips_through_json() {
+        let home = tempfile::tempdir().expect("temp aid home");
+        let _guard = crate::paths::AidHomeGuard::set(home.path());
         let args = AdviseArgs {
             prompt: "Refactor src/main.rs".to_string(),
             difficulty: crate::types::TaskDifficulty::Complex,

@@ -131,6 +131,71 @@ impl Drop for AidHomeGuard {
     }
 }
 
+/// Refuse to resolve rate-limit markers (and similar) against the developer's
+/// real `~/.aid` when a unit test forgot `AidHomeGuard`.
+///
+/// # Limitations
+///
+/// This guard catches same-thread calls through `marker_path`.
+/// It does NOT catch:
+/// - Anything off-thread (spawned threads or work-stealing async runtime workers
+///   do not inherit the `thread_local!` `AidHomeGuard` override, and panics on unjoined
+///   threads do not fail tests).
+/// - Any deletion or file access that does not go through `marker_path` (or explicit
+///   `assert_aid_home_isolated` checks).
+///
+/// The vanishing-marker bug this was written for is still open: see board item
+/// wi-de7e, which records what is established and why bisecting is the wrong next tool.
+#[cfg(test)]
+pub fn assert_aid_home_isolated(context: &str) {
+    let resolved = resolve_path(&aid_dir());
+    let real = resolve_path(&dirs_home().join(".aid"));
+    if resolved != real {
+        return;
+    }
+    let test_name = std::thread::current()
+        .name()
+        .map(|s| s.to_string())
+        .unwrap_or_else(|| "<unknown test>".to_string());
+    panic!(
+        "{context} would touch real ~/.aid ({real:?}); \
+         set paths::AidHomeGuard in test `{test_name}`"
+    );
+}
+
+#[cfg(test)]
+fn resolve_path(path: &std::path::Path) -> PathBuf {
+    if let Ok(canon) = std::fs::canonicalize(path) {
+        return canon;
+    }
+    let mut current = path.to_path_buf();
+    let mut tail = PathBuf::new();
+    while !current.as_os_str().is_empty() {
+        if let Ok(canon) = std::fs::canonicalize(&current) {
+            return canon.join(tail);
+        }
+        if let Some(file_name) = current.file_name() {
+            tail = PathBuf::from(file_name).join(tail);
+            if !current.pop() {
+                break;
+            }
+        } else {
+            break;
+        }
+    }
+    let mut normalized = PathBuf::new();
+    for comp in path.components() {
+        match comp {
+            std::path::Component::CurDir => {}
+            std::path::Component::ParentDir => {
+                normalized.pop();
+            }
+            c => normalized.push(c.as_os_str()),
+        }
+    }
+    normalized
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -175,5 +240,19 @@ mod tests {
         let _guard = AidHomeGuard::set(std::path::Path::new("/tmp/aid-test"));
         let path = steer_signal_path("t-abcd");
         assert!(path.ends_with("jobs/t-abcd.steer"));
+    }
+
+    #[test]
+    fn assert_aid_home_isolated_passes_with_temp_dir() {
+        let temp = tempfile::TempDir::new().unwrap();
+        let _guard = AidHomeGuard::set(temp.path());
+        assert_aid_home_isolated("test_isolated");
+    }
+
+    #[test]
+    #[should_panic(expected = "test_variant would touch real ~/.aid")]
+    fn assert_aid_home_isolated_detects_home_variant() {
+        let _guard = AidHomeGuard::set(&dirs_home().join(".aid").join("."));
+        assert_aid_home_isolated("test_variant");
     }
 }

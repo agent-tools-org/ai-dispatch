@@ -191,3 +191,115 @@ fn a_delivered_run_that_hit_a_refusal_keeps_its_marker() {
     // What watcher.rs consults before clearing.
     assert!(crate::rate_limit::is_rate_limited(&crate::types::AgentKind::Qwen));
 }
+
+#[test]
+fn quota_scan_tail_captures_refusal_before_large_diagnostics() {
+    let refusal = "Quota exhausted: Your token-plan 5-hour quota has been exhausted.";
+    let diagnostics = "x".repeat(10_000);
+    let output = format!("{refusal}\n{diagnostics}");
+    let tail = quota_scan_tail(&output);
+    assert!(
+        agent_prose_quota_match(tail, crate::types::AgentKind::Qwen),
+        "refusal must be preserved even when followed by >4 KB of diagnostics"
+    );
+}
+
+#[test]
+fn quota_scan_tail_aligns_start_to_line_boundary() {
+    let refusal = "Quota exhausted: Your token-plan 5-hour quota has been exhausted.";
+    let prefix = "header line\n";
+    let split_line_header = "split line start ";
+    let split_line_y = "y".repeat(100);
+
+    let mut suffix = String::with_capacity(65_440);
+    while suffix.len() < 65_440 {
+        suffix.push_str("trailing diagnostic line...\n");
+    }
+    suffix.truncate(65_440);
+
+    let output = format!("{prefix}{split_line_header}{split_line_y}\n{refusal}\n{suffix}");
+    assert_eq!(output.len(), 65_636);
+    let raw_start = output.len() - 65_536;
+    assert_eq!(raw_start, 100);
+    assert_ne!(output.as_bytes()[raw_start - 1], b'\n');
+
+    let tail = quota_scan_tail(&output);
+    let first_line = tail.lines().next().unwrap_or("");
+    assert_eq!(
+        first_line,
+        format!("{split_line_header}{split_line_y}"),
+        "window start must rewind to line boundary and keep full line"
+    );
+    assert!(
+        !first_line.starts_with('y'),
+        "window start must align to line boundary and not start mid-line"
+    );
+}
+
+#[test]
+fn quota_scan_tail_keeps_line_when_start_lands_on_line_boundary() {
+    let refusal = "Quota exhausted: Your token-plan 5-hour quota has been exhausted.";
+    let tail_bytes = 65_536;
+    let refusal_with_newline_len = refusal.len() + 1;
+    let suffix_len_needed = tail_bytes - refusal_with_newline_len;
+
+    let mut suffix = String::with_capacity(suffix_len_needed);
+    while suffix.len() + 2 <= suffix_len_needed {
+        suffix.push_str("a\n");
+    }
+    while suffix.len() < suffix_len_needed {
+        suffix.push('a');
+    }
+
+    let prefix = "line\n".repeat(100);
+    let output = format!("{prefix}{refusal}\n{suffix}");
+
+    let raw_start = output.len() - tail_bytes;
+    assert_eq!(raw_start, prefix.len());
+    assert_eq!(output.as_bytes()[raw_start - 1], b'\n');
+
+    let tail = quota_scan_tail(&output);
+    let first_line = tail.lines().next().unwrap_or("");
+    assert_eq!(
+        first_line, refusal,
+        "when start lands exactly on line boundary, the first line must be kept"
+    );
+}
+
+#[test]
+fn quota_scan_tail_rewind_is_bounded_when_output_has_no_newline() {
+    // A single line longer than two windows: rewinding to its start would scan
+    // everything. The raw offset stands instead.
+    let output = "z".repeat(200_000);
+    let tail = quota_scan_tail(&output);
+    assert!(
+        tail.len() <= 65_536,
+        "rewind must not expand the window past one extra budget, got {}",
+        tail.len()
+    );
+}
+
+#[test]
+fn buffered_grok_prose_about_rate_limits_never_marks_it() {
+    // grok has no anchored signature, so nothing it writes about quotas may mark
+    // it. This is the invariant that makes wiring record_quota_exhaustion into
+    // the buffered watcher safe for grok, whose buffer also carries aid's own
+    // terminal sentinel and echoed idle nudges.
+    let temp = tempfile::tempdir().unwrap();
+    let _aid_home = crate::paths::AidHomeGuard::set(temp.path());
+    let agent = crate::types::AgentKind::Grok;
+    crate::rate_limit::clear_rate_limit(&agent);
+
+    for line in [
+        "I hit a rate limit while reading the file",
+        "429",
+        "The task is about rate_limit markers",
+        "=== AID TASK t-abc DONE (exit 0) ===",
+    ] {
+        assert!(
+            !record_quota_exhaustion(line, agent, None).recorded(),
+            "grok must not be marked from its own prose: {line}"
+        );
+    }
+    assert!(!crate::rate_limit::is_rate_limited(&agent));
+}

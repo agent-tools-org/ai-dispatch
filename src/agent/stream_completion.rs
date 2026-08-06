@@ -215,14 +215,35 @@ fn quota_signature_anchor(lower: &str, agent: crate::types::AgentKind) -> Option
 }
 
 /// The last few lines of output, where a terminal failure reports itself.
+///
+/// Scans the last 64 KB (65,536 bytes) of output, aligned to a line boundary.
+/// 64 KB is large enough to ensure refusal lines are captured even if followed
+/// by extensive post-refusal diagnostic dumps or tracebacks, while keeping
+/// string scanning microsecond-fast. Aligning the window start to a line boundary
+/// ensures anchored refusal signatures are never split mid-line.
 fn quota_scan_tail(output: &str) -> &str {
-    const TAIL_BYTES: usize = 4000;
+    const TAIL_BYTES: usize = 65_536;
     if output.len() <= TAIL_BYTES {
         return output;
     }
     let mut start = output.len() - TAIL_BYTES;
     while start < output.len() && !output.is_char_boundary(start) {
         start += 1;
+    }
+    // Rewinding to the start of the line the window landed in must itself be
+    // bounded: output with no newline before that point would otherwise make the
+    // scan the whole buffer, which for a multi-megabyte transcript is a per-task
+    // cost paid on every completion. One extra window is the budget; beyond it the
+    // raw offset stands and only that line's tail is scanned, which is what the
+    // pre-alignment code did for every line.
+    if start > 0 && output.as_bytes()[start - 1] != b'\n' {
+        let mut floor = start.saturating_sub(TAIL_BYTES);
+        while floor < start && !output.is_char_boundary(floor) {
+            floor += 1;
+        }
+        if let Some(pos) = output[floor..start].rfind('\n') {
+            start = floor + pos + 1;
+        }
     }
     &output[start..]
 }

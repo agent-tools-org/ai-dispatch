@@ -66,8 +66,31 @@ impl super::Agent for GrokAgent {
     }
 }
 
+/// Find grok's JSON envelope inside a buffer that may also carry aid's own
+/// echoed writes. Scans from each `{` that starts a line and keeps the last
+/// value that parses, so trailing sentinels and leading nudges are both
+/// tolerated without guessing at their exact wording.
+fn extract_envelope(output: &str) -> Option<Value> {
+    let trimmed = output.trim();
+    if let Ok(value) = serde_json::from_str::<Value>(trimmed) {
+        return Some(value);
+    }
+    let mut found = None;
+    for (idx, _) in trimmed.match_indices('\n') {
+        let rest = trimmed[idx + 1..].trim_start();
+        if !rest.starts_with('{') {
+            continue;
+        }
+        let mut stream = serde_json::Deserializer::from_str(rest).into_iter::<Value>();
+        if let Some(Ok(value)) = stream.next() {
+            found = Some(value);
+        }
+    }
+    found
+}
+
 pub fn extract_response(output: &str) -> Option<String> {
-    let value: Value = serde_json::from_str(output.trim()).ok()?;
+    let value = extract_envelope(output)?;
     value
         .get("text")
         .and_then(Value::as_str)
@@ -75,9 +98,16 @@ pub fn extract_response(output: &str) -> Option<String> {
         .map(ToOwned::to_owned)
 }
 
+/// The buffer handed here is not grok's stdout alone. aid writes into the same
+/// PTY, and the terminal echoes it back: an auto-nudge lands as a bare line
+/// *before* grok's envelope, and the terminal sentinel lands after it. Requiring
+/// the whole buffer to be one JSON document therefore failed every run that was
+/// idle long enough to be nudged — measured on t-cd0bb8dd (8m16s, `end_turn`,
+/// real work committed) and t-137fe385, both stored Failed, while a 27s run that
+/// was never nudged parsed fine. The stopReason check below never ran in exactly
+/// the cases it was written for.
 pub fn parse_grok_completion(output: &str) -> CompletionInfo {
-    let trimmed = output.trim();
-    let Ok(value) = serde_json::from_str::<Value>(trimmed) else {
+    let Some(value) = extract_envelope(output) else {
         return failed_completion();
     };
     if value.get("type").and_then(Value::as_str) == Some("error") {

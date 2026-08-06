@@ -102,6 +102,12 @@ pub(crate) fn retry_task_to_run_args(store: &Store, task: &Task, group_id: &str,
             ..Default::default()
         }
     });
+    // Batch retry switches agents too — via `agent_override`, or the
+    // rate-limit fallback above. A model is only valid for the CLI it was
+    // chosen for, so it does not travel with the work.
+    if agent_name != task.agent_display_name() {
+        run_args.model = None;
+    }
     run_args.agent_name = agent_name;
     run_args.prompt = task.prompt.clone();
     apply_retry_target(task, &mut run_args)?;

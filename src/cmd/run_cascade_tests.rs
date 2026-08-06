@@ -90,3 +90,44 @@ fn cascade_refuses_persisted_worktree_that_equals_repo_path() {
 
     assert!(err.to_string().contains("recorded worktree path"));
 }
+
+/// A cascade exists to escape a failing route. Carrying the parent's model
+/// across the agent switch sent agy `gpt-5.6-luna` — codex's model — and agy
+/// refused it by listing its own (`t-ac9a7a9d`, cascaded from `t-90371f9e`).
+#[test]
+fn cascading_to_another_agent_drops_the_parents_model() {
+    let mut args = RunArgs {
+        agent_name: "codex".to_string(),
+        model: Some("gpt-5.6-luna".to_string()),
+        cascade: vec!["agy".to_string(), "cursor".to_string()],
+        ..Default::default()
+    };
+    let (next, remaining) =
+        super::take_next_cascade_agent(&args).expect("cascade must yield the next agent");
+    assert_eq!(next, "agy");
+    assert_eq!(remaining, vec!["cursor".to_string()]);
+
+    // The guard the dispatch path applies.
+    if args.agent_name != next {
+        args.model = None;
+    }
+    args.agent_name = next;
+    assert_eq!(args.model, None, "a model chosen for codex must not reach agy");
+}
+
+/// The mirror case: a cascade entry naming the same agent is a retry, and a
+/// retry must still ask for what was asked before.
+#[test]
+fn cascading_to_the_same_agent_keeps_the_model() {
+    let mut args = RunArgs {
+        agent_name: "codex".to_string(),
+        model: Some("gpt-5.6-luna".to_string()),
+        cascade: vec!["codex".to_string()],
+        ..Default::default()
+    };
+    let (next, _) = super::take_next_cascade_agent(&args).expect("cascade must yield an agent");
+    if args.agent_name != next {
+        args.model = None;
+    }
+    assert_eq!(args.model.as_deref(), Some("gpt-5.6-luna"));
+}

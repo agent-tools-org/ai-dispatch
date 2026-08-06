@@ -78,6 +78,12 @@ fn retry_task_to_run_args(
         }
     });
     run_args.repo = run_args.repo.or_else(|| task.repo_path.clone());
+    // Same rule as the cascade: a model belongs to a route, not to a task, so
+    // `aid retry <id> --agent <other>` must not hand the new CLI a model only
+    // the old one serves. Retrying on the same agent keeps it.
+    if agent_name != task.agent_display_name() {
+        run_args.model = None;
+    }
     run_args.agent_name = agent_name;
     run_args.prompt = prompt;
     if let Some(dir) = dir {

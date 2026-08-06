@@ -21,7 +21,9 @@ async fn dry_run_returns_without_starting_task() {
         ..Default::default()
     }).await.unwrap();
     let task = store.get_task(task_id.as_str()).unwrap().unwrap();
-    assert_eq!(task.status, TaskStatus::Pending);
+    // Skipped, not Pending: a dry run never dispatches, and a row left pending
+    // was reaped ten minutes later as a failure the agent never had.
+    assert_eq!(task.status, TaskStatus::Skipped);
     assert!(task.resolved_prompt.is_some());
     assert!(task.prompt_tokens.is_some());
 }
@@ -60,5 +62,7 @@ async fn rate_limited_agent_with_cascade_proceeds() {
         ..Default::default()
     }).await.unwrap();
     let task = store.get_task(task_id.as_str()).unwrap().unwrap();
-    assert_eq!(task.status, TaskStatus::Pending);
+    // Skipped, not Pending: a dry run never dispatches, and a row left pending
+    // was reaped ten minutes later as a failure the agent never had.
+    assert_eq!(task.status, TaskStatus::Skipped);
 }

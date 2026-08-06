@@ -158,7 +158,6 @@ fn refused_quota_rescue_preserves_failed_status_for_cascade() {
         &store,
         &task.id,
         super::run_post::read_quota_error_message(&task.id).as_deref(),
-        None,
     );
 
     let saved_task = store.get_task("t-empty-cascade").unwrap().unwrap();

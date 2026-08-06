@@ -229,7 +229,6 @@ pub(crate) fn rescue_quota_failed_task(
     store: &Store,
     task_id: &TaskId,
     quota_error_message: Option<&str>,
-    base_branch: Option<&str>,
 ) {
     if quota_error_message.is_none() {
         return;
@@ -239,7 +238,7 @@ pub(crate) fn rescue_quota_failed_task(
     };
     if task.status == TaskStatus::Failed
         && task.verify_status == VerifyStatus::Passed
-        && produced_work(&task, base_branch)
+        && produced_work(&task)
     {
         aid_info!("[aid] Rescuing quota-failed task {} — verify passed", task_id);
         let _ = crate::task_lifecycle::rescue_to_done(store, task_id);
@@ -257,7 +256,16 @@ pub(crate) fn rescue_quota_failed_task(
 /// Event count is deliberately not used as a substitute — it is not evidence of
 /// work in either direction: qwen has emitted 25 events while changing zero
 /// files, and agy has written 182 lines while emitting none.
-fn produced_work(task: &Task, base_branch: Option<&str>) -> bool {
+///
+/// Every check here is local to the worktree — untracked files, HEAD vs the SHA
+/// recorded at dispatch, `git diff HEAD`/`--cached`. None of them consult a base
+/// branch. That is deliberate: the base-branch comparison inside
+/// `worktree_is_empty_diff_with_base` cannot answer on a repo whose default
+/// branch is not main/master, and making *it* report the difference honestly
+/// would silently change two unrelated warnings that share the same snapshot
+/// (`maybe_flag_empty_worktree_diff`, `maybe_flag_hollow_output`). Keeping the
+/// rescue decision self-contained fixes the rescue without touching them.
+fn produced_work(task: &Task) -> bool {
     let Some(wt_path) = task.worktree_path.as_deref() else {
         return true;
     };
@@ -265,23 +273,23 @@ fn produced_work(task: &Task, base_branch: Option<&str>) -> bool {
     if !path.exists() {
         return true;
     }
+    // Any untracked file `is_rescuable_path` accepts counts, not just source
+    // extensions — an agent that left only a notes file still did something,
+    // and the rescue's job is to avoid discarding work, not to grade it.
     if match crate::commit::detect_untracked_source_files(wt_path) {
         Ok(files) => !files.is_empty(),
         Err(_) => true,
     } {
         return true;
     }
-    if let Some(start_sha) = task.start_sha.as_deref() {
-        match has_committed_work_since_start(path, start_sha) {
-            Ok(true) => return true,
-            Err(_) => return true,
-            Ok(false) => match has_uncommitted_changes(path) {
-                Ok(has_changes) => return has_changes,
-                Err(_) => return true,
-            },
-        }
+    if let Some(start_sha) = task.start_sha.as_deref()
+        && !matches!(has_committed_work_since_start(path, start_sha), Ok(false))
+    {
+        // Ok(true) is work; Err is unverifiable, and unverifiable must never
+        // discard an agent's output.
+        return true;
     }
-    !matches!(worktree_is_empty_diff_with_base(path, base_branch), Some(true))
+    has_uncommitted_changes(path).unwrap_or(true)
 }
 
 fn has_committed_work_since_start(dir: &Path, start_sha: &str) -> Result<bool> {

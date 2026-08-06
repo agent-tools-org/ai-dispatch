@@ -343,3 +343,38 @@ fn output_text_uses_research_mode_for_no_worktree() {
     assert!(parts.iter().all(|part| part.len() > 1_000));
     assert!(!output.contains("[... "));
 }
+
+#[test]
+fn extract_messages_from_log_parses_commandcode_event_wrapper() {
+    let file = NamedTempFile::new().unwrap();
+    let lines = concat!(
+        "{\"type\":\"event\",\"event\":{\"type\":\"run_start\",\"sessionId\":\"sess-123\"}}\n",
+        "{\"type\":\"event\",\"event\":{\"type\":\"thinking_delta\",\"delta\":\"Let me analyze\"}}\n",
+        "{\"type\":\"event\",\"event\":{\"type\":\"message_update\",\"content\":[{\"type\":\"thinking\",\"thinking\":\"internal thought\"},{\"type\":\"text\",\"text\":\"Auditing the changes:\"}]}}\n",
+        "{\"type\":\"event\",\"event\":{\"type\":\"tool_queued\",\"toolName\":\"shell_command\",\"input\":{\"command\":\"git diff\"}}}\n",
+        "{\"type\":\"result\",\"subtype\":\"success\",\"sessionId\":\"sess-123\",\"finalText\":\"Audit completed: no issues found.\"}\n"
+    );
+    write_log(file.path(), lines.to_string());
+
+    let output = extract_messages_from_log(file.path(), true).unwrap();
+    assert!(output.contains("Auditing the changes:"), "Output was: {output}");
+    assert!(output.contains("[shell_command]"), "Output was: {output}");
+    assert!(output.contains("Audit completed: no issues found."), "Output was: {output}");
+    assert!(!output.contains("internal thought"), "Thinking should be dropped: {output}");
+    assert!(!output.contains("Let me analyze"), "Thinking deltas should be dropped: {output}");
+}
+
+#[test]
+fn extract_messages_from_log_returns_notice_for_unrecognized_json_stream() {
+    let file = NamedTempFile::new().unwrap();
+    let lines = concat!(
+        "{\"unsupported_schema\":true,\"data\":\"line1\"}\n",
+        "{\"unsupported_schema\":true,\"data\":\"line2\"}\n"
+    );
+    write_log(file.path(), lines.to_string());
+
+    let output = extract_messages_from_log(file.path(), true).unwrap();
+    assert!(output.contains("[Unrecognized JSON log format from agent]"), "Output: {output}");
+    assert!(output.contains("Sample line: {\"unsupported_schema\":true"), "Output: {output}");
+    assert!(output.contains("See transcript at"), "Output: {output}");
+}

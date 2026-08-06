@@ -94,7 +94,11 @@ pub(super) fn render_tree_view(frame: &mut ratatui::Frame<'_>, app: &App) {
 
                     let is_done = matches!(task.status, TaskStatus::Done | TaskStatus::Merged);
                     let id_color = if is_done { Color::Green } else { Color::White };
-                    let dim = Color::Indexed(if is_done { 243 } else { 248 });
+                    // Success must read as success. Dimming a finished row harder
+                    // than a running one made the whole line grey, so a completed
+                    // task looked spent rather than good — the green id and route
+                    // were not enough to carry it.
+                    let dim = Color::Indexed(248);
 
                     // Tree rows are dense: 22 chars keeps route visible without
                     // crowding status/duration. Truncation drops provider first.
@@ -111,7 +115,10 @@ pub(super) fn render_tree_view(frame: &mut ratatui::Frame<'_>, app: &App) {
                     ];
                     if cost_str != "—" && cost_str != "-" {
                         spans.push(Span::raw(" "));
-                        spans.push(Span::styled(cost_str, Style::default().fg(Color::Indexed(243))));
+                        spans.push(Span::styled(
+                            cost_str,
+                            Style::default().fg(if is_done { Color::Green } else { Color::Indexed(243) }),
+                        ));
                     }
                     if let Some(ms) = milestone {
                         spans.push(Span::raw(" "));

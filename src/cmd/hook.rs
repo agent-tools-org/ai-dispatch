@@ -8,8 +8,31 @@ use crate::project::{self, ProjectConfig};
 use crate::team::TeamConfig;
 use crate::types::AgentKind;
 
-const BASE_TEXT: &str = "[aid] ai-dispatch is installed for multi-agent orchestration. Key commands:
+/// Injected into every session, so it is the one place a dispatcher reliably
+/// reads. It carries the practices that were paid for, not a command list the
+/// caller could get from `--help`.
+const BASE_TEXT: &str = "[aid] ai-dispatch is installed for multi-agent orchestration.
+
+You are the dispatcher, and aid does not guess what you already know:
+- Declare the profile: --difficulty --budget --urgency --rigor. Undeclared is stored as
+  null, not inferred.
+- Declare --skill; aid picks none for you. Declare --kind to narrow the injected toolbox;
+  omit it and every tool is described, because omission is not a decision.
+- A route is <cli>/<provider>/<model>. An exhausted route says nothing about another
+  provider reaching a model of the same class. `aid agent list --json` carries both, plus
+  the metering shape that decides whether an outage recovers with time at all.
+- Do not dispatch to a weaker model on the provider pool you are already running on. A
+  different provider is delegation; the same pool for a worse model is waste.
+- Judge a delivery by running it, not by reading its diff. --rigor sets the proof owed:
+  draft compiles, standard runs the changed path, critical adds an independent audit.
+- Keep briefs short: the goal and the red lines, not the implementation path.
+- Do not edit a directory while an agent works in it. AID snapshots dirty paths once, at
+  dispatch, so edits made before it are protected from the rescue commit and edits made
+  during the run are not. -w <branch> puts the agent somewhere else entirely.
+
+Commands:
 - Dispatch: aid run <agent> \"<prompt>\" [--worktree <branch>]
+- Compare:  aid advise \"<task>\" --difficulty <d> --budget <b> --urgency <u> --rigor <r>
 - Monitor:  aid watch --tui (dashboard) | aid watch --wait <id> (blocking)
 - Review:   aid show <id> --diff | aid board
 - Batch:    aid batch <file> --parallel";

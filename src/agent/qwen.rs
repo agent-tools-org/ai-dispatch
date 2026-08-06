@@ -108,6 +108,8 @@ impl super::Agent for QwenAgent {
         }
     }
 
+    /// Note: This is a local config read from ~/.qwen/settings.json, not a served list
+    /// returned by the Qwen CLI directly.
     fn served_models(&self) -> Result<Option<Vec<String>>> {
         let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
         let settings_path = std::path::Path::new(&home).join(".qwen/settings.json");

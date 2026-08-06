@@ -189,3 +189,11 @@ fn only_accepts_a_bare_agent_binary_that_identifies_as_cursor() {
     ));
     assert!(!super::help_mentions_cursor(""));
 }
+
+#[test]
+fn parse_cursor_models_output_strips_ansi_escapes() {
+    let raw = "\u{1b}[1mcomposer-2.5\u{1b}[0m (current)\n\u{1b}[32mcomposer-2.5-fast\u{1b}[0m\n\u{1b}[34mgpt-5.6\u{1b}[0m\n";
+    let models = super::parse_cursor_models_output(raw);
+    assert_eq!(models, vec!["composer-2.5", "composer-2.5-fast", "gpt-5.6"]);
+}
+

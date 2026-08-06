@@ -5,9 +5,12 @@ team = "dev"
 language = "rust"
 verify = "cargo test --bin aid"
 gitbutler = "auto"
-aid_gc = "auto"
 rules = [
   "File size limit: 300 lines per file",
   "Never use features = [\"full\"] for dependencies",
   "All public functions must have tests",
 ]
+# Applied when a dispatch declares no --skill of its own. Since v10.5.0 aid
+# picks none on the caller's behalf, so without this line this repo's own
+# dispatches carry no methodology at all.
+skills = ["implementer"]

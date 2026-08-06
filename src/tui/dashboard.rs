@@ -2,6 +2,7 @@
 // Exports the checklist-style dashboard view; depends on ratatui and App state.
 use super::app::App;
 use super::metrics::ProcessMetrics;
+use super::route_display::format_route_fit;
 use crate::types::{EventKind, Task, TaskStatus};
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::prelude::{Alignment, Color, Modifier, Style};
@@ -149,7 +150,7 @@ pub fn render_task_card(
                 .title(format!(
                     " {} {} {} {} ",
                     task.id,
-                    task.agent_display_name(),
+                    format_route_fit(task, 36),
                     task.status.label(),
                     milestone_progress(task, milestones.len())
                 ))

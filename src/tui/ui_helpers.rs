@@ -7,6 +7,7 @@ use ratatui::widgets::{Block, Borders, Cell, Paragraph, Row};
 
 use crate::cost;
 use crate::tui::app::{App, DetailTab};
+use crate::tui::route_display::format_route_fit;
 use crate::types::{Task, TaskStatus};
 
 pub fn task_row(app: &App, task: &Task) -> Row<'static> {
@@ -18,9 +19,14 @@ pub fn task_row(app: &App, task: &Task) -> Row<'static> {
         TaskStatus::Stopped => format!("✗ {}", task.status.label()),
         _ => task.status.label().to_string(),
     };
+    // Route column budget matches the table Constraint::Length(28).
+    let route = format_route_fit(task, 28);
+    let model = task
+        .display_model()
+        .unwrap_or_else(|| "unknown".to_string());
     Row::new(vec![
         Cell::from(task.id.as_str().to_string()),
-        Cell::from(task.agent_display_name().to_string()),
+        Cell::from(route),
         Cell::from(status),
         Cell::from(task_progress(app, task)),
         Cell::from(task_cpu(app, task)),
@@ -29,7 +35,7 @@ pub fn task_row(app: &App, task: &Task) -> Row<'static> {
         Cell::from(task_duration(task)),
         Cell::from(task_tokens(task)),
         Cell::from(cost::format_cost_label(task.cost_usd, task.agent)),
-        Cell::from(truncate(&task.display_model().unwrap_or_else(|| "-".to_string()), 14)),
+        Cell::from(truncate(&model, 18)),
         Cell::from(task.workgroup_id.clone().unwrap_or_else(|| "-".to_string())),
         Cell::from(truncate(&task.prompt, 60)),
     ])
@@ -46,13 +52,15 @@ pub fn task_header(task: &Task, events: &[crate::types::TaskEvent]) -> Paragraph
         TaskStatus::Stopped => Color::Red,
         _ => Color::Indexed(250),
     };
+    // Detail has room for the full triple; attribution rides on the model segment.
+    let route = task.display_route();
     let line1 = Line::from(vec![
         Span::styled(
             task.id.as_str().to_string(),
             Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD),
         ),
         Span::raw("  "),
-        Span::styled(task.agent_display_name().to_string(), Style::default().fg(Color::Indexed(250))),
+        Span::styled(route, Style::default().fg(Color::Indexed(250))),
         Span::raw("  "),
         Span::styled(task.status.label().to_string(), Style::default().fg(status_color).add_modifier(Modifier::BOLD)),
     ]);
@@ -64,7 +72,10 @@ pub fn task_header(task: &Task, events: &[crate::types::TaskEvent]) -> Paragraph
         Span::styled("  Cost: ", Style::default().fg(Color::Indexed(243))),
         Span::raw(cost::format_cost_label(task.cost_usd, task.agent)),
         Span::styled("  Model: ", Style::default().fg(Color::Indexed(243))),
-        Span::raw(task.display_model().unwrap_or_else(|| "-".to_string())),
+        Span::raw(
+            task.display_model()
+                .unwrap_or_else(|| "unknown".to_string()),
+        ),
     ]);
     let scope = task_scope_line(task);
     let mut lines = vec![line1, line2];
@@ -301,15 +312,17 @@ mod tests {
             repo_path: None,
             worktree_path: None,
             worktree_branch: None,
-        final_head_sha: None,
-        final_branch: None,
+            final_head_sha: None,
+            final_branch: None,
             start_sha: None,
             log_path: None,
             output_path: None,
             tokens: None,
             prompt_tokens: None,
             duration_ms: None,
-            requested_model: None, observed_model: None, attribution_source: None,
+            requested_model: None,
+            observed_model: None,
+            attribution_source: None,
             cost_usd: None,
             exit_code: None,
             created_at: Local::now(),
@@ -323,6 +336,29 @@ mod tests {
             audit_report_path: None,
             delivery_assessment: None,
         }
+    }
+
+    #[test]
+    fn task_header_shows_route_triple_not_opaque_agent() {
+        use crate::types::AttributionSource;
+        let mut task = make_task();
+        task.requested_model = Some("gpt-5.6".to_string());
+        task.observed_model = Some("gpt-5.6".to_string());
+        task.attribution_source = Some(AttributionSource::Echoed);
+        // task_header is a Paragraph; assert the source string it is built from.
+        assert_eq!(
+            task.display_route(),
+            "codex/openai-chatgpt-plan/gpt-5.6"
+        );
+        let _ = task_header(&task, &[]);
+    }
+
+    #[test]
+    fn task_header_unknown_model_is_literal_unknown() {
+        let task = make_task();
+        assert!(task.display_route().ends_with("/unknown"));
+        assert_eq!(task.display_model(), None);
+        let _ = task_header(&task, &[]);
     }
 
     #[test]

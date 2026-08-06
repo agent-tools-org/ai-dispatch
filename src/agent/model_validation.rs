@@ -94,17 +94,21 @@ pub(crate) fn get_served_models_cached(agent: &dyn Agent) -> Option<Vec<String>>
         if let Some(res) = thread_mock {
             return res;
         }
+        agent.served_models().ok().flatten()
     }
-    if let Ok(guard) = cache().lock() {
-        if let Some(cached) = guard.get(&kind) {
-            return cached.clone();
+    #[cfg(not(test))]
+    {
+        if let Ok(guard) = cache().lock() {
+            if let Some(cached) = guard.get(&kind) {
+                return cached.clone();
+            }
         }
+        let result = agent.served_models().ok().flatten();
+        if let Ok(mut guard) = cache().lock() {
+            guard.insert(kind, result.clone());
+        }
+        result
     }
-    let result = agent.served_models().ok().flatten();
-    if let Ok(mut guard) = cache().lock() {
-        guard.insert(kind, result.clone());
-    }
-    result
 }
 
 pub(crate) fn run_cmd_with_timeout(mut cmd: Command, timeout: Duration) -> Option<String> {

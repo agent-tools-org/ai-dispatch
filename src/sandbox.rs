@@ -80,6 +80,9 @@ fn mount_workdir(wrapped: &mut Command, dir: &str) {
 
 fn forward_command_envs(wrapped: &mut Command, cmd: &Command) {
     for (key, value) in cmd.get_envs() {
+        if key == std::ffi::OsStr::new("HOME") {
+            continue;
+        }
         if let Some(value) = value {
             wrapped.arg("-e").arg(format!(
                 "{}={}",

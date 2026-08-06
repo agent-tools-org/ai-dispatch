@@ -32,6 +32,15 @@ pub fn check_worktree_lock_with_store(wt_path: &Path, store: Option<&Store>) -> 
     lock_record_is_held(&record, store).then_some(record.task_id)
 }
 
+// Store-aware liveness: pid-based when a pid is recorded, otherwise falls back
+// to whether the holder task is still non-terminal. Matches the acquisition
+// gate in lock_record_is_held, so a retry that proceeds because the holder was
+// stopped will not be re-refused on the next create_worktree call.
+pub(crate) fn live_lock_holder_with_store(wt_path: &Path, store: &Store) -> Option<String> {
+    let record = read_lock_record(&wt_path.join(LOCK_FILENAME))?;
+    lock_record_is_held(&record, Some(store)).then_some(record.task_id)
+}
+
 fn lock_record_is_held(record: &LockRecord, store: Option<&Store>) -> bool {
     if let Some(worker_pid) = record.worker_pid {
         return super::state::process_alive(worker_pid);

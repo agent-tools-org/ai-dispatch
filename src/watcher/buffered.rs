@@ -51,7 +51,10 @@ pub(crate) async fn watch_buffered(
     };
     info.exit_code = exit_status.code();
     if info.status == TaskStatus::Done {
-        rate_limit::clear_rate_limit(&agent.kind());
+        let task = store.get_task(task_id.as_str()).ok().flatten();
+        let dispatched_model = task.as_ref().and_then(|t| t.requested_model.as_deref());
+        let model = info.model.as_deref().or(dispatched_model);
+        rate_limit::clear_rate_limit_for_model(&agent.kind(), model);
     }
     let event = match agent.kind() {
         AgentKind::Grok => crate::agent::grok::make_completion_event(task_id, &info),

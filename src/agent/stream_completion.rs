@@ -230,8 +230,10 @@ fn quota_scan_tail(output: &str) -> &str {
     while start < output.len() && !output.is_char_boundary(start) {
         start += 1;
     }
-    if let Some(pos) = output[start..].find('\n') {
-        start += pos + 1;
+    if start > 0 && output.as_bytes()[start - 1] != b'\n' {
+        if let Some(pos) = output[start..].find('\n') {
+            start += pos + 1;
+        }
     }
     &output[start..]
 }

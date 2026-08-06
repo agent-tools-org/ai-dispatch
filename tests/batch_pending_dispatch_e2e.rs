@@ -17,6 +17,8 @@ fn aid_cmd_in(aid_home: &Path) -> Command {
     let mut cmd = Command::new(env!("CARGO_BIN_EXE_aid"));
     cmd.env("AID_HOME", aid_home);
     cmd.env("AID_NO_DETACH", "1");
+    cmd.env_remove("AID_TASK_ID");
+    cmd.env_remove("AID_TASK_DEPTH");
     // Project config is discovered from the working directory. Left at the repo root, dispatched
     // tasks inherit ai-dispatch's own verify command and run the whole unit suite as verification,
     // which dominates the timings this test measures. The temp AID_HOME is not a git repo, so

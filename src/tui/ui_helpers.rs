@@ -53,6 +53,7 @@ pub fn task_header(task: &Task, events: &[crate::types::TaskEvent]) -> Paragraph
         _ => Color::Indexed(250),
     };
     // Detail has room for the full triple; attribution rides on the model segment.
+    // No separate Model line — Route already carries model + grade.
     let route = task.display_route();
     let line1 = Line::from(vec![
         Span::styled(
@@ -71,11 +72,6 @@ pub fn task_header(task: &Task, events: &[crate::types::TaskEvent]) -> Paragraph
         Span::raw(task_tokens(task)),
         Span::styled("  Cost: ", Style::default().fg(Color::Indexed(243))),
         Span::raw(cost::format_cost_label(task.cost_usd, task.agent)),
-        Span::styled("  Model: ", Style::default().fg(Color::Indexed(243))),
-        Span::raw(
-            task.display_model()
-                .unwrap_or_else(|| "unknown".to_string()),
-        ),
     ]);
     let scope = task_scope_line(task);
     let mut lines = vec![line1, line2];

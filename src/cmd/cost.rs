@@ -101,8 +101,12 @@ pub(crate) fn daily_summary_rows(
 }
 
 fn render_task_report(title: &str, tasks: &[&Task]) -> String {
-    let mut out = format!("{title}\n{:<10} {:<12} {:<8} {:<10} {:<10} {}\n", "Task ID", "Agent", "Status", "Tokens", "Cost", "Duration");
-    out.push_str(&"-".repeat(68));
+    // Route is cli/provider/model; width matches the text board's route column.
+    let mut out = format!(
+        "{title}\n{:<10} {:<36} {:<8} {:<10} {:<10} {}\n",
+        "Task ID", "Route", "Status", "Tokens", "Cost", "Duration"
+    );
+    out.push_str(&"-".repeat(92));
     out.push('\n');
     let mut totals: Totals = (0, 0, None);
     for task in tasks {
@@ -111,10 +115,17 @@ fn render_task_report(title: &str, tasks: &[&Task]) -> String {
         totals.0 += 1;
         totals.1 += tokens;
         add_known_cost(&mut totals.2, cost_usd);
+        let route = task.display_route();
+        let route = if route.chars().count() > 36 {
+            let keep: String = route.chars().take(33).collect();
+            format!("{keep}...")
+        } else {
+            route
+        };
         out.push_str(&format!(
-            "{:<10} {:<12} {:<8} {:<10} {:<10} {}\n",
+            "{:<10} {:<36} {:<8} {:<10} {:<10} {}\n",
             task.id,
-            task.agent_display_name(),
+            route,
             task.status.label(),
             tokens,
             cost::format_cost(cost_usd),

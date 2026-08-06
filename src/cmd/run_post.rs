@@ -236,10 +236,99 @@ pub(crate) fn rescue_quota_failed_task(
     let Ok(Some(task)) = store.get_task(task_id.as_str()) else {
         return;
     };
-    if task.status == TaskStatus::Failed && task.verify_status == VerifyStatus::Passed {
+    if task.status == TaskStatus::Failed
+        && task.verify_status == VerifyStatus::Passed
+        && produced_work(&task)
+    {
         aid_info!("[aid] Rescuing quota-failed task {} — verify passed", task_id);
         let _ = crate::task_lifecycle::rescue_to_done(store, task_id);
     }
+}
+
+/// Verify passing is not evidence the agent did anything: on an untouched
+/// worktree `cargo check` succeeds precisely because nothing changed. Rescuing
+/// on that alone recorded a dead run as Done, which also suppressed the cascade
+/// that should have fired (`t-d072e5da`: oz died on quota with 0 events, was
+/// stored `status=done` with `exit_code=1`, and `--cascade codebuff` never ran).
+///
+/// A task with no worktree has no diff to inspect, so aid genuinely cannot tell
+/// and keeps the older, more generous behaviour rather than inventing a signal.
+/// Event count is deliberately not used as a substitute — it is not evidence of
+/// work in either direction: qwen has emitted 25 events while changing zero
+/// files, and agy has written 182 lines while emitting none.
+///
+/// Every check here is local to the worktree — untracked files, HEAD vs the SHA
+/// recorded at dispatch, `git diff HEAD`/`--cached`. None of them consult a base
+/// branch. That is deliberate: the base-branch comparison inside
+/// `worktree_is_empty_diff_with_base` cannot answer on a repo whose default
+/// branch is not main/master, and making *it* report the difference honestly
+/// would silently change two unrelated warnings that share the same snapshot
+/// (`maybe_flag_empty_worktree_diff`, `maybe_flag_hollow_output`). Keeping the
+/// rescue decision self-contained fixes the rescue without touching them.
+fn produced_work(task: &Task) -> bool {
+    let Some(wt_path) = task.worktree_path.as_deref() else {
+        return true;
+    };
+    let path = Path::new(wt_path);
+    if !path.exists() {
+        return true;
+    }
+    // Any untracked file `is_rescuable_path` accepts counts, not just source
+    // extensions — an agent that left only a notes file still did something,
+    // and the rescue's job is to avoid discarding work, not to grade it.
+    if match crate::commit::detect_untracked_source_files(wt_path) {
+        Ok(files) => !files.is_empty(),
+        Err(_) => true,
+    } {
+        return true;
+    }
+    if let Some(start_sha) = task.start_sha.as_deref()
+        && !matches!(has_committed_work_since_start(path, start_sha), Ok(false))
+    {
+        // Ok(true) is work; Err is unverifiable, and unverifiable must never
+        // discard an agent's output.
+        return true;
+    }
+    has_uncommitted_changes(path).unwrap_or(true)
+}
+
+fn has_committed_work_since_start(dir: &Path, start_sha: &str) -> Result<bool> {
+    let head = std::process::Command::new("git")
+        .current_dir(dir)
+        .args(["rev-parse", "--verify", "--quiet", "HEAD^{commit}"])
+        .output()?;
+    let start = std::process::Command::new("git")
+        .current_dir(dir)
+        .args(["rev-parse", "--verify", "--quiet"])
+        .arg(format!("{start_sha}^{{commit}}"))
+        .output()?;
+    if !head.status.success() || !start.status.success() {
+        anyhow::bail!("git rev-parse failed");
+    }
+    let head_sha = String::from_utf8_lossy(&head.stdout).trim().to_string();
+    let start_commit_sha = String::from_utf8_lossy(&start.stdout).trim().to_string();
+    Ok(head_sha != start_commit_sha)
+}
+
+fn has_uncommitted_changes(dir: &Path) -> Result<bool> {
+    let head = std::process::Command::new("git")
+        .current_dir(dir)
+        .args(["diff", "--stat", "HEAD"])
+        .output()?;
+    if !head.status.success() {
+        anyhow::bail!("git diff HEAD failed");
+    }
+    if !String::from_utf8_lossy(&head.stdout).trim().is_empty() {
+        return Ok(true);
+    }
+    let staged = std::process::Command::new("git")
+        .current_dir(dir)
+        .args(["diff", "--cached", "--stat"])
+        .output()?;
+    if !staged.status.success() {
+        anyhow::bail!("git diff --cached failed");
+    }
+    Ok(!String::from_utf8_lossy(&staged.stdout).trim().is_empty())
 }
 
 pub(crate) fn read_quota_error_message(task_id: &TaskId) -> Option<String> {

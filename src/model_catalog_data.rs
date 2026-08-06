@@ -48,6 +48,13 @@ pub const AGENT_PROFILES: &[(AgentKind, &str, &str, &str, bool)] = &[
         true,
     ),
     (
+        AgentKind::CommandCode,
+        "General coding, multi-file implementation, model-routing across providers",
+        "commandcode.ai subscription / credits",
+        "implement, create, build, refactor, test, explain",
+        true,
+    ),
+    (
         AgentKind::Kilo,
         "Simple edits, renames, type annotations (free tier)",
         "free",

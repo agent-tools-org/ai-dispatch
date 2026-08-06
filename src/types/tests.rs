@@ -269,7 +269,15 @@ fn task_delivery_assessment_maps_hollow_output() {
 
 #[test]
 fn resumable_agents_report_session_support() {
-    for kind in [AgentKind::OpenCode, AgentKind::Kilo, AgentKind::MiMoCode, AgentKind::Droid, AgentKind::Codex, AgentKind::Qwen] {
+    for kind in [
+        AgentKind::OpenCode,
+        AgentKind::CommandCode,
+        AgentKind::Kilo,
+        AgentKind::MiMoCode,
+        AgentKind::Droid,
+        AgentKind::Codex,
+        AgentKind::Qwen,
+    ] {
         assert!(kind.supports_session_resume(), "{kind} should resume sessions");
     }
     for kind in [AgentKind::Gemini, AgentKind::Cursor, AgentKind::Claude, AgentKind::Custom] {

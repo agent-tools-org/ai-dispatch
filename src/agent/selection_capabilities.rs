@@ -52,6 +52,12 @@ pub(super) const AGENT_CAPABILITIES: &[(AgentKind, &[(TaskCategory, i32)])] = &[
         (TaskCategory::ComplexImpl, 3), (TaskCategory::Research, 1),
         (TaskCategory::Frontend, 2), (TaskCategory::Refactoring, 4),
     ]),
+    (AgentKind::CommandCode, &[
+        (TaskCategory::ComplexImpl, 8), (TaskCategory::Refactoring, 7),
+        (TaskCategory::Testing, 6), (TaskCategory::Debugging, 6),
+        (TaskCategory::SimpleEdit, 5), (TaskCategory::Research, 3),
+        (TaskCategory::Frontend, 4), (TaskCategory::Documentation, 4),
+    ]),
     (AgentKind::Kilo, &[
         (TaskCategory::SimpleEdit, 7), (TaskCategory::Documentation, 4),
         (TaskCategory::Testing, 3), (TaskCategory::Debugging, 3),

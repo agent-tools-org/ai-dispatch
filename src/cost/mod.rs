@@ -78,6 +78,7 @@ fn resolve_pricing(model: Option<&str>, agent: AgentKind) -> Option<ModelPricing
             model_pricing(&m, agent)
         }
         AgentKind::Codex => codex_fallback_pricing(agent),
+        AgentKind::CommandCode => None,
         AgentKind::Copilot => Some(ModelPricing {
             input_per_m: 0.0,
             output_per_m: 0.0,

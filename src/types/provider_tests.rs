@@ -44,6 +44,14 @@ fn a_known_vendor_may_still_have_unknown_metering() {
     assert_eq!(shape, MeteringShape::Unknown);
 }
 
+#[test]
+fn commandcode_is_its_own_provider() {
+    let (provider, shape) = provider_for_cli(AgentKind::CommandCode);
+    assert_eq!(provider.as_str(), "commandcode.ai");
+    assert!(!provider.is_unknown());
+    assert_eq!(shape, MeteringShape::Unknown);
+}
+
 /// Two CLIs from the same vendor must not collapse into one provider: agy and
 /// gemini both reach Google models, but an exhausted Antigravity tier says
 /// nothing about a Gemini API key.

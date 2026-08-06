@@ -14,6 +14,7 @@ pub(crate) mod gemini_support;
 pub mod grok;
 pub mod kilo;
 pub(crate) mod model_group;
+pub(crate) mod model_validation;
 pub mod mimocode;
 pub mod opencode;
 pub(crate) mod opencode_overlay;
@@ -79,6 +80,12 @@ pub trait Agent: Send + Sync {
     /// Agents that don't produce stdout when piped (e.g. opencode) should return true.
     fn needs_pty(&self) -> bool {
         false
+    }
+
+    /// Query served models from CLI or local config.
+    /// Returns Ok(Some(list)) if positively known, or Ok(None) if unqueryable.
+    fn served_models(&self) -> Result<Option<Vec<String>>> {
+        Ok(None)
     }
 }
 
@@ -261,37 +268,6 @@ pub fn embed_context_in_prompt(prompt: &str, context_files: &[String]) -> anyhow
 #[cfg(test)]
 mod cursor_binary_tests;
 #[cfg(test)]
-mod binary_preflight_tests {
-    use super::{built_in_agent_binary_exists, ensure_agent_binary_available_with};
-    use crate::types::AgentKind;
-
-    #[test]
-    fn built_in_agent_binary_exists_rejects_missing_kilo_binary() {
-        assert!(!built_in_agent_binary_exists(AgentKind::Kilo, |_| false));
-    }
-
-    #[test]
-    fn built_in_agent_binary_exists_rejects_missing_mimocode_binary() {
-        assert!(!built_in_agent_binary_exists(AgentKind::MiMoCode, |_| false));
-    }
-
-    #[test]
-    fn built_in_agent_binary_exists_accepts_cursor_alias_binary() {
-        assert!(built_in_agent_binary_exists(AgentKind::Cursor, |name| {
-            name == "cursor-agent"
-        }));
-    }
-
-    #[test]
-    fn ensure_agent_binary_available_reports_missing_path_binary() {
-        let err = ensure_agent_binary_available_with(AgentKind::Kilo, "kilo", |_| false)
-            .unwrap_err();
-
-        assert_eq!(
-            err.to_string(),
-            "Agent 'kilo' not found: binary missing from PATH"
-        );
-    }
-}
+mod binary_preflight_tests;
 #[cfg(test)]
 mod tests;

@@ -203,6 +203,8 @@ async fn audit_report_mode_skips_dirty_worktree_enforcement() {
 #[tokio::test]
 async fn background_lifecycle_runs_verify_and_checklist_scan() {
     let _permit = test_subprocess::acquire();
+    let aid_home = tempfile::tempdir().unwrap();
+    let _guard = crate::paths::AidHomeGuard::set(aid_home.path());
     let dir = tempfile::tempdir().unwrap();
     let store = Arc::new(Store::open_memory().unwrap());
     let task_id = TaskId("t-bg-lifecycle-ok".to_string());

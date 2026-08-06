@@ -350,6 +350,7 @@ fn similar_tasks_hint_absent_without_history() {
 
 #[test]
 fn team_override_boosts_score() {
+    let (_temp, _guard) = isolated();
     let prompt = "rename src/types.rs field name to task_name";
     let normalized = prompt.trim().to_lowercase();
     let profile = classifier::classify(
@@ -404,6 +405,7 @@ fn team_override_boosts_score() {
 
 #[test]
 fn team_preferred_agents_boost() {
+    let (_temp, _guard) = isolated();
     let prompt = "rename src/types.rs field name to task_name";
     let normalized = prompt.trim().to_lowercase();
     let profile = classifier::classify(

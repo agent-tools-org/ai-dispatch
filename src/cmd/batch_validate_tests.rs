@@ -79,6 +79,8 @@ fn parallel_same_dir_without_worktree_errors() {
 
 #[test]
 fn parallel_same_dir_with_force_warns() {
+    let temp = TempDir::new().unwrap();
+    let _guard = AidHomeGuard::set(temp.path());
     let mut first = stub_task("first", None);
     first.dir = Some("src".to_string());
     let mut second = stub_task("second", None);
@@ -100,6 +102,8 @@ fn parallel_same_dir_with_force_warns() {
 
 #[test]
 fn parallel_same_dir_readonly_excluded() {
+    let temp = TempDir::new().unwrap();
+    let _guard = AidHomeGuard::set(temp.path());
     let mut first = stub_task("first", None);
     first.dir = Some("src".to_string());
     first.read_only = true;
@@ -192,6 +196,8 @@ fn read_only_with_worktree_is_rejected() {
 
 #[test]
 fn read_only_without_worktree_is_accepted() {
+    let temp = TempDir::new().unwrap();
+    let _guard = AidHomeGuard::set(temp.path());
     let mut task = stub_task("audit", None);
     task.read_only = true;
     validate_batch_config(&[task], false, false).unwrap();

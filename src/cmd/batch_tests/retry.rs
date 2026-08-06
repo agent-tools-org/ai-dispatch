@@ -3,6 +3,7 @@
 // Deps: super::shared + batch_retry
 use super::shared::make_stored_task;
 use crate::cmd::run::RunArgs;
+use crate::paths::AidHomeGuard;
 use crate::store::Store;
 use crate::types::{AgentKind, TaskStatus};
 use std::path::{Path, PathBuf};
@@ -10,6 +11,11 @@ use std::process::Command;
 use std::sync::Arc;
 
 use super::super::batch_retry::{retry_failed, retry_task_to_run_args};
+
+fn isolated_home() -> AidHomeGuard {
+    let temp = tempfile::tempdir().unwrap();
+    AidHomeGuard::set(temp.path())
+}
 
 fn git(repo_dir: &Path, args: &[&str]) {
     assert!(Command::new("git")
@@ -70,6 +76,7 @@ fn retry_task_to_run_args_uses_parent_and_original_fields() {
 
 #[test]
 fn retry_task_to_run_args_prefers_existing_worktree_path() {
+    let _guard = isolated_home();
     let (repo, _linked_root, worktree) = linked_worktree("feat/retry");
     let mut task = make_stored_task("t-1234", AgentKind::Codex, TaskStatus::Failed);
     task.repo_path = Some(repo.path().display().to_string());
@@ -85,6 +92,7 @@ fn retry_task_to_run_args_prefers_existing_worktree_path() {
 
 #[test]
 fn retry_task_to_run_args_uses_repo_path_when_worktree_is_absent() {
+    let _guard = isolated_home();
     let repo = tempfile::tempdir().unwrap();
     let mut task = make_stored_task("t-no-worktree", AgentKind::Codex, TaskStatus::Failed);
     task.repo_path = Some(repo.path().display().to_string());
@@ -100,6 +108,7 @@ fn retry_task_to_run_args_uses_repo_path_when_worktree_is_absent() {
 
 #[test]
 fn retry_task_to_run_args_errors_when_stale_worktree_has_no_repo() {
+    let _guard = isolated_home();
     let temp = tempfile::tempdir().unwrap();
     let stale_dir = temp.path().join("missing-worktree");
     let mut task = make_stored_task("t-stale-no-repo", AgentKind::Codex, TaskStatus::Failed);
@@ -124,6 +133,7 @@ fn retry_task_to_run_args_errors_when_stale_worktree_has_no_repo() {
 
 #[test]
 fn retry_task_to_run_args_errors_without_worktree_or_repo() {
+    let _guard = isolated_home();
     let task = make_stored_task("t-no-target", AgentKind::Codex, TaskStatus::Failed);
     let store = Store::open_memory().unwrap();
 
@@ -136,6 +146,7 @@ fn retry_task_to_run_args_errors_without_worktree_or_repo() {
 
 #[test]
 fn retry_task_to_run_args_preserves_saved_subdir_inside_repo() {
+    let _guard = isolated_home();
     let repo = tempfile::tempdir().unwrap();
     let subdir = repo.path().join("crate");
     std::fs::create_dir(&subdir).unwrap();
@@ -159,6 +170,7 @@ fn retry_task_to_run_args_preserves_saved_subdir_inside_repo() {
 
 #[test]
 fn retry_task_to_run_args_refuses_poisoned_worktree_path() {
+    let _guard = isolated_home();
     let temp = tempfile::tempdir().unwrap();
     let repo_path = temp.path().display().to_string();
     let mut task = make_stored_task("t-poisoned-batch", AgentKind::Codex, TaskStatus::Failed);
@@ -178,6 +190,7 @@ fn retry_task_to_run_args_refuses_poisoned_worktree_path() {
 
 #[test]
 fn retry_task_to_run_args_rehydrates_saved_args_and_keeps_worktree() {
+    let _guard = isolated_home();
     let store = Store::open_memory().unwrap();
     let (repo, _linked_root, worktree) = linked_worktree("feat/retry");
     let mut task = make_stored_task("t-7777", AgentKind::Codex, TaskStatus::Failed);
@@ -207,6 +220,7 @@ fn retry_task_to_run_args_rehydrates_saved_args_and_keeps_worktree() {
 
 #[test]
 fn retry_task_to_run_args_preserves_saved_worktree_when_live_path_exists() {
+    let _guard = isolated_home();
     let store = Store::open_memory().unwrap();
     // Real repo + linked worktree: the isolation guard resolves the main checkout via git
     // and fails closed on paths it cannot place, so a plain temp dir will not do here.

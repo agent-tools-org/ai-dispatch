@@ -131,6 +131,25 @@ impl Drop for AidHomeGuard {
     }
 }
 
+/// Refuse to resolve rate-limit markers (and similar) against the developer's
+/// real `~/.aid` when a unit test forgot `AidHomeGuard`.
+#[cfg(test)]
+pub fn assert_aid_home_isolated(context: &str) {
+    let resolved = aid_dir();
+    let real = dirs_home().join(".aid");
+    if resolved != real {
+        return;
+    }
+    let test_name = std::thread::current()
+        .name()
+        .map(|s| s.to_string())
+        .unwrap_or_else(|| "<unknown test>".to_string());
+    panic!(
+        "{context} would touch real ~/.aid ({real:?}); \
+         set paths::AidHomeGuard in test `{test_name}`"
+    );
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

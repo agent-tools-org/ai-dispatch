@@ -156,7 +156,7 @@ fn render_pane(pane: &PaneData, is_active: bool) -> List<'static> {
         if !pane.worktree_branch.is_empty() {
             parts.push(pane.worktree_branch.clone());
         }
-        if !pane.model.is_empty() && pane.model != "-" {
+        if !pane.model.is_empty() && pane.model != "unknown" {
             parts.push(pane.model.clone());
         }
         if !pane.created.is_empty() {

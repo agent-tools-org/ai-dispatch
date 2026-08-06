@@ -11,6 +11,7 @@ use crate::tui::app::App;
 use super::status_to_color;
 use super::ui_helpers::truncate;
 use crate::cost;
+use crate::tui::route_display::format_route_fit;
 use crate::tui::tree_data;
 use crate::types::{Task, TaskStatus};
 
@@ -95,11 +96,14 @@ pub(super) fn render_tree_view(frame: &mut ratatui::Frame<'_>, app: &App) {
                     let id_color = if is_done { Color::Green } else { Color::White };
                     let dim = Color::Indexed(if is_done { 243 } else { 248 });
 
+                    // Tree rows are dense: 22 chars keeps route visible without
+                    // crowding status/duration. Truncation drops provider first.
+                    let route = format_route_fit(task, 22);
                     let mut spans = vec![
                         Span::styled(node.prefix.clone(), Style::default().fg(Color::Indexed(240))),
                         Span::styled(task.id.as_str(), Style::default().fg(id_color).add_modifier(Modifier::BOLD)),
                         Span::raw(" "),
-                        Span::styled(task.agent_display_name().to_string(), Style::default().fg(if is_done { Color::Green } else { Color::Cyan })),
+                        Span::styled(route, Style::default().fg(if is_done { Color::Green } else { Color::Cyan })),
                         Span::raw(" "),
                         Span::styled(task.status.label().to_string(), Style::default().fg(status_color)),
                         Span::raw(" "),
@@ -193,15 +197,17 @@ mod tests {
             repo_path: None,
             worktree_path: None,
             worktree_branch: None,
-        final_head_sha: None,
-        final_branch: None,
+            final_head_sha: None,
+            final_branch: None,
             start_sha: None,
             log_path: None,
             output_path: None,
             tokens: None,
             prompt_tokens: None,
             duration_ms: None,
-            requested_model: None, observed_model: None, attribution_source: None,
+            requested_model: None,
+            observed_model: None,
+            attribution_source: None,
             cost_usd: None,
             exit_code: None,
             created_at: Local::now(),
@@ -215,6 +221,22 @@ mod tests {
             audit_report_path: None,
             delivery_assessment: None,
         }
+    }
+
+    #[test]
+    fn tree_route_fit_uses_provider_not_just_cli() {
+        use crate::tui::route_display::format_route_fit;
+        use crate::types::AttributionSource;
+        let mut t = base_task();
+        t.requested_model = Some("gpt-5.6".to_string());
+        t.observed_model = Some("gpt-5.6".to_string());
+        t.attribution_source = Some(AttributionSource::ConfirmedBySuccess);
+        let shown = format_route_fit(&t, 22);
+        assert!(shown.starts_with("codex/"), "{shown}");
+        assert!(shown.contains("openai") || shown.contains("..."), "{shown}");
+        // inferred attribution is part of the model segment when width allows
+        let wide = format_route_fit(&t, 80);
+        assert!(wide.contains("(inferred)"), "{wide}");
     }
 
     #[test]

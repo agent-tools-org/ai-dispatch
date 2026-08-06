@@ -6,8 +6,8 @@ use chrono::{DateTime, Local};
 use serde::Serialize;
 
 use super::{
-    AgentKind, AttributionSource, DeliveryAssessment, EventKind, TaskId, TaskStatus, VerifyStatus,
-    WorkgroupId,
+    provider_for_cli, AgentKind, AttributionSource, DeliveryAssessment, EventKind, Route, TaskId,
+    TaskStatus, VerifyStatus, WorkgroupId,
 };
 
 #[derive(Debug, Clone, Serialize)]
@@ -106,6 +106,28 @@ impl Task {
             self.observed_model.as_deref(),
             self.requested_model.as_deref(),
             self.attribution_source,
+        )
+    }
+
+    /// The structured route for this task. Model is the observation only — a
+    /// request that was never confirmed stays `None` rather than being filled in.
+    pub fn route(&self) -> Route {
+        Route::for_cli(self.agent).with_model(self.attributed_model())
+    }
+
+    /// Human route label: `cli/provider/model` with attribution on the model
+    /// segment. An unknown model stays `unknown` — never a default or the CLI
+    /// name. Provider comes from `provider_for_cli`, the single source.
+    pub fn display_route(&self) -> String {
+        let (provider, _) = provider_for_cli(self.agent);
+        let model = self
+            .display_model()
+            .unwrap_or_else(|| "unknown".to_string());
+        format!(
+            "{}/{}/{}",
+            self.agent_display_name(),
+            provider.as_str(),
+            model
         )
     }
 
@@ -221,72 +243,5 @@ pub fn format_model_display(
 }
 
 #[cfg(test)]
-mod model_display_tests {
-    use super::format_model_display;
-
-    #[test]
-    fn an_unconfirmed_request_is_marked_as_one() {
-        assert_eq!(format_model_display(None, Some("gpt-5.6"), None), Some("gpt-5.6?".to_string()));
-    }
-
-    #[test]
-    fn a_confirmed_model_is_shown_plainly() {
-        assert_eq!(
-            format_model_display(Some("gpt-5.6"), Some("gpt-5.6"), None),
-            Some("gpt-5.6".to_string())
-        );
-    }
-
-    /// The case worth surfacing: aid asked for one model and the CLI served
-    /// another. Showing only one of the two hides a substitution.
-    #[test]
-    fn a_substitution_shows_both() {
-        assert_eq!(
-            format_model_display(Some("composer-2"), Some("auto"), None),
-            Some("composer-2 (asked auto)".to_string())
-        );
-    }
-
-    #[test]
-    fn nothing_known_renders_as_nothing() {
-        assert_eq!(format_model_display(None, None, None), None);
-    }
-}
-
-#[cfg(test)]
-mod attribution_grade_display_tests {
-    use super::{format_model_display, AttributionSource};
-
-    /// A model inferred from a run not failing must not read the same as one the
-    /// CLI named. Storing the grade and then rendering both identically would
-    /// waste it.
-    #[test]
-    fn an_inferred_model_is_marked() {
-        assert_eq!(
-            format_model_display(
-                Some("gpt-5.6"),
-                Some("gpt-5.6"),
-                Some(AttributionSource::ConfirmedBySuccess)
-            ),
-            Some("gpt-5.6 (inferred)".to_string())
-        );
-    }
-
-    #[test]
-    fn an_echoed_model_stays_plain() {
-        assert_eq!(
-            format_model_display(Some("gpt-5.6"), Some("gpt-5.6"), Some(AttributionSource::Echoed)),
-            Some("gpt-5.6".to_string())
-        );
-    }
-
-    /// A disagreement outranks the grade: the CLI serving something other than
-    /// what was asked is the more important thing to show.
-    #[test]
-    fn a_substitution_still_shows_both() {
-        assert_eq!(
-            format_model_display(Some("composer-2"), Some("auto"), Some(AttributionSource::Echoed)),
-            Some("composer-2 (asked auto)".to_string())
-        );
-    }
-}
+#[path = "task_display_tests.rs"]
+mod tests;

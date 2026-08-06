@@ -1,8 +1,12 @@
 // Idle policy for PTY-backed reply and unstick handling.
-// Exports: IdleDetector, IdleAction, and MonitorTaskStatus for pty_watch.
-// Deps: std::time and the resolved timeout policy.
+// Exports idle policy, output classification, and monitor status helpers.
+// Deps: Store, task status, std::time, and the resolved timeout policy.
 
+use anyhow::Result;
 use std::time::{Duration, Instant};
+
+use crate::store::Store;
+use crate::types::TaskStatus;
 
 const DEFAULT_NUDGE_MESSAGE: &str = "Task appears idle. Status update please?";
 
@@ -88,6 +92,26 @@ impl IdleDetector {
 
 pub(crate) fn default_nudge_message() -> String {
     DEFAULT_NUDGE_MESSAGE.to_string()
+}
+
+/// True when a flushed stream line is meaningful agent output.
+///
+/// Raw/unparsed output still proves the agent is alive and working, so it must
+/// refresh the idle clock. Lines that carry no text after terminal-escape
+/// stripping are terminal-control noise (spinners, cursor hides) and must not
+/// keep a wedged process alive.
+pub(crate) fn is_agent_output(line: &str) -> bool {
+    !line.trim().is_empty()
+}
+
+pub(crate) fn load_monitor_status(store: &Store, task_id: &str) -> Result<MonitorTaskStatus> {
+    let status = store.get_task(task_id)?.map(|task| task.status);
+    Ok(match status {
+        Some(TaskStatus::Running) => MonitorTaskStatus::Running,
+        Some(TaskStatus::AwaitingInput) => MonitorTaskStatus::AwaitingInput,
+        Some(TaskStatus::Stalled) => MonitorTaskStatus::Stalled,
+        _ => MonitorTaskStatus::Inactive,
+    })
 }
 
 /// True when a stream line is only an echo of text aid itself wrote to the PTY.

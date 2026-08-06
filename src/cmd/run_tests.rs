@@ -106,6 +106,83 @@ fn read_quota_error_message_detects_402_payment_errors() {
 }
 
 #[test]
+fn rescue_quota_failed_task_refuses_empty_worktree_rescue() {
+    let dir = TempDir::new().unwrap();
+    let _guard = paths::AidHomeGuard::set(dir.path());
+    std::fs::create_dir_all(paths::logs_dir()).unwrap();
+
+    let wt_dir = dir.path().join("wt");
+    std::fs::create_dir_all(&wt_dir).unwrap();
+    git(&wt_dir, &["init"]);
+    git(&wt_dir, &["config", "user.email", "aid@example.com"]);
+    git(&wt_dir, &["config", "user.name", "Aid Tester"]);
+    std::fs::write(wt_dir.join("file.txt"), "initial").unwrap();
+    git(&wt_dir, &["add", "file.txt"]);
+    git(&wt_dir, &["commit", "-m", "initial"]);
+
+    std::fs::write(
+        paths::stderr_path("t-empty-wt"),
+        "Error: You have hit your usage limit.",
+    )
+    .unwrap();
+
+    let store = Store::open_memory().unwrap();
+    let mut task = make_failed_task("t-empty-wt");
+    task.worktree_path = Some(wt_dir.to_str().unwrap().to_string());
+    task.verify_status = VerifyStatus::Passed;
+    store.insert_task(&task).unwrap();
+
+    rescue_quota_failed_task(
+        &store,
+        &task.id,
+        read_quota_error_message(&task.id).as_deref(),
+        None,
+    );
+
+    let task = store.get_task("t-empty-wt").unwrap().unwrap();
+    assert_eq!(task.status, TaskStatus::Failed);
+}
+
+#[test]
+fn rescue_quota_failed_task_rescues_worktree_with_modified_code() {
+    let dir = TempDir::new().unwrap();
+    let _guard = paths::AidHomeGuard::set(dir.path());
+    std::fs::create_dir_all(paths::logs_dir()).unwrap();
+
+    let wt_dir = dir.path().join("wt");
+    std::fs::create_dir_all(&wt_dir).unwrap();
+    git(&wt_dir, &["init"]);
+    git(&wt_dir, &["config", "user.email", "aid@example.com"]);
+    git(&wt_dir, &["config", "user.name", "Aid Tester"]);
+    std::fs::write(wt_dir.join("file.txt"), "initial").unwrap();
+    git(&wt_dir, &["add", "file.txt"]);
+    git(&wt_dir, &["commit", "-m", "initial"]);
+    std::fs::write(wt_dir.join("file.txt"), "modified").unwrap();
+
+    std::fs::write(
+        paths::stderr_path("t-work-wt"),
+        "Error: You have hit your usage limit.",
+    )
+    .unwrap();
+
+    let store = Store::open_memory().unwrap();
+    let mut task = make_failed_task("t-work-wt");
+    task.worktree_path = Some(wt_dir.to_str().unwrap().to_string());
+    task.verify_status = VerifyStatus::Passed;
+    store.insert_task(&task).unwrap();
+
+    rescue_quota_failed_task(
+        &store,
+        &task.id,
+        read_quota_error_message(&task.id).as_deref(),
+        None,
+    );
+
+    let task = store.get_task("t-work-wt").unwrap().unwrap();
+    assert_eq!(task.status, TaskStatus::Done);
+}
+
+#[test]
 fn rescue_quota_failed_task_marks_passed_verify_as_done() {
     let dir = TempDir::new().unwrap();
     let _guard = paths::AidHomeGuard::set(dir.path());
@@ -119,10 +196,21 @@ fn rescue_quota_failed_task_marks_passed_verify_as_done() {
     let mut task = make_failed_task("t-rescue-pass");
     task.verify_status = VerifyStatus::Passed;
     store.insert_task(&task).unwrap();
+    store
+        .insert_event(&crate::types::TaskEvent {
+            task_id: task.id.clone(),
+            timestamp: chrono::Local::now(),
+            event_kind: crate::types::EventKind::Reasoning,
+            detail: "reasoning".to_string(),
+            metadata: None,
+        })
+        .unwrap();
+
     rescue_quota_failed_task(
         &store,
         &task.id,
         read_quota_error_message(&task.id).as_deref(),
+        None,
     );
     let task = store.get_task("t-rescue-pass").unwrap().unwrap();
     assert_eq!(task.status, TaskStatus::Done);
@@ -145,6 +233,7 @@ fn rescue_quota_failed_task_keeps_failed_verify_failed() {
         &store,
         &task.id,
         read_quota_error_message(&task.id).as_deref(),
+        None,
     );
     let task = store.get_task("t-rescue-fail").unwrap().unwrap();
     assert_eq!(task.status, TaskStatus::Failed);

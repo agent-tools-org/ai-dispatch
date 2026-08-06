@@ -328,16 +328,16 @@ fn has_uncommitted_changes(dir: &Path) -> Result<bool> {
     Ok(!String::from_utf8_lossy(&staged.stdout).trim().is_empty())
 }
 
-pub(crate) fn read_quota_error_message(task_id: &TaskId) -> Option<String> {
+pub(crate) fn read_quota_error_message(task_id: &TaskId, agent: &crate::types::AgentKind) -> Option<String> {
     let stderr_path = crate::paths::stderr_path(task_id.as_str());
     if let Ok(stderr) = std::fs::read_to_string(&stderr_path)
-        && let Some(line) = find_rate_limit_line(&stderr)
+        && let Some(line) = find_rate_limit_line_stderr(&stderr)
     {
         return Some(line);
     }
     let log_path = crate::paths::log_path(task_id.as_str());
     if let Ok(log) = std::fs::read_to_string(&log_path)
-        && let Some(line) = find_rate_limit_line(&log)
+        && let Some(line) = find_rate_limit_line_in_agent_log(&log, agent)
     {
         return Some(line);
     }
@@ -370,10 +370,16 @@ fn audit_current_dir(effective_dir: Option<&str>, repo_path: Option<&str>) -> Op
         .filter(|path| path.is_dir())
 }
 
-fn find_rate_limit_line(content: &str) -> Option<String> {
+fn find_rate_limit_line_stderr(content: &str) -> Option<String> {
     content
         .lines()
         .find_map(rate_limit::extract_rate_limit_message)
+}
+
+fn find_rate_limit_line_in_agent_log(content: &str, agent: &crate::types::AgentKind) -> Option<String> {
+    content
+        .lines()
+        .find_map(|line| rate_limit::extract_rate_limit_from_stream_detail(line, agent))
 }
 
 #[cfg(test)]

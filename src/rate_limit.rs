@@ -232,6 +232,21 @@ fn contains_status_code(s: &str, code: &str) -> bool {
 }
 
 pub fn extract_rate_limit_message(raw: &str) -> Option<String> {
+    extract_rate_limit_with_evidence(raw, QuotaEvidence::NonAgentChannel, None)
+}
+
+/// Extract a quota refusal from a streaming event's `detail` field.
+/// JSON error envelopes are a genuine non-agent channel; plain text is
+/// assistant-authored and only matches per-agent templates.
+pub fn extract_rate_limit_from_stream_detail(raw: &str, agent: &AgentKind) -> Option<String> {
+    extract_rate_limit_with_evidence(raw, QuotaEvidence::AgentProse, Some(agent))
+}
+
+fn extract_rate_limit_with_evidence(
+    raw: &str,
+    prose_evidence: QuotaEvidence,
+    agent: Option<&AgentKind>,
+) -> Option<String> {
     let trimmed = raw.trim();
     if trimmed.is_empty() {
         return None;
@@ -239,8 +254,13 @@ pub fn extract_rate_limit_message(raw: &str) -> Option<String> {
     if trimmed.starts_with('{') && trimmed.contains("\"type\"") {
         return extract_from_json_error(trimmed);
     }
-    if is_rate_limit_error_with_evidence(trimmed, QuotaEvidence::NonAgentChannel) && trimmed.len() < 500
-    {
+    let matches = match agent {
+        Some(agent) => {
+            is_rate_limit_error_for_agent_with_evidence(trimmed, agent, prose_evidence)
+        }
+        None => is_rate_limit_error_with_evidence(trimmed, prose_evidence),
+    };
+    if matches && trimmed.len() < 500 {
         Some(trimmed.to_string())
     } else {
         None
@@ -483,6 +503,32 @@ mod tests {
     #[test]
     fn test_extract_rate_limit_message_ignores_noise() {
         assert_eq!(extract_rate_limit_message("YOLO mode is enabled"), None);
+    }
+
+    #[test]
+    fn stream_detail_ignores_agent_grep_about_rate_limit_code() {
+        let grep_line = "completed: grep clear_rate_limit_if_stale|marker_path";
+        assert!(
+            extract_rate_limit_message(grep_line).is_some(),
+            "generic matcher still fires on stderr/log channels"
+        );
+        assert_eq!(
+            extract_rate_limit_from_stream_detail(grep_line, &AgentKind::Cursor),
+            None,
+        );
+    }
+
+    #[test]
+    fn stream_detail_extracts_codex_usage_limit_json() {
+        let message = "You've hit your usage limit. Visit https://chatgpt.com/codex/settings/usage \
+                         to purchase more credits or try again at Aug 11th, 2026 2:23 PM.";
+        assert_eq!(
+            extract_rate_limit_from_stream_detail(
+                &format!(r#"{{"type":"error","message":"{message}"}}"#),
+                &AgentKind::Codex,
+            ),
+            Some(message.to_string()),
+        );
     }
 
     #[test]

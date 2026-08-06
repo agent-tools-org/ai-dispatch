@@ -74,7 +74,9 @@ pub(crate) fn handle_streaming_line_with_session(
         apply_completion_event(info, &event);
         synthetic_tracker.observe(&event);
         save_session_id(store, task_id, &event, session_saved)?;
-        if let Some(message) = rate_limit::extract_rate_limit_message(&event.detail) {
+        if let Some(message) =
+            rate_limit::extract_rate_limit_from_stream_detail(&event.detail, &agent.kind())
+        {
             rate_limit::mark_rate_limited(&agent.kind(), &message);
         }
         store.insert_event(&event)?;

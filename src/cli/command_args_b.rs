@@ -265,14 +265,14 @@ pub enum BuildCommandArg {
   aid test
   aid test --bin aid
   aid test --bin aid paths::aid_dir -- --exact
+  aid test -- my_filter
   aid test --lib
   aid test --isolated --bin aid my_test
 
-Guarantees (unlike raw `cargo test`):
-  - A filter matching zero tests exits non-zero and names the filter
-  - A run with no test targets never looks like a pass
-  - The digest lists which tests ran
-  - Failure output is compact (panics/assertions, not pass noise)"#)]
+Target selectors are aid flags (`--lib`, `--bin`, `--test NAME` = target, not
+name filter). Free args after `--` are harness args (filter / --exact / …).
+Guarantees: zero-match filter fails (positional or after `--`); no targets
+never looks like a pass; digest names tests; failures stay compact."#)]
 pub struct TestArgs {
     /// Cargo package (-p).
     #[arg(short = 'p', long)]
@@ -283,18 +283,18 @@ pub struct TestArgs {
     /// Only run library unit tests (`cargo test --lib`).
     #[arg(long)]
     pub lib: bool,
-    /// Integration test target name (`cargo test --test NAME`).
+    /// Integration test target (`cargo test --test NAME`). Not a name filter.
     #[arg(long = "test")]
     pub test_target: Option<String>,
-    /// Libtest name filter (substring or exact with `-- --exact`).
+    /// Name filter; also free after `--` (`aid test -- name`).
     pub filter: Option<String>,
-    /// Run cargo test with a temporary AID_HOME (does not read/write ~/.aid).
+    /// Temporary AID_HOME for the cargo child (no ~/.aid read/write).
     #[arg(long)]
     pub isolated: bool,
-    /// Include warning diagnostics instead of reporting only their count.
+    /// Include warning diagnostics instead of only their count.
     #[arg(long)]
     pub warnings: bool,
-    /// Extra args after `--` are passed to the test harness (e.g. --exact).
+    /// Args after `--` go to the test harness (filter, --exact, …).
     #[arg(last = true, allow_hyphen_values = true)]
     pub extra_args: Vec<String>,
 }

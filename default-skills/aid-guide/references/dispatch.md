@@ -229,6 +229,8 @@ aid build check
 aid build clippy -- --all-targets
 aid test --bin aid
 aid test --bin aid my_module::my_test -- --exact
+aid test -- my_filter
+aid test -- my_filter --exact
 aid test --isolated --bin aid
 ```
 
@@ -240,7 +242,11 @@ empty target set for a green suite.
 `aid test` reuses the same cargo process supervision and diagnostic pipeline as
 `aid build`, then parses libtest stdout. Guarantees:
 
-- A filter that matches zero tests exits non-zero and names the filter
+- A filter that matches zero tests exits non-zero and names the filter.
+  Filters may be positional (`aid test name`) or free args after `--`
+  (`aid test -- name`), matching cargo muscle memory.
+- Target selectors are aid flags only: `--lib`, `--bin NAME`, `--test NAME`
+  (integration-test *target*, not a name filter). Do not put them after `--`.
 - A run with no test targets never looks like a pass
 - The digest lists which tests ran (not only a pass count)
 - Failure output stays compact (panics and assertion diffs)

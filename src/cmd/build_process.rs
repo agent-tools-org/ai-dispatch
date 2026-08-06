@@ -1,43 +1,41 @@
 // Cargo process supervision and build event emission for `aid build`.
-// Exports: ProgressConfig and run_cargo_process().
-// Deps: tokio process/io, Store events, build request/diagnostic/fallback/progress.
+// Exports: ProgressConfig, run_cargo_process(), run_cargo_outcome().
+// Deps: tokio process, Store events, build request/diagnostic/fallback/stream/progress.
 
 use anyhow::{Context, Result};
 use std::process::{ExitStatus, Stdio};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
-use tokio::io::{AsyncBufReadExt, AsyncRead, BufReader};
 use tokio::process::{Child, Command};
 use tokio::sync::mpsc;
 
-use super::build_diag::{render_digest, BuildReport, DiagnosticCollector};
-use super::build_fallback::{
-    fallback_digest_note, is_permission_os_error_text, should_retry_with_fallback,
+use super::build_diag::{render_digest, BuildReport};
+use super::build_fallback::{fallback_digest_note, should_retry_with_fallback};
+use super::build_stream::{
+    drain_streams, emit_event, handle_stream_event, pump_lines, CargoStreamState, StreamEvent,
 };
 use super::{BuildRequest, CargoTargetChoice};
 use crate::store::Store;
-use crate::types::{EventKind, TaskEvent, TaskId};
 
 pub(crate) use super::build_progress::{ProgressConfig, ProgressState};
-
-#[derive(Debug)]
-enum StreamEvent {
-    Stdout(String),
-    Stderr(String),
-    Done,
-}
-
-#[derive(Debug, Default)]
-struct CargoStreamState {
-    collector: DiagnosticCollector,
-    stderr_lines: Vec<String>,
-    compiled_units: usize,
-    done_streams: usize,
-}
+#[cfg(test)]
+pub(super) use super::build_stream::is_compiler_artifact_line;
 
 struct CargoAttempt {
     status: ExitStatus,
     stream_state: CargoStreamState,
+}
+
+/// Full cargo run result for callers that need stdout beyond the build digest.
+#[derive(Debug)]
+pub(crate) struct CargoRunOutcome {
+    pub(crate) exit_code: i32,
+    pub(crate) cargo_success: bool,
+    pub(crate) command: String,
+    pub(crate) elapsed: Duration,
+    pub(crate) compiled_units: usize,
+    pub(crate) plain_stdout: Vec<String>,
+    pub(crate) report: BuildReport,
 }
 
 pub(crate) async fn run_cargo_process(
@@ -46,12 +44,32 @@ pub(crate) async fn run_cargo_process(
     target: CargoTargetChoice,
     progress: ProgressConfig,
 ) -> Result<i32> {
+    let outcome = run_cargo_outcome(store.clone(), request.clone(), target, progress, &[]).await?;
+    println!("{}", render_digest(&outcome.report, request.include_warnings()));
+    let task_id = std::env::var("AID_TASK_ID").ok();
+    emit_event(
+        &store,
+        &task_id,
+        finished_detail(&outcome.command, &outcome.report, outcome.compiled_units),
+    );
+    Ok(outcome.exit_code)
+}
+
+pub(crate) async fn run_cargo_outcome(
+    store: Arc<Store>,
+    request: BuildRequest,
+    target: CargoTargetChoice,
+    progress: ProgressConfig,
+    child_env: &[(String, String)],
+) -> Result<CargoRunOutcome> {
     let cargo_args = request.cargo_args();
     let task_id = std::env::var("AID_TASK_ID").ok();
     let start = Instant::now();
     let command = request.display_command(&target);
     emit_event(&store, &task_id, format!("{command} started"));
-    let first = run_one_attempt(&store, &task_id, &cargo_args, &command, &target, &progress).await?;
+    let first =
+        run_one_attempt(&store, &task_id, &cargo_args, &command, &target, &progress, child_env)
+            .await?;
     let (status, stream_state, command, note) = maybe_retry_after_permission_block(
         &store,
         &task_id,
@@ -61,9 +79,11 @@ pub(crate) async fn run_cargo_process(
         &target,
         first,
         command,
+        child_env,
     )
     .await?;
     let compiled_units = stream_state.compiled_units;
+    let plain_stdout = stream_state.plain_stdout;
     let report = BuildReport {
         success: status.success(),
         command: command.clone(),
@@ -72,9 +92,15 @@ pub(crate) async fn run_cargo_process(
         stderr_lines: stream_state.stderr_lines,
         note,
     };
-    println!("{}", render_digest(&report, request.include_warnings));
-    emit_event(&store, &task_id, finished_detail(&command, &report, compiled_units));
-    Ok(status.code().unwrap_or(1))
+    Ok(CargoRunOutcome {
+        exit_code: status.code().unwrap_or(1),
+        cargo_success: status.success(),
+        command,
+        elapsed: start.elapsed(),
+        compiled_units,
+        plain_stdout,
+        report,
+    })
 }
 
 async fn maybe_retry_after_permission_block(
@@ -86,6 +112,7 @@ async fn maybe_retry_after_permission_block(
     target: &CargoTargetChoice,
     first: CargoAttempt,
     command: String,
+    child_env: &[(String, String)],
 ) -> Result<(ExitStatus, CargoStreamState, String, Option<String>)> {
     let Some(fallback) = should_retry_with_fallback(
         first.status.success(),
@@ -105,7 +132,16 @@ async fn maybe_retry_after_permission_block(
         task_id,
         format!("target dir unwritable; retrying with CARGO_TARGET_DIR={fallback}"),
     );
-    let second = run_one_attempt(store, task_id, cargo_args, &fb_command, &fb_target, progress).await?;
+    let second = run_one_attempt(
+        store,
+        task_id,
+        cargo_args,
+        &fb_command,
+        &fb_target,
+        progress,
+        child_env,
+    )
+    .await?;
     Ok((
         second.status,
         second.stream_state,
@@ -121,11 +157,16 @@ async fn run_one_attempt(
     command: &str,
     target: &CargoTargetChoice,
     progress: &ProgressConfig,
+    child_env: &[(String, String)],
 ) -> Result<CargoAttempt> {
     let start = Instant::now();
     // Always apply an explicit dir for non-inherited choices so a fallback can
     // override an ambient inherited CARGO_TARGET_DIR on retry.
-    let mut child = spawn_cargo(cargo_args, target.value.as_deref().filter(|_| !target.inherited))?;
+    let mut child = spawn_cargo(
+        cargo_args,
+        target.value.as_deref().filter(|_| !target.inherited),
+        child_env,
+    )?;
     let stdout = child.stdout.take().context("Failed to capture cargo stdout")?;
     let stderr = child.stderr.take().context("Failed to capture cargo stderr")?;
     let (tx, mut rx) = mpsc::channel(64);
@@ -180,84 +221,20 @@ async fn wait_for_cargo(
     }
 }
 
-fn spawn_cargo(cargo_args: &[String], target_dir: Option<&str>) -> Result<tokio::process::Child> {
+fn spawn_cargo(
+    cargo_args: &[String],
+    target_dir: Option<&str>,
+    child_env: &[(String, String)],
+) -> Result<tokio::process::Child> {
     let mut std_cmd = std::process::Command::new("cargo");
     std_cmd.args(cargo_args);
     crate::agent::apply_cargo_target_env(&mut std_cmd, target_dir);
+    for (key, value) in child_env {
+        std_cmd.env(key, value);
+    }
     std_cmd.stdout(Stdio::piped());
     std_cmd.stderr(Stdio::piped());
     Command::from(std_cmd).spawn().context("Failed to spawn cargo process")
-}
-
-async fn pump_lines<R, F>(reader: R, tx: mpsc::Sender<StreamEvent>, build_event: F)
-where
-    R: AsyncRead + Unpin,
-    F: Fn(String) -> StreamEvent + Copy,
-{
-    let mut lines = BufReader::new(reader).lines();
-    while let Ok(Some(line)) = lines.next_line().await {
-        if tx.send(build_event(line)).await.is_err() {
-            return;
-        }
-    }
-    let _ = tx.send(StreamEvent::Done).await;
-}
-
-async fn drain_streams(
-    rx: &mut mpsc::Receiver<StreamEvent>,
-    store: &Store,
-    task_id: &Option<String>,
-    stream_state: &mut CargoStreamState,
-) {
-    while stream_state.done_streams < 2 {
-        let event = rx.recv().await;
-        handle_stream_event(event, store, task_id, stream_state);
-    }
-}
-
-fn handle_stream_event(
-    event: Option<StreamEvent>,
-    store: &Store,
-    task_id: &Option<String>,
-    stream_state: &mut CargoStreamState,
-) {
-    match event {
-        Some(StreamEvent::Stdout(line)) => {
-            if is_compiler_artifact_line(&line) {
-                stream_state.compiled_units += 1;
-            }
-            if let Some(diagnostic) = stream_state.collector.push_json_line(&line) {
-                // JSON compiler-message path: EPERM never hits stderr, but fallback
-                // detection keys off the human message text.
-                if is_permission_os_error_text(&diagnostic.message) {
-                    stream_state.stderr_lines.push(diagnostic.message.clone());
-                }
-                emit_event(store, task_id, diagnostic.event_detail());
-            }
-        }
-        Some(StreamEvent::Stderr(line)) => stream_state.stderr_lines.push(line),
-        Some(StreamEvent::Done) | None => stream_state.done_streams += 1,
-    }
-}
-
-fn is_compiler_artifact_line(line: &str) -> bool {
-    serde_json::from_str::<serde_json::Value>(line)
-        .ok()
-        .and_then(|value| value.get("reason").and_then(|reason| reason.as_str()).map(str::to_string))
-        .as_deref()
-        == Some("compiler-artifact")
-}
-
-fn emit_event(store: &Store, task_id: &Option<String>, detail: String) {
-    if let Some(task_id) = task_id.as_ref() {
-        let _ = store.insert_event(&TaskEvent {
-            task_id: TaskId(task_id.clone()),
-            timestamp: chrono::Local::now(),
-            event_kind: EventKind::Build,
-            detail,
-            metadata: None,
-        });
-    }
 }
 
 fn finished_detail(command: &str, report: &BuildReport, compiled_units: usize) -> String {

@@ -99,6 +99,8 @@ pub enum Commands {
     Container(command_args_b::ContainerArgs),
     /// Run cargo build/check and parse/deduplicate JSON compiler errors
     Build(command_args_b::BuildArgs),
+    /// Run cargo test with trusted guarantees (zero-match is an error)
+    Test(command_args_b::TestArgs),
     Worktree(command_args_c::WorktreeArgs),
     Store(command_args_c::StoreArgs),
     Team(command_args_c::TeamArgs),

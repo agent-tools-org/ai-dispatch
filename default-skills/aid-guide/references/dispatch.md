@@ -66,7 +66,8 @@ guess, and it appears for every provider whose metering aid has not seen.
 - Use `aid query` for a direct model query that does not need a task worktree.
 - Use `aid benchmark` to compare agents on the same prompt.
 - Use `aid experiment` for repeated metric-driven improvement.
-- Use `aid build` for compact Rust build/test diagnostics.
+- Use `aid build` for compact Rust compile diagnostics (check/clippy).
+- Use `aid test` for trusted Cargo test runs (zero-match is an error; digests name executed tests).
 
 ## Run one task
 
@@ -221,21 +222,37 @@ aid run opencode "Extract the parser helper" \
   --difficulty simple --budget cheap --urgency normal --rigor draft
 ```
 
-## Build
+## Build and test
 
 ```bash
 aid build check
-aid build test --package my-crate
+aid build clippy -- --all-targets
+aid test --bin aid
+aid test --bin aid my_module::my_test -- --exact
+aid test --isolated --bin aid
 ```
 
-Use `aid build --help` for supported Cargo command and filter options. It emits
-compact, deduplicated diagnostics and integrates progress into task events.
+Use `aid build` for compile checks. It emits compact, deduplicated diagnostics
+and integrates progress into task events. `aid build` no longer accepts `test`
+as a command — use `aid test` so agents cannot mistake a zero-match filter or
+empty target set for a green suite.
+
+`aid test` reuses the same cargo process supervision and diagnostic pipeline as
+`aid build`, then parses libtest stdout. Guarantees:
+
+- A filter that matches zero tests exits non-zero and names the filter
+- A run with no test targets never looks like a pass
+- The digest lists which tests ran (not only a pass count)
+- Failure output stays compact (panics and assertion diffs)
+
+`--isolated` gives the cargo test process a temporary `AID_HOME` so the run
+cannot read or pollute the developer's `~/.aid/`. It is opt-in, not the default.
 
 Inherited `CARGO_TARGET_DIR` wins for the first attempt. If cargo cannot write
 that directory (common under agent OS sandboxes that only allow the worktree
-and temp dirs), `aid build` retries once under the system temp directory
-(`aid-build-target/<project-key>/`) and records the fallback paths in the
-digest. Do not preflight with a generic write probe — the fallback is keyed
+and temp dirs), `aid build` / `aid test` retries once under the system temp
+directory (`aid-build-target/<project-key>/`) and records the fallback paths in
+the digest. Do not preflight with a generic write probe — the fallback is keyed
 off cargo's real permission error.
 
 ## Retry and fallback

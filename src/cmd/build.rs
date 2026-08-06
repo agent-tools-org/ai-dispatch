@@ -9,11 +9,13 @@ use crate::cli::command_args_b::{BuildArgs, BuildCommandArg};
 use crate::store::Store;
 
 #[path = "build_diag.rs"]
-mod build_diag;
+pub(crate) mod build_diag;
 #[path = "build_fallback.rs"]
 mod build_fallback;
+#[path = "build_stream.rs"]
+mod build_stream;
 #[path = "build_process.rs"]
-mod build_process;
+pub(crate) mod build_process;
 #[path = "build_progress.rs"]
 mod build_progress;
 
@@ -49,20 +51,42 @@ pub async fn run(store: Arc<Store>, args: BuildArgs) -> Result<i32> {
     build_process::run_cargo_process(store, request, target, progress).await
 }
 
+/// Shared target-dir resolution for `aid build` and `aid test`.
+pub(crate) fn resolve_target(store: &Store) -> CargoTargetChoice {
+    resolve_cargo_target_choice(store)
+}
+
 impl BuildRequest {
     fn from_args(args: BuildArgs) -> Result<Self> {
         let (command, mut extra_args) = default_command_and_args(args.command);
-        if args.test_filter.is_some() && command != BuildCommand::Test {
-            bail!("--test is only valid with `aid build test`");
-        }
         extra_args.extend(args.extra_args);
         Ok(Self {
             command,
             package: args.package,
-            test_filter: args.test_filter,
+            test_filter: None,
             include_warnings: args.warnings,
             extra_args,
         })
+    }
+
+    /// Build a cargo-test request used by `aid test` (not the CLI `build` surface).
+    pub(crate) fn for_test(
+        package: Option<String>,
+        extra_args: Vec<String>,
+        test_filter: Option<String>,
+        include_warnings: bool,
+    ) -> Self {
+        Self {
+            command: BuildCommand::Test,
+            package,
+            test_filter,
+            include_warnings,
+            extra_args,
+        }
+    }
+
+    pub(crate) fn include_warnings(&self) -> bool {
+        self.include_warnings
     }
 
     pub(crate) fn cargo_args(&self) -> Vec<String> {
@@ -98,7 +122,6 @@ impl BuildRequest {
         }
         args.extend(self.extra_args.clone());
         if let Some(filter) = self.test_filter.as_ref() {
-            args.push("--test".to_string());
             args.push(filter.clone());
         }
         args
@@ -133,7 +156,9 @@ fn parse_verify_command(verify: Option<&str>) -> (BuildCommand, Vec<String>) {
     let cargo_args = parts.strip_prefix(&["cargo"]).unwrap_or(&parts);
     match cargo_args.first().copied() {
         Some("check") => (BuildCommand::Check, cargo_args[1..].iter().map(|s| s.to_string()).collect()),
-        Some("test") => (BuildCommand::Test, cargo_args[1..].iter().map(|s| s.to_string()).collect()),
+        // Project verify may be `cargo test …`; compile checks stay on `aid build`.
+        // Trusted test runs go through `aid test` (libtest guarantees).
+        Some("test") => (BuildCommand::Check, cargo_args[1..].iter().map(|s| s.to_string()).collect()),
         Some("clippy") => (BuildCommand::Clippy, cargo_args[1..].iter().map(|s| s.to_string()).collect()),
         _ => (BuildCommand::Check, Vec::new()),
     }
@@ -143,7 +168,6 @@ impl From<BuildCommandArg> for BuildCommand {
     fn from(value: BuildCommandArg) -> Self {
         match value {
             BuildCommandArg::Check => Self::Check,
-            BuildCommandArg::Test => Self::Test,
             BuildCommandArg::Clippy => Self::Clippy,
         }
     }
@@ -186,7 +210,6 @@ mod tests {
         BuildArgs {
             command,
             package: None,
-            test_filter: None,
             warnings: false,
             extra_args: Vec::new(),
         }
@@ -205,18 +228,17 @@ mod tests {
     }
 
     #[test]
-    fn request_rejects_test_filter_for_check() {
-        let mut cli_args = args(Some(BuildCommandArg::Check));
-        cli_args.test_filter = Some("smoke".to_string());
-        assert!(BuildRequest::from_args(cli_args).is_err());
-    }
-
-    #[test]
-    fn request_places_test_filter_as_cargo_test_filter() {
-        let mut cli_args = args(Some(BuildCommandArg::Test));
-        cli_args.test_filter = Some("retry_flow".to_string());
-        let request = BuildRequest::from_args(cli_args).expect("valid test request");
-        assert_eq!(request.cargo_args(), ["test", "--message-format=json", "retry_flow"]);
+    fn for_test_places_filter_as_cargo_test_filter() {
+        let request = BuildRequest::for_test(
+            None,
+            vec!["--bin".to_string(), "aid".to_string()],
+            Some("retry_flow".to_string()),
+            false,
+        );
+        assert_eq!(
+            request.cargo_args(),
+            ["test", "--message-format=json", "--bin", "aid", "retry_flow"]
+        );
     }
 
     #[test]
@@ -224,6 +246,13 @@ mod tests {
         let (command, args) = parse_verify_command(Some("cargo clippy --all-targets"));
         assert_eq!(command, BuildCommand::Clippy);
         assert_eq!(args, ["--all-targets"]);
+    }
+
+    #[test]
+    fn verify_cargo_test_maps_to_check_not_test() {
+        let (command, args) = parse_verify_command(Some("cargo test --bin aid"));
+        assert_eq!(command, BuildCommand::Check);
+        assert_eq!(args, ["--bin", "aid"]);
     }
 
     #[test]

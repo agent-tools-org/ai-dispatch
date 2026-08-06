@@ -19,6 +19,14 @@ pub(super) fn validate_critical_rigor(args: &RunArgs) -> Result<()> {
     Ok(())
 }
 
+/// `--egress local` is independent of rigor: only a loopback provider passes.
+pub(super) fn validate_egress(args: &RunArgs) -> Result<()> {
+    if !args.declared_egress.requires_local() {
+        return Ok(());
+    }
+    crate::agent::egress::require_local_egress(&args.agent_name)
+}
+
 pub(super) fn persist_declaration(store: &Store, task_id: &TaskId, args: &RunArgs) -> Result<()> {
     store.update_task_profile(task_id.as_str(), TaskProfileDeclaration {
         difficulty: args.declared_difficulty,

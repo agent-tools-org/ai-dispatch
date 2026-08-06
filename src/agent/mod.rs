@@ -22,6 +22,7 @@ pub mod qwen;
 pub(crate) mod read_only;
 pub(crate) mod custom;
 pub(crate) mod cargo_target;
+pub(crate) mod egress;
 pub(crate) mod registry;
 pub mod classifier;
 pub(crate) mod selection;

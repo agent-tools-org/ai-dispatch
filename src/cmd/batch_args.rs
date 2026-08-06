@@ -65,6 +65,7 @@ pub(crate) fn task_to_run_args(
         declared_budget: task.budget,
         declared_urgency: task.urgency,
         declared_rigor: task.rigor,
+        declared_egress: task.egress.unwrap_or_default(),
         kind: task.kind,
         worktree: task.worktree.clone(),
         group: task.group.clone(),

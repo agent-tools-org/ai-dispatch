@@ -86,8 +86,8 @@ async fn dispatch_run(
     store: Arc<crate::store::Store>,
     args: command_args_a::RunArgs,
 ) -> Result<RunDispatch> {
-    let command_args_a::RunArgs { agent, prompt, prompt_file, repo, repo_root, dir, output, result_file, model, difficulty, budget, urgency, rigor, kind, no_hint, worktree, team, group, verify, iterate, eval, eval_feedback_template, judge, peer_review, retry, context, checklist, checklist_file, scope, run_extras, no_skill, bg, dry_run, read_only, sandbox, container, best_of, metric, parent, id, timeout, idle_timeout, audit, no_audit, no_link_deps } = args;
-    let task_id = run_batch::run(store, agent, prompt, prompt_file, repo, repo_root, dir, output, result_file, model, difficulty, budget, urgency, rigor, kind, no_hint, worktree, team, group, verify, iterate, eval, eval_feedback_template, judge, peer_review, retry, context, checklist, checklist_file, scope, run_extras, no_skill, bg, dry_run, read_only, sandbox, container, best_of, metric, parent, id, timeout, idle_timeout, audit, no_audit, no_link_deps).await?;
+    let command_args_a::RunArgs { agent, prompt, prompt_file, repo, repo_root, dir, output, result_file, model, difficulty, budget, urgency, rigor, egress, kind, no_hint, worktree, team, group, verify, iterate, eval, eval_feedback_template, judge, peer_review, retry, context, checklist, checklist_file, scope, run_extras, no_skill, bg, dry_run, read_only, sandbox, container, best_of, metric, parent, id, timeout, idle_timeout, audit, no_audit, no_link_deps } = args;
+    let task_id = run_batch::run(store, agent, prompt, prompt_file, repo, repo_root, dir, output, result_file, model, difficulty, budget, urgency, rigor, egress, kind, no_hint, worktree, team, group, verify, iterate, eval, eval_feedback_template, judge, peer_review, retry, context, checklist, checklist_file, scope, run_extras, no_skill, bg, dry_run, read_only, sandbox, container, best_of, metric, parent, id, timeout, idle_timeout, audit, no_audit, no_link_deps).await?;
     Ok(RunDispatch::new(task_id, bg, dry_run))
 }
 

@@ -1,13 +1,14 @@
-// Display helpers for `aid agent show` output.
+// Display helpers for `aid agent show` / `list` output.
 // Exports: show_builtin_profile and print_custom_summary.
-// Deps: custom agent config types, AgentKind, std::path.
+// Deps: custom agent config types, AgentKind, provider egress, std::path.
 
-use crate::agent::custom::{CapabilityScores, CustomAgentConfig};
-use crate::types::AgentKind;
+use crate::agent::custom::CustomAgentConfig;
+use crate::agent::egress::resolve_agent_egress;
+use crate::types::{egress_for_cli, AgentKind};
 use std::path::Path;
 
 pub(super) fn show_builtin_profile(kind: AgentKind) {
-    let Some((_, description, cost, best_for, streaming, trust_tier)) = kind.profile() else {
+    let Some((_, description, cost, best_for, streaming)) = kind.profile() else {
         return;
     };
     println!("Built-in agent: {}", kind.as_str());
@@ -22,7 +23,8 @@ pub(super) fn show_builtin_profile(kind: AgentKind) {
             "buffered"
         }
     );
-    println!("  Trust tier: {}", trust_tier);
+    // Egress is a property of the provider, not a per-CLI constant.
+    println!("  Egress: {}", egress_for_cli(kind).label());
 }
 
 pub(super) fn print_custom_summary(config: &CustomAgentConfig, path: &Path) {
@@ -42,7 +44,11 @@ pub(super) fn print_custom_summary(config: &CustomAgentConfig, path: &Path) {
     }
     println!("  Streaming: {}", config.streaming);
     println!("  Output format: {}", config.output_format);
-    println!("  Trust tier: {}", config.trust_tier);
+    if let Some(url) = config.base_url.as_deref().filter(|s| !s.is_empty()) {
+        println!("  Base URL: {}", url);
+    }
+    // Hand-set trust_tier is ignored; show provider-derived egress.
+    println!("  Egress: {}", resolve_agent_egress(&config.id).label());
     if !config.strengths.is_empty() {
         println!("  Strengths: {}", config.strengths.join(", "));
     }
@@ -50,7 +56,7 @@ pub(super) fn print_custom_summary(config: &CustomAgentConfig, path: &Path) {
     print_capabilities(&config.capabilities);
 }
 
-fn print_capabilities(cap: &CapabilityScores) {
+fn print_capabilities(cap: &crate::agent::custom::CapabilityScores) {
     for (label, value) in &[
         ("research", cap.research),
         ("simple_edit", cap.simple_edit),
@@ -90,10 +96,15 @@ pub(super) fn show_quota() -> anyhow::Result<()> {
 pub(super) fn list_agents() -> anyhow::Result<()> {
     use crate::agent::registry;
     println!("Built-in agents:");
-    println!("  {:<10} {:<6} DESCRIPTION", "NAME", "TRUST");
+    println!("  {:<10} {:<12} DESCRIPTION", "NAME", "EGRESS");
     for kind in AgentKind::ALL_BUILTIN {
-        if let Some((_, description, _, _, _, trust_tier)) = kind.profile() {
-            println!("  {:<10} {:<6} {}", kind.as_str(), trust_tier, description);
+        if let Some((_, description, _, _, _)) = kind.profile() {
+            println!(
+                "  {:<10} {:<12} {}",
+                kind.as_str(),
+                egress_for_cli(*kind).label(),
+                description
+            );
         }
     }
     println!("\nCustom agents:");
@@ -102,11 +113,13 @@ pub(super) fn list_agents() -> anyhow::Result<()> {
         println!("  (none installed — use `aid agent add <name>` to create one)");
         return Ok(());
     }
-    println!("  {:<10} {:<6} DISPLAY NAME", "NAME", "TRUST");
+    println!("  {:<10} {:<12} DISPLAY NAME", "NAME", "EGRESS");
     for config in custom {
         println!(
-            "  {:<10} {:<6} {}",
-            config.id, config.trust_tier, config.display_name
+            "  {:<10} {:<12} {}",
+            config.id,
+            resolve_agent_egress(&config.id).label(),
+            config.display_name
         );
     }
     Ok(())

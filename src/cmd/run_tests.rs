@@ -357,6 +357,17 @@ fn validate_dispatch_warns_copilot_without_dir() {
 }
 
 #[test]
+fn validate_dispatch_stays_silent_when_worktree_supplies_the_dir() {
+    let args = RunArgs {
+        prompt: "Implement the dispatcher".to_string(),
+        worktree: Some("fix/some-branch".to_string()),
+        ..Default::default()
+    };
+    assert!(validate_dispatch(&args, &AgentKind::Codex).is_empty());
+    assert!(validate_dispatch(&args, &AgentKind::Cursor).is_empty());
+}
+
+#[test]
 fn resolve_prompt_input_reads_prompt_file() {
     let dir = TempDir::new().unwrap();
     let prompt_file = dir.path().join("prompt.md");

@@ -9,7 +9,8 @@ use std::time::{Duration, Instant};
 use tokio::process::{Child, Command};
 use tokio::sync::mpsc;
 
-use super::build_diag::{render_digest, BuildReport};
+use super::build_diag::BuildReport;
+use crate::cmd::build_parse::evaluate_build_run;
 use super::build_fallback::{fallback_digest_note, should_retry_with_fallback};
 use super::build_stream::{
     drain_streams, emit_event, handle_stream_event, pump_lines, CargoStreamState, StreamEvent,
@@ -45,14 +46,16 @@ pub(crate) async fn run_cargo_process(
     progress: ProgressConfig,
 ) -> Result<i32> {
     let outcome = run_cargo_outcome(store.clone(), request.clone(), target, progress, &[]).await?;
-    println!("{}", render_digest(&outcome.report, request.include_warnings()));
-    let task_id = std::env::var("AID_TASK_ID").ok();
-    emit_event(
-        &store,
-        &task_id,
-        finished_detail(&outcome.command, &outcome.report, outcome.compiled_units),
+    let verdict = evaluate_build_run(
+        &outcome.report,
+        outcome.compiled_units,
+        outcome.exit_code,
+        request.include_warnings(),
     );
-    Ok(outcome.exit_code)
+    println!("{}", verdict.digest);
+    let task_id = std::env::var("AID_TASK_ID").ok();
+    emit_event(&store, &task_id, verdict.event_detail);
+    Ok(verdict.exit_code)
 }
 
 pub(crate) async fn run_cargo_outcome(
@@ -235,12 +238,6 @@ fn spawn_cargo(
     std_cmd.stdout(Stdio::piped());
     std_cmd.stderr(Stdio::piped());
     Command::from(std_cmd).spawn().context("Failed to spawn cargo process")
-}
-
-fn finished_detail(command: &str, report: &BuildReport, compiled_units: usize) -> String {
-    let errors = report.diagnostics.iter().filter(|diagnostic| diagnostic.is_error()).count();
-    let warnings = report.diagnostics.len().saturating_sub(errors);
-    format!("{command} finished: {errors} errors, {warnings} warnings, {compiled_units} units compiled")
 }
 
 #[cfg(test)]

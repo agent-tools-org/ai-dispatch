@@ -252,7 +252,7 @@ pub(crate) async fn post_run_lifecycle(
             args.agent_name
         );
         let mut cascade_args = args.clone();
-        cascade_args.agent_name = next_agent;
+        super::run_post::switch_agent(&mut cascade_args, next_agent);
         cascade_args.cascade = remaining_cascade;
         cascade_args.parent_task_id = Some(task_id.as_str().to_string());
         inherit_cascade_target(&mut cascade_args, &task)?;
@@ -272,7 +272,7 @@ pub(crate) async fn post_run_lifecycle(
             fallback.as_str()
         );
         let mut cascade_args = args.clone();
-        cascade_args.agent_name = fallback.as_str().to_string();
+        super::run_post::switch_agent(&mut cascade_args, fallback.as_str().to_string());
         cascade_args.parent_task_id = Some(task_id.as_str().to_string());
         inherit_cascade_target(&mut cascade_args, &task)?;
         return Box::pin(run(store.clone(), cascade_args)).await.map(Some);

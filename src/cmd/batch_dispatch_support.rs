@@ -54,7 +54,7 @@ pub(super) async fn dispatch_level_with_ids(
                     fallback_agent.as_str(),
                     dispatch_task_ref(&tasks[task_idx], task_idx),
                 );
-                run_args.agent_name = fallback_agent.as_str().to_string();
+                crate::cmd::run::switch_agent(&mut run_args, fallback_agent.as_str().to_string());
                 run_args.cascade = remaining_cascade;
             }
             let progress_ref = format!(
@@ -123,7 +123,7 @@ pub(super) async fn maybe_dispatch_auto_fallback(
     );
     run_args.repo_root = repo_root.map(str::to_string);
     run_args.suppress_nested_repo_warning = true;
-    run_args.agent_name = fallback_agent.as_str().to_string();
+    crate::cmd::run::switch_agent(&mut run_args, fallback_agent.as_str().to_string());
     run_args.parent_task_id = Some(task_id.to_string());
     retried[task_idx] = true;
     aid_progress!(

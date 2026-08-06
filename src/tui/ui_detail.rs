@@ -5,7 +5,7 @@
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::prelude::{Color, Style};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, Borders, List, ListItem, Paragraph, Wrap};
+use ratatui::widgets::{Block, Borders, Paragraph, Wrap};
 
 use crate::tui::app::{App, DetailTab};
 use super::ui_helpers::{
@@ -45,7 +45,7 @@ pub(super) fn render_detail(frame: &mut ratatui::Frame<'_>, app: &App) {
 
     frame.render_widget(
         Paragraph::new(Line::from(Span::styled(
-            "e=events p=prompt o=output Tab=next Esc=back q=quit",
+            "e=events p=prompt o=output j/k PgUp/PgDn Home/End Tab=next Esc=back q=quit",
             Style::default().fg(Color::Indexed(243)),
         ))),
         chunks[1],
@@ -61,27 +61,21 @@ pub(super) fn render_detail_content(
 ) {
     match app.detail_tab {
         DetailTab::Events => {
-            let items: Vec<ListItem<'_>> = events
-                .iter()
-                .map(|event| {
-                    let kind_color = event_kind_color(event.event_kind);
-                    ListItem::new(Line::from(vec![
-                        Span::styled(
-                            event.timestamp.format("%H:%M:%S").to_string(),
-                            Style::default().fg(Color::Indexed(243)),
-                        ),
-                        Span::raw(" "),
-                        Span::styled(
-                            format!("[{}]", event.event_kind.as_str()),
-                            Style::default().fg(kind_color),
-                        ),
-                        Span::raw(" "),
-                        Span::raw(event.detail.clone()),
-                    ]))
-                })
-                .collect();
+            // Paragraph + wrap so long event details stay readable without
+            // blowing the layout; j/k/PgUp/PgDn/Home/End share detail_scroll.
+            let lines: Vec<Line<'static>> = if events.is_empty() {
+                vec![Line::from(Span::styled(
+                    "(no events)",
+                    Style::default().fg(Color::Indexed(243)),
+                ))]
+            } else {
+                events.iter().map(event_line).collect()
+            };
             frame.render_widget(
-                List::new(items).block(detail_content_block("Events")),
+                Paragraph::new(lines)
+                    .wrap(Wrap { trim: false })
+                    .scroll((detail_scroll_offset(app.detail_scroll), 0))
+                    .block(detail_content_block("Events")),
                 area,
             );
         }
@@ -104,6 +98,23 @@ pub(super) fn render_detail_content(
             );
         }
     }
+}
+
+fn event_line(event: &TaskEvent) -> Line<'static> {
+    let kind_color = event_kind_color(event.event_kind);
+    Line::from(vec![
+        Span::styled(
+            event.timestamp.format("%H:%M:%S").to_string(),
+            Style::default().fg(Color::Indexed(243)),
+        ),
+        Span::raw(" "),
+        Span::styled(
+            format!("[{}]", event.event_kind.as_str()),
+            Style::default().fg(kind_color),
+        ),
+        Span::raw(" "),
+        Span::raw(event.detail.clone()),
+    ])
 }
 
 fn event_kind_color(kind: EventKind) -> Color {

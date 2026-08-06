@@ -39,10 +39,6 @@ impl DetailTab {
             Self::Output => Self::Prompt,
         }
     }
-
-    fn is_text_view(self) -> bool {
-        matches!(self, Self::Prompt | Self::Output)
-    }
 }
 
 pub struct App {
@@ -107,14 +103,23 @@ impl App {
     }
 
     pub fn tick(&mut self) -> Result<()> {
+        let tree_anchor = if self.tree_mode {
+            let nodes =
+                super::tree_data::build_task_tree_with_creators(&self.tasks, &self.wg_creators);
+            nodes
+                .get(self.tree_selected)
+                .map(|n| (n.task.id.as_str().to_string(), n.is_group_header))
+        } else {
+            None
+        };
         self.reload_tasks()?;
-        // Keep tree_node_count in sync for key navigation
+        // Keep tree selection on the same node identity across refreshes.
         if self.tree_mode {
-            let count = super::tree_data::build_task_tree_with_creators(&self.tasks, &self.wg_creators).len();
-            self.tree_node_count = count;
-            if self.tree_selected >= count && count > 0 {
-                self.tree_selected = count - 1;
-            }
+            let nodes =
+                super::tree_data::build_task_tree_with_creators(&self.tasks, &self.wg_creators);
+            self.tree_node_count = nodes.len();
+            self.tree_selected =
+                Self::resolve_tree_selected(&nodes, tree_anchor, self.tree_selected);
         }
         // Only refresh process metrics every 2 seconds (ps fork is expensive)
         if self.last_metrics_refresh.elapsed().as_secs() >= 2 {
@@ -128,9 +133,11 @@ impl App {
             self.load_multipane_events()?;
             let count = self.multipane_tasks().len();
             self.pane_scroll_offsets.resize(count, 0);
+            self.clamp_all_pane_scrolls();
         }
         if self.detail_mode {
             self.load_selected_events()?;
+            self.clamp_detail_scroll();
         }
         Ok(())
     }
@@ -259,3 +266,7 @@ impl App {
 #[cfg(test)]
 #[path = "app_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "app_selection_tests.rs"]
+mod selection_tests;

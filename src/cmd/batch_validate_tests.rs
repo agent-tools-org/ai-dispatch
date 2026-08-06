@@ -49,7 +49,7 @@ fn stub_task(name: &str, depends_on: Option<Vec<&str>>) -> batch::BatchTask {
         read_only: false,
         sandbox: false,
         no_skill: false,
-        difficulty: None, budget: None, urgency: None, rigor: None, kind: None,
+        difficulty: None, budget: None, urgency: None, rigor: None, egress: None, kind: None,
         audit: None,
             env: None,
         env_forward: None,

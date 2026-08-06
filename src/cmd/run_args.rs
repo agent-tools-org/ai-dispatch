@@ -4,7 +4,7 @@
 use anyhow::{Context, Result};
 use crate::agent::classifier::TaskCategory;
 use crate::store::Store;
-use crate::types::{TaskBudget, TaskDifficulty, TaskId, TaskRigor, TaskUrgency};
+use crate::types::{TaskBudget, TaskDifficulty, TaskEgress, TaskId, TaskRigor, TaskUrgency};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -26,6 +26,7 @@ pub struct RunArgs {
     pub declared_budget: Option<TaskBudget>,
     pub declared_urgency: Option<TaskUrgency>,
     pub declared_rigor: Option<TaskRigor>,
+    pub declared_egress: TaskEgress,
     pub kind: Option<TaskCategory>,
     pub worktree: Option<String>,
     pub base_branch: Option<String>,
@@ -119,6 +120,7 @@ impl Default for RunArgs {
             declared_budget: None,
             declared_urgency: None,
             declared_rigor: None,
+            declared_egress: TaskEgress::Any,
             kind: None,
             worktree: None,
             base_branch: None,

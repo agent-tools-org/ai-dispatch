@@ -41,9 +41,15 @@ pub struct CustomAgentConfig {
     pub output_format: String,
     #[serde(default)]
     pub capabilities: CapabilityScores,
-    /// Trust tier: "local" (runs locally), "api" (sends prompts to third-party API)
+    /// Legacy hand-set label. Ignored for display and for `--egress` admission:
+    /// egress is established from [`Self::base_url`] (or is Unknown). Kept so
+    /// existing agent TOML still parses.
     #[serde(default = "default_trust_tier")]
     pub trust_tier: String,
+    /// OpenAI-compatible endpoint for this agent, when known. A loopback host
+    /// is the only evidence that admits `--egress local`.
+    #[serde(default)]
+    pub base_url: Option<String>,
     #[serde(default)]
     pub strengths: Vec<String>,
     /// When set (currently only "opencode"), the registry returns a
@@ -248,6 +254,7 @@ mod tests {
             output_format: default_output_format(),
             capabilities: CapabilityScores::default(),
             trust_tier: default_trust_tier(),
+            base_url: None,
             strengths: Vec::new(),
             delegate_to: None,
             forced_model: None,

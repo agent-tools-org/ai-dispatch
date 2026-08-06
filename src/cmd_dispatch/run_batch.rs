@@ -8,7 +8,7 @@ mod run_profile;
 use crate::cli::{BatchAction, RunExtrasArgs};
 use crate::cmd;
 use crate::types::TaskId;
-use crate::types::{TaskBudget, TaskDifficulty, TaskRigor, TaskUrgency};
+use crate::types::{TaskBudget, TaskDifficulty, TaskEgress, TaskRigor, TaskUrgency};
 use crate::agent::classifier::TaskCategory;
 use crate::{config, store};
 use anyhow::{Context, Result, anyhow};
@@ -33,6 +33,7 @@ pub(super) async fn run(
     budget: Option<TaskBudget>,
     urgency: Option<TaskUrgency>,
     rigor: Option<TaskRigor>,
+    egress: TaskEgress,
     kind: Option<TaskCategory>,
     no_hint: bool,
     worktree: Option<String>,
@@ -89,6 +90,7 @@ pub(super) async fn run(
         budget,
         urgency,
         rigor,
+        egress,
         kind,
         no_hint,
         read_only,
@@ -133,6 +135,7 @@ pub(super) async fn run(
         budget,
         urgency,
         rigor,
+        egress,
         kind,
         best_of,
         metric,

@@ -207,6 +207,9 @@ fn apply_task_defaults(task: &mut BatchTask, defaults: &BatchDefaults, task_idx:
     if task.rigor.is_none() {
         task.rigor = defaults.rigor;
     }
+    if task.egress.is_none() {
+        task.egress = defaults.egress;
+    }
     if task.kind.is_none() {
         task.kind = defaults.kind;
     }

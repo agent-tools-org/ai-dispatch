@@ -55,7 +55,8 @@ length-based complexity guess. The caller may override it with `--kind`.
 | `--difficulty` | `trivial` `simple` `moderate` `complex` | `moderate` | Floor on required capability score |
 | `--budget` | `free` `cheap` `standard` `premium` | `standard` | Eligible agents and model tier; `free` admits only free agents/models |
 | `--urgency` | `background` `normal` `urgent` | `normal` | Rate-limit policy: `background` waits for reset, `urgent` switches agent immediately |
-| `--rigor` | `draft` `standard` `critical` | `standard` | `critical` requires `--verify` and a cross-audit, and restricts trust tier |
+| `--rigor` | `draft` `standard` `critical` | `standard` | `critical` requires `--verify` and a cross-audit; does not whitelist agents |
+| `--egress` | `any` `local` | `any` | `local` admits only a provider whose established endpoint is loopback |
 
 The `--urgency` row is the answer to "codex quota is tight, what now?" — that call belongs to the
 caller, not to aid.
@@ -87,7 +88,7 @@ No new top-level command; extend `AgentCommands::{List, Show}` (`src/cli/sub_enu
       "kind": "builtin",
       "installed": true,
       "disabled": false,
-      "trust_tier": "local",
+      "trust_tier": "third-party",
       "description": "Complex implementation, multi-file refactors",
       "supports_session_resume": true,
       "quota": {

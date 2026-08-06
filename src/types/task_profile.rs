@@ -1,5 +1,6 @@
 // Declared task-profile dimensions shared by CLI, batch, routing, and storage.
-// Exports: TaskDifficulty, TaskBudget, TaskUrgency, TaskRigor, DeclaredTaskProfile.
+// Exports: TaskDifficulty, TaskBudget, TaskUrgency, TaskRigor, TaskEgress,
+//   DeclaredTaskProfile.
 // Deps: clap value parsing and serde persistence/JSON.
 
 use clap::ValueEnum;
@@ -153,6 +154,40 @@ impl TaskRigor {
             "critical" => Some(Self::Critical),
             _ => None,
         }
+    }
+}
+
+/// Where task data may go. Decided by the provider endpoint, not the CLI.
+/// Independent of [`TaskRigor`]: critical still forces verify+audit and does
+/// not whitelist agents.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, ValueEnum)]
+#[serde(rename_all = "kebab-case")]
+pub enum TaskEgress {
+    /// Any provider (default). No data-locality gate.
+    #[default]
+    Any,
+    /// Only a provider whose established endpoint is loopback.
+    Local,
+}
+
+impl TaskEgress {
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Any => "any",
+            Self::Local => "local",
+        }
+    }
+
+    pub(crate) fn parse_str(value: &str) -> Option<Self> {
+        match value {
+            "any" => Some(Self::Any),
+            "local" => Some(Self::Local),
+            _ => None,
+        }
+    }
+
+    pub fn requires_local(self) -> bool {
+        matches!(self, Self::Local)
     }
 }
 

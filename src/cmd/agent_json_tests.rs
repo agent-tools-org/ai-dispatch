@@ -21,7 +21,7 @@ fn test_agent_json_serialization_roundtrip() {
         kind: "builtin".to_string(),
         installed: true,
         disabled: false,
-        trust_tier: "local".to_string(),
+        trust_tier: "third-party".to_string(),
         description: "Complex implementation, multi-file refactors".to_string(),
         supports_session_resume: true,
         provider: "openai-chatgpt-plan".to_string(),

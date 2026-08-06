@@ -83,3 +83,40 @@ fn test_command_parses_filter_bin_and_harness_args() {
         _ => panic!("expected Test"),
     }
 }
+
+#[test]
+fn test_command_parses_filter_after_double_dash() {
+    // cargo muscle memory: `aid test -- name` — filter lands in extra_args.
+    let cli = Cli::try_parse_from(["aid", "test", "--", "nonexistent_test_xyz", "--exact"])
+        .expect("test command parses");
+    match cli.command {
+        Some(Commands::Test(TestArgs {
+            filter,
+            extra_args,
+            test_target,
+            ..
+        })) => {
+            assert!(filter.is_none());
+            assert!(test_target.is_none());
+            assert_eq!(extra_args, ["nonexistent_test_xyz", "--exact"]);
+        }
+        _ => panic!("expected Test"),
+    }
+}
+
+#[test]
+fn test_command_test_flag_is_target_not_name_filter() {
+    let cli = Cli::try_parse_from(["aid", "test", "--test", "template_e2e"])
+        .expect("test command parses");
+    match cli.command {
+        Some(Commands::Test(TestArgs {
+            filter,
+            test_target,
+            ..
+        })) => {
+            assert!(filter.is_none());
+            assert_eq!(test_target.as_deref(), Some("template_e2e"));
+        }
+        _ => panic!("expected Test"),
+    }
+}

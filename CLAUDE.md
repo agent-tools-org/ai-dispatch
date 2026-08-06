@@ -270,6 +270,7 @@ aid export t-1234 --format json -o out.json  # export as JSON
 aid build check                          # compact cargo check/clippy diagnostics
 aid test --bin aid                       # trusted tests (zero-match is an error)
 aid test --bin aid my_test -- --exact    # filter; lists which tests ran
+aid test -- my_filter                    # same as cargo; zero-match still fails
 aid test --isolated --bin aid            # temp AID_HOME for the cargo test process
 aid memory add discovery "fact"          # store agent memory
 aid memory list | search "keyword"       # recall memories

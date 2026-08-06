@@ -19,7 +19,8 @@ pub async fn run(store: Arc<Store>, args: TestArgs) -> Result<i32> {
     if !crate::agent::is_rust_project(None) {
         bail!("This is not a Rust project (no Cargo.toml found).");
     }
-    let filter = args.filter.clone();
+    // Positional FILTER, or the first non-flag arg after `--` (cargo muscle memory).
+    let filter = effective_filter(&args);
     let request = build_request(&args);
     let target = resolve_target(&store);
     let progress = build_process::ProgressConfig::from_env();
@@ -41,6 +42,29 @@ pub async fn run(store: Arc<Store>, args: TestArgs) -> Result<i32> {
     // Keep the temp AID_HOME alive for the whole cargo child lifetime.
     drop(isolated);
     Ok(verdict.exit_code)
+}
+
+/// Name filter for guarantee evaluation: clap positional, else first free harness arg.
+///
+/// `cargo test -- name` puts the filter after `--` (libtest free arg). Agents type
+/// that form; aid must still treat it as a filter for the zero-match rule.
+/// Target selectors stay on aid flags (`--lib`, `--bin`, `--test`), never as
+/// name filters.
+fn effective_filter(args: &TestArgs) -> Option<String> {
+    if let Some(filter) = args
+        .filter
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+    {
+        return Some(filter.to_string());
+    }
+    args.extra_args
+        .iter()
+        .map(String::as_str)
+        .map(str::trim)
+        .find(|arg| !arg.is_empty() && !arg.starts_with('-'))
+        .map(str::to_string)
 }
 
 /// Temporary AID_HOME for `--isolated` runs; removed on drop.
@@ -139,18 +163,25 @@ fn emit_finished(store: &Store, detail: &str) {
 mod tests {
     use super::*;
 
-    #[test]
-    fn build_request_orders_bin_filter_and_harness_args() {
-        let args = TestArgs {
+    fn base_args() -> TestArgs {
+        TestArgs {
             package: None,
-            bin: Some("aid".to_string()),
+            bin: None,
             lib: false,
             test_target: None,
-            filter: Some("paths::".to_string()),
+            filter: None,
             isolated: false,
             warnings: false,
-            extra_args: vec!["--exact".to_string()],
-        };
+            extra_args: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn build_request_orders_bin_filter_and_harness_args() {
+        let mut args = base_args();
+        args.bin = Some("aid".to_string());
+        args.filter = Some("paths::".to_string());
+        args.extra_args = vec!["--exact".to_string()];
         let request = build_request(&args);
         assert_eq!(
             request.cargo_args(),
@@ -168,21 +199,40 @@ mod tests {
 
     #[test]
     fn build_request_supports_lib_and_package() {
-        let args = TestArgs {
-            package: Some("ai-dispatch".to_string()),
-            bin: None,
-            lib: true,
-            test_target: None,
-            filter: None,
-            isolated: false,
-            warnings: true,
-            extra_args: Vec::new(),
-        };
+        let mut args = base_args();
+        args.package = Some("ai-dispatch".to_string());
+        args.lib = true;
+        args.warnings = true;
         let request = build_request(&args);
         assert_eq!(
             request.cargo_args(),
             ["test", "--message-format=json", "-p", "ai-dispatch", "--lib"]
         );
         assert!(request.include_warnings());
+    }
+
+    #[test]
+    fn effective_filter_reads_free_arg_after_double_dash() {
+        let mut args = base_args();
+        args.extra_args = vec!["nonexistent_test_xyz".to_string(), "--exact".to_string()];
+        assert_eq!(
+            effective_filter(&args).as_deref(),
+            Some("nonexistent_test_xyz")
+        );
+    }
+
+    #[test]
+    fn effective_filter_prefers_positional_over_harness_free_arg() {
+        let mut args = base_args();
+        args.filter = Some("paths::".to_string());
+        args.extra_args = vec!["other".to_string()];
+        assert_eq!(effective_filter(&args).as_deref(), Some("paths::"));
+    }
+
+    #[test]
+    fn effective_filter_ignores_harness_flags_only() {
+        let mut args = base_args();
+        args.extra_args = vec!["--exact".to_string(), "--nocapture".to_string()];
+        assert_eq!(effective_filter(&args), None);
     }
 }

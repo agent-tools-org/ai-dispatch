@@ -539,7 +539,7 @@ fn handle_failed_postprocess(
     _repo_path: Option<&String>,
     runtime_hooks: &[hooks::Hook],
 ) -> Option<String> {
-    let quota_error_message = read_quota_error_message(task_id);
+    let quota_error_message = read_quota_error_message(task_id, &agent_kind);
     if let Some(message) = quota_error_message.as_deref()
         && let Some(clean_message) = rate_limit::extract_rate_limit_message(message)
     {

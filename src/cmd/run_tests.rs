@@ -59,7 +59,7 @@ fn read_quota_error_message_uses_stderr() {
         "You have hit your usage limit.",
     )
     .unwrap();
-    let message = read_quota_error_message(&TaskId("t-quota-stderr".to_string()));
+    let message = read_quota_error_message(&TaskId("t-quota-stderr".to_string()), &AgentKind::Codex);
     assert_eq!(message.as_deref(), Some("You have hit your usage limit."));
 }
 
@@ -73,7 +73,7 @@ fn read_quota_error_message_falls_back_to_log() {
         "{\"error\":\"You have hit your usage limit.\"}\n",
     )
     .unwrap();
-    let message = read_quota_error_message(&TaskId("t-quota-log".to_string()));
+    let message = read_quota_error_message(&TaskId("t-quota-log".to_string()), &AgentKind::Codex);
     assert_eq!(message.as_deref(), Some("{\"error\":\"You have hit your usage limit.\"}"));
 }
 
@@ -87,7 +87,7 @@ fn read_quota_error_message_extracts_rate_limit_line_only() {
         "tokens: 8714294 in + 27373 out = 8741667 (8442752 cached)\nYou have hit your usage limit.\nsome other line\n",
     )
     .unwrap();
-    let message = read_quota_error_message(&TaskId("t-quota-mixed".to_string()));
+    let message = read_quota_error_message(&TaskId("t-quota-mixed".to_string()), &AgentKind::Codex);
     assert_eq!(message.as_deref(), Some("You have hit your usage limit."));
 }
 
@@ -101,8 +101,31 @@ fn read_quota_error_message_detects_402_payment_errors() {
         "{\"type\":\"error\",\"source\":\"agent_loop\",\"message\":\"402 payment required: reload your tokens\"}\n",
     )
     .unwrap();
-    let message = read_quota_error_message(&TaskId("t-quota-402".to_string()));
+    let message = read_quota_error_message(&TaskId("t-quota-402".to_string()), &AgentKind::Codex);
     assert_eq!(message.as_deref(), Some("402 payment required: reload your tokens"));
+}
+
+#[test]
+fn read_quota_error_message_ignores_agent_grep_in_log() {
+    let dir = TempDir::new().unwrap();
+    let _guard = paths::AidHomeGuard::set(dir.path());
+    std::fs::create_dir_all(paths::logs_dir()).unwrap();
+    crate::rate_limit::clear_rate_limit(&AgentKind::Cursor);
+    let grep_line = "completed: grep clear_rate_limit_if_stale|marker_path";
+    std::fs::write(
+        paths::log_path("t-quota-grep-log"),
+        format!("{grep_line}\n"),
+    )
+    .unwrap();
+    let task_id = TaskId("t-quota-grep-log".to_string());
+    let message = read_quota_error_message(&task_id, &AgentKind::Cursor);
+    assert_eq!(message, None);
+    if let Some(line) = message.as_deref()
+        && let Some(clean_message) = crate::rate_limit::extract_rate_limit_message(line)
+    {
+        crate::rate_limit::mark_rate_limited(&AgentKind::Cursor, &clean_message);
+    }
+    assert!(!crate::rate_limit::is_rate_limited(&AgentKind::Cursor));
 }
 
 #[test]
@@ -135,7 +158,7 @@ fn rescue_quota_failed_task_refuses_empty_worktree_rescue() {
     rescue_quota_failed_task(
         &store,
         &task.id,
-        read_quota_error_message(&task.id).as_deref(),
+        read_quota_error_message(&task.id, &task.agent).as_deref(),
     );
 
     let task = store.get_task("t-empty-wt").unwrap().unwrap();
@@ -173,7 +196,7 @@ fn rescue_quota_failed_task_rescues_worktree_with_modified_code() {
     rescue_quota_failed_task(
         &store,
         &task.id,
-        read_quota_error_message(&task.id).as_deref(),
+        read_quota_error_message(&task.id, &task.agent).as_deref(),
     );
     let checked_task = store.get_task("t-work-wt").unwrap().unwrap();
     assert_eq!(checked_task.status, TaskStatus::Failed);
@@ -183,7 +206,7 @@ fn rescue_quota_failed_task_rescues_worktree_with_modified_code() {
     rescue_quota_failed_task(
         &store,
         &task.id,
-        read_quota_error_message(&task.id).as_deref(),
+        read_quota_error_message(&task.id, &task.agent).as_deref(),
     );
 
     let task = store.get_task("t-work-wt").unwrap().unwrap();
@@ -223,7 +246,7 @@ fn rescue_quota_failed_task_rescues_untracked_source_files() {
     rescue_quota_failed_task(
         &store,
         &task.id,
-        read_quota_error_message(&task.id).as_deref(),
+        read_quota_error_message(&task.id, &task.agent).as_deref(),
     );
     let checked = store.get_task("t-untracked-wt").unwrap().unwrap();
     assert_eq!(checked.status, TaskStatus::Failed);
@@ -235,7 +258,7 @@ fn rescue_quota_failed_task_rescues_untracked_source_files() {
     rescue_quota_failed_task(
         &store,
         &task.id,
-        read_quota_error_message(&task.id).as_deref(),
+        read_quota_error_message(&task.id, &task.agent).as_deref(),
     );
 
     let task = store.get_task("t-untracked-wt").unwrap().unwrap();
@@ -276,7 +299,7 @@ fn rescue_quota_failed_task_rescues_committed_work_non_standard_branch() {
     rescue_quota_failed_task(
         &store,
         &task.id,
-        read_quota_error_message(&task.id).as_deref(),
+        read_quota_error_message(&task.id, &task.agent).as_deref(),
     );
     let checked = store.get_task("t-custom-branch").unwrap().unwrap();
     assert_eq!(checked.status, TaskStatus::Failed);
@@ -289,7 +312,7 @@ fn rescue_quota_failed_task_rescues_committed_work_non_standard_branch() {
     rescue_quota_failed_task(
         &store,
         &task.id,
-        read_quota_error_message(&task.id).as_deref(),
+        read_quota_error_message(&task.id, &task.agent).as_deref(),
     );
     let rescued = store.get_task("t-custom-branch").unwrap().unwrap();
     assert_eq!(rescued.status, TaskStatus::Done);
@@ -313,7 +336,7 @@ fn rescue_quota_failed_task_marks_passed_verify_as_done() {
     rescue_quota_failed_task(
         &store,
         &task.id,
-        read_quota_error_message(&task.id).as_deref(),
+        read_quota_error_message(&task.id, &task.agent).as_deref(),
     );
     let task = store.get_task("t-rescue-pass").unwrap().unwrap();
     assert_eq!(task.status, TaskStatus::Done);
@@ -335,7 +358,7 @@ fn rescue_quota_failed_task_keeps_failed_verify_failed() {
     rescue_quota_failed_task(
         &store,
         &task.id,
-        read_quota_error_message(&task.id).as_deref(),
+        read_quota_error_message(&task.id, &task.agent).as_deref(),
     );
     let task = store.get_task("t-rescue-fail").unwrap().unwrap();
     assert_eq!(task.status, TaskStatus::Failed);

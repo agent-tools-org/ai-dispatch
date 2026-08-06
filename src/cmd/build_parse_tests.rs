@@ -56,6 +56,7 @@ fn compile_failure_preserves_cargo_exit_code() {
         elapsed: Duration::from_millis(50),
         diagnostics: Vec::new(),
         stderr_lines: vec!["error: could not compile `foo`".to_string()],
+        note: None,
     };
     let verdict = evaluate_build_run(&report, 4, 101, false);
     assert!(!verdict.success);

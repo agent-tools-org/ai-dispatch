@@ -176,7 +176,6 @@ impl AgentKind {
                 "commandcode.ai subscription / credits",
                 "implement, create, build, refactor, test, explain",
                 true,
-                "api",
             )),
             Self::Cursor => Some((
                 "cursor",

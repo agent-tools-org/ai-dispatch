@@ -144,7 +144,8 @@ impl Drop for AidHomeGuard {
 /// - Any deletion or file access that does not go through `marker_path` (or explicit
 ///   `assert_aid_home_isolated` checks).
 ///
-/// The vanishing-marker bug is still open and tracked.
+/// The vanishing-marker bug this was written for is still open: see board item
+/// wi-de7e, which records what is established and why bisecting is the wrong next tool.
 #[cfg(test)]
 pub fn assert_aid_home_isolated(context: &str) {
     let resolved = resolve_path(&aid_dir());

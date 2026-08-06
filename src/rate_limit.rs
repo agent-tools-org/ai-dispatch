@@ -107,9 +107,58 @@ pub fn clear_rate_limit_if_stale(agent: &AgentKind, task_start: DateTime<Local>)
     clear_rate_limit(agent)
 }
 
+pub fn clear_group_rate_limit_if_stale(
+    agent: &AgentKind,
+    group: &str,
+    task_start: DateTime<Local>,
+) -> bool {
+    let path = group_marker_path(agent, group);
+    let written_after_start = fs::metadata(&path)
+        .and_then(|meta| meta.modified())
+        .map(|modified| DateTime::<Local>::from(modified) >= task_start)
+        .unwrap_or(false);
+    if written_after_start {
+        return false;
+    }
+    clear_group_rate_limit(agent, group)
+}
+
+pub fn clear_rate_limit_for_model_if_stale(
+    agent: &AgentKind,
+    model: Option<&str>,
+    task_start: DateTime<Local>,
+) -> bool {
+    let mut cleared = clear_rate_limit_if_stale(agent, task_start);
+    if let Some(group) = crate::agent::model_group::model_group(*agent, model) {
+        if clear_group_rate_limit_if_stale(agent, group, task_start) {
+            cleared = true;
+        }
+    }
+    cleared
+}
+
+pub fn clear_rate_limit_for_model(agent: &AgentKind, model: Option<&str>) -> bool {
+    let mut cleared = clear_rate_limit(agent);
+    if let Some(group) = crate::agent::model_group::model_group(*agent, model) {
+        if clear_group_rate_limit(agent, group) {
+            cleared = true;
+        }
+    }
+    cleared
+}
+
 pub fn clear_rate_limit(agent: &AgentKind) -> bool {
-    let path = marker_path(agent);
-    fs::remove_file(&path).is_ok()
+    fs::remove_file(marker_path(agent)).is_ok()
+}
+
+pub fn clear_all_rate_limits_for_agent(agent: &AgentKind) -> bool {
+    let mut cleared = clear_rate_limit(agent);
+    for (group, _) in crate::agent::model_group::groups_for_agent(*agent) {
+        if clear_group_rate_limit(agent, group) {
+            cleared = true;
+        }
+    }
+    cleared
 }
 
 pub fn is_rate_limited(agent: &AgentKind) -> bool {
@@ -695,6 +744,62 @@ mod stale_clear_tests {
 
         assert!(clear_rate_limit_if_stale(&AgentKind::Qwen, task_start));
         assert!(!is_rate_limited(&AgentKind::Qwen));
+    }
+
+    #[test]
+    fn clear_group_rate_limit_if_stale_clears_only_matching_group() {
+        let temp = tempfile::tempdir().unwrap();
+        let _guard = crate::paths::AidHomeGuard::set(temp.path());
+
+        let agent = AgentKind::Antigravity;
+        clear_all_rate_limits_for_agent(&agent);
+
+        mark_rate_limited(&agent, "Agent rate limit");
+        mark_group_rate_limited(&agent, "gemini", "Gemini quota exhausted");
+        mark_group_rate_limited(&agent, "claude", "Claude quota exhausted");
+
+        let task_start = Local::now() + chrono::Duration::minutes(5);
+
+        let cleared = clear_rate_limit_for_model_if_stale(&agent, Some("gemini-3.6-flash-high"), task_start);
+        assert!(cleared, "gemini group marker should be cleared on success");
+
+        assert!(!is_rate_limited(&agent), "agent-level marker must be cleared on model success");
+        assert!(!is_group_rate_limited(&agent, "gemini"), "gemini group must no longer be limited");
+        assert!(is_group_rate_limited(&agent, "claude"), "claude group must remain limited");
+    }
+
+    #[test]
+    fn clear_rate_limit_does_not_clear_group_markers() {
+        let temp = tempfile::tempdir().unwrap();
+        let _guard = crate::paths::AidHomeGuard::set(temp.path());
+
+        let agent = AgentKind::Antigravity;
+        clear_all_rate_limits_for_agent(&agent);
+
+        mark_rate_limited(&agent, "Agent level limit");
+        mark_group_rate_limited(&agent, "gemini", "Gemini quota exhausted");
+
+        assert!(clear_rate_limit(&agent));
+        assert!(!is_rate_limited(&agent), "agent-level marker must be removed");
+        assert!(is_group_rate_limited(&agent, "gemini"), "group marker must NOT be removed by clear_rate_limit");
+    }
+
+    #[test]
+    fn clear_all_rate_limits_clears_agent_and_all_groups() {
+        let temp = tempfile::tempdir().unwrap();
+        let _guard = crate::paths::AidHomeGuard::set(temp.path());
+
+        let agent = AgentKind::Antigravity;
+        clear_all_rate_limits_for_agent(&agent);
+
+        mark_rate_limited(&agent, "Agent limit");
+        mark_group_rate_limited(&agent, "gemini", "Gemini limit");
+        mark_group_rate_limited(&agent, "claude", "Claude limit");
+
+        assert!(clear_all_rate_limits_for_agent(&agent));
+        assert!(!is_rate_limited(&agent));
+        assert!(!is_group_rate_limited(&agent, "gemini"));
+        assert!(!is_group_rate_limited(&agent, "claude"));
     }
 }
 

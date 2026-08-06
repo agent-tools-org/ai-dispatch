@@ -465,9 +465,8 @@ fn handle_done_postprocess(
 ) {
     // Only a marker that predates this run is stale. One written *during* it was
     // written by this run's own refusal, and success here does not disprove it.
-    if rate_limit::is_rate_limited(&agent_kind) {
-        rate_limit::clear_rate_limit_if_stale(&agent_kind, task.created_at);
-    }
+    let model = task.observed_model.as_deref().or(args.model.as_deref());
+    rate_limit::clear_rate_limit_for_model_if_stale(&agent_kind, model, task.created_at);
     for memory_id in &prompt_bundle.injected_memory_ids {
         if let Err(err) = store.increment_memory_success(memory_id) {
             aid_error!("[aid] Failed to record memory success for {memory_id}: {err}");

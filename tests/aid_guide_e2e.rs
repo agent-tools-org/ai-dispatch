@@ -82,6 +82,12 @@ fn official_guide_documents_retry_worktree_safety() {
     assert!(operations.contains("When the recorded linked worktree still exists, retry reuses it"));
     assert!(operations.contains("original repository checkout as its anchor"));
     assert!(operations.contains("genuinely checked out in the checkout that dispatched the task"));
+    // Issue: a stalled task's own worktree lease refused its retry. The guide
+    // must document that retry supersedes a non-terminal task's live worker.
+    assert!(operations.contains("supersedes that task's own run"));
+    assert!(operations.contains("stops the still-live worker first"));
+    assert!(operations.contains("If the worker cannot be stopped, the retry is refused"));
+    assert!(operations.contains("genuinely held by a different live task"));
 }
 
 #[test]

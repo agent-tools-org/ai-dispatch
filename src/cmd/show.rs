@@ -354,8 +354,8 @@ pub fn summary_text(store: &Arc<Store>, task_id: &str) -> Result<String> {
     let mut out = String::new();
     out.push_str(&format!("=== Review: {} ===\n", task.id));
     out.push_str(&format!(
-        "Agent: {}  Status: {}  Prompt: {}\n",
-        task.agent_display_name(),
+        "Route: {}  Status: {}  Prompt: {}\n",
+        task.display_route(),
         task.status.label(),
         task.prompt,
     ));

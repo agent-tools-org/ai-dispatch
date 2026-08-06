@@ -32,7 +32,7 @@ pub fn generate_summary(task: &Task) -> CompletionSummary {
     let conclusion = summary_conclusion::extract_conclusion(task);
     let summary_text = format!(
         "{} {}: {} files changed ({}). Duration: {}.",
-        task.agent_display_name(),
+        task.display_route(),
         task.status.as_str(),
         files_changed.len(),
         file_list,
@@ -41,6 +41,7 @@ pub fn generate_summary(task: &Task) -> CompletionSummary {
 
     CompletionSummary {
         task_id: task.id.as_str().to_string(),
+        // Structured field stays the CLI name; the human line above carries the route.
         agent: task.agent_display_name().to_string(),
         status: task.status.as_str().to_string(),
         files_changed,
@@ -165,7 +166,12 @@ mod tests {
         assert_eq!(summary.status, "done");
         assert_eq!(summary.duration_secs, Some(2));
         assert!(summary.conclusion.is_empty());
-        assert!(summary.summary_text.contains("codex done")); assert!(summary.summary_text.contains("(no changes detected)"));
+        assert!(
+            summary.summary_text.contains("codex/openai-chatgpt-plan/unknown done"),
+            "summary text should open with the route triple: {}",
+            summary.summary_text
+        );
+        assert!(summary.summary_text.contains("(no changes detected)"));
     }
     #[test]
     fn format_summary_produces_readable_output() {

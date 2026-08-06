@@ -77,15 +77,13 @@ pub(crate) fn worktree_diff(task: &Task, task_id: &str) -> Result<String> {
 fn format_diff_header(task: &Task) -> String {
     let mut out = String::new();
     out.push_str(&format!("=== Review: {} ===\n", task.id));
+    // Route already carries model + attribution; keep no separate Model line.
     out.push_str(&format!(
-        "Agent: {}  Status: {}  Prompt: {}\n",
-        task.agent_display_name(),
+        "Route: {}  Status: {}  Prompt: {}\n",
+        task.display_route(),
         task.status.label(),
         truncate(&task.prompt, 60),
     ));
-    if let Some(model) = task.display_model() {
-        out.push_str(&format!("Model: {model}\n"));
-    }
     out
 }
 

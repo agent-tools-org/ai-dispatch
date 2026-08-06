@@ -17,7 +17,7 @@ pub fn render_task_detail(task: &Task, events: &[TaskEvent], retry_chain: Option
     out.push_str(&format!(
         "Task: {} — {}: {}\n",
         task.id,
-        task.agent_display_name(),
+        task.display_route(),
         truncate(&task.prompt, 60),
     ));
 

@@ -67,7 +67,7 @@ fn init_stream(
     group: Option<&str>,
     limit: Option<usize>,
 ) -> Result<StreamInit> {
-    println!("ID | Agent | Status | Duration | Prompt (truncated)");
+    println!("ID | Route | Status | Duration | Prompt (truncated)");
     let FilteredTasks { mut tasks, truncation } = list_filtered_tasks(store, running, today, mine, group, limit)?;
     tasks.sort_by(|a, b| a.id.as_str().cmp(b.id.as_str()));
     let mut last_status = HashMap::new();
@@ -76,7 +76,7 @@ fn init_stream(
         println!(
             "{} | {} | {} | {} | {}",
             task.id.as_str(),
-            task.agent_display_name(),
+            task.display_route(),
             colored_status(task.status),
             duration_for_task(task, store),
             prompt_snippet(task),
@@ -135,7 +135,7 @@ fn poll_and_print(
                 "[{}] {} {} {} {} {}",
                 Local::now().format("%H:%M:%S"),
                 task.id.as_str(),
-                task.agent_display_name(),
+                task.display_route(),
                 colored_status(task.status),
                 duration_for_task(task, store),
                 prompt_snippet(task),

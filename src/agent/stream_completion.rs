@@ -230,11 +230,19 @@ fn quota_scan_tail(output: &str) -> &str {
     while start < output.len() && !output.is_char_boundary(start) {
         start += 1;
     }
+    // Rewinding to the start of the line the window landed in must itself be
+    // bounded: output with no newline before that point would otherwise make the
+    // scan the whole buffer, which for a multi-megabyte transcript is a per-task
+    // cost paid on every completion. One extra window is the budget; beyond it the
+    // raw offset stands and only that line's tail is scanned, which is what the
+    // pre-alignment code did for every line.
     if start > 0 && output.as_bytes()[start - 1] != b'\n' {
-        if let Some(pos) = output[..start].rfind('\n') {
-            start = pos + 1;
-        } else {
-            start = 0;
+        let mut floor = start.saturating_sub(TAIL_BYTES);
+        while floor < start && !output.is_char_boundary(floor) {
+            floor += 1;
+        }
+        if let Some(pos) = output[floor..start].rfind('\n') {
+            start = floor + pos + 1;
         }
     }
     &output[start..]

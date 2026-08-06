@@ -265,3 +265,41 @@ fn quota_scan_tail_keeps_line_when_start_lands_on_line_boundary() {
         "when start lands exactly on line boundary, the first line must be kept"
     );
 }
+
+#[test]
+fn quota_scan_tail_rewind_is_bounded_when_output_has_no_newline() {
+    // A single line longer than two windows: rewinding to its start would scan
+    // everything. The raw offset stands instead.
+    let output = "z".repeat(200_000);
+    let tail = quota_scan_tail(&output);
+    assert!(
+        tail.len() <= 65_536,
+        "rewind must not expand the window past one extra budget, got {}",
+        tail.len()
+    );
+}
+
+#[test]
+fn buffered_grok_prose_about_rate_limits_never_marks_it() {
+    // grok has no anchored signature, so nothing it writes about quotas may mark
+    // it. This is the invariant that makes wiring record_quota_exhaustion into
+    // the buffered watcher safe for grok, whose buffer also carries aid's own
+    // terminal sentinel and echoed idle nudges.
+    let temp = tempfile::tempdir().unwrap();
+    let _aid_home = crate::paths::AidHomeGuard::set(temp.path());
+    let agent = crate::types::AgentKind::Grok;
+    crate::rate_limit::clear_rate_limit(&agent);
+
+    for line in [
+        "I hit a rate limit while reading the file",
+        "429",
+        "The task is about rate_limit markers",
+        "=== AID TASK t-abc DONE (exit 0) ===",
+    ] {
+        assert!(
+            !record_quota_exhaustion(line, agent, None).recorded(),
+            "grok must not be marked from its own prose: {line}"
+        );
+    }
+    assert!(!crate::rate_limit::is_rate_limited(&agent));
+}

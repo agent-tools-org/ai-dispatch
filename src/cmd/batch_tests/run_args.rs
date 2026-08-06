@@ -2,13 +2,20 @@
 // Exports: (tests only)
 // Deps: crate::batch, batch_args
 use crate::batch;
+use crate::paths::AidHomeGuard;
 use crate::store::Store;
 use std::sync::Arc;
 
 use super::super::batch_args::task_to_run_args;
 
+fn isolated_home() -> AidHomeGuard {
+    let temp = tempfile::tempdir().unwrap();
+    AidHomeGuard::set(temp.path())
+}
+
 #[test]
 fn task_to_run_args_copies_context() {
+    let _guard = isolated_home();
     let store = Arc::new(Store::open_memory().unwrap());
     let run_args = task_to_run_args(
         &batch::BatchTask {
@@ -74,6 +81,7 @@ fn task_to_run_args_copies_context() {
 
 #[test]
 fn task_to_run_args_copies_result_file() {
+    let _guard = isolated_home();
     let store = Arc::new(Store::open_memory().unwrap());
     let run_args = task_to_run_args(
         &batch::BatchTask {
@@ -136,6 +144,7 @@ fn task_to_run_args_copies_result_file() {
 
 #[test]
 fn task_to_run_args_copies_checklist() {
+    let _guard = isolated_home();
     let store = Arc::new(Store::open_memory().unwrap());
     let run_args = task_to_run_args(
         &batch::BatchTask {
@@ -201,6 +210,7 @@ fn task_to_run_args_copies_checklist() {
 
 #[test]
 fn task_to_run_args_copies_iterate_config() {
+    let _guard = isolated_home();
     let store = Arc::new(Store::open_memory().unwrap());
     let run_args = task_to_run_args(
         &batch::BatchTask {
@@ -268,6 +278,7 @@ fn task_to_run_args_copies_iterate_config() {
 
 #[test]
 fn task_to_run_args_defaults_dry_run_to_false() {
+    let _guard = isolated_home();
     let store = Arc::new(Store::open_memory().unwrap());
     let run_args = task_to_run_args(
         &batch::BatchTask {
@@ -330,6 +341,7 @@ fn task_to_run_args_defaults_dry_run_to_false() {
 
 #[test]
 fn task_to_run_args_includes_sibling_metadata() {
+    let _guard = isolated_home();
     let store = Arc::new(Store::open_memory().unwrap());
     let current = batch::BatchTask {
         id: Some("task-current".to_string()),
@@ -444,6 +456,7 @@ fn task_to_run_args_includes_sibling_metadata() {
 
 #[test]
 fn task_to_run_args_applies_forwarded_env_after_explicit_env() {
+    let _guard = isolated_home();
     let store = Arc::new(Store::open_memory().unwrap());
     let forwarded_path = std::env::var("PATH").unwrap();
     let run_args = task_to_run_args(
@@ -511,6 +524,7 @@ fn task_to_run_args_applies_forwarded_env_after_explicit_env() {
 
 #[test]
 fn task_to_run_args_includes_shared_dir_env() {
+    let _guard = isolated_home();
     let store = Arc::new(Store::open_memory().unwrap());
     let run_args = task_to_run_args(
         &batch::BatchTask {
@@ -580,6 +594,7 @@ fn task_to_run_args_includes_shared_dir_env() {
 
 #[test]
 fn task_to_run_args_copies_existing_task_id_and_run_flags() {
+    let _guard = isolated_home();
     let store = Arc::new(Store::open_memory().unwrap());
     let run_args = task_to_run_args(
         &batch::BatchTask {
@@ -655,6 +670,7 @@ fn task_to_run_args_copies_existing_task_id_and_run_flags() {
 
 #[test]
 fn task_to_run_args_copies_setup_and_link_deps() {
+    let _guard = isolated_home();
     let store = Arc::new(Store::open_memory().unwrap());
     let run_args = task_to_run_args(
         &batch::BatchTask {

@@ -9,6 +9,11 @@ use std::path::Path;
 use std::process::Command;
 use std::sync::Arc;
 
+fn isolated_home() -> crate::paths::AidHomeGuard {
+    let temp = tempfile::tempdir().unwrap();
+    crate::paths::AidHomeGuard::set(temp.path())
+}
+
 fn test_task(id: &str) -> Task {
     Task {
         id: TaskId(id.to_string()),
@@ -108,6 +113,7 @@ fn report_mode_dirty_skip_uses_narrow_predicate() {
 
 #[test]
 fn generated_id_collision_retries_and_dispatch_succeeds() {
+    let _guard = isolated_home();
     let store = Arc::new(Store::open_memory().unwrap());
     store.insert_task(&test_task("t-00000001")).unwrap();
     TaskId::set_generate_sequence_for_tests(&["t-00000001", "t-00000002"]);
@@ -126,6 +132,7 @@ fn generated_id_collision_retries_and_dispatch_succeeds() {
 
 #[test]
 fn generated_id_exhaustion_does_not_reset_worktree_branch() {
+    let _guard = isolated_home();
     let _permit = crate::test_subprocess::acquire();
     let repo = init_repo();
     let store = Arc::new(Store::open_memory().unwrap());
@@ -164,6 +171,7 @@ fn generated_id_exhaustion_does_not_reset_worktree_branch() {
 
 #[test]
 fn retry_prepare_persists_live_worktree_metadata() {
+    let _guard = isolated_home();
     let _permit = crate::test_subprocess::acquire();
     let repo = init_repo();
     let store = Arc::new(Store::open_memory().unwrap());
@@ -220,6 +228,7 @@ fn prepare_dispatch_updates_log_path_when_id_is_auto_suffixed() {
 
 #[test]
 fn prepare_dispatch_uses_task_specific_audit_result_file() {
+    let _guard = isolated_home();
     let store = Arc::new(Store::open_memory().unwrap());
     let mut args = RunArgs {
         agent_name: "codex".to_string(),
@@ -238,6 +247,7 @@ fn prepare_dispatch_uses_task_specific_audit_result_file() {
 
 #[test]
 fn prepare_dispatch_skips_auto_result_file_when_output_is_set() {
+    let _guard = isolated_home();
     let store = Arc::new(Store::open_memory().unwrap());
     let mut args = RunArgs {
         agent_name: "codex".to_string(),
@@ -254,6 +264,7 @@ fn prepare_dispatch_skips_auto_result_file_when_output_is_set() {
 
 #[test]
 fn prepare_dispatch_keeps_write_intent_out_of_report_mode() {
+    let _guard = isolated_home();
     let store = Arc::new(Store::open_memory().unwrap());
     let mut args = RunArgs {
         agent_name: "codex".to_string(),
@@ -269,6 +280,7 @@ fn prepare_dispatch_keeps_write_intent_out_of_report_mode() {
 
 #[test]
 fn prepare_dispatch_rejects_requested_worktree_when_it_is_the_repo_root() {
+    let _guard = isolated_home();
     let _permit = crate::test_subprocess::acquire();
     let repo = init_repo();
     let store = Arc::new(Store::open_memory().unwrap());

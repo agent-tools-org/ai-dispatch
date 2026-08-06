@@ -40,8 +40,8 @@ output_format = "text"  # "text" or "jsonl"
 # Strength categories for simple boosts (match TaskCategory strings, e.g. "research")
 strengths = []
 
-# Trust tier: "local" (runs locally) or "api" (sends prompts to third-party)
-trust_tier = "api"
+# Egress is derived from base_url (loopback => local). trust_tier is legacy and ignored.
+# base_url = "http://127.0.0.1:11434/v1"
 
 # Capability scores for auto-selection (0-10)
 [agent.capabilities]
@@ -63,7 +63,7 @@ pub(super) fn custom_agent_template(name: &str, display_name: &str) -> String {
 
 pub(super) fn build_builtin_agent_toml(target_name: &str, kind: AgentKind) -> String {
     let display_name = title_case(target_name);
-    let Some((command, _, _, _, streaming, trust_tier)) = kind.profile() else {
+    let Some((command, _, _, _, streaming)) = kind.profile() else {
         return String::new();
     };
     let caps = capability_scores_for(kind);
@@ -92,9 +92,9 @@ pub(super) fn build_builtin_agent_toml(target_name: &str, kind: AgentKind) -> St
     toml.push_str(&format!("streaming = {}\n", streaming));
     toml.push_str("output_format = \"text\"  # text | jsonl\n\n");
     toml.push_str(
-        "# Trust tier: \"local\" (runs locally) or \"api\" (sends prompts to third-party)\n",
+        "# Egress is derived from base_url (loopback => local for --egress local).\n",
     );
-    toml.push_str(&format!("trust_tier = \"{}\"\n\n", trust_tier));
+    toml.push_str("# base_url = \"http://127.0.0.1:11434/v1\"\n\n");
     toml.push_str("# Strength categories for auto-selection boosts\n");
     toml.push_str("strengths = []\n\n");
     toml.push_str("# Capability scores (0-10) guide auto-selection\n");

@@ -199,9 +199,15 @@ write_agent_toml() {
     printf 'fixed_args = %s\n' "${wrapper_args}"
     printf 'streaming = true\n'
     printf 'output_format = "jsonl"\n'
-    # base_url establishes egress (loopback => local; otherwise third-party).
+    # base_url establishes egress (loopback => local; RFC1918/.local => private-network; else third-party).
     # trust_tier is legacy and ignored for admission/display.
     printf 'base_url = %s\n' "$(toml_quote "$(jq -r '.base_url' <<< "${manifest_data}")")"
+    if jq -e '(.provider // "") | length > 0' <<< "${manifest_data}" >/dev/null; then
+      printf 'provider = %s\n' "$(toml_quote "$(jq -r '.provider' <<< "${manifest_data}")")"
+    fi
+    if jq -e '(.metering // "") | length > 0' <<< "${manifest_data}" >/dev/null; then
+      printf 'metering = %s\n' "$(toml_quote "$(jq -r '.metering' <<< "${manifest_data}")")"
+    fi
     if [[ "${protocol}" == "openai" ]]; then
       printf 'delegate_to = "opencode"\n'
       printf 'forced_model = %s\n' "$(toml_quote "${model_ref}")"

@@ -47,6 +47,22 @@ pub fn require_local_egress(agent_name: &str) -> Result<()> {
     );
 }
 
+/// Fail when `--egress private-network` was declared and this agent does not
+/// reach a loopback or private-network endpoint.
+pub fn require_private_network_egress(agent_name: &str) -> Result<()> {
+    let tier = resolve_agent_egress(agent_name);
+    if tier.admits_private_network() {
+        return Ok(());
+    }
+    let detail = egress_detail(agent_name);
+    anyhow::bail!(
+        "Agent '{agent_name}' is not eligible for --egress private-network: {detail} is {} \
+         (only loopback or RFC1918/link-local endpoints qualify; public third-party \
+         providers and unknown endpoints do not)",
+        tier.label()
+    );
+}
+
 fn egress_detail(agent_name: &str) -> String {
     if let Some(kind) = AgentKind::parse_str(agent_name) {
         return format!("provider '{}'", crate::types::provider_for_cli(kind).0.as_str());
@@ -70,5 +86,13 @@ mod tests {
     #[test]
     fn unknown_name_is_unknown() {
         assert_eq!(resolve_agent_egress("no-such-agent-xyz"), EgressTier::Unknown);
+    }
+
+    #[test]
+    fn private_network_url_classifies_without_widening_local() {
+        let tier = egress_for_base_url("http://10.0.0.5:11434/v1");
+        assert_eq!(tier, EgressTier::PrivateNetwork);
+        assert!(!tier.admits_local());
+        assert!(tier.admits_private_network());
     }
 }

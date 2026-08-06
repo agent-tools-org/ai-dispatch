@@ -15,6 +15,7 @@ Usage: scripts/aid-byok-probe.sh [--key <api-key>] <manifest.toml>
 Exit codes:
   0  tool_calls present
   2  no tool_calls present
+  3  inconclusive (finish_reason length; output may have been truncated)
 EOF
 }
 
@@ -66,7 +67,7 @@ request_json() {
       }
     }],
     tool_choice: "auto",
-    max_tokens: 128
+    max_tokens: 2048
   }'
 }
 
@@ -107,6 +108,12 @@ probe_manifest() {
     printf 'finish_reason: %s\n' "${finish_reason}"
     printf 'content: %s\n' "${preview}"
     return 0
+  fi
+  if [[ "${finish_reason}" == "length" ]]; then
+    printf 'tool_calls: inconclusive\n'
+    printf 'finish_reason: %s\n' "${finish_reason}"
+    printf 'content: %s\n' "${preview}"
+    return 3
   fi
   printf 'tool_calls: no\n'
   printf 'finish_reason: %s\n' "${finish_reason}"

@@ -168,6 +168,8 @@ pub enum TaskEgress {
     Any,
     /// Only a provider whose established endpoint is loopback.
     Local,
+    /// Only a provider whose established endpoint is loopback or private-network.
+    PrivateNetwork,
 }
 
 impl TaskEgress {
@@ -175,6 +177,7 @@ impl TaskEgress {
         match self {
             Self::Any => "any",
             Self::Local => "local",
+            Self::PrivateNetwork => "private-network",
         }
     }
 
@@ -182,12 +185,17 @@ impl TaskEgress {
         match value {
             "any" => Some(Self::Any),
             "local" => Some(Self::Local),
+            "private-network" => Some(Self::PrivateNetwork),
             _ => None,
         }
     }
 
     pub fn requires_local(self) -> bool {
         matches!(self, Self::Local)
+    }
+
+    pub fn requires_private_network(self) -> bool {
+        matches!(self, Self::PrivateNetwork)
     }
 }
 

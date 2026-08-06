@@ -89,10 +89,12 @@ Important controls:
 - `--rigor` declares `draft`, `standard`, or `critical` proof level (compiles / path exercised /
   cross-audit). `critical` forces `--verify` and `--audit`; it does **not** restrict which agent
   may run.
-- `--egress` declares `any` (default) or `local`. `local` admits only a provider whose established
-  endpoint is loopback (`localhost` / `127.0.0.1`). Every current built-in agent is third-party or
-  unknown and therefore ineligible. Egress is decided by the provider (or a custom agent's
-  `base_url`), not by CLI identity or a hand-set `trust_tier`.
+- `--egress` declares `any` (default), `local`, or `private-network`. `local` admits only a provider whose established
+  endpoint is loopback (`localhost`, `127.0.0.0/8`, or `::1`). `private-network` admits loopback, RFC1918/link-local
+  IPs, or private DNS suffixes (`.local`, `.home.arpa`) but does not widen `local`. Every current built-in agent is third-party or
+  unknown and therefore ineligible for either gate. Egress is decided by the provider (or a custom agent's
+  `base_url`), not by CLI identity or a hand-set `trust_tier`. Custom BYOK agents declare `provider` and optional
+  `metering` in the manifest (copied into the generated agent TOML); aid never infers provider identity from the host.
 - `--kind` overrides the inferred task kind while difficulty remains caller-declared. On `aid run`
   it is also how a caller narrows the injected toolbox: declare it and tools are filtered to that
   category, omit it and every resolved tool is described.

@@ -74,6 +74,9 @@ fn explicit_agent(
     if egress.requires_local() {
         agent::egress::require_local_egress(&agent_name)?;
     }
+    if egress.requires_private_network() {
+        agent::egress::require_private_network_egress(&agent_name)?;
+    }
     let selected_kind = AgentKind::parse_str(&agent_name);
     let selected_model = if model.is_none() {
         selected_kind.and_then(|kind| agent::selection::model_for_task_budget(
@@ -128,5 +131,17 @@ mod tests {
             TaskEgress::Any,
         )
         .is_ok());
+    }
+
+    #[test]
+    fn egress_private_network_refuses_public_third_party() {
+        let err = explicit_agent(
+            "codex".into(),
+            &None,
+            Some(TaskBudget::Standard),
+            TaskEgress::PrivateNetwork,
+        )
+        .expect_err("codex must fail --egress private-network");
+        assert!(err.to_string().contains("--egress private-network"));
     }
 }

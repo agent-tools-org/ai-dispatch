@@ -83,6 +83,8 @@ fn remove_worktree_path_allows_legacy_tmp_worktree() {
         .unwrap();
     let worktree_path = path_holder.path().to_path_buf();
     drop(path_holder);
+    // If remove_worktree_path panics/fails before deleting, guard still reaps the fixture.
+    let _guard = crate::test_env::TmpWorktreeGuard::with_repo(repo.path(), worktree_path.clone());
     git(
         repo.path(),
         &[

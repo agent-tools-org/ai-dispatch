@@ -1,24 +1,68 @@
 // Isolated HOME directory per task dispatch to prevent orchestrator identity leaks.
-// Exports: IsolatedHomeGuard, DEFAULT_DENYLIST.
-// Deps: std::fs, std::path::{Path, PathBuf}.
+// Exports: IsolatedHomeGuard, DEFAULT_DENYLIST, resolve_real_home.
+// Deps: std::fs, std::path::{Path, PathBuf}, libc (unix passwd fallback).
 
+use std::ffi::OsStr;
 use std::fs;
 use std::path::{Path, PathBuf};
+
+use anyhow::Context;
+
+#[cfg(unix)]
+use std::os::unix::ffi::OsStrExt;
 
 pub const DEFAULT_DENYLIST: &[&str] = &[
     ".claude",
     ".claude.json",
     ".anthropic",
+    ".agents",
+    ".agent",
 ];
 
 pub struct IsolatedHomeGuard {
     path: PathBuf,
 }
 
+pub fn resolve_real_home() -> anyhow::Result<PathBuf> {
+    if let Some(home) = std::env::var_os("HOME") {
+        let home = PathBuf::from(home);
+        if home.is_dir() {
+            return Ok(home);
+        }
+        anyhow::bail!("HOME is set to '{}' but is not a directory", home.display());
+    }
+    passwd_home()
+}
+
+#[cfg(unix)]
+fn passwd_home() -> anyhow::Result<PathBuf> {
+    unsafe {
+        let uid = libc::getuid();
+        let entry = libc::getpwuid(uid);
+        if entry.is_null() {
+            anyhow::bail!("HOME is unset and passwd lookup failed for uid {uid}");
+        }
+        let dir = std::ffi::CStr::from_ptr((*entry).pw_dir);
+        let home = PathBuf::from(OsStr::from_bytes(dir.to_bytes()));
+        if !home.is_dir() {
+            anyhow::bail!(
+                "HOME is unset; passwd home '{}' is not a directory",
+                home.display()
+            );
+        }
+        Ok(home)
+    }
+}
+
+#[cfg(not(unix))]
+fn passwd_home() -> anyhow::Result<PathBuf> {
+    anyhow::bail!("HOME is unset and passwd home resolution is unavailable on this platform")
+}
+
 impl IsolatedHomeGuard {
     pub fn create(task_id: Option<&str>) -> anyhow::Result<Self> {
-        let real_home = std::env::var_os("HOME").map(PathBuf::from);
-        Self::create_from_home(real_home.as_deref(), task_id)
+        let real_home = resolve_real_home()?;
+        Self::create_from_home(Some(real_home.as_path()), task_id)
     }
 
     pub fn create_from_home(real_home: Option<&Path>, task_id: Option<&str>) -> anyhow::Result<Self> {
@@ -45,35 +89,63 @@ impl IsolatedHomeGuard {
     }
 
     fn build_isolated_home(real_home: Option<&Path>, isolated_path: &Path) -> anyhow::Result<()> {
-        if isolated_path.exists() {
-            let _ = fs::remove_dir_all(isolated_path);
-        }
-        fs::create_dir_all(isolated_path)?;
-
         let Some(real_home) = real_home else {
-            return Ok(());
+            anyhow::bail!("cannot build isolated HOME: real home directory is unknown");
         };
         if !real_home.is_dir() {
-            return Ok(());
+            anyhow::bail!(
+                "cannot build isolated HOME: '{}' is not a directory",
+                real_home.display()
+            );
         }
 
-        let entries = match fs::read_dir(real_home) {
-            Ok(rd) => rd,
-            Err(_) => return Ok(()),
-        };
+        if isolated_path.exists() {
+            fs::remove_dir_all(isolated_path).with_context(|| {
+                format!(
+                    "cannot remove existing isolated HOME at '{}'",
+                    isolated_path.display()
+                )
+            })?;
+        }
+        fs::create_dir_all(isolated_path).with_context(|| {
+            format!(
+                "cannot create isolated HOME at '{}'",
+                isolated_path.display()
+            )
+        })?;
 
-        for entry in entries.flatten() {
+        let entries = fs::read_dir(real_home).with_context(|| {
+            format!("cannot read real HOME directory '{}'", real_home.display())
+        })?;
+
+        #[cfg(not(unix))]
+        {
+            anyhow::bail!("HOME isolation requires Unix symlinks");
+        }
+
+        for entry in entries {
+            let entry = entry.with_context(|| {
+                format!("cannot read entry in real HOME '{}'", real_home.display())
+            })?;
             let file_name = entry.file_name();
             let name_str = file_name.to_string_lossy();
-            if DEFAULT_DENYLIST.contains(&name_str.as_ref()) {
+            if DEFAULT_DENYLIST.contains(&name_str.as_ref())
+                || DEFAULT_DENYLIST
+                    .iter()
+                    .any(|d| name_str.starts_with(&format!("{d}.")) || name_str.starts_with(&format!("{d}-")))
+            {
                 continue;
             }
             let link_dest = isolated_path.join(&file_name);
             let target_path = entry.path();
             #[cfg(unix)]
-            {
-                let _ = std::os::unix::fs::symlink(&target_path, &link_dest);
-            }
+            std::os::unix::fs::symlink(&target_path, &link_dest).with_context(|| {
+                format!(
+                    "cannot symlink '{}' -> '{}' in isolated HOME",
+                    target_path.display(),
+                    link_dest.display()
+                )
+            })?;
         }
         Ok(())
     }

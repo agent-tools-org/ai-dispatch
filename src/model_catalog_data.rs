@@ -158,5 +158,7 @@ pub const AGENT_MODELS: &[AgentModel] = &[
     AgentModel { agent: AgentKind::Claude, model: "haiku", input_per_m: 0.8, output_per_m: 4.0, tier: "cheap", description: "Fastest, lower-cost option", capability: 6.2 },
     // Price unknown: grok's CLI exposes no billing surface (MeteringShape::Unknown).
     // 0.0/0.0 here is "no figure", not free — do not invent a plausible rate.
+    // estimate_cost must return None for grok models (pricing_builtin has no grok
+    // row); a finished task only gets a number when the agent reports total_cost_usd.
     AgentModel { agent: AgentKind::Grok, model: "grok-4.5", input_per_m: 0.0, output_per_m: 0.0, tier: "unknown", description: "CLI default (price unknown)", capability: 8.0 },
 ];

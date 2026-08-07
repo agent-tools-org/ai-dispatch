@@ -9,7 +9,6 @@ use super::background_kill::terminate_task_processes;
 use super::background_spec::{load_spec_if_exists, BackgroundRunSpec};
 use super::background_waiting;
 use super::MAX_WORKERS;
-use crate::idle_timeout::DEFAULT_IDLE_TIMEOUT_SECS;
 use crate::{config, notify, paths, sanitize};
 use crate::store::Store;
 use crate::types::{AgentKind, EventKind, PendingReason, Task, TaskEvent, TaskFilter, TaskId, TaskStatus};
@@ -17,7 +16,6 @@ use crate::types::{AgentKind, EventKind, PendingReason, Task, TaskEvent, TaskFil
 pub(crate) const ZOMBIE_FAILURE_DETAIL: &str = "Background worker died unexpectedly";
 const PENDING_TASK_TIMEOUT_SECS: i64 = 600;
 const MAX_RUN_HOURS: i64 = crate::timeout_policy::DEFAULT_HARD_CAP_HOURS;
-const LIVE_WORKER_IDLE_MARGIN: u64 = 2;
 
 pub(super) fn record_worker_failure_skip_notify(store: &Store, task_id: &str, err: &anyhow::Error) -> Result<bool> {
     record_failure_skip_notify(store, task_id, &format!("{err:#}"), &format!("Background worker failed: {err}"))
@@ -86,7 +84,7 @@ where
 {
     let task_id = task.id.as_str();
     if is_worker_alive(worker_pid) {
-        if cleanup_wedged_live_worker(store, task, spec, worker_pid)? {
+        if background_orphan::cleanup_wedged_live_worker(store, task, spec, worker_pid)? {
             cleaned.push(task_id.to_string());
             return Ok(());
         }
@@ -173,36 +171,6 @@ fn cleanup_old_running_tasks(
         }
     }
     Ok(())
-}
-
-fn cleanup_wedged_live_worker(
-    store: &Store,
-    task: &Task,
-    spec: &BackgroundRunSpec,
-    worker_pid: u32,
-) -> Result<bool> {
-    if task.status != TaskStatus::Running {
-        return Ok(false);
-    }
-    let idle_secs = spec.idle_timeout_secs.unwrap_or(DEFAULT_IDLE_TIMEOUT_SECS);
-    let stale_after_secs = idle_secs.saturating_mul(LIVE_WORKER_IDLE_MARGIN);
-    let activity = background_orphan::latest_activity(store, task)?;
-    if !background_orphan::is_stale(activity.timestamp, Local::now(), stale_after_secs) {
-        return Ok(false);
-    }
-    let detail = format!(
-        "hung detected (monitor wedged): no events for {stale_after_secs}s \
-         (idle timeout {idle_secs}s, margin {LIVE_WORKER_IDLE_MARGIN}x)"
-    );
-    terminate_task_processes(Some(worker_pid), spec);
-    let failed = background_orphan::record_hung_detected_failure(
-        store,
-        task.id.as_str(),
-        stale_after_secs,
-        &activity,
-        &detail,
-    )?;
-    Ok(failed)
 }
 
 pub(crate) fn cleanup_stale_pending_tasks(store: &Store) -> Result<Vec<String>> {

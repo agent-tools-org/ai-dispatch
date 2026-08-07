@@ -38,10 +38,12 @@ Do not send repeated polling messages; inspect events first.
 
 AID enforces configured idle, hung-task, cost, and maximum-duration safeguards.
 
-A task that has produced zero bytes since spawn is reaped on the shorter
-first-token budget (default 180s, `AID_FIRST_TOKEN_TIMEOUT_SECS`), including
-buffered agents such as grok. Silence after real progress keeps the full idle
-timeout.
+A task that has produced zero progress since spawn is reaped on the shorter
+first-token budget (default 180s, `AID_FIRST_TOKEN_TIMEOUT_SECS`). For PTY
+agents this is the first-token dead-stream detector; for buffered background
+agents (grok, agy) the background reaper applies the same distinction — silence
+since spawn versus silence after progress. Only the latter waits out the full
+idle margin.
 
 `--idle-timeout SECS` stops a task whose stream goes quiet. Meaningful text
 output refreshes the liveness clock even when aid cannot parse it into an event

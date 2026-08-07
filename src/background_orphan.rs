@@ -6,11 +6,13 @@ use anyhow::Result;
 use chrono::{DateTime, Local};
 
 use super::background_kill::terminate_task_processes;
-use super::background_spec::load_spec_if_exists;
+use super::background_spec::{load_spec_if_exists, BackgroundRunSpec};
 use crate::idle_timeout::DEFAULT_IDLE_TIMEOUT_SECS;
 use crate::process_monitor;
 use crate::store::Store;
-use crate::types::{EventKind, Task, TaskEvent, TaskId};
+use crate::types::{EventKind, Task, TaskEvent, TaskId, TaskStatus};
+
+const LIVE_WORKER_IDLE_MARGIN: u64 = 2;
 
 pub(super) fn cleanup_orphaned_idle_tasks<F>(
     store: &Store,
@@ -109,6 +111,53 @@ pub(super) fn record_hung_detected_failure(
         false,
     )?;
     Ok(true)
+}
+
+/// Live worker with a wedged monitor: no progress events for too long.
+/// Zero events since spawn uses the first-token budget; silence after progress
+/// uses 2× idle (the buffered path never builds MonitorState).
+pub(super) fn cleanup_wedged_live_worker(
+    store: &Store,
+    task: &Task,
+    spec: &BackgroundRunSpec,
+    worker_pid: u32,
+) -> Result<bool> {
+    if task.status != TaskStatus::Running {
+        return Ok(false);
+    }
+    let idle_secs = spec.idle_timeout_secs.unwrap_or(DEFAULT_IDLE_TIMEOUT_SECS);
+    let activity = latest_activity(store, task)?;
+    let stale_after_secs = wedged_stale_after_secs(activity.event_count, idle_secs, spec);
+    if !is_stale(activity.timestamp, Local::now(), stale_after_secs) {
+        return Ok(false);
+    }
+    let detail = wedged_failure_detail(activity.event_count, stale_after_secs, idle_secs);
+    terminate_task_processes(Some(worker_pid), spec);
+    record_hung_detected_failure(store, task.id.as_str(), stale_after_secs, &activity, &detail)
+}
+
+fn wedged_stale_after_secs(event_count: u32, idle_secs: u64, spec: &BackgroundRunSpec) -> u64 {
+    if event_count == 0 {
+        crate::timeout_policy::TimeoutPolicy::from_env(spec.env.as_ref())
+            .first_token
+            .as_secs()
+    } else {
+        idle_secs.saturating_mul(LIVE_WORKER_IDLE_MARGIN)
+    }
+}
+
+fn wedged_failure_detail(event_count: u32, stale_after_secs: u64, idle_secs: u64) -> String {
+    if event_count == 0 {
+        format!(
+            "hung detected (monitor wedged): no events since spawn for {stale_after_secs}s \
+             (first-token timeout)"
+        )
+    } else {
+        format!(
+            "hung detected (monitor wedged): no events for {stale_after_secs}s \
+             (idle timeout {idle_secs}s, margin {LIVE_WORKER_IDLE_MARGIN}x)"
+        )
+    }
 }
 
 pub(super) struct TaskActivity {

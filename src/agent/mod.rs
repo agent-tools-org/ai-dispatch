@@ -44,10 +44,11 @@ pub(crate) mod env;
 #[path = "binary.rs"]
 mod binary;
 pub(crate) use binary::{
-    built_in_agent_binary_exists, built_in_binaries, builtin_binary_owner,
-    ensure_agent_binary_available, ensure_agent_binary_available_with,
+    builtin_binary_owner, ensure_agent_binary_available, ensure_agent_binary_available_with,
     ensure_resolved_binary_available, ensure_resolved_binary_available_with,
 };
+#[cfg(test)]
+pub(crate) use binary::built_in_agent_binary_exists;
 #[allow(unused_imports)]
 pub use env::{
     agent_has_fs_access, apply_cargo_target_env, apply_run_env, apply_rust_build_cache_env,

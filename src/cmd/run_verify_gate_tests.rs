@@ -182,7 +182,10 @@ fn read_only_task_skips_configured_verify() {
 }
 
 #[test]
-fn empty_diff_skips_configured_verify() {
+fn empty_diff_still_runs_configured_verify_and_fails_on_broken_tree() {
+    // Agent delivered nothing (clean tree, no commits ahead). That is delivery
+    // assessment, not a verify skip — configured verify must still run and can
+    // fail when the tree is already broken (`false` as stand-in).
     let repo = tempfile::tempdir().unwrap();
     let dir = repo.path();
     assert!(std::process::Command::new("git")
@@ -213,7 +216,7 @@ fn empty_diff_skips_configured_verify() {
         .success());
     let dir_str = dir.to_string_lossy().to_string();
     let store = Store::open_memory().unwrap();
-    let task_id = TaskId("t-empty-skip".to_string());
+    let task_id = TaskId("t-empty-still-verify".to_string());
     store
         .insert_task(&task(task_id.as_str(), TaskStatus::Done, Some(&dir_str), Some("false")))
         .unwrap();
@@ -221,16 +224,15 @@ fn empty_diff_skips_configured_verify() {
     maybe_verify(&store, &task_id, Some("false"), Some(&dir_str), None);
 
     let loaded = store.get_task(task_id.as_str()).unwrap().unwrap();
-    assert_eq!(loaded.verify_status, VerifyStatus::Skipped);
-    assert_eq!(loaded.status, TaskStatus::Done);
-    assert!(store.latest_error(task_id.as_str()).is_none());
+    assert!(loaded.verify_status.was_attempted());
+    assert_eq!(loaded.verify_status, VerifyStatus::Failed);
+    assert_eq!(loaded.status, TaskStatus::Failed);
 }
 
 #[test]
 fn genuine_verify_failure_still_fails_task() {
     let dir = tempfile::tempdir().unwrap();
     let dir_str = dir.path().to_string_lossy().to_string();
-    // Non-git dir so empty-diff skip does not fire; command still fails.
     let store = Store::open_memory().unwrap();
     let task_id = TaskId("t-real-vfail".to_string());
     store

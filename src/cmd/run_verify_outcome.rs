@@ -3,76 +3,18 @@
 // Deps: chrono, store, types, verify.
 
 use chrono::Local;
-use std::path::Path;
-use std::process::Command;
 
 use crate::store::Store;
 use crate::types::{EventKind, Task, TaskEvent, TaskId};
 use crate::verify::VerifyResult;
 
-/// Skip verify when there is nothing under test: read-only tasks never change the
-/// tree, and an empty diff has no change for the verify command to exercise.
-pub(super) fn nothing_to_verify_reason(task: Option<&Task>, dir: &Path) -> Option<&'static str> {
+/// Skip verify only when there is genuinely nothing under test.
+/// Read-only tasks never change the tree. An empty diff is *not* a skip:
+/// "agent delivered nothing" is delivery assessment, and a configured verify
+/// must still run against the tree (and can fail if the tree is already broken).
+pub(super) fn nothing_to_verify_reason(task: Option<&Task>) -> Option<&'static str> {
     if task.is_some_and(|task| task.read_only) {
         return Some("task is read-only");
-    }
-    if worktree_has_nothing_to_verify(dir) == Some(true) {
-        return Some("worktree has no changes to verify");
-    }
-    None
-}
-
-/// True only when porcelain is clean and HEAD has no commits ahead of the
-/// default branch. Returns None when git cannot answer — callers must not skip.
-fn worktree_has_nothing_to_verify(dir: &Path) -> Option<bool> {
-    let porcelain = Command::new("git")
-        .current_dir(dir)
-        .args(["status", "--porcelain"])
-        .output()
-        .ok()?;
-    if !porcelain.status.success() {
-        return None;
-    }
-    if !String::from_utf8_lossy(&porcelain.stdout).trim().is_empty() {
-        return Some(false);
-    }
-    let base = default_branch(dir)?;
-    let ahead = Command::new("git")
-        .current_dir(dir)
-        .args(["rev-list", "--count", &format!("{base}..HEAD")])
-        .output()
-        .ok()?;
-    if !ahead.status.success() {
-        return None;
-    }
-    let count = String::from_utf8_lossy(&ahead.stdout).trim().parse::<u64>().ok()?;
-    Some(count == 0)
-}
-
-fn default_branch(dir: &Path) -> Option<String> {
-    let origin = Command::new("git")
-        .current_dir(dir)
-        .args(["symbolic-ref", "--short", "refs/remotes/origin/HEAD"])
-        .output()
-        .ok()?;
-    if origin.status.success() {
-        if let Some(name) = String::from_utf8_lossy(&origin.stdout)
-            .trim()
-            .strip_prefix("origin/")
-        {
-            return Some(name.to_string());
-        }
-    }
-    for candidate in ["main", "master"] {
-        let ok = Command::new("git")
-            .current_dir(dir)
-            .args(["rev-parse", "--verify", "--quiet", &format!("{candidate}^{{commit}}")])
-            .status()
-            .ok()?
-            .success();
-        if ok {
-            return Some(candidate.to_string());
-        }
     }
     None
 }

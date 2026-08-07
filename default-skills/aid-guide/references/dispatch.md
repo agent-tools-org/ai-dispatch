@@ -103,10 +103,12 @@ Important controls:
 - `--worktree` creates or reuses an isolated task branch.
 - `--verify [COMMAND]` verifies completion; without a value it uses project
   configuration or supported defaults. Verification is skipped (not failed)
-  when the task is `--read-only` or the worktree has no changes to exercise.
-  A verify command that hits the wall-clock cap is recorded as `timed_out`,
-  which is inconclusive and does not fail the task; only a finished verify
-  command with a non-zero exit fails the task.
+  when the task is `--read-only` or has no working directory. An empty diff
+  is not a skip — delivery assessment records `empty_diff`, and a configured
+  verify still runs against the tree. A verify command that hits the
+  wall-clock cap is recorded as `timed_out`, which is inconclusive and does
+  not fail the task; only a finished verify command with a non-zero exit
+  fails the task.
 - `--retry N` permits new attempts after failure.
 - `--bg` returns the task ID immediately.
 - `--read-only` forbids modifying the repository under test; the task result

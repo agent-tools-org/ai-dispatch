@@ -555,7 +555,9 @@ pub(crate) fn maybe_flag_hollow_output(
     task: &Task,
     base_branch: Option<&str>,
 ) {
-    if task.status != TaskStatus::Done || task.verify_status != VerifyStatus::Skipped {
+    // Hollow output is delivery assessment, not verify outcome. A task can have
+    // Passed/TimedOut verify and still lack a substantive deliverable.
+    if task.status != TaskStatus::Done {
         return;
     }
     if output_content_length(task) >= 200 {

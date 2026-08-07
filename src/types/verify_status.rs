@@ -36,6 +36,12 @@ impl VerifyStatus {
             _ => None,
         }
     }
+
+    /// True when a verify command was started (pass, fail, or timeout).
+    /// Distinct from delivery: an empty-diff task can still have been verified.
+    pub fn was_attempted(self) -> bool {
+        matches!(self, Self::Passed | Self::Failed | Self::TimedOut)
+    }
 }
 
 #[cfg(test)]
@@ -46,5 +52,14 @@ mod tests {
     fn timed_out_round_trips() {
         assert_eq!(VerifyStatus::TimedOut.as_str(), "timed_out");
         assert_eq!(VerifyStatus::parse_str("timed_out"), Some(VerifyStatus::TimedOut));
+    }
+
+    #[test]
+    fn was_attempted_excludes_skipped_and_pending() {
+        assert!(VerifyStatus::Passed.was_attempted());
+        assert!(VerifyStatus::Failed.was_attempted());
+        assert!(VerifyStatus::TimedOut.was_attempted());
+        assert!(!VerifyStatus::Skipped.was_attempted());
+        assert!(!VerifyStatus::Pending.was_attempted());
     }
 }

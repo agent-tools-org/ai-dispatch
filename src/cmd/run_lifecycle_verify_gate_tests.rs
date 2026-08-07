@@ -119,7 +119,8 @@ async fn failed_verify_fails_completed_worktree_task() {
     let repo = init_repo();
     let branch = "fix/verify-gate-clean";
     let wt = create_worktree(repo.path(), branch);
-    // Leave a real change so empty-diff skip does not fire; verify must still run.
+    // Real change optional now that empty-diff no longer skips verify; keep one
+    // so this case is clearly "agent produced work that still failed verify".
     std::fs::write(wt.join("change.txt"), "changed\n").unwrap();
     let store = Arc::new(Store::open_memory().unwrap());
     let task_id = TaskId("t-vgate-worktree".to_string());

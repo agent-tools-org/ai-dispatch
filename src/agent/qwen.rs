@@ -27,7 +27,9 @@ impl super::Agent for QwenAgent {
 
     fn build_command(&self, prompt: &str, opts: &RunOpts) -> Result<Command> {
         if opts.read_only {
-            anyhow::bail!("qwen agent does not support read-only mode");
+            anyhow::bail!(
+                "qwen agent does not support read-only mode; omit --read-only, or use an agent that supports it (codex, claude, cursor, gemini, agy)"
+            );
         }
         let mut cmd = Command::new("qwen");
         cmd.args(["-o", "stream-json"]);

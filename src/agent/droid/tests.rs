@@ -57,6 +57,28 @@ fn build_command_read_only_uses_use_spec() {
 }
 
 #[test]
+fn build_command_read_only_with_result_file_skips_use_spec() {
+    let opts = RunOpts {
+        dir: None,
+        output: None,
+        result_file: Some("result.md".to_string()),
+        model: None,
+        budget: false,
+        read_only: true,
+        sandbox: false,
+        context_files: vec![],
+        session_id: None,
+        env: None,
+        env_forward: None,
+    };
+    let cmd = DroidAgent.build_command("audit", &opts).unwrap();
+    let args: Vec<String> = cmd.get_args().map(|a| a.to_string_lossy().to_string()).collect();
+    assert!(!args.contains(&"--use-spec".to_string()));
+    assert!(args.contains(&"--skip-permissions-unsafe".to_string()));
+    assert!(args.iter().any(|a| a.contains("EXCEPT the result file")));
+}
+
+#[test]
 fn build_command_adds_context_files_via_append_system_prompt_file() {
     let opts = RunOpts {
         dir: None,

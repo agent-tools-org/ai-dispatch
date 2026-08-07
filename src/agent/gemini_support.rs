@@ -8,6 +8,7 @@ use std::collections::BTreeSet;
 use std::path::{Component, Path, PathBuf};
 use std::process::Command;
 
+use super::read_only::{allow_result_file_write, read_only_prompt};
 use super::RunOpts;
 
 pub(super) fn build_gemini_family_command(
@@ -23,7 +24,14 @@ pub(super) fn build_gemini_family_command(
     {
         cmd.env(key, value);
     }
-    if opts.read_only {
+    // Plan mode blocks the result-file write audits need; relax to write-capable
+    // mode and keep the read-only contract in the prompt exception text.
+    let effective_prompt = if allow_result_file_write(opts) {
+        read_only_prompt(prompt, opts)
+    } else {
+        prompt.to_string()
+    };
+    if opts.read_only && !allow_result_file_write(opts) {
         cmd.args(["--approval-mode", "plan"]);
     } else {
         cmd.arg("-y");
@@ -34,7 +42,7 @@ pub(super) fn build_gemini_family_command(
     for dir in gemini_include_directories(opts.dir.as_deref(), &opts.context_files) {
         cmd.args(["--include-directories", &dir]);
     }
-    cmd.args(["-p", prompt]);
+    cmd.args(["-p", &effective_prompt]);
     if let Some(ref dir) = opts.dir {
         cmd.current_dir(dir);
     }

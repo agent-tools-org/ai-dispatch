@@ -1,11 +1,45 @@
 // Pre-dispatch validation and task ID conflict handling for `aid run`.
-// Exports: validate_dispatch(), resolve_id_conflict(), IdConflict.
+// Exports: validate_dispatch(), validate_command_preflight(), resolve_id_conflict(), IdConflict.
 // Deps: agent classification, Store, RunArgs, task status types.
 use anyhow::Result;
-use crate::agent;
+use crate::agent::{self, RunOpts};
 use crate::store::Store;
 use crate::types::{AgentKind, TaskStatus};
 use super::RunArgs;
+
+/// Reject combinations the command builder cannot honor before a task row exists.
+pub(super) fn validate_command_preflight(
+    agent: &dyn agent::Agent,
+    args: &RunArgs,
+    effective_model: Option<&str>,
+) -> Result<()> {
+    if args.sandbox
+        && crate::sandbox::can_sandbox(agent.kind())
+        && !crate::sandbox::is_available()
+    {
+        anyhow::bail!(
+            "--sandbox requires Apple Container CLI. Install: brew install container; or omit --sandbox"
+        );
+    }
+    let opts = RunOpts {
+        // Capability probe only — skip dir existence checks (worktree may not exist yet).
+        dir: None,
+        output: args.output.clone(),
+        result_file: args.result_file.clone(),
+        model: effective_model.map(str::to_string),
+        budget: args.budget,
+        read_only: args.read_only,
+        sandbox: args.sandbox,
+        context_files: Vec::new(),
+        session_id: None,
+        env: None,
+        env_forward: None,
+    };
+    agent
+        .build_command("__aid_preflight__", &opts)
+        .map(|_| ())
+        .map_err(|err| anyhow::anyhow!("{err:#}"))
+}
 
 pub(super) fn validate_dispatch(args: &RunArgs, agent_kind: &AgentKind) -> Vec<String> {
     let mut warnings = Vec::new();

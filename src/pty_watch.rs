@@ -35,6 +35,10 @@ pub(crate) struct MonitorState {
     awaiting_input: bool,
     last_progress_time: Instant,
     last_raw_chunk_time: Instant,
+    /// Set on the first real PTY byte chunk. Buffered agents never raise
+    /// `event_count`, so this is how first-token knows "silence since spawn"
+    /// apart from "silence after progress".
+    received_raw_bytes: bool,
     idle_nudged: bool,
     idle_warned: bool,
     pending_inbound_acks: usize,
@@ -77,6 +81,7 @@ impl MonitorState {
             awaiting_input: false,
             last_progress_time: Instant::now(),
             last_raw_chunk_time: Instant::now(),
+            received_raw_bytes: false,
             idle_nudged: false,
             idle_warned: false,
             pending_inbound_acks: 0,
@@ -379,9 +384,14 @@ impl MonitorState {
         agent_streaming: bool,
         first_token_timeout: Duration,
     ) -> bool {
-        agent_streaming
-            && self.progress_count() <= 1
-            && self.last_raw_chunk_time.elapsed() > first_token_timeout
+        // Streaming: still at zero/one parsed event. Buffered: never saw a byte.
+        // Silence after progress keeps the long idle budget either way.
+        let awaiting_first_output = if agent_streaming {
+            self.progress_count() <= 1
+        } else {
+            !self.received_raw_bytes
+        };
+        awaiting_first_output && self.last_raw_chunk_time.elapsed() > first_token_timeout
     }
 
     fn last_progress_detail(&self) -> Option<String> {
@@ -430,6 +440,7 @@ pub(crate) fn monitor_bridge(
         }
         match rx.recv_timeout(INPUT_POLL_INTERVAL) {
             Ok(bytes) => {
+                state.received_raw_bytes = true;
                 state.last_raw_chunk_time = Instant::now();
                 state.handle_chunk(agent, task_id, store, log_file, decoder.push(bytes))?;
             }

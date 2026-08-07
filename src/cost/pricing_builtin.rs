@@ -111,11 +111,9 @@ pub(super) fn for_model_lower(m: &str) -> Option<ModelPricing> {
             input_per_m: 1.10,
             output_per_m: 4.40,
         }
-    } else if m.contains("grok") {
-        ModelPricing {
-            input_per_m: 3.0,
-            output_per_m: 15.0,
-        }
+    // grok intentionally absent: price is unknown (catalog tier "unknown").
+    // A plausible rate here would make estimate_cost invent $figures for
+    // finished grok tasks that lack agent-reported total_cost_usd.
     } else if (m.contains("free")
         && (m.contains("nemotron")
             || m.contains("minimax")

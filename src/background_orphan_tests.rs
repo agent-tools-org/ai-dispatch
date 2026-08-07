@@ -185,3 +185,62 @@ fn is_stale_requires_idle_timeout_to_elapse() {
     assert!(is_stale(now - chrono::Duration::seconds(300), now, 300));
     assert!(!is_stale(now - chrono::Duration::seconds(299), now, 300));
 }
+
+#[test]
+fn latest_activity_ignores_setup_as_agent_output() {
+    let store = Store::open_memory().expect("store");
+    let mut task = make_task("t-setup-act");
+    task.created_at = Local::now() - chrono::Duration::seconds(200);
+    store.insert_task(&task).expect("insert task");
+    store
+        .insert_event(&TaskEvent {
+            task_id: TaskId("t-setup-act".to_string()),
+            timestamp: Local::now() - chrono::Duration::seconds(190),
+            event_kind: EventKind::Setup,
+            detail: "Cargo target seeded: /tmp/target from /cache in 12ms".to_string(),
+            metadata: None,
+        })
+        .expect("insert setup");
+
+    let activity = latest_activity(&store, &task).expect("activity");
+
+    assert_eq!(activity.event_count, 0);
+    assert!(!activity.has_agent_bytes);
+    assert_eq!(activity.timestamp, task.created_at);
+    assert!(activity.detail.is_none());
+}
+
+#[test]
+fn latest_activity_counts_transcript_bytes_as_progress() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    let _aid_home = paths::AidHomeGuard::set(temp.path());
+    paths::ensure_dirs().expect("ensure dirs");
+    let store = Store::open_memory().expect("store");
+    let mut task = make_task("t-bytes-act");
+    task.created_at = Local::now() - chrono::Duration::seconds(200);
+    store.insert_task(&task).expect("insert task");
+    store
+        .insert_event(&TaskEvent {
+            task_id: TaskId("t-bytes-act".to_string()),
+            timestamp: Local::now() - chrono::Duration::seconds(190),
+            event_kind: EventKind::Setup,
+            detail: "Cargo target seeded".to_string(),
+            metadata: None,
+        })
+        .expect("insert setup");
+    std::fs::create_dir_all(paths::task_dir("t-bytes-act")).expect("task dir");
+    let transcript = paths::transcript_path("t-bytes-act");
+    std::fs::write(&transcript, "agent chunk\n").expect("bytes");
+    // mtime newer than created_at so activity advances on bytes.
+    let newer = std::time::SystemTime::now() - std::time::Duration::from_secs(10);
+    std::fs::File::open(&transcript)
+        .expect("open")
+        .set_modified(newer)
+        .expect("mtime");
+
+    let activity = latest_activity(&store, &task).expect("activity");
+
+    assert_eq!(activity.event_count, 0);
+    assert!(activity.has_agent_bytes);
+    assert!(activity.timestamp > task.created_at);
+}

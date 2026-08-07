@@ -59,6 +59,27 @@ text). Generic tokens like `429` or `rate limit` count in agent-authored prose
 only when the whole line is essentially the refusal (for example `429 Too Many
 Requests`), not when they appear inside discussion.
 
+A hold ends in one of three ways, and `aid config agents` names which:
+
+| Status | Ends when | Example |
+|---|---|---|
+| `rate-limited (try again at <time>)` | that time passes | codex usage limit, qwen token-plan window |
+| `rate-limited (needs manual clear: aid config clear-limit <agent>)` | a person acts | spent balance, billing cycle, retired plan tier |
+| `rate-limited (cooling down)` | a short cooldown elapses | a bare `429`/`402` with no recognised template |
+
+The middle class covers refusals that never state a reset time and do not return
+on a clock — a spent opencode balance, a copilot monthly quota, a cursor premium
+pool, grok's exhausted Build balance. These are held until `aid config
+clear-limit <agent>` rather than given an invented expiry, because a guessed
+cooldown sends work back to a provider that is still refusing it. The last class
+is the opposite guard: an unrecognised refusal must not take a route out
+permanently, so it expires by itself.
+
+An agent whose plan splits one allowance into tiers is marked per tier. Cursor
+meters a single premium pool that every model except `auto` draws on, so a
+premium refusal holds those models while `auto` stays dispatchable;
+`aid config clear-limit cursor` clears both.
+
 Use `aid byok` for custom OpenAI-compatible endpoints. Use `aid credential` to
 manage named credential-pool entries; never place secret values in prompts,
 task output, committed project configuration, or skills.

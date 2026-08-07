@@ -137,30 +137,32 @@ pub(super) fn resolve_agent_setup(store: &Arc<Store>, args: &mut RunArgs) -> Res
             "[aid] {} is rate-limited; background urgency keeps this agent selected",
             agent_kind.as_str()
         );
-    } else if let Some(info) = rate_limit::get_rate_limit_info(&agent_kind)
-        && let Some(ref recovery) = info.recovery_at
-    {
+    } else if let Some(hold) = rate_limit::dispatch_blocking_hold(&agent_kind) {
+        // A hold that a person must end carries no recovery time at all. Gating
+        // on the presence of one sent `aid run` straight into a spent balance,
+        // and kept diverting for markers whose stated time had already passed.
         if let Some(next_agent) = args.cascade.first() {
             aid_warn!(
-                "[aid] {} is rate-limited — will cascade to {}",
+                "[aid] {} is rate-limited ({}) — will cascade to {}",
                 agent_kind.as_str(),
+                hold,
                 next_agent
             );
         } else if let Some(fallback) =
             crate::agent::selection::coding_fallback_for_prompt(&agent_kind, &args.prompt)
         {
             aid_warn!(
-                "[aid] {} is rate-limited (until {}), auto-cascading to {}",
+                "[aid] {} is rate-limited ({}), auto-cascading to {}",
                 agent_kind.as_str(),
-                recovery,
+                hold,
                 fallback.as_str()
             );
             args.cascade = vec![fallback.as_str().to_string()];
         } else {
             anyhow::bail!(
-                "{} is rate-limited until {}. Use --cascade <agent> to specify a fallback, or wait.",
+                "{} is rate-limited {}. Use --cascade <agent> to specify a fallback.",
                 agent_kind.as_str(),
-                recovery
+                hold
             );
         }
     }

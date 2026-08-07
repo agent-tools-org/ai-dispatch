@@ -77,7 +77,7 @@ pub(crate) fn handle_streaming_line_with_session(
         if let Some(message) =
             rate_limit::extract_rate_limit_from_stream_detail(&event.detail, &agent.kind())
         {
-            rate_limit::mark_rate_limited(&agent.kind(), &message);
+            rate_limit::mark_rate_limited_for_message(&agent.kind(), &message);
         }
         store.insert_event(&event)?;
         *event_count += 1;

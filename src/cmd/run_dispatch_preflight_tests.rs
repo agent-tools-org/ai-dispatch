@@ -3,55 +3,15 @@
 
 use super::*;
 use super::validate_command_preflight_with;
-use std::ffi::OsString;
 use std::sync::Arc;
-
-struct EnvVarGuard {
-    key: &'static str,
-    previous: Option<OsString>,
-}
-
-impl EnvVarGuard {
-    fn remove(key: &'static str) -> Self {
-        let previous = std::env::var_os(key);
-        // SAFETY: test-only; restored on drop so nested aid sessions stay intact.
-        unsafe { std::env::remove_var(key) };
-        Self { key, previous }
-    }
-}
-
-impl Drop for EnvVarGuard {
-    fn drop(&mut self) {
-        match &self.previous {
-            Some(value) => unsafe { std::env::set_var(self.key, value) },
-            None => unsafe { std::env::remove_var(self.key) },
-        }
-    }
-}
 
 fn isolated_home() -> crate::paths::AidHomeGuard {
     let temp = tempfile::tempdir().unwrap();
     crate::paths::AidHomeGuard::set(temp.path())
 }
 
-/// prepare_dispatch reads AID_TASK_ID / AID_TASK_DEPTH; clear them so nested
-/// outer aid sessions cannot turn capability probes into depth refusals.
-fn clear_nested_dispatch_env() -> (
-    std::sync::MutexGuard<'static, ()>,
-    EnvVarGuard,
-    EnvVarGuard,
-) {
-    let lock = crate::aic::test_env_lock();
-    (
-        lock,
-        EnvVarGuard::remove("AID_TASK_ID"),
-        EnvVarGuard::remove("AID_TASK_DEPTH"),
-    )
-}
-
 #[test]
 fn prepare_dispatch_rejects_qwen_read_only_before_task_exists() {
-    let _nest = clear_nested_dispatch_env();
     let _guard = isolated_home();
     let store = Arc::new(Store::open_memory().unwrap());
     let mut args = RunArgs {
@@ -112,8 +72,20 @@ fn validate_command_preflight_rejects_missing_resolved_binary() {
 }
 
 #[test]
+fn validate_command_preflight_skips_path_probe_on_dry_run() {
+    let agent = crate::agent::get_agent(AgentKind::Codex);
+    let args = RunArgs {
+        agent_name: "codex".to_string(),
+        prompt: "Inspect the repository state carefully.".to_string(),
+        dry_run: true,
+        ..Default::default()
+    };
+    // Dry-run never spawns; missing host binaries must not block the preview.
+    validate_command_preflight_with(agent.as_ref(), &args, None, |_| false).unwrap();
+}
+
+#[test]
 fn prepare_dispatch_rejects_custom_agent_with_missing_binary_before_task_exists() {
-    let _nest = clear_nested_dispatch_env();
     let temp = tempfile::tempdir().unwrap();
     let _guard = crate::paths::AidHomeGuard::set(temp.path());
     crate::paths::ensure_dirs().unwrap();

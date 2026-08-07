@@ -282,7 +282,10 @@ empty target set for a green suite.
 - Failure output stays compact (panics and assertion diffs)
 
 `--isolated` gives the cargo test process a temporary `AID_HOME` so the run
-cannot read or pollute the developer's `~/.aid/`. It is opt-in, not the default.
+cannot read or pollute the developer's `~/.aid/`. It also clears nested
+`AID_TASK_ID` / `AID_TASK_DEPTH` in that child so unit tests that call
+`prepare_dispatch` are not refused as over-depth when `aid test` itself runs
+inside a task. It is opt-in, not the default.
 
 Inherited `CARGO_TARGET_DIR` wins for the first attempt. If cargo cannot write
 that directory (common under agent OS sandboxes that only allow the worktree

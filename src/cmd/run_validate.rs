@@ -50,8 +50,8 @@ where
     let cmd = agent
         .build_command("__aid_preflight__", &opts)
         .map_err(|err| anyhow::anyhow!("{err:#}"))?;
-    // Container/sandbox runs resolve the binary inside the guest image.
-    if args.container.is_some() || args.sandbox {
+    // Container/sandbox resolve the binary in the guest; dry-run never spawns.
+    if args.container.is_some() || args.sandbox || args.dry_run {
         return Ok(());
     }
     let program = cmd.get_program().to_string_lossy();

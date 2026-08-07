@@ -10,6 +10,9 @@ use crate::types::{EventKind, Task, TaskEvent, TaskId, TaskStatus, VerifyStatus}
 
 use super::RunArgs;
 
+#[path = "run_verify_outcome.rs"]
+mod outcome;
+
 pub(in crate::cmd) fn maybe_cleanup_fast_fail_impl(store: &Store, task_id: &TaskId, task: &Task) {
     let _ = (store, task_id, task);
 }
@@ -34,6 +37,10 @@ pub(in crate::cmd) fn maybe_verify_impl(
     let path = std::path::Path::new(dir_path);
     let task = store.get_task(task_id.as_str()).ok().flatten();
     let worktree_branch = task.as_ref().and_then(|task| task.worktree_branch.clone());
+    if let Some(reason) = outcome::nothing_to_verify_reason(task.as_ref(), path) {
+        aid_info!("[aid] Verify skipped: {reason}");
+        return;
+    }
     if !path.is_dir() {
         let detail = stale_worktree_dir_error(dir_path, worktree_branch.as_deref());
         record_verify_not_run(store, task_id, detail.clone());
@@ -58,7 +65,9 @@ pub(in crate::cmd) fn maybe_verify_impl(
             let report = crate::verify::format_verify_report(&result);
             println!("{report}");
             crate::verify::record_verify_status(store, task_id, &result);
-            if !result.success {
+            if result.timed_out {
+                outcome::record_verify_timed_out(store, task_id, &result);
+            } else if !result.success {
                 let hint = verify_failure_hint(store, task_id, &result.output);
                 let detail = match verify_output_excerpt(&result.output) {
                     Some(output) => {

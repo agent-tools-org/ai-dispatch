@@ -162,3 +162,84 @@ fn rustc_error_does_not_emit_missing_npm_hint() {
         event.detail.contains("verify likely failed because dependencies weren't installed")
     }));
 }
+
+#[test]
+fn read_only_task_skips_configured_verify() {
+    let dir = tempfile::tempdir().unwrap();
+    let dir_str = dir.path().to_string_lossy().to_string();
+    let store = Store::open_memory().unwrap();
+    let task_id = TaskId("t-readonly-skip".to_string());
+    let mut t = task(task_id.as_str(), TaskStatus::Done, Some(&dir_str), Some("false"));
+    t.read_only = true;
+    store.insert_task(&t).unwrap();
+
+    maybe_verify(&store, &task_id, Some("false"), Some(&dir_str), None);
+
+    let loaded = store.get_task(task_id.as_str()).unwrap().unwrap();
+    assert_eq!(loaded.verify_status, VerifyStatus::Skipped);
+    assert_eq!(loaded.status, TaskStatus::Done);
+    assert!(store.latest_error(task_id.as_str()).is_none());
+}
+
+#[test]
+fn empty_diff_skips_configured_verify() {
+    let repo = tempfile::tempdir().unwrap();
+    let dir = repo.path();
+    assert!(std::process::Command::new("git")
+        .args(["-C", &dir.to_string_lossy(), "init", "-b", "main"])
+        .status()
+        .unwrap()
+        .success());
+    assert!(std::process::Command::new("git")
+        .args(["-C", &dir.to_string_lossy(), "config", "user.email", "t@example.com"])
+        .status()
+        .unwrap()
+        .success());
+    assert!(std::process::Command::new("git")
+        .args(["-C", &dir.to_string_lossy(), "config", "user.name", "t"])
+        .status()
+        .unwrap()
+        .success());
+    std::fs::write(dir.join("file.txt"), "hello\n").unwrap();
+    assert!(std::process::Command::new("git")
+        .args(["-C", &dir.to_string_lossy(), "add", "file.txt"])
+        .status()
+        .unwrap()
+        .success());
+    assert!(std::process::Command::new("git")
+        .args(["-C", &dir.to_string_lossy(), "commit", "-m", "init"])
+        .status()
+        .unwrap()
+        .success());
+    let dir_str = dir.to_string_lossy().to_string();
+    let store = Store::open_memory().unwrap();
+    let task_id = TaskId("t-empty-skip".to_string());
+    store
+        .insert_task(&task(task_id.as_str(), TaskStatus::Done, Some(&dir_str), Some("false")))
+        .unwrap();
+
+    maybe_verify(&store, &task_id, Some("false"), Some(&dir_str), None);
+
+    let loaded = store.get_task(task_id.as_str()).unwrap().unwrap();
+    assert_eq!(loaded.verify_status, VerifyStatus::Skipped);
+    assert_eq!(loaded.status, TaskStatus::Done);
+    assert!(store.latest_error(task_id.as_str()).is_none());
+}
+
+#[test]
+fn genuine_verify_failure_still_fails_task() {
+    let dir = tempfile::tempdir().unwrap();
+    let dir_str = dir.path().to_string_lossy().to_string();
+    // Non-git dir so empty-diff skip does not fire; command still fails.
+    let store = Store::open_memory().unwrap();
+    let task_id = TaskId("t-real-vfail".to_string());
+    store
+        .insert_task(&task(task_id.as_str(), TaskStatus::Done, Some(&dir_str), Some("false")))
+        .unwrap();
+
+    maybe_verify(&store, &task_id, Some("false"), Some(&dir_str), None);
+
+    let loaded = store.get_task(task_id.as_str()).unwrap().unwrap();
+    assert_eq!(loaded.verify_status, VerifyStatus::Failed);
+    assert_eq!(loaded.status, TaskStatus::Failed);
+}

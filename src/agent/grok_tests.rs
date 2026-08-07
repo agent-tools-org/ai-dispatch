@@ -66,6 +66,21 @@ fn write_run_carries_blanket_approval() {
 }
 
 #[test]
+fn read_only_with_result_file_allows_write_for_report() {
+    let mut run = opts(true);
+    run.result_file = Some("result.md".to_string());
+    let args = args_for(&run);
+    assert!(args.iter().any(|arg| arg == "--always-approve"));
+    assert!(!args.windows(2).any(|pair| pair == ["--permission-mode", "plan"]));
+    let prompt = args
+        .windows(2)
+        .find(|pair| pair[0] == "-p")
+        .map(|pair| pair[1].as_str())
+        .unwrap();
+    assert!(prompt.contains("EXCEPT the result file"));
+}
+
+#[test]
 fn streaming_is_false_and_parse_event_returns_none() {
     let task_id = TaskId::generate();
     assert!(!GrokAgent.streaming());

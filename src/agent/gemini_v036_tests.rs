@@ -215,3 +215,26 @@ fn extract_response_handles_content_arrays_and_tool_boundaries() {
 
     assert_eq!(result, Some("Alpha beta\n\nGamma".to_string()));
 }
+
+#[test]
+fn read_only_with_result_file_allows_write_via_yolo() {
+    let opts = RunOpts {
+        dir: None,
+        output: None,
+        result_file: Some("result.md".to_string()),
+        model: None,
+        budget: false,
+        read_only: true,
+        sandbox: false,
+        context_files: vec![],
+        session_id: None,
+        env: None,
+        env_forward: None,
+    };
+    let cmd = GeminiAgent.build_command("audit", &opts).unwrap();
+    let args: Vec<String> = cmd.get_args().map(|a| a.to_string_lossy().into_owned()).collect();
+    assert!(args.iter().any(|a| a == "-y"));
+    assert!(!args.windows(2).any(|p| p == ["--approval-mode", "plan"]));
+    let prompt = args.windows(2).find(|p| p[0] == "-p").map(|p| p[1].as_str()).unwrap();
+    assert!(prompt.contains("EXCEPT the result file"));
+}

@@ -31,7 +31,7 @@ pub async fn run(store: Arc<Store>, args: TestArgs) -> Result<i32> {
     };
     let child_env = isolated
         .as_ref()
-        .map(|dir| vec![("AID_HOME".to_string(), dir.path().to_string_lossy().into_owned())])
+        .map(|dir| isolated_child_env(dir.path()))
         .unwrap_or_default();
     let outcome =
         build_process::run_cargo_outcome(store.clone(), request, target, progress, &child_env)
@@ -65,6 +65,19 @@ fn effective_filter(args: &TestArgs) -> Option<String> {
         .map(str::trim)
         .find(|arg| !arg.is_empty() && !arg.starts_with('-'))
         .map(str::to_string)
+}
+
+/// Env for `--isolated` cargo children: temp AID_HOME and no nested dispatch.
+/// Empty AID_TASK_* disables apply_nested_delegation without mutating the parent.
+fn isolated_child_env(aid_home: &std::path::Path) -> Vec<(String, String)> {
+    vec![
+        (
+            "AID_HOME".to_string(),
+            aid_home.to_string_lossy().into_owned(),
+        ),
+        ("AID_TASK_ID".to_string(), String::new()),
+        ("AID_TASK_DEPTH".to_string(), String::new()),
+    ]
 }
 
 /// Temporary AID_HOME for `--isolated` runs; removed on drop.
@@ -234,5 +247,14 @@ mod tests {
         let mut args = base_args();
         args.extra_args = vec!["--exact".to_string(), "--nocapture".to_string()];
         assert_eq!(effective_filter(&args), None);
+    }
+
+    #[test]
+    fn isolated_child_env_clears_nested_dispatch_markers() {
+        let home = std::path::Path::new("/tmp/aid-test-home");
+        let env = isolated_child_env(home);
+        assert!(env.iter().any(|(k, v)| k == "AID_HOME" && v == "/tmp/aid-test-home"));
+        assert!(env.iter().any(|(k, v)| k == "AID_TASK_ID" && v.is_empty()));
+        assert!(env.iter().any(|(k, v)| k == "AID_TASK_DEPTH" && v.is_empty()));
     }
 }

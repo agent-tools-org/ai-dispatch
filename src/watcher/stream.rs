@@ -74,8 +74,19 @@ pub(crate) fn handle_streaming_line_with_session(
         apply_completion_event(info, &event);
         synthetic_tracker.observe(&event);
         save_session_id(store, task_id, &event, session_saved)?;
-        if let Some(message) =
-            rate_limit::extract_rate_limit_from_stream_detail(&event.detail, &agent.kind())
+        // The raw line, never `event.detail`. An adapter's detail is a rendering
+        // aid composed: cursor's is `completed: grep <the pattern the model
+        // chose>`, and on 2026-08-07 one of those — an audit's own `grep
+        // "you're out of usage|…"` — became a hold on cursor that no clock would
+        // release. `event_kind` is used only as a cheap prefilter over lines the
+        // adapter already parsed; it can narrow what is looked at and never
+        // admit anything, because `quota_channel` decides admission.
+        if event.event_kind == EventKind::Error
+            && let Some(message) = rate_limit::refusal_on_channel(
+                line,
+                agent.kind(),
+                crate::quota_channel::Channel::CliStream,
+            )
         {
             rate_limit::mark_rate_limited_for_message(&agent.kind(), &message);
         }

@@ -227,9 +227,11 @@ fn parse_user_event(task_id: &TaskId, v: &Value, now: chrono::DateTime<Local>) -
     if !is_error {
         return None;
     }
-    if crate::rate_limit::is_rate_limit_error_for_agent(detail, &AgentKind::Claude) {
-        crate::rate_limit::mark_rate_limited(&AgentKind::Claude, detail);
-    }
+    // No marking here. `is_error` on a tool_result block is the *tool* failing —
+    // a command that exited non-zero, a rejected edit, a file that was not
+    // there — and its text is whatever the model asked for. This wrote
+    // `~/.aid/rate-limit-claude` on 2026-08-07 off an agent's own message, and a
+    // provider that was serving the whole time was held on opencode's needle.
     let (detail, metadata) = capped_detail(detail);
     Some(TaskEvent { task_id: task_id.clone(), timestamp: now, event_kind: EventKind::Error, detail, metadata })
 }

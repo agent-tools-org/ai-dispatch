@@ -126,9 +126,12 @@ fn set_feed_for_tests(feed: price_feed::Feed) {
 }
 
 /// Test seam: clear the process feed index so a seeded feed cannot leak into
-/// other tests running in the same process.
+/// other tests running in the same process. Also used by tests outside this
+/// module that assert catalog-derived pricing: a developer's real feed knows
+/// prices the catalog deliberately does not carry, and a test that asserts
+/// "unknown" must say which of the two it is asking about.
 #[cfg(test)]
-fn clear_feed_for_tests() {
+pub(crate) fn clear_feed_for_tests() {
     let cache = FEED_INDEX.get_or_init(|| Mutex::new(None));
     if let Ok(mut guard) = cache.lock() {
         *guard = None;

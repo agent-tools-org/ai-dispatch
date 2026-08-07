@@ -224,4 +224,18 @@ mod tests {
     #[test]
     fn auto_commit_ignores_result_files() { let _permit = test_subprocess::acquire(); let dir = repo(); commit_path(dir.path(), "src/main.rs", "fn main() {}\n"); commit_path(dir.path(), "result-t-1234.md", "transient"); write_path(dir.path(), "result-t-1234.md", "changed"); write_path(dir.path(), "src/main.rs", "fn main() { println!(\"changed\"); }\n"); auto_commit(dir.path().to_str().unwrap(), "task-123", "[Task]\nChange source").unwrap(); let changed = git_stdout(dir.path(), &["diff-tree", "--no-commit-id", "--name-only", "-r", "HEAD"]); assert!(changed.lines().any(|line| line == "src/main.rs")); assert!(!changed.lines().any(|line| line == "result-t-1234.md")); }
 
+    #[test]
+    fn auto_commit_includes_tracked_aid_project_toml_changes() {
+        let _permit = test_subprocess::acquire();
+        let dir = repo();
+        commit_path(dir.path(), "src/main.rs", "fn main() {}\n");
+        commit_path(dir.path(), ".aid/project.toml", "[project]\nid = \"alpha\"\n");
+        write_path(dir.path(), "src/main.rs", "fn main() { println!(\"changed\"); }\n");
+        write_path(dir.path(), ".aid/project.toml", "[project]\nid = \"beta\"\n");
+        auto_commit(dir.path().to_str().unwrap(), "task-123", "[Task]\nChange source and project config").unwrap();
+        let changed = git_stdout(dir.path(), &["diff-tree", "--no-commit-id", "--name-only", "-r", "HEAD"]);
+        assert!(changed.lines().any(|line| line == "src/main.rs"), "got: {changed}");
+        assert!(changed.lines().any(|line| line == ".aid/project.toml"), "got: {changed}");
+    }
+
 }

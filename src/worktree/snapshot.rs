@@ -81,14 +81,31 @@ pub fn parse_status_entry(line: &str) -> Option<WorktreeStatusEntry> {
 
 /// `git add` pathspec exclusions for aid's own runtime bookkeeping/artifacts —
 /// a target repo won't gitignore these itself, so any `git add` run by aid or
-/// a dispatched agent must exclude them explicitly. Kept in sync with the
-/// bookkeeping paths `is_rescuable_path` rejects — that function is authoritative.
+/// a dispatched agent must exclude them explicitly.
+///
+/// This is a *different* policy from `is_rescuable_path`, not the same one
+/// restated: `is_rescuable_path` decides what rescue may treat as recoverable
+/// source, and can afford to reject all of `.aid/` conservatively since it
+/// only ever considers new/dirty files. This list feeds `git add -u` as well
+/// (see `commit::auto_commit`), which restages already-tracked files — an
+/// unqualified `.aid/**` exclude here would stop a repo that legitimately
+/// tracks `.aid/project.toml` from ever having edits to it committed. So this
+/// list names only the paths aid itself generates under `.aid/`
+/// (`.aid/state.toml`, `.aid/batches/`, per `.gitignore`), not the directory
+/// as a whole.
+///
+/// Each `.aid-*`/`aid-batch-*` pattern is listed twice (bare and `**/`-
+/// prefixed): git pathspec matching does not let a single glob cover both a
+/// repo-root file and a nested one of the same name.
 pub const AID_ADD_EXCLUDES: &[&str] = &[
     ":(exclude).aid-*",
-    ":(exclude).aid/**",
+    ":(exclude)**/.aid-*",
+    ":(exclude).aid/state.toml",
+    ":(exclude).aid/batches/**",
     ":(exclude)result-*.md",
     ":(exclude)result-*.json",
-    ":(exclude)aid-batch-*.toml",
+    ":(exclude)aid-batch-*",
+    ":(exclude)**/aid-batch-*",
 ];
 
 pub fn is_rescuable_path(path: &str) -> bool {

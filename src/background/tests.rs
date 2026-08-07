@@ -198,6 +198,55 @@ fn reaps_silent_since_spawn_on_first_token_budget() {
     );
 }
 
+/// Real silent-since-spawn shape (t-764b2a1d): aid already wrote a Setup
+/// event ("Cargo target seeded …") before the agent produced anything.
+/// Setup is bookkeeping, not agent output — still first-token, not 2× idle.
+#[test]
+fn reaps_silent_since_spawn_despite_setup_bookkeeping() {
+    let temp = tempfile::tempdir().unwrap();
+    let _aid_home = paths::AidHomeGuard::set(temp.path());
+    paths::ensure_dirs().unwrap();
+
+    let store = Store::open_memory().unwrap();
+    let mut task = make_task("t-setup0", TaskStatus::Running);
+    task.created_at = Local::now() - Duration::seconds(120);
+    store.insert_task(&task).unwrap();
+    let mut env = std::collections::HashMap::new();
+    env.insert("AID_FIRST_TOKEN_TIMEOUT_SECS".to_string(), "90".to_string());
+    save_spec(&BackgroundRunSpec {
+        worker_pid: Some(305),
+        idle_timeout_secs: Some(600),
+        env: Some(env),
+        ..make_spec("t-setup0")
+    })
+    .unwrap();
+    store
+        .insert_event(&TaskEvent {
+            task_id: TaskId("t-setup0".to_string()),
+            timestamp: Local::now() - Duration::seconds(115),
+            event_kind: EventKind::Setup,
+            detail: "Cargo target seeded: /tmp/target from /cache in 12ms".to_string(),
+            metadata: None,
+        })
+        .unwrap();
+
+    let cleaned = check_zombie_tasks_with(&store, |pid| pid == 305).unwrap();
+
+    assert_eq!(cleaned, vec!["t-setup0".to_string()]);
+    assert_eq!(
+        store.get_task("t-setup0").unwrap().unwrap().status,
+        TaskStatus::Failed
+    );
+    let events = store.get_events("t-setup0").unwrap();
+    assert!(
+        events
+            .iter()
+            .any(|e| e.detail.contains("no events since spawn") && e.detail.contains("first-token")),
+        "setup must not count as agent output; detail={:?}",
+        events.iter().map(|e| &e.detail).collect::<Vec<_>>()
+    );
+}
+
 #[test]
 fn keeps_silent_since_spawn_within_first_token_budget() {
     let temp = tempfile::tempdir().unwrap();

@@ -90,7 +90,7 @@ fn droid_reload_tokens_is_recognized() {
     let (agent, minutes) = match_quota_signature("402 payment required: reload your tokens")
         .expect("droid reload-tokens message must match");
     assert_eq!(agent, AgentKind::Droid);
-    assert_eq!(minutes, 1440);
+    assert_eq!(minutes, 0);
 }
 
 #[test]
@@ -98,7 +98,7 @@ fn gemini_ineligible_tier_is_recognized() {
     let msg = "IneligibleTierError: This client is no longer supported for Gemini Code Assist for individuals; migrate to Antigravity";
     let (agent, minutes) = match_quota_signature(msg).expect("gemini tier message must match");
     assert_eq!(agent, AgentKind::Gemini);
-    assert_eq!(minutes, 1440);
+    assert_eq!(minutes, 0);
 }
 
 #[test]
@@ -130,8 +130,8 @@ fn opencode_insufficient_balance_is_recognized() {
     let body = r#"{"type":"error","error":{"name":"APIError","data":{"message":"Insufficient balance. Manage your billing here: https://opencode.ai/workspace/wrk_01/billing","statusCode":401}}}"#;
     let (agent, minutes) = match_quota_signature(body).expect("opencode balance message must match");
     assert_eq!(agent, AgentKind::OpenCode);
-    // A day, not the usual hour: a balance does not refill with time.
-    assert_eq!(minutes, 1440);
+    // 0 means permanent hold (manual clear required).
+    assert_eq!(minutes, 0);
 }
 
 #[test]

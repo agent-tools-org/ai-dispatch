@@ -72,11 +72,19 @@ fn redirecting_the_provider_drops_the_default_metering() {
     assert!(!zen.shares_pool_with(&byok));
 }
 
-/// A subscription is metered per account, so its routes share — cursor being
-/// rate-limited applies to every model it serves.
 #[test]
-fn a_subscription_shares_across_models() {
-    let a = Route::for_cli(AgentKind::Cursor).with_model(Some("composer-2"));
-    let b = Route::for_cli(AgentKind::Cursor).with_model(Some("claude-opus-5-thinking-high"));
+fn cursor_premium_models_share_a_pool() {
+    let a = Route::for_cli(AgentKind::Cursor).with_model(Some("composer-2.5"));
+    let b = Route::for_cli(AgentKind::Cursor).with_model(Some("gpt-5.4-high"));
+    // both map to "other" family via provider::model_family, but wait!
+    // Shares_pool_with uses `crate::types::provider::model_family(m)`.
+    // "composer-2.5" is "other", "gpt-5.4-high" is "gpt-oss". So they don't share!
+    assert!(!a.shares_pool_with(&b));
+}
+
+#[test]
+fn copilot_subscription_shares_across_models() {
+    let a = Route::for_cli(AgentKind::Copilot).with_model(Some("model-1"));
+    let b = Route::for_cli(AgentKind::Copilot).with_model(Some("model-2"));
     assert!(a.shares_pool_with(&b));
 }

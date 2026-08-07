@@ -143,16 +143,25 @@ fn render_models_line(
 }
 
 fn render_rate_limit_line(kind: AgentKind) -> String {
+    if !rate_limit::is_rate_limited(&kind) {
+        return String::new();
+    }
     match rate_limit::get_rate_limit_info(&kind) {
-        Some(info) if info.recovery_at.is_some() => {
+        Some(info) => {
             let fallback_hint = crate::agent::selection::coding_fallback_for(&kind, None, None)
                 .map(|fallback| format!(" → use --fallback {}", fallback.as_str()))
                 .unwrap_or_default();
-            format!(
-                "  Status:    rate-limited (try again at {}){}\n",
-                info.recovery_at.as_deref().unwrap_or("unknown"),
-                fallback_hint,
-            )
+            if let Some(recovery) = info.recovery_at {
+                format!(
+                    "  Status:    rate-limited (try again at {}){}\n",
+                    recovery, fallback_hint,
+                )
+            } else {
+                format!(
+                    "  Status:    rate-limited (needs manual clear){}\n",
+                    fallback_hint,
+                )
+            }
         }
         _ => String::new(),
     }

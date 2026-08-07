@@ -7,7 +7,6 @@ use chrono::{DateTime, Local, NaiveDateTime};
 use std::fs;
 use std::path::PathBuf;
 
-const RATE_LIMIT_WINDOW_SECS: u64 = 300;
 
 #[cfg(test)]
 fn assert_marker_path_isolated() {
@@ -79,11 +78,7 @@ fn marker_is_active(path: &std::path::Path) -> bool {
     if let Some(recovery_at) = recovery {
         return recovery_at > Local::now().naive_local();
     }
-    fs::metadata(path)
-        .and_then(|meta| meta.modified())
-        .ok()
-        .and_then(|modified| modified.elapsed().ok())
-        .is_some_and(|elapsed| elapsed.as_secs() < RATE_LIMIT_WINDOW_SECS)
+    true
 }
 
 /// Clear a marker only when it predates `task_start`.
@@ -163,31 +158,12 @@ pub fn clear_all_rate_limits_for_agent(agent: &AgentKind) -> bool {
 
 pub fn is_rate_limited(agent: &AgentKind) -> bool {
     if let Some(info) = get_rate_limit_info(agent) {
-        let within_window = || {
-            let path = marker_path(agent);
-            let Ok(metadata) = fs::metadata(&path) else {
-                return false;
-            };
-            let Ok(modified) = metadata.modified() else {
-                return false;
-            };
-            let Ok(elapsed) = modified.elapsed() else {
-                return false;
-            };
-            elapsed.as_secs() < RATE_LIMIT_WINDOW_SECS
-        };
-        // If we have recovery_at info, check if it's still in the future
         if let Some(recovery_str) = info.recovery_at {
             if let Some(recovery_at) = parse_recovery_datetime(&recovery_str) {
-                recovery_at > Local::now().naive_local()
-            } else {
-                // Fall back to the mtime-based cooldown window
-                within_window()
+                return recovery_at > Local::now().naive_local();
             }
-        } else {
-            // Fall back to the mtime-based cooldown window
-            within_window()
         }
+        true
     } else {
         false
     }
@@ -213,6 +189,9 @@ fn resolved_recovery(message: &str) -> Option<String> {
         return Some(format_at(at));
     }
     let (_, fallback_minutes) = crate::rate_limit_signatures::match_quota_signature(message)?;
+    if fallback_minutes == 0 {
+        return None;
+    }
     Some(format_at(
         Local::now().naive_local() + chrono::Duration::minutes(fallback_minutes),
     ))
@@ -515,11 +494,6 @@ mod tests {
             ),
             Some("429 rate limit exceeded".to_string())
         );
-    }
-
-    #[test]
-    fn test_rate_limit_window_matches_five_minutes() {
-        assert_eq!(RATE_LIMIT_WINDOW_SECS, 300);
     }
 
     #[test]

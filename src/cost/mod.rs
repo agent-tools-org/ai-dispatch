@@ -148,10 +148,8 @@ fn classify_pricing(model: &str, agent: AgentKind) -> (PricingSource, Option<Mod
             }),
         );
     }
-    if matches!(
-        provider_for_cli(agent).1,
-        MeteringShape::Subscription
-    ) {
+    let metering = provider_for_cli(agent).1;
+    if matches!(metering, MeteringShape::Subscription) || agent == AgentKind::Cursor {
         return (PricingSource::Included, Some(ModelPricing {
             input_per_m: 0.0,
             output_per_m: 0.0,

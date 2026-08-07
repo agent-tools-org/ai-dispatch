@@ -15,7 +15,7 @@ fn background_preflight_rejects_missing_kilo_binary() {
 
     assert_eq!(
         err.to_string(),
-        "Agent 'kilo' not found: binary missing from PATH"
+        "Agent 'kilo' not found: binary 'kilo' missing from PATH"
     );
 }
 

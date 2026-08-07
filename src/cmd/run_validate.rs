@@ -13,6 +13,18 @@ pub(super) fn validate_command_preflight(
     args: &RunArgs,
     effective_model: Option<&str>,
 ) -> Result<()> {
+    validate_command_preflight_with(agent, args, effective_model, crate::agent::env::which_exists)
+}
+
+pub(super) fn validate_command_preflight_with<F>(
+    agent: &dyn agent::Agent,
+    args: &RunArgs,
+    effective_model: Option<&str>,
+    which: F,
+) -> Result<()>
+where
+    F: Fn(&str) -> bool,
+{
     if args.sandbox
         && crate::sandbox::can_sandbox(agent.kind())
         && !crate::sandbox::is_available()
@@ -35,10 +47,15 @@ pub(super) fn validate_command_preflight(
         env: None,
         env_forward: None,
     };
-    agent
+    let cmd = agent
         .build_command("__aid_preflight__", &opts)
-        .map(|_| ())
-        .map_err(|err| anyhow::anyhow!("{err:#}"))
+        .map_err(|err| anyhow::anyhow!("{err:#}"))?;
+    // Container/sandbox runs resolve the binary inside the guest image.
+    if args.container.is_some() || args.sandbox {
+        return Ok(());
+    }
+    let program = cmd.get_program().to_string_lossy();
+    agent::ensure_resolved_binary_available_with(&args.agent_name, &program, which)
 }
 
 pub(super) fn validate_dispatch(args: &RunArgs, agent_kind: &AgentKind) -> Vec<String> {

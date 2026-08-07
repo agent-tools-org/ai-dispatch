@@ -13,6 +13,9 @@ use super::run_task_profile::{
     validate_critical_rigor, validate_egress,
 };
 use super::run_validate::{validate_command_preflight, validate_dispatch};
+#[cfg(test)]
+#[allow(unused_imports)]
+use super::run_validate::validate_command_preflight_with;
 use super::{RunArgs, context_file_from_spec, resolve_max_duration_mins, resolve_prompt_input, run_prompt};
 
 pub(super) struct PreparedDispatch {

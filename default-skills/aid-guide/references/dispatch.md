@@ -191,8 +191,13 @@ by itself remove implementation methodology or Git staging instructions.
 
 Unsupported agent and flag combinations (for example `qwen` with `--read-only`)
 are refused before a task row is created, with an error that names what to do
-instead. Unknown models that the agent CLI does not report as invalid are passed
+instead. The same preflight resolves the agent command (built-in or custom) and
+refuses when the binary is missing from `PATH`, naming the missing binary.
+Unknown models that the agent CLI does not report as invalid are passed
 through.
+
+If the agent process still fails to start after preflight, the task ends in
+`failed` with an agent-spawn error — it is never left `running` with no worker.
 
 When `--result-file` is set (audit and review prompts set it automatically) and
 the agent never writes that file, AID salvages the captured agent output into

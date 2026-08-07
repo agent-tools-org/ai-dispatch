@@ -136,6 +136,48 @@ async fn max_duration_timeout_reaches_on_fail_lifecycle() {
     assert_eq!(std::fs::read_to_string(hook_path).unwrap(), "failed");
 }
 
+#[tokio::test]
+async fn spawn_failure_marks_task_failed_not_running() {
+    let temp = tempfile::tempdir().unwrap();
+    let _aid_home = crate::paths::AidHomeGuard::set(temp.path());
+    crate::paths::ensure_dirs().unwrap();
+    let store = Arc::new(Store::open_memory().unwrap());
+    let task_id = TaskId("t-spawn-miss".to_string());
+    store.insert_task(&task(&task_id, TaskStatus::Running)).unwrap();
+    let log_path = temp.path().join("spawn.log");
+    let cmd = tokio::process::Command::new("/definitely/missing/agent-binary");
+    let policy = crate::timeout_policy::TimeoutPolicy::default();
+
+    let err = run_agent_process_with_timeout(
+        &TimeoutTestAgent,
+        cmd,
+        &task_id,
+        &store,
+        &log_path,
+        None,
+        None,
+        false,
+        None,
+        policy,
+        None,
+    )
+    .await
+    .unwrap_err();
+
+    assert!(
+        err.to_string().contains("Failed to spawn agent process"),
+        "unexpected error: {err}"
+    );
+    let loaded = store.get_task(task_id.as_str()).unwrap().unwrap();
+    assert_eq!(loaded.status, TaskStatus::Failed);
+    assert!(loaded.completed_at.is_some());
+    let detail = store.latest_error(task_id.as_str()).unwrap();
+    assert!(
+        detail.contains("Failed during agent spawn"),
+        "unexpected detail: {detail}"
+    );
+}
+
 fn tiny_timeout_policy() -> crate::timeout_policy::TimeoutPolicy {
     crate::timeout_policy::TimeoutPolicy {
         idle: Duration::from_millis(20),

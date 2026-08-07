@@ -62,15 +62,28 @@ fn read_changelog_file() -> Option<String> {
     if content.trim().is_empty() { None } else { Some(content) }
 }
 
+/// Commit identity + dirty flag for `aid --version`. Falls back to a plain
+/// "no git metadata" marker (never a blank field) when there is no git repo
+/// to inspect, e.g. a crates.io tarball or released source archive.
+fn build_git_info() -> String {
+    git(&["describe", "--always", "--dirty"])
+        .filter(|desc| !desc.is_empty())
+        .unwrap_or_else(|| "no git metadata".to_string())
+}
+
 fn main() {
     // Watch git locations so changelog re-embeds when tags change.
     println!("cargo:rerun-if-changed=.git/refs/tags");
     println!("cargo:rerun-if-changed=.git/packed-refs");
     println!("cargo:rerun-if-changed=Cargo.toml");
     println!("cargo:rerun-if-changed=CHANGELOG.md");
+    // Watch HEAD/index so the embedded commit SHA and dirty flag stay current.
+    println!("cargo:rerun-if-changed=.git/HEAD");
+    println!("cargo:rerun-if-changed=.git/index");
     // Prefer live git tags; fall back to static CHANGELOG.md (for crates.io installs).
     let text = build_embedded_changelog()
         .or_else(read_changelog_file)
         .unwrap_or_default();
     println!("cargo:rustc-env=AID_CHANGELOG={}", escape_newlines(&text));
+    println!("cargo:rustc-env=AID_GIT_INFO={}", build_git_info());
 }

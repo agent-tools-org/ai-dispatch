@@ -71,26 +71,9 @@ pub(crate) fn auto_commit_uncommitted(wt_path: &str, branch: &str) -> bool {
         return false;
     }
     aid_info!("[aid] Worktree has uncommitted changes — auto-committing on {branch}");
-    let _ = Command::new("git")
-        .args([
-            "-C",
-            wt_path,
-            "add",
-            "-A",
-            "--",
-            ".",
-            ":(exclude)target/",
-            ":(exclude)node_modules/",
-            ":(exclude).build/",
-            ":(exclude)dist/",
-            ":(exclude)__pycache__/",
-            ":(exclude).aid-lock",
-            ":(exclude).aid-*",
-            ":(exclude)result-*.md",
-            ":(exclude)result-*.json",
-            ":(exclude)aid-batch-*.toml",
-        ])
-        .output();
+    let mut add_args = vec!["-C", wt_path, "add", "-A", "--", ".", ":(exclude)target/", ":(exclude)node_modules/", ":(exclude).build/", ":(exclude)dist/", ":(exclude)__pycache__/"];
+    add_args.extend_from_slice(crate::worktree::AID_ADD_EXCLUDES);
+    let _ = Command::new("git").args(&add_args).output();
     if !has_staged_changes(wt_path) {
         return false;
     }

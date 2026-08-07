@@ -55,9 +55,17 @@ pub(super) fn latest_activity(store: &Store, task: &Task) -> Result<TaskActivity
         .filter(|event| event.event_kind.is_liveness() && !is_idle_bookkeeping_event(event))
         .collect::<Vec<_>>();
     let last_event = progress_events.last();
+    let mut timestamp = last_event.map(|event| event.timestamp).unwrap_or(task.created_at);
+    let has_agent_bytes = agent_has_produced_bytes(task.id.as_str());
+    if let Some(bytes_at) = agent_bytes_mtime(task.id.as_str())
+        && bytes_at > timestamp
+    {
+        timestamp = bytes_at;
+    }
     Ok(TaskActivity {
-        timestamp: last_event.map(|event| event.timestamp).unwrap_or(task.created_at),
+        timestamp,
         event_count: progress_events.len() as u32,
+        has_agent_bytes,
         detail: last_event.map(|event| event.detail.clone()),
     })
 }
@@ -68,8 +76,8 @@ pub(super) fn is_stale(last_activity: DateTime<Local>, now: DateTime<Local>, idl
 
 fn is_idle_bookkeeping_event(event: &TaskEvent) -> bool {
     // Aid's own setup (cargo target seed, setup scripts) is not agent output.
-    // t-764b2a1d already had a Setup event before any agent bytes — counting it
-    // as liveness kept the wedged reaper on 2× idle instead of first-token.
+    // Keep excluding it: for buffered agents the first-token signal is bytes,
+    // and Setup must not masquerade as either events or progress.
     if event.event_kind == EventKind::Setup {
         return true;
     }
@@ -86,6 +94,46 @@ fn is_idle_bookkeeping_event(event: &TaskEvent) -> bool {
         || metadata.get("auto_escalated").and_then(|value| value.as_bool()) == Some(true)
         || metadata.get("acked_reply").and_then(|value| value.as_bool()) == Some(true)
         || metadata.get("source").and_then(|value| value.as_str()) == Some("unstick-auto")
+}
+
+/// Buffered agents (grok/agy) emit no progress events until exit; watch_buffered
+/// appends stdout to the transcript as bytes arrive so the reaper can see them.
+fn agent_has_produced_bytes(task_id: &str) -> bool {
+    agent_byte_paths(task_id).into_iter().any(|path| {
+        std::fs::metadata(&path).map(|meta| meta.len() > 0).unwrap_or(false)
+    })
+}
+
+fn agent_bytes_mtime(task_id: &str) -> Option<DateTime<Local>> {
+    let mut best: Option<DateTime<Local>> = None;
+    for path in agent_byte_paths(task_id) {
+        let Ok(meta) = std::fs::metadata(&path) else {
+            continue;
+        };
+        if meta.len() == 0 {
+            continue;
+        }
+        let Ok(modified) = meta.modified() else {
+            continue;
+        };
+        let at = DateTime::<Local>::from(modified);
+        best = Some(match best {
+            Some(prev) if prev >= at => prev,
+            _ => at,
+        });
+    }
+    best
+}
+
+fn agent_byte_paths(task_id: &str) -> [std::path::PathBuf; 2] {
+    [
+        crate::paths::transcript_path(task_id),
+        crate::paths::log_path(task_id),
+    ]
+}
+
+fn has_agent_progress(activity: &TaskActivity) -> bool {
+    activity.event_count > 0 || activity.has_agent_bytes
 }
 
 fn record_orphaned_hung(
@@ -119,9 +167,10 @@ pub(super) fn record_hung_detected_failure(
     Ok(true)
 }
 
-/// Live worker with a wedged monitor: no progress events for too long.
-/// Zero events since spawn uses the first-token budget; silence after progress
-/// uses 2× idle (the buffered path never builds MonitorState).
+/// Live worker with a wedged monitor: no agent progress for too long.
+/// Zero agent output since spawn uses the first-token budget; silence after
+/// progress uses 2× idle. Buffered agents signal progress via stdout bytes
+/// (watch_buffered), not events — do not key first-token on event_count alone.
 pub(super) fn cleanup_wedged_live_worker(
     store: &Store,
     task: &Task,
@@ -133,35 +182,36 @@ pub(super) fn cleanup_wedged_live_worker(
     }
     let idle_secs = spec.idle_timeout_secs.unwrap_or(DEFAULT_IDLE_TIMEOUT_SECS);
     let activity = latest_activity(store, task)?;
-    let stale_after_secs = wedged_stale_after_secs(activity.event_count, idle_secs, spec);
+    let saw_progress = has_agent_progress(&activity);
+    let stale_after_secs = wedged_stale_after_secs(saw_progress, idle_secs, spec);
     if !is_stale(activity.timestamp, Local::now(), stale_after_secs) {
         return Ok(false);
     }
-    let detail = wedged_failure_detail(activity.event_count, stale_after_secs, idle_secs);
+    let detail = wedged_failure_detail(saw_progress, stale_after_secs, idle_secs);
     terminate_task_processes(Some(worker_pid), spec);
     record_hung_detected_failure(store, task.id.as_str(), stale_after_secs, &activity, &detail)
 }
 
-fn wedged_stale_after_secs(event_count: u32, idle_secs: u64, spec: &BackgroundRunSpec) -> u64 {
-    if event_count == 0 {
+fn wedged_stale_after_secs(saw_progress: bool, idle_secs: u64, spec: &BackgroundRunSpec) -> u64 {
+    if saw_progress {
+        idle_secs.saturating_mul(LIVE_WORKER_IDLE_MARGIN)
+    } else {
         crate::timeout_policy::TimeoutPolicy::from_env(spec.env.as_ref())
             .first_token
             .as_secs()
-    } else {
-        idle_secs.saturating_mul(LIVE_WORKER_IDLE_MARGIN)
     }
 }
 
-fn wedged_failure_detail(event_count: u32, stale_after_secs: u64, idle_secs: u64) -> String {
-    if event_count == 0 {
-        format!(
-            "hung detected (monitor wedged): no events since spawn for {stale_after_secs}s \
-             (first-token timeout)"
-        )
-    } else {
+fn wedged_failure_detail(saw_progress: bool, stale_after_secs: u64, idle_secs: u64) -> String {
+    if saw_progress {
         format!(
             "hung detected (monitor wedged): no events for {stale_after_secs}s \
              (idle timeout {idle_secs}s, margin {LIVE_WORKER_IDLE_MARGIN}x)"
+        )
+    } else {
+        format!(
+            "hung detected (monitor wedged): no agent output since spawn for {stale_after_secs}s \
+             (first-token timeout)"
         )
     }
 }
@@ -169,6 +219,7 @@ fn wedged_failure_detail(event_count: u32, stale_after_secs: u64, idle_secs: u64
 pub(super) struct TaskActivity {
     pub(super) timestamp: DateTime<Local>,
     pub(super) event_count: u32,
+    pub(super) has_agent_bytes: bool,
     pub(super) detail: Option<String>,
 }
 

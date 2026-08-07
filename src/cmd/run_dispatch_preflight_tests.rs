@@ -36,8 +36,14 @@ fn isolated_home() -> crate::paths::AidHomeGuard {
 
 /// prepare_dispatch reads AID_TASK_ID / AID_TASK_DEPTH; clear them so nested
 /// outer aid sessions cannot turn capability probes into depth refusals.
-fn clear_nested_dispatch_env() -> (EnvVarGuard, EnvVarGuard) {
+fn clear_nested_dispatch_env() -> (
+    std::sync::MutexGuard<'static, ()>,
+    EnvVarGuard,
+    EnvVarGuard,
+) {
+    let lock = crate::aic::test_env_lock();
     (
+        lock,
         EnvVarGuard::remove("AID_TASK_ID"),
         EnvVarGuard::remove("AID_TASK_DEPTH"),
     )

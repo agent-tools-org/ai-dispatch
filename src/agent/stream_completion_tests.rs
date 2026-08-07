@@ -155,13 +155,56 @@ fn quota_line_anchors_on_signature_needle_without_quota_word() {
     assert!(line.starts_with("402"));
 }
 
+/// `~/.aid/rate-limit-copilot` began `sage\":\"You have exceeded` — the marker
+/// held a fragment sliced mid-token, because the window start was a fixed 40
+/// characters back from the anchor and that lands inside `"message\":\"`.
+/// The recorded message must be the provider's own sentence.
+#[test]
+fn quota_line_records_a_clean_refusal_not_a_mid_token_fragment() {
+    let event = r#"{"type":"error","errorCode":"quota_exceeded","message":"You have exceeded your monthly quota","code":"quota_exceeded","requestFingerprint":{"messageCount":2}}"#;
+    let line = quota_line(event, crate::types::AgentKind::Copilot).expect("copilot line");
+    assert_eq!(line, "You have exceeded your monthly quota");
+}
+
+/// The grok refusal arrives wrapped in a JSON body too.
+#[test]
+fn quota_line_unwraps_the_grok_payment_refusal() {
+    let event = r#"  "message": "API error (status 402 Payment Required): Grok Build usage balance exhausted","#;
+    let line = quota_line(event, crate::types::AgentKind::Grok).expect("grok line");
+    assert_eq!(
+        line,
+        "API error (status 402 Payment Required): Grok Build usage balance exhausted"
+    );
+}
+
+/// Unwrapping must not cost the reset time a provider does state: codex's
+/// refusal is plain text and has to survive whole.
+#[test]
+fn quota_line_keeps_a_stated_reset_time_on_plain_text() {
+    let message = "You've hit your usage limit. Visit https://chatgpt.com/codex/settings/usage \
+                   to purchase more credits or try again at Aug 11th, 2026 2:23 PM.";
+    let line = quota_line(message, crate::types::AgentKind::Codex).expect("codex line");
+    assert!(line.contains("try again at Aug 11th, 2026 2:23 PM"), "got {line}");
+}
+
+/// A JSON-wrapped refusal must keep its embedded reset time as well, so the
+/// marker is held to the stated window rather than a class default.
+#[test]
+fn quota_line_keeps_a_reset_time_embedded_in_json() {
+    let event = r#"{"type":"result","text":"Quota exhausted: Your token-plan 1-week quota has been exhausted. The quota will reset at 08-12 10:12:00 UTC.\n\nPlease retry"}"#;
+    let line = quota_line(event, crate::types::AgentKind::Qwen).expect("qwen line");
+    assert!(line.starts_with("Quota exhausted:"), "got {line}");
+    assert!(line.contains("reset at 08-12 10:12:00 UTC"), "got {line}");
+    assert!(!line.contains('\\'), "JSON escapes must not survive: {line}");
+}
+
 #[test]
 fn record_quota_exhaustion_ignores_signature_source_citations() {
     let temp = tempfile::tempdir().unwrap();
     let _aid_home = crate::paths::AidHomeGuard::set(temp.path());
     crate::rate_limit::clear_rate_limit(&crate::types::AgentKind::OpenCode);
 
-    let output = "QuotaSignature { agent: AgentKind::OpenCode, needle: \"insufficient balance\", fallback_minutes: 1440 },";
+    let output = "QuotaSignature { agent: AgentKind::OpenCode, needle: \"insufficient balance\", recovery: QuotaRecovery::NeedsHuman },";
     assert!(!record_quota_exhaustion(
         output,
         crate::types::AgentKind::OpenCode,
@@ -302,4 +345,26 @@ fn buffered_grok_prose_about_rate_limits_never_marks_it() {
         );
     }
     assert!(!crate::rate_limit::is_rate_limited(&agent));
+}
+
+/// The buffered and PTY watchers pass whatever model the run recorded, which is
+/// often nothing. A cursor premium refusal must still land on the premium group
+/// rather than the whole agent, so `auto` stays dispatchable.
+#[test]
+fn a_cursor_premium_refusal_with_no_recorded_model_marks_only_the_premium_pool() {
+    let temp = tempfile::tempdir().unwrap();
+    let _aid_home = crate::paths::AidHomeGuard::set(temp.path());
+
+    let cursor = crate::types::AgentKind::Cursor;
+    crate::rate_limit::clear_all_rate_limits_for_agent(&cursor);
+    let refusal = "ActionRequiredError: Increase limits for faster responses You're out of \
+                   usage. Switch to Auto, or ask your admin to increase your limit to continue.";
+
+    assert!(record_quota_exhaustion(refusal, cursor, None).should_fail());
+    assert!(crate::rate_limit::is_group_rate_limited(&cursor, "premium"));
+    assert!(!crate::rate_limit::is_group_rate_limited(&cursor, "auto"));
+    assert!(
+        !crate::rate_limit::is_rate_limited(&cursor),
+        "a tier refusal must not write off the whole agent"
+    );
 }

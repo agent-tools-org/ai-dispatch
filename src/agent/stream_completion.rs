@@ -116,7 +116,12 @@ pub(crate) fn record_quota_exhaustion(
     agent: crate::types::AgentKind,
     model: Option<&str>,
 ) -> QuotaOutcome {
-    let tail = quota_scan_tail(output);
+    // Only what the CLI wrote. The model's own text is dropped before any
+    // needle is looked for, so a report quoting this repo's signature table —
+    // or a test fixture, or a commit message — cannot write a marker. See
+    // `quota_channel` for what that rests on and what it does not reach.
+    let tail = crate::quota_channel::provider_attributable(quota_scan_tail(output), agent);
+    let tail = tail.as_str();
     if !agent_prose_quota_match(tail, agent) {
         return QuotaOutcome::None;
     }
@@ -167,16 +172,16 @@ fn agent_prose_quota_match(output: &str, agent: crate::types::AgentKind) -> bool
     output.lines().any(|line| prose_line_is_quota_refusal(line, agent))
 }
 
-/// A refusal in assistant-authored text is only recognised by its provider's own
-/// anchored template. A generic token — `429`, `rate limit` — carries no
-/// information here: on a standalone line it is as likely to be a task id or a
-/// markdown heading the agent wrote as a provider status. Providers whose
-/// refusal wording nobody has captured are undetectable on this channel, and
-/// that is the honest answer rather than a guess.
+/// A refusal is only recognised by its provider's own anchored template. A
+/// generic token — `429`, `rate limit` — carries no information here: on a
+/// standalone line it is as likely to be a task id or a markdown heading as a
+/// provider status. Providers whose refusal wording nobody has captured are
+/// undetectable, and that is the honest answer rather than a guess.
+///
+/// Callers pass text that has already been through
+/// `quota_channel::provider_attributable`; this decides only *what* was said,
+/// never *who* said it.
 fn prose_line_is_quota_refusal(line: &str, agent: crate::types::AgentKind) -> bool {
-    if crate::rate_limit_signatures::is_signature_source_citation(line) {
-        return false;
-    }
     crate::rate_limit_signatures::match_quota_signature_for_agent(line, agent).is_some()
 }
 

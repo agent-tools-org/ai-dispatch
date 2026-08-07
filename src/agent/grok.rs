@@ -26,6 +26,14 @@ impl super::Agent for GrokAgent {
         let prompt_with_ctx = super::embed_context_in_prompt(prompt, &opts.context_files)?;
         let mut cmd = Command::new("grok");
         cmd.args(["-p", &prompt_with_ctx, "--output-format", "json"]);
+        // Global Claude Code Stop hooks (`hiboss hook stop`) refuse the first
+        // exit until `hiboss ask` returns — and `hiboss ask` blocks for a human.
+        // Headless `-p` has no human, so the session writes zero bytes and the
+        // watchdog reaps it (t-764b2a1d, 1200s). Measured: `--deny Bash(hiboss:*)`
+        // lets grok refuse the gate by policy and exit normally. Adapter-local
+        // because only this CLI speaks `--deny`; scoped to hiboss (not all Bash)
+        // so normal tool use stays intact. The `:*` covers ask/hook/notify.
+        cmd.args(["--deny", "Bash(hiboss:*)"]);
         if opts.read_only {
             cmd.args(["--permission-mode", "plan"]);
         } else {

@@ -45,6 +45,19 @@ fn build_command_uses_grok_binary_and_json_flags() {
     assert!(args.windows(2).any(|pair| pair == ["-r", "sess-1"]));
 }
 
+/// Headless grok inherits Claude Code Stop hooks that call `hiboss ask` and
+/// block forever without a human. The deny must ship on every dispatch.
+#[test]
+fn headless_dispatch_denies_hiboss_bash() {
+    for read_only in [false, true] {
+        let args = args_for(&opts(read_only));
+        assert!(
+            args.windows(2).any(|pair| pair == ["--deny", "Bash(hiboss:*)"]),
+            "read_only={read_only}: missing hiboss deny"
+        );
+    }
+}
+
 #[test]
 fn read_only_uses_plan_permission_mode() {
     let args = args_for(&opts(true));
@@ -114,6 +127,28 @@ fn extract_response_returns_text_field() {
 #[test]
 fn kind_returns_grok() {
     assert_eq!(GrokAgent.kind(), AgentKind::Grok);
+}
+
+#[test]
+fn catalog_lists_grok_profile_and_default_model() {
+    use crate::model_catalog::{AGENT_MODELS, AGENT_PROFILES};
+    let profile = AGENT_PROFILES
+        .iter()
+        .find(|(agent, _, _, _, _)| *agent == AgentKind::Grok);
+    let Some((_, _, cost, _, streaming)) = profile else {
+        panic!("grok missing from AGENT_PROFILES");
+    };
+    assert_eq!(*cost, "unknown");
+    assert!(!*streaming);
+    let model = AGENT_MODELS
+        .iter()
+        .find(|m| m.agent == AgentKind::Grok && m.model == "grok-4.5");
+    let Some(model) = model else {
+        panic!("grok-4.5 missing from AGENT_MODELS");
+    };
+    assert_eq!(model.tier, "unknown");
+    assert_eq!(model.input_per_m, 0.0);
+    assert_eq!(model.output_per_m, 0.0);
 }
 
 /// Taken verbatim in shape from `t-c7ae82a8`: no `type: "error"`, a populated

@@ -8,6 +8,9 @@ use crate::cmd::{checklist_scan, judge, retry_logic, show};
 #[path = "run_lifecycle/final_state.rs"]
 mod final_state;
 pub(crate) use final_state::capture_final_worktree_state;
+#[path = "run_lifecycle/missing_report.rs"]
+mod missing_report;
+pub(crate) use missing_report::record_missing_report;
 use super::run_dirty::{DirtyWorktreeAction, post_agent_dirty_worktree_cleanup};
 use super::run_model_selfheal::maybe_auto_retry_after_model_unavailable;
 use super::run_delivery_recovery::maybe_auto_recover_missing_delivery;
@@ -497,35 +500,6 @@ fn persist_result_file(
         Ok(delivery) => record_missing_report(store.as_ref(), task_id, delivery),
         Err(err) => aid_warn!("[aid] Failed to persist result file: {err}"),
     }
-}
-
-/// A requested report that never materialized used to be papered over with whatever the
-/// agent had printed, leaving a `done` task whose `result.md` is a tool log. Record the
-/// miss so `aid show`, `aid board`, and the JSON view all report it.
-fn record_missing_report(
-    store: &Store,
-    task_id: &TaskId,
-    delivery: run_prompt::ResultDelivery,
-) {
-    if delivery != (run_prompt::ResultDelivery::LogFallback { looks_like_report: false }) {
-        return;
-    }
-    if let Err(err) = store.update_delivery_assessment(
-        task_id.as_str(),
-        Some(DeliveryAssessment::MissingFinalDelivery),
-    ) {
-        aid_warn!("[aid] Failed to record missing delivery: {err}");
-    }
-    let _ = store.insert_event(&TaskEvent {
-        task_id: task_id.clone(),
-        timestamp: chrono::Local::now(),
-        event_kind: EventKind::Error,
-        detail: "Missing final delivery: no result file written and captured output is tool narration, not a report".to_string(),
-        metadata: Some(serde_json::json!({
-            "delivery_guard": "missing_final_delivery",
-            "source": "result_file_fallback",
-        })),
-    });
 }
 
 fn handle_failed_postprocess(

@@ -150,6 +150,51 @@ fn save_partial_work_commits_dirty_files() {
 }
 
 #[test]
+fn save_partial_work_excludes_aid_runtime_files() {
+    let _permit = test_subprocess::acquire();
+    let temp = tempfile::tempdir().unwrap();
+    init_repo(temp.path());
+    write_file(temp.path(), "tracked.txt", "base\n");
+    git(temp.path(), &["add", "tracked.txt"]);
+    git(temp.path(), &["commit", "-m", "initial"]);
+
+    write_file(temp.path(), "tracked.txt", "changed\n");
+    write_file(temp.path(), ".aid-lock", "pid=1234\n");
+    write_file(temp.path(), ".aid-verify-deps-state", "fresh=1\n");
+
+    save_partial_work(temp.path().to_str().unwrap(), "t-1234").unwrap();
+
+    assert_eq!(head_message(temp.path()), "[aid] partial work from t-1234");
+    let committed = git_stdout(temp.path(), &["show", "--name-only", "--format=", "HEAD"]);
+    assert_eq!(committed, "tracked.txt\n", "got: {committed}");
+    // Left on disk untouched, just never staged.
+    assert!(temp.path().join(".aid-lock").exists());
+    assert!(temp.path().join(".aid-verify-deps-state").exists());
+}
+
+#[test]
+fn save_partial_work_excludes_aid_directory() {
+    let _permit = test_subprocess::acquire();
+    let temp = tempfile::tempdir().unwrap();
+    init_repo(temp.path());
+    write_file(temp.path(), "tracked.txt", "base\n");
+    git(temp.path(), &["add", "tracked.txt"]);
+    git(temp.path(), &["commit", "-m", "initial"]);
+
+    write_file(temp.path(), "tracked.txt", "changed\n");
+    std::fs::create_dir_all(temp.path().join(".aid")).unwrap();
+    write_file(temp.path(), ".aid/state.toml", "health = 1\n");
+
+    save_partial_work(temp.path().to_str().unwrap(), "t-1234").unwrap();
+
+    assert_eq!(head_message(temp.path()), "[aid] partial work from t-1234");
+    let committed = git_stdout(temp.path(), &["show", "--name-only", "--format=", "HEAD"]);
+    assert_eq!(committed, "tracked.txt\n", "got: {committed}");
+    // Left on disk untouched, just never staged.
+    assert!(temp.path().join(".aid/state.toml").exists());
+}
+
+#[test]
 fn reset_dirty_worktree_discards_dirty_files() {
     let _permit = test_subprocess::acquire();
     let temp = tempfile::tempdir().unwrap();

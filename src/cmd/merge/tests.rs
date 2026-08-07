@@ -235,6 +235,49 @@ fn auto_commit_uncommitted_commits_dirty_worktree() {
 }
 
 #[test]
+fn auto_commit_uncommitted_excludes_aid_directory() {
+    let _permit = test_subprocess::acquire();
+    let repo = init_repo();
+    let branch = unique("aid-dir-branch");
+    let wt = TempDir::new().unwrap();
+    git(
+        repo.path(),
+        &[
+            "worktree",
+            "add",
+            &wt.path().to_string_lossy(),
+            "-b",
+            &branch,
+        ],
+    );
+    std::fs::write(wt.path().join("dirty.txt"), "uncommitted\n").unwrap();
+    std::fs::create_dir_all(wt.path().join(".aid")).unwrap();
+    std::fs::write(wt.path().join(".aid/state.toml"), "health = 1\n").unwrap();
+
+    let committed = auto_commit_uncommitted(&wt.path().to_string_lossy(), &branch);
+    assert!(committed);
+
+    let out = Command::new("git")
+        .args(["-C", &wt.path().to_string_lossy(), "diff-tree", "--no-commit-id", "--name-only", "-r", "HEAD"])
+        .output()
+        .unwrap();
+    let files = String::from_utf8_lossy(&out.stdout);
+    assert!(files.lines().any(|line| line == "dirty.txt"), "got: {files}");
+    assert!(!files.lines().any(|line| line == ".aid/state.toml"), "got: {files}");
+    assert!(wt.path().join(".aid/state.toml").exists());
+
+    git(
+        repo.path(),
+        &[
+            "worktree",
+            "remove",
+            "--force",
+            &wt.path().to_string_lossy(),
+        ],
+    );
+}
+
+#[test]
 fn merge_refuses_persisted_worktree_that_equals_repo_path() {
     let _permit = test_subprocess::acquire();
     let repo = init_repo();

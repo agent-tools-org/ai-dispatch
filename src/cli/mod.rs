@@ -18,6 +18,8 @@ mod run_audit_flag_tests;
 #[cfg(test)]
 mod run_timeout_help_tests;
 #[cfg(test)]
+mod version_tests;
+#[cfg(test)]
 mod doctor_tests;
 #[cfg(test)]
 mod build_flag_tests;
@@ -41,7 +43,7 @@ pub use sub_enums::{
 #[derive(Parser)]
 #[command(
     name = "aid",
-    version,
+    version = concat!(env!("CARGO_PKG_VERSION"), " (", env!("AID_GIT_INFO"), ")"),
     about = "Multi-AI CLI team orchestrator with optional GitButler integration"
 )]
 pub struct Cli {

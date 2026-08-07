@@ -125,8 +125,11 @@ pub(crate) fn record_quota_exhaustion(
         .unwrap_or_else(|| tail.chars().take(200).collect());
     // An agent whose plan meters model families separately must only lose the
     // family that ran out. agy's gemini allowance and its claude allowance are
-    // independent: marking the whole agent would strand a working one.
-    match crate::agent::model_group::model_group(agent, model) {
+    // independent: marking the whole agent would strand a working one. When no
+    // model was recorded for the run, the refusal may still name its own tier.
+    match crate::agent::model_group::model_group(agent, model)
+        .or_else(|| crate::agent::model_group::group_from_refusal(agent, &detail))
+    {
         Some(group) => crate::rate_limit::mark_group_rate_limited(&agent, group, &detail),
         None => crate::rate_limit::mark_rate_limited(&agent, &detail),
     }

@@ -44,6 +44,37 @@ fn cursor_auto_is_not_held_with_the_premium_pool() {
     assert_eq!(model_group(AgentKind::Cursor, Some("Auto")), Some("auto"));
 }
 
+/// The refusal captured on t-dfc23e80, t-b38df7a8 and t-d6fef491. Every path
+/// that writes a marker without a model in hand reads the tier from this string;
+/// if it stops being recognised, those paths silently go back to marking the
+/// whole agent and `auto` goes out with the premium pool.
+#[test]
+fn the_cursor_premium_refusal_names_its_own_tier() {
+    assert_eq!(
+        group_from_refusal(
+            AgentKind::Cursor,
+            "ActionRequiredError: Increase limits for faster responses You're out of usage. \
+             Switch to Auto, or ask your admin to increase your limit to continue."
+        ),
+        Some("premium")
+    );
+}
+
+/// A workspace cap is not a tier cap, and no other agent has tiers to name.
+/// Both must fall through to agent-level marking unchanged.
+#[test]
+fn a_refusal_that_names_no_tier_stays_agent_wide() {
+    assert_eq!(
+        group_from_refusal(AgentKind::Cursor, "Quota exceeded for this workspace"),
+        None
+    );
+    assert_eq!(group_from_refusal(AgentKind::Cursor, "HTTP 429 Too Many Requests"), None);
+    assert_eq!(
+        group_from_refusal(AgentKind::Codex, "You're out of usage. Switch to Auto."),
+        None
+    );
+}
+
 #[test]
 fn a_spent_cursor_premium_pool_falls_back_to_auto() {
     let got = healthy_model_for(AgentKind::Cursor, Some("composer-2.5"), |group| {

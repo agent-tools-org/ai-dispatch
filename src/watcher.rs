@@ -274,7 +274,7 @@ fn failure_stderr_note(status: TaskStatus, task_id: &TaskId, agent: &dyn Agent) 
     if let Ok(stderr_content) = std::fs::read_to_string(&stderr_path) {
         for line in stderr_content.lines() {
             if let Some(message) = rate_limit::extract_rate_limit_message(line) {
-                rate_limit::mark_rate_limited(&agent.kind(), &message);
+                rate_limit::mark_rate_limited_for_message(&agent.kind(), &message);
                 break;
             }
         }

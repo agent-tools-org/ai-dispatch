@@ -265,7 +265,7 @@ pub(crate) async fn post_run_lifecycle(
         && let Some(fallback) =
             agent::selection::coding_fallback_for_prompt(&agent_kind, &args.prompt)
     {
-        rate_limit::mark_rate_limited(&agent_kind, &clean_message);
+        rate_limit::mark_rate_limited_for_message(&agent_kind, &clean_message);
         aid_info!(
             "[aid] Quota exhausted for {}, auto-cascading to {}",
             agent_kind.as_str(),
@@ -542,7 +542,7 @@ fn handle_failed_postprocess(
     if let Some(message) = quota_error_message.as_deref()
         && let Some(clean_message) = rate_limit::extract_rate_limit_message(message)
     {
-        rate_limit::mark_rate_limited(&agent_kind, &clean_message);
+        rate_limit::mark_rate_limited_for_message(&agent_kind, &clean_message);
     }
     run_fail_hook(task_id, task, agent_display_name, effective_dir, runtime_hooks);
     quota_error_message

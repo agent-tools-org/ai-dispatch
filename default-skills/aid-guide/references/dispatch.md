@@ -297,6 +297,15 @@ installed, and known-unhealthy agents (for example gemini when `agy` is
 present). A frontend task falling off codex prefers cursor; a research task
 prefers agy — not gemini.
 
+A hold diverts dispatch whenever it is still live, whether it ends on a stated
+time or only when a person runs `aid config clear-limit <agent>` (see
+`references/configuration.md` for the three hold classes). A marker whose stated
+time has already passed does not divert anything, and neither does the short
+cooldown left by an unrecognised refusal — that window is shorter than the cost
+of moving off the agent you asked for. Where a tiered agent has only one tier
+held — cursor's premium pool — dispatch stays on the agent and switches to a
+tier that still serves, reporting the swap rather than making it silently.
+
 ## Verify before review
 
 ```bash

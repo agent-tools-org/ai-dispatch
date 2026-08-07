@@ -374,7 +374,9 @@ fn is_error_line(line: &str) -> bool {
 
 fn maybe_mark_rate_limit(detail: &str) {
     if rate_limit::is_rate_limit_error_for_agent(detail, &AgentKind::Cursor) {
-        rate_limit::mark_rate_limited(&AgentKind::Cursor, detail);
+        // Cursor's premium refusal names the tier it spent, and this path has no
+        // model in hand — marking the agent here is what took `auto` out too.
+        rate_limit::mark_rate_limited_for_message(&AgentKind::Cursor, detail);
     }
 }
 

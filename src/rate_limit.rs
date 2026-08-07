@@ -1,6 +1,7 @@
 // Rate-limit detection: marks agents as rate-limited when quota errors occur.
 // A marker is held by a stated reset time, by a person, or by a short cooldown.
-// Exports: mark_rate_limited, is_rate_limited, get_rate_limit_info, clear_*.
+// Exports: mark_rate_limited{,_for_message}, is_rate_limited,
+// dispatch_blocking_hold, get_rate_limit_info, clear_*.
 
 use crate::paths::aid_dir;
 use crate::rate_limit_signatures::QuotaRecovery;
@@ -53,6 +54,21 @@ pub fn clear_group_rate_limit(agent: &AgentKind, group: &str) -> bool {
 
 pub fn mark_rate_limited(agent: &AgentKind, message: &str) {
     write_marker(&marker_path(agent), message);
+}
+
+/// Record a refusal when the caller has no model in hand — a stderr line, a
+/// stream error event, a failed task's captured output.
+///
+/// The refusal can still name the tier it exhausted even when the model is
+/// unknown, and marking the whole agent for a tier refusal takes a route out
+/// that is still serving: cursor's "You're out of usage. Switch to Auto" went
+/// through `mark_rate_limited`, so `is_rate_limited(Cursor)` became true and
+/// `auto` — the tier the message itself points at — stopped being dispatchable.
+pub fn mark_rate_limited_for_message(agent: &AgentKind, message: &str) {
+    match crate::agent::model_group::group_from_refusal(*agent, message) {
+        Some(group) => mark_group_rate_limited(agent, group, message),
+        None => mark_rate_limited(agent, message),
+    }
 }
 
 /// What is holding a marker open. These are three different facts and
@@ -123,7 +139,15 @@ fn marker_field(content: &str, key: &str) -> Option<String> {
         .map(str::to_string)
 }
 
-/// Shared liveness check for a marker file.
+/// What is holding a marker that is already on disk. The read-side counterpart
+/// of `Hold`: the stated time has been parsed, so callers compare instants.
+enum StoredHold {
+    Until(NaiveDateTime),
+    NeedsHuman,
+    Transient,
+}
+
+/// Classify a marker file's contents.
 ///
 /// A marker with no parseable reset time is not automatically permanent. Before
 /// the hold classes existed this fell straight through to "still limited",
@@ -131,19 +155,81 @@ fn marker_field(content: &str, key: &str) -> Option<String> {
 /// exactly such a marker — took a route out until someone ran
 /// `aid config clear-limit`. That is the same defect as an outage going
 /// unrecorded, pointing the other way: a route that still serves, written off.
+///
+/// Markers written before the hold classes existed carry no `hold:` line at all,
+/// and the human-ended ones carry no reset time either — copilot's and grok's
+/// live markers are both in that shape. Rather than rewrite files this version
+/// did not author, the stored refusal text is re-read: it is the same evidence
+/// write-time classification uses. Only the `NeedsHuman` verdict is taken from
+/// it, because an `After` window read here would be measured from read time and
+/// so could never elapse.
+fn stored_hold(content: &str) -> StoredHold {
+    if let Some(recovery_at) =
+        marker_field(content, "recovery_at: ").as_deref().and_then(parse_recovery_datetime)
+    {
+        return StoredHold::Until(recovery_at);
+    }
+    if marker_field(content, "hold: ").as_deref() == Some(MANUAL_HOLD)
+        || stored_refusal_needs_a_person(content)
+    {
+        return StoredHold::NeedsHuman;
+    }
+    StoredHold::Transient
+}
+
+/// Whether the refusal a marker recorded is one only a person ends.
+///
+/// Matched line by line: grok's marker wraps its refusal in a multi-line JSON
+/// body, so reading only the first `message:` line misses it. Lines quoting this
+/// crate's own signature table are skipped for the same reason the prose path
+/// skips them — a marker whose text happens to contain our source is not a
+/// provider saying anything.
+fn stored_refusal_needs_a_person(content: &str) -> bool {
+    content
+        .lines()
+        .filter(|line| !crate::rate_limit_signatures::is_signature_source_citation(line))
+        .any(|line| matches!(classify_hold(line), Hold::NeedsHuman))
+}
+
+/// Shared liveness check for a marker file.
 fn marker_is_active(path: &std::path::Path) -> bool {
     let Ok(content) = fs::read_to_string(path) else {
         return false;
     };
-    if let Some(recovery_at) =
-        marker_field(&content, "recovery_at: ").as_deref().and_then(parse_recovery_datetime)
-    {
-        return recovery_at > Local::now().naive_local();
+    match stored_hold(&content) {
+        StoredHold::Until(recovery_at) => recovery_at > Local::now().naive_local(),
+        StoredHold::NeedsHuman => true,
+        StoredHold::Transient => within_cooldown_window(path),
     }
-    if marker_field(&content, "hold: ").as_deref() == Some(MANUAL_HOLD) {
-        return true;
+}
+
+/// How a live hold ends, phrased for the caller who just chose this agent —
+/// `None` when nothing should stop the dispatch.
+///
+/// `aid run` gated on the presence of a recovery time, which was wrong in both
+/// directions: a marker whose stated time had already passed still diverted the
+/// run, and a refusal only a person can end carries no time at all, so dispatch
+/// walked straight into an account that cannot serve.
+///
+/// The bounded transient cooldown is deliberately not a gate. It is short enough
+/// that moving the caller off the agent they asked for costs more than the wait,
+/// and gating on it was never the previous behaviour either.
+pub fn dispatch_blocking_hold(agent: &AgentKind) -> Option<String> {
+    let path = marker_path(agent);
+    let content = fs::read_to_string(&path).ok()?;
+    match stored_hold(&content) {
+        StoredHold::Until(recovery_at) if recovery_at > Local::now().naive_local() => {
+            // Quote the provider's own phrasing of the time rather than a
+            // reformat of it; the parse above only decides whether it is past.
+            let stated = marker_field(&content, "recovery_at: ")
+                .unwrap_or_else(|| format_recovery(recovery_at));
+            Some(format!("until {stated}"))
+        }
+        StoredHold::NeedsHuman => {
+            Some(format!("until cleared with `aid config clear-limit {}`", agent.as_str()))
+        }
+        StoredHold::Until(_) | StoredHold::Transient => None,
     }
-    within_cooldown_window(path)
 }
 
 /// The bounded cooldown for the transient class, measured from the write time.
@@ -433,7 +519,7 @@ pub fn get_rate_limit_info(agent: &AgentKind) -> Option<RateLimitInfo> {
     Some(RateLimitInfo {
         recovery_at: marker_field(&content, "recovery_at: "),
         message: marker_field(&content, "message: "),
-        needs_human: marker_field(&content, "hold: ").as_deref() == Some(MANUAL_HOLD),
+        needs_human: matches!(stored_hold(&content), StoredHold::NeedsHuman),
     })
 }
 

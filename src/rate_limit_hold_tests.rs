@@ -401,28 +401,38 @@ fn a_legacy_marker_with_an_unrecognised_refusal_still_expires() {
     assert!(!get_rate_limit_info(&AgentKind::Claude).expect("marker present").needs_human);
 }
 
-/// Reading a marker's stored text back must not resurrect the false positive
-/// the prose path already guards against. `~/.aid/rate-limit-claude` was written
-/// on 2026-08-07 from an agent's own message quoting this crate's signature
-/// table — the text contained `needle: "insufficient balance"`, so claude was
-/// given opencode's refusal. A citation is not a provider saying anything.
+/// A marker records what *one* provider said, so a needle another provider owns
+/// is not evidence about this one. `~/.aid/rate-limit-claude` was written on
+/// 2026-08-07 from an agent's own message quoting this crate's signature table,
+/// and the stored text contained `"insufficient balance"` — opencode's refusal,
+/// which held claude open until someone cleared it.
+///
+/// The scoping is what does the work here, not the wording: the identical text
+/// in opencode's own marker is still a human-ended hold, as the second half
+/// asserts. The write side can no longer produce such a marker at all
+/// (`quota_channel`); this covers the ones already on disk.
 #[test]
-fn a_stored_signature_citation_is_not_read_as_a_human_ended_hold() {
+fn a_stored_refusal_only_speaks_for_the_agent_whose_marker_it_is() {
     let temp = isolated();
     let _guard = crate::paths::AidHomeGuard::set(temp.path());
 
-    let path = marker_path(&AgentKind::Claude);
-    std::fs::write(
-        &path,
-        "recovery_at: \nmessage: QuotaSignature { needle: \"insufficient balance\", \
-         recovery: QuotaRecovery::NeedsHuman }\n",
-    )
-    .expect("write marker");
-    age_marker(&path, RATE_LIMIT_WINDOW_SECS + 60);
+    let stored = "recovery_at: \nmessage: QuotaSignature { needle: \"insufficient balance\", \
+                  recovery: QuotaRecovery::NeedsHuman }\n";
 
+    let claude = marker_path(&AgentKind::Claude);
+    std::fs::write(&claude, stored).expect("write marker");
+    age_marker(&claude, RATE_LIMIT_WINDOW_SECS + 60);
     assert!(
         !is_rate_limited(&AgentKind::Claude),
-        "a quoted signature must not hold a route open until someone clears it"
+        "another provider's needle must not hold claude open until someone clears it"
+    );
+
+    let opencode = marker_path(&AgentKind::OpenCode);
+    std::fs::write(&opencode, stored).expect("write marker");
+    age_marker(&opencode, RATE_LIMIT_WINDOW_SECS + 60);
+    assert!(
+        is_rate_limited(&AgentKind::OpenCode),
+        "opencode's own refusal must still hold, or this became a denylist"
     );
 }
 

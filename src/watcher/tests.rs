@@ -259,3 +259,100 @@ fn term_escape_strip_allows_droid_stream_parse_via_stream_path() {
     assert!(res.is_some());
     assert_eq!(res.unwrap().kind, EventKind::Completion);
 }
+
+/// The live false positive of 2026-08-07 at the call site that produced it.
+///
+/// A cursor audit task quoted `src/agent/cursor_tests.rs:142` into its report.
+/// Every chunk of that report reaches this function as `{"type":"assistant"}`,
+/// which the adapter classifies as Reasoning — the model talking. Only a
+/// diagnostic event is the CLI talking, and the model cannot author one.
+#[test]
+fn only_a_diagnostic_event_can_mark_a_route_rate_limited() {
+    let temp = tempfile::tempdir().unwrap();
+    let _aid_home = paths::AidHomeGuard::set(temp.path());
+    let store = std::sync::Arc::new(crate::store::Store::open_memory().unwrap());
+    let task = running_task("t-cursor-quote", AgentKind::Cursor);
+    store.insert_task(&task).unwrap();
+    crate::rate_limit::clear_all_rate_limits_for_agent(&AgentKind::Cursor);
+
+    let quoted = "assert_rate_limit(r#\"{\"type\":\"error\",\"message\":\"quota exceeded for \
+                  this workspace\"}\"#, true);";
+    let report = json!({
+        "type": "assistant",
+        "message": {"content": [{"type": "text", "text": quoted}]}
+    })
+    .to_string();
+
+    feed_stream_line(&store, &task, &report);
+    assert!(
+        !crate::rate_limit::is_rate_limited(&AgentKind::Cursor),
+        "a report quoting our own fixture must not hold cursor"
+    );
+
+    let refusal = r#"{"type":"error","message":"quota exceeded for this workspace"}"#;
+    feed_stream_line(&store, &task, refusal);
+    assert!(
+        crate::rate_limit::is_rate_limited(&AgentKind::Cursor),
+        "the same words from the CLI's own error envelope must still hold cursor"
+    );
+}
+
+fn feed_stream_line(store: &std::sync::Arc<crate::store::Store>, task: &Task, line: &str) {
+    let mut synthetic = SyntheticMilestoneTracker::new();
+    let mut info = CompletionInfo { tokens: None, status: TaskStatus::Done, model: None, cost_usd: None, exit_code: None };
+    let mut event_count = 0u32;
+    let mut session_saved = false;
+    let agent = crate::agent::cursor::CursorAgent;
+    let ctx = super::StreamLineContext {
+        agent: &agent,
+        task_id: &task.id,
+        store,
+        workgroup_id: None,
+        synthetic_tracker: &mut synthetic,
+    };
+    super::handle_streaming_line_with_session(ctx, &mut info, &mut event_count, line, &mut session_saved)
+        .expect("stream line handled");
+}
+
+fn running_task(id: &str, agent: AgentKind) -> Task {
+    Task {
+        id: TaskId(id.to_string()),
+        agent,
+        custom_agent_name: None,
+        prompt: "prompt".to_string(),
+        resolved_prompt: None,
+        category: None,
+        status: TaskStatus::Running,
+        parent_task_id: None,
+        workgroup_id: None,
+        caller_kind: None,
+        caller_session_id: None,
+        agent_session_id: None,
+        repo_path: None,
+        worktree_path: None,
+        worktree_branch: None,
+        final_head_sha: None,
+        final_branch: None,
+        start_sha: None,
+        log_path: None,
+        output_path: None,
+        tokens: None,
+        prompt_tokens: None,
+        duration_ms: None,
+        requested_model: None,
+        observed_model: None,
+        attribution_source: None,
+        cost_usd: None,
+        exit_code: None,
+        created_at: chrono::Local::now(),
+        completed_at: None,
+        verify: None,
+        verify_status: crate::types::VerifyStatus::Skipped,
+        pending_reason: None,
+        read_only: false,
+        budget: false,
+        audit_verdict: None,
+        audit_report_path: None,
+        delivery_assessment: None,
+    }
+}

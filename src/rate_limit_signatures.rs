@@ -125,17 +125,8 @@ pub(crate) const QUOTA_SIGNATURES: &[QuotaSignature] = &[
     QuotaSignature { agent: AgentKind::Grok, needle: "usage balance exhausted", recovery: QuotaRecovery::NeedsHuman },
 ];
 
-/// True when a line is quoting this module's own signature table, not a live refusal.
-pub(crate) fn is_signature_source_citation(line: &str) -> bool {
-    let lower = line.to_lowercase();
-    lower.contains("quotasignature")
-        || lower.contains("quotarecovery")
-        || lower.contains("needle:")
-        || lower.contains("rate_limit_signatures")
-}
-
-/// Match only signatures owned by one agent — used when scanning agent-authored
-/// output so prose about another provider's quota cannot flip this run.
+/// Match only signatures owned by one agent, so a refusal quoted about another
+/// provider cannot flip this run.
 pub(crate) fn match_quota_signature_for_agent(
     message: &str,
     agent: AgentKind,

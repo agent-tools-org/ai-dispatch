@@ -74,8 +74,16 @@ pub(crate) fn handle_streaming_line_with_session(
         apply_completion_event(info, &event);
         synthetic_tracker.observe(&event);
         save_session_id(store, task_id, &event, session_saved)?;
-        if let Some(message) =
-            rate_limit::extract_rate_limit_from_stream_detail(&event.detail, &agent.kind())
+        // Diagnostic events only. An adapter classifies each line it parses, and
+        // a Reasoning event is the model's own message text: on 2026-08-07 a
+        // cursor audit quoted `src/agent/cursor_tests.rs:142` into its report,
+        // the chunk arrived here as `{"type":"assistant",...}`, and cursor's
+        // anchored needle matched inside it — writing a real hold on a route
+        // that was serving. Who spoke is decided by the envelope, which the
+        // model cannot author; what was said is decided below.
+        if event.event_kind == EventKind::Error
+            && let Some(message) =
+                rate_limit::extract_rate_limit_from_stream_detail(&event.detail, &agent.kind())
         {
             rate_limit::mark_rate_limited_for_message(&agent.kind(), &message);
         }

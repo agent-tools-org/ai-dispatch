@@ -198,20 +198,75 @@ fn quota_line_keeps_a_reset_time_embedded_in_json() {
     assert!(!line.contains('\\'), "JSON escapes must not survive: {line}");
 }
 
+/// The live false positive of 2026-08-07, end to end.
+///
+/// A cursor audit task read `src/agent/cursor_tests.rs:142` and quoted it into
+/// its report. aid wrote `~/.aid/rate-limit-cursor`, held cursor until the next
+/// day and recorded the task FAILED with exit code 0, while cursor served the
+/// whole time. The report reaches the watcher as assistant envelopes, which is
+/// where the split now drops it.
 #[test]
-fn record_quota_exhaustion_ignores_signature_source_citations() {
+fn a_report_quoting_this_repos_own_fixture_never_marks_the_agent() {
     let temp = tempfile::tempdir().unwrap();
     let _aid_home = crate::paths::AidHomeGuard::set(temp.path());
-    crate::rate_limit::clear_rate_limit(&crate::types::AgentKind::OpenCode);
+    let cursor = crate::types::AgentKind::Cursor;
+    crate::rate_limit::clear_all_rate_limits_for_agent(&cursor);
 
-    let output = "QuotaSignature { agent: AgentKind::OpenCode, needle: \"insufficient balance\", recovery: QuotaRecovery::NeedsHuman },";
-    assert!(!record_quota_exhaustion(
-        output,
-        crate::types::AgentKind::OpenCode,
-        None,
-    )
-    .recorded());
-    assert!(!crate::rate_limit::is_rate_limited(&crate::types::AgentKind::OpenCode));
+    let quoted = "assert_rate_limit(r#\"{\"type\":\"error\",\"message\":\"quota exceeded for \
+                  this workspace\"}\"#, true);\n====\ncommit 7881e2d";
+    let output = format!(
+        "{}\n{}\n",
+        serde_json::json!({"type": "system", "subtype": "init", "model": "composer-2.5"}),
+        serde_json::json!({
+            "type": "assistant",
+            "message": {"content": [{"type": "text", "text": quoted}]}
+        })
+    );
+
+    assert!(!record_quota_exhaustion(&output, cursor, None).recorded());
+    assert!(!crate::rate_limit::is_rate_limited(&cursor));
+    assert!(!crate::rate_limit::is_group_rate_limited(&cursor, "premium"));
+}
+
+/// The same guarantee over every signature we ship, so a needle added later
+/// inherits it: nothing an agent can write into its own message becomes a hold.
+#[test]
+fn no_shipped_signature_can_be_quoted_into_a_marker() {
+    let temp = tempfile::tempdir().unwrap();
+    let _aid_home = crate::paths::AidHomeGuard::set(temp.path());
+
+    for signature in crate::rate_limit_signatures::QUOTA_SIGNATURES {
+        crate::rate_limit::clear_all_rate_limits_for_agent(&signature.agent);
+        let report = serde_json::json!({
+            "type": "assistant",
+            "message": {"content": [{
+                "type": "text",
+                "text": format!("The captured refusal reads \"{}\".", signature.needle),
+            }]}
+        })
+        .to_string();
+        assert!(
+            !record_quota_exhaustion(&report, signature.agent, None).recorded(),
+            "needle {:?} was quoted into a marker for {:?}",
+            signature.needle,
+            signature.agent
+        );
+        assert!(!crate::rate_limit::is_rate_limited(&signature.agent));
+    }
+}
+
+/// The other direction: the same needle, arriving in the envelope only the CLI
+/// can open, must still be recorded.
+#[test]
+fn the_same_needle_in_a_cli_error_envelope_still_marks() {
+    let temp = tempfile::tempdir().unwrap();
+    let _aid_home = crate::paths::AidHomeGuard::set(temp.path());
+    let cursor = crate::types::AgentKind::Cursor;
+    crate::rate_limit::clear_all_rate_limits_for_agent(&cursor);
+
+    let output = r#"{"type":"error","message":"quota exceeded for this workspace"}"#;
+    assert!(record_quota_exhaustion(output, cursor, None).recorded());
+    assert!(crate::rate_limit::is_rate_limited(&cursor));
 }
 
 /// The two facts must stay separable. `watcher.rs` clears the rate-limit marker

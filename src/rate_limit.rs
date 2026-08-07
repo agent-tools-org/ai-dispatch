@@ -45,7 +45,7 @@ pub fn mark_group_rate_limited(agent: &AgentKind, group: &str, message: &str) {
 }
 
 pub fn is_group_rate_limited(agent: &AgentKind, group: &str) -> bool {
-    marker_is_active(&group_marker_path(agent, group))
+    marker_is_active(&group_marker_path(agent, group), agent)
 }
 
 pub fn clear_group_rate_limit(agent: &AgentKind, group: &str) -> bool {
@@ -163,14 +163,14 @@ enum StoredHold {
 /// write-time classification uses. Only the `NeedsHuman` verdict is taken from
 /// it, because an `After` window read here would be measured from read time and
 /// so could never elapse.
-fn stored_hold(content: &str) -> StoredHold {
+fn stored_hold(content: &str, agent: &AgentKind) -> StoredHold {
     if let Some(recovery_at) =
         marker_field(content, "recovery_at: ").as_deref().and_then(parse_recovery_datetime)
     {
         return StoredHold::Until(recovery_at);
     }
     if marker_field(content, "hold: ").as_deref() == Some(MANUAL_HOLD)
-        || stored_refusal_needs_a_person(content)
+        || stored_refusal_needs_a_person(content, agent)
     {
         return StoredHold::NeedsHuman;
     }
@@ -180,23 +180,30 @@ fn stored_hold(content: &str) -> StoredHold {
 /// Whether the refusal a marker recorded is one only a person ends.
 ///
 /// Matched line by line: grok's marker wraps its refusal in a multi-line JSON
-/// body, so reading only the first `message:` line misses it. Lines quoting this
-/// crate's own signature table are skipped for the same reason the prose path
-/// skips them — a marker whose text happens to contain our source is not a
-/// provider saying anything.
-fn stored_refusal_needs_a_person(content: &str) -> bool {
-    content
-        .lines()
-        .filter(|line| !crate::rate_limit_signatures::is_signature_source_citation(line))
-        .any(|line| matches!(classify_hold(line), Hold::NeedsHuman))
+/// body, so reading only the first `message:` line misses it.
+///
+/// Scoped to the agent whose marker this is. A marker is aid's record of what
+/// *one* provider said, so a needle another provider owns is not evidence about
+/// this one — `~/.aid/rate-limit-claude`, written on 2026-08-07 from an agent's
+/// own message quoting this crate's signature table, held claude open on
+/// opencode's `insufficient balance`. The write side can no longer produce such
+/// a marker (`quota_channel`), but markers already on disk predate that and are
+/// still read here.
+fn stored_refusal_needs_a_person(content: &str, agent: &AgentKind) -> bool {
+    content.lines().any(|line| {
+        parse_recovery_time(line).is_none()
+            && crate::rate_limit_signatures::parse_relative_recovery(line).is_none()
+            && crate::rate_limit_signatures::match_quota_signature_for_agent(line, *agent)
+                == Some(QuotaRecovery::NeedsHuman)
+    })
 }
 
 /// Shared liveness check for a marker file.
-fn marker_is_active(path: &std::path::Path) -> bool {
+fn marker_is_active(path: &std::path::Path, agent: &AgentKind) -> bool {
     let Ok(content) = fs::read_to_string(path) else {
         return false;
     };
-    match stored_hold(&content) {
+    match stored_hold(&content, agent) {
         StoredHold::Until(recovery_at) => recovery_at > Local::now().naive_local(),
         StoredHold::NeedsHuman => true,
         StoredHold::Transient => within_cooldown_window(path),
@@ -217,7 +224,7 @@ fn marker_is_active(path: &std::path::Path) -> bool {
 pub fn dispatch_blocking_hold(agent: &AgentKind) -> Option<String> {
     let path = marker_path(agent);
     let content = fs::read_to_string(&path).ok()?;
-    match stored_hold(&content) {
+    match stored_hold(&content, agent) {
         StoredHold::Until(recovery_at) if recovery_at > Local::now().naive_local() => {
             // Quote the provider's own phrasing of the time rather than a
             // reformat of it; the parse above only decides whether it is past.
@@ -317,7 +324,7 @@ pub fn clear_all_rate_limits_for_agent(agent: &AgentKind) -> bool {
 }
 
 pub fn is_rate_limited(agent: &AgentKind) -> bool {
-    marker_is_active(&marker_path(agent))
+    marker_is_active(&marker_path(agent), agent)
 }
 
 pub fn rate_limited_agents() -> Vec<(AgentKind, String)> {
@@ -519,7 +526,7 @@ pub fn get_rate_limit_info(agent: &AgentKind) -> Option<RateLimitInfo> {
     Some(RateLimitInfo {
         recovery_at: marker_field(&content, "recovery_at: "),
         message: marker_field(&content, "message: "),
-        needs_human: matches!(stored_hold(&content), StoredHold::NeedsHuman),
+        needs_human: matches!(stored_hold(&content, agent), StoredHold::NeedsHuman),
     })
 }
 

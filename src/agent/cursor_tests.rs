@@ -126,6 +126,21 @@ fn read_only_build_command_adds_trust_and_context() {
 }
 
 #[test]
+fn read_only_with_result_file_uses_force_not_plan() {
+    let mut opts = run_opts();
+    opts.read_only = true;
+    opts.result_file = Some("result.md".to_string());
+    let cmd = CursorAgent.build_command("audit findings", &opts).unwrap();
+    let args: Vec<String> = cmd
+        .get_args()
+        .map(|a| a.to_string_lossy().into_owned())
+        .collect();
+    assert!(args.iter().any(|a| a == "--force"));
+    assert!(!args.windows(2).any(|w| w == ["--mode", "plan"]));
+    assert!(args.iter().any(|a| a.contains("EXCEPT the result file")));
+}
+
+#[test]
 fn parse_event_marks_plain_text_rate_limits() {
     let temp = tempfile::tempdir().unwrap();
     let _aid_home = paths::AidHomeGuard::set(temp.path());

@@ -24,9 +24,15 @@ impl super::Agent for GrokAgent {
 
     fn build_command(&self, prompt: &str, opts: &RunOpts) -> Result<Command> {
         let prompt_with_ctx = super::embed_context_in_prompt(prompt, &opts.context_files)?;
+        let allow_result = super::read_only::allow_result_file_write(opts);
+        let effective_prompt = if allow_result {
+            super::read_only::read_only_prompt(&prompt_with_ctx, opts)
+        } else {
+            prompt_with_ctx
+        };
         let mut cmd = Command::new("grok");
-        cmd.args(["-p", &prompt_with_ctx, "--output-format", "json"]);
-        if opts.read_only {
+        cmd.args(["-p", &effective_prompt, "--output-format", "json"]);
+        if opts.read_only && !allow_result {
             cmd.args(["--permission-mode", "plan"]);
         } else {
             // Without this grok asks for approval it can never receive: in
@@ -38,6 +44,7 @@ impl super::Agent for GrokAgent {
             // cancels identically. Every other adapter passes its own form of
             // this (codex `--full-auto`, agy/claude `--dangerously-skip-
             // permissions`, droid `--skip-permissions-unsafe`, kilo `--auto`).
+            // Result-file audits need the same write path with prompt-level RO.
             cmd.arg("--always-approve");
         }
         if let Some(ref model) = opts.model {

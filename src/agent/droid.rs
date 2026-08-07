@@ -26,7 +26,8 @@ impl super::Agent for DroidAgent {
     fn build_command(&self, prompt: &str, opts: &RunOpts) -> Result<Command> {
         let mut cmd = Command::new("droid");
         cmd.args(["exec", "--output-format", "stream-json"]);
-        if opts.read_only {
+        let allow_result = super::read_only::allow_result_file_write(opts);
+        if opts.read_only && !allow_result {
             // `--use-spec` is droid's true read-only mode. `--auto low` still
             // permits file creation/modification in non-system directories,
             // so it is NOT a read-only mode despite the name.
@@ -39,6 +40,7 @@ impl super::Agent for DroidAgent {
             // (parallel to `gemini -y` and `cursor --trust`), so adopt
             // droid's own recommendation. Note: --skip-permissions-unsafe
             // cannot be combined with --auto.
+            // With a result file, skip --use-spec so the report can be written.
             cmd.arg("--skip-permissions-unsafe");
         }
         if let Some(ref model) = opts.model {
@@ -58,7 +60,12 @@ impl super::Agent for DroidAgent {
             cmd.args(["--cwd", dir]);
             cmd.current_dir(dir);
         }
-        cmd.arg(prompt);
+        let effective_prompt = if allow_result {
+            super::read_only::read_only_prompt(prompt, opts)
+        } else {
+            prompt.to_string()
+        };
+        cmd.arg(&effective_prompt);
         Ok(cmd)
     }
 

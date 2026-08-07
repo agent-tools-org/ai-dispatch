@@ -42,7 +42,8 @@ fn official_guide_documents_prompt_only_audit_dispatch() {
     assert!(dispatch.contains("`read-only comparative audit`"));
     assert!(dispatch.contains("`read-only cross-audit`"));
     assert!(dispatch.contains("`read-only re-audit`"));
-    assert!(dispatch.contains("Omit `--read-only`"));
+    assert!(dispatch.contains("still permits writing the task result file"));
+    assert!(dispatch.contains("refused before a task row is created"));
     assert!(dispatch.contains("`add an audit log`"));
     assert!(dispatch.contains("`make changes to the read-only audit logic`"));
     assert!(dispatch.contains("`do not modify` or `without modifying`"));

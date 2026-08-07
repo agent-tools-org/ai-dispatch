@@ -105,7 +105,8 @@ Important controls:
   configuration or supported defaults.
 - `--retry N` permits new attempts after failure.
 - `--bg` returns the task ID immediately.
-- `--read-only` forbids writing intent.
+- `--read-only` forbids modifying the repository under test; the task result
+  file and audit report remain writable.
 - `--sandbox` requests sandboxed execution.
 - `--timeout SECS` is a hard wall-clock cap in seconds.
 - `--idle-timeout SECS` stops a task whose stream goes quiet. Meaningful raw
@@ -176,10 +177,10 @@ verify = "cargo test --bin app"
 Prompts expressing `read-only … audit`, including `read-only audit` and
 modifiers such as `read-only comparative audit`, `read-only cross-audit`, or
 `read-only re-audit`, are dispatched as report tasks from the prompt alone.
-Omit `--read-only` when the auditor must
-write its result artifact: AID auto-selects a task-specific result file and
-omits implementation methodology and Git staging instructions. This prompt
-formatting decision is independent of dirty-worktree enforcement.
+`--read-only` still permits writing the task result file and audit report; it
+forbids modifying the repository under test. AID auto-selects a task-specific
+result file and omits implementation methodology and Git staging instructions.
+This prompt formatting decision is independent of dirty-worktree enforcement.
 Implementation noun phrases such as `add an audit log` and write requests such as
 `add tests for the read-only audit module` or
 `make changes to the read-only audit logic` remain normal writable tasks.
@@ -187,6 +188,16 @@ Write verbs after the audit phrase also keep implementation scaffolding unless
 they are negated, as in `do not modify` or `without modifying`.
 An explicit `--result-file` controls report formatting and delivery; it does not
 by itself remove implementation methodology or Git staging instructions.
+
+Unsupported agent and flag combinations (for example `qwen` with `--read-only`)
+are refused before a task row is created, with an error that names what to do
+instead. The same preflight resolves the agent command (built-in or custom) and
+refuses when the binary is missing from `PATH`, naming the missing binary.
+Unknown models that the agent CLI does not report as invalid are passed
+through.
+
+If the agent process still fails to start after preflight, the task ends in
+`failed` with an agent-spawn error — it is never left `running` with no worker.
 
 When `--result-file` is set (audit and review prompts set it automatically) and
 the agent never writes that file, AID salvages the captured agent output into
@@ -271,7 +282,10 @@ empty target set for a green suite.
 - Failure output stays compact (panics and assertion diffs)
 
 `--isolated` gives the cargo test process a temporary `AID_HOME` so the run
-cannot read or pollute the developer's `~/.aid/`. It is opt-in, not the default.
+cannot read or pollute the developer's `~/.aid/`. It also clears nested
+`AID_TASK_ID` / `AID_TASK_DEPTH` in that child so unit tests that call
+`prepare_dispatch` are not refused as over-depth when `aid test` itself runs
+inside a task. It is opt-in, not the default.
 
 Inherited `CARGO_TARGET_DIR` wins for the first attempt. If cargo cannot write
 that directory (common under agent OS sandboxes that only allow the worktree

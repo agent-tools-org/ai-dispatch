@@ -60,13 +60,19 @@ impl super::Agent for CursorAgent {
     fn build_command(&self, prompt: &str, opts: &RunOpts) -> Result<Command> {
         let mut cmd = Command::new(cursor_binary());
         let prompt_with_ctx = super::embed_context_in_prompt(prompt, &opts.context_files)?;
+        let effective_prompt = if super::read_only::allow_result_file_write(opts) {
+            super::read_only::read_only_prompt(&prompt_with_ctx, opts)
+        } else {
+            prompt_with_ctx
+        };
         // Cursor documents stream-json "assistant" events as deltas; only the terminal "result"
         // event is complete, so requesting --stream-partial-output just degrades logs into tokens.
-        if opts.read_only {
+        // Plan mode cannot write the audit result file; keep --force and prompt-level read-only.
+        if opts.read_only && !super::read_only::allow_result_file_write(opts) {
             cmd.args([
                 "-p",
                 "--trust",
-                &prompt_with_ctx,
+                &effective_prompt,
                 "--mode",
                 "plan",
                 "--output-format",
@@ -75,7 +81,7 @@ impl super::Agent for CursorAgent {
         } else {
             cmd.args([
                 "-p",
-                &prompt_with_ctx,
+                &effective_prompt,
                 "--trust",
                 "--force",
                 "--output-format",

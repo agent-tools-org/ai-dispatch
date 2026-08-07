@@ -12,7 +12,10 @@ use super::run_task_profile::{
     apply_category_and_result_defaults, persist_declaration, should_auto_result_file,
     validate_critical_rigor, validate_egress,
 };
-use super::run_validate::validate_dispatch;
+use super::run_validate::{validate_command_preflight, validate_dispatch};
+#[cfg(test)]
+#[allow(unused_imports)]
+use super::run_validate::validate_command_preflight_with;
 use super::{RunArgs, context_file_from_spec, resolve_max_duration_mins, resolve_prompt_input, run_prompt};
 
 pub(super) struct PreparedDispatch {
@@ -81,6 +84,13 @@ pub(super) fn prepare_dispatch(store: &Arc<Store>, args: &mut RunArgs) -> Result
     for warning in validate_dispatch(args, &agent_setup.agent_kind) {
         aid_warn!("[aid] Warning: {warning}");
     }
+    // Refuse unsupported agent/flag combinations before the task row exists so
+    // background dispatch cannot return success and die in the worker.
+    validate_command_preflight(
+        agent_setup.agent.as_ref(),
+        args,
+        agent_setup.effective_model.as_deref(),
+    )?;
     insert_task_claiming_id(store, &mut task, &mut task_id, &mut log_path, explicit_id)?;
     persist_declaration(store, &task_id, args)?;
     let setup = match setup_worktree(store, args, detected_project.as_ref(), &agent_setup, &task_id, explicit_repo_path.as_deref()) {
@@ -283,3 +293,4 @@ fn prepared_dispatch(
 }
 
 #[cfg(test)] #[path = "run_dispatch_prepare_tests.rs"] mod tests;
+#[cfg(test)] #[path = "run_dispatch_preflight_tests.rs"] mod preflight_tests;

@@ -166,6 +166,16 @@ fn catalog_lists_grok_profile_and_default_model() {
     assert_eq!(model.output_per_m, 0.0);
     // Catalog 0.0 must not become a numeric cost. Without agent-reported
     // total_cost_usd, estimate_cost stays None → format "unknown", never $0.00.
+    //
+    // Asked of the catalog alone: a real price feed on the developer's machine
+    // does know grok's rate, and using it is correct. This test failed in the
+    // release run for exactly that reason — it was asserting the feed away
+    // rather than isolating it. Clearing the process cache is not enough:
+    // feed_index() reloads from AID_HOME on the next miss, so the home is what
+    // has to be isolated.
+    let temp = tempfile::tempdir().unwrap();
+    let _aid_home = crate::paths::AidHomeGuard::set(temp.path());
+    crate::cost::clear_feed_for_tests();
     for model_name in ["grok-4.5", "grok-4.5-build"] {
         let cost = crate::cost::estimate_cost(100_000, Some(model_name), AgentKind::Grok);
         assert_eq!(cost, None, "{model_name}");

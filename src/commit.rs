@@ -30,7 +30,8 @@ pub fn auto_commit(dir: &str, task_id: &str, prompt: &str) -> Result<()> {
     // temp files (batch TOML, team knowledge, shared context) via `git add -u`.
     if head_sha(dir).is_ok() {
         let add = Command::new("git")
-            .args(["-C", dir, "add", "-u", "--", ".", ":(exclude).aid-lock", ":(exclude)result-*.md", ":(exclude)aid-batch-*.toml"])
+            .args(["-C", dir, "add", "-u", "--", "."])
+            .args(crate::worktree::AID_ADD_EXCLUDES)
             .output()
             .context("Failed to run git add")?;
         anyhow::ensure!(add.status.success(), "git add failed: {}", String::from_utf8_lossy(&add.stderr));
@@ -210,6 +211,31 @@ mod tests {
     fn auto_commit_commits_real_source_changes() { let _permit = test_subprocess::acquire(); let dir = repo(); commit_path(dir.path(), "src/main.rs", "fn main() {}\n"); let before = head(dir.path()); write_path(dir.path(), "src/main.rs", "fn main() { println!(\"changed\"); }\n"); auto_commit(dir.path().to_str().unwrap(), "task-123", "[Task]\nChange source").unwrap(); assert_ne!(head(dir.path()), before); }
 
     #[test]
+    fn auto_commit_skips_when_verify_deps_state_already_tracked_and_changed() {
+        let _permit = test_subprocess::acquire();
+        let dir = repo();
+        commit_path(dir.path(), ".aid-verify-deps-state", "fresh=0\n");
+        let before = head(dir.path());
+        write_path(dir.path(), ".aid-verify-deps-state", "fresh=1\n");
+        auto_commit(dir.path().to_str().unwrap(), "task-123", "[Task]\nIgnore verify state").unwrap();
+        assert_eq!(head(dir.path()), before);
+    }
+
+    #[test]
     fn auto_commit_ignores_result_files() { let _permit = test_subprocess::acquire(); let dir = repo(); commit_path(dir.path(), "src/main.rs", "fn main() {}\n"); commit_path(dir.path(), "result-t-1234.md", "transient"); write_path(dir.path(), "result-t-1234.md", "changed"); write_path(dir.path(), "src/main.rs", "fn main() { println!(\"changed\"); }\n"); auto_commit(dir.path().to_str().unwrap(), "task-123", "[Task]\nChange source").unwrap(); let changed = git_stdout(dir.path(), &["diff-tree", "--no-commit-id", "--name-only", "-r", "HEAD"]); assert!(changed.lines().any(|line| line == "src/main.rs")); assert!(!changed.lines().any(|line| line == "result-t-1234.md")); }
+
+    #[test]
+    fn auto_commit_includes_tracked_aid_project_toml_changes() {
+        let _permit = test_subprocess::acquire();
+        let dir = repo();
+        commit_path(dir.path(), "src/main.rs", "fn main() {}\n");
+        commit_path(dir.path(), ".aid/project.toml", "[project]\nid = \"alpha\"\n");
+        write_path(dir.path(), "src/main.rs", "fn main() { println!(\"changed\"); }\n");
+        write_path(dir.path(), ".aid/project.toml", "[project]\nid = \"beta\"\n");
+        auto_commit(dir.path().to_str().unwrap(), "task-123", "[Task]\nChange source and project config").unwrap();
+        let changed = git_stdout(dir.path(), &["diff-tree", "--no-commit-id", "--name-only", "-r", "HEAD"]);
+        assert!(changed.lines().any(|line| line == "src/main.rs"), "got: {changed}");
+        assert!(changed.lines().any(|line| line == ".aid/project.toml"), "got: {changed}");
+    }
 
 }

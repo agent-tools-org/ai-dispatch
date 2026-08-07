@@ -103,7 +103,9 @@ fn append_recent_activity(out: &mut String, events: &[TaskEvent]) {
 }
 
 fn commit_partial_work(worktree: &Path, task_id: &str) -> Result<()> {
-    run_git(worktree, &["add", "-A"])?;
+    let mut add_args = vec!["add", "-A", "--", "."];
+    add_args.extend_from_slice(crate::worktree::AID_ADD_EXCLUDES);
+    run_git(worktree, &add_args)?;
     if !has_staged_changes(worktree)? {
         return Ok(());
     }

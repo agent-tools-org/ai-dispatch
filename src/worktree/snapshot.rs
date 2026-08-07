@@ -79,6 +79,16 @@ pub fn parse_status_entry(line: &str) -> Option<WorktreeStatusEntry> {
     })
 }
 
+/// `git add` pathspec exclusions for aid's own runtime bookkeeping/artifacts —
+/// a target repo won't gitignore these itself, so any `git add` run by aid or
+/// a dispatched agent must exclude them explicitly.
+pub const AID_ADD_EXCLUDES: &[&str] = &[
+    ":(exclude).aid-*",
+    ":(exclude)result-*.md",
+    ":(exclude)result-*.json",
+    ":(exclude)aid-batch-*.toml",
+];
+
 pub fn is_rescuable_path(path: &str) -> bool {
     if path.starts_with(".aid/")
         || (path.starts_with("result-t-") && path.ends_with(".md"))

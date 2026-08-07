@@ -172,7 +172,9 @@ fn resolve_retry_target(
 
 fn save_partial_work(path: &str, task_id: &str) -> Result<()> {
     if worktree_is_dirty(path)? {
-        run_git(path, &["add", "-A"])?;
+        let mut add_args = vec!["add", "-A", "--", "."];
+        add_args.extend_from_slice(crate::worktree::AID_ADD_EXCLUDES);
+        run_git(path, &add_args)?;
         run_git(path, &["commit", "-m", &format!("[aid] partial work from {task_id}")])?;
         aid_info!("[aid] Saved partial work from prior attempt as commit");
     }

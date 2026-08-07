@@ -221,6 +221,35 @@ fn salvage_noops_when_worktree_is_clean() {
 }
 
 #[test]
+fn salvage_excludes_aid_runtime_files_from_commit() {
+    let (_home, _guard) = isolated_home();
+    let repo = init_repo();
+    std::fs::write(repo.path().join("base.txt"), "changed\n").expect("write");
+    std::fs::write(repo.path().join(".aid-lock"), "pid=1234\n").expect("write lock");
+    std::fs::write(repo.path().join(".aid-verify-deps-state"), "fresh=1\n").expect("write state");
+    let store = Store::open_memory().expect("store");
+    let mut task = task("t-salvage-aid-files", Some(repo.path().display().to_string()));
+    task.status = TaskStatus::Running;
+    store.insert_task(&task).expect("insert");
+
+    crate::task_lifecycle::mark_failed(&store, &task.id).expect("fail");
+
+    let committed = git_stdout(
+        repo.path(),
+        &["diff-tree", "--no-commit-id", "--name-only", "-r", "HEAD"],
+    );
+    assert!(committed.lines().any(|line| line == "base.txt"), "got: {committed}");
+    assert!(!committed.lines().any(|line| line == ".aid-lock"), "got: {committed}");
+    assert!(
+        !committed.lines().any(|line| line == ".aid-verify-deps-state"),
+        "got: {committed}"
+    );
+    // The files stay on disk (untouched), just never staged/committed by aid.
+    assert!(repo.path().join(".aid-lock").exists());
+    assert!(repo.path().join(".aid-verify-deps-state").exists());
+}
+
+#[test]
 fn salvage_error_does_not_change_failed_status() {
     let (_home, _guard) = isolated_home();
     let not_repo = tempfile::tempdir().expect("tempdir");

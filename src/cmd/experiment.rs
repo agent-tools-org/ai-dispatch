@@ -135,7 +135,8 @@ fn git_revert(dir: &str) -> Result<()> {
 }
 fn git_commit(dir: &str, message: &str) -> Result<()> {
     Command::new("git")
-        .args(["add", "-A"])
+        .args(["add", "-A", "--", "."])
+        .args(crate::worktree::AID_ADD_EXCLUDES)
         .current_dir(dir)
         .output()?;
     Command::new("git")
@@ -143,4 +144,40 @@ fn git_commit(dir: &str, message: &str) -> Result<()> {
         .current_dir(dir)
         .output()?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::git_commit;
+    use crate::test_subprocess;
+    use std::process::Command;
+
+    fn git(dir: &std::path::Path, args: &[&str]) {
+        assert!(Command::new("git").arg("-C").arg(dir).args(args).status().unwrap().success());
+    }
+
+    fn git_stdout(dir: &std::path::Path, args: &[&str]) -> String {
+        String::from_utf8(Command::new("git").arg("-C").arg(dir).args(args).output().unwrap().stdout).unwrap()
+    }
+
+    #[test]
+    fn git_commit_excludes_aid_runtime_files() {
+        let _permit = test_subprocess::acquire();
+        let dir = tempfile::tempdir().unwrap();
+        git(dir.path(), &["init"]);
+        git(dir.path(), &["config", "user.email", "test@example.com"]);
+        git(dir.path(), &["config", "user.name", "Test User"]);
+        std::fs::write(dir.path().join("tracked.txt"), "base\n").unwrap();
+        git(dir.path(), &["add", "tracked.txt"]);
+        git(dir.path(), &["commit", "-m", "initial"]);
+
+        std::fs::write(dir.path().join("tracked.txt"), "changed\n").unwrap();
+        std::fs::write(dir.path().join(".aid-lock"), "pid=1234\n").unwrap();
+        std::fs::write(dir.path().join(".aid-verify-deps-state"), "fresh=1\n").unwrap();
+
+        git_commit(dir.path().to_str().unwrap(), "experiment run 1: 0.5").unwrap();
+
+        let committed = git_stdout(dir.path(), &["show", "--name-only", "--format=", "HEAD"]);
+        assert_eq!(committed, "tracked.txt\n", "got: {committed}");
+    }
 }

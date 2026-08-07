@@ -1,4 +1,7 @@
-use super::{built_in_agent_binary_exists, ensure_agent_binary_available_with};
+use super::{
+    built_in_agent_binary_exists, ensure_agent_binary_available_with,
+    ensure_resolved_binary_available_with,
+};
 use crate::types::AgentKind;
 
 #[test]
@@ -25,6 +28,31 @@ fn ensure_agent_binary_available_reports_missing_path_binary() {
 
     assert_eq!(
         err.to_string(),
-        "Agent 'kilo' not found: binary missing from PATH"
+        "Agent 'kilo' not found: binary 'kilo' missing from PATH"
+    );
+}
+
+#[test]
+fn ensure_resolved_binary_available_names_missing_custom_binary() {
+    let err = ensure_resolved_binary_available_with("goose", "goose", |_| false).unwrap_err();
+
+    assert_eq!(
+        err.to_string(),
+        "Agent 'goose' not found: binary 'goose' missing from PATH"
+    );
+}
+
+#[test]
+fn ensure_resolved_binary_available_rejects_missing_absolute_path() {
+    let err = ensure_resolved_binary_available_with(
+        "goose",
+        "/definitely/missing/goose-bin",
+        |_| true,
+    )
+    .unwrap_err();
+
+    assert!(
+        err.to_string().contains("binary 'goose-bin' missing from PATH"),
+        "unexpected error: {err}"
     );
 }

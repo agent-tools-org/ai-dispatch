@@ -14,6 +14,9 @@ use super::{clean_output_if_jsonl, fill_empty_output_from_log};
 #[path = "run_retry_target.rs"]
 mod run_retry_target;
 pub(crate) use run_retry_target::{apply_retry_target, retry_target};
+#[path = "run_spawn_fail.rs"]
+mod run_spawn_fail;
+pub(crate) use run_spawn_fail::{fail_task_on_agent_spawn, insert_phase_error_event};
 
 const FAST_FAIL_SNAPSHOT_MS: i64 = 5_000;
 const STDERR_EXCERPT_LINES: usize = 8;
@@ -49,21 +52,6 @@ pub(crate) fn capture_failure_context(store: &Store, task_id: &TaskId, cmd: &Com
             .and_then(|task| task.worktree_path.as_ref())
             .is_some(),
     }
-}
-
-pub(crate) fn insert_phase_error_event(store: &Store, task_id: &TaskId, phase: &str, error: &str, stderr: Option<&str>) {
-    let mut detail = format!("Failed during {phase}: {error}");
-    if let Some(stderr) = stderr.filter(|stderr| !stderr.is_empty()) {
-        detail.push_str("\nStderr: ");
-        detail.push_str(stderr);
-    }
-    let _ = store.insert_event(&TaskEvent {
-        task_id: task_id.clone(),
-        timestamp: Local::now(),
-        event_kind: EventKind::Error,
-        detail,
-        metadata: None,
-    });
 }
 
 pub(crate) fn stderr_excerpt(task_id: &TaskId) -> Option<String> {
@@ -172,13 +160,7 @@ pub(crate) async fn run_agent_process_impl(args: RunProcessArgs<'_>) -> Result<(
             let err = anyhow::Error::new(err).context("Failed to spawn agent process");
             let stderr = stderr_excerpt(task_id)
                 .or_else(|| Some("unavailable (process did not start)".to_string()));
-            insert_phase_error_event(
-                store.as_ref(),
-                task_id,
-                "agent spawn",
-                &err.to_string(),
-                stderr.as_deref(),
-            );
+            fail_task_on_agent_spawn(store.as_ref(), task_id, &err, stderr.as_deref());
             return Err(err);
         }
     };

@@ -52,13 +52,7 @@ pub(crate) async fn run_agent_process_with_timeout(
             let err = err.context("Failed to spawn agent process");
             let stderr = run_prompt::stderr_excerpt(task_id)
                 .or_else(|| Some("unavailable (process did not start)".to_string()));
-            run_prompt::insert_phase_error_event(
-                store.as_ref(),
-                task_id,
-                "agent spawn",
-                &err.to_string(),
-                stderr.as_deref(),
-            );
+            run_prompt::fail_task_on_agent_spawn(store.as_ref(), task_id, &err, stderr.as_deref());
             return Err(err);
         }
     };

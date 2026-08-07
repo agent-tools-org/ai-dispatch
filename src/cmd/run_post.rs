@@ -167,7 +167,10 @@ pub(crate) fn maybe_flag_empty_worktree_diff(
     task: &Task,
     base_branch: Option<&str>,
 ) {
-    if task.read_only || task.status != TaskStatus::Done || task.verify_status != VerifyStatus::Skipped {
+    // Empty delivery is orthogonal to verify: a Passed/TimedOut/Skipped verify
+    // can still mean the agent changed nothing. Only read-only tasks skip this
+    // warning (no changes are expected). Failed verify already fails the task.
+    if task.read_only || task.status != TaskStatus::Done {
         return;
     }
     let Some(wt_path) = task.worktree_path.as_deref() else {

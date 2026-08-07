@@ -37,7 +37,7 @@ pub(in crate::cmd) fn maybe_verify_impl(
     let path = std::path::Path::new(dir_path);
     let task = store.get_task(task_id.as_str()).ok().flatten();
     let worktree_branch = task.as_ref().and_then(|task| task.worktree_branch.clone());
-    if let Some(reason) = outcome::nothing_to_verify_reason(task.as_ref(), path) {
+    if let Some(reason) = outcome::nothing_to_verify_reason(task.as_ref()) {
         aid_info!("[aid] Verify skipped: {reason}");
         return;
     }

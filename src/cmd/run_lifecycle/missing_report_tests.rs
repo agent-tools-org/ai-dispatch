@@ -1,5 +1,5 @@
 // Pins failure attribution for the result-file missing-report guard.
-// Covers: suppress when a kill cause is already recorded; still flag a real miss.
+// Covers: suppress event on Failed+kill cause; still flag Done with mid-run error.
 // Deps: missing_report, Store, ResultDelivery, task fixtures.
 
 use super::run_lifecycle::record_missing_report;
@@ -59,6 +59,27 @@ fn narration_miss() -> ResultDelivery {
     }
 }
 
+fn insert_error(store: &Store, task_id: &TaskId, detail: &str) {
+    store
+        .insert_event(&TaskEvent {
+            task_id: task_id.clone(),
+            timestamp: Local::now(),
+            event_kind: EventKind::Error,
+            detail: detail.to_string(),
+            metadata: None,
+        })
+        .unwrap();
+}
+
+fn has_missing_delivery_event(store: &Store, task_id: &str) -> bool {
+    store.get_events(task_id).unwrap().iter().any(|e| {
+        e.event_kind == EventKind::Error
+            && e.metadata.as_ref().is_some_and(|m| {
+                m.get("delivery_guard").and_then(|v| v.as_str()) == Some("missing_final_delivery")
+            })
+    })
+}
+
 #[test]
 fn record_missing_report_flags_narration_when_no_prior_cause() {
     let store = Store::open_memory().unwrap();
@@ -76,13 +97,7 @@ fn record_missing_report_flags_narration_when_no_prior_cause() {
     );
     let latest = store.latest_error(task_id.as_str()).unwrap();
     assert!(latest.contains("Missing final delivery"));
-    let events = store.get_events(task_id.as_str()).unwrap();
-    assert!(events.iter().any(|e| {
-        e.event_kind == EventKind::Error
-            && e.metadata.as_ref().is_some_and(|m| {
-                m.get("delivery_guard").and_then(|v| v.as_str()) == Some("missing_final_delivery")
-            })
-    }));
+    assert!(has_missing_delivery_event(&store, task_id.as_str()));
 }
 
 #[test]
@@ -93,21 +108,42 @@ fn record_missing_report_keeps_prior_kill_cause() {
         .insert_task(&task(task_id.as_str(), TaskStatus::Failed))
         .unwrap();
     let cause = "Background worker failed: Failed to build agent command: qwen agent does not support read-only mode";
+    insert_error(&store, &task_id, cause);
+
+    record_missing_report(&store, &task_id, narration_miss());
+
+    // Assessment records the delivery fact; the Error event is withheld so latest_error
+    // stays the terminal kill cause.
+    let loaded = store.get_task(task_id.as_str()).unwrap().unwrap();
+    assert_eq!(
+        loaded.delivery_assessment,
+        Some(DeliveryAssessment::MissingFinalDelivery)
+    );
+    assert_eq!(store.latest_error(task_id.as_str()).as_deref(), Some(cause));
+    assert!(!has_missing_delivery_event(&store, task_id.as_str()));
+}
+
+#[test]
+fn record_missing_report_flags_done_despite_mid_run_error() {
+    let store = Store::open_memory().unwrap();
+    let task_id = TaskId("t-done-mid-error".to_string());
     store
-        .insert_event(&TaskEvent {
-            task_id: task_id.clone(),
-            timestamp: Local::now(),
-            event_kind: EventKind::Error,
-            detail: cause.to_string(),
-            metadata: None,
-        })
+        .insert_task(&task(task_id.as_str(), TaskStatus::Done))
         .unwrap();
+    insert_error(
+        &store,
+        &task_id,
+        "Error: Exit code 143 Command timed out after 2m 0s",
+    );
 
     record_missing_report(&store, &task_id, narration_miss());
 
     let loaded = store.get_task(task_id.as_str()).unwrap().unwrap();
-    assert_eq!(loaded.delivery_assessment, None);
-    assert_eq!(store.latest_error(task_id.as_str()).as_deref(), Some(cause));
-    let events = store.get_events(task_id.as_str()).unwrap();
-    assert!(!events.iter().any(|e| e.detail.contains("Missing final delivery")));
+    assert_eq!(
+        loaded.delivery_assessment,
+        Some(DeliveryAssessment::MissingFinalDelivery)
+    );
+    let latest = store.latest_error(task_id.as_str()).unwrap();
+    assert!(latest.contains("Missing final delivery"));
+    assert!(has_missing_delivery_event(&store, task_id.as_str()));
 }

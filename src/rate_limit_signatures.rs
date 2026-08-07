@@ -58,24 +58,28 @@ pub(crate) const QUOTA_SIGNATURES: &[QuotaSignature] = &[
     // Neither the generic phrase list nor a status-code check caught this: 401
     // is neither 429 nor 402, and no needle contained "insufficient balance", so
     // aid kept reporting opencode as OK and kept dispatching to it.
-    QuotaSignature { agent: AgentKind::OpenCode, needle: "insufficient balance", fallback_minutes: 1440 },
+    QuotaSignature { agent: AgentKind::OpenCode, needle: "insufficient balance", fallback_minutes: 0 },
     // OpenCode-compatible overlays share the same Zen billing refusal shape.
-    QuotaSignature { agent: AgentKind::MiMoCode, needle: "insufficient balance", fallback_minutes: 1440 },
-    QuotaSignature { agent: AgentKind::Kilo, needle: "insufficient balance", fallback_minutes: 1440 },
+    QuotaSignature { agent: AgentKind::MiMoCode, needle: "insufficient balance", fallback_minutes: 0 },
+    QuotaSignature { agent: AgentKind::Kilo, needle: "insufficient balance", fallback_minutes: 0 },
     // droid 0.183.0, captured as HTTP 402 body:
     // "402 payment required: reload your tokens"
-    QuotaSignature { agent: AgentKind::Droid, needle: "reload your tokens", fallback_minutes: 1440 },
+    QuotaSignature { agent: AgentKind::Droid, needle: "reload your tokens", fallback_minutes: 0 },
     // gemini Code Assist, captured 2026-08-05:
     // "IneligibleTierError: ... migrate to Antigravity"
-    QuotaSignature { agent: AgentKind::Gemini, needle: "ineligibletier", fallback_minutes: 1440 },
+    QuotaSignature { agent: AgentKind::Gemini, needle: "ineligibletier", fallback_minutes: 0 },
     QuotaSignature { agent: AgentKind::Gemini, needle: "resource exhausted", fallback_minutes: 60 },
     QuotaSignature { agent: AgentKind::Gemini, needle: "resourceexhausted", fallback_minutes: 60 },
-    QuotaSignature { agent: AgentKind::Antigravity, needle: "migrate to antigravity", fallback_minutes: 1440 },
+    QuotaSignature { agent: AgentKind::Antigravity, needle: "migrate to antigravity", fallback_minutes: 0 },
     // cursor workspace quota (structured error event)
     QuotaSignature { agent: AgentKind::Cursor, needle: "quota exceeded for this workspace", fallback_minutes: 300 },
+    QuotaSignature { agent: AgentKind::Cursor, needle: "you're out of usage", fallback_minutes: 0 },
     // copilot CLI refusal when premium allowance is spent:
     // "You've reached your premium request limit for this billing cycle."
-    QuotaSignature { agent: AgentKind::Copilot, needle: "premium request limit", fallback_minutes: 1440 },
+    QuotaSignature { agent: AgentKind::Copilot, needle: "premium request limit", fallback_minutes: 0 },
+    QuotaSignature { agent: AgentKind::Copilot, needle: "exceeded your monthly quota", fallback_minutes: 0 },
+    // grok balance exhaustion:
+    QuotaSignature { agent: AgentKind::Grok, needle: "usage balance exhausted", fallback_minutes: 0 },
 ];
 
 /// True when a line is quoting this module's own signature table, not a live refusal.

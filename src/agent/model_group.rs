@@ -41,6 +41,12 @@ pub(crate) fn model_group(agent: AgentKind, model: Option<&str>) -> Option<&'sta
         return None;
     }
     let model = model?.to_ascii_lowercase();
+    if agent == AgentKind::Cursor {
+        if model == "composer-2.5" || model == "gpt-5.4-high" {
+            return Some("premium");
+        }
+        return Some("standard");
+    }
     Some(family_of(&model))
 }
 
@@ -60,6 +66,9 @@ pub(crate) fn groups_for_agent(agent: AgentKind) -> &'static [(&'static str, &'s
             ("gemini", &["gemini-3.1-pro-high", "gemini-3.6-flash-high", "gemini-3.6-flash-low"]),
             ("claude", &["claude-opus-4-6-thinking", "claude-sonnet-4-6"]),
             ("gpt-oss", &["gpt-oss-120b-medium"]),
+        ],
+        AgentKind::Cursor => &[
+            ("premium", &["composer-2.5", "gpt-5.4-high"]),
         ],
         _ => &[],
     }

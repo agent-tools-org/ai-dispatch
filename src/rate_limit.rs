@@ -1,11 +1,22 @@
 // Rate-limit detection: marks agents as rate-limited when quota errors occur.
-// Provides marker file tracking with a 5-minute cooldown for automatic budget mode.
+// A marker is held by a stated reset time, by a person, or by a short cooldown.
+// Exports: mark_rate_limited, is_rate_limited, get_rate_limit_info, clear_*.
 
 use crate::paths::aid_dir;
+use crate::rate_limit_signatures::QuotaRecovery;
 use crate::types::AgentKind;
 use chrono::{DateTime, Local, NaiveDateTime};
 use std::fs;
 use std::path::PathBuf;
+
+/// Cooldown for a refusal that named no reset time and matched no signature —
+/// a bare 429 or 402 seen on stderr. All we know is that it just happened, so
+/// the route is stepped over briefly and then tried again. Anything longer
+/// would be an invented outage for a route that is probably still serving.
+const RATE_LIMIT_WINDOW_SECS: u64 = 300;
+
+/// Marker field value for a hold that only a person can end.
+const MANUAL_HOLD: &str = "manual";
 
 
 #[cfg(test)]
@@ -44,11 +55,47 @@ pub fn mark_rate_limited(agent: &AgentKind, message: &str) {
     write_marker(&marker_path(agent), message);
 }
 
+/// What is holding a marker open. These are three different facts and
+/// collapsing any two of them loses a route in one direction or the other.
+enum Hold {
+    /// The provider stated when it comes back, or its signature says how long
+    /// that class of window runs. Held until that instant.
+    Until(String),
+    /// Only a person ends it — a top-up, a plan change, an admin raising a
+    /// limit. Held until `aid config clear-limit <agent>`.
+    NeedsHuman,
+    /// Neither: no reset time and no signature. Held for a bounded cooldown.
+    Transient,
+}
+
+/// Decide, once at write time, what will end this refusal.
+///
+/// A stated time always wins over the signature's class default: a copilot
+/// message that does name its reset date is held to that date, not to a person.
+fn classify_hold(message: &str) -> Hold {
+    if let Some(stated) = parse_recovery_time(message) {
+        return Hold::Until(stated);
+    }
+    if let Some(at) = crate::rate_limit_signatures::parse_relative_recovery(message) {
+        return Hold::Until(format_recovery(at));
+    }
+    match crate::rate_limit_signatures::match_quota_signature(message) {
+        Some((_, QuotaRecovery::NeedsHuman)) => Hold::NeedsHuman,
+        Some((_, QuotaRecovery::After(minutes))) => Hold::Until(format_recovery(
+            Local::now().naive_local() + chrono::Duration::minutes(minutes),
+        )),
+        None => Hold::Transient,
+    }
+}
+
+fn format_recovery(at: NaiveDateTime) -> String {
+    at.format("%b %d, %Y %I:%M %p").to_string()
+}
+
 fn write_marker(path: &std::path::Path, message: &str) {
     if let Some(parent) = path.parent() {
         let _ = fs::create_dir_all(parent);
     }
-    let recovery_at = parse_recovery_time(message).or_else(|| resolved_recovery(message));
     let truncated_message = if message.len() > 200 {
         let mut end = 200;
         while !message.is_char_boundary(end) { end -= 1; }
@@ -56,29 +103,56 @@ fn write_marker(path: &std::path::Path, message: &str) {
     } else {
         message
     };
-    let content = format!(
-        "recovery_at: {}\nmessage: {}\n",
-        recovery_at.unwrap_or_default(),
-        truncated_message
-    );
+    let (recovery_at, hold_line) = match classify_hold(message) {
+        Hold::Until(at) => (at, String::new()),
+        Hold::NeedsHuman => (String::new(), format!("hold: {MANUAL_HOLD}\n")),
+        Hold::Transient => (String::new(), String::new()),
+    };
+    let content =
+        format!("recovery_at: {recovery_at}\n{hold_line}message: {truncated_message}\n");
     let _ = fs::write(path, content);
 }
 
-/// Shared liveness check for a marker file: honour a parsed recovery time when
-/// present, otherwise fall back to the mtime cooldown window.
+/// Read a `key: value` field from a marker, treating an empty value as absent.
+fn marker_field(content: &str, key: &str) -> Option<String> {
+    content
+        .lines()
+        .find_map(|line| line.strip_prefix(key))
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_string)
+}
+
+/// Shared liveness check for a marker file.
+///
+/// A marker with no parseable reset time is not automatically permanent. Before
+/// the hold classes existed this fell straight through to "still limited",
+/// which meant one transient 429 caught on stderr — the generic path writes
+/// exactly such a marker — took a route out until someone ran
+/// `aid config clear-limit`. That is the same defect as an outage going
+/// unrecorded, pointing the other way: a route that still serves, written off.
 fn marker_is_active(path: &std::path::Path) -> bool {
     let Ok(content) = fs::read_to_string(path) else {
         return false;
     };
-    let recovery = content
-        .lines()
-        .find_map(|line| line.strip_prefix("recovery_at: "))
-        .filter(|value| !value.is_empty())
-        .and_then(parse_recovery_datetime);
-    if let Some(recovery_at) = recovery {
+    if let Some(recovery_at) =
+        marker_field(&content, "recovery_at: ").as_deref().and_then(parse_recovery_datetime)
+    {
         return recovery_at > Local::now().naive_local();
     }
-    true
+    if marker_field(&content, "hold: ").as_deref() == Some(MANUAL_HOLD) {
+        return true;
+    }
+    within_cooldown_window(path)
+}
+
+/// The bounded cooldown for the transient class, measured from the write time.
+fn within_cooldown_window(path: &std::path::Path) -> bool {
+    fs::metadata(path)
+        .and_then(|meta| meta.modified())
+        .ok()
+        .and_then(|modified| modified.elapsed().ok())
+        .is_some_and(|elapsed| elapsed.as_secs() < RATE_LIMIT_WINDOW_SECS)
 }
 
 /// Clear a marker only when it predates `task_start`.
@@ -157,16 +231,7 @@ pub fn clear_all_rate_limits_for_agent(agent: &AgentKind) -> bool {
 }
 
 pub fn is_rate_limited(agent: &AgentKind) -> bool {
-    if let Some(info) = get_rate_limit_info(agent) {
-        if let Some(recovery_str) = info.recovery_at {
-            if let Some(recovery_at) = parse_recovery_datetime(&recovery_str) {
-                return recovery_at > Local::now().naive_local();
-            }
-        }
-        true
-    } else {
-        false
-    }
+    marker_is_active(&marker_path(agent))
 }
 
 pub fn rate_limited_agents() -> Vec<(AgentKind, String)> {
@@ -176,25 +241,6 @@ pub fn rate_limited_agents() -> Vec<(AgentKind, String)> {
         is_rate_limited(&agent).then(|| (agent, info.message.unwrap_or_default()))
     })
     .collect()
-}
-
-/// Absolute recovery time for messages that state their reset relatively
-/// ("resets in 1 day", "5-hour quota") or not at all. Falling back to the
-/// 5-minute default sent work straight back to a provider that was still
-/// refusing it — droid's weekly cap read as recovered after five minutes.
-fn resolved_recovery(message: &str) -> Option<String> {
-    let format_at =
-        |at: chrono::NaiveDateTime| at.format("%b %d, %Y %I:%M %p").to_string();
-    if let Some(at) = crate::rate_limit_signatures::parse_relative_recovery(message) {
-        return Some(format_at(at));
-    }
-    let (_, fallback_minutes) = crate::rate_limit_signatures::match_quota_signature(message)?;
-    if fallback_minutes == 0 {
-        return None;
-    }
-    Some(format_at(
-        Local::now().naive_local() + chrono::Duration::minutes(fallback_minutes),
-    ))
 }
 
 /// The agent a quota message names, when the provider's wording identifies it.
@@ -370,6 +416,10 @@ fn parse_recovery_datetime(s: &str) -> Option<NaiveDateTime> {
 pub struct RateLimitInfo {
     pub recovery_at: Option<String>,
     pub message: Option<String>,
+    /// True when only `aid config clear-limit` ends this hold. Distinguishes a
+    /// spent balance from a transient refusal, which also has no recovery time
+    /// but expires on its own.
+    pub needs_human: bool,
 }
 
 pub fn recovery_datetime(agent: &AgentKind) -> Option<NaiveDateTime> {
@@ -380,26 +430,10 @@ pub fn recovery_datetime(agent: &AgentKind) -> Option<NaiveDateTime> {
 pub fn get_rate_limit_info(agent: &AgentKind) -> Option<RateLimitInfo> {
     let path = marker_path(agent);
     let content = fs::read_to_string(&path).ok()?;
-    let mut recovery_at = None;
-    let mut message = None;
-    for line in content.lines() {
-        if let Some(recovery) = line.strip_prefix("recovery_at: ") {
-            recovery_at = if recovery.is_empty() {
-                None
-            } else {
-                Some(recovery.to_string())
-            };
-        } else if let Some(msg) = line.strip_prefix("message: ") {
-            message = if msg.is_empty() {
-                None
-            } else {
-                Some(msg.to_string())
-            };
-        }
-    }
     Some(RateLimitInfo {
-        recovery_at,
-        message,
+        recovery_at: marker_field(&content, "recovery_at: "),
+        message: marker_field(&content, "message: "),
+        needs_human: marker_field(&content, "hold: ").as_deref() == Some(MANUAL_HOLD),
     })
 }
 
@@ -776,6 +810,10 @@ mod stale_clear_tests {
         assert!(!is_group_rate_limited(&agent, "claude"));
     }
 }
+
+#[cfg(test)]
+#[path = "rate_limit_hold_tests.rs"]
+mod hold_tests;
 
 #[cfg(test)]
 mod home_guard_tests {

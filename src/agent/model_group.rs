@@ -4,6 +4,10 @@
 
 use crate::types::AgentKind;
 
+/// Cursor's metered premium pool, and the `auto` tier that outlives it.
+const PREMIUM_GROUP: &str = "premium";
+const AUTO_GROUP: &str = "auto";
+
 /// Agents whose quota is metered per model family rather than per account.
 ///
 /// agy is the case that forced this: `agy models` serves gemini-*, claude-* and
@@ -21,12 +25,19 @@ use crate::types::AgentKind;
 /// working claude allowance and hand the work to a weaker agent — the mirror of
 /// the failures-reported-as-success class: a usable resource reported as dead.
 pub(crate) fn has_grouped_quota(agent: AgentKind) -> bool {
-    // Was `matches!(agent, AgentKind::Antigravity)` — a hardcoded special case
-    // written the day agy's per-family metering was discovered, before the
-    // provider dimension existed to express it. Whether quota is metered per
-    // family is a fact about the provider doing the metering, not about the CLI
-    // that happens to reach it, so the provider table answers it now and a
-    // second such provider needs no change here at all.
+    // Two independent reasons an allowance is partitioned, and they are not the
+    // same fact. A provider that meters per model family says so in the
+    // provider table, and a second such provider needs no change here at all.
+    //
+    // A tier split *inside* one pool is different: cursor is a subscription —
+    // one account, one bill — but `auto` keeps serving after the premium pool is
+    // spent, so the two must be marked separately. That is not a metering shape,
+    // and rewriting cursor's shape to `PerModelFamily` to obtain grouping here
+    // is what broke cost classification and needed an agent-specific patch in
+    // the pricing layer to undo. The group table states the split directly.
+    if !groups_for_agent(agent).is_empty() {
+        return true;
+    }
     matches!(
         crate::types::provider_for_cli(agent).1,
         crate::types::MeteringShape::PerModelFamily
@@ -42,10 +53,16 @@ pub(crate) fn model_group(agent: AgentKind, model: Option<&str>) -> Option<&'sta
     }
     let model = model?.to_ascii_lowercase();
     if agent == AgentKind::Cursor {
-        if model == "composer-2.5" || model == "gpt-5.4-high" {
-            return Some("premium");
-        }
-        return Some("standard");
+        // Cursor meters one shared premium pool and `auto` is the only thing
+        // that keeps serving once it is spent, so `auto` is the exception and
+        // everything else draws on the metered pool.
+        //
+        // Enumerating premium models instead gets this backwards: the first
+        // version of this listed `composer-2.5` and `gpt-5.4-high` because those
+        // were the two models in the day's evidence, which left every other
+        // premium model reading as unmetered and dispatchable after the pool was
+        // already gone.
+        return Some(if model.starts_with("auto") { AUTO_GROUP } else { PREMIUM_GROUP });
     }
     Some(family_of(&model))
 }
@@ -67,8 +84,13 @@ pub(crate) fn groups_for_agent(agent: AgentKind) -> &'static [(&'static str, &'s
             ("claude", &["claude-opus-4-6-thinking", "claude-sonnet-4-6"]),
             ("gpt-oss", &["gpt-oss-120b-medium"]),
         ],
+        // Cursor's two tiers. The model lists are a preference order for
+        // picking a replacement, not the membership test — `model_group`
+        // decides membership, and it treats everything that is not `auto` as
+        // premium so an unlisted premium model is still held.
         AgentKind::Cursor => &[
-            ("premium", &["composer-2.5", "gpt-5.4-high"]),
+            (PREMIUM_GROUP, &["composer-2.5", "gpt-5.4-high"]),
+            (AUTO_GROUP, &["auto"]),
         ],
         _ => &[],
     }

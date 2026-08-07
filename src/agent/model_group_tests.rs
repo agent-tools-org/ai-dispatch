@@ -11,6 +11,58 @@ fn agy_models_map_to_their_families() {
     assert_eq!(model_group(agy, Some("gpt-oss-120b-medium")), Some("gpt-oss"));
 }
 
+/// Cursor meters one premium pool. Enumerating the premium models left every
+/// model outside the day's evidence reading as unmetered, so after the pool was
+/// spent aid kept dispatching to it. `auto` is the only exception.
+#[test]
+fn every_cursor_model_but_auto_draws_on_the_premium_pool() {
+    let cursor = AgentKind::Cursor;
+    for model in [
+        "composer-2.5",
+        "gpt-5.4-high",
+        // None of these appeared in the evidence that motivated the fix; all of
+        // them still spend the same pool.
+        "claude-opus-5-thinking",
+        "claude-opus-5-thinking-high",
+        "gemini-3.1-pro",
+        "o3",
+        "composer-2",
+    ] {
+        assert_eq!(
+            model_group(cursor, Some(model)),
+            Some("premium"),
+            "{model} must be held with the premium pool"
+        );
+    }
+}
+
+/// The other half of the same fact: after a premium refusal `auto` keeps
+/// serving, so it must not be marked with the pool that ran out.
+#[test]
+fn cursor_auto_is_not_held_with_the_premium_pool() {
+    assert_eq!(model_group(AgentKind::Cursor, Some("auto")), Some("auto"));
+    assert_eq!(model_group(AgentKind::Cursor, Some("Auto")), Some("auto"));
+}
+
+#[test]
+fn a_spent_cursor_premium_pool_falls_back_to_auto() {
+    let got = healthy_model_for(AgentKind::Cursor, Some("composer-2.5"), |group| {
+        group == "premium"
+    });
+    assert_eq!(got, Some("auto"));
+}
+
+/// Cursor's tier split must not be bought by rewriting its metering shape:
+/// a subscription is what it is, and the pricing layer reads that field.
+#[test]
+fn cursor_stays_a_subscription_while_still_being_grouped() {
+    assert_eq!(
+        crate::types::provider_for_cli(AgentKind::Cursor).1,
+        crate::types::MeteringShape::Subscription
+    );
+    assert!(has_grouped_quota(AgentKind::Cursor));
+}
+
 #[test]
 fn agents_metered_per_account_have_no_groups() {
     assert_eq!(model_group(AgentKind::Qwen, Some("qwen3.8-max")), None);

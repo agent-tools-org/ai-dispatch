@@ -188,23 +188,46 @@ fn output_has_substantive_deliverable(output: &str) -> bool {
 /// metadata. Truncating there discarded the reset time along with the message,
 /// so the marker showed raw JSON and fell back to a "~1h" guess for a five-hour
 /// window.
+///
+/// Backing up a fixed 40 bytes from the anchor instead is what put a fragment
+/// sliced mid-token into the marker: `~/.aid/rate-limit-copilot` began
+/// `sage\":\"You have exceeded` — 40 characters before "quota" lands inside
+/// `"message\":\"`. The window start is snapped to the enclosing JSON string
+/// instead, which is where the provider's own sentence begins and ends.
 pub(super) fn quota_line(output: &str, agent: crate::types::AgentKind) -> Option<String> {
     let line = output
         .lines()
         .find(|line| prose_line_is_quota_refusal(line, agent))?;
     let lower = line.to_lowercase();
-    let anchor = lower
-        .find("quota")
+    // The needle that identified this line as a refusal is the best anchor:
+    // it is inside the provider's sentence by construction. A bare "quota"
+    // search is not — on copilot's event it lands in `"errorCode":"quota_
+    // exceeded"`, several fields before the message, and the window closes
+    // around the field name instead of the refusal.
+    let anchor = quota_signature_anchor(&lower, agent)
+        .or_else(|| lower.find("quota"))
         .or_else(|| lower.find("usage limit"))
-        .or_else(|| quota_signature_anchor(&lower, agent))
         .unwrap_or(0);
-    let start = line
-        .char_indices()
-        .map(|(idx, _)| idx)
-        .take_while(|idx| *idx <= anchor.saturating_sub(40))
-        .last()
+    let refusal = enclosing_plain_run(line, anchor);
+    Some(refusal.chars().take(240).collect::<String>().trim().to_string())
+}
+
+/// The run of plain text around `anchor`, bounded by the structural characters
+/// that delimit a JSON string — quotes, escapes and braces. On a plain-text
+/// refusal none are present and the whole line is returned unchanged, so codex's
+/// "... try again at <date>." keeps the reset time it states.
+fn enclosing_plain_run(line: &str, anchor: usize) -> &str {
+    const DELIMITERS: [char; 6] = ['"', '\\', '{', '}', '[', ']'];
+    let anchor = anchor.min(line.len());
+    let start = line[..anchor]
+        .rfind(DELIMITERS)
+        .map(|idx| idx + line[idx..].chars().next().map_or(1, char::len_utf8))
         .unwrap_or(0);
-    Some(line[start..].chars().take(240).collect::<String>().trim().to_string())
+    let end = line[anchor..]
+        .find(DELIMITERS)
+        .map(|idx| anchor + idx)
+        .unwrap_or(line.len());
+    line[start..end].trim_matches(|c: char| c.is_whitespace() || c == ':' || c == ',')
 }
 
 fn quota_signature_anchor(lower: &str, agent: crate::types::AgentKind) -> Option<usize> {

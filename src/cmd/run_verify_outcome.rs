@@ -1,0 +1,118 @@
+// Skip and timeout recording helpers for verification outcomes.
+// Exports: nothing_to_verify_reason, record_verify_timed_out.
+// Deps: chrono, store, types, verify.
+
+use chrono::Local;
+use std::path::Path;
+use std::process::Command;
+
+use crate::store::Store;
+use crate::types::{EventKind, Task, TaskEvent, TaskId};
+use crate::verify::VerifyResult;
+
+/// Skip verify when there is nothing under test: read-only tasks never change the
+/// tree, and an empty diff has no change for the verify command to exercise.
+pub(super) fn nothing_to_verify_reason(task: Option<&Task>, dir: &Path) -> Option<&'static str> {
+    if task.is_some_and(|task| task.read_only) {
+        return Some("task is read-only");
+    }
+    if worktree_has_nothing_to_verify(dir) == Some(true) {
+        return Some("worktree has no changes to verify");
+    }
+    None
+}
+
+/// True only when porcelain is clean and HEAD has no commits ahead of the
+/// default branch. Returns None when git cannot answer — callers must not skip.
+fn worktree_has_nothing_to_verify(dir: &Path) -> Option<bool> {
+    let porcelain = Command::new("git")
+        .current_dir(dir)
+        .args(["status", "--porcelain"])
+        .output()
+        .ok()?;
+    if !porcelain.status.success() {
+        return None;
+    }
+    if !String::from_utf8_lossy(&porcelain.stdout).trim().is_empty() {
+        return Some(false);
+    }
+    let base = default_branch(dir)?;
+    let ahead = Command::new("git")
+        .current_dir(dir)
+        .args(["rev-list", "--count", &format!("{base}..HEAD")])
+        .output()
+        .ok()?;
+    if !ahead.status.success() {
+        return None;
+    }
+    let count = String::from_utf8_lossy(&ahead.stdout).trim().parse::<u64>().ok()?;
+    Some(count == 0)
+}
+
+fn default_branch(dir: &Path) -> Option<String> {
+    let origin = Command::new("git")
+        .current_dir(dir)
+        .args(["symbolic-ref", "--short", "refs/remotes/origin/HEAD"])
+        .output()
+        .ok()?;
+    if origin.status.success() {
+        if let Some(name) = String::from_utf8_lossy(&origin.stdout)
+            .trim()
+            .strip_prefix("origin/")
+        {
+            return Some(name.to_string());
+        }
+    }
+    for candidate in ["main", "master"] {
+        let ok = Command::new("git")
+            .current_dir(dir)
+            .args(["rev-parse", "--verify", "--quiet", &format!("{candidate}^{{commit}}")])
+            .status()
+            .ok()?
+            .success();
+        if ok {
+            return Some(candidate.to_string());
+        }
+    }
+    None
+}
+
+pub(super) fn record_verify_timed_out(store: &Store, task_id: &TaskId, result: &VerifyResult) {
+    let detail = match output_excerpt(&result.output) {
+        Some(output) => format!(
+            "Verification did not finish: {}\nOutput: {output}",
+            result.command
+        ),
+        None => format!("Verification did not finish: {}", result.command),
+    };
+    let _ = store.insert_event(&TaskEvent {
+        task_id: task_id.clone(),
+        timestamp: Local::now(),
+        event_kind: EventKind::Milestone,
+        detail,
+        metadata: None,
+    });
+    aid_warn!(
+        "[aid] Verification timed out for {task_id}; task not failed (inconclusive)"
+    );
+}
+
+fn output_excerpt(output: &str) -> Option<String> {
+    let lines: Vec<&str> = output
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+        .collect();
+    if lines.is_empty() {
+        return None;
+    }
+    let start = lines.len().saturating_sub(8);
+    let excerpt = lines[start..].join(" | ");
+    Some(if excerpt.chars().count() > 400 {
+        let mut truncated: String = excerpt.chars().take(400).collect();
+        truncated.push_str("...");
+        truncated
+    } else {
+        excerpt
+    })
+}

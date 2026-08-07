@@ -19,6 +19,10 @@ const VERIFY_TIMEOUT: Duration = Duration::from_secs(120);
 #[derive(Debug, Clone)]
 pub struct VerifyResult {
     pub success: bool,
+    /// True when the verify command was killed by the wall-clock cap.
+    /// Distinct from `success == false`: a timeout did not finish, so it is not
+    /// evidence that the change under test is broken.
+    pub timed_out: bool,
     pub output: String,
     pub command: String,
 }
@@ -31,9 +35,26 @@ pub fn run_verify(
     cargo_target_dir: Option<&str>,
     container_name: Option<&str>,
 ) -> Result<VerifyResult> {
+    run_verify_with_timeout(
+        worktree_path,
+        command,
+        cargo_target_dir,
+        container_name,
+        VERIFY_TIMEOUT,
+    )
+}
+
+pub(crate) fn run_verify_with_timeout(
+    worktree_path: &Path,
+    command: Option<&str>,
+    cargo_target_dir: Option<&str>,
+    container_name: Option<&str>,
+    timeout: Duration,
+) -> Result<VerifyResult> {
     if command.is_some_and(|command| command.trim() == "skip") {
         return Ok(VerifyResult {
             success: false,
+            timed_out: false,
             output: "Configured verify command was 'skip' and did not run".to_string(),
             command: "skip".to_string(),
         });
@@ -43,6 +64,7 @@ pub fn run_verify(
     else {
         return Ok(VerifyResult {
             success: true,
+            timed_out: false,
             output: "No project file detected, skipping verification".to_string(),
             command: "skip".to_string(),
         });
@@ -63,20 +85,24 @@ pub fn run_verify(
     let mut guard = ProcessGuard::spawn(&mut cmd)
         .with_context(|| format!("Failed to run verify command: {cmd_str}"))?;
     let reader = spawn_output_reader(guard.child_mut())?;
-    let status = guard.wait_with_timeout(VERIFY_TIMEOUT)?;
+    let status = guard.wait_with_timeout(timeout)?;
     let timed_out = status.is_none();
     let combined = match reader.join() {
         Ok(result) => result?,
         Err(_) => return Err(anyhow::anyhow!("verify output reader thread panicked")),
     };
     let combined = if timed_out {
-        format!("{combined}\nVerification timed out after {} seconds", VERIFY_TIMEOUT.as_secs())
+        format!(
+            "{combined}\nVerification timed out after {} seconds",
+            timeout.as_secs().max(1)
+        )
     } else {
         combined
     };
 
     Ok(VerifyResult {
         success: status.is_some_and(|status| status.success()),
+        timed_out,
         output: combined,
         command: cmd_str,
     })
@@ -104,10 +130,16 @@ pub(crate) fn apply_declared_file_check(
 
 /// Format a concise pass/fail report from verification result.
 pub fn format_verify_report(result: &VerifyResult) -> String {
-    let status = if result.success { "PASS" } else { "FAIL" };
+    let status = if result.timed_out {
+        "TIMEOUT"
+    } else if result.success {
+        "PASS"
+    } else {
+        "FAIL"
+    };
     let mut report = format!("Verify {status} ({}):", result.command);
-    if !result.success {
-        // Show last 20 lines of output on failure
+    if !result.success || result.timed_out {
+        // Show last 20 lines of output on failure / timeout
         let lines: Vec<&str> = result.output.lines().collect();
         let start = lines.len().saturating_sub(20);
         if start > 0 {
@@ -125,7 +157,9 @@ pub fn record_verify_status(store: &Store, task_id: &TaskId, result: &VerifyResu
     if result.command == "skip" && result.success {
         return;
     }
-    let status = if result.success {
+    let status = if result.timed_out {
+        VerifyStatus::TimedOut
+    } else if result.success {
         VerifyStatus::Passed
     } else {
         VerifyStatus::Failed

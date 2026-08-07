@@ -114,6 +114,7 @@ fn configured_skip_command_fails() {
 fn format_report_pass() {
     let result = VerifyResult {
         success: true,
+        timed_out: false,
         output: "all good".to_string(),
         command: "cargo check".to_string(),
     };
@@ -125,6 +126,7 @@ fn format_report_pass() {
 fn format_report_fail_shows_output() {
     let result = VerifyResult {
         success: false,
+        timed_out: false,
         output: "error[E0308]: mismatched types".to_string(),
         command: "cargo check".to_string(),
     };
@@ -154,6 +156,68 @@ fn enforce_verify_status_keeps_done_passed_verify_as_done() {
     enforce_verify_status(&store, &task.id);
     let loaded = store.get_task(task.id.as_str()).unwrap().unwrap();
     assert_eq!(loaded.status, TaskStatus::Done);
+}
+
+#[test]
+fn enforce_verify_status_keeps_done_on_timed_out_verify() {
+    let store = Store::open_memory().unwrap();
+    let task = make_task("t-verify-timeout", TaskStatus::Done, VerifyStatus::TimedOut);
+    store.insert_task(&task).unwrap();
+    enforce_verify_status(&store, &task.id);
+    let loaded = store.get_task(task.id.as_str()).unwrap().unwrap();
+    assert_eq!(loaded.status, TaskStatus::Done);
+    assert_eq!(loaded.verify_status, VerifyStatus::TimedOut);
+}
+
+#[test]
+fn record_verify_status_maps_timeout_separately_from_failure() {
+    let store = Store::open_memory().unwrap();
+    let task = make_task("t-record-timeout", TaskStatus::Done, VerifyStatus::Skipped);
+    store.insert_task(&task).unwrap();
+    record_verify_status(
+        &store,
+        &task.id,
+        &VerifyResult {
+            success: false,
+            timed_out: true,
+            output: "Verification timed out after 1 seconds".to_string(),
+            command: "sleep 30".to_string(),
+        },
+    );
+    let loaded = store.get_task(task.id.as_str()).unwrap().unwrap();
+    assert_eq!(loaded.verify_status, VerifyStatus::TimedOut);
+    assert_eq!(loaded.status, TaskStatus::Done);
+}
+
+#[test]
+fn format_report_timeout_label() {
+    let result = VerifyResult {
+        success: false,
+        timed_out: true,
+        output: "still compiling".to_string(),
+        command: "cargo test".to_string(),
+    };
+    let report = format_verify_report(&result);
+    assert!(report.starts_with("Verify TIMEOUT"));
+    assert!(report.contains("still compiling"));
+}
+
+#[cfg(unix)]
+#[test]
+fn verify_timeout_is_not_a_command_failure() {
+    let _permit = test_subprocess::acquire();
+    let dir = TempDir::new().unwrap();
+    let result = run_verify_with_timeout(
+        dir.path(),
+        Some("sleep 5"),
+        None,
+        None,
+        Duration::from_millis(200),
+    )
+    .unwrap();
+    assert!(result.timed_out);
+    assert!(!result.success);
+    assert!(result.output.contains("Verification timed out"));
 }
 
 #[cfg(unix)]

@@ -1,5 +1,6 @@
 // Model-group quota accounting for agents whose plan meters several families
-// separately. Exports: model_group, groups_for_agent, has_grouped_quota.
+// separately. Exports: model_group, group_from_refusal, groups_for_agent,
+// has_grouped_quota.
 // Deps: types::AgentKind.
 
 use crate::types::AgentKind;
@@ -65,6 +66,27 @@ pub(crate) fn model_group(agent: AgentKind, model: Option<&str>) -> Option<&'sta
         return Some(if model.starts_with("auto") { AUTO_GROUP } else { PREMIUM_GROUP });
     }
     Some(family_of(&model))
+}
+
+/// The group a refusal names, for providers whose own wording identifies the
+/// exhausted tier.
+///
+/// Most marker writes happen where no model is in hand: a stderr line, a stream
+/// error event, a failed task's captured output. Those paths marked the whole
+/// agent, which for cursor meant one premium refusal took `auto` out with it —
+/// `auto` being the one tier that keeps serving once the premium pool is spent.
+/// The refusal itself says so, so it is read here rather than guessed.
+pub(crate) fn group_from_refusal(agent: AgentKind, message: &str) -> Option<&'static str> {
+    if agent != AgentKind::Cursor {
+        return None;
+    }
+    // The needle is cursor's premium signature verbatim; its other quota
+    // refusal — "quota exceeded for this workspace" — names no tier and stays
+    // agent-wide, which is right: a workspace cap is not a tier cap.
+    message
+        .to_ascii_lowercase()
+        .contains("you're out of usage")
+        .then_some(PREMIUM_GROUP)
 }
 
 /// Delegates to the types layer: how a provider partitions its allowance is a

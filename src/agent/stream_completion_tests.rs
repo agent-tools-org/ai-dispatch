@@ -346,3 +346,25 @@ fn buffered_grok_prose_about_rate_limits_never_marks_it() {
     }
     assert!(!crate::rate_limit::is_rate_limited(&agent));
 }
+
+/// The buffered and PTY watchers pass whatever model the run recorded, which is
+/// often nothing. A cursor premium refusal must still land on the premium group
+/// rather than the whole agent, so `auto` stays dispatchable.
+#[test]
+fn a_cursor_premium_refusal_with_no_recorded_model_marks_only_the_premium_pool() {
+    let temp = tempfile::tempdir().unwrap();
+    let _aid_home = crate::paths::AidHomeGuard::set(temp.path());
+
+    let cursor = crate::types::AgentKind::Cursor;
+    crate::rate_limit::clear_all_rate_limits_for_agent(&cursor);
+    let refusal = "ActionRequiredError: Increase limits for faster responses You're out of \
+                   usage. Switch to Auto, or ask your admin to increase your limit to continue.";
+
+    assert!(record_quota_exhaustion(refusal, cursor, None).should_fail());
+    assert!(crate::rate_limit::is_group_rate_limited(&cursor, "premium"));
+    assert!(!crate::rate_limit::is_group_rate_limited(&cursor, "auto"));
+    assert!(
+        !crate::rate_limit::is_rate_limited(&cursor),
+        "a tier refusal must not write off the whole agent"
+    );
+}

@@ -258,6 +258,174 @@ fn a_group_marker_holds_for_a_person_too() {
     assert!(!is_group_rate_limited(&cursor, "premium"));
 }
 
+/// The live call site, not just the grouping helper. `classify_line` in the
+/// cursor adapter has no model in hand, so it marked the agent — which made
+/// `is_rate_limited(Cursor)` true and took `auto` out with the pool that ran
+/// out. The message names the tier; the marking must follow it.
+#[test]
+fn a_cursor_premium_refusal_with_no_model_in_hand_holds_only_the_premium_pool() {
+    let temp = isolated();
+    let _guard = crate::paths::AidHomeGuard::set(temp.path());
+
+    let cursor = AgentKind::Cursor;
+    mark_rate_limited_for_message(
+        &cursor,
+        "ActionRequiredError: Increase limits for faster responses You're out of usage. \
+         Switch to Auto, or ask your admin to increase your limit to continue.",
+    );
+
+    assert!(is_group_rate_limited(&cursor, "premium"), "the spent pool is held");
+    assert!(!is_group_rate_limited(&cursor, "auto"), "auto keeps serving");
+    assert!(!is_rate_limited(&cursor), "the agent as a whole is not written off");
+    assert!(
+        dispatch_blocking_hold(&cursor).is_none(),
+        "aid run must still dispatch cursor — on auto"
+    );
+}
+
+/// The complement: a cursor refusal that names no tier is still an agent-level
+/// fact and must not be quietly narrowed to one group.
+#[test]
+fn a_cursor_refusal_naming_no_tier_still_marks_the_agent() {
+    let temp = isolated();
+    let _guard = crate::paths::AidHomeGuard::set(temp.path());
+
+    let cursor = AgentKind::Cursor;
+    mark_rate_limited_for_message(&cursor, "Quota exceeded for this workspace");
+
+    assert!(is_rate_limited(&cursor));
+    assert!(!is_group_rate_limited(&cursor, "premium"));
+}
+
+/// `aid run` used to divert only when a recovery time was present. A spent
+/// balance states none, so dispatch walked into an account that cannot serve.
+#[test]
+fn a_human_ended_hold_blocks_dispatch_and_names_the_way_out() {
+    let temp = isolated();
+    let _guard = crate::paths::AidHomeGuard::set(temp.path());
+
+    mark_rate_limited(
+        &AgentKind::Grok,
+        "API error (status 402 Payment Required): Grok Build usage balance exhausted",
+    );
+    let hold = dispatch_blocking_hold(&AgentKind::Grok).expect("a spent balance must block");
+    assert_eq!(hold, "until cleared with `aid config clear-limit grok`");
+
+    assert!(clear_rate_limit(&AgentKind::Grok));
+    assert!(dispatch_blocking_hold(&AgentKind::Grok).is_none());
+}
+
+/// The other direction of the same gate: a stated time still blocks while it is
+/// in the future, and stops blocking once it has passed. oz's live marker is
+/// fourteen hours stale and kept diverting runs off a route that was back.
+#[test]
+fn a_stated_time_blocks_dispatch_only_until_it_passes() {
+    let temp = isolated();
+    let _guard = crate::paths::AidHomeGuard::set(temp.path());
+
+    std::fs::write(marker_path(&AgentKind::Codex), read_fixture("rate-limit-codex"))
+        .expect("write marker");
+    assert_eq!(
+        dispatch_blocking_hold(&AgentKind::Codex),
+        Some("until Aug 11th, 2026 2:23 PM".to_string()),
+        "the provider's own phrasing of the time is quoted back"
+    );
+
+    std::fs::write(marker_path(&AgentKind::Oz), read_fixture("rate-limit-oz")).expect("write marker");
+    assert!(
+        dispatch_blocking_hold(&AgentKind::Oz).is_none(),
+        "a reset time in the past must not divert a run"
+    );
+}
+
+/// A bounded cooldown is not a dispatch gate. Moving the caller off the agent
+/// they asked for costs more than the few minutes left on a transient 429, and
+/// gating on it was never the previous behaviour either.
+#[test]
+fn a_transient_cooldown_does_not_divert_dispatch() {
+    let temp = isolated();
+    let _guard = crate::paths::AidHomeGuard::set(temp.path());
+
+    mark_rate_limited(&AgentKind::Claude, "HTTP 429 Too Many Requests");
+    assert!(is_rate_limited(&AgentKind::Claude), "still cooling down");
+    assert!(dispatch_blocking_hold(&AgentKind::Claude).is_none());
+}
+
+/// Markers already on disk when this version lands carry no `hold:` line. The
+/// two human-ended ones state no reset time either, so the cooldown would
+/// release them within five minutes and hand work back to a spent allowance.
+/// Their stored refusal text is the same evidence write-time classification
+/// uses, so it is re-read rather than the file rewritten.
+#[test]
+fn a_legacy_marker_is_reclassified_from_the_refusal_it_stored() {
+    let temp = isolated();
+    let _guard = crate::paths::AidHomeGuard::set(temp.path());
+
+    for (agent, fixture) in [
+        // "recovery_at: " empty, message a mid-token JSON fragment that still
+        // carries "You have exceeded your monthly quota".
+        (AgentKind::Copilot, "rate-limit-copilot"),
+        // "recovery_at: " empty, refusal on a later line of a multi-line message.
+        (AgentKind::Grok, "rate-limit-grok"),
+    ] {
+        let path = marker_path(&agent);
+        std::fs::write(&path, read_fixture(fixture)).expect("write marker");
+        age_marker(&path, RATE_LIMIT_WINDOW_SECS * 100);
+
+        assert!(
+            is_rate_limited(&agent),
+            "{fixture} states a refusal only a person ends and must not expire on a timer"
+        );
+        assert!(
+            get_rate_limit_info(&agent).expect("marker present").needs_human,
+            "{fixture} must report which kind of hold it is under"
+        );
+        assert!(dispatch_blocking_hold(&agent).is_some(), "{fixture} must divert dispatch");
+    }
+}
+
+/// The same rule must not turn every legacy marker permanent. A stored message
+/// matching no signature is still transient and still expires — that is the
+/// blackhole this whole change exists to avoid.
+#[test]
+fn a_legacy_marker_with_an_unrecognised_refusal_still_expires() {
+    let temp = isolated();
+    let _guard = crate::paths::AidHomeGuard::set(temp.path());
+
+    let path = marker_path(&AgentKind::Claude);
+    std::fs::write(&path, "recovery_at: \nmessage: 429 Too Many Requests\n")
+        .expect("write marker");
+    age_marker(&path, RATE_LIMIT_WINDOW_SECS + 60);
+
+    assert!(!is_rate_limited(&AgentKind::Claude));
+    assert!(!get_rate_limit_info(&AgentKind::Claude).expect("marker present").needs_human);
+}
+
+/// Reading a marker's stored text back must not resurrect the false positive
+/// the prose path already guards against. `~/.aid/rate-limit-claude` was written
+/// on 2026-08-07 from an agent's own message quoting this crate's signature
+/// table — the text contained `needle: "insufficient balance"`, so claude was
+/// given opencode's refusal. A citation is not a provider saying anything.
+#[test]
+fn a_stored_signature_citation_is_not_read_as_a_human_ended_hold() {
+    let temp = isolated();
+    let _guard = crate::paths::AidHomeGuard::set(temp.path());
+
+    let path = marker_path(&AgentKind::Claude);
+    std::fs::write(
+        &path,
+        "recovery_at: \nmessage: QuotaSignature { needle: \"insufficient balance\", \
+         recovery: QuotaRecovery::NeedsHuman }\n",
+    )
+    .expect("write marker");
+    age_marker(&path, RATE_LIMIT_WINDOW_SECS + 60);
+
+    assert!(
+        !is_rate_limited(&AgentKind::Claude),
+        "a quoted signature must not hold a route open until someone clears it"
+    );
+}
+
 fn read_fixture(name: &str) -> String {
     let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("tests/fixtures")

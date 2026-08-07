@@ -55,6 +55,7 @@ mod pty_runner;
 mod pty_runner_control;
 mod pty_watch_idle;
 mod pty_watch;
+mod quota_channel;
 mod rate_limit;
 mod rate_limit_signatures;
 mod rate_limit_wait;

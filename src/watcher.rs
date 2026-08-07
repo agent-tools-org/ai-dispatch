@@ -271,13 +271,18 @@ fn failure_stderr_note(status: TaskStatus, task_id: &TaskId, agent: &dyn Agent) 
     if !stderr_path.exists() {
         return String::new();
     }
-    if let Ok(stderr_content) = std::fs::read_to_string(&stderr_path) {
-        for line in stderr_content.lines() {
-            if let Some(message) = rate_limit::extract_rate_limit_message(line) {
-                rate_limit::mark_rate_limited_for_message(&agent.kind(), &message);
-                break;
-            }
-        }
+    // stderr is a named channel (`quota_channel::Channel::CliStderr`) and the
+    // reason it stays one is cursor: its spent premium pool arrives only here,
+    // as `ActionRequiredError: ... You're out of usage.`, with no error envelope
+    // anywhere in the stream to read it from.
+    if let Ok(stderr_content) = std::fs::read_to_string(&stderr_path)
+        && let Some(message) = rate_limit::refusal_on_channel(
+            &stderr_content,
+            agent.kind(),
+            crate::quota_channel::Channel::CliStderr,
+        )
+    {
+        rate_limit::mark_rate_limited_for_message(&agent.kind(), &message);
     }
     format!(" — stderr: {}", stderr_path.display())
 }

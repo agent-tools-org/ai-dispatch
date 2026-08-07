@@ -51,6 +51,13 @@ pub(crate) const QUOTA_SIGNATURES: &[QuotaSignature] = &[
     // "You've reached your weekly standard usage limit (resets in 1 day)."
     // A rolling window on a clock, and the message states the remainder.
     QuotaSignature { agent: AgentKind::Droid, needle: "weekly standard usage limit", recovery: QuotaRecovery::After(1440) },
+    // The same limit on droid's shorter window, captured 2026-08-07 from the
+    // marker droid wrote at 19:35: "You've reached your 5-hour standard usage
+    // limit (resets in 1h 48min)." It states its own remainder, so `After` here
+    // is only the floor for a message that ever omits it. Until this entry
+    // existed the refusal was caught by the generic `402` rule alone — that is,
+    // by the status code and not by anything droid said.
+    QuotaSignature { agent: AgentKind::Droid, needle: "standard usage limit", recovery: QuotaRecovery::After(300) },
     // codex-cli, captured previously:
     // "You have hit your usage limit ... try again at <date>."
     QuotaSignature { agent: AgentKind::Codex, needle: "hit your usage limit", recovery: QuotaRecovery::After(300) },

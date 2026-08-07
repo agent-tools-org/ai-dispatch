@@ -260,12 +260,15 @@ pub(crate) async fn post_run_lifecycle(
     } else if let Some(task) = store.get_task(task_id.as_str())?
         && task.status == TaskStatus::Failed
         && args.cascade.is_empty()
+        // Already the provider's own sentence: `read_quota_error_message` reads
+        // the stderr and stream channels through `quota_channel` and returns
+        // nothing else. Re-matching it here would only be a second opinion on
+        // text that has already passed the one gate.
         && let Some(message) = quota_error_message.as_deref()
-        && let Some(clean_message) = rate_limit::extract_rate_limit_message(message)
         && let Some(fallback) =
             agent::selection::coding_fallback_for_prompt(&agent_kind, &args.prompt)
     {
-        rate_limit::mark_rate_limited_for_message(&agent_kind, &clean_message);
+        rate_limit::mark_rate_limited_for_message(&agent_kind, message);
         aid_info!(
             "[aid] Quota exhausted for {}, auto-cascading to {}",
             agent_kind.as_str(),
@@ -539,10 +542,8 @@ fn handle_failed_postprocess(
     runtime_hooks: &[hooks::Hook],
 ) -> Option<String> {
     let quota_error_message = read_quota_error_message(task_id, &agent_kind);
-    if let Some(message) = quota_error_message.as_deref()
-        && let Some(clean_message) = rate_limit::extract_rate_limit_message(message)
-    {
-        rate_limit::mark_rate_limited_for_message(&agent_kind, &clean_message);
+    if let Some(message) = quota_error_message.as_deref() {
+        rate_limit::mark_rate_limited_for_message(&agent_kind, message);
     }
     run_fail_hook(task_id, task, agent_display_name, effective_dir, runtime_hooks);
     quota_error_message

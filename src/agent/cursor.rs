@@ -9,7 +9,6 @@ use std::sync::OnceLock;
 
 use super::truncate::{capped_detail, capped_detail_with};
 use super::RunOpts;
-use crate::rate_limit;
 use crate::types::*;
 
 pub struct CursorAgent;
@@ -223,10 +222,6 @@ fn parse_json_event(
         }
         _ => return None,
     };
-    if event_kind == EventKind::Error || is_error_line(&detail) {
-        maybe_mark_rate_limit(&detail);
-    }
-
     let (detail, metadata) = capped_detail_with(&detail, metadata);
     Some(TaskEvent {
         task_id: task_id.clone(),
@@ -346,9 +341,15 @@ fn tool_argument<'a>(value: &'a serde_json::Value, keys: &[&str], fallback: &'a 
         .unwrap_or(fallback)
 }
 
+/// Classification only. This once also wrote rate-limit markers, off a `detail`
+/// that is the model's own assistant text on one branch and an aid-composed tool
+/// line (`completed: grep <pattern>`) on another — neither is the provider
+/// speaking, and both wrote real holds on a cursor that was serving. Cursor's
+/// two captured refusals are read where they actually arrive: the workspace
+/// quota as a `{"type":"error"}` line on the stream, and the spent premium pool
+/// as `ActionRequiredError` on stderr. Both go through `quota_channel`.
 fn classify_line(line: &str) -> (Option<EventKind>, &str) {
     if is_error_line(line) {
-        maybe_mark_rate_limit(line);
         (Some(EventKind::Error), line)
     } else if line.contains("test result:") || (line.contains("running") && line.contains("test")) {
         (Some(EventKind::Test), line)
@@ -370,14 +371,6 @@ fn classify_line(line: &str) -> (Option<EventKind>, &str) {
 
 fn is_error_line(line: &str) -> bool {
     line.contains("error[") || line.contains("FAILED") || line.starts_with("Error:")
-}
-
-fn maybe_mark_rate_limit(detail: &str) {
-    if rate_limit::is_rate_limit_error_for_agent(detail, &AgentKind::Cursor) {
-        // Cursor's premium refusal names the tier it spent, and this path has no
-        // model in hand — marking the agent here is what took `auto` out too.
-        rate_limit::mark_rate_limited_for_message(&AgentKind::Cursor, detail);
-    }
 }
 
 #[cfg(test)]

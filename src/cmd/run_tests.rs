@@ -74,7 +74,9 @@ fn read_quota_error_message_falls_back_to_log() {
     )
     .unwrap();
     let message = read_quota_error_message(&TaskId("t-quota-log".to_string()), &AgentKind::Codex);
-    assert_eq!(message.as_deref(), Some("{\"error\":\"You have hit your usage limit.\"}"));
+    // The provider's sentence, lifted out of the envelope it arrived in — not
+    // the raw JSON, which is what the marker used to end up holding.
+    assert_eq!(message.as_deref(), Some("You have hit your usage limit."));
 }
 
 #[test]
@@ -120,10 +122,8 @@ fn read_quota_error_message_ignores_agent_grep_in_log() {
     let task_id = TaskId("t-quota-grep-log".to_string());
     let message = read_quota_error_message(&task_id, &AgentKind::Cursor);
     assert_eq!(message, None);
-    if let Some(line) = message.as_deref()
-        && let Some(clean_message) = crate::rate_limit::extract_rate_limit_message(line)
-    {
-        crate::rate_limit::mark_rate_limited(&AgentKind::Cursor, &clean_message);
+    if let Some(line) = message.as_deref() {
+        crate::rate_limit::mark_rate_limited(&AgentKind::Cursor, line);
     }
     assert!(!crate::rate_limit::is_rate_limited(&AgentKind::Cursor));
 }

@@ -379,10 +379,16 @@ pub fn is_rate_limit_error_for_agent_with_evidence(
     evidence == QuotaEvidence::NonAgentChannel && generic_quota_signal(message)
 }
 
+/// A status token that means "out of quota" whoever the provider is. Admissible
+/// only inside an envelope the CLI opened — see `quota_channel::Attributable`.
+///
+/// `rate_limit` is deliberately absent. No provider writes its refusal in
+/// snake_case; that spelling only ever appears in source, in a grep pattern or
+/// in a report about this crate, so it could match nothing real and forge
+/// plenty.
 fn generic_quota_signal(message: &str) -> bool {
     let lower = message.to_lowercase();
     lower.contains("rate limit")
-        || lower.contains("rate_limit")
         || contains_status_code(&lower, "429")
         || contains_status_code(&lower, "402")
         || lower.contains("too many requests")
@@ -407,68 +413,33 @@ fn contains_status_code(s: &str, code: &str) -> bool {
     false
 }
 
-pub fn extract_rate_limit_message(raw: &str) -> Option<String> {
-    extract_rate_limit_with_evidence(raw, QuotaEvidence::NonAgentChannel, None)
-}
-
-/// Extract a quota refusal from a streaming event's `detail` field.
-/// JSON error envelopes are a genuine non-agent channel; plain text is
-/// assistant-authored and only matches per-agent templates.
-pub fn extract_rate_limit_from_stream_detail(raw: &str, agent: &AgentKind) -> Option<String> {
-    extract_rate_limit_with_evidence(raw, QuotaEvidence::AgentProse, Some(agent))
-}
-
-fn extract_rate_limit_with_evidence(
+/// The provider's refusal in `raw`, or `None` — the one way captured bytes
+/// become a rate-limit marker.
+///
+/// `raw` is first split by `quota_channel` into what the CLI said and what the
+/// model said, and only the CLI's part is matched. Callers name the channel they
+/// read from; nothing else about the bytes is consulted, and in particular no
+/// caller may hand this an adapter's rendered event detail, an assistant
+/// message, or a tool result. Those are not channels — see `quota_channel`.
+///
+/// The evidence rule follows the split rather than the call site: a string the
+/// CLI put inside a diagnostic envelope may carry a bare status token, because
+/// only the CLI could have put it there. A line with no envelope around it must
+/// match that agent's own anchored signature, because on a PTY transport it may
+/// be the model's rendered answer.
+pub(crate) fn refusal_on_channel(
     raw: &str,
-    prose_evidence: QuotaEvidence,
-    agent: Option<&AgentKind>,
+    agent: AgentKind,
+    channel: crate::quota_channel::Channel,
 ) -> Option<String> {
-    let trimmed = raw.trim();
-    if trimmed.is_empty() {
-        return None;
+    let kept = crate::quota_channel::provider_attributable(raw, agent, channel);
+    if let Some(refusal) = crate::agent::stream_completion::quota_line(&kept.all(), agent) {
+        return Some(refusal);
     }
-    if trimmed.starts_with('{') && trimmed.contains("\"type\"") {
-        return extract_from_json_error(trimmed);
-    }
-    let matches = match agent {
-        Some(agent) => {
-            is_rate_limit_error_for_agent_with_evidence(trimmed, agent, prose_evidence)
-        }
-        None => is_rate_limit_error_with_evidence(trimmed, prose_evidence),
-    };
-    if matches && trimmed.len() < 500 {
-        Some(trimmed.to_string())
-    } else {
-        None
-    }
-}
-
-fn extract_from_json_error(json_str: &str) -> Option<String> {
-    let value: serde_json::Value = serde_json::from_str(json_str).ok()?;
-    let is_error_event = value.get("error").is_some()
-        || value.get("type").and_then(serde_json::Value::as_str) == Some("error");
-    if !is_error_event {
-        return None;
-    }
-    if let Some(message) = json_error_message(&value)
-        && is_rate_limit_error_with_evidence(message, QuotaEvidence::NonAgentChannel)
-    {
-        return Some(message.to_string());
-    }
-    if is_rate_limit_error_with_evidence(json_str, QuotaEvidence::NonAgentChannel) {
-        return Some(json_str.chars().take(240).collect());
-    }
-    None
-}
-
-fn json_error_message(value: &serde_json::Value) -> Option<&str> {
-    value
-        .get("message")
-        .and_then(serde_json::Value::as_str)
-        .or_else(|| value.pointer("/error/message").and_then(serde_json::Value::as_str))
-        .or_else(|| value.pointer("/error/data/message").and_then(serde_json::Value::as_str))
-        .map(str::trim)
-        .filter(|message| !message.is_empty())
+    let generic = kept.cli_diagnostic.lines().find(|line| generic_quota_signal(line))?;
+    let refusal: String = generic.chars().take(240).collect();
+    let refusal = refusal.trim();
+    (!refusal.is_empty()).then(|| refusal.to_string())
 }
 
 fn parse_recovery_time(message: &str) -> Option<String> {
@@ -613,80 +584,91 @@ mod tests {
         ));
     }
 
+    use crate::quota_channel::Channel;
+
     #[test]
-    fn extract_rate_limit_message_from_nested_429_json() {
+    fn a_generic_status_token_is_read_inside_an_envelope_the_cli_opened() {
         assert_eq!(
-            extract_rate_limit_message(
-                r#"{"type":"error","error":{"message":"429 rate limit exceeded"}}"#
+            refusal_on_channel(
+                r#"{"type":"error","error":{"message":"429 rate limit exceeded"}}"#,
+                AgentKind::Cursor,
+                Channel::CliStream,
             ),
             Some("429 rate limit exceeded".to_string())
         );
     }
 
     #[test]
-    fn test_extract_rate_limit_message_plain_text() {
+    fn a_generic_status_token_outside_an_envelope_is_not_a_refusal() {
+        // Same token, same channel, no envelope around it: this is the shape a
+        // PTY renders the model's own answer in.
         assert_eq!(
-            extract_rate_limit_message("You have hit your usage limit."),
-            Some("You have hit your usage limit.".to_string())
-        );
-    }
-
-    #[test]
-    fn test_extract_rate_limit_message_ignores_init_json() {
-        assert_eq!(
-            extract_rate_limit_message(r#"{"type":"system","subtype":"init","message":"rate limit enabled"}"#),
+            refusal_on_channel("429 rate limit exceeded", AgentKind::Cursor, Channel::CliStream),
             None
         );
     }
 
     #[test]
-    fn test_extract_rate_limit_message_from_error_json() {
-        assert_eq!(
-            extract_rate_limit_message(
-                r#"{"type":"error","message":"You have hit your usage limit."}"#
-            ),
-            Some("You have hit your usage limit.".to_string())
-        );
-    }
-
-    #[test]
-    fn test_extract_rate_limit_message_from_402_error_json() {
-        assert_eq!(
-            extract_rate_limit_message(
-                r#"{"type":"error","source":"agent_loop","message":"402 payment required: reload your tokens"}"#
-            ),
-            Some("402 payment required: reload your tokens".to_string())
-        );
-    }
-
-    #[test]
-    fn test_extract_rate_limit_message_ignores_noise() {
-        assert_eq!(extract_rate_limit_message("YOLO mode is enabled"), None);
-    }
-
-    #[test]
-    fn stream_detail_ignores_agent_grep_about_rate_limit_code() {
-        let grep_line = "completed: grep clear_rate_limit_if_stale|marker_path";
+    fn stderr_carries_droids_402_body() {
+        let line = r#"402 {"detail":"You've reached your 5-hour standard usage limit (resets in 1h 48min).","status":402}"#;
         assert!(
-            extract_rate_limit_message(grep_line).is_some(),
-            "generic matcher still fires on stderr/log channels"
-        );
-        assert_eq!(
-            extract_rate_limit_from_stream_detail(grep_line, &AgentKind::Cursor),
-            None,
+            refusal_on_channel(line, AgentKind::Droid, Channel::CliStderr)
+                .is_some_and(|refusal| refusal.contains("standard usage limit")),
+            "the refusal droid actually wrote on 2026-08-07 must stay detectable"
         );
     }
 
     #[test]
-    fn stream_detail_extracts_codex_usage_limit_json() {
+    fn an_agents_own_words_about_a_provider_are_not_a_refusal() {
+        for line in [
+            "The RPC provider throttles us; we saw a 429 during the run.",
+            "completed: grep clear_rate_limit_if_stale|marker_path",
+            "YOLO mode is enabled",
+        ] {
+            assert_eq!(
+                refusal_on_channel(line, AgentKind::Cursor, Channel::CliStream),
+                None,
+                "{line:?} is the model or aid talking"
+            );
+        }
+    }
+
+    #[test]
+    fn an_init_event_mentioning_rate_limits_is_not_a_refusal() {
+        assert_eq!(
+            refusal_on_channel(
+                r#"{"type":"system","subtype":"init","message":"rate limit enabled"}"#,
+                AgentKind::Codex,
+                Channel::CliStream,
+            ),
+            None
+        );
+    }
+
+    #[test]
+    fn codexs_usage_limit_envelope_yields_its_own_sentence() {
         let message = "You've hit your usage limit. Visit https://chatgpt.com/codex/settings/usage \
                          to purchase more credits or try again at Aug 11th, 2026 2:23 PM.";
         assert_eq!(
-            extract_rate_limit_from_stream_detail(
+            refusal_on_channel(
                 &format!(r#"{{"type":"error","message":"{message}"}}"#),
-                &AgentKind::Codex,
+                AgentKind::Codex,
+                Channel::CliStream,
             ),
             Some(message.to_string()),
+        );
+    }
+
+    /// A signature belongs to one provider. cursor's needle in copilot's stream
+    /// is a report about cursor, not copilot refusing.
+    #[test]
+    fn a_refusal_is_only_read_for_the_agent_that_owns_the_signature() {
+        let envelope =
+            r#"{"type":"error","message":"You're out of usage. Switch to Auto."}"#;
+        assert!(refusal_on_channel(envelope, AgentKind::Cursor, Channel::CliStream).is_some());
+        assert_eq!(
+            refusal_on_channel(envelope, AgentKind::Copilot, Channel::CliStream),
+            None
         );
     }
 

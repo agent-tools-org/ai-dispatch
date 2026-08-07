@@ -18,14 +18,17 @@ fn marks_claude_rate_limits_from_error_and_user_events() {
     assert_eq!(event.event_kind, EventKind::Error);
     assert!(rate_limit::is_rate_limited(&AgentKind::Claude));
     rate_limit::clear_rate_limit(&AgentKind::Claude);
+    // A `tool_result` block flagged `is_error` is the *tool* failing, and its
+    // text is whatever the model asked for. It is still an Error event; it is
+    // not testimony about the provider. Marking here wrote
+    // `~/.aid/rate-limit-claude` on 2026-08-07 off an agent's own message.
     let event = parse_event_line(
         &task_id,
         r#"{"type":"user","message":{"content":[{"content":"HTTP 429 too many requests","is_error":true}]}}"#,
     )
     .unwrap();
     assert_eq!(event.event_kind, EventKind::Error);
-    assert!(rate_limit::is_rate_limited(&AgentKind::Claude));
-    rate_limit::clear_rate_limit(&AgentKind::Claude);
+    assert!(!rate_limit::is_rate_limited(&AgentKind::Claude));
 }
 
 #[test]

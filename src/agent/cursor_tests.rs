@@ -125,21 +125,59 @@ fn read_only_build_command_adds_trust_and_context() {
     assert!(args.windows(2).any(|window| window[0] == "--mode" && window[1] == "plan"));
 }
 
+/// The adapter classifies; it does not decide who spoke. Every line below is one
+/// cursor really produced on 2026-08-07, and each of the first three wrote a
+/// real hold on a route that was serving the whole time — one of them permanent.
+/// Detection now happens where the channel is known (`quota_channel`), so
+/// parsing an event must leave the marker directory untouched whatever the line
+/// says.
 #[test]
-fn parse_event_marks_plain_text_rate_limits() {
+fn parse_event_classifies_but_never_marks() {
     let temp = tempfile::tempdir().unwrap();
     let _aid_home = paths::AidHomeGuard::set(temp.path());
     let _guard = rate_limit_lock().lock().unwrap();
     let _ = rate_limit::clear_rate_limit(&AgentKind::Cursor);
-    let event = parse("Error: rate limit exceeded, try again later");
-    assert_eq!(event.event_kind, EventKind::Error);
-    assert!(rate_limit::is_rate_limited(&AgentKind::Cursor));
-    rate_limit::clear_rate_limit(&AgentKind::Cursor);
+
+    let lines = [
+        // The audit's own report, quoting this repo's fixture back at us.
+        r#"{"type":"assistant","message":{"content":[{"type":"text","text":"FAILED: the needle is `quota exceeded for this workspace`"}]}}"#,
+        // The audit's own grep, rendered by aid as `completed: grep <pattern>`.
+        r#"{"type":"tool_call","subtype":"completed","tool_call":{"grepToolCall":{"args":{"pattern":"you're out of usage|out of usage|ActionRequired"}}}}"#,
+        // A plain-text line carrying a generic token.
+        "Error: rate limit exceeded, try again later",
+        // And cursor's genuine refusal envelope — still not the adapter's call.
+        r#"{"type":"error","message":"quota exceeded for this workspace"}"#,
+    ];
+    for line in lines {
+        let _ = CursorAgent.parse_event(&TaskId("t-cursor".to_string()), line);
+        assert!(
+            !rate_limit::is_rate_limited(&AgentKind::Cursor),
+            "adapter wrote a marker from {line:?}"
+        );
+        assert!(
+            !rate_limit::is_group_rate_limited(&AgentKind::Cursor, "premium"),
+            "adapter wrote a group marker from {line:?}"
+        );
+    }
 }
 
+/// The genuine refusal above is not lost — it is read on the channel it arrived
+/// on, and it marks the premium tier rather than the whole agent, so `auto`
+/// stays dispatchable.
 #[test]
-fn parse_event_marks_json_rate_limits() {
-    assert_rate_limit(r#"{"type":"error","message":"quota exceeded for this workspace"}"#, true);
+fn cursors_error_envelope_is_read_on_the_stream_channel() {
+    let temp = tempfile::tempdir().unwrap();
+    let _aid_home = paths::AidHomeGuard::set(temp.path());
+    let _guard = rate_limit_lock().lock().unwrap();
+    let _ = rate_limit::clear_rate_limit(&AgentKind::Cursor);
+
+    let line = r#"{"type":"error","message":"quota exceeded for this workspace"}"#;
+    let refusal = rate_limit::refusal_on_channel(
+        line,
+        AgentKind::Cursor,
+        crate::quota_channel::Channel::CliStream,
+    );
+    assert_eq!(refusal.as_deref(), Some("quota exceeded for this workspace"));
 }
 
 fn parse(line: &str) -> crate::types::TaskEvent {
@@ -156,18 +194,6 @@ fn metadata_str<'a>(event: &'a crate::types::TaskEvent, key: &str) -> Option<&'a
 
 fn metadata_first_str<'a>(event: &'a crate::types::TaskEvent, key: &str) -> Option<&'a str> {
     event.metadata.as_ref()?.get(key)?.as_array()?.first()?.as_str()
-}
-
-fn assert_rate_limit(line: &str, is_json: bool) {
-    let temp = tempfile::tempdir().unwrap();
-    let _aid_home = paths::AidHomeGuard::set(temp.path());
-    let _guard = rate_limit_lock().lock().unwrap();
-    let _ = rate_limit::clear_rate_limit(&AgentKind::Cursor);
-    let event = parse(line);
-    let expected = if is_json { "quota exceeded for this workspace" } else { line };
-    assert_eq!(event.event_kind, EventKind::Error);
-    assert_eq!(rate_limit::get_rate_limit_info(&AgentKind::Cursor).and_then(|info| info.message), Some(expected.to_string()));
-    let _ = rate_limit::clear_rate_limit(&AgentKind::Cursor);
 }
 
 fn rate_limit_lock() -> &'static Mutex<()> {

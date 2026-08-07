@@ -109,7 +109,7 @@ impl Agent for OpenCodeOverlayAgent {
         if let Ok(v) = serde_json::from_str::<serde_json::Value>(trimmed) {
             return parse_json_event(self.spec.rate_limit_kind, task_id, &v, now);
         }
-        let (kind, detail) = classify_text_line(self.spec.rate_limit_kind, trimmed);
+        let (kind, detail) = classify_text_line(trimmed);
         kind.map(|event_kind| {
             let (detail, metadata) = super::truncate::capped_detail(detail);
             TaskEvent {

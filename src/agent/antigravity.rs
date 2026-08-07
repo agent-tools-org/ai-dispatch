@@ -30,14 +30,19 @@ impl super::Agent for AntigravityAgent {
     fn build_command(&self, prompt: &str, opts: &RunOpts) -> Result<Command> {
         let caps = agy_capabilities();
         let plan_flag = caps.plan_mode_flag;
-        let effective_prompt = if opts.read_only && plan_flag.is_none() {
-            aid_warn!("[aid] agy read-only is prompt-level only, not enforced. Use --worktree or --sandbox for isolation.");
+        let allow_result = super::read_only::allow_result_file_write(opts);
+        // Plan mode blocks result-file delivery; fall back to prompt-level RO.
+        let use_plan = opts.read_only && plan_flag.is_some() && !allow_result;
+        let effective_prompt = if opts.read_only && !use_plan {
+            if plan_flag.is_none() {
+                aid_warn!("[aid] agy read-only is prompt-level only, not enforced. Use --worktree or --sandbox for isolation.");
+            }
             read_only_prompt(prompt, opts)
         } else {
             prompt.to_string()
         };
         let mut cmd = Command::new("agy");
-        if opts.read_only && let Some(flag) = plan_flag {
+        if use_plan && let Some(flag) = plan_flag {
             cmd.args([flag, "plan"]);
         }
         if let Some(ref model) = opts.model {

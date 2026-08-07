@@ -48,7 +48,10 @@ fn build_command_fails_on_read_only() {
 
     let res = QwenAgent.build_command("hello", &opts);
     assert!(res.is_err());
-    assert_eq!(res.unwrap_err().to_string(), "qwen agent does not support read-only mode");
+    assert_eq!(
+        res.unwrap_err().to_string(),
+        "qwen agent does not support read-only mode; omit --read-only, or use an agent that supports it (codex, claude, cursor, gemini, agy)"
+    );
 }
 
 #[test]

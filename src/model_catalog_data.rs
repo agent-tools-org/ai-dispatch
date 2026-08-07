@@ -83,13 +83,6 @@ pub const AGENT_PROFILES: &[(AgentKind, &str, &str, &str, bool)] = &[
         true,
     ),
     (
-        AgentKind::Grok,
-        "Complex implementation, coding via xAI",
-        "free / BYOK",
-        "implement, create, build, refactor, code",
-        true,
-    ),
-    (
         AgentKind::Oz,
         "Complex implementation, multi-file refactors (Warp)",
         "Warp subscription",
@@ -149,7 +142,6 @@ pub const AGENT_MODELS: &[AgentModel] = &[
     AgentModel { agent: AgentKind::Droid, model: "sonnet", input_per_m: 3.0, output_per_m: 15.0, tier: "standard", description: "Balanced cost/quality", capability: 8.5 },
     AgentModel { agent: AgentKind::Droid, model: "opus", input_per_m: 15.0, output_per_m: 75.0, tier: "premium", description: "Strongest reasoning", capability: 9.5 },
     AgentModel { agent: AgentKind::Droid, model: "haiku", input_per_m: 0.25, output_per_m: 1.25, tier: "cheap", description: "Fast, simple tasks", capability: 5.8 },
-    AgentModel { agent: AgentKind::Grok, model: "grok-beta", input_per_m: 5.0, output_per_m: 15.0, tier: "premium", description: "Default Grok Build model", capability: 9.0 },
     AgentModel { agent: AgentKind::Oz, model: "auto", input_per_m: 0.0, output_per_m: 0.0, tier: "standard", description: "Warp auto routing (default)", capability: 8.0 },
     AgentModel { agent: AgentKind::Oz, model: "auto-efficient", input_per_m: 0.0, output_per_m: 0.0, tier: "cheap", description: "Warp efficient auto", capability: 6.5 },
     AgentModel { agent: AgentKind::Oz, model: "auto-genius", input_per_m: 0.0, output_per_m: 0.0, tier: "premium", description: "Warp genius auto", capability: 9.0 },

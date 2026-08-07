@@ -140,7 +140,7 @@ pub fn provider_for_cli(cli: AgentKind) -> (ProviderId, MeteringShape) {
         // Local bearer in ~/.grok/auth.json; the CLI exposes no billing surface.
         AgentKind::Grok => ("xai", MeteringShape::Unknown),
         // Rate-limited with a reset timestamp but no per-task metering.
-        AgentKind::Cursor => ("cursor-subscription", MeteringShape::PerModelFamily),
+        AgentKind::Cursor => ("cursor-subscription", MeteringShape::Subscription),
         AgentKind::Claude => ("anthropic", MeteringShape::Unknown),
         AgentKind::Gemini => ("google-genai", MeteringShape::Unknown),
         AgentKind::Copilot => ("github-copilot", MeteringShape::Subscription),

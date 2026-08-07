@@ -14,28 +14,51 @@ pub(crate) struct QuotaSignature {
     pub(crate) agent: AgentKind,
     /// Lowercase substring taken verbatim from captured CLI output.
     pub(crate) needle: &'static str,
-    /// Fallback cooldown when the message carries no parseable reset time.
+    /// What ends this refusal.
+    pub(crate) recovery: QuotaRecovery,
+}
+
+/// What ends a refusal — a clock, or a person.
+///
+/// These are different facts and collapsing them loses a route in one direction
+/// or the other. Giving a spent balance a cooldown hands work back to an account
+/// that still cannot pay; giving a transient 429 a permanent hold writes off a
+/// route that is already serving again. Encoding the class here means each
+/// signature states which one it is on its own evidence, instead of a magic
+/// minute count standing in for "never".
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum QuotaRecovery {
+    /// A clock ends it. The value is the cooldown to apply when the message
+    /// itself carries no parseable reset time.
+    ///
     /// A wrong-but-short guess is worse than none: it sends work back to a
     /// provider that is still exhausted.
-    pub(crate) fallback_minutes: i64,
+    After(i64),
+    /// Only a person ends it: a top-up, a plan change, an admin raising a
+    /// limit, or a billing cycle whose date the message does not state. Any
+    /// number of minutes chosen here would be invented and would expire while
+    /// the provider is still refusing, so the marker holds until
+    /// `aid config clear-limit <agent>`.
+    NeedsHuman,
 }
 
 pub(crate) const QUOTA_SIGNATURES: &[QuotaSignature] = &[
     // qwen 0.21.5, ModelStudio token plan, captured 2026-08-05:
     // "Quota exhausted: Your token-plan 5-hour quota has been exhausted."
-    QuotaSignature { agent: AgentKind::Qwen, needle: "quota has been exhausted", fallback_minutes: 300 },
-    QuotaSignature { agent: AgentKind::Qwen, needle: "quota exhausted", fallback_minutes: 300 },
+    QuotaSignature { agent: AgentKind::Qwen, needle: "quota has been exhausted", recovery: QuotaRecovery::After(300) },
+    QuotaSignature { agent: AgentKind::Qwen, needle: "quota exhausted", recovery: QuotaRecovery::After(300) },
     // droid 0.183.0, captured 2026-08-05 as an HTTP 402 body:
     // "You've reached your weekly standard usage limit (resets in 1 day)."
-    QuotaSignature { agent: AgentKind::Droid, needle: "weekly standard usage limit", fallback_minutes: 1440 },
+    // A rolling window on a clock, and the message states the remainder.
+    QuotaSignature { agent: AgentKind::Droid, needle: "weekly standard usage limit", recovery: QuotaRecovery::After(1440) },
     // codex-cli, captured previously:
     // "You have hit your usage limit ... try again at <date>."
-    QuotaSignature { agent: AgentKind::Codex, needle: "hit your usage limit", fallback_minutes: 300 },
+    QuotaSignature { agent: AgentKind::Codex, needle: "hit your usage limit", recovery: QuotaRecovery::After(300) },
     // oz (Warp cloud agents), captured 2026-08-05 with exit code 1:
     // "Error: Quota limit reached."
     // No reset time is given at all, so the cooldown is a guess; an hour keeps
     // the agent out of rotation without writing it off for the day.
-    QuotaSignature { agent: AgentKind::Oz, needle: "quota limit reached", fallback_minutes: 60 },
+    QuotaSignature { agent: AgentKind::Oz, needle: "quota limit reached", recovery: QuotaRecovery::After(60) },
     // agy 1.1.10, captured 2026-08-05 against the gemini group while the claude
     // group was still serving:
     // "Individual quota reached. Please upgrade your subscription to increase
@@ -43,51 +66,71 @@ pub(crate) const QUOTA_SIGNATURES: &[QuotaSignature] = &[
     // The earlier entry here used the bare needle "quota" with an invented
     // 12-hour cooldown; it matched unrelated output and would have stranded a
     // working claude allowance for twelve hours over a 59-minute gemini outage.
-    QuotaSignature { agent: AgentKind::Antigravity, needle: "individual quota reached", fallback_minutes: 60 },
+    QuotaSignature { agent: AgentKind::Antigravity, needle: "individual quota reached", recovery: QuotaRecovery::After(60) },
     // opencode Zen, captured 2026-08-05 from t-76181278 as an HTTP 401 body:
     // {"type":"error","error":{"name":"APIError","data":{"message":"Insufficient
     //  balance. Manage your billing here: ...","statusCode":401}}}
     //
-    // Unlike every other entry here this is not a time-based quota and it does
-    // not recover on its own — it ends when the account is topped up. The table
-    // has no way to say that, so the cooldown is a day: long enough to stop aid
-    // feeding work to an account that cannot pay for it, short enough that a
-    // top-up is not ignored for a week. `aid config clear-limit opencode` is the
-    // escape hatch after paying.
+    // Unlike the entries above this is not a time-based quota: it ends when the
+    // account is topped up, never on a clock. It previously carried a one-day
+    // cooldown only because the table could not say "a person ends this"; it can
+    // now, and `aid config clear-limit opencode` is the escape hatch after paying.
     //
     // Neither the generic phrase list nor a status-code check caught this: 401
     // is neither 429 nor 402, and no needle contained "insufficient balance", so
     // aid kept reporting opencode as OK and kept dispatching to it.
-    QuotaSignature { agent: AgentKind::OpenCode, needle: "insufficient balance", fallback_minutes: 0 },
+    QuotaSignature { agent: AgentKind::OpenCode, needle: "insufficient balance", recovery: QuotaRecovery::NeedsHuman },
     // OpenCode-compatible overlays share the same Zen billing refusal shape.
-    QuotaSignature { agent: AgentKind::MiMoCode, needle: "insufficient balance", fallback_minutes: 0 },
-    QuotaSignature { agent: AgentKind::Kilo, needle: "insufficient balance", fallback_minutes: 0 },
+    QuotaSignature { agent: AgentKind::MiMoCode, needle: "insufficient balance", recovery: QuotaRecovery::NeedsHuman },
+    QuotaSignature { agent: AgentKind::Kilo, needle: "insufficient balance", recovery: QuotaRecovery::NeedsHuman },
     // droid 0.183.0, captured as HTTP 402 body:
     // "402 payment required: reload your tokens"
-    QuotaSignature { agent: AgentKind::Droid, needle: "reload your tokens", fallback_minutes: 0 },
+    // Reloading tokens is a purchase, not a window elapsing — distinct from
+    // droid's weekly usage limit above, which does run on a clock.
+    QuotaSignature { agent: AgentKind::Droid, needle: "reload your tokens", recovery: QuotaRecovery::NeedsHuman },
     // gemini Code Assist, captured 2026-08-05:
     // "IneligibleTierError: ... migrate to Antigravity"
-    QuotaSignature { agent: AgentKind::Gemini, needle: "ineligibletier", fallback_minutes: 0 },
-    QuotaSignature { agent: AgentKind::Gemini, needle: "resource exhausted", fallback_minutes: 60 },
-    QuotaSignature { agent: AgentKind::Gemini, needle: "resourceexhausted", fallback_minutes: 60 },
-    QuotaSignature { agent: AgentKind::Antigravity, needle: "migrate to antigravity", fallback_minutes: 0 },
-    // cursor workspace quota (structured error event)
-    QuotaSignature { agent: AgentKind::Cursor, needle: "quota exceeded for this workspace", fallback_minutes: 300 },
-    QuotaSignature { agent: AgentKind::Cursor, needle: "you're out of usage", fallback_minutes: 0 },
+    // Not a quota at all: this tier is no longer served by this CLI and no
+    // amount of waiting restores it. A person migrates to agy.
+    QuotaSignature { agent: AgentKind::Gemini, needle: "ineligibletier", recovery: QuotaRecovery::NeedsHuman },
+    // Per-window API quota on the paid endpoint; this one does refill on a clock.
+    QuotaSignature { agent: AgentKind::Gemini, needle: "resource exhausted", recovery: QuotaRecovery::After(60) },
+    QuotaSignature { agent: AgentKind::Gemini, needle: "resourceexhausted", recovery: QuotaRecovery::After(60) },
+    // The same tier retirement, worded from the other side.
+    QuotaSignature { agent: AgentKind::Antigravity, needle: "migrate to antigravity", recovery: QuotaRecovery::NeedsHuman },
+    // cursor workspace quota (structured error event) — a window on a clock.
+    QuotaSignature { agent: AgentKind::Cursor, needle: "quota exceeded for this workspace", recovery: QuotaRecovery::After(300) },
+    // cursor premium pool spent, captured 2026-08-07 on t-dfc23e80, t-b38df7a8
+    // and t-d6fef491:
+    // "ActionRequiredError: Increase limits for faster responses You're out of
+    //  usage. Switch to Auto, or ask your admin to increase your limit to continue."
+    // The message names the two ways out and both are human actions. `auto` is
+    // not held with it — see model_group::model_group.
+    QuotaSignature { agent: AgentKind::Cursor, needle: "you're out of usage", recovery: QuotaRecovery::NeedsHuman },
     // copilot CLI refusal when premium allowance is spent:
     // "You've reached your premium request limit for this billing cycle."
-    QuotaSignature { agent: AgentKind::Copilot, needle: "premium request limit", fallback_minutes: 0 },
-    QuotaSignature { agent: AgentKind::Copilot, needle: "exceeded your monthly quota", fallback_minutes: 0 },
-    // grok balance exhaustion:
-    QuotaSignature { agent: AgentKind::Grok, needle: "usage balance exhausted", fallback_minutes: 0 },
+    // This does return at the next billing cycle, but the message never says
+    // when that is. The old one-day cooldown expired weeks early and handed work
+    // back to a spent allowance, so the hold waits for a person instead.
+    QuotaSignature { agent: AgentKind::Copilot, needle: "premium request limit", recovery: QuotaRecovery::NeedsHuman },
+    // copilot, captured 2026-08-07 on t-03a68876 and t-80cf4b62 as a JSON event:
+    // {"errorCode":"quota_exceeded","message":"You have exceeded your monthly quota"}
+    // Same class as above: monthly, with no stated reset date.
+    QuotaSignature { agent: AgentKind::Copilot, needle: "exceeded your monthly quota", recovery: QuotaRecovery::NeedsHuman },
+    // grok, captured 2026-08-07:
+    // "API error (status 402 Payment Required): Grok Build usage balance exhausted"
+    // A spent balance does not come back on a clock. Before this entry existed
+    // the refusal matched only the generic 402 rule, which wrote a marker with
+    // no recovery time that stopped counting after five minutes.
+    QuotaSignature { agent: AgentKind::Grok, needle: "usage balance exhausted", recovery: QuotaRecovery::NeedsHuman },
 ];
 
 /// True when a line is quoting this module's own signature table, not a live refusal.
 pub(crate) fn is_signature_source_citation(line: &str) -> bool {
     let lower = line.to_lowercase();
     lower.contains("quotasignature")
+        || lower.contains("quotarecovery")
         || lower.contains("needle:")
-        || lower.contains("fallback_minutes:")
         || lower.contains("rate_limit_signatures")
 }
 
@@ -96,19 +139,19 @@ pub(crate) fn is_signature_source_citation(line: &str) -> bool {
 pub(crate) fn match_quota_signature_for_agent(
     message: &str,
     agent: AgentKind,
-) -> Option<i64> {
+) -> Option<QuotaRecovery> {
     let lower = message.to_lowercase();
     QUOTA_SIGNATURES
         .iter()
         .find(|signature| signature.agent == agent && lower.contains(signature.needle))
-        .map(|signature| signature.fallback_minutes)
+        .map(|signature| signature.recovery)
 }
 
 /// Match a message against every provider signature. Returns the agent the
-/// signature belongs to and its fallback cooldown, so a caller can both mark the
+/// signature belongs to and what ends the refusal, so a caller can both mark the
 /// right agent and avoid the 5-minute default that expires while the provider is
 /// still refusing work.
-pub(crate) fn match_quota_signature(message: &str) -> Option<(AgentKind, i64)> {
+pub(crate) fn match_quota_signature(message: &str) -> Option<(AgentKind, QuotaRecovery)> {
     match_quota_signature_with_agent(message, None)
 }
 
@@ -116,17 +159,17 @@ pub(crate) fn match_quota_signature(message: &str) -> Option<(AgentKind, i64)> {
 pub(crate) fn match_quota_signature_with_agent(
     message: &str,
     preferred: Option<AgentKind>,
-) -> Option<(AgentKind, i64)> {
+) -> Option<(AgentKind, QuotaRecovery)> {
     let lower = message.to_lowercase();
     if let Some(agent) = preferred {
-        if let Some(minutes) = match_quota_signature_for_agent(message, agent) {
-            return Some((agent, minutes));
+        if let Some(recovery) = match_quota_signature_for_agent(message, agent) {
+            return Some((agent, recovery));
         }
     }
     QUOTA_SIGNATURES
         .iter()
         .find(|signature| lower.contains(signature.needle))
-        .map(|signature| (signature.agent, signature.fallback_minutes))
+        .map(|signature| (signature.agent, signature.recovery))
 }
 
 /// Parse relative reset phrasings that `parse_recovery_time`'s "try again at

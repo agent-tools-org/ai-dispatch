@@ -185,3 +185,26 @@ fn is_stale_requires_idle_timeout_to_elapse() {
     assert!(is_stale(now - chrono::Duration::seconds(300), now, 300));
     assert!(!is_stale(now - chrono::Duration::seconds(299), now, 300));
 }
+
+#[test]
+fn latest_activity_ignores_setup_as_agent_output() {
+    let store = Store::open_memory().expect("store");
+    let mut task = make_task("t-setup-act");
+    task.created_at = Local::now() - chrono::Duration::seconds(200);
+    store.insert_task(&task).expect("insert task");
+    store
+        .insert_event(&TaskEvent {
+            task_id: TaskId("t-setup-act".to_string()),
+            timestamp: Local::now() - chrono::Duration::seconds(190),
+            event_kind: EventKind::Setup,
+            detail: "Cargo target seeded: /tmp/target from /cache in 12ms".to_string(),
+            metadata: None,
+        })
+        .expect("insert setup");
+
+    let activity = latest_activity(&store, &task).expect("activity");
+
+    assert_eq!(activity.event_count, 0);
+    assert_eq!(activity.timestamp, task.created_at);
+    assert!(activity.detail.is_none());
+}

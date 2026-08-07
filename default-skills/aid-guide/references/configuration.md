@@ -53,11 +53,22 @@ Use `aid config agents` to see configured and detected agents. Built-in dispatch
 probes binaries by their real CLI names, for example `grok` and `commandcode`
 (not the generic `agent` alias used by cursor). Register a local custom agent
 with `config add-agent`. Use `clear-limit` only after confirming a provider's
-rate-limit condition has cleared. Quota exhaustion is detected from per-CLI
-refusal templates (stderr, structured error events, or provider-specific exit
-text). Generic tokens like `429` or `rate limit` count in agent-authored prose
-only when the whole line is essentially the refusal (for example `429 Too Many
-Requests`), not when they appear inside discussion.
+rate-limit condition has cleared.
+
+Quota exhaustion is read from two named channels and nowhere else: the CLI's
+stderr, and the raw lines of its output stream. Within the stream, a refusal is
+admitted only from an envelope the CLI itself opened — a structured error event —
+never from an assistant message, a tool call, a tool result, or the event text
+aid renders for the task board. Those are the model's words or aid's own, and
+matching them wrote real holds on providers that were serving.
+
+What may match depends on how strongly the text is attributed. A string inside a
+CLI error envelope may match a generic token like `429`, `402` or `rate limit`,
+because only the CLI could have put it there. A line with no envelope around it —
+plain-text CLIs such as `agy`, and anything running under a PTY, where the
+captured buffer is the rendered answer — must match that agent's own captured
+refusal template. An agent whose refusal wording has never been captured stays
+undetectable, which is the honest answer rather than a guess.
 
 A hold ends in one of three ways, and `aid config agents` names which:
 

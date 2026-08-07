@@ -283,6 +283,31 @@ fn a_cursor_premium_refusal_with_no_model_in_hand_holds_only_the_premium_pool() 
     );
 }
 
+/// End to end on the channel it actually arrives on. cursor's premium refusal is
+/// on stderr and nowhere else — no error envelope in the stream carries it — so
+/// this is the coverage that decides whether `Channel::CliStderr` earns its
+/// place in the enumeration. If it ever stops passing, the answer is not to
+/// widen the stream channel but to say so.
+#[test]
+fn cursors_premium_refusal_is_read_off_the_stderr_channel() {
+    let temp = isolated();
+    let _guard = crate::paths::AidHomeGuard::set(temp.path());
+
+    let stderr = "ActionRequiredError: Increase limits for faster responses You're out of usage. \
+                  Switch to Auto, or ask your admin to increase your limit to continue.";
+    let refusal = refusal_on_channel(
+        stderr,
+        AgentKind::Cursor,
+        crate::quota_channel::Channel::CliStderr,
+    )
+    .expect("cursor's premium refusal must be readable on stderr");
+    mark_rate_limited_for_message(&AgentKind::Cursor, &refusal);
+
+    assert!(is_group_rate_limited(&AgentKind::Cursor, "premium"));
+    assert!(!is_group_rate_limited(&AgentKind::Cursor, "auto"));
+    assert!(!is_rate_limited(&AgentKind::Cursor));
+}
+
 /// The complement: a cursor refusal that names no tier is still an agent-level
 /// fact and must not be quietly narrowed to one group.
 #[test]

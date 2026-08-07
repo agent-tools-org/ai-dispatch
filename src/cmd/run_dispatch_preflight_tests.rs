@@ -3,15 +3,49 @@
 
 use super::*;
 use super::validate_command_preflight_with;
+use std::ffi::OsString;
 use std::sync::Arc;
+
+struct EnvVarGuard {
+    key: &'static str,
+    previous: Option<OsString>,
+}
+
+impl EnvVarGuard {
+    fn remove(key: &'static str) -> Self {
+        let previous = std::env::var_os(key);
+        // SAFETY: test-only; restored on drop so nested aid sessions stay intact.
+        unsafe { std::env::remove_var(key) };
+        Self { key, previous }
+    }
+}
+
+impl Drop for EnvVarGuard {
+    fn drop(&mut self) {
+        match &self.previous {
+            Some(value) => unsafe { std::env::set_var(self.key, value) },
+            None => unsafe { std::env::remove_var(self.key) },
+        }
+    }
+}
 
 fn isolated_home() -> crate::paths::AidHomeGuard {
     let temp = tempfile::tempdir().unwrap();
     crate::paths::AidHomeGuard::set(temp.path())
 }
 
+/// prepare_dispatch reads AID_TASK_ID / AID_TASK_DEPTH; clear them so nested
+/// outer aid sessions cannot turn capability probes into depth refusals.
+fn clear_nested_dispatch_env() -> (EnvVarGuard, EnvVarGuard) {
+    (
+        EnvVarGuard::remove("AID_TASK_ID"),
+        EnvVarGuard::remove("AID_TASK_DEPTH"),
+    )
+}
+
 #[test]
 fn prepare_dispatch_rejects_qwen_read_only_before_task_exists() {
+    let _nest = clear_nested_dispatch_env();
     let _guard = isolated_home();
     let store = Arc::new(Store::open_memory().unwrap());
     let mut args = RunArgs {
@@ -73,6 +107,7 @@ fn validate_command_preflight_rejects_missing_resolved_binary() {
 
 #[test]
 fn prepare_dispatch_rejects_custom_agent_with_missing_binary_before_task_exists() {
+    let _nest = clear_nested_dispatch_env();
     let temp = tempfile::tempdir().unwrap();
     let _guard = crate::paths::AidHomeGuard::set(temp.path());
     crate::paths::ensure_dirs().unwrap();

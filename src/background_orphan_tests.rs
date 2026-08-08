@@ -244,3 +244,64 @@ fn latest_activity_counts_transcript_bytes_as_progress() {
     assert!(activity.has_agent_bytes);
     assert!(activity.timestamp > task.created_at);
 }
+
+/// The agy failure this exists for. agy runs in print mode: stdout stays empty until a
+/// turn completes, so transcript bytes prove nothing mid-turn and the reaper read
+/// "no agent output since spawn" while agy was streaming from the model. Replay of
+/// t-7fbbd0e7 (2026-08-08): agy's own log last grew at 13:39:26 and aid killed the task
+/// at 13:41:56 — 150s, inside the 180s budget. Watching that log keeps it alive.
+#[test]
+fn latest_activity_counts_the_agent_s_own_log_as_progress() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    let _aid_home = paths::AidHomeGuard::set(temp.path());
+    paths::ensure_dirs().expect("ensure dirs");
+    let store = Store::open_memory().expect("store");
+    let mut task = make_task("t-agy-log");
+    task.created_at = Local::now() - chrono::Duration::seconds(200);
+    store.insert_task(&task).expect("insert task");
+    std::fs::create_dir_all(paths::task_dir("t-agy-log")).expect("task dir");
+
+    // Nothing on stdout: transcript absent, exactly as print mode leaves it.
+    let agent_log = paths::agent_log_path("t-agy-log");
+    std::fs::write(&agent_log, "streamGenerateContent ... ResponseID: CM92\n").expect("bytes");
+    let newer = std::time::SystemTime::now() - std::time::Duration::from_secs(150);
+    std::fs::File::open(&agent_log).expect("open").set_modified(newer).expect("mtime");
+
+    let activity = latest_activity(&store, &task).expect("activity");
+
+    assert_eq!(activity.event_count, 0, "no parsed events — agy emits none");
+    assert!(activity.has_agent_bytes, "the agent's own log is proof it is working");
+    assert!(
+        activity.timestamp > task.created_at,
+        "and it must advance the clock, or the first-token budget still reaps it"
+    );
+}
+
+/// Cross-audit finding: a leftover `agent.log` from an earlier attempt on the same task
+/// id used to count as progress purely by existing, moving a spawn that produced nothing
+/// off the 180s first-token budget onto 2x idle. Bytes older than the task say nothing
+/// about it.
+#[test]
+fn latest_activity_ignores_agent_log_left_by_an_earlier_run() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    let _aid_home = paths::AidHomeGuard::set(temp.path());
+    paths::ensure_dirs().expect("ensure dirs");
+    let store = Store::open_memory().expect("store");
+    let mut task = make_task("t-stale-log");
+    task.created_at = Local::now() - chrono::Duration::seconds(200);
+    store.insert_task(&task).expect("insert task");
+    std::fs::create_dir_all(paths::task_dir("t-stale-log")).expect("task dir");
+
+    let agent_log = paths::agent_log_path("t-stale-log");
+    std::fs::write(&agent_log, "output from the previous attempt\n").expect("bytes");
+    let before_the_task = std::time::SystemTime::now() - std::time::Duration::from_secs(600);
+    std::fs::File::open(&agent_log).expect("open").set_modified(before_the_task).expect("mtime");
+
+    let activity = latest_activity(&store, &task).expect("activity");
+
+    assert!(
+        !activity.has_agent_bytes,
+        "a file older than the task is not evidence this run produced anything"
+    );
+    assert_eq!(activity.timestamp, task.created_at, "and it must not advance the clock");
+}

@@ -162,7 +162,11 @@ async fn run_task_inner(store: &Arc<Store>, spec: &BackgroundRunSpec) -> Result<
         sandbox: spec.sandbox,
         context_files: vec![],
         session_id: None,
-        env: spec.env.clone(),
+        env: agent::env_with_agent_log(
+            spec.env.clone(),
+            &spec.task_id,
+            spec.container.is_none() && !spec.sandbox,
+        ),
         env_forward: spec.env_forward.clone(),
     };
     ensure_agent_binary_available(spec)?;

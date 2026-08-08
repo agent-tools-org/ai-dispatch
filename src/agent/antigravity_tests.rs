@@ -229,3 +229,48 @@ fn parse_completion_emits_unknown_model_and_cost() {
 fn kind_returns_antigravity() {
     assert_eq!(AntigravityAgent.kind(), AgentKind::Antigravity);
 }
+
+/// agy is a print-mode CLI: nothing reaches stdout until a turn completes, so aid's
+/// liveness check has to read a file agy actually writes while it works. Proven on
+/// t-7fbbd0e7 (2026-08-08): agy's own log carried 24KB and three streamGenerateContent
+/// calls while aid recorded "no agent output since spawn" and reaped it at 180s.
+#[test]
+fn build_command_points_agy_log_at_the_task_dir() {
+    let built = RunOpts {
+        env: Some(std::collections::HashMap::from([(
+            crate::agent::AGENT_LOG_ENV.to_string(),
+            "/tmp/aid-test/tasks/t-abcd1234/agent.log".to_string(),
+        )])),
+        ..opts(false, vec![])
+    };
+    let cmd = AntigravityAgent.build_command("do the thing", &built).unwrap();
+    let args: Vec<String> =
+        cmd.get_args().map(|a| a.to_string_lossy().into_owned()).collect();
+    let idx = args.iter().position(|a| a == "--log-file").expect("--log-file must be passed");
+    let path = &args[idx + 1];
+    assert!(path.contains("t-abcd1234"), "log must be per task: {path}");
+    assert!(path.ends_with("agent.log"), "and named for aid's watcher: {path}");
+}
+
+/// Without a task id there is nothing to name the file after; passing a bare flag
+/// would be worse than passing none.
+#[test]
+fn build_command_omits_the_log_flag_when_no_task_is_known() {
+    let cmd = AntigravityAgent.build_command("do the thing", &opts(false, vec![])).unwrap();
+    let args: Vec<String> =
+        cmd.get_args().map(|a| a.to_string_lossy().into_owned()).collect();
+    assert!(!args.iter().any(|a| a == "--log-file"), "got: {args:?}");
+}
+
+/// The adapter carries no isolation policy: it passes the log it was handed and nothing
+/// otherwise. Whether the path is watchable is decided where the wrapping is known —
+/// see `env_with_agent_log` and its callers.
+#[test]
+fn build_command_passes_only_the_log_it_was_handed() {
+    let none = crate::agent::env_with_agent_log(None, "t-abcd1234", false);
+    assert!(none.is_none(), "an unwatchable run must be handed no path");
+
+    let seeded = crate::agent::env_with_agent_log(None, "t-abcd1234", true).unwrap();
+    let path = seeded.get(crate::agent::AGENT_LOG_ENV).expect("seeded when watchable");
+    assert!(path.contains("t-abcd1234") && path.ends_with("agent.log"), "got: {path}");
+}

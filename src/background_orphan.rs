@@ -56,7 +56,7 @@ pub(super) fn latest_activity(store: &Store, task: &Task) -> Result<TaskActivity
         .collect::<Vec<_>>();
     let last_event = progress_events.last();
     let mut timestamp = last_event.map(|event| event.timestamp).unwrap_or(task.created_at);
-    let has_agent_bytes = agent_has_produced_bytes(task.id.as_str());
+    let has_agent_bytes = agent_has_produced_bytes(task.id.as_str(), task.created_at);
     if let Some(bytes_at) = agent_bytes_mtime(task.id.as_str())
         && bytes_at > timestamp
     {
@@ -98,9 +98,27 @@ fn is_idle_bookkeeping_event(event: &TaskEvent) -> bool {
 
 /// Buffered agents (grok/agy) emit no progress events until exit; watch_buffered
 /// appends stdout to the transcript as bytes arrive so the reaper can see them.
-fn agent_has_produced_bytes(task_id: &str) -> bool {
+/// Bytes this run produced — not merely bytes that are lying there.
+///
+/// Presence alone was enough before, which let an `agent.log` left by an earlier attempt
+/// on the same task id count as progress and silently move a dead spawn off the
+/// first-token budget onto 2x idle. The file has to have been written after the task
+/// started to say anything about this run.
+fn agent_has_produced_bytes(task_id: &str, started_at: DateTime<Local>) -> bool {
     agent_byte_paths(task_id).into_iter().any(|path| {
-        std::fs::metadata(&path).map(|meta| meta.len() > 0).unwrap_or(false)
+        let Ok(meta) = std::fs::metadata(&path) else {
+            return false;
+        };
+        if meta.len() == 0 {
+            return false;
+        }
+        // HFS+ truncates mtime to whole seconds, so a file written in the same second the
+        // task was created can read as a hair older than it. A small grace keeps real
+        // progress from being judged stale — erring toward "alive" here costs one more
+        // idle window, erring the other way reaps a healthy run at 180s.
+        meta.modified()
+            .map(|at| DateTime::<Local>::from(at) >= started_at - chrono::Duration::seconds(2))
+            .unwrap_or(false)
     })
 }
 
@@ -125,10 +143,21 @@ fn agent_bytes_mtime(task_id: &str) -> Option<DateTime<Local>> {
     best
 }
 
-fn agent_byte_paths(task_id: &str) -> [std::path::PathBuf; 2] {
+/// Files whose growth proves the agent is alive. The agent's own log is included
+/// because a print-mode CLI (agy) writes nothing to stdout until its turn ends, so
+/// judging it on transcript bytes alone reaps healthy runs mid-turn.
+///
+/// What this cannot decide: a process stuck in a loop that keeps appending looks exactly
+/// like one doing work. No byte-level signal can separate them without reading meaning
+/// into the content, and the transcript already had this property — the agent log widens
+/// the surface by one file, it does not introduce the class. The bound on a chatty-but-
+/// stuck run is the wall clock: max-duration (default 60m) and the 24h hard cap, not this
+/// check.
+fn agent_byte_paths(task_id: &str) -> [std::path::PathBuf; 3] {
     [
         crate::paths::transcript_path(task_id),
         crate::paths::log_path(task_id),
+        crate::paths::agent_log_path(task_id),
     ]
 }
 

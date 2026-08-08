@@ -124,13 +124,15 @@ fn delegate_opencode_with_own_endpoint_does_not_inherit_opencode_rate_limit() {
 }
 
 #[test]
-fn delegate_opencode_without_endpoint_still_uses_opencode_rate_limit() {
+fn delegate_opencode_without_endpoint_uses_own_custom_marker() {
+    // The write path marks (Custom, Some(id)) even when delegate_to = opencode
+    // and there is no base_url.  The read must use the same slot.
     let mut config = sample_custom_config();
     config.base_url = None;
     assert!(!custom_has_endpoint(&config));
     assert_eq!(
         rate_limit_kind(AgentKind::Custom, Some(&config)),
-        AgentKind::OpenCode
+        AgentKind::Custom
     );
 }
 
@@ -140,6 +142,29 @@ fn isolated_home() -> (tempfile::TempDir, crate::paths::AidHomeGuard) {
     let guard = crate::paths::AidHomeGuard::set(tmp.path());
     std::fs::create_dir_all(crate::paths::aid_dir()).ok();
     (tmp, guard)
+}
+
+/// Guard: if `rate_limit_kind` ever returns `OpenCode` for a `delegate_to`
+/// agent again, this test will read `rate-limit-opencode` (empty) and return
+/// "ok" instead of "limited", failing the assertion.
+#[test]
+fn custom_agent_quota_read_matches_write() {
+    let (_tmp, _guard) = isolated_home();
+    let mut config = sample_custom_config();
+    config.id = "auditor".into();
+    config.base_url = None; // no endpoint — triggers the old delegate_to path
+    crate::rate_limit::mark_rate_limited(
+        &AgentKind::Custom,
+        Some("auditor"),
+        "try again at Aug 11th, 2099 2:23 PM.",
+    );
+    let rlk = rate_limit_kind(AgentKind::Custom, Some(&config));
+    let q = build_quota_json(&rlk, Some("auditor"));
+    assert_eq!(
+        q.state, "limited",
+        "build_quota_json must read the same marker the write path wrote; \
+         state 'ok' means rate_limit_kind has diverged from the write path again"
+    );
 }
 
 #[test]

@@ -85,7 +85,7 @@ fn quota_row(kind: AgentKind, custom_name: Option<&str>) -> QuotaRow {
     if rate_limit::is_rate_limited(&kind, custom_name) {
         let info = rate_limit::get_rate_limit_info(&kind, custom_name);
         return QuotaRow::Limited {
-            detail: agent_hold_detail(&kind, info.as_ref()),
+            detail: agent_hold_detail(&kind, custom_name, info.as_ref()),
         };
     }
     let groups = rate_limit::active_group_holds(&kind, custom_name);
@@ -93,26 +93,34 @@ fn quota_row(kind: AgentKind, custom_name: Option<&str>) -> QuotaRow {
         return QuotaRow::Ok;
     }
     QuotaRow::Partial {
-        detail: group_holds_detail(&kind, &groups),
+        detail: group_holds_detail(&kind, custom_name, &groups),
     }
 }
 
-fn agent_hold_detail(kind: &AgentKind, info: Option<&RateLimitInfo>) -> String {
+fn agent_hold_detail(
+    kind: &AgentKind,
+    custom_name: Option<&str>,
+    info: Option<&RateLimitInfo>,
+) -> String {
     let Some(info) = info else {
         return String::new();
     };
-    let end = rate_limit::format_hold_end(kind, info);
+    let end = rate_limit::format_hold_end(kind, custom_name, info);
     match info.message.as_deref() {
         Some(msg) if !msg.is_empty() => format!("{end} — {msg}"),
         _ => end,
     }
 }
 
-fn group_holds_detail(kind: &AgentKind, groups: &[(String, RateLimitInfo)]) -> String {
+fn group_holds_detail(
+    kind: &AgentKind,
+    custom_name: Option<&str>,
+    groups: &[(String, RateLimitInfo)],
+) -> String {
     groups
         .iter()
         .map(|(group, info)| {
-            let end = rate_limit::format_hold_end(kind, info);
+            let end = rate_limit::format_hold_end(kind, custom_name, info);
             match info.message.as_deref() {
                 Some(msg) if !msg.is_empty() => format!("{group} {end} — {msg}"),
                 _ => format!("{group} {end}"),

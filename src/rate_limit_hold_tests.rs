@@ -278,7 +278,7 @@ fn a_group_marker_holds_for_a_person_too() {
     assert_eq!(holds[0].0, "premium");
     assert!(holds[0].1.needs_human);
     assert!(
-        format_hold_end(&cursor, &holds[0].1).contains("aid config clear-limit cursor"),
+        format_hold_end(&cursor, None, &holds[0].1).contains("aid config clear-limit cursor"),
         "manual group hold must name the clear command"
     );
 

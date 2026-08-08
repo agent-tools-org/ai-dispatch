@@ -586,13 +586,21 @@ pub fn active_group_holds(
 
 /// How a live hold ends, for display. Never invents a reset time aid did not
 /// observe — a missing recovery is either a person-clear or a short cooldown.
-pub fn format_hold_end(agent: &AgentKind, info: &RateLimitInfo) -> String {
+pub fn format_hold_end(
+    agent: &AgentKind,
+    custom_name: Option<&str>,
+    info: &RateLimitInfo,
+) -> String {
     if let Some(at) = info.recovery_at.as_deref() {
         format!("resets {at}")
     } else if info.needs_human {
+        // Named by the same function that decides the marker file, so the
+        // command we print can never clear a different agent than the one held:
+        // `AgentKind::Custom.as_str()` is the constant "custom", so a held
+        // `glm5` used to be reported as cleared by `clear-limit custom`.
         format!(
             "held until cleared with `aid config clear-limit {}`",
-            agent.as_str()
+            marker_slug(agent, custom_name)
         )
     } else {
         "cooling down".to_string()

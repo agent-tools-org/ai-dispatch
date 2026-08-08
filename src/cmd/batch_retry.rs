@@ -1,7 +1,7 @@
 // Batch retry logic for failed/skipped tasks.
 // Exports: retry_failed
 // Deps: crate::cmd::run, crate::store::Store, crate::types::Task
-use crate::cmd::run::{self, apply_retry_target, RunArgs};
+use crate::cmd::run::{self, apply_retry_target, switch_agent, RunArgs};
 use crate::cmd::wait::{wait_for_task_ids, WaitOutcome};
 use crate::store::Store;
 use crate::types::{Task, TaskStatus};
@@ -101,13 +101,13 @@ pub(crate) fn retry_task_to_run_args(store: &Store, task: &Task, group_id: &str,
             ..Default::default()
         }
     });
-    // Batch retry switches agents too — via `agent_override`, or the
-    // rate-limit fallback above. A model is only valid for the CLI it was
-    // chosen for, so it does not travel with the work.
-    if agent_name != task.agent_display_name() {
-        run_args.model = None;
-    }
-    run_args.agent_name = agent_name;
+    // Anchor the current route then let switch_agent clear route-owned fields
+    // (model + session_id) if the agent changes. Saved dispatch args may carry
+    // a session_id from the original run; handing it to a different CLI is the
+    // same defect as passing the model — both are meaningless outside their
+    // issuing CLI.
+    run_args.agent_name = task.agent_display_name().to_string();
+    switch_agent(&mut run_args, agent_name);
     run_args.prompt = task.prompt.clone();
     apply_retry_target(task, &mut run_args)?;
     run_args.group = Some(group_id.to_string());

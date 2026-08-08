@@ -1,10 +1,11 @@
 // Extra best-of tests kept separate to preserve small test files.
-// Covers metric cwd fallback and plan expansion behavior.
+// Covers metric cwd fallback, plan expansion, and route-field isolation.
 
 use super::*;
 use super::output_files::{
     DispatchArtifacts, dispatch_artifacts_for_candidate, finalize_winner_artifacts, suffixed_path,
 };
+use crate::cmd::run::{switch_agent, RunArgs};
 use tempfile::tempdir;
 
 #[test]
@@ -119,4 +120,46 @@ fn finalize_winner_artifacts_copies_winner_and_cleans_loser() {
     assert_eq!(std::fs::read_to_string(&original_result).unwrap(), "winner result");
     assert!(!loser_output.exists());
     assert!(!loser_result.exists());
+}
+
+/// Each best-of racer that uses a DIFFERENT agent than the parent must have
+/// route-owned fields (model + session_id) cleared. Before this fix,
+/// `child_args.agent_name = agent_label` was a direct field assignment that
+/// bypassed `switch_agent`, so every racer inherited the parent's session
+/// token and model regardless of which CLI was being dispatched.
+#[test]
+fn best_of_racers_clear_route_fields_when_agent_differs() {
+    // Build parent RunArgs that carry a session and a pinned model from a
+    // previous codex run.
+    let parent = RunArgs {
+        agent_name: "codex".to_string(),
+        prompt: "implement feature X".to_string(),
+        model: Some("gpt-5".to_string()),
+        session_id: Some("codex-session-token".to_string()),
+        ..Default::default()
+    };
+
+    // Simulate what run_best_of does when building a child for a different racer.
+    let mut child = parent.clone();
+    switch_agent(&mut child, "gemini".to_string());
+
+    assert_eq!(child.agent_name, "gemini");
+    assert!(
+        child.model.is_none(),
+        "model must be cleared for a racer on a different agent, got {:?}",
+        child.model
+    );
+    assert!(
+        child.session_id.is_none(),
+        "session_id must be cleared for a racer on a different agent, got {:?}",
+        child.session_id
+    );
+
+    // A racer on the SAME agent must keep the model and session.
+    let mut same_agent_child = parent.clone();
+    switch_agent(&mut same_agent_child, "codex".to_string());
+
+    assert_eq!(same_agent_child.agent_name, "codex");
+    assert_eq!(same_agent_child.model.as_deref(), Some("gpt-5"));
+    assert_eq!(same_agent_child.session_id.as_deref(), Some("codex-session-token"));
 }

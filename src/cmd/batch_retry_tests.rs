@@ -3,6 +3,7 @@
 // Deps: batch_retry private helpers, Store, rate_limit test guards.
 
 use super::*;
+use crate::cmd::run::RunArgs;
 use crate::paths;
 use crate::rate_limit::{clear_rate_limit, mark_rate_limited};
 use crate::types::{AgentKind, TaskId, VerifyStatus};
@@ -169,4 +170,38 @@ fn retry_bucket_treats_none_worktree_as_unique() {
     assert_eq!(task_ids(&buckets[0]), vec!["t-301".to_string()]);
     assert_eq!(task_ids(&buckets[1]), vec!["t-302".to_string()]);
     assert_eq!(task_ids(&buckets[2]), vec!["t-303".to_string()]);
+}
+
+/// `aid batch retry --agent <other>` must drop session_id from the saved
+/// dispatch args. Before this fix, the model was cleared but session_id from
+/// the saved RunArgs was left intact and handed to the new CLI.
+#[test]
+fn batch_retry_agent_override_clears_session_id() {
+    let _guard = aid_home_guard("aid-batch-retry-session-clear");
+    let repo = TempDir::new().unwrap();
+    let mut task = make_task("t-session-override", AgentKind::Codex);
+    set_repo(&mut task, &repo);
+    let store = Store::open_memory().unwrap();
+    // Simulate saved dispatch args that contain a session token and model from
+    // the original codex run.
+    let saved = RunArgs {
+        agent_name: "codex".to_string(),
+        prompt: task.prompt.clone(),
+        session_id: Some("codex-session-token".to_string()),
+        model: Some("gpt-5".to_string()),
+        ..Default::default()
+    };
+    store
+        .update_task_dispatch_args(task.id.as_str(), &saved.dispatch_args_json().unwrap())
+        .unwrap();
+
+    let args = retry_task_to_run_args(&store, &task, "wg-test", Some("gemini")).unwrap();
+
+    assert_eq!(args.agent_name, "gemini");
+    assert!(
+        args.session_id.is_none(),
+        "session_id from saved dispatch must be cleared on agent change, got {:?}",
+        args.session_id
+    );
+    assert!(args.model.is_none(), "model must be cleared on agent change");
 }

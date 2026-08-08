@@ -27,12 +27,20 @@ Before deciding:
 ```bash
 aid show <task-id> --summary
 aid show <task-id> --diff
+aid show <task-id> --diff --branch
 aid show <task-id> --result
 aid show <task-id> --events
 ```
 
 Confirm the requested outcome, verification evidence, final branch and commit,
 uncommitted files, submodule changes, and any audit findings.
+
+`--diff` is scoped to the task's own baseline (`start_sha..HEAD`). A task dispatched
+into a worktree that already carries commits — a retry, or a follow-up on the same
+branch — gets a baseline above them, so that scope can be a truthful but tiny sliver
+while the branch holds the delivered work. The diff stat says so when it happens;
+`--diff --branch` widens the view to every commit since the branch left the default
+branch. Read it before concluding a task produced nothing.
 
 ## Accept
 

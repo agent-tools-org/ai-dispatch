@@ -1,6 +1,6 @@
 // Diff rendering helpers for `aid show`.
-// Exports: diff_text, diff_stat, parse_diff_stat, worktree_diff.
-// Deps: cmd::show::load_task, paths, show_output_messages::read_task_output, Store, Task.
+// Exports: diff_text, diff_text_branch, diff_stat, parse_diff_stat, worktree_diff.
+// Deps: show_output_diff_base git plumbing, cmd::show::load_task, Store, Task.
 use anyhow::Result;
 use serde_json::json;
 use std::path::Path;
@@ -12,19 +12,35 @@ use crate::types::{EventKind, Task, TaskEvent};
 use crate::worktree::{capture_live_worktree_state, uncommitted_diff_text};
 
 use super::show_output_artifacts::diff_artifact_fallback;
+use super::show_output_diff_base::{
+    branch_diff_signal, generate_diff, generate_diff_file, head_matches_start, merge_base,
+    range_arg_sets,
+};
 use super::worktree_state_section;
+pub(crate) use super::show_output_diff_base::branch_base_ref;
 
 const DIFF_EXCLUDE: &[&str] = &[":(exclude)*.lock", ":(exclude)package-lock.json"];
 
 pub fn diff_text(store: &Arc<Store>, task_id: &str) -> Result<String> {
-    diff_text_with_filter(store, task_id, None)
+    diff_text_with_filter(store, task_id, None, false)
 }
 
-pub fn diff_text_file(store: &Arc<Store>, task_id: &str, file: &str) -> Result<String> {
-    diff_text_with_filter(store, task_id, Some(file))
+/// Everything on the task's branch since it left the default branch, not just
+/// the commits this task added. Backs `aid show <id> --diff --branch`.
+pub fn diff_text_branch(store: &Arc<Store>, task_id: &str) -> Result<String> {
+    diff_text_with_filter(store, task_id, None, true)
 }
 
-fn diff_text_with_filter(store: &Arc<Store>, task_id: &str, file: Option<&str>) -> Result<String> {
+pub fn diff_text_file(store: &Arc<Store>, task_id: &str, file: &str, branch: bool) -> Result<String> {
+    diff_text_with_filter(store, task_id, Some(file), branch)
+}
+
+fn diff_text_with_filter(
+    store: &Arc<Store>,
+    task_id: &str,
+    file: Option<&str>,
+    branch: bool,
+) -> Result<String> {
     let task = super::super::load_task(store, task_id)?;
     let mut out = format_diff_header(&task);
     let events = store.get_events(task_id)?;
@@ -34,7 +50,7 @@ fn diff_text_with_filter(store: &Arc<Store>, task_id: &str, file: Option<&str>) 
     if let Some(ref worktree_path) = task.worktree_path
         && Path::new(worktree_path).exists()
     {
-        out.push_str(&format_diff_output(&task, worktree_path, file));
+        out.push_str(&format_diff_output(&task, worktree_path, file, branch));
         out.push_str(&format!("\nWorktree: {worktree_path}\n"));
         return Ok(out);
     }
@@ -66,7 +82,7 @@ pub(crate) fn worktree_diff(task: &Task, task_id: &str) -> Result<String> {
     if let Some(ref worktree_path) = task.worktree_path
         && Path::new(worktree_path).exists()
     {
-        return Ok(format_diff_output(task, worktree_path, None));
+        return Ok(format_diff_output(task, worktree_path, None, false));
     }
     if let Some(fallback) = diff_artifact_fallback(task, task_id)? {
         return Ok(fallback);
@@ -101,31 +117,45 @@ fn format_recent_events(events: &[TaskEvent]) -> String {
     out
 }
 
-fn format_diff_output(task: &Task, worktree_path: &str, file: Option<&str>) -> String {
+fn format_diff_output(task: &Task, worktree_path: &str, file: Option<&str>, branch: bool) -> String {
     let mut out = String::new();
     let live_state = capture_live_worktree_state(Path::new(worktree_path)).ok();
     let failed_without_new_commits = task.status == crate::types::TaskStatus::Failed
         && task.start_sha.as_deref().is_some_and(|start_sha| head_matches_start(worktree_path, start_sha));
     out.push_str(&worktree_state_section(worktree_path, live_state.as_ref()));
-    out.push_str("\n--- Diff Stat ---\n");
+    let base_ref = branch_base_ref(worktree_path);
+    // --branch rebases the whole view on where this branch left the default branch, so
+    // the diff covers every commit on it rather than only this task's own. If no base
+    // ref resolves there is no branch to show; say so instead of labelling whatever the
+    // fallbacks turn up as "whole branch".
+    let branch_base = branch.then(|| base_ref.as_deref().and_then(|base| merge_base(worktree_path, base)));
+    let branch_unresolved = branch && branch_base.as_ref().is_none_or(Option::is_none);
+    let scoped = branch && !branch_unresolved;
+    // flatten, not match: branch mode with an unresolvable base is Some(None), and that
+    // has to fall through to the task's own baseline — the message below promises it.
+    let baseline = branch_base.clone().flatten().or_else(|| task.start_sha.clone());
+    if branch_unresolved {
+        out.push_str("\n[aid] Cannot locate this branch's base: no default branch ref resolves in this worktree.\n        Showing this task's own changes instead — the branch view is unavailable, not empty.\n");
+    }
+    out.push_str(if scoped { "\n--- Diff Stat (whole branch) ---\n" } else { "\n--- Diff Stat ---\n" });
     let stat = match file {
-        Some(path) => diff_stat_file(worktree_path, task.start_sha.as_deref(), path),
-        None => diff_stat(worktree_path, task.start_sha.as_deref()),
+        Some(path) => diff_stat_file(worktree_path, baseline.as_deref(), path, base_ref.as_deref()),
+        None => diff_stat(worktree_path, baseline.as_deref(), base_ref.as_deref()),
     };
     if live_state.as_ref().is_some_and(|state| state.is_dirty())
         && stat.contains("(no changes detected)")
     {
         out.push_str("  (no committed diff detected)\n");
-    } else if failed_without_new_commits {
+    } else if failed_without_new_commits && !scoped {
         out.push_str("No changes (task failed before making commits)\n");
     } else {
         out.push_str(&stat);
     }
-    out.push_str("\n--- Full Diff ---\n");
-    let diff = if failed_without_new_commits && file.is_none() {
+    out.push_str(if scoped { "\n--- Full Diff (whole branch) ---\n" } else { "\n--- Full Diff ---\n" });
+    let diff = if failed_without_new_commits && file.is_none() && !scoped {
         uncommitted_diff_text(Path::new(worktree_path)).unwrap_or_default()
     } else {
-        match file { Some(path) => full_diff_file(worktree_path, task.start_sha.as_deref(), path), None => full_diff(worktree_path, task.start_sha.as_deref()) }
+        match file { Some(path) => full_diff_file(worktree_path, baseline.as_deref(), path, base_ref.as_deref()), None => full_diff(worktree_path, baseline.as_deref(), base_ref.as_deref()) }
     };
     out.push_str(if diff.trim().is_empty() { "  (no diff available)\n" } else { &diff });
     out
@@ -149,25 +179,35 @@ fn inplace_working_diff(repo_path: &str, file: Option<&str>) -> String {
     }
 }
 
-pub(crate) fn diff_stat(wt_path: &str, start_sha: Option<&str>) -> String {
-    let start_args =
-        start_sha.map(|sha| vec!["diff".to_string(), format!("{sha}..HEAD"), "--stat".to_string()]);
-    generate_diff(
+pub(crate) fn diff_stat(wt_path: &str, start_sha: Option<&str>, base_ref: Option<&str>) -> String {
+    let mut out = generate_diff(
         wt_path,
-        diff_arg_sets(start_args, &[&["diff", "main...HEAD", "--stat"], &["diff", "--stat"]]).as_slice(),
+        &range_arg_sets(start_sha, base_ref, true),
         "  (no changes detected)\n",
-    )
+    );
+    append_branch_signal(&mut out, wt_path, start_sha, base_ref);
+    out
 }
 
-pub(crate) fn diff_stat_file(wt_path: &str, start_sha: Option<&str>, file: &str) -> String {
-    let start_args =
-        start_sha.map(|sha| vec!["diff".to_string(), format!("{sha}..HEAD"), "--stat".to_string()]);
-    generate_diff_file(
+pub(crate) fn diff_stat_file(wt_path: &str, start_sha: Option<&str>, file: &str, base_ref: Option<&str>) -> String {
+    let mut out = generate_diff_file(
         wt_path,
-        diff_arg_sets(start_args, &[&["diff", "main...HEAD", "--stat"], &["diff", "--stat"]]).as_slice(),
+        &range_arg_sets(start_sha, base_ref, true),
         "  (no changes detected)\n",
         file,
-    )
+    );
+    append_branch_signal(&mut out, wt_path, start_sha, base_ref);
+    out
+}
+
+fn append_branch_signal(out: &mut String, wt_path: &str, start_sha: Option<&str>, base_ref: Option<&str>) {
+    let Some(signal) = branch_diff_signal(wt_path, start_sha, base_ref) else {
+        return;
+    };
+    if !out.ends_with('\n') {
+        out.push('\n');
+    }
+    out.push_str(&signal);
 }
 
 pub(crate) fn parse_diff_stat(diff_text: &str) -> Vec<serde_json::Value> {
@@ -198,94 +238,17 @@ pub(crate) fn parse_diff_stat(diff_text: &str) -> Vec<serde_json::Value> {
         .collect()
 }
 
-fn full_diff(wt_path: &str, start_sha: Option<&str>) -> String {
-    let start_args = start_sha.map(|sha| vec!["diff".to_string(), format!("{sha}..HEAD")]);
-    generate_diff(
-        wt_path,
-        diff_arg_sets(start_args, &[&["diff", "main...HEAD"], &["diff"]]).as_slice(),
-        "  (no diff available)\n",
-    )
+fn full_diff(wt_path: &str, start_sha: Option<&str>, base_ref: Option<&str>) -> String {
+    generate_diff(wt_path, &range_arg_sets(start_sha, base_ref, false), "  (no diff available)\n")
 }
 
-fn full_diff_file(wt_path: &str, start_sha: Option<&str>, file: &str) -> String {
-    let start_args = start_sha.map(|sha| vec!["diff".to_string(), format!("{sha}..HEAD")]);
+fn full_diff_file(wt_path: &str, start_sha: Option<&str>, file: &str, base_ref: Option<&str>) -> String {
     generate_diff_file(
         wt_path,
-        diff_arg_sets(start_args, &[&["diff", "main...HEAD"], &["diff"]]).as_slice(),
+        &range_arg_sets(start_sha, base_ref, false),
         "  (no diff available)\n",
         file,
     )
-}
-
-fn generate_diff(wt_path: &str, args_sets: &[Vec<String>], fallback: &str) -> String {
-    for args in args_sets {
-        if let Some(output) = run_git_diff(wt_path, &diff_args(args))
-            && !output.trim().is_empty()
-        {
-            return output;
-        }
-    }
-    fallback.to_string()
-}
-
-fn generate_diff_file(wt_path: &str, args_sets: &[Vec<String>], fallback: &str, file: &str) -> String {
-    for args in args_sets {
-        if let Some(output) = run_git_diff(wt_path, &diff_args_file(args, file))
-            && !output.trim().is_empty()
-        {
-            return output;
-        }
-    }
-    fallback.to_string()
-}
-
-fn diff_args(base_args: &[String]) -> Vec<String> {
-    let mut args = base_args.to_vec();
-    args.push("--".to_string());
-    args.push(".".to_string());
-    args.extend(DIFF_EXCLUDE.iter().map(|value| value.to_string()));
-    args
-}
-
-fn diff_args_file(base_args: &[String], file: &str) -> Vec<String> {
-    let mut args = base_args.to_vec();
-    args.push("--".to_string());
-    args.push(file.to_string());
-    args
-}
-
-fn diff_arg_sets(start_args: Option<Vec<String>>, fallback: &[&[&str]]) -> Vec<Vec<String>> {
-    let mut args_sets = Vec::with_capacity(fallback.len() + usize::from(start_args.is_some()));
-    if let Some(start_args) = start_args {
-        args_sets.push(start_args);
-    }
-    args_sets.extend(fallback.iter().map(|args| args.iter().map(|value| (*value).to_string()).collect()));
-    args_sets
-}
-
-fn head_matches_start(wt_path: &str, start_sha: &str) -> bool {
-    let output = Command::new("git")
-        .args(["-C", wt_path, "rev-parse", "HEAD"])
-        .output();
-    match output {
-        Ok(output) if output.status.success() => {
-            String::from_utf8_lossy(&output.stdout).trim() == start_sha
-        }
-        _ => false,
-    }
-}
-
-fn run_git_diff(wt_path: &str, args: &[String]) -> Option<String> {
-    let output = Command::new("git")
-        .arg("-C")
-        .arg(wt_path)
-        .args(args)
-        .output()
-        .ok()?;
-    if !output.status.success() {
-        return None;
-    }
-    Some(String::from_utf8_lossy(&output.stdout).into())
 }
 
 fn truncate(s: &str, max: usize) -> String {
@@ -296,3 +259,4 @@ fn truncate(s: &str, max: usize) -> String {
         format!("{}...", &s[..end])
     }
 }
+

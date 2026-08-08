@@ -26,14 +26,15 @@ pub fn detect_untracked_source_files(dir: &str) -> Result<Vec<String>> {
         .collect())
 }
 
-pub fn rescue_dirty_worktree(dir: &str, task_id: &str) -> Result<RescueOutcome> {
-    rescue_dirty_worktree_with_baseline(dir, task_id, None)
+pub fn rescue_dirty_worktree(dir: &str, task_id: &str, start_sha: Option<&str>) -> Result<RescueOutcome> {
+    rescue_dirty_worktree_with_baseline(dir, task_id, None, start_sha)
 }
 
 pub fn rescue_dirty_worktree_with_baseline(
     dir: &str,
     task_id: &str,
     baseline: Option<&[String]>,
+    start_sha: Option<&str>,
 ) -> Result<RescueOutcome> {
     let had_existing_head = crate::commit::head_sha(dir).is_ok();
     let files = detect_rescuable_files(dir, baseline)?;
@@ -59,7 +60,7 @@ pub fn rescue_dirty_worktree_with_baseline(
     if outcome.staged.is_empty() {
         return Ok(outcome);
     }
-    if let Err(err) = commit_rescue(dir, task_id, had_existing_head) {
+    if let Err(err) = commit_rescue(dir, task_id, had_existing_head, start_sha) {
         outcome.error = Some(err);
         return Ok(outcome);
     }
@@ -126,8 +127,17 @@ fn stage_file(dir: &str, file: &WorktreeStatusEntry) -> std::result::Result<(), 
     }
 }
 
-fn commit_rescue(dir: &str, task_id: &str, had_existing_head: bool) -> std::result::Result<(), String> {
-    let output = if had_existing_head && !head_is_tagged(dir)? {
+fn commit_rescue(dir: &str, task_id: &str, had_existing_head: bool, start_sha: Option<&str>) -> std::result::Result<(), String> {
+    let current_head = crate::commit::head_sha(dir).ok();
+    
+    // Amend only if we know where the task started AND we are currently on a different commit.
+    // If start_sha is unknown, or we are still on the start_sha, do not amend.
+    let should_amend = match (start_sha, current_head.as_deref()) {
+        (Some(start), Some(head)) => start != head,
+        _ => false,
+    };
+
+    let output = if had_existing_head && should_amend && !head_is_tagged(dir)? {
         Command::new("git")
             .args(["-C", dir, "commit", "--amend", "--no-edit"])
             .output()

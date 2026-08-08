@@ -19,7 +19,7 @@ pub use show_output::{
 #[allow(unused_imports)]
 pub use show_output::read_task_output;
 pub(crate) use show_output::{
-    diff_stat, diff_text_file, extract_messages_from_log, is_non_output_line,
+    branch_base_ref, diff_stat, diff_text_branch, diff_text_file, extract_messages_from_log, is_non_output_line,
     is_unrecognized_json_notice, parse_diff_stat, read_tail, worktree_diff, worktree_state_section,
 };
 
@@ -44,6 +44,7 @@ pub struct ShowArgs {
     pub diff: bool,
     pub summary: bool,
     pub file: Option<String>,
+    pub branch: bool,
     pub output: bool,
     pub result: bool,
     pub transcript: bool,
@@ -110,7 +111,9 @@ pub async fn run(store: Arc<Store>, args: ShowArgs) -> Result<()> {
         render_log_text(&args.task_id, args.full)?
     } else if matches!(mode, ShowMode::Diff) {
         if let Some(file) = args.file.as_deref() {
-            diff_text_file(&store, &args.task_id, file)?
+            diff_text_file(&store, &args.task_id, file, args.branch)?
+        } else if args.branch {
+            diff_text_branch(&store, &args.task_id)?
         } else {
             diff_text(&store, &args.task_id)?
         }
@@ -300,7 +303,8 @@ pub fn audit_text(store: &Arc<Store>, task_id: &str) -> Result<String> {
         && Path::new(wt_path).exists()
     {
         out.push_str("\nChanges:\n");
-        let stat = diff_stat(wt_path, task.start_sha.as_deref());
+        let base_ref = branch_base_ref(wt_path);
+        let stat = diff_stat(wt_path, task.start_sha.as_deref(), base_ref.as_deref());
         if live_dirty && stat.contains("(no changes detected)") {
             out.push_str("  (no committed diff detected)\n");
         } else {
@@ -387,7 +391,8 @@ pub fn summary_text(store: &Arc<Store>, task_id: &str) -> Result<String> {
         && Path::new(wt_path).exists()
     {
         out.push_str("\n--- Diff Stat ---\n");
-        let stat = diff_stat(wt_path, task.start_sha.as_deref());
+        let base_ref = branch_base_ref(wt_path);
+        let stat = diff_stat(wt_path, task.start_sha.as_deref(), base_ref.as_deref());
         if live_dirty && stat.contains("(no changes detected)") {
             out.push_str("  (no committed diff detected)\n");
         } else {

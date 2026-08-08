@@ -24,7 +24,7 @@ current arguments.
 | `aid board` | Show the current task board. |
 | `aid watch` | Stream task or group progress. |
 | `aid wait` | Block until selected tasks or a group reach a stopping state. |
-| `aid show` | Inspect task state, events, context, output, result, transcript, summary, audit, or diff. |
+| `aid show` | Inspect task state, events, context, output, result, transcript, summary, audit, or diff; `--diff --branch` widens the diff from the task's own commits to the whole branch. |
 | `aid output` | Print task output directly. |
 | `aid tree` | Show task ancestry and retries. |
 | `aid respond` | Supply an answer to a task awaiting input. |

@@ -109,7 +109,7 @@ fn rescue_dirty_worktree_stages_modified_file() {
     commit_path(dir.path(), "src/main.rs", "fn main() {}\n");
     let before = head(dir.path());
     write_path(dir.path(), "src/main.rs", "fn main() { println!(\"changed\"); }\n");
-    let outcome = rescue_dirty_worktree(dir.path().to_str().unwrap(), "task-123").unwrap();
+    let outcome = rescue_dirty_worktree(dir.path().to_str().unwrap(), "task-123", None).unwrap();
     assert_eq!(outcome.modified, vec!["src/main.rs"]);
     assert!(outcome.committed);
     assert!(outcome.had_existing_head);
@@ -122,7 +122,7 @@ fn rescue_dirty_worktree_creates_initial_commit_when_no_head() {
     let _permit = test_subprocess::acquire();
     let dir = repo();
     write_path(dir.path(), "src/lib.rs", "pub fn value() -> u8 { 1 }\n");
-    let outcome = rescue_dirty_worktree(dir.path().to_str().unwrap(), "task-123").unwrap();
+    let outcome = rescue_dirty_worktree(dir.path().to_str().unwrap(), "task-123", None).unwrap();
     assert_eq!(outcome.untracked, vec!["src/lib.rs"]);
     assert!(outcome.committed);
     assert!(!outcome.had_existing_head);
@@ -138,7 +138,7 @@ fn rescue_dirty_worktree_respects_exclusions() {
     let dir = repo();
     write_path(dir.path(), "target/foo.rs", "ignored");
     write_path(dir.path(), "src/bar.rs", "pub fn bar() {}\n");
-    let outcome = rescue_dirty_worktree(dir.path().to_str().unwrap(), "task-123").unwrap();
+    let outcome = rescue_dirty_worktree(dir.path().to_str().unwrap(), "task-123", None).unwrap();
     assert_eq!(outcome.staged, vec!["src/bar.rs"]);
     let tree = git_stdout(dir.path(), &["ls-tree", "-r", "--name-only", "HEAD"]);
     assert!(tree.lines().any(|line| line == "src/bar.rs"));
@@ -154,7 +154,7 @@ fn rescue_does_not_amend_tagged_head() {
     git(dir.path(), &["tag", "vtest"]);
     write_path(dir.path(), "src/rescued.rs", "pub fn rescued() {}\n");
 
-    let outcome = rescue_dirty_worktree(dir.path().to_str().unwrap(), "task-123").unwrap();
+    let outcome = rescue_dirty_worktree(dir.path().to_str().unwrap(), "task-123", None).unwrap();
 
     assert!(outcome.committed);
     assert_eq!(git_stdout(dir.path(), &["rev-parse", "vtest"]).trim(), tagged_sha);
@@ -181,6 +181,7 @@ fn rescue_preserves_pre_existing_dirty_files() {
         dir.path().to_str().unwrap(),
         "task-123",
         Some(&baseline),
+        None,
     )
     .unwrap();
 
@@ -207,6 +208,7 @@ fn rescue_path_baseline_handles_kind_transition() {
         dir.path().to_str().unwrap(),
         "task-123",
         Some(&baseline),
+        None,
     )
     .unwrap();
 
@@ -238,6 +240,7 @@ fn rescue_path_baseline_handles_rename_and_delete() {
         dir.path().to_str().unwrap(),
         "task-123",
         Some(&baseline),
+        None,
     )
     .unwrap();
 
@@ -252,7 +255,7 @@ fn rescue_path_baseline_handles_rename_and_delete() {
 }
 
 #[test]
-fn rescue_amends_untagged_head() {
+fn rescue_creates_new_commit_when_start_sha_matches_head_or_unknown() {
     let _permit = test_subprocess::acquire();
     let dir = repo();
     commit_path(dir.path(), "tracked.txt", "tracked");
@@ -260,9 +263,34 @@ fn rescue_amends_untagged_head() {
     let count_before = commit_count(dir.path());
     write_path(dir.path(), "src/amended.rs", "pub fn amended() {}\n");
 
-    let outcome = rescue_dirty_worktree(dir.path().to_str().unwrap(), "task-123").unwrap();
+    // With start_sha matching HEAD, it creates a new commit
+    let outcome = rescue_dirty_worktree(dir.path().to_str().unwrap(), "task-123", Some(&before)).unwrap();
 
     assert!(outcome.committed);
     assert_ne!(head(dir.path()), before);
+    // count_before + 1 since it's a new commit instead of amend
+    assert_eq!(commit_count(dir.path()), (count_before.parse::<usize>().unwrap() + 1).to_string());
+}
+
+#[test]
+fn rescue_amends_when_start_sha_differs_from_head() {
+    let _permit = test_subprocess::acquire();
+    let dir = repo();
+    commit_path(dir.path(), "tracked.txt", "tracked");
+    let start_sha = head(dir.path());
+    
+    // Simulate agent committing something
+    commit_path(dir.path(), "agent.txt", "agent");
+    let count_before = commit_count(dir.path());
+    let before = head(dir.path());
+    
+    // Agent left dirty files
+    write_path(dir.path(), "src/amended.rs", "pub fn amended() {}\n");
+
+    let outcome = rescue_dirty_worktree(dir.path().to_str().unwrap(), "task-123", Some(&start_sha)).unwrap();
+
+    assert!(outcome.committed);
+    assert_ne!(head(dir.path()), before);
+    // count remains same because of amend
     assert_eq!(commit_count(dir.path()), count_before);
 }

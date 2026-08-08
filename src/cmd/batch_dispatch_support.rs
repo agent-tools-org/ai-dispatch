@@ -23,45 +23,47 @@ pub(super) async fn dispatch_level_with_ids(
 ) -> Result<Vec<DispatchedTask>> {
     let shared_dir_path = shared_dir_path.map(str::to_string);
     let repo_root = repo_root.map(str::to_string);
-    let handles: Vec<_> = task_indices
-        .iter()
-        .map(|&task_idx| {
-            let store = store.clone();
-            let shared_dir_path = shared_dir_path.clone();
-            let repo_root = repo_root.clone();
-            let siblings: Vec<_> = tasks
-                .iter()
-                .enumerate()
-                .filter(|(idx, _)| *idx != task_idx)
-                .map(|(_, task)| task)
-                .collect();
-            let mut run_args = task_to_run_args(
-                &tasks[task_idx],
-                &siblings,
-                true,
-                &store,
-                shared_dir_path.as_deref(),
-            );
-            run_args.repo_root = repo_root;
-            run_args.suppress_nested_repo_warning = true;
-            run_args.existing_task_id = Some(crate::types::TaskId(waiting_ids[task_idx].clone()));
-            if let Some((fallback_agent, remaining_cascade)) =
-                pre_dispatch_fallback_choice(&run_args.agent_name, tasks[task_idx].fallback.as_deref())
-            {
-                aid_info!(
-                    "[batch] {} rate-limited → using fallback: {} for task '{}'",
-                    run_args.agent_name,
-                    fallback_agent.as_str(),
-                    dispatch_task_ref(&tasks[task_idx], task_idx),
-                );
-                crate::cmd::run::switch_agent(&mut run_args, fallback_agent.as_str().to_string());
-                run_args.cascade = remaining_cascade;
-            }
-            let progress_ref = format!(
-                "{}: {}",
+    let mut prepared = Vec::with_capacity(task_indices.len());
+    for &task_idx in task_indices {
+        let siblings: Vec<_> = tasks
+            .iter()
+            .enumerate()
+            .filter(|(idx, _)| *idx != task_idx)
+            .map(|(_, task)| task)
+            .collect();
+        let mut run_args = task_to_run_args(
+            &tasks[task_idx],
+            &siblings,
+            true,
+            &store,
+            shared_dir_path.as_deref(),
+        );
+        run_args.repo_root = repo_root.clone();
+        run_args.suppress_nested_repo_warning = true;
+        run_args.existing_task_id = Some(crate::types::TaskId(waiting_ids[task_idx].clone()));
+        if let Some((fallback_agent, remaining_cascade)) =
+            pre_dispatch_fallback_choice(&run_args.agent_name, tasks[task_idx].fallback.as_deref())?
+        {
+            aid_info!(
+                "[batch] {} rate-limited → using fallback: {} for task '{}'",
                 run_args.agent_name,
+                fallback_agent,
                 dispatch_task_ref(&tasks[task_idx], task_idx),
             );
+            crate::cmd::run::switch_agent(&mut run_args, fallback_agent);
+            run_args.cascade = remaining_cascade;
+        }
+        let progress_ref = format!(
+            "{}: {}",
+            run_args.agent_name,
+            dispatch_task_ref(&tasks[task_idx], task_idx),
+        );
+        prepared.push((task_idx, progress_ref, run_args));
+    }
+    let handles: Vec<_> = prepared
+        .into_iter()
+        .map(|(task_idx, progress_ref, run_args)| {
+            let store = store.clone();
             tokio::spawn(async move { (task_idx, progress_ref, run::run(store, run_args).await) })
         })
         .collect();
@@ -123,19 +125,19 @@ pub(super) async fn maybe_dispatch_auto_fallback(
     );
     run_args.repo_root = repo_root.map(str::to_string);
     run_args.suppress_nested_repo_warning = true;
-    crate::cmd::run::switch_agent(&mut run_args, fallback_agent.as_str().to_string());
+    crate::cmd::run::switch_agent(&mut run_args, fallback_agent.clone());
     run_args.parent_task_id = Some(task_id.to_string());
     retried[task_idx] = true;
     aid_progress!(
         "[batch] {} fallback {} → {}",
         task_id,
         original_agent,
-        fallback_agent.as_str(),
+        fallback_agent,
     );
     aid_info!(
         "[batch] Auto-fallback: {} -> {} for task {}",
         original_agent,
-        fallback_agent.as_str(),
+        fallback_agent,
         dispatch_task_ref(&tasks[task_idx], task_idx),
     );
     let retry_id = run::run(store, run_args).await?;
@@ -177,10 +179,10 @@ pub(super) fn dispatch_task_ref(task: &batch::BatchTask, task_idx: usize) -> Str
 pub(crate) fn pre_dispatch_fallback_choice(
     agent_name: &str,
     fallback: Option<&str>,
-) -> Option<(AgentKind, Vec<String>)> {
+) -> Result<Option<(String, Vec<String>)>> {
     let (agent_kind, custom_name) = rate_limit::resolve_agent(agent_name);
     if !rate_limit::is_rate_limited(&agent_kind, custom_name) {
-        return None;
+        return Ok(None);
     }
     available_fallback_after(agent_name, fallback)
 }
@@ -198,15 +200,17 @@ pub(crate) fn auto_fallback_agent(
     task_id: &str,
     tasks: &[batch::BatchTask],
     task_idx: usize,
-) -> Result<Option<(String, AgentKind)>> {
+) -> Result<Option<(String, String)>> {
     let Some(task) = store.get_task(task_id)? else {
         anyhow::bail!("batch task not found after dispatch: {task_id}");
     };
-    if let Some((fallback_kind, _)) = tasks
+    if let Some((fallback_name, _)) = tasks
         .get(task_idx)
-        .and_then(|task_spec| available_fallback_after(task.agent.as_str(), task_spec.fallback.as_deref()))
+        .map(|task_spec| available_fallback_after(task.agent.as_str(), task_spec.fallback.as_deref()))
+        .transpose()?
+        .flatten()
     {
-        return Ok(Some((task.agent.as_str().to_string(), fallback_kind)));
+        return Ok(Some((task.agent.as_str().to_string(), fallback_name)));
     }
     if tasks.get(task_idx).and_then(|task_spec| task_spec.fallback.as_deref()).is_some() {
         return Ok(None);
@@ -216,32 +220,61 @@ pub(crate) fn auto_fallback_agent(
         task.category.as_deref(),
         Some(task.prompt.as_str()),
     )
-    .map(|fallback| (task.agent.as_str().to_string(), fallback)))
+    .map(|fallback| (task.agent.as_str().to_string(), fallback.as_str().to_string())))
 }
 
+/// Resolve cascade names the same way `aid run` does: custom agents are valid
+/// targets; an unresolvable name is an error, never silently skipped.
 fn available_fallback_after(
     current_agent: &str,
     fallback: Option<&str>,
-) -> Option<(AgentKind, Vec<String>)> {
-    let fallback_agents: Vec<_> = fallback?
+) -> Result<Option<(String, Vec<String>)>> {
+    let Some(fallback) = fallback else {
+        return Ok(None);
+    };
+    let names: Vec<&str> = fallback
         .split(',')
         .map(str::trim)
         .filter(|agent_name| !agent_name.is_empty())
-        .filter_map(AgentKind::parse_str)
         .collect();
-    let start = AgentKind::parse_str(current_agent)
-        .and_then(|agent| fallback_agents.iter().position(|candidate| *candidate == agent))
-        .map(|idx| idx + 1)
-        .unwrap_or(0);
-    let selected_idx = fallback_agents[start..]
+    if names.is_empty() {
+        return Ok(None);
+    }
+    let all: Vec<(AgentKind, String)> = names
         .iter()
-        .position(|candidate| !rate_limit::is_rate_limited(candidate, None))
-        .map(|offset| start + offset)?;
-    Some((
-        fallback_agents[selected_idx],
-        fallback_agents[selected_idx + 1..]
+        .map(|s| {
+            AgentKind::parse_str(s)
+                .map(|k| (k, (*s).to_string()))
+                .or_else(|| {
+                    crate::agent::registry::custom_agent_exists(s)
+                        .then(|| (AgentKind::Custom, (*s).to_string()))
+                })
+                .ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "Unknown cascade agent '{s}'. Use `aid config agents` to list available agents."
+                    )
+                })
+        })
+        .collect::<Result<_>>()?;
+    let start = all
+        .iter()
+        .position(|(_, n)| n == current_agent)
+        .map_or(0, |i| i + 1);
+    let selected_idx = all[start..]
+        .iter()
+        .position(|(kind, name)| {
+            let candidate_custom = (*kind == AgentKind::Custom).then_some(name.as_str());
+            !rate_limit::is_rate_limited(kind, candidate_custom)
+        })
+        .map(|offset| start + offset);
+    let Some(selected_idx) = selected_idx else {
+        return Ok(None);
+    };
+    Ok(Some((
+        all[selected_idx].1.clone(),
+        all[selected_idx + 1..]
             .iter()
-            .map(|agent| agent.as_str().to_string())
+            .map(|(_, name)| name.clone())
             .collect(),
-    ))
+    )))
 }

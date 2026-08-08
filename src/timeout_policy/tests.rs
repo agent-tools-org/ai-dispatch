@@ -7,8 +7,14 @@ use crate::paths::AidHomeGuard;
 use crate::project::{ProjectConfig, ProjectUnstickConfig};
 use std::fs;
 
+static ENV_MUTEX: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
 #[test]
 fn policy_resolution_precedence_is_cli_agent_project_default() {
+    let _guard_env = ENV_MUTEX.lock().unwrap();
+    unsafe {
+        std::env::remove_var("AID_FIRST_TOKEN_TIMEOUT_SECS");
+    }
     let dir = tempfile::tempdir().expect("tempdir");
     let _guard = AidHomeGuard::set(dir.path());
     crate::agent_config::save_agent_idle_timeout("codex", Some(420)).expect("save config");
@@ -20,21 +26,42 @@ fn policy_resolution_precedence_is_cli_agent_project_default() {
 
     let policy = TimeoutPolicy::resolve("codex", Some(240), Some(10), Some(&project));
     assert_eq!(policy.idle, Duration::from_secs(240));
+    assert_eq!(policy.first_token, Duration::from_secs(240)); // Raised by CLI
     assert_eq!(policy.max_duration, Duration::from_secs(10 * 60));
 
     let policy = TimeoutPolicy::resolve("codex", None, None, Some(&project));
     assert_eq!(policy.idle, Duration::from_secs(420));
+    assert_eq!(policy.first_token, Duration::from_secs(420)); // Raised by Agent
     assert_eq!(policy.max_duration, Duration::from_secs(20 * 60));
 
     let policy = TimeoutPolicy::resolve("project-only-agent", None, None, Some(&project));
     assert_eq!(policy.idle, Duration::from_secs(300));
+    assert_eq!(policy.first_token, Duration::from_secs(300)); // Raised by Project
+
+    let policy = TimeoutPolicy::resolve("project-only-agent", Some(60), None, None);
+    assert_eq!(policy.idle, Duration::from_secs(60));
+    assert_eq!(policy.first_token, Duration::from_secs(180)); // Does not drop below default
 
     let policy = TimeoutPolicy::resolve("project-only-agent", None, None, None);
     assert_eq!(policy.idle, Duration::from_secs(DEFAULT_IDLE_SECS));
+    assert_eq!(policy.first_token, Duration::from_secs(DEFAULT_FIRST_TOKEN_SECS));
     assert_eq!(
         policy.max_duration,
         Duration::from_secs(DEFAULT_MAX_DURATION_MINS as u64 * 60)
     );
+}
+
+#[test]
+fn policy_resolution_honors_operator_env_var() {
+    let _guard_env = ENV_MUTEX.lock().unwrap();
+    unsafe {
+        std::env::set_var("AID_FIRST_TOKEN_TIMEOUT_SECS", "999");
+    }
+    let policy = TimeoutPolicy::resolve("codex", Some(240), None, None);
+    assert_eq!(policy.first_token, Duration::from_secs(999));
+    unsafe {
+        std::env::remove_var("AID_FIRST_TOKEN_TIMEOUT_SECS");
+    }
 }
 
 #[test]

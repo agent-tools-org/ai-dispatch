@@ -1,7 +1,8 @@
 // Rate-limit detection: marks agents as rate-limited when quota errors occur.
 // A marker is held by a stated reset time, by a person, or by a short cooldown.
 // Exports: mark_rate_limited{,_for_message}, is_rate_limited,
-// dispatch_blocking_hold, get_rate_limit_info, clear_*.
+// dispatch_blocking_hold, get_rate_limit_info, active_group_holds,
+// format_hold_end, clear_*.
 
 use crate::paths::aid_dir;
 use crate::rate_limit_signatures::QuotaRecovery;
@@ -494,11 +495,47 @@ pub fn recovery_datetime(agent: &AgentKind) -> Option<NaiveDateTime> {
 pub fn get_rate_limit_info(agent: &AgentKind) -> Option<RateLimitInfo> {
     let path = marker_path(agent);
     let content = fs::read_to_string(&path).ok()?;
-    Some(RateLimitInfo {
-        recovery_at: marker_field(&content, "recovery_at: "),
-        message: marker_field(&content, "message: "),
-        needs_human: matches!(stored_hold(&content, agent), StoredHold::NeedsHuman),
-    })
+    Some(info_from_marker_content(&content, agent))
+}
+
+fn info_from_marker_content(content: &str, agent: &AgentKind) -> RateLimitInfo {
+    RateLimitInfo {
+        recovery_at: marker_field(content, "recovery_at: "),
+        message: marker_field(content, "message: "),
+        needs_human: matches!(stored_hold(content, agent), StoredHold::NeedsHuman),
+    }
+}
+
+/// Live model-group holds for an agent. Empty when every group is clear, and
+/// independent of the agent-level marker — a held premium pool does not belong
+/// in `is_rate_limited`.
+pub fn active_group_holds(agent: &AgentKind) -> Vec<(String, RateLimitInfo)> {
+    crate::agent::model_group::groups_for_agent(*agent)
+        .iter()
+        .filter_map(|(group, _)| {
+            let path = group_marker_path(agent, group);
+            if !marker_is_active(&path, agent) {
+                return None;
+            }
+            let content = fs::read_to_string(&path).ok()?;
+            Some(((*group).to_string(), info_from_marker_content(&content, agent)))
+        })
+        .collect()
+}
+
+/// How a live hold ends, for display. Never invents a reset time aid did not
+/// observe — a missing recovery is either a person-clear or a short cooldown.
+pub fn format_hold_end(agent: &AgentKind, info: &RateLimitInfo) -> String {
+    if let Some(at) = info.recovery_at.as_deref() {
+        format!("resets {at}")
+    } else if info.needs_human {
+        format!(
+            "held until cleared with `aid config clear-limit {}`",
+            agent.as_str()
+        )
+    } else {
+        "cooling down".to_string()
+    }
 }
 
 #[cfg(test)]

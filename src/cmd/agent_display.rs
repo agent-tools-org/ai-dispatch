@@ -4,6 +4,7 @@
 
 use crate::agent::custom::CustomAgentConfig;
 use crate::agent::egress::resolve_agent_egress;
+use crate::rate_limit::{self, RateLimitInfo};
 use crate::types::{egress_for_cli, AgentKind};
 use std::path::Path;
 
@@ -71,23 +72,63 @@ fn print_capabilities(cap: &crate::agent::custom::CapabilityScores) {
     }
 }
 
+/// Observed quota state for display. A group hold is Partial, never Limited —
+/// the agent remains dispatchable on its clear tiers.
+#[derive(Debug, PartialEq)]
+enum QuotaRow {
+    Ok,
+    Limited { detail: String },
+    Partial { detail: String },
+}
+
+fn quota_row(kind: AgentKind) -> QuotaRow {
+    if rate_limit::is_rate_limited(&kind) {
+        let info = rate_limit::get_rate_limit_info(&kind);
+        return QuotaRow::Limited {
+            detail: agent_hold_detail(&kind, info.as_ref()),
+        };
+    }
+    let groups = rate_limit::active_group_holds(&kind);
+    if groups.is_empty() {
+        return QuotaRow::Ok;
+    }
+    QuotaRow::Partial {
+        detail: group_holds_detail(&kind, &groups),
+    }
+}
+
+fn agent_hold_detail(kind: &AgentKind, info: Option<&RateLimitInfo>) -> String {
+    let Some(info) = info else {
+        return String::new();
+    };
+    let end = rate_limit::format_hold_end(kind, info);
+    match info.message.as_deref() {
+        Some(msg) if !msg.is_empty() => format!("{end} — {msg}"),
+        _ => end,
+    }
+}
+
+fn group_holds_detail(kind: &AgentKind, groups: &[(String, RateLimitInfo)]) -> String {
+    groups
+        .iter()
+        .map(|(group, info)| {
+            format!("{group} {}", rate_limit::format_hold_end(kind, info))
+        })
+        .collect::<Vec<_>>()
+        .join("; ")
+}
+
 pub(super) fn show_quota() -> anyhow::Result<()> {
-    use crate::rate_limit;
-    let limited = rate_limit::rate_limited_agents();
     println!("{:<12} {:<10} DETAIL", "AGENT", "STATUS");
     for kind in AgentKind::ALL_BUILTIN {
-        if let Some((_, msg)) = limited.iter().find(|(a, _)| *a == *kind) {
-            let info = rate_limit::get_rate_limit_info(kind);
-            let recovery = info
-                .as_ref()
-                .and_then(|i| i.recovery_at.as_deref())
-                .unwrap_or("~1h");
-            println!(
-                "{:<12} {:<10} resets {recovery} — {msg}",
-                kind.as_str(), "LIMITED"
-            );
-        } else {
-            println!("{:<12} {:<10}", kind.as_str(), "OK");
+        match quota_row(*kind) {
+            QuotaRow::Ok => println!("{:<12} {:<10}", kind.as_str(), "OK"),
+            QuotaRow::Limited { detail } => {
+                println!("{:<12} {:<10} {detail}", kind.as_str(), "LIMITED");
+            }
+            QuotaRow::Partial { detail } => {
+                println!("{:<12} {:<10} {detail}", kind.as_str(), "PARTIAL");
+            }
         }
     }
     Ok(())
@@ -95,10 +136,36 @@ pub(super) fn show_quota() -> anyhow::Result<()> {
 
 pub(super) fn list_agents() -> anyhow::Result<()> {
     use crate::agent::registry;
+    let rows: Vec<_> = AgentKind::ALL_BUILTIN
+        .iter()
+        .filter_map(|kind| kind.profile().map(|_| (*kind, quota_row(*kind))))
+        .collect();
+    let any_hold = rows.iter().any(|(_, row)| !matches!(row, QuotaRow::Ok));
+
     println!("Built-in agents:");
-    println!("  {:<10} {:<12} DESCRIPTION", "NAME", "EGRESS");
-    for kind in AgentKind::ALL_BUILTIN {
-        if let Some((_, description, _, _, _)) = kind.profile() {
+    if any_hold {
+        println!("  {:<10} {:<12} {:<10} DESCRIPTION", "NAME", "EGRESS", "STATUS");
+    } else {
+        println!("  {:<10} {:<12} DESCRIPTION", "NAME", "EGRESS");
+    }
+    for (kind, row) in &rows {
+        let Some((_, description, _, _, _)) = kind.profile() else {
+            continue;
+        };
+        if any_hold {
+            let status = match row {
+                QuotaRow::Ok => "",
+                QuotaRow::Limited { .. } => "LIMITED",
+                QuotaRow::Partial { .. } => "PARTIAL",
+            };
+            println!(
+                "  {:<10} {:<12} {:<10} {}",
+                kind.as_str(),
+                egress_for_cli(*kind).label(),
+                status,
+                description
+            );
+        } else {
             println!(
                 "  {:<10} {:<12} {}",
                 kind.as_str(),
@@ -124,3 +191,7 @@ pub(super) fn list_agents() -> anyhow::Result<()> {
     }
     Ok(())
 }
+
+#[cfg(test)]
+#[path = "agent_display_tests.rs"]
+mod tests;

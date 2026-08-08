@@ -21,6 +21,8 @@ mod state;
 mod validation;
 #[path = "worktree/path.rs"]
 mod path;
+#[path = "worktree/exclude.rs"]
+mod exclude;
 pub(crate) use snapshot::{WorktreeStatusEntry, WorktreeStatusKind, capture_worktree_snapshot, capture_worktree_snapshot_with_base, AID_ADD_EXCLUDES};
 pub(crate) use live_state::{LiveWorktreeState, capture_live_worktree_state, uncommitted_diff_text};
 pub(crate) use baseline::{baseline_contains, extract_baseline_path, extract_baseline_paths};
@@ -41,6 +43,7 @@ pub(crate) use lock::{
 use state::{existing_worktree_path, local_branch_exists, sync_cargo_lock};
 use validation::{canonical_worktree_path, ensure_current_checkout_is_not_task_target, ensure_worktree_path_is_isolated, is_valid_git_worktree};
 pub(crate) use validation::ensure_consumed_worktree_path_is_isolated;
+pub use validation::validate_git_repo;
 
 const AID_BRANCH_PREFIXES: &[&str] = &["feat/", "fix/", "docs/", "chore/", "test/", "refactor/"];
 
@@ -49,17 +52,6 @@ pub struct WorktreeInfo {
     pub path: PathBuf,
     pub branch: String,
     pub created: bool,
-}
-
-pub fn validate_git_repo(path: &Path) -> Result<()> {
-    let status = Command::new("git")
-        .args(["-C", &path.to_string_lossy(), "rev-parse", "--git-dir"])
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .status()
-        .context("Failed to run git")?;
-    anyhow::ensure!(status.success(), "Not a git repository: {}", path.display());
-    Ok(())
 }
 
 fn invalid_worktree_error(path: &Path, branch: &str) -> anyhow::Error {
@@ -159,6 +151,7 @@ pub fn create_worktree(repo_dir: &Path, branch: &str, base_branch: Option<&str>)
         sanitize::validate_branch_name(base_branch)?;
     }
     validate_git_repo(repo_dir)?;
+    exclude::ensure_aid_paths_excluded(repo_dir);
     ensure_current_checkout_is_not_task_target(repo_dir, branch)?;
     let wt_path = aid_worktree_path(repo_dir, branch);
     if let Some(parent) = wt_path.parent() {

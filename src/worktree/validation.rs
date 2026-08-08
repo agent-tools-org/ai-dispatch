@@ -7,6 +7,17 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use super::path::main_working_tree_dir;
 
+pub fn validate_git_repo(path: &Path) -> Result<()> {
+    let status = Command::new("git")
+        .args(["-C", &path.to_string_lossy(), "rev-parse", "--git-dir"])
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .context("Failed to run git")?;
+    anyhow::ensure!(status.success(), "Not a git repository: {}", path.display());
+    Ok(())
+}
+
 pub(super) fn canonical_worktree_path(path: &Path) -> PathBuf {
     path.canonicalize().unwrap_or_else(|_| path.to_path_buf())
 }

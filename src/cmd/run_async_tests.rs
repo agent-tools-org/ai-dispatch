@@ -43,7 +43,7 @@ async fn rate_limited_agent_without_cascade_fails_early() {
         skills: vec![NO_SKILL_SENTINEL.to_string()],
         ..Default::default()
     }).await.unwrap_err();
-    assert!(err.to_string().contains("mimocode is rate-limited until Mar 21st, 2099 2:27 PM"));
+    assert!(err.to_string().contains("mimocode is held (until Mar 21st, 2099 2:27 PM)"));
 }
 
 #[tokio::test]

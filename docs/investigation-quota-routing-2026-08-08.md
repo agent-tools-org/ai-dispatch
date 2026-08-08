@@ -1,6 +1,39 @@
 # Investigation: a held route is still dispatched, and quota never ranks live routes
 
-Date: 2026-08-08 · Status: root-caused, not fixed · aid 10.17.2 (e642d4f7)
+Date: 2026-08-08 · Status: **shipped in v10.18.0** (e8b1e922) · found on aid 10.17.2 (e642d4f7)
+
+## Outcome
+
+Fixed and released in v10.18.0, after three rounds of two-auditor cross-review
+(the first two returned BLOCK, both correctly):
+
+- F1 — a held route is substituted before dispatch, carrying neither the model
+  nor the session id of the route it replaced. Verified live: the reproduction at
+  the top of this document now prints `[dry-run] Agent: claude`.
+- F2 — quota state reaches `aid agent list`, `aid agent quota` and the agent JSON
+  API, agreeing across all three; a model-group hold reads PARTIAL; the invented
+  `resets ~1h` is gone.
+- Custom agents get their own rate-limit marker, and the `clear-limit` hint
+  resolves its name through the same function that names the marker file.
+- D3 — the first-token budget resolves through the CLI/agent/project chain in
+  spirit: the live watcher now accepts agent-log growth as proof of life for a
+  buffered agent. **The idle budget still does not** — it counts progress events
+  only, so a quiet buffered agent is still reaped at 600s. Raise it with
+  `--idle-timeout` until fixed.
+
+Not shipped, ready on branches, unaudited:
+
+- `fix/first-token-budget-configurable` (`dedeadf2`) — makes the 180s budget
+  reachable from CLI/agent/project config, the root cause recorded under D3.
+- `fix/dispatched-verify-toolchain` (`d581d0f9`) — D2, the sccache failure that
+  killed eight dispatched verifies in one night.
+
+Still open: D1 (an empty run recorded as a delivery), the idle-budget half of the
+liveness rule, and re-scoring grok from measured outcomes once its runs stop
+being killed by aid.
+
+The recurring shape behind four of these — one rule, several implementations,
+fixed only where it was named — is recorded separately as a working note.
 
 ## Problem
 

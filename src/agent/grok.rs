@@ -58,6 +58,17 @@ impl super::Agent for GrokAgent {
         if let Some(ref model) = opts.model {
             cmd.args(["--model", model]);
         }
+        // grok's --debug-file grows throughout a run, giving both reapers a byte
+        // signal for proof of life. Without it, grok is silent on the PTY until
+        // exit and looks identical to a dead process to the first-token detector.
+        // Mirrors agy's --log-file pattern; the caller decides whether the path
+        // is watchable via env_with_agent_log.
+        if let Some(log_file) = super::agent_log_from_opts(opts) {
+            if let Some(parent) = std::path::Path::new(log_file).parent() {
+                let _ = std::fs::create_dir_all(parent);
+            }
+            cmd.args(["--debug-file", log_file]);
+        }
         if let Some(ref session_id) = opts.session_id {
             cmd.args(["-r", session_id]);
         }

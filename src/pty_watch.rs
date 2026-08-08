@@ -39,6 +39,9 @@ pub(crate) struct MonitorState {
     /// `event_count`, so this is how first-token knows "silence since spawn"
     /// apart from "silence after progress".
     received_raw_bytes: bool,
+    /// Wall-clock time this state was created. Used by the first-token hang
+    /// check to exclude log files left by earlier attempts on the same task id.
+    start_system_time: std::time::SystemTime,
     idle_nudged: bool,
     idle_warned: bool,
     pending_inbound_acks: usize,
@@ -82,6 +85,7 @@ impl MonitorState {
             last_progress_time: Instant::now(),
             last_raw_chunk_time: Instant::now(),
             received_raw_bytes: false,
+            start_system_time: std::time::SystemTime::now(),
             idle_nudged: false,
             idle_warned: false,
             pending_inbound_acks: 0,
@@ -383,13 +387,22 @@ impl MonitorState {
         &self,
         agent_streaming: bool,
         first_token_timeout: Duration,
+        task_id: &str,
     ) -> bool {
-        // Streaming: still at zero/one parsed event. Buffered: never saw a byte.
+        // Streaming: still at zero/one parsed event. Buffered: never saw a byte
+        // on the PTY AND no agent log file has grown since spawn.
         // Silence after progress keeps the long idle budget either way.
+        //
+        // Buffered agents (grok, agy) write nothing to the PTY until they exit,
+        // so `received_raw_bytes` stays false for the whole run. They do write to
+        // their own log file (grok via --debug-file, agy via --log-file). Checking
+        // that file here keeps them alive past the first-token budget, matching
+        // exactly what the orphan reaper does in background_orphan.rs.
         let awaiting_first_output = if agent_streaming {
             self.progress_count() <= 1
         } else {
             !self.received_raw_bytes
+                && !crate::paths::agent_has_produced_bytes(task_id, self.start_system_time)
         };
         awaiting_first_output && self.last_raw_chunk_time.elapsed() > first_token_timeout
     }
@@ -447,7 +460,7 @@ pub(crate) fn monitor_bridge(
             Err(RecvTimeoutError::Timeout) => {
                 state.handle_timeout(store, task_id)?;
                 if let Some(first_token) = first_token_timeout
-                    && state.first_token_hang_elapsed(agent.streaming(), first_token)
+                    && state.first_token_hang_elapsed(agent.streaming(), first_token, task_id.as_str())
                 {
                     state.info.status = TaskStatus::Failed;
                     process_monitor::insert_hung_detected_events(

@@ -35,7 +35,10 @@ pub(super) fn task_json(store: &Arc<Store>, task_id: &str) -> Result<String> {
         .worktree_path
         .as_deref()
         .filter(|path| Path::new(path).exists())
-        .map(|path| parse_diff_stat(&diff_stat(path, task.start_sha.as_deref())))
+        .map(|path| {
+            let base_ref = super::branch_base_ref(path);
+            parse_diff_stat(&diff_stat(path, task.start_sha.as_deref(), base_ref.as_deref()))
+        })
         .unwrap_or_default();
     let files_changed = diff_entries.len();
     let (insertions, deletions) =
@@ -66,6 +69,9 @@ pub(super) fn task_json(store: &Arc<Store>, task_id: &str) -> Result<String> {
         "worktree_path": task.worktree_path,
         "repo_path": task.repo_path,
         "output_path": task.output_path,
+        "start_sha": task.start_sha,
+        "final_head_sha": task.final_head_sha,
+        "final_branch": task.final_branch,
         "output": output,
         "checklist_status": checklist_status,
         "verify": task.verify,

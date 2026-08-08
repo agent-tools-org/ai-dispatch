@@ -250,7 +250,8 @@ pub struct CleanArgs {
 ))]
 #[command(after_help = r#"Examples:
   aid show t-1234              # Events timeline
-  aid show t-1234 --diff       # Full worktree diff
+  aid show t-1234 --diff       # What this task changed (start_sha..HEAD)
+  aid show t-1234 --diff --branch # Every change on the task's branch
   aid show t-1234 --events     # Events only
   aid show t-1234 --output     # Task output (truncated)
   aid show t-1234 --output --full # Complete output
@@ -269,6 +270,8 @@ pub struct ShowArgs {
     pub summary: bool,
     #[arg(long, requires = "diff")]
     pub file: Option<String>,
+    #[arg(long, requires = "diff", help = "With --diff: every change on the task's branch, not just this task's own commits")]
+    pub branch: bool,
     #[arg(long)]
     pub output: bool,
     #[arg(long)]

@@ -108,7 +108,7 @@ async fn dispatch_primary(store: Arc<crate::store::Store>, command: Commands) ->
         Commands::Changelog(command_args_a::ChangelogArgs { version, all, count, git }) => display::changelog(version, all, count, git),
         Commands::Agent(command_args_a::AgentArgs { action }) => display::agent(store, action),
         Commands::Clean(command_args_a::CleanArgs { older_than, worktrees, dry_run }) => display::clean(store, older_than, worktrees, dry_run),
-        Commands::Show(command_args_a::ShowArgs { task_id, events, context, diff, summary, file, output, result, transcript, full, brief, explain, log, json, agent, model }) => display::show(store, task_id, events, context, diff, summary, file, output, result, transcript, full, brief, explain, log, json, agent, model).await,
+        Commands::Show(command_args_a::ShowArgs { task_id, events, context, diff, summary, file, branch, output, result, transcript, full, brief, explain, log, json, agent, model }) => display::show(store, task_id, events, context, diff, summary, file, branch, output, result, transcript, full, brief, explain, log, json, agent, model).await,
         Commands::Export(command_args_b::ExportArgs { task_id, format, sharegpt, output }) => {
             display::export(store, task_id, format, sharegpt, output).await
         }

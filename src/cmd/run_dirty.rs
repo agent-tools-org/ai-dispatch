@@ -28,10 +28,13 @@ pub(crate) async fn post_agent_dirty_worktree_cleanup(
         return Ok(DirtyWorktreeAction::Continue);
     }
 
+    let start_sha = store.get_task(task_id.as_str())?.and_then(|t| t.start_sha);
+
     match crate::commit::rescue_dirty_worktree_with_baseline(
         dir,
         task_id.as_str(),
         pre_task_dirty_paths,
+        start_sha.as_deref(),
     ) {
         Ok(outcome) if !outcome.staged.is_empty() => {
             let files_list = rescue_files_summary(&outcome);

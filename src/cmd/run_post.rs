@@ -385,23 +385,25 @@ fn find_rate_limit_line_in_agent_log(content: &str, agent: &crate::types::AgentK
 #[path = "run_post_tests.rs"]
 mod tests;
 
-/// Point `args` at a different agent, dropping any pinned model when the agent
-/// actually changes.
+/// Point `args` at a different agent, dropping any pinned model or session when
+/// the agent actually changes.
 ///
 /// A model id means something only inside one CLI. codex's `gpt-5.6-sol`
 /// reaching agy is refused outright — agy answers by listing its Gemini models
 /// (`t-94d5f8ab`, auto-cascaded from `t-9269aab8` after codex hit its quota).
-/// The cascade exists to escape a failing route; inheriting half of that route
-/// defeats it.
+/// A session id is the same defect one field over: it resumes state inside the
+/// CLI that issued it, not a substitute. The cascade exists to escape a failing
+/// route; inheriting half of that route defeats it.
 ///
 /// This lives in one place because the rule was previously copied into three
 /// call sites and missed at four others — including both primary cascades in
 /// `run_lifecycle`, which is how the bug survived the v10.5.1 fix that claimed
-/// to cover every switch path. A same-agent retry keeps its model: it must
-/// still ask for what was asked before.
+/// to cover every switch path. A same-agent retry keeps its model and session:
+/// it must still ask for what was asked before, and may resume.
 pub(crate) fn switch_agent(args: &mut RunArgs, next_agent: String) {
     if args.agent_name != next_agent {
         args.model = None;
+        args.session_id = None;
     }
     args.agent_name = next_agent;
 }

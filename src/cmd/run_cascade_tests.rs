@@ -207,3 +207,30 @@ fn retrying_the_same_agent_keeps_its_model() {
     super::run_post::switch_agent(&mut args, "codex".to_string());
     assert_eq!(args.model.as_deref(), Some("gpt-5.6-sol"));
 }
+
+/// A session id resumes state inside the CLI that issued it. Carrying it across
+/// an agent switch is the same defect as carrying a model — one field over.
+#[test]
+fn switching_agent_drops_a_session_that_belongs_to_the_old_cli() {
+    let mut args = RunArgs {
+        agent_name: "codex".to_string(),
+        session_id: Some("codex-session-abc".to_string()),
+        ..Default::default()
+    };
+    super::run_post::switch_agent(&mut args, "agy".to_string());
+    assert_eq!(args.agent_name, "agy");
+    assert_eq!(args.session_id, None, "a codex session must not survive into agy");
+}
+
+/// A same-agent retry may still resume; switch_agent must not clear the session
+/// when the agent name is unchanged.
+#[test]
+fn retrying_the_same_agent_keeps_its_session() {
+    let mut args = RunArgs {
+        agent_name: "codex".to_string(),
+        session_id: Some("codex-session-abc".to_string()),
+        ..Default::default()
+    };
+    super::run_post::switch_agent(&mut args, "codex".to_string());
+    assert_eq!(args.session_id.as_deref(), Some("codex-session-abc"));
+}

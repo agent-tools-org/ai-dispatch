@@ -1,3 +1,11 @@
+## v10.17.2 (2026-08-08)
+- aid was killing healthy agy runs. It invokes `agy -p <prompt> --print-timeout 24h`, and print mode emits nothing on stdout until a turn completes — so agy's time-to-first-byte is its first-turn latency, and aid reaped "zero progress since spawn" on the 180s first-token budget. The two settings contradicted each other: aid granted agy 24 hours and killed it after three minutes. Any agy task whose first turn ran past 180s died, deterministically.
+- aid now hands agy a per-task log path and the orphan reaper watches that file alongside the transcript, so an agent that is streaming from the model instead of writing to stdout reads as alive. Replaying the run that prompted this: its log last grew 150s before the kill, inside the budget.
+- Watched bytes only count when written at or after the task started. An `agent.log` left by an earlier attempt on the same task id used to count as progress by merely existing, quietly moving a spawn that produced nothing off the first-token budget.
+- The log path is handed out only where the wrapping is known — never for sandboxed or containerised runs, whose guests cannot write a host path — so no agent adapter has to reason about isolation.
+- Known limit, stated in the code rather than papered over: a process looping forever while appending looks identical to one doing work. No byte-level signal separates them; max-duration and the hard cap remain the bound on such a run.
+
+
 ## v10.17.1 (2026-08-08)
 - A task that committed cleanly could still be recorded FAIL with "Configured verification did not run: dirty worktree rescue dispatched retry before verify". The dirt was aid's own: an agent had run `git add .aid-lock`, so aid's lease file became tracked, and aid clearing that lease at task end showed up as ` D .aid-lock` — which the dirty gate read as the agent leaving work behind. Rescue already ignored the file; the gate downstream did not. Both now ask the same question.
 - Creating a worktree adds `.aid-*`, `aid-batch-*` and `result-t-*` to the repository's local `.git/info/exclude`, so aid's runtime files never become tracked in the first place. The file is never committed and the repository's `.gitignore` is left alone. (A per-worktree `info/exclude` does not work — git does not read it — so the entries go to the common directory and apply to the whole clone.)

@@ -55,6 +55,12 @@ pub fn transcript_path(task_id: &str) -> PathBuf {
     task_dir(task_id).join("transcript.md")
 }
 
+/// Where an agent that keeps its own log is told to write it, so aid can read that
+/// file as proof of life for agents whose stdout stays silent mid-turn.
+pub fn agent_log_path(task_id: &str) -> PathBuf {
+    task_dir(task_id).join("agent.log")
+}
+
 pub fn log_path(task_id: &str) -> PathBuf {
     // Takes a validated task ID from the input boundary.
     logs_dir().join(format!("{task_id}.jsonl"))

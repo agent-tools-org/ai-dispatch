@@ -101,6 +101,37 @@ pub trait Agent: Send + Sync {
 }
 
 /// Options passed to agent for command construction
+/// Env key naming the log aid will watch for proof the agent is alive.
+pub const AGENT_LOG_ENV: &str = "AID_AGENT_LOG";
+
+/// Hand an agent the log path aid will watch — but only when aid can read it back.
+///
+/// A sandboxed run remaps `AID_HOME`, and a containerised run does not mount `~/.aid` at
+/// all, so the host path would be unwritable inside and empty outside: aid would gain no
+/// liveness signal and risk an agent that refuses to start on a bad `--log-file`. The
+/// decision lives here, at the only place that knows how the command will be wrapped, so
+/// no agent adapter has to reason about isolation.
+pub fn env_with_agent_log(
+    env: Option<HashMap<String, String>>,
+    task_id: &str,
+    watchable: bool,
+) -> Option<HashMap<String, String>> {
+    if !watchable {
+        return env;
+    }
+    let mut env = env.unwrap_or_default();
+    env.insert(
+        AGENT_LOG_ENV.to_string(),
+        crate::paths::agent_log_path(task_id).to_string_lossy().into_owned(),
+    );
+    Some(env)
+}
+
+/// The log path aid promised to watch, if it gave one.
+pub fn agent_log_from_opts(opts: &RunOpts) -> Option<&str> {
+    opts.env.as_ref()?.get(AGENT_LOG_ENV).map(String::as_str).filter(|p| !p.is_empty())
+}
+
 #[derive(Debug, Clone)]
 pub struct RunOpts {
     pub dir: Option<String>,

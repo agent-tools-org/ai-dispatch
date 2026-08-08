@@ -28,7 +28,11 @@ pub(super) fn build_run_opts(
         sandbox: args.sandbox,
         context_files: prompt_bundle.context_files.clone(),
         session_id: args.session_id.clone(),
-        env: args.env.clone(),
+        env: crate::agent::env_with_agent_log(
+            args.env.clone(),
+            prepared.task_id.as_str(),
+            args.container.is_none() && !args.sandbox,
+        ),
         env_forward: args.env_forward.clone(),
     }
 }

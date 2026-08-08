@@ -67,11 +67,22 @@ impl super::Agent for AntigravityAgent {
         for dir in agy_include_directories(run_dir.as_deref(), &opts.context_files) {
             cmd.args(["--add-dir", &dir]);
         }
-        if let Ok(log_file) = std::env::var("AGY_LOG_FILE") {
-            if !log_file.is_empty() {
-                cmd.args(["--log-file", &log_file]);
+        // agy runs in print mode: it emits nothing on stdout until a turn completes, so
+        // aid's "no output since spawn" liveness check cannot tell a long first turn from
+        // a dead process and reaps healthy runs at the first-token budget. agy's own log
+        // does grow throughout, so point it at a per-task path aid can watch.
+        // AGY_LOG_FILE stays an operator override.
+        // agy runs in print mode: nothing reaches stdout until a turn completes, so aid's
+        // "no output since spawn" check cannot tell a long first turn from a dead process
+        // and reaps healthy runs at the first-token budget. agy's own log grows throughout.
+        // The caller decides whether that path is watchable; this adapter just uses it.
+        if let Some(log_file) = super::agent_log_from_opts(opts) {
+            if let Some(parent) = std::path::Path::new(log_file).parent() {
+                let _ = std::fs::create_dir_all(parent);
             }
+            cmd.args(["--log-file", log_file]);
         }
+
         if let Some(ref dir) = run_dir {
             // The sandbox and container wrappers mount this cwd verbatim (`-v dir:dir`),
             // so it must name the same directory as the workspace paths above -

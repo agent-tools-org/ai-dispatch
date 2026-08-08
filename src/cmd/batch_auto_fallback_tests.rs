@@ -65,8 +65,8 @@ fn isolated_rate_limit_home() -> (TempDir, AidHomeGuard) {
 }
 
 fn dispatch_agent_name(agent_name: &str, fallback: Option<&str>) -> String {
-    match pre_dispatch_fallback_choice(agent_name, fallback) {
-        Some((fallback_agent, _)) => fallback_agent.as_str().to_string(),
+    match pre_dispatch_fallback_choice(agent_name, fallback).unwrap() {
+        Some((fallback_agent, _)) => fallback_agent,
         None => agent_name.to_string(),
     }
 }
@@ -94,10 +94,12 @@ fn pre_dispatch_uses_fallback_when_agent_is_rate_limited() {
     let (_temp, _guard) = isolated_rate_limit_home();
     mark_rate_limited(&AgentKind::Codex, None, "rate limit exceeded");
 
-    let choice = pre_dispatch_fallback_choice("codex", Some("opencode,cursor")).unwrap();
+    let choice = pre_dispatch_fallback_choice("codex", Some("opencode,cursor"))
+        .unwrap()
+        .expect("fallback choice");
 
     assert_eq!(dispatch_agent_name("codex", Some("opencode,cursor")), "opencode");
-    assert_eq!(choice.0, AgentKind::OpenCode);
+    assert_eq!(choice.0, "opencode");
     assert_eq!(choice.1, vec!["cursor".to_string()]);
 
     clear_rate_limit(&AgentKind::Codex, None);
@@ -109,7 +111,7 @@ fn pre_dispatch_keeps_original_when_no_fallback_is_available() {
     mark_rate_limited(&AgentKind::Codex, None, "rate limit exceeded");
 
     assert_eq!(dispatch_agent_name("codex", None), "codex");
-    assert!(pre_dispatch_fallback_choice("codex", None).is_none());
+    assert!(pre_dispatch_fallback_choice("codex", None).unwrap().is_none());
 
     clear_rate_limit(&AgentKind::Codex, None);
 }
@@ -121,7 +123,29 @@ fn auto_fallback_skips_rate_limited_toml_fallbacks() {
 
     let store = Store::open_memory().unwrap();
     store.insert_task(&stored_task("t-codex", AgentKind::Codex)).unwrap();
-    let tasks = vec![crate::batch::BatchTask {
+    let tasks = vec![batch_task_with_fallback("opencode,cursor")];
+
+    let result = auto_fallback_agent(&store, "t-codex", &tasks, 0).unwrap();
+    assert!(result.is_some());
+    let (original, fallback) = result.unwrap();
+    assert_eq!(original, "codex");
+    assert_eq!(fallback, "cursor");
+
+    clear_rate_limit(&AgentKind::OpenCode, None);
+}
+
+fn write_custom_agent(name: &str) {
+    let agents_dir = crate::paths::aid_dir().join("agents");
+    std::fs::create_dir_all(&agents_dir).unwrap();
+    std::fs::write(
+        agents_dir.join(format!("{name}.toml")),
+        format!("[agent]\nid = \"{name}\"\ndisplay_name = \"{name}\"\ncommand = \"{name}\"\n"),
+    )
+    .unwrap();
+}
+
+fn batch_task_with_fallback(fallback: &str) -> crate::batch::BatchTask {
+    crate::batch::BatchTask {
         id: None,
         name: None,
         agent: String::new(),
@@ -156,12 +180,17 @@ fn auto_fallback_skips_rate_limited_toml_fallbacks() {
         depends_on: None,
         parent: None,
         context_from: None,
-        fallback: Some("opencode,cursor".to_string()),
+        fallback: Some(fallback.to_string()),
         scope: None,
         read_only: false,
         sandbox: false,
         no_skill: false,
-        difficulty: None, budget: None, urgency: None, rigor: None, egress: None, kind: None,
+        difficulty: None,
+        budget: None,
+        urgency: None,
+        rigor: None,
+        egress: None,
+        kind: None,
         audit: None,
         env: None,
         env_forward: None,
@@ -169,13 +198,55 @@ fn auto_fallback_skips_rate_limited_toml_fallbacks() {
         on_success: None,
         on_fail: None,
         conditional: false,
-    }];
+    }
+}
+
+/// Custom agents named in batch fallback must be selected — same rule as
+/// `aid run` cascade parsing, not silently dropped by AgentKind::parse_str.
+#[test]
+fn pre_dispatch_uses_custom_agent_in_fallback() {
+    let (_temp, _guard) = isolated_rate_limit_home();
+    write_custom_agent("glm5");
+    mark_rate_limited(&AgentKind::Codex, None, "rate limit exceeded");
+
+    let choice = pre_dispatch_fallback_choice("codex", Some("glm5,cursor"))
+        .unwrap()
+        .expect("custom fallback");
+
+    assert_eq!(choice.0, "glm5");
+    assert_eq!(choice.1, vec!["cursor".to_string()]);
+
+    clear_rate_limit(&AgentKind::Codex, None);
+}
+
+/// An unresolvable batch fallback entry must surface as an error, never be
+/// skipped the way filter_map(AgentKind::parse_str) used to.
+#[test]
+fn pre_dispatch_unknown_fallback_is_an_error() {
+    let (_temp, _guard) = isolated_rate_limit_home();
+    mark_rate_limited(&AgentKind::Codex, None, "rate limit exceeded");
+
+    let err = pre_dispatch_fallback_choice("codex", Some("not-a-real-agent"))
+        .expect_err("unknown cascade agent must error");
+    assert!(
+        err.to_string().contains("not-a-real-agent"),
+        "error must name the unknown agent: {err}"
+    );
+
+    clear_rate_limit(&AgentKind::Codex, None);
+}
+
+#[test]
+fn auto_fallback_agent_selects_custom_toml_fallback() {
+    let (_temp, _guard) = isolated_rate_limit_home();
+    write_custom_agent("glm5");
+
+    let store = Store::open_memory().unwrap();
+    store.insert_task(&stored_task("t-codex", AgentKind::Codex)).unwrap();
+    let tasks = vec![batch_task_with_fallback("glm5")];
 
     let result = auto_fallback_agent(&store, "t-codex", &tasks, 0).unwrap();
-    assert!(result.is_some());
-    let (original, fallback) = result.unwrap();
+    let (original, fallback) = result.expect("custom fallback");
     assert_eq!(original, "codex");
-    assert_eq!(fallback, AgentKind::Cursor);
-
-    clear_rate_limit(&AgentKind::OpenCode, None);
+    assert_eq!(fallback, "glm5");
 }

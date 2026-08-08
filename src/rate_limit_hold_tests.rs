@@ -273,8 +273,18 @@ fn a_group_marker_holds_for_a_person_too() {
     assert!(!is_group_rate_limited(&cursor, None, "auto"), "auto keeps serving");
     assert!(!is_rate_limited(&cursor, None), "the agent itself is not written off");
 
+    let holds = active_group_holds(&cursor, None);
+    assert_eq!(holds.len(), 1);
+    assert_eq!(holds[0].0, "premium");
+    assert!(holds[0].1.needs_human);
+    assert!(
+        format_hold_end(&cursor, &holds[0].1).contains("aid config clear-limit cursor"),
+        "manual group hold must name the clear command"
+    );
+
     assert!(clear_all_rate_limits_for_agent(&cursor, None));
     assert!(!is_group_rate_limited(&cursor, None, "premium"));
+    assert!(active_group_holds(&cursor, None).is_empty());
 }
 
 /// The live call site, not just the grouping helper. `classify_line` in the

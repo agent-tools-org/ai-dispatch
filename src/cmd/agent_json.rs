@@ -10,7 +10,7 @@ use crate::store::Store;
 mod tests;
 
 use crate::cmd::agent_json_types::{
-    AgentListJson, AgentJson, QuotaJson, ModelsJson, AvailableModelJson, LoadJson
+    AgentListJson, AgentJson, GroupHoldJson, QuotaJson, ModelsJson, AvailableModelJson, LoadJson
 };
 use crate::cmd::agent_json_helpers::{
     command_installed, get_agent_capabilities, get_agent_history
@@ -115,23 +115,10 @@ fn build_agent_json(
         crate::types::provider_for_cli(kind)
     };
 
-    let quota = {
-        let custom_name = custom_config.map(|c| c.id.as_str());
-        let state = if crate::rate_limit::is_rate_limited(&kind, custom_name) {
-            "limited".to_string()
-        } else {
-            "ok".to_string()
-        };
-        let info = crate::rate_limit::get_rate_limit_info(&kind, custom_name);
-        let recovery_at = info.as_ref().and_then(|i| i.recovery_at.clone());
-        let message = info.as_ref().and_then(|i| i.message.clone());
-        QuotaJson {
-            state,
-            recovery_at,
-            message,
-            source: "marker".to_string(),
-        }
-    };
+    let quota = build_quota_json(
+        &rate_limit_kind(kind, custom_config),
+        custom_config.map(|c| c.id.as_str()),
+    );
     
     let capabilities = get_agent_capabilities(kind, custom_config);
     
@@ -202,11 +189,80 @@ fn build_agent_json(
     })
 }
 
+/// Build the `QuotaJson` for `rlk` by consulting live rate-limit markers.
+/// State is `"ok"` when no markers are active, `"partial"` when only model-group
+/// markers are active (the agent is still dispatchable on clear tiers), and
+/// `"limited"` when the agent-level marker is active.
+fn build_quota_json(rlk: &AgentKind, custom_name: Option<&str>) -> QuotaJson {
+    if crate::rate_limit::is_rate_limited(rlk, custom_name) {
+        let info = crate::rate_limit::get_rate_limit_info(rlk, custom_name);
+        QuotaJson {
+            state: "limited".to_string(),
+            recovery_at: info.as_ref().and_then(|i| i.recovery_at.clone()),
+            message: info.as_ref().and_then(|i| i.message.clone()),
+            source: "marker".to_string(),
+            groups: vec![],
+        }
+    } else {
+        let holds = crate::rate_limit::active_group_holds(rlk, custom_name);
+        if holds.is_empty() {
+            QuotaJson {
+                state: "ok".to_string(),
+                recovery_at: None,
+                message: None,
+                source: "marker".to_string(),
+                groups: vec![],
+            }
+        } else {
+            let groups = holds
+                .into_iter()
+                .map(|(group, info)| GroupHoldJson {
+                    group,
+                    recovery_at: info.recovery_at,
+                    message: info.message,
+                })
+                .collect();
+            QuotaJson {
+                state: "partial".to_string(),
+                recovery_at: None,
+                message: None,
+                source: "marker".to_string(),
+                groups,
+            }
+        }
+    }
+}
+
 fn builtin_profile(name: &str) -> Option<AgentKind> {
     AgentKind::ALL_BUILTIN
         .iter()
         .copied()
         .find(|kind| kind.as_str().eq_ignore_ascii_case(name))
+}
+
+fn custom_has_endpoint(config: &CustomAgentConfig) -> bool {
+    config
+        .base_url
+        .as_deref()
+        .map(str::trim)
+        .is_some_and(|url| !url.is_empty())
+}
+
+fn rate_limit_kind(kind: AgentKind, custom_config: Option<&CustomAgentConfig>) -> AgentKind {
+    let Some(config) = custom_config else {
+        return kind;
+    };
+    if custom_has_endpoint(config) {
+        return AgentKind::Custom;
+    }
+    if config.delegate_to.as_deref() == Some("opencode") {
+        return config
+            .rate_limit_kind
+            .as_deref()
+            .and_then(AgentKind::parse_str)
+            .unwrap_or(AgentKind::OpenCode);
+    }
+    AgentKind::Custom
 }
 
 fn catalog_default_model(kind: AgentKind) -> Option<String> {

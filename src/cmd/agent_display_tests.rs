@@ -82,6 +82,30 @@ fn cursor_premium_group_hold_is_partial_and_names_clear_limit() {
 }
 
 #[test]
+fn group_hold_detail_includes_provider_message() {
+    let temp = isolated();
+    let _guard = AidHomeGuard::set(temp.path());
+    std::fs::create_dir_all(paths::aid_dir()).ok();
+
+    mark_group_rate_limited(
+        &AgentKind::Cursor,
+        "premium",
+        "ActionRequiredError: ask your admin to increase your limit to continue.",
+    );
+
+    match quota_row(AgentKind::Cursor) {
+        QuotaRow::Partial { detail } => {
+            assert!(detail.contains("premium"), "{detail}");
+            assert!(
+                detail.contains("ActionRequiredError"),
+                "provider message must appear in group hold detail: {detail}"
+            );
+        }
+        other => panic!("expected Partial, got {other:?}"),
+    }
+}
+
+#[test]
 fn human_ended_agent_hold_does_not_invent_reset_time() {
     let temp = isolated();
     let _guard = AidHomeGuard::set(temp.path());

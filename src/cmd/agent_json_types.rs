@@ -29,10 +29,22 @@ pub struct AgentJson {
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct QuotaJson {
-    pub state: String, // "ok" or "limited"
+    /// `"ok"` | `"partial"` (group hold — agent still dispatchable) | `"limited"` (agent hold)
+    pub state: String,
     pub recovery_at: Option<String>,
     pub message: Option<String>,
     pub source: String, // "marker"
+    /// Non-empty when state is `"partial"`. Each entry is one held model group.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub groups: Vec<GroupHoldJson>,
+}
+
+/// One held model-group entry inside a `partial` quota state.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct GroupHoldJson {
+    pub group: String,
+    pub recovery_at: Option<String>,
+    pub message: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]

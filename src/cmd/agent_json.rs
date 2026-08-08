@@ -248,21 +248,17 @@ fn custom_has_endpoint(config: &CustomAgentConfig) -> bool {
         .is_some_and(|url| !url.is_empty())
 }
 
-fn rate_limit_kind(kind: AgentKind, custom_config: Option<&CustomAgentConfig>) -> AgentKind {
-    let Some(config) = custom_config else {
-        return kind;
-    };
-    if custom_has_endpoint(config) {
-        return AgentKind::Custom;
-    }
-    if config.delegate_to.as_deref() == Some("opencode") {
-        return config
-            .rate_limit_kind
-            .as_deref()
-            .and_then(AgentKind::parse_str)
-            .unwrap_or(AgentKind::OpenCode);
-    }
-    AgentKind::Custom
+/// Which kind to pass to `build_quota_json` for this agent.
+///
+/// The write path (`OpenCodeOverlayAgent::rate_limit_name`) always marks
+/// `(Custom, Some(id))` when `reported_kind == Custom`, so the file is
+/// `rate-limit-<id>`.  The read must consult the same slot.  The old branch
+/// that returned `OpenCode` for `delegate_to = "opencode"` agents without their
+/// own endpoint caused a split: writes landed at `rate-limit-<id>` while reads
+/// looked at `rate-limit-opencode`.  For built-in agents `kind` is returned
+/// unchanged; for custom agents `kind` is already `Custom`.
+fn rate_limit_kind(kind: AgentKind, _custom_config: Option<&CustomAgentConfig>) -> AgentKind {
+    kind
 }
 
 fn catalog_default_model(kind: AgentKind) -> Option<String> {

@@ -123,6 +123,7 @@ fn group_holds_detail(kind: &AgentKind, groups: &[(String, RateLimitInfo)]) -> S
 }
 
 pub(super) fn show_quota() -> anyhow::Result<()> {
+    use crate::agent::registry;
     println!("{:<12} {:<10} DETAIL", "AGENT", "STATUS");
     for kind in AgentKind::ALL_BUILTIN {
         match quota_row(*kind, None) {
@@ -132,6 +133,17 @@ pub(super) fn show_quota() -> anyhow::Result<()> {
             }
             QuotaRow::Partial { detail } => {
                 println!("{:<12} {:<10} {detail}", kind.as_str(), "PARTIAL");
+            }
+        }
+    }
+    for config in registry::list_custom_agents() {
+        match quota_row(AgentKind::Custom, Some(config.id.as_str())) {
+            QuotaRow::Ok => println!("{:<12} {:<10}", config.id, "OK"),
+            QuotaRow::Limited { detail } => {
+                println!("{:<12} {:<10} {detail}", config.id, "LIMITED");
+            }
+            QuotaRow::Partial { detail } => {
+                println!("{:<12} {:<10} {detail}", config.id, "PARTIAL");
             }
         }
     }
@@ -184,14 +196,38 @@ pub(super) fn list_agents() -> anyhow::Result<()> {
         println!("  (none installed — use `aid agent add <name>` to create one)");
         return Ok(());
     }
-    println!("  {:<10} {:<12} DISPLAY NAME", "NAME", "EGRESS");
-    for config in custom {
-        println!(
-            "  {:<10} {:<12} {}",
-            config.id,
-            resolve_agent_egress(&config.id).label(),
-            config.display_name
-        );
+    let custom_rows: Vec<_> = custom
+        .iter()
+        .map(|c| (c, quota_row(AgentKind::Custom, Some(c.id.as_str()))))
+        .collect();
+    let any_custom_hold = custom_rows.iter().any(|(_, row)| !matches!(row, QuotaRow::Ok));
+    if any_custom_hold {
+        println!("  {:<10} {:<12} {:<10} DISPLAY NAME", "NAME", "EGRESS", "STATUS");
+    } else {
+        println!("  {:<10} {:<12} DISPLAY NAME", "NAME", "EGRESS");
+    }
+    for (config, row) in &custom_rows {
+        if any_custom_hold {
+            let status = match row {
+                QuotaRow::Ok => "",
+                QuotaRow::Limited { .. } => "LIMITED",
+                QuotaRow::Partial { .. } => "PARTIAL",
+            };
+            println!(
+                "  {:<10} {:<12} {:<10} {}",
+                config.id,
+                resolve_agent_egress(&config.id).label(),
+                status,
+                config.display_name
+            );
+        } else {
+            println!(
+                "  {:<10} {:<12} {}",
+                config.id,
+                resolve_agent_egress(&config.id).label(),
+                config.display_name
+            );
+        }
     }
     Ok(())
 }

@@ -124,3 +124,33 @@ fn human_ended_agent_hold_does_not_invent_reset_time() {
         other => panic!("expected Limited, got {other:?}"),
     }
 }
+
+#[test]
+fn custom_agent_with_hold_shows_limited() {
+    let temp = isolated();
+    let _guard = AidHomeGuard::set(temp.path());
+    std::fs::create_dir_all(paths::aid_dir()).ok();
+
+    mark_rate_limited(
+        &AgentKind::Custom,
+        Some("auditor"),
+        "try again at Aug 11th, 2099 2:23 PM.",
+    );
+
+    match quota_row(AgentKind::Custom, Some("auditor")) {
+        QuotaRow::Limited { detail } => {
+            assert!(detail.contains("resets Aug 11th, 2099"), "{detail}");
+        }
+        other => panic!("expected Limited, got {other:?}"),
+    }
+    // An unrelated custom agent must not inherit the hold.
+    assert!(
+        matches!(quota_row(AgentKind::Custom, Some("other-agent")), QuotaRow::Ok),
+        "unrelated custom agent must not inherit the hold"
+    );
+    // Built-in agents must be unaffected.
+    assert!(
+        matches!(quota_row(AgentKind::Codex, None), QuotaRow::Ok),
+        "built-in codex must not inherit custom agent hold"
+    );
+}

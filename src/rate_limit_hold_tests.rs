@@ -182,9 +182,20 @@ fn an_unparseable_recovery_phrase_falls_back_to_the_cooldown() {
     );
 }
 
-/// The live markers copied from ~/.aid on 2026-08-07. The three that state a
-/// future reset time must still read as out — this fix must not shorten a hold
-/// that exists today.
+/// The live markers copied from ~/.aid on 2026-08-07. Each states its reset time
+/// in its own provider's phrasing, and every one of those must still read as out —
+/// this fix must not shorten a hold that exists today.
+///
+/// The stated year is pushed forward before the marker is written. As captured,
+/// opencode's reset time had passed within a day and droid's within hours, so the
+/// test decayed into failing on the calendar rather than on the code. The phrasing
+/// each provider uses is the part under test — `parse_recovery_datetime` has to read
+/// `Aug 11th, 2026 2:23 PM` and `Aug 08, 2026 12:39 AM` alike — so only the year moves.
+///
+/// The marker is then aged past the transient cooldown. Without that, a `recovery_at`
+/// this parser failed to read would fall through to `StoredHold::Transient`, and a
+/// freshly written file is inside its window, so the assertion would pass without the
+/// stated time doing any work at all.
 #[test]
 fn live_markers_with_a_future_reset_time_still_read_as_out() {
     let temp = isolated();
@@ -196,13 +207,31 @@ fn live_markers_with_a_future_reset_time_still_read_as_out() {
         (AgentKind::Droid, "rate-limit-droid"),
         (AgentKind::OpenCode, "rate-limit-opencode"),
     ] {
-        let content = read_fixture(fixture);
-        std::fs::write(marker_path(&agent), &content).expect("write marker");
+        let content = with_future_recovery_year(&read_fixture(fixture));
+        let path = marker_path(&agent);
+        std::fs::write(&path, &content).expect("write marker");
+        age_marker(&path, RATE_LIMIT_WINDOW_SECS + 60);
         assert!(
             is_rate_limited(&agent),
             "{fixture} states a future reset time and must still hold"
         );
     }
+}
+
+/// Move the year on the `recovery_at:` line only, leaving each provider's message
+/// body — and its date phrasing — exactly as it was captured.
+fn with_future_recovery_year(content: &str) -> String {
+    let mut out: String = content
+        .lines()
+        .map(|line| match line.strip_prefix("recovery_at: ") {
+            Some(stated) => format!("recovery_at: {}\n", stated.replace("2026", "2126")),
+            None => format!("{line}\n"),
+        })
+        .collect();
+    if !content.ends_with('\n') {
+        out.pop();
+    }
+    out
 }
 
 /// oz's live marker says "try again at Aug 07, 2026 02:05 AM" — fourteen hours

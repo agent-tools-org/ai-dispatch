@@ -271,10 +271,14 @@ pub(crate) async fn post_run_lifecycle(
         && let Some(fallback) =
             agent::selection::coding_fallback_for_prompt(&agent_kind, &args.prompt)
     {
-        rate_limit::mark_rate_limited_for_message(&agent_kind, message);
+        rate_limit::mark_rate_limited_for_message(
+            &agent_kind,
+            task.custom_agent_name.as_deref(),
+            message,
+        );
         aid_info!(
             "[aid] Quota exhausted for {}, auto-cascading to {}",
-            agent_kind.as_str(),
+            task.agent_display_name(),
             fallback.as_str()
         );
         let mut cascade_args = args.clone();
@@ -472,7 +476,12 @@ fn handle_done_postprocess(
     // Only a marker that predates this run is stale. One written *during* it was
     // written by this run's own refusal, and success here does not disprove it.
     let model = task.observed_model.as_deref().or(args.model.as_deref());
-    rate_limit::clear_rate_limit_for_model_if_stale(&agent_kind, model, task.created_at);
+    rate_limit::clear_rate_limit_for_model_if_stale(
+        &agent_kind,
+        task.custom_agent_name.as_deref(),
+        model,
+        task.created_at,
+    );
     for memory_id in &prompt_bundle.injected_memory_ids {
         if let Err(err) = store.increment_memory_success(memory_id) {
             aid_error!("[aid] Failed to record memory success for {memory_id}: {err}");
@@ -517,7 +526,11 @@ fn handle_failed_postprocess(
 ) -> Option<String> {
     let quota_error_message = read_quota_error_message(task_id, &agent_kind);
     if let Some(message) = quota_error_message.as_deref() {
-        rate_limit::mark_rate_limited_for_message(&agent_kind, message);
+        rate_limit::mark_rate_limited_for_message(
+            &agent_kind,
+            task.custom_agent_name.as_deref(),
+            message,
+        );
     }
     run_fail_hook(task_id, task, agent_display_name, effective_dir, runtime_hooks);
     quota_error_message

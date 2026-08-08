@@ -74,16 +74,15 @@ pub(crate) fn format_elapsed(elapsed: Duration) -> String {
 pub(crate) fn warn_for_rate_limited_agents(tasks: &[batch::BatchTask]) {
     let mut seen = std::collections::HashSet::new();
     for task in tasks {
-        let Some(agent) = crate::types::AgentKind::parse_str(&task.agent) else {
-            continue;
-        };
-        if !seen.insert(agent) {
+        if !seen.insert(task.agent.clone()) {
             continue;
         }
-        if rate_limit::is_rate_limited(&agent) {
-            let count = tasks.iter().filter(|t| t.agent == agent.as_str()).count();
+        let (agent, custom_name) = rate_limit::resolve_agent(&task.agent);
+        if rate_limit::is_rate_limited(&agent, custom_name) {
+            let count = tasks.iter().filter(|t| t.agent == task.agent).count();
+            let label = rate_limit::marker_slug(&agent, custom_name);
             aid_warn!(
-                "[aid] Warning: {agent} is rate-limited — {count} task(s) may fail or need fallback"
+                "[aid] Warning: {label} is rate-limited — {count} task(s) may fail or need fallback"
             );
         }
     }

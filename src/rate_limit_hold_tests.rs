@@ -23,17 +23,17 @@ fn a_transient_refusal_with_no_stated_time_expires_on_its_own() {
     let temp = isolated();
     let _guard = crate::paths::AidHomeGuard::set(temp.path());
 
-    mark_rate_limited(&AgentKind::Claude, "HTTP 429 Too Many Requests");
+    mark_rate_limited(&AgentKind::Claude, None, "HTTP 429 Too Many Requests");
 
-    let info = get_rate_limit_info(&AgentKind::Claude).expect("marker written");
+    let info = get_rate_limit_info(&AgentKind::Claude, None).expect("marker written");
     assert_eq!(info.recovery_at, None, "no time was stated, so none is invented");
     assert!(!info.needs_human, "a bare 429 does not need a person");
-    assert!(is_rate_limited(&AgentKind::Claude), "still inside the cooldown");
+    assert!(is_rate_limited(&AgentKind::Claude, None), "still inside the cooldown");
 
     // Age the marker past the cooldown window: the route is tried again.
-    age_marker(&marker_path(&AgentKind::Claude), RATE_LIMIT_WINDOW_SECS + 60);
+    age_marker(&marker_path(&AgentKind::Claude, None), RATE_LIMIT_WINDOW_SECS + 60);
     assert!(
-        !is_rate_limited(&AgentKind::Claude),
+        !is_rate_limited(&AgentKind::Claude, None),
         "a transient refusal must not hold a route open indefinitely"
     );
 }
@@ -45,23 +45,20 @@ fn a_refusal_that_needs_a_person_is_not_released_by_time() {
     let temp = isolated();
     let _guard = crate::paths::AidHomeGuard::set(temp.path());
 
-    mark_rate_limited(
-        &AgentKind::Grok,
-        "API error (status 402 Payment Required): Grok Build usage balance exhausted",
-    );
+    mark_rate_limited(&AgentKind::Grok, None, "API error (status 402 Payment Required): Grok Build usage balance exhausted");
 
-    let info = get_rate_limit_info(&AgentKind::Grok).expect("marker written");
+    let info = get_rate_limit_info(&AgentKind::Grok, None).expect("marker written");
     assert_eq!(info.recovery_at, None, "no invented reset time");
     assert!(info.needs_human);
 
-    age_marker(&marker_path(&AgentKind::Grok), RATE_LIMIT_WINDOW_SECS * 100);
+    age_marker(&marker_path(&AgentKind::Grok, None), RATE_LIMIT_WINDOW_SECS * 100);
     assert!(
-        is_rate_limited(&AgentKind::Grok),
+        is_rate_limited(&AgentKind::Grok, None),
         "a spent balance must survive any amount of elapsed time"
     );
 
-    assert!(clear_rate_limit(&AgentKind::Grok));
-    assert!(!is_rate_limited(&AgentKind::Grok));
+    assert!(clear_rate_limit(&AgentKind::Grok, None));
+    assert!(!is_rate_limited(&AgentKind::Grok, None));
 }
 
 /// Every refusal we classify as needing a person, with the message that made us
@@ -98,18 +95,18 @@ fn every_human_ended_refusal_holds_without_an_invented_reset_time() {
              Assist for individuals",
         ),
     ] {
-        clear_rate_limit(&agent);
-        mark_rate_limited(&agent, message);
-        let info = get_rate_limit_info(&agent).expect("marker written");
+        clear_rate_limit(&agent, None);
+        mark_rate_limited(&agent, None, message);
+        let info = get_rate_limit_info(&agent, None).expect("marker written");
         assert_eq!(
             info.recovery_at, None,
             "{agent:?} must not be given a reset time it never stated: {message}"
         );
         assert!(info.needs_human, "{agent:?} must be held for a person: {message}");
 
-        age_marker(&marker_path(&agent), RATE_LIMIT_WINDOW_SECS * 100);
-        assert!(is_rate_limited(&agent), "{agent:?} hold must survive elapsed time");
-        clear_rate_limit(&agent);
+        age_marker(&marker_path(&agent, None), RATE_LIMIT_WINDOW_SECS * 100);
+        assert!(is_rate_limited(&agent, None), "{agent:?} hold must survive elapsed time");
+        clear_rate_limit(&agent, None);
     }
 }
 
@@ -134,15 +131,15 @@ fn clock_ended_refusals_still_get_a_recovery_time() {
             "402 You've reached your weekly standard usage limit (resets in 1 day).",
         ),
     ] {
-        clear_rate_limit(&agent);
-        mark_rate_limited(&agent, message);
-        let info = get_rate_limit_info(&agent).expect("marker written");
+        clear_rate_limit(&agent, None);
+        mark_rate_limited(&agent, None, message);
+        let info = get_rate_limit_info(&agent, None).expect("marker written");
         assert!(
             info.recovery_at.is_some(),
             "{agent:?} recovers on a clock and must say when: {message}"
         );
         assert!(!info.needs_human, "{agent:?} must not wait for a person: {message}");
-        clear_rate_limit(&agent);
+        clear_rate_limit(&agent, None);
     }
 }
 
@@ -153,11 +150,8 @@ fn a_stated_reset_time_wins_over_the_class_default() {
     let temp = isolated();
     let _guard = crate::paths::AidHomeGuard::set(temp.path());
 
-    mark_rate_limited(
-        &AgentKind::Droid,
-        "402 payment required: reload your tokens (resets in 2 hours)",
-    );
-    let info = get_rate_limit_info(&AgentKind::Droid).expect("marker written");
+    mark_rate_limited(&AgentKind::Droid, None, "402 payment required: reload your tokens (resets in 2 hours)");
+    let info = get_rate_limit_info(&AgentKind::Droid, None).expect("marker written");
     assert!(info.recovery_at.is_some(), "the stated time must be recorded");
     assert!(!info.needs_human, "a stated time is not a human hold");
 }
@@ -170,14 +164,14 @@ fn an_unparseable_recovery_phrase_falls_back_to_the_cooldown() {
     let temp = isolated();
     let _guard = crate::paths::AidHomeGuard::set(temp.path());
 
-    let path = marker_path(&AgentKind::Qwen);
+    let path = marker_path(&AgentKind::Qwen, None);
     std::fs::write(&path, "recovery_at: tomorrow morning\nmessage: out of quota\n")
         .expect("write marker");
 
-    assert!(is_rate_limited(&AgentKind::Qwen), "fresh marker still holds");
+    assert!(is_rate_limited(&AgentKind::Qwen, None), "fresh marker still holds");
     age_marker(&path, RATE_LIMIT_WINDOW_SECS + 60);
     assert!(
-        !is_rate_limited(&AgentKind::Qwen),
+        !is_rate_limited(&AgentKind::Qwen, None),
         "an unreadable time must expire, not become permanent"
     );
 }
@@ -208,11 +202,11 @@ fn live_markers_with_a_future_reset_time_still_read_as_out() {
         (AgentKind::OpenCode, "rate-limit-opencode"),
     ] {
         let content = with_future_recovery_year(&read_fixture(fixture));
-        let path = marker_path(&agent);
+        let path = marker_path(&agent, None);
         std::fs::write(&path, &content).expect("write marker");
         age_marker(&path, RATE_LIMIT_WINDOW_SECS + 60);
         assert!(
-            is_rate_limited(&agent),
+            is_rate_limited(&agent, None),
             "{fixture} states a future reset time and must still hold"
         );
     }
@@ -242,10 +236,10 @@ fn a_marker_whose_stated_time_has_passed_reads_as_recovered() {
     let temp = isolated();
     let _guard = crate::paths::AidHomeGuard::set(temp.path());
 
-    std::fs::write(marker_path(&AgentKind::Oz), read_fixture("rate-limit-oz"))
+    std::fs::write(marker_path(&AgentKind::Oz, None), read_fixture("rate-limit-oz"))
         .expect("write marker");
     assert!(
-        !is_rate_limited(&AgentKind::Oz),
+        !is_rate_limited(&AgentKind::Oz, None),
         "a reset time in the past means the route is available again"
     );
 }
@@ -257,10 +251,10 @@ fn a_marker_without_a_hold_field_is_not_permanent() {
     let temp = isolated();
     let _guard = crate::paths::AidHomeGuard::set(temp.path());
 
-    let path = marker_path(&AgentKind::Copilot);
+    let path = marker_path(&AgentKind::Copilot, None);
     std::fs::write(&path, "recovery_at: \nmessage: some old refusal\n").expect("write marker");
     age_marker(&path, RATE_LIMIT_WINDOW_SECS + 60);
-    assert!(!is_rate_limited(&AgentKind::Copilot));
+    assert!(!is_rate_limited(&AgentKind::Copilot, None));
 }
 
 /// Group markers are held by the same three classes as agent markers, so a
@@ -271,25 +265,21 @@ fn a_group_marker_holds_for_a_person_too() {
     let _guard = crate::paths::AidHomeGuard::set(temp.path());
 
     let cursor = AgentKind::Cursor;
-    mark_group_rate_limited(
-        &cursor,
-        "premium",
-        "ActionRequiredError: Increase limits for faster responses You're out of usage. \
-         Switch to Auto, or ask your admin to increase your limit to continue.",
-    );
+    mark_group_rate_limited(&cursor, None, "premium", "ActionRequiredError: Increase limits for faster responses You're out of usage. \
+         Switch to Auto, or ask your admin to increase your limit to continue.");
 
-    age_marker(&group_marker_path(&cursor, "premium"), RATE_LIMIT_WINDOW_SECS * 100);
-    assert!(is_group_rate_limited(&cursor, "premium"));
-    assert!(!is_group_rate_limited(&cursor, "auto"), "auto keeps serving");
-    assert!(!is_rate_limited(&cursor), "the agent itself is not written off");
+    age_marker(&group_marker_path(&cursor, None, "premium"), RATE_LIMIT_WINDOW_SECS * 100);
+    assert!(is_group_rate_limited(&cursor, None, "premium"));
+    assert!(!is_group_rate_limited(&cursor, None, "auto"), "auto keeps serving");
+    assert!(!is_rate_limited(&cursor, None), "the agent itself is not written off");
 
-    assert!(clear_all_rate_limits_for_agent(&cursor));
-    assert!(!is_group_rate_limited(&cursor, "premium"));
+    assert!(clear_all_rate_limits_for_agent(&cursor, None));
+    assert!(!is_group_rate_limited(&cursor, None, "premium"));
 }
 
 /// The live call site, not just the grouping helper. `classify_line` in the
 /// cursor adapter has no model in hand, so it marked the agent — which made
-/// `is_rate_limited(Cursor)` true and took `auto` out with the pool that ran
+/// `is_rate_limited(Cursor, None)` true and took `auto` out with the pool that ran
 /// out. The message names the tier; the marking must follow it.
 #[test]
 fn a_cursor_premium_refusal_with_no_model_in_hand_holds_only_the_premium_pool() {
@@ -297,17 +287,14 @@ fn a_cursor_premium_refusal_with_no_model_in_hand_holds_only_the_premium_pool() 
     let _guard = crate::paths::AidHomeGuard::set(temp.path());
 
     let cursor = AgentKind::Cursor;
-    mark_rate_limited_for_message(
-        &cursor,
-        "ActionRequiredError: Increase limits for faster responses You're out of usage. \
-         Switch to Auto, or ask your admin to increase your limit to continue.",
-    );
+    mark_rate_limited_for_message(&cursor, None, "ActionRequiredError: Increase limits for faster responses You're out of usage. \
+         Switch to Auto, or ask your admin to increase your limit to continue.");
 
-    assert!(is_group_rate_limited(&cursor, "premium"), "the spent pool is held");
-    assert!(!is_group_rate_limited(&cursor, "auto"), "auto keeps serving");
-    assert!(!is_rate_limited(&cursor), "the agent as a whole is not written off");
+    assert!(is_group_rate_limited(&cursor, None, "premium"), "the spent pool is held");
+    assert!(!is_group_rate_limited(&cursor, None, "auto"), "auto keeps serving");
+    assert!(!is_rate_limited(&cursor, None), "the agent as a whole is not written off");
     assert!(
-        dispatch_blocking_hold(&cursor).is_none(),
+        dispatch_blocking_hold(&cursor, None).is_none(),
         "aid run must still dispatch cursor — on auto"
     );
 }
@@ -330,11 +317,11 @@ fn cursors_premium_refusal_is_read_off_the_stderr_channel() {
         crate::quota_channel::Channel::CliStderr,
     )
     .expect("cursor's premium refusal must be readable on stderr");
-    mark_rate_limited_for_message(&AgentKind::Cursor, &refusal);
+    mark_rate_limited_for_message(&AgentKind::Cursor, None, &refusal);
 
-    assert!(is_group_rate_limited(&AgentKind::Cursor, "premium"));
-    assert!(!is_group_rate_limited(&AgentKind::Cursor, "auto"));
-    assert!(!is_rate_limited(&AgentKind::Cursor));
+    assert!(is_group_rate_limited(&AgentKind::Cursor, None, "premium"));
+    assert!(!is_group_rate_limited(&AgentKind::Cursor, None, "auto"));
+    assert!(!is_rate_limited(&AgentKind::Cursor, None));
 }
 
 /// The complement: a cursor refusal that names no tier is still an agent-level
@@ -345,10 +332,10 @@ fn a_cursor_refusal_naming_no_tier_still_marks_the_agent() {
     let _guard = crate::paths::AidHomeGuard::set(temp.path());
 
     let cursor = AgentKind::Cursor;
-    mark_rate_limited_for_message(&cursor, "Quota exceeded for this workspace");
+    mark_rate_limited_for_message(&cursor, None, "Quota exceeded for this workspace");
 
-    assert!(is_rate_limited(&cursor));
-    assert!(!is_group_rate_limited(&cursor, "premium"));
+    assert!(is_rate_limited(&cursor, None));
+    assert!(!is_group_rate_limited(&cursor, None, "premium"));
 }
 
 /// `aid run` used to divert only when a recovery time was present. A spent
@@ -358,15 +345,12 @@ fn a_human_ended_hold_blocks_dispatch_and_names_the_way_out() {
     let temp = isolated();
     let _guard = crate::paths::AidHomeGuard::set(temp.path());
 
-    mark_rate_limited(
-        &AgentKind::Grok,
-        "API error (status 402 Payment Required): Grok Build usage balance exhausted",
-    );
-    let hold = dispatch_blocking_hold(&AgentKind::Grok).expect("a spent balance must block");
+    mark_rate_limited(&AgentKind::Grok, None, "API error (status 402 Payment Required): Grok Build usage balance exhausted");
+    let hold = dispatch_blocking_hold(&AgentKind::Grok, None).expect("a spent balance must block");
     assert_eq!(hold, "until cleared with `aid config clear-limit grok`");
 
-    assert!(clear_rate_limit(&AgentKind::Grok));
-    assert!(dispatch_blocking_hold(&AgentKind::Grok).is_none());
+    assert!(clear_rate_limit(&AgentKind::Grok, None));
+    assert!(dispatch_blocking_hold(&AgentKind::Grok, None).is_none());
 }
 
 /// The other direction of the same gate: a stated time still blocks while it is
@@ -377,17 +361,17 @@ fn a_stated_time_blocks_dispatch_only_until_it_passes() {
     let temp = isolated();
     let _guard = crate::paths::AidHomeGuard::set(temp.path());
 
-    std::fs::write(marker_path(&AgentKind::Codex), read_fixture("rate-limit-codex"))
+    std::fs::write(marker_path(&AgentKind::Codex, None), read_fixture("rate-limit-codex"))
         .expect("write marker");
     assert_eq!(
-        dispatch_blocking_hold(&AgentKind::Codex),
+        dispatch_blocking_hold(&AgentKind::Codex, None),
         Some("until Aug 11th, 2026 2:23 PM".to_string()),
         "the provider's own phrasing of the time is quoted back"
     );
 
-    std::fs::write(marker_path(&AgentKind::Oz), read_fixture("rate-limit-oz")).expect("write marker");
+    std::fs::write(marker_path(&AgentKind::Oz, None), read_fixture("rate-limit-oz")).expect("write marker");
     assert!(
-        dispatch_blocking_hold(&AgentKind::Oz).is_none(),
+        dispatch_blocking_hold(&AgentKind::Oz, None).is_none(),
         "a reset time in the past must not divert a run"
     );
 }
@@ -400,9 +384,9 @@ fn a_transient_cooldown_does_not_divert_dispatch() {
     let temp = isolated();
     let _guard = crate::paths::AidHomeGuard::set(temp.path());
 
-    mark_rate_limited(&AgentKind::Claude, "HTTP 429 Too Many Requests");
-    assert!(is_rate_limited(&AgentKind::Claude), "still cooling down");
-    assert!(dispatch_blocking_hold(&AgentKind::Claude).is_none());
+    mark_rate_limited(&AgentKind::Claude, None, "HTTP 429 Too Many Requests");
+    assert!(is_rate_limited(&AgentKind::Claude, None), "still cooling down");
+    assert!(dispatch_blocking_hold(&AgentKind::Claude, None).is_none());
 }
 
 /// Markers already on disk when this version lands carry no `hold:` line. The
@@ -422,19 +406,19 @@ fn a_legacy_marker_is_reclassified_from_the_refusal_it_stored() {
         // "recovery_at: " empty, refusal on a later line of a multi-line message.
         (AgentKind::Grok, "rate-limit-grok"),
     ] {
-        let path = marker_path(&agent);
+        let path = marker_path(&agent, None);
         std::fs::write(&path, read_fixture(fixture)).expect("write marker");
         age_marker(&path, RATE_LIMIT_WINDOW_SECS * 100);
 
         assert!(
-            is_rate_limited(&agent),
+            is_rate_limited(&agent, None),
             "{fixture} states a refusal only a person ends and must not expire on a timer"
         );
         assert!(
-            get_rate_limit_info(&agent).expect("marker present").needs_human,
+            get_rate_limit_info(&agent, None).expect("marker present").needs_human,
             "{fixture} must report which kind of hold it is under"
         );
-        assert!(dispatch_blocking_hold(&agent).is_some(), "{fixture} must divert dispatch");
+        assert!(dispatch_blocking_hold(&agent, None).is_some(), "{fixture} must divert dispatch");
     }
 }
 
@@ -446,13 +430,13 @@ fn a_legacy_marker_with_an_unrecognised_refusal_still_expires() {
     let temp = isolated();
     let _guard = crate::paths::AidHomeGuard::set(temp.path());
 
-    let path = marker_path(&AgentKind::Claude);
+    let path = marker_path(&AgentKind::Claude, None);
     std::fs::write(&path, "recovery_at: \nmessage: 429 Too Many Requests\n")
         .expect("write marker");
     age_marker(&path, RATE_LIMIT_WINDOW_SECS + 60);
 
-    assert!(!is_rate_limited(&AgentKind::Claude));
-    assert!(!get_rate_limit_info(&AgentKind::Claude).expect("marker present").needs_human);
+    assert!(!is_rate_limited(&AgentKind::Claude, None));
+    assert!(!get_rate_limit_info(&AgentKind::Claude, None).expect("marker present").needs_human);
 }
 
 /// A marker records what *one* provider said, so a needle another provider owns
@@ -473,19 +457,19 @@ fn a_stored_refusal_only_speaks_for_the_agent_whose_marker_it_is() {
     let stored = "recovery_at: \nmessage: QuotaSignature { needle: \"insufficient balance\", \
                   recovery: QuotaRecovery::NeedsHuman }\n";
 
-    let claude = marker_path(&AgentKind::Claude);
+    let claude = marker_path(&AgentKind::Claude, None);
     std::fs::write(&claude, stored).expect("write marker");
     age_marker(&claude, RATE_LIMIT_WINDOW_SECS + 60);
     assert!(
-        !is_rate_limited(&AgentKind::Claude),
+        !is_rate_limited(&AgentKind::Claude, None),
         "another provider's needle must not hold claude open until someone clears it"
     );
 
-    let opencode = marker_path(&AgentKind::OpenCode);
+    let opencode = marker_path(&AgentKind::OpenCode, None);
     std::fs::write(&opencode, stored).expect("write marker");
     age_marker(&opencode, RATE_LIMIT_WINDOW_SECS + 60);
     assert!(
-        is_rate_limited(&AgentKind::OpenCode),
+        is_rate_limited(&AgentKind::OpenCode, None),
         "opencode's own refusal must still hold, or this became a denylist"
     );
 }

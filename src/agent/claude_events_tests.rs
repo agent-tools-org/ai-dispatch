@@ -8,7 +8,7 @@ use crate::{paths, rate_limit};
 fn marks_claude_rate_limits_from_error_and_user_events() {
     let temp = tempfile::tempdir().unwrap();
     let _aid_home = paths::AidHomeGuard::set(temp.path());
-    rate_limit::clear_rate_limit(&AgentKind::Claude);
+    rate_limit::clear_rate_limit(&AgentKind::Claude, None);
     let task_id = TaskId("t-claude-rate".to_string());
     let event = parse_event_line(
         &task_id,
@@ -16,8 +16,8 @@ fn marks_claude_rate_limits_from_error_and_user_events() {
     )
     .unwrap();
     assert_eq!(event.event_kind, EventKind::Error);
-    assert!(rate_limit::is_rate_limited(&AgentKind::Claude));
-    rate_limit::clear_rate_limit(&AgentKind::Claude);
+    assert!(rate_limit::is_rate_limited(&AgentKind::Claude, None));
+    rate_limit::clear_rate_limit(&AgentKind::Claude, None);
     // A `tool_result` block flagged `is_error` is the *tool* failing, and its
     // text is whatever the model asked for. It is still an Error event; it is
     // not testimony about the provider. Marking here wrote
@@ -28,7 +28,7 @@ fn marks_claude_rate_limits_from_error_and_user_events() {
     )
     .unwrap();
     assert_eq!(event.event_kind, EventKind::Error);
-    assert!(!rate_limit::is_rate_limited(&AgentKind::Claude));
+    assert!(!rate_limit::is_rate_limited(&AgentKind::Claude, None));
 }
 
 #[test]

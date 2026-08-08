@@ -192,7 +192,12 @@ pub async fn watch_streaming(
                                         // quota belongs to is only knowable from what aid dispatched.
                                         let task = store.get_task(task_id.as_str()).ok().flatten();
     let dispatched_model = task.as_ref().and_then(|t| t.requested_model.as_deref());
-    let quota = crate::agent::stream_completion::record_quota_exhaustion(&full_output, agent.kind(), info.model.as_deref().or(dispatched_model));
+    let quota = crate::agent::stream_completion::record_quota_exhaustion(
+        &full_output,
+        agent.kind(),
+        agent.rate_limit_name(),
+        info.model.as_deref().or(dispatched_model),
+    );
     if quota.should_fail() {
         status = TaskStatus::Failed;
         info.status = status;
@@ -203,7 +208,7 @@ pub async fn watch_streaming(
     // provider that is out.
     if status == TaskStatus::Done && !quota.recorded() {
         let model = info.model.as_deref().or(dispatched_model);
-        rate_limit::clear_rate_limit_for_model(&agent.kind(), model);
+        rate_limit::clear_rate_limit_for_model(&agent.kind(), agent.rate_limit_name(), model);
     }
     let stderr_note = failure_stderr_note(status, task_id, agent);
     let detail = format!(
@@ -282,7 +287,11 @@ fn failure_stderr_note(status: TaskStatus, task_id: &TaskId, agent: &dyn Agent) 
             crate::quota_channel::Channel::CliStderr,
         )
     {
-        rate_limit::mark_rate_limited_for_message(&agent.kind(), &message);
+        rate_limit::mark_rate_limited_for_message(
+            &agent.kind(),
+            agent.rate_limit_name(),
+            &message,
+        );
     }
     format!(" — stderr: {}", stderr_path.display())
 }

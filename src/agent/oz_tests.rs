@@ -200,7 +200,7 @@ fn parses_agent_reasoning_event() {
 fn parses_rate_limit_error_and_marks_agent() {
     let temp = tempfile::tempdir().unwrap();
     let _aid_home = paths::AidHomeGuard::set(temp.path());
-    let _ = rate_limit::clear_rate_limit(&AgentKind::Oz);
+    let _ = rate_limit::clear_rate_limit(&AgentKind::Oz, None);
     let agent = OzAgent;
     let line = r#"{"type":"error","message":"Error: Quota limit reached."}"#;
     let event = agent
@@ -209,8 +209,8 @@ fn parses_rate_limit_error_and_marks_agent() {
 
     assert_eq!(event.event_kind, EventKind::Error);
     let info =
-        rate_limit::get_rate_limit_info(&AgentKind::Oz).expect("rate limit marker should be created");
+        rate_limit::get_rate_limit_info(&AgentKind::Oz, None).expect("rate limit marker should be created");
     assert_eq!(info.message.as_deref(), Some("Error: Quota limit reached."));
 
-    let _ = rate_limit::clear_rate_limit(&AgentKind::Oz);
+    let _ = rate_limit::clear_rate_limit(&AgentKind::Oz, None);
 }

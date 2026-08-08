@@ -35,19 +35,15 @@ fn nested_opencode_error_type_fails() {
 fn record_quota_exhaustion_ignores_agent_prose_about_rate_limits() {
     let temp = tempfile::tempdir().unwrap();
     let _aid_home = crate::paths::AidHomeGuard::set(temp.path());
-    crate::rate_limit::clear_rate_limit(&crate::types::AgentKind::Cursor);
+    crate::rate_limit::clear_rate_limit(&crate::types::AgentKind::Cursor, None);
 
     let report = format!(
         "Conclusion: {}\n",
         "The RPC provider throttles us; we saw a 429 and burned Alchemy credits"
     );
-    assert!(!record_quota_exhaustion(
-        &report,
-        crate::types::AgentKind::Cursor,
-        None,
-    )
+    assert!(!record_quota_exhaustion(&report, crate::types::AgentKind::Cursor, None, None,)
     .recorded());
-    assert!(!crate::rate_limit::is_rate_limited(&crate::types::AgentKind::Cursor));
+    assert!(!crate::rate_limit::is_rate_limited(&crate::types::AgentKind::Cursor, None));
 }
 
 #[test]
@@ -55,26 +51,18 @@ fn record_quota_exhaustion_detects_provider_refusal_templates() {
     let temp = tempfile::tempdir().unwrap();
     let _aid_home = crate::paths::AidHomeGuard::set(temp.path());
 
-    crate::rate_limit::clear_rate_limit(&crate::types::AgentKind::Qwen);
+    crate::rate_limit::clear_rate_limit(&crate::types::AgentKind::Qwen, None);
     let qwen_out = "Quota exhausted: Your token-plan 5-hour quota has been exhausted.";
-    assert!(record_quota_exhaustion(
-        qwen_out,
-        crate::types::AgentKind::Qwen,
-        None,
-    )
+    assert!(record_quota_exhaustion(qwen_out, crate::types::AgentKind::Qwen, None, None,)
     .should_fail());
-    assert!(crate::rate_limit::is_rate_limited(&crate::types::AgentKind::Qwen));
-    crate::rate_limit::clear_rate_limit(&crate::types::AgentKind::Qwen);
+    assert!(crate::rate_limit::is_rate_limited(&crate::types::AgentKind::Qwen, None));
+    crate::rate_limit::clear_rate_limit(&crate::types::AgentKind::Qwen, None);
 
-    crate::rate_limit::clear_rate_limit(&crate::types::AgentKind::Codex);
+    crate::rate_limit::clear_rate_limit(&crate::types::AgentKind::Codex, None);
     let codex_out = "You have hit your usage limit. try again at Mar 21st, 2099 2:27 PM.";
-    assert!(record_quota_exhaustion(
-        codex_out,
-        crate::types::AgentKind::Codex,
-        None,
-    )
+    assert!(record_quota_exhaustion(codex_out, crate::types::AgentKind::Codex, None, None,)
     .should_fail());
-    assert!(crate::rate_limit::is_rate_limited(&crate::types::AgentKind::Codex));
+    assert!(crate::rate_limit::is_rate_limited(&crate::types::AgentKind::Codex, None));
 }
 
 #[test]
@@ -94,34 +82,26 @@ fn prose_rate_limit_tokens_are_not_quota_failures() {
 fn record_quota_exhaustion_marks_but_does_not_fail_substantive_deliverable() {
     let temp = tempfile::tempdir().unwrap();
     let _aid_home = crate::paths::AidHomeGuard::set(temp.path());
-    crate::rate_limit::clear_rate_limit(&crate::types::AgentKind::Qwen);
+    crate::rate_limit::clear_rate_limit(&crate::types::AgentKind::Qwen, None);
 
     let mut report = String::from("## Findings\n\n");
     report.push_str(&"The audit reviewed rate limits and 429 handling. ".repeat(20));
     report.push_str("\nQuota exhausted: Your token-plan 5-hour quota has been exhausted.");
-    assert!(!record_quota_exhaustion(
-        &report,
-        crate::types::AgentKind::Qwen,
-        None,
-    )
+    assert!(!record_quota_exhaustion(&report, crate::types::AgentKind::Qwen, None, None,)
     .should_fail());
-    assert!(crate::rate_limit::is_rate_limited(&crate::types::AgentKind::Qwen));
+    assert!(crate::rate_limit::is_rate_limited(&crate::types::AgentKind::Qwen, None));
 }
 
 #[test]
 fn record_quota_exhaustion_marks_refusal_even_behind_markdown_heading() {
     let temp = tempfile::tempdir().unwrap();
     let _aid_home = crate::paths::AidHomeGuard::set(temp.path());
-    crate::rate_limit::clear_rate_limit(&crate::types::AgentKind::Qwen);
+    crate::rate_limit::clear_rate_limit(&crate::types::AgentKind::Qwen, None);
 
     let output = "# Error\nQuota exhausted: Your token-plan 5-hour quota has been exhausted.";
-    assert!(!record_quota_exhaustion(
-        output,
-        crate::types::AgentKind::Qwen,
-        None,
-    )
+    assert!(!record_quota_exhaustion(output, crate::types::AgentKind::Qwen, None, None,)
     .should_fail());
-    assert!(crate::rate_limit::is_rate_limited(&crate::types::AgentKind::Qwen));
+    assert!(crate::rate_limit::is_rate_limited(&crate::types::AgentKind::Qwen, None));
 }
 
 /// A provider whose refusal wording nobody has captured is undetectable on the
@@ -134,17 +114,17 @@ fn unobserved_providers_are_not_guessed_from_generic_prose() {
     let _aid_home = crate::paths::AidHomeGuard::set(temp.path());
 
     for agent in [crate::types::AgentKind::Claude, crate::types::AgentKind::Grok] {
-        crate::rate_limit::clear_rate_limit(&agent);
-        assert!(!record_quota_exhaustion("429 Too Many Requests", agent, None).recorded());
-        assert!(!crate::rate_limit::is_rate_limited(&agent));
+        crate::rate_limit::clear_rate_limit(&agent, None);
+        assert!(!record_quota_exhaustion("429 Too Many Requests", agent, None, None).recorded());
+        assert!(!crate::rate_limit::is_rate_limited(&agent, None));
     }
 
     // The same shape an agent writes in a report must not mark either.
-    crate::rate_limit::clear_rate_limit(&crate::types::AgentKind::Cursor);
+    crate::rate_limit::clear_rate_limit(&crate::types::AgentKind::Cursor, None);
     for line in ["429", "## Rate Limit", "Task 429", "Rate Limit"] {
-        assert!(!record_quota_exhaustion(line, crate::types::AgentKind::Cursor, None).recorded());
+        assert!(!record_quota_exhaustion(line, crate::types::AgentKind::Cursor, None, None).recorded());
     }
-    assert!(!crate::rate_limit::is_rate_limited(&crate::types::AgentKind::Cursor));
+    assert!(!crate::rate_limit::is_rate_limited(&crate::types::AgentKind::Cursor, None));
 }
 
 #[test]
@@ -210,7 +190,7 @@ fn a_report_quoting_this_repos_own_fixture_never_marks_the_agent() {
     let temp = tempfile::tempdir().unwrap();
     let _aid_home = crate::paths::AidHomeGuard::set(temp.path());
     let cursor = crate::types::AgentKind::Cursor;
-    crate::rate_limit::clear_all_rate_limits_for_agent(&cursor);
+    crate::rate_limit::clear_all_rate_limits_for_agent(&cursor, None);
 
     let quoted = "assert_rate_limit(r#\"{\"type\":\"error\",\"message\":\"quota exceeded for \
                   this workspace\"}\"#, true);\n====\ncommit 7881e2d";
@@ -223,9 +203,9 @@ fn a_report_quoting_this_repos_own_fixture_never_marks_the_agent() {
         })
     );
 
-    assert!(!record_quota_exhaustion(&output, cursor, None).recorded());
-    assert!(!crate::rate_limit::is_rate_limited(&cursor));
-    assert!(!crate::rate_limit::is_group_rate_limited(&cursor, "premium"));
+    assert!(!record_quota_exhaustion(&output, cursor, None, None).recorded());
+    assert!(!crate::rate_limit::is_rate_limited(&cursor, None));
+    assert!(!crate::rate_limit::is_group_rate_limited(&cursor, None, "premium"));
 }
 
 /// The same guarantee over every signature we ship, so a needle added later
@@ -236,7 +216,7 @@ fn no_shipped_signature_can_be_quoted_into_a_marker() {
     let _aid_home = crate::paths::AidHomeGuard::set(temp.path());
 
     for signature in crate::rate_limit_signatures::QUOTA_SIGNATURES {
-        crate::rate_limit::clear_all_rate_limits_for_agent(&signature.agent);
+        crate::rate_limit::clear_all_rate_limits_for_agent(&signature.agent, None);
         let report = serde_json::json!({
             "type": "assistant",
             "message": {"content": [{
@@ -246,12 +226,12 @@ fn no_shipped_signature_can_be_quoted_into_a_marker() {
         })
         .to_string();
         assert!(
-            !record_quota_exhaustion(&report, signature.agent, None).recorded(),
+            !record_quota_exhaustion(&report, signature.agent, None, None).recorded(),
             "needle {:?} was quoted into a marker for {:?}",
             signature.needle,
             signature.agent
         );
-        assert!(!crate::rate_limit::is_rate_limited(&signature.agent));
+        assert!(!crate::rate_limit::is_rate_limited(&signature.agent, None));
     }
 }
 
@@ -267,11 +247,11 @@ fn copilots_real_session_error_envelope_is_recorded() {
     let temp = tempfile::tempdir().unwrap();
     let _aid_home = crate::paths::AidHomeGuard::set(temp.path());
     let copilot = crate::types::AgentKind::Copilot;
-    crate::rate_limit::clear_all_rate_limits_for_agent(&copilot);
+    crate::rate_limit::clear_all_rate_limits_for_agent(&copilot, None);
 
     let output = r#"{"type":"session.error","data":{"message":"{\"error\":{\"message\":\"You have exceeded your monthly quota\",\"code\":\"quota_exceeded\"}}","requestFingerprint":{"messageCount":2}}}"#;
-    assert!(record_quota_exhaustion(output, copilot, None).recorded());
-    let info = crate::rate_limit::get_rate_limit_info(&copilot).expect("marker");
+    assert!(record_quota_exhaustion(output, copilot, None, None).recorded());
+    let info = crate::rate_limit::get_rate_limit_info(&copilot, None).expect("marker");
     assert!(info.needs_human, "a monthly quota with no stated reset waits for a person");
     assert!(
         info.message.is_some_and(|message| message.contains("exceeded your monthly quota")),
@@ -286,11 +266,11 @@ fn the_same_needle_in_a_cli_error_envelope_still_marks() {
     let temp = tempfile::tempdir().unwrap();
     let _aid_home = crate::paths::AidHomeGuard::set(temp.path());
     let cursor = crate::types::AgentKind::Cursor;
-    crate::rate_limit::clear_all_rate_limits_for_agent(&cursor);
+    crate::rate_limit::clear_all_rate_limits_for_agent(&cursor, None);
 
     let output = r#"{"type":"error","message":"quota exceeded for this workspace"}"#;
-    assert!(record_quota_exhaustion(output, cursor, None).recorded());
-    assert!(crate::rate_limit::is_rate_limited(&cursor));
+    assert!(record_quota_exhaustion(output, cursor, None, None).recorded());
+    assert!(crate::rate_limit::is_rate_limited(&cursor, None));
 }
 
 /// The two facts must stay separable. `watcher.rs` clears the rate-limit marker
@@ -301,17 +281,17 @@ fn the_same_needle_in_a_cli_error_envelope_still_marks() {
 fn a_delivered_run_that_hit_a_refusal_keeps_its_marker() {
     let temp = tempfile::tempdir().unwrap();
     let _aid_home = crate::paths::AidHomeGuard::set(temp.path());
-    crate::rate_limit::clear_rate_limit(&crate::types::AgentKind::Qwen);
+    crate::rate_limit::clear_rate_limit(&crate::types::AgentKind::Qwen, None);
 
     let mut report = String::from("## Findings\n\n");
     report.push_str(&"Reviewed the adapter and its tests. ".repeat(20));
     report.push_str("\nQuota exhausted: Your token-plan 5-hour quota has been exhausted.");
 
-    let outcome = record_quota_exhaustion(&report, crate::types::AgentKind::Qwen, None);
+    let outcome = record_quota_exhaustion(&report, crate::types::AgentKind::Qwen, None, None);
     assert!(outcome.recorded(), "the outage must be recorded");
     assert!(!outcome.should_fail(), "a run that delivered is not a failed task");
     // What watcher.rs consults before clearing.
-    assert!(crate::rate_limit::is_rate_limited(&crate::types::AgentKind::Qwen));
+    assert!(crate::rate_limit::is_rate_limited(&crate::types::AgentKind::Qwen, None));
 }
 
 #[test]
@@ -410,7 +390,7 @@ fn buffered_grok_prose_about_rate_limits_never_marks_it() {
     let temp = tempfile::tempdir().unwrap();
     let _aid_home = crate::paths::AidHomeGuard::set(temp.path());
     let agent = crate::types::AgentKind::Grok;
-    crate::rate_limit::clear_rate_limit(&agent);
+    crate::rate_limit::clear_rate_limit(&agent, None);
 
     for line in [
         "I hit a rate limit while reading the file",
@@ -419,11 +399,11 @@ fn buffered_grok_prose_about_rate_limits_never_marks_it() {
         "=== AID TASK t-abc DONE (exit 0) ===",
     ] {
         assert!(
-            !record_quota_exhaustion(line, agent, None).recorded(),
+            !record_quota_exhaustion(line, agent, None, None).recorded(),
             "grok must not be marked from its own prose: {line}"
         );
     }
-    assert!(!crate::rate_limit::is_rate_limited(&agent));
+    assert!(!crate::rate_limit::is_rate_limited(&agent, None));
 }
 
 /// The buffered and PTY watchers pass whatever model the run recorded, which is
@@ -435,15 +415,15 @@ fn a_cursor_premium_refusal_with_no_recorded_model_marks_only_the_premium_pool()
     let _aid_home = crate::paths::AidHomeGuard::set(temp.path());
 
     let cursor = crate::types::AgentKind::Cursor;
-    crate::rate_limit::clear_all_rate_limits_for_agent(&cursor);
+    crate::rate_limit::clear_all_rate_limits_for_agent(&cursor, None);
     let refusal = "ActionRequiredError: Increase limits for faster responses You're out of \
                    usage. Switch to Auto, or ask your admin to increase your limit to continue.";
 
-    assert!(record_quota_exhaustion(refusal, cursor, None).should_fail());
-    assert!(crate::rate_limit::is_group_rate_limited(&cursor, "premium"));
-    assert!(!crate::rate_limit::is_group_rate_limited(&cursor, "auto"));
+    assert!(record_quota_exhaustion(refusal, cursor, None, None).should_fail());
+    assert!(crate::rate_limit::is_group_rate_limited(&cursor, None, "premium"));
+    assert!(!crate::rate_limit::is_group_rate_limited(&cursor, None, "auto"));
     assert!(
-        !crate::rate_limit::is_rate_limited(&cursor),
+        !crate::rate_limit::is_rate_limited(&cursor, None),
         "a tier refusal must not write off the whole agent"
     );
 }

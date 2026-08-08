@@ -237,10 +237,17 @@ fn recommendation(
 }
 
 fn rate_limit_notes(ranked: &[RankedCandidate], urgency: TaskUrgency) -> Vec<String> {
-    ranked.iter().filter(|item| rate_limit::is_rate_limited(&item.order.kind))
+    ranked
+        .iter()
+        .filter(|item| {
+            let custom = (item.order.kind == AgentKind::Custom).then_some(item.report.agent.as_str());
+            rate_limit::is_rate_limited(&item.order.kind, custom)
+        })
         .map(|item| {
-            let recovery = rate_limit::get_rate_limit_info(&item.order.kind)
-                .and_then(|info| info.recovery_at).map(|value| format!(" until {value}"))
+            let custom = (item.order.kind == AgentKind::Custom).then_some(item.report.agent.as_str());
+            let recovery = rate_limit::get_rate_limit_info(&item.order.kind, custom)
+                .and_then(|info| info.recovery_at)
+                .map(|value| format!(" until {value}"))
                 .unwrap_or_default();
             let action = match urgency {
                 TaskUrgency::Background => "; background work may wait",

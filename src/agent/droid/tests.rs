@@ -237,14 +237,14 @@ fn parses_session_forked_events_as_milestones() {
 fn marks_droid_rate_limits_from_status_and_error_type() {
     let temp = tempfile::tempdir().unwrap();
     let _aid_home = paths::AidHomeGuard::set(temp.path());
-    rate_limit::clear_rate_limit(&AgentKind::Droid);
+    rate_limit::clear_rate_limit(&AgentKind::Droid, None);
     let agent = DroidAgent;
     let line = r#"{"type":"error","status":429,"error_type":"rate_limit_exceeded"}"#;
     let event = agent.parse_event(&TaskId("t-droid".to_string()), line).unwrap();
     assert_eq!(event.event_kind, EventKind::Error);
     assert_eq!(event.detail, "rate_limit_exceeded");
-    assert!(rate_limit::is_rate_limited(&AgentKind::Droid));
-    rate_limit::clear_rate_limit(&AgentKind::Droid);
+    assert!(rate_limit::is_rate_limited(&AgentKind::Droid, None));
+    rate_limit::clear_rate_limit(&AgentKind::Droid, None);
 }
 
 #[test]

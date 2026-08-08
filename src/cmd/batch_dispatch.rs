@@ -83,10 +83,10 @@ async fn dispatch_with_dependencies(
         } else {
             task.agent.as_str()
         };
-        let Some(kind) = crate::types::AgentKind::parse_str(agent_name) else {
-            continue;
-        };
-        if !crate::rate_limit::is_rate_limited(&kind) || !rate_warned.insert(agent_name.to_string()) {
+        let (kind, custom_name) = crate::rate_limit::resolve_agent(agent_name);
+        if !crate::rate_limit::is_rate_limited(&kind, custom_name)
+            || !rate_warned.insert(agent_name.to_string())
+        {
             continue;
         }
         if task.fallback.is_some() {

@@ -89,7 +89,7 @@ impl super::Agent for OzAgent {
             "error" => {
                 let msg = v.get("message").and_then(|m| m.as_str()).unwrap_or("unknown error");
                 if rate_limit::is_rate_limit_error_for_agent(msg, &crate::types::AgentKind::Oz) {
-                    rate_limit::mark_rate_limited(&crate::types::AgentKind::Oz, msg);
+                    rate_limit::mark_rate_limited(&crate::types::AgentKind::Oz, None, msg);
                 }
                 let (detail, metadata) = capped_detail(msg);
                 Some(TaskEvent {

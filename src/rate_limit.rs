@@ -25,35 +25,64 @@ fn assert_marker_path_isolated() {
     crate::paths::assert_aid_home_isolated("rate_limit::marker_path");
 }
 
-fn marker_path(agent: &AgentKind) -> PathBuf {
+/// Resolve a CLI agent name into kind + optional custom id for marker paths.
+pub fn resolve_agent(name: &str) -> (AgentKind, Option<&str>) {
+    match AgentKind::parse_str(name) {
+        Some(kind) => (kind, None),
+        None => (AgentKind::Custom, Some(name)),
+    }
+}
+
+/// Marker file slug under `~/.aid/rate-limit-*`.
+///
+/// Built-ins keep `AgentKind::as_str()` so live files like `rate-limit-codex`
+/// stay put. A custom agent uses its own id — otherwise every custom shares
+/// one `rate-limit-custom` hold.
+pub fn marker_slug<'a>(agent: &'a AgentKind, custom_name: Option<&'a str>) -> &'a str {
+    match (agent, custom_name) {
+        (AgentKind::Custom, Some(name)) if !name.is_empty() => name,
+        _ => agent.as_str(),
+    }
+}
+
+fn marker_path(agent: &AgentKind, custom_name: Option<&str>) -> PathBuf {
     #[cfg(test)]
     assert_marker_path_isolated();
-    aid_dir().join(format!("rate-limit-{}", agent.as_str()))
+    aid_dir().join(format!("rate-limit-{}", marker_slug(agent, custom_name)))
 }
 
 /// Marker for one model group of an agent whose plan meters families
 /// separately. agy's gemini allowance can be exhausted while its claude
 /// allowance still serves; a per-agent marker would strand the working one.
-fn group_marker_path(agent: &AgentKind, group: &str) -> PathBuf {
+fn group_marker_path(agent: &AgentKind, custom_name: Option<&str>, group: &str) -> PathBuf {
     #[cfg(test)]
     assert_marker_path_isolated();
-    aid_dir().join(format!("rate-limit-{}--{}", agent.as_str(), group))
+    aid_dir().join(format!(
+        "rate-limit-{}--{}",
+        marker_slug(agent, custom_name),
+        group
+    ))
 }
 
-pub fn mark_group_rate_limited(agent: &AgentKind, group: &str, message: &str) {
-    write_marker(&group_marker_path(agent, group), message);
+pub fn mark_group_rate_limited(
+    agent: &AgentKind,
+    custom_name: Option<&str>,
+    group: &str,
+    message: &str,
+) {
+    write_marker(&group_marker_path(agent, custom_name, group), message);
 }
 
-pub fn is_group_rate_limited(agent: &AgentKind, group: &str) -> bool {
-    marker_is_active(&group_marker_path(agent, group), agent)
+pub fn is_group_rate_limited(agent: &AgentKind, custom_name: Option<&str>, group: &str) -> bool {
+    marker_is_active(&group_marker_path(agent, custom_name, group), agent)
 }
 
-pub fn clear_group_rate_limit(agent: &AgentKind, group: &str) -> bool {
-    fs::remove_file(group_marker_path(agent, group)).is_ok()
+pub fn clear_group_rate_limit(agent: &AgentKind, custom_name: Option<&str>, group: &str) -> bool {
+    fs::remove_file(group_marker_path(agent, custom_name, group)).is_ok()
 }
 
-pub fn mark_rate_limited(agent: &AgentKind, message: &str) {
-    write_marker(&marker_path(agent), message);
+pub fn mark_rate_limited(agent: &AgentKind, custom_name: Option<&str>, message: &str) {
+    write_marker(&marker_path(agent, custom_name), message);
 }
 
 /// Record a refusal when the caller has no model in hand — a stderr line, a
@@ -62,12 +91,16 @@ pub fn mark_rate_limited(agent: &AgentKind, message: &str) {
 /// The refusal can still name the tier it exhausted even when the model is
 /// unknown, and marking the whole agent for a tier refusal takes a route out
 /// that is still serving: cursor's "You're out of usage. Switch to Auto" went
-/// through `mark_rate_limited`, so `is_rate_limited(Cursor)` became true and
+/// through `mark_rate_limited`, so `is_rate_limited(Cursor, None)` became true and
 /// `auto` — the tier the message itself points at — stopped being dispatchable.
-pub fn mark_rate_limited_for_message(agent: &AgentKind, message: &str) {
+pub fn mark_rate_limited_for_message(
+    agent: &AgentKind,
+    custom_name: Option<&str>,
+    message: &str,
+) {
     match crate::agent::model_group::group_from_refusal(*agent, message) {
-        Some(group) => mark_group_rate_limited(agent, group, message),
-        None => mark_rate_limited(agent, message),
+        Some(group) => mark_group_rate_limited(agent, custom_name, group, message),
+        None => mark_rate_limited(agent, custom_name, message),
     }
 }
 
@@ -221,8 +254,8 @@ fn marker_is_active(path: &std::path::Path, agent: &AgentKind) -> bool {
 /// The bounded transient cooldown is deliberately not a gate. It is short enough
 /// that moving the caller off the agent they asked for costs more than the wait,
 /// and gating on it was never the previous behaviour either.
-pub fn dispatch_blocking_hold(agent: &AgentKind) -> Option<String> {
-    let path = marker_path(agent);
+pub fn dispatch_blocking_hold(agent: &AgentKind, custom_name: Option<&str>) -> Option<String> {
+    let path = marker_path(agent, custom_name);
     let content = fs::read_to_string(&path).ok()?;
     match stored_hold(&content, agent) {
         StoredHold::Until(recovery_at) if recovery_at > Local::now().naive_local() => {
@@ -233,7 +266,8 @@ pub fn dispatch_blocking_hold(agent: &AgentKind) -> Option<String> {
             Some(format!("until {stated}"))
         }
         StoredHold::NeedsHuman => {
-            Some(format!("until cleared with `aid config clear-limit {}`", agent.as_str()))
+            let slug = marker_slug(agent, custom_name);
+            Some(format!("until cleared with `aid config clear-limit {slug}`"))
         }
         StoredHold::Until(_) | StoredHold::Transient => None,
     }
@@ -257,8 +291,12 @@ fn within_cooldown_window(path: &std::path::Path) -> bool {
 /// survived the watcher and then died in `handle_done_postprocess`.
 ///
 /// Returns true when a marker was actually removed.
-pub fn clear_rate_limit_if_stale(agent: &AgentKind, task_start: DateTime<Local>) -> bool {
-    let path = marker_path(agent);
+pub fn clear_rate_limit_if_stale(
+    agent: &AgentKind,
+    custom_name: Option<&str>,
+    task_start: DateTime<Local>,
+) -> bool {
+    let path = marker_path(agent, custom_name);
     let written_after_start = fs::metadata(&path)
         .and_then(|meta| meta.modified())
         .map(|modified| DateTime::<Local>::from(modified) >= task_start)
@@ -266,15 +304,16 @@ pub fn clear_rate_limit_if_stale(agent: &AgentKind, task_start: DateTime<Local>)
     if written_after_start {
         return false;
     }
-    clear_rate_limit(agent)
+    clear_rate_limit(agent, custom_name)
 }
 
 pub fn clear_group_rate_limit_if_stale(
     agent: &AgentKind,
+    custom_name: Option<&str>,
     group: &str,
     task_start: DateTime<Local>,
 ) -> bool {
-    let path = group_marker_path(agent, group);
+    let path = group_marker_path(agent, custom_name, group);
     let written_after_start = fs::metadata(&path)
         .and_then(|meta| meta.modified())
         .map(|modified| DateTime::<Local>::from(modified) >= task_start)
@@ -282,58 +321,77 @@ pub fn clear_group_rate_limit_if_stale(
     if written_after_start {
         return false;
     }
-    clear_group_rate_limit(agent, group)
+    clear_group_rate_limit(agent, custom_name, group)
 }
 
 pub fn clear_rate_limit_for_model_if_stale(
     agent: &AgentKind,
+    custom_name: Option<&str>,
     model: Option<&str>,
     task_start: DateTime<Local>,
 ) -> bool {
-    let mut cleared = clear_rate_limit_if_stale(agent, task_start);
+    let mut cleared = clear_rate_limit_if_stale(agent, custom_name, task_start);
     if let Some(group) = crate::agent::model_group::model_group(*agent, model) {
-        if clear_group_rate_limit_if_stale(agent, group, task_start) {
+        if clear_group_rate_limit_if_stale(agent, custom_name, group, task_start) {
             cleared = true;
         }
     }
     cleared
 }
 
-pub fn clear_rate_limit_for_model(agent: &AgentKind, model: Option<&str>) -> bool {
-    let mut cleared = clear_rate_limit(agent);
+pub fn clear_rate_limit_for_model(
+    agent: &AgentKind,
+    custom_name: Option<&str>,
+    model: Option<&str>,
+) -> bool {
+    let mut cleared = clear_rate_limit(agent, custom_name);
     if let Some(group) = crate::agent::model_group::model_group(*agent, model) {
-        if clear_group_rate_limit(agent, group) {
+        if clear_group_rate_limit(agent, custom_name, group) {
             cleared = true;
         }
     }
     cleared
 }
 
-pub fn clear_rate_limit(agent: &AgentKind) -> bool {
-    fs::remove_file(marker_path(agent)).is_ok()
+pub fn clear_rate_limit(agent: &AgentKind, custom_name: Option<&str>) -> bool {
+    fs::remove_file(marker_path(agent, custom_name)).is_ok()
 }
 
-pub fn clear_all_rate_limits_for_agent(agent: &AgentKind) -> bool {
-    let mut cleared = clear_rate_limit(agent);
+pub fn clear_all_rate_limits_for_agent(agent: &AgentKind, custom_name: Option<&str>) -> bool {
+    let mut cleared = clear_rate_limit(agent, custom_name);
     for (group, _) in crate::agent::model_group::groups_for_agent(*agent) {
-        if clear_group_rate_limit(agent, group) {
+        if clear_group_rate_limit(agent, custom_name, group) {
             cleared = true;
         }
     }
     cleared
 }
 
-pub fn is_rate_limited(agent: &AgentKind) -> bool {
-    marker_is_active(&marker_path(agent), agent)
+pub fn is_rate_limited(agent: &AgentKind, custom_name: Option<&str>) -> bool {
+    marker_is_active(&marker_path(agent, custom_name), agent)
 }
 
-pub fn rate_limited_agents() -> Vec<(AgentKind, String)> {
-    AgentKind::ALL_BUILTIN.iter().copied()
-    .filter_map(|agent| {
-        let info = get_rate_limit_info(&agent)?;
-        is_rate_limited(&agent).then(|| (agent, info.message.unwrap_or_default()))
-    })
-    .collect()
+/// Currently held agents as `(display name, message)`. Includes registered
+/// custom agents, each under its own marker.
+pub fn rate_limited_agents() -> Vec<(String, String)> {
+    let mut out: Vec<(String, String)> = AgentKind::ALL_BUILTIN
+        .iter()
+        .copied()
+        .filter_map(|agent| {
+            let info = get_rate_limit_info(&agent, None)?;
+            is_rate_limited(&agent, None)
+                .then(|| (agent.as_str().to_string(), info.message.unwrap_or_default()))
+        })
+        .collect();
+    for config in crate::agent::registry::list_custom_agents() {
+        let name = config.id.as_str();
+        if let Some(info) = get_rate_limit_info(&AgentKind::Custom, Some(name))
+            && is_rate_limited(&AgentKind::Custom, Some(name))
+        {
+            out.push((config.id, info.message.unwrap_or_default()));
+        }
+    }
+    out
 }
 
 /// The agent a quota message names, when the provider's wording identifies it.
@@ -486,13 +544,13 @@ pub struct RateLimitInfo {
     pub needs_human: bool,
 }
 
-pub fn recovery_datetime(agent: &AgentKind) -> Option<NaiveDateTime> {
-    let recovery_at = get_rate_limit_info(agent)?.recovery_at?;
+pub fn recovery_datetime(agent: &AgentKind, custom_name: Option<&str>) -> Option<NaiveDateTime> {
+    let recovery_at = get_rate_limit_info(agent, custom_name)?.recovery_at?;
     parse_recovery_datetime(&recovery_at)
 }
 
-pub fn get_rate_limit_info(agent: &AgentKind) -> Option<RateLimitInfo> {
-    let path = marker_path(agent);
+pub fn get_rate_limit_info(agent: &AgentKind, custom_name: Option<&str>) -> Option<RateLimitInfo> {
+    let path = marker_path(agent, custom_name);
     let content = fs::read_to_string(&path).ok()?;
     Some(RateLimitInfo {
         recovery_at: marker_field(&content, "recovery_at: "),
@@ -678,11 +736,11 @@ mod tests {
         let _guard = paths::AidHomeGuard::set(&temp_dir);
         std::fs::create_dir_all(paths::aid_dir()).ok();
 
-        mark_rate_limited(&AgentKind::Codex, "rate limit exceeded");
-        assert!(is_rate_limited(&AgentKind::Codex));
+        mark_rate_limited(&AgentKind::Codex, None, "rate limit exceeded");
+        assert!(is_rate_limited(&AgentKind::Codex, None));
 
-        let _ = std::fs::remove_file(marker_path(&AgentKind::Codex));
-        assert!(!is_rate_limited(&AgentKind::Codex));
+        let _ = std::fs::remove_file(marker_path(&AgentKind::Codex, None));
+        assert!(!is_rate_limited(&AgentKind::Codex, None));
     }
 
     #[test]
@@ -691,7 +749,7 @@ mod tests {
         let _guard = paths::AidHomeGuard::set(&temp_dir);
         std::fs::create_dir_all(paths::aid_dir()).ok();
 
-        assert!(!is_rate_limited(&AgentKind::Codex));
+        assert!(!is_rate_limited(&AgentKind::Codex, None));
     }
 
     #[test]
@@ -750,10 +808,10 @@ mod tests {
         let past = Local::now().naive_local() - chrono::Duration::minutes(5);
         let recovery_at = past.format("%b %d, %Y %I:%M %p").to_string();
         let content = format!("recovery_at: {}\nmessage: test\n", recovery_at);
-        let path = marker_path(&AgentKind::Codex);
+        let path = marker_path(&AgentKind::Codex, None);
         let _ = std::fs::write(&path, content);
 
-        assert!(!is_rate_limited(&AgentKind::Codex));
+        assert!(!is_rate_limited(&AgentKind::Codex, None));
 
         let _ = std::fs::remove_file(path);
     }
@@ -765,8 +823,8 @@ mod tests {
         std::fs::create_dir_all(paths::aid_dir()).ok();
 
         // Test with recovery time
-        mark_rate_limited(&AgentKind::Codex, "You have hit your usage limit. Upgrade to Pro (https://chatgpt.com/explore/pro), visit https://chatgpt.com/codex/settings/usage to purchase more credits or try again at Mar 19th, 2026 2:27 PM.");
-        let info = get_rate_limit_info(&AgentKind::Codex).unwrap();
+        mark_rate_limited(&AgentKind::Codex, None, "You have hit your usage limit. Upgrade to Pro (https://chatgpt.com/explore/pro), visit https://chatgpt.com/codex/settings/usage to purchase more credits or try again at Mar 19th, 2026 2:27 PM.");
+        let info = get_rate_limit_info(&AgentKind::Codex, None).unwrap();
         assert_eq!(info.recovery_at, Some("Mar 19th, 2026 2:27 PM".to_string()));
         assert!(info
             .message
@@ -774,22 +832,22 @@ mod tests {
             .contains("You have hit your usage limit"));
 
         // Test without recovery time
-        mark_rate_limited(&AgentKind::Gemini, "rate limit exceeded");
-        let info = get_rate_limit_info(&AgentKind::Gemini).unwrap();
+        mark_rate_limited(&AgentKind::Gemini, None, "rate limit exceeded");
+        let info = get_rate_limit_info(&AgentKind::Gemini, None).unwrap();
         assert_eq!(info.recovery_at, None);
         assert_eq!(info.message, Some("rate limit exceeded".to_string()));
 
-        mark_rate_limited(&AgentKind::Qwen, "rate limit exceeded");
-        let info = get_rate_limit_info(&AgentKind::Qwen).unwrap();
+        mark_rate_limited(&AgentKind::Qwen, None, "rate limit exceeded");
+        let info = get_rate_limit_info(&AgentKind::Qwen, None).unwrap();
         assert_eq!(info.recovery_at, None);
         assert_eq!(info.message, Some("rate limit exceeded".to_string()));
 
         // Test non-existent file
-        assert!(get_rate_limit_info(&AgentKind::Cursor).is_none());
+        assert!(get_rate_limit_info(&AgentKind::Cursor, None).is_none());
 
-        let _ = std::fs::remove_file(marker_path(&AgentKind::Codex));
-        let _ = std::fs::remove_file(marker_path(&AgentKind::Gemini));
-        let _ = std::fs::remove_file(marker_path(&AgentKind::Qwen));
+        let _ = std::fs::remove_file(marker_path(&AgentKind::Codex, None));
+        let _ = std::fs::remove_file(marker_path(&AgentKind::Gemini, None));
+        let _ = std::fs::remove_file(marker_path(&AgentKind::Qwen, None));
     }
 }
 
@@ -805,13 +863,13 @@ mod stale_clear_tests {
     fn a_marker_written_during_the_run_is_not_cleared_by_success() {
         let temp = tempfile::tempdir().unwrap();
         let _guard = crate::paths::AidHomeGuard::set(temp.path());
-        clear_rate_limit(&AgentKind::Qwen);
+        clear_rate_limit(&AgentKind::Qwen, None);
 
         let task_start = Local::now() - chrono::Duration::minutes(5);
-        mark_rate_limited(&AgentKind::Qwen, "Your token-plan 5-hour quota has been exhausted.");
+        mark_rate_limited(&AgentKind::Qwen, None, "Your token-plan 5-hour quota has been exhausted.");
 
-        assert!(!clear_rate_limit_if_stale(&AgentKind::Qwen, task_start));
-        assert!(is_rate_limited(&AgentKind::Qwen));
+        assert!(!clear_rate_limit_if_stale(&AgentKind::Qwen, None, task_start));
+        assert!(is_rate_limited(&AgentKind::Qwen, None));
     }
 
     /// A marker left by an earlier run is stale and a fresh success clears it,
@@ -820,13 +878,13 @@ mod stale_clear_tests {
     fn a_marker_from_an_earlier_run_is_still_cleared() {
         let temp = tempfile::tempdir().unwrap();
         let _guard = crate::paths::AidHomeGuard::set(temp.path());
-        clear_rate_limit(&AgentKind::Qwen);
+        clear_rate_limit(&AgentKind::Qwen, None);
 
-        mark_rate_limited(&AgentKind::Qwen, "Your token-plan 5-hour quota has been exhausted.");
+        mark_rate_limited(&AgentKind::Qwen, None, "Your token-plan 5-hour quota has been exhausted.");
         let task_start = Local::now() + chrono::Duration::minutes(5);
 
-        assert!(clear_rate_limit_if_stale(&AgentKind::Qwen, task_start));
-        assert!(!is_rate_limited(&AgentKind::Qwen));
+        assert!(clear_rate_limit_if_stale(&AgentKind::Qwen, None, task_start));
+        assert!(!is_rate_limited(&AgentKind::Qwen, None));
     }
 
     #[test]
@@ -835,20 +893,25 @@ mod stale_clear_tests {
         let _guard = crate::paths::AidHomeGuard::set(temp.path());
 
         let agent = AgentKind::Antigravity;
-        clear_all_rate_limits_for_agent(&agent);
+        clear_all_rate_limits_for_agent(&agent, None);
 
-        mark_rate_limited(&agent, "Agent rate limit");
-        mark_group_rate_limited(&agent, "gemini", "Gemini quota exhausted");
-        mark_group_rate_limited(&agent, "claude", "Claude quota exhausted");
+        mark_rate_limited(&agent, None, "Agent rate limit");
+        mark_group_rate_limited(&agent, None, "gemini", "Gemini quota exhausted");
+        mark_group_rate_limited(&agent, None, "claude", "Claude quota exhausted");
 
         let task_start = Local::now() + chrono::Duration::minutes(5);
 
-        let cleared = clear_rate_limit_for_model_if_stale(&agent, Some("gemini-3.6-flash-high"), task_start);
+        let cleared = clear_rate_limit_for_model_if_stale(
+            &agent,
+            None,
+            Some("gemini-3.6-flash-high"),
+            task_start,
+        );
         assert!(cleared, "gemini group marker should be cleared on success");
 
-        assert!(!is_rate_limited(&agent), "agent-level marker must be cleared on model success");
-        assert!(!is_group_rate_limited(&agent, "gemini"), "gemini group must no longer be limited");
-        assert!(is_group_rate_limited(&agent, "claude"), "claude group must remain limited");
+        assert!(!is_rate_limited(&agent, None), "agent-level marker must be cleared on model success");
+        assert!(!is_group_rate_limited(&agent, None, "gemini"), "gemini group must no longer be limited");
+        assert!(is_group_rate_limited(&agent, None, "claude"), "claude group must remain limited");
     }
 
     #[test]
@@ -857,14 +920,14 @@ mod stale_clear_tests {
         let _guard = crate::paths::AidHomeGuard::set(temp.path());
 
         let agent = AgentKind::Antigravity;
-        clear_all_rate_limits_for_agent(&agent);
+        clear_all_rate_limits_for_agent(&agent, None);
 
-        mark_rate_limited(&agent, "Agent level limit");
-        mark_group_rate_limited(&agent, "gemini", "Gemini quota exhausted");
+        mark_rate_limited(&agent, None, "Agent level limit");
+        mark_group_rate_limited(&agent, None, "gemini", "Gemini quota exhausted");
 
-        assert!(clear_rate_limit(&agent));
-        assert!(!is_rate_limited(&agent), "agent-level marker must be removed");
-        assert!(is_group_rate_limited(&agent, "gemini"), "group marker must NOT be removed by clear_rate_limit");
+        assert!(clear_rate_limit(&agent, None));
+        assert!(!is_rate_limited(&agent, None), "agent-level marker must be removed");
+        assert!(is_group_rate_limited(&agent, None, "gemini"), "group marker must NOT be removed by clear_rate_limit");
     }
 
     #[test]
@@ -873,22 +936,26 @@ mod stale_clear_tests {
         let _guard = crate::paths::AidHomeGuard::set(temp.path());
 
         let agent = AgentKind::Antigravity;
-        clear_all_rate_limits_for_agent(&agent);
+        clear_all_rate_limits_for_agent(&agent, None);
 
-        mark_rate_limited(&agent, "Agent limit");
-        mark_group_rate_limited(&agent, "gemini", "Gemini limit");
-        mark_group_rate_limited(&agent, "claude", "Claude limit");
+        mark_rate_limited(&agent, None, "Agent limit");
+        mark_group_rate_limited(&agent, None, "gemini", "Gemini limit");
+        mark_group_rate_limited(&agent, None, "claude", "Claude limit");
 
-        assert!(clear_all_rate_limits_for_agent(&agent));
-        assert!(!is_rate_limited(&agent));
-        assert!(!is_group_rate_limited(&agent, "gemini"));
-        assert!(!is_group_rate_limited(&agent, "claude"));
+        assert!(clear_all_rate_limits_for_agent(&agent, None));
+        assert!(!is_rate_limited(&agent, None));
+        assert!(!is_group_rate_limited(&agent, None, "gemini"));
+        assert!(!is_group_rate_limited(&agent, None, "claude"));
     }
 }
 
 #[cfg(test)]
 #[path = "rate_limit_hold_tests.rs"]
 mod hold_tests;
+
+#[cfg(test)]
+#[path = "rate_limit_custom_tests.rs"]
+mod custom_tests;
 
 #[cfg(test)]
 mod home_guard_tests {
@@ -901,7 +968,7 @@ mod home_guard_tests {
         let _guard = AidHomeGuard::set(temp.path());
         std::fs::create_dir_all(paths::aid_dir()).unwrap();
 
-        mark_rate_limited(&AgentKind::Codex, "rate limit exceeded");
+        mark_rate_limited(&AgentKind::Codex, None, "rate limit exceeded");
         let marker = paths::aid_dir().join("rate-limit-codex");
         assert!(marker.exists());
         assert!(marker.starts_with(temp.path()));
@@ -918,7 +985,7 @@ mod home_guard_tests {
             return;
         }
         let err = std::panic::catch_unwind(|| {
-            let _ = marker_path(&AgentKind::Codex);
+            let _ = marker_path(&AgentKind::Codex, None);
         });
         assert!(
             err.is_err(),

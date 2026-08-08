@@ -7,7 +7,7 @@ use std::{path::{Path, PathBuf}, sync::Arc};
 use crate::{agent, paths, project::{self, ProjectConfig}, session};
 use crate::{store::{Store, TaskCompletionUpdate}, types::*};
 use super::run_dispatch_claim::insert_task_claiming_id;
-use super::run_dispatch_resolve::{AgentSetup, apply_project_defaults, resolve_agent_setup};
+use super::run_dispatch_resolve::{AgentSetup, apply_project_defaults, maybe_insert_held_route_event, resolve_agent_setup};
 use super::run_task_profile::{
     apply_category_and_result_defaults, persist_declaration, should_auto_result_file,
     validate_critical_rigor, validate_egress,
@@ -92,6 +92,7 @@ pub(super) fn prepare_dispatch(store: &Arc<Store>, args: &mut RunArgs) -> Result
         agent_setup.effective_model.as_deref(),
     )?;
     insert_task_claiming_id(store, &mut task, &mut task_id, &mut log_path, explicit_id)?;
+    maybe_insert_held_route_event(store, &task_id, &agent_setup);
     persist_declaration(store, &task_id, args)?;
     let setup = match setup_worktree(store, args, detected_project.as_ref(), &agent_setup, &task_id, explicit_repo_path.as_deref()) {
         Ok(setup) => setup,

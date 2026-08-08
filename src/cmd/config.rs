@@ -114,6 +114,18 @@ fn print_agents(store: &Arc<Store>) {
             println!("    Display name: {}", agent.display_name);
             println!("    Command: {} ({})", agent.command, install_status);
             println!("    Capabilities: {}", format_capabilities(&agent.capabilities));
+            // Rate-limit status: uses the custom agent's own id in the hint
+            // (clear-limit <id>) rather than the kind constant "custom".
+            if rate_limit::is_rate_limited(&AgentKind::Custom, Some(agent.id.as_str())) {
+                let hint = match rate_limit::dispatch_blocking_hold(
+                    &AgentKind::Custom,
+                    Some(agent.id.as_str()),
+                ) {
+                    Some(h) => format!(" — {h}"),
+                    None => String::new(),
+                };
+                println!("    Status: LIMITED{hint}");
+            }
         }
     }
     if let Some(line) = disabled_summary_line(&disabled_agent_names()) {

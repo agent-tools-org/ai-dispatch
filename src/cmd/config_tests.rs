@@ -8,6 +8,7 @@ use super::config_display::{ModelHistory, recent_observed_models_line};
 use super::{builtin_agent_visible, disabled_agent_names, disabled_summary_line, load_pricing_overrides, merged_agent_models};
 use crate::agent_config;
 use crate::paths::AidHomeGuard;
+use crate::rate_limit;
 use crate::types::AgentKind;
 
 #[test]
@@ -161,5 +162,37 @@ fn disabled_agent_listing_hides_and_summarizes_agent() {
     assert_eq!(
         disabled_summary_line(&names).as_deref(),
         Some("Disabled: gemini (enable with aid agent config gemini --enable)")
+    );
+}
+
+/// `aid config agents` custom-agent loop must surface rate-limit status.
+/// Before this fix the loop had no rate-limit check at all, so a held custom
+/// agent appeared fine in `aid config agents` while `aid agent quota` showed
+/// it as LIMITED. The hint must use the agent's own id ("clear-limit auditor")
+/// never the kind constant ("clear-limit custom").
+#[test]
+fn config_agents_custom_hold_names_agent_id_in_hint() {
+    let temp = tempfile::tempdir().unwrap();
+    let _guard = AidHomeGuard::set(temp.path());
+    std::fs::create_dir_all(crate::paths::aid_dir()).ok();
+
+    // A message with no reset date causes needs_human = true, so
+    // dispatch_blocking_hold emits the "until cleared with …" hint.
+    rate_limit::mark_rate_limited(
+        &AgentKind::Custom,
+        Some("auditor"),
+        "APIError: Insufficient balance. Manage your billing here",
+    );
+
+    let hint = rate_limit::dispatch_blocking_hold(&AgentKind::Custom, Some("auditor"))
+        .expect("a human-held agent must produce a blocking hint");
+
+    assert!(
+        hint.contains("clear-limit auditor"),
+        "hint must name the agent id 'auditor', got: {hint}"
+    );
+    assert!(
+        !hint.contains("clear-limit custom"),
+        "hint must NOT say 'clear-limit custom', got: {hint}"
     );
 }

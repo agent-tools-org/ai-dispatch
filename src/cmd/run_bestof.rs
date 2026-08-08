@@ -13,7 +13,7 @@ use crate::store::Store;
 use crate::team;
 use crate::types::*;
 use super::run_validate::{IdConflict, resolve_id_conflict};
-use super::{run, RunArgs};
+use super::{run, switch_agent, RunArgs};
 #[path = "run_bestof/output_files.rs"]
 mod output_files;
 use self::output_files::{
@@ -206,7 +206,10 @@ pub async fn run_best_of(store: Arc<Store>, args: RunArgs, n: usize) -> Result<T
             args.result_file.as_deref(),
             candidate_idx,
         );
-        child_args.agent_name = agent_label.clone();
+        // switch_agent drops route-owned fields (model + session_id) when the
+        // racer uses a different agent than the parent, so each CLI only
+        // receives context its own route can interpret.
+        switch_agent(&mut child_args, agent_label.clone());
         child_args.background = true;
         child_args.judge = None;
         child_args.announce = false;

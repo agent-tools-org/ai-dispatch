@@ -8,6 +8,18 @@ use crate::rate_limit::{
 };
 use crate::types::AgentKind;
 
+fn custom_agent_toml(id: &str) -> String {
+    format!(
+        "[agent]\nid = \"{id}\"\ndisplay_name = \"{id} agent\"\ncommand = \"{id}\"\n"
+    )
+}
+
+fn write_custom_agent(aid_home: &std::path::Path, id: &str) {
+    let agents_dir = aid_home.join(".aid").join("agents");
+    std::fs::create_dir_all(&agents_dir).unwrap();
+    std::fs::write(agents_dir.join(format!("{id}.toml")), custom_agent_toml(id)).unwrap();
+}
+
 fn isolated() -> tempfile::TempDir {
     let temp = tempfile::tempdir().expect("tempdir");
     let _ = std::fs::create_dir_all(temp.path().join(".aid"));
@@ -153,4 +165,60 @@ fn custom_agent_with_hold_shows_limited() {
         matches!(quota_row(AgentKind::Codex, None), QuotaRow::Ok),
         "built-in codex must not inherit custom agent hold"
     );
+}
+
+/// A manually-held custom agent's clear-limit hint must name the agent's own
+/// id (e.g. "clear-limit auditor"), never the kind constant "clear-limit custom".
+/// Before this was enforced, `AgentKind::Custom.as_str()` ("custom") leaked
+/// into the hint, making the displayed command wrong.
+#[test]
+fn custom_agent_human_hold_names_agent_id_in_clear_limit_hint() {
+    let temp = isolated();
+    let _guard = AidHomeGuard::set(temp.path());
+    std::fs::create_dir_all(paths::aid_dir()).ok();
+
+    // A message with no reset date causes needs_human = true, so format_hold_end
+    // emits the "held until cleared with `aid config clear-limit <slug>`" line.
+    mark_rate_limited(
+        &AgentKind::Custom,
+        Some("auditor"),
+        "APIError: Insufficient balance. Manage your billing here",
+    );
+
+    match quota_row(AgentKind::Custom, Some("auditor")) {
+        QuotaRow::Limited { detail } => {
+            assert!(
+                detail.contains("clear-limit auditor"),
+                "hint must name the agent id 'auditor', got: {detail}"
+            );
+            assert!(
+                !detail.contains("clear-limit custom"),
+                "hint must NOT say 'clear-limit custom', got: {detail}"
+            );
+        }
+        other => panic!("expected Limited, got {other:?}"),
+    }
+}
+
+/// The `show_quota` and `list_agents` printer loops must handle a held custom
+/// agent without panicking and must complete successfully. Tests here exercise
+/// the loops themselves, not just the `quota_row` helper they call.
+#[test]
+fn show_quota_and_list_agents_cover_held_custom_agent_loop() {
+    let temp = isolated();
+    let _guard = AidHomeGuard::set(temp.path());
+    std::fs::create_dir_all(paths::aid_dir()).ok();
+    // Register a custom agent so the loops have something to iterate over.
+    write_custom_agent(temp.path(), "held-agent");
+    mark_rate_limited(
+        &AgentKind::Custom,
+        Some("held-agent"),
+        "APIError: Insufficient balance.",
+    );
+
+    let quota_result = show_quota();
+    assert!(quota_result.is_ok(), "show_quota failed: {:?}", quota_result);
+
+    let list_result = list_agents();
+    assert!(list_result.is_ok(), "list_agents failed: {:?}", list_result);
 }

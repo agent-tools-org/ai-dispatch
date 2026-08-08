@@ -100,6 +100,38 @@ fn streaming_is_false_and_parse_event_returns_none() {
     assert!(GrokAgent.parse_event(&task_id, "anything").is_none());
 }
 
+/// grok runs buffered: nothing reaches the PTY until exit. Without --debug-file
+/// both reapers see zero bytes and kill healthy runs at 183s (t-73b69cde,
+/// t-24f12f38). The adapter must pass --debug-file when env carries the log path.
+#[test]
+fn build_command_passes_debug_file_when_agent_log_env_is_set() {
+    let mut run = opts(false);
+    run.env = Some(std::collections::HashMap::from([(
+        crate::agent::AGENT_LOG_ENV.to_string(),
+        "/tmp/aid-test/tasks/t-grok1234/agent.log".to_string(),
+    )]));
+    let args = GrokAgent.build_command("task", &run).unwrap()
+        .get_args()
+        .map(|a| a.to_string_lossy().into_owned())
+        .collect::<Vec<_>>();
+    let idx = args.iter().position(|a| a == "--debug-file")
+        .expect("--debug-file must be passed when AID_AGENT_LOG is set");
+    let path = &args[idx + 1];
+    assert!(path.contains("t-grok1234"), "debug-file must be per task: {path}");
+    assert!(path.ends_with("agent.log"), "and named for aid's watcher: {path}");
+}
+
+/// Without a log path in env there is nothing to name the file after; passing a
+/// bare --debug-file flag would be worse than passing none.
+#[test]
+fn build_command_omits_debug_file_when_no_agent_log_env() {
+    let args = args_for(&opts(false));
+    assert!(
+        !args.iter().any(|a| a == "--debug-file"),
+        "--debug-file must not appear when env carries no log path; got: {args:?}"
+    );
+}
+
 #[test]
 fn parse_completion_reads_model_tokens_and_cost_from_model_usage() {
     let output = r#"{

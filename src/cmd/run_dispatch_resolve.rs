@@ -141,17 +141,14 @@ pub(super) fn resolve_agent_setup(store: &Arc<Store>, args: &mut RunArgs) -> Res
             agent_kind.as_str()
         );
     } else if let Some(hold) = rate_limit::dispatch_blocking_hold(&agent_kind) {
-        let original = agent_kind.as_str().to_string();
-        let (next_kind, remaining) = skip_held_to_fallback(agent_kind, &hold, &args.cascade, &args.prompt)?;
-        aid_warn!(
-            "[aid] {} is held ({}) — dispatching to {} instead. \
-             Use `aid config clear-limit {}` to clear.",
-            original, hold, next_kind.as_str(), original,
-        );
-        super::switch_agent(args, next_kind.as_str().to_string());
+        let original = custom_agent_name.as_deref().unwrap_or_else(|| agent_kind.as_str()).to_string();
+        let (next_kind, next_name, remaining) = skip_held_to_fallback(agent_kind, &original, &hold, &args.cascade, &args.prompt)?;
+        aid_warn!("[aid] {} is held ({}) — dispatching to {} instead. Use `aid config clear-limit {}` to clear.",
+            original, hold, next_name, original);
+        super::switch_agent(args, next_name.clone());
         args.cascade = remaining;
         agent_kind = next_kind;
-        custom_agent_name = None;
+        custom_agent_name = (next_kind == AgentKind::Custom).then_some(next_name);
         substituted_from = Some((original, hold));
     }
     let requested_skills = run_prompt::effective_skills(args);
@@ -263,20 +260,24 @@ pub(super) fn resolve_agent_setup(store: &Arc<Store>, args: &mut RunArgs) -> Res
     })
 }
 
-// Walk `cascade` (then auto-fallback) to the first non-held alternative.
-fn skip_held_to_fallback(held: AgentKind, hold: &str, cascade: &[String], prompt: &str) -> Result<(AgentKind, Vec<String>)> {
-    let all: Vec<AgentKind> = cascade.iter().filter_map(|s| AgentKind::parse_str(s)).collect();
-    let start = all.iter().position(|k| *k == held).map_or(0, |i| i + 1);
-    for (i, kind) in all[start..].iter().enumerate() {
+// Walk `cascade` (then auto-fallback) to the first non-held alternative. Unrecognised names error; custom agents are valid.
+fn skip_held_to_fallback(held_kind: AgentKind, held_name: &str, hold: &str, cascade: &[String], prompt: &str) -> Result<(AgentKind, String, Vec<String>)> {
+    let all: Vec<(AgentKind, String)> = cascade.iter().map(|s|
+        AgentKind::parse_str(s).map(|k| (k, s.clone()))
+            .or_else(|| agent::registry::custom_agent_exists(s).then(|| (AgentKind::Custom, s.clone())))
+            .ok_or_else(|| anyhow::anyhow!("Unknown cascade agent '{s}'. Use `aid config agents` to list available agents."))
+    ).collect::<Result<_>>()?;
+    let start = all.iter().position(|(_, n)| n == held_name).map_or(0, |i| i + 1);
+    for (i, (kind, name)) in all[start..].iter().enumerate() {
         if rate_limit::dispatch_blocking_hold(kind).is_none() {
-            return Ok((*kind, all[start + i + 1..].iter().map(|k| k.as_str().to_string()).collect()));
+            return Ok((*kind, name.clone(), all[start + i + 1..].iter().map(|(_, n)| n.clone()).collect()));
         }
     }
-    if let Some(fb) = crate::agent::selection::coding_fallback_for_prompt(&held, prompt)
-        && rate_limit::dispatch_blocking_hold(&fb).is_none() {
-        return Ok((fb, vec![]));
+    if let Some(fb) = crate::agent::selection::coding_fallback_for_prompt(&held_kind, prompt)
+        .filter(|fb| rate_limit::dispatch_blocking_hold(fb).is_none()) {
+        return Ok((fb, fb.as_str().to_string(), vec![]));
     }
-    anyhow::bail!("{} is held ({hold}). Use --cascade <agent> to specify a fallback, or `aid config clear-limit {}` to clear.", held.as_str(), held.as_str())
+    anyhow::bail!("{held_name} is held ({hold}). Use --cascade <agent> or `aid config clear-limit {held_name}` to clear.")
 }
 // Insert a milestone event when a held route was substituted. No-op if `substituted_from` is None.
 pub(super) fn maybe_insert_held_route_event(store: &Store, task_id: &crate::types::TaskId, setup: &AgentSetup) {

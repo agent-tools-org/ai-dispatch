@@ -172,3 +172,70 @@ fn resolve_agent_setup_allows_auto_model_for_cursor() {
     let res = resolve_agent_setup(&store, &mut args);
     assert!(res.is_ok(), "cursor with model 'auto' must be allowed");
 }
+
+/// Write a minimal custom-agent TOML under the isolated AID_HOME so
+/// `custom_agent_exists` and `resolve_custom_agent` can find it.
+fn write_custom_agent(name: &str) {
+    let agents_dir = crate::paths::aid_dir().join("agents");
+    std::fs::create_dir_all(&agents_dir).unwrap();
+    std::fs::write(
+        agents_dir.join(format!("{name}.toml")),
+        format!(
+            "[agent]\nid = \"{name}\"\ndisplay_name = \"{name}\"\ncommand = \"{name}\"\n"
+        ),
+    )
+    .unwrap();
+}
+
+/// A custom agent named in --cascade must be selected when the primary is
+/// held, not silently dropped because AgentKind::parse_str does not know it.
+#[test]
+fn custom_agent_in_cascade_is_used_when_primary_held() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let _guard = AidHomeGuard::set(dir.path());
+    write_manual_hold(AgentKind::Codex);
+    write_custom_agent("glm5");
+    let store = Arc::new(Store::open_memory().expect("store"));
+    let mut args = RunArgs {
+        agent_name: "codex".to_string(),
+        prompt: "Add unit tests".to_string(),
+        cascade: vec!["glm5".to_string()],
+        ..Default::default()
+    };
+
+    let setup = resolve_agent_setup(&store, &mut args).expect("should switch to custom glm5");
+
+    assert_eq!(setup.agent_kind, AgentKind::Custom, "glm5 is a custom agent");
+    assert_eq!(args.agent_name, "glm5", "routing name must be glm5, not 'custom'");
+    assert_eq!(setup.agent_display_name, "glm5");
+    let (original, _) = setup.substituted_from.expect("substituted_from must be set");
+    assert_eq!(original, "codex");
+    assert!(args.cascade.is_empty(), "remaining cascade after glm5 must be empty");
+}
+
+/// An unrecognised cascade entry must produce an immediate error — the caller
+/// asked for X by name and we must not silently pretend it does not exist.
+#[test]
+fn unknown_cascade_entry_is_an_error() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let _guard = AidHomeGuard::set(dir.path());
+    write_manual_hold(AgentKind::Codex);
+    let store = Arc::new(Store::open_memory().expect("store"));
+    let mut args = RunArgs {
+        agent_name: "codex".to_string(),
+        prompt: "Fix bug".to_string(),
+        cascade: vec!["not-a-real-agent".to_string()],
+        ..Default::default()
+    };
+
+    match resolve_agent_setup(&store, &mut args) {
+        Err(err) => {
+            let msg = err.to_string();
+            assert!(
+                msg.contains("not-a-real-agent"),
+                "error must name the unknown agent: {msg}"
+            );
+        }
+        Ok(_) => panic!("unknown cascade agent must produce an error"),
+    }
+}

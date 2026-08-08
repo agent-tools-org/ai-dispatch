@@ -129,6 +129,29 @@ fn held_agent_drops_model_when_switching_to_cascade() {
     assert!(setup.substituted_from.is_some());
 }
 
+/// Pre-dispatch substitution must drop session_id the same way post-failure
+/// cascade already does — a session belongs to the CLI that issued it.
+#[test]
+fn held_agent_drops_session_when_switching_to_cascade() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let _guard = AidHomeGuard::set(dir.path());
+    write_manual_hold(AgentKind::Codex);
+    let store = Arc::new(Store::open_memory().expect("store"));
+    let mut args = RunArgs {
+        agent_name: "codex".to_string(),
+        prompt: "Add tests".to_string(),
+        session_id: Some("codex-session-abc".to_string()),
+        cascade: vec!["oz".to_string()],
+        ..Default::default()
+    };
+
+    let setup = resolve_agent_setup(&store, &mut args).expect("should switch to oz");
+
+    assert_eq!(setup.agent_kind, AgentKind::Oz);
+    assert_eq!(args.session_id, None, "codex session must not carry over to oz");
+    assert!(setup.substituted_from.is_some());
+}
+
 /// When both the primary and all cascade options are held and no auto-fallback
 /// is available, resolve_agent_setup must return an error — no dispatch at all.
 #[test]

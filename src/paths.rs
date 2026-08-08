@@ -61,6 +61,37 @@ pub fn agent_log_path(task_id: &str) -> PathBuf {
     task_dir(task_id).join("agent.log")
 }
 
+/// The agent-owned output files to watch for proof of life.
+/// Used by both the live watcher (pty_watch) and the orphan reaper so they
+/// ask the same question about buffered agents.
+pub fn agent_byte_paths(task_id: &str) -> [PathBuf; 3] {
+    [transcript_path(task_id), log_path(task_id), agent_log_path(task_id)]
+}
+
+/// Returns true when any of the agent-owned output files for `task_id` have
+/// been written since `started_at`. Used by both the live watcher and the
+/// orphan reaper to prove a buffered agent (one that writes nothing to its
+/// PTY until it exits) is still alive.
+///
+/// A file that exists but was last written *before* the task started belongs
+/// to an earlier attempt on the same id and is not proof this run did anything.
+/// HFS+ truncates mtime to whole seconds; the 2-second grace keeps a file
+/// created in the same second as the task from looking stale.
+pub fn agent_has_produced_bytes(task_id: &str, started_at: std::time::SystemTime) -> bool {
+    let grace = started_at
+        .checked_sub(std::time::Duration::from_secs(2))
+        .unwrap_or(started_at);
+    agent_byte_paths(task_id).into_iter().any(|path| {
+        let Ok(meta) = std::fs::metadata(&path) else {
+            return false;
+        };
+        if meta.len() == 0 {
+            return false;
+        }
+        meta.modified().map(|mtime| mtime >= grace).unwrap_or(false)
+    })
+}
+
 pub fn log_path(task_id: &str) -> PathBuf {
     // Takes a validated task ID from the input boundary.
     logs_dir().join(format!("{task_id}.jsonl"))

@@ -39,35 +39,29 @@ pub(super) fn task_label(task: &batch::BatchTask, task_idx: usize) -> String {
 pub(super) fn rate_limit_precheck(tasks: &[batch::BatchTask]) {
     let mut unique_agents = HashSet::new();
     for task in tasks {
-        if let Some(kind) = AgentKind::parse_str(&task.agent) {
-            unique_agents.insert(kind);
-        }
+        unique_agents.insert(task.agent.clone());
     }
     let mut rate_limited = HashSet::new();
-    for agent_kind in unique_agents {
-        if !rate_limit::is_rate_limited(&agent_kind) {
+    for agent_name in &unique_agents {
+        let (agent_kind, custom_name) = rate_limit::resolve_agent(agent_name);
+        if !rate_limit::is_rate_limited(&agent_kind, custom_name) {
             continue;
         }
-        let recovery_info = rate_limit::get_rate_limit_info(&agent_kind)
+        let recovery_info = rate_limit::get_rate_limit_info(&agent_kind, custom_name)
             .and_then(|info| info.recovery_at)
             .map(|time| format!(" (try again at {time})"))
             .unwrap_or_default();
         aid_warn!(
-            "[aid] Warning: agent '{}' is rate-limited{}",
-            agent_kind.as_str(),
-            recovery_info
+            "[aid] Warning: agent '{agent_name}' is rate-limited{recovery_info}"
         );
-        rate_limited.insert(agent_kind);
+        rate_limited.insert(agent_name.clone());
     }
     if rate_limited.is_empty() {
         return;
     }
     let mut rate_limited_tasks = 0;
     for (task_idx, task) in tasks.iter().enumerate() {
-        let Some(kind) = AgentKind::parse_str(&task.agent) else {
-            continue;
-        };
-        if rate_limited.contains(&kind) {
+        if rate_limited.contains(&task.agent) {
             rate_limited_tasks += 1;
             if let Some(ref fallback) = task.fallback {
                 aid_info!(

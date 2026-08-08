@@ -74,7 +74,7 @@ fn retry_uses_original_when_not_rate_limited() {
     let args = retry_task_to_run_args(&Store::open_memory().unwrap(), &task, "wg-test", None)
         .unwrap();
     assert_eq!(args.agent_name, "codex");
-    clear_rate_limit(&AgentKind::Codex);
+    clear_rate_limit(&AgentKind::Codex, None);
 }
 
 #[test]
@@ -86,20 +86,20 @@ fn retry_uses_fallback_when_rate_limited() {
         AgentKind::Codex,
         AgentKind::Copilot,
     ]);
-    mark_rate_limited(&AgentKind::Codex, "rate limit exceeded");
+    mark_rate_limited(&AgentKind::Codex, None, "rate limit exceeded");
     let repo = TempDir::new().unwrap();
     let mut task = make_task("t-002", AgentKind::Codex);
     set_repo(&mut task, &repo);
     let args = retry_task_to_run_args(&Store::open_memory().unwrap(), &task, "wg-test", None)
         .unwrap();
     assert_ne!(args.agent_name, "codex", "Should use fallback when rate-limited");
-    clear_rate_limit(&AgentKind::Codex);
+    clear_rate_limit(&AgentKind::Codex, None);
 }
 
 #[test]
 fn retry_uses_override_regardless_of_rate_limit() {
     let _guard = aid_home_guard("aid-retry-fallback-test-override");
-    mark_rate_limited(&AgentKind::Codex, "rate limit exceeded");
+    mark_rate_limited(&AgentKind::Codex, None, "rate limit exceeded");
     let repo = TempDir::new().unwrap();
     let mut task = make_task("t-003", AgentKind::Codex);
     set_repo(&mut task, &repo);
@@ -107,7 +107,7 @@ fn retry_uses_override_regardless_of_rate_limit() {
         retry_task_to_run_args(&Store::open_memory().unwrap(), &task, "wg-test", Some("gemini"))
             .unwrap();
     assert_eq!(args.agent_name, "gemini", "Override should bypass rate limit check");
-    clear_rate_limit(&AgentKind::Codex);
+    clear_rate_limit(&AgentKind::Codex, None);
 }
 
 #[test]

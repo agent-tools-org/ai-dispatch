@@ -273,7 +273,7 @@ fn only_a_diagnostic_event_can_mark_a_route_rate_limited() {
     let store = std::sync::Arc::new(crate::store::Store::open_memory().unwrap());
     let task = running_task("t-cursor-quote", AgentKind::Cursor);
     store.insert_task(&task).unwrap();
-    crate::rate_limit::clear_all_rate_limits_for_agent(&AgentKind::Cursor);
+    crate::rate_limit::clear_all_rate_limits_for_agent(&AgentKind::Cursor, None);
 
     let quoted = "assert_rate_limit(r#\"{\"type\":\"error\",\"message\":\"quota exceeded for \
                   this workspace\"}\"#, true);";
@@ -285,14 +285,14 @@ fn only_a_diagnostic_event_can_mark_a_route_rate_limited() {
 
     feed_stream_line(&store, &task, &report);
     assert!(
-        !crate::rate_limit::is_rate_limited(&AgentKind::Cursor),
+        !crate::rate_limit::is_rate_limited(&AgentKind::Cursor, None),
         "a report quoting our own fixture must not hold cursor"
     );
 
     let refusal = r#"{"type":"error","message":"quota exceeded for this workspace"}"#;
     feed_stream_line(&store, &task, refusal);
     assert!(
-        crate::rate_limit::is_rate_limited(&AgentKind::Cursor),
+        crate::rate_limit::is_rate_limited(&AgentKind::Cursor, None),
         "the same words from the CLI's own error envelope must still hold cursor"
     );
 }

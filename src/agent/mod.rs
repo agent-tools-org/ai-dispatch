@@ -60,6 +60,12 @@ pub use env::{
 pub trait Agent: Send + Sync {
     fn kind(&self) -> AgentKind;
 
+    /// Custom-agent id used as the rate-limit marker slug. Built-ins return
+    /// `None` so markers stay `rate-limit-{as_str()}`.
+    fn rate_limit_name(&self) -> Option<&str> {
+        None
+    }
+
     /// Whether this agent streams JSONL (true) or outputs a single JSON blob (false)
     fn streaming(&self) -> bool;
 

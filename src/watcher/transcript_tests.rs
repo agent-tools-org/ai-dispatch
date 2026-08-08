@@ -141,8 +141,8 @@ async fn watch_buffered_clears_rate_limit_on_success() {
         delivery_assessment: None,
     };
     store.insert_task(&task).unwrap();
-    rate_limit::mark_rate_limited(&AgentKind::Gemini, "rate limit exceeded");
-    assert!(rate_limit::is_rate_limited(&AgentKind::Gemini));
+    rate_limit::mark_rate_limited(&AgentKind::Gemini, None, "rate limit exceeded");
+    assert!(rate_limit::is_rate_limited(&AgentKind::Gemini, None));
 
     let mut child = tokio::process::Command::new("sh")
         .arg("-c")
@@ -164,7 +164,7 @@ async fn watch_buffered_clears_rate_limit_on_success() {
     .await
     .unwrap();
 
-    assert!(!rate_limit::is_rate_limited(&AgentKind::Gemini));
+    assert!(!rate_limit::is_rate_limited(&AgentKind::Gemini, None));
 }
 
 struct BufferedAgyTestAgent;
@@ -262,8 +262,5 @@ async fn watch_buffered_records_quota_refusal_and_fails_task() {
     .unwrap();
 
     assert_eq!(info.status, TaskStatus::Failed);
-    assert!(rate_limit::is_group_rate_limited(
-        &AgentKind::Antigravity,
-        "gemini"
-    ));
+    assert!(rate_limit::is_group_rate_limited(&AgentKind::Antigravity, None, "gemini"));
 }

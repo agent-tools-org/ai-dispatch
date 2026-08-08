@@ -112,7 +112,7 @@ fn read_quota_error_message_ignores_agent_grep_in_log() {
     let dir = TempDir::new().unwrap();
     let _guard = paths::AidHomeGuard::set(dir.path());
     std::fs::create_dir_all(paths::logs_dir()).unwrap();
-    crate::rate_limit::clear_rate_limit(&AgentKind::Cursor);
+    crate::rate_limit::clear_rate_limit(&AgentKind::Cursor, None);
     let grep_line = "completed: grep clear_rate_limit_if_stale|marker_path";
     std::fs::write(
         paths::log_path("t-quota-grep-log"),
@@ -123,9 +123,9 @@ fn read_quota_error_message_ignores_agent_grep_in_log() {
     let message = read_quota_error_message(&task_id, &AgentKind::Cursor);
     assert_eq!(message, None);
     if let Some(line) = message.as_deref() {
-        crate::rate_limit::mark_rate_limited(&AgentKind::Cursor, line);
+        crate::rate_limit::mark_rate_limited(&AgentKind::Cursor, None, line);
     }
-    assert!(!crate::rate_limit::is_rate_limited(&AgentKind::Cursor));
+    assert!(!crate::rate_limit::is_rate_limited(&AgentKind::Cursor, None));
 }
 
 #[test]
@@ -651,7 +651,7 @@ async fn rate_limited_agent_without_cascade_fails_early() {
     crate::paths::ensure_dirs().unwrap();
     // No installed peers → category-aware fallback correctly returns None.
     let _agents = crate::agent::DetectAgentsGuard::set(vec![AgentKind::MiMoCode]);
-    crate::rate_limit::mark_rate_limited(&AgentKind::MiMoCode, "try again at Mar 21st, 2099 2:27 PM.");
+    crate::rate_limit::mark_rate_limited(&AgentKind::MiMoCode, None, "try again at Mar 21st, 2099 2:27 PM.");
     let err = run(Arc::new(Store::open_memory().unwrap()), RunArgs {
         agent_name: "mimocode".to_string(),
         prompt: "Inspect the repository state".to_string(),
@@ -668,7 +668,7 @@ async fn rate_limited_agent_with_cascade_proceeds() {
     let _aid_home = paths::AidHomeGuard::set(temp.path());
     crate::paths::ensure_dirs().unwrap();
     let store = Arc::new(Store::open_memory().unwrap());
-    crate::rate_limit::mark_rate_limited(&AgentKind::Kilo, "try again at Mar 21st, 2099 2:27 PM.");
+    crate::rate_limit::mark_rate_limited(&AgentKind::Kilo, None, "try again at Mar 21st, 2099 2:27 PM.");
     let task_id = run(store.clone(), RunArgs {
         agent_name: "kilo".to_string(),
         prompt: "Inspect the repository state".to_string(),

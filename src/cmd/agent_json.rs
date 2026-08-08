@@ -116,9 +116,13 @@ fn build_agent_json(
     };
 
     let quota = {
-        let rlk = rate_limit_kind(kind, custom_config);
-        let state = if crate::rate_limit::is_rate_limited(&rlk) { "limited".to_string() } else { "ok".to_string() };
-        let info = crate::rate_limit::get_rate_limit_info(&rlk);
+        let custom_name = custom_config.map(|c| c.id.as_str());
+        let state = if crate::rate_limit::is_rate_limited(&kind, custom_name) {
+            "limited".to_string()
+        } else {
+            "ok".to_string()
+        };
+        let info = crate::rate_limit::get_rate_limit_info(&kind, custom_name);
         let recovery_at = info.as_ref().and_then(|i| i.recovery_at.clone());
         let message = info.as_ref().and_then(|i| i.message.clone());
         QuotaJson {
@@ -203,31 +207,6 @@ fn builtin_profile(name: &str) -> Option<AgentKind> {
         .iter()
         .copied()
         .find(|kind| kind.as_str().eq_ignore_ascii_case(name))
-}
-
-fn custom_has_endpoint(config: &CustomAgentConfig) -> bool {
-    config
-        .base_url
-        .as_deref()
-        .map(str::trim)
-        .is_some_and(|url| !url.is_empty())
-}
-
-fn rate_limit_kind(kind: AgentKind, custom_config: Option<&CustomAgentConfig>) -> AgentKind {
-    let Some(config) = custom_config else {
-        return kind;
-    };
-    if custom_has_endpoint(config) {
-        return AgentKind::Custom;
-    }
-    if config.delegate_to.as_deref() == Some("opencode") {
-        return config
-            .rate_limit_kind
-            .as_deref()
-            .and_then(AgentKind::parse_str)
-            .unwrap_or(AgentKind::OpenCode);
-    }
-    AgentKind::Custom
 }
 
 fn catalog_default_model(kind: AgentKind) -> Option<String> {

@@ -4,7 +4,6 @@ use crate::cmd::agent_json_types::{
     AgentListJson, AgentJson, QuotaJson, ModelsJson, AvailableModelJson, HistoryJson, CategoryHistoryJson, LoadJson
 };
 use crate::types::AgentKind;
-use super::{custom_has_endpoint, rate_limit_kind};
 
 #[test]
 fn test_agent_json_serialization_roundtrip() {
@@ -112,22 +111,21 @@ fn custom_with_endpoint_uses_declared_provider_not_builtin_unknown() {
 }
 
 #[test]
-fn delegate_opencode_with_own_endpoint_does_not_inherit_opencode_rate_limit() {
-    let config = sample_custom_config();
-    assert!(custom_has_endpoint(&config));
-    assert_eq!(
-        rate_limit_kind(AgentKind::Custom, Some(&config)),
-        AgentKind::Custom
-    );
-}
+fn custom_agent_quota_reads_its_own_marker_not_shared_custom() {
+    let temp = tempfile::tempdir().unwrap();
+    let _guard = crate::paths::AidHomeGuard::set(temp.path());
+    std::fs::create_dir_all(crate::paths::aid_dir()).unwrap();
 
-#[test]
-fn delegate_opencode_without_endpoint_still_uses_opencode_rate_limit() {
-    let mut config = sample_custom_config();
-    config.base_url = None;
-    assert!(!custom_has_endpoint(&config));
-    assert_eq!(
-        rate_limit_kind(AgentKind::Custom, Some(&config)),
-        AgentKind::OpenCode
+    let config = sample_custom_config();
+    crate::rate_limit::mark_rate_limited(
+        &AgentKind::Custom,
+        Some(config.id.as_str()),
+        "try again at Mar 21st, 2099 2:27 PM.",
     );
+    assert!(crate::rate_limit::is_rate_limited(
+        &AgentKind::Custom,
+        Some(config.id.as_str())
+    ));
+    assert!(!crate::rate_limit::is_rate_limited(&AgentKind::Custom, None));
+    assert!(!crate::rate_limit::is_rate_limited(&AgentKind::OpenCode, None));
 }

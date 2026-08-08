@@ -267,7 +267,7 @@ fn parse_error_event(
     let detail = droid_error_detail(v);
     if is_droid_rate_limit(v, detail.as_deref()) {
         let rate_limit_message = detail.clone().unwrap_or_else(|| "status 429".to_string());
-        rate_limit::mark_rate_limited(&AgentKind::Droid, &rate_limit_message);
+        rate_limit::mark_rate_limited(&AgentKind::Droid, None, &rate_limit_message);
     }
     let (detail, metadata) = capped_detail(detail.as_deref().unwrap_or("unknown error"));
     Some(TaskEvent {

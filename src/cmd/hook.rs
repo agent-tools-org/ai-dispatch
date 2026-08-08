@@ -59,20 +59,34 @@ enum QuotaState {
 
 fn agents_status_line() -> Option<String> {
     let installed = crate::agent::detect_agents();
-    let entries = AgentKind::ALL_BUILTIN
+    let mut entries = AgentKind::ALL_BUILTIN
         .iter()
         .copied()
         .filter(|kind| installed.contains(kind))
         .filter(|kind| !crate::agent_config::is_agent_disabled(kind.as_str()))
         .map(|kind| {
-            let state = if crate::rate_limit::is_rate_limited(&kind) {
-                QuotaState::Limited { resets: crate::rate_limit::recovery_datetime(&kind) }
+            let state = if crate::rate_limit::is_rate_limited(&kind, None) {
+                QuotaState::Limited { resets: crate::rate_limit::recovery_datetime(&kind, None) }
             } else {
                 QuotaState::Ok
             };
             (kind.as_str().to_string(), state)
         })
         .collect::<Vec<_>>();
+    for config in crate::agent::registry::list_custom_agents() {
+        if crate::agent_config::is_agent_disabled(&config.id) {
+            continue;
+        }
+        let name = config.id.as_str();
+        let state = if crate::rate_limit::is_rate_limited(&AgentKind::Custom, Some(name)) {
+            QuotaState::Limited {
+                resets: crate::rate_limit::recovery_datetime(&AgentKind::Custom, Some(name)),
+            }
+        } else {
+            QuotaState::Ok
+        };
+        entries.push((config.id, state));
+    }
     render_agents_status_line(&entries)
 }
 

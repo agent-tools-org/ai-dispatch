@@ -119,8 +119,8 @@ fn build_command_read_only_without_result_file_keeps_strict_prefix() {
 fn parse_event_marks_mimocode_rate_limits() {
     let temp = tempfile::tempdir().unwrap();
     let _aid_home = paths::AidHomeGuard::set(temp.path());
-    rate_limit::clear_rate_limit(&AgentKind::MiMoCode);
-    rate_limit::clear_rate_limit(&AgentKind::OpenCode);
+    rate_limit::clear_rate_limit(&AgentKind::MiMoCode, None);
+    rate_limit::clear_rate_limit(&AgentKind::OpenCode, None);
     let event = agent()
         .parse_event(
             &TaskId("t-mimocode".to_string()),
@@ -128,8 +128,8 @@ fn parse_event_marks_mimocode_rate_limits() {
         )
         .unwrap();
     assert_eq!(event.event_kind, EventKind::Error);
-    assert!(rate_limit::is_rate_limited(&AgentKind::MiMoCode));
-    assert!(!rate_limit::is_rate_limited(&AgentKind::OpenCode));
-    rate_limit::clear_rate_limit(&AgentKind::MiMoCode);
-    rate_limit::clear_rate_limit(&AgentKind::OpenCode);
+    assert!(rate_limit::is_rate_limited(&AgentKind::MiMoCode, None));
+    assert!(!rate_limit::is_rate_limited(&AgentKind::OpenCode, None));
+    rate_limit::clear_rate_limit(&AgentKind::MiMoCode, None);
+    rate_limit::clear_rate_limit(&AgentKind::OpenCode, None);
 }

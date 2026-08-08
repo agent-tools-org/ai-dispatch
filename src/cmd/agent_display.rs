@@ -76,19 +76,31 @@ pub(super) fn show_quota() -> anyhow::Result<()> {
     let limited = rate_limit::rate_limited_agents();
     println!("{:<12} {:<10} DETAIL", "AGENT", "STATUS");
     for kind in AgentKind::ALL_BUILTIN {
-        if let Some((_, msg)) = limited.iter().find(|(a, _)| *a == *kind) {
-            let info = rate_limit::get_rate_limit_info(kind);
+        let name = kind.as_str();
+        if let Some((_, msg)) = limited.iter().find(|(a, _)| a == name) {
+            let info = rate_limit::get_rate_limit_info(kind, None);
             let recovery = info
                 .as_ref()
                 .and_then(|i| i.recovery_at.as_deref())
                 .unwrap_or("~1h");
             println!(
                 "{:<12} {:<10} resets {recovery} — {msg}",
-                kind.as_str(), "LIMITED"
+                name, "LIMITED"
             );
         } else {
-            println!("{:<12} {:<10}", kind.as_str(), "OK");
+            println!("{:<12} {:<10}", name, "OK");
         }
+    }
+    for (name, msg) in &limited {
+        if AgentKind::parse_str(name).is_some() {
+            continue;
+        }
+        let info = rate_limit::get_rate_limit_info(&AgentKind::Custom, Some(name));
+        let recovery = info
+            .as_ref()
+            .and_then(|i| i.recovery_at.as_deref())
+            .unwrap_or("~1h");
+        println!("{:<12} {:<10} resets {recovery} — {msg}", name, "LIMITED");
     }
     Ok(())
 }

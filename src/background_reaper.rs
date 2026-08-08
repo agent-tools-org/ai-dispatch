@@ -11,7 +11,7 @@ use super::background_waiting;
 use super::MAX_WORKERS;
 use crate::{config, notify, paths, sanitize};
 use crate::store::Store;
-use crate::types::{AgentKind, EventKind, PendingReason, Task, TaskEvent, TaskFilter, TaskId, TaskStatus};
+use crate::types::{EventKind, PendingReason, Task, TaskEvent, TaskFilter, TaskId, TaskStatus};
 
 pub(crate) const ZOMBIE_FAILURE_DETAIL: &str = "Background worker died unexpectedly";
 const PENDING_TASK_TIMEOUT_SECS: i64 = 600;
@@ -221,7 +221,7 @@ pub(crate) fn fail_stale_pending_task(
 }
 
 fn infer_pending_reason(store: &Store, task: &Task) -> Result<PendingReason> {
-    if task.agent != AgentKind::Custom && crate::rate_limit::is_rate_limited(&task.agent) {
+    if crate::rate_limit::is_rate_limited(&task.agent, task.custom_agent_name.as_deref()) {
         return Ok(PendingReason::RateLimited);
     }
     if store.list_tasks(TaskFilter::Running)?.len() >= MAX_WORKERS {

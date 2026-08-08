@@ -130,21 +130,22 @@ pub(super) fn resolve_agent_setup(store: &Arc<Store>, args: &mut RunArgs) -> Res
         args.dir = Some(".".to_string());
         aid_info!("[aid] Auto-set --dir . (git repo detected)");
     }
+    let custom_name = custom_agent_name.as_deref();
     if args.declared_urgency == Some(crate::types::TaskUrgency::Background)
-        && rate_limit::is_rate_limited(&agent_kind)
+        && rate_limit::is_rate_limited(&agent_kind, custom_name)
     {
         aid_warn!(
             "[aid] {} is rate-limited; background urgency keeps this agent selected",
-            agent_kind.as_str()
+            resolved_agent_name
         );
-    } else if let Some(hold) = rate_limit::dispatch_blocking_hold(&agent_kind) {
+    } else if let Some(hold) = rate_limit::dispatch_blocking_hold(&agent_kind, custom_name) {
         // A hold that a person must end carries no recovery time at all. Gating
         // on the presence of one sent `aid run` straight into a spent balance,
         // and kept diverting for markers whose stated time had already passed.
         if let Some(next_agent) = args.cascade.first() {
             aid_warn!(
                 "[aid] {} is rate-limited ({}) — will cascade to {}",
-                agent_kind.as_str(),
+                resolved_agent_name,
                 hold,
                 next_agent
             );
@@ -153,7 +154,7 @@ pub(super) fn resolve_agent_setup(store: &Arc<Store>, args: &mut RunArgs) -> Res
         {
             aid_warn!(
                 "[aid] {} is rate-limited ({}), auto-cascading to {}",
-                agent_kind.as_str(),
+                resolved_agent_name,
                 hold,
                 fallback.as_str()
             );
@@ -161,7 +162,7 @@ pub(super) fn resolve_agent_setup(store: &Arc<Store>, args: &mut RunArgs) -> Res
         } else {
             anyhow::bail!(
                 "{} is rate-limited {}. Use --cascade <agent> to specify a fallback.",
-                agent_kind.as_str(),
+                resolved_agent_name,
                 hold
             );
         }
@@ -206,7 +207,7 @@ pub(super) fn resolve_agent_setup(store: &Arc<Store>, args: &mut RunArgs) -> Res
         && crate::agent::classifier::is_simple_for_routing(&args.prompt)
     {
         if let Some(bm) = cmd_config::budget_model(&agent_kind) {
-            if rate_limit::is_rate_limited(&agent_kind) {
+            if rate_limit::is_rate_limited(&agent_kind, custom_name) {
                 None
             } else {
                 aid_info!("[aid] Smart route: simple prompt -> {}", bm);
@@ -238,7 +239,7 @@ pub(super) fn resolve_agent_setup(store: &Arc<Store>, args: &mut RunArgs) -> Res
     let effective_model = match agent::model_group::healthy_model_for(
         agent_kind,
         effective_model.as_deref(),
-        |group| rate_limit::is_group_rate_limited(&agent_kind, group),
+        |group| rate_limit::is_group_rate_limited(&agent_kind, custom_name, group),
     ) {
         Some(replacement) => {
             aid_warn!(

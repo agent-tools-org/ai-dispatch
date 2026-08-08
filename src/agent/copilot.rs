@@ -205,7 +205,7 @@ fn parse_plain_error(task_id: &TaskId, value: &Value, now: chrono::DateTime<Loca
 
 fn mark_rate_limit_if_needed(detail: &str) {
     if rate_limit::is_rate_limit_error_for_agent(detail, &AgentKind::Copilot) {
-        rate_limit::mark_rate_limited(&AgentKind::Copilot, detail);
+        rate_limit::mark_rate_limited(&AgentKind::Copilot, None, detail);
     }
 }
 

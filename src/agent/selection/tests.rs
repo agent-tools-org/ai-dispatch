@@ -570,7 +570,7 @@ fn fallback_chain_skips_rate_limited() {
         AgentKind::Codex,
         AgentKind::Cursor,
     ]);
-    crate::rate_limit::mark_rate_limited(&AgentKind::Codex, "quota exhausted");
+    crate::rate_limit::mark_rate_limited(&AgentKind::Codex, None, "quota exhausted");
     let result = super::coding_fallback_for(&AgentKind::Gemini, None, None);
     // Should skip Codex (rate-limited) and pick the next available.
     assert!(result.is_some());

@@ -104,6 +104,9 @@ pub(crate) fn select_agent_from(
         .filter(|config| AgentKind::parse_str(&config.id).is_none())
         .filter(|config| !agent_config::is_agent_disabled(&config.id))
         .filter(|config| custom_command_installed(&config.command))
+        .filter(|config| {
+            !rate_limit::is_rate_limited(&AgentKind::Custom, Some(config.id.as_str()))
+        })
         .map(|config| {
             let mut score = custom_category_score(&config, profile.category);
             score += custom_strength_bonus(&config, profile.category);
@@ -162,7 +165,7 @@ pub(crate) fn select_agent_from(
     } else if opts.budget {
         reason.push_str("; budget mode");
     }
-    if rate_limit::is_rate_limited(&AgentKind::Codex) && selected_name != AgentKind::Codex.as_str() {
+    if rate_limit::is_rate_limited(&AgentKind::Codex, None) && selected_name != AgentKind::Codex.as_str() {
         reason.push_str("; codex rate-limited");
     }
     if let Some(sel_kind) = selected_builtin

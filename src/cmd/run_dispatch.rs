@@ -46,7 +46,10 @@ pub async fn run(store: Arc<Store>, mut args: RunArgs) -> Result<TaskId> {
     }
     if !args.background {
         crate::rate_limit_wait::wait_for_declared_reset(
-            store.as_ref(), prepared.task_id.as_str(), prepared.agent_kind,
+            store.as_ref(),
+            prepared.task_id.as_str(),
+            prepared.agent_kind,
+            prepared.agent.rate_limit_name(),
         ).await?;
     }
     ensure_agent_binary_available(&store, &prepared, &args)?;

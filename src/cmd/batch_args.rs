@@ -111,10 +111,12 @@ pub(crate) fn task_to_run_args(
 
 /// If the agent is rate-limited, return the suggested fallback as an auto-cascade.
 fn auto_cascade_for_rate_limited(agent_name: &str, prompt: &str) -> Vec<String> {
-    let Some(agent) = crate::types::AgentKind::parse_str(agent_name) else {
+    let (agent, custom_name) = crate::rate_limit::resolve_agent(agent_name);
+    if !crate::rate_limit::is_rate_limited(&agent, custom_name) {
         return vec![];
-    };
-    if !crate::rate_limit::is_rate_limited(&agent) {
+    }
+    // Coding fallback is defined for built-ins; a held custom has no matrix entry.
+    if agent == crate::types::AgentKind::Custom {
         return vec![];
     }
     crate::agent::selection::coding_fallback_for_prompt(&agent, prompt)

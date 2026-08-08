@@ -91,7 +91,7 @@ fn parse_stream_event(task_id: &TaskId, v: &serde_json::Value, now: chrono::Date
         "error" => {
             let detail = extract_error_detail(v)?;
             if support::is_gemini_rate_limit_error(&detail) {
-                rate_limit::mark_rate_limited(&AgentKind::Gemini, &detail);
+                rate_limit::mark_rate_limited(&AgentKind::Gemini, None, &detail);
             }
             (EventKind::Error, detail, None)
         }

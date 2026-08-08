@@ -585,7 +585,7 @@ fn stale_pending_timeout_uses_rate_limited_reason() {
     let mut task = make_task("t-aa04", TaskStatus::Pending);
     task.created_at = Local::now() - Duration::seconds(601);
     store.insert_task(&task).unwrap();
-    crate::rate_limit::mark_rate_limited(&AgentKind::Codex, "rate limit exceeded");
+    crate::rate_limit::mark_rate_limited(&AgentKind::Codex, None, "rate limit exceeded");
 
     let changed = fail_stale_pending_task(&store, &task, Local::now(), 601).unwrap();
 

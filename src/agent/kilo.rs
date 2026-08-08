@@ -109,8 +109,8 @@ mod tests {
     fn parse_event_marks_kilo_rate_limits() {
         let temp = tempfile::tempdir().unwrap();
         let _aid_home = paths::AidHomeGuard::set(temp.path());
-        rate_limit::clear_rate_limit(&AgentKind::Kilo);
-        rate_limit::clear_rate_limit(&AgentKind::OpenCode);
+        rate_limit::clear_rate_limit(&AgentKind::Kilo, None);
+        rate_limit::clear_rate_limit(&AgentKind::OpenCode, None);
         let event = agent()
             .parse_event(
                 &TaskId("t-kilo".to_string()),
@@ -118,9 +118,9 @@ mod tests {
             )
             .unwrap();
         assert_eq!(event.event_kind, EventKind::Error);
-        assert!(rate_limit::is_rate_limited(&AgentKind::Kilo));
-        assert!(!rate_limit::is_rate_limited(&AgentKind::OpenCode));
-        rate_limit::clear_rate_limit(&AgentKind::Kilo);
-        rate_limit::clear_rate_limit(&AgentKind::OpenCode);
+        assert!(rate_limit::is_rate_limited(&AgentKind::Kilo, None));
+        assert!(!rate_limit::is_rate_limited(&AgentKind::OpenCode, None));
+        rate_limit::clear_rate_limit(&AgentKind::Kilo, None);
+        rate_limit::clear_rate_limit(&AgentKind::OpenCode, None);
     }
 }

@@ -175,10 +175,7 @@ fn test_rate_limit_precheck_does_not_panic() {
     let temp = TempDir::new().unwrap();
     let guard = AidHomeGuard::set(temp.path());
     std::fs::create_dir_all(crate::paths::aid_dir()).ok();
-    rate_limit::mark_rate_limited(
-        &AgentKind::Codex,
-        "rate limit exceeded; try again at Mar 19th, 2026 2:27 PM.",
-    );
+    rate_limit::mark_rate_limited(&AgentKind::Codex, None, "rate limit exceeded; try again at Mar 19th, 2026 2:27 PM.");
     let tasks = vec![stub_task("first", None), stub_task("second", None)];
     rate_limit_precheck(&tasks);
     drop(guard);

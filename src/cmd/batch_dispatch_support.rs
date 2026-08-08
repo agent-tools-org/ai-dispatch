@@ -178,8 +178,8 @@ pub(crate) fn pre_dispatch_fallback_choice(
     agent_name: &str,
     fallback: Option<&str>,
 ) -> Option<(AgentKind, Vec<String>)> {
-    let agent_kind = AgentKind::parse_str(agent_name)?;
-    if !rate_limit::is_rate_limited(&agent_kind) {
+    let (agent_kind, custom_name) = rate_limit::resolve_agent(agent_name);
+    if !rate_limit::is_rate_limited(&agent_kind, custom_name) {
         return None;
     }
     available_fallback_after(agent_name, fallback)
@@ -235,7 +235,7 @@ fn available_fallback_after(
         .unwrap_or(0);
     let selected_idx = fallback_agents[start..]
         .iter()
-        .position(|candidate| !rate_limit::is_rate_limited(candidate))
+        .position(|candidate| !rate_limit::is_rate_limited(candidate, None))
         .map(|offset| start + offset)?;
     Some((
         fallback_agents[selected_idx],

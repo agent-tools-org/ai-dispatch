@@ -213,7 +213,7 @@ fn parse_item_event(
                 return None;
             }
             if rate_limit::is_rate_limit_error_for_agent(message, &AgentKind::Codex) {
-                rate_limit::mark_rate_limited(&AgentKind::Codex, message);
+                rate_limit::mark_rate_limited(&AgentKind::Codex, None, message);
             }
             let (detail, metadata) = capped_detail(message);
             Some(TaskEvent {
@@ -342,7 +342,7 @@ fn parse_error_event(
         .filter(|message| !message.is_empty())?;
 
     if rate_limit::is_rate_limit_error_for_agent(detail, &AgentKind::Codex) {
-        rate_limit::mark_rate_limited(&AgentKind::Codex, detail);
+        rate_limit::mark_rate_limited(&AgentKind::Codex, None, detail);
     }
 
     let (detail, metadata) = capped_detail(detail);

@@ -114,6 +114,7 @@ pub(crate) fn merge_parsed_completion(info: &mut CompletionInfo, parsed: Complet
 pub(crate) fn record_quota_exhaustion(
     output: &str,
     agent: crate::types::AgentKind,
+    custom_name: Option<&str>,
     model: Option<&str>,
 ) -> QuotaOutcome {
     // Only what the CLI wrote. The model's own text is dropped before any
@@ -138,8 +139,10 @@ pub(crate) fn record_quota_exhaustion(
     match crate::agent::model_group::model_group(agent, model)
         .or_else(|| crate::agent::model_group::group_from_refusal(agent, &detail))
     {
-        Some(group) => crate::rate_limit::mark_group_rate_limited(&agent, group, &detail),
-        None => crate::rate_limit::mark_rate_limited(&agent, &detail),
+        Some(group) => {
+            crate::rate_limit::mark_group_rate_limited(&agent, custom_name, group, &detail)
+        }
+        None => crate::rate_limit::mark_rate_limited(&agent, custom_name, &detail),
     }
     if output_has_substantive_deliverable(output) {
         QuotaOutcome::RecordedDelivered

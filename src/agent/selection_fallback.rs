@@ -89,7 +89,7 @@ fn is_category_specialist(kind: AgentKind, category: TaskCategory, score: i32) -
 
 fn is_usable_fallback(kind: AgentKind, available: &[AgentKind]) -> bool {
     !agent_config::is_agent_disabled(kind.as_str())
-        && !rate_limit::is_rate_limited(&kind)
+        && !rate_limit::is_rate_limited(&kind, None)
         && !is_known_unhealthy(kind, available)
 }
 
@@ -161,7 +161,7 @@ mod tests {
             AgentKind::OpenCode,
             AgentKind::Cursor,
         ]);
-        rate_limit::mark_rate_limited(&AgentKind::Droid, "quota exhausted");
+        rate_limit::mark_rate_limited(&AgentKind::Droid, None, "quota exhausted");
         let got = coding_fallback_for_category(&AgentKind::Codex, TaskCategory::ComplexImpl);
         assert_eq!(got, Some(AgentKind::Cursor));
         assert_ne!(got, Some(AgentKind::Gemini));

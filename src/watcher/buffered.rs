@@ -58,6 +58,7 @@ pub(crate) async fn watch_buffered(
     let quota = crate::agent::stream_completion::record_quota_exhaustion(
         &buffer,
         agent.kind(),
+        agent.rate_limit_name(),
         info.model.as_deref().or(dispatched_model),
     );
     if quota.should_fail() {
@@ -65,7 +66,7 @@ pub(crate) async fn watch_buffered(
     }
     if info.status == TaskStatus::Done && !quota.recorded() {
         let model = info.model.as_deref().or(dispatched_model);
-        rate_limit::clear_rate_limit_for_model(&agent.kind(), model);
+        rate_limit::clear_rate_limit_for_model(&agent.kind(), agent.rate_limit_name(), model);
     }
     let event = match agent.kind() {
         AgentKind::Grok => crate::agent::grok::make_completion_event(task_id, &info),

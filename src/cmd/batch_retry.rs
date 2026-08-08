@@ -68,22 +68,21 @@ pub(crate) fn retry_task_to_run_args(store: &Store, task: &Task, group_id: &str,
         override_name.to_string()
     } else {
         let original = task.agent_display_name().to_string();
-        if let Some(kind) = crate::types::AgentKind::parse_str(&original) {
-            if crate::rate_limit::is_rate_limited(&kind) {
-                if let Some(fallback) = crate::agent::selection::coding_fallback_for(
+        let (kind, custom_name) = crate::rate_limit::resolve_agent(&original);
+        if crate::rate_limit::is_rate_limited(&kind, custom_name) {
+            if kind != crate::types::AgentKind::Custom
+                && let Some(fallback) = crate::agent::selection::coding_fallback_for(
                     &kind,
                     task.category.as_deref(),
                     Some(task.prompt.as_str()),
-                ) {
-                    crate::aid_info!(
-                        "[aid] {} is rate-limited, retrying with fallback: {}",
-                        original,
-                        fallback.as_str()
-                    );
-                    fallback.as_str().to_string()
-                } else {
-                    original
-                }
+                )
+            {
+                crate::aid_info!(
+                    "[aid] {} is rate-limited, retrying with fallback: {}",
+                    original,
+                    fallback.as_str()
+                );
+                fallback.as_str().to_string()
             } else {
                 original
             }

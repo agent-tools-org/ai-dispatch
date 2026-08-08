@@ -53,6 +53,14 @@ impl Agent for OpenCodeOverlayAgent {
         self.spec.reported_kind
     }
 
+    fn rate_limit_name(&self) -> Option<&str> {
+        if self.spec.reported_kind == AgentKind::Custom {
+            Some(self.spec.id.as_str())
+        } else {
+            None
+        }
+    }
+
     fn streaming(&self) -> bool {
         true
     }
@@ -107,7 +115,14 @@ impl Agent for OpenCodeOverlayAgent {
             return None;
         }
         if let Ok(v) = serde_json::from_str::<serde_json::Value>(trimmed) {
-            return parse_json_event(self.spec.rate_limit_kind, task_id, &v, now);
+            return parse_json_event(
+                self.spec.rate_limit_kind,
+                self.spec.reported_kind,
+                self.rate_limit_name(),
+                task_id,
+                &v,
+                now,
+            );
         }
         let (kind, detail) = classify_text_line(trimmed);
         kind.map(|event_kind| {
@@ -204,8 +219,8 @@ mod tests {
     fn overlay_spec_uses_binary_args_kind_and_rate_limit_kind() {
         let temp = tempfile::tempdir().unwrap();
         let _aid_home = paths::AidHomeGuard::set(temp.path());
-        rate_limit::clear_rate_limit(&AgentKind::MiMoCode);
-        rate_limit::clear_rate_limit(&AgentKind::OpenCode);
+        rate_limit::clear_rate_limit(&AgentKind::MiMoCode, None);
+        rate_limit::clear_rate_limit(&AgentKind::OpenCode, None);
         let agent = OpenCodeOverlayAgent::from_spec(OpenCodeOverlaySpec {
             id: "mimocode".into(),
             display_name: "MiMo Code".into(),
@@ -232,9 +247,32 @@ mod tests {
             )
             .unwrap();
         assert_eq!(event.event_kind, EventKind::Error);
-        assert!(rate_limit::is_rate_limited(&AgentKind::MiMoCode));
-        assert!(!rate_limit::is_rate_limited(&AgentKind::OpenCode));
-        rate_limit::clear_rate_limit(&AgentKind::MiMoCode);
-        rate_limit::clear_rate_limit(&AgentKind::OpenCode);
+        assert!(rate_limit::is_rate_limited(&AgentKind::MiMoCode, None));
+        assert!(!rate_limit::is_rate_limited(&AgentKind::OpenCode, None));
+        rate_limit::clear_rate_limit(&AgentKind::MiMoCode, None);
+        rate_limit::clear_rate_limit(&AgentKind::OpenCode, None);
+    }
+
+    #[test]
+    fn custom_overlay_marks_its_own_id_not_opencode() {
+        let temp = tempfile::tempdir().unwrap();
+        let _aid_home = paths::AidHomeGuard::set(temp.path());
+        let agent = OpenCodeOverlayAgent::from_spec(OpenCodeOverlaySpec {
+            id: "auditor".into(),
+            display_name: "Auditor".into(),
+            reported_kind: AgentKind::Custom,
+            binary: "opencode".into(),
+            extra_args: Vec::new(),
+            default_model: Some("x".into()),
+            rate_limit_kind: AgentKind::OpenCode,
+            allow_external_directories: true,
+        });
+        let _ = agent.parse_event(
+            &TaskId("t-aud".into()),
+            r#"{"type":"error","error":{"name":"APIError","data":{"message":"Insufficient balance. Manage your billing here"}}}"#,
+        );
+        assert!(rate_limit::is_rate_limited(&AgentKind::Custom, Some("auditor")));
+        assert!(!rate_limit::is_rate_limited(&AgentKind::OpenCode, None));
+        assert!(!rate_limit::is_rate_limited(&AgentKind::Custom, Some("other")));
     }
 }

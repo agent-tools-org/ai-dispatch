@@ -92,7 +92,7 @@ fn auto_fallback_agent_returns_none_when_no_usable_peer() {
 #[test]
 fn pre_dispatch_uses_fallback_when_agent_is_rate_limited() {
     let (_temp, _guard) = isolated_rate_limit_home();
-    mark_rate_limited(&AgentKind::Codex, "rate limit exceeded");
+    mark_rate_limited(&AgentKind::Codex, None, "rate limit exceeded");
 
     let choice = pre_dispatch_fallback_choice("codex", Some("opencode,cursor")).unwrap();
 
@@ -100,24 +100,24 @@ fn pre_dispatch_uses_fallback_when_agent_is_rate_limited() {
     assert_eq!(choice.0, AgentKind::OpenCode);
     assert_eq!(choice.1, vec!["cursor".to_string()]);
 
-    clear_rate_limit(&AgentKind::Codex);
+    clear_rate_limit(&AgentKind::Codex, None);
 }
 
 #[test]
 fn pre_dispatch_keeps_original_when_no_fallback_is_available() {
     let (_temp, _guard) = isolated_rate_limit_home();
-    mark_rate_limited(&AgentKind::Codex, "rate limit exceeded");
+    mark_rate_limited(&AgentKind::Codex, None, "rate limit exceeded");
 
     assert_eq!(dispatch_agent_name("codex", None), "codex");
     assert!(pre_dispatch_fallback_choice("codex", None).is_none());
 
-    clear_rate_limit(&AgentKind::Codex);
+    clear_rate_limit(&AgentKind::Codex, None);
 }
 
 #[test]
 fn auto_fallback_skips_rate_limited_toml_fallbacks() {
     let (_temp, _guard) = isolated_rate_limit_home();
-    mark_rate_limited(&AgentKind::OpenCode, "rate limit exceeded");
+    mark_rate_limited(&AgentKind::OpenCode, None, "rate limit exceeded");
 
     let store = Store::open_memory().unwrap();
     store.insert_task(&stored_task("t-codex", AgentKind::Codex)).unwrap();
@@ -177,5 +177,5 @@ fn auto_fallback_skips_rate_limited_toml_fallbacks() {
     assert_eq!(original, "codex");
     assert_eq!(fallback, AgentKind::Cursor);
 
-    clear_rate_limit(&AgentKind::OpenCode);
+    clear_rate_limit(&AgentKind::OpenCode, None);
 }

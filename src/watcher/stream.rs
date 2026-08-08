@@ -88,7 +88,11 @@ pub(crate) fn handle_streaming_line_with_session(
                 crate::quota_channel::Channel::CliStream,
             )
         {
-            rate_limit::mark_rate_limited_for_message(&agent.kind(), &message);
+            rate_limit::mark_rate_limited_for_message(
+                &agent.kind(),
+                agent.rate_limit_name(),
+                &message,
+            );
         }
         store.insert_event(&event)?;
         *event_count += 1;

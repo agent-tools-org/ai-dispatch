@@ -53,7 +53,10 @@ Use `aid config agents` to see configured and detected agents. Built-in dispatch
 probes binaries by their real CLI names, for example `grok` and `commandcode`
 (not the generic `agent` alias used by cursor). Register a local custom agent
 with `config add-agent`. Use `clear-limit` only after confirming a provider's
-rate-limit condition has cleared.
+rate-limit condition has cleared. Each custom agent has its own marker keyed on
+its id (`rate-limit-<id>`), so one custom hitting quota does not hold the
+others; `aid config clear-limit <custom-id>` clears that agent alone.
+Built-in markers (`rate-limit-codex`, …) are unchanged.
 
 Quota exhaustion is read from two named channels and nowhere else: the CLI's
 stderr, and the raw lines of its output stream. Within the stream, a refusal is

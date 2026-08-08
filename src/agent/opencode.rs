@@ -71,7 +71,7 @@ impl super::Agent for OpenCodeAgent {
             return None;
         }
         if let Ok(v) = serde_json::from_str::<serde_json::Value>(trimmed) {
-            return parse_json_event(AgentKind::OpenCode, task_id, &v, now);
+            return parse_json_event(AgentKind::OpenCode, AgentKind::OpenCode, None, task_id, &v, now);
         }
         let (kind, detail) = classify_text_line(trimmed);
         kind.map(|k| {
@@ -101,7 +101,9 @@ impl super::Agent for OpenCodeAgent {
 }
 
 pub(crate) fn parse_json_event(
-    agent_kind: AgentKind,
+    signature_kind: AgentKind,
+    marker_kind: AgentKind,
+    custom_name: Option<&str>,
     task_id: &TaskId,
     v: &serde_json::Value,
     now: chrono::DateTime<Local>,
@@ -149,8 +151,8 @@ pub(crate) fn parse_json_event(
         }
         "error" => {
             let detail = error_detail(v).unwrap_or("unknown error");
-            if rate_limit::is_rate_limit_error_for_agent(detail, &agent_kind) {
-                rate_limit::mark_rate_limited(&agent_kind, detail);
+            if rate_limit::is_rate_limit_error_for_agent(detail, &signature_kind) {
+                rate_limit::mark_rate_limited(&marker_kind, custom_name, detail);
             }
             (detail.to_string(), None)
         }
@@ -292,10 +294,10 @@ mod rate_limit_tests {
     use super::*; use crate::{agent::Agent, paths, rate_limit};
     #[test]
     fn marks_opencode_rate_limits_from_text_and_json_errors() {
-        let temp = tempfile::tempdir().unwrap(); let _aid_home = paths::AidHomeGuard::set(temp.path()); rate_limit::clear_rate_limit(&AgentKind::OpenCode); let agent = OpenCodeAgent;
+        let temp = tempfile::tempdir().unwrap(); let _aid_home = paths::AidHomeGuard::set(temp.path()); rate_limit::clear_rate_limit(&AgentKind::OpenCode, None); let agent = OpenCodeAgent;
         // A rendered PTY line is classified but never marked: under a PTY this
         // is the model's own answer as often as the CLI's output.
-        assert_eq!(agent.parse_event(&TaskId("t-opencode".to_string()), "Error: Insufficient balance. Manage your billing here").unwrap().event_kind, EventKind::Error); assert!(!rate_limit::is_rate_limited(&AgentKind::OpenCode));
-        assert_eq!(parse_json_event(AgentKind::OpenCode, &TaskId("t-opencode".to_string()), &serde_json::json!({"type":"error","error":{"name":"APIError","data":{"message":"Insufficient balance. Manage your billing here"}}}), Local::now()).unwrap().event_kind, EventKind::Error); assert!(rate_limit::is_rate_limited(&AgentKind::OpenCode)); rate_limit::clear_rate_limit(&AgentKind::OpenCode);
+        assert_eq!(agent.parse_event(&TaskId("t-opencode".to_string()), "Error: Insufficient balance. Manage your billing here").unwrap().event_kind, EventKind::Error); assert!(!rate_limit::is_rate_limited(&AgentKind::OpenCode, None));
+        assert_eq!(parse_json_event(AgentKind::OpenCode, AgentKind::OpenCode, None,  &TaskId("t-opencode".to_string()), &serde_json::json!({"type":"error","error":{"name":"APIError","data":{"message":"Insufficient balance. Manage your billing here"}}}), Local::now()).unwrap().event_kind, EventKind::Error); assert!(rate_limit::is_rate_limited(&AgentKind::OpenCode, None)); rate_limit::clear_rate_limit(&AgentKind::OpenCode, None);
     }
 }

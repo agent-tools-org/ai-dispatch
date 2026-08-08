@@ -128,7 +128,7 @@ pub(super) fn score_breakdown(
         budget_penalty = -3.0;
     }
     let mut rate_limit_penalty = 0.0;
-    if ctx.penalize_rate_limit && rate_limit::is_rate_limited(&kind) {
+    if ctx.penalize_rate_limit && rate_limit::is_rate_limited(&kind, None) {
         s -= 10.0;
         rate_limit_penalty = -10.0;
     }

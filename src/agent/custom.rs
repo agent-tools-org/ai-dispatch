@@ -117,6 +117,10 @@ impl super::Agent for CustomAgent {
         AgentKind::Custom
     }
 
+    fn rate_limit_name(&self) -> Option<&str> {
+        Some(self.config.id.as_str())
+    }
+
     fn streaming(&self) -> bool {
         self.config.streaming
     }

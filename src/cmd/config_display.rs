@@ -143,10 +143,10 @@ fn render_models_line(
 }
 
 fn render_rate_limit_line(kind: AgentKind) -> String {
-    if !rate_limit::is_rate_limited(&kind) {
+    if !rate_limit::is_rate_limited(&kind, None) {
         return String::new();
     }
-    match rate_limit::get_rate_limit_info(&kind) {
+    match rate_limit::get_rate_limit_info(&kind, None) {
         Some(info) => {
             let fallback_hint = crate::agent::selection::coding_fallback_for(&kind, None, None)
                 .map(|fallback| format!(" → use --fallback {}", fallback.as_str()))

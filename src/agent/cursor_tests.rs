@@ -151,7 +151,7 @@ fn parse_event_classifies_but_never_marks() {
     let temp = tempfile::tempdir().unwrap();
     let _aid_home = paths::AidHomeGuard::set(temp.path());
     let _guard = rate_limit_lock().lock().unwrap();
-    let _ = rate_limit::clear_rate_limit(&AgentKind::Cursor);
+    let _ = rate_limit::clear_rate_limit(&AgentKind::Cursor, None);
 
     let lines = [
         // The audit's own report, quoting this repo's fixture back at us.
@@ -166,11 +166,11 @@ fn parse_event_classifies_but_never_marks() {
     for line in lines {
         let _ = CursorAgent.parse_event(&TaskId("t-cursor".to_string()), line);
         assert!(
-            !rate_limit::is_rate_limited(&AgentKind::Cursor),
+            !rate_limit::is_rate_limited(&AgentKind::Cursor, None),
             "adapter wrote a marker from {line:?}"
         );
         assert!(
-            !rate_limit::is_group_rate_limited(&AgentKind::Cursor, "premium"),
+            !rate_limit::is_group_rate_limited(&AgentKind::Cursor, None, "premium"),
             "adapter wrote a group marker from {line:?}"
         );
     }
@@ -184,7 +184,7 @@ fn cursors_error_envelope_is_read_on_the_stream_channel() {
     let temp = tempfile::tempdir().unwrap();
     let _aid_home = paths::AidHomeGuard::set(temp.path());
     let _guard = rate_limit_lock().lock().unwrap();
-    let _ = rate_limit::clear_rate_limit(&AgentKind::Cursor);
+    let _ = rate_limit::clear_rate_limit(&AgentKind::Cursor, None);
 
     let line = r#"{"type":"error","message":"quota exceeded for this workspace"}"#;
     let refusal = rate_limit::refusal_on_channel(

@@ -14,8 +14,26 @@ pub struct WorktreeSnapshot {
 }
 
 impl WorktreeSnapshot {
+    /// Whether anything the *agent* left is uncommitted.
+    ///
+    /// aid's own bookkeeping does not count. It used to: a task that committed
+    /// cleanly still failed because aid removed its own `.aid-lock` on the way out,
+    /// `git status` reported ` D .aid-lock`, and the caller read that as agent dirt —
+    /// dispatching a retry and skipping the configured verification. Rescue already
+    /// ignored the file (`is_rescuable_path`), so rescue staged nothing while the
+    /// gate downstream acted as if it had; the two policies have to agree.
     pub fn has_uncommitted_changes(&self) -> bool {
-        !self.status_lines.is_empty()
+        !self.agent_status_lines().is_empty()
+    }
+
+    /// Status lines with aid's own files removed — what a human should be shown when
+    /// asked "what did the agent leave behind".
+    pub fn agent_status_lines(&self) -> Vec<String> {
+        self.status_lines
+            .iter()
+            .filter(|line| !line_is_only_aid_owned(line))
+            .cloned()
+            .collect()
     }
 
     pub fn rescuable_entries(&self) -> Vec<WorktreeStatusEntry> {
@@ -25,6 +43,57 @@ impl WorktreeSnapshot {
             .cloned()
             .collect()
     }
+}
+
+/// Whether a porcelain line names nothing but aid's own files.
+///
+/// A rename names two paths and `extract_baseline_path` returns only the destination,
+/// so judging on that alone would drop `R  src/lib.rs -> result-t-abcd.md` entirely and
+/// hide a real file's disappearance from every dirty check. Both sides have to be aid's
+/// before the line stops counting.
+fn line_is_only_aid_owned(line: &str) -> bool {
+    let paths = status_line_paths(line);
+    !paths.is_empty() && paths.iter().all(|path| is_aid_owned_path(path))
+}
+
+/// Every path a porcelain line names: one, or two for a rename.
+fn status_line_paths(line: &str) -> Vec<String> {
+    let Some(rest) = line.strip_prefix("?? ").or_else(|| line.get(3..)) else {
+        return Vec::new();
+    };
+    match rest.split_once(" -> ") {
+        Some((from, to)) => vec![unquote(from), unquote(to)],
+        None => vec![unquote(rest)],
+    }
+}
+
+/// Git quotes paths that need escaping (`?? "odd name.md"`). Strip the wrapper so the
+/// name is judged, not the quote character.
+fn unquote(path: &str) -> String {
+    path.strip_prefix('"').and_then(|p| p.strip_suffix('"')).unwrap_or(path).to_string()
+}
+
+/// Paths aid itself writes into a worktree. Deliberately narrower than
+/// `is_rescuable_path`, which also rejects build output: a stray `target/` or `.so`
+/// is still the agent's business and must keep failing the data-loss assertion.
+///
+/// It is also narrower than `AID_ADD_EXCLUDES`, which still matches any `result-*.md`.
+/// That breadth is safe for `git add` — over-excluding there only leaves a file
+/// uncommitted — but on this path an over-match makes real work stop counting as
+/// uncommitted, so the two lists are deliberately not the same.
+pub fn is_aid_owned_path(path: &str) -> bool {
+    // Porcelain reports an untracked directory with a trailing slash; keep the last
+    // real segment so `.aid-dir/` is judged on its name and not on an empty string.
+    let name = path.trim_end_matches('/').rsplit('/').next().unwrap_or(path);
+    name.starts_with(".aid-")
+        || name.starts_with("aid-batch-")
+        || path == ".aid/state.toml"
+        || path.starts_with(".aid/batches/")
+        // `result-t-`, never a bare `result-`: aid's report is always named for its
+        // task id, and widening this to any `result-*.md` would quietly classify a
+        // user's own `result-summary.md` as aid's — on this path an over-match means
+        // real work stops counting as uncommitted and can be thrown away.
+        || (name.starts_with("result-t-") && (name.ends_with(".md") || name.ends_with(".json")))
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

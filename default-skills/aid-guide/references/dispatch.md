@@ -233,6 +233,13 @@ still collide and are refused. A nested child whose `parent_task_id` chain
 reaches the lease holder may re-enter the same worktree so edits stay on the
 parent branch.
 
+Creating a worktree also adds AID's own runtime files — `.aid-*`, `aid-batch-*`,
+`result-t-*.md` — to the repository's local `.git/info/exclude`. That file is never
+committed and the repository's `.gitignore` is left alone; it exists so an agent
+running `git add .` cannot commit AID's lease file. Dirty-worktree enforcement
+ignores those paths as well, so AID clearing its own lease at task end is not read
+as the agent leaving work uncommitted.
+
 ## Recursive delegation
 
 Agents already receive `AID_TASK_ID` (and now `AID_TASK_DEPTH`) and can run

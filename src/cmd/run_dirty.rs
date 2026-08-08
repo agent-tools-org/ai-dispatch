@@ -208,6 +208,9 @@ fn rescue_files_summary(outcome: &crate::commit::RescueOutcome) -> String {
     files.join(", ")
 }
 
+/// Only what the agent left. aid's own bookkeeping is filtered out: this feeds both
+/// the retry decision and the data-loss assertion, and aid removing its own
+/// `.aid-lock` on the way out is not the agent leaving work behind.
 fn worktree_status_lines(dir: &str) -> Result<Vec<String>> {
-    Ok(crate::worktree::capture_worktree_snapshot(Path::new(dir))?.status_lines)
+    Ok(crate::worktree::capture_worktree_snapshot(Path::new(dir))?.agent_status_lines())
 }

@@ -112,7 +112,11 @@ fn group_holds_detail(kind: &AgentKind, groups: &[(String, RateLimitInfo)]) -> S
     groups
         .iter()
         .map(|(group, info)| {
-            format!("{group} {}", rate_limit::format_hold_end(kind, info))
+            let end = rate_limit::format_hold_end(kind, info);
+            match info.message.as_deref() {
+                Some(msg) if !msg.is_empty() => format!("{group} {end} — {msg}"),
+                _ => format!("{group} {end}"),
+            }
         })
         .collect::<Vec<_>>()
         .join("; ")

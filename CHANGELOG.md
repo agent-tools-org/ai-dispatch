@@ -1,3 +1,10 @@
+## v10.17.1 (2026-08-08)
+- A task that committed cleanly could still be recorded FAIL with "Configured verification did not run: dirty worktree rescue dispatched retry before verify". The dirt was aid's own: an agent had run `git add .aid-lock`, so aid's lease file became tracked, and aid clearing that lease at task end showed up as ` D .aid-lock` — which the dirty gate read as the agent leaving work behind. Rescue already ignored the file; the gate downstream did not. Both now ask the same question.
+- Creating a worktree adds `.aid-*`, `aid-batch-*` and `result-t-*` to the repository's local `.git/info/exclude`, so aid's runtime files never become tracked in the first place. The file is never committed and the repository's `.gitignore` is left alone. (A per-worktree `info/exclude` does not work — git does not read it — so the entries go to the common directory and apply to the whole clone.)
+- A porcelain rename names two paths on one line. Judging such a line by its destination alone would have let `R src/lib.rs -> result-t-abcd.md` erase a real file from the retry gate, the data-loss assertion, the reaper and stop; a line now stops counting only when every path on it is aid's.
+- The aid-owned test is narrower than the `git add` exclusion list on purpose: over-excluding a `git add` only leaves a file uncommitted, while over-matching here makes real work stop counting as uncommitted at all. A user's own `result-summary.md` is theirs; only `result-t-*` is aid's.
+
+
 ## v10.17.0 (2026-08-08)
 - A dashboard was delivered and the reviewer concluded nothing had been built. Both halves of that were aid's doing, and both are fixed here.
 - The dirty-worktree rescue ran `git commit --amend` whenever a HEAD existed, so it folded an agent's work into whatever commit happened to be there — 14,303 lines of a delivered dashboard ended up inside the operator's own commit titled "chore: ignore aid's worktree bookkeeping files", and `git log` then showed no trace of the work. Rescue now amends only a commit the task itself created: `start_sha` known and different from HEAD. Unknown, equal, or tagged means a new commit.

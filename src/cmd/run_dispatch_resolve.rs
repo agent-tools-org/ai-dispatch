@@ -35,6 +35,8 @@ pub(super) struct AgentSetup {
     pub effective_model: Option<String>,
     pub budget_active: bool,
     pub agent: Box<dyn agent::Agent>,
+    /// `Some((original, hold))` when a held primary was replaced before dispatch.
+    pub substituted_from: Option<(String, String)>,
 }
 
 pub(super) fn apply_project_defaults(args: &mut RunArgs, detected_project: Option<&ProjectConfig>) {
@@ -86,7 +88,7 @@ pub(super) fn apply_project_defaults(args: &mut RunArgs, detected_project: Optio
 }
 
 pub(super) fn resolve_agent_setup(store: &Arc<Store>, args: &mut RunArgs) -> Result<AgentSetup> {
-    let (agent_kind, custom_agent_name) = if let Some(kind) = AgentKind::parse_str(&args.agent_name) {
+    let (mut agent_kind, mut custom_agent_name) = if let Some(kind) = AgentKind::parse_str(&args.agent_name) {
         (kind, None)
     } else if agent::registry::custom_agent_exists(&args.agent_name) {
         (AgentKind::Custom, Some(args.agent_name.clone()))
@@ -130,6 +132,7 @@ pub(super) fn resolve_agent_setup(store: &Arc<Store>, args: &mut RunArgs) -> Res
         args.dir = Some(".".to_string());
         aid_info!("[aid] Auto-set --dir . (git repo detected)");
     }
+    let mut substituted_from: Option<(String, String)> = None;
     if args.declared_urgency == Some(crate::types::TaskUrgency::Background)
         && rate_limit::is_rate_limited(&agent_kind)
     {
@@ -138,33 +141,18 @@ pub(super) fn resolve_agent_setup(store: &Arc<Store>, args: &mut RunArgs) -> Res
             agent_kind.as_str()
         );
     } else if let Some(hold) = rate_limit::dispatch_blocking_hold(&agent_kind) {
-        // A hold that a person must end carries no recovery time at all. Gating
-        // on the presence of one sent `aid run` straight into a spent balance,
-        // and kept diverting for markers whose stated time had already passed.
-        if let Some(next_agent) = args.cascade.first() {
-            aid_warn!(
-                "[aid] {} is rate-limited ({}) — will cascade to {}",
-                agent_kind.as_str(),
-                hold,
-                next_agent
-            );
-        } else if let Some(fallback) =
-            crate::agent::selection::coding_fallback_for_prompt(&agent_kind, &args.prompt)
-        {
-            aid_warn!(
-                "[aid] {} is rate-limited ({}), auto-cascading to {}",
-                agent_kind.as_str(),
-                hold,
-                fallback.as_str()
-            );
-            args.cascade = vec![fallback.as_str().to_string()];
-        } else {
-            anyhow::bail!(
-                "{} is rate-limited {}. Use --cascade <agent> to specify a fallback.",
-                agent_kind.as_str(),
-                hold
-            );
-        }
+        let original = agent_kind.as_str().to_string();
+        let (next_kind, remaining) = skip_held_to_fallback(agent_kind, &hold, &args.cascade, &args.prompt)?;
+        aid_warn!(
+            "[aid] {} is held ({}) — dispatching to {} instead. \
+             Use `aid config clear-limit {}` to clear.",
+            original, hold, next_kind.as_str(), original,
+        );
+        super::switch_agent(args, next_kind.as_str().to_string());
+        args.cascade = remaining;
+        agent_kind = next_kind;
+        custom_agent_name = None;
+        substituted_from = Some((original, hold));
     }
     let requested_skills = run_prompt::effective_skills(args);
     if args.skills.is_empty() {
@@ -271,7 +259,39 @@ pub(super) fn resolve_agent_setup(store: &Arc<Store>, args: &mut RunArgs) -> Res
         effective_model,
         budget_active,
         agent,
+        substituted_from,
     })
+}
+
+// Walk `cascade` (then auto-fallback) to the first non-held alternative.
+fn skip_held_to_fallback(held: AgentKind, hold: &str, cascade: &[String], prompt: &str) -> Result<(AgentKind, Vec<String>)> {
+    let all: Vec<AgentKind> = cascade.iter().filter_map(|s| AgentKind::parse_str(s)).collect();
+    let start = all.iter().position(|k| *k == held).map_or(0, |i| i + 1);
+    for (i, kind) in all[start..].iter().enumerate() {
+        if rate_limit::dispatch_blocking_hold(kind).is_none() {
+            return Ok((*kind, all[start + i + 1..].iter().map(|k| k.as_str().to_string()).collect()));
+        }
+    }
+    if let Some(fb) = crate::agent::selection::coding_fallback_for_prompt(&held, prompt)
+        && rate_limit::dispatch_blocking_hold(&fb).is_none() {
+        return Ok((fb, vec![]));
+    }
+    anyhow::bail!("{} is held ({hold}). Use --cascade <agent> to specify a fallback, or `aid config clear-limit {}` to clear.", held.as_str(), held.as_str())
+}
+// Insert a milestone event when a held route was substituted. No-op if `substituted_from` is None.
+pub(super) fn maybe_insert_held_route_event(store: &Store, task_id: &crate::types::TaskId, setup: &AgentSetup) {
+    let Some((ref original, ref hold)) = setup.substituted_from else { return };
+    let _ = store.insert_event(&crate::types::TaskEvent {
+        task_id: task_id.clone(),
+        timestamp: chrono::Local::now(),
+        event_kind: crate::types::EventKind::Milestone,
+        detail: format!(
+            "Held route skipped: {original} ({hold}) — dispatching to {} instead. \
+             Use `aid config clear-limit {original}` to restore.",
+            setup.agent_display_name,
+        ),
+        metadata: None,
+    });
 }
 
 #[cfg(test)]

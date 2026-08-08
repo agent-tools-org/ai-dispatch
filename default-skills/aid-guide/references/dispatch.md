@@ -333,6 +333,21 @@ of moving off the agent you asked for. Where a tiered agent has only one tier
 held — cursor's premium pool — dispatch stays on the agent and switches to a
 tier that still serves, reporting the swap rather than making it silently.
 
+The held route is **not spawned**. Substitution happens before dispatch, so no
+task row is recorded for the agent that was never run, and the fallback carries
+none of the held route's model: a model name means something only inside one
+CLI. The substitution is announced on stderr and recorded as an event on the
+dispatched task, both naming `aid config clear-limit <agent>` — skipping the
+probe means a topped-up account is no longer discovered by a dispatch
+succeeding, so that escape hatch is how a stale hold is released.
+
+`--declared-urgency background` still keeps the agent you asked for: a
+background task can afford to wait for the window to reopen.
+
+A `--cascade` entry aid cannot resolve is an error, not a skipped entry. Custom
+agents are valid cascade targets and are checked against their own hold, not a
+shared one.
+
 ## Verify before review
 
 ```bash

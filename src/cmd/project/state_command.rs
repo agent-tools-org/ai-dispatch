@@ -62,7 +62,11 @@ fn render_state(git_root: &Path, state: &ProjectState, agent_rates: &[AgentRate]
 }
 
 fn project_name(git_root: &Path) -> String {
-    project::detect_project()
+    // Read the config of the repo being rendered, not of whatever directory the
+    // process happens to sit in. The CWD lookup made this function depend on
+    // ambient state, which is why its test passed for the wrong reason and then
+    // failed under a parallel suite run.
+    project::detect_project_in(git_root)
         .map(|config| config.id)
         .or_else(|| {
             git_root

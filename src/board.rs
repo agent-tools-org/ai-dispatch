@@ -178,7 +178,8 @@ fn count_statuses(tasks: &[Task]) -> (usize, usize, usize) {
     for t in tasks {
         match t.outcome() {
             TaskOutcome::Verified | TaskOutcome::Delivered => done += 1,
-            TaskOutcome::InProgress => running += 1,
+            TaskOutcome::InProgress if matches!(t.status, TaskStatus::Running | TaskStatus::AwaitingInput | TaskStatus::Stalled) => running += 1,
+            TaskOutcome::InProgress => {}
             TaskOutcome::Broken | TaskOutcome::Failed | TaskOutcome::Stopped => failed += 1,
             TaskOutcome::Unverified(_) | TaskOutcome::Skipped => {}
         }
@@ -193,13 +194,7 @@ fn format_with_outcome(task: &Task, base: String) -> String {
         TaskOutcome::Unverified(UnverifiedReason::TimedOut) => format!("{base} [VTIMEOUT]"),
         TaskOutcome::Unverified(UnverifiedReason::Infrastructure) => format!("{base} [VINFRA]"),
         TaskOutcome::Unverified(UnverifiedReason::NoResult) => format!("{base} [VNORESULT]"),
-        TaskOutcome::Failed
-        | TaskOutcome::Stopped
-        | TaskOutcome::Skipped
-        | TaskOutcome::InProgress => format!(
-            "{base} [V{}]",
-            task.verify_status.as_str().to_ascii_uppercase()
-        ),
+        TaskOutcome::Failed | TaskOutcome::Stopped | TaskOutcome::Skipped | TaskOutcome::InProgress => base,
     }
 }
 

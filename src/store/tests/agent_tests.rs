@@ -62,6 +62,26 @@ fn agent_success_rates_includes_merged_as_success() {
 }
 
 #[test]
+fn agent_success_rates_excludes_unverified_from_both_rate_and_sample() {
+    let store = Store::open_memory().unwrap();
+    for i in 0..5 {
+        let mut task = make_task(&format!("t-pass-{i:04}"), AgentKind::Codex, TaskStatus::Done);
+        task.verify_status = VerifyStatus::Passed;
+        store.insert_task(&task).unwrap();
+    }
+    for i in 0..2 {
+        let mut task = make_task(&format!("t-timeout-{i:04}"), AgentKind::Codex, TaskStatus::Done);
+        task.verify = Some("cargo test".to_string());
+        task.verify_status = VerifyStatus::TimedOut;
+        store.insert_task(&task).unwrap();
+    }
+
+    let rates = store.agent_success_rates().unwrap();
+
+    assert_eq!(rates, vec![(AgentKind::Codex, 1.0, 5)]);
+}
+
+#[test]
 fn agent_success_rates_groups_by_agent() {
     let store = Store::open_memory().unwrap();
     for i in 0..5 {

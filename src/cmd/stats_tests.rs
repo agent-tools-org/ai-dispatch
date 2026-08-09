@@ -3,7 +3,7 @@
 
 use super::*;
 use chrono::Duration;
-use crate::types::{AttributionSource, EventKind, TaskEvent, TaskId, VerifyStatus};
+use crate::types::{AttributionSource, EventKind, TaskEvent, TaskId, TaskStatus, VerifyStatus};
 
 fn task(id: &str, agent: AgentKind, status: TaskStatus, age_days: i64, model: &str, cost_usd: Option<f64>, duration_ms: Option<i64>, tokens: i64) -> Task {
     Task { id: TaskId(id.to_string()), agent, custom_agent_name: None, prompt: "prompt".to_string(), resolved_prompt: None, category: None, status, parent_task_id: None, workgroup_id: None, caller_kind: None, caller_session_id: None, agent_session_id: None, repo_path: None, worktree_path: None, worktree_branch: None, final_head_sha: None, final_branch: None, start_sha: None, log_path: None, output_path: None, tokens: Some(tokens), prompt_tokens: None, duration_ms, requested_model: Some(model.to_string()), observed_model: Some(model.to_string()), attribution_source: Some(AttributionSource::Echoed), cost_usd, exit_code: None, created_at: Local::now() - Duration::days(age_days), completed_at: None, verify: None, verify_status: VerifyStatus::Skipped, pending_reason: None, read_only: false, budget: false, audit_verdict: None, audit_report_path: None, delivery_assessment: None }
@@ -34,6 +34,39 @@ fn stats_does_not_panic_on_zero_duration_count() {
     let stats = collect(&store, UsageWindow::Days(7), None, Local::now()).unwrap();
 
     assert_eq!(stats.agent_rows[0].avg_duration_ms, None);
+}
+
+#[test]
+fn timed_out_verification_is_not_counted_as_success() {
+    let store = Store::open_memory().unwrap();
+    let mut task = task("t-timeout", AgentKind::Codex, TaskStatus::Done, 1, "gpt-5.4", Some(1.0), Some(1_000), 1_000);
+    task.verify = Some("cargo test".to_string());
+    task.verify_status = VerifyStatus::TimedOut;
+    store.insert_task(&task).unwrap();
+
+    let stats = collect(&store, UsageWindow::Days(7), None, Local::now()).unwrap();
+
+    assert_eq!(stats.agent_rows[0].success_rate, 0.0);
+}
+
+#[test]
+fn running_outcomes_are_not_in_the_success_denominator() {
+    let store = Store::open_memory().unwrap();
+    for (id, status) in [
+        ("t-waiting", TaskStatus::Waiting),
+        ("t-pending", TaskStatus::Pending),
+        ("t-running", TaskStatus::Running),
+        ("t-done", TaskStatus::Done),
+    ] {
+        store
+            .insert_task(&task(id, AgentKind::Codex, status, 1, "gpt-5.4", Some(1.0), Some(1_000), 1_000))
+            .unwrap();
+    }
+
+    let stats = collect(&store, UsageWindow::Days(7), None, Local::now()).unwrap();
+
+    assert_eq!(stats.agent_rows[0].tasks, 4);
+    assert_eq!(stats.agent_rows[0].success_rate, 100.0);
 }
 
 #[test]

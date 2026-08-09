@@ -7,7 +7,7 @@ use std::cmp::Ordering;
 use crate::config::UsageBudget;
 use crate::cost;
 use crate::paths;
-use crate::types::{AgentKind, Task, TaskStatus};
+use crate::types::{AgentKind, Task};
 use crate::usage::{filter_budget_tasks, AgentAnalytics, AgentUsageRow, BudgetUsageRow, TaskSummary, UsageSnapshot};
 
 pub fn render_usage(snapshot: &UsageSnapshot) -> String {
@@ -157,7 +157,7 @@ pub(crate) fn collect_agent_rows(tasks: &[Task]) -> Vec<AgentUsageRow> {
 
         let done_count = agent_tasks
             .iter()
-            .filter(|task| matches!(task.status, TaskStatus::Done | TaskStatus::Merged))
+            .filter(|task| task.outcome().is_success())
             .count();
         let retry_count = agent_tasks
             .iter()

@@ -2,12 +2,12 @@
 // Exports Store budget usage, success-rate, and cost aggregate queries.
 // Deps: Store, rusqlite, chrono, and AgentKind.
 
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use chrono::{DateTime, Local};
 use rusqlite::params;
 
 use super::super::Store;
-use crate::types::AgentKind;
+use crate::types::{verify_required, AgentKind, TaskOutcome, TaskStatus, VerifyStatus};
 
 impl Store {
     pub fn budget_usage_summary(
@@ -71,47 +71,69 @@ impl Store {
     }
 
     pub fn agent_success_rates(&self) -> Result<Vec<(AgentKind, f64, usize)>> {
-        let conn = self.db();
-        let mut stmt = conn.prepare(
-            "SELECT agent,
-                    SUM(CASE WHEN status IN ('done', 'merged') THEN 1 ELSE 0 END) as successes,
-                    COUNT(*) as total
-             FROM tasks
-             WHERE status IN ('done', 'merged', 'failed')
-             GROUP BY agent
-             HAVING total >= 5",
-        )?;
-        let rows = stmt.query_map([], |row| {
-            let agent_str: String = row.get(0)?;
-            let successes: i64 = row.get(1)?;
-            let total: i64 = row.get(2)?;
-            let agent = AgentKind::parse_str(&agent_str).unwrap_or(AgentKind::Custom);
-            let rate = successes as f64 / total as f64;
-            Ok((agent, rate, total as usize))
-        })?;
-        rows.map(|row| Ok(row?)).collect()
+        self.success_rates(None, 5)
     }
 
     pub fn agent_success_rates_by_category(&self, category: &str) -> Result<Vec<(AgentKind, f64, usize)>> {
+        self.success_rates(Some(category), 5)
+    }
+
+    fn success_rates(
+        &self,
+        category: Option<&str>,
+        minimum_tasks: usize,
+    ) -> Result<Vec<(AgentKind, f64, usize)>> {
+        let mut totals = std::collections::HashMap::<AgentKind, (usize, usize)>::new();
+        for (agent, outcome) in self.agent_metric_outcomes(category)? {
+            if outcome.is_unverified() {
+                continue;
+            }
+            let entry = totals.entry(agent).or_default();
+            entry.0 += usize::from(outcome.is_success());
+            entry.1 += 1;
+        }
+        Ok(totals
+            .into_iter()
+            .filter(|(_, (_, total))| *total >= minimum_tasks)
+            .map(|(agent, (successes, total))| {
+                (agent, successes as f64 / total as f64, total)
+            })
+            .collect())
+    }
+
+    fn agent_metric_outcomes(
+        &self,
+        category: Option<&str>,
+    ) -> Result<Vec<(AgentKind, TaskOutcome)>> {
         let conn = self.db();
         let mut stmt = conn.prepare(
-            "SELECT agent,
-                    SUM(CASE WHEN status IN ('done', 'merged') THEN 1 ELSE 0 END) as successes,
-                    COUNT(*) as total
+            "SELECT agent, status, verify_status, verify
              FROM tasks
-             WHERE status IN ('done', 'merged', 'failed') AND category = ?1
-             GROUP BY agent
-             HAVING total >= 5",
+             WHERE status IN ('done', 'merged', 'failed')
+               AND (?1 IS NULL OR category = ?1)",
         )?;
         let rows = stmt.query_map(params![category], |row| {
             let agent_str: String = row.get(0)?;
-            let successes: i64 = row.get(1)?;
-            let total: i64 = row.get(2)?;
-            let agent = AgentKind::parse_str(&agent_str).unwrap_or(AgentKind::Custom);
-            let rate = successes as f64 / total as f64;
-            Ok((agent, rate, total as usize))
+            let status: String = row.get(1)?;
+            let verify_status: String = row.get(2)?;
+            let verify: Option<String> = row.get(3)?;
+            Ok((agent_str, status, verify_status, verify))
         })?;
-        rows.map(|row| Ok(row?)).collect()
+        rows.map(|row| {
+            let (agent, status, verify_status, verify) = row?;
+            let status = TaskStatus::parse_str(&status)
+                .ok_or_else(|| anyhow!("unknown task status in metrics: {status}"))?;
+            let verify_status = VerifyStatus::parse_str(&verify_status)
+                .ok_or_else(|| anyhow!("unknown verify status in metrics: {verify_status}"))?;
+            let agent = AgentKind::parse_str(&agent).unwrap_or(AgentKind::Custom);
+            let outcome = TaskOutcome::derive(
+                status,
+                verify_status,
+                verify_required(verify.as_deref()),
+            );
+            Ok((agent, outcome))
+        })
+        .collect()
     }
 
     pub fn agent_avg_costs(&self) -> Result<Vec<(AgentKind, f64)>> {

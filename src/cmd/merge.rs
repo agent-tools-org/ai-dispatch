@@ -7,7 +7,7 @@ use chrono::Local;
 use std::process::{Command, Stdio};
 use std::sync::Arc;
 use crate::store::Store;
-use crate::types::{verify_required, EventKind, Task, TaskEvent, TaskId, TaskOutcome, TaskStatus, VerifyStatus};
+use crate::types::{verify_required, EventKind, Task, TaskEvent, TaskId, TaskOutcome, TaskStatus};
 #[path = "merge/final_branch.rs"]
 mod final_branch;
 use final_branch::*;

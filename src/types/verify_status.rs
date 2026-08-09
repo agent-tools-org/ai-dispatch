@@ -16,6 +16,14 @@ pub enum VerifyStatus {
 }
 
 impl VerifyStatus {
+    pub const ALL: [Self; 5] = [
+        Self::Pending,
+        Self::Passed,
+        Self::Failed,
+        Self::Skipped,
+        Self::TimedOut,
+    ];
+
     pub fn as_str(&self) -> &'static str {
         match self {
             Self::Pending => "pending",

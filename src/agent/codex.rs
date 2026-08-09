@@ -19,7 +19,7 @@ use std::sync::OnceLock;
 use output_classifier::classify_output;
 use super::read_only::read_only_prompt;
 use super::truncate::{capped_detail, capped_detail_with, truncate_text};
-use super::RunOpts;
+use super::{CommandContext, RunOpts};
 use crate::rate_limit;
 use crate::templates;
 use crate::types::*;
@@ -101,7 +101,22 @@ pub(crate) fn rollout_filename_matches(path: &Path, session_id: &str) -> bool {
     let Some(timestamp) = stem.strip_suffix(&format!("-{session_id}")) else {
         return false;
     };
+    // Resume safety intentionally depends on Codex's current timestamp-shaped rollout prefix.
     NaiveDateTime::parse_from_str(timestamp, ROLLOUT_TIMESTAMP_FORMAT).is_ok()
+}
+
+pub(crate) fn rollout_filename_matches_for_attribution(
+    path: &Path,
+    session_id: &str,
+) -> bool {
+    if session_id.is_empty() {
+        return false;
+    }
+    path.file_name()
+        .and_then(|name| name.to_str())
+        .is_some_and(|name| {
+            name.starts_with("rollout-") && name.ends_with(&format!("-{session_id}.jsonl"))
+        })
 }
 
 pub(crate) fn resume_fallback_event(task_id: &TaskId) -> TaskEvent {
@@ -116,20 +131,13 @@ pub(crate) fn resume_fallback_event(task_id: &TaskId) -> TaskEvent {
 
 pub struct CodexAgent;
 
-impl super::Agent for CodexAgent {
-    fn kind(&self) -> AgentKind {
-        AgentKind::Codex
-    }
-
-    fn streaming(&self) -> bool {
-        true
-    }
-
-    fn accepts_idle_nudge(&self) -> bool {
-        false
-    }
-
-    fn build_command(&self, prompt: &str, opts: &RunOpts) -> Result<Command> {
+impl CodexAgent {
+    fn build_codex_command(
+        &self,
+        prompt: &str,
+        opts: &RunOpts,
+        durable_codex_home: bool,
+    ) -> Result<Command> {
         let effective_prompt = if opts.read_only {
             read_only_prompt(prompt, opts)
         } else {
@@ -141,7 +149,7 @@ impl super::Agent for CodexAgent {
         let resume_session_id = opts
             .session_id
             .as_deref()
-            .filter(|session_id| opts.sandbox || !resume_fallback_needed(session_id));
+            .filter(|session_id| !durable_codex_home || !resume_fallback_needed(session_id));
         if let Some(session_id) = resume_session_id {
             cmd.args([
                 "exec",
@@ -185,6 +193,33 @@ impl super::Agent for CodexAgent {
             cmd.current_dir(dir);
         }
         Ok(cmd)
+    }
+}
+
+impl super::Agent for CodexAgent {
+    fn kind(&self) -> AgentKind {
+        AgentKind::Codex
+    }
+
+    fn streaming(&self) -> bool {
+        true
+    }
+
+    fn accepts_idle_nudge(&self) -> bool {
+        false
+    }
+
+    fn build_command(&self, prompt: &str, opts: &RunOpts) -> Result<Command> {
+        self.build_codex_command(prompt, opts, true)
+    }
+
+    fn build_command_with_context(
+        &self,
+        prompt: &str,
+        opts: &RunOpts,
+        context: CommandContext,
+    ) -> Result<Command> {
+        self.build_codex_command(prompt, opts, context.durable_codex_home)
     }
 
     fn parse_event(&self, task_id: &TaskId, line: &str) -> Option<TaskEvent> {
@@ -536,7 +571,7 @@ mod tests {
         CodexAgent,
         RESUME_FALLBACK_DETAIL,
     };
-    use crate::agent::{Agent, RunOpts};
+    use crate::agent::{Agent, CommandContext, RunOpts};
     use crate::types::{EventKind, TaskId};
     use std::fs;
     use std::path::Path;
@@ -642,7 +677,15 @@ mod tests {
             env: None,
             env_forward: None,
         };
-        let cmd = CodexAgent.build_command("continue", &opts).unwrap();
+        let cmd = CodexAgent
+            .build_command_with_context(
+                "continue",
+                &opts,
+                CommandContext {
+                    durable_codex_home: false,
+                },
+            )
+            .unwrap();
         let args: Vec<String> = cmd
             .get_args()
             .map(|arg| arg.to_string_lossy().to_string())
@@ -668,6 +711,10 @@ mod tests {
         assert!(rollout_filename_matches(
             Path::new("rollout-2026-08-09T17-20-31-session-123.jsonl"),
             "session-123"
+        ));
+        assert!(!rollout_filename_matches(
+            Path::new("rollout-not-a-timestamp-019e3e49-6b83-7563-a3d8-b51a3a716dd1.jsonl"),
+            "019e3e49-6b83-7563-a3d8-b51a3a716dd1"
         ));
     }
 

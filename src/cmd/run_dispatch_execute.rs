@@ -200,15 +200,12 @@ pub(super) async fn run_foreground_task(
     } else {
         capture_pre_task_dirty_paths(prepared.effective_dir.as_ref())
     };
-    let mut opts = build_run_opts(args, prepared, prompt_bundle);
+    let opts = build_run_opts(args, prepared, prompt_bundle);
     let uses_durable_codex_home = agent::should_use_durable_codex_home(
         prepared.agent_kind,
         args.sandbox,
         container_name.is_some(),
     );
-    if prepared.agent_kind == crate::types::AgentKind::Codex && !uses_durable_codex_home {
-        opts.sandbox = true;
-    }
     let codex_resume_fallback = uses_durable_codex_home
         && opts
             .session_id
@@ -216,7 +213,13 @@ pub(super) async fn run_foreground_task(
             .is_some_and(agent::codex::resume_fallback_needed);
     let mut std_cmd = prepared
         .agent
-        .build_command(&prompt_bundle.effective_prompt, &opts)
+        .build_command_with_context(
+            &prompt_bundle.effective_prompt,
+            &opts,
+            agent::CommandContext {
+                durable_codex_home: uses_durable_codex_home,
+            },
+        )
         .map_err(|err| anyhow::anyhow!("Failed to build agent command: {err:#}"))?;
     // TODO: integrate credential_pool rotation here
     let _home_guard = agent::apply_run_env(&mut std_cmd, &opts, Some(prepared.task_id.as_str()))?;

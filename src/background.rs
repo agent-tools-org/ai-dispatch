@@ -161,6 +161,8 @@ async fn run_task_inner(store: &Arc<Store>, spec: &BackgroundRunSpec) -> Result<
         read_only: spec.read_only,
         sandbox: spec.sandbox,
         context_files: vec![],
+        // Background runs intentionally stay fresh. If resume is added, carry the durable-home
+        // context into command construction and record the same fallback milestone as foreground.
         session_id: None,
         env: agent::env_with_agent_log(
             spec.env.clone(),

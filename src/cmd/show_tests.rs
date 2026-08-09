@@ -271,7 +271,9 @@ fn audit_text_shows_failed_status_when_result_file_is_missing() {
 
     let text = audit_text(&store, task.id.as_str()).unwrap();
 
-    assert!(text.contains("Status: FAILED"));
+    // The summary header also prints "Status: FAILED", so anchor on the notice's
+    // own line or a broken notice still satisfies this.
+    assert!(text.contains("Status: FAILED\n"), "output: {text}");
 }
 
 #[test]

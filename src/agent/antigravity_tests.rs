@@ -267,10 +267,14 @@ fn build_command_omits_the_log_flag_when_no_task_is_known() {
 /// see `env_with_agent_log` and its callers.
 #[test]
 fn build_command_passes_only_the_log_it_was_handed() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    let _home = crate::paths::AidHomeGuard::set(temp.path());
+    crate::paths::ensure_dirs().expect("ensure dirs");
+
     let none = crate::agent::env_with_agent_log(None, "t-abcd1234", false);
     assert!(none.is_none(), "an unwatchable run must be handed no path");
 
-    let seeded = crate::agent::env_with_agent_log(None, "t-abcd1234", true).unwrap();
+    let seeded = crate::agent::env_with_agent_log(None, "t-abcd1235", true).unwrap();
     let path = seeded.get(crate::agent::AGENT_LOG_ENV).expect("seeded when watchable");
-    assert!(path.contains("t-abcd1234") && path.ends_with("agent.log"), "got: {path}");
+    assert!(path.contains("t-abcd1235") && path.ends_with("agent.log"), "got: {path}");
 }

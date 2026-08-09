@@ -100,7 +100,7 @@ fn board_counts_only_active_lifecycle_statuses_as_running() {
     let mut pending = waiting.clone();
     pending.id = TaskId("t-pending".to_string());
     pending.status = TaskStatus::Pending;
-    let mut running = waiting;
+    let mut running = waiting.clone();
     running.id = TaskId("t-running".to_string());
     running.status = TaskStatus::Running;
 

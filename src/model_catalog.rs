@@ -193,11 +193,7 @@ fn budget_preferred_tiers(budget: TaskBudget) -> &'static [&'static str] {
 }
 
 /// True when `model` sits on a preferred (priced/known) tier for `budget`.
-pub fn model_on_budget_preference(
-    kind: AgentKind,
-    budget: TaskBudget,
-    model: &str,
-) -> bool {
+pub fn model_on_budget_preference(kind: AgentKind, budget: TaskBudget, model: &str) -> bool {
     AGENT_MODELS
         .iter()
         .find(|entry| entry.agent == kind && entry.model == model)
@@ -208,14 +204,8 @@ fn total_price(model: &AgentModel) -> f64 {
     model.input_per_m + model.output_per_m
 }
 
-/// Within a matched tier: Free/Cheap prefer lowest total price (capability
-/// breaks ties); Standard/Premium prefer highest capability.
-/// Ordering is for `min_by`: Less means `left` is preferred (first wins ties).
-fn better_within_budget_tier(
-    budget: TaskBudget,
-    left: &AgentModel,
-    right: &AgentModel,
-) -> Ordering {
+/// Free/Cheap: lowest price (capability ties). Standard/Premium: highest capability.
+fn better_budget_candidate(budget: TaskBudget, left: &AgentModel, right: &AgentModel) -> Ordering {
     match budget {
         TaskBudget::Free | TaskBudget::Cheap => total_price(left)
             .partial_cmp(&total_price(right))
@@ -233,22 +223,31 @@ fn better_within_budget_tier(
     }
 }
 
-/// Pick a catalog model for `budget`.
-///
-/// Walks preferred tiers first, then `unknown` as a last resort at every
-/// budget level — unpriced is eligible, not ineligible.
+fn pick_in_tier(kind: AgentKind, budget: TaskBudget, tier: &str) -> Option<&'static AgentModel> {
+    AGENT_MODELS
+        .iter()
+        .filter(|m| m.agent == kind && m.tier == tier)
+        .min_by(|a, b| better_budget_candidate(budget, a, b))
+}
+
+/// Free/Cheap pool preferred tiers by lowest price; Standard/Premium walk tiers.
+/// `unknown` is always last resort.
 pub fn model_for_task_budget(kind: AgentKind, budget: TaskBudget) -> Option<&'static str> {
     let preferred = budget_preferred_tiers(budget);
-    for tier in preferred.iter().copied().chain(std::iter::once("unknown")) {
-        if let Some(model) = AGENT_MODELS
+    match budget {
+        TaskBudget::Free | TaskBudget::Cheap => AGENT_MODELS
             .iter()
-            .filter(|model| model.agent == kind && model.tier == tier)
-            .min_by(|left, right| better_within_budget_tier(budget, left, right))
-        {
-            return Some(model.model);
-        }
+            .filter(|m| m.agent == kind && preferred.contains(&m.tier))
+            .min_by(|a, b| better_budget_candidate(budget, a, b))
+            .or_else(|| pick_in_tier(kind, budget, "unknown"))
+            .map(|m| m.model),
+        TaskBudget::Standard | TaskBudget::Premium => preferred
+            .iter()
+            .copied()
+            .chain(std::iter::once("unknown"))
+            .find_map(|tier| pick_in_tier(kind, budget, tier))
+            .map(|m| m.model),
     }
-    None
 }
 
 /// Budget-mode / smart-route model: same rule as `model_for_task_budget(..., Cheap)`.

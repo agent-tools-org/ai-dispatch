@@ -70,3 +70,17 @@ fn budget_cheap_picks_lowest_price_within_tier() {
         Some("flash-lite")
     );
 }
+
+#[test]
+fn budget_cheap_picks_lowest_price_across_preferred_tiers() {
+    // opencode cheap-tier glm-5.2 is ~$2.36; free-tier deepseek is $0.00.
+    // Free/Cheap must pool preferred tiers, not short-circuit on cheap.
+    assert_eq!(
+        model_for_task_budget(AgentKind::OpenCode, TaskBudget::Cheap),
+        Some("opencode/deepseek-v4-flash-free")
+    );
+    assert_eq!(
+        budget_model(&AgentKind::OpenCode),
+        Some("opencode/deepseek-v4-flash-free")
+    );
+}

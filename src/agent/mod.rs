@@ -52,9 +52,10 @@ pub(crate) use binary::built_in_agent_binary_exists;
 #[allow(unused_imports)]
 pub use env::{
     agent_has_fs_access, apply_cargo_target_env, apply_codex_home_env, apply_run_env, apply_rust_build_cache_env,
-    cargo_target_env_arg, is_rust_project, set_git_ceiling, should_use_durable_codex_home, shared_target_dir,
+    cargo_target_env_arg, is_rust_project, set_git_ceiling, shared_target_dir,
     target_dir_for_worktree,
 };
+pub(crate) use env::should_use_durable_codex_home;
 
 /// Adapter trait for AI CLI tools
 pub trait Agent: Send + Sync {

@@ -308,13 +308,7 @@ fn task_outcome(task: &Task) -> TaskOutcome {
 }
 
 pub(crate) fn inherit_cascade_target(cascade_args: &mut RunArgs, task: &Task) -> Result<()> {
-    let (dir, worktree) = super::retry_target(task)?;
-    if let Some(dir) = dir {
-        cascade_args.dir = Some(dir);
-        cascade_args.worktree = worktree;
-    } else if let Some(worktree) = worktree {
-        cascade_args.worktree = Some(worktree);
-    }
+    super::apply_retry_target(task, cascade_args)?;
     cascade_args.existing_task_id = None;
     Ok(())
 }

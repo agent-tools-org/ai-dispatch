@@ -55,7 +55,8 @@ where
         return Ok(());
     }
     let program = cmd.get_program().to_string_lossy();
-    agent::ensure_resolved_binary_available_with(&args.agent_name, &program, which)
+    agent::ensure_resolved_binary_available_with(&args.agent_name, &program, which)?;
+    agent.validate_cli()
 }
 
 pub(super) fn validate_dispatch(args: &RunArgs, agent_kind: &AgentKind) -> Vec<String> {

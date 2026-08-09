@@ -97,21 +97,7 @@ pub(crate) fn model_for_task_budget(
     kind: AgentKind,
     budget: TaskBudget,
 ) -> Option<&'static str> {
-    let tiers: &[&str] = match budget {
-        TaskBudget::Free => &["free"],
-        TaskBudget::Cheap => &["cheap", "free"],
-        TaskBudget::Standard => &["standard", "cheap", "free"],
-        TaskBudget::Premium => &["premium", "standard", "cheap", "free"],
-    };
-    for tier in tiers {
-        if let Some(model) = AGENT_MODELS.iter()
-            .filter(|model| model.agent == kind && model.tier == *tier)
-            .max_by(|left, right| left.capability.partial_cmp(&right.capability).unwrap_or(Ordering::Equal))
-        {
-            return Some(model.model);
-        }
-    }
-    None
+    crate::model_catalog::model_for_task_budget(kind, budget)
 }
 
 pub(super) fn score_breakdown(

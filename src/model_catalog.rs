@@ -1,6 +1,6 @@
 // Shared agent model catalog: per-agent model/pricing data and catalog queries.
 // Exports: AGENT_PROFILES, AGENT_MODELS, AgentModel, PricingFileModel, ResolvedAgentModel,
-//          models_for_agent(), budget_model(), load_pricing_overrides()
+//          models_for_agent(), model_for_task_budget(), budget_model(), load_pricing_overrides()
 // Deps: crate::types::AgentKind, crate::paths, serde, model_catalog_data
 
 use anyhow::Result;
@@ -10,7 +10,7 @@ use std::fs;
 use std::path::PathBuf;
 use std::sync::OnceLock;
 
-use crate::types::AgentKind;
+use crate::types::{AgentKind, TaskBudget};
 
 #[path = "model_catalog_data.rs"]
 mod model_catalog_data;
@@ -182,12 +182,57 @@ pub fn models_for_agent(agent: &AgentKind) -> Vec<&'static AgentModel> {
         .collect()
 }
 
-pub fn budget_model(agent: &AgentKind) -> Option<&'static str> {
-    let models = models_for_agent(agent);
-    if models.is_empty() {
-        return None;
+/// Preferred catalog tiers for a declared budget, excluding unpriced `unknown`.
+fn budget_preferred_tiers(budget: TaskBudget) -> &'static [&'static str] {
+    match budget {
+        TaskBudget::Free => &["free"],
+        TaskBudget::Cheap => &["cheap", "free"],
+        TaskBudget::Standard => &["standard", "cheap", "free"],
+        TaskBudget::Premium => &["premium", "standard", "cheap", "free"],
     }
+}
+
+/// True when `model` sits on a preferred (priced/known) tier for `budget`.
+pub fn model_on_budget_preference(
+    kind: AgentKind,
+    budget: TaskBudget,
+    model: &str,
+) -> bool {
+    AGENT_MODELS
+        .iter()
+        .find(|entry| entry.agent == kind && entry.model == model)
+        .is_some_and(|entry| budget_preferred_tiers(budget).contains(&entry.tier))
+}
+
+/// Pick the strongest catalog model for `budget`.
+///
+/// Walks preferred tiers first, then `unknown` as a last resort at every
+/// budget level — unpriced is eligible, not ineligible.
+pub fn model_for_task_budget(kind: AgentKind, budget: TaskBudget) -> Option<&'static str> {
+    let preferred = budget_preferred_tiers(budget);
+    for tier in preferred.iter().copied().chain(std::iter::once("unknown")) {
+        if let Some(model) = AGENT_MODELS
+            .iter()
+            .filter(|model| model.agent == kind && model.tier == tier)
+            .max_by(|left, right| {
+                left.capability
+                    .partial_cmp(&right.capability)
+                    .unwrap_or(Ordering::Equal)
+            })
+        {
+            return Some(model.model);
+        }
+    }
+    None
+}
+
+/// Budget-mode / smart-route model: same rule as `model_for_task_budget(..., Cheap)`.
+pub fn budget_model(agent: &AgentKind) -> Option<&'static str> {
     if *agent == AgentKind::Qwen {
+        let models = models_for_agent(agent);
+        if models.is_empty() {
+            return None;
+        }
         return get_qwen_selected_model()
             .and_then(|selected| {
                 models
@@ -197,18 +242,7 @@ pub fn budget_model(agent: &AgentKind) -> Option<&'static str> {
             })
             .or_else(|| models.first().map(|model| model.model));
     }
-    let non_free: Vec<_> = models.iter().filter(|model| model.tier != "free").collect();
-    if non_free.is_empty() {
-        return models.first().map(|model| model.model);
-    }
-    non_free
-        .iter()
-        .min_by(|left, right| {
-            let left_cost = left.input_per_m + left.output_per_m;
-            let right_cost = right.input_per_m + right.output_per_m;
-            left_cost.partial_cmp(&right_cost).unwrap_or(Ordering::Equal)
-        })
-        .map(|model| model.model)
+    model_for_task_budget(*agent, TaskBudget::Cheap)
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -225,3 +259,7 @@ pub fn load_pricing_overrides() -> Result<Vec<PricingFileModel>> {
     let response: PricingResponse = serde_json::from_str(&contents)?;
     Ok(response.models)
 }
+
+#[cfg(test)]
+#[path = "model_catalog_tests.rs"]
+mod tests;

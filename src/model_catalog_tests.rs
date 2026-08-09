@@ -56,3 +56,17 @@ fn unknown_model_is_not_on_budget_cheap_preference() {
         "grok-4.5"
     ));
 }
+
+#[test]
+fn budget_cheap_picks_lowest_price_within_tier() {
+    // gemini cheap-tier: flash has higher capability but flash-lite is ~6x
+    // cheaper on output. Free/Cheap must prefer lowest total price.
+    assert_eq!(
+        model_for_task_budget(AgentKind::Gemini, TaskBudget::Cheap),
+        Some("flash-lite")
+    );
+    assert_eq!(
+        budget_model(&AgentKind::Gemini),
+        Some("flash-lite")
+    );
+}

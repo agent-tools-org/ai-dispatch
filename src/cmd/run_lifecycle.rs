@@ -551,7 +551,7 @@ fn handle_failed_postprocess(
 }
 
 fn run_fail_hook(
-    task_id: &TaskId,
+    _task_id: &TaskId,
     task: &Task,
     agent_display_name: &str,
     effective_dir: Option<&String>,

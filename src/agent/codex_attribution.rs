@@ -94,7 +94,8 @@ fn find_session_file_in_day(
 }
 
 fn session_file_matches(path: &Path, thread_id: &str) -> bool {
-    super::rollout_filename_matches(path, thread_id)
+    // Attribution tolerates timestamp changes so billing data is not silently lost.
+    super::rollout_filename_matches_for_attribution(path, thread_id)
 }
 
 fn model_from_turn_context(line: &str) -> Option<String> {
@@ -268,6 +269,26 @@ mod tests {
                 Some("gpt-5.6-luna"),
             ),
             (None, None)
+        );
+    }
+
+    #[test]
+    fn attribution_keeps_rollout_with_unparseable_timestamp() {
+        let home = tempdir().expect("temp home");
+        let created_at = test_date();
+        let day = home.path().join("sessions/2026/08/09");
+        fs::create_dir_all(&day).expect("session directory");
+        let thread_id = "019fe4ce-9cf4-79f1-b7e8-b32831ca775d";
+        let path = day.join(format!("rollout-not-a-timestamp-{thread_id}.jsonl"));
+        fs::write(
+            path,
+            "{\"type\":\"turn_context\",\"payload\":{\"model\":\"attributed-model\"}}\n",
+        )
+        .expect("session metadata");
+
+        assert_eq!(
+            observed_model_for_thread(home.path(), thread_id, created_at).as_deref(),
+            Some("attributed-model")
         );
     }
 }

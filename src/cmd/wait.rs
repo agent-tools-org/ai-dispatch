@@ -350,6 +350,29 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn wait_for_task_ids_tracks_stalled_tasks_until_they_finish() {
+        let store = Arc::new(Store::open_memory().unwrap());
+        store
+            .insert_task(&make_task("t-stalled", TaskStatus::Stalled))
+            .unwrap();
+        let wait_store = store.clone();
+        let handle = tokio::spawn(async move {
+            wait_for_task_ids(&wait_store, &[String::from("t-stalled")], None, false, None).await
+        });
+
+        sleep(Duration::from_millis(100)).await;
+        assert!(!handle.is_finished());
+        store.update_task_status("t-stalled", TaskStatus::Done).unwrap();
+
+        let outcome = tokio::time::timeout(Duration::from_secs(3), handle)
+            .await
+            .unwrap()
+            .unwrap()
+            .unwrap();
+        assert_eq!(outcome, WaitOutcome::Completed);
+    }
+
+    #[tokio::test]
     async fn wait_for_task_ids_tracks_group_tasks_added_mid_watch() {
         let store = Arc::new(Store::open_memory().unwrap());
         let mut first = make_task("t-first", TaskStatus::Running);

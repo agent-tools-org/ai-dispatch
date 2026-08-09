@@ -2,6 +2,7 @@
 // Exports: (tests only)
 // Deps: super::shared + batch_helpers
 use crate::background::{BackgroundRunSpec, save_spec};
+use crate::batch;
 use super::shared::{make_task, seed_task};
 use crate::paths::AidHomeGuard;
 use crate::store::Store;
@@ -11,7 +12,9 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use super::super::batch_helpers::{batch_summary, ensure_batch_workgroup, resolve_batch_path};
-use super::super::batch_types::BatchTaskOutcome;
+use super::super::batch_types::{BatchDispatchResult, BatchTaskOutcome};
+use super::super::{batch_wait_error, finalize_batch};
+use crate::cmd::wait::WaitOutcome;
 
 struct EnvVarGuard {
     key: &'static str,
@@ -266,6 +269,46 @@ fn batch_summary_skips_zero_cost_and_uses_seconds_under_minute() {
     );
 
     assert_eq!(summary, "[batch] 2/2 done, 0 failed, 0 skipped. Time: 42s");
+}
+
+#[test]
+fn failed_batch_reports_and_archives_before_returning_error() {
+    let temp = tempfile::tempdir().unwrap();
+    let _guard = AidHomeGuard::set(temp.path());
+    let batch_file = temp.path().join("failed.toml");
+    fs::write(&batch_file, "[[tasks]]\nname = 'failed-task'\nagent = 'codex'\nprompt = 'fail'\n").unwrap();
+    let config = batch::parse_batch_file(&batch_file).unwrap();
+    let store = Store::open_memory().unwrap();
+    seed_task(&store, "t-failed", TaskStatus::Failed, None);
+    let dispatch = BatchDispatchResult {
+        task_ids: vec!["t-failed".to_string()],
+        outcomes: vec![BatchTaskOutcome::Failed],
+    };
+    let summary = batch_summary(
+        &dispatch.outcomes,
+        &dispatch.task_ids,
+        &config.tasks,
+        &store,
+        Instant::now(),
+        None,
+    );
+    assert!(summary.contains("1 failed"));
+    let error = finalize_batch(
+        &batch_file,
+        &dispatch,
+        &["t-failed".to_string()],
+        &config,
+        &store,
+        Instant::now(),
+        None,
+        batch_wait_error(WaitOutcome::Failed(vec!["t-failed".to_string()])),
+        1,
+    )
+    .unwrap_err();
+
+    assert!(error.to_string().contains("t-failed"));
+    let archives = fs::read_dir(crate::paths::aid_dir().join("batches")).unwrap().count();
+    assert_eq!(archives, 1);
 }
 #[test]
 fn reconcile_and_poll_completed_tasks_marks_zombies_failed() {

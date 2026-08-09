@@ -163,19 +163,20 @@ impl DeliveryEvidence {
         }
     }
 
-    /// For write tasks the diff is the deliverable, so a non-empty trailing
-    /// agent message is enough. For read-only/report tasks the prose *is* the
-    /// deliverable, so the length floor still applies.
-    pub(crate) fn validate(&self, read_only: bool) -> DeliveryOutcome {
+    /// When the task produced a diff, that diff is the deliverable and a
+    /// non-empty trailing agent message is enough. When there are no changes,
+    /// the prose *is* the deliverable, so the length floor still applies —
+    /// including audit/report runs dispatched without `--read-only`.
+    pub(crate) fn validate(&self, produced_changes: bool) -> DeliveryOutcome {
         let message_is_last = match (self.last_message_sequence, self.last_work_sequence) {
             (Some(message), Some(work)) => message > work,
             (Some(_), None) => true,
             (None, _) => false,
         };
-        let substantive = if read_only {
-            self.last_message_chars >= MIN_FINAL_MESSAGE_CHARS
-        } else {
+        let substantive = if produced_changes {
             self.last_message_chars > 0
+        } else {
+            self.last_message_chars >= MIN_FINAL_MESSAGE_CHARS
         };
         if message_is_last && substantive {
             return DeliveryOutcome::Delivered;

@@ -65,19 +65,18 @@ fn board_marks_timed_out_verification_without_counting_success() {
     assert!(output.contains("1 total | 0 done"), "output: {output}");
 }
 
+/// Nothing can yet produce Unverified(Infrastructure) — VerifyStatus gains
+/// InfrastructureFailure in P4 — so the tag is asserted at the outcome level.
+/// P4 adds the board-rendering case once the variant exists.
 #[test]
-fn board_marks_infrastructure_verification_without_counting_success() {
-    let temp = TempDir::new().unwrap();
-    let _guard = AidHomeGuard::set(temp.path());
-    let store = Store::open_memory().unwrap();
-    let mut task = timed_out_task();
-    task.id = crate::types::TaskId("t-infra".to_string());
-    task.verify_status = VerifyStatus::InfrastructureFailure;
+fn infrastructure_verification_carries_its_own_tag() {
+    use crate::types::{outcome::UnverifiedReason, TaskOutcome};
 
-    let output = render_board(&[task], &store).unwrap();
-
-    assert!(output.contains("[VINFRA]"), "output: {output}");
-    assert!(output.contains("1 total | 0 done"), "output: {output}");
+    assert_eq!(
+        TaskOutcome::Unverified(UnverifiedReason::Infrastructure).verification_tag(),
+        Some("VINFRA")
+    );
+    assert!(!TaskOutcome::Unverified(UnverifiedReason::Infrastructure).is_success());
 }
 
 #[test]

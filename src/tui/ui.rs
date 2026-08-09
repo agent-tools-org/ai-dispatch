@@ -2,7 +2,7 @@
 // Draws table/list widgets from App state with simple status coloring.
 
 #[path = "ui_helpers.rs"]
-mod ui_helpers;
+pub(crate) mod ui_helpers;
 #[path = "ui_detail.rs"]
 mod ui_detail;
 #[path = "ui_tree.rs"]

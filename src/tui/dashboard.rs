@@ -3,7 +3,7 @@
 use super::app::App;
 use super::metrics::ProcessMetrics;
 use super::route_display::format_route_fit;
-use super::ui_helpers::task_status_label;
+use super::ui::ui_helpers::task_status_label;
 use crate::types::{EventKind, Task, TaskStatus};
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::prelude::{Alignment, Color, Modifier, Style};

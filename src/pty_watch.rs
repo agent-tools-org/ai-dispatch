@@ -325,9 +325,13 @@ impl MonitorState {
         task_id: &TaskId,
         accepts_nudge: bool,
     ) -> Result<()> {
-        // Same buffered-liveness question as idle_hang_elapsed: a quiet PTY is
-        // not idle when agent-owned logs grew inside the warn window.
-        self.refresh_progress_from_buffered_log(task_id.as_str());
+        // Same buffered-liveness question as idle_hang_elapsed — read only.
+        // Do not mark_progress(): that clock belongs to the hang reaper.
+        if !self.streaming
+            && Self::buffered_log_grew_within(task_id.as_str(), self.idle_detector.warn_after)
+        {
+            return Ok(());
+        }
         match self.idle_detector.tick(
             self.last_progress_time,
             load_monitor_status(store.as_ref(), task_id.as_str())?,
@@ -437,15 +441,6 @@ impl MonitorState {
             .checked_sub(window)
             .unwrap_or(std::time::UNIX_EPOCH);
         crate::paths::agent_has_produced_bytes(task_id, window_start)
-    }
-
-    fn refresh_progress_from_buffered_log(&mut self, task_id: &str) {
-        if self.streaming {
-            return;
-        }
-        if Self::buffered_log_grew_within(task_id, self.idle_detector.warn_after) {
-            self.mark_progress();
-        }
     }
 
     fn last_progress_detail(&self) -> Option<String> {

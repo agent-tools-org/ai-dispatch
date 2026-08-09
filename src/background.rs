@@ -152,12 +152,6 @@ async fn run_task_inner(store: &Arc<Store>, spec: &BackgroundRunSpec) -> Result<
     crate::rate_limit_wait::wait_for_declared_reset(
         store.as_ref(), &spec.task_id, agent.kind(), agent.rate_limit_name(),
     ).await?;
-    let session_id = if agent.kind() == AgentKind::Codex {
-        crate::cmd::run::RunArgs::saved_for_task(store.as_ref(), &spec.task_id)?
-            .and_then(|args| args.session_id)
-    } else {
-        None
-    };
     let opts = RunOpts {
         dir: spec.dir.clone(),
         output: spec.output.clone(),
@@ -167,7 +161,7 @@ async fn run_task_inner(store: &Arc<Store>, spec: &BackgroundRunSpec) -> Result<
         read_only: spec.read_only,
         sandbox: spec.sandbox,
         context_files: vec![],
-        session_id,
+        session_id: None,
         env: agent::env_with_agent_log(
             spec.env.clone(),
             &spec.task_id,
@@ -175,11 +169,6 @@ async fn run_task_inner(store: &Arc<Store>, spec: &BackgroundRunSpec) -> Result<
         ),
         env_forward: spec.env_forward.clone(),
     };
-    let codex_resume_fallback = agent.kind() == AgentKind::Codex
-        && opts
-            .session_id
-            .as_deref()
-            .is_some_and(agent::codex::resume_fallback_needed);
     ensure_agent_binary_available(spec)?;
     let _workspace_symlink = crate::cmd::run::WorkspaceSymlinkGuard::create(
         agent.kind(),
@@ -189,9 +178,6 @@ async fn run_task_inner(store: &Arc<Store>, spec: &BackgroundRunSpec) -> Result<
     let mut std_cmd = agent
         .build_command(&spec.prompt, &opts)
         .map_err(|err| anyhow::anyhow!("Failed to build agent command: {err:#}"))?;
-    if codex_resume_fallback {
-        store.insert_event(&agent::codex::resume_fallback_event(&TaskId(spec.task_id.clone())))?;
-    }
     if spec.container.is_none() && !spec.sandbox {
         let program = std_cmd.get_program().to_string_lossy();
         agent::ensure_resolved_binary_available(&spec.agent_name, &program)?;

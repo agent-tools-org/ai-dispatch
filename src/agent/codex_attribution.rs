@@ -72,7 +72,7 @@ fn find_session_file(
     created_at: DateTime<Local>,
 ) -> Option<PathBuf> {
     find_session_file_in_day(codex_home, thread_id, created_at).or_else(|| {
-        find_session_file_in_day(codex_home, thread_id, created_at - Duration::days(1))
+        find_session_file_in_day(codex_home, thread_id, created_at + Duration::days(1))
     })
 }
 
@@ -206,13 +206,16 @@ mod tests {
     }
 
     #[test]
-    fn rollout_lookup_uses_created_day_then_previous_day_only() {
+    fn rollout_lookup_uses_created_day_then_next_day_only() {
         let home = tempdir().expect("temp home");
-        let created_at = test_date();
-        let previous_day = home.path().join("sessions/2026/08/08");
-        fs::create_dir_all(&previous_day).expect("session directory");
+        let created_at = Local
+            .with_ymd_and_hms(2026, 8, 9, 23, 59, 59)
+            .single()
+            .expect("valid midnight-edge test date");
+        let next_day = home.path().join("sessions/2026/08/10");
+        fs::create_dir_all(&next_day).expect("session directory");
         let thread_id = "019fe4ce-9cf4-79f1-b7e8-b32831ca775d";
-        let path = previous_day.join(format!("rollout-2026-08-08T23-59-00-{thread_id}.jsonl"));
+        let path = next_day.join(format!("rollout-2026-08-10T00-00-01-{thread_id}.jsonl"));
         fs::write(path, "session").expect("session file");
 
         assert!(find_session_file(home.path(), thread_id, created_at).is_some());
@@ -220,7 +223,7 @@ mod tests {
             find_session_file(
                 home.path(),
                 thread_id,
-                created_at - Duration::days(2),
+                created_at - Duration::days(1),
             ),
             None
         );

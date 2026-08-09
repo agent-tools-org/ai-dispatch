@@ -7,7 +7,7 @@ current arguments.
 
 | Command | Purpose |
 |---|---|
-| `aid run` | Dispatch one agent task with optional worktree, verification, retry, audit, context, skills, or background execution. |
+| `aid run` | Dispatch one agent task with optional worktree, verification, retry, audit, context, skills, or background execution; only a successful `TaskOutcome` exits 0 in the foreground. |
 | `aid advise` | Preview declared-profile agent/model routing without dispatching or writing task state. |
 | `aid batch` | Dispatch a dependency-aware TOML task graph. |
 | `aid benchmark` | Run the same task through multiple agents and compare results. |
@@ -21,10 +21,10 @@ current arguments.
 
 | Command | Purpose |
 |---|---|
-| `aid board` | Show the current task board. |
-| `aid watch` | Stream task or group progress. |
-| `aid wait` | Block until selected tasks or a group reach a stopping state. |
-| `aid show` | Inspect task state, events, context, output, result, transcript, summary, audit, or diff; `--diff --branch` widens the diff from the task's own commits to the whole branch. |
+| `aid board` | Show the current task board, including verification tags when verification has something to report. |
+| `aid watch` | Stream task or group progress; `--wait` waits for verification to settle and exits non-zero when a task did not succeed. |
+| `aid wait` | Block until selected tasks or a group reach a stopping state, including verification completion; returns non-zero when any task did not succeed. |
+| `aid show` | Inspect task state, outcome, verification, events, context, output, result, transcript, summary, audit, or diff; `--diff --branch` widens the diff from the task's own commits to the whole branch. |
 | `aid output` | Print task output directly. |
 | `aid tree` | Show task ancestry and retries. |
 | `aid respond` | Supply an answer to a task awaiting input. |
@@ -33,7 +33,7 @@ current arguments.
 | `aid unstick` | Request recovery or escalation for a stalled task. |
 | `aid stop` | Stop one task or its retry tree while preserving artifacts. |
 | `aid retry` | Start a new attempt using prior task context and artifacts; supersedes a non-terminal task by stopping its live worker first. |
-| `aid merge` | Merge delivered code and mark the task merged; this is not principal acceptance. |
+| `aid merge` | Merge delivered code only when its outcome is successful by default; `--force` overrides a failed or inconclusive verification and records the reason. This is not principal acceptance. |
 
 ## Review and artifact custody
 
@@ -68,8 +68,8 @@ current arguments.
 | `aid credential` | Manage credential-pool entries. |
 | `aid byok` | Manage custom OpenAI-compatible providers through opencode. |
 | `aid container` | Build, list, or stop development containers. |
-| `aid hook` | Install or invoke supported AID hooks. |
-| `aid mcp` | Start AID's stdio MCP server. |
+| `aid hook` | Install or invoke supported AID hooks; task hook payloads expose additive `outcome` and `verify_status` fields. |
+| `aid mcp` | Start AID's stdio MCP server; task payloads expose additive `outcome` and `verify_status` fields. |
 | `aid doctor` | Report repository/worktree hygiene without bypassing custody. |
 | `aid clean` | Remove disposable logs and caches while retaining custody evidence. |
 | `aid upgrade` | Upgrade AID after checking active-task safety. |
@@ -81,6 +81,6 @@ current arguments.
 |---|---|
 | `aid usage` | Report token and usage totals. |
 | `aid cost` | Report estimated costs by group, agent, or period. |
-| `aid stats` | Report task outcomes, declared difficulty versus outcomes, models, failures, and usage concentration. |
+| `aid stats` | Report outcome-based task success, declared difficulty versus outcomes, models, failures, and usage concentration. |
 
 Global options include `--quiet`, `--help`, and `--version`.

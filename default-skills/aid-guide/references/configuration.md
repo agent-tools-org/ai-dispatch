@@ -155,7 +155,10 @@ aid mcp
 
 Use containers for isolated execution when a task needs reproducible
 dependencies. Hooks run commands and therefore require the same trust review as
-scripts. `aid mcp` exposes AID operations over stdio JSON-RPC for an MCP host.
+scripts. Completion hook payloads include additive `outcome` and
+`verify_status` fields alongside the existing lifecycle `status`. `aid mcp`
+exposes AID operations over stdio JSON-RPC for an MCP host; its task views
+likewise include `outcome` and `verify_status`.
 
 ## Maintenance
 

@@ -3,6 +3,10 @@
 // Depends on serde_json for metadata-rich completion events.
 
 mod output_classifier;
+#[path = "codex_attribution.rs"]
+mod attribution;
+
+pub(crate) use attribution::grade_completion_observation;
 
 use anyhow::{bail, Result};
 use chrono::Local;

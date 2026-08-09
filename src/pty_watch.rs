@@ -325,6 +325,13 @@ impl MonitorState {
         task_id: &TaskId,
         accepts_nudge: bool,
     ) -> Result<()> {
+        // Same buffered-liveness question as idle_hang_elapsed — read only.
+        // Do not mark_progress(): that clock belongs to the hang reaper.
+        if !self.streaming
+            && Self::buffered_log_grew_within(task_id.as_str(), self.idle_detector.warn_after)
+        {
+            return Ok(());
+        }
         match self.idle_detector.tick(
             self.last_progress_time,
             load_monitor_status(store.as_ref(), task_id.as_str())?,
@@ -407,6 +414,35 @@ impl MonitorState {
         awaiting_first_output && self.last_raw_chunk_time.elapsed() > first_token_timeout
     }
 
+    /// Idle hang for the live PTY watcher. Streaming keeps the progress-event
+    /// clock alone. Buffered agents write nothing to the PTY mid-run, so a quiet
+    /// `last_progress_time` is not enough — also require that agent-owned logs
+    /// have not grown within the idle window (same `agent_has_produced_bytes`
+    /// question the first-token detector and orphan reaper ask).
+    fn idle_hang_elapsed(
+        &self,
+        agent_streaming: bool,
+        idle: Duration,
+        task_id: &str,
+    ) -> bool {
+        if self.last_progress_time.elapsed() <= idle {
+            return false;
+        }
+        if agent_streaming {
+            return true;
+        }
+        !Self::buffered_log_grew_within(task_id, idle)
+    }
+
+    /// True when any agent-owned log grew inside `window`. Shared by the hang
+    /// reaper and the warn/nudge/escalate ladder — do not invent another ask.
+    fn buffered_log_grew_within(task_id: &str, window: Duration) -> bool {
+        let window_start = std::time::SystemTime::now()
+            .checked_sub(window)
+            .unwrap_or(std::time::UNIX_EPOCH);
+        crate::paths::agent_has_produced_bytes(task_id, window_start)
+    }
+
     fn last_progress_detail(&self) -> Option<String> {
         self.last_event_detail.clone().or_else(|| {
             self.full_output
@@ -474,7 +510,7 @@ pub(crate) fn monitor_bridge(
                     break;
                 }
                 if let Some(idle) = idle_timeout
-                    && state.last_progress_time.elapsed() > idle
+                    && state.idle_hang_elapsed(agent.streaming(), idle, task_id.as_str())
                 {
                     state.info.status = TaskStatus::Failed;
                     process_monitor::insert_hung_detected_events(
@@ -750,6 +786,8 @@ mod tests;
 mod log_tests;
 #[cfg(test)]
 mod first_token_tests;
+#[cfg(test)]
+mod idle_hang_tests;
 #[cfg(test)]
 #[path = "pty_watch_activity_tests.rs"]
 mod activity_tests;

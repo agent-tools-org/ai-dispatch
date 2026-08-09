@@ -17,9 +17,10 @@ Fixed and released in v10.18.0, after three rounds of two-auditor cross-review
   resolves its name through the same function that names the marker file.
 - D3 — the first-token budget resolves through the CLI/agent/project chain in
   spirit: the live watcher now accepts agent-log growth as proof of life for a
-  buffered agent. **The idle budget still does not** — it counts progress events
-  only, so a quiet buffered agent is still reaped at 600s. Raise it with
-  `--idle-timeout` until fixed.
+  buffered agent. The idle hang reaper and warn/nudge ladder share the same
+  `buffered_log_grew_within` helper (read-only for the ladder — it must not
+  reset `last_progress_time`). Sandbox/container runs still have no buffered
+  log signal.
 
 Not shipped, ready on branches, unaudited:
 
@@ -28,9 +29,8 @@ Not shipped, ready on branches, unaudited:
 - `fix/dispatched-verify-toolchain` (`d581d0f9`) — D2, the sccache failure that
   killed eight dispatched verifies in one night.
 
-Still open: D1 (an empty run recorded as a delivery), the idle-budget half of the
-liveness rule, and re-scoring grok from measured outcomes once its runs stop
-being killed by aid.
+Still open: D1 (an empty run recorded as a delivery), and re-scoring grok from
+measured outcomes once its runs stop being killed by aid.
 
 The recurring shape behind four of these — one rule, several implementations,
 fixed only where it was named — is recorded separately as a working note.

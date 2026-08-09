@@ -2,6 +2,7 @@
 // Exports CodexAgent for streaming runs plus helpers for tool and usage events.
 // Depends on serde_json for metadata-rich completion events.
 
+mod capabilities;
 mod output_classifier;
 #[path = "codex_attribution.rs"]
 mod attribution;
@@ -160,7 +161,8 @@ impl CodexAgent {
                 &injected,
             ]);
         } else {
-            cmd.args(["exec", "--json", "--skip-git-repo-check", "--full-auto", &injected]);
+            let approval_flag = capabilities::approval_flag_for_version(codex_version()).as_str();
+            cmd.args(["exec", "--json", "--skip-git-repo-check", approval_flag, &injected]);
         }
         if let Some(ref model) = opts.model {
             if has_native_model_flag() {
@@ -211,6 +213,10 @@ impl super::Agent for CodexAgent {
 
     fn build_command(&self, prompt: &str, opts: &RunOpts) -> Result<Command> {
         self.build_codex_command(prompt, opts, true)
+    }
+
+    fn validate_cli(&self) -> Result<()> {
+        capabilities::validate_installed_codex(codex_version())
     }
 
     fn build_command_with_context(
@@ -567,8 +573,8 @@ fn extract_noop_reason(line: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::{
-        parse_semver, resume_fallback_event, rollout_filename_matches, session_rollout_exists,
-        CodexAgent,
+        capabilities, codex_version, parse_semver, resume_fallback_event,
+        rollout_filename_matches, session_rollout_exists, CodexAgent,
         RESUME_FALLBACK_DETAIL,
     };
     use crate::agent::{Agent, CommandContext, RunOpts};
@@ -918,7 +924,7 @@ mod tests {
     }
 
     #[test]
-    fn build_command_read_only_uses_full_auto() {
+    fn build_command_read_only_uses_versioned_approval_flag() {
         let opts = RunOpts {
             dir: None,
             output: None,
@@ -938,7 +944,8 @@ mod tests {
             .map(|arg| arg.to_string_lossy().to_string())
             .collect();
 
-        assert!(args.contains(&"--full-auto".to_string()));
+        let expected = capabilities::approval_flag_for_version(codex_version()).as_str();
+        assert!(args.iter().any(|arg| arg == expected));
         assert!(!args.contains(&"-s".to_string()));
         assert!(!args.contains(&"read-only".to_string()));
     }
@@ -1044,7 +1051,12 @@ mod tests {
 
         assert_eq!(
             &args[..4],
-            ["exec", "--json", "--skip-git-repo-check", "--full-auto"]
+            [
+                "exec",
+                "--json",
+                "--skip-git-repo-check",
+                capabilities::approval_flag_for_version(codex_version()).as_str(),
+            ]
         );
         assert!(args[4].contains("write the final report"));
     }

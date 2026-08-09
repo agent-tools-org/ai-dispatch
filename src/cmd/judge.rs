@@ -89,17 +89,15 @@ pub(crate) fn gather_diff(task: &Task) -> Option<String> {
     if !Path::new(dir).exists() {
         return None;
     }
-    // Try committed diff first (codex commits changes), then unstaged diff
-    for args in [&["diff", "--no-color", "HEAD~1..HEAD"][..], &["diff", "--no-color"]] {
-        let output = StdCommand::new("git").current_dir(dir).args(args).output().ok()?;
-        if output.status.success() {
-            let diff = String::from_utf8_lossy(&output.stdout).into_owned();
-            if !diff.trim().is_empty() {
-                return Some(diff);
-            }
-        }
+    let mut command = StdCommand::new("git");
+    command.current_dir(dir).args(["diff", "--no-color"]);
+    command.arg(task.start_sha.as_deref().unwrap_or("HEAD"));
+    let output = command.arg("--").output().ok()?;
+    if !output.status.success() {
+        return None;
     }
-    None
+    let diff = String::from_utf8_lossy(&output.stdout).into_owned();
+    (!diff.trim().is_empty()).then_some(diff)
 }
 
 pub(crate) fn read_output(task: &Task) -> Option<String> {
@@ -182,6 +180,10 @@ fn parse_peer_review(text: &str) -> Result<PeerReview> {
     }
     Ok(PeerReview { score: 5, feedback: "no score found in review".to_string() })
 }
+
+#[cfg(test)]
+#[path = "judge_diff_tests.rs"]
+mod diff_tests;
 
 #[cfg(test)]
 mod tests {

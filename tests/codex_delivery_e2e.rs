@@ -11,6 +11,42 @@ mod common;
 use common::aid_cmd_in;
 
 #[test]
+fn fresh_codex_accepts_the_current_approval_flag() {
+    assert_fresh_codex_succeeds("t-current-codex-approval", false);
+}
+
+#[test]
+fn fresh_codex_accepts_the_legacy_approval_flag() {
+    assert_fresh_codex_succeeds("t-legacy-codex-approval", true);
+}
+
+fn assert_fresh_codex_succeeds(task_id: &str, legacy: bool) {
+    let aid_home = TempDir::new().unwrap();
+    let bin_dir = TempDir::new().unwrap();
+    write_fake_codex(bin_dir.path());
+
+    let mut command = aid_cmd_in(aid_home.path());
+    command
+        .env("PATH", test_path(bin_dir.path()))
+        .env("FAKE_CODEX_FINAL_ON_FRESH", "1");
+    if legacy {
+        command.env("FAKE_CODEX_LEGACY", "1");
+    }
+    let output = command
+        .args(["run", "codex", "Implement and report the requested change", "--id", task_id])
+        .output().unwrap();
+    assert!(
+        output.status.success(),
+        "stdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let conn = Connection::open(aid_home.path().join("aid.db")).unwrap();
+    assert_eq!(task_facts(&conn, task_id).0, "done");
+}
+
+#[test]
 fn missing_final_delivery_fails_parent_and_resumes_once() {
     let aid_home = TempDir::new().unwrap();
     let bin_dir = TempDir::new().unwrap();
@@ -127,7 +163,19 @@ fn write_fake_codex(dir: &Path) {
         &path,
         r#"#!/bin/sh
 if [ "$1" = "--version" ]; then
-  echo "codex-cli 1.0.0"
+  if [ "$FAKE_CODEX_LEGACY" = "1" ]; then
+    echo "codex-cli 0.146.0"
+  else
+    echo "codex-cli 0.147.0"
+  fi
+  exit 0
+fi
+if [ "$1" = "exec" ] && [ "$2" = "--help" ]; then
+  if [ "$FAKE_CODEX_LEGACY" = "1" ]; then
+    echo "      --full-auto"
+  else
+    echo "      --approve-for-me"
+  fi
   exit 0
 fi
 if [ "$2" = "resume" ]; then
@@ -141,7 +189,23 @@ if [ "$2" = "resume" ]; then
   printf '%s\n' '{"type":"turn.completed","usage":{"input_tokens":20,"cached_input_tokens":10,"output_tokens":80}}'
   exit 0
 fi
+if [ "$FAKE_CODEX_LEGACY" = "1" ]; then
+  case " $* " in
+    *" --full-auto "*) ;;
+    *) echo "error: missing '--full-auto'" >&2; exit 2 ;;
+  esac
+else
+  case " $* " in
+    *" --approve-for-me "*) ;;
+    *) echo "error: missing '--approve-for-me'" >&2; exit 2 ;;
+  esac
+fi
 printf '%s\n' '{"type":"thread.started","thread_id":"019e3e49-6b83-7563-a3d8-b51a3a716dd1"}'
+if [ "$FAKE_CODEX_FINAL_ON_FRESH" = "1" ]; then
+  printf '%s\n' '{"type":"item.completed","item":{"id":"final","type":"agent_message","text":"Completed the requested implementation and verified the resulting behavior. The work is ready for review, with the exact change and validation evidence recorded in this final delivery. The implementation preserves the existing command flow, and the focused regression test confirms that the current Codex approval option reaches a successful terminal state."}}'
+  printf '%s\n' '{"type":"turn.completed","usage":{"input_tokens":20,"cached_input_tokens":10,"output_tokens":80}}'
+  exit 0
+fi
 printf '%s\n' '{"type":"item.completed","item":{"id":"progress","type":"agent_message","text":"I am investigating the task now. I will inspect the available evidence and provide the final report after the tool work is complete. This progress update is deliberately substantive but is not a final answer."}}'
 printf '%s\n' '{"type":"item.completed","item":{"id":"work","type":"command_execution","command":"inspect evidence","aggregated_output":"","exit_code":0}}'
 printf '%s\n' '{"type":"turn.completed","usage":{"input_tokens":100,"cached_input_tokens":50,"output_tokens":9000}}'

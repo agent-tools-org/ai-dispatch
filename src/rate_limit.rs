@@ -211,6 +211,10 @@ fn stored_hold(content: &str, agent: &AgentKind) -> StoredHold {
     StoredHold::Transient
 }
 
+pub(crate) fn live_quota_can_override(content: &str, agent: &AgentKind) -> bool {
+    !matches!(stored_hold(content, agent), StoredHold::NeedsHuman)
+}
+
 /// Whether the refusal a marker recorded is one only a person ends.
 ///
 /// Matched line by line: grok's marker wraps its refusal in a multi-line JSON

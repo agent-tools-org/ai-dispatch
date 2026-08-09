@@ -5,11 +5,12 @@
 use anyhow::Result;
 use std::collections::HashMap;
 use std::sync::Arc;
-use tokio::time::{sleep, Duration};
+use tokio::time::{sleep, Duration, Instant};
 
 use crate::cost;
 use crate::store::Store;
-use crate::types::{verify_required, TaskFilter, TaskOutcome, TaskStatus};
+use crate::types::{verify_required, Task, TaskFilter, TaskOutcome, TaskStatus, VerifyStatus};
+use crate::verify::VERIFY_TIMEOUT;
 
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) enum WaitOutcome {
@@ -98,6 +99,7 @@ async fn wait_for_task_ids_inner(
 ) -> Result<WaitOutcome> {
     let mut task_ids = task_ids.to_vec();
     let mut last_status: HashMap<String, String> = HashMap::new();
+    let mut pending_since: HashMap<String, Instant> = HashMap::new();
     let mut completed = 0usize;
     let track_group_tasks = |task_ids: &mut Vec<String>, completed: usize| -> Result<bool> {
         let Some(group_id) = group else { return Ok(false); };
@@ -180,10 +182,21 @@ async fn wait_for_task_ids_inner(
                 return Ok(WaitOutcome::Completed);
             }
 
-            if matches!(outcome, TaskOutcome::InProgress) {
+            if verification_is_in_flight(&task) {
+                let started_at = pending_since.entry(task_id.clone()).or_insert_with(Instant::now);
+                if started_at.elapsed() < VERIFY_TIMEOUT {
+                    remaining += 1;
+                } else {
+                    failed.push(task_id.clone());
+                }
+            } else if matches!(outcome, TaskOutcome::InProgress) {
+                pending_since.remove(task_id);
                 remaining += 1;
             } else if !outcome.is_success() {
+                pending_since.remove(task_id);
                 failed.push(task_id.clone());
+            } else {
+                pending_since.remove(task_id);
             }
         }
 
@@ -225,6 +238,10 @@ fn still_running_task_ids(store: &Arc<Store>, task_ids: &[String], group: Option
     let mut running = Vec::new();
     for task_id in tracked {
         if let Some(task) = store.get_task(&task_id)? {
+            if verification_is_in_flight(&task) {
+                running.push(task_id);
+                continue;
+            }
             let outcome = TaskOutcome::derive(
                 task.status,
                 task.verify_status,
@@ -236,6 +253,12 @@ fn still_running_task_ids(store: &Arc<Store>, task_ids: &[String], group: Option
         }
     }
     Ok(running)
+}
+
+fn verification_is_in_flight(task: &Task) -> bool {
+    matches!(task.status, TaskStatus::Done | TaskStatus::Merged)
+        && task.verify_status == VerifyStatus::Pending
+        && verify_required(task.verify.as_deref())
 }
 
 #[cfg(test)]
@@ -326,7 +349,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn wait_for_task_ids_reports_done_without_required_verification() {
+    async fn wait_for_task_ids_times_out_when_pending_verification_never_answers() {
         let store = Arc::new(Store::open_memory().unwrap());
         let mut task = make_task("t-no-verify-result", TaskStatus::Done);
         task.verify = Some("cargo test".to_string());
@@ -338,15 +361,42 @@ mod tests {
             &[String::from("t-no-verify-result")],
             None,
             false,
-            None,
+            Some(Duration::from_millis(10)),
         )
         .await
         .unwrap();
 
         assert_eq!(
             outcome,
-            WaitOutcome::Failed(vec![String::from("t-no-verify-result")])
+            WaitOutcome::TimedOut(vec![String::from("t-no-verify-result")])
         );
+    }
+
+    #[tokio::test]
+    async fn wait_for_task_ids_waits_for_done_task_verification_result() {
+        let store = Arc::new(Store::open_memory().unwrap());
+        let mut task = make_task("t-verifying", TaskStatus::Done);
+        task.verify = Some("cargo test".to_string());
+        task.verify_status = VerifyStatus::Pending;
+        store.insert_task(&task).unwrap();
+
+        let wait_store = store.clone();
+        let handle = tokio::spawn(async move {
+            wait_for_task_ids(&wait_store, &[String::from("t-verifying")], None, false, None).await
+        });
+
+        sleep(Duration::from_millis(100)).await;
+        assert!(!handle.is_finished());
+        store
+            .update_verify_status("t-verifying", VerifyStatus::Passed)
+            .unwrap();
+
+        let outcome = tokio::time::timeout(Duration::from_secs(3), handle)
+            .await
+            .unwrap()
+            .unwrap()
+            .unwrap();
+        assert_eq!(outcome, WaitOutcome::Completed);
     }
 
     #[tokio::test]

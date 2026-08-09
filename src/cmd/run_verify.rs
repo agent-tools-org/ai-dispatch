@@ -47,6 +47,7 @@ pub(in crate::cmd) fn maybe_verify_impl(
         aid_error!("Verify error: {detail}");
         return;
     }
+    let _ = store.update_verify_status(task_id.as_str(), VerifyStatus::Pending);
     let cargo_target_dir = crate::agent::target_dir_for_worktree(worktree_branch.as_deref());
     match crate::verify::run_verify(path, command, cargo_target_dir.as_deref(), container_name) {
         Ok(result) => {

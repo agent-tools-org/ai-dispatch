@@ -209,10 +209,8 @@ pub(crate) async fn run_agent_process_impl(args: RunProcessArgs<'_>) -> Result<(
     }
     // Same split as pty_runner::record_completion: the observation stands alone,
     // only the cost estimate may fall back to what was requested.
-    let (observed_model, attribution_source) = crate::types::grade_observation(
-        info.model.as_deref(),
-        model,
-        info.status == crate::types::TaskStatus::Done,
+    let (observed_model, attribution_source) = crate::agent::codex::grade_completion_observation(
+        agent, store.as_ref(), task_id, &info, model,
     );
     let costing_model = observed_model.as_deref().or(model);
     let cost_usd = info.cost_usd.or_else(|| info.tokens.and_then(|tokens| crate::cost::estimate_cost(tokens, costing_model, agent.kind())));

@@ -201,10 +201,8 @@ fn record_completion(
     // recorded `gemini-3.6-flash-low` as the model the `claude` CLI ran
     // (`t-bd455a68`, which failed for exactly that reason) and cursor's
     // `composer-2` as an `agy` model (`t-702f7bcb`).
-    let (observed_model, attribution_source) = crate::types::grade_observation(
-        info.model.as_deref(),
-        model,
-        info.status == crate::types::TaskStatus::Done,
+    let (observed_model, attribution_source) = crate::agent::codex::grade_completion_observation(
+        agent, store.as_ref(), task_id, info, model,
     );
     // Costing still falls back to the request, because an estimate is openly an
     // estimate — and with both values now stored, a reader can tell which basis

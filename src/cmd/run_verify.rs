@@ -68,7 +68,7 @@ pub(in crate::cmd) fn maybe_verify_impl(
             crate::verify::record_verify_status(store, task_id, &result);
             if result.timed_out {
                 outcome::record_verify_timed_out(store, task_id, &result);
-            } else if !result.success {
+            } else if !result.success && !result.infrastructure_failure {
                 let hint = verify_failure_hint(store, task_id, &result.output);
                 let detail = match verify_output_excerpt(&result.output) {
                     Some(output) => {
@@ -89,7 +89,14 @@ pub(in crate::cmd) fn maybe_verify_impl(
             }
         }
         Err(e) => {
-            record_verify_failed(store, task_id, format!("Failed during verification: {e}"));
+            if crate::verify::error_indicates_infrastructure_failure(&e, container_name.is_some()) {
+                let _ = store.update_verify_status(
+                    task_id.as_str(),
+                    VerifyStatus::InfrastructureFailure,
+                );
+            } else {
+                record_verify_failed(store, task_id, format!("Failed during verification: {e}"));
+            }
             aid_error!("Verify error: {e}");
         }
     }

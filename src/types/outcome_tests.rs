@@ -4,7 +4,7 @@
 
 use crate::types::{outcome::UnverifiedReason, verify_required, TaskOutcome, TaskStatus, VerifyStatus};
 
-const GOLDEN_TABLE: [(TaskStatus, VerifyStatus, bool, TaskOutcome); 100] = [
+const GOLDEN_TABLE: [(TaskStatus, VerifyStatus, bool, TaskOutcome); 120] = [
     (TaskStatus::Waiting, VerifyStatus::Pending, false, TaskOutcome::InProgress),
     (TaskStatus::Waiting, VerifyStatus::Pending, true, TaskOutcome::InProgress),
     (TaskStatus::Waiting, VerifyStatus::Passed, false, TaskOutcome::InProgress),
@@ -15,6 +15,8 @@ const GOLDEN_TABLE: [(TaskStatus, VerifyStatus, bool, TaskOutcome); 100] = [
     (TaskStatus::Waiting, VerifyStatus::Skipped, true, TaskOutcome::InProgress),
     (TaskStatus::Waiting, VerifyStatus::TimedOut, false, TaskOutcome::InProgress),
     (TaskStatus::Waiting, VerifyStatus::TimedOut, true, TaskOutcome::InProgress),
+    (TaskStatus::Waiting, VerifyStatus::InfrastructureFailure, false, TaskOutcome::InProgress),
+    (TaskStatus::Waiting, VerifyStatus::InfrastructureFailure, true, TaskOutcome::InProgress),
     (TaskStatus::Pending, VerifyStatus::Pending, false, TaskOutcome::InProgress),
     (TaskStatus::Pending, VerifyStatus::Pending, true, TaskOutcome::InProgress),
     (TaskStatus::Pending, VerifyStatus::Passed, false, TaskOutcome::InProgress),
@@ -25,6 +27,8 @@ const GOLDEN_TABLE: [(TaskStatus, VerifyStatus, bool, TaskOutcome); 100] = [
     (TaskStatus::Pending, VerifyStatus::Skipped, true, TaskOutcome::InProgress),
     (TaskStatus::Pending, VerifyStatus::TimedOut, false, TaskOutcome::InProgress),
     (TaskStatus::Pending, VerifyStatus::TimedOut, true, TaskOutcome::InProgress),
+    (TaskStatus::Pending, VerifyStatus::InfrastructureFailure, false, TaskOutcome::InProgress),
+    (TaskStatus::Pending, VerifyStatus::InfrastructureFailure, true, TaskOutcome::InProgress),
     (TaskStatus::Running, VerifyStatus::Pending, false, TaskOutcome::InProgress),
     (TaskStatus::Running, VerifyStatus::Pending, true, TaskOutcome::InProgress),
     (TaskStatus::Running, VerifyStatus::Passed, false, TaskOutcome::InProgress),
@@ -35,6 +39,8 @@ const GOLDEN_TABLE: [(TaskStatus, VerifyStatus, bool, TaskOutcome); 100] = [
     (TaskStatus::Running, VerifyStatus::Skipped, true, TaskOutcome::InProgress),
     (TaskStatus::Running, VerifyStatus::TimedOut, false, TaskOutcome::InProgress),
     (TaskStatus::Running, VerifyStatus::TimedOut, true, TaskOutcome::InProgress),
+    (TaskStatus::Running, VerifyStatus::InfrastructureFailure, false, TaskOutcome::InProgress),
+    (TaskStatus::Running, VerifyStatus::InfrastructureFailure, true, TaskOutcome::InProgress),
     (TaskStatus::AwaitingInput, VerifyStatus::Pending, false, TaskOutcome::InProgress),
     (TaskStatus::AwaitingInput, VerifyStatus::Pending, true, TaskOutcome::InProgress),
     (TaskStatus::AwaitingInput, VerifyStatus::Passed, false, TaskOutcome::InProgress),
@@ -45,6 +51,8 @@ const GOLDEN_TABLE: [(TaskStatus, VerifyStatus, bool, TaskOutcome); 100] = [
     (TaskStatus::AwaitingInput, VerifyStatus::Skipped, true, TaskOutcome::InProgress),
     (TaskStatus::AwaitingInput, VerifyStatus::TimedOut, false, TaskOutcome::InProgress),
     (TaskStatus::AwaitingInput, VerifyStatus::TimedOut, true, TaskOutcome::InProgress),
+    (TaskStatus::AwaitingInput, VerifyStatus::InfrastructureFailure, false, TaskOutcome::InProgress),
+    (TaskStatus::AwaitingInput, VerifyStatus::InfrastructureFailure, true, TaskOutcome::InProgress),
     (TaskStatus::Stalled, VerifyStatus::Pending, false, TaskOutcome::InProgress),
     (TaskStatus::Stalled, VerifyStatus::Pending, true, TaskOutcome::InProgress),
     (TaskStatus::Stalled, VerifyStatus::Passed, false, TaskOutcome::InProgress),
@@ -55,6 +63,8 @@ const GOLDEN_TABLE: [(TaskStatus, VerifyStatus, bool, TaskOutcome); 100] = [
     (TaskStatus::Stalled, VerifyStatus::Skipped, true, TaskOutcome::InProgress),
     (TaskStatus::Stalled, VerifyStatus::TimedOut, false, TaskOutcome::InProgress),
     (TaskStatus::Stalled, VerifyStatus::TimedOut, true, TaskOutcome::InProgress),
+    (TaskStatus::Stalled, VerifyStatus::InfrastructureFailure, false, TaskOutcome::InProgress),
+    (TaskStatus::Stalled, VerifyStatus::InfrastructureFailure, true, TaskOutcome::InProgress),
     (TaskStatus::Done, VerifyStatus::Pending, false, TaskOutcome::Delivered),
     (TaskStatus::Done, VerifyStatus::Pending, true, TaskOutcome::Unverified(UnverifiedReason::NoResult)),
     (TaskStatus::Done, VerifyStatus::Passed, false, TaskOutcome::Verified),
@@ -65,6 +75,8 @@ const GOLDEN_TABLE: [(TaskStatus, VerifyStatus, bool, TaskOutcome); 100] = [
     (TaskStatus::Done, VerifyStatus::Skipped, true, TaskOutcome::Unverified(UnverifiedReason::NoResult)),
     (TaskStatus::Done, VerifyStatus::TimedOut, false, TaskOutcome::Unverified(UnverifiedReason::TimedOut)),
     (TaskStatus::Done, VerifyStatus::TimedOut, true, TaskOutcome::Unverified(UnverifiedReason::TimedOut)),
+    (TaskStatus::Done, VerifyStatus::InfrastructureFailure, false, TaskOutcome::Unverified(UnverifiedReason::Infrastructure)),
+    (TaskStatus::Done, VerifyStatus::InfrastructureFailure, true, TaskOutcome::Unverified(UnverifiedReason::Infrastructure)),
     (TaskStatus::Merged, VerifyStatus::Pending, false, TaskOutcome::Delivered),
     (TaskStatus::Merged, VerifyStatus::Pending, true, TaskOutcome::Unverified(UnverifiedReason::NoResult)),
     (TaskStatus::Merged, VerifyStatus::Passed, false, TaskOutcome::Verified),
@@ -75,6 +87,8 @@ const GOLDEN_TABLE: [(TaskStatus, VerifyStatus, bool, TaskOutcome); 100] = [
     (TaskStatus::Merged, VerifyStatus::Skipped, true, TaskOutcome::Unverified(UnverifiedReason::NoResult)),
     (TaskStatus::Merged, VerifyStatus::TimedOut, false, TaskOutcome::Unverified(UnverifiedReason::TimedOut)),
     (TaskStatus::Merged, VerifyStatus::TimedOut, true, TaskOutcome::Unverified(UnverifiedReason::TimedOut)),
+    (TaskStatus::Merged, VerifyStatus::InfrastructureFailure, false, TaskOutcome::Unverified(UnverifiedReason::Infrastructure)),
+    (TaskStatus::Merged, VerifyStatus::InfrastructureFailure, true, TaskOutcome::Unverified(UnverifiedReason::Infrastructure)),
     (TaskStatus::Failed, VerifyStatus::Pending, false, TaskOutcome::Failed),
     (TaskStatus::Failed, VerifyStatus::Pending, true, TaskOutcome::Failed),
     (TaskStatus::Failed, VerifyStatus::Passed, false, TaskOutcome::Failed),
@@ -85,6 +99,8 @@ const GOLDEN_TABLE: [(TaskStatus, VerifyStatus, bool, TaskOutcome); 100] = [
     (TaskStatus::Failed, VerifyStatus::Skipped, true, TaskOutcome::Failed),
     (TaskStatus::Failed, VerifyStatus::TimedOut, false, TaskOutcome::Failed),
     (TaskStatus::Failed, VerifyStatus::TimedOut, true, TaskOutcome::Failed),
+    (TaskStatus::Failed, VerifyStatus::InfrastructureFailure, false, TaskOutcome::Failed),
+    (TaskStatus::Failed, VerifyStatus::InfrastructureFailure, true, TaskOutcome::Failed),
     (TaskStatus::Skipped, VerifyStatus::Pending, false, TaskOutcome::Skipped),
     (TaskStatus::Skipped, VerifyStatus::Pending, true, TaskOutcome::Skipped),
     (TaskStatus::Skipped, VerifyStatus::Passed, false, TaskOutcome::Skipped),
@@ -95,6 +111,8 @@ const GOLDEN_TABLE: [(TaskStatus, VerifyStatus, bool, TaskOutcome); 100] = [
     (TaskStatus::Skipped, VerifyStatus::Skipped, true, TaskOutcome::Skipped),
     (TaskStatus::Skipped, VerifyStatus::TimedOut, false, TaskOutcome::Skipped),
     (TaskStatus::Skipped, VerifyStatus::TimedOut, true, TaskOutcome::Skipped),
+    (TaskStatus::Skipped, VerifyStatus::InfrastructureFailure, false, TaskOutcome::Skipped),
+    (TaskStatus::Skipped, VerifyStatus::InfrastructureFailure, true, TaskOutcome::Skipped),
     (TaskStatus::Stopped, VerifyStatus::Pending, false, TaskOutcome::Stopped),
     (TaskStatus::Stopped, VerifyStatus::Pending, true, TaskOutcome::Stopped),
     (TaskStatus::Stopped, VerifyStatus::Passed, false, TaskOutcome::Stopped),
@@ -105,6 +123,8 @@ const GOLDEN_TABLE: [(TaskStatus, VerifyStatus, bool, TaskOutcome); 100] = [
     (TaskStatus::Stopped, VerifyStatus::Skipped, true, TaskOutcome::Stopped),
     (TaskStatus::Stopped, VerifyStatus::TimedOut, false, TaskOutcome::Stopped),
     (TaskStatus::Stopped, VerifyStatus::TimedOut, true, TaskOutcome::Stopped),
+    (TaskStatus::Stopped, VerifyStatus::InfrastructureFailure, false, TaskOutcome::Stopped),
+    (TaskStatus::Stopped, VerifyStatus::InfrastructureFailure, true, TaskOutcome::Stopped),
 ];
 
 /// `ALL` is a fixed-size array, so a new enum variant does not break it and the
@@ -133,11 +153,12 @@ fn all_lists_stay_in_step_with_their_enums() {
             | VerifyStatus::Passed
             | VerifyStatus::Failed
             | VerifyStatus::Skipped
-            | VerifyStatus::TimedOut => {}
+            | VerifyStatus::TimedOut
+            | VerifyStatus::InfrastructureFailure => {}
         }
     }
     assert_eq!(TaskStatus::ALL.len(), 10);
-    assert_eq!(VerifyStatus::ALL.len(), 5);
+    assert_eq!(VerifyStatus::ALL.len(), 6);
 }
 
 #[test]

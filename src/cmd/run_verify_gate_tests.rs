@@ -3,6 +3,7 @@
 // Deps: run verify wrapper, Store, worktree dependency state, tempfile.
 
 use super::maybe_verify;
+use crate::test_subprocess;
 use crate::{
     store::Store,
     types::{AgentKind, Task, TaskId, TaskStatus, VerifyStatus},

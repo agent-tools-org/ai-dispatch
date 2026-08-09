@@ -154,7 +154,11 @@ pub fn format_verify_report(result: &VerifyResult) -> String {
 
 /// Update the task's verify_status based on the latest verify result.
 pub fn record_verify_status(store: &Store, task_id: &TaskId, result: &VerifyResult) {
+    // `auto` can resolve to `skip`, and the caller cannot know that in advance.
+    // Record it, so a task that asked for verification and then legitimately
+    // needed none reads as Skipped rather than sitting on the Pending marker.
     if result.command == "skip" && result.success {
+        let _ = store.update_verify_status(task_id.as_str(), VerifyStatus::Skipped);
         return;
     }
     let status = if result.timed_out {

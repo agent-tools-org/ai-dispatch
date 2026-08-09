@@ -202,6 +202,10 @@ fn report_strings_keep_outcome_and_verification_tag_vocabularies_stable() {
         Some("VTIMEOUT")
     );
     assert_eq!(
+        TaskOutcome::Unverified(UnverifiedReason::Infrastructure).verification_tag(),
+        Some("VINFRA")
+    );
+    assert_eq!(
         TaskOutcome::Unverified(UnverifiedReason::NoResult).verification_tag(),
         Some("VNORESULT")
     );

@@ -183,7 +183,11 @@ async fn run_task_inner(store: &Arc<Store>, spec: &BackgroundRunSpec) -> Result<
         agent::ensure_resolved_binary_available(&spec.agent_name, &program)?;
     }
     let _home_guard = agent::apply_run_env(&mut std_cmd, &opts, Some(&spec.task_id))?;
-    if agent.kind() == AgentKind::Codex {
+    if agent::should_use_durable_codex_home(
+        agent.kind(),
+        spec.sandbox,
+        spec.container.is_some(),
+    ) {
         agent::apply_codex_home_env(&mut std_cmd)?;
     }
     if let Some(ref dir) = spec.dir {

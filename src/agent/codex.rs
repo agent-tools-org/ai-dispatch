@@ -72,7 +72,7 @@ pub(crate) fn resume_fallback_needed(session_id: &str) -> bool {
 }
 
 pub(crate) fn session_rollout_exists(sessions_dir: &Path, session_id: &str) -> bool {
-    if session_id.is_empty() {
+    if !is_uuid_session_id(session_id) {
         return false;
     }
     let Ok(entries) = fs::read_dir(sessions_dir) else {
@@ -85,10 +85,21 @@ pub(crate) fn session_rollout_exists(sessions_dir: &Path, session_id: &str) -> b
         }
         path.file_name()
             .and_then(|name| name.to_str())
-            .and_then(|name| name.strip_suffix(".jsonl"))
-            .and_then(|name| name.strip_suffix(session_id))
-            .is_some_and(|prefix| prefix.ends_with('-'))
+            .is_some_and(|name| {
+                name.starts_with("rollout-")
+                    && name.ends_with(&format!("-{session_id}.jsonl"))
+            })
     })
+}
+
+fn is_uuid_session_id(session_id: &str) -> bool {
+    let bytes = session_id.as_bytes();
+    bytes.len() == 36
+        && [8, 13, 18, 23].iter().all(|&index| bytes[index] == b'-')
+        && bytes
+            .iter()
+            .enumerate()
+            .all(|(index, byte)| index == 8 || index == 13 || index == 18 || index == 23 || byte.is_ascii_hexdigit())
 }
 
 pub(crate) fn resume_fallback_event(task_id: &TaskId) -> TaskEvent {
@@ -581,23 +592,25 @@ mod tests {
     }
 
     #[test]
-    fn finds_rollout_matching_session_id_in_nested_sessions_dir() {
+    fn finds_only_full_uuid_rollout_matches_in_nested_sessions_dir() {
         let temp = tempdir().unwrap();
         let sessions = temp.path().join("sessions/2026/08/09");
         fs::create_dir_all(&sessions).unwrap();
+        let session_id = "019e3e49-6b83-7563-a3d8-b51a3a716dd1";
         fs::write(
-            sessions.join("rollout-2026-08-09T17-20-31-session-123.jsonl"),
+            sessions.join(format!("rollout-2026-08-09T17-20-31-{session_id}.jsonl")),
             "{}",
         )
         .unwrap();
+        fs::write(sessions.join("rollout-session-abc-123.jsonl"), "{}").unwrap();
 
         assert!(session_rollout_exists(
             temp.path().join("sessions").as_path(),
-            "session-123"
+            session_id
         ));
         assert!(!session_rollout_exists(
             temp.path().join("sessions").as_path(),
-            "other-session"
+            "123"
         ));
     }
 

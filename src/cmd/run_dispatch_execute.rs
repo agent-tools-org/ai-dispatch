@@ -212,7 +212,11 @@ pub(super) async fn run_foreground_task(
         .map_err(|err| anyhow::anyhow!("Failed to build agent command: {err:#}"))?;
     // TODO: integrate credential_pool rotation here
     let _home_guard = agent::apply_run_env(&mut std_cmd, &opts, Some(prepared.task_id.as_str()))?;
-    if prepared.agent_kind == crate::types::AgentKind::Codex {
+    if agent::should_use_durable_codex_home(
+        prepared.agent_kind,
+        args.sandbox,
+        container_name.is_some(),
+    ) {
         agent::apply_codex_home_env(&mut std_cmd)?;
     }
     if codex_resume_fallback {

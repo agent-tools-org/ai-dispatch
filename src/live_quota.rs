@@ -1,5 +1,5 @@
 // Reads aidbar quota snapshots that can override an older route marker.
-// Exports: overrides_marker; deps: aidbar JSON cache, chrono, AgentKind.
+// Exports: overrides_marker; deps: rate-limit hold classification, aidbar JSON cache.
 
 use chrono::{DateTime, Utc};
 use serde::Deserialize;
@@ -37,6 +37,12 @@ fn overrides_marker_in_cache(agent: &AgentKind, marker_path: &Path, cache_dir: &
     let Some(provider) = provider_name(agent) else {
         return false;
     };
+    let Ok(marker_content) = std::fs::read_to_string(marker_path) else {
+        return false;
+    };
+    if !crate::rate_limit::live_quota_can_override(&marker_content, agent) {
+        return false;
+    }
     let Ok(marker_mtime) = std::fs::metadata(marker_path).and_then(|meta| meta.modified()) else {
         return false;
     };
@@ -204,5 +210,30 @@ mod tests {
             &marker,
             &cache_dir,
         ));
+    }
+
+    #[test]
+    fn newer_opencode_headroom_does_not_release_a_needs_human_marker() {
+        let temp = tempfile::tempdir().expect("temp directory");
+        let marker = temp.path().join("rate-limit-opencode");
+        let cache_dir = temp.path().join("aidbar");
+        std::fs::create_dir_all(&cache_dir).expect("cache directory");
+        std::fs::write(
+            cache_dir.join("opencode.json"),
+            r#"{"ok":true,"snapshot":{"provider":"opencode","plan":"zen","windows":[{"label":"5h","used_percent":96.86,"resets_at":null},{"label":"Weekly","used_percent":57.08,"resets_at":null}],"fetched_at":"2099-01-01T00:00:00Z"}}"#,
+        )
+        .expect("cache record");
+
+        for marker_content in [
+            "recovery_at: \nhold: manual\nmessage: Insufficient balance\n",
+            "recovery_at: \nmessage: Insufficient balance. Manage your billing here\n",
+        ] {
+            std::fs::write(&marker, marker_content).expect("marker");
+            assert!(!overrides_marker_in_cache(
+                &AgentKind::OpenCode,
+                &marker,
+                &cache_dir,
+            ));
+        }
     }
 }

@@ -107,6 +107,39 @@ const GOLDEN_TABLE: [(TaskStatus, VerifyStatus, bool, TaskOutcome); 100] = [
     (TaskStatus::Stopped, VerifyStatus::TimedOut, true, TaskOutcome::Stopped),
 ];
 
+/// `ALL` is a fixed-size array, so a new enum variant does not break it and the
+/// golden table would silently stop covering the whole product. These matches go
+/// non-exhaustive the moment a variant is added, which drags whoever added it
+/// into this file — where the next step is to extend `ALL` and the table.
+#[test]
+fn all_lists_stay_in_step_with_their_enums() {
+    for status in TaskStatus::ALL {
+        match status {
+            TaskStatus::Waiting
+            | TaskStatus::Pending
+            | TaskStatus::Running
+            | TaskStatus::AwaitingInput
+            | TaskStatus::Stalled
+            | TaskStatus::Done
+            | TaskStatus::Merged
+            | TaskStatus::Failed
+            | TaskStatus::Skipped
+            | TaskStatus::Stopped => {}
+        }
+    }
+    for verify_status in VerifyStatus::ALL {
+        match verify_status {
+            VerifyStatus::Pending
+            | VerifyStatus::Passed
+            | VerifyStatus::Failed
+            | VerifyStatus::Skipped
+            | VerifyStatus::TimedOut => {}
+        }
+    }
+    assert_eq!(TaskStatus::ALL.len(), 10);
+    assert_eq!(VerifyStatus::ALL.len(), 5);
+}
+
 #[test]
 fn golden_cartesian_derivation_table() {
     let expected_cell_count = TaskStatus::ALL.len() * VerifyStatus::ALL.len() * 2;

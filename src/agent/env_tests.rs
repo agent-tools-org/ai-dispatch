@@ -224,6 +224,14 @@ fn apply_codex_home_env_uses_durable_real_home() {
     );
 }
 
+#[test]
+fn durable_codex_home_is_disabled_for_isolated_wrappers() {
+    assert!(should_use_durable_codex_home(AgentKind::Codex, false, false));
+    assert!(!should_use_durable_codex_home(AgentKind::Codex, true, false));
+    assert!(!should_use_durable_codex_home(AgentKind::Codex, false, true));
+    assert!(!should_use_durable_codex_home(AgentKind::Claude, false, false));
+}
+
 fn command_env(cmd: &Command, name: &str) -> Option<String> {
     cmd.get_envs()
         .find(|(key, _)| *key == name)

@@ -32,6 +32,8 @@ mod task;
 mod task_profile;
 #[path = "types/memory.rs"]
 mod memory;
+#[path = "types/outcome.rs"]
+mod outcome;
 
 pub use self::agent::AgentKind;
 pub use self::attribution::{grade_observation, AttributionSource, ROUTER_ALIASES};
@@ -44,6 +46,7 @@ pub use self::route::Route;
 pub use self::delivery::DeliveryAssessment;
 pub use self::message::{MessageDirection, MessageSource, TaskMessage};
 pub use self::memory::{Memory, MemoryId, MemoryTier, MemoryType};
+pub use self::outcome::{verify_required, TaskOutcome, UnverifiedReason};
 pub use self::status::{EventKind, PendingReason, TaskStatus};
 pub use self::verify_status::VerifyStatus;
 pub use self::status_sets::{ACTIVE_EXECUTION_FAILURE_STATUSES, ACTIVE_TASK_STATUSES};

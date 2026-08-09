@@ -69,11 +69,30 @@ fn running_task(store: &Store, id: &str) -> TaskId {
     task.id
 }
 
+fn aid_home() -> (tempfile::TempDir, paths::AidHomeGuard) {
+    let temp = tempfile::tempdir().expect("tempdir");
+    let home = paths::AidHomeGuard::set(temp.path());
+    paths::ensure_dirs().expect("ensure dirs");
+    (temp, home)
+}
+
+fn write_agent_log(id: &str, body: &str) {
+    std::fs::create_dir_all(paths::task_dir(id)).expect("task dir");
+    std::fs::write(paths::agent_log_path(id), body).expect("write log");
+}
+
+fn age_log(id: &str, age: Duration) {
+    let stale = std::time::SystemTime::now() - age;
+    std::fs::File::open(paths::agent_log_path(id))
+        .expect("open")
+        .set_modified(stale)
+        .expect("mtime");
+}
+
 #[test]
 fn idle_hang_fires_for_streaming_when_progress_stale() {
     let mut state = MonitorState::new(true, None);
     state.last_progress_time = Instant::now() - Duration::from_secs(601);
-
     assert!(state.idle_hang_elapsed(true, Duration::from_secs(600), "t-stream-idle"));
 }
 
@@ -81,21 +100,15 @@ fn idle_hang_fires_for_streaming_when_progress_stale() {
 fn idle_hang_is_inert_for_streaming_with_fresh_progress() {
     let mut state = MonitorState::new(true, None);
     state.last_progress_time = Instant::now() - Duration::from_secs(10);
-
     assert!(!state.idle_hang_elapsed(true, Duration::from_secs(600), "t-stream-fresh"));
 }
 
 #[test]
 fn idle_hang_fires_for_buffered_without_log_growth() {
-    // Replay of t-54c4560a shape: PTY silent, progress clock stale, no recent
-    // agent.log write → idle watchdog must still reap.
-    let temp = tempfile::tempdir().expect("tempdir");
-    let _home = paths::AidHomeGuard::set(temp.path());
-    paths::ensure_dirs().expect("ensure dirs");
-
+    // t-54c4560a shape: PTY silent, progress stale, no recent agent.log → reap.
+    let (_temp, _home) = aid_home();
     let mut state = MonitorState::new(false, None);
     state.last_progress_time = Instant::now() - Duration::from_secs(601);
-
     assert!(
         state.idle_hang_elapsed(false, Duration::from_secs(600), "t-buf-idle-dead"),
         "buffered agent with no log growth must be reaped"
@@ -104,19 +117,10 @@ fn idle_hang_fires_for_buffered_without_log_growth() {
 
 #[test]
 fn idle_hang_is_inert_for_buffered_with_log_growth_in_window() {
-    // grok/agy write agent.log while the PTY stays silent. A log written
-    // inside the idle window is growth, not mere existence — keep alive.
-    let temp = tempfile::tempdir().expect("tempdir");
-    let _home = paths::AidHomeGuard::set(temp.path());
-    paths::ensure_dirs().expect("ensure dirs");
-    std::fs::create_dir_all(paths::task_dir("t-buf-idle-live")).expect("task dir");
-
-    let agent_log = paths::agent_log_path("t-buf-idle-live");
-    std::fs::write(&agent_log, "tool call in flight...\n").expect("write log");
-
+    let (_temp, _home) = aid_home();
+    write_agent_log("t-buf-idle-live", "tool call in flight...\n");
     let mut state = MonitorState::new(false, None);
     state.last_progress_time = Instant::now() - Duration::from_secs(601);
-
     assert!(
         !state.idle_hang_elapsed(false, Duration::from_secs(600), "t-buf-idle-live"),
         "buffered agent whose log grew inside the idle window must survive"
@@ -125,23 +129,11 @@ fn idle_hang_is_inert_for_buffered_with_log_growth_in_window() {
 
 #[test]
 fn idle_hang_fires_for_buffered_when_log_is_stale() {
-    // A log that merely exists from earlier in the run is not proof of life.
-    let temp = tempfile::tempdir().expect("tempdir");
-    let _home = paths::AidHomeGuard::set(temp.path());
-    paths::ensure_dirs().expect("ensure dirs");
-    std::fs::create_dir_all(paths::task_dir("t-buf-idle-stale")).expect("task dir");
-
-    let agent_log = paths::agent_log_path("t-buf-idle-stale");
-    std::fs::write(&agent_log, "wrote once then hung\n").expect("write log");
-    let stale = std::time::SystemTime::now() - Duration::from_secs(700);
-    std::fs::File::open(&agent_log)
-        .expect("open")
-        .set_modified(stale)
-        .expect("mtime");
-
+    let (_temp, _home) = aid_home();
+    write_agent_log("t-buf-idle-stale", "wrote once then hung\n");
+    age_log("t-buf-idle-stale", Duration::from_secs(700));
     let mut state = MonitorState::new(false, None);
     state.last_progress_time = Instant::now() - Duration::from_secs(601);
-
     assert!(
         state.idle_hang_elapsed(false, Duration::from_secs(600), "t-buf-idle-stale"),
         "stale agent.log must not keep a hung buffered agent alive"
@@ -150,20 +142,10 @@ fn idle_hang_fires_for_buffered_when_log_is_stale() {
 
 #[test]
 fn idle_hang_streaming_ignores_agent_log() {
-    // Streaming idle semantics stay progress-clock only even if a log exists.
-    let temp = tempfile::tempdir().expect("tempdir");
-    let _home = paths::AidHomeGuard::set(temp.path());
-    paths::ensure_dirs().expect("ensure dirs");
-    std::fs::create_dir_all(paths::task_dir("t-stream-log")).expect("task dir");
-    std::fs::write(
-        paths::agent_log_path("t-stream-log"),
-        "unrelated log growth\n",
-    )
-    .expect("write log");
-
+    let (_temp, _home) = aid_home();
+    write_agent_log("t-stream-log", "unrelated log growth\n");
     let mut state = MonitorState::new(true, None);
     state.last_progress_time = Instant::now() - Duration::from_secs(601);
-
     assert!(
         state.idle_hang_elapsed(true, Duration::from_secs(600), "t-stream-log"),
         "streaming agents must not gain idle immunity from agent.log"
@@ -172,29 +154,16 @@ fn idle_hang_streaming_ignores_agent_log() {
 
 #[test]
 fn maybe_handle_idle_skips_ladder_when_buffered_log_grows() {
-    // Live failure shape (t-54c4560a): PTY silent, progress stale, agent.log
-    // still growing — warn/nudge/escalate must stay quiet via the shared helper.
-    let temp = tempfile::tempdir().expect("tempdir");
-    let _home = paths::AidHomeGuard::set(temp.path());
-    paths::ensure_dirs().expect("ensure dirs");
-    std::fs::create_dir_all(paths::task_dir("t-buf-ladder-live")).expect("task dir");
-    std::fs::write(
-        paths::agent_log_path("t-buf-ladder-live"),
-        "streamGenerateContent in flight\n",
-    )
-    .expect("write log");
-
+    let (_temp, _home) = aid_home();
+    write_agent_log("t-buf-ladder-live", "streamGenerateContent in flight\n");
     let store = Arc::new(Store::open_memory().expect("store"));
     let task_id = running_task(&store, "t-buf-ladder-live");
     let mut state = MonitorState::with_policy(false, None, short_ladder_policy());
-    state.last_progress_time = Instant::now() - Duration::from_secs(25);
-
-    state
-        .maybe_handle_idle(&store, &task_id, true)
-        .expect("idle ladder");
-
-    assert!(!state.idle_warned, "growing agent.log must suppress idle warn");
-    assert!(!state.idle_nudged, "growing agent.log must suppress auto-nudge");
+    let stale = Instant::now() - Duration::from_secs(25);
+    state.last_progress_time = stale;
+    state.maybe_handle_idle(&store, &task_id, true).expect("idle ladder");
+    assert_eq!(state.last_progress_time, stale, "ladder must not reset hang clock");
+    assert!(!state.idle_warned && !state.idle_nudged);
     let events = store.get_events(task_id.as_str()).expect("events");
     assert!(
         events.iter().all(|e| e.detail != "idle warn" && e.detail != "Auto-nudge sent"),
@@ -203,28 +172,46 @@ fn maybe_handle_idle_skips_ladder_when_buffered_log_grows() {
 }
 
 #[test]
-fn maybe_handle_idle_warns_when_buffered_log_is_stale() {
-    let temp = tempfile::tempdir().expect("tempdir");
-    let _home = paths::AidHomeGuard::set(temp.path());
-    paths::ensure_dirs().expect("ensure dirs");
-    std::fs::create_dir_all(paths::task_dir("t-buf-ladder-stale")).expect("task dir");
-    let agent_log = paths::agent_log_path("t-buf-ladder-stale");
-    std::fs::write(&agent_log, "wrote once then hung\n").expect("write log");
-    let stale = std::time::SystemTime::now() - Duration::from_secs(60);
-    std::fs::File::open(&agent_log)
-        .expect("open")
-        .set_modified(stale)
-        .expect("mtime");
+fn repeated_ladder_ticks_with_log_growth_still_reap_after_idle() {
+    // Round-2: mark_progress from buffered growth reset the hang clock every
+    // tick. Multi-tick growth must leave last_progress_time alone.
+    let (_temp, _home) = aid_home();
+    write_agent_log("t-buf-multi-tick", "start\n");
+    let agent_log = paths::agent_log_path("t-buf-multi-tick");
+    let store = Arc::new(Store::open_memory().expect("store"));
+    let task_id = running_task(&store, "t-buf-multi-tick");
+    let mut state = MonitorState::with_policy(false, None, short_ladder_policy());
+    let stale_progress = Instant::now() - Duration::from_secs(601);
+    state.last_progress_time = stale_progress;
 
+    for i in 0..5 {
+        std::fs::write(&agent_log, format!("tool call {i}\n")).expect("write log");
+        state.maybe_handle_idle(&store, &task_id, true).expect("idle ladder");
+        assert!(
+            !state.idle_hang_elapsed(false, Duration::from_secs(600), "t-buf-multi-tick"),
+            "growing log must suppress hang while alive"
+        );
+    }
+    assert_eq!(state.last_progress_time, stale_progress);
+    assert!(!state.idle_warned && !state.idle_nudged);
+
+    age_log("t-buf-multi-tick", Duration::from_secs(700));
+    assert!(
+        state.idle_hang_elapsed(false, Duration::from_secs(600), "t-buf-multi-tick"),
+        "after log freezes, prior ladder ticks must not immunise the agent"
+    );
+}
+
+#[test]
+fn maybe_handle_idle_warns_when_buffered_log_is_stale() {
+    let (_temp, _home) = aid_home();
+    write_agent_log("t-buf-ladder-stale", "wrote once then hung\n");
+    age_log("t-buf-ladder-stale", Duration::from_secs(60));
     let store = Arc::new(Store::open_memory().expect("store"));
     let task_id = running_task(&store, "t-buf-ladder-stale");
     let mut state = MonitorState::with_policy(false, None, short_ladder_policy());
     state.last_progress_time = Instant::now() - Duration::from_secs(15);
-
-    state
-        .maybe_handle_idle(&store, &task_id, true)
-        .expect("idle ladder");
-
+    state.maybe_handle_idle(&store, &task_id, true).expect("idle ladder");
     assert!(state.idle_warned, "stale buffered log must still warn");
     let events = store.get_events(task_id.as_str()).expect("events");
     assert!(
@@ -235,25 +222,13 @@ fn maybe_handle_idle_warns_when_buffered_log_is_stale() {
 
 #[test]
 fn maybe_handle_idle_streaming_ignores_agent_log() {
-    let temp = tempfile::tempdir().expect("tempdir");
-    let _home = paths::AidHomeGuard::set(temp.path());
-    paths::ensure_dirs().expect("ensure dirs");
-    std::fs::create_dir_all(paths::task_dir("t-stream-ladder")).expect("task dir");
-    std::fs::write(
-        paths::agent_log_path("t-stream-ladder"),
-        "unrelated log growth\n",
-    )
-    .expect("write log");
-
+    let (_temp, _home) = aid_home();
+    write_agent_log("t-stream-ladder", "unrelated log growth\n");
     let store = Arc::new(Store::open_memory().expect("store"));
     let task_id = running_task(&store, "t-stream-ladder");
     let mut state = MonitorState::with_policy(true, None, short_ladder_policy());
     state.last_progress_time = Instant::now() - Duration::from_secs(15);
-
-    state
-        .maybe_handle_idle(&store, &task_id, true)
-        .expect("idle ladder");
-
+    state.maybe_handle_idle(&store, &task_id, true).expect("idle ladder");
     assert!(
         state.idle_warned,
         "streaming ladder must stay on the progress clock even if a log grows"

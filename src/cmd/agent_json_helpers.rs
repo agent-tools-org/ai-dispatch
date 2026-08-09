@@ -231,4 +231,36 @@ mod tests {
         assert_eq!(category.success_rate, 1.0);
         Ok(())
     }
+
+    /// The largest real correction: 366 rows in the live store are delivered
+    /// with a failed verification, and the old SQL counted every one of them as
+    /// a success because the status said `done`.
+    #[test]
+    fn agent_history_counts_a_failed_verification_as_a_failure() -> Result<()> {
+        let store = Store::open_memory()?;
+        let created_at = Local::now().to_rfc3339();
+        for index in 0..4 {
+            store.db().execute(
+                "INSERT INTO tasks (id, agent, prompt, status, created_at, verify_status, verify, category)
+                 VALUES (?1, 'codex', 'prompt', 'done', ?2, 'passed', 'cargo test', 'testing')",
+                params![format!("passed-{index}"), created_at],
+            )?;
+        }
+        store.db().execute(
+            "INSERT INTO tasks (id, agent, prompt, status, created_at, verify_status, verify, category)
+             VALUES ('broken', 'codex', 'prompt', 'done', ?1, 'failed', 'cargo test', 'testing')",
+            params![created_at],
+        )?;
+
+        let history = get_agent_history(&store, "codex", false)?
+            .ok_or_else(|| anyhow!("expected agent history"))?;
+
+        assert_eq!(history.tasks, 5, "a broken task stays in the denominator");
+        assert!(
+            (history.success_rate - 0.8).abs() < f64::EPSILON,
+            "expected 4/5, got {}",
+            history.success_rate
+        );
+        Ok(())
+    }
 }

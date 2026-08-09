@@ -24,6 +24,23 @@ use crate::templates;
 use crate::types::*;
 use crate::worktree_layout::{read_commondir, resolve_worktree_gitdir};
 
+pub(crate) const RESUME_FALLBACK_MARKER: &str = "AID_CODEX_RESUME_FALLBACK";
+
+const RESUME_FALLBACK_SCRIPT: &str = r#"session_id="$1"
+prompt="$2"
+shift 2
+stderr_file=$(mktemp "${TMPDIR:-/tmp}/aid-codex-resume.XXXXXX") || exit 1
+trap 'rm -f "$stderr_file"' EXIT
+if codex exec resume --json --skip-git-repo-check "$session_id" "$prompt" "$@" 2>"$stderr_file"; then
+    exit 0
+fi
+if grep -q "failed to resolve rollout path" "$stderr_file" || grep -q "thread/resume failed" "$stderr_file"; then
+    printf '%s\n' 'AID_CODEX_RESUME_FALLBACK'
+    exec codex exec --json --skip-git-repo-check --full-auto "$prompt" "$@"
+fi
+cat "$stderr_file" >&2
+exit 1"#;
+
 /// Parsed codex CLI version (major, minor, patch).
 /// Cached via OnceLock so `codex --version` runs at most once.
 fn codex_version() -> (u32, u32, u32) {
@@ -81,14 +98,8 @@ impl super::Agent for CodexAgent {
         let injected = templates::inject_codex_prompt(&with_context, None);
         let mut cmd = Command::new("codex");
         if let Some(session_id) = opts.session_id.as_deref() {
-            cmd.args([
-                "exec",
-                "resume",
-                "--json",
-                "--skip-git-repo-check",
-                session_id,
-                &injected,
-            ]);
+            cmd = Command::new("sh");
+            cmd.args(["-c", RESUME_FALLBACK_SCRIPT, "aid-codex-resume", session_id, &injected]);
         } else {
             cmd.args(["exec", "--json", "--skip-git-repo-check", "--full-auto", &injected]);
         }
@@ -126,6 +137,16 @@ impl super::Agent for CodexAgent {
     }
 
     fn parse_event(&self, task_id: &TaskId, line: &str) -> Option<TaskEvent> {
+        if line.trim() == RESUME_FALLBACK_MARKER {
+            return Some(TaskEvent {
+                task_id: task_id.clone(),
+                timestamp: Local::now(),
+                event_kind: EventKind::Milestone,
+                detail: "Codex session resume skipped: rollout missing; starting fresh session"
+                    .to_string(),
+                metadata: None,
+            });
+        }
         let v: serde_json::Value = serde_json::from_str(line).ok()?;
         let now = Local::now();
 
@@ -469,7 +490,7 @@ fn extract_noop_reason(line: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{parse_semver, CodexAgent};
+    use super::{parse_semver, CodexAgent, RESUME_FALLBACK_MARKER};
     use crate::agent::{Agent, RunOpts};
     use crate::types::{EventKind, TaskId};
     use std::fs;
@@ -518,6 +539,19 @@ mod tests {
                 .get("agent_session_id")
                 .and_then(|v| v.as_str()),
             Some("019d1efa-5aa6-7132-bdfa-71fb97e12438")
+        );
+    }
+
+    #[test]
+    fn parses_resume_fallback_marker_as_milestone() {
+        let event = CodexAgent
+            .parse_event(&TaskId("t-resume-fallback".to_string()), RESUME_FALLBACK_MARKER)
+            .unwrap();
+
+        assert_eq!(event.event_kind, EventKind::Milestone);
+        assert_eq!(
+            event.detail,
+            "Codex session resume skipped: rollout missing; starting fresh session"
         );
     }
 
@@ -845,10 +879,53 @@ mod tests {
             .map(|arg| arg.to_string_lossy().to_string())
             .collect();
 
-        assert_eq!(&args[..4], ["exec", "resume", "--json", "--skip-git-repo-check"]);
-        assert_eq!(args[4], "019e3e49-6b83-7563-a3d8-b51a3a716dd1");
-        assert!(args[5].contains("write the final report"));
-        assert!(!args.iter().any(|arg| arg == "--full-auto"));
+        assert_eq!(args[0], "-c");
+        assert!(args[1].contains("codex exec resume"));
+        assert_eq!(args[3], "019e3e49-6b83-7563-a3d8-b51a3a716dd1");
+        assert!(args[4].contains("write the final report"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn poisoned_resume_falls_back_to_fresh_session() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let temp = tempdir().unwrap();
+        let fake_codex = temp.path().join("codex");
+        fs::write(
+            &fake_codex,
+            "#!/bin/sh\nif [ \"$2\" = \"resume\" ]; then\n  echo 'thread/resume failed: failed to resolve rollout path' >&2\n  exit 1\nfi\nprintf '%s\\n' '{\"type\":\"thread.started\",\"thread_id\":\"fresh-session\"}'\n",
+        )
+        .unwrap();
+        let mut permissions = fs::metadata(&fake_codex).unwrap().permissions();
+        permissions.set_mode(0o755);
+        fs::set_permissions(&fake_codex, permissions).unwrap();
+
+        let opts = RunOpts {
+            dir: None,
+            output: None,
+            result_file: None,
+            model: None,
+            budget: false,
+            read_only: false,
+            sandbox: false,
+            context_files: vec![],
+            session_id: Some("poisoned-session".to_string()),
+            env: None,
+            env_forward: None,
+        };
+        let mut cmd = CodexAgent.build_command("continue", &opts).unwrap();
+        cmd.env("PATH", format!("{}:/bin:/usr/bin", temp.path().display()));
+
+        let output = cmd.output().unwrap();
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        assert!(
+            output.status.success(),
+            "stderr: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert!(stdout.contains(RESUME_FALLBACK_MARKER));
+        assert!(stdout.contains("fresh-session"));
     }
 }
 

@@ -10,15 +10,23 @@ principal review: Unreviewed -> Accepted | Rejected
 artifact custody: Preserved -> Durability proved -> Deleted
 ```
 
-`Done` means the agent process exited successfully **and** its CLI result
+`TaskStatus` describes lifecycle and integration. `Done` means the agent process
+exited successfully **and** its CLI result
 envelope did not report a terminal error. Streaming agents that exit 0 while
 emitting a real failure envelope (for example Cursor/Claude
 `{"type":"result","is_error":true}`, OpenCode/Gemini `{"type":"error",...}`,
 or Qwen `[API Error: ...]`) are recorded as `Failed`. Ambiguous envelopes stay
 `Done` rather than risk a false failure.
 
-`Merged` means code was integrated. Neither means the principal accepted the
-result.
+`Merged` means code was integrated. Neither `Done` nor `Merged` means that the
+task succeeded or that the principal accepted the result.
+
+Verification is a separate axis. A configured verify command starts with
+`VerifyStatus::Pending` and ends as `Passed`, `Failed`, `TimedOut`,
+`InfrastructureFailure`, or `Skipped`. `TimedOut` and
+`InfrastructureFailure` are inconclusive rather than evidence that the change
+is broken. `TaskOutcome` derives the judgment: only `Verified` and `Delivered`
+are success; `Unverified` and `Broken` are not.
 
 ## Review
 
@@ -32,7 +40,7 @@ aid show <task-id> --result
 aid show <task-id> --events
 ```
 
-Confirm the requested outcome, verification evidence, final branch and commit,
+Confirm the requested outcome, derived task outcome, verification evidence, final branch and commit,
 uncommitted files, submodule changes, and any audit findings.
 
 `--diff` is scoped to the task's own baseline (`start_sha..HEAD`). A task dispatched

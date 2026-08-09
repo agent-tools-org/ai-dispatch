@@ -13,10 +13,18 @@ aid output <task-id>
 aid tree <task-id>
 ```
 
-Use `watch` for a stream and `wait` for automation. Use `show` to inspect
-context, diff, output, result, transcript, audit, event log, agent, model, and
+Use `watch` for a stream and `wait` for automation. `--wait` continues while
+verification is pending and returns non-zero when any selected task does not
+have a successful outcome. Use `show` to inspect context, diff, output, result,
+transcript, audit, event log, agent, model, derived outcome, verification, and
 stored completion data. Run `aid show --help` because its modes are mutually
 exclusive in some combinations.
+
+Human task surfaces use verification tags only when verification has something
+to say: `VFAIL` for a failed verification, `VTIMEOUT` for a timeout, `VINFRA`
+for a verification infrastructure failure, and `VNORESULT` when a required
+verification has no result. Running tasks and tasks without a verify command
+have no tag. The tags appear in board rows, `aid show`, the TUI, and task detail.
 
 ## Communicate with a live task
 
@@ -88,10 +96,14 @@ aid merge <task-id> --check
 aid merge --group <group-id> --approve
 ```
 
-Merge integrates delivered code and records `Merged`. It does not accept the
-delivery on behalf of the principal and does not authorize worktree deletion.
-Review can happen before or after integration depending on team policy, but
-`aid accept` must remain an explicit principal decision.
+Merge integrates delivered code and records `Merged`. By default it requires a
+successful outcome; a failed or inconclusive verification is refused. This
+gate applies to single-task merges, group merges, and GitButler lane merges.
+`--force` is the explicit override and records why the verification gate was
+overridden. It does not accept the delivery on behalf of the principal and does
+not authorize worktree deletion. Review can happen before or after integration
+depending on team policy, but `aid accept` must remain an explicit principal
+decision.
 
 For GitButler lanes:
 
@@ -114,8 +126,19 @@ aid changelog
 
 Use exports for sharing, not as a substitute for the stored task record.
 
-`aid stats` and `aid cost` show `unknown` when a task's model has no known
-pricing. Unknown costs are omitted from totals rather than recorded as `$0.00`.
+`aid stats` reports success from `TaskOutcome`, so `Verified` and `Delivered`
+are the only successes and a verification failure is a failure even when the
+task was delivered. `aid stats` and `aid cost` show `unknown` when a task's
+model has no known pricing. Unknown costs are omitted from totals rather than
+recorded as `$0.00`.
+
+## Machine-facing completion data
+
+MCP task views, task hook payloads, and task webhooks add `outcome` and
+`verify_status` fields. Existing `status` fields retain their lifecycle meaning;
+consumers must use `outcome` when deciding whether work succeeded. The values
+are additive and use the stored verification names, including `pending`,
+`timed_out`, and `infrastructure_failure`.
 
 ## Model attribution: requested versus observed
 

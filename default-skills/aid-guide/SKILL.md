@@ -34,6 +34,9 @@ already knows, which puts these responsibilities on the caller:
 4. **Verify by running.** An agent's own report of success is not evidence.
    `--rigor` states the proof owed — `draft` compiles, `standard` runs the
    changed path and captures real output, `critical` adds an independent audit.
+   A task's judgment is its derived `TaskOutcome`, not its lifecycle
+   `TaskStatus`: only `Verified` and `Delivered` are success. `Unverified` is
+   inconclusive and `Broken` is a verification failure; neither is success.
 5. **Read `unknown` as unknown.** A model, provider, or cost AID could not
    establish is reported as unknown rather than filled in with a plausible
    value. Several CLIs never name the model they ran, so unknown is the honest
@@ -59,7 +62,9 @@ already knows, which puts these responsibilities on the caller:
    - `aid show <task>`
    - `aid project state`
 4. Explain the next safe command and its expected state transition.
-5. Never equate agent completion, `Done`, or `Merged` with principal acceptance.
+5. Never equate agent completion, `Done`, or `Merged` with task success or
+   principal acceptance. Read `TaskStatus` for lifecycle/integration and
+   `TaskOutcome` for judgment.
 6. Never recommend raw `git worktree prune`, direct removal of AID task
    worktrees, or deletion of task branches as cleanup.
 7. For exact syntax not shown here, run `aid <command> --help`.

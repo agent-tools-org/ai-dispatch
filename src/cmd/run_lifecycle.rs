@@ -161,13 +161,9 @@ pub(crate) async fn post_run_lifecycle(
     let _ = store.save_completion_summary(task_id.as_str(), &summary_json);
     if let Some(task) = store.get_task(task_id.as_str())? {
         let done_payload = show::task_hook_json(
-            task_id,
+            &task,
             agent_display_name,
-            task.status,
-            &task.prompt,
-            task.worktree_path.as_deref(),
             effective_dir.map(String::as_str),
-            task.exit_code,
         );
         if let Err(err) = hooks::run_hooks_with(
             "after_complete",
@@ -555,20 +551,16 @@ fn handle_failed_postprocess(
 }
 
 fn run_fail_hook(
-    task_id: &TaskId,
+    _task_id: &TaskId,
     task: &Task,
     agent_display_name: &str,
     effective_dir: Option<&String>,
     runtime_hooks: &[hooks::Hook],
 ) {
     let payload = show::task_hook_json(
-        task_id,
+        task,
         agent_display_name,
-        TaskStatus::Failed,
-        &task.prompt,
-        task.worktree_path.as_deref(),
         effective_dir.map(String::as_str),
-        task.exit_code,
     );
     if let Err(err) = hooks::run_hooks_with(
         "on_fail",

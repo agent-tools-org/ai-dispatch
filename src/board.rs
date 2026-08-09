@@ -188,14 +188,10 @@ fn count_statuses(tasks: &[Task]) -> (usize, usize, usize) {
 }
 
 fn format_with_outcome(task: &Task, base: String) -> String {
-    match task.outcome() {
-        TaskOutcome::Verified | TaskOutcome::Delivered => base,
-        TaskOutcome::Broken => format!("{base} [VFAIL]"),
-        TaskOutcome::Unverified(UnverifiedReason::TimedOut) => format!("{base} [VTIMEOUT]"),
-        TaskOutcome::Unverified(UnverifiedReason::Infrastructure) => format!("{base} [VINFRA]"),
-        TaskOutcome::Unverified(UnverifiedReason::NoResult) => format!("{base} [VNORESULT]"),
-        TaskOutcome::Failed | TaskOutcome::Stopped | TaskOutcome::Skipped | TaskOutcome::InProgress => base,
-    }
+    task.outcome()
+        .verification_tag()
+        .map(|tag| format!("{base} [{tag}]"))
+        .unwrap_or(base)
 }
 
 fn format_duration(ms: i64) -> String {

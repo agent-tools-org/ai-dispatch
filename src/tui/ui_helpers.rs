@@ -10,14 +10,23 @@ use crate::tui::app::{App, DetailTab};
 use crate::tui::route_display::format_route_fit;
 use crate::types::{Task, TaskStatus};
 
+pub fn task_status_label(task: &Task) -> String {
+    let label = task.status.label();
+    task.outcome()
+        .verification_tag()
+        .map(|tag| format!("{label} [{tag}]"))
+        .unwrap_or_else(|| label.to_string())
+}
+
 pub fn task_row(app: &App, task: &Task) -> Row<'static> {
+    let label = task_status_label(task);
     let status = match task.status {
-        TaskStatus::Running => format!("▶ {}", task.status.label()),
-        TaskStatus::Stalled => format!("! {}", task.status.label()),
-        TaskStatus::Done | TaskStatus::Merged => format!("✓ {}", task.status.label()),
-        TaskStatus::Failed => format!("✗ {}", task.status.label()),
-        TaskStatus::Stopped => format!("✗ {}", task.status.label()),
-        _ => task.status.label().to_string(),
+        TaskStatus::Running => format!("▶ {label}"),
+        TaskStatus::Stalled => format!("! {label}"),
+        TaskStatus::Done | TaskStatus::Merged => format!("✓ {label}"),
+        TaskStatus::Failed => format!("✗ {label}"),
+        TaskStatus::Stopped => format!("✗ {label}"),
+        _ => label,
     };
     // Route column budget matches the table Constraint::Length(28).
     let route = format_route_fit(task, 28);
@@ -63,7 +72,7 @@ pub fn task_header(task: &Task, events: &[crate::types::TaskEvent]) -> Paragraph
         Span::raw("  "),
         Span::styled(route, Style::default().fg(Color::Indexed(250))),
         Span::raw("  "),
-        Span::styled(task.status.label().to_string(), Style::default().fg(status_color).add_modifier(Modifier::BOLD)),
+        Span::styled(task_status_label(task), Style::default().fg(status_color).add_modifier(Modifier::BOLD)),
     ]);
     let line2 = Line::from(vec![
         Span::styled("Duration: ", Style::default().fg(Color::Indexed(243))),
@@ -361,6 +370,15 @@ mod tests {
         assert!(task.display_route().ends_with("/unknown"));
         assert_eq!(task.display_model(), None);
         let _ = task_header(&task, &[]);
+    }
+
+    #[test]
+    fn status_label_shows_inconclusive_verification() {
+        let mut task = make_task();
+        task.verify = Some("cargo test".to_string());
+        task.verify_status = VerifyStatus::TimedOut;
+
+        assert_eq!(task_status_label(&task), "DONE [VTIMEOUT]");
     }
 
     #[test]

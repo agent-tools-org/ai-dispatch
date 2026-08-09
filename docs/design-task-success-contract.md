@@ -135,14 +135,31 @@ rule is fixed at the site it was reported and keeps biting everywhere else:
    cell. Adding a variant breaks the table and forces a deliberate decision per
    cell instead of an inherited default.
 
-### Known imprecision, accepted
+### `Pending` is the in-flight marker
 
-`verify = "auto"` resolves to a real command or to `skip` at run time, and the
-resolved value is not stored. Such rows (20 all-time) read as
-`Unverified(NoResult)` rather than `Delivered`. This errs toward reporting an
-unknown, which is the safe direction, and is preferred over adding a
-`VerifyStatus::NotRequired` — that would put two mechanisms behind one rule and
-would still need the `verify`-column heuristic for legacy rows.
+A task dispatched with a verify command stores `Pending` from the moment it is
+inserted, and verification overwrites it with a result. This gives `Pending` the
+meaning the design assigns it — asked, no answer recorded yet — and closes a
+race that was live in the P1 waiter: a task flips to `Done` in the runner, then
+post-run work including the `after_complete` hook runs arbitrary shell commands,
+and only then does verification start. In that window `verify_status` was still
+the column default, so `aid watch --wait` derived `Unverified(NoResult)` and
+reported failure for a task that was merely mid-verification — the contract's
+own defect pointing the other way. The waiter now waits while verification is in
+flight, bounded by the verify timeout so it cannot hang.
+
+Legacy rows keep the old shape: they have no `Pending` and are read through the
+`verify` column exactly as the table says.
+
+### The `auto` ambiguity, removed rather than accepted
+
+An earlier draft accepted that `verify = "auto"` resolves to a real command or
+to `skip` at run time, that the resolved value is not stored, and that such rows
+would read as `Unverified(NoResult)`. Adding the `Pending` marker turned that
+imprecision into a visible wrong answer, so it is fixed at the source instead:
+when the resolved command is `skip`, verification records `Skipped` explicitly
+rather than returning without writing. A task that asked for verification and
+legitimately needed none now reads as `Delivered`.
 
 ## 5. Locked decisions
 

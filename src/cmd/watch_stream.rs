@@ -109,6 +109,8 @@ pub(crate) fn task_event_json(store: &Store, task: &Task, tasks: &[Task]) -> Res
         "task": task.id.as_str(),
         "agent": task.agent_display_name(),
         "status": task.status.as_str(),
+        "outcome": task.outcome().as_str(),
+        "verify_status": task.verify_status.as_str(),
         "elapsed_secs": elapsed_secs(task),
         "progress": progress(tasks),
         "remaining": remaining(tasks),
@@ -184,9 +186,26 @@ mod tests {
 
         assert_eq!(event["event"], "task_failed");
         assert_eq!(event["reason"], "agent_crash: exited 1");
+        assert_eq!(event["outcome"], "failed");
+        assert_eq!(event["verify_status"], "skipped");
         assert_eq!(event["progress"], "2/2");
         assert_eq!(event["remaining"], 0);
         assert_eq!(event["elapsed_secs"], 5);
+    }
+
+    #[test]
+    fn timed_out_task_event_preserves_done_status_and_reports_verification() {
+        let store = Store::open_memory().unwrap();
+        let mut task = task("t-timeout", TaskStatus::Done);
+        task.verify = Some("cargo test".to_string());
+        task.verify_status = VerifyStatus::TimedOut;
+
+        let event = task_event_json(&store, &task, &[task.clone()]).unwrap();
+
+        assert_eq!(event["event"], "task_done");
+        assert_eq!(event["status"], "done");
+        assert_eq!(event["outcome"], "unverified");
+        assert_eq!(event["verify_status"], "timed_out");
     }
 
     fn task(id: &str, status: TaskStatus) -> Task {

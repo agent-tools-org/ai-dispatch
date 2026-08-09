@@ -45,13 +45,7 @@ async fn send_webhook(webhook: &WebhookConfig, task: &Task, status: &str) {
     for (key, value) in &webhook.headers {
         cmd.arg("-H").arg(format!("{key}: {value}"));
     }
-    let body = json!({
-        "task_id": task.id.as_str(),
-        "agent": task.agent_display_name(),
-        "status": status,
-        "prompt": task.prompt.as_str(),
-        "duration_ms": task.duration_ms,
-    });
+    let body = webhook_payload(task, status);
     cmd.arg("-d")
         .arg(body.to_string())
         .stdin(Stdio::null())
@@ -76,5 +70,74 @@ async fn send_webhook(webhook: &WebhookConfig, task: &Task, status: &str) {
             });
         }
         Err(err) => aid_error!("[aid] failed to fire webhook {}: {err}", webhook.name),
+    }
+}
+
+fn webhook_payload(task: &Task, status: &str) -> serde_json::Value {
+    json!({
+        "task_id": task.id.as_str(),
+        "agent": task.agent_display_name(),
+        "status": status,
+        "outcome": task.outcome().as_str(),
+        "verify_status": task.verify_status.as_str(),
+        "prompt": task.prompt.as_str(),
+        "duration_ms": task.duration_ms,
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::webhook_payload;
+    use crate::types::{AgentKind, Task, TaskId, TaskStatus, VerifyStatus};
+    use chrono::Local;
+
+    #[test]
+    fn webhook_payload_adds_outcome_and_verification_status() {
+        let task = Task {
+            id: TaskId("t-webhook".to_string()),
+            agent: AgentKind::Codex,
+            custom_agent_name: None,
+            prompt: "prompt".to_string(),
+            resolved_prompt: None,
+            category: None,
+            status: TaskStatus::Done,
+            parent_task_id: None,
+            workgroup_id: None,
+            caller_kind: None,
+            caller_session_id: None,
+            agent_session_id: None,
+            repo_path: None,
+            worktree_path: None,
+            worktree_branch: None,
+            final_head_sha: None,
+            final_branch: None,
+            start_sha: None,
+            log_path: None,
+            output_path: None,
+            tokens: None,
+            prompt_tokens: None,
+            duration_ms: None,
+            requested_model: None,
+            observed_model: None,
+            attribution_source: None,
+            cost_usd: None,
+            exit_code: None,
+            created_at: Local::now(),
+            completed_at: None,
+            verify: Some("cargo test".to_string()),
+            verify_status: VerifyStatus::TimedOut,
+            pending_reason: None,
+            read_only: false,
+            budget: false,
+            audit_verdict: None,
+            audit_report_path: None,
+            delivery_assessment: None,
+        };
+
+        let payload = webhook_payload(&task, "done");
+
+        assert_eq!(payload["status"], "done");
+        assert_eq!(payload["outcome"], "unverified");
+        assert_eq!(payload["verify_status"], "timed_out");
     }
 }

@@ -94,10 +94,15 @@ fn format_diff_header(task: &Task) -> String {
     let mut out = String::new();
     out.push_str(&format!("=== Review: {} ===\n", task.id));
     // Route already carries model + attribution; keep no separate Model line.
+    let status = task
+        .outcome()
+        .verification_tag()
+        .map(|tag| format!("{} [{tag}]", task.status.label()))
+        .unwrap_or_else(|| task.status.label().to_string());
     out.push_str(&format!(
         "Route: {}  Status: {}  Prompt: {}\n",
         task.display_route(),
-        task.status.label(),
+        status,
         truncate(&task.prompt, 60),
     ));
     out
@@ -259,4 +264,3 @@ fn truncate(s: &str, max: usize) -> String {
         format!("{}...", &s[..end])
     }
 }
-

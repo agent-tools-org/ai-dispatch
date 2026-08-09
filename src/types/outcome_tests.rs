@@ -190,6 +190,25 @@ fn success_and_unverified_predicates_are_explicit() {
 }
 
 #[test]
+fn report_strings_keep_outcome_and_verification_tag_vocabularies_stable() {
+    assert_eq!(TaskOutcome::Verified.as_str(), "verified");
+    assert_eq!(TaskOutcome::Delivered.as_str(), "delivered");
+    assert_eq!(TaskOutcome::Unverified(UnverifiedReason::TimedOut).as_str(), "unverified");
+    assert_eq!(TaskOutcome::Broken.as_str(), "broken");
+    assert_eq!(TaskOutcome::InProgress.as_str(), "in_progress");
+    assert_eq!(TaskOutcome::Broken.verification_tag(), Some("VFAIL"));
+    assert_eq!(
+        TaskOutcome::Unverified(UnverifiedReason::TimedOut).verification_tag(),
+        Some("VTIMEOUT")
+    );
+    assert_eq!(
+        TaskOutcome::Unverified(UnverifiedReason::NoResult).verification_tag(),
+        Some("VNORESULT")
+    );
+    assert_eq!(TaskOutcome::Delivered.verification_tag(), None);
+}
+
+#[test]
 fn merge_candidates_include_only_delivered_outcomes() {
     assert!(TaskOutcome::Verified.is_merge_candidate());
     assert!(TaskOutcome::Delivered.is_merge_candidate());

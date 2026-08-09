@@ -190,6 +190,18 @@ fn success_and_unverified_predicates_are_explicit() {
 }
 
 #[test]
+fn merge_candidates_include_only_delivered_outcomes() {
+    assert!(TaskOutcome::Verified.is_merge_candidate());
+    assert!(TaskOutcome::Delivered.is_merge_candidate());
+    assert!(TaskOutcome::Unverified(UnverifiedReason::NoResult).is_merge_candidate());
+    assert!(TaskOutcome::Broken.is_merge_candidate());
+    assert!(!TaskOutcome::Failed.is_merge_candidate());
+    assert!(!TaskOutcome::Stopped.is_merge_candidate());
+    assert!(!TaskOutcome::Skipped.is_merge_candidate());
+    assert!(!TaskOutcome::InProgress.is_merge_candidate());
+}
+
+#[test]
 fn verify_required_reads_the_verify_column_contract() {
     assert!(!verify_required(None));
     assert!(!verify_required(Some("")));

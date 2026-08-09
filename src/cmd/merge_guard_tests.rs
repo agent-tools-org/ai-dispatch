@@ -113,10 +113,27 @@ fn merge_group_lanes_refuses_first_poisoned_task_before_gitbutler_setup() {
     task.created_at = Local::now();
     store.insert_task(&task).unwrap();
 
-    let err = merge_lanes::merge_group_lanes(&store, group).unwrap_err();
+    let err = merge_lanes::merge_group_lanes(&store, group, false).unwrap_err();
 
     assert!(err.to_string().contains("recorded worktree path"));
     assert!(!setup_log.exists(), "GitButler setup ran before worktree validation");
+}
+
+#[test]
+fn merge_group_lanes_refuses_failed_verification_without_force() {
+    let store = Store::open_memory().unwrap();
+    let group = "wg-lanes-vfail";
+    let mut task = grouped_task("t-lanes-vfail", group, Path::new("."));
+    task.worktree_path = None;
+    task.worktree_branch = None;
+    task.repo_path = None;
+    task.verify_status = VerifyStatus::Failed;
+    store.insert_task(&task).unwrap();
+    let _gitbutler = EnvGuard::set("AID_GITBUTLER", "0");
+
+    let err = merge_lanes::merge_group_lanes(&store, group, false).unwrap_err();
+
+    assert!(err.to_string().contains("verification failed"));
 }
 
 fn write_command(dir: &Path, name: &str, body: &str) {

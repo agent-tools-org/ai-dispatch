@@ -251,7 +251,15 @@ pub async fn run(store: Arc<Store>, args: BatchArgs) -> Result<()> {
     };
     let task_ids = dispatch.dispatched_task_ids();
     if args.wait && args.parallel && !has_dependencies && !task_ids.is_empty() {
-        crate::cmd::wait::wait_for_task_ids(&store, &task_ids, None, false, None).await?;
+        match crate::cmd::wait::wait_for_task_ids(&store, &task_ids, None, false, None).await? {
+            crate::cmd::wait::WaitOutcome::Completed => {}
+            crate::cmd::wait::WaitOutcome::Failed(task_ids) => {
+                anyhow::bail!("Batch task(s) did not succeed: {}", task_ids.join(", "))
+            }
+            crate::cmd::wait::WaitOutcome::TimedOut(task_ids) => {
+                anyhow::bail!("Batch wait timed out with task(s) running: {}", task_ids.join(", "))
+            }
+        }
     }
     aid_info!(
         "{}",

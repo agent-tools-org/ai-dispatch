@@ -5,7 +5,7 @@
 use super::{
     RunArgs, final_dirty_assertion,
     run_dirty::{DirtyWorktreeAction, post_agent_dirty_worktree_cleanup},
-    run_lifecycle::{LifecycleMode, post_run_lifecycle},
+    run_lifecycle::{merge_hint_for_task, LifecycleMode, post_run_lifecycle},
     run_prompt::PromptBundle,
 };
 use crate::{hooks::Hook, store::Store, test_subprocess, types::*};
@@ -97,6 +97,14 @@ fn final_assertion_fails_task_when_worktree_still_dirty() {
     let events = store.get_events(task_id.as_str()).unwrap();
     assert!(events.iter().any(|event| event.detail.contains("FAIL: agent left uncommitted changes after rescue and retry")));
     assert!(events.iter().any(|event| event.detail.contains("?? src/lib.rs")));
+}
+
+#[test]
+fn merge_hint_requires_a_successful_task_outcome() {
+    let mut task = task("t-unverified-hint", TaskStatus::Done);
+    task.verify = Some("cargo test".to_string());
+
+    assert!(merge_hint_for_task(&task).is_none());
 }
 
 #[test]

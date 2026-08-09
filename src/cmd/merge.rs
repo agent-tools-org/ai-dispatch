@@ -7,7 +7,7 @@ use chrono::Local;
 use std::process::{Command, Stdio};
 use std::sync::Arc;
 use crate::store::Store;
-use crate::types::{EventKind, Task, TaskEvent, TaskId, TaskStatus, VerifyStatus};
+use crate::types::{verify_required, EventKind, Task, TaskEvent, TaskId, TaskOutcome, TaskStatus};
 #[path = "merge/final_branch.rs"]
 mod final_branch;
 use final_branch::*;
@@ -36,7 +36,7 @@ fn run_with_output(store: Arc<Store>, task_id: Option<&str>, group: Option<&str>
         if target.is_some() {
             return Err(anyhow!("--lanes cannot be combined with --target; lanes apply to the GitButler workspace of the main repo"));
         }
-        return merge_lanes::merge_group_lanes(&store, group_id);
+        return merge_lanes::merge_group_lanes(&store, group_id, force);
     }
     match (task_id, group) {
         (Some(id), _) => merge_single_with_output(&store, id, approve, check, force, target, print_summary),
@@ -54,16 +54,8 @@ fn merge_single_with_output(store: &Store, task_id: &str, approve: bool, check: 
         .get_task(task_id)?
         .ok_or_else(|| anyhow!("Task '{task_id}' not found"))?;
     let original_status = task.status;
-    if task.status != TaskStatus::Done && (!force || !matches!(task.status, TaskStatus::Failed | TaskStatus::Stopped)) {
-        return Err(anyhow!(
-            "Task '{task_id}' is {} — only DONE tasks can be marked as merged",
-            task.status.label()
-        ));
-    }
-    if task.verify_status == VerifyStatus::Failed {
-        aid_warn!("[aid] Warning: task '{task_id}' has VFAIL status — verify failed before merge");
-        aid_hint!("[aid] Review carefully: aid show {task_id} --diff");
-    }
+    let outcome = task_outcome(&task);
+    validate_merge_outcome(&task, outcome, force)?;
     ensure_task_worktree_is_safe(&task)?;
     let repo_dir = resolve_repo_dir(task.repo_path.as_deref(), task.worktree_path.as_deref());
     if check { return check_single(task_id, &task, &repo_dir); }
@@ -146,7 +138,7 @@ fn merge_single_with_output(store: &Store, task_id: &str, approve: bool, check: 
         }
     }
     if force {
-        record_force_merge_warning(store, task_id, original_status)?;
+        record_force_merge_warning(store, task_id, original_status, outcome)?;
     }
     crate::task_lifecycle::mark_merged(store, task_id)?;
     if print_summary {
@@ -155,10 +147,20 @@ fn merge_single_with_output(store: &Store, task_id: &str, approve: bool, check: 
     Ok(())
 }
 
-fn record_force_merge_warning(store: &Store, task_id: &str, status: TaskStatus) -> Result<()> {
+fn record_force_merge_warning(
+    store: &Store,
+    task_id: &str,
+    status: TaskStatus,
+    outcome: TaskOutcome,
+) -> Result<()> {
+    let reason = match outcome {
+        TaskOutcome::Broken => "verification failed",
+        TaskOutcome::Unverified(_) => "verification was inconclusive",
+        _ => "verify/tests were not run",
+    };
     let detail = format!(
-        "Force-merged task {task_id} from status {} — verify/tests were not run",
-        status.label()
+        "Force-merged task {task_id} from status {} — {reason}",
+        status.label(),
     );
     aid_warn!("[aid] Warning: {detail}");
     store.insert_event(&TaskEvent {
@@ -168,6 +170,61 @@ fn record_force_merge_warning(store: &Store, task_id: &str, status: TaskStatus) 
         detail,
         metadata: None,
     })
+}
+
+fn task_outcome(task: &Task) -> TaskOutcome {
+    TaskOutcome::derive(
+        task.status,
+        task.verify_status,
+        verify_required(task.verify.as_deref()),
+    )
+}
+
+pub(super) fn validate_merge_outcome(
+    task: &Task,
+    outcome: TaskOutcome,
+    force: bool,
+) -> Result<()> {
+    match outcome {
+        TaskOutcome::Verified | TaskOutcome::Delivered => Ok(()),
+        TaskOutcome::Unverified(reason) => {
+            aid_warn!(
+                "[aid] Warning: task '{}' has inconclusive verification ({reason:?})",
+                task.id
+            );
+            if force {
+                Ok(())
+            } else {
+                Err(anyhow!(
+                    "Task '{}' has inconclusive verification — use --force to merge",
+                    task.id
+                ))
+            }
+        }
+        TaskOutcome::Broken => {
+            aid_warn!("[aid] Warning: task '{}' has VFAIL status — verify failed before merge", task.id);
+            aid_hint!("[aid] Review carefully: aid show {} --diff", task.id);
+            if force {
+                Ok(())
+            } else {
+                Err(anyhow!(
+                    "Task '{}' verification failed — use --force to merge",
+                    task.id
+                ))
+            }
+        }
+        TaskOutcome::Failed | TaskOutcome::Stopped if force => Ok(()),
+        TaskOutcome::Failed | TaskOutcome::Stopped => Err(anyhow!(
+            "Task '{}' is {} — only DONE tasks can be marked as merged",
+            task.id,
+            task.status.label()
+        )),
+        _ => Err(anyhow!(
+            "Task '{}' is {} — only completed tasks can be marked as merged",
+            task.id,
+            task.status.label()
+        )),
+    }
 }
 
 fn merge_group(store: &Store, group_id: &str, approve: bool, check: bool, target: Option<&str>) -> Result<()> {
@@ -187,6 +244,12 @@ fn merge_group_with_output(store: &Store, group_id: &str, approve: bool, check: 
     if check {
         return check_group(group_id, &tasks);
     }
+    for task in &tasks {
+        let outcome = task_outcome(task);
+        if outcome.is_merge_candidate() {
+            validate_merge_outcome(task, outcome, force)?;
+        }
+    }
     if approve {
         match ask_group_approval(group_id, &tasks)? {
             ApprovalDecision::Merge => {}
@@ -200,7 +263,8 @@ fn merge_group_with_output(store: &Store, group_id: &str, approve: bool, check: 
     let mut merged = 0;
     let mut skipped = Vec::new();
     for task in &tasks {
-        if task.status != TaskStatus::Done {
+        let outcome = task_outcome(task);
+        if !outcome.is_merge_candidate() {
             skipped.push(format!("{} ({})", task.id, task.status.label()));
             continue;
         }

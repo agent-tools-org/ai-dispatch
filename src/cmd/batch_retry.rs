@@ -179,6 +179,9 @@ async fn wait_for_retry_completion(store: &Arc<Store>, task_id: &str) -> Result<
                 SERIAL_RETRY_TIMEOUT_SECS
             )
         }
+        WaitOutcome::Failed(task_ids) => {
+            anyhow::bail!("Retried task(s) did not succeed: {}", task_ids.join(", "))
+        }
     }
 }
 

@@ -9,11 +9,12 @@ use tokio::time::{sleep, Duration};
 
 use crate::cost;
 use crate::store::Store;
-use crate::types::{TaskFilter, TaskStatus};
+use crate::types::{verify_required, TaskFilter, TaskOutcome, TaskStatus};
 
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) enum WaitOutcome {
     Completed,
+    Failed(Vec<String>),
     TimedOut(Vec<String>),
 }
 
@@ -55,6 +56,10 @@ pub async fn run(
                 println!("{hint}");
             }
             Ok(())
+        }
+        WaitOutcome::Failed(task_ids) => {
+            aid_error!("[aid] {} task(s) did not succeed: {}", task_ids.len(), task_ids.join(", "));
+            std::process::exit(1);
         }
         WaitOutcome::TimedOut(running) => {
             let secs = timeout_secs.unwrap_or_default();
@@ -113,6 +118,7 @@ async fn wait_for_task_ids_inner(
         track_group_tasks(&mut task_ids, completed)?;
         let mut remaining = 0usize;
         let total = task_ids.len();
+        let mut failed = Vec::new();
 
         for task_id in &task_ids {
             let Some(task) = store.get_task(task_id)? else {
@@ -120,6 +126,11 @@ async fn wait_for_task_ids_inner(
             };
 
             let status = task.status;
+            let outcome = TaskOutcome::derive(
+                task.status,
+                task.verify_status,
+                verify_required(task.verify.as_deref()),
+            );
             let status_text = status.label().to_string();
             let status_changed = last_status.insert(task_id.clone(), status_text.clone()) != Some(status_text);
 
@@ -169,11 +180,10 @@ async fn wait_for_task_ids_inner(
                 return Ok(WaitOutcome::Completed);
             }
 
-            if matches!(
-                status,
-                TaskStatus::Waiting | TaskStatus::Pending | TaskStatus::Running | TaskStatus::AwaitingInput
-            ) {
+            if matches!(outcome, TaskOutcome::InProgress) {
                 remaining += 1;
+            } else if !outcome.is_success() {
+                failed.push(task_id.clone());
             }
         }
 
@@ -182,7 +192,13 @@ async fn wait_for_task_ids_inner(
                 continue;
             }
             println!("All {} task(s) completed.", total);
-            return Ok(WaitOutcome::Completed);
+            failed.sort();
+            failed.dedup();
+            return Ok(if failed.is_empty() {
+                WaitOutcome::Completed
+            } else {
+                WaitOutcome::Failed(failed)
+            });
         }
 
         sleep(Duration::from_secs(2)).await;
@@ -208,10 +224,15 @@ fn still_running_task_ids(store: &Arc<Store>, task_ids: &[String], group: Option
     }
     let mut running = Vec::new();
     for task_id in tracked {
-        if let Some(task) = store.get_task(&task_id)?
-            && !task.status.is_terminal()
-        {
-            running.push(task_id);
+        if let Some(task) = store.get_task(&task_id)? {
+            let outcome = TaskOutcome::derive(
+                task.status,
+                task.verify_status,
+                verify_required(task.verify.as_deref()),
+            );
+            if matches!(outcome, TaskOutcome::InProgress) {
+                running.push(task_id);
+            }
         }
     }
     Ok(running)
@@ -289,6 +310,43 @@ mod tests {
         }).unwrap();
         let outcome = wait_for_task_ids(&store, &[String::from("t-done")], None, false, None).await.unwrap();
         assert_eq!(outcome, WaitOutcome::Completed);
+    }
+
+    #[tokio::test]
+    async fn wait_for_task_ids_reports_failed_terminal_tasks() {
+        let store = Arc::new(Store::open_memory().unwrap());
+        let task = make_task("t-failed", TaskStatus::Failed);
+        store.insert_task(&task).unwrap();
+
+        let outcome = wait_for_task_ids(&store, &[String::from("t-failed")], None, false, None)
+            .await
+            .unwrap();
+
+        assert_eq!(outcome, WaitOutcome::Failed(vec![String::from("t-failed")]));
+    }
+
+    #[tokio::test]
+    async fn wait_for_task_ids_reports_done_without_required_verification() {
+        let store = Arc::new(Store::open_memory().unwrap());
+        let mut task = make_task("t-no-verify-result", TaskStatus::Done);
+        task.verify = Some("cargo test".to_string());
+        task.verify_status = VerifyStatus::Pending;
+        store.insert_task(&task).unwrap();
+
+        let outcome = wait_for_task_ids(
+            &store,
+            &[String::from("t-no-verify-result")],
+            None,
+            false,
+            None,
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(
+            outcome,
+            WaitOutcome::Failed(vec![String::from("t-no-verify-result")])
+        );
     }
 
     #[tokio::test]

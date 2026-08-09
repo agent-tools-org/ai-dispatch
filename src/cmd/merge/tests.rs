@@ -672,6 +672,22 @@ fn merge_single_succeeds_with_committed_worktree() {
 }
 
 #[test]
+fn merge_single_refuses_required_verification_without_force() {
+    let _permit = test_subprocess::acquire();
+    let repo = init_repo();
+    let (wt, branch) = create_worktree_with_commit(repo.path());
+    let store = Store::open_memory().unwrap();
+    let mut task = make_task_with_worktree("t-merge-unverified", repo.path(), wt.path(), &branch);
+    task.verify = Some("cargo test".to_string());
+    store.insert_task(&task).unwrap();
+
+    let result = merge_single(&store, task.id.as_str(), false, false, false, None);
+
+    assert!(result.is_err());
+    assert!(result.unwrap_err().to_string().contains("--force"));
+}
+
+#[test]
 fn merge_single_auto_commits_then_merges() {
     let _permit = test_subprocess::acquire();
     let repo = init_repo();
@@ -711,6 +727,24 @@ fn merge_single_auto_commits_then_merges() {
         std::fs::read_to_string(repo.path().join("uncommitted.txt")).unwrap(),
         "agent forgot to commit\n"
     );
+}
+
+#[test]
+fn merge_group_refuses_failed_verification_without_force() {
+    let store = Store::open_memory().unwrap();
+    let group = "wg-merge-vfail";
+    let mut task = make_task_with_worktree("t-group-vfail", Path::new("."), Path::new("/tmp"), "branch");
+    task.worktree_path = None;
+    task.worktree_branch = None;
+    task.repo_path = None;
+    task.workgroup_id = Some(group.to_string());
+    task.verify_status = VerifyStatus::Failed;
+    store.insert_task(&task).unwrap();
+
+    let result = merge_group_with_output(&store, group, false, false, false, None, false);
+
+    assert!(result.is_err());
+    assert!(result.unwrap_err().to_string().contains("--force"));
 }
 
 #[test]

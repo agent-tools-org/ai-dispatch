@@ -5,15 +5,25 @@ use anyhow::{Result, anyhow};
 use std::path::Path;
 
 use crate::store::Store;
-use crate::types::TaskStatus;
+use crate::types::{verify_required, TaskOutcome};
 
 use super::merge_git::{auto_commit_uncommitted, commits_ahead, resolve_repo_dir};
-use super::ensure_task_worktree_is_safe;
+use super::{ensure_task_worktree_is_safe, validate_merge_outcome};
 
-pub(super) fn merge_group_lanes(store: &Store, group_id: &str) -> Result<()> {
+pub(super) fn merge_group_lanes(store: &Store, group_id: &str, force: bool) -> Result<()> {
     let tasks = store.list_tasks_by_group(group_id)?;
     if tasks.is_empty() {
         return Err(anyhow!("No tasks found in group '{group_id}'"));
+    }
+    for task in &tasks {
+        let outcome = TaskOutcome::derive(
+            task.status,
+            task.verify_status,
+            verify_required(task.verify.as_deref()),
+        );
+        if outcome.is_merge_candidate() {
+            validate_merge_outcome(task, outcome, force)?;
+        }
     }
     if std::env::var("AID_GITBUTLER").is_ok_and(|value| value == "0") {
         return Err(anyhow!("GitButler integration disabled via AID_GITBUTLER=0"));
@@ -45,7 +55,12 @@ pub(super) fn merge_group_lanes(store: &Store, group_id: &str) -> Result<()> {
     let mut applied = 0;
     let mut skipped = 0;
     for task in &tasks {
-        if task.status != TaskStatus::Done {
+        let outcome = TaskOutcome::derive(
+            task.status,
+            task.verify_status,
+            verify_required(task.verify.as_deref()),
+        );
+        if !outcome.is_merge_candidate() {
             skipped += 1;
             continue;
         }

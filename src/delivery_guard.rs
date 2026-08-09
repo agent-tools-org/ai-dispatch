@@ -132,6 +132,7 @@ pub(crate) struct DeliveryEvidence {
     last_work_sequence: Option<u64>,
     last_work_kind: Option<String>,
     last_message_sequence: Option<u64>,
+    last_message: String,
     last_message_chars: usize,
 }
 
@@ -158,18 +159,29 @@ impl DeliveryEvidence {
                 .or_else(|| item.get("content"))
                 .and_then(Value::as_str)
                 .unwrap_or_default();
+            let trimmed = text.trim();
             self.last_message_sequence = Some(self.sequence);
-            self.last_message_chars = text.trim().chars().count();
+            self.last_message = trimmed.to_string();
+            self.last_message_chars = trimmed.chars().count();
         }
     }
 
-    pub(crate) fn validate(&self) -> DeliveryOutcome {
+    /// When the task produced a diff, that diff is the deliverable — waive the
+    /// length floor, but still require a delivery-shaped trailing message (same
+    /// narration/prose/heading checks as report detection). When there are no
+    /// changes, the prose *is* the deliverable, so the length floor still applies.
+    pub(crate) fn validate(&self, produced_changes: bool) -> DeliveryOutcome {
         let message_is_last = match (self.last_message_sequence, self.last_work_sequence) {
             (Some(message), Some(work)) => message > work,
             (Some(_), None) => true,
             (None, _) => false,
         };
-        if message_is_last && self.last_message_chars >= MIN_FINAL_MESSAGE_CHARS {
+        let substantive = if produced_changes {
+            looks_like_short_delivery(&self.last_message)
+        } else {
+            self.last_message_chars >= MIN_FINAL_MESSAGE_CHARS
+        };
+        if message_is_last && substantive {
             return DeliveryOutcome::Delivered;
         }
         DeliveryOutcome::MissingFinalDelivery {
@@ -177,6 +189,16 @@ impl DeliveryEvidence {
             last_message_chars: self.last_message_chars,
         }
     }
+}
+
+/// Diff-is-deliverable path: after stripping narration, require a heading or
+/// prose — not merely any non-empty fragment.
+fn looks_like_short_delivery(text: &str) -> bool {
+    let substance = substance_after_narration(text.trim());
+    if substance.is_empty() {
+        return false;
+    }
+    has_markdown_heading(&substance) || looks_like_prose(&substance)
 }
 
 fn is_completed_message(value: &Value, item_kind: &str) -> bool {

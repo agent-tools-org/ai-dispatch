@@ -15,7 +15,8 @@ fn accepts_substantive_message_after_work() {
     let mut evidence = DeliveryEvidence::default();
     observe(&mut evidence, serde_json::json!({"type":"item.completed","item":{"type":"command_execution"}}));
     observe(&mut evidence, serde_json::json!({"type":"item.completed","item":{"type":"agent_message","text":LONG_MESSAGE}}));
-    assert_eq!(evidence.validate(), DeliveryOutcome::Delivered);
+    assert_eq!(evidence.validate(true), DeliveryOutcome::Delivered);
+    assert_eq!(evidence.validate(false), DeliveryOutcome::Delivered);
 }
 
 #[test]
@@ -24,31 +25,58 @@ fn rejects_progress_message_followed_by_work() {
     observe(&mut evidence, serde_json::json!({"type":"item.completed","item":{"type":"agent_message","text":LONG_MESSAGE}}));
     observe(&mut evidence, serde_json::json!({"type":"item.completed","item":{"type":"command_execution"}}));
     assert!(matches!(
-        evidence.validate(),
+        evidence.validate(true),
+        DeliveryOutcome::MissingFinalDelivery { .. }
+    ));
+    assert!(matches!(
+        evidence.validate(false),
         DeliveryOutcome::MissingFinalDelivery { .. }
     ));
 }
 
 #[test]
-fn rejects_short_trailing_fragment() {
+fn rejects_short_trailing_fragment_for_read_only() {
     let mut evidence = DeliveryEvidence::default();
     observe(&mut evidence, serde_json::json!({"type":"item.completed","item":{"type":"command_execution"}}));
     observe(&mut evidence, serde_json::json!({"type":"item.completed","item":{"type":"agent_message","text":"done"}}));
     assert!(matches!(
-        evidence.validate(),
+        evidence.validate(true),
         DeliveryOutcome::MissingFinalDelivery { last_message_chars: 4, .. }
     ));
 }
 
+/// Write-task incident t-346c5194: a commit follow-up's correct closing message
+/// is short. The length floor must not apply when the deliverable is the diff.
 #[test]
-fn rejects_138_char_final_message() {
+fn accepts_short_trailing_message_for_write_task() {
+    let mut evidence = DeliveryEvidence::default();
+    let short_message = "x".repeat(157);
+    observe(&mut evidence, serde_json::json!({"type":"item.completed","item":{"type":"command_execution"}}));
+    observe(&mut evidence, serde_json::json!({"type":"item.completed","item":{"type":"agent_message","text":short_message}}));
+    assert_eq!(evidence.validate(false), DeliveryOutcome::Delivered);
+}
+
+#[test]
+fn rejects_138_char_final_message_for_read_only() {
     let mut evidence = DeliveryEvidence::default();
     let short_message = "x".repeat(138);
     observe(&mut evidence, serde_json::json!({"type":"item.completed","item":{"type":"command_execution"}}));
     observe(&mut evidence, serde_json::json!({"type":"item.completed","item":{"type":"agent_message","text":short_message}}));
     assert!(matches!(
-        evidence.validate(),
+        evidence.validate(true),
         DeliveryOutcome::MissingFinalDelivery { last_message_chars: 138, .. }
+    ));
+}
+
+/// Without a trailing agent message the guard must still fail write tasks —
+/// that is the "did work then died silently" case it exists to catch.
+#[test]
+fn rejects_write_task_with_no_trailing_message() {
+    let mut evidence = DeliveryEvidence::default();
+    observe(&mut evidence, serde_json::json!({"type":"item.completed","item":{"type":"command_execution"}}));
+    assert!(matches!(
+        evidence.validate(false),
+        DeliveryOutcome::MissingFinalDelivery { last_message_chars: 0, .. }
     ));
 }
 
@@ -56,7 +84,7 @@ fn rejects_138_char_final_message() {
 fn accepts_tool_free_answer() {
     let mut evidence = DeliveryEvidence::default();
     observe(&mut evidence, serde_json::json!({"type":"item.completed","item":{"type":"agent_message","text":LONG_MESSAGE}}));
-    assert_eq!(evidence.validate(), DeliveryOutcome::Delivered);
+    assert_eq!(evidence.validate(true), DeliveryOutcome::Delivered);
 }
 
 #[test]
@@ -67,7 +95,7 @@ fn accepts_final_message_followed_by_todo_list_update() {
     observe(&mut evidence, serde_json::json!({"type":"item.started","item":{"type":"todo_list","items":[]}}));
     observe(&mut evidence, serde_json::json!({"type":"item.updated","item":{"type":"todo_list","items":[]}}));
     observe(&mut evidence, serde_json::json!({"type":"item.completed","item":{"type":"todo_list","items":[]}}));
-    assert_eq!(evidence.validate(), DeliveryOutcome::Delivered);
+    assert_eq!(evidence.validate(true), DeliveryOutcome::Delivered);
 }
 
 /// Verbatim shape of the t-f2f1e7c1 capture: agy died mid-audit and left only the

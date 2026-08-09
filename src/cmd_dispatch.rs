@@ -12,7 +12,7 @@ mod task_ops;
 
 use crate::cli::Commands;
 use crate::store::Store;
-use crate::types::{Task, TaskId, TaskStatus, VerifyStatus};
+use crate::types::{verify_required, Task, TaskId, TaskOutcome, TaskStatus};
 use anyhow::{Result, anyhow, bail};
 use std::fs;
 use std::io::{IsTerminal, Read};
@@ -57,7 +57,7 @@ impl DispatchOutcome {
 pub(crate) struct RunExitStatus {
     task_id: TaskId,
     status: TaskStatus,
-    verify_status: VerifyStatus,
+    outcome: TaskOutcome,
     duration_ms: i64,
     reason: Option<String>,
 }
@@ -69,31 +69,40 @@ impl RunExitStatus {
         Self {
             task_id: task.id.clone(),
             status: task.status,
-            verify_status: task.verify_status,
+            outcome: TaskOutcome::derive(
+                task.status,
+                task.verify_status,
+                verify_required(task.verify.as_deref()),
+            ),
             duration_ms: task.duration_ms.or(elapsed_ms).unwrap_or(0).max(0),
             reason,
         }
     }
 
     pub(crate) fn exit_code(&self) -> i32 {
-        exit_code_for_status(self.status, self.verify_status)
+        exit_code_for_outcome(self.outcome)
     }
 
     pub(crate) fn summary_line(&self) -> String {
         let duration = format_duration(self.duration_ms);
-        if self.status == TaskStatus::Done && self.verify_status != VerifyStatus::Failed {
-            return format!("[STATUS=DONE] [aid] {} done in {duration} (exit 0)", self.task_id);
-        }
-        let mut line = if self.status == TaskStatus::Done {
-            format!(
+        let mut line = match self.outcome {
+            TaskOutcome::Verified | TaskOutcome::Delivered => {
+                return format!("[STATUS=DONE] [aid] {} done in {duration} (exit 0)", self.task_id)
+            }
+            TaskOutcome::Broken => format!(
                 "[STATUS=VERIFY_FAILED] [aid] {} completed but verification failed in {duration} (exit 1)",
                 self.task_id
-            )
-        } else {
-            let marker = if self.status == TaskStatus::Stopped { "stopped" } else { "failed" };
-            format!("[STATUS=FAILED] [aid] {} {marker} in {duration} (exit 1)", self.task_id)
+            ),
+            TaskOutcome::Unverified(reason) => format!(
+                "[STATUS=UNVERIFIED] [aid] {} completed but verification was inconclusive ({reason:?}) in {duration} (exit 1)",
+                self.task_id
+            ),
+            _ => {
+                let marker = if matches!(self.outcome, TaskOutcome::Stopped) { "stopped" } else { "failed" };
+                format!("[STATUS=FAILED] [aid] {} {marker} in {duration} (exit 1)", self.task_id)
+            }
         };
-        if !matches!(self.status, TaskStatus::Done | TaskStatus::Failed | TaskStatus::Stopped) {
+        if matches!(self.outcome, TaskOutcome::InProgress | TaskOutcome::Skipped) {
             line.push_str(&format!(" — status {}", self.status));
         }
         if let Some(reason) = self.reason.as_deref().filter(|reason| !reason.trim().is_empty()) {
@@ -116,8 +125,8 @@ pub(crate) fn background_status_line(
     )
 }
 
-fn exit_code_for_status(status: TaskStatus, verify_status: VerifyStatus) -> i32 {
-    if status == TaskStatus::Done && verify_status != VerifyStatus::Failed { 0 } else { 1 }
+fn exit_code_for_outcome(outcome: TaskOutcome) -> i32 {
+    if outcome.is_success() { 0 } else { 1 }
 }
 
 fn format_duration(duration_ms: i64) -> String {

@@ -2,9 +2,9 @@
 // Covers verification-aware exit codes and machine-parseable status tags.
 
 use super::{
-    RunExitStatus, background_status_line, exit_code_for_status, resolve_finding_content_from,
+    RunExitStatus, background_status_line, exit_code_for_outcome, resolve_finding_content_from,
 };
-use crate::types::{AgentKind, Task, TaskId, TaskStatus, VerifyStatus};
+use crate::types::{AgentKind, Task, TaskId, TaskOutcome, TaskStatus, VerifyStatus};
 use anyhow::Result;
 use chrono::Local;
 use std::io::{Cursor, Write};
@@ -58,11 +58,28 @@ fn resolve_finding_content_errors_without_input() {
 }
 
 #[test]
-fn terminal_task_statuses_map_to_process_exit_codes() {
+fn terminal_task_outcomes_map_to_process_exit_codes() {
     for status in TaskStatus::ALL.into_iter().filter(TaskStatus::is_terminal) {
-        let expected = if status == TaskStatus::Done { 0 } else { 1 };
-        assert_eq!(exit_code_for_status(status, VerifyStatus::Passed), expected, "status {status}");
+        let outcome = TaskOutcome::derive(status, VerifyStatus::Passed, false);
+        let expected = if outcome.is_success() { 0 } else { 1 };
+        assert_eq!(exit_code_for_outcome(outcome), expected, "status {status}");
     }
+}
+
+#[test]
+fn merged_verified_task_exits_zero() {
+    assert_eq!(exit_code_for_outcome(TaskOutcome::Verified), 0);
+}
+
+#[test]
+fn merged_unverified_task_exits_one_with_inconclusive_summary() {
+    let mut task = task_with_verify_status(VerifyStatus::Pending);
+    task.status = TaskStatus::Merged;
+    task.verify = Some("cargo test".to_string());
+    let outcome = RunExitStatus::from_task(&task, None);
+
+    assert_eq!(outcome.exit_code(), 1);
+    assert!(outcome.summary_line().starts_with("[STATUS=UNVERIFIED]"));
 }
 
 #[test]
@@ -116,7 +133,8 @@ fn status_line(
     reason: Option<&str>,
 ) -> String {
     RunExitStatus {
-        task_id: TaskId("t-test".to_string()), status, verify_status,
+        task_id: TaskId("t-test".to_string()), status,
+        outcome: TaskOutcome::derive(status, verify_status, false),
         duration_ms: 2_500, reason: reason.map(str::to_string),
     }
     .summary_line()

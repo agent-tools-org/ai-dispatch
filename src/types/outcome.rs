@@ -106,6 +106,13 @@ impl TaskOutcome {
     pub fn is_unverified(self) -> bool {
         matches!(self, Self::Unverified(_))
     }
+
+    pub fn is_merge_candidate(self) -> bool {
+        matches!(
+            self,
+            Self::Verified | Self::Delivered | Self::Unverified(_) | Self::Broken
+        )
+    }
 }
 
 pub fn verify_required(verify: Option<&str>) -> bool {

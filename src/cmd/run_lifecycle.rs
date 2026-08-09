@@ -182,9 +182,10 @@ pub(crate) async fn post_run_lifecycle(
     crate::webhook::fire_task_webhooks(store, task_id.as_str()).await;
     if mode.is_foreground() && args.announce {
         let status_hint = if let Some(task) = store.get_task(task_id.as_str())? {
-            match task.status {
-                TaskStatus::Done => format!("[aid] Next: aid show {task_id} --diff | aid merge {task_id}"),
-                TaskStatus::Failed => {
+            let outcome = task_outcome(&task);
+            if let Some(hint) = merge_hint_for_task(&task) {
+                hint
+            } else if matches!(outcome, TaskOutcome::Failed) {
                     let reason = store.latest_error(task_id.as_str())
                         .map(|r| format!("[aid] Reason: {r}\n"))
                         .unwrap_or_default();
@@ -196,8 +197,8 @@ pub(crate) async fn post_run_lifecycle(
                     } else {
                         format!("{reason}{next}")
                     }
-                }
-                _ => String::new(),
+            } else {
+                String::new()
             }
         } else {
             String::new()
@@ -291,6 +292,20 @@ pub(crate) async fn post_run_lifecycle(
     };
     if mode.is_foreground() && completed_normally { aid_info!("[aid] View in TUI: aid board"); }
     Ok(None)
+}
+
+pub(crate) fn merge_hint_for_task(task: &Task) -> Option<String> {
+    task_outcome(task)
+        .is_success()
+        .then(|| format!("[aid] Next: aid show {} --diff | aid merge {}", task.id, task.id))
+}
+
+fn task_outcome(task: &Task) -> TaskOutcome {
+    TaskOutcome::derive(
+        task.status,
+        task.verify_status,
+        verify_required(task.verify.as_deref()),
+    )
 }
 
 pub(crate) fn inherit_cascade_target(cascade_args: &mut RunArgs, task: &Task) -> Result<()> {

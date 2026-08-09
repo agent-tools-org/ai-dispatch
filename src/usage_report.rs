@@ -157,7 +157,7 @@ pub(crate) fn collect_agent_rows(tasks: &[Task]) -> Vec<AgentUsageRow> {
 
         let done_count = agent_tasks
             .iter()
-            .filter(|task| matches!(task.status, TaskStatus::Done | TaskStatus::Merged))
+            .filter(|task| task.outcome().is_success())
             .count();
         let retry_count = agent_tasks
             .iter()

@@ -37,6 +37,19 @@ fn stats_does_not_panic_on_zero_duration_count() {
 }
 
 #[test]
+fn timed_out_verification_is_not_counted_as_success() {
+    let store = Store::open_memory().unwrap();
+    let mut task = task("t-timeout", AgentKind::Codex, TaskStatus::Done, 1, "gpt-5.4", Some(1.0), Some(1_000), 1_000);
+    task.verify = Some("cargo test".to_string());
+    task.verify_status = VerifyStatus::TimedOut;
+    store.insert_task(&task).unwrap();
+
+    let stats = collect(&store, UsageWindow::Days(7), None, Local::now()).unwrap();
+
+    assert_eq!(stats.agent_rows[0].success_rate, 0.0);
+}
+
+#[test]
 fn render_output_shows_friendly_message_when_no_tasks_match() {
     let stats = StatsSnapshot { agent_rows: Vec::new(), failure_rows: Vec::new(), model_rows: Vec::new(), declared_rows: Vec::new(), activity_by_day: Vec::new(), activity_by_hour: Vec::new(), top_sessions: Vec::new(), total_cost: None, total_tokens: 0, total_tasks: 0 };
 

@@ -23,7 +23,7 @@ use super::{detect_agents, RunOpts};
 use crate::agent_config;
 use crate::rate_limit;
 use crate::store::Store;
-use crate::types::{AgentKind, TaskStatus};
+use crate::types::AgentKind;
 use crate::agent::registry::load_custom_agents;
 use crate::team::TeamConfig;
 use std::collections::HashMap;
@@ -178,10 +178,17 @@ pub(crate) fn select_agent_from(
     }
     if let Ok(similar_tasks) = store.find_similar_tasks(prompt, 5) {
         let mut stats: HashMap<AgentKind, (usize, usize)> = HashMap::new();
-        for (_, agent, status) in similar_tasks {
+        for (task_id, agent, _) in similar_tasks {
+            let Ok(Some(task)) = store.get_task(&task_id) else {
+                continue;
+            };
+            let outcome = task.outcome();
+            if outcome.is_unverified() {
+                continue;
+            }
             let entry = stats.entry(agent).or_insert((0, 0));
             entry.1 += 1;
-            if matches!(status, TaskStatus::Done | TaskStatus::Merged) {
+            if outcome.is_success() {
                 entry.0 += 1;
             }
         }

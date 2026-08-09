@@ -85,12 +85,26 @@ fn explicit_agent(
     } else {
         None
     };
+    // Declared budget is a preference: never refuse dispatch when no preferred
+    // tier matches. Warn and continue with whatever model we actually chose.
     if model.is_none()
-        && matches!(declared_budget, Some(TaskBudget::Free | TaskBudget::Cheap))
-        && selected_model.is_none()
-        && selected_kind != Some(AgentKind::Antigravity)
+        && let Some(budget) = declared_budget
+        && matches!(budget, TaskBudget::Free | TaskBudget::Cheap)
     {
-        anyhow::bail!("Agent '{agent_name}' has no model eligible for the declared budget");
+        let on_preference = selected_model.as_deref().is_some_and(|name| {
+            selected_kind.is_some_and(|kind| {
+                crate::model_catalog::model_on_budget_preference(kind, budget, name)
+            })
+        });
+        if !on_preference {
+            let chosen = selected_model.as_deref().unwrap_or("agent default");
+            aid_warn!(
+                "[aid] Warning: agent '{}' has no model eligible for declared budget {}; using {}",
+                agent_name,
+                budget.label(),
+                chosen
+            );
+        }
     }
     Ok((agent_name, selected_model))
 }
@@ -108,6 +122,35 @@ mod tests {
             TaskEgress::Any,
         );
         assert!(result.is_ok(), "identity gate must be gone: {result:?}");
+    }
+
+    #[test]
+    fn declared_budget_is_preference_not_hard_gate() {
+        // Claude has no free-tier catalog model. Pre-fix this bailed; budget
+        // is a preference so dispatch must still succeed.
+        let result = explicit_agent(
+            "claude".into(),
+            &None,
+            Some(TaskBudget::Free),
+            TaskEgress::Any,
+        );
+        assert!(
+            result.is_ok(),
+            "declared budget must not refuse dispatch: {result:?}"
+        );
+    }
+
+    #[test]
+    fn cheap_budget_dispatches_grok_with_unknown_tier_model() {
+        let (agent, model) = explicit_agent(
+            "grok".into(),
+            &None,
+            Some(TaskBudget::Cheap),
+            TaskEgress::Any,
+        )
+        .expect("grok --budget cheap must dispatch");
+        assert_eq!(agent, "grok");
+        assert_eq!(model.as_deref(), Some("grok-4.5"));
     }
 
     #[test]

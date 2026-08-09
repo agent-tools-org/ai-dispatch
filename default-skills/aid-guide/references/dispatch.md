@@ -84,7 +84,12 @@ aid run codex "Implement request validation" \
 Important controls:
 
 - `--difficulty` declares `trivial`, `simple`, `moderate`, or `complex` capability needs.
-- `--budget` declares the eligible `free`, `cheap`, `standard`, or `premium` model tier.
+- `--budget` declares a preferred `free`, `cheap`, `standard`, or `premium` model
+  tier. It is a preference, not a hard constraint: when no catalog model sits on
+  a preferred tier, aid warns on stderr (agent, declared budget, model actually
+  chosen) and still dispatches. Catalog tier `unknown` means unpriced, not
+  ineligible — it is selectable as a last resort after the known tiers at every
+  budget level.
 - `--urgency` declares `background`, `normal`, or `urgent` rate-limit handling.
 - `--rigor` declares `draft`, `standard`, or `critical` proof level (compiles / path exercised /
   cross-audit). `critical` forces `--verify` and `--audit`; it does **not** restrict which agent

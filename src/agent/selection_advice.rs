@@ -193,10 +193,9 @@ fn team_base(context: &CandidateContext<'_>, kind: AgentKind) -> i32 {
         .unwrap_or_else(|| base_score(kind, context.profile.category))
 }
 
-fn budget_allows(kind: AgentKind, budget: TaskBudget, model: Option<&str>) -> bool {
+fn budget_allows(_kind: AgentKind, budget: TaskBudget, model: Option<&str>) -> bool {
     match budget {
-        TaskBudget::Free => model.is_some() || kind == AgentKind::Antigravity,
-        TaskBudget::Cheap => model.is_some() || kind == AgentKind::Antigravity,
+        TaskBudget::Free | TaskBudget::Cheap => model.is_some(),
         TaskBudget::Standard | TaskBudget::Premium => true,
     }
 }

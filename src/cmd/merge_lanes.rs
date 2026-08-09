@@ -8,7 +8,7 @@ use crate::store::Store;
 use crate::types::{verify_required, TaskOutcome};
 
 use super::merge_git::{auto_commit_uncommitted, commits_ahead, resolve_repo_dir};
-use super::{ensure_task_worktree_is_safe, validate_merge_outcome};
+use super::{ensure_task_worktree_is_safe, is_merge_candidate, validate_merge_outcome};
 
 pub(super) fn merge_group_lanes(store: &Store, group_id: &str, force: bool) -> Result<()> {
     let tasks = store.list_tasks_by_group(group_id)?;
@@ -21,7 +21,7 @@ pub(super) fn merge_group_lanes(store: &Store, group_id: &str, force: bool) -> R
             task.verify_status,
             verify_required(task.verify.as_deref()),
         );
-        if outcome.is_merge_candidate() {
+        if is_merge_candidate(task, outcome) {
             validate_merge_outcome(task, outcome, force)?;
         }
     }
@@ -60,7 +60,7 @@ pub(super) fn merge_group_lanes(store: &Store, group_id: &str, force: bool) -> R
             task.verify_status,
             verify_required(task.verify.as_deref()),
         );
-        if !outcome.is_merge_candidate() {
+        if !is_merge_candidate(task, outcome) {
             skipped += 1;
             continue;
         }

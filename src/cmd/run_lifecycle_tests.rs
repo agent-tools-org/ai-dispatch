@@ -108,6 +108,13 @@ fn merge_hint_requires_a_successful_task_outcome() {
 }
 
 #[test]
+fn merge_hint_is_not_recommended_for_an_already_merged_task() {
+    let task = task("t-already-merged-hint", TaskStatus::Merged);
+
+    assert!(merge_hint_for_task(&task).is_none());
+}
+
+#[test]
 fn final_assertion_skipped_for_read_only() {
     let _permit = test_subprocess::acquire();
     let dir = init_repo();

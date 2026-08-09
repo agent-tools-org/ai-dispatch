@@ -136,6 +136,46 @@ fn merge_group_lanes_refuses_failed_verification_without_force() {
     assert!(err.to_string().contains("verification failed"));
 }
 
+#[test]
+fn merge_group_lanes_skips_an_already_merged_task() {
+    let _permit = test_subprocess::acquire();
+    let repo = init_repo();
+    git(repo.path(), &["switch", "-c", "lane"]);
+    std::fs::write(repo.path().join("lane.txt"), "lane\n").unwrap();
+    git(repo.path(), &["add", "lane.txt"]);
+    git(repo.path(), &["commit", "-m", "lane"]);
+    git(repo.path(), &["switch", "main"]);
+    std::fs::create_dir(repo.path().join(".aid")).unwrap();
+    std::fs::write(
+        repo.path().join(".aid/project.toml"),
+        "[project]\nid = \"demo\"\ngitbutler = \"auto\"\n",
+    )
+    .unwrap();
+    let temp = tempfile::tempdir().unwrap();
+    let apply_log = temp.path().join("apply.log");
+    let _cwd = CurrentDirGuard::set(repo.path());
+    let _path = PathGuard::prepend(temp.path());
+    let _but = EnvGuard::set("AID_GITBUTLER_TEST_PRESENT", "1");
+    let _project = EnvGuard::set("AID_GITBUTLER_TEST_PROJECT_PRESENT", "1");
+    write_command(
+        temp.path(),
+        "but",
+        &format!("case \"$1\" in apply) printf applied > '{}';; esac\n", apply_log.display()),
+    );
+    let store = Store::open_memory().unwrap();
+    let group = "wg-lanes-already-merged";
+    let mut task = grouped_task("t-lanes-already-merged", group, repo.path());
+    task.status = TaskStatus::Merged;
+    task.worktree_path = None;
+    task.worktree_branch = Some("lane".to_string());
+    store.insert_task(&task).unwrap();
+
+    merge_lanes::merge_group_lanes(&store, group, false).unwrap();
+
+    assert!(!apply_log.exists());
+    assert_eq!(store.get_task(task.id.as_str()).unwrap().unwrap().status, TaskStatus::Merged);
+}
+
 fn write_command(dir: &Path, name: &str, body: &str) {
     let path = dir.join(name);
     std::fs::write(&path, format!("#!/bin/sh\n{body}")).unwrap();

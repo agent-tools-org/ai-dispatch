@@ -7,7 +7,7 @@ use chrono::Local;
 use std::process::{Command, Stdio};
 use std::sync::Arc;
 use crate::store::Store;
-use crate::types::{verify_required, EventKind, Task, TaskEvent, TaskId, TaskOutcome, TaskStatus};
+use crate::types::{verify_required, EventKind, Task, TaskEvent, TaskId, TaskOutcome, TaskStatus, VerifyStatus};
 #[path = "merge/final_branch.rs"]
 mod final_branch;
 use final_branch::*;
@@ -185,6 +185,15 @@ pub(super) fn validate_merge_outcome(
     outcome: TaskOutcome,
     force: bool,
 ) -> Result<()> {
+    if !matches!(task.status, TaskStatus::Done)
+        && !(force && matches!(task.status, TaskStatus::Failed | TaskStatus::Stopped))
+    {
+        return Err(anyhow!(
+            "Task '{}' is {} — only DONE tasks can be marked as merged",
+            task.id,
+            task.status.label()
+        ));
+    }
     match outcome {
         TaskOutcome::Verified | TaskOutcome::Delivered => Ok(()),
         TaskOutcome::Unverified(reason) => {
@@ -214,17 +223,16 @@ pub(super) fn validate_merge_outcome(
             }
         }
         TaskOutcome::Failed | TaskOutcome::Stopped if force => Ok(()),
-        TaskOutcome::Failed | TaskOutcome::Stopped => Err(anyhow!(
-            "Task '{}' is {} — only DONE tasks can be marked as merged",
-            task.id,
-            task.status.label()
-        )),
         _ => Err(anyhow!(
             "Task '{}' is {} — only completed tasks can be marked as merged",
             task.id,
             task.status.label()
         )),
     }
+}
+
+pub(super) fn is_merge_candidate(task: &Task, outcome: TaskOutcome) -> bool {
+    task.status == TaskStatus::Done && outcome.is_merge_candidate()
 }
 
 fn merge_group(store: &Store, group_id: &str, approve: bool, check: bool, target: Option<&str>) -> Result<()> {
@@ -246,7 +254,7 @@ fn merge_group_with_output(store: &Store, group_id: &str, approve: bool, check: 
     }
     for task in &tasks {
         let outcome = task_outcome(task);
-        if outcome.is_merge_candidate() {
+        if is_merge_candidate(task, outcome) {
             validate_merge_outcome(task, outcome, force)?;
         }
     }
@@ -264,7 +272,7 @@ fn merge_group_with_output(store: &Store, group_id: &str, approve: bool, check: 
     let mut skipped = Vec::new();
     for task in &tasks {
         let outcome = task_outcome(task);
-        if !outcome.is_merge_candidate() {
+        if !is_merge_candidate(task, outcome) {
             skipped.push(format!("{} ({})", task.id, task.status.label()));
             continue;
         }

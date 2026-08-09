@@ -748,6 +748,31 @@ fn merge_group_refuses_failed_verification_without_force() {
 }
 
 #[test]
+fn merge_group_skips_an_already_merged_task() {
+    let _permit = test_subprocess::acquire();
+    let repo = init_repo();
+    let (wt, branch) = create_worktree_with_commit(repo.path());
+    let store = Store::open_memory().unwrap();
+    let mut task = make_task_with_worktree("t-group-already-merged", repo.path(), wt.path(), &branch);
+    task.status = TaskStatus::Merged;
+    task.workgroup_id = Some("wg-already-merged".to_string());
+    store.insert_task(&task).unwrap();
+
+    let result = merge_group_with_output(
+        &store,
+        "wg-already-merged",
+        false,
+        false,
+        false,
+        None,
+        false,
+    );
+
+    assert!(result.is_ok(), "already-merged task should be skipped: {result:?}");
+    assert!(!repo.path().join("agent-work.txt").exists());
+}
+
+#[test]
 fn merge_single_fails_when_no_commits_and_no_changes() {
     let _permit = test_subprocess::acquire();
     let repo = init_repo();

@@ -66,6 +66,21 @@ fn board_marks_timed_out_verification_without_counting_success() {
 }
 
 #[test]
+fn board_marks_infrastructure_verification_without_counting_success() {
+    let temp = TempDir::new().unwrap();
+    let _guard = AidHomeGuard::set(temp.path());
+    let store = Store::open_memory().unwrap();
+    let mut task = timed_out_task();
+    task.id = crate::types::TaskId("t-infra".to_string());
+    task.verify_status = VerifyStatus::InfrastructureFailure;
+
+    let output = render_board(&[task], &store).unwrap();
+
+    assert!(output.contains("[VINFRA]"), "output: {output}");
+    assert!(output.contains("1 total | 0 done"), "output: {output}");
+}
+
+#[test]
 fn board_omits_verification_tags_when_no_verification_result_exists() {
     let temp = TempDir::new().unwrap();
     let _guard = AidHomeGuard::set(temp.path());

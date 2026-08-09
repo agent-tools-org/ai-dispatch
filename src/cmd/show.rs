@@ -359,8 +359,15 @@ fn terminal_missing_result_notice(task: &crate::types::Task) -> Option<String> {
 fn human_status(task: &Task) -> String {
     task.outcome()
         .verification_tag()
-        .map(|tag| format!("{} [{tag}]", task.status.label()))
-        .unwrap_or_else(|| task.status.label().to_string())
+        .map(|tag| format!("{} [{tag}]", show_status_label(task)))
+        .unwrap_or_else(|| show_status_label(task).to_string())
+}
+
+fn show_status_label(task: &Task) -> &'static str {
+    match task.status {
+        TaskStatus::Failed => "FAILED",
+        status => status.label(),
+    }
 }
 
 pub fn summary_text(store: &Arc<Store>, task_id: &str) -> Result<String> {

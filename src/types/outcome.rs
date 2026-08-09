@@ -46,10 +46,10 @@ impl TaskOutcome {
         match self {
             Self::Broken => Some("VFAIL"),
             Self::Unverified(UnverifiedReason::TimedOut) => Some("VTIMEOUT"),
+            Self::Unverified(UnverifiedReason::Infrastructure) => Some("VINFRA"),
             Self::Unverified(UnverifiedReason::NoResult) => Some("VNORESULT"),
             Self::Verified
             | Self::Delivered
-            | Self::Unverified(UnverifiedReason::Infrastructure)
             | Self::Failed
             | Self::Stopped
             | Self::Skipped

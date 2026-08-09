@@ -67,6 +67,10 @@ pub(crate) fn durable_session_rollout_exists(session_id: &str) -> bool {
     session_rollout_exists(&real_home.join(".codex").join("sessions"), session_id)
 }
 
+pub(crate) fn resume_fallback_needed(session_id: &str) -> bool {
+    !durable_session_rollout_exists(session_id)
+}
+
 pub(crate) fn session_rollout_exists(sessions_dir: &Path, session_id: &str) -> bool {
     if session_id.is_empty() {
         return false;
@@ -124,7 +128,7 @@ impl super::Agent for CodexAgent {
         let resume_session_id = opts
             .session_id
             .as_deref()
-            .filter(|session_id| durable_session_rollout_exists(session_id));
+            .filter(|session_id| !resume_fallback_needed(session_id));
         if let Some(session_id) = resume_session_id {
             cmd.args([
                 "exec",

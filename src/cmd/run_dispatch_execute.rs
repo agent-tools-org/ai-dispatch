@@ -205,7 +205,7 @@ pub(super) async fn run_foreground_task(
         && opts
             .session_id
             .as_deref()
-            .is_some_and(|id| !agent::codex::durable_session_rollout_exists(id));
+            .is_some_and(agent::codex::resume_fallback_needed);
     let mut std_cmd = prepared
         .agent
         .build_command(&prompt_bundle.effective_prompt, &opts)

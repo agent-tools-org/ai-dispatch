@@ -58,6 +58,12 @@ its id (`rate-limit-<id>`), so one custom hitting quota does not hold the
 others; `aid config clear-limit <custom-id>` clears that agent alone.
 Built-in markers (`rate-limit-codex`, …) are unchanged.
 
+For providers that aidbar probes, dispatch may temporarily treat an older
+marker as released when a successful cache snapshot is newer than the marker
+and every reported usage window has headroom. The marker remains on disk, so
+stale, failed, missing, or unsupported provider readings do not release it and
+the normal marker state returns on the next dispatch decision.
+
 Quota exhaustion is read from two named channels and nowhere else: the CLI's
 stderr, and the raw lines of its output stream. Within the stream, a refusal is
 admitted only from an envelope the CLI itself opened — a structured error event —

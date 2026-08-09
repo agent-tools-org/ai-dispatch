@@ -3,6 +3,7 @@
 use super::app::App;
 use super::metrics::ProcessMetrics;
 use super::route_display::format_route_fit;
+use super::ui_helpers::task_status_label;
 use crate::types::{EventKind, Task, TaskStatus};
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::prelude::{Alignment, Color, Modifier, Style};
@@ -121,7 +122,7 @@ pub fn render_task_card(
         ListItem::new(format!("Prompt: {}", truncate(&task.prompt, 56))),
         ListItem::new(format!(
             "System: CPU {cpu}  MEM {memory}  Status {}",
-            task.status.label()
+            task_status_label(task)
         )),
         ListItem::new(format!("Activity: {}", truncate(&activity, 56))),
     ];
@@ -151,7 +152,7 @@ pub fn render_task_card(
                     " {} {} {} {} ",
                     task.id,
                     format_route_fit(task, 36),
-                    task.status.label(),
+                    task_status_label(task),
                     milestone_progress(task, milestones.len())
                 ))
                 .borders(Borders::ALL)

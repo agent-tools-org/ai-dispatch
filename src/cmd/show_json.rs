@@ -10,7 +10,7 @@ use std::sync::Arc;
 
 use crate::cmd;
 use crate::store::Store;
-use crate::types::{TaskId, TaskStatus};
+use crate::types::Task;
 
 use super::show_helpers::load_task;
 use super::{diff_stat, output_text_for_task, parse_diff_stat};
@@ -103,21 +103,19 @@ pub(super) fn task_json(store: &Arc<Store>, task_id: &str) -> Result<String> {
 }
 
 pub(crate) fn task_hook_json(
-    task_id: &TaskId,
+    task: &Task,
     agent: &str,
-    status: TaskStatus,
-    prompt: &str,
-    worktree: Option<&str>,
     dir: Option<&str>,
-    exit_code: Option<i32>,
 ) -> serde_json::Value {
     json!({
-        "task_id": task_id.as_str(),
+        "task_id": task.id.as_str(),
         "agent": agent,
-        "status": status.as_str(),
-        "prompt": prompt,
-        "worktree": worktree,
+        "status": task.status.as_str(),
+        "outcome": task.outcome().as_str(),
+        "verify_status": task.verify_status.as_str(),
+        "prompt": task.prompt,
+        "worktree": task.worktree_path,
         "dir": dir,
-        "exit_code": exit_code,
+        "exit_code": task.exit_code,
     })
 }

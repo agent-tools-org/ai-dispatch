@@ -24,7 +24,13 @@ pub fn render_task_detail(task: &Task, events: &[TaskEvent], retry_chain: Option
     let duration = task.duration_ms
         .map(format_duration)
         .unwrap_or_else(|| elapsed_since(task.created_at));
-    out.push_str(&format!("Status: {}  Duration: {}\n", task.status.label(), duration));
+    let status = task.status.label();
+    let verification = task
+        .outcome()
+        .verification_tag()
+        .map(|tag| format!(" [{tag}]"))
+        .unwrap_or_default();
+    out.push_str(&format!("Status: {status}{verification}  Duration: {duration}\n"));
     if let Some(pending_reason) = task.pending_reason.as_deref() {
         out.push_str(&format!("Pending reason: {pending_reason}\n"));
     }

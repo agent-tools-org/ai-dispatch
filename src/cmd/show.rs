@@ -8,7 +8,7 @@ use std::sync::Arc;
 use crate::board::render_task_detail;
 use crate::cmd;
 use crate::store::Store;
-use crate::types::TaskStatus;
+use crate::types::{Task, TaskStatus};
 
 #[path = "show_output.rs"]
 mod show_output;
@@ -348,9 +348,19 @@ fn terminal_missing_result_notice(task: &crate::types::Task) -> Option<String> {
         return None;
     }
     if task.status == TaskStatus::Done {
-        return Some("Status: DONE (no result file - see --output / output.md)\n".to_string());
+        return Some(format!(
+            "Status: {} (no result file - see --output / output.md)\n",
+            human_status(task)
+        ));
     }
-    Some("Status: FAILED\n".to_string())
+    Some(format!("Status: {}\n", human_status(task)))
+}
+
+fn human_status(task: &Task) -> String {
+    task.outcome()
+        .verification_tag()
+        .map(|tag| format!("{} [{tag}]", task.status.label()))
+        .unwrap_or_else(|| task.status.label().to_string())
 }
 
 pub fn summary_text(store: &Arc<Store>, task_id: &str) -> Result<String> {
@@ -360,7 +370,7 @@ pub fn summary_text(store: &Arc<Store>, task_id: &str) -> Result<String> {
     out.push_str(&format!(
         "Route: {}  Status: {}  Prompt: {}\n",
         task.display_route(),
-        task.status.label(),
+        human_status(&task),
         task.prompt,
     ));
     if let Some(verdict) = task.audit_verdict.as_deref() {

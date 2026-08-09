@@ -333,13 +333,20 @@ of moving off the agent you asked for. Where a tiered agent has only one tier
 held — cursor's premium pool — dispatch stays on the agent and switches to a
 tier that still serves, reporting the swap rather than making it silently.
 
+For providers represented by aidbar, a successful cached snapshot can release an
+older marker for this dispatch decision only when its `fetched_at` is newer than
+the marker file's modification time and every reported usage window has
+headroom. The marker is not deleted, and aidbar errors, missing probes, stale
+snapshots, and unrecognized providers do not release it. `aid advise` continues
+to score and report the marker state rather than this one-round dispatch view.
+
 The held route is **not spawned**. Substitution happens before dispatch, so no
 task row is recorded for the agent that was never run, and the fallback carries
 none of the held route's model: a model name means something only inside one
 CLI. The substitution is announced on stderr and recorded as an event on the
-dispatched task, both naming `aid config clear-limit <agent>` — skipping the
-probe means a topped-up account is no longer discovered by a dispatch
-succeeding, so that escape hatch is how a stale hold is released.
+dispatched task, both naming `aid config clear-limit <agent>`. When no usable
+aidbar snapshot can release the marker, that escape hatch is how a topped-up
+account or other changed provider state releases a stale hold.
 
 `--declared-urgency background` still keeps the agent you asked for: a
 background task can afford to wait for the window to reopen.

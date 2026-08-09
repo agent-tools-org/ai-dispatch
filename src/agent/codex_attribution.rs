@@ -94,11 +94,7 @@ fn find_session_file_in_day(
 }
 
 fn session_file_matches(path: &Path, thread_id: &str) -> bool {
-    path.file_name()
-        .and_then(|name| name.to_str())
-        .is_some_and(|name| {
-            name.starts_with("rollout-") && name.ends_with(&format!("-{thread_id}.jsonl"))
-        })
+    super::rollout_filename_matches(path, thread_id)
 }
 
 fn model_from_turn_context(line: &str) -> Option<String> {
@@ -239,6 +235,16 @@ mod tests {
         assert!(!session_file_matches(
             Path::new("rollout-2026-08-09T00-00-00-other.jsonl"),
             "thread-id"
+        ));
+        assert!(!session_file_matches(
+            Path::new(
+                "rollout-2026-08-09T00-00-00-extra-019e3e49-6b83-7563-a3d8-b51a3a716dd1.jsonl"
+            ),
+            "019e3e49-6b83-7563-a3d8-b51a3a716dd1"
+        ));
+        assert!(session_file_matches(
+            Path::new("rollout-2026-08-09T00-00-00-session-123.jsonl"),
+            "session-123"
         ));
     }
 

@@ -107,13 +107,15 @@ Important controls:
 - `--repo` or `--repo-root` supplies the repository anchor.
 - `--worktree` creates or reuses an isolated task branch.
 - `--verify [COMMAND]` verifies completion; without a value it uses project
-  configuration or supported defaults. Verification is skipped (not failed)
-  when the task is `--read-only` or has no working directory. An empty diff
-  is not a skip — delivery assessment records `empty_diff`, and a configured
-  verify still runs against the tree. A verify command that hits the
-  wall-clock cap is recorded as `timed_out`, which is inconclusive and does
-  not fail the task; only a finished verify command with a non-zero exit
-  fails the task.
+  configuration or supported defaults. A task with verification configured is
+  written with `verify_status = pending` at dispatch, so `pending` means that a
+  result is in flight. Verification is skipped (not failed) when the task is
+  `--read-only` or has no working directory. An empty diff is not a skip —
+  delivery assessment records `empty_diff`, and a configured verify still runs
+  against the tree. A verify timeout is recorded as `timed_out`, and a verify
+  tooling failure without a compiler or test diagnostic is recorded as
+  `infrastructure_failure`; both are inconclusive. A finished verify command
+  with a non-zero diagnostic result is `failed`.
 - `--retry N` permits new attempts after failure.
 - `--bg` returns the task ID immediately.
 - `--read-only` forbids modifying the repository under test; the task result
@@ -135,6 +137,32 @@ cascade options.
 Missing task-profile dimensions produce one warning and persist as null. Projects
 with `require_task_profile = true` reject incomplete runs; the production profile
 enables this requirement.
+
+## Completion judgment and exit status
+
+`TaskStatus` answers lifecycle and integration: whether a task is running, has
+delivered artifacts, or has been merged. `VerifyStatus` answers what happened
+to verification. `TaskOutcome` is derived from both and is the only axis that
+answers whether the task succeeded.
+
+The terminal outcomes are:
+
+- `Verified`: delivered and verification passed.
+- `Delivered`: delivered without required verification.
+- `Broken`: delivered but verification failed.
+- `Unverified`: delivered, but verification was inconclusive because it timed
+  out, failed as infrastructure, or produced no result.
+- `Failed`, `Stopped`, and `Skipped`: the task did not produce a successful
+  delivery; `InProgress` is non-terminal.
+
+Only `Verified` and `Delivered` are success outcomes. A foreground `aid run`
+exits 0 only for those outcomes; all other outcomes use a non-zero exit. Do not
+read `Done` or `Merged` as success without checking the outcome.
+
+When `aid watch --wait` or `aid wait` observes `verify_status = pending`, it
+continues waiting for verification, bounded by the verification timeout. Once
+the task settles, either command returns non-zero if the outcome is not a
+success outcome.
 
 ## Task Execution Isolation
 

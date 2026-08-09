@@ -4,7 +4,7 @@
 
 use super::app::App;
 use crate::cost;
-use crate::types::{AgentKind, Task, TaskOutcome, TaskStatus};
+use crate::types::{AgentKind, Task, TaskOutcome};
 use chrono::{Duration, Local};
 use ratatui::layout::{Alignment, Constraint, Direction, Layout, Rect};
 use ratatui::prelude::{Color, Modifier, Style};

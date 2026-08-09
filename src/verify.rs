@@ -14,7 +14,7 @@ use crate::store::Store;
 use crate::types::{Task, TaskId, TaskStatus, VerifyStatus};
 
 static VERIFY_LOCK: Mutex<()> = Mutex::new(());
-const VERIFY_TIMEOUT: Duration = Duration::from_secs(120);
+pub(crate) const VERIFY_TIMEOUT: Duration = Duration::from_secs(120);
 
 #[derive(Debug, Clone)]
 pub struct VerifyResult {

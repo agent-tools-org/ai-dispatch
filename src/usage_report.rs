@@ -7,7 +7,7 @@ use std::cmp::Ordering;
 use crate::config::UsageBudget;
 use crate::cost;
 use crate::paths;
-use crate::types::{AgentKind, Task, TaskStatus};
+use crate::types::{AgentKind, Task};
 use crate::usage::{filter_budget_tasks, AgentAnalytics, AgentUsageRow, BudgetUsageRow, TaskSummary, UsageSnapshot};
 
 pub fn render_usage(snapshot: &UsageSnapshot) -> String {

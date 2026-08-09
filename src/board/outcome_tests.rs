@@ -64,3 +64,47 @@ fn board_marks_timed_out_verification_without_counting_success() {
     assert!(output.contains("[VTIMEOUT]"), "output: {output}");
     assert!(output.contains("1 total | 0 done"), "output: {output}");
 }
+
+#[test]
+fn board_omits_verification_tags_when_no_verification_result_exists() {
+    let temp = TempDir::new().unwrap();
+    let _guard = AidHomeGuard::set(temp.path());
+    let store = Store::open_memory().unwrap();
+    let mut failed = timed_out_task();
+    failed.id = TaskId("t-failed".to_string());
+    failed.status = TaskStatus::Failed;
+    failed.verify = None;
+    failed.verify_status = VerifyStatus::Skipped;
+    let mut running = timed_out_task();
+    running.id = TaskId("t-running".to_string());
+    running.status = TaskStatus::Running;
+    running.verify = None;
+    running.verify_status = VerifyStatus::Skipped;
+
+    let output = render_board(&[failed, running], &store).unwrap();
+
+    assert!(!output.contains("[VSKIPPED]"), "output: {output}");
+    assert!(!output.contains("[V"), "output: {output}");
+}
+
+#[test]
+fn board_counts_only_active_lifecycle_statuses_as_running() {
+    let temp = TempDir::new().unwrap();
+    let _guard = AidHomeGuard::set(temp.path());
+    let store = Store::open_memory().unwrap();
+    let mut waiting = timed_out_task();
+    waiting.id = TaskId("t-waiting".to_string());
+    waiting.status = TaskStatus::Waiting;
+    waiting.verify = None;
+    waiting.verify_status = VerifyStatus::Skipped;
+    let mut pending = waiting.clone();
+    pending.id = TaskId("t-pending".to_string());
+    pending.status = TaskStatus::Pending;
+    let mut running = waiting;
+    running.id = TaskId("t-running".to_string());
+    running.status = TaskStatus::Running;
+
+    let output = render_board(&[pending, running, waiting], &store).unwrap();
+
+    assert!(output.contains("3 total | 0 done | 1 running | 0 failed"), "output: {output}");
+}

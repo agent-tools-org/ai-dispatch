@@ -200,12 +200,15 @@ pub(super) async fn run_foreground_task(
     } else {
         capture_pre_task_dirty_paths(prepared.effective_dir.as_ref())
     };
-    let opts = build_run_opts(args, prepared, prompt_bundle);
-    let codex_resume_fallback = prepared.agent_kind == crate::types::AgentKind::Codex
-        && opts
-            .session_id
-            .as_deref()
-            .is_some_and(agent::codex::resume_fallback_needed);
+    let mut opts = build_run_opts(args, prepared, prompt_bundle);
+    if prepared.agent_kind == crate::types::AgentKind::Codex && container_name.is_some() {
+        opts.sandbox = true;
+    }
+    let codex_resume_fallback = agent::should_use_durable_codex_home(
+        prepared.agent_kind,
+        args.sandbox,
+        container_name.is_some(),
+    ) && opts.session_id.as_deref().is_some_and(agent::codex::resume_fallback_needed);
     let mut std_cmd = prepared
         .agent
         .build_command(&prompt_bundle.effective_prompt, &opts)

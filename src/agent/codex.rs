@@ -72,9 +72,6 @@ pub(crate) fn resume_fallback_needed(session_id: &str) -> bool {
 }
 
 pub(crate) fn session_rollout_exists(sessions_dir: &Path, session_id: &str) -> bool {
-    if !is_uuid_session_id(session_id) {
-        return false;
-    }
     let Ok(entries) = fs::read_dir(sessions_dir) else {
         return false;
     };
@@ -83,23 +80,26 @@ pub(crate) fn session_rollout_exists(sessions_dir: &Path, session_id: &str) -> b
         if path.is_dir() {
             return session_rollout_exists(&path, session_id);
         }
-        path.file_name()
-            .and_then(|name| name.to_str())
-            .is_some_and(|name| {
-                name.starts_with("rollout-")
-                    && name.ends_with(&format!("-{session_id}.jsonl"))
-            })
+        rollout_filename_matches(&path, session_id)
     })
 }
 
-fn is_uuid_session_id(session_id: &str) -> bool {
-    let bytes = session_id.as_bytes();
-    bytes.len() == 36
-        && [8, 13, 18, 23].iter().all(|&index| bytes[index] == b'-')
-        && bytes
-            .iter()
-            .enumerate()
-            .all(|(index, byte)| index == 8 || index == 13 || index == 18 || index == 23 || byte.is_ascii_hexdigit())
+pub(crate) fn rollout_filename_matches(path: &Path, session_id: &str) -> bool {
+    if session_id.is_empty() {
+        return false;
+    }
+    let Some(name) = path.file_name().and_then(|name| name.to_str()) else {
+        return false;
+    };
+    let Some(stem) = name
+        .strip_prefix("rollout-")
+        .and_then(|name| name.strip_suffix(".jsonl"))
+    else {
+        return false;
+    };
+    stem.len() > 20
+        && stem.as_bytes().get(19) == Some(&b'-')
+        && &stem[20..] == session_id
 }
 
 pub(crate) fn resume_fallback_event(task_id: &TaskId) -> TaskEvent {
@@ -139,7 +139,7 @@ impl super::Agent for CodexAgent {
         let resume_session_id = opts
             .session_id
             .as_deref()
-            .filter(|session_id| !resume_fallback_needed(session_id));
+            .filter(|session_id| opts.sandbox || !resume_fallback_needed(session_id));
         if let Some(session_id) = resume_session_id {
             cmd.args([
                 "exec",
@@ -530,12 +530,14 @@ fn extract_noop_reason(line: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::{
-        parse_semver, resume_fallback_event, session_rollout_exists, CodexAgent,
+        parse_semver, resume_fallback_event, rollout_filename_matches, session_rollout_exists,
+        CodexAgent,
         RESUME_FALLBACK_DETAIL,
     };
     use crate::agent::{Agent, RunOpts};
     use crate::types::{EventKind, TaskId};
     use std::fs;
+    use std::path::Path;
     use tempfile::tempdir;
 
     #[test]
@@ -592,7 +594,7 @@ mod tests {
     }
 
     #[test]
-    fn finds_only_full_uuid_rollout_matches_in_nested_sessions_dir() {
+    fn finds_only_full_session_id_rollout_matches_in_nested_sessions_dir() {
         let temp = tempdir().unwrap();
         let sessions = temp.path().join("sessions/2026/08/09");
         fs::create_dir_all(&sessions).unwrap();
@@ -602,7 +604,12 @@ mod tests {
             "{}",
         )
         .unwrap();
-        fs::write(sessions.join("rollout-session-abc-123.jsonl"), "{}").unwrap();
+        fs::write(
+            sessions.join("rollout-2026-08-09T17-20-31-extra-019e3e49-6b83-7563-a3d8-b51a3a716dd1.jsonl"),
+            "{}",
+        )
+        .unwrap();
+        fs::write(sessions.join("rollout-2026-08-09T17-20-31-session-123.jsonl"), "{}").unwrap();
 
         assert!(session_rollout_exists(
             temp.path().join("sessions").as_path(),
@@ -611,6 +618,54 @@ mod tests {
         assert!(!session_rollout_exists(
             temp.path().join("sessions").as_path(),
             "123"
+        ));
+        assert!(session_rollout_exists(
+            temp.path().join("sessions").as_path(),
+            "session-123"
+        ));
+    }
+
+    #[test]
+    fn sandboxed_resume_skips_host_rollout_precheck() {
+        let opts = RunOpts {
+            dir: None,
+            output: None,
+            result_file: None,
+            model: None,
+            budget: false,
+            read_only: false,
+            sandbox: true,
+            context_files: vec![],
+            session_id: Some("not-a-uuid-session".to_string()),
+            env: None,
+            env_forward: None,
+        };
+        let cmd = CodexAgent.build_command("continue", &opts).unwrap();
+        let args: Vec<String> = cmd
+            .get_args()
+            .map(|arg| arg.to_string_lossy().to_string())
+            .collect();
+
+        assert_eq!(&args[..3], ["exec", "resume", "--json"]);
+        assert!(args.contains(&"not-a-uuid-session".to_string()));
+    }
+
+    #[test]
+    fn rollout_match_requires_exact_timestamp_boundary_and_session_id() {
+        let path = Path::new(
+            "rollout-2026-08-09T17-20-31-extra-019e3e49-6b83-7563-a3d8-b51a3a716dd1.jsonl",
+        );
+        assert!(!rollout_filename_matches(
+            path,
+            "019e3e49-6b83-7563-a3d8-b51a3a716dd1"
+        ));
+        assert!(!rollout_filename_matches(
+            Path::new("rollout-2026-08-09T17-20-31-long-123.jsonl"),
+            "123"
+        ));
+        assert!(rollout_filename_matches(
+            Path::new("rollout-2026-08-09T17-20-31-session-123.jsonl"),
+            "session-123"
         ));
     }
 

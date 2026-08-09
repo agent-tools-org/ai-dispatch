@@ -7,7 +7,7 @@ use crate::agent::classifier;
 use crate::batch;
 use crate::rate_limit;
 use crate::store::Store;
-use crate::types::{AgentKind, Task, TaskId, TaskStatus, VerifyStatus};
+use crate::types::{AgentKind, Task, TaskId, TaskOutcome, TaskStatus, VerifyStatus};
 use anyhow::Result;
 use chrono::Local;
 use std::collections::{BTreeMap, HashSet};
@@ -146,16 +146,14 @@ pub(super) fn load_task_outcome(store: &Arc<Store>, task_id: &str) -> Result<Bat
     let Some(task) = store.get_task(task_id)? else {
         anyhow::bail!("batch task not found after dispatch: {task_id}");
     };
-    Ok(match task.status {
-        TaskStatus::Done | TaskStatus::Merged => BatchTaskOutcome::Done,
-        TaskStatus::Skipped => BatchTaskOutcome::Skipped,
-        TaskStatus::Waiting
-        | TaskStatus::Pending
-        | TaskStatus::Running
-        | TaskStatus::AwaitingInput
-        | TaskStatus::Stalled
-        | TaskStatus::Failed
-        | TaskStatus::Stopped => BatchTaskOutcome::Failed,
+    Ok(match task.outcome() {
+        TaskOutcome::Verified | TaskOutcome::Delivered => BatchTaskOutcome::Done,
+        TaskOutcome::Skipped => BatchTaskOutcome::Skipped,
+        TaskOutcome::Unverified(_)
+        | TaskOutcome::Broken
+        | TaskOutcome::Failed
+        | TaskOutcome::Stopped
+        | TaskOutcome::InProgress => BatchTaskOutcome::Failed,
     })
 }
 fn validate_task_agents(tasks: &[batch::BatchTask]) -> Result<()> {

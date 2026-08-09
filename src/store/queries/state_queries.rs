@@ -2,12 +2,12 @@
 // Exports: Store helpers for recent project tasks and project-level state metrics.
 // Deps: super::super::{schema::row_to_task, Store}, rusqlite, crate::types::Task.
 
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use rusqlite::{params, OptionalExtension};
 
 use super::super::schema::row_to_task;
 use super::super::Store;
-use crate::types::Task;
+use crate::types::{verify_required, Task, TaskOutcome, TaskStatus, VerifyStatus};
 
 impl Store {
     pub fn recent_tasks_for_project(&self, repo_path: &str, limit: usize) -> Result<Vec<Task>> {
@@ -35,22 +35,43 @@ impl Store {
     pub fn project_agent_success_rates(&self, repo_path: &str) -> Result<Vec<(String, f64, usize)>> {
         let conn = self.db();
         let mut stmt = conn.prepare(
-            "SELECT agent,
-                    COUNT(*) as total,
-                    SUM(CASE WHEN status = 'done' THEN 1 ELSE 0 END) as success
+            "SELECT agent, status, verify_status, verify
              FROM tasks
-             WHERE repo_path = ?1 AND status IN ('done', 'failed')
-             GROUP BY agent
-             HAVING total >= 3",
+             WHERE repo_path = ?1 AND status IN ('done', 'merged', 'failed')",
         )?;
         let rows = stmt.query_map(params![repo_path], |row| {
             let agent: String = row.get(0)?;
-            let total: i64 = row.get(1)?;
-            let success: i64 = row.get(2)?;
-            let rate = success as f64 / total as f64;
-            Ok((agent, rate, total as usize))
+            let status: String = row.get(1)?;
+            let verify_status: String = row.get(2)?;
+            let verify: Option<String> = row.get(3)?;
+            Ok((agent, status, verify_status, verify))
         })?;
-        rows.map(|row| Ok(row?)).collect()
+        let mut totals = std::collections::HashMap::<String, (usize, usize)>::new();
+        for row in rows {
+            let (agent, status, verify_status, verify) = row?;
+            let status = TaskStatus::parse_str(&status)
+                .ok_or_else(|| anyhow!("unknown task status in project metrics: {status}"))?;
+            let verify_status = VerifyStatus::parse_str(&verify_status)
+                .ok_or_else(|| anyhow!("unknown verify status in project metrics: {verify_status}"))?;
+            let outcome = TaskOutcome::derive(
+                status,
+                verify_status,
+                verify_required(verify.as_deref()),
+            );
+            if outcome.is_unverified() {
+                continue;
+            }
+            let entry = totals.entry(agent).or_default();
+            entry.0 += usize::from(outcome.is_success());
+            entry.1 += 1;
+        }
+        Ok(totals
+            .into_iter()
+            .filter(|(_, (_, total))| *total >= 3)
+            .map(|(agent, (successes, total))| {
+                (agent, successes as f64 / total as f64, total)
+            })
+            .collect())
     }
 
     pub fn last_verify_event(&self, repo_path: &str) -> Result<Option<(String, String)>> {

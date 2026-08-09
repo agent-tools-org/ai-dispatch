@@ -15,6 +15,8 @@ mod detail;
 #[cfg(test)]
 mod tests;
 #[cfg(test)]
+mod outcome_tests;
+#[cfg(test)]
 mod detail_tests;
 
 pub use detail::render_task_detail;
@@ -101,11 +103,7 @@ pub fn render_board(tasks: &[Task], store: &Store) -> Result<String> {
         } else {
             let error = latest_errors.get(task.id.as_str()).cloned();
             let base = task_status(task, latest_milestone(&latest_milestones, task.id.as_str()), error);
-            if task.has_verify_failure() {
-                format!("{} [VFAIL]", base)
-            } else {
-                base
-            }
+            format_with_outcome(task, base)
         };
         let duration = if task.status == TaskStatus::Skipped {
             "-".to_string()
@@ -178,14 +176,31 @@ fn count_statuses(tasks: &[Task]) -> (usize, usize, usize) {
     let mut running = 0;
     let mut failed = 0;
     for t in tasks {
-        match t.status {
-            TaskStatus::Done | TaskStatus::Merged => done += 1,
-            TaskStatus::Running | TaskStatus::AwaitingInput | TaskStatus::Stalled => running += 1,
-            TaskStatus::Failed | TaskStatus::Stopped => failed += 1,
-            TaskStatus::Pending | TaskStatus::Waiting | TaskStatus::Skipped => {}
+        match t.outcome() {
+            TaskOutcome::Verified | TaskOutcome::Delivered => done += 1,
+            TaskOutcome::InProgress => running += 1,
+            TaskOutcome::Broken | TaskOutcome::Failed | TaskOutcome::Stopped => failed += 1,
+            TaskOutcome::Unverified(_) | TaskOutcome::Skipped => {}
         }
     }
     (done, running, failed)
+}
+
+fn format_with_outcome(task: &Task, base: String) -> String {
+    match task.outcome() {
+        TaskOutcome::Verified | TaskOutcome::Delivered => base,
+        TaskOutcome::Broken => format!("{base} [VFAIL]"),
+        TaskOutcome::Unverified(UnverifiedReason::TimedOut) => format!("{base} [VTIMEOUT]"),
+        TaskOutcome::Unverified(UnverifiedReason::Infrastructure) => format!("{base} [VINFRA]"),
+        TaskOutcome::Unverified(UnverifiedReason::NoResult) => format!("{base} [VNORESULT]"),
+        TaskOutcome::Failed
+        | TaskOutcome::Stopped
+        | TaskOutcome::Skipped
+        | TaskOutcome::InProgress => format!(
+            "{base} [V{}]",
+            task.verify_status.as_str().to_ascii_uppercase()
+        ),
+    }
 }
 
 fn format_duration(ms: i64) -> String {

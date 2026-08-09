@@ -8,7 +8,7 @@ use crate::agent::custom::CapabilityScores;
 use crate::cost;
 use crate::model_catalog::{AGENT_MODELS, AGENT_PROFILES};
 use crate::rate_limit;
-use crate::types::{AgentKind, Task, TaskStatus};
+use crate::types::{AgentKind, Task};
 
 pub(crate) struct AgentHistory {
     task_count: usize,
@@ -173,7 +173,7 @@ pub(crate) fn compute_agent_history(tasks: &[Task]) -> HashMap<AgentKind, AgentH
         }
         let done_count = agent_tasks
             .iter()
-            .filter(|task| matches!(task.status, TaskStatus::Done | TaskStatus::Merged))
+            .filter(|task| task.outcome().is_success())
             .count();
         let total_cost: f64 = agent_tasks.iter().filter_map(|task| task.cost_usd).sum();
         history.insert(
@@ -194,7 +194,7 @@ pub(crate) fn compute_model_history(tasks: &[Task]) -> HashMap<(AgentKind, Strin
         let model = task.costing_model().unwrap_or("default").to_string();
         let entry = accum.entry((task.agent, model)).or_insert((0, 0, 0.0));
         entry.0 += 1;
-        if matches!(task.status, TaskStatus::Done | TaskStatus::Merged) {
+        if task.outcome().is_success() {
             entry.1 += 1;
         }
         if let Some(cost) = task.cost_usd {

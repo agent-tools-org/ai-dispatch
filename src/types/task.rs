@@ -7,7 +7,7 @@ use serde::Serialize;
 
 use super::{
     provider_for_cli, AgentKind, AttributionSource, DeliveryAssessment, EventKind, Route, TaskId,
-    TaskStatus, VerifyStatus, WorkgroupId,
+    TaskOutcome, TaskStatus, VerifyStatus, WorkgroupId,
 };
 
 #[derive(Debug, Clone, Serialize)]
@@ -69,6 +69,14 @@ pub struct Task {
 }
 
 impl Task {
+    pub fn outcome(&self) -> TaskOutcome {
+        TaskOutcome::derive(
+            self.status,
+            self.verify_status,
+            super::verify_required(self.verify.as_deref()),
+        )
+    }
+
     /// The model an outcome may be attributed to: what the CLI reported, never
     /// what aid asked for. `None` means nobody knows, and it must stay unknown
     /// — capability history, per-model success rates and model-level routing

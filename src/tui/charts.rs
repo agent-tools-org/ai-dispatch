@@ -4,7 +4,7 @@
 
 use super::app::App;
 use crate::cost;
-use crate::types::{AgentKind, Task, TaskStatus};
+use crate::types::{AgentKind, Task, TaskOutcome, TaskStatus};
 use chrono::{Duration, Local};
 use ratatui::layout::{Alignment, Constraint, Direction, Layout, Rect};
 use ratatui::prelude::{Color, Modifier, Style};
@@ -105,7 +105,7 @@ fn render_success_chart(frame: &mut ratatui::Frame<'_>, app: &App, area: Rect) {
                 .tasks
                 .iter()
                 .filter(|task| task.agent == *agent)
-                .filter(|task| matches!(task.status, TaskStatus::Done | TaskStatus::Merged))
+                .filter(|task| task.outcome().is_success())
                 .count();
             let rate = (success * 100).checked_div(total).unwrap_or(0) as u64;
             Bar::default()
@@ -189,17 +189,17 @@ fn render_summary(frame: &mut ratatui::Frame<'_>, app: &App, area: Rect) {
     let done = app
         .tasks
         .iter()
-        .filter(|task| matches!(task.status, TaskStatus::Done | TaskStatus::Merged))
+        .filter(|task| task.outcome().is_success())
         .count();
     let failed = app
         .tasks
         .iter()
-        .filter(|task| matches!(task.status, TaskStatus::Failed))
+        .filter(|task| matches!(task.outcome(), TaskOutcome::Broken | TaskOutcome::Failed | TaskOutcome::Stopped))
         .count();
     let running = app
         .tasks
         .iter()
-        .filter(|task| matches!(task.status, TaskStatus::Running | TaskStatus::AwaitingInput))
+        .filter(|task| matches!(task.outcome(), TaskOutcome::InProgress))
         .count();
     let total_cost = app
         .tasks

@@ -325,6 +325,9 @@ impl MonitorState {
         task_id: &TaskId,
         accepts_nudge: bool,
     ) -> Result<()> {
+        // Same buffered-liveness question as idle_hang_elapsed: a quiet PTY is
+        // not idle when agent-owned logs grew inside the warn window.
+        self.refresh_progress_from_buffered_log(task_id.as_str());
         match self.idle_detector.tick(
             self.last_progress_time,
             load_monitor_status(store.as_ref(), task_id.as_str())?,
@@ -424,10 +427,25 @@ impl MonitorState {
         if agent_streaming {
             return true;
         }
+        !Self::buffered_log_grew_within(task_id, idle)
+    }
+
+    /// True when any agent-owned log grew inside `window`. Shared by the hang
+    /// reaper and the warn/nudge/escalate ladder — do not invent another ask.
+    fn buffered_log_grew_within(task_id: &str, window: Duration) -> bool {
         let window_start = std::time::SystemTime::now()
-            .checked_sub(idle)
+            .checked_sub(window)
             .unwrap_or(std::time::UNIX_EPOCH);
-        !crate::paths::agent_has_produced_bytes(task_id, window_start)
+        crate::paths::agent_has_produced_bytes(task_id, window_start)
+    }
+
+    fn refresh_progress_from_buffered_log(&mut self, task_id: &str) {
+        if self.streaming {
+            return;
+        }
+        if Self::buffered_log_grew_within(task_id, self.idle_detector.warn_after) {
+            self.mark_progress();
+        }
     }
 
     fn last_progress_detail(&self) -> Option<String> {

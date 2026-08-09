@@ -112,17 +112,19 @@ pub const AGENT_LOG_ENV: &str = "AID_AGENT_LOG";
 
 /// Hand an agent the log path aid will watch — but only when aid can read it back.
 ///
-/// A sandboxed run remaps `AID_HOME`, and a containerised run does not mount `~/.aid` at
-/// all, so the host path would be unwritable inside and empty outside: aid would gain no
-/// liveness signal and risk an agent that refuses to start on a bad `--log-file`. The
-/// decision lives here, at the only place that knows how the command will be wrapped, so
-/// no agent adapter has to reason about isolation.
+/// Sandbox remaps `AID_HOME`; containers do not mount `~/.aid`. A host path would be
+/// unwritable inside and empty outside, so aid skips seeding and records
+/// `agent-log-unwatchable` under the task dir — buffered liveness is knowingly blind
+/// until isolation exposes a readable log. Decision stays here so adapters stay dumb.
 pub fn env_with_agent_log(
     env: Option<HashMap<String, String>>,
     task_id: &str,
     watchable: bool,
 ) -> Option<HashMap<String, String>> {
     if !watchable {
+        let dir = crate::paths::task_dir(task_id);
+        let _ = std::fs::create_dir_all(&dir)
+            .and_then(|_| std::fs::write(dir.join("agent-log-unwatchable"), "sandbox_or_container\n"));
         return env;
     }
     let mut env = env.unwrap_or_default();
@@ -131,6 +133,11 @@ pub fn env_with_agent_log(
         crate::paths::agent_log_path(task_id).to_string_lossy().into_owned(),
     );
     Some(env)
+}
+
+/// True when this run was started without a host-readable agent log (sandbox/container).
+pub fn agent_log_is_unwatchable(task_id: &str) -> bool {
+    crate::paths::task_dir(task_id).join("agent-log-unwatchable").is_file()
 }
 
 /// The log path aid promised to watch, if it gave one.

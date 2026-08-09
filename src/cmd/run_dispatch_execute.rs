@@ -200,13 +200,35 @@ pub(super) async fn run_foreground_task(
     } else {
         capture_pre_task_dirty_paths(prepared.effective_dir.as_ref())
     };
+    let opts = build_run_opts(args, prepared, prompt_bundle);
+    let uses_durable_codex_home = agent::should_use_durable_codex_home(
+        prepared.agent_kind,
+        args.sandbox,
+        container_name.is_some(),
+    );
+    let codex_resume_fallback = uses_durable_codex_home
+        && opts
+            .session_id
+            .as_deref()
+            .is_some_and(agent::codex::resume_fallback_needed);
     let mut std_cmd = prepared
         .agent
-        .build_command(&prompt_bundle.effective_prompt, &build_run_opts(args, prepared, prompt_bundle))
+        .build_command_with_context(
+            &prompt_bundle.effective_prompt,
+            &opts,
+            agent::CommandContext {
+                durable_codex_home: uses_durable_codex_home,
+            },
+        )
         .map_err(|err| anyhow::anyhow!("Failed to build agent command: {err:#}"))?;
     // TODO: integrate credential_pool rotation here
-    let opts = build_run_opts(args, prepared, prompt_bundle);
     let _home_guard = agent::apply_run_env(&mut std_cmd, &opts, Some(prepared.task_id.as_str()))?;
+    if uses_durable_codex_home {
+        agent::apply_codex_home_env(&mut std_cmd)?;
+    }
+    if codex_resume_fallback {
+        store.insert_event(&agent::codex::resume_fallback_event(&prepared.task_id))?;
+    }
     if let Some(ref dir) = prepared.effective_dir {
         agent::set_git_ceiling(&mut std_cmd, dir);
     }

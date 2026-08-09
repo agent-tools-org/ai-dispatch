@@ -9,8 +9,9 @@ mod attribution;
 pub(crate) use attribution::grade_completion_observation;
 
 use anyhow::{bail, Result};
-use chrono::Local;
+use chrono::{Local, NaiveDateTime};
 use serde_json::{json, Map, Value};
+use std::fs;
 use std::path::Path;
 use std::process::Command;
 use std::sync::OnceLock;
@@ -18,11 +19,15 @@ use std::sync::OnceLock;
 use output_classifier::classify_output;
 use super::read_only::read_only_prompt;
 use super::truncate::{capped_detail, capped_detail_with, truncate_text};
-use super::RunOpts;
+use super::{CommandContext, RunOpts};
 use crate::rate_limit;
 use crate::templates;
 use crate::types::*;
 use crate::worktree_layout::{read_commondir, resolve_worktree_gitdir};
+
+pub(crate) const RESUME_FALLBACK_DETAIL: &str =
+    "Codex session resume skipped: rollout missing; starting fresh session";
+const ROLLOUT_TIMESTAMP_FORMAT: &str = "%Y-%m-%dT%H-%M-%S";
 
 /// Parsed codex CLI version (major, minor, patch).
 /// Cached via OnceLock so `codex --version` runs at most once.
@@ -56,22 +61,83 @@ fn has_native_model_flag() -> bool {
     codex_version() >= (0, 116, 0)
 }
 
+pub(crate) fn durable_session_rollout_exists(session_id: &str) -> bool {
+    let Ok(real_home) = super::home_isolation::resolve_real_home() else {
+        return false;
+    };
+    session_rollout_exists(&real_home.join(".codex").join("sessions"), session_id)
+}
+
+pub(crate) fn resume_fallback_needed(session_id: &str) -> bool {
+    !durable_session_rollout_exists(session_id)
+}
+
+pub(crate) fn session_rollout_exists(sessions_dir: &Path, session_id: &str) -> bool {
+    let Ok(entries) = fs::read_dir(sessions_dir) else {
+        return false;
+    };
+    entries.flatten().any(|entry| {
+        let path = entry.path();
+        if path.is_dir() {
+            return session_rollout_exists(&path, session_id);
+        }
+        rollout_filename_matches(&path, session_id)
+    })
+}
+
+pub(crate) fn rollout_filename_matches(path: &Path, session_id: &str) -> bool {
+    if session_id.is_empty() {
+        return false;
+    }
+    let Some(name) = path.file_name().and_then(|name| name.to_str()) else {
+        return false;
+    };
+    let Some(stem) = name
+        .strip_prefix("rollout-")
+        .and_then(|name| name.strip_suffix(".jsonl"))
+    else {
+        return false;
+    };
+    let Some(timestamp) = stem.strip_suffix(&format!("-{session_id}")) else {
+        return false;
+    };
+    // Resume safety intentionally depends on Codex's current timestamp-shaped rollout prefix.
+    NaiveDateTime::parse_from_str(timestamp, ROLLOUT_TIMESTAMP_FORMAT).is_ok()
+}
+
+pub(crate) fn rollout_filename_matches_for_attribution(
+    path: &Path,
+    session_id: &str,
+) -> bool {
+    if session_id.is_empty() {
+        return false;
+    }
+    path.file_name()
+        .and_then(|name| name.to_str())
+        .is_some_and(|name| {
+            name.starts_with("rollout-") && name.ends_with(&format!("-{session_id}.jsonl"))
+        })
+}
+
+pub(crate) fn resume_fallback_event(task_id: &TaskId) -> TaskEvent {
+    TaskEvent {
+        task_id: task_id.clone(),
+        timestamp: Local::now(),
+        event_kind: EventKind::Milestone,
+        detail: RESUME_FALLBACK_DETAIL.to_string(),
+        metadata: None,
+    }
+}
+
 pub struct CodexAgent;
 
-impl super::Agent for CodexAgent {
-    fn kind(&self) -> AgentKind {
-        AgentKind::Codex
-    }
-
-    fn streaming(&self) -> bool {
-        true
-    }
-
-    fn accepts_idle_nudge(&self) -> bool {
-        false
-    }
-
-    fn build_command(&self, prompt: &str, opts: &RunOpts) -> Result<Command> {
+impl CodexAgent {
+    fn build_codex_command(
+        &self,
+        prompt: &str,
+        opts: &RunOpts,
+        durable_codex_home: bool,
+    ) -> Result<Command> {
         let effective_prompt = if opts.read_only {
             read_only_prompt(prompt, opts)
         } else {
@@ -80,7 +146,11 @@ impl super::Agent for CodexAgent {
         let with_context = super::embed_context_in_prompt(&effective_prompt, &opts.context_files)?;
         let injected = templates::inject_codex_prompt(&with_context, None);
         let mut cmd = Command::new("codex");
-        if let Some(session_id) = opts.session_id.as_deref() {
+        let resume_session_id = opts
+            .session_id
+            .as_deref()
+            .filter(|session_id| !durable_codex_home || !resume_fallback_needed(session_id));
+        if let Some(session_id) = resume_session_id {
             cmd.args([
                 "exec",
                 "resume",
@@ -117,12 +187,39 @@ impl super::Agent for CodexAgent {
                     );
                 }
             }
-            if opts.session_id.is_none() {
+            if resume_session_id.is_none() {
                 cmd.args(["-C", dir]);
             }
             cmd.current_dir(dir);
         }
         Ok(cmd)
+    }
+}
+
+impl super::Agent for CodexAgent {
+    fn kind(&self) -> AgentKind {
+        AgentKind::Codex
+    }
+
+    fn streaming(&self) -> bool {
+        true
+    }
+
+    fn accepts_idle_nudge(&self) -> bool {
+        false
+    }
+
+    fn build_command(&self, prompt: &str, opts: &RunOpts) -> Result<Command> {
+        self.build_codex_command(prompt, opts, true)
+    }
+
+    fn build_command_with_context(
+        &self,
+        prompt: &str,
+        opts: &RunOpts,
+        context: CommandContext,
+    ) -> Result<Command> {
+        self.build_codex_command(prompt, opts, context.durable_codex_home)
     }
 
     fn parse_event(&self, task_id: &TaskId, line: &str) -> Option<TaskEvent> {
@@ -469,10 +566,15 @@ fn extract_noop_reason(line: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{parse_semver, CodexAgent};
-    use crate::agent::{Agent, RunOpts};
+    use super::{
+        parse_semver, resume_fallback_event, rollout_filename_matches, session_rollout_exists,
+        CodexAgent,
+        RESUME_FALLBACK_DETAIL,
+    };
+    use crate::agent::{Agent, CommandContext, RunOpts};
     use crate::types::{EventKind, TaskId};
     use std::fs;
+    use std::path::Path;
     use tempfile::tempdir;
 
     #[test]
@@ -519,6 +621,101 @@ mod tests {
                 .and_then(|v| v.as_str()),
             Some("019d1efa-5aa6-7132-bdfa-71fb97e12438")
         );
+    }
+
+    #[test]
+    fn builds_resume_fallback_milestone() {
+        let event = resume_fallback_event(&TaskId("t-resume-fallback".to_string()));
+        assert_eq!(event.event_kind, EventKind::Milestone);
+        assert_eq!(event.detail, RESUME_FALLBACK_DETAIL);
+    }
+
+    #[test]
+    fn finds_only_full_session_id_rollout_matches_in_nested_sessions_dir() {
+        let temp = tempdir().unwrap();
+        let sessions = temp.path().join("sessions/2026/08/09");
+        fs::create_dir_all(&sessions).unwrap();
+        let session_id = "019e3e49-6b83-7563-a3d8-b51a3a716dd1";
+        fs::write(
+            sessions.join(format!("rollout-2026-08-09T17-20-31-{session_id}.jsonl")),
+            "{}",
+        )
+        .unwrap();
+        fs::write(
+            sessions.join("rollout-2026-08-09T17-20-31-extra-019e3e49-6b83-7563-a3d8-b51a3a716dd1.jsonl"),
+            "{}",
+        )
+        .unwrap();
+        fs::write(sessions.join("rollout-2026-08-09T17-20-31-session-123.jsonl"), "{}").unwrap();
+
+        assert!(session_rollout_exists(
+            temp.path().join("sessions").as_path(),
+            session_id
+        ));
+        assert!(!session_rollout_exists(
+            temp.path().join("sessions").as_path(),
+            "123"
+        ));
+        assert!(session_rollout_exists(
+            temp.path().join("sessions").as_path(),
+            "session-123"
+        ));
+    }
+
+    #[test]
+    fn sandboxed_resume_skips_host_rollout_precheck() {
+        let opts = RunOpts {
+            dir: None,
+            output: None,
+            result_file: None,
+            model: None,
+            budget: false,
+            read_only: false,
+            sandbox: true,
+            context_files: vec![],
+            session_id: Some("not-a-uuid-session".to_string()),
+            env: None,
+            env_forward: None,
+        };
+        let cmd = CodexAgent
+            .build_command_with_context(
+                "continue",
+                &opts,
+                CommandContext {
+                    durable_codex_home: false,
+                },
+            )
+            .unwrap();
+        let args: Vec<String> = cmd
+            .get_args()
+            .map(|arg| arg.to_string_lossy().to_string())
+            .collect();
+
+        assert_eq!(&args[..3], ["exec", "resume", "--json"]);
+        assert!(args.contains(&"not-a-uuid-session".to_string()));
+    }
+
+    #[test]
+    fn rollout_match_requires_exact_timestamp_boundary_and_session_id() {
+        let path = Path::new(
+            "rollout-2026-08-09T17-20-31-extra-019e3e49-6b83-7563-a3d8-b51a3a716dd1.jsonl",
+        );
+        assert!(!rollout_filename_matches(
+            path,
+            "019e3e49-6b83-7563-a3d8-b51a3a716dd1"
+        ));
+        assert!(!rollout_filename_matches(
+            Path::new("rollout-2026-08-09T17-20-31-long-123.jsonl"),
+            "123"
+        ));
+        assert!(rollout_filename_matches(
+            Path::new("rollout-2026-08-09T17-20-31-session-123.jsonl"),
+            "session-123"
+        ));
+        assert!(!rollout_filename_matches(
+            Path::new("rollout-not-a-timestamp-019e3e49-6b83-7563-a3d8-b51a3a716dd1.jsonl"),
+            "019e3e49-6b83-7563-a3d8-b51a3a716dd1"
+        ));
     }
 
     #[test]
@@ -825,7 +1022,7 @@ mod tests {
     }
 
     #[test]
-    fn build_command_resumes_saved_session() {
+    fn build_command_starts_fresh_when_saved_rollout_is_missing() {
         let opts = RunOpts {
             dir: None,
             output: None,
@@ -845,10 +1042,11 @@ mod tests {
             .map(|arg| arg.to_string_lossy().to_string())
             .collect();
 
-        assert_eq!(&args[..4], ["exec", "resume", "--json", "--skip-git-repo-check"]);
-        assert_eq!(args[4], "019e3e49-6b83-7563-a3d8-b51a3a716dd1");
-        assert!(args[5].contains("write the final report"));
-        assert!(!args.iter().any(|arg| arg == "--full-auto"));
+        assert_eq!(
+            &args[..4],
+            ["exec", "--json", "--skip-git-repo-check", "--full-auto"]
+        );
+        assert!(args[4].contains("write the final report"));
     }
 }
 

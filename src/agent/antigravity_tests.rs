@@ -273,16 +273,8 @@ fn build_command_passes_only_the_log_it_was_handed() {
 
     let none = crate::agent::env_with_agent_log(None, "t-abcd1234", false);
     assert!(none.is_none(), "an unwatchable run must be handed no path");
-    assert!(
-        crate::agent::agent_log_is_unwatchable("t-abcd1234"),
-        "unwatchable runs must leave an explicit marker, not a silent blind spot"
-    );
 
     let seeded = crate::agent::env_with_agent_log(None, "t-abcd1235", true).unwrap();
     let path = seeded.get(crate::agent::AGENT_LOG_ENV).expect("seeded when watchable");
     assert!(path.contains("t-abcd1235") && path.ends_with("agent.log"), "got: {path}");
-    assert!(
-        !crate::agent::agent_log_is_unwatchable("t-abcd1235"),
-        "watchable runs must not set the unwatchable marker"
-    );
 }

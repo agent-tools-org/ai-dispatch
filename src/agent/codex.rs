@@ -9,7 +9,7 @@ mod attribution;
 pub(crate) use attribution::grade_completion_observation;
 
 use anyhow::{bail, Result};
-use chrono::Local;
+use chrono::{Local, NaiveDateTime};
 use serde_json::{json, Map, Value};
 use std::fs;
 use std::path::Path;
@@ -27,6 +27,7 @@ use crate::worktree_layout::{read_commondir, resolve_worktree_gitdir};
 
 pub(crate) const RESUME_FALLBACK_DETAIL: &str =
     "Codex session resume skipped: rollout missing; starting fresh session";
+const ROLLOUT_TIMESTAMP_FORMAT: &str = "%Y-%m-%dT%H-%M-%S";
 
 /// Parsed codex CLI version (major, minor, patch).
 /// Cached via OnceLock so `codex --version` runs at most once.
@@ -97,9 +98,10 @@ pub(crate) fn rollout_filename_matches(path: &Path, session_id: &str) -> bool {
     else {
         return false;
     };
-    stem.len() > 20
-        && stem.as_bytes().get(19) == Some(&b'-')
-        && &stem[20..] == session_id
+    let Some(timestamp) = stem.strip_suffix(&format!("-{session_id}")) else {
+        return false;
+    };
+    NaiveDateTime::parse_from_str(timestamp, ROLLOUT_TIMESTAMP_FORMAT).is_ok()
 }
 
 pub(crate) fn resume_fallback_event(task_id: &TaskId) -> TaskEvent {

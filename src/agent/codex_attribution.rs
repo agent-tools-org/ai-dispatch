@@ -24,10 +24,11 @@ pub(crate) fn grade_completion_observation(
     if info.model.is_some() {
         return grade_observation(info.model.as_deref(), requested, succeeded);
     }
-    if agent.kind() == AgentKind::Codex
-        && let Some(model) = observed_model_for_task(store, task_id)
-    {
-        return (Some(model), Some(AttributionSource::RecordedByCli));
+    if agent.kind() == AgentKind::Codex {
+        return observed_model_for_task(store, task_id)
+            .map_or((None, None), |model| {
+                (Some(model), Some(AttributionSource::RecordedByCli))
+            });
     }
     grade_observation(None, requested, succeeded)
 }
@@ -51,11 +52,12 @@ fn resolve_codex_home(codex_home: Option<OsString>, home: Option<OsString>) -> P
 
 fn observed_model_for_thread(codex_home: &Path, thread_id: &str) -> Option<String> {
     let session_path = find_session_file(codex_home, thread_id)?;
-    let first_line = BufReader::new(fs::File::open(session_path).ok()?)
-        .lines()
-        .next()?
-        .ok()?;
-    model_from_session_meta(&first_line)
+    for line in BufReader::new(fs::File::open(session_path).ok()?).lines().flatten() {
+        if is_turn_context(&line) {
+            return model_from_turn_context(&line);
+        }
+    }
+    None
 }
 
 fn find_session_file(codex_home: &Path, thread_id: &str) -> Option<PathBuf> {
@@ -105,9 +107,9 @@ fn session_file_matches(path: &Path, thread_id: &str) -> bool {
         })
 }
 
-fn model_from_session_meta(line: &str) -> Option<String> {
+fn model_from_turn_context(line: &str) -> Option<String> {
     let value: serde_json::Value = serde_json::from_str(line).ok()?;
-    if value.get("type").and_then(serde_json::Value::as_str) != Some("session_meta") {
+    if !is_turn_context_value(&value) {
         return None;
     }
     value
@@ -115,6 +117,16 @@ fn model_from_session_meta(line: &str) -> Option<String> {
         .and_then(serde_json::Value::as_str)
         .filter(|model| !model.is_empty())
         .map(ToOwned::to_owned)
+}
+
+fn is_turn_context(line: &str) -> bool {
+    serde_json::from_str::<serde_json::Value>(line)
+        .ok()
+        .is_some_and(|value| is_turn_context_value(&value))
+}
+
+fn is_turn_context_value(value: &serde_json::Value) -> bool {
+    value.get("type").and_then(serde_json::Value::as_str) == Some("turn_context")
 }
 
 #[cfg(test)]
@@ -138,7 +150,7 @@ mod tests {
     }
 
     #[test]
-    fn reads_model_from_matching_rollout_session_meta() {
+    fn reads_model_from_turn_context_after_modelless_session_meta() {
         let home = tempdir().expect("temp home");
         let day = home.path().join("sessions/2026/08/09");
         fs::create_dir_all(&day).expect("session directory");
@@ -146,7 +158,7 @@ mod tests {
         let path = day.join(format!("rollout-2026-08-09T00-00-00-{thread_id}.jsonl"));
         fs::write(
             path,
-            "{\"type\":\"session_meta\",\"payload\":{\"model\":\"gpt-5.6-luna\"}}\n",
+            "{\"type\":\"session_meta\",\"payload\":{\"model_provider\":\"openai\"}}\n{\"type\":\"turn_context\",\"payload\":{\"model\":\"gpt-5.6-luna\"}}\n",
         )
         .expect("session metadata");
 
@@ -157,15 +169,58 @@ mod tests {
     }
 
     #[test]
+    fn first_turn_context_without_model_stays_unknown() {
+        let home = tempdir().expect("temp home");
+        let day = home.path().join("sessions/2026/08/09");
+        fs::create_dir_all(&day).expect("session directory");
+        let thread_id = "019fe4ce-9cf4-79f1-b7e8-b32831ca775d";
+        let path = day.join(format!("rollout-2026-08-09T00-00-00-{thread_id}.jsonl"));
+        fs::write(
+            path,
+            "{\"type\":\"turn_context\",\"payload\":{}}\n{\"type\":\"turn_context\",\"payload\":{\"model\":\"later-model\"}}\n",
+        )
+        .expect("session metadata");
+
+        assert_eq!(observed_model_for_thread(home.path(), thread_id), None);
+    }
+
+    #[test]
     fn missing_or_malformed_session_metadata_stays_unknown() {
-        assert_eq!(model_from_session_meta("not json"), None);
+        assert_eq!(model_from_turn_context("not json"), None);
         assert_eq!(
-            model_from_session_meta("{\"type\":\"session_meta\",\"payload\":{}}"),
+            is_turn_context("{\"type\":\"session_meta\",\"payload\":{\"model\":\"gpt-5.6-luna\"}}"),
+            false
+        );
+        assert_eq!(
+            model_from_turn_context("{\"payload\":{\"model\":\"gpt-5.6-luna\"}}"),
             None
         );
         assert!(!session_file_matches(
             Path::new("rollout-2026-08-09T00-00-00-other.jsonl"),
             "thread-id"
         ));
+    }
+
+    #[test]
+    fn codex_without_rollout_stays_unknown_instead_of_confirming_request() {
+        let store = Store::open_memory().expect("in-memory store");
+        let info = CompletionInfo {
+            tokens: None,
+            status: TaskStatus::Done,
+            model: None,
+            cost_usd: None,
+            exit_code: None,
+        };
+
+        assert_eq!(
+            grade_completion_observation(
+                &crate::agent::codex::CodexAgent,
+                &store,
+                &TaskId("missing-task".to_string()),
+                &info,
+                Some("gpt-5.6-luna"),
+            ),
+            (None, None)
+        );
     }
 }

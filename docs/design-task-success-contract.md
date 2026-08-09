@@ -166,6 +166,27 @@ would still need the `verify`-column heuristic for legacy rows.
 4. **Machine surfaces change additively only.** JSON, MCP and webhook payloads
    gain `outcome` and `verify_status` fields. The meaning of an existing
    `status: "done"` in a payload does not change in this effort.
+5. **A success base holds only tasks with an outcome.** `aid stats` used to
+   divide by "everything except `Waiting`", which put running, pending and
+   stalled tasks into the denominator of a success rate. They have no outcome
+   yet, so they leave it. Measured on the 30-day window this moved nothing (base
+   1270 either way), but it moves live windows, and it is a decision rather than
+   a side effect of routing the question through `TaskOutcome`.
+6. **A verification tag appears only when verification has something to say.**
+   `Broken` and `Unverified(reason)` are labelled; everything else is not. A
+   running task and a task that never had a verify command both carry no tag —
+   otherwise the board wears a meaningless marker on the 1,612 rows that are
+   simply failed with no verification configured.
+
+### Where each axis answers
+
+`TaskOutcome` collapses `Done` and `Merged`, and collapses every non-terminal
+status into `InProgress`. That is right for judgment and wrong for anything
+asking *what stage is this in*. Two gates were written the wrong way before this
+was explicit: the merge gate stopped refusing an already-merged task (P1), and
+the board counted queued tasks as running (P2). The rule: ask `TaskStatus` for
+lifecycle and integration, ask `TaskOutcome` for judgment, and when a call site
+needs both, ask both.
 
 ## 6. Consumers
 

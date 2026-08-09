@@ -124,6 +124,35 @@ fn sccache_death_leaves_the_task_delivered_and_blames_nothing() {
     );
 }
 
+/// The mirror of the incident test, and the more dangerous direction: a false
+/// infrastructure classification turns a broken change into an inconclusive one.
+/// Tooling noise alongside a real compiler diagnostic must still fail the task.
+#[cfg(unix)]
+#[test]
+fn sccache_noise_with_a_compiler_diagnostic_still_fails_the_task() {
+    let _permit = test_subprocess::acquire();
+    let dir = tempfile::tempdir().unwrap();
+    let script = dir.path().join("sccache-and-error.sh");
+    std::fs::write(
+        &script,
+        "#!/bin/sh\necho 'sccache: encountered fatal error'\necho 'error[E0308]: mismatched types'\nexit 1\n",
+    )
+    .unwrap();
+    let dir_str = dir.path().to_string_lossy().to_string();
+    let command = format!("sh {}", script.to_string_lossy());
+    let store = Store::open_memory().unwrap();
+    let task_id = TaskId("t-verify-sccache-diag".to_string());
+    store
+        .insert_task(&task(task_id.as_str(), TaskStatus::Done, Some(&dir_str), Some(&command)))
+        .unwrap();
+
+    maybe_verify(&store, &task_id, Some(&command), Some(&dir_str), None);
+
+    let loaded = store.get_task(task_id.as_str()).unwrap().unwrap();
+    assert_eq!(loaded.verify_status, VerifyStatus::Failed);
+    assert_eq!(loaded.status, TaskStatus::Failed);
+}
+
 #[test]
 fn no_configured_verify_leaves_done_task_successful() {
     let store = Store::open_memory().unwrap();

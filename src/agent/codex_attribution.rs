@@ -237,7 +237,10 @@ mod tests {
             Path::new("rollout-2026-08-09T00-00-00-other.jsonl"),
             "thread-id"
         ));
-        assert!(!session_file_matches(
+        // Deliberately the opposite of the resume rule (see codex.rs): resume rejects an
+        // unexpected filename shape because matching the wrong rollout is a hard failure,
+        // while attribution accepts it because failing to match silently loses billing data.
+        assert!(session_file_matches(
             Path::new(
                 "rollout-2026-08-09T00-00-00-extra-019e3e49-6b83-7563-a3d8-b51a3a716dd1.jsonl"
             ),

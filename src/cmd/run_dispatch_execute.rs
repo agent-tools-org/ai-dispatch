@@ -207,6 +207,9 @@ pub(super) async fn run_foreground_task(
     // TODO: integrate credential_pool rotation here
     let opts = build_run_opts(args, prepared, prompt_bundle);
     let _home_guard = agent::apply_run_env(&mut std_cmd, &opts, Some(prepared.task_id.as_str()))?;
+    if prepared.agent_kind == crate::types::AgentKind::Codex {
+        agent::apply_codex_home_env(&mut std_cmd)?;
+    }
     if let Some(ref dir) = prepared.effective_dir {
         agent::set_git_ceiling(&mut std_cmd, dir);
     }

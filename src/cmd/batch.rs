@@ -250,26 +250,60 @@ pub async fn run(store: Arc<Store>, args: BatchArgs) -> Result<()> {
         .await?
     };
     let task_ids = dispatch.dispatched_task_ids();
-    if args.wait && args.parallel && !has_dependencies && !task_ids.is_empty() {
-        match crate::cmd::wait::wait_for_task_ids(&store, &task_ids, None, false, None).await? {
-            crate::cmd::wait::WaitOutcome::Completed => {}
-            crate::cmd::wait::WaitOutcome::Failed(task_ids) => {
-                anyhow::bail!("Batch task(s) did not succeed: {}", task_ids.join(", "))
-            }
-            crate::cmd::wait::WaitOutcome::TimedOut(task_ids) => {
-                anyhow::bail!("Batch wait timed out with task(s) running: {}", task_ids.join(", "))
-            }
-        }
+    let wait_error = if args.wait && args.parallel && !has_dependencies && !task_ids.is_empty() {
+        Some(batch_wait_error(
+            crate::cmd::wait::wait_for_task_ids(&store, &task_ids, None, false, None).await?,
+        ))
+    } else {
+        None
+    };
+    finalize_batch(
+        path,
+        &dispatch,
+        &task_ids,
+        &config,
+        &store,
+        start_time,
+        batch_repo_path.as_deref(),
+        wait_error.flatten(),
+        total,
+    )
+}
+
+pub(super) fn batch_wait_error(outcome: crate::cmd::wait::WaitOutcome) -> Option<anyhow::Error> {
+    match outcome {
+        crate::cmd::wait::WaitOutcome::Completed => None,
+        crate::cmd::wait::WaitOutcome::Failed(task_ids) => Some(anyhow::anyhow!(
+            "Batch task(s) did not succeed: {}",
+            task_ids.join(", ")
+        )),
+        crate::cmd::wait::WaitOutcome::TimedOut(task_ids) => Some(anyhow::anyhow!(
+            "Batch wait timed out with task(s) running: {}",
+            task_ids.join(", ")
+        )),
     }
+}
+
+pub(super) fn finalize_batch(
+    path: &Path,
+    dispatch: &batch_types::BatchDispatchResult,
+    task_ids: &[String],
+    config: &batch::BatchConfig,
+    store: &Store,
+    start_time: Instant,
+    batch_repo_path: Option<&str>,
+    wait_error: Option<anyhow::Error>,
+    total: usize,
+) -> Result<()> {
     aid_info!(
         "{}",
         batch_helpers::batch_summary(
             &dispatch.outcomes,
             &dispatch.task_ids,
             &config.tasks,
-            &store,
+            store,
             start_time,
-            batch_repo_path.as_deref(),
+            batch_repo_path,
         )
     );
     let archive_dir = crate::paths::aid_dir().join("batches");
@@ -285,7 +319,6 @@ pub async fn run(store: Arc<Store>, args: BatchArgs) -> Result<()> {
         }
     }
     println!("Batch: {total} task(s) dispatched");
-    // Print watch hint for the caller
     let group_id = config.tasks.first().and_then(|t| t.group.as_deref());
     if let Some(gid) = group_id {
         aid_hint!("[aid] Watch: aid watch --wait --group {gid}");
@@ -293,6 +326,9 @@ pub async fn run(store: Arc<Store>, args: BatchArgs) -> Result<()> {
         aid_hint!("[aid] Watch: aid watch --wait {}", task_ids[0]);
     }
     aid_hint!("[aid] TUI:   aid watch --tui");
+    if let Some(error) = wait_error {
+        return Err(error);
+    }
     Ok(())
 }
 

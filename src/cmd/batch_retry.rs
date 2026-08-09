@@ -6,7 +6,7 @@ use crate::cmd::wait::{wait_for_task_ids, WaitOutcome};
 use crate::store::Store;
 use crate::types::{Task, TaskStatus};
 use anyhow::Result;
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::HashMap, future::Future, sync::Arc};
 use tokio::time::Duration;
 /// Caps the serialized retry waiter only; the retried task keeps running.
 const SERIAL_RETRY_TIMEOUT_SECS: u64 = 30 * 60;
@@ -52,8 +52,14 @@ pub async fn retry_failed(
         return Ok(());
     }
     println!("[batch] Retrying {}/{} task(s) in {group_id}", retry_tasks.len(), total);
+    let mut failed_retries = Vec::new();
     for bucket in bucket_retry_tasks(retry_tasks) {
-        dispatch_retry_bucket(&store, bucket, group_id, agent_override).await?;
+        failed_retries.extend(
+            dispatch_retry_bucket(&store, bucket, group_id, agent_override).await?,
+        );
+    }
+    if !failed_retries.is_empty() {
+        anyhow::bail!("Retried task(s) did not succeed: {}", failed_retries.join(", "))
     }
     Ok(())
 }
@@ -150,21 +156,54 @@ async fn dispatch_retry_bucket(
     bucket: RetryBucket,
     group_id: &str,
     agent_override: Option<&str>,
-) -> Result<()> {
-    if bucket.tasks.len() == 1 {
-        let run_args = retry_task_to_run_args(store, &bucket.tasks[0], group_id, agent_override)?;
-        let _ = run::run(store.clone(), run_args).await?;
-        return Ok(());
-    }
+) -> Result<Vec<String>> {
+    let wait_for_completion = bucket.tasks.len() > 1;
     let label = bucket.label();
-    println!("[aid] Serializing {} retries in worktree {}", bucket.tasks.len(), label);
-    for task in bucket.tasks {
-        let run_args = retry_task_to_run_args(store, &task, group_id, agent_override)?;
-        let task_id = run::run(store.clone(), run_args).await?;
-        wait_for_retry_completion(store, task_id.as_str()).await?;
+    if wait_for_completion {
+        println!("[aid] Serializing {} retries in worktree {}", bucket.tasks.len(), label);
     }
-    println!("[aid] Worktree {} bucket complete", label);
-    Ok(())
+    let store = store.clone();
+    let group_id = group_id.to_string();
+    let agent_override = agent_override.map(str::to_string);
+    let failures = retry_tasks_serially(bucket.tasks, move |task| {
+        let store = store.clone();
+        let group_id = group_id.clone();
+        let agent_override = agent_override.clone();
+        async move {
+            let run_args = retry_task_to_run_args(
+                store.as_ref(),
+                &task,
+                &group_id,
+                agent_override.as_deref(),
+            )?;
+            let task_id = run::run(store.clone(), run_args).await?;
+            if wait_for_completion {
+                wait_for_retry_completion(&store, task_id.as_str()).await?;
+            }
+            Ok(())
+        }
+    })
+    .await;
+    if wait_for_completion {
+        println!("[aid] Worktree {} bucket complete", label);
+    }
+    Ok(failures)
+}
+
+pub(super) async fn retry_tasks_serially<F, Fut>(tasks: Vec<Task>, mut retry_one: F) -> Vec<String>
+where
+    F: FnMut(Task) -> Fut,
+    Fut: Future<Output = Result<()>>,
+{
+    let mut failures = Vec::new();
+    for task in tasks {
+        let task_id = task.id.to_string();
+        if let Err(error) = retry_one(task).await {
+            aid_error!("[aid] Retry failed for {task_id}: {error}");
+            failures.push(task_id);
+        }
+    }
+    failures
 }
 
 async fn wait_for_retry_completion(store: &Arc<Store>, task_id: &str) -> Result<()> {

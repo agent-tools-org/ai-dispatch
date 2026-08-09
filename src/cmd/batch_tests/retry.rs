@@ -306,3 +306,32 @@ fn retry_filter_includes_waiting_only_when_requested() {
     assert!(should_retry_task(TaskStatus::Waiting, true));
     assert!(!should_retry_task(TaskStatus::Running, true));
 }
+
+#[tokio::test]
+async fn serial_retry_continues_after_a_failed_task() {
+    let first = make_stored_task("t-first", AgentKind::Codex, TaskStatus::Failed);
+    let second = make_stored_task("t-second", AgentKind::Codex, TaskStatus::Failed);
+    let attempted = Arc::new(std::sync::Mutex::new(Vec::new()));
+    let attempted_by_retry = attempted.clone();
+
+    let failures = super::super::batch_retry::retry_tasks_serially(
+        vec![first, second],
+        move |task| {
+            let attempted = attempted_by_retry.clone();
+            async move {
+                attempted.lock().unwrap().push(task.id.to_string());
+                if task.id.as_str() == "t-first" {
+                    anyhow::bail!("simulated retry failure");
+                }
+                Ok(())
+            }
+        },
+    )
+    .await;
+
+    assert_eq!(
+        attempted.lock().unwrap().as_slice(),
+        ["t-first", "t-second"]
+    );
+    assert_eq!(failures, vec!["t-first"]);
+}

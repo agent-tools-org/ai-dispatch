@@ -204,7 +204,36 @@ pub fn model_on_budget_preference(
         .is_some_and(|entry| budget_preferred_tiers(budget).contains(&entry.tier))
 }
 
-/// Pick the strongest catalog model for `budget`.
+fn total_price(model: &AgentModel) -> f64 {
+    model.input_per_m + model.output_per_m
+}
+
+/// Within a matched tier: Free/Cheap prefer lowest total price (capability
+/// breaks ties); Standard/Premium prefer highest capability.
+/// Ordering is for `min_by`: Less means `left` is preferred (first wins ties).
+fn better_within_budget_tier(
+    budget: TaskBudget,
+    left: &AgentModel,
+    right: &AgentModel,
+) -> Ordering {
+    match budget {
+        TaskBudget::Free | TaskBudget::Cheap => total_price(left)
+            .partial_cmp(&total_price(right))
+            .unwrap_or(Ordering::Equal)
+            .then_with(|| {
+                right
+                    .capability
+                    .partial_cmp(&left.capability)
+                    .unwrap_or(Ordering::Equal)
+            }),
+        TaskBudget::Standard | TaskBudget::Premium => right
+            .capability
+            .partial_cmp(&left.capability)
+            .unwrap_or(Ordering::Equal),
+    }
+}
+
+/// Pick a catalog model for `budget`.
 ///
 /// Walks preferred tiers first, then `unknown` as a last resort at every
 /// budget level — unpriced is eligible, not ineligible.
@@ -214,11 +243,7 @@ pub fn model_for_task_budget(kind: AgentKind, budget: TaskBudget) -> Option<&'st
         if let Some(model) = AGENT_MODELS
             .iter()
             .filter(|model| model.agent == kind && model.tier == tier)
-            .max_by(|left, right| {
-                left.capability
-                    .partial_cmp(&right.capability)
-                    .unwrap_or(Ordering::Equal)
-            })
+            .min_by(|left, right| better_within_budget_tier(budget, left, right))
         {
             return Some(model.model);
         }

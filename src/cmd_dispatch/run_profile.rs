@@ -154,6 +154,19 @@ mod tests {
     }
 
     #[test]
+    fn cheap_budget_dispatches_gemini_flash_lite() {
+        let (agent, model) = explicit_agent(
+            "gemini".into(),
+            &None,
+            Some(TaskBudget::Cheap),
+            TaskEgress::Any,
+        )
+        .expect("gemini --budget cheap must dispatch");
+        assert_eq!(agent, "gemini");
+        assert_eq!(model.as_deref(), Some("flash-lite"));
+    }
+
+    #[test]
     fn egress_local_refuses_builtin_third_party() {
         let err = explicit_agent(
             "codex".into(),

@@ -21,8 +21,10 @@ fn missing_final_delivery_fails_parent_and_resumes_once() {
         std::env::var("PATH").unwrap_or_default()
     );
 
+    let home = home_with_seeded_rollout();
     let output = aid_cmd_in(aid_home.path())
         .env("PATH", path)
+        .env("HOME", home.path())
         .args([
             "run",
             "codex",
@@ -55,8 +57,10 @@ fn repeated_missing_delivery_does_not_start_third_attempt() {
     let bin_dir = TempDir::new().unwrap();
     write_fake_codex(bin_dir.path());
 
+    let home = home_with_seeded_rollout();
     let output = aid_cmd_in(aid_home.path())
         .env("PATH", test_path(bin_dir.path()))
+        .env("HOME", home.path())
         .env("FAKE_CODEX_HOLLOW_RESUME", "1")
         .args([
             "run",
@@ -79,6 +83,24 @@ fn repeated_missing_delivery_does_not_start_third_attempt() {
         )
         .unwrap();
     assert_eq!(facts, (2, 2));
+}
+
+/// The resume preflight looks for the session's rollout under the operator's
+/// real `$HOME`, so a test that leaves HOME alone reads whatever that machine
+/// happens to have and falls back to a fresh run instead of resuming. Give the
+/// test its own HOME and seed the rollout the fake CLI's thread_id implies.
+const FIXTURE_SESSION_ID: &str = "019e3e49-6b83-7563-a3d8-b51a3a716dd1";
+
+fn home_with_seeded_rollout() -> TempDir {
+    let home = TempDir::new().unwrap();
+    let sessions = home.path().join(".codex/sessions/2026/08/09");
+    std::fs::create_dir_all(&sessions).unwrap();
+    std::fs::write(
+        sessions.join(format!("rollout-2026-08-09T00-00-00-{FIXTURE_SESSION_ID}.jsonl")),
+        "{\"type\":\"turn_context\",\"model\":\"gpt-5.6-sol\"}\n",
+    )
+    .unwrap();
+    home
 }
 
 fn task_facts(conn: &Connection, task_id: &str) -> (String, Option<String>) {

@@ -295,6 +295,9 @@ pub(crate) async fn post_run_lifecycle(
 }
 
 pub(crate) fn merge_hint_for_task(task: &Task) -> Option<String> {
+    if task.status != TaskStatus::Done {
+        return None;
+    }
     task_outcome(task)
         .is_success()
         .then(|| format!("[aid] Next: aid show {} --diff | aid merge {}", task.id, task.id))

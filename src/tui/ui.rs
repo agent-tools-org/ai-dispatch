@@ -2,7 +2,7 @@
 // Draws table/list widgets from App state with simple status coloring.
 
 #[path = "ui_helpers.rs"]
-mod ui_helpers;
+pub(crate) mod ui_helpers;
 #[path = "ui_detail.rs"]
 mod ui_detail;
 #[path = "ui_tree.rs"]
@@ -84,7 +84,7 @@ fn render_multipane_view(frame: &mut ratatui::Frame<'_>, app: &App) {
                 task_id: task.id.as_str().to_string(),
                 // Pane title budget is tight; model still lands in the bottom bar.
                 agent: crate::tui::route_display::format_route_fit(task, 28),
-                status: task.status.label().to_string(),
+                status: task_status_label(task),
                 prompt: task.prompt.clone(),
                 events,
                 tokens: task_tokens(task),

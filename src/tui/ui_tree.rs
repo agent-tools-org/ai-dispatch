@@ -9,7 +9,7 @@ use ratatui::widgets::{Block, Borders, List, ListItem, Paragraph};
 
 use crate::tui::app::App;
 use super::status_to_color;
-use super::ui_helpers::truncate;
+use super::ui_helpers::{task_status_label, truncate};
 use crate::cost;
 use crate::tui::route_display::format_route_fit;
 use crate::tui::tree_data;
@@ -109,7 +109,7 @@ pub(super) fn render_tree_view(frame: &mut ratatui::Frame<'_>, app: &App) {
                         Span::raw(" "),
                         Span::styled(route, Style::default().fg(if is_done { Color::Green } else { Color::Cyan })),
                         Span::raw(" "),
-                        Span::styled(task.status.label().to_string(), Style::default().fg(status_color)),
+                        Span::styled(task_status_label(task), Style::default().fg(status_color)),
                         Span::raw(" "),
                         Span::styled(duration, Style::default().fg(dim)),
                     ];

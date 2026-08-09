@@ -129,14 +129,33 @@ async fn run_tool(store: Arc<Store>, arguments: Value) -> Result<Value> {
     .await;
     match task_id {
         Ok(task_id) => {
-            let status = store
-                .get_task(task_id.as_str())?
-                .map(|task| task.status.as_str().to_string())
-                .unwrap_or_else(|| "pending".to_string());
-            Ok(json!({ "task_id": task_id, "status": status }))
+            let task = store.get_task(task_id.as_str())?;
+            Ok(run_task_report(&task_id, task.as_ref()))
         }
         Err(err) => Ok(error_payload(err.to_string())),
     }
+}
+
+fn run_task_report(task_id: &crate::types::TaskId, task: Option<&Task>) -> Value {
+    let fields = task
+        .map(|task| {
+            json!({
+                "status": task.status.as_str(),
+                "outcome": task.outcome().as_str(),
+                "verify_status": task.verify_status.as_str(),
+            })
+        })
+        .unwrap_or_else(|| json!({
+            "status": "pending",
+            "outcome": "in_progress",
+            "verify_status": "pending",
+        }));
+    json!({
+        "task_id": task_id,
+        "status": fields["status"],
+        "outcome": fields["outcome"],
+        "verify_status": fields["verify_status"],
+    })
 }
 
 fn board_tool(store: Arc<Store>, arguments: Value) -> Result<Value> {
@@ -283,6 +302,8 @@ fn render_board_task(task: Task) -> Value {
         "id": task.id,
         "agent": task.agent_display_name(),
         "status": task.status.as_str(),
+        "outcome": task.outcome().as_str(),
+        "verify_status": task.verify_status.as_str(),
         "duration": task_duration(&task),
         "tokens": task.tokens,
         "cost": task.cost_usd,

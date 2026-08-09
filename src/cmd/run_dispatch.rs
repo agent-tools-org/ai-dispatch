@@ -30,7 +30,6 @@ pub async fn run(store: Arc<Store>, mut args: RunArgs) -> Result<TaskId> {
         crate::repo_root::warn_if_nested_repo(args.repo.as_deref().or(args.dir.as_deref()).unwrap_or("."));
     }
     let prepared = prepare_dispatch(&store, &mut args)?;
-    let before_worktree = prepared.task.worktree_path.clone();
     let prompt_bundle = run_prompt::build_prompt_bundle(
         &store,
         &args,
@@ -74,8 +73,6 @@ pub async fn run(store: Arc<Store>, mut args: RunArgs) -> Result<TaskId> {
     run_before_hook(
         &store,
         &prepared,
-        &args,
-        before_worktree.as_deref(),
         &runtime_hooks,
     )?;
     if args.background {
@@ -185,18 +182,14 @@ fn dry_run(
 fn run_before_hook(
     store: &Arc<Store>,
     prepared: &PreparedDispatch,
-    args: &RunArgs,
-    before_worktree: Option<&str>,
     runtime_hooks: &[hooks::Hook],
 ) -> Result<()> {
+    let mut task = prepared.task.clone();
+    task.status = TaskStatus::Running;
     let before_payload = show::task_hook_json(
-        &prepared.task_id,
+        &task,
         &prepared.agent_display_name,
-        TaskStatus::Running,
-        &args.prompt,
-        before_worktree,
         prepared.effective_dir.as_deref(),
-        None,
     );
     if let Err(err) = hooks::run_hooks_with(
         "before_run",

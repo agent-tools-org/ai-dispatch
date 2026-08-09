@@ -29,6 +29,34 @@ pub enum UnverifiedReason {
 }
 
 impl TaskOutcome {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Verified => "verified",
+            Self::Delivered => "delivered",
+            Self::Unverified(_) => "unverified",
+            Self::Broken => "broken",
+            Self::Failed => "failed",
+            Self::Stopped => "stopped",
+            Self::Skipped => "skipped",
+            Self::InProgress => "in_progress",
+        }
+    }
+
+    pub fn verification_tag(self) -> Option<&'static str> {
+        match self {
+            Self::Broken => Some("VFAIL"),
+            Self::Unverified(UnverifiedReason::TimedOut) => Some("VTIMEOUT"),
+            Self::Unverified(UnverifiedReason::Infrastructure) => Some("VINFRA"),
+            Self::Unverified(UnverifiedReason::NoResult) => Some("VNORESULT"),
+            Self::Verified
+            | Self::Delivered
+            | Self::Failed
+            | Self::Stopped
+            | Self::Skipped
+            | Self::InProgress => None,
+        }
+    }
+
     pub fn derive(
         status: TaskStatus,
         verify_status: VerifyStatus,

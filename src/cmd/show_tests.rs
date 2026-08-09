@@ -230,6 +230,37 @@ fn audit_text_shows_done_status_when_result_file_is_missing() {
 }
 
 #[test]
+fn audit_text_shows_inconclusive_verification_tag() {
+    let store = Arc::new(Store::open_memory().unwrap());
+    let mut task = task_fixture("t-show-timeout", "investigate issue", None, None);
+    task.verify = Some("cargo test".to_string());
+    task.verify_status = VerifyStatus::TimedOut;
+    store.insert_task(&task).unwrap();
+
+    let text = audit_text(&store, task.id.as_str()).unwrap();
+
+    // audit_text prints the status twice — the detail header and the missing-result
+    // notice. Pin the notice line, or the header alone satisfies the assertion.
+    assert!(
+        text.contains("Status: DONE [VTIMEOUT] (no result file"),
+        "output: {text}"
+    );
+}
+
+#[test]
+fn task_hook_payload_adds_outcome_and_verification_status() {
+    let mut task = task_fixture("t-hook-timeout", "hook task", None, None);
+    task.verify = Some("cargo test".to_string());
+    task.verify_status = VerifyStatus::TimedOut;
+
+    let payload = task_hook_json(&task, "codex", Some("/repo"));
+
+    assert_eq!(payload["status"], "done");
+    assert_eq!(payload["outcome"], "unverified");
+    assert_eq!(payload["verify_status"], "timed_out");
+}
+
+#[test]
 fn audit_text_shows_failed_status_when_result_file_is_missing() {
     let temp = tempfile::tempdir().unwrap();
     let _aid_home = crate::paths::AidHomeGuard::set(temp.path());
@@ -240,7 +271,9 @@ fn audit_text_shows_failed_status_when_result_file_is_missing() {
 
     let text = audit_text(&store, task.id.as_str()).unwrap();
 
-    assert!(text.contains("Status: FAILED"));
+    // The summary header also prints "Status: FAILED", so anchor on the notice's
+    // own line or a broken notice still satisfies this.
+    assert!(text.contains("Status: FAILED\n"), "output: {text}");
 }
 
 #[test]

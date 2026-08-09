@@ -8,7 +8,7 @@ use std::path::Path;
 
 use crate::config::{AidConfig, UsageBudget};
 use crate::store::Store;
-use crate::types::{Task, TaskFilter, TaskStatus};
+use crate::types::{Task, TaskFilter, TaskOutcome};
 use crate::usage_report::{collect_agent_rows, collect_budget_rows, select_top_tasks};
 
 pub struct BudgetStatus {
@@ -368,11 +368,11 @@ pub fn agent_analytics(
 fn summarize_agent_period(tasks: &[&Task]) -> AgentPeriodStats {
     let success_count = tasks
         .iter()
-        .filter(|task| matches!(task.status, TaskStatus::Done | TaskStatus::Merged))
+        .filter(|task| task.outcome().is_success())
         .count();
     let fail_count = tasks
         .iter()
-        .filter(|task| matches!(task.status, TaskStatus::Failed))
+        .filter(|task| matches!(task.outcome(), TaskOutcome::Broken | TaskOutcome::Failed))
         .count();
     let retry_count = tasks.iter().filter(|task| task.parent_task_id.is_some()).count();
     let tokens = tasks.iter().map(|task| task.tokens.unwrap_or(0)).sum();
@@ -710,6 +710,19 @@ mod tests {
         assert_eq!(row.retry_count, 1);
         assert!((row.success_rate - 33.333333333333336).abs() < 0.0001);
         assert_eq!(row.avg_duration_secs, 60.0);
+    }
+
+    #[test]
+    fn timed_out_verification_is_not_counted_as_usage_success() {
+        let done = make_task("t-done", AgentKind::Codex, 1_000, 0.10);
+        let mut timed_out = make_task("t-timeout", AgentKind::Codex, 1_000, 0.10);
+        timed_out.verify = Some("cargo test".to_string());
+        timed_out.verify_status = VerifyStatus::TimedOut;
+
+        let snapshot = collect_usage_from_tasks(&[done, timed_out], &AidConfig::default()).unwrap();
+        let row = snapshot.agent_rows.iter().find(|row| row.name == AgentKind::Codex.as_str()).unwrap();
+
+        assert_eq!(row.success_rate, 50.0);
     }
 
     #[test]

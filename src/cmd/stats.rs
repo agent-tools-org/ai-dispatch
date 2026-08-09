@@ -8,7 +8,7 @@ use std::collections::{BTreeMap, HashMap};
 use super::stats_hint;
 use crate::cost;
 use crate::store::Store;
-use crate::types::{AgentKind, Task, TaskStatus};
+use crate::types::{AgentKind, Task, TaskOutcome};
 use crate::usage::UsageWindow;
 
 #[derive(Debug, PartialEq)] struct StatsSnapshot { agent_rows: Vec<AgentRow>, failure_rows: Vec<FailureRow>, model_rows: Vec<ModelRow>, declared_rows: Vec<DeclaredRow>, activity_by_day: Vec<(String, usize)>, activity_by_hour: Vec<(u32, usize)>, top_sessions: Vec<TopSession>, total_cost: Option<f64>, total_tokens: i64, total_tasks: usize }
@@ -37,8 +37,9 @@ fn collect(store: &Store, window: UsageWindow, agent: Option<&str>, now: DateTim
         let cost_usd = task_cost(task);
         let row = agents.entry(task.agent_display_name().to_string()).or_insert((task.agent, 0, 0, 0, 0, 0, None));
         row.1 += 1;
-        row.2 += usize::from(matches!(task.status, TaskStatus::Done | TaskStatus::Merged));
-        row.3 += usize::from(task.status != TaskStatus::Waiting);
+        let outcome = task.outcome();
+        row.2 += usize::from(outcome.is_success());
+        row.3 += usize::from(!matches!(outcome, TaskOutcome::InProgress));
         if let Some(ms) = task.duration_ms { row.4 += ms; row.5 += 1; }
         add_known_cost(&mut row.6, cost_usd);
         let model = task.attributed_model().unwrap_or("unknown").to_string();
@@ -49,7 +50,7 @@ fn collect(store: &Store, window: UsageWindow, agent: Option<&str>, now: DateTim
             let row = declared.entry(difficulty.label().to_string()).or_default();
             row.0 += 1;
             if let Some(duration) = task.duration_ms { row.1 += duration; row.2 += 1; }
-            row.3 += usize::from(task.status == TaskStatus::Failed || task.has_verify_failure());
+            row.3 += usize::from(matches!(outcome, TaskOutcome::Broken | TaskOutcome::Failed));
         }
         *day_counts.entry(task.created_at.format("%a").to_string()).or_default() += 1;
         hour_counts[task.created_at.hour() as usize] += 1;
@@ -62,7 +63,7 @@ fn collect(store: &Store, window: UsageWindow, agent: Option<&str>, now: DateTim
         if let Some(cost_usd) = cost_usd {
             if highest_cost.as_ref().is_none_or(|(_, best)| cost_usd > *best) { highest_cost = Some((task, cost_usd)); }
         }
-        if task.status == TaskStatus::Failed {
+        if matches!(outcome, TaskOutcome::Broken | TaskOutcome::Failed) {
             let label = classify_failure(store.latest_error(task.id.as_str()).as_deref(), task.exit_code);
             let entry = failures.entry(label).or_insert((0, BTreeMap::new()));
             entry.0 += 1;

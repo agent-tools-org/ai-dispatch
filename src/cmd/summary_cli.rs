@@ -2,7 +2,7 @@
 // Exports: run.
 // Deps: anyhow, crate::store, crate::types.
 use crate::store::Store;
-use crate::types::{Finding, Task, TaskStatus, Workgroup};
+use crate::types::{Finding, Task, TaskOutcome, TaskStatus, Workgroup};
 use anyhow::{anyhow, Result};
 use std::collections::HashMap;
 
@@ -14,11 +14,11 @@ pub fn run(store: &Store, group_id: &str) -> Result<()> {
     let milestone_map = group_milestones(store.get_workgroup_milestones(group_id)?);
     let done = tasks
         .iter()
-        .filter(|task| is_success_status(task.status))
+        .filter(|task| task.outcome().is_success())
         .count();
     let failed = tasks
         .iter()
-        .filter(|task| matches!(task.status, TaskStatus::Failed | TaskStatus::Stopped))
+        .filter(|task| matches!(task.outcome(), TaskOutcome::Broken | TaskOutcome::Failed | TaskOutcome::Stopped))
         .count();
 
     print_header(&workgroup, total_tasks(&tasks), done, failed);
@@ -98,18 +98,14 @@ fn status_symbol(status: TaskStatus) -> &'static str {
     }
 }
 
-fn is_success_status(status: TaskStatus) -> bool {
-    matches!(status, TaskStatus::Done | TaskStatus::Merged)
-}
-
 fn format_result_attrs(task: &Task) -> String {
     let mut parts = Vec::new();
     if let Some(duration) = task.duration_ms {
         parts.push(format_duration(duration));
     }
-    if matches!(task.status, TaskStatus::Failed | TaskStatus::Stopped) {
+    if matches!(task.outcome(), TaskOutcome::Broken | TaskOutcome::Failed | TaskOutcome::Stopped) {
         parts.push("FAILED".to_string());
-    } else if is_success_status(task.status) {
+    } else if task.outcome().is_success() {
         if let Some(tokens) = task.tokens {
             parts.push(format!("{} tokens", format_tokens(tokens)));
         }

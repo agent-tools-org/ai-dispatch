@@ -12,7 +12,7 @@ use crate::background;
 use crate::cmd::eta;
 use crate::session;
 use crate::store::Store;
-use crate::types::{Task, TaskFilter, TaskStatus};
+use crate::types::{Task, TaskFilter, TaskOutcome, TaskStatus};
 
 const POLL_INTERVAL: Duration = Duration::from_secs(2);
 const PROMPT_MAX: usize = 60;
@@ -271,10 +271,22 @@ fn truncate(s: &str, max: usize) -> String {
 
 fn print_summary(tasks: &[Task], label: &str) {
     let total = tasks.len();
-    let done = tasks.iter().filter(|t| t.status == TaskStatus::Done).count();
-    let merged = tasks.iter().filter(|t| t.status == TaskStatus::Merged).count();
-    let failed = tasks.iter().filter(|t| t.status == TaskStatus::Failed).count();
-    let skipped = tasks.iter().filter(|t| t.status == TaskStatus::Skipped).count();
+    let done = tasks
+        .iter()
+        .filter(|t| t.status == TaskStatus::Done && t.outcome().is_success())
+        .count();
+    let merged = tasks
+        .iter()
+        .filter(|t| t.status == TaskStatus::Merged && t.outcome().is_success())
+        .count();
+    let failed = tasks
+        .iter()
+        .filter(|t| matches!(t.outcome(), TaskOutcome::Broken | TaskOutcome::Failed | TaskOutcome::Stopped))
+        .count();
+    let skipped = tasks
+        .iter()
+        .filter(|t| matches!(t.outcome(), TaskOutcome::Skipped))
+        .count();
     println!(
         "{label}: {total} total | {done} done | {merged} merged | {failed} failed | {skipped} skipped"
     );

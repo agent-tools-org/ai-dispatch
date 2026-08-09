@@ -45,28 +45,66 @@ fn rejects_short_trailing_fragment_without_changes() {
     ));
 }
 
-/// Incident t-346c5194: a commit follow-up's correct closing message is short.
-/// The length floor must not apply when the deliverable is the diff.
+/// Incident t-346c5194: a commit follow-up's correct closing message is short
+/// prose. Length floor waived when the diff is the deliverable; same text must
+/// still fail without changes (fails if the waive is applied unconditionally).
 #[test]
 fn accepts_short_trailing_message_when_diff_is_deliverable() {
     let mut evidence = DeliveryEvidence::default();
-    let short_message = "x".repeat(157);
+    // Verbatim shape of the t-346c5194 closing message (< 200 chars, real prose).
+    let short_message = "Committed all changes:\n\
+`b9525d8f docs: investigate dead heartbeat decision counters`\n\
+Worktree is clean. No source files, configs, or scripts were modified.";
+    assert!(short_message.chars().count() < super::MIN_FINAL_MESSAGE_CHARS);
     observe(&mut evidence, serde_json::json!({"type":"item.completed","item":{"type":"command_execution"}}));
     observe(&mut evidence, serde_json::json!({"type":"item.completed","item":{"type":"agent_message","text":short_message}}));
     assert_eq!(evidence.validate(true), DeliveryOutcome::Delivered);
+    assert!(matches!(
+        evidence.validate(false),
+        DeliveryOutcome::MissingFinalDelivery { .. }
+    ));
 }
 
-/// Audit/report tasks often omit `--read-only` so they can write a result file.
-/// No tree changes + a short sign-off must still fail — that is the hollow case.
+/// Delivery-shaped short prose without changes must still hit the length floor.
+/// Fails if the waive ignores `produced_changes` (reverting the diff check).
 #[test]
-fn rejects_short_signoff_when_task_produced_no_changes() {
+fn rejects_delivery_shaped_short_message_without_changes() {
     let mut evidence = DeliveryEvidence::default();
-    let short_message = "x".repeat(20);
+    let short_message = "Committed all changes.\nWorktree is clean.";
+    assert!(short_message.chars().count() < super::MIN_FINAL_MESSAGE_CHARS);
     observe(&mut evidence, serde_json::json!({"type":"item.completed","item":{"type":"command_execution"}}));
     observe(&mut evidence, serde_json::json!({"type":"item.completed","item":{"type":"agent_message","text":short_message}}));
     assert!(matches!(
         evidence.validate(false),
-        DeliveryOutcome::MissingFinalDelivery { last_message_chars: 20, .. }
+        DeliveryOutcome::MissingFinalDelivery { .. }
+    ));
+}
+
+/// A stray edit plus a two-word fragment must still fail — non-empty is not a
+/// delivery. Fails if the changed-task floor collapses to `chars > 0`.
+#[test]
+fn rejects_changed_task_with_non_delivery_fragment() {
+    let mut evidence = DeliveryEvidence::default();
+    observe(&mut evidence, serde_json::json!({"type":"item.completed","item":{"type":"command_execution"}}));
+    observe(&mut evidence, serde_json::json!({"type":"item.completed","item":{"type":"agent_message","text":"ok mid"}}));
+    assert!(matches!(
+        evidence.validate(true),
+        DeliveryOutcome::MissingFinalDelivery { last_message_chars: 6, .. }
+    ));
+}
+
+/// Narration announcing the next tool call is not a delivery, even with a diff.
+#[test]
+fn rejects_changed_task_with_narration_only_trailing_message() {
+    let mut evidence = DeliveryEvidence::default();
+    observe(&mut evidence, serde_json::json!({"type":"item.completed","item":{"type":"command_execution"}}));
+    observe(
+        &mut evidence,
+        serde_json::json!({"type":"item.completed","item":{"type":"agent_message","text":"I will commit the remaining files."}}),
+    );
+    assert!(matches!(
+        evidence.validate(true),
+        DeliveryOutcome::MissingFinalDelivery { .. }
     ));
 }
 

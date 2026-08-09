@@ -239,7 +239,12 @@ fn audit_text_shows_inconclusive_verification_tag() {
 
     let text = audit_text(&store, task.id.as_str()).unwrap();
 
-    assert!(text.contains("Status: DONE [VTIMEOUT]"), "output: {text}");
+    // audit_text prints the status twice — the detail header and the missing-result
+    // notice. Pin the notice line, or the header alone satisfies the assertion.
+    assert!(
+        text.contains("Status: DONE [VTIMEOUT] (no result file"),
+        "output: {text}"
+    );
 }
 
 #[test]

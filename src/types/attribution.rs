@@ -18,6 +18,10 @@ pub enum AttributionSource {
     /// The CLI named the model in its own output. The strongest evidence
     /// available, and the only grade fit for scoring a model's capability.
     Echoed,
+    /// Codex's persisted session metadata named the model used for this run.
+    /// This is a CLI-authored record, distinct from streamed output and
+    /// inference from a successful exit.
+    RecordedByCli,
     /// aid passed an explicit model and the run succeeded, so that model ran —
     /// a CLI asked for a model it cannot serve fails instead, as `t-bd455a68`
     /// did when the `claude` CLI was handed `gemini-3.6-flash-low`.
@@ -32,6 +36,7 @@ impl AttributionSource {
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Echoed => "echoed",
+            Self::RecordedByCli => "recorded_by_cli",
             Self::ConfirmedBySuccess => "confirmed_by_success",
         }
     }
@@ -39,6 +44,7 @@ impl AttributionSource {
     pub fn parse_str(value: &str) -> Option<Self> {
         match value {
             "echoed" => Some(Self::Echoed),
+            "recorded_by_cli" => Some(Self::RecordedByCli),
             "confirmed_by_success" => Some(Self::ConfirmedBySuccess),
             _ => None,
         }
@@ -47,7 +53,7 @@ impl AttributionSource {
     /// Whether this grade may be used to score a model's capability or to learn
     /// an agent's default model. Only a statement by the CLI qualifies.
     pub fn is_conclusive(self) -> bool {
-        matches!(self, Self::Echoed)
+        matches!(self, Self::Echoed | Self::RecordedByCli)
     }
 }
 
@@ -108,7 +114,11 @@ mod tests {
 
     #[test]
     fn grades_round_trip_through_storage() {
-        for grade in [AttributionSource::Echoed, AttributionSource::ConfirmedBySuccess] {
+        for grade in [
+            AttributionSource::Echoed,
+            AttributionSource::RecordedByCli,
+            AttributionSource::ConfirmedBySuccess,
+        ] {
             assert_eq!(AttributionSource::parse_str(grade.as_str()), Some(grade));
         }
         assert_eq!(AttributionSource::parse_str("guessed"), None);
@@ -134,6 +144,12 @@ mod grade_observation_tests {
         let (model, source) = grade_observation(Some("composer-2"), Some("auto"), true);
         assert_eq!(model.as_deref(), Some("composer-2"));
         assert_eq!(source, Some(AttributionSource::Echoed));
+    }
+
+    #[test]
+    fn a_cli_session_record_is_conclusive_but_not_an_echo() {
+        assert!(AttributionSource::RecordedByCli.is_conclusive());
+        assert_eq!(AttributionSource::RecordedByCli.as_str(), "recorded_by_cli");
     }
 
     /// codex and agy never name a model. Without this rule their every task is

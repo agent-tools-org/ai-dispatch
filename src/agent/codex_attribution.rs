@@ -94,11 +94,8 @@ fn find_session_file_in_day(
 }
 
 fn session_file_matches(path: &Path, thread_id: &str) -> bool {
-    path.file_name()
-        .and_then(|name| name.to_str())
-        .is_some_and(|name| {
-            name.starts_with("rollout-") && name.ends_with(&format!("-{thread_id}.jsonl"))
-        })
+    // Attribution tolerates timestamp changes so billing data is not silently lost.
+    super::rollout_filename_matches_for_attribution(path, thread_id)
 }
 
 fn model_from_turn_context(line: &str) -> Option<String> {
@@ -240,6 +237,19 @@ mod tests {
             Path::new("rollout-2026-08-09T00-00-00-other.jsonl"),
             "thread-id"
         ));
+        // Deliberately the opposite of the resume rule (see codex.rs): resume rejects an
+        // unexpected filename shape because matching the wrong rollout is a hard failure,
+        // while attribution accepts it because failing to match silently loses billing data.
+        assert!(session_file_matches(
+            Path::new(
+                "rollout-2026-08-09T00-00-00-extra-019e3e49-6b83-7563-a3d8-b51a3a716dd1.jsonl"
+            ),
+            "019e3e49-6b83-7563-a3d8-b51a3a716dd1"
+        ));
+        assert!(session_file_matches(
+            Path::new("rollout-2026-08-09T00-00-00-session-123.jsonl"),
+            "session-123"
+        ));
     }
 
     #[test]
@@ -262,6 +272,26 @@ mod tests {
                 Some("gpt-5.6-luna"),
             ),
             (None, None)
+        );
+    }
+
+    #[test]
+    fn attribution_keeps_rollout_with_unparseable_timestamp() {
+        let home = tempdir().expect("temp home");
+        let created_at = test_date();
+        let day = home.path().join("sessions/2026/08/09");
+        fs::create_dir_all(&day).expect("session directory");
+        let thread_id = "019fe4ce-9cf4-79f1-b7e8-b32831ca775d";
+        let path = day.join(format!("rollout-not-a-timestamp-{thread_id}.jsonl"));
+        fs::write(
+            path,
+            "{\"type\":\"turn_context\",\"payload\":{\"model\":\"attributed-model\"}}\n",
+        )
+        .expect("session metadata");
+
+        assert_eq!(
+            observed_model_for_thread(home.path(), thread_id, created_at).as_deref(),
+            Some("attributed-model")
         );
     }
 }

@@ -51,10 +51,11 @@ pub(crate) use binary::{
 pub(crate) use binary::built_in_agent_binary_exists;
 #[allow(unused_imports)]
 pub use env::{
-    agent_has_fs_access, apply_cargo_target_env, apply_run_env, apply_rust_build_cache_env,
+    agent_has_fs_access, apply_cargo_target_env, apply_codex_home_env, apply_run_env, apply_rust_build_cache_env,
     cargo_target_env_arg, is_rust_project, set_git_ceiling, shared_target_dir,
     target_dir_for_worktree,
 };
+pub(crate) use env::should_use_durable_codex_home;
 
 /// Adapter trait for AI CLI tools
 pub trait Agent: Send + Sync {
@@ -77,6 +78,16 @@ pub trait Agent: Send + Sync {
 
     /// Build the OS command to execute this agent
     fn build_command(&self, prompt: &str, opts: &RunOpts) -> Result<Command>;
+
+    /// Build a command with dispatch facts that affect agent-specific behavior.
+    fn build_command_with_context(
+        &self,
+        prompt: &str,
+        opts: &RunOpts,
+        _context: CommandContext,
+    ) -> Result<Command> {
+        self.build_command(prompt, opts)
+    }
 
     /// Parse a single line of output into an event (streaming agents only)
     fn parse_event(&self, task_id: &TaskId, line: &str) -> Option<TaskEvent>;
@@ -104,6 +115,11 @@ pub trait Agent: Send + Sync {
     fn served_models(&self) -> Result<Option<Vec<String>>> {
         Ok(None)
     }
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+pub struct CommandContext {
+    pub durable_codex_home: bool,
 }
 
 /// Options passed to agent for command construction

@@ -211,6 +211,27 @@ fn apply_rust_build_cache_env_sets_target_only() {
     assert!(command_env(&cmd, "RUSTC_WRAPPER").is_none());
 }
 
+#[test]
+fn apply_codex_home_env_uses_durable_real_home() {
+    let mut cmd = Command::new("echo");
+
+    apply_codex_home_env(&mut cmd).unwrap();
+
+    let codex_home = command_env(&cmd, "CODEX_HOME").unwrap();
+    assert_eq!(
+        PathBuf::from(codex_home),
+        super::super::home_isolation::resolve_real_home().unwrap().join(".codex")
+    );
+}
+
+#[test]
+fn durable_codex_home_is_disabled_for_isolated_wrappers() {
+    assert!(should_use_durable_codex_home(AgentKind::Codex, false, false));
+    assert!(!should_use_durable_codex_home(AgentKind::Codex, true, false));
+    assert!(!should_use_durable_codex_home(AgentKind::Codex, false, true));
+    assert!(!should_use_durable_codex_home(AgentKind::Claude, false, false));
+}
+
 fn command_env(cmd: &Command, name: &str) -> Option<String> {
     cmd.get_envs()
         .find(|(key, _)| *key == name)

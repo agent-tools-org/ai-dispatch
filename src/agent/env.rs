@@ -106,6 +106,20 @@ pub fn apply_cargo_target_env(cmd: &mut Command, cargo_target_dir: Option<&str>)
     }
 }
 
+pub fn apply_codex_home_env(cmd: &mut Command) -> anyhow::Result<()> {
+    let codex_home = super::home_isolation::resolve_real_home()?.join(".codex");
+    cmd.env("CODEX_HOME", codex_home);
+    Ok(())
+}
+
+pub(crate) fn should_use_durable_codex_home(
+    agent_kind: AgentKind,
+    sandbox: bool,
+    containerized: bool,
+) -> bool {
+    agent_kind == AgentKind::Codex && !sandbox && !containerized
+}
+
 pub fn cargo_target_env_arg(cargo_target_dir: &str) -> String {
     format!("{CARGO_TARGET_DIR_ENV}={cargo_target_dir}")
 }

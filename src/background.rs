@@ -161,6 +161,8 @@ async fn run_task_inner(store: &Arc<Store>, spec: &BackgroundRunSpec) -> Result<
         read_only: spec.read_only,
         sandbox: spec.sandbox,
         context_files: vec![],
+        // Background runs intentionally stay fresh. If resume is added, carry the durable-home
+        // context into command construction and record the same fallback milestone as foreground.
         session_id: None,
         env: agent::env_with_agent_log(
             spec.env.clone(),
@@ -183,6 +185,13 @@ async fn run_task_inner(store: &Arc<Store>, spec: &BackgroundRunSpec) -> Result<
         agent::ensure_resolved_binary_available(&spec.agent_name, &program)?;
     }
     let _home_guard = agent::apply_run_env(&mut std_cmd, &opts, Some(&spec.task_id))?;
+    if agent::should_use_durable_codex_home(
+        agent.kind(),
+        spec.sandbox,
+        spec.container.is_some(),
+    ) {
+        agent::apply_codex_home_env(&mut std_cmd)?;
+    }
     if let Some(ref dir) = spec.dir {
         agent::set_git_ceiling(&mut std_cmd, dir);
     }

@@ -1307,3 +1307,18 @@ fn auto_commit_excludes_aid_lock_when_other_files_change() {
         ],
     );
 }
+
+#[test]
+fn merge_single_refuses_an_already_merged_task() {
+    let _permit = test_subprocess::acquire();
+    let repo = init_repo();
+    let (wt, branch) = create_worktree_with_commit(repo.path());
+    let store = Store::open_memory().unwrap();
+    let mut task = make_task_with_worktree("t-already-merged", repo.path(), wt.path(), &branch);
+    task.status = TaskStatus::Merged;
+    store.insert_task(&task).unwrap();
+
+    let result = merge_single(&store, task.id.as_str(), false, false, false, None);
+
+    assert!(result.is_err(), "merging an already-merged task must not proceed");
+}

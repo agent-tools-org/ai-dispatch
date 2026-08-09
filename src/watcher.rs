@@ -152,12 +152,14 @@ pub async fn watch_streaming(
         TaskStatus::Failed
     };
     info.exit_code = exit_status.code();
+    let task = store.get_task(task_id.as_str()).ok().flatten();
+    let produced_changes = task.as_ref().is_some_and(crate::commit::task_has_changes_since);
     if status == TaskStatus::Done
         && agent.kind() == AgentKind::Codex
         && let DeliveryOutcome::MissingFinalDelivery {
             last_work_kind,
             last_message_chars,
-        } = delivery_evidence.validate()
+        } = delivery_evidence.validate(produced_changes)
     {
         status = TaskStatus::Failed;
         let _ = store.update_delivery_assessment(
@@ -185,12 +187,9 @@ pub async fn watch_streaming(
         status = info.status;
     }
 
-    // Checked before the clear below: a quota refusal arrives as ordinary result
-    // text with exit 0, so treating it as success would both hide the outage and
-    // wipe the marker that records it.
-                                        // agy and other plain-text CLIs never echo their model, so the group a
-                                        // quota belongs to is only knowable from what aid dispatched.
-                                        let task = store.get_task(task_id.as_str()).ok().flatten();
+    // Checked before the clear below: a quota refusal arrives as exit 0 text.
+    // agy and other plain-text CLIs never echo their model, so the group a
+    // quota belongs to is only knowable from what aid dispatched.
     let dispatched_model = task.as_ref().and_then(|t| t.requested_model.as_deref());
     let quota = crate::agent::stream_completion::record_quota_exhaustion(
         &full_output,

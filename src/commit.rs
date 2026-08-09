@@ -16,6 +16,24 @@ pub fn has_uncommitted_changes(dir: &str) -> Result<bool> {
     Ok(crate::worktree::capture_worktree_snapshot(Path::new(dir))?.has_uncommitted_changes())
 }
 
+/// True when HEAD moved past `start_sha` or the worktree still has local edits.
+pub(crate) fn has_changes_since(dir: &str, start_sha: Option<&str>) -> bool {
+    if let (Some(start), Ok(head)) = (start_sha, head_sha(dir))
+        && start != head
+    {
+        return true;
+    }
+    has_uncommitted_changes(dir).unwrap_or(false)
+}
+
+/// Worktree/repo path relative to the task's recorded start SHA.
+pub(crate) fn task_has_changes_since(task: &crate::types::Task) -> bool {
+    task.worktree_path
+        .as_deref()
+        .or(task.repo_path.as_deref())
+        .is_some_and(|dir| has_changes_since(dir, task.start_sha.as_deref()))
+}
+
 pub fn head_sha(dir: &str) -> Result<String> {
     let out = Command::new("git")
         .args(["-C", dir, "rev-parse", "HEAD"])
@@ -135,7 +153,7 @@ fn strip_aid_tags(text: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{auto_commit, extract_task_summary, has_uncommitted_changes, strip_aid_tags};
+    use super::{auto_commit, extract_task_summary, has_changes_since, has_uncommitted_changes, strip_aid_tags};
     use crate::test_subprocess;
     use std::{path::Path, process::Command};
 
@@ -200,6 +218,23 @@ mod tests {
 
     #[test]
     fn detects_dirty_git_repo() { let _permit = test_subprocess::acquire(); let dir = repo(); assert!(!has_uncommitted_changes(dir.path().to_str().unwrap()).unwrap()); write_path(dir.path(), "tracked.txt", "change"); assert!(has_uncommitted_changes(dir.path().to_str().unwrap()).unwrap()); }
+
+    #[test]
+    fn has_changes_since_detects_commit_and_dirty_tree() {
+        let _permit = test_subprocess::acquire();
+        let dir = repo();
+        let path = dir.path().to_str().unwrap();
+        commit_path(dir.path(), "tracked.txt", "v1\n");
+        let start = head(dir.path()).trim().to_string();
+        assert!(!has_changes_since(path, Some(&start)));
+        write_path(dir.path(), "tracked.txt", "dirty\n");
+        assert!(has_changes_since(path, Some(&start)));
+        git(dir.path(), &["add", "tracked.txt"]);
+        git(dir.path(), &["commit", "-m", "v2"]);
+        assert!(has_changes_since(path, Some(&start)));
+        let after = head(dir.path()).trim().to_string();
+        assert!(!has_changes_since(path, Some(&after)));
+    }
 
     #[test]
     fn auto_commit_succeeds_on_repo_without_head() { let _permit = test_subprocess::acquire(); let dir = repo(); write_path(dir.path(), "first.txt", "hello"); auto_commit(dir.path().to_str().unwrap(), "task-123", "[Task]\nCreate the first file").unwrap(); assert!(!head(dir.path()).is_empty()); assert_eq!(git_stdout(dir.path(), &["ls-tree", "-r", "--name-only", "HEAD"]).trim(), "first.txt"); }

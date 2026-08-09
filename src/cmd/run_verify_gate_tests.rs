@@ -89,6 +89,41 @@ fn configured_verify_spawn_failure_fails_not_skipped() {
     assert!(store.latest_error(task_id.as_str()).unwrap().contains("Failed to run verify command"));
 }
 
+/// The incident this whole contract came from: on 2026-08-08 eight tasks were
+/// marked FAILED because aid's verify died on sccache after their agents had
+/// run the suite green. The task must stay delivered, the verification must be
+/// recorded as inconclusive, and nothing may be written that blames the change.
+#[cfg(unix)]
+#[test]
+fn sccache_death_leaves_the_task_delivered_and_blames_nothing() {
+    let _permit = test_subprocess::acquire();
+    let dir = tempfile::tempdir().unwrap();
+    let script = dir.path().join("sccache-death.sh");
+    std::fs::write(
+        &script,
+        "#!/bin/sh\necho 'sccache: encountered fatal error'\necho 'sccache: error: failed to spawn Command' >&2\nexit 1\n",
+    )
+    .unwrap();
+    let dir_str = dir.path().to_string_lossy().to_string();
+    let command = format!("sh {}", script.to_string_lossy());
+    let store = Store::open_memory().unwrap();
+    let task_id = TaskId("t-verify-sccache".to_string());
+    store
+        .insert_task(&task(task_id.as_str(), TaskStatus::Done, Some(&dir_str), Some(&command)))
+        .unwrap();
+
+    maybe_verify(&store, &task_id, Some(&command), Some(&dir_str), None);
+
+    let task = store.get_task(task_id.as_str()).unwrap().unwrap();
+    assert_eq!(task.verify_status, VerifyStatus::InfrastructureFailure);
+    assert_eq!(task.status, TaskStatus::Done, "delivery must survive a tooling death");
+    assert!(
+        store.latest_error(task_id.as_str()).is_none(),
+        "recorded error: {:?}",
+        store.latest_error(task_id.as_str())
+    );
+}
+
 #[test]
 fn no_configured_verify_leaves_done_task_successful() {
     let store = Store::open_memory().unwrap();

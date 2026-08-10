@@ -1056,8 +1056,11 @@ mod tests {
             .map(|arg| arg.to_string_lossy().to_string())
             .collect();
 
+        // The approval flag sits between the fixed prefix and the prompt only when the
+        // installed Codex version could be read, so pin the prefix and the prompt by
+        // position from each end rather than assuming the flag is present.
         assert_eq!(&args[..3], ["exec", "--json", "--skip-git-repo-check"]);
-        assert!(args[4].contains("write the final report"));
+        assert!(args.last().unwrap().contains("write the final report"));
     }
 }
 

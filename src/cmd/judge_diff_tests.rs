@@ -79,7 +79,7 @@ fn task_without_start_sha_includes_current_staged_changes() {
     std::fs::write(repo.path().join("tracked.txt"), "staged by task\n").unwrap();
     git(repo.path(), &["add", "tracked.txt"]);
 
-    assert!(gather_diff(&task(repo.path(), None)).unwrap().contains("tracked.txt"));
+    assert!(gather_diff(&task(repo.path(), None)).unwrap().contains("staged by task"));
 }
 
 #[test]

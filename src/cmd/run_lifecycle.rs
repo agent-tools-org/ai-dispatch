@@ -308,6 +308,10 @@ fn task_outcome(task: &Task) -> TaskOutcome {
 }
 
 pub(crate) fn inherit_cascade_target(cascade_args: &mut RunArgs, task: &Task) -> Result<()> {
+    if task.repo_path.is_none() && task.worktree_path.is_none() && task.worktree_branch.is_none() {
+        cascade_args.existing_task_id = None;
+        return Ok(());
+    }
     super::apply_retry_target(task, cascade_args)?;
     cascade_args.existing_task_id = None;
     Ok(())

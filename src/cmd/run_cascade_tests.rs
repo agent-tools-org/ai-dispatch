@@ -92,6 +92,24 @@ fn cascade_refuses_persisted_worktree_that_equals_repo_path() {
     assert!(err.to_string().contains("recorded worktree path"));
 }
 
+#[test]
+fn cascade_without_any_persisted_target_keeps_caller_directory_defaults() {
+    let mut task = failed_task("unused");
+    task.worktree_path = None;
+    task.worktree_branch = None;
+    let mut args = RunArgs {
+        existing_task_id: Some(crate::types::TaskId("t-parent".to_string())),
+        ..Default::default()
+    };
+
+    inherit_cascade_target(&mut args, &task).unwrap();
+
+    assert_eq!(args.dir, None);
+    assert_eq!(args.repo, None);
+    assert_eq!(args.worktree, None);
+    assert_eq!(args.existing_task_id, None);
+}
+
 /// A cascade exists to escape a failing route. Carrying the parent's model
 /// across the agent switch sent agy `gpt-5.6-luna` — codex's model — and agy
 /// refused it by listing its own (`t-ac9a7a9d`, cascaded from `t-90371f9e`).

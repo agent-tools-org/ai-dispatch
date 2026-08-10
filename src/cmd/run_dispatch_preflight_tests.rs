@@ -72,6 +72,23 @@ fn validate_command_preflight_rejects_missing_resolved_binary() {
 }
 
 #[test]
+fn validate_command_preflight_rejects_missing_codex_binary() {
+    let agent = crate::agent::get_agent(AgentKind::Codex);
+    let args = RunArgs {
+        agent_name: "codex".to_string(),
+        prompt: "Inspect the repository state carefully.".to_string(),
+        ..Default::default()
+    };
+    let err = validate_command_preflight_with(agent.as_ref(), &args, None, |_| false)
+        .unwrap_err()
+        .to_string();
+    assert_eq!(
+        err,
+        "Agent 'codex' not found: binary 'codex' missing from PATH"
+    );
+}
+
+#[test]
 fn validate_command_preflight_skips_path_probe_on_dry_run() {
     let agent = crate::agent::get_agent(AgentKind::Codex);
     let args = RunArgs {

@@ -1,5 +1,5 @@
 // Pre-dispatch validation and task ID conflict handling for `aid run`.
-// Exports: validate_dispatch(), validate_command_preflight(), resolve_id_conflict(), IdConflict.
+// Exports: validate_dispatch(), validate_command_preflight_with(), resolve_id_conflict(), IdConflict.
 // Deps: agent classification, Store, RunArgs, task status types.
 use anyhow::Result;
 use crate::agent::{self, RunOpts};
@@ -7,21 +7,6 @@ use crate::store::Store;
 use crate::types::{AgentKind, TaskStatus};
 use super::RunArgs;
 use std::process::Command;
-
-/// Reject combinations the command builder cannot honor before a task row exists.
-pub(super) fn validate_command_preflight(
-    agent: &dyn agent::Agent,
-    args: &RunArgs,
-    effective_model: Option<&str>,
-) -> Result<()> {
-    validate_command_preflight_with_runner(
-        agent,
-        args,
-        effective_model,
-        crate::agent::env::which_exists,
-        &preflight_cli_command_runner,
-    )
-}
 
 pub(super) fn validate_command_preflight_with<F>(
     agent: &dyn agent::Agent,

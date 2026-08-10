@@ -577,7 +577,7 @@ fn extract_noop_reason(line: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::{
-        capabilities, codex_version, parse_semver, resume_fallback_event,
+        parse_semver, resume_fallback_event,
         rollout_filename_matches, session_rollout_exists, CodexAgent,
         RESUME_FALLBACK_DETAIL,
     };

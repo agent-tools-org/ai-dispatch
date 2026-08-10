@@ -219,6 +219,10 @@ impl super::Agent for CodexAgent {
         capabilities::validate_installed_codex(codex_version())
     }
 
+    fn validate_cli_with(&self, run: &crate::agent::CliCommandRunner<'_>) -> Result<()> {
+        capabilities::validate_installed_codex_with(codex_version(), run)
+    }
+
     fn build_command_with_context(
         &self,
         prompt: &str,

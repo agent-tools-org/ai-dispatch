@@ -52,13 +52,23 @@ fn cargo_and_git_work_in_isolated_home() {
         .expect("cargo should be runnable");
     assert!(cargo_output.status.success(), "cargo --version failed under isolated HOME: {}", String::from_utf8_lossy(&cargo_output.stderr));
 
-    // git config or commit must succeed inside isolated home.
+    // git must be usable inside the isolated home. Reading a pre-existing global
+    // user.name would only assert that the host machine has one — an isolated HOME
+    // legitimately has no gitconfig — so write one and read it back instead.
+    let git_set = Command::new("git")
+        .args(["config", "--global", "user.name", "Isolated Home"])
+        .env("HOME", guard.path())
+        .output()
+        .expect("git should be runnable");
+    assert!(git_set.status.success(), "git config write failed under isolated HOME: {}", String::from_utf8_lossy(&git_set.stderr));
     let git_output = Command::new("git")
         .args(["config", "--global", "--get", "user.name"])
         .env("HOME", guard.path())
         .output()
         .expect("git should be runnable");
-    assert!(git_output.status.success(), "git config failed under isolated HOME: {}", String::from_utf8_lossy(&git_output.stderr));
+    assert!(git_output.status.success(), "git config read failed under isolated HOME: {}", String::from_utf8_lossy(&git_output.stderr));
+    assert_eq!(String::from_utf8_lossy(&git_output.stdout).trim(), "Isolated Home");
+    assert!(guard.path().join(".gitconfig").exists(), "the write must land inside the isolated HOME, not the operator's");
 }
 
 #[test]

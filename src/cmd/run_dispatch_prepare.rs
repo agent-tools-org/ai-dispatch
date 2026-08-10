@@ -12,10 +12,7 @@ use super::run_task_profile::{
     apply_category_and_result_defaults, persist_declaration, should_auto_result_file,
     validate_critical_rigor, validate_egress,
 };
-use super::run_validate::{validate_command_preflight, validate_dispatch};
-#[cfg(test)]
-#[allow(unused_imports)]
-use super::run_validate::validate_command_preflight_with;
+use super::run_validate::{validate_command_preflight_with, validate_dispatch};
 use super::{RunArgs, context_file_from_spec, resolve_max_duration_mins, resolve_prompt_input, run_prompt};
 
 pub(super) struct PreparedDispatch {
@@ -61,6 +58,17 @@ fn stale_worktree_dir_error(dir: &str, branch: Option<&str>) -> String {
 }
 
 pub(super) fn prepare_dispatch(store: &Arc<Store>, args: &mut RunArgs) -> Result<PreparedDispatch> {
+    prepare_dispatch_with(store, args, crate::agent::env::which_exists)
+}
+
+pub(super) fn prepare_dispatch_with<W>(
+    store: &Arc<Store>,
+    args: &mut RunArgs,
+    which: W,
+) -> Result<PreparedDispatch>
+where
+    W: Fn(&str) -> bool,
+{
     super::run_delegation::apply_nested_delegation(store, args)?;
     args.prompt = resolve_prompt_input(&args.prompt, args.prompt_file.as_deref())?;
     args.prompt_file = None;
@@ -86,10 +94,11 @@ pub(super) fn prepare_dispatch(store: &Arc<Store>, args: &mut RunArgs) -> Result
     }
     // Refuse unsupported agent/flag combinations before the task row exists so
     // background dispatch cannot return success and die in the worker.
-    validate_command_preflight(
+    validate_command_preflight_with(
         agent_setup.agent.as_ref(),
         args,
         agent_setup.effective_model.as_deref(),
+        which,
     )?;
     insert_task_claiming_id(store, &mut task, &mut task_id, &mut log_path, explicit_id)?;
     maybe_insert_held_route_event(store, &task_id, &agent_setup);

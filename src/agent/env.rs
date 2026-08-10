@@ -1,14 +1,24 @@
 // Agent environment helpers: shared target dirs, git ceiling, cwd resolution, run env.
 // Exports: path and process helpers for agent runs.
-// Deps: crate::paths, std::process::Command, super::RunOpts.
+// Deps: anyhow::Result, crate::paths, std::process::Command, super::RunOpts.
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+use anyhow::Result;
 use crate::types::AgentKind;
 
 use super::RunOpts;
 pub(crate) use super::cargo_target::BranchTargetSeedOutcome;
+
+#[derive(Debug)]
+pub(crate) struct CliCommandOutput {
+    pub success: bool,
+    pub stdout: String,
+    pub stderr: String,
+}
+
+pub(crate) type CliCommandRunner<'a> = dyn Fn(&str, &[&str]) -> Result<CliCommandOutput> + 'a;
 
 const CARGO_TARGET_DIR_ENV: &str = "CARGO_TARGET_DIR";
 const CARGO_MANIFEST_NAME: &str = "Cargo.toml";

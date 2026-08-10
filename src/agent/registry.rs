@@ -115,6 +115,7 @@ fn opencode_spec(config: &CustomAgentConfig, model: &str) -> OpenCodeOverlaySpec
         binary: config.binary.clone().unwrap_or_else(|| "opencode".to_string()),
         extra_args: config.extra_args.clone(),
         default_model: Some(model.to_string()),
+        interactive_input: config.interactive_input,
         rate_limit_kind: parse_rate_limit_kind(config),
         allow_external_directories: true,
     }

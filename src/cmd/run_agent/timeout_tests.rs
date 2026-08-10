@@ -18,6 +18,10 @@ impl Agent for TimeoutTestAgent {
         false
     }
 
+    fn accepts_interactive_input(&self) -> bool {
+        false
+    }
+
     fn build_command(&self, _prompt: &str, _opts: &RunOpts) -> anyhow::Result<StdCommand> {
         Ok(StdCommand::new("sh"))
     }

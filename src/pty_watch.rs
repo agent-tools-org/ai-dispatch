@@ -4,6 +4,7 @@
 use anyhow::Result;
 use chrono::Local;
 use serde_json::json;
+use std::collections::HashSet;
 use std::io::Write;
 use std::sync::{Arc, mpsc::{self, RecvTimeoutError}};
 use std::time::{Duration, Instant};
@@ -45,6 +46,7 @@ pub(crate) struct MonitorState {
     idle_nudged: bool,
     idle_warned: bool,
     pending_inbound_acks: usize,
+    failed_inbound_message_ids: HashSet<i64>,
     /// Payloads aid wrote to the PTY; matching stream lines are echoes, not agent progress.
     inbound_echo_suppress: Vec<String>,
     idle_detector: IdleDetector,
@@ -89,6 +91,7 @@ impl MonitorState {
             idle_nudged: false,
             idle_warned: false,
             pending_inbound_acks: 0,
+            failed_inbound_message_ids: HashSet::new(),
             inbound_echo_suppress: Vec::new(),
             idle_detector: IdleDetector::from_policy(timeout_policy),
             streaming,
@@ -257,7 +260,11 @@ impl MonitorState {
         let Some(input) = input_signal::take_response(task_id.as_str())? else {
             return Ok(());
         };
-        bridge.write_input(&input)?;
+        if !Self::write_input_or_record_failure(
+            bridge, store, task_id, "Response", &input, None,
+        )? {
+            return Ok(());
+        }
         self.inbound_echo_suppress.push(input);
         self.finish_input_delivery(store, task_id)?;
         Ok(())
@@ -272,7 +279,11 @@ impl MonitorState {
         let Some(message) = input_signal::take_steer(task_id.as_str())? else {
             return Ok(());
         };
-        bridge.write_input(&message)?;
+        if !Self::write_input_or_record_failure(
+            bridge, store, task_id, "Steer", &message, None,
+        )? {
+            return Ok(());
+        }
         self.inbound_echo_suppress.push(message.clone());
         let delivered = store.mark_delivered_matching_inbound(task_id.as_str(), &message)?;
         if delivered {
@@ -296,7 +307,20 @@ impl MonitorState {
         task_id: &TaskId,
     ) -> Result<()> {
         for message in store.pending_inbound_for_task(task_id.as_str())? {
-            bridge.write_input(&message.content)?;
+            if self.failed_inbound_message_ids.contains(&message.id) {
+                continue;
+            }
+            if !Self::write_input_or_record_failure(
+                bridge,
+                store,
+                task_id,
+                "Reply",
+                &message.content,
+                Some(message.id),
+            )? {
+                self.failed_inbound_message_ids.insert(message.id);
+                break;
+            }
             self.inbound_echo_suppress.push(message.content.clone());
             if store.mark_delivered(message.id)? {
                 self.pending_inbound_acks += 1;
@@ -317,6 +341,36 @@ impl MonitorState {
             })?;
         }
         Ok(())
+    }
+
+    fn write_input_or_record_failure(
+        bridge: &mut PtyBridge,
+        store: &Arc<Store>,
+        task_id: &TaskId,
+        source: &str,
+        message: &str,
+        message_id: Option<i64>,
+    ) -> Result<bool> {
+        let Err(error) = bridge.write_input(message) else {
+            return Ok(true);
+        };
+        store.insert_event(&TaskEvent {
+            task_id: task_id.clone(),
+            timestamp: Local::now(),
+            event_kind: EventKind::Error,
+            detail: format!(
+                "{source} not delivered: {} — {error:#}",
+                message.chars().take(200).collect::<String>()
+            ),
+            metadata: Some(json!({
+                "input_delivery": "failed",
+                "delivered": false,
+                "source": source,
+                "message_id": message_id,
+                "error": error.to_string(),
+            })),
+        })?;
+        Ok(false)
     }
 
     fn maybe_handle_idle(
@@ -526,10 +580,14 @@ pub(crate) fn monitor_bridge(
             }
             Err(RecvTimeoutError::Disconnected) => { state.handle_chunk(agent, task_id, store, log_file, decoder.flush())?; reader_done = true; }
         }
-        state.maybe_forward_input(bridge, store, task_id)?;
-        state.maybe_forward_steer(bridge, store, task_id)?;
-        state.maybe_consume_reply(bridge, store, task_id)?;
-        state.maybe_handle_idle(store, task_id, agent.accepts_idle_nudge())?;
+        let accepts_input = agent.accepts_interactive_input();
+        if accepts_input {
+            state.maybe_forward_input(bridge, store, task_id)?;
+            state.maybe_forward_steer(bridge, store, task_id)?;
+            state.maybe_consume_reply(bridge, store, task_id)?;
+        }
+        let accepts_nudge = accepts_input && agent.accepts_idle_nudge();
+        state.maybe_handle_idle(store, task_id, accepts_nudge)?;
     }
 
     if !state.line_buffer.trim().is_empty() {
@@ -791,3 +849,6 @@ mod idle_hang_tests;
 #[cfg(test)]
 #[path = "pty_watch_activity_tests.rs"]
 mod activity_tests;
+#[cfg(test)]
+#[path = "pty_watch_write_tests.rs"]
+mod write_tests;

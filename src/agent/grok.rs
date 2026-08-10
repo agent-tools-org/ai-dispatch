@@ -22,6 +22,10 @@ impl super::Agent for GrokAgent {
         false
     }
 
+    fn accepts_interactive_input(&self) -> bool {
+        false
+    }
+
     fn build_command(&self, prompt: &str, opts: &RunOpts) -> Result<Command> {
         let prompt_with_ctx = super::embed_context_in_prompt(prompt, &opts.context_files)?;
         let allow_result = super::read_only::allow_result_file_write(opts);

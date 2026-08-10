@@ -56,6 +56,10 @@ impl super::Agent for CursorAgent {
         true
     }
 
+    fn accepts_interactive_input(&self) -> bool {
+        true
+    }
+
     fn build_command(&self, prompt: &str, opts: &RunOpts) -> Result<Command> {
         let mut cmd = Command::new(cursor_binary());
         let prompt_with_ctx = super::embed_context_in_prompt(prompt, &opts.context_files)?;

@@ -123,7 +123,7 @@ fn generated_id_collision_retries_and_dispatch_succeeds() {
         ..Default::default()
     };
 
-    let prepared = prepare_dispatch(&store, &mut args).unwrap();
+    let prepared = prepare_dispatch_with(&store, &mut args, |_| true).unwrap();
 
     assert_eq!(prepared.task_id.as_str(), "t-00000002");
     assert!(store.get_task("t-00000001").unwrap().is_some());
@@ -160,7 +160,7 @@ fn generated_id_exhaustion_does_not_reset_worktree_branch() {
         ..Default::default()
     };
 
-    let err = match prepare_dispatch(&store, &mut args) {
+    let err = match prepare_dispatch_with(&store, &mut args, |_| true) {
         Ok(_) => panic!("dispatch should fail after generated ID retries are exhausted"),
         Err(err) => err,
     };
@@ -191,7 +191,7 @@ fn retry_prepare_persists_live_worktree_metadata() {
     };
 
     apply_retry_target(&parent, &mut args).unwrap();
-    let prepared = prepare_dispatch(&store, &mut args).unwrap();
+    let prepared = prepare_dispatch_with(&store, &mut args, |_| true).unwrap();
 
     let saved = store.get_task(prepared.task_id.as_str()).unwrap().unwrap();
     assert_eq!(saved.worktree_path.as_deref(), Some(worktree_path.as_str()));
@@ -209,7 +209,7 @@ fn prepare_dispatch_updates_log_path_when_id_is_auto_suffixed() {
         prompt: "Investigate a concrete task routing bug.".to_string(),
         ..Default::default()
     };
-    prepare_dispatch(&store, &mut first).unwrap();
+    prepare_dispatch_with(&store, &mut first, |_| true).unwrap();
 
     let mut second = RunArgs {
         agent_name: "codex".to_string(),
@@ -217,7 +217,7 @@ fn prepare_dispatch_updates_log_path_when_id_is_auto_suffixed() {
         prompt: "Investigate a concrete task routing bug again.".to_string(),
         ..Default::default()
     };
-    let prepared = prepare_dispatch(&store, &mut second).unwrap();
+    let prepared = prepare_dispatch_with(&store, &mut second, |_| true).unwrap();
 
     let expected = crate::paths::log_path("t-ebcf-2");
     let saved = store.get_task("t-ebcf-2").unwrap().unwrap();
@@ -236,7 +236,7 @@ fn prepare_dispatch_uses_task_specific_audit_result_file() {
         ..Default::default()
     };
 
-    let prepared = prepare_dispatch(&store, &mut args).unwrap();
+    let prepared = prepare_dispatch_with(&store, &mut args, |_| true).unwrap();
 
     assert_eq!(
         args.result_file.as_deref(),
@@ -257,7 +257,7 @@ fn prepare_dispatch_skips_auto_result_file_when_output_is_set() {
         ..Default::default()
     };
 
-    prepare_dispatch(&store, &mut args).unwrap();
+    prepare_dispatch_with(&store, &mut args, |_| true).unwrap();
 
     assert_eq!(args.result_file, None);
 }
@@ -272,7 +272,7 @@ fn prepare_dispatch_keeps_write_intent_out_of_report_mode() {
         ..Default::default()
     };
 
-    prepare_dispatch(&store, &mut args).unwrap();
+    prepare_dispatch_with(&store, &mut args, |_| true).unwrap();
 
     assert!(!args.audit_report_mode);
     assert_eq!(args.result_file, None);

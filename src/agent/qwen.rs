@@ -38,7 +38,7 @@ impl super::Agent for QwenAgent {
         let mut cmd = Command::new("qwen");
         cmd.args(["-o", "stream-json"]);
         let model = opts.model.clone()
-            .or_else(|| crate::model_catalog::get_qwen_selected_model())
+            .or_else(crate::model_catalog::get_qwen_selected_model)
             .unwrap_or_else(|| "coder-model".to_string());
         cmd.args(["-m", &model]);
         if opts.sandbox {

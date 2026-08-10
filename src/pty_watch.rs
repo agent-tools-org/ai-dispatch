@@ -368,7 +368,12 @@ impl MonitorState {
         message: &str,
         message_id: Option<i64>,
     ) -> Result<bool> {
-        let Err(error) = bridge.write_input(message) else {
+        let delivery = if bridge.is_alive() {
+            bridge.write_input(message)
+        } else {
+            Err(anyhow::anyhow!("PTY child has already exited"))
+        };
+        let Err(error) = delivery else {
             return Ok(true);
         };
         store.insert_event(&TaskEvent {

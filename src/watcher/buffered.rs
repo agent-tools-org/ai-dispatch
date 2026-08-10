@@ -133,16 +133,16 @@ async fn persist_outputs(
         .join("\n");
     tokio::fs::write(log_path, &filtered).await?;
     let _ = tokio::fs::create_dir_all(paths::task_dir(task_id.as_str())).await;
-    let _ = tokio::fs::write(paths::transcript_path(task_id.as_str()), &buffer).await;
+    let _ = tokio::fs::write(paths::transcript_path(task_id.as_str()), buffer).await;
     if let Some(out_path) = output_path {
-        if let Some(response) = crate::agent::grok::extract_response(&buffer) {
+        if let Some(response) = crate::agent::grok::extract_response(buffer) {
             let response_filtered: String = response
                 .lines()
                 .filter(|line| !is_standalone_milestone_line(line))
                 .collect::<Vec<_>>()
                 .join("\n");
             tokio::fs::write(out_path, &response_filtered).await?;
-        } else if let Some(response) = crate::agent::gemini::extract_response(&buffer) {
+        } else if let Some(response) = crate::agent::gemini::extract_response(buffer) {
             let response_filtered: String = response
                 .lines()
                 .filter(|line| !is_standalone_milestone_line(line))

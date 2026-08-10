@@ -150,7 +150,7 @@ pub(super) fn record_hung_detected_failure(
     activity: &TaskActivity,
     detail: &str,
 ) -> Result<bool> {
-    if !super::record_failure(store, task_id, &detail, &detail)? {
+    if !super::record_failure(store, task_id, detail, detail)? {
         return Ok(false);
     }
     process_monitor::insert_hung_detected_events(

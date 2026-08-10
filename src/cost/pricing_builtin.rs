@@ -11,13 +11,9 @@ pub(super) fn for_model_lower(m: &str) -> Option<ModelPricing> {
             input_per_m: 2.0,
             output_per_m: 8.0,
         }
-    } else if m.contains("gpt-5.6-luna") {
-        ModelPricing {
-            input_per_m: 0.4,
-            output_per_m: 1.6,
-        }
-    } else if (m.contains("gpt-5.4") || m.contains("gpt-5.5") || m.contains("gpt-5.6"))
-        && m.contains("mini")
+    } else if m.contains("gpt-5.6-luna")
+        || ((m.contains("gpt-5.4") || m.contains("gpt-5.5") || m.contains("gpt-5.6"))
+            && m.contains("mini"))
     {
         ModelPricing {
             input_per_m: 0.4,
@@ -51,12 +47,9 @@ pub(super) fn for_model_lower(m: &str) -> Option<ModelPricing> {
             input_per_m: 0.4,
             output_per_m: 1.6,
         }
-    } else if m.contains("gpt-4.1-nano") {
-        ModelPricing {
-            input_per_m: 0.1,
-            output_per_m: 0.4,
-        }
-    } else if m.contains("gemini-3") && m.contains("flash") && m.contains("lite") {
+    } else if m.contains("gpt-4.1-nano")
+        || (m.contains("gemini-3") && m.contains("flash") && m.contains("lite"))
+    {
         ModelPricing {
             input_per_m: 0.10,
             output_per_m: 0.40,

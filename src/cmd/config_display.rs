@@ -96,7 +96,7 @@ pub(crate) fn recent_observed_models_line(
     if extras.is_empty() {
         return None;
     }
-    extras.sort_by(|left, right| right.1.cmp(&left.1));
+    extras.sort_by_key(|(_, count)| std::cmp::Reverse(*count));
     let parts: Vec<String> = extras
         .into_iter()
         .take(3)

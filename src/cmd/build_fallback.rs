@@ -2,7 +2,7 @@
 // Exports: target permission detection, fallback path, and digest note helpers.
 // Deps: std path/env only.
 
-use std::path::PathBuf;
+use std::path::Path;
 
 /// True when cargo failed because the chosen target dir (or a cargo lock path
 /// prefixed by it) was not writable. Keyed off cargo's real OS error, not a
@@ -52,7 +52,7 @@ pub(crate) fn should_retry_with_fallback(
         return None;
     }
     let fallback = sandbox_fallback_target_dir()?;
-    if PathBuf::from(&fallback) == PathBuf::from(chosen) {
+    if Path::new(&fallback) == Path::new(chosen) {
         return None;
     }
     Some(fallback)

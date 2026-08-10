@@ -293,7 +293,7 @@ fn prepare_dispatch_rejects_requested_worktree_when_it_is_the_repo_root() {
         ..Default::default()
     };
 
-    let err = match prepare_dispatch(&store, &mut args) {
+    let err = match prepare_dispatch_with(&store, &mut args, |_| true) {
         Ok(prepared) => panic!(
             "dispatch should reject repo-root worktree: repo={:?} worktree={:?}",
             prepared.repo_path, prepared.wt_path

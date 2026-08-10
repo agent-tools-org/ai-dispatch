@@ -27,6 +27,10 @@ impl Agent for StubStreamingAgent {
         true
     }
 
+    fn accepts_interactive_input(&self) -> bool {
+        true
+    }
+
     fn build_command(&self, _prompt: &str, _opts: &RunOpts) -> anyhow::Result<Command> {
         Ok(Command::new("true"))
     }

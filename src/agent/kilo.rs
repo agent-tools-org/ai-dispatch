@@ -17,6 +17,7 @@ pub(crate) fn spec() -> OpenCodeOverlaySpec {
         binary: "kilo".to_string(),
         extra_args: vec!["--auto".to_string()],
         default_model: None,
+        interactive_input: true,
         rate_limit_kind: AgentKind::Kilo,
         allow_external_directories: false,
     }

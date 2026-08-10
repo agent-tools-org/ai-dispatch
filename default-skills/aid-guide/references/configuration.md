@@ -58,6 +58,11 @@ its id (`rate-limit-<id>`), so one custom hitting quota does not hold the
 others; `aid config clear-limit <custom-id>` clears that agent alone.
 Built-in markers (`rate-limit-codex`, …) are unchanged.
 
+Custom agent TOML may set `interactive_input = false` when its CLI does not
+consume PTY stdin. The field defaults to `true` so existing custom agents keep
+their historical steering, reply, respond, and idle-nudge behavior; it is
+independent of the `streaming` output setting.
+
 For providers that aidbar probes, dispatch may temporarily treat a
 time-based or transient older marker as released when a successful cache
 snapshot is newer than the marker and every reported usage window has headroom.

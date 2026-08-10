@@ -167,15 +167,12 @@ pub(crate) fn parse_knowledge_line(line: &str, base_dir: &Path) -> Option<Knowle
     let mut remainder = rest[closing + 1..].trim_start();
     let mut path = None;
     if remainder.starts_with('(') {
-        if let Some(end) = remainder.find(')') {
-            let segment = remainder[1..end].trim().to_string();
-            if !segment.is_empty() {
-                path = Some(segment);
-            }
-            remainder = remainder[end + 1..].trim_start();
-        } else {
-            return None;
+        let end = remainder.find(')')?;
+        let segment = remainder[1..end].trim().to_string();
+        if !segment.is_empty() {
+            path = Some(segment);
         }
+        remainder = remainder[end + 1..].trim_start();
     }
     let description = remainder.split_once('—')?.1.trim();
     if description.is_empty() {

@@ -102,7 +102,9 @@ fn queued_message_after_child_exit_does_not_fail_monitor() {
     assert_eq!(event.event_kind, EventKind::Error);
     assert!(event.detail.contains("Reply not delivered"));
     assert!(
-        event.detail.contains("Input/output error") || event.detail.contains("os error 5"),
+        event.detail.contains("PTY child has already exited")
+            || event.detail.contains("Input/output error")
+            || event.detail.contains("os error 5"),
         "event must preserve the write failure reason: {}",
         event.detail
     );

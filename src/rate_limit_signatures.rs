@@ -228,14 +228,13 @@ fn parse_compact_duration(lower: &str) -> Option<Duration> {
         }
         let amount: i64 = number.parse().ok()?;
         number.clear();
-        total = total
-            + match ch {
-                'd' => Duration::days(amount),
-                'h' => Duration::hours(amount),
-                'm' => Duration::minutes(amount),
-                's' => Duration::seconds(amount),
-                _ => return None,
-            };
+        total += match ch {
+            'd' => Duration::days(amount),
+            'h' => Duration::hours(amount),
+            'm' => Duration::minutes(amount),
+            's' => Duration::seconds(amount),
+            _ => return None,
+        };
     }
     (total > Duration::zero()).then_some(total)
 }

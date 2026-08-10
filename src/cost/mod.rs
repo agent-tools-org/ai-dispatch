@@ -26,10 +26,8 @@ static GEMINI_DEFAULT_MODEL_CACHE: OnceLock<Option<String>> = OnceLock::new();
 
 /// Populate [`GEMINI_DEFAULT_MODEL_CACHE`] once per process from [`Store::latest_default_model`].
 pub fn warm_gemini_default_from_store(store: &Store) {
-    let _ = GEMINI_DEFAULT_MODEL_CACHE.get_or_init(|| match store.latest_default_model(AgentKind::Gemini) {
-        Ok(m) => m,
-        Err(_) => None,
-    });
+    let _ = GEMINI_DEFAULT_MODEL_CACHE
+        .get_or_init(|| store.latest_default_model(AgentKind::Gemini).unwrap_or_default());
 }
 
 /// Refresh the price-feed cache out of band. Never blocks or fails a run; a

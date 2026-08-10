@@ -58,7 +58,10 @@ fn observed_model_for_thread(
     created_at: DateTime<Local>,
 ) -> Option<String> {
     let session_path = find_session_file(codex_home, thread_id, created_at)?;
-    for line in BufReader::new(fs::File::open(session_path).ok()?).lines().flatten() {
+    for line in BufReader::new(fs::File::open(session_path).ok()?)
+        .lines()
+        .map_while(Result::ok)
+    {
         if let Some(model) = model_from_turn_context(&line) {
             return Some(model);
         }

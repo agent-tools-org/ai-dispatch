@@ -75,11 +75,11 @@ fn retry_task_to_run_args(
         feedback = args.feedback,
         prompt = task.prompt,
     );
-    let worktree = reusable_worktree(&task);
+    let worktree = reusable_worktree(task);
     let (dir, worktree_arg) = if args.dir.is_some() {
         (args.dir, None) // --dir override takes precedence
     } else {
-        resolve_retry_target(&task, worktree, &args.task_id, args.reset)?
+        resolve_retry_target(task, worktree, &args.task_id, args.reset)?
     };
 
     if announce {

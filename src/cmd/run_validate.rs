@@ -1,20 +1,12 @@
 // Pre-dispatch validation and task ID conflict handling for `aid run`.
-// Exports: validate_dispatch(), validate_command_preflight(), resolve_id_conflict(), IdConflict.
+// Exports: validate_dispatch(), validate_command_preflight_with(), resolve_id_conflict(), IdConflict.
 // Deps: agent classification, Store, RunArgs, task status types.
 use anyhow::Result;
 use crate::agent::{self, RunOpts};
 use crate::store::Store;
 use crate::types::{AgentKind, TaskStatus};
 use super::RunArgs;
-
-/// Reject combinations the command builder cannot honor before a task row exists.
-pub(super) fn validate_command_preflight(
-    agent: &dyn agent::Agent,
-    args: &RunArgs,
-    effective_model: Option<&str>,
-) -> Result<()> {
-    validate_command_preflight_with(agent, args, effective_model, crate::agent::env::which_exists)
-}
+use std::process::Command;
 
 pub(super) fn validate_command_preflight_with<F>(
     agent: &dyn agent::Agent,
@@ -24,6 +16,25 @@ pub(super) fn validate_command_preflight_with<F>(
 ) -> Result<()>
 where
     F: Fn(&str) -> bool,
+{
+    validate_command_preflight_with_runner(
+        agent,
+        args,
+        effective_model,
+        which,
+        &preflight_cli_command_runner,
+    )
+}
+
+fn validate_command_preflight_with_runner<W>(
+    agent: &dyn agent::Agent,
+    args: &RunArgs,
+    effective_model: Option<&str>,
+    which: W,
+    run: &agent::CliCommandRunner<'_>,
+) -> Result<()>
+where
+    W: Fn(&str) -> bool,
 {
     if args.sandbox
         && crate::sandbox::can_sandbox(agent.kind())
@@ -55,7 +66,31 @@ where
         return Ok(());
     }
     let program = cmd.get_program().to_string_lossy();
-    agent::ensure_resolved_binary_available_with(&args.agent_name, &program, which)
+    agent::ensure_resolved_binary_available_with(&args.agent_name, &program, which)?;
+    agent.validate_cli_with(run)
+}
+
+fn run_cli_command(program: &str, args: &[&str]) -> Result<agent::CliCommandOutput> {
+    let output = Command::new(program).args(args).output()?;
+    Ok(agent::CliCommandOutput {
+        success: output.status.success(),
+        stdout: String::from_utf8_lossy(&output.stdout).into_owned(),
+        stderr: String::from_utf8_lossy(&output.stderr).into_owned(),
+    })
+}
+
+#[cfg(test)]
+fn preflight_cli_command_runner(_program: &str, _args: &[&str]) -> Result<agent::CliCommandOutput> {
+    Ok(agent::CliCommandOutput {
+        success: true,
+        stdout: "--full-auto\n--approve-for-me\n".to_string(),
+        stderr: String::new(),
+    })
+}
+
+#[cfg(not(test))]
+fn preflight_cli_command_runner(program: &str, args: &[&str]) -> Result<agent::CliCommandOutput> {
+    run_cli_command(program, args)
 }
 
 pub(super) fn validate_dispatch(args: &RunArgs, agent_kind: &AgentKind) -> Vec<String> {

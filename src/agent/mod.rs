@@ -55,7 +55,7 @@ pub use env::{
     cargo_target_env_arg, is_rust_project, set_git_ceiling, shared_target_dir,
     target_dir_for_worktree,
 };
-pub(crate) use env::should_use_durable_codex_home;
+pub(crate) use env::{should_use_durable_codex_home, CliCommandOutput, CliCommandRunner};
 
 /// Adapter trait for AI CLI tools
 pub trait Agent: Send + Sync {
@@ -79,6 +79,11 @@ pub trait Agent: Send + Sync {
     /// Build the OS command to execute this agent
     fn build_command(&self, prompt: &str, opts: &RunOpts) -> Result<Command>;
 
+    /// Validate the installed host CLI contract before a task row is claimed; use `validate_cli_with` for injected runners.
+    fn validate_cli(&self) -> Result<()> {
+        Ok(())
+    }
+    fn validate_cli_with(&self, _run: &CliCommandRunner<'_>) -> Result<()> { self.validate_cli() }
     /// Build a command with dispatch facts that affect agent-specific behavior.
     fn build_command_with_context(
         &self,

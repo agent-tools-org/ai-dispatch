@@ -59,7 +59,7 @@ fn cascade_inherits_existing_worktree_dir() {
     let linked_root = tempfile::tempdir().unwrap();
     let linked = linked_root.path().join("linked");
     git(repo.path(), &["worktree", "add", "-b", "feat/cascade", &linked.to_string_lossy()]);
-    let task = failed_task(&linked.display().to_string());
+    let task = failed_task_with_repo(&repo.path().display().to_string(), &linked.display().to_string());
     let mut args = RunArgs {
         agent_name: "gemini".to_string(),
         worktree: Some("feat/cascade".to_string()),
@@ -69,6 +69,7 @@ fn cascade_inherits_existing_worktree_dir() {
     inherit_cascade_target(&mut args, &task).unwrap();
 
     assert_eq!(args.dir, task.worktree_path);
+    assert_eq!(args.repo.as_deref(), Some(repo.path().to_string_lossy().as_ref()));
     // The cascade keeps the worktree branch so the follow-up task is persisted with its
     // worktree metadata intact; dropping it strips isolation from later generations.
     assert_eq!(args.worktree.as_deref(), Some("feat/cascade"));
@@ -89,6 +90,24 @@ fn cascade_refuses_persisted_worktree_that_equals_repo_path() {
     let err = inherit_cascade_target(&mut args, &task).unwrap_err();
 
     assert!(err.to_string().contains("recorded worktree path"));
+}
+
+#[test]
+fn cascade_without_any_persisted_target_keeps_caller_directory_defaults() {
+    let mut task = failed_task("unused");
+    task.worktree_path = None;
+    task.worktree_branch = None;
+    let mut args = RunArgs {
+        existing_task_id: Some(crate::types::TaskId("t-parent".to_string())),
+        ..Default::default()
+    };
+
+    inherit_cascade_target(&mut args, &task).unwrap();
+
+    assert_eq!(args.dir, None);
+    assert_eq!(args.repo, None);
+    assert_eq!(args.worktree, None);
+    assert_eq!(args.existing_task_id, None);
 }
 
 /// A cascade exists to escape a failing route. Carrying the parent's model

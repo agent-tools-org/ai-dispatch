@@ -555,6 +555,18 @@ fn respond_reads_response_text_from_file() {
     let mut response_file = NamedTempFile::new().unwrap();
     write!(response_file, "text with `backticks` and {{braces}}").unwrap();
 
+    // `aid respond` now refuses to queue input for a task it cannot find, so the row
+    // has to exist — and it has to belong to an agent that reads stdin.
+    let init = aid_cmd_in(temp_dir.path()).arg("board").output().unwrap();
+    assert!(init.status.success());
+    let conn = rusqlite::Connection::open(temp_dir.path().join("aid.db")).unwrap();
+    conn.execute(
+        "INSERT INTO tasks (id, agent, prompt, status, created_at)
+         VALUES (?1, ?2, ?3, ?4, ?5)",
+        params!["t-bb02", "codex", "awaiting input", "running", "2026-08-10T00:00:00+00:00"],
+    )
+    .unwrap();
+
     let output = aid_cmd_in(temp_dir.path())
         .args([
             "respond",
@@ -564,7 +576,11 @@ fn respond_reads_response_text_from_file() {
         ])
         .output()
         .unwrap();
-    assert!(output.status.success());
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
 
     let queued = std::fs::read_to_string(temp_dir.path().join("jobs/t-bb02.input")).unwrap();
     assert_eq!(queued, "text with `backticks` and {braces}");

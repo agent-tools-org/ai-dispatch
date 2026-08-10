@@ -223,6 +223,10 @@ impl super::Agent for CodexAgent {
         capabilities::validate_installed_codex(codex_version())
     }
 
+    fn validate_cli_with(&self, run: &crate::agent::CliCommandRunner<'_>) -> Result<()> {
+        capabilities::validate_installed_codex_with(codex_version(), run)
+    }
+
     fn build_command_with_context(
         &self,
         prompt: &str,
@@ -577,7 +581,7 @@ fn extract_noop_reason(line: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::{
-        capabilities, codex_version, parse_semver, resume_fallback_event,
+        parse_semver, resume_fallback_event,
         rollout_filename_matches, session_rollout_exists, CodexAgent,
         RESUME_FALLBACK_DETAIL,
     };

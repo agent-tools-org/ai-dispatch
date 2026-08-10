@@ -5,6 +5,8 @@
 use anyhow::{Context, Result, ensure};
 use std::process::Command;
 
+use crate::agent::{CliCommandOutput, CliCommandRunner};
+
 const APPROVE_FOR_ME_VERSION: (u32, u32, u32) = (0, 147, 0);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -31,17 +33,32 @@ pub(super) fn approval_flag_for_version(version: (u32, u32, u32)) -> ApprovalFla
 }
 
 pub(super) fn validate_installed_codex(version: (u32, u32, u32)) -> Result<()> {
-    let output = Command::new("codex")
-        .args(["exec", "--help"])
-        .output()
+    validate_installed_codex_with(version, &run_codex_command)
+}
+
+pub(super) fn validate_installed_codex_with(
+    version: (u32, u32, u32),
+    run: &CliCommandRunner<'_>,
+) -> Result<()> {
+    let output = run("codex", &["exec", "--help"])
         .context("failed to inspect Codex CLI capabilities")?;
     ensure!(
-        output.status.success(),
+        output.success,
         "`codex exec --help` failed; reinstall or upgrade Codex CLI"
     );
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    validate_exec_help(version, &format!("{stdout}{stderr}"))
+    validate_exec_help(version, &format!("{}{}", output.stdout, output.stderr))
+}
+
+fn run_codex_command(program: &str, args: &[&str]) -> Result<CliCommandOutput> {
+    let output = Command::new(program)
+        .args(args)
+        .output()
+        .context("failed to inspect Codex CLI capabilities")?;
+    Ok(CliCommandOutput {
+        success: output.status.success(),
+        stdout: String::from_utf8_lossy(&output.stdout).into_owned(),
+        stderr: String::from_utf8_lossy(&output.stderr).into_owned(),
+    })
 }
 
 fn validate_exec_help(version: (u32, u32, u32), help: &str) -> Result<()> {
@@ -66,7 +83,9 @@ fn help_defines_flag(help: &str, flag: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::{ApprovalFlag, approval_flag_for_version, validate_exec_help};
+    use super::{ApprovalFlag, approval_flag_for_version, validate_exec_help, validate_installed_codex_with};
+    use crate::agent::CliCommandOutput;
+    use std::cell::RefCell;
 
     #[test]
     fn selects_flags_for_old_and_new_versions() {
@@ -81,5 +100,31 @@ mod tests {
         assert!(validate_exec_help((0, 147, 0), "      --approve-for-me\n").is_ok());
         let error = validate_exec_help((0, 147, 0), "      --full-auto\n").unwrap_err();
         assert!(error.to_string().contains("--approve-for-me"));
+    }
+
+    #[test]
+    fn validates_codex_help_through_the_injected_runner() {
+        let invocation = RefCell::new(None);
+        let runner = |program: &str, args: &[&str]| {
+            *invocation.borrow_mut() = Some((
+                program.to_string(),
+                args.iter().map(|arg| (*arg).to_string()).collect::<Vec<_>>(),
+            ));
+            Ok(CliCommandOutput {
+                success: true,
+                stdout: "--approve-for-me\n".to_string(),
+                stderr: String::new(),
+            })
+        };
+
+        validate_installed_codex_with((0, 147, 0), &runner).unwrap();
+
+        assert_eq!(
+            *invocation.borrow(),
+            Some((
+                "codex".to_string(),
+                vec!["exec".to_string(), "--help".to_string()]
+            ))
+        );
     }
 }

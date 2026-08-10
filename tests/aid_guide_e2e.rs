@@ -73,9 +73,10 @@ fn official_guide_documents_steering_delivery_contract() {
 
     assert!(operations.contains("`steer` is refused for the one-shot print-mode `agy` and `grok` CLIs"));
     assert!(operations.contains("aid reports the limitation"));
-    assert!(operations.contains("message"));
+    assert!(operations.contains("steer message"));
     assert!(operations.contains("Codex steering remains supported"));
     assert!(operations.contains("`respond` is refused for those same one-shot CLIs"));
+    assert!(operations.contains("no response signal was written"));
 }
 
 #[test]

@@ -19,6 +19,7 @@ pub(crate) struct OpenCodeOverlaySpec {
     pub binary: String,
     pub extra_args: Vec<String>,
     pub default_model: Option<String>,
+    pub interactive_input: bool,
     pub rate_limit_kind: AgentKind,
     pub allow_external_directories: bool,
 }
@@ -36,6 +37,7 @@ impl OpenCodeOverlayAgent {
             binary: "opencode".to_string(),
             extra_args: Vec::new(),
             default_model: Some(forced_model),
+            interactive_input: true,
             rate_limit_kind: AgentKind::OpenCode,
             allow_external_directories: true,
         })
@@ -66,7 +68,7 @@ impl Agent for OpenCodeOverlayAgent {
     }
 
     fn accepts_interactive_input(&self) -> bool {
-        true
+        self.spec.interactive_input
     }
 
     fn build_command(&self, prompt: &str, opts: &RunOpts) -> Result<Command> {
@@ -232,6 +234,7 @@ mod tests {
             binary: "mimo".into(),
             extra_args: vec!["--dangerously-skip-permissions".into()],
             default_model: Some("mimo/mimo-auto".into()),
+            interactive_input: true,
             rate_limit_kind: AgentKind::MiMoCode,
             allow_external_directories: false,
         });
@@ -268,9 +271,11 @@ mod tests {
             binary: "opencode".into(),
             extra_args: Vec::new(),
             default_model: Some("x".into()),
+            interactive_input: false,
             rate_limit_kind: AgentKind::OpenCode,
             allow_external_directories: true,
         });
+        assert!(!agent.accepts_interactive_input());
         let _ = agent.parse_event(
             &TaskId("t-aud".into()),
             r#"{"type":"error","error":{"name":"APIError","data":{"message":"Insufficient balance. Manage your billing here"}}}"#,

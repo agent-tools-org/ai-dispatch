@@ -17,6 +17,7 @@ pub(crate) fn spec() -> OpenCodeOverlaySpec {
         binary: "mimo".to_string(),
         extra_args: vec!["--dangerously-skip-permissions".to_string()],
         default_model: Some("mimo/mimo-auto".to_string()),
+        interactive_input: true,
         rate_limit_kind: AgentKind::MiMoCode,
         allow_external_directories: false,
     }

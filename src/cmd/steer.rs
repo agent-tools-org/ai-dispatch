@@ -3,7 +3,7 @@
 
 use anyhow::Result;
 
-use crate::cmd::reply;
+use crate::cmd::reply::{self, InputCommand};
 use crate::store::Store;
 use crate::types::MessageSource;
 
@@ -16,6 +16,7 @@ pub fn run(store: &Store, task_id: &str, message: &str) -> Result<()> {
         true,
         30,
         MessageSource::Steer,
+        InputCommand::Steer,
     )?;
     println!("Steered {task_id}: {}", message.chars().take(80).collect::<String>());
     Ok(())
@@ -101,7 +102,7 @@ mod tests {
             store.insert_task(&task).unwrap();
 
             let err = run(&store, task_id, "pivot").unwrap_err();
-            assert!(err.to_string().contains("cannot consume steering input"));
+            assert!(err.to_string().contains("no steer message was queued"));
             assert!(store.list_messages_for_task(task_id).unwrap().is_empty());
             assert!(!crate::paths::steer_signal_path(task_id).exists());
         }
@@ -124,5 +125,22 @@ mod tests {
             input_signal::take_steer(task.id.as_str()).unwrap().as_deref(),
             Some("pivot")
         );
+    }
+
+    #[test]
+    fn steer_explains_how_to_recover_deleted_custom_agent() {
+        let temp_home = tempfile::tempdir().unwrap();
+        let _aid_home = AidHomeGuard::set(temp_home.path());
+        let store = Store::open_memory().unwrap();
+        let mut task = make_task("t-steer-missing-custom", TaskStatus::Running);
+        task.agent = AgentKind::Custom;
+        task.custom_agent_name = Some("gone".to_string());
+        store.insert_task(&task).unwrap();
+
+        let err = run(&store, task.id.as_str(), "pivot").unwrap_err();
+        let message = err.to_string();
+        assert!(message.contains("unavailable custom agent 'gone'"));
+        assert!(message.contains("restore ~/.aid/agents/gone.toml"));
+        assert!(message.contains("stop the task and retry"));
     }
 }

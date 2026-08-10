@@ -580,10 +580,13 @@ pub(crate) fn monitor_bridge(
             }
             Err(RecvTimeoutError::Disconnected) => { state.handle_chunk(agent, task_id, store, log_file, decoder.flush())?; reader_done = true; }
         }
-        state.maybe_forward_input(bridge, store, task_id)?;
-        state.maybe_forward_steer(bridge, store, task_id)?;
-        state.maybe_consume_reply(bridge, store, task_id)?;
-        let accepts_nudge = agent.accepts_interactive_input() && agent.accepts_idle_nudge();
+        let accepts_input = agent.accepts_interactive_input();
+        if accepts_input {
+            state.maybe_forward_input(bridge, store, task_id)?;
+            state.maybe_forward_steer(bridge, store, task_id)?;
+            state.maybe_consume_reply(bridge, store, task_id)?;
+        }
+        let accepts_nudge = accepts_input && agent.accepts_idle_nudge();
         state.maybe_handle_idle(store, task_id, accepts_nudge)?;
     }
 

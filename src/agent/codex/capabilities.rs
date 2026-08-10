@@ -32,20 +32,29 @@ pub(super) fn approval_flag_for_version(version: (u32, u32, u32)) -> ApprovalFla
     }
 }
 
-pub(super) fn validate_installed_codex(version: (u32, u32, u32)) -> Result<()> {
+pub(super) fn validate_installed_codex(version: Option<(u32, u32, u32)>) -> Result<()> {
     validate_installed_codex_with(version, &run_codex_command)
 }
 
 pub(super) fn validate_installed_codex_with(
-    version: (u32, u32, u32),
+    version: Option<(u32, u32, u32)>,
     run: &CliCommandRunner<'_>,
 ) -> Result<()> {
-    let output = run("codex", &["exec", "--help"])
-        .context("failed to inspect Codex CLI capabilities")?;
-    ensure!(
-        output.success,
-        "`codex exec --help` failed; reinstall or upgrade Codex CLI"
-    );
+    let Some(version) = version else {
+        eprintln!("warning: could not read Codex CLI version; skipping flag validation");
+        return Ok(());
+    };
+    let output = match run("codex", &["exec", "--help"]) {
+        Ok(output) if output.success => output,
+        Ok(_) => {
+            eprintln!("warning: `codex exec --help` failed; skipping flag validation");
+            return Ok(());
+        }
+        Err(error) => {
+            eprintln!("warning: could not inspect Codex CLI flags ({error:#}); skipping validation");
+            return Ok(());
+        }
+    };
     validate_exec_help(version, &format!("{}{}", output.stdout, output.stderr))
 }
 
@@ -117,7 +126,7 @@ mod tests {
             })
         };
 
-        validate_installed_codex_with((0, 147, 0), &runner).unwrap();
+        validate_installed_codex_with(Some((0, 147, 0)), &runner).unwrap();
 
         assert_eq!(
             *invocation.borrow(),
@@ -126,5 +135,41 @@ mod tests {
                 vec!["exec".to_string(), "--help".to_string()]
             ))
         );
+    }
+
+    #[test]
+    fn unknown_version_skips_flag_validation() {
+        let runner = |_program: &str, _args: &[&str]| -> anyhow::Result<CliCommandOutput> {
+            panic!("help must not be required when the version is unknown")
+        };
+
+        validate_installed_codex_with(None, &runner).unwrap();
+    }
+
+    #[test]
+    fn failed_help_probe_does_not_block_a_known_version() {
+        let runner = |_program: &str, _args: &[&str]| {
+            Ok(CliCommandOutput {
+                success: false,
+                stdout: String::new(),
+                stderr: "unsupported".to_string(),
+            })
+        };
+
+        validate_installed_codex_with(Some((0, 147, 0)), &runner).unwrap();
+    }
+
+    #[test]
+    fn known_version_still_rejects_a_missing_required_flag() {
+        let runner = |_program: &str, _args: &[&str]| {
+            Ok(CliCommandOutput {
+                success: true,
+                stdout: "--full-auto\n".to_string(),
+                stderr: String::new(),
+            })
+        };
+
+        let error = validate_installed_codex_with(Some((0, 147, 0)), &runner).unwrap_err();
+        assert!(error.to_string().contains("--approve-for-me"));
     }
 }

@@ -495,7 +495,23 @@ fn batch_retry_with_no_failures_succeeds() {
     std::fs::create_dir(&bin_dir).unwrap();
 
     let codex_path = bin_dir.join("codex");
-    std::fs::write(&codex_path, "#!/bin/sh\nexit 0\n").unwrap();
+    std::fs::write(
+        &codex_path,
+        r#"#!/bin/sh
+if [ "$1" = "--version" ]; then
+  echo "codex-cli 0.147.0"
+  exit 0
+fi
+if [ "$1" = "exec" ] && [ "$2" = "--help" ]; then
+  echo "      --approve-for-me"
+  exit 0
+fi
+printf '%s\n' '{"type":"thread.started","thread_id":"batch-retry-fixture"}'
+printf '%s\n' '{"type":"item.completed","item":{"type":"agent_message","text":"ok"}}'
+printf '%s\n' '{"type":"turn.completed","usage":{"input_tokens":1,"cached_input_tokens":0,"output_tokens":1}}'
+"#,
+    )
+    .unwrap();
     let mut perms = std::fs::metadata(&codex_path).unwrap().permissions();
     perms.set_mode(0o755);
     std::fs::set_permissions(&codex_path, perms).unwrap();
@@ -542,7 +558,12 @@ fn batch_retry_with_no_failures_succeeds() {
         .args(["batch", "retry", &workgroup_id])
         .output()
         .unwrap();
-    assert!(retry_output.status.success());
+    assert!(
+        retry_output.status.success(),
+        "stdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&retry_output.stdout),
+        String::from_utf8_lossy(&retry_output.stderr)
+    );
 
     let stdout = String::from_utf8_lossy(&retry_output.stdout);
     let stderr = String::from_utf8_lossy(&retry_output.stderr);

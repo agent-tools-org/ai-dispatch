@@ -1,3 +1,14 @@
+## v10.21.0 (2026-08-10)
+- `aid steer` no longer kills the task it steers: a PTY write that fails is recorded as an undelivered message instead of ending the run, and the agent's own exit decides the outcome again
+- Steering, replying, responding and unsticking now refuse up front for agents that cannot read stdin, rather than queueing a message nothing will ever consume
+- `accepts_interactive_input()` is a required agent capability, so a new agent must answer the question instead of inheriting a wrong default; `accepts_idle_nudge()` derives from it, and custom agents declare `interactive_input` in their TOML
+- Codex dispatch selects its approval flag from the installed CLI version (`--full-auto` before 0.147.0, `--approve-for-me` from 0.147.0) and validates it during preflight
+- An unreadable Codex version or an unreachable `codex exec --help` no longer blocks dispatch; aid warns and proceeds rather than treating an unknown as a contract violation
+- Task summaries and judges diff against the task's own baseline instead of the previous repository commit, so a no-op task stops borrowing someone else's changes
+- A cascade with no recorded worktree, branch or repository keeps the caller's directory instead of aborting the run
+- Preflight resolves the agent binary and its capabilities through injectable seams, which took the binary test suite from ten CI failures to zero
+
+
 ## v10.20.0 (2026-08-10)
 - A task's judgment is now separate from its lifecycle. `TaskStatus` answers what stage a task is in and whether it was integrated; `VerifyStatus` answers what verification said; a derived `TaskOutcome` answers whether the work succeeded, and it is the only thing any consumer asks. `Verified` and `Delivered` are the only successes — `Unverified(TimedOut | Infrastructure | NoResult)` is inconclusive and `Broken` is a verification failure. One exhaustive derivation, a 120-cell literal golden table over the whole `TaskStatus × VerifyStatus × verify-required` product, and an allowlist wherever success is derived, so a new variant on either axis is a compile error rather than an inherited default.
 - Delivered work whose verification failed is no longer counted as a success. Measured on the live store, 378 rows were `done`/`merged` with a failed verification and 87 more had a verify command configured and no result recorded; every counter, gate, chart and webhook read all of them as success. Agent success rates move accordingly — codex 75% to 69%, agy 68% to 60%, mimocode 46% to 38%, commandcode 27% to 9% over 30 days — and `aid advise` routes on those numbers.

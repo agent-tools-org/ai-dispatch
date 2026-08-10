@@ -21,6 +21,10 @@ impl super::Agent for ClaudeAgent {
         true
     }
 
+    fn accepts_interactive_input(&self) -> bool {
+        true
+    }
+
     fn build_command(&self, prompt: &str, opts: &RunOpts) -> Result<Command> {
         let mut cmd = Command::new("claude");
         let prompt = super::embed_context_in_prompt(prompt, &opts.context_files)?;

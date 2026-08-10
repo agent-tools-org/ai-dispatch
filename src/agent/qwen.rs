@@ -25,6 +25,10 @@ impl super::Agent for QwenAgent {
         true
     }
 
+    fn accepts_interactive_input(&self) -> bool {
+        true
+    }
+
     fn build_command(&self, prompt: &str, opts: &RunOpts) -> Result<Command> {
         if opts.read_only {
             anyhow::bail!(

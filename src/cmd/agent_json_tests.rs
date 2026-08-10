@@ -87,6 +87,7 @@ fn sample_custom_config() -> CustomAgentConfig {
         output_flag: String::new(),
         fixed_args: Vec::new(),
         streaming: true,
+        interactive_input: true,
         output_format: "jsonl".into(),
         capabilities: Default::default(),
         trust_tier: "api".into(),

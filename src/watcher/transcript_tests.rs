@@ -18,6 +18,7 @@ struct BufferedTestAgent;
 impl Agent for BufferedTestAgent {
     fn kind(&self) -> AgentKind { AgentKind::Gemini }
     fn streaming(&self) -> bool { false }
+    fn accepts_interactive_input(&self) -> bool { false }
     fn build_command(&self, _: &str, _: &RunOpts) -> anyhow::Result<Command> { unreachable!() }
     fn parse_event(&self, _: &TaskId, _: &str) -> Option<TaskEvent> { None }
     fn parse_completion(&self, _: &str) -> CompletionInfo {
@@ -174,6 +175,9 @@ impl Agent for BufferedAgyTestAgent {
         AgentKind::Antigravity
     }
     fn streaming(&self) -> bool {
+        false
+    }
+    fn accepts_interactive_input(&self) -> bool {
         false
     }
     fn build_command(&self, _: &str, _: &RunOpts) -> anyhow::Result<Command> {

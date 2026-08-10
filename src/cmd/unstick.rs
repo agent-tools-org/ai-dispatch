@@ -6,7 +6,7 @@ use anyhow::{Result, anyhow, bail};
 use chrono::Local;
 
 use crate::background;
-use crate::cmd::reply;
+use crate::cmd::reply::{self, InputCommand};
 use crate::store::Store;
 use crate::types::{EventKind, MessageSource, TaskEvent, TaskId, TaskStatus};
 
@@ -48,6 +48,7 @@ pub fn run(store: &Store, task_id: &str, message: Option<&str>, escalate: bool) 
         true,
         30,
         MessageSource::Reply,
+        InputCommand::Unstick,
     )?;
     println!("Sent unstick nudge to {task_id}");
     Ok(())

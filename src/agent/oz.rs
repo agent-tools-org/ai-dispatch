@@ -38,6 +38,10 @@ impl super::Agent for OzAgent {
         true
     }
 
+    fn accepts_interactive_input(&self) -> bool {
+        true
+    }
+
     fn build_command(&self, prompt: &str, opts: &RunOpts) -> Result<Command> {
         let prompt_with_ctx = super::embed_context_in_prompt(prompt, &opts.context_files)?;
         let effective_prompt = if opts.read_only {

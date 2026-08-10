@@ -2,7 +2,6 @@
 // Exports fallback output extraction and JSONL cleanup utilities for run_prompt.
 use anyhow::{Context, Result};
 use std::path::{Path, PathBuf};
-
 pub(in crate::cmd) fn output_file_instruction(output_path: Option<&str>, result_file: Option<&str>) -> Option<String> {
     let mut sections = Vec::new();
     if output_path.is_some() {
@@ -22,8 +21,8 @@ pub(in crate::cmd) enum ResultDelivery {
     NotRequested,
     /// The agent wrote the declared result file.
     File,
-    /// The declared file was missing; captured output stood in for it.
-    LogFallback { looks_like_report: bool },
+    /// The declared file was missing; a captured-output fallback may have been saved.
+    MissingFile { fallback_saved: bool },
 }
 
 pub(in crate::cmd) fn persist_result_file(
@@ -34,7 +33,7 @@ pub(in crate::cmd) fn persist_result_file(
 ) -> Result<ResultDelivery> {
     let Some(result_file) = result_file else { return Ok(ResultDelivery::NotRequested); };
     let source = resolve_result_path(result_file, base_dir);
-    if !source.exists() {
+    if !file_has_content(&source) {
         return persist_result_from_log(task_id, log_path);
     }
     let dest = crate::paths::task_dir(task_id).join("result.md");
@@ -51,16 +50,20 @@ pub(in crate::cmd) fn persist_result_file(
 
 fn persist_result_from_log(task_id: &str, log_path: &Path) -> Result<ResultDelivery> {
     let Some(content) = extract_output_fallback_from_log(log_path) else {
-        return Ok(ResultDelivery::LogFallback { looks_like_report: false });
+        return Ok(ResultDelivery::MissingFile { fallback_saved: false });
     };
-    let looks_like_report = crate::delivery_guard::looks_like_delivered_report(&content);
     let dest = crate::paths::task_dir(task_id).join("result.md");
     if let Some(parent) = dest.parent() {
         std::fs::create_dir_all(parent)?;
     }
     std::fs::write(&dest, content)
         .with_context(|| format!("Failed to persist result file to {}", dest.display()))?;
-    Ok(ResultDelivery::LogFallback { looks_like_report })
+    Ok(ResultDelivery::MissingFile { fallback_saved: true })
+}
+
+fn file_has_content(path: &Path) -> bool {
+    std::fs::read_to_string(path)
+        .is_ok_and(|content| !content.trim().is_empty())
 }
 
 fn resolve_result_path(result_file: &str, base_dir: Option<&str>) -> PathBuf {
@@ -135,7 +138,7 @@ pub(in crate::cmd) fn clean_output_if_jsonl(output_path: &Path) -> Result<()> {
                 )
         })
         .count();
-    if json_lines * 2 <= non_empty_lines.len() {
+    if json_lines != non_empty_lines.len() {
         return Ok(());
     }
     let Some(cleaned) = crate::cmd::show::extract_messages_from_log(output_path, true, None) else {
@@ -224,7 +227,7 @@ I will inspect the indexer snapshot file to answer the second question about det
             persist_result_file("t-narration-result", Some("result.md"), Some("/missing"), &log_path)
                 .unwrap();
 
-        assert_eq!(delivery, ResultDelivery::LogFallback { looks_like_report: false });
+        assert_eq!(delivery, ResultDelivery::MissingFile { fallback_saved: true });
     }
 
     #[test]
@@ -259,8 +262,7 @@ I will inspect the indexer snapshot file to answer the second question about det
             std::fs::read_to_string(saved).unwrap(),
             "plain text report\nwith final findings"
         );
-        // Short, but not narration - it is still salvaged, just not blessed as a report.
-        assert_eq!(delivery, ResultDelivery::LogFallback { looks_like_report: false });
+        assert_eq!(delivery, ResultDelivery::MissingFile { fallback_saved: true });
     }
 
     #[test]

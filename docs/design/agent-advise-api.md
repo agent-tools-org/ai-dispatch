@@ -18,10 +18,10 @@ inventory and its recommendation, and let the caller decide.
 
 Two failures follow from guessing.
 
-1. **Misrouted large tasks.** `classifier::classify` derives complexity from prompt length and
-   keywords (`is_simple_for_routing`: ≤200 chars, ≤35 words). A large refactor described in one
-   tight sentence classifies as `simple_edit`, where `opencode` scores 8 and `codex` scores 4.
-   The scoring matrix is not at fault; the label fed into it is.
+1. **Misrouted large tasks.** Earlier routing derived complexity from prompt length and
+   keywords. A large refactor described in one tight sentence could classify as `simple_edit`,
+   where `opencode` scores 8 and `codex` scores 4. Smart model downgrade now requires an explicit
+   declared difficulty; inferred category remains advisory for `aid advise`.
 2. **Invisible inventory.** The full routing computation — category, complexity, per-category
    success rates, average cost, rate-limit penalties, team preferences — is reachable only by
    dispatching. Only one human-readable `reason` string escapes. Measured over 30 days in this

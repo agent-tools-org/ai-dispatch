@@ -105,9 +105,12 @@ fn write_streaming_output(log_path: &Path, out_path: &Path) {
     if !current_stream.is_empty() {
         messages.push(current_stream);
     }
-    let substantive: Vec<String> = messages.into_iter().filter(|message| message.len() > 50).collect();
-    let start = substantive.len().saturating_sub(5);
-    let output = substantive[start..].join("\n\n---\n\n");
+    let delivered: Vec<String> = messages
+        .into_iter()
+        .filter(|message| !message.trim().is_empty())
+        .collect();
+    let start = delivered.len().saturating_sub(5);
+    let output = delivered[start..].join("\n\n---\n\n");
     if !output.is_empty()
         && let Err(err) = std::fs::write(out_path, &output)
     {

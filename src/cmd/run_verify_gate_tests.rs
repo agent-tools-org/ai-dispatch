@@ -72,7 +72,7 @@ fn configured_verify_without_working_dir_is_a_legitimate_skip() {
 }
 
 #[test]
-fn configured_verify_spawn_failure_fails_not_skipped() {
+fn configured_verify_spawn_failure_is_inconclusive() {
     let dir = tempfile::tempdir().unwrap();
     let dir_str = dir.path().to_string_lossy().to_string();
     let store = Store::open_memory().unwrap();
@@ -84,18 +84,16 @@ fn configured_verify_spawn_failure_fails_not_skipped() {
     maybe_verify(&store, &task_id, Some("missing-aid-verify-bin"), Some(&dir_str), None);
 
     let task = store.get_task(task_id.as_str()).unwrap().unwrap();
-    assert_eq!(task.verify_status, VerifyStatus::Failed);
-    assert_eq!(task.status, TaskStatus::Failed);
-    assert!(store.latest_error(task_id.as_str()).unwrap().contains("Failed to run verify command"));
+    assert_eq!(task.verify_status, VerifyStatus::InfrastructureFailure);
+    assert_eq!(task.status, TaskStatus::Done);
+    assert!(store.latest_error(task_id.as_str()).is_none());
 }
 
-/// The incident this whole contract came from: on 2026-08-08 eight tasks were
-/// marked FAILED because aid's verify died on sccache after their agents had
-/// run the suite green. The task must stay delivered, the verification must be
-/// recorded as inconclusive, and nothing may be written that blames the change.
+/// A completed verify process is governed by its exit status. AID must not
+/// reinterpret failure text as an infrastructure exception.
 #[cfg(unix)]
 #[test]
-fn sccache_death_leaves_the_task_delivered_and_blames_nothing() {
+fn nonzero_verify_is_failed_regardless_of_sccache_wording() {
     let _permit = test_subprocess::acquire();
     let dir = tempfile::tempdir().unwrap();
     let script = dir.path().join("sccache-death.sh");
@@ -115,13 +113,9 @@ fn sccache_death_leaves_the_task_delivered_and_blames_nothing() {
     maybe_verify(&store, &task_id, Some(&command), Some(&dir_str), None);
 
     let task = store.get_task(task_id.as_str()).unwrap().unwrap();
-    assert_eq!(task.verify_status, VerifyStatus::InfrastructureFailure);
-    assert_eq!(task.status, TaskStatus::Done, "delivery must survive a tooling death");
-    assert!(
-        store.latest_error(task_id.as_str()).is_none(),
-        "recorded error: {:?}",
-        store.latest_error(task_id.as_str())
-    );
+    assert_eq!(task.verify_status, VerifyStatus::Failed);
+    assert_eq!(task.status, TaskStatus::Failed);
+    assert!(store.latest_error(task_id.as_str()).is_some());
 }
 
 /// The mirror of the incident test, and the more dangerous direction: a false
@@ -151,6 +145,23 @@ fn sccache_noise_with_a_compiler_diagnostic_still_fails_the_task() {
     let loaded = store.get_task(task_id.as_str()).unwrap().unwrap();
     assert_eq!(loaded.verify_status, VerifyStatus::Failed);
     assert_eq!(loaded.status, TaskStatus::Failed);
+}
+
+#[test]
+fn prompt_prose_does_not_create_an_undeclared_verify_contract() {
+    let dir = tempfile::tempdir().unwrap();
+    let dir_str = dir.path().to_string_lossy().to_string();
+    let store = Store::open_memory().unwrap();
+    let task_id = TaskId("t-verify-prompt-prose".to_string());
+    let mut stored = task(task_id.as_str(), TaskStatus::Done, Some(&dir_str), Some("true"));
+    stored.prompt = "Create a new file: guessed-from-prose.txt".to_string();
+    store.insert_task(&stored).unwrap();
+
+    maybe_verify(&store, &task_id, Some("true"), Some(&dir_str), None);
+
+    let loaded = store.get_task(task_id.as_str()).unwrap().unwrap();
+    assert_eq!(loaded.verify_status, VerifyStatus::Passed);
+    assert_eq!(loaded.status, TaskStatus::Done);
 }
 
 #[test]

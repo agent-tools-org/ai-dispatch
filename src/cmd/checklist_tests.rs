@@ -80,7 +80,7 @@ fn checklist_items_are_injected_into_prompt_with_required_format() {
     let expected = concat!(
         "<aid-checklist>\n",
         "MANDATORY CHECKLIST — You MUST explicitly address EVERY item below.\n",
-        "For each item, state CONFIRMED (with evidence) or REJECTED (with reasoning).\n",
+        "For each item, output `CHECKLIST N: CONFIRMED — <evidence>` or `CHECKLIST N: REJECTED — <reason>`.\n",
         "Do NOT skip any item. Missing responses will trigger an automatic retry.\n\n",
         "[ ] 1. Verify auth flow handles retries\n",
         "[ ] 2. Confirm tests cover failure cases\n",

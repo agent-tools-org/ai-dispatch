@@ -1,121 +1,8 @@
-// Final-delivery evidence: Codex JSONL events plus a text check for plain-text agents.
-// Exports DeliveryEvidence, DeliveryOutcome, and looks_like_delivered_report.
-// Depends only on serde_json so validation stays pure and replayable.
+// Final-delivery evidence derived from structured agent protocol events.
+// Exports DeliveryEvidence and DeliveryOutcome; depends only on serde_json.
+// Content quality is deliberately outside this module's success contract.
 
 use serde_json::Value;
-
-pub(crate) const MIN_FINAL_MESSAGE_CHARS: usize = 200;
-
-/// Openers plain-text agents use to announce the tool call they are about to make.
-/// Deliberately first-person-singular: "we will monitor the logs" is a sentence a real
-/// report writes, and treating it as narration would discard the report around it.
-const NARRATION_OPENERS: &[&str] = &[
-    "i will ",
-    "i'll ",
-    "i am going to ",
-    "i'm going to ",
-    "i am now ",
-    "i'm now ",
-    "let me ",
-    "now i ",
-];
-
-/// Discourse markers that can precede an opener ("First, I'll ...").
-const NARRATION_PREFIXES: &[&str] = &["first, ", "first ", "next, ", "next ", "then, ", "then ", "now, "];
-
-/// Do the captured bytes look like a report the agent actually wrote, or like a
-/// transcript of what it was about to do? Non-streaming agents (agy, gemini) print
-/// both to the same stream, so a run that dies mid-investigation leaves behind a
-/// plausible-looking file made entirely of pre-tool narration.
-pub(crate) fn looks_like_delivered_report(text: &str) -> bool {
-    let trimmed = text.trim();
-    if crate::cmd::show::is_unrecognized_json_notice(trimmed) {
-        return true;
-    }
-    // Only what follows the last announced tool call can be the deliverable - the same
-    // ordering rule the Codex JSONL guard applies to messages versus work events.
-    let substance = substance_after_narration(trimmed);
-    // A heading is the shape the report instruction asks for, and a legitimate report can
-    // be as short as "## Findings\nNo findings." - do not hold length against it.
-    if has_markdown_heading(&substance) {
-        return true;
-    }
-    // Without a heading, require prose: bulk alone would accept a directory listing or
-    // other raw tool output that happened to trail the last announced tool call.
-    substance.chars().count() >= MIN_FINAL_MESSAGE_CHARS && looks_like_prose(&substance)
-}
-
-/// Sentence terminators across the scripts agents actually write in - ASCII plus the
-/// ideographic stops used by Chinese and Japanese and the Devanagari danda.
-const SENTENCE_ENDINGS: &[char] =
-    &['.', '!', '?', '。', '！', '？', '．', '｡', '।', '؟', '۔'];
-
-const LIST_MARKERS: &[&str] = &["- ", "* ", "+ ", "• "];
-
-/// Prose, or a structured list - as opposed to raw tool output that merely happens to be
-/// long. A directory listing has neither sentence punctuation nor list markers.
-fn looks_like_prose(text: &str) -> bool {
-    text.lines().any(|line| {
-        let line = line.trim();
-        line.ends_with(SENTENCE_ENDINGS)
-            || LIST_MARKERS.iter().any(|marker| line.starts_with(marker))
-            || starts_with_numbered_marker(line)
-    })
-}
-
-fn starts_with_numbered_marker(line: &str) -> bool {
-    let digits = line.chars().take_while(char::is_ascii_digit).count();
-    digits > 0 && line[digits..].starts_with(['.', ')']) && line[digits + 1..].starts_with(' ')
-}
-
-/// Text left after the last line announcing a tool call. Milestones are progress
-/// markers, never deliverables, so they are not substance either.
-fn substance_after_narration(text: &str) -> String {
-    let lines: Vec<&str> = text.lines().map(str::trim).collect();
-    let start = lines
-        .iter()
-        .rposition(|line| is_narration_line(line))
-        .map_or(0, |index| index + 1);
-    lines[start..]
-        .iter()
-        .filter(|line| !line.is_empty() && !is_milestone_line(line))
-        .copied()
-        .collect::<Vec<&str>>()
-        .join("\n")
-}
-
-fn is_milestone_line(line: &str) -> bool {
-    line.to_lowercase().starts_with("[milestone]")
-}
-
-fn has_markdown_heading(text: &str) -> bool {
-    text.lines().any(|line| {
-        let line = line.trim_start();
-        line.starts_with('#') && line.trim_start_matches('#').starts_with(' ')
-    })
-}
-
-fn is_narration_line(line: &str) -> bool {
-    // An announcement of the next tool call is a short sentence. Anything report-length
-    // is a report, even when it opens with "I will present the findings: ...".
-    if line.chars().count() >= MIN_FINAL_MESSAGE_CHARS {
-        return false;
-    }
-    let lowered = line.to_lowercase();
-    let mut rest = lowered
-        .strip_prefix("[milestone]")
-        .unwrap_or(&lowered)
-        .trim_start();
-    if let Some(prefix) = NARRATION_PREFIXES
-        .iter()
-        .find(|prefix| rest.starts_with(**prefix))
-    {
-        rest = rest[prefix.len()..].trim_start();
-    }
-    NARRATION_OPENERS
-        .iter()
-        .any(|opener| rest.starts_with(opener))
-}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum DeliveryOutcome {
@@ -166,22 +53,16 @@ impl DeliveryEvidence {
         }
     }
 
-    /// When the task produced a diff, that diff is the deliverable — waive the
-    /// length floor, but still require a delivery-shaped trailing message (same
-    /// narration/prose/heading checks as report detection). When there are no
-    /// changes, the prose *is* the deliverable, so the length floor still applies.
-    pub(crate) fn validate(&self, produced_changes: bool) -> DeliveryOutcome {
+    /// A structured, non-empty final message after the last work event is delivery.
+    /// The original task contract may legitimately require a one-character answer;
+    /// this layer therefore never grades length, prose style, or report quality.
+    pub(crate) fn validate(&self) -> DeliveryOutcome {
         let message_is_last = match (self.last_message_sequence, self.last_work_sequence) {
             (Some(message), Some(work)) => message > work,
             (Some(_), None) => true,
             (None, _) => false,
         };
-        let substantive = if produced_changes {
-            looks_like_short_delivery(&self.last_message)
-        } else {
-            self.last_message_chars >= MIN_FINAL_MESSAGE_CHARS
-        };
-        if message_is_last && substantive {
+        if message_is_last && !self.last_message.is_empty() {
             return DeliveryOutcome::Delivered;
         }
         DeliveryOutcome::MissingFinalDelivery {
@@ -189,16 +70,6 @@ impl DeliveryEvidence {
             last_message_chars: self.last_message_chars,
         }
     }
-}
-
-/// Diff-is-deliverable path: after stripping narration, require a heading or
-/// prose — not merely any non-empty fragment.
-fn looks_like_short_delivery(text: &str) -> bool {
-    let substance = substance_after_narration(text.trim());
-    if substance.is_empty() {
-        return false;
-    }
-    has_markdown_heading(&substance) || looks_like_prose(&substance)
 }
 
 fn is_completed_message(value: &Value, item_kind: &str) -> bool {

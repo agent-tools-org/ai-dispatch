@@ -2,7 +2,6 @@
 // Deps: MonitorState, paths::agent_log_path, AidHomeGuard.
 
 use super::MonitorState;
-use crate::agent::Agent;
 use crate::paths;
 use crate::store::Store;
 use crate::timeout_policy::{NudgeLadder, TimeoutPolicy};

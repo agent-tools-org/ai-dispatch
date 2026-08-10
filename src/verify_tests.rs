@@ -115,7 +115,6 @@ fn format_report_pass() {
     let result = VerifyResult {
         success: true,
         timed_out: false,
-        infrastructure_failure: false,
         output: "all good".to_string(),
         command: "cargo check".to_string(),
     };
@@ -128,7 +127,6 @@ fn format_report_fail_shows_output() {
     let result = VerifyResult {
         success: false,
         timed_out: false,
-        infrastructure_failure: false,
         output: "error[E0308]: mismatched types".to_string(),
         command: "cargo check".to_string(),
     };
@@ -182,7 +180,6 @@ fn record_verify_status_maps_timeout_separately_from_failure() {
         &VerifyResult {
             success: false,
             timed_out: true,
-            infrastructure_failure: false,
             output: "Verification timed out after 1 seconds".to_string(),
             command: "sleep 30".to_string(),
         },
@@ -197,34 +194,12 @@ fn format_report_timeout_label() {
     let result = VerifyResult {
         success: false,
         timed_out: true,
-        infrastructure_failure: false,
         output: "still compiling".to_string(),
         command: "cargo test".to_string(),
     };
     let report = format_verify_report(&result);
     assert!(report.starts_with("Verify TIMEOUT"));
     assert!(report.contains("still compiling"));
-}
-
-#[test]
-fn record_verify_status_maps_infrastructure_failure_separately() {
-    let store = Store::open_memory().unwrap();
-    let task = make_task("t-record-infra", TaskStatus::Done, VerifyStatus::Skipped);
-    store.insert_task(&task).unwrap();
-    record_verify_status(
-        &store,
-        &task.id,
-        &VerifyResult {
-            success: false,
-            timed_out: false,
-            infrastructure_failure: true,
-            output: "sccache: encountered fatal error\nsccache: error: failed to spawn".to_string(),
-            command: "cargo check".to_string(),
-        },
-    );
-    let loaded = store.get_task(task.id.as_str()).unwrap().unwrap();
-    assert_eq!(loaded.verify_status, VerifyStatus::InfrastructureFailure);
-    assert_eq!(loaded.status, TaskStatus::Done);
 }
 
 #[cfg(unix)]

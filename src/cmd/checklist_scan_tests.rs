@@ -1,74 +1,56 @@
-// Unit tests for checklist output scanning (CONFIRMED / REJECTED / Missing).
+// Tests the exact checklist response contract without proximity heuristics.
+// Covers confirmed, rejected, missing, case folding, and false-positive prose.
 
-use super::{scan_checklist, ChecklistItemStatus};
+use super::{ChecklistItemStatus, scan_checklist};
 
-fn items(s: &[&str]) -> Vec<String> {
-    s.iter().map(|x| (*x).to_string()).collect()
+fn items(values: &[&str]) -> Vec<String> {
+    values.iter().map(|value| (*value).to_string()).collect()
 }
 
 #[test]
-fn all_confirmed_all_addressed() {
+fn explicit_responses_are_addressed() {
     let checklist = items(&["a", "b", "c"]);
-    let out = "a CONFIRMED\nb confirmed\nc CONFIRMED";
-    let r = scan_checklist(&checklist, out);
-    assert!(r.all_addressed());
-    assert!(r.missing_items().is_empty());
+    let output = concat!(
+        "CHECKLIST 1: CONFIRMED — evidence\n",
+        "checklist 2: rejected — reason\n",
+        "CHECKLIST 3: CONFIRMED: evidence"
+    );
+    let result = scan_checklist(&checklist, output);
+
+    assert!(result.all_addressed());
+    assert_eq!(result.items[1].status, ChecklistItemStatus::Rejected);
+    assert_eq!(result.summary(), "3/3 addressed (2 confirmed, 1 rejected)");
 }
 
 #[test]
-fn one_missing_reported() {
+fn missing_explicit_response_is_reported() {
     let checklist = items(&["present", "absent"]);
-    let out = "present CONFIRMED\nnothing about the other";
-    let r = scan_checklist(&checklist, out);
-    assert!(!r.all_addressed());
-    assert_eq!(r.missing_items(), vec!["absent"]);
+    let result = scan_checklist(
+        &checklist,
+        "CHECKLIST 1: CONFIRMED — evidence\nnothing about the other",
+    );
+
+    assert!(!result.all_addressed());
+    assert_eq!(result.missing_items(), vec!["absent"]);
 }
 
 #[test]
-fn mixed_confirmed_rejected_all_addressed() {
-    let checklist = items(&["x", "y", "z"]);
-    let out = "x CONFIRMED\ny REJECTED\nz confirmed";
-    let r = scan_checklist(&checklist, out);
-    assert!(r.all_addressed());
-    assert!(r.missing_items().is_empty());
-}
-
-#[test]
-fn empty_checklist_all_addressed() {
-    let r = scan_checklist(&[], "");
-    assert!(r.all_addressed());
-    assert_eq!(r.summary(), "0/0 addressed (0 confirmed, 0 rejected)");
-}
-
-#[test]
-fn case_insensitive_keywords() {
-    let checklist = items(&["only"]);
-    let r = scan_checklist(&checklist, "confirmed for only item");
-    assert!(r.all_addressed());
-    let r2 = scan_checklist(&checklist, "only: rejected — cannot do");
-    assert_eq!(r2.items[0].status, ChecklistItemStatus::Rejected);
-}
-
-#[test]
-fn numbered_bracket_line_then_confirmed() {
-    let checklist = items(&["item"]);
-    let out = "[ ] 1. item\nCONFIRMED";
-    let r = scan_checklist(&checklist, out);
-    assert!(r.all_addressed());
-    assert_eq!(r.items[0].status, ChecklistItemStatus::Confirmed);
-}
-
-#[test]
-fn checkbox_x_marked_confirmed() {
+fn prose_and_legacy_checkbox_do_not_invent_a_response() {
     let checklist = items(&["task"]);
-    let out = "[x] 1. task done";
-    let r = scan_checklist(&checklist, out);
-    assert_eq!(r.items[0].status, ChecklistItemStatus::Confirmed);
+    for output in [
+        "task confirmed somewhere in prose",
+        "[x] 1. task done",
+        "the word CHECKLIST 1: CONFIRMED is quoted mid-line",
+    ] {
+        let result = scan_checklist(&checklist, output);
+        assert_eq!(result.items[0].status, ChecklistItemStatus::Missing);
+    }
 }
 
 #[test]
-fn summary_counts() {
-    let checklist = items(&["a", "b", "c"]);
-    let r = scan_checklist(&checklist, "a CONFIRMED\nb REJECTED\nc CONFIRMED");
-    assert_eq!(r.summary(), "3/3 addressed (2 confirmed, 1 rejected)");
+fn empty_checklist_is_addressed() {
+    let result = scan_checklist(&[], "");
+
+    assert!(result.all_addressed());
+    assert_eq!(result.summary(), "0/0 addressed (0 confirmed, 0 rejected)");
 }

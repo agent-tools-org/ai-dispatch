@@ -16,9 +16,6 @@ pub(crate) fn resolve_prompt(prompt: &str, template: Option<&str>) -> Result<Str
     } else { Ok(raw) }
 }
 
-/// Minimum prompt length to inject full methodology + gotchas.
-/// Short prompts (trivial tasks) get references-only to avoid context pollution.
-const SKILL_FULL_INJECT_MIN_CHARS: usize = 200;
 const RUST_CACHE_PROMPT_LINE: &str =
     "Rust project: CARGO_TARGET_DIR points at a warm shared target; do not override. Use 'aid build' for cargo check/clippy (clean, deduplicated compiler errors). Use 'aid test' for tests — zero-match filters fail and digests name which tests ran.";
 const BATCH_SIBLING_LIMIT: usize = 10;
@@ -78,21 +75,27 @@ pub(super) fn format_batch_siblings(siblings: &[(String, String, String)]) -> St
     lines.join("\n")
 }
 
-pub(crate) fn inject_skill(prompt: &str, agent_kind: &AgentKind, requested_skills: &[String], raw_prompt_len: usize) -> Result<String> {
+pub(crate) fn inject_skill(
+    prompt: &str,
+    agent_kind: &AgentKind,
+    requested_skills: &[String],
+    required: bool,
+) -> Result<String> {
     if requested_skills.is_empty() { return Ok(prompt.to_string()); }
-    let full_inject = raw_prompt_len >= SKILL_FULL_INJECT_MIN_CHARS;
-    if !full_inject {
-        aid_info!("[aid] Skill methodology skipped (short prompt, references only)");
-    }
     let mut sections = Vec::new();
     for name in requested_skills {
-        if full_inject {
-            let skill_text = skills::load_skill(name)?;
-            if let Some(gotchas) = skills::load_skill_gotchas(name, agent_kind) {
-                sections.push(format!("--- Gotchas ---\n{gotchas}"));
+        let skill_text = match skills::load_skill(name) {
+            Ok(text) => text,
+            Err(error) if !required => {
+                aid_warn!("[aid] Auto-applied skill unavailable: {name} ({error})");
+                continue;
             }
-            sections.push(format!("--- Methodology ---\n{skill_text}"));
+            Err(error) => return Err(error),
+        };
+        if let Some(gotchas) = skills::load_skill_gotchas(name, agent_kind) {
+            sections.push(format!("--- Gotchas ---\n{gotchas}"));
         }
+        sections.push(format!("--- Methodology ---\n{skill_text}"));
         let scripts = skills::load_skill_scripts(name);
         if !scripts.is_empty() {
             sections.push(

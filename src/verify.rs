@@ -11,10 +11,8 @@ use std::time::Duration;
 
 use crate::process_guard::ProcessGuard;
 use crate::store::Store;
-use crate::types::{Task, TaskId, TaskStatus, VerifyStatus};
+use crate::types::{TaskId, TaskStatus, VerifyStatus};
 
-#[path = "verify_classification.rs"]
-mod verify_classification;
 static VERIFY_LOCK: Mutex<()> = Mutex::new(());
 pub(crate) const VERIFY_TIMEOUT: Duration = Duration::from_secs(120);
 
@@ -25,8 +23,6 @@ pub struct VerifyResult {
     /// Distinct from `success == false`: a timeout did not finish, so it is not
     /// evidence that the change under test is broken.
     pub timed_out: bool,
-    /// True when verification tooling failed without a compiler or test diagnostic.
-    pub infrastructure_failure: bool,
     pub output: String,
     pub command: String,
 }
@@ -58,7 +54,6 @@ pub(crate) fn run_verify_with_timeout(
         return Ok(VerifyResult {
             success: false,
             timed_out: false,
-            infrastructure_failure: false,
             output: "Configured verify command was 'skip' and did not run".to_string(),
             command: "skip".to_string(),
         });
@@ -69,7 +64,6 @@ pub(crate) fn run_verify_with_timeout(
         return Ok(VerifyResult {
             success: true,
             timed_out: false,
-            infrastructure_failure: false,
             output: "No project file detected, skipping verification".to_string(),
             command: "skip".to_string(),
         });
@@ -108,38 +102,15 @@ pub(crate) fn run_verify_with_timeout(
     Ok(VerifyResult {
         success,
         timed_out,
-        infrastructure_failure: !timed_out && !success && output_indicates_infrastructure_failure(&combined),
         output: combined,
         command: cmd_str,
     })
-}
-
-/// Downgrade a verify result when the prompt declared new files that were not added.
-pub(crate) fn apply_declared_file_check(
-    worktree_path: &Path,
-    task: Option<&Task>,
-    mut result: VerifyResult,
-) -> Result<VerifyResult> {
-    let Some(task) = task else {
-        return Ok(result);
-    };
-    if let Some(message) = crate::verify_declared_files::check_task_declared_files(worktree_path, task)? {
-        result.success = false;
-        if result.output.trim().is_empty() {
-            result.output = message;
-        } else {
-            result.output = format!("{}\n{message}", result.output.trim_end());
-        }
-    }
-    Ok(result)
 }
 
 /// Format a concise pass/fail report from verification result.
 pub fn format_verify_report(result: &VerifyResult) -> String {
     let status = if result.timed_out {
         "TIMEOUT"
-    } else if result.infrastructure_failure {
-        "INFRA_FAILURE"
     } else if result.success {
         "PASS"
     } else {
@@ -171,24 +142,12 @@ pub fn record_verify_status(store: &Store, task_id: &TaskId, result: &VerifyResu
     }
     let status = if result.timed_out {
         VerifyStatus::TimedOut
-    } else if result.infrastructure_failure {
-        VerifyStatus::InfrastructureFailure
     } else if result.success {
         VerifyStatus::Passed
     } else {
         VerifyStatus::Failed
     };
     let _ = store.update_verify_status(task_id.as_str(), status);
-}
-fn output_indicates_infrastructure_failure(output: &str) -> bool {
-    verify_classification::output_indicates_infrastructure_failure(output)
-}
-
-pub(crate) fn error_indicates_infrastructure_failure(
-    error: &anyhow::Error,
-    containerized: bool,
-) -> bool {
-    verify_classification::error_indicates_infrastructure_failure(error, containerized)
 }
 /// Fail a completed task when verification failed.
 pub fn enforce_verify_status(store: &Store, task_id: &TaskId) {

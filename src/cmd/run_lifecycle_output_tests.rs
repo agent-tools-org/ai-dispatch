@@ -1,8 +1,8 @@
-// Focused tests for post-run output length detection.
+// Focused tests for factual post-run output presence detection.
 // Exports no helpers; exercises transcript fallback used by hollow-output checks.
 // Deps: run_lifecycle output/final-state helpers, paths, task domain types.
 
-use super::run_lifecycle::{capture_final_worktree_state, output_content_length};
+use super::run_lifecycle::{capture_final_worktree_state, output_has_content};
 use crate::store::Store;
 use crate::test_subprocess;
 use crate::types::{AgentKind, Task, TaskId, TaskStatus, VerifyStatus};
@@ -73,7 +73,7 @@ fn task(id: &str) -> Task {
 }
 
 #[test]
-fn output_content_length_counts_plain_text_transcript() {
+fn output_presence_accepts_plain_text_transcript() {
     let temp = tempfile::tempdir().unwrap();
     let _aid_home = crate::paths::AidHomeGuard::set(temp.path());
     let task = task("t-transcript-output");
@@ -81,32 +81,29 @@ fn output_content_length_counts_plain_text_transcript() {
     std::fs::create_dir_all(transcript.parent().unwrap()).unwrap();
     std::fs::write(&transcript, "plain transcript output\n".repeat(20)).unwrap();
 
-    assert!(output_content_length(&task) >= 200);
+    assert!(output_has_content(&task));
 }
 
 #[test]
-fn output_content_length_counts_multibyte_output_as_characters() {
+fn output_presence_accepts_one_character() {
     let dir = tempfile::tempdir().unwrap();
     let output_path = dir.path().join("output.md");
-    let content = format!("{}{}", "a".repeat(196), "\u{2019}".repeat(2));
-    assert!(content.len() >= 200);
-    assert!(content.chars().count() < 200);
-    std::fs::write(&output_path, content).unwrap();
+    std::fs::write(&output_path, "好").unwrap();
     let mut task = task("t-short-multibyte");
     task.output_path = Some(output_path.to_string_lossy().to_string());
 
-    assert!(output_content_length(&task) < 200);
+    assert!(output_has_content(&task));
 }
 
 #[test]
-fn output_content_length_keeps_long_ascii_output_at_threshold() {
+fn output_presence_rejects_whitespace_only_file() {
     let dir = tempfile::tempdir().unwrap();
     let output_path = dir.path().join("output.md");
-    std::fs::write(&output_path, "a".repeat(200)).unwrap();
-    let mut task = task("t-long-ascii");
+    std::fs::write(&output_path, " \n\t").unwrap();
+    let mut task = task("t-empty-output");
     task.output_path = Some(output_path.to_string_lossy().to_string());
 
-    assert!(output_content_length(&task) >= 200);
+    assert!(!output_has_content(&task));
 }
 
 #[test]

@@ -8,10 +8,49 @@ use std::sync::Arc;
 use crate::agent::Agent;
 use crate::rate_limit;
 use crate::store::Store;
-use crate::types::{CompletionInfo, EventKind, TaskId};
+use crate::delivery_guard::{DeliveryOutcome, DeliveryOutcome::MissingFinalDelivery};
+use crate::types::{
+    CompletionInfo, DeliveryAssessment, EventKind, TaskEvent, TaskId, TaskStatus,
+};
 
 use super::extract::{append_to_broadcast, extract_finding_detail, parse_milestone_event};
 use super::{apply_completion_event, SyntheticMilestoneTracker};
+
+pub(crate) fn apply_codex_delivery_guard(
+    store: &Arc<Store>,
+    task_id: &TaskId,
+    status: TaskStatus,
+    outcome: DeliveryOutcome,
+    exit_code: Option<i32>,
+) -> TaskStatus {
+    let MissingFinalDelivery {
+        last_work_kind,
+        last_message_chars,
+    } = outcome
+    else {
+        return status;
+    };
+    if status != TaskStatus::Done {
+        return status;
+    }
+    let _ = store.update_delivery_assessment(
+        task_id.as_str(),
+        Some(DeliveryAssessment::MissingFinalDelivery),
+    );
+    let _ = store.insert_event(&TaskEvent {
+        task_id: task_id.clone(),
+        timestamp: chrono::Local::now(),
+        event_kind: EventKind::Error,
+        detail: "Missing final delivery: Codex exited without a final agent message".to_string(),
+        metadata: Some(serde_json::json!({
+            "delivery_guard": "missing_final_delivery",
+            "last_work_kind": last_work_kind,
+            "last_message_chars": last_message_chars,
+            "exit_code": exit_code,
+        })),
+    });
+    TaskStatus::Failed
+}
 
 pub(crate) struct StreamLineContext<'a> {
     pub agent: &'a dyn Agent,

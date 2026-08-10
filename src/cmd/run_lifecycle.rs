@@ -462,6 +462,7 @@ fn run_task_postprocess_phase(
     }
     maybe_cleanup_fast_fail(store, task_id, &task);
     persist_result_file(store, task_id, args, &task, effective_dir);
+    let task = store.get_task(task_id.as_str())?.unwrap_or(task);
     if task.status == TaskStatus::Failed {
         return Ok(handle_failed_postprocess(
             store,
@@ -521,7 +522,12 @@ fn persist_result_file(
         effective_dir.map(String::as_str),
         &log_path,
     ) {
-        Ok(delivery) => record_missing_report(store.as_ref(), task_id, delivery),
+        Ok(delivery) => record_missing_report(
+            store.as_ref(),
+            task_id,
+            delivery,
+            args.result_file_required == Some(true),
+        ),
         Err(err) => aid_warn!("[aid] Failed to persist result file: {err}"),
     }
 }
@@ -577,12 +583,12 @@ pub(crate) fn maybe_flag_hollow_output(
     task: &Task,
     base_branch: Option<&str>,
 ) {
-    // Hollow output is delivery assessment, not verify outcome. A task can have
-    // Passed/TimedOut verify and still lack a substantive deliverable.
+    // Hollow output records factual absence only; content length and style are
+    // not evidence about whether the original task contract was satisfied.
     if task.status != TaskStatus::Done {
         return;
     }
-    if output_content_length(task) >= 200 {
+    if output_has_content(task) {
         return;
     }
     let no_worktree_changes = match task.worktree_path.as_deref() {
@@ -592,7 +598,7 @@ pub(crate) fn maybe_flag_hollow_output(
     if !no_worktree_changes {
         return;
     }
-    aid_warn!("[aid] Warning: agent completed but produced no substantive output");
+    aid_warn!("[aid] Warning: agent completed with no output or worktree changes");
     if let Err(err) = store.update_delivery_assessment(
         task_id.as_str(),
         Some(DeliveryAssessment::HollowOutput),
@@ -603,23 +609,23 @@ pub(crate) fn maybe_flag_hollow_output(
         task_id: task_id.clone(),
         timestamp: chrono::Local::now(),
         event_kind: EventKind::Milestone,
-        detail: "Hollow output: agent produced no substantive deliverable".to_string(),
+        detail: "Hollow output: no output or worktree changes were observed".to_string(),
         metadata: None,
     });
 }
-pub(super) fn output_content_length(task: &Task) -> usize {
+pub(super) fn output_has_content(task: &Task) -> bool {
     if let Some(ref path) = task.output_path {
         if let Ok(content) = std::fs::read_to_string(path) {
-            return content.trim().chars().count();
+            return !content.trim().is_empty();
         }
     }
     let auto_path = crate::paths::task_dir(task.id.as_str()).join("output.md");
     if let Ok(content) = std::fs::read_to_string(auto_path) {
-        return content.trim().chars().count();
+        return !content.trim().is_empty();
     }
     let transcript = crate::paths::transcript_path(task.id.as_str());
     if let Some(content) = super::run_prompt::extract_output_fallback_from_path(&transcript) {
-        return content.trim().chars().count();
+        return !content.trim().is_empty();
     }
     let log_path = task
         .log_path
@@ -627,6 +633,5 @@ pub(super) fn output_content_length(task: &Task) -> usize {
         .map(std::path::PathBuf::from)
         .unwrap_or_else(|| crate::paths::log_path(task.id.as_str()));
     super::run_prompt::extract_output_fallback_from_path(&log_path)
-        .map(|content| content.trim().chars().count())
-        .unwrap_or(0)
+        .is_some_and(|content| !content.trim().is_empty())
 }

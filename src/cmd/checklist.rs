@@ -43,7 +43,7 @@ pub(crate) fn format_checklist_block(items: &[String]) -> Option<String> {
     let mut lines = vec![
         "<aid-checklist>".to_string(),
         "MANDATORY CHECKLIST — You MUST explicitly address EVERY item below.".to_string(),
-        "For each item, state CONFIRMED (with evidence) or REJECTED (with reasoning).".to_string(),
+        "For each item, output `CHECKLIST N: CONFIRMED — <evidence>` or `CHECKLIST N: REJECTED — <reason>`.".to_string(),
         "Do NOT skip any item. Missing responses will trigger an automatic retry.".to_string(),
         String::new(),
     ];

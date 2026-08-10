@@ -6,8 +6,8 @@ use serde_json::Value;
 
 use crate::types::{CompletionInfo, TaskStatus};
 
-/// Claude / Cursor / Qwen stream-json terminal `result` is a failure.
-/// Keyed to real envelopes: `is_error:true` or non-`success` subtype.
+/// Claude / Cursor / Qwen stream-json terminal `result` is a failure only when
+/// its protocol exposes an explicit error flag or a known non-delivery subtype.
 pub(crate) fn result_envelope_failed(v: &Value) -> bool {
     if v.get("type").and_then(|t| t.as_str()) != Some("result") {
         return false;
@@ -17,7 +17,7 @@ pub(crate) fn result_envelope_failed(v: &Value) -> bool {
     }
     matches!(
         v.get("subtype").and_then(|s| s.as_str()),
-        Some(sub) if sub != "success"
+        Some("error_during_execution" | "max_turns" | "cancelled")
     )
 }
 
@@ -117,6 +117,16 @@ pub(crate) fn record_quota_exhaustion(
     custom_name: Option<&str>,
     model: Option<&str>,
 ) -> QuotaOutcome {
+    record_quota_exhaustion_with_delivery(output, agent, custom_name, model, false)
+}
+
+pub(crate) fn record_quota_exhaustion_with_delivery(
+    output: &str,
+    agent: crate::types::AgentKind,
+    custom_name: Option<&str>,
+    model: Option<&str>,
+    delivered: bool,
+) -> QuotaOutcome {
     // Only what the CLI wrote. The model's own text is dropped before any
     // needle is looked for, so a report quoting this repo's signature table —
     // or a test fixture, or a commit message — cannot write a marker. See
@@ -144,7 +154,7 @@ pub(crate) fn record_quota_exhaustion(
         }
         None => crate::rate_limit::mark_rate_limited(&agent, custom_name, &detail),
     }
-    if output_has_substantive_deliverable(output) {
+    if delivered {
         QuotaOutcome::RecordedDelivered
     } else {
         QuotaOutcome::RecordedFailed
@@ -189,10 +199,6 @@ fn agent_prose_quota_match(output: &str, agent: crate::types::AgentKind) -> bool
 /// never *who* said it.
 fn prose_line_is_quota_refusal(line: &str, agent: crate::types::AgentKind) -> bool {
     crate::rate_limit_signatures::match_quota_signature_for_agent(line, agent).is_some()
-}
-
-fn output_has_substantive_deliverable(output: &str) -> bool {
-    crate::delivery_guard::looks_like_delivered_report(output)
 }
 
 /// The quota sentence itself, windowed around the phrase that reports it.

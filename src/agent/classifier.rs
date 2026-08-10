@@ -215,21 +215,6 @@ pub(crate) fn contains_any(prompt: &str, terms: &[&str]) -> bool {
     terms.iter().any(|term| prompt.contains(term))
 }
 
-/// Conservative gate for automatic cheap-model routing.
-pub fn is_simple_for_routing(prompt: &str) -> bool {
-    let chars = prompt.chars().count();
-    let words = prompt.split_whitespace().count();
-    let newlines = prompt.chars().filter(|&c| c == '\n').count();
-    let lower = prompt.to_lowercase();
-    chars <= 200
-        && words <= 35
-        && newlines <= 2
-        && !prompt.contains("```")
-        && !prompt.contains("http://")
-        && !prompt.contains("https://")
-        && !contains_any(&lower, &["implement", "create module", "design", "architect", "refactor across", "migrate", "audit", "review", "verify", "debug", "investigate", "root cause"])
-}
-
 /// Word-boundary aware match: "ui" matches " ui " but not "suite".
 pub(crate) fn contains_any_word(text: &str, terms: &[&str]) -> bool {
     let bytes = text.as_bytes();
@@ -288,31 +273,4 @@ mod tests {
         assert_eq!(classify(&"x".repeat(600), 5, 600).complexity, Complexity::High);
     }
 
-    #[test]
-    fn simple_prompt_is_routable() {
-        assert!(is_simple_for_routing("rename a field"));
-        assert!(!is_simple_for_routing("Cross-audit the parser.rs change"));
-        assert!(!is_simple_for_routing("review this diff"));
-        assert!(!is_simple_for_routing("verify the fix works"));
-    }
-
-    #[test]
-    fn long_prompt_is_not_routable() {
-        assert!(!is_simple_for_routing(&"a ".repeat(36)));
-    }
-
-    #[test]
-    fn code_block_prompt_is_not_routable() {
-        assert!(!is_simple_for_routing("fix this:\n```rs\nfn main() {}\n```"));
-    }
-
-    #[test]
-    fn implement_prompt_is_not_routable() {
-        assert!(!is_simple_for_routing("implement a new handler"));
-    }
-
-    #[test]
-    fn url_prompt_is_not_routable() {
-        assert!(!is_simple_for_routing("check https://example.com"));
-    }
 }

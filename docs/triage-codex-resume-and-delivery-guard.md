@@ -1,5 +1,10 @@
 # Triage: Codex resume vs deleted task HOME + delivery-guard false fail
 
+> Resolution (2026-08-10): the 200-character delivery floor described below
+> was removed. A non-empty structured final `agent_message` after the last work
+> event is now sufficient, regardless of length. The remainder of this document
+> is retained as historical incident evidence.
+
 Date: 2026-08-09  
 Scope: read-only call-chain trace. No behaviour change in this write-up.
 

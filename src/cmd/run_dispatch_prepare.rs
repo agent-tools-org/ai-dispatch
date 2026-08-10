@@ -73,7 +73,10 @@ where
     args.prompt = resolve_prompt_input(&args.prompt, args.prompt_file.as_deref())?;
     args.prompt_file = None;
     args.max_duration_mins = resolve_max_duration_mins(args.timeout, args.max_duration_mins);
-    let had_explicit_result_file = args.result_file.is_some();
+    let had_explicit_result_file = args
+        .result_file_required
+        .unwrap_or_else(|| args.result_file.is_some());
+    args.result_file_required = Some(had_explicit_result_file);
     let detected_project = project::detect_project(); apply_project_defaults(args, detected_project.as_ref());
     validate_critical_rigor(args)?;
     validate_egress(args)?;
@@ -125,6 +128,7 @@ where
     if should_auto_result_file(args, had_explicit_result_file) {
         let result_file = crate::cmd::report_mode::task_result_file(task_id.as_str());
         args.result_file = Some(result_file.clone());
+        args.result_file_required = Some(false);
         aid_info!("[aid] Audit report mode: auto-set --result-file {result_file}");
     }
     let mut dispatch_args = args.clone();

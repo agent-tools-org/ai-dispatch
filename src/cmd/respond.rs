@@ -3,7 +3,7 @@
 
 use anyhow::{Context, Result};
 
-use crate::cmd::reply::ensure_interactive_input;
+use crate::cmd::reply::{InputCommand, ensure_interactive_input};
 use crate::input_signal;
 use crate::store::Store;
 
@@ -11,7 +11,7 @@ pub fn run(store: &Store, task_id: &str, input: Option<&str>, file: Option<&str>
     let task = store
         .get_task(task_id)?
         .ok_or_else(|| anyhow::anyhow!("Task {task_id} not found"))?;
-    ensure_interactive_input(&task)?;
+    ensure_interactive_input(&task, InputCommand::Respond)?;
     let text = if let Some(path) = file {
         std::fs::read_to_string(path)
             .with_context(|| format!("Failed to read response file: {path}"))?
@@ -65,7 +65,7 @@ mod tests {
         for (task_id, agent) in [("t-respond-agy", AgentKind::Antigravity), ("t-respond-grok", AgentKind::Grok)] {
             store.insert_task(&make_task(task_id, agent)).unwrap();
             let err = run(&store, task_id, Some("yes"), None).unwrap_err();
-            assert!(err.to_string().contains("cannot consume steering input"));
+            assert!(err.to_string().contains("no response signal was written"));
             assert!(input_signal::take_response(task_id).unwrap().is_none());
         }
     }
@@ -81,5 +81,21 @@ mod tests {
             input_signal::take_response("t-respond-codex").unwrap().as_deref(),
             Some("yes")
         );
+    }
+
+    #[test]
+    fn respond_explains_how_to_recover_deleted_custom_agent() {
+        let temp_home = tempfile::tempdir().unwrap();
+        let _aid_home = AidHomeGuard::set(temp_home.path());
+        let store = Store::open_memory().unwrap();
+        let mut task = make_task("t-respond-missing-custom", AgentKind::Custom);
+        task.custom_agent_name = Some("gone".to_string());
+        store.insert_task(&task).unwrap();
+
+        let err = run(&store, task.id.as_str(), Some("yes"), None).unwrap_err();
+        let message = err.to_string();
+        assert!(message.contains("unavailable custom agent 'gone'"));
+        assert!(message.contains("restore ~/.aid/agents/gone.toml"));
+        assert!(message.contains("stop the task and retry"));
     }
 }

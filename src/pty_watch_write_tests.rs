@@ -7,6 +7,7 @@ use std::sync::{Arc, mpsc};
 use std::time::Duration;
 
 use super::{MonitorState, monitor_bridge};
+use crate::agent::antigravity::AntigravityAgent;
 use crate::agent::codex::CodexAgent;
 use crate::input_signal;
 use crate::pty_bridge::PtyBridge;
@@ -181,4 +182,47 @@ fn failed_pending_reply_is_reported_once_after_successful_steer() {
         .collect::<Vec<_>>();
     assert_eq!(failed_events.len(), 1, "failed reply must produce one event");
     assert_eq!(failed_events[0].event_kind, EventKind::Error);
+}
+
+#[test]
+fn noninteractive_agent_leaves_queued_input_untouched() {
+    let _permit = crate::test_subprocess::acquire();
+    let temp_home = tempfile::tempdir().unwrap();
+    let _aid_home = crate::paths::AidHomeGuard::set(temp_home.path());
+    let task = super::tests::pty_task("t-noninteractive-input", TaskStatus::Running);
+    let store = Arc::new(Store::open_memory().unwrap());
+    store.insert_task(&task).unwrap();
+    store
+        .insert_message(
+            task.id.as_str(),
+            MessageDirection::In,
+            "queued input",
+            MessageSource::Reply,
+        )
+        .unwrap();
+    input_signal::write_steer(task.id.as_str(), "queued steer").unwrap();
+
+    let command = vec!["/usr/bin/true".to_string()];
+    let mut bridge = PtyBridge::spawn(&command, None, vec![]).unwrap();
+    let receiver = spawn_reader(&mut bridge);
+    let mut log = tempfile::NamedTempFile::new().unwrap();
+    let mut state = MonitorState::new(false, None);
+
+    monitor_bridge(
+        &AntigravityAgent,
+        &task.id,
+        &store,
+        &mut bridge,
+        &receiver,
+        log.as_file_mut(),
+        &mut state,
+        None,
+        None,
+    )
+    .unwrap();
+    assert!(bridge.wait().unwrap().success());
+
+    let messages = store.list_messages_for_task(task.id.as_str()).unwrap();
+    assert!(messages[0].delivered_at.is_none());
+    assert_eq!(input_signal::take_steer(task.id.as_str()).unwrap().as_deref(), Some("queued steer"));
 }

@@ -40,9 +40,10 @@ aid unstick <task-id>
 - Use `steer` for updated direction during execution.
 - `steer` is refused for the one-shot print-mode `agy` and `grok` CLIs because
   they do not consume PTY stdin; aid reports the limitation before queuing a
-  message. Codex steering remains supported.
+  steer message. Codex steering remains supported.
 - `respond` is refused for those same one-shot CLIs before aid writes a
-  response signal; use it only when the selected adapter consumes PTY input.
+  response signal; aid says that no response signal was written. Use it only
+  when the selected adapter consumes PTY input.
 - Use `unstick` when progress has stopped and recovery is appropriate.
 
 Do not send repeated polling messages; inspect events first.

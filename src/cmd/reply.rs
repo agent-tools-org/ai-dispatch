@@ -21,6 +21,34 @@ pub enum ReplyOutcome {
     TimedOut { delivered: bool },
 }
 
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum InputCommand {
+    Reply,
+    Steer,
+    Respond,
+    Unstick,
+}
+
+impl InputCommand {
+    fn invocation(self) -> &'static str {
+        match self {
+            Self::Reply => "`aid reply`",
+            Self::Steer => "`aid steer`",
+            Self::Respond => "`aid respond`",
+            Self::Unstick => "`aid unstick`",
+        }
+    }
+
+    fn refusal(self) -> &'static str {
+        match self {
+            Self::Reply => "no reply message was queued",
+            Self::Steer => "no steer message was queued",
+            Self::Respond => "no response signal was written",
+            Self::Unstick => "no nudge was queued",
+        }
+    }
+}
+
 pub fn run(
     store: &Store,
     task_id: &str,
@@ -37,6 +65,7 @@ pub fn run(
         async_mode,
         timeout_secs,
         MessageSource::Reply,
+        InputCommand::Reply,
     )
 }
 
@@ -48,6 +77,7 @@ pub(crate) fn run_with_source(
     async_mode: bool,
     timeout_secs: u64,
     source: MessageSource,
+    command: InputCommand,
 ) -> Result<ReplyOutcome> {
     run_with_hook(
         store,
@@ -58,6 +88,7 @@ pub(crate) fn run_with_source(
         Duration::from_secs(timeout_secs),
         DEFAULT_POLL_INTERVAL,
         source,
+        command,
         |_| {},
     )
 }
@@ -71,6 +102,7 @@ fn run_with_hook<F>(
     timeout: Duration,
     poll_interval: Duration,
     source: MessageSource,
+    command: InputCommand,
     mut on_poll: F,
 ) -> Result<ReplyOutcome>
 where
@@ -88,7 +120,7 @@ where
             task.status.label()
         );
     }
-    ensure_interactive_input(&task)?;
+    ensure_interactive_input(&task, command)?;
 
     let text = read_message(message, file)?;
     let queued = store.insert_message(task_id, MessageDirection::In, &text, source)?;
@@ -100,22 +132,35 @@ where
     wait_for_ack(store, task_id, queued.id, timeout, poll_interval, &mut on_poll)
 }
 
-pub(crate) fn ensure_interactive_input(task: &Task) -> Result<()> {
+pub(crate) fn ensure_interactive_input(task: &Task, command: InputCommand) -> Result<()> {
     let adapter = if task.agent == crate::types::AgentKind::Custom {
         task.custom_agent_name
             .as_deref()
             .and_then(agent::registry::resolve_custom_agent)
-            .ok_or_else(|| anyhow!("Custom agent for task {} is unavailable", task.id))?
+            .ok_or_else(|| {
+                let name = task.custom_agent_name.as_deref().unwrap_or("<unnamed>");
+                anyhow!(
+                    "Task {} uses unavailable custom agent '{}'; restore ~/.aid/agents/{}.toml, or stop the task and retry it with an available agent",
+                    task.id, name, name
+                )
+            })?
     } else {
         agent::get_agent(task.agent)
     };
     if adapter.accepts_interactive_input() {
         return Ok(());
     }
-    bail!(
-        "Task {} uses '{}' in one-shot print mode and cannot consume steering input; no message was queued",
-        task.id,
+    let agent_name = if task.agent == crate::types::AgentKind::Custom {
+        task.custom_agent_name.as_deref().unwrap_or("custom")
+    } else {
         task.agent.as_str()
+    };
+    bail!(
+        "Task {} uses '{}' in one-shot print mode and cannot consume interactive input; {} for {}",
+        task.id,
+        agent_name,
+        command.refusal(),
+        command.invocation()
     )
 }
 
@@ -167,133 +212,5 @@ where
 }
 
 #[cfg(test)]
-mod tests {
-    use std::time::Duration;
-
-    use chrono::Local;
-
-    use super::{ReplyOutcome, run, run_with_hook};
-    use crate::paths::AidHomeGuard;
-    use crate::store::Store;
-    use crate::types::{AgentKind, MessageSource, Task, TaskId, TaskStatus, VerifyStatus};
-
-    fn make_task(id: &str, status: TaskStatus) -> Task {
-        Task {
-            id: TaskId(id.to_string()),
-            agent: AgentKind::Codex,
-            custom_agent_name: None,
-            prompt: "test".to_string(),
-            resolved_prompt: None,
-            category: None,
-            status,
-            parent_task_id: None,
-            workgroup_id: None,
-            caller_kind: None,
-            caller_session_id: None,
-            agent_session_id: None,
-            repo_path: None,
-            worktree_path: None,
-            worktree_branch: None,
-        final_head_sha: None,
-        final_branch: None,
-            start_sha: None,
-            log_path: None,
-            output_path: None,
-            tokens: None,
-            prompt_tokens: None,
-            duration_ms: None,
-            requested_model: None, observed_model: None, attribution_source: None,
-            cost_usd: None,
-            exit_code: None,
-            created_at: Local::now(),
-            completed_at: None,
-            verify: None,
-            verify_status: VerifyStatus::Skipped,
-            pending_reason: None,
-            read_only: false,
-            budget: false,
-            audit_verdict: None,
-            audit_report_path: None,
-            delivery_assessment: None,
-        }
-    }
-
-    #[test]
-    fn reply_async_returns_immediately() {
-        let temp = tempfile::tempdir().unwrap();
-        let _aid_home = AidHomeGuard::set(temp.path());
-        let store = Store::open_memory().unwrap();
-        store.insert_task(&make_task("t-reply-async", TaskStatus::Running)).unwrap();
-
-        let outcome = run(
-            &store,
-            "t-reply-async",
-            Some("follow this path"),
-            None,
-            true,
-            30,
-        )
-        .unwrap();
-
-        assert_eq!(outcome, ReplyOutcome::Queued { id: 1 });
-        let messages = store.list_messages_for_task("t-reply-async").unwrap();
-        assert_eq!(messages.len(), 1);
-        assert_eq!(messages[0].source, MessageSource::Reply);
-        assert_eq!(messages[0].content, "follow this path");
-    }
-
-    #[test]
-    fn reply_polls_until_ack() {
-        let temp = tempfile::tempdir().unwrap();
-        let _aid_home = AidHomeGuard::set(temp.path());
-        let store = Store::open_memory().unwrap();
-        store.insert_task(&make_task("t-reply-ack", TaskStatus::AwaitingInput)).unwrap();
-
-        let mut polls = 0usize;
-        let outcome = run_with_hook(
-            &store,
-            "t-reply-ack",
-            Some("answer"),
-            None,
-            false,
-            Duration::from_millis(25),
-            Duration::from_millis(1),
-            MessageSource::Reply,
-            |message_id| {
-                polls += 1;
-                if polls == 1 {
-                    store.mark_delivered(message_id).unwrap();
-                }
-                if polls == 2 {
-                    store.mark_acked_latest_inbound("t-reply-ack").unwrap();
-                }
-            },
-        )
-        .unwrap();
-
-        assert_eq!(outcome, ReplyOutcome::Acked { delivered: true });
-    }
-
-    #[test]
-    fn reply_times_out_cleanly() {
-        let temp = tempfile::tempdir().unwrap();
-        let _aid_home = AidHomeGuard::set(temp.path());
-        let store = Store::open_memory().unwrap();
-        store.insert_task(&make_task("t-reply-timeout", TaskStatus::Stalled)).unwrap();
-
-        let outcome = run_with_hook(
-            &store,
-            "t-reply-timeout",
-            Some("nudge"),
-            None,
-            false,
-            Duration::from_millis(5),
-            Duration::from_millis(1),
-            MessageSource::Reply,
-            |_| {},
-        )
-        .unwrap();
-
-        assert_eq!(outcome, ReplyOutcome::TimedOut { delivered: false });
-    }
-}
+#[path = "reply_tests.rs"]
+mod tests;

@@ -37,6 +37,10 @@ pub struct CustomAgentConfig {
     pub fixed_args: Vec<String>,
     #[serde(default)]
     pub streaming: bool,
+    /// Whether aid may send responses, replies, and steering to the running CLI.
+    /// Defaults to true to preserve the historical custom-agent behavior.
+    #[serde(default = "default_interactive_input")]
+    pub interactive_input: bool,
     #[serde(default = "default_output_format")]
     pub output_format: String,
     #[serde(default)]
@@ -104,6 +108,10 @@ fn default_output_format() -> String {
     "text".to_string()
 }
 
+fn default_interactive_input() -> bool {
+    true
+}
+
 fn default_score() -> i32 {
     3
 }
@@ -126,7 +134,7 @@ impl super::Agent for CustomAgent {
     }
 
     fn accepts_interactive_input(&self) -> bool {
-        self.config.streaming
+        self.config.interactive_input
     }
 
     fn build_command(&self, prompt: &str, opts: &RunOpts) -> Result<Command> {
@@ -265,6 +273,7 @@ mod tests {
             output_flag: String::new(),
             fixed_args: Vec::new(),
             streaming: false,
+            interactive_input: default_interactive_input(),
             output_format: default_output_format(),
             capabilities: CapabilityScores::default(),
             trust_tier: default_trust_tier(),
@@ -292,6 +301,7 @@ mod tests {
         assert_eq!(config.id, "aider");
         assert_eq!(config.prompt_mode, "arg");
         assert_eq!(config.output_format, "text");
+        assert!(config.interactive_input);
         assert_eq!(config.capabilities.simple_edit, 0);
     }
 
@@ -309,6 +319,7 @@ mod tests {
             output_flag = "--out"
             fixed_args = ["--yes", "--batch"]
             streaming = true
+            interactive_input = false
             output_format = "jsonl"
 
             [agent.capabilities]
@@ -323,6 +334,7 @@ mod tests {
         "#;
         let config = parse_config(toml_data).unwrap();
         assert!(config.streaming);
+        assert!(!config.interactive_input);
         assert_eq!(config.prompt_mode, "flag");
         assert_eq!(config.capabilities.complex_impl, 8);
         assert_eq!(config.fixed_args.len(), 2);
@@ -363,6 +375,19 @@ mod tests {
             config: base_config("agent-cli"),
         };
         assert_eq!(agent.kind(), AgentKind::Custom);
+    }
+
+    #[test]
+    fn custom_agent_input_capability_is_independent_of_streaming() {
+        let mut config = base_config("agent-cli");
+        config.streaming = false;
+        config.interactive_input = true;
+        assert!(CustomAgent { config }.accepts_interactive_input());
+
+        let mut config = base_config("agent-cli");
+        config.streaming = true;
+        config.interactive_input = false;
+        assert!(!CustomAgent { config }.accepts_interactive_input());
     }
 
     #[test]

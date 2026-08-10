@@ -72,9 +72,10 @@ pub trait Agent: Send + Sync {
     fn accepts_interactive_input(&self) -> bool;
 
     /// Interactive agents that read stdin mid-run can be nudged to unstick.
-    /// Exec/batch agents that ignore stdin must return false so aid does not waste a nudge on them.
+    /// An adapter may narrow this for agents that must not receive automatic nudges,
+    /// but it can never widen the interactive-input capability.
     fn accepts_idle_nudge(&self) -> bool {
-        true
+        self.accepts_interactive_input()
     }
 
     /// Build the OS command to execute this agent

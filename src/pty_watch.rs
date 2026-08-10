@@ -583,7 +583,8 @@ pub(crate) fn monitor_bridge(
         state.maybe_forward_input(bridge, store, task_id)?;
         state.maybe_forward_steer(bridge, store, task_id)?;
         state.maybe_consume_reply(bridge, store, task_id)?;
-        state.maybe_handle_idle(store, task_id, agent.accepts_idle_nudge())?;
+        let accepts_nudge = agent.accepts_interactive_input() && agent.accepts_idle_nudge();
+        state.maybe_handle_idle(store, task_id, accepts_nudge)?;
     }
 
     if !state.line_buffer.trim().is_empty() {

@@ -924,7 +924,7 @@ mod tests {
     }
 
     #[test]
-    fn build_command_read_only_rejects_legacy_approval_flags() {
+    fn build_command_read_only_omits_legacy_approval_flags() {
         let opts = RunOpts {
             dir: None,
             output: None,

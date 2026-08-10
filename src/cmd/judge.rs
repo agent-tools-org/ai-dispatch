@@ -92,8 +92,8 @@ pub(crate) fn gather_diff(task: &Task) -> Option<String> {
     let diff_args = match task.start_sha.as_deref() {
         Some(start_sha) => vec![vec!["diff", "--no-color", start_sha, "--"]],
         None => vec![
-            vec!["diff", "--no-color", "HEAD~1..HEAD", "--"],
             vec!["diff", "--no-color", "HEAD", "--"],
+            vec!["diff", "--no-color", "HEAD~1..HEAD", "--"],
         ],
     };
     for args in diff_args {

@@ -18,7 +18,7 @@ fn configured_verification_is_pending_when_dispatch_inserts_task() {
         ..Default::default()
     };
 
-    let prepared = prepare_dispatch(&store, &mut args).unwrap();
+    let prepared = prepare_dispatch_with(&store, &mut args, |_| true).unwrap();
     let task = store.get_task(prepared.task_id.as_str()).unwrap().unwrap();
 
     assert_eq!(task.verify_status, VerifyStatus::Pending);

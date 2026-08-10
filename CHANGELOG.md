@@ -1,3 +1,11 @@
+## v10.22.0 (2026-08-10)
+- Task completion now follows process facts, structured agent protocol events, and explicit caller contracts instead of response length, prose shape, or prompt-wording guesses
+- Codex exact answers such as `ok` remain successful when a non-empty final message follows the last work event, with end-to-end regression coverage for short delivery
+- Verification uses command exit status directly, treats execution failures and timeouts as inconclusive infrastructure outcomes, and no longer reclassifies failures from output keywords
+- Explicit result files remain enforceable artifacts, while auto-generated report paths, hollow-output observations, and ordinary model prose cannot silently fail a completed task
+- Agent result parsing, quota handling, judge verdicts, checklist responses, model health, skill injection, and smart routing now use explicit contracts without invented defaults or prompt-length thresholds
+
+
 ## v10.21.0 (2026-08-10)
 - `aid steer` no longer kills the task it steers: a PTY write that fails is recorded as an undelivered message instead of ending the run, and the agent's own exit decides the outcome again
 - Steering, replying, responding and unsticking now refuse up front for agents that cannot read stdin, rather than queueing a message nothing will ever consume

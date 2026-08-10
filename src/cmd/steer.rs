@@ -1,23 +1,13 @@
 // Handler for `aid steer` — inject guidance into running PTY tasks.
 // Delegates to persisted reply delivery with steer source tracking.
 
-use anyhow::{Result, bail};
+use anyhow::Result;
 
 use crate::cmd::reply;
-use crate::types::AgentKind;
 use crate::store::Store;
 use crate::types::MessageSource;
 
 pub fn run(store: &Store, task_id: &str, message: &str) -> Result<()> {
-    let task = store
-        .get_task(task_id)?
-        .ok_or_else(|| anyhow::anyhow!("Task {task_id} not found"))?;
-    if matches!(task.agent, AgentKind::Antigravity | AgentKind::Grok) {
-        bail!(
-            "Task {task_id} uses '{}' in one-shot print mode and cannot consume steering input; no message was queued",
-            task.agent.as_str()
-        );
-    }
     reply::run_with_source(
         store,
         task_id,

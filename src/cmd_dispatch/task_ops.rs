@@ -65,8 +65,8 @@ fn local_principal() -> String {
         .unwrap_or_else(|| "local-principal".to_string())
 }
 
-pub(super) fn respond(task_id: String, input: Option<String>, file: Option<String>) -> Result<()> {
-    cmd::respond::run(&task_id, input.as_deref(), file.as_deref())
+pub(super) fn respond(store: Arc<store::Store>, task_id: String, input: Option<String>, file: Option<String>) -> Result<()> {
+    cmd::respond::run(&store, &task_id, input.as_deref(), file.as_deref())
 }
 
 pub(super) fn reply(

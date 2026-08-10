@@ -26,6 +26,10 @@ impl super::Agent for CopilotAgent {
         true
     }
 
+    fn accepts_interactive_input(&self) -> bool {
+        true
+    }
+
     fn build_command(&self, prompt: &str, opts: &RunOpts) -> Result<Command> {
         let mut cmd = Command::new("copilot");
         let prompt = effective_prompt(prompt, opts);

@@ -26,6 +26,10 @@ impl super::Agent for CommandCodeAgent {
         true
     }
 
+    fn accepts_interactive_input(&self) -> bool {
+        true
+    }
+
     fn accepts_idle_nudge(&self) -> bool {
         false
     }

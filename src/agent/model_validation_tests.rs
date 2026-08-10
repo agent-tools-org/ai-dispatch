@@ -17,6 +17,9 @@ impl Agent for MockQueryableAgent {
     fn streaming(&self) -> bool {
         false
     }
+    fn accepts_interactive_input(&self) -> bool {
+        false
+    }
     fn build_command(&self, _prompt: &str, _opts: &RunOpts) -> Result<Command> {
         Ok(Command::new("true"))
     }
@@ -96,4 +99,3 @@ fn cursor_probe_failure_returns_none_and_allows_non_alias_models() {
     assert!(validate_model_for_agent(&mock, "auto").is_ok());
     assert!(validate_model_for_agent(&mock, "custom-model-xyz").is_ok());
 }
-

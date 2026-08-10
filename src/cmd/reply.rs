@@ -7,9 +7,10 @@ use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result, anyhow, bail};
 
+use crate::agent;
 use crate::input_signal;
 use crate::store::Store;
-use crate::types::{MessageDirection, MessageSource, TaskStatus};
+use crate::types::{MessageDirection, MessageSource, Task, TaskStatus};
 
 const DEFAULT_POLL_INTERVAL: Duration = Duration::from_millis(100);
 
@@ -87,6 +88,7 @@ where
             task.status.label()
         );
     }
+    ensure_interactive_input(&task)?;
 
     let text = read_message(message, file)?;
     let queued = store.insert_message(task_id, MessageDirection::In, &text, source)?;
@@ -96,6 +98,25 @@ where
     }
 
     wait_for_ack(store, task_id, queued.id, timeout, poll_interval, &mut on_poll)
+}
+
+pub(crate) fn ensure_interactive_input(task: &Task) -> Result<()> {
+    let adapter = if task.agent == crate::types::AgentKind::Custom {
+        task.custom_agent_name
+            .as_deref()
+            .and_then(agent::registry::resolve_custom_agent)
+            .ok_or_else(|| anyhow!("Custom agent for task {} is unavailable", task.id))?
+    } else {
+        agent::get_agent(task.agent)
+    };
+    if adapter.accepts_interactive_input() {
+        return Ok(());
+    }
+    bail!(
+        "Task {} uses '{}' in one-shot print mode and cannot consume steering input; no message was queued",
+        task.id,
+        task.agent.as_str()
+    )
 }
 
 fn read_message(message: Option<&str>, file: Option<&str>) -> Result<String> {

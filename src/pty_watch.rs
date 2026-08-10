@@ -4,6 +4,7 @@
 use anyhow::Result;
 use chrono::Local;
 use serde_json::json;
+use std::collections::HashSet;
 use std::io::Write;
 use std::sync::{Arc, mpsc::{self, RecvTimeoutError}};
 use std::time::{Duration, Instant};
@@ -45,6 +46,7 @@ pub(crate) struct MonitorState {
     idle_nudged: bool,
     idle_warned: bool,
     pending_inbound_acks: usize,
+    failed_inbound_message_ids: HashSet<i64>,
     /// Payloads aid wrote to the PTY; matching stream lines are echoes, not agent progress.
     inbound_echo_suppress: Vec<String>,
     idle_detector: IdleDetector,
@@ -89,6 +91,7 @@ impl MonitorState {
             idle_nudged: false,
             idle_warned: false,
             pending_inbound_acks: 0,
+            failed_inbound_message_ids: HashSet::new(),
             inbound_echo_suppress: Vec::new(),
             idle_detector: IdleDetector::from_policy(timeout_policy),
             streaming,
@@ -304,6 +307,9 @@ impl MonitorState {
         task_id: &TaskId,
     ) -> Result<()> {
         for message in store.pending_inbound_for_task(task_id.as_str())? {
+            if self.failed_inbound_message_ids.contains(&message.id) {
+                continue;
+            }
             if !Self::write_input_or_record_failure(
                 bridge,
                 store,
@@ -312,6 +318,7 @@ impl MonitorState {
                 &message.content,
                 Some(message.id),
             )? {
+                self.failed_inbound_message_ids.insert(message.id);
                 break;
             }
             self.inbound_echo_suppress.push(message.content.clone());

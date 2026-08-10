@@ -75,6 +75,7 @@ fn official_guide_documents_steering_delivery_contract() {
     assert!(operations.contains("aid reports the limitation"));
     assert!(operations.contains("message"));
     assert!(operations.contains("Codex steering remains supported"));
+    assert!(operations.contains("`respond` is refused for those same one-shot CLIs"));
 }
 
 #[test]

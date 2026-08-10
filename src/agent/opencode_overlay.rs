@@ -65,6 +65,10 @@ impl Agent for OpenCodeOverlayAgent {
         true
     }
 
+    fn accepts_interactive_input(&self) -> bool {
+        true
+    }
+
     fn build_command(&self, prompt: &str, opts: &RunOpts) -> Result<Command> {
         if opts.read_only && self.spec.reported_kind == AgentKind::Custom {
             aid_warn!("[aid] ⚠OpenCode read-only is prompt-level only, not enforced. Use --worktree for isolation.");

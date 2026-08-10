@@ -125,6 +125,10 @@ impl super::Agent for CustomAgent {
         self.config.streaming
     }
 
+    fn accepts_interactive_input(&self) -> bool {
+        self.config.streaming
+    }
+
     fn build_command(&self, prompt: &str, opts: &RunOpts) -> Result<Command> {
         let effective_prompt = if opts.read_only {
             read_only_prompt(prompt, opts)

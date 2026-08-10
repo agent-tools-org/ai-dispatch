@@ -60,7 +60,6 @@ pub(crate) use env::should_use_durable_codex_home;
 /// Adapter trait for AI CLI tools
 pub trait Agent: Send + Sync {
     fn kind(&self) -> AgentKind;
-
     /// Custom-agent id used as the rate-limit marker slug. Built-ins return
     /// `None` so markers stay `rate-limit-{as_str()}`.
     fn rate_limit_name(&self) -> Option<&str> {
@@ -69,6 +68,8 @@ pub trait Agent: Send + Sync {
 
     /// Whether this agent streams JSONL (true) or outputs a single JSON blob (false)
     fn streaming(&self) -> bool;
+    /// Whether the running CLI consumes interactive input from its PTY.
+    fn accepts_interactive_input(&self) -> bool;
 
     /// Interactive agents that read stdin mid-run can be nudged to unstick.
     /// Exec/batch agents that ignore stdin must return false so aid does not waste a nudge on them.
@@ -110,7 +111,6 @@ pub trait Agent: Send + Sync {
     }
 
     /// Whether this agent requires a PTY even for foreground execution.
-    /// Agents that don't produce stdout when piped (e.g. opencode) should return true.
     fn needs_pty(&self) -> bool {
         false
     }

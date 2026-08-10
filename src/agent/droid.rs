@@ -23,6 +23,10 @@ impl super::Agent for DroidAgent {
         true
     }
 
+    fn accepts_interactive_input(&self) -> bool {
+        true
+    }
+
     fn build_command(&self, prompt: &str, opts: &RunOpts) -> Result<Command> {
         let mut cmd = Command::new("droid");
         cmd.args(["exec", "--output-format", "stream-json"]);

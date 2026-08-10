@@ -2,9 +2,8 @@
 
 ## Status
 
-Proposed design for the successful-exit-without-delivery incident observed on
-2026-07-27. This document defines the delivery contract and test gate before
-production code changes begin.
+Implemented. The original content-length clause was removed on 2026-08-10
+after it falsely failed exact short answers, including `t-5d7f1e71`.
 
 ## Incident
 
@@ -14,10 +13,10 @@ emitted a substantive `agent_message` after their final work event. The other
 six consumed 8,871 to 14,030 output tokens but ended after a command or todo
 event, leaving only earlier progress messages.
 
-AID marked all eight tasks `done` because streaming completion currently trusts
-the child exit code. The existing `HollowOutput` assessment did not catch the
-six incomplete deliveries because it counts accumulated text; progress messages
-already exceeded its 200-character threshold.
+AID marked all eight tasks `done` because streaming completion trusted the
+child exit code. The earlier `HollowOutput` assessment counted accumulated text
+rather than a protocol-level final response, so progress messages could mask a
+missing delivery.
 
 ## Goal
 
@@ -58,13 +57,11 @@ A Codex run has final-delivery evidence when all conditions hold:
 
 1. the process exits successfully;
 2. a non-empty completed `agent_message` exists;
-3. no `Work` event follows that message;
-4. the message contains at least `MIN_FINAL_MESSAGE_CHARS` non-whitespace
-   characters.
+3. no `Work` event follows that message.
 
-The length floor only rejects acknowledgements and fragments. Event ordering is
-the primary signal. The constant must be centralized and initially set to 200
-characters to match the existing substantive-output convention.
+AID does not grade the message by length, headings, prose shape, or keywords.
+Those properties cannot distinguish a correct exact answer such as `ok` from an
+incomplete long report. Content quality is outside the terminal-state contract.
 
 For write tasks, a committed or dirty scoped diff remains independent delivery
 evidence for preserving work, but it does not manufacture a missing user-facing
@@ -86,8 +83,9 @@ MissingFinalDelivery
 This is an expected domain outcome, not a parser exception. It must be persisted
 as `DeliveryAssessment::MissingFinalDelivery`.
 
-`HollowOutput` remains for agents without structured final-message evidence.
-Codex uses the stronger ordering-based assessment.
+Agents with structured protocols use their explicit completion or result event.
+Plain-text agents use process status plus their adapter's captured completion
+contract. Accumulated prose length is never delivery evidence.
 
 ## State Transitions
 
@@ -218,13 +216,13 @@ The first implementation commit adds failing tests for these flows:
 
 | Flow | JSONL ending | Expected result |
 |---|---|---|
-| Normal report | work, long message, turn complete, exit 0 | `Done` |
+| Normal report | work, non-empty message, turn complete, exit 0 | `Done` |
 | Incident reproduction | work, turn complete, exit 0 | original `Failed`, one resumed child |
 | Stale progress message | message, work, turn complete, exit 0 | recovery required |
-| Tiny trailing fragment | work, short message, turn complete, exit 0 | recovery required |
-| Tool-free answer | long message, turn complete, exit 0 | `Done` |
+| Exact short answer | work, `ok`, turn complete, exit 0 | `Done` |
+| Tool-free answer | non-empty message, turn complete, exit 0 | `Done` |
 | Agent error | work, error, exit non-zero | existing failure path |
-| Recovery succeeds | hollow parent, resumed long message | parent `Failed`, child `Done` |
+| Recovery succeeds | hollow parent, resumed final message | parent `Failed`, child `Done` |
 | Recovery repeats hollow | hollow parent and child | both `Failed`, no third task |
 | Missing session ID | hollow run without thread event | `Failed`, manual retry hint |
 | Write task with diff | file change, no final message, exit 0 | work preserved, task not `Done` |

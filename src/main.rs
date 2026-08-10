@@ -96,7 +96,6 @@ mod update_check;
 mod usage;
 pub mod usage_report;
 mod verify;
-mod verify_declared_files;
 mod watcher;
 mod webhook;
 #[cfg(feature = "web")]

@@ -267,12 +267,10 @@ derivation total and every unconverted consumer behaves exactly as it does today
 - **P2 — Class C + R2.** Counters ship together with board row rendering, so when
   the numbers change the rows on screen explain why.
 - **P3 — Class R.** Remaining display and machine surfaces, additive only.
-- **P4 — re-derive the parked branch.** `VerifyStatus::InfrastructureFailure`,
-  `src/verify_classification.rs`, the `exit_code_for_status` allowlist, the
-  widened Go/Jest diagnostic detection, and
-  `error_indicates_infrastructure_failure` land onto the finished contract: one
-  new table cell plus one classifier, instead of fourteen files of call-site
-  patching. `fix/verify-infra-classification` is deleted, not merged.
+- **P4 — verification evidence boundary.** A verify process that starts and
+  returns zero passes; one that returns non-zero fails; a timeout is
+  inconclusive; and a spawn/read/wait error is an infrastructure failure.
+  Verification output wording never reclassifies the process result.
 
 No data migration in any phase.
 

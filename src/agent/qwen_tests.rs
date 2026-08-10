@@ -218,10 +218,10 @@ fn get_qwen_selected_model_reads_settings_json() {
 
 #[test]
 fn parse_completion_detects_api_errors_and_returns_failed() {
-    // Test case 1: Raw text containing [API Error: ...]
+    // Agent prose is not a status channel, even when it quotes provider wording.
     let output1 = "some logs\n[API Error: 403 Access to model denied]\nmore logs";
     let info1 = QwenAgent.parse_completion(output1);
-    assert_eq!(info1.status, TaskStatus::Failed);
+    assert_eq!(info1.status, TaskStatus::Done);
 
     // Test case 2: JSON line with type error
     let output2 = serde_json::json!({
@@ -240,13 +240,26 @@ fn parse_completion_detects_api_errors_and_returns_failed() {
     let info3 = QwenAgent.parse_completion(&output3);
     assert_eq!(info3.status, TaskStatus::Failed);
 
-    // Test case 4: JSON line with type assistant containing API Error in text
+    // Assistant content remains data, not an error envelope.
     let output4 = serde_json::json!({
         "type": "assistant",
         "content": "Received [API Error: 403 Access to model denied]"
     }).to_string();
     let info4 = QwenAgent.parse_completion(&output4);
-    assert_eq!(info4.status, TaskStatus::Failed);
+    assert_eq!(info4.status, TaskStatus::Done);
+
+    // Qwen 0.21.5 reports provider refusal in the terminal result field while
+    // incorrectly setting is_error=false and subtype=success.
+    let terminal_refusal = serde_json::json!({
+        "type": "result",
+        "subtype": "success",
+        "is_error": false,
+        "result": "[API Error: 403 Access to model denied]"
+    }).to_string();
+    assert_eq!(
+        QwenAgent.parse_completion(&terminal_refusal).status,
+        TaskStatus::Failed
+    );
 
     // Test case 5: Successful completion
     let output5 = serde_json::json!({

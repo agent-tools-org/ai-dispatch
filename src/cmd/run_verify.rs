@@ -51,24 +51,12 @@ pub(in crate::cmd) fn maybe_verify_impl(
     let cargo_target_dir = crate::agent::target_dir_for_worktree(worktree_branch.as_deref());
     match crate::verify::run_verify(path, command, cargo_target_dir.as_deref(), container_name) {
         Ok(result) => {
-            let result = match crate::verify::apply_declared_file_check(path, task.as_ref(), result) {
-                Ok(result) => result,
-                Err(e) => {
-                    record_verify_failed(
-                        store,
-                        task_id,
-                        format!("Failed during declared-file verification: {e}"),
-                    );
-                    aid_error!("Verify error: {e}");
-                    return;
-                }
-            };
             let report = crate::verify::format_verify_report(&result);
             println!("{report}");
             crate::verify::record_verify_status(store, task_id, &result);
             if result.timed_out {
                 outcome::record_verify_timed_out(store, task_id, &result);
-            } else if !result.success && !result.infrastructure_failure {
+            } else if !result.success {
                 let hint = verify_failure_hint(store, task_id, &result.output);
                 let detail = match verify_output_excerpt(&result.output) {
                     Some(output) => {
@@ -89,17 +77,25 @@ pub(in crate::cmd) fn maybe_verify_impl(
             }
         }
         Err(e) => {
-            if crate::verify::error_indicates_infrastructure_failure(&e, container_name.is_some()) {
-                let _ = store.update_verify_status(
-                    task_id.as_str(),
-                    VerifyStatus::InfrastructureFailure,
-                );
-            } else {
-                record_verify_failed(store, task_id, format!("Failed during verification: {e}"));
-            }
+            record_verify_infrastructure_failure(store, task_id, &e);
             aid_error!("Verify error: {e}");
         }
     }
+}
+
+fn record_verify_infrastructure_failure(
+    store: &Store,
+    task_id: &TaskId,
+    error: &anyhow::Error,
+) {
+    let _ = store.update_verify_status(task_id.as_str(), VerifyStatus::InfrastructureFailure);
+    let _ = store.insert_event(&TaskEvent {
+        task_id: task_id.clone(),
+        timestamp: Local::now(),
+        event_kind: EventKind::Milestone,
+        detail: format!("Verification could not run: {error}"),
+        metadata: Some(serde_json::json!({ "verify_execution_error": true })),
+    });
 }
 
 pub(in crate::cmd) fn record_verify_not_run(store: &Store, task_id: &TaskId, reason: String) {

@@ -34,7 +34,7 @@ fn render_all_confirmed_shows_checkmarks() {
     let out = tempfile::NamedTempFile::new().unwrap();
     std::fs::write(
         out.path(),
-        "1. First item — CONFIRMED\n2. Second item — CONFIRMED\n",
+        "CHECKLIST 1: CONFIRMED — evidence\nCHECKLIST 2: CONFIRMED — evidence\n",
     )
     .unwrap();
     let task = Task {
@@ -86,7 +86,7 @@ fn render_all_confirmed_shows_checkmarks() {
 fn render_missing_item_shows_x() {
     let store = Store::open_memory().unwrap();
     let out = tempfile::NamedTempFile::new().unwrap();
-    std::fs::write(out.path(), "1. Only first — CONFIRMED\n").unwrap();
+    std::fs::write(out.path(), "CHECKLIST 1: CONFIRMED — evidence\n").unwrap();
     let task = Task {
         id: TaskId("t-cl-miss".to_string()),
         agent: AgentKind::Codex,

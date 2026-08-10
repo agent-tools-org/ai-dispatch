@@ -191,7 +191,20 @@ pub(crate) async fn maybe_judge_retry(store: &Arc<Store>, args: &RunArgs, task_i
     if task.status != TaskStatus::Done {
         return Ok(None);
     }
-    let judge_result = judge::judge_task(&task, judge_agent, &args.prompt).await?;
+    let judge_result = match judge::judge_task(&task, judge_agent, &args.prompt).await {
+        Ok(result) => result,
+        Err(error) => {
+            aid_warn!("[aid] Judge inconclusive: {error}");
+            let _ = store.insert_event(&TaskEvent {
+                task_id: task_id.clone(),
+                timestamp: chrono::Local::now(),
+                event_kind: EventKind::Milestone,
+                detail: format!("Judge inconclusive: {error}"),
+                metadata: Some(serde_json::json!({ "judge_inconclusive": true })),
+            });
+            return Ok(None);
+        }
+    };
     if judge_result.passed {
         println!("[aid] Judge approved");
         return Ok(None);

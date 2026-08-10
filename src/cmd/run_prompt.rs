@@ -91,7 +91,12 @@ pub(super) fn build_prompt_bundle(store: &Store, args: &RunArgs, agent_kind: &Ag
         .filter(|skill| !suppress_implementation_scaffolding || skill.as_str() != "implementer")
         .cloned()
         .collect::<Vec<_>>();
-    let mut effective_prompt = inject_skill(&effective_prompt, agent_kind, &prompt_skills, prompt.len())?;
+    let mut effective_prompt = inject_skill(
+        &effective_prompt,
+        agent_kind,
+        &prompt_skills,
+        !args.skills.is_empty(),
+    )?;
     let mut injected_memory_ids = Vec::new();
 
     // Inject relevant memories from past tasks

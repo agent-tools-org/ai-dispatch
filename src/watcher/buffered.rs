@@ -55,11 +55,13 @@ pub(crate) async fn watch_buffered(
     info.exit_code = exit_status.code();
     let task = store.get_task(task_id.as_str()).ok().flatten();
     let dispatched_model = task.as_ref().and_then(|t| t.requested_model.as_deref());
-    let quota = crate::agent::stream_completion::record_quota_exhaustion(
+    let delivered = buffered_delivery_confirmed(agent.kind(), &buffer);
+    let quota = crate::agent::stream_completion::record_quota_exhaustion_with_delivery(
         &buffer,
         agent.kind(),
         agent.rate_limit_name(),
         info.model.as_deref().or(dispatched_model),
+        delivered,
     );
     if quota.should_fail() {
         info.status = TaskStatus::Failed;
@@ -74,6 +76,15 @@ pub(crate) async fn watch_buffered(
     };
     store.insert_event(&event)?;
     Ok(info)
+}
+
+fn buffered_delivery_confirmed(agent: AgentKind, output: &str) -> bool {
+    let response = match agent {
+        AgentKind::Grok => crate::agent::grok::extract_response(output),
+        AgentKind::Antigravity => crate::agent::gemini::extract_response(output),
+        _ => None,
+    };
+    response.is_some_and(|text| !text.trim().is_empty())
 }
 
 async fn read_stdout_signaling_bytes(

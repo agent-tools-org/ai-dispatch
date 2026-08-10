@@ -20,7 +20,13 @@ fn inject_skill_includes_gotchas_scripts_and_references_for_folder_skill() {
     std::fs::write(dir.join("references").join("api.md"), "").unwrap();
 
     let long_prompt = "x".repeat(250);
-    let injected = inject_skill(&long_prompt, &AgentKind::Codex, &["implementer".to_string()], 250).unwrap();
+    let injected = inject_skill(
+        &long_prompt,
+        &AgentKind::Codex,
+        &["implementer".to_string()],
+        true,
+    )
+    .unwrap();
 
     assert!(injected.contains(&long_prompt));
     assert!(injected.contains("--- Gotchas ---\ngeneral\n\nagent"));
@@ -32,7 +38,7 @@ fn inject_skill_includes_gotchas_scripts_and_references_for_folder_skill() {
 }
 
 #[test]
-fn inject_skill_skips_methodology_for_short_prompts() {
+fn inject_skill_includes_methodology_for_short_prompts() {
     let temp = tempfile::tempdir().unwrap();
     let _aid_home = crate::paths::AidHomeGuard::set(temp.path());
     let dir = crate::paths::aid_dir().join("skills").join("implementer");
@@ -40,9 +46,15 @@ fn inject_skill_skips_methodology_for_short_prompts() {
     std::fs::write(dir.join("SKILL.md"), "method").unwrap();
     std::fs::write(dir.join("gotchas.md"), "general gotcha").unwrap();
 
-    let injected = inject_skill("short prompt", &AgentKind::Codex, &["implementer".to_string()], 12).unwrap();
+    let injected = inject_skill(
+        "short prompt",
+        &AgentKind::Codex,
+        &["implementer".to_string()],
+        true,
+    )
+    .unwrap();
 
     assert!(injected.contains("short prompt"));
-    assert!(!injected.contains("--- Methodology ---"), "methodology should be skipped for short prompts");
-    assert!(!injected.contains("--- Gotchas ---"), "gotchas should be skipped for short prompts");
+    assert!(injected.contains("--- Methodology ---\nmethod"));
+    assert!(injected.contains("--- Gotchas ---\ngeneral gotcha"));
 }

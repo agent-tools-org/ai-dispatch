@@ -1,3 +1,6 @@
+// Command Code adapter contract tests for command construction and NDJSON parsing.
+// Covers explicit success, failure, unknown result values, sessions, and usage.
+
 use super::super::Agent;
 use super::*;
 use crate::agent::RunOpts;
@@ -132,6 +135,20 @@ fn parse_completion_rejects_max_turns_result() {
     assert_eq!(info.status, TaskStatus::Failed);
     assert_eq!(info.model.as_deref(), Some("deepseek/deepseek-v4-flash"));
     assert_eq!(info.tokens, Some(22003));
+}
+
+#[test]
+fn parse_completion_does_not_invent_failure_for_unknown_result_values() {
+    let output = r#"{"type":"result","subtype":"future_success","stopReason":"new_terminal_reason","finalText":"ok"}"#;
+    let info = parse_commandcode_completion(output);
+    assert_eq!(info.status, TaskStatus::Done);
+}
+
+#[test]
+fn parse_completion_rejects_explicit_error_flag() {
+    let output = r#"{"type":"result","subtype":"future_value","is_error":true,"finalText":""}"#;
+    let info = parse_commandcode_completion(output);
+    assert_eq!(info.status, TaskStatus::Failed);
 }
 
 #[test]

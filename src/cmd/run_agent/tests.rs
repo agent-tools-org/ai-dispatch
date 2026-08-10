@@ -1,5 +1,5 @@
 // Tests for streaming output persistence in `aid run`.
-// Covers substantive message retention, filtering, and mixed streaming completion events.
+// Covers exact message retention and mixed streaming completion events.
 // Depends on super::write_streaming_output, serde_json, and tempfile.
 
 use super::{spawn_child_with_log, write_streaming_output};
@@ -11,7 +11,7 @@ use std::path::Path;
 use tempfile::NamedTempFile;
 
 #[test]
-fn write_streaming_output_keeps_last_five_substantive_messages() {
+fn write_streaming_output_keeps_last_five_messages() {
     let log_file = NamedTempFile::new().unwrap();
     let out_file = NamedTempFile::new().unwrap();
     let content = [
@@ -77,7 +77,7 @@ fn write_streaming_output_keeps_last_five_substantive_messages() {
 }
 
 #[test]
-fn write_streaming_output_skips_writing_when_messages_are_not_substantive() {
+fn write_streaming_output_preserves_short_messages() {
     let log_file = NamedTempFile::new().unwrap();
     let out_file = NamedTempFile::new().unwrap();
     let content = [
@@ -98,12 +98,10 @@ fn write_streaming_output_skips_writing_when_messages_are_not_substantive() {
     .unwrap()
     .join("\n");
     std::fs::write(log_file.path(), content).unwrap();
-    std::fs::write(out_file.path(), "existing output").unwrap();
-
     write_streaming_output(log_file.path(), out_file.path());
 
     let output = std::fs::read_to_string(out_file.path()).unwrap();
-    assert_eq!(output, "existing output");
+    assert_eq!(output, "short ack\n\n---\n\ntiny delta");
 }
 
 #[test]

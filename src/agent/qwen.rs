@@ -69,10 +69,6 @@ impl super::Agent for QwenAgent {
         let mut model = None;
         let mut status = TaskStatus::Done;
 
-        if output.contains("[API Error:") || output.contains("API Error:") {
-            status = TaskStatus::Failed;
-        }
-
         for line in output.lines() {
             let trimmed = line.trim();
             if trimmed.is_empty() {
@@ -90,15 +86,15 @@ impl super::Agent for QwenAgent {
                         status = TaskStatus::Failed;
                     }
                     if event_type == "result" {
-                        if v.get("error").is_some() || v.get("status").and_then(|s| s.as_str()) == Some("failed") {
+                        let terminal_api_error = v
+                            .get("result")
+                            .and_then(serde_json::Value::as_str)
+                            .is_some_and(|text| text.trim_start().starts_with("[API Error:"));
+                        if v.get("error").is_some()
+                            || v.get("status").and_then(|s| s.as_str()) == Some("failed")
+                            || terminal_api_error
+                        {
                             status = TaskStatus::Failed;
-                        }
-                    }
-                    if event_type == "assistant" {
-                        if let Some(content) = extract_assistant_text(&v) {
-                            if content.contains("[API Error:") || content.contains("API Error:") {
-                                status = TaskStatus::Failed;
-                            }
                         }
                     }
                 }

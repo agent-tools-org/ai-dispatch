@@ -54,8 +54,8 @@ fn task(id: &str, status: TaskStatus) -> Task {
 }
 
 fn narration_miss() -> ResultDelivery {
-    ResultDelivery::LogFallback {
-        looks_like_report: false,
+    ResultDelivery::MissingFile {
+        fallback_saved: true,
     }
 }
 
@@ -88,13 +88,14 @@ fn record_missing_report_flags_narration_when_no_prior_cause() {
         .insert_task(&task(task_id.as_str(), TaskStatus::Done))
         .unwrap();
 
-    record_missing_report(&store, &task_id, narration_miss());
+    record_missing_report(&store, &task_id, narration_miss(), true);
 
     let loaded = store.get_task(task_id.as_str()).unwrap().unwrap();
     assert_eq!(
         loaded.delivery_assessment,
         Some(DeliveryAssessment::MissingFinalDelivery)
     );
+    assert_eq!(loaded.status, TaskStatus::Failed);
     let latest = store.latest_error(task_id.as_str()).unwrap();
     assert!(latest.contains("Missing final delivery"));
     assert!(has_missing_delivery_event(&store, task_id.as_str()));
@@ -110,7 +111,7 @@ fn record_missing_report_keeps_prior_kill_cause() {
     let cause = "Background worker failed: Failed to build agent command: qwen agent does not support read-only mode";
     insert_error(&store, &task_id, cause);
 
-    record_missing_report(&store, &task_id, narration_miss());
+    record_missing_report(&store, &task_id, narration_miss(), true);
 
     // Assessment records the delivery fact; the Error event is withheld so latest_error
     // stays the terminal kill cause.
@@ -136,14 +137,30 @@ fn record_missing_report_flags_done_despite_mid_run_error() {
         "Error: Exit code 143 Command timed out after 2m 0s",
     );
 
-    record_missing_report(&store, &task_id, narration_miss());
+    record_missing_report(&store, &task_id, narration_miss(), true);
 
     let loaded = store.get_task(task_id.as_str()).unwrap().unwrap();
     assert_eq!(
         loaded.delivery_assessment,
         Some(DeliveryAssessment::MissingFinalDelivery)
     );
+    assert_eq!(loaded.status, TaskStatus::Failed);
     let latest = store.latest_error(task_id.as_str()).unwrap();
     assert!(latest.contains("Missing final delivery"));
     assert!(has_missing_delivery_event(&store, task_id.as_str()));
+}
+
+#[test]
+fn auto_result_file_is_advisory() {
+    let store = Store::open_memory().unwrap();
+    let task_id = TaskId("t-auto-report".to_string());
+    store
+        .insert_task(&task(task_id.as_str(), TaskStatus::Done))
+        .unwrap();
+
+    record_missing_report(&store, &task_id, narration_miss(), false);
+
+    let loaded = store.get_task(task_id.as_str()).unwrap().unwrap();
+    assert_eq!(loaded.status, TaskStatus::Done);
+    assert_eq!(loaded.delivery_assessment, None);
 }

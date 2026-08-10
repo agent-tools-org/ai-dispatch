@@ -136,57 +136,55 @@ fn truncate_diff(diff: &str, max_chars: usize) -> &str {
 }
 
 fn parse_judge_response(text: &str) -> Result<JudgeResult> {
-    // Scan all lines — agents may prefix with reasoning before the verdict
-    for line in text.lines() {
-        let trimmed = line.trim();
-        if trimmed.is_empty() {
-            continue;
-        }
-        let up = trimmed.to_uppercase();
-        let (word, passed) = if up.starts_with("PASS") {
-            ("PASS", true)
-        } else if up.starts_with("RETRY") {
-            ("RETRY", false)
-        } else {
-            continue;
-        };
-        let feedback = trimmed[word.len()..]
-            .trim_start_matches(|c: char| c.is_ascii_whitespace() || c == ':' || c == '-')
-            .trim()
-            .to_string();
-        return Ok(JudgeResult { passed, feedback });
-    }
-    // Fallback: if no explicit verdict found, default to PASS (avoid blocking on judge failures)
-    aid_warn!("[aid] Judge response contained no PASS/RETRY verdict — defaulting to PASS");
-    Ok(JudgeResult { passed: true, feedback: "no verdict found in judge response".to_string() })
+    let line = text
+        .lines()
+        .map(str::trim)
+        .find(|line| !line.is_empty())
+        .context("judge response is empty")?;
+    let upper = line.to_uppercase();
+    let (passed, prefix_len) = if upper.starts_with("PASS:") {
+        (true, "PASS:".len())
+    } else if upper.starts_with("RETRY:") {
+        (false, "RETRY:".len())
+    } else {
+        anyhow::bail!("judge response has no explicit first-line PASS:/RETRY: verdict");
+    };
+    Ok(JudgeResult {
+        passed,
+        feedback: line[prefix_len..].trim().to_string(),
+    })
 }
 
 fn parse_peer_review(text: &str) -> Result<PeerReview> {
-    for line in text.lines() {
-        let trimmed = line.trim();
-        if trimmed.is_empty() {
-            continue;
-        }
-        let up = trimmed.to_uppercase();
-        if up.starts_with("SCORE:") || up.starts_with("SCORE ") {
-            let rest = trimmed[6..].trim().trim_start_matches(':').trim();
-            if let Some(num_str) = rest.split('/').next()
-                && let Ok(score) = num_str.trim().parse::<u8>()
-            {
-                let score = score.min(10);
-                let feedback: String = text
-                    .lines()
-                    .skip_while(|l| !l.trim().to_uppercase().starts_with("SCORE"))
-                    .skip(1)
-                    .filter(|l| !l.trim().is_empty())
-                    .take(3)
-                    .collect::<Vec<_>>()
-                    .join(" ");
-                return Ok(PeerReview { score, feedback });
-            }
-        }
+    let line = text
+        .lines()
+        .map(str::trim)
+        .find(|line| !line.is_empty())
+        .context("peer review response is empty")?;
+    let rest = line
+        .strip_prefix("SCORE:")
+        .context("peer review has no explicit first-line SCORE: verdict")?
+        .trim();
+    let score = rest
+        .split('/')
+        .next()
+        .context("peer review score is missing")?
+        .trim()
+        .parse::<u8>()
+        .context("peer review score is not an integer")?;
+    if !(1..=10).contains(&score) {
+        anyhow::bail!("peer review score must be between 1 and 10");
     }
-    Ok(PeerReview { score: 5, feedback: "no score found in review".to_string() })
+    let feedback = text
+        .lines()
+        .skip_while(|candidate| candidate.trim() != line)
+        .skip(1)
+        .map(str::trim)
+        .filter(|candidate| !candidate.is_empty())
+        .take(3)
+        .collect::<Vec<_>>()
+        .join(" ");
+    Ok(PeerReview { score, feedback })
 }
 
 #[cfg(test)]
@@ -212,33 +210,26 @@ mod tests {
     }
 
     #[test]
-    fn parse_verdict_after_prose() {
+    fn parse_verdict_after_prose_is_inconclusive() {
         let text = "Looking at the diff, I can see changes were made.\nThe implementation looks complete.\nPASS: all requirements met";
-        let result = parse_judge_response(text).unwrap();
-        assert!(result.passed);
-        assert_eq!(result.feedback, "all requirements met");
+        assert!(parse_judge_response(text).is_err());
     }
 
     #[test]
-    fn parse_retry_after_reasoning() {
+    fn parse_retry_after_reasoning_is_inconclusive() {
         let text = "The task asked for tests but none were added.\nRETRY: add unit tests for the new function";
-        let result = parse_judge_response(text).unwrap();
-        assert!(!result.passed);
-        assert_eq!(result.feedback, "add unit tests for the new function");
+        assert!(parse_judge_response(text).is_err());
     }
 
     #[test]
-    fn parse_no_verdict_defaults_to_pass() {
+    fn parse_no_verdict_is_inconclusive() {
         let text = "The code looks fine and all changes are appropriate.";
-        let result = parse_judge_response(text).unwrap();
-        assert!(result.passed);
-        assert!(result.feedback.contains("no verdict"));
+        assert!(parse_judge_response(text).is_err());
     }
 
     #[test]
-    fn parse_empty_response_defaults_to_pass() {
-        let result = parse_judge_response("").unwrap();
-        assert!(result.passed);
+    fn parse_empty_response_is_inconclusive() {
+        assert!(parse_judge_response("").is_err());
     }
 
     #[test]
@@ -263,8 +254,7 @@ mod tests {
     }
 
     #[test]
-    fn parse_peer_review_no_score_defaults_to_5() {
-        let review = parse_peer_review("The code looks fine.").unwrap();
-        assert_eq!(review.score, 5);
+    fn parse_peer_review_no_score_is_inconclusive() {
+        assert!(parse_peer_review("The code looks fine.").is_err());
     }
 }

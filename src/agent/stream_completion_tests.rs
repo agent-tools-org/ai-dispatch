@@ -23,6 +23,15 @@ fn result_success_is_error_false_ok() {
 }
 
 #[test]
+fn unknown_result_subtype_is_not_invented_as_failure() {
+    let v: Value = serde_json::from_str(
+        r#"{"type":"result","subtype":"future_success_shape","is_error":false}"#,
+    )
+    .unwrap();
+    assert!(!result_envelope_failed(&v));
+}
+
+#[test]
 fn nested_opencode_error_type_fails() {
     let out = r#"{"type":"error","error":{"name":"UnknownError","data":{"message":"x"}}}"#;
     assert_eq!(
@@ -79,7 +88,7 @@ fn prose_rate_limit_tokens_are_not_quota_failures() {
 }
 
 #[test]
-fn record_quota_exhaustion_marks_but_does_not_fail_substantive_deliverable() {
+fn explicit_delivery_survives_a_later_quota_refusal() {
     let temp = tempfile::tempdir().unwrap();
     let _aid_home = crate::paths::AidHomeGuard::set(temp.path());
     crate::rate_limit::clear_rate_limit(&crate::types::AgentKind::Qwen, None);
@@ -87,19 +96,25 @@ fn record_quota_exhaustion_marks_but_does_not_fail_substantive_deliverable() {
     let mut report = String::from("## Findings\n\n");
     report.push_str(&"The audit reviewed rate limits and 429 handling. ".repeat(20));
     report.push_str("\nQuota exhausted: Your token-plan 5-hour quota has been exhausted.");
-    assert!(!record_quota_exhaustion(&report, crate::types::AgentKind::Qwen, None, None,)
+    assert!(!record_quota_exhaustion_with_delivery(
+        &report,
+        crate::types::AgentKind::Qwen,
+        None,
+        None,
+        true,
+    )
     .should_fail());
     assert!(crate::rate_limit::is_rate_limited(&crate::types::AgentKind::Qwen, None));
 }
 
 #[test]
-fn record_quota_exhaustion_marks_refusal_even_behind_markdown_heading() {
+fn markdown_shape_does_not_turn_a_refusal_into_delivery() {
     let temp = tempfile::tempdir().unwrap();
     let _aid_home = crate::paths::AidHomeGuard::set(temp.path());
     crate::rate_limit::clear_rate_limit(&crate::types::AgentKind::Qwen, None);
 
     let output = "# Error\nQuota exhausted: Your token-plan 5-hour quota has been exhausted.";
-    assert!(!record_quota_exhaustion(output, crate::types::AgentKind::Qwen, None, None,)
+    assert!(record_quota_exhaustion(output, crate::types::AgentKind::Qwen, None, None,)
     .should_fail());
     assert!(crate::rate_limit::is_rate_limited(&crate::types::AgentKind::Qwen, None));
 }
@@ -287,7 +302,13 @@ fn a_delivered_run_that_hit_a_refusal_keeps_its_marker() {
     report.push_str(&"Reviewed the adapter and its tests. ".repeat(20));
     report.push_str("\nQuota exhausted: Your token-plan 5-hour quota has been exhausted.");
 
-    let outcome = record_quota_exhaustion(&report, crate::types::AgentKind::Qwen, None, None);
+    let outcome = record_quota_exhaustion_with_delivery(
+        &report,
+        crate::types::AgentKind::Qwen,
+        None,
+        None,
+        true,
+    );
     assert!(outcome.recorded(), "the outage must be recorded");
     assert!(!outcome.should_fail(), "a run that delivered is not a failed task");
     // What watcher.rs consults before clearing.

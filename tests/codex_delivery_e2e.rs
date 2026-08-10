@@ -20,6 +20,63 @@ fn fresh_codex_accepts_the_legacy_approval_flag() {
     assert_fresh_codex_succeeds("t-legacy-codex-approval", true);
 }
 
+#[test]
+fn exact_short_answer_is_a_successful_delivery() {
+    let aid_home = TempDir::new().unwrap();
+    let bin_dir = TempDir::new().unwrap();
+    write_fake_codex(bin_dir.path());
+
+    let output = aid_cmd_in(aid_home.path())
+        .env("PATH", test_path(bin_dir.path()))
+        .env("FAKE_CODEX_SHORT_FINAL", "1")
+        .args([
+            "run",
+            "codex",
+            "Reply with the single word: ok",
+            "--id",
+            "t-short-final",
+        ])
+        .output()
+        .unwrap();
+
+    assert!(
+        output.status.success(),
+        "stdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let conn = Connection::open(aid_home.path().join("aid.db")).unwrap();
+    assert_eq!(task_facts(&conn, "t-short-final").0, "done");
+}
+
+#[test]
+fn missing_explicit_result_file_fails_on_the_artifact_contract() {
+    let aid_home = TempDir::new().unwrap();
+    let bin_dir = TempDir::new().unwrap();
+    write_fake_codex(bin_dir.path());
+
+    let output = aid_cmd_in(aid_home.path())
+        .env("PATH", test_path(bin_dir.path()))
+        .env("FAKE_CODEX_SHORT_FINAL", "1")
+        .args([
+            "run",
+            "codex",
+            "Reply with the single word: ok",
+            "--result-file",
+            "required-result.md",
+            "--id",
+            "t-missing-required-result",
+        ])
+        .output()
+        .unwrap();
+
+    assert!(!output.status.success());
+    let conn = Connection::open(aid_home.path().join("aid.db")).unwrap();
+    let facts = task_facts(&conn, "t-missing-required-result");
+    assert_eq!(facts.0, "failed");
+    assert_eq!(facts.1.as_deref(), Some("missing_final_delivery"));
+}
+
 fn assert_fresh_codex_succeeds(task_id: &str, legacy: bool) {
     let aid_home = TempDir::new().unwrap();
     let bin_dir = TempDir::new().unwrap();
@@ -185,7 +242,7 @@ if [ "$2" = "resume" ]; then
     printf '%s\n' '{"type":"turn.completed","usage":{"input_tokens":20,"cached_input_tokens":10,"output_tokens":8000}}'
     exit 0
   fi
-  printf '%s\n' '{"type":"item.completed","item":{"id":"final","type":"agent_message","text":"Final report: the investigation is complete and the evidence supports the requested conclusion. This recovered response is intentionally long enough to qualify as a substantive final deliverable, includes the operational result, and closes the task without making another tool call."}}'
+  printf '%s\n' '{"type":"item.completed","item":{"id":"final","type":"agent_message","text":"Recovery complete."}}'
   printf '%s\n' '{"type":"turn.completed","usage":{"input_tokens":20,"cached_input_tokens":10,"output_tokens":80}}'
   exit 0
 fi
@@ -201,8 +258,13 @@ else
   esac
 fi
 printf '%s\n' '{"type":"thread.started","thread_id":"019e3e49-6b83-7563-a3d8-b51a3a716dd1"}'
+if [ "$FAKE_CODEX_SHORT_FINAL" = "1" ]; then
+  printf '%s\n' '{"type":"item.completed","item":{"id":"final","type":"agent_message","text":"ok"}}'
+  printf '%s\n' '{"type":"turn.completed","usage":{"input_tokens":20,"cached_input_tokens":10,"output_tokens":1}}'
+  exit 0
+fi
 if [ "$FAKE_CODEX_FINAL_ON_FRESH" = "1" ]; then
-  printf '%s\n' '{"type":"item.completed","item":{"id":"final","type":"agent_message","text":"Completed the requested implementation and verified the resulting behavior. The work is ready for review, with the exact change and validation evidence recorded in this final delivery. The implementation preserves the existing command flow, and the focused regression test confirms that the current Codex approval option reaches a successful terminal state."}}'
+  printf '%s\n' '{"type":"item.completed","item":{"id":"final","type":"agent_message","text":"Completed and verified."}}'
   printf '%s\n' '{"type":"turn.completed","usage":{"input_tokens":20,"cached_input_tokens":10,"output_tokens":80}}'
   exit 0
 fi

@@ -10,6 +10,7 @@ use std::sync::{Arc, mpsc::{self, RecvTimeoutError}};
 use std::time::{Duration, Instant};
 
 use crate::agent::Agent;
+use crate::delivery_guard::{DeliveryEvidence, DeliveryOutcome};
 use crate::input_signal;
 use crate::process_monitor;
 use crate::prompt::PromptDetector;
@@ -18,7 +19,7 @@ use crate::pty_watch_idle::{
     is_agent_output, load_monitor_status, take_inbound_echo, IdleAction, IdleDetector,
 };
 use crate::store::Store;
-use crate::types::{CompletionInfo, EventKind, TaskEvent, TaskId, TaskStatus};
+use crate::types::{AgentKind, CompletionInfo, EventKind, TaskEvent, TaskId, TaskStatus};
 use crate::watcher::{self, SyntheticMilestoneTracker};
 
 mod utf8;
@@ -53,6 +54,8 @@ pub(crate) struct MonitorState {
     streaming: bool,
     workgroup_id: Option<String>,
     session_saved: bool,
+    delivery_evidence: DeliveryEvidence,
+    saw_completion_event: bool,
 }
 
 impl MonitorState {
@@ -97,6 +100,8 @@ impl MonitorState {
             streaming,
             workgroup_id,
             session_saved: false,
+            delivery_evidence: DeliveryEvidence::default(),
+            saw_completion_event: false,
         }
     }
 
@@ -137,6 +142,9 @@ impl MonitorState {
         while let Some(pos) = self.line_buffer.find('\n') {
             let line = self.line_buffer[..pos].trim_end_matches('\r').to_string();
             let is_echo = take_inbound_echo(&mut self.inbound_echo_suppress, &line);
+            if !is_echo && agent.kind() == AgentKind::Codex {
+                self.delivery_evidence.observe_codex_jsonl(&line);
+            }
             self.observe_output_line(task_id, store, &line)?;
             if !is_echo && is_agent_output(&line) {
                 self.mark_progress();
@@ -155,6 +163,9 @@ impl MonitorState {
                     &line,
                     &mut self.session_saved,
                 )? {
+                    if event_detail.kind == EventKind::Completion {
+                        self.saw_completion_event = true;
+                    }
                     if event_detail.kind.is_liveness() {
                         self.last_event_detail = Some(event_detail.detail);
                     }
@@ -176,6 +187,9 @@ impl MonitorState {
             return Ok(());
         }
         let is_echo = take_inbound_echo(&mut self.inbound_echo_suppress, &trailing);
+        if !is_echo && agent.kind() == AgentKind::Codex {
+            self.delivery_evidence.observe_codex_jsonl(&trailing);
+        }
         self.observe_output_line(task_id, store, &trailing)?;
         if !is_echo && is_agent_output(&trailing) {
             self.mark_progress();
@@ -194,6 +208,9 @@ impl MonitorState {
                 &trailing,
                 &mut self.session_saved,
             )? {
+                if event_detail.kind == EventKind::Completion {
+                    self.saw_completion_event = true;
+                }
                 if event_detail.kind.is_liveness() {
                     self.mark_progress();
                     self.last_event_detail = Some(event_detail.detail);
@@ -629,6 +646,21 @@ fn finalize_streaming(
     } else {
         TaskStatus::Failed
     };
+    let delivery_outcome = state.delivery_evidence.validate();
+    let delivered = if agent.kind() == AgentKind::Codex {
+        matches!(&delivery_outcome, DeliveryOutcome::Delivered)
+    } else {
+        state.saw_completion_event
+    };
+    if agent.kind() == AgentKind::Codex {
+        status = watcher::apply_codex_delivery_guard(
+            store,
+            task_id,
+            status,
+            delivery_outcome,
+            i32::try_from(exit_status.exit_code()).ok(),
+        );
+    }
     if status == TaskStatus::Done {
         state.info.status = status;
         let parsed = agent.parse_completion(&state.full_output);
@@ -637,18 +669,19 @@ fn finalize_streaming(
     }
     // Same reason as the streaming watcher: a quota refusal exits 0 and carries
     // no error envelope, so it must be caught on the success path or not at all.
-                                        // agy and other plain-text CLIs never echo their model, so the group a
-                                        // quota belongs to is only knowable from what aid dispatched.
-                                        let dispatched_model = store
-                                            .get_task(task_id.as_str())
-                                            .ok()
-                                            .flatten()
-                                            .and_then(|task| task.requested_model);
-    if crate::agent::stream_completion::record_quota_exhaustion(
+    // agy and other plain-text CLIs never echo their model, so the group a
+    // quota belongs to is only knowable from what aid dispatched.
+    let dispatched_model = store
+        .get_task(task_id.as_str())
+        .ok()
+        .flatten()
+        .and_then(|task| task.requested_model);
+    if crate::agent::stream_completion::record_quota_exhaustion_with_delivery(
         &state.full_output,
         agent.kind(),
         agent.rate_limit_name(),
         state.info.model.as_deref().or(dispatched_model.as_deref()),
+        delivered,
     )
     .should_fail()
     {

@@ -17,8 +17,9 @@ pub(crate) fn record_missing_report(
     store: &Store,
     task_id: &TaskId,
     delivery: ResultDelivery,
+    required: bool,
 ) {
-    if delivery != (ResultDelivery::LogFallback { looks_like_report: false }) {
+    if !required || !matches!(delivery, ResultDelivery::MissingFile { .. }) {
         return;
     }
     if let Err(err) = store.update_delivery_assessment(
@@ -30,11 +31,15 @@ pub(crate) fn record_missing_report(
     if suppress_missing_report_event(store, task_id) {
         return;
     }
+    if let Err(err) = crate::task_lifecycle::mark_failed(store, task_id) {
+        aid_warn!("[aid] Failed to mark missing required result file: {err}");
+    }
     let _ = store.insert_event(&TaskEvent {
         task_id: task_id.clone(),
         timestamp: chrono::Local::now(),
         event_kind: EventKind::Error,
-        detail: "Missing final delivery: no result file written and captured output is tool narration, not a report".to_string(),
+        detail: "Missing final delivery: the explicitly required result file was not written"
+            .to_string(),
         metadata: Some(serde_json::json!({
             "delivery_guard": "missing_final_delivery",
             "source": "result_file_fallback",

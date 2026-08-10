@@ -41,7 +41,9 @@ use extract::{
 };
 use stderr::{drain_stderr_capture, spawn_stderr_capture};
 pub(crate) use progress::SyntheticMilestoneTracker;
-pub(crate) use stream::{handle_streaming_line_with_session, StreamLineContext};
+pub(crate) use stream::{
+    StreamLineContext, apply_codex_delivery_guard, handle_streaming_line_with_session,
+};
 /// Watch a child process, parse output, store events, return completion info
 pub async fn watch_streaming(
     agent: &dyn Agent,
@@ -69,6 +71,7 @@ pub async fn watch_streaming(
     };
     let mut event_count = 0u32;
     let mut session_saved = false;
+    let mut saw_completion_event = false;
     let mut synthetic_tracker = SyntheticMilestoneTracker::new();
     let mut delivery_evidence = DeliveryEvidence::default();
     let mut last_event_detail: Option<String> = None;
@@ -120,6 +123,9 @@ pub async fn watch_streaming(
             &line,
             &mut session_saved,
         )? {
+            if event_detail.kind == EventKind::Completion {
+                saw_completion_event = true;
+            }
             let detail = event_detail.detail;
             last_event_detail = Some(detail.clone());
             if exceeds_cost_ceiling(info.cost_usd, max_task_cost) {
@@ -153,31 +159,20 @@ pub async fn watch_streaming(
     };
     info.exit_code = exit_status.code();
     let task = store.get_task(task_id.as_str()).ok().flatten();
-    let produced_changes = task.as_ref().is_some_and(crate::commit::task_has_changes_since);
-    if status == TaskStatus::Done
-        && agent.kind() == AgentKind::Codex
-        && let DeliveryOutcome::MissingFinalDelivery {
-            last_work_kind,
-            last_message_chars,
-        } = delivery_evidence.validate(produced_changes)
-    {
-        status = TaskStatus::Failed;
-        let _ = store.update_delivery_assessment(
-            task_id.as_str(),
-            Some(DeliveryAssessment::MissingFinalDelivery),
+    let delivery_outcome = delivery_evidence.validate();
+    let delivered = if agent.kind() == AgentKind::Codex {
+        matches!(&delivery_outcome, DeliveryOutcome::Delivered)
+    } else {
+        saw_completion_event
+    };
+    if agent.kind() == AgentKind::Codex {
+        status = apply_codex_delivery_guard(
+            store,
+            task_id,
+            status,
+            delivery_outcome,
+            exit_status.code(),
         );
-        let _ = store.insert_event(&TaskEvent {
-            task_id: task_id.clone(),
-            timestamp: Local::now(),
-            event_kind: EventKind::Error,
-            detail: "Missing final delivery: Codex exited after work without a substantive final message".to_string(),
-            metadata: Some(serde_json::json!({
-                "delivery_guard": "missing_final_delivery",
-                "last_work_kind": last_work_kind,
-                "last_message_chars": last_message_chars,
-                "exit_code": exit_status.code(),
-            })),
-        });
     }
 
     if status == TaskStatus::Done {
@@ -191,11 +186,12 @@ pub async fn watch_streaming(
     // agy and other plain-text CLIs never echo their model, so the group a
     // quota belongs to is only knowable from what aid dispatched.
     let dispatched_model = task.as_ref().and_then(|t| t.requested_model.as_deref());
-    let quota = crate::agent::stream_completion::record_quota_exhaustion(
+    let quota = crate::agent::stream_completion::record_quota_exhaustion_with_delivery(
         &full_output,
         agent.kind(),
         agent.rate_limit_name(),
         info.model.as_deref().or(dispatched_model),
+        delivered,
     );
     if quota.should_fail() {
         status = TaskStatus::Failed;

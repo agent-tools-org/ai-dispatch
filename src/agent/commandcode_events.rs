@@ -182,6 +182,11 @@ pub(crate) fn usage_metadata(usage: &Value) -> Option<Value> {
 }
 
 pub(crate) fn commandcode_result_failed(value: &Value) -> bool {
-    value.get("subtype").and_then(Value::as_str) != Some("success")
-        || value.get("stopReason").and_then(Value::as_str) != Some("end_turn")
+    if value.get("is_error").and_then(Value::as_bool) == Some(true) {
+        return true;
+    }
+    let subtype = value.get("subtype").and_then(Value::as_str);
+    let stop_reason = value.get("stopReason").and_then(Value::as_str);
+    matches!(subtype, Some("error_during_execution" | "max_turns" | "cancelled"))
+        || matches!(stop_reason, Some("error" | "max_turns" | "cancelled"))
 }

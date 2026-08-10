@@ -10,7 +10,7 @@ use crate::config;
 use crate::project::ProjectConfig;
 use crate::rate_limit;
 use crate::store::Store;
-use crate::types::AgentKind;
+use crate::types::{AgentKind, TaskDifficulty};
 use crate::usage;
 use super::run_prompt;
 use super::RunArgs;
@@ -201,13 +201,16 @@ pub(super) fn resolve_agent_setup(store: &Arc<Store>, args: &mut RunArgs) -> Res
         && !budget_active
         && requested_model.is_none()
         && cfg.selection.smart_routing
-        && crate::agent::classifier::is_simple_for_routing(&args.prompt)
+        && matches!(
+            args.declared_difficulty,
+            Some(TaskDifficulty::Trivial | TaskDifficulty::Simple)
+        )
     {
         if let Some(bm) = cmd_config::budget_model(&agent_kind) {
             if rate_limit::is_rate_limited(&agent_kind, custom_name) {
                 None
             } else {
-                aid_info!("[aid] Smart route: simple prompt -> {}", bm);
+                aid_info!("[aid] Smart route: declared simple task -> {}", bm);
                 Some(bm.to_string())
             }
         } else {

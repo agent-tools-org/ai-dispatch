@@ -21,7 +21,7 @@ pub use show_output_messages::{
 };
 pub(crate) use show_output_diff::{branch_base_ref, diff_stat, parse_diff_stat, worktree_diff};
 pub(crate) use show_output_messages::{
-    extract_messages_from_log, is_non_output_line, is_unrecognized_json_notice, read_tail,
+    extract_messages_from_log, is_non_output_line, read_tail,
 };
 pub(crate) use show_worktree_state::worktree_state_section;
 

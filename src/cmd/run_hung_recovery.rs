@@ -8,8 +8,6 @@ use crate::types::{Task, TaskStatus};
 pub const MAX_HUNG_RETRIES: u32 = 2;
 pub const MAX_TRANSIENT_HUNG_RETRIES: u32 = 1;
 
-const MIN_PROGRESS_EVENTS: i64 = 6;
-
 pub fn build_hung_retry_feedback(task: &Task, hung_duration_secs: u64) -> String {
     let detail = task
         .resolved_prompt
@@ -33,7 +31,7 @@ pub fn should_auto_retry_hung(task: &Task, context: &HungContext, retry_count: u
     if context.transient {
         return retry_count < MAX_TRANSIENT_HUNG_RETRIES;
     }
-    retry_count < MAX_HUNG_RETRIES && i64::from(context.event_count) >= MIN_PROGRESS_EVENTS
+    retry_count < MAX_HUNG_RETRIES
 }
 
 pub(crate) fn with_hung_context(task: &Task, context: &HungContext) -> Task {
@@ -98,10 +96,10 @@ mod tests {
     }
 
     #[test]
-    fn should_not_auto_retry_immediate_failures() {
+    fn should_retry_hung_without_an_event_count_floor() {
         let task = task();
         let context = hung_context(5, false);
-        assert!(!should_auto_retry_hung(&task, &context, 0));
+        assert!(should_auto_retry_hung(&task, &context, 0));
     }
 
     #[test]

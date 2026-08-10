@@ -89,15 +89,23 @@ pub(crate) fn gather_diff(task: &Task) -> Option<String> {
     if !Path::new(dir).exists() {
         return None;
     }
-    let mut command = StdCommand::new("git");
-    command.current_dir(dir).args(["diff", "--no-color"]);
-    command.arg(task.start_sha.as_deref().unwrap_or("HEAD"));
-    let output = command.arg("--").output().ok()?;
-    if !output.status.success() {
-        return None;
+    let diff_args = match task.start_sha.as_deref() {
+        Some(start_sha) => vec![vec!["diff", "--no-color", start_sha, "--"]],
+        None => vec![
+            vec!["diff", "--no-color", "HEAD~1..HEAD", "--"],
+            vec!["diff", "--no-color", "HEAD", "--"],
+        ],
+    };
+    for args in diff_args {
+        let output = StdCommand::new("git").current_dir(dir).args(args).output().ok()?;
+        if output.status.success() {
+            let diff = String::from_utf8_lossy(&output.stdout).into_owned();
+            if !diff.trim().is_empty() {
+                return Some(diff);
+            }
+        }
     }
-    let diff = String::from_utf8_lossy(&output.stdout).into_owned();
-    (!diff.trim().is_empty()).then_some(diff)
+    None
 }
 
 pub(crate) fn read_output(task: &Task) -> Option<String> {

@@ -81,3 +81,15 @@ fn task_without_start_sha_includes_current_staged_changes() {
 
     assert!(gather_diff(&task(repo.path(), None)).unwrap().contains("tracked.txt"));
 }
+
+#[test]
+fn task_without_start_sha_includes_latest_committed_changes() {
+    let repo = init_repo();
+    std::fs::write(repo.path().join("tracked.txt"), "committed by task\n").unwrap();
+    git(repo.path(), &["add", "tracked.txt"]);
+    git(repo.path(), &["commit", "-m", "task commit"]);
+
+    let diff = gather_diff(&task(repo.path(), None)).expect("latest task commit should be visible");
+    assert!(diff.contains("tracked.txt"));
+    assert!(diff.contains("committed by task"));
+}

@@ -924,7 +924,7 @@ mod tests {
     }
 
     #[test]
-    fn build_command_read_only_uses_versioned_approval_flag() {
+    fn build_command_read_only_rejects_legacy_approval_flags() {
         let opts = RunOpts {
             dir: None,
             output: None,
@@ -944,8 +944,6 @@ mod tests {
             .map(|arg| arg.to_string_lossy().to_string())
             .collect();
 
-        let expected = capabilities::approval_flag_for_version(codex_version()).as_str();
-        assert!(args.iter().any(|arg| arg == expected));
         assert!(!args.contains(&"-s".to_string()));
         assert!(!args.contains(&"read-only".to_string()));
     }
@@ -1049,15 +1047,7 @@ mod tests {
             .map(|arg| arg.to_string_lossy().to_string())
             .collect();
 
-        assert_eq!(
-            &args[..4],
-            [
-                "exec",
-                "--json",
-                "--skip-git-repo-check",
-                capabilities::approval_flag_for_version(codex_version()).as_str(),
-            ]
-        );
+        assert_eq!(&args[..3], ["exec", "--json", "--skip-git-repo-check"]);
         assert!(args[4].contains("write the final report"));
     }
 }

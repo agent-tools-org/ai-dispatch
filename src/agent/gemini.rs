@@ -26,6 +26,10 @@ impl super::Agent for GeminiAgent {
         true
     }
 
+    fn accepts_interactive_input(&self) -> bool {
+        true
+    }
+
     fn build_command(&self, prompt: &str, opts: &RunOpts) -> Result<Command> {
         // aid runs gemini headlessly in worktrees outside the user's trusted
         // folder list; without this env var, gemini overrides --approval-mode

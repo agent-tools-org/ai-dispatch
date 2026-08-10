@@ -23,6 +23,10 @@ impl super::Agent for AntigravityAgent {
         false
     }
 
+    fn accepts_interactive_input(&self) -> bool {
+        false
+    }
+
     fn needs_pty(&self) -> bool {
         false
     }

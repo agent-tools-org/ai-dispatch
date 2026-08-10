@@ -135,7 +135,7 @@ async fn dispatch_secondary(store: Arc<crate::store::Store>, command: Commands) 
             task_ops::reject(store, task_id)
         }
         Commands::Gc(command_args_b::ArtifactGcArgs { task }) => task_ops::gc(store, task),
-        Commands::Respond(command_args_b::RespondArgs { task_id, input, file }) => task_ops::respond(task_id, input, file),
+        Commands::Respond(command_args_b::RespondArgs { task_id, input, file }) => task_ops::respond(store, task_id, input, file),
         Commands::Reply(command_args_b::ReplyArgs { task_id, message, file, async_mode, timeout_secs }) => {
             task_ops::reply(store, task_id, message, file, async_mode, timeout_secs)
         }

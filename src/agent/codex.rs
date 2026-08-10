@@ -30,20 +30,22 @@ pub(crate) const RESUME_FALLBACK_DETAIL: &str =
     "Codex session resume skipped: rollout missing; starting fresh session";
 const ROLLOUT_TIMESTAMP_FORMAT: &str = "%Y-%m-%dT%H-%M-%S";
 
-/// Parsed codex CLI version (major, minor, patch).
+/// Parsed codex CLI version (major, minor, patch), when the probe succeeds.
 /// Cached via OnceLock so `codex --version` runs at most once.
-fn codex_version() -> (u32, u32, u32) {
-    static VERSION: OnceLock<(u32, u32, u32)> = OnceLock::new();
+fn codex_version() -> Option<(u32, u32, u32)> {
+    static VERSION: OnceLock<Option<(u32, u32, u32)>> = OnceLock::new();
     *VERSION.get_or_init(|| {
         Command::new("codex")
             .arg("--version")
             .output()
             .ok()
             .and_then(|out| {
+                if !out.status.success() {
+                    return None;
+                }
                 let text = String::from_utf8_lossy(&out.stdout);
                 parse_semver(text.trim())
             })
-            .unwrap_or((0, 0, 0))
     })
 }
 
@@ -59,7 +61,7 @@ fn parse_semver(text: &str) -> Option<(u32, u32, u32)> {
 
 /// Returns true if codex CLI supports the native `-m` / `--model` flag (≥ 0.116.0).
 fn has_native_model_flag() -> bool {
-    codex_version() >= (0, 116, 0)
+    codex_version().is_some_and(|version| version >= (0, 116, 0))
 }
 
 pub(crate) fn durable_session_rollout_exists(session_id: &str) -> bool {
@@ -161,8 +163,11 @@ impl CodexAgent {
                 &injected,
             ]);
         } else {
-            let approval_flag = capabilities::approval_flag_for_version(codex_version()).as_str();
-            cmd.args(["exec", "--json", "--skip-git-repo-check", approval_flag, &injected]);
+            cmd.args(["exec", "--json", "--skip-git-repo-check"]);
+            if let Some(version) = codex_version() {
+                cmd.arg(capabilities::approval_flag_for_version(version).as_str());
+            }
+            cmd.arg(&injected);
         }
         if let Some(ref model) = opts.model {
             if has_native_model_flag() {

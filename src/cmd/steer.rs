@@ -1,13 +1,23 @@
 // Handler for `aid steer` — inject guidance into running PTY tasks.
 // Delegates to persisted reply delivery with steer source tracking.
 
-use anyhow::Result;
+use anyhow::{Result, bail};
 
 use crate::cmd::reply;
+use crate::types::AgentKind;
 use crate::store::Store;
 use crate::types::MessageSource;
 
 pub fn run(store: &Store, task_id: &str, message: &str) -> Result<()> {
+    let task = store
+        .get_task(task_id)?
+        .ok_or_else(|| anyhow::anyhow!("Task {task_id} not found"))?;
+    if matches!(task.agent, AgentKind::Antigravity | AgentKind::Grok) {
+        bail!(
+            "Task {task_id} uses '{}' in one-shot print mode and cannot consume steering input; no message was queued",
+            task.agent.as_str()
+        );
+    }
     reply::run_with_source(
         store,
         task_id,
@@ -24,6 +34,8 @@ pub fn run(store: &Store, task_id: &str, message: &str) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::run;
+    use crate::input_signal;
+    use crate::paths::AidHomeGuard;
     use crate::store::Store;
     use crate::types::{AgentKind, Task, TaskId, TaskStatus, VerifyStatus};
     use chrono::Local;
@@ -81,6 +93,46 @@ mod tests {
             msg.contains("can only steer running tasks")
                 || msg.contains("can only reply to running tasks"),
             "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn steer_rejects_one_shot_agents_without_queuing() {
+        let temp_home = tempfile::tempdir().unwrap();
+        let _aid_home = AidHomeGuard::set(temp_home.path());
+        let store = Store::open_memory().unwrap();
+
+        for (task_id, agent) in [
+            ("t-steer-agy", AgentKind::Antigravity),
+            ("t-steer-grok", AgentKind::Grok),
+        ] {
+            let mut task = make_task(task_id, TaskStatus::Running);
+            task.agent = agent;
+            store.insert_task(&task).unwrap();
+
+            let err = run(&store, task_id, "pivot").unwrap_err();
+            assert!(err.to_string().contains("cannot consume steering input"));
+            assert!(store.list_messages_for_task(task_id).unwrap().is_empty());
+            assert!(!crate::paths::steer_signal_path(task_id).exists());
+        }
+    }
+
+    #[test]
+    fn steer_keeps_codex_delivery_path() {
+        let temp_home = tempfile::tempdir().unwrap();
+        let _aid_home = AidHomeGuard::set(temp_home.path());
+        let store = Store::open_memory().unwrap();
+        let task = make_task("t-steer-codex", TaskStatus::Running);
+        store.insert_task(&task).unwrap();
+
+        run(&store, task.id.as_str(), "pivot").unwrap();
+
+        let messages = store.list_messages_for_task(task.id.as_str()).unwrap();
+        assert_eq!(messages.len(), 1);
+        assert_eq!(messages[0].source.as_str(), "steer");
+        assert_eq!(
+            input_signal::take_steer(task.id.as_str()).unwrap().as_deref(),
+            Some("pivot")
         );
     }
 }

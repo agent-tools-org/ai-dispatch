@@ -66,7 +66,7 @@ fn render_success_chart(frame: &mut ratatui::Frame<'_>, app: &App, area: Rect) {
     let bars = AGENTS
         .iter()
         .map(|agent| {
-            let total = app.tasks.iter().filter(|task| task.agent == *agent).count();
+            let total = app.tasks.iter().filter(|task| task.agent == *agent).filter(|task| task.outcome() != TaskOutcome::Stopped).count();
             let success = app.tasks.iter().filter(|task| task.agent == *agent).filter(|task| task.outcome().is_success()).count();
             let rate = (success * 100).checked_div(total).unwrap_or(0) as u64;
             Bar::default()
@@ -112,7 +112,7 @@ fn render_legacy_summary(frame: &mut ratatui::Frame<'_>, app: &App, area: Rect) 
     if inner.is_empty() { return; }
     let parts = Layout::default().direction(Direction::Vertical).constraints([Constraint::Length(4), Constraint::Min(1)]).split(inner);
     let done = app.tasks.iter().filter(|task| task.outcome().is_success()).count();
-    let failed = app.tasks.iter().filter(|task| matches!(task.outcome(), TaskOutcome::Broken | TaskOutcome::Failed | TaskOutcome::Stopped)).count();
+    let failed = app.tasks.iter().filter(|task| matches!(task.outcome(), TaskOutcome::Broken | TaskOutcome::Failed)).count();
     let running = app.tasks.iter().filter(|task| matches!(task.outcome(), TaskOutcome::InProgress)).count();
     let total_cost = app.tasks.iter().filter_map(|task| task.cost_usd).sum::<f64>();
     let today = Local::now().date_naive();

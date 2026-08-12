@@ -108,6 +108,19 @@ fn hollow_output_done_task_exits_one_not_success() {
 }
 
 #[test]
+fn stopped_task_has_a_stopped_status_line_not_a_failure_line() {
+    let mut task = task_with_verify_status(VerifyStatus::Skipped);
+    task.status = TaskStatus::Stopped;
+    let outcome = RunExitStatus::from_task(&task, Some("interrupted by signal SIGINT".to_string()));
+
+    assert_eq!(outcome.exit_code(), 1);
+    let line = outcome.summary_line();
+    assert!(line.starts_with("[STATUS=STOPPED]"));
+    assert!(!line.contains("[STATUS=FAILED]"));
+    assert!(line.contains("stopped"));
+}
+
+#[test]
 fn run_status_lines_have_distinct_prefix_tags_despite_prose_collisions() {
     let done = status_line(TaskStatus::Done, VerifyStatus::Passed, None);
     let failed = status_line(

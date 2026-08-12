@@ -91,7 +91,7 @@ fn assert_termination_sets_stopped(
         let events = store.get_events(task_id).unwrap();
         assert_eq!(events.len(), 1);
         assert_eq!(events[0].detail, detail);
-        assert_eq!(events[0].event_kind, EventKind::Error);
+        assert_eq!(events[0].event_kind, EventKind::Completion);
     });
 }
 

@@ -5,6 +5,7 @@ use super::*;
 use crate::paths::AidHomeGuard;
 use crate::rate_limit;
 use crate::store::Store;
+use crate::types::TaskOutcome;
 use std::sync::Arc;
 use tempfile::TempDir;
 
@@ -198,4 +199,9 @@ fn read_only_without_worktree_is_accepted() {
     let mut task = stub_task("audit", None);
     task.read_only = true;
     validate_batch_config(&[task], false, false).unwrap();
+}
+
+#[test]
+fn stopped_task_is_skipped_instead_of_failed_in_batch_results() {
+    assert_eq!(batch_outcome(TaskOutcome::Stopped), BatchTaskOutcome::Skipped);
 }

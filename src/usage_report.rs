@@ -168,7 +168,15 @@ pub(crate) fn collect_agent_rows(tasks: &[Task]) -> Vec<AgentUsageRow> {
             .filter(|task| task.status.is_terminal())
             .filter_map(|task| task.duration_ms)
             .collect();
-        let success_rate = (done_count as f64 * 100.0) / agent_tasks.len() as f64;
+        let measured_count = agent_tasks
+            .iter()
+            .filter(|task| task.outcome() != crate::types::TaskOutcome::Stopped)
+            .count();
+        let success_rate = if measured_count == 0 {
+            0.0
+        } else {
+            (done_count as f64 * 100.0) / measured_count as f64
+        };
         let avg_duration_secs = if completed_durations.is_empty() {
             0.0
         } else {

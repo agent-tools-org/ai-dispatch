@@ -141,15 +141,15 @@ where
 
 fn record_interrupted(store: &Store, task_id: &TaskId, signal_name: &str) -> Result<()> {
     let detail = format!("interrupted by signal {signal_name}");
-    if !crate::task_lifecycle::fail_if_running(store, task_id.as_str())? {
+    if !crate::task_lifecycle::mark_stopped(store, task_id.as_str())? {
         return Ok(());
     }
     std::fs::write(crate::paths::stderr_path(task_id.as_str()), format!("{detail}\n"))?;
-    crate::pty_watch::append_failed_terminal_sentinel(task_id, &crate::paths::log_path(task_id.as_str()), &detail);
+    crate::pty_watch::append_stopped_terminal_sentinel(task_id, &crate::paths::log_path(task_id.as_str()), &detail);
     store.insert_event(&TaskEvent {
         task_id: task_id.clone(),
         timestamp: Local::now(),
-        event_kind: EventKind::Error,
+        event_kind: EventKind::Completion, // Existing terminal kind; dashboard counts it as a completion.
         detail,
         metadata: None,
     })?;

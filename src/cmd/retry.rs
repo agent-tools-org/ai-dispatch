@@ -2,6 +2,7 @@
 // Reuses the original task config and dispatches a child task with feedback.
 
 use anyhow::{Context, Result};
+use std::path::Path;
 use std::sync::Arc;
 
 use crate::cmd::run::{self, switch_agent, RunArgs};
@@ -120,11 +121,23 @@ fn retry_task_to_run_args(
         run_args.dir = Some(dir);
     }
     run_args.worktree = worktree_arg;
+    resume_pruned_worktree_at_tip(task, &mut run_args)?;
     run_args.announce = announce;
     run_args.parent_task_id = Some(task.id.as_str().to_string());
     run_args.background = args.bg;
     run_args.existing_task_id = None;
     Ok(run_args)
+}
+
+fn resume_pruned_worktree_at_tip(task: &crate::types::Task, run_args: &mut RunArgs) -> Result<()> {
+    let Some(path) = task.worktree_path.as_deref() else { return Ok(()) };
+    if Path::new(path).exists() { return Ok(()) }
+    let Some(branch) = run_args.worktree.as_deref() else { return Ok(()) };
+    let Some(repo) = run_args.repo.as_deref() else { return Ok(()) };
+    if let Some(base) = crate::worktree::branch_tip_resume_base(Path::new(repo), branch)? {
+        run_args.base_branch = Some(base);
+    }
+    Ok(())
 }
 
 fn reusable_worktree(task: &crate::types::Task) -> Option<String> {
@@ -226,3 +239,7 @@ mod tests;
 #[cfg(test)]
 #[path = "retry_saved_args_tests.rs"]
 mod saved_args_tests;
+
+#[cfg(test)]
+#[path = "retry_pruned_resume_tests.rs"]
+mod pruned_resume_tests;

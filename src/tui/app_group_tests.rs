@@ -3,7 +3,7 @@
 // Deps: TUI App, in-memory Store, and Task fixtures.
 
 use super::*;
-use chrono::Local;
+use chrono::{Duration, Local};
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use std::sync::Arc;
 
@@ -60,6 +60,41 @@ fn grouped_navigation_keeps_jk_in_group_and_hl_between_groups() {
     assert_eq!(crate::tui::tree_data::build_task_tree_with_state(
         &app.tasks, &app.wg_creators, &app.collapsed_projects,
     ).iter().filter(|value| value.project_id == collapsed).count(), 1);
+}
+
+#[test]
+fn visible_navigation_reaches_every_node_across_collapsed_group() {
+    let store = Arc::new(Store::open_memory().unwrap());
+    for (id, project_id, age) in [
+        ("t-nav-old", "project-old", 30),
+        ("t-nav-middle", "project-middle", 20),
+        ("t-nav-new", "project-new", 10),
+    ] {
+        let mut value = task(id);
+        value.project_id = Some(project_id.into());
+        value.created_at = Local::now() - Duration::seconds(age);
+        store.insert_task(&value).unwrap();
+    }
+    let mut app = App::new(store, super::super::RunOptions::default()).unwrap();
+    app.collapsed_projects.insert(Some("project-middle".into()));
+    app.tree_selected = 0;
+
+    let nodes = crate::tui::tree_data::build_task_tree_with_state(
+        &app.tasks, &app.wg_creators, &app.collapsed_projects,
+    );
+    let collapsed_index = nodes
+        .iter()
+        .position(|node| node.is_group_header && node.project_id.as_deref() == Some("project-middle"))
+        .expect("collapsed group header is visible");
+    assert!(collapsed_index > 0 && collapsed_index + 1 < nodes.len());
+    let mut visited = std::collections::HashSet::from([app.tree_selected]);
+    for _ in 0..nodes.len() {
+        app.handle_key(KeyEvent::new(KeyCode::Char('j'), KeyModifiers::NONE)).unwrap();
+        visited.insert(app.tree_selected);
+    }
+
+    let expected: std::collections::HashSet<usize> = (0..nodes.len()).collect();
+    assert_eq!(visited, expected);
 }
 
 #[test]

@@ -9,7 +9,7 @@ use std::process::Command;
 #[path = "merge_stash_identity.rs"]
 mod identity;
 use identity::{
-    apply_stash, drop_stash_if_exact, find_stash, push_stash, unique_stash_message,
+    apply_stash, find_stash, push_stash, unique_stash_message,
 };
 
 pub(crate) struct LocalChanges {
@@ -56,9 +56,9 @@ where
     }
     let message = unique_stash_message()?;
     aid_info!("[aid] Saving local changes before merge...");
-    push_stash(repo_dir, &message)?;
+    let subject = push_stash(repo_dir, &message)?;
     before_identify(&message);
-    let stash_ref = find_stash(repo_dir, &message)
+    let stash_ref = find_stash(repo_dir, &subject)
         .map_err(|error| format_capture_error(None, &message, &error))?;
     // Git captures and clears these paths in one operation; later edits are never reset by aid.
     after_capture();
@@ -69,32 +69,8 @@ pub(crate) fn restore_local_changes(
     repo_dir: &str,
     changes: &LocalChanges,
 ) -> Result<(), String> {
-    restore_local_changes_inner(repo_dir, changes, || {})
-}
-
-#[cfg(test)]
-pub(crate) fn restore_local_changes_with_drop_hook<F>(
-    repo_dir: &str,
-    changes: &LocalChanges,
-    before_drop: F,
-) -> Result<(), String>
-where
-    F: FnOnce(),
-{
-    restore_local_changes_inner(repo_dir, changes, before_drop)
-}
-
-fn restore_local_changes_inner<F>(
-    repo_dir: &str,
-    changes: &LocalChanges,
-    before_drop: F,
-) -> Result<(), String>
-where
-    F: FnOnce(),
-{
     ensure_stash_untracked_paths_free(repo_dir, &changes.stash_ref)?;
-    apply_stash(repo_dir, &changes.stash_ref)?;
-    drop_stash_if_exact(repo_dir, &changes.stash_ref, before_drop)
+    apply_stash(repo_dir, &changes.stash_ref)
 }
 
 pub(crate) fn restore_untracked_after_failed_merge(
@@ -129,6 +105,7 @@ pub(crate) fn restore_untracked_after_failed_merge(
 }
 
 pub(crate) fn format_stash_restore_error(changes: &LocalChanges, error: &str) -> String {
+    // Git's stash list owns retained recovery entries; aid never deletes user data here.
     format!(
         "failed to restore merge-local changes (stash commit {} visible in git stash list): {error}; recover manually before retrying",
         changes.stash_ref

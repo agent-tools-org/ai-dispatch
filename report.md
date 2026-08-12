@@ -1,12 +1,11 @@
-Implemented and committed as `09318446`.
+Implemented and committed as `78c84812`.
 
-- Exact full stash identity matching; duplicate matches fail closed.
-- Successful restores drop only the verified SHA’s stash entry.
-- Shifted stash positions refuse deletion rather than dropping another entry.
-- Failed/conflicted merges retain the stash for recovery.
-- Added regressions for duplicate identity and shifted-list cleanup.
-- 54/54 merge tests passed; `aid build` and clippy passed.
-- File-size, headers, unwrap, and staging checks passed.
-- Worktree is clean.
+- Removed all stash dropping and positional-selector logic.
+- Removed branch-subject reconstruction; Git’s exact emitted subject is matched.
+- Added detached-HEAD capture/restore coverage.
+- Retained stash entries as durable Git-owned recovery records.
+- Replaced the shifted-drop test with retention assertions.
+- `54/54` merge tests, `aid build`, and clippy passed.
+- Policy checks passed; worktree is clean.
 
-Concurrent merge locking and `merge --abort` handling remain pre-existing and out of scope.
+Retention is intentionally owned by normal Git stash maintenance; `aid` never deletes these recovery entries. Concurrent merge locking and `merge --abort` remain out of scope.

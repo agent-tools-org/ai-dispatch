@@ -13,17 +13,26 @@ pub(crate) fn unique_stash_message() -> Result<String, String> {
     Ok(format!("aid merge-local {}-{timestamp}", std::process::id()))
 }
 
-pub(crate) fn push_stash(repo_dir: &str, message: &str) -> Result<(), String> {
+pub(crate) fn push_stash(repo_dir: &str, message: &str) -> Result<String, String> {
     // `stash create` cannot include untracked files; push -u stores both kinds durably at once.
     let output = Command::new("git")
         .args([
-            "-C", repo_dir, "stash", "push", "--include-untracked", "--quiet", "--message",
+            "-C",
+            repo_dir,
+            "stash",
+            "push",
+            "--include-untracked",
+            "--message",
             message,
         ])
         .output()
         .map_err(|error| format!("failed to capture merge-local changes: {error}"))?;
     if output.status.success() {
-        Ok(())
+        let prefix = "Saved working directory and index state ";
+        String::from_utf8_lossy(&output.stdout)
+            .lines()
+            .find_map(|line| line.strip_prefix(prefix).map(str::to_string))
+            .ok_or_else(|| "git stash did not report its exact identity".to_string())
     } else {
         Err(format!(
             "failed to capture merge-local changes: {}",
@@ -32,8 +41,7 @@ pub(crate) fn push_stash(repo_dir: &str, message: &str) -> Result<(), String> {
     }
 }
 
-pub(crate) fn find_stash(repo_dir: &str, message: &str) -> Result<String, String> {
-    let expected_subject = stash_subject(repo_dir, message)?;
+pub(crate) fn find_stash(repo_dir: &str, expected_subject: &str) -> Result<String, String> {
     let output = Command::new("git")
         .args(["-C", repo_dir, "stash", "list", "--format=%H%x09%gs"])
         .output()
@@ -63,25 +71,6 @@ pub(crate) fn find_stash(repo_dir: &str, message: &str) -> Result<String, String
     }
 }
 
-fn stash_subject(repo_dir: &str, message: &str) -> Result<String, String> {
-    let output = Command::new("git")
-        .args(["-C", repo_dir, "branch", "--show-current"])
-        .output()
-        .map_err(|error| format!("failed to identify merge stash branch: {error}"))?;
-    if !output.status.success() {
-        return Err(format!(
-            "failed to identify merge stash branch: {}",
-            first_error_line(&output.stderr)
-        ));
-    }
-    let branch = String::from_utf8_lossy(&output.stdout).trim().to_string();
-    if branch.is_empty() {
-        Ok(format!("WIP on (no branch): {message}"))
-    } else {
-        Ok(format!("On {branch}: {message}"))
-    }
-}
-
 pub(crate) fn apply_stash(repo_dir: &str, stash_ref: &str) -> Result<(), String> {
     let output = Command::new("git")
         .args(["-C", repo_dir, "stash", "apply", "--index", stash_ref])
@@ -93,74 +82,6 @@ pub(crate) fn apply_stash(repo_dir: &str, stash_ref: &str) -> Result<(), String>
         Err(format!(
             "failed to apply merge-local stash {stash_ref}: {}",
             first_error_line(&output.stderr)
-        ))
-    }
-}
-
-pub(crate) fn drop_stash_if_exact<F>(
-    repo_dir: &str,
-    stash_ref: &str,
-    before_drop: F,
-) -> Result<(), String>
-where
-    F: FnOnce(),
-{
-    let selector = find_stash_selector(repo_dir, stash_ref)?;
-    verify_stash_selector(repo_dir, &selector, stash_ref)?;
-    before_drop();
-    verify_stash_selector(repo_dir, &selector, stash_ref)?;
-    let output = Command::new("git")
-        .args(["-C", repo_dir, "stash", "drop", "--quiet", &selector])
-        .output()
-        .map_err(|error| format!("failed to drop merge-local stash {stash_ref}: {error}"))?;
-    if output.status.success() {
-        Ok(())
-    } else {
-        Err(format!(
-            "failed to drop merge-local stash {stash_ref}: {}",
-            first_error_line(&output.stderr)
-        ))
-    }
-}
-
-fn find_stash_selector(repo_dir: &str, stash_ref: &str) -> Result<String, String> {
-    let output = Command::new("git")
-        .args(["-C", repo_dir, "stash", "list", "--format=%H%x09%gd"])
-        .output()
-        .map_err(|error| format!("failed to locate merge-local stash {stash_ref}: {error}"))?;
-    if !output.status.success() {
-        return Err(format!(
-            "failed to locate merge-local stash {stash_ref}: {}",
-            first_error_line(&output.stderr)
-        ));
-    }
-    let mut matches = Vec::new();
-    for line in String::from_utf8_lossy(&output.stdout).lines() {
-        let Some((commit, selector)) = line.split_once('\t') else {
-            continue;
-        };
-        if commit == stash_ref {
-            matches.push(selector.to_string());
-        }
-    }
-    match matches.as_slice() {
-        [selector] => Ok(selector.clone()),
-        [] => Err(format!("stash commit {stash_ref} is no longer in git stash list")),
-        _ => Err(format!("stash commit {stash_ref} has multiple list entries")),
-    }
-}
-
-fn verify_stash_selector(repo_dir: &str, selector: &str, expected: &str) -> Result<(), String> {
-    let output = Command::new("git")
-        .args(["-C", repo_dir, "rev-parse", "--verify", selector])
-        .output()
-        .map_err(|error| format!("failed to verify merge-local stash {expected}: {error}"))?;
-    let actual = String::from_utf8_lossy(&output.stdout).trim().to_string();
-    if output.status.success() && actual == expected {
-        Ok(())
-    } else {
-        Err(format!(
-            "refusing to drop merge-local stash {expected}: {selector} changed"
         ))
     }
 }

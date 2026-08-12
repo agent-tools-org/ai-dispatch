@@ -18,24 +18,6 @@ const TASK_IDS_SQL: &str = "SELECT id FROM tasks";
 const WORKGROUP_IDS_SQL: &str = "SELECT id FROM workgroups";
 const LOG_SUFFIX: &str = ".jsonl";
 
-pub fn get_dir_size(path: &Path) -> u64 {
-    let mut total = 0;
-    if let Ok(entries) = fs::read_dir(path) {
-        for entry in entries.flatten() {
-            if let Ok(file_type) = entry.file_type() {
-                if file_type.is_dir() {
-                    total += get_dir_size(&entry.path());
-                } else if file_type.is_file() {
-                    if let Ok(meta) = entry.metadata() {
-                        total += meta.len();
-                    }
-                }
-            }
-        }
-    }
-    total
-}
-
 pub fn format_bytes(bytes: u64) -> String {
     if bytes < 1024 {
         format!("{} B", bytes)
@@ -74,14 +56,6 @@ pub fn run(
     if total_bytes > 0 || dry_run {
         println!("---");
         println!("Total space {}: {}", if dry_run { "reclaimable" } else { "reclaimed" }, format_bytes(total_bytes));
-    } else if !clean_worktrees {
-        // Evaluate hint for worktrees if they didn't pass --worktrees
-        let (cargo_bytes, fallback_bytes, home_bytes) = crate::cmd::clean_cargo_target::measure_orphaned_space(&store)?;
-        let reclaimable = cargo_bytes + fallback_bytes + home_bytes;
-        if reclaimable > 1024 * 1024 * 500 { // 500 MB threshold
-            println!("---");
-            println!("Hint: {} of reclaimable space is occupied by orphaned tasks. Run `aid clean --worktrees` to reclaim.", format_bytes(reclaimable));
-        }
     }
     
     Ok(())
@@ -144,7 +118,7 @@ fn clean_orphaned_shared_dirs(store: &Store, dry_run: bool) -> Result<u64> {
         if known_wgs.contains(&wg_id) {
             continue;
         }
-        let size = get_dir_size(&entry.path());
+        let size = crate::cmd::clean_size::get_dir_size(&entry.path())?;
         if dry_run {
             println!("[dry-run] Would remove orphaned shared dir {} ({})", entry.path().display(), format_bytes(size));
             bytes += size;
@@ -171,7 +145,7 @@ pub(crate) fn clean_isolated_task_homes(store: &Store, dry_run: bool) -> Result<
     for id in crate::cmd::clean_cargo_target::orphaned_task_ids(store)? {
         let home_dir = crate::paths::task_dir(&id).join("home");
         if home_dir.exists() {
-            let size = get_dir_size(&home_dir);
+            let size = crate::cmd::clean_size::get_dir_size(&home_dir)?;
             if dry_run {
                 println!("[dry-run] Would remove isolated task home for {} ({})", id, format_bytes(size));
                 bytes += size;
@@ -192,6 +166,19 @@ pub(crate) fn clean_isolated_task_homes(store: &Store, dry_run: bool) -> Result<
         );
     }
     Ok(bytes)
+}
+
+pub(crate) fn session_start_hint() -> Result<Option<String>> {
+    let Some(store) = Store::open_read_only(&paths::db_path())? else {
+        return Ok(None);
+    };
+    if crate::cmd::clean_cargo_target::has_reclaimable_space_above_threshold(&store)? {
+        return Ok(Some(format!(
+            "Hint: orphaned task artifacts occupy at least {}. Run `aid clean --worktrees` to reclaim.",
+            format_bytes(crate::cmd::clean_size::CLEANUP_HINT_THRESHOLD_BYTES)
+        )));
+    }
+    Ok(None)
 }
 
 fn query_string_set(store: &Store, sql: &str) -> Result<HashSet<String>> {

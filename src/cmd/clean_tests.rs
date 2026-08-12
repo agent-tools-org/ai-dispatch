@@ -45,3 +45,16 @@
         assert!(crate::shared_dir::shared_dir_path("wg-orphanned").is_none());
         assert!(crate::shared_dir::shared_dir_path("wg-known").is_some());
     }
+
+    #[test]
+    fn bounded_dir_size_stops_at_entry_limit() {
+        let temp = tempfile::tempdir().unwrap();
+        fs::write(temp.path().join("first"), vec![b'a'; 7]).unwrap();
+        fs::write(temp.path().join("second"), vec![b'b'; 11]).unwrap();
+        fs::write(temp.path().join("third"), vec![b'c'; 13]).unwrap();
+
+        let (bytes, entries) = crate::cmd::clean_size::get_dir_size_bounded(temp.path(), 1_000, 2).unwrap();
+
+        assert_eq!(entries, 2);
+        assert!(bytes == 18 || bytes == 20);
+    }

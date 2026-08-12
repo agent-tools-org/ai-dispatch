@@ -122,11 +122,17 @@ fn grok_pty_default_ladder_preserves_three_five_six_hundred_boundaries() {
         IdleAction::SendNudge(crate::pty_watch_idle::default_nudge_message())
     );
 
+    let now = Instant::now();
     let mut state = MonitorState::new(true, None);
-    state.last_progress_time = Instant::now() - Duration::from_secs(599);
-    assert!(!state.idle_hang_elapsed(true, Duration::from_secs(600), "t-grok-pty"));
-    state.last_progress_time = Instant::now() - Duration::from_secs(600);
-    assert!(state.idle_hang_elapsed(true, Duration::from_secs(600), "t-grok-pty-hung"));
+    // Pin `now` so the 600s boundary does not race wall-clock load. With
+    // `elapsed <= idle` meaning still alive: 599/600 stay below/at threshold,
+    // 601 is the first second that hangs.
+    state.last_progress_time = now - Duration::from_secs(599);
+    assert!(!state.idle_hang_elapsed_at(true, Duration::from_secs(600), "t-grok-pty", now));
+    state.last_progress_time = now - Duration::from_secs(600);
+    assert!(!state.idle_hang_elapsed_at(true, Duration::from_secs(600), "t-grok-pty", now));
+    state.last_progress_time = now - Duration::from_secs(601);
+    assert!(state.idle_hang_elapsed_at(true, Duration::from_secs(600), "t-grok-pty-hung", now));
 }
 
 #[test]

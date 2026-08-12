@@ -502,7 +502,20 @@ impl MonitorState {
         idle: Duration,
         task_id: &str,
     ) -> bool {
-        if self.last_progress_time.elapsed() <= idle {
+        self.idle_hang_elapsed_at(agent_streaming, idle, task_id, Instant::now())
+    }
+
+    /// Same decision as [`Self::idle_hang_elapsed`], with an injectable `now`
+    /// so boundary tests can pin the clock (production always passes
+    /// `Instant::now()` via the wrapper).
+    fn idle_hang_elapsed_at(
+        &self,
+        agent_streaming: bool,
+        idle: Duration,
+        task_id: &str,
+        now: Instant,
+    ) -> bool {
+        if now.saturating_duration_since(self.last_progress_time) <= idle {
             return false;
         }
         if agent_streaming {

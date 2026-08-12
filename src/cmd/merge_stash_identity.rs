@@ -1,5 +1,5 @@
 // Identifies and manages durable merge-local stash entries.
-// Exports exact message lookup, SHA-based apply, and checked cleanup.
+// Exports token lookup and SHA-based apply helpers.
 // Deps: Git stash plumbing and standard time handling.
 
 use std::process::Command;
@@ -13,7 +13,7 @@ pub(crate) fn unique_stash_message() -> Result<String, String> {
     Ok(format!("aid merge-local {}-{timestamp}", std::process::id()))
 }
 
-pub(crate) fn push_stash(repo_dir: &str, message: &str) -> Result<String, String> {
+pub(crate) fn push_stash(repo_dir: &str, message: &str) -> Result<(), String> {
     // `stash create` cannot include untracked files; push -u stores both kinds durably at once.
     let output = Command::new("git")
         .args([
@@ -28,11 +28,7 @@ pub(crate) fn push_stash(repo_dir: &str, message: &str) -> Result<String, String
         .output()
         .map_err(|error| format!("failed to capture merge-local changes: {error}"))?;
     if output.status.success() {
-        let prefix = "Saved working directory and index state ";
-        String::from_utf8_lossy(&output.stdout)
-            .lines()
-            .find_map(|line| line.strip_prefix(prefix).map(str::to_string))
-            .ok_or_else(|| "git stash did not report its exact identity".to_string())
+        Ok(())
     } else {
         Err(format!(
             "failed to capture merge-local changes: {}",
@@ -41,7 +37,7 @@ pub(crate) fn push_stash(repo_dir: &str, message: &str) -> Result<String, String
     }
 }
 
-pub(crate) fn find_stash(repo_dir: &str, expected_subject: &str) -> Result<String, String> {
+pub(crate) fn find_stash(repo_dir: &str, expected_token: &str) -> Result<String, String> {
     let output = Command::new("git")
         .args(["-C", repo_dir, "stash", "list", "--format=%H%x09%gs"])
         .output()
@@ -57,15 +53,15 @@ pub(crate) fn find_stash(repo_dir: &str, expected_subject: &str) -> Result<Strin
         let Some((commit, subject)) = line.split_once('\t') else {
             continue;
         };
-        if subject == expected_subject {
+        if subject.contains(expected_token) {
             matches.push(commit.to_string());
         }
     }
     match matches.as_slice() {
         [stash_ref] => Ok(stash_ref.clone()),
-        [] => Err(format!("stash identity {expected_subject} was not found in git stash list")),
+        [] => Err(format!("stash identity token {expected_token} was not found in git stash list")),
         _ => Err(format!(
-            "multiple stashes matched identity {expected_subject}: {}",
+            "multiple stashes matched identity token {expected_token}: {}",
             matches.join(", ")
         )),
     }

@@ -555,7 +555,7 @@ fn stash_capture_fails_when_git_status_cannot_run() {
 }
 
 #[test]
-fn stash_capture_refuses_duplicate_full_identity() {
+fn stash_capture_reports_token_on_post_push_identity_failure() {
     let _permit = test_subprocess::acquire();
     let repo = init_repo();
     std::fs::write(repo.path().join("init.txt"), "local change\n").unwrap();
@@ -569,7 +569,29 @@ fn stash_capture_refuses_duplicate_full_identity() {
             );
         },
     );
-    assert!(matches!(result, Err(error) if error.contains("multiple stashes matched")));
+    assert!(matches!(result, Err(error)
+        if error.contains("multiple stashes matched")
+            && error.contains("recovery handle: stash message aid merge-local")));
+    git(repo.path(), &["stash", "clear"]);
+}
+
+#[test]
+fn stash_identity_lookup_uses_token_when_banner_text_is_unusable() {
+    let _permit = test_subprocess::acquire();
+    let repo = init_repo();
+    let token = format!("aid merge-local {}", unique("token"));
+    let message = format!("translated banner text {token}");
+    std::fs::write(repo.path().join("init.txt"), "local change\n").unwrap();
+    git(
+        repo.path(),
+        &["stash", "push", "--include-untracked", "--quiet", "--message", &message],
+    );
+    let found = find_stash_for_test(&repo.path().to_string_lossy(), &token).unwrap();
+    let expected = Command::new("git")
+        .args(["-C", &repo.path().to_string_lossy(), "rev-parse", "refs/stash"])
+        .output()
+        .unwrap();
+    assert_eq!(found, String::from_utf8_lossy(&expected.stdout).trim());
     git(repo.path(), &["stash", "clear"]);
 }
 

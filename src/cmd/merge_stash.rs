@@ -42,6 +42,11 @@ where
     capture_local_changes(repo_dir, before_identify, || {})
 }
 
+#[cfg(test)]
+pub(crate) fn find_stash_for_test(repo_dir: &str, token: &str) -> Result<String, String> {
+    find_stash(repo_dir, token)
+}
+
 fn capture_local_changes<F, G>(
     repo_dir: &str,
     before_identify: F,
@@ -56,9 +61,10 @@ where
     }
     let message = unique_stash_message()?;
     aid_info!("[aid] Saving local changes before merge...");
-    let subject = push_stash(repo_dir, &message)?;
+    push_stash(repo_dir, &message)
+        .map_err(|error| format_capture_error(None, &message, &error))?;
     before_identify(&message);
-    let stash_ref = find_stash(repo_dir, &subject)
+    let stash_ref = find_stash(repo_dir, &message)
         .map_err(|error| format_capture_error(None, &message, &error))?;
     // Git captures and clears these paths in one operation; later edits are never reset by aid.
     after_capture();

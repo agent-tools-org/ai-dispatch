@@ -13,8 +13,9 @@ use ratatui::layout::{Constraint, Direction, Layout};
 use ratatui::prelude::{Alignment, Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{
-    Block, Borders, Paragraph, Row, Table, TableState,
+    Block, Borders, Cell, Paragraph, Row, Table, TableState,
 };
+use std::collections::HashMap;
 
 use super::app::App;
 use super::charts;
@@ -23,6 +24,7 @@ use super::multipane;
 use super::status_bar::{render_status_bar, StatusBarMode};
 use crate::cost;
 use crate::types::TaskStatus;
+use crate::tui::tree_data::{self, TreeNode};
 
 pub fn render(frame: &mut ratatui::Frame<'_>, app: &App) {
     if app.tree_mode {
@@ -135,7 +137,22 @@ fn render_board(frame: &mut ratatui::Frame<'_>, app: &App) {
         "Prompt",
     ])
     .style(Style::default().add_modifier(Modifier::BOLD));
-    let rows = app.tasks.iter().map(|task| task_row(app, task));
+    let nodes = tree_data::build_task_tree_with_state(
+        &app.tasks,
+        &app.wg_creators,
+        &app.collapsed_projects,
+    );
+    let group_counts = app.tasks.iter().fold(HashMap::new(), |mut counts, task| {
+        let entry = counts.entry(task.project_id.clone()).or_insert((0, 0));
+        entry.1 += 1;
+        if task.status.is_terminal() {
+            entry.0 += 1;
+        }
+        counts
+    });
+    let rows = nodes
+        .iter()
+        .map(|node| board_row(app, node, &group_counts));
     let table = Table::new(
         rows,
         [
@@ -164,12 +181,35 @@ fn render_board(frame: &mut ratatui::Frame<'_>, app: &App) {
     );
 
     let mut state = TableState::default();
-    if !app.tasks.is_empty() {
-        state.select(Some(app.selected));
+    if !nodes.is_empty() {
+        state.select(Some(app.tree_selected.min(nodes.len() - 1)));
     }
     frame.render_stateful_widget(table, chunks[1], &mut state);
 
-    render_status_bar(frame, chunks[2], app, StatusBarMode::Board);
+    if app.search_mode {
+        frame.render_widget(
+            Paragraph::new(format!(
+                "Find: {}  (Enter select, Esc cancel, n/N next/previous)",
+                app.search_query
+            )),
+            chunks[2],
+        );
+    } else {
+        render_status_bar(frame, chunks[2], app, StatusBarMode::Board);
+    }
+}
+
+fn board_row(
+    app: &App,
+    node: &TreeNode,
+    group_counts: &HashMap<Option<String>, (usize, usize)>,
+) -> Row<'static> {
+    if node.is_group_header {
+        let (done, total) = group_counts.get(&node.project_id).copied().unwrap_or((0, 0));
+        return Row::new(vec![Cell::from(format!("{}({done}/{total})", node.prefix))])
+            .style(Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD));
+    }
+    task_row(app, &node.task)
 }
 
 fn status_to_color(status: TaskStatus) -> Color {

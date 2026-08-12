@@ -39,7 +39,11 @@ pub(super) fn render_tree_view(frame: &mut ratatui::Frame<'_>, app: &App) {
         chunks[0],
     );
 
-    let nodes = tree_data::build_task_tree_with_creators(&app.tasks, &app.wg_creators);
+    let nodes = tree_data::build_task_tree_with_state(
+        &app.tasks,
+        &app.wg_creators,
+        &app.collapsed_projects,
+    );
     // We can't mutate app here (render takes &App), so tree_node_count
     // is updated in tick(). Use nodes.len() for bounds checking.
     if nodes.is_empty() {
@@ -56,14 +60,14 @@ pub(super) fn render_tree_view(frame: &mut ratatui::Frame<'_>, app: &App) {
                 if node.is_group_header {
                     // Workgroup header line
                     let running_in_group = app.tasks.iter()
-                        .filter(|t| t.workgroup_id.as_deref() == task.workgroup_id.as_deref()
+                        .filter(|t| t.project_id == node.project_id
                             && matches!(t.status, TaskStatus::Running))
                         .count();
                     let total_in_group = app.tasks.iter()
-                        .filter(|t| t.workgroup_id.as_deref() == task.workgroup_id.as_deref())
+                        .filter(|t| t.project_id == node.project_id)
                         .count();
                     let done_in_group = app.tasks.iter()
-                        .filter(|t| t.workgroup_id.as_deref() == task.workgroup_id.as_deref() && t.status.is_terminal())
+                        .filter(|t| t.project_id == node.project_id && t.status.is_terminal())
                         .count();
                     let mut spans = vec![
                         Span::styled(&node.prefix, Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
@@ -157,7 +161,13 @@ pub(super) fn render_tree_view(frame: &mut ratatui::Frame<'_>, app: &App) {
     frame.render_widget(
         Paragraph::new(Line::from(vec![
             Span::styled(" j/k", Style::default().fg(Color::Yellow)),
-            Span::raw(":nav "),
+            Span::raw(":tasks "),
+            Span::styled("h/l", Style::default().fg(Color::Yellow)),
+            Span::raw(":groups "),
+            Span::styled("Space", Style::default().fg(Color::Yellow)),
+            Span::raw(":collapse "),
+            Span::styled("/", Style::default().fg(Color::Yellow)),
+            Span::raw(":find "),
             Span::styled("Enter", Style::default().fg(Color::Yellow)),
             Span::raw(":detail "),
             Span::styled("t", Style::default().fg(Color::Yellow)),

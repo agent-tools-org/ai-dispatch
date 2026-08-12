@@ -5,7 +5,7 @@ use anyhow::Result;
 use crossterm::event::{KeyCode, KeyEvent};
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use super::metrics::ProcessMetrics;
 use super::stats::{StatsRange, StatsSnapshot};
@@ -18,6 +18,10 @@ mod app_keys;
 mod app_tasks;
 #[path = "app_panes.rs"]
 mod app_panes;
+#[path = "app_navigation.rs"]
+mod app_navigation;
+#[path = "app_refresh.rs"]
+mod app_refresh;
 #[path = "stats_app.rs"]
 mod stats_app;
 
@@ -65,12 +69,11 @@ pub struct App {
     pub tree_mode: bool,
     pub tree_selected: usize,
     pub tree_node_count: usize,
+    pub collapsed_projects: std::collections::HashSet<Option<String>>,
+    pub search_mode: bool,
+    pub search_query: String,
     pub wg_creators: HashMap<String, String>,
     pub show_all: bool,
-    /// When false (default), list only the current project (or unattributed).
-    pub show_all_projects: bool,
-    /// Resolved once at startup — not re-detected per frame.
-    pub current_project_id: Option<String>,
     pub active_pane: usize,
     pub pane_scroll_offsets: HashMap<String, usize>,
     pub should_quit: bool,
@@ -82,6 +85,8 @@ pub struct App {
     last_stats_refresh: Instant,
     cached_terminal_milestones: HashMap<String, String>,
     active_pane_task_id: Option<String>,
+    last_task_refresh: Instant,
+    pub(crate) animation_phase: u8,
 }
 
 impl App {
@@ -105,10 +110,11 @@ impl App {
             tree_mode: false,
             tree_selected: 0,
             tree_node_count: 0,
+            collapsed_projects: std::collections::HashSet::new(),
+            search_mode: false,
+            search_query: String::new(),
             wg_creators: HashMap::new(),
             show_all: false,
-            show_all_projects: false,
-            current_project_id: crate::project::current_project_id(),
             active_pane: 0,
             pane_scroll_offsets: HashMap::new(),
             should_quit: false,
@@ -120,28 +126,37 @@ impl App {
             last_stats_refresh: Instant::now(),
             cached_terminal_milestones: HashMap::new(),
             active_pane_task_id: None,
+            last_task_refresh: Instant::now(),
+            animation_phase: 0,
         };
         app.reload_tasks()?;
         Ok(app)
     }
 
     pub fn tick(&mut self) -> Result<()> {
-        self.reload_tasks()?;
+        let task_refresh_due = self.last_task_refresh.elapsed() >= TASK_REFRESH_INTERVAL;
+        if task_refresh_due {
+            self.reload_tasks()?;
+            self.last_task_refresh = Instant::now();
+        }
+        if self.has_reasoning_task() {
+            self.animation_phase = self.animation_phase.wrapping_add(1) % 3;
+        }
         // Only refresh process metrics every 2 seconds (ps fork is expensive)
         if self.last_metrics_refresh.elapsed().as_secs() >= 2 {
             self.metrics = self.load_metrics(&self.tasks);
             self.last_metrics_refresh = Instant::now();
         }
         self.refresh_stats_if_due()?;
-        if self.dashboard_mode {
+        if task_refresh_due && self.dashboard_mode {
             self.load_dashboard_events()?;
         }
-        if self.multipane_mode {
+        if task_refresh_due && self.multipane_mode {
             self.reconcile_active_pane();
             self.load_multipane_events()?;
             self.clamp_all_pane_scrolls();
         }
-        if self.detail_mode {
+        if task_refresh_due && self.detail_mode {
             self.load_selected_events()?;
             self.clamp_detail_scroll();
         }
@@ -162,12 +177,17 @@ impl App {
         self.milestones.get(task_id).map(String::as_str)
     }
     pub fn task_activity(&self, task: &Task) -> String {
-        super::agent_state::activity_label(
+        let label = super::agent_state::activity_label(
             task.status,
             task.agent,
             task.id.as_str(),
             self.latest_events.get(task.id.as_str()),
-        )
+        );
+        if label.starts_with("THINKING ·") {
+            format!("{label} {}", ["·", "··", "···"][self.animation_phase as usize])
+        } else {
+            label
+        }
     }
     pub fn get_failure_reason(&self, task_id: &str) -> Option<String> {
         self.events_cache.get(task_id).and_then(|events| {
@@ -232,11 +252,7 @@ impl App {
     }
     pub fn scope_label(&self) -> String {
         let scope = if self.show_all && self.task_id_filter.is_none() { "all" } else { "today+active" };
-        let project = if self.show_all_projects {
-            "project:*".to_string()
-        } else {
-            format!("project:{}", crate::project::project_display(self.current_project_id.as_deref()))
-        };
+        let project = "project:*";
         match (self.task_id_filter.as_deref(), self.group_filter.as_deref()) {
             (Some(t), Some(g)) => format!("{project} | task {t} | group {g}"),
             (Some(t), None) => format!("{project} | task {t}"),
@@ -245,57 +261,9 @@ impl App {
         }
     }
     pub fn empty_message(&self) -> String { format!("No tasks matched scope: {}", self.scope_label()) }
-    fn load_selected_events(&mut self) -> Result<()> {
-        let Some(task_id) = self
-            .selected_task()
-            .map(|task| task.id.as_str().to_string())
-        else {
-            return Ok(());
-        };
-        let events = self.store.get_events(&task_id)?;
-        self.events_cache.insert(task_id, events);
-        Ok(())
-    }
-    fn load_dashboard_events(&mut self) -> Result<()> {
-        for task_id in self
-            .tasks
-            .iter()
-            .filter(|task| {
-                matches!(
-                    task.status,
-                    TaskStatus::Running | TaskStatus::AwaitingInput | TaskStatus::Stalled
-                )
-            })
-            .map(|task| task.id.as_str().to_string())
-        {
-            self.events_cache
-                .insert(task_id.clone(), self.store.get_events(&task_id)?);
-        }
-        Ok(())
-    }
-    fn load_multipane_events(&mut self) -> Result<()> {
-        let task_ids: Vec<String> = self
-            .multipane_tasks()
-            .iter()
-            .map(|t| t.id.as_str().to_string())
-            .collect();
-        for task_id in task_ids {
-            // Always refresh running tasks, cache completed ones
-            let is_running = self.tasks.iter().any(|t| {
-                t.id.as_str() == task_id
-                    && matches!(
-                        t.status,
-                        TaskStatus::Running | TaskStatus::AwaitingInput | TaskStatus::Stalled
-                    )
-            });
-            if is_running || !self.events_cache.contains_key(&task_id) {
-                self.events_cache
-                    .insert(task_id.clone(), self.store.get_events(&task_id)?);
-            }
-        }
-        Ok(())
-    }
 }
+
+const TASK_REFRESH_INTERVAL: Duration = Duration::from_secs(2);
 
 #[cfg(test)]
 #[path = "app_tests.rs"]
@@ -304,3 +272,11 @@ mod tests;
 #[cfg(test)]
 #[path = "app_selection_tests.rs"]
 mod selection_tests;
+
+#[cfg(test)]
+#[path = "app_group_tests.rs"]
+mod group_tests;
+
+#[cfg(test)]
+#[path = "app_detail_tests.rs"]
+mod detail_tests;

@@ -1,10 +1,30 @@
 // Tests for persisted result-file output fallback in show helpers.
 // Ensures `result.md` is treated as the primary rendered output when present.
 
+use std::path::{Path, PathBuf};
+
 use crate::cmd::show::read_task_output;
 use crate::paths::AidHomeGuard;
 use crate::types::{AgentKind, Task, TaskId, TaskStatus, VerifyStatus};
 use chrono::Local;
+
+struct TempCwd {
+    previous: PathBuf,
+}
+
+impl TempCwd {
+    fn enter(path: &Path) -> Self {
+        let previous = std::env::current_dir().unwrap();
+        std::env::set_current_dir(path).unwrap();
+        Self { previous }
+    }
+}
+
+impl Drop for TempCwd {
+    fn drop(&mut self) {
+        std::env::set_current_dir(&self.previous).unwrap();
+    }
+}
 
 fn task(id: &str) -> Task {
     Task {
@@ -109,11 +129,9 @@ fn read_task_output_never_renders_sibling_task_relative_report() {
     };
 
     // Caller's CWD is task A's worktree — the pre-fix failure mode.
-    let prev = std::env::current_dir().unwrap();
-    std::env::set_current_dir(&worktree_a).unwrap();
+    let _cwd = TempCwd::enter(&worktree_a);
     let owner = read_task_output(&task_a);
     let victim = read_task_output(&task_b);
-    std::env::set_current_dir(prev).unwrap();
 
     assert_eq!(owner.unwrap(), foreign);
     assert!(
@@ -147,10 +165,8 @@ fn read_task_output_resolves_relative_report_from_task_worktree() {
         ..task("t-rel-owned")
     };
 
-    let prev = std::env::current_dir().unwrap();
-    std::env::set_current_dir(&foreign_cwd).unwrap();
+    let _cwd = TempCwd::enter(&foreign_cwd);
     let output = read_task_output(&task);
-    std::env::set_current_dir(prev).unwrap();
 
     assert_eq!(output.unwrap(), "owned-by-this-task\n");
 }
@@ -187,10 +203,8 @@ fn output_text_reports_missing_owned_file_then_task_log() {
     };
     store.insert_task(&task_b).unwrap();
 
-    let prev = std::env::current_dir().unwrap();
-    std::env::set_current_dir(&worktree_a).unwrap();
+    let _cwd = TempCwd::enter(&worktree_a);
     let text = output_text_for_task(&store, "t-victim-output", true).unwrap();
-    std::env::set_current_dir(prev).unwrap();
 
     assert!(
         !text.contains("FOREIGN_REPORT_TASK_A_ONLY"),

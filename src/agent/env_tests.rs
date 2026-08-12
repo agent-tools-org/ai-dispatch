@@ -107,7 +107,7 @@ fn seed_branch_target_dir_prefers_base_over_root_artifact_entries() {
 }
 
 #[test]
-fn seed_branch_target_dir_skips_when_no_seed_source_exists() {
+fn seed_branch_target_dir_creates_empty_target_when_seed_is_skipped() {
     let clone_guard = super::super::cargo_target::CloneSeedGuard::regular_copy();
     let temp = tempfile::tempdir().unwrap();
     let root = temp.path().join("target");
@@ -123,6 +123,7 @@ fn seed_branch_target_dir_skips_when_no_seed_source_exists() {
                 .to_string(),
         }
     );
+    assert!(root.join("feat-shared-cache").is_dir());
     drop((target_dir_guard, clone_guard));
 }
 

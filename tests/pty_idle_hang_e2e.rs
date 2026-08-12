@@ -59,31 +59,27 @@ fn pty_unparseable_text_keeps_task_alive_past_idle_timeout() {
     }
     let aid_home = TempDir::new().unwrap();
     let script_dir = TempDir::new().unwrap();
-    // Fake `grok`: emits plain, aid-unparseable text lines, then a completion
-    // envelope. Grok's adapter never parses a line into an event, so only the
-    // raw-output liveness signal keeps the idle clock from reaping this run.
-    write_script(
+    // A streaming overlay emits short, aid-unparseable text lines, then a
+    // completion envelope. The 700ms gaps reach the monitor's 500ms timeout
+    // arm while staying below the two-second idle timeout.
+    let agent_path = write_script(
         script_dir.path(),
-        "grok",
+        "pty-live-agent",
         "#!/bin/sh\n\
          printf 'Starting the change...\\n'\n\
-         for i in 1 2 3 4 5 6 7 8; do\n\
-           printf 'Working through step %s...\\n' \"$i\"\n\
-           sleep 0.5\n\
+         i=1\n\
+         while [ \"$i\" -le 8 ]; do\n\
+           printf 'pulse\\n'\n\
+           sleep 0.7\n\
+           i=$((i + 1))\n\
          done\n\
          printf '{\"result\":\"done\"}\\n'\n",
     );
-    let path = format!(
-        "{}:{}",
-        script_dir.path().display(),
-        std::env::var("PATH").unwrap_or_default()
-    );
-    let mut cmd = aid_cmd_in(aid_home.path());
-    cmd.env("PATH", path);
+    write_streaming_overlay_agent(aid_home.path(), "ptylive", &agent_path);
 
-    run_ok(cmd.args([
+    run_ok(aid_cmd_in(aid_home.path()).args([
         "run",
-        "grok",
+        "ptylive",
         "implement the change",
         "--bg",
         "--id",
@@ -92,7 +88,7 @@ fn pty_unparseable_text_keeps_task_alive_past_idle_timeout() {
         "2",
     ]));
     // The run produces no parsed events, but its unparseable text must keep
-    // it alive well past the 2s idle window and complete on its own.
+    // it alive across multiple 2s idle windows and complete on its own.
     wait_for_status(aid_home.path(), "t-pty-live", "done", Duration::from_secs(20));
     assert!(
         !task_status(aid_home.path(), "t-pty-live")
@@ -104,7 +100,7 @@ fn pty_unparseable_text_keeps_task_alive_past_idle_timeout() {
     // the regression is caught here rather than silently.
     let events = event_details(aid_home.path(), "t-pty-live");
     assert!(
-        events.iter().all(|(_, detail, _)| !detail.contains("Working through step")),
+        events.iter().all(|(_, detail, _)| !detail.contains("pulse")),
         "plain text lines must never be recorded as parsed events: {events:?}"
     );
 }
@@ -166,6 +162,20 @@ fn write_custom_agent(aid_home: &Path, id: &str, command: &Path) {
         agents_dir.join(format!("{id}.toml")),
         format!(
             "[agent]\nid = \"{id}\"\ndisplay_name = \"{id}\"\ncommand = \"{}\"\ntrust_tier = \"local\"\nprompt_mode = \"arg\"\nstreaming = true\noutput_format = \"jsonl\"\n",
+            command.display()
+        ),
+    )
+    .unwrap();
+}
+
+fn write_streaming_overlay_agent(aid_home: &Path, id: &str, command: &Path) {
+    let agents_dir = aid_home.join("agents");
+    std::fs::create_dir_all(&agents_dir).unwrap();
+    std::fs::write(
+        agents_dir.join(format!("{id}.toml")),
+        format!(
+            "[agent]\nid = \"{id}\"\ndisplay_name = \"{id}\"\ncommand = \"{}\"\ntrust_tier = \"local\"\ndelegate_to = \"opencode\"\nforced_model = \"test-model\"\nbinary = \"{}\"\ninteractive_input = false\n",
+            command.display(),
             command.display()
         ),
     )

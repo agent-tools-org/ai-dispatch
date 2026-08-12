@@ -18,6 +18,7 @@ pub use show_output::{
 };
 #[allow(unused_imports)]
 pub use show_output::read_task_output;
+pub(crate) use show_output::owned_output_path;
 pub(crate) use show_output::{
     branch_base_ref, diff_stat, diff_text_branch, diff_text_file, extract_messages_from_log,
     is_non_output_line, parse_diff_stat, read_tail, worktree_diff, worktree_state_section,

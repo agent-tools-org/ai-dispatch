@@ -118,7 +118,7 @@ fn terminate(
     store.insert_event(&TaskEvent {
         task_id: TaskId(task_id.to_string()),
         timestamp: Local::now(),
-        event_kind: EventKind::Error,
+        event_kind: EventKind::Completion,
         detail: detail.to_string(),
         metadata: None,
     })?;

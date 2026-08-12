@@ -113,8 +113,8 @@ fn count_statuses(tasks: &[Task]) -> (usize, usize, usize) {
             TaskOutcome::Verified | TaskOutcome::Delivered => done += 1,
             TaskOutcome::InProgress if matches!(t.status, TaskStatus::Running | TaskStatus::AwaitingInput | TaskStatus::Stalled) => running += 1,
             TaskOutcome::InProgress => {}
-            TaskOutcome::Broken | TaskOutcome::Failed | TaskOutcome::Stopped => failed += 1,
-            TaskOutcome::Unverified(_) | TaskOutcome::Skipped => {}
+            TaskOutcome::Broken | TaskOutcome::Failed => failed += 1,
+            TaskOutcome::Unverified(_) | TaskOutcome::Skipped | TaskOutcome::Stopped => {}
         }
     }
     (done, running, failed)

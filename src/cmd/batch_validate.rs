@@ -146,15 +146,18 @@ pub(super) fn load_task_outcome(store: &Arc<Store>, task_id: &str) -> Result<Bat
     let Some(task) = store.get_task(task_id)? else {
         anyhow::bail!("batch task not found after dispatch: {task_id}");
     };
-    Ok(match task.outcome() {
+    Ok(batch_outcome(task.outcome()))
+}
+
+fn batch_outcome(outcome: TaskOutcome) -> BatchTaskOutcome {
+    match outcome {
         TaskOutcome::Verified | TaskOutcome::Delivered => BatchTaskOutcome::Done,
-        TaskOutcome::Skipped => BatchTaskOutcome::Skipped,
+        TaskOutcome::Skipped | TaskOutcome::Stopped => BatchTaskOutcome::Skipped,
         TaskOutcome::Unverified(_)
         | TaskOutcome::Broken
         | TaskOutcome::Failed
-        | TaskOutcome::Stopped
         | TaskOutcome::InProgress => BatchTaskOutcome::Failed,
-    })
+    }
 }
 fn validate_task_agents(tasks: &[batch::BatchTask]) -> Result<()> {
     for (task_idx, task) in tasks.iter().enumerate() {

@@ -122,3 +122,18 @@ fn board_counts_only_active_lifecycle_statuses_as_running() {
 
     assert!(output.contains("3 total | 0 done | 1 running | 0 failed"), "output: {output}");
 }
+
+#[test]
+fn board_does_not_count_stopped_tasks_as_failed() {
+    let temp = TempDir::new().unwrap();
+    let _guard = AidHomeGuard::set(temp.path());
+    let store = Store::open_memory().unwrap();
+    let mut stopped = timed_out_task();
+    stopped.status = TaskStatus::Stopped;
+    stopped.verify_status = VerifyStatus::Skipped;
+    stopped.verify = None;
+
+    let output = render_board(&[stopped], &store).unwrap();
+
+    assert!(output.contains("1 total | 0 done | 0 running | 0 failed"), "output: {output}");
+}

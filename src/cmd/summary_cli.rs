@@ -18,7 +18,7 @@ pub fn run(store: &Store, group_id: &str) -> Result<()> {
         .count();
     let failed = tasks
         .iter()
-        .filter(|task| matches!(task.outcome(), TaskOutcome::Broken | TaskOutcome::Failed | TaskOutcome::Stopped))
+        .filter(|task| matches!(task.outcome(), TaskOutcome::Broken | TaskOutcome::Failed))
         .count();
 
     print_header(&workgroup, total_tasks(&tasks), done, failed);
@@ -93,7 +93,7 @@ fn status_symbol(status: TaskStatus) -> &'static str {
     match status {
         TaskStatus::Done | TaskStatus::Merged => "✓",
         TaskStatus::Failed => "✗",
-        TaskStatus::Stopped => "✗",
+        TaskStatus::Stopped => "•",
         _ => "•",
     }
 }
@@ -103,8 +103,10 @@ fn format_result_attrs(task: &Task) -> String {
     if let Some(duration) = task.duration_ms {
         parts.push(format_duration(duration));
     }
-    if matches!(task.outcome(), TaskOutcome::Broken | TaskOutcome::Failed | TaskOutcome::Stopped) {
+    if matches!(task.outcome(), TaskOutcome::Broken | TaskOutcome::Failed) {
         parts.push("FAILED".to_string());
+    } else if task.status == TaskStatus::Stopped {
+        parts.push("STOPPED".to_string());
     } else if task.outcome().is_success() {
         if let Some(tokens) = task.tokens {
             parts.push(format!("{} tokens", format_tokens(tokens)));
@@ -159,5 +161,16 @@ fn format_cost_label(cost: Option<f64>) -> String {
     match cost {
         Some(c) if c > 0.0 => format!("${:.2}", c),
         _ => "free".to_string(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::status_symbol;
+    use crate::types::TaskStatus;
+
+    #[test]
+    fn stopped_status_uses_a_neutral_symbol() {
+        assert_eq!(status_symbol(TaskStatus::Stopped), "•");
     }
 }

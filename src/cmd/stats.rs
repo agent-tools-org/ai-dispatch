@@ -39,7 +39,7 @@ fn collect(store: &Store, window: UsageWindow, agent: Option<&str>, now: DateTim
         row.1 += 1;
         let outcome = task.outcome();
         row.2 += usize::from(outcome.is_success());
-        row.3 += usize::from(!matches!(outcome, TaskOutcome::InProgress));
+        row.3 += usize::from(!matches!(outcome, TaskOutcome::InProgress | TaskOutcome::Stopped));
         if let Some(ms) = task.duration_ms { row.4 += ms; row.5 += 1; }
         add_known_cost(&mut row.6, cost_usd);
         let model = task.attributed_model().unwrap_or("unknown").to_string();

@@ -208,7 +208,7 @@ fn colored_status(status: TaskStatus) -> String {
         TaskStatus::Done => color("Done", ANSI_GREEN),
         TaskStatus::Merged => color("Merged", ANSI_GREEN),
         TaskStatus::Failed => color("Failed", ANSI_RED),
-        TaskStatus::Stopped => color("Stopped", ANSI_RED),
+        TaskStatus::Stopped => color("Stopped", ANSI_YELLOW),
         TaskStatus::Running => color("Running", ANSI_YELLOW),
         TaskStatus::AwaitingInput => color("Await", ANSI_BLUE),
         TaskStatus::Stalled => color("Stalled", ANSI_RED),
@@ -287,7 +287,7 @@ fn print_summary(tasks: &[Task], label: &str) {
         .count();
     let failed = tasks
         .iter()
-        .filter(|t| matches!(t.outcome(), TaskOutcome::Broken | TaskOutcome::Failed | TaskOutcome::Stopped))
+        .filter(|t| matches!(t.outcome(), TaskOutcome::Broken | TaskOutcome::Failed))
         .count();
     let skipped = tasks
         .iter()

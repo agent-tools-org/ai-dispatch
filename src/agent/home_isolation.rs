@@ -97,7 +97,7 @@ impl IsolatedHomeGuard {
 
     pub(crate) fn apply_toolchain_env(&self, cmd: &mut Command) {
         cmd.env("CARGO_HOME", self.real_home.join(".cargo"));
-        // NEGATIVE CONTROL
+        cmd.env("RUSTUP_HOME", self.real_home.join(".rustup"));
     }
 
     fn build_isolated_home(real_home: Option<&Path>, isolated_path: &Path) -> anyhow::Result<()> {

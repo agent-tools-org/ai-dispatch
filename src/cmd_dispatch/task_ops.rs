@@ -10,15 +10,31 @@ use std::sync::Arc;
 pub(super) async fn retry(
     store: Arc<store::Store>,
     task_id: String,
-    feedback: String,
+    feedback: Option<String>,
+    feedback_file: Option<String>,
     agent: Option<String>,
+    model: Option<String>,
+    idle_timeout_secs: Option<u64>,
     dir: Option<String>,
     reset: bool,
     bg: bool,
 ) -> Result<()> {
-    cmd::retry::run(store, cmd::retry::RetryArgs { task_id, feedback, agent, dir, reset, bg })
-        .await
-        .map(|_| ())
+    cmd::retry::run(
+        store,
+        cmd::retry::RetryArgs {
+            task_id,
+            feedback,
+            feedback_file,
+            agent,
+            model,
+            idle_timeout_secs,
+            dir,
+            reset,
+            bg,
+        },
+    )
+    .await
+    .map(|_| ())
 }
 
 pub(super) fn merge(

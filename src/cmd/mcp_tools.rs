@@ -190,8 +190,11 @@ async fn retry_tool(store: Arc<Store>, arguments: Value) -> Result<Value> {
         store,
         RetryArgs {
             task_id: args.task_id,
-            feedback: args.feedback,
+            feedback: Some(args.feedback),
+            feedback_file: None,
             agent: args.agent,
+            model: None,
+            idle_timeout_secs: None,
             dir: None,
             reset: false,
             bg: false,

@@ -11,8 +11,11 @@ use crate::types::TaskId;
 
 pub struct RetryArgs {
     pub task_id: String,
-    pub feedback: String,
+    pub feedback: Option<String>,
+    pub feedback_file: Option<String>,
     pub agent: Option<String>,
+    pub model: Option<String>,
+    pub idle_timeout_secs: Option<u64>,
     pub dir: Option<String>,
     pub reset: bool,
     pub bg: bool,
@@ -71,27 +74,27 @@ fn retry_task_to_run_args(
     args: RetryArgs,
     announce: bool,
 ) -> Result<RunArgs> {
+    let feedback = resolve_feedback(args.feedback.as_deref(), args.feedback_file.as_deref())?;
     let prompt = format!(
         "[Previous attempt feedback]\n{feedback}\n\n[Original task]\n{prompt}",
-        feedback = args.feedback,
         prompt = task.prompt,
     );
     let worktree = reusable_worktree(task);
     let (dir, worktree_arg) = if args.dir.is_some() {
-        (args.dir, None) // --dir override takes precedence
+        (args.dir.clone(), None) // --dir override takes precedence
     } else {
         resolve_retry_target(task, worktree, &args.task_id, args.reset)?
     };
-
     if announce {
-        println!(
-            "Retrying {} with feedback: {}",
-            task.id,
-            truncate(&args.feedback, 60)
-        );
+        println!("Retrying {} with feedback: {}", task.id, truncate(&feedback, 60));
     }
+    let mut run_args = load_retry_run_args(store, task)?;
+    apply_retry_route(&mut run_args, task, &args);
+    finish_retry_run_args(&mut run_args, task, args, prompt, dir, worktree_arg, announce)?;
+    Ok(run_args)
+}
 
-    let agent_name = args.agent.unwrap_or_else(|| task.agent_display_name().to_string());
+fn load_retry_run_args(store: &Store, task: &crate::types::Task) -> Result<RunArgs> {
     let mut run_args = RunArgs::saved_for_task(store, task.id.as_str())?.unwrap_or_else(|| {
         RunArgs {
             repo: task.repo_path.clone(),
@@ -106,27 +109,65 @@ fn retry_task_to_run_args(
         }
     });
     run_args.repo = run_args.repo.or_else(|| task.repo_path.clone());
-    // Anchor the current route so switch_agent can compare "task's agent" to
-    // "next agent" and drop route-owned fields (model + session_id) when they
-    // differ. A same-agent retry keeps both; a different-agent retry drops both.
+    Ok(run_args)
+}
+
+// Anchor the current route so switch_agent can compare "task's agent" to
+// "next agent" and drop route-owned fields (model + session_id) when they
+// differ. A same-agent retry keeps both; a different-agent retry drops both.
+// Explicit --model / --idle-timeout then override; unspecified inherits.
+fn apply_retry_route(run_args: &mut RunArgs, task: &crate::types::Task, args: &RetryArgs) {
+    let agent_name = args
+        .agent
+        .clone()
+        .unwrap_or_else(|| task.agent_display_name().to_string());
     run_args.agent_name = task.agent_display_name().to_string();
     run_args.session_id = if task.agent.supports_session_resume() {
         task.agent_session_id.clone()
     } else {
         None
     };
-    switch_agent(&mut run_args, agent_name);
+    switch_agent(run_args, agent_name);
+    if let Some(model) = args.model.clone() {
+        run_args.model = Some(model);
+    }
+    if let Some(secs) = args.idle_timeout_secs {
+        run_args.idle_timeout_secs = Some(secs);
+    }
+}
+
+fn finish_retry_run_args(
+    run_args: &mut RunArgs,
+    task: &crate::types::Task,
+    args: RetryArgs,
+    prompt: String,
+    dir: Option<String>,
+    worktree_arg: Option<String>,
+    announce: bool,
+) -> Result<()> {
     run_args.prompt = prompt;
     if let Some(dir) = dir {
         run_args.dir = Some(dir);
     }
     run_args.worktree = worktree_arg;
-    resume_pruned_worktree_at_tip(task, &mut run_args)?;
+    resume_pruned_worktree_at_tip(task, run_args)?;
     run_args.announce = announce;
     run_args.parent_task_id = Some(task.id.as_str().to_string());
     run_args.background = args.bg;
     run_args.existing_task_id = None;
-    Ok(run_args)
+    Ok(())
+}
+
+fn resolve_feedback(feedback: Option<&str>, feedback_file: Option<&str>) -> Result<String> {
+    match (feedback, feedback_file) {
+        (Some(_), Some(_)) => {
+            anyhow::bail!("Cannot use both --feedback and --feedback-file")
+        }
+        (Some(text), None) => Ok(text.to_string()),
+        (None, Some(path)) => std::fs::read_to_string(path)
+            .with_context(|| format!("Failed to read feedback file: {path}")),
+        (None, None) => anyhow::bail!("Either --feedback or --feedback-file is required"),
+    }
 }
 
 fn resume_pruned_worktree_at_tip(task: &crate::types::Task, run_args: &mut RunArgs) -> Result<()> {
@@ -243,3 +284,7 @@ mod saved_args_tests;
 #[cfg(test)]
 #[path = "retry_pruned_resume_tests.rs"]
 mod pruned_resume_tests;
+
+#[cfg(test)]
+#[path = "retry_override_tests.rs"]
+mod override_tests;

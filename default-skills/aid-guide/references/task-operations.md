@@ -142,9 +142,11 @@ Use exports for sharing, not as a substitute for the stored task record.
 
 `aid stats` reports success from `TaskOutcome`, so `Verified` and `Delivered`
 are the only successes and a verification failure is a failure even when the
-task was delivered. `aid stats` and `aid cost` show `unknown` when a task's
-model has no known pricing. Unknown costs are omitted from totals rather than
-recorded as `$0.00`.
+task was delivered. A `Done` task with `hollow_output` or
+`missing_final_delivery` is judged not successful, so empty agent runs do not
+inflate success rates used by `aid advise`. `aid stats` and `aid cost` show
+`unknown` when a task's model has no known pricing. Unknown costs are omitted
+from totals rather than recorded as `$0.00`.
 
 ## Machine-facing completion data
 

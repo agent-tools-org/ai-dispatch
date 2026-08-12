@@ -82,6 +82,22 @@ fn agent_success_rates_excludes_unverified_from_both_rate_and_sample() {
 }
 
 #[test]
+fn agent_success_rates_counts_hollow_output_done_as_failure() {
+    let store = Store::open_memory().unwrap();
+    for i in 0..4 {
+        let mut task = make_task(&format!("t-ok-{i:04}"), AgentKind::Codex, TaskStatus::Done);
+        task.verify_status = VerifyStatus::Passed;
+        store.insert_task(&task).unwrap();
+    }
+    let mut hollow = make_task("t-hollow", AgentKind::Codex, TaskStatus::Done);
+    hollow.delivery_assessment = Some(crate::types::DeliveryAssessment::HollowOutput);
+    store.insert_task(&hollow).unwrap();
+
+    let rates = store.agent_success_rates().unwrap();
+    assert_eq!(rates, vec![(AgentKind::Codex, 0.8, 5)]);
+}
+
+#[test]
 fn agent_success_rates_groups_by_agent() {
     let store = Store::open_memory().unwrap();
     for i in 0..5 {

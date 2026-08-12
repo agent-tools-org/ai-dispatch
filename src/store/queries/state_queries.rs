@@ -7,7 +7,9 @@ use rusqlite::{params, OptionalExtension};
 
 use super::super::schema::row_to_task;
 use super::super::Store;
-use crate::types::{verify_required, Task, TaskOutcome, TaskStatus, VerifyStatus};
+use crate::types::{
+    verify_required, DeliveryAssessment, Task, TaskOutcome, TaskStatus, VerifyStatus,
+};
 
 impl Store {
     pub fn recent_tasks_for_project(&self, repo_path: &str, limit: usize) -> Result<Vec<Task>> {
@@ -35,7 +37,7 @@ impl Store {
     pub fn project_agent_success_rates(&self, repo_path: &str) -> Result<Vec<(String, f64, usize)>> {
         let conn = self.db();
         let mut stmt = conn.prepare(
-            "SELECT agent, status, verify_status, verify
+            "SELECT agent, status, verify_status, verify, delivery_assessment
              FROM tasks
              WHERE repo_path = ?1 AND status IN ('done', 'merged', 'failed')",
         )?;
@@ -44,20 +46,25 @@ impl Store {
             let status: String = row.get(1)?;
             let verify_status: String = row.get(2)?;
             let verify: Option<String> = row.get(3)?;
-            Ok((agent, status, verify_status, verify))
+            let delivery: Option<String> = row.get(4)?;
+            Ok((agent, status, verify_status, verify, delivery))
         })?;
         let mut totals = std::collections::HashMap::<String, (usize, usize)>::new();
         for row in rows {
-            let (agent, status, verify_status, verify) = row?;
+            let (agent, status, verify_status, verify, delivery) = row?;
             let status = TaskStatus::parse_str(&status)
                 .ok_or_else(|| anyhow!("unknown task status in project metrics: {status}"))?;
             let verify_status = VerifyStatus::parse_str(&verify_status)
                 .ok_or_else(|| anyhow!("unknown verify status in project metrics: {verify_status}"))?;
+            let delivery = delivery
+                .as_deref()
+                .and_then(DeliveryAssessment::parse_str);
             let outcome = TaskOutcome::derive(
                 status,
                 verify_status,
                 verify_required(verify.as_deref()),
-            );
+            )
+            .with_delivery_assessment(delivery);
             if outcome.is_unverified() {
                 continue;
             }

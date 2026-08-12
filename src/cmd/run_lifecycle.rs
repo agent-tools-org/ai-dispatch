@@ -300,11 +300,7 @@ pub(crate) fn merge_hint_for_task(task: &Task) -> Option<String> {
 }
 
 fn task_outcome(task: &Task) -> TaskOutcome {
-    TaskOutcome::derive(
-        task.status,
-        task.verify_status,
-        verify_required(task.verify.as_deref()),
-    )
+    task.outcome()
 }
 
 pub(crate) fn inherit_cascade_target(cascade_args: &mut RunArgs, task: &Task) -> Result<()> {

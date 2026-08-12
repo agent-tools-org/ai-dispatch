@@ -1,8 +1,8 @@
 // Derived task judgment from lifecycle and verification facts.
 // Exports: TaskOutcome, UnverifiedReason, verify_required.
-// Deps: TaskStatus and VerifyStatus.
+// Deps: TaskStatus, VerifyStatus, and DeliveryAssessment.
 
-use super::{TaskStatus, VerifyStatus};
+use super::{DeliveryAssessment, TaskStatus, VerifyStatus};
 use serde::Serialize;
 
 #[cfg(test)]
@@ -133,6 +133,27 @@ impl TaskOutcome {
                 VerifyStatus::Skipped | VerifyStatus::Pending,
                 false,
             ) => Self::Delivered,
+        }
+    }
+
+    /// Fold a persisted delivery assessment into lifecycle×verify judgment.
+    ///
+    /// `HollowOutput` already means nothing was observed on any channel and
+    /// the worktree had no changes — not merely empty stdout. `MissingFinalDelivery`
+    /// means the agent finished without a final deliverable. Either case is a
+    /// non-delivery and must not count as success for stats/advise, even when
+    /// the process exited 0 and status is still `Done`.
+    ///
+    /// `EmptyDiff` alone is not demoted: a read-only audit can write a report
+    /// (or a commit-only task can leave a clean tree) without code changes.
+    pub fn with_delivery_assessment(self, delivery: Option<DeliveryAssessment>) -> Self {
+        if !self.is_success() {
+            return self;
+        }
+        match delivery {
+            Some(DeliveryAssessment::HollowOutput)
+            | Some(DeliveryAssessment::MissingFinalDelivery) => Self::Failed,
+            Some(DeliveryAssessment::EmptyDiff) | None => self,
         }
     }
 

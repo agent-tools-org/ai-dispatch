@@ -155,18 +155,14 @@ fn on_done_command_contains_gitbutler_commit_shell_command() {
 fn task_worktree_integration_plan_skips_hooks_and_emits_hint_without_main_repo_project() {
     let _guard = env_lock();
     let temp = tempfile::tempdir().unwrap();
-    unsafe {
-        std::env::set_var("AID_GITBUTLER_TEST_PRESENT", "1");
-        std::env::set_var("AID_GITBUTLER_TEST_PROJECT_PRESENT", "0");
-    }
+    crate::gitbutler::set_test_but_available(Some(true));
+    crate::gitbutler::set_test_project_present(Some(false));
 
     let first = task_worktree_integration_plan(temp.path(), temp.path(), Mode::Auto, "codex");
     let second = task_worktree_integration_plan(temp.path(), temp.path(), Mode::Auto, "claude");
 
-    unsafe {
-        std::env::remove_var("AID_GITBUTLER_TEST_PRESENT");
-        std::env::remove_var("AID_GITBUTLER_TEST_PROJECT_PRESENT");
-    }
+    crate::gitbutler::set_test_but_available(None);
+    crate::gitbutler::set_test_project_present(None);
 
     assert_eq!(first.on_done_command, None);
     assert!(!first.install_claude_hooks);
@@ -180,18 +176,14 @@ fn task_worktree_integration_plan_skips_hooks_and_emits_hint_without_main_repo_p
 fn task_worktree_integration_plan_preserves_hook_modes_when_main_repo_has_project() {
     let _guard = env_lock();
     let temp = tempfile::tempdir().unwrap();
-    unsafe {
-        std::env::set_var("AID_GITBUTLER_TEST_PRESENT", "1");
-        std::env::set_var("AID_GITBUTLER_TEST_PROJECT_PRESENT", "1");
-    }
+    crate::gitbutler::set_test_but_available(Some(true));
+    crate::gitbutler::set_test_project_present(Some(true));
 
     let claude = task_worktree_integration_plan(temp.path(), temp.path(), Mode::Auto, "claude");
     let codex = task_worktree_integration_plan(temp.path(), temp.path(), Mode::Auto, "codex");
 
-    unsafe {
-        std::env::remove_var("AID_GITBUTLER_TEST_PRESENT");
-        std::env::remove_var("AID_GITBUTLER_TEST_PROJECT_PRESENT");
-    }
+    crate::gitbutler::set_test_but_available(None);
+    crate::gitbutler::set_test_project_present(None);
 
     assert!(claude.install_claude_hooks);
     assert_eq!(claude.on_done_command, None);

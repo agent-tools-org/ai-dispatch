@@ -102,12 +102,19 @@ pub fn apply_rust_build_cache_env(
     project_dir: Option<&str>,
     worktree_branch: Option<&str>,
 ) {
-    if !is_rust_project(project_dir) {
-        return;
-    }
-    if let Some(target_dir) = target_dir_for_worktree(worktree_branch) {
+    if let Some(target_dir) = rust_build_cache_target_dir(project_dir, worktree_branch) {
         apply_cargo_target_env(cmd, Some(target_dir.as_str()));
     }
+}
+
+pub fn rust_build_cache_target_dir(
+    project_dir: Option<&str>,
+    worktree_branch: Option<&str>,
+) -> Option<String> {
+    if !is_rust_project(project_dir) {
+        return None;
+    }
+    target_dir_for_worktree(worktree_branch)
 }
 
 pub fn apply_cargo_target_env(cmd: &mut Command, cargo_target_dir: Option<&str>) {

@@ -140,6 +140,7 @@ impl CodexAgent {
         prompt: &str,
         opts: &RunOpts,
         durable_codex_home: bool,
+        cargo_target_dir: Option<&Path>,
     ) -> Result<Command> {
         let effective_prompt = if opts.read_only {
             read_only_prompt(prompt, opts)
@@ -185,7 +186,10 @@ impl CodexAgent {
                 bail!("codex working directory does not exist: {}", dir);
             }
             if let Some(gitdir) = resolve_worktree_gitdir(dir_path) {
-                if let Some(config) = writable_roots_config(&gitdir) {
+                if let Some(config) = writable_roots_config(
+                    &gitdir,
+                    cargo_target_dir,
+                ) {
                     cmd.args(["-c", &config]);
                 } else {
                     eprintln!(
@@ -221,7 +225,7 @@ impl super::Agent for CodexAgent {
     }
 
     fn build_command(&self, prompt: &str, opts: &RunOpts) -> Result<Command> {
-        self.build_codex_command(prompt, opts, true)
+        self.build_codex_command(prompt, opts, true, None)
     }
 
     fn validate_cli(&self) -> Result<()> {
@@ -238,7 +242,12 @@ impl super::Agent for CodexAgent {
         opts: &RunOpts,
         context: CommandContext,
     ) -> Result<Command> {
-        self.build_codex_command(prompt, opts, context.durable_codex_home)
+        self.build_codex_command(
+            prompt,
+            opts,
+            context.durable_codex_home,
+            context.cargo_target_dir.as_deref().map(Path::new),
+        )
     }
 
     fn parse_event(&self, task_id: &TaskId, line: &str) -> Option<TaskEvent> {
@@ -286,12 +295,15 @@ impl super::Agent for CodexAgent {
     }
 }
 
-fn writable_roots_config(path: &Path) -> Option<String> {
+fn writable_roots_config(path: &Path, cargo_target_dir: Option<&Path>) -> Option<String> {
     let mut roots = vec![toml::Value::String(path.to_str()?.to_string())];
     if let Some(commondir) =
         read_commondir(path).and_then(|path| path.to_str().map(ToOwned::to_owned))
     {
         roots.push(toml::Value::String(commondir));
+    }
+    if let Some(target_dir) = cargo_target_dir.and_then(|path| path.to_str()) {
+        roots.push(toml::Value::String(target_dir.to_string()));
     }
     let value = toml::Value::Array(roots);
     Some(format!("sandbox_workspace_write.writable_roots={value}"))
@@ -584,6 +596,10 @@ fn extract_noop_reason(line: &str) -> String {
 }
 
 #[cfg(test)]
+#[path = "codex_writable_roots_tests.rs"]
+mod writable_roots_tests;
+
+#[cfg(test)]
 mod tests {
     use super::{
         parse_semver, resume_fallback_event,
@@ -702,6 +718,7 @@ mod tests {
                 &opts,
                 CommandContext {
                     durable_codex_home: false,
+                    cargo_target_dir: None,
                 },
             )
             .unwrap();

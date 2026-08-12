@@ -212,6 +212,15 @@ fn apply_rust_build_cache_env_sets_target_only() {
 }
 
 #[test]
+fn rust_build_cache_target_dir_requires_a_rust_project() {
+    let temp = tempfile::tempdir().unwrap();
+    let target = temp.path().join("target");
+    let _target_dir = CargoTargetDirGuard::set(&target);
+
+    assert_eq!(rust_build_cache_target_dir(Some(temp.path().to_str().unwrap()), None), None);
+}
+
+#[test]
 fn apply_codex_home_env_uses_durable_real_home() {
     let mut cmd = Command::new("echo");
 

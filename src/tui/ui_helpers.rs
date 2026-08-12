@@ -61,7 +61,7 @@ pub fn task_header(task: &Task, events: &[crate::types::TaskEvent]) -> Paragraph
         TaskStatus::AwaitingInput => Color::Magenta,
         TaskStatus::Stalled => Color::LightRed,
         TaskStatus::Failed => Color::Red,
-        TaskStatus::Stopped => Color::Red,
+        TaskStatus::Stopped => Color::Yellow,
         _ => Color::Indexed(250),
     };
     // Detail has room for the full triple; attribution rides on the model segment.
@@ -102,7 +102,7 @@ pub fn task_header(task: &Task, events: &[crate::types::TaskEvent]) -> Paragraph
             Style::default().fg(Color::Magenta),
         )));
     }
-    if matches!(task.status, TaskStatus::Failed | TaskStatus::Stopped)
+    if task.status == TaskStatus::Failed
         && let Some(reason) = last_error_detail(events)
     {
         lines.push(Line::from(Span::styled(
@@ -211,8 +211,8 @@ pub fn task_progress(app: &App, task: &Task) -> String {
     if matches!(task.status, TaskStatus::Running | TaskStatus::AwaitingInput) {
         return truncate(&app.task_activity(task), 30);
     }
-    // For failed/stopped tasks, show last error reason instead of milestone
-    if matches!(task.status, TaskStatus::Failed | TaskStatus::Stopped)
+    // For failed tasks, show last error reason instead of milestone
+    if task.status == TaskStatus::Failed
         && let Some(reason) = app.get_failure_reason(task.id.as_str())
     {
         return truncate(&reason, 30);
@@ -244,7 +244,7 @@ pub fn status_style(status: TaskStatus) -> Style {
         TaskStatus::AwaitingInput => Style::default().fg(Color::Magenta).add_modifier(Modifier::BOLD),
         TaskStatus::Stalled => Style::default().fg(Color::LightRed).add_modifier(Modifier::BOLD),
         TaskStatus::Failed => Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
-        TaskStatus::Stopped => Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
+        TaskStatus::Stopped => Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD),
         TaskStatus::Pending => Style::default().fg(Color::Indexed(250)),
         TaskStatus::Waiting => Style::default().fg(Color::Indexed(240)),
         TaskStatus::Skipped => Style::default().fg(Color::Blue),

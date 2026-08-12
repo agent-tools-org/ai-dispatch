@@ -726,6 +726,23 @@ mod tests {
     }
 
     #[test]
+    fn stopped_tasks_are_excluded_from_usage_success_rate() {
+        let done = make_task("t-done", AgentKind::Codex, 1_000, 0.10);
+        let mut stopped = make_task("t-stopped", AgentKind::Codex, 1_000, 0.10);
+        stopped.status = TaskStatus::Stopped;
+
+        let snapshot = collect_usage_from_tasks(&[done, stopped], &AidConfig::default()).unwrap();
+        let row = snapshot
+            .agent_rows
+            .iter()
+            .find(|row| row.name == AgentKind::Codex.as_str())
+            .unwrap();
+
+        assert_eq!(row.tasks, 2);
+        assert_eq!(row.success_rate, 100.0);
+    }
+
+    #[test]
     fn usage_window_parses_last_days() {
         let window = UsageWindow::parse("7d").unwrap();
         let now = Local::now();

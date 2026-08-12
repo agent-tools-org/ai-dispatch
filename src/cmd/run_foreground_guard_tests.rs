@@ -105,7 +105,7 @@ fn foreground_spec_guard_clears_spec_on_drop() {
 }
 
 #[test]
-fn interrupt_cleanup_records_failed_kills_agent_and_clears_spec() {
+fn interrupt_cleanup_records_stopped_kills_agent_and_clears_spec() {
     let temp = tempfile::tempdir().expect("tempdir");
     let _aid_home = paths::AidHomeGuard::set(temp.path());
     paths::ensure_dirs().expect("ensure dirs");
@@ -122,10 +122,16 @@ fn interrupt_cleanup_records_failed_kills_agent_and_clears_spec() {
     assert!(!paths::job_path("t-fg-int").exists());
     assert_eq!(
         store.get_task("t-fg-int").expect("get task").expect("task").status,
-        TaskStatus::Failed
+        TaskStatus::Stopped
     );
     let events = store.get_events("t-fg-int").expect("events");
-    assert!(events.iter().any(|event| event.detail == "interrupted by signal SIGTERM"));
+    assert!(events.iter().any(|event| {
+        event.detail == "interrupted by signal SIGTERM"
+            && event.event_kind == crate::types::EventKind::Completion
+    }));
+    let log = std::fs::read_to_string(paths::log_path("t-fg-int")).expect("read log");
+    assert!(log.contains("AID TASK t-fg-int STOPPED"));
+    assert!(!log.contains("AID TASK t-fg-int FAILED"));
 }
 
 #[tokio::test]
@@ -162,6 +168,6 @@ async fn interrupt_cleanup_waits_for_late_pty_pid_before_clearing_spec() {
     assert!(!paths::job_path("t-fg-early-int").exists());
     assert_eq!(
         store.get_task("t-fg-early-int").expect("get task").expect("task").status,
-        TaskStatus::Failed
+        TaskStatus::Stopped
     );
 }

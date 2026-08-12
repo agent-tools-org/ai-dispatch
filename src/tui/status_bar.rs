@@ -74,7 +74,7 @@ fn count_tasks(tasks: &[Task]) -> TaskCounts {
         ) {
             counts.running += 1;
         }
-        if matches!(task.status, TaskStatus::Failed | TaskStatus::Stopped) {
+        if task.status == TaskStatus::Failed {
             counts.failed += 1;
         }
     }
@@ -242,7 +242,7 @@ mod tests {
             TaskCounts {
                 total: 5,
                 running: 2,
-                failed: 2,
+                failed: 1,
             }
         );
     }

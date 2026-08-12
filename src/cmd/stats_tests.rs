@@ -70,6 +70,22 @@ fn running_outcomes_are_not_in_the_success_denominator() {
 }
 
 #[test]
+fn stopped_outcomes_are_excluded_from_success_rate_and_failures() {
+    let store = Store::open_memory().unwrap();
+    for (id, status) in [("t-done", TaskStatus::Done), ("t-stopped", TaskStatus::Stopped)] {
+        store
+            .insert_task(&task(id, AgentKind::Codex, status, 1, "gpt-5.4", Some(1.0), Some(1_000), 1_000))
+            .unwrap();
+    }
+
+    let stats = collect(&store, UsageWindow::Days(7), None, Local::now()).unwrap();
+
+    assert_eq!(stats.agent_rows[0].tasks, 2);
+    assert_eq!(stats.agent_rows[0].success_rate, 100.0);
+    assert!(stats.failure_rows.is_empty());
+}
+
+#[test]
 fn render_output_shows_friendly_message_when_no_tasks_match() {
     let stats = StatsSnapshot { agent_rows: Vec::new(), failure_rows: Vec::new(), model_rows: Vec::new(), declared_rows: Vec::new(), activity_by_day: Vec::new(), activity_by_hour: Vec::new(), top_sessions: Vec::new(), total_cost: None, total_tokens: 0, total_tasks: 0 };
 

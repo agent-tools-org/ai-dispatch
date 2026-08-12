@@ -93,9 +93,12 @@ impl RunExitStatus {
                 "[STATUS=UNVERIFIED] [aid] {} completed but verification was inconclusive ({reason:?}) in {duration} (exit 1)",
                 self.task_id
             ),
+            TaskOutcome::Stopped => format!(
+                "[STATUS=STOPPED] [aid] {} stopped in {duration} (exit 1)",
+                self.task_id
+            ),
             _ => {
-                let marker = if matches!(self.outcome, TaskOutcome::Stopped) { "stopped" } else { "failed" };
-                format!("[STATUS=FAILED] [aid] {} {marker} in {duration} (exit 1)", self.task_id)
+                format!("[STATUS=FAILED] [aid] {} failed in {duration} (exit 1)", self.task_id)
             }
         };
         if matches!(self.outcome, TaskOutcome::InProgress | TaskOutcome::Skipped) {

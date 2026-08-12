@@ -14,15 +14,20 @@ pub async fn fire_task_webhooks(store: &Store, task_id: &str) {
         Ok(None) => return,
         Err(err) => return aid_error!("[aid] failed to load task {task_id} for webhooks: {err}"),
     };
-    let status = match task.status {
-        TaskStatus::Done | TaskStatus::Merged => "done",
-        TaskStatus::Failed => "failed",
-        TaskStatus::Stopped => "failed",
-        _ => return,
+    let Some(status) = webhook_status(task.status) else {
+        return;
     };
     match crate::config::load_config() {
         Ok(config) => fire_webhooks(&config, &task, status).await,
         Err(err) => aid_error!("[aid] failed to load config for webhooks: {err}"),
+    }
+}
+
+fn webhook_status(status: TaskStatus) -> Option<&'static str> {
+    match status {
+        TaskStatus::Done | TaskStatus::Merged => Some("done"),
+        TaskStatus::Failed => Some("failed"),
+        _ => return None,
     }
 }
 
@@ -87,7 +92,7 @@ fn webhook_payload(task: &Task, status: &str) -> serde_json::Value {
 
 #[cfg(test)]
 mod tests {
-    use super::webhook_payload;
+    use super::{webhook_payload, webhook_status};
     use crate::types::{AgentKind, Task, TaskId, TaskStatus, VerifyStatus};
     use chrono::Local;
 
@@ -139,5 +144,11 @@ mod tests {
         assert_eq!(payload["status"], "done");
         assert_eq!(payload["outcome"], "unverified");
         assert_eq!(payload["verify_status"], "timed_out");
+    }
+
+    #[test]
+    fn stopped_tasks_do_not_route_to_failure_webhooks() {
+        assert_eq!(webhook_status(TaskStatus::Stopped), None);
+        assert_eq!(webhook_status(TaskStatus::Failed), Some("failed"));
     }
 }

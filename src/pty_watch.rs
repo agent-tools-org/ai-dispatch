@@ -773,6 +773,16 @@ pub(crate) fn append_failed_terminal_sentinel(
     append_terminal_sentinel_line(&crate::paths::transcript_path(task_id.as_str()), &sentinel);
 }
 
+pub(crate) fn append_stopped_terminal_sentinel(
+    task_id: &TaskId,
+    log_path: &std::path::Path,
+    reason: &str,
+) {
+    let sentinel = format!("\n=== AID TASK {} STOPPED ({}) ===\n", task_id, reason);
+    append_terminal_sentinel_line(log_path, &sentinel);
+    append_terminal_sentinel_line(&crate::paths::transcript_path(task_id.as_str()), &sentinel);
+}
+
 fn append_terminal_sentinel_line(log_path: &std::path::Path, sentinel: &str) {
     let Ok(mut file) = std::fs::OpenOptions::new().create(true).append(true).open(log_path) else {
         return;

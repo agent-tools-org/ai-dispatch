@@ -3,22 +3,16 @@
 // Deps: tui::stats and crate task types.
 
 use super::*;
-use crate::types::{AgentKind, Task, TaskId, TaskStatus, VerifyStatus};
+use crate::store::TaskStatsRow;
 use chrono::{DateTime, Local, TimeZone};
 
-fn task(id: &str, created: &str, completed: Option<&str>, repo: Option<&str>, tokens: Option<i64>) -> Task {
-    Task {
-        id: TaskId(id.to_string()), agent: AgentKind::Codex, custom_agent_name: None,
-        prompt: String::new(), resolved_prompt: None, category: None, status: TaskStatus::Done,
-        parent_task_id: None, workgroup_id: None, caller_kind: None, caller_session_id: None,
-        agent_session_id: None, repo_path: repo.map(str::to_string), worktree_path: None,
-        worktree_branch: None, final_head_sha: None, final_branch: None, start_sha: None,
-        log_path: None, output_path: None, tokens, prompt_tokens: None, duration_ms: None,
-        requested_model: None, observed_model: None, attribution_source: None, cost_usd: None,
-        exit_code: Some(0), created_at: at(created), completed_at: completed.map(at),
-        verify: None, verify_status: VerifyStatus::Skipped, pending_reason: None,
-        read_only: false, budget: false, audit_verdict: None, audit_report_path: None,
-        delivery_assessment: None,
+fn task(id: &str, created: &str, completed: Option<&str>, repo: Option<&str>, tokens: Option<i64>) -> TaskStatsRow {
+    TaskStatsRow {
+        id: id.to_string(),
+        created_at: at(created),
+        completed_at: completed.map(at),
+        repo_path: repo.map(str::to_string),
+        tokens,
     }
 }
 

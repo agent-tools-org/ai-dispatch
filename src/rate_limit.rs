@@ -73,7 +73,8 @@ pub fn mark_group_rate_limited(
     group: &str,
     message: &str,
 ) {
-    write_marker(&group_marker_path(agent, custom_name, group), message);
+    let provider = (*agent == AgentKind::OpenCode).then_some(group);
+    write_marker(&group_marker_path(agent, custom_name, group), message, provider);
 }
 
 pub fn is_group_rate_limited(agent: &AgentKind, custom_name: Option<&str>, group: &str) -> bool {
@@ -85,7 +86,7 @@ pub fn clear_group_rate_limit(agent: &AgentKind, custom_name: Option<&str>, grou
 }
 
 pub fn mark_rate_limited(agent: &AgentKind, custom_name: Option<&str>, message: &str) {
-    write_marker(&marker_path(agent, custom_name), message);
+    write_marker(&marker_path(agent, custom_name), message, None);
 }
 
 /// Record a refusal when the caller has no model in hand — a stderr line, a
@@ -144,24 +145,17 @@ fn format_recovery(at: NaiveDateTime) -> String {
     at.format("%b %d, %Y %I:%M %p").to_string()
 }
 
-fn write_marker(path: &std::path::Path, message: &str) {
+fn write_marker(path: &std::path::Path, message: &str, provider: Option<&str>) {
     if let Some(parent) = path.parent() {
         let _ = fs::create_dir_all(parent);
     }
-    let truncated_message = if message.len() > 200 {
-        let mut end = 200;
-        while !message.is_char_boundary(end) { end -= 1; }
-        &message[..end]
-    } else {
-        message
-    };
     let (recovery_at, hold_line) = match classify_hold(message) {
         Hold::Until(at) => (at, String::new()),
         Hold::NeedsHuman => (String::new(), format!("hold: {MANUAL_HOLD}\n")),
         Hold::Transient => (String::new(), String::new()),
     };
-    let content =
-        format!("recovery_at: {recovery_at}\n{hold_line}message: {truncated_message}\n");
+    let provider_line = format!("provider: {}\n", provider.unwrap_or("unknown"));
+    let content = format!("recovery_at: {recovery_at}\n{hold_line}{provider_line}message: {message}\n");
     let _ = fs::write(path, content);
 }
 
@@ -262,11 +256,31 @@ fn marker_is_active(path: &std::path::Path, agent: &AgentKind) -> bool {
 /// that moving the caller off the agent they asked for costs more than the wait,
 /// and gating on it was never the previous behaviour either.
 pub fn dispatch_blocking_hold(agent: &AgentKind, custom_name: Option<&str>) -> Option<String> {
-    let path = marker_path(agent, custom_name);
-    if !marker_is_active(&path, agent) || crate::live_quota::overrides_marker(agent, &path) {
+    dispatch_blocking_hold_at_path(&marker_path(agent, custom_name), agent, custom_name)
+}
+
+pub fn dispatch_blocking_hold_for_model(
+    agent: &AgentKind,
+    custom_name: Option<&str>,
+    model: Option<&str>,
+) -> Option<String> {
+    let group = crate::agent::model_group::model_group(*agent, model)?;
+    dispatch_blocking_hold_at_path(
+        &group_marker_path(agent, custom_name, group),
+        agent,
+        custom_name,
+    )
+}
+
+fn dispatch_blocking_hold_at_path(
+    path: &std::path::Path,
+    agent: &AgentKind,
+    custom_name: Option<&str>,
+) -> Option<String> {
+    if !marker_is_active(path, agent) || crate::live_quota::overrides_marker(agent, path) {
         return None;
     }
-    let content = fs::read_to_string(&path).ok()?;
+    let content = fs::read_to_string(path).ok()?;
     match stored_hold(&content, agent) {
         StoredHold::Until(recovery_at) if recovery_at > Local::now().naive_local() => {
             // Quote the provider's own phrasing of the time rather than a
@@ -374,7 +388,33 @@ pub fn clear_all_rate_limits_for_agent(agent: &AgentKind, custom_name: Option<&s
             cleared = true;
         }
     }
+    for (group, _) in discovered_group_markers(agent, custom_name) {
+        if clear_group_rate_limit(agent, custom_name, &group) {
+            cleared = true;
+        }
+    }
     cleared
+}
+
+fn discovered_group_markers(
+    agent: &AgentKind,
+    custom_name: Option<&str>,
+) -> Vec<(String, PathBuf)> {
+    if *agent != AgentKind::OpenCode {
+        return Vec::new();
+    }
+    let prefix = format!("rate-limit-{}--", marker_slug(agent, custom_name));
+    let Ok(entries) = fs::read_dir(aid_dir()) else {
+        return Vec::new();
+    };
+    entries
+        .filter_map(Result::ok)
+        .filter_map(|entry| {
+            let name = entry.file_name().to_string_lossy().into_owned();
+            let group = name.strip_prefix(&prefix)?.to_string();
+            (!group.is_empty()).then_some((group, entry.path()))
+        })
+        .collect()
 }
 
 pub fn is_rate_limited(agent: &AgentKind, custom_name: Option<&str>) -> bool {
@@ -518,8 +558,24 @@ fn parse_recovery_time(message: &str) -> Option<String> {
         let end = remainder.find('.').unwrap_or(remainder.len());
         Some(remainder[..end].trim().to_string())
     } else {
-        None
+        parse_iso_recovery_time(message)
     }
+}
+
+fn parse_iso_recovery_time(message: &str) -> Option<String> {
+    for (index, _) in message.match_indices("20") {
+        let candidate: String = message[index..]
+            .chars()
+            .take_while(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '-' | ':' | '.' | '+'))
+            .collect();
+        let candidate = candidate.trim_end_matches(['.', ',', ';', ')', ']', '}']);
+        let Ok(parsed) = chrono::DateTime::parse_from_rfc3339(candidate) else {
+            continue;
+        };
+        let local = parsed.with_timezone(&Local).naive_local();
+        return Some(format_recovery(local));
+    }
+    None
 }
 
 fn parse_recovery_datetime(s: &str) -> Option<NaiveDateTime> {
@@ -608,15 +664,19 @@ pub fn active_group_holds(
     agent: &AgentKind,
     custom_name: Option<&str>,
 ) -> Vec<(String, RateLimitInfo)> {
-    crate::agent::model_group::groups_for_agent(*agent)
+    let mut groups: Vec<(String, PathBuf)> = crate::agent::model_group::groups_for_agent(*agent)
         .iter()
-        .filter_map(|(group, _)| {
-            let path = group_marker_path(agent, custom_name, group);
+        .map(|(group, _)| ((*group).to_string(), group_marker_path(agent, custom_name, group)))
+        .collect();
+    groups.extend(discovered_group_markers(agent, custom_name));
+    groups
+        .into_iter()
+        .filter_map(|(group, path)| {
             if !marker_is_active(&path, agent) {
                 return None;
             }
             let content = fs::read_to_string(&path).ok()?;
-            Some(((*group).to_string(), info_from_marker_content(&content, agent)))
+            Some((group, info_from_marker_content(&content, agent)))
         })
         .collect()
 }
@@ -643,6 +703,10 @@ pub fn format_hold_end(
         "cooling down".to_string()
     }
 }
+
+#[cfg(test)]
+#[path = "rate_limit_credibility_tests.rs"]
+mod credibility_tests;
 
 #[cfg(test)]
 mod tests {

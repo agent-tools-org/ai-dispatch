@@ -3,6 +3,9 @@ use crate::paths::AidHomeGuard;
 use crate::types::AgentKind;
 use std::sync::Arc;
 
+#[path = "run_dispatch_resolve_held_tests.rs"]
+mod held_tests;
+
 /// Write a manual-hold marker for `agent` so `dispatch_blocking_hold` returns `Some`.
 fn write_manual_hold(agent: AgentKind) {
     let path = crate::paths::aid_dir().join(format!("rate-limit-{}", agent.as_str()));

@@ -47,7 +47,7 @@ fn running_task(id: &str, repo: &Path, wt: &Path, branch: &str) -> Task {
         caller_session_id: None,
         agent_session_id: None,
         repo_path: Some(repo.display().to_string()), project_id: None,
-        worktree_path: Some(wt.display().to_string()),
+        worktree_path: Some(wt.display().to_string()), effective_dir: None,
         worktree_branch: Some(branch.to_string()),
         final_head_sha: None,
         final_branch: None,

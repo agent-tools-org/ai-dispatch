@@ -20,6 +20,7 @@ const CREATE_TABLES_SQL: &str = "CREATE TABLE IF NOT EXISTS tasks (
     repo_path TEXT,
     project_id TEXT,
     worktree_path TEXT,
+    effective_dir TEXT,
     worktree_branch TEXT, final_head_sha TEXT, final_branch TEXT,
     start_sha TEXT,
     log_path TEXT,
@@ -245,6 +246,7 @@ pub(super) fn migrate(store: &Store) -> Result<()> {
     super::migrations::migrate_declared_task_profile(&conn)?;
     super::migrations::migrate_observed_model(&conn)?;
     super::migrations::migrate_project_id(&conn)?;
+    super::migrations::migrate_effective_dir(&conn)?;
     Ok(())
 }
 
@@ -279,6 +281,7 @@ pub(super) fn row_to_task(row: &Row) -> rusqlite::Result<Result<Task>> {
         // still map; NULL remains the honest unattributed bucket.
         project_id: row.get("project_id").ok().flatten(),
         worktree_path: row.get(11)?,
+        effective_dir: row.get("effective_dir").ok().flatten(),
         worktree_branch: row.get(12)?,
         final_head_sha: row.get(34).ok().flatten(),
         final_branch: row.get(35).ok().flatten(),

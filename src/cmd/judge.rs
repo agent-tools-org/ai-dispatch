@@ -2,7 +2,7 @@
 // Exports: judge_task(), gather_diff(), read_output().
 // Deps: crate::store::Store, crate::types::Task.
 use anyhow::{Context, Result};
-use std::{env, fs, path::{Path, PathBuf}, process::{Command as StdCommand, Stdio}};
+use std::{env, path::Path, process::{Command as StdCommand, Stdio}};
 use tokio::process::Command;
 use crate::types::Task;
 
@@ -19,9 +19,7 @@ pub struct PeerReview {
 }
 
 pub async fn judge_task(task: &Task, judge_agent: &str, original_prompt: &str) -> Result<JudgeResult> {
-    let diff = gather_diff(task)
-        .or_else(|| read_output(task))
-        .unwrap_or_else(|| "(no diff or output)".to_string());
+    let diff = judge_review_material(task);
     let truncated = truncate_diff(&diff, MAX_DIFF_CHARS);
     let prompt = format!(
         concat!(
@@ -53,9 +51,7 @@ pub async fn judge_task(task: &Task, judge_agent: &str, original_prompt: &str) -
 }
 
 pub async fn peer_review_task(task: &Task, reviewer_agent: &str, original_prompt: &str) -> Result<PeerReview> {
-    let diff = gather_diff(task)
-        .or_else(|| read_output(task))
-        .unwrap_or_else(|| "(no diff or output)".to_string());
+    let diff = judge_review_material(task);
     let truncated = truncate_diff(&diff, MAX_DIFF_CHARS);
     let prompt = format!(
         concat!(
@@ -108,18 +104,23 @@ pub(crate) fn gather_diff(task: &Task) -> Option<String> {
     None
 }
 
-pub(crate) fn read_output(task: &Task) -> Option<String> {
-    let output_path = task.output_path.as_deref()?;
-    let mut candidates = vec![PathBuf::from(output_path)];
-    if let Some(worktree) = task.worktree_path.as_deref() {
-        candidates.push(Path::new(worktree).join(output_path));
+pub(crate) fn judge_review_material(task: &Task) -> String {
+    let notice = crate::cmd::show::missing_owned_output_absence(task);
+    let body = gather_diff(task)
+        .or_else(|| read_output(task))
+        .unwrap_or_else(|| "(no diff or output)".to_string());
+    match notice {
+        Some(notice) => format!("{notice}\n{body}"),
+        None => body,
     }
-    for candidate in candidates {
-        if let Ok(text) = fs::read_to_string(&candidate)
-            && !text.trim().is_empty()
-        {
-            return Some(text);
-        }
+}
+
+pub(crate) fn read_output(task: &Task) -> Option<String> {
+    // Prefer task-owned path resolution (never CWD-relative `-o` leakage).
+    if let Ok(text) = crate::cmd::show::read_task_output(task)
+        && !text.trim().is_empty()
+    {
+        return Some(text);
     }
     None
 }

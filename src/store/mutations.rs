@@ -39,9 +39,9 @@ impl Store {
              caller_kind, caller_session_id, agent_session_id, repo_path, project_id, worktree_path, worktree_branch,
              final_head_sha, final_branch, start_sha, log_path, output_path, tokens, prompt_tokens, duration_ms, model, cost_usd, exit_code,
              created_at, completed_at, verify, verify_status, read_only, budget, custom_agent_name,
-             category, pending_reason, audit_verdict, audit_report_path, delivery_assessment, observed_model, attribution_source)
+             category, pending_reason, audit_verdict, audit_report_path, delivery_assessment, observed_model, attribution_source, effective_dir)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17,
-             ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28, ?29, ?30, ?31, ?32, ?33, ?34, ?35, ?36, ?37, ?38, ?39)",
+             ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28, ?29, ?30, ?31, ?32, ?33, ?34, ?35, ?36, ?37, ?38, ?39, ?40)",
             params![
                 task.id.as_str(),
                 agent_value,
@@ -82,6 +82,7 @@ impl Store {
                 task.delivery_assessment.map(|value| value.as_str()),
                 task.observed_model,
                 task.attribution_source.map(|value| value.as_str()),
+                task.effective_dir,
             ],
         )?;
         Ok(())
@@ -139,7 +140,7 @@ impl Store {
              final_head_sha=?15, final_branch=?16, start_sha=?17, log_path=?18, output_path=?19, model=?20, verify=?21,
              verify_status=?22, read_only=?23, budget=?24, custom_agent_name=?25,
              category=?26, pending_reason=?27, audit_verdict=?28, audit_report_path=?29,
-             delivery_assessment=?30
+             delivery_assessment=?30, effective_dir=?31
              WHERE id=?1",
             params![
                 task.id.as_str(), agent_value, task.prompt, task.resolved_prompt,
@@ -154,6 +155,7 @@ impl Store {
                 task.audit_verdict,
                 task.audit_report_path,
                 task.delivery_assessment.map(|value| value.as_str()),
+                task.effective_dir,
             ],
         )?;
         Ok(())
@@ -310,10 +312,11 @@ impl Store {
         repo_path: Option<&str>,
         worktree_path: Option<&str>,
         worktree_branch: Option<&str>,
+        effective_dir: Option<&str>,
     ) -> Result<()> {
         self.db().execute(
-            "UPDATE tasks SET repo_path = ?1, worktree_path = ?2, worktree_branch = ?3 WHERE id = ?4",
-            params![repo_path, worktree_path, worktree_branch, id],
+            "UPDATE tasks SET repo_path = ?1, worktree_path = ?2, worktree_branch = ?3, effective_dir = ?4 WHERE id = ?5",
+            params![repo_path, worktree_path, worktree_branch, effective_dir, id],
         )?;
         Ok(())
     }

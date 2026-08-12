@@ -102,6 +102,16 @@ fn official_guide_documents_event_fallback_coverage() {
 }
 
 #[test]
+fn official_guide_documents_task_owned_output() {
+    let operations = include_str!("../default-skills/aid-guide/references/task-operations.md");
+
+    assert!(operations.contains("`aid show --output` only renders content proven to belong to that task"));
+    assert!(operations.contains("read from the caller's CWD or from the shared repository root"));
+    assert!(operations.contains("absolute `--dir` from their persisted dispatch args"));
+    assert!(operations.contains("recorded directory stay empty and report absence"));
+}
+
+#[test]
 fn official_guide_documents_retry_worktree_safety() {
     let operations = include_str!("../default-skills/aid-guide/references/task-operations.md");
 

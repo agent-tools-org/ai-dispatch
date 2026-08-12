@@ -4,7 +4,7 @@
 
 use anyhow::Result;
 use chrono::Local;
-use rusqlite::{OptionalExtension, params};
+use rusqlite::{params, OptionalExtension};
 
 use super::schema::row_to_memory;
 use super::status_guard::status_guard_warn_only;
@@ -158,10 +158,18 @@ impl Store {
         Ok(())
     }
 
-    pub fn create_workgroup(&self, name: &str, shared_context: &str, created_by: Option<&str>, custom_id: Option<&str>) -> Result<Workgroup> {
+    pub fn create_workgroup(
+        &self,
+        name: &str,
+        shared_context: &str,
+        created_by: Option<&str>,
+        custom_id: Option<&str>,
+    ) -> Result<Workgroup> {
         let now = Local::now();
         let workgroup = Workgroup {
-            id: custom_id.map(|s| WorkgroupId(s.to_string())).unwrap_or_else(WorkgroupId::generate),
+            id: custom_id
+                .map(|s| WorkgroupId(s.to_string()))
+                .unwrap_or_else(WorkgroupId::generate),
             name: name.to_string(),
             shared_context: shared_context.to_string(),
             created_by: created_by.map(str::to_string),
@@ -217,7 +225,11 @@ impl Store {
     /// Set status to Failed only if currently Running or Waiting.
     /// Prevents zombie cleanup from clobbering a real completion status.
     pub fn fail_if_running(&self, id: &str) -> Result<bool> {
-        if !self.guard_current_status(id, &[TaskStatus::Running, TaskStatus::Waiting], TaskStatus::Failed)? {
+        if !self.guard_current_status(
+            id,
+            &[TaskStatus::Running, TaskStatus::Waiting],
+            TaskStatus::Failed,
+        )? {
             return Ok(false);
         }
         let rows = self.db().execute(
@@ -228,7 +240,11 @@ impl Store {
         Ok(rows > 0)
     }
 
-    pub fn fail_pending_with_reason(&self, id: &str, pending_reason: PendingReason) -> Result<bool> {
+    pub fn fail_pending_with_reason(
+        &self,
+        id: &str,
+        pending_reason: PendingReason,
+    ) -> Result<bool> {
         if !self.guard_current_status(id, &[TaskStatus::Pending], TaskStatus::Failed)? {
             return Ok(false);
         }
@@ -338,10 +354,7 @@ impl Store {
         Ok(())
     }
 
-    pub fn update_task_completion(
-        &self,
-        payload: TaskCompletionUpdate<'_>,
-    ) -> Result<bool> {
+    pub fn update_task_completion(&self, payload: TaskCompletionUpdate<'_>) -> Result<bool> {
         if !self.guard_completion_transition(payload.id, payload.status)? {
             return Ok(false);
         }
@@ -483,7 +496,8 @@ impl Store {
     }
 
     fn current_task_status(&self, id: &str) -> Result<Option<TaskStatus>> {
-        let status = self.db()
+        let status = self
+            .db()
             .query_row(
                 "SELECT status FROM tasks WHERE id = ?1",
                 params![id],
@@ -514,7 +528,13 @@ impl Store {
         Ok(())
     }
 
-    pub fn save_peer_review(&self, task_id: &str, reviewer: &str, score: u8, feedback: &str) -> Result<()> {
+    pub fn save_peer_review(
+        &self,
+        task_id: &str,
+        reviewer: &str,
+        score: u8,
+        feedback: &str,
+    ) -> Result<()> {
         let review_json = serde_json::json!({
             "reviewer": reviewer,
             "score": score,
@@ -604,7 +624,6 @@ impl Store {
         Ok(())
     }
 
-
     pub fn update_memory(&self, id: &str, content: &str) -> Result<bool> {
         let mut hasher = std::collections::hash_map::DefaultHasher::new();
         std::hash::Hash::hash(content, &mut hasher);
@@ -676,9 +695,10 @@ impl Store {
     }
 
     pub fn increment_memory_success(&self, id: &str) -> Result<bool> {
-        let rows = self
-            .db()
-            .execute("UPDATE memories SET success_count = success_count + 1 WHERE id = ?1", params![id])?;
+        let rows = self.db().execute(
+            "UPDATE memories SET success_count = success_count + 1 WHERE id = ?1",
+            params![id],
+        )?;
         Ok(rows > 0)
     }
 
@@ -706,6 +726,27 @@ impl Store {
             params![delivery_assessment.map(|value| value.as_str()), id],
         )?;
         Ok(())
+    }
+
+    pub fn update_principal_merge_override(&self, id: &str, reason: &str) -> Result<()> {
+        self.db().execute(
+            "UPDATE tasks SET principal_merge_override = ?1 WHERE id = ?2",
+            params![reason, id],
+        )?;
+        Ok(())
+    }
+
+    pub fn get_principal_merge_override(&self, id: &str) -> Result<Option<String>> {
+        let reason = self
+            .db()
+            .query_row(
+                "SELECT principal_merge_override FROM tasks WHERE id = ?1",
+                params![id],
+                |row| row.get::<_, Option<String>>(0),
+            )
+            .optional()?
+            .flatten();
+        Ok(reason)
     }
 }
 
@@ -743,7 +784,8 @@ mod tests {
                     status: TaskStatus::Done,
                     tokens: Some(1234),
                     duration_ms: 5000,
-                    observed_model: Some("test-model"), attribution_source: None,
+                    observed_model: Some("test-model"),
+                    attribution_source: None,
                     cost_usd: Some(0.05),
                     exit_code: Some(0),
                 },
@@ -781,7 +823,8 @@ mod tests {
                     status: TaskStatus::Done,
                     tokens: Some(1234),
                     duration_ms: 5000,
-                    observed_model: Some("test-model"), attribution_source: None,
+                    observed_model: Some("test-model"),
+                    attribution_source: None,
                     cost_usd: Some(0.05),
                     exit_code: Some(0),
                 },
@@ -840,7 +883,8 @@ mod tests {
                     status: TaskStatus::Failed,
                     tokens: None,
                     duration_ms: 5000,
-                    observed_model: None, attribution_source: None,
+                    observed_model: None,
+                    attribution_source: None,
                     cost_usd: None,
                     exit_code: Some(1),
                 },
@@ -850,5 +894,30 @@ mod tests {
 
         assert!(!changed);
         assert_eq!(store.get_events("t-atomic-merged").unwrap().len(), 0);
+    }
+
+    #[test]
+    fn update_principal_merge_override_persists_reason() {
+        let store = Store::open_memory().unwrap();
+        insert_task_status(&store, "t-override", TaskStatus::Failed);
+
+        store
+            .update_principal_merge_override("t-override", "verification command failed")
+            .unwrap();
+
+        let loaded = store.get_task("t-override").unwrap().unwrap();
+        assert_eq!(loaded.status, TaskStatus::Failed);
+        assert_eq!(
+            store.get_principal_merge_override("t-override").unwrap(),
+            Some("verification command failed".to_string())
+        );
+    }
+
+    #[test]
+    fn get_principal_merge_override_returns_none_when_not_set() {
+        let store = Store::open_memory().unwrap();
+        insert_task_status(&store, "t-none", TaskStatus::Failed);
+
+        assert_eq!(store.get_principal_merge_override("t-none").unwrap(), None);
     }
 }

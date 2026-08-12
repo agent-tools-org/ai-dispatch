@@ -1,11 +1,12 @@
 // Schema helpers and row mappers for the store.
 // Exports: create_tables, row_to_task, row_to_event.
 // Deps: rusqlite, chrono, crate::types.
-use anyhow::Result; use chrono::{DateTime, Local};
-use rusqlite::Row;
+pub(super) use super::schema_rows::{row_to_event, row_to_memory};
 use super::{kg_schema::CREATE_KG_SQL, Store};
 use crate::types::*;
-pub(super) use super::schema_rows::{row_to_event, row_to_memory};
+use anyhow::Result;
+use chrono::{DateTime, Local};
+use rusqlite::Row;
 const CREATE_TABLES_SQL: &str = "CREATE TABLE IF NOT EXISTS tasks (
     id TEXT PRIMARY KEY,
     agent TEXT NOT NULL,
@@ -35,7 +36,8 @@ const CREATE_TABLES_SQL: &str = "CREATE TABLE IF NOT EXISTS tasks (
     audit_verdict TEXT, audit_report_path TEXT, delivery_assessment TEXT, dispatch_args TEXT,
     declared_difficulty TEXT, declared_budget TEXT, declared_urgency TEXT, declared_rigor TEXT,
     observed_model TEXT,
-    attribution_source TEXT
+    attribution_source TEXT,
+    principal_merge_override TEXT
 );
 CREATE TABLE IF NOT EXISTS workgroups (
     id TEXT PRIMARY KEY,
@@ -174,11 +176,15 @@ pub(super) fn migrate(store: &Store) -> Result<()> {
     let _ = conn.execute_batch(CREATE_WORKGROUPS_SQL);
     let _ = conn.execute_batch(CREATE_MEMORIES_SQL);
     let _ = conn.execute_batch("ALTER TABLE memories ADD COLUMN supersedes TEXT;");
-    let _ = conn.execute_batch("ALTER TABLE memories ADD COLUMN version INTEGER NOT NULL DEFAULT 1;");
-    let _ = conn.execute_batch("ALTER TABLE memories ADD COLUMN inject_count INTEGER NOT NULL DEFAULT 0;");
+    let _ =
+        conn.execute_batch("ALTER TABLE memories ADD COLUMN version INTEGER NOT NULL DEFAULT 1;");
+    let _ = conn
+        .execute_batch("ALTER TABLE memories ADD COLUMN inject_count INTEGER NOT NULL DEFAULT 0;");
     let _ = conn.execute_batch("ALTER TABLE memories ADD COLUMN last_injected_at TEXT;");
-    let _ = conn.execute_batch("ALTER TABLE memories ADD COLUMN success_count INTEGER NOT NULL DEFAULT 0;");
-    let _ = conn.execute_batch("ALTER TABLE memories ADD COLUMN tier TEXT NOT NULL DEFAULT 'on_demand';");
+    let _ = conn
+        .execute_batch("ALTER TABLE memories ADD COLUMN success_count INTEGER NOT NULL DEFAULT 0;");
+    let _ = conn
+        .execute_batch("ALTER TABLE memories ADD COLUMN tier TEXT NOT NULL DEFAULT 'on_demand';");
     let _ = conn.execute_batch("ALTER TABLE events ADD COLUMN metadata TEXT;");
     let _ = conn.execute_batch("ALTER TABLE tasks ADD COLUMN prompt_tokens INTEGER;");
     let _ = conn.execute_batch("ALTER TABLE tasks ADD COLUMN verify TEXT;");
@@ -223,12 +229,17 @@ pub(super) fn migrate(store: &Store) -> Result<()> {
     let _ = conn.execute_batch("ALTER TABLE findings ADD COLUMN note TEXT;");
     let _ = conn.execute_batch("ALTER TABLE findings ADD COLUMN updated_at TEXT;");
     let _ = conn.execute_batch(CREATE_KG_SQL);
+    let _ = conn.execute_batch("ALTER TABLE tasks ADD COLUMN principal_merge_override TEXT;");
     // Performance indexes for hot query paths
-    let _ = conn.execute_batch("CREATE INDEX IF NOT EXISTS idx_tasks_created_at ON tasks(created_at);");
+    let _ =
+        conn.execute_batch("CREATE INDEX IF NOT EXISTS idx_tasks_created_at ON tasks(created_at);");
     let _ = conn.execute_batch("CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);");
-    let _ = conn.execute_batch("CREATE INDEX IF NOT EXISTS idx_tasks_workgroup ON tasks(workgroup_id);");
+    let _ = conn
+        .execute_batch("CREATE INDEX IF NOT EXISTS idx_tasks_workgroup ON tasks(workgroup_id);");
     let _ = conn.execute_batch("CREATE INDEX IF NOT EXISTS idx_events_task_id ON events(task_id);");
-    let _ = conn.execute_batch("CREATE INDEX IF NOT EXISTS idx_events_task_kind ON events(task_id, event_type);");
+    let _ = conn.execute_batch(
+        "CREATE INDEX IF NOT EXISTS idx_events_task_kind ON events(task_id, event_type);",
+    );
     super::migrations::migrate_task_messages(&conn)?;
     super::migrations::migrate_declared_task_profile(&conn)?;
     super::migrations::migrate_observed_model(&conn)?;
@@ -263,7 +274,8 @@ pub(super) fn row_to_task(row: &Row) -> rusqlite::Result<Result<Task>> {
         agent_session_id: row.get(9)?,
         repo_path: row.get(10)?,
         worktree_path: row.get(11)?,
-        worktree_branch: row.get(12)?, final_head_sha: row.get(34).ok().flatten(),
+        worktree_branch: row.get(12)?,
+        final_head_sha: row.get(34).ok().flatten(),
         final_branch: row.get(35).ok().flatten(),
         start_sha: row.get(13)?,
         log_path: row.get(14)?,

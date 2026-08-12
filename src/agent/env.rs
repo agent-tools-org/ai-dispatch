@@ -2,10 +2,8 @@
 // Exports: path and process helpers for agent runs.
 // Deps: anyhow::Result, crate::paths, std::process::Command, super::RunOpts.
 
-use std::io::Read;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
-use std::time::{Duration, Instant};
+use std::process::Command;
 
 use anyhow::Result;
 use crate::types::AgentKind;
@@ -230,8 +228,8 @@ pub fn apply_run_env(
 }
 
 pub(crate) fn which_exists(name: &str) -> bool {
-    if identity_marker(name).is_some() {
-        return binary_identity_matches(name);
+    if let Some(marker) = super::env_identity::identity_marker(name) {
+        return super::env_identity::binary_identity_matches(name, marker);
     }
     let on_path = Command::new("which")
         .arg(name)
@@ -239,57 +237,6 @@ pub(crate) fn which_exists(name: &str) -> bool {
         .map(|o| o.status.success())
         .unwrap_or(false);
     on_path
-}
-
-fn binary_identity_matches(name: &str) -> bool {
-    let Some(marker) = identity_marker(name) else {
-        return true;
-    };
-    let mut command = Command::new(name);
-    command.arg("--help").stdout(Stdio::piped()).stderr(Stdio::piped());
-    let Ok(mut child) = command.spawn() else {
-        return false;
-    };
-    let deadline = Instant::now() + Duration::from_millis(500);
-    loop {
-        match child.try_wait() {
-            Ok(Some(status)) => {
-                let mut stdout = Vec::new();
-                let mut stderr = Vec::new();
-                let stdout_ok = child
-                    .stdout
-                    .take()
-                    .is_some_and(|mut stream| stream.read_to_end(&mut stdout).is_ok());
-                let stderr_ok = child
-                    .stderr
-                    .take()
-                    .is_some_and(|mut stream| stream.read_to_end(&mut stderr).is_ok());
-                let text = format!(
-                    "{}{}",
-                    String::from_utf8_lossy(&stdout),
-                    String::from_utf8_lossy(&stderr)
-                );
-                let identity = text.to_ascii_lowercase().contains(marker);
-                return status.success() && stdout_ok && stderr_ok && identity;
-            }
-            Ok(None) if Instant::now() >= deadline => {
-                let _ = child.kill();
-                let _ = child.wait();
-                return false;
-            }
-            Ok(None) => std::thread::sleep(Duration::from_millis(5)),
-            Err(_) => return false,
-        }
-    }
-}
-
-fn identity_marker(name: &str) -> Option<&'static str> {
-    match name {
-        "agent" => Some("cursor"),
-        "claude" => Some("claude code"),
-        "oz" => Some("warp"),
-        _ => None,
-    }
 }
 
 #[cfg(test)]

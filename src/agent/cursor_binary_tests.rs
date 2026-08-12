@@ -11,6 +11,7 @@ use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 use std::process::Command;
+use std::time::{Duration, Instant};
 use tempfile::TempDir;
 
 #[test]
@@ -67,6 +68,17 @@ fn foreign_binary_is_not_reported_or_dispatchable() {
     );
     assert_eq!(extract_marker(&output, "CURSOR_REPORTED="), "0");
     assert_eq!(extract_marker(&output, "CURSOR_DISPATCHABLE="), "0");
+}
+#[test]
+fn oversized_identity_output_does_not_block_cursor_probe() {
+    let _permit = test_subprocess::acquire();
+    let bin_dir = oversized_agent_bin_dir();
+    let output = run_helper_with_deadline(
+        "agent::cursor_binary_tests::reports_cursor_probe_after_oversized_help",
+        &bin_dir,
+        Duration::from_secs(2),
+    );
+    assert_eq!(extract_marker(&output, "CURSOR_BINARY="), "cursor-agent");
 }
 
 #[test]
@@ -128,6 +140,19 @@ fn reports_cursor_availability_for_subprocess() {
     let dispatchable = ensure_resolved_binary_available("cursor", "cursor-agent").is_ok();
     println!("CURSOR_REPORTED={}", u8::from(reported));
     println!("CURSOR_DISPATCHABLE={}", u8::from(dispatchable));
+}
+
+#[test]
+#[ignore]
+fn reports_cursor_probe_after_oversized_help() {
+    let agent = CursorAgent;
+    let cmd = agent.build_command("test prompt", &run_opts()).unwrap();
+    let marker = format!("CURSOR_BINARY={}", cmd.get_program().to_string_lossy());
+    if let Ok(path) = std::env::var("CURSOR_PROBE_MARKER") {
+        fs::write(path, marker).unwrap();
+    } else {
+        println!("{marker}");
+    }
 }
 
 fn fake_bin_dir() -> TempDir {
@@ -195,6 +220,16 @@ printf '%s\n' '{"type":"result","subtype":"success","result":"that omits route a
     dir
 }
 
+fn oversized_agent_bin_dir() -> TempDir {
+    let dir = tempfile::tempdir().unwrap();
+    let script = r#"#!/bin/sh
+n=1000000
+while [ "$n" -gt 0 ]; do printf x; n=$((n - 1)); done
+"#;
+    write_executable(&dir.path().join("agent"), script);
+    dir
+}
+
 fn write_executable(path: &Path, script: &str) {
     fs::write(path, script).unwrap();
     let mut perms = fs::metadata(path).unwrap().permissions();
@@ -214,6 +249,29 @@ fn run_helper(test_name: &str, bin_dir: &TempDir) -> String {
         String::from_utf8_lossy(&output.stderr)
     );
     String::from_utf8(output.stdout).unwrap()
+}
+
+fn run_helper_with_deadline(test_name: &str, bin_dir: &TempDir, deadline: Duration) -> String {
+    let marker_path = bin_dir.path().join("probe-marker");
+    let mut child = Command::new(std::env::current_exe().unwrap())
+        .args(["--exact", test_name, "--ignored", "--nocapture"])
+        .env("PATH", bin_dir.path())
+        .env("CURSOR_PROBE_MARKER", &marker_path)
+        .spawn()
+        .unwrap();
+    let started = Instant::now();
+    loop {
+        if let Some(status) = child.try_wait().unwrap() {
+            assert!(status.success(), "helper test exited unsuccessfully: {status}");
+            return fs::read_to_string(marker_path).unwrap_or_default();
+        }
+        if started.elapsed() >= deadline {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("cursor identity probe exceeded {deadline:?}");
+        }
+        std::thread::sleep(Duration::from_millis(10));
+    }
 }
 
 fn extract_marker<'a>(output: &'a str, prefix: &str) -> &'a str {

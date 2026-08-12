@@ -29,18 +29,7 @@ fn cursor_binary() -> &'static str {
 }
 
 fn identifies_as_cursor(binary: &str) -> bool {
-    Command::new(binary)
-        .arg("--help")
-        .output()
-        .map(|output| {
-            let text = format!(
-                "{}{}",
-                String::from_utf8_lossy(&output.stdout),
-                String::from_utf8_lossy(&output.stderr)
-            );
-            help_mentions_cursor(&text)
-        })
-        .unwrap_or(false)
+    super::env_identity::binary_identity_matches(binary, "cursor")
 }
 
 fn help_mentions_cursor(help: &str) -> bool {

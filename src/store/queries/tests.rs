@@ -177,6 +177,23 @@ fn latest_awaiting_reasons_batch_skips_missing_prompts() {
 }
 
 #[test]
+fn latest_events_batch_returns_one_refresh_snapshot_per_task() {
+    let store = Store::open_memory().unwrap();
+    insert_task(&store, "t-latest", AgentKind::Codex, TaskStatus::Running, "Prompt");
+    insert_task(&store, "t-other", AgentKind::Grok, TaskStatus::Running, "Other");
+    insert_event(&store, "t-latest", "2026-03-15T00:00:00Z", "tool_call", "Read", None);
+    insert_event(&store, "t-latest", "2026-03-15T01:00:00Z", "reasoning", "Thinking", None);
+    insert_event(&store, "t-other", "2026-03-15T02:00:00Z", "tool_call", "Write", None);
+
+    let latest = store.latest_events_batch(&["t-latest", "t-other", "t-missing"]).unwrap();
+
+    assert_eq!(latest.len(), 2);
+    assert_eq!(latest.get("t-latest").map(|event| event.detail.as_str()), Some("Thinking"));
+    assert_eq!(latest.get("t-latest").map(|event| event.event_kind.as_str()), Some("reasoning"));
+    assert_eq!(latest.get("t-other").map(|event| event.detail.as_str()), Some("Write"));
+}
+
+#[test]
 fn active_worktree_siblings_counts_stalled_tasks() {
     let store = Store::open_memory().unwrap();
     let conn = store.db();

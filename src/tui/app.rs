@@ -49,6 +49,7 @@ impl DetailTab {
 pub struct App {
     pub tasks: Vec<Task>,
     pub events_cache: HashMap<String, Vec<TaskEvent>>,
+    latest_events: HashMap<String, TaskEvent>,
     pub metrics: HashMap<String, ProcessMetrics>,
     pub milestones: HashMap<String, String>,
     pub selected: usize,
@@ -84,6 +85,7 @@ impl App {
         let mut app = Self {
             tasks: Vec::new(),
             events_cache: HashMap::new(),
+            latest_events: HashMap::new(),
             metrics: HashMap::new(),
             milestones: HashMap::new(),
             selected: 0,
@@ -152,6 +154,14 @@ impl App {
     }
     pub fn get_milestone(&self, task_id: &str) -> Option<&str> {
         self.milestones.get(task_id).map(String::as_str)
+    }
+    pub fn task_activity(&self, task: &Task) -> String {
+        super::agent_state::activity_label(
+            task.status,
+            task.agent,
+            task.id.as_str(),
+            self.latest_events.get(task.id.as_str()),
+        )
     }
     pub fn get_failure_reason(&self, task_id: &str) -> Option<String> {
         self.events_cache.get(task_id).and_then(|events| {

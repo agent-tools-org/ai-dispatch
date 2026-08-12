@@ -113,6 +113,17 @@ pub(super) fn render_tree_view(frame: &mut ratatui::Frame<'_>, app: &App) {
                         Span::raw(" "),
                         Span::styled(duration, Style::default().fg(dim)),
                     ];
+                    if matches!(task.status, TaskStatus::Running | TaskStatus::AwaitingInput) {
+                        spans.push(Span::raw(" "));
+                        spans.push(Span::styled(
+                            truncate(&app.task_activity(task), 42),
+                            Style::default().fg(if task.status == TaskStatus::AwaitingInput {
+                                Color::Magenta
+                            } else {
+                                Color::Indexed(245)
+                            }),
+                        ));
+                    }
                     if cost_str != "—" && cost_str != "-" {
                         spans.push(Span::raw(" "));
                         spans.push(Span::styled(

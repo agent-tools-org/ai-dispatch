@@ -25,6 +25,7 @@ impl App {
         let prev_selected = self.selected;
         let tasks = self.load_tasks()?;
         self.milestones = self.load_milestones_batch(&tasks)?;
+        self.latest_events = self.load_latest_events_batch(&tasks)?;
         if let Ok(wgs) = self.store.list_workgroups() {
             self.wg_creators = wgs
                 .into_iter()
@@ -155,6 +156,11 @@ impl App {
         }
         result.extend(fresh);
         Ok(result)
+    }
+
+    fn load_latest_events_batch(&self, tasks: &[Task]) -> Result<HashMap<String, crate::types::TaskEvent>> {
+        let task_ids: Vec<&str> = tasks.iter().map(|task| task.id.as_str()).collect();
+        self.store.latest_events_batch(&task_ids)
     }
 }
 

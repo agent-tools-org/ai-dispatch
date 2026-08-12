@@ -85,6 +85,7 @@ fn render_multipane_view(frame: &mut ratatui::Frame<'_>, app: &App) {
                 // Pane title budget is tight; model still lands in the bottom bar.
                 agent: crate::tui::route_display::format_route_fit(task, 28),
                 status: task_status_label(task),
+                activity: app.task_activity(task),
                 prompt: task.prompt.clone(),
                 events,
                 tokens: task_tokens(task),

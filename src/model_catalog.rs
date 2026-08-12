@@ -9,12 +9,16 @@ use std::cmp::Ordering;
 use std::fs;
 use std::path::PathBuf;
 use std::sync::OnceLock;
-
 use crate::types::{AgentKind, TaskBudget};
 
 #[path = "model_catalog_data.rs"]
 mod model_catalog_data;
+#[cfg(test)]
+#[path = "model_catalog_test_support.rs"]
+mod test_support;
 pub use model_catalog_data::{AGENT_MODELS, AGENT_PROFILES, AgentModel};
+#[cfg(test)]
+pub(crate) use test_support::set_test_qwen_home;
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct PricingFileModel {
@@ -90,9 +94,16 @@ impl ResolvedAgentModel {
 }
 
 static QWEN_MODELS_CACHE: OnceLock<Vec<AgentModel>> = OnceLock::new();
+fn qwen_home() -> Option<PathBuf> {
+    #[cfg(test)]
+    if let Some(home) = test_support::qwen_home_override() {
+        return Some(home);
+    }
+    std::env::var_os("HOME").map(PathBuf::from)
+}
 
 fn load_qwen_models() -> Vec<String> {
-    let Some(home) = std::env::var_os("HOME").map(PathBuf::from) else {
+    let Some(home) = qwen_home() else {
         return vec!["coder-model".to_string()];
     };
     let path = home.join(".qwen").join("settings.json");
@@ -140,7 +151,7 @@ fn load_qwen_models() -> Vec<String> {
 }
 
 pub fn get_qwen_selected_model() -> Option<String> {
-    let home = std::env::var_os("HOME").map(PathBuf::from)?;
+    let home = qwen_home()?;
     let path = home.join(".qwen").join("settings.json");
     if !path.exists() {
         return None;

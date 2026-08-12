@@ -151,6 +151,8 @@ fn target_dir_for_worktree_isolates_branches() {
 
 #[test]
 fn apply_run_env_sets_explicit_vars_on_command() {
+    let aid_home = TempDir::new().unwrap();
+    let _aid_guard = AidHomeGuard::set(aid_home.path());
     let mut cmd = Command::new("echo");
     let opts = RunOpts {
         dir: None,
@@ -211,10 +213,14 @@ fn apply_run_env_sets_aid_home_on_command() {
 #[test]
 fn apply_run_env_forwards_parent_vars() {
     let _permit = test_subprocess::acquire();
+    let aid_home = TempDir::new().unwrap();
     let output = run_helper(
         "agent::tests::reports_forwarded_env_for_subprocess",
         None,
-        &[("AID_TEST_FORWARDED_ENV", Some(OsStr::new("forwarded-value")))],
+        &[
+            ("AID_HOME", Some(aid_home.path().as_os_str())),
+            ("AID_TEST_FORWARDED_ENV", Some(OsStr::new("forwarded-value"))),
+        ],
     );
     assert_eq!(
         extract_marker(&output, "FORWARDED_ENV="),

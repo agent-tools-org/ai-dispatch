@@ -5,8 +5,22 @@ use super::*;
 use std::fs;
 use std::process::Command;
 
+fn isolated_home() -> (tempfile::TempDir, crate::paths::AidHomeGuard, IsolatedHomeGuard) {
+    let aid_home = tempfile::tempdir().unwrap();
+    let aid_guard = crate::paths::AidHomeGuard::set(aid_home.path());
+    let home = IsolatedHomeGuard::create(None).unwrap();
+    (aid_home, aid_guard, home)
+}
+
+fn test_aid_home() -> (tempfile::TempDir, crate::paths::AidHomeGuard) {
+    let aid_home = tempfile::tempdir().unwrap();
+    let aid_guard = crate::paths::AidHomeGuard::set(aid_home.path());
+    (aid_home, aid_guard)
+}
+
 #[test]
 fn isolation_negative_control() {
+    let (_aid_home, _aid_guard) = test_aid_home();
     let temp = tempfile::tempdir().unwrap();
     let mock_real_home = temp.path().join("mock_home");
     let mock_claude_dir = mock_real_home.join(".claude");
@@ -45,7 +59,9 @@ fn isolation_negative_control() {
 
 #[test]
 fn cargo_and_git_work_in_isolated_home() {
-    let guard = IsolatedHomeGuard::create(None).unwrap();
+    let (_aid_home, _aid_guard) = test_aid_home();
+    let real_home = tempfile::tempdir().unwrap();
+    let guard = IsolatedHomeGuard::create_from_home(Some(real_home.path()), None).unwrap();
 
     // cargo --version must succeed (exit code 0) inside isolated home.
     let cargo_output = Command::new("cargo")
@@ -77,7 +93,7 @@ fn cargo_and_git_work_in_isolated_home() {
 #[test]
 fn isolated_home_cleanup_on_drop() {
     let iso_path = {
-        let guard = IsolatedHomeGuard::create(None).unwrap();
+        let (_aid_home, _aid_guard, guard) = isolated_home();
         let path = guard.path().to_path_buf();
         assert!(path.exists());
         path
@@ -96,6 +112,7 @@ fn denylist_contains_agents_identity_surfaces() {
 
 #[test]
 fn claude_credential_reachability_and_instruction_masking_under_isolation() {
+    let (_aid_home, _aid_guard) = test_aid_home();
     let temp = tempfile::tempdir().unwrap();
     let mock_home = temp.path().join("mock_home");
 
@@ -144,6 +161,7 @@ fn claude_credential_reachability_and_instruction_masking_under_isolation() {
 
 #[test]
 fn aid_directory_reachability_under_isolation() {
+    let (_aid_home, _aid_guard) = test_aid_home();
     let temp = tempfile::tempdir().unwrap();
     let mock_home = temp.path().join("mock_home");
     let aid_dir = mock_home.join(".aid");
@@ -163,7 +181,7 @@ fn aid_directory_reachability_under_isolation() {
 
 #[test]
 fn container_sandbox_home_interplay() {
-    let guard = IsolatedHomeGuard::create(None).unwrap();
+    let (_aid_home, _aid_guard, guard) = isolated_home();
     let mut cmd = Command::new("claude");
     cmd.env("HOME", guard.path());
 
@@ -193,6 +211,7 @@ fn container_sandbox_home_interplay() {
 
 #[test]
 fn build_isolated_home_fails_without_real_home() {
+    let (_aid_home, _aid_guard) = test_aid_home();
     match IsolatedHomeGuard::create_from_home(None, None) {
         Ok(_) => panic!("expected error when real home is unknown"),
         Err(err) => assert!(
@@ -204,6 +223,7 @@ fn build_isolated_home_fails_without_real_home() {
 
 #[test]
 fn build_isolated_home_fails_when_real_home_not_directory() {
+    let (_aid_home, _aid_guard) = test_aid_home();
     let temp = tempfile::tempdir().unwrap();
     let not_a_dir = temp.path().join("not-a-dir");
     fs::write(&not_a_dir, "file").unwrap();
@@ -218,6 +238,7 @@ fn build_isolated_home_fails_when_real_home_not_directory() {
 
 #[test]
 fn build_isolated_home_fails_when_real_home_unreadable() {
+    let (_aid_home, _aid_guard) = test_aid_home();
     let temp = tempfile::tempdir().unwrap();
     let real_home = temp.path().join("home");
     fs::create_dir(&real_home).unwrap();
@@ -258,7 +279,7 @@ fn cargo_build_uses_rustc_outside_isolated_home() {
     permissions.set_mode(0o700);
     fs::set_permissions(&wrapper, permissions).unwrap();
 
-    let guard = IsolatedHomeGuard::create(None).unwrap();
+    let (_aid_home, _aid_guard, guard) = isolated_home();
     let isolated_home = guard.path().to_path_buf();
     let mut cargo = Command::new("cargo");
     cargo

@@ -55,7 +55,7 @@ fn render_credential_list(pool: &credential_pool::CredentialPool) -> String {
                 Some(until) if *until > now => format!("cooldown until {}", until.to_rfc3339()),
                 _ => "ready".to_string(),
             };
-            let env_status = if std::env::var(&key.env).ok().filter(|value| !value.is_empty()).is_some() {
+            let env_status = if credential_pool::credential_is_set(&key.env) {
                 "set"
             } else {
                 "missing"
@@ -69,7 +69,7 @@ fn render_credential_list(pool: &credential_pool::CredentialPool) -> String {
 #[cfg(test)]
 mod tests {
     use super::{CredentialAction, render_credential_list, run_credential_command};
-    use crate::credential_pool::{load_pool, mark_exhausted};
+    use crate::credential_pool::{load_pool, mark_exhausted, set_test_env};
     use crate::paths::AidHomeGuard;
     use std::fs;
     use tempfile::TempDir;
@@ -107,9 +107,10 @@ keys = [
         let dir = TempDir::new().unwrap();
         let _guard = AidHomeGuard::set(dir.path());
         fs::write(dir.path().join("credentials.toml"), SAMPLE).unwrap();
-        unsafe {
-            std::env::set_var("OPENAI_API_KEY", "secret");
-        }
+        set_test_env(Some(std::collections::HashMap::from([(
+            "OPENAI_API_KEY".to_string(),
+            "secret".to_string(),
+        )])));
 
         let pool = load_pool().unwrap();
 
@@ -117,6 +118,7 @@ keys = [
 
         assert!(rendered.contains("codex (RoundRobin)"));
         assert!(rendered.contains("personal [OPENAI_API_KEY] ready (set)"));
+        set_test_env(None);
     }
 
     #[test]

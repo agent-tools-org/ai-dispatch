@@ -236,6 +236,8 @@ fn apply_codex_home_env_uses_durable_real_home() {
 
 #[test]
 fn apply_run_env_sets_host_toolchain_paths() {
+    let aid_home = tempfile::tempdir().unwrap();
+    let _aid_guard = crate::paths::AidHomeGuard::set(aid_home.path());
     let mut cmd = Command::new("echo");
     let opts = RunOpts {
         dir: None,

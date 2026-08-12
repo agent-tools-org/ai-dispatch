@@ -195,3 +195,28 @@ fn hint_scan_marks_complete_scan_when_limits_are_not_reached() {
     assert!(!measured.truncated);
     assert_eq!(measured.bytes, expected);
 }
+
+#[test]
+fn hint_estimate_survives_entry_limit_before_byte_threshold() {
+    let _permit = crate::test_subprocess::acquire();
+    let aid_home = tempfile::tempdir().unwrap();
+    let _aid_guard = crate::paths::AidHomeGuard::set(aid_home.path());
+    let target_root = aid_home.path().join("cargo-target");
+    let _target_guard = CargoTargetDirGuard::set(&target_root);
+    let store = Store::open_memory().unwrap();
+    let branch = "feat/truncated-hint";
+    insert_task(&store, "t-truncated-hint", "done", None, None, Some(branch));
+
+    let target = target_root.join(crate::agent::env::branch_target_name(branch));
+    fs::create_dir_all(&target).unwrap();
+    for index in 0..=crate::cmd::clean_size::CLEANUP_HINT_ENTRY_LIMIT {
+        fs::File::create(target.join(format!("artifact-{index}"))).unwrap();
+    }
+
+    let estimate = has_reclaimable_space_above_threshold(&store)
+        .unwrap()
+        .expect("entry-budget truncation must remain visible");
+
+    assert!(estimate.truncated);
+    assert!(estimate.bytes < crate::cmd::clean_size::CLEANUP_HINT_THRESHOLD_BYTES);
+}

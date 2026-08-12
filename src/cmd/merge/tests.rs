@@ -869,6 +869,28 @@ fn merge_single_force_merges_failed_task_with_committed_branch() {
 }
 
 #[test]
+fn force_merge_warning_uses_latest_verification_status() {
+    let store = Store::open_memory().unwrap();
+    let task = make_task_with_worktree(
+        "t-force-latest-verify",
+        Path::new("."),
+        Path::new("/tmp/missing-worktree"),
+        "branch",
+    );
+    store.insert_task(&task).unwrap();
+    store
+        .update_verify_status(task.id.as_str(), VerifyStatus::Failed)
+        .unwrap();
+
+    record_force_merge_warning(&store, &task).unwrap();
+
+    let events = store.get_events(task.id.as_str()).unwrap();
+    assert!(events.iter().any(|event| {
+        event.detail.contains("verification command failed")
+    }));
+}
+
+#[test]
 fn merge_single_force_rejects_failed_task_without_commits() {
     let _permit = test_subprocess::acquire();
     let repo = init_repo();

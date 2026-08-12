@@ -148,7 +148,10 @@ fn merge_single_with_output(store: &Store, task_id: &str, approve: bool, check: 
 }
 
 fn record_force_merge_warning(store: &Store, task: &Task) -> Result<()> {
-    let reason = match task.verify_status {
+    let current_task = store
+        .get_task(task.id.as_str())?
+        .ok_or_else(|| anyhow!("Task '{}' not found", task.id))?;
+    let reason = match current_task.verify_status {
         VerifyStatus::Failed => "verification command failed",
         VerifyStatus::InfrastructureFailure => "verification infrastructure failed",
         VerifyStatus::TimedOut => "verification timed out",
@@ -156,8 +159,8 @@ fn record_force_merge_warning(store: &Store, task: &Task) -> Result<()> {
     };
     let detail = format!(
         "Force-merged task {} from status {} — {}",
-        task.id,
-        task.status.label(),
+        current_task.id,
+        current_task.status.label(),
         reason,
     );
     aid_warn!("[aid] Warning: {detail}");

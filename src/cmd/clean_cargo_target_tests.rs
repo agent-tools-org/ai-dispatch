@@ -126,3 +126,56 @@ fn cleanup_removes_only_terminal_task_owned_targets() {
     assert!(unattributed.exists());
     assert!(target_root.exists());
 }
+
+#[test]
+fn cleanup_preserves_root_when_branch_name_matches_root_basename() {
+    let _permit = crate::test_subprocess::acquire();
+    let aid_home = tempfile::tempdir().unwrap();
+    let _aid_guard = crate::paths::AidHomeGuard::set(aid_home.path());
+    let target_root = aid_home.path().join("cargo-target");
+    let _target_guard = CargoTargetDirGuard::set(&target_root);
+    let fallback_root = tempfile::tempdir().unwrap();
+    let store = Store::open_memory().unwrap();
+    let live_worktree = tempfile::tempdir().unwrap();
+
+    insert_task(
+        &store,
+        "t-root-name",
+        "done",
+        None,
+        None,
+        Some("cargo-target"),
+    );
+    insert_task(
+        &store,
+        "t-live-leaf",
+        "done",
+        None,
+        Some(live_worktree.path()),
+        Some("live-leaf"),
+    );
+
+    let live_target = target_root.join("live-leaf");
+    fs::create_dir_all(&live_target).unwrap();
+    fs::write(target_root.join("root-artifact"), b"root").unwrap();
+
+    let mut sizes = crate::cmd::clean_size::SizeTracker::new();
+    clean_orphaned_branch_targets(&store, false, Some(fallback_root.path()), &mut sizes).unwrap();
+
+    assert!(target_root.exists());
+    assert!(live_target.exists());
+}
+
+#[test]
+fn hint_scan_completes_after_entry_limit() {
+    let temp = tempfile::tempdir().unwrap();
+    fs::write(temp.path().join("first"), vec![b'a'; 7]).unwrap();
+    fs::write(temp.path().join("second"), vec![b'b'; 11]).unwrap();
+    fs::write(temp.path().join("third"), vec![b'c'; 13]).unwrap();
+
+    let expected = crate::cmd::clean_size::get_dir_size(temp.path()).unwrap();
+    let mut sizes = crate::cmd::clean_size::SizeTracker::new();
+    let measured = scan_hint_path(&mut sizes, temp.path(), 10_000, 2).unwrap();
+
+    assert_eq!(measured, expected);
+}

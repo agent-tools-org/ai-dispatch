@@ -78,6 +78,28 @@ fn slash_search_selects_a_matching_task_without_database_queries() {
 }
 
 #[test]
+fn search_mode_uses_n_and_n_for_next_previous_and_escape_cancels() {
+    let store = Arc::new(Store::open_memory().unwrap());
+    let first = task("t-find-first");
+    let second = task("t-find-second");
+    store.insert_task(&first).unwrap();
+    store.insert_task(&second).unwrap();
+    let mut app = App::new(store, super::super::RunOptions::default()).unwrap();
+    app.selected = app.tasks.iter().position(|value| value.id == first.id).unwrap();
+
+    app.handle_key(KeyEvent::new(KeyCode::Char('/'), KeyModifiers::NONE)).unwrap();
+    for character in "prompt".chars() {
+        app.handle_key(KeyEvent::new(KeyCode::Char(character), KeyModifiers::NONE)).unwrap();
+    }
+    app.handle_key(KeyEvent::new(KeyCode::Char('n'), KeyModifiers::NONE)).unwrap();
+    assert_eq!(app.selected_task().map(|value| value.id.as_str()), Some("t-find-second"));
+    app.handle_key(KeyEvent::new(KeyCode::Char('N'), KeyModifiers::NONE)).unwrap();
+    assert_eq!(app.selected_task().map(|value| value.id.as_str()), Some("t-find-first"));
+    app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE)).unwrap();
+    assert!(!app.search_mode);
+}
+
+#[test]
 fn animation_only_changes_a_real_reasoning_state() {
     let store = Arc::new(Store::open_memory().unwrap());
     let mut reasoning = task("t-thinking");

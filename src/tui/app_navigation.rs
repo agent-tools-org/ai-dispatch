@@ -34,6 +34,8 @@ impl App {
     pub(super) fn handle_search_key(&mut self, key: KeyEvent) -> Result<()> {
         match key.code {
             KeyCode::Esc => self.search_mode = false,
+            KeyCode::Char('n') => self.move_search(1),
+            KeyCode::Char('N') => self.move_search(-1),
             KeyCode::Enter => {
                 self.search_mode = false;
                 self.move_search(1);

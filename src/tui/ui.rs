@@ -206,7 +206,12 @@ fn board_row(
 ) -> Row<'static> {
     if node.is_group_header {
         let (done, total) = group_counts.get(&node.project_id).copied().unwrap_or((0, 0));
-        return Row::new(vec![Cell::from(format!("{}({done}/{total})", node.prefix))])
+        return Row::new(vec![
+            Cell::from(truncate(&node.prefix, 10)),
+            Cell::from(""),
+            Cell::from(""),
+            Cell::from(format!("({done}/{total})")),
+        ])
             .style(Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD));
     }
     task_row(app, &node.task)

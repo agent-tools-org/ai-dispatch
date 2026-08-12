@@ -8,6 +8,9 @@ const PAGE_SCROLL: usize = 10;
 
 impl App {
     pub fn handle_key(&mut self, key: KeyEvent) -> Result<()> {
+        if self.search_mode {
+            return self.handle_search_key(key);
+        }
         match key.code {
             KeyCode::Char('q') => {
                 self.should_quit = true;
@@ -20,12 +23,6 @@ impl App {
             }
             KeyCode::Char('a') => {
                 self.show_all = !self.show_all;
-                self.reload_tasks()?;
-                return Ok(());
-            }
-            // Toggle project filter: default is current project only; P shows all.
-            KeyCode::Char('P') => {
-                self.show_all_projects = !self.show_all_projects;
                 self.reload_tasks()?;
                 return Ok(());
             }
@@ -57,6 +54,7 @@ impl App {
                     self.stats_mode = false;
                     self.multipane_mode = false;
                     self.detail_mode = false;
+                    self.select_first_task_if_header();
                 }
                 return Ok(());
             }
@@ -76,15 +74,9 @@ impl App {
             return self.handle_detail_key(key);
         }
         if self.tree_mode {
-            return self.handle_tree_key(key);
+            return self.handle_board_navigation(key);
         }
-        match key.code {
-            KeyCode::Down | KeyCode::Char('j') => self.next(),
-            KeyCode::Up | KeyCode::Char('k') => self.previous(),
-            KeyCode::Enter => self.enter_detail_mode()?,
-            _ => {}
-        }
-        Ok(())
+        self.handle_board_navigation(key)
     }
 
     fn handle_stats_key(&mut self, key: KeyEvent) -> Result<()> {
@@ -232,37 +224,7 @@ impl App {
         }
     }
 
-    fn handle_tree_key(&mut self, key: KeyEvent) -> Result<()> {
-        match key.code {
-            KeyCode::Down | KeyCode::Char('j') if self.tree_node_count > 0 => {
-                self.tree_selected = (self.tree_selected + 1) % self.tree_node_count;
-            }
-            KeyCode::Up | KeyCode::Char('k') if self.tree_node_count > 0 => {
-                self.tree_selected = if self.tree_selected == 0 {
-                    self.tree_node_count - 1
-                } else {
-                    self.tree_selected - 1
-                };
-            }
-            KeyCode::Enter => {
-                // Map tree_selected back to app.tasks index for detail view
-                let nodes = crate::tui::tree_data::build_task_tree_with_creators(&self.tasks, &self.wg_creators);
-                if let Some(node) = nodes.get(self.tree_selected)
-                    && let Some(idx) = self.tasks.iter().position(|t| t.id == node.task.id) {
-                        self.selected = idx;
-                        self.tree_mode = false;
-                        self.enter_detail_mode()?;
-                    }
-            }
-            KeyCode::Esc => {
-                self.tree_mode = false;
-            }
-            _ => {}
-        }
-        Ok(())
-    }
-
-    fn enter_detail_mode(&mut self) -> Result<()> {
+    pub(super) fn enter_detail_mode(&mut self) -> Result<()> {
         self.tree_mode = false;
         self.detail_mode = true;
         self.reset_detail_state();
@@ -279,21 +241,6 @@ impl App {
         self.detail_scroll = 0;
     }
 
-    fn next(&mut self) {
-        if !self.tasks.is_empty() {
-            self.selected = (self.selected + 1) % self.tasks.len();
-        }
-    }
-
-    fn previous(&mut self) {
-        if !self.tasks.is_empty() {
-            self.selected = if self.selected == 0 {
-                self.tasks.len() - 1
-            } else {
-                self.selected - 1
-            };
-        }
-    }
 }
 
 fn prompt_line_count(task: &crate::types::Task) -> usize {

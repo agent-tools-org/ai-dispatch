@@ -11,8 +11,9 @@ pub struct TreeNode {
     #[allow(dead_code)]
     pub depth: usize,
     pub prefix: String,
-    /// True if this is a workgroup header (virtual node reusing first task)
+    /// True if this is a project header (virtual node reusing the first task).
     pub is_group_header: bool,
+    pub project_id: Option<String>,
 }
 
 /// Build a flat list of TreeNodes with proper indentation.
@@ -25,9 +26,17 @@ pub fn build_task_tree(tasks: &[Task]) -> Vec<TreeNode> {
 
 /// Build tree with optional workgroup creator labels.
 pub fn build_task_tree_with_creators(tasks: &[Task], creators: &HashMap<String, String>) -> Vec<TreeNode> {
+    build_task_tree_with_state(tasks, creators, &HashSet::new())
+}
+
+/// Build the grouped task rows used by the board and tree views.
+pub fn build_task_tree_with_state(
+    tasks: &[Task],
+    creators: &HashMap<String, String>,
+    collapsed_projects: &HashSet<Option<String>>,
+) -> Vec<TreeNode> {
     let mut result = Vec::new();
     let mut seen = HashSet::new();
-    let task_ids: HashSet<&str> = tasks.iter().map(|t| t.id.as_str()).collect();
 
     // Group tasks by project_id (first-class). NULL → unattributed bucket.
     let mut groups: HashMap<Option<&str>, Vec<&Task>> = HashMap::new();
@@ -47,75 +56,65 @@ pub fn build_task_tree_with_creators(tasks: &[Task], creators: &HashMap<String, 
         (None, None) => std::cmp::Ordering::Equal,
     });
 
-    let multi_project = groups.len() > 1;
     for group_key in group_keys {
         let group_tasks = &groups[&group_key];
         let project_label = crate::project::project_display(group_key);
-
-        if multi_project {
-            // Find roots within this project
-            let roots = find_roots(group_tasks, &task_ids);
-            if roots.is_empty() { continue; }
-
-            // Use first root as project header display
-            let header_task = roots[0];
-            let wg_hint = header_task
-                .workgroup_id
-                .as_deref()
-                .and_then(|gid| creators.get(gid).map(|by| format!(" ({gid}/{by})")))
-                .or_else(|| {
-                    header_task
-                        .workgroup_id
-                        .as_ref()
-                        .map(|gid| format!(" ({gid})"))
-                })
-                .unwrap_or_default();
+        let group_ids: HashSet<&str> = group_tasks.iter().map(|task| task.id.as_str()).collect();
+        let roots = find_roots(group_tasks, &group_ids);
+        let Some(header_task) = roots.first().or_else(|| group_tasks.first()) else {
+            continue;
+        };
+        let group_id = group_key.map(str::to_string);
+        let collapsed = collapsed_projects.contains(&group_id);
+        let marker = if collapsed { "▸" } else { "▾" };
+        let workgroup_hint = header_task
+            .workgroup_id
+            .as_deref()
+            .and_then(|group| creators.get(group).map(|creator| format!(" ({group}/{creator})")))
+            .or_else(|| header_task.workgroup_id.as_ref().map(|group| format!(" ({group})")))
+            .unwrap_or_default();
+        result.push(TreeNode {
+            task: (*header_task).clone(),
+            depth: 0,
+            prefix: format!("{marker} {project_label}{workgroup_hint} "),
+            is_group_header: true,
+            project_id: group_id.clone(),
+        });
+        if collapsed {
+            continue;
+        }
+        for (i, root) in roots.iter().enumerate() {
+            if seen.contains(root.id.as_str()) {
+                continue;
+            }
+            seen.insert(root.id.as_str().to_string());
+            let is_last = i + 1 == roots.len();
+            let connector = if is_last { "  └── " } else { "  ├── " };
             result.push(TreeNode {
-                task: header_task.clone(),
-                depth: 0,
-                prefix: format!("▸ {project_label}{wg_hint} "),
-                is_group_header: true,
+                task: (*root).clone(),
+                depth: 1,
+                prefix: connector.to_string(),
+                is_group_header: false,
+                project_id: group_id.clone(),
             });
-            seen.insert(header_task.id.as_str().to_string());
-
-            // Add remaining roots and all children at depth 1+
-            for (i, root) in roots.iter().enumerate() {
-                if seen.contains(root.id.as_str()) {
-                    // header task already added — add its children
-                    add_children(root.id.as_str(), group_tasks, &mut result, &mut seen, 1, "  ");
-                    continue;
-                }
-                let is_last = i + 1 == roots.len();
-                let connector = if is_last { "  └── " } else { "  ├── " };
-                seen.insert(root.id.as_str().to_string());
-                result.push(TreeNode {
-                    task: (*root).clone(),
-                    depth: 1,
-                    prefix: connector.to_string(),
-                    is_group_header: false,
-                });
-                let next_prefix = if is_last { "      " } else { "  │   " };
-                add_children(root.id.as_str(), group_tasks, &mut result, &mut seen, 2, next_prefix);
-            }
-        } else {
-            // Single project view — flat roots with parent-child hierarchy
-            let all_refs: Vec<&Task> = tasks.iter().collect();
-            let mut roots = find_roots(group_tasks, &task_ids);
-            roots.sort_by(|a, b| {
-                b.status.is_terminal().cmp(&a.status.is_terminal())
-                    .then(b.created_at.cmp(&a.created_at))
+            let next_prefix = if is_last { "      " } else { "  │   " };
+            add_children(root.id.as_str(), group_tasks, &mut result, &mut seen, 2, next_prefix, &group_id);
+        }
+        // A malformed retry cycle must not make a task disappear from the TUI.
+        let remaining: Vec<&Task> = group_tasks
+            .iter()
+            .filter(|task| !seen.contains(task.id.as_str()))
+            .copied()
+            .collect();
+        for task in remaining {
+            seen.insert(task.id.as_str().to_string());
+            result.push(TreeNode {
+                task: (*task).clone(),
+                depth: 1,
+                prefix: "  └── ".to_string(),
+                is_group_header: false,
+                project_id: group_id.clone(),
             });
-            for root in &roots {
-                if seen.contains(root.id.as_str()) { continue; }
-                seen.insert(root.id.as_str().to_string());
-                result.push(TreeNode {
-                    task: (*root).clone(),
-                    depth: 0,
-                    prefix: String::new(),
-                    is_group_header: false,
-                });
-                add_children(root.id.as_str(), &all_refs, &mut result, &mut seen, 1, "");
-            }
         }
     }
     result
@@ -145,6 +144,7 @@ fn add_children(
     seen: &mut HashSet<String>,
     depth: usize,
     parent_prefix: &str,
+    project_id: &Option<String>,
 ) {
     let children: Vec<&&Task> = tasks
         .iter()
@@ -158,6 +158,7 @@ fn add_children(
             depth,
             prefix: format!("{parent_prefix}{}", if is_last { "└── " } else { "├── " }),
             is_group_header: false,
+            project_id: project_id.clone(),
         });
         add_children(
             child.id.as_str(),
@@ -166,6 +167,7 @@ fn add_children(
             seen,
             depth + 1,
             &format!("{parent_prefix}{}", if is_last { "    " } else { "│   " }),
+            project_id,
         );
     }
 }
@@ -207,27 +209,30 @@ mod tests {
     #[test]
     fn flat_tasks_no_hierarchy() {
         let tree = build_task_tree(&[mk("t-1", None), mk("t-2", None)]);
-        assert_eq!(tree.len(), 2);
-        assert_eq!(tree[0].depth, 0);
-        assert_eq!(tree[1].depth, 0);
-    }
-
-    #[test]
-    fn parent_child_creates_hierarchy() {
-        let tree = build_task_tree(&[mk("p", None), mk("c1", Some("p")), mk("c2", Some("p"))]);
         assert_eq!(tree.len(), 3);
-        assert_eq!(tree[0].depth, 0);
+        assert!(tree[0].is_group_header);
         assert_eq!(tree[1].depth, 1);
         assert_eq!(tree[2].depth, 1);
     }
 
     #[test]
-    fn nested_hierarchy() {
-        let tree = build_task_tree(&[mk("r", None), mk("m", Some("r")), mk("l", Some("m"))]);
-        assert_eq!(tree.len(), 3);
-        assert_eq!(tree[0].depth, 0);
+    fn parent_child_creates_hierarchy() {
+        let tree = build_task_tree(&[mk("p", None), mk("c1", Some("p")), mk("c2", Some("p"))]);
+        assert_eq!(tree.len(), 4);
+        assert!(tree[0].is_group_header);
         assert_eq!(tree[1].depth, 1);
         assert_eq!(tree[2].depth, 2);
+        assert_eq!(tree[3].depth, 2);
+    }
+
+    #[test]
+    fn nested_hierarchy() {
+        let tree = build_task_tree(&[mk("r", None), mk("m", Some("r")), mk("l", Some("m"))]);
+        assert_eq!(tree.len(), 4);
+        assert!(tree[0].is_group_header);
+        assert_eq!(tree[1].depth, 1);
+        assert_eq!(tree[2].depth, 2);
+        assert_eq!(tree[3].depth, 3);
     }
 
     #[test]
@@ -250,5 +255,27 @@ mod tests {
             headers.iter().any(|p| p.contains("unattributed")),
             "{headers:?}"
         );
+    }
+
+    #[test]
+    fn grouped_rows_show_every_task_and_keep_unattributed_separate() {
+        let mut a = mk("a", None);
+        a.project_id = Some("alpha".into());
+        let mut b = mk("b", None);
+        b.project_id = Some("beta".into());
+        let mut u = mk("u", None);
+        u.project_id = None;
+        let tree = build_task_tree(&[a, b, u]);
+
+        let task_ids: HashSet<&str> = tree
+            .iter()
+            .filter(|node| !node.is_group_header)
+            .map(|node| node.task.id.as_str())
+            .collect();
+        assert_eq!(task_ids, HashSet::from(["a", "b", "u"]));
+        assert_eq!(tree.iter().filter(|node| node.is_group_header).count(), 3);
+        assert!(tree.iter().any(|node| {
+            node.is_group_header && node.project_id.is_none() && node.prefix.contains("unattributed")
+        }));
     }
 }

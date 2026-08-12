@@ -26,7 +26,7 @@ use ratatui::backend::CrosstermBackend;
 use ratatui::Terminal;
 use std::io::stdout;
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use crate::store::Store;
 
@@ -53,9 +53,14 @@ fn run_loop(
     terminal: &mut Terminal<CrosstermBackend<std::io::Stdout>>,
     mut app: app::App,
 ) -> Result<()> {
+    const FRAME_INTERVAL: Duration = Duration::from_millis(100);
+    let mut last_draw = Instant::now() - FRAME_INTERVAL;
     loop {
-        terminal.draw(|frame| ui::render(frame, &app))?;
-        if event::poll(Duration::from_millis(500))?
+        if last_draw.elapsed() >= FRAME_INTERVAL {
+            terminal.draw(|frame| ui::render(frame, &app))?;
+            last_draw = Instant::now();
+        }
+        if event::poll(Duration::from_millis(25))?
             && let Event::Key(key) = event::read()?
         {
             app.handle_key(key)?;

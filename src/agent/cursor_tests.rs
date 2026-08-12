@@ -36,14 +36,12 @@ fn parses_assistant_message() {
 
 #[test]
 fn prose_about_writing_is_not_a_cursor_file_event() {
-    assert_ne!(
-        super::classify_line("I wrote a report about the implementation.").0,
-        Some(EventKind::FileWrite)
-    );
-    assert_eq!(
-        super::classify_line("I wrote src/agent/cursor.rs").0,
-        Some(EventKind::FileWrite)
-    );
+    for line in ["Writing tests for I/O bounds is necessary.", "I wrote a guide for example.com."] {
+        assert_ne!(super::classify_line(line).0, Some(EventKind::FileWrite));
+    }
+    for line in ["Writing Makefile", "Creating Dockerfile", "Writing CHANGELOG"] {
+        assert_eq!(super::classify_line(line).0, Some(EventKind::FileWrite));
+    }
 }
 
 #[test]

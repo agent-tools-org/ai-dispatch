@@ -1,14 +1,15 @@
-Implemented and committed as `5b434649`.
+Implemented and committed as `4b440f89`.
 
 Changes:
 
-- Bounded inbound-echo suppression to two matches within 5 seconds. The old single-use assertion was wrong because PTYs can emit both the terminal echo and the agent’s immediate repeat.
-- Added regression coverage proving delayed identical text is real output.
-- Required path evidence for OpenCode and Cursor file-write events.
-- Added Grok/PTY timing coverage for 3-minute warning, 5-minute nudge, and 600-second hang detection.
+- Echo suppression now allows two matches within 30 seconds, caps pending entries at 64, and treats later repeats as real output.
+- Preserves delayed six-second PTY echoes while making hour-later repeats real.
+- File-write detection now requires exactly one operand after `Writing`, `Creating`, or `wrote`, preserving `Makefile`, `Dockerfile`, and `CHANGELOG` while rejecting prose.
+- Added tests for all reported false positives/negatives, third echoes, expiry, and memory bounds.
 
-Verification:
+Before-fix failures included one-shot echo suppression and prose classified as `FileWrite`. After-fix:
 
-- Before: affected regression tests failed.
-- After: `aid test --bin aid` — 2,297 passed, 0 failed.
-- `aid build check -- --all-targets` — 0 errors.
+- `aid build check -- --all-targets`: 0 errors
+- `aid test --bin aid`: 2,300 passed, 0 failed, 9 ignored
+- PTY tests: 51 passed
+- Worktree clean.

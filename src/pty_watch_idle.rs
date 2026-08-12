@@ -9,9 +9,12 @@ use crate::store::Store;
 use crate::types::TaskStatus;
 
 const DEFAULT_NUDGE_MESSAGE: &str = "Task appears idle. Status update please?";
-const INBOUND_ECHO_WINDOW: Duration = Duration::from_secs(5);
+// Thirty seconds covers delayed PTY delivery while making hour-later repeats real output.
+const INBOUND_ECHO_WINDOW: Duration = Duration::from_secs(30);
 const INBOUND_ECHO_MATCHES: u8 = 2;
+const MAX_PENDING_INBOUND_ECHOES: usize = 64;
 
+// Invariant: each message suppresses at most two matching lines for 30 seconds, with 64 pending messages maximum.
 #[derive(Debug, Clone)]
 pub(crate) struct InboundEcho {
     message: String,
@@ -106,6 +109,9 @@ pub(crate) fn default_nudge_message() -> String {
 pub(crate) fn register_inbound_echo(pending: &mut Vec<InboundEcho>, message: String) {
     let now = Instant::now();
     pending.retain(|echo| echo.expires_at > now && echo.remaining_matches > 0);
+    if pending.len() >= MAX_PENDING_INBOUND_ECHOES {
+        pending.remove(0);
+    }
     pending.push(InboundEcho {
         message,
         expires_at: now + INBOUND_ECHO_WINDOW,
@@ -135,6 +141,7 @@ pub(crate) fn load_monitor_status(store: &Store, task_id: &str) -> Result<Monito
 
 /// True when a stream line is only an echo of text aid itself wrote to the PTY.
 /// Those echoes must not reset the idle / hung clocks (see idle-watchdog self-nudge).
+/// The bounded budget prevents a one-hour repeat from being mistaken for an echo.
 pub(crate) fn take_inbound_echo(pending: &mut Vec<InboundEcho>, line: &str) -> bool {
     take_inbound_echo_at(pending, line, Instant::now())
 }
@@ -283,7 +290,20 @@ mod tests {
     }
 
     #[test]
-    fn inbound_echo_suppression_expires_after_short_window() {
+    fn inbound_echo_suppression_covers_delayed_terminal_echo() {
+        let registered_at = Instant::now();
+        let mut pending = Vec::new();
+        register_inbound_echo(&mut pending, default_nudge_message());
+
+        assert!(take_inbound_echo_at(
+            &mut pending,
+            &default_nudge_message(),
+            registered_at + Duration::from_secs(6),
+        ));
+    }
+
+    #[test]
+    fn inbound_echo_suppression_expires_after_bounded_window() {
         let registered_at = Instant::now();
         let mut pending = Vec::new();
         register_inbound_echo(&mut pending, default_nudge_message());
@@ -294,5 +314,23 @@ mod tests {
             registered_at + INBOUND_ECHO_WINDOW + Duration::from_millis(1),
         ));
         assert!(pending.is_empty());
+    }
+
+    #[test]
+    fn inbound_echo_suppression_has_a_finite_pending_entry_cap() {
+        let mut pending = Vec::new();
+        for index in 0..=MAX_PENDING_INBOUND_ECHOES {
+            register_inbound_echo(&mut pending, format!("message-{index}"));
+        }
+        assert_eq!(pending.len(), MAX_PENDING_INBOUND_ECHOES);
+    }
+
+    #[test]
+    fn third_matching_echo_inside_window_is_real_output() {
+        let mut pending = Vec::new();
+        register_inbound_echo(&mut pending, default_nudge_message());
+        assert!(take_inbound_echo(&mut pending, &default_nudge_message()));
+        assert!(take_inbound_echo(&mut pending, &default_nudge_message()));
+        assert!(!take_inbound_echo(&mut pending, &default_nudge_message()));
     }
 }

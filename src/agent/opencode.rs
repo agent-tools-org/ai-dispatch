@@ -247,19 +247,14 @@ pub(crate) fn classify_text_line(line: &str) -> (Option<EventKind>, &str) {
 }
 
 pub(crate) fn contains_path_evidence(line: &str) -> bool {
-    line.split_whitespace().any(|raw| {
-        let token = raw
-            .trim_matches(|character: char| {
-                matches!(character, '`' | '"' | '\'' | ',' | ';' | ':' | '(' | ')' | '[' | ']' | '{' | '}')
-            })
-            .trim_end_matches(['.', ',', ';', ':', '!', '?']);
-        token.contains('/')
-            || token.contains('\\')
-            || token.rsplit_once('.').is_some_and(|(stem, extension)| {
-                !stem.is_empty()
-                    && extension.chars().any(|character| character.is_ascii_alphabetic())
-            })
-    })
+    let mut words = line.split_whitespace();
+    let Some(_) = words.position(|word| matches!(word, "Writing" | "Creating" | "wrote")) else {
+        return false;
+    };
+    let Some(operand) = words.next() else {
+        return false;
+    };
+    words.next().is_none() && !operand.trim_matches(['`', '"', '\'', '.', ',', ';', ':']).is_empty()
 }
 
 pub(crate) fn classify_tool_detail(detail: &str) -> EventKind {

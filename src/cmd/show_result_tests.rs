@@ -59,3 +59,23 @@ fn read_task_output_uses_persisted_result_file() {
 
     assert_eq!(output, "## Findings\nNo findings.\n");
 }
+
+#[test]
+fn read_task_output_unwraps_persisted_grok_envelope() {
+    let temp = tempfile::tempdir().unwrap();
+    let output_path = temp.path().join("grok-output.json");
+    let _aid_home = AidHomeGuard::set(temp.path());
+    let task = Task {
+        agent: AgentKind::Grok,
+        output_path: Some(output_path.display().to_string()),
+        ..task("t-grok-envelope")
+    };
+    let envelope = serde_json::json!({
+        "text": "# Findings\n\nThe report is rendered markdown."
+    });
+    std::fs::write(&output_path, serde_json::to_string(&envelope).unwrap()).unwrap();
+
+    let output = read_task_output(&task).unwrap();
+
+    assert_eq!(output, "# Findings\n\nThe report is rendered markdown.");
+}

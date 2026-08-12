@@ -154,10 +154,11 @@ fn custom_agent_quota_read_matches_write() {
     let mut config = sample_custom_config();
     config.id = "auditor".into();
     config.base_url = None; // no endpoint — triggers the old delegate_to path
+    let stated = crate::rate_limit::test_future_recovery_time();
     crate::rate_limit::mark_rate_limited(
         &AgentKind::Custom,
         Some("auditor"),
-        "try again at Aug 11th, 2099 2:23 PM.",
+        &format!("try again at {stated}."),
     );
     let rlk = rate_limit_kind(AgentKind::Custom, Some(&config));
     let q = build_quota_json(&rlk, Some("auditor"));
@@ -184,7 +185,10 @@ fn quota_json_limited_for_agent_level_hold() {
     crate::rate_limit::mark_rate_limited(
         &AgentKind::Codex,
         None,
-        "You've hit your usage limit. try again at Aug 11th, 2099 2:23 PM.",
+        &format!(
+            "You've hit your usage limit. try again at {}.",
+            crate::rate_limit::test_future_recovery_time()
+        ),
     );
     let q = build_quota_json(&AgentKind::Codex, None);
     assert_eq!(q.state, "limited");

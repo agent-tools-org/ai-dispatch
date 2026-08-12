@@ -8,6 +8,8 @@ use crate::paths::aid_dir;
 use crate::rate_limit_signatures::QuotaRecovery;
 use crate::types::AgentKind;
 use chrono::{DateTime, Local, NaiveDateTime};
+#[cfg(test)]
+use chrono::{Datelike, Timelike};
 use std::fs;
 use std::path::PathBuf;
 
@@ -542,6 +544,34 @@ fn parse_recovery_datetime(s: &str) -> Option<NaiveDateTime> {
     NaiveDateTime::parse_from_str(&cleaned, "%b %d, %Y %I:%M %p").ok()
 }
 
+#[cfg(test)]
+pub(crate) fn test_future_recovery_time() -> String {
+    let at = Local::now().naive_local() + chrono::Duration::days(1);
+    format!(
+        "{} {}{}, {} {}:{:02} {}",
+        at.format("%b"),
+        at.day(),
+        test_ordinal_suffix(at.day()),
+        at.year(),
+        at.hour12().1,
+        at.minute(),
+        at.format("%p")
+    )
+}
+
+#[cfg(test)]
+fn test_ordinal_suffix(day: u32) -> &'static str {
+    match day % 100 {
+        11..=13 => "th",
+        _ => match day % 10 {
+            1 => "st",
+            2 => "nd",
+            3 => "rd",
+            _ => "th",
+        },
+    }
+}
+
 #[derive(Debug, PartialEq)]
 pub struct RateLimitInfo {
     pub recovery_at: Option<String>,
@@ -624,10 +654,13 @@ mod tests {
     /// outage reads as available again after five minutes.
     #[test]
     fn codex_recovery_timestamp_parses() {
-        let message = "You've hit your usage limit. Visit https://chatgpt.com/codex/settings/usage \
-                       to purchase more credits or try again at Aug 11th, 2026 2:23 PM.";
-        let extracted = parse_recovery_time(message).expect("recovery phrase must be extracted");
-        assert_eq!(extracted, "Aug 11th, 2026 2:23 PM");
+        let stated = test_future_recovery_time();
+        let message = format!(
+            "You've hit your usage limit. Visit https://chatgpt.com/codex/settings/usage \
+             to purchase more credits or try again at {stated}."
+        );
+        let extracted = parse_recovery_time(&message).expect("recovery phrase must be extracted");
+        assert_eq!(extracted, stated);
         let parsed = parse_recovery_datetime(&extracted).expect("recovery timestamp must parse");
         assert!(parsed > Local::now().naive_local(), "parsed {parsed} must be in the future");
     }

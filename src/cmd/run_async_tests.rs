@@ -35,7 +35,12 @@ async fn rate_limited_agent_without_cascade_fails_early() {
     crate::paths::ensure_dirs().unwrap();
     // No installed peers → category-aware fallback correctly returns None.
     let _agents = crate::agent::DetectAgentsGuard::set(vec![AgentKind::MiMoCode]);
-    crate::rate_limit::mark_rate_limited(&AgentKind::MiMoCode, None, "try again at Mar 21st, 2099 2:27 PM.");
+    let stated = crate::rate_limit::test_future_recovery_time();
+    crate::rate_limit::mark_rate_limited(
+        &AgentKind::MiMoCode,
+        None,
+        &format!("try again at {stated}."),
+    );
     let err = run(Arc::new(Store::open_memory().unwrap()), RunArgs {
         agent_name: "mimocode".to_string(),
         prompt: "Inspect the repository state".to_string(),
@@ -43,7 +48,7 @@ async fn rate_limited_agent_without_cascade_fails_early() {
         skills: vec![NO_SKILL_SENTINEL.to_string()],
         ..Default::default()
     }).await.unwrap_err();
-    assert!(err.to_string().contains("mimocode is held (until Mar 21st, 2099 2:27 PM)"));
+    assert!(err.to_string().contains(&format!("mimocode is held (until {stated})")));
 }
 
 #[tokio::test]
@@ -52,7 +57,11 @@ async fn rate_limited_agent_with_cascade_proceeds() {
     let _aid_home = paths::AidHomeGuard::set(temp.path());
     crate::paths::ensure_dirs().unwrap();
     let store = Arc::new(Store::open_memory().unwrap());
-    crate::rate_limit::mark_rate_limited(&AgentKind::Kilo, None, "try again at Mar 21st, 2099 2:27 PM.");
+    crate::rate_limit::mark_rate_limited(
+        &AgentKind::Kilo,
+        None,
+        &format!("try again at {}.", crate::rate_limit::test_future_recovery_time()),
+    );
     let task_id = run(store.clone(), RunArgs {
         agent_name: "kilo".to_string(),
         prompt: "Inspect the repository state".to_string(),

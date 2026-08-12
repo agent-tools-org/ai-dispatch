@@ -69,6 +69,9 @@ fn advise_ranks_actionable_builtins_before_separate_custom_context() {
 #[test]
 fn advise_succeeds_when_every_builtin_is_rate_limited() {
     let aid_home = TempDir::new().expect("temp AID_HOME");
+    let future = (chrono::Local::now().naive_local() + chrono::Duration::days(1))
+        .format("%b %d, %Y %I:%M %p")
+        .to_string();
     for agent in [
         "gemini", "qwen", "codex", "copilot", "opencode", "commandcode",
         "cursor", "kilo", "mimocode", "droid", "oz", "claude",
@@ -76,7 +79,7 @@ fn advise_succeeds_when_every_builtin_is_rate_limited() {
     ] {
         std::fs::write(
             aid_home.path().join(format!("rate-limit-{agent}")),
-            "recovery_at: Dec 31, 2099 11:59 PM\nmessage: quota exhausted\n",
+            format!("recovery_at: {future}\nmessage: quota exhausted\n"),
         ).expect("write test marker");
     }
     let output = aid_cmd_in(aid_home.path())

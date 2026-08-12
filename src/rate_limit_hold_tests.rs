@@ -3,6 +3,7 @@
 // fixtures under tests/fixtures/ are copies of live ~/.aid markers.
 
 use super::*;
+use chrono::{Datelike, Duration, Local, Timelike};
 use crate::types::AgentKind;
 
 fn isolated() -> tempfile::TempDir {
@@ -180,11 +181,10 @@ fn an_unparseable_recovery_phrase_falls_back_to_the_cooldown() {
 /// in its own provider's phrasing, and every one of those must still read as out —
 /// this fix must not shorten a hold that exists today.
 ///
-/// The stated year is pushed forward before the marker is written. As captured,
-/// opencode's reset time had passed within a day and droid's within hours, so the
-/// test decayed into failing on the calendar rather than on the code. The phrasing
-/// each provider uses is the part under test — `parse_recovery_datetime` has to read
-/// `Aug 11th, 2026 2:23 PM` and `Aug 08, 2026 12:39 AM` alike — so only the year moves.
+/// The stated time is rebuilt one day from now before each marker is written.
+/// The phrasing each provider uses is the part under test —
+/// `parse_recovery_datetime` has to read `Aug 11th, 2026 2:23 PM` and
+/// `Aug 08, 2026 12:39 AM` alike — so the fixture's formatting is preserved.
 ///
 /// The marker is then aged past the transient cooldown. Without that, a `recovery_at`
 /// this parser failed to read would fall through to `StoredHold::Transient`, and a
@@ -201,7 +201,7 @@ fn live_markers_with_a_future_reset_time_still_read_as_out() {
         (AgentKind::Droid, "rate-limit-droid"),
         (AgentKind::OpenCode, "rate-limit-opencode"),
     ] {
-        let content = with_future_recovery_year(&read_fixture(fixture));
+        let content = with_relative_recovery_time(&read_fixture(fixture), Duration::days(1));
         let path = marker_path(&agent, None);
         std::fs::write(&path, &content).expect("write marker");
         age_marker(&path, RATE_LIMIT_WINDOW_SECS + 60);
@@ -212,31 +212,16 @@ fn live_markers_with_a_future_reset_time_still_read_as_out() {
     }
 }
 
-/// Move the year on the `recovery_at:` line only, leaving each provider's message
-/// body — and its date phrasing — exactly as it was captured.
-fn with_future_recovery_year(content: &str) -> String {
-    let mut out: String = content
-        .lines()
-        .map(|line| match line.strip_prefix("recovery_at: ") {
-            Some(stated) => format!("recovery_at: {}\n", stated.replace("2026", "2126")),
-            None => format!("{line}\n"),
-        })
-        .collect();
-    if !content.ends_with('\n') {
-        out.pop();
-    }
-    out
-}
-
-/// oz's live marker says "try again at Aug 07, 2026 02:05 AM" — fourteen hours
-/// in the past when it was captured. `aid config agents` printed it as the
-/// current status because the renderer never asked whether the hold was over.
+/// oz's live marker had a reset time in the past when it was captured. `aid config
+/// agents` printed it as the current status because the renderer never asked
+/// whether the hold was over.
 #[test]
 fn a_marker_whose_stated_time_has_passed_reads_as_recovered() {
     let temp = isolated();
     let _guard = crate::paths::AidHomeGuard::set(temp.path());
 
-    std::fs::write(marker_path(&AgentKind::Oz, None), read_fixture("rate-limit-oz"))
+    let content = with_relative_recovery_time(&read_fixture("rate-limit-oz"), Duration::minutes(-1));
+    std::fs::write(marker_path(&AgentKind::Oz, None), content)
         .expect("write marker");
     assert!(
         !is_rate_limited(&AgentKind::Oz, None),
@@ -371,15 +356,22 @@ fn a_stated_time_blocks_dispatch_only_until_it_passes() {
     let temp = isolated();
     let _guard = crate::paths::AidHomeGuard::set(temp.path());
 
-    std::fs::write(marker_path(&AgentKind::Codex, None), read_fixture("rate-limit-codex"))
+    let content = with_relative_recovery_time(&read_fixture("rate-limit-codex"), Duration::days(1));
+    let stated = content
+        .lines()
+        .find_map(|line| line.strip_prefix("recovery_at: "))
+        .map(str::to_string)
+        .expect("fixture must state a recovery time");
+    std::fs::write(marker_path(&AgentKind::Codex, None), content)
         .expect("write marker");
     assert_eq!(
         dispatch_blocking_hold(&AgentKind::Codex, None),
-        Some("until Aug 11th, 2026 2:23 PM".to_string()),
+        Some(format!("until {stated}")),
         "the provider's own phrasing of the time is quoted back"
     );
 
-    std::fs::write(marker_path(&AgentKind::Oz, None), read_fixture("rate-limit-oz")).expect("write marker");
+    let content = with_relative_recovery_time(&read_fixture("rate-limit-oz"), Duration::minutes(-1));
+    std::fs::write(marker_path(&AgentKind::Oz, None), content).expect("write marker");
     assert!(
         dispatch_blocking_hold(&AgentKind::Oz, None).is_none(),
         "a reset time in the past must not divert a run"
@@ -501,4 +493,55 @@ fn age_marker(path: &std::path::Path, seconds: u64) {
         .unwrap_or_else(|err| panic!("open {path:?}: {err}"));
     file.set_modified(when)
         .unwrap_or_else(|err| panic!("set mtime on {path:?}: {err}"));
+}
+
+/// Shift a fixture's stated time relative to now while preserving its provider
+/// formatting. The message body remains the captured evidence under test.
+fn with_relative_recovery_time(content: &str, delta: Duration) -> String {
+    let stated = content
+        .lines()
+        .find_map(|line| line.strip_prefix("recovery_at: "))
+        .filter(|value| !value.is_empty())
+        .expect("fixture must state a recovery time");
+    let template_tokens: Vec<_> = stated.split_whitespace().collect();
+    let at = Local::now().naive_local() + delta;
+    let day_token = template_tokens[1];
+    let day = if day_token.starts_with('0') {
+        format!("{:02}", at.day())
+    } else {
+        at.day().to_string()
+    };
+    let suffix = if day_token.ends_with("st,") || day_token.ends_with("nd,")
+        || day_token.ends_with("rd,") || day_token.ends_with("th,")
+    {
+        ordinal_suffix(at.day()).to_string()
+    } else {
+        String::new()
+    };
+    let hour = if template_tokens[3].starts_with('0') {
+        format!("{:02}", at.hour12().1)
+    } else {
+        at.hour12().1.to_string()
+    };
+    let replacement = format!(
+        "{} {}{}, {} {}:{:02} {}",
+        at.format("%b"), day, suffix, at.year(), hour, at.minute(), at.format("%p")
+    );
+    content.replacen(
+        &format!("recovery_at: {stated}"),
+        &format!("recovery_at: {replacement}"),
+        1,
+    )
+}
+
+fn ordinal_suffix(day: u32) -> &'static str {
+    match day % 100 {
+        11..=13 => "th",
+        _ => match day % 10 {
+            1 => "st",
+            2 => "nd",
+            3 => "rd",
+            _ => "th",
+        },
+    }
 }

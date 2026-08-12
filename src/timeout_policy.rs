@@ -66,8 +66,19 @@ impl TimeoutPolicy {
         let defaults = Self::default();
         let agent_idle_secs = crate::agent_config::get_default_idle_timeout(agent_name);
         let project_idle_secs = project.and_then(|project| project.idle_timeout);
-        let idle_secs = first_u64([cli_idle_secs, agent_idle_secs, project_idle_secs])
-            .unwrap_or(DEFAULT_IDLE_SECS);
+        
+        let configured_idle = first_u64([cli_idle_secs, agent_idle_secs, project_idle_secs]);
+        let idle_secs = configured_idle.unwrap_or(DEFAULT_IDLE_SECS);
+        
+        let first_token_base = configured_idle
+            .map(|secs| std::cmp::max(secs, DEFAULT_FIRST_TOKEN_SECS))
+            .unwrap_or(DEFAULT_FIRST_TOKEN_SECS);
+            
+        let first_token_env = std::env::var(ENV_FIRST_TOKEN_SECS)
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .filter(|v| *v > 0);
+
         let max_duration_mins = first_i64([
             cli_max_duration_mins,
             project.and_then(|project| project.max_duration_mins),
@@ -78,7 +89,7 @@ impl TimeoutPolicy {
         let ladder = project.map_or(defaults.nudge_ladder, project_ladder);
         Self {
             idle: Duration::from_secs(idle_secs),
-            first_token: defaults.first_token,
+            first_token: Duration::from_secs(first_token_env.unwrap_or(first_token_base)),
             nudge_ladder: ladder,
             max_duration: Duration::from_secs(max_duration_mins as u64 * 60),
             hard_cap: Duration::from_secs(hard_cap_hours as u64 * 60 * 60),
@@ -145,28 +156,20 @@ pub(crate) fn env_with_policy(
     policy: TimeoutPolicy,
 ) -> Option<HashMap<String, String>> {
     let mut env = env.unwrap_or_default();
-    env.insert(ENV_IDLE_SECS.to_string(), policy.idle.as_secs().to_string());
-    env.insert(
-        ENV_FIRST_TOKEN_SECS.to_string(),
-        policy.first_token.as_secs().to_string(),
-    );
-    env.insert(
-        ENV_WARN_SECS.to_string(),
-        policy.nudge_ladder.warn.as_secs().to_string(),
-    );
-    env.insert(
-        ENV_NUDGE_SECS.to_string(),
-        policy.nudge_ladder.nudge.as_secs().to_string(),
-    );
-    env.insert(
-        ENV_ESCALATE_SECS.to_string(),
-        policy.nudge_ladder.escalate.as_secs().to_string(),
-    );
-    env.insert(
-        ENV_MAX_DURATION_MINS.to_string(),
-        policy.max_duration_mins().to_string(),
-    );
-    env.insert(ENV_HARD_CAP_HOURS.to_string(), policy.hard_cap_hours().to_string());
+    env.entry(ENV_IDLE_SECS.to_string())
+        .or_insert_with(|| policy.idle.as_secs().to_string());
+    env.entry(ENV_FIRST_TOKEN_SECS.to_string())
+        .or_insert_with(|| policy.first_token.as_secs().to_string());
+    env.entry(ENV_WARN_SECS.to_string())
+        .or_insert_with(|| policy.nudge_ladder.warn.as_secs().to_string());
+    env.entry(ENV_NUDGE_SECS.to_string())
+        .or_insert_with(|| policy.nudge_ladder.nudge.as_secs().to_string());
+    env.entry(ENV_ESCALATE_SECS.to_string())
+        .or_insert_with(|| policy.nudge_ladder.escalate.as_secs().to_string());
+    env.entry(ENV_MAX_DURATION_MINS.to_string())
+        .or_insert_with(|| policy.max_duration_mins().to_string());
+    env.entry(ENV_HARD_CAP_HOURS.to_string())
+        .or_insert_with(|| policy.hard_cap_hours().to_string());
     Some(env)
 }
 

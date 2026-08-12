@@ -1,3 +1,15 @@
+## v10.23.0 (2026-08-12)
+- Build artifacts now belong to the task that created them: sandboxed agents write the configured shared target dir instead of silently copying it into system temp, and aid reclaims what a finished task owns rather than guessing ownership from directory names
+- Sandboxed agents can write the configured `CARGO_TARGET_DIR`: codex receives the effective target leaf as a writable root, and aid creates that leaf when seeding is skipped, so builds land in the shared warm cache instead of falling back to a per-worktree copy under the system temp dir that nothing ever reclaimed
+- A dispatched task no longer poisons host build tooling: `CARGO_HOME` and `RUSTUP_HOME` now point at the real host paths while `HOME` stays isolated, so a persistent sccache server can no longer record a task-scoped rustc path that dies with the task and breaks every later build on the machine
+- `aid clean --worktrees` reclaims what a terminal task owns — its branch target dir, its sandbox fallback target dir, and its isolated task home — driven by task records. A directory that cannot be attributed to a terminal task is never deleted, and a task whose worktree is still live is never in scope
+- Reclamation reports before it removes: every category prints measured sizes and a total, counting each inode once so hardlinked seed artifacts are not double counted
+- `aid hook session-start` prints a one-line reclaimable-space hint above a 500 MB threshold, bounded to keep session start under a second. A truncated scan says so and points at `aid clean --worktrees --dry-run` for the exact figure, instead of dropping silently or reporting the threshold as if it were the total
+- Cleanup can never remove a cargo target root: branch targets always resolve under the root, and a safety invariant rejects the root itself at every removal site
+- `aid merge --force` records the real verification status on the task instead of a stale value read before verification ran, and the override stays visible in `aid show`
+- Rate-limit hold tests are clock-independent, replacing hardcoded dates that had begun failing permanently
+
+
 ## v10.22.0 (2026-08-10)
 - Task completion now follows process facts, structured agent protocol events, and explicit caller contracts instead of response length, prose shape, or prompt-wording guesses
 - Codex exact answers such as `ok` remain successful when a non-empty final message follows the last work event, with end-to-end regression coverage for short delivery

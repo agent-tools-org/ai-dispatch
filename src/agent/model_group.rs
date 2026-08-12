@@ -9,12 +9,6 @@ use crate::types::AgentKind;
 const PREMIUM_GROUP: &str = "premium";
 const AUTO_GROUP: &str = "auto";
 
-const OPENCODE_GROUPS: &[(&str, &[&str])] = &[
-    ("opencode", &["opencode/glm-5.2", "opencode/kimi-k2.6"]),
-    ("opencode-go", &["opencode-go/glm-5.2"]),
-    ("mimo", &["mimo/mimo-v2.5", "mimo/mimo-v2.5-pro"]),
-];
-
 /// Agents whose quota is metered per model family rather than per account.
 ///
 /// agy is the case that forced this: `agy models` serves gemini-*, claude-* and
@@ -42,7 +36,7 @@ pub(crate) fn has_grouped_quota(agent: AgentKind) -> bool {
     // and rewriting cursor's shape to `PerModelFamily` to obtain grouping here
     // is what broke cost classification and needed an agent-specific patch in
     // the pricing layer to undo. The group table states the split directly.
-    if !groups_for_agent(agent).is_empty() {
+    if agent == AgentKind::OpenCode || !groups_for_agent(agent).is_empty() {
         return true;
     }
     matches!(
@@ -54,16 +48,12 @@ pub(crate) fn has_grouped_quota(agent: AgentKind) -> bool {
 /// The quota group a model belongs to, by family prefix. Returns None when the
 /// agent meters its whole account together, so callers fall back to per-agent
 /// marking unchanged.
-pub(crate) fn model_group(agent: AgentKind, model: Option<&str>) -> Option<&'static str> {
+pub(crate) fn model_group<'a>(agent: AgentKind, model: Option<&'a str>) -> Option<&'a str> {
+    if agent == AgentKind::OpenCode {
+        return model.and_then(provider_from_model);
+    }
     if !has_grouped_quota(agent) {
         return None;
-    }
-    if agent == AgentKind::OpenCode {
-        let provider = model?.split_once('/')?.0;
-        return OPENCODE_GROUPS
-            .iter()
-            .find(|(group, _)| *group == provider)
-            .map(|(group, _)| *group);
     }
     let model = model?.to_ascii_lowercase();
     if agent == AgentKind::Cursor {
@@ -89,7 +79,7 @@ pub(crate) fn model_group(agent: AgentKind, model: Option<&str>) -> Option<&'sta
 /// agent, which for cursor meant one premium refusal took `auto` out with it —
 /// `auto` being the one tier that keeps serving once the premium pool is spent.
 /// The refusal itself says so, so it is read here rather than guessed.
-pub(crate) fn group_from_refusal(agent: AgentKind, message: &str) -> Option<&'static str> {
+pub(crate) fn group_from_refusal<'a>(agent: AgentKind, message: &'a str) -> Option<&'a str> {
     if agent == AgentKind::OpenCode {
         return named_opencode_provider(message);
     }
@@ -105,22 +95,27 @@ pub(crate) fn group_from_refusal(agent: AgentKind, message: &str) -> Option<&'st
         .then_some(PREMIUM_GROUP)
 }
 
-fn named_opencode_provider(message: &str) -> Option<&'static str> {
+fn provider_from_model(model: &str) -> Option<&str> {
+    let (provider, _) = model.split_once('/')?;
+    (!provider.is_empty()).then_some(provider)
+}
+
+fn named_opencode_provider(message: &str) -> Option<&str> {
     let lower = message.to_ascii_lowercase();
-    OPENCODE_GROUPS.iter().find_map(|(group, _)| {
-        let provider_field = [
-            format!("provider: {group}"),
-            format!("provider: \"{group}\""),
-            format!("providerid: {group}"),
-            format!("providerid: \"{group}\""),
-            format!("\"providerid\":\"{group}\""),
-            format!("\"providerid\": \"{group}\""),
-            format!("provider_id: {group}"),
-            format!("provider_id: \"{group}\""),
-            format!("{group}/"),
-        ];
-        provider_field.iter().any(|needle| lower.contains(needle)).then_some(*group)
-    })
+    ["providerid", "provider_id", "provider", "model"]
+        .iter()
+        .find_map(|key| value_after_key(message, &lower, key))
+        .and_then(|value| provider_from_model(value).or(Some(value)))
+}
+
+fn value_after_key<'a>(message: &'a str, lower: &str, key: &str) -> Option<&'a str> {
+    let start = lower.find(key)? + key.len();
+    let value = message[start..].split_once(':')?.1.trim_start();
+    let value = value.strip_prefix('"').unwrap_or(value);
+    let end = value
+        .find(|ch: char| ch == '"' || ch == ',' || ch == '}' || ch.is_whitespace())
+        .unwrap_or(value.len());
+    (!value[..end].is_empty()).then_some(&value[..end])
 }
 
 /// Delegates to the types layer: how a provider partitions its allowance is a
@@ -148,7 +143,6 @@ pub(crate) fn groups_for_agent(agent: AgentKind) -> &'static [(&'static str, &'s
             (PREMIUM_GROUP, &["composer-2.5", "gpt-5.4-high"]),
             (AUTO_GROUP, &["auto"]),
         ],
-        AgentKind::OpenCode => OPENCODE_GROUPS,
         _ => &[],
     }
 }

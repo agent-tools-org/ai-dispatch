@@ -368,7 +368,33 @@ pub fn clear_all_rate_limits_for_agent(agent: &AgentKind, custom_name: Option<&s
             cleared = true;
         }
     }
+    for (group, _) in discovered_group_markers(agent, custom_name) {
+        if clear_group_rate_limit(agent, custom_name, &group) {
+            cleared = true;
+        }
+    }
     cleared
+}
+
+fn discovered_group_markers(
+    agent: &AgentKind,
+    custom_name: Option<&str>,
+) -> Vec<(String, PathBuf)> {
+    if *agent != AgentKind::OpenCode {
+        return Vec::new();
+    }
+    let prefix = format!("rate-limit-{}--", marker_slug(agent, custom_name));
+    let Ok(entries) = fs::read_dir(aid_dir()) else {
+        return Vec::new();
+    };
+    entries
+        .filter_map(Result::ok)
+        .filter_map(|entry| {
+            let name = entry.file_name().to_string_lossy().into_owned();
+            let group = name.strip_prefix(&prefix)?.to_string();
+            (!group.is_empty()).then_some((group, entry.path()))
+        })
+        .collect()
 }
 
 pub fn is_rate_limited(agent: &AgentKind, custom_name: Option<&str>) -> bool {
@@ -618,15 +644,19 @@ pub fn active_group_holds(
     agent: &AgentKind,
     custom_name: Option<&str>,
 ) -> Vec<(String, RateLimitInfo)> {
-    crate::agent::model_group::groups_for_agent(*agent)
+    let mut groups: Vec<(String, PathBuf)> = crate::agent::model_group::groups_for_agent(*agent)
         .iter()
-        .filter_map(|(group, _)| {
-            let path = group_marker_path(agent, custom_name, group);
+        .map(|(group, _)| ((*group).to_string(), group_marker_path(agent, custom_name, group)))
+        .collect();
+    groups.extend(discovered_group_markers(agent, custom_name));
+    groups
+        .into_iter()
+        .filter_map(|(group, path)| {
             if !marker_is_active(&path, agent) {
                 return None;
             }
             let content = fs::read_to_string(&path).ok()?;
-            Some(((*group).to_string(), info_from_marker_content(&content, agent)))
+            Some((group, info_from_marker_content(&content, agent)))
         })
         .collect()
 }

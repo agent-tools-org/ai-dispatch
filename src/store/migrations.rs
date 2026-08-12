@@ -75,10 +75,14 @@ pub(super) fn migrate_effective_dir(conn: &Connection) -> Result<()> {
 
 fn backfill_effective_dir_from_dispatch_args(conn: &Connection) -> Result<()> {
     let mut select = conn.prepare(
-        "SELECT id, trim(json_extract(dispatch_args, '$.dir'))
+        "SELECT id,
+                CASE WHEN json_valid(dispatch_args) THEN
+                    CASE WHEN json_type(dispatch_args, '$.dir') = 'text'
+                         THEN json_extract(dispatch_args, '$.dir')
+                    END
+                END
          FROM tasks
-         WHERE effective_dir IS NULL
-           AND json_extract(dispatch_args, '$.dir') IS NOT NULL",
+         WHERE effective_dir IS NULL",
     )?;
     let rows = select.query_map([], |row| {
         Ok((row.get::<_, String>(0)?, row.get::<_, Option<String>>(1)?))
@@ -101,6 +105,6 @@ fn backfill_effective_dir_from_dispatch_args(conn: &Connection) -> Result<()> {
 }
 
 fn usable_recorded_dir(dir: Option<&str>) -> Option<String> {
-    let dir = dir.map(str::trim).filter(|value| !value.is_empty())?;
+    let dir = dir.filter(|value| !value.is_empty())?;
     Path::new(dir).is_absolute().then(|| dir.to_string())
 }

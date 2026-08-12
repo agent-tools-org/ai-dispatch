@@ -1,15 +1,17 @@
 // Migration: backfill effective_dir from pre-column dispatch_args.dir.
 // Starts from a schema that lacks the column; proves a legacy --dir task
-// can resolve its report after migrate().
+// can resolve its report after Store::open().
 // Deps: Store, RunArgs, read_task_output, AidHomeGuard.
 
 use crate::cmd::run::RunArgs;
 use crate::cmd::show::{missing_owned_output_absence, owned_output_path, read_task_output};
 use crate::paths::AidHomeGuard;
 use crate::store::Store;
+use rusqlite::Connection;
+use std::path::Path;
 
-fn pre_effective_dir_store() -> Store {
-    let conn = rusqlite::Connection::open_in_memory().unwrap();
+fn create_pre_effective_dir_database(path: &Path) {
+    let conn = Connection::open(path).unwrap();
     conn.execute_batch(
         "CREATE TABLE tasks (
             id TEXT PRIMARY KEY,
@@ -35,14 +37,10 @@ fn pre_effective_dir_store() -> Store {
         );",
     )
     .unwrap();
-    Store {
-        conn: std::sync::Mutex::new(conn),
-    }
 }
 
-fn insert_legacy_task(store: &Store, id: &str, output: &str, dispatch_args: Option<&str>) {
-    store
-        .db()
+fn insert_legacy_task(conn: &Connection, id: &str, output: &str, dispatch_args: Option<&str>) {
+    conn
         .execute(
             "INSERT INTO tasks (id, agent, prompt, status, created_at, output_path, dispatch_args)
              VALUES (?1, 'codex', 'audit', 'done', '2026-08-01T00:00:00+00:00', ?2, ?3)",
@@ -51,57 +49,36 @@ fn insert_legacy_task(store: &Store, id: &str, output: &str, dispatch_args: Opti
         .unwrap();
 }
 
-fn has_column(store: &Store, name: &str) -> bool {
-    let conn = store.db();
+fn has_column(conn: &Connection, name: &str) -> bool {
     let mut stmt = conn.prepare("PRAGMA table_info(tasks)").unwrap();
     stmt.query_map([], |row| row.get::<_, String>(1))
         .unwrap()
         .any(|col| col.ok().as_deref() == Some(name))
 }
 
-/// The defect: a bare ADD COLUMN left every pre-migration `--dir` row NULL, so
-/// a relative `-o report.md` could never be resolved after CWD was removed.
-#[test]
-fn migrate_backfills_effective_dir_so_legacy_dir_task_resolves_report() {
-    let root = tempfile::tempdir().unwrap();
-    let aid_home = root.path().join("aid-home");
-    let _aid_home = AidHomeGuard::set(&aid_home);
-    let dir = root.path().join("audit-dir");
-    std::fs::create_dir_all(&dir).unwrap();
-    std::fs::write(dir.join("report.md"), "LEGACY_DIR_OWNED_REPORT\n").unwrap();
-
-    let store = pre_effective_dir_store();
-    assert!(
-        !has_column(&store, "effective_dir"),
-        "fixture must start without the column"
-    );
-
+fn insert_legacy_rows(conn: &Connection, dir: &Path) {
     let args = RunArgs {
         dir: Some(dir.display().to_string()),
         output: Some("report.md".to_string()),
         ..Default::default()
     };
     insert_legacy_task(
-        &store,
+        conn,
         "t-legacy-dir",
         "report.md",
         Some(&args.dispatch_args_json().unwrap()),
     );
+    insert_legacy_task(conn, "t-legacy-nodir", "report.md", Some(r#"{"prompt":"research"}"#));
+    insert_legacy_task(conn, "t-legacy-rel", "report.md", Some(r#"{"dir":"."}"#));
     insert_legacy_task(
-        &store,
-        "t-legacy-nodir",
+        conn,
+        "t-legacy-missing-dir",
         "report.md",
-        Some(r#"{"prompt":"research"}"#),
+        Some(r#"{"dir":"/tmp/aid-dir-that-no-longer-exists"}"#),
     );
-    insert_legacy_task(
-        &store,
-        "t-legacy-rel",
-        "report.md",
-        Some(r#"{"dir":"."}"#),
-    );
+}
 
-    store.migrate().unwrap();
-
+fn assert_legacy_rows_resolve(store: &Store, dir: &Path) {
     let owner = store.get_task("t-legacy-dir").unwrap().unwrap();
     assert_eq!(owner.effective_dir.as_deref(), Some(dir.to_str().unwrap()));
     assert_eq!(read_task_output(&owner).unwrap(), "LEGACY_DIR_OWNED_REPORT\n");
@@ -117,8 +94,79 @@ fn migrate_backfills_effective_dir_so_legacy_dir_task_resolves_report() {
     );
 
     let relative = store.get_task("t-legacy-rel").unwrap().unwrap();
-    assert!(
-        relative.effective_dir.is_none(),
-        "relative --dir is not usable without CWD"
+    assert!(relative.effective_dir.is_none(), "relative --dir is not usable without CWD");
+
+    let missing_dir = store.get_task("t-legacy-missing-dir").unwrap().unwrap();
+    assert_eq!(
+        missing_dir.effective_dir.as_deref(),
+        Some("/tmp/aid-dir-that-no-longer-exists")
     );
+    assert!(read_task_output(&missing_dir).is_err());
+}
+
+/// The defect: a bare ADD COLUMN left every pre-migration `--dir` row NULL, so
+/// a relative `-o report.md` could never be resolved after CWD was removed.
+#[test]
+fn migrate_backfills_effective_dir_so_legacy_dir_task_resolves_report() {
+    let root = tempfile::tempdir().unwrap();
+    let aid_home = root.path().join("aid-home");
+    let _aid_home = AidHomeGuard::set(&aid_home);
+    let dir = root.path().join("audit-dir");
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(dir.join("report.md"), "LEGACY_DIR_OWNED_REPORT\n").unwrap();
+
+    let db_path = root.path().join("aid.db");
+    create_pre_effective_dir_database(&db_path);
+    let conn = Connection::open(&db_path).unwrap();
+    assert!(!has_column(&conn, "effective_dir"), "fixture must start without the column");
+    insert_legacy_rows(&conn, &dir);
+    drop(conn);
+
+    let store = Store::open(&db_path).unwrap();
+    assert_legacy_rows_resolve(&store, &dir);
+
+    store
+        .db()
+        .execute(
+            "UPDATE tasks SET effective_dir = ?1 WHERE id = 't-legacy-dir'",
+            rusqlite::params!["/tmp/already-populated-dir"],
+        )
+        .unwrap();
+    drop(store);
+    let reopened = Store::open(&db_path).unwrap();
+    let owner = reopened.get_task("t-legacy-dir").unwrap().unwrap();
+    assert_eq!(owner.effective_dir.as_deref(), Some("/tmp/already-populated-dir"));
+}
+
+#[test]
+fn malformed_dispatch_args_do_not_abort_open_or_skip_valid_sibling() {
+    let root = tempfile::tempdir().unwrap();
+    let db_path = root.path().join("aid.db");
+    create_pre_effective_dir_database(&db_path);
+    let conn = Connection::open(&db_path).unwrap();
+    insert_legacy_task(
+        &conn,
+        "t-valid-dir",
+        "report.md",
+        Some(r#"{"dir":"/tmp/valid-historical-dir"}"#),
+    );
+    insert_legacy_task(
+        &conn,
+        "t-whitespace-dir",
+        "report.md",
+        Some(r#"{"dir":"/tmp/recorded-dir-with-space "}"#),
+    );
+    insert_legacy_task(&conn, "t-malformed", "report.md", Some("{not json"));
+    drop(conn);
+
+    let store = Store::open(&db_path).unwrap();
+    let valid = store.get_task("t-valid-dir").unwrap().unwrap();
+    assert_eq!(valid.effective_dir.as_deref(), Some("/tmp/valid-historical-dir"));
+    let whitespace = store.get_task("t-whitespace-dir").unwrap().unwrap();
+    assert_eq!(
+        whitespace.effective_dir.as_deref(),
+        Some("/tmp/recorded-dir-with-space ")
+    );
+    let malformed = store.get_task("t-malformed").unwrap().unwrap();
+    assert!(malformed.effective_dir.is_none());
 }

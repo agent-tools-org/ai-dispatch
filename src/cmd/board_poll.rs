@@ -7,13 +7,12 @@ use std::path::Path;
 use crate::types::Task;
 
 pub(super) const BOARD_MIN_COOLDOWN_SECS: i64 = 10;
-pub(super) const BOARD_FORCE_COOLDOWN_SECS: i64 = 30;
 const BOARD_REPEAT_LIMIT: u32 = 1;
 const FORCE_ESCALATION_LIMIT: u32 = 3;
 const FORCE_ESCALATION_WINDOW_SECS: i64 = 120;
 
 #[derive(Debug, PartialEq, Eq)]
-pub(super) enum AntiPollStatus { Allowed(u32), Cooldown(i64), Repeat(u32), ForceCooldown(i64), ForceBlocked }
+pub(super) enum AntiPollStatus { Allowed(u32), Cooldown(i64), Repeat(u32), ForceBlocked }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub(super) struct ForceMarkerState {
@@ -45,22 +44,24 @@ pub(super) fn anti_poll_status(marker_path: &Path, fingerprint: &str, now: i64, 
     let elapsed = now - marker.timestamp;
     if force {
         let force_state = next_force_state(&marker, now);
-        if elapsed >= 0 && elapsed < BOARD_FORCE_COOLDOWN_SECS { return (AntiPollStatus::ForceCooldown(elapsed), force_state) }
         if is_force_window_active(marker.force_window_start, now) && marker.force_count >= FORCE_ESCALATION_LIMIT {
             return (AntiPollStatus::ForceBlocked, force_state);
         }
         return (AntiPollStatus::Allowed(0), force_state);
     }
-    if elapsed >= 0 && elapsed < BOARD_MIN_COOLDOWN_SECS { return (AntiPollStatus::Cooldown(elapsed), ForceMarkerState::default()) }
     if marker.is_uninitialized() {
         return (AntiPollStatus::Allowed(0), ForceMarkerState::default());
     }
+    let force_state = ForceMarkerState { count: marker.force_count, window_start: marker.force_window_start };
     if marker.fingerprint == fingerprint {
         let repeat_count = marker.repeat_count + 1;
-        if repeat_count >= BOARD_REPEAT_LIMIT { return (AntiPollStatus::Repeat(repeat_count), ForceMarkerState::default()) }
-        return (AntiPollStatus::Allowed(repeat_count), ForceMarkerState::default());
+        if repeat_count >= BOARD_REPEAT_LIMIT { return (AntiPollStatus::Repeat(repeat_count), force_state) }
+        return (AntiPollStatus::Allowed(repeat_count), force_state);
     }
-    (AntiPollStatus::Allowed(0), ForceMarkerState::default())
+    if elapsed >= 0 && elapsed < BOARD_MIN_COOLDOWN_SECS {
+        return (AntiPollStatus::Cooldown(elapsed), force_state);
+    }
+    (AntiPollStatus::Allowed(0), force_state)
 }
 
 #[derive(Debug, Default)]

@@ -1,3 +1,10 @@
+## v10.25.0 (2026-08-12)
+- Cancelling a task no longer counts against the agent, and aid's own idle nudge no longer masks a hang
+- Operator cancellation is recorded as `Stopped`, not `Failed`. Ctrl-C, SIGTERM and `aid stop` all take this path, and every consumer that derives a success rate, a failure count or a webhook status was updated to match, so `aid stats` no longer charges your interruptions to the agent. Genuine failures — crashes, non-zero exits, timeouts, reaper kills, verify failures — still count as failures. Webhooks now receive a distinct `stopped` status instead of silently receiving nothing.
+- aid's own idle nudge can no longer be mistaken for agent progress. Inbound echo suppression is bounded by a 30-second window, two matches and a 64-entry cap instead of being consumed by the first match, so the PTY's echo and the agent's immediate repeat are both absorbed while later identical output still counts as real progress. Previously the second echo reset the activity clock, which could keep `hung_detected` from ever firing on a stalled task.
+- `aid retry` gained `--model`, `--idle-timeout` and `--feedback-file`/`-F`. Each inherits the original task's value when unspecified. `--feedback` and `--feedback-file` are mutually exclusive, and passing both is an error rather than a silent precedence rule.
+
+
 ## v10.24.0 (2026-08-12)
 - Agent reports now read as what the agent actually wrote, and the TUI keeps your place when new tasks arrive
 - `aid show --output` no longer corrupts non-ASCII text: ANSI stripping walked the line byte by byte and destroyed every multi-byte UTF-8 sequence, turning an apostrophe into mojibake on 141 of the last 351 tasks. It now reuses the escape stripper that already handled this correctly

@@ -142,8 +142,9 @@ enables this requirement.
 
 `TaskStatus` answers lifecycle and integration: whether a task is running, has
 delivered artifacts, or has been merged. `VerifyStatus` answers what happened
-to verification. `TaskOutcome` is derived from both and is the only axis that
-answers whether the task succeeded.
+to verification. Delivery assessment records empty-diff / hollow / missing-final
+observations. `TaskOutcome` is derived from those facts and is the only axis
+that answers whether the task succeeded.
 
 The terminal outcomes are:
 
@@ -155,9 +156,12 @@ The terminal outcomes are:
 - `Failed`, `Stopped`, and `Skipped`: the task did not produce a successful
   delivery; `InProgress` is non-terminal.
 
-Only `Verified` and `Delivered` are success outcomes. A foreground `aid run`
-exits 0 only for those outcomes; all other outcomes use a non-zero exit. Do not
-read `Done` or `Merged` as success without checking the outcome.
+Only `Verified` and `Delivered` are success outcomes. Hollow or missing-final
+delivery assessments demote an otherwise successful outcome to `Failed` so
+empty runs do not inflate `aid stats` / `aid advise`. `empty_diff` alone does
+not demote. A foreground `aid run` exits 0 only for success outcomes; all other
+outcomes use a non-zero exit. Do not read `Done` or `Merged` as success without
+checking the outcome.
 
 When `aid watch --wait` or `aid wait` observes `verify_status = pending`, it
 continues waiting for verification, bounded by the verification timeout. Once

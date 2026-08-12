@@ -12,7 +12,7 @@ mod task_ops;
 
 use crate::cli::Commands;
 use crate::store::Store;
-use crate::types::{verify_required, Task, TaskId, TaskOutcome, TaskStatus};
+use crate::types::{Task, TaskId, TaskOutcome, TaskStatus};
 use anyhow::{Result, anyhow, bail};
 use std::fs;
 use std::io::{IsTerminal, Read};
@@ -69,11 +69,7 @@ impl RunExitStatus {
         Self {
             task_id: task.id.clone(),
             status: task.status,
-            outcome: TaskOutcome::derive(
-                task.status,
-                task.verify_status,
-                verify_required(task.verify.as_deref()),
-            ),
+            outcome: task.outcome(),
             duration_ms: task.duration_ms.or(elapsed_ms).unwrap_or(0).max(0),
             reason,
         }

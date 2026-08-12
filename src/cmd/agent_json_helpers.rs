@@ -8,7 +8,9 @@ use std::collections::HashMap;
 
 use crate::agent::custom::CustomAgentConfig;
 use crate::agent::classifier::TaskCategory;
-use crate::types::{verify_required, AgentKind, TaskOutcome, TaskStatus, VerifyStatus};
+use crate::types::{
+    verify_required, AgentKind, DeliveryAssessment, TaskOutcome, TaskStatus, VerifyStatus,
+};
 use crate::store::Store;
 use crate::cmd::agent_json_types::{HistoryJson, CategoryHistoryJson};
 
@@ -134,7 +136,7 @@ fn history_samples(
     agent_name: &str,
 ) -> Result<Vec<HistorySample>> {
     let mut stmt = conn.prepare(
-        "SELECT category, status, verify_status, verify, duration_ms, cost_usd
+        "SELECT category, status, verify_status, verify, duration_ms, cost_usd, delivery_assessment
          FROM tasks
          WHERE status IN ('done', 'merged', 'failed')
            AND created_at >= ?1
@@ -151,15 +153,19 @@ fn history_samples(
                 row.get::<_, Option<String>>(3)?,
                 row.get::<_, Option<i64>>(4)?,
                 row.get::<_, Option<f64>>(5)?,
+                row.get::<_, Option<String>>(6)?,
             ))
         },
     )?;
     rows.map(|row| {
-        let (category, status, verify_status, verify, duration_ms, cost_usd) = row?;
+        let (category, status, verify_status, verify, duration_ms, cost_usd, delivery) = row?;
         let status = TaskStatus::parse_str(&status)
             .ok_or_else(|| anyhow!("unknown task status in agent history: {status}"))?;
         let verify_status = VerifyStatus::parse_str(&verify_status)
             .ok_or_else(|| anyhow!("unknown verify status in agent history: {verify_status}"))?;
+        let delivery = delivery
+            .as_deref()
+            .and_then(DeliveryAssessment::parse_str);
         Ok(HistorySample {
             category,
             duration_ms,
@@ -168,7 +174,8 @@ fn history_samples(
                 status,
                 verify_status,
                 verify_required(verify.as_deref()),
-            ),
+            )
+            .with_delivery_assessment(delivery),
         })
     })
     .collect()

@@ -2,7 +2,10 @@
 // Exports: none; loaded by outcome.rs under `#[cfg(test)]`.
 // Deps: crate::types public outcome and status re-exports.
 
-use crate::types::{outcome::UnverifiedReason, verify_required, TaskOutcome, TaskStatus, VerifyStatus};
+use crate::types::{
+    outcome::UnverifiedReason, verify_required, DeliveryAssessment, TaskOutcome, TaskStatus,
+    VerifyStatus,
+};
 
 const GOLDEN_TABLE: [(TaskStatus, VerifyStatus, bool, TaskOutcome); 120] = [
     (TaskStatus::Waiting, VerifyStatus::Pending, false, TaskOutcome::InProgress),
@@ -208,6 +211,39 @@ fn success_and_unverified_predicates_are_explicit() {
     assert!(TaskOutcome::Unverified(UnverifiedReason::NoResult).is_unverified());
     assert!(!TaskOutcome::Verified.is_unverified());
     assert!(!TaskOutcome::Broken.is_unverified());
+}
+
+#[test]
+fn empty_everywhere_delivery_demotes_success_to_failed() {
+    // HollowOutput = nothing on any channel + no worktree changes; not mere quiet stdout.
+    let hollow = Some(DeliveryAssessment::HollowOutput);
+    assert_eq!(
+        TaskOutcome::Delivered.with_delivery_assessment(hollow),
+        TaskOutcome::Failed
+    );
+    assert_eq!(
+        TaskOutcome::Verified.with_delivery_assessment(hollow),
+        TaskOutcome::Failed
+    );
+    assert_eq!(
+        TaskOutcome::Delivered
+            .with_delivery_assessment(Some(DeliveryAssessment::MissingFinalDelivery)),
+        TaskOutcome::Failed
+    );
+    // EmptyDiff alone may still be a real delivery (report file / commit-only).
+    assert_eq!(
+        TaskOutcome::Delivered.with_delivery_assessment(Some(DeliveryAssessment::EmptyDiff)),
+        TaskOutcome::Delivered
+    );
+    assert_eq!(TaskOutcome::Verified.with_delivery_assessment(None), TaskOutcome::Verified);
+    assert_eq!(
+        TaskOutcome::Broken.with_delivery_assessment(hollow),
+        TaskOutcome::Broken
+    );
+    assert_eq!(
+        TaskOutcome::Unverified(UnverifiedReason::NoResult).with_delivery_assessment(hollow),
+        TaskOutcome::Unverified(UnverifiedReason::NoResult)
+    );
 }
 
 #[test]

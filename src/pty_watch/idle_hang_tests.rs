@@ -3,6 +3,7 @@
 
 use super::MonitorState;
 use crate::paths;
+use crate::pty_watch_idle::{IdleAction, IdleDetector, MonitorTaskStatus};
 use crate::store::Store;
 use crate::timeout_policy::{NudgeLadder, TimeoutPolicy};
 use crate::types::{AgentKind, Task, TaskId, TaskStatus, VerifyStatus};
@@ -94,6 +95,38 @@ fn idle_hang_fires_for_streaming_when_progress_stale() {
     let mut state = MonitorState::new(true, None);
     state.last_progress_time = Instant::now() - Duration::from_secs(601);
     assert!(state.idle_hang_elapsed(true, Duration::from_secs(600), "t-stream-idle"));
+}
+
+#[test]
+fn grok_pty_default_ladder_preserves_three_five_six_hundred_boundaries() {
+    let detector = IdleDetector::default();
+    assert_eq!(detector.warn_after, Duration::from_secs(180));
+    assert_eq!(detector.nudge_after, Duration::from_secs(300));
+    assert_eq!(detector.escalate_after, Duration::from_secs(600));
+    assert_eq!(
+        detector.tick(
+            Instant::now() - Duration::from_secs(180),
+            MonitorTaskStatus::Running,
+            false,
+            true,
+        ),
+        IdleAction::WarnEvent
+    );
+    assert_eq!(
+        detector.tick(
+            Instant::now() - Duration::from_secs(300),
+            MonitorTaskStatus::Running,
+            false,
+            true,
+        ),
+        IdleAction::SendNudge(crate::pty_watch_idle::default_nudge_message())
+    );
+
+    let mut state = MonitorState::new(true, None);
+    state.last_progress_time = Instant::now() - Duration::from_secs(599);
+    assert!(!state.idle_hang_elapsed(true, Duration::from_secs(600), "t-grok-pty"));
+    state.last_progress_time = Instant::now() - Duration::from_secs(600);
+    assert!(state.idle_hang_elapsed(true, Duration::from_secs(600), "t-grok-pty-hung"));
 }
 
 #[test]

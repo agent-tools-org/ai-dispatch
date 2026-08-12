@@ -228,7 +228,11 @@ pub(crate) fn classify_text_line(line: &str) -> (Option<EventKind>, &str) {
         (Some(EventKind::Build), line)
     } else if line.contains("git commit") || line.starts_with("commit ") {
         (Some(EventKind::Commit), line)
-    } else if line.starts_with("Writing") || line.starts_with("Creating") {
+    } else if (line.starts_with("Writing")
+        || line.starts_with("Creating")
+        || line.contains("wrote"))
+        && contains_path_evidence(line)
+    {
         (Some(EventKind::FileWrite), line)
     } else if line.starts_with("Reading") {
         (Some(EventKind::FileRead), line)
@@ -240,6 +244,22 @@ pub(crate) fn classify_text_line(line: &str) -> (Option<EventKind>, &str) {
             (None, line)
         }
     }
+}
+
+pub(crate) fn contains_path_evidence(line: &str) -> bool {
+    line.split_whitespace().any(|raw| {
+        let token = raw
+            .trim_matches(|character: char| {
+                matches!(character, '`' | '"' | '\'' | ',' | ';' | ':' | '(' | ')' | '[' | ']' | '{' | '}')
+            })
+            .trim_end_matches(['.', ',', ';', ':', '!', '?']);
+        token.contains('/')
+            || token.contains('\\')
+            || token.rsplit_once('.').is_some_and(|(stem, extension)| {
+                !stem.is_empty()
+                    && extension.chars().any(|character| character.is_ascii_alphabetic())
+            })
+    })
 }
 
 pub(crate) fn classify_tool_detail(detail: &str) -> EventKind {

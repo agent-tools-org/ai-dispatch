@@ -175,6 +175,20 @@ fn opencode_needs_pty() {
 }
 
 #[test]
+fn prose_about_writing_is_not_an_opencode_file_event() {
+    for line in [
+        "Writing robust adapters requires careful tests.",
+        "Creating a reliable parser takes time.",
+    ] {
+        assert_ne!(classify_text_line(line).0, Some(EventKind::FileWrite));
+    }
+    assert_eq!(
+        classify_text_line("Writing src/agent/opencode.rs").0,
+        Some(EventKind::FileWrite)
+    );
+}
+
+#[test]
 fn codex_does_not_need_pty() {
     assert!(!super::super::codex::CodexAgent.needs_pty());
 }

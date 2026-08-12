@@ -1,23 +1,14 @@
-Root cause: merge restoration used positional stash refs, allowing competing stashes to be restored.
+Root cause: recovery errors named only the tracked SHA, hiding the untracked backup directory.
 
-Fix committed in `a31746f0`:
+Fix committed as `8ca542a0`:
 
-- Uses `git stash create` with immutable commit IDs.
-- Backs up untracked files explicitly.
-- Preserves merge failures and restores untracked files without touching conflicted indexes.
-- Reports recovery IDs/paths loudly.
+- Recovery messages now name every handle: tracked SHA, reachable ref, and untracked backup path.
+- `stash create` commits are anchored under `refs/aid/merge-local/<sha>` to survive `git gc --prune=now`; the ref is removed after successful restoration.
+- Chose a dedicated ref over `git stash store` to avoid the shared stash stack and positional cleanup race.
 
-Pre-fix regression:
+Regression failed before the fix because `aid-merge-local-*` was absent from the error. Afterward:
 
-```text
-left: "task-b rescue\n"
-right: "local change\n"
-```
-
-Verification:
-
-- 48 merge tests passed
-- `aid build` passed
-- clippy passed
-- File-size, headers, unwrap, and staging checks passed
+- 49 merge tests passed
+- `aid build` and clippy passed
+- File checks passed
 - Working tree clean

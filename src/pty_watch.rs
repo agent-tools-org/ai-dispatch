@@ -16,7 +16,8 @@ use crate::process_monitor;
 use crate::prompt::PromptDetector;
 use crate::pty_bridge::PtyBridge;
 use crate::pty_watch_idle::{
-    is_agent_output, load_monitor_status, take_inbound_echo, IdleAction, IdleDetector,
+    is_agent_output, load_monitor_status, register_inbound_echo, take_inbound_echo, InboundEcho,
+    IdleAction, IdleDetector,
 };
 use crate::store::Store;
 use crate::types::{AgentKind, CompletionInfo, EventKind, TaskEvent, TaskId, TaskStatus};
@@ -49,7 +50,7 @@ pub(crate) struct MonitorState {
     pending_inbound_acks: usize,
     failed_inbound_message_ids: HashSet<i64>,
     /// Payloads aid wrote to the PTY; matching stream lines are echoes, not agent progress.
-    inbound_echo_suppress: Vec<String>,
+    inbound_echo_suppress: Vec<InboundEcho>,
     idle_detector: IdleDetector,
     streaming: bool,
     workgroup_id: Option<String>,
@@ -282,7 +283,7 @@ impl MonitorState {
         )? {
             return Ok(());
         }
-        self.inbound_echo_suppress.push(input);
+        register_inbound_echo(&mut self.inbound_echo_suppress, input);
         self.finish_input_delivery(store, task_id)?;
         Ok(())
     }
@@ -301,7 +302,7 @@ impl MonitorState {
         )? {
             return Ok(());
         }
-        self.inbound_echo_suppress.push(message.clone());
+        register_inbound_echo(&mut self.inbound_echo_suppress, message.clone());
         let delivered = store.mark_delivered_matching_inbound(task_id.as_str(), &message)?;
         if delivered {
             self.pending_inbound_acks += 1;
@@ -338,7 +339,7 @@ impl MonitorState {
                 self.failed_inbound_message_ids.insert(message.id);
                 break;
             }
-            self.inbound_echo_suppress.push(message.content.clone());
+            register_inbound_echo(&mut self.inbound_echo_suppress, message.content.clone());
             if store.mark_delivered(message.id)? {
                 self.pending_inbound_acks += 1;
             }

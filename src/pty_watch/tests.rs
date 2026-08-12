@@ -135,8 +135,7 @@ fn auto_nudge_echo_does_not_reset_idle_progress_clock() {
     state.last_progress_time = stale;
     state.idle_nudged = true;
     let nudge = crate::pty_watch_idle::default_nudge_message();
-    state.inbound_echo_suppress.push(nudge.clone());
-    state.inbound_echo_suppress.push(nudge.clone());
+    crate::pty_watch_idle::register_inbound_echo(&mut state.inbound_echo_suppress, nudge.clone());
     let mut log = tempfile::NamedTempFile::new().unwrap();
 
     // Stream goes silent except for aid's own nudge echoes (the live failure shape).
@@ -183,7 +182,7 @@ fn agent_resume_after_nudge_echo_does_reset_idle_progress_clock() {
     state.last_progress_time = Instant::now() - idle - Duration::from_millis(50);
     state.idle_nudged = true;
     let nudge = crate::pty_watch_idle::default_nudge_message();
-    state.inbound_echo_suppress.push(nudge.clone());
+    crate::pty_watch_idle::register_inbound_echo(&mut state.inbound_echo_suppress, nudge.clone());
     let mut log = tempfile::NamedTempFile::new().unwrap();
 
     state

@@ -9,6 +9,18 @@ use crate::store::Store;
 use crate::types::TaskStatus;
 
 const DEFAULT_NUDGE_MESSAGE: &str = "Task appears idle. Status update please?";
+// Thirty seconds covers delayed PTY delivery while making hour-later repeats real output.
+const INBOUND_ECHO_WINDOW: Duration = Duration::from_secs(30);
+const INBOUND_ECHO_MATCHES: u8 = 2;
+const MAX_PENDING_INBOUND_ECHOES: usize = 64;
+
+// Invariant: each message suppresses at most two matching lines for 30 seconds, with 64 pending messages maximum.
+#[derive(Debug, Clone)]
+pub(crate) struct InboundEcho {
+    message: String,
+    expires_at: Instant,
+    remaining_matches: u8,
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum MonitorTaskStatus {
@@ -94,6 +106,19 @@ pub(crate) fn default_nudge_message() -> String {
     DEFAULT_NUDGE_MESSAGE.to_string()
 }
 
+pub(crate) fn register_inbound_echo(pending: &mut Vec<InboundEcho>, message: String) {
+    let now = Instant::now();
+    pending.retain(|echo| echo.expires_at > now && echo.remaining_matches > 0);
+    if pending.len() >= MAX_PENDING_INBOUND_ECHOES {
+        pending.remove(0);
+    }
+    pending.push(InboundEcho {
+        message,
+        expires_at: now + INBOUND_ECHO_WINDOW,
+        remaining_matches: INBOUND_ECHO_MATCHES,
+    });
+}
+
 /// True when a flushed stream line is meaningful agent output.
 ///
 /// Raw/unparsed output still proves the agent is alive and working, so it must
@@ -116,13 +141,30 @@ pub(crate) fn load_monitor_status(store: &Store, task_id: &str) -> Result<Monito
 
 /// True when a stream line is only an echo of text aid itself wrote to the PTY.
 /// Those echoes must not reset the idle / hung clocks (see idle-watchdog self-nudge).
-pub(crate) fn take_inbound_echo(pending: &mut Vec<String>, line: &str) -> bool {
+/// The bounded budget prevents a one-hour repeat from being mistaken for an echo.
+pub(crate) fn take_inbound_echo(pending: &mut Vec<InboundEcho>, line: &str) -> bool {
+    take_inbound_echo_at(pending, line, Instant::now())
+}
+
+fn take_inbound_echo_at(
+    pending: &mut Vec<InboundEcho>,
+    line: &str,
+    now: Instant,
+) -> bool {
     let trimmed = line.trim();
     if trimmed.is_empty() {
         return false;
     }
-    if let Some(idx) = pending.iter().position(|msg| msg.trim() == trimmed) {
-        pending.remove(idx);
+    pending.retain(|echo| echo.expires_at > now && echo.remaining_matches > 0);
+    if let Some(idx) = pending
+        .iter()
+        .position(|echo| echo.message.trim() == trimmed)
+    {
+        if pending[idx].remaining_matches == 1 {
+            pending.remove(idx);
+        } else {
+            pending[idx].remaining_matches -= 1;
+        }
         true
     } else {
         false
@@ -235,12 +277,60 @@ mod tests {
     }
 
     #[test]
-    fn take_inbound_echo_matches_exact_trim_once() {
-        let mut pending = vec![default_nudge_message(), "other".to_string()];
+    fn take_inbound_echo_suppresses_terminal_echo_and_immediate_duplicate() {
+        let mut pending = Vec::new();
+        register_inbound_echo(&mut pending, default_nudge_message());
+        register_inbound_echo(&mut pending, "other".to_string());
         assert!(take_inbound_echo(&mut pending, "  Task appears idle. Status update please?  "));
-        assert_eq!(pending, vec!["other".to_string()]);
+        assert!(take_inbound_echo(&mut pending, &default_nudge_message()));
         assert!(!take_inbound_echo(&mut pending, &default_nudge_message()));
         assert!(take_inbound_echo(&mut pending, "other"));
+        assert!(take_inbound_echo(&mut pending, "other"));
         assert!(pending.is_empty());
+    }
+
+    #[test]
+    fn inbound_echo_suppression_covers_delayed_terminal_echo() {
+        let registered_at = Instant::now();
+        let mut pending = Vec::new();
+        register_inbound_echo(&mut pending, default_nudge_message());
+
+        assert!(take_inbound_echo_at(
+            &mut pending,
+            &default_nudge_message(),
+            registered_at + Duration::from_secs(6),
+        ));
+    }
+
+    #[test]
+    fn inbound_echo_suppression_expires_after_bounded_window() {
+        let registered_at = Instant::now();
+        let mut pending = Vec::new();
+        register_inbound_echo(&mut pending, default_nudge_message());
+
+        assert!(!take_inbound_echo_at(
+            &mut pending,
+            &default_nudge_message(),
+            registered_at + INBOUND_ECHO_WINDOW + Duration::from_millis(1),
+        ));
+        assert!(pending.is_empty());
+    }
+
+    #[test]
+    fn inbound_echo_suppression_has_a_finite_pending_entry_cap() {
+        let mut pending = Vec::new();
+        for index in 0..=MAX_PENDING_INBOUND_ECHOES {
+            register_inbound_echo(&mut pending, format!("message-{index}"));
+        }
+        assert_eq!(pending.len(), MAX_PENDING_INBOUND_ECHOES);
+    }
+
+    #[test]
+    fn third_matching_echo_inside_window_is_real_output() {
+        let mut pending = Vec::new();
+        register_inbound_echo(&mut pending, default_nudge_message());
+        assert!(take_inbound_echo(&mut pending, &default_nudge_message()));
+        assert!(take_inbound_echo(&mut pending, &default_nudge_message()));
+        assert!(!take_inbound_echo(&mut pending, &default_nudge_message()));
     }
 }

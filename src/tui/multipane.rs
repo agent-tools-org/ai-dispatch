@@ -4,7 +4,7 @@ use super::app::App;
 use super::status_bar::{render_status_bar, StatusBarMode};
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::prelude::{Color, Modifier, Style};
-use ratatui::widgets::{Block, Borders, List, ListItem, Paragraph};
+use ratatui::widgets::{Block, Borders, List, ListItem};
 
 pub struct PaneData {
     pub task_id: String,

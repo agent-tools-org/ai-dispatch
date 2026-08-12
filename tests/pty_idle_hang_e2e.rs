@@ -12,33 +12,10 @@ use std::time::{Duration, Instant};
 use std::os::unix::fs::PermissionsExt;
 use tempfile::TempDir;
 
-const TASK_ID: &str = "t-pty-idle";
+mod common;
+use common::aid_cmd_in;
 
-fn aid_cmd_in(aid_home: &Path) -> Command {
-    let mut cmd = Command::new(env!("CARGO_BIN_EXE_aid"));
-    cmd.env("AID_HOME", aid_home);
-    cmd.env("AID_NO_DETACH", "1");
-    // Clear orchestrator environment variables that would pollute tests. Without
-    // this, a run executed under an aid task sees AID_TASK_ID and is treated as
-    // a delegated child, which rejects --bg outright.
-    for var in [
-        "AID_GROUP",
-        "AID_TASK_ID",
-        "AID_TASK_DEPTH",
-        "AID_TASK_NAME",
-        "AID_ITERATION",
-        "AID_PARENT_TASK_ID",
-        "AID_CASCADE",
-    ] {
-        cmd.env_remove(var);
-    }
-    // Project config is discovered from the working directory. Left at the repo root, this test's
-    // dispatched task inherits ai-dispatch's own verify command and runs the whole unit suite as
-    // verification, which blows past the idle-reap window this test measures. The temp AID_HOME is
-    // not a git repo, so discovery finds nothing and the task is verified against nothing.
-    cmd.current_dir(aid_home);
-    cmd
-}
+const TASK_ID: &str = "t-pty-idle";
 
 #[test]
 fn pty_csi_spinner_noise_does_not_reset_idle_timeout() {

@@ -10,8 +10,8 @@ use std::process::Command;
 
 const BASE_TARGET_DIR_NAME: &str = "_base";
 
-pub(crate) fn clean_orphaned_branch_targets(dry_run: bool) -> Result<()> {
-    let (live_names, live_keys) = live_branch_target_info()?;
+pub(crate) fn clean_orphaned_branch_targets(dry_run: bool, fallback_root: Option<&Path>) -> Result<()> {
+    let (live_names, mut live_keys) = live_branch_target_info()?;
     let mut removed = 0usize;
 
     if let Some(root) = crate::agent::env::branch_target_root() {
@@ -32,9 +32,15 @@ pub(crate) fn clean_orphaned_branch_targets(dry_run: bool) -> Result<()> {
         }
     }
 
-    let temp_root = std::env::temp_dir().join("aid-build-target");
-    if let Ok(dirs) = branch_target_dirs(&temp_root) {
-        for target in dirs {
+    if let Ok(cwd) = std::env::current_dir() {
+        live_keys.insert(crate::cmd::build::build_fallback::cwd_key(&cwd));
+    }
+
+    let temp_root = fallback_root
+        .map(|p| p.to_path_buf())
+        .unwrap_or_else(|| std::env::temp_dir().join("aid-build-target"));
+    let dirs = branch_target_dirs(&temp_root)?;
+    for target in dirs {
             let Some(name) = target.file_name().and_then(|name| name.to_str()) else {
                 continue;
             };
@@ -49,7 +55,6 @@ pub(crate) fn clean_orphaned_branch_targets(dry_run: bool) -> Result<()> {
             }
             removed += 1;
         }
-    }
 
     println!(
         "{} {removed} orphaned Cargo target dirs",
@@ -171,16 +176,15 @@ mod tests {
         fs::create_dir_all(&live_target).unwrap();
         git(repo.path(), &["worktree", "add", &wt_path.to_string_lossy(), "-b", live_branch]);
 
-        let temp_root = std::env::temp_dir().join("aid-build-target");
-        fs::create_dir_all(&temp_root).unwrap();
+        let temp_root = tempfile::tempdir().unwrap();
         let live_key = crate::cmd::build::build_fallback::cwd_key(&wt_path);
         let stale_key = crate::cmd::build::build_fallback::cwd_key(Path::new("/tmp/some-dead-wt"));
-        let live_fallback = temp_root.join(live_key);
-        let stale_fallback = temp_root.join(stale_key);
+        let live_fallback = temp_root.path().join(live_key);
+        let stale_fallback = temp_root.path().join(stale_key);
         fs::create_dir_all(&live_fallback).unwrap();
         fs::create_dir_all(&stale_fallback).unwrap();
 
-        clean_orphaned_branch_targets(false).unwrap();
+        clean_orphaned_branch_targets(false, Some(temp_root.path())).unwrap();
 
         assert!(root.join(BASE_TARGET_DIR_NAME).exists());
         assert!(live_target.exists());

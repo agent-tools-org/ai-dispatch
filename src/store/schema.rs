@@ -232,7 +232,6 @@ pub(super) fn migrate(store: &Store) -> Result<()> {
     let _ = conn.execute_batch("ALTER TABLE findings ADD COLUMN updated_at TEXT;");
     let _ = conn.execute_batch(CREATE_KG_SQL);
     let _ = conn.execute_batch("ALTER TABLE tasks ADD COLUMN principal_merge_override TEXT;");
-    let _ = conn.execute_batch("ALTER TABLE tasks ADD COLUMN effective_dir TEXT;");
     // Performance indexes for hot query paths
     let _ =
         conn.execute_batch("CREATE INDEX IF NOT EXISTS idx_tasks_created_at ON tasks(created_at);");
@@ -247,6 +246,7 @@ pub(super) fn migrate(store: &Store) -> Result<()> {
     super::migrations::migrate_declared_task_profile(&conn)?;
     super::migrations::migrate_observed_model(&conn)?;
     super::migrations::migrate_project_id(&conn)?;
+    super::migrations::migrate_effective_dir(&conn)?;
     Ok(())
 }
 

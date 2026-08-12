@@ -2,7 +2,9 @@
 // Exports: none (test module).
 // Deps: super::{cursor::CursorAgent, detect_agents, RunOpts}, crate::test_subprocess, tempfile.
 
-use super::{cursor::CursorAgent, detect_agents, Agent, RunOpts};
+use super::{
+    cursor::CursorAgent, detect_agents, ensure_resolved_binary_available, Agent, RunOpts,
+};
 use crate::test_subprocess;
 use crate::types::{AgentKind, EventKind, TaskId};
 use std::fs;
@@ -42,6 +44,29 @@ fn detect_agents_deduplicates_cursor_aliases() {
         &bin_dir,
     );
     assert_eq!(extract_marker(&output, "CURSOR_COUNT="), "1");
+}
+
+#[test]
+fn detect_agents_rejects_foreign_binary_under_claimable_name() {
+    let _permit = test_subprocess::acquire();
+    let bin_dir = foreign_agent_only_bin_dir();
+    let output = run_helper(
+        "agent::cursor_binary_tests::reports_cursor_count_for_subprocess",
+        &bin_dir,
+    );
+    assert_eq!(extract_marker(&output, "CURSOR_COUNT="), "0");
+}
+
+#[test]
+fn foreign_binary_is_not_reported_or_dispatchable() {
+    let _permit = test_subprocess::acquire();
+    let bin_dir = foreign_agent_only_bin_dir();
+    let output = run_helper(
+        "agent::cursor_binary_tests::reports_cursor_availability_for_subprocess",
+        &bin_dir,
+    );
+    assert_eq!(extract_marker(&output, "CURSOR_REPORTED="), "0");
+    assert_eq!(extract_marker(&output, "CURSOR_DISPATCHABLE="), "0");
 }
 
 #[test]
@@ -96,6 +121,15 @@ fn reports_cursor_count_for_subprocess() {
     println!("CURSOR_COUNT={count}");
 }
 
+#[test]
+#[ignore]
+fn reports_cursor_availability_for_subprocess() {
+    let reported = detect_agents().contains(&AgentKind::Cursor);
+    let dispatchable = ensure_resolved_binary_available("cursor", "cursor-agent").is_ok();
+    println!("CURSOR_REPORTED={}", u8::from(reported));
+    println!("CURSOR_DISPATCHABLE={}", u8::from(dispatchable));
+}
+
 fn fake_bin_dir() -> TempDir {
     let dir = tempfile::tempdir().unwrap();
     let which = String::from_utf8(
@@ -123,6 +157,16 @@ fn fake_bin_dir() -> TempDir {
 /// Same layout, except `agent` is xAI's Grok Build CLI rather than Cursor's.
 fn grok_shadowed_bin_dir() -> TempDir {
     let dir = fake_bin_dir();
+    write_executable(
+        &dir.path().join("agent"),
+        "#!/bin/sh\necho 'Grok Build TUI'\necho 'Usage: agent [OPTIONS] [PROMPT] [COMMAND]'\nexit 0\n",
+    );
+    dir
+}
+
+fn foreign_agent_only_bin_dir() -> TempDir {
+    let dir = fake_bin_dir();
+    fs::remove_file(dir.path().join("cursor-agent")).unwrap();
     write_executable(
         &dir.path().join("agent"),
         "#!/bin/sh\necho 'Grok Build TUI'\necho 'Usage: agent [OPTIONS] [PROMPT] [COMMAND]'\nexit 0\n",

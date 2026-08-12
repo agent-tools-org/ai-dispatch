@@ -414,7 +414,8 @@ fn ask_group_approval(group_id: &str, tasks: &[Task]) -> Result<ApprovalDecision
 
 fn run_approval_prompt(merge_action: &str, retry_action: &str, prompt: &str) -> Result<ApprovalDecision> {
     let actions = format!("{merge_action},{retry_action},Skip");
-    let output = match Command::new("hiboss")
+    let cmd = get_hiboss_command();
+    let output = match Command::new(&cmd)
         .args(["ask", "--actions", &actions, "--timeout", "300", prompt])
         .stdout(Stdio::piped())
         .output()
@@ -431,6 +432,26 @@ fn run_approval_prompt(merge_action: &str, retry_action: &str, prompt: &str) -> 
         return Ok(ApprovalDecision::Retry);
     }
     Ok(ApprovalDecision::Merge)
+}
+
+#[cfg(test)]
+thread_local! {
+    static TEST_HIBOSS_COMMAND: std::cell::RefCell<Option<String>> = const { std::cell::RefCell::new(None) };
+}
+
+#[cfg(test)]
+pub fn set_test_hiboss_command(cmd: Option<String>) {
+    TEST_HIBOSS_COMMAND.with(|cell| *cell.borrow_mut() = cmd);
+}
+
+fn get_hiboss_command() -> String {
+    #[cfg(test)]
+    {
+        if let Some(cmd) = TEST_HIBOSS_COMMAND.with(|cell| cell.borrow().clone()) {
+            return cmd;
+        }
+    }
+    "hiboss".to_string()
 }
 
 #[cfg(test)]

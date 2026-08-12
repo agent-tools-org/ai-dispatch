@@ -76,8 +76,8 @@ fn merge_group_with_output_refuses_first_poisoned_task_before_approval() {
     let repo = init_repo();
     let temp = tempfile::tempdir().unwrap();
     let log = temp.path().join("hiboss.log");
-    let _path = PathGuard::prepend(temp.path());
     write_command(temp.path(), "hiboss", &format!("printf called > '{}'\n", log.display()));
+    crate::cmd::merge::set_test_hiboss_command(Some(temp.path().join("hiboss").to_string_lossy().to_string()));
     let store = Store::open_memory().unwrap();
     let group = "wg-poisoned-merge";
     let mut task = grouped_task("t-poisoned-first", group, repo.path());
@@ -89,6 +89,7 @@ fn merge_group_with_output_refuses_first_poisoned_task_before_approval() {
 
     assert!(err.to_string().contains("recorded worktree path"));
     assert!(!log.exists(), "approval ran before poisoned worktree validation");
+    crate::cmd::merge::set_test_hiboss_command(None);
 }
 
 #[test]
@@ -103,10 +104,10 @@ fn merge_group_lanes_refuses_first_poisoned_task_before_gitbutler_setup() {
     .unwrap();
     let temp = tempfile::tempdir().unwrap();
     let setup_log = temp.path().join("setup.log");
-    let _cwd = CurrentDirGuard::set(repo.path());
-    let _path = PathGuard::prepend(temp.path());
-    let _but = EnvGuard::set("AID_GITBUTLER_TEST_PRESENT", "1");
+    crate::gitbutler::set_test_but_available(Some(true));
+    crate::gitbutler::set_test_project_present(Some(true));
     write_command(temp.path(), "but", &format!("pwd > '{}'\n", setup_log.display()));
+    crate::gitbutler::set_test_but_command(Some(temp.path().join("but").to_string_lossy().to_string()));
     let store = Store::open_memory().unwrap();
     let group = "wg-poisoned-lanes";
     let mut task = grouped_task("t-poisoned-lanes-first", group, repo.path());
@@ -117,6 +118,10 @@ fn merge_group_lanes_refuses_first_poisoned_task_before_gitbutler_setup() {
 
     assert!(err.to_string().contains("recorded worktree path"));
     assert!(!setup_log.exists(), "GitButler setup ran before worktree validation");
+    
+    crate::gitbutler::set_test_but_available(None);
+    crate::gitbutler::set_test_project_present(None);
+    crate::gitbutler::set_test_but_command(None);
 }
 
 #[test]
@@ -129,11 +134,15 @@ fn merge_group_lanes_refuses_failed_verification_without_force() {
     task.repo_path = None;
     task.verify_status = VerifyStatus::Failed;
     store.insert_task(&task).unwrap();
-    let _gitbutler = EnvGuard::set("AID_GITBUTLER", "0");
+    
+    // Test that validation fails on vfail without force.
+    // Use thread_local to ensure we don't bail out prematurely on AID_GITBUTLER=0 check if we reach it.
+    crate::gitbutler::set_test_but_available(Some(true));
 
     let err = merge_lanes::merge_group_lanes(&store, group, false).unwrap_err();
 
     assert!(err.to_string().contains("verification failed"));
+    crate::gitbutler::set_test_but_available(None);
 }
 
 #[test]
@@ -193,69 +202,4 @@ fn write_command(dir: &Path, name: &str, body: &str) {
         perms.set_mode(0o755);
     }
     std::fs::set_permissions(path, perms).unwrap();
-}
-
-struct EnvGuard {
-    key: &'static str,
-    previous: Option<String>,
-}
-
-impl EnvGuard {
-    fn set(key: &'static str, value: &str) -> Self {
-        let previous = env::var(key).ok();
-        unsafe { env::set_var(key, value) };
-        Self { key, previous }
-    }
-}
-
-impl Drop for EnvGuard {
-    fn drop(&mut self) {
-        match self.previous.take() {
-            Some(value) => unsafe { env::set_var(self.key, value) },
-            None => unsafe { env::remove_var(self.key) },
-        }
-    }
-}
-
-struct PathGuard {
-    previous: Option<String>,
-}
-
-impl PathGuard {
-    fn prepend(dir: &Path) -> Self {
-        let previous = env::var("PATH").ok();
-        let next = match previous.as_deref() {
-            Some(path) => format!("{}:{path}", dir.display()),
-            None => dir.display().to_string(),
-        };
-        unsafe { env::set_var("PATH", next) };
-        Self { previous }
-    }
-}
-
-impl Drop for PathGuard {
-    fn drop(&mut self) {
-        match self.previous.take() {
-            Some(value) => unsafe { env::set_var("PATH", value) },
-            None => unsafe { env::remove_var("PATH") },
-        }
-    }
-}
-
-struct CurrentDirGuard {
-    previous: PathBuf,
-}
-
-impl CurrentDirGuard {
-    fn set(path: &Path) -> Self {
-        let previous = env::current_dir().unwrap();
-        env::set_current_dir(path).unwrap();
-        Self { previous }
-    }
-}
-
-impl Drop for CurrentDirGuard {
-    fn drop(&mut self) {
-        env::set_current_dir(&self.previous).unwrap();
-    }
 }

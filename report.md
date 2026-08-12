@@ -1,14 +1,20 @@
-Root cause: recovery errors named only the tracked SHA, hiding the untracked backup directory.
+Root cause: merge-local capture could treat failed status as clean, reset edits created after capture, and hide colliding untracked backups.
 
-Fix committed as `8ca542a0`:
+Fix committed in `ca9fa17b`:
 
-- Recovery messages now name every handle: tracked SHA, reachable ref, and untracked backup path.
-- `stash create` commits are anchored under `refs/aid/merge-local/<sha>` to survive `git gc --prune=now`; the ref is removed after successful restoration.
-- Chose a dedicated ref over `git stash store` to avoid the shared stash stack and positional cleanup race.
+- Fail closed when `git status` fails.
+- Verify tracked worktree/index snapshots before reset.
+- Report every untracked collision and backup path.
+- Preserve recovery anchors until restoration completes.
+- Expire anchors older than 30 days on the next capture.
+- Split custody helpers to remain under 300 lines.
 
-Regression failed before the fix because `aid-merge-local-*` was absent from the error. Afterward:
+Validation:
 
-- 49 merge tests passed
-- `aid build` and clippy passed
-- File checks passed
-- Working tree clean
+- Pre-fix regressions reproduced.
+- `aid test`: 53/53 merge tests passed.
+- `aid build`: passed.
+- `aid build clippy -- --all-targets`: passed with existing warnings.
+- Worktree clean.
+
+The group-merge cleanup and `git merge --abort` paths were pre-existing and untouched.

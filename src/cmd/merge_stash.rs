@@ -2,20 +2,22 @@
 // Exports exact tracked-change capture and untracked-file backup/restore.
 // Deps: git plumbing and the standard filesystem APIs.
 
-use std::fs;
-use std::path::{Path, PathBuf};
 use std::process::Command;
-use std::time::{SystemTime, UNIX_EPOCH};
+#[path = "merge_stash_anchor.rs"]
+mod anchor;
+use anchor::{anchor_tracked_commit, drop_tracked_anchor, sweep_stale_anchors};
+#[path = "merge_stash_files.rs"]
+mod files;
+use files::{
+    backup_untracked, ensure_untracked_destinations_free, restore_backup_after_capture_failure,
+    restore_untracked, UntrackedBackup,
+};
 pub(crate) struct LocalChanges {
     tracked_ref: Option<String>,
     tracked_anchor: Option<String>,
     untracked: Option<UntrackedBackup>,
 }
 
-struct UntrackedBackup {
-    root: PathBuf,
-    paths: Vec<PathBuf>,
-}
 pub(crate) fn stash_local_changes(repo_dir: &str) -> Result<Option<LocalChanges>, String> {
     capture_local_changes(repo_dir, || {})
 }
@@ -33,9 +35,10 @@ fn capture_local_changes<F>(repo_dir: &str, after_capture: F) -> Result<Option<L
 where
     F: FnOnce(),
 {
-    if !has_local_changes(repo_dir) {
+    if !has_local_changes(repo_dir)? {
         return Ok(None);
     }
+    sweep_stale_anchors(repo_dir)?;
     aid_info!("[aid] Saving local changes before merge...");
     let tracked_ref = create_tracked_stash(repo_dir)?;
     let tracked_anchor = match tracked_ref.as_deref() {
@@ -43,6 +46,14 @@ where
         None => None,
     };
     after_capture();
+    let snapshot = snapshot_ref(repo_dir, tracked_ref.as_deref()).map_err(|error| {
+        format_capture_error(
+            tracked_ref.as_deref(),
+            tracked_anchor.as_deref(),
+            &error,
+            None,
+        )
+    })?;
     let untracked = match backup_untracked(repo_dir) {
         Ok(untracked) => untracked,
         Err(error) => {
@@ -50,17 +61,27 @@ where
                 tracked_ref.as_deref(),
                 tracked_anchor.as_deref(),
                 &error,
+                None,
             ));
         }
     };
-    if let Err(error) = clear_worktree(repo_dir) {
-        if let Some(backup) = &untracked {
-            let _ = restore_untracked(repo_dir, backup);
-        }
+    // Reset only when both tracked worktree and index still match the captured snapshot.
+    if let Err(error) = verify_snapshot(repo_dir, &snapshot, tracked_ref.is_some()) {
+        let backup = restore_backup_after_capture_failure(repo_dir, untracked.as_ref());
         return Err(format_capture_error(
             tracked_ref.as_deref(),
             tracked_anchor.as_deref(),
             &error,
+            backup,
+        ));
+    }
+    if let Err(error) = clear_worktree(repo_dir) {
+        let backup = restore_backup_after_capture_failure(repo_dir, untracked.as_ref());
+        return Err(format_capture_error(
+            tracked_ref.as_deref(),
+            tracked_anchor.as_deref(),
+            &error,
+            backup,
         ));
     }
     Ok(Some(LocalChanges { tracked_ref, tracked_anchor, untracked }))
@@ -69,14 +90,17 @@ pub(crate) fn restore_local_changes(
     repo_dir: &str,
     changes: &LocalChanges,
 ) -> Result<(), String> {
+    if let Some(backup) = &changes.untracked {
+        ensure_untracked_destinations_free(repo_dir, backup)?;
+    }
     if let Some(stash_ref) = &changes.tracked_ref {
         apply_tracked_stash(repo_dir, stash_ref)?;
     }
-    if let (Some(anchor), Some(commit)) = (&changes.tracked_anchor, &changes.tracked_ref) {
-        drop_tracked_anchor(repo_dir, anchor, commit)?;
-    }
     if let Some(backup) = &changes.untracked {
         restore_untracked(repo_dir, backup)?;
+    }
+    if let (Some(anchor), Some(commit)) = (&changes.tracked_anchor, &changes.tracked_ref) {
+        drop_tracked_anchor(repo_dir, anchor, commit)?;
     }
     Ok(())
 }
@@ -116,14 +140,15 @@ fn recovery_handles(
         handles.join(", ")
     }
 }
-fn has_local_changes(repo_dir: &str) -> bool {
-    Command::new("git")
+fn has_local_changes(repo_dir: &str) -> Result<bool, String> {
+    let output = Command::new("git")
         .args(["-C", repo_dir, "status", "--porcelain"])
         .output()
-        .ok()
-        .filter(|output| output.status.success())
-        .map(|output| !output.stdout.is_empty())
-        .unwrap_or(false)
+        .map_err(|error| format!("git status failed: {error}"))?;
+    if !output.status.success() {
+        return Err(format!("git status failed: {}", first_error_line(&output.stderr)));
+    }
+    Ok(!output.stdout.is_empty())
 }
 fn create_tracked_stash(repo_dir: &str) -> Result<Option<String>, String> {
     let output = Command::new("git")
@@ -139,102 +164,57 @@ fn create_tracked_stash(repo_dir: &str) -> Result<Option<String>, String> {
     let reference = String::from_utf8_lossy(&output.stdout).trim().to_string();
     Ok((!reference.is_empty()).then_some(reference))
 }
-fn anchor_tracked_commit(repo_dir: &str, commit: &str) -> Result<String, String> {
-    let anchor = format!("refs/aid/merge-local/{commit}");
+fn snapshot_ref(repo_dir: &str, tracked_ref: Option<&str>) -> Result<String, String> {
+    if let Some(tracked_ref) = tracked_ref {
+        return Ok(tracked_ref.to_string());
+    }
     let output = Command::new("git")
-        .args(["-C", repo_dir, "update-ref", &anchor, commit])
+        .args(["-C", repo_dir, "rev-parse", "HEAD"])
         .output()
-        .map_err(|error| format!("failed to retain tracked changes {commit}: {error}"))?;
-    if output.status.success() {
-        Ok(anchor)
-    } else {
-        Err(format!("failed to retain tracked changes {commit}: {}", first_error_line(&output.stderr)))
-    }
-}
-fn backup_untracked(repo_dir: &str) -> Result<Option<UntrackedBackup>, String> {
-    let paths = untracked_paths(repo_dir)?;
-    if paths.is_empty() {
-        return Ok(None);
-    }
-    let root = unique_backup_root()?;
-    for relative in &paths {
-        let source = Path::new(repo_dir).join(relative);
-        let destination = root.join(relative);
-        if let Err(error) = copy_entry(&source, &destination) {
-            let _ = fs::remove_dir_all(&root);
-            return Err(format!("failed to back up untracked file {}: {error}", relative.display()));
-        }
-    }
-    let mut removed = Vec::new();
-    for relative in &paths {
-        let source = Path::new(repo_dir).join(relative);
-        if let Err(error) = fs::remove_file(&source) {
-            for restored in &removed {
-                let _ = copy_entry(&root.join(restored), &Path::new(repo_dir).join(restored));
-            }
-            let _ = fs::remove_dir_all(&root);
-            return Err(format!("failed to clear untracked file {}: {error}", relative.display()));
-        }
-        removed.push(relative.clone());
-    }
-    Ok(Some(UntrackedBackup { root, paths }))
-}
-fn untracked_paths(repo_dir: &str) -> Result<Vec<PathBuf>, String> {
-    let output = Command::new("git")
-        .args(["-C", repo_dir, "ls-files", "--others", "--exclude-standard", "-z"])
-        .output()
-        .map_err(|error| format!("failed to list untracked files: {error}"))?;
+        .map_err(|error| format!("failed to identify merge snapshot: {error}"))?;
     if !output.status.success() {
-        return Err(format!("failed to list untracked files: {}", first_error_line(&output.stderr)));
+        return Err(format!("failed to identify merge snapshot: {}", first_error_line(&output.stderr)));
     }
-    Ok(String::from_utf8_lossy(&output.stdout)
-        .split('\0')
-        .filter(|path| !path.is_empty())
-        .map(PathBuf::from)
-        .collect())
-}
-fn unique_backup_root() -> Result<PathBuf, String> {
-    let timestamp = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map_err(|error| format!("failed to create local-change backup name: {error}"))?
-        .as_nanos();
-    let root = std::env::temp_dir().join(format!("aid-merge-local-{}-{timestamp}", std::process::id()));
-    fs::create_dir(&root).map_err(|error| format!("failed to create local-change backup: {error}"))?;
-    Ok(root)
+    Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
 }
 
-fn copy_entry(source: &Path, destination: &Path) -> Result<(), String> {
-    if let Some(parent) = destination.parent() {
-        fs::create_dir_all(parent).map_err(|error| error.to_string())?;
-    }
-    let file_type = fs::symlink_metadata(source)
-        .map_err(|error| error.to_string())?
-        .file_type();
-    if file_type.is_symlink() {
-        return copy_symlink(source, destination);
-    }
-    fs::copy(source, destination)
-        .map(|_| ())
-        .map_err(|error| error.to_string())
-}
-
-#[cfg(unix)]
-fn copy_symlink(source: &Path, destination: &Path) -> Result<(), String> {
-    std::os::unix::fs::symlink(fs::read_link(source).map_err(|error| error.to_string())?, destination)
-        .map_err(|error| error.to_string())
-}
-
-#[cfg(windows)]
-fn copy_symlink(source: &Path, destination: &Path) -> Result<(), String> {
-    let target = fs::read_link(source).map_err(|error| error.to_string())?;
-    if target.is_dir() {
-        std::os::windows::fs::symlink_dir(target, destination)
+fn verify_snapshot(repo_dir: &str, snapshot: &str, has_tracked_snapshot: bool) -> Result<(), String> {
+    let worktree = Command::new("git")
+        .args(["-C", repo_dir, "diff", "--quiet", snapshot, "--"])
+        .output()
+        .map_err(|error| format!("failed to verify merge snapshot: {error}"))?;
+    let index_snapshot = if has_tracked_snapshot {
+        let output = Command::new("git")
+            .args(["-C", repo_dir, "rev-parse", &format!("{snapshot}^2")])
+            .output()
+            .map_err(|error| format!("failed to verify merge snapshot: {error}"))?;
+        if !output.status.success() {
+            return Err("failed to verify merge snapshot".to_string());
+        }
+        String::from_utf8_lossy(&output.stdout).trim().to_string()
     } else {
-        std::os::windows::fs::symlink_file(target, destination)
+        "HEAD".to_string()
+    };
+    let index = Command::new("git")
+        .args([
+            "-C",
+            repo_dir,
+            "diff",
+            "--cached",
+            "--quiet",
+            &index_snapshot,
+            "--",
+        ])
+        .output()
+        .map_err(|error| format!("failed to verify merge snapshot: {error}"))?;
+    if worktree.status.code() == Some(1) || index.status.code() == Some(1) {
+        return Err("working tree changed after snapshot; reset skipped".to_string());
     }
-    .map_err(|error| error.to_string())
+    if !worktree.status.success() || !index.status.success() {
+        return Err("failed to verify merge snapshot".to_string());
+    }
+    Ok(())
 }
-
 fn clear_worktree(repo_dir: &str) -> Result<(), String> {
     let output = Command::new("git")
         .args(["-C", repo_dir, "reset", "--hard", "HEAD"])
@@ -245,18 +225,6 @@ fn clear_worktree(repo_dir: &str) -> Result<(), String> {
     } else {
         Err(format!("failed to clear tracked changes: {}", first_error_line(&output.stderr)))
     }
-}
-
-fn restore_untracked(repo_dir: &str, backup: &UntrackedBackup) -> Result<(), String> {
-    for relative in &backup.paths {
-        let destination = Path::new(repo_dir).join(relative);
-        if fs::symlink_metadata(&destination).is_ok() {
-            return Err(format!("untracked path already exists: {}", relative.display()));
-        }
-        copy_entry(&backup.root.join(relative), &destination)?;
-    }
-    fs::remove_dir_all(&backup.root)
-        .map_err(|error| format!("failed to remove local-change backup: {error}"))
 }
 
 fn apply_tracked_stash(repo_dir: &str, stash_ref: &str) -> Result<(), String> {
@@ -271,24 +239,13 @@ fn apply_tracked_stash(repo_dir: &str, stash_ref: &str) -> Result<(), String> {
     }
 }
 
-fn drop_tracked_anchor(repo_dir: &str, anchor: &str, commit: &str) -> Result<(), String> {
-    let output = Command::new("git")
-        .args(["-C", repo_dir, "update-ref", "-d", anchor, commit])
-        .output()
-        .map_err(|error| format!("failed to drop tracked-change ref {anchor}: {error}"))?;
-    if output.status.success() {
-        Ok(())
-    } else {
-        Err(format!("failed to drop tracked-change ref {anchor}: {}", first_error_line(&output.stderr)))
-    }
-}
-
 fn format_capture_error(
     tracked_ref: Option<&str>,
     tracked_anchor: Option<&str>,
     error: &str,
+    untracked: Option<&UntrackedBackup>,
 ) -> String {
-    format!("{error}; recovery handles: {}", recovery_handles(tracked_ref, tracked_anchor, None))
+    format!("{error}; recovery handles: {}", recovery_handles(tracked_ref, tracked_anchor, untracked))
 }
 
 fn first_error_line(stderr: &[u8]) -> String {

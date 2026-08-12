@@ -154,7 +154,7 @@ fn display_width(value: &str) -> usize {
 fn mode_hint(mode: StatusBarMode) -> String {
     match mode {
         StatusBarMode::Board | StatusBarMode::Dashboard => {
-            "a=all/today s=stats d=dashboard m=multipane j/k=nav Enter=detail q=quit".into()
+            "a=all/today h/l=groups j/k=tasks /=find Enter=detail q=quit".into()
         }
         StatusBarMode::Stats => "a=all/today s=stats v=legacy d=dashboard m=multipane q=quit".into(),
         StatusBarMode::Multipane { extra_panes } => {

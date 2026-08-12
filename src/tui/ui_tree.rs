@@ -39,7 +39,11 @@ pub(super) fn render_tree_view(frame: &mut ratatui::Frame<'_>, app: &App) {
         chunks[0],
     );
 
-    let nodes = tree_data::build_task_tree_with_creators(&app.tasks, &app.wg_creators);
+    let nodes = tree_data::build_task_tree_with_state(
+        &app.tasks,
+        &app.wg_creators,
+        &app.collapsed_projects,
+    );
     // We can't mutate app here (render takes &App), so tree_node_count
     // is updated in tick(). Use nodes.len() for bounds checking.
     if nodes.is_empty() {
@@ -54,31 +58,11 @@ pub(super) fn render_tree_view(frame: &mut ratatui::Frame<'_>, app: &App) {
                 let is_selected = i == app.tree_selected;
 
                 if node.is_group_header {
-                    // Workgroup header line
-                    let running_in_group = app.tasks.iter()
-                        .filter(|t| t.workgroup_id.as_deref() == task.workgroup_id.as_deref()
-                            && matches!(t.status, TaskStatus::Running))
-                        .count();
-                    let total_in_group = app.tasks.iter()
-                        .filter(|t| t.workgroup_id.as_deref() == task.workgroup_id.as_deref())
-                        .count();
-                    let done_in_group = app.tasks.iter()
-                        .filter(|t| t.workgroup_id.as_deref() == task.workgroup_id.as_deref() && t.status.is_terminal())
-                        .count();
-                    let mut spans = vec![
-                        Span::styled(&node.prefix, Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
-                        Span::styled(
-                            format!(" ({done_in_group}/{total_in_group})"),
-                            Style::default().fg(Color::Indexed(243)),
-                        ),
-                    ];
-                    if running_in_group > 0 {
-                        spans.push(Span::styled(
-                            format!(" {running_in_group}▶"),
-                            Style::default().fg(Color::Yellow),
-                        ));
-                    }
-                    let item = ListItem::new(Line::from(spans));
+                    let header = fit_group_header(&node.prefix, chunks[1].width as usize);
+                    let item = ListItem::new(Span::styled(
+                        header,
+                        Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD),
+                    ));
                     if is_selected {
                         item.style(Style::default().bg(Color::Indexed(237)).add_modifier(Modifier::BOLD))
                     } else {
@@ -157,7 +141,13 @@ pub(super) fn render_tree_view(frame: &mut ratatui::Frame<'_>, app: &App) {
     frame.render_widget(
         Paragraph::new(Line::from(vec![
             Span::styled(" j/k", Style::default().fg(Color::Yellow)),
-            Span::raw(":nav "),
+            Span::raw(":tasks "),
+            Span::styled("h/l", Style::default().fg(Color::Yellow)),
+            Span::raw(":groups "),
+            Span::styled("Space", Style::default().fg(Color::Yellow)),
+            Span::raw(":collapse "),
+            Span::styled("/", Style::default().fg(Color::Yellow)),
+            Span::raw(":find "),
             Span::styled("Enter", Style::default().fg(Color::Yellow)),
             Span::raw(":detail "),
             Span::styled("t", Style::default().fg(Color::Yellow)),
@@ -171,6 +161,17 @@ pub(super) fn render_tree_view(frame: &mut ratatui::Frame<'_>, app: &App) {
         ])),
         chunks[2],
     );
+}
+
+fn fit_group_header(prefix: &str, width: usize) -> String {
+    let value = prefix.trim_end();
+    let Some((label, count)) = value.rsplit_once(" (") else {
+        return truncate(value, width);
+    };
+    let suffix = format!(" ({count}");
+    let label_width = width.saturating_sub(suffix.chars().count());
+    let visible_label: String = label.chars().take(label_width).collect();
+    format!("{visible_label}{suffix}")
 }
 
 fn tree_duration(task: &Task) -> String {
@@ -194,7 +195,7 @@ fn tree_duration(task: &Task) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::tree_duration;
+    use super::{fit_group_header, tree_duration};
     use crate::types::{AgentKind, Task, TaskId, TaskStatus, VerifyStatus};
     use chrono::Local;
 
@@ -277,5 +278,12 @@ mod tests {
         t.status = TaskStatus::Done;
         t.duration_ms = None;
         assert_eq!(tree_duration(&t), "-");
+    }
+
+    #[test]
+    fn group_header_fit_preserves_count_after_long_project_label() {
+        let shown = fit_group_header("▸ project-with-a-long-id (1/42)", 12);
+        assert!(shown.contains("(1/42)"), "{shown}");
+        assert!(shown.chars().count() <= 12, "{shown}");
     }
 }

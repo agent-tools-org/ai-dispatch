@@ -13,10 +13,20 @@ use crate::types::{Task, TaskFilter, TaskStatus};
 impl App {
     pub(super) fn reload_tasks(&mut self) -> Result<()> {
         let tree_nodes =
-            super::super::tree_data::build_task_tree_with_creators(&self.tasks, &self.wg_creators);
+            super::super::tree_data::build_task_tree_with_state(
+                &self.tasks,
+                &self.wg_creators,
+                &self.collapsed_projects,
+            );
         let tree_anchor = tree_nodes
             .get(self.tree_selected)
-            .map(|n| (n.task.id.as_str().to_string(), n.is_group_header));
+            .map(|n| {
+                (
+                    n.task.id.as_str().to_string(),
+                    n.project_id.clone(),
+                    n.is_group_header,
+                )
+            });
         // Selection is identity-based: follow the selected task across reorders.
         let selected_id = self
             .tasks
@@ -35,7 +45,11 @@ impl App {
         self.tasks = tasks;
         self.selected = resolve_selected_index(&self.tasks, selected_id.as_deref(), prev_selected);
         let tree_nodes =
-            super::super::tree_data::build_task_tree_with_creators(&self.tasks, &self.wg_creators);
+            super::super::tree_data::build_task_tree_with_state(
+                &self.tasks,
+                &self.wg_creators,
+                &self.collapsed_projects,
+            );
         self.tree_node_count = tree_nodes.len();
         self.tree_selected = App::resolve_tree_selected(
             &tree_nodes,
@@ -52,16 +66,27 @@ impl App {
     /// (not jump to 0). Empty list → index 0.
     pub(super) fn resolve_tree_selected(
         nodes: &[super::super::tree_data::TreeNode],
-        anchor: Option<(String, bool)>,
+        anchor: Option<(String, Option<String>, bool)>,
         prev: usize,
     ) -> usize {
         if nodes.is_empty() {
             return 0;
         }
-        if let Some((id, is_header)) = anchor.as_ref() {
+        if let Some((id, project_id, is_header)) = anchor.as_ref() {
             if let Some(idx) = nodes
                 .iter()
-                .position(|n| n.task.id.as_str() == id && n.is_group_header == *is_header)
+                .position(|n| {
+                    n.task.id.as_str() == id
+                        && n.project_id.as_ref() == project_id.as_ref()
+                        && n.is_group_header == *is_header
+                })
+            {
+                return idx;
+            }
+            if *is_header
+                && let Some(idx) = nodes.iter().position(|node| {
+                    node.is_group_header && node.project_id.as_ref() == project_id.as_ref()
+                })
             {
                 return idx;
             }
@@ -82,7 +107,6 @@ impl App {
             self.load_today_with_active_tasks()?
         };
         self.apply_group_filter(&mut tasks);
-        self.apply_project_filter(&mut tasks);
         Ok(tasks)
     }
 
@@ -113,13 +137,6 @@ impl App {
                 task.workgroup_id.as_deref() == Some(group_id) || task.workgroup_id.is_none()
             });
         }
-    }
-
-    fn apply_project_filter(&self, tasks: &mut Vec<Task>) {
-        if self.show_all_projects {
-            return;
-        }
-        crate::project::retain_project(tasks, self.current_project_id.as_deref());
     }
 
     pub(super) fn load_metrics(&self, tasks: &[Task]) -> HashMap<String, ProcessMetrics> {

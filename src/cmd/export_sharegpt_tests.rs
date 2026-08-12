@@ -138,6 +138,20 @@ fn export_sharegpt_rejects_failed_tasks() {
     assert!(err.to_string().contains("successful tasks"));
 }
 
+#[test]
+fn export_sharegpt_rejects_hollow_delivery_done_tasks() {
+    let temp = TempDir::new().unwrap();
+    let _aid_home = AidHomeGuard::set(temp.path());
+    let store = Store::open_memory().unwrap();
+    let mut task = done_task("t-sharegpt-hollow", Some("resolved system prompt"));
+    task.delivery_assessment = Some(crate::types::DeliveryAssessment::HollowOutput);
+    store.insert_task(&task).unwrap();
+
+    let err = export_sharegpt(&store, task.id.as_str(), None).unwrap_err();
+
+    assert!(err.to_string().contains("successful tasks"));
+}
+
 fn done_task(id: &str, resolved_prompt: Option<&str>) -> Task {
     Task {
         id: TaskId(id.to_string()),

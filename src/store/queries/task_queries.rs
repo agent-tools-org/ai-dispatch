@@ -176,7 +176,7 @@ impl Store {
             if task.agent != agent {
                 continue;
             }
-            if !matches!(task.status, TaskStatus::Done | TaskStatus::Merged) {
+            if !task.outcome().is_success() {
                 continue;
             }
             if let Some(raw) = task.conclusive_model() {

@@ -228,11 +228,15 @@ pub fn apply_run_env(
 }
 
 pub(crate) fn which_exists(name: &str) -> bool {
-    Command::new("which")
+    if let Some(marker) = super::env_identity::identity_marker(name) {
+        return super::env_identity::binary_identity_matches(name, marker);
+    }
+    let on_path = Command::new("which")
         .arg(name)
         .output()
         .map(|o| o.status.success())
-        .unwrap_or(false)
+        .unwrap_or(false);
+    on_path
 }
 
 #[cfg(test)]

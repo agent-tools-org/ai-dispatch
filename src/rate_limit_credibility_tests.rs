@@ -12,7 +12,7 @@ fn isolated() -> tempfile::TempDir {
 }
 
 #[test]
-fn opencode_model_refusal_holds_only_the_named_provider() {
+fn opencode_model_refusal_holds_only_the_nvidia_provider() {
     let temp = isolated();
     let _guard = crate::paths::AidHomeGuard::set(temp.path());
     let agent = AgentKind::OpenCode;
@@ -21,11 +21,14 @@ fn opencode_model_refusal_holds_only_the_named_provider() {
         "Insufficient balance. Manage your billing here.",
         agent,
         None,
-        Some("opencode/glm-5.2"),
+        Some("nvidia/llama-4-maverick"),
     );
 
-    assert!(is_group_rate_limited(&agent, None, "opencode"));
+    assert!(is_group_rate_limited(&agent, None, "nvidia"));
     assert!(!is_rate_limited(&agent, None));
+    assert_eq!(active_group_holds(&agent, None).len(), 1);
+    assert!(clear_all_rate_limits_for_agent(&agent, None));
+    assert!(!is_group_rate_limited(&agent, None, "nvidia"));
 }
 
 #[test]
@@ -50,10 +53,10 @@ fn explicitly_named_opencode_provider_is_narrowed_without_a_model() {
     mark_rate_limited_for_message(
         &agent,
         None,
-        r#"{"providerID":"opencode-go","message":"Insufficient balance."}"#,
+        r#"{"providerID":"nvidia","message":"Insufficient balance."}"#,
     );
 
-    assert!(is_group_rate_limited(&agent, None, "opencode-go"));
+    assert!(is_group_rate_limited(&agent, None, "nvidia"));
     assert!(!is_rate_limited(&agent, None));
 }
 

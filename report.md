@@ -1,9 +1,9 @@
-Implemented and committed as `3ab3ea44`.
+Quota-marker review follow-up committed as `f7a5bcc2`.
 
-- OpenCode quota holds are scoped to known providers (`opencode`, `opencode-go`, `mimo`) when attribution is available.
-- Unattributed refusals record `provider: unknown` and conservatively hold the whole agent.
-- Markers retain the full refusal message.
-- Valid ISO/RFC3339 reset timestamps populate `recovery_at`; unknown times remain empty.
+- OpenCode groups derive from any provider prefix before `/`, including `nvidia`; no allowlist or model table.
+- Named provider refusals use the same extraction.
+- Unknown attribution records `provider: unknown` and conservatively holds the whole agent.
+- Full messages and usable ISO/RFC3339 reset times are preserved.
 
-Before fix: 2 regression failures, including `recovery_at: None` and truncated messages.  
-After fix: `aid build` passes; 2,297 tests passed, 0 failed.
+Before fix: both `nvidia` attribution tests failed.  
+After fix: `aid build` passed; 2,297 tests passed, 0 failed.

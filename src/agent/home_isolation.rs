@@ -5,6 +5,7 @@
 use std::ffi::OsStr;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::process::Command;
 
 use anyhow::Context;
 
@@ -19,6 +20,7 @@ pub const DEFAULT_DENYLIST: &[&str] = &[
 
 pub struct IsolatedHomeGuard {
     path: PathBuf,
+    real_home: PathBuf,
 }
 
 pub fn resolve_real_home() -> anyhow::Result<PathBuf> {
@@ -78,12 +80,24 @@ impl IsolatedHomeGuard {
             }
         };
         let target_home = base_dir.join("home");
+        let real_home_path = real_home.map(Path::to_path_buf);
         Self::build_isolated_home(real_home, &target_home)?;
-        Ok(Self { path: target_home })
+        let Some(real_home) = real_home_path else {
+            anyhow::bail!("cannot build isolated HOME: real home directory is unknown");
+        };
+        Ok(Self {
+            path: target_home,
+            real_home,
+        })
     }
 
     pub fn path(&self) -> &Path {
         &self.path
+    }
+
+    pub(crate) fn apply_toolchain_env(&self, cmd: &mut Command) {
+        cmd.env("CARGO_HOME", self.real_home.join(".cargo"));
+        cmd.env("RUSTUP_HOME", self.real_home.join(".rustup"));
     }
 
     fn build_isolated_home(real_home: Option<&Path>, isolated_path: &Path) -> anyhow::Result<()> {

@@ -27,16 +27,22 @@ fn webhook_status(status: TaskStatus) -> Option<&'static str> {
     match status {
         TaskStatus::Done | TaskStatus::Merged => Some("done"),
         TaskStatus::Failed => Some("failed"),
+        TaskStatus::Stopped => Some("stopped"),
         _ => return None,
     }
 }
 
 pub async fn fire_webhooks(config: &AidConfig, task: &Task, status: &str) {
     for webhook in &config.webhooks {
-        if (status == "done" && webhook.on_done) || (status == "failed" && webhook.on_failed) {
+        if should_fire_webhook(webhook, status) {
             send_webhook(webhook, task, status).await;
         }
     }
+}
+
+fn should_fire_webhook(webhook: &WebhookConfig, status: &str) -> bool {
+    (status == "done" && webhook.on_done)
+        || ((status == "failed" || status == "stopped") && webhook.on_failed)
 }
 
 async fn send_webhook(webhook: &WebhookConfig, task: &Task, status: &str) {
@@ -92,7 +98,8 @@ fn webhook_payload(task: &Task, status: &str) -> serde_json::Value {
 
 #[cfg(test)]
 mod tests {
-    use super::{webhook_payload, webhook_status};
+    use super::{should_fire_webhook, webhook_payload, webhook_status};
+    use crate::config::WebhookConfig;
     use crate::types::{AgentKind, Task, TaskId, TaskStatus, VerifyStatus};
     use chrono::Local;
 
@@ -147,8 +154,22 @@ mod tests {
     }
 
     #[test]
-    fn stopped_tasks_do_not_route_to_failure_webhooks() {
-        assert_eq!(webhook_status(TaskStatus::Stopped), None);
+    fn stopped_tasks_emit_distinct_terminal_webhook_status() {
+        assert_eq!(webhook_status(TaskStatus::Stopped), Some("stopped"));
         assert_eq!(webhook_status(TaskStatus::Failed), Some("failed"));
+    }
+
+    #[test]
+    fn stopped_tasks_use_terminal_webhook_subscription() {
+        let webhook = WebhookConfig {
+            name: "terminal".to_string(),
+            url: "https://example.test/hook".to_string(),
+            on_done: false,
+            on_failed: true,
+            headers: Vec::new(),
+        };
+
+        assert!(should_fire_webhook(&webhook, "stopped"));
+        assert!(!should_fire_webhook(&webhook, "done"));
     }
 }

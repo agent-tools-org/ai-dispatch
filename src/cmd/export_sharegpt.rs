@@ -7,13 +7,13 @@ use serde_json::Value;
 
 use crate::paths;
 use crate::store::Store;
-use crate::types::{EventKind, Task, TaskEvent, TaskStatus};
+use crate::types::{EventKind, Task, TaskEvent};
 
 pub fn export_sharegpt(store: &Store, task_id: &str, output: Option<&str>) -> Result<()> {
     let task = store
         .get_task(task_id)?
         .ok_or_else(|| anyhow::anyhow!("Task '{task_id}' not found"))?;
-    if !matches!(task.status, TaskStatus::Done | TaskStatus::Merged) {
+    if !task.outcome().is_success() {
         bail!("ShareGPT export only supports successful tasks");
     }
     let record = ShareGptRecord {

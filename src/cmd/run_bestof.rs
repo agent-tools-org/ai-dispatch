@@ -30,6 +30,7 @@ struct CandidateResult {
     task_id: TaskId,
     agent_label: String,
     status: TaskStatus,
+    is_success: bool,
     diff_line_count: usize,
     metric_score: Option<f64>,
 }
@@ -76,10 +77,6 @@ fn evaluate_metric(
     None
 }
 
-fn is_success_status(status: &TaskStatus) -> bool {
-    matches!(status, TaskStatus::Done | TaskStatus::Merged)
-}
-
 fn is_completed_best_of_status(status: &TaskStatus) -> bool {
     status.is_terminal() || *status == TaskStatus::AwaitingInput
 }
@@ -98,7 +95,8 @@ impl CandidateResult {
             .custom_agent_name
             .clone()
             .unwrap_or_else(|| task.agent.as_str().to_string());
-        let diff_line_count = if is_success_status(&task.status) {
+        let is_success = task.outcome().is_success();
+        let diff_line_count = if is_success {
             judge::gather_diff(&task)
                 .or_else(|| judge::read_output(&task))
                 .map(|text| text.lines().count())
@@ -106,7 +104,7 @@ impl CandidateResult {
         } else {
             0
         };
-        let metric_score = if is_success_status(&task.status) {
+        let metric_score = if is_success {
             metric_cmd.and_then(|cmd| {
                 evaluate_metric(cmd, task.worktree_path.as_deref(), task.repo_path.as_deref())
             })
@@ -117,6 +115,7 @@ impl CandidateResult {
             task_id: task.id.clone(),
             agent_label,
             status: task.status,
+            is_success,
             diff_line_count,
             metric_score,
         }
@@ -126,7 +125,7 @@ impl CandidateResult {
 fn pick_best_result(candidates: &[CandidateResult]) -> Option<&CandidateResult> {
     candidates
         .iter()
-        .filter(|c| is_success_status(&c.status))
+        .filter(|c| c.is_success)
         .max_by(|a, b| match (
             a.metric_score.filter(|score| score.is_finite()),
             b.metric_score.filter(|score| score.is_finite()),

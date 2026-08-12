@@ -80,7 +80,25 @@ pub(crate) fn seed_branch_target_dir(
     } else {
         super::cargo_target::seed_branch_target_from_root_entries(&layout.branch_root, &target)
     };
+    let outcome = ensure_branch_target_dir(&target, outcome);
     Some(outcome)
+}
+
+fn ensure_branch_target_dir(
+    target: &Path,
+    outcome: BranchTargetSeedOutcome,
+) -> BranchTargetSeedOutcome {
+    if target.is_dir() {
+        return outcome;
+    }
+    let target_display = target.to_string_lossy().into_owned();
+    match std::fs::create_dir_all(target) {
+        Ok(()) => outcome,
+        Err(err) => BranchTargetSeedOutcome::Skipped {
+            target: target_display,
+            reason: format!("seed did not create target directory: {err}"),
+        },
+    }
 }
 
 pub(crate) fn remove_branch_target_dir_if_unused(repo_dir: &Path, branch: &str) -> anyhow::Result<bool> {

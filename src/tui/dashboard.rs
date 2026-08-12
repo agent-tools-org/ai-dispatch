@@ -3,12 +3,12 @@
 use super::app::App;
 use super::metrics::ProcessMetrics;
 use super::route_display::format_route_fit;
+use super::status_bar::{render_status_bar, StatusBarMode};
 use super::ui::ui_helpers::task_status_label;
 use crate::types::{EventKind, Task, TaskStatus};
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::prelude::{Alignment, Color, Modifier, Style};
 use ratatui::widgets::{Block, Borders, List, ListItem, Paragraph};
-const FOOTER_HINT: &str = "a=all/today s=stats d=dashboard m=multipane j/k=nav Enter=detail q=quit";
 const ACTIVITY_KINDS: &[(EventKind, &str, &str)] = &[
     (EventKind::ToolCall, "tool call", "tool calls"),
     (EventKind::Build, "build", "builds"),
@@ -51,29 +51,7 @@ pub fn render_dashboard(frame: &mut ratatui::Frame<'_>, app: &App) {
     } else {
         render_cards(frame, app, chunks[1]);
     }
-    let done = app
-        .tasks
-        .iter()
-        .filter(|task| matches!(task.status, TaskStatus::Done | TaskStatus::Merged))
-        .count();
-    let running = app
-        .tasks
-        .iter()
-        .filter(|task| matches!(task.status, TaskStatus::Running | TaskStatus::AwaitingInput))
-        .count();
-    let footer_line = ratatui::text::Line::from(vec![
-        ratatui::text::Span::styled(
-            format!(" {} tasks ", app.tasks.len()),
-            Style::default().fg(Color::Indexed(250)),
-        ),
-        ratatui::text::Span::styled(format!("{}✓ ", done), Style::default().fg(Color::Green)),
-        ratatui::text::Span::styled(format!("{}▶ ", running), Style::default().fg(Color::Yellow)),
-        ratatui::text::Span::styled(
-            format!("│ {FOOTER_HINT}"),
-            Style::default().fg(Color::Indexed(243)),
-        ),
-    ]);
-    frame.render_widget(Paragraph::new(footer_line), chunks[2]);
+    render_status_bar(frame, chunks[2], app, StatusBarMode::Dashboard);
 }
 fn render_cards(frame: &mut ratatui::Frame<'_>, app: &App, area: Rect) {
     let (start, end) = visible_task_indices(app, area.height);

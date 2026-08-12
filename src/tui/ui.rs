@@ -20,6 +20,7 @@ use super::app::App;
 use super::charts;
 use super::dashboard;
 use super::multipane;
+use super::status_bar::{render_status_bar, StatusBarMode};
 use crate::cost;
 use crate::types::TaskStatus;
 
@@ -103,7 +104,7 @@ fn render_multipane_view(frame: &mut ratatui::Frame<'_>, app: &App) {
             }
         })
         .collect();
-    multipane::render_multipane(frame, &panes, app.active_pane);
+    multipane::render_multipane(frame, &panes, app, app.active_pane);
 }
 
 fn render_board(frame: &mut ratatui::Frame<'_>, app: &App) {
@@ -167,41 +168,7 @@ fn render_board(frame: &mut ratatui::Frame<'_>, app: &App) {
     }
     frame.render_stateful_widget(table, chunks[1], &mut state);
 
-    let done = app.tasks.iter().filter(|task| matches!(task.status, TaskStatus::Done | TaskStatus::Merged)).count();
-    let running = app
-        .tasks
-        .iter()
-        .filter(|task| {
-            matches!(
-                task.status,
-                TaskStatus::Running | TaskStatus::AwaitingInput | TaskStatus::Stalled
-            )
-        })
-        .count();
-    let failed = app.tasks.iter().filter(|task| matches!(task.status, TaskStatus::Failed)).count();
-    let status_line = Line::from(vec![
-        Span::styled(
-            format!(" {} tasks ", app.tasks.len()),
-            Style::default().fg(Color::Indexed(250)),
-        ),
-        Span::styled(
-            format!("{}✓ ", done),
-            Style::default().fg(Color::Green),
-        ),
-        Span::styled(
-            format!("{}▶ ", running),
-            Style::default().fg(Color::Yellow),
-        ),
-        Span::styled(
-            format!("{}✗ ", failed),
-            Style::default().fg(Color::Red),
-        ),
-        Span::styled(
-            "│ a=all/today s=stats d=dashboard m=multipane j/k=nav Enter=detail q=quit",
-            Style::default().fg(Color::Indexed(243)),
-        ),
-    ]);
-    frame.render_widget(Paragraph::new(status_line), chunks[2]);
+    render_status_bar(frame, chunks[2], app, StatusBarMode::Board);
 }
 
 fn status_to_color(status: TaskStatus) -> Color {

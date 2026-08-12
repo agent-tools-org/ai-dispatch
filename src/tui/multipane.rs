@@ -1,5 +1,7 @@
 // Multi-pane renderer for simultaneous task event stream display.
 // Exports render_multipane for split-pane layouts; depends on ratatui Layout.
+use super::app::App;
+use super::status_bar::{render_status_bar, StatusBarMode};
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::prelude::{Color, Modifier, Style};
 use ratatui::widgets::{Block, Borders, List, ListItem, Paragraph};
@@ -24,7 +26,12 @@ pub struct PaneData {
     pub total_events: usize,
 }
 
-pub fn render_multipane(frame: &mut ratatui::Frame<'_>, panes: &[PaneData], active_pane: usize) {
+pub fn render_multipane(
+    frame: &mut ratatui::Frame<'_>,
+    panes: &[PaneData],
+    app: &App,
+    active_pane: usize,
+) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([Constraint::Min(5), Constraint::Length(1)])
@@ -43,19 +50,11 @@ pub fn render_multipane(frame: &mut ratatui::Frame<'_>, panes: &[PaneData], acti
         );
     }
     let extra = panes.len().saturating_sub(6);
-    let footer = if extra > 0 {
-        format!(
-            "Tab=pane j/k PgUp/PgDn Home/End Enter=detail Esc=board q=quit | +{extra} more"
-        )
-    } else {
-        "Tab=pane j/k PgUp/PgDn Home/End Enter=detail Esc=board q=quit".into()
-    };
-    frame.render_widget(
-        Paragraph::new(ratatui::text::Line::from(ratatui::text::Span::styled(
-            footer,
-            Style::default().fg(Color::Indexed(243)),
-        ))),
+    render_status_bar(
+        frame,
         chunks[1],
+        app,
+        StatusBarMode::Multipane { extra_panes: extra },
     );
 }
 

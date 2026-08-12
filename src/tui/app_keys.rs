@@ -26,6 +26,9 @@ impl App {
             KeyCode::Char('s') => {
                 self.tree_mode = false;
                 self.stats_mode = !self.stats_mode;
+                if self.stats_mode {
+                    self.refresh_stats()?;
+                }
                 return Ok(());
             }
             KeyCode::Char('m') => {
@@ -56,6 +59,13 @@ impl App {
         if self.multipane_mode {
             return self.handle_multipane_key(key);
         }
+        if self.stats_mode {
+            if key.code == KeyCode::Char('v') {
+                self.legacy_stats_view = !self.legacy_stats_view;
+                return Ok(());
+            }
+            return self.handle_stats_key(key);
+        }
         if self.detail_mode {
             return self.handle_detail_key(key);
         }
@@ -67,6 +77,18 @@ impl App {
             KeyCode::Up | KeyCode::Char('k') => self.previous(),
             KeyCode::Enter => self.enter_detail_mode()?,
             _ => {}
+        }
+        Ok(())
+    }
+
+    fn handle_stats_key(&mut self, key: KeyEvent) -> Result<()> {
+        let next_range = match key.code {
+            KeyCode::Left | KeyCode::Char('h') => Some(self.stats_range.previous()),
+            KeyCode::Right | KeyCode::Char('l') => Some(self.stats_range.next()),
+            _ => None,
+        };
+        if let Some(range) = next_range {
+            self.set_stats_range(range)?;
         }
         Ok(())
     }

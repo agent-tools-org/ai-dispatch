@@ -18,8 +18,8 @@ impl App {
                 self.reload_tasks()?;
                 self.last_task_refresh = Instant::now();
             }
-            KeyCode::Down | KeyCode::Char('j') => self.move_within_group(1),
-            KeyCode::Up | KeyCode::Char('k') => self.move_within_group(-1),
+            KeyCode::Down | KeyCode::Char('j') => self.move_visible(1),
+            KeyCode::Up | KeyCode::Char('k') => self.move_visible(-1),
             KeyCode::Left | KeyCode::Char('h') => self.jump_group(-1),
             KeyCode::Right | KeyCode::Char('l') => self.jump_group(1),
             KeyCode::Char(' ') => self.toggle_selected_group(),
@@ -57,37 +57,16 @@ impl App {
         )
     }
 
-    fn move_within_group(&mut self, direction: i8) {
+    fn move_visible(&mut self, direction: i8) {
         let nodes = self.visible_nodes();
-        let Some(current) = nodes.get(self.tree_selected) else {
-            return;
-        };
-        let candidates: Vec<usize> = nodes
-            .iter()
-            .enumerate()
-            .filter(|(_, node)| {
-                !node.is_group_header && node.project_id == current.project_id
-            })
-            .map(|(index, _)| index)
-            .collect();
-        if candidates.is_empty() {
+        if nodes.is_empty() {
             return;
         }
-        let next = if current.is_group_header {
-            if direction > 0 { candidates[0] } else { *candidates.last().unwrap_or(&candidates[0]) }
+        let current = self.tree_selected.min(nodes.len() - 1);
+        let next = if direction > 0 {
+            current.saturating_add(1).min(nodes.len() - 1)
         } else {
-            let position = candidates
-                .iter()
-                .position(|index| *index == self.tree_selected)
-                .unwrap_or(0);
-            let next_position = if direction > 0 {
-                (position + 1) % candidates.len()
-            } else if position == 0 {
-                candidates.len() - 1
-            } else {
-                position - 1
-            };
-            candidates[next_position]
+            current.saturating_sub(1)
         };
         self.select_row(next, &nodes);
     }
@@ -149,7 +128,7 @@ impl App {
             .get(self.tree_selected)
             .is_some_and(|node| node.is_group_header)
         {
-            self.move_within_group(1);
+            self.move_visible(1);
         }
     }
 

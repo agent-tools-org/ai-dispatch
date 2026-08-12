@@ -112,11 +112,21 @@ fn compute_state_aggregates_project_metrics() {
             Some(0.3),
             VerifyStatus::Passed,
         ),
+        make_task(
+            "t-6",
+            AgentKind::Codex,
+            TaskStatus::Stopped,
+            dir.path(),
+            55,
+            30.0,
+            None,
+            VerifyStatus::Skipped,
+        ),
     ] {
         store.insert_task(&task).unwrap();
     }
     let state = compute_state(&store, &dir.path().to_string_lossy()).unwrap();
-    assert_eq!(state.health.total_tasks, 5);
+    assert_eq!(state.health.total_tasks, 6);
     assert!((state.health.recent_success_rate - 0.6).abs() < f64::EPSILON);
     assert_eq!(state.performance.best_agent.as_deref(), Some("codex"));
     assert_eq!(state.context.last_task_id.as_deref(), Some("t-1"));

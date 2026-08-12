@@ -207,7 +207,7 @@ fn status_style(status: TaskStatus) -> Style {
         TaskStatus::AwaitingInput => Style::default().fg(Color::Magenta),
         TaskStatus::Stalled => Style::default().fg(Color::LightRed),
         TaskStatus::Failed => Style::default().fg(Color::Red),
-        TaskStatus::Stopped => Style::default().fg(Color::Red),
+        TaskStatus::Stopped => Style::default().fg(Color::Yellow),
         TaskStatus::Pending => Style::default().fg(Color::Gray),
         TaskStatus::Waiting => Style::default().fg(Color::DarkGray),
         TaskStatus::Skipped => Style::default().fg(Color::Blue),

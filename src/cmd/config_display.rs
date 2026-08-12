@@ -8,7 +8,7 @@ use crate::agent::custom::CapabilityScores;
 use crate::cost;
 use crate::model_catalog::{AGENT_MODELS, AGENT_PROFILES};
 use crate::rate_limit;
-use crate::types::{AgentKind, Task};
+use crate::types::{AgentKind, Task, TaskOutcome};
 
 pub(crate) struct AgentHistory {
     task_count: usize,
@@ -176,11 +176,19 @@ pub(crate) fn compute_agent_history(tasks: &[Task]) -> HashMap<AgentKind, AgentH
             .filter(|task| task.outcome().is_success())
             .count();
         let total_cost: f64 = agent_tasks.iter().filter_map(|task| task.cost_usd).sum();
+        let measured_count = agent_tasks
+            .iter()
+            .filter(|task| task.outcome() != TaskOutcome::Stopped)
+            .count();
         history.insert(
             agent,
             AgentHistory {
                 task_count: agent_tasks.len(),
-                success_rate: (done_count as f64 / agent_tasks.len() as f64) * 100.0,
+                success_rate: if measured_count == 0 {
+                    0.0
+                } else {
+                    (done_count as f64 / measured_count as f64) * 100.0
+                },
                 avg_cost: total_cost / agent_tasks.len() as f64,
             },
         );
@@ -191,6 +199,9 @@ pub(crate) fn compute_agent_history(tasks: &[Task]) -> HashMap<AgentKind, AgentH
 pub(crate) fn compute_model_history(tasks: &[Task]) -> HashMap<(AgentKind, String), ModelHistory> {
     let mut accum: HashMap<(AgentKind, String), (usize, usize, f64)> = HashMap::new();
     for task in tasks {
+        if task.outcome() == TaskOutcome::Stopped {
+            continue;
+        }
         let model = task.costing_model().unwrap_or("default").to_string();
         let entry = accum.entry((task.agent, model)).or_insert((0, 0, 0.0));
         entry.0 += 1;

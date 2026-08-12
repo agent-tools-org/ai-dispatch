@@ -15,6 +15,8 @@ use crate::types::{EventKind, Task, TaskEvent, TaskStatus};
 mod app_keys;
 #[path = "app_tasks.rs"]
 mod app_tasks;
+#[path = "app_panes.rs"]
+mod app_panes;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum DetailTab {
@@ -59,7 +61,7 @@ pub struct App {
     pub wg_creators: HashMap<String, String>,
     pub show_all: bool,
     pub active_pane: usize,
-    pub pane_scroll_offsets: Vec<usize>,
+    pub pane_scroll_offsets: HashMap<String, usize>,
     pub should_quit: bool,
     task_id_filter: Option<String>,
     group_filter: Option<String>,
@@ -67,6 +69,7 @@ pub struct App {
     store: Arc<Store>,
     last_metrics_refresh: Instant,
     cached_terminal_milestones: HashMap<String, String>,
+    active_pane_task_id: Option<String>,
 }
 
 impl App {
@@ -89,7 +92,7 @@ impl App {
             wg_creators: HashMap::new(),
             show_all: false,
             active_pane: 0,
-            pane_scroll_offsets: Vec::new(),
+            pane_scroll_offsets: HashMap::new(),
             should_quit: false,
             task_id_filter: options.task_id,
             group_filter: options.group,
@@ -97,30 +100,14 @@ impl App {
             store,
             last_metrics_refresh: Instant::now(),
             cached_terminal_milestones: HashMap::new(),
+            active_pane_task_id: None,
         };
         app.reload_tasks()?;
         Ok(app)
     }
 
     pub fn tick(&mut self) -> Result<()> {
-        let tree_anchor = if self.tree_mode {
-            let nodes =
-                super::tree_data::build_task_tree_with_creators(&self.tasks, &self.wg_creators);
-            nodes
-                .get(self.tree_selected)
-                .map(|n| (n.task.id.as_str().to_string(), n.is_group_header))
-        } else {
-            None
-        };
         self.reload_tasks()?;
-        // Keep tree selection on the same node identity across refreshes.
-        if self.tree_mode {
-            let nodes =
-                super::tree_data::build_task_tree_with_creators(&self.tasks, &self.wg_creators);
-            self.tree_node_count = nodes.len();
-            self.tree_selected =
-                Self::resolve_tree_selected(&nodes, tree_anchor, self.tree_selected);
-        }
         // Only refresh process metrics every 2 seconds (ps fork is expensive)
         if self.last_metrics_refresh.elapsed().as_secs() >= 2 {
             self.metrics = self.load_metrics(&self.tasks);
@@ -130,9 +117,8 @@ impl App {
             self.load_dashboard_events()?;
         }
         if self.multipane_mode {
+            self.reconcile_active_pane();
             self.load_multipane_events()?;
-            let count = self.multipane_tasks().len();
-            self.pane_scroll_offsets.resize(count, 0);
             self.clamp_all_pane_scrolls();
         }
         if self.detail_mode {
@@ -196,6 +182,25 @@ impl App {
     }
     pub fn pane_count(&self) -> usize {
         self.multipane_tasks().len().min(6)
+    }
+    pub(crate) fn pane_scroll_offset(&self, task_id: &str) -> usize {
+        self.pane_scroll_offsets.get(task_id).copied().unwrap_or(0)
+    }
+    fn reconcile_active_pane(&mut self) {
+        let tasks = self.multipane_tasks();
+        if tasks.is_empty() {
+            self.active_pane = 0;
+            self.active_pane_task_id = None;
+            return;
+        }
+        let index = self
+            .active_pane_task_id
+            .as_deref()
+            .and_then(|id| tasks.iter().position(|task| task.id.as_str() == id))
+            .unwrap_or_else(|| self.active_pane.min(tasks.len() - 1));
+        let task_id = tasks[index].id.as_str().to_string();
+        self.active_pane = index;
+        self.active_pane_task_id = Some(task_id);
     }
     pub fn scope_label(&self) -> String {
         let scope = if self.show_all && self.task_id_filter.is_none() {

@@ -12,6 +12,11 @@ use crate::types::{Task, TaskFilter, TaskStatus};
 
 impl App {
     pub(super) fn reload_tasks(&mut self) -> Result<()> {
+        let tree_nodes =
+            super::super::tree_data::build_task_tree_with_creators(&self.tasks, &self.wg_creators);
+        let tree_anchor = tree_nodes
+            .get(self.tree_selected)
+            .map(|n| (n.task.id.as_str().to_string(), n.is_group_header));
         // Selection is identity-based: follow the selected task across reorders.
         let selected_id = self
             .tasks
@@ -28,6 +33,17 @@ impl App {
         }
         self.tasks = tasks;
         self.selected = resolve_selected_index(&self.tasks, selected_id.as_deref(), prev_selected);
+        let tree_nodes =
+            super::super::tree_data::build_task_tree_with_creators(&self.tasks, &self.wg_creators);
+        self.tree_node_count = tree_nodes.len();
+        self.tree_selected = App::resolve_tree_selected(
+            &tree_nodes,
+            tree_anchor,
+            self.tree_selected,
+        );
+        if self.multipane_mode {
+            self.reconcile_active_pane();
+        }
         Ok(())
     }
 

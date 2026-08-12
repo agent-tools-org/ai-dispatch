@@ -129,3 +129,133 @@ fn detail_scroll_clamps_to_content() {
     app.clamp_detail_scroll();
     assert!(app.detail_scroll < 10_000);
 }
+
+#[test]
+fn multipane_focus_follows_task_identity_when_refresh_reorders_panes() {
+    let store = Arc::new(Store::open_memory().unwrap());
+    let mut target = make_task("t-pane-focus");
+    target.created_at = Local::now() - Duration::seconds(10);
+    store.insert_task(&target).unwrap();
+    let mut older = make_task("t-pane-older");
+    older.created_at = Local::now() - Duration::seconds(20);
+    store.insert_task(&older).unwrap();
+
+    let mut app = App::new(
+        store.clone(),
+        super::super::RunOptions {
+            task_id: None,
+            group: None,
+        },
+    )
+    .unwrap();
+    app.handle_key(KeyEvent::new(KeyCode::Char('m'), KeyModifiers::NONE))
+        .unwrap();
+
+    let mut inserted = make_task("t-pane-running");
+    inserted.status = TaskStatus::Running;
+    store.insert_task(&inserted).unwrap();
+    app.reload_tasks().unwrap();
+
+    assert_eq!(app.multipane_tasks()[app.active_pane].id.as_str(), "t-pane-focus");
+}
+
+#[test]
+fn multipane_scroll_follows_task_identity_when_refresh_reorders_panes() {
+    let store = Arc::new(Store::open_memory().unwrap());
+    let mut target = make_task("t-pane-scroll");
+    target.created_at = Local::now() - Duration::seconds(10);
+    store.insert_task(&target).unwrap();
+    let mut older = make_task("t-pane-scroll-older");
+    older.created_at = Local::now() - Duration::seconds(20);
+    store.insert_task(&older).unwrap();
+
+    let mut app = App::new(
+        store.clone(),
+        super::super::RunOptions {
+            task_id: None,
+            group: None,
+        },
+    )
+    .unwrap();
+    app.multipane_mode = true;
+    app.pane_scroll_offsets
+        .insert("t-pane-scroll".to_string(), 3);
+    app.pane_scroll_offsets
+        .insert("t-pane-scroll-older".to_string(), 7);
+
+    let mut inserted = make_task("t-pane-scroll-running");
+    inserted.status = TaskStatus::Running;
+    store.insert_task(&inserted).unwrap();
+    app.reload_tasks().unwrap();
+
+    assert_eq!(app.pane_scroll_offset("t-pane-scroll"), 3);
+}
+
+#[test]
+fn tree_selection_survives_refresh_while_tree_mode_is_inactive() {
+    let store = Arc::new(Store::open_memory().unwrap());
+    let mut selected = make_task("t-tree-selected");
+    selected.created_at = Local::now() - Duration::seconds(20);
+    store.insert_task(&selected).unwrap();
+    let mut first = make_task("t-tree-first");
+    first.created_at = Local::now() - Duration::seconds(10);
+    store.insert_task(&first).unwrap();
+
+    let mut app = App::new(
+        store.clone(),
+        super::super::RunOptions {
+            task_id: None,
+            group: None,
+        },
+    )
+    .unwrap();
+    app.handle_key(KeyEvent::new(KeyCode::Char('t'), KeyModifiers::NONE))
+        .unwrap();
+    app.tick().unwrap();
+    app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE))
+        .unwrap();
+    app.handle_key(KeyEvent::new(KeyCode::Char('t'), KeyModifiers::NONE))
+        .unwrap();
+
+    let mut inserted = make_task("t-tree-new");
+    inserted.created_at = Local::now();
+    store.insert_task(&inserted).unwrap();
+    app.tick().unwrap();
+    app.handle_key(KeyEvent::new(KeyCode::Char('t'), KeyModifiers::NONE))
+        .unwrap();
+    app.tick().unwrap();
+
+    let nodes = crate::tui::tree_data::build_task_tree_with_creators(&app.tasks, &app.wg_creators);
+    assert_eq!(nodes[app.tree_selected].task.id.as_str(), "t-tree-selected");
+}
+
+#[test]
+fn multipane_enter_opens_task_identity_after_refresh_reorders_panes() {
+    let store = Arc::new(Store::open_memory().unwrap());
+    let mut target = make_task("t-enter-target");
+    target.created_at = Local::now() - Duration::seconds(10);
+    store.insert_task(&target).unwrap();
+    let mut older = make_task("t-enter-older");
+    older.created_at = Local::now() - Duration::seconds(20);
+    store.insert_task(&older).unwrap();
+
+    let mut app = App::new(
+        store.clone(),
+        super::super::RunOptions {
+            task_id: None,
+            group: None,
+        },
+    )
+    .unwrap();
+    app.handle_key(KeyEvent::new(KeyCode::Char('m'), KeyModifiers::NONE))
+        .unwrap();
+
+    let mut inserted = make_task("t-enter-running");
+    inserted.status = TaskStatus::Running;
+    store.insert_task(&inserted).unwrap();
+    app.reload_tasks().unwrap();
+    app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
+        .unwrap();
+
+    assert_eq!(app.selected_task().map(|task| task.id.as_str()), Some("t-enter-target"));
+}

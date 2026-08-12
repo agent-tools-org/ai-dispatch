@@ -23,7 +23,7 @@ pub(crate) fn sandbox_fallback_target_dir() -> Option<String> {
     Some(dir.to_string_lossy().into_owned())
 }
 
-fn cwd_key(cwd: &std::path::Path) -> String {
+pub(crate) fn cwd_key(cwd: &std::path::Path) -> String {
     use std::collections::hash_map::DefaultHasher;
     use std::hash::{Hash, Hasher};
     let mut hasher = DefaultHasher::new();

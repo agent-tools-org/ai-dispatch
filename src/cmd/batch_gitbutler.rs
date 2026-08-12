@@ -169,7 +169,8 @@ mod tests {
             .status()
             .unwrap()
             .success());
-        let _but = EnvGuard::set("AID_GITBUTLER_TEST_PRESENT", "1");
+        crate::gitbutler::set_test_but_available(Some(true));
+        crate::gitbutler::set_test_project_present(Some(true));
         let project_path = repo.path().join(".aid/project.toml");
         fs::create_dir_all(project_path.parent().unwrap()).unwrap();
         fs::write(&project_path, "[project]\nid = \"demo\"\ngitbutler = \"auto\"\n").unwrap();
@@ -177,5 +178,8 @@ mod tests {
         let hint = merge_back_hint(repo.path(), "wg-demo").unwrap();
         assert!(hint.contains("aid merge --lanes --group wg-demo"));
         assert!(hint.contains("aid merge --group wg-demo"));
+
+        crate::gitbutler::set_test_but_available(None);
+        crate::gitbutler::set_test_project_present(None);
     }
 }

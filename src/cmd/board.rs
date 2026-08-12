@@ -58,6 +58,8 @@ pub fn run(
     let now = Local::now().timestamp();
     let mut repeat_count = 0;
     let mut force_state = ForceMarkerState::default();
+    let mut poll_notice = None;
+    let mut poll_failed = false;
     if !json {
         let anti_poll = anti_poll_status(&marker_path, &fingerprint, now, force);
         force_state = anti_poll.1;
@@ -65,24 +67,18 @@ pub fn run(
         repeat_count = match anti_poll.0 {
             AntiPollStatus::Allowed(repeat_count) => repeat_count,
             AntiPollStatus::Cooldown(elapsed) => {
-                write_board_marker(&marker_path, &fingerprint, now, 0, 0, 0);
-                aid_hint!("[aid] Board checked {elapsed}s ago. {watch_hint}");
-                std::process::exit(0);
+                poll_notice = Some(format!("[aid] Board checked {elapsed}s ago. {watch_hint}"));
+                0
             }
             AntiPollStatus::Repeat(repeat_count) => {
-                write_board_marker(&marker_path, &fingerprint, now, repeat_count, 0, 0);
-                aid_warn!("[aid] No changes after {repeat_count} checks. {watch_hint} Exiting.");
-                std::process::exit(1);
-            }
-            AntiPollStatus::ForceCooldown(elapsed) => {
-                write_board_marker(&marker_path, &fingerprint, now, 0, force_state.count, force_state.window_start);
-                aid_hint!("[aid] Board is rate-limited ({elapsed}s/30s). {watch_hint}");
-                std::process::exit(0);
+                poll_notice = Some(format!("[aid] No changes after {repeat_count} checks. {watch_hint} Exiting."));
+                poll_failed = true;
+                repeat_count
             }
             AntiPollStatus::ForceBlocked => {
-                write_board_marker(&marker_path, &fingerprint, now, 0, force_state.count, force_state.window_start);
-                aid_warn!("[aid] Repeated polling detected. Board locked for 60s. {watch_hint}");
-                std::process::exit(1);
+                poll_notice = Some(format!("[aid] Repeated polling detected. Board locked for 60s. {watch_hint}"));
+                poll_failed = true;
+                0
             }
         };
     }
@@ -98,11 +94,19 @@ pub fn run(
         json,
     )?;
     stdout.flush()?;
-    if !json && repeat_count > 0 {
-        let watch_hint = watch_instead_of_polling_hint(&tasks);
-        aid_hint!("[aid] No status changes since last check ({repeat_count}x). {watch_hint}");
+    if let Some(notice) = poll_notice {
+        if poll_failed {
+            aid_warn!("{notice}");
+        } else {
+            aid_hint!("{notice}");
+        }
     }
-    write_board_marker(&marker_path, &fingerprint, now, repeat_count, force_state.count, force_state.window_start);
+    if !json {
+        write_board_marker(&marker_path, &fingerprint, now, repeat_count, force_state.count, force_state.window_start);
+    }
+    if poll_failed {
+        std::process::exit(1);
+    }
     Ok(())
 }
 

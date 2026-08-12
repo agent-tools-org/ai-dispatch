@@ -8,7 +8,7 @@ use crate::types::{AgentKind, Task, TaskOutcome};
 use chrono::{Duration, Local};
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::prelude::{Color, Modifier, Style};
-use ratatui::text::{Line, Span};
+use ratatui::text::Line;
 use ratatui::widgets::{Bar, BarChart, BarGroup, Block, Borders, Gauge, Paragraph, Sparkline};
 
 const AGENTS: &[AgentKind] = AgentKind::ALL_BUILTIN;

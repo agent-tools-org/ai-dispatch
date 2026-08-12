@@ -6,12 +6,13 @@ use super::*;
 use crate::store::TaskStatsRow;
 use chrono::{DateTime, Local, TimeZone};
 
-fn task(id: &str, created: &str, completed: Option<&str>, repo: Option<&str>, tokens: Option<i64>) -> TaskStatsRow {
+fn task(id: &str, created: &str, completed: Option<&str>, repo: Option<&str>, project_id: Option<&str>, tokens: Option<i64>) -> TaskStatsRow {
     TaskStatsRow {
         id: id.to_string(),
         created_at: at(created),
         completed_at: completed.map(at),
         repo_path: repo.map(str::to_string),
+        project_id: project_id.map(str::to_string),
         tokens,
     }
 }
@@ -23,9 +24,9 @@ fn at(value: &str) -> DateTime<Local> {
 #[test]
 fn buckets_tasks_by_created_day_and_sums_recorded_tokens() {
     let tasks = vec![
-        task("t-1", "2026-08-10 09:00:00", Some("2026-08-10 09:10:00"), Some("/repo/a"), Some(120)),
-        task("t-2", "2026-08-10 12:00:00", None, Some("/repo/a"), None),
-        task("t-3", "2026-08-11 12:00:00", Some("2026-08-11 12:20:00"), Some("/repo/b"), Some(80)),
+        task("t-1", "2026-08-10 09:00:00", Some("2026-08-10 09:10:00"), Some("/repo/a"), Some("project-a"), Some(120)),
+        task("t-2", "2026-08-10 12:00:00", None, Some("/repo/a"), Some("project-a"), None),
+        task("t-3", "2026-08-11 12:00:00", Some("2026-08-11 12:20:00"), Some("/repo/b"), Some("project-b"), Some(80)),
     ];
     let snapshot = aggregate_tasks(&tasks, StatsRange::AllTime, at("2026-08-11 18:00:00"));
 
@@ -40,9 +41,9 @@ fn buckets_tasks_by_created_day_and_sums_recorded_tokens() {
 #[test]
 fn filters_tasks_to_selected_date_range() {
     let tasks = vec![
-        task("t-old", "2026-07-01 09:00:00", Some("2026-07-01 09:10:00"), Some("/repo/a"), Some(10)),
-        task("t-in", "2026-08-06 09:00:00", Some("2026-08-06 09:10:00"), Some("/repo/a"), Some(20)),
-        task("t-today", "2026-08-12 09:00:00", None, Some("/repo/b"), Some(30)),
+        task("t-old", "2026-07-01 09:00:00", Some("2026-07-01 09:10:00"), Some("/repo/a"), Some("project-a"), Some(10)),
+        task("t-in", "2026-08-06 09:00:00", Some("2026-08-06 09:10:00"), Some("/repo/a"), Some("project-a"), Some(20)),
+        task("t-today", "2026-08-12 09:00:00", None, Some("/repo/b"), Some("project-b"), Some(30)),
     ];
     let snapshot = aggregate_tasks(&tasks, StatsRange::Last7Days, at("2026-08-12 18:00:00"));
 
@@ -56,20 +57,56 @@ fn filters_tasks_to_selected_date_range() {
 #[test]
 fn rolls_up_projects_and_ranks_by_task_count_then_tokens() {
     let tasks = vec![
-        task("t-1", "2026-08-10 09:00:00", Some("2026-08-10 09:01:00"), Some("/repo/a"), Some(10)),
-        task("t-2", "2026-08-10 10:00:00", Some("2026-08-10 10:03:00"), Some("/repo/a"), Some(30)),
-        task("t-3", "2026-08-10 11:00:00", Some("2026-08-10 11:02:00"), Some("/repo/b"), Some(100)),
-        task("t-4", "2026-08-10 12:00:00", None, None, None),
+        task("t-1", "2026-08-10 09:00:00", Some("2026-08-10 09:01:00"), Some("/repo/a"), Some("project-a"), Some(10)),
+        task("t-2", "2026-08-10 10:00:00", Some("2026-08-10 10:03:00"), Some("/repo/a"), Some("project-a"), Some(30)),
+        task("t-3", "2026-08-10 11:00:00", Some("2026-08-10 11:02:00"), Some("/repo/b"), Some("project-b"), Some(100)),
+        task("t-4", "2026-08-10 12:00:00", None, None, None, None),
     ];
     let snapshot = aggregate_tasks(&tasks, StatsRange::AllTime, at("2026-08-10 18:00:00"));
 
-    assert_eq!(snapshot.projects[0].name, "/repo/a");
+    assert_eq!(snapshot.projects[0].name, "project-a");
     assert_eq!(snapshot.projects[0].task_count, 2);
     assert_eq!(snapshot.projects[0].tokens, 40);
     assert_eq!(snapshot.projects[0].duration_secs, 240);
-    assert_eq!(snapshot.projects[1].name, "/repo/b");
-    assert_eq!(snapshot.projects[2].name, "(no repo_path)");
+    assert_eq!(snapshot.projects[1].name, "project-b");
+    assert_eq!(snapshot.projects[2].name, "unattributed");
     assert_eq!(snapshot.projects[2].token_task_count, 0);
+}
+
+#[test]
+fn groups_rollups_by_project_id_not_repo_path() {
+    let tasks = vec![
+        task("t-a1", "2026-08-10 09:00:00", Some("2026-08-10 09:01:00"), Some("/repo/a"), Some("project-a"), Some(10)),
+        task("t-a2", "2026-08-10 10:00:00", Some("2026-08-10 10:02:00"), Some("/repo/b"), Some("project-a"), Some(20)),
+        task("t-b1", "2026-08-10 11:00:00", None, Some("/repo/a"), Some("project-b"), Some(100)),
+    ];
+    let snapshot = aggregate_tasks(&tasks, StatsRange::AllTime, at("2026-08-10 18:00:00"));
+
+    assert_eq!(
+        snapshot.projects,
+        vec![
+            ProjectStats { name: "project-a".to_string(), task_count: 2, tokens: 30, token_task_count: 2, duration_secs: 180, duration_task_count: 2 },
+            ProjectStats { name: "project-b".to_string(), task_count: 1, tokens: 100, token_task_count: 1, duration_secs: 0, duration_task_count: 0 },
+        ],
+    );
+}
+
+#[test]
+fn keeps_unattributed_tasks_in_an_explicit_bucket() {
+    let tasks = vec![
+        task("t-u1", "2026-08-10 09:00:00", None, Some("/repo/a"), None, Some(7)),
+        task("t-u2", "2026-08-10 10:00:00", None, Some("/repo/b"), None, Some(3)),
+        task("t-p1", "2026-08-10 11:00:00", None, Some("/repo/a"), Some("project-a"), Some(5)),
+    ];
+    let snapshot = aggregate_tasks(&tasks, StatsRange::AllTime, at("2026-08-10 18:00:00"));
+
+    assert_eq!(
+        snapshot.projects,
+        vec![
+            ProjectStats { name: "unattributed".to_string(), task_count: 2, tokens: 10, token_task_count: 2, duration_secs: 0, duration_task_count: 0 },
+            ProjectStats { name: "project-a".to_string(), task_count: 1, tokens: 5, token_task_count: 1, duration_secs: 0, duration_task_count: 0 },
+        ],
+    );
 }
 
 #[test]

@@ -151,7 +151,7 @@ fn record_task(task: &TaskStatsRow, start: NaiveDate, activity: &mut [DailyStats
         day.task_count += 1;
         if let Some(tokens) = task.tokens { day.tokens += tokens; }
     }
-    let project_name = task.repo_path.clone().unwrap_or_else(|| "(no repo_path)".to_string());
+    let project_name = crate::project::project_display(task.project_id.as_deref()).to_string();
     let project = projects.entry(project_name.clone()).or_insert_with(|| ProjectStats {
         name: project_name, task_count: 0, tokens: 0, token_task_count: 0,
         duration_secs: 0, duration_task_count: 0,

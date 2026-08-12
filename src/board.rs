@@ -1,8 +1,6 @@
 // Text rendering for task board and task detail views.
 // Board rows can enrich output with stored milestone events.
 
-use std::collections::HashMap;
-
 use anyhow::Result;
 
 use crate::cmd::eta;

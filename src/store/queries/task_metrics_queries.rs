@@ -9,7 +9,7 @@ use rusqlite::params;
 use super::super::Store;
 use crate::types::{verify_required, AgentKind, TaskOutcome, TaskStatus, VerifyStatus};
 
-pub(crate) const STATS_TASK_QUERY: &str = "SELECT id, created_at, completed_at, repo_path, tokens FROM tasks WHERE (?1 IS NULL OR created_at >= ?1) AND created_at < ?2 ORDER BY created_at";
+pub(crate) const STATS_TASK_QUERY: &str = "SELECT id, created_at, completed_at, repo_path, project_id, tokens FROM tasks WHERE (?1 IS NULL OR created_at >= ?1) AND created_at < ?2 ORDER BY created_at";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TaskStatsRow {
@@ -17,6 +17,7 @@ pub struct TaskStatsRow {
     pub created_at: DateTime<Local>,
     pub completed_at: Option<DateTime<Local>>,
     pub repo_path: Option<String>,
+    pub project_id: Option<String>,
     pub tokens: Option<i64>,
 }
 
@@ -34,7 +35,8 @@ impl Store {
                         .get::<_, Option<String>>(2)?
                         .map(|value| super::super::schema::parse_dt(&value)),
                     repo_path: row.get(3)?,
-                    tokens: row.get(4)?,
+                    project_id: row.get(4)?,
+                    tokens: row.get(5)?,
                 })
             },
         )?;
@@ -231,7 +233,7 @@ mod tests {
     fn stats_query_selects_only_literal_aggregation_columns() {
         assert_eq!(
             STATS_TASK_QUERY,
-            "SELECT id, created_at, completed_at, repo_path, tokens FROM tasks WHERE (?1 IS NULL OR created_at >= ?1) AND created_at < ?2 ORDER BY created_at",
+            "SELECT id, created_at, completed_at, repo_path, project_id, tokens FROM tasks WHERE (?1 IS NULL OR created_at >= ?1) AND created_at < ?2 ORDER BY created_at",
         );
         assert!(!STATS_TASK_QUERY.contains("prompt"));
     }
@@ -250,6 +252,7 @@ mod tests {
 
         assert_eq!(rows.iter().map(|row| row.id.as_str()).collect::<Vec<_>>(), vec!["t-in"]);
         assert_eq!(rows[0].repo_path.as_deref(), Some("/repo"));
+        assert_eq!(rows[0].project_id, None);
         assert_eq!(rows[0].tokens, Some(42));
     }
 }

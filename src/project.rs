@@ -22,8 +22,8 @@ mod project_team;
 use self::audit::ProjectFile;
 pub use self::edit::{upsert_gitbutler_mode, upsert_gitbutler_prompt_suppressed};
 pub use self::identity::{
-    current_project_id, matches_project_filter, path_based_project_id, project_display,
-    project_filter_banner, resolve_project_id, resolve_project_id_with_config, retain_project,
+    current_project_id, project_display,
+    project_filter_banner, resolve_project_id, retain_project,
     UNATTRIBUTED,
 };
 use self::profile::apply_profile;

@@ -116,7 +116,7 @@ fn render_projects(frame: &mut ratatui::Frame<'_>, projects: &[ProjectStats], ar
         project.name.clone(), project.task_count.to_string(), format_known_tokens(project.tokens, project.token_task_count), format_known_duration(project.duration_secs, project.duration_task_count),
     ]));
     let table = Table::new(rows, [Constraint::Min(20), Constraint::Length(8), Constraint::Length(16), Constraint::Length(16)])
-        .header(Row::new(["Project · repo_path", "Tasks", "Tokens · tasks.tokens", "Duration · completed_at−created_at"]).style(Style::default().add_modifier(Modifier::BOLD)))
+        .header(Row::new(["Project · project_id", "Tasks", "Tokens · tasks.tokens", "Duration · completed_at−created_at"]).style(Style::default().add_modifier(Modifier::BOLD)))
         .block(Block::default().title("Projects · ranked by task count, then tokens").borders(Borders::ALL));
     frame.render_widget(table, area);
 }

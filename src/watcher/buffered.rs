@@ -36,7 +36,7 @@ pub(crate) async fn watch_buffered(
     // while the child is still alive (buffered agents emit no progress events).
     read_stdout_signaling_bytes(&mut reader, &mut raw, task_id).await?;
     let buffer = String::from_utf8_lossy(&raw).into_owned();
-    persist_outputs(&buffer, task_id, log_path, output_path).await?;
+    persist_outputs(agent.kind(), &buffer, task_id, log_path, output_path).await?;
     if let Some(handle) = stderr_handle {
         drain_stderr_capture(handle).await;
     }
@@ -79,11 +79,7 @@ pub(crate) async fn watch_buffered(
 }
 
 fn buffered_delivery_confirmed(agent: AgentKind, output: &str) -> bool {
-    let response = match agent {
-        AgentKind::Grok => crate::agent::grok::extract_response(output),
-        AgentKind::Antigravity => crate::agent::gemini::extract_response(output),
-        _ => None,
-    };
+    let response = crate::agent::extract_response(agent, output);
     response.is_some_and(|text| !text.trim().is_empty())
 }
 
@@ -121,6 +117,7 @@ async fn read_stdout_signaling_bytes(
 }
 
 async fn persist_outputs(
+    agent: AgentKind,
     buffer: &str,
     task_id: &TaskId,
     log_path: &std::path::Path,
@@ -135,14 +132,7 @@ async fn persist_outputs(
     let _ = tokio::fs::create_dir_all(paths::task_dir(task_id.as_str())).await;
     let _ = tokio::fs::write(paths::transcript_path(task_id.as_str()), buffer).await;
     if let Some(out_path) = output_path {
-        if let Some(response) = crate::agent::grok::extract_response(buffer) {
-            let response_filtered: String = response
-                .lines()
-                .filter(|line| !is_standalone_milestone_line(line))
-                .collect::<Vec<_>>()
-                .join("\n");
-            tokio::fs::write(out_path, &response_filtered).await?;
-        } else if let Some(response) = crate::agent::gemini::extract_response(buffer) {
+        if let Some(response) = crate::agent::extract_response(agent, buffer) {
             let response_filtered: String = response
                 .lines()
                 .filter(|line| !is_standalone_milestone_line(line))

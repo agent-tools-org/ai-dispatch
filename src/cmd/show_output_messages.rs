@@ -7,7 +7,7 @@ use std::sync::Arc;
 
 use crate::paths;
 use crate::store::Store;
-use crate::types::Task;
+use crate::types::{AgentKind, Task};
 use super::show_output_extract::collect_messages;
 
 pub fn output_text_for_task(store: &Store, task_id: &str, full: bool) -> Result<String> {
@@ -189,21 +189,24 @@ fn join_messages(messages: Vec<String>, full: bool, max_output_chars: usize) -> 
 }
 pub fn read_task_output(task: &Task) -> Result<String> {
     if let Some(path) = task.output_path.as_deref() {
-        if let Ok(content) = std::fs::read_to_string(path) {
-            if is_valid_output_content(&content) {
-                return Ok(content);
-            }
+        if let Some(content) = read_output_file(Path::new(path), task.agent) {
+            return Ok(content);
         }
     }
     let persisted = paths::task_dir(task.id.as_str()).join("result.md");
-    if persisted.exists() {
-        if let Ok(content) = std::fs::read_to_string(&persisted) {
-            if is_valid_output_content(&content) {
-                return Ok(content);
-            }
-        }
+    if let Some(content) = read_output_file(&persisted, task.agent) {
+        return Ok(content);
     }
     Err(anyhow::anyhow!("Task has no output file"))
+}
+
+fn read_output_file(path: &Path, agent: AgentKind) -> Option<String> {
+    let raw = std::fs::read_to_string(path).ok()?;
+    let content = match crate::agent::extract_response(agent, &raw) {
+        Some(response) => response,
+        None => raw,
+    };
+    is_valid_output_content(&content).then_some(content)
 }
 
 fn is_valid_output_content(content: &str) -> bool {

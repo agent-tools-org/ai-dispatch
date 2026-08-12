@@ -18,6 +18,7 @@ mod schema_rows;
 mod status_guard;
 mod task_profile;
 pub use kg_types::{KgStats, KgTriple};
+pub use queries::TaskStatsRow;
 
 #[cfg(test)]
 mod tests;

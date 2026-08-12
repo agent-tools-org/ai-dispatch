@@ -135,6 +135,18 @@ mod tests {
     }
 
     #[test]
+    fn stats_tab_and_backtab_select_adjacent_ranges() {
+        let store = Arc::new(Store::open_memory().unwrap());
+        let mut app = app::App::new(store, RunOptions::default()).unwrap();
+
+        app.handle_key(KeyEvent::new(KeyCode::Char('s'), KeyModifiers::NONE)).unwrap();
+        app.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE)).unwrap();
+        assert_eq!(app.stats_range, stats::StatsRange::Last30Days);
+        app.handle_key(KeyEvent::new(KeyCode::BackTab, KeyModifiers::SHIFT)).unwrap();
+        assert_eq!(app.stats_range, stats::StatsRange::AllTime);
+    }
+
+    #[test]
     fn toggles_tree_mode_with_t_key() {
         let store = Arc::new(Store::open_memory().unwrap());
         let mut app = app::App::new(store, RunOptions::default()).unwrap();

@@ -5,14 +5,19 @@
 use std::fs;
 use std::path::Path;
 use std::process::Command;
-use std::time::{SystemTime, UNIX_EPOCH};
+
+#[path = "merge_stash_identity.rs"]
+mod identity;
+use identity::{
+    apply_stash, drop_stash_if_exact, find_stash, push_stash, unique_stash_message,
+};
 
 pub(crate) struct LocalChanges {
     stash_ref: String,
 }
 
 pub(crate) fn stash_local_changes(repo_dir: &str) -> Result<Option<LocalChanges>, String> {
-    capture_local_changes(repo_dir, || {})
+    capture_local_changes(repo_dir, |_| {}, || {})
 }
 
 #[cfg(test)]
@@ -23,12 +28,28 @@ pub(crate) fn stash_local_changes_with_hook<F>(
 where
     F: FnOnce(),
 {
-    capture_local_changes(repo_dir, after_capture)
+    capture_local_changes(repo_dir, |_| {}, after_capture)
 }
 
-fn capture_local_changes<F>(repo_dir: &str, after_capture: F) -> Result<Option<LocalChanges>, String>
+#[cfg(test)]
+pub(crate) fn stash_local_changes_with_identity_hook<F>(
+    repo_dir: &str,
+    before_identify: F,
+) -> Result<Option<LocalChanges>, String>
 where
-    F: FnOnce(),
+    F: FnOnce(&str),
+{
+    capture_local_changes(repo_dir, before_identify, || {})
+}
+
+fn capture_local_changes<F, G>(
+    repo_dir: &str,
+    before_identify: F,
+    after_capture: G,
+) -> Result<Option<LocalChanges>, String>
+where
+    F: FnOnce(&str),
+    G: FnOnce(),
 {
     if !has_local_changes(repo_dir)? {
         return Ok(None);
@@ -36,9 +57,9 @@ where
     let message = unique_stash_message()?;
     aid_info!("[aid] Saving local changes before merge...");
     push_stash(repo_dir, &message)?;
-    let stash_ref = find_stash(repo_dir, &message).map_err(|error| {
-        format_capture_error(None, &message, &error)
-    })?;
+    before_identify(&message);
+    let stash_ref = find_stash(repo_dir, &message)
+        .map_err(|error| format_capture_error(None, &message, &error))?;
     // Git captures and clears these paths in one operation; later edits are never reset by aid.
     after_capture();
     Ok(Some(LocalChanges { stash_ref }))
@@ -48,8 +69,32 @@ pub(crate) fn restore_local_changes(
     repo_dir: &str,
     changes: &LocalChanges,
 ) -> Result<(), String> {
+    restore_local_changes_inner(repo_dir, changes, || {})
+}
+
+#[cfg(test)]
+pub(crate) fn restore_local_changes_with_drop_hook<F>(
+    repo_dir: &str,
+    changes: &LocalChanges,
+    before_drop: F,
+) -> Result<(), String>
+where
+    F: FnOnce(),
+{
+    restore_local_changes_inner(repo_dir, changes, before_drop)
+}
+
+fn restore_local_changes_inner<F>(
+    repo_dir: &str,
+    changes: &LocalChanges,
+    before_drop: F,
+) -> Result<(), String>
+where
+    F: FnOnce(),
+{
     ensure_stash_untracked_paths_free(repo_dir, &changes.stash_ref)?;
-    apply_stash(repo_dir, &changes.stash_ref, true)
+    apply_stash(repo_dir, &changes.stash_ref)?;
+    drop_stash_if_exact(repo_dir, &changes.stash_ref, before_drop)
 }
 
 pub(crate) fn restore_untracked_after_failed_merge(
@@ -66,13 +111,7 @@ pub(crate) fn restore_untracked_after_failed_merge(
     }
     let source = format!("{untracked_tree}^{{tree}}");
     let mut args = vec![
-        "-C",
-        repo_dir,
-        "restore",
-        "--source",
-        &source,
-        "--worktree",
-        "--",
+        "-C", repo_dir, "restore", "--source", &source, "--worktree", "--",
     ];
     args.extend(paths.iter().map(String::as_str));
     let output = Command::new("git")
@@ -105,84 +144,6 @@ fn has_local_changes(repo_dir: &str) -> Result<bool, String> {
         return Err(format!("git status failed: {}", first_error_line(&output.stderr)));
     }
     Ok(!output.stdout.is_empty())
-}
-
-fn unique_stash_message() -> Result<String, String> {
-    let timestamp = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map_err(|error| format!("failed to create merge stash identity: {error}"))?
-        .as_nanos();
-    Ok(format!(
-        "aid merge-local {}-{timestamp}",
-        std::process::id()
-    ))
-}
-
-fn push_stash(repo_dir: &str, message: &str) -> Result<(), String> {
-    // `stash create` cannot include untracked files; push -u stores both kinds durably at once.
-    let output = Command::new("git")
-        .args([
-            "-C",
-            repo_dir,
-            "stash",
-            "push",
-            "--include-untracked",
-            "--quiet",
-            "--message",
-            message,
-        ])
-        .output()
-        .map_err(|error| format!("failed to capture merge-local changes: {error}"))?;
-    if output.status.success() {
-        Ok(())
-    } else {
-        Err(format!(
-            "failed to capture merge-local changes: {}",
-            first_error_line(&output.stderr)
-        ))
-    }
-}
-
-fn find_stash(repo_dir: &str, message: &str) -> Result<String, String> {
-    let output = Command::new("git")
-        .args(["-C", repo_dir, "stash", "list", "--format=%H%x09%gs"])
-        .output()
-        .map_err(|error| format!("failed to identify merge-local stash: {error}"))?;
-    if !output.status.success() {
-        return Err(format!(
-            "failed to identify merge-local stash: {}",
-            first_error_line(&output.stderr)
-        ));
-    }
-    for line in String::from_utf8_lossy(&output.stdout).lines() {
-        let Some((commit, subject)) = line.split_once('\t') else {
-            continue;
-        };
-        if subject.contains(message) {
-            return Ok(commit.to_string());
-        }
-    }
-    Err(format!("stash message {message} was not found in git stash list"))
-}
-
-fn apply_stash(repo_dir: &str, stash_ref: &str, with_index: bool) -> Result<(), String> {
-    let mut args = vec!["-C", repo_dir, "stash", "apply"];
-    if with_index {
-        args.push("--index");
-    }
-    args.push(stash_ref);
-    let output = Command::new("git")
-        .args(args)
-        .output()
-        .map_err(|error| format!("failed to apply merge-local stash {stash_ref}: {error}"))?;
-    if output.status.success() {
-        Ok(())
-    } else {
-        Err(format!(
-            "failed to apply merge-local stash {stash_ref}: {}",
-            first_error_line(&output.stderr)
-        ))
-    }
 }
 
 fn stash_untracked_tree(repo_dir: &str, stash_ref: &str) -> Result<Option<String>, String> {

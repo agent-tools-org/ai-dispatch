@@ -3,13 +3,7 @@
 
 use crate::sandbox::{can_sandbox, wrap_command};
 use crate::types::AgentKind;
-use std::{
-    ffi::OsString,
-    fs,
-    path::Path,
-    process::Command,
-    sync::{Mutex, OnceLock},
-};
+use std::{fs, path::Path, process::Command};
 use tempfile::tempdir;
 
 fn args(cmd: &Command) -> Vec<String> {
@@ -23,41 +17,17 @@ fn self_mount(path: &Path) -> String {
     format!("{path}:{path}")
 }
 
-fn env_lock() -> &'static Mutex<()> {
-    static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
-    LOCK.get_or_init(|| Mutex::new(()))
-}
-
-struct HomeGuard(Option<OsString>);
-
-impl Drop for HomeGuard {
-    fn drop(&mut self) {
-        match self.0.take() {
-            Some(home) => unsafe {
-                std::env::set_var("HOME", home);
-            },
-            None => unsafe {
-                std::env::remove_var("HOME");
-            },
-        }
-    }
-}
-
 fn with_home<F>(dirs: &[&str], test: F)
 where
     F: FnOnce(),
 {
-    let _guard = env_lock().lock().expect("env lock poisoned");
     let temp = tempdir().expect("tempdir");
     for dir in dirs {
         fs::create_dir_all(temp.path().join(dir)).expect("create home subdir");
     }
-    let original_home = std::env::var_os("HOME");
-    let _home_guard = HomeGuard(original_home);
-    unsafe {
-        std::env::set_var("HOME", temp.path());
-    }
+    crate::sandbox::set_test_home(Some(temp.path().to_path_buf()));
     test();
+    crate::sandbox::set_test_home(None);
 }
 
 #[test]

@@ -1,6 +1,9 @@
 // Container sandbox helpers for agent process execution.
 // Exports command wrapping, availability checks, and container cleanup.
 
+#[cfg(test)]
+use std::cell::RefCell;
+use std::path::PathBuf;
 use std::process::{Command, Stdio};
 
 use crate::types::AgentKind;
@@ -8,6 +11,16 @@ use crate::worktree_layout::{read_commondir, resolve_worktree_gitdir};
 
 const CONTAINER_BIN: &str = "container";
 const SANDBOX_IMAGE: &str = "aid-sandbox:latest";
+
+#[cfg(test)]
+thread_local! {
+    static TEST_HOME: RefCell<Option<PathBuf>> = const { RefCell::new(None) };
+}
+
+#[cfg(test)]
+pub(crate) fn set_test_home(home: Option<PathBuf>) {
+    TEST_HOME.with(|cell| *cell.borrow_mut() = home);
+}
 
 pub fn can_sandbox(agent_kind: AgentKind) -> bool {
     !matches!(
@@ -102,8 +115,8 @@ fn forward_agent_envs(wrapped: &mut Command, agent_kind: AgentKind) {
 }
 
 fn mount_agent_home(wrapped: &mut Command, agent_kind: AgentKind) {
-    if let Some(home) = std::env::var_os("HOME") {
-        let home = std::path::Path::new(&home);
+    if let Some(home) = host_home() {
+        let home = home.as_path();
         for subdir in agent_config_dirs(agent_kind) {
             let host_path = home.join(subdir);
             if host_path.exists() {
@@ -124,6 +137,14 @@ fn mount_agent_home(wrapped: &mut Command, agent_kind: AgentKind) {
                 .arg("AID_HOME=/root/.aid");
         }
     }
+}
+
+fn host_home() -> Option<PathBuf> {
+    #[cfg(test)]
+    if let Some(home) = TEST_HOME.with(|cell| cell.borrow().clone()) {
+        return Some(home);
+    }
+    std::env::var_os("HOME").map(PathBuf::from)
 }
 
 fn worktree_git_mounts(cwd: &str) -> Vec<(String, String)> {

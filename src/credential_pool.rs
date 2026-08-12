@@ -8,6 +8,16 @@ use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
 use std::path::Path;
 
+#[cfg(test)]
+thread_local! {
+    static TEST_ENV: RefCell<Option<HashMap<String, String>>> = const { RefCell::new(None) };
+}
+
+#[cfg(test)]
+pub(crate) fn set_test_env(values: Option<HashMap<String, String>>) {
+    TEST_ENV.with(|cell| *cell.borrow_mut() = values);
+}
+
 #[derive(Debug, Clone, Deserialize)]
 pub struct CredentialPool {
     #[serde(flatten)]
@@ -129,13 +139,26 @@ fn key_value_if_ready(key: &KeyEntry, now: &DateTime<Local>) -> Option<String> {
     if key.exhausted_until.as_ref().is_some_and(|until| *until > *now) {
         return None;
     }
-    std::env::var(&key.env).ok().filter(|value| !value.is_empty())
+    credential_env(&key.env).filter(|value| !value.is_empty())
+}
+
+fn credential_env(name: &str) -> Option<String> {
+    #[cfg(test)]
+    if let Some(values) = TEST_ENV.with(|cell| cell.borrow().clone()) {
+        return values.get(name).cloned();
+    }
+    std::env::var(name).ok()
+}
+
+pub(crate) fn credential_is_set(name: &str) -> bool {
+    credential_env(name).is_some_and(|value| !value.is_empty())
 }
 
 #[cfg(test)]
 mod tests {
     use super::{CredentialPool, Strategy, get_credential, load_pool, load_pool_from_path, mark_exhausted};
     use crate::paths::AidHomeGuard;
+    use std::collections::HashMap;
     use std::fs;
     use tempfile::TempDir;
 
@@ -175,10 +198,10 @@ keys = [
         let dir = TempDir::new().unwrap();
         write_pool(&dir);
         let pool: CredentialPool = load_pool_from_path(&dir.path().join("credentials.toml")).unwrap();
-        unsafe {
-            std::env::set_var("OPENAI_API_KEY", "first");
-            std::env::set_var("OPENAI_API_KEY_2", "second");
-        }
+        super::set_test_env(Some(HashMap::from([
+            ("OPENAI_API_KEY".to_string(), "first".to_string()),
+            ("OPENAI_API_KEY_2".to_string(), "second".to_string()),
+        ])));
 
         let first = get_credential(&pool, "codex");
         let second = get_credential(&pool, "codex");
@@ -187,6 +210,7 @@ keys = [
         assert_eq!(first, Some(("OPENAI_API_KEY".to_string(), "first".to_string())));
         assert_eq!(second, Some(("OPENAI_API_KEY_2".to_string(), "second".to_string())));
         assert_eq!(third, Some(("OPENAI_API_KEY".to_string(), "first".to_string())));
+        super::set_test_env(None);
     }
 
     #[test]
@@ -199,10 +223,10 @@ keys = [
             env: "GEMINI_API_KEY_BACKUP".to_string(),
             exhausted_until: None,
         });
-        unsafe {
-            std::env::set_var("GEMINI_API_KEY", "primary");
-            std::env::set_var("GEMINI_API_KEY_BACKUP", "backup");
-        }
+        super::set_test_env(Some(HashMap::from([
+            ("GEMINI_API_KEY".to_string(), "primary".to_string()),
+            ("GEMINI_API_KEY_BACKUP".to_string(), "backup".to_string()),
+        ])));
 
         mark_exhausted(&mut pool, "gemini", "default", 5);
 
@@ -212,6 +236,7 @@ keys = [
             selected,
             Some(("GEMINI_API_KEY_BACKUP".to_string(), "backup".to_string()))
         );
+        super::set_test_env(None);
     }
 
     #[test]
@@ -219,16 +244,17 @@ keys = [
         let dir = TempDir::new().unwrap();
         write_pool(&dir);
         let mut pool = load_pool_from_path(&dir.path().join("credentials.toml")).unwrap();
-        unsafe {
-            std::env::set_var("OPENAI_API_KEY", "first");
-            std::env::set_var("OPENAI_API_KEY_2", "second");
-        }
+        super::set_test_env(Some(HashMap::from([
+            ("OPENAI_API_KEY".to_string(), "first".to_string()),
+            ("OPENAI_API_KEY_2".to_string(), "second".to_string()),
+        ])));
 
         mark_exhausted(&mut pool, "codex", "personal", 5);
 
         let selected = get_credential(&pool, "codex");
 
         assert_eq!(selected, Some(("OPENAI_API_KEY_2".to_string(), "second".to_string())));
+        super::set_test_env(None);
     }
 
     #[test]

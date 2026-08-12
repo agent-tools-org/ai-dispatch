@@ -3,6 +3,7 @@
 // Deps: ratatui widgets (BarChart, Sparkline, Gauge), App state, usage module.
 
 use super::app::App;
+use super::status_bar::{render_status_bar, StatusBarMode};
 use crate::cost;
 use crate::types::{AgentKind, Task, TaskOutcome};
 use chrono::{Duration, Local};
@@ -11,7 +12,6 @@ use ratatui::prelude::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Bar, BarChart, BarGroup, Block, Borders, Gauge, Paragraph, Sparkline};
 const AGENTS: &[AgentKind] = AgentKind::ALL_BUILTIN;
-const FOOTER_HINT: &str = "a=all/today s=stats d=dashboard m=multipane q=quit";
 struct BudgetUsage {
     name: String,
     used: f64,
@@ -41,7 +41,7 @@ pub fn render_stats(frame: &mut ratatui::Frame<'_>, app: &App) {
     render_success_chart(frame, app, top_cols[1]);
     render_budget_gauges(frame, app, bottom_cols[0]);
     render_summary(frame, app, bottom_cols[1]);
-    render_footer(frame, chunks[3]);
+    render_status_bar(frame, chunks[3], app, StatusBarMode::Stats);
 }
 fn render_title(frame: &mut ratatui::Frame<'_>, app: &App, area: Rect) {
     let title = Line::from(vec![
@@ -239,12 +239,6 @@ fn render_summary(frame: &mut ratatui::Frame<'_>, app: &App, area: Rect) {
             .max(max)
             .style(Style::default().fg(Color::Cyan)),
         parts[1],
-    );
-}
-fn render_footer(frame: &mut ratatui::Frame<'_>, area: Rect) {
-    frame.render_widget(
-        Paragraph::new(FOOTER_HINT).style(Style::default().fg(Color::Indexed(243))),
-        area,
     );
 }
 fn budget_usage(app: &App) -> Vec<BudgetUsage> {

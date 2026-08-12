@@ -21,7 +21,7 @@ fn make_task(id: &str, group_id: Option<&str>) -> Task {
         caller_kind: None,
         caller_session_id: None,
         agent_session_id: None,
-        repo_path: None,
+        repo_path: None, project_id: crate::project::current_project_id(),
         worktree_path: None,
         worktree_branch: None,
         final_head_sha: None,
@@ -96,7 +96,10 @@ fn filters_today_view_by_group() {
 
     assert_eq!(app.tasks.len(), 1);
     assert_eq!(app.tasks[0].id.as_str(), "t-1000");
-    assert_eq!(app.scope_label(), "today+active | group wg-a");
+    let label = app.scope_label();
+    assert!(label.contains("project:"), "{label}");
+    assert!(label.contains("today+active"), "{label}");
+    assert!(label.contains("group wg-a"), "{label}");
 }
 
 #[test]
@@ -203,7 +206,10 @@ fn filters_specific_task_scope() {
 
     assert_eq!(app.tasks.len(), 1);
     assert_eq!(app.tasks[0].id.as_str(), "t-1001");
-    assert_eq!(app.scope_label(), "task t-1001 | group wg-b");
+    let label = app.scope_label();
+    assert!(label.contains("project:"), "{label}");
+    assert!(label.contains("task t-1001"), "{label}");
+    assert!(label.contains("group wg-b"), "{label}");
 }
 
 #[test]

@@ -82,6 +82,7 @@ impl App {
             self.load_today_with_active_tasks()?
         };
         self.apply_group_filter(&mut tasks);
+        self.apply_project_filter(&mut tasks);
         Ok(tasks)
     }
 
@@ -112,6 +113,13 @@ impl App {
                 task.workgroup_id.as_deref() == Some(group_id) || task.workgroup_id.is_none()
             });
         }
+    }
+
+    fn apply_project_filter(&self, tasks: &mut Vec<Task>) {
+        if self.show_all_projects {
+            return;
+        }
+        crate::project::retain_project(tasks, self.current_project_id.as_deref());
     }
 
     pub(super) fn load_metrics(&self, tasks: &[Task]) -> HashMap<String, ProcessMetrics> {

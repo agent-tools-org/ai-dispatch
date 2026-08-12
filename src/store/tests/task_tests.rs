@@ -154,6 +154,22 @@ fn migrate_adds_repo_path_column() {
     assert!(columns.contains(&"delivery_assessment".to_string()));
     assert!(columns.contains(&"final_head_sha".to_string()));
     assert!(columns.contains(&"final_branch".to_string()));
+    assert!(columns.contains(&"project_id".to_string()));
+}
+
+#[test]
+fn project_id_round_trips_and_null_stays_unattributed() {
+    let store = Store::open_memory().unwrap();
+    let mut attributed = make_task("t-proj-a", AgentKind::Codex, TaskStatus::Done);
+    attributed.project_id = Some("ai-dispatch".into());
+    store.insert_task(&attributed).unwrap();
+    let unattributed = make_task("t-proj-u", AgentKind::Codex, TaskStatus::Done);
+    store.insert_task(&unattributed).unwrap();
+
+    let loaded_a = store.get_task("t-proj-a").unwrap().unwrap();
+    assert_eq!(loaded_a.project_id.as_deref(), Some("ai-dispatch"));
+    let loaded_u = store.get_task("t-proj-u").unwrap().unwrap();
+    assert!(loaded_u.project_id.is_none());
 }
 
 #[test]

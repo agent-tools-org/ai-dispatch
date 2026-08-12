@@ -1,25 +1,27 @@
 // Handler for `aid board` — list all tasks with status summary.
 // Detects repeated calls with no status changes and warns callers.
-// Deps: crate::store, crate::board, crate::background, crate::session
+// Deps: crate::store, crate::board, crate::background, project filter.
 
 use anyhow::Result;
 use chrono::Local;
 use std::io::Write;
-use std::path::Path;
 use std::sync::Arc;
 
 use crate::background;
 use crate::board::render_board;
-use crate::session;
 use crate::store::Store;
 use crate::types::{Task, TaskFilter, TaskStatus, Workgroup};
 
+#[path = "board_filter.rs"]
+pub(crate) mod board_filter;
+#[path = "board_poll.rs"]
+mod board_poll;
+use board_poll::{
+    anti_poll_status, task_fingerprint, watch_instead_of_polling_hint, write_board_marker,
+    AntiPollStatus, ForceMarkerState,
+};
+
 const DEFAULT_TASK_LIMIT: usize = 50;
-const BOARD_MIN_COOLDOWN_SECS: i64 = 10;
-const BOARD_FORCE_COOLDOWN_SECS: i64 = 30;
-const BOARD_REPEAT_LIMIT: u32 = 1;
-const FORCE_ESCALATION_LIMIT: u32 = 3;
-const FORCE_ESCALATION_WINDOW_SECS: i64 = 120;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) struct TruncationNotice {
@@ -27,16 +29,17 @@ pub(crate) struct TruncationNotice {
     total: usize,
 }
 
-#[derive(Debug, PartialEq, Eq)]
-enum AntiPollStatus { Allowed(u32), Cooldown(i64), Repeat(u32), ForceCooldown(i64), ForceBlocked }
-
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-struct ForceMarkerState {
-    count: u32,
-    window_start: i64,
-}
-
-pub fn run(store: &Arc<Store>, running: bool, today: bool, mine: bool, group: Option<&str>, limit: Option<usize>, force: bool, json: bool) -> Result<()> {
+pub fn run(
+    store: &Arc<Store>,
+    running: bool,
+    today: bool,
+    mine: bool,
+    group: Option<&str>,
+    all_projects: bool,
+    limit: Option<usize>,
+    force: bool,
+    json: bool,
+) -> Result<()> {
     let filter = if running {
         TaskFilter::Running
     } else if today {
@@ -47,12 +50,7 @@ pub fn run(store: &Arc<Store>, running: bool, today: bool, mine: bool, group: Op
 
     background::check_zombie_tasks(store)?;
     let mut tasks = store.list_tasks(filter)?;
-    if mine {
-        tasks.retain(session::matches_current);
-    }
-    if let Some(group_id) = group {
-        tasks.retain(|task| task.workgroup_id.as_deref() == Some(group_id));
-    }
+    let project_filter = board_filter::apply_board_filters(&mut tasks, mine, group, all_projects);
     let truncation = apply_limit(&mut tasks, limit, running, today, mine, group);
 
     let fingerprint = task_fingerprint(&tasks);
@@ -89,7 +87,16 @@ pub fn run(store: &Arc<Store>, running: bool, today: bool, mine: bool, group: Op
         };
     }
     let mut stdout = std::io::stdout();
-    write_board_output(&mut stdout, store, &tasks, group, truncation, json)?;
+    write_board_output(
+        &mut stdout,
+        store,
+        &tasks,
+        group,
+        project_filter.as_ref().map(|f| f.as_deref()),
+        all_projects,
+        truncation,
+        json,
+    )?;
     stdout.flush()?;
     if !json && repeat_count > 0 {
         let watch_hint = watch_instead_of_polling_hint(&tasks);
@@ -99,13 +106,28 @@ pub fn run(store: &Arc<Store>, running: bool, today: bool, mine: bool, group: Op
     Ok(())
 }
 
-fn write_board_output<W: Write>(writer: &mut W, store: &Store, tasks: &[Task], group: Option<&str>, truncation: Option<TruncationNotice>, json: bool) -> Result<()> {
+fn write_board_output<W: Write>(
+    writer: &mut W,
+    store: &Store,
+    tasks: &[Task],
+    group: Option<&str>,
+    project_filter: Option<Option<&str>>,
+    all_projects: bool,
+    truncation: Option<TruncationNotice>,
+    json: bool,
+) -> Result<()> {
     if json {
         let payload: Vec<serde_json::Value> = tasks.iter().map(board_json_row).collect();
         writeln!(writer, "{}", serde_json::to_string(&payload)?)?;
         return Ok(());
     }
     let has_terminal_worktree = tasks.iter().any(|task| matches!(task.status, TaskStatus::Done | TaskStatus::Failed | TaskStatus::Merged | TaskStatus::Skipped | TaskStatus::Stopped) && task.worktree_path.is_some());
+    // Always surface the active project filter so tasks cannot appear to vanish.
+    writeln!(
+        writer,
+        "{}",
+        board_filter::project_scope_banner(project_filter, all_projects)
+    )?;
     if let Some(group_id) = group
         && let Some(header) = group_header(store, group_id)?
     {
@@ -177,93 +199,6 @@ pub(crate) fn apply_limit(tasks: &mut Vec<Task>, limit: Option<usize>, running: 
 
 pub(crate) fn truncation_notice_message(truncation: TruncationNotice) -> String { format!("[aid] Showing {} of {} tasks. Use --limit N or --today/--running for more.", truncation.shown, truncation.total) }
 
-/// Compact fingerprint of task statuses for change detection.
-fn task_fingerprint(tasks: &[crate::types::Task]) -> String {
-    let mut parts: Vec<String> = tasks.iter().map(|t| format!("{}:{}", t.id, t.status.label())).collect();
-    parts.sort();
-    parts.join(",")
-}
-
-fn watch_instead_of_polling_hint(tasks: &[Task]) -> String {
-    let running_ids: Vec<&str> = tasks.iter().filter(|task| task.status == TaskStatus::Running).map(|task| task.id.as_str()).collect();
-    if running_ids.is_empty() {
-        return "Use `aid watch --wait <id>` instead of polling.".to_string();
-    }
-    if running_ids.len() == 1 {
-        return format!("Use `aid watch --wait {}` instead of polling.", running_ids[0]);
-    }
-    let commands = running_ids.iter().map(|task_id| format!("`aid watch --wait {task_id}`")).collect::<Vec<_>>().join(", ");
-    format!("Use one of {commands} instead of polling.")
-}
-
-fn anti_poll_status(marker_path: &Path, fingerprint: &str, now: i64, force: bool) -> (AntiPollStatus, ForceMarkerState) {
-    let marker = read_board_marker(marker_path);
-    let elapsed = now - marker.timestamp;
-    if force {
-        let force_state = next_force_state(&marker, now);
-        if elapsed >= 0 && elapsed < BOARD_FORCE_COOLDOWN_SECS { return (AntiPollStatus::ForceCooldown(elapsed), force_state) }
-        if is_force_window_active(marker.force_window_start, now) && marker.force_count >= FORCE_ESCALATION_LIMIT {
-            return (AntiPollStatus::ForceBlocked, force_state);
-        }
-        return (AntiPollStatus::Allowed(0), force_state);
-    }
-    if elapsed >= 0 && elapsed < BOARD_MIN_COOLDOWN_SECS { return (AntiPollStatus::Cooldown(elapsed), ForceMarkerState::default()) }
-    if marker.is_uninitialized() {
-        return (AntiPollStatus::Allowed(0), ForceMarkerState::default());
-    }
-    if marker.fingerprint == fingerprint {
-        let repeat_count = marker.repeat_count + 1;
-        if repeat_count >= BOARD_REPEAT_LIMIT { return (AntiPollStatus::Repeat(repeat_count), ForceMarkerState::default()) }
-        return (AntiPollStatus::Allowed(repeat_count), ForceMarkerState::default());
-    }
-    (AntiPollStatus::Allowed(0), ForceMarkerState::default())
-}
-
-#[derive(Debug, Default)]
-struct BoardMarker {
-    timestamp: i64,
-    fingerprint: String,
-    repeat_count: u32,
-    force_count: u32,
-    force_window_start: i64,
-}
-
-impl BoardMarker {
-    fn is_uninitialized(&self) -> bool {
-        self.timestamp == 0 && self.fingerprint.is_empty() && self.repeat_count == 0 && self.force_count == 0 && self.force_window_start == 0
-    }
-}
-
-fn read_board_marker(marker_path: &Path) -> BoardMarker {
-    let Ok(prev) = std::fs::read_to_string(marker_path) else { return BoardMarker::default() };
-    let parts: Vec<&str> = prev.lines().collect();
-    BoardMarker {
-        timestamp: parts.first().and_then(|s| s.parse().ok()).unwrap_or(0),
-        fingerprint: parts.get(1).copied().unwrap_or("").to_string(),
-        repeat_count: parts.get(2).and_then(|s| s.parse().ok()).unwrap_or(0),
-        force_count: parts.get(3).and_then(|s| s.parse().ok()).unwrap_or(0),
-        force_window_start: parts.get(4).and_then(|s| s.parse().ok()).unwrap_or(0),
-    }
-}
-
-fn next_force_state(marker: &BoardMarker, now: i64) -> ForceMarkerState {
-    if is_force_window_active(marker.force_window_start, now) {
-        if marker.force_count >= FORCE_ESCALATION_LIMIT {
-            return ForceMarkerState { count: marker.force_count, window_start: marker.force_window_start };
-        }
-        return ForceMarkerState { count: marker.force_count + 1, window_start: marker.force_window_start };
-    }
-    ForceMarkerState { count: 1, window_start: now }
-}
-
-fn is_force_window_active(force_window_start: i64, now: i64) -> bool {
-    force_window_start > 0 && now - force_window_start >= 0 && now - force_window_start < FORCE_ESCALATION_WINDOW_SECS
-}
-
-fn write_board_marker(marker_path: &Path, fingerprint: &str, now: i64, repeat_count: u32, force_count: u32, force_window_start: i64) {
-    let _ = std::fs::write(marker_path, format!("{now}\n{fingerprint}\n{repeat_count}\n{force_count}\n{force_window_start}"));
-}
-
 fn long_running_warning(tasks: &[crate::types::Task], now: chrono::DateTime<Local>) -> Option<String> {
     let count = tasks.iter().filter(|task| task.status == TaskStatus::Running).filter(|task| (now - task.created_at).num_hours() >= 1).count();
     if count == 0 { return None }
@@ -280,6 +215,7 @@ fn board_json_row(task: &Task) -> serde_json::Value {
         "tokens": task.tokens,
         "duration_ms": task.duration_ms,
         "cost_usd": task.cost_usd,
+        "project_id": task.project_id,
         "workgroup_id": task.workgroup_id,
         "worktree_branch": task.worktree_branch,
         "verify_status": task.verify_status.as_str(),

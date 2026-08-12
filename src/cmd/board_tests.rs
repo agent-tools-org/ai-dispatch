@@ -2,7 +2,8 @@
 // Covers limit handling, marker transitions, and rendered output.
 // Deps: super module internals, tempfile, chrono, crate::store, crate::paths.
 
-use super::{AntiPollStatus, TruncationNotice, anti_poll_status, apply_limit, board_json_row, long_running_warning, truncation_notice_message, write_board_marker, write_board_output};
+use super::{TruncationNotice, apply_limit, board_json_row, long_running_warning, truncation_notice_message, write_board_output};
+use super::board_poll::{AntiPollStatus, anti_poll_status, write_board_marker};
 use chrono::{Duration, Local};
 use crate::paths::AidHomeGuard;
 use crate::store::Store;
@@ -76,7 +77,7 @@ fn board_output_is_not_written_when_anti_poll_blocks() {
     let mut output = Vec::new();
 
     if let AntiPollStatus::Allowed(_) = anti_poll {
-        write_board_output(&mut output, &store, &tasks, None, None, false).unwrap();
+        write_board_output(&mut output, &store, &tasks, None, None, true, None, false).unwrap();
     }
 
     assert_eq!(anti_poll, AntiPollStatus::Repeat(1));
@@ -91,7 +92,7 @@ fn board_output_shows_terminal_status_when_result_file_is_missing() {
     let tasks = vec![make_task("t-done-no-result", TaskStatus::Done, Local::now())];
     let mut output = Vec::new();
 
-    write_board_output(&mut output, &store, &tasks, None, None, false).unwrap();
+    write_board_output(&mut output, &store, &tasks, None, None, true, None, false).unwrap();
     let text = String::from_utf8(output).unwrap();
 
     assert!(text.contains(
@@ -107,7 +108,7 @@ fn board_output_shows_failed_status_when_result_file_is_missing() {
     let tasks = vec![make_task("t-failed-no-result", TaskStatus::Failed, Local::now())];
     let mut output = Vec::new();
 
-    write_board_output(&mut output, &store, &tasks, None, None, false).unwrap();
+    write_board_output(&mut output, &store, &tasks, None, None, true, None, false).unwrap();
     let text = String::from_utf8(output).unwrap();
 
     assert!(text.contains("Status: FAILED t-failed-no-result"));
@@ -212,7 +213,7 @@ fn make_task(task_id: &str, status: TaskStatus, created_at: chrono::DateTime<Loc
         caller_kind: None,
         caller_session_id: None,
         agent_session_id: None,
-        repo_path: None,
+        repo_path: None, project_id: None,
         worktree_path: None,
         worktree_branch: None,
         final_head_sha: None,

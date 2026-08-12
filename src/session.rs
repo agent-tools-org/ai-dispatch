@@ -94,7 +94,7 @@ mod tests {
             caller_kind: Some("codex".to_string()),
             caller_session_id: Some("0123456789abcdef".to_string()),
             agent_session_id: None,
-            repo_path: None,
+            repo_path: None, project_id: None,
             worktree_path: None,
             worktree_branch: None,
         final_head_sha: None,

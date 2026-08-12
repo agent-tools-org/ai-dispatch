@@ -177,7 +177,7 @@ fn task_fixture(id: &str, status: TaskStatus, worktree_path: Option<&str>) -> Ta
         caller_kind: None,
         caller_session_id: None,
         agent_session_id: None,
-        repo_path: None,
+        repo_path: None, project_id: None,
         worktree_path: worktree_path.map(str::to_string),
         worktree_branch: worktree_path.map(|_| "aid-test".to_string()),
         final_head_sha: None,

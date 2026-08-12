@@ -34,7 +34,7 @@ fn failed_task(path: &str) -> Task {
         id: TaskId("t-cascade".to_string()), agent: AgentKind::Codex, custom_agent_name: None,
         prompt: "prompt".to_string(), resolved_prompt: None, category: None,
         status: TaskStatus::Failed, parent_task_id: None, workgroup_id: None,
-        caller_kind: None, caller_session_id: None, agent_session_id: None, repo_path: None,
+        caller_kind: None, caller_session_id: None, agent_session_id: None, repo_path: None, project_id: None,
         worktree_path: Some(path.to_string()), worktree_branch: Some("feat/cascade".to_string()),
         final_head_sha: None,
         final_branch: None,

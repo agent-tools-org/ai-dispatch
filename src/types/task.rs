@@ -25,6 +25,9 @@ pub struct Task {
     pub caller_session_id: Option<String>,
     pub agent_session_id: Option<String>,
     pub repo_path: Option<String>,
+    /// Stable project identity recorded at dispatch. `None` is the explicit
+    /// unattributed bucket — never invent a project for historical rows.
+    pub project_id: Option<String>,
     pub worktree_path: Option<String>,
     pub worktree_branch: Option<String>,
     pub final_head_sha: Option<String>,

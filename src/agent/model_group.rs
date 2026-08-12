@@ -9,6 +9,12 @@ use crate::types::AgentKind;
 const PREMIUM_GROUP: &str = "premium";
 const AUTO_GROUP: &str = "auto";
 
+const OPENCODE_GROUPS: &[(&str, &[&str])] = &[
+    ("opencode", &["opencode/glm-5.2", "opencode/kimi-k2.6"]),
+    ("opencode-go", &["opencode-go/glm-5.2"]),
+    ("mimo", &["mimo/mimo-v2.5", "mimo/mimo-v2.5-pro"]),
+];
+
 /// Agents whose quota is metered per model family rather than per account.
 ///
 /// agy is the case that forced this: `agy models` serves gemini-*, claude-* and
@@ -52,6 +58,13 @@ pub(crate) fn model_group(agent: AgentKind, model: Option<&str>) -> Option<&'sta
     if !has_grouped_quota(agent) {
         return None;
     }
+    if agent == AgentKind::OpenCode {
+        let provider = model?.split_once('/')?.0;
+        return OPENCODE_GROUPS
+            .iter()
+            .find(|(group, _)| *group == provider)
+            .map(|(group, _)| *group);
+    }
     let model = model?.to_ascii_lowercase();
     if agent == AgentKind::Cursor {
         // Cursor meters one shared premium pool and `auto` is the only thing
@@ -77,6 +90,9 @@ pub(crate) fn model_group(agent: AgentKind, model: Option<&str>) -> Option<&'sta
 /// `auto` being the one tier that keeps serving once the premium pool is spent.
 /// The refusal itself says so, so it is read here rather than guessed.
 pub(crate) fn group_from_refusal(agent: AgentKind, message: &str) -> Option<&'static str> {
+    if agent == AgentKind::OpenCode {
+        return named_opencode_provider(message);
+    }
     if agent != AgentKind::Cursor {
         return None;
     }
@@ -87,6 +103,24 @@ pub(crate) fn group_from_refusal(agent: AgentKind, message: &str) -> Option<&'st
         .to_ascii_lowercase()
         .contains("you're out of usage")
         .then_some(PREMIUM_GROUP)
+}
+
+fn named_opencode_provider(message: &str) -> Option<&'static str> {
+    let lower = message.to_ascii_lowercase();
+    OPENCODE_GROUPS.iter().find_map(|(group, _)| {
+        let provider_field = [
+            format!("provider: {group}"),
+            format!("provider: \"{group}\""),
+            format!("providerid: {group}"),
+            format!("providerid: \"{group}\""),
+            format!("\"providerid\":\"{group}\""),
+            format!("\"providerid\": \"{group}\""),
+            format!("provider_id: {group}"),
+            format!("provider_id: \"{group}\""),
+            format!("{group}/"),
+        ];
+        provider_field.iter().any(|needle| lower.contains(needle)).then_some(*group)
+    })
 }
 
 /// Delegates to the types layer: how a provider partitions its allowance is a
@@ -114,6 +148,7 @@ pub(crate) fn groups_for_agent(agent: AgentKind) -> &'static [(&'static str, &'s
             (PREMIUM_GROUP, &["composer-2.5", "gpt-5.4-high"]),
             (AUTO_GROUP, &["auto"]),
         ],
+        AgentKind::OpenCode => OPENCODE_GROUPS,
         _ => &[],
     }
 }

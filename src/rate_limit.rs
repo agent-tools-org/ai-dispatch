@@ -73,7 +73,8 @@ pub fn mark_group_rate_limited(
     group: &str,
     message: &str,
 ) {
-    write_marker(&group_marker_path(agent, custom_name, group), message);
+    let provider = (*agent == AgentKind::OpenCode).then_some(group);
+    write_marker(&group_marker_path(agent, custom_name, group), message, provider);
 }
 
 pub fn is_group_rate_limited(agent: &AgentKind, custom_name: Option<&str>, group: &str) -> bool {
@@ -85,7 +86,7 @@ pub fn clear_group_rate_limit(agent: &AgentKind, custom_name: Option<&str>, grou
 }
 
 pub fn mark_rate_limited(agent: &AgentKind, custom_name: Option<&str>, message: &str) {
-    write_marker(&marker_path(agent, custom_name), message);
+    write_marker(&marker_path(agent, custom_name), message, None);
 }
 
 /// Record a refusal when the caller has no model in hand — a stderr line, a
@@ -144,24 +145,17 @@ fn format_recovery(at: NaiveDateTime) -> String {
     at.format("%b %d, %Y %I:%M %p").to_string()
 }
 
-fn write_marker(path: &std::path::Path, message: &str) {
+fn write_marker(path: &std::path::Path, message: &str, provider: Option<&str>) {
     if let Some(parent) = path.parent() {
         let _ = fs::create_dir_all(parent);
     }
-    let truncated_message = if message.len() > 200 {
-        let mut end = 200;
-        while !message.is_char_boundary(end) { end -= 1; }
-        &message[..end]
-    } else {
-        message
-    };
     let (recovery_at, hold_line) = match classify_hold(message) {
         Hold::Until(at) => (at, String::new()),
         Hold::NeedsHuman => (String::new(), format!("hold: {MANUAL_HOLD}\n")),
         Hold::Transient => (String::new(), String::new()),
     };
-    let content =
-        format!("recovery_at: {recovery_at}\n{hold_line}message: {truncated_message}\n");
+    let provider_line = format!("provider: {}\n", provider.unwrap_or("unknown"));
+    let content = format!("recovery_at: {recovery_at}\n{hold_line}{provider_line}message: {message}\n");
     let _ = fs::write(path, content);
 }
 
@@ -518,8 +512,24 @@ fn parse_recovery_time(message: &str) -> Option<String> {
         let end = remainder.find('.').unwrap_or(remainder.len());
         Some(remainder[..end].trim().to_string())
     } else {
-        None
+        parse_iso_recovery_time(message)
     }
+}
+
+fn parse_iso_recovery_time(message: &str) -> Option<String> {
+    for (index, _) in message.match_indices("20") {
+        let candidate: String = message[index..]
+            .chars()
+            .take_while(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '-' | ':' | '.' | '+'))
+            .collect();
+        let candidate = candidate.trim_end_matches(['.', ',', ';', ')', ']', '}']);
+        let Ok(parsed) = chrono::DateTime::parse_from_rfc3339(candidate) else {
+            continue;
+        };
+        let local = parsed.with_timezone(&Local).naive_local();
+        return Some(format_recovery(local));
+    }
+    None
 }
 
 fn parse_recovery_datetime(s: &str) -> Option<NaiveDateTime> {
@@ -643,6 +653,10 @@ pub fn format_hold_end(
         "cooling down".to_string()
     }
 }
+
+#[cfg(test)]
+#[path = "rate_limit_credibility_tests.rs"]
+mod credibility_tests;
 
 #[cfg(test)]
 mod tests {

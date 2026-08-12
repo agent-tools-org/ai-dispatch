@@ -21,6 +21,13 @@ writing it from memory. Inspect the effective result with `aid project show`
 and `aid project state`. Use `aid project sync` to synchronize supported
 project instructions and budgets.
 
+`[project].id` is the **stable project identity** recorded on every dispatched
+task. Main checkout and linked worktrees resolve to the same id. When no
+`project.toml` exists, aid falls back to a path-based id of the main working
+tree. Outside any git repository, tasks are stored with `project_id` unset
+(the unattributed bucket). Historical tasks without a recorded identity stay
+unattributed — aid does not invent one after the fact.
+
 Common project controls include:
 
 - default team and verification command;

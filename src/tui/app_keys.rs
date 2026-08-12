@@ -23,6 +23,12 @@ impl App {
                 self.reload_tasks()?;
                 return Ok(());
             }
+            // Toggle project filter: default is current project only; P shows all.
+            KeyCode::Char('P') => {
+                self.show_all_projects = !self.show_all_projects;
+                self.reload_tasks()?;
+                return Ok(());
+            }
             KeyCode::Char('s') => {
                 self.tree_mode = false;
                 self.stats_mode = !self.stats_mode;

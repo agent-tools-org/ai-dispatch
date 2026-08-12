@@ -1,4 +1,4 @@
-// Build a tree of tasks by parent_task_id and workgroup relationships.
+// Build a tree of tasks by project, then parent_task_id hierarchy.
 // Exports: TreeNode, build_task_tree.
 // Deps: crate::types::Task.
 
@@ -16,8 +16,8 @@ pub struct TreeNode {
 }
 
 /// Build a flat list of TreeNodes with proper indentation.
-/// Groups tasks by workgroup, then by parent_task_id hierarchy within each group.
-/// Orphan tasks (no workgroup, no parent) appear at root level.
+/// When multiple projects are present, groups by project_id (NULL → unattributed).
+/// Within a project, nests by parent_task_id.
 #[cfg(test)]
 pub fn build_task_tree(tasks: &[Task]) -> Vec<TreeNode> {
     build_task_tree_with_creators(tasks, &HashMap::new())
@@ -29,13 +29,13 @@ pub fn build_task_tree_with_creators(tasks: &[Task], creators: &HashMap<String, 
     let mut seen = HashSet::new();
     let task_ids: HashSet<&str> = tasks.iter().map(|t| t.id.as_str()).collect();
 
-    // Group tasks by workgroup_id
+    // Group tasks by project_id (first-class). NULL → unattributed bucket.
     let mut groups: HashMap<Option<&str>, Vec<&Task>> = HashMap::new();
     for task in tasks {
-        groups.entry(task.workgroup_id.as_deref()).or_default().push(task);
+        groups.entry(task.project_id.as_deref()).or_default().push(task);
     }
 
-    // Sort groups: named groups first (newest first by latest task), then None (ungrouped)
+    // Named projects first (newest first), unattributed last.
     let mut group_keys: Vec<Option<&str>> = groups.keys().copied().collect();
     group_keys.sort_by(|a, b| match (a, b) {
         (Some(ga), Some(gb)) => {
@@ -47,23 +47,33 @@ pub fn build_task_tree_with_creators(tasks: &[Task], creators: &HashMap<String, 
         (None, None) => std::cmp::Ordering::Equal,
     });
 
+    let multi_project = groups.len() > 1;
     for group_key in group_keys {
         let group_tasks = &groups[&group_key];
+        let project_label = crate::project::project_display(group_key);
 
-        if let Some(gid) = group_key {
-            // Find roots within this group
+        if multi_project {
+            // Find roots within this project
             let roots = find_roots(group_tasks, &task_ids);
             if roots.is_empty() { continue; }
 
-            // Use first root as group header display
+            // Use first root as project header display
             let header_task = roots[0];
+            let wg_hint = header_task
+                .workgroup_id
+                .as_deref()
+                .and_then(|gid| creators.get(gid).map(|by| format!(" ({gid}/{by})")))
+                .or_else(|| {
+                    header_task
+                        .workgroup_id
+                        .as_ref()
+                        .map(|gid| format!(" ({gid})"))
+                })
+                .unwrap_or_default();
             result.push(TreeNode {
                 task: header_task.clone(),
                 depth: 0,
-                prefix: match creators.get(gid) {
-                    Some(by) => format!("▸ {gid} ({by}) "),
-                    None => format!("▸ {gid} "),
-                },
+                prefix: format!("▸ {project_label}{wg_hint} "),
                 is_group_header: true,
             });
             seen.insert(header_task.id.as_str().to_string());
@@ -88,7 +98,7 @@ pub fn build_task_tree_with_creators(tasks: &[Task], creators: &HashMap<String, 
                 add_children(root.id.as_str(), group_tasks, &mut result, &mut seen, 2, next_prefix);
             }
         } else {
-            // Ungrouped tasks — flat roots with parent-child hierarchy
+            // Single project view — flat roots with parent-child hierarchy
             let all_refs: Vec<&Task> = tasks.iter().collect();
             let mut roots = find_roots(group_tasks, &task_ids);
             roots.sort_by(|a, b| {
@@ -182,7 +192,7 @@ mod tests {
             verify_status: VerifyStatus::Skipped,
             custom_agent_name: None, resolved_prompt: None,
             caller_kind: None, caller_session_id: None, agent_session_id: None,
-            repo_path: None, worktree_path: None, worktree_branch: None,
+            repo_path: None, project_id: crate::project::current_project_id(), worktree_path: None, worktree_branch: None,
         final_head_sha: None,
         final_branch: None,
             start_sha: None,
@@ -221,16 +231,24 @@ mod tests {
     }
 
     #[test]
-    fn workgroup_tasks_grouped() {
-        let tasks = vec![
-            mk_group("t-1", None, Some("wg-a")),
-            mk_group("t-2", None, Some("wg-a")),
-            mk("t-3", None),
-        ];
-        let tree = build_task_tree(&tasks);
-        // wg-a group header + t-2 child + ungrouped t-3
-        assert!(tree[0].is_group_header);
-        assert!(tree[0].prefix.contains("wg-a"));
-        assert!(!tree.last().unwrap().is_group_header);
+    fn multi_project_tasks_grouped() {
+        let mut a = mk("t-1", None);
+        a.project_id = Some("proj-a".into());
+        let mut b = mk("t-2", None);
+        b.project_id = Some("proj-b".into());
+        let mut u = mk("t-3", None);
+        u.project_id = None;
+        let tree = build_task_tree(&[a, b, u]);
+        let headers: Vec<_> = tree
+            .iter()
+            .filter(|n| n.is_group_header)
+            .map(|n| n.prefix.clone())
+            .collect();
+        assert!(headers.iter().any(|p| p.contains("proj-a")), "{headers:?}");
+        assert!(headers.iter().any(|p| p.contains("proj-b")), "{headers:?}");
+        assert!(
+            headers.iter().any(|p| p.contains("unattributed")),
+            "{headers:?}"
+        );
     }
 }

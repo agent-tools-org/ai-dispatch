@@ -255,7 +255,7 @@ fn make_task(
         caller_kind: None,
         caller_session_id: None,
         agent_session_id: None,
-        repo_path: Some(repo_path.to_string_lossy().to_string()),
+        repo_path: Some(repo_path.to_string_lossy().to_string()), project_id: None,
         worktree_path: None,
         worktree_branch: None,
         final_head_sha: None,

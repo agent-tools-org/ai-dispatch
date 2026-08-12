@@ -145,7 +145,7 @@ fn task_with_verify_status(verify_status: VerifyStatus) -> Task {
         id: TaskId("t-test".to_string()), agent: AgentKind::Codex,
         custom_agent_name: None, prompt: "test prompt".to_string(), resolved_prompt: None,
         category: None, status: TaskStatus::Done, parent_task_id: None, workgroup_id: None,
-        caller_kind: None, caller_session_id: None, agent_session_id: None, repo_path: None,
+        caller_kind: None, caller_session_id: None, agent_session_id: None, repo_path: None, project_id: None,
         worktree_path: None, worktree_branch: None, final_head_sha: None, final_branch: None,
         start_sha: None, log_path: None, output_path: None, tokens: None, prompt_tokens: None,
         duration_ms: Some(2_500), requested_model: None, observed_model: None, attribution_source: None, cost_usd: None, exit_code: None,

@@ -4,6 +4,7 @@
 
 ```bash
 aid board
+aid board --all
 aid board --json
 aid watch <task-id>
 aid wait <task-id>
@@ -12,6 +13,13 @@ aid show <task-id> --events
 aid output <task-id>
 aid tree <task-id>
 ```
+
+`aid board` defaults to the **current project** (the stable identity of the
+enclosing git main working tree — `.aid/project.toml` `id` when present). Tasks
+dispatched outside any project, and historical rows that never recorded one,
+live in the explicit **unattributed** bucket. Use `--all` to list every project;
+the board always prints which filter is active so tasks cannot appear to vanish.
+The TUI mirrors this default and toggles it with `P`.
 
 Use `watch` for a stream and `wait` for automation. `--wait` continues while
 verification is pending and returns non-zero when any selected task does not

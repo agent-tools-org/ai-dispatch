@@ -24,7 +24,7 @@ fn make_task(id: &str, agent: AgentKind, status: TaskStatus) -> Task {
         caller_kind: None,
         caller_session_id: None,
         agent_session_id: None,
-        repo_path: None,
+        repo_path: None, project_id: crate::project::current_project_id(),
         worktree_path: None,
         worktree_branch: Some("feat/test".to_string()),
         final_head_sha: None,

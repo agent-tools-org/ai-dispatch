@@ -1,31 +1,40 @@
 ## Findings
 
-**Overall Verdict:** BLOCK
+1. **High — the ownership fix still leaks reports through a shared repository root.** `owned_output_path()` accepts any existing `repo_path/<relative -o>` file (`src/cmd/show_output_owned.rs:21-39`). Two worktree tasks using `-o report.md` therefore share the same repo-root report; task B can display task A’s file if B’s worktree lacks one. The regression test only covers foreign CWD files, not foreign repo-root files.
 
-### 1. (FAIL) Q2: The narrowed hold fails to reach the read path
+2. **High — legitimate relative outputs under the effective `--dir` no longer resolve.** Without a worktree, `resolve_worktree_paths()` returns `args.dir` but no `repo_path` (`src/cmd/run_prompt_helpers.rs:239-242`); the task stores neither effective directory nor CWD. Thus audit/research tasks using `--dir /external/project -o report.md` fail to find their genuine report. The same occurs for nested `--dir` paths inside a worktree/repository because only the worktree/repo roots are searched. Worktree-root and repo-root outputs do resolve. Pruned worktrees and moved absolute files were already unreadable, so those are not new regressions.
 
-**Severity:** High
-**Files:** `src/cmd/run_dispatch_resolve.rs`, `src/agent/model_group.rs`
-**Evidence:** 
-The write path successfully records the narrowed hold by calling `mark_group_rate_limited` (creating `.aid/rate-limit-opencode--nvidia`). However, the dispatch read path completely ignores it.
-During dispatch (`run_dispatch_resolve.rs`), group routing evaluates `agent::model_group::healthy_model_for`. `healthy_model_for` relies on `groups_for_agent(agent)`. Since `AgentKind::OpenCode` is missing from the match arms in `groups_for_agent`, it hits the `_ => &[]` fallback. With an empty group list, `healthy_model_for` bails out (`if groups.is_empty() { return None; }`) and never executes the closure containing the `is_group_rate_limited` check. Meanwhile, the global `is_rate_limited` check ignores group markers. The route stays fully active despite the file existing on disk.
+3. **Medium — relative path containment is not enforced.** `base.join(path)` accepts `..`, and `is_file()` follows symlinks (`src/cmd/show_output_owned.rs:21-24`). A declared path such as `../other-task/report.md`, or a symlink beneath a task directory, can escape the intended task boundary.
 
-### 2. (FAIL) Q3: Unknown attribution and data fabrication
+### Question 1 — FAIL
 
-**Severity:** Medium
-**Files:** `src/rate_limit.rs`, `src/agent/model_group.rs`
-**Evidence:**
-- **Fabricated `recovery_at`:** In `parse_iso_recovery_time` (`src/rate_limit.rs`), an ISO timestamp found in the refusal is parsed into a `DateTime` and shifted to the system's local timezone (`.with_timezone(&Local).naive_local()`). It is then formatted via `format_recovery` (e.g., `Jan 02, 2099 10:04 AM`). This constructs a localized string that was not literally present in the provider's refusal message.
-- **Unattributed Refusals Marking Less:** If an OpenCode refusal has no model but happens to contain a key like `provider` (e.g., `{"error": "limit", "provider": "unknown"}`), `named_opencode_provider` blindly extracts `"unknown"`. This causes `mark_rate_limited_for_message` to write a narrow group marker (`rate-limit-opencode--unknown`) instead of falling back to the global `mark_rate_limited`. The global agent avoids the hold, and the system continues routing tasks to it.
-- **Ollama Quota Leakage:** Yes, ollama is treated as a quota-bearing provider. If the model is `"ollama/llama3"`, `provider_from_model` extracts `"ollama"`. Because `has_grouped_quota(OpenCode)` unconditionally returns true, any matched or manual refusal on that task will write `.aid/rate-limit-opencode--ollama`, treating the local unmetered endpoint as if it were a bounded cloud provider.
+Evidence is findings 1–2. The new resolver stops finding real reports written in an effective `--dir` that is not persisted as a resolver base. It does not regress:
 
-### 3. (PASS) Q1: Quota marking for other agents remains intact
+- worktree-root output;
+- repository-root output;
+- task-directory output;
+- absolute output paths that still exist;
+- outputs lost when the worktree itself was pruned;
+- absolute paths whose files were moved, which also failed before.
 
-**Severity:** None (Correct)
-**Files:** `src/agent/model_group.rs`
-**Evidence:**
-- The behavior for agents other than OpenCode (e.g., Cursor, Antigravity) is byte-for-byte unchanged at runtime.
-- In `has_grouped_quota`, the short-circuit `agent == AgentKind::OpenCode` leaves the old `!groups_for_agent(agent).is_empty()` logic exactly as it was.
-- In `model_group`, the return type's lifetime was relaxed from `&'static str` to `&'a str` to allow returning a substring of the model name. For non-OpenCode agents, the function still returns static string constants (like `AUTO_GROUP`), which perfectly coerces to the `'a` lifetime without altering program behavior.
+### Question 2 — FAIL
 
-=== AID TASK t-c537498a DONE (exit 0) ===
+- `src/cmd/judge.rs`: before, consumed the declared path relative to CWD, then `worktree/<path>`; now consumes task-owned output or persisted `result.md` through `read_task_output()`. If unresolved and no diff exists, it degrades to the explicit `(no diff or output)` placeholder.
+- `src/cmd/prompt_context.rs`: before, read `task.output_path` directly relative to CWD; now uses the strict resolver and then the same task log fallback. A missing report can silently become log-derived context; with no usable log it warns and skips the task, so the caller’s intended report context may be absent.
+- `src/cmd/summary_conclusion.rs`: before, read the declared path relative to CWD; now uses the strict resolver, then the task log. Missing output can silently become a log conclusion or an empty conclusion, rendered as `(none)` by `summary.rs:101-105`.
+
+### Question 3 — PASS, narrowly
+
+For `aid show --output`, `show.rs:109-110` reaches `render_task_output()`. If no declared owned file or persisted `result.md` exists, `show_output_owned.rs:54-56` prefixes:
+
+> No task-owned output file for this task (...). Falling back to this task's log.
+
+The body is then the task’s own log, or `No output or log available` (`show_output_messages.rs:38-53`). This cannot be mistaken for a successful report. The shared-repository collision in Finding 1 can nevertheless produce a wrong successful report before the absence path runs.
+
+## Open Questions
+
+- The added `TempCwd` test helper mutates process-global CWD (`show_result_tests.rs:15-25`); parallel tests can interfere with one another.
+- No added test covers no-worktree `--dir`, nested `--dir`, shared repo-root collisions, `..`, symlinks, judge input, context injection, or summary conclusions.
+- Targeted validation passed 5/5 `show_result_tests`; this does not cover the failures above.
+
+**Overall verdict: BLOCK**

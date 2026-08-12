@@ -15,8 +15,6 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::{
     Block, Borders, Cell, Paragraph, Row, Table, TableState,
 };
-use std::collections::HashMap;
-
 use super::app::App;
 use super::charts;
 use super::dashboard;
@@ -133,8 +131,7 @@ fn render_board(frame: &mut ratatui::Frame<'_>, app: &App) {
     );
 
     let header = Row::new(vec![
-        "ID", "Route", "Status", "Progress", "CPU", "Mem", "Created", "Duration", "Tokens", "Cost", "Model", "Project",
-        "Prompt",
+        "ID", "Route", "Status", "Progress", "CPU", "Mem", "Created", "Duration", "Tokens", "Cost", "Model", "Prompt",
     ])
     .style(Style::default().add_modifier(Modifier::BOLD));
     let nodes = tree_data::build_task_tree_with_state(
@@ -142,17 +139,7 @@ fn render_board(frame: &mut ratatui::Frame<'_>, app: &App) {
         &app.wg_creators,
         &app.collapsed_projects,
     );
-    let group_counts = app.tasks.iter().fold(HashMap::new(), |mut counts, task| {
-        let entry = counts.entry(task.project_id.clone()).or_insert((0, 0));
-        entry.1 += 1;
-        if task.status.is_terminal() {
-            entry.0 += 1;
-        }
-        counts
-    });
-    let rows = nodes
-        .iter()
-        .map(|node| board_row(app, node, &group_counts));
+    let rows = nodes.iter().map(|node| board_row(app, node));
     let table = Table::new(
         rows,
         [
@@ -168,7 +155,6 @@ fn render_board(frame: &mut ratatui::Frame<'_>, app: &App) {
             Constraint::Length(8),
             Constraint::Length(8),
             Constraint::Length(18),
-            Constraint::Length(10),
             Constraint::Min(20),
         ],
     )
@@ -202,19 +188,34 @@ fn render_board(frame: &mut ratatui::Frame<'_>, app: &App) {
 fn board_row(
     app: &App,
     node: &TreeNode,
-    group_counts: &HashMap<Option<String>, (usize, usize)>,
 ) -> Row<'static> {
     if node.is_group_header {
-        let (done, total) = group_counts.get(&node.project_id).copied().unwrap_or((0, 0));
-        return Row::new(vec![
-            Cell::from(truncate(&node.prefix, 10)),
-            Cell::from(""),
-            Cell::from(""),
-            Cell::from(format!("({done}/{total})")),
-        ])
+        return Row::new(group_header_cells(&node.prefix))
             .style(Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD));
     }
     task_row(app, &node.task)
+}
+
+const TABLE_COLUMN_WIDTHS: [usize; 12] = [10, 28, 8, 24, 7, 7, 11, 10, 8, 8, 18, 20];
+
+fn group_header_cells(prefix: &str) -> Vec<Cell<'static>> {
+    let text = fit_group_header(prefix, TABLE_COLUMN_WIDTHS.iter().sum());
+    let mut chars = text.chars();
+    TABLE_COLUMN_WIDTHS
+        .iter()
+        .map(|width| Cell::from(chars.by_ref().take(*width).collect::<String>()))
+        .collect()
+}
+
+fn fit_group_header(prefix: &str, width: usize) -> String {
+    let value = prefix.trim_end();
+    let Some((label, count)) = value.rsplit_once(" (") else {
+        return truncate(value, width);
+    };
+    let suffix = format!(" ({count}");
+    let label_width = width.saturating_sub(suffix.chars().count());
+    let visible_label: String = label.chars().take(label_width).collect();
+    format!("{visible_label}{suffix}")
 }
 
 fn status_to_color(status: TaskStatus) -> Color {
@@ -233,7 +234,7 @@ fn status_to_color(status: TaskStatus) -> Color {
 
 #[cfg(test)]
 mod tests {
-    use super::status_to_color;
+    use super::{fit_group_header, status_to_color, TABLE_COLUMN_WIDTHS};
     use ratatui::prelude::Color;
     use crate::types::TaskStatus;
 
@@ -243,5 +244,23 @@ mod tests {
         assert_eq!(status_to_color(TaskStatus::Merged), Color::Green);
         assert_eq!(status_to_color(TaskStatus::Failed), Color::Red);
         assert_eq!(status_to_color(TaskStatus::Running), Color::Yellow);
+    }
+
+    #[test]
+    fn group_header_parts_keep_label_and_count_across_the_row() {
+        let prefix = "▾ agentswap-cli (2/3) ";
+        let shown = fit_group_header(prefix, TABLE_COLUMN_WIDTHS.iter().sum());
+
+        assert_eq!(shown, "▾ agentswap-cli (2/3)");
+        assert!(shown.len() > 10);
+        assert!(shown.ends_with("(2/3)"));
+    }
+
+    #[test]
+    fn long_group_header_preserves_count() {
+        let prefix = format!("▾ {} (14/14) ", "project-".repeat(30));
+        let shown = fit_group_header(&prefix, 20);
+
+        assert!(shown.ends_with("(14/14)"));
     }
 }

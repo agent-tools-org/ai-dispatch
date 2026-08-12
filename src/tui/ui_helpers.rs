@@ -49,9 +49,6 @@ pub fn task_row(app: &App, task: &Task) -> Row<'static> {
         Cell::from(task_tokens(task)),
         Cell::from(cost::format_cost_label(task.cost_usd, task.agent)),
         Cell::from(truncate(&model, 18)),
-        Cell::from(
-            crate::project::project_display(task.project_id.as_deref()).to_string(),
-        ),
         Cell::from(truncate(&task.prompt, 60)),
     ])
     .style(status_style(task.status))

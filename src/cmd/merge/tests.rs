@@ -481,6 +481,9 @@ fn check_merge_detects_conflict() {
         MergeCheckResult::Ok(commits) => {
             panic!("expected conflict, got clean merge with {commits} commit(s)")
         }
+        MergeCheckResult::StashRestoreFailed(error) => {
+            panic!("expected merge conflict, got stash restore failure: {error}")
+        }
     }
     assert_eq!(worktree_status(repo.path()), "");
 
@@ -522,7 +525,67 @@ fn git_merge_branch_stashes_local_changes() {
 }
 
 #[test]
-fn git_merge_branch_stashes_and_warns_on_pop_conflict() {
+fn git_merge_branch_stashes_untracked_changes_without_using_an_older_stash() {
+    let _permit = test_subprocess::acquire();
+    let repo = init_repo();
+    let (wt, branch) = create_worktree_with_commit(repo.path());
+    std::fs::write(repo.path().join("init.txt"), "older rescue\n").unwrap();
+    git(repo.path(), &["stash", "push", "-m", "older rescue"]);
+    std::fs::write(repo.path().join("task-b-untracked.txt"), "task-b\n").unwrap();
+
+    let result = git_merge_branch(&repo.path().to_string_lossy(), &branch);
+    assert!(matches!(result, MergeResult::Merged));
+    assert_eq!(std::fs::read_to_string(repo.path().join("init.txt")).unwrap(), "init\n");
+    assert_eq!(std::fs::read_to_string(repo.path().join("task-b-untracked.txt")).unwrap(), "task-b\n");
+    let stashes = Command::new("git")
+        .args(["-C", &repo.path().to_string_lossy(), "stash", "list"])
+        .output()
+        .unwrap();
+    assert!(String::from_utf8_lossy(&stashes.stdout).contains("older rescue"));
+    git(repo.path(), &["stash", "drop"]);
+    git(repo.path(), &["worktree", "remove", "--force", &wt.path().to_string_lossy()]);
+}
+
+#[test]
+fn git_merge_branch_restores_its_own_stash_when_newer_stash_appears() {
+    let _permit = test_subprocess::acquire();
+    let repo = init_repo();
+    let (wt, branch) = create_worktree_with_commit(repo.path());
+    std::fs::write(repo.path().join("main.txt"), "main\n").unwrap();
+    git(repo.path(), &["add", "main.txt"]);
+    git(repo.path(), &["commit", "-m", "main change"]);
+    std::fs::write(repo.path().join("init.txt"), "local change\n").unwrap();
+
+    let hook = repo.path().join(".git/hooks/pre-merge-commit");
+    std::fs::write(
+        &hook,
+        "#!/bin/sh\nprintf 'task-b rescue\n' > init.txt\ngit stash push -q -m 'task-b rescue'\n",
+    )
+    .unwrap();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mut permissions = std::fs::metadata(&hook).unwrap().permissions();
+        permissions.set_mode(0o755);
+        std::fs::set_permissions(&hook, permissions).unwrap();
+    }
+
+    let result = git_merge_branch(&repo.path().to_string_lossy(), &branch);
+    assert!(matches!(result, MergeResult::Merged));
+    assert_eq!(std::fs::read_to_string(repo.path().join("init.txt")).unwrap(), "local change\n");
+    let stashes = Command::new("git")
+        .args(["-C", &repo.path().to_string_lossy(), "stash", "list"])
+        .output()
+        .unwrap();
+    let stashes = String::from_utf8_lossy(&stashes.stdout);
+    assert!(stashes.contains("task-b rescue"));
+    assert!(!stashes.contains("aid: auto-stash before merge"));
+    git(repo.path(), &["stash", "drop"]);
+    git(repo.path(), &["worktree", "remove", "--force", &wt.path().to_string_lossy()]);
+}
+
+#[test]
+fn git_merge_branch_fails_loudly_on_stash_restore_conflict() {
     let _permit = test_subprocess::acquire();
     let repo = init_repo();
     let branch = unique("pop-conflict");
@@ -543,7 +606,10 @@ fn git_merge_branch_stashes_and_warns_on_pop_conflict() {
     std::fs::write(repo.path().join("init.txt"), "local change\n").unwrap();
 
     let result = git_merge_branch(&repo.path().to_string_lossy(), &branch);
-    assert!(matches!(result, MergeResult::Merged));
+    let MergeResult::StashRestoreFailed(error) = result else {
+        panic!("expected stash restore failure");
+    };
+    assert!(error.contains("stash"));
     let status = Command::new("git")
         .args(["-C", &repo.path().to_string_lossy(), "status", "--short"])
         .output()

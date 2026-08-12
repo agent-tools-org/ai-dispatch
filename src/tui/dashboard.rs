@@ -70,7 +70,7 @@ fn render_cards(frame: &mut ratatui::Frame<'_>, app: &App, area: Rect) {
     {
         let selected = start + index == app.selected;
         let milestones = app.task_milestones(task.id.as_str());
-        let activity = task_activity_summary(app, task.id.as_str());
+        let activity = task_activity_summary(app, task);
         frame.render_widget(
             render_task_card(
                 task,
@@ -164,9 +164,10 @@ fn visible_task_indices(app: &App, height: u16) -> (usize, usize) {
     }
     (start, end)
 }
-fn task_activity_summary(app: &App, task_id: &str) -> String {
+fn task_activity_summary(app: &App, task: &Task) -> String {
+    let task_id = task.id.as_str();
     let Some(events) = app.events_cache.get(task_id) else {
-        return "no cached events".to_string();
+        return app.task_activity(task);
     };
     let parts = ACTIVITY_KINDS
         .iter()
@@ -179,9 +180,9 @@ fn task_activity_summary(app: &App, task_id: &str) -> String {
         })
         .collect::<Vec<_>>();
     if parts.is_empty() {
-        "no activity yet".to_string()
+        app.task_activity(task)
     } else {
-        parts.join(", ")
+        format!("{} · {}", app.task_activity(task), parts.join(", "))
     }
 }
 fn card_height(milestones: &[String]) -> u16 {

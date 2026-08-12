@@ -11,6 +11,9 @@ use crate::tui::route_display::format_route_fit;
 use crate::types::{Task, TaskStatus};
 
 pub fn task_status_label(task: &Task) -> String {
+    if task.status == TaskStatus::AwaitingInput {
+        return "WAITING".to_string();
+    }
     let label = task.status.label();
     task.outcome()
         .verification_tag()
@@ -22,6 +25,7 @@ pub fn task_row(app: &App, task: &Task) -> Row<'static> {
     let label = task_status_label(task);
     let status = match task.status {
         TaskStatus::Running => format!("▶ {label}"),
+        TaskStatus::AwaitingInput => label,
         TaskStatus::Stalled => format!("! {label}"),
         TaskStatus::Done | TaskStatus::Merged => format!("✓ {label}"),
         TaskStatus::Failed => format!("✗ {label}"),
@@ -87,11 +91,15 @@ pub fn task_header(task: &Task, events: &[crate::types::TaskEvent]) -> Paragraph
     if !scope.is_empty() {
         lines.push(Line::from(Span::styled(scope, Style::default().fg(Color::Indexed(243)))));
     }
-    if task.status == TaskStatus::AwaitingInput
-        && let Some(prompt) = pending_prompt(events)
-    {
+    if task.status == TaskStatus::AwaitingInput {
+        let latest = events.last();
         lines.push(Line::from(Span::styled(
-            format!("Awaiting: {}", truncate(prompt, 120)),
+            crate::tui::agent_state::activity_label(
+                task.status,
+                task.agent,
+                task.id.as_str(),
+                latest,
+            ),
             Style::default().fg(Color::Magenta),
         )));
     }
@@ -201,8 +209,8 @@ pub fn task_memory(app: &App, task: &Task) -> String {
 }
 
 pub fn task_progress(app: &App, task: &Task) -> String {
-    if task.status == TaskStatus::AwaitingInput {
-        return "awaiting input".to_string();
+    if matches!(task.status, TaskStatus::Running | TaskStatus::AwaitingInput) {
+        return truncate(&app.task_activity(task), 30);
     }
     // For failed/stopped tasks, show last error reason instead of milestone
     if matches!(task.status, TaskStatus::Failed | TaskStatus::Stopped)

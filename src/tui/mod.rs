@@ -2,6 +2,7 @@
 // Boots ratatui+crossterm, runs the app loop, and restores the terminal on exit.
 
 pub mod app;
+pub(crate) mod agent_state;
 pub mod charts;
 pub mod dashboard;
 pub mod metrics;

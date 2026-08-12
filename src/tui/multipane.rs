@@ -10,6 +10,7 @@ pub struct PaneData {
     pub task_id: String,
     pub agent: String,
     pub status: String,
+    pub activity: String,
     pub prompt: String,
     pub events: Vec<(String, String, String)>,
     pub tokens: String,
@@ -199,6 +200,7 @@ fn render_pane(pane: &PaneData, is_active: bool, area_height: u16) -> List<'stat
     // Ellipsis truncation is intentional and visible ("...").
     let prompt = truncate_visible(&pane.prompt, 60);
     let mut items = vec![ListItem::new(format!("Prompt: {prompt}"))];
+    items.push(ListItem::new(format!("State: {}", pane.activity)));
     let summary = format!(
         "Tokens: {}  Cost: {}  CPU: {}  Mem: {}",
         pane.tokens, pane.cost, pane.cpu, pane.memory

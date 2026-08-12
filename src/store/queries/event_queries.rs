@@ -170,6 +170,40 @@ impl Store {
         Ok(map)
     }
 
+    pub fn latest_events_batch(&self, task_ids: &[&str]) -> Result<HashMap<String, TaskEvent>> {
+        if task_ids.is_empty() {
+            return Ok(HashMap::new());
+        }
+        let conn = self.db();
+        let placeholders: Vec<String> = (1..=task_ids.len()).map(|i| format!("?{i}")).collect();
+        let sql = format!(
+            "SELECT e.task_id, e.timestamp, e.event_type, e.detail, e.metadata
+             FROM events e
+             JOIN (
+                 SELECT task_id, MAX(id) AS latest_id
+                 FROM events
+                 WHERE task_id IN ({})
+                   AND timestamp = (
+                       SELECT MAX(latest.timestamp)
+                       FROM events latest
+                       WHERE latest.task_id = events.task_id
+                   )
+                 GROUP BY task_id
+             ) latest ON latest.latest_id = e.id",
+            placeholders.join(",")
+        );
+        let mut stmt = conn.prepare(&sql)?;
+        let params: Vec<&dyn rusqlite::ToSql> =
+            task_ids.iter().map(|id| id as &dyn rusqlite::ToSql).collect();
+        let rows = stmt.query_map(params.as_slice(), row_to_event)?;
+        let mut map = HashMap::new();
+        for row in rows {
+            let event = row?;
+            map.insert(event.task_id.as_str().to_string(), event);
+        }
+        Ok(map)
+    }
+
     pub fn get_workgroup_milestones(&self, workgroup_id: &str) -> Result<Vec<(String, String)>> {
         let conn = self.db();
         let mut stmt = conn.prepare(

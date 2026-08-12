@@ -2,7 +2,7 @@
 // Covers unchanged task custody plus committed and unstaged task changes.
 // Deps: judge::gather_diff, Task metadata, temporary Git repositories.
 
-use super::gather_diff;
+use super::{gather_diff, judge_review_material};
 use crate::types::{AgentKind, Task, TaskId, TaskStatus, VerifyStatus};
 use chrono::Local;
 use std::path::Path;
@@ -39,7 +39,7 @@ fn task(repo: &Path, start_sha: Option<String>) -> Task {
         prompt: "test".into(), resolved_prompt: None, category: None,
         status: TaskStatus::Failed, parent_task_id: None, workgroup_id: None,
         caller_kind: None, caller_session_id: None, agent_session_id: None,
-        repo_path: Some(repo.display().to_string()), project_id: None, worktree_path: None,
+        repo_path: Some(repo.display().to_string()), project_id: None, worktree_path: None, effective_dir: None,
         worktree_branch: None, final_head_sha: None, final_branch: None,
         start_sha, log_path: None, output_path: None, tokens: None,
         prompt_tokens: None, duration_ms: None, requested_model: None,
@@ -92,4 +92,21 @@ fn task_without_start_sha_includes_latest_committed_changes() {
     let diff = gather_diff(&task(repo.path(), None)).expect("latest task commit should be visible");
     assert!(diff.contains("tracked.txt"));
     assert!(diff.contains("committed by task"));
+}
+
+#[test]
+fn judge_material_reports_missing_owned_output() {
+    let repo = init_repo();
+    let mut missing = task(repo.path(), Some(git(repo.path(), &["rev-parse", "HEAD"])));
+    missing.output_path = Some("report.md".to_string());
+
+    let material = judge_review_material(&missing);
+    assert!(
+        material.contains("No task-owned output file"),
+        "absence must be explicit: {material}"
+    );
+    assert!(
+        material.contains("(no diff or output)"),
+        "must not invent a report: {material}"
+    );
 }

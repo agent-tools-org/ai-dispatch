@@ -8,6 +8,12 @@ use crate::paths::AidHomeGuard;
 use crate::types::{AgentKind, Task, TaskId, TaskStatus, VerifyStatus};
 use chrono::Local;
 
+// Local RAII CWD guard (same pattern as src/state_tests.rs). Not hoisted:
+// state_tests already has its own copy plus a module-local lock.
+// CWD is process-global, so these tests can race other TempCwd users under
+// the default parallel runner. test_subprocess::acquire() does not serialize
+// CWD — it is an 8-slot subprocess semaphore. New ownership tests avoid
+// set_current_dir entirely (see show_output_owned_tests.rs).
 struct TempCwd {
     previous: PathBuf,
 }
@@ -41,7 +47,7 @@ fn task(id: &str) -> Task {
         caller_session_id: None,
         agent_session_id: None,
         repo_path: None, project_id: None,
-        worktree_path: None,
+        worktree_path: None, effective_dir: None,
         worktree_branch: None,
         final_head_sha: None,
         final_branch: None,
@@ -118,12 +124,12 @@ fn read_task_output_never_renders_sibling_task_relative_report() {
     // Task B never wrote its -o file.
 
     let task_a = Task {
-        worktree_path: Some(worktree_a.display().to_string()),
+        worktree_path: Some(worktree_a.display().to_string()), effective_dir: None,
         output_path: Some("report.md".to_string()),
         ..task("t-owner-a")
     };
     let task_b = Task {
-        worktree_path: Some(worktree_b.display().to_string()),
+        worktree_path: Some(worktree_b.display().to_string()), effective_dir: None,
         output_path: Some("report.md".to_string()),
         ..task("t-victim-b")
     };
@@ -160,7 +166,7 @@ fn read_task_output_resolves_relative_report_from_task_worktree() {
     std::fs::write(foreign_cwd.join("report.md"), "cwd-foreign-content\n").unwrap();
 
     let task = Task {
-        worktree_path: Some(worktree.display().to_string()),
+        worktree_path: Some(worktree.display().to_string()), effective_dir: None,
         output_path: Some("report.md".to_string()),
         ..task("t-rel-owned")
     };
@@ -196,7 +202,7 @@ fn output_text_reports_missing_owned_file_then_task_log() {
 
     let store = Store::open_memory().unwrap();
     let task_b = Task {
-        worktree_path: Some(worktree_b.display().to_string()),
+        worktree_path: Some(worktree_b.display().to_string()), effective_dir: None,
         output_path: Some("report.md".to_string()),
         log_path: Some(log_b.display().to_string()),
         ..task("t-victim-output")

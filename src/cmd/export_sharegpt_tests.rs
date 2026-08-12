@@ -167,7 +167,7 @@ fn done_task(id: &str, resolved_prompt: Option<&str>) -> Task {
         caller_session_id: None,
         agent_session_id: None,
         repo_path: None, project_id: None,
-        worktree_path: None,
+        worktree_path: None, effective_dir: None,
         worktree_branch: None,
         final_head_sha: None,
         final_branch: None,

@@ -45,7 +45,7 @@ fn task(repo: &Path, start_sha: &str, final_sha: &str) -> Task {
         caller_session_id: None,
         agent_session_id: None,
         repo_path: Some(repo.to_string_lossy().to_string()), project_id: None,
-        worktree_path: Some(repo.to_string_lossy().to_string()),
+        worktree_path: Some(repo.to_string_lossy().to_string()), effective_dir: None,
         worktree_branch: Some("dispatch/branch".to_string()),
         final_head_sha: Some(final_sha.to_string()),
         final_branch: Some("agent/final".to_string()),

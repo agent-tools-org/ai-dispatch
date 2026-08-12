@@ -238,7 +238,7 @@ fn make_task(task_id: &str, status: TaskStatus, created_at: chrono::DateTime<Loc
         caller_session_id: None,
         agent_session_id: None,
         repo_path: None, project_id: None,
-        worktree_path: None,
+        worktree_path: None, effective_dir: None,
         worktree_branch: None,
         final_head_sha: None,
         final_branch: None,

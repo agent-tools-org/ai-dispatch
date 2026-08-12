@@ -193,8 +193,8 @@ fn join_messages(messages: Vec<String>, full: bool, max_output_chars: usize) -> 
     output
 }
 pub fn read_task_output(task: &Task) -> Result<String> {
-    // Only paths proven to belong to this task (worktree/repo/task_dir or absolute declare).
-    // Never resolve relative `-o` against process CWD — that leaks sibling task reports.
+    // Only paths proven to belong to this task (effective dir/worktree/task_dir or absolute declare).
+    // Never resolve relative `-o` against process CWD or the shared repo root.
     if let Some(path) = super::show_output_owned::owned_output_path(task) {
         if let Some(content) = read_output_file(&path, task.agent) {
             return Ok(content);

@@ -35,7 +35,7 @@ fn failed_task(path: &str) -> Task {
         prompt: "prompt".to_string(), resolved_prompt: None, category: None,
         status: TaskStatus::Failed, parent_task_id: None, workgroup_id: None,
         caller_kind: None, caller_session_id: None, agent_session_id: None, repo_path: None, project_id: None,
-        worktree_path: Some(path.to_string()), worktree_branch: Some("feat/cascade".to_string()),
+        worktree_path: Some(path.to_string()), effective_dir: None, worktree_branch: Some("feat/cascade".to_string()),
         final_head_sha: None,
         final_branch: None,
         start_sha: None, log_path: None, output_path: None, tokens: None, prompt_tokens: None,

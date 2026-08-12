@@ -67,16 +67,20 @@ pub fn build_task_tree_with_state(
         let group_id = group_key.map(str::to_string);
         let collapsed = collapsed_projects.contains(&group_id);
         let marker = if collapsed { "▸" } else { "▾" };
+        let total = group_tasks.len();
+        let done = group_tasks.iter().filter(|task| task.status.is_terminal()).count();
+        let running = group_tasks.iter().filter(|task| task.status == crate::types::TaskStatus::Running).count();
         let workgroup_hint = header_task
             .workgroup_id
             .as_deref()
             .and_then(|group| creators.get(group).map(|creator| format!(" ({group}/{creator})")))
             .or_else(|| header_task.workgroup_id.as_ref().map(|group| format!(" ({group})")))
             .unwrap_or_default();
+        let running_hint = if running > 0 { format!(" {running}▶") } else { String::new() };
         result.push(TreeNode {
             task: (*header_task).clone(),
             depth: 0,
-            prefix: format!("{marker} {project_label}{workgroup_hint} "),
+            prefix: format!("{marker} {project_label}{workgroup_hint}{running_hint} ({done}/{total}) "),
             is_group_header: true,
             project_id: group_id.clone(),
         });
@@ -277,5 +281,16 @@ mod tests {
         assert!(tree.iter().any(|node| {
             node.is_group_header && node.project_id.is_none() && node.prefix.contains("unattributed")
         }));
+    }
+
+    #[test]
+    fn collapsed_group_header_keeps_done_total_count_visible() {
+        let mut task = mk("alpha-task", None);
+        task.project_id = Some("alpha".into());
+        let collapsed = HashSet::from([Some("alpha".to_string())]);
+        let tree = build_task_tree_with_state(&[task], &HashMap::new(), &collapsed);
+
+        assert_eq!(tree.len(), 1);
+        assert!(tree[0].prefix.contains("(1/1)"), "{}", tree[0].prefix);
     }
 }

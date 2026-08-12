@@ -68,6 +68,19 @@ fn official_guide_documents_watcher_safeguards() {
 }
 
 #[test]
+fn official_guide_documents_grouped_tui_controls() {
+    let operations = include_str!("../default-skills/aid-guide/references/task-operations.md");
+
+    assert!(operations.contains("The TUI shows every project grouped by project"));
+    assert!(operations.contains("h/l"));
+    assert!(operations.contains("Space"));
+    assert!(operations.contains("/"));
+    assert!(operations.contains("r"));
+    assert!(operations.contains("CLI keeps its current-project default with --all"));
+    assert!(!operations.contains("The TUI mirrors this default and toggles it with `P`."));
+}
+
+#[test]
 fn official_guide_documents_steering_delivery_contract() {
     let operations = include_str!("../default-skills/aid-guide/references/task-operations.md");
 

@@ -66,15 +66,18 @@ pub struct SummaryArgs {
 }
 
 #[derive(Args)]
-#[command(after_help = r#"Examples:
-  aid retry t-1234 -f "Fix the compilation error in parser.rs"
-  aid retry t-1234 -f "Use HashMap instead" --agent opencode"#)]
 pub struct RetryArgs {
     pub task_id: String,
-    #[arg(short, long)]
-    pub feedback: String,
+    #[arg(short, long, conflicts_with = "feedback_file")]
+    pub feedback: Option<String>,
+    #[arg(long, short = 'F', conflicts_with = "feedback")]
+    pub feedback_file: Option<String>,
     #[arg(long)]
     pub agent: Option<String>,
+    #[arg(long)]
+    pub model: Option<String>,
+    #[arg(long, value_name = "SECS")]
+    pub idle_timeout: Option<u64>,
     #[arg(long)]
     pub dir: Option<String>,
     #[arg(long)]
@@ -82,7 +85,6 @@ pub struct RetryArgs {
     #[arg(long, help = "Run in background (non-blocking)")]
     pub bg: bool,
 }
-
 #[derive(Args)]
 pub struct MergeArgs {
     pub task_id: Option<String>,
@@ -99,13 +101,11 @@ pub struct MergeArgs {
     #[arg(long, help = "Apply group task branches as GitButler virtual branch lanes")]
     pub lanes: bool,
 }
-
 #[derive(Args)]
 pub struct ArtifactDecisionArgs {
     /// Task whose delivered artifacts are being accepted or rejected.
     pub task_id: String,
 }
-
 #[derive(Args)]
 pub struct ArtifactGcArgs {
     /// Accepted task whose worktree may be deleted after durability proof.

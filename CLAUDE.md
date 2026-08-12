@@ -156,6 +156,9 @@ aid board --json                         # machine-readable JSON
 ```bash
 aid retry t-1234 -f "Fix the compilation error in parser.rs"
 aid retry t-1234 -f "Use HashMap instead" --agent opencode   # switch agent
+aid retry t-1234 -f "try again" --model gpt-5.4              # same agent, different model
+aid retry t-1234 -f "try again" --idle-timeout 900           # longer idle leash
+aid retry t-1234 -F feedback.md                              # feedback from file
 aid retry t-1234 -f "Start fresh" --reset                    # reset worktree
 aid stop t-1234                          # graceful stop
 aid stop t-1234 --force                  # force kill

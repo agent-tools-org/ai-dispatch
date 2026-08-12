@@ -94,6 +94,9 @@ Repeated activity is not itself a stop condition.
 aid stop <task-id>
 aid stop <task-id> --retry-tree
 aid retry <task-id> --feedback "Fix the failing test" --bg
+aid retry <task-id> --feedback "try again" --model gpt-5.4
+aid retry <task-id> --feedback "try again" --idle-timeout 900
+aid retry <task-id> --feedback-file notes.md
 ```
 
 Stopping preserves the worktree and attempts to preserve in-flight changes.
@@ -104,6 +107,10 @@ understand the chain.
 stops the still-live worker first, then starts the new attempt in the same
 worktree. If the worker cannot be stopped, the retry is refused. A retry still
 refuses a worktree genuinely held by a different live task.
+
+Unspecified `--model` and `--idle-timeout` inherit the original task's saved
+values (not global defaults). `--feedback` and `--feedback-file` (`-F`) are
+mutually exclusive; provide exactly one.
 
 When the recorded linked worktree still exists, retry reuses it with the
 original repository checkout as its anchor. Retry still refuses a target branch

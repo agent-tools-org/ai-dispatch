@@ -232,8 +232,11 @@ pub async fn retry_task(
 ) -> impl IntoResponse {
     match task_actions::retry(store, task_actions::RetryArgs {
         task_id: id,
-        feedback: request.feedback.unwrap_or_default(),
+        feedback: request.feedback,
+        feedback_file: None,
         agent: None,
+        model: None,
+        idle_timeout_secs: None,
         dir: None,
         reset: false,
         bg: false,

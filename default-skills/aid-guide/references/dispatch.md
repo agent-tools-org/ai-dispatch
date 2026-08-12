@@ -348,11 +348,14 @@ off cargo's real permission error.
 
 ```bash
 aid retry <task-id> --feedback "Address the failed invariant"
+aid retry <task-id> --feedback-file notes.md --model gpt-5.4 --idle-timeout 900
 aid run codex "Task" --cascade opencode,cursor
 ```
 
 A retry is a new attempt linked to its parent. It does not erase or rewrite the
-failed attempt. Inspect the tree with `aid tree <task-id>`.
+failed attempt. Inspect the tree with `aid tree <task-id>`. Unspecified
+`--model` / `--idle-timeout` keep the original task values; `--feedback` and
+`--feedback-file` cannot be combined.
 
 When `--cascade` is omitted and the primary agent is rate-limited or hits a
 quota/auth dead path, aid auto-cascades to the best installed peer for the

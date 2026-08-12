@@ -82,8 +82,15 @@ fn retry_recreates_pruned_committed_worktree_at_branch_tip() {
     store.update_task_dispatch_args(task.id.as_str(), &saved.dispatch_args_json().unwrap()).unwrap();
 
     let retry = retry_task_to_run_args(&store, &task, RetryArgs {
-        task_id: task.id.to_string(), feedback: "continue".to_string(), agent: None,
-        dir: None, reset: false, bg: false,
+        task_id: task.id.to_string(),
+        feedback: Some("continue".to_string()),
+        feedback_file: None,
+        agent: None,
+        model: None,
+        idle_timeout_secs: None,
+        dir: None,
+        reset: false,
+        bg: false,
     }, false).unwrap();
 
     assert_eq!(retry.base_branch.as_deref(), Some(branch.as_str()));

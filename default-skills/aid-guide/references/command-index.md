@@ -32,7 +32,7 @@ current arguments.
 | `aid steer` | Inject updated direction into a running task. |
 | `aid unstick` | Request recovery or escalation for a stalled task. |
 | `aid stop` | Stop one task or its retry tree while preserving artifacts. |
-| `aid retry` | Start a new attempt using prior task context and artifacts; supersedes a non-terminal task by stopping its live worker first. |
+| `aid retry` | Start a new attempt using prior task context and artifacts; supersedes a non-terminal task by stopping its live worker first. Optional `--model`, `--idle-timeout`, and `--feedback-file` (`-F`) override those fields; unspecified model/idle-timeout inherit the original task. |
 | `aid merge` | Merge delivered code only when its outcome is successful by default; `--force` overrides a failed or inconclusive verification and records the reason. This is not principal acceptance. |
 
 ## Review and artifact custody

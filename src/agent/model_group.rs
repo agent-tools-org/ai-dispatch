@@ -36,7 +36,7 @@ pub(crate) fn has_grouped_quota(agent: AgentKind) -> bool {
     // and rewriting cursor's shape to `PerModelFamily` to obtain grouping here
     // is what broke cost classification and needed an agent-specific patch in
     // the pricing layer to undo. The group table states the split directly.
-    if !groups_for_agent(agent).is_empty() {
+    if agent == AgentKind::OpenCode || !groups_for_agent(agent).is_empty() {
         return true;
     }
     matches!(
@@ -48,7 +48,10 @@ pub(crate) fn has_grouped_quota(agent: AgentKind) -> bool {
 /// The quota group a model belongs to, by family prefix. Returns None when the
 /// agent meters its whole account together, so callers fall back to per-agent
 /// marking unchanged.
-pub(crate) fn model_group(agent: AgentKind, model: Option<&str>) -> Option<&'static str> {
+pub(crate) fn model_group<'a>(agent: AgentKind, model: Option<&'a str>) -> Option<&'a str> {
+    if agent == AgentKind::OpenCode {
+        return model.and_then(provider_from_model);
+    }
     if !has_grouped_quota(agent) {
         return None;
     }
@@ -76,7 +79,10 @@ pub(crate) fn model_group(agent: AgentKind, model: Option<&str>) -> Option<&'sta
 /// agent, which for cursor meant one premium refusal took `auto` out with it —
 /// `auto` being the one tier that keeps serving once the premium pool is spent.
 /// The refusal itself says so, so it is read here rather than guessed.
-pub(crate) fn group_from_refusal(agent: AgentKind, message: &str) -> Option<&'static str> {
+pub(crate) fn group_from_refusal<'a>(agent: AgentKind, message: &'a str) -> Option<&'a str> {
+    if agent == AgentKind::OpenCode {
+        return named_opencode_provider(message);
+    }
     if agent != AgentKind::Cursor {
         return None;
     }
@@ -87,6 +93,30 @@ pub(crate) fn group_from_refusal(agent: AgentKind, message: &str) -> Option<&'st
         .to_ascii_lowercase()
         .contains("you're out of usage")
         .then_some(PREMIUM_GROUP)
+}
+
+fn provider_from_model(model: &str) -> Option<&str> {
+    let (provider, _) = model.split_once('/')?;
+    (!provider.is_empty()).then_some(provider)
+}
+
+fn named_opencode_provider(message: &str) -> Option<&str> {
+    let lower = message.to_ascii_lowercase();
+    ["providerid", "provider_id", "provider", "model"]
+        .iter()
+        .find_map(|key| value_after_key(message, &lower, key))
+        .and_then(|value| provider_from_model(value).or(Some(value)))
+        .filter(|provider| !provider.eq_ignore_ascii_case("unknown"))
+}
+
+fn value_after_key<'a>(message: &'a str, lower: &str, key: &str) -> Option<&'a str> {
+    let start = lower.find(key)? + key.len();
+    let value = message[start..].split_once(':')?.1.trim_start();
+    let value = value.strip_prefix('"').unwrap_or(value);
+    let end = value
+        .find(|ch: char| ch == '"' || ch == ',' || ch == '}' || ch.is_whitespace())
+        .unwrap_or(value.len());
+    (!value[..end].is_empty()).then_some(&value[..end])
 }
 
 /// Delegates to the types layer: how a provider partitions its allowance is a

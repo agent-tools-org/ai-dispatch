@@ -11,10 +11,11 @@ fn two_custom_agents_do_not_share_a_hold() {
     let _guard = AidHomeGuard::set(temp.path());
     std::fs::create_dir_all(paths::aid_dir()).unwrap();
 
+    let stated = crate::rate_limit::test_future_recovery_time();
     mark_rate_limited(
         &AgentKind::Custom,
         Some("auditor"),
-        "try again at Mar 21st, 2099 2:27 PM.",
+        &format!("try again at {stated}."),
     );
 
     assert!(is_rate_limited(&AgentKind::Custom, Some("auditor")));

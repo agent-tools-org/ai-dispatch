@@ -45,13 +45,16 @@ fn agent_level_hold_is_limited_not_partial() {
     let _guard = AidHomeGuard::set(temp.path());
     std::fs::create_dir_all(paths::aid_dir()).ok();
 
-    mark_rate_limited(&AgentKind::Codex, None,
-        "You've hit your usage limit. try again at Aug 11th, 2099 2:23 PM.",
+    let stated = crate::rate_limit::test_future_recovery_time();
+    mark_rate_limited(
+        &AgentKind::Codex,
+        None,
+        &format!("You've hit your usage limit. try again at {stated}."),
     );
 
     match quota_row(AgentKind::Codex, None) {
         QuotaRow::Limited { detail } => {
-            assert!(detail.contains("resets Aug 11th, 2099 2:23 PM"), "{detail}");
+            assert!(detail.contains(&format!("resets {stated}")), "{detail}");
             assert!(!detail.contains("~1h"), "must not invent a reset time");
         }
         other => panic!("expected Limited, got {other:?}"),
@@ -143,15 +146,16 @@ fn custom_agent_with_hold_shows_limited() {
     let _guard = AidHomeGuard::set(temp.path());
     std::fs::create_dir_all(paths::aid_dir()).ok();
 
+    let stated = crate::rate_limit::test_future_recovery_time();
     mark_rate_limited(
         &AgentKind::Custom,
         Some("auditor"),
-        "try again at Aug 11th, 2099 2:23 PM.",
+        &format!("try again at {stated}."),
     );
 
     match quota_row(AgentKind::Custom, Some("auditor")) {
         QuotaRow::Limited { detail } => {
-            assert!(detail.contains("resets Aug 11th, 2099"), "{detail}");
+            assert!(detail.contains(&format!("resets {stated}")), "{detail}");
         }
         other => panic!("expected Limited, got {other:?}"),
     }

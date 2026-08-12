@@ -68,8 +68,11 @@ fn record_quota_exhaustion_detects_provider_refusal_templates() {
     crate::rate_limit::clear_rate_limit(&crate::types::AgentKind::Qwen, None);
 
     crate::rate_limit::clear_rate_limit(&crate::types::AgentKind::Codex, None);
-    let codex_out = "You have hit your usage limit. try again at Mar 21st, 2099 2:27 PM.";
-    assert!(record_quota_exhaustion(codex_out, crate::types::AgentKind::Codex, None, None,)
+    let codex_out = format!(
+        "You have hit your usage limit. try again at {}.",
+        crate::rate_limit::test_future_recovery_time()
+    );
+    assert!(record_quota_exhaustion(&codex_out, crate::types::AgentKind::Codex, None, None,)
     .should_fail());
     assert!(crate::rate_limit::is_rate_limited(&crate::types::AgentKind::Codex, None));
 }

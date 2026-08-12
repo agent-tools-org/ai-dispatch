@@ -532,7 +532,6 @@ fn stash_capture_keeps_identity_when_a_competing_stash_appears() {
     let changes = stash_local_changes_with_hook(&repo.path().to_string_lossy(), || {
         std::fs::write(repo.path().join("init.txt"), "competing\n").unwrap();
         git(repo.path(), &["stash", "push", "-q", "-m", "competing stash"]);
-        std::fs::write(repo.path().join("init.txt"), "local change\n").unwrap();
     })
     .unwrap()
     .expect("local changes should be captured");
@@ -555,14 +554,21 @@ fn stash_capture_fails_when_git_status_cannot_run() {
 }
 
 #[test]
-fn stash_capture_rejects_tracked_changes_written_after_snapshot() {
+fn stash_capture_does_not_reset_edits_written_after_capture() {
     let _permit = test_subprocess::acquire();
     let repo = init_repo();
     std::fs::write(repo.path().join("init.txt"), "local change\n").unwrap();
-    let result = stash_local_changes_with_hook(&repo.path().to_string_lossy(), || {
-        std::fs::write(repo.path().join("init.txt"), "late change\n").unwrap();
+    let changes = stash_local_changes_with_hook(&repo.path().to_string_lossy(), || {
+        std::fs::write(repo.path().join("late.txt"), "late change\n").unwrap();
     });
-    assert!(matches!(result, Err(error) if error.contains("changed after snapshot")));
+    let changes = changes
+        .unwrap()
+        .expect("local changes should be captured");
+    assert_eq!(
+        std::fs::read_to_string(repo.path().join("late.txt")).unwrap(),
+        "late change\n"
+    );
+    restore_local_changes(&repo.path().to_string_lossy(), &changes).unwrap();
 }
 
 #[test]
@@ -577,50 +583,10 @@ fn untracked_restore_reports_every_colliding_file_and_backup_path() {
     std::fs::write(repo.path().join("first.txt"), "merge first\n").unwrap();
     std::fs::write(repo.path().join("second.txt"), "merge second\n").unwrap();
     let result = restore_local_changes(&repo.path().to_string_lossy(), &changes);
-    assert!(matches!(result, Err(error)
+    assert!(matches!(&result, Err(error)
         if error.contains("first.txt")
             && error.contains("second.txt")
-            && error.contains("aid-merge-local-")));
-}
-
-#[test]
-fn stale_merge_recovery_refs_expire_on_next_capture() {
-    let _permit = test_subprocess::acquire();
-    let repo = init_repo();
-    let old_commit = Command::new("git")
-        .args([
-            "-C",
-            &repo.path().to_string_lossy(),
-            "commit-tree",
-            "HEAD^{tree}",
-            "-p",
-            "HEAD",
-        ])
-        .env("GIT_AUTHOR_DATE", "2000-01-01T00:00:00Z")
-        .env("GIT_COMMITTER_DATE", "2000-01-01T00:00:00Z")
-        .output()
-        .unwrap();
-    assert!(old_commit.status.success());
-    let old_commit = String::from_utf8_lossy(&old_commit.stdout).trim().to_string();
-    let anchor = format!("refs/aid/merge-local/{old_commit}");
-    git(repo.path(), &["update-ref", &anchor, &old_commit]);
-    std::fs::write(repo.path().join("init.txt"), "local change\n").unwrap();
-
-    let changes = stash_local_changes(&repo.path().to_string_lossy())
-        .unwrap()
-        .expect("local changes should be captured");
-    restore_local_changes(&repo.path().to_string_lossy(), &changes).unwrap();
-    let refs = Command::new("git")
-        .args([
-            "-C",
-            &repo.path().to_string_lossy(),
-            "for-each-ref",
-            "--format=%(refname)",
-            "refs/aid/merge-local",
-        ])
-        .output()
-        .unwrap();
-    assert!(!String::from_utf8_lossy(&refs.stdout).contains(&anchor));
+            && error.contains("stash commit")), "restore result: {result:?}");
 }
 
 #[test]
@@ -712,9 +678,11 @@ fn git_merge_branch_fails_loudly_on_stash_restore_conflict() {
     let MergeResult::Failed(error) = result else {
         panic!("expected merge failure");
     };
-    assert!(error.contains("tracked changes were kept out of the conflicted index"));
-    assert!(error.contains("aid-merge-local-"), "recovery details missing: {error}");
-    assert!(error.contains("refs/aid/merge-local/"), "tracked ref missing: {error}");
+    assert!(
+        error.contains("tracked changes were kept out of the conflicted index"),
+        "merge error: {error}"
+    );
+    assert!(error.contains("stash commit"), "recovery details missing: {error}");
     assert_eq!(
         std::fs::read_to_string(repo.path().join("untracked.txt")).unwrap(),
         "keep me\n"
@@ -754,6 +722,11 @@ fn tracked_merge_backup_survives_aggressive_git_gc() {
         std::fs::read_to_string(repo.path().join("init.txt")).unwrap(),
         "local change\n"
     );
+    let stashes = Command::new("git")
+        .args(["-C", &repo.path().to_string_lossy(), "stash", "list"])
+        .output()
+        .unwrap();
+    assert!(String::from_utf8_lossy(&stashes.stdout).contains("aid merge-local"));
 }
 
 #[test]

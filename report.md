@@ -1,20 +1,9 @@
-Root cause: merge-local capture could treat failed status as clean, reset edits created after capture, and hide colliding untracked backups.
+Implemented and committed as `6ce49ddc`.
 
-Fix committed in `ca9fa17b`:
+- Replaced custom refs, temp backups, expiry sweep, and snapshot machinery with durable `git stash push --include-untracked`.
+- Identifies the exact stash by a unique message and restores by commit SHA; entries remain visible in `git stash list`.
+- Preserved fail-closed status handling and complete collision reporting.
+- Updated conflict recovery to restore only untracked files from the stash’s third parent.
+- `git stash create` cannot capture untracked files in the supported Git version, so `push -u` is required for one durable combined snapshot.
 
-- Fail closed when `git status` fails.
-- Verify tracked worktree/index snapshots before reset.
-- Report every untracked collision and backup path.
-- Preserve recovery anchors until restoration completes.
-- Expire anchors older than 30 days on the next capture.
-- Split custody helpers to remain under 300 lines.
-
-Validation:
-
-- Pre-fix regressions reproduced.
-- `aid test`: 53/53 merge tests passed.
-- `aid build`: passed.
-- `aid build clippy -- --all-targets`: passed with existing warnings.
-- Worktree clean.
-
-The group-merge cleanup and `git merge --abort` paths were pre-existing and untouched.
+Validation: 52 merge tests passed, `aid build`, clippy, policy checks passed, and the worktree is clean.

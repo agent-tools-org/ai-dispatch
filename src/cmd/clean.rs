@@ -179,13 +179,25 @@ pub(crate) fn session_start_hint() -> Result<Option<String>> {
     let Some(store) = Store::open_read_only(&paths::db_path())? else {
         return Ok(None);
     };
-    if let Some(bytes) = crate::cmd::clean_cargo_target::has_reclaimable_space_above_threshold(&store)? {
-        return Ok(Some(format!(
-            "Hint: terminal task artifacts occupy at least {}. Run `aid clean --worktrees` to reclaim.",
-            format_bytes(bytes)
-        )));
+    if let Some(estimate) = crate::cmd::clean_cargo_target::has_reclaimable_space_above_threshold(&store)? {
+        return Ok(Some(render_session_start_hint(estimate)));
     }
     Ok(None)
+}
+
+fn render_session_start_hint(
+    estimate: crate::cmd::clean_cargo_target::ReclaimableSpaceEstimate,
+) -> String {
+    if estimate.truncated {
+        return format!(
+            "Hint: terminal task artifacts occupy at least {} (incomplete scan). Run `aid clean --worktrees --dry-run` for the full figure, then `aid clean --worktrees` to reclaim.",
+            format_bytes(estimate.bytes)
+        );
+    }
+    format!(
+        "Hint: terminal task artifacts occupy at least {}. Run `aid clean --worktrees` to reclaim.",
+        format_bytes(estimate.bytes)
+    )
 }
 
 fn query_string_set(store: &Store, sql: &str) -> Result<HashSet<String>> {

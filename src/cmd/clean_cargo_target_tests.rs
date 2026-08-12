@@ -167,7 +167,7 @@ fn cleanup_preserves_root_when_branch_name_matches_root_basename() {
 }
 
 #[test]
-fn hint_scan_completes_after_entry_limit() {
+fn hint_scan_reports_lower_bound_when_entry_limit_truncates_scan() {
     let temp = tempfile::tempdir().unwrap();
     fs::write(temp.path().join("first"), vec![b'a'; 7]).unwrap();
     fs::write(temp.path().join("second"), vec![b'b'; 11]).unwrap();
@@ -177,5 +177,21 @@ fn hint_scan_completes_after_entry_limit() {
     let mut sizes = crate::cmd::clean_size::SizeTracker::new();
     let measured = scan_hint_path(&mut sizes, temp.path(), 10_000, 2).unwrap();
 
-    assert_eq!(measured, expected);
+    assert!(measured.truncated);
+    assert_eq!(measured.entries, 2);
+    assert!(measured.bytes < expected);
+}
+
+#[test]
+fn hint_scan_marks_complete_scan_when_limits_are_not_reached() {
+    let temp = tempfile::tempdir().unwrap();
+    fs::write(temp.path().join("first"), vec![b'a'; 7]).unwrap();
+    fs::write(temp.path().join("second"), vec![b'b'; 11]).unwrap();
+
+    let expected = crate::cmd::clean_size::get_dir_size(temp.path()).unwrap();
+    let mut sizes = crate::cmd::clean_size::SizeTracker::new();
+    let measured = scan_hint_path(&mut sizes, temp.path(), 10_000, 3).unwrap();
+
+    assert!(!measured.truncated);
+    assert_eq!(measured.bytes, expected);
 }

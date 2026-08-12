@@ -68,29 +68,56 @@ pub(crate) fn clean_orphaned_branch_targets(
     Ok(bytes)
 }
 
-pub(crate) fn has_reclaimable_space_above_threshold(store: &Store) -> Result<Option<u64>> {
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct ReclaimableSpaceEstimate {
+    pub(crate) bytes: u64,
+    pub(crate) truncated: bool,
+}
+
+pub(crate) fn has_reclaimable_space_above_threshold(
+    store: &Store,
+) -> Result<Option<ReclaimableSpaceEstimate>> {
     let mut sizes = crate::cmd::clean_size::SizeTracker::new();
     let mut bytes = 0;
+    let mut entries = 0;
+    let mut truncated = false;
     for path in owned_target_dirs(store, None)?
         .into_iter()
         .map(|(_, path)| path)
         .chain(terminal_task_homes(store)?.into_iter())
     {
-        if bytes >= crate::cmd::clean_size::CLEANUP_HINT_BYTE_LIMIT {
+        if bytes >= crate::cmd::clean_size::CLEANUP_HINT_BYTE_LIMIT
+            || entries >= crate::cmd::clean_size::CLEANUP_HINT_ENTRY_LIMIT
+        {
+            truncated = true;
             break;
         }
-        bytes += scan_hint_path(
+        let scan = scan_hint_path(
             &mut sizes,
             &path,
             crate::cmd::clean_size::CLEANUP_HINT_BYTE_LIMIT - bytes,
-            crate::cmd::clean_size::CLEANUP_HINT_ENTRY_LIMIT,
+            crate::cmd::clean_size::CLEANUP_HINT_ENTRY_LIMIT - entries,
         )?;
+        bytes += scan.bytes;
+        entries += scan.entries;
+        if scan.truncated {
+            truncated = true;
+            break;
+        }
     }
-    if bytes >= crate::cmd::clean_size::CLEANUP_HINT_THRESHOLD_BYTES {
-        Ok(Some(bytes))
+
+    if truncated || bytes >= crate::cmd::clean_size::CLEANUP_HINT_THRESHOLD_BYTES {
+        Ok(Some(ReclaimableSpaceEstimate { bytes, truncated }))
     } else {
         Ok(None)
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct HintScan {
+    bytes: u64,
+    entries: usize,
+    truncated: bool,
 }
 
 fn scan_hint_path(
@@ -98,13 +125,13 @@ fn scan_hint_path(
     path: &Path,
     byte_limit: u64,
     entry_limit: usize,
-) -> Result<u64> {
+) -> Result<HintScan> {
     let (bytes, entries) = sizes.get_dir_size_bounded(path, byte_limit, entry_limit)?;
-    if entries < entry_limit || bytes >= byte_limit {
-        return Ok(bytes);
-    }
-    let (remaining, _) = sizes.get_dir_size_bounded(path, byte_limit - bytes, usize::MAX)?;
-    Ok(bytes + remaining)
+    Ok(HintScan {
+        bytes,
+        entries,
+        truncated: entries >= entry_limit || bytes >= byte_limit,
+    })
 }
 
 pub(crate) fn terminal_task_ids(store: &Store) -> Result<Vec<String>> {

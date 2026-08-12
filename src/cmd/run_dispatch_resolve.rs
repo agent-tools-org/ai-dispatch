@@ -231,26 +231,12 @@ pub(super) fn resolve_agent_setup(store: &Arc<Store>, args: &mut RunArgs) -> Res
             requested_model.clone()
         }
     });
-    if let Some(hold) = rate_limit::dispatch_blocking_hold_for_model(
-        &agent_kind,
-        custom_agent_name.as_deref(),
-        effective_model.as_deref(),
-    ) {
-        held::switch_model_held_route(
-            args,
-            &mut agent_kind,
-            &mut custom_agent_name,
-            &mut effective_model,
-            &mut substituted_from,
-            hold,
-        )?;
-    }
     // An agent whose plan meters model families separately can have one family
     // exhausted while another still serves. Switch groups rather than treating
     // the agent as unavailable — and say so, because a silent model swap is the
     // same defect as a CLI quietly substituting a model the caller did not ask
     // for.
-    let effective_model = match agent::model_group::healthy_model_for(
+    let mut effective_model = match agent::model_group::healthy_model_for(
         agent_kind,
         effective_model.as_deref(),
         |group| rate_limit::is_group_rate_limited(&agent_kind, custom_agent_name.as_deref(), group),
@@ -266,6 +252,20 @@ pub(super) fn resolve_agent_setup(store: &Arc<Store>, args: &mut RunArgs) -> Res
         }
         None => effective_model,
     };
+    if let Some(hold) = rate_limit::dispatch_blocking_hold_for_model(
+        &agent_kind,
+        custom_agent_name.as_deref(),
+        effective_model.as_deref(),
+    ) {
+        held::switch_model_held_route(
+            args,
+            &mut agent_kind,
+            &mut custom_agent_name,
+            &mut effective_model,
+            &mut substituted_from,
+            hold,
+        )?;
+    }
     let agent: Box<dyn agent::Agent> = if agent_kind == AgentKind::Custom {
         agent::registry::resolve_custom_agent(custom_agent_name.as_deref().unwrap_or(""))
             .ok_or_else(|| anyhow::anyhow!("Custom agent '{}' not found in registry", args.agent_name))?

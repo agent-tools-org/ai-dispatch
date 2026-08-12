@@ -52,11 +52,10 @@ pub(crate) use binary::built_in_agent_binary_exists;
 #[allow(unused_imports)]
 pub use env::{
     agent_has_fs_access, apply_cargo_target_env, apply_codex_home_env, apply_run_env, apply_rust_build_cache_env,
-    cargo_target_env_arg, is_rust_project, set_git_ceiling, shared_target_dir,
-    target_dir_for_worktree,
+    cargo_target_env_arg, is_rust_project, rust_build_cache_target_dir, set_git_ceiling,
+    shared_target_dir, target_dir_for_worktree,
 };
 pub(crate) use env::{should_use_durable_codex_home, CliCommandOutput, CliCommandRunner};
-
 /// Adapter trait for AI CLI tools
 pub trait Agent: Send + Sync {
     fn kind(&self) -> AgentKind;
@@ -123,9 +122,10 @@ pub trait Agent: Send + Sync {
     }
 }
 
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Clone, Default)]
 pub struct CommandContext {
     pub durable_codex_home: bool,
+    pub cargo_target_dir: Option<String>,
 }
 
 /// Options passed to agent for command construction

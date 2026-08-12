@@ -149,7 +149,7 @@ fn record_interrupted(store: &Store, task_id: &TaskId, signal_name: &str) -> Res
     store.insert_event(&TaskEvent {
         task_id: task_id.clone(),
         timestamp: Local::now(),
-        event_kind: EventKind::Completion,
+        event_kind: EventKind::Completion, // Existing terminal kind; dashboard counts it as a completion.
         detail,
         metadata: None,
     })?;

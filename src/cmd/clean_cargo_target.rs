@@ -36,6 +36,9 @@ pub(crate) fn clean_orphaned_branch_targets(
     let mut bytes = 0;
     let mut removed = 0;
     for (kind, target) in targets {
+        if !is_safe_target_for_removal(&target) {
+            continue;
+        }
         let size = sizes.get_dir_size(&target)?;
         if dry_run {
             println!(
@@ -68,30 +71,40 @@ pub(crate) fn clean_orphaned_branch_targets(
 pub(crate) fn has_reclaimable_space_above_threshold(store: &Store) -> Result<Option<u64>> {
     let mut sizes = crate::cmd::clean_size::SizeTracker::new();
     let mut bytes = 0;
-    let mut entries = 0;
     for path in owned_target_dirs(store, None)?
         .into_iter()
         .map(|(_, path)| path)
         .chain(terminal_task_homes(store)?.into_iter())
     {
-        if bytes >= crate::cmd::clean_size::CLEANUP_HINT_BYTE_LIMIT
-            || entries >= crate::cmd::clean_size::CLEANUP_HINT_ENTRY_LIMIT
-        {
+        if bytes >= crate::cmd::clean_size::CLEANUP_HINT_BYTE_LIMIT {
             break;
         }
-        let (measured, scanned) = sizes.get_dir_size_bounded(
+        bytes += scan_hint_path(
+            &mut sizes,
             &path,
             crate::cmd::clean_size::CLEANUP_HINT_BYTE_LIMIT - bytes,
-            crate::cmd::clean_size::CLEANUP_HINT_ENTRY_LIMIT - entries,
+            crate::cmd::clean_size::CLEANUP_HINT_ENTRY_LIMIT,
         )?;
-        bytes += measured;
-        entries += scanned;
     }
     if bytes >= crate::cmd::clean_size::CLEANUP_HINT_THRESHOLD_BYTES {
         Ok(Some(bytes))
     } else {
         Ok(None)
     }
+}
+
+fn scan_hint_path(
+    sizes: &mut crate::cmd::clean_size::SizeTracker,
+    path: &Path,
+    byte_limit: u64,
+    entry_limit: usize,
+) -> Result<u64> {
+    let (bytes, entries) = sizes.get_dir_size_bounded(path, byte_limit, entry_limit)?;
+    if entries < entry_limit || bytes >= byte_limit {
+        return Ok(bytes);
+    }
+    let (remaining, _) = sizes.get_dir_size_bounded(path, byte_limit - bytes, usize::MAX)?;
+    Ok(bytes + remaining)
 }
 
 pub(crate) fn terminal_task_ids(store: &Store) -> Result<Vec<String>> {
@@ -145,10 +158,7 @@ fn task_target_paths(
     ) {
         let name = crate::agent::env::branch_target_name(branch);
         if !is_reserved_target_dir_name(&name) {
-            let target = (root.file_name().and_then(|value| value.to_str()) == Some(name.as_str()))
-                .then(|| root.to_path_buf())
-                .unwrap_or_else(|| root.join(name));
-            paths.push((TargetKind::Branch, target));
+            paths.push((TargetKind::Branch, root.join(name)));
         }
     }
     if let Some(cwd) = task.worktree_path.as_deref().or(task.repo_path.as_deref()) {
@@ -158,6 +168,19 @@ fn task_target_paths(
         ));
     }
     paths
+}
+
+fn is_safe_target_for_removal(target: &Path) -> bool {
+    if crate::agent::env::branch_target_root().is_some_and(|root| root == target) {
+        return false;
+    }
+    if std::env::var_os("CARGO_TARGET_DIR")
+        .map(PathBuf::from)
+        .is_some_and(|root| root == target)
+    {
+        return false;
+    }
+    true
 }
 
 fn has_live_worktree(task: &Task) -> bool {

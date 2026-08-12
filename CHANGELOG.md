@@ -1,3 +1,17 @@
+## v10.24.0 (2026-08-12)
+- Agent reports now read as what the agent actually wrote, and the TUI keeps your place when new tasks arrive
+- `aid show --output` no longer corrupts non-ASCII text: ANSI stripping walked the line byte by byte and destroyed every multi-byte UTF-8 sequence, turning an apostrophe into mojibake on 141 of the last 351 tasks. It now reuses the escape stripper that already handled this correctly
+- Agent response envelopes are unwrapped for persisted reports: a grok report reached the operator as a single-line JSON blob with escaped newlines on 69 of about 80 recent tasks, because only the gemini extractor was ever tried. Extraction is now agent-aware and shared, and `aid show` also unwraps artifacts written by older versions
+- The TUI keeps the task you are looking at: pane focus, per-pane scroll offsets and tree selection are keyed by task identity instead of list position, so a new task arriving or a task starting to run no longer moves the view out from under you. The list stays free to reorder
+- The bottom status bar now carries running and total counts, failed count, aggregate agent CPU and memory, and the active filter scope, from state the refresh cycle already holds and without a database query per frame. Three duplicated footer implementations were replaced by one shared builder
+- New task statistics view with a time-range selector, activity heatmap with streaks, token trend with its peak, and ranked per-project rollups. The previous cost, success-rate and budget charts remain, on the `v` toggle
+- `aid retry` resumes a task whose worktree was pruned by auto-GC: it recreates the worktree at the branch tip instead of refusing, so an agent's own committed work is no longer uncontinuable. The guard that prevents orphaning real commits is unchanged
+- Tests no longer mutate process-wide state. Seven dispatched runs reported unexplained environment failures that never reproduced in a normal shell; the cause was our own tests setting `HOME` and credential variables for the whole process, so parallel isolation tests resolved inconsistent homes. HOME, credentials and GitButler detection now use thread-local test seams
+- End-to-end tests no longer inherit the developer's repository configuration from the working directory: nine e2e files set a temporary AID_HOME but ran with cwd at the repo root, so every dispatched task inside a test picked up this repo's own verify command
+- The first-token budget can now be set from the CLI, per agent, or in project config
+- `docs/kept-branches.md` records why five branches are kept unmerged and why five others were dropped, including one that had already fixed a bug we re-diagnosed from scratch
+
+
 ## v10.23.0 (2026-08-12)
 - Build artifacts now belong to the task that created them: sandboxed agents write the configured shared target dir instead of silently copying it into system temp, and aid reclaims what a finished task owns rather than guessing ownership from directory names
 - Sandboxed agents can write the configured `CARGO_TARGET_DIR`: codex receives the effective target leaf as a writable root, and aid creates that leaf when seeding is skipped, so builds land in the shared warm cache instead of falling back to a per-worktree copy under the system temp dir that nothing ever reclaimed

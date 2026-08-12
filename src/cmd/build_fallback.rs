@@ -2,7 +2,7 @@
 // Exports: target permission detection, fallback path, and digest note helpers.
 // Deps: std path/env only.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 /// True when cargo failed because the chosen target dir (or a cargo lock path
 /// prefixed by it) was not writable. Keyed off cargo's real OS error, not a
@@ -13,17 +13,25 @@ pub(crate) fn target_dir_permission_blocked(stderr_lines: &[String], target_dir:
         .any(|line| is_permission_block_for_target(line, target_dir))
 }
 
+pub(crate) fn fallback_target_root() -> PathBuf {
+    #[cfg(test)]
+    if let Ok(val) = std::env::var("AID_TEST_FALLBACK_TARGET_ROOT") {
+        return PathBuf::from(val);
+    }
+    std::env::temp_dir().join("aid-build-target")
+}
+
 /// System temp `aid-build-target/<cwd-key>` — writable inside agent OS sandboxes
 /// that allow temp dirs. Prefer temp over `./target` because some sandboxes
 /// block cargo writes under the worktree while still allowing plain file creation.
 pub(crate) fn sandbox_fallback_target_dir() -> Option<String> {
     let cwd = std::env::current_dir().ok()?;
     let key = cwd_key(&cwd);
-    let dir = std::env::temp_dir().join("aid-build-target").join(key);
+    let dir = fallback_target_root().join(key);
     Some(dir.to_string_lossy().into_owned())
 }
 
-fn cwd_key(cwd: &std::path::Path) -> String {
+pub(crate) fn cwd_key(cwd: &std::path::Path) -> String {
     use std::collections::hash_map::DefaultHasher;
     use std::hash::{Hash, Hasher};
     let mut hasher = DefaultHasher::new();

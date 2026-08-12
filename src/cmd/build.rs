@@ -11,7 +11,7 @@ use crate::store::Store;
 #[path = "build_diag.rs"]
 pub(crate) mod build_diag;
 #[path = "build_fallback.rs"]
-mod build_fallback;
+pub(crate) mod build_fallback;
 #[path = "build_stream.rs"]
 mod build_stream;
 #[path = "build_process.rs"]

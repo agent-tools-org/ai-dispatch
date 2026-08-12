@@ -864,7 +864,7 @@ fn merge_single_force_merges_failed_task_with_committed_branch() {
     let events = store.get_events("t-force-failed").unwrap();
     assert!(events.iter().any(|event| {
         event.event_kind == EventKind::Error
-            && event.detail == "Force-merged task t-force-failed from status FAIL — verify/tests were not run"
+            && event.detail == "Force-merged task t-force-failed from status FAIL — agent/tests did not complete successfully"
     }));
 }
 

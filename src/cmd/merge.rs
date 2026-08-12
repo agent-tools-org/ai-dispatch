@@ -7,7 +7,7 @@ use chrono::Local;
 use std::process::{Command, Stdio};
 use std::sync::Arc;
 use crate::store::Store;
-use crate::types::{verify_required, EventKind, Task, TaskEvent, TaskId, TaskOutcome, TaskStatus};
+use crate::types::{verify_required, EventKind, Task, TaskEvent, TaskId, TaskOutcome, TaskStatus, VerifyStatus};
 #[path = "merge/final_branch.rs"]
 mod final_branch;
 use final_branch::*;
@@ -138,7 +138,7 @@ fn merge_single_with_output(store: &Store, task_id: &str, approve: bool, check: 
         }
     }
     if force {
-        record_force_merge_warning(store, task_id, original_status, outcome)?;
+        record_force_merge_warning(store, &task)?;
     }
     crate::task_lifecycle::mark_merged(store, task_id)?;
     if print_summary {
@@ -147,29 +147,29 @@ fn merge_single_with_output(store: &Store, task_id: &str, approve: bool, check: 
     Ok(())
 }
 
-fn record_force_merge_warning(
-    store: &Store,
-    task_id: &str,
-    status: TaskStatus,
-    outcome: TaskOutcome,
-) -> Result<()> {
-    let reason = match outcome {
-        TaskOutcome::Broken => "verification failed",
-        TaskOutcome::Unverified(_) => "verification was inconclusive",
-        _ => "verify/tests were not run",
+fn record_force_merge_warning(store: &Store, task: &Task) -> Result<()> {
+    let reason = match task.verify_status {
+        VerifyStatus::Failed => "verification command failed",
+        VerifyStatus::InfrastructureFailure => "verification infrastructure failed",
+        VerifyStatus::TimedOut => "verification timed out",
+        _ => "agent/tests did not complete successfully",
     };
     let detail = format!(
-        "Force-merged task {task_id} from status {} — {reason}",
-        status.label(),
+        "Force-merged task {} from status {} — {}",
+        task.id,
+        task.status.label(),
+        reason,
     );
     aid_warn!("[aid] Warning: {detail}");
     store.insert_event(&TaskEvent {
-        task_id: TaskId(task_id.to_string()),
+        task_id: TaskId(task.id.to_string()),
         timestamp: Local::now(),
         event_kind: EventKind::Error,
-        detail,
+        detail: detail.clone(),
         metadata: None,
-    })
+    })?;
+    store.update_principal_merge_override(task.id.as_str(), &detail)?;
+    Ok(())
 }
 
 fn task_outcome(task: &Task) -> TaskOutcome {

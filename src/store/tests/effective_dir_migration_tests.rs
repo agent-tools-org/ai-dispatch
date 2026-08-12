@@ -157,6 +157,12 @@ fn malformed_dispatch_args_do_not_abort_open_or_skip_valid_sibling() {
         Some(r#"{"dir":"/tmp/recorded-dir-with-space "}"#),
     );
     insert_legacy_task(&conn, "t-malformed", "report.md", Some("{not json"));
+    conn.execute(
+        "INSERT INTO tasks (id, agent, prompt, status, created_at, output_path, dispatch_args)
+         VALUES (X'00FF', 'codex', 'audit', 'done', '2026-08-01T00:00:00+00:00', 'report.md', ?1)",
+        rusqlite::params![r#"{"dir":"/tmp/non-text-id-dir"}"#],
+    )
+    .unwrap();
     drop(conn);
 
     let store = Store::open(&db_path).unwrap();
@@ -165,8 +171,17 @@ fn malformed_dispatch_args_do_not_abort_open_or_skip_valid_sibling() {
     let whitespace = store.get_task("t-whitespace-dir").unwrap().unwrap();
     assert_eq!(
         whitespace.effective_dir.as_deref(),
-        Some("/tmp/recorded-dir-with-space ")
+        Some("/tmp/recorded-dir-with-space")
     );
     let malformed = store.get_task("t-malformed").unwrap().unwrap();
     assert!(malformed.effective_dir.is_none());
+    let non_text_id_dir: Option<String> = store
+        .db()
+        .query_row(
+            "SELECT effective_dir FROM tasks WHERE typeof(id) = 'blob'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert!(non_text_id_dir.is_none());
 }

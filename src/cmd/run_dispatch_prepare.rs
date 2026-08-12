@@ -291,10 +291,8 @@ fn persist_worktree_setup(store: &Store, task_id: &TaskId, task: &mut Task, setu
 }
 
 fn persistable_effective_dir(dir: Option<&str>) -> Option<String> {
-    let raw = match dir {
-        Some(value) if !value.is_empty() => value,
-        _ => ".",
-    };
+    // Effective directories are trimmed before storage; edge spaces are input noise for migrated and new tasks.
+    let raw = dir.map(str::trim).filter(|value| !value.is_empty()).unwrap_or(".");
     let path = Path::new(raw);
     if path.is_absolute() {
         return Some(raw.to_string());
@@ -367,5 +365,6 @@ fn prepared_dispatch(
 }
 
 #[cfg(test)] #[path = "run_dispatch_prepare_tests.rs"] mod tests;
+#[cfg(test)] #[path = "run_dispatch_effective_dir_tests.rs"] mod effective_dir_tests;
 #[cfg(test)] #[path = "run_dispatch_verify_tests.rs"] mod verify_tests;
 #[cfg(test)] #[path = "run_dispatch_preflight_tests.rs"] mod preflight_tests;

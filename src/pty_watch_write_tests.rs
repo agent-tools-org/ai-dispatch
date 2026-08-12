@@ -6,13 +6,13 @@ use std::io::Read;
 use std::sync::{Arc, mpsc};
 use std::time::Duration;
 
-use super::{MonitorState, monitor_bridge};
+use super::{MonitorState, monitor_bridge, write_output_file};
 use crate::agent::antigravity::AntigravityAgent;
 use crate::agent::codex::CodexAgent;
 use crate::input_signal;
 use crate::pty_bridge::PtyBridge;
 use crate::store::Store;
-use crate::types::{EventKind, MessageDirection, MessageSource, TaskStatus};
+use crate::types::{AgentKind, EventKind, MessageDirection, MessageSource, TaskStatus};
 
 fn spawn_reader(bridge: &mut PtyBridge) -> mpsc::Receiver<Vec<u8>> {
     spawn_reader_with_error_delay(bridge, Duration::ZERO)
@@ -227,4 +227,17 @@ fn noninteractive_agent_leaves_queued_input_untouched() {
     let messages = store.list_messages_for_task(task.id.as_str()).unwrap();
     assert!(messages[0].delivered_at.is_none());
     assert_eq!(input_signal::take_steer(task.id.as_str()).unwrap().as_deref(), Some("queued steer"));
+}
+
+#[test]
+fn grok_output_file_contains_markdown_instead_of_json_envelope() {
+    let file = tempfile::NamedTempFile::new().unwrap();
+    let envelope = r##"{"text":"# Findings\n\nThe report is rendered markdown."}"##;
+
+    write_output_file(AgentKind::Grok, file.path().to_str().unwrap(), envelope).unwrap();
+
+    assert_eq!(
+        std::fs::read_to_string(file.path()).unwrap(),
+        "# Findings\n\nThe report is rendered markdown."
+    );
 }

@@ -1,3 +1,6 @@
+// Tests for cleanup reporting and bounded size measurement.
+// Deps: clean, clean_size, tempfile, std::fs.
+
     use super::*;
 
     #[cfg(unix)]
@@ -76,4 +79,18 @@
             sizes.get_dir_size(temp.path()).unwrap(),
             first.metadata().unwrap().blocks().saturating_mul(512)
         );
+    }
+
+    #[test]
+    fn truncated_session_hint_is_visible_and_actionable() {
+        let hint = render_session_start_hint(
+            crate::cmd::clean_cargo_target::ReclaimableSpaceEstimate {
+                bytes: 128 * 1024 * 1024,
+                truncated: true,
+            },
+        );
+
+        assert!(hint.contains("at least 128.0 MB"));
+        assert!(hint.contains("incomplete scan"));
+        assert!(hint.contains("aid clean --worktrees --dry-run"));
     }

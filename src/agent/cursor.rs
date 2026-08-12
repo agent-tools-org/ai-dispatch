@@ -21,7 +21,7 @@ pub struct CursorAgent;
 fn cursor_binary() -> &'static str {
     static RESOLVED: OnceLock<&'static str> = OnceLock::new();
     *RESOLVED.get_or_init(|| {
-        if super::env::which_exists("agent") && identifies_as_cursor("agent") {
+        if identifies_as_cursor("agent") {
             return "agent";
         }
         "cursor-agent"

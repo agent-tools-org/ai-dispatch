@@ -91,26 +91,24 @@ pub fn run() -> Result<()> {
     // 2. Detect installed agents
     section("Agents");
     let builtin = [
-        ("gemini", "gemini"),
-        ("agy", "agy"),
-        ("qwen", "qwen"),
-        ("codex", "codex"),
-        ("copilot", "copilot"),
-        ("opencode", "opencode"),
-        ("cursor", "cursor"),
-        ("kilo", "kilo"),
-        ("mimocode", "mimo"),
-        ("droid", "droid"),
-        ("oz", "oz"),
+        ("gemini", crate::types::AgentKind::Gemini),
+        ("agy", crate::types::AgentKind::Antigravity),
+        ("qwen", crate::types::AgentKind::Qwen),
+        ("codex", crate::types::AgentKind::Codex),
+        ("copilot", crate::types::AgentKind::Copilot),
+        ("opencode", crate::types::AgentKind::OpenCode),
+        ("cursor", crate::types::AgentKind::Cursor),
+        ("kilo", crate::types::AgentKind::Kilo),
+        ("mimocode", crate::types::AgentKind::MiMoCode),
+        ("droid", crate::types::AgentKind::Droid),
+        ("oz", crate::types::AgentKind::Oz),
+        ("claude", crate::types::AgentKind::Claude),
     ];
+    let detected = crate::agent::detect_agents();
     let mut installed = 0;
     let mut missing = Vec::new();
-    for (name, cmd) in builtin {
-        let found = std::process::Command::new("which")
-            .arg(cmd)
-            .output()
-            .map(|o| o.status.success())
-            .unwrap_or(false);
+    for (name, kind) in builtin {
+        let found = detected.contains(&kind);
         if found {
             installed += 1;
             println!("  ✓ {name}");

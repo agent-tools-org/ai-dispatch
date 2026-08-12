@@ -14,7 +14,7 @@ struct MessageCollector {
 pub(super) fn collect_messages(content: &str) -> Vec<String> {
     let mut collector = MessageCollector::default();
     for line in content.lines() {
-        let cleaned = strip_ansi(line);
+        let cleaned = crate::watcher::strip_terminal_escapes(line);
         let Ok(value) = serde_json::from_str::<Value>(&cleaned) else {
             continue;
         };
@@ -179,27 +179,6 @@ impl MessageCollector {
         self.flush_pending();
         self.messages
     }
-}
-
-fn strip_ansi(s: &str) -> String {
-    let mut result = String::with_capacity(s.len());
-    let bytes = s.as_bytes();
-    let mut i = 0;
-    while i < bytes.len() {
-        if bytes[i] == 0x1b && i + 1 < bytes.len() && bytes[i + 1] == b'[' {
-            let mut j = i + 2;
-            while j < bytes.len() && (bytes[j].is_ascii_digit() || bytes[j] == b';') {
-                j += 1;
-            }
-            if j < bytes.len() && bytes[j].is_ascii_alphabetic() {
-                i = j + 1;
-                continue;
-            }
-        }
-        result.push(bytes[i] as char);
-        i += 1;
-    }
-    result
 }
 
 fn completed_agent_message(value: &Value) -> Option<String> {
@@ -473,5 +452,12 @@ mod tests {
         for msg in &messages {
             assert!(!msg.contains("\"toolName\""), "JSON blob leaked: {msg}");
         }
+    }
+
+    #[test]
+    fn collect_messages_preserves_utf8_after_stripping_ansi() {
+        let line = "\x1b[1m{\"type\":\"message\",\"role\":\"assistant\",\"content\":\"I’m using\"}\x1b[0m";
+
+        assert_eq!(collect_messages(line), vec!["I’m using"]);
     }
 }

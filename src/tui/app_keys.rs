@@ -34,6 +34,10 @@ impl App {
                 if self.multipane_mode {
                     self.active_pane = 0;
                     self.pane_scroll_offsets.clear();
+                    self.active_pane_task_id = self
+                        .multipane_tasks()
+                        .first()
+                        .map(|task| task.id.as_str().to_string());
                 }
                 return Ok(());
             }
@@ -68,54 +72,59 @@ impl App {
     }
 
     fn handle_multipane_key(&mut self, key: KeyEvent) -> Result<()> {
+        self.reconcile_active_pane();
         match key.code {
             KeyCode::Tab => {
                 let pane_count = self.pane_count();
                 if pane_count > 0 {
-                    self.active_pane = (self.active_pane + 1) % pane_count;
+                    self.set_active_pane((self.active_pane + 1) % pane_count);
                 }
             }
             KeyCode::BackTab => {
                 let pane_count = self.pane_count();
                 if pane_count > 0 {
-                    self.active_pane = if self.active_pane == 0 {
+                    let index = if self.active_pane == 0 {
                         pane_count - 1
                     } else {
                         self.active_pane - 1
                     };
+                    self.set_active_pane(index);
                 }
             }
-            KeyCode::Down | KeyCode::Char('j')
-                if self.active_pane < self.pane_scroll_offsets.len() =>
-            {
-                let offset = &mut self.pane_scroll_offsets[self.active_pane];
-                *offset = offset.saturating_sub(1);
+            KeyCode::Down | KeyCode::Char('j') => {
+                if let Some(task_id) = self.current_pane_task_id() {
+                    let offset = self.pane_scroll_offsets.entry(task_id).or_default();
+                    *offset = offset.saturating_sub(1);
+                }
             }
-            KeyCode::Up | KeyCode::Char('k')
-                if self.active_pane < self.pane_scroll_offsets.len() =>
-            {
+            KeyCode::Up | KeyCode::Char('k') => {
                 self.scroll_pane_by(self.active_pane, 1);
             }
-            KeyCode::PageDown if self.active_pane < self.pane_scroll_offsets.len() => {
-                let offset = &mut self.pane_scroll_offsets[self.active_pane];
-                *offset = offset.saturating_sub(PAGE_SCROLL);
+            KeyCode::PageDown => {
+                if let Some(task_id) = self.current_pane_task_id() {
+                    let offset = self.pane_scroll_offsets.entry(task_id).or_default();
+                    *offset = offset.saturating_sub(PAGE_SCROLL);
+                }
             }
-            KeyCode::PageUp if self.active_pane < self.pane_scroll_offsets.len() => {
+            KeyCode::PageUp => {
                 self.scroll_pane_by(self.active_pane, PAGE_SCROLL);
             }
-            KeyCode::Home if self.active_pane < self.pane_scroll_offsets.len() => {
+            KeyCode::Home => {
                 // Home = oldest end of the stream (max offset).
                 let max = self.pane_max_scroll(self.active_pane);
-                self.pane_scroll_offsets[self.active_pane] = max;
+                if let Some(task_id) = self.current_pane_task_id() {
+                    self.pane_scroll_offsets.insert(task_id, max);
+                }
             }
-            KeyCode::End if self.active_pane < self.pane_scroll_offsets.len() => {
+            KeyCode::End => {
                 // End = live tail.
-                self.pane_scroll_offsets[self.active_pane] = 0;
+                if let Some(task_id) = self.current_pane_task_id() {
+                    self.pane_scroll_offsets.insert(task_id, 0);
+                }
             }
             KeyCode::Enter => {
-                let tasks = self.multipane_tasks();
-                if let Some(task) = tasks.get(self.active_pane)
-                    && let Some(idx) = self.tasks.iter().position(|t| t.id == task.id)
+                if let Some(task_id) = self.current_pane_task_id()
+                    && let Some(idx) = self.tasks.iter().position(|t| t.id.as_str() == task_id)
                 {
                     self.selected = idx;
                     self.multipane_mode = false;
@@ -171,34 +180,6 @@ impl App {
         if self.detail_scroll > max {
             self.detail_scroll = max;
         }
-    }
-
-    pub(super) fn clamp_all_pane_scrolls(&mut self) {
-        for i in 0..self.pane_scroll_offsets.len() {
-            let max = self.pane_max_scroll(i);
-            if self.pane_scroll_offsets[i] > max {
-                self.pane_scroll_offsets[i] = max;
-            }
-        }
-    }
-
-    fn scroll_pane_by(&mut self, pane: usize, delta: usize) {
-        let max = self.pane_max_scroll(pane);
-        let offset = &mut self.pane_scroll_offsets[pane];
-        *offset = (*offset).saturating_add(delta).min(max);
-    }
-
-    fn pane_max_scroll(&self, pane: usize) -> usize {
-        let tasks = self.multipane_tasks();
-        let Some(task) = tasks.get(pane) else {
-            return 0;
-        };
-        let n = self
-            .events_cache
-            .get(task.id.as_str())
-            .map(|events| events.len())
-            .unwrap_or(0);
-        n.saturating_sub(1)
     }
 
     fn detail_max_scroll(&self) -> usize {

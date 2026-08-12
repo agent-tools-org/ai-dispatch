@@ -43,8 +43,7 @@ fn render_multipane_view(frame: &mut ratatui::Frame<'_>, app: &App) {
     let tasks = app.multipane_tasks();
     let panes: Vec<multipane::PaneData> = tasks
         .iter()
-        .enumerate()
-        .map(|(index, task)| {
+        .map(|task| {
             let events_raw = app
                 .events_cache
                 .get(task.id.as_str())
@@ -99,7 +98,7 @@ fn render_multipane_view(frame: &mut ratatui::Frame<'_>, app: &App) {
                 worktree_branch: task.worktree_branch.clone().unwrap_or_default(),
                 created: task.created_at.format("%m-%d %H:%M").to_string(),
                 elapsed,
-                scroll_offset: app.pane_scroll_offsets.get(index).copied().unwrap_or(0),
+                scroll_offset: app.pane_scroll_offset(task.id.as_str()),
                 total_events,
             }
         })

@@ -82,9 +82,9 @@ pub(super) fn ensure_branch_force_reset_is_safe(
     if unique_commits > 0 {
         anyhow::bail!(
             "Branch {branch} has {unique_commits} unmerged commit(s) not on {base_ref}; \
-             refusing to force-reset because it would orphan task artifacts. \
-             Resolve the owning task through principal acceptance and custody GC, \
-             or use a different --worktree name."
+             refusing to reset it because that would orphan task artifacts. The branch and \
+             its commits are preserved; resolve the owning task through principal acceptance \
+             and custody GC, or choose a different --worktree name."
         );
     }
     Ok(base_oid)

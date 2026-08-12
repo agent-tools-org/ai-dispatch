@@ -18,6 +18,16 @@ fn git(repo_dir: &Path, args: &[&str]) {
         .success());
 }
 
+fn git_output(repo_dir: &Path, args: &[&str]) -> String {
+    let output = Command::new("git")
+        .args(["-C", &repo_dir.to_string_lossy()])
+        .args(args)
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+    String::from_utf8(output.stdout).unwrap().trim().to_string()
+}
+
 fn unique_branch(prefix: &str) -> String {
     format!(
         "{prefix}-{}-{}",
@@ -80,4 +90,22 @@ fn create_worktree_resumes_existing_aid_branch_without_reset() {
         repo.path(),
         &["worktree", "remove", "--force", &info.path.to_string_lossy()],
     );
+}
+
+#[test]
+fn force_reset_refusal_explains_that_branch_commits_are_preserved() {
+    let _permit = test_subprocess::acquire();
+    let repo = init_repo();
+    let branch = unique_branch("feat/unsafe-reset");
+    let info = create_worktree(repo.path(), branch.as_str(), Some("main")).unwrap();
+    std::fs::write(info.path.join("agent.txt"), "agent\n").unwrap();
+    git(info.path.as_path(), &["add", "agent.txt"]);
+    git(info.path.as_path(), &["commit", "-m", "agent commit"]);
+    let branch_head = git_output(repo.path(), &["rev-parse", branch.as_str()]);
+    git(repo.path(), &["worktree", "remove", "--force", &info.path.to_string_lossy()]);
+
+    let error = create_worktree(repo.path(), branch.as_str(), Some("main")).unwrap_err();
+
+    assert!(error.to_string().contains("branch and its commits are preserved"));
+    assert_eq!(git_output(repo.path(), &["rev-parse", branch.as_str()]), branch_head);
 }

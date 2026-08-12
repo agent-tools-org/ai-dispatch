@@ -106,6 +106,7 @@ fn named_opencode_provider(message: &str) -> Option<&str> {
         .iter()
         .find_map(|key| value_after_key(message, &lower, key))
         .and_then(|value| provider_from_model(value).or(Some(value)))
+        .filter(|provider| !provider.eq_ignore_ascii_case("unknown"))
 }
 
 fn value_after_key<'a>(message: &'a str, lower: &str, key: &str) -> Option<&'a str> {

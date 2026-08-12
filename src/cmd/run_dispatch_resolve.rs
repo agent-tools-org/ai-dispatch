@@ -219,7 +219,7 @@ pub(super) fn resolve_agent_setup(store: &Arc<Store>, args: &mut RunArgs) -> Res
     } else {
         None
     };
-    let effective_model = smart_routed.or_else(|| {
+    let mut effective_model = smart_routed.or_else(|| {
         if budget_active && requested_model.is_none() {
             if let Some(bm) = cmd_config::budget_model(&agent_kind) {
                 aid_info!("[aid] Budget mode: using model {}", bm);
@@ -231,6 +231,20 @@ pub(super) fn resolve_agent_setup(store: &Arc<Store>, args: &mut RunArgs) -> Res
             requested_model.clone()
         }
     });
+    if let Some(hold) = rate_limit::dispatch_blocking_hold_for_model(
+        &agent_kind,
+        custom_agent_name.as_deref(),
+        effective_model.as_deref(),
+    ) {
+        held::switch_model_held_route(
+            args,
+            &mut agent_kind,
+            &mut custom_agent_name,
+            &mut effective_model,
+            &mut substituted_from,
+            hold,
+        )?;
+    }
     // An agent whose plan meters model families separately can have one family
     // exhausted while another still serves. Switch groups rather than treating
     // the agent as unavailable — and say so, because a silent model swap is the
@@ -239,7 +253,7 @@ pub(super) fn resolve_agent_setup(store: &Arc<Store>, args: &mut RunArgs) -> Res
     let effective_model = match agent::model_group::healthy_model_for(
         agent_kind,
         effective_model.as_deref(),
-        |group| rate_limit::is_group_rate_limited(&agent_kind, custom_name, group),
+        |group| rate_limit::is_group_rate_limited(&agent_kind, custom_agent_name.as_deref(), group),
     ) {
         Some(replacement) => {
             aid_warn!(

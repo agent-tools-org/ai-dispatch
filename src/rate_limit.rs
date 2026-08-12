@@ -256,11 +256,31 @@ fn marker_is_active(path: &std::path::Path, agent: &AgentKind) -> bool {
 /// that moving the caller off the agent they asked for costs more than the wait,
 /// and gating on it was never the previous behaviour either.
 pub fn dispatch_blocking_hold(agent: &AgentKind, custom_name: Option<&str>) -> Option<String> {
-    let path = marker_path(agent, custom_name);
-    if !marker_is_active(&path, agent) || crate::live_quota::overrides_marker(agent, &path) {
+    dispatch_blocking_hold_at_path(&marker_path(agent, custom_name), agent, custom_name)
+}
+
+pub fn dispatch_blocking_hold_for_model(
+    agent: &AgentKind,
+    custom_name: Option<&str>,
+    model: Option<&str>,
+) -> Option<String> {
+    let group = crate::agent::model_group::model_group(*agent, model)?;
+    dispatch_blocking_hold_at_path(
+        &group_marker_path(agent, custom_name, group),
+        agent,
+        custom_name,
+    )
+}
+
+fn dispatch_blocking_hold_at_path(
+    path: &std::path::Path,
+    agent: &AgentKind,
+    custom_name: Option<&str>,
+) -> Option<String> {
+    if !marker_is_active(path, agent) || crate::live_quota::overrides_marker(agent, path) {
         return None;
     }
-    let content = fs::read_to_string(&path).ok()?;
+    let content = fs::read_to_string(path).ok()?;
     match stored_hold(&content, agent) {
         StoredHold::Until(recovery_at) if recovery_at > Local::now().naive_local() => {
             // Quote the provider's own phrasing of the time rather than a

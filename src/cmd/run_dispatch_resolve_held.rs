@@ -8,6 +8,33 @@ use crate::store::Store;
 use crate::types::AgentKind;
 use super::AgentSetup;
 
+pub(super) fn switch_model_held_route(
+    args: &mut super::RunArgs,
+    agent_kind: &mut AgentKind,
+    custom_agent_name: &mut Option<String>,
+    effective_model: &mut Option<String>,
+    substituted_from: &mut Option<(String, String)>,
+    hold: String,
+) -> Result<()> {
+    let original = custom_agent_name
+        .as_deref()
+        .unwrap_or_else(|| agent_kind.as_str())
+        .to_string();
+    let (next_kind, next_name, remaining) =
+        skip_held_to_fallback(*agent_kind, &original, &hold, &args.cascade, &args.prompt)?;
+    aid_warn!(
+        "[aid] {} model provider is held ({}) — dispatching to {} instead. Use `aid config clear-limit {}` to clear.",
+        original, hold, next_name, original
+    );
+    super::super::switch_agent(args, next_name.clone());
+    args.cascade = remaining;
+    *agent_kind = next_kind;
+    *custom_agent_name = (next_kind == AgentKind::Custom).then_some(next_name);
+    *effective_model = None;
+    *substituted_from = Some((original, hold));
+    Ok(())
+}
+
 // Walk `cascade` (then auto-fallback) to the first non-held alternative. Unrecognised names error; custom agents are valid.
 pub(super) fn skip_held_to_fallback(
     held_kind: AgentKind,

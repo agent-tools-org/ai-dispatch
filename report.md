@@ -1,14 +1,17 @@
-Provider marker verification completed.
+## Findings
 
-- `nvidia/<model>` derives group `nvidia`.
-- Writes `rate-limit-opencode--nvidia`.
-- Reads the same key via `is_group_rate_limited`.
-- Unknown attribution remains agent-wide with `provider: unknown`.
+- **High — OpenCode provider holds were inert during dispatch.** The resolver now derives the provider from `provider/model`, checks `rate-limit-opencode--<provider>`, and cascades before dispatch (`src/rate_limit.rs:262`, `src/cmd/run_dispatch_resolve.rs:234`).
 
-Verification:
+- **Medium — `unknown` is not treated as attribution.** Such refusals now create an agent-wide marker with `provider: unknown` (`src/agent/model_group.rs:103`).
 
-```text
-passed: 4 passed, 0 failed, 0 ignored; command: cargo test --bin aid credibility
-```
+- **Low — Ollama is not special-cased.** A hypothetical Ollama refusal narrows only Ollama and cannot disable unrelated providers.
 
-`aid build` also passed with 0 errors. Report committed as `53df288d`.
+Markers retain the complete refusal message and usable ISO reset timestamps. Missing reset information remains unknown.
+
+## Verification
+
+- Before fix: dispatch test failed with `left: OpenCode`, `right: Codex`.
+- After fix: 5 credibility tests passed.
+- Full suite: 2,299 passed, 0 failed, 9 ignored.
+- `aid build`: 0 errors.
+- Commit: `798f4e11`.

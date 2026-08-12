@@ -81,6 +81,32 @@ fn held_agent_switches_to_explicit_cascade_before_dispatch() {
     assert!(args.cascade.is_empty());
 }
 
+#[test]
+fn held_opencode_provider_switches_before_dispatch() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let _guard = AidHomeGuard::set(dir.path());
+    crate::rate_limit::mark_group_rate_limited(
+        &AgentKind::OpenCode,
+        None,
+        "nvidia",
+        "Insufficient balance.",
+    );
+    let store = Arc::new(Store::open_memory().expect("store"));
+    let mut args = RunArgs {
+        agent_name: "opencode".to_string(),
+        prompt: "Add unit tests".to_string(),
+        model: Some("nvidia/llama-4-maverick".to_string()),
+        cascade: vec!["codex".to_string()],
+        ..Default::default()
+    };
+
+    let setup = resolve_agent_setup(&store, &mut args).expect("should switch to fallback");
+
+    assert_eq!(setup.agent_kind, AgentKind::Codex);
+    assert_eq!(args.agent_name, "codex");
+    assert!(setup.substituted_from.is_some());
+}
+
 /// When the first cascade agent is also held, resolve_agent_setup must keep
 /// walking to the first non-held option.
 #[test]

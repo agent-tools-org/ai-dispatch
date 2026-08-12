@@ -61,6 +61,22 @@ fn explicitly_named_opencode_provider_is_narrowed_without_a_model() {
 }
 
 #[test]
+fn explicitly_unknown_opencode_provider_stays_agent_wide() {
+    let temp = isolated();
+    let _guard = crate::paths::AidHomeGuard::set(temp.path());
+    let agent = AgentKind::OpenCode;
+
+    mark_rate_limited_for_message(
+        &agent,
+        None,
+        r#"{"provider":"unknown","message":"Insufficient balance."}"#,
+    );
+
+    assert!(is_rate_limited(&agent, None));
+    assert!(!is_group_rate_limited(&agent, None, "unknown"));
+}
+
+#[test]
 fn long_refusal_keeps_an_iso_reset_timestamp_after_the_old_cutoff() {
     let temp = isolated();
     let _guard = crate::paths::AidHomeGuard::set(temp.path());

@@ -209,11 +209,11 @@ fn hint_estimate_survives_entry_limit_before_byte_threshold() {
 
     let target = target_root.join(crate::agent::env::branch_target_name(branch));
     fs::create_dir_all(&target).unwrap();
-    for index in 0..=crate::cmd::clean_size::CLEANUP_HINT_ENTRY_LIMIT {
+    for index in 0..=2 {
         fs::File::create(target.join(format!("artifact-{index}"))).unwrap();
     }
 
-    let estimate = has_reclaimable_space_above_threshold(&store)
+    let estimate = has_reclaimable_space_above_threshold_with_entry_limit(&store, 2)
         .unwrap()
         .expect("entry-budget truncation must remain visible");
 

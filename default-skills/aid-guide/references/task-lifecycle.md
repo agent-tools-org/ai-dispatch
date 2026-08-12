@@ -25,8 +25,13 @@ Verification is a separate axis. A configured verify command starts with
 `VerifyStatus::Pending` and ends as `Passed`, `Failed`, `TimedOut`,
 `InfrastructureFailure`, or `Skipped`. `TimedOut` and
 `InfrastructureFailure` are inconclusive rather than evidence that the change
-is broken. `TaskOutcome` derives the judgment: only `Verified` and `Delivered`
-are success; `Unverified` and `Broken` are not.
+is broken. `TaskOutcome` derives the judgment from lifecycle, verification, and
+delivery assessment: only `Verified` and `Delivered` are success; `Unverified`
+and `Broken` are not. A `Done` task with `delivery_assessment=hollow_output` or
+`missing_final_delivery` is judged `Failed` — those assessments mean nothing
+was observed on any delivery channel (output, transcript, log, and worktree
+changes), not merely quiet stdout. `empty_diff` alone does not demote success:
+a report-only audit or commit-cleaned worktree can still be a real delivery.
 
 ## Review
 

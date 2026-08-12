@@ -128,11 +128,7 @@ async fn wait_for_task_ids_inner(
             };
 
             let status = task.status;
-            let outcome = TaskOutcome::derive(
-                task.status,
-                task.verify_status,
-                verify_required(task.verify.as_deref()),
-            );
+            let outcome = task.outcome();
             let status_text = status.label().to_string();
             let status_changed = last_status.insert(task_id.clone(), status_text.clone()) != Some(status_text);
 
@@ -242,11 +238,7 @@ fn still_running_task_ids(store: &Arc<Store>, task_ids: &[String], group: Option
                 running.push(task_id);
                 continue;
             }
-            let outcome = TaskOutcome::derive(
-                task.status,
-                task.verify_status,
-                verify_required(task.verify.as_deref()),
-            );
+            let outcome = task.outcome();
             if matches!(outcome, TaskOutcome::InProgress) {
                 running.push(task_id);
             }

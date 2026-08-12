@@ -37,6 +37,9 @@ already knows, which puts these responsibilities on the caller:
    A task's judgment is its derived `TaskOutcome`, not its lifecycle
    `TaskStatus`: only `Verified` and `Delivered` are success. `Unverified` is
    inconclusive and `Broken` is a verification failure; neither is success.
+   A `Done` task assessed `hollow_output` or `missing_final_delivery` is also
+   not success — those mean no deliverable was observed anywhere, not merely
+   empty stdout.
 5. **Read `unknown` as unknown.** A model, provider, or cost AID could not
    establish is reported as unknown rather than filled in with a plausible
    value. Several CLIs never name the model they ran, so unknown is the honest

@@ -2,7 +2,7 @@
 // Exports: judge_task(), gather_diff(), read_output().
 // Deps: crate::store::Store, crate::types::Task.
 use anyhow::{Context, Result};
-use std::{env, fs, path::{Path, PathBuf}, process::{Command as StdCommand, Stdio}};
+use std::{env, path::Path, process::{Command as StdCommand, Stdio}};
 use tokio::process::Command;
 use crate::types::Task;
 
@@ -109,17 +109,11 @@ pub(crate) fn gather_diff(task: &Task) -> Option<String> {
 }
 
 pub(crate) fn read_output(task: &Task) -> Option<String> {
-    let output_path = task.output_path.as_deref()?;
-    let mut candidates = vec![PathBuf::from(output_path)];
-    if let Some(worktree) = task.worktree_path.as_deref() {
-        candidates.push(Path::new(worktree).join(output_path));
-    }
-    for candidate in candidates {
-        if let Ok(text) = fs::read_to_string(&candidate)
-            && !text.trim().is_empty()
-        {
-            return Some(text);
-        }
+    // Prefer task-owned path resolution (never CWD-relative `-o` leakage).
+    if let Ok(text) = crate::cmd::show::read_task_output(task)
+        && !text.trim().is_empty()
+    {
+        return Some(text);
     }
     None
 }

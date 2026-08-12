@@ -11,6 +11,8 @@ mod show_output_artifacts;
 mod show_output_extract;
 #[path = "show_output_messages.rs"]
 mod show_output_messages;
+#[path = "show_output_owned.rs"]
+mod show_output_owned;
 #[path = "show_worktree_state.rs"]
 mod show_worktree_state;
 
@@ -19,6 +21,7 @@ pub use show_output_messages::{
     log_text, log_text_brief, output_text, output_text_brief, output_text_for_task,
     read_task_output,
 };
+pub(crate) use show_output_owned::owned_output_path;
 pub(crate) use show_output_diff::{branch_base_ref, diff_stat, parse_diff_stat, worktree_diff};
 pub(crate) use show_output_messages::{
     extract_messages_from_log, is_non_output_line, read_tail,

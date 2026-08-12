@@ -11,7 +11,9 @@ pub(crate) fn extract_conclusion(task: &Task) -> String {
     {
         return String::new();
     }
-    if let Some(conclusion) = task.output_path.as_deref().and_then(read_conclusion_from_output) {
+    if let Some(path) = crate::cmd::show::owned_output_path(task)
+        && let Some(conclusion) = read_conclusion_from_output(&path)
+    {
         return conclusion;
     }
     task.log_path
@@ -20,7 +22,7 @@ pub(crate) fn extract_conclusion(task: &Task) -> String {
         .unwrap_or_default()
 }
 
-fn read_conclusion_from_output(path: &str) -> Option<String> {
+fn read_conclusion_from_output(path: &Path) -> Option<String> {
     let content = std::fs::read_to_string(path).ok()?;
     extract_last_text_block(&content).map(|s| truncate_conclusion(&s))
 }

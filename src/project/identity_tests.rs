@@ -115,7 +115,7 @@ fn retain_project_keeps_unattributed_bucket_explicit() {
             agent_session_id: None,
             repo_path: None,
             project_id: project_id.map(str::to_string),
-            worktree_path: None,
+            worktree_path: None, effective_dir: None,
             worktree_branch: None,
             final_head_sha: None,
             final_branch: None,

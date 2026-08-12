@@ -203,9 +203,10 @@ dispatch an explicit agent.
 ## Context and instructions
 
 Use `--context <path>...` for source material, not extra positional arguments.
-Use `--context-from <task>...` to inject prior task output. Use `--scope` to
-state intended files. Use `--checklist` or `--checklist-file` for explicit
-acceptance criteria.
+Use `--context-from <task>...` to inject prior task output. If that task
+declared `-o` and the owned file is missing, aid reports the absence and does
+not substitute the task log. Use `--scope` to state intended files. Use
+`--checklist` or `--checklist-file` for explicit acceptance criteria.
 
 Prefer a project verify command for consistent results:
 

@@ -45,7 +45,7 @@ fn make_task(id: &str, agent: AgentKind, status: TaskStatus) -> Task {
         caller_session_id: None,
         agent_session_id: None,
         repo_path: None, project_id: None,
-        worktree_path: None,
+        worktree_path: None, effective_dir: None,
         worktree_branch: None,
         final_head_sha: None,
         final_branch: None,
@@ -414,4 +414,32 @@ fn resolve_context_from_reads_shared_file() {
     assert!(context.contains("<shared-file name=\"summary.txt\">"));
     assert!(context.contains("\nshared line\nfinal line\n</shared-file>"));
     assert!(!context.contains("spoof"));
+}
+
+#[test]
+fn resolve_context_from_reports_missing_owned_output_instead_of_log() {
+    let store = Store::open_memory().unwrap();
+    let mut task = make_task("t-context-missing", AgentKind::Codex, TaskStatus::Done);
+    let log = NamedTempFile::new().unwrap();
+    std::fs::write(
+        log.path(),
+        "{\"type\":\"message\",\"role\":\"assistant\",\"content\":\"LOG_SUBSTITUTE_NOT_A_REPORT\"}\n",
+    )
+    .unwrap();
+    task.output_path = Some("report.md".to_string());
+    task.log_path = Some(log.path().display().to_string());
+    store.insert_task(&task).unwrap();
+
+    let context = resolve_context_from(&store, &[task.id.as_str().to_string()])
+        .unwrap()
+        .unwrap();
+
+    assert!(
+        context.contains("No task-owned output file"),
+        "absence must be explicit: {context}"
+    );
+    assert!(
+        !context.contains("LOG_SUBSTITUTE_NOT_A_REPORT"),
+        "must not silently inject the log as the prior report: {context}"
+    );
 }

@@ -64,7 +64,7 @@ fn task_fixture(id: &str, repo: &Path, start_sha: Option<&str>, status: TaskStat
         caller_session_id: None,
         agent_session_id: None,
         repo_path: Some(repo.display().to_string()), project_id: None,
-        worktree_path: Some(repo.display().to_string()),
+        worktree_path: Some(repo.display().to_string()), effective_dir: None,
         worktree_branch: Some("task-branch".to_string()),
         final_head_sha: None,
         final_branch: None,

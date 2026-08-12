@@ -46,7 +46,7 @@ fn failed_task(repo: &Path, worktree: &Path, branch: &str) -> Task {
         custom_agent_name: None, prompt: "retry prompt".to_string(), resolved_prompt: None,
         category: None, status: TaskStatus::Failed, parent_task_id: None, workgroup_id: None,
         caller_kind: None, caller_session_id: None, agent_session_id: None,
-        repo_path: Some(repo.display().to_string()), project_id: None, worktree_path: Some(worktree.display().to_string()),
+        repo_path: Some(repo.display().to_string()), project_id: None, worktree_path: Some(worktree.display().to_string()), effective_dir: None,
         worktree_branch: Some(branch.to_string()), final_head_sha: None, final_branch: None,
         start_sha: None, log_path: None, output_path: None, tokens: None, prompt_tokens: None,
         duration_ms: None, requested_model: None, observed_model: None, attribution_source: None,

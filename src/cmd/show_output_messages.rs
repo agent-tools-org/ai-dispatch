@@ -35,17 +35,22 @@ fn render_task_output(task: &Task, task_id: &str, full: bool, tail_lines: usize)
     if let Ok(content) = read_task_output(task) {
         return Ok(content);
     }
-    if !full && is_research_task(task) {
+    let absence = super::show_output_owned::missing_owned_output_notice(task);
+    let body = if !full && is_research_task(task) {
         let path = task_log_path(task, task_id);
-        if let Some(content) = extract_messages_research(&path) {
-            return Ok(content);
-        }
+        extract_messages_research(&path)
+    } else {
+        None
     }
-    if let Some(content) = extract_messages_for_task(task, task_id, full) {
-        return Ok(content);
-    }
-    let path = task_log_path(task, task_id);
-    Ok(read_tail(&path, tail_lines, "No output or log available"))
+    .or_else(|| extract_messages_for_task(task, task_id, full))
+    .unwrap_or_else(|| {
+        let path = task_log_path(task, task_id);
+        read_tail(&path, tail_lines, "No output or log available")
+    });
+    Ok(match absence {
+        Some(notice) => format!("{notice}{body}"),
+        None => body,
+    })
 }
 
 fn task_log_path(task: &Task, task_id: &str) -> PathBuf {
@@ -188,8 +193,10 @@ fn join_messages(messages: Vec<String>, full: bool, max_output_chars: usize) -> 
     output
 }
 pub fn read_task_output(task: &Task) -> Result<String> {
-    if let Some(path) = task.output_path.as_deref() {
-        if let Some(content) = read_output_file(Path::new(path), task.agent) {
+    // Only paths proven to belong to this task (effective dir/worktree/task_dir or absolute declare).
+    // Never resolve relative `-o` against process CWD or the shared repo root.
+    if let Some(path) = super::show_output_owned::owned_output_path(task) {
+        if let Some(content) = read_output_file(&path, task.agent) {
             return Ok(content);
         }
     }

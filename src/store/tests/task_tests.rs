@@ -19,6 +19,18 @@ fn insert_and_get_task() {
 }
 
 #[test]
+fn insert_and_get_task_roundtrips_effective_dir() {
+    let store = Store::open_memory().unwrap();
+    let mut task = make_task("t-0004e", AgentKind::Codex, TaskStatus::Done);
+    task.effective_dir = Some("/tmp/audit-dir".to_string());
+    task.output_path = Some("report.md".to_string());
+    store.insert_task(&task).unwrap();
+
+    let loaded = store.get_task("t-0004e").unwrap().unwrap();
+    assert_eq!(loaded.effective_dir.as_deref(), Some("/tmp/audit-dir"));
+}
+
+#[test]
 fn insert_and_get_task_persists_dispatch_flags() {
     let store = Store::open_memory().unwrap();
     let mut task = make_task("t-0004", AgentKind::Codex, TaskStatus::Pending);

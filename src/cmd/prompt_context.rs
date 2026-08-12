@@ -343,9 +343,12 @@ pub(super) fn resolve_context_from(store: &Store, task_ids: &[String]) -> Result
             continue;
         };
         let mut content = String::new();
-        if let Some(ref path) = task.output_path
-            && let Ok(text) = std::fs::read_to_string(path)
-        {
+        if let Some(absence) = crate::cmd::show::missing_owned_output_absence(&task) {
+            aid_warn!(
+                "[aid] Warning: --context-from task '{task_id}' has no task-owned output file; not using this task's log as a substitute"
+            );
+            content = absence;
+        } else if let Ok(text) = crate::cmd::show::read_task_output(&task) {
             content = text;
         }
         if content.is_empty()

@@ -130,7 +130,7 @@ fn render_board(frame: &mut ratatui::Frame<'_>, app: &App) {
     );
 
     let header = Row::new(vec![
-        "ID", "Route", "Status", "Progress", "CPU", "Mem", "Created", "Duration", "Tokens", "Cost", "Model", "Group",
+        "ID", "Route", "Status", "Progress", "CPU", "Mem", "Created", "Duration", "Tokens", "Cost", "Model", "Project",
         "Prompt",
     ])
     .style(Style::default().add_modifier(Modifier::BOLD));

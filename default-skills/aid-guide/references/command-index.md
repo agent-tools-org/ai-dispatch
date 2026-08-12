@@ -21,7 +21,7 @@ current arguments.
 
 | Command | Purpose |
 |---|---|
-| `aid board` | Show the current task board, including verification tags when verification has something to report. |
+| `aid board` | Show the current task board (default: current project only; `--all` shows every project). Includes verification tags when verification has something to report. |
 | `aid watch` | Stream task or group progress; `--wait` waits for verification to settle and exits non-zero when a task did not succeed. |
 | `aid wait` | Block until selected tasks or a group reach a stopping state, including verification completion; returns non-zero when any task did not succeed. |
 | `aid show` | Inspect task state, outcome, verification, events, context, output, result, transcript, summary, audit, or diff; `--diff --branch` widens the diff from the task's own commits to the whole branch. |

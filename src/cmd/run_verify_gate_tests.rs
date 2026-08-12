@@ -25,7 +25,7 @@ fn task(id: &str, status: TaskStatus, dir: Option<&str>, verify: Option<&str>) -
         caller_kind: None,
         caller_session_id: None,
         agent_session_id: None,
-        repo_path: None,
+        repo_path: None, project_id: None,
         worktree_path: dir.map(str::to_string),
         worktree_branch: Some("fix/verify-gate".to_string()),
         final_head_sha: None,

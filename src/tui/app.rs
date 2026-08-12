@@ -66,6 +66,10 @@ pub struct App {
     pub tree_node_count: usize,
     pub wg_creators: HashMap<String, String>,
     pub show_all: bool,
+    /// When false (default), list only the current project (or unattributed).
+    pub show_all_projects: bool,
+    /// Resolved once at startup — not re-detected per frame.
+    pub current_project_id: Option<String>,
     pub active_pane: usize,
     pub pane_scroll_offsets: HashMap<String, usize>,
     pub should_quit: bool,
@@ -101,6 +105,8 @@ impl App {
             tree_node_count: 0,
             wg_creators: HashMap::new(),
             show_all: false,
+            show_all_projects: false,
+            current_project_id: crate::project::current_project_id(),
             active_pane: 0,
             pane_scroll_offsets: HashMap::new(),
             should_quit: false,
@@ -215,16 +221,17 @@ impl App {
         self.active_pane_task_id = Some(task_id);
     }
     pub fn scope_label(&self) -> String {
-        let scope = if self.show_all && self.task_id_filter.is_none() {
-            "all"
+        let scope = if self.show_all && self.task_id_filter.is_none() { "all" } else { "today+active" };
+        let project = if self.show_all_projects {
+            "project:*".to_string()
         } else {
-            "today+active"
+            format!("project:{}", crate::project::project_display(self.current_project_id.as_deref()))
         };
         match (self.task_id_filter.as_deref(), self.group_filter.as_deref()) {
-            (Some(task_id), Some(group_id)) => format!("task {task_id} | group {group_id}"),
-            (Some(task_id), None) => format!("task {task_id}"),
-            (None, Some(group_id)) => format!("{scope} | group {group_id}"),
-            (None, None) => scope.to_string(),
+            (Some(t), Some(g)) => format!("{project} | task {t} | group {g}"),
+            (Some(t), None) => format!("{project} | task {t}"),
+            (None, Some(g)) => format!("{project} | {scope} | group {g}"),
+            (None, None) => format!("{project} | {scope}"),
         }
     }
     pub fn empty_message(&self) -> String { format!("No tasks matched scope: {}", self.scope_label()) }

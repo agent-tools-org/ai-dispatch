@@ -105,6 +105,7 @@ pub(super) async fn board(
     today: bool,
     mine: bool,
     group: Option<String>,
+    all_projects: bool,
     limit: Option<usize>,
     force: bool,
     stream: bool,
@@ -112,9 +113,28 @@ pub(super) async fn board(
 ) -> Result<()> {
     let group = resolve_group(group);
     if stream {
-        cmd::board_stream::run(&store, running, today, mine, group.as_deref(), limit).await?;
+        cmd::board_stream::run(
+            &store,
+            running,
+            today,
+            mine,
+            group.as_deref(),
+            all_projects,
+            limit,
+        )
+        .await?;
     } else {
-        cmd::board::run(&store, running, today, mine, group.as_deref(), limit, force, json)?;
+        cmd::board::run(
+            &store,
+            running,
+            today,
+            mine,
+            group.as_deref(),
+            all_projects,
+            limit,
+            force,
+            json,
+        )?;
     }
     Ok(())
 }

@@ -197,6 +197,11 @@ pub struct BoardArgs {
     pub mine: bool,
     #[arg(long)]
     pub group: Option<String>,
+    /// Show tasks from every project (default: current project only).
+    /// Without this flag the board filters to the current project identity
+    /// (or the explicit unattributed bucket when none is resolved).
+    #[arg(long)]
+    pub all: bool,
     /// Maximum number of tasks to display (default: 50 without filters, unlimited with --group/--running/--today)
     #[arg(short, long)]
     pub limit: Option<usize>,

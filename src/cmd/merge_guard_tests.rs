@@ -43,7 +43,7 @@ fn grouped_task(id: &str, group: &str, repo: &Path) -> Task {
         caller_kind: None,
         caller_session_id: None,
         agent_session_id: None,
-        repo_path: Some(repo.to_string_lossy().to_string()),
+        repo_path: Some(repo.to_string_lossy().to_string()), project_id: None,
         worktree_path: Some(repo.to_string_lossy().to_string()),
         worktree_branch: Some("main".to_string()),
         final_head_sha: None,

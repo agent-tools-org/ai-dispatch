@@ -24,7 +24,7 @@ fn make_task(id: &str, worktree_path: &str) -> Task {
         caller_kind: None,
         caller_session_id: None,
         agent_session_id: None,
-        repo_path: None,
+        repo_path: None, project_id: None,
         worktree_path: Some(worktree_path.to_string()),
         worktree_branch: Some("feat/test".to_string()),
         final_head_sha: None,

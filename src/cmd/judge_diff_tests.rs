@@ -39,7 +39,7 @@ fn task(repo: &Path, start_sha: Option<String>) -> Task {
         prompt: "test".into(), resolved_prompt: None, category: None,
         status: TaskStatus::Failed, parent_task_id: None, workgroup_id: None,
         caller_kind: None, caller_session_id: None, agent_session_id: None,
-        repo_path: Some(repo.display().to_string()), worktree_path: None,
+        repo_path: Some(repo.display().to_string()), project_id: None, worktree_path: None,
         worktree_branch: None, final_head_sha: None, final_branch: None,
         start_sha, log_path: None, output_path: None, tokens: None,
         prompt_tokens: None, duration_ms: None, requested_model: None,

@@ -136,7 +136,7 @@ mod tests {
             category: None,
             status: TaskStatus::Done, parent_task_id: None, workgroup_id: None,
             caller_kind: None, caller_session_id: None, agent_session_id: None,
-            repo_path: None, worktree_path: None, worktree_branch: None,
+            repo_path: None, project_id: None, worktree_path: None, worktree_branch: None,
         final_head_sha: None,
         final_branch: None,
             start_sha: None,

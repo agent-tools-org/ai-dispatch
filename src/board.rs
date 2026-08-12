@@ -7,11 +7,11 @@ use anyhow::Result;
 
 use crate::cmd::eta;
 use crate::cost;
-use crate::session;
 use crate::store::Store;
 use crate::types::*;
 
 mod detail;
+mod rows;
 #[cfg(test)]
 mod tests;
 #[cfg(test)]
@@ -77,98 +77,33 @@ pub fn render_board(tasks: &[Task], store: &Store) -> Result<String> {
     };
 
     // Header — Route is cli/provider/model (attribution rides on the model segment).
+    // Project is first-class; Group remains for workgroup scope.
     if show_repo {
         out.push_str(&format!(
-            "{:<11} {:<36} {:<30} {:<10} {:<10} {:<8} {:<11} {:<12} {:<20} {:<16} {}\n",
-            "ID", "Route", "Status", "Duration", "Tokens", "Cost", "Parent", "Group", "Repo", "Caller", "Model"
+            "{:<11} {:<36} {:<30} {:<10} {:<10} {:<8} {:<11} {:<14} {:<12} {:<20} {:<16} {}\n",
+            "ID", "Route", "Status", "Duration", "Tokens", "Cost", "Parent", "Project", "Group", "Repo", "Caller", "Model"
         ));
-        out.push_str(&"-".repeat(191));
+        out.push_str(&"-".repeat(206));
         out.push('\n');
     } else {
         out.push_str(&format!(
-            "{:<11} {:<36} {:<30} {:<10} {:<10} {:<8} {:<11} {:<12} {:<16} {}\n",
-            "ID", "Route", "Status", "Duration", "Tokens", "Cost", "Parent", "Group", "Caller", "Model"
+            "{:<11} {:<36} {:<30} {:<10} {:<10} {:<8} {:<11} {:<14} {:<12} {:<16} {}\n",
+            "ID", "Route", "Status", "Duration", "Tokens", "Cost", "Parent", "Project", "Group", "Caller", "Model"
         ));
-        out.push_str(&"-".repeat(170));
+        out.push_str(&"-".repeat(185));
         out.push('\n');
     }
 
-    for task in tasks {
-        let status = if task.status == TaskStatus::AwaitingInput {
-            let reason = awaiting_reasons.get(task.id.as_str());
-            match reason {
-                Some(r) => truncate(&format!("AWAIT — {}", r), 30),
-                None => task.status.label().to_string(),
-            }
-        } else {
-            let error = latest_errors.get(task.id.as_str()).cloned();
-            let base = task_status(task, latest_milestone(&latest_milestones, task.id.as_str()), error);
-            format_with_outcome(task, base)
-        };
-        let duration = if task.status == TaskStatus::Skipped {
-            "-".to_string()
-        } else {
-            task.duration_ms
-                .map(format_duration)
-                .unwrap_or_else(|| format_running_duration(task, store))
-        };
-        let tokens = if task.status == TaskStatus::Skipped {
-            "-".to_string()
-        } else {
-            task.tokens
-                .map(format_tokens)
-                .unwrap_or_else(|| "-".to_string())
-        };
-        let cost_str = if task.status == TaskStatus::Skipped {
-            "-".to_string()
-        } else {
-            cost::format_cost_label(task.cost_usd, task.agent)
-        };
-        let parent = short_parent(task.parent_task_id.as_deref());
-        let group = short_group(task.workgroup_id.as_deref());
-        let repo = short_repo(task.repo_path.as_deref());
-        let caller = session::display(task);
-        let model_display = task.display_model();
-        let model = model_display.as_deref().unwrap_or("unknown");
-        // Fixed column: keep the triple scannable without wrapping the row.
-        let route = truncate(&task.display_route(), 36);
-
-        if show_repo {
-            out.push_str(&format!(
-                "{:<11} {:<36} {:<30} {:<10} {:<10} {:<8} {:<11} {:<12} {:<20} {:<16} {}\n",
-                task.id.as_str(),
-                route,
-                status,
-                duration,
-                tokens,
-                cost_str,
-                parent,
-                group,
-                repo,
-                caller,
-                model,
-            ));
-        } else {
-            out.push_str(&format!(
-                "{:<11} {:<36} {:<30} {:<10} {:<10} {:<8} {:<11} {:<12} {:<16} {}\n",
-                task.id.as_str(),
-                route,
-                status,
-                duration,
-                tokens,
-                cost_str,
-                parent,
-                group,
-                caller,
-                model,
-            ));
-        }
-    }
+    rows::append_grouped_task_rows(
+        &mut out,
+        tasks,
+        store,
+        show_repo,
+        &awaiting_reasons,
+        &latest_milestones,
+        &latest_errors,
+    );
     Ok(out)
-}
-
-fn latest_milestone(milestones: &HashMap<String, String>, task_id: &str) -> Option<String> {
-    milestones.get(task_id).cloned()
 }
 
 fn count_statuses(tasks: &[Task]) -> (usize, usize, usize) {
@@ -187,14 +122,14 @@ fn count_statuses(tasks: &[Task]) -> (usize, usize, usize) {
     (done, running, failed)
 }
 
-fn format_with_outcome(task: &Task, base: String) -> String {
+pub(super) fn format_with_outcome(task: &Task, base: String) -> String {
     task.outcome()
         .verification_tag()
         .map(|tag| format!("{base} [{tag}]"))
         .unwrap_or(base)
 }
 
-fn format_duration(ms: i64) -> String {
+pub(super) fn format_duration(ms: i64) -> String {
     let secs = ms / 1000;
     if secs < 60 {
         format!("{secs}s")
@@ -215,7 +150,7 @@ fn elapsed_since(start: chrono::DateTime<chrono::Local>) -> String {
     }
 }
 
-fn format_running_duration(task: &Task, store: &Store) -> String {
+pub(super) fn format_running_duration(task: &Task, store: &Store) -> String {
     let elapsed = elapsed_since(task.created_at);
     match (eta::estimate_eta(task, store), eta::estimate_progress(task, store)) {
         (Some(eta_label), Some(progress)) => format!("{elapsed} (ETA {eta_label} {progress}%)"),
@@ -225,7 +160,7 @@ fn format_running_duration(task: &Task, store: &Store) -> String {
     }
 }
 
-fn format_tokens(n: i64) -> String {
+pub(super) fn format_tokens(n: i64) -> String {
     if n >= 1_000_000 {
         format!("{:.1}M", n as f64 / 1_000_000.0)
     } else if n >= 1_000 {
@@ -235,7 +170,7 @@ fn format_tokens(n: i64) -> String {
     }
 }
 
-fn truncate(s: &str, max: usize) -> String {
+pub(super) fn truncate(s: &str, max: usize) -> String {
     if s.len() <= max {
         s.to_string()
     } else {
@@ -244,20 +179,20 @@ fn truncate(s: &str, max: usize) -> String {
     }
 }
 
-fn short_parent(parent: Option<&str>) -> String {
+pub(super) fn short_parent(parent: Option<&str>) -> String {
     parent.unwrap_or("-").to_string()
 }
 
-fn short_group(group: Option<&str>) -> String {
+pub(super) fn short_group(group: Option<&str>) -> String {
     group.unwrap_or("-").to_string()
 }
 
-fn short_repo(repo: Option<&str>) -> String {
+pub(super) fn short_repo(repo: Option<&str>) -> String {
     repo.map(|path| truncate(path, 20))
         .unwrap_or_else(|| "-".to_string())
 }
 
-fn task_status(task: &Task, milestone: Option<String>, latest_error: Option<String>) -> String {
+pub(super) fn task_status(task: &Task, milestone: Option<String>, latest_error: Option<String>) -> String {
     let base = if task.status == TaskStatus::Failed {
         if let Some(pending_reason) = task.pending_reason.as_deref() {
             truncate(&format!("{} — {}", task.status.label(), pending_reason), 30)

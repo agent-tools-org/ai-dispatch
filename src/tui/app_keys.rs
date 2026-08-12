@@ -85,6 +85,8 @@ impl App {
         let next_range = match key.code {
             KeyCode::Left | KeyCode::Char('h') => Some(self.stats_range.previous()),
             KeyCode::Right | KeyCode::Char('l') => Some(self.stats_range.next()),
+            KeyCode::Tab => Some(self.stats_range.next()),
+            KeyCode::BackTab => Some(self.stats_range.previous()),
             _ => None,
         };
         if let Some(range) = next_range {

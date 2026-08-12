@@ -77,6 +77,16 @@ pub(crate) struct ReclaimableSpaceEstimate {
 pub(crate) fn has_reclaimable_space_above_threshold(
     store: &Store,
 ) -> Result<Option<ReclaimableSpaceEstimate>> {
+    has_reclaimable_space_above_threshold_with_entry_limit(
+        store,
+        crate::cmd::clean_size::CLEANUP_HINT_ENTRY_LIMIT,
+    )
+}
+
+fn has_reclaimable_space_above_threshold_with_entry_limit(
+    store: &Store,
+    entry_limit: usize,
+) -> Result<Option<ReclaimableSpaceEstimate>> {
     let mut sizes = crate::cmd::clean_size::SizeTracker::new();
     let mut bytes = 0;
     let mut entries = 0;
@@ -87,7 +97,7 @@ pub(crate) fn has_reclaimable_space_above_threshold(
         .chain(terminal_task_homes(store)?.into_iter())
     {
         if bytes >= crate::cmd::clean_size::CLEANUP_HINT_BYTE_LIMIT
-            || entries >= crate::cmd::clean_size::CLEANUP_HINT_ENTRY_LIMIT
+            || entries >= entry_limit
         {
             truncated = true;
             break;
@@ -96,7 +106,7 @@ pub(crate) fn has_reclaimable_space_above_threshold(
             &mut sizes,
             &path,
             crate::cmd::clean_size::CLEANUP_HINT_BYTE_LIMIT - bytes,
-            crate::cmd::clean_size::CLEANUP_HINT_ENTRY_LIMIT - entries,
+            entry_limit - entries,
         )?;
         bytes += scan.bytes;
         entries += scan.entries;

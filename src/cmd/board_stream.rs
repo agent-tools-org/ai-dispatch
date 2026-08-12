@@ -10,7 +10,6 @@ use std::time::Duration;
 
 use crate::background;
 use crate::cmd::eta;
-use crate::session;
 use crate::store::Store;
 use crate::types::{Task, TaskFilter, TaskOutcome, TaskStatus};
 
@@ -22,22 +21,32 @@ const ANSI_RED: &str = "\x1b[31m";
 const ANSI_YELLOW: &str = "\x1b[33m";
 const ANSI_BLUE: &str = "\x1b[34m";
 const ANSI_DIM: &str = "\x1b[2m";
-
 pub async fn run(
     store: &Arc<Store>,
     running: bool,
     today: bool,
     mine: bool,
     group: Option<&str>,
+    all_projects: bool,
     limit: Option<usize>,
 ) -> Result<()> {
     background::check_zombie_tasks(store)?;
-    let mut init = init_stream(store, running, today, mine, group, limit)?;
+    let mut init = init_stream(store, running, today, mine, group, all_projects, limit)?;
     if init.tasks.is_empty() || init.tasks.iter().all(|task| is_terminal(task.status)) {
         print_summary(&init.tasks, "Summary");
         return Ok(());
     }
-    run_stream_loop(store, running, today, mine, group, limit, &mut init.state).await
+    run_stream_loop(
+        store,
+        running,
+        today,
+        mine,
+        group,
+        all_projects,
+        limit,
+        &mut init.state,
+    )
+    .await
 }
 
 struct StreamState {
@@ -65,10 +74,20 @@ fn init_stream(
     today: bool,
     mine: bool,
     group: Option<&str>,
+    all_projects: bool,
     limit: Option<usize>,
 ) -> Result<StreamInit> {
+    let current = crate::project::current_project_id();
+    println!(
+        "{}",
+        crate::cmd::board::board_filter::project_scope_banner(
+            if all_projects { None } else { Some(current.as_deref()) },
+            all_projects,
+        )
+    );
     println!("ID | Route | Status | Duration | Prompt (truncated)");
-    let FilteredTasks { mut tasks, truncation } = list_filtered_tasks(store, running, today, mine, group, limit)?;
+    let FilteredTasks { mut tasks, truncation } =
+        list_filtered_tasks(store, running, today, mine, group, all_projects, limit)?;
     tasks.sort_by(|a, b| a.id.as_str().cmp(b.id.as_str()));
     let mut last_status = HashMap::new();
     for task in tasks.iter().filter(|task| is_active(task.status)) {
@@ -97,6 +116,7 @@ async fn run_stream_loop(
     today: bool,
     mine: bool,
     group: Option<&str>,
+    all_projects: bool,
     limit: Option<usize>,
     state: &mut StreamState,
 ) -> Result<()> {
@@ -104,7 +124,7 @@ async fn run_stream_loop(
     ticker.tick().await;
     loop {
         ticker.tick().await;
-        match poll_and_print(store, running, today, mine, group, limit, state)? {
+        match poll_and_print(store, running, today, mine, group, all_projects, limit, state)? {
             StreamAction::Continue => {}
             StreamAction::Exit => return Ok(()),
         }
@@ -117,10 +137,12 @@ fn poll_and_print(
     today: bool,
     mine: bool,
     group: Option<&str>,
+    all_projects: bool,
     limit: Option<usize>,
     state: &mut StreamState,
 ) -> Result<StreamAction> {
-    let mut tasks = list_filtered_tasks(store, running, today, mine, group, limit)?.tasks;
+    let mut tasks =
+        list_filtered_tasks(store, running, today, mine, group, all_projects, limit)?.tasks;
     tasks.sort_by(|a, b| a.id.as_str().cmp(b.id.as_str()));
     for task in &tasks {
         let key = task.id.as_str();
@@ -157,28 +179,12 @@ fn poll_and_print(
 }
 
 fn list_filtered_tasks(
-    store: &Store,
-    running: bool,
-    today: bool,
-    mine: bool,
-    group: Option<&str>,
-    limit: Option<usize>,
+    store: &Store, running: bool, today: bool, mine: bool, group: Option<&str>,
+    all_projects: bool, limit: Option<usize>,
 ) -> Result<FilteredTasks> {
-    let filter = if running {
-        TaskFilter::Running
-    } else if today {
-        TaskFilter::Today
-    } else {
-        TaskFilter::All
-    };
-
+    let filter = if running { TaskFilter::Running } else if today { TaskFilter::Today } else { TaskFilter::All };
     let mut tasks = store.list_tasks(filter)?;
-    if mine {
-        tasks.retain(session::matches_current);
-    }
-    if let Some(group_id) = group {
-        tasks.retain(|task| task.workgroup_id.as_deref() == Some(group_id));
-    }
+    let _ = crate::cmd::board::board_filter::apply_board_filters(&mut tasks, mine, group, all_projects);
     let truncation = crate::cmd::board::apply_limit(&mut tasks, limit, running, today, mine, group);
     Ok(FilteredTasks { tasks, truncation })
 }

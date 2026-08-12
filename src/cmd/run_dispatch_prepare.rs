@@ -90,7 +90,15 @@ where
     let workgroup = run_prompt::load_workgroup(store, args.group.as_deref())?;
     let explicit_repo_path = crate::repo_root::resolve_explicit_repo_path(args.repo_root.as_deref(), args.repo.as_deref())?;
     let caller = session::current_caller();
-    let mut task = pending_task(args, &agent_setup, &task_id, &log_path, explicit_repo_path.clone(), caller);
+    let mut task = pending_task(
+        args,
+        &agent_setup,
+        &task_id,
+        &log_path,
+        explicit_repo_path.clone(),
+        caller,
+        detected_project.as_ref(),
+    );
     apply_category_and_result_defaults(args, &mut task, had_explicit_result_file);
     for warning in validate_dispatch(args, &agent_setup.agent_kind) {
         aid_warn!("[aid] Warning: {warning}");
@@ -114,6 +122,17 @@ where
         }
     };
     if let Err(err) = persist_worktree_setup(store, &task_id, &mut task, &setup) {
+        clear_worktree_lock(setup.wt_path.as_deref(), task_id.as_str());
+        fail_claimed_task(store, &task_id, &err)?;
+        return Err(err);
+    }
+    // Re-resolve after worktree/repo are known so main+worktree share identity.
+    task.project_id = resolve_task_project_id(
+        detected_project.as_ref(),
+        task.repo_path.as_deref(),
+        args.dir.as_deref(),
+    );
+    if let Err(err) = store.update_task_project_id(task_id.as_str(), task.project_id.as_deref()) {
         clear_worktree_lock(setup.wt_path.as_deref(), task_id.as_str());
         fail_claimed_task(store, &task_id, &err)?;
         return Err(err);
@@ -150,14 +169,16 @@ fn pending_task(
     log_path: &Path,
     repo_path: Option<String>,
     caller: Option<session::CallerSession>,
+    detected_project: Option<&ProjectConfig>,
 ) -> Task {
+    let project_id = resolve_task_project_id(detected_project, repo_path.as_deref(), args.dir.as_deref());
     Task {
         id: task_id.clone(), agent: agent_setup.agent_kind, custom_agent_name: agent_setup.custom_agent_name.clone(),
         prompt: args.prompt.clone(), resolved_prompt: None, category: None, status: TaskStatus::Pending,
         parent_task_id: args.parent_task_id.clone(), workgroup_id: args.group.clone(),
         caller_kind: caller.as_ref().map(|item| item.kind.clone()),
         caller_session_id: caller.as_ref().map(|item| item.session_id.clone()),
-        agent_session_id: None, repo_path, worktree_path: None, worktree_branch: None, final_head_sha: None, final_branch: None, start_sha: None,
+        agent_session_id: None, repo_path, project_id, worktree_path: None, worktree_branch: None, final_head_sha: None, final_branch: None, start_sha: None,
         log_path: Some(log_path.to_string_lossy().to_string()), output_path: args.output.clone(),
         tokens: None, prompt_tokens: None, duration_ms: None, requested_model: agent_setup.effective_model.clone(), observed_model: None, attribution_source: None,
         cost_usd: None, exit_code: None, created_at: Local::now(), completed_at: None,
@@ -165,6 +186,27 @@ fn pending_task(
         read_only: args.read_only, budget: args.budget, audit_verdict: None, audit_report_path: None,
         delivery_assessment: None,
     }
+}
+
+fn resolve_task_project_id(
+    detected_project: Option<&ProjectConfig>,
+    repo_path: Option<&str>,
+    dir: Option<&str>,
+) -> Option<String> {
+    if let Some(id) = detected_project
+        .map(|config| config.id.as_str())
+        .map(str::trim)
+        .filter(|id| !id.is_empty())
+    {
+        return Some(id.to_string());
+    }
+    if let Some(repo) = repo_path {
+        return project::resolve_project_id(Path::new(repo));
+    }
+    if let Some(dir) = dir {
+        return project::resolve_project_id(Path::new(dir));
+    }
+    project::current_project_id()
 }
 
 fn setup_worktree(

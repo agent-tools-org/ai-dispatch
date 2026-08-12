@@ -1,6 +1,6 @@
 // Store schema migrations for feature-specific tables.
 // Exports: migrate_task_messages, migrate_declared_task_profile,
-//          migrate_observed_model.
+//          migrate_observed_model, migrate_project_id.
 // Deps: anyhow and rusqlite.
 
 use anyhow::Result;
@@ -45,5 +45,17 @@ pub(super) fn migrate_declared_task_profile(conn: &Connection) -> Result<()> {
     let _ = conn.execute_batch("ALTER TABLE tasks ADD COLUMN declared_budget TEXT;");
     let _ = conn.execute_batch("ALTER TABLE tasks ADD COLUMN declared_urgency TEXT;");
     let _ = conn.execute_batch("ALTER TABLE tasks ADD COLUMN declared_rigor TEXT;");
+    Ok(())
+}
+
+/// First-class project identity on tasks.
+///
+/// Existing rows are deliberately left NULL. Most historical tasks never
+/// recorded a project (or even a repo_path); inventing one would launder
+/// guesses into identity. NULL is the explicit unattributed bucket.
+pub(super) fn migrate_project_id(conn: &Connection) -> Result<()> {
+    let _ = conn.execute_batch("ALTER TABLE tasks ADD COLUMN project_id TEXT;");
+    let _ = conn
+        .execute_batch("CREATE INDEX IF NOT EXISTS idx_tasks_project_id ON tasks(project_id);");
     Ok(())
 }

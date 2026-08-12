@@ -101,8 +101,8 @@ async fn dispatch_primary(store: Arc<crate::store::Store>, command: Commands) ->
         Commands::Wait(command_args_watch::WaitArgs { task_ids, group, exit_on_await, timeout }) => {
             display::wait(store, task_ids, group, exit_on_await, timeout).await
         }
-        Commands::Board(command_args_a::BoardArgs { running, today, mine, group, limit, force, stream, json }) => {
-            display::board(store, running, today, mine, group, limit, force, stream, json).await
+        Commands::Board(command_args_a::BoardArgs { running, today, mine, group, all, limit, force, stream, json }) => {
+            display::board(store, running, today, mine, group, all, limit, force, stream, json).await
         }
         Commands::Notifications => display::notifications(),
         Commands::Changelog(command_args_a::ChangelogArgs { version, all, count, git }) => display::changelog(version, all, count, git),

@@ -1,9 +1,14 @@
-Quota-marker review follow-up committed as `f7a5bcc2`.
+Provider marker verification completed.
 
-- OpenCode groups derive from any provider prefix before `/`, including `nvidia`; no allowlist or model table.
-- Named provider refusals use the same extraction.
-- Unknown attribution records `provider: unknown` and conservatively holds the whole agent.
-- Full messages and usable ISO/RFC3339 reset times are preserved.
+- `nvidia/<model>` derives group `nvidia`.
+- Writes `rate-limit-opencode--nvidia`.
+- Reads the same key via `is_group_rate_limited`.
+- Unknown attribution remains agent-wide with `provider: unknown`.
 
-Before fix: both `nvidia` attribution tests failed.  
-After fix: `aid build` passed; 2,297 tests passed, 0 failed.
+Verification:
+
+```text
+passed: 4 passed, 0 failed, 0 ignored; command: cargo test --bin aid credibility
+```
+
+`aid build` also passed with 0 errors. Report committed as `53df288d`.

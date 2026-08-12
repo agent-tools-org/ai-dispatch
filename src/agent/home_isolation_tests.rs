@@ -264,6 +264,8 @@ fn cargo_build_uses_rustc_outside_isolated_home() {
     cargo
         .args(["build", "--offline", "--manifest-path"])
         .arg(project.join("Cargo.toml"))
+        .env_remove("CARGO_HOME")
+        .env_remove("RUSTUP_HOME")
         .env("HOME", guard.path())
         .env("RUSTC_WRAPPER", &wrapper)
         .env("AID_RUSTC_CAPTURE", &capture);

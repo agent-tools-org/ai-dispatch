@@ -29,6 +29,9 @@ pub struct Task {
     /// unattributed bucket — never invent a project for historical rows.
     pub project_id: Option<String>,
     pub worktree_path: Option<String>,
+    /// Directory the agent ran in (`--dir` after worktree remapping).
+    /// Relative `-o` resolves here — never the shared repo root or process CWD.
+    pub effective_dir: Option<String>,
     pub worktree_branch: Option<String>,
     pub final_head_sha: Option<String>,
     pub final_branch: Option<String>,

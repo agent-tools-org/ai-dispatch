@@ -19,9 +19,7 @@ pub struct PeerReview {
 }
 
 pub async fn judge_task(task: &Task, judge_agent: &str, original_prompt: &str) -> Result<JudgeResult> {
-    let diff = gather_diff(task)
-        .or_else(|| read_output(task))
-        .unwrap_or_else(|| "(no diff or output)".to_string());
+    let diff = judge_review_material(task);
     let truncated = truncate_diff(&diff, MAX_DIFF_CHARS);
     let prompt = format!(
         concat!(
@@ -53,9 +51,7 @@ pub async fn judge_task(task: &Task, judge_agent: &str, original_prompt: &str) -
 }
 
 pub async fn peer_review_task(task: &Task, reviewer_agent: &str, original_prompt: &str) -> Result<PeerReview> {
-    let diff = gather_diff(task)
-        .or_else(|| read_output(task))
-        .unwrap_or_else(|| "(no diff or output)".to_string());
+    let diff = judge_review_material(task);
     let truncated = truncate_diff(&diff, MAX_DIFF_CHARS);
     let prompt = format!(
         concat!(
@@ -106,6 +102,17 @@ pub(crate) fn gather_diff(task: &Task) -> Option<String> {
         }
     }
     None
+}
+
+pub(crate) fn judge_review_material(task: &Task) -> String {
+    let notice = crate::cmd::show::missing_owned_output_absence(task);
+    let body = gather_diff(task)
+        .or_else(|| read_output(task))
+        .unwrap_or_else(|| "(no diff or output)".to_string());
+    match notice {
+        Some(notice) => format!("{notice}\n{body}"),
+        None => body,
+    }
 }
 
 pub(crate) fn read_output(task: &Task) -> Option<String> {

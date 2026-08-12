@@ -29,7 +29,7 @@ fn test_task(id: &str) -> Task {
         caller_session_id: None,
         agent_session_id: None,
         repo_path: None, project_id: None,
-        worktree_path: None,
+        worktree_path: None, effective_dir: None,
         worktree_branch: None,
         final_head_sha: None,
         final_branch: None,
@@ -302,4 +302,25 @@ fn prepare_dispatch_rejects_requested_worktree_when_it_is_the_repo_root() {
     };
 
     assert!(err.to_string().contains("main working tree"));
+}
+
+#[test]
+fn prepare_dispatch_records_effective_dir_from_dir_flag() {
+    let _guard = isolated_home();
+    let store = Arc::new(Store::open_memory().unwrap());
+    let dir = tempfile::tempdir().unwrap();
+    let dir_path = dir.path().display().to_string();
+    let mut args = RunArgs {
+        agent_name: "codex".to_string(),
+        prompt: "Investigate a concrete task routing bug.".to_string(),
+        dir: Some(dir_path.clone()),
+        output: Some("report.md".to_string()),
+        ..Default::default()
+    };
+
+    let prepared = prepare_dispatch_with(&store, &mut args, |_| true).unwrap();
+    let loaded = store.get_task(prepared.task_id.as_str()).unwrap().unwrap();
+
+    assert_eq!(loaded.effective_dir.as_deref(), Some(dir_path.as_str()));
+    assert_eq!(prepared.task.effective_dir.as_deref(), Some(dir_path.as_str()));
 }

@@ -178,7 +178,7 @@ fn pending_task(
         parent_task_id: args.parent_task_id.clone(), workgroup_id: args.group.clone(),
         caller_kind: caller.as_ref().map(|item| item.kind.clone()),
         caller_session_id: caller.as_ref().map(|item| item.session_id.clone()),
-        agent_session_id: None, repo_path, project_id, worktree_path: None, worktree_branch: None, final_head_sha: None, final_branch: None, start_sha: None,
+        agent_session_id: None, repo_path, project_id, worktree_path: None, effective_dir: None, worktree_branch: None, final_head_sha: None, final_branch: None, start_sha: None,
         log_path: Some(log_path.to_string_lossy().to_string()), output_path: args.output.clone(),
         tokens: None, prompt_tokens: None, duration_ms: None, requested_model: agent_setup.effective_model.clone(), observed_model: None, attribution_source: None,
         cost_usd: None, exit_code: None, created_at: Local::now(), completed_at: None,
@@ -280,12 +280,30 @@ fn persist_worktree_setup(store: &Store, task_id: &TaskId, task: &mut Task, setu
     task.repo_path = setup.repo_path.clone();
     task.worktree_path = setup.wt_path.clone();
     task.worktree_branch = setup.wt_branch.clone();
+    task.effective_dir = persistable_effective_dir(setup.effective_dir.as_deref());
     store.update_task_worktree(
         task_id.as_str(),
         task.repo_path.as_deref(),
         task.worktree_path.as_deref(),
         task.worktree_branch.as_deref(),
+        task.effective_dir.as_deref(),
     )
+}
+
+fn persistable_effective_dir(dir: Option<&str>) -> Option<String> {
+    let raw = match dir {
+        Some(value) if !value.is_empty() => value,
+        _ => ".",
+    };
+    let path = Path::new(raw);
+    if path.is_absolute() {
+        return Some(raw.to_string());
+    }
+    match std::env::current_dir() {
+        Ok(cwd) => Some(cwd.join(path).to_string_lossy().into_owned()),
+        Err(_) if dir.is_some() => Some(raw.to_string()),
+        Err(_) => None,
+    }
 }
 
 fn prepare_worktree_deps(

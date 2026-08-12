@@ -33,7 +33,7 @@ fn failed_task(id: &str) -> Task {
         prompt: "original prompt".to_string(), resolved_prompt: None, category: None,
         status: TaskStatus::Failed, parent_task_id: None, workgroup_id: None,
         caller_kind: None, caller_session_id: None, agent_session_id: None, repo_path: None, project_id: None,
-        worktree_path: None, worktree_branch: None, final_head_sha: None, final_branch: None, start_sha: None,
+        worktree_path: None, effective_dir: None, worktree_branch: None, final_head_sha: None, final_branch: None, start_sha: None,
         log_path: None, output_path: None, tokens: None, prompt_tokens: None, duration_ms: None,
         requested_model: None, cost_usd: None, exit_code: None, created_at: Local::now(), completed_at: None, observed_model: None, attribution_source: None,
         verify: None, verify_status: VerifyStatus::Skipped, pending_reason: None,

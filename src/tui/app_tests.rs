@@ -22,7 +22,7 @@ pub(crate) fn make_task(id: &str, group_id: Option<&str>) -> Task {
         caller_session_id: None,
         agent_session_id: None,
         repo_path: None, project_id: crate::project::current_project_id(),
-        worktree_path: None,
+        worktree_path: None, effective_dir: None,
         worktree_branch: None,
         final_head_sha: None,
         final_branch: None,

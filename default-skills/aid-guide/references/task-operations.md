@@ -35,11 +35,13 @@ stored completion data. Run `aid show --help` because its modes are mutually
 exclusive in some combinations.
 
 `aid show --output` only renders content proven to belong to that task: the
-task's worktree/repo/task-dir resolution of a declared `-o` path, or the
-persisted `result.md` under `~/.aid/tasks/<id>/`. Relative `-o` paths are never
-read from the caller's CWD (that would leak another task's report). When the
-declared output is missing, the absence is stated explicitly and the fallback is
-this task's own log.
+task's recorded working directory (`--dir` after worktree remapping), its
+worktree, or `~/.aid/tasks/<id>/`, or the persisted `result.md` under that task
+dir. Relative `-o` paths are never read from the caller's CWD or from the
+shared repository root (either would leak another task's report). Paths that
+escape the chosen base via `..` or a symlink are rejected. When the declared
+output is missing, the absence is stated explicitly and the fallback is this
+task's own log.
 
 Human task surfaces use verification tags only when verification has something
 to say: `VFAIL` for a failed verification, `VTIMEOUT` for a timeout, `VINFRA`

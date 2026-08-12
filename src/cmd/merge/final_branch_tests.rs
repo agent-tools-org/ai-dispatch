@@ -52,7 +52,7 @@ fn task(repo: &Path, dispatch_branch: &str, final_branch: &str) -> Task {
         caller_session_id: None,
         agent_session_id: None,
         repo_path: Some(repo.to_string_lossy().to_string()), project_id: None,
-        worktree_path: None,
+        worktree_path: None, effective_dir: None,
         worktree_branch: Some(dispatch_branch.to_string()),
         final_head_sha: None,
         final_branch: Some(final_branch.to_string()),

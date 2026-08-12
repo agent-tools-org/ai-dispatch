@@ -1,5 +1,8 @@
     use super::*;
 
+    #[cfg(unix)]
+    use std::os::unix::fs::MetadataExt;
+
     fn contains_path(paths: &[PathBuf], needle: &Path) -> bool {
         paths.iter().any(|path| path == needle)
     }
@@ -53,8 +56,24 @@
         fs::write(temp.path().join("second"), vec![b'b'; 11]).unwrap();
         fs::write(temp.path().join("third"), vec![b'c'; 13]).unwrap();
 
-        let (bytes, entries) = crate::cmd::clean_size::get_dir_size_bounded(temp.path(), 1_000, 2).unwrap();
+        let (bytes, entries) = crate::cmd::clean_size::get_dir_size_bounded(temp.path(), 10_000, 2).unwrap();
 
         assert_eq!(entries, 2);
-        assert!(bytes == 18 || bytes == 20);
+        assert!(bytes >= 18);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn size_tracker_counts_hardlinked_inode_once() {
+        let temp = tempfile::tempdir().unwrap();
+        let first = temp.path().join("first");
+        let second = temp.path().join("second");
+        fs::write(&first, vec![b'x'; 17]).unwrap();
+        fs::hard_link(&first, &second).unwrap();
+
+        let mut sizes = crate::cmd::clean_size::SizeTracker::new();
+        assert_eq!(
+            sizes.get_dir_size(temp.path()).unwrap(),
+            first.metadata().unwrap().blocks().saturating_mul(512)
+        );
     }

@@ -46,9 +46,12 @@ pub fn run(
     
     let mut total_bytes = 0;
     if clean_worktrees {
+        let mut sizes = crate::cmd::clean_size::SizeTracker::new();
         total_bytes += clean_orphaned_worktrees(&store, dry_run)?;
-        total_bytes += crate::cmd::clean_cargo_target::clean_orphaned_branch_targets(dry_run, None)?;
-        total_bytes += clean_isolated_task_homes(&store, dry_run)?;
+        total_bytes += crate::cmd::clean_cargo_target::clean_orphaned_branch_targets(
+            &store, dry_run, None, &mut sizes,
+        )?;
+        total_bytes += clean_isolated_task_homes(&store, dry_run, &mut sizes)?;
     }
     total_bytes += clean_orphaned_logs(&store, dry_run)?;
     total_bytes += clean_orphaned_shared_dirs(&store, dry_run)?;
@@ -139,13 +142,17 @@ fn clean_orphaned_shared_dirs(store: &Store, dry_run: bool) -> Result<u64> {
     Ok(bytes)
 }
 
-pub(crate) fn clean_isolated_task_homes(store: &Store, dry_run: bool) -> Result<u64> {
+pub(crate) fn clean_isolated_task_homes(
+    store: &Store,
+    dry_run: bool,
+    sizes: &mut crate::cmd::clean_size::SizeTracker,
+) -> Result<u64> {
     let mut bytes = 0u64;
     let mut removed = 0usize;
-    for id in crate::cmd::clean_cargo_target::orphaned_task_ids(store)? {
+    for id in crate::cmd::clean_cargo_target::terminal_task_ids(store)? {
         let home_dir = crate::paths::task_dir(&id).join("home");
         if home_dir.exists() {
-            let size = crate::cmd::clean_size::get_dir_size(&home_dir)?;
+            let size = sizes.get_dir_size(&home_dir)?;
             if dry_run {
                 println!("[dry-run] Would remove isolated task home for {} ({})", id, format_bytes(size));
                 bytes += size;
@@ -172,10 +179,10 @@ pub(crate) fn session_start_hint() -> Result<Option<String>> {
     let Some(store) = Store::open_read_only(&paths::db_path())? else {
         return Ok(None);
     };
-    if crate::cmd::clean_cargo_target::has_reclaimable_space_above_threshold(&store)? {
+    if let Some(bytes) = crate::cmd::clean_cargo_target::has_reclaimable_space_above_threshold(&store)? {
         return Ok(Some(format!(
-            "Hint: orphaned task artifacts occupy at least {}. Run `aid clean --worktrees` to reclaim.",
-            format_bytes(crate::cmd::clean_size::CLEANUP_HINT_THRESHOLD_BYTES)
+            "Hint: terminal task artifacts occupy at least {}. Run `aid clean --worktrees` to reclaim.",
+            format_bytes(bytes)
         )));
     }
     Ok(None)

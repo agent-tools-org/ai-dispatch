@@ -724,7 +724,7 @@ fn finalize_buffered(
     state.full_output.push_str(&terminal_sentinel(task_id, exit_status, state));
     persist_transcript(task_id, &state.full_output);
     if let Some(path) = output_path {
-        write_output_file(path, &state.full_output)?;
+        write_output_file(agent.kind(), path, &state.full_output)?;
     }
     state.info = if state.info.status == TaskStatus::Failed {
         CompletionInfo {
@@ -862,8 +862,8 @@ fn mark_awaiting_input(
     Ok(())
 }
 
-fn write_output_file(path: &str, buffer: &str) -> Result<()> {
-    if let Some(response) = crate::agent::gemini::extract_response(buffer) {
+fn write_output_file(agent: AgentKind, path: &str, buffer: &str) -> Result<()> {
+    if let Some(response) = crate::agent::extract_response(agent, buffer) {
         std::fs::write(path, response)?;
     } else {
         std::fs::write(path, buffer)?;

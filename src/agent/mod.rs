@@ -29,7 +29,7 @@ pub mod classifier;
 pub(crate) mod selection;
 pub(crate) mod stream_completion;
 pub(crate) mod truncate;
-
+pub(crate) mod response;
 use anyhow::Result;
 use std::collections::HashMap;
 use std::process::Command;
@@ -37,7 +37,6 @@ use std::process::Command;
 use crate::prompt_scan::scan_for_injection;
 use crate::store;
 use crate::types::*;
-
 pub mod home_isolation;
 
 pub(crate) mod env;
@@ -47,6 +46,7 @@ pub(crate) use binary::{
     builtin_binary_owner, ensure_agent_binary_available, ensure_agent_binary_available_with,
     ensure_resolved_binary_available, ensure_resolved_binary_available_with,
 };
+pub(crate) use response::extract_response;
 #[cfg(test)]
 pub(crate) use binary::built_in_agent_binary_exists;
 #[allow(unused_imports)]

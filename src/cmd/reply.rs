@@ -103,10 +103,42 @@ fn run_with_hook<F>(
     poll_interval: Duration,
     source: MessageSource,
     command: InputCommand,
-    mut on_poll: F,
+    on_poll: F,
 ) -> Result<ReplyOutcome>
 where
     F: FnMut(i64),
+{
+    run_with_hook_and_sleep(
+        store,
+        task_id,
+        message,
+        file,
+        async_mode,
+        timeout,
+        poll_interval,
+        source,
+        command,
+        on_poll,
+        std::thread::sleep,
+    )
+}
+
+fn run_with_hook_and_sleep<F, S>(
+    store: &Store,
+    task_id: &str,
+    message: Option<&str>,
+    file: Option<&str>,
+    async_mode: bool,
+    timeout: Duration,
+    poll_interval: Duration,
+    source: MessageSource,
+    command: InputCommand,
+    mut on_poll: F,
+    mut sleep: S,
+) -> Result<ReplyOutcome>
+where
+    F: FnMut(i64),
+    S: FnMut(Duration),
 {
     let task = store
         .get_task(task_id)?
@@ -129,7 +161,15 @@ where
         return Ok(ReplyOutcome::Queued { id: queued.id });
     }
 
-    wait_for_ack(store, task_id, queued.id, timeout, poll_interval, &mut on_poll)
+    wait_for_ack(
+        store,
+        task_id,
+        queued.id,
+        timeout,
+        poll_interval,
+        &mut on_poll,
+        &mut sleep,
+    )
 }
 
 pub(crate) fn ensure_interactive_input(task: &Task, command: InputCommand) -> Result<()> {
@@ -187,6 +227,7 @@ fn wait_for_ack<F>(
     timeout: Duration,
     poll_interval: Duration,
     on_poll: &mut F,
+    sleep: &mut impl FnMut(Duration),
 ) -> Result<ReplyOutcome>
 where
     F: FnMut(i64),
@@ -207,7 +248,7 @@ where
             return Ok(ReplyOutcome::TimedOut { delivered });
         }
         on_poll(message_id);
-        std::thread::sleep(poll_interval);
+        sleep(poll_interval);
     }
 }
 

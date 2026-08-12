@@ -238,8 +238,16 @@ fn verify_kills_background_grandchildren() {
     let result = run_verify(dir.path(), script.to_str(), None, None).unwrap();
     assert!(result.success);
     let pid = result.output.trim().parse::<i32>().unwrap();
-    thread::sleep(Duration::from_millis(200));
-    let status = unsafe { libc::kill(pid, 0) };
-    assert_eq!(status, -1);
-    assert_eq!(Error::last_os_error().raw_os_error(), Some(libc::ESRCH));
+    let deadline = std::time::Instant::now() + Duration::from_secs(2);
+    loop {
+        let status = unsafe { libc::kill(pid, 0) };
+        if status == -1 && Error::last_os_error().raw_os_error() == Some(libc::ESRCH) {
+            break;
+        }
+        assert!(
+            std::time::Instant::now() < deadline,
+            "background verify child {pid} did not exit"
+        );
+        thread::yield_now();
+    }
 }

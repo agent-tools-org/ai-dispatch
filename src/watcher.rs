@@ -23,7 +23,7 @@ pub(crate) use esc::strip_terminal_escapes;
 use anyhow::Result;
 use chrono::Local;
 use std::sync::Arc;
-use tokio::io::{AsyncBufReadExt, BufReader};
+use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::process::Child;
 use tokio::time::{timeout, Duration};
 use crate::agent::Agent;
@@ -102,7 +102,6 @@ pub async fn watch_streaming(
             delivery_evidence.observe_codex_jsonl(&line);
         }
 
-        use tokio::io::AsyncWriteExt;
         if !is_standalone_milestone_line(&line) && !is_thinking_delta(&line) {
             log_file.write_all(line.as_bytes()).await?;
             log_file.write_all(b"\n").await?;
@@ -148,6 +147,7 @@ pub async fn watch_streaming(
             }
         }
     }
+    log_file.flush().await?;
     if let Some(handle) = stderr_handle {
         drain_stderr_capture(handle).await;
     }

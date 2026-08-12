@@ -5,7 +5,7 @@ use std::time::Duration;
 
 use chrono::Local;
 
-use super::{InputCommand, ReplyOutcome, run, run_with_hook};
+use super::{InputCommand, ReplyOutcome, run, run_with_hook, run_with_hook_and_sleep};
 use crate::paths::AidHomeGuard;
 use crate::store::Store;
 use crate::types::{AgentKind, MessageSource, Task, TaskId, TaskStatus, VerifyStatus};
@@ -77,7 +77,7 @@ fn reply_polls_until_ack() {
     store.insert_task(&make_task("t-reply-ack", TaskStatus::AwaitingInput)).unwrap();
 
     let mut polls = 0usize;
-    let outcome = run_with_hook(
+    let outcome = run_with_hook_and_sleep(
         &store,
         "t-reply-ack",
         Some("answer"),
@@ -96,6 +96,7 @@ fn reply_polls_until_ack() {
                 store.mark_acked_latest_inbound("t-reply-ack").unwrap();
             }
         },
+        |_| {},
     )
     .unwrap();
 

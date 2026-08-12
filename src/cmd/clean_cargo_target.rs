@@ -24,7 +24,7 @@ pub(crate) fn clean_orphaned_branch_targets(dry_run: bool, fallback_root: Option
             if is_reserved_target_dir_name(name) || live_names.contains(name) {
                 continue;
             }
-            let size = crate::cmd::clean::get_dir_size(&target);
+            let size = crate::cmd::clean_size::get_dir_size(&target)?;
             if dry_run {
                 println!("[dry-run] Would remove orphaned Cargo target dir {} ({})", target.display(), crate::cmd::clean::format_bytes(size));
                 cargo_bytes += size;
@@ -56,7 +56,7 @@ pub(crate) fn clean_orphaned_branch_targets(dry_run: bool, fallback_root: Option
         if live_keys.contains(name) {
             continue;
         }
-        let size = crate::cmd::clean::get_dir_size(&target);
+        let size = crate::cmd::clean_size::get_dir_size(&target)?;
         if dry_run {
             println!("[dry-run] Would remove orphaned fallback target dir {} ({})", target.display(), crate::cmd::clean::format_bytes(size));
             fallback_bytes += size;
@@ -86,16 +86,19 @@ pub(crate) fn clean_orphaned_branch_targets(dry_run: bool, fallback_root: Option
     Ok(cargo_bytes + fallback_bytes)
 }
 
-pub(crate) fn measure_orphaned_space(store: &Store) -> Result<(u64, u64, u64)> {
+pub(crate) fn has_reclaimable_space_above_threshold(store: &Store) -> Result<bool> {
     let (live_names, mut live_keys) = live_branch_target_info()?;
-    let mut cargo_bytes = 0u64;
+    let mut measured_bytes = 0u64;
+    let mut measured_entries = 0usize;
 
     if let Some(root) = crate::agent::env::branch_target_root() {
-        let dirs = branch_target_dirs(&root)?;
-        for target in dirs {
+        for target in branch_target_dirs(&root)? {
             let Some(name) = target.file_name().and_then(|name| name.to_str()) else { continue; };
             if !is_reserved_target_dir_name(name) && !live_names.contains(name) {
-                cargo_bytes += crate::cmd::clean::get_dir_size(&target);
+                measure_hint_candidate(&target, &mut measured_bytes, &mut measured_entries)?;
+                if measured_bytes >= crate::cmd::clean_size::CLEANUP_HINT_THRESHOLD_BYTES {
+                    return Ok(true);
+                }
             }
         }
     }
@@ -104,25 +107,44 @@ pub(crate) fn measure_orphaned_space(store: &Store) -> Result<(u64, u64, u64)> {
         live_keys.insert(crate::cmd::build::build_fallback::cwd_key(&cwd));
     }
 
-    let mut fallback_bytes = 0u64;
     let temp_root = crate::cmd::build::build_fallback::fallback_target_root();
-    let dirs = branch_target_dirs(&temp_root)?;
-    for target in dirs {
+    for target in branch_target_dirs(&temp_root)? {
         let Some(name) = target.file_name().and_then(|name| name.to_str()) else { continue; };
         if !live_keys.contains(name) {
-            fallback_bytes += crate::cmd::clean::get_dir_size(&target);
+            measure_hint_candidate(&target, &mut measured_bytes, &mut measured_entries)?;
+            if measured_bytes >= crate::cmd::clean_size::CLEANUP_HINT_THRESHOLD_BYTES {
+                return Ok(true);
+            }
         }
     }
 
-    let mut home_bytes = 0u64;
     for id in orphaned_task_ids(store)? {
         let home_dir = crate::paths::task_dir(&id).join("home");
         if home_dir.exists() {
-            home_bytes += crate::cmd::clean::get_dir_size(&home_dir);
+            measure_hint_candidate(&home_dir, &mut measured_bytes, &mut measured_entries)?;
+            if measured_bytes >= crate::cmd::clean_size::CLEANUP_HINT_THRESHOLD_BYTES {
+                return Ok(true);
+            }
         }
     }
-    
-    Ok((cargo_bytes, fallback_bytes, home_bytes))
+
+    Ok(false)
+}
+
+fn measure_hint_candidate(path: &Path, bytes: &mut u64, entries: &mut usize) -> Result<()> {
+    let remaining_bytes = crate::cmd::clean_size::CLEANUP_HINT_THRESHOLD_BYTES.saturating_sub(*bytes);
+    let remaining_entries = crate::cmd::clean_size::CLEANUP_HINT_ENTRY_LIMIT.saturating_sub(*entries);
+    if remaining_bytes == 0 || remaining_entries == 0 {
+        return Ok(());
+    }
+    let (measured, scanned) = crate::cmd::clean_size::get_dir_size_bounded(
+        path,
+        remaining_bytes,
+        remaining_entries,
+    )?;
+    *bytes += measured;
+    *entries += scanned;
+    Ok(())
 }
 
 pub(crate) fn orphaned_task_ids(store: &Store) -> Result<Vec<String>> {
@@ -179,6 +201,7 @@ fn collect_live_info_under(root: &Path, names: &mut HashSet<String>, keys: &mut 
         if crate::worktree::is_aid_managed_worktree_path(&path) {
             insert_current_branch_name(&path, names);
             keys.insert(crate::cmd::build::build_fallback::cwd_key(&path));
+            continue;
         }
         if path.starts_with(crate::worktree::aid_worktree_root()) {
             collect_live_info_under(&path, names, keys)?;

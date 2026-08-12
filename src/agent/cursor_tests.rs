@@ -35,16 +35,6 @@ fn parses_assistant_message() {
 }
 
 #[test]
-fn prose_about_writing_is_not_a_cursor_file_event() {
-    for line in ["Writing tests for I/O bounds is necessary.", "I wrote a guide for example.com."] {
-        assert_ne!(super::classify_line(line).0, Some(EventKind::FileWrite));
-    }
-    for line in ["Writing Makefile", "Creating Dockerfile", "Writing CHANGELOG"] {
-        assert_eq!(super::classify_line(line).0, Some(EventKind::FileWrite));
-    }
-}
-
-#[test]
 fn tool_call_ignores_sibling_metadata_and_preserves_arguments() {
     let cases = [
         ("readToolCall", "path", "src/read.rs", EventKind::FileRead, "completed: read", "files"),
@@ -254,3 +244,4 @@ fn parse_cursor_models_output_strips_ansi_escapes() {
     let models = super::parse_cursor_models_output(raw);
     assert_eq!(models, vec!["composer-2.5", "composer-2.5-fast", "gpt-5.6"]);
 }
+

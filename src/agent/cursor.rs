@@ -397,10 +397,7 @@ fn classify_line(line: &str) -> (Option<EventKind>, &str) {
         (Some(EventKind::Build), line)
     } else if line.contains("git commit") {
         (Some(EventKind::Commit), line)
-    } else if (line.starts_with("Writing")
-        || line.starts_with("Creating")
-        || line.contains("wrote"))
-        && super::opencode::contains_path_evidence(line)
+    } else if line.starts_with("Writing") || line.starts_with("Creating") || line.contains("wrote")
     {
         (Some(EventKind::FileWrite), line)
     } else if line.starts_with("Reading") {

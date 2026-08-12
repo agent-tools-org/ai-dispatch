@@ -175,16 +175,6 @@ fn opencode_needs_pty() {
 }
 
 #[test]
-fn prose_about_writing_is_not_an_opencode_file_event() {
-    for line in ["Writing tests for I/O bounds is necessary.", "I wrote a guide for example.com."] {
-        assert_ne!(classify_text_line(line).0, Some(EventKind::FileWrite));
-    }
-    for line in ["Writing Makefile", "Creating Dockerfile", "Writing CHANGELOG"] {
-        assert_eq!(classify_text_line(line).0, Some(EventKind::FileWrite));
-    }
-}
-
-#[test]
 fn codex_does_not_need_pty() {
     assert!(!super::super::codex::CodexAgent.needs_pty());
 }

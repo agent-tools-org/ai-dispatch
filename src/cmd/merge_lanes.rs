@@ -25,18 +25,6 @@ pub(super) fn merge_group_lanes(store: &Store, group_id: &str, force: bool) -> R
             validate_merge_outcome(task, outcome, force)?;
         }
     }
-    if std::env::var("AID_GITBUTLER").is_ok_and(|value| value == "0") {
-        return Err(anyhow!("GitButler integration disabled via AID_GITBUTLER=0"));
-    }
-    if crate::project::detect_project()
-        .unwrap_or_default()
-        .gitbutler_mode()
-        == crate::gitbutler::Mode::Off
-    {
-        return Err(anyhow!(
-            "GitButler integration is off for this project. Set [project] gitbutler = \"auto\" in .aid/project.toml"
-        ));
-    }
     // Validate the task the derivation below actually consumes, before it is consumed:
     // a poisoned first task would otherwise seed repo_dir from a main checkout and then
     // have GitButler setup run inside it.
@@ -47,6 +35,20 @@ pub(super) fn merge_group_lanes(store: &Store, group_id: &str, force: bool) -> R
         tasks.first().and_then(|task| task.repo_path.as_deref()),
         tasks.first().and_then(|task| task.worktree_path.as_deref()),
     );
+
+    if std::env::var("AID_GITBUTLER").is_ok_and(|value| value == "0") {
+        return Err(anyhow!("GitButler integration disabled via AID_GITBUTLER=0"));
+    }
+    if crate::project::detect_project_in(Path::new(&repo_dir))
+        .unwrap_or_default()
+        .gitbutler_mode()
+        == crate::gitbutler::Mode::Off
+    {
+        return Err(anyhow!(
+            "GitButler integration is off for this project. Set [project] gitbutler = \"auto\" in .aid/project.toml"
+        ));
+    }
+
     if !crate::gitbutler::but_available() {
         return Err(anyhow!("GitButler CLI not found. Install: https://gitbutler.com"));
     }

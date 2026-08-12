@@ -153,10 +153,13 @@ fn merge_group_lanes_skips_an_already_merged_task() {
     .unwrap();
     let temp = tempfile::tempdir().unwrap();
     let apply_log = temp.path().join("apply.log");
-    let _cwd = CurrentDirGuard::set(repo.path());
-    let _path = PathGuard::prepend(temp.path());
-    let _but = EnvGuard::set("AID_GITBUTLER_TEST_PRESENT", "1");
-    let _project = EnvGuard::set("AID_GITBUTLER_TEST_PROJECT_PRESENT", "1");
+    
+    // Instead of PathGuard, EnvGuard, CurrentDirGuard which mutate process-wide state,
+    // we use thread-local overrides injected into gitbutler logic.
+    crate::gitbutler::set_test_but_available(Some(true));
+    crate::gitbutler::set_test_project_present(Some(true));
+    crate::gitbutler::set_test_but_command(Some(temp.path().join("but").to_string_lossy().to_string()));
+
     write_command(
         temp.path(),
         "but",
@@ -174,6 +177,10 @@ fn merge_group_lanes_skips_an_already_merged_task() {
 
     assert!(!apply_log.exists());
     assert_eq!(store.get_task(task.id.as_str()).unwrap().unwrap().status, TaskStatus::Merged);
+
+    crate::gitbutler::set_test_but_available(None);
+    crate::gitbutler::set_test_project_present(None);
+    crate::gitbutler::set_test_but_command(None);
 }
 
 fn write_command(dir: &Path, name: &str, body: &str) {

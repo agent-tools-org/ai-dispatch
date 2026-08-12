@@ -84,31 +84,53 @@ enum PricingSource {
     Unknown,
 }
 
-/// Cached feed lookup index, populated once per process from the local cache.
-/// Refresh happens out of band (never on the dispatch path); a cold or stale
-/// cache degrades to the built-in matcher instead of blocking a run.
+#[cfg(not(test))]
 static FEED_INDEX: OnceLock<Mutex<Option<FeedIndex>>> = OnceLock::new();
+
+#[cfg(test)]
+thread_local! {
+    static TEST_FEED_INDEX: std::cell::RefCell<Option<Option<FeedIndex>>> = const { std::cell::RefCell::new(None) };
+}
 
 type FeedIndex = (Arc<price_feed::Feed>, Arc<HashMap<String, usize>>);
 
 fn feed_index() -> Option<FeedIndex> {
-    let cache = FEED_INDEX.get_or_init(|| Mutex::new(None));
-    let mut guard = cache.lock().ok()?;
-    if let Some(pair) = guard.as_ref() {
-        return Some(pair.clone());
+    #[cfg(not(test))]
+    {
+        let cache = FEED_INDEX.get_or_init(|| Mutex::new(None));
+        let mut guard = cache.lock().ok()?;
+        if let Some(pair) = guard.as_ref() {
+            return Some(pair.clone());
+        }
+        // First load from the local cache; store the index so the dispatch path is
+        // a lock + Arc clone, never a file read.
+        let loaded = price_feed::load_cache()
+            .map(|feed| {
+                let index = feed.index();
+                (Arc::new(feed), Arc::new(index))
+            });
+        if let Some(pair) = loaded {
+            *guard = Some(pair.clone());
+            return Some(pair);
+        }
+        None
     }
-    // First load from the local cache; store the index so the dispatch path is
-    // a lock + Arc clone, never a file read.
-    let loaded = price_feed::load_cache()
-        .map(|feed| {
-            let index = feed.index();
-            (Arc::new(feed), Arc::new(index))
-        });
-    if let Some(pair) = loaded {
-        *guard = Some(pair.clone());
-        return Some(pair);
+    #[cfg(test)]
+    {
+        TEST_FEED_INDEX.with(|cell| {
+            let mut borrowed = cell.borrow_mut();
+            if let Some(cached) = borrowed.as_ref() {
+                return cached.clone();
+            }
+            let loaded = price_feed::load_cache()
+                .map(|feed| {
+                    let index = feed.index();
+                    (Arc::new(feed), Arc::new(index))
+                });
+            *borrowed = Some(loaded.clone());
+            loaded
+        })
     }
-    None
 }
 
 /// Test seam: force the process feed index from a constructed feed. The real
@@ -117,10 +139,9 @@ fn feed_index() -> Option<FeedIndex> {
 #[cfg(test)]
 fn set_feed_for_tests(feed: price_feed::Feed) {
     let index = feed.index();
-    let cache = FEED_INDEX.get_or_init(|| Mutex::new(None));
-    if let Ok(mut guard) = cache.lock() {
-        *guard = Some((Arc::new(feed), Arc::new(index)));
-    }
+    TEST_FEED_INDEX.with(|cell| {
+        *cell.borrow_mut() = Some(Some((Arc::new(feed), Arc::new(index))));
+    });
 }
 
 /// Test seam: clear the process feed index so a seeded feed cannot leak into
@@ -130,10 +151,9 @@ fn set_feed_for_tests(feed: price_feed::Feed) {
 /// "unknown" must say which of the two it is asking about.
 #[cfg(test)]
 pub(crate) fn clear_feed_for_tests() {
-    let cache = FEED_INDEX.get_or_init(|| Mutex::new(None));
-    if let Ok(mut guard) = cache.lock() {
-        *guard = None;
-    }
+    TEST_FEED_INDEX.with(|cell| {
+        *cell.borrow_mut() = None;
+    });
 }
 
 /// The resolution outcome: priced feed first, then builtin, else unknown.

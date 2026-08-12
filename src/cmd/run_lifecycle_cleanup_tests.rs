@@ -127,7 +127,7 @@ async fn run_lifecycle(
     .unwrap()
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "current_thread")]
 async fn completed_worktree_survives_when_checklist_retry_dispatches() {
     let _permit = test_subprocess::acquire();
     let (_home, _guard) = isolated_home();
@@ -159,7 +159,7 @@ async fn completed_worktree_survives_when_checklist_retry_dispatches() {
     assert!(wt.exists());
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "current_thread")]
 async fn completed_worktree_is_pruned_when_no_retry_dispatches() {
     let _permit = test_subprocess::acquire();
     let (_home, _guard) = isolated_home();

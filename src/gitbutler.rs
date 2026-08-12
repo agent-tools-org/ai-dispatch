@@ -91,7 +91,8 @@ pub fn is_active(mode: Mode) -> bool {
 }
 /// Run `but setup` in the main repo and ignore "already set up" failures.
 pub fn ensure_setup(repo_dir: &Path) -> Result<()> {
-    let output = Command::new("but").arg("setup").current_dir(repo_dir).output()?;
+    let but_cmd = get_but_command();
+    let output = Command::new(&but_cmd).arg("setup").current_dir(repo_dir).output()?;
     if output.status.success() || setup_already_done(&output) {
         return Ok(());
     }
@@ -103,7 +104,8 @@ pub fn apply_branch(repo_dir: &Path, branch: &str) -> Result<()> {
     if !but_available() {
         bail!("GitButler CLI not found. Install: https://gitbutler.com");
     }
-    let output = Command::new("but")
+    let but_cmd = get_but_command();
+    let output = Command::new(&but_cmd)
         .arg("apply")
         .arg(branch)
         .current_dir(repo_dir)
@@ -186,10 +188,45 @@ pub(crate) fn task_worktree_integration_plan(
     }
 }
 
+#[cfg(test)]
+thread_local! {
+    static TEST_BUT_AVAILABLE: std::cell::RefCell<Option<bool>> = const { std::cell::RefCell::new(None) };
+    static TEST_PROJECT_PRESENT: std::cell::RefCell<Option<bool>> = const { std::cell::RefCell::new(None) };
+    static TEST_BUT_COMMAND: std::cell::RefCell<Option<String>> = const { std::cell::RefCell::new(None) };
+}
+
+#[cfg(test)]
+pub fn set_test_but_available(available: Option<bool>) {
+    TEST_BUT_AVAILABLE.with(|cell| *cell.borrow_mut() = available);
+}
+
+#[cfg(test)]
+pub fn set_test_project_present(present: Option<bool>) {
+    TEST_PROJECT_PRESENT.with(|cell| *cell.borrow_mut() = present);
+}
+
+#[cfg(test)]
+pub fn set_test_but_command(command: Option<String>) {
+    TEST_BUT_COMMAND.with(|cell| *cell.borrow_mut() = command);
+}
+
+fn get_but_command() -> String {
+    #[cfg(test)]
+    {
+        if let Some(cmd) = TEST_BUT_COMMAND.with(|cell| cell.borrow().clone()) {
+            return cmd;
+        }
+    }
+    "but".to_string()
+}
+
 pub(crate) fn main_repo_has_project(repo_dir: &Path) -> bool {
     #[cfg(test)]
-    if let Ok(value) = std::env::var("AID_GITBUTLER_TEST_PROJECT_PRESENT") {
-        return matches!(value.trim().to_ascii_lowercase().as_str(), "1" | "true" | "yes");
+    {
+        let override_val = TEST_PROJECT_PRESENT.with(|cell| *cell.borrow());
+        if let Some(val) = override_val {
+            return val;
+        }
     }
 
     if !but_available() {
@@ -202,7 +239,8 @@ pub(crate) fn main_repo_has_project(repo_dir: &Path) -> bool {
         return status;
     }
 
-    let status = Command::new("but")
+    let but_cmd = get_but_command();
+    let status = Command::new(&but_cmd)
         .args(["status", "--json"])
         .current_dir(repo_dir)
         .output()
@@ -217,13 +255,14 @@ pub(crate) fn main_repo_has_project(repo_dir: &Path) -> bool {
 fn detect_but_available() -> bool {
     #[cfg(test)]
     {
-        return std::env::var("AID_GITBUTLER_TEST_PRESENT")
-            .map(|value| matches!(value.trim().to_ascii_lowercase().as_str(), "1" | "true" | "yes"))
-            .unwrap_or(false);
+        let override_val = TEST_BUT_AVAILABLE.with(|cell| *cell.borrow());
+        if let Some(val) = override_val {
+            return val;
+        }
     }
 
-    #[cfg(not(test))]
-    Command::new("but")
+    let but_cmd = get_but_command();
+    Command::new(&but_cmd)
         .arg("--version")
         .output()
         .map(|output| output.status.success())

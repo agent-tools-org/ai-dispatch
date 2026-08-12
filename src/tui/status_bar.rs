@@ -156,7 +156,7 @@ fn mode_hint(mode: StatusBarMode) -> String {
         StatusBarMode::Board | StatusBarMode::Dashboard => {
             "a=all/today s=stats d=dashboard m=multipane j/k=nav Enter=detail q=quit".into()
         }
-        StatusBarMode::Stats => "a=all/today s=stats d=dashboard m=multipane q=quit".into(),
+        StatusBarMode::Stats => "a=all/today s=stats v=legacy d=dashboard m=multipane q=quit".into(),
         StatusBarMode::Multipane { extra_panes } => {
             let extra = (extra_panes > 0).then(|| format!(" | +{extra_panes} more"));
             format!(

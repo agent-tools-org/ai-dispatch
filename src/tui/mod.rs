@@ -8,6 +8,8 @@ pub mod metrics;
 pub mod multipane;
 pub mod route_display;
 mod status_bar;
+pub(crate) mod stats;
+mod stats_legacy;
 pub mod tree_data;
 pub mod ui;
 
@@ -116,6 +118,19 @@ mod tests {
         assert!(app.stats_mode);
         app.handle_key(KeyEvent::new(KeyCode::Char('s'), KeyModifiers::NONE)).unwrap();
         assert!(!app.stats_mode);
+    }
+
+    #[test]
+    fn toggles_legacy_stats_view_with_v_key() {
+        let store = Arc::new(Store::open_memory().unwrap());
+        let mut app = app::App::new(store, RunOptions::default()).unwrap();
+
+        app.handle_key(KeyEvent::new(KeyCode::Char('s'), KeyModifiers::NONE)).unwrap();
+        assert!(!app.legacy_stats_view);
+        app.handle_key(KeyEvent::new(KeyCode::Char('v'), KeyModifiers::NONE)).unwrap();
+        assert!(app.legacy_stats_view);
+        app.handle_key(KeyEvent::new(KeyCode::Char('v'), KeyModifiers::NONE)).unwrap();
+        assert!(!app.legacy_stats_view);
     }
 
     #[test]

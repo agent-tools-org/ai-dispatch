@@ -8,6 +8,7 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use super::metrics::ProcessMetrics;
+use super::stats::{StatsRange, StatsSnapshot};
 use crate::store::Store;
 use crate::types::{EventKind, Task, TaskEvent, TaskStatus};
 
@@ -17,6 +18,8 @@ mod app_keys;
 mod app_tasks;
 #[path = "app_panes.rs"]
 mod app_panes;
+#[path = "stats_app.rs"]
+mod stats_app;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum DetailTab {
@@ -54,6 +57,9 @@ pub struct App {
     pub detail_scroll: usize,
     pub dashboard_mode: bool,
     pub stats_mode: bool,
+    pub legacy_stats_view: bool,
+    pub stats_range: StatsRange,
+    pub stats: StatsSnapshot,
     pub multipane_mode: bool,
     pub tree_mode: bool,
     pub tree_selected: usize,
@@ -68,6 +74,7 @@ pub struct App {
     config: crate::config::AidConfig,
     store: Arc<Store>,
     last_metrics_refresh: Instant,
+    last_stats_refresh: Instant,
     cached_terminal_milestones: HashMap<String, String>,
     active_pane_task_id: Option<String>,
 }
@@ -85,6 +92,9 @@ impl App {
             detail_scroll: 0,
             dashboard_mode: false,
             stats_mode: false,
+            legacy_stats_view: false,
+            stats_range: StatsRange::AllTime,
+            stats: StatsSnapshot::empty(StatsRange::AllTime),
             multipane_mode: false,
             tree_mode: false,
             tree_selected: 0,
@@ -99,6 +109,7 @@ impl App {
             config: crate::config::load_config().unwrap_or_default(),
             store,
             last_metrics_refresh: Instant::now(),
+            last_stats_refresh: Instant::now(),
             cached_terminal_milestones: HashMap::new(),
             active_pane_task_id: None,
         };
@@ -113,6 +124,7 @@ impl App {
             self.metrics = self.load_metrics(&self.tasks);
             self.last_metrics_refresh = Instant::now();
         }
+        self.refresh_stats_if_due()?;
         if self.dashboard_mode {
             self.load_dashboard_events()?;
         }

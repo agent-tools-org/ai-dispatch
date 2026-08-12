@@ -1,361 +1,145 @@
-// Stats and charts view for the aid TUI.
-// Renders agent cost bars, success rates, budget gauges, and cost sparkline.
-// Deps: ratatui widgets (BarChart, Sparkline, Gauge), App state, usage module.
+// Statistics dashboard rendering for the aid TUI.
+// Exports: render_stats; consumes refresh-time StatsSnapshot values from App.
+// Deps: ratatui widgets, tui::stats aggregation, shared status bar, and legacy charts.
 
 use super::app::App;
+use super::stats::{format_duration, format_tokens, DailyStats, ProjectStats, StatsRange};
+use super::stats_legacy::render_legacy_grid;
 use super::status_bar::{render_status_bar, StatusBarMode};
-use crate::cost;
-use crate::types::{AgentKind, Task, TaskOutcome};
-use chrono::{Duration, Local};
 use ratatui::layout::{Alignment, Constraint, Direction, Layout, Rect};
 use ratatui::prelude::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Bar, BarChart, BarGroup, Block, Borders, Gauge, Paragraph, Sparkline};
-const AGENTS: &[AgentKind] = AgentKind::ALL_BUILTIN;
-struct BudgetUsage {
-    name: String,
-    used: f64,
-    limit: f64,
-}
+use ratatui::widgets::{Block, Borders, Paragraph, Row, Sparkline, Table};
+
+const RANGE_LABELS: [(StatsRange, &str); 4] = [
+    (StatsRange::AllTime, "All time"),
+    (StatsRange::Last30Days, "Last 30 days"),
+    (StatsRange::Last7Days, "Last 7 days"),
+    (StatsRange::Today, "Today"),
+];
+const WEEKDAY_LABELS: [&str; 7] = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
 
 pub fn render_stats(frame: &mut ratatui::Frame<'_>, app: &App) {
+    if app.legacy_stats_view {
+        render_legacy_stats(frame, app);
+        return;
+    }
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
             Constraint::Length(1),
-            Constraint::Percentage(40),
-            Constraint::Percentage(40),
-            Constraint::Min(1),
+            Constraint::Length(3),
+            Constraint::Length(4),
+            Constraint::Length(9),
+            Constraint::Length(6),
+            Constraint::Min(8),
+            Constraint::Length(1),
         ])
         .split(frame.area());
-    let top_cols = Layout::default()
-        .direction(Direction::Horizontal)
-        .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
-        .split(chunks[1]);
-    let bottom_cols = Layout::default()
-        .direction(Direction::Horizontal)
-        .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
-        .split(chunks[2]);
     render_title(frame, app, chunks[0]);
-    render_cost_chart(frame, app, top_cols[0]);
-    render_success_chart(frame, app, top_cols[1]);
-    render_budget_gauges(frame, app, bottom_cols[0]);
-    render_summary(frame, app, bottom_cols[1]);
-    render_status_bar(frame, chunks[3], app, StatusBarMode::Stats);
+    render_range_selector(frame, app, chunks[1]);
+    render_summary(frame, app, chunks[2]);
+    render_heatmap(frame, &app.stats.activity, app.stats.activity_max, app.stats.current_streak, app.stats.best_streak, chunks[3]);
+    render_token_trend(frame, &app.stats.token_trend, app.stats.token_max, app.stats.peak_tokens, chunks[4]);
+    render_projects(frame, &app.stats.projects, chunks[5]);
+    render_status_bar(frame, chunks[6], app, StatusBarMode::Stats);
 }
+
+fn render_legacy_stats(frame: &mut ratatui::Frame<'_>, app: &App) {
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([Constraint::Length(1), Constraint::Min(8), Constraint::Length(1)])
+        .split(frame.area());
+    let title = Line::from(vec![
+        Span::styled("aid ", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+        Span::styled(format!("legacy stats [{}]", app.scope_label()), Style::default().fg(Color::Indexed(250))),
+    ]);
+    frame.render_widget(Paragraph::new(title).alignment(Alignment::Center), chunks[0]);
+    render_legacy_grid(frame, app, chunks[1]);
+    render_status_bar(frame, chunks[2], app, StatusBarMode::Stats);
+}
+
 fn render_title(frame: &mut ratatui::Frame<'_>, app: &App, area: Rect) {
     let title = Line::from(vec![
-        Span::styled(
-            "aid ",
-            Style::default()
-                .fg(Color::Cyan)
-                .add_modifier(Modifier::BOLD),
-        ),
-        Span::styled(
-            format!("stats [{}]", app.scope_label()),
-            Style::default().fg(Color::Indexed(250)),
-        ),
+        Span::styled("aid ", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+        Span::styled(format!("stats · {} · tasks, not sessions", app.stats_range.label()), Style::default().fg(Color::Indexed(250))),
     ]);
     frame.render_widget(Paragraph::new(title).alignment(Alignment::Center), area);
 }
-fn render_cost_chart(frame: &mut ratatui::Frame<'_>, app: &App, area: Rect) {
-    let mut max = 1;
-    let bars = AGENTS
-        .iter()
-        .map(|agent| {
-            let cents = app
-                .tasks
-                .iter()
-                .filter(|task| task.agent == *agent)
-                .filter_map(|task| task.cost_usd)
-                .sum::<f64>()
-                * 100.0;
-            let cents = cents as u64;
-            max = max.max(cents);
-            Bar::default()
-                .label(Line::from(agent.as_str()))
-                .value(cents)
-                .style(agent_color(*agent))
-                .text_value(cost::format_cost(Some(cents as f64 / 100.0)))
-        })
-        .collect::<Vec<_>>();
-    let chart = BarChart::default()
-        .block(
-            Block::default()
-                .title("Cost by Agent")
-                .borders(Borders::ALL),
-        )
-        .direction(Direction::Horizontal)
-        .bar_gap(0)
-        .data(BarGroup::default().bars(&bars))
-        .max(max)
-        .value_style(
-            Style::default()
-                .fg(Color::White)
-                .add_modifier(Modifier::BOLD),
-        );
-    frame.render_widget(chart, area);
-}
-fn render_success_chart(frame: &mut ratatui::Frame<'_>, app: &App, area: Rect) {
-    let bars = AGENTS
-        .iter()
-        .map(|agent| {
-            let total = app.tasks.iter().filter(|task| task.agent == *agent).count();
-            let success = app
-                .tasks
-                .iter()
-                .filter(|task| task.agent == *agent)
-                .filter(|task| task.outcome().is_success())
-                .count();
-            let rate = (success * 100).checked_div(total).unwrap_or(0) as u64;
-            Bar::default()
-                .label(Line::from(agent.as_str()))
-                .value(rate)
-                .style(success_color(rate))
-                .text_value(format!("{rate}%"))
-        })
-        .collect::<Vec<_>>();
-    let chart = BarChart::default()
-        .block(
-            Block::default()
-                .title("Success Rate (%)")
-                .borders(Borders::ALL),
-        )
-        .direction(Direction::Horizontal)
-        .bar_gap(0)
-        .data(BarGroup::default().bars(&bars))
-        .max(100)
-        .value_style(
-            Style::default()
-                .fg(Color::White)
-                .add_modifier(Modifier::BOLD),
-        );
-    frame.render_widget(chart, area);
-}
-fn render_budget_gauges(frame: &mut ratatui::Frame<'_>, app: &App, area: Rect) {
-    let block = Block::default().title("Budget Usage").borders(Borders::ALL);
-    let inner = block.inner(area);
-    frame.render_widget(block, area);
-    let usage = budget_usage(app);
-    if usage.is_empty() || inner.is_empty() {
-        frame.render_widget(
-            Paragraph::new(if usage.is_empty() {
-                "No budgets configured. See `aid config`."
-            } else {
-                ""
-            }),
-            inner,
-        );
-        return;
-    }
-    let visible = usage.len().min(inner.height as usize);
-    let rows = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints(vec![Constraint::Length(1); visible])
-        .split(inner);
-    for (budget, row) in usage.iter().take(visible).zip(rows.iter()) {
-        let ratio = if budget.limit <= 0.0 {
-            0.0
-        } else {
-            (budget.used / budget.limit).max(0.0)
-        };
-        let percent = (ratio * 100.0).round() as u64;
-        let label = format!(
-            "{}: {}/{} ({}%)",
-            budget.name,
-            cost::format_cost(Some(budget.used)),
-            cost::format_cost(Some(budget.limit)),
-            percent
-        );
-        let gauge = Gauge::default()
-            .ratio(ratio.clamp(0.0, 1.0))
-            .label(label)
-            .use_unicode(true)
-            .gauge_style(Style::default().fg(gauge_color(ratio)));
-        frame.render_widget(gauge, *row);
-    }
-}
-fn render_summary(frame: &mut ratatui::Frame<'_>, app: &App, area: Rect) {
-    let block = Block::default().title("Summary").borders(Borders::ALL);
-    let inner = block.inner(area);
-    frame.render_widget(block, area);
-    if inner.is_empty() {
-        return;
-    }
-    let parts = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([Constraint::Length(4), Constraint::Min(1)])
-        .split(inner);
-    let done = app
-        .tasks
-        .iter()
-        .filter(|task| task.outcome().is_success())
-        .count();
-    let failed = app
-        .tasks
-        .iter()
-        .filter(|task| matches!(task.outcome(), TaskOutcome::Broken | TaskOutcome::Failed | TaskOutcome::Stopped))
-        .count();
-    let running = app
-        .tasks
-        .iter()
-        .filter(|task| matches!(task.outcome(), TaskOutcome::InProgress))
-        .count();
-    let total_cost = app
-        .tasks
-        .iter()
-        .filter_map(|task| task.cost_usd)
-        .sum::<f64>();
-    let today = Local::now().date_naive();
-    let today_cost = app
-        .tasks
-        .iter()
-        .filter(|task| task.created_at.date_naive() == today)
-        .filter_map(|task| task.cost_usd)
-        .sum::<f64>();
-    let total_tokens = app.tasks.iter().filter_map(|task| task.tokens).sum::<i64>();
-    let summary = vec![
-        Line::from(format!(
-            "Tasks: {}  Done: {}  Failed: {}  Running: {}",
-            app.tasks.len(),
-            done,
-            failed,
-            running
-        )),
-        Line::from(format!(
-            "Cost: {} total  {} today",
-            cost::format_cost(Some(total_cost)),
-            cost::format_cost(Some(today_cost))
-        )),
-        Line::from(format!("Tokens: {}", format_tokens(total_tokens))),
-        Line::from("Recent task cost"),
-    ];
-    let spark = recent_costs(app);
-    let max = spark.iter().copied().max().unwrap_or(1).max(1);
-    frame.render_widget(Paragraph::new(summary), parts[0]);
+
+fn render_range_selector(frame: &mut ratatui::Frame<'_>, app: &App, area: Rect) {
+    let spans = RANGE_LABELS.iter().flat_map(|(range, label)| {
+        let style = if *range == app.stats_range {
+            Style::default().fg(Color::Black).bg(Color::Cyan).add_modifier(Modifier::BOLD)
+        } else { Style::default().fg(Color::Indexed(250)) };
+        [Span::raw(" "), Span::styled(*label, style), Span::raw(" ")]
+    }).collect::<Vec<_>>();
     frame.render_widget(
-        Sparkline::default()
-            .data(spark)
-            .max(max)
-            .style(Style::default().fg(Color::Cyan)),
-        parts[1],
+        Paragraph::new(Line::from(spans))
+            .block(Block::default().title("Time range · tasks.created_at").borders(Borders::ALL))
+            .alignment(Alignment::Center),
+        area,
     );
 }
-fn budget_usage(app: &App) -> Vec<BudgetUsage> {
-    app.config()
-        .usage
-        .budgets
-        .iter()
-        .filter_map(|budget| {
-            let limit = budget.cost_limit_usd?;
-            let used = filter_budget_tasks(
-                &app.tasks,
-                budget.agent.as_deref(),
-                budget.window.as_deref(),
-            )
-            .into_iter()
-            .filter_map(|task| task.cost_usd)
-            .sum::<f64>()
-                + budget.external_cost_usd;
-            Some(BudgetUsage {
-                name: budget.name.clone(),
-                used,
-                limit,
-            })
-        })
-        .collect()
-}
-fn filter_budget_tasks<'a>(
-    tasks: &'a [Task],
-    agent: Option<&str>,
-    window: Option<&str>,
-) -> Vec<&'a Task> {
-    let window_start = window
-        .and_then(parse_window)
-        .map(|value| Local::now() - value);
-    tasks
-        .iter()
-        .filter(|task| {
-            agent
-                .map(|name| task.agent_display_name() == name)
-                .unwrap_or(false)
-        })
-        .filter(|task| {
-            window_start
-                .map(|start| task.created_at >= start)
-                .unwrap_or(true)
-        })
-        .collect()
-}
-fn parse_window(value: &str) -> Option<Duration> {
-    let trimmed = value.trim();
-    if let Some(hours) = trimmed.strip_suffix('h') {
-        return hours.parse::<i64>().ok().map(Duration::hours);
-    }
-    if let Some(days) = trimmed.strip_suffix('d') {
-        return days.parse::<i64>().ok().map(Duration::days);
-    }
-    trimmed
-        .strip_suffix('m')
-        .and_then(|minutes| minutes.parse::<i64>().ok().map(Duration::minutes))
-}
-fn recent_costs(app: &App) -> Vec<u64> {
-    let values = app
-        .tasks
-        .iter()
-        .rev()
-        .take(20)
-        .filter_map(|task| task.cost_usd.map(|cost| (cost * 100.0) as u64))
-        .collect::<Vec<_>>();
-    if values.is_empty() {
-        vec![0]
-    } else {
-        values
+
+fn render_summary(frame: &mut ratatui::Frame<'_>, app: &App, area: Rect) {
+    let columns = Layout::default().direction(Direction::Horizontal).constraints([Constraint::Percentage(33), Constraint::Percentage(34), Constraint::Percentage(33)]).split(area);
+    let stats = [
+        ("Tasks · tasks table", app.stats.total_tasks.to_string()),
+        ("Duration · completed_at−created_at", format_known_duration(app.stats.total_duration_secs, app.stats.duration_task_count)),
+        ("Tokens · tasks.tokens", format_known_tokens(app.stats.total_tokens, app.stats.token_task_count)),
+    ];
+    for ((title, value), column) in stats.into_iter().zip(columns.iter().copied()) {
+        frame.render_widget(Paragraph::new(value).block(Block::default().title(title).borders(Borders::ALL)).alignment(Alignment::Center), column);
     }
 }
-fn format_tokens(tokens: i64) -> String {
-    if tokens >= 1_000_000 {
-        format!("{:.1}M", tokens as f64 / 1_000_000.0)
-    } else if tokens >= 1_000 {
-        format!("{:.1}k", tokens as f64 / 1_000.0)
-    } else {
-        tokens.to_string()
-    }
+
+fn render_heatmap(frame: &mut ratatui::Frame<'_>, days: &[DailyStats], max: usize, streak: usize, best_streak: usize, area: Rect) {
+    let title = format!("Activity by day · tasks.created_at · streak {streak}d · best {best_streak}d");
+    let lines = WEEKDAY_LABELS.iter().enumerate().map(|(weekday, label)| {
+        let mut spans = vec![Span::styled(format!("{label} "), Style::default().fg(Color::Indexed(243)))];
+        spans.extend(days.iter().filter(|day| day.weekday == weekday as u32).map(|day| Span::styled(heat_cell(day.task_count, max), heat_style(day.task_count, max))));
+        Line::from(spans)
+    }).collect::<Vec<_>>();
+    frame.render_widget(Paragraph::new(lines).block(Block::default().title(title).borders(Borders::ALL)), area);
 }
-fn agent_color(agent: AgentKind) -> Color {
-    match agent {
-        AgentKind::Codex => Color::Cyan,
-        AgentKind::Gemini => Color::Green,
-        AgentKind::Antigravity => Color::LightYellow,
-        AgentKind::Qwen => Color::LightRed,
-        AgentKind::Copilot => Color::LightGreen,
-        AgentKind::OpenCode => Color::Yellow,
-        AgentKind::CommandCode => Color::LightYellow,
-        AgentKind::Cursor => Color::Magenta,
-        AgentKind::Kilo => Color::Blue,
-        AgentKind::MiMoCode => Color::Blue,
-        AgentKind::Droid => Color::LightMagenta,
-        AgentKind::Oz => Color::LightBlue,
-        AgentKind::Claude => Color::White,
-        AgentKind::Grok => Color::Rgb(255, 107, 53),
-        AgentKind::Custom => Color::Gray,
-    }
+
+fn render_token_trend(frame: &mut ratatui::Frame<'_>, data: &[u64], max: u64, peak: Option<(chrono::NaiveDate, i64)>, area: Rect) {
+    let peak_label = peak.map(|(date, tokens)| format!("peak {} · {}", date.format("%Y-%m-%d"), format_tokens(tokens))).unwrap_or_else(|| "peak unavailable · no recorded tokens".to_string());
+    let empty_data = [0_u64];
+    let spark_data = if data.is_empty() { &empty_data[..] } else { data };
+    frame.render_widget(Sparkline::default().block(Block::default().title(format!("Token trend · tasks.tokens · {peak_label}")).borders(Borders::ALL)).data(spark_data).max(max).style(Style::default().fg(Color::Cyan)), area);
 }
-fn success_color(rate: u64) -> Color {
-    if rate >= 80 {
-        Color::Green
-    } else if rate >= 50 {
-        Color::Yellow
-    } else {
-        Color::Red
-    }
+
+fn render_projects(frame: &mut ratatui::Frame<'_>, projects: &[ProjectStats], area: Rect) {
+    let rows = projects.iter().map(|project| Row::new([
+        project.name.clone(), project.task_count.to_string(), format_known_tokens(project.tokens, project.token_task_count), format_known_duration(project.duration_secs, project.duration_task_count),
+    ]));
+    let table = Table::new(rows, [Constraint::Min(20), Constraint::Length(8), Constraint::Length(16), Constraint::Length(16)])
+        .header(Row::new(["Project · repo_path", "Tasks", "Tokens · tasks.tokens", "Duration · completed_at−created_at"]).style(Style::default().add_modifier(Modifier::BOLD)))
+        .block(Block::default().title("Projects · ranked by task count, then tokens").borders(Borders::ALL));
+    frame.render_widget(table, area);
 }
-fn gauge_color(ratio: f64) -> Color {
-    if ratio > 0.8 {
-        Color::Red
-    } else if ratio >= 0.5 {
-        Color::Yellow
-    } else {
-        Color::Green
-    }
+
+fn format_known_tokens(tokens: i64, recorded_tasks: usize) -> String {
+    if recorded_tasks == 0 { "—".to_string() } else { format!("{} ({recorded_tasks} recorded)", format_tokens(tokens)) }
+}
+
+fn format_known_duration(seconds: i64, measured_tasks: usize) -> String {
+    if measured_tasks == 0 { "—".to_string() } else { format!("{} ({measured_tasks} complete)", format_duration(seconds)) }
+}
+
+fn heat_cell(count: usize, max: usize) -> String {
+    let symbol = match (count, max) {
+        (0, _) | (_, 0) => '·',
+        (count, max) if count * 4 >= max * 3 => '█',
+        (count, max) if count * 2 >= max => '▓',
+        (count, max) if count * 4 >= max => '▒',
+        _ => '░',
+    };
+    symbol.to_string()
+}
+
+fn heat_style(count: usize, max: usize) -> Style {
+    if count == 0 || max == 0 { Style::default().fg(Color::Indexed(238)) } else { Style::default().fg(Color::Green) }
 }

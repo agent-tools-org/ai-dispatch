@@ -206,6 +206,10 @@ pub(super) async fn run_foreground_task(
         args.sandbox,
         container_name.is_some(),
     );
+    let cargo_target_dir = agent::rust_build_cache_target_dir(
+        prepared.effective_dir.as_deref(),
+        args.worktree.as_deref(),
+    );
     let codex_resume_fallback = uses_durable_codex_home
         && opts
             .session_id
@@ -218,6 +222,7 @@ pub(super) async fn run_foreground_task(
             &opts,
             agent::CommandContext {
                 durable_codex_home: uses_durable_codex_home,
+                cargo_target_dir: cargo_target_dir.clone(),
             },
         )
         .map_err(|err| anyhow::anyhow!("Failed to build agent command: {err:#}"))?;
@@ -238,11 +243,7 @@ pub(super) async fn run_foreground_task(
     std_cmd.env("AID_TASK_ID", prepared.task_id.as_str());
     let depth = crate::cmd::run::task_depth(store, prepared.task_id.as_str()).unwrap_or(0);
     std_cmd.env("AID_TASK_DEPTH", depth.to_string());
-    agent::apply_rust_build_cache_env(
-        &mut std_cmd,
-        prepared.effective_dir.as_deref(),
-        args.worktree.as_deref(),
-    );
+    agent::apply_cargo_target_env(&mut std_cmd, cargo_target_dir.as_deref());
     let std_cmd = if let Some(container_name) = container_name {
         aid_info!(
             "[aid] Container: running {} in {}",

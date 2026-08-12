@@ -107,7 +107,7 @@ fn seed_branch_target_dir_prefers_base_over_root_artifact_entries() {
 }
 
 #[test]
-fn seed_branch_target_dir_skips_when_no_seed_source_exists() {
+fn seed_branch_target_dir_creates_empty_target_when_seed_is_skipped() {
     let clone_guard = super::super::cargo_target::CloneSeedGuard::regular_copy();
     let temp = tempfile::tempdir().unwrap();
     let root = temp.path().join("target");
@@ -123,6 +123,7 @@ fn seed_branch_target_dir_skips_when_no_seed_source_exists() {
                 .to_string(),
         }
     );
+    assert!(root.join("feat-shared-cache").is_dir());
     drop((target_dir_guard, clone_guard));
 }
 
@@ -209,6 +210,15 @@ fn apply_rust_build_cache_env_sets_target_only() {
         Some(expected.as_str())
     );
     assert!(command_env(&cmd, "RUSTC_WRAPPER").is_none());
+}
+
+#[test]
+fn rust_build_cache_target_dir_requires_a_rust_project() {
+    let temp = tempfile::tempdir().unwrap();
+    let target = temp.path().join("target");
+    let _target_dir = CargoTargetDirGuard::set(&target);
+
+    assert_eq!(rust_build_cache_target_dir(Some(temp.path().to_str().unwrap()), None), None);
 }
 
 #[test]

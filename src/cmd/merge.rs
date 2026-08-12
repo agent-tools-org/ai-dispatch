@@ -119,6 +119,10 @@ fn merge_single_with_output(store: &Store, task_id: &str, approve: bool, check: 
                 crate::task_lifecycle::restore_after_merge_failure(store, task_id, preserved_status)?;
                 return Err(anyhow!("Merge failed — resolve manually, then re-run aid merge {task_id}"));
             }
+            MergeResult::StashRestoreFailed(error) => {
+                aid_error!("[aid] Error: {error}");
+                return Err(anyhow!(error));
+            }
         }
     } else {
         if force {
@@ -304,10 +308,17 @@ fn merge_group_with_output(store: &Store, group_id: &str, approve: bool, check: 
                     skipped.push(format!("{} (merge no-op)", task.id));
                     continue;
                 }
-                MergeResult::Failed(_) => {
+                MergeResult::Failed(error) => {
                     aid_warn!("[aid] Warning: git merge {branch} failed, skipping {}", task.id);
+                    for line in error.lines().take(5) {
+                        aid_warn!("  {}", line);
+                    }
                     skipped.push(format!("{} (merge conflict)", task.id));
                     continue;
+                }
+                MergeResult::StashRestoreFailed(error) => {
+                    aid_error!("[aid] Error: {error}");
+                    return Err(anyhow!(error));
                 }
             }
         } else {
@@ -328,7 +339,11 @@ fn check_single(task_id: &str, task: &Task, repo_dir: &str) -> Result<()> {
     match merge_source_branch(task) {
         Some(branch) => {
             warn_branch_drift(task);
-            print_check_result(task_id, &check_merge(repo_dir, branch));
+            let result = check_merge(repo_dir, branch);
+            print_check_result(task_id, &result);
+            if let MergeCheckResult::StashRestoreFailed(error) = result {
+                return Err(anyhow!(error));
+            }
         }
         None => println!("{task_id}: OK (in-place edit)"),
     }
@@ -348,6 +363,9 @@ fn check_group(group_id: &str, tasks: &[Task]) -> Result<()> {
                     conflicts += 1;
                 }
                 print_check_result(task.id.as_str(), &result);
+                if let MergeCheckResult::StashRestoreFailed(error) = result {
+                    return Err(anyhow!(error));
+                }
             }
             None => println!("{}: OK (in-place edit)", task.id),
         }
@@ -360,6 +378,7 @@ fn print_check_result(task_id: &str, result: &MergeCheckResult) {
     match result {
         MergeCheckResult::Ok(commits) => println!("{task_id}: OK ({commits} commit(s))"),
         MergeCheckResult::Conflict(files) => println!("{task_id}: CONFLICT ({})", files.join(", ")),
+        MergeCheckResult::StashRestoreFailed(error) => println!("{task_id}: ERROR ({error})"),
     }
 }
 

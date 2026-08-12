@@ -9,6 +9,19 @@ use std::process::Command;
 #[path = "merge_verify.rs"]
 mod merge_verify;
 pub(crate) use merge_verify::{run_post_merge_verify, run_verify_in_worktree};
+#[path = "merge_stash.rs"]
+mod merge_stash;
+use merge_stash::{
+    format_stash_restore_error, restore_untracked_after_failed_merge, LocalChanges,
+};
+pub(crate) use merge_stash::restore_local_changes;
+pub(crate) use merge_stash::stash_local_changes;
+#[cfg(test)]
+pub(crate) use merge_stash::stash_local_changes_with_hook;
+#[cfg(test)]
+pub(crate) use merge_stash::stash_local_changes_with_identity_hook;
+#[cfg(test)]
+pub(crate) use merge_stash::find_stash_for_test;
 
 pub(crate) fn resolve_repo_dir(repo_path: Option<&str>, worktree_path: Option<&str>) -> String {
     if let Some(repo) = repo_path {
@@ -166,7 +179,10 @@ pub(crate) fn git_merge_branch(repo_dir: &str, branch: &str) -> MergeResult {
         .filter(|o| o.status.success())
         .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string());
 
-    let stashed = stash_local_changes(repo_dir);
+    let local_changes = match stash_local_changes(repo_dir) {
+        Ok(local_changes) => local_changes,
+        Err(error) => return MergeResult::StashRestoreFailed(error),
+    };
 
     let output = Command::new("git")
         .args(["-C", repo_dir, "merge", branch, "--no-edit"])
@@ -197,17 +213,24 @@ pub(crate) fn git_merge_branch(repo_dir: &str, branch: &str) -> MergeResult {
         Err(e) => MergeResult::Failed(e.to_string()),
     };
 
-    if stashed && pop_stash(repo_dir) {
+    if let MergeResult::Failed(error) = &merge_result {
+        return preserve_changes_after_failed_merge(repo_dir, local_changes, error);
+    }
+    if let Some(changes) = &local_changes {
+        if let Err(error) = restore_local_changes(repo_dir, changes) {
+            return MergeResult::StashRestoreFailed(format_stash_restore_error(changes, &error));
+        }
         aid_info!("[aid] Restored local changes");
-    } else if stashed {
-        aid_hint!("[aid] Your stashed local changes conflict with the merge. Resolve with: git stash pop");
     }
     merge_result
 }
 
 pub(crate) fn check_merge(repo_dir: &str, branch: &str) -> MergeCheckResult {
     let ahead = commits_ahead(repo_dir, branch);
-    let stashed = stash_local_changes(repo_dir);
+    let local_changes = match stash_local_changes(repo_dir) {
+        Ok(local_changes) => local_changes,
+        Err(error) => return MergeCheckResult::StashRestoreFailed(error),
+    };
     let output = Command::new("git")
         .args(["-C", repo_dir, "merge", "--no-commit", "--no-ff", branch])
         .output();
@@ -217,50 +240,41 @@ pub(crate) fn check_merge(repo_dir: &str, branch: &str) -> MergeCheckResult {
         Err(err) => MergeCheckResult::Conflict(vec![err.to_string()]),
     };
     abort_merge(repo_dir);
-    if stashed && !pop_stash(repo_dir) {
-        aid_hint!("[aid] Your stashed local changes conflict with the merge check. Resolve with: git stash pop");
+    if let Some(changes) = &local_changes {
+        if let Err(error) = restore_local_changes(repo_dir, changes) {
+            return MergeCheckResult::StashRestoreFailed(format_stash_restore_error(changes, &error));
+        }
     }
     result
+}
+
+fn preserve_changes_after_failed_merge(
+    repo_dir: &str,
+    local_changes: Option<LocalChanges>,
+    merge_error: &str,
+) -> MergeResult {
+    let Some(changes) = local_changes else {
+        return MergeResult::Failed(merge_error.to_string());
+    };
+    let recovery = match restore_untracked_after_failed_merge(repo_dir, &changes) {
+        Ok(()) => format_stash_restore_error(&changes, "tracked changes were kept out of the conflicted index"),
+        Err(error) => format_stash_restore_error(&changes, &error),
+    };
+    MergeResult::Failed(format!("{merge_error}\n{recovery}"))
 }
 
 pub(crate) enum MergeResult {
     Merged,
     AlreadyUpToDate,
     Failed(String),
+    StashRestoreFailed(String),
 }
 
 pub(crate) enum MergeCheckResult {
     Ok(u32),
     Conflict(Vec<String>),
+    StashRestoreFailed(String),
 }
-
-fn stash_local_changes(repo_dir: &str) -> bool {
-    let dirty = Command::new("git")
-        .args(["-C", repo_dir, "status", "--porcelain"])
-        .output()
-        .ok()
-        .filter(|o| o.status.success())
-        .map(|o| !o.stdout.is_empty())
-        .unwrap_or(false);
-    if !dirty {
-        return false;
-    }
-    aid_info!("[aid] Stashing local changes before merge...");
-    match Command::new("git")
-        .args(["-C", repo_dir, "stash", "push", "-m", "aid: auto-stash before merge"])
-        .output()
-    {
-        Ok(o) if o.status.success() => true,
-        Ok(o) => {
-            let stderr = String::from_utf8_lossy(&o.stderr);
-            aid_warn!("[aid] Warning: failed to stash local changes: {}", stderr.lines().next().unwrap_or(""));
-            false
-        }
-        Err(e) => { aid_warn!("[aid] Warning: failed to stash local changes: {e}"); false }
-    }
-}
-
-fn pop_stash(repo_dir: &str) -> bool { matches!(Command::new("git").args(["-C", repo_dir, "stash", "pop"]).output(), Ok(o) if o.status.success()) }
 
 fn abort_merge(repo_dir: &str) { let _ = Command::new("git").args(["-C", repo_dir, "merge", "--abort"]).output(); }
 

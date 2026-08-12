@@ -228,11 +228,7 @@ pub(crate) fn classify_text_line(line: &str) -> (Option<EventKind>, &str) {
         (Some(EventKind::Build), line)
     } else if line.contains("git commit") || line.starts_with("commit ") {
         (Some(EventKind::Commit), line)
-    } else if (line.starts_with("Writing")
-        || line.starts_with("Creating")
-        || line.contains("wrote"))
-        && contains_path_evidence(line)
-    {
+    } else if line.starts_with("Writing") || line.starts_with("Creating") {
         (Some(EventKind::FileWrite), line)
     } else if line.starts_with("Reading") {
         (Some(EventKind::FileRead), line)
@@ -244,17 +240,6 @@ pub(crate) fn classify_text_line(line: &str) -> (Option<EventKind>, &str) {
             (None, line)
         }
     }
-}
-
-pub(crate) fn contains_path_evidence(line: &str) -> bool {
-    let mut words = line.split_whitespace();
-    let Some(_) = words.position(|word| matches!(word, "Writing" | "Creating" | "wrote")) else {
-        return false;
-    };
-    let Some(operand) = words.next() else {
-        return false;
-    };
-    words.next().is_none() && !operand.trim_matches(['`', '"', '\'', '.', ',', ';', ':']).is_empty()
 }
 
 pub(crate) fn classify_tool_detail(detail: &str) -> EventKind {

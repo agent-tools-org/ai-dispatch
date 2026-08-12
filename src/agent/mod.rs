@@ -40,6 +40,7 @@ use crate::types::*;
 pub mod home_isolation;
 
 pub(crate) mod env;
+pub(crate) mod env_identity;
 #[path = "binary.rs"]
 mod binary;
 pub(crate) use binary::{

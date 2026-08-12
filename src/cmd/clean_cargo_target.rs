@@ -44,30 +44,29 @@ pub(crate) fn clean_orphaned_branch_targets(dry_run: bool, fallback_root: Option
 
     let temp_root = fallback_root
         .map(|p| p.to_path_buf())
-        .unwrap_or_else(|| std::env::temp_dir().join("aid-build-target"));
+        .unwrap_or_else(|| crate::cmd::build::build_fallback::fallback_target_root());
     let mut removed_fallback = 0usize;
     let mut fallback_bytes = 0u64;
     
-    if let Ok(dirs) = branch_target_dirs(&temp_root) {
-        for target in dirs {
-            let Some(name) = target.file_name().and_then(|name| name.to_str()) else {
-                continue;
-            };
-            if live_keys.contains(name) {
-                continue;
-            }
-            let size = crate::cmd::clean::get_dir_size(&target);
-            if dry_run {
-                println!("[dry-run] Would remove orphaned fallback target dir {} ({})", target.display(), crate::cmd::clean::format_bytes(size));
-                fallback_bytes += size;
-            } else {
-                if fs::remove_dir_all(&target).is_ok() {
-                    println!("Removed orphaned fallback target dir {} ({})", target.display(), crate::cmd::clean::format_bytes(size));
-                    fallback_bytes += size;
-                }
-            }
-            removed_fallback += 1;
+    let dirs = branch_target_dirs(&temp_root)?;
+    for target in dirs {
+        let Some(name) = target.file_name().and_then(|name| name.to_str()) else {
+            continue;
+        };
+        if live_keys.contains(name) {
+            continue;
         }
+        let size = crate::cmd::clean::get_dir_size(&target);
+        if dry_run {
+            println!("[dry-run] Would remove orphaned fallback target dir {} ({})", target.display(), crate::cmd::clean::format_bytes(size));
+            fallback_bytes += size;
+        } else {
+            if fs::remove_dir_all(&target).is_ok() {
+                println!("Removed orphaned fallback target dir {} ({})", target.display(), crate::cmd::clean::format_bytes(size));
+                fallback_bytes += size;
+            }
+        }
+        removed_fallback += 1;
     }
 
     if removed_cargo > 0 || dry_run {
@@ -92,12 +91,11 @@ pub(crate) fn measure_orphaned_space(store: &Store) -> Result<(u64, u64, u64)> {
     let mut cargo_bytes = 0u64;
 
     if let Some(root) = crate::agent::env::branch_target_root() {
-        if let Ok(dirs) = branch_target_dirs(&root) {
-            for target in dirs {
-                let Some(name) = target.file_name().and_then(|name| name.to_str()) else { continue; };
-                if !is_reserved_target_dir_name(name) && !live_names.contains(name) {
-                    cargo_bytes += crate::cmd::clean::get_dir_size(&target);
-                }
+        let dirs = branch_target_dirs(&root)?;
+        for target in dirs {
+            let Some(name) = target.file_name().and_then(|name| name.to_str()) else { continue; };
+            if !is_reserved_target_dir_name(name) && !live_names.contains(name) {
+                cargo_bytes += crate::cmd::clean::get_dir_size(&target);
             }
         }
     }
@@ -107,13 +105,12 @@ pub(crate) fn measure_orphaned_space(store: &Store) -> Result<(u64, u64, u64)> {
     }
 
     let mut fallback_bytes = 0u64;
-    let temp_root = std::env::temp_dir().join("aid-build-target");
-    if let Ok(dirs) = branch_target_dirs(&temp_root) {
-        for target in dirs {
-            let Some(name) = target.file_name().and_then(|name| name.to_str()) else { continue; };
-            if !live_keys.contains(name) {
-                fallback_bytes += crate::cmd::clean::get_dir_size(&target);
-            }
+    let temp_root = crate::cmd::build::build_fallback::fallback_target_root();
+    let dirs = branch_target_dirs(&temp_root)?;
+    for target in dirs {
+        let Some(name) = target.file_name().and_then(|name| name.to_str()) else { continue; };
+        if !live_keys.contains(name) {
+            fallback_bytes += crate::cmd::clean::get_dir_size(&target);
         }
     }
 
@@ -260,6 +257,7 @@ mod tests {
         git(repo.path(), &["worktree", "add", &wt_path.to_string_lossy(), "-b", live_branch]);
 
         let temp_root = tempfile::tempdir().unwrap();
+        let _fallback_guard = crate::test_env::FallbackTargetDirGuard::set(temp_root.path());
         let live_key = crate::cmd::build::build_fallback::cwd_key(&wt_path);
         let stale_key = crate::cmd::build::build_fallback::cwd_key(Path::new("/tmp/some-dead-wt"));
         let live_fallback = temp_root.path().join(live_key);

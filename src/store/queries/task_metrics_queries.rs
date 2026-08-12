@@ -3,13 +3,44 @@
 // Deps: Store, rusqlite, chrono, and AgentKind.
 
 use anyhow::{anyhow, Result};
-use chrono::{DateTime, Local};
+use chrono::{DateTime, Local, NaiveDate};
 use rusqlite::params;
 
 use super::super::Store;
 use crate::types::{verify_required, AgentKind, TaskOutcome, TaskStatus, VerifyStatus};
 
+pub(crate) const STATS_TASK_QUERY: &str = "SELECT id, created_at, completed_at, repo_path, tokens FROM tasks WHERE (?1 IS NULL OR created_at >= ?1) AND created_at < ?2 ORDER BY created_at";
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TaskStatsRow {
+    pub id: String,
+    pub created_at: DateTime<Local>,
+    pub completed_at: Option<DateTime<Local>>,
+    pub repo_path: Option<String>,
+    pub tokens: Option<i64>,
+}
+
 impl Store {
+    pub fn list_stats_tasks(&self, start: Option<NaiveDate>, end_exclusive: NaiveDate) -> Result<Vec<TaskStatsRow>> {
+        let conn = self.db();
+        let mut stmt = conn.prepare(STATS_TASK_QUERY)?;
+        let rows = stmt.query_map(
+            params![start.map(|date| date.to_string()), end_exclusive.to_string()],
+            |row| {
+                Ok(TaskStatsRow {
+                    id: row.get(0)?,
+                    created_at: super::super::schema::parse_dt(&row.get::<_, String>(1)?),
+                    completed_at: row
+                        .get::<_, Option<String>>(2)?
+                        .map(|value| super::super::schema::parse_dt(&value)),
+                    repo_path: row.get(3)?,
+                    tokens: row.get(4)?,
+                })
+            },
+        )?;
+        rows.map(|row| Ok(row?)).collect()
+    }
+
     pub fn budget_usage_summary(
         &self,
         agent: &str,
@@ -170,5 +201,55 @@ impl Store {
             Ok((agent, duration.round() as i64))
         })?;
         rows.map(|row| Ok(row?)).collect()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::types::{AgentKind, Task, TaskId, TaskStatus, VerifyStatus};
+    use chrono::TimeZone;
+
+    fn task(id: &str, created_at: DateTime<Local>, prompt: &str) -> Task {
+        Task {
+            id: TaskId(id.to_string()), agent: AgentKind::Codex, custom_agent_name: None,
+            prompt: prompt.to_string(), resolved_prompt: None, category: None,
+            status: TaskStatus::Done, parent_task_id: None, workgroup_id: None,
+            caller_kind: None, caller_session_id: None, agent_session_id: None,
+            repo_path: Some("/repo".to_string()), worktree_path: None, worktree_branch: None,
+            final_head_sha: None, final_branch: None, start_sha: None, log_path: None,
+            output_path: None, tokens: Some(42), prompt_tokens: None, duration_ms: None,
+            requested_model: None, observed_model: None, attribution_source: None,
+            cost_usd: None, exit_code: Some(0), created_at, completed_at: None,
+            verify: None, verify_status: VerifyStatus::Skipped, pending_reason: None,
+            read_only: false, budget: false, audit_verdict: None, audit_report_path: None,
+            delivery_assessment: None,
+        }
+    }
+
+    #[test]
+    fn stats_query_selects_only_literal_aggregation_columns() {
+        assert_eq!(
+            STATS_TASK_QUERY,
+            "SELECT id, created_at, completed_at, repo_path, tokens FROM tasks WHERE (?1 IS NULL OR created_at >= ?1) AND created_at < ?2 ORDER BY created_at",
+        );
+        assert!(!STATS_TASK_QUERY.contains("prompt"));
+    }
+
+    #[test]
+    fn stats_query_returns_only_rows_inside_literal_date_range() {
+        let store = Store::open_memory().unwrap();
+        let at = |value: &str| Local.datetime_from_str(value, "%Y-%m-%d %H:%M:%S").unwrap();
+        store.insert_task(&task("t-before", at("2026-08-05 23:59:59"), &"old".repeat(10_000))).unwrap();
+        store.insert_task(&task("t-in", at("2026-08-06 00:00:00"), "in range")).unwrap();
+        store.insert_task(&task("t-after", at("2026-08-07 00:00:00"), "outside")).unwrap();
+
+        let rows = store
+            .list_stats_tasks(Some(NaiveDate::from_ymd_opt(2026, 8, 6).unwrap()), NaiveDate::from_ymd_opt(2026, 8, 7).unwrap())
+            .unwrap();
+
+        assert_eq!(rows.iter().map(|row| row.id.as_str()).collect::<Vec<_>>(), vec!["t-in"]);
+        assert_eq!(rows[0].repo_path.as_deref(), Some("/repo"));
+        assert_eq!(rows[0].tokens, Some(42));
     }
 }

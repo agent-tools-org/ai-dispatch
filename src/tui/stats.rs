@@ -5,7 +5,7 @@
 use chrono::{DateTime, Datelike, Duration, Local, NaiveDate};
 use std::collections::HashMap;
 
-use crate::types::Task;
+use crate::store::TaskStatsRow;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum StatsRange {
@@ -40,6 +40,15 @@ impl StatsRange {
             Self::Last30Days => Self::Last7Days,
             Self::Last7Days => Self::Today,
             Self::Today => Self::AllTime,
+        }
+    }
+
+    pub(crate) fn query_start(self, end: NaiveDate) -> Option<NaiveDate> {
+        match self {
+            Self::AllTime => None,
+            Self::Last30Days => Some(end - Duration::days(29)),
+            Self::Last7Days => Some(end - Duration::days(6)),
+            Self::Today => Some(end),
         }
     }
 }
@@ -110,7 +119,7 @@ impl StatsSnapshot {
     }
 }
 
-pub fn aggregate_tasks(tasks: &[Task], range: StatsRange, now: DateTime<Local>) -> StatsSnapshot {
+pub fn aggregate_tasks(tasks: &[TaskStatsRow], range: StatsRange, now: DateTime<Local>) -> StatsSnapshot {
     let end = now.date_naive();
     let start = range_start(tasks, range, end);
     let days = (end - start).num_days().max(0) as usize + 1;
@@ -135,7 +144,7 @@ pub fn aggregate_tasks(tasks: &[Task], range: StatsRange, now: DateTime<Local>) 
     StatsSnapshot { range, total_tasks: totals.total_tasks, total_tokens: totals.total_tokens, token_task_count: totals.token_task_count, total_duration_secs: totals.total_duration_secs, duration_task_count: totals.duration_task_count, activity, activity_max, token_trend, token_max, projects, current_streak, best_streak, peak_tokens }
 }
 
-fn record_task(task: &Task, start: NaiveDate, activity: &mut [DailyStats], projects: &mut HashMap<String, ProjectStats>, totals: &mut AggregateTotals) {
+fn record_task(task: &TaskStatsRow, start: NaiveDate, activity: &mut [DailyStats], projects: &mut HashMap<String, ProjectStats>, totals: &mut AggregateTotals) {
     totals.total_tasks += 1;
     let index = (task.created_at.date_naive() - start).num_days() as usize;
     if let Some(day) = activity.get_mut(index) {
@@ -162,7 +171,7 @@ fn record_task(task: &Task, start: NaiveDate, activity: &mut [DailyStats], proje
     }
 }
 
-fn range_start(tasks: &[Task], range: StatsRange, end: NaiveDate) -> NaiveDate {
+fn range_start(tasks: &[TaskStatsRow], range: StatsRange, end: NaiveDate) -> NaiveDate {
     match range {
         StatsRange::AllTime => tasks.iter().map(|task| task.created_at.date_naive()).filter(|date| *date <= end).min().unwrap_or(end),
         StatsRange::Last30Days => end - Duration::days(29),
@@ -171,12 +180,12 @@ fn range_start(tasks: &[Task], range: StatsRange, end: NaiveDate) -> NaiveDate {
     }
 }
 
-fn in_range(task: &Task, start: NaiveDate, end: NaiveDate) -> bool {
+fn in_range(task: &TaskStatsRow, start: NaiveDate, end: NaiveDate) -> bool {
     let date = task.created_at.date_naive();
     date >= start && date <= end
 }
 
-fn task_duration_secs(task: &Task) -> Option<i64> {
+fn task_duration_secs(task: &TaskStatsRow) -> Option<i64> {
     let completed_at = task.completed_at?;
     let seconds = (completed_at - task.created_at).num_seconds();
     (seconds >= 0).then_some(seconds)

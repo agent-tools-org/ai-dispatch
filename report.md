@@ -1,12 +1,10 @@
 ## Findings
 
-- High — Fixed `src/store/migrations.rs`: malformed historical `dispatch_args` no longer aborts `Store::open()`, and valid sibling rows are backfilled.
-- Historical directory paths are preserved verbatim, matching new-task persistence.
+No findings.
 
-Evidence: regression failed before the fix with `malformed JSON`; now passes.
+Verified:
 
-Verification:
-
-- 53 store tests passed.
-- `aid build check` and clippy: 0 errors.
-- Commit: `81114335`.
+- Malformed/invalid IDs no longer brick migration.
+- Whitespace normalization is consistent for migrated and new tasks.
+- Targeted tests pass; `aid build check` and clippy report zero errors.
+- Commit: `3c282985`.

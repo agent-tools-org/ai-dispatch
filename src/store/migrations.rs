@@ -75,7 +75,7 @@ pub(super) fn migrate_effective_dir(conn: &Connection) -> Result<()> {
 
 fn backfill_effective_dir_from_dispatch_args(conn: &Connection) -> Result<()> {
     let mut select = conn.prepare(
-        "SELECT id,
+        "SELECT CASE WHEN typeof(id) = 'text' THEN id END,
                 CASE WHEN json_valid(dispatch_args) THEN
                     CASE WHEN json_type(dispatch_args, '$.dir') = 'text'
                          THEN json_extract(dispatch_args, '$.dir')
@@ -85,11 +85,12 @@ fn backfill_effective_dir_from_dispatch_args(conn: &Connection) -> Result<()> {
          WHERE effective_dir IS NULL",
     )?;
     let rows = select.query_map([], |row| {
-        Ok((row.get::<_, String>(0)?, row.get::<_, Option<String>>(1)?))
+        Ok((row.get::<_, Option<String>>(0)?, row.get::<_, Option<String>>(1)?))
     })?;
     let mut updates = Vec::new();
     for row in rows {
         let (id, dir) = row?;
+        let Some(id) = id else { continue };
         if let Some(dir) = usable_recorded_dir(dir.as_deref()) {
             updates.push((id, dir));
         }
@@ -105,6 +106,6 @@ fn backfill_effective_dir_from_dispatch_args(conn: &Connection) -> Result<()> {
 }
 
 fn usable_recorded_dir(dir: Option<&str>) -> Option<String> {
-    let dir = dir.filter(|value| !value.is_empty())?;
+    let dir = dir.map(str::trim).filter(|value| !value.is_empty())?;
     Path::new(dir).is_absolute().then(|| dir.to_string())
 }

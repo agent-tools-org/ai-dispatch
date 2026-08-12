@@ -225,6 +225,30 @@ fn apply_codex_home_env_uses_durable_real_home() {
 }
 
 #[test]
+fn apply_run_env_sets_host_toolchain_paths() {
+    let mut cmd = Command::new("echo");
+    let opts = RunOpts {
+        dir: None,
+        output: None,
+        result_file: None,
+        model: None,
+        budget: false,
+        read_only: false,
+        sandbox: false,
+        context_files: vec![],
+        session_id: None,
+        env: None,
+        env_forward: None,
+    };
+
+    let guard = apply_run_env(&mut cmd, &opts, None).unwrap();
+    let real_home = super::super::home_isolation::resolve_real_home().unwrap();
+    assert_eq!(command_env(&cmd, "CARGO_HOME"), Some(real_home.join(".cargo").to_string_lossy().into_owned()));
+    assert_eq!(command_env(&cmd, "RUSTUP_HOME"), Some(real_home.join(".rustup").to_string_lossy().into_owned()));
+    drop(guard);
+}
+
+#[test]
 fn durable_codex_home_is_disabled_for_isolated_wrappers() {
     assert!(should_use_durable_codex_home(AgentKind::Codex, false, false));
     assert!(!should_use_durable_codex_home(AgentKind::Codex, true, false));

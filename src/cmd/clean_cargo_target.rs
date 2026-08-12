@@ -11,26 +11,46 @@ use std::process::Command;
 const BASE_TARGET_DIR_NAME: &str = "_base";
 
 pub(crate) fn clean_orphaned_branch_targets(dry_run: bool) -> Result<()> {
-    let Some(root) = crate::agent::env::branch_target_root() else {
-        return Ok(());
-    };
-    let live_names = live_branch_target_names()?;
+    let (live_names, live_keys) = live_branch_target_info()?;
     let mut removed = 0usize;
-    for target in branch_target_dirs(&root)? {
-        let Some(name) = target.file_name().and_then(|name| name.to_str()) else {
-            continue;
-        };
-        if is_reserved_target_dir_name(name) || live_names.contains(name) {
-            continue;
+
+    if let Some(root) = crate::agent::env::branch_target_root() {
+        for target in branch_target_dirs(&root)? {
+            let Some(name) = target.file_name().and_then(|name| name.to_str()) else {
+                continue;
+            };
+            if is_reserved_target_dir_name(name) || live_names.contains(name) {
+                continue;
+            }
+            if dry_run {
+                println!("[dry-run] Would remove orphaned Cargo target dir {}", target.display());
+            } else {
+                fs::remove_dir_all(&target)?;
+                println!("Removed orphaned Cargo target dir {}", target.display());
+            }
+            removed += 1;
         }
-        if dry_run {
-            println!("[dry-run] Would remove orphaned Cargo target dir {}", target.display());
-        } else {
-            fs::remove_dir_all(&target)?;
-            println!("Removed orphaned Cargo target dir {}", target.display());
-        }
-        removed += 1;
     }
+
+    let temp_root = std::env::temp_dir().join("aid-build-target");
+    if let Ok(dirs) = branch_target_dirs(&temp_root) {
+        for target in dirs {
+            let Some(name) = target.file_name().and_then(|name| name.to_str()) else {
+                continue;
+            };
+            if live_keys.contains(name) {
+                continue;
+            }
+            if dry_run {
+                println!("[dry-run] Would remove orphaned fallback target dir {}", target.display());
+            } else {
+                fs::remove_dir_all(&target)?;
+                println!("Removed orphaned fallback target dir {}", target.display());
+            }
+            removed += 1;
+        }
+    }
+
     println!(
         "{} {removed} orphaned Cargo target dirs",
         if dry_run { "[dry-run] Would remove" } else { "Removed" }
@@ -53,14 +73,15 @@ fn branch_target_dirs(root: &Path) -> Result<Vec<PathBuf>> {
     Ok(paths)
 }
 
-fn live_branch_target_names() -> Result<HashSet<String>> {
+fn live_branch_target_info() -> Result<(HashSet<String>, HashSet<String>)> {
     let mut names = HashSet::new();
-    collect_live_names_under(&crate::worktree::aid_worktree_root(), &mut names)?;
-    collect_live_names_under(Path::new("/tmp"), &mut names)?;
-    Ok(names)
+    let mut keys = HashSet::new();
+    collect_live_info_under(&crate::worktree::aid_worktree_root(), &mut names, &mut keys)?;
+    collect_live_info_under(Path::new("/tmp"), &mut names, &mut keys)?;
+    Ok((names, keys))
 }
 
-fn collect_live_names_under(root: &Path, names: &mut HashSet<String>) -> Result<()> {
+fn collect_live_info_under(root: &Path, names: &mut HashSet<String>, keys: &mut HashSet<String>) -> Result<()> {
     if !root.exists() {
         return Ok(());
     }
@@ -72,9 +93,10 @@ fn collect_live_names_under(root: &Path, names: &mut HashSet<String>) -> Result<
         let path = entry.path();
         if crate::worktree::is_aid_managed_worktree_path(&path) {
             insert_current_branch_name(&path, names);
+            keys.insert(crate::cmd::build::build_fallback::cwd_key(&path));
         }
         if path.starts_with(crate::worktree::aid_worktree_root()) {
-            collect_live_names_under(&path, names)?;
+            collect_live_info_under(&path, names, keys)?;
         }
     }
     Ok(())
@@ -149,10 +171,21 @@ mod tests {
         fs::create_dir_all(&live_target).unwrap();
         git(repo.path(), &["worktree", "add", &wt_path.to_string_lossy(), "-b", live_branch]);
 
+        let temp_root = std::env::temp_dir().join("aid-build-target");
+        fs::create_dir_all(&temp_root).unwrap();
+        let live_key = crate::cmd::build::build_fallback::cwd_key(&wt_path);
+        let stale_key = crate::cmd::build::build_fallback::cwd_key(Path::new("/tmp/some-dead-wt"));
+        let live_fallback = temp_root.join(live_key);
+        let stale_fallback = temp_root.join(stale_key);
+        fs::create_dir_all(&live_fallback).unwrap();
+        fs::create_dir_all(&stale_fallback).unwrap();
+
         clean_orphaned_branch_targets(false).unwrap();
 
         assert!(root.join(BASE_TARGET_DIR_NAME).exists());
         assert!(live_target.exists());
         assert!(!stale_target.exists());
+        assert!(live_fallback.exists());
+        assert!(!stale_fallback.exists());
     }
 }

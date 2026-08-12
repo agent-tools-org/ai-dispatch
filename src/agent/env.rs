@@ -222,6 +222,7 @@ pub fn apply_run_env(
         }
     }
     let guard = super::home_isolation::IsolatedHomeGuard::create(task_id)?;
+    guard.apply_toolchain_env(cmd);
     cmd.env("HOME", guard.path());
     Ok(guard)
 }

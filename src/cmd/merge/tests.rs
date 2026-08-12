@@ -636,6 +636,8 @@ fn git_merge_branch_fails_loudly_on_stash_restore_conflict() {
         panic!("expected merge failure");
     };
     assert!(error.contains("tracked changes were kept out of the conflicted index"));
+    assert!(error.contains("aid-merge-local-"), "recovery details missing: {error}");
+    assert!(error.contains("refs/aid/merge-local/"), "tracked ref missing: {error}");
     assert_eq!(
         std::fs::read_to_string(repo.path().join("untracked.txt")).unwrap(),
         "keep me\n"
@@ -656,6 +658,24 @@ fn git_merge_branch_fails_loudly_on_stash_restore_conflict() {
             "--force",
             &wt.path().to_string_lossy(),
         ],
+    );
+}
+
+#[test]
+fn tracked_merge_backup_survives_aggressive_git_gc() {
+    let _permit = test_subprocess::acquire();
+    let repo = init_repo();
+    std::fs::write(repo.path().join("init.txt"), "local change\n").unwrap();
+
+    let changes = stash_local_changes(&repo.path().to_string_lossy())
+        .unwrap()
+        .expect("local changes should be captured");
+    git(repo.path(), &["gc", "--prune=now"]);
+    restore_local_changes(&repo.path().to_string_lossy(), &changes).unwrap();
+
+    assert_eq!(
+        std::fs::read_to_string(repo.path().join("init.txt")).unwrap(),
+        "local change\n"
     );
 }
 

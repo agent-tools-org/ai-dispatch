@@ -12,10 +12,10 @@ pub(crate) use merge_verify::{run_post_merge_verify, run_verify_in_worktree};
 #[path = "merge_stash.rs"]
 mod merge_stash;
 use merge_stash::{
-    format_stash_restore_error, restore_untracked_after_failed_merge, stash_local_changes,
-    LocalChanges,
+    format_stash_restore_error, restore_untracked_after_failed_merge, LocalChanges,
 };
 pub(crate) use merge_stash::restore_local_changes;
+pub(crate) use merge_stash::stash_local_changes;
 #[cfg(test)]
 pub(crate) use merge_stash::stash_local_changes_with_hook;
 

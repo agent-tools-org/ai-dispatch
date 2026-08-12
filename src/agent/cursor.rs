@@ -4,7 +4,10 @@
 use anyhow::Result;
 use chrono::Local;
 use serde_json::json;
+#[cfg(test)]
+use std::cell::RefCell;
 use std::process::Command;
+#[cfg(not(test))]
 use std::sync::OnceLock;
 
 use super::truncate::{capped_detail, capped_detail_with};
@@ -19,13 +22,26 @@ pub struct CursorAgent;
 /// argument error that reads like a Cursor bug. Accept `agent` only when it says it is
 /// Cursor's, and fall back to the unambiguous alias otherwise.
 fn cursor_binary() -> &'static str {
-    static RESOLVED: OnceLock<&'static str> = OnceLock::new();
-    *RESOLVED.get_or_init(|| {
-        if identifies_as_cursor("agent") {
-            return "agent";
-        }
-        "cursor-agent"
-    })
+    #[cfg(test)]
+    if let Some(binary) = TEST_CURSOR_BINARY.with(|cell| *cell.borrow()) {
+        return binary;
+    }
+
+    #[cfg(not(test))]
+    {
+        static RESOLVED: OnceLock<&'static str> = OnceLock::new();
+        return *RESOLVED.get_or_init(resolve_cursor_binary);
+    }
+
+    #[cfg(test)]
+    resolve_cursor_binary()
+}
+
+fn resolve_cursor_binary() -> &'static str {
+    if identifies_as_cursor("agent") {
+        return "agent";
+    }
+    "cursor-agent"
 }
 
 fn identifies_as_cursor(binary: &str) -> bool {
@@ -34,6 +50,31 @@ fn identifies_as_cursor(binary: &str) -> bool {
 
 fn help_mentions_cursor(help: &str) -> bool {
     help.to_ascii_lowercase().contains("cursor")
+}
+
+#[cfg(test)]
+thread_local! {
+    static TEST_CURSOR_BINARY: RefCell<Option<&'static str>> = const { RefCell::new(None) };
+}
+
+#[cfg(test)]
+pub(crate) struct CursorBinaryGuard {
+    previous: Option<&'static str>,
+}
+
+#[cfg(test)]
+impl CursorBinaryGuard {
+    pub(crate) fn set(binary: &'static str) -> Self {
+        let previous = TEST_CURSOR_BINARY.with(|cell| cell.replace(Some(binary)));
+        Self { previous }
+    }
+}
+
+#[cfg(test)]
+impl Drop for CursorBinaryGuard {
+    fn drop(&mut self) {
+        TEST_CURSOR_BINARY.with(|cell| cell.replace(self.previous.take()));
+    }
 }
 
 impl super::Agent for CursorAgent {

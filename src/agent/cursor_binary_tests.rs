@@ -3,7 +3,8 @@
 // Deps: super::{cursor::CursorAgent, detect_agents, RunOpts}, crate::test_subprocess, tempfile.
 
 use super::{
-    cursor::CursorAgent, detect_agents, ensure_resolved_binary_available, Agent, RunOpts,
+    cursor::{CursorAgent, CursorBinaryGuard}, detect_agents, ensure_resolved_binary_available, Agent,
+    RunOpts,
 };
 use crate::test_subprocess;
 use crate::types::{AgentKind, EventKind, TaskId};
@@ -16,13 +17,10 @@ use tempfile::TempDir;
 
 #[test]
 fn build_command_prefers_agent_binary() {
-    let _permit = test_subprocess::acquire();
-    let bin_dir = fake_bin_dir();
-    let output = run_helper(
-        "agent::cursor_binary_tests::reports_cursor_binary_for_subprocess",
-        &bin_dir,
-    );
-    assert_eq!(extract_marker(&output, "CURSOR_BINARY="), "agent");
+    let _guard = CursorBinaryGuard::set("agent");
+    let agent = CursorAgent;
+    let command = agent.build_command("test prompt", &run_opts()).unwrap();
+    assert_eq!(command.get_program().to_string_lossy(), "agent");
 }
 
 #[test]

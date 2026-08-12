@@ -543,6 +543,7 @@ fn stash_capture_keeps_identity_when_a_competing_stash_appears() {
         .unwrap();
     let stashes = String::from_utf8_lossy(&stashes.stdout);
     assert!(stashes.contains("competing stash"));
+    assert!(!stashes.contains("aid merge-local"));
     git(repo.path(), &["stash", "drop"]);
 }
 
@@ -551,6 +552,25 @@ fn stash_capture_fails_when_git_status_cannot_run() {
     let _permit = test_subprocess::acquire();
     let result = stash_local_changes("/path/that/is/not/a/git/repository");
     assert!(matches!(result, Err(error) if error.contains("status")));
+}
+
+#[test]
+fn stash_capture_refuses_duplicate_full_identity() {
+    let _permit = test_subprocess::acquire();
+    let repo = init_repo();
+    std::fs::write(repo.path().join("init.txt"), "local change\n").unwrap();
+    let result = stash_local_changes_with_identity_hook(
+        &repo.path().to_string_lossy(),
+        |message| {
+            std::fs::write(repo.path().join("foreign.txt"), "foreign\n").unwrap();
+            git(
+                repo.path(),
+                &["stash", "push", "--include-untracked", "--quiet", "--message", message],
+            );
+        },
+    );
+    assert!(matches!(result, Err(error) if error.contains("multiple stashes matched")));
+    git(repo.path(), &["stash", "clear"]);
 }
 
 #[test]
@@ -569,6 +589,36 @@ fn stash_capture_does_not_reset_edits_written_after_capture() {
         "late change\n"
     );
     restore_local_changes(&repo.path().to_string_lossy(), &changes).unwrap();
+}
+
+#[test]
+fn stash_restore_refuses_to_drop_shifted_stash_entry() {
+    let _permit = test_subprocess::acquire();
+    let repo = init_repo();
+    std::fs::write(repo.path().join("init.txt"), "local change\n").unwrap();
+    let changes = stash_local_changes(&repo.path().to_string_lossy())
+        .unwrap()
+        .expect("local changes should be captured");
+    let result = restore_local_changes_with_drop_hook(
+        &repo.path().to_string_lossy(),
+        &changes,
+        || {
+            std::fs::write(repo.path().join("foreign.txt"), "foreign\n").unwrap();
+            git(
+                repo.path(),
+                &["stash", "push", "--include-untracked", "--quiet", "--message", "foreign"],
+            );
+        },
+    );
+    assert!(matches!(result, Err(error) if error.contains("refusing to drop")));
+    let stashes = Command::new("git")
+        .args(["-C", &repo.path().to_string_lossy(), "stash", "list"])
+        .output()
+        .unwrap();
+    let stashes = String::from_utf8_lossy(&stashes.stdout);
+    assert!(stashes.contains("foreign"));
+    assert!(stashes.contains("aid merge-local"));
+    git(repo.path(), &["stash", "clear"]);
 }
 
 #[test]
@@ -722,11 +772,6 @@ fn tracked_merge_backup_survives_aggressive_git_gc() {
         std::fs::read_to_string(repo.path().join("init.txt")).unwrap(),
         "local change\n"
     );
-    let stashes = Command::new("git")
-        .args(["-C", &repo.path().to_string_lossy(), "stash", "list"])
-        .output()
-        .unwrap();
-    assert!(String::from_utf8_lossy(&stashes.stdout).contains("aid merge-local"));
 }
 
 #[test]

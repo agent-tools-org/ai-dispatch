@@ -18,6 +18,10 @@ pub(crate) use merge_stash::restore_local_changes;
 pub(crate) use merge_stash::stash_local_changes;
 #[cfg(test)]
 pub(crate) use merge_stash::stash_local_changes_with_hook;
+#[cfg(test)]
+pub(crate) use merge_stash::{
+    restore_local_changes_with_drop_hook, stash_local_changes_with_identity_hook,
+};
 
 pub(crate) fn resolve_repo_dir(repo_path: Option<&str>, worktree_path: Option<&str>) -> String {
     if let Some(repo) = repo_path {

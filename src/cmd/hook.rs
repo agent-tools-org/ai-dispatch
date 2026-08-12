@@ -48,6 +48,10 @@ pub fn session_start() -> Result<()> {
         rendered.push('\n');
         rendered.push_str(&line);
     }
+    if let Some(line) = crate::cmd::clean::session_start_hint()? {
+        rendered.push('\n');
+        rendered.push_str(&line);
+    }
     println!("{rendered}");
     Ok(())
 }

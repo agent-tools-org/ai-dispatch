@@ -18,6 +18,19 @@ const TASK_IDS_SQL: &str = "SELECT id FROM tasks";
 const WORKGROUP_IDS_SQL: &str = "SELECT id FROM workgroups";
 const LOG_SUFFIX: &str = ".jsonl";
 
+pub fn format_bytes(bytes: u64) -> String {
+    if bytes < 1024 {
+        format!("{} B", bytes)
+    } else if bytes < 1024 * 1024 {
+        format!("{:.1} KB", bytes as f64 / 1024.0)
+    } else if bytes < 1024 * 1024 * 1024 {
+        format!("{:.1} MB", bytes as f64 / 1024.0 / 1024.0)
+    } else {
+        format!("{:.1} GB", bytes as f64 / 1024.0 / 1024.0 / 1024.0)
+    }
+}
+
+
 pub fn run(
     store: Arc<Store>,
     older_than_days: u64,
@@ -30,24 +43,34 @@ pub fn run(
     } else {
         println!("Task records and events retained as custody evidence");
     }
+    
+    let mut total_bytes = 0;
     if clean_worktrees {
-        clean_orphaned_worktrees(&store, dry_run)?;
-        crate::cmd::clean_cargo_target::clean_orphaned_branch_targets(dry_run)?;
+        total_bytes += clean_orphaned_worktrees(&store, dry_run)?;
+        total_bytes += crate::cmd::clean_cargo_target::clean_orphaned_branch_targets(dry_run, None)?;
+        total_bytes += clean_isolated_task_homes(&store, dry_run)?;
     }
-    clean_orphaned_logs(&store, dry_run)?;
-    clean_orphaned_shared_dirs(&store, dry_run)?;
+    total_bytes += clean_orphaned_logs(&store, dry_run)?;
+    total_bytes += clean_orphaned_shared_dirs(&store, dry_run)?;
+    
+    if total_bytes > 0 || dry_run {
+        println!("---");
+        println!("Total space {}: {}", if dry_run { "reclaimable" } else { "reclaimed" }, format_bytes(total_bytes));
+    }
+    
     Ok(())
 }
 
-fn clean_orphaned_worktrees(store: &Store, dry_run: bool) -> Result<()> {
+fn clean_orphaned_worktrees(store: &Store, dry_run: bool) -> Result<u64> {
     let _ = (store, dry_run);
     println!("Preserved orphaned worktree dirs; task artifacts require explicit acceptance and custody GC");
-    Ok(())
+    Ok(0)
 }
 
-fn clean_orphaned_logs(store: &Store, dry_run: bool) -> Result<()> {
+fn clean_orphaned_logs(store: &Store, dry_run: bool) -> Result<u64> {
     let task_ids = query_string_set(store, TASK_IDS_SQL)?;
     let mut removed = 0usize;
+    let mut bytes = 0u64;
     for path in log_paths()? {
         let name = path
             .file_name()
@@ -57,31 +80,35 @@ fn clean_orphaned_logs(store: &Store, dry_run: bool) -> Result<()> {
         if task_ids.contains(task_id) {
             continue;
         }
+        let size = path.metadata().map(|m| m.len()).unwrap_or(0);
         if dry_run {
-            println!("[dry-run] Would remove orphaned log {}", path.display());
+            println!("[dry-run] Would remove orphaned log {} ({})", path.display(), format_bytes(size));
+            bytes += size;
         } else {
-            fs::remove_file(&path)?;
+            if fs::remove_file(&path).is_ok() {
+                bytes += size;
+            }
         }
         removed += 1;
     }
-    println!(
-        "{} {removed} orphaned logs",
-        if dry_run {
-            "[dry-run] Would remove"
-        } else {
-            "Removed"
-        }
-    );
-    Ok(())
+    if removed > 0 || dry_run {
+        println!(
+            "{} {removed} orphaned logs ({})",
+            if dry_run { "[dry-run] Would remove" } else { "Removed" },
+            format_bytes(bytes)
+        );
+    }
+    Ok(bytes)
 }
 
-fn clean_orphaned_shared_dirs(store: &Store, dry_run: bool) -> Result<()> {
+fn clean_orphaned_shared_dirs(store: &Store, dry_run: bool) -> Result<u64> {
     let known_wgs = query_string_set(store, WORKGROUP_IDS_SQL)?;
     let shared_base = crate::paths::aid_dir().join("shared");
     if !shared_base.exists() {
-        return Ok(());
+        return Ok(0);
     }
     let mut removed = 0usize;
+    let mut bytes = 0u64;
     for entry in fs::read_dir(&shared_base)? {
         let entry = entry?;
         if !entry.file_type()?.is_dir() {
@@ -91,19 +118,67 @@ fn clean_orphaned_shared_dirs(store: &Store, dry_run: bool) -> Result<()> {
         if known_wgs.contains(&wg_id) {
             continue;
         }
+        let size = crate::cmd::clean_size::get_dir_size(&entry.path())?;
         if dry_run {
-            println!("[dry-run] Would remove orphaned shared dir {}", entry.path().display());
+            println!("[dry-run] Would remove orphaned shared dir {} ({})", entry.path().display(), format_bytes(size));
+            bytes += size;
         } else {
             crate::shared_dir::cleanup_shared_dir(&wg_id);
-            println!("Removed orphaned shared dir {}", entry.path().display());
+            println!("Removed orphaned shared dir {} ({})", entry.path().display(), format_bytes(size));
+            bytes += size;
         }
         removed += 1;
     }
-    println!(
-        "{} {removed} orphaned shared dirs",
-        if dry_run { "[dry-run] Would remove" } else { "Removed" }
-    );
-    Ok(())
+    if removed > 0 || dry_run {
+        println!(
+            "{} {removed} orphaned shared dirs ({})",
+            if dry_run { "[dry-run] Would remove" } else { "Removed" },
+            format_bytes(bytes)
+        );
+    }
+    Ok(bytes)
+}
+
+pub(crate) fn clean_isolated_task_homes(store: &Store, dry_run: bool) -> Result<u64> {
+    let mut bytes = 0u64;
+    let mut removed = 0usize;
+    for id in crate::cmd::clean_cargo_target::orphaned_task_ids(store)? {
+        let home_dir = crate::paths::task_dir(&id).join("home");
+        if home_dir.exists() {
+            let size = crate::cmd::clean_size::get_dir_size(&home_dir)?;
+            if dry_run {
+                println!("[dry-run] Would remove isolated task home for {} ({})", id, format_bytes(size));
+                bytes += size;
+            } else {
+                if fs::remove_dir_all(&home_dir).is_ok() {
+                    println!("Removed isolated task home for {} ({})", id, format_bytes(size));
+                    bytes += size;
+                }
+            }
+            removed += 1;
+        }
+    }
+    if removed > 0 || dry_run {
+        println!(
+            "{} {removed} isolated task homes ({})",
+            if dry_run { "[dry-run] Would remove" } else { "Removed" },
+            format_bytes(bytes)
+        );
+    }
+    Ok(bytes)
+}
+
+pub(crate) fn session_start_hint() -> Result<Option<String>> {
+    let Some(store) = Store::open_read_only(&paths::db_path())? else {
+        return Ok(None);
+    };
+    if crate::cmd::clean_cargo_target::has_reclaimable_space_above_threshold(&store)? {
+        return Ok(Some(format!(
+            "Hint: orphaned task artifacts occupy at least {}. Run `aid clean --worktrees` to reclaim.",
+            format_bytes(crate::cmd::clean_size::CLEANUP_HINT_THRESHOLD_BYTES)
+        )));
+    }
+    Ok(None)
 }
 
 fn query_string_set(store: &Store, sql: &str) -> Result<HashSet<String>> {
@@ -175,52 +250,5 @@ fn log_paths() -> Result<Vec<PathBuf>> {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn contains_path(paths: &[PathBuf], needle: &Path) -> bool {
-        paths.iter().any(|path| path == needle)
-    }
-
-    #[test]
-    fn legacy_tmp_worktree_path_is_collectable() {
-        let worktree = tempfile::Builder::new()
-            .prefix("aid-wt-clean-legacy-")
-            .tempdir_in("/tmp")
-            .unwrap();
-        let mut paths = Vec::new();
-
-        collect_legacy_tmp_worktree_paths(Path::new("/tmp"), &mut paths).unwrap();
-
-        assert!(contains_path(&paths, worktree.path()));
-    }
-
-    #[test]
-    fn non_aid_tmp_path_is_rejected_by_clean_scan() {
-        let worktree = tempfile::Builder::new()
-            .prefix("not-aid-clean-")
-            .tempdir_in("/tmp")
-            .unwrap();
-        let mut paths = Vec::new();
-
-        collect_legacy_tmp_worktree_paths(Path::new("/tmp"), &mut paths).unwrap();
-
-        assert!(!contains_path(&paths, worktree.path()));
-        assert!(!is_aid_managed_worktree_path(worktree.path()));
-    }
-
-    #[test]
-    fn clean_orphaned_shared_dirs_removes_unknown_workgroup_dirs() {
-        let temp = tempfile::tempdir().unwrap();
-        let _guard = crate::paths::AidHomeGuard::set(temp.path());
-        let store = Store::open_memory().unwrap();
-        crate::shared_dir::create_shared_dir("wg-orphanned").unwrap();
-        crate::shared_dir::create_shared_dir("wg-known").unwrap();
-        store.create_workgroup("Known", "", None, Some("wg-known")).unwrap();
-
-        clean_orphaned_shared_dirs(&store, false).unwrap();
-
-        assert!(crate::shared_dir::shared_dir_path("wg-orphanned").is_none());
-        assert!(crate::shared_dir::shared_dir_path("wg-known").is_some());
-    }
-}
+#[path = "clean_tests.rs"]
+mod tests;

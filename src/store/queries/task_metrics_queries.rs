@@ -7,7 +7,9 @@ use chrono::{DateTime, Local, NaiveDate};
 use rusqlite::params;
 
 use super::super::Store;
-use crate::types::{verify_required, AgentKind, TaskOutcome, TaskStatus, VerifyStatus};
+use crate::types::{
+    verify_required, AgentKind, DeliveryAssessment, TaskOutcome, TaskStatus, VerifyStatus,
+};
 
 pub(crate) const STATS_TASK_QUERY: &str = "SELECT id, created_at, completed_at, repo_path, tokens FROM tasks WHERE (?1 IS NULL OR created_at >= ?1) AND created_at < ?2 ORDER BY created_at";
 
@@ -138,7 +140,7 @@ impl Store {
     ) -> Result<Vec<(AgentKind, TaskOutcome)>> {
         let conn = self.db();
         let mut stmt = conn.prepare(
-            "SELECT agent, status, verify_status, verify
+            "SELECT agent, status, verify_status, verify, delivery_assessment
              FROM tasks
              WHERE status IN ('done', 'merged', 'failed')
                AND (?1 IS NULL OR category = ?1)",
@@ -148,20 +150,25 @@ impl Store {
             let status: String = row.get(1)?;
             let verify_status: String = row.get(2)?;
             let verify: Option<String> = row.get(3)?;
-            Ok((agent_str, status, verify_status, verify))
+            let delivery: Option<String> = row.get(4)?;
+            Ok((agent_str, status, verify_status, verify, delivery))
         })?;
         rows.map(|row| {
-            let (agent, status, verify_status, verify) = row?;
+            let (agent, status, verify_status, verify, delivery) = row?;
             let status = TaskStatus::parse_str(&status)
                 .ok_or_else(|| anyhow!("unknown task status in metrics: {status}"))?;
             let verify_status = VerifyStatus::parse_str(&verify_status)
                 .ok_or_else(|| anyhow!("unknown verify status in metrics: {verify_status}"))?;
             let agent = AgentKind::parse_str(&agent).unwrap_or(AgentKind::Custom);
+            let delivery = delivery
+                .as_deref()
+                .and_then(DeliveryAssessment::parse_str);
             let outcome = TaskOutcome::derive(
                 status,
                 verify_status,
                 verify_required(verify.as_deref()),
-            );
+            )
+            .with_delivery_assessment(delivery);
             Ok((agent, outcome))
         })
         .collect()

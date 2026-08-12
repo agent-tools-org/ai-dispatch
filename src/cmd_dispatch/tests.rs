@@ -99,6 +99,15 @@ fn done_task_with_failed_verification_exits_one_and_reports_reason() {
 }
 
 #[test]
+fn hollow_output_done_task_exits_one_not_success() {
+    let mut task = task_with_verify_status(VerifyStatus::Skipped);
+    task.delivery_assessment = Some(crate::types::DeliveryAssessment::HollowOutput);
+    let outcome = RunExitStatus::from_task(&task, None);
+    assert_eq!(outcome.exit_code(), 1);
+    assert!(!outcome.summary_line().starts_with("[STATUS=DONE]"));
+}
+
+#[test]
 fn run_status_lines_have_distinct_prefix_tags_despite_prose_collisions() {
     let done = status_line(TaskStatus::Done, VerifyStatus::Passed, None);
     let failed = status_line(

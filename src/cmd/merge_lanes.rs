@@ -5,7 +5,7 @@ use anyhow::{Result, anyhow};
 use std::path::Path;
 
 use crate::store::Store;
-use crate::types::{verify_required, TaskOutcome};
+use crate::types::TaskOutcome;
 
 use super::merge_git::{auto_commit_uncommitted, commits_ahead, resolve_repo_dir};
 use super::{ensure_task_worktree_is_safe, is_merge_candidate, validate_merge_outcome};
@@ -16,11 +16,7 @@ pub(super) fn merge_group_lanes(store: &Store, group_id: &str, force: bool) -> R
         return Err(anyhow!("No tasks found in group '{group_id}'"));
     }
     for task in &tasks {
-        let outcome = TaskOutcome::derive(
-            task.status,
-            task.verify_status,
-            verify_required(task.verify.as_deref()),
-        );
+        let outcome = task.outcome();
         if is_merge_candidate(task, outcome) {
             validate_merge_outcome(task, outcome, force)?;
         }
@@ -57,11 +53,7 @@ pub(super) fn merge_group_lanes(store: &Store, group_id: &str, force: bool) -> R
     let mut applied = 0;
     let mut skipped = 0;
     for task in &tasks {
-        let outcome = TaskOutcome::derive(
-            task.status,
-            task.verify_status,
-            verify_required(task.verify.as_deref()),
-        );
+        let outcome = task.outcome();
         if !is_merge_candidate(task, outcome) {
             skipped += 1;
             continue;

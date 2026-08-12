@@ -78,6 +78,7 @@ impl Task {
             self.verify_status,
             super::verify_required(self.verify.as_deref()),
         )
+        .with_delivery_assessment(self.delivery_assessment)
     }
 
     /// The model an outcome may be attributed to: what the CLI reported, never

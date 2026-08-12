@@ -7,7 +7,7 @@ use chrono::Local;
 use std::process::{Command, Stdio};
 use std::sync::Arc;
 use crate::store::Store;
-use crate::types::{verify_required, EventKind, Task, TaskEvent, TaskId, TaskOutcome, TaskStatus, VerifyStatus};
+use crate::types::{EventKind, Task, TaskEvent, TaskId, TaskOutcome, TaskStatus, VerifyStatus};
 #[path = "merge/final_branch.rs"]
 mod final_branch;
 use final_branch::*;
@@ -176,11 +176,7 @@ fn record_force_merge_warning(store: &Store, task: &Task) -> Result<()> {
 }
 
 fn task_outcome(task: &Task) -> TaskOutcome {
-    TaskOutcome::derive(
-        task.status,
-        task.verify_status,
-        verify_required(task.verify.as_deref()),
-    )
+    task.outcome()
 }
 
 pub(super) fn validate_merge_outcome(

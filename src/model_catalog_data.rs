@@ -160,5 +160,6 @@ pub const AGENT_MODELS: &[AgentModel] = &[
     // 0.0/0.0 here is "no figure", not free — do not invent a plausible rate.
     // estimate_cost must return None for grok models (pricing_builtin has no grok
     // row); a finished task only gets a number when the agent reports total_cost_usd.
-    AgentModel { agent: AgentKind::Grok, model: "grok-4.5", input_per_m: 0.0, output_per_m: 0.0, tier: "unknown", description: "CLI default (price unknown)", capability: 8.0 },
+    AgentModel { agent: AgentKind::Grok, model: "grok-4.6", input_per_m: 0.0, output_per_m: 0.0, tier: "premium", description: "CLI default (price unknown)", capability: 8.5 },
+    AgentModel { agent: AgentKind::Grok, model: "grok-4.5", input_per_m: 0.0, output_per_m: 0.0, tier: "cheap", description: "Previous CLI model (price unknown)", capability: 8.0 },
 ];

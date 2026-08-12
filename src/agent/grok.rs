@@ -115,15 +115,34 @@ fn parse_grok_models_output(output: &str) -> Vec<String> {
             in_models_section = true;
             continue;
         }
-        if in_models_section || trimmed.starts_with('*') {
-            let clean = trimmed.trim_start_matches('*').trim();
-            let model_name = clean.split_whitespace().next().unwrap_or(clean);
-            if !model_name.is_empty() && !models.contains(&model_name.to_string()) {
-                models.push(model_name.to_string());
-            }
+        if !in_models_section { continue; }
+        let Some(clean) = trimmed.strip_prefix('*').or_else(|| trimmed.strip_prefix('-')) else { continue; };
+        let clean = clean.trim();
+        let model_name = clean.split_whitespace().next().unwrap_or(clean);
+        if !model_name.is_empty() && !models.contains(&model_name.to_string()) {
+            models.push(model_name.to_string());
         }
     }
     models
+}
+
+#[cfg(test)]
+mod parser_tests {
+    use super::parse_grok_models_output;
+
+    #[test]
+    fn parses_current_grok_models_output_and_ignores_footer_text() {
+        let output = r#"You are logged in with grok.com.
+
+Default model: grok-4.6
+
+Available models:
+  * grok-4.6 (default)
+  - grok-4.5
+"#;
+        assert_eq!(parse_grok_models_output(output), ["grok-4.6", "grok-4.5"]);
+        assert_eq!(parse_grok_models_output(&format!("{output}Footer text")), ["grok-4.6", "grok-4.5"]);
+    }
 }
 
 /// Find grok's JSON envelope inside a buffer that also carries aid's own writes.

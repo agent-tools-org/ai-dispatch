@@ -51,10 +51,20 @@ impl Drop for MockServedModelsGuard {
     }
 }
 
-pub(crate) fn validate_model_for_agent(agent: &dyn Agent, model: &str) -> Result<()> {
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum ModelSource {
+    UserSupplied,
+    AidResolved,
+}
+
+pub(crate) fn validate_model_for_agent(
+    agent: &dyn Agent,
+    model: &str,
+    source: ModelSource,
+) -> Result<bool> {
     let model_clean = model.trim();
     if model_clean.is_empty() {
-        return Ok(());
+        return Ok(true);
     }
     let kind = agent.kind();
     let served = get_served_models_cached(agent);
@@ -64,7 +74,7 @@ pub(crate) fn validate_model_for_agent(agent: &dyn Agent, model: &str) -> Result
             "[aid] Cannot query served models for {}; allowing dispatch with model '{model_clean}'",
             kind.as_str()
         );
-        return Ok(());
+        return Ok(true);
     };
 
     if served_list.is_empty() {
@@ -72,18 +82,25 @@ pub(crate) fn validate_model_for_agent(agent: &dyn Agent, model: &str) -> Result
             "[aid] No served models reported for {}; allowing dispatch with model '{model_clean}'",
             kind.as_str()
         );
-        return Ok(());
+        return Ok(true);
     }
 
     if served_list.iter().any(|m| m.eq_ignore_ascii_case(model_clean)) {
-        return Ok(());
+        return Ok(true);
     }
 
     let list_str = served_list.join(", ");
-    Err(anyhow!(
-        "Agent '{}' does not serve model '{model_clean}'. Served models: {list_str}",
+    if source == ModelSource::UserSupplied {
+        return Err(anyhow!(
+            "Agent '{}' does not serve model '{model_clean}'. Served models: {list_str}",
+            kind.as_str()
+        ));
+    }
+    aid_warn!(
+        "[aid] Agent '{}' does not serve aid-selected model '{model_clean}'; dropping it and using the CLI default",
         kind.as_str()
-    ))
+    );
+    Ok(false)
 }
 
 pub(crate) fn get_served_models_cached(agent: &dyn Agent) -> Option<Vec<String>> {

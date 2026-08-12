@@ -199,6 +199,27 @@ fn resolve_agent_setup_allows_auto_model_for_cursor() {
     assert!(res.is_ok(), "cursor with model 'auto' must be allowed");
 }
 
+#[test]
+fn resolve_agent_setup_drops_unserved_aid_selected_model() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let _guard = AidHomeGuard::set(dir.path());
+    let _served = crate::agent::model_validation::MockServedModelsGuard::set(
+        AgentKind::Grok,
+        Some(vec!["grok-4.6".to_string()]),
+    );
+    let store = Arc::new(Store::open_memory().expect("store"));
+    let mut args = RunArgs {
+        agent_name: "grok".to_string(),
+        prompt: "say hi".to_string(),
+        budget: true,
+        ..Default::default()
+    };
+
+    let setup = resolve_agent_setup(&store, &mut args).expect("stale catalog model is recoverable");
+
+    assert_eq!(setup.effective_model, None);
+}
+
 /// Write a minimal custom-agent TOML under the isolated AID_HOME so
 /// `custom_agent_exists` and `resolve_custom_agent` can find it.
 fn write_custom_agent(name: &str) {

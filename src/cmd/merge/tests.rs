@@ -525,6 +525,28 @@ fn git_merge_branch_stashes_local_changes() {
 }
 
 #[test]
+fn stash_capture_keeps_identity_when_a_competing_stash_appears() {
+    let _permit = test_subprocess::acquire();
+    let repo = init_repo();
+    std::fs::write(repo.path().join("init.txt"), "local change\n").unwrap();
+    let changes = stash_local_changes_with_hook(&repo.path().to_string_lossy(), || {
+        std::fs::write(repo.path().join("init.txt"), "competing\n").unwrap();
+        git(repo.path(), &["stash", "push", "-q", "-m", "competing stash"]);
+    })
+    .unwrap()
+    .expect("local changes should be captured");
+    restore_local_changes(&repo.path().to_string_lossy(), &changes).unwrap();
+    assert_eq!(std::fs::read_to_string(repo.path().join("init.txt")).unwrap(), "local change\n");
+    let stashes = Command::new("git")
+        .args(["-C", &repo.path().to_string_lossy(), "stash", "list"])
+        .output()
+        .unwrap();
+    let stashes = String::from_utf8_lossy(&stashes.stdout);
+    assert!(stashes.contains("competing stash"));
+    git(repo.path(), &["stash", "drop"]);
+}
+
+#[test]
 fn git_merge_branch_stashes_untracked_changes_without_using_an_older_stash() {
     let _permit = test_subprocess::acquire();
     let repo = init_repo();
@@ -603,13 +625,21 @@ fn git_merge_branch_fails_loudly_on_stash_restore_conflict() {
     std::fs::write(wt.path().join("init.txt"), "branch change\n").unwrap();
     git(wt.path(), &["add", "init.txt"]);
     git(wt.path(), &["commit", "-m", "branch change"]);
+    std::fs::write(repo.path().join("init.txt"), "main change\n").unwrap();
+    git(repo.path(), &["add", "init.txt"]);
+    git(repo.path(), &["commit", "-m", "main change"]);
     std::fs::write(repo.path().join("init.txt"), "local change\n").unwrap();
+    std::fs::write(repo.path().join("untracked.txt"), "keep me\n").unwrap();
 
     let result = git_merge_branch(&repo.path().to_string_lossy(), &branch);
-    let MergeResult::StashRestoreFailed(error) = result else {
-        panic!("expected stash restore failure");
+    let MergeResult::Failed(error) = result else {
+        panic!("expected merge failure");
     };
-    assert!(error.contains("stash"));
+    assert!(error.contains("tracked changes were kept out of the conflicted index"));
+    assert_eq!(
+        std::fs::read_to_string(repo.path().join("untracked.txt")).unwrap(),
+        "keep me\n"
+    );
     let status = Command::new("git")
         .args(["-C", &repo.path().to_string_lossy(), "status", "--short"])
         .output()
@@ -618,7 +648,6 @@ fn git_merge_branch_fails_loudly_on_stash_restore_conflict() {
     assert!(stdout.contains("UU init.txt"));
 
     git(repo.path(), &["reset", "--hard", "HEAD~1"]);
-    git(repo.path(), &["stash", "drop"]);
     git(
         repo.path(),
         &[

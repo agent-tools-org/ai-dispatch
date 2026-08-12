@@ -308,8 +308,11 @@ fn merge_group_with_output(store: &Store, group_id: &str, approve: bool, check: 
                     skipped.push(format!("{} (merge no-op)", task.id));
                     continue;
                 }
-                MergeResult::Failed(_) => {
+                MergeResult::Failed(error) => {
                     aid_warn!("[aid] Warning: git merge {branch} failed, skipping {}", task.id);
+                    for line in error.lines().take(5) {
+                        aid_warn!("  {}", line);
+                    }
                     skipped.push(format!("{} (merge conflict)", task.id));
                     continue;
                 }

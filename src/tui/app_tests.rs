@@ -7,7 +7,7 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 use crate::types::{AgentKind, TaskId, TaskStatus, VerifyStatus};
 
-fn make_task(id: &str, group_id: Option<&str>) -> Task {
+pub(crate) fn make_task(id: &str, group_id: Option<&str>) -> Task {
     Task {
         id: TaskId(id.to_string()),
         agent: AgentKind::Codex,
@@ -291,42 +291,4 @@ fn detail_mode_cycles_tabs_and_resets_scroll() {
     app.handle_key(KeyEvent::new(KeyCode::BackTab, KeyModifiers::SHIFT))
         .unwrap();
     assert!(app.detail_tab == DetailTab::Prompt);
-}
-
-#[test]
-fn detail_mode_keeps_selection_stable_and_resets_on_escape() {
-    let store = Arc::new(Store::open_memory().unwrap());
-    store.insert_task(&make_task("t-1004", None)).unwrap();
-    store.insert_task(&make_task("t-1005", None)).unwrap();
-    let mut app = App::new(
-        store,
-        super::super::RunOptions {
-            task_id: None,
-            group: None,
-        },
-    )
-    .unwrap();
-
-    app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
-        .unwrap();
-    // Empty events: j is clamped; selection must stay put.
-    app.handle_key(KeyEvent::new(KeyCode::Char('j'), KeyModifiers::NONE))
-        .unwrap();
-    assert_eq!(app.selected, 0);
-    assert_eq!(app.detail_scroll, 0);
-
-    app.handle_key(KeyEvent::new(KeyCode::Char('o'), KeyModifiers::NONE))
-        .unwrap();
-    app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE))
-        .unwrap();
-    app.handle_key(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE))
-        .unwrap();
-    assert_eq!(app.selected, 0);
-    assert_eq!(app.detail_scroll, 0);
-
-    app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE))
-        .unwrap();
-    assert!(!app.detail_mode);
-    assert!(app.detail_tab == DetailTab::Events);
-    assert_eq!(app.detail_scroll, 0);
 }

@@ -18,8 +18,14 @@ aid tree <task-id>
 enclosing git main working tree — `.aid/project.toml` `id` when present). Tasks
 dispatched outside any project, and historical rows that never recorded one,
 live in the explicit **unattributed** bucket. Use `--all` to list every project;
-the board always prints which filter is active so tasks cannot appear to vanish.
-The TUI mirrors this default and toggles it with `P`.
+the CLI keeps its current-project default with --all as the escape hatch.
+
+The TUI shows every project grouped by project, including a visible
+**unattributed** group. In the task board, use `j/k` to move within a group,
+`h/l` to jump between groups, `Space` to collapse or expand the selected group,
+`/` to find a task, `n/N` to move to the next or previous match while finding,
+`Enter` to open the selected task, `r` to refresh, and `Esc` to cancel search or
+return from a view. `g`/`G` return to the first/last row.
 
 Use `watch` for a stream and `wait` for automation. `--wait` continues while
 verification is pending and returns non-zero when any selected task does not

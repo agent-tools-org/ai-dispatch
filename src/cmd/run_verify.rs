@@ -49,14 +49,30 @@ pub(in crate::cmd) fn maybe_verify_impl(
     }
     let _ = store.update_verify_status(task_id.as_str(), VerifyStatus::Pending);
     let cargo_target_dir = crate::agent::target_dir_for_worktree(worktree_branch.as_deref());
-    match crate::verify::run_verify(path, command, cargo_target_dir.as_deref(), container_name) {
+    match crate::verify_cargo::run_verify_with_store(
+        store,
+        path,
+        command,
+        cargo_target_dir.as_deref(),
+        container_name,
+    ) {
         Ok(result) => {
             let report = crate::verify::format_verify_report(&result);
             println!("{report}");
-            crate::verify::record_verify_status(store, task_id, &result);
-            if result.timed_out {
+            let target_permission_failure = result.infrastructure_failure
+                || crate::verify_cargo::target_dir_permission_failure(
+                    &result,
+                    cargo_target_dir.as_deref(),
+                );
+            if target_permission_failure {
+                let detail = verify_infrastructure_detail(&result);
+                record_verify_infrastructure_detail(store, task_id, detail);
+            } else {
+                crate::verify::record_verify_status(store, task_id, &result);
+            }
+            if result.timed_out && !target_permission_failure {
                 outcome::record_verify_timed_out(store, task_id, &result);
-            } else if !result.success {
+            } else if !result.success && !target_permission_failure {
                 let hint = verify_failure_hint(store, task_id, &result.output);
                 let detail = match verify_output_excerpt(&result.output) {
                     Some(output) => {
@@ -88,14 +104,25 @@ fn record_verify_infrastructure_failure(
     task_id: &TaskId,
     error: &anyhow::Error,
 ) {
+    record_verify_infrastructure_detail(store, task_id, error.to_string());
+}
+
+fn record_verify_infrastructure_detail(store: &Store, task_id: &TaskId, detail: String) {
     let _ = store.update_verify_status(task_id.as_str(), VerifyStatus::InfrastructureFailure);
     let _ = store.insert_event(&TaskEvent {
         task_id: task_id.clone(),
         timestamp: Local::now(),
         event_kind: EventKind::Milestone,
-        detail: format!("Verification could not run: {error}"),
+        detail: format!("Verification could not run: {detail}"),
         metadata: Some(serde_json::json!({ "verify_execution_error": true })),
     });
+}
+
+fn verify_infrastructure_detail(result: &crate::verify::VerifyResult) -> String {
+    match verify_output_excerpt(&result.output) {
+        Some(output) => format!("{}\nOutput: {output}", result.command),
+        None => result.command.clone(),
+    }
 }
 
 pub(in crate::cmd) fn record_verify_not_run(store: &Store, task_id: &TaskId, reason: String) {

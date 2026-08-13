@@ -34,7 +34,7 @@ pub async fn run(store: Arc<Store>, args: TestArgs) -> Result<i32> {
         .map(|dir| isolated_child_env(dir.path()))
         .unwrap_or_default();
     let outcome =
-        build_process::run_cargo_outcome(store.clone(), request, target, progress, &child_env)
+        build_process::run_cargo_outcome(store.as_ref(), request, target, progress, None, None, &child_env)
             .await?;
     let verdict = verdict_from_outcome(&outcome, filter.as_deref(), args.warnings);
     println!("{}", verdict.digest);

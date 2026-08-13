@@ -152,6 +152,7 @@ where
     }
     let mut dispatch_args = args.clone();
     dispatch_args.model = agent_setup.effective_model.clone();
+    dispatch_args.model_source = args.model_source;
     store.update_task_dispatch_args(task_id.as_str(), &dispatch_args.dispatch_args_json()?)?;
     Ok(prepared_dispatch(detected_project, agent_setup, task_id, task, log_path, workgroup, setup))
 }

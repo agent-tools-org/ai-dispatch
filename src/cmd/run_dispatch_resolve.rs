@@ -248,6 +248,7 @@ pub(super) fn resolve_agent_setup(store: &Arc<Store>, args: &mut RunArgs) -> Res
                 effective_model.as_deref().unwrap_or("(default)"),
                 replacement
             );
+            args.model_source = agent::model_validation::ModelSource::AidResolved;
             Some(replacement.to_string())
         }
         None => effective_model,
@@ -272,9 +273,12 @@ pub(super) fn resolve_agent_setup(store: &Arc<Store>, args: &mut RunArgs) -> Res
     } else {
         agent::get_agent(agent_kind)
     };
+    let model_source = args.model.as_ref().map(|_| args.model_source).unwrap_or(agent::model_validation::ModelSource::AidResolved);
+    args.model_source = model_source;
     if let Some(ref model) = effective_model {
-        let source = if args.model.is_some() { agent::model_validation::ModelSource::UserSupplied } else { agent::model_validation::ModelSource::AidResolved };
-        if !agent::model_validation::validate_model_for_agent(agent.as_ref(), model, source)? { effective_model = None; }
+        if !agent::model_validation::validate_model_for_agent(agent.as_ref(), model, model_source)? {
+            effective_model = None;
+        }
     }
     Ok(AgentSetup {
         agent_kind,

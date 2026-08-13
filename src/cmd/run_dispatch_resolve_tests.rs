@@ -5,6 +5,8 @@ use std::sync::Arc;
 
 #[path = "run_dispatch_resolve_held_tests.rs"]
 mod held_tests;
+#[path = "run_dispatch_model_source_tests.rs"]
+mod model_source_tests;
 
 /// Write a manual-hold marker for `agent` so `dispatch_blocking_hold` returns `Some`.
 fn write_manual_hold(agent: AgentKind) {
@@ -211,7 +213,8 @@ fn resolve_agent_setup_drops_unserved_aid_selected_model() {
     let mut args = RunArgs {
         agent_name: "grok".to_string(),
         prompt: "say hi".to_string(),
-        budget: true,
+        model: Some("stale-aid-model".to_string()),
+        model_source: crate::agent::model_validation::ModelSource::AidResolved,
         ..Default::default()
     };
 

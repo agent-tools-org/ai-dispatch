@@ -2,6 +2,7 @@
 // Exports: retry_failed
 // Deps: crate::cmd::run, crate::store::Store, crate::types::Task
 use crate::cmd::run::{self, apply_retry_target, switch_agent, RunArgs};
+use crate::agent::model_validation::ModelSource;
 use crate::cmd::wait::{wait_for_task_ids, WaitOutcome};
 use crate::store::Store;
 use crate::types::{Task, TaskStatus};
@@ -101,6 +102,7 @@ pub(crate) fn retry_task_to_run_args(store: &Store, task: &Task, group_id: &str,
             repo: task.repo_path.clone(),
             output: task.output_path.clone(),
             model: task.requested_model.clone(),
+            model_source: ModelSource::AidResolved,
             verify: task.verify.clone(),
             read_only: task.read_only,
             budget: task.budget,

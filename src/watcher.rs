@@ -224,7 +224,12 @@ pub async fn watch_streaming(
             }
         }
     }
-    let stderr_note = failure_stderr_note(status, task_id, agent);
+    let stderr_note = failure_stderr_note(
+        status,
+        task_id,
+        agent,
+        dispatched_model.or(info.model.as_deref()),
+    );
     let detail = format!(
         "{} — {} events, exit code {}{}",
         status.label(),
@@ -303,7 +308,12 @@ fn read_capped_stderr(task_id: &str) -> Option<String> {
     Some(text)
 }
 
-fn failure_stderr_note(status: TaskStatus, task_id: &TaskId, agent: &dyn Agent) -> String {
+fn failure_stderr_note(
+    status: TaskStatus,
+    task_id: &TaskId,
+    agent: &dyn Agent,
+    model: Option<&str>,
+) -> String {
     if status != TaskStatus::Failed {
         return String::new();
     }
@@ -322,9 +332,10 @@ fn failure_stderr_note(status: TaskStatus, task_id: &TaskId, agent: &dyn Agent) 
             crate::quota_channel::Channel::CliStderr,
         )
     {
-        rate_limit::mark_rate_limited_for_message(
+        rate_limit::mark_rate_limited_for_model(
             &agent.kind(),
             agent.rate_limit_name(),
+            model,
             &message,
         );
     }

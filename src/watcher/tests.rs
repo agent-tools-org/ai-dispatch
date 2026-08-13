@@ -4,6 +4,7 @@
 use super::{
     apply_completion_event, exceeds_cost_ceiling, parse_milestone_event, SyntheticMilestoneTracker,
 };
+use crate::agent::Agent;
 use crate::paths;
 use crate::types::{CompletionInfo, EventKind, TaskEvent, TaskId, TaskStatus, Task, AgentKind};
 use chrono::Local;
@@ -297,14 +298,50 @@ fn only_a_diagnostic_event_can_mark_a_route_rate_limited() {
     );
 }
 
+#[test]
+fn streamed_opencode_refusal_holds_only_the_dispatched_provider() {
+    let temp = tempfile::tempdir().unwrap();
+    let _aid_home = paths::AidHomeGuard::set(temp.path());
+    let store = std::sync::Arc::new(crate::store::Store::open_memory().unwrap());
+    let mut task = running_task("t-opencode-provider-scope", AgentKind::OpenCode);
+    task.requested_model = Some("opencode/deepseek-v4-pro".to_string());
+    store.insert_task(&task).unwrap();
+    crate::rate_limit::clear_all_rate_limits_for_agent(&AgentKind::OpenCode, None);
+
+    let refusal = r#"{"type":"error","timestamp":1776000000000,"sessionID":"ses_live","error":{"name":"APIError","data":{"message":"Insufficient balance. Manage your billing here: https://opencode.ai/workspace/wrk_live/billing","statusCode":401,"isRetryable":false,"responseHeaders":{},"responseBody":"{\"type\":\"error\",\"error\":{\"type\":\"CreditsError\"}}","metadata":{"url":"https://opencode.ai/zen/v1/chat/completions"}}}}"#;
+    feed_stream_line_with_agent(&store, &task, refusal, &crate::agent::opencode::OpenCodeAgent);
+
+    assert!(!crate::rate_limit::is_rate_limited(&AgentKind::OpenCode, None));
+    assert!(crate::rate_limit::dispatch_blocking_hold_for_model(
+        &AgentKind::OpenCode,
+        None,
+        Some("opencode/deepseek-v4-pro"),
+    )
+    .is_some());
+    assert!(crate::rate_limit::dispatch_blocking_hold_for_model(
+        &AgentKind::OpenCode,
+        None,
+        Some("opencode-go/deepseek-v4-pro"),
+    )
+    .is_none());
+}
+
 fn feed_stream_line(store: &std::sync::Arc<crate::store::Store>, task: &Task, line: &str) {
+    feed_stream_line_with_agent(store, task, line, &crate::agent::cursor::CursorAgent);
+}
+
+fn feed_stream_line_with_agent(
+    store: &std::sync::Arc<crate::store::Store>,
+    task: &Task,
+    line: &str,
+    agent: &dyn Agent,
+) {
     let mut synthetic = SyntheticMilestoneTracker::new();
     let mut info = CompletionInfo { tokens: None, status: TaskStatus::Done, model: None, cost_usd: None, exit_code: None };
     let mut event_count = 0u32;
     let mut session_saved = false;
-    let agent = crate::agent::cursor::CursorAgent;
     let ctx = super::StreamLineContext {
-        agent: &agent,
+        agent,
         task_id: &task.id,
         store,
         workgroup_id: None,

@@ -3,6 +3,7 @@
 // Deps: build_diag, build_process, CLI build args, agent cargo-target helpers.
 
 use anyhow::{bail, Result};
+use std::path::Path;
 use std::sync::Arc;
 
 use crate::cli::command_args_b::{BuildArgs, BuildCommandArg};
@@ -56,6 +57,10 @@ pub(crate) fn resolve_target(store: &Store) -> CargoTargetChoice {
     resolve_cargo_target_choice(store)
 }
 
+pub(crate) fn target_for_verify(cargo_target_dir: Option<&str>) -> CargoTargetChoice {
+    let value = cargo_target_dir.map(str::to_string).or_else(|| std::env::var("CARGO_TARGET_DIR").ok());
+    CargoTargetChoice { value, inherited: cargo_target_dir.is_none() }
+}
 impl BuildRequest {
     fn from_args(args: BuildArgs) -> Result<Self> {
         let (command, mut extra_args) = default_command_and_args(args.command);
@@ -83,6 +88,29 @@ impl BuildRequest {
             include_warnings,
             extra_args,
         }
+    }
+
+    pub(crate) fn for_verify(worktree_path: &Path, command: Option<&str>) -> Option<Self> {
+        let command = match command {
+            Some(command) => command.trim().to_string(),
+            None if worktree_path.join("Cargo.toml").exists() => "cargo check".to_string(),
+            None => return None,
+        };
+        let parts = command.split_whitespace().collect::<Vec<_>>();
+        let cargo_args = parts.strip_prefix(&["cargo"])?;
+        let (command, extra_args) = match cargo_args.first().copied()? {
+            "check" => (BuildCommand::Check, &cargo_args[1..]),
+            "test" => (BuildCommand::Test, &cargo_args[1..]),
+            "clippy" => (BuildCommand::Clippy, &cargo_args[1..]),
+            _ => return None,
+        };
+        Some(Self {
+            command,
+            package: None,
+            test_filter: None,
+            include_warnings: false,
+            extra_args: extra_args.iter().map(|arg| (*arg).to_string()).collect(),
+        })
     }
 
     pub(crate) fn include_warnings(&self) -> bool {
@@ -268,3 +296,5 @@ mod tests {
         );
     }
 }
+
+#[cfg(test)] #[path = "build_verify_tests.rs"] mod verify_tests;

@@ -77,6 +77,58 @@ fn explicitly_unknown_opencode_provider_stays_agent_wide() {
 }
 
 #[test]
+fn opencode_error_for_one_provider_does_not_hold_another_model_route() {
+    let temp = isolated();
+    let _guard = crate::paths::AidHomeGuard::set(temp.path());
+    let agent = AgentKind::OpenCode;
+    let task_id = crate::types::TaskId("t-provider-scope".to_string());
+    let error = serde_json::json!({
+        "type": "error",
+        "providerID": "opencode",
+        "error": {"data": {"message": "Insufficient balance. Manage your billing here"}}
+    });
+
+    crate::agent::opencode::parse_json_event(
+        AgentKind::OpenCode,
+        AgentKind::OpenCode,
+        None,
+        &task_id,
+        &error,
+        chrono::Local::now(),
+    );
+
+    assert!(!is_rate_limited(&agent, None));
+    assert!(dispatch_blocking_hold_for_model(&agent, None, Some("opencode-go/deepseek-v4-pro"))
+        .is_none());
+}
+
+#[test]
+fn opencode_error_still_blocks_the_provider_that_refused() {
+    let temp = isolated();
+    let _guard = crate::paths::AidHomeGuard::set(temp.path());
+    let agent = AgentKind::OpenCode;
+    let task_id = crate::types::TaskId("t-provider-hold".to_string());
+    let error = serde_json::json!({
+        "type": "error",
+        "providerID": "opencode",
+        "error": {"data": {"message": "Insufficient balance. Manage your billing here"}}
+    });
+
+    crate::agent::opencode::parse_json_event(
+        AgentKind::OpenCode,
+        AgentKind::OpenCode,
+        None,
+        &task_id,
+        &error,
+        chrono::Local::now(),
+    );
+
+    assert!(is_group_rate_limited(&agent, None, "opencode"));
+    assert!(dispatch_blocking_hold_for_model(&agent, None, Some("opencode/deepseek-v4-pro"))
+        .is_some());
+}
+
+#[test]
 fn long_refusal_keeps_an_iso_reset_timestamp_after_the_old_cutoff() {
     let temp = isolated();
     let _guard = crate::paths::AidHomeGuard::set(temp.path());

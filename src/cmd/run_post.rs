@@ -6,6 +6,7 @@ use anyhow::Result;
 use std::{path::{Path, PathBuf}, sync::Arc};
 
 use crate::{process_monitor, rate_limit, store::Store, types::*};
+use crate::agent::model_validation::ModelSource;
 use crate::cmd::{retry_logic, run_hung_recovery};
 
 use super::{RunArgs, inherit_retry_base_branch, run};
@@ -87,7 +88,10 @@ fn build_hung_retry_args(
     retry_args.parent_task_id = Some(task.id.as_str().to_string());
     retry_args.repo = task.repo_path.clone().or_else(|| retry_args.repo.clone());
     retry_args.output = task.output_path.clone().or_else(|| retry_args.output.clone());
-    retry_args.model = task.requested_model.clone().or_else(|| retry_args.model.clone());
+    if retry_args.model.is_none() {
+        retry_args.model = task.requested_model.clone();
+        retry_args.model_source = ModelSource::AidResolved;
+    }
     retry_args.verify = task.verify.clone();
     retry_args.read_only = task.read_only;
     retry_args.budget = task.budget;

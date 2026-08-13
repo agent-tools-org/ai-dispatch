@@ -3,6 +3,7 @@
 // Deps: anyhow, serde, Store, crate::types::TaskId, std collections.
 use anyhow::{Context, Result};
 use crate::agent::classifier::TaskCategory;
+use crate::agent::model_validation::ModelSource;
 use crate::store::Store;
 use crate::types::{TaskBudget, TaskDifficulty, TaskEgress, TaskId, TaskRigor, TaskUrgency};
 use serde::{Deserialize, Serialize};
@@ -25,6 +26,7 @@ pub struct RunArgs {
     /// Auto-generated report paths are advisory and must not change task status.
     pub result_file_required: Option<bool>,
     pub model: Option<String>,
+    pub model_source: ModelSource,
     pub declared_difficulty: Option<TaskDifficulty>,
     pub declared_budget: Option<TaskBudget>,
     pub declared_urgency: Option<TaskUrgency>,
@@ -120,6 +122,7 @@ impl Default for RunArgs {
             result_file: None,
             result_file_required: None,
             model: None,
+            model_source: ModelSource::default(),
             declared_difficulty: None,
             declared_budget: None,
             declared_urgency: None,

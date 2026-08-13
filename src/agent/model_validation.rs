@@ -7,6 +7,7 @@ use std::collections::HashMap;
 use std::process::Command;
 use std::sync::{Mutex, OnceLock};
 use std::time::Duration;
+use serde::{Deserialize, Serialize};
 
 use crate::types::AgentKind;
 use super::Agent;
@@ -51,10 +52,18 @@ impl Drop for MockServedModelsGuard {
     }
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub(crate) enum ModelSource {
     UserSupplied,
     AidResolved,
+}
+
+impl Default for ModelSource {
+    /// Unknown provenance belongs to old persisted rows; fail closed so a
+    /// model whose caller intent cannot be recovered is never silently dropped.
+    fn default() -> Self {
+        Self::UserSupplied
+    }
 }
 
 pub(crate) fn validate_model_for_agent(
@@ -97,7 +106,7 @@ pub(crate) fn validate_model_for_agent(
         ));
     }
     aid_warn!(
-        "[aid] Agent '{}' does not serve aid-selected model '{model_clean}'; dropping it and using the CLI default",
+        "[aid] Agent '{}' does not serve aid-selected model '{model_clean}'; dropping it and using the agent's own default model",
         kind.as_str()
     );
     Ok(false)

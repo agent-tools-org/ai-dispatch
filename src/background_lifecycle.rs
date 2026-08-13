@@ -7,6 +7,7 @@ use std::sync::Arc;
 
 use super::BackgroundRunSpec;
 use crate::agent::Agent;
+use crate::agent::model_validation::ModelSource;
 use crate::store::Store;
 use crate::types::{TaskId, TaskStatus};
 
@@ -16,7 +17,10 @@ pub(super) async fn run_post_lifecycle(
     agent: &dyn Agent,
     container_name: Option<&str>,
 ) -> Result<()> {
-    let lifecycle_args = run_args_from_spec(spec);
+    let model_source = crate::cmd::run::RunArgs::saved_for_task(store, &spec.task_id)?
+        .map(|args| args.model_source)
+        .unwrap_or(ModelSource::AidResolved);
+    let lifecycle_args = run_args_from_spec(spec, model_source);
     let task_id = TaskId(spec.task_id.clone());
     let pre_verify_status = store
         .get_task(&spec.task_id)?
@@ -45,7 +49,7 @@ pub(super) async fn run_post_lifecycle(
     Ok(())
 }
 
-fn run_args_from_spec(spec: &BackgroundRunSpec) -> crate::cmd::run::RunArgs {
+fn run_args_from_spec(spec: &BackgroundRunSpec, model_source: ModelSource) -> crate::cmd::run::RunArgs {
     crate::cmd::run::RunArgs {
         agent_name: spec.agent_name.clone(),
         prompt: spec.prompt.clone(),
@@ -53,6 +57,7 @@ fn run_args_from_spec(spec: &BackgroundRunSpec) -> crate::cmd::run::RunArgs {
         output: spec.output.clone(),
         result_file: spec.result_file.clone(),
         model: spec.model.clone(),
+        model_source,
         worktree: spec.worktree.clone(),
         base_branch: spec.base_branch.clone(),
         group: spec.group.clone(),

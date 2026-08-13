@@ -2,6 +2,7 @@
 // Exports: task_to_run_args
 // Deps: crate::cmd::run::RunArgs, crate::batch, crate::store::Store
 use crate::batch;
+use crate::agent::model_validation::ModelSource;
 use crate::cmd::run::{RunArgs, NO_SKILL_SENTINEL};
 use crate::store::Store;
 use std::collections::HashMap;
@@ -54,6 +55,11 @@ pub(crate) fn task_to_run_args(
             .and_then(|kind| crate::agent::selection::model_for_task_budget(kind, budget))
             .map(str::to_string)
     });
+    let model_source = if task.model.is_some() {
+        ModelSource::UserSupplied
+    } else {
+        ModelSource::AidResolved
+    };
     RunArgs {
         agent_name,
         prompt: task.prompt.clone(),
@@ -61,6 +67,7 @@ pub(crate) fn task_to_run_args(
         output: task.output.clone(),
         result_file: auto_scope_result_file(task, siblings),
         model: task.model.clone().or(profile_model),
+        model_source,
         declared_difficulty: task.difficulty,
         declared_budget: task.budget,
         declared_urgency: task.urgency,
@@ -164,4 +171,29 @@ fn merged_env(
         }
     }
     (!merged.is_empty()).then_some(merged)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn budget_selected_batch_model_is_aid_resolved() {
+        let home = tempfile::tempdir().expect("temporary aid home");
+        let _guard = crate::paths::AidHomeGuard::set(home.path());
+        let task: batch::BatchTask = toml::from_str(
+            r#"
+            agent = "qwen"
+            prompt = "say hi"
+            budget = "cheap"
+            "#,
+        )
+        .expect("valid batch task");
+        let store = Arc::new(Store::open_memory().expect("in-memory store"));
+
+        let args = task_to_run_args(&task, &[], false, &store, None);
+
+        assert!(args.model.is_some(), "budget should select a model");
+        assert_eq!(args.model_source, ModelSource::AidResolved);
+    }
 }

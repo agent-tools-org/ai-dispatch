@@ -152,22 +152,6 @@ where
     }
     let mut dispatch_args = args.clone();
     dispatch_args.model = agent_setup.effective_model.clone();
-    // qwen keys its saved sessions by the working directory it was started in.
-    // A dispatch without --dir (or with aid's auto-set `--dir .`) inherits the
-    // shell's cwd, so a later `aid retry` invoked from a different directory
-    // would replay a different cwd and qwen could not find the session. Persist
-    // the absolute dispatch-time cwd so a retry replays the exact directory no
-    // matter where it is invoked from.
-    if dispatch_args
-        .dir
-        .as_deref()
-        .map(str::trim)
-        .map_or(true, |dir| dir.is_empty() || dir == ".")
-    {
-        dispatch_args.dir = std::env::current_dir()
-            .ok()
-            .map(|path| path.to_string_lossy().into_owned());
-    }
     store.update_task_dispatch_args(task_id.as_str(), &dispatch_args.dispatch_args_json()?)?;
     Ok(prepared_dispatch(detected_project, agent_setup, task_id, task, log_path, workgroup, setup))
 }

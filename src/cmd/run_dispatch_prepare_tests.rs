@@ -305,27 +305,6 @@ fn prepare_dispatch_rejects_requested_worktree_when_it_is_the_repo_root() {
 }
 
 #[test]
-fn prepare_dispatch_without_dir_persists_absolute_cwd() {
-    let _guard = isolated_home();
-    let store = Arc::new(Store::open_memory().unwrap());
-    let mut args = RunArgs {
-        agent_name: "codex".to_string(),
-        prompt: "Investigate a concrete task routing bug.".to_string(),
-        ..Default::default()
-    };
-
-    let prepared = prepare_dispatch_with(&store, &mut args, |_| true).unwrap();
-
-    let saved_json = store
-        .get_task_dispatch_args(prepared.task_id.as_str())
-        .unwrap()
-        .unwrap();
-    let saved = RunArgs::from_dispatch_args_json(&saved_json).unwrap();
-    let cwd = std::env::current_dir().unwrap();
-    assert_eq!(saved.dir.as_deref(), Some(cwd.to_str().unwrap()));
-}
-
-#[test]
 fn prepare_dispatch_records_effective_dir_from_dir_flag() {
     let _guard = isolated_home();
     let store = Arc::new(Store::open_memory().unwrap());

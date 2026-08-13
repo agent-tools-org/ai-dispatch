@@ -110,6 +110,14 @@ aid retry <task-id> --feedback "try again" --idle-timeout 900
 aid retry <task-id> --feedback-file notes.md
 ```
 
+A retry replays the directory the original run actually used, not the one you
+happen to be standing in when you type the command. A task dispatched without
+`--dir` records the absolute directory it ran in, and the retry resolves to
+that, falling back to the task's repository and refusing when neither is
+usable. This matters for agents that key their saved sessions by working
+directory: without it, resuming a session from a different directory fails
+immediately.
+
 Stopping preserves the worktree and attempts to preserve in-flight changes.
 Inspect the artifact afterward. A retry creates linked history; use `tree` to
 understand the chain.

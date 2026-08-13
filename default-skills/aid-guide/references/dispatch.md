@@ -374,6 +374,21 @@ of moving off the agent you asked for. Where a tiered agent has only one tier
 held — cursor's premium pool — dispatch stays on the agent and switches to a
 tier that still serves, reporting the swap rather than making it silently.
 
+A hold is scoped to what actually refused. When a CLI serves several providers,
+a refusal is attributed to the provider of the route aid dispatched, so one
+provider running out of credit leaves its siblings dispatchable — an
+`opencode/` balance failure does not hold `opencode-go/`. When the refusing
+provider cannot be identified, the hold covers the whole agent rather than
+guessing a provider.
+
+Model validation distinguishes who chose the model. A model you named with
+`--model` that the CLI does not serve is a hard error listing the served
+models. A model aid resolved for you — from the catalog, the declared budget,
+or a stored per-agent default — is dropped with a warning and the agent's own
+default runs instead, because a stale catalog entry is aid's problem to absorb,
+not a reason to refuse your dispatch. Where the CLI cannot be asked what it
+serves, dispatch proceeds unvalidated and says so.
+
 For providers represented by aidbar, a successful cached snapshot can release a
 time-based or transient older marker for this dispatch decision only when its
 `fetched_at` is newer than the marker file's modification time and every

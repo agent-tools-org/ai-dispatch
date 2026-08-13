@@ -50,6 +50,18 @@ fn budget_preferred_tiers_beat_unknown() {
 }
 
 #[test]
+fn unknown_model_is_not_on_budget_cheap_preference() {
+    // grok is unpriced: both rows sit on tier "unknown", which is a last-resort
+    // fallback, never a *preferred* tier. Deleting this let a tier reassignment
+    // (unknown -> cheap/premium) pass unnoticed and strand TaskBudget::Free.
+    assert!(!model_on_budget_preference(
+        AgentKind::Grok,
+        TaskBudget::Cheap,
+        "grok-4.5"
+    ));
+}
+
+#[test]
 fn budget_cheap_picks_lowest_price_within_tier() {
     // gemini cheap-tier: flash has higher capability but flash-lite is ~6x
     // cheaper on output. Free/Cheap must prefer lowest total price.

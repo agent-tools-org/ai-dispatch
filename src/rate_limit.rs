@@ -117,6 +117,18 @@ pub fn mark_rate_limited_for_evidence(
     }
 }
 
+pub fn mark_rate_limited_for_value(
+    agent: &AgentKind,
+    custom_name: Option<&str>,
+    evidence: &serde_json::Value,
+    message: &str,
+) {
+    match crate::agent::model_group::group_from_refusal_value(*agent, evidence) {
+        Some(group) => mark_group_rate_limited(agent, custom_name, group, message),
+        None => mark_rate_limited(agent, custom_name, message),
+    }
+}
+
 /// What is holding a marker open. These are three different facts and
 /// collapsing any two of them loses a route in one direction or the other.
 enum Hold {

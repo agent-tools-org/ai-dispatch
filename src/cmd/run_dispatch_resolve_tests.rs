@@ -211,7 +211,8 @@ fn resolve_agent_setup_drops_unserved_aid_selected_model() {
     let mut args = RunArgs {
         agent_name: "grok".to_string(),
         prompt: "say hi".to_string(),
-        budget: true,
+        model: Some("stale-aid-model".to_string()),
+        model_source: crate::agent::model_validation::ModelSource::AidResolved,
         ..Default::default()
     };
 

@@ -6,6 +6,7 @@ use crate::cli::RunExtrasArgs;
 use crate::cmd;
 use crate::cmd_dispatch::resolve_group;
 use crate::agent::classifier::TaskCategory;
+use crate::agent::model_validation::ModelSource;
 use crate::types::{TaskBudget, TaskDifficulty, TaskEgress, TaskRigor, TaskUrgency};
 
 #[allow(clippy::too_many_arguments)]
@@ -63,6 +64,11 @@ pub(super) fn build_run_args(
     } else {
         extras.skill
     };
+    let model_source = if model.is_some() {
+        ModelSource::UserSupplied
+    } else {
+        ModelSource::AidResolved
+    };
     cmd::run::RunArgs {
         agent_name,
         prompt,
@@ -73,6 +79,7 @@ pub(super) fn build_run_args(
         output,
         result_file,
         model: model.or(auto_model),
+        model_source,
         declared_difficulty: difficulty,
         declared_budget,
         declared_urgency: urgency,
@@ -118,5 +125,73 @@ pub(super) fn build_run_args(
         no_audit,
         link_deps: !no_link_deps,
         ..Default::default()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::cli::RunExtrasArgs;
+
+    #[test]
+    fn auto_model_is_marked_aid_resolved() {
+        let args = build_run_args(
+            "qwen".to_string(),
+            "say hi".to_string(),
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            Some("stale-aid-model".to_string()),
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            0,
+            Vec::new(),
+            Vec::new(),
+            Vec::new(),
+            Box::new(RunExtrasArgs {
+                context_from: Vec::new(),
+                skill: Vec::new(),
+                template: None,
+                on_done: None,
+                cascade: Vec::new(),
+                hook: Vec::new(),
+            }),
+            false,
+            false,
+            true,
+            false,
+            false,
+            None,
+            false,
+            None,
+            None,
+            None,
+            None,
+            TaskEgress::Any,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            false,
+            false,
+            false,
+        );
+
+        assert_eq!(args.model.as_deref(), Some("stale-aid-model"));
+        assert_eq!(args.model_source, ModelSource::AidResolved);
     }
 }

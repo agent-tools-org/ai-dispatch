@@ -189,9 +189,9 @@ fn catalog_lists_grok_profile_and_default_model() {
     assert!(!*streaming);
     let model = AGENT_MODELS
         .iter()
-        .find(|m| m.agent == AgentKind::Grok && m.model == "grok-4.5");
+        .find(|m| m.agent == AgentKind::Grok && m.model == "grok-4.6");
     let Some(model) = model else {
-        panic!("grok-4.5 missing from AGENT_MODELS");
+        panic!("grok-4.6 missing from AGENT_MODELS");
     };
     assert_eq!(model.tier, "unknown");
     assert_eq!(model.input_per_m, 0.0);
@@ -208,7 +208,7 @@ fn catalog_lists_grok_profile_and_default_model() {
     let temp = tempfile::tempdir().unwrap();
     let _aid_home = crate::paths::AidHomeGuard::set(temp.path());
     crate::cost::clear_feed_for_tests();
-    for model_name in ["grok-4.5", "grok-4.5-build"] {
+    for model_name in ["grok-4.6", "grok-4.5", "grok-4.5-build"] {
         let cost = crate::cost::estimate_cost(100_000, Some(model_name), AgentKind::Grok);
         assert_eq!(cost, None, "{model_name}");
         assert_eq!(crate::cost::format_cost(cost), "unknown");

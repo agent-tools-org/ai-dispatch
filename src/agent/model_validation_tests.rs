@@ -39,8 +39,8 @@ fn validate_model_allows_valid_model() {
         models: Some(vec!["gpt-5.6-sol".to_string(), "gpt-5.5".to_string()]),
     };
 
-    assert!(validate_model_for_agent(&mock, "gpt-5.6-sol").is_ok());
-    assert!(validate_model_for_agent(&mock, "GPT-5.5").is_ok());
+    assert!(validate_model_for_agent(&mock, "gpt-5.6-sol", ModelSource::UserSupplied).is_ok());
+    assert!(validate_model_for_agent(&mock, "GPT-5.5", ModelSource::UserSupplied).is_ok());
 }
 
 #[test]
@@ -51,7 +51,9 @@ fn validate_model_rejects_absent_model_naming_served() {
         models: Some(vec!["gpt-5.6-sol".to_string(), "gpt-5.5".to_string()]),
     };
 
-    let err = validate_model_for_agent(&mock, "auto").unwrap_err().to_string();
+    let err = validate_model_for_agent(&mock, "auto", ModelSource::UserSupplied)
+        .unwrap_err()
+        .to_string();
     assert!(err.contains("Agent 'codex' does not serve model 'auto'"));
     assert!(err.contains("Served models: gpt-5.6-sol, gpt-5.5"));
 }
@@ -64,7 +66,7 @@ fn validate_model_allows_unqueryable_cli() {
         models: None,
     };
 
-    assert!(validate_model_for_agent(&mock, "any-unknown-model").is_ok());
+    assert!(validate_model_for_agent(&mock, "any-unknown-model", ModelSource::AidResolved).is_ok());
 }
 
 #[test]
@@ -80,9 +82,9 @@ fn cursor_auto_model_is_allowed() {
         ]),
     };
 
-    assert!(validate_model_for_agent(&mock, "auto").is_ok());
-    assert!(validate_model_for_agent(&mock, "composer-2.5").is_ok());
-    assert!(validate_model_for_agent(&mock, "unserved-model").is_err());
+    assert!(validate_model_for_agent(&mock, "auto", ModelSource::UserSupplied).is_ok());
+    assert!(validate_model_for_agent(&mock, "composer-2.5", ModelSource::UserSupplied).is_ok());
+    assert!(validate_model_for_agent(&mock, "unserved-model", ModelSource::UserSupplied).is_err());
 }
 
 #[test]
@@ -95,7 +97,7 @@ fn cursor_probe_failure_returns_none_and_allows_non_alias_models() {
 
     // When the probe fails (returns None), unknown means ALLOW.
     // Both real models like composer-2.5 and aliases like auto must be allowed.
-    assert!(validate_model_for_agent(&mock, "composer-2.5").is_ok());
-    assert!(validate_model_for_agent(&mock, "auto").is_ok());
-    assert!(validate_model_for_agent(&mock, "custom-model-xyz").is_ok());
+    assert!(validate_model_for_agent(&mock, "composer-2.5", ModelSource::AidResolved).is_ok());
+    assert!(validate_model_for_agent(&mock, "auto", ModelSource::AidResolved).is_ok());
+    assert!(validate_model_for_agent(&mock, "custom-model-xyz", ModelSource::AidResolved).is_ok());
 }

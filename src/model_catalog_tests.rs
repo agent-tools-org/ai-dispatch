@@ -6,16 +6,17 @@ use super::{budget_model, model_for_task_budget, model_on_budget_preference};
 use crate::types::{AgentKind, TaskBudget};
 
 #[test]
-fn budget_cheap_selects_unknown_tier_as_last_resort() {
-    // grok's only catalog row is tier "unknown" — unpriced, not ineligible.
-    assert_eq!(
-        model_for_task_budget(AgentKind::Grok, TaskBudget::Cheap),
-        Some("grok-4.5")
-    );
-    assert_eq!(
-        model_for_task_budget(AgentKind::Grok, TaskBudget::Free),
-        Some("grok-4.5")
-    );
+fn grok_budget_selection_is_a_monotonic_golden_table() {
+    let expected = [
+        (TaskBudget::Free, "grok-4.6"),
+        (TaskBudget::Cheap, "grok-4.6"),
+        (TaskBudget::Standard, "grok-4.6"),
+        (TaskBudget::Premium, "grok-4.6"),
+    ];
+
+    for (budget, model) in expected {
+        assert_eq!(model_for_task_budget(AgentKind::Grok, budget), Some(model));
+    }
 }
 
 #[test]
@@ -50,6 +51,9 @@ fn budget_preferred_tiers_beat_unknown() {
 
 #[test]
 fn unknown_model_is_not_on_budget_cheap_preference() {
+    // grok is unpriced: both rows sit on tier "unknown", which is a last-resort
+    // fallback, never a *preferred* tier. Deleting this let a tier reassignment
+    // (unknown -> cheap/premium) pass unnoticed and strand TaskBudget::Free.
     assert!(!model_on_budget_preference(
         AgentKind::Grok,
         TaskBudget::Cheap,

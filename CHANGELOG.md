@@ -1,3 +1,11 @@
+## v10.30.0 (2026-08-13)
+- One provider running out of credit no longer takes its whole CLI offline: a refusal is attributed to the route aid actually dispatched, so a sibling provider that is still serving stays available.
+- A model aid picked for you is no longer mistaken for one you named. Stale catalog entries degrade to the agent's own default with a warning, while a model you asked for by name still fails loudly if the CLI does not serve it — on first dispatch and on retry alike.
+- Retrying a task now replays the directory the original run actually used, instead of whichever directory you happened to be standing in. Agents that key their saved sessions by working directory can resume again.
+- A fast failure whose only output went to stderr no longer leaves an empty log; the reason is preserved, bounded, and only for agents that exited on their own.
+- New: docs/multimodal-capability-matrix.md records, per agent, which modalities are measured, which are unsupported, and which are simply unknown.
+
+
 ## v10.29.0 (2026-08-13)
 - A sandbox that refuses writes to the cargo target directory no longer reads as a broken delivery: Rust verification now runs through the same cargo runner as `aid build` and `aid test`, so it retries against a writable temporary target and reports what the tests actually did.
 - When a build environment genuinely cannot run, the task is recorded as unverified infrastructure rather than failed, so the board stops showing an agent's passing work as broken. A test that really fails is still a failure.

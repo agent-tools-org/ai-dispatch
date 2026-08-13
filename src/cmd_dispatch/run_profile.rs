@@ -141,7 +141,7 @@ mod tests {
     }
 
     #[test]
-    fn cheap_budget_dispatches_grok_with_unknown_tier_model() {
+    fn cheap_budget_dispatches_grok_with_cli_default_model() {
         let (agent, model) = explicit_agent(
             "grok".into(),
             &None,
@@ -150,7 +150,7 @@ mod tests {
         )
         .expect("grok --budget cheap must dispatch");
         assert_eq!(agent, "grok");
-        assert_eq!(model.as_deref(), Some("grok-4.5"));
+        assert_eq!(model.as_deref(), Some("grok-4.6"));
     }
 
     #[test]

@@ -193,7 +193,7 @@ fn catalog_lists_grok_profile_and_default_model() {
     let Some(model) = model else {
         panic!("grok-4.6 missing from AGENT_MODELS");
     };
-    assert_eq!(model.tier, "premium");
+    assert_eq!(model.tier, "unknown");
     assert_eq!(model.input_per_m, 0.0);
     assert_eq!(model.output_per_m, 0.0);
     // Catalog 0.0 must not become a numeric cost. Without agent-reported

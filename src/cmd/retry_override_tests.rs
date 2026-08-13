@@ -3,6 +3,7 @@
 // Deps: retry_task_to_run_args, RetryArgs, RunArgs, Store.
 
 use super::{retry_task_to_run_args, RetryArgs};
+use crate::agent::model_validation::{ModelSource, MockServedModelsGuard};
 use crate::cmd::run::RunArgs;
 use crate::store::Store;
 use crate::types::{AgentKind, Task, TaskId, TaskStatus, VerifyStatus};
@@ -111,6 +112,35 @@ fn retry_unspecified_model_inherits_original() {
         Some("gpt-saved"),
         "unspecified --model must inherit the original task model, not a default"
     );
+}
+
+#[test]
+fn retry_keeps_explicit_model_hard_error_provenance() {
+    let store = Store::open_memory().unwrap();
+    let task = failed_task("t-model-source");
+    let saved = RunArgs {
+        agent_name: "codex".to_string(),
+        prompt: task.prompt.clone(),
+        model: Some("explicit-model".to_string()),
+        model_source: ModelSource::UserSupplied,
+        ..Default::default()
+    };
+    insert_with_saved(&store, &task, &saved);
+    let _served = MockServedModelsGuard::set(
+        AgentKind::Codex,
+        Some(vec!["different-model".to_string()]),
+    );
+
+    let retry = retry_task_to_run_args(&store, &task, base_retry(task.id.as_str()), false).unwrap();
+    assert_eq!(retry.model_source, ModelSource::UserSupplied);
+    let err = crate::agent::model_validation::validate_model_for_agent(
+        crate::agent::get_agent(AgentKind::Codex).as_ref(),
+        retry.model.as_deref().unwrap(),
+        retry.model_source,
+    )
+    .unwrap_err()
+    .to_string();
+    assert!(err.contains("does not serve model 'explicit-model'"));
 }
 
 #[test]

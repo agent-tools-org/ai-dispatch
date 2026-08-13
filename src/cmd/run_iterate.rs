@@ -127,7 +127,6 @@ pub async fn maybe_iterate(
     retry_args.output = task.output_path.clone().or_else(|| retry_args.output.clone());
     if retry_args.model.is_none() {
         retry_args.model = task.requested_model.clone();
-        retry_args.model_source = crate::agent::model_validation::ModelSource::AidResolved;
     }
     retry_args.verify = task.verify.clone();
     retry_args.read_only = task.read_only;

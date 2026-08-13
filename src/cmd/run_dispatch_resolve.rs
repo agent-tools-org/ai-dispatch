@@ -248,6 +248,7 @@ pub(super) fn resolve_agent_setup(store: &Arc<Store>, args: &mut RunArgs) -> Res
                 effective_model.as_deref().unwrap_or("(default)"),
                 replacement
             );
+            args.model_source = agent::model_validation::ModelSource::AidResolved;
             Some(replacement.to_string())
         }
         None => effective_model,

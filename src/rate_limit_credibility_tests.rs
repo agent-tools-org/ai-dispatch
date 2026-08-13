@@ -197,3 +197,57 @@ fn long_refusal_keeps_an_iso_reset_timestamp_after_the_old_cutoff() {
     assert!(info.recovery_at.is_some(), "{info:?}");
     assert!(info.message.is_some_and(|stored| stored.len() > 200));
 }
+
+/// The production case, with the event shape actually emitted by the CLI.
+///
+/// Measured 2026-08-13 against the live out-of-balance provider:
+///   opencode run --model opencode/deepseek-v4-pro --format json 'hi'
+/// The error event carries NO `providerID` at any depth — the field exists only
+/// in the human log format. Attribution therefore cannot come from the refusal;
+/// it comes from the route aid dispatched. A fixture that invents `providerID`
+/// passes through the parsed-key path and proves nothing about this case.
+#[test]
+fn real_opencode_refusal_without_provider_key_scopes_to_dispatched_route() {
+    let temp = isolated();
+    let _guard = crate::paths::AidHomeGuard::set(temp.path());
+    let agent = AgentKind::OpenCode;
+    let error = serde_json::json!({
+        "type": "error",
+        "timestamp": 1786593837748i64,
+        "sessionID": "ses_006b585dfffevIIzdbtftHpYJO",
+        "error": {
+            "name": "APIError",
+            "data": {
+                "message": "Insufficient balance. Manage your billing here: https://opencode.ai/workspace/wrk_x/billing",
+                "statusCode": 401,
+                "isRetryable": false,
+                "metadata": {"url": "https://opencode.ai/zen/v1/chat/completions"}
+            }
+        }
+    });
+
+    mark_rate_limited_for_model_value(
+        &agent,
+        None,
+        Some("opencode/deepseek-v4-pro"),
+        &error,
+        "Insufficient balance. Manage your billing here",
+    );
+
+    assert!(
+        is_group_rate_limited(&agent, None, "opencode"),
+        "the dispatched provider must be held"
+    );
+    assert!(
+        !is_rate_limited(&agent, None),
+        "one provider's refusal must not hold the whole CLI"
+    );
+    assert!(
+        dispatch_blocking_hold_for_model(&agent, None, Some("opencode-go/deepseek-v4-pro")).is_none(),
+        "the healthy sibling provider must stay dispatchable"
+    );
+    assert!(
+        dispatch_blocking_hold_for_model(&agent, None, Some("opencode/other-model")).is_some(),
+        "another model on the refusing provider must stay blocked"
+    );
+}

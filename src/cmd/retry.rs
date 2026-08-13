@@ -6,6 +6,7 @@ use std::path::Path;
 use std::sync::Arc;
 
 use crate::cmd::run::{self, switch_agent, RunArgs};
+use crate::agent::model_validation::ModelSource;
 use crate::store::Store;
 use crate::types::TaskId;
 
@@ -101,6 +102,10 @@ fn load_retry_run_args(store: &Store, task: &crate::types::Task) -> Result<RunAr
             dir: task.repo_path.clone(),
             output: task.output_path.clone(),
             model: task.requested_model.clone(),
+            // requested_model stores the effective model, not whether the
+            // original invocation supplied --model. Old rows cannot retain
+            // that distinction, so let stale preferences degrade on retry.
+            model_source: ModelSource::AidResolved,
             group: task.workgroup_id.clone(),
             verify: task.verify.clone(),
             read_only: task.read_only,
@@ -130,6 +135,7 @@ fn apply_retry_route(run_args: &mut RunArgs, task: &crate::types::Task, args: &R
     switch_agent(run_args, agent_name);
     if let Some(model) = args.model.clone() {
         run_args.model = Some(model);
+        run_args.model_source = ModelSource::UserSupplied;
     }
     if let Some(secs) = args.idle_timeout_secs {
         run_args.idle_timeout_secs = Some(secs);

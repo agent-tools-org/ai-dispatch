@@ -59,6 +59,8 @@ pub(crate) enum ModelSource {
 }
 
 impl Default for ModelSource {
+    /// Unknown provenance belongs to old persisted rows; fail closed so a
+    /// model whose caller intent cannot be recovered is never silently dropped.
     fn default() -> Self {
         Self::UserSupplied
     }

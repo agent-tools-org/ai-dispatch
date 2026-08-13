@@ -26,7 +26,11 @@ pub(crate) fn fallback_target_root() -> PathBuf {
 /// block cargo writes under the worktree while still allowing plain file creation.
 pub(crate) fn sandbox_fallback_target_dir() -> Option<String> {
     let cwd = std::env::current_dir().ok()?;
-    let key = cwd_key(&cwd);
+    sandbox_fallback_target_dir_at(&cwd)
+}
+
+pub(crate) fn sandbox_fallback_target_dir_at(cwd: &Path) -> Option<String> {
+    let key = cwd_key(cwd);
     let dir = fallback_target_root().join(key);
     Some(dir.to_string_lossy().into_owned())
 }
@@ -52,6 +56,15 @@ pub(crate) fn should_retry_with_fallback(
     stderr_lines: &[String],
     target_dir: Option<&str>,
 ) -> Option<String> {
+    should_retry_with_fallback_at(success, stderr_lines, target_dir, None)
+}
+
+pub(crate) fn should_retry_with_fallback_at(
+    success: bool,
+    stderr_lines: &[String],
+    target_dir: Option<&str>,
+    cwd: Option<&Path>,
+) -> Option<String> {
     if success {
         return None;
     }
@@ -59,7 +72,9 @@ pub(crate) fn should_retry_with_fallback(
     if !target_dir_permission_blocked(stderr_lines, chosen) {
         return None;
     }
-    let fallback = sandbox_fallback_target_dir()?;
+    let fallback = cwd
+        .and_then(sandbox_fallback_target_dir_at)
+        .or_else(sandbox_fallback_target_dir)?;
     if Path::new(&fallback) == Path::new(chosen) {
         return None;
     }

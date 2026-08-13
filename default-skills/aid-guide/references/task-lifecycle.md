@@ -25,7 +25,11 @@ Verification is a separate axis. A configured verify command starts with
 `VerifyStatus::Pending` and ends as `Passed`, `Failed`, `TimedOut`,
 `InfrastructureFailure`, or `Skipped`. `TimedOut` and
 `InfrastructureFailure` are inconclusive rather than evidence that the change
-is broken. `TaskOutcome` derives the judgment from lifecycle, verification, and
+is broken. A build environment that cannot run is one of those cases: when
+cargo is denied write access to the configured target directory, aid retries
+against a writable temporary target, and if that still fails the task is
+recorded `InfrastructureFailure` (`Unverified`) rather than `Failed`
+(`Broken`). `TaskOutcome` derives the judgment from lifecycle, verification, and
 delivery assessment: only `Verified` and `Delivered` are success; `Unverified`
 and `Broken` are not. A `Done` task with `delivery_assessment=hollow_output` or
 `missing_final_delivery` is judged `Failed` — those assessments mean nothing

@@ -1,3 +1,9 @@
+## v10.29.0 (2026-08-13)
+- A sandbox that refuses writes to the cargo target directory no longer reads as a broken delivery: Rust verification now runs through the same cargo runner as `aid build` and `aid test`, so it retries against a writable temporary target and reports what the tests actually did.
+- When a build environment genuinely cannot run, the task is recorded as unverified infrastructure rather than failed, so the board stops showing an agent's passing work as broken. A test that really fails is still a failure.
+- Known follow-up: every rescued verification writes into the shared fallback target directory, which has no garbage collection and grows by roughly two gigabytes per branch.
+
+
 ## v10.28.0 (2026-08-13)
 - Dispatching to grok works again: aid resolved grok-4.5 from a catalog that had gone stale against the CLI's own model list, and its served-model probe dropped every non-default row, so aid refused the very model it had just picked and no `aid run grok` could start at any budget level.
 - aid now knows grok-4.6, and both grok rows stay on the unpriced `unknown` tier, so asking for the cheapest option can no longer strand budget selection on a model aid never chose.

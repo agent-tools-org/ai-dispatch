@@ -102,7 +102,16 @@ pub fn mark_rate_limited_for_message(
     custom_name: Option<&str>,
     message: &str,
 ) {
-    match crate::agent::model_group::group_from_refusal(*agent, message) {
+    mark_rate_limited_for_evidence(agent, custom_name, message, message);
+}
+
+pub fn mark_rate_limited_for_evidence(
+    agent: &AgentKind,
+    custom_name: Option<&str>,
+    evidence: &str,
+    message: &str,
+) {
+    match crate::agent::model_group::group_from_refusal(*agent, evidence) {
         Some(group) => mark_group_rate_limited(agent, custom_name, group, message),
         None => mark_rate_limited(agent, custom_name, message),
     }

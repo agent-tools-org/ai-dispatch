@@ -156,7 +156,13 @@ pub(crate) fn parse_json_event(
         "error" => {
             let detail = error_detail(v).unwrap_or("unknown error");
             if rate_limit::is_rate_limit_error_for_agent(detail, &signature_kind) {
-                rate_limit::mark_rate_limited(&marker_kind, custom_name, detail);
+                let evidence = v.to_string();
+                rate_limit::mark_rate_limited_for_evidence(
+                    &marker_kind,
+                    custom_name,
+                    &evidence,
+                    detail,
+                );
             }
             (detail.to_string(), None)
         }

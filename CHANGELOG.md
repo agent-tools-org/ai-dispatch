@@ -1,3 +1,10 @@
+## v10.28.0 (2026-08-13)
+- Dispatching to grok works again: aid resolved grok-4.5 from a catalog that had gone stale against the CLI's own model list, and its served-model probe dropped every non-default row, so aid refused the very model it had just picked and no `aid run grok` could start at any budget level.
+- aid now knows grok-4.6, and both grok rows stay on the unpriced `unknown` tier, so asking for the cheapest option can no longer strand budget selection on a model aid never chose.
+- A model aid picked for you no longer turns a stale catalog into a dead dispatch: it is dropped with a warning and the agent's own default runs instead. A model you asked for by name still fails loudly if the CLI does not serve it.
+- Recorded why an `aid retry` of a qwen task dies in two seconds, and why the outer sandbox turns a passing verification into a reported code failure.
+
+
 ## v10.27.0 (2026-08-13)
 - Two ways aid could show you the wrong thing about your own work are closed: a report belonging to another task, and a merge restoring another task's tree
 - `aid show --output` only renders a file it can prove belongs to the task you asked about. A relative `-o` path used to be resolved against the process working directory, so running the command from a directory that happened to hold a `report.md` displayed that file as the task's report — real work from a different task, with nothing marking it as foreign. Relative paths now resolve only under the task's own recorded directory, worktree, or task directory, and are required to stay inside it. When no owned file exists, that is stated and the task's own log is shown instead. `aid judge`, `--context-from` and summary conclusions share the same rule, so a caller who believes they passed a previous task's report into a prompt no longer receives something else in silence.

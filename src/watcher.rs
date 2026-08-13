@@ -205,6 +205,20 @@ pub async fn watch_streaming(
         let model = info.model.as_deref().or(dispatched_model);
         rate_limit::clear_rate_limit_for_model(&agent.kind(), agent.rate_limit_name(), model);
     }
+    // A fast-fail whose only output was stderr (e.g. qwen's "No saved session
+    // found with ID ...") would otherwise leave a zero-byte log and discard the
+    // cause that was on screen. Preserve surviving stderr in the log so the
+    // reason is not lost.
+    if status == TaskStatus::Failed && full_output.trim().is_empty() {
+        if let Ok(stderr) = std::fs::read_to_string(paths::stderr_path(task_id.as_str()))
+            && !stderr.trim().is_empty()
+        {
+            log_file.write_all(stderr.as_bytes()).await?;
+            if !stderr.ends_with('\n') {
+                log_file.write_all(b"\n").await?;
+            }
+        }
+    }
     let stderr_note = failure_stderr_note(status, task_id, agent);
     let detail = format!(
         "{} — {} events, exit code {}{}",

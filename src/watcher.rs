@@ -205,6 +205,25 @@ pub async fn watch_streaming(
         let model = info.model.as_deref().or(dispatched_model);
         rate_limit::clear_rate_limit_for_model(&agent.kind(), agent.rate_limit_name(), model);
     }
+    // A fast-fail whose only output was stderr (e.g. qwen's "No saved session
+    // found with ID ...") would otherwise leave a zero-byte log and discard the
+    // cause that was on screen. Preserve surviving stderr in the log so the
+    // reason is not lost. This is deliberately narrow: it fires only when the
+    // agent exited on its own (a non-zero exit code, not a signal) with no
+    // stdout events — a hung or cost-killed process is terminated by signal and
+    // its stderr is not replayed. Reads are capped so an oversized stderr is
+    // not copied unbounded into the log.
+    if status == TaskStatus::Failed
+        && full_output.trim().is_empty()
+        && exit_status.code().is_some()
+    {
+        if let Some(stderr) = read_capped_stderr(task_id.as_str()) {
+            log_file.write_all(stderr.as_bytes()).await?;
+            if !stderr.ends_with('\n') {
+                log_file.write_all(b"\n").await?;
+            }
+        }
+    }
     let stderr_note = failure_stderr_note(status, task_id, agent);
     let detail = format!(
         "{} — {} events, exit code {}{}",
@@ -261,6 +280,27 @@ fn exceeds_cost_ceiling(current_cost: Option<f64>, max_task_cost: Option<f64>) -
         (current_cost, max_task_cost),
         (Some(current_cost), Some(max_task_cost)) if current_cost > max_task_cost
     )
+}
+
+const MAX_PRESERVED_STDERR_BYTES: usize = 64 * 1024;
+
+fn read_capped_stderr(task_id: &str) -> Option<String> {
+    use std::io::Read;
+    let file = std::fs::File::open(paths::stderr_path(task_id)).ok()?;
+    let mut bytes = Vec::new();
+    file.take(MAX_PRESERVED_STDERR_BYTES as u64 + 1)
+        .read_to_end(&mut bytes)
+        .ok()?;
+    let truncated = bytes.len() > MAX_PRESERVED_STDERR_BYTES;
+    bytes.truncate(MAX_PRESERVED_STDERR_BYTES);
+    let mut text = String::from_utf8_lossy(&bytes).into_owned();
+    if truncated {
+        text.push_str("\n[stderr truncated]");
+    }
+    if text.trim().is_empty() {
+        return None;
+    }
+    Some(text)
 }
 
 fn failure_stderr_note(status: TaskStatus, task_id: &TaskId, agent: &dyn Agent) -> String {

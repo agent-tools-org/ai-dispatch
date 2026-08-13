@@ -268,9 +268,15 @@ pub(crate) async fn post_run_lifecycle(
         && let Some(fallback) =
             agent::selection::coding_fallback_for_prompt(&agent_kind, &args.prompt)
     {
-        rate_limit::mark_rate_limited_for_message(
+        let model = task
+            .requested_model
+            .as_deref()
+            .or(args.model.as_deref())
+            .or(task.observed_model.as_deref());
+        rate_limit::mark_rate_limited_for_model(
             &agent_kind,
             task.custom_agent_name.as_deref(),
+            model,
             message,
         );
         aid_info!(
@@ -540,9 +546,14 @@ fn handle_failed_postprocess(
 ) -> Option<String> {
     let quota_error_message = read_quota_error_message(task_id, &agent_kind);
     if let Some(message) = quota_error_message.as_deref() {
-        rate_limit::mark_rate_limited_for_message(
+        let model = task
+            .requested_model
+            .as_deref()
+            .or(task.observed_model.as_deref());
+        rate_limit::mark_rate_limited_for_model(
             &agent_kind,
             task.custom_agent_name.as_deref(),
+            model,
             message,
         );
     }

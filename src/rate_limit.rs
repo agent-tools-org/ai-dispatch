@@ -60,6 +60,7 @@ fn marker_path(agent: &AgentKind, custom_name: Option<&str>) -> PathBuf {
 fn group_marker_path(agent: &AgentKind, custom_name: Option<&str>, group: &str) -> PathBuf {
     #[cfg(test)]
     assert_marker_path_isolated();
+    let group = group.to_ascii_lowercase();
     aid_dir().join(format!(
         "rate-limit-{}--{}",
         marker_slug(agent, custom_name),
@@ -102,16 +103,20 @@ pub fn mark_rate_limited_for_message(
     custom_name: Option<&str>,
     message: &str,
 ) {
-    mark_rate_limited_for_evidence(agent, custom_name, message, message);
+    mark_rate_limited_for_model(agent, custom_name, None, message);
 }
 
-pub fn mark_rate_limited_for_evidence(
+/// Mark the route aid actually dispatched, falling back to refusal text only
+/// when no route model is available.
+pub fn mark_rate_limited_for_model(
     agent: &AgentKind,
     custom_name: Option<&str>,
-    evidence: &str,
+    model: Option<&str>,
     message: &str,
 ) {
-    match crate::agent::model_group::group_from_refusal(*agent, evidence) {
+    match crate::agent::model_group::model_group(*agent, model)
+        .or_else(|| crate::agent::model_group::group_from_refusal(*agent, message))
+    {
         Some(group) => mark_group_rate_limited(agent, custom_name, group, message),
         None => mark_rate_limited(agent, custom_name, message),
     }
@@ -123,7 +128,21 @@ pub fn mark_rate_limited_for_value(
     evidence: &serde_json::Value,
     message: &str,
 ) {
-    match crate::agent::model_group::group_from_refusal_value(*agent, evidence) {
+    mark_rate_limited_for_model_value(agent, custom_name, None, evidence, message);
+}
+
+/// Mark the dispatched route first, then use exact keys from a parsed refusal
+/// only when aid has no model to identify the route.
+pub fn mark_rate_limited_for_model_value(
+    agent: &AgentKind,
+    custom_name: Option<&str>,
+    model: Option<&str>,
+    evidence: &serde_json::Value,
+    message: &str,
+) {
+    match crate::agent::model_group::model_group(*agent, model)
+        .or_else(|| crate::agent::model_group::group_from_refusal_value(*agent, evidence))
+    {
         Some(group) => mark_group_rate_limited(agent, custom_name, group, message),
         None => mark_rate_limited(agent, custom_name, message),
     }

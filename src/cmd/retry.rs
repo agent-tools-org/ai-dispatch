@@ -148,6 +148,8 @@ fn finish_retry_run_args(
     run_args.prompt = prompt;
     if let Some(dir) = dir {
         run_args.dir = Some(dir);
+    } else if worktree_arg.is_none() {
+        resolve_replay_dir(run_args, task)?;
     }
     run_args.worktree = worktree_arg;
     resume_pruned_worktree_at_tip(task, run_args)?;
@@ -156,6 +158,38 @@ fn finish_retry_run_args(
     run_args.background = args.bg;
     run_args.existing_task_id = None;
     Ok(())
+}
+
+// A task dispatched without --dir (or with `--dir .`) stores `dir: null` (or
+// `.`), which means "the process cwd of the invocation" — not a stable replay
+// target. On replay, resolve the absolute directory the task actually ran in
+// (its effective_dir), falling back to its repo, and refuse to guess when
+// neither still exists.
+fn resolve_replay_dir(run_args: &mut RunArgs, task: &crate::types::Task) -> Result<()> {
+    let dir_is_process_cwd = run_args
+        .dir
+        .as_deref()
+        .map(str::trim)
+        .map_or(true, |dir| dir.is_empty() || dir == ".");
+    if !dir_is_process_cwd {
+        return Ok(());
+    }
+    if let Some(effective) = task.effective_dir.as_deref()
+        && Path::new(effective).is_dir()
+    {
+        run_args.dir = Some(effective.to_string());
+        return Ok(());
+    }
+    if let Some(repo) = task.repo_path.as_deref()
+        && Path::new(repo).is_dir()
+    {
+        run_args.dir = Some(repo.to_string());
+        return Ok(());
+    }
+    anyhow::bail!(
+        "cannot retry task {}: recorded working directory no longer exists and no usable repo path; refusing to guess a working directory",
+        task.id
+    );
 }
 
 fn resolve_feedback(feedback: Option<&str>, feedback_file: Option<&str>) -> Result<String> {
@@ -288,3 +322,7 @@ mod pruned_resume_tests;
 #[cfg(test)]
 #[path = "retry_override_tests.rs"]
 mod override_tests;
+
+#[cfg(test)]
+#[path = "retry_dir_fallback_tests.rs"]
+mod dir_fallback_tests;

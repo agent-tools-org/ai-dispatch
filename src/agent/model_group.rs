@@ -95,6 +95,21 @@ pub(crate) fn group_from_refusal<'a>(agent: AgentKind, message: &'a str) -> Opti
         .then_some(PREMIUM_GROUP)
 }
 
+/// Read OpenCode's provider attribution from the parsed error envelope.
+pub(crate) fn group_from_refusal_value<'a>(
+    agent: AgentKind,
+    value: &'a serde_json::Value,
+) -> Option<&'a str> {
+    if agent != AgentKind::OpenCode {
+        return None;
+    }
+    ["providerID", "provider_id", "provider", "model"]
+        .iter()
+        .find_map(|key| value.get(*key).and_then(serde_json::Value::as_str))
+        .and_then(|value| provider_from_model(value).or(Some(value)))
+        .filter(|provider| !provider.eq_ignore_ascii_case("unknown"))
+}
+
 fn provider_from_model(model: &str) -> Option<&str> {
     let (provider, _) = model.split_once('/')?;
     (!provider.is_empty()).then_some(provider)

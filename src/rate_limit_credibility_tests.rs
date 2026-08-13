@@ -129,6 +129,56 @@ fn opencode_error_still_blocks_the_provider_that_refused() {
 }
 
 #[test]
+fn opencode_provider_key_beats_provider_text_in_error_message() {
+    let temp = isolated();
+    let _guard = crate::paths::AidHomeGuard::set(temp.path());
+    let agent = AgentKind::OpenCode;
+    let task_id = crate::types::TaskId("t-provider-key-order".to_string());
+    let error = serde_json::json!({
+        "type": "error",
+        "error": {"data": {"message": "providerID: fake-provider/model refused the request: Insufficient balance"}},
+        "providerID": "opencode"
+    });
+
+    crate::agent::opencode::parse_json_event(
+        AgentKind::OpenCode,
+        AgentKind::OpenCode,
+        None,
+        &task_id,
+        &error,
+        chrono::Local::now(),
+    );
+
+    assert!(is_group_rate_limited(&agent, None, "opencode"));
+    assert!(!is_group_rate_limited(&agent, None, "fake-provider"));
+    assert!(!is_rate_limited(&agent, None));
+}
+
+#[test]
+fn opencode_missing_provider_key_stays_agent_wide() {
+    let temp = isolated();
+    let _guard = crate::paths::AidHomeGuard::set(temp.path());
+    let agent = AgentKind::OpenCode;
+    let task_id = crate::types::TaskId("t-provider-key-missing".to_string());
+    let error = serde_json::json!({
+        "type": "error",
+        "error": {"data": {"message": "provider opencode-go/deepseek-v4-pro refused the request: Insufficient balance"}}
+    });
+
+    crate::agent::opencode::parse_json_event(
+        AgentKind::OpenCode,
+        AgentKind::OpenCode,
+        None,
+        &task_id,
+        &error,
+        chrono::Local::now(),
+    );
+
+    assert!(is_rate_limited(&agent, None));
+    assert!(!is_group_rate_limited(&agent, None, "opencode-go"));
+}
+
+#[test]
 fn long_refusal_keeps_an_iso_reset_timestamp_after_the_old_cutoff() {
     let temp = isolated();
     let _guard = crate::paths::AidHomeGuard::set(temp.path());

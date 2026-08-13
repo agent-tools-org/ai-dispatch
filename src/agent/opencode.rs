@@ -155,13 +155,12 @@ pub(crate) fn parse_json_event(
         }
         "error" => {
             let detail = error_detail(v).unwrap_or("unknown error");
-            if rate_limit::is_rate_limit_error_for_agent(detail, &signature_kind) {
-                rate_limit::mark_rate_limited_for_value(
-                    &marker_kind,
-                    custom_name,
-                    v,
-                    detail,
-                );
+            // The built-in OpenCode watcher has the dispatched model and owns
+            // provider attribution. Overlays still need their agent marker.
+            if marker_kind != AgentKind::OpenCode
+                && rate_limit::is_rate_limit_error_for_agent(detail, &signature_kind)
+            {
+                rate_limit::mark_rate_limited_for_value(&marker_kind, custom_name, v, detail);
             }
             (detail.to_string(), None)
         }
@@ -298,15 +297,3 @@ pub(crate) fn extract_tokens_from_output(output: &str) -> (Option<i64>, Option<f
 #[cfg(test)]
 #[path = "opencode_tests.rs"]
 mod tests;
-#[cfg(test)]
-mod rate_limit_tests {
-    use super::*; use crate::{agent::Agent, paths, rate_limit};
-    #[test]
-    fn marks_opencode_rate_limits_from_text_and_json_errors() {
-        let temp = tempfile::tempdir().unwrap(); let _aid_home = paths::AidHomeGuard::set(temp.path()); rate_limit::clear_rate_limit(&AgentKind::OpenCode, None); let agent = OpenCodeAgent;
-        // A rendered PTY line is classified but never marked: under a PTY this
-        // is the model's own answer as often as the CLI's output.
-        assert_eq!(agent.parse_event(&TaskId("t-opencode".to_string()), "Error: Insufficient balance. Manage your billing here").unwrap().event_kind, EventKind::Error); assert!(!rate_limit::is_rate_limited(&AgentKind::OpenCode, None));
-        assert_eq!(parse_json_event(AgentKind::OpenCode, AgentKind::OpenCode, None,  &TaskId("t-opencode".to_string()), &serde_json::json!({"type":"error","error":{"name":"APIError","data":{"message":"Insufficient balance. Manage your billing here"}}}), Local::now()).unwrap().event_kind, EventKind::Error); assert!(rate_limit::is_rate_limited(&AgentKind::OpenCode, None)); rate_limit::clear_rate_limit(&AgentKind::OpenCode, None);
-    }
-}

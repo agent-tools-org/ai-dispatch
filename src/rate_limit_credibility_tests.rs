@@ -32,6 +32,24 @@ fn opencode_model_refusal_holds_only_the_nvidia_provider() {
 }
 
 #[test]
+fn opencode_provider_route_markers_are_case_insensitive() {
+    let temp = isolated();
+    let _guard = crate::paths::AidHomeGuard::set(temp.path());
+    let agent = AgentKind::OpenCode;
+
+    mark_rate_limited_for_model(
+        &agent,
+        None,
+        Some("OpenCode/deepseek-v4-pro"),
+        "Insufficient balance.",
+    );
+
+    assert!(is_group_rate_limited(&agent, None, "opencode"));
+    assert!(dispatch_blocking_hold_for_model(&agent, None, Some("opencode/other-model"))
+        .is_some());
+}
+
+#[test]
 fn unknown_opencode_provider_is_recorded_and_stays_conservative() {
     let temp = isolated();
     let _guard = crate::paths::AidHomeGuard::set(temp.path());
@@ -81,20 +99,17 @@ fn opencode_error_for_one_provider_does_not_hold_another_model_route() {
     let temp = isolated();
     let _guard = crate::paths::AidHomeGuard::set(temp.path());
     let agent = AgentKind::OpenCode;
-    let task_id = crate::types::TaskId("t-provider-scope".to_string());
     let error = serde_json::json!({
         "type": "error",
         "providerID": "opencode",
         "error": {"data": {"message": "Insufficient balance. Manage your billing here"}}
     });
 
-    crate::agent::opencode::parse_json_event(
-        AgentKind::OpenCode,
-        AgentKind::OpenCode,
+    mark_rate_limited_for_value(
+        &agent,
         None,
-        &task_id,
         &error,
-        chrono::Local::now(),
+        "Insufficient balance. Manage your billing here",
     );
 
     assert!(!is_rate_limited(&agent, None));
@@ -107,20 +122,17 @@ fn opencode_error_still_blocks_the_provider_that_refused() {
     let temp = isolated();
     let _guard = crate::paths::AidHomeGuard::set(temp.path());
     let agent = AgentKind::OpenCode;
-    let task_id = crate::types::TaskId("t-provider-hold".to_string());
     let error = serde_json::json!({
         "type": "error",
         "providerID": "opencode",
         "error": {"data": {"message": "Insufficient balance. Manage your billing here"}}
     });
 
-    crate::agent::opencode::parse_json_event(
-        AgentKind::OpenCode,
-        AgentKind::OpenCode,
+    mark_rate_limited_for_value(
+        &agent,
         None,
-        &task_id,
         &error,
-        chrono::Local::now(),
+        "Insufficient balance. Manage your billing here",
     );
 
     assert!(is_group_rate_limited(&agent, None, "opencode"));
@@ -133,20 +145,17 @@ fn opencode_provider_key_beats_provider_text_in_error_message() {
     let temp = isolated();
     let _guard = crate::paths::AidHomeGuard::set(temp.path());
     let agent = AgentKind::OpenCode;
-    let task_id = crate::types::TaskId("t-provider-key-order".to_string());
     let error = serde_json::json!({
         "type": "error",
         "error": {"data": {"message": "providerID: fake-provider/model refused the request: Insufficient balance"}},
         "providerID": "opencode"
     });
 
-    crate::agent::opencode::parse_json_event(
-        AgentKind::OpenCode,
-        AgentKind::OpenCode,
+    mark_rate_limited_for_value(
+        &agent,
         None,
-        &task_id,
         &error,
-        chrono::Local::now(),
+        "Insufficient balance. Manage your billing here",
     );
 
     assert!(is_group_rate_limited(&agent, None, "opencode"));
@@ -159,19 +168,16 @@ fn opencode_missing_provider_key_stays_agent_wide() {
     let temp = isolated();
     let _guard = crate::paths::AidHomeGuard::set(temp.path());
     let agent = AgentKind::OpenCode;
-    let task_id = crate::types::TaskId("t-provider-key-missing".to_string());
     let error = serde_json::json!({
         "type": "error",
         "error": {"data": {"message": "provider opencode-go/deepseek-v4-pro refused the request: Insufficient balance"}}
     });
 
-    crate::agent::opencode::parse_json_event(
-        AgentKind::OpenCode,
-        AgentKind::OpenCode,
+    mark_rate_limited_for_value(
+        &agent,
         None,
-        &task_id,
         &error,
-        chrono::Local::now(),
+        "Insufficient balance. Manage your billing here",
     );
 
     assert!(is_rate_limited(&agent, None));

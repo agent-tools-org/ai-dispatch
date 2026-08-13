@@ -127,11 +127,7 @@ pub(crate) fn handle_streaming_line_with_session(
                 crate::quota_channel::Channel::CliStream,
             )
         {
-            rate_limit::mark_rate_limited_for_message(
-                &agent.kind(),
-                agent.rate_limit_name(),
-                &message,
-            );
+            mark_stream_rate_limit(store, task_id, agent, line, &message);
         }
         store.insert_event(&event)?;
         *event_count += 1;
@@ -143,6 +139,36 @@ pub(crate) fn handle_streaming_line_with_session(
     }
 
     Ok(None)
+}
+
+fn mark_stream_rate_limit(
+    store: &Arc<Store>,
+    task_id: &TaskId,
+    agent: &dyn Agent,
+    line: &str,
+    message: &str,
+) {
+    let model = store
+        .get_task(task_id.as_str())
+        .ok()
+        .flatten()
+        .and_then(|task| task.requested_model);
+    if let Ok(value) = serde_json::from_str::<serde_json::Value>(line) {
+        rate_limit::mark_rate_limited_for_model_value(
+            &agent.kind(),
+            agent.rate_limit_name(),
+            model.as_deref(),
+            &value,
+            message,
+        );
+    } else {
+        rate_limit::mark_rate_limited_for_model(
+            &agent.kind(),
+            agent.rate_limit_name(),
+            model.as_deref(),
+            message,
+        );
+    }
 }
 
 impl EventDetail {

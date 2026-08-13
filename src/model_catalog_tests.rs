@@ -6,11 +6,17 @@ use super::{budget_model, model_for_task_budget, model_on_budget_preference};
 use crate::types::{AgentKind, TaskBudget};
 
 #[test]
-fn budget_cheap_selects_grok_cheap_model() {
-    assert_eq!(
-        model_for_task_budget(AgentKind::Grok, TaskBudget::Cheap),
-        Some("grok-4.5")
-    );
+fn grok_budget_selection_is_a_monotonic_golden_table() {
+    let expected = [
+        (TaskBudget::Free, "grok-4.6"),
+        (TaskBudget::Cheap, "grok-4.6"),
+        (TaskBudget::Standard, "grok-4.6"),
+        (TaskBudget::Premium, "grok-4.6"),
+    ];
+
+    for (budget, model) in expected {
+        assert_eq!(model_for_task_budget(AgentKind::Grok, budget), Some(model));
+    }
 }
 
 #[test]
@@ -31,14 +37,6 @@ fn budget_model_agrees_with_task_budget_cheap() {
 }
 
 #[test]
-fn premium_budget_selects_grok_default_model() {
-    assert_eq!(
-        model_for_task_budget(AgentKind::Grok, TaskBudget::Premium),
-        Some("grok-4.6")
-    );
-}
-
-#[test]
 fn budget_preferred_tiers_beat_unknown() {
     // Cursor has a cheap-tier model; unknown must not win when a preferred
     // tier exists.
@@ -48,15 +46,6 @@ fn budget_preferred_tiers_beat_unknown() {
         AgentKind::Cursor,
         TaskBudget::Cheap,
         model
-    ));
-}
-
-#[test]
-fn grok_cheap_model_is_on_budget_cheap_preference() {
-    assert!(model_on_budget_preference(
-        AgentKind::Grok,
-        TaskBudget::Cheap,
-        "grok-4.5"
     ));
 }
 

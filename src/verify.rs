@@ -13,7 +13,7 @@ use crate::process_guard::ProcessGuard;
 use crate::store::Store;
 use crate::types::{TaskId, TaskStatus, VerifyStatus};
 
-static VERIFY_LOCK: Mutex<()> = Mutex::new(());
+pub(crate) static VERIFY_LOCK: Mutex<()> = Mutex::new(());
 pub(crate) const VERIFY_TIMEOUT: Duration = Duration::from_secs(120);
 
 #[derive(Debug, Clone)]
@@ -25,6 +25,7 @@ pub struct VerifyResult {
     pub timed_out: bool,
     pub output: String,
     pub command: String,
+    pub(crate) infrastructure_failure: bool,
 }
 
 /// Run a verification command in the given worktree directory.
@@ -56,6 +57,7 @@ pub(crate) fn run_verify_with_timeout(
             timed_out: false,
             output: "Configured verify command was 'skip' and did not run".to_string(),
             command: "skip".to_string(),
+            infrastructure_failure: false,
         });
     }
     let Some((cmd_str, mut cmd)) =
@@ -66,6 +68,7 @@ pub(crate) fn run_verify_with_timeout(
             timed_out: false,
             output: "No project file detected, skipping verification".to_string(),
             command: "skip".to_string(),
+            infrastructure_failure: false,
         });
     };
 
@@ -104,6 +107,7 @@ pub(crate) fn run_verify_with_timeout(
         timed_out,
         output: combined,
         command: cmd_str,
+        infrastructure_failure: false,
     })
 }
 

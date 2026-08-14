@@ -178,6 +178,7 @@ mod tests {
             .join(crate::cmd::build::build_fallback::cwd_key(&wt));
         fs::create_dir_all(&fallback_dir).unwrap();
         fs::write(fallback_dir.join("artifact"), b"build-data").unwrap();
+        fs::write(fallback_dir.join(".cargo-lock"), b"").unwrap();
 
         let _fallback_guard = crate::test_env::FallbackTargetDirGuard::set(fallback_root.path());
 

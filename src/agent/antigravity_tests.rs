@@ -278,3 +278,19 @@ fn build_command_passes_only_the_log_it_was_handed() {
     let path = seeded.get(crate::agent::AGENT_LOG_ENV).expect("seeded when watchable");
     assert!(path.contains("t-abcd1235") && path.ends_with("agent.log"), "got: {path}");
 }
+
+#[test]
+fn parse_agy_models_output_ignores_stderr_noise_and_error_lines() {
+    let input = "\
+Fetching available models...
+ERROR: failed to ping telemetry service
+error: network latency high
+[ERROR] connection pool exhausted
+gemini-3.7-flash-high\tGemini 3.7 Flash (High)
+gemini-3.6-flash-high\tGemini 3.6 Flash (High)
+";
+    let models = super::parse_agy_models_output(input);
+    assert!(!models.contains(&"ERROR".to_string()), "ERROR line must not be parsed as model");
+    assert!(!models.contains(&"error".to_string()), "error line must not be parsed as model");
+    assert_eq!(models, vec!["gemini-3.7-flash-high", "gemini-3.6-flash-high"]);
+}

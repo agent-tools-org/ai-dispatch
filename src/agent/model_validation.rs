@@ -12,7 +12,19 @@ use serde::{Deserialize, Serialize};
 use crate::types::AgentKind;
 use super::Agent;
 
-static SERVED_CACHE: OnceLock<Mutex<HashMap<AgentKind, Option<Vec<String>>>>> = OnceLock::new();
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub(crate) struct ServedModelsCacheEntry {
+    pub models: Vec<String>,
+    pub updated_at_secs: u64,
+}
+
+#[derive(Clone, Debug)]
+struct CachedServedModels {
+    models: Option<Vec<String>>,
+    from_live_probe: bool,
+}
+
+static SERVED_CACHE: OnceLock<Mutex<HashMap<AgentKind, CachedServedModels>>> = OnceLock::new();
 
 #[cfg(test)]
 thread_local! {
@@ -23,7 +35,7 @@ thread_local! {
 pub(crate) const DEFAULT_PROBE_TIMEOUT: Duration = Duration::from_secs(10);
 pub(crate) const SERVED_MODELS_CACHE_TTL: Duration = Duration::from_secs(24 * 3600);
 
-fn cache() -> &'static Mutex<HashMap<AgentKind, Option<Vec<String>>>> {
+fn cache() -> &'static Mutex<HashMap<AgentKind, CachedServedModels>> {
     SERVED_CACHE.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
@@ -38,33 +50,16 @@ fn now_secs() -> u64 {
         .as_secs()
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub(crate) struct ServedModelsCacheEntry {
-    pub models: Vec<String>,
-    pub updated_at_secs: u64,
-}
-
-#[derive(Deserialize)]
-#[serde(untagged)]
-enum DiskCacheItem {
-    New(ServedModelsCacheEntry),
-    Legacy(Vec<String>),
-}
-
 fn load_from_disk_cache(kind: AgentKind) -> Option<Vec<String>> {
     let path = cache_file_path();
     let content = std::fs::read_to_string(&path).ok()?;
-    let map: HashMap<String, DiskCacheItem> = serde_json::from_str(&content).ok()?;
-    match map.get(kind.as_str())? {
-        DiskCacheItem::New(entry) => {
-            let age = now_secs().saturating_sub(entry.updated_at_secs);
-            if age <= SERVED_MODELS_CACHE_TTL.as_secs() {
-                Some(entry.models.clone())
-            } else {
-                None
-            }
-        }
-        DiskCacheItem::Legacy(_) => None,
+    let map: HashMap<String, ServedModelsCacheEntry> = serde_json::from_str(&content).ok()?;
+    let entry = map.get(kind.as_str())?;
+    let age = now_secs().saturating_sub(entry.updated_at_secs);
+    if age <= SERVED_MODELS_CACHE_TTL.as_secs() {
+        Some(entry.models.clone())
+    } else {
+        None
     }
 }
 
@@ -159,7 +154,7 @@ pub(crate) fn validate_model_for_agent(
         return Ok(true);
     }
     let kind = agent.kind();
-    let served = get_served_models_cached(agent);
+    let (served, from_live_probe) = get_served_models_cached_with_status(agent);
 
     let Some(served_list) = served else {
         aid_info!(
@@ -181,8 +176,13 @@ pub(crate) fn validate_model_for_agent(
         return Ok(true);
     }
 
-    // Model not in cached list; refresh cache once in case CLI gained support for new models.
-    let fresh_served_list = refresh_served_models_cached(agent).unwrap_or(served_list);
+    // Model not in cached list; refresh cache once ONLY if cached list did NOT come from a live probe in this process.
+    let fresh_served_list = if from_live_probe {
+        served_list
+    } else {
+        refresh_served_models_cached(agent).unwrap_or(served_list)
+    };
+
     if fresh_served_list.iter().any(|m| m.eq_ignore_ascii_case(model_clean)) {
         return Ok(true);
     }
@@ -205,7 +205,13 @@ pub(crate) fn refresh_served_models_cached(agent: &dyn Agent) -> Option<Vec<Stri
     let kind = agent.kind();
     let result = agent.served_models().ok().flatten();
     if let Ok(mut guard) = cache().lock() {
-        guard.insert(kind, result.clone());
+        guard.insert(
+            kind,
+            CachedServedModels {
+                models: result.clone(),
+                from_live_probe: true,
+            },
+        );
     }
     if let Some(ref models) = result {
         save_to_disk_cache(kind, models);
@@ -216,43 +222,60 @@ pub(crate) fn refresh_served_models_cached(agent: &dyn Agent) -> Option<Vec<Stri
 }
 
 pub(crate) fn get_served_models_cached(agent: &dyn Agent) -> Option<Vec<String>> {
+    get_served_models_cached_with_status(agent).0
+}
+
+pub(crate) fn get_served_models_cached_with_status(agent: &dyn Agent) -> (Option<Vec<String>>, bool) {
     let kind = agent.kind();
     #[cfg(test)]
     {
         let thread_mock = TEST_OVERRIDE.with(|cell| cell.borrow().get(&kind).cloned());
         if let Some(res) = thread_mock {
-            return res;
+            return (res, true);
         }
     }
 
     if let Ok(guard) = cache().lock() {
         if let Some(cached) = guard.get(&kind) {
-            return cached.clone();
+            return (cached.models.clone(), cached.from_live_probe);
         }
     }
 
     if let Some(disk_models) = load_from_disk_cache(kind) {
         if let Ok(mut guard) = cache().lock() {
-            guard.insert(kind, Some(disk_models.clone()));
+            guard.insert(
+                kind,
+                CachedServedModels {
+                    models: Some(disk_models.clone()),
+                    from_live_probe: false,
+                },
+            );
         }
-        return Some(disk_models);
+        return (Some(disk_models), false);
     }
 
-    refresh_served_models_cached(agent)
+    let fresh = refresh_served_models_cached(agent);
+    (fresh, true)
 }
 
-pub(crate) fn run_probe_cmd(cmd: Command) -> Option<String> {
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct ProbeOutput {
+    pub stdout: String,
+    pub stderr: String,
+}
+
+pub(crate) fn run_probe_cmd(cmd: Command) -> Option<ProbeOutput> {
     run_cmd_with_timeout(cmd, DEFAULT_PROBE_TIMEOUT)
 }
 
-pub(crate) fn run_cmd_with_timeout(mut cmd: Command, timeout: Duration) -> Option<String> {
+pub(crate) fn run_cmd_with_timeout(mut cmd: Command, timeout: Duration) -> Option<ProbeOutput> {
     let (tx, rx) = std::sync::mpsc::channel();
     std::thread::spawn(move || {
         let res = cmd.output().ok().and_then(|output| {
             if output.status.success() {
                 let stdout = String::from_utf8_lossy(&output.stdout).to_string();
                 let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-                Some(format!("{stdout}\n{stderr}"))
+                Some(ProbeOutput { stdout, stderr })
             } else {
                 None
             }

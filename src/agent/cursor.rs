@@ -179,10 +179,10 @@ impl super::Agent for CursorAgent {
         let mut cmd = Command::new(binary);
         cmd.arg("models");
         let output = super::model_validation::run_probe_cmd(cmd);
-        let Some(text) = output else {
+        let Some(probe) = output else {
             return Ok(None);
         };
-        let mut models = parse_cursor_models_output(&text);
+        let mut models = parse_cursor_models_output(&probe.stdout);
         for alias in crate::types::ROUTER_ALIASES {
             if !models.iter().any(|m| m.eq_ignore_ascii_case(alias)) {
                 models.push((*alias).to_string());

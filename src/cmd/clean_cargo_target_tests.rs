@@ -212,14 +212,19 @@ fn safety_guard_refuses_symlinks_under_fallback_root() {
         let store = Store::open_memory().unwrap();
         let wt_path = Path::new("/tmp/stale-wt-symlink");
         insert_task(&store, "t-symlink", "done", None, Some(wt_path), None);
-        let target_for_wt = fallback_root.path().join(crate::cmd::build::build_fallback::cwd_key(wt_path));
+        let target_for_wt = fallback_root
+            .path()
+            .join(crate::cmd::build::build_fallback::cwd_key(wt_path));
         let _ = fs::remove_dir_all(&target_for_wt);
         std::os::unix::fs::symlink(external_dir.path(), &target_for_wt).unwrap();
 
         let mut sizes = crate::cmd::clean_size::SizeTracker::new();
         clean_orphaned_branch_targets(&store, false, Some(fallback_root.path()), &mut sizes).unwrap();
 
-        assert!(fs::symlink_metadata(&target_for_wt).is_ok(), "Symlink node itself must survive cleanup");
+        assert!(
+            fs::symlink_metadata(&target_for_wt).is_ok(),
+            "Symlink node itself must survive cleanup"
+        );
         assert!(external_file.exists(), "External file through symlink must survive cleanup");
     }
 }
@@ -238,6 +243,9 @@ fn cleanup_skips_fallback_target_when_cwd_still_exists_on_disk() {
     let stale_fallback = fallback_root.path().join(crate::cmd::build::build_fallback::cwd_key(stale_wt));
     fs::create_dir_all(&live_fallback).unwrap();
     fs::create_dir_all(&stale_fallback).unwrap();
+
+    let skipped = count_skipped_fallback_targets(&store, fallback_root.path()).unwrap();
+    assert_eq!(skipped, 1, "Must count 1 skipped fallback target whose cwd still exists");
 
     let mut sizes = crate::cmd::clean_size::SizeTracker::new();
     clean_orphaned_branch_targets(&store, false, Some(fallback_root.path()), &mut sizes).unwrap();
@@ -275,8 +283,10 @@ fn cwd_existence_check_fails_closed_on_stat_error() {
     let existing_path = temp.path();
     let missing_path = temp.path().join("missing-dir-12345");
     let empty_path = Path::new("");
+    let relative_path = Path::new("some/relative/path");
 
     assert!(!cwd_no_longer_exists(existing_path), "Existing directory must report false");
     assert!(cwd_no_longer_exists(&missing_path), "Missing directory must report true");
     assert!(!cwd_no_longer_exists(empty_path), "Empty path must fail closed and report false");
+    assert!(!cwd_no_longer_exists(relative_path), "Relative path must fail closed and report false");
 }

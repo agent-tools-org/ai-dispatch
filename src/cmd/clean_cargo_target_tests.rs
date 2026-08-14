@@ -1,5 +1,5 @@
 // Tests for task-owned Cargo target and fallback cleanup.
-// Covers terminal ownership, live-worktree protection, and liveness verification.
+// Covers terminal ownership, live-worktree protection, and cwd existence checks.
 // Deps: clean_cargo_target, Store, tempfile, rusqlite.
 
 use super::*;
@@ -60,7 +60,6 @@ fn cleanup_removes_only_terminal_task_owned_targets() {
     for path in [&stale_target, &live_target, &stale_fallback, &unattributed] {
         fs::create_dir_all(path).unwrap();
         fs::write(path.join("artifact"), vec![b'x'; 8]).unwrap();
-        fs::write(path.join(".cargo-lock"), b"").unwrap();
     }
     fs::write(target_root.join("root-artifact"), b"root").unwrap();
 
@@ -169,11 +168,8 @@ fn cleanup_reclaims_task_fallback_targets_and_protects_running_tasks() {
     let unattributed_fallback = fallback_root.path().join("unattributed-fallback-12345");
 
     fs::create_dir_all(&stale_fallback).unwrap();
-    fs::write(stale_fallback.join(".cargo-lock"), b"").unwrap();
     fs::create_dir_all(&running_fallback).unwrap();
-    fs::write(running_fallback.join(".cargo-lock"), b"").unwrap();
     fs::create_dir_all(&unattributed_fallback).unwrap();
-    fs::write(unattributed_fallback.join(".cargo-lock"), b"").unwrap();
 
     let mut sizes = crate::cmd::clean_size::SizeTracker::new();
     clean_orphaned_branch_targets(&store, false, Some(fallback_root.path()), &mut sizes).unwrap();
@@ -229,55 +225,58 @@ fn safety_guard_refuses_symlinks_under_fallback_root() {
 }
 
 #[test]
-#[cfg(unix)]
-fn cleanup_skips_live_target_with_held_cargo_lock() {
+fn cleanup_skips_fallback_target_when_cwd_still_exists_on_disk() {
     let store = Store::open_memory().unwrap();
     let fallback_root = tempfile::tempdir().unwrap();
-    let wt_path = Path::new("/tmp/stale-wt-locked");
-    insert_task(&store, "t-stale-locked", "done", None, Some(wt_path), None);
+    let live_dir = tempfile::tempdir().unwrap();
+    let stale_wt = Path::new("/tmp/nonexistent-cwd-wt-12345");
 
-    let target = fallback_root.path().join(crate::cmd::build::build_fallback::cwd_key(wt_path));
-    fs::create_dir_all(&target).unwrap();
-    let lock_file = target.join(".cargo-lock");
-    fs::write(&lock_file, b"").unwrap();
+    insert_task(&store, "t-live-cwd", "done", None, Some(live_dir.path()), None);
+    insert_task(&store, "t-stale-cwd", "done", None, Some(stale_wt), None);
 
-    use std::os::unix::io::AsRawFd;
-    let lock_holder = fs::File::open(&lock_file).unwrap();
-    let ret = unsafe { libc::flock(lock_holder.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) };
-    assert_eq!(ret, 0, "Failed to take lock in test setup");
+    let live_fallback = fallback_root.path().join(crate::cmd::build::build_fallback::cwd_key(live_dir.path()));
+    let stale_fallback = fallback_root.path().join(crate::cmd::build::build_fallback::cwd_key(stale_wt));
+    fs::create_dir_all(&live_fallback).unwrap();
+    fs::create_dir_all(&stale_fallback).unwrap();
 
     let mut sizes = crate::cmd::clean_size::SizeTracker::new();
     clean_orphaned_branch_targets(&store, false, Some(fallback_root.path()), &mut sizes).unwrap();
 
-    assert!(target.exists(), "Target with held .cargo-lock must NOT be deleted");
-
-    unsafe { libc::flock(lock_holder.as_raw_fd(), libc::LOCK_UN) };
-
-    clean_orphaned_branch_targets(&store, false, Some(fallback_root.path()), &mut sizes).unwrap();
-    assert!(!target.exists(), "Target with released .cargo-lock must be deleted");
+    assert!(live_fallback.exists(), "Fallback target whose cwd exists must be preserved");
+    assert!(!stale_fallback.exists(), "Fallback target whose cwd no longer exists must be deleted");
 }
 
 #[test]
-fn cleanup_skips_recently_modified_target_without_cargo_lock() {
+fn remove_task_fallback_preserves_repo_and_removes_deleted_worktree() {
     let store = Store::open_memory().unwrap();
-    let fallback_root = tempfile::tempdir().unwrap();
-    let wt_path = Path::new("/tmp/stale-wt-recent");
-    insert_task(&store, "t-stale-recent", "done", None, Some(wt_path), None);
+    let fallback_root_dir = tempfile::tempdir().unwrap();
+    let repo_dir = tempfile::tempdir().unwrap();
+    let stale_wt = Path::new("/tmp/nonexistent-wt-for-task-fallback");
 
-    let target = fallback_root.path().join(crate::cmd::build::build_fallback::cwd_key(wt_path));
-    fs::create_dir_all(&target).unwrap();
-    let artifact = target.join("build-artifact");
-    fs::write(&artifact, b"recent").unwrap();
+    insert_task(&store, "t-task-gc", "done", Some(repo_dir.path()), Some(stale_wt), None);
+    let task = store.get_task("t-task-gc").unwrap().unwrap();
 
-    let mut sizes = crate::cmd::clean_size::SizeTracker::new();
-    clean_orphaned_branch_targets(&store, false, Some(fallback_root.path()), &mut sizes).unwrap();
+    let repo_fallback = fallback_root_dir.path().join(crate::cmd::build::build_fallback::cwd_key(repo_dir.path()));
+    let wt_fallback = fallback_root_dir.path().join(crate::cmd::build::build_fallback::cwd_key(stale_wt));
+    fs::create_dir_all(&repo_fallback).unwrap();
+    fs::create_dir_all(&wt_fallback).unwrap();
 
-    assert!(target.exists(), "Recently modified target without .cargo-lock must NOT be deleted");
+    let _fallback_guard = crate::test_env::FallbackTargetDirGuard::set(fallback_root_dir.path());
+    let res = remove_task_fallback_target_dirs(&store, &task);
 
-    let old_time = SystemTime::now() - Duration::from_secs(60);
-    fs::File::open(&artifact).unwrap().set_modified(old_time).unwrap();
-    fs::File::open(&target).unwrap().set_modified(old_time).unwrap();
+    res.unwrap();
+    assert!(repo_fallback.exists(), "Repo fallback target must persist forever");
+    assert!(!wt_fallback.exists(), "Deleted worktree fallback target must be removed");
+}
 
-    clean_orphaned_branch_targets(&store, false, Some(fallback_root.path()), &mut sizes).unwrap();
-    assert!(!target.exists(), "Aged target without .cargo-lock must be deleted");
+#[test]
+fn cwd_existence_check_fails_closed_on_stat_error() {
+    let temp = tempfile::tempdir().unwrap();
+    let existing_path = temp.path();
+    let missing_path = temp.path().join("missing-dir-12345");
+    let empty_path = Path::new("");
+
+    assert!(!cwd_no_longer_exists(existing_path), "Existing directory must report false");
+    assert!(cwd_no_longer_exists(&missing_path), "Missing directory must report true");
+    assert!(!cwd_no_longer_exists(empty_path), "Empty path must fail closed and report false");
 }

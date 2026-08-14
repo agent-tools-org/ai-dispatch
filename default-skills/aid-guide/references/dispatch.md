@@ -389,6 +389,11 @@ default runs instead, because a stale catalog entry is aid's problem to absorb,
 not a reason to refuse your dispatch. Where the CLI cannot be asked what it
 serves, dispatch proceeds unvalidated and says so.
 
+The served list is cached on disk for 24 hours, so a slow CLI is asked once
+rather than on every dispatch. When the model you asked for is absent from the
+cached list, aid re-probes once before rejecting it, so a model the CLI gained
+since the last probe is accepted rather than refused for a day.
+
 For providers represented by aidbar, a successful cached snapshot can release a
 time-based or transient older marker for this dispatch decision only when its
 `fetched_at` is newer than the marker file's modification time and every

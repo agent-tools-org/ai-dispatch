@@ -71,7 +71,7 @@ current arguments.
 | `aid hook` | Install or invoke supported AID hooks; task hook payloads expose additive `outcome` and `verify_status` fields. |
 | `aid mcp` | Start AID's stdio MCP server; task payloads expose additive `outcome` and `verify_status` fields. |
 | `aid doctor` | Report repository/worktree hygiene without bypassing custody. |
-| `aid clean` | Remove disposable logs and caches while retaining custody evidence. |
+| `aid clean` | Remove disposable logs and caches while retaining custody evidence; reclaims a task's fallback cargo target only once the directory it was keyed from is gone, and reports how many it held back. |
 | `aid upgrade` | Upgrade AID after checking active-task safety. |
 | `aid changelog` | Read release notes. |
 

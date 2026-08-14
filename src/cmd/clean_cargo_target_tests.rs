@@ -222,40 +222,53 @@ fn hint_estimate_survives_entry_limit_before_byte_threshold() {
 }
 
 #[test]
-fn cleanup_reclaims_orphan_fallback_targets_and_protects_running_tasks() {
+fn cleanup_reclaims_task_fallback_targets_and_protects_running_tasks() {
     let store = Store::open_memory().unwrap();
     let fallback_root = tempfile::tempdir().unwrap();
 
-    let running_wt = Path::new("/tmp/running-wt");
-    insert_task(
-        &store,
-        "t-running",
-        "running",
-        None,
-        Some(running_wt),
-        None,
-    );
+    let stale_wt = Path::new("/tmp/stale-fallback-wt");
+    let running_wt = Path::new("/tmp/running-fallback-wt");
+    insert_task(&store, "t-stale", "done", None, Some(stale_wt), None);
+    insert_task(&store, "t-running", "running", None, Some(running_wt), None);
 
+    let stale_fallback = fallback_root
+        .path()
+        .join(crate::cmd::build::build_fallback::cwd_key(stale_wt));
     let running_fallback = fallback_root
         .path()
         .join(crate::cmd::build::build_fallback::cwd_key(running_wt));
-    let orphan_fallback = fallback_root.path().join("orphan-fallback-12345");
+    let unattributed_fallback = fallback_root.path().join("unattributed-fallback-12345");
 
+    fs::create_dir_all(&stale_fallback).unwrap();
+    fs::write(stale_fallback.join("file"), b"stale").unwrap();
     fs::create_dir_all(&running_fallback).unwrap();
     fs::write(running_fallback.join("file"), b"running").unwrap();
-    fs::create_dir_all(&orphan_fallback).unwrap();
-    fs::write(orphan_fallback.join("file"), b"orphan").unwrap();
+    fs::create_dir_all(&unattributed_fallback).unwrap();
+    fs::write(unattributed_fallback.join("file"), b"unattributed").unwrap();
 
     let mut sizes = crate::cmd::clean_size::SizeTracker::new();
     clean_orphaned_branch_targets(&store, false, Some(fallback_root.path()), &mut sizes).unwrap();
 
+    assert!(!stale_fallback.exists(), "Terminal task fallback dir must be reclaimed");
     assert!(running_fallback.exists(), "Running task fallback dir must be protected");
-    assert!(!orphan_fallback.exists(), "Orphan fallback dir must be cleaned");
+    assert!(unattributed_fallback.exists(), "Unattributed fallback dir must be preserved");
 }
 
 #[test]
-fn cleanup_refuses_symlinks_under_fallback_root() {
-    let store = Store::open_memory().unwrap();
+fn safety_guard_parent_must_be_fallback_root() {
+    let fallback_root = tempfile::tempdir().unwrap();
+    let nested_dir = fallback_root.path().join("subdir");
+    let deep_target = nested_dir.join("deep_target");
+    fs::create_dir_all(&deep_target).unwrap();
+
+    assert!(
+        !is_safe_fallback_target_for_removal(&deep_target, fallback_root.path()),
+        "Path whose parent is not fallback_root must be rejected"
+    );
+}
+
+#[test]
+fn safety_guard_refuses_symlinks_under_fallback_root() {
     let fallback_root = tempfile::tempdir().unwrap();
     let external_dir = tempfile::tempdir().unwrap();
     let external_file = external_dir.path().join("external-file");
@@ -263,10 +276,30 @@ fn cleanup_refuses_symlinks_under_fallback_root() {
 
     let symlink_path = fallback_root.path().join("symlink-target");
     #[cfg(unix)]
-    std::os::unix::fs::symlink(external_dir.path(), &symlink_path).unwrap();
+    {
+        std::os::unix::fs::symlink(external_dir.path(), &symlink_path).unwrap();
 
-    let mut sizes = crate::cmd::clean_size::SizeTracker::new();
-    clean_orphaned_branch_targets(&store, false, Some(fallback_root.path()), &mut sizes).unwrap();
+        assert!(
+            !is_safe_fallback_target_for_removal(&symlink_path, fallback_root.path()),
+            "Symlink under fallback root must be rejected"
+        );
 
-    assert!(external_file.exists(), "External file through symlink must not be touched");
+        let store = Store::open_memory().unwrap();
+        let wt_path = Path::new("/tmp/stale-wt-symlink");
+        insert_task(&store, "t-symlink", "done", None, Some(wt_path), None);
+        let target_for_wt = fallback_root
+            .path()
+            .join(crate::cmd::build::build_fallback::cwd_key(wt_path));
+        let _ = fs::remove_dir_all(&target_for_wt);
+        std::os::unix::fs::symlink(external_dir.path(), &target_for_wt).unwrap();
+
+        let mut sizes = crate::cmd::clean_size::SizeTracker::new();
+        clean_orphaned_branch_targets(&store, false, Some(fallback_root.path()), &mut sizes).unwrap();
+
+        assert!(
+            fs::symlink_metadata(&target_for_wt).is_ok(),
+            "Symlink node itself must survive cleanup"
+        );
+        assert!(external_file.exists(), "External file through symlink must survive cleanup");
+    }
 }

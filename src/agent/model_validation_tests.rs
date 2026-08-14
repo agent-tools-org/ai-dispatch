@@ -8,6 +8,10 @@ use crate::types::*;
 
 static TEST_MUTEX: Mutex<()> = Mutex::new(());
 
+fn lock_test() -> std::sync::MutexGuard<'static, ()> {
+    TEST_MUTEX.lock().unwrap_or_else(|e| e.into_inner())
+}
+
 struct MockQueryableAgent {
     kind: AgentKind,
     models: Mutex<Option<Vec<String>>>,
@@ -30,6 +34,7 @@ impl Agent for MockQueryableAgent {
 
 #[test]
 fn validate_model_allows_valid_model() {
+    let _lock = lock_test();
     clear_served_models_cache();
     let mock = MockQueryableAgent::new(AgentKind::Codex, Some(vec!["gpt-5.6-sol".to_string(), "gpt-5.5".to_string()]));
 
@@ -39,6 +44,7 @@ fn validate_model_allows_valid_model() {
 
 #[test]
 fn validate_model_rejects_absent_model_naming_served() {
+    let _lock = lock_test();
     clear_served_models_cache();
     let mock = MockQueryableAgent::new(AgentKind::Codex, Some(vec!["gpt-5.6-sol".to_string(), "gpt-5.5".to_string()]));
 
@@ -51,6 +57,7 @@ fn validate_model_rejects_absent_model_naming_served() {
 
 #[test]
 fn validate_model_allows_unqueryable_cli() {
+    let _lock = lock_test();
     clear_served_models_cache();
     let mock = MockQueryableAgent::new(AgentKind::Kilo, None);
 
@@ -59,6 +66,7 @@ fn validate_model_allows_unqueryable_cli() {
 
 #[test]
 fn cursor_auto_model_is_allowed() {
+    let _lock = lock_test();
     clear_served_models_cache();
     let mock = MockQueryableAgent::new(AgentKind::Cursor, Some(vec![
         "composer-2.5".to_string(),
@@ -74,6 +82,7 @@ fn cursor_auto_model_is_allowed() {
 
 #[test]
 fn cursor_probe_failure_returns_none_and_allows_non_alias_models() {
+    let _lock = lock_test();
     clear_served_models_cache();
     let mock = MockQueryableAgent::new(AgentKind::Cursor, None);
 
@@ -84,6 +93,7 @@ fn cursor_probe_failure_returns_none_and_allows_non_alias_models() {
 
 #[test]
 fn agy_real_captured_fixture_parsing_and_rejection() {
+    let _lock = lock_test();
     clear_served_models_cache();
     let captured = "\
 Fetching available models...
@@ -133,7 +143,7 @@ Available models:
 
 #[test]
 fn served_models_disk_caching_and_clearing() {
-    let _lock = TEST_MUTEX.lock().unwrap();
+    let _lock = lock_test();
     let temp = tempfile::tempdir().expect("tempdir");
     let _home = crate::paths::AidHomeGuard::set(temp.path());
     clear_served_models_cache();
@@ -152,7 +162,7 @@ fn served_models_disk_caching_and_clearing() {
 
 #[test]
 fn validate_slow_cli_probe_success_asserts_no_cannot_query_warning() {
-    let _lock = TEST_MUTEX.lock().unwrap();
+    let _lock = lock_test();
     let temp = tempfile::tempdir().expect("tempdir");
     let _home = crate::paths::AidHomeGuard::set(temp.path());
     clear_served_models_cache();
@@ -168,7 +178,7 @@ fn validate_slow_cli_probe_success_asserts_no_cannot_query_warning() {
 
 #[test]
 fn stale_disk_cache_entry_reprobes() {
-    let _lock = TEST_MUTEX.lock().unwrap();
+    let _lock = lock_test();
     let temp = tempfile::tempdir().expect("tempdir");
     let _home = crate::paths::AidHomeGuard::set(temp.path());
     clear_served_models_cache();
@@ -193,7 +203,7 @@ fn stale_disk_cache_entry_reprobes() {
 
 #[test]
 fn fresh_disk_cache_entry_serves_cache() {
-    let _lock = TEST_MUTEX.lock().unwrap();
+    let _lock = lock_test();
     let temp = tempfile::tempdir().expect("tempdir");
     let _home = crate::paths::AidHomeGuard::set(temp.path());
     clear_served_models_cache();
@@ -218,7 +228,7 @@ fn fresh_disk_cache_entry_serves_cache() {
 
 #[test]
 fn validate_model_refreshes_cache_on_missing_model() {
-    let _lock = TEST_MUTEX.lock().unwrap();
+    let _lock = lock_test();
     let temp = tempfile::tempdir().expect("tempdir");
     let _home = crate::paths::AidHomeGuard::set(temp.path());
     clear_served_models_cache();
@@ -236,7 +246,7 @@ fn validate_model_refreshes_cache_on_missing_model() {
 
 #[test]
 fn cold_cache_probes_only_once_on_unserved_model() {
-    let _lock = TEST_MUTEX.lock().unwrap();
+    let _lock = lock_test();
     let temp = tempfile::tempdir().expect("tempdir");
     let _home = crate::paths::AidHomeGuard::set(temp.path());
     clear_served_models_cache();

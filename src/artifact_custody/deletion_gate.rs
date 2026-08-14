@@ -40,7 +40,9 @@ pub(crate) fn delete_accepted_worktree(store: &Store, task_id: &str) -> Result<(
     remove_worktree(
         task.repo_path.as_deref().context("Task has no repository")?,
         worktree,
-    )
+    )?;
+    let _ = crate::cmd::clean_cargo_target::remove_task_fallback_target_dirs(store, &task);
+    Ok(())
 }
 
 fn remove_worktree(repo: &str, worktree: &Path) -> Result<()> {
@@ -93,5 +95,95 @@ mod tests {
 
         assert!(error.contains("has not been accepted"), "{error}");
         assert!(worktree.path().exists());
+    }
+
+    #[test]
+    fn accepted_worktree_deletion_reclaims_task_fallback_target_dir() {
+        use std::fs;
+        use crate::store::{AcceptanceDecision, AcceptanceRecord};
+
+        let store = Store::open_memory().unwrap();
+        let repo = tempfile::tempdir().unwrap();
+        std::process::Command::new("git")
+            .args(["init", "-b", "main", &repo.path().to_string_lossy()])
+            .status()
+            .unwrap();
+        std::process::Command::new("git")
+            .args(["-C", &repo.path().to_string_lossy(), "config", "user.email", "test@example.com"])
+            .status()
+            .unwrap();
+        std::process::Command::new("git")
+            .args(["-C", &repo.path().to_string_lossy(), "config", "user.name", "Test User"])
+            .status()
+            .unwrap();
+        fs::write(repo.path().join("file.txt"), "base\n").unwrap();
+        std::process::Command::new("git")
+            .args(["-C", &repo.path().to_string_lossy(), "add", "file.txt"])
+            .status()
+            .unwrap();
+        std::process::Command::new("git")
+            .args(["-C", &repo.path().to_string_lossy(), "commit", "-m", "base"])
+            .status()
+            .unwrap();
+
+        let wt = crate::worktree::aid_worktree_root().join("proj").join("feat-test-gc");
+        fs::create_dir_all(&wt).unwrap();
+        std::process::Command::new("git")
+            .args([
+                "-C",
+                &repo.path().to_string_lossy(),
+                "worktree",
+                "add",
+                &wt.to_string_lossy(),
+                "-b",
+                "feat-test-gc",
+            ])
+            .status()
+            .unwrap();
+
+        let head = crate::artifact_custody::acceptance::git_output(&wt, &["rev-parse", "HEAD"]).unwrap();
+        let manifest = crate::artifact_custody::durability::manifest_digest(&wt, &head).unwrap();
+
+        store
+            .db()
+            .execute(
+                "INSERT INTO tasks
+                 (id, agent, prompt, status, repo_path, worktree_path, worktree_branch, created_at)
+                 VALUES ('t-accepted-gc', 'codex', 'task', 'done', ?1, ?2, 'feat-test-gc', ?3)",
+                params![
+                    repo.path().display().to_string(),
+                    wt.display().to_string(),
+                    chrono::Local::now().to_rfc3339()
+                ],
+            )
+            .unwrap();
+
+        store
+            .record_acceptance(
+                "t-accepted-gc",
+                &AcceptanceRecord {
+                    decision: AcceptanceDecision::Accepted,
+                    principal_id: "test".to_string(),
+                    accepted_head_sha: Some(head),
+                    accepted_branch: Some("feat-test-gc".to_string()),
+                    manifest_digest: Some(manifest),
+                },
+                "cli",
+            )
+            .unwrap();
+
+        let fallback_root = tempfile::tempdir().unwrap();
+        let fallback_dir = fallback_root
+            .path()
+            .join(crate::cmd::build::build_fallback::cwd_key(&wt));
+        fs::create_dir_all(&fallback_dir).unwrap();
+        fs::write(fallback_dir.join("artifact"), b"build-data").unwrap();
+
+        let _fallback_guard = crate::test_env::FallbackTargetDirGuard::set(fallback_root.path());
+
+        delete_accepted_worktree(&store, "t-accepted-gc").unwrap();
+
+        assert!(!wt.exists(), "Worktree must be removed");
+        assert!(!fallback_dir.exists(), "Task fallback target dir must be removed on GC");
     }
 }

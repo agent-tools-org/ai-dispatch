@@ -101,7 +101,7 @@ impl super::Agent for GrokAgent {
         let Some(output) = super::model_validation::run_probe_cmd(cmd) else {
             return Ok(None);
         };
-        let models = parse_grok_models_output(&output);
+        let models = parse_grok_models_output(&output.stdout);
         Ok(if models.is_empty() { None } else { Some(models) })
     }
 }

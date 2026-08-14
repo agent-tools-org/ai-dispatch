@@ -223,12 +223,54 @@ fn validate_model_refreshes_cache_on_missing_model() {
     let _home = crate::paths::AidHomeGuard::set(temp.path());
     clear_served_models_cache();
 
-    let mock = MockQueryableAgent::new(AgentKind::Antigravity, Some(vec!["gemini-3.7-flash-high".to_string()]));
+    save_to_disk_cache(AgentKind::Antigravity, &["gemini-3.7-flash-high".to_string()]);
 
-    assert_eq!(get_served_models_cached(&mock), Some(vec!["gemini-3.7-flash-high".to_string()]));
-
-    *mock.models.lock().unwrap() = Some(vec!["gemini-3.7-flash-high".to_string(), "gemini-3.8".to_string()]);
+    let mock = MockQueryableAgent::new(
+        AgentKind::Antigravity,
+        Some(vec!["gemini-3.7-flash-high".to_string(), "gemini-3.8".to_string()]),
+    );
 
     let res = validate_model_for_agent(&mock, "gemini-3.8", ModelSource::UserSupplied);
-    assert!(res.is_ok(), "Missing model validation must refresh cache and accept newly added model");
+    assert!(res.is_ok(), "Missing model validation must refresh disk cache and accept newly added model");
+}
+
+#[test]
+fn cold_cache_probes_only_once_on_unserved_model() {
+    let _lock = TEST_MUTEX.lock().unwrap();
+    let temp = tempfile::tempdir().expect("tempdir");
+    let _home = crate::paths::AidHomeGuard::set(temp.path());
+    clear_served_models_cache();
+
+    struct CountingAgent {
+        count: std::sync::atomic::AtomicUsize,
+    }
+
+    impl Agent for CountingAgent {
+        fn kind(&self) -> AgentKind { AgentKind::Antigravity }
+        fn streaming(&self) -> bool { false }
+        fn accepts_interactive_input(&self) -> bool { false }
+        fn build_command(&self, _prompt: &str, _opts: &RunOpts) -> Result<Command> { Ok(Command::new("true")) }
+        fn parse_event(&self, _task_id: &TaskId, _line: &str) -> Option<TaskEvent> { None }
+        fn served_models(&self) -> Result<Option<Vec<String>>> {
+            self.count.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            Ok(Some(vec!["gemini-3.7-flash-high".to_string()]))
+        }
+    }
+
+    let agent = CountingAgent {
+        count: std::sync::atomic::AtomicUsize::new(0),
+    };
+
+    let res = validate_model_for_agent(&agent, "gemini-9.9-nonexistent", ModelSource::UserSupplied);
+    assert!(res.is_err(), "Must reject unserved model");
+    assert_eq!(agent.count.load(std::sync::atomic::Ordering::SeqCst), 1, "Cold cache probe must run only once");
+}
+
+#[test]
+fn run_cmd_with_timeout_separates_stdout_and_stderr() {
+    let mut cmd = Command::new("sh");
+    cmd.arg("-c").arg("echo 'stdout output'; echo 'stderr output' >&2");
+    let res = run_cmd_with_timeout(cmd, Duration::from_secs(2)).expect("command output");
+    assert_eq!(res.stdout.trim(), "stdout output");
+    assert_eq!(res.stderr.trim(), "stderr output");
 }

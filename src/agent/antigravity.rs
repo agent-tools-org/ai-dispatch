@@ -106,7 +106,7 @@ impl super::Agent for AntigravityAgent {
         let Some(output) = super::model_validation::run_probe_cmd(cmd) else {
             return Ok(None);
         };
-        let models = parse_agy_models_output(&output);
+        let models = parse_agy_models_output(&output.stdout);
         Ok(if models.is_empty() { None } else { Some(models) })
     }
 }
@@ -119,6 +119,10 @@ pub(crate) fn parse_agy_models_output(output: &str) -> Vec<String> {
             || trimmed.starts_with('#')
             || trimmed.starts_with("Available")
             || trimmed.starts_with("Fetching")
+            || trimmed.starts_with("ERROR")
+            || trimmed.starts_with("error")
+            || trimmed.starts_with("[ERROR]")
+            || trimmed.starts_with("[WARN]")
         {
             continue;
         }

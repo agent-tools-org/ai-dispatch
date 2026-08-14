@@ -127,6 +127,7 @@ gpt-oss-120b-medium\tGPT-OSS 120B (Medium)
 
 #[test]
 fn grok_real_captured_fixture_parsing() {
+    let _lock = lock_test();
     clear_served_models_cache();
     let captured = "\
 You are logged in with grok.com.
@@ -155,6 +156,13 @@ fn served_models_disk_caching_and_clearing() {
 
     let cache_file = cache_file_path();
     assert!(cache_file.exists(), "disk cache file must exist");
+
+    let tmp_files: Vec<_> = std::fs::read_dir(temp.path())
+        .expect("read_dir")
+        .flatten()
+        .filter(|e| e.file_name().to_string_lossy().contains("tmp"))
+        .collect();
+    assert!(tmp_files.is_empty(), "no temp files should remain after atomic write");
 
     clear_served_models_cache();
     assert!(!cache_file.exists(), "disk cache file must be removed");

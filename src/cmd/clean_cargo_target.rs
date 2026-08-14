@@ -96,9 +96,7 @@ fn has_reclaimable_space_above_threshold_with_entry_limit(
         .map(|(_, path)| path)
         .chain(terminal_task_homes(store)?.into_iter())
     {
-        if bytes >= crate::cmd::clean_size::CLEANUP_HINT_BYTE_LIMIT
-            || entries >= entry_limit
-        {
+        if bytes >= crate::cmd::clean_size::CLEANUP_HINT_BYTE_LIMIT || entries >= entry_limit {
             truncated = true;
             break;
         }
@@ -163,7 +161,7 @@ fn terminal_task_homes(store: &Store) -> Result<Vec<PathBuf>> {
 
 fn owned_target_dirs(store: &Store, fallback_root: Option<&Path>) -> Result<Vec<(TargetKind, PathBuf)>> {
     let tasks = store.list_tasks(TaskFilter::All)?;
-    let mut terminal_branches = Vec::new();
+    let mut terminal_candidates = Vec::new();
     let mut blocked = HashSet::new();
     let branch_root = crate::agent::env::branch_target_root();
     let fallback_root = fallback_root
@@ -173,11 +171,7 @@ fn owned_target_dirs(store: &Store, fallback_root: Option<&Path>) -> Result<Vec<
     for task in &tasks {
         let paths = task_target_paths(task, branch_root.as_deref(), &fallback_root);
         if task.status.is_terminal() && !has_live_worktree(task) {
-            for (kind, path) in paths {
-                if matches!(kind, TargetKind::Branch) {
-                    terminal_branches.push(path);
-                }
-            }
+            terminal_candidates.extend(paths);
         } else {
             blocked.extend(paths.into_iter().map(|(_, path)| path));
         }
@@ -186,23 +180,16 @@ fn owned_target_dirs(store: &Store, fallback_root: Option<&Path>) -> Result<Vec<
     let mut result = Vec::new();
     let mut seen = HashSet::new();
 
-    for path in terminal_branches {
-        if !blocked.contains(&path) && seen.insert(path.clone()) && path.is_dir() {
-            result.push((TargetKind::Branch, path));
+    for (kind, path) in terminal_candidates {
+        if blocked.contains(&path) || !seen.insert(path.clone()) || !path.is_dir() {
+            continue;
         }
-    }
-
-    if fallback_root.is_dir() {
-        if let Ok(entries) = fs::read_dir(&fallback_root) {
-            for entry in entries.flatten() {
-                let path = entry.path();
-                if is_safe_fallback_target_for_removal(&path, &fallback_root)
-                    && !blocked.contains(&path)
-                    && seen.insert(path.clone())
-                {
-                    result.push((TargetKind::Fallback, path));
-                }
-            }
+        let safe = match kind {
+            TargetKind::Branch => is_safe_target_for_removal(&path),
+            TargetKind::Fallback => is_safe_fallback_target_for_removal(&path, &fallback_root),
+        };
+        if safe {
+            result.push((kind, path));
         }
     }
 
@@ -244,21 +231,14 @@ fn task_target_paths(
     let mut paths = Vec::new();
     if let (Some(root), Some(branch)) = (
         branch_root,
-        task.worktree_branch.as_deref().filter(|branch| !branch.trim().is_empty()),
+        task.worktree_branch.as_deref().filter(|b| !b.trim().is_empty()),
     ) {
         let name = crate::agent::env::branch_target_name(branch);
         if !is_reserved_target_dir_name(&name) {
             paths.push((TargetKind::Branch, root.join(name)));
         }
     }
-    for cwd in [
-        task.worktree_path.as_deref(),
-        task.repo_path.as_deref(),
-        task.effective_dir.as_deref(),
-    ]
-    .into_iter()
-    .flatten()
-    {
+    for cwd in [task.worktree_path.as_deref(), task.repo_path.as_deref(), task.effective_dir.as_deref()].into_iter().flatten() {
         paths.push((
             TargetKind::Fallback,
             fallback_root.join(crate::cmd::build::build_fallback::cwd_key(Path::new(cwd))),
@@ -268,16 +248,10 @@ fn task_target_paths(
 }
 
 fn is_safe_fallback_target_for_removal(path: &Path, fallback_root: &Path) -> bool {
-    if !path.is_dir() {
+    if !path.is_dir() || path.parent() != Some(fallback_root) {
         return false;
     }
-    if path.parent() != Some(fallback_root) {
-        return false;
-    }
-    if fs::symlink_metadata(path)
-        .map(|m| m.file_type().is_symlink())
-        .unwrap_or(true)
-    {
+    if fs::symlink_metadata(path).map(|m| m.file_type().is_symlink()).unwrap_or(true) {
         return false;
     }
     is_safe_target_for_removal(path)
@@ -287,10 +261,7 @@ fn is_safe_target_for_removal(target: &Path) -> bool {
     if crate::agent::env::branch_target_root().is_some_and(|root| root == target) {
         return false;
     }
-    if std::env::var_os("CARGO_TARGET_DIR")
-        .map(PathBuf::from)
-        .is_some_and(|root| root == target)
-    {
+    if std::env::var_os("CARGO_TARGET_DIR").map(PathBuf::from).is_some_and(|root| root == target) {
         return false;
     }
     true
@@ -298,16 +269,11 @@ fn is_safe_target_for_removal(target: &Path) -> bool {
 
 fn has_live_worktree(task: &Task) -> bool {
     task.worktree_branch.is_some()
-        && task
-            .worktree_path
-            .as_deref()
-            .is_some_and(|path| Path::new(path).is_dir())
+        && task.worktree_path.as_deref().is_some_and(|path| Path::new(path).is_dir())
 }
 
 fn is_reserved_target_dir_name(name: &str) -> bool {
-    name == BASE_TARGET_DIR_NAME
-        || name.starts_with('.')
-        || matches!(name, "debug" | "release" | "tmp" | "doc" | "package")
+    name == BASE_TARGET_DIR_NAME || name.starts_with('.') || matches!(name, "debug" | "release" | "tmp" | "doc" | "package")
 }
 
 #[cfg(test)]

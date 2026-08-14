@@ -220,3 +220,53 @@ fn hint_estimate_survives_entry_limit_before_byte_threshold() {
     assert!(estimate.truncated);
     assert!(estimate.bytes < crate::cmd::clean_size::CLEANUP_HINT_THRESHOLD_BYTES);
 }
+
+#[test]
+fn cleanup_reclaims_orphan_fallback_targets_and_protects_running_tasks() {
+    let store = Store::open_memory().unwrap();
+    let fallback_root = tempfile::tempdir().unwrap();
+
+    let running_wt = Path::new("/tmp/running-wt");
+    insert_task(
+        &store,
+        "t-running",
+        "running",
+        None,
+        Some(running_wt),
+        None,
+    );
+
+    let running_fallback = fallback_root
+        .path()
+        .join(crate::cmd::build::build_fallback::cwd_key(running_wt));
+    let orphan_fallback = fallback_root.path().join("orphan-fallback-12345");
+
+    fs::create_dir_all(&running_fallback).unwrap();
+    fs::write(running_fallback.join("file"), b"running").unwrap();
+    fs::create_dir_all(&orphan_fallback).unwrap();
+    fs::write(orphan_fallback.join("file"), b"orphan").unwrap();
+
+    let mut sizes = crate::cmd::clean_size::SizeTracker::new();
+    clean_orphaned_branch_targets(&store, false, Some(fallback_root.path()), &mut sizes).unwrap();
+
+    assert!(running_fallback.exists(), "Running task fallback dir must be protected");
+    assert!(!orphan_fallback.exists(), "Orphan fallback dir must be cleaned");
+}
+
+#[test]
+fn cleanup_refuses_symlinks_under_fallback_root() {
+    let store = Store::open_memory().unwrap();
+    let fallback_root = tempfile::tempdir().unwrap();
+    let external_dir = tempfile::tempdir().unwrap();
+    let external_file = external_dir.path().join("external-file");
+    fs::write(&external_file, b"important").unwrap();
+
+    let symlink_path = fallback_root.path().join("symlink-target");
+    #[cfg(unix)]
+    std::os::unix::fs::symlink(external_dir.path(), &symlink_path).unwrap();
+
+    let mut sizes = crate::cmd::clean_size::SizeTracker::new();
+    clean_orphaned_branch_targets(&store, false, Some(fallback_root.path()), &mut sizes).unwrap();
+
+    assert!(external_file.exists(), "External file through symlink must not be touched");
+}

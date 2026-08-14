@@ -27,7 +27,7 @@ impl TargetKind {
 }
 
 fn cwd_no_longer_exists(cwd: &Path) -> bool {
-    if cwd.as_os_str().is_empty() {
+    if !cwd.is_absolute() {
         return false;
     }
     match fs::symlink_metadata(cwd) {
@@ -76,7 +76,31 @@ pub(crate) fn clean_orphaned_branch_targets(
             crate::cmd::clean::format_bytes(bytes)
         );
     }
+    let fallback_root_buf = fallback_root.map(Path::to_path_buf).unwrap_or_else(crate::cmd::build::build_fallback::fallback_target_root);
+    let skipped_count = count_skipped_fallback_targets(store, &fallback_root_buf)?;
+    if removed == 0 && skipped_count > 0 {
+        println!(
+            "{}Skipped {skipped_count} fallback target dirs (source cwd still exists)",
+            if dry_run { "[dry-run] " } else { "" }
+        );
+    }
     Ok(bytes)
+}
+
+pub(crate) fn count_skipped_fallback_targets(store: &Store, fallback_root: &Path) -> Result<usize> {
+    if !fallback_root.is_dir() {
+        return Ok(0);
+    }
+    let tasks = store.list_tasks(TaskFilter::All)?;
+    let mut skipped = HashSet::new();
+    for task in &tasks {
+        for (cwd, path) in task_fallback_target_paths(task, fallback_root) {
+            if path.is_dir() && !cwd_no_longer_exists(&cwd) && is_safe_fallback_target_for_removal(&path, fallback_root) {
+                skipped.insert(path);
+            }
+        }
+    }
+    Ok(skipped.len())
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

@@ -24,10 +24,38 @@ fn cache() -> &'static Mutex<HashMap<AgentKind, Option<Vec<String>>>> {
     SERVED_CACHE.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
+fn cache_file_path() -> std::path::PathBuf {
+    crate::paths::aid_dir().join("served_models_cache.json")
+}
+
+fn load_from_disk_cache(kind: AgentKind) -> Option<Vec<String>> {
+    let path = cache_file_path();
+    let content = std::fs::read_to_string(&path).ok()?;
+    let map: HashMap<String, Vec<String>> = serde_json::from_str(&content).ok()?;
+    map.get(kind.as_str()).cloned()
+}
+
+fn save_to_disk_cache(kind: AgentKind, models: &[String]) {
+    let path = cache_file_path();
+    let mut map: HashMap<String, Vec<String>> = if let Ok(content) = std::fs::read_to_string(&path) {
+        serde_json::from_str(&content).unwrap_or_default()
+    } else {
+        HashMap::new()
+    };
+    if let Some(parent) = path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    map.insert(kind.as_str().to_string(), models.to_vec());
+    if let Ok(json) = serde_json::to_string_pretty(&map) {
+        let _ = std::fs::write(&path, json);
+    }
+}
+
 pub(crate) fn clear_served_models_cache() {
     if let Ok(mut guard) = cache().lock() {
         guard.clear();
     }
+    let _ = std::fs::remove_file(cache_file_path());
 }
 
 #[cfg(test)]
@@ -120,21 +148,35 @@ pub(crate) fn get_served_models_cached(agent: &dyn Agent) -> Option<Vec<String>>
         if let Some(res) = thread_mock {
             return res;
         }
-        agent.served_models().ok().flatten()
     }
-    #[cfg(not(test))]
-    {
-        if let Ok(guard) = cache().lock() {
-            if let Some(cached) = guard.get(&kind) {
-                return cached.clone();
-            }
+
+    if let Ok(guard) = cache().lock() {
+        if let Some(cached) = guard.get(&kind) {
+            return cached.clone();
         }
-        let result = agent.served_models().ok().flatten();
+    }
+
+    if let Some(disk_models) = load_from_disk_cache(kind) {
         if let Ok(mut guard) = cache().lock() {
-            guard.insert(kind, result.clone());
+            guard.insert(kind, Some(disk_models.clone()));
         }
-        result
+        return Some(disk_models);
     }
+
+    let result = agent.served_models().ok().flatten();
+    if let Ok(mut guard) = cache().lock() {
+        guard.insert(kind, result.clone());
+    }
+    if let Some(ref models) = result {
+        save_to_disk_cache(kind, models);
+    }
+    result
+}
+
+pub(crate) const DEFAULT_PROBE_TIMEOUT: Duration = Duration::from_secs(6);
+
+pub(crate) fn run_probe_cmd(cmd: Command) -> Option<String> {
+    run_cmd_with_timeout(cmd, DEFAULT_PROBE_TIMEOUT)
 }
 
 pub(crate) fn run_cmd_with_timeout(mut cmd: Command, timeout: Duration) -> Option<String> {

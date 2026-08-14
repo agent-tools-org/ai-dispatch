@@ -44,10 +44,7 @@ fn cache_file_path() -> std::path::PathBuf {
 }
 
 fn now_secs() -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_secs()
+    SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs()
 }
 
 fn load_from_disk_cache(kind: AgentKind) -> Option<Vec<String>> {
@@ -63,16 +60,25 @@ fn load_from_disk_cache(kind: AgentKind) -> Option<Vec<String>> {
     }
 }
 
-fn save_to_disk_cache(kind: AgentKind, models: &[String]) {
-    let path = cache_file_path();
-    let mut map: HashMap<String, ServedModelsCacheEntry> = if let Ok(content) = std::fs::read_to_string(&path) {
-        serde_json::from_str(&content).unwrap_or_default()
-    } else {
-        HashMap::new()
-    };
+fn atomic_write_cache_file(path: &std::path::Path, content: &str) {
     if let Some(parent) = path.parent() {
         let _ = std::fs::create_dir_all(parent);
     }
+    static WRITE_COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let nanos = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_nanos();
+    let count = WRITE_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let tmp_path = path.with_extension(format!("tmp.{}.{}.{}", std::process::id(), nanos, count));
+    if std::fs::write(&tmp_path, content).is_ok() && std::fs::rename(&tmp_path, path).is_err() {
+        let _ = std::fs::remove_file(&tmp_path);
+    }
+}
+
+fn save_to_disk_cache(kind: AgentKind, models: &[String]) {
+    let path = cache_file_path();
+    let mut map: HashMap<String, ServedModelsCacheEntry> = std::fs::read_to_string(&path)
+        .ok()
+        .and_then(|c| serde_json::from_str(&c).ok())
+        .unwrap_or_default();
     map.insert(
         kind.as_str().to_string(),
         ServedModelsCacheEntry {
@@ -81,7 +87,7 @@ fn save_to_disk_cache(kind: AgentKind, models: &[String]) {
         },
     );
     if let Ok(json) = serde_json::to_string_pretty(&map) {
-        let _ = std::fs::write(&path, json);
+        atomic_write_cache_file(&path, &json);
     }
 }
 
@@ -101,7 +107,7 @@ pub(crate) fn clear_served_models_cache_for_agent(kind: AgentKind) {
         if let Ok(mut map) = serde_json::from_str::<HashMap<String, serde_json::Value>>(&content) {
             if map.remove(kind.as_str()).is_some() {
                 if let Ok(json) = serde_json::to_string_pretty(&map) {
-                    let _ = std::fs::write(&path, json);
+                    atomic_write_cache_file(&path, &json);
                 }
             }
         }

@@ -103,7 +103,7 @@ impl super::Agent for AntigravityAgent {
     fn served_models(&self) -> Result<Option<Vec<String>>> {
         let mut cmd = Command::new("agy");
         cmd.arg("models");
-        let Some(output) = super::model_validation::run_cmd_with_timeout(cmd, std::time::Duration::from_secs(2)) else {
+        let Some(output) = super::model_validation::run_probe_cmd(cmd) else {
             return Ok(None);
         };
         let models = parse_agy_models_output(&output);
@@ -111,11 +111,15 @@ impl super::Agent for AntigravityAgent {
     }
 }
 
-fn parse_agy_models_output(output: &str) -> Vec<String> {
+pub(crate) fn parse_agy_models_output(output: &str) -> Vec<String> {
     let mut models = Vec::new();
     for line in output.lines() {
         let trimmed = line.trim();
-        if trimmed.is_empty() || trimmed.starts_with('#') || trimmed.starts_with("Available") {
+        if trimmed.is_empty()
+            || trimmed.starts_with('#')
+            || trimmed.starts_with("Available")
+            || trimmed.starts_with("Fetching")
+        {
             continue;
         }
         let first = trimmed.split_whitespace().next().unwrap_or("");

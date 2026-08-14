@@ -178,7 +178,7 @@ impl super::Agent for CursorAgent {
         let binary = cursor_binary();
         let mut cmd = Command::new(binary);
         cmd.arg("models");
-        let output = super::model_validation::run_cmd_with_timeout(cmd, std::time::Duration::from_secs(2));
+        let output = super::model_validation::run_probe_cmd(cmd);
         let Some(text) = output else {
             return Ok(None);
         };

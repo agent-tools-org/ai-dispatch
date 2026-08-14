@@ -1,3 +1,11 @@
+## v10.31.0 (2026-08-14)
+- Model validation now actually fires for slow CLIs. The served-model probe capped at 2 seconds while `agy models` takes 3.9s and `grok models` 2.3-2.6s, so the probe always timed out, returned nothing, and aid accepted any model name at all — a nonexistent model dispatched without a word. The probe now allows 10 seconds and caches its result on disk for 24 hours, so the cost is paid once rather than on every dispatch.
+- A model absent from the cached list triggers one refresh before aid rejects it, so a model the CLI gained since the last probe is accepted instead of being wrongly refused for a day.
+- Probe output no longer mixes stderr into the model list. Agy's rejection message used to offer `ERROR` and `error` as served models.
+- The served-model disk cache is written atomically, so two concurrent aid processes cannot leave a torn file behind.
+- Fallback cargo target directories are reclaimed when their task is accepted and garbage-collected, and by `aid clean --worktrees`. A directory is removed only when the working directory it was keyed from no longer exists, so a build running in the main repository is never touched. When nothing is reclaimed, aid now says how many targets it held back and why.
+
+
 ## v10.30.0 (2026-08-13)
 - One provider running out of credit no longer takes its whole CLI offline: a refusal is attributed to the route aid actually dispatched, so a sibling provider that is still serving stays available.
 - A model aid picked for you is no longer mistaken for one you named. Stale catalog entries degrade to the agent's own default with a warning, while a model you asked for by name still fails loudly if the CLI does not serve it — on first dispatch and on retry alike.

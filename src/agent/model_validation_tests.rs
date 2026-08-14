@@ -2,42 +2,36 @@
 
 use super::*;
 use std::process::Command;
+use std::sync::Mutex;
 use crate::agent::{Agent, RunOpts};
 use crate::types::*;
 
+static TEST_MUTEX: Mutex<()> = Mutex::new(());
+
 struct MockQueryableAgent {
     kind: AgentKind,
-    models: Option<Vec<String>>,
+    models: Mutex<Option<Vec<String>>>,
+}
+
+impl MockQueryableAgent {
+    fn new(kind: AgentKind, models: Option<Vec<String>>) -> Self {
+        Self { kind, models: Mutex::new(models) }
+    }
 }
 
 impl Agent for MockQueryableAgent {
-    fn kind(&self) -> AgentKind {
-        self.kind
-    }
-    fn streaming(&self) -> bool {
-        false
-    }
-    fn accepts_interactive_input(&self) -> bool {
-        false
-    }
-    fn build_command(&self, _prompt: &str, _opts: &RunOpts) -> Result<Command> {
-        Ok(Command::new("true"))
-    }
-    fn parse_event(&self, _task_id: &TaskId, _line: &str) -> Option<TaskEvent> {
-        None
-    }
-    fn served_models(&self) -> Result<Option<Vec<String>>> {
-        Ok(self.models.clone())
-    }
+    fn kind(&self) -> AgentKind { self.kind }
+    fn streaming(&self) -> bool { false }
+    fn accepts_interactive_input(&self) -> bool { false }
+    fn build_command(&self, _prompt: &str, _opts: &RunOpts) -> Result<Command> { Ok(Command::new("true")) }
+    fn parse_event(&self, _task_id: &TaskId, _line: &str) -> Option<TaskEvent> { None }
+    fn served_models(&self) -> Result<Option<Vec<String>>> { Ok(self.models.lock().unwrap().clone()) }
 }
 
 #[test]
 fn validate_model_allows_valid_model() {
     clear_served_models_cache();
-    let mock = MockQueryableAgent {
-        kind: AgentKind::Codex,
-        models: Some(vec!["gpt-5.6-sol".to_string(), "gpt-5.5".to_string()]),
-    };
+    let mock = MockQueryableAgent::new(AgentKind::Codex, Some(vec!["gpt-5.6-sol".to_string(), "gpt-5.5".to_string()]));
 
     assert!(validate_model_for_agent(&mock, "gpt-5.6-sol", ModelSource::UserSupplied).is_ok());
     assert!(validate_model_for_agent(&mock, "GPT-5.5", ModelSource::UserSupplied).is_ok());
@@ -46,10 +40,7 @@ fn validate_model_allows_valid_model() {
 #[test]
 fn validate_model_rejects_absent_model_naming_served() {
     clear_served_models_cache();
-    let mock = MockQueryableAgent {
-        kind: AgentKind::Codex,
-        models: Some(vec!["gpt-5.6-sol".to_string(), "gpt-5.5".to_string()]),
-    };
+    let mock = MockQueryableAgent::new(AgentKind::Codex, Some(vec!["gpt-5.6-sol".to_string(), "gpt-5.5".to_string()]));
 
     let err = validate_model_for_agent(&mock, "auto", ModelSource::UserSupplied)
         .unwrap_err()
@@ -61,10 +52,7 @@ fn validate_model_rejects_absent_model_naming_served() {
 #[test]
 fn validate_model_allows_unqueryable_cli() {
     clear_served_models_cache();
-    let mock = MockQueryableAgent {
-        kind: AgentKind::Kilo,
-        models: None,
-    };
+    let mock = MockQueryableAgent::new(AgentKind::Kilo, None);
 
     assert!(validate_model_for_agent(&mock, "any-unknown-model", ModelSource::AidResolved).is_ok());
 }
@@ -72,15 +60,12 @@ fn validate_model_allows_unqueryable_cli() {
 #[test]
 fn cursor_auto_model_is_allowed() {
     clear_served_models_cache();
-    let mock = MockQueryableAgent {
-        kind: AgentKind::Cursor,
-        models: Some(vec![
-            "composer-2.5".to_string(),
-            "auto".to_string(),
-            "default".to_string(),
-            "router".to_string(),
-        ]),
-    };
+    let mock = MockQueryableAgent::new(AgentKind::Cursor, Some(vec![
+        "composer-2.5".to_string(),
+        "auto".to_string(),
+        "default".to_string(),
+        "router".to_string(),
+    ]));
 
     assert!(validate_model_for_agent(&mock, "auto", ModelSource::UserSupplied).is_ok());
     assert!(validate_model_for_agent(&mock, "composer-2.5", ModelSource::UserSupplied).is_ok());
@@ -90,13 +75,8 @@ fn cursor_auto_model_is_allowed() {
 #[test]
 fn cursor_probe_failure_returns_none_and_allows_non_alias_models() {
     clear_served_models_cache();
-    let mock = MockQueryableAgent {
-        kind: AgentKind::Cursor,
-        models: None,
-    };
+    let mock = MockQueryableAgent::new(AgentKind::Cursor, None);
 
-    // When the probe fails (returns None), unknown means ALLOW.
-    // Both real models like composer-2.5 and aliases like auto must be allowed.
     assert!(validate_model_for_agent(&mock, "composer-2.5", ModelSource::AidResolved).is_ok());
     assert!(validate_model_for_agent(&mock, "auto", ModelSource::AidResolved).is_ok());
     assert!(validate_model_for_agent(&mock, "custom-model-xyz", ModelSource::AidResolved).is_ok());
@@ -127,10 +107,7 @@ gpt-oss-120b-medium\tGPT-OSS 120B (Medium)
     assert!(models.contains(&"gemini-3.7-flash-high".to_string()));
     assert!(models.contains(&"claude-sonnet-4-6".to_string()));
 
-    let mock = MockQueryableAgent {
-        kind: AgentKind::Antigravity,
-        models: Some(models),
-    };
+    let mock = MockQueryableAgent::new(AgentKind::Antigravity, Some(models));
 
     let res = validate_model_for_agent(&mock, "gemini-9.9-nonexistent", ModelSource::UserSupplied);
     assert!(res.is_err());
@@ -156,14 +133,12 @@ Available models:
 
 #[test]
 fn served_models_disk_caching_and_clearing() {
+    let _lock = TEST_MUTEX.lock().unwrap();
     let temp = tempfile::tempdir().expect("tempdir");
     let _home = crate::paths::AidHomeGuard::set(temp.path());
     clear_served_models_cache();
 
-    let mock = MockQueryableAgent {
-        kind: AgentKind::Antigravity,
-        models: Some(vec!["gemini-3.7-flash-high".to_string()]),
-    };
+    let mock = MockQueryableAgent::new(AgentKind::Antigravity, Some(vec!["gemini-3.7-flash-high".to_string()]));
 
     let models = get_served_models_cached(&mock).expect("models present");
     assert_eq!(models, vec!["gemini-3.7-flash-high".to_string()]);
@@ -177,18 +152,83 @@ fn served_models_disk_caching_and_clearing() {
 
 #[test]
 fn validate_slow_cli_probe_success_asserts_no_cannot_query_warning() {
+    let _lock = TEST_MUTEX.lock().unwrap();
     let temp = tempfile::tempdir().expect("tempdir");
     let _home = crate::paths::AidHomeGuard::set(temp.path());
     clear_served_models_cache();
 
-    let mock = MockQueryableAgent {
-        kind: AgentKind::Antigravity,
-        models: Some(vec!["gemini-3.7-flash-high".to_string()]),
-    };
+    let mock = MockQueryableAgent::new(AgentKind::Antigravity, Some(vec!["gemini-3.7-flash-high".to_string()]));
 
     let res = validate_model_for_agent(&mock, "gemini-9.9-nonexistent", ModelSource::UserSupplied);
     assert!(res.is_err(), "Must reject unserved user-supplied model");
     let err_msg = res.unwrap_err().to_string();
     assert!(err_msg.contains("Agent 'agy' does not serve model 'gemini-9.9-nonexistent'"));
     assert!(!err_msg.contains("Cannot query served models"), "Must NOT report timeout / cannot query");
+}
+
+#[test]
+fn stale_disk_cache_entry_reprobes() {
+    let _lock = TEST_MUTEX.lock().unwrap();
+    let temp = tempfile::tempdir().expect("tempdir");
+    let _home = crate::paths::AidHomeGuard::set(temp.path());
+    clear_served_models_cache();
+
+    let cache_file = cache_file_path();
+    if let Some(parent) = cache_file.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    let stale_json = serde_json::json!({
+        "agy": {
+            "models": ["stale-model-v1"],
+            "updated_at_secs": 100
+        }
+    });
+    std::fs::write(&cache_file, stale_json.to_string()).expect("write stale cache");
+
+    let mock = MockQueryableAgent::new(AgentKind::Antigravity, Some(vec!["fresh-model-v2".to_string()]));
+
+    let models = get_served_models_cached(&mock).expect("models present");
+    assert_eq!(models, vec!["fresh-model-v2".to_string()], "Stale cache must be ignored and re-probed");
+}
+
+#[test]
+fn fresh_disk_cache_entry_serves_cache() {
+    let _lock = TEST_MUTEX.lock().unwrap();
+    let temp = tempfile::tempdir().expect("tempdir");
+    let _home = crate::paths::AidHomeGuard::set(temp.path());
+    clear_served_models_cache();
+
+    let cache_file = cache_file_path();
+    if let Some(parent) = cache_file.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    let fresh_json = serde_json::json!({
+        "agy": {
+            "models": ["cached-model-v1"],
+            "updated_at_secs": now_secs()
+        }
+    });
+    std::fs::write(&cache_file, fresh_json.to_string()).expect("write fresh cache");
+
+    let mock = MockQueryableAgent::new(AgentKind::Antigravity, Some(vec!["should-not-be-queried".to_string()]));
+
+    let models = get_served_models_cached(&mock).expect("models present");
+    assert_eq!(models, vec!["cached-model-v1".to_string()], "Fresh cache must be returned");
+}
+
+#[test]
+fn validate_model_refreshes_cache_on_missing_model() {
+    let _lock = TEST_MUTEX.lock().unwrap();
+    let temp = tempfile::tempdir().expect("tempdir");
+    let _home = crate::paths::AidHomeGuard::set(temp.path());
+    clear_served_models_cache();
+
+    let mock = MockQueryableAgent::new(AgentKind::Antigravity, Some(vec!["gemini-3.7-flash-high".to_string()]));
+
+    assert_eq!(get_served_models_cached(&mock), Some(vec!["gemini-3.7-flash-high".to_string()]));
+
+    *mock.models.lock().unwrap() = Some(vec!["gemini-3.7-flash-high".to_string(), "gemini-3.8".to_string()]);
+
+    let res = validate_model_for_agent(&mock, "gemini-3.8", ModelSource::UserSupplied);
+    assert!(res.is_ok(), "Missing model validation must refresh cache and accept newly added model");
 }

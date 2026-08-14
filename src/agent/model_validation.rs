@@ -6,7 +6,7 @@ use anyhow::{Result, anyhow};
 use std::collections::HashMap;
 use std::process::Command;
 use std::sync::{Mutex, OnceLock};
-use std::time::Duration;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use serde::{Deserialize, Serialize};
 
 use crate::types::AgentKind;
@@ -20,6 +20,9 @@ thread_local! {
         std::cell::RefCell::new(HashMap::new());
 }
 
+pub(crate) const DEFAULT_PROBE_TIMEOUT: Duration = Duration::from_secs(10);
+pub(crate) const SERVED_MODELS_CACHE_TTL: Duration = Duration::from_secs(24 * 3600);
+
 fn cache() -> &'static Mutex<HashMap<AgentKind, Option<Vec<String>>>> {
     SERVED_CACHE.get_or_init(|| Mutex::new(HashMap::new()))
 }
@@ -28,16 +31,46 @@ fn cache_file_path() -> std::path::PathBuf {
     crate::paths::aid_dir().join("served_models_cache.json")
 }
 
+fn now_secs() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs()
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub(crate) struct ServedModelsCacheEntry {
+    pub models: Vec<String>,
+    pub updated_at_secs: u64,
+}
+
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum DiskCacheItem {
+    New(ServedModelsCacheEntry),
+    Legacy(Vec<String>),
+}
+
 fn load_from_disk_cache(kind: AgentKind) -> Option<Vec<String>> {
     let path = cache_file_path();
     let content = std::fs::read_to_string(&path).ok()?;
-    let map: HashMap<String, Vec<String>> = serde_json::from_str(&content).ok()?;
-    map.get(kind.as_str()).cloned()
+    let map: HashMap<String, DiskCacheItem> = serde_json::from_str(&content).ok()?;
+    match map.get(kind.as_str())? {
+        DiskCacheItem::New(entry) => {
+            let age = now_secs().saturating_sub(entry.updated_at_secs);
+            if age <= SERVED_MODELS_CACHE_TTL.as_secs() {
+                Some(entry.models.clone())
+            } else {
+                None
+            }
+        }
+        DiskCacheItem::Legacy(_) => None,
+    }
 }
 
 fn save_to_disk_cache(kind: AgentKind, models: &[String]) {
     let path = cache_file_path();
-    let mut map: HashMap<String, Vec<String>> = if let Ok(content) = std::fs::read_to_string(&path) {
+    let mut map: HashMap<String, ServedModelsCacheEntry> = if let Ok(content) = std::fs::read_to_string(&path) {
         serde_json::from_str(&content).unwrap_or_default()
     } else {
         HashMap::new()
@@ -45,7 +78,13 @@ fn save_to_disk_cache(kind: AgentKind, models: &[String]) {
     if let Some(parent) = path.parent() {
         let _ = std::fs::create_dir_all(parent);
     }
-    map.insert(kind.as_str().to_string(), models.to_vec());
+    map.insert(
+        kind.as_str().to_string(),
+        ServedModelsCacheEntry {
+            models: models.to_vec(),
+            updated_at_secs: now_secs(),
+        },
+    );
     if let Ok(json) = serde_json::to_string_pretty(&map) {
         let _ = std::fs::write(&path, json);
     }
@@ -56,6 +95,22 @@ pub(crate) fn clear_served_models_cache() {
         guard.clear();
     }
     let _ = std::fs::remove_file(cache_file_path());
+}
+
+pub(crate) fn clear_served_models_cache_for_agent(kind: AgentKind) {
+    if let Ok(mut guard) = cache().lock() {
+        guard.remove(&kind);
+    }
+    let path = cache_file_path();
+    if let Ok(content) = std::fs::read_to_string(&path) {
+        if let Ok(mut map) = serde_json::from_str::<HashMap<String, serde_json::Value>>(&content) {
+            if map.remove(kind.as_str()).is_some() {
+                if let Ok(json) = serde_json::to_string_pretty(&map) {
+                    let _ = std::fs::write(&path, json);
+                }
+            }
+        }
+    }
 }
 
 #[cfg(test)]
@@ -126,7 +181,13 @@ pub(crate) fn validate_model_for_agent(
         return Ok(true);
     }
 
-    let list_str = served_list.join(", ");
+    // Model not in cached list; refresh cache once in case CLI gained support for new models.
+    let fresh_served_list = refresh_served_models_cached(agent).unwrap_or(served_list);
+    if fresh_served_list.iter().any(|m| m.eq_ignore_ascii_case(model_clean)) {
+        return Ok(true);
+    }
+
+    let list_str = fresh_served_list.join(", ");
     if source == ModelSource::UserSupplied {
         return Err(anyhow!(
             "Agent '{}' does not serve model '{model_clean}'. Served models: {list_str}",
@@ -138,6 +199,20 @@ pub(crate) fn validate_model_for_agent(
         kind.as_str()
     );
     Ok(false)
+}
+
+pub(crate) fn refresh_served_models_cached(agent: &dyn Agent) -> Option<Vec<String>> {
+    let kind = agent.kind();
+    let result = agent.served_models().ok().flatten();
+    if let Ok(mut guard) = cache().lock() {
+        guard.insert(kind, result.clone());
+    }
+    if let Some(ref models) = result {
+        save_to_disk_cache(kind, models);
+    } else {
+        clear_served_models_cache_for_agent(kind);
+    }
+    result
 }
 
 pub(crate) fn get_served_models_cached(agent: &dyn Agent) -> Option<Vec<String>> {
@@ -163,17 +238,8 @@ pub(crate) fn get_served_models_cached(agent: &dyn Agent) -> Option<Vec<String>>
         return Some(disk_models);
     }
 
-    let result = agent.served_models().ok().flatten();
-    if let Ok(mut guard) = cache().lock() {
-        guard.insert(kind, result.clone());
-    }
-    if let Some(ref models) = result {
-        save_to_disk_cache(kind, models);
-    }
-    result
+    refresh_served_models_cached(agent)
 }
-
-pub(crate) const DEFAULT_PROBE_TIMEOUT: Duration = Duration::from_secs(6);
 
 pub(crate) fn run_probe_cmd(cmd: Command) -> Option<String> {
     run_cmd_with_timeout(cmd, DEFAULT_PROBE_TIMEOUT)

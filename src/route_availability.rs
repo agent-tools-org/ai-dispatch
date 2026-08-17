@@ -14,8 +14,8 @@ use crate::types::AgentKind;
 mod policy;
 
 pub(crate) use policy::{
-    classify_hold, format_hold_end_for, marker_text_from_info, overrides_marker_at,
-    snapshot_overrides, stored_hold, wall_of, Hold, StoredHold, MANUAL_HOLD,
+    classify_hold, format_hold_end_for, overrides_marker_at, snapshot_overrides, stored_hold,
+    wall_of, Hold, StoredHold, MANUAL_HOLD,
 };
 
 #[cfg(test)]
@@ -23,7 +23,6 @@ pub(crate) use policy::overrides_marker_at_in_cache;
 
 const DEGRADED_USED: f64 = 80.0;
 
-/// What is actually stopping work on this route, if anything.
 #[derive(Clone, Debug, PartialEq)]
 pub struct RouteAvailability {
     pub status: RouteStatus,
@@ -41,7 +40,6 @@ pub enum RouteStatus {
     Held,
 }
 
-/// The thing that has to change for this route to serve again.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum QuotaWall {
     Clock,
@@ -140,29 +138,38 @@ pub(crate) fn decide(
     marker_mtime: Option<SystemTime>,
     snapshot: Option<ProbeEvidence>,
 ) -> RouteAvailability {
-    let hold = content.map(|text| stored_hold(text, agent));
-    let wall = content
-        .map(|text| wall_of(agent, text))
-        .unwrap_or(QuotaWall::None);
-    if let (Some(hold), Some(mtime), Some(probe)) = (hold.as_ref(), marker_mtime, snapshot.as_ref())
-    {
-        let relevant = policy::relevant_windows(probe, agent, group);
-        if snapshot_overrides(hold, probe, mtime, &relevant) {
-            return released(wall, snapshot, marker_mtime);
-        }
-    }
-    match hold {
-        Some(stored) => from_stored(
+    match content {
+        Some(text) => apply_hold(
             agent,
             custom_name,
-            stored,
-            wall,
+            group,
+            stored_hold(text, agent),
+            wall_of(agent, text),
+            Some(text),
             marker_mtime,
             snapshot,
-            content,
         ),
         None => probe_only(snapshot),
     }
+}
+
+pub(crate) fn apply_hold(
+    agent: &AgentKind,
+    custom_name: Option<&str>,
+    group: Option<&str>,
+    hold: StoredHold,
+    wall: QuotaWall,
+    content: Option<&str>,
+    marker_mtime: Option<SystemTime>,
+    snapshot: Option<ProbeEvidence>,
+) -> RouteAvailability {
+    if let (Some(mtime), Some(probe)) = (marker_mtime, snapshot.as_ref()) {
+        let relevant = policy::relevant_windows(probe, agent, group);
+        if snapshot_overrides(&hold, probe, mtime, &relevant) {
+            return released(wall, snapshot, marker_mtime);
+        }
+    }
+    from_stored(agent, custom_name, hold, wall, marker_mtime, snapshot, content)
 }
 
 fn released(
@@ -264,13 +271,7 @@ fn probe_only(snapshot: Option<ProbeEvidence>) -> RouteAvailability {
 
 fn max_used(snapshot: Option<&ProbeEvidence>) -> f64 {
     snapshot
-        .map(|probe| {
-            probe
-                .windows
-                .iter()
-                .map(|window| window.used_percent)
-                .fold(0.0_f64, f64::max)
-        })
+        .map(|probe| probe.windows.iter().map(|w| w.used_percent).fold(0.0, f64::max))
         .unwrap_or(0.0)
 }
 

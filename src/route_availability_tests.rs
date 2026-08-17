@@ -3,7 +3,7 @@
 
 use super::*;
 use crate::paths::AidHomeGuard;
-use crate::rate_limit::{self, dispatch_blocking_hold, mark_rate_limited};
+use crate::rate_limit::{self, dispatch_blocking_hold, format_hold_end, mark_rate_limited};
 use crate::types::AgentKind;
 use chrono::{Duration as ChronoDuration, Local, Utc};
 use std::time::{Duration, SystemTime};
@@ -211,27 +211,80 @@ fn windowed_arm_requires_a_dated_window() {
         !snapshot_overrides(&hold, &undated, mtime, &undated.windows),
         "percent alone must not release Windowed"
     );
-    let held = decide(
+    let held = apply_hold(
         &AgentKind::Grok,
         None,
         None,
-        Some("recovery_at:\nhold: manual\nmessage: synthetic windowed"),
+        hold.clone(),
+        QuotaWall::Windowed,
+        None,
         Some(mtime),
         Some(undated.clone()),
     );
-    // No Windowed signature yet, so stored_hold sees unmatched manual → NeedsHuman.
-    // Pin the compiled arm via the helper, not the marker text.
-    assert!(!snapshot_overrides(
-        &hold,
-        &undated,
-        mtime,
-        &undated.windows
-    ));
     assert_eq!(held.status, RouteStatus::Held);
+    assert_eq!(held.ends, HoldEnd::SnapshotDatedWindow);
 
     let dated = probe("grok", &[0.0], true, fetched, true);
     assert!(snapshot_overrides(&hold, &dated, mtime, &dated.windows));
-    let released = released(QuotaWall::Windowed, Some(dated), Some(mtime));
-    assert_eq!(released.status, RouteStatus::Dispatchable);
+    let freed = apply_hold(
+        &AgentKind::Grok,
+        None,
+        None,
+        hold.clone(),
+        QuotaWall::Windowed,
+        None,
+        Some(mtime),
+        Some(dated),
+    );
+    assert_eq!(freed.status, RouteStatus::Dispatchable);
     assert!(!format_hold_end_for(&hold, &AgentKind::Grok, None, None).contains("cooling down"));
+}
+
+#[test]
+fn snapshot_overrides_rejects_equal_older_or_mixed_windows() {
+    let mtime = SystemTime::now();
+    let hold = StoredHold::Until(future_clock().0);
+
+    let equal = probe("codex", &[0.0], false, DateTime::<Utc>::from(mtime), true);
+    assert!(!snapshot_overrides(&hold, &equal, mtime, &equal.windows));
+
+    let older_at = DateTime::<Utc>::from(mtime - Duration::from_secs(1));
+    let older = probe("codex", &[0.0], false, older_at, true);
+    assert!(!snapshot_overrides(&hold, &older, mtime, &older.windows));
+
+    let mixed = probe("codex", &[0.0, 100.0], false, newer_than(mtime), true);
+    assert!(!snapshot_overrides(&hold, &mixed, mtime, &mixed.windows));
+}
+
+#[test]
+fn format_hold_end_classifies_the_full_grok_fixture() {
+    let temp = tempfile::tempdir().expect("temp");
+    let _home = AidHomeGuard::set(temp.path());
+    std::fs::create_dir_all(temp.path().join(".aid")).expect("aid dir");
+
+    let content = std::fs::read_to_string(
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/rate-limit-grok"),
+    )
+    .expect("grok fixture");
+    let first = content.lines().find_map(|l| l.strip_prefix("message: ")).unwrap_or("");
+    assert!(!first.contains("usage balance exhausted"));
+    assert!(!matches!(
+        stored_hold(&content, &AgentKind::Grok),
+        StoredHold::Transient
+    ));
+
+    std::fs::write(rate_limit::marker_path(&AgentKind::Grok, None), &content).expect("marker");
+    let info = rate_limit::get_rate_limit_info(&AgentKind::Grok, None).expect("info");
+    assert!(info.marker.contains("usage balance exhausted"));
+    let end = format_hold_end(&AgentKind::Grok, None, &info);
+    assert!(
+        !end.contains("cooling down"),
+        "full fixture must not print cooling down, got {end:?}"
+    );
+
+    // Simulate post-PR-3: needs_human is false; reconstruction from the first
+    // message: line would be Transient. Original bytes must still classify.
+    let mut flipped = info;
+    flipped.needs_human = false;
+    assert!(!format_hold_end(&AgentKind::Grok, None, &flipped).contains("cooling down"));
 }

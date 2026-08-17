@@ -210,26 +210,3 @@ pub(crate) fn format_hold_end_for(
         StoredHold::Transient => "cooling down".to_string(),
     }
 }
-
-/// Reconstruct just enough marker text for `stored_hold` to re-read the class.
-pub(crate) fn marker_text_from_info(
-    recovery_at: Option<&str>,
-    needs_human: bool,
-    message: Option<&str>,
-) -> String {
-    let mut content = String::new();
-    if let Some(at) = recovery_at {
-        content.push_str("recovery_at: ");
-        content.push_str(at);
-        content.push('\n');
-    }
-    if needs_human {
-        content.push_str("hold: manual\n");
-    }
-    if let Some(message) = message {
-        content.push_str("message: ");
-        content.push_str(message);
-        content.push('\n');
-    }
-    content
-}

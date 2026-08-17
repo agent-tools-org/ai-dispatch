@@ -137,12 +137,19 @@ fn delegate_opencode_without_endpoint_uses_own_custom_marker() {
     );
 }
 
-fn isolated_home() -> (tempfile::TempDir, crate::paths::AidHomeGuard) {
+fn isolated_home() -> (
+    tempfile::TempDir,
+    crate::paths::AidHomeGuard,
+    crate::live_quota::CacheDirGuard,
+) {
     let tmp = tempfile::tempdir().expect("tempdir");
     let _ = std::fs::create_dir_all(tmp.path().join(".aid"));
     let guard = crate::paths::AidHomeGuard::set(tmp.path());
     std::fs::create_dir_all(crate::paths::aid_dir()).ok();
-    (tmp, guard)
+    let aidbar = tmp.path().join("aidbar");
+    std::fs::create_dir_all(&aidbar).ok();
+    let cache = crate::live_quota::CacheDirGuard::set(&aidbar);
+    (tmp, guard, cache)
 }
 
 /// Guard: if `rate_limit_kind` ever returns `OpenCode` for a `delegate_to`
@@ -150,7 +157,7 @@ fn isolated_home() -> (tempfile::TempDir, crate::paths::AidHomeGuard) {
 /// "ok" instead of "limited", failing the assertion.
 #[test]
 fn custom_agent_quota_read_matches_write() {
-    let (_tmp, _guard) = isolated_home();
+    let (_tmp, _guard, _cache) = isolated_home();
     let mut config = sample_custom_config();
     config.id = "auditor".into();
     config.base_url = None; // no endpoint — triggers the old delegate_to path
@@ -171,7 +178,7 @@ fn custom_agent_quota_read_matches_write() {
 
 #[test]
 fn quota_json_ok_when_no_markers() {
-    let (_tmp, _guard) = isolated_home();
+    let (_tmp, _guard, _cache) = isolated_home();
     let q = build_quota_json(&AgentKind::Gemini, None);
     assert_eq!(q.state, "ok");
     assert!(q.groups.is_empty());
@@ -181,7 +188,7 @@ fn quota_json_ok_when_no_markers() {
 
 #[test]
 fn quota_json_limited_for_agent_level_hold() {
-    let (_tmp, _guard) = isolated_home();
+    let (_tmp, _guard, _cache) = isolated_home();
     crate::rate_limit::mark_rate_limited(
         &AgentKind::Codex,
         None,
@@ -198,12 +205,12 @@ fn quota_json_limited_for_agent_level_hold() {
 
 #[test]
 fn quota_json_partial_for_group_hold_carries_provider_message() {
-    let (_tmp, _guard) = isolated_home();
+    let (_tmp, _guard, _cache) = isolated_home();
     crate::rate_limit::mark_group_rate_limited(
         &AgentKind::Cursor,
         None,
         "premium",
-        "ActionRequiredError: ask your admin to increase your limit",
+        "ActionRequiredError: You're out of usage. Switch to Auto, or ask your admin to increase your limit",
     );
     // The agent-level marker must NOT be set.
     assert!(!crate::rate_limit::is_rate_limited(&AgentKind::Cursor, None));

@@ -291,3 +291,7 @@ fn cooldown_active(mtime: Option<SystemTime>) -> bool {
 #[cfg(test)]
 #[path = "route_availability_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "route_availability_windowed_tests.rs"]
+mod windowed_tests;

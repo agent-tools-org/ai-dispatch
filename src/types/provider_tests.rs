@@ -33,15 +33,14 @@ fn unobserved_providers_are_unknown_not_invented() {
     }
 }
 
-/// A provider whose id is known while its metering is not is a legitimate
-/// state: grok's bearer token proves the vendor, and the CLI exposes no billing
-/// surface at all. Forcing a shape here would be a guess.
+/// aidbar's GetGrokCreditsConfig is one billing-period pool: used_percent plus
+/// period_end. That is AccountPool, not an invented unknown.
 #[test]
-fn a_known_vendor_may_still_have_unknown_metering() {
+fn grok_is_an_account_pool() {
     let (provider, shape) = provider_for_cli(AgentKind::Grok);
     assert_eq!(provider.as_str(), "xai");
     assert!(!provider.is_unknown());
-    assert_eq!(shape, MeteringShape::Unknown);
+    assert_eq!(shape, MeteringShape::AccountPool);
 }
 
 #[test]

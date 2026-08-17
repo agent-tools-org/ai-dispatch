@@ -115,9 +115,9 @@ pub(crate) const QUOTA_SIGNATURES: &[QuotaSignature] = &[
     // and t-d6fef491:
     // "ActionRequiredError: Increase limits for faster responses You're out of
     //  usage. Switch to Auto, or ask your admin to increase your limit to continue."
-    // The message names the two ways out and both are human actions. `auto` is
-    // not held with it — see model_group::model_group.
-    QuotaSignature { agent: AgentKind::Cursor, needle: "you're out of usage", recovery: QuotaRecovery::NeedsHuman },
+    // A dated Plan window with headroom ends it. On-demand is not this pool.
+    // `auto` is not held with it — see model_group::group_from_refusal.
+    QuotaSignature { agent: AgentKind::Cursor, needle: "you're out of usage", recovery: QuotaRecovery::Windowed },
     // copilot CLI refusal when premium allowance is spent:
     // "You've reached your premium request limit for this billing cycle."
     // This does return at the next billing cycle, but the message never says
@@ -130,10 +130,10 @@ pub(crate) const QUOTA_SIGNATURES: &[QuotaSignature] = &[
     QuotaSignature { agent: AgentKind::Copilot, needle: "exceeded your monthly quota", recovery: QuotaRecovery::NeedsHuman },
     // grok, captured 2026-08-07:
     // "API error (status 402 Payment Required): Grok Build usage balance exhausted"
-    // A spent balance does not come back on a clock. Before this entry existed
-    // the refusal matched only the generic 402 rule, which wrote a marker with
-    // no recovery time that stopped counting after five minutes.
-    QuotaSignature { agent: AgentKind::Grok, needle: "usage balance exhausted", recovery: QuotaRecovery::NeedsHuman },
+    // Land now as Windowed: aidbar already maps the billing period to a dated
+    // resets_at. Revert to NeedsHuman if a 402 arrives while the same-minute
+    // aidbar snapshot still has headroom.
+    QuotaSignature { agent: AgentKind::Grok, needle: "usage balance exhausted", recovery: QuotaRecovery::Windowed },
 ];
 
 /// Match only signatures owned by one agent, so a refusal quoted about another

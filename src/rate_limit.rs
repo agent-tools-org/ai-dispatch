@@ -85,7 +85,8 @@ pub fn mark_group_rate_limited(
 }
 
 pub fn is_group_rate_limited(agent: &AgentKind, custom_name: Option<&str>, group: &str) -> bool {
-    marker_is_active(&group_marker_path(agent, custom_name, group), agent)
+    let path = group_marker_path(agent, custom_name, group);
+    marker_is_active(&path, agent) && !crate::live_quota::overrides_marker(agent, &path)
 }
 
 pub fn clear_group_rate_limit(agent: &AgentKind, custom_name: Option<&str>, group: &str) -> bool {

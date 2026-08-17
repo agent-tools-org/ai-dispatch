@@ -12,6 +12,14 @@ fn isolated() -> tempfile::TempDir {
     temp
 }
 
+/// Hold tests pin marker classification. An empty aidbar cache so a live
+/// snapshot cannot release an aged Windowed marker.
+fn isolate_cache(temp: &tempfile::TempDir) -> crate::live_quota::CacheDirGuard {
+    let cache = temp.path().join("aidbar");
+    std::fs::create_dir_all(&cache).expect("cache");
+    crate::live_quota::CacheDirGuard::set(&cache)
+}
+
 /// The refusal aid could not classify at all: a bare status code caught on
 /// stderr, matching no signature. It writes a marker with no recovery time and
 /// no manual hold, and that must expire on its own.
@@ -39,24 +47,26 @@ fn a_transient_refusal_with_no_stated_time_expires_on_its_own() {
     );
 }
 
-/// The other class. A spent balance does not come back on a clock, so ageing
-/// the marker changes nothing — only `aid config clear-limit` does.
+/// Windowed grok is not released by elapsed time — only a dated snapshot or
+/// `aid config clear-limit` ends it.
 #[test]
-fn a_refusal_that_needs_a_person_is_not_released_by_time() {
+fn a_windowed_grok_hold_is_not_released_by_elapsed_time() {
     let temp = isolated();
     let _guard = crate::paths::AidHomeGuard::set(temp.path());
+    let _cache = isolate_cache(&temp);
 
     mark_rate_limited(&AgentKind::Grok, None, "API error (status 402 Payment Required): Grok Build usage balance exhausted");
 
     let info = get_rate_limit_info(&AgentKind::Grok, None).expect("marker written");
     assert_eq!(info.recovery_at, None, "no invented reset time");
-    assert!(info.needs_human);
+    assert!(!info.needs_human, "Windowed is not a person hold");
 
     age_marker(&marker_path(&AgentKind::Grok, None), RATE_LIMIT_WINDOW_SECS * 100);
     assert!(
         is_rate_limited(&AgentKind::Grok, None),
-        "a spent balance must survive any amount of elapsed time"
+        "a Windowed hold must survive any amount of elapsed time"
     );
+    assert!(dispatch_blocking_hold(&AgentKind::Grok, None).is_some());
 
     assert!(clear_rate_limit(&AgentKind::Grok, None));
     assert!(!is_rate_limited(&AgentKind::Grok, None));
@@ -71,19 +81,10 @@ fn every_human_ended_refusal_holds_without_an_invented_reset_time() {
     let _guard = crate::paths::AidHomeGuard::set(temp.path());
 
     for (agent, message) in [
-        (
-            AgentKind::Cursor,
-            "ActionRequiredError: Increase limits for faster responses You're out of usage. \
-             Switch to Auto, or ask your admin to increase your limit to continue.",
-        ),
         (AgentKind::Copilot, "You have exceeded your monthly quota"),
         (
             AgentKind::Copilot,
             "You've reached your premium request limit for this billing cycle.",
-        ),
-        (
-            AgentKind::Grok,
-            "API error (status 402 Payment Required): Grok Build usage balance exhausted",
         ),
         (
             AgentKind::OpenCode,
@@ -248,6 +249,7 @@ fn a_marker_without_a_hold_field_is_not_permanent() {
 fn a_group_marker_holds_for_a_person_too() {
     let temp = isolated();
     let _guard = crate::paths::AidHomeGuard::set(temp.path());
+    let _cache = isolate_cache(&temp);
 
     let cursor = AgentKind::Cursor;
     mark_group_rate_limited(&cursor, None, "premium", "ActionRequiredError: Increase limits for faster responses You're out of usage. \
@@ -261,11 +263,13 @@ fn a_group_marker_holds_for_a_person_too() {
     let holds = active_group_holds(&cursor, None);
     assert_eq!(holds.len(), 1);
     assert_eq!(holds[0].0, "premium");
-    assert!(holds[0].1.needs_human);
+    assert!(!holds[0].1.needs_human, "cursor premium is Windowed");
+    let end = format_hold_end(&cursor, None, &holds[0].1);
     assert!(
-        format_hold_end(&cursor, None, &holds[0].1).contains("aid config clear-limit cursor"),
-        "manual group hold must name the clear command"
+        end.contains("aid config clear-limit cursor"),
+        "Windowed group hold must still name the clear command, got {end:?}"
     );
+    assert!(!end.contains("cooling down"), "got {end:?}");
 
     assert!(clear_all_rate_limits_for_agent(&cursor, None));
     assert!(!is_group_rate_limited(&cursor, None, "premium"));
@@ -333,16 +337,21 @@ fn a_cursor_refusal_naming_no_tier_still_marks_the_agent() {
     assert!(!is_group_rate_limited(&cursor, None, "premium"));
 }
 
-/// `aid run` used to divert only when a recovery time was present. A spent
-/// balance states none, so dispatch walked into an account that cannot serve.
+/// `aid run` used to divert only when a recovery time was present. A Windowed
+/// 402 states none, so dispatch must still stop and name the dated-snapshot way
+/// out rather than inventing a clock or saying "cooling down".
 #[test]
-fn a_human_ended_hold_blocks_dispatch_and_names_the_way_out() {
+fn a_windowed_hold_blocks_dispatch_and_names_the_way_out() {
     let temp = isolated();
     let _guard = crate::paths::AidHomeGuard::set(temp.path());
 
     mark_rate_limited(&AgentKind::Grok, None, "API error (status 402 Payment Required): Grok Build usage balance exhausted");
-    let hold = dispatch_blocking_hold(&AgentKind::Grok, None).expect("a spent balance must block");
-    assert_eq!(hold, "until cleared with `aid config clear-limit grok`");
+    let hold = dispatch_blocking_hold(&AgentKind::Grok, None).expect("a Windowed hold must block");
+    assert_eq!(
+        hold,
+        "until a dated grok snapshot with headroom (or `aid config clear-limit grok`)"
+    );
+    assert!(!hold.contains("cooling down"));
 
     assert!(clear_rate_limit(&AgentKind::Grok, None));
     assert!(dispatch_blocking_hold(&AgentKind::Grok, None).is_none());
@@ -400,13 +409,14 @@ fn a_transient_cooldown_does_not_divert_dispatch() {
 fn a_legacy_marker_is_reclassified_from_the_refusal_it_stored() {
     let temp = isolated();
     let _guard = crate::paths::AidHomeGuard::set(temp.path());
+    let _cache = isolate_cache(&temp);
 
-    for (agent, fixture) in [
+    for (agent, fixture, human) in [
         // "recovery_at: " empty, message a mid-token JSON fragment that still
         // carries "You have exceeded your monthly quota".
-        (AgentKind::Copilot, "rate-limit-copilot"),
+        (AgentKind::Copilot, "rate-limit-copilot", true),
         // "recovery_at: " empty, refusal on a later line of a multi-line message.
-        (AgentKind::Grok, "rate-limit-grok"),
+        (AgentKind::Grok, "rate-limit-grok", false),
     ] {
         let path = marker_path(&agent, None);
         std::fs::write(&path, read_fixture(fixture)).expect("write marker");
@@ -414,13 +424,20 @@ fn a_legacy_marker_is_reclassified_from_the_refusal_it_stored() {
 
         assert!(
             is_rate_limited(&agent, None),
-            "{fixture} states a refusal only a person ends and must not expire on a timer"
+            "{fixture} must not expire on a timer"
         );
-        assert!(
-            get_rate_limit_info(&agent, None).expect("marker present").needs_human,
+        let info = get_rate_limit_info(&agent, None).expect("marker present");
+        assert_eq!(
+            info.needs_human, human,
             "{fixture} must report which kind of hold it is under"
         );
         assert!(dispatch_blocking_hold(&agent, None).is_some(), "{fixture} must divert dispatch");
+        if !human {
+            assert!(
+                !format_hold_end(&agent, None, &info).contains("cooling down"),
+                "{fixture} Windowed must not print cooling down"
+            );
+        }
     }
 }
 

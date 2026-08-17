@@ -156,7 +156,7 @@ fn render_rate_limit_line(kind: AgentKind) -> String {
                 None if info.needs_human => {
                     format!("needs manual clear: aid config clear-limit {}", kind.as_str())
                 }
-                None => "cooling down".to_string(),
+                None => rate_limit::format_hold_end(&kind, None, &info),
             };
             format!("  Status:    rate-limited ({cause}){fallback_hint}\n")
         }

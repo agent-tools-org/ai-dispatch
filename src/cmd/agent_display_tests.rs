@@ -36,7 +36,7 @@ fn healthy_list_omits_status_column() {
         .iter()
         .map(|k| quota_row(*k, None))
         .collect();
-    assert!(rows.iter().all(|r| matches!(r, QuotaRow::Ok)));
+    assert!(rows.iter().all(|r| matches!(r, QuotaRow::Ok { .. })));
 }
 
 #[test]
@@ -59,7 +59,7 @@ fn agent_level_hold_is_limited_not_partial() {
         }
         other => panic!("expected Limited, got {other:?}"),
     }
-    assert!(matches!(quota_row(AgentKind::Gemini, None), QuotaRow::Ok));
+    assert!(matches!(quota_row(AgentKind::Gemini, None), QuotaRow::Ok { .. }));
 }
 
 #[test]
@@ -91,7 +91,7 @@ fn cursor_premium_group_hold_is_partial_and_names_clear_limit() {
     }
 
     clear_all_rate_limits_for_agent(&AgentKind::Cursor, None);
-    assert!(matches!(quota_row(AgentKind::Cursor, None), QuotaRow::Ok));
+    assert!(matches!(quota_row(AgentKind::Cursor, None), QuotaRow::Ok { .. }));
 }
 
 #[test]
@@ -102,7 +102,7 @@ fn group_hold_detail_includes_provider_message() {
 
     mark_group_rate_limited(&AgentKind::Cursor, None,
         "premium",
-        "ActionRequiredError: ask your admin to increase your limit to continue.",
+        "ActionRequiredError: You're out of usage. ask your admin to increase your limit to continue.",
     );
 
     match quota_row(AgentKind::Cursor, None) {
@@ -161,12 +161,12 @@ fn custom_agent_with_hold_shows_limited() {
     }
     // An unrelated custom agent must not inherit the hold.
     assert!(
-        matches!(quota_row(AgentKind::Custom, Some("other-agent")), QuotaRow::Ok),
+        matches!(quota_row(AgentKind::Custom, Some("other-agent")), QuotaRow::Ok { .. }),
         "unrelated custom agent must not inherit the hold"
     );
     // Built-in agents must be unaffected.
     assert!(
-        matches!(quota_row(AgentKind::Codex, None), QuotaRow::Ok),
+        matches!(quota_row(AgentKind::Codex, None), QuotaRow::Ok { .. }),
         "built-in codex must not inherit custom agent hold"
     );
 }

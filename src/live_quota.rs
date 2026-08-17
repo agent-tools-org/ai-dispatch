@@ -10,7 +10,7 @@ use std::time::Duration;
 use crate::route_availability::{ProbeEvidence, WindowView};
 use crate::types::AgentKind;
 
-const STALE_AFTER: Duration = Duration::from_secs(15 * 60);
+pub(crate) const STALE_AFTER: Duration = Duration::from_secs(15 * 60);
 
 #[derive(Deserialize)]
 struct CachedRecord {

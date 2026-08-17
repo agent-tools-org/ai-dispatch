@@ -413,8 +413,14 @@ dispatched task, both naming `aid config clear-limit <agent>`. When no usable
 aidbar snapshot can release the marker, that escape hatch is how a topped-up
 account or other changed provider state releases a stale hold.
 
-`--declared-urgency background` still keeps the agent you asked for: a
-background task can afford to wait for the window to reopen.
+`--declared-urgency background` still keeps the agent you asked for. The wait
+blocks only on a clock or a dated mapped snapshot; prepaid, plan-change, and
+unmapped holds return immediately and tell you to `aid config clear-limit` or
+pick another agent.
+
+A dry-run substitution milestone says `would dispatch` and records JSON
+metadata naming both routes and whether the model class was preserved. It does
+not mean the substitute ran.
 
 A `--cascade` entry aid cannot resolve is an error, not a skipped entry. Custom
 agents are valid cascade targets and are checked against their own hold, not a

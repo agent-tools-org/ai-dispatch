@@ -57,8 +57,56 @@ pub fn session_start() -> Result<()> {
 }
 
 enum QuotaState {
-    Ok,
-    Limited { resets: Option<NaiveDateTime> },
+    Ok { used_percent: Option<f64>, stale: bool },
+    Partial { used_percent: Option<f64>, stale: bool },
+    Limited {
+        resets: Option<NaiveDateTime>,
+        used_percent: Option<f64>,
+        stale: bool,
+    },
+}
+
+fn probe_bits(
+    probe: Option<&crate::route_availability::ProbeEvidence>,
+) -> (Option<f64>, bool) {
+    match probe {
+        Some(probe) if probe.ok && !probe.windows.is_empty() => {
+            let used = probe
+                .windows
+                .iter()
+                .map(|window| window.used_percent)
+                .fold(0.0, f64::max);
+            (Some(used), probe.stale)
+        }
+        Some(probe) => (None, probe.stale),
+        None => (None, false),
+    }
+}
+
+fn quota_state_for(kind: AgentKind, custom: Option<&str>) -> QuotaState {
+    let avail = crate::route_availability::availability(&kind, custom);
+    let (used_percent, stale) = probe_bits(avail.probe.as_ref());
+    if avail.status == crate::route_availability::RouteStatus::Held {
+        let resets = match avail.ends {
+            crate::route_availability::HoldEnd::At(at) => Some(at),
+            _ => crate::rate_limit::recovery_datetime(&kind, custom),
+        };
+        return QuotaState::Limited {
+            resets,
+            used_percent,
+            stale,
+        };
+    }
+    if !crate::rate_limit::active_group_holds(&kind, custom).is_empty() {
+        return QuotaState::Partial {
+            used_percent,
+            stale,
+        };
+    }
+    QuotaState::Ok {
+        used_percent,
+        stale,
+    }
 }
 
 fn agents_status_line() -> Option<String> {
@@ -68,49 +116,61 @@ fn agents_status_line() -> Option<String> {
         .copied()
         .filter(|kind| installed.contains(kind))
         .filter(|kind| !crate::agent_config::is_agent_disabled(kind.as_str()))
-        .map(|kind| {
-            let state = if crate::rate_limit::is_rate_limited(&kind, None) {
-                QuotaState::Limited { resets: crate::rate_limit::recovery_datetime(&kind, None) }
-            } else {
-                QuotaState::Ok
-            };
-            (kind.as_str().to_string(), state)
-        })
+        .map(|kind| (kind.as_str().to_string(), quota_state_for(kind, None)))
         .collect::<Vec<_>>();
     for config in crate::agent::registry::list_custom_agents() {
         if crate::agent_config::is_agent_disabled(&config.id) {
             continue;
         }
-        let name = config.id.as_str();
-        let state = if crate::rate_limit::is_rate_limited(&AgentKind::Custom, Some(name)) {
-            QuotaState::Limited {
-                resets: crate::rate_limit::recovery_datetime(&AgentKind::Custom, Some(name)),
-            }
-        } else {
-            QuotaState::Ok
-        };
+        let state = quota_state_for(AgentKind::Custom, Some(config.id.as_str()));
         entries.push((config.id, state));
     }
     render_agents_status_line(&entries)
 }
 
+fn suffix(used_percent: Option<f64>, stale: bool) -> String {
+    let mut out = String::new();
+    if let Some(used) = used_percent {
+        out.push_str(&format!(" ({used:.0}%)"));
+    }
+    if stale {
+        out.push_str(" STALE");
+    }
+    out
+}
+
 fn render_agents_status_line(entries: &[(String, QuotaState)]) -> Option<String> {
-    let any_limited = entries
-        .iter()
-        .any(|(_, state)| matches!(state, QuotaState::Limited { .. }));
-    if !any_limited {
+    let any_hold = entries.iter().any(|(_, state)| {
+        matches!(state, QuotaState::Limited { .. } | QuotaState::Partial { .. })
+    });
+    if !any_hold {
         return None;
     }
     let parts = entries
         .iter()
         .map(|(name, state)| match state {
-            QuotaState::Ok => format!("{name} ok"),
-            QuotaState::Limited { resets: Some(time) } => {
-                format!("{name} LIMITED (resets {})", time.format("%H:%M"))
-            }
-            QuotaState::Limited { resets: None } => {
-                format!("{name} LIMITED")
-            }
+            QuotaState::Ok {
+                used_percent,
+                stale,
+            } => format!("{name} ok{}", suffix(*used_percent, *stale)),
+            QuotaState::Partial {
+                used_percent,
+                stale,
+            } => format!("{name} PARTIAL{}", suffix(*used_percent, *stale)),
+            QuotaState::Limited {
+                resets: Some(time),
+                used_percent,
+                stale,
+            } => format!(
+                "{name} LIMITED (resets {}){}",
+                time.format("%H:%M"),
+                suffix(*used_percent, *stale)
+            ),
+            QuotaState::Limited {
+                resets: None,
+                used_percent,
+                stale,
+            } => format!("{name} LIMITED{}", suffix(*used_percent, *stale)),
         })
         .collect::<Vec<_>>();
     Some(format!("agents: {}", parts.join(" - ")))
@@ -137,122 +197,5 @@ fn render_session_start(project: Option<&ProjectConfig>, team: Option<&TeamConfi
 }
 
 #[cfg(test)]
-mod tests {
-    use super::{QuotaState, render_agents_status_line, render_session_start};
-    use crate::project::{ProjectAgents, ProjectBudget, ProjectConfig};
-    use crate::team::TeamConfig;
-    use std::collections::HashMap;
-
-    fn entry(name: &str, state: QuotaState) -> (String, QuotaState) {
-        (name.to_string(), state)
-    }
-
-    #[test]
-    fn agent_line_silent_when_all_ok() {
-        let entries = vec![
-            entry("codex", QuotaState::Ok),
-            entry("agy", QuotaState::Ok),
-        ];
-        assert_eq!(render_agents_status_line(&entries), None);
-    }
-
-    #[test]
-    fn agent_line_formats_limited_fleet() {
-        let resets = chrono::NaiveDateTime::parse_from_str("2026-08-05 18:27", "%Y-%m-%d %H:%M")
-            .expect("valid datetime");
-        let entries = vec![
-            entry("codex", QuotaState::Limited { resets: Some(resets) }),
-            entry("agy", QuotaState::Ok),
-            entry("opencode", QuotaState::Ok),
-        ];
-        assert_eq!(
-            render_agents_status_line(&entries).as_deref(),
-            Some("agents: codex LIMITED (resets 18:27) - agy ok - opencode ok")
-        );
-    }
-
-    #[test]
-    fn agent_line_omits_reset_time_when_unknown() {
-        let entries = vec![
-            entry("codex", QuotaState::Limited { resets: None }),
-            entry("agy", QuotaState::Ok),
-        ];
-        assert_eq!(
-            render_agents_status_line(&entries).as_deref(),
-            Some("agents: codex LIMITED - agy ok")
-        );
-    }
-
-    #[test]
-    fn agents_status_line_reads_markers_for_installed_fleet() {
-        let temp_dir = std::env::temp_dir().join("aid-hook-quota-line-test");
-        let _home = crate::paths::AidHomeGuard::set(&temp_dir);
-        std::fs::create_dir_all(crate::paths::aid_dir()).expect("create aid dir");
-        let _fleet = crate::agent::DetectAgentsGuard::set(vec![
-            crate::types::AgentKind::Codex,
-            crate::types::AgentKind::Antigravity,
-            crate::types::AgentKind::OpenCode,
-        ]);
-        let recovery = (chrono::Local::now() + chrono::Duration::hours(2)).naive_local();
-        let marker = format!(
-            "recovery_at: {}\nmessage: quota exhausted\n",
-            recovery.format("%b %d, %Y %I:%M %p")
-        );
-        std::fs::write(crate::paths::aid_dir().join("rate-limit-codex"), marker)
-            .expect("write marker");
-
-        let line = super::agents_status_line().expect("line when an agent is limited");
-        let expected_reset = recovery.format("%H:%M");
-        assert_eq!(
-            line,
-            format!("agents: codex LIMITED (resets {expected_reset}) - opencode ok - agy ok")
-        );
-
-        std::fs::remove_file(crate::paths::aid_dir().join("rate-limit-codex")).ok();
-        assert_eq!(super::agents_status_line(), None);
-    }
-
-    #[test]
-    fn renders_base_text_without_project() {
-        let rendered = render_session_start(None, None);
-        assert!(rendered.contains("[aid] ai-dispatch is installed"));
-        assert!(!rendered.contains("Project:"));
-        assert!(!rendered.contains("Rules:"));
-        assert!(rendered.contains("aid project init"));
-    }
-
-    #[test]
-    fn renders_project_and_combined_rule_count() {
-        let project = ProjectConfig {
-            id: "ai-dispatch".to_string(),
-            profile: Some("standard".to_string()),
-            max_task_cost: None,
-            team: Some("dev".to_string()),
-            verify: None,
-            setup: None,
-            container: None,
-            gitbutler: None,
-            language: None,
-            rules: vec!["project rule".to_string()],
-            budget: ProjectBudget::default(),
-            agents: ProjectAgents::default(),
-            audit: Default::default(),
-            ..Default::default()
-        };
-        let team = TeamConfig {
-            id: "dev".to_string(),
-            display_name: "Dev".to_string(),
-            description: String::new(),
-            preferred_agents: vec![],
-            default_agent: None,
-            overrides: HashMap::new(),
-            rules: vec!["team rule 1".to_string(), "team rule 2".to_string()],
-            toolbox: Default::default(),
-        };
-
-        let rendered = render_session_start(Some(&project), Some(&team));
-
-        assert!(rendered.contains("Project: ai-dispatch (profile: standard, team: dev)"));
-        assert!(rendered.contains("Rules: 3 rule(s)"));
-    }
-}
+#[path = "hook_tests.rs"]
+mod tests;

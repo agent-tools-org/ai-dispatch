@@ -11,6 +11,7 @@ use crate::store::Store;
 use crate::types::DeclaredTaskProfile;
 
 pub(crate) fn run(store: Option<&Store>, args: AdviseArgs) -> Result<()> {
+    crate::live_quota_refresh::refresh_stale_if_enabled();
     let declared = DeclaredTaskProfile {
         difficulty: args.difficulty,
         budget: args.budget,

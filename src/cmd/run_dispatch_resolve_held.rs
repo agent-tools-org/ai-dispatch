@@ -87,24 +87,113 @@ pub(super) fn skip_held_to_fallback(
     )
 }
 
+fn wall_label(wall: crate::route_availability::QuotaWall) -> &'static str {
+    match wall {
+        crate::route_availability::QuotaWall::Clock => "clock",
+        crate::route_availability::QuotaWall::Windowed => "windowed",
+        crate::route_availability::QuotaWall::Prepaid => "prepaid",
+        crate::route_availability::QuotaWall::PlanChange => "plan_change",
+        crate::route_availability::QuotaWall::Transient => "transient",
+        crate::route_availability::QuotaWall::None => "none",
+    }
+}
+
+fn model_tier(kind: AgentKind, model: Option<&str>) -> Option<&'static str> {
+    let model = model?;
+    crate::model_catalog::models_for_agent(&kind)
+        .into_iter()
+        .find(|entry| entry.model == model)
+        .map(|entry| entry.tier)
+}
+
+pub(crate) fn model_class_preserved(
+    from_agent: &str,
+    to_agent: &str,
+    from_model: Option<&str>,
+    to_model: Option<&str>,
+) -> bool {
+    let Some(from_kind) = AgentKind::parse_str(from_agent) else {
+        return false;
+    };
+    let Some(to_kind) = AgentKind::parse_str(to_agent) else {
+        return false;
+    };
+    match (
+        model_tier(from_kind, from_model),
+        model_tier(to_kind, to_model),
+    ) {
+        (Some(from_tier), Some(to_tier)) => from_tier == to_tier,
+        _ => false,
+    }
+}
+
+pub(crate) fn held_substitution_detail(
+    original: &str,
+    hold: &str,
+    to: &str,
+    dry_run: bool,
+) -> String {
+    let verb = if dry_run {
+        "would dispatch"
+    } else {
+        "dispatching"
+    };
+    format!(
+        "Held route skipped: {original} ({hold}) — {verb} to {to} instead. \
+         Use `aid config clear-limit {original}` to restore."
+    )
+}
+
+pub(crate) fn held_substitution_metadata(
+    original: &str,
+    to: &str,
+    from_model: Option<&str>,
+    to_model: Option<&str>,
+    hold: &str,
+    wall: &str,
+    dry_run: bool,
+) -> serde_json::Value {
+    serde_json::json!({
+        "kind": "quota_substitution",
+        "from_agent": original,
+        "to_agent": to,
+        "from_model": from_model,
+        "to_model": to_model,
+        "wall": wall,
+        "hold": hold,
+        "model_class_preserved": model_class_preserved(original, to, from_model, to_model),
+        "dry_run": dry_run,
+    })
+}
+
 // Insert a milestone event when a held route was substituted. No-op if `substituted_from` is None.
 pub(crate) fn maybe_insert_held_route_event(
     store: &Store,
     task_id: &crate::types::TaskId,
     setup: &AgentSetup,
+    dry_run: bool,
 ) {
     let Some((ref original, ref hold)) = setup.substituted_from else {
         return;
     };
+    let from_kind = AgentKind::parse_str(original).unwrap_or(AgentKind::Custom);
+    let from_custom = AgentKind::parse_str(original)
+        .is_none()
+        .then_some(original.as_str());
+    let wall = wall_label(crate::route_availability::availability(&from_kind, from_custom).wall);
     let _ = store.insert_event(&crate::types::TaskEvent {
         task_id: task_id.clone(),
         timestamp: chrono::Local::now(),
         event_kind: crate::types::EventKind::Milestone,
-        detail: format!(
-            "Held route skipped: {original} ({hold}) — dispatching to {} instead. \
-             Use `aid config clear-limit {original}` to restore.",
-            setup.agent_display_name,
-        ),
-        metadata: None,
+        detail: held_substitution_detail(original, hold, &setup.agent_display_name, dry_run),
+        metadata: Some(held_substitution_metadata(
+            original,
+            &setup.agent_display_name,
+            None,
+            setup.effective_model.as_deref(),
+            hold,
+            wall,
+            dry_run,
+        )),
     });
 }

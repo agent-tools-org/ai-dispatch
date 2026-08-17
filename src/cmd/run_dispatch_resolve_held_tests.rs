@@ -55,3 +55,30 @@ fn held_cursor_premium_switches_to_auto_without_changing_agent() {
     assert_eq!(args.agent_name, "cursor");
     assert!(setup.substituted_from.is_none());
 }
+
+/// `--urgency background` keeps a held ungrouped agent. The for_model facade
+/// now answers agent-level holds; the resolve second gate must not undo that.
+#[test]
+fn background_urgency_keeps_held_ungrouped_agent() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let _guard = AidHomeGuard::set(dir.path());
+    crate::rate_limit::mark_rate_limited(
+        &AgentKind::Grok,
+        None,
+        "API error (status 402 Payment Required): Grok Build usage balance exhausted",
+    );
+    let store = Arc::new(Store::open_memory().expect("store"));
+    let mut args = RunArgs {
+        agent_name: "grok".to_string(),
+        prompt: "Add unit tests".to_string(),
+        declared_urgency: Some(crate::types::TaskUrgency::Background),
+        cascade: vec![],
+        ..Default::default()
+    };
+
+    let setup = resolve_agent_setup(&store, &mut args)
+        .expect("background must keep the held grok agent");
+    assert_eq!(setup.agent_kind, AgentKind::Grok);
+    assert_eq!(args.agent_name, "grok");
+    assert!(setup.substituted_from.is_none());
+}

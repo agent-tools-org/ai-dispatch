@@ -87,7 +87,14 @@ fn retry_uses_fallback_when_rate_limited() {
         AgentKind::Codex,
         AgentKind::Copilot,
     ]);
-    mark_rate_limited(&AgentKind::Codex, None, "rate limit exceeded");
+    mark_rate_limited(
+        &AgentKind::Codex,
+        None,
+        &format!(
+            "You've hit your usage limit. try again at {}.",
+            crate::rate_limit::test_future_recovery_time()
+        ),
+    );
     let repo = TempDir::new().unwrap();
     let mut task = make_task("t-002", AgentKind::Codex);
     set_repo(&mut task, &repo);
@@ -100,7 +107,14 @@ fn retry_uses_fallback_when_rate_limited() {
 #[test]
 fn retry_uses_override_regardless_of_rate_limit() {
     let _guard = aid_home_guard("aid-retry-fallback-test-override");
-    mark_rate_limited(&AgentKind::Codex, None, "rate limit exceeded");
+    mark_rate_limited(
+        &AgentKind::Codex,
+        None,
+        &format!(
+            "You've hit your usage limit. try again at {}.",
+            crate::rate_limit::test_future_recovery_time()
+        ),
+    );
     let repo = TempDir::new().unwrap();
     let mut task = make_task("t-003", AgentKind::Codex);
     set_repo(&mut task, &repo);

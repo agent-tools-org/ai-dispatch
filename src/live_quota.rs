@@ -96,19 +96,22 @@ pub(crate) fn provider_name(agent: &AgentKind) -> Option<&'static str> {
 pub(crate) fn cache_dir() -> Option<PathBuf> {
     #[cfg(test)]
     {
-        if let Some(path) = CACHE_DIR_OVERRIDE.with(|cell| cell.borrow().clone()) {
-            return Some(path);
-        }
+        // Hold readers now consult the snapshot. A test that only isolates
+        // AID_HOME must not inherit the host aidbar cache and silently release.
+        return CACHE_DIR_OVERRIDE.with(|cell| cell.borrow().clone());
     }
-    std::env::var_os("XDG_CACHE_HOME")
-        .filter(|value| !value.is_empty())
-        .map(PathBuf::from)
-        .or_else(|| {
-            std::env::var_os("HOME")
-                .filter(|value| !value.is_empty())
-                .map(|home| PathBuf::from(home).join(".cache"))
-        })
-        .map(|dir| dir.join("aidbar"))
+    #[cfg(not(test))]
+    {
+        std::env::var_os("XDG_CACHE_HOME")
+            .filter(|value| !value.is_empty())
+            .map(PathBuf::from)
+            .or_else(|| {
+                std::env::var_os("HOME")
+                    .filter(|value| !value.is_empty())
+                    .map(|home| PathBuf::from(home).join(".cache"))
+            })
+            .map(|dir| dir.join("aidbar"))
+    }
 }
 
 #[cfg(test)]

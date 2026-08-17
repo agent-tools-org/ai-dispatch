@@ -243,7 +243,14 @@ fn marks_droid_rate_limits_from_status_and_error_type() {
     let event = agent.parse_event(&TaskId("t-droid".to_string()), line).unwrap();
     assert_eq!(event.event_kind, EventKind::Error);
     assert_eq!(event.detail, "rate_limit_exceeded");
-    assert!(rate_limit::is_rate_limited(&AgentKind::Droid, None));
+    assert!(
+        rate_limit::get_rate_limit_info(&AgentKind::Droid, None).is_some(),
+        "generic 429 still writes a Transient marker"
+    );
+    assert!(
+        !rate_limit::is_rate_limited(&AgentKind::Droid, None),
+        "Transient is not Held"
+    );
     rate_limit::clear_rate_limit(&AgentKind::Droid, None);
     let live = r#"{"type":"error","message":"You've reached your weekly standard usage limit (resets in 1 day)."}"#;
     let event = agent.parse_event(&TaskId("t-droid".to_string()), live).unwrap();

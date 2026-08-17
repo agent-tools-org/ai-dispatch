@@ -16,7 +16,14 @@ fn marks_claude_rate_limits_from_error_and_user_events() {
     )
     .unwrap();
     assert_eq!(event.event_kind, EventKind::Error);
-    assert!(rate_limit::is_rate_limited(&AgentKind::Claude, None));
+    assert!(
+        rate_limit::get_rate_limit_info(&AgentKind::Claude, None).is_some(),
+        "generic 429 still writes a Transient marker"
+    );
+    assert!(
+        !rate_limit::is_rate_limited(&AgentKind::Claude, None),
+        "Transient is not Held"
+    );
     rate_limit::clear_rate_limit(&AgentKind::Claude, None);
     // A `tool_result` block flagged `is_error` is the *tool* failing, and its
     // text is whatever the model asked for. It is still an Error event; it is

@@ -472,3 +472,27 @@ survives to tell a scheduler what would still work when one dimension fails.
 - **Routing**: the declared profile picks a model class; reachability then picks a (CLI, provider)
   pair that can serve it right now. When codex's quota ran out, `claude-opus-5-thinking-high` was
   reachable through cursor the whole time and nothing in the data model could say so.
+
+---
+
+## Revisions from quota-awareness (2026-08-17)
+
+### 5. "Network quota probing is a non-goal" — superseded
+
+The 2026-08-05 non-goal listed "Network quota probing (separate aidbar-integration
+track)" and the out-of-scope item "Network quota probes feeding `quota.source =
+\"probe\"`". `docs/design/quota-awareness.md` is that track.
+
+aid still does not probe itself — aidbar remains the only probe, and `aid advise`
+does not spawn it (that is a later operability PR). Advise now reads the aidbar
+disk cache and:
+
+- ranks live headroom via additive `breakdown.headroom_penalty` (≤ 0; unused
+  quota never boosts; a stale snapshot contributes 0)
+- keeps `rate_limit_penalty` −10 when the route is Held
+- exposes an additive `quota` object on each built-in candidate:
+  `status`, `wall`, `used_percent`, `resets_at`, `freshness_secs`, `stale`,
+  `source`
+
+JSON keys stay additive. `auto` stays deleted. Notes distinguish held /
+degraded / skipped instead of only echoing `is_rate_limited`.

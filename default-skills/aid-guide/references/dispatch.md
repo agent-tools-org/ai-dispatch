@@ -186,15 +186,21 @@ aid advise "Refactor the scheduler" \
 ```
 
 `aid advise` requires all four declared dimensions. It reads the live inventory,
-rate-limit markers, team preferences, and task history, then runs the production
-selector without launching an agent or writing the task store. Use `--top 0` for
-all candidates, `--team` for team preferences, and omit `--json` for a concise
-human-readable breakdown. Missing the declared capability floor or budget is a
-ranking penalty, not a hard gate: alternatives still appear with an exclusion
-reason such as `base 6 < floor 8 for complex`. Custom agents are reported
-separately because their configured capability values are not on the built-in
-score scale. Inferred kind is advisory; pass `--kind` when the caller knows the
-task kind. Advice exits successfully even when every agent is rate-limited.
+rate-limit markers, aidbar disk snapshots, team preferences, and task history,
+then runs the production selector without launching an agent or writing the task store.
+Fresh live used-percent ranks remaining headroom (a penalty as the window
+fills; unused quota never boosts). Held routes still take today's −10 when
+urgency is not `background`. Use `--top 0` for all candidates, `--team` for
+team preferences, and omit `--json` for a concise human-readable breakdown
+(including a headroom term). JSON candidates add a `quota` object (`status`,
+`wall`, `used_percent`, `resets_at`, `freshness_secs`, `stale`, `source`)
+without renaming existing keys. Missing the declared capability floor or
+budget is a ranking penalty, not a hard gate: alternatives still appear with
+an exclusion reason such as `base 6 < floor 8 for complex`. Custom agents are
+reported separately because their configured capability values are not on the
+built-in score scale. Inferred kind is advisory; pass `--kind` when the
+caller knows the task kind. Advice exits successfully even when every agent
+is rate-limited. Advise does not spawn `aidbar`.
 
 `aid run auto` and batch `agent = "auto"` (or an empty agent) are hard errors.
 There is no silent routing shim: declare a task profile, run `aid advise`, then
@@ -366,8 +372,9 @@ present). A frontend task falling off codex prefers cursor; a research task
 prefers agy — not gemini.
 
 A hold diverts dispatch whenever it is still live, whether it ends on a stated
-time or only when a person runs `aid config clear-limit <agent>` (see
-`references/configuration.md` for the three hold classes). A marker whose stated
+time, a dated aidbar window, or only when a person runs
+`aid config clear-limit <agent>` (see `references/configuration.md` for the
+four hold classes). A marker whose stated
 time has already passed does not divert anything, and neither does the short
 cooldown left by an unrecognised refusal — that window is shorter than the cost
 of moving off the agent you asked for. Where a tiered agent has only one tier
@@ -395,15 +402,16 @@ cached list, aid re-probes once before rejecting it, so a model the CLI gained
 since the last probe is accepted rather than refused for a day.
 
 For providers represented by aidbar, a successful cached snapshot can release a
-time-based or transient older marker for this dispatch decision only when its
-`fetched_at` is newer than the marker file's modification time and every
-reported usage window has headroom. A `NeedsHuman` hold — the explicit
-`hold: manual` marker or a refusal whose text requires rereading — is never
-released by percentages: used-percent readings say nothing about a spend or
-balance hold (opencode refused at $19.37 of a $20 window). The marker is not
-deleted, and aidbar errors, missing probes, stale snapshots, and unrecognized
-providers do not release it. `aid advise` continues to score and report the
-marker state rather than this one-round dispatch view.
+time-based, transient, or Windowed older marker for this dispatch decision only
+when its `fetched_at` is newer than the marker file's modification time and
+every relevant usage window has headroom. A Windowed hold also requires a
+dated `resets_at` on at least one of those windows. Cursor premium's relevant
+window is the one labelled `Plan`; On-demand is ignored. A `NeedsHuman` hold
+— prepaid or a plan change — is never released by percentages: used-percent
+readings say nothing about a spend or balance hold (opencode refused at $19.37
+of a $20 window). The marker is not deleted, and aidbar errors, missing
+probes, and unrecognized providers do not release it. `aid advise` continues
+to score and report the marker state rather than this one-round dispatch view.
 
 The held route is **not spawned**. Substitution happens before dispatch, so no
 task row is recorded for the agent that was never run, and the fallback carries
@@ -413,8 +421,14 @@ dispatched task, both naming `aid config clear-limit <agent>`. When no usable
 aidbar snapshot can release the marker, that escape hatch is how a topped-up
 account or other changed provider state releases a stale hold.
 
-`--declared-urgency background` still keeps the agent you asked for: a
-background task can afford to wait for the window to reopen.
+`--declared-urgency background` still keeps the agent you asked for. The wait
+blocks only on a clock or a dated mapped snapshot; prepaid, plan-change, and
+unmapped holds return immediately and tell you to `aid config clear-limit` or
+pick another agent.
+
+A dry-run substitution milestone says `would dispatch` and records JSON
+metadata naming both routes and whether the model class was preserved. It does
+not mean the substitute ran.
 
 A `--cascade` entry aid cannot resolve is an error, not a skipped entry. Custom
 agents are valid cascade targets and are checked against their own hold, not a

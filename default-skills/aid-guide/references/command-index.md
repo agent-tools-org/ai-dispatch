@@ -8,7 +8,7 @@ current arguments.
 | Command | Purpose |
 |---|---|
 | `aid run` | Dispatch one agent task with optional worktree, verification, retry, audit, context, skills, or background execution; only a successful `TaskOutcome` exits 0 in the foreground. |
-| `aid advise` | Preview declared-profile agent/model routing without dispatching or writing task state. |
+| `aid advise` | Preview declared-profile agent/model routing without dispatching or writing task state. JSON candidates include an additive `quota` object (status, wall, used percent, freshness) and `breakdown.headroom_penalty`. |
 | `aid batch` | Dispatch a dependency-aware TOML task graph. |
 | `aid benchmark` | Run the same task through multiple agents and compare results. |
 | `aid ask` | Run a focused research or exploration request with optional files. |
@@ -61,7 +61,7 @@ current arguments.
 |---|---|
 | `aid setup` | Configure AID and install bundled resources when needed. |
 | `aid project` | Initialize, inspect, or synchronize project configuration. |
-| `aid agent` | Inspect built-in agent availability and related state. |
+| `aid agent` | Inspect built-in agent availability and related state. `aid agent quota` shows live used percent and freshness when an aidbar snapshot exists; `STALE` is display-only. |
 | `aid config` | Inspect agents, pricing, installed skills, templates, and prompt budgets. |
 | `aid store` | Browse, install, inspect, and update community packages. |
 | `aid tool` | Manage reusable tool definitions. |

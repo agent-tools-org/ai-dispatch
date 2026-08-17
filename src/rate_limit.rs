@@ -1,11 +1,15 @@
-// Rate-limit detection: marks agents as rate-limited when quota errors occur.
-// A marker is held by a stated reset time, by a person, or by a short cooldown.
+// Rate-limit detection: writes markers and keeps public hold facades.
+// Classification and snapshot override live in route_availability.
 // Exports: mark_rate_limited{,_for_message}, is_rate_limited,
 // dispatch_blocking_hold, get_rate_limit_info, active_group_holds,
 // format_hold_end, clear_*.
 
 use crate::paths::aid_dir;
-use crate::rate_limit_signatures::QuotaRecovery;
+use crate::route_availability::{
+    availability, availability_for_group, availability_for_model, classify_hold,
+    format_hold_end_for, Hold, HoldEnd, MANUAL_HOLD, RouteAvailability, RouteStatus,
+    StoredHold, stored_hold,
+};
 use crate::types::AgentKind;
 use chrono::{DateTime, Local, NaiveDateTime};
 #[cfg(test)]
@@ -17,11 +21,7 @@ use std::path::PathBuf;
 /// a bare 429 or 402 seen on stderr. All we know is that it just happened, so
 /// the route is stepped over briefly and then tried again. Anything longer
 /// would be an invented outage for a route that is probably still serving.
-const RATE_LIMIT_WINDOW_SECS: u64 = 300;
-
-/// Marker field value for a hold that only a person can end.
-const MANUAL_HOLD: &str = "manual";
-
+pub(crate) const RATE_LIMIT_WINDOW_SECS: u64 = 300;
 
 #[cfg(test)]
 fn assert_marker_path_isolated() {
@@ -48,7 +48,7 @@ pub fn marker_slug<'a>(agent: &'a AgentKind, custom_name: Option<&'a str>) -> &'
     }
 }
 
-fn marker_path(agent: &AgentKind, custom_name: Option<&str>) -> PathBuf {
+pub(crate) fn marker_path(agent: &AgentKind, custom_name: Option<&str>) -> PathBuf {
     #[cfg(test)]
     assert_marker_path_isolated();
     aid_dir().join(format!("rate-limit-{}", marker_slug(agent, custom_name)))
@@ -57,7 +57,11 @@ fn marker_path(agent: &AgentKind, custom_name: Option<&str>) -> PathBuf {
 /// Marker for one model group of an agent whose plan meters families
 /// separately. agy's gemini allowance can be exhausted while its claude
 /// allowance still serves; a per-agent marker would strand the working one.
-fn group_marker_path(agent: &AgentKind, custom_name: Option<&str>, group: &str) -> PathBuf {
+pub(crate) fn group_marker_path(
+    agent: &AgentKind,
+    custom_name: Option<&str>,
+    group: &str,
+) -> PathBuf {
     #[cfg(test)]
     assert_marker_path_isolated();
     let group = group.to_ascii_lowercase();
@@ -75,11 +79,18 @@ pub fn mark_group_rate_limited(
     message: &str,
 ) {
     let provider = (*agent == AgentKind::OpenCode).then_some(group);
-    write_marker(&group_marker_path(agent, custom_name, group), message, provider);
+    write_marker(
+        &group_marker_path(agent, custom_name, group),
+        message,
+        provider,
+    );
 }
 
 pub fn is_group_rate_limited(agent: &AgentKind, custom_name: Option<&str>, group: &str) -> bool {
-    marker_is_active(&group_marker_path(agent, custom_name, group), agent)
+    matches!(
+        availability_for_group(agent, custom_name, group).status,
+        RouteStatus::Held
+    )
 }
 
 pub fn clear_group_rate_limit(agent: &AgentKind, custom_name: Option<&str>, group: &str) -> bool {
@@ -98,11 +109,7 @@ pub fn mark_rate_limited(agent: &AgentKind, custom_name: Option<&str>, message: 
 /// that is still serving: cursor's "You're out of usage. Switch to Auto" went
 /// through `mark_rate_limited`, so `is_rate_limited(Cursor, None)` became true and
 /// `auto` — the tier the message itself points at — stopped being dispatchable.
-pub fn mark_rate_limited_for_message(
-    agent: &AgentKind,
-    custom_name: Option<&str>,
-    message: &str,
-) {
+pub fn mark_rate_limited_for_message(agent: &AgentKind, custom_name: Option<&str>, message: &str) {
     mark_rate_limited_for_model(agent, custom_name, None, message);
 }
 
@@ -148,40 +155,7 @@ pub fn mark_rate_limited_for_model_value(
     }
 }
 
-/// What is holding a marker open. These are three different facts and
-/// collapsing any two of them loses a route in one direction or the other.
-enum Hold {
-    /// The provider stated when it comes back, or its signature says how long
-    /// that class of window runs. Held until that instant.
-    Until(String),
-    /// Only a person ends it — a top-up, a plan change, an admin raising a
-    /// limit. Held until `aid config clear-limit <agent>`.
-    NeedsHuman,
-    /// Neither: no reset time and no signature. Held for a bounded cooldown.
-    Transient,
-}
-
-/// Decide, once at write time, what will end this refusal.
-///
-/// A stated time always wins over the signature's class default: a copilot
-/// message that does name its reset date is held to that date, not to a person.
-fn classify_hold(message: &str) -> Hold {
-    if let Some(stated) = parse_recovery_time(message) {
-        return Hold::Until(stated);
-    }
-    if let Some(at) = crate::rate_limit_signatures::parse_relative_recovery(message) {
-        return Hold::Until(format_recovery(at));
-    }
-    match crate::rate_limit_signatures::match_quota_signature(message) {
-        Some((_, QuotaRecovery::NeedsHuman)) => Hold::NeedsHuman,
-        Some((_, QuotaRecovery::After(minutes))) => Hold::Until(format_recovery(
-            Local::now().naive_local() + chrono::Duration::minutes(minutes),
-        )),
-        None => Hold::Transient,
-    }
-}
-
-fn format_recovery(at: NaiveDateTime) -> String {
+pub(crate) fn format_recovery(at: NaiveDateTime) -> String {
     at.format("%b %d, %Y %I:%M %p").to_string()
 }
 
@@ -191,97 +165,23 @@ fn write_marker(path: &std::path::Path, message: &str, provider: Option<&str>) {
     }
     let (recovery_at, hold_line) = match classify_hold(message) {
         Hold::Until(at) => (at, String::new()),
-        Hold::NeedsHuman => (String::new(), format!("hold: {MANUAL_HOLD}\n")),
+        Hold::NeedsHuman | Hold::Windowed => (String::new(), format!("hold: {MANUAL_HOLD}\n")),
         Hold::Transient => (String::new(), String::new()),
     };
     let provider_line = format!("provider: {}\n", provider.unwrap_or("unknown"));
-    let content = format!("recovery_at: {recovery_at}\n{hold_line}{provider_line}message: {message}\n");
+    let content =
+        format!("recovery_at: {recovery_at}\n{hold_line}{provider_line}message: {message}\n");
     let _ = fs::write(path, content);
 }
 
 /// Read a `key: value` field from a marker, treating an empty value as absent.
-fn marker_field(content: &str, key: &str) -> Option<String> {
+pub(crate) fn marker_field(content: &str, key: &str) -> Option<String> {
     content
         .lines()
         .find_map(|line| line.strip_prefix(key))
         .map(str::trim)
         .filter(|value| !value.is_empty())
         .map(str::to_string)
-}
-
-/// What is holding a marker that is already on disk. The read-side counterpart
-/// of `Hold`: the stated time has been parsed, so callers compare instants.
-enum StoredHold {
-    Until(NaiveDateTime),
-    NeedsHuman,
-    Transient,
-}
-
-/// Classify a marker file's contents.
-///
-/// A marker with no parseable reset time is not automatically permanent. Before
-/// the hold classes existed this fell straight through to "still limited",
-/// which meant one transient 429 caught on stderr — the generic path writes
-/// exactly such a marker — took a route out until someone ran
-/// `aid config clear-limit`. That is the same defect as an outage going
-/// unrecorded, pointing the other way: a route that still serves, written off.
-///
-/// Markers written before the hold classes existed carry no `hold:` line at all,
-/// and the human-ended ones carry no reset time either — copilot's and grok's
-/// live markers are both in that shape. Rather than rewrite files this version
-/// did not author, the stored refusal text is re-read: it is the same evidence
-/// write-time classification uses. Only the `NeedsHuman` verdict is taken from
-/// it, because an `After` window read here would be measured from read time and
-/// so could never elapse.
-fn stored_hold(content: &str, agent: &AgentKind) -> StoredHold {
-    if let Some(recovery_at) =
-        marker_field(content, "recovery_at: ").as_deref().and_then(parse_recovery_datetime)
-    {
-        return StoredHold::Until(recovery_at);
-    }
-    if marker_field(content, "hold: ").as_deref() == Some(MANUAL_HOLD)
-        || stored_refusal_needs_a_person(content, agent)
-    {
-        return StoredHold::NeedsHuman;
-    }
-    StoredHold::Transient
-}
-
-pub(crate) fn live_quota_can_override(content: &str, agent: &AgentKind) -> bool {
-    !matches!(stored_hold(content, agent), StoredHold::NeedsHuman)
-}
-
-/// Whether the refusal a marker recorded is one only a person ends.
-///
-/// Matched line by line: grok's marker wraps its refusal in a multi-line JSON
-/// body, so reading only the first `message:` line misses it.
-///
-/// Scoped to the agent whose marker this is. A marker is aid's record of what
-/// *one* provider said, so a needle another provider owns is not evidence about
-/// this one — `~/.aid/rate-limit-claude`, written on 2026-08-07 from an agent's
-/// own message quoting this crate's signature table, held claude open on
-/// opencode's `insufficient balance`. The write side can no longer produce such
-/// a marker (`quota_channel`), but markers already on disk predate that and are
-/// still read here.
-fn stored_refusal_needs_a_person(content: &str, agent: &AgentKind) -> bool {
-    content.lines().any(|line| {
-        parse_recovery_time(line).is_none()
-            && crate::rate_limit_signatures::parse_relative_recovery(line).is_none()
-            && crate::rate_limit_signatures::match_quota_signature_for_agent(line, *agent)
-                == Some(QuotaRecovery::NeedsHuman)
-    })
-}
-
-/// Shared liveness check for a marker file.
-fn marker_is_active(path: &std::path::Path, agent: &AgentKind) -> bool {
-    let Ok(content) = fs::read_to_string(path) else {
-        return false;
-    };
-    match stored_hold(&content, agent) {
-        StoredHold::Until(recovery_at) => recovery_at > Local::now().naive_local(),
-        StoredHold::NeedsHuman => true,
-        StoredHold::Transient => within_cooldown_window(path),
-    }
 }
 
 /// How a live hold ends, phrased for the caller who just chose this agent —
@@ -296,7 +196,7 @@ fn marker_is_active(path: &std::path::Path, agent: &AgentKind) -> bool {
 /// that moving the caller off the agent they asked for costs more than the wait,
 /// and gating on it was never the previous behaviour either.
 pub fn dispatch_blocking_hold(agent: &AgentKind, custom_name: Option<&str>) -> Option<String> {
-    dispatch_blocking_hold_at_path(&marker_path(agent, custom_name), agent, custom_name)
+    hold_text(agent, custom_name, &availability(agent, custom_name))
 }
 
 pub fn dispatch_blocking_hold_for_model(
@@ -304,46 +204,43 @@ pub fn dispatch_blocking_hold_for_model(
     custom_name: Option<&str>,
     model: Option<&str>,
 ) -> Option<String> {
-    let group = crate::agent::model_group::model_group(*agent, model)?;
-    dispatch_blocking_hold_at_path(
-        &group_marker_path(agent, custom_name, group),
+    hold_text(
         agent,
         custom_name,
+        &availability_for_model(agent, custom_name, model),
     )
 }
 
-fn dispatch_blocking_hold_at_path(
-    path: &std::path::Path,
+fn hold_text(
     agent: &AgentKind,
     custom_name: Option<&str>,
+    avail: &RouteAvailability,
 ) -> Option<String> {
-    if !marker_is_active(path, agent) || crate::live_quota::overrides_marker(agent, path) {
-        return None;
-    }
-    let content = fs::read_to_string(path).ok()?;
-    match stored_hold(&content, agent) {
-        StoredHold::Until(recovery_at) if recovery_at > Local::now().naive_local() => {
-            // Quote the provider's own phrasing of the time rather than a
-            // reformat of it; the parse above only decides whether it is past.
-            let stated = marker_field(&content, "recovery_at: ")
-                .unwrap_or_else(|| format_recovery(recovery_at));
-            Some(format!("until {stated}"))
-        }
-        StoredHold::NeedsHuman => {
-            let slug = marker_slug(agent, custom_name);
-            Some(format!("until cleared with `aid config clear-limit {slug}`"))
-        }
-        StoredHold::Until(_) | StoredHold::Transient => None,
+    match avail.status {
+        RouteStatus::Held => Some(dispatch_hold_end(agent, custom_name, avail)),
+        _ => None,
     }
 }
 
-/// The bounded cooldown for the transient class, measured from the write time.
-fn within_cooldown_window(path: &std::path::Path) -> bool {
-    fs::metadata(path)
-        .and_then(|meta| meta.modified())
-        .ok()
-        .and_then(|modified| modified.elapsed().ok())
-        .is_some_and(|elapsed| elapsed.as_secs() < RATE_LIMIT_WINDOW_SECS)
+fn dispatch_hold_end(
+    agent: &AgentKind,
+    custom_name: Option<&str>,
+    avail: &RouteAvailability,
+) -> String {
+    match &avail.ends {
+        HoldEnd::At(_) => avail
+            .why
+            .strip_prefix("held ")
+            .unwrap_or(&avail.why)
+            .to_string(),
+        HoldEnd::ClearLimit { slug } => {
+            format!("until cleared with `aid config clear-limit {slug}`")
+        }
+        HoldEnd::SnapshotDatedWindow => {
+            format_hold_end_for(&StoredHold::Windowed, agent, custom_name, None)
+        }
+        HoldEnd::Cooldown | HoldEnd::Nothing => avail.why.clone(),
+    }
 }
 
 /// Clear a marker only when it predates `task_start`.
@@ -458,7 +355,10 @@ fn discovered_group_markers(
 }
 
 pub fn is_rate_limited(agent: &AgentKind, custom_name: Option<&str>) -> bool {
-    marker_is_active(&marker_path(agent, custom_name), agent)
+    matches!(
+        availability(agent, custom_name).status,
+        RouteStatus::Held
+    )
 }
 
 /// Currently held agents as `(display name, message)`. Includes registered
@@ -584,13 +484,16 @@ pub(crate) fn refusal_on_channel(
     if let Some(refusal) = crate::agent::stream_completion::quota_line(&kept.all(), agent) {
         return Some(refusal);
     }
-    let generic = kept.cli_diagnostic.lines().find(|line| generic_quota_signal(line))?;
+    let generic = kept
+        .cli_diagnostic
+        .lines()
+        .find(|line| generic_quota_signal(line))?;
     let refusal: String = generic.chars().take(240).collect();
     let refusal = refusal.trim();
     (!refusal.is_empty()).then(|| refusal.to_string())
 }
 
-fn parse_recovery_time(message: &str) -> Option<String> {
+pub(crate) fn parse_recovery_time(message: &str) -> Option<String> {
     let prefix = "try again at ";
     if let Some(start) = message.find(prefix) {
         let start = start + prefix.len();
@@ -618,7 +521,7 @@ fn parse_iso_recovery_time(message: &str) -> Option<String> {
     None
 }
 
-fn parse_recovery_datetime(s: &str) -> Option<NaiveDateTime> {
+pub(crate) fn parse_recovery_datetime(s: &str) -> Option<NaiveDateTime> {
     let mut parts: Vec<String> = s.split(' ').map(|part| part.to_string()).collect();
     if parts.len() < 2 {
         return None;
@@ -668,7 +571,7 @@ fn test_ordinal_suffix(day: u32) -> &'static str {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct RateLimitInfo {
     pub recovery_at: Option<String>,
     pub message: Option<String>,
@@ -676,6 +579,9 @@ pub struct RateLimitInfo {
     /// spent balance from a transient refusal, which also has no recovery time
     /// but expires on its own.
     pub needs_human: bool,
+    /// Full marker bytes. `message` is only the first `message:` line; grok's
+    /// needle lives later in a JSON body, so display must classify this field.
+    pub(crate) marker: String,
 }
 
 pub fn recovery_datetime(agent: &AgentKind, custom_name: Option<&str>) -> Option<NaiveDateTime> {
@@ -694,6 +600,7 @@ fn info_from_marker_content(content: &str, agent: &AgentKind) -> RateLimitInfo {
         recovery_at: marker_field(content, "recovery_at: "),
         message: marker_field(content, "message: "),
         needs_human: matches!(stored_hold(content, agent), StoredHold::NeedsHuman),
+        marker: content.to_string(),
     }
 }
 
@@ -706,13 +613,21 @@ pub fn active_group_holds(
 ) -> Vec<(String, RateLimitInfo)> {
     let mut groups: Vec<(String, PathBuf)> = crate::agent::model_group::groups_for_agent(*agent)
         .iter()
-        .map(|(group, _)| ((*group).to_string(), group_marker_path(agent, custom_name, group)))
+        .map(|(group, _)| {
+            (
+                (*group).to_string(),
+                group_marker_path(agent, custom_name, group),
+            )
+        })
         .collect();
     groups.extend(discovered_group_markers(agent, custom_name));
     groups
         .into_iter()
         .filter_map(|(group, path)| {
-            if !marker_is_active(&path, agent) {
+            if !matches!(
+                availability_for_group(agent, custom_name, &group).status,
+                RouteStatus::Held
+            ) {
                 return None;
             }
             let content = fs::read_to_string(&path).ok()?;
@@ -729,19 +644,14 @@ pub fn format_hold_end(
     info: &RateLimitInfo,
 ) -> String {
     if let Some(at) = info.recovery_at.as_deref() {
-        format!("resets {at}")
-    } else if info.needs_human {
-        // Named by the same function that decides the marker file, so the
-        // command we print can never clear a different agent than the one held:
-        // `AgentKind::Custom.as_str()` is the constant "custom", so a held
-        // `glm5` used to be reported as cleared by `clear-limit custom`.
-        format!(
-            "held until cleared with `aid config clear-limit {}`",
-            marker_slug(agent, custom_name)
-        )
-    } else {
-        "cooling down".to_string()
+        return format!("resets {at}");
     }
+    format_hold_end_for(
+        &stored_hold(&info.marker, agent),
+        agent,
+        custom_name,
+        None,
+    )
 }
 
 #[cfg(test)]
@@ -766,7 +676,10 @@ mod tests {
         let extracted = parse_recovery_time(&message).expect("recovery phrase must be extracted");
         assert_eq!(extracted, stated);
         let parsed = parse_recovery_datetime(&extracted).expect("recovery timestamp must parse");
-        assert!(parsed > Local::now().naive_local(), "parsed {parsed} must be in the future");
+        assert!(
+            parsed > Local::now().naive_local(),
+            "parsed {parsed} must be in the future"
+        );
     }
 
     #[test]
@@ -777,8 +690,12 @@ mod tests {
         assert!(is_rate_limit_error(
             "Quota exhausted: Your token-plan 5-hour quota has been exhausted."
         ));
-        assert!(is_rate_limit_error("APIError: Insufficient balance. Manage your billing here"));
-        assert!(is_rate_limit_error("402 payment required: reload your tokens"));
+        assert!(is_rate_limit_error(
+            "APIError: Insufficient balance. Manage your billing here"
+        ));
+        assert!(is_rate_limit_error(
+            "402 payment required: reload your tokens"
+        ));
         assert!(is_rate_limit_error(
             "IneligibleTierError: This client is no longer supported for Gemini Code Assist for individuals; migrate to Antigravity"
         ));
@@ -805,7 +722,9 @@ mod tests {
         assert!(!is_rate_limit_error(
             "We must respect the rate limit on the Base sequencer feed"
         ));
-        assert!(!is_rate_limit_error("The parser handles nested arrays correctly"));
+        assert!(!is_rate_limit_error(
+            "The parser handles nested arrays correctly"
+        ));
     }
 
     #[test]
@@ -853,7 +772,11 @@ mod tests {
         // Same token, same channel, no envelope around it: this is the shape a
         // PTY renders the model's own answer in.
         assert_eq!(
-            refusal_on_channel("429 rate limit exceeded", AgentKind::Cursor, Channel::CliStream),
+            refusal_on_channel(
+                "429 rate limit exceeded",
+                AgentKind::Cursor,
+                Channel::CliStream
+            ),
             None
         );
     }
@@ -913,8 +836,7 @@ mod tests {
     /// is a report about cursor, not copilot refusing.
     #[test]
     fn a_refusal_is_only_read_for_the_agent_that_owns_the_signature() {
-        let envelope =
-            r#"{"type":"error","message":"You're out of usage. Switch to Auto."}"#;
+        let envelope = r#"{"type":"error","message":"You're out of usage. Switch to Auto."}"#;
         assert!(refusal_on_channel(envelope, AgentKind::Cursor, Channel::CliStream).is_some());
         assert_eq!(
             refusal_on_channel(envelope, AgentKind::Copilot, Channel::CliStream),
@@ -928,7 +850,11 @@ mod tests {
         let _guard = paths::AidHomeGuard::set(&temp_dir);
         std::fs::create_dir_all(paths::aid_dir()).ok();
 
-        mark_rate_limited(&AgentKind::Codex, None, "rate limit exceeded");
+        mark_rate_limited(
+            &AgentKind::Codex,
+            None,
+            &format!("try again at {}.", test_future_recovery_time()),
+        );
         assert!(is_rate_limited(&AgentKind::Codex, None));
 
         let _ = std::fs::remove_file(marker_path(&AgentKind::Codex, None));
@@ -956,7 +882,9 @@ mod tests {
     #[test]
     fn test_parse_recovery_time() {
         assert_eq!(
-            parse_recovery_time("You have hit your usage limit. Upgrade to Pro (https://chatgpt.com/explore/pro), visit https://chatgpt.com/codex/settings/usage to purchase more credits or try again at Mar 19th, 2026 2:27 PM."),
+            parse_recovery_time(
+                "You have hit your usage limit. Upgrade to Pro (https://chatgpt.com/explore/pro), visit https://chatgpt.com/codex/settings/usage to purchase more credits or try again at Mar 19th, 2026 2:27 PM."
+            ),
             Some("Mar 19th, 2026 2:27 PM".to_string())
         );
         assert_eq!(parse_recovery_time("no recovery time here"), None);
@@ -1015,13 +943,18 @@ mod tests {
         std::fs::create_dir_all(paths::aid_dir()).ok();
 
         // Test with recovery time
-        mark_rate_limited(&AgentKind::Codex, None, "You have hit your usage limit. Upgrade to Pro (https://chatgpt.com/explore/pro), visit https://chatgpt.com/codex/settings/usage to purchase more credits or try again at Mar 19th, 2026 2:27 PM.");
+        mark_rate_limited(
+            &AgentKind::Codex,
+            None,
+            "You have hit your usage limit. Upgrade to Pro (https://chatgpt.com/explore/pro), visit https://chatgpt.com/codex/settings/usage to purchase more credits or try again at Mar 19th, 2026 2:27 PM.",
+        );
         let info = get_rate_limit_info(&AgentKind::Codex, None).unwrap();
         assert_eq!(info.recovery_at, Some("Mar 19th, 2026 2:27 PM".to_string()));
-        assert!(info
-            .message
-            .unwrap()
-            .contains("You have hit your usage limit"));
+        assert!(
+            info.message
+                .unwrap()
+                .contains("You have hit your usage limit")
+        );
 
         // Test without recovery time
         mark_rate_limited(&AgentKind::Gemini, None, "rate limit exceeded");
@@ -1058,9 +991,17 @@ mod stale_clear_tests {
         clear_rate_limit(&AgentKind::Qwen, None);
 
         let task_start = Local::now() - chrono::Duration::minutes(5);
-        mark_rate_limited(&AgentKind::Qwen, None, "Your token-plan 5-hour quota has been exhausted.");
+        mark_rate_limited(
+            &AgentKind::Qwen,
+            None,
+            "Your token-plan 5-hour quota has been exhausted.",
+        );
 
-        assert!(!clear_rate_limit_if_stale(&AgentKind::Qwen, None, task_start));
+        assert!(!clear_rate_limit_if_stale(
+            &AgentKind::Qwen,
+            None,
+            task_start
+        ));
         assert!(is_rate_limited(&AgentKind::Qwen, None));
     }
 
@@ -1072,10 +1013,18 @@ mod stale_clear_tests {
         let _guard = crate::paths::AidHomeGuard::set(temp.path());
         clear_rate_limit(&AgentKind::Qwen, None);
 
-        mark_rate_limited(&AgentKind::Qwen, None, "Your token-plan 5-hour quota has been exhausted.");
+        mark_rate_limited(
+            &AgentKind::Qwen,
+            None,
+            "Your token-plan 5-hour quota has been exhausted.",
+        );
         let task_start = Local::now() + chrono::Duration::minutes(5);
 
-        assert!(clear_rate_limit_if_stale(&AgentKind::Qwen, None, task_start));
+        assert!(clear_rate_limit_if_stale(
+            &AgentKind::Qwen,
+            None,
+            task_start
+        ));
         assert!(!is_rate_limited(&AgentKind::Qwen, None));
     }
 
@@ -1101,9 +1050,18 @@ mod stale_clear_tests {
         );
         assert!(cleared, "gemini group marker should be cleared on success");
 
-        assert!(!is_rate_limited(&agent, None), "agent-level marker must be cleared on model success");
-        assert!(!is_group_rate_limited(&agent, None, "gemini"), "gemini group must no longer be limited");
-        assert!(is_group_rate_limited(&agent, None, "claude"), "claude group must remain limited");
+        assert!(
+            !is_rate_limited(&agent, None),
+            "agent-level marker must be cleared on model success"
+        );
+        assert!(
+            !is_group_rate_limited(&agent, None, "gemini"),
+            "gemini group must no longer be limited"
+        );
+        assert!(
+            is_group_rate_limited(&agent, None, "claude"),
+            "claude group must remain limited"
+        );
     }
 
     #[test]
@@ -1118,8 +1076,14 @@ mod stale_clear_tests {
         mark_group_rate_limited(&agent, None, "gemini", "Gemini quota exhausted");
 
         assert!(clear_rate_limit(&agent, None));
-        assert!(!is_rate_limited(&agent, None), "agent-level marker must be removed");
-        assert!(is_group_rate_limited(&agent, None, "gemini"), "group marker must NOT be removed by clear_rate_limit");
+        assert!(
+            !is_rate_limited(&agent, None),
+            "agent-level marker must be removed"
+        );
+        assert!(
+            is_group_rate_limited(&agent, None, "gemini"),
+            "group marker must NOT be removed by clear_rate_limit"
+        );
     }
 
     #[test]

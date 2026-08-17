@@ -92,7 +92,14 @@ fn auto_fallback_agent_returns_none_when_no_usable_peer() {
 #[test]
 fn pre_dispatch_uses_fallback_when_agent_is_rate_limited() {
     let (_temp, _guard) = isolated_rate_limit_home();
-    mark_rate_limited(&AgentKind::Codex, None, "rate limit exceeded");
+    mark_rate_limited(
+        &AgentKind::Codex,
+        None,
+        &format!(
+            "You've hit your usage limit. try again at {}.",
+            crate::rate_limit::test_future_recovery_time()
+        ),
+    );
 
     let choice = pre_dispatch_fallback_choice("codex", Some("opencode,cursor"))
         .unwrap()
@@ -108,7 +115,14 @@ fn pre_dispatch_uses_fallback_when_agent_is_rate_limited() {
 #[test]
 fn pre_dispatch_keeps_original_when_no_fallback_is_available() {
     let (_temp, _guard) = isolated_rate_limit_home();
-    mark_rate_limited(&AgentKind::Codex, None, "rate limit exceeded");
+    mark_rate_limited(
+        &AgentKind::Codex,
+        None,
+        &format!(
+            "You've hit your usage limit. try again at {}.",
+            crate::rate_limit::test_future_recovery_time()
+        ),
+    );
 
     assert_eq!(dispatch_agent_name("codex", None), "codex");
     assert!(pre_dispatch_fallback_choice("codex", None).unwrap().is_none());
@@ -119,7 +133,11 @@ fn pre_dispatch_keeps_original_when_no_fallback_is_available() {
 #[test]
 fn auto_fallback_skips_rate_limited_toml_fallbacks() {
     let (_temp, _guard) = isolated_rate_limit_home();
-    mark_rate_limited(&AgentKind::OpenCode, None, "rate limit exceeded");
+    mark_rate_limited(
+        &AgentKind::OpenCode,
+        None,
+        "Insufficient balance. Manage your billing here",
+    );
 
     let store = Store::open_memory().unwrap();
     store.insert_task(&stored_task("t-codex", AgentKind::Codex)).unwrap();
@@ -207,7 +225,14 @@ fn batch_task_with_fallback(fallback: &str) -> crate::batch::BatchTask {
 fn pre_dispatch_uses_custom_agent_in_fallback() {
     let (_temp, _guard) = isolated_rate_limit_home();
     write_custom_agent("glm5");
-    mark_rate_limited(&AgentKind::Codex, None, "rate limit exceeded");
+    mark_rate_limited(
+        &AgentKind::Codex,
+        None,
+        &format!(
+            "You've hit your usage limit. try again at {}.",
+            crate::rate_limit::test_future_recovery_time()
+        ),
+    );
 
     let choice = pre_dispatch_fallback_choice("codex", Some("glm5,cursor"))
         .unwrap()
@@ -224,7 +249,14 @@ fn pre_dispatch_uses_custom_agent_in_fallback() {
 #[test]
 fn pre_dispatch_unknown_fallback_is_an_error() {
     let (_temp, _guard) = isolated_rate_limit_home();
-    mark_rate_limited(&AgentKind::Codex, None, "rate limit exceeded");
+    mark_rate_limited(
+        &AgentKind::Codex,
+        None,
+        &format!(
+            "You've hit your usage limit. try again at {}.",
+            crate::rate_limit::test_future_recovery_time()
+        ),
+    );
 
     let err = pre_dispatch_fallback_choice("codex", Some("not-a-real-agent"))
         .expect_err("unknown cascade agent must error");

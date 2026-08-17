@@ -155,12 +155,13 @@ pub(crate) fn parse_json_event(
         }
         "error" => {
             let detail = error_detail(v).unwrap_or("unknown error");
-            // The built-in OpenCode watcher has the dispatched model and owns
-            // provider attribution. Overlays still need their agent marker.
-            if marker_kind != AgentKind::OpenCode
-                && rate_limit::is_rate_limit_error_for_agent(detail, &signature_kind)
-            {
-                rate_limit::mark_rate_limited_for_value(&marker_kind, custom_name, v, detail);
+            // Watcher owns built-in OpenCode (has the model); overlays write here.
+            if marker_kind != AgentKind::OpenCode {
+                if let Some(message) = rate_limit::refusal_on_channel(
+                    &v.to_string(), signature_kind, crate::quota_channel::Channel::CliStream,
+                ) {
+                    rate_limit::mark_rate_limited_for_message(&marker_kind, custom_name, &message);
+                }
             }
             (detail.to_string(), None)
         }
@@ -217,12 +218,8 @@ fn milestone_detail(v: &serde_json::Value, event_type: &str) -> String {
         .unwrap_or_else(|| event_type.replace('_', " "))
 }
 
-/// Classification only. opencode runs under a PTY, so the lines reaching here
-/// are the *rendered* session — the model's markdown answer as much as the CLI's
-/// own output — and this once matched them with `NonAgentChannel` evidence, so a
-/// report that merely wrote "429" or "rate limit" could mark the route out.
-/// opencode's captured refusal is a `{"type":"error"}` envelope, which
-/// `quota_channel` reads on the stream channel.
+/// Classification only. PTY-rendered lines are not a mark site; the captured
+/// refusal is a `{"type":"error"}` envelope that `quota_channel` reads.
 pub(crate) fn classify_text_line(line: &str) -> (Option<EventKind>, &str) {
     if line.contains("error[") || line.contains("FAILED") || line.starts_with("Error:") {
         (Some(EventKind::Error), line)

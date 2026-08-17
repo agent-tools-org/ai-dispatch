@@ -112,7 +112,7 @@ where
         which,
     )?;
     insert_task_claiming_id(store, &mut task, &mut task_id, &mut log_path, explicit_id)?;
-    maybe_insert_held_route_event(store, &task_id, &agent_setup);
+    maybe_insert_held_route_event(store, &task_id, &agent_setup, args.dry_run);
     persist_declaration(store, &task_id, args)?;
     let setup = match setup_worktree(store, args, detected_project.as_ref(), &agent_setup, &task_id, explicit_repo_path.as_deref()) {
         Ok(setup) => setup,

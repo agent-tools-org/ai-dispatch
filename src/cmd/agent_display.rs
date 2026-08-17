@@ -4,9 +4,12 @@
 
 use crate::agent::custom::CustomAgentConfig;
 use crate::agent::egress::resolve_agent_egress;
-use crate::rate_limit::{self, RateLimitInfo};
 use crate::types::{egress_for_cli, AgentKind};
 use std::path::Path;
+
+#[path = "agent_display_quota.rs"]
+mod quota;
+use quota::{quota_row, QuotaRow};
 
 pub(super) fn show_builtin_profile(kind: AgentKind) {
     let Some((_, description, cost, best_for, streaming)) = kind.profile() else {
@@ -72,90 +75,25 @@ fn print_capabilities(cap: &crate::agent::custom::CapabilityScores) {
     }
 }
 
-/// Observed quota state for display. A group hold is Partial, never Limited —
-/// the agent remains dispatchable on its clear tiers.
-#[derive(Debug, PartialEq)]
-enum QuotaRow {
-    Ok,
-    Limited { detail: String },
-    Partial { detail: String },
-}
-
-fn quota_row(kind: AgentKind, custom_name: Option<&str>) -> QuotaRow {
-    if rate_limit::is_rate_limited(&kind, custom_name) {
-        let info = rate_limit::get_rate_limit_info(&kind, custom_name);
-        return QuotaRow::Limited {
-            detail: agent_hold_detail(&kind, custom_name, info.as_ref()),
-        };
-    }
-    let groups = rate_limit::active_group_holds(&kind, custom_name);
-    if groups.is_empty() {
-        return QuotaRow::Ok;
-    }
-    QuotaRow::Partial {
-        detail: group_holds_detail(&kind, custom_name, &groups),
-    }
-}
-
-fn agent_hold_detail(
-    kind: &AgentKind,
-    custom_name: Option<&str>,
-    info: Option<&RateLimitInfo>,
-) -> String {
-    let Some(info) = info else {
-        return String::new();
-    };
-    let end = rate_limit::format_hold_end(kind, custom_name, info);
-    match info.message.as_deref() {
-        Some(msg) if !msg.is_empty() => format!("{end} — {msg}"),
-        _ => end,
-    }
-}
-
-fn group_holds_detail(
-    kind: &AgentKind,
-    custom_name: Option<&str>,
-    groups: &[(String, RateLimitInfo)],
-) -> String {
-    groups
-        .iter()
-        .map(|(group, info)| {
-            let end = rate_limit::format_hold_end(kind, custom_name, info);
-            match info.message.as_deref() {
-                Some(msg) if !msg.is_empty() => format!("{group} {end} — {msg}"),
-                _ => format!("{group} {end}"),
-            }
-        })
-        .collect::<Vec<_>>()
-        .join("; ")
-}
-
 pub(super) fn show_quota() -> anyhow::Result<()> {
     use crate::agent::registry;
+    crate::live_quota_refresh::refresh_stale_if_enabled();
     println!("{:<12} {:<10} DETAIL", "AGENT", "STATUS");
     for kind in AgentKind::ALL_BUILTIN {
-        match quota_row(*kind, None) {
-            QuotaRow::Ok => println!("{:<12} {:<10}", kind.as_str(), "OK"),
-            QuotaRow::Limited { detail } => {
-                println!("{:<12} {:<10} {detail}", kind.as_str(), "LIMITED");
-            }
-            QuotaRow::Partial { detail } => {
-                println!("{:<12} {:<10} {detail}", kind.as_str(), "PARTIAL");
-            }
-        }
+        print_quota_row(kind.as_str(), quota_row(*kind, None));
     }
     for config in registry::list_custom_agents() {
-        match quota_row(AgentKind::Custom, Some(config.id.as_str())) {
-            QuotaRow::Ok => println!("{:<12} {:<10}", config.id, "OK"),
-            QuotaRow::Limited { detail } => {
-                println!("{:<12} {:<10} {detail}", config.id, "LIMITED");
-            }
-            QuotaRow::Partial { detail } => {
-                println!("{:<12} {:<10} {detail}", config.id, "PARTIAL");
-            }
-        }
+        print_quota_row(&config.id, quota_row(AgentKind::Custom, Some(config.id.as_str())));
     }
     Ok(())
+}
+
+fn print_quota_row(name: &str, row: QuotaRow) {
+    match row {
+        QuotaRow::Ok { detail } => println!("{name:<12} {:<10} {detail}", "OK"),
+        QuotaRow::Limited { detail } => println!("{name:<12} {:<10} {detail}", "LIMITED"),
+        QuotaRow::Partial { detail } => println!("{name:<12} {:<10} {detail}", "PARTIAL"),
+    }
 }
 
 pub(super) fn list_agents() -> anyhow::Result<()> {
@@ -164,7 +102,9 @@ pub(super) fn list_agents() -> anyhow::Result<()> {
         .iter()
         .filter_map(|kind| kind.profile().map(|_| (*kind, quota_row(*kind, None))))
         .collect();
-    let any_hold = rows.iter().any(|(_, row)| !matches!(row, QuotaRow::Ok));
+    let any_hold = rows
+        .iter()
+        .any(|(_, row)| !matches!(row, QuotaRow::Ok { .. }));
 
     println!("Built-in agents:");
     if any_hold {
@@ -178,7 +118,7 @@ pub(super) fn list_agents() -> anyhow::Result<()> {
         };
         if any_hold {
             let status = match row {
-                QuotaRow::Ok => "",
+                QuotaRow::Ok { .. } => "",
                 QuotaRow::Limited { .. } => "LIMITED",
                 QuotaRow::Partial { .. } => "PARTIAL",
             };
@@ -208,7 +148,9 @@ pub(super) fn list_agents() -> anyhow::Result<()> {
         .iter()
         .map(|c| (c, quota_row(AgentKind::Custom, Some(c.id.as_str()))))
         .collect();
-    let any_custom_hold = custom_rows.iter().any(|(_, row)| !matches!(row, QuotaRow::Ok));
+    let any_custom_hold = custom_rows
+        .iter()
+        .any(|(_, row)| !matches!(row, QuotaRow::Ok { .. }));
     if any_custom_hold {
         println!("  {:<10} {:<12} {:<10} DISPLAY NAME", "NAME", "EGRESS", "STATUS");
     } else {
@@ -217,7 +159,7 @@ pub(super) fn list_agents() -> anyhow::Result<()> {
     for (config, row) in &custom_rows {
         if any_custom_hold {
             let status = match row {
-                QuotaRow::Ok => "",
+                QuotaRow::Ok { .. } => "",
                 QuotaRow::Limited { .. } => "LIMITED",
                 QuotaRow::Partial { .. } => "PARTIAL",
             };

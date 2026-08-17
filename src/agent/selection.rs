@@ -4,6 +4,8 @@
 
 #[path = "selection_scoring.rs"]
 mod selection_scoring;
+#[path = "selection_quota.rs"]
+mod selection_quota;
 #[path = "selection_capabilities.rs"]
 mod selection_capabilities;
 #[path = "selection_advice.rs"]
@@ -277,4 +279,4 @@ mod tests;
 mod disabled_tests;
 #[cfg(test)]
 #[path = "selection_score_tests.rs"]
-mod score_tests;
+mod selection_score_tests;

@@ -81,6 +81,14 @@ snapshot: used-percent readings say nothing about a spend or balance hold
 so stale, failed, missing, or unsupported provider readings do not release
 it and the normal marker state returns on the next dispatch decision.
 
+`aid advise` and `aid agent quota` may best-effort spawn `aidbar` when a mapped
+cache is already stale. They do not run one `aidbar --no-cache` against the
+whole provider set (that refresh is sequential and grok's HTTP timeout is 10s).
+Until aidbar grows a per-id refresh flag, those commands stay on the disk
+cache and do not promise current percents. `AID_QUOTA_REFRESH=0` disables the
+spawn. `aid run` never spawns. A snapshot older than 15 minutes is tagged
+`STALE` on quota display and is not treated as Held.
+
 Quota exhaustion is read from two named channels and nowhere else: the CLI's
 stderr, and the raw lines of its output stream. Within the stream, a refusal is
 admitted only from an envelope the CLI itself opened — a structured error event —

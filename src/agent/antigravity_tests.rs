@@ -294,3 +294,27 @@ gemini-3.6-flash-high\tGemini 3.6 Flash (High)
     assert!(!models.contains(&"error".to_string()), "error line must not be parsed as model");
     assert_eq!(models, vec!["gemini-3.7-flash-high", "gemini-3.6-flash-high"]);
 }
+
+#[test]
+fn parse_agy_models_output_from_real_output() {
+    let input = "\
+Fetching available models...
+gemini-3.7-flash-high\tGemini 3.7 Flash (High)
+gemini-3.7-flash-medium\tGemini 3.7 Flash (Medium)
+gemini-3.7-flash-low\tGemini 3.7 Flash (Low)
+gemini-3.6-flash-high\tGemini 3.6 Flash (High)
+gemini-3.6-flash-medium\tGemini 3.6 Flash (Medium)
+gemini-3.6-flash-low\tGemini 3.6 Flash (Low)
+gemini-3.5-flash-high\tGemini 3.5 Flash (High)
+gemini-3.5-flash-medium\tGemini 3.5 Flash (Medium)
+gemini-3.5-flash-low\tGemini 3.5 Flash (Low)
+gemini-3.1-pro-high\tGemini 3.1 Pro (High)
+gemini-3.1-pro-low\tGemini 3.1 Pro (Low)
+claude-sonnet-4-6\tClaude Sonnet 4.6 (Thinking)
+claude-opus-4-6-thinking\tClaude Opus 4.6 (Thinking)
+gpt-oss-120b-medium\tGPT-OSS 120B (Medium)
+";
+    let models = super::parse_agy_models_output(input);
+    assert!(models.contains(&"gemini-3.7-flash-high".to_string()));
+    assert_eq!(models.len(), 14);
+}

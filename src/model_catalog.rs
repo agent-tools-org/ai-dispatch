@@ -187,10 +187,42 @@ pub fn models_for_agent(agent: &AgentKind) -> Vec<&'static AgentModel> {
     if *agent == AgentKind::Qwen {
         return get_qwen_models().iter().collect();
     }
-    AGENT_MODELS
+    
+    let mut static_models: Vec<_> = AGENT_MODELS
         .iter()
         .filter(|model| model.agent == *agent)
-        .collect()
+        .collect();
+
+    if *agent == AgentKind::Antigravity {
+        static_models.extend(get_agy_discovered_models());
+    }
+    
+    static_models
+}
+
+static AGY_DISCOVERED_CACHE: OnceLock<Vec<AgentModel>> = OnceLock::new();
+
+fn get_agy_discovered_models() -> Vec<&'static AgentModel> {
+    let models = AGY_DISCOVERED_CACHE.get_or_init(|| {
+        let agent_obj = crate::agent::get_agent(AgentKind::Antigravity);
+        let served = crate::agent::model_validation::get_served_models_cached(&*agent_obj).unwrap_or_default();
+        let mut discovered = Vec::new();
+        for m in served {
+            if !AGENT_MODELS.iter().any(|sm| sm.agent == AgentKind::Antigravity && sm.model == m) {
+                discovered.push(AgentModel {
+                    agent: AgentKind::Antigravity,
+                    model: Box::leak(m.into_boxed_str()),
+                    input_per_m: 0.0,
+                    output_per_m: 0.0,
+                    tier: "unknown",
+                    description: "Discovered model (capabilities and pricing unknown)",
+                    capability: 0.0,
+                });
+            }
+        }
+        discovered
+    });
+    models.iter().collect()
 }
 
 /// Preferred catalog tiers for a declared budget, excluding unpriced `unknown`.
@@ -205,9 +237,9 @@ fn budget_preferred_tiers(budget: TaskBudget) -> &'static [&'static str] {
 
 /// True when `model` sits on a preferred (priced/known) tier for `budget`.
 pub fn model_on_budget_preference(kind: AgentKind, budget: TaskBudget, model: &str) -> bool {
-    AGENT_MODELS
+    models_for_agent(&kind)
         .iter()
-        .find(|entry| entry.agent == kind && entry.model == model)
+        .find(|entry| entry.model == model)
         .is_some_and(|entry| budget_preferred_tiers(budget).contains(&entry.tier))
 }
 
@@ -235,9 +267,9 @@ fn better_budget_candidate(budget: TaskBudget, left: &AgentModel, right: &AgentM
 }
 
 fn pick_in_tier(kind: AgentKind, budget: TaskBudget, tier: &str) -> Option<&'static AgentModel> {
-    AGENT_MODELS
-        .iter()
-        .filter(|m| m.agent == kind && m.tier == tier)
+    models_for_agent(&kind)
+        .into_iter()
+        .filter(|m| m.tier == tier)
         .min_by(|a, b| better_budget_candidate(budget, a, b))
 }
 
@@ -246,9 +278,9 @@ fn pick_in_tier(kind: AgentKind, budget: TaskBudget, tier: &str) -> Option<&'sta
 pub fn model_for_task_budget(kind: AgentKind, budget: TaskBudget) -> Option<&'static str> {
     let preferred = budget_preferred_tiers(budget);
     match budget {
-        TaskBudget::Free | TaskBudget::Cheap => AGENT_MODELS
-            .iter()
-            .filter(|m| m.agent == kind && preferred.contains(&m.tier))
+        TaskBudget::Free | TaskBudget::Cheap => models_for_agent(&kind)
+            .into_iter()
+            .filter(|m| preferred.contains(&m.tier))
             .min_by(|a, b| better_budget_candidate(budget, a, b))
             .or_else(|| pick_in_tier(kind, budget, "unknown"))
             .map(|m| m.model),

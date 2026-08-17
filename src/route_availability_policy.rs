@@ -134,21 +134,38 @@ pub(crate) fn snapshot_overrides(
     }
 }
 
-/// Agent-level uses every window. Group holds match `windows[].group` only.
-/// Cursor Plan-label exception is PR-3.
+/// Agent-level uses every window. Group field wins when present.
+/// Cursor premium without a group field matches the Plan label only.
 pub(crate) fn relevant_windows(
     snapshot: &ProbeEvidence,
-    _agent: &AgentKind,
+    agent: &AgentKind,
     group: Option<&str>,
 ) -> Vec<WindowView> {
     match group {
         None => snapshot.windows.clone(),
-        Some(group) => snapshot
-            .windows
-            .iter()
-            .filter(|window| window.group.as_deref() == Some(group))
-            .cloned()
-            .collect(),
+        Some(group) => {
+            let by_field: Vec<_> = snapshot
+                .windows
+                .iter()
+                .filter(|window| window.group.as_deref() == Some(group))
+                .cloned()
+                .collect();
+            if !by_field.is_empty() {
+                return by_field;
+            }
+            // Evidenced exception — not a general infer-group table.
+            // aidbar cursor labels are exactly "Plan" and "On-demand".
+            // On-demand has been 115% while Plan had headroom.
+            if *agent == AgentKind::Cursor && group.eq_ignore_ascii_case("premium") {
+                return snapshot
+                    .windows
+                    .iter()
+                    .filter(|window| window.label.eq_ignore_ascii_case("plan"))
+                    .cloned()
+                    .collect();
+            }
+            Vec::new()
+        }
     }
 }
 

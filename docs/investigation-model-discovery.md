@@ -50,7 +50,7 @@ NEXT: Verify the CLI flows and mutation-sensitive fixture test.
 
 FINDING: The captured fixture is mutation-sensitive and the affected automated paths pass.
 CONFIDENCE: HIGH
-EVIDENCE: Mutating `gemini-3.7-flash-high` to `gemini-3.7-flash-hugh` made `parses_captured_agy_models_output_exactly` fail with a left/right list mismatch; after restoration, the parser test, direct catalog-merge test, two `discovered_agy` tests, 14 model-validation tests, guide coverage, and `init_e2e` passed.
+EVIDENCE: Mutating `gemini-3.7-flash-high` to `gemini-3.7-flash-hugh` made `parses_captured_agy_models_output_exactly` fail with a left/right list mismatch; after restoration, the parser test, direct catalog-merge test, advise unknown-capability scoring test, two `discovered_agy` tests, 14 model-validation tests, guide coverage, and `init_e2e` passed.
 IMPLICATION: The parser, cache merge, JSON nulls, validation, cost unknown, and official guide contract are covered.
 NEXT: Run the rebuilt binary acceptance commands when the mandated shared target is writable.
 

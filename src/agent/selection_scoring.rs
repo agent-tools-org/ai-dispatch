@@ -44,7 +44,7 @@ pub(super) fn model_quality_score(base_score: i32, capability: Option<f64>) -> f
     }
 }
 
-fn model_capability_score(agent: AgentKind, model: &str) -> Option<f64> {
+pub(super) fn model_capability_score(agent: AgentKind, model: &str) -> Option<f64> {
     models_for_agent(&agent)
         .into_iter()
         .find(|candidate| candidate.model == model)

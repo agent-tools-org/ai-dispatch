@@ -6,8 +6,7 @@
 
 use crate::paths::aid_dir;
 use crate::route_availability::{
-    Hold, MANUAL_HOLD, StoredHold, classify_hold, format_hold_end_for, marker_text_from_info,
-    stored_hold,
+    Hold, MANUAL_HOLD, StoredHold, classify_hold, format_hold_end_for, stored_hold,
 };
 use crate::types::AgentKind;
 use chrono::{DateTime, Local, NaiveDateTime};
@@ -588,7 +587,7 @@ fn test_ordinal_suffix(day: u32) -> &'static str {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct RateLimitInfo {
     pub recovery_at: Option<String>,
     pub message: Option<String>,
@@ -596,6 +595,9 @@ pub struct RateLimitInfo {
     /// spent balance from a transient refusal, which also has no recovery time
     /// but expires on its own.
     pub needs_human: bool,
+    /// Full marker bytes. `message` is only the first `message:` line; grok's
+    /// needle lives later in a JSON body, so display must classify this field.
+    pub(crate) marker: String,
 }
 
 pub fn recovery_datetime(agent: &AgentKind, custom_name: Option<&str>) -> Option<NaiveDateTime> {
@@ -614,6 +616,7 @@ fn info_from_marker_content(content: &str, agent: &AgentKind) -> RateLimitInfo {
         recovery_at: marker_field(content, "recovery_at: "),
         message: marker_field(content, "message: "),
         needs_human: matches!(stored_hold(content, agent), StoredHold::NeedsHuman),
+        marker: content.to_string(),
     }
 }
 
@@ -656,8 +659,12 @@ pub fn format_hold_end(
     if let Some(at) = info.recovery_at.as_deref() {
         return format!("resets {at}");
     }
-    let content = marker_text_from_info(None, info.needs_human, info.message.as_deref());
-    format_hold_end_for(&stored_hold(&content, agent), agent, custom_name, None)
+    format_hold_end_for(
+        &stored_hold(&info.marker, agent),
+        agent,
+        custom_name,
+        None,
+    )
 }
 
 #[cfg(test)]

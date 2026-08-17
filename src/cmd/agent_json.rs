@@ -1,3 +1,7 @@
+// Builds machine-readable agent inventory, quota, model, and history output.
+// Exports JSON list and single-agent printers plus testable value generation.
+// Deps: agent registry, model catalog, rate limits, Store, serde_json.
+
 use anyhow::Result;
 use chrono::Local;
 
@@ -80,6 +84,10 @@ fn build_agent_json(
     } else {
         crate::agent::detect_agents().contains(&kind)
     };
+    if installed && kind == AgentKind::Antigravity {
+        let agent = crate::agent::get_agent(kind);
+        let _ = crate::agent::model_validation::get_served_models_cached(&*agent);
+    }
     
     let disabled = crate::agent_config::is_agent_disabled(&name);
     
@@ -148,6 +156,7 @@ fn build_agent_json(
                     tier: m.tier,
                     input_per_m: m.input_per_m,
                     output_per_m: m.output_per_m,
+                    capability: m.capability,
                 })
                 .collect()
         };

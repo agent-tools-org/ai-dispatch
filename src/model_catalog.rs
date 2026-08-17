@@ -1,10 +1,7 @@
 // Shared agent model catalog: per-agent model/pricing data and catalog queries.
-// Exports: AGENT_PROFILES, AGENT_MODELS, AgentModel, PricingFileModel, ResolvedAgentModel,
-//          models_for_agent(), model_for_task_budget(), budget_model(), load_pricing_overrides()
+// Exports: static and resolved model queries, pricing overrides, budget selection.
 // Deps: crate::types::AgentKind, crate::paths, serde, model_catalog_data
 
-use anyhow::Result;
-use serde::Deserialize;
 use std::cmp::Ordering;
 use std::fs;
 use std::path::PathBuf;
@@ -13,85 +10,18 @@ use crate::types::{AgentKind, TaskBudget};
 
 #[path = "model_catalog_data.rs"]
 mod model_catalog_data;
+#[path = "model_catalog_resolved.rs"]
+pub(crate) mod model_catalog_resolved;
 #[cfg(test)]
 #[path = "model_catalog_test_support.rs"]
 mod test_support;
 pub use model_catalog_data::{AGENT_MODELS, AGENT_PROFILES, AgentModel};
+pub(crate) use model_catalog_resolved::{
+    load_pricing_overrides, merged_agent_models, models_for_agent, PricingResponse,
+};
+pub(crate) use model_catalog_resolved::is_unpriced_discovered_model;
 #[cfg(test)]
 pub(crate) use test_support::set_test_qwen_home;
-
-#[derive(Debug, Clone, Deserialize)]
-pub struct PricingFileModel {
-    pub agent: String,
-    pub model: String,
-    pub input_per_m: f64,
-    pub output_per_m: f64,
-    pub tier: String,
-    pub description: String,
-    pub updated: String,
-}
-
-#[derive(Debug, Clone)]
-pub struct ResolvedAgentModel {
-    pub agent: AgentKind,
-    pub model: String,
-    pub input_per_m: f64,
-    pub output_per_m: f64,
-    pub tier: String,
-    pub description: String,
-}
-
-impl From<&AgentModel> for ResolvedAgentModel {
-    fn from(model: &AgentModel) -> Self {
-        Self {
-            agent: model.agent,
-            model: model.model.to_string(),
-            input_per_m: model.input_per_m,
-            output_per_m: model.output_per_m,
-            tier: model.tier.to_string(),
-            description: model.description.to_string(),
-        }
-    }
-}
-
-impl ResolvedAgentModel {
-    pub fn from_override(agent: AgentKind, model: PricingFileModel) -> Self {
-        let PricingFileModel {
-            model,
-            input_per_m,
-            output_per_m,
-            tier,
-            description,
-            updated,
-            ..
-        } = model;
-        let _ = updated;
-        Self {
-            agent,
-            model,
-            input_per_m,
-            output_per_m,
-            tier,
-            description,
-        }
-    }
-
-    pub fn apply_override(&mut self, model: PricingFileModel) {
-        let PricingFileModel {
-            input_per_m,
-            output_per_m,
-            tier,
-            description,
-            updated,
-            ..
-        } = model;
-        let _ = updated;
-        self.input_per_m = input_per_m;
-        self.output_per_m = output_per_m;
-        self.tier = tier;
-        self.description = description;
-    }
-}
 
 static QWEN_MODELS_CACHE: OnceLock<Vec<AgentModel>> = OnceLock::new();
 fn qwen_home() -> Option<PathBuf> {
@@ -183,46 +113,14 @@ fn get_qwen_models() -> &'static [AgentModel] {
     })
 }
 
-pub fn models_for_agent(agent: &AgentKind) -> Vec<&'static AgentModel> {
+pub(crate) fn static_models_for_agent(agent: &AgentKind) -> Vec<&'static AgentModel> {
     if *agent == AgentKind::Qwen {
         return get_qwen_models().iter().collect();
     }
-    
-    let mut static_models: Vec<_> = AGENT_MODELS
+    AGENT_MODELS
         .iter()
         .filter(|model| model.agent == *agent)
-        .collect();
-
-    if *agent == AgentKind::Antigravity {
-        static_models.extend(get_agy_discovered_models());
-    }
-    
-    static_models
-}
-
-static AGY_DISCOVERED_CACHE: OnceLock<Vec<AgentModel>> = OnceLock::new();
-
-fn get_agy_discovered_models() -> Vec<&'static AgentModel> {
-    let models = AGY_DISCOVERED_CACHE.get_or_init(|| {
-        let agent_obj = crate::agent::get_agent(AgentKind::Antigravity);
-        let served = crate::agent::model_validation::get_served_models_cached(&*agent_obj).unwrap_or_default();
-        let mut discovered = Vec::new();
-        for m in served {
-            if !AGENT_MODELS.iter().any(|sm| sm.agent == AgentKind::Antigravity && sm.model == m) {
-                discovered.push(AgentModel {
-                    agent: AgentKind::Antigravity,
-                    model: Box::leak(m.into_boxed_str()),
-                    input_per_m: 0.0,
-                    output_per_m: 0.0,
-                    tier: "unknown",
-                    description: "Discovered model (capabilities and pricing unknown)",
-                    capability: 0.0,
-                });
-            }
-        }
-        discovered
-    });
-    models.iter().collect()
+        .collect()
 }
 
 /// Preferred catalog tiers for a declared budget, excluding unpriced `unknown`.
@@ -237,9 +135,9 @@ fn budget_preferred_tiers(budget: TaskBudget) -> &'static [&'static str] {
 
 /// True when `model` sits on a preferred (priced/known) tier for `budget`.
 pub fn model_on_budget_preference(kind: AgentKind, budget: TaskBudget, model: &str) -> bool {
-    models_for_agent(&kind)
+    AGENT_MODELS
         .iter()
-        .find(|entry| entry.model == model)
+        .find(|entry| entry.agent == kind && entry.model == model)
         .is_some_and(|entry| budget_preferred_tiers(budget).contains(&entry.tier))
 }
 
@@ -267,9 +165,9 @@ fn better_budget_candidate(budget: TaskBudget, left: &AgentModel, right: &AgentM
 }
 
 fn pick_in_tier(kind: AgentKind, budget: TaskBudget, tier: &str) -> Option<&'static AgentModel> {
-    models_for_agent(&kind)
-        .into_iter()
-        .filter(|m| m.tier == tier)
+    AGENT_MODELS
+        .iter()
+        .filter(|m| m.agent == kind && m.tier == tier)
         .min_by(|a, b| better_budget_candidate(budget, a, b))
 }
 
@@ -278,9 +176,9 @@ fn pick_in_tier(kind: AgentKind, budget: TaskBudget, tier: &str) -> Option<&'sta
 pub fn model_for_task_budget(kind: AgentKind, budget: TaskBudget) -> Option<&'static str> {
     let preferred = budget_preferred_tiers(budget);
     match budget {
-        TaskBudget::Free | TaskBudget::Cheap => models_for_agent(&kind)
-            .into_iter()
-            .filter(|m| preferred.contains(&m.tier))
+        TaskBudget::Free | TaskBudget::Cheap => AGENT_MODELS
+            .iter()
+            .filter(|m| m.agent == kind && preferred.contains(&m.tier))
             .min_by(|a, b| better_budget_candidate(budget, a, b))
             .or_else(|| pick_in_tier(kind, budget, "unknown"))
             .map(|m| m.model),
@@ -296,7 +194,7 @@ pub fn model_for_task_budget(kind: AgentKind, budget: TaskBudget) -> Option<&'st
 /// Budget-mode / smart-route model: same rule as `model_for_task_budget(..., Cheap)`.
 pub fn budget_model(agent: &AgentKind) -> Option<&'static str> {
     if *agent == AgentKind::Qwen {
-        let models = models_for_agent(agent);
+        let models = static_models_for_agent(agent);
         if models.is_empty() {
             return None;
         }
@@ -310,21 +208,6 @@ pub fn budget_model(agent: &AgentKind) -> Option<&'static str> {
             .or_else(|| models.first().map(|model| model.model));
     }
     model_for_task_budget(*agent, TaskBudget::Cheap)
-}
-
-#[derive(Debug, Clone, Deserialize)]
-pub struct PricingResponse {
-    pub models: Vec<PricingFileModel>,
-}
-
-pub fn load_pricing_overrides() -> Result<Vec<PricingFileModel>> {
-    let path = crate::paths::pricing_path();
-    if !path.exists() {
-        return Ok(Vec::new());
-    }
-    let contents = fs::read_to_string(path)?;
-    let response: PricingResponse = serde_json::from_str(&contents)?;
-    Ok(response.models)
 }
 
 #[cfg(test)]

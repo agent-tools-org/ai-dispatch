@@ -47,7 +47,7 @@ fn now_secs() -> u64 {
     SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs()
 }
 
-fn load_from_disk_cache(kind: AgentKind) -> Option<Vec<String>> {
+pub(crate) fn load_from_disk_cache(kind: AgentKind) -> Option<Vec<String>> {
     let path = cache_file_path();
     let content = std::fs::read_to_string(&path).ok()?;
     let map: HashMap<String, ServedModelsCacheEntry> = serde_json::from_str(&content).ok()?;
@@ -160,9 +160,7 @@ pub(crate) fn validate_model_for_agent(
         return Ok(true);
     }
     let kind = agent.kind();
-    
-    // Use fast path to never slow dispatch
-    let served = get_served_models_fast(agent);
+    let (served, from_live_probe) = get_served_models_cached_with_status(agent);
 
     let Some(served_list) = served else {
         aid_info!(
@@ -184,7 +182,18 @@ pub(crate) fn validate_model_for_agent(
         return Ok(true);
     }
 
-    let list_str = served_list.join(", ");
+    // Model not in cached list; refresh cache once ONLY if cached list did NOT come from a live probe in this process.
+    let fresh_served_list = if from_live_probe {
+        served_list
+    } else {
+        refresh_served_models_cached(agent).unwrap_or(served_list)
+    };
+
+    if fresh_served_list.iter().any(|m| m.eq_ignore_ascii_case(model_clean)) {
+        return Ok(true);
+    }
+
+    let list_str = fresh_served_list.join(", ");
     if source == ModelSource::UserSupplied {
         return Err(anyhow!(
             "Agent '{}' does not serve model '{model_clean}'. Served models: {list_str}",
@@ -220,44 +229,6 @@ pub(crate) fn refresh_served_models_cached(agent: &dyn Agent) -> Option<Vec<Stri
 
 pub(crate) fn get_served_models_cached(agent: &dyn Agent) -> Option<Vec<String>> {
     get_served_models_cached_with_status(agent).0
-}
-
-pub(crate) fn get_served_models_fast(agent: &dyn Agent) -> Option<Vec<String>> {
-    let kind = agent.kind();
-    #[cfg(test)]
-    {
-        let thread_mock = TEST_OVERRIDE.with(|cell| cell.borrow().get(&kind).cloned());
-        if let Some(res) = thread_mock {
-            return res;
-        }
-    }
-
-    if let Ok(guard) = cache().lock() {
-        if let Some(cached) = guard.get(&kind) {
-            return cached.models.clone();
-        }
-    }
-
-    if let Some(disk_models) = load_from_disk_cache(kind) {
-        if let Ok(mut guard) = cache().lock() {
-            guard.insert(
-                kind,
-                CachedServedModels {
-                    models: Some(disk_models.clone()),
-                    from_live_probe: false,
-                },
-            );
-        }
-        return Some(disk_models);
-    }
-
-    // Fire off a background probe so it's ready next time
-    std::thread::spawn(move || {
-        let bg_agent = crate::agent::get_agent(kind);
-        refresh_served_models_cached(&*bg_agent);
-    });
-
-    None
 }
 
 pub(crate) fn get_served_models_cached_with_status(agent: &dyn Agent) -> (Option<Vec<String>>, bool) {

@@ -257,3 +257,6 @@ fn absolute_dir(path: &Path) -> Option<PathBuf> {
 #[cfg(test)]
 #[path = "antigravity_tests.rs"]
 mod tests;
+#[cfg(test)]
+#[path = "antigravity_model_tests.rs"]
+mod model_tests;

@@ -142,6 +142,16 @@ fn official_guide_documents_declared_profiles_and_advice() {
 }
 
 #[test]
+fn official_guide_documents_discovered_model_unknowns() {
+    let dispatch = include_str!("../default-skills/aid-guide/references/dispatch.md");
+
+    assert!(dispatch.contains("refreshes agy's served-model cache"));
+    assert!(dispatch.contains("`null` `input_per_m`"));
+    assert!(dispatch.contains("cost displays report `unknown`"));
+    assert!(dispatch.contains("never initiate this discovery probe"));
+}
+
+#[test]
 fn official_guide_documents_recursive_delegation() {
     let dispatch = include_str!("../default-skills/aid-guide/references/dispatch.md");
 

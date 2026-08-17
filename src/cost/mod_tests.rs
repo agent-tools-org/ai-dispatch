@@ -65,7 +65,7 @@ fn codex_fallback_uses_standard_tier_or_first_catalog_model() {
     let _guard = isolated();
     let cost = estimate_cost(1_000_000, None, AgentKind::Codex).unwrap();
     // Mirrors codex_fallback_pricing: prefer a "standard" tier model, else the first.
-    let models = model_catalog::models_for_agent(&AgentKind::Codex);
+    let models = model_catalog::static_models_for_agent(&AgentKind::Codex);
     let fallback = models
         .iter()
         .find(|m| m.tier == "standard")
@@ -90,6 +90,19 @@ fn unknown_model_returns_none() {
     let _guard = isolated();
     let cost = estimate_cost(1000, Some("unknown-model"), AgentKind::OpenCode);
     assert!(cost.is_none());
+}
+
+#[test]
+fn discovered_agy_model_does_not_inherit_similar_model_pricing() {
+    let _guard = isolated();
+    clear_feed_for_tests();
+    let cost = estimate_cost(
+        1_000_000,
+        Some("gemini-3.7-flash-high"),
+        AgentKind::Antigravity,
+    );
+    assert_eq!(cost, None);
+    assert_eq!(format_cost(cost), "unknown");
 }
 
 #[test]
@@ -267,4 +280,3 @@ fn feed_reads_from_isolated_cache_file() {
     assert_eq!(pricing.output_per_m, 2.0);
     clear_feed_for_tests();
 }
-

@@ -98,7 +98,7 @@ fn wall_label(wall: crate::route_availability::QuotaWall) -> &'static str {
     }
 }
 
-fn model_tier(kind: AgentKind, model: Option<&str>) -> Option<&'static str> {
+fn model_tier(kind: AgentKind, model: Option<&str>) -> Option<String> {
     let model = model?;
     crate::model_catalog::models_for_agent(&kind)
         .into_iter()

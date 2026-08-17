@@ -1,8 +1,8 @@
 // Tests for shared budget-to-model selection.
-// Deps: super::{budget_model, model_for_task_budget, model_on_budget_preference},
+// Deps: super::{budget_model, model_for_task_budget, model_on_budget_preference, models_for_agent},
 //       crate::types::{AgentKind, TaskBudget}.
 
-use super::{budget_model, model_for_task_budget, model_on_budget_preference};
+use super::{budget_model, model_for_task_budget, model_on_budget_preference, models_for_agent};
 use crate::types::{AgentKind, TaskBudget};
 
 #[test]
@@ -34,6 +34,33 @@ fn budget_model_agrees_with_task_budget_cheap() {
         budget_model(&AgentKind::Claude),
         model_for_task_budget(AgentKind::Claude, TaskBudget::Cheap)
     );
+}
+
+#[test]
+fn models_for_agent_merges_cached_agy_model_as_unknown() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    let _home = crate::paths::AidHomeGuard::set(temp.path());
+    crate::paths::ensure_dirs().expect("aid dirs");
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .expect("current time")
+        .as_secs();
+    let cache = serde_json::json!({
+        "agy": {"models": ["gemini-3.7-flash-high"], "updated_at_secs": now}
+    });
+    std::fs::write(
+        crate::paths::aid_dir().join("served_models_cache.json"),
+        cache.to_string(),
+    )
+    .expect("served-model cache");
+
+    let models = models_for_agent(&AgentKind::Antigravity);
+    let discovered = models.iter()
+        .find(|model| model.model == "gemini-3.7-flash-high")
+        .expect("discovered model");
+    assert_eq!(discovered.input_per_m, None);
+    assert_eq!(discovered.output_per_m, None);
+    assert_eq!(discovered.capability, None);
 }
 
 #[test]

@@ -401,6 +401,12 @@ rather than on every dispatch. When the model you asked for is absent from the
 cached list, aid re-probes once before rejecting it, so a model the CLI gained
 since the last probe is accepted rather than refused for a day.
 
+`aid agent list --json` refreshes agy's served-model cache when it is missing
+or stale, then merges newly served agy models into `models.available`. A
+discovered model without catalog metadata has `null` `input_per_m`,
+`output_per_m`, and `capability`; cost displays report `unknown`. Dispatch-time
+catalog readers use only the bounded 24-hour cache and never initiate this discovery probe.
+
 For providers represented by aidbar, a successful cached snapshot can release a
 time-based, transient, or Windowed older marker for this dispatch decision only
 when its `fetched_at` is newer than the marker file's modification time and

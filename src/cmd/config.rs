@@ -25,9 +25,8 @@ mod config_display;
 mod tests;
 
 use config_display::{agent_profile, compute_agent_history, compute_model_history, format_capabilities};
-pub use crate::model_catalog::{
-    AGENT_MODELS, AGENT_PROFILES, ResolvedAgentModel, budget_model, load_pricing_overrides,
-};
+use crate::model_catalog::AGENT_PROFILES;
+pub(crate) use crate::model_catalog::{budget_model, merged_agent_models};
 use crate::model_catalog::PricingResponse;
 
 pub fn run(store: &Arc<Store>, action: ConfigAction) -> Result<()> {
@@ -209,13 +208,15 @@ fn print_pricing(update: bool) -> Result<()> {
     println!("{}", "-".repeat(85));
     for &agent in AgentKind::ALL_BUILTIN {
         for am in pricing.iter().filter(|model| model.agent == agent) {
+            let input = am.input_per_m.map(|value| format!("${value:.2}")).unwrap_or_else(|| "unknown".to_string());
+            let output = am.output_per_m.map(|value| format!("${value:.2}")).unwrap_or_else(|| "unknown".to_string());
             println!(
-                "{:<10} {:<25} {:>10} ${:>9.2} ${:>9.2} {}",
+                "{:<10} {:<25} {:>10} {:>10} {:>10} {}",
                 agent.as_str(),
                 am.model,
                 am.tier,
-                am.input_per_m,
-                am.output_per_m,
+                input,
+                output,
                 am.description
             );
         }
@@ -257,28 +258,6 @@ fn clear_limit(agent: &str) -> Result<()> {
         return Ok(());
     }
     anyhow::bail!("Unknown agent: {agent}");
-}
-
-pub fn merged_agent_models() -> Result<Vec<ResolvedAgentModel>> {
-    let mut merged = Vec::with_capacity(AGENT_MODELS.len());
-    let mut indexes = HashMap::new();
-    for model in AGENT_MODELS {
-        indexes.insert((model.agent, model.model.to_lowercase()), merged.len());
-        merged.push(ResolvedAgentModel::from(model));
-    }
-    for model in load_pricing_overrides()? {
-        let Some(agent) = AgentKind::parse_str(&model.agent) else {
-            continue;
-        };
-        let key = (agent, model.model.to_lowercase());
-        if let Some(index) = indexes.get(&key).copied() {
-            merged[index].apply_override(model);
-            continue;
-        }
-        indexes.insert(key, merged.len());
-        merged.push(ResolvedAgentModel::from_override(agent, model));
-    }
-    Ok(merged)
 }
 
 fn update_pricing_file() -> Result<usize> {

@@ -40,6 +40,10 @@ pub(crate) enum QuotaRecovery {
     /// the provider is still refusing, so the marker holds until
     /// `aid config clear-limit <agent>`.
     NeedsHuman,
+    /// No clock in the refusal. A dated live window may end it.
+    /// A percentage without a date may not. `After` is not used as a floor:
+    /// inventing a clock is how grok's 402 used to expire in five minutes.
+    Windowed,
 }
 
 pub(crate) const QUOTA_SIGNATURES: &[QuotaSignature] = &[

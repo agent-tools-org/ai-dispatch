@@ -1,11 +1,12 @@
 // Tests for pricing override loading and merged model resolution.
 // Exports: module-scoped tests only
-// Deps: super::load_pricing_overrides, super::merged_agent_models, crate::paths
+// Deps: model catalog resolution, config helpers, crate::paths
 
 use std::collections::HashMap;
 
 use super::config_display::{ModelHistory, recent_observed_models_line};
-use super::{builtin_agent_visible, disabled_agent_names, disabled_summary_line, load_pricing_overrides, merged_agent_models};
+use super::{builtin_agent_visible, disabled_agent_names, disabled_summary_line, merged_agent_models};
+use crate::model_catalog::load_pricing_overrides;
 use crate::agent_config;
 use crate::paths::AidHomeGuard;
 use crate::rate_limit;
@@ -50,16 +51,16 @@ fn loads_and_merges_pricing_overrides() {
         .iter()
         .find(|model| model.agent == crate::types::AgentKind::Codex && model.model == "gpt-4.1")
         .unwrap();
-    assert_eq!(existing.input_per_m, 9.0);
-    assert_eq!(existing.output_per_m, 19.0);
+    assert_eq!(existing.input_per_m, Some(9.0));
+    assert_eq!(existing.output_per_m, Some(19.0));
     assert_eq!(existing.tier, "custom");
 
     let added = merged
         .iter()
         .find(|model| model.agent == crate::types::AgentKind::Codex && model.model == "new-model")
         .unwrap();
-    assert_eq!(added.input_per_m, 1.5);
-    assert_eq!(added.output_per_m, 2.5);
+    assert_eq!(added.input_per_m, Some(1.5));
+    assert_eq!(added.output_per_m, Some(2.5));
 }
 
 #[test]

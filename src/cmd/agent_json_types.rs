@@ -1,3 +1,7 @@
+// Serializable response types for `aid agent list --json` and agent detail output.
+// Exports agent, quota, model, history, and load JSON contracts.
+// Deps: serde and HashMap.
+
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -58,8 +62,9 @@ pub struct ModelsJson {
 pub struct AvailableModelJson {
     pub model: String,
     pub tier: String,
-    pub input_per_m: f64,
-    pub output_per_m: f64,
+    pub input_per_m: Option<f64>,
+    pub output_per_m: Option<f64>,
+    pub capability: Option<f64>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]

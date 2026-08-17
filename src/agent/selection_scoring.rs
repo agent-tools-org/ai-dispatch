@@ -3,7 +3,7 @@
 // Deps: classifier, capability matrix, model catalog, rate limits, task profiles.
 
 use crate::agent::classifier::{self, Complexity};
-use crate::model_catalog::AGENT_MODELS;
+use crate::model_catalog::{models_for_agent, AGENT_MODELS};
 use crate::rate_limit;
 use crate::team::TeamConfig;
 use crate::types::{AgentKind, TaskBudget};
@@ -45,9 +45,10 @@ pub(super) fn model_quality_score(base_score: i32, capability: Option<f64>) -> f
 }
 
 fn model_capability_score(agent: AgentKind, model: &str) -> Option<f64> {
-    AGENT_MODELS.iter()
-        .find(|m| m.agent == agent && m.model == model)
-        .map(|m| m.capability)
+    models_for_agent(&agent)
+        .into_iter()
+        .find(|candidate| candidate.model == model)
+        .and_then(|candidate| candidate.capability)
 }
 
 /// True when the model has a non-zero price. Used to bias budget mode toward

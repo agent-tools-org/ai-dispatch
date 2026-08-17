@@ -4,10 +4,11 @@
 
 mod price_feed;
 mod pricing_builtin;
+mod pricing_resolution;
 
 use crate::model_catalog;
 use crate::store::Store;
-use crate::types::{provider_for_cli, AgentKind, MeteringShape};
+use crate::types::AgentKind;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, OnceLock};
 
@@ -26,8 +27,7 @@ thread_local! {
     static TEST_PRICING_OVERRIDES: std::cell::RefCell<Option<Arc<HashMap<(AgentKind, String), ModelPricing>>>> = const { std::cell::RefCell::new(None) };
 }
 
-/// Most recent completed model name for Gemini from the task DB (`None` = checked, no hits).
-/// Unset means warm has not run yet (`gemini_fallback_pricing` uses static fallback pricing).
+/// Most recent Gemini model from the task DB; unset uses static fallback pricing.
 static GEMINI_DEFAULT_MODEL_CACHE: OnceLock<Option<String>> = OnceLock::new();
 
 /// Populate [`GEMINI_DEFAULT_MODEL_CACHE`] once per process from [`Store::latest_default_model`].
@@ -74,20 +74,6 @@ pub fn format_cost_label(cost_usd: Option<f64>, agent: AgentKind) -> String {
         AgentKind::Kilo | AgentKind::MiMoCode => format_cost(cost_usd),
         _ => format_cost(cost_usd),
     }
-}
-
-/// How a model's cost is established. The three states must stay distinct:
-/// collapsing "unknown" into "included" is the $0.00 bug this replaces.
-enum PricingSource {
-    /// The feed knows this model and carries a real price.
-    Priced,
-    /// A flat-rate subscription: marginal cost is genuinely ~0
-    /// (Cursor, Copilot — `MeteringShape::Subscription`).
-    Included,
-    /// The built-in offline matcher priced it.
-    Builtin,
-    /// Nobody knows. The caller must see unknown, never $0.00 and never "free".
-    Unknown,
 }
 
 #[cfg(not(test))]
@@ -165,44 +151,9 @@ pub(crate) fn clear_feed_for_tests() {
     });
 }
 
-/// The resolution outcome: priced feed first, then builtin, else unknown.
-fn classify_pricing(model: &str, agent: AgentKind) -> (PricingSource, Option<ModelPricing>) {
-    if let Some((feed, index)) = feed_index()
-        && let Some(entry) = price_feed::feed_lookup(&feed, &index, model)
-    {
-        return (
-            PricingSource::Priced,
-            Some(ModelPricing {
-                input_per_m: entry.input_per_mtok,
-                output_per_m: entry.output_per_mtok,
-            }),
-        );
-    }
-    if matches!(
-        provider_for_cli(agent).1,
-        MeteringShape::Subscription
-    ) {
-        return (PricingSource::Included, Some(ModelPricing {
-            input_per_m: 0.0,
-            output_per_m: 0.0,
-        }));
-    }
-    if let Some(pricing) = pricing_builtin::for_model_lower(&model.to_lowercase()) {
-        return (PricingSource::Builtin, Some(pricing));
-    }
-    (PricingSource::Unknown, None)
-}
-
 fn resolve_pricing(model: Option<&str>, agent: AgentKind) -> Option<ModelPricing> {
     if let Some(m) = model {
-        let (source, pricing) = classify_pricing(m, agent);
-        return match source {
-            // Priced by the feed or the built-in matcher, or a subscription
-            // where marginal cost is really ~0. All three are known.
-            PricingSource::Priced | PricingSource::Included | PricingSource::Builtin => pricing,
-            // Unknown stays unknown — never synthesize $0.00.
-            PricingSource::Unknown => None,
-        };
+        return pricing_resolution::resolve_model_pricing(m, agent);
     }
     match agent {
         AgentKind::Gemini => gemini_fallback_pricing(agent),
@@ -240,10 +191,9 @@ fn gemini_fallback_pricing(agent: AgentKind) -> Option<ModelPricing> {
     model_pricing("gemini-3-flash-preview", agent)
 }
 
-/// Codex fallback pricing derived from the merged model catalog (AGENT_MODELS).
-/// Picks the "standard" tier model; falls back to the first available.
+/// Codex fallback: prefer the static standard-tier model, then the first.
 fn codex_fallback_pricing(agent: AgentKind) -> Option<ModelPricing> {
-    let models = model_catalog::models_for_agent(&agent);
+    let models = model_catalog::static_models_for_agent(&agent);
     let model = models.iter().find(|m| m.tier == "standard").or_else(|| models.first())?;
     Some(ModelPricing {
         input_per_m: model.input_per_m,

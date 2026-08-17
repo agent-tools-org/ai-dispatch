@@ -186,15 +186,21 @@ aid advise "Refactor the scheduler" \
 ```
 
 `aid advise` requires all four declared dimensions. It reads the live inventory,
-rate-limit markers, team preferences, and task history, then runs the production
-selector without launching an agent or writing the task store. Use `--top 0` for
-all candidates, `--team` for team preferences, and omit `--json` for a concise
-human-readable breakdown. Missing the declared capability floor or budget is a
-ranking penalty, not a hard gate: alternatives still appear with an exclusion
-reason such as `base 6 < floor 8 for complex`. Custom agents are reported
-separately because their configured capability values are not on the built-in
-score scale. Inferred kind is advisory; pass `--kind` when the caller knows the
-task kind. Advice exits successfully even when every agent is rate-limited.
+rate-limit markers, aidbar disk snapshots, team preferences, and task history,
+then runs the production selector without launching an agent or writing the task store.
+Fresh live used-percent ranks remaining headroom (a penalty as the window
+fills; unused quota never boosts). Held routes still take today's −10 when
+urgency is not `background`. Use `--top 0` for all candidates, `--team` for
+team preferences, and omit `--json` for a concise human-readable breakdown
+(including a headroom term). JSON candidates add a `quota` object (`status`,
+`wall`, `used_percent`, `resets_at`, `freshness_secs`, `stale`, `source`)
+without renaming existing keys. Missing the declared capability floor or
+budget is a ranking penalty, not a hard gate: alternatives still appear with
+an exclusion reason such as `base 6 < floor 8 for complex`. Custom agents are
+reported separately because their configured capability values are not on the
+built-in score scale. Inferred kind is advisory; pass `--kind` when the
+caller knows the task kind. Advice exits successfully even when every agent
+is rate-limited. Advise does not spawn `aidbar`.
 
 `aid run auto` and batch `agent = "auto"` (or an empty agent) are hard errors.
 There is no silent routing shim: declare a task profile, run `aid advise`, then

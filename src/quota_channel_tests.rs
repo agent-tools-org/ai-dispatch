@@ -4,20 +4,15 @@
 use super::*;
 use crate::rate_limit_signatures::QUOTA_SIGNATURES;
 
-/// Everything admitted from the stream channel, both attribution strengths.
 fn stream(output: &str, agent: AgentKind) -> String {
     provider_attributable(output, agent, Channel::CliStream).all()
 }
 
-/// Only what the CLI put inside a diagnostic envelope — the slice a bare status
-/// token may be matched against.
 fn stream_diagnostic(output: &str, agent: AgentKind) -> String {
     provider_attributable(output, agent, Channel::CliStream).cli_diagnostic
 }
 
-/// The bytes that wrote `~/.aid/rate-limit-cursor` on 2026-08-07: a cursor audit
-/// task reading this repo's own test fixture and quoting it back, streamed the
-/// only way a model's words can reach aid — inside an assistant envelope.
+/// 2026-08-07 cursor audit quoted this fixture inside an assistant envelope.
 fn the_incident_line() -> String {
     let quoted = "assert_rate_limit(r#\"{\"type\":\"error\",\"message\":\"quota exceeded for \
                   this workspace\"}\"#, true);\n====\ncommit 7881e2d";
@@ -58,17 +53,18 @@ fn no_signature_in_the_table_can_be_forged_from_model_text() {
     }
 }
 
-/// copilot's refusal — captured on t-03a68876 and t-80cf4b62 — is a
-/// `session.error`, not an `error`. Matching only the bare word dropped the
-/// whole event, so the monthly quota this module exists for was invisible to it.
+/// copilot's refusal on t-03a68876: `session.error` + nested `data.errorCode`.
 #[test]
 fn copilots_session_error_is_read_as_the_cli_speaking() {
-    let event = r#"{"type":"session.error","data":{"message":"{\"error\":{\"message\":\"You have exceeded your monthly quota\",\"code\":\"quota_exceeded\"}}","requestFingerprint":{"messageCount":2}}}"#;
-    let kept = stream_diagnostic(event, AgentKind::Copilot);
-    assert!(
-        kept.to_lowercase().contains("exceeded your monthly quota"),
-        "copilot's real refusal envelope must survive: {kept}"
-    );
+    let nested = r#"{"type":"session.error","data":{"message":"{\"error\":{\"message\":\"You have exceeded your monthly quota\",\"code\":\"quota_exceeded\"}}","requestFingerprint":{"messageCount":2}}}"#;
+    let live = r#"{"type":"session.error","data":{"errorType":"quota","message":"You have exceeded your monthly quota (Request ID: EC26:161163:156CE45:19CFB24:6A75A3A0)","statusCode":402,"errorCode":"quota_exceeded"}}"#;
+    for event in [nested, live] {
+        let kept = stream_diagnostic(event, AgentKind::Copilot);
+        assert!(
+            kept.to_lowercase().contains("exceeded your monthly quota"),
+            "copilot's live session.error must survive: {kept}"
+        );
+    }
 }
 
 #[test]
@@ -79,6 +75,8 @@ fn a_cli_error_envelope_survives_as_the_providers_own_sentence() {
         kept.lines().any(|line| line == "You have exceeded your monthly quota"),
         "provider sentence must survive whole and unescaped: {kept}"
     );
+    let status = stream_diagnostic(r#"{"type":"error","status":429}"#, AgentKind::Droid);
+    assert!(status.contains("429"), "numeric 429 in a CLI error must survive: {status}");
 }
 
 /// A tool's own failure is not the provider speaking, however the CLI flags it.

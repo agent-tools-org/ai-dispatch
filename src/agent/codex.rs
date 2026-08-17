@@ -21,7 +21,6 @@ use output_classifier::classify_output;
 use super::read_only::read_only_prompt;
 use super::truncate::{capped_detail, capped_detail_with, truncate_text};
 use super::{CommandContext, RunOpts};
-use crate::rate_limit;
 use crate::templates;
 use crate::types::*;
 use crate::worktree_layout::{read_commondir, resolve_worktree_gitdir};
@@ -344,9 +343,7 @@ fn parse_item_event(
             if message.is_empty() {
                 return None;
             }
-            if rate_limit::is_rate_limit_error_for_agent(message, &AgentKind::Codex) {
-                rate_limit::mark_rate_limited(&AgentKind::Codex, None, message);
-            }
+            crate::quota_channel::mark_stream_refusal(AgentKind::Codex, None, &item.to_string());
             let (detail, metadata) = capped_detail(message);
             Some(TaskEvent {
                 task_id: task_id.clone(),
@@ -473,9 +470,7 @@ fn parse_error_event(
         .and_then(|value| value.as_str())
         .filter(|message| !message.is_empty())?;
 
-    if rate_limit::is_rate_limit_error_for_agent(detail, &AgentKind::Codex) {
-        rate_limit::mark_rate_limited(&AgentKind::Codex, None, detail);
-    }
+    crate::quota_channel::mark_stream_refusal(AgentKind::Codex, None, &v.to_string());
 
     let (detail, metadata) = capped_detail(detail);
     Some(TaskEvent {
@@ -598,6 +593,10 @@ fn extract_noop_reason(line: &str) -> String {
 #[cfg(test)]
 #[path = "codex_writable_roots_tests.rs"]
 mod writable_roots_tests;
+
+#[cfg(test)]
+#[path = "codex_quota_tests.rs"]
+mod quota_tests;
 
 #[cfg(test)]
 mod tests {

@@ -12,7 +12,6 @@ use std::process::Command;
 use super::read_only::read_only_prompt;
 use super::RunOpts;
 use super::truncate::{capped_detail, capped_detail_with};
-use crate::rate_limit;
 use crate::types::*;
 
 pub struct CopilotAgent;
@@ -65,8 +64,8 @@ impl super::Agent for CopilotAgent {
             "tool.execution_start" => parse_tool_start(task_id, &value, now),
             "tool.execution_complete" => parse_tool_error(task_id, &value, now),
             "session.tools_updated" => parse_model_update(task_id, &value, now),
-            "session.error" => parse_session_error(task_id, &value, now),
-            "error" => parse_plain_error(task_id, &value, now),
+            "session.error" => parse_session_error(task_id, &value, line, now),
+            "error" => parse_plain_error(task_id, &value, line, now),
             "result" => Some(TaskEvent {
                 task_id: task_id.clone(),
                 timestamp: now,
@@ -173,13 +172,18 @@ fn parse_model_update(task_id: &TaskId, value: &Value, now: chrono::DateTime<Loc
     })
 }
 
-fn parse_session_error(task_id: &TaskId, value: &Value, now: chrono::DateTime<Local>) -> Option<TaskEvent> {
+fn parse_session_error(
+    task_id: &TaskId,
+    value: &Value,
+    line: &str,
+    now: chrono::DateTime<Local>,
+) -> Option<TaskEvent> {
     let data = value.get("data")?;
     if data.get("errorType").and_then(Value::as_str) == Some("persistence") {
         return None;
     }
     let text = data.get("message").and_then(Value::as_str)?;
-    mark_rate_limit_if_needed(text);
+    crate::quota_channel::mark_stream_refusal(AgentKind::Copilot, None, line);
     let (detail, metadata) = capped_detail(text);
     Some(TaskEvent {
         task_id: task_id.clone(),
@@ -190,13 +194,18 @@ fn parse_session_error(task_id: &TaskId, value: &Value, now: chrono::DateTime<Lo
     })
 }
 
-fn parse_plain_error(task_id: &TaskId, value: &Value, now: chrono::DateTime<Local>) -> Option<TaskEvent> {
+fn parse_plain_error(
+    task_id: &TaskId,
+    value: &Value,
+    line: &str,
+    now: chrono::DateTime<Local>,
+) -> Option<TaskEvent> {
     let text = value
         .get("message")
         .and_then(Value::as_str)
         .or_else(|| value.pointer("/data/message").and_then(Value::as_str))
         .unwrap_or("unknown error");
-    mark_rate_limit_if_needed(text);
+    crate::quota_channel::mark_stream_refusal(AgentKind::Copilot, None, line);
     let (detail, metadata) = capped_detail(text);
     Some(TaskEvent {
         task_id: task_id.clone(),
@@ -205,12 +214,6 @@ fn parse_plain_error(task_id: &TaskId, value: &Value, now: chrono::DateTime<Loca
         detail,
         metadata,
     })
-}
-
-fn mark_rate_limit_if_needed(detail: &str) {
-    if rate_limit::is_rate_limit_error_for_agent(detail, &AgentKind::Copilot) {
-        rate_limit::mark_rate_limited(&AgentKind::Copilot, None, detail);
-    }
 }
 
 fn classify_tool_kind(tool_name: &str, args: Option<&Value>) -> EventKind {

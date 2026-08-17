@@ -1,12 +1,16 @@
-// Reads aidbar quota snapshots that can override an older route marker.
-// Exports: overrides_marker; deps: rate-limit hold classification, aidbar JSON cache.
+// Reads aidbar quota snapshots. Parse only; override policy lives in route_availability.
+// Exports: snapshot, overrides_marker, provider_name, cache_dir.
+// Deps: serde, chrono, route_availability types.
 
 use chrono::{DateTime, Utc};
 use serde::Deserialize;
 use std::path::{Path, PathBuf};
-use std::time::SystemTime;
+use std::time::Duration;
 
+use crate::route_availability::{ProbeEvidence, WindowView};
 use crate::types::AgentKind;
+
+const STALE_AFTER: Duration = Duration::from_secs(15 * 60);
 
 #[derive(Deserialize)]
 struct CachedRecord {
@@ -24,38 +28,59 @@ struct UsageSnapshot {
 #[derive(Deserialize)]
 struct UsageWindow {
     used_percent: f64,
+    #[serde(default)]
+    label: String,
+    #[serde(default)]
+    resets_at: Option<DateTime<Utc>>,
+    #[serde(default)]
+    group: Option<String>,
 }
 
 pub(crate) fn overrides_marker(agent: &AgentKind, marker_path: &Path) -> bool {
-    let Some(cache_dir) = cache_dir() else {
-        return false;
-    };
-    overrides_marker_in_cache(agent, marker_path, &cache_dir)
+    crate::route_availability::overrides_marker_at(agent, marker_path)
 }
 
-fn overrides_marker_in_cache(agent: &AgentKind, marker_path: &Path, cache_dir: &Path) -> bool {
-    let Some(provider) = provider_name(agent) else {
-        return false;
-    };
-    let Ok(marker_content) = std::fs::read_to_string(marker_path) else {
-        return false;
-    };
-    if !crate::rate_limit::live_quota_can_override(&marker_content, agent) {
-        return false;
+/// Parse the aidbar cache for this agent. No override policy.
+pub(crate) fn snapshot(agent: &AgentKind) -> Option<ProbeEvidence> {
+    snapshot_in_cache(agent, &cache_dir()?)
+}
+
+pub(crate) fn snapshot_in_cache(agent: &AgentKind, cache_dir: &Path) -> Option<ProbeEvidence> {
+    let provider = provider_name(agent)?;
+    let raw = std::fs::read(cache_dir.join(format!("{provider}.json"))).ok()?;
+    let record: CachedRecord = serde_json::from_slice(&raw).ok()?;
+    probe_from_record(&record, provider)
+}
+
+fn probe_from_record(record: &CachedRecord, expected_provider: &str) -> Option<ProbeEvidence> {
+    let snap = record.snapshot.as_ref()?;
+    if snap.provider != expected_provider {
+        return None;
     }
-    let Ok(marker_mtime) = std::fs::metadata(marker_path).and_then(|meta| meta.modified()) else {
-        return false;
-    };
-    let Ok(raw) = std::fs::read(cache_dir.join(format!("{provider}.json"))) else {
-        return false;
-    };
-    let Ok(record) = serde_json::from_slice::<CachedRecord>(&raw) else {
-        return false;
-    };
-    record_overrides(&record, provider, marker_mtime)
+    let age = Utc::now()
+        .signed_duration_since(snap.fetched_at)
+        .to_std()
+        .unwrap_or(Duration::ZERO);
+    Some(ProbeEvidence {
+        provider: snap.provider.clone(),
+        fetched_at: snap.fetched_at,
+        age,
+        stale: age >= STALE_AFTER,
+        ok: record.ok,
+        windows: snap
+            .windows
+            .iter()
+            .map(|window| WindowView {
+                label: window.label.clone(),
+                used_percent: window.used_percent,
+                resets_at: window.resets_at,
+                group: window.group.clone(),
+            })
+            .collect(),
+    })
 }
 
-fn provider_name(agent: &AgentKind) -> Option<&'static str> {
+pub(crate) fn provider_name(agent: &AgentKind) -> Option<&'static str> {
     match agent {
         AgentKind::Codex => Some("codex"),
         AgentKind::Claude => Some("claude"),
@@ -68,7 +93,13 @@ fn provider_name(agent: &AgentKind) -> Option<&'static str> {
     }
 }
 
-fn cache_dir() -> Option<PathBuf> {
+pub(crate) fn cache_dir() -> Option<PathBuf> {
+    #[cfg(test)]
+    {
+        if let Some(path) = CACHE_DIR_OVERRIDE.with(|cell| cell.borrow().clone()) {
+            return Some(path);
+        }
+    }
     std::env::var_os("XDG_CACHE_HOME")
         .filter(|value| !value.is_empty())
         .map(PathBuf::from)
@@ -80,160 +111,33 @@ fn cache_dir() -> Option<PathBuf> {
         .map(|dir| dir.join("aidbar"))
 }
 
-fn record_overrides(record: &CachedRecord, provider: &str, marker_mtime: SystemTime) -> bool {
-    let Some(snapshot) = record.snapshot.as_ref() else {
-        return false;
-    };
-    record.ok
-        && snapshot.provider == provider
-        && snapshot.fetched_at > DateTime::<Utc>::from(marker_mtime)
-        && !snapshot.windows.is_empty()
-        && snapshot
-            .windows
-            .iter()
-            .all(|window| (0.0..100.0).contains(&window.used_percent))
+#[cfg(test)]
+thread_local! {
+    static CACHE_DIR_OVERRIDE: std::cell::RefCell<Option<PathBuf>> =
+        const { std::cell::RefCell::new(None) };
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
+pub(crate) struct CacheDirGuard {
+    previous: Option<PathBuf>,
+}
 
-    fn record(provider: &str, fetched_at: DateTime<Utc>, percentages: &[f64]) -> CachedRecord {
-        CachedRecord {
-            ok: true,
-            snapshot: Some(UsageSnapshot {
-                provider: provider.to_string(),
-                windows: percentages
-                    .iter()
-                    .map(|used_percent| UsageWindow { used_percent: *used_percent })
-                    .collect(),
-                fetched_at,
-            }),
-        }
-    }
-
-    #[test]
-    fn newer_snapshot_with_headroom_overrides_marker() {
-        let marker_mtime = SystemTime::now();
-        let fetched_at = DateTime::<Utc>::from(marker_mtime + std::time::Duration::from_secs(1));
-        assert!(record_overrides(
-            &record("codex", fetched_at, &[0.0]),
-            "codex",
-            marker_mtime,
-        ));
-    }
-
-    #[test]
-    fn old_or_equal_snapshot_does_not_override_marker() {
-        let marker_mtime = SystemTime::now();
-        let fetched_at = DateTime::<Utc>::from(marker_mtime);
-        assert!(!record_overrides(
-            &record("codex", fetched_at, &[0.0]),
-            "codex",
-            marker_mtime,
-        ));
-
-        let old = DateTime::<Utc>::from(marker_mtime - std::time::Duration::from_secs(1));
-        assert!(!record_overrides(
-            &record("codex", old, &[0.0]),
-            "codex",
-            marker_mtime,
-        ));
-    }
-
-    #[test]
-    fn exhausted_or_failed_snapshot_does_not_override_marker() {
-        let marker_mtime = SystemTime::now();
-        let fetched_at = DateTime::<Utc>::from(marker_mtime + std::time::Duration::from_secs(1));
-        assert!(!record_overrides(
-            &record("codex", fetched_at, &[100.0]),
-            "codex",
-            marker_mtime,
-        ));
-
-        let mut failed = record("codex", fetched_at, &[0.0]);
-        failed.ok = false;
-        assert!(!record_overrides(&failed, "codex", marker_mtime));
-    }
-
-    #[test]
-    fn every_window_needs_headroom_and_snapshot_provider_must_match() {
-        let marker_mtime = SystemTime::now();
-        let fetched_at = DateTime::<Utc>::from(marker_mtime + std::time::Duration::from_secs(1));
-        assert!(!record_overrides(
-            &record("codex", fetched_at, &[0.0, 100.0]),
-            "codex",
-            marker_mtime,
-        ));
-        assert!(!record_overrides(
-            &record("claude", fetched_at, &[0.0]),
-            "codex",
-            marker_mtime,
-        ));
-    }
-
-    #[test]
-    fn provider_mapping_matches_aidbar_probe_ids() {
-        assert_eq!(provider_name(&AgentKind::Codex), Some("codex"));
-        assert_eq!(provider_name(&AgentKind::Antigravity), Some("agy"));
-        assert_eq!(provider_name(&AgentKind::Copilot), None);
-        assert_eq!(provider_name(&AgentKind::Grok), Some("grok"));
-        assert_eq!(provider_name(&AgentKind::Qwen), Some("qwen"));
-    }
-
-    #[test]
-    fn aidbar_error_records_have_no_snapshot_to_override() {
-        let raw = r#"{"ok":false,"snapshot":null,"error":"not logged in"}"#;
-        let record: CachedRecord = serde_json::from_str(raw).expect("valid aidbar record");
-        assert!(!record_overrides(
-            &record,
-            "grok",
-            SystemTime::now() - std::time::Duration::from_secs(1),
-        ));
-    }
-
-    #[test]
-    fn newer_successful_aidbar_cache_record_overrides_marker_from_disk() {
-        let temp = tempfile::tempdir().expect("temp directory");
-        let marker = temp.path().join("rate-limit-codex");
-        let cache_dir = temp.path().join("aidbar");
-        std::fs::create_dir_all(&cache_dir).expect("cache directory");
-        std::fs::write(&marker, "marker").expect("marker");
-        std::fs::write(
-            cache_dir.join("codex.json"),
-            r#"{"ok":true,"snapshot":{"provider":"codex","plan":"pro","windows":[{"label":"Weekly","used_percent":0.0,"resets_at":null}],"fetched_at":"2099-01-01T00:00:00Z"}}"#,
-        )
-        .expect("cache record");
-
-        assert!(overrides_marker_in_cache(
-            &AgentKind::Codex,
-            &marker,
-            &cache_dir,
-        ));
-    }
-
-    #[test]
-    fn newer_opencode_headroom_does_not_release_a_needs_human_marker() {
-        let temp = tempfile::tempdir().expect("temp directory");
-        let marker = temp.path().join("rate-limit-opencode");
-        let cache_dir = temp.path().join("aidbar");
-        std::fs::create_dir_all(&cache_dir).expect("cache directory");
-        std::fs::write(
-            cache_dir.join("opencode.json"),
-            r#"{"ok":true,"snapshot":{"provider":"opencode","plan":"zen","windows":[{"label":"5h","used_percent":96.86,"resets_at":null},{"label":"Weekly","used_percent":57.08,"resets_at":null}],"fetched_at":"2099-01-01T00:00:00Z"}}"#,
-        )
-        .expect("cache record");
-
-        for marker_content in [
-            "recovery_at: \nhold: manual\nmessage: Insufficient balance\n",
-            "recovery_at: \nmessage: Insufficient balance. Manage your billing here\n",
-        ] {
-            std::fs::write(&marker, marker_content).expect("marker");
-            assert!(!overrides_marker_in_cache(
-                &AgentKind::OpenCode,
-                &marker,
-                &cache_dir,
-            ));
-        }
+#[cfg(test)]
+impl CacheDirGuard {
+    pub(crate) fn set(path: &Path) -> Self {
+        let previous = CACHE_DIR_OVERRIDE.with(|cell| cell.borrow().clone());
+        CACHE_DIR_OVERRIDE.with(|cell| *cell.borrow_mut() = Some(path.to_path_buf()));
+        Self { previous }
     }
 }
+
+#[cfg(test)]
+impl Drop for CacheDirGuard {
+    fn drop(&mut self) {
+        CACHE_DIR_OVERRIDE.with(|cell| *cell.borrow_mut() = self.previous.take());
+    }
+}
+
+#[cfg(test)]
+#[path = "live_quota_tests.rs"]
+mod tests;

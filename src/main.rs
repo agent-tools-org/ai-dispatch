@@ -41,6 +41,7 @@ pub mod gitbutler;
 mod hooks;
 mod idle_timeout;
 mod live_quota;
+mod route_availability;
 mod input_signal;
 mod model_catalog;
 mod model_health;

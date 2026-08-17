@@ -295,3 +295,7 @@ mod tests;
 #[cfg(test)]
 #[path = "route_availability_facade_tests.rs"]
 mod facade_tests;
+
+#[cfg(test)]
+#[path = "route_availability_windowed_tests.rs"]
+mod windowed_tests;

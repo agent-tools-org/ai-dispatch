@@ -366,8 +366,9 @@ present). A frontend task falling off codex prefers cursor; a research task
 prefers agy — not gemini.
 
 A hold diverts dispatch whenever it is still live, whether it ends on a stated
-time or only when a person runs `aid config clear-limit <agent>` (see
-`references/configuration.md` for the three hold classes). A marker whose stated
+time, a dated aidbar window, or only when a person runs
+`aid config clear-limit <agent>` (see `references/configuration.md` for the
+four hold classes). A marker whose stated
 time has already passed does not divert anything, and neither does the short
 cooldown left by an unrecognised refusal — that window is shorter than the cost
 of moving off the agent you asked for. Where a tiered agent has only one tier
@@ -395,15 +396,16 @@ cached list, aid re-probes once before rejecting it, so a model the CLI gained
 since the last probe is accepted rather than refused for a day.
 
 For providers represented by aidbar, a successful cached snapshot can release a
-time-based or transient older marker for this dispatch decision only when its
-`fetched_at` is newer than the marker file's modification time and every
-reported usage window has headroom. A `NeedsHuman` hold — the explicit
-`hold: manual` marker or a refusal whose text requires rereading — is never
-released by percentages: used-percent readings say nothing about a spend or
-balance hold (opencode refused at $19.37 of a $20 window). The marker is not
-deleted, and aidbar errors, missing probes, stale snapshots, and unrecognized
-providers do not release it. `aid advise` continues to score and report the
-marker state rather than this one-round dispatch view.
+time-based, transient, or Windowed older marker for this dispatch decision only
+when its `fetched_at` is newer than the marker file's modification time and
+every relevant usage window has headroom. A Windowed hold also requires a
+dated `resets_at` on at least one of those windows. Cursor premium's relevant
+window is the one labelled `Plan`; On-demand is ignored. A `NeedsHuman` hold
+— prepaid or a plan change — is never released by percentages: used-percent
+readings say nothing about a spend or balance hold (opencode refused at $19.37
+of a $20 window). The marker is not deleted, and aidbar errors, missing
+probes, and unrecognized providers do not release it. `aid advise` continues
+to score and report the marker state rather than this one-round dispatch view.
 
 The held route is **not spawned**. Substitution happens before dispatch, so no
 task row is recorded for the agent that was never run, and the fallback carries

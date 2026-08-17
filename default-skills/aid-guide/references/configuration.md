@@ -71,14 +71,15 @@ their historical steering, reply, respond, and idle-nudge behavior; it is
 independent of the `streaming` output setting.
 
 For providers that aidbar probes, dispatch may temporarily treat a
-time-based or transient older marker as released when a successful cache
-snapshot is newer than the marker and every reported usage window has headroom.
-A `NeedsHuman` hold — the explicit `hold: manual` marker or a refusal whose
-text requires rereading — is never released by percentages: used-percent
-readings say nothing about a spend or balance hold (opencode refused at $19.37
-of a $20 window). The marker remains on disk, so stale, failed, missing, or
-unsupported provider readings do not release it and the normal marker state
-returns on the next dispatch decision.
+time-based, transient, or **Windowed** older marker as released when a
+successful cache snapshot is newer than the marker and every **relevant**
+usage window has headroom. A Windowed hold also requires at least one of
+those windows to carry a dated `resets_at` — a bare percentage cannot end
+it. A `NeedsHuman` hold (prepaid or plan-change) is never released by a
+snapshot: used-percent readings say nothing about a spend or balance hold
+(opencode refused at $19.37 of a $20 window). The marker remains on disk,
+so stale, failed, missing, or unsupported provider readings do not release
+it and the normal marker state returns on the next dispatch decision.
 
 Quota exhaustion is read from two named channels and nowhere else: the CLI's
 stderr, and the raw lines of its output stream. Within the stream, a refusal is
@@ -95,20 +96,25 @@ captured buffer is the rendered answer — must match that agent's own captured
 refusal template. An agent whose refusal wording has never been captured stays
 undetectable, which is the honest answer rather than a guess.
 
-A hold ends in one of two ways, and `aid config agents` names which:
+A hold ends in one of three ways, and `aid config agents` names which:
 
 | Status | Ends when | Example |
 |---|---|---|
 | `rate-limited (try again at <time>)` | that time passes | codex usage limit, qwen token-plan window |
-| `rate-limited (needs manual clear: aid config clear-limit <agent>)` | a person acts | spent balance, billing cycle, retired plan tier |
+| `rate-limited (until a dated <provider> snapshot with headroom …)` | a newer dated aidbar window shows headroom, or `clear-limit` | grok 402 `usage balance exhausted`; cursor premium `you're out of usage` |
+| `rate-limited (needs manual clear: aid config clear-limit <agent>)` | a person acts | spent opencode balance, copilot monthly/premium, gemini `IneligibleTier` |
 
-The second class covers refusals that never state a reset time and do not return
-on a clock — a spent opencode balance, a copilot monthly quota, a cursor premium
-pool, grok's exhausted Build balance. These are held until `aid config
-clear-limit <agent>` rather than given an invented expiry, because a guessed
-cooldown sends work back to a provider that is still refusing it. A bare
-`429`/`402` with no recognised template is Degraded, not a hold: `aid agent
-quota` prints OK and dispatch is not diverted.
+The Windowed class covers refusals that never state a reset time, but whose
+wall is a dated billing window aidbar already probes. A percentage alone
+cannot end them; `resets_at` must be present. Cursor premium matches the
+`Plan` window only — `On-demand` is never relevant for that group, even at
+115%. The person-only class is prepaid or a plan change: a guessed cooldown
+or a dated spend window would send work back to an account that still cannot
+pay. A bare `429`/`402` with no recognised template is Degraded, not a hold:
+`aid agent quota` prints OK and dispatch is not diverted. An on-disk
+`hold: manual` marker is re-read against the current signature table, so a
+Windowed needle written before this class existed still classifies as
+Windowed rather than as a person hold.
 
 An agent whose plan splits one allowance into tiers is marked per tier. Cursor
 meters a single premium pool that every model except `auto` draws on, so a

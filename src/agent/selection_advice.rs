@@ -8,12 +8,12 @@ use serde::{Deserialize, Serialize};
 
 use super::classifier::{self, Complexity, TaskCategory, TaskProfile};
 use super::selection_capabilities::{base_score, team_override_score};
+use super::selection_quota::{self, CandidateQuota, NoteTarget};
 use super::selection_scoring::{
     Candidate, CandidateContext, ScoreBreakdown, compare_candidates, cost_efficiency,
     model_for_task_budget, priority, score_breakdown,
 };
 use crate::agent_config;
-use crate::rate_limit;
 use crate::store::Store;
 use crate::team::TeamConfig;
 use crate::types::{AgentKind, DeclaredTaskProfile, TaskBudget, TaskDifficulty, TaskUrgency};
@@ -60,6 +60,8 @@ pub(crate) struct AdviceCandidate {
     pub model: Option<String>,
     pub breakdown: ScoreBreakdown,
     pub exclusion_reason: Option<String>,
+    #[serde(default)]
+    pub quota: CandidateQuota,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -111,7 +113,7 @@ pub(crate) fn advise(
             .then_with(|| compare_candidates(&left.order, &right.order, context.budget).reverse())
     });
     let recommended = recommendation(&ranked, &avg_cost_map, &duration_map, inferred.kind, declared);
-    let notes = rate_limit_notes(&ranked, declared.urgency);
+    let notes = availability_notes(&ranked, declared.urgency, recommended.as_ref());
     let mut candidates: Vec<_> = ranked.into_iter().map(|item| item.report).collect();
     let mut custom_candidates = custom::custom_candidates(&context, declared);
     if top > 0 {
@@ -210,8 +212,10 @@ fn ranked(
         kind, score: breakdown.total, efficiency: cost_efficiency(breakdown.total, avg_cost),
         is_default: context.team_default == Some(kind), priority: priority(kind),
     };
+    let quota = selection_quota::candidate_quota(kind, None);
     let report = AdviceCandidate {
-        agent: name, installed, eligible, score: breakdown.total, model, breakdown, exclusion_reason,
+        agent: name, installed, eligible, score: breakdown.total, model, breakdown,
+        exclusion_reason, quota,
     };
     RankedCandidate { report, order }
 }
@@ -223,37 +227,61 @@ fn recommendation(
     // Ranking already applies the eligibility penalty; prefer installed, else first.
     let selected = ranked.iter().find(|item| item.report.installed).or_else(|| ranked.first())?;
     let model_suffix = selected.report.model.as_deref().map(|model| format!("/{model}")).unwrap_or_default();
+    let mut reason = format!(
+        "{}/{} → {}{} (score: {:.1})",
+        declared.difficulty.label(), kind.label(), selected.report.agent, model_suffix,
+        selected.report.score,
+    );
+    if let Some(clause) = quota_pick_clause(ranked, selected) {
+        reason.push_str(&clause);
+    }
     Some(RecommendedAdvice {
         agent: selected.report.agent.clone(), model: selected.report.model.clone(),
         score: selected.report.score, est_cost_usd: costs.get(&selected.order.kind).copied(),
         est_duration_secs: durations.get(&selected.order.kind).copied(),
-        reason: format!(
-            "{}/{} → {}{} (score: {:.1})",
-            declared.difficulty.label(), kind.label(), selected.report.agent, model_suffix,
-            selected.report.score,
-        ),
+        reason,
     })
 }
 
-fn rate_limit_notes(ranked: &[RankedCandidate], urgency: TaskUrgency) -> Vec<String> {
-    ranked
+fn quota_pick_clause(ranked: &[RankedCandidate], selected: &RankedCandidate) -> Option<String> {
+    let unconstrained = ranked.iter().filter(|item| item.report.installed).max_by(|left, right| {
+        unconstrained_score(left)
+            .partial_cmp(&unconstrained_score(right))
+            .unwrap_or(std::cmp::Ordering::Equal)
+    })?;
+    if unconstrained.report.agent == selected.report.agent {
+        return None;
+    }
+    if unconstrained.report.quota.status != "held" {
+        return None;
+    }
+    Some(format!(
+        "; {} held → {}",
+        unconstrained.report.agent, selected.report.agent
+    ))
+}
+
+fn unconstrained_score(item: &RankedCandidate) -> f64 {
+    item.report.score
+        - item.report.breakdown.rate_limit_penalty
+        - item.report.breakdown.headroom_penalty
+}
+
+fn availability_notes(
+    ranked: &[RankedCandidate],
+    urgency: TaskUrgency,
+    recommended: Option<&RecommendedAdvice>,
+) -> Vec<String> {
+    let targets: Vec<NoteTarget<'_>> = ranked
         .iter()
-        .filter(|item| {
-            let custom = (item.order.kind == AgentKind::Custom).then_some(item.report.agent.as_str());
-            rate_limit::is_rate_limited(&item.order.kind, custom)
-        })
         .map(|item| {
             let custom = (item.order.kind == AgentKind::Custom).then_some(item.report.agent.as_str());
-            let recovery = rate_limit::get_rate_limit_info(&item.order.kind, custom)
-                .and_then(|info| info.recovery_at)
-                .map(|value| format!(" until {value}"))
-                .unwrap_or_default();
-            let action = match urgency {
-                TaskUrgency::Background => "; background work may wait",
-                TaskUrgency::Urgent => "; switch agent immediately",
-                TaskUrgency::Normal => "",
-            };
-            format!("{} rate-limited{}{}", item.report.agent, recovery, action)
+            NoteTarget {
+                name: item.report.agent.as_str(),
+                kind: item.order.kind,
+                custom_name: custom,
+            }
         })
-        .collect()
+        .collect();
+    selection_quota::notes_for(&targets, urgency, recommended.map(|item| item.agent.as_str()))
 }

@@ -65,11 +65,12 @@ fn print_human(report: &AdviceReport, kind_was_overridden: bool) {
         // a model of the same class.
         let route = recommended_route(&recommended.agent, recommended.model.clone());
         println!(
-            "Recommended: {}   score {:.1}   {}  {}",
+            "Recommended: {}   score {:.1}   {}  {}{}",
             route,
             recommended.score,
             cost_label(recommended.est_cost_usd),
             duration_label(recommended.est_duration_secs),
+            recommended_quota_suffix(&recommended.reason),
         );
     } else {
         println!("Recommended: none (no installed agents)");
@@ -78,7 +79,7 @@ fn print_human(report: &AdviceReport, kind_was_overridden: bool) {
         let availability = candidate_mark(candidate.installed, candidate.exclusion_reason.as_deref());
         let item = &candidate.breakdown;
         println!(
-            "  {}. {:<10} {:>5.1}  base {:.1}  {:+.1} model  {:+.1} budget  {:+.1} limit  {:+.1} history  {:+.1} complexity  {:+.1} team{}",
+            "  {}. {:<10} {:>5.1}  base {:.1}  {:+.1} model  {:+.1} budget  {:+.1} limit  {:+.1} history  {:+.1} complexity  {:+.1} team  {:+.1} headroom{}",
             index + 1,
             candidate.agent,
             candidate.score,
@@ -89,6 +90,7 @@ fn print_human(report: &AdviceReport, kind_was_overridden: bool) {
             item.history_bonus,
             item.complexity_bonus,
             item.team_bonus,
+            item.headroom_penalty,
             availability,
         );
     }
@@ -110,6 +112,14 @@ fn print_human(report: &AdviceReport, kind_was_overridden: bool) {
     if !report.notes.is_empty() {
         println!("Notes: {}", report.notes.join("; "));
     }
+}
+
+fn recommended_quota_suffix(reason: &str) -> String {
+    reason
+        .split_once("; ")
+        .filter(|(_, rest)| rest.contains("held →"))
+        .map(|(_, rest)| format!("  quota: {rest}"))
+        .unwrap_or_default()
 }
 
 fn candidate_mark(installed: bool, exclusion_reason: Option<&str>) -> String {

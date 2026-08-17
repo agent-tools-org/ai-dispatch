@@ -9,7 +9,9 @@ use chrono::{Duration as ChronoDuration, SecondsFormat, Utc};
 use tempfile::TempDir;
 
 use super::selection_quota::{headroom_penalty, penalty_from_used};
-use super::selection_scoring::{CandidateContext, score_breakdown, score_for};
+use super::selection_scoring::{
+    CandidateContext, model_capability_score, model_quality_score, score_breakdown, score_for,
+};
 use super::advise;
 use crate::agent::classifier::{Complexity, TaskCategory, TaskProfile};
 use crate::live_quota::CacheDirGuard;
@@ -116,6 +118,29 @@ fn score_for_is_bit_identical_to_pre_breakdown_value() {
     assert_eq!(score.to_bits(), 0x4030_5999_9999_999a);
     assert_eq!(breakdown.total.to_bits(), score.to_bits());
     assert_eq!(breakdown.headroom_penalty, 0.0);
+}
+
+#[test]
+fn discovered_agy_model_keeps_base_score_when_capability_is_unknown() {
+    let temp = TempDir::new().expect("temp dir");
+    let _home = AidHomeGuard::set(temp.path());
+    crate::paths::ensure_dirs().expect("aid dirs");
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .expect("current time")
+        .as_secs();
+    let cache = serde_json::json!({
+        "agy": {"models": ["gemini-3.7-flash-high"], "updated_at_secs": now}
+    });
+    std::fs::write(
+        crate::paths::aid_dir().join("served_models_cache.json"),
+        cache.to_string(),
+    )
+    .expect("served-model cache");
+
+    let capability = model_capability_score(AgentKind::Antigravity, "gemini-3.7-flash-high");
+    assert_eq!(capability, None);
+    assert_eq!(model_quality_score(8, capability), 8.0);
 }
 
 #[test]

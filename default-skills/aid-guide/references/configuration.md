@@ -116,9 +116,10 @@ meters a single premium pool that every model except `auto` draws on, so a
 premium refusal holds those models while `auto` stays dispatchable;
 `aid config clear-limit cursor` clears both. A group hold is not an agent hold:
 `aid agent list` and `aid agent quota` report it as `PARTIAL` (still dispatchable
-on clear tiers), not `LIMITED` or `OK`. A hold only a person ends names
-`aid config clear-limit <agent>`; aid never invents a reset time it did not
-observe.
+on clear tiers), not `LIMITED` or `OK`. STATUS now matches dispatch: a snapshot
+that releases a route for `aid run` also clears LIMITED / PARTIAL. A hold only
+a person ends names `aid config clear-limit <agent>`; aid never invents a reset
+time it did not observe.
 
 Use `aid byok` for custom OpenAI-compatible endpoints. Use `aid credential` to
 manage named credential-pool entries; never place secret values in prompts,

@@ -1,3 +1,7 @@
+## Unreleased
+- Transient cooldown no longer applies scoring −10: `is_rate_limited` is now the same Held check as `aid run`, so a bare 429 is not treated as a hold.
+
+
 ## v10.31.0 (2026-08-14)
 - Model validation now actually fires for slow CLIs. The served-model probe capped at 2 seconds while `agy models` takes 3.9s and `grok models` 2.3-2.6s, so the probe always timed out, returned nothing, and aid accepted any model name at all — a nonexistent model dispatched without a word. The probe now allows 10 seconds and caches its result on disk for 24 hours, so the cost is paid once rather than on every dispatch.
 - A model absent from the cached list triggers one refresh before aid rejects it, so a model the CLI gained since the last probe is accepted instead of being wrongly refused for a day.

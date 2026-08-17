@@ -146,9 +146,18 @@ pub(crate) fn relevant_windows(
         Some(group) => snapshot
             .windows
             .iter()
-            .filter(|window| window.group.as_deref() == Some(group))
+            .filter(|window| window_matches_group(window.group.as_deref(), group))
             .cloned()
             .collect(),
+    }
+}
+
+fn window_matches_group(window_group: Option<&str>, asked: &str) -> bool {
+    match window_group {
+        Some(group) if group == asked => true,
+        // One probe pool: aidbar writes a single claude-gpt window for Claude+GPT.
+        Some("claude-gpt") if matches!(asked, "claude" | "gpt-oss") => true,
+        _ => false,
     }
 }
 

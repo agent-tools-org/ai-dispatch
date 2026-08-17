@@ -326,6 +326,23 @@ fn streamed_opencode_refusal_holds_only_the_dispatched_provider() {
     .is_none());
 }
 
+/// Tool-derived Error events carry the model's request, not the provider.
+#[test]
+fn tool_error_events_do_not_mark_quota() {
+    let temp = tempfile::tempdir().unwrap();
+    let _aid_home = crate::paths::AidHomeGuard::set(temp.path());
+    let store = std::sync::Arc::new(crate::store::Store::open_memory().unwrap());
+    let task = running_task("t-copilot-tool", AgentKind::Copilot);
+    store.insert_task(&task).unwrap();
+    crate::rate_limit::clear_all_rate_limits_for_agent(&AgentKind::Copilot, None);
+    let line = r#"{"type":"tool.execution_complete","data":{"success":false,"toolName":"grep","error":"You have exceeded your monthly quota"}}"#;
+    feed_stream_line_with_agent(&store, &task, line, &crate::agent::copilot::CopilotAgent);
+    assert!(
+        !crate::rate_limit::is_rate_limited(&AgentKind::Copilot, None),
+        "a failing tool must not write a copilot hold"
+    );
+}
+
 fn feed_stream_line(store: &std::sync::Arc<crate::store::Store>, task: &Task, line: &str) {
     feed_stream_line_with_agent(store, task, line, &crate::agent::cursor::CursorAgent);
 }

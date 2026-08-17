@@ -3,11 +3,15 @@
 
 use super::super::Agent;
 use super::*;
+use crate::{paths, rate_limit};
 
 #[test]
 fn parses_step_finish_token_event() {
     let task_id = TaskId("t-step".to_string());
-    let event = parse_json_event(AgentKind::OpenCode, AgentKind::OpenCode, None, 
+    let event = parse_json_event(
+        AgentKind::OpenCode,
+        AgentKind::OpenCode,
+        None,
         &task_id,
         &serde_json::json!({
             "type": "step_finish",
@@ -44,7 +48,10 @@ fn parses_new_milestone_events() {
         serde_json::json!({"type": "auto_compact", "message": "compacted session"}),
         serde_json::json!({"type": "git_snapshot", "text": "snapshot saved"}),
     ] {
-        let event = parse_json_event(AgentKind::OpenCode, AgentKind::OpenCode, None, 
+        let event = parse_json_event(
+            AgentKind::OpenCode,
+            AgentKind::OpenCode,
+            None,
             &TaskId("t-ms".to_string()),
             &value,
             Local::now(),
@@ -94,7 +101,10 @@ fn build_command_includes_file_flags_for_context_files() {
 #[test]
 fn extracts_session_id_from_json_event() {
     let task_id = TaskId("t-sess".to_string());
-    let event = parse_json_event(AgentKind::OpenCode, AgentKind::OpenCode, None, 
+    let event = parse_json_event(
+        AgentKind::OpenCode,
+        AgentKind::OpenCode,
+        None,
         &task_id,
         &serde_json::json!({
             "type": "message",
@@ -262,5 +272,29 @@ fn build_command_read_only_without_result_file_keeps_strict_prefix() {
         .collect();
 
     let last_arg = args.last().expect("should have prompt as last arg");
-    assert!(last_arg.contains("Do NOT modify, create, or delete any files. Only read and analyze."));
+    assert!(
+        last_arg.contains("Do NOT modify, create, or delete any files. Only read and analyze.")
+    );
+}
+
+/// Built-in OpenCode marks on the watcher. Live wording must still be a refusal.
+#[test]
+fn live_insufficient_balance_envelope_is_a_stream_refusal() {
+    let temp = tempfile::tempdir().unwrap();
+    let _aid_home = paths::AidHomeGuard::set(temp.path());
+    rate_limit::clear_rate_limit(&AgentKind::OpenCode, None);
+    let line = r#"{"type":"error","error":{"name":"APIError","data":{"message":"Insufficient balance. Manage your billing here: https://x"}}}"#;
+    let _ = OpenCodeAgent.parse_event(&TaskId("t-oc".to_string()), line);
+    assert!(!rate_limit::is_rate_limited(&AgentKind::OpenCode, None));
+    let refusal = rate_limit::refusal_on_channel(
+        line,
+        AgentKind::OpenCode,
+        crate::quota_channel::Channel::CliStream,
+    );
+    assert!(
+        refusal
+            .as_deref()
+            .is_some_and(|t| t.to_lowercase().contains("insufficient balance")),
+        "live wording must still be a stream refusal: {refusal:?}"
+    );
 }

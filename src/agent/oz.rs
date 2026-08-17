@@ -9,7 +9,6 @@ use std::process::Command;
 use super::read_only::read_only_prompt;
 use super::truncate::{capped_detail, capped_detail_with};
 use super::RunOpts;
-use crate::rate_limit;
 use crate::types::*;
 
 pub struct OzAgent;
@@ -92,9 +91,7 @@ impl super::Agent for OzAgent {
             }
             "error" => {
                 let msg = v.get("message").and_then(|m| m.as_str()).unwrap_or("unknown error");
-                if rate_limit::is_rate_limit_error_for_agent(msg, &crate::types::AgentKind::Oz) {
-                    rate_limit::mark_rate_limited(&crate::types::AgentKind::Oz, None, msg);
-                }
+                crate::quota_channel::mark_stream_refusal(crate::types::AgentKind::Oz, None, line);
                 let (detail, metadata) = capped_detail(msg);
                 Some(TaskEvent {
                     task_id: task_id.clone(),

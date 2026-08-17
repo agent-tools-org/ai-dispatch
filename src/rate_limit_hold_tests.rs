@@ -29,7 +29,10 @@ fn a_transient_refusal_with_no_stated_time_expires_on_its_own() {
     let info = get_rate_limit_info(&AgentKind::Claude, None).expect("marker written");
     assert_eq!(info.recovery_at, None, "no time was stated, so none is invented");
     assert!(!info.needs_human, "a bare 429 does not need a person");
-    assert!(is_rate_limited(&AgentKind::Claude, None), "still inside the cooldown");
+    assert!(
+        !is_rate_limited(&AgentKind::Claude, None),
+        "Transient cooldown is not Held — scoring and dispatch stay open"
+    );
 
     // Age the marker past the cooldown window: the route is tried again.
     age_marker(&marker_path(&AgentKind::Claude, None), RATE_LIMIT_WINDOW_SECS + 60);
@@ -169,7 +172,10 @@ fn an_unparseable_recovery_phrase_falls_back_to_the_cooldown() {
     std::fs::write(&path, "recovery_at: tomorrow morning\nmessage: out of quota\n")
         .expect("write marker");
 
-    assert!(is_rate_limited(&AgentKind::Qwen, None), "fresh marker still holds");
+    assert!(
+        !is_rate_limited(&AgentKind::Qwen, None),
+        "unparseable recovery is Transient, and Transient is not Held"
+    );
     age_marker(&path, RATE_LIMIT_WINDOW_SECS + 60);
     assert!(
         !is_rate_limited(&AgentKind::Qwen, None),
@@ -387,7 +393,10 @@ fn a_transient_cooldown_does_not_divert_dispatch() {
     let _guard = crate::paths::AidHomeGuard::set(temp.path());
 
     mark_rate_limited(&AgentKind::Claude, None, "HTTP 429 Too Many Requests");
-    assert!(is_rate_limited(&AgentKind::Claude, None), "still cooling down");
+    assert!(
+        !is_rate_limited(&AgentKind::Claude, None),
+        "Transient is not Held, so scoring no longer applies -10"
+    );
     assert!(dispatch_blocking_hold(&AgentKind::Claude, None).is_none());
 }
 

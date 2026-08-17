@@ -12,7 +12,6 @@ use super::gemini_support::{
     extract_tokens, extract_tool_arguments, extract_tool_name,
 };
 use super::RunOpts;
-use crate::rate_limit;
 use crate::types::*;
 
 pub struct GeminiAgent;
@@ -94,9 +93,7 @@ fn parse_stream_event(task_id: &TaskId, v: &serde_json::Value, now: chrono::Date
         }
         "error" => {
             let detail = extract_error_detail(v)?;
-            if support::is_gemini_rate_limit_error(&detail) {
-                rate_limit::mark_rate_limited(&AgentKind::Gemini, None, &detail);
-            }
+            crate::quota_channel::mark_stream_refusal(AgentKind::Gemini, None, &v.to_string());
             (EventKind::Error, detail, None)
         }
         // "turn_complete" (pre-0.35) and "result" (0.35+) carry completion stats

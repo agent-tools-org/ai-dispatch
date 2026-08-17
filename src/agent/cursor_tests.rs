@@ -193,6 +193,13 @@ fn cursors_error_envelope_is_read_on_the_stream_channel() {
         crate::quota_channel::Channel::CliStream,
     );
     assert_eq!(refusal.as_deref(), Some("quota exceeded for this workspace"));
+    crate::quota_channel::mark_stream_refusal(AgentKind::Cursor, None, line);
+    assert!(rate_limit::is_rate_limited(&AgentKind::Cursor, None));
+    rate_limit::clear_all_rate_limits_for_agent(&AgentKind::Cursor, None);
+    let premium = r#"{"type":"error","message":"You're out of usage. Switch to Auto."}"#;
+    crate::quota_channel::mark_stream_refusal(AgentKind::Cursor, None, premium);
+    assert!(rate_limit::is_group_rate_limited(&AgentKind::Cursor, None, "premium"));
+    assert!(!rate_limit::is_rate_limited(&AgentKind::Cursor, None));
 }
 
 fn parse(line: &str) -> crate::types::TaskEvent {

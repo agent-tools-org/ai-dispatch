@@ -1,5 +1,5 @@
 // The named channels a quota refusal may be read from, and the split within each.
-// Exports: Channel, Attributable, provider_attributable.
+// Exports: Channel, Attributable, provider_attributable, mark_stream_refusal.
 // Deps: serde_json, types::AgentKind, watcher::strip_terminal_escapes.
 
 use serde_json::{Map, Value};
@@ -106,7 +106,10 @@ pub(crate) fn provider_attributable(
             push_line(&mut kept.cli_diagnostic, line);
             continue;
         }
-        match serde_json::from_str::<Value>(line).ok().and_then(|value| value.as_object().cloned()) {
+        match serde_json::from_str::<Value>(line)
+            .ok()
+            .and_then(|value| value.as_object().cloned())
+        {
             Some(object) => keep_envelope_strings(&object, agent, &mut kept),
             None => push_line(&mut kept.unsplit, line),
         }
@@ -140,9 +143,23 @@ impl Attributable {
     }
 }
 
+/// The only way an adapter may write a hold: the raw captured line, split here,
+/// then `mark_rate_limited_for_message` so a tier refusal cannot take `auto`.
+pub(crate) fn mark_stream_refusal(agent: AgentKind, custom_name: Option<&str>, raw: &str) {
+    let Some(message) = crate::rate_limit::refusal_on_channel(raw, agent, Channel::CliStream)
+    else {
+        return;
+    };
+    crate::rate_limit::mark_rate_limited_for_message(&agent, custom_name, &message);
+}
+
 fn keep_envelope_strings(object: &Map<String, Value>, agent: AgentKind, kept: &mut Attributable) {
     if is_error_envelope(object) {
-        collect_strings(&Value::Object(object.clone()), MAX_DEPTH, &mut kept.cli_diagnostic);
+        collect_strings(
+            &Value::Object(object.clone()),
+            MAX_DEPTH,
+            &mut kept.cli_diagnostic,
+        );
     } else if terminal_text_is_a_refusal_channel(agent) && is_terminal_result(object) {
         // The slot qwen's model otherwise fills, so it is read under the narrow
         // rule even though it arrived inside an envelope.
@@ -172,9 +189,10 @@ fn is_error_envelope(object: &Map<String, Value>) -> bool {
 /// `{"type":"session.error","data":{"message":"…exceeded your monthly quota…"}}`
 /// and was being dropped whole.
 fn names_an_error_type(object: &Map<String, Value>) -> bool {
-    object.get("type").and_then(Value::as_str).is_some_and(|kind| {
-        kind == "error" || kind.ends_with(".error") || kind.ends_with("_error")
-    })
+    object
+        .get("type")
+        .and_then(Value::as_str)
+        .is_some_and(|kind| kind == "error" || kind.ends_with(".error") || kind.ends_with("_error"))
 }
 
 /// A tool's own failure is not the provider speaking, however the CLI flags it.
@@ -187,7 +205,10 @@ fn names_an_error_type(object: &Map<String, Value>) -> bool {
 /// error test, not after it, so widening what counts as an error envelope can
 /// never re-open that path.
 fn describes_a_tool(object: &Map<String, Value>) -> bool {
-    object.get("type").and_then(Value::as_str).is_some_and(|kind| kind.contains("tool"))
+    object
+        .get("type")
+        .and_then(Value::as_str)
+        .is_some_and(|kind| kind.contains("tool"))
         || object.contains_key("tool_call")
         || object.contains_key("tool_use_id")
         || object.contains_key("toolCallId")
@@ -227,6 +248,10 @@ fn collect_strings(value: &Value, depth: u8, kept: &mut String) {
             for field in fields.values() {
                 collect_strings(field, depth - 1, kept);
             }
+        }
+        // Status codes arrive as numbers; generic matching needs the digits.
+        Value::Number(n) if matches!(n.as_i64(), Some(402 | 429)) => {
+            push_line(kept, &n.to_string());
         }
         _ => {}
     }

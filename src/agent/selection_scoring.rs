@@ -90,6 +90,8 @@ pub(crate) struct ScoreBreakdown {
     pub history_bonus: f64,
     pub complexity_bonus: f64,
     pub team_bonus: f64,
+    #[serde(default)]
+    pub headroom_penalty: f64,
     pub total: f64,
 }
 
@@ -134,6 +136,8 @@ pub(super) fn score_breakdown(
         s += 3.0;
         team_bonus = 3.0;
     }
+    let headroom_penalty = super::selection_quota::headroom_penalty(kind);
+    if headroom_penalty != 0.0 { s += headroom_penalty; } // 0.0 would change bits
     ScoreBreakdown {
         base: base as f64,
         model_capability: initial - base as f64,
@@ -142,6 +146,7 @@ pub(super) fn score_breakdown(
         history_bonus,
         complexity_bonus,
         team_bonus,
+        headroom_penalty,
         total: s,
     }
 }

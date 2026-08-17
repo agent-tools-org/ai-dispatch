@@ -31,6 +31,9 @@ fn advise_emits_json_without_creating_store_state() {
     assert_eq!(payload["declared"]["difficulty"], "moderate");
     assert!(payload["recommended"].is_object());
     assert!(payload["candidates"].as_array().is_some_and(|items| !items.is_empty()));
+    let candidates = payload["candidates"].as_array().expect("candidates");
+    assert!(candidates.iter().all(|item| item["quota"]["status"].is_string()));
+    assert!(candidates.iter().all(|item| item["breakdown"]["headroom_penalty"].is_number()));
     assert_eq!(directory_entries(aid_home.path()), before);
     assert!(!aid_home.path().join("aid.db").exists());
 }
@@ -83,6 +86,7 @@ fn advise_succeeds_when_every_builtin_is_rate_limited() {
         ).expect("write test marker");
     }
     let output = aid_cmd_in(aid_home.path())
+        .env("XDG_CACHE_HOME", aid_home.path().join("empty-cache"))
         .args(["advise", "Implement a complex cross-file refactor"])
         .args(PROFILE_ARGS)
         .output()

@@ -159,3 +159,20 @@ fn copilot_premium_request_limit_is_recognized() {
     let msg = "You've reached your premium request limit for this billing cycle.";
     assert!(match_quota_signature_for_agent(msg, AgentKind::Copilot).is_some());
 }
+
+#[test]
+fn grok_usage_balance_exhausted_is_windowed() {
+    let msg = "API error (status 402 Payment Required): Grok Build usage balance exhausted";
+    let (agent, recovery) = match_quota_signature(msg).expect("grok 402 must match");
+    assert_eq!(agent, AgentKind::Grok);
+    assert_eq!(recovery, QuotaRecovery::Windowed);
+}
+
+#[test]
+fn cursor_out_of_usage_is_windowed() {
+    let msg = "ActionRequiredError: Increase limits for faster responses You're out of usage. \
+               Switch to Auto, or ask your admin to increase your limit to continue.";
+    let (agent, recovery) = match_quota_signature(msg).expect("cursor premium must match");
+    assert_eq!(agent, AgentKind::Cursor);
+    assert_eq!(recovery, QuotaRecovery::Windowed);
+}

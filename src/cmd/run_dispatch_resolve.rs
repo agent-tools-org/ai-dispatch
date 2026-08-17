@@ -231,11 +231,8 @@ pub(super) fn resolve_agent_setup(store: &Arc<Store>, args: &mut RunArgs) -> Res
             requested_model.clone()
         }
     });
-    // An agent whose plan meters model families separately can have one family
-    // exhausted while another still serves. Switch groups rather than treating
-    // the agent as unavailable — and say so, because a silent model swap is the
-    // same defect as a CLI quietly substituting a model the caller did not ask
-    // for.
+    // Family-metered agents: switch groups, and say so — a silent model swap
+    // is the same defect as a CLI substituting a model the caller did not ask for.
     let mut effective_model = match agent::model_group::healthy_model_for(
         agent_kind,
         effective_model.as_deref(),
@@ -253,11 +250,14 @@ pub(super) fn resolve_agent_setup(store: &Arc<Store>, args: &mut RunArgs) -> Res
         }
         None => effective_model,
     };
-    if let Some(hold) = rate_limit::dispatch_blocking_hold_for_model(
-        &agent_kind,
-        custom_agent_name.as_deref(),
-        effective_model.as_deref(),
-    ) {
+    // No-group for_model is agent-level; skip it or background keep is undone.
+    if agent::model_group::model_group(agent_kind, effective_model.as_deref()).is_some()
+        && let Some(hold) = rate_limit::dispatch_blocking_hold_for_model(
+            &agent_kind,
+            custom_agent_name.as_deref(),
+            effective_model.as_deref(),
+        )
+    {
         held::switch_model_held_route(
             args,
             &mut agent_kind,

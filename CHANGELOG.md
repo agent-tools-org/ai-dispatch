@@ -1,3 +1,10 @@
+## v10.33.0 (2026-08-17)
+- `aid agent list`, `aid advise`, and cost reporting now see the models an agent CLI actually serves: agy's catalog grew from 3 entries to all 14 that `agy models` returns, including the whole `gemini-3.7-flash` family, which aid previously could not name at all.
+- A discovered model's price and capability stay explicitly unknown instead of defaulting to zero: `aid agent list --json` renders them as `null`, `aid run --model <discovered>` reports `Estimated cost: unknown`, and `aid advise` neither charges $0.00 nor scores the model as the worst available.
+- Discovery reads only the served-model disk cache, never a network probe, so a cold or stale cache cannot delay a dispatch; a failed or empty probe still allows the run rather than rejecting the model.
+- Pricing resolution moved into `model_catalog_resolved` and `cost::pricing_resolution`, leaving prices and `aid advise` rankings unchanged for every model already in the catalog.
+
+
 ## v10.32.0 (2026-08-17)
 - Dispatch, advise, scoring, and `aid agent quota` now share one hold predicate, so a recovered route is no longer refused after aidbar already shows headroom.
 - Grok Build 402 and Cursor premium `you're out of usage` are dated-window holds: a newer aidbar snapshot with `resets_at` and unused capacity releases them. A percentage without a date cannot.

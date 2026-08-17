@@ -95,30 +95,30 @@ captured buffer is the rendered answer — must match that agent's own captured
 refusal template. An agent whose refusal wording has never been captured stays
 undetectable, which is the honest answer rather than a guess.
 
-A hold ends in one of three ways, and `aid config agents` names which:
+A hold ends in one of two ways, and `aid config agents` names which:
 
 | Status | Ends when | Example |
 |---|---|---|
 | `rate-limited (try again at <time>)` | that time passes | codex usage limit, qwen token-plan window |
 | `rate-limited (needs manual clear: aid config clear-limit <agent>)` | a person acts | spent balance, billing cycle, retired plan tier |
-| `rate-limited (cooling down)` | a short cooldown elapses | a bare `429`/`402` with no recognised template |
 
-The middle class covers refusals that never state a reset time and do not return
+The second class covers refusals that never state a reset time and do not return
 on a clock — a spent opencode balance, a copilot monthly quota, a cursor premium
 pool, grok's exhausted Build balance. These are held until `aid config
 clear-limit <agent>` rather than given an invented expiry, because a guessed
-cooldown sends work back to a provider that is still refusing it. The last class
-is the opposite guard: an unrecognised refusal must not take a route out
-permanently, so it expires by itself.
+cooldown sends work back to a provider that is still refusing it. A bare
+`429`/`402` with no recognised template is Degraded, not a hold: `aid agent
+quota` prints OK and dispatch is not diverted.
 
 An agent whose plan splits one allowance into tiers is marked per tier. Cursor
 meters a single premium pool that every model except `auto` draws on, so a
 premium refusal holds those models while `auto` stays dispatchable;
 `aid config clear-limit cursor` clears both. A group hold is not an agent hold:
 `aid agent list` and `aid agent quota` report it as `PARTIAL` (still dispatchable
-on clear tiers), not `LIMITED` or `OK`. A hold only a person ends names
-`aid config clear-limit <agent>`; aid never invents a reset time it did not
-observe.
+on clear tiers), not `LIMITED` or `OK`. STATUS now matches dispatch: a snapshot
+that releases a route for `aid run` also clears LIMITED / PARTIAL. A hold only
+a person ends names `aid config clear-limit <agent>`; aid never invents a reset
+time it did not observe.
 
 Use `aid byok` for custom OpenAI-compatible endpoints. Use `aid credential` to
 manage named credential-pool entries; never place secret values in prompts,

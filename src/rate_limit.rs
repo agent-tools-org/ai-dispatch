@@ -6,7 +6,9 @@
 
 use crate::paths::aid_dir;
 use crate::route_availability::{
-    Hold, MANUAL_HOLD, StoredHold, classify_hold, format_hold_end_for, stored_hold,
+    availability, availability_for_group, availability_for_model, classify_hold,
+    format_hold_end_for, Hold, HoldEnd, MANUAL_HOLD, RouteAvailability, RouteStatus,
+    StoredHold, stored_hold,
 };
 use crate::types::AgentKind;
 use chrono::{DateTime, Local, NaiveDateTime};
@@ -85,7 +87,10 @@ pub fn mark_group_rate_limited(
 }
 
 pub fn is_group_rate_limited(agent: &AgentKind, custom_name: Option<&str>, group: &str) -> bool {
-    marker_is_active(&group_marker_path(agent, custom_name, group), agent)
+    matches!(
+        availability_for_group(agent, custom_name, group).status,
+        RouteStatus::Held
+    )
 }
 
 pub fn clear_group_rate_limit(agent: &AgentKind, custom_name: Option<&str>, group: &str) -> bool {
@@ -179,18 +184,6 @@ pub(crate) fn marker_field(content: &str, key: &str) -> Option<String> {
         .map(str::to_string)
 }
 
-/// Shared liveness check for a marker file.
-fn marker_is_active(path: &std::path::Path, agent: &AgentKind) -> bool {
-    let Ok(content) = fs::read_to_string(path) else {
-        return false;
-    };
-    match stored_hold(&content, agent) {
-        StoredHold::Until(recovery_at) => recovery_at > Local::now().naive_local(),
-        StoredHold::Windowed | StoredHold::NeedsHuman => true,
-        StoredHold::Transient => within_cooldown_window(path),
-    }
-}
-
 /// How a live hold ends, phrased for the caller who just chose this agent —
 /// `None` when nothing should stop the dispatch.
 ///
@@ -203,7 +196,7 @@ fn marker_is_active(path: &std::path::Path, agent: &AgentKind) -> bool {
 /// that moving the caller off the agent they asked for costs more than the wait,
 /// and gating on it was never the previous behaviour either.
 pub fn dispatch_blocking_hold(agent: &AgentKind, custom_name: Option<&str>) -> Option<String> {
-    dispatch_blocking_hold_at_path(&marker_path(agent, custom_name), agent, custom_name)
+    hold_text(agent, custom_name, &availability(agent, custom_name))
 }
 
 pub fn dispatch_blocking_hold_for_model(
@@ -211,55 +204,43 @@ pub fn dispatch_blocking_hold_for_model(
     custom_name: Option<&str>,
     model: Option<&str>,
 ) -> Option<String> {
-    let group = crate::agent::model_group::model_group(*agent, model)?;
-    dispatch_blocking_hold_at_path(
-        &group_marker_path(agent, custom_name, group),
+    hold_text(
         agent,
         custom_name,
+        &availability_for_model(agent, custom_name, model),
     )
 }
 
-fn dispatch_blocking_hold_at_path(
-    path: &std::path::Path,
+fn hold_text(
     agent: &AgentKind,
     custom_name: Option<&str>,
+    avail: &RouteAvailability,
 ) -> Option<String> {
-    if !marker_is_active(path, agent) || crate::live_quota::overrides_marker(agent, path) {
-        return None;
-    }
-    let content = fs::read_to_string(path).ok()?;
-    match stored_hold(&content, agent) {
-        StoredHold::Until(recovery_at) if recovery_at > Local::now().naive_local() => {
-            // Quote the provider's own phrasing of the time rather than a
-            // reformat of it; the parse above only decides whether it is past.
-            let stated = marker_field(&content, "recovery_at: ")
-                .unwrap_or_else(|| format_recovery(recovery_at));
-            Some(format!("until {stated}"))
-        }
-        StoredHold::Windowed => {
-            let slug = marker_slug(agent, custom_name);
-            let provider = crate::live_quota::provider_name(agent).unwrap_or(agent.as_str());
-            Some(format!(
-                "until a dated {provider} snapshot with headroom (or `aid config clear-limit {slug}`)"
-            ))
-        }
-        StoredHold::NeedsHuman => {
-            let slug = marker_slug(agent, custom_name);
-            Some(format!(
-                "until cleared with `aid config clear-limit {slug}`"
-            ))
-        }
-        StoredHold::Until(_) | StoredHold::Transient => None,
+    match avail.status {
+        RouteStatus::Held => Some(dispatch_hold_end(agent, custom_name, avail)),
+        _ => None,
     }
 }
 
-/// The bounded cooldown for the transient class, measured from the write time.
-fn within_cooldown_window(path: &std::path::Path) -> bool {
-    fs::metadata(path)
-        .and_then(|meta| meta.modified())
-        .ok()
-        .and_then(|modified| modified.elapsed().ok())
-        .is_some_and(|elapsed| elapsed.as_secs() < RATE_LIMIT_WINDOW_SECS)
+fn dispatch_hold_end(
+    agent: &AgentKind,
+    custom_name: Option<&str>,
+    avail: &RouteAvailability,
+) -> String {
+    match &avail.ends {
+        HoldEnd::At(_) => avail
+            .why
+            .strip_prefix("held ")
+            .unwrap_or(&avail.why)
+            .to_string(),
+        HoldEnd::ClearLimit { slug } => {
+            format!("until cleared with `aid config clear-limit {slug}`")
+        }
+        HoldEnd::SnapshotDatedWindow => {
+            format_hold_end_for(&StoredHold::Windowed, agent, custom_name, None)
+        }
+        HoldEnd::Cooldown | HoldEnd::Nothing => avail.why.clone(),
+    }
 }
 
 /// Clear a marker only when it predates `task_start`.
@@ -374,7 +355,10 @@ fn discovered_group_markers(
 }
 
 pub fn is_rate_limited(agent: &AgentKind, custom_name: Option<&str>) -> bool {
-    marker_is_active(&marker_path(agent, custom_name), agent)
+    matches!(
+        availability(agent, custom_name).status,
+        RouteStatus::Held
+    )
 }
 
 /// Currently held agents as `(display name, message)`. Includes registered
@@ -640,7 +624,10 @@ pub fn active_group_holds(
     groups
         .into_iter()
         .filter_map(|(group, path)| {
-            if !marker_is_active(&path, agent) {
+            if !matches!(
+                availability_for_group(agent, custom_name, &group).status,
+                RouteStatus::Held
+            ) {
                 return None;
             }
             let content = fs::read_to_string(&path).ok()?;
@@ -863,7 +850,11 @@ mod tests {
         let _guard = paths::AidHomeGuard::set(&temp_dir);
         std::fs::create_dir_all(paths::aid_dir()).ok();
 
-        mark_rate_limited(&AgentKind::Codex, None, "rate limit exceeded");
+        mark_rate_limited(
+            &AgentKind::Codex,
+            None,
+            &format!("try again at {}.", test_future_recovery_time()),
+        );
         assert!(is_rate_limited(&AgentKind::Codex, None));
 
         let _ = std::fs::remove_file(marker_path(&AgentKind::Codex, None));

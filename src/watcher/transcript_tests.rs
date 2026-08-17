@@ -142,7 +142,11 @@ async fn watch_buffered_clears_rate_limit_on_success() {
         delivery_assessment: None,
     };
     store.insert_task(&task).unwrap();
-    rate_limit::mark_rate_limited(&AgentKind::Gemini, None, "rate limit exceeded");
+    rate_limit::mark_rate_limited(
+        &AgentKind::Gemini,
+        None,
+        "IneligibleTierError: This client is no longer supported for Gemini Code Assist for individuals",
+    );
     assert!(rate_limit::is_rate_limited(&AgentKind::Gemini, None));
 
     let mut child = tokio::process::Command::new("sh")

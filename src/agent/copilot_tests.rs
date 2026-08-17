@@ -4,7 +4,8 @@
 
 use super::CopilotAgent;
 use crate::agent::{Agent, RunOpts};
-use crate::types::{EventKind, TaskId};
+use crate::types::{AgentKind, EventKind, TaskId};
+use crate::{paths, rate_limit};
 
 fn opts() -> RunOpts {
     RunOpts {
@@ -31,11 +32,20 @@ fn build_command_uses_copilot_prompt_mode() {
         .collect();
     assert_eq!(cmd.get_program().to_string_lossy(), "copilot");
     assert!(args.windows(2).any(|pair| pair == ["-p", "ship it"]));
-    assert!(args.windows(2).any(|pair| pair == ["--output-format", "json"]));
+    assert!(
+        args.windows(2)
+            .any(|pair| pair == ["--output-format", "json"])
+    );
     assert!(args.windows(2).any(|pair| pair == ["--stream", "on"]));
     assert!(args.windows(2).any(|pair| pair == ["--model", "gpt-5.2"]));
-    assert!(args.windows(2).any(|pair| pair == ["--add-dir", "/tmp/project"]));
-    assert!(args.windows(2).any(|pair| pair == ["--add-dir", "/tmp/project/docs"]));
+    assert!(
+        args.windows(2)
+            .any(|pair| pair == ["--add-dir", "/tmp/project"])
+    );
+    assert!(
+        args.windows(2)
+            .any(|pair| pair == ["--add-dir", "/tmp/project/docs"])
+    );
 }
 
 #[test]
@@ -50,8 +60,7 @@ fn parse_event_reads_final_assistant_message() {
 
 #[test]
 fn parse_event_reads_tool_execution_start() {
-    let line =
-        r#"{"type":"tool.execution_start","data":{"toolName":"view","arguments":{"path":"Cargo.toml"}}}"#;
+    let line = r#"{"type":"tool.execution_start","data":{"toolName":"view","arguments":{"path":"Cargo.toml"}}}"#;
     let event = CopilotAgent
         .parse_event(&TaskId("t-copilot".to_string()), line)
         .unwrap();
@@ -63,7 +72,24 @@ fn parse_event_reads_tool_execution_start() {
 fn parse_event_ignores_persistence_session_errors() {
     let line =
         r#"{"type":"session.error","data":{"errorType":"persistence","message":"mkdir failed"}}"#;
-    assert!(CopilotAgent
+    assert!(
+        CopilotAgent
+            .parse_event(&TaskId("t-copilot".to_string()), line)
+            .is_none()
+    );
+}
+
+/// Live t-03a68876: `session.error` + `data.errorCode=quota_exceeded`.
+#[test]
+fn parse_event_marks_live_session_error_quota() {
+    let temp = tempfile::tempdir().unwrap();
+    let _aid_home = paths::AidHomeGuard::set(temp.path());
+    rate_limit::clear_rate_limit(&AgentKind::Copilot, None);
+    let line = r#"{"type":"session.error","data":{"errorType":"quota","message":"You have exceeded your monthly quota (Request ID: EC26:161163:156CE45:19CFB24:6A75A3A0)","statusCode":402,"errorCode":"quota_exceeded"}}"#;
+    let event = CopilotAgent
         .parse_event(&TaskId("t-copilot".to_string()), line)
-        .is_none());
+        .unwrap();
+    assert_eq!(event.event_kind, EventKind::Error);
+    assert!(rate_limit::is_rate_limited(&AgentKind::Copilot, None));
+    rate_limit::clear_rate_limit(&AgentKind::Copilot, None);
 }

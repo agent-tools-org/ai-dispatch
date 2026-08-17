@@ -9,7 +9,6 @@ use std::process::Command;
 
 use super::truncate::{capped_detail, capped_detail_with};
 use super::RunOpts;
-use crate::rate_limit;
 use crate::types::*;
 
 pub struct DroidAgent;
@@ -268,12 +267,8 @@ fn parse_error_event(
     v: &Value,
     now: chrono::DateTime<Local>,
 ) -> Option<TaskEvent> {
-    let detail = droid_error_detail(v);
-    if is_droid_rate_limit(v, detail.as_deref()) {
-        let rate_limit_message = detail.clone().unwrap_or_else(|| "status 429".to_string());
-        rate_limit::mark_rate_limited(&AgentKind::Droid, None, &rate_limit_message);
-    }
-    let (detail, metadata) = capped_detail(detail.as_deref().unwrap_or("unknown error"));
+    crate::quota_channel::mark_stream_refusal(AgentKind::Droid, None, &v.to_string());
+    let (detail, metadata) = capped_detail(droid_error_detail(v).as_deref().unwrap_or("unknown error"));
     Some(TaskEvent {
         task_id: task_id.clone(),
         timestamp: now,
@@ -298,23 +293,6 @@ fn droid_error_detail(v: &Value) -> Option<String> {
         .and_then(|value| value.as_str())
         .or_else(|| v.pointer("/error/type").and_then(|value| value.as_str()))
         .map(ToOwned::to_owned)
-}
-
-fn is_droid_rate_limit(v: &Value, detail: Option<&str>) -> bool {
-    if detail.is_some_and(|detail| rate_limit::is_rate_limit_error_for_agent(detail, &AgentKind::Droid)) {
-        return true;
-    }
-    let status = v
-        .get("status")
-        .and_then(|value| value.as_i64())
-        .or_else(|| v.pointer("/error/status").and_then(|value| value.as_i64()));
-    if status == Some(429) {
-        return true;
-    }
-    v.get("error_type")
-        .and_then(|value| value.as_str())
-        .or_else(|| v.pointer("/error/type").and_then(|value| value.as_str()))
-        .is_some_and(|value| value.eq_ignore_ascii_case("rate_limit_exceeded"))
 }
 
 #[cfg(test)]

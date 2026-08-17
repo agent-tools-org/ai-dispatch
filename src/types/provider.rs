@@ -137,8 +137,9 @@ pub fn provider_for_cli(cli: AgentKind) -> (ProviderId, MeteringShape) {
         // "You've reached your weekly standard usage limit (resets in 1 day)"
         // as an HTTP 402 body.
         AgentKind::Droid => ("factory", MeteringShape::AccountPool),
-        // Local bearer in ~/.grok/auth.json; the CLI exposes no billing surface.
-        AgentKind::Grok => ("xai", MeteringShape::Unknown),
+        // aidbar GetGrokCreditsConfig: one billing-period pool, used_percent +
+        // period_end. That is an account pool, not an unknown shape.
+        AgentKind::Grok => ("xai", MeteringShape::AccountPool),
         // Rate-limited with a reset timestamp but no per-task metering.
         AgentKind::Cursor => ("cursor-subscription", MeteringShape::Subscription),
         AgentKind::Claude => ("anthropic", MeteringShape::Unknown),

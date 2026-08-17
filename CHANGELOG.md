@@ -1,5 +1,6 @@
 ## Unreleased
 - Transient cooldown no longer applies scoring −10: `is_rate_limited` is now the same Held check as `aid run`, so a bare 429 is not treated as a hold.
+- Grok's `usage balance exhausted` 402 and Cursor's premium `you're out of usage` are Windowed holds: a newer dated aidbar snapshot with headroom can release them. A percentage without a date cannot. OpenCode prepaid, Gemini `IneligibleTier`, and Copilot's undated monthly/premium needles stay person-only. Cursor premium matches the Plan window only — On-demand is ignored for that group.
 
 
 ## v10.31.0 (2026-08-14)

@@ -64,6 +64,71 @@ fn models_for_agent_merges_cached_agy_model_as_unknown() {
 }
 
 #[test]
+fn models_for_agent_merges_cached_opencode_model_as_unknown() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    let _home = crate::paths::AidHomeGuard::set(temp.path());
+    crate::paths::ensure_dirs().expect("aid dirs");
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .expect("current time")
+        .as_secs();
+    let cache = serde_json::json!({
+        "opencode": {"models": ["opencode-go/glm-5.2"], "updated_at_secs": now}
+    });
+    std::fs::write(
+        crate::paths::aid_dir().join("served_models_cache.json"),
+        cache.to_string(),
+    )
+    .expect("served-model cache");
+
+    let models = models_for_agent(&AgentKind::OpenCode);
+    let discovered = models
+        .iter()
+        .find(|model| model.model == "opencode-go/glm-5.2")
+        .expect("discovered model");
+    assert_eq!(discovered.input_per_m, None);
+    assert_eq!(discovered.output_per_m, None);
+    assert_eq!(discovered.capability, None);
+}
+
+#[test]
+fn agent_list_json_marks_discovered_opencode_metadata_unknown() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    let _home = crate::paths::AidHomeGuard::set(temp.path());
+    crate::paths::ensure_dirs().expect("aid dirs");
+    crate::agent::model_validation::clear_served_models_cache();
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .expect("current time")
+        .as_secs();
+    let cache = serde_json::json!({
+        "opencode": {"models": ["opencode-go/glm-5.2"], "updated_at_secs": now}
+    });
+    std::fs::write(
+        crate::paths::aid_dir().join("served_models_cache.json"),
+        cache.to_string(),
+    )
+    .expect("served-model cache");
+
+    let store = crate::store::Store::open_memory().expect("store");
+    let list = crate::cmd::agent_json::agents_list_value(&store).expect("agent list");
+    let agents = list["agents"].as_array().expect("agents");
+    let opencode = agents
+        .iter()
+        .find(|agent| agent["name"] == "opencode")
+        .expect("opencode");
+    let model = opencode["models"]["available"]
+        .as_array()
+        .expect("available")
+        .iter()
+        .find(|model| model["model"] == "opencode-go/glm-5.2")
+        .expect("discovered model");
+    assert!(model["input_per_m"].is_null());
+    assert!(model["output_per_m"].is_null());
+    assert!(model["capability"].is_null());
+}
+
+#[test]
 fn budget_preferred_tiers_beat_unknown() {
     // Cursor has a cheap-tier model; unknown must not win when a preferred
     // tier exists.

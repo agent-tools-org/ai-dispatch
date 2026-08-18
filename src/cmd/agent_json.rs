@@ -84,7 +84,7 @@ fn build_agent_json(
     } else {
         crate::agent::detect_agents().contains(&kind)
     };
-    if installed && kind == AgentKind::Antigravity {
+    if installed && matches!(kind, AgentKind::Antigravity | AgentKind::OpenCode) {
         let agent = crate::agent::get_agent(kind);
         let _ = crate::agent::model_validation::get_served_models_cached(&*agent);
     }

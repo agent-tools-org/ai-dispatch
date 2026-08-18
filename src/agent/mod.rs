@@ -17,6 +17,7 @@ pub(crate) mod model_group;
 pub(crate) mod model_validation;
 pub mod mimocode;
 pub mod opencode;
+pub(crate) mod opencode_models;
 pub(crate) mod opencode_overlay;
 pub mod oz;
 pub mod qwen;

@@ -79,35 +79,38 @@ pub fn models_for_agent(agent: &AgentKind) -> Vec<ResolvedAgentModel> {
         .into_iter()
         .map(ResolvedAgentModel::from)
         .collect();
-    if *agent == AgentKind::Antigravity {
-        models.extend(discovered_agy_models());
-    }
+    models.extend(discovered_models_for(*agent));
     models
 }
 
-fn discovered_agy_models() -> Vec<ResolvedAgentModel> {
-    crate::agent::model_validation::load_from_disk_cache(AgentKind::Antigravity)
+fn discovered_models_for(agent: AgentKind) -> Vec<ResolvedAgentModel> {
+    let description = match agent {
+        AgentKind::Antigravity => "Discovered from agy; pricing and capability unknown",
+        AgentKind::OpenCode => "Discovered from opencode; pricing and capability unknown",
+        _ => return Vec::new(),
+    };
+    crate::agent::model_validation::load_from_disk_cache(agent)
         .unwrap_or_default()
         .into_iter()
         .filter(|name| {
-            !AGENT_MODELS.iter().any(|known| {
-                known.agent == AgentKind::Antigravity && known.model.eq_ignore_ascii_case(name)
-            })
+            !AGENT_MODELS
+                .iter()
+                .any(|known| known.agent == agent && known.model.eq_ignore_ascii_case(name))
         })
         .map(|model| ResolvedAgentModel {
-            agent: AgentKind::Antigravity,
+            agent,
             model,
             input_per_m: None,
             output_per_m: None,
             tier: "unknown".to_string(),
-            description: "Discovered from agy; pricing and capability unknown".to_string(),
+            description: description.to_string(),
             capability: None,
         })
         .collect()
 }
 
 pub(crate) fn is_unpriced_discovered_model(agent: AgentKind, model: &str) -> bool {
-    agent == AgentKind::Antigravity
+    matches!(agent, AgentKind::Antigravity | AgentKind::OpenCode)
         && !AGENT_MODELS
             .iter()
             .any(|known| known.agent == agent && known.model.eq_ignore_ascii_case(model))
@@ -135,7 +138,10 @@ pub fn merged_agent_models() -> Result<Vec<ResolvedAgentModel>> {
         indexes.insert((model.agent, model.model.to_lowercase()), merged.len());
         merged.push(ResolvedAgentModel::from(model));
     }
-    for model in discovered_agy_models() {
+    for model in discovered_models_for(AgentKind::Antigravity)
+        .into_iter()
+        .chain(discovered_models_for(AgentKind::OpenCode))
+    {
         indexes.insert((model.agent, model.model.to_lowercase()), merged.len());
         merged.push(model);
     }

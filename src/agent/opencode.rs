@@ -102,6 +102,10 @@ impl super::Agent for OpenCodeAgent {
         info.cost_usd = cost_usd;
         info
     }
+
+    fn served_models(&self) -> Result<Option<Vec<String>>> {
+        super::opencode_models::probe_served_models()
+    }
 }
 
 pub(crate) fn parse_json_event(

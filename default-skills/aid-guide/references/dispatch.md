@@ -408,7 +408,9 @@ cached list, aid re-probes once before rejecting it, so a model the CLI gained
 since the last probe is accepted rather than refused for a day.
 
 `aid agent list --json` refreshes agy's served-model cache when it is missing
-or stale, then merges newly served agy models into `models.available`. A
+or stale, then merges newly served agy models into `models.available`. The same
+refresh-and-merge applies to opencode (`opencode models`), so providers such as
+`opencode-go` appear beside the built-in `opencode/*` rows. A
 discovered model without catalog metadata has `null` `input_per_m`,
 `output_per_m`, and `capability`; cost displays report `unknown`. Dispatch-time
 catalog readers use only the bounded 24-hour cache and never initiate this discovery probe.

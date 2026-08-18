@@ -79,9 +79,11 @@ fn explicit_agent(
     }
     let selected_kind = AgentKind::parse_str(&agent_name);
     let selected_model = if model.is_none() {
-        selected_kind.and_then(|kind| agent::selection::model_for_task_budget(
-            kind, declared_budget.unwrap_or(TaskBudget::Standard),
-        )).map(str::to_string)
+        crate::agent_config::get_default_model(&agent_name).or_else(|| {
+            selected_kind.and_then(|kind| agent::selection::model_for_task_budget(
+                kind, declared_budget.unwrap_or(TaskBudget::Standard),
+            )).map(str::to_string)
+        })
     } else {
         None
     };
@@ -199,5 +201,26 @@ mod tests {
         )
         .expect_err("codex must fail --egress private-network");
         assert!(err.to_string().contains("--egress private-network"));
+    }
+
+    #[test]
+    fn configured_default_model_wins_over_catalog_default() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let _guard = crate::paths::AidHomeGuard::set(temp.path());
+        crate::agent_config::save_agent_default_model("opencode", Some("opencode/kimi-k2.6"))
+            .expect("save config");
+
+        let (_agent, model) = explicit_agent(
+            "opencode".into(),
+            &None,
+            Some(TaskBudget::Standard),
+            TaskEgress::Any,
+        )
+        .expect("opencode dispatch must resolve");
+        assert_eq!(
+            model.as_deref(),
+            Some("opencode/kimi-k2.6"),
+            "configured default model must be used, not the catalog default opencode/glm-5.2"
+        );
     }
 }

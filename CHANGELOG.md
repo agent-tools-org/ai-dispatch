@@ -1,3 +1,9 @@
+## v10.34.0 (2026-08-18)
+- `aid run` and `aid batch` now honour the per-agent default model in `~/.aid/agent_config.toml`. It was unreachable: dispatch pre-filled a catalog model by declared budget before the config was ever read, so a configured `opencode-go/glm-5.2` still dispatched `opencode/glm-5.2` — a provider group that had been quota-held since Aug 13, which sent every plain `aid run opencode` to a substitute agent.
+- One shared resolver now decides the model for both run and batch: `--model` > configured default > catalog by declared budget. A configured default that outranks a declared free or cheap budget now says so instead of claiming the agent has no eligible model.
+- A held-route substitution no longer hands work to an agent whose model family is already exhausted. The fallback is pinned to a group that can still serve — agy's claude family rather than its spent gemini one — and a candidate whose every family is held is skipped instead of dispatched into a dead allowance.
+
+
 ## v10.33.0 (2026-08-17)
 - `aid agent list`, `aid advise`, and cost reporting now see the models an agent CLI actually serves: agy's catalog grew from 3 entries to all 14 that `agy models` returns, including the whole `gemini-3.7-flash` family, which aid previously could not name at all.
 - A discovered model's price and capability stay explicitly unknown instead of defaulting to zero: `aid agent list --json` renders them as `null`, `aid run --model <discovered>` reports `Estimated cost: unknown`, and `aid advise` neither charges $0.00 nor scores the model as the worst available.

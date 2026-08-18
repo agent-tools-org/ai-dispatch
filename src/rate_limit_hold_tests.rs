@@ -20,6 +20,19 @@ fn isolate_cache(temp: &tempfile::TempDir) -> crate::live_quota::CacheDirGuard {
     crate::live_quota::CacheDirGuard::set(&cache)
 }
 
+/// Write a probe snapshot so `stored_hold` sees a live quota source for this
+/// route. The window sits at 100% so `snapshot_overrides` does not release the
+/// hold — the probe exists to keep Windowed classification, not to clear it.
+fn write_probe_held(cache_dir: &std::path::Path, provider: &str) {
+    std::fs::write(
+        cache_dir.join(format!("{provider}.json")),
+        format!(
+            r#"{{"ok":true,"snapshot":{{"provider":"{provider}","windows":[{{"label":"window","used_percent":100.0,"resets_at":"2099-01-01T00:00:00Z","group":null}}],"fetched_at":"2099-01-01T00:00:00Z"}}}}"#
+        ),
+    )
+    .expect("cache");
+}
+
 /// The refusal aid could not classify at all: a bare status code caught on
 /// stderr, matching no signature. It writes a marker with no recovery time and
 /// no manual hold, and that must expire on its own.
@@ -51,12 +64,14 @@ fn a_transient_refusal_with_no_stated_time_expires_on_its_own() {
 }
 
 /// Windowed grok is not released by elapsed time — only a dated snapshot or
-/// `aid config clear-limit` ends it.
+/// `aid config clear-limit` ends it. A probe is written so the route keeps its
+/// Windowed class; the probe's window sits at 100% so it does not release.
 #[test]
 fn a_windowed_grok_hold_is_not_released_by_elapsed_time() {
     let temp = isolated();
     let _guard = crate::paths::AidHomeGuard::set(temp.path());
     let _cache = isolate_cache(&temp);
+    write_probe_held(&temp.path().join("aidbar"), "grok");
 
     mark_rate_limited(&AgentKind::Grok, None, "API error (status 402 Payment Required): Grok Build usage balance exhausted");
 
@@ -256,6 +271,7 @@ fn a_group_marker_holds_for_a_person_too() {
     let temp = isolated();
     let _guard = crate::paths::AidHomeGuard::set(temp.path());
     let _cache = isolate_cache(&temp);
+    write_probe_held(&temp.path().join("aidbar"), "cursor");
 
     let cursor = AgentKind::Cursor;
     mark_group_rate_limited(&cursor, None, "premium", "ActionRequiredError: Increase limits for faster responses You're out of usage. \
@@ -345,11 +361,14 @@ fn a_cursor_refusal_naming_no_tier_still_marks_the_agent() {
 
 /// `aid run` used to divert only when a recovery time was present. A Windowed
 /// 402 states none, so dispatch must still stop and name the dated-snapshot way
-/// out rather than inventing a clock or saying "cooling down".
+/// out rather than inventing a clock or saying "cooling down". A probe is
+/// written so the route keeps its Windowed class — see the probe-less case below.
 #[test]
 fn a_windowed_hold_blocks_dispatch_and_names_the_way_out() {
     let temp = isolated();
     let _guard = crate::paths::AidHomeGuard::set(temp.path());
+    let _cache = isolate_cache(&temp);
+    write_probe_held(&temp.path().join("aidbar"), "grok");
 
     mark_rate_limited(&AgentKind::Grok, None, "API error (status 402 Payment Required): Grok Build usage balance exhausted");
     let hold = dispatch_blocking_hold(&AgentKind::Grok, None).expect("a Windowed hold must block");
@@ -361,6 +380,46 @@ fn a_windowed_hold_blocks_dispatch_and_names_the_way_out() {
 
     assert!(clear_rate_limit(&AgentKind::Grok, None));
     assert!(dispatch_blocking_hold(&AgentKind::Grok, None).is_none());
+}
+
+/// A probe-less agent's Windowed refusal must state the human-cleared end, not
+/// promise a dated snapshot that can never arrive. grok's 402 is Windowed by
+/// signature (aidbar is assumed to map the billing period to a dated resets_at),
+/// but when no probe exists the recovery condition is unobservable, so the hold
+/// is human-cleared and `aid agent quota` / dispatch must say so plainly.
+#[test]
+fn a_probeless_windowed_refusal_states_a_human_clear_not_a_missing_snapshot() {
+    let temp = isolated();
+    let _guard = crate::paths::AidHomeGuard::set(temp.path());
+    let _cache = isolate_cache(&temp);
+
+    mark_rate_limited(&AgentKind::Grok, None, "API error (status 402 Payment Required): Grok Build usage balance exhausted");
+
+    let hold = dispatch_blocking_hold(&AgentKind::Grok, None)
+        .expect("the refusal must still block dispatch");
+    assert!(
+        !hold.contains("dated grok snapshot"),
+        "a probe-less route must not promise a snapshot; got {hold:?}"
+    );
+    assert!(
+        hold.contains("aid config clear-limit grok"),
+        "the stated end must name the human-clear command; got {hold:?}"
+    );
+
+    let info = get_rate_limit_info(&AgentKind::Grok, None).expect("marker written");
+    assert!(
+        info.needs_human,
+        "a probe-less Windowed refusal is human-cleared, not windowed: {info:?}"
+    );
+    let end = format_hold_end(&AgentKind::Grok, None, &info);
+    assert!(
+        !end.contains("dated grok snapshot"),
+        "quota display must not promise a snapshot for a probe-less route: {end:?}"
+    );
+    assert!(
+        end.contains("aid config clear-limit grok"),
+        "quota display must name the human-clear command: {end:?}"
+    );
 }
 
 /// The other direction of the same gate: a stated time still blocks while it is
@@ -419,6 +478,7 @@ fn a_legacy_marker_is_reclassified_from_the_refusal_it_stored() {
     let temp = isolated();
     let _guard = crate::paths::AidHomeGuard::set(temp.path());
     let _cache = isolate_cache(&temp);
+    write_probe_held(&temp.path().join("aidbar"), "grok");
 
     for (agent, fixture, human) in [
         // "recovery_at: " empty, message a mid-token JSON fragment that still

@@ -113,12 +113,16 @@ A hold ends in one of three ways, and `aid config agents` names which:
 | Status | Ends when | Example |
 |---|---|---|
 | `rate-limited (try again at <time>)` | that time passes | codex usage limit, qwen token-plan window |
-| `rate-limited (until a dated <provider> snapshot with headroom …)` | a newer dated aidbar window shows headroom, or `clear-limit` | grok 402 `usage balance exhausted`; cursor premium `you're out of usage` |
-| `rate-limited (needs manual clear: aid config clear-limit <agent>)` | a person acts | spent opencode balance, copilot monthly/premium, gemini `IneligibleTier` |
+| `rate-limited (until a dated <provider> snapshot with headroom …)` | a newer dated aidbar window shows headroom, or `clear-limit` | cursor premium `you're out of usage`; grok 402 `usage balance exhausted` (when aidbar probes grok) |
+| `rate-limited (needs manual clear: aid config clear-limit <agent>)` | a person acts | spent opencode balance, copilot monthly/premium, gemini `IneligibleTier`; grok 402 with no aidbar probe |
 
 The Windowed class covers refusals that never state a reset time, but whose
 wall is a dated billing window aidbar already probes. A percentage alone
-cannot end them; `resets_at` must be present. Cursor premium matches the
+cannot end them; `resets_at` must be present. A Windowed hold also requires
+aidbar to actually probe the route: when no live snapshot source exists, the
+recovery condition is unobservable, so the hold is human-cleared and `aid agent
+quota` / `aid advise` name `aid config clear-limit` rather than promising a
+dated snapshot that will never arrive. Cursor premium matches the
 `Plan` window only — `On-demand` is never relevant for that group, even at
 115%. The person-only class is prepaid or a plan change: a guessed cooldown
 or a dated spend window would send work back to an account that still cannot

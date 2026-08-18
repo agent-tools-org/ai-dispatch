@@ -8,6 +8,20 @@ use crate::store::Store;
 use crate::types::AgentKind;
 use super::AgentSetup;
 
+/// Whether the aid-resolved model pin on a substituted route must survive
+/// model validation. The pin is aid's own choice to escape an exhausted model
+/// family; a served-list miss is cache/catalog lag, not evidence the model is
+/// unservable, and dropping to the CLI default re-enters the exact family the
+/// hold just proved spent (t-44b30780). User-supplied models still hard-error
+/// inside `validate_model_for_agent`; this only retains a pin aid placed.
+pub(super) fn keep_aid_resolved_pin(
+    substituted_from: Option<&(String, String)>,
+    model_source: crate::agent::model_validation::ModelSource,
+) -> bool {
+    substituted_from.is_some()
+        && model_source == crate::agent::model_validation::ModelSource::AidResolved
+}
+
 pub(super) fn switch_model_held_route(
     args: &mut super::RunArgs,
     agent_kind: &mut AgentKind,

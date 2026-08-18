@@ -1,8 +1,15 @@
 // Built-in substring model pricing lookup (USD per million tokens).
-// Exports: for_model_lower
+// Exports: for_model_lower, is_free_named
 // Deps: super::ModelPricing
 
 use super::ModelPricing;
+
+/// Provider naming convention: an id ending in `-free`, `/free`, or `:free`
+/// is self-declared free. This encodes a suffix convention, not known pricing.
+pub(super) fn is_free_named(model: &str) -> bool {
+    let lower = model.to_lowercase();
+    lower.ends_with("-free") || lower.ends_with("/free") || lower.ends_with(":free")
+}
 
 /// Match `lower` (`model.to_lowercase()`) against known tiers.
 pub(super) fn for_model_lower(m: &str) -> Option<ModelPricing> {
@@ -107,13 +114,7 @@ pub(super) fn for_model_lower(m: &str) -> Option<ModelPricing> {
     // grok intentionally absent: price is unknown (catalog tier "unknown").
     // A plausible rate here would make estimate_cost invent $figures for
     // finished grok tasks that lack agent-reported total_cost_usd.
-    } else if (m.contains("free")
-        && (m.contains("nemotron")
-            || m.contains("minimax")
-            || m.contains("kilo")
-            || m.contains("mimo")))
-        || m.starts_with("mimo/")
-    {
+    } else if is_free_named(m) || m.starts_with("mimo/") {
         return Some(ModelPricing {
             input_per_m: 0.0,
             output_per_m: 0.0,
@@ -157,5 +158,21 @@ mod tests {
         // The old `m.contains("mimo")` substring wrongly zero-costed this.
         assert!(!is_free("opencode/mimo-v2-flash"));
         assert!(!is_free("xiaomi/mimo-v2.5-pro"));
+    }
+
+    #[test]
+    fn free_suffix_is_uniform_not_a_family_allowlist() {
+        assert!(is_free_named("opencode-go/hy3-free"));
+        assert!(is_free_named("opencode/laguna-s-2.1-free"));
+        assert!(is_free("opencode-go/hy3-free"));
+        assert!(is_free("opencode/laguna-s-2.1-free"));
+    }
+
+    #[test]
+    fn free_in_the_middle_of_a_name_is_not_a_free_suffix() {
+        assert!(!is_free_named("opencode/laguna-free-v2"));
+        assert!(!is_free_named("acme/freedom-pro"));
+        assert!(!is_free("opencode/laguna-free-v2"));
+        assert!(!is_free("acme/freedom-pro"));
     }
 }

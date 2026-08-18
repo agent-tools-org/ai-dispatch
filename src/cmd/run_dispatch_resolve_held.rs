@@ -30,8 +30,19 @@ pub(super) fn switch_model_held_route(
     args.cascade = remaining;
     *agent_kind = next_kind;
     *custom_agent_name = (next_kind == AgentKind::Custom).then_some(next_name);
-    *effective_model = None;
     *substituted_from = Some((original, hold));
+    let next_custom = custom_agent_name.as_deref();
+    // `None` would run the fallback's own default model — for agy that is a
+    // gemini one, the exact family the hold just proved exhausted (t-44b30780).
+    // The old model belongs to the substituted CLI, so evaluate the next agent
+    // with no current model and pin a healthy group when it has one (agy on its
+    // claude family); ungrouped agents keep their own default.
+    *effective_model = agent::model_group::healthy_model_for(
+        *agent_kind,
+        None,
+        |group| rate_limit::is_group_rate_limited(agent_kind, next_custom, group),
+    )
+    .map(str::to_string);
     Ok(())
 }
 
@@ -66,7 +77,7 @@ pub(super) fn skip_held_to_fallback(
         // A custom candidate is held under its own name, not the shared
         // `custom` marker — see rate_limit::marker_path.
         let candidate_custom = (*kind == AgentKind::Custom).then_some(name.as_str());
-        if rate_limit::dispatch_blocking_hold(kind, candidate_custom).is_none() {
+        if !candidate_is_blocked(kind, candidate_custom) {
             return Ok((
                 *kind,
                 name.clone(),
@@ -78,13 +89,32 @@ pub(super) fn skip_held_to_fallback(
         }
     }
     if let Some(fb) = crate::agent::selection::coding_fallback_for_prompt(&held_kind, prompt)
-        .filter(|fb| rate_limit::dispatch_blocking_hold(fb, None).is_none())
+        .filter(|fb| !candidate_is_blocked(fb, None))
     {
         return Ok((fb, fb.as_str().to_string(), vec![]));
     }
     anyhow::bail!(
         "{held_name} is held ({hold}). Use --cascade <agent> or `aid config clear-limit {held_name}` to clear."
     )
+}
+
+/// Whether a fallback candidate can actually take the work. An agent-level
+/// hold blocks outright; a candidate with a static family table (agy, cursor)
+/// is blocked when every group it can draw on is held — the agent-level
+/// marker alone would miss `rate-limit-agy--gemini`, so a substitution would
+/// hand the task to an allowance that is already spent (t-44b30780). opencode
+/// keeps its dynamic provider markers; its candidate check stays agent-level.
+fn candidate_is_blocked(kind: &AgentKind, custom_name: Option<&str>) -> bool {
+    if rate_limit::dispatch_blocking_hold(kind, custom_name).is_some() {
+        return true;
+    }
+    let groups = crate::agent::model_group::groups_for_agent(*kind);
+    if groups.is_empty() {
+        return false;
+    }
+    groups.iter().all(|(group, _)| {
+        rate_limit::is_group_rate_limited(kind, custom_name, group)
+    })
 }
 
 fn wall_label(wall: crate::route_availability::QuotaWall) -> &'static str {

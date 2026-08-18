@@ -14,6 +14,15 @@ use super::AgentSetup;
 /// unservable, and dropping to the CLI default re-enters the exact family the
 /// hold just proved spent (t-44b30780). User-supplied models still hard-error
 /// inside `validate_model_for_agent`; this only retains a pin aid placed.
+///
+/// This is deliberately broader than the family pin from `healthy_model_for`:
+/// `switch_agent` clears `args.model`, so every `effective_model` on a
+/// substituted route arrives as `ModelSource::AidResolved` — including a model
+/// read from `agent_config.toml` for the fallback agent or one picked by budget
+/// mode. The same trade applies to those: a served-list miss is not proof the
+/// CLI will reject the model, and the fallback's own default can re-enter the
+/// exhausted group on a family-metered agent. See
+/// `substituted_route_keeps_agent_config_model_despite_served_list_miss`.
 pub(super) fn keep_aid_resolved_pin(
     substituted_from: Option<&(String, String)>,
     model_source: crate::agent::model_validation::ModelSource,

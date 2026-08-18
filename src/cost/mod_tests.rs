@@ -106,6 +106,19 @@ fn discovered_agy_model_does_not_inherit_similar_model_pricing() {
 }
 
 #[test]
+fn discovered_opencode_model_does_not_inherit_similar_model_pricing() {
+    let _guard = isolated();
+    clear_feed_for_tests();
+    let cost = estimate_cost(
+        1_000_000,
+        Some("opencode-go/glm-5.2"),
+        AgentKind::OpenCode,
+    );
+    assert_eq!(cost, None);
+    assert_eq!(format_cost(cost), "unknown");
+}
+
+#[test]
 fn commandcode_unknown_model_stays_unknown() {
     let _guard = isolated();
     assert_eq!(

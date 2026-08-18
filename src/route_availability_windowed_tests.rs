@@ -76,8 +76,22 @@ fn incident_marker() -> String {
     format!("recovery_at:\nhold: manual\nprovider: unknown\nmessage: {GROK_402}\n")
 }
 
+/// A probe is written so the route keeps its Windowed class — the signature
+/// assumes aidbar maps the billing period to a dated resets_at. Without a probe
+/// the recovery is unobservable and the hold becomes human-cleared (see
+/// `rate_limit_hold_tests::a_probeless_windowed_refusal_states_a_human_clear`).
+fn write_grok_probe(iso: &Isolated) {
+    write_cache(
+        &iso.cache_dir,
+        "grok",
+        &window("Aug 11 – Aug 18", 100.0, Some(DATED), None),
+    );
+}
+
 #[test]
 fn incident_marker_classifies_as_windowed_never_needs_human() {
+    let iso = isolated();
+    write_grok_probe(&iso);
     for content in [incident_marker(), grok_fixture()] {
         assert!(
             matches!(stored_hold(&content, &AgentKind::Grok), StoredHold::Windowed),
@@ -116,7 +130,8 @@ fn grok_undated_zero_percent_stays_held() {
 
 #[test]
 fn grok_fixture_format_hold_end_is_not_cooling_down() {
-    let _iso = isolated();
+    let iso = isolated();
+    write_grok_probe(&iso);
     std::fs::write(marker_path(&AgentKind::Grok, None), grok_fixture()).expect("marker");
     let info = get_rate_limit_info(&AgentKind::Grok, None).expect("info");
     let end = format_hold_end(&AgentKind::Grok, None, &info);

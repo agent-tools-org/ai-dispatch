@@ -60,6 +60,9 @@ pub(crate) fn classify_hold(message: &str) -> Hold {
 }
 
 /// Windowed signature match runs before `hold: manual`. Unmatched manual stays NeedsHuman.
+/// A Windowed hold ends only when a dated live snapshot arrives; if this route
+/// has no probe, that condition is unobservable, so the hold is human-cleared
+/// rather than promising a snapshot that will never come.
 pub(crate) fn stored_hold(content: &str, agent: &AgentKind) -> StoredHold {
     if let Some(recovery_at) = marker_field(content, "recovery_at: ")
         .as_deref()
@@ -68,7 +71,10 @@ pub(crate) fn stored_hold(content: &str, agent: &AgentKind) -> StoredHold {
         return StoredHold::Until(recovery_at);
     }
     if stored_refusal_matches(content, agent, QuotaRecovery::Windowed) {
-        return StoredHold::Windowed;
+        if live_quota::snapshot(agent).is_some() {
+            return StoredHold::Windowed;
+        }
+        return StoredHold::NeedsHuman;
     }
     if marker_field(content, "hold: ").as_deref() == Some(MANUAL_HOLD)
         || stored_refusal_matches(content, agent, QuotaRecovery::NeedsHuman)

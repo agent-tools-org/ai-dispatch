@@ -1,5 +1,5 @@
 // OpenCode `models` CLI probe and parser.
-// Exports: probe_served_models, parse_opencode_models_output.
+// Exports: probe_served_models, parse_opencode_models_output, served_models_from_cli_output.
 // Deps: model_validation::run_probe_cmd.
 
 use anyhow::Result;
@@ -11,8 +11,16 @@ pub(crate) fn probe_served_models() -> Result<Option<Vec<String>>> {
     let Some(output) = super::model_validation::run_probe_cmd(cmd) else {
         return Ok(None);
     };
-    let models = parse_opencode_models_output(&output.stdout);
-    Ok(if models.is_empty() { None } else { Some(models) })
+    Ok(served_models_from_cli_output(&output.stdout))
+}
+
+pub(crate) fn served_models_from_cli_output(output: &str) -> Option<Vec<String>> {
+    let models = parse_opencode_models_output(output);
+    if models.is_empty() {
+        None
+    } else {
+        Some(models)
+    }
 }
 
 pub(crate) fn parse_opencode_models_output(output: &str) -> Vec<String> {

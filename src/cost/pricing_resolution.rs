@@ -8,7 +8,7 @@ use crate::types::{provider_for_cli, AgentKind, MeteringShape};
 
 pub(super) fn resolve_model_pricing(model: &str, agent: AgentKind) -> Option<ModelPricing> {
     if model_catalog::is_unpriced_discovered_model(agent, model) {
-        return None;
+        return declared_free_name_pricing(model);
     }
     if let Some((feed, index)) = feed_index()
         && let Some(entry) = price_feed::feed_lookup(&feed, &index, model)
@@ -25,4 +25,14 @@ pub(super) fn resolve_model_pricing(model: &str, agent: AgentKind) -> Option<Mod
         });
     }
     pricing_builtin::for_model_lower(&model.to_lowercase())
+}
+
+/// Self-declared free names stay $0.00. Similar-model rates must not fill in.
+fn declared_free_name_pricing(model: &str) -> Option<ModelPricing> {
+    let lower = model.to_lowercase();
+    if !lower.contains("free") {
+        return None;
+    }
+    let pricing = pricing_builtin::for_model_lower(&lower)?;
+    (pricing.input_per_m == 0.0 && pricing.output_per_m == 0.0).then_some(pricing)
 }

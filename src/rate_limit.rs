@@ -683,6 +683,23 @@ mod tests {
     }
 
     #[test]
+    fn format_recovery_output_round_trips_through_parse_recovery_datetime() {
+        // format_recovery writes "%b %d, %Y %I:%M %p" — e.g. "Aug 18, 2026 02:41 PM".
+        // A dated hold whose marker aid wrote itself must read back as held, or
+        // the dispatch picker treats it as a long-expired transient (t-44b30780).
+        for minutes_from_now in [1, 232, 1440] {
+            let at = Local::now().naive_local() + chrono::Duration::minutes(minutes_from_now);
+            let written = format_recovery(at);
+            let parsed = parse_recovery_datetime(&written).unwrap_or_else(|| {
+                panic!("format_recovery output must parse back: {written:?}")
+            });
+            // Minute precision: the format drops seconds, so compare to the minute.
+            let expected = at.date().and_hms_opt(at.hour(), at.minute(), 0).unwrap();
+            assert_eq!(parsed, expected, "round trip of {written:?} must be exact");
+        }
+    }
+
+    #[test]
     fn test_is_rate_limit_error() {
         assert!(is_rate_limit_error(
             "You have hit your usage limit. try again at Mar 19th, 2026 2:27 PM."

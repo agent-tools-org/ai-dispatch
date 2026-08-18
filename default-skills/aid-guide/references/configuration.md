@@ -58,7 +58,11 @@ aid credential --help
 
 Use `aid config agents` to see configured and detected agents. Built-in dispatch
 probes binaries by their real CLI names, for example `grok` and `commandcode`
-(not the generic `agent` alias used by cursor). Register a local custom agent
+(not the generic `agent` alias used by cursor). `aid agent config <agent> --model <id>`
+writes the per-agent default to `~/.aid/agent_config.toml`. That default is sticky:
+`aid run` and `aid batch` use it whenever `--model` / `model =` is omitted, including
+when a budget is declared. `--model` always wins. With no configured default, aid
+uses the catalog model for the declared budget. Register a local custom agent
 with `config add-agent`. Use `clear-limit` only after confirming a provider's
 rate-limit condition has cleared. Each custom agent has its own marker keyed on
 its id (`rate-limit-<id>`), so one custom hitting quota does not hold the

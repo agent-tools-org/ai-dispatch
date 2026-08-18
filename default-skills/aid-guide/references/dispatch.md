@@ -85,8 +85,14 @@ Important controls:
 
 - `--difficulty` declares `trivial`, `simple`, `moderate`, or `complex` capability needs.
 - `--budget` declares a preferred `free`, `cheap`, `standard`, or `premium` model
-  tier. It is a preference, not a hard constraint: when no catalog model sits on
-  a preferred tier, aid warns on stderr (agent, declared budget, model actually
+  tier. For an explicit agent, model selection is `--model`, then the per-agent
+  default in `~/.aid/agent_config.toml` (`aid agent config <agent> --model`), then
+  the catalog pick for the declared budget. A configured default is sticky like
+  `--model`: it outranks the catalog budget pick. `aid run` and `aid batch` share
+  that order. When the configured default outranks a `free` or `cheap` declaration
+  whose catalog still has a preferred-tier row, aid warns once on stderr that the
+  configured default overrode the declared budget. When no catalog model sits on a
+  preferred tier, aid warns on stderr (agent, declared budget, model actually
   chosen) and still dispatches. Catalog tier `unknown` means unpriced, not
   ineligible — it is selectable as a last resort after the known tiers at every
   budget level.

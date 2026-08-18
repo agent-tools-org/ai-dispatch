@@ -50,11 +50,12 @@ pub(crate) fn task_to_run_args(
     } else {
         task.skills.clone().unwrap_or_default()
     };
-    let profile_model = task.budget.and_then(|budget| {
-        crate::types::AgentKind::parse_str(&agent_name)
-            .and_then(|kind| crate::agent::selection::model_for_task_budget(kind, budget))
-            .map(str::to_string)
-    });
+    let profile_model = crate::agent::selection::resolve_explicit_agent_model(
+        &agent_name,
+        task.model.as_deref(),
+        task.budget,
+        false,
+    );
     let model_source = if task.model.is_some() {
         ModelSource::UserSupplied
     } else {
@@ -194,6 +195,71 @@ mod tests {
         let args = task_to_run_args(&task, &[], false, &store, None);
 
         assert!(args.model.is_some(), "budget should select a model");
+        assert_eq!(args.model_source, ModelSource::AidResolved);
+    }
+
+    fn batch_task(toml: &str) -> (tempfile::TempDir, crate::paths::AidHomeGuard, batch::BatchTask) {
+        let home = tempfile::tempdir().expect("temporary aid home");
+        let guard = crate::paths::AidHomeGuard::set(home.path());
+        let task: batch::BatchTask = toml::from_str(toml).expect("valid batch task");
+        (home, guard, task)
+    }
+
+    #[test]
+    fn configured_default_outranks_declared_batch_budget() {
+        let (_home, _guard, task) = batch_task(
+            r#"
+            agent = "gemini"
+            prompt = "say hi"
+            budget = "cheap"
+            "#,
+        );
+        crate::agent_config::save_agent_default_model("gemini", Some("pro")).expect("save config");
+        let store = Arc::new(Store::open_memory().expect("in-memory store"));
+
+        let args = task_to_run_args(&task, &[], false, &store, None);
+
+        assert_eq!(
+            args.model.as_deref(),
+            Some("pro"),
+            "batch must match run: configured default outranks catalog cheap pick flash-lite"
+        );
+        assert_eq!(args.model_source, ModelSource::AidResolved);
+    }
+
+    #[test]
+    fn batch_task_model_beats_configured_default() {
+        let (_home, _guard, task) = batch_task(
+            r#"
+            agent = "gemini"
+            prompt = "say hi"
+            budget = "cheap"
+            model = "flash"
+            "#,
+        );
+        crate::agent_config::save_agent_default_model("gemini", Some("pro")).expect("save config");
+        let store = Arc::new(Store::open_memory().expect("in-memory store"));
+
+        let args = task_to_run_args(&task, &[], false, &store, None);
+
+        assert_eq!(args.model.as_deref(), Some("flash"));
+        assert_eq!(args.model_source, ModelSource::UserSupplied);
+    }
+
+    #[test]
+    fn batch_uses_catalog_when_no_default_is_configured() {
+        let (_home, _guard, task) = batch_task(
+            r#"
+            agent = "gemini"
+            prompt = "say hi"
+            budget = "cheap"
+            "#,
+        );
+        let store = Arc::new(Store::open_memory().expect("in-memory store"));
+
+        let args = task_to_run_args(&task, &[], false, &store, None);
+
+        assert_eq!(args.model.as_deref(), Some("flash-lite"));
         assert_eq!(args.model_source, ModelSource::AidResolved);
     }
 }

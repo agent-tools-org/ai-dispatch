@@ -415,6 +415,13 @@ discovered model without catalog metadata has `null` `input_per_m`,
 `output_per_m`, and `capability`; cost displays report `unknown`. Dispatch-time
 catalog readers use only the bounded 24-hour cache and never initiate this discovery probe.
 
+Two different things can print as $0.00, and they are not interchangeable. A
+model whose id ends in `-free`, `/free`, or `:free` is treated as
+self-declared free by the provider's naming convention and costs 0.0; a catalog
+row whose tier is `unknown` stores 0.0/0.0 to mean "no figure on record" and
+costs `unknown`, never free. A static catalog row's own price outranks both
+discovery and the name convention.
+
 For providers represented by aidbar, a successful cached snapshot can release a
 time-based, transient, or Windowed older marker for this dispatch decision only
 when its `fetched_at` is newer than the marker file's modification time and

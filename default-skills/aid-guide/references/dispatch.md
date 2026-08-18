@@ -402,6 +402,18 @@ default runs instead, because a stale catalog entry is aid's problem to absorb,
 not a reason to refuse your dispatch. Where the CLI cannot be asked what it
 serves, dispatch proceeds unvalidated and says so.
 
+One exception: on a substituted route — where a held agent was replaced by a
+fallback before dispatch — an aid-resolved model survives a served-list miss
+rather than being dropped. The substitution already proved the requested
+family spent, and the fallback's own default can re-enter that exhausted
+family (agy's default is a gemini model, the group the hold just escaped), so
+the aid-resolved pin is retained through the cache lag. This covers any
+aid-resolved effective model on the substituted route, not only the healthy
+family pin: `switch_agent` clears `--model`, so a fallback's per-agent default
+or a budget-picked model arrives as aid-resolved too, and the same trade
+applies. A served-list miss is cache lag, not proof the CLI will reject the
+model.
+
 The served list is cached on disk for 24 hours, so a slow CLI is asked once
 rather than on every dispatch. When the model you asked for is absent from the
 cached list, aid re-probes once before rejecting it, so a model the CLI gained

@@ -276,7 +276,7 @@ pub(super) fn resolve_agent_setup(store: &Arc<Store>, args: &mut RunArgs) -> Res
     let model_source = args.model.as_ref().map(|_| args.model_source).unwrap_or(agent::model_validation::ModelSource::AidResolved);
     args.model_source = model_source;
     if let Some(ref model) = effective_model {
-        if !agent::model_validation::validate_model_for_agent(agent.as_ref(), model, model_source)? {
+        if !held::keep_aid_resolved_pin(substituted_from.as_ref(), model_source) && !agent::model_validation::validate_model_for_agent(agent.as_ref(), model, model_source)? {
             effective_model = None;
         }
     }

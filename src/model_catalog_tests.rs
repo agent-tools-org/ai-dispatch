@@ -168,6 +168,29 @@ fn droid_budget_picks_core_and_default_stays_opus() {
             "removed catalog alias {alias} must not return"
         );
     }
+    for id in [
+        "glm-5.2",
+        "glm-5.2-fast",
+        "kimi-k3",
+        "kimi-k2.7-code",
+        "kimi-k2.6",
+        "deepseek-v4-flash-0731",
+        "deepseek-v4-pro",
+        "minimax-m3",
+        "minimax-m2.7",
+        "inkling",
+        "nemotron-3-ultra",
+    ] {
+        let row = models
+            .iter()
+            .find(|row| row.model == id)
+            .unwrap_or_else(|| panic!("{id} must stay in the catalog"));
+        assert_eq!(row.tier, "cheap", "{id} is Core");
+        assert!(
+            row.description.contains("Droid Core"),
+            "{id} must read as Droid Core in aid agent list"
+        );
+    }
     for row in &models {
         assert_eq!(row.input_per_m, 0.0, "{} must not invent a rate", row.model);
         assert_eq!(row.output_per_m, 0.0, "{} must not invent a rate", row.model);

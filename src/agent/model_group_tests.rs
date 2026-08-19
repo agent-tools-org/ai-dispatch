@@ -139,13 +139,43 @@ fn no_current_model_still_finds_a_healthy_group() {
 const DROID_WEEKLY_402: &str = r#"{"type":"error","source":"agent_loop","message":"402 {\"detail\":\"You've reached your weekly standard usage limit (resets in 2 days).\nSwitch to Droid Core or enable Extra Usage to continue.\",\"status\":402,\"title\":\"Payment Required\",\"displayToUser\":true}"}"#;
 
 #[test]
-fn droid_core_is_only_the_confirmed_allowlist() {
+fn droid_core_follows_factory_billing_pool() {
     let droid = AgentKind::Droid;
-    assert_eq!(model_group(droid, Some("glm-5.2")), Some("core"));
-    assert_eq!(model_group(droid, Some("kimi-k3")), Some("core"));
-    assert_eq!(model_group(droid, Some("minimax-m3")), Some("core"));
-    assert_eq!(model_group(droid, Some("deepseek-v4-flash-0731")), Some("core"));
-    assert_eq!(model_group(droid, Some("GLM-5.2")), Some("core"));
+    for model in [
+        "glm-5.2",
+        "glm-5.2-fast",
+        "kimi-k3",
+        "kimi-k2.7-code",
+        "kimi-k2.6",
+        "deepseek-v4-flash-0731",
+        "deepseek-v4-pro",
+        "minimax-m3",
+        "minimax-m2.7",
+        "inkling",
+        "nemotron-3-ultra",
+        "GLM-5.2",
+        // deprecated / availableInCLI:!1, still billingPool:"core"
+        "glm-4.6",
+        "shield-risk",
+    ] {
+        assert_eq!(
+            model_group(droid, Some(model)),
+            Some("core"),
+            "{model} is billingPool:core"
+        );
+    }
+}
+
+/// inkling and nemotron-3-ultra were not in the 2026-08-19 probe. Factory
+/// still labels both billingPool:"core" and CLI-selectable. Narrowing the
+/// allowlist back to the four probed ids must fail here.
+#[test]
+fn an_unprobed_cli_core_model_is_still_core() {
+    assert_eq!(model_group(AgentKind::Droid, Some("inkling")), Some("core"));
+    assert_eq!(
+        model_group(AgentKind::Droid, Some("nemotron-3-ultra")),
+        Some("core")
+    );
 }
 
 #[test]
@@ -157,8 +187,6 @@ fn every_other_droid_name_is_standard_including_unknown_and_none() {
         "gpt-5.6-luna",
         "grok-4.6",
         "auto",
-        "glm-5.2-fast",
-        "kimi-k2.6",
         "not-a-real-model",
     ] {
         assert_eq!(

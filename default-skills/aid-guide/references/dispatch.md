@@ -158,7 +158,8 @@ The terminal outcomes are:
 - `Delivered`: delivered without required verification.
 - `Broken`: delivered but verification failed.
 - `Unverified`: delivered, but verification was inconclusive because it timed
-  out, failed as infrastructure, or produced no result.
+  out, failed as infrastructure, produced no result, or the agent exited
+  unobserved after a foreground detach (kill and success cannot be told apart).
 - `Failed`, `Stopped`, and `Skipped`: the task did not produce a successful
   delivery; `InProgress` is non-terminal.
 

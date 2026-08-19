@@ -52,7 +52,7 @@ pub(super) fn task_json(store: &Arc<Store>, task_id: &str) -> Result<String> {
             });
     let output = output_text_for_task(store.as_ref(), task_id, true).ok();
     let checklist_status = cmd::show_checklist::render_checklist_status(store.as_ref(), &task);
-    let payload = serde_json::json!({
+    let mut payload = serde_json::json!({
         "id": task.id.as_str(),
         "agent": task.agent_display_name(),
         "custom_agent": task.custom_agent_name,
@@ -99,6 +99,9 @@ pub(super) fn task_json(store: &Arc<Store>, task_id: &str) -> Result<String> {
             "deletions": deletions,
         },
     });
+    // Set after the `json!` payload: folding another field into that macro
+    // hits the default recursion limit.
+    payload["outcome"] = serde_json::Value::String(task.outcome().as_str().to_string());
     serde_json::to_string(&payload).map_err(Into::into)
 }
 

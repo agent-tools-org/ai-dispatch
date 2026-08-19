@@ -23,9 +23,11 @@ task succeeded or that the principal accepted the result.
 
 Verification is a separate axis. A configured verify command starts with
 `VerifyStatus::Pending` and ends as `Passed`, `Failed`, `TimedOut`,
-`InfrastructureFailure`, or `Skipped`. `TimedOut` and
-`InfrastructureFailure` are inconclusive rather than evidence that the change
-is broken. A build environment that cannot run is one of those cases: when
+`InfrastructureFailure`, or `Skipped`. `Unobserved` is set when a deliberately
+detached foreground task's agent exits with no surviving completion event —
+not a verify result, an unknown process outcome. `TimedOut`,
+`InfrastructureFailure`, and `Unobserved` are inconclusive rather than
+evidence that the change is broken. A build environment that cannot run is one of those cases: when
 cargo is denied write access to the configured target directory, aid retries
 against a writable temporary target, and if that still fails the task is
 recorded `InfrastructureFailure` (`Unverified`) rather than `Failed`

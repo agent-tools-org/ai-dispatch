@@ -74,7 +74,8 @@ impl TaskOutcome {
                 | VerifyStatus::Failed
                 | VerifyStatus::Skipped
                 | VerifyStatus::TimedOut
-                | VerifyStatus::InfrastructureFailure,
+                | VerifyStatus::InfrastructureFailure
+                | VerifyStatus::Unobserved,
                 false | true,
             ) => Self::InProgress,
             (
@@ -84,7 +85,8 @@ impl TaskOutcome {
                 | VerifyStatus::Failed
                 | VerifyStatus::Skipped
                 | VerifyStatus::TimedOut
-                | VerifyStatus::InfrastructureFailure,
+                | VerifyStatus::InfrastructureFailure
+                | VerifyStatus::Unobserved,
                 false | true,
             ) => Self::Failed,
             (
@@ -94,7 +96,8 @@ impl TaskOutcome {
                 | VerifyStatus::Failed
                 | VerifyStatus::Skipped
                 | VerifyStatus::TimedOut
-                | VerifyStatus::InfrastructureFailure,
+                | VerifyStatus::InfrastructureFailure
+                | VerifyStatus::Unobserved,
                 false | true,
             ) => Self::Stopped,
             (
@@ -104,7 +107,8 @@ impl TaskOutcome {
                 | VerifyStatus::Failed
                 | VerifyStatus::Skipped
                 | VerifyStatus::TimedOut
-                | VerifyStatus::InfrastructureFailure,
+                | VerifyStatus::InfrastructureFailure
+                | VerifyStatus::Unobserved,
                 false | true,
             ) => Self::Skipped,
             (TaskStatus::Done | TaskStatus::Merged, VerifyStatus::Passed, false | true) => {
@@ -123,6 +127,11 @@ impl TaskOutcome {
                 VerifyStatus::InfrastructureFailure,
                 false | true,
             ) => Self::Unverified(UnverifiedReason::Infrastructure),
+            (
+                TaskStatus::Done | TaskStatus::Merged,
+                VerifyStatus::Unobserved,
+                false | true,
+            ) => Self::Unverified(UnverifiedReason::NoResult),
             (
                 TaskStatus::Done | TaskStatus::Merged,
                 VerifyStatus::Skipped | VerifyStatus::Pending,

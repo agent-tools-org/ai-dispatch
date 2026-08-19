@@ -145,6 +145,7 @@ pub(super) fn run_background_task(
         container: args.container.clone(),
         link_deps: args.link_deps,
         pre_task_dirty_paths,
+        detached: false,
     };
     background::save_spec(&spec)?;
     let mut worker = match background::spawn_worker(prepared.task_id.as_str()) {

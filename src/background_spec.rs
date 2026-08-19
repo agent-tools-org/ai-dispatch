@@ -80,6 +80,11 @@ pub struct BackgroundRunSpec {
     pub link_deps: bool,
     #[serde(default)]
     pub pre_task_dirty_paths: Option<Vec<String>>,
+    /// Deliberate foreground detach marker. When true, the reaper adopts the
+    /// task (leaves the agent alive) instead of reaping it as a dead-worker
+    /// zombie. Set only by the non-interactive SIGTERM/SIGHUP detach path.
+    #[serde(default)]
+    pub detached: bool,
 }
 
 fn default_link_deps() -> bool { true }
@@ -122,7 +127,7 @@ pub fn load_worker_pid(task_id: &str) -> Result<Option<u32>> {
     Ok(load_spec_if_exists(task_id)?.and_then(|spec| spec.worker_pid))
 }
 
-pub(crate) fn load_spec_if_exists(task_id: &str) -> Result<Option<BackgroundRunSpec>> {
+pub fn load_spec_if_exists(task_id: &str) -> Result<Option<BackgroundRunSpec>> {
     sanitize::validate_task_id(task_id)?;
     let path = paths::job_path(task_id);
     if !path.exists() {
@@ -182,6 +187,7 @@ mod tests {
             container: Some("aid:test".to_string()),
             link_deps: true,
             pre_task_dirty_paths: Some(vec!["?? pre-existing.rs".to_string()]),
+            detached: false,
         }
     }
 

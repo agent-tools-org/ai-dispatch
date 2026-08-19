@@ -11,6 +11,8 @@ mod background_kill;
 mod background_orphan;
 #[path = "background_reaper.rs"]
 mod background_reaper;
+#[path = "background_adopt.rs"]
+mod background_adopt;
 #[path = "background_spec.rs"]
 mod background_spec;
 #[path = "background_waiting.rs"]
@@ -36,7 +38,7 @@ use crate::types::{AgentKind, TaskFilter, TaskId};
 const MAX_WORKERS: usize = 32;
 
 pub use self::background_process::{is_process_running, kill_process, load_agent_pid, sigkill_process, update_agent_pid};
-pub use self::background_spec::{load_worker_pid, save_spec, BackgroundRunSpec};
+pub use self::background_spec::{load_spec_if_exists, load_worker_pid, save_spec, BackgroundRunSpec};
 pub(crate) use self::background_process::update_worker_pid;
 pub(crate) use self::background_reaper::{check_zombie_tasks_with, record_failure};
 #[cfg(test)]
@@ -44,7 +46,6 @@ pub(crate) use self::background_reaper::cleanup_stale_pending_tasks;
 #[cfg(test)]
 pub(crate) use self::background_reaper::{fail_stale_pending_task, ZOMBIE_FAILURE_DETAIL};
 pub(crate) use self::background_spec::clear_spec;
-
 pub fn spawn_worker(task_id: &str) -> Result<Child> {
     sanitize::validate_task_id(task_id)?;
     let exe = std::env::current_exe().context("Failed to resolve current aid binary")?;

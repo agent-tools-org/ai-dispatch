@@ -135,6 +135,31 @@ When the recorded linked worktree still exists, retry reuses it with the
 original repository checkout as its anchor. Retry still refuses a target branch
 that is genuinely checked out in the checkout that dispatched the task.
 
+### Foreground signal behavior
+
+A foreground `aid run` or `aid retry` classifies signals by whether stdin is a
+TTY:
+
+- **Interactive (stdin is a TTY), SIGINT/Ctrl-C**: stops the agent and records
+  `Stopped`. This is the existing session-end behavior.
+- **Non-interactive (stdin is not a TTY), SIGTERM or SIGHUP**: **detaches**.
+  Aid hard-exits without sending a stop signal to the agent, records a
+  `detached` milestone, and prints `aid watch --wait <task-id>` for reattach.
+  The task stays `Running`; the background reaper adopts it on the next `aid`
+  invocation instead of reaping the dead worker and killing the agent.
+- **SIGINT without a TTY**: still stops. SIGINT means interrupt, not a harness
+  timeout.
+
+Detach covers non-PTY agents (codex, gemini, agy, and other piped CLIs).
+PTY agents (opencode, mimocode, kilo) die when the PTY master closes on aid's
+exit, so detach cannot preserve them. The `detached` marker is set on the
+background spec only when the non-interactive detach path actually runs; a
+genuinely dead worker with no marker is still reaped as before.
+
+When the reaper finds a detached task whose agent has also exited, it records
+`Done` (the agent ran to completion; the exit code is not recoverable). Inspect
+`aid show <task-id>` for the actual result.
+
 ## Merge
 
 ```bash

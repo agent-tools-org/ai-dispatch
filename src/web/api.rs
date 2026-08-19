@@ -27,6 +27,7 @@ pub struct TaskResponse {
     pub prompt: String,
     pub resolved_prompt: Option<String>,
     pub status: String,
+    pub outcome: String,
     pub parent_task_id: Option<String>,
     pub workgroup_id: Option<String>,
     pub caller_kind: Option<String>,
@@ -105,6 +106,7 @@ impl TaskResponse {
         latest_milestone: Option<String>,
         latest_error: Option<String>,
     ) -> Self {
+        let outcome = task.outcome().as_str().to_string();
         Self {
             id: task.id.to_string(),
             agent: task.agent.as_str().to_string(),
@@ -112,6 +114,7 @@ impl TaskResponse {
             prompt: task.prompt,
             resolved_prompt: task.resolved_prompt,
             status: task.status.as_str().to_string(),
+            outcome,
             parent_task_id: task.parent_task_id,
             workgroup_id: task.workgroup_id,
             caller_kind: task.caller_kind,

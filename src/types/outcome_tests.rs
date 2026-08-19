@@ -7,7 +7,7 @@ use crate::types::{
     VerifyStatus,
 };
 
-const GOLDEN_TABLE: [(TaskStatus, VerifyStatus, bool, TaskOutcome); 120] = [
+const GOLDEN_TABLE: [(TaskStatus, VerifyStatus, bool, TaskOutcome); 140] = [
     (TaskStatus::Waiting, VerifyStatus::Pending, false, TaskOutcome::InProgress),
     (TaskStatus::Waiting, VerifyStatus::Pending, true, TaskOutcome::InProgress),
     (TaskStatus::Waiting, VerifyStatus::Passed, false, TaskOutcome::InProgress),
@@ -128,6 +128,28 @@ const GOLDEN_TABLE: [(TaskStatus, VerifyStatus, bool, TaskOutcome); 120] = [
     (TaskStatus::Stopped, VerifyStatus::TimedOut, true, TaskOutcome::Stopped),
     (TaskStatus::Stopped, VerifyStatus::InfrastructureFailure, false, TaskOutcome::Stopped),
     (TaskStatus::Stopped, VerifyStatus::InfrastructureFailure, true, TaskOutcome::Stopped),
+    // VerifyStatus::Unobserved — agent exited after deliberate foreground
+    // detach with no watcher alive to observe the result.
+    (TaskStatus::Waiting, VerifyStatus::Unobserved, false, TaskOutcome::InProgress),
+    (TaskStatus::Waiting, VerifyStatus::Unobserved, true, TaskOutcome::InProgress),
+    (TaskStatus::Pending, VerifyStatus::Unobserved, false, TaskOutcome::InProgress),
+    (TaskStatus::Pending, VerifyStatus::Unobserved, true, TaskOutcome::InProgress),
+    (TaskStatus::Running, VerifyStatus::Unobserved, false, TaskOutcome::InProgress),
+    (TaskStatus::Running, VerifyStatus::Unobserved, true, TaskOutcome::InProgress),
+    (TaskStatus::AwaitingInput, VerifyStatus::Unobserved, false, TaskOutcome::InProgress),
+    (TaskStatus::AwaitingInput, VerifyStatus::Unobserved, true, TaskOutcome::InProgress),
+    (TaskStatus::Stalled, VerifyStatus::Unobserved, false, TaskOutcome::InProgress),
+    (TaskStatus::Stalled, VerifyStatus::Unobserved, true, TaskOutcome::InProgress),
+    (TaskStatus::Done, VerifyStatus::Unobserved, false, TaskOutcome::Unverified(UnverifiedReason::NoResult)),
+    (TaskStatus::Done, VerifyStatus::Unobserved, true, TaskOutcome::Unverified(UnverifiedReason::NoResult)),
+    (TaskStatus::Merged, VerifyStatus::Unobserved, false, TaskOutcome::Unverified(UnverifiedReason::NoResult)),
+    (TaskStatus::Merged, VerifyStatus::Unobserved, true, TaskOutcome::Unverified(UnverifiedReason::NoResult)),
+    (TaskStatus::Failed, VerifyStatus::Unobserved, false, TaskOutcome::Failed),
+    (TaskStatus::Failed, VerifyStatus::Unobserved, true, TaskOutcome::Failed),
+    (TaskStatus::Skipped, VerifyStatus::Unobserved, false, TaskOutcome::Skipped),
+    (TaskStatus::Skipped, VerifyStatus::Unobserved, true, TaskOutcome::Skipped),
+    (TaskStatus::Stopped, VerifyStatus::Unobserved, false, TaskOutcome::Stopped),
+    (TaskStatus::Stopped, VerifyStatus::Unobserved, true, TaskOutcome::Stopped),
 ];
 
 /// `ALL` is a fixed-size array, so a new enum variant does not break it and the
@@ -157,11 +179,12 @@ fn all_lists_stay_in_step_with_their_enums() {
             | VerifyStatus::Failed
             | VerifyStatus::Skipped
             | VerifyStatus::TimedOut
-            | VerifyStatus::InfrastructureFailure => {}
+            | VerifyStatus::InfrastructureFailure
+            | VerifyStatus::Unobserved => {}
         }
     }
     assert_eq!(TaskStatus::ALL.len(), 10);
-    assert_eq!(VerifyStatus::ALL.len(), 6);
+    assert_eq!(VerifyStatus::ALL.len(), 7);
 }
 
 #[test]

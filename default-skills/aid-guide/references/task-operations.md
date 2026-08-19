@@ -48,8 +48,10 @@ stated explicitly and the fallback is this task's own log.
 Human task surfaces use verification tags only when verification has something
 to say: `VFAIL` for a failed verification, `VTIMEOUT` for a timeout, `VINFRA`
 for a verification infrastructure failure, and `VNORESULT` when a required
-verification has no result. Running tasks and tasks without a verify command
-have no tag. The tags appear in board rows, `aid show`, the TUI, and task detail.
+verification has no result or when a detached agent exited unobserved (a kill
+and a success cannot be distinguished). Running tasks and tasks that skipped
+verification without that unobserved-exit case have no tag. The tags appear in
+board rows, `aid show`, the TUI, and task detail.
 
 ## Communicate with a live task
 
@@ -156,9 +158,21 @@ exit, so detach cannot preserve them. The `detached` marker is set on the
 background spec only when the non-interactive detach path actually runs; a
 genuinely dead worker with no marker is still reaped as before.
 
-When the reaper finds a detached task whose agent has also exited, it records
-`Done` (the agent ran to completion; the exit code is not recoverable). Inspect
-`aid show <task-id>` for the actual result.
+When the reaper finds a detached task whose agent has also exited, lifecycle
+becomes `Done`, but that is not success by itself:
+
+- If a watcher `Completion` event survived detach, the agent finished while
+  observed. Without a verify command the outcome is `Delivered`; required
+  verification that never ran stays `Unverified`.
+- If no `Completion` event survived, the agent exited unobserved: a SIGKILL, a
+  crash, and a successful finish are indistinguishable. `verify_status` is
+  `unobserved` and the derived outcome is `Unverified(NoResult)` — not
+  `Delivered`. `aid board`, `aid board --json`, `aid show`, and completion
+  notifications report that judgment (`VNORESULT` / `outcome: unverified`).
+  Do not read lifecycle `Done` as success here.
+
+A dead worker with no `detached` marker is still a zombie: the reaper kills
+the leftover agent and records `Failed`, as before.
 
 ## Merge
 

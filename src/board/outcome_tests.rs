@@ -124,6 +124,22 @@ fn board_counts_only_active_lifecycle_statuses_as_running() {
 }
 
 #[test]
+fn board_marks_unobserved_detach_without_counting_success() {
+    let temp = TempDir::new().unwrap();
+    let _guard = AidHomeGuard::set(temp.path());
+    let store = Store::open_memory().unwrap();
+    let mut task = timed_out_task();
+    task.id = TaskId("t-unobserved".to_string());
+    task.verify = None;
+    task.verify_status = VerifyStatus::Unobserved;
+
+    let output = render_board(&[task], &store).unwrap();
+
+    assert!(output.contains("[VNORESULT]"), "output: {output}");
+    assert!(output.contains("1 total | 0 done"), "output: {output}");
+}
+
+#[test]
 fn board_does_not_count_stopped_tasks_as_failed() {
     let temp = TempDir::new().unwrap();
     let _guard = AidHomeGuard::set(temp.path());

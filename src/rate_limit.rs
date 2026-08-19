@@ -113,8 +113,9 @@ pub fn mark_rate_limited_for_message(agent: &AgentKind, custom_name: Option<&str
     mark_rate_limited_for_model(agent, custom_name, None, message);
 }
 
-/// Mark the route aid actually dispatched, falling back to refusal text only
-/// when no route model is available.
+/// Attribute the hold with `quota_group_for_mark`. That is not simply
+/// "dispatched route first": for an agent whose refusals name their own tier,
+/// the message decides and the model may not narrow it. See the helper.
 pub fn mark_rate_limited_for_model(
     agent: &AgentKind,
     custom_name: Option<&str>,
@@ -136,8 +137,9 @@ pub fn mark_rate_limited_for_value(
     mark_rate_limited_for_model_value(agent, custom_name, None, evidence, message);
 }
 
-/// Mark the dispatched route first, then use exact keys from a parsed refusal
-/// only when aid has no model to identify the route.
+/// Same attribution as `mark_rate_limited_for_model`, with a parsed refusal
+/// envelope available for providers that name the exhausted unit in structured
+/// fields. `quota_group_for_mark` owns the precedence; do not reorder it here.
 pub fn mark_rate_limited_for_model_value(
     agent: &AgentKind,
     custom_name: Option<&str>,

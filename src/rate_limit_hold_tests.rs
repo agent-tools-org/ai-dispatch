@@ -394,6 +394,64 @@ fn a_droid_refusal_naming_no_tier_still_marks_the_agent() {
     assert!(!is_group_rate_limited(&AgentKind::Droid, None, "core"));
 }
 
+/// Watcher, lifecycle, and stream-completion pass `requested_model`. The
+/// refusal names the spent tier; a dispatched opus must not change that.
+#[test]
+fn a_droid_standard_402_with_a_model_in_hand_holds_only_the_standard_pool() {
+    let temp = isolated();
+    let _guard = crate::paths::AidHomeGuard::set(temp.path());
+
+    let body = r#"{"type":"error","source":"agent_loop","message":"402 {\"detail\":\"You've reached your weekly standard usage limit (resets in 2 days).\nSwitch to Droid Core or enable Extra Usage to continue.\",\"status\":402,\"title\":\"Payment Required\",\"displayToUser\":true}"}"#;
+    mark_rate_limited_for_model(&AgentKind::Droid, None, Some("claude-opus-5"), body);
+
+    assert!(is_group_rate_limited(&AgentKind::Droid, None, "standard"));
+    assert!(!is_group_rate_limited(&AgentKind::Droid, None, "core"));
+    assert!(!is_rate_limited(&AgentKind::Droid, None));
+    assert!(
+        dispatch_blocking_hold(&AgentKind::Droid, None).is_none(),
+        "aid run must still dispatch droid — on Core"
+    );
+}
+
+/// Same write site, Core model in hand: the refusal still names standard.
+#[test]
+fn a_droid_standard_402_with_a_core_model_in_hand_still_holds_only_standard() {
+    let temp = isolated();
+    let _guard = crate::paths::AidHomeGuard::set(temp.path());
+
+    let body = r#"{"type":"error","source":"agent_loop","message":"402 {\"detail\":\"You've reached your weekly standard usage limit (resets in 2 days).\nSwitch to Droid Core or enable Extra Usage to continue.\",\"status\":402,\"title\":\"Payment Required\",\"displayToUser\":true}"}"#;
+    mark_rate_limited_for_model(&AgentKind::Droid, None, Some("glm-5.2"), body);
+
+    assert!(is_group_rate_limited(&AgentKind::Droid, None, "standard"));
+    assert!(!is_group_rate_limited(&AgentKind::Droid, None, "core"));
+    assert!(!is_rate_limited(&AgentKind::Droid, None));
+}
+
+/// The live with-model path. `reload your tokens` names no tier and is
+/// NeedsHuman — a purchase ends it. Marking only `standard` would keep
+/// dispatching Core against an account that cannot serve.
+#[test]
+fn a_droid_reload_tokens_402_with_a_model_in_hand_marks_the_agent() {
+    let temp = isolated();
+    let _guard = crate::paths::AidHomeGuard::set(temp.path());
+
+    mark_rate_limited_for_model(
+        &AgentKind::Droid,
+        None,
+        Some("claude-opus-5"),
+        "402 payment required: reload your tokens",
+    );
+
+    assert!(is_rate_limited(&AgentKind::Droid, None));
+    assert!(!is_group_rate_limited(&AgentKind::Droid, None, "standard"));
+    assert!(!is_group_rate_limited(&AgentKind::Droid, None, "core"));
+    assert!(dispatch_blocking_hold(&AgentKind::Droid, None).is_some());
+    assert!(
+        dispatch_blocking_hold_for_model(&AgentKind::Droid, None, Some("glm-5.2")).is_none(),
+        "Core group is not held; the agent-wide marker is what stops dispatch"
+    );
+}
+
 /// `aid run` used to divert only when a recovery time was present. A Windowed
 /// 402 states none, so dispatch must still stop and name the dated-snapshot way
 /// out rather than inventing a clock or saying "cooling down". A probe is

@@ -201,30 +201,6 @@ fn adopts_detached_task_with_live_agent() {
 }
 
 #[test]
-fn records_done_when_detached_agent_has_exited() {
-    let _home = setup_home();
-    let store = Store::open_memory().expect("store");
-    store
-        .insert_task(&task("t-detach-done", TaskStatus::Running))
-        .expect("insert task");
-    let mut s = spec("t-detach-done");
-    s.detached = true;
-    s.agent_pid = Some(999999);
-    s.idle_timeout_secs = Some(3600);
-    save_spec(&s).expect("save spec");
-
-    let cleaned = check_zombie_tasks_with(&store, |_| false).expect("reap");
-
-    assert_eq!(cleaned, vec!["t-detach-done".to_string()]);
-    assert_eq!(
-        store.get_task("t-detach-done").expect("get").expect("task").status,
-        TaskStatus::Done,
-    );
-    let events = store.get_events("t-detach-done").expect("events");
-    assert!(events.iter().any(|e| e.detail.contains("detached task completed")));
-}
-
-#[test]
 fn reaps_non_detached_task_with_dead_worker_and_agent() {
     let _home = setup_home();
     let store = Store::open_memory().expect("store");

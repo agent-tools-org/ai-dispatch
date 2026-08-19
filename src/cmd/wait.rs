@@ -152,9 +152,13 @@ async fn wait_for_task_ids_inner(
                     } else {
                         String::new()
                     };
+                    let status_label = outcome
+                        .verification_tag()
+                        .map(|tag| format!("{} [{tag}]", status.label()))
+                        .unwrap_or_else(|| status.label().to_string());
                     println!(
                         "[{}/{}] {} {} ({}, {}tok, {}){fail_reason}",
-                        completed, total, task_id, status.label(), duration, tokens, cost::format_cost(task.cost_usd),
+                        completed, total, task_id, status_label, duration, tokens, cost::format_cost(task.cost_usd),
                     );
                 } else {
                     println!("[{}/{}] {} {}", completed, total, task_id, status.label());

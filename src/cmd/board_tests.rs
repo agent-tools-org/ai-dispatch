@@ -55,6 +55,17 @@ fn board_json_row_includes_delivery_assessment() {
 }
 
 #[test]
+fn board_json_row_does_not_report_unobserved_as_success() {
+    let mut task = make_task("t-unobs", TaskStatus::Done, Local::now());
+    task.verify_status = VerifyStatus::Unobserved;
+    let row = board_json_row(&task);
+    assert_eq!(row["status"], "done");
+    assert_eq!(row["verify_status"], "unobserved");
+    assert_eq!(row["outcome"], "unverified");
+    assert_ne!(row["outcome"], "delivered");
+}
+
+#[test]
 fn format_group_header_includes_custom_name() {
     let temp = tempfile::tempdir().unwrap();
     let _guard = AidHomeGuard::set(temp.path());

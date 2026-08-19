@@ -294,6 +294,9 @@ mod foreground_tests;
 #[path = "background_reaper_tests.rs"]
 mod background_reaper_tests;
 #[cfg(test)]
+#[path = "background_adopt_tests.rs"]
+mod background_adopt_tests;
+#[cfg(test)]
 #[path = "background_lifecycle_bypass_tests.rs"]
 mod lifecycle_bypass_tests;
 #[cfg(test)]

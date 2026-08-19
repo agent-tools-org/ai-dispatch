@@ -106,9 +106,10 @@ where
     // Deliberate foreground detach: the worker (aid CLI) exited on purpose via
     // the non-interactive SIGTERM/SIGHUP path, leaving the agent alive. Adopt
     // the task instead of reaping it. If the agent is still running, leave
-    // the task Running. If the agent has also exited, the task reached a real
-    // terminal outcome — record it as Done (the agent ran to completion; we
-    // cannot recover its exit code, but the operator can inspect the logs).
+    // the task Running. If the agent has also exited, adopt_detached_task
+    // records Done with Unobserved unless a Completion event survived — a
+    // kill and a success are otherwise indistinguishable, so this must not
+    // read as Delivered.
     if spec.detached {
         return super::background_adopt::adopt_detached_task(store, task_id, spec, cleaned);
     }

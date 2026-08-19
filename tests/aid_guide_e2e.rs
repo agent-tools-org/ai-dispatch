@@ -167,6 +167,21 @@ fn official_guide_documents_recursive_delegation() {
     assert!(dispatch.contains("may re-enter the same worktree"));
 }
 
+#[test]
+fn official_guide_documents_unobserved_foreground_detach() {
+    let operations = include_str!("../default-skills/aid-guide/references/task-operations.md");
+    let lifecycle = include_str!("../default-skills/aid-guide/references/task-lifecycle.md");
+    let dispatch = include_str!("../default-skills/aid-guide/references/dispatch.md");
+
+    assert!(operations.contains("verify_status` is"));
+    assert!(operations.contains("`unobserved`"));
+    assert!(operations.contains("`Unverified(NoResult)`"));
+    assert!(operations.contains("Do not read lifecycle `Done` as success here"));
+    assert!(operations.contains("dead worker with no `detached` marker"));
+    assert!(lifecycle.contains("`Unobserved` is set when a deliberately"));
+    assert!(dispatch.contains("unobserved after a foreground detach"));
+}
+
 fn public_commands(help: &str) -> Vec<String> {
     help.lines()
         .skip_while(|line| *line != "Commands:")

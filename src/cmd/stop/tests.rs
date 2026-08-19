@@ -169,6 +169,7 @@ fn stop_attempts_agent_cleanup_when_agent_pid_exists() {
         container: None,
         link_deps: true,
         pre_task_dirty_paths: None,
+        detached: false,
     };
     save_spec(&spec).unwrap();
 

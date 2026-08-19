@@ -15,6 +15,12 @@ use super::run_dispatch_prepare::PreparedDispatch;
 use super::run_agent::run_agent_process_with_timeout;
 use super::{RunArgs, run_prompt};
 
+#[path = "run_foreground_signal.rs"]
+mod foreground_signal;
+use foreground_signal::{
+    handle_foreground_detach, should_detach, wait_for_foreground_signal, ForegroundSignal,
+};
+
 pub(super) struct ForegroundSpecGuard {
     task_id: String,
     active: bool,
@@ -77,44 +83,8 @@ pub(super) fn save_foreground_spec(
         container: args.container.clone(),
         link_deps: args.link_deps,
         pre_task_dirty_paths,
+        detached: false,
     })
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(super) enum ForegroundSignal {
-    Int,
-    Term,
-    Hup,
-}
-
-impl ForegroundSignal {
-    pub(super) fn name(self) -> &'static str {
-        match self {
-            Self::Int => "SIGINT",
-            Self::Term => "SIGTERM",
-            Self::Hup => "SIGHUP",
-        }
-    }
-}
-
-// SIGKILL cannot be caught; the foreground spec remains the convergence backstop for that case.
-#[cfg(unix)]
-pub(super) async fn wait_for_foreground_signal() -> Result<ForegroundSignal> {
-    use tokio::signal::unix::{SignalKind, signal};
-
-    let mut sigint = signal(SignalKind::interrupt())?;
-    let mut sigterm = signal(SignalKind::terminate())?;
-    let mut sighup = signal(SignalKind::hangup())?;
-    tokio::select! {
-        _ = sigint.recv() => Ok(ForegroundSignal::Int),
-        _ = sigterm.recv() => Ok(ForegroundSignal::Term),
-        _ = sighup.recv() => Ok(ForegroundSignal::Hup),
-    }
-}
-
-#[cfg(not(unix))]
-pub(super) async fn wait_for_foreground_signal() -> Result<ForegroundSignal> {
-    std::future::pending::<Result<ForegroundSignal>>().await
 }
 
 pub(super) fn handle_foreground_interrupt(store: &Store, task_id: &TaskId, signal_name: &str) -> Result<()> {
@@ -243,6 +213,9 @@ async fn run_pty_agent_with_signal(
         result = &mut run_handle => result.context("foreground PTY runner panicked")?,
         signal = wait_for_foreground_signal() => {
             let signal = signal?;
+            if should_detach(signal) {
+                handle_foreground_detach(&store_for_signal, &task_id_for_signal, signal);
+            }
             control.mark_interrupted();
             let fallback_pid = control.wait_agent_pid(std::time::Duration::from_secs(2)).await;
             handle_foreground_interrupt_with(
@@ -289,6 +262,9 @@ async fn run_non_pty_agent_with_signal(
         result = &mut run => result,
         signal = wait_for_foreground_signal() => {
             let signal = signal?;
+            if should_detach(signal) {
+                handle_foreground_detach(store, task_id, signal);
+            }
             handle_foreground_interrupt(store, task_id, signal.name())?;
             anyhow::bail!("interrupted by signal {}", signal.name());
         }

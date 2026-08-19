@@ -47,6 +47,7 @@ fn make_spec(task_id: &str) -> BackgroundRunSpec {
         container: None,
         link_deps: true,
         pre_task_dirty_paths: None,
+        detached: false,
     }
 }
 
@@ -170,4 +171,16 @@ async fn interrupt_cleanup_waits_for_late_pty_pid_before_clearing_spec() {
         store.get_task("t-fg-early-int").expect("get task").expect("task").status,
         TaskStatus::Stopped
     );
+}
+
+#[test]
+fn detach_decision_preserves_sigint_and_tty_behavior() {
+    use super::foreground_signal::{ForegroundSignal, should_detach_for_terminal};
+
+    assert!(!should_detach_for_terminal(ForegroundSignal::Int, false));
+    assert!(!should_detach_for_terminal(ForegroundSignal::Int, true));
+    assert!(!should_detach_for_terminal(ForegroundSignal::Term, true));
+    assert!(should_detach_for_terminal(ForegroundSignal::Term, false));
+    assert!(should_detach_for_terminal(ForegroundSignal::Hup, false));
+    assert!(!should_detach_for_terminal(ForegroundSignal::Hup, true));
 }

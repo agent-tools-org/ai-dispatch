@@ -72,5 +72,6 @@ fn make_spec(task_id: &str) -> BackgroundRunSpec {
         container: None,
         link_deps: false,
         pre_task_dirty_paths: None,
+        detached: false,
     }
 }

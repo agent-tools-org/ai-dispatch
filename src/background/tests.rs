@@ -57,6 +57,7 @@ fn serializes_spec_to_json() {
         container: None,
         link_deps: true,
         pre_task_dirty_paths: None,
+        detached: false,
     };
 
     let content = serde_json::to_string_pretty(&spec).unwrap();
@@ -824,6 +825,7 @@ fn make_spec(task_id: &str) -> BackgroundRunSpec {
         container: None,
         link_deps: true,
         pre_task_dirty_paths: None,
+        detached: false,
     }
 }
 

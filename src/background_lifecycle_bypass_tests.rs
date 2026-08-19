@@ -154,6 +154,7 @@ fn spec(task_id: &str) -> BackgroundRunSpec {
         container: None,
         link_deps: true,
         pre_task_dirty_paths: None,
+        detached: false,
     }
 }
 

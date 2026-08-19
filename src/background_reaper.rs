@@ -103,6 +103,16 @@ where
         }
         return Ok(());
     }
+    // Deliberate foreground detach: the worker (aid CLI) exited on purpose via
+    // the non-interactive SIGTERM/SIGHUP path, leaving the agent alive. Adopt
+    // the task instead of reaping it. If the agent is still running, leave
+    // the task Running. If the agent has also exited, adopt_detached_task
+    // records Done with Unobserved unless a Completion event survived — a
+    // kill and a success are otherwise indistinguishable, so this must not
+    // read as Delivered.
+    if spec.detached {
+        return super::background_adopt::adopt_detached_task(store, task_id, spec, cleaned);
+    }
     preserve_zombie_changes(store, task_id, spec)?;
     terminate_task_processes(Some(worker_pid), spec);
     if record_failure(store, task_id, ZOMBIE_FAILURE_DETAIL, ZOMBIE_FAILURE_DETAIL)? {
@@ -130,7 +140,7 @@ fn cleanup_missing_pid_task(
     Ok(())
 }
 
-fn preserve_zombie_changes(store: &Store, task_id: &str, spec: &BackgroundRunSpec) -> Result<()> {
+pub(super) fn preserve_zombie_changes(store: &Store, task_id: &str, spec: &BackgroundRunSpec) -> Result<()> {
     if let Some(task) = store.get_task(task_id)?
         && !task.read_only
         && !spec.audit_report_mode
@@ -267,7 +277,7 @@ pub(crate) fn record_failure(store: &Store, task_id: &str, stderr_detail: &str, 
     Ok(recorded)
 }
 
-fn notify_task_completion(store: &Store, task_id: &str) -> Result<()> {
+pub(super) fn notify_task_completion(store: &Store, task_id: &str) -> Result<()> {
     if let Some(task) = store.get_task(task_id)? { notify::notify_completion(&task); }
     Ok(())
 }

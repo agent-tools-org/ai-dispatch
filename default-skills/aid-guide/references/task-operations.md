@@ -48,8 +48,10 @@ stated explicitly and the fallback is this task's own log.
 Human task surfaces use verification tags only when verification has something
 to say: `VFAIL` for a failed verification, `VTIMEOUT` for a timeout, `VINFRA`
 for a verification infrastructure failure, and `VNORESULT` when a required
-verification has no result. Running tasks and tasks without a verify command
-have no tag. The tags appear in board rows, `aid show`, the TUI, and task detail.
+verification has no result or when a detached agent exited unobserved (a kill
+and a success cannot be distinguished). Running tasks and tasks that skipped
+verification without that unobserved-exit case have no tag. The tags appear in
+board rows, `aid show`, the TUI, and task detail.
 
 ## Communicate with a live task
 
@@ -134,6 +136,43 @@ mutually exclusive; provide exactly one.
 When the recorded linked worktree still exists, retry reuses it with the
 original repository checkout as its anchor. Retry still refuses a target branch
 that is genuinely checked out in the checkout that dispatched the task.
+
+### Foreground signal behavior
+
+A foreground `aid run` or `aid retry` classifies signals by whether stdin is a
+TTY:
+
+- **Interactive (stdin is a TTY), SIGINT/Ctrl-C**: stops the agent and records
+  `Stopped`. This is the existing session-end behavior.
+- **Non-interactive (stdin is not a TTY), SIGTERM or SIGHUP**: **detaches**.
+  Aid hard-exits without sending a stop signal to the agent, records a
+  `detached` milestone, and prints `aid watch --wait <task-id>` for reattach.
+  The task stays `Running`; the background reaper adopts it on the next `aid`
+  invocation instead of reaping the dead worker and killing the agent.
+- **SIGINT without a TTY**: still stops. SIGINT means interrupt, not a harness
+  timeout.
+
+Detach covers non-PTY agents (codex, gemini, agy, and other piped CLIs).
+PTY agents (opencode, mimocode, kilo) die when the PTY master closes on aid's
+exit, so detach cannot preserve them. The `detached` marker is set on the
+background spec only when the non-interactive detach path actually runs; a
+genuinely dead worker with no marker is still reaped as before.
+
+When the reaper finds a detached task whose agent has also exited, lifecycle
+becomes `Done`, but that is not success by itself:
+
+- If a watcher `Completion` event survived detach, the agent finished while
+  observed. Without a verify command the outcome is `Delivered`; required
+  verification that never ran stays `Unverified`.
+- If no `Completion` event survived, the agent exited unobserved: a SIGKILL, a
+  crash, and a successful finish are indistinguishable. `verify_status` is
+  `unobserved` and the derived outcome is `Unverified(NoResult)` — not
+  `Delivered`. `aid board`, `aid board --json`, `aid show`, and completion
+  notifications report that judgment (`VNORESULT` / `outcome: unverified`).
+  Do not read lifecycle `Done` as success here.
+
+A dead worker with no `detached` marker is still a zombie: the reaper kills
+the leftover agent and records `Failed`, as before.
 
 ## Merge
 

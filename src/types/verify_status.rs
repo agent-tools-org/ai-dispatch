@@ -15,16 +15,23 @@ pub enum VerifyStatus {
     TimedOut,
     /// Verify tooling failed before producing a compiler or test diagnostic.
     InfrastructureFailure,
+    /// The agent exited after a deliberate foreground detach and no watcher
+    /// was alive to observe its completion. No exit code, no completion event,
+    /// no parse_completion output — the result is genuinely unknown. Maps to
+    /// `Unverified(NoResult)` regardless of whether the operator asked for
+    /// verification, because a kill and a success are indistinguishable here.
+    Unobserved,
 }
 
 impl VerifyStatus {
-    pub const ALL: [Self; 6] = [
+    pub const ALL: [Self; 7] = [
         Self::Pending,
         Self::Passed,
         Self::Failed,
         Self::Skipped,
         Self::TimedOut,
         Self::InfrastructureFailure,
+        Self::Unobserved,
     ];
 
     pub fn as_str(&self) -> &'static str {
@@ -35,6 +42,7 @@ impl VerifyStatus {
             Self::Skipped => "skipped",
             Self::TimedOut => "timed_out",
             Self::InfrastructureFailure => "infrastructure_failure",
+            Self::Unobserved => "unobserved",
         }
     }
 
@@ -46,6 +54,7 @@ impl VerifyStatus {
             "skipped" => Some(Self::Skipped),
             "timed_out" => Some(Self::TimedOut),
             "infrastructure_failure" => Some(Self::InfrastructureFailure),
+            "unobserved" => Some(Self::Unobserved),
             _ => None,
         }
     }
@@ -83,12 +92,19 @@ mod tests {
     }
 
     #[test]
-    fn was_attempted_excludes_skipped_and_pending() {
+    fn unobserved_round_trips() {
+        assert_eq!(VerifyStatus::Unobserved.as_str(), "unobserved");
+        assert_eq!(VerifyStatus::parse_str("unobserved"), Some(VerifyStatus::Unobserved));
+    }
+
+    #[test]
+    fn was_attempted_excludes_skipped_pending_and_unobserved() {
         assert!(VerifyStatus::Passed.was_attempted());
         assert!(VerifyStatus::Failed.was_attempted());
         assert!(VerifyStatus::TimedOut.was_attempted());
         assert!(VerifyStatus::InfrastructureFailure.was_attempted());
         assert!(!VerifyStatus::Skipped.was_attempted());
         assert!(!VerifyStatus::Pending.was_attempted());
+        assert!(!VerifyStatus::Unobserved.was_attempted());
     }
 }

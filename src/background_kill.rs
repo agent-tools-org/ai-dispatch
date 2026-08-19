@@ -101,6 +101,7 @@ mod tests {
             container: None,
             link_deps: true,
             pre_task_dirty_paths: None,
+        detached: false,
         }
     }
 

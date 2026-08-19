@@ -330,6 +330,22 @@ fn task_json_includes_delivery_assessment() {
 }
 
 #[test]
+fn task_json_does_not_report_unobserved_as_success() {
+    let store = Arc::new(Store::open_memory().unwrap());
+    let mut task = research_task("t-show-unobs", Path::new("."));
+    task.verify_status = VerifyStatus::Unobserved;
+    store.insert_task(&task).unwrap();
+
+    let payload: serde_json::Value =
+        serde_json::from_str(&task_json(&store, task.id.as_str()).unwrap()).unwrap();
+
+    assert_eq!(payload["status"], "done");
+    assert_eq!(payload["verify_status"], "unobserved");
+    assert_eq!(payload["outcome"], "unverified");
+    assert_ne!(payload["outcome"], "delivered");
+}
+
+#[test]
 fn result_text_reads_task_result_file() {
     let temp = tempfile::tempdir().unwrap();
     let _aid_home = crate::paths::AidHomeGuard::set(temp.path());

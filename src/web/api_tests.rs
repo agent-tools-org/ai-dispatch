@@ -67,6 +67,19 @@ fn task_response_serializes_rfc3339_timestamps() {
     assert!(json["created_at"].as_str().unwrap().contains('T'));
     assert!(json["completed_at"].as_str().unwrap().contains('T'));
     assert_eq!(json["status"], "done");
+    assert_eq!(json["outcome"], "verified");
+}
+
+#[test]
+fn task_response_does_not_report_unobserved_as_success() {
+    let mut task = make_task("t-unobs");
+    task.verify = None;
+    task.verify_status = VerifyStatus::Unobserved;
+    let json = serde_json::to_value(TaskResponse::from_task(task, None, None)).unwrap();
+    assert_eq!(json["status"], "done");
+    assert_eq!(json["verify_status"], "unobserved");
+    assert_eq!(json["outcome"], "unverified");
+    assert_ne!(json["outcome"], "delivered");
 }
 
 #[test]

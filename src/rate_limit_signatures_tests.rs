@@ -86,6 +86,27 @@ fn prose_that_merely_mentions_quota_is_not_a_quota_failure() {
 }
 
 #[test]
+fn droid_weekly_core_and_standard_needles_do_not_shadow_each_other() {
+    let core = r#"402 {"detail":"You've reached your weekly Droid Core usage limit (resets in 2 days).\nReload Extra Usage credits or wait for your limits to reset.","status":402,"title":"Payment Required","displayToUser":true}"#;
+    let standard = "402 You've reached your weekly standard usage limit (resets in 1 day).\nSwitch to Droid Core or enable Extra Usage to continue.";
+
+    let (agent, recovery) = match_quota_signature(core).expect("core quota message must match");
+    assert_eq!(agent, AgentKind::Droid);
+    assert_eq!(recovery, QuotaRecovery::After(2880));
+
+    let (agent, recovery) = match_quota_signature(standard).expect("standard quota message must match");
+    assert_eq!(agent, AgentKind::Droid);
+    assert_eq!(recovery, QuotaRecovery::After(1440));
+
+    let core_l = core.to_lowercase();
+    let standard_l = standard.to_lowercase();
+    assert!(core_l.contains("weekly droid core usage limit"));
+    assert!(!core_l.contains("weekly standard usage limit"));
+    assert!(standard_l.contains("weekly standard usage limit"));
+    assert!(!standard_l.contains("weekly droid core usage limit"));
+}
+
+#[test]
 fn droid_reload_tokens_is_recognized() {
     let (agent, recovery) = match_quota_signature("402 payment required: reload your tokens")
         .expect("droid reload-tokens message must match");

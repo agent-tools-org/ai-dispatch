@@ -138,6 +138,8 @@ fn no_current_model_still_finds_a_healthy_group() {
 /// Captured 2026-08-19 12:06-12:10 with the standard pool exhausted.
 const DROID_WEEKLY_402: &str = r#"{"type":"error","source":"agent_loop","message":"402 {\"detail\":\"You've reached your weekly standard usage limit (resets in 2 days).\nSwitch to Droid Core or enable Extra Usage to continue.\",\"status\":402,\"title\":\"Payment Required\",\"displayToUser\":true}"}"#;
 
+const DROID_CORE_402: &str = r#"402 {"detail":"You've reached your weekly Droid Core usage limit (resets in 2 days).\nReload Extra Usage credits or wait for your limits to reset.","status":402,"title":"Payment Required","displayToUser":true}"#;
+
 #[test]
 fn droid_core_follows_factory_billing_pool() {
     let droid = AgentKind::Droid;
@@ -209,6 +211,15 @@ fn the_droid_standard_refusal_names_its_own_tier() {
             AgentKind::Droid,
             "You've reached your 5-hour standard usage limit (resets in 1h 48min)."
         ),
+        Some("standard")
+    );
+}
+
+#[test]
+fn the_droid_core_refusal_names_its_own_tier() {
+    assert_eq!(group_from_refusal(AgentKind::Droid, DROID_CORE_402), Some("core"));
+    assert_eq!(
+        group_from_refusal(AgentKind::Droid, DROID_WEEKLY_402),
         Some("standard")
     );
 }

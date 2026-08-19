@@ -137,8 +137,9 @@ meters a single premium pool that every model except `auto` draws on, so a
 premium refusal holds those models while `auto` stays dispatchable;
 `aid config clear-limit cursor` clears both. Droid's Factory plan meters a
 weekly or 5-hour `standard` pool separately from Droid Core, so a standard 402
-holds those models while Core stays dispatchable. A droid 402 that does not
-name `standard usage` — including `reload your tokens` — holds the whole agent,
+holds those models while Core stays dispatchable, and a Core 402 holds Core
+while standard stays dispatchable. A droid 402 that names neither pool —
+including `reload your tokens` — holds the whole agent,
 even when a model was on the dispatched route.
 `aid config clear-limit droid` clears both. A group hold is not an agent hold:
 `aid agent list` and `aid agent quota` report it as `PARTIAL` (still dispatchable

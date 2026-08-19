@@ -153,11 +153,11 @@ pub fn mark_rate_limited_for_model_value(
     }
 }
 
-/// For droid the refusal is the authority: `standard usage` marks `standard`;
-/// anything else is agent-wide. A dispatched model must not narrow a 402
-/// that named no tier — `model_group(Droid, Some(_))` is never None, so
-/// model-first would hold only that pool. Other agents still prefer the
-/// dispatched model, then the refusal.
+/// For droid the refusal is the authority: `standard usage` marks `standard`,
+/// `droid core usage` marks `core`; anything else is agent-wide. A dispatched
+/// model must not narrow a 402 that named no tier — `model_group(Droid, Some(_))`
+/// is never None, so model-first would hold only that pool. Other agents still
+/// prefer the dispatched model, then the refusal.
 fn quota_group_for_mark<'a>(
     agent: AgentKind,
     model: Option<&'a str>,

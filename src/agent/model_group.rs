@@ -133,10 +133,16 @@ pub(crate) fn group_from_refusal<'a>(agent: AgentKind, message: &'a str) -> Opti
     if agent == AgentKind::Droid {
         // Weekly and 5-hour refusals both name the spent tier; a 402 that
         // names no tier (reload-your-tokens) stays agent-wide.
-        return message
-            .to_ascii_lowercase()
-            .contains("standard usage")
-            .then_some(STANDARD_GROUP);
+        // Standard is first so "Switch to Droid Core" in a standard 402 cannot
+        // steal the Core pool. The needles are not substrings of each other.
+        let lower = message.to_ascii_lowercase();
+        if lower.contains("standard usage") {
+            return Some(STANDARD_GROUP);
+        }
+        if lower.contains("droid core usage") {
+            return Some(CORE_GROUP);
+        }
+        return None;
     }
     if agent != AgentKind::Cursor {
         return None;

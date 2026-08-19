@@ -379,6 +379,23 @@ fn a_droid_standard_402_with_no_model_holds_only_the_standard_pool() {
 }
 
 #[test]
+fn a_droid_core_402_with_no_model_holds_only_the_core_pool() {
+    let temp = isolated();
+    let _guard = crate::paths::AidHomeGuard::set(temp.path());
+
+    let body = r#"402 {"detail":"You've reached your weekly Droid Core usage limit (resets in 2 days).\nReload Extra Usage credits or wait for your limits to reset.","status":402,"title":"Payment Required","displayToUser":true}"#;
+    mark_rate_limited_for_message(&AgentKind::Droid, None, body);
+
+    assert!(is_group_rate_limited(&AgentKind::Droid, None, "core"));
+    assert!(!is_group_rate_limited(&AgentKind::Droid, None, "standard"));
+    assert!(!is_rate_limited(&AgentKind::Droid, None));
+    assert!(
+        dispatch_blocking_hold(&AgentKind::Droid, None).is_none(),
+        "aid run must still dispatch droid — on standard"
+    );
+}
+
+#[test]
 fn a_droid_refusal_naming_no_tier_still_marks_the_agent() {
     let temp = isolated();
     let _guard = crate::paths::AidHomeGuard::set(temp.path());

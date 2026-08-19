@@ -89,6 +89,12 @@ pub(crate) fn provider_name(agent: &AgentKind) -> Option<&'static str> {
         AgentKind::Antigravity => Some("agy"),
         AgentKind::Grok => Some("grok"),
         AgentKind::Qwen => Some("qwen"),
+        // aidbar's `droid` probe reads Factory's billing endpoint, which
+        // reports the standard and core pools separately with a real
+        // windowEnd. Without it a droid hold recovers on a cooldown guessed
+        // from the refusal text — measured 4h early on the weekly window,
+        // and 19h early when the guess came from the older marker.
+        AgentKind::Droid => Some("droid"),
         _ => None,
     }
 }

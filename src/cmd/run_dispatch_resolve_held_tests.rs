@@ -86,6 +86,61 @@ fn background_urgency_keeps_held_ungrouped_agent() {
     assert!(setup.substituted_from.is_none());
 }
 
+/// `availability_for_model(Droid, None)` reads the standard group, not the
+/// agent marker. Agent-wide holds are caught by `dispatch_blocking_hold`
+/// first; background keep skips that gate on purpose and must still stay
+/// on droid — for_model must not invent a group hold from the agent marker.
+#[test]
+fn background_urgency_keeps_held_droid_agent() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let _guard = AidHomeGuard::set(dir.path());
+    crate::rate_limit::mark_rate_limited(
+        &AgentKind::Droid,
+        None,
+        "402 payment required: reload your tokens",
+    );
+    let store = Arc::new(Store::open_memory().expect("store"));
+    let mut args = RunArgs {
+        agent_name: "droid".to_string(),
+        prompt: "Add unit tests".to_string(),
+        declared_urgency: Some(crate::types::TaskUrgency::Background),
+        cascade: vec!["gemini".to_string()],
+        ..Default::default()
+    };
+
+    let setup = resolve_agent_setup(&store, &mut args)
+        .expect("background must keep the held droid agent");
+    assert_eq!(setup.agent_kind, AgentKind::Droid);
+    assert_eq!(args.agent_name, "droid");
+    assert!(setup.substituted_from.is_none());
+}
+
+/// The complementary non-background path: an agent-wide droid hold must
+/// leave the agent, including when the caller named a Core model.
+#[test]
+fn agent_wide_droid_hold_cascades_away_even_with_a_core_model() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let _guard = AidHomeGuard::set(dir.path());
+    crate::rate_limit::mark_rate_limited(
+        &AgentKind::Droid,
+        None,
+        "402 payment required: reload your tokens",
+    );
+    let store = Arc::new(Store::open_memory().expect("store"));
+    let mut args = RunArgs {
+        agent_name: "droid".to_string(),
+        prompt: "Add unit tests".to_string(),
+        model: Some("glm-5.2".to_string()),
+        cascade: vec!["gemini".to_string()],
+        ..Default::default()
+    };
+
+    let setup = resolve_agent_setup(&store, &mut args).expect("should leave held droid");
+    assert_eq!(setup.agent_kind, AgentKind::Gemini);
+    assert_eq!(args.agent_name, "gemini");
+    assert!(setup.substituted_from.is_some());
+}
+
 /// t-44b30780 chain: opencode was held on its `opencode` provider group, so
 /// `skip_held_to_fallback` substituted agy — whose gemini group marker
 /// (`rate-limit-agy--gemini`) had existed since 10:40 — and agy died in 10

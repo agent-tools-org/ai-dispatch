@@ -386,7 +386,8 @@ cooldown left by an unrecognised refusal — that window is shorter than the cos
 of moving off the agent you asked for. Where a tiered agent has only one tier
 held — cursor's premium pool, or droid's standard pool — dispatch stays on the
 agent and switches to a tier that still serves, reporting the swap rather than
-making it silently.
+making it silently. A droid refusal that does not name `standard usage` holds
+the whole agent, including Core.
 
 A hold is scoped to what actually refused. When a CLI serves several providers,
 a refusal is attributed to the provider of the route aid dispatched, so one

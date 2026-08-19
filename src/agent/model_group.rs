@@ -9,6 +9,19 @@ use crate::types::AgentKind;
 const PREMIUM_GROUP: &str = "premium";
 const AUTO_GROUP: &str = "auto";
 
+/// Factory's weekly/5-hour standard pool, and the Core models that outlive it.
+const STANDARD_GROUP: &str = "standard";
+const CORE_GROUP: &str = "core";
+
+/// Confirmed Droid Core ids only. Unlisted names are standard — enumerating
+/// the spent pool instead left every other standard model dispatchable.
+const DROID_CORE: &[&str] = &[
+    "glm-5.2",
+    "kimi-k3",
+    "minimax-m3",
+    "deepseek-v4-flash-0731",
+];
+
 /// Agents whose quota is metered per model family rather than per account.
 ///
 /// agy is the case that forced this: `agy models` serves gemini-*, claude-* and
@@ -52,6 +65,9 @@ pub(crate) fn model_group<'a>(agent: AgentKind, model: Option<&'a str>) -> Optio
     if agent == AgentKind::OpenCode {
         return model.and_then(provider_from_model);
     }
+    if agent == AgentKind::Droid {
+        return Some(droid_group(model));
+    }
     if !has_grouped_quota(agent) {
         return None;
     }
@@ -71,6 +87,19 @@ pub(crate) fn model_group<'a>(agent: AgentKind, model: Option<&'a str>) -> Optio
     Some(family_of(&model))
 }
 
+fn droid_group(model: Option<&str>) -> &'static str {
+    match model {
+        Some(name) if is_droid_core(name) => CORE_GROUP,
+        _ => STANDARD_GROUP,
+    }
+}
+
+fn is_droid_core(model: &str) -> bool {
+    DROID_CORE
+        .iter()
+        .any(|id| model.eq_ignore_ascii_case(id))
+}
+
 /// The group a refusal names, for providers whose own wording identifies the
 /// exhausted tier.
 ///
@@ -82,6 +111,14 @@ pub(crate) fn model_group<'a>(agent: AgentKind, model: Option<&'a str>) -> Optio
 pub(crate) fn group_from_refusal<'a>(agent: AgentKind, message: &'a str) -> Option<&'a str> {
     if agent == AgentKind::OpenCode {
         return named_opencode_provider(message);
+    }
+    if agent == AgentKind::Droid {
+        // Weekly and 5-hour refusals both name the spent tier; a 402 that
+        // names no tier (reload-your-tokens) stays agent-wide.
+        return message
+            .to_ascii_lowercase()
+            .contains("standard usage")
+            .then_some(STANDARD_GROUP);
     }
     if agent != AgentKind::Cursor {
         return None;
@@ -158,6 +195,20 @@ pub(crate) fn groups_for_agent(agent: AgentKind) -> &'static [(&'static str, &'s
         AgentKind::Cursor => &[
             (PREMIUM_GROUP, &["composer-2.5", "gpt-5.4-high"]),
             (AUTO_GROUP, &["auto"]),
+        ],
+        // Preference order for a replacement, not membership — `model_group`
+        // treats only the Core allowlist as `core`.
+        AgentKind::Droid => &[
+            (STANDARD_GROUP, &["claude-opus-5"]),
+            (
+                CORE_GROUP,
+                &[
+                    "glm-5.2",
+                    "kimi-k3",
+                    "minimax-m3",
+                    "deepseek-v4-flash-0731",
+                ],
+            ),
         ],
         _ => &[],
     }

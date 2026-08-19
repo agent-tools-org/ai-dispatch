@@ -142,6 +142,39 @@ fn budget_preferred_tiers_beat_unknown() {
 }
 
 #[test]
+fn droid_budget_picks_core_and_default_stays_opus() {
+    assert_eq!(budget_model(&AgentKind::Droid), Some("glm-5.2"));
+    assert_eq!(
+        model_for_task_budget(AgentKind::Droid, TaskBudget::Cheap),
+        Some("glm-5.2")
+    );
+    assert_eq!(
+        model_for_task_budget(AgentKind::Droid, TaskBudget::Standard),
+        Some("claude-opus-5")
+    );
+    let models: Vec<_> = crate::model_catalog::AGENT_MODELS
+        .iter()
+        .filter(|row| row.agent == AgentKind::Droid)
+        .collect();
+    assert!(
+        models
+            .iter()
+            .any(|row| row.model == "claude-opus-5" && row.description.contains("default")),
+        "CLI default must remain claude-opus-5"
+    );
+    for alias in ["sonnet", "opus", "haiku"] {
+        assert!(
+            models.iter().all(|row| row.model != alias),
+            "removed catalog alias {alias} must not return"
+        );
+    }
+    for row in &models {
+        assert_eq!(row.input_per_m, 0.0, "{} must not invent a rate", row.model);
+        assert_eq!(row.output_per_m, 0.0, "{} must not invent a rate", row.model);
+    }
+}
+
+#[test]
 fn unknown_model_is_not_on_budget_cheap_preference() {
     // grok is unpriced: both rows sit on tier "unknown", which is a last-resort
     // fallback, never a *preferred* tier. Deleting this let a tier reassignment

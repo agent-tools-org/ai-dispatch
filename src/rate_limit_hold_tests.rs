@@ -359,6 +359,41 @@ fn a_cursor_refusal_naming_no_tier_still_marks_the_agent() {
     assert!(!is_group_rate_limited(&cursor, None, "premium"));
 }
 
+/// The live call site with no model in hand. The 402 names the standard
+/// pool; Core must stay dispatchable.
+#[test]
+fn a_droid_standard_402_with_no_model_holds_only_the_standard_pool() {
+    let temp = isolated();
+    let _guard = crate::paths::AidHomeGuard::set(temp.path());
+
+    let body = r#"{"type":"error","source":"agent_loop","message":"402 {\"detail\":\"You've reached your weekly standard usage limit (resets in 2 days).\nSwitch to Droid Core or enable Extra Usage to continue.\",\"status\":402,\"title\":\"Payment Required\",\"displayToUser\":true}"}"#;
+    mark_rate_limited_for_message(&AgentKind::Droid, None, body);
+
+    assert!(is_group_rate_limited(&AgentKind::Droid, None, "standard"));
+    assert!(!is_group_rate_limited(&AgentKind::Droid, None, "core"));
+    assert!(!is_rate_limited(&AgentKind::Droid, None));
+    assert!(
+        dispatch_blocking_hold(&AgentKind::Droid, None).is_none(),
+        "aid run must still dispatch droid — on Core"
+    );
+}
+
+#[test]
+fn a_droid_refusal_naming_no_tier_still_marks_the_agent() {
+    let temp = isolated();
+    let _guard = crate::paths::AidHomeGuard::set(temp.path());
+
+    mark_rate_limited_for_message(
+        &AgentKind::Droid,
+        None,
+        "402 payment required: reload your tokens",
+    );
+
+    assert!(is_rate_limited(&AgentKind::Droid, None));
+    assert!(!is_group_rate_limited(&AgentKind::Droid, None, "standard"));
+    assert!(!is_group_rate_limited(&AgentKind::Droid, None, "core"));
+}
+
 /// `aid run` used to divert only when a recovery time was present. A Windowed
 /// 402 states none, so dispatch must still stop and name the dated-snapshot way
 /// out rather than inventing a clock or saying "cooling down". A probe is

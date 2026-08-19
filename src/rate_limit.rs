@@ -121,9 +121,7 @@ pub fn mark_rate_limited_for_model(
     model: Option<&str>,
     message: &str,
 ) {
-    match crate::agent::model_group::model_group(*agent, model)
-        .or_else(|| crate::agent::model_group::group_from_refusal(*agent, message))
-    {
+    match quota_group_for_mark(*agent, model, message, None) {
         Some(group) => mark_group_rate_limited(agent, custom_name, group, message),
         None => mark_rate_limited(agent, custom_name, message),
     }
@@ -147,12 +145,30 @@ pub fn mark_rate_limited_for_model_value(
     evidence: &serde_json::Value,
     message: &str,
 ) {
-    match crate::agent::model_group::model_group(*agent, model)
-        .or_else(|| crate::agent::model_group::group_from_refusal_value(*agent, evidence))
-    {
+    match quota_group_for_mark(*agent, model, message, Some(evidence)) {
         Some(group) => mark_group_rate_limited(agent, custom_name, group, message),
         None => mark_rate_limited(agent, custom_name, message),
     }
+}
+
+/// Dispatched model first; with no model, only the refusal may name a tier.
+/// `model_group(Droid, None)` is `standard` (fail closed), so consulting it
+/// here would mark every model-less droid 402 as standard — including
+/// reload-your-tokens, which names no tier and must stay agent-wide.
+fn quota_group_for_mark<'a>(
+    agent: AgentKind,
+    model: Option<&'a str>,
+    message: &'a str,
+    evidence: Option<&'a serde_json::Value>,
+) -> Option<&'a str> {
+    if let Some(name) = model
+        && let Some(group) = crate::agent::model_group::model_group(agent, Some(name))
+    {
+        return Some(group);
+    }
+    evidence
+        .and_then(|value| crate::agent::model_group::group_from_refusal_value(agent, value))
+        .or_else(|| crate::agent::model_group::group_from_refusal(agent, message))
 }
 
 pub(crate) fn format_recovery(at: NaiveDateTime) -> String {

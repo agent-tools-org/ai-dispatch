@@ -134,3 +134,78 @@ fn no_current_model_still_finds_a_healthy_group() {
     let got = healthy_model_for(AgentKind::Antigravity, None, |group| group == "gemini");
     assert_eq!(got, Some("claude-opus-4-6-thinking"));
 }
+
+/// Captured 2026-08-19 12:06-12:10 with the standard pool exhausted.
+const DROID_WEEKLY_402: &str = r#"{"type":"error","source":"agent_loop","message":"402 {\"detail\":\"You've reached your weekly standard usage limit (resets in 2 days).\nSwitch to Droid Core or enable Extra Usage to continue.\",\"status\":402,\"title\":\"Payment Required\",\"displayToUser\":true}"}"#;
+
+#[test]
+fn droid_core_is_only_the_confirmed_allowlist() {
+    let droid = AgentKind::Droid;
+    assert_eq!(model_group(droid, Some("glm-5.2")), Some("core"));
+    assert_eq!(model_group(droid, Some("kimi-k3")), Some("core"));
+    assert_eq!(model_group(droid, Some("minimax-m3")), Some("core"));
+    assert_eq!(model_group(droid, Some("deepseek-v4-flash-0731")), Some("core"));
+    assert_eq!(model_group(droid, Some("GLM-5.2")), Some("core"));
+}
+
+#[test]
+fn every_other_droid_name_is_standard_including_unknown_and_none() {
+    let droid = AgentKind::Droid;
+    for model in [
+        "claude-opus-5",
+        "claude-haiku-4-5-20251001",
+        "gpt-5.6-luna",
+        "grok-4.6",
+        "auto",
+        "glm-5.2-fast",
+        "kimi-k2.6",
+        "not-a-real-model",
+    ] {
+        assert_eq!(
+            model_group(droid, Some(model)),
+            Some("standard"),
+            "{model} must draw on the standard pool"
+        );
+    }
+    assert_eq!(model_group(droid, None), Some("standard"));
+}
+
+#[test]
+fn the_droid_standard_refusal_names_its_own_tier() {
+    assert_eq!(
+        group_from_refusal(AgentKind::Droid, DROID_WEEKLY_402),
+        Some("standard")
+    );
+    assert_eq!(
+        group_from_refusal(
+            AgentKind::Droid,
+            "You've reached your 5-hour standard usage limit (resets in 1h 48min)."
+        ),
+        Some("standard")
+    );
+}
+
+#[test]
+fn a_droid_refusal_that_names_no_tier_stays_agent_wide() {
+    assert_eq!(
+        group_from_refusal(AgentKind::Droid, "402 payment required: reload your tokens"),
+        None
+    );
+}
+
+#[test]
+fn a_spent_droid_standard_pool_falls_back_to_core() {
+    let got = healthy_model_for(AgentKind::Droid, Some("claude-opus-5"), |group| {
+        group == "standard"
+    });
+    assert_eq!(got, Some("glm-5.2"));
+}
+
+#[test]
+fn droid_stays_an_account_pool_while_still_being_grouped() {
+    assert_eq!(
+        crate::types::provider_for_cli(AgentKind::Droid).1,
+        crate::types::MeteringShape::AccountPool
+    );
+    assert!(has_grouped_quota(AgentKind::Droid));
+}

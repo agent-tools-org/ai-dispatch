@@ -200,6 +200,39 @@ fn adopts_detached_task_with_live_agent() {
     let _ = child.wait();
 }
 
+/// The dangerous half of the detach gate. `reaps_non_detached_task_with_dead_worker_and_agent`
+/// passes a pid that was never alive, so it only pins the Failed transition — it cannot tell
+/// whether a real orphan agent is still killed. If the gate ever widened to adopt tasks the
+/// detach path never marked, that test would stay green while live agents leaked forever.
+#[test]
+fn reaps_non_detached_task_and_kills_its_live_agent() {
+    let _home = setup_home();
+    let store = Store::open_memory().expect("store");
+    store
+        .insert_task(&task("t-orphan-live", TaskStatus::Running))
+        .expect("insert task");
+    let mut child = std::process::Command::new("sleep").arg("30").spawn().expect("spawn agent");
+    let agent_pid = child.id();
+    let mut s = spec("t-orphan-live");
+    s.detached = false;
+    s.agent_pid = Some(agent_pid);
+    s.idle_timeout_secs = Some(3600);
+    save_spec(&s).expect("save spec");
+
+    let cleaned = check_zombie_tasks_with(&store, |_| false).expect("reap");
+
+    assert_eq!(cleaned, vec!["t-orphan-live".to_string()]);
+    assert_eq!(
+        store.get_task("t-orphan-live").expect("get").expect("task").status,
+        TaskStatus::Failed,
+    );
+    let _ = child.wait();
+    assert!(
+        !crate::background::is_process_running(agent_pid),
+        "an orphan agent with no detach marker must still be killed",
+    );
+}
+
 #[test]
 fn reaps_non_detached_task_with_dead_worker_and_agent() {
     let _home = setup_home();

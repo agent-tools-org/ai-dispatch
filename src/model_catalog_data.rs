@@ -147,8 +147,9 @@ pub const AGENT_MODELS: &[AgentModel] = &[
     AgentModel { agent: AgentKind::Cursor, model: "gpt-5.4-high", input_per_m: 0.0, output_per_m: 0.0, tier: "premium", description: "GPT-5.4 High, premium pool", capability: 9.0 },
     // droid 0.199.0 served catalog, captured 2026-08-19. Factory publishes no
     // per-token rate (estimate_cost is None). 0.0/0.0 is "no figure", not free.
-    // Confirmed Core models are cheap so `--budget` survives the weekly
-    // standard pool; every other served name is standard (fail closed).
+    // CLI-selectable billingPool:"core" rows are cheap so `--budget` survives
+    // the weekly standard pool; everything else is standard (Factory's own
+    // billingPool default is "standard").
     AgentModel { agent: AgentKind::Droid, model: "claude-opus-5", input_per_m: 0.0, output_per_m: 0.0, tier: "standard", description: "CLI default (price unknown)", capability: 9.5 },
     AgentModel { agent: AgentKind::Droid, model: "claude-opus-5-fast", input_per_m: 0.0, output_per_m: 0.0, tier: "standard", description: "price unknown", capability: 9.4 },
     AgentModel { agent: AgentKind::Droid, model: "claude-opus-4-8", input_per_m: 0.0, output_per_m: 0.0, tier: "standard", description: "price unknown", capability: 9.3 },
@@ -180,15 +181,15 @@ pub const AGENT_MODELS: &[AgentModel] = &[
     AgentModel { agent: AgentKind::Droid, model: "gemini-3.5-flash", input_per_m: 0.0, output_per_m: 0.0, tier: "standard", description: "price unknown", capability: 7.4 },
     AgentModel { agent: AgentKind::Droid, model: "gemini-3-flash-preview", input_per_m: 0.0, output_per_m: 0.0, tier: "standard", description: "price unknown", capability: 7.5 },
     AgentModel { agent: AgentKind::Droid, model: "auto", input_per_m: 0.0, output_per_m: 0.0, tier: "standard", description: "price unknown", capability: 8.0 },
-    AgentModel { agent: AgentKind::Droid, model: "inkling", input_per_m: 0.0, output_per_m: 0.0, tier: "standard", description: "price unknown", capability: 7.0 },
+    AgentModel { agent: AgentKind::Droid, model: "inkling", input_per_m: 0.0, output_per_m: 0.0, tier: "cheap", description: "Droid Core (price unknown)", capability: 7.0 },
     AgentModel { agent: AgentKind::Droid, model: "grok-4.6", input_per_m: 0.0, output_per_m: 0.0, tier: "standard", description: "price unknown", capability: 8.5 },
     AgentModel { agent: AgentKind::Droid, model: "grok-4.5", input_per_m: 0.0, output_per_m: 0.0, tier: "standard", description: "price unknown", capability: 8.0 },
-    AgentModel { agent: AgentKind::Droid, model: "glm-5.2-fast", input_per_m: 0.0, output_per_m: 0.0, tier: "standard", description: "price unknown", capability: 6.5 },
-    AgentModel { agent: AgentKind::Droid, model: "kimi-k2.7-code", input_per_m: 0.0, output_per_m: 0.0, tier: "standard", description: "price unknown", capability: 6.4 },
-    AgentModel { agent: AgentKind::Droid, model: "kimi-k2.6", input_per_m: 0.0, output_per_m: 0.0, tier: "standard", description: "price unknown", capability: 6.2 },
-    AgentModel { agent: AgentKind::Droid, model: "nemotron-3-ultra", input_per_m: 0.0, output_per_m: 0.0, tier: "standard", description: "price unknown", capability: 6.0 },
-    AgentModel { agent: AgentKind::Droid, model: "deepseek-v4-pro", input_per_m: 0.0, output_per_m: 0.0, tier: "standard", description: "price unknown", capability: 6.8 },
-    AgentModel { agent: AgentKind::Droid, model: "minimax-m2.7", input_per_m: 0.0, output_per_m: 0.0, tier: "standard", description: "price unknown", capability: 6.0 },
+    AgentModel { agent: AgentKind::Droid, model: "glm-5.2-fast", input_per_m: 0.0, output_per_m: 0.0, tier: "cheap", description: "Droid Core (price unknown)", capability: 6.5 },
+    AgentModel { agent: AgentKind::Droid, model: "kimi-k2.7-code", input_per_m: 0.0, output_per_m: 0.0, tier: "cheap", description: "Droid Core (price unknown)", capability: 6.4 },
+    AgentModel { agent: AgentKind::Droid, model: "kimi-k2.6", input_per_m: 0.0, output_per_m: 0.0, tier: "cheap", description: "Droid Core (price unknown)", capability: 6.2 },
+    AgentModel { agent: AgentKind::Droid, model: "nemotron-3-ultra", input_per_m: 0.0, output_per_m: 0.0, tier: "cheap", description: "Droid Core (price unknown)", capability: 6.0 },
+    AgentModel { agent: AgentKind::Droid, model: "deepseek-v4-pro", input_per_m: 0.0, output_per_m: 0.0, tier: "cheap", description: "Droid Core (price unknown)", capability: 6.8 },
+    AgentModel { agent: AgentKind::Droid, model: "minimax-m2.7", input_per_m: 0.0, output_per_m: 0.0, tier: "cheap", description: "Droid Core (price unknown)", capability: 6.0 },
     AgentModel { agent: AgentKind::Droid, model: "glm-5.2", input_per_m: 0.0, output_per_m: 0.0, tier: "cheap", description: "Droid Core (price unknown)", capability: 7.2 },
     AgentModel { agent: AgentKind::Droid, model: "kimi-k3", input_per_m: 0.0, output_per_m: 0.0, tier: "cheap", description: "Droid Core (price unknown)", capability: 7.0 },
     AgentModel { agent: AgentKind::Droid, model: "minimax-m3", input_per_m: 0.0, output_per_m: 0.0, tier: "cheap", description: "Droid Core (price unknown)", capability: 6.8 },

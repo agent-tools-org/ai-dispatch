@@ -13,13 +13,31 @@ const AUTO_GROUP: &str = "auto";
 const STANDARD_GROUP: &str = "standard";
 const CORE_GROUP: &str = "core";
 
-/// Confirmed Droid Core ids only. Unlisted names are standard — enumerating
-/// the spent pool instead left every other standard model dispatchable.
+/// Factory 0.199.0 model table: each row carries `billingPool`, and the
+/// resolver defaults `billingPool ?? "standard"`. An unlisted or future
+/// name is therefore standard — Factory's own default, not just our caution.
 const DROID_CORE: &[&str] = &[
+    // CLI-selectable, labeled "<X> (Droid Core)" in the table.
     "glm-5.2",
+    "glm-5.2-fast",
     "kimi-k3",
-    "minimax-m3",
+    "kimi-k2.7-code",
+    "kimi-k2.6",
     "deepseek-v4-flash-0731",
+    "deepseek-v4-pro",
+    "minimax-m3",
+    "minimax-m2.7",
+    "inkling",
+    "nemotron-3-ultra",
+    // billingPool:"core" but deprecated or availableInCLI:!1.
+    "glm-4.6",
+    "glm-4.7",
+    "glm-5",
+    "glm-5.1",
+    "kimi-k2.5",
+    "minimax-m2.5",
+    "shield-risk",
+    "shield-downgrade",
 ];
 
 /// Agents whose quota is metered per model family rather than per account.
@@ -197,18 +215,11 @@ pub(crate) fn groups_for_agent(agent: AgentKind) -> &'static [(&'static str, &'s
             (AUTO_GROUP, &["auto"]),
         ],
         // Preference order for a replacement, not membership — `model_group`
-        // treats only the Core allowlist as `core`.
+        // treats only the Core allowlist as `core`. First Core id is the
+        // strongest that still served with the standard pool exhausted.
         AgentKind::Droid => &[
             (STANDARD_GROUP, &["claude-opus-5"]),
-            (
-                CORE_GROUP,
-                &[
-                    "glm-5.2",
-                    "kimi-k3",
-                    "minimax-m3",
-                    "deepseek-v4-flash-0731",
-                ],
-            ),
+            (CORE_GROUP, &["glm-5.2"]),
         ],
         _ => &[],
     }

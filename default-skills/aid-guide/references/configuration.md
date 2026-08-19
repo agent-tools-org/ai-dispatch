@@ -135,7 +135,10 @@ Windowed rather than as a person hold.
 An agent whose plan splits one allowance into tiers is marked per tier. Cursor
 meters a single premium pool that every model except `auto` draws on, so a
 premium refusal holds those models while `auto` stays dispatchable;
-`aid config clear-limit cursor` clears both. A group hold is not an agent hold:
+`aid config clear-limit cursor` clears both. Droid's Factory plan meters a
+weekly or 5-hour `standard` pool separately from Droid Core, so a standard 402
+holds those models while Core stays dispatchable;
+`aid config clear-limit droid` clears both. A group hold is not an agent hold:
 `aid agent list` and `aid agent quota` report it as `PARTIAL` (still dispatchable
 on clear tiers), not `LIMITED` or `OK`. STATUS now matches dispatch: a snapshot
 that releases a route for `aid run` also clears LIMITED / PARTIAL. A hold only

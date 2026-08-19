@@ -384,8 +384,9 @@ four hold classes). A marker whose stated
 time has already passed does not divert anything, and neither does the short
 cooldown left by an unrecognised refusal — that window is shorter than the cost
 of moving off the agent you asked for. Where a tiered agent has only one tier
-held — cursor's premium pool — dispatch stays on the agent and switches to a
-tier that still serves, reporting the swap rather than making it silently.
+held — cursor's premium pool, or droid's standard pool — dispatch stays on the
+agent and switches to a tier that still serves, reporting the swap rather than
+making it silently.
 
 A hold is scoped to what actually refused. When a CLI serves several providers,
 a refusal is attributed to the provider of the route aid dispatched, so one

@@ -251,12 +251,25 @@ fn marks_droid_rate_limits_from_status_and_error_type() {
         !rate_limit::is_rate_limited(&AgentKind::Droid, None),
         "Transient is not Held"
     );
-    rate_limit::clear_rate_limit(&AgentKind::Droid, None);
-    let live = r#"{"type":"error","message":"You've reached your weekly standard usage limit (resets in 1 day)."}"#;
+    rate_limit::clear_all_rate_limits_for_agent(&AgentKind::Droid, None);
+    let live = r#"{"type":"error","source":"agent_loop","message":"402 {\"detail\":\"You've reached your weekly standard usage limit (resets in 2 days).\nSwitch to Droid Core or enable Extra Usage to continue.\",\"status\":402,\"title\":\"Payment Required\",\"displayToUser\":true}"}"#;
     let event = agent.parse_event(&TaskId("t-droid".to_string()), live).unwrap();
     assert_eq!(event.event_kind, EventKind::Error);
-    assert!(rate_limit::is_rate_limited(&AgentKind::Droid, None));
-    rate_limit::clear_rate_limit(&AgentKind::Droid, None);
+    assert!(rate_limit::is_group_rate_limited(
+        &AgentKind::Droid,
+        None,
+        "standard"
+    ));
+    assert!(!rate_limit::is_group_rate_limited(
+        &AgentKind::Droid,
+        None,
+        "core"
+    ));
+    assert!(
+        !rate_limit::is_rate_limited(&AgentKind::Droid, None),
+        "a standard 402 must not write off the whole agent"
+    );
+    rate_limit::clear_all_rate_limits_for_agent(&AgentKind::Droid, None);
 }
 
 #[test]

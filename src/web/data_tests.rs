@@ -14,27 +14,32 @@ use crate::background::{BackgroundRunSpec, save_spec};
 use crate::store::Store;
 use crate::types::TaskStatus;
 
-#[tokio::test]
-async fn running_task_reports_worker_rss_and_fleet_sums_it() {
+#[tokio::test(flavor = "current_thread")]
+async fn running_task_reports_measured_worker_rss_and_fleet_sums_it() {
     let home = tempfile::tempdir().unwrap();
     let _home = crate::paths::AidHomeGuard::set(home.path());
     let store = Arc::new(Store::open_memory().unwrap());
     let mut task = make_task("t-memory");
-    task.status = TaskStatus::Running;
+    task.status = TaskStatus::Pending;
     task.project_id = Some("memory-sector".to_string());
     store.insert_task(&task).unwrap();
+    assert!(store.update_task_status("t-memory", TaskStatus::Running).unwrap());
+    let worker_pid = std::process::id();
     let spec = serde_json::from_value::<BackgroundRunSpec>(serde_json::json!({
         "task_id": "t-memory",
-        "worker_pid": std::process::id(),
+        "worker_pid": worker_pid,
         "agent_name": "codex",
         "prompt": "measure memory",
         "retry": 0
     }))
     .unwrap();
     save_spec(&spec).unwrap();
+    assert_eq!(crate::background::load_worker_pid("t-memory").unwrap(), Some(worker_pid));
+    let expected_memory = crate::tui::metrics::get_process_metrics(worker_pid)
+        .map(|metrics| metrics.memory_mb.round() as i64);
 
     let Json(response) = get_task(Path("t-memory".to_string()), State(store.clone())).await.unwrap();
-    assert!(response.memory_mb.is_some_and(|value| value > 0));
+    assert_eq!(response.memory_mb, expected_memory);
 
     let Json(fleet) = get_fleet(
         Query(FleetParams { window: Some("all".to_string()) }),
@@ -47,10 +52,10 @@ async fn running_task_reports_worker_rss_and_fleet_sums_it() {
     )
     .await
     .unwrap();
-    assert!(fleet.summary.memory_mb.is_some_and(|value| value > 0));
+    assert_eq!(fleet.summary.memory_mb, expected_memory);
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "current_thread")]
 async fn sector_workgroup_is_derived_from_any_task_in_the_sector() {
     let home = tempfile::tempdir().unwrap();
     let _home = crate::paths::AidHomeGuard::set(home.path());

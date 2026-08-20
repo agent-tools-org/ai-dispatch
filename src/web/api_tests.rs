@@ -160,22 +160,14 @@ async fn list_tasks_returns_task_json() {
 }
 
 #[tokio::test]
-async fn task_response_derives_started_at_from_dispatch_liveness_event() {
+async fn task_response_reports_started_at_after_running_transition() {
     let store = Arc::new(Store::open_memory().unwrap());
     let mut task = make_task("t-started");
-    task.status = TaskStatus::Running;
+    task.status = TaskStatus::Pending;
     store.insert_task(&task).unwrap();
-    let started_at = Local::now();
-    store.insert_event(&TaskEvent {
-        task_id: TaskId("t-started".to_string()),
-        timestamp: started_at,
-        event_kind: EventKind::Setup,
-        detail: "worker started".to_string(),
-        metadata: None,
-    }).unwrap();
+    assert!(store.update_task_status("t-started", TaskStatus::Running).unwrap());
     let Json(response) = get_task(Path("t-started".to_string()), State(store)).await.unwrap();
-    let expected = started_at.to_rfc3339();
-    assert_eq!(response.started_at.as_deref(), Some(expected.as_str()));
+    assert!(response.started_at.is_some());
 }
 
 #[tokio::test]

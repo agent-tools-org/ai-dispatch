@@ -32,7 +32,7 @@ struct AIDCommandApp: App {
                 Button("CARGO") { store.persistTab(.cargo) }
                     .keyboardShortcut("3", modifiers: .command)
                 Divider()
-                Button("Refresh") { store.startDemoStream() }
+                Button("Refresh") { store.refresh() }
                     .keyboardShortcut("r", modifiers: .command)
             }
         }
@@ -45,7 +45,8 @@ struct AIDCommandApp: App {
                 commanderName: Binding(
                     get: { store.commanderName },
                     set: { store.persistCommanderName($0) }
-                )
+                ),
+                store: store
             )
             .environment(\.theme, themeManager.tokens)
         }
@@ -68,7 +69,8 @@ struct RootView: View {
                     commanderName: Binding(
                         get: { store.commanderName },
                         set: { store.persistCommanderName($0) }
-                    )
+                    ),
+                    store: store
                 )
                 .environment(\.theme, themeManager.tokens)
             }

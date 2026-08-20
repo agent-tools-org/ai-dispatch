@@ -1,4 +1,4 @@
-// Main fleet console store — snapshot stream, selection, XP, toasts.
+// Main fleet console store — snapshot stream, selection, XP, toasts, source switch.
 // Exports: FleetStore.
 
 import Foundation
@@ -18,18 +18,41 @@ final class FleetStore {
     var commanderName: String
     var showSettings = false
     var showLeftRail = false
+    var connectionConfig: ConnectionConfig
+    var probeResult: String?
 
     private var streamTask: Task<Void, Never>?
     private var detailTask: Task<Void, Never>?
     private let demoSource = DemoSource()
+    private var liveSource: LiveSource?
 
     init() {
+        connectionConfig = ConnectionConfig.load()
         snapshot = DemoDataset.initialSnapshot()
         xpState = XPState(xp: UserDefaults.standard.integer(forKey: Self.xpKey).nonZeroOr(4280))
         commanderName = UserDefaults.standard.string(forKey: Self.commanderKey) ?? "CMDR"
         selectedTab = Self.loadTab()
         selectedSectorID = Self.loadSectorID(fallback: snapshot.sectors.first?.id)
-        startDemoStream()
+        startSource()
+    }
+
+    func startSource() {
+        streamTask?.cancel()
+        liveSource?.updateConfig(connectionConfig)
+        if connectionConfig.source == .live {
+            let source = liveSource ?? LiveSource(config: connectionConfig)
+            source.updateConfig(connectionConfig)
+            liveSource = source
+            var previous = snapshot
+            streamTask = Task {
+                for await update in source.snapshots() {
+                    guard !Task.isCancelled else { break }
+                    handleUpdate(update, previous: &previous)
+                }
+            }
+        } else {
+            startDemoStream()
+        }
     }
 
     func startDemoStream() {
@@ -41,6 +64,25 @@ final class FleetStore {
                 handleUpdate(update, previous: &previous)
             }
         }
+    }
+
+    func applyConnection(_ config: ConnectionConfig) throws {
+        try config.persist(token: config.token)
+        connectionConfig = ConnectionConfig.load()
+        if ProcessInfo.processInfo.environment["AID_BASE_URL"] != nil {
+            connectionConfig = config
+        }
+        startSource()
+    }
+
+    func refresh() {
+        startSource()
+    }
+
+    func runProbe() async {
+        var config = connectionConfig
+        config.token = config.token ?? KeychainTokenStore.load()
+        probeResult = await ConnectionProbe.test(config: config)
     }
 
     func selectMission(_ id: MissionID?) {
@@ -78,25 +120,27 @@ final class FleetStore {
             return
         }
         do {
-            let result = try await demoSource.act(action, on: id)
-            snapshot = demoSource.currentSnapshot()
+            let result = try await activeSource().act(action, on: id)
+            snapshot = activeSource().currentSnapshot()
             actionMessage = result.message
-            if result.ok, case .abort = action {
+            if result.ok {
                 loadDetail(for: id)
             }
-            if result.ok, case .relaunch = action {
-                loadDetail(for: id)
-            }
-        } catch DemoSourceError.rejected(let reason) {
-            actionMessage = reason
         } catch {
-            actionMessage = "action failed"
+            actionMessage = LiveSource.message(for: error)
         }
     }
 
     var selectedSector: Sector? {
         guard let selectedSectorID else { return snapshot.sectors.first }
         return snapshot.sectors.first { $0.id == selectedSectorID } ?? snapshot.sectors.first
+    }
+
+    private func activeSource() -> any FleetDataSource {
+        if connectionConfig.source == .live, let liveSource {
+            return liveSource
+        }
+        return demoSource
     }
 
     private func loadDetail(for id: MissionID?) {
@@ -106,13 +150,16 @@ final class FleetStore {
             return
         }
         detailTask = Task {
-            missionDetail = try? await demoSource.detail(id)
+            missionDetail = try? await activeSource().detail(id)
         }
     }
 
     private func handleUpdate(_ update: FleetSnapshot, previous: inout FleetSnapshot) {
         detectTransitions(from: previous, to: update)
         snapshot = update
+        if selectedSectorID == nil {
+            selectedSectorID = update.sectors.first?.id
+        }
         if let id = selectedMissionID {
             loadDetail(for: id)
         }

@@ -101,8 +101,24 @@ struct HUDBarView: View {
     }
 
     private var linkLamp: some View {
-        let live = snapshot.connection == .live
-        return StatusLamp(color: live ? theme.done : theme.fail, active: live)
+        let color: Color
+        let label: String
+        switch snapshot.connection {
+        case .live:
+            color = theme.done; label = "LINK"
+        case .connecting:
+            color = theme.stop; label = "LINK…"
+        case .degraded(let age):
+            color = theme.stop; label = "STALE \(Int(age))s"
+        case .error(let message):
+            color = theme.fail; label = String(message.prefix(24))
+        case .disconnected:
+            color = theme.fail; label = "OFF"
+        }
+        return HStack(spacing: 4) {
+            StatusLamp(color: color, active: snapshot.connection == .live)
+            MonoLabel(text: label, color: color)
+        }
     }
 
     private func startClock() {

@@ -23,6 +23,9 @@ targetTemplates:
     type: application
     sources:
       - path: AIDCommand
+    settings:
+      base:
+        PRODUCT_MODULE_NAME: AIDCommand
     info:
       path: Support/Info-${target_name}.plist
       properties:
@@ -59,7 +62,10 @@ targets:
     dependencies:
       - target: AIDCommandMac
     settings:
-      base: { GENERATE_INFOPLIST_FILE: "YES" }
+      base:
+        GENERATE_INFOPLIST_FILE: "YES"
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/AID Command.app/Contents/MacOS/AID Command"
+        BUNDLE_LOADER: "$(TEST_HOST)"
   AIDCommandTestsiPad:
     type: bundle.unit-test
     platform: iOS
@@ -68,7 +74,10 @@ targets:
     dependencies:
       - target: AIDCommandiPad
     settings:
-      base: { GENERATE_INFOPLIST_FILE: "YES" }
+      base:
+        GENERATE_INFOPLIST_FILE: "YES"
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/AID Command.app/AID Command"
+        BUNDLE_LOADER: "$(TEST_HOST)"
 schemes:
   AIDCommand macOS:
     build:

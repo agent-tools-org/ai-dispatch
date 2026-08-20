@@ -183,7 +183,7 @@ fn task_outcome(task: &Task) -> TaskOutcome {
     task.outcome()
 }
 
-pub(super) fn validate_merge_outcome(
+pub(crate) fn validate_merge_outcome(
     task: &Task,
     outcome: TaskOutcome,
     force: bool,

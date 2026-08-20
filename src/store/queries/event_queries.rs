@@ -211,8 +211,11 @@ impl Store {
         let conn = self.db();
         let placeholders: Vec<String> = (1..=task_ids.len()).map(|index| format!("?{index}")).collect();
         let sql = format!(
-            "SELECT task_id, timestamp, event_type, detail, metadata FROM events
-             WHERE task_id IN ({}) ORDER BY task_id, id DESC",
+            "SELECT task_id, timestamp, event_type, detail, metadata FROM (
+                 SELECT task_id, timestamp, event_type, detail, metadata, id,
+                        ROW_NUMBER() OVER (PARTITION BY task_id ORDER BY id DESC) AS event_rank
+                 FROM events WHERE task_id IN ({})
+             ) WHERE event_rank <= 3 ORDER BY task_id, id",
             placeholders.join(",")
         );
         let params: Vec<&dyn rusqlite::ToSql> =
@@ -223,12 +226,7 @@ impl Store {
         for row in rows {
             let event = row?;
             let task_events = events.entry(event.task_id.as_str().to_string()).or_insert_with(Vec::new);
-            if task_events.len() < 3 {
-                task_events.push(event);
-            }
-        }
-        for task_events in events.values_mut() {
-            task_events.reverse();
+            task_events.push(event);
         }
         Ok(events)
     }

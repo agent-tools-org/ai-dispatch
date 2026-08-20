@@ -31,16 +31,17 @@ pub(crate) fn agents_list_value(store: &Store) -> Result<serde_json::Value> {
 }
 
 pub fn print_agent_json(store: &Store, name: &str) -> Result<()> {
+    let installed_agents = crate::agent::detect_agents();
     if let Some(kind) = builtin_profile(name) {
         let running_tasks = store.list_tasks(TaskFilter::Running).unwrap_or_default();
-        let agent_json = build_agent_json(store, kind, None, &running_tasks)?;
+        let agent_json = build_agent_json(store, kind, None, &running_tasks, &installed_agents)?;
         println!("{}", serde_json::to_string_pretty(&agent_json)?);
         return Ok(());
     }
     let custom_agents = crate::agent::registry::list_custom_agents();
     if let Some(config) = custom_agents.iter().find(|c| c.id.eq_ignore_ascii_case(name)) {
         let running_tasks = store.list_tasks(TaskFilter::Running).unwrap_or_default();
-        let agent_json = build_agent_json(store, AgentKind::Custom, Some(config), &running_tasks)?;
+        let agent_json = build_agent_json(store, AgentKind::Custom, Some(config), &running_tasks, &installed_agents)?;
         println!("{}", serde_json::to_string_pretty(&agent_json)?);
         return Ok(());
     }
@@ -49,15 +50,16 @@ pub fn print_agent_json(store: &Store, name: &str) -> Result<()> {
 
 pub(crate) fn get_agents_list(store: &Store) -> Result<AgentListJson> {
     let running_tasks = store.list_tasks(TaskFilter::Running).unwrap_or_default();
+    let installed_agents = crate::agent::detect_agents();
     let mut agents = Vec::new();
     
     for kind in AgentKind::ALL_BUILTIN {
-        agents.push(build_agent_json(store, *kind, None, &running_tasks)?);
+        agents.push(build_agent_json(store, *kind, None, &running_tasks, &installed_agents)?);
     }
     
     let custom = crate::agent::registry::list_custom_agents();
     for config in &custom {
-        agents.push(build_agent_json(store, AgentKind::Custom, Some(config), &running_tasks)?);
+        agents.push(build_agent_json(store, AgentKind::Custom, Some(config), &running_tasks, &installed_agents)?);
     }
     
     Ok(AgentListJson {
@@ -71,6 +73,7 @@ fn build_agent_json(
     kind: AgentKind,
     custom_config: Option<&CustomAgentConfig>,
     running_tasks: &[Task],
+    installed_agents: &[AgentKind],
 ) -> Result<AgentJson> {
     let name = match custom_config {
         Some(config) => config.id.clone(),
@@ -82,13 +85,8 @@ fn build_agent_json(
     let installed = if let Some(config) = custom_config {
         command_installed(&config.command)
     } else {
-        crate::agent::detect_agents().contains(&kind)
+        installed_agents.contains(&kind)
     };
-    if installed && matches!(kind, AgentKind::Antigravity | AgentKind::OpenCode) {
-        let agent = crate::agent::get_agent(kind);
-        let _ = crate::agent::model_validation::get_served_models_cached(&*agent);
-    }
-    
     let disabled = crate::agent_config::is_agent_disabled(&name);
     
     // `trust_tier` keeps the JSON field name for callers; the value is the

@@ -12,7 +12,7 @@ use super::api_tests::make_task;
 use super::fleet::{FleetParams, ServerInfo, get_fleet};
 use crate::background::{BackgroundRunSpec, save_spec};
 use crate::store::Store;
-use crate::types::TaskStatus;
+use crate::types::{AttributionSource, TaskStatus};
 
 #[tokio::test(flavor = "current_thread")]
 async fn running_task_reports_measured_worker_rss_and_fleet_sums_it() {
@@ -88,4 +88,29 @@ async fn sector_workgroup_is_derived_from_any_task_in_the_sector() {
     let ungrouped = fleet.sectors.iter().find(|sector| sector.id == "ungrouped-sector").unwrap();
     assert_eq!(shared.workgroup_id.as_deref(), Some("wg-real"));
     assert_eq!(ungrouped.workgroup_id, None);
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn fleet_reports_the_latest_observed_model_for_an_agent() {
+    let home = tempfile::tempdir().unwrap();
+    let _home = crate::paths::AidHomeGuard::set(home.path());
+    let store = Arc::new(Store::open_memory().unwrap());
+    let mut task = make_task("t-observed-model");
+    task.observed_model = Some("gpt-observed".to_string());
+    task.attribution_source = Some(AttributionSource::Echoed);
+    store.insert_task(&task).unwrap();
+
+    let Json(fleet) = get_fleet(
+        Query(FleetParams { window: Some("all".to_string()) }),
+        State(store),
+        axum::Extension(ServerInfo {
+            host: "127.0.0.1".to_string(),
+            port: 8080,
+            started_at: "2026-08-20T07:00:00Z".to_string(),
+        }),
+    )
+    .await
+    .unwrap();
+    let codex = fleet.agents.iter().find(|agent| agent.name == "codex").unwrap();
+    assert_eq!(codex.observed_model.as_deref(), Some("gpt-observed"));
 }

@@ -4,6 +4,7 @@
 import SwiftUI
 
 struct ConsoleShellView: View {
+    @Environment(\.theme) private var theme
     @Bindable var store: FleetStore
     @Bindable var themeManager: ThemeManager
 
@@ -18,7 +19,10 @@ struct ConsoleShellView: View {
                         selectedTab: $store.selectedTab,
                         onToggleRail: { store.showLeftRail.toggle() }
                     )
-                    GaugeStripView(summary: store.snapshot.summary)
+                    ThemedPanel {
+                        GaugeStripView(summary: store.snapshot.summary)
+                    }
+                    .padding(.horizontal, theme.spacing.md)
                     HStack(spacing: 0) {
                         if layout != .compact {
                             LeftRailView(
@@ -28,7 +32,9 @@ struct ConsoleShellView: View {
                             .frame(width: layout.leftRailWidth)
                         }
                         centerContent
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
                     }
+                    .frame(maxHeight: .infinity)
                     if layout.showsBottomBrief {
                         MissionBriefPlaceholder()
                             .frame(height: 268)

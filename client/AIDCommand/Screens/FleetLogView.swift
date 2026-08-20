@@ -11,7 +11,7 @@ struct FleetLogView: View {
 
     var body: some View {
         ScrollView {
-            LazyVStack(alignment: .leading, spacing: theme.spacing.md) {
+            VStack(alignment: .leading, spacing: theme.spacing.md) {
                 ForEach(sectors) { sector in
                     sectorGroup(sector)
                 }
@@ -65,7 +65,7 @@ struct FleetLogView: View {
         } label: {
             HStack(spacing: theme.spacing.sm) {
                 Text(StatusMapper.mark(for: mission.state))
-                    .font(theme.font(.label))
+                    .font(.system(size: 13))
                     .foregroundStyle(color(for: mission.state))
                     .frame(width: 16)
                 missionColumn(mission)

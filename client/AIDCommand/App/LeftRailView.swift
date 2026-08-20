@@ -43,9 +43,14 @@ struct LeftRailView: View {
                         .foregroundStyle(theme.ink)
                         .lineLimit(1)
                 }
-                Text("\(done)✦ \(run)▶ \(fail)✕")
-                    .font(theme.font(.caption))
-                    .foregroundStyle(theme.ink2)
+                HStack(spacing: 6) {
+                    Text("\(done)").font(theme.font(.caption)).foregroundStyle(theme.done)
+                    + Text("✦").font(.system(size: 11)).foregroundStyle(theme.done)
+                    Text("\(run)").font(theme.font(.caption)).foregroundStyle(theme.run)
+                    + Text("▶").font(.system(size: 11)).foregroundStyle(theme.run)
+                    Text("\(fail)").font(theme.font(.caption)).foregroundStyle(theme.fail)
+                    + Text("✕").font(.system(size: 11)).foregroundStyle(theme.fail)
+                }
                 SegmentBar(segments: segments, count: max(segments.count, 1))
             }
             .padding(theme.spacing.sm)

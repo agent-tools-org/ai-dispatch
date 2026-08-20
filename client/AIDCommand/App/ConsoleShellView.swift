@@ -19,10 +19,8 @@ struct ConsoleShellView: View {
                         selectedTab: tabBinding,
                         onToggleRail: { store.showLeftRail.toggle() }
                     )
-                    ThemedPanel {
-                        GaugeStripView(summary: store.snapshot.summary)
-                    }
-                    .padding(.horizontal, theme.spacing.md)
+                    GaugeStripView(summary: store.snapshot.summary)
+                        .padding(.horizontal, theme.spacing.md)
                     HStack(spacing: 0) {
                         if layout != .compact {
                             LeftRailView(
@@ -37,6 +35,7 @@ struct ConsoleShellView: View {
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
                     }
                     .frame(maxHeight: .infinity)
+                    .frame(minHeight: 0)
                     if layout.showsBottomBrief {
                         MissionBriefView(
                             snapshot: store.snapshot,

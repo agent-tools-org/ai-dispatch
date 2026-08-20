@@ -1,5 +1,5 @@
 // Agent and drive glyphs — SVG paths ported to SwiftUI Path.
-// Exports: UnitGlyph, DriveGlyph.
+// Exports: UnitGlyph, DriveGlyph, GlyphQuantizer.
 
 import SwiftUI
 
@@ -106,7 +106,7 @@ struct DriveGlyph: View {
     }
 }
 
-private struct GlyphQuantizer: ViewModifier {
+struct GlyphQuantizer: ViewModifier {
     let enabled: Bool
 
     func body(content: Content) -> some View {

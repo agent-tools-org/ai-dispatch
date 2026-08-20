@@ -11,20 +11,22 @@ struct GaugeCell: View {
     var pipLevel: Int = 4
 
     var body: some View {
-        VStack(alignment: .leading, spacing: theme.spacing.xs) {
-            HStack(spacing: 6) {
-                StatusLamp(color: color)
-                MonoLabel(text: label)
+        ThemedPanel {
+            VStack(alignment: .leading, spacing: theme.spacing.xs) {
+                HStack(spacing: 6) {
+                    StatusLamp(color: color)
+                    MonoLabel(text: label)
+                }
+                Text(value)
+                    .font(theme.font(.value))
+                    .foregroundStyle(color)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+                pipRow
             }
-            Text(value)
-                .font(theme.font(.value))
-                .foregroundStyle(color)
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
-            pipRow
+            .padding(theme.spacing.sm)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(theme.spacing.sm)
     }
 
     private var pipRow: some View {

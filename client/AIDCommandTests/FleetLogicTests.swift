@@ -140,13 +140,30 @@ final class DemoDatasetCoverageTests: XCTestCase {
     }
 
     func testFleetLogReceivesAllSectorsFromDemoSource() {
-        let _ = DemoSource()
-        let snapshot = DemoDataset.initialSnapshot()
-        let sectors = snapshot.sectors
-        XCTAssertEqual(sectors.count, 3)
-        for sector in sectors {
-            XCTAssertFalse(sector.missions.isEmpty, "\(sector.tag) must have missions")
-        }
+        let source = DemoSource()
+        let snapshot = source.currentSnapshot()
+        XCTAssertEqual(snapshot.sectors.count, 3)
+        let tags = snapshot.sectors.map(\.tag).sorted()
+        XCTAssertEqual(tags, ["SEC-01", "SEC-02", "SEC-03"])
+        let totalMissions = snapshot.sectors.reduce(0) { $0 + $1.missions.count }
+        XCTAssertEqual(totalMissions, 20, "Fleet log must receive all 20 demo missions")
+        XCTAssertEqual(snapshot.sectors[0].missions.count, 9)
+        XCTAssertEqual(snapshot.sectors[1].missions.count, 6)
+        XCTAssertEqual(snapshot.sectors[2].missions.count, 5)
+    }
+}
+
+final class FleetStoreSnapshotTests: XCTestCase {
+    @MainActor
+    func testStoreSnapshotMatchesDemoSourceMissionCount() {
+        let store = FleetStore()
+        let source = DemoSource()
+        let demo = source.currentSnapshot()
+        XCTAssertEqual(store.snapshot.sectors.count, demo.sectors.count)
+        let storeTotal = store.snapshot.sectors.reduce(0) { $0 + $1.missions.count }
+        let demoTotal = demo.sectors.reduce(0) { $0 + $1.missions.count }
+        XCTAssertEqual(storeTotal, demoTotal)
+        XCTAssertEqual(storeTotal, 20)
     }
 }
 

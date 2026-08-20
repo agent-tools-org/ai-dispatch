@@ -4,6 +4,7 @@
 
 use anyhow::Result;
 use rusqlite::{OptionalExtension, params};
+use std::collections::HashMap;
 
 use super::Store;
 use crate::types::{
@@ -49,6 +50,51 @@ impl Store {
             urgency: urgency.as_deref().and_then(TaskUrgency::parse_str),
             rigor: rigor.as_deref().and_then(TaskRigor::parse_str),
         })
+    }
+
+    pub fn get_task_profiles_batch(&self, task_ids: &[&str]) -> Result<HashMap<String, TaskProfileDeclaration>> {
+        if task_ids.is_empty() {
+            return Ok(HashMap::new());
+        }
+        let placeholders: Vec<String> = (1..=task_ids.len()).map(|index| format!("?{index}")).collect();
+        let sql = format!(
+            "SELECT id, declared_difficulty, declared_budget, declared_urgency, declared_rigor
+             FROM tasks WHERE id IN ({})",
+            placeholders.join(",")
+        );
+        let conn = self.db();
+        let params: Vec<&dyn rusqlite::ToSql> =
+            task_ids.iter().map(|id| id as &dyn rusqlite::ToSql).collect();
+        let mut statement = conn.prepare(&sql)?;
+        let rows = statement.query_map(params.as_slice(), |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                TaskProfileDeclaration {
+                    difficulty: row
+                        .get::<_, Option<String>>(1)?
+                        .as_deref()
+                        .and_then(TaskDifficulty::parse_str),
+                    budget: row
+                        .get::<_, Option<String>>(2)?
+                        .as_deref()
+                        .and_then(TaskBudget::parse_str),
+                    urgency: row
+                        .get::<_, Option<String>>(3)?
+                        .as_deref()
+                        .and_then(TaskUrgency::parse_str),
+                    rigor: row
+                        .get::<_, Option<String>>(4)?
+                        .as_deref()
+                        .and_then(TaskRigor::parse_str),
+                },
+            ))
+        })?;
+        let mut profiles = HashMap::new();
+        for row in rows {
+            let (id, profile) = row?;
+            profiles.insert(id, profile);
+        }
+        Ok(profiles)
     }
 }
 

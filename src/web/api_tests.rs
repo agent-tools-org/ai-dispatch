@@ -6,20 +6,23 @@ use std::sync::Arc;
 
 use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
+use axum::response::IntoResponse;
 use axum::Json;
 use chrono::Local;
 use tempfile::NamedTempFile;
 
 use super::api::{
-    ActionResponse, DiffResponse, TaskEventResponse, TaskListParams, TaskResponse, get_task, get_task_events,
-    get_task_output, get_usage, list_tasks,
+    DiffResponse, TaskEventResponse, TaskListParams, TaskResponse, get_task, get_task_events,
+    get_task_output, get_task_result, get_usage, list_tasks, merge_task, steer_task,
 };
+use super::api_types::{ActionResponse, MessageRequest, TaskEnrichment};
+use super::fleet::{FleetParams, ServerInfo, get_fleet};
 use crate::store::Store;
 use crate::types::{
     AgentKind, DeliveryAssessment, EventKind, Task, TaskEvent, TaskId, TaskStatus, VerifyStatus,
 };
 
-fn make_task(id: &str) -> Task {
+pub(super) fn make_task(id: &str) -> Task {
     Task {
         id: TaskId(id.to_string()),
         agent: AgentKind::Codex,
@@ -63,7 +66,7 @@ fn make_task(id: &str) -> Task {
 
 #[test]
 fn task_response_serializes_rfc3339_timestamps() {
-    let json = serde_json::to_value(TaskResponse::from_task(make_task("t-1"), None, None)).unwrap();
+    let json = serde_json::to_value(TaskResponse::from_task(make_task("t-1"), TaskEnrichment::default())).unwrap();
     assert!(json["created_at"].as_str().unwrap().contains('T'));
     assert!(json["completed_at"].as_str().unwrap().contains('T'));
     assert_eq!(json["status"], "done");
@@ -75,7 +78,7 @@ fn task_response_does_not_report_unobserved_as_success() {
     let mut task = make_task("t-unobs");
     task.verify = None;
     task.verify_status = VerifyStatus::Unobserved;
-    let json = serde_json::to_value(TaskResponse::from_task(task, None, None)).unwrap();
+    let json = serde_json::to_value(TaskResponse::from_task(task, TaskEnrichment::default())).unwrap();
     assert_eq!(json["status"], "done");
     assert_eq!(json["verify_status"], "unobserved");
     assert_eq!(json["outcome"], "unverified");
@@ -88,10 +91,25 @@ fn task_response_serializes_delivery_assessment() {
     task.pending_reason = Some("rate_limited".to_string());
     task.delivery_assessment = Some(DeliveryAssessment::EmptyDiff);
 
-    let json = serde_json::to_value(TaskResponse::from_task(task, None, None)).unwrap();
+    let json = serde_json::to_value(TaskResponse::from_task(task, TaskEnrichment::default())).unwrap();
 
     assert_eq!(json["pending_reason"], "rate_limited");
     assert_eq!(json["delivery_assessment"], "empty_diff");
+}
+
+#[test]
+fn task_response_keeps_unmeasured_values_null() {
+    let mut task = make_task("t-unknown");
+    task.cost_usd = None;
+    task.requested_model = None;
+    let value = serde_json::to_value(TaskResponse::from_task(task, TaskEnrichment::default())).unwrap();
+    assert!(value["cost_usd"].is_null());
+    assert!(value["observed_model"].is_null());
+    assert!(value["difficulty"].is_null());
+    assert!(value["rigor"].is_null());
+    assert!(value["budget_class"].is_null());
+    assert!(value["urgency"].is_null());
+    assert!(value["memory_mb"].is_null());
 }
 
 #[test]
@@ -142,6 +160,46 @@ async fn list_tasks_returns_task_json() {
 }
 
 #[tokio::test]
+async fn task_response_reports_started_at_after_running_transition() {
+    let store = Arc::new(Store::open_memory().unwrap());
+    let mut task = make_task("t-started");
+    task.status = TaskStatus::Pending;
+    store.insert_task(&task).unwrap();
+    assert!(store.update_task_status("t-started", TaskStatus::Running).unwrap());
+    let Json(response) = get_task(Path("t-started".to_string()), State(store)).await.unwrap();
+    assert!(response.started_at.is_some());
+}
+
+#[tokio::test]
+async fn fleet_returns_redacted_tasks_and_summary_in_one_snapshot() {
+    let home = tempfile::tempdir().unwrap();
+    let _home = crate::paths::AidHomeGuard::set(home.path());
+    let store = Arc::new(Store::open_memory().unwrap());
+    let mut task = make_task("t-fleet");
+    task.project_id = Some("client-api".to_string());
+    task.cost_usd = None;
+    store.insert_task(&task).unwrap();
+    let Json(response) = get_fleet(
+        Query(FleetParams { window: Some("all".to_string()) }),
+        State(store),
+        axum::Extension(ServerInfo {
+            host: "127.0.0.1".to_string(),
+            port: 8080,
+            started_at: "2026-08-20T07:00:00Z".to_string(),
+        }),
+    )
+    .await
+    .unwrap();
+    assert_eq!(response.summary.done, 1);
+    assert_eq!(response.summary.spend_usd, None);
+    assert_eq!(response.summary.tokens, Some(42));
+    assert_eq!(response.sectors.len(), 1);
+    assert!(!response.agents.is_empty());
+    assert!(response.sectors[0].tasks[0].get("prompt").is_none());
+    assert!(response.sectors[0].tasks[0].get("resolved_prompt").is_none());
+}
+
+#[tokio::test]
 async fn get_task_returns_404_for_missing_task() {
     let store = Arc::new(Store::open_memory().unwrap());
     let result = get_task(Path("missing".to_string()), State(store)).await;
@@ -176,6 +234,47 @@ async fn get_task_output_reads_output_file_before_log_file() {
     store.insert_task(&task).unwrap();
     let Json(response) = get_task_output(Path("t-1".to_string()), State(store)).await.unwrap();
     assert_eq!(response.output, "final output");
+}
+
+#[tokio::test]
+async fn get_task_result_reads_persisted_report() {
+    let home = tempfile::tempdir().unwrap();
+    let _home = crate::paths::AidHomeGuard::set(home.path());
+    let store = Arc::new(Store::open_memory().unwrap());
+    store.insert_task(&make_task("t-result")).unwrap();
+    let result_path = crate::paths::task_dir("t-result").join("result.md");
+    std::fs::create_dir_all(result_path.parent().unwrap()).unwrap();
+    std::fs::write(&result_path, "report").unwrap();
+    let Json(response) = get_task_result(Path("t-result".to_string()), State(store)).await.unwrap();
+    assert_eq!(response.result, "report");
+}
+
+#[tokio::test]
+async fn steer_endpoint_uses_cli_guard_for_terminal_tasks() {
+    let store = Arc::new(Store::open_memory().unwrap());
+    store.insert_task(&make_task("t-steer-done")).unwrap();
+    let expected = crate::cmd::steer::run(store.as_ref(), "t-steer-done", "pivot")
+        .expect_err("CLI guard must reject terminal task")
+        .to_string();
+    let response = steer_task(
+        Path("t-steer-done".to_string()),
+        State(store),
+        Json(MessageRequest { message: "pivot".to_string() }),
+    )
+    .await
+    .into_response();
+    assert_eq!(response.status(), StatusCode::CONFLICT);
+    assert!(expected.contains("can only reply to running tasks"));
+}
+
+#[tokio::test]
+async fn merge_endpoint_reports_running_task_as_conflict() {
+    let store = Arc::new(Store::open_memory().unwrap());
+    let mut task = make_task("t-merge-running");
+    task.status = TaskStatus::Running;
+    store.insert_task(&task).unwrap();
+    let response = merge_task(Path(task.id.to_string()), State(store)).await.into_response();
+    assert_eq!(response.status(), StatusCode::CONFLICT);
 }
 
 #[tokio::test]

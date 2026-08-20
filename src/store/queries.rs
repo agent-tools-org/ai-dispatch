@@ -3,6 +3,7 @@
 // Deps: submodules under src/store/queries/.
 
 mod event_queries;
+mod agent_queries;
 mod message_queries;
 mod memory_queries;
 mod state_queries;
@@ -14,6 +15,8 @@ mod workgroup_queries;
 
 #[allow(unused_imports)]
 pub use event_queries::*;
+#[allow(unused_imports)]
+pub use agent_queries::*;
 #[allow(unused_imports)]
 pub use message_queries::*;
 #[allow(unused_imports)]

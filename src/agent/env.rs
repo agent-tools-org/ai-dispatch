@@ -2,6 +2,7 @@
 // Exports: path and process helpers for agent runs.
 // Deps: anyhow::Result, crate::paths, std::process::Command, super::RunOpts.
 
+use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -231,12 +232,60 @@ pub(crate) fn which_exists(name: &str) -> bool {
     if let Some(marker) = super::env_identity::identity_marker(name) {
         return super::env_identity::binary_identity_matches(name, marker);
     }
-    let on_path = Command::new("which")
-        .arg(name)
-        .output()
-        .map(|o| o.status.success())
-        .unwrap_or(false);
-    on_path
+    let paths = std::env::var_os("PATH")
+        .map(|value| std::env::split_paths(&value).collect::<Vec<_>>())
+        .unwrap_or_default();
+    executable_in_paths(name, paths)
+}
+
+pub(crate) fn installed_agents(candidates: &[(&str, AgentKind)]) -> Vec<AgentKind> {
+    let results = std::thread::scope(|scope| {
+        let probes =
+        candidates
+            .iter()
+            .map(|(name, kind)| scope.spawn(move || (*kind, which_exists(name))))
+            .collect::<Vec<_>>();
+        probes.into_iter().filter_map(|probe| probe.join().ok()).collect::<Vec<_>>()
+    });
+    let mut found = Vec::new();
+    for (kind, available) in results {
+        if available && !found.contains(&kind) {
+            found.push(kind);
+        }
+    }
+    found
+}
+
+fn executable_in_paths<I>(name: &str, paths: I) -> bool
+where
+    I: IntoIterator<Item = PathBuf>,
+{
+    let candidate = Path::new(name);
+    if candidate.components().count() > 1 {
+        return is_executable_file(candidate);
+    }
+    paths
+        .into_iter()
+        .map(|path| path.join(name))
+        .any(|path| is_executable_file(&path))
+}
+
+fn is_executable_file(path: &Path) -> bool {
+    let Ok(metadata) = fs::metadata(path) else {
+        return false;
+    };
+    if !metadata.is_file() {
+        return false;
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        metadata.permissions().mode() & 0o111 != 0
+    }
+    #[cfg(not(unix))]
+    {
+        true
+    }
 }
 
 #[cfg(test)]

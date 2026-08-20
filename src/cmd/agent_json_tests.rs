@@ -9,7 +9,8 @@ use crate::cmd::agent_json_types::{
     HistoryJson, CategoryHistoryJson, LoadJson,
 };
 use crate::types::AgentKind;
-use super::{build_quota_json, custom_has_endpoint, get_agents_list, rate_limit_kind};
+use super::{build_quota_json, get_agents_list, rate_limit_kind};
+use crate::cmd::agent_json_helpers::custom_has_endpoint;
 
 #[test]
 fn test_agent_json_serialization_roundtrip() {

@@ -8,16 +8,19 @@ use chrono::Local;
 use crate::agent::custom::CustomAgentConfig;
 use crate::types::{AgentKind, Task, TaskFilter};
 use crate::store::Store;
+use crate::cmd::agent_history::get_agent_histories;
 
 #[cfg(test)]
 #[path = "agent_json_tests.rs"]
 mod tests;
 
 use crate::cmd::agent_json_types::{
-    AgentListJson, AgentJson, GroupHoldJson, QuotaJson, ModelsJson, AvailableModelJson, LoadJson
+    AgentListJson, AgentJson, HistoryJson, ModelsJson,
+    AvailableModelJson, LoadJson,
 };
 use crate::cmd::agent_json_helpers::{
-    command_installed, get_agent_capabilities, get_agent_history
+    build_quota_json, builtin_profile, catalog_default_model, command_installed,
+    get_agent_capabilities, metering_label, rate_limit_kind,
 };
 
 pub fn print_agents_json(store: &Store) -> Result<()> {
@@ -34,14 +37,24 @@ pub fn print_agent_json(store: &Store, name: &str) -> Result<()> {
     let installed_agents = crate::agent::detect_agents();
     if let Some(kind) = builtin_profile(name) {
         let running_tasks = store.list_tasks(TaskFilter::Running).unwrap_or_default();
-        let agent_json = build_agent_json(store, kind, None, &running_tasks, &installed_agents)?;
+        let histories = get_agent_histories(store, &[kind.as_str()])?;
+        let history = histories.get(kind.as_str()).cloned().flatten();
+        let agent_json = build_agent_json(kind, None, &running_tasks, &installed_agents, history)?;
         println!("{}", serde_json::to_string_pretty(&agent_json)?);
         return Ok(());
     }
     let custom_agents = crate::agent::registry::list_custom_agents();
     if let Some(config) = custom_agents.iter().find(|c| c.id.eq_ignore_ascii_case(name)) {
         let running_tasks = store.list_tasks(TaskFilter::Running).unwrap_or_default();
-        let agent_json = build_agent_json(store, AgentKind::Custom, Some(config), &running_tasks, &installed_agents)?;
+        let histories = get_agent_histories(store, &[config.id.as_str()])?;
+        let history = histories.get(&config.id).cloned().flatten();
+        let agent_json = build_agent_json(
+            AgentKind::Custom,
+            Some(config),
+            &running_tasks,
+            &installed_agents,
+            history,
+        )?;
         println!("{}", serde_json::to_string_pretty(&agent_json)?);
         return Ok(());
     }
@@ -49,17 +62,40 @@ pub fn print_agent_json(store: &Store, name: &str) -> Result<()> {
 }
 
 pub(crate) fn get_agents_list(store: &Store) -> Result<AgentListJson> {
-    let running_tasks = store.list_tasks(TaskFilter::Running).unwrap_or_default();
     let installed_agents = crate::agent::detect_agents();
+    get_agents_list_with_installed(store, &installed_agents)
+}
+
+pub(crate) fn get_agents_list_with_installed(
+    store: &Store,
+    installed_agents: &[AgentKind],
+) -> Result<AgentListJson> {
+    let running_tasks = store.list_tasks(TaskFilter::Running).unwrap_or_default();
+    let custom = crate::agent::registry::list_custom_agents();
+    let history_names: Vec<&str> = AgentKind::ALL_BUILTIN
+        .iter()
+        .map(|kind| kind.as_str())
+        .chain(custom.iter().map(|config| config.id.as_str()))
+        .collect();
+    let histories = get_agent_histories(store, &history_names)?;
     let mut agents = Vec::new();
     
     for kind in AgentKind::ALL_BUILTIN {
-        agents.push(build_agent_json(store, *kind, None, &running_tasks, &installed_agents)?);
+        let history = histories.get(kind.as_str()).cloned().flatten();
+        let agent = build_agent_json(*kind, None, &running_tasks, &installed_agents, history)?;
+        agents.push(agent);
     }
     
-    let custom = crate::agent::registry::list_custom_agents();
     for config in &custom {
-        agents.push(build_agent_json(store, AgentKind::Custom, Some(config), &running_tasks, &installed_agents)?);
+        let history = histories.get(&config.id).cloned().flatten();
+        let agent = build_agent_json(
+            AgentKind::Custom,
+            Some(config),
+            &running_tasks,
+            &installed_agents,
+            history,
+        )?;
+        agents.push(agent);
     }
     
     Ok(AgentListJson {
@@ -69,11 +105,11 @@ pub(crate) fn get_agents_list(store: &Store) -> Result<AgentListJson> {
 }
 
 fn build_agent_json(
-    store: &Store,
     kind: AgentKind,
     custom_config: Option<&CustomAgentConfig>,
     running_tasks: &[Task],
     installed_agents: &[AgentKind],
+    history: Option<HistoryJson>,
 ) -> Result<AgentJson> {
     let name = match custom_config {
         Some(config) => config.id.clone(),
@@ -176,8 +212,6 @@ fn build_agent_json(
     };
     let load = LoadJson { running };
     
-    let history = get_agent_history(store, &name, is_custom)?;
-    
     Ok(AgentJson {
         name,
         kind: if is_custom { "custom".to_string() } else { "builtin".to_string() },
@@ -194,103 +228,4 @@ fn build_agent_json(
         history,
         load,
     })
-}
-
-/// Build the `QuotaJson` for `rlk` by consulting live rate-limit markers.
-/// State is `"ok"` when no markers are active, `"partial"` when only model-group
-/// markers are active (the agent is still dispatchable on clear tiers), and
-/// `"limited"` when the agent-level marker is active.
-fn build_quota_json(rlk: &AgentKind, custom_name: Option<&str>) -> QuotaJson {
-    if crate::rate_limit::is_rate_limited(rlk, custom_name) {
-        let info = crate::rate_limit::get_rate_limit_info(rlk, custom_name);
-        QuotaJson {
-            state: "limited".to_string(),
-            recovery_at: info.as_ref().and_then(|i| i.recovery_at.clone()),
-            message: info.as_ref().and_then(|i| i.message.clone()),
-            source: "marker".to_string(),
-            groups: vec![],
-        }
-    } else {
-        let holds = crate::rate_limit::active_group_holds(rlk, custom_name);
-        if holds.is_empty() {
-            QuotaJson {
-                state: "ok".to_string(),
-                recovery_at: None,
-                message: None,
-                source: "marker".to_string(),
-                groups: vec![],
-            }
-        } else {
-            let groups = holds
-                .into_iter()
-                .map(|(group, info)| GroupHoldJson {
-                    group,
-                    recovery_at: info.recovery_at,
-                    message: info.message,
-                })
-                .collect();
-            QuotaJson {
-                state: "partial".to_string(),
-                recovery_at: None,
-                message: None,
-                source: "marker".to_string(),
-                groups,
-            }
-        }
-    }
-}
-
-fn builtin_profile(name: &str) -> Option<AgentKind> {
-    AgentKind::ALL_BUILTIN
-        .iter()
-        .copied()
-        .find(|kind| kind.as_str().eq_ignore_ascii_case(name))
-}
-
-fn custom_has_endpoint(config: &CustomAgentConfig) -> bool {
-    config
-        .base_url
-        .as_deref()
-        .map(str::trim)
-        .is_some_and(|url| !url.is_empty())
-}
-
-/// Which kind to pass to `build_quota_json` for this agent.
-///
-/// The write path (`OpenCodeOverlayAgent::rate_limit_name`) always marks
-/// `(Custom, Some(id))` when `reported_kind == Custom`, so the file is
-/// `rate-limit-<id>`.  The read must consult the same slot.  The old branch
-/// that returned `OpenCode` for `delegate_to = "opencode"` agents without their
-/// own endpoint caused a split: writes landed at `rate-limit-<id>` while reads
-/// looked at `rate-limit-opencode`.  For built-in agents `kind` is returned
-/// unchanged; for custom agents `kind` is already `Custom`.
-fn rate_limit_kind(kind: AgentKind, _custom_config: Option<&CustomAgentConfig>) -> AgentKind {
-    kind
-}
-
-fn catalog_default_model(kind: AgentKind) -> Option<String> {
-    let models = crate::model_catalog::models_for_agent(&kind);
-    models
-        .iter()
-        .find(|m| m.description.to_ascii_lowercase().contains("default"))
-        .or_else(|| models.first())
-        .map(|m| m.model.to_string())
-}
-
-/// Machine-readable metering shape, so the caller can route on it. An exhausted
-/// `spend_budget` does not recover with time — only a top-up clears it — and a
-/// `per_model_family` pool says nothing about that provider's other families.
-/// Collapsing these into one "limited" flag is what stranded a working agy
-/// claude allowance behind an exhausted gemini one.
-fn metering_label(shape: crate::types::MeteringShape) -> String {
-    use crate::types::MeteringShape as M;
-    match shape {
-        M::AccountPool => "account_pool",
-        M::PerModelFamily => "per_model_family",
-        M::SpendBudget => "spend_budget",
-        M::Subscription => "subscription",
-        M::None => "none",
-        M::Unknown => "unknown",
-    }
-    .to_string()
 }

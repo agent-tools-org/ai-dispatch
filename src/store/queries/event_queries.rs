@@ -50,15 +50,19 @@ impl Store {
         let placeholders: Vec<String> = (1..=task_ids.len()).map(|i| format!("?{i}")).collect();
         // Exclude completion summary errors (start with "FAIL" or "DONE") — we want the actual cause
         let sql = format!(
-            "SELECT task_id, detail FROM events e1
-             WHERE event_type = 'error'
-             AND detail NOT LIKE 'FAIL%' AND detail NOT LIKE 'DONE%'
-             AND timestamp = (
-                 SELECT MAX(timestamp) FROM events e2
-                 WHERE e2.task_id = e1.task_id AND e2.event_type = 'error'
-                 AND e2.detail NOT LIKE 'FAIL%' AND e2.detail NOT LIKE 'DONE%'
-             )
-             AND task_id IN ({})",
+            "SELECT e.task_id, e.detail
+             FROM events e
+             JOIN (
+                 SELECT task_id, MAX(timestamp) AS latest_timestamp
+                 FROM events
+                 WHERE event_type = 'error'
+                   AND detail NOT LIKE 'FAIL%' AND detail NOT LIKE 'DONE%'
+                   AND task_id IN ({})
+                 GROUP BY task_id
+             ) latest ON latest.task_id = e.task_id
+                      AND latest.latest_timestamp = e.timestamp
+             WHERE e.event_type = 'error'
+               AND e.detail NOT LIKE 'FAIL%' AND e.detail NOT LIKE 'DONE%'",
             placeholders.join(",")
         );
         let mut stmt = conn.prepare(&sql)?;
@@ -84,13 +88,16 @@ impl Store {
         let conn = self.db();
         let placeholders: Vec<String> = (1..=task_ids.len()).map(|i| format!("?{i}")).collect();
         let sql = format!(
-            "SELECT task_id, detail FROM events e1
-             WHERE event_type = 'error'
-             AND timestamp = (
-                 SELECT MAX(timestamp) FROM events e2
-                 WHERE e2.task_id = e1.task_id AND e2.event_type = 'error'
-             )
-             AND task_id IN ({})",
+            "SELECT e.task_id, e.detail
+             FROM events e
+             JOIN (
+                 SELECT task_id, MAX(timestamp) AS latest_timestamp
+                 FROM events
+                 WHERE event_type = 'error' AND task_id IN ({})
+                 GROUP BY task_id
+             ) latest ON latest.task_id = e.task_id
+                      AND latest.latest_timestamp = e.timestamp
+             WHERE e.event_type = 'error'",
             placeholders.join(",")
         );
         let mut stmt = conn.prepare(&sql)?;
@@ -114,13 +121,16 @@ impl Store {
         let conn = self.db();
         let placeholders: Vec<String> = (1..=task_ids.len()).map(|i| format!("?{i}")).collect();
         let sql = format!(
-            "SELECT task_id, detail FROM events e1
-             WHERE event_type = 'milestone'
-             AND timestamp = (
-                 SELECT MAX(timestamp) FROM events e2
-                 WHERE e2.task_id = e1.task_id AND e2.event_type = 'milestone'
-             )
-             AND task_id IN ({})",
+            "SELECT e.task_id, e.detail
+             FROM events e
+             JOIN (
+                 SELECT task_id, MAX(timestamp) AS latest_timestamp
+                 FROM events
+                 WHERE event_type = 'milestone' AND task_id IN ({})
+                 GROUP BY task_id
+             ) latest ON latest.task_id = e.task_id
+                      AND latest.latest_timestamp = e.timestamp
+             WHERE e.event_type = 'milestone'",
             placeholders.join(",")
         );
         let mut stmt = conn.prepare(&sql)?;
@@ -144,14 +154,17 @@ impl Store {
         let conn = self.db();
         let placeholders: Vec<String> = (1..=task_ids.len()).map(|i| format!("?{i}")).collect();
         let sql = format!(
-            "SELECT task_id, json_extract(metadata, '$.awaiting_prompt') FROM events e1
-             WHERE json_extract(metadata, '$.awaiting_input') = 1
-             AND timestamp = (
-                 SELECT MAX(timestamp) FROM events e2
-                 WHERE e2.task_id = e1.task_id
-                   AND json_extract(e2.metadata, '$.awaiting_input') = 1
-             )
-             AND task_id IN ({})",
+            "SELECT e.task_id, json_extract(e.metadata, '$.awaiting_prompt')
+             FROM events e
+             JOIN (
+                 SELECT task_id, MAX(timestamp) AS latest_timestamp
+                 FROM events
+                 WHERE json_extract(metadata, '$.awaiting_input') = 1
+                   AND task_id IN ({})
+                 GROUP BY task_id
+             ) latest ON latest.task_id = e.task_id
+                      AND latest.latest_timestamp = e.timestamp
+             WHERE json_extract(e.metadata, '$.awaiting_input') = 1",
             placeholders.join(",")
         );
         let mut stmt = conn.prepare(&sql)?;
@@ -211,12 +224,18 @@ impl Store {
         let conn = self.db();
         let placeholders: Vec<String> = (1..=task_ids.len()).map(|index| format!("?{index}")).collect();
         let sql = format!(
-            "SELECT task_id, timestamp, event_type, detail, metadata FROM (
-                 SELECT task_id, timestamp, event_type, detail, metadata, id,
-                        ROW_NUMBER() OVER (PARTITION BY task_id ORDER BY id DESC) AS event_rank
-                 FROM events WHERE task_id IN ({})
-             ) WHERE event_rank <= 3 ORDER BY task_id, id",
-            placeholders.join(",")
+            "WITH requested(task_id) AS (VALUES {})
+             SELECT e.task_id, e.timestamp, e.event_type, e.detail, e.metadata
+             FROM requested
+             JOIN events e ON e.id IN (
+                 SELECT latest.id
+                 FROM events latest
+                 WHERE latest.task_id = requested.task_id
+                 ORDER BY latest.id DESC
+                 LIMIT 3
+             )
+             ORDER BY e.task_id, e.id",
+            placeholders.iter().map(|value| format!("({value})")).collect::<Vec<_>>().join(",")
         );
         let params: Vec<&dyn rusqlite::ToSql> =
             task_ids.iter().map(|id| id as &dyn rusqlite::ToSql).collect();

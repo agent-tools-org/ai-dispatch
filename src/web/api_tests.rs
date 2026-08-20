@@ -186,6 +186,7 @@ async fn fleet_returns_redacted_tasks_and_summary_in_one_snapshot() {
             host: "127.0.0.1".to_string(),
             port: 8080,
             started_at: "2026-08-20T07:00:00Z".to_string(),
+            installed_agents: Vec::new(),
         }),
     )
     .await

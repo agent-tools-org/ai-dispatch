@@ -18,27 +18,18 @@ impl Store {
         }
         let placeholders: Vec<String> = (1..=task_ids.len()).map(|index| format!("?{index}")).collect();
         let sql = format!(
-            "SELECT id,
-                    COALESCE(
-                        started_at,
-                        (SELECT MIN(timestamp) FROM events
-                         WHERE events.task_id = tasks.id
-                           AND event_type IN (
-                               'setup', 'reasoning', 'milestone', 'tool_call',
-                               'build', 'test', 'commit', 'file_write', 'file_read',
-                               'web_search', 'lint', 'format'
-                           ))
-                    )
-             FROM tasks WHERE id IN ({})
-               AND (started_at IS NOT NULL OR EXISTS (
-                   SELECT 1 FROM events
-                   WHERE events.task_id = tasks.id
-                     AND event_type IN (
-                         'setup', 'reasoning', 'milestone', 'tool_call',
-                         'build', 'test', 'commit', 'file_write', 'file_read',
-                         'web_search', 'lint', 'format'
-                     )
-               ))",
+            "SELECT tasks.id, COALESCE(tasks.started_at, MIN(events.timestamp))
+             FROM tasks
+             LEFT JOIN events ON tasks.started_at IS NULL
+               AND events.task_id = tasks.id
+               AND events.event_type IN (
+                   'setup', 'reasoning', 'milestone', 'tool_call',
+                   'build', 'test', 'commit', 'file_write', 'file_read',
+                   'web_search', 'lint', 'format'
+               )
+             WHERE tasks.id IN ({})
+             GROUP BY tasks.id
+             HAVING tasks.started_at IS NOT NULL OR COUNT(events.id) > 0",
             placeholders.join(",")
         );
         let conn = self.db();
@@ -46,12 +37,14 @@ impl Store {
             task_ids.iter().map(|id| id as &dyn rusqlite::ToSql).collect();
         let mut statement = conn.prepare(&sql)?;
         let rows = statement.query_map(params.as_slice(), |row| {
-            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+            Ok((row.get::<_, String>(0)?, row.get::<_, Option<String>>(1)?))
         })?;
         let mut started_at = HashMap::new();
         for row in rows {
             let (id, value) = row?;
-            started_at.insert(id, value);
+            if let Some(value) = value {
+                started_at.insert(id, value);
+            }
         }
         Ok(started_at)
     }

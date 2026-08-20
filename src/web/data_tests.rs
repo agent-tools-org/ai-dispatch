@@ -48,6 +48,7 @@ async fn running_task_reports_measured_worker_rss_and_fleet_sums_it() {
             host: "127.0.0.1".to_string(),
             port: 8080,
             started_at: "2026-08-20T07:00:00Z".to_string(),
+            installed_agents: Vec::new(),
         }),
     )
     .await
@@ -80,6 +81,7 @@ async fn sector_workgroup_is_derived_from_any_task_in_the_sector() {
             host: "127.0.0.1".to_string(),
             port: 8080,
             started_at: "2026-08-20T07:00:00Z".to_string(),
+            installed_agents: Vec::new(),
         }),
     )
     .await
@@ -107,6 +109,7 @@ async fn fleet_reports_the_latest_observed_model_for_an_agent() {
             host: "127.0.0.1".to_string(),
             port: 8080,
             started_at: "2026-08-20T07:00:00Z".to_string(),
+            installed_agents: Vec::new(),
         }),
     )
     .await

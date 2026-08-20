@@ -5,6 +5,7 @@ pub mod agent;
 pub mod advise;
 pub mod agent_display;
 pub mod agent_json;
+pub(crate) mod agent_history;
 pub mod agent_json_helpers;
 pub mod agent_json_types;
 pub mod ask;

@@ -72,7 +72,7 @@ fn build_router(store: Arc<Store>, port: u16, host: String, token: Option<String
         .route("/api/usage", get(api::get_usage))
         .route("/api/fleet", get(fleet::get_fleet))
         .route("/api/agents", get(fleet::get_agents))
-        .route("/api/events", get(|state| async move { sse::sse_handler(state) }))
+        .route("/api/events", get(|state, server| async move { sse::sse_handler(state, server) }))
         .layer(middleware::from_fn(auth::middleware));
     Router::new()
         .merge(api)
@@ -84,6 +84,7 @@ fn build_router(store: Arc<Store>, port: u16, host: String, token: Option<String
             host,
             port,
             started_at: chrono::Utc::now().to_rfc3339(),
+            installed_agents: crate::agent::detect_agents(),
         }))
         .layer(axum::Extension(auth::AuthConfig::new(token)))
 }

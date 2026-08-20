@@ -5,7 +5,7 @@
 use crate::store::Store;
 use crate::types::{Task, TaskFilter, TaskStatus};
 use anyhow::Result;
-use axum::extract::State;
+use axum::extract::{Extension, State};
 use axum::response::sse::{Event, KeepAlive, Sse};
 use futures::stream::{self, Stream};
 use serde::Serialize;
@@ -16,7 +16,7 @@ use std::time::Duration;
 use tokio::time::{Interval, MissedTickBehavior, interval};
 
 use super::api_types::AgentResponse;
-use super::fleet::{self, FleetSummary};
+use super::fleet::{self, FleetSummary, ServerInfo};
 
 const POLL_INTERVAL: Duration = Duration::from_secs(2);
 const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(10);
@@ -56,6 +56,7 @@ struct AgentUpdatePayload {
 
 struct SseState {
     store: Arc<Store>,
+    installed_agents: Vec<crate::types::AgentKind>,
     pending: VecDeque<Event>,
     last_seen: HashMap<String, TaskStatus>,
     last_agents: HashMap<String, (String, Vec<String>)>,
@@ -65,6 +66,7 @@ struct SseState {
 
 pub(crate) fn sse_handler(
     State(store): State<Arc<Store>>,
+    Extension(server): Extension<ServerInfo>,
 ) -> Sse<impl Stream<Item = std::result::Result<Event, Infallible>>> {
     let mut poll = interval(POLL_INTERVAL);
     poll.set_missed_tick_behavior(MissedTickBehavior::Delay);
@@ -74,6 +76,7 @@ pub(crate) fn sse_handler(
     let stream = stream::unfold(
         SseState {
             store,
+            installed_agents: server.installed_agents,
             pending: VecDeque::new(),
             last_seen: HashMap::new(),
             last_agents: HashMap::new(),
@@ -88,7 +91,12 @@ pub(crate) fn sse_handler(
 
                 tokio::select! {
                     _ = state.poll.tick() => {
-                        if let Ok(events) = poll_events(&state.store, &mut state.last_seen, &mut state.last_agents) {
+                        if let Ok(events) = poll_events(
+                            &state.store,
+                            &state.installed_agents,
+                            &mut state.last_seen,
+                            &mut state.last_agents,
+                        ) {
                             state.pending.extend(events);
                         }
                     }
@@ -109,6 +117,7 @@ pub(crate) fn sse_handler(
 
 fn poll_events(
     store: &Store,
+    installed_agents: &[crate::types::AgentKind],
     last_seen: &mut HashMap<String, TaskStatus>,
     last_agents: &mut HashMap<String, (String, Vec<String>)>,
 ) -> Result<VecDeque<Event>> {
@@ -153,7 +162,7 @@ fn poll_events(
 
     let today = store.list_tasks(TaskFilter::Today)?;
     events.push(fleet_summary_event(&today));
-    append_agent_events(store, &running_tasks, last_agents, &mut events)?;
+    append_agent_events(store, installed_agents, &running_tasks, last_agents, &mut events)?;
     Ok(events.into())
 }
 
@@ -192,11 +201,12 @@ fn task_update_event(store: &Store, task: &Task) -> Result<Event> {
 
 fn append_agent_events(
     store: &Store,
+    installed_agents: &[crate::types::AgentKind],
     running: &[Task],
     last_agents: &mut HashMap<String, (String, Vec<String>)>,
     events: &mut Vec<Event>,
 ) -> Result<()> {
-    let agents = fleet::build_agents(store, running)?;
+    let agents = fleet::build_agents(store, running, installed_agents)?;
     for agent in agents {
         let state = (agent.quota.state.clone(), agent.running_task_ids.clone());
         let changed = last_agents.get(&agent.name).is_some_and(|previous| previous != &state);

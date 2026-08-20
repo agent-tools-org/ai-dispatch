@@ -176,7 +176,7 @@ struct MissionBriefView: View {
     private func sideColumn(_ mission: Mission) -> some View {
         VStack(alignment: .leading, spacing: theme.spacing.sm) {
             HStack(spacing: theme.spacing.md) {
-                stat("elapsed", FleetFormatters.elapsed(seconds: mission.elapsedSeconds))
+                stat("elapsed", nil, mission: mission)
                 stat("memory", mission.memoryMB ?? "—")
                 stat("tokens", FleetFormatters.tokens(mission.tokens))
                 stat("cost", FleetFormatters.cost(mission.cost))
@@ -196,12 +196,18 @@ struct MissionBriefView: View {
         .frame(width: 280, alignment: .leading)
     }
 
-    private func stat(_ label: String, _ value: String) -> some View {
+    private func stat(_ label: String, _ value: String? = nil, mission: Mission? = nil) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             MonoLabel(text: label, color: theme.ink3)
-            Text(value)
-                .font(theme.font(.caption))
-                .foregroundStyle(theme.ink)
+            if let mission {
+                ElapsedLabel(mission: mission)
+                    .font(theme.font(.caption))
+                    .foregroundStyle(theme.ink)
+            } else {
+                Text(value ?? "—")
+                    .font(theme.font(.caption))
+                    .foregroundStyle(theme.ink)
+            }
         }
     }
 

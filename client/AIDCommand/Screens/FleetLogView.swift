@@ -55,6 +55,7 @@ struct FleetLogView: View {
             }
             MonoLabel(text: "\(done)/\(sector.missions.count) cleared")
             SegmentBar(segments: sector.missions.map { color(for: $0.state) })
+                .frame(maxWidth: 160, alignment: .leading)
         }
         .padding(theme.spacing.sm)
         .background(theme.bg)

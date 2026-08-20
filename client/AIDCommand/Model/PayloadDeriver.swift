@@ -1,4 +1,5 @@
 // Client-side payload kind and priority derivation from mission facts.
+// Named DESIGN.md §7 payloads win; generic heuristics cover the rest.
 // Exports: PayloadKind, Payload, PayloadDeriver.
 
 import Foundation
@@ -42,12 +43,15 @@ enum PayloadDeriver {
                 manifest: manifest(for: mission)
             )
         case .done:
-            let kind = kind(for: mission)
+            if let named = namedPayload(for: mission, sectorTag: sectorTag) {
+                return named
+            }
+            let kind = heuristicKind(for: mission)
             return Payload(
                 id: mission.id,
-                name: payloadName(for: mission, kind: kind),
+                name: heuristicName(for: mission, kind: kind),
                 kind: kind,
-                rarity: rarity(for: mission, kind: kind),
+                rarity: heuristicRarity(for: mission, kind: kind),
                 sectorTag: sectorTag,
                 manifest: manifest(for: mission)
             )
@@ -60,43 +64,72 @@ enum PayloadDeriver {
         payloads.filter { $0.rarity == .legendary || $0.rarity == .epic }.count
     }
 
-    private static func kind(for mission: Mission) -> PayloadKind {
+    /// Spec-named payloads from DESIGN.md §7 (+ canvas call-outs for kind/rarity).
+    private static func namedPayload(for mission: Mission, sectorTag: String) -> Payload? {
         switch mission.id {
-        case "t-85e75668": return .report
-        case "t-9f10c3d2": return .release
-        case "t-b1930f5c": return .fixture
-        default: break
+        case "t-85e75668":
+            return Payload(
+                id: mission.id, name: "Fill-rate regression", kind: .report,
+                rarity: .legendary, sectorTag: sectorTag,
+                manifest: "9 venues · \(FleetFormatters.tokens(mission.tokens)) · \(FleetFormatters.cost(mission.cost))"
+            )
+        case "t-9f10c3d2":
+            return Payload(
+                id: mission.id, name: "aid v8.78.0", kind: .release,
+                rarity: .legendary, sectorTag: sectorTag,
+                manifest: "3.4 MB bin · 32 commands"
+            )
+        case "t-b1930f5c":
+            return Payload(
+                id: mission.id, name: "Store type fixes", kind: .fixture,
+                rarity: .common, sectorTag: sectorTag, manifest: manifest(for: mission)
+            )
+        case "t-22c5346d":
+            return Payload(
+                id: mission.id, name: "Ladder-gas study", kind: .bench,
+                rarity: .epic, sectorTag: sectorTag, manifest: manifest(for: mission)
+            )
+        case "t-d5a7f26e":
+            return Payload(
+                id: mission.id, name: "Call-site rescue", kind: .dataset,
+                rarity: .rare, sectorTag: sectorTag, manifest: manifest(for: mission)
+            )
+        case "t-77b2e004":
+            return Payload(
+                id: mission.id, name: "Rename watch engine symbols", kind: .patch,
+                rarity: .common, sectorTag: sectorTag, manifest: manifest(for: mission)
+            )
+        default:
+            return nil
         }
+    }
+
+    private static func heuristicKind(for mission: Mission) -> PayloadKind {
         let title = mission.title.lowercased()
         if title.contains("release") || title.contains("cut release") { return .release }
         if title.contains("audit") { return .audit }
         if title.contains("review") || title.contains("regression") { return .report }
-        if title.contains("measurement") || title.contains("bench") { return .bench }
+        if title.contains("measurement") || title.contains("bench") || title.contains("study") {
+            return .bench
+        }
         if title.contains("fix") || title.contains("type") { return .fixture }
-        if title.contains("patch") || title.contains("plumbing") { return .patch }
-        if title.contains("dataset") || title.contains("discovery") { return .dataset }
+        if title.contains("patch") || title.contains("rename") || title.contains("plumbing") {
+            return .patch
+        }
+        if title.contains("dataset") || title.contains("discovery") || title.contains("call-site") {
+            return .dataset
+        }
         return .report
     }
 
-    private static func payloadName(for mission: Mission, kind: PayloadKind) -> String {
-        switch mission.id {
-        case "t-85e75668": return "Fill-rate regression"
-        case "t-9f10c3d2": return "aid v8.78.0"
-        case "t-b1930f5c": return "Store type fixes"
-        default:
-            if kind == .release, let title = mission.title.split(separator: " ").last {
-                return String(title)
-            }
-            return mission.title
+    private static func heuristicName(for mission: Mission, kind: PayloadKind) -> String {
+        if kind == .release, let title = mission.title.split(separator: " ").last {
+            return String(title)
         }
+        return mission.title
     }
 
-    private static func rarity(for mission: Mission, kind: PayloadKind) -> PayloadRarity {
-        switch mission.id {
-        case "t-85e75668", "t-9f10c3d2": return .legendary
-        case "t-b1930f5c": return .common
-        default: break
-        }
+    private static func heuristicRarity(for mission: Mission, kind: PayloadKind) -> PayloadRarity {
         if kind == .scrap { return .salvage }
         let threat = mission.threat ?? 1
         if threat >= 5 { return .legendary }
@@ -107,13 +140,6 @@ enum PayloadDeriver {
     }
 
     private static func manifest(for mission: Mission) -> String {
-        let tokens = FleetFormatters.tokens(mission.tokens)
-        let cost = FleetFormatters.cost(mission.cost)
-        switch mission.id {
-        case "t-85e75668": return "9 venues · \(tokens) · \(cost)"
-        case "t-9f10c3d2": return "3.4 MB bin · 32 commands"
-        default:
-            return "\(tokens) · \(cost)"
-        }
+        "\(FleetFormatters.tokens(mission.tokens)) · \(FleetFormatters.cost(mission.cost))"
     }
 }

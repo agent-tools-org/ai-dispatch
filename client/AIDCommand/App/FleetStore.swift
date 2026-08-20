@@ -13,6 +13,7 @@ final class FleetStore {
     var selectedMissionID: MissionID?
     var missionDetail: MissionDetail?
     var actionMessage: String?
+    var documentPayload: DocumentPayload?
     var xpState: XPState
     var toasts: [ToastEvent] = []
     var commanderName: String
@@ -33,7 +34,10 @@ final class FleetStore {
         commanderName = UserDefaults.standard.string(forKey: Self.commanderKey) ?? "CMDR"
         selectedTab = Self.loadTab()
         selectedSectorID = Self.loadSectorID(fallback: snapshot.sectors.first?.id)
+        // Prefer a real selection over an empty brief with a half-filled unit card.
+        selectedMissionID = snapshot.sectors.flatMap(\.missions).first?.id
         startSource()
+        loadDetail(for: selectedMissionID)
     }
 
     func startSource() {
@@ -43,6 +47,8 @@ final class FleetStore {
             let source = liveSource ?? LiveSource(config: connectionConfig)
             source.updateConfig(connectionConfig)
             liveSource = source
+            selectedMissionID = nil
+            missionDetail = nil
             var previous = snapshot
             streamTask = Task {
                 for await update in source.snapshots() {
@@ -93,6 +99,7 @@ final class FleetStore {
     func selectSector(_ id: String?) {
         selectedSectorID = id
         persistSectorID(id)
+        persistTab(.hangar)
     }
 
     func persistTab(_ tab: CenterTab) {
@@ -103,6 +110,10 @@ final class FleetStore {
     func applyLaunchState() {
         selectedTab = Self.loadTab()
         selectedSectorID = Self.loadSectorID(fallback: snapshot.sectors.first?.id)
+        if selectedMissionID == nil {
+            selectedMissionID = snapshot.sectors.flatMap(\.missions).first?.id
+            loadDetail(for: selectedMissionID)
+        }
     }
 
     func dismissToast(_ id: UUID) {
@@ -120,11 +131,22 @@ final class FleetStore {
             return
         }
         do {
-            let result = try await activeSource().act(action, on: id)
-            snapshot = activeSource().currentSnapshot()
-            actionMessage = result.message
-            if result.ok {
-                loadDetail(for: id)
+            switch action {
+            case .diff:
+                let text = try await activeSource().diff(id)
+                documentPayload = DocumentPayload(title: "DIFF · \(id)", body: text, allowsSave: true)
+                actionMessage = nil
+            case .export:
+                let text = try await activeSource().result(id)
+                documentPayload = DocumentPayload(title: "EXPORT · \(id)", body: text, allowsSave: true)
+                actionMessage = nil
+            default:
+                let result = try await activeSource().act(action, on: id)
+                snapshot = activeSource().currentSnapshot()
+                actionMessage = result.message
+                if result.ok {
+                    loadDetail(for: id)
+                }
             }
         } catch {
             actionMessage = LiveSource.message(for: error)
@@ -150,20 +172,44 @@ final class FleetStore {
             return
         }
         detailTask = Task {
-            missionDetail = try? await activeSource().detail(id)
+            let loaded = try? await activeSource().detail(id)
+            guard !Task.isCancelled else { return }
+            missionDetail = loaded
         }
     }
 
     private func handleUpdate(_ update: FleetSnapshot, previous: inout FleetSnapshot) {
+        // LiveSource emits an empty "connecting" snapshot first — don't wipe a painted console.
+        if update.sectors.isEmpty, !previous.sectors.isEmpty {
+            var kept = previous
+            kept.connection = update.connection
+            kept.serverVersion = update.serverVersion == "—" ? previous.serverVersion : update.serverVersion
+            snapshot = kept
+            previous = kept
+            return
+        }
         detectTransitions(from: previous, to: update)
         snapshot = update
-        if selectedSectorID == nil {
+        if selectedSectorID == nil || !update.sectors.contains(where: { $0.id == selectedSectorID }) {
             selectedSectorID = update.sectors.first?.id
+        }
+        let priorMission = selectedMissionID
+        ensureMissionSelection(in: update)
+        if selectedMissionID != priorMission {
+            missionDetail = nil
         }
         if let id = selectedMissionID {
             loadDetail(for: id)
+        } else {
+            missionDetail = nil
         }
         previous = update
+    }
+
+    private func ensureMissionSelection(in update: FleetSnapshot) {
+        let ids = update.sectors.flatMap(\.missions).map(\.id)
+        if let selectedMissionID, ids.contains(selectedMissionID) { return }
+        selectedMissionID = ids.first
     }
 
     private func detectTransitions(from old: FleetSnapshot, to new: FleetSnapshot) {

@@ -18,6 +18,7 @@ struct SegmentBar: View {
                 segment(at: index)
             }
         }
+        .fixedSize(horizontal: true, vertical: false)
         .onAppear { startBlink() }
     }
 
@@ -32,7 +33,7 @@ struct SegmentBar: View {
         } else {
             RoundedRectangle(cornerRadius: 1)
                 .fill(color)
-                .frame(height: 4)
+                .frame(width: 6, height: 4)
                 .shadow(color: isLeading ? color.opacity(0.8) : .clear, radius: 3)
         }
     }

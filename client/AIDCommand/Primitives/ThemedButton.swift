@@ -8,6 +8,7 @@ struct ThemedButton: View {
     let title: String
     var filled: Bool = false
     var selected: Bool = false
+    var compact: Bool = false
     let action: () -> Void
 
     var body: some View {
@@ -16,8 +17,8 @@ struct ThemedButton: View {
                 .font(theme.font(.label))
                 .tracking(theme.kind == .pixel ? 0.8 : 1.2)
                 .foregroundStyle(foreground)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
+                .padding(.horizontal, compact ? 8 : 12)
+                .padding(.vertical, compact ? 5 : 8)
                 .background(background)
                 .clipShape(PanelShape(style: theme.panelStyle))
                 .overlay(

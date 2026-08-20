@@ -39,6 +39,7 @@ struct ConsoleShellView: View {
                     if layout.showsBottomBrief {
                         MissionBriefView(
                             snapshot: store.snapshot,
+                            selectedMissionID: store.selectedMissionID,
                             detail: store.missionDetail,
                             actionMessage: store.actionMessage,
                             onAction: { action in
@@ -52,6 +53,10 @@ struct ConsoleShellView: View {
                 ToastStack(toasts: store.toasts)
             }
             .background { ConsoleBackground() }
+            .sheet(item: $store.documentPayload) { payload in
+                TextDocumentSheet(payload: payload)
+                    .environment(\.theme, theme)
+            }
             .sheet(isPresented: $store.showLeftRail) {
                 if layout == .compact {
                     NavigationStack {
@@ -91,11 +96,11 @@ struct ConsoleShellView: View {
         case .hangar:
             if let sector = store.selectedSector {
                 HangarView(sector: sector, selectedMissionID: missionBinding)
+            } else if let first = store.snapshot.sectors.first {
+                HangarView(sector: first, selectedMissionID: missionBinding)
             } else {
-                HangarView(
-                    sector: store.snapshot.sectors[0],
-                    selectedMissionID: missionBinding
-                )
+                MonoLabel(text: "no sectors", color: theme.ink3)
+                    .padding()
             }
         case .cargo:
             CargoView(

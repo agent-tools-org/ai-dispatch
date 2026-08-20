@@ -25,7 +25,27 @@ final class FleetAPIDecoderTests: XCTestCase {
         XCTAssertEqual(snapshot.agents.count, 1)
         XCTAssertEqual(snapshot.agents[0].id, "codex")
         XCTAssertTrue(snapshot.agents[0].busy)
+        XCTAssertEqual(snapshot.agents[0].taskCount, 41)
         XCTAssertEqual(snapshot.connection, .live)
+        XCTAssertEqual(FleetFormatters.workgroupLabel(snapshot.sectors[0].workgroupID), "WG-41BA0DD2")
+    }
+
+    func testZeroTaskCountIsUnmeasured() throws {
+        let json = Self.fleetFixture.replacingOccurrences(of: "\"task_count\": 41", with: "\"task_count\": 0")
+        let data = json.data(using: .utf8)!
+        let snapshot = try FleetAPIDecoder.decodeSnapshot(from: data, connection: .live)
+        XCTAssertNil(snapshot.agents[0].taskCount)
+        XCTAssertEqual(FleetFormatters.measuredCount(snapshot.agents[0].taskCount), "—")
+    }
+
+    func testMissingWorkgroupRendersDash() throws {
+        let json = Self.fleetFixture.replacingOccurrences(
+            of: "\"workgroup_id\": \"wg-41ba0dd2\",",
+            with: "\"workgroup_id\": null,"
+        )
+        let data = json.data(using: .utf8)!
+        let snapshot = try FleetAPIDecoder.decodeSnapshot(from: data, connection: .live)
+        XCTAssertEqual(FleetFormatters.workgroupLabel(snapshot.sectors[0].workgroupID), "—")
     }
 
     func testNullCostStaysUnknown() throws {

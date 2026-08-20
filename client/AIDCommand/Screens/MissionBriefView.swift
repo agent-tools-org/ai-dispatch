@@ -6,6 +6,7 @@ import SwiftUI
 struct MissionBriefView: View {
     @Environment(\.theme) private var theme
     let snapshot: FleetSnapshot
+    let selectedMissionID: MissionID?
     let detail: MissionDetail?
     let actionMessage: String?
     let onAction: (MissionAction) -> Void
@@ -16,16 +17,29 @@ struct MissionBriefView: View {
 
     var body: some View {
         ThemedPanel {
-            HStack(alignment: .top, spacing: theme.spacing.lg) {
-                unitCard
-                crewList
-                briefColumn
-                sideColumn
+            VStack(alignment: .leading, spacing: theme.spacing.sm) {
+                if let mission {
+                    HStack(alignment: .top, spacing: theme.spacing.md) {
+                        unitCard(for: mission)
+                        crewList
+                        briefColumn(mission)
+                        sideColumn(mission)
+                    }
+                    actionBar
+                } else {
+                    emptyState
+                }
+                if let actionMessage {
+                    Text(actionMessage)
+                        .font(theme.font(.caption))
+                        .foregroundStyle(theme.fail)
+                }
             }
             .padding(theme.spacing.md)
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         }
-        .padding(theme.spacing.md)
+        .padding(.horizontal, theme.spacing.md)
+        .padding(.bottom, theme.spacing.sm)
         .sheet(isPresented: $showSteerSheet) { steerSheet }
         .alert("Confirm action", isPresented: confirmBinding) {
             Button("Cancel", role: .cancel) { confirmAction = nil }
@@ -38,10 +52,27 @@ struct MissionBriefView: View {
         }
     }
 
-    private var mission: Mission? { detail?.mission }
+    /// Prefer hydrated detail when it matches the selection; else the snapshot row.
+    private var mission: Mission? {
+        if let id = selectedMissionID {
+            if let detail, detail.mission.id == id { return detail.mission }
+            return snapshot.sectors.flatMap(\.missions).first { $0.id == id }
+        }
+        return nil
+    }
 
-    private var unitCard: some View {
-        let agent = mission?.agent ?? snapshot.agents.first?.id ?? "—"
+    private var emptyState: some View {
+        VStack(alignment: .leading, spacing: theme.spacing.sm) {
+            MonoLabel(text: "mission brief", color: theme.ink3)
+            Text("Select a mission from the fleet log, hangar, or cargo hold.")
+                .font(theme.font(.body))
+                .foregroundStyle(theme.ink2)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+    }
+
+    private func unitCard(for mission: Mission) -> some View {
+        let agent = mission.agent
         let profile = UnitCatalog.profile(for: agent)
         let flown = snapshot.agents.first { $0.id == agent }?.taskCount
         return VStack(spacing: theme.spacing.sm) {
@@ -53,7 +84,7 @@ struct MissionBriefView: View {
                 text: profile.map { "\($0.role) · LV \($0.level)" } ?? "— · LV —",
                 color: theme.ink2
             )
-            if let model = mission?.model {
+            if let model = mission.model {
                 HStack(spacing: 4) {
                     DriveGlyph(model: model, size: 14)
                     Text(FleetFormatters.model(model))
@@ -62,9 +93,12 @@ struct MissionBriefView: View {
                 }
             }
             starRow(level: profile?.level)
-            MonoLabel(text: "missions flown \(flown.map(String.init) ?? "—")", color: theme.ink3)
+            MonoLabel(
+                text: "missions flown \(FleetFormatters.measuredCount(flown))",
+                color: theme.ink3
+            )
         }
-        .frame(width: 150)
+        .frame(width: 140)
     }
 
     private func starRow(level: Int?) -> some View {
@@ -81,81 +115,85 @@ struct MissionBriefView: View {
         VStack(alignment: .leading, spacing: theme.spacing.xs) {
             MonoLabel(text: "crew")
             ScrollView {
-                VStack(alignment: .leading, spacing: theme.spacing.xs) {
+                LazyVGrid(
+                    columns: [GridItem(.flexible()), GridItem(.flexible())],
+                    alignment: .leading,
+                    spacing: theme.spacing.xs
+                ) {
                     ForEach(snapshot.agents) { agent in
-                        HStack(spacing: 6) {
+                        HStack(spacing: 4) {
                             StatusLamp(color: agent.busy ? theme.run : theme.done, active: agent.busy)
                             Text(agent.id)
                                 .font(theme.font(.caption))
                                 .foregroundStyle(theme.ink)
-                            MonoLabel(text: agent.busy ? "ENG" : "RDY", color: agent.busy ? theme.run : theme.ink2)
+                                .lineLimit(1)
+                            MonoLabel(
+                                text: agent.busy ? "ENG" : "RDY",
+                                color: agent.busy ? theme.run : theme.ink2
+                            )
                             StatusLamp(color: agent.quotaOK ? theme.done : theme.fail, active: agent.quotaOK)
                         }
                     }
                 }
             }
+            .frame(maxHeight: .infinity)
         }
-        .frame(width: 130)
+        .frame(width: 220)
+        .frame(maxHeight: .infinity, alignment: .topLeading)
     }
 
-    private var briefColumn: some View {
+    private func briefColumn(_ mission: Mission) -> some View {
         VStack(alignment: .leading, spacing: theme.spacing.sm) {
-            if let mission {
-                HStack(spacing: theme.spacing.sm) {
-                    StatePill(state: mission.state, verifyTag: mission.verifyTag)
-                    MonoLabel(text: "threat \(mission.threat.map(String.init) ?? "—")")
-                }
-                Text("\(mission.id) · \(mission.agent) · \(FleetFormatters.model(mission.model))")
+            HStack(spacing: theme.spacing.sm) {
+                StatePill(state: mission.state, verifyTag: mission.verifyTag)
+                MonoLabel(text: "threat \(mission.threat.map(String.init) ?? "—")")
+            }
+            Text("\(mission.id) · \(mission.agent) · \(FleetFormatters.model(mission.model))")
+                .font(theme.font(.caption))
+                .foregroundStyle(theme.ink3)
+            Text(mission.title)
+                .font(theme.font(.body))
+                .foregroundStyle(theme.ink)
+            if let detail {
+                Text(detail.prompt)
                     .font(theme.font(.caption))
-                    .foregroundStyle(theme.ink3)
-                Text(mission.title)
-                    .font(theme.font(.body))
-                    .foregroundStyle(theme.ink)
-                if let detail {
-                    Text(detail.prompt)
+                    .foregroundStyle(theme.ink2)
+                    .padding(theme.spacing.sm)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(theme.bgDeep.opacity(0.5))
+                    .lineLimit(4)
+                ForEach(detail.events.prefix(3)) { event in
+                    Text("› \(event.message)")
                         .font(theme.font(.caption))
-                        .foregroundStyle(theme.ink2)
-                        .padding(theme.spacing.sm)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(theme.bgDeep.opacity(0.5))
-                    ForEach(detail.events) { event in
-                        Text("› \(event.message)")
-                            .font(theme.font(.caption))
-                            .foregroundStyle(theme.ink3)
-                    }
+                        .foregroundStyle(theme.ink3)
+                        .lineLimit(1)
                 }
-            } else {
-                MonoLabel(text: "select a mission", color: theme.ink3)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    private var sideColumn: some View {
+    private func sideColumn(_ mission: Mission) -> some View {
         VStack(alignment: .leading, spacing: theme.spacing.sm) {
-            statsRow
-            payloadStrip
-            lampRow
-            actionBar
-            if let actionMessage {
-                Text(actionMessage)
-                    .font(theme.font(.caption))
-                    .foregroundStyle(theme.fail)
-            }
-        }
-        .frame(width: 320)
-    }
-
-    @ViewBuilder
-    private var statsRow: some View {
-        if let mission {
             HStack(spacing: theme.spacing.md) {
                 stat("elapsed", FleetFormatters.elapsed(seconds: mission.elapsedSeconds))
                 stat("memory", mission.memoryMB ?? "—")
                 stat("tokens", FleetFormatters.tokens(mission.tokens))
                 stat("cost", FleetFormatters.cost(mission.cost))
             }
+            if let payload = PayloadDeriver.derive(from: mission, sectorTag: "—") {
+                HStack(spacing: theme.spacing.sm) {
+                    MonoLabel(text: payload.kind.rawValue, color: theme.accent)
+                    Text(payload.name)
+                        .font(theme.font(.caption))
+                        .foregroundStyle(theme.ink)
+                        .lineLimit(1)
+                    RarityChevrons(rarity: payload.rarity)
+                }
+            }
+            lampRow
         }
+        .frame(width: 280, alignment: .leading)
     }
 
     private func stat(_ label: String, _ value: String) -> some View {
@@ -164,19 +202,6 @@ struct MissionBriefView: View {
             Text(value)
                 .font(theme.font(.caption))
                 .foregroundStyle(theme.ink)
-        }
-    }
-
-    @ViewBuilder
-    private var payloadStrip: some View {
-        if let mission, let payload = PayloadDeriver.derive(from: mission, sectorTag: "—") {
-            HStack(spacing: theme.spacing.sm) {
-                MonoLabel(text: payload.kind.rawValue, color: theme.accent)
-                Text(payload.name)
-                    .font(theme.font(.caption))
-                    .foregroundStyle(theme.ink)
-                RarityChevrons(rarity: payload.rarity)
-            }
         }
     }
 
@@ -193,22 +218,27 @@ struct MissionBriefView: View {
 
     private func lampColor(_ label: String) -> Color {
         switch label {
-        case "LINK": return snapshot.connection == .live ? theme.done : theme.fail
+        case "LINK":
+            switch snapshot.connection {
+            case .live: return theme.done
+            case .degraded: return theme.stop
+            case .connecting: return theme.ink2
+            case .disconnected, .error: return theme.fail
+            }
         case "QUOTA": return theme.stop
         default: return theme.ink2
         }
     }
 
     private var actionBar: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: theme.spacing.xs) {
-                ThemedButton(title: "ABORT") { onAction(.abort) }
-                ThemedButton(title: "RELAUNCH") { confirmAction = .relaunch }
-                ThemedButton(title: "STEER") { showSteerSheet = true }
-                ThemedButton(title: "DIFF") { onAction(.diff) }
-                ThemedButton(title: "EXPORT") { onAction(.export) }
-                ThemedButton(title: "DOCK", filled: true) { confirmAction = .dock }
-            }
+        HStack(spacing: theme.spacing.xs) {
+            ThemedButton(title: "ABORT", compact: true) { onAction(.abort) }
+            ThemedButton(title: "RELAUNCH", compact: true) { confirmAction = .relaunch }
+            ThemedButton(title: "STEER", compact: true) { showSteerSheet = true }
+            ThemedButton(title: "DIFF", compact: true) { onAction(.diff) }
+            ThemedButton(title: "EXPORT", compact: true) { onAction(.export) }
+            ThemedButton(title: "DOCK", filled: true, compact: true) { confirmAction = .dock }
+            Spacer(minLength: 0)
         }
     }
 

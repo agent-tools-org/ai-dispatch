@@ -170,16 +170,30 @@ final class FleetStoreSnapshotTests: XCTestCase {
 final class PayloadDeriverTests: XCTestCase {
     func testKnownPayloadMappings() {
         let snapshot = DemoDataset.initialSnapshot()
-        let missions = snapshot.sectors.flatMap(\.missions)
-        let report = missions.first { $0.id == "t-85e75668" }
-        let payload = report.flatMap { PayloadDeriver.derive(from: $0, sectorTag: "SEC-01") }
-        XCTAssertEqual(payload?.kind, .report)
-        XCTAssertEqual(payload?.rarity, .legendary)
+        let missions = Dictionary(uniqueKeysWithValues: snapshot.sectors.flatMap(\.missions).map { ($0.id, $0) })
 
-        let release = missions.first { $0.id == "t-9f10c3d2" }
-        let releasePayload = release.flatMap { PayloadDeriver.derive(from: $0, sectorTag: "SEC-03") }
-        XCTAssertEqual(releasePayload?.kind, .release)
-        XCTAssertEqual(releasePayload?.rarity, .legendary)
+        let report = PayloadDeriver.derive(from: missions["t-85e75668"]!, sectorTag: "SEC-01")
+        XCTAssertEqual(report?.kind, .report)
+        XCTAssertEqual(report?.rarity, .legendary)
+
+        let release = PayloadDeriver.derive(from: missions["t-9f10c3d2"]!, sectorTag: "SEC-03")
+        XCTAssertEqual(release?.kind, .release)
+        XCTAssertEqual(release?.rarity, .legendary)
+
+        let ladder = PayloadDeriver.derive(from: missions["t-22c5346d"]!, sectorTag: "SEC-01")
+        XCTAssertEqual(ladder?.kind, .bench)
+        XCTAssertEqual(ladder?.rarity, .epic)
+        XCTAssertEqual(ladder?.rarity.label, "HIGH")
+
+        let dataset = PayloadDeriver.derive(from: missions["t-d5a7f26e"]!, sectorTag: "SEC-01")
+        XCTAssertEqual(dataset?.kind, .dataset)
+
+        let patch = PayloadDeriver.derive(from: missions["t-77b2e004"]!, sectorTag: "SEC-03")
+        XCTAssertEqual(patch?.kind, .patch)
+
+        let payloads = PayloadDeriver.payloads(from: snapshot.sectors)
+        XCTAssertGreaterThan(payloads.filter { $0.kind == .dataset }.count, 0)
+        XCTAssertGreaterThan(payloads.filter { $0.kind == .patch }.count, 0)
     }
 
     func testFailMissionYieldsScrap() {
@@ -248,5 +262,17 @@ final class FleetFormattersTests: XCTestCase {
     func testElapsedFormatting() {
         XCTAssertEqual(FleetFormatters.elapsed(seconds: 0), "—")
         XCTAssertEqual(FleetFormatters.elapsed(seconds: 125), "2m 05s")
+    }
+
+    func testWorkgroupLabelOmitsPlaceholder() {
+        XCTAssertEqual(FleetFormatters.workgroupLabel(""), "—")
+        XCTAssertEqual(FleetFormatters.workgroupLabel("——"), "—")
+        XCTAssertEqual(FleetFormatters.workgroupLabel("8937e74c"), "WG-8937E74C")
+    }
+
+    func testMeasuredCountTreatsZeroAsUnknown() {
+        XCTAssertEqual(FleetFormatters.measuredCount(nil), "—")
+        XCTAssertEqual(FleetFormatters.measuredCount(0), "—")
+        XCTAssertEqual(FleetFormatters.measuredCount(4), "4")
     }
 }

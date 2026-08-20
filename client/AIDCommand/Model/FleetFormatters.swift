@@ -31,7 +31,17 @@ enum FleetFormatters {
     }
 
     static func workgroupLabel(_ id: String) -> String {
-        "WG-\(id.prefix(8).uppercased())"
+        let trimmed = id.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty || trimmed.allSatisfy({ $0 == "—" || $0 == "-" }) {
+            return "—"
+        }
+        return "WG-\(trimmed.prefix(8).uppercased())"
+    }
+
+    /// Counts the server did not really measure (nil / 0) render as unknown.
+    static func measuredCount(_ value: Int?) -> String {
+        guard let value, value > 0 else { return "—" }
+        return String(value)
     }
 
     static func reactorLoad(running: Int) -> String {

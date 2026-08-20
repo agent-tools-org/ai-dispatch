@@ -12,7 +12,8 @@ struct AgentInfo: Identifiable, Sendable, Equatable {
     let id: String
     let busy: Bool
     let quotaOK: Bool
-    let taskCount: Int
+    /// nil when the server did not measure a trustworthy count.
+    let taskCount: Int?
 }
 
 struct MissionDetail: Sendable, Equatable {

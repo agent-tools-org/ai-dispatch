@@ -36,7 +36,7 @@ enum FleetAPIDecoder {
         for (index, sector) in dto.sectors.enumerated() {
             let tag = "SEC-\(String(format: "%02d", index + 1))"
             let missions = sector.tasks.map { mapTask($0, medians: [:]) }
-            let wg = sector.workgroup_id.map(stripWG) ?? "——"
+            let wg = sector.workgroup_id.map(stripWG) ?? ""
             sectors.append(Sector(
                 id: sector.id,
                 tag: tag,
@@ -63,7 +63,7 @@ enum FleetAPIDecoder {
                 id: $0.name,
                 busy: $0.busy,
                 quotaOK: ($0.quota?.state ?? "unknown") == "ok",
-                taskCount: Int($0.task_count ?? 0)
+                taskCount: measuredTaskCount($0.task_count)
             )
         }
         return FleetSnapshot(
@@ -165,6 +165,12 @@ enum FleetAPIDecoder {
 
     private static func stripWG(_ id: String) -> String {
         id.hasPrefix("wg-") ? String(id.dropFirst(3)) : id
+    }
+
+    /// Server currently sends 0 when it withholds a sample — treat as unmeasured.
+    private static func measuredTaskCount(_ value: UInt64?) -> Int? {
+        guard let value, value > 0 else { return nil }
+        return Int(value)
     }
 }
 

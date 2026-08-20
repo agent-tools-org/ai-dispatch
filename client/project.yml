@@ -1,0 +1,82 @@
+# xcodegen spec for the AID Command desktop client.
+# Two app targets share one source tree: AIDCommandMac (native macOS) and
+# AIDCommandiPad (iPadOS). The .xcodeproj is generated — never hand-edit or commit it.
+# Regenerate with: cd client && xcodegen generate
+name: AIDCommand
+options:
+  bundleIdPrefix: com.mingsun
+  createIntermediateGroups: true
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    SWIFT_STRICT_CONCURRENCY: complete
+    CODE_SIGNING_REQUIRED: "NO"
+    CODE_SIGNING_ALLOWED: "NO"
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    PRODUCT_NAME: AID Command
+    PRODUCT_BUNDLE_IDENTIFIER: com.mingsun.aidcommand
+    ENABLE_APP_SANDBOX: "NO"
+    ENABLE_USER_SCRIPT_SANDBOXING: "NO"
+targetTemplates:
+  App:
+    type: application
+    sources:
+      - path: AIDCommand
+    info:
+      path: Support/Info-${target_name}.plist
+      properties:
+        CFBundleDisplayName: AID Command
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        LSApplicationCategoryType: public.app-category.developer-tools
+        # The client talks plain HTTP to `aid web` on loopback or a LAN address.
+        # NSAllowsLocalNetworking permits that without disabling ATS for the internet.
+        NSAppTransportSecurity:
+          NSAllowsLocalNetworking: true
+        NSLocalNetworkUsageDescription: >-
+          AID Command connects to the aid server running on your Mac to show
+          dispatched agent tasks.
+targets:
+  AIDCommandMac:
+    templates: [App]
+    platform: macOS
+    deploymentTarget: "14.0"
+  AIDCommandiPad:
+    templates: [App]
+    platform: iOS
+    deploymentTarget: "17.0"
+    settings:
+      base:
+        TARGETED_DEVICE_FAMILY: "2"
+        INFOPLIST_KEY_UIUserInterfaceStyle: Dark
+        INFOPLIST_KEY_UILaunchScreen_Generation: "YES"
+  AIDCommandTestsMac:
+    type: bundle.unit-test
+    platform: macOS
+    deploymentTarget: "14.0"
+    sources: [AIDCommandTests]
+    dependencies:
+      - target: AIDCommandMac
+    settings:
+      base: { GENERATE_INFOPLIST_FILE: "YES" }
+  AIDCommandTestsiPad:
+    type: bundle.unit-test
+    platform: iOS
+    deploymentTarget: "17.0"
+    sources: [AIDCommandTests]
+    dependencies:
+      - target: AIDCommandiPad
+    settings:
+      base: { GENERATE_INFOPLIST_FILE: "YES" }
+schemes:
+  AIDCommand macOS:
+    build:
+      targets: { AIDCommandMac: all }
+    test:
+      targets: [AIDCommandTestsMac]
+  AIDCommand iPad:
+    build:
+      targets: { AIDCommandiPad: all }
+    test:
+      targets: [AIDCommandTestsiPad]

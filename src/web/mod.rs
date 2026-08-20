@@ -71,8 +71,7 @@ fn build_router(store: Arc<Store>, port: u16, host: String, token: Option<String
         .route("/api/fleet", get(fleet::get_fleet))
         .route("/api/agents", get(fleet::get_agents))
         .route("/api/events", get(|state| async move { sse::sse_handler(state) }))
-        .layer(middleware::from_fn(auth::middleware))
-        .layer(axum::Extension(auth::AuthConfig::new(token)));
+        .layer(middleware::from_fn(auth::middleware));
     Router::new()
         .merge(api)
         .route("/", get(index))
@@ -84,6 +83,7 @@ fn build_router(store: Arc<Store>, port: u16, host: String, token: Option<String
             port,
             started_at: chrono::Utc::now().to_rfc3339(),
         }))
+        .layer(axum::Extension(auth::AuthConfig::new(token)))
 }
 
 async fn index() -> Response {

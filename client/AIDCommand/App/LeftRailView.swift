@@ -9,7 +9,7 @@ struct LeftRailView: View {
     @Binding var selectedSectorID: String?
 
     var body: some View {
-        ScrollView {
+        ScrollView(.vertical, showsIndicators: true) {
             VStack(alignment: .leading, spacing: theme.spacing.lg) {
                 ThemedPanel {
                     ContactScope(missions: sectors.flatMap(\.missions))
@@ -21,7 +21,9 @@ struct LeftRailView: View {
                 }
             }
             .padding(theme.spacing.md)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
+        .frame(minHeight: 0, maxHeight: .infinity)
         .background(theme.bgDeep)
     }
 

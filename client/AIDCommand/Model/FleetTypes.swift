@@ -70,6 +70,7 @@ struct FleetSnapshot: Sendable, Equatable {
     var summary: FleetSummary
     var serverVersion: String
     var connection: ConnectionState
+    var agents: [AgentInfo]
     var tick: Int
 }
 

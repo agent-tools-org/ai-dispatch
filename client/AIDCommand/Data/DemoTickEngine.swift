@@ -57,6 +57,7 @@ enum DemoTickEngine {
             summary: summary,
             serverVersion: snapshot.serverVersion,
             connection: snapshot.connection,
+            agents: DemoAgents.roster(from: sectors),
             tick: tick
         )
         return Result(snapshot: updated, toasts: toasts, xpAwards: xpAwards)

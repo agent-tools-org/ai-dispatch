@@ -16,7 +16,7 @@ struct ConsoleShellView: View {
                         snapshot: store.snapshot,
                         xpState: store.xpState,
                         commanderName: store.commanderName,
-                        selectedTab: $store.selectedTab,
+                        selectedTab: tabBinding,
                         onToggleRail: { store.showLeftRail.toggle() }
                     )
                     ThemedPanel {
@@ -27,17 +27,26 @@ struct ConsoleShellView: View {
                         if layout != .compact {
                             LeftRailView(
                                 sectors: store.snapshot.sectors,
-                                selectedSectorID: $store.selectedSectorID
+                                selectedSectorID: sectorBinding
                             )
                             .frame(width: layout.leftRailWidth)
+                            .frame(maxHeight: .infinity, alignment: .top)
+                            .layoutPriority(1)
                         }
                         centerContent
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
                     }
                     .frame(maxHeight: .infinity)
                     if layout.showsBottomBrief {
-                        MissionBriefPlaceholder()
-                            .frame(height: 268)
+                        MissionBriefView(
+                            snapshot: store.snapshot,
+                            detail: store.missionDetail,
+                            actionMessage: store.actionMessage,
+                            onAction: { action in
+                                Task { await store.performAction(action) }
+                            }
+                        )
+                        .frame(height: 268)
                     }
                 }
                 ScreenFrame()
@@ -49,7 +58,7 @@ struct ConsoleShellView: View {
                     NavigationStack {
                         LeftRailView(
                             sectors: store.snapshot.sectors,
-                            selectedSectorID: $store.selectedSectorID
+                            selectedSectorID: sectorBinding
                         )
                         .navigationTitle("Tactical Scan")
                     }
@@ -58,19 +67,49 @@ struct ConsoleShellView: View {
         }
     }
 
+    private var tabBinding: Binding<CenterTab> {
+        Binding(
+            get: { store.selectedTab },
+            set: { store.persistTab($0) }
+        )
+    }
+
+    private var sectorBinding: Binding<String?> {
+        Binding(
+            get: { store.selectedSectorID },
+            set: { store.selectSector($0) }
+        )
+    }
+
     @ViewBuilder
     private var centerContent: some View {
         switch store.selectedTab {
         case .fleetLog:
             FleetLogView(
                 sectors: store.snapshot.sectors,
-                selectedMissionID: $store.selectedMissionID
+                selectedMissionID: missionBinding
             )
         case .hangar:
-            HangarPlaceholder()
+            if let sector = store.selectedSector {
+                HangarView(sector: sector, selectedMissionID: missionBinding)
+            } else {
+                HangarView(
+                    sector: store.snapshot.sectors[0],
+                    selectedMissionID: missionBinding
+                )
+            }
         case .cargo:
-            CargoPlaceholder()
+            CargoView(
+                sectors: store.snapshot.sectors,
+                selectedMissionID: missionBinding
+            )
         }
     }
 
+    private var missionBinding: Binding<MissionID?> {
+        Binding(
+            get: { store.selectedMissionID },
+            set: { store.selectMission($0) }
+        )
+    }
 }

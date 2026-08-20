@@ -9,9 +9,17 @@ struct MonoLabel: View {
     var color: Color?
 
     var body: some View {
-        Text(text.uppercased())
+        // Join with word-joiners so a tight parent never wraps mid-glyph.
+        Text(Self.unbreakable(text.uppercased()))
             .font(theme.font(.label))
             .tracking(theme.kind == .pixel ? 1.0 : 1.4)
             .foregroundStyle(color ?? theme.ink2)
+            .lineLimit(1)
+            .fixedSize(horizontal: true, vertical: true)
+            .layoutPriority(1)
+    }
+
+    private static func unbreakable(_ text: String) -> String {
+        String(text.flatMap { [$0, "\u{2060}"] }.dropLast())
     }
 }

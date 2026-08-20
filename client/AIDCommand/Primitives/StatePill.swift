@@ -11,18 +11,13 @@ struct StatePill: View {
     var body: some View {
         HStack(spacing: 4) {
             StateMark(state: state, size: 12)
-            Text(StatusMapper.label(for: state))
-                .font(theme.font(.label))
-                .tracking(theme.kind == .pixel ? 0.8 : 1.2)
+            MonoLabel(text: StatusMapper.label(for: state), color: stateColor)
             if let verifyTag {
-                Text(verifyTag.rawValue)
-                    .font(theme.font(.caption))
-                    .foregroundStyle(theme.stop)
+                MonoLabel(text: verifyTag.rawValue, color: theme.stop)
                     .padding(.horizontal, 4)
                     .background(theme.stop.opacity(0.15))
             }
         }
-        .foregroundStyle(stateColor)
         .padding(.horizontal, 8)
         .padding(.vertical, 4)
         .background(stateColor.opacity(0.12))
@@ -30,6 +25,7 @@ struct StatePill: View {
             RoundedRectangle(cornerRadius: theme.motion.stepped ? 0 : 4)
                 .stroke(stateColor.opacity(0.5), lineWidth: theme.hairline)
         )
+        .fixedSize(horizontal: true, vertical: false)
     }
 
     private var stateColor: Color {

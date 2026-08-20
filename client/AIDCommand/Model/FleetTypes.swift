@@ -40,6 +40,8 @@ struct Mission: Identifiable, Sendable, Equatable {
     let threat: Int?
     let progress: Double
     let elapsedSeconds: Int
+    /// When set on a RUN mission, UI derives a live elapsed tick from this instant.
+    let startedAt: Date?
     let tokens: String?
     let cost: String?
     let memoryMB: String?

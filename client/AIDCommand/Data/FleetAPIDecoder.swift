@@ -87,6 +87,7 @@ enum FleetAPIDecoder {
         )
         case .fail, .stop: progress = 0
         }
+        let startedAt = dto.duration_ms == nil ? parseDate(dto.started_at) : nil
         return Mission(
             id: dto.id,
             title: title(for: dto),
@@ -96,6 +97,7 @@ enum FleetAPIDecoder {
             threat: threat(from: dto.difficulty),
             progress: progress,
             elapsedSeconds: elapsed,
+            startedAt: state == .run ? startedAt : nil,
             tokens: formatTokens(dto.tokens),
             cost: formatCost(dto.cost_usd),
             memoryMB: dto.memory_mb.map { "\($0)M" },
@@ -114,7 +116,8 @@ enum FleetAPIDecoder {
         return Mission(
             id: mission.id, title: mission.title, agent: mission.agent, model: mission.model,
             state: mission.state, threat: mission.threat, progress: progress,
-            elapsedSeconds: mission.elapsedSeconds, tokens: mission.tokens, cost: mission.cost,
+            elapsedSeconds: mission.elapsedSeconds, startedAt: mission.startedAt,
+            tokens: mission.tokens, cost: mission.cost,
             memoryMB: mission.memoryMB, verifyTag: mission.verifyTag,
             awaitingReason: mission.awaitingReason
         )
@@ -128,7 +131,20 @@ enum FleetAPIDecoder {
 
     private static func elapsedSeconds(_ dto: TaskDTO) -> Int {
         if let ms = dto.duration_ms { return max(0, Int(ms / 1000)) }
+        if let started = parseDate(dto.started_at) {
+            return max(0, Int(Date().timeIntervalSince(started)))
+        }
         return 0
+    }
+
+    private static func parseDate(_ string: String?) -> Date? {
+        guard let string, !string.isEmpty else { return nil }
+        let withFraction = ISO8601DateFormatter()
+        withFraction.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let date = withFraction.date(from: string) { return date }
+        let basic = ISO8601DateFormatter()
+        basic.formatOptions = [.withInternetDateTime]
+        return basic.date(from: string)
     }
 
     private static func threat(from difficulty: String?) -> Int? {
@@ -220,6 +236,7 @@ struct TaskDTO: Decodable {
     let tokens: Int64?
     let cost_usd: Double?
     let duration_ms: Int64?
+    let started_at: String?
     let difficulty: String?
     let memory_mb: Int64?
     let awaiting_reason: String?

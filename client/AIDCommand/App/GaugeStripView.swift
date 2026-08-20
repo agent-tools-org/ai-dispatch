@@ -38,7 +38,6 @@ struct GaugeStripView: View {
         .padding(.horizontal, theme.spacing.lg)
         .padding(.vertical, theme.spacing.sm)
         .frame(height: 96)
-        .background(theme.bgDeep)
     }
 
     private var klaxonSlot: some View {

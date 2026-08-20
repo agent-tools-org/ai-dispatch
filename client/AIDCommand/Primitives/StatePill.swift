@@ -11,7 +11,7 @@ struct StatePill: View {
     var body: some View {
         HStack(spacing: 4) {
             Text(StatusMapper.mark(for: state))
-                .font(theme.font(.caption))
+                .font(.system(size: 12))
             Text(StatusMapper.label(for: state))
                 .font(theme.font(.label))
                 .tracking(theme.kind == .pixel ? 0.8 : 1.2)

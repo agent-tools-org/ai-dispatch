@@ -118,6 +118,38 @@ final class ThemeContractTests: XCTestCase {
     }
 }
 
+final class DemoDatasetCoverageTests: XCTestCase {
+    func testAllSectorsAndMissionsPresent() {
+        let snapshot = DemoDataset.initialSnapshot()
+        XCTAssertEqual(snapshot.sectors.count, 3, "Expected 3 sectors")
+        let sectorIDs = snapshot.sectors.map(\.id)
+        XCTAssertTrue(sectorIDs.contains("SEC-01"))
+        XCTAssertTrue(sectorIDs.contains("SEC-02"))
+        XCTAssertTrue(sectorIDs.contains("SEC-03"))
+        let totalMissions = snapshot.sectors.reduce(0) { $0 + $1.missions.count }
+        XCTAssertEqual(totalMissions, 20, "Expected 20 missions across all sectors")
+        XCTAssertEqual(snapshot.sectors[0].missions.count, 9, "SEC-01 should have 9 missions")
+        XCTAssertEqual(snapshot.sectors[1].missions.count, 6, "SEC-02 should have 6 missions")
+        XCTAssertEqual(snapshot.sectors[2].missions.count, 5, "SEC-03 should have 5 missions")
+    }
+
+    func testAllMissionIDsUnique() {
+        let snapshot = DemoDataset.initialSnapshot()
+        let allIDs = snapshot.sectors.flatMap(\.missions).map(\.id)
+        XCTAssertEqual(allIDs.count, Set(allIDs).count, "Mission IDs must be unique")
+    }
+
+    func testFleetLogReceivesAllSectorsFromDemoSource() {
+        let _ = DemoSource()
+        let snapshot = DemoDataset.initialSnapshot()
+        let sectors = snapshot.sectors
+        XCTAssertEqual(sectors.count, 3)
+        for sector in sectors {
+            XCTAssertFalse(sector.missions.isEmpty, "\(sector.tag) must have missions")
+        }
+    }
+}
+
 final class FleetFormattersTests: XCTestCase {
     func testUnknownCostAndModel() {
         XCTAssertEqual(FleetFormatters.cost(nil), "—")

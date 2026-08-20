@@ -24,9 +24,16 @@ struct AIDCommandApp: App {
             CommandMenu("View") {
                 Button("Toggle Theme") { themeManager.toggle() }
                     .keyboardShortcut("t", modifiers: .command)
-                ForEach(CenterTab.allCases, id: \.self) { tab in
-                    Button(tab.rawValue) { store.selectedTab = tab }
-                }
+                Divider()
+                Button("FLEET LOG") { store.selectedTab = .fleetLog }
+                    .keyboardShortcut("1", modifiers: .command)
+                Button("HANGAR") { store.selectedTab = .hangar }
+                    .keyboardShortcut("2", modifiers: .command)
+                Button("CARGO") { store.selectedTab = .cargo }
+                    .keyboardShortcut("3", modifiers: .command)
+                Divider()
+                Button("Refresh") { store.startDemoStream() }
+                    .keyboardShortcut("r", modifiers: .command)
             }
         }
         #endif

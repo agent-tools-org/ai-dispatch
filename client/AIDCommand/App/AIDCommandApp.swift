@@ -25,11 +25,11 @@ struct AIDCommandApp: App {
                 Button("Toggle Theme") { themeManager.toggle() }
                     .keyboardShortcut("t", modifiers: .command)
                 Divider()
-                Button("FLEET LOG") { store.selectedTab = .fleetLog }
+                Button("FLEET LOG") { store.persistTab(.fleetLog) }
                     .keyboardShortcut("1", modifiers: .command)
-                Button("HANGAR") { store.selectedTab = .hangar }
+                Button("HANGAR") { store.persistTab(.hangar) }
                     .keyboardShortcut("2", modifiers: .command)
-                Button("CARGO") { store.selectedTab = .cargo }
+                Button("CARGO") { store.persistTab(.cargo) }
                     .keyboardShortcut("3", modifiers: .command)
                 Divider()
                 Button("Refresh") { store.startDemoStream() }
@@ -60,6 +60,7 @@ struct RootView: View {
     var body: some View {
         ConsoleShellView(store: store, themeManager: themeManager)
             .environment(\.theme, themeManager.tokens)
+            .onAppear { store.applyLaunchState() }
             #if os(iOS)
             .sheet(isPresented: $store.showSettings) {
                 SettingsView(

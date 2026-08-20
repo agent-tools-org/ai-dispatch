@@ -20,6 +20,7 @@ enum DemoDataset {
             summary: summary,
             serverVersion: "0.1.0-demo",
             connection: .disconnected,
+            agents: DemoAgents.roster(from: sectors),
             tick: 0
         )
     }

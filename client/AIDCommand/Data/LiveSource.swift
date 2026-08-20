@@ -4,11 +4,13 @@
 import Foundation
 
 final class LiveSource: FleetDataSource, @unchecked Sendable {
+    func currentSnapshot() -> FleetSnapshot { DemoDataset.initialSnapshot() }
+
     func snapshots() -> AsyncStream<FleetSnapshot> {
         AsyncStream { $0.finish() }
     }
 
-    func detail(_ id: MissionID) async throws -> Mission {
+    func detail(_ id: MissionID) async throws -> MissionDetail {
         throw LiveSourceError.notImplemented
     }
 
@@ -20,7 +22,7 @@ final class LiveSource: FleetDataSource, @unchecked Sendable {
         throw LiveSourceError.notImplemented
     }
 
-    func act(_ action: MissionAction, on id: MissionID) async throws {
+    func act(_ action: MissionAction, on id: MissionID) async throws -> MissionActionResult {
         throw LiveSourceError.notImplemented
     }
 }

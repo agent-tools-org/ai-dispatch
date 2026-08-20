@@ -150,6 +150,78 @@ final class DemoDatasetCoverageTests: XCTestCase {
     }
 }
 
+final class PayloadDeriverTests: XCTestCase {
+    func testKnownPayloadMappings() {
+        let snapshot = DemoDataset.initialSnapshot()
+        let missions = snapshot.sectors.flatMap(\.missions)
+        let report = missions.first { $0.id == "t-85e75668" }
+        let payload = report.flatMap { PayloadDeriver.derive(from: $0, sectorTag: "SEC-01") }
+        XCTAssertEqual(payload?.kind, .report)
+        XCTAssertEqual(payload?.rarity, .legendary)
+
+        let release = missions.first { $0.id == "t-9f10c3d2" }
+        let releasePayload = release.flatMap { PayloadDeriver.derive(from: $0, sectorTag: "SEC-03") }
+        XCTAssertEqual(releasePayload?.kind, .release)
+        XCTAssertEqual(releasePayload?.rarity, .legendary)
+    }
+
+    func testFailMissionYieldsScrap() {
+        let snapshot = DemoDataset.initialSnapshot()
+        let fail = snapshot.sectors[0].missions.first { $0.state == .fail }
+        let payload = fail.flatMap { PayloadDeriver.derive(from: $0, sectorTag: "SEC-01") }
+        XCTAssertEqual(payload?.kind, .scrap)
+        XCTAssertEqual(payload?.rarity, .salvage)
+    }
+
+    func testRunningMissionHasNoPayload() {
+        let snapshot = DemoDataset.initialSnapshot()
+        let running = snapshot.sectors[0].missions.first { $0.state == .run }
+        let payload = running.flatMap { PayloadDeriver.derive(from: $0, sectorTag: "SEC-01") }
+        XCTAssertNil(payload)
+    }
+
+    func testAllDoneMissionsProducePayloads() {
+        let snapshot = DemoDataset.initialSnapshot()
+        let payloads = PayloadDeriver.payloads(from: snapshot.sectors)
+        let doneCount = snapshot.sectors.flatMap(\.missions).filter { $0.state == .done || $0.state == .fail || $0.state == .stop }.count
+        XCTAssertEqual(payloads.count, doneCount)
+    }
+}
+
+final class FleetStoreLaunchTests: XCTestCase {
+    @MainActor
+    func testDefaultTabIsFleetLogWhenUnset() {
+        let key = "aid.command.tab"
+        let prior = UserDefaults.standard.string(forKey: key)
+        UserDefaults.standard.removeObject(forKey: key)
+        defer {
+            if let prior { UserDefaults.standard.set(prior, forKey: key) }
+            else { UserDefaults.standard.removeObject(forKey: key) }
+        }
+        let store = FleetStore()
+        XCTAssertEqual(store.selectedTab, .fleetLog)
+    }
+}
+
+final class DemoSourceActionTests: XCTestCase {
+    func testAbortRunningMission() async throws {
+        let source = DemoSource()
+        let running = source.currentSnapshot().sectors.flatMap(\.missions).first { $0.state == .run }
+        XCTAssertNotNil(running)
+        let result = try await source.act(.abort, on: running!.id)
+        XCTAssertTrue(result.ok)
+        let updated = source.currentSnapshot().sectors.flatMap(\.missions).first { $0.id == running!.id }
+        XCTAssertEqual(updated?.state, .stop)
+    }
+
+    func testDockRejectsRunningMission() async throws {
+        let source = DemoSource()
+        let running = source.currentSnapshot().sectors.flatMap(\.missions).first { $0.state == .run }
+        let result = try await source.act(.dock, on: running!.id)
+        XCTAssertFalse(result.ok)
+    }
+}
+
 final class FleetFormattersTests: XCTestCase {
     func testUnknownCostAndModel() {
         XCTAssertEqual(FleetFormatters.cost(nil), "—")

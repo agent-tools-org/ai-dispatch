@@ -204,7 +204,11 @@ pub struct AgentResponse {
 }
 
 impl AgentResponse {
-    pub(crate) fn from_json(agent: AgentJson, running_task_ids: Vec<String>) -> Self {
+    pub(crate) fn from_json(
+        agent: AgentJson,
+        running_task_ids: Vec<String>,
+        observed_model: Option<String>,
+    ) -> Self {
         let history = agent.history.as_ref();
         Self {
             name: agent.name,
@@ -215,7 +219,7 @@ impl AgentResponse {
             metering: agent.metering,
             quota: agent.quota,
             default_model: agent.models.default,
-            observed_model: None,
+            observed_model,
             busy: !running_task_ids.is_empty(),
             running_task_ids,
             success_rate: history.map(|value| value.success_rate),

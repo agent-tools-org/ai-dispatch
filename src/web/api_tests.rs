@@ -12,10 +12,10 @@ use chrono::Local;
 use tempfile::NamedTempFile;
 
 use super::api::{
-    ActionResponse, DiffResponse, TaskEventResponse, TaskListParams, TaskResponse, get_task, get_task_events,
-    get_task_output, get_task_result, get_usage, list_tasks, steer_task,
+    DiffResponse, TaskEventResponse, TaskListParams, TaskResponse, get_task, get_task_events,
+    get_task_output, get_task_result, get_usage, list_tasks, merge_task, steer_task,
 };
-use super::api_types::{MessageRequest, TaskEnrichment};
+use super::api_types::{ActionResponse, MessageRequest, TaskEnrichment};
 use super::fleet::{FleetParams, ServerInfo, get_fleet};
 use crate::store::Store;
 use crate::types::{
@@ -191,7 +191,8 @@ async fn fleet_returns_redacted_tasks_and_summary_in_one_snapshot() {
     .await
     .unwrap();
     assert_eq!(response.summary.done, 1);
-    assert_eq!(response.summary.spend_usd, 0.0);
+    assert_eq!(response.summary.spend_usd, None);
+    assert_eq!(response.summary.tokens, Some(42));
     assert_eq!(response.sectors.len(), 1);
     assert!(!response.agents.is_empty());
     assert!(response.sectors[0].tasks[0].get("prompt").is_none());
@@ -264,6 +265,16 @@ async fn steer_endpoint_uses_cli_guard_for_terminal_tasks() {
     .into_response();
     assert_eq!(response.status(), StatusCode::CONFLICT);
     assert!(expected.contains("can only reply to running tasks"));
+}
+
+#[tokio::test]
+async fn merge_endpoint_reports_running_task_as_conflict() {
+    let store = Arc::new(Store::open_memory().unwrap());
+    let mut task = make_task("t-merge-running");
+    task.status = TaskStatus::Running;
+    store.insert_task(&task).unwrap();
+    let response = merge_task(Path(task.id.to_string()), State(store)).await.into_response();
+    assert_eq!(response.status(), StatusCode::CONFLICT);
 }
 
 #[tokio::test]

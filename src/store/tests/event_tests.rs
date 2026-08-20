@@ -64,3 +64,39 @@ fn gets_latest_milestone() {
     let milestone = store.latest_milestone("t-0030").unwrap();
     assert_eq!(milestone.as_deref(), Some("tests passing"));
 }
+
+#[test]
+fn latest_observed_models_keep_the_newest_model_per_agent() {
+    let store = Store::open_memory().unwrap();
+    let mut older = make_task("t-model-old", AgentKind::Codex, TaskStatus::Done);
+    older.created_at -= chrono::Duration::minutes(1);
+    older.observed_model = Some("gpt-old".to_string());
+    let mut newer = make_task("t-model-new", AgentKind::Codex, TaskStatus::Done);
+    newer.observed_model = Some("gpt-new".to_string());
+    store.insert_task(&older).unwrap();
+    store.insert_task(&newer).unwrap();
+
+    let models = store.latest_observed_models().unwrap();
+    assert_eq!(models.get("codex").map(String::as_str), Some("gpt-new"));
+}
+
+#[test]
+fn latest_events_batch_returns_only_three_events_per_task() {
+    let store = Store::open_memory().unwrap();
+    store.insert_task(&make_task("t-events", AgentKind::Codex, TaskStatus::Running)).unwrap();
+    for index in 0..5 {
+        store
+            .insert_event(&TaskEvent {
+                task_id: TaskId("t-events".to_string()),
+                timestamp: Local::now(),
+                event_kind: EventKind::ToolCall,
+                detail: format!("event-{index}"),
+                metadata: None,
+            })
+            .unwrap();
+    }
+
+    let events = store.latest_events_three_batch(&["t-events"]).unwrap();
+    let details: Vec<_> = events["t-events"].iter().map(|event| event.detail.as_str()).collect();
+    assert_eq!(details, ["event-2", "event-3", "event-4"]);
+}

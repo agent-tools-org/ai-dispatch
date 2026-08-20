@@ -4,6 +4,7 @@
 
 pub mod api;
 mod api_types;
+mod actions;
 mod auth;
 mod diff;
 pub mod embed;
@@ -30,6 +31,7 @@ use tower_http::cors::{AllowOrigin, CorsLayer};
 use crate::store::Store;
 
 pub async fn serve(store: Arc<Store>, port: u16, host: String, token: Option<String>) -> Result<()> {
+    let token = auth::resolve_token(&host, token)?;
     auth::validate_bind_auth(&host, token.as_deref())?;
     let app = build_router(store, port, host.clone(), token.clone());
 
@@ -158,13 +160,14 @@ mod tests {
         let _ = serve;
     }
 
-    #[tokio::test]
-    async fn non_loopback_startup_without_token_is_refused() {
-        let store = std::sync::Arc::new(crate::store::Store::open_memory().expect("store"));
-        let error = serve(store, 0, "0.0.0.0".to_string(), None)
-            .await
-            .expect_err("unauthenticated LAN bind must not start");
-        assert!(error.to_string().contains("--token"));
+    #[test]
+    fn non_loopback_startup_without_token_resolves_auth() {
+        let home = tempfile::tempdir().expect("temporary AID home");
+        let _home = crate::paths::AidHomeGuard::set(home.path());
+        let token = auth::resolve_token("0.0.0.0", None)
+            .expect("resolve token")
+            .expect("generated token");
+        assert!(auth::validate_bind_auth("0.0.0.0", Some(&token)).is_ok());
     }
 
     #[tokio::test]

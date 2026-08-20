@@ -36,8 +36,8 @@ pub struct FleetSummary {
     pub done: usize,
     pub failed: usize,
     pub stopped: usize,
-    pub spend_usd: f64,
-    pub tokens: i64,
+    pub spend_usd: Option<f64>,
+    pub tokens: Option<i64>,
     pub memory_mb: Option<i64>,
     pub window: String,
 }
@@ -149,16 +149,18 @@ pub async fn get_agents(State(store): State<Arc<Store>>) -> Result<Json<Vec<Agen
 
 pub(crate) fn build_agents(store: &Store, running: &[Task]) -> anyhow::Result<Vec<AgentResponse>> {
     let list = agent_json::get_agents_list(store)?;
+    let observed_models = store.latest_observed_models()?;
     Ok(list
         .agents
         .into_iter()
         .map(|agent| {
+            let agent_name = agent.name.clone();
             let running_task_ids = running
                 .iter()
-                .filter(|task| agent_matches_task(&agent.name, &agent.kind, task))
+                .filter(|task| agent_matches_task(&agent_name, &agent.kind, task))
                 .map(|task| task.id.to_string())
                 .collect();
-            AgentResponse::from_json(agent, running_task_ids)
+            AgentResponse::from_json(agent, running_task_ids, observed_models.get(&agent_name).cloned())
         })
         .collect())
 }
@@ -177,8 +179,8 @@ fn summary_for_responses(tasks: &[TaskResponse], window: &str) -> FleetSummary {
         done: 0,
         failed: 0,
         stopped: 0,
-        spend_usd: 0.0,
-        tokens: 0,
+        spend_usd: None,
+        tokens: None,
         memory_mb: None,
         window: window.to_string(),
     };
@@ -190,8 +192,18 @@ fn summary_for_responses(tasks: &[TaskResponse], window: &str) -> FleetSummary {
             "stopped" => summary.stopped += 1,
             _ => {}
         }
-        summary.spend_usd += task.cost_usd.unwrap_or(0.0);
-        summary.tokens += task.tokens.unwrap_or(0);
+        if let Some(cost) = task.cost_usd {
+            match summary.spend_usd.as_mut() {
+                Some(total) => *total += cost,
+                None => summary.spend_usd = Some(cost),
+            }
+        }
+        if let Some(tokens) = task.tokens {
+            match summary.tokens.as_mut() {
+                Some(total) => *total += tokens,
+                None => summary.tokens = Some(tokens),
+            }
+        }
         if let Some(memory_mb) = task.memory_mb {
             summary.memory_mb = Some(summary.memory_mb.unwrap_or(0) + memory_mb);
         }

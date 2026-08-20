@@ -17,10 +17,11 @@ use crate::task_view;
 use crate::types::{Task, TaskFilter};
 
 pub(crate) use super::api_types::{
-    ActionResponse, AgentUsageResponse, DiffResponse, MessageRequest, ResultResponse,
+    AgentUsageResponse, DiffResponse, MessageRequest, ResultResponse,
     RetryRequest, TaskEventResponse, TaskListParams, TaskOutputResponse, TaskResponse,
     UsageResponse,
 };
+use super::actions;
 use super::api_types::TaskEnrichment;
 use super::diff::has_non_empty_diff;
 
@@ -96,10 +97,10 @@ pub async fn get_usage(State(store): State<Arc<Store>>) -> Result<Json<UsageResp
 
 pub async fn stop_task(Path(id): Path<String>, State(store): State<Arc<Store>>) -> impl IntoResponse {
     match store.get_task(&id) {
-        Ok(Some(task)) if task.status.is_terminal() => action_ok(None),
-        Ok(Some(_)) => action_result(task_actions::stop(&store, &id)),
-        Ok(None) => action_error(anyhow::anyhow!("Task {id} not found")),
-        Err(error) => action_error(error),
+        Ok(Some(task)) if task.status.is_terminal() => actions::action_ok(None),
+        Ok(Some(_)) => actions::action_result(task_actions::stop(&store, &id).map_err(actions::internal)),
+        Ok(None) => actions::action_error(actions::not_found(format!("Task {id} not found"))),
+        Err(error) => actions::action_error(actions::internal(error)),
     }
 }
 
@@ -108,6 +109,9 @@ pub async fn retry_task(
     State(store): State<Arc<Store>>,
     Json(request): Json<RetryRequest>,
 ) -> impl IntoResponse {
+    if let Err(error) = actions::ensure_exists(&store, &id) {
+        return actions::action_error(error);
+    }
     let args = task_actions::RetryArgs {
         task_id: id,
         feedback: request.feedback,
@@ -120,13 +124,16 @@ pub async fn retry_task(
         bg: false,
     };
     match task_actions::retry(store, args).await {
-        Ok(new_task_id) => action_ok(Some(new_task_id.to_string())),
-        Err(error) => action_error(error),
+        Ok(new_task_id) => actions::action_ok(Some(new_task_id.to_string())),
+        Err(error) => actions::action_error(actions::internal(error)),
     }
 }
 
 pub async fn merge_task(Path(id): Path<String>, State(store): State<Arc<Store>>) -> impl IntoResponse {
-    action_result(task_actions::merge(
+    if let Err(error) = actions::ensure_merge_allowed(&store, &id) {
+        return actions::action_error(error);
+    }
+    actions::action_result(task_actions::merge(
         store,
         task_actions::MergeArgs {
             task_id: Some(&id),
@@ -137,7 +144,7 @@ pub async fn merge_task(Path(id): Path<String>, State(store): State<Arc<Store>>)
             target: None,
             lanes: false,
         },
-    ))
+    ).map_err(actions::internal))
 }
 
 pub async fn steer_task(
@@ -145,7 +152,10 @@ pub async fn steer_task(
     State(store): State<Arc<Store>>,
     Json(request): Json<MessageRequest>,
 ) -> impl IntoResponse {
-    action_result(cmd::steer::run(&store, &id, &request.message))
+    if let Err(error) = actions::ensure_replyable(&store, &id) {
+        return actions::action_error(error);
+    }
+    actions::action_result(cmd::steer::run(&store, &id, &request.message).map_err(actions::internal))
 }
 
 pub async fn respond_task(
@@ -153,15 +163,24 @@ pub async fn respond_task(
     State(store): State<Arc<Store>>,
     Json(request): Json<MessageRequest>,
 ) -> impl IntoResponse {
-    action_result(cmd::respond::run(&store, &id, Some(&request.message), None))
+    if let Err(error) = actions::ensure_replyable(&store, &id) {
+        return actions::action_error(error);
+    }
+    actions::action_result(cmd::respond::run(&store, &id, Some(&request.message), None).map_err(actions::internal))
 }
 
 pub async fn accept_task(Path(id): Path<String>, State(store): State<Arc<Store>>) -> impl IntoResponse {
-    action_result(crate::artifact_custody::accept(&store, &id, &local_principal()))
+    if let Err(error) = actions::ensure_terminal(&store, &id) {
+        return actions::action_error(error);
+    }
+    actions::action_result(crate::artifact_custody::accept(&store, &id, &local_principal()).map_err(actions::internal))
 }
 
 pub async fn reject_task(Path(id): Path<String>, State(store): State<Arc<Store>>) -> impl IntoResponse {
-    action_result(crate::artifact_custody::reject(&store, &id, &local_principal()))
+    if let Err(error) = actions::ensure_terminal(&store, &id) {
+        return actions::action_error(error);
+    }
+    actions::action_result(crate::artifact_custody::reject(&store, &id, &local_principal()).map_err(actions::internal))
 }
 
 pub async fn get_task_diff(Path(id): Path<String>, State(store): State<Arc<Store>>) -> impl IntoResponse {
@@ -241,34 +260,8 @@ fn local_principal() -> String {
         .unwrap_or_else(|| "local-principal".to_string())
 }
 
-fn action_result(result: anyhow::Result<()>) -> (StatusCode, Json<ActionResponse>) {
-    match result {
-        Ok(()) => action_ok(None),
-        Err(error) => action_error(error),
-    }
-}
-
-fn action_ok(new_task_id: Option<String>) -> (StatusCode, Json<ActionResponse>) {
-    (StatusCode::OK, Json(ActionResponse { ok: true, new_task_id, error: None }))
-}
-
 pub(crate) fn internal_error(_: anyhow::Error) -> StatusCode {
     StatusCode::INTERNAL_SERVER_ERROR
-}
-
-fn action_error(error: anyhow::Error) -> (StatusCode, Json<ActionResponse>) {
-    let message = error.to_string();
-    let status = if message.contains("not found") {
-        StatusCode::NOT_FOUND
-    } else if message.contains("can only")
-        || message.contains("not complete")
-        || message.contains("acceptance is not allowed")
-    {
-        StatusCode::CONFLICT
-    } else {
-        StatusCode::INTERNAL_SERVER_ERROR
-    };
-    (status, Json(ActionResponse { ok: false, new_task_id: None, error: Some(message) }))
 }
 
 fn diff_unavailable(diff: &str) -> bool {

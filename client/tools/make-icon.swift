@@ -26,7 +26,7 @@ private struct IconSpec {
 private enum IconGeometry {
     static let macInset: CGFloat = 0.095
     static let macCornerRadius: CGFloat = 0.17
-    static let detailedCrossoverPoints: CGFloat = 32
+    static let detailedCrossoverPoints: CGFloat = 48
     static let compactMacBadgeRadius: CGFloat = 0.365
     static let compactIPadBadgeRadius: CGFloat = 0.395
     static let detailedMacBadgeRadius: CGFloat = 0.365
@@ -34,7 +34,7 @@ private enum IconGeometry {
     static let detailedBadgeStrokeRatio: CGFloat = 0.055
     static let minimumStroke: CGFloat = 1.75
     static let compactBadgeFillAlpha: CGFloat = 1
-    static let detailedBadgeFillAlpha: CGFloat = 0.62
+    static let detailedBadgeFillAlpha: CGFloat = 0.78
     static let detailedLampRadiusRatio: CGFloat = 0.043
     static let minimumLampRadius: CGFloat = 1.65
     static let macCaseEdgeAlpha: CGFloat = 0.35

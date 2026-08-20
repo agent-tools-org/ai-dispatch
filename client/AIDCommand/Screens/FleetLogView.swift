@@ -72,9 +72,8 @@ struct FleetLogView: View {
                 missionColumn(mission)
                 unitColumn(mission)
                 StatePill(state: mission.state, verifyTag: mission.verifyTag)
-                    .frame(width: 110, alignment: .leading)
                 progressColumn(mission)
-                Text(FleetFormatters.elapsed(seconds: mission.elapsedSeconds))
+                ElapsedLabel(mission: mission)
                     .font(theme.font(.caption))
                     .foregroundStyle(theme.ink2)
                     .frame(width: 72, alignment: .trailing)
@@ -111,25 +110,29 @@ struct FleetLogView: View {
                 .foregroundStyle(theme.ink3)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        .layoutPriority(1)
     }
 
     private func unitColumn(_ mission: Mission) -> some View {
-        HStack(spacing: 6) {
-            UnitGlyph(agent: mission.agent, size: 18)
+        HStack(spacing: 4) {
+            UnitGlyph(agent: mission.agent, size: 16)
             VStack(alignment: .leading, spacing: 0) {
                 Text(mission.agent)
                     .font(theme.font(.caption))
                     .foregroundStyle(theme.ink2)
-                HStack(spacing: 4) {
-                    DriveGlyph(model: mission.model, size: 12)
+                    .lineLimit(1)
+                HStack(spacing: 2) {
+                    DriveGlyph(model: mission.model, size: 10)
                     Text(FleetFormatters.model(mission.model))
                         .font(theme.font(.caption))
                         .foregroundStyle(theme.ink3)
                         .lineLimit(1)
                 }
             }
+            .frame(maxWidth: 72, alignment: .leading)
         }
-        .frame(width: 140, alignment: .leading)
+        .frame(width: 96, alignment: .leading)
+        .layoutPriority(0)
     }
 
     private func progressColumn(_ mission: Mission) -> some View {

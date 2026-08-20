@@ -56,6 +56,59 @@ final class FleetAPIDecoderTests: XCTestCase {
         XCTAssertNil(mission?.tokens)
     }
 
+    func testRunningElapsedFromStartedAtWhenDurationMissing() throws {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime]
+        let startedAt = Date().addingTimeInterval(-125)
+        let started = formatter.string(from: startedAt)
+        let json = """
+        {
+          "server": {
+            "version": "10.37.0",
+            "host": "127.0.0.1",
+            "port": 8080,
+            "started_at": "2026-08-20T07:00:00Z",
+            "aid_home": "/tmp/.aid"
+          },
+          "summary": {
+            "running": 1, "done": 0, "failed": 0, "spend_usd": null,
+            "tokens": null, "memory_mb": null, "window": "today"
+          },
+          "sectors": [{
+            "id": "aid-core",
+            "name": "aid-core",
+            "repo_path": "/tmp/aid-core",
+            "workgroup_id": "wg-41ba0dd2",
+            "tasks": [{
+              "id": "t-run",
+              "agent": "codex",
+              "status": "running",
+              "outcome": "in_progress",
+              "prompt_excerpt": "Live elapsed tick",
+              "requested_model": "gpt-5.6",
+              "observed_model": "gpt-5.6",
+              "tokens": null,
+              "cost_usd": null,
+              "duration_ms": null,
+              "started_at": "\(started)",
+              "difficulty": "simple",
+              "memory_mb": null,
+              "latest_events": []
+            }]
+          }],
+          "agents": [{ "name": "codex", "busy": true, "task_count": 1, "quota": { "state": "ok" } }]
+        }
+        """
+        let data = json.data(using: .utf8)!
+        let snapshot = try FleetAPIDecoder.decodeSnapshot(from: data, connection: .live)
+        let running = try XCTUnwrap(snapshot.sectors[0].missions.first)
+        XCTAssertEqual(running.state, .run)
+        XCTAssertNotNil(running.startedAt)
+        XCTAssertGreaterThanOrEqual(running.elapsedSeconds, 120)
+        XCTAssertLessThanOrEqual(running.elapsedSeconds, 135)
+        XCTAssertNotEqual(FleetFormatters.elapsed(seconds: running.elapsedSeconds), "—")
+    }
+
     func testUnauthorizedProbeMessage() async {
         let body = #"{"error":"unauthorized"}"#.data(using: .utf8)!
         let dto = try? JSONDecoder().decode(ProbeError.self, from: body)

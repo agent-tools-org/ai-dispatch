@@ -115,7 +115,7 @@ struct HangarView: View {
                             .foregroundStyle(theme.ink2)
                         DriveGlyph(model: mission.model, size: 12)
                         Spacer()
-                        Text(FleetFormatters.elapsed(seconds: mission.elapsedSeconds))
+                        ElapsedLabel(mission: mission)
                             .font(theme.font(.caption))
                             .foregroundStyle(theme.ink3)
                         Text(FleetFormatters.cost(mission.cost))

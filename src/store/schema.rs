@@ -30,6 +30,7 @@ const CREATE_TABLES_SQL: &str = "CREATE TABLE IF NOT EXISTS tasks (
     model TEXT,
     cost_usd REAL,
     created_at TEXT NOT NULL,
+    started_at TEXT,
     completed_at TEXT,
     completion_summary TEXT,
     peer_review TEXT,
@@ -166,6 +167,7 @@ pub(super) fn migrate(store: &Store) -> Result<()> {
     // Add columns if missing (ALTER TABLE ADD COLUMN is idempotent when wrapped in try)
     let _ = conn.execute_batch("ALTER TABLE tasks ADD COLUMN model TEXT;");
     let _ = conn.execute_batch("ALTER TABLE tasks ADD COLUMN cost_usd REAL;");
+    let _ = conn.execute_batch("ALTER TABLE tasks ADD COLUMN started_at TEXT;");
     let _ = conn.execute_batch("ALTER TABLE tasks ADD COLUMN exit_code INTEGER;");
     let _ = conn.execute_batch("ALTER TABLE tasks ADD COLUMN parent_task_id TEXT;");
     let _ = conn.execute_batch("ALTER TABLE tasks ADD COLUMN workgroup_id TEXT;");

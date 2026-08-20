@@ -1,6 +1,6 @@
-// Web API handlers for task, event, output, and usage JSON endpoints.
-// Exports: axum handlers and response DTOs for the web UI.
-// Deps: axum, serde, crate::store, crate::types.
+// Web API handlers for task, event, output, action, and usage endpoints.
+// Exports: additive `/api/` handlers and shared task response enrichment.
+// Deps: axum, Store batch queries, task actions, and API DTOs.
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -9,159 +9,21 @@ use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use axum::Json;
-use serde::{Deserialize, Serialize};
 
+use crate::cmd;
 use crate::store::Store;
 use crate::task_actions;
 use crate::task_view;
-use crate::types::{Task, TaskEvent, TaskFilter};
+use crate::types::{Task, TaskFilter};
 
-#[derive(Debug, Deserialize)]
-pub struct TaskListParams { pub filter: Option<String> }
-
-#[derive(Debug, Serialize)]
-pub struct TaskResponse {
-    pub id: String,
-    pub agent: String,
-    pub custom_agent_name: Option<String>,
-    pub prompt: String,
-    pub resolved_prompt: Option<String>,
-    pub status: String,
-    pub outcome: String,
-    pub parent_task_id: Option<String>,
-    pub workgroup_id: Option<String>,
-    pub caller_kind: Option<String>,
-    pub caller_session_id: Option<String>,
-    pub agent_session_id: Option<String>,
-    pub repo_path: Option<String>,
-    pub project_id: Option<String>,
-    pub worktree_path: Option<String>,
-    pub effective_dir: Option<String>,
-    pub worktree_branch: Option<String>,
-    pub final_head_sha: Option<String>,
-    pub final_branch: Option<String>,
-    pub log_path: Option<String>,
-    pub output_path: Option<String>,
-    pub tokens: Option<i64>,
-    pub prompt_tokens: Option<i64>,
-    pub duration_ms: Option<i64>,
-    pub requested_model: Option<String>,
-    pub observed_model: Option<String>,
-    pub attribution_source: Option<String>,
-    pub cost_usd: Option<f64>,
-    pub exit_code: Option<i32>,
-    pub created_at: String,
-    pub completed_at: Option<String>,
-    pub verify: Option<String>,
-    pub verify_status: String,
-    pub pending_reason: Option<String>,
-    pub delivery_assessment: Option<String>,
-    pub read_only: bool,
-    pub budget: bool,
-    pub latest_milestone: Option<String>,
-    pub latest_error: Option<String>,
-}
-
-#[derive(Debug, Serialize)]
-pub struct TaskEventResponse {
-    pub task_id: String,
-    pub timestamp: String,
-    pub event_kind: String,
-    pub detail: String,
-    pub metadata: Option<serde_json::Value>,
-}
-
-#[derive(Debug, Serialize)]
-pub struct TaskOutputResponse { pub output: String }
-
-#[derive(Debug, Serialize)]
-pub struct AgentUsageResponse {
-    pub agent: String,
-    pub success_rate: Option<f64>,
-    pub task_count: usize,
-    pub avg_cost: Option<f64>,
-}
-
-#[derive(Debug, Serialize)]
-pub struct UsageResponse { pub agents: Vec<AgentUsageResponse> }
-
-#[derive(Debug, Serialize)]
-pub struct ActionResponse {
-    pub ok: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub new_task_id: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub error: Option<String>,
-}
-
-#[derive(Debug, Serialize)]
-pub struct DiffResponse { pub diff: String }
-
-#[derive(Debug, Deserialize)]
-pub struct RetryRequest { pub feedback: Option<String> }
-
-impl TaskResponse {
-    pub(crate) fn from_task(
-        task: Task,
-        latest_milestone: Option<String>,
-        latest_error: Option<String>,
-    ) -> Self {
-        let outcome = task.outcome().as_str().to_string();
-        Self {
-            id: task.id.to_string(),
-            agent: task.agent.as_str().to_string(),
-            custom_agent_name: task.custom_agent_name,
-            prompt: task.prompt,
-            resolved_prompt: task.resolved_prompt,
-            status: task.status.as_str().to_string(),
-            outcome,
-            parent_task_id: task.parent_task_id,
-            workgroup_id: task.workgroup_id,
-            caller_kind: task.caller_kind,
-            caller_session_id: task.caller_session_id,
-            agent_session_id: task.agent_session_id,
-            repo_path: task.repo_path,
-            project_id: task.project_id,
-            worktree_path: task.worktree_path,
-            effective_dir: task.effective_dir,
-            worktree_branch: task.worktree_branch,
-            final_head_sha: task.final_head_sha,
-            final_branch: task.final_branch,
-            log_path: task.log_path,
-            output_path: task.output_path,
-            tokens: task.tokens,
-            prompt_tokens: task.prompt_tokens,
-            duration_ms: task.duration_ms,
-            requested_model: task.requested_model,
-            observed_model: task.observed_model,
-            attribution_source: task.attribution_source.map(|value| value.as_str().to_string()),
-            cost_usd: task.cost_usd,
-            exit_code: task.exit_code,
-            created_at: task.created_at.to_rfc3339(),
-            completed_at: task.completed_at.map(|value| value.to_rfc3339()),
-            verify: task.verify,
-            verify_status: task.verify_status.as_str().to_string(),
-            delivery_assessment: task.delivery_assessment.map(|value| value.as_str().to_string()),
-            pending_reason: task.pending_reason,
-            read_only: task.read_only,
-            budget: task.budget,
-            latest_milestone,
-            latest_error,
-        }
-    }
-}
-
-impl From<TaskEvent> for TaskEventResponse {
-    fn from(event: TaskEvent) -> Self {
-        Self {
-            task_id: event.task_id.to_string(),
-            timestamp: event.timestamp.to_rfc3339(),
-            event_kind: event.event_kind.as_str().to_string(),
-            detail: event.detail,
-            metadata: event.metadata,
-        }
-    }
-}
+pub(crate) use super::api_types::{
+    AgentUsageResponse, DiffResponse, MessageRequest, ResultResponse,
+    RetryRequest, TaskEventResponse, TaskListParams, TaskOutputResponse, TaskResponse,
+    UsageResponse,
+};
+use super::actions;
+use super::api_types::TaskEnrichment;
+use super::diff::has_non_empty_diff;
 
 pub async fn list_tasks(
     Query(params): Query<TaskListParams>,
@@ -169,17 +31,7 @@ pub async fn list_tasks(
 ) -> Result<Json<Vec<TaskResponse>>, StatusCode> {
     let filter = parse_filter(params.filter.as_deref()).ok_or(StatusCode::BAD_REQUEST)?;
     let tasks = store.list_tasks(filter).map_err(internal_error)?;
-    let task_ids: Vec<&str> = tasks.iter().map(|task| task.id.as_str()).collect();
-    let milestones = store.latest_milestones_batch(&task_ids).map_err(internal_error)?;
-    let response = tasks
-        .into_iter()
-        .map(|task| {
-            let milestone = milestones.get(task.id.as_str()).cloned();
-            let error = store.latest_error(task.id.as_str());
-            TaskResponse::from_task(task, milestone, error)
-        })
-        .collect();
-    Ok(Json(response))
+    Ok(Json(enrich_tasks(&store, tasks).map_err(internal_error)?))
 }
 
 pub async fn get_task(
@@ -187,8 +39,12 @@ pub async fn get_task(
     State(store): State<Arc<Store>>,
 ) -> Result<Json<TaskResponse>, StatusCode> {
     let task = store.get_task(&id).map_err(internal_error)?.ok_or(StatusCode::NOT_FOUND)?;
-    let milestone = store.latest_milestone(&id).map_err(internal_error)?;
-    Ok(Json(TaskResponse::from_task(task, milestone, store.latest_error(&id))))
+    let response = enrich_tasks(&store, vec![task])
+        .map_err(internal_error)?
+        .into_iter()
+        .next()
+        .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+    Ok(Json(response))
 }
 
 pub async fn get_task_events(
@@ -205,7 +61,23 @@ pub async fn get_task_output(
     State(store): State<Arc<Store>>,
 ) -> Result<Json<TaskOutputResponse>, StatusCode> {
     let task = store.get_task(&id).map_err(internal_error)?.ok_or(StatusCode::NOT_FOUND)?;
-    Ok(Json(TaskOutputResponse { output: read_task_output(&task) }))
+    Ok(Json(TaskOutputResponse { output: task_view::read_output(&task) }))
+}
+
+pub async fn get_task_result(
+    Path(id): Path<String>,
+    State(store): State<Arc<Store>>,
+) -> Result<Json<ResultResponse>, StatusCode> {
+    ensure_task_exists(&store, &id)?;
+    let path = crate::paths::task_dir(&id).join("result.md");
+    let result = std::fs::read_to_string(path).map_err(|error| {
+        if error.kind() == std::io::ErrorKind::NotFound {
+            StatusCode::NOT_FOUND
+        } else {
+            StatusCode::INTERNAL_SERVER_ERROR
+        }
+    })?;
+    Ok(Json(ResultResponse { result }))
 }
 
 pub async fn get_usage(State(store): State<Arc<Store>>) -> Result<Json<UsageResponse>, StatusCode> {
@@ -224,9 +96,11 @@ pub async fn get_usage(State(store): State<Arc<Store>>) -> Result<Json<UsageResp
 }
 
 pub async fn stop_task(Path(id): Path<String>, State(store): State<Arc<Store>>) -> impl IntoResponse {
-    match task_actions::stop(&store, &id) {
-        Ok(()) => (StatusCode::OK, Json(ActionResponse { ok: true, new_task_id: None, error: None })).into_response(),
-        Err(error) => action_error(error).into_response(),
+    match store.get_task(&id) {
+        Ok(Some(task)) if task.status.is_terminal() => actions::action_ok(None),
+        Ok(Some(_)) => actions::action_result(task_actions::stop(&store, &id).map_err(actions::internal)),
+        Ok(None) => actions::action_error(actions::not_found(format!("Task {id} not found"))),
+        Err(error) => actions::action_error(actions::internal(error)),
     }
 }
 
@@ -235,7 +109,10 @@ pub async fn retry_task(
     State(store): State<Arc<Store>>,
     Json(request): Json<RetryRequest>,
 ) -> impl IntoResponse {
-    match task_actions::retry(store, task_actions::RetryArgs {
+    if let Err(error) = actions::ensure_exists(&store, &id) {
+        return actions::action_error(error);
+    }
+    let args = task_actions::RetryArgs {
         task_id: id,
         feedback: request.feedback,
         feedback_file: None,
@@ -245,29 +122,65 @@ pub async fn retry_task(
         dir: None,
         reset: false,
         bg: false,
-    }).await {
-        Ok(new_task_id) => (StatusCode::OK, Json(ActionResponse {
-            ok: true,
-            new_task_id: Some(new_task_id.to_string()),
-            error: None,
-        })).into_response(),
-        Err(error) => action_error(error).into_response(),
+    };
+    match task_actions::retry(store, args).await {
+        Ok(new_task_id) => actions::action_ok(Some(new_task_id.to_string())),
+        Err(error) => actions::action_error(actions::internal(error)),
     }
 }
 
 pub async fn merge_task(Path(id): Path<String>, State(store): State<Arc<Store>>) -> impl IntoResponse {
-    match task_actions::merge(store, task_actions::MergeArgs {
-        task_id: Some(&id),
-        group: None,
-        approve: true,
-        check: false,
-        force: false,
-        target: None,
-        lanes: false,
-    }) {
-        Ok(()) => (StatusCode::OK, Json(ActionResponse { ok: true, new_task_id: None, error: None })).into_response(),
-        Err(error) => action_error(error).into_response(),
+    if let Err(error) = actions::ensure_merge_allowed(&store, &id) {
+        return actions::action_error(error);
     }
+    actions::action_result(task_actions::merge(
+        store,
+        task_actions::MergeArgs {
+            task_id: Some(&id),
+            group: None,
+            approve: true,
+            check: false,
+            force: false,
+            target: None,
+            lanes: false,
+        },
+    ).map_err(actions::internal))
+}
+
+pub async fn steer_task(
+    Path(id): Path<String>,
+    State(store): State<Arc<Store>>,
+    Json(request): Json<MessageRequest>,
+) -> impl IntoResponse {
+    if let Err(error) = actions::ensure_replyable(&store, &id) {
+        return actions::action_error(error);
+    }
+    actions::action_result(cmd::steer::run(&store, &id, &request.message).map_err(actions::internal))
+}
+
+pub async fn respond_task(
+    Path(id): Path<String>,
+    State(store): State<Arc<Store>>,
+    Json(request): Json<MessageRequest>,
+) -> impl IntoResponse {
+    if let Err(error) = actions::ensure_replyable(&store, &id) {
+        return actions::action_error(error);
+    }
+    actions::action_result(cmd::respond::run(&store, &id, Some(&request.message), None).map_err(actions::internal))
+}
+
+pub async fn accept_task(Path(id): Path<String>, State(store): State<Arc<Store>>) -> impl IntoResponse {
+    if let Err(error) = actions::ensure_terminal(&store, &id) {
+        return actions::action_error(error);
+    }
+    actions::action_result(crate::artifact_custody::accept(&store, &id, &local_principal()).map_err(actions::internal))
+}
+
+pub async fn reject_task(Path(id): Path<String>, State(store): State<Arc<Store>>) -> impl IntoResponse {
+    if let Err(error) = actions::ensure_terminal(&store, &id) {
+        return actions::action_error(error);
+    }
+    actions::action_result(crate::artifact_custody::reject(&store, &id, &local_principal()).map_err(actions::internal))
 }
 
 pub async fn get_task_diff(Path(id): Path<String>, State(store): State<Arc<Store>>) -> impl IntoResponse {
@@ -278,33 +191,81 @@ pub async fn get_task_diff(Path(id): Path<String>, State(store): State<Arc<Store
     }
 }
 
-fn parse_filter(filter: Option<&str>) -> Option<TaskFilter> { match filter.unwrap_or("today") {
-    "all" => Some(TaskFilter::All), "running" => Some(TaskFilter::Running), "today" => Some(TaskFilter::Today), _ => None,
-} }
+pub(crate) fn enrich_tasks(store: &Store, tasks: Vec<Task>) -> anyhow::Result<Vec<TaskResponse>> {
+    let ids: Vec<&str> = tasks.iter().map(|task| task.id.as_str()).collect();
+    let memory_mb: HashMap<_, _> = tasks
+        .iter()
+        .map(|task| (task.id.as_str().to_string(), task_memory_mb(task)))
+        .collect();
+    let started_at = store.started_at_batch(&ids)?;
+    let profiles = store.get_task_profiles_batch(&ids)?;
+    let milestones = store.latest_milestones_batch(&ids)?;
+    let mut errors = store.latest_errors_batch(&ids)?;
+    for (id, error) in store.latest_errors_batch_unfiltered(&ids)? {
+        errors.entry(id).or_insert(error);
+    }
+    let awaiting = store.latest_awaiting_reasons_batch(&ids)?;
+    let events = store.latest_events_three_batch(&ids)?;
+    Ok(tasks
+        .into_iter()
+        .map(|task| {
+            let id = task.id.as_str().to_string();
+            let has_diff = has_non_empty_diff(&task);
+            TaskResponse::from_task(task, TaskEnrichment {
+                started_at: started_at.get(&id).cloned(),
+                memory_mb: memory_mb.get(&id).copied().flatten(),
+                profile: profiles.get(&id).copied().unwrap_or_default(),
+                latest_milestone: milestones.get(&id).cloned(),
+                latest_error: errors.get(&id).cloned(),
+                awaiting_reason: awaiting.get(&id).cloned(),
+                latest_events: events
+                    .get(&id)
+                    .cloned()
+                    .unwrap_or_default()
+                    .into_iter()
+                    .map(TaskEventResponse::from)
+                    .collect(),
+                has_diff,
+            })
+        })
+        .collect())
+}
+
+pub(crate) fn task_memory_mb(task: &Task) -> Option<i64> {
+    if !matches!(task.status, crate::types::TaskStatus::Running | crate::types::TaskStatus::AwaitingInput) {
+        return None;
+    }
+    let worker_pid = crate::background::load_worker_pid(task.id.as_str()).ok().flatten()?;
+    crate::tui::metrics::get_process_metrics(worker_pid)
+        .map(|metrics| metrics.memory_mb.round() as i64)
+}
+
+fn parse_filter(filter: Option<&str>) -> Option<TaskFilter> {
+    match filter.unwrap_or("today") {
+        "all" => Some(TaskFilter::All),
+        "running" => Some(TaskFilter::Running),
+        "today" => Some(TaskFilter::Today),
+        _ => None,
+    }
+}
 
 fn ensure_task_exists(store: &Store, id: &str) -> Result<(), StatusCode> {
     store.get_task(id).map_err(internal_error)?.ok_or(StatusCode::NOT_FOUND).map(|_| ())
 }
 
-fn read_task_output(task: &Task) -> String {
-    task_view::read_output(task)
+fn local_principal() -> String {
+    std::env::var("USER")
+        .ok()
+        .filter(|value| !value.trim().is_empty())
+        .unwrap_or_else(|| "local-principal".to_string())
 }
 
-fn internal_error(_: anyhow::Error) -> StatusCode { StatusCode::INTERNAL_SERVER_ERROR }
-
-fn action_error(error: anyhow::Error) -> (StatusCode, Json<ActionResponse>) {
-    let message = error.to_string();
-    let status = if message.contains("not found") {
-        StatusCode::NOT_FOUND
-    } else if message.contains("not running") || message.contains("only DONE tasks") {
-        StatusCode::BAD_REQUEST
-    } else {
-        StatusCode::INTERNAL_SERVER_ERROR
-    };
-    (status, Json(ActionResponse { ok: false, new_task_id: None, error: Some(message) }))
+pub(crate) fn internal_error(_: anyhow::Error) -> StatusCode {
+    StatusCode::INTERNAL_SERVER_ERROR
 }
 
-fn diff_unavailable(diff: &str) -> bool { diff.contains("(worktree removed or diff unavailable)")
-    || diff.contains("(no worktree diff or output file available)")
-    || diff.contains("(in-place edit — no uncommitted changes detected, may already be committed)")
+fn diff_unavailable(diff: &str) -> bool {
+    diff.contains("(worktree removed or diff unavailable)")
+        || diff.contains("(no worktree diff or output file available)")
+        || diff.contains("(in-place edit — no uncommitted changes detected, may already be committed)")
 }

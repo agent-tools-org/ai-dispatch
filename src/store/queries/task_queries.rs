@@ -4,6 +4,7 @@
 
 use anyhow::Result;
 use chrono::Local;
+use std::collections::HashMap;
 use rusqlite::{params, OptionalExtension};
 
 use super::super::schema::row_to_task;
@@ -11,6 +12,50 @@ use super::super::Store;
 use crate::types::{AgentKind, Task, TaskFilter, TaskStatus, ACTIVE_TASK_STATUSES};
 
 impl Store {
+    pub fn started_at_batch(&self, task_ids: &[&str]) -> Result<HashMap<String, String>> {
+        if task_ids.is_empty() {
+            return Ok(HashMap::new());
+        }
+        let placeholders: Vec<String> = (1..=task_ids.len()).map(|index| format!("?{index}")).collect();
+        let sql = format!(
+            "SELECT id,
+                    COALESCE(
+                        started_at,
+                        (SELECT MIN(timestamp) FROM events
+                         WHERE events.task_id = tasks.id
+                           AND event_type IN (
+                               'setup', 'reasoning', 'milestone', 'tool_call',
+                               'build', 'test', 'commit', 'file_write', 'file_read',
+                               'web_search', 'lint', 'format'
+                           ))
+                    )
+             FROM tasks WHERE id IN ({})
+               AND (started_at IS NOT NULL OR EXISTS (
+                   SELECT 1 FROM events
+                   WHERE events.task_id = tasks.id
+                     AND event_type IN (
+                         'setup', 'reasoning', 'milestone', 'tool_call',
+                         'build', 'test', 'commit', 'file_write', 'file_read',
+                         'web_search', 'lint', 'format'
+                     )
+               ))",
+            placeholders.join(",")
+        );
+        let conn = self.db();
+        let params: Vec<&dyn rusqlite::ToSql> =
+            task_ids.iter().map(|id| id as &dyn rusqlite::ToSql).collect();
+        let mut statement = conn.prepare(&sql)?;
+        let rows = statement.query_map(params.as_slice(), |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+        })?;
+        let mut started_at = HashMap::new();
+        for row in rows {
+            let (id, value) = row?;
+            started_at.insert(id, value);
+        }
+        Ok(started_at)
+    }
+
     pub fn get_task(&self, id: &str) -> Result<Option<Task>> {
         let conn = self.db();
         let mut stmt = conn.prepare(

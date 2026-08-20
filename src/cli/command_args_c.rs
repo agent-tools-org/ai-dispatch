@@ -149,4 +149,8 @@ pub struct DoctorArgs {
 pub struct WebArgs {
     #[arg(long, default_value = "8080")]
     pub port: u16,
+    #[arg(long, default_value = "127.0.0.1")]
+    pub host: String,
+    #[arg(long)]
+    pub token: Option<String>,
 }

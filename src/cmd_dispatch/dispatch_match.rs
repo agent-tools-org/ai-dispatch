@@ -77,7 +77,7 @@ pub(crate) async fn dispatch(
             | Commands::Experiment(..)
         ) => dispatch_tertiary(store, command).await.map(|()| DispatchOutcome::CommandCompleted),
         #[cfg(feature = "web")]
-        Commands::Web(command_args_c::WebArgs { port }) => admin_config::run_web(port)
+        Commands::Web(command_args_c::WebArgs { port, host, token }) => admin_config::run_web(port, host, token)
             .await
             .map(|()| DispatchOutcome::CommandCompleted),
     }

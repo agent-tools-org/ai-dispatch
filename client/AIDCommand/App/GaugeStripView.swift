@@ -41,9 +41,13 @@ struct GaugeStripView: View {
     }
 
     private var klaxonSlot: some View {
-        VStack {
-            MonoLabel(text: "klaxon")
-            StatusLamp(color: theme.accent, active: false)
+        ThemedPanel {
+            VStack {
+                MonoLabel(text: "klaxon")
+                StatusLamp(color: theme.accent, active: false)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .padding(theme.spacing.sm)
         }
         .frame(width: 64)
     }

@@ -10,14 +10,16 @@ struct FleetLogView: View {
     @State private var collapsed: Set<String> = []
 
     var body: some View {
-        ScrollView {
+        ScrollView(.vertical, showsIndicators: true) {
             VStack(alignment: .leading, spacing: theme.spacing.md) {
                 ForEach(sectors) { sector in
                     sectorGroup(sector)
                 }
             }
             .padding(theme.spacing.md)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private func sectorGroup(_ sector: Sector) -> some View {
@@ -64,9 +66,7 @@ struct FleetLogView: View {
             selectedMissionID = mission.id
         } label: {
             HStack(spacing: theme.spacing.sm) {
-                Text(StatusMapper.mark(for: mission.state))
-                    .font(.system(size: 13))
-                    .foregroundStyle(color(for: mission.state))
+                StateMark(state: mission.state, size: 13)
                     .frame(width: 16)
                 missionColumn(mission)
                 unitColumn(mission)

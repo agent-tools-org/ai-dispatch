@@ -27,6 +27,15 @@ struct LeftRailView: View {
         .background(theme.bgDeep)
     }
 
+    private func countMark(count: Int, state: MissionDisplayState) -> some View {
+        HStack(spacing: 2) {
+            Text("\(count)")
+                .font(theme.font(.caption))
+                .foregroundStyle(missionColor(state))
+            StateMark(state: state, size: 10)
+        }
+    }
+
     private func sectorRow(_ sector: Sector) -> some View {
         let selected = selectedSectorID == sector.id
         let segments = sector.missions.map { missionColor($0.state) }
@@ -46,12 +55,9 @@ struct LeftRailView: View {
                         .lineLimit(1)
                 }
                 HStack(spacing: 6) {
-                    Text("\(done)").font(theme.font(.caption)).foregroundStyle(theme.done)
-                    + Text("✦").font(.system(size: 11)).foregroundStyle(theme.done)
-                    Text("\(run)").font(theme.font(.caption)).foregroundStyle(theme.run)
-                    + Text("▶").font(.system(size: 11)).foregroundStyle(theme.run)
-                    Text("\(fail)").font(theme.font(.caption)).foregroundStyle(theme.fail)
-                    + Text("✕").font(.system(size: 11)).foregroundStyle(theme.fail)
+                    countMark(count: done, state: .done)
+                    countMark(count: run, state: .run)
+                    countMark(count: fail, state: .fail)
                 }
                 SegmentBar(segments: segments, count: max(segments.count, 1))
             }

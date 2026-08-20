@@ -100,3 +100,22 @@ fn latest_events_batch_returns_only_three_events_per_task() {
     let details: Vec<_> = events["t-events"].iter().map(|event| event.detail.as_str()).collect();
     assert_eq!(details, ["event-2", "event-3", "event-4"]);
 }
+
+#[test]
+fn started_at_batch_uses_the_earliest_start_event_when_column_is_empty() {
+    let store = Store::open_memory().unwrap();
+    store.insert_task(&make_task("t-started-event", AgentKind::Codex, TaskStatus::Done)).unwrap();
+    let started = Local::now() - chrono::Duration::minutes(2);
+    store
+        .insert_event(&TaskEvent {
+            task_id: TaskId("t-started-event".to_string()),
+            timestamp: started,
+            event_kind: EventKind::Setup,
+            detail: "started".to_string(),
+            metadata: None,
+        })
+        .unwrap();
+
+    let values = store.started_at_batch(&["t-started-event"]).unwrap();
+    assert_eq!(values.get("t-started-event").map(String::as_str), Some(started.to_rfc3339().as_str()));
+}

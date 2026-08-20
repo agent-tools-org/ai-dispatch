@@ -13,7 +13,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::cmd::agent_json;
 use crate::store::Store;
-use crate::types::{Task, TaskFilter};
+use crate::types::{AgentKind, Task, TaskFilter};
 
 use super::api::{enrich_tasks, internal_error, task_memory_mb};
 use super::api_types::{AgentResponse, TaskEnrichment, TaskResponse};
@@ -23,6 +23,7 @@ pub struct ServerInfo {
     pub host: String,
     pub port: u16,
     pub started_at: String,
+    pub installed_agents: Vec<AgentKind>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -117,8 +118,12 @@ pub async fn get_fleet(
 ) -> Result<Json<FleetResponse>, StatusCode> {
     let window = Window::parse(params.window.as_deref()).ok_or(StatusCode::BAD_REQUEST)?;
     let now = Local::now();
+    let task_filter = match window {
+        Window::Today => TaskFilter::Today,
+        Window::Hours24 | Window::Days7 | Window::Days30 | Window::All => TaskFilter::All,
+    };
     let tasks = store
-        .list_tasks(TaskFilter::All)
+        .list_tasks(task_filter)
         .map_err(internal_error)?
         .into_iter()
         .filter(|task| window.includes(task.created_at, now))
@@ -127,7 +132,7 @@ pub async fn get_fleet(
     let summary = summary_for_responses(&responses, window.label());
     let sectors = build_sectors(responses).map_err(internal_error)?;
     let running = store.list_tasks(TaskFilter::Running).map_err(internal_error)?;
-    let agents = build_agents(&store, &running).map_err(internal_error)?;
+    let agents = build_agents(&store, &running, &server.installed_agents).map_err(internal_error)?;
     Ok(Json(FleetResponse {
         server: ServerPayload {
             version: env!("CARGO_PKG_VERSION").to_string(),
@@ -142,13 +147,21 @@ pub async fn get_fleet(
     }))
 }
 
-pub async fn get_agents(State(store): State<Arc<Store>>) -> Result<Json<Vec<AgentResponse>>, StatusCode> {
+pub async fn get_agents(
+    State(store): State<Arc<Store>>,
+    Extension(server): Extension<ServerInfo>,
+) -> Result<Json<Vec<AgentResponse>>, StatusCode> {
     let running = store.list_tasks(TaskFilter::Running).map_err(internal_error)?;
-    Ok(Json(build_agents(&store, &running).map_err(internal_error)?))
+    let agents = build_agents(&store, &running, &server.installed_agents).map_err(internal_error)?;
+    Ok(Json(agents))
 }
 
-pub(crate) fn build_agents(store: &Store, running: &[Task]) -> anyhow::Result<Vec<AgentResponse>> {
-    let list = agent_json::get_agents_list(store)?;
+pub(crate) fn build_agents(
+    store: &Store,
+    running: &[Task],
+    installed_agents: &[AgentKind],
+) -> anyhow::Result<Vec<AgentResponse>> {
+    let list = agent_json::get_agents_list_with_installed(store, installed_agents)?;
     let observed_models = store.latest_observed_models()?;
     Ok(list
         .agents

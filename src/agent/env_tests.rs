@@ -4,6 +4,7 @@
 use super::*;
 use crate::test_env::CargoTargetDirGuard;
 use std::process::Command;
+use std::os::unix::fs::PermissionsExt;
 
 #[test]
 fn target_dir_for_worktree_keeps_source_and_branches_as_siblings() {
@@ -258,6 +259,19 @@ fn apply_run_env_sets_host_toolchain_paths() {
     assert_eq!(command_env(&cmd, "CARGO_HOME"), Some(real_home.join(".cargo").to_string_lossy().into_owned()));
     assert_eq!(command_env(&cmd, "RUSTUP_HOME"), Some(real_home.join(".rustup").to_string_lossy().into_owned()));
     drop(guard);
+}
+
+#[test]
+fn executable_search_requires_execute_permission() {
+    let temp = tempfile::tempdir().unwrap();
+    let binary = temp.path().join("agent");
+    std::fs::write(&binary, "#!/bin/sh\n").unwrap();
+    assert!(!executable_in_paths("agent", vec![temp.path().to_path_buf()]));
+
+    let mut permissions = std::fs::metadata(&binary).unwrap().permissions();
+    permissions.set_mode(0o755);
+    std::fs::set_permissions(&binary, permissions).unwrap();
+    assert!(executable_in_paths("agent", vec![temp.path().to_path_buf()]));
 }
 
 #[test]

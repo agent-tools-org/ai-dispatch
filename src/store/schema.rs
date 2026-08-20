@@ -244,6 +244,9 @@ pub(super) fn migrate(store: &Store) -> Result<()> {
     let _ = conn.execute_batch(
         "CREATE INDEX IF NOT EXISTS idx_events_task_kind ON events(task_id, event_type);",
     );
+    let _ = conn.execute_batch(
+        "CREATE INDEX IF NOT EXISTS idx_events_task_id_id ON events(task_id, id);",
+    );
     super::migrations::migrate_task_messages(&conn)?;
     super::migrations::migrate_declared_task_profile(&conn)?;
     super::migrations::migrate_observed_model(&conn)?;

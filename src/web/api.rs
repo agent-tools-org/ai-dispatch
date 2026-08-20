@@ -204,7 +204,12 @@ pub(crate) fn enrich_tasks(store: &Store, tasks: Vec<Task>) -> anyhow::Result<Ve
     for (id, error) in store.latest_errors_batch_unfiltered(&ids)? {
         errors.entry(id).or_insert(error);
     }
-    let awaiting = store.latest_awaiting_reasons_batch(&ids)?;
+    let awaiting_ids: Vec<&str> = tasks
+        .iter()
+        .filter(|task| task.status == crate::types::TaskStatus::AwaitingInput)
+        .map(|task| task.id.as_str())
+        .collect();
+    let awaiting = store.latest_awaiting_reasons_batch(&awaiting_ids)?;
     let events = store.latest_events_three_batch(&ids)?;
     Ok(tasks
         .into_iter()

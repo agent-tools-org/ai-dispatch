@@ -184,8 +184,7 @@ pub fn detect_agents() -> Vec<AgentKind> {
             return list;
         }
     }
-    let mut found = Vec::new();
-    for (name, kind) in [
+    let candidates = [
         ("gemini", AgentKind::Gemini),
         ("agy", AgentKind::Antigravity),
         ("qwen", AgentKind::Qwen),
@@ -201,12 +200,8 @@ pub fn detect_agents() -> Vec<AgentKind> {
         ("oz", AgentKind::Oz),
         ("claude", AgentKind::Claude),
         ("grok", AgentKind::Grok),
-    ] {
-        if env::which_exists(name) && !found.contains(&kind) {
-            found.push(kind);
-        }
-    }
-    found
+    ];
+    env::installed_agents(&candidates)
 }
 
 #[cfg(test)]

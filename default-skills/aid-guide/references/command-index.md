@@ -72,6 +72,7 @@ current arguments.
 | `aid mcp` | Start AID's stdio MCP server; task payloads expose additive `outcome` and `verify_status` fields. |
 | `aid doctor` | Report repository/worktree hygiene without bypassing custody. |
 | `aid clean` | Remove disposable logs and caches while retaining custody evidence; reclaims a task's fallback cargo target only once the directory it was keyed from is gone, and reports how many it held back. |
+| `aid web` | Serve the embedded dashboard and client API; `--host` selects the bind address and non-loopback binds require `--token`. |
 | `aid upgrade` | Upgrade AID after checking active-task safety. |
 | `aid changelog` | Read release notes. |
 

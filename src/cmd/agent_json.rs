@@ -47,7 +47,7 @@ pub fn print_agent_json(store: &Store, name: &str) -> Result<()> {
     anyhow::bail!("Unknown agent '{name}'")
 }
 
-fn get_agents_list(store: &Store) -> Result<AgentListJson> {
+pub(crate) fn get_agents_list(store: &Store) -> Result<AgentListJson> {
     let running_tasks = store.list_tasks(TaskFilter::Running).unwrap_or_default();
     let mut agents = Vec::new();
     

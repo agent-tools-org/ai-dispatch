@@ -15,8 +15,8 @@ use crate::cmd::agent_json;
 use crate::store::Store;
 use crate::types::{Task, TaskFilter};
 
-use super::api::{enrich_tasks, internal_error};
-use super::api_types::{AgentResponse, TaskResponse};
+use super::api::{enrich_tasks, internal_error, task_memory_mb};
+use super::api_types::{AgentResponse, TaskEnrichment, TaskResponse};
 
 #[derive(Debug, Clone)]
 pub struct ServerInfo {
@@ -165,7 +165,8 @@ pub(crate) fn build_agents(store: &Store, running: &[Task]) -> anyhow::Result<Ve
 
 pub(crate) fn summary_for_tasks(tasks: &[Task], window: &str) -> FleetSummary {
     let responses = tasks.iter().cloned().map(|task| {
-        TaskResponse::from_task(task, Default::default())
+        let memory_mb = task_memory_mb(&task);
+        TaskResponse::from_task(task, TaskEnrichment { memory_mb, ..Default::default() })
     }).collect::<Vec<_>>();
     summary_for_responses(&responses, window)
 }
@@ -191,6 +192,9 @@ fn summary_for_responses(tasks: &[TaskResponse], window: &str) -> FleetSummary {
         }
         summary.spend_usd += task.cost_usd.unwrap_or(0.0);
         summary.tokens += task.tokens.unwrap_or(0);
+        if let Some(memory_mb) = task.memory_mb {
+            summary.memory_mb = Some(summary.memory_mb.unwrap_or(0) + memory_mb);
+        }
     }
     summary
 }
@@ -212,6 +216,9 @@ fn build_sectors(tasks: Vec<TaskResponse>) -> anyhow::Result<Vec<SectorResponse>
             workgroup_id: task.workgroup_id.clone(),
             tasks: Vec::new(),
         });
+        if sector.workgroup_id.is_none() {
+            sector.workgroup_id = task.workgroup_id.clone();
+        }
         sector.tasks.push(value);
     }
     let mut sectors: Vec<_> = sectors.into_values().collect();

@@ -22,7 +22,7 @@ use crate::types::{
     AgentKind, DeliveryAssessment, EventKind, Task, TaskEvent, TaskId, TaskStatus, VerifyStatus,
 };
 
-fn make_task(id: &str) -> Task {
+pub(super) fn make_task(id: &str) -> Task {
     Task {
         id: TaskId(id.to_string()),
         agent: AgentKind::Codex,
@@ -109,6 +109,7 @@ fn task_response_keeps_unmeasured_values_null() {
     assert!(value["rigor"].is_null());
     assert!(value["budget_class"].is_null());
     assert!(value["urgency"].is_null());
+    assert!(value["memory_mb"].is_null());
 }
 
 #[test]
@@ -159,14 +160,22 @@ async fn list_tasks_returns_task_json() {
 }
 
 #[tokio::test]
-async fn task_response_reports_started_at_after_running_transition() {
+async fn task_response_derives_started_at_from_dispatch_liveness_event() {
     let store = Arc::new(Store::open_memory().unwrap());
     let mut task = make_task("t-started");
-    task.status = TaskStatus::Pending;
+    task.status = TaskStatus::Running;
     store.insert_task(&task).unwrap();
-    assert!(store.update_task_status("t-started", TaskStatus::Running).unwrap());
+    let started_at = Local::now();
+    store.insert_event(&TaskEvent {
+        task_id: TaskId("t-started".to_string()),
+        timestamp: started_at,
+        event_kind: EventKind::Setup,
+        detail: "worker started".to_string(),
+        metadata: None,
+    }).unwrap();
     let Json(response) = get_task(Path("t-started".to_string()), State(store)).await.unwrap();
-    assert!(response.started_at.is_some());
+    let expected = started_at.to_rfc3339();
+    assert_eq!(response.started_at.as_deref(), Some(expected.as_str()));
 }
 
 #[tokio::test]

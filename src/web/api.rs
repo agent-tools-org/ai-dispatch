@@ -174,6 +174,10 @@ pub async fn get_task_diff(Path(id): Path<String>, State(store): State<Arc<Store
 
 pub(crate) fn enrich_tasks(store: &Store, tasks: Vec<Task>) -> anyhow::Result<Vec<TaskResponse>> {
     let ids: Vec<&str> = tasks.iter().map(|task| task.id.as_str()).collect();
+    let memory_mb: HashMap<_, _> = tasks
+        .iter()
+        .map(|task| (task.id.as_str().to_string(), task_memory_mb(task)))
+        .collect();
     let started_at = store.started_at_batch(&ids)?;
     let profiles = store.get_task_profiles_batch(&ids)?;
     let milestones = store.latest_milestones_batch(&ids)?;
@@ -190,6 +194,7 @@ pub(crate) fn enrich_tasks(store: &Store, tasks: Vec<Task>) -> anyhow::Result<Ve
             let has_diff = has_non_empty_diff(&task);
             TaskResponse::from_task(task, TaskEnrichment {
                 started_at: started_at.get(&id).cloned(),
+                memory_mb: memory_mb.get(&id).copied().flatten(),
                 profile: profiles.get(&id).copied().unwrap_or_default(),
                 latest_milestone: milestones.get(&id).cloned(),
                 latest_error: errors.get(&id).cloned(),
@@ -205,6 +210,15 @@ pub(crate) fn enrich_tasks(store: &Store, tasks: Vec<Task>) -> anyhow::Result<Ve
             })
         })
         .collect())
+}
+
+pub(crate) fn task_memory_mb(task: &Task) -> Option<i64> {
+    if !matches!(task.status, crate::types::TaskStatus::Running | crate::types::TaskStatus::AwaitingInput) {
+        return None;
+    }
+    let worker_pid = crate::background::load_worker_pid(task.id.as_str()).ok().flatten()?;
+    crate::tui::metrics::get_process_metrics(worker_pid)
+        .map(|metrics| metrics.memory_mb.round() as i64)
 }
 
 fn parse_filter(filter: Option<&str>) -> Option<TaskFilter> {

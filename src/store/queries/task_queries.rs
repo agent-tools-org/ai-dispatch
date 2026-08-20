@@ -18,7 +18,27 @@ impl Store {
         }
         let placeholders: Vec<String> = (1..=task_ids.len()).map(|index| format!("?{index}")).collect();
         let sql = format!(
-            "SELECT id, started_at FROM tasks WHERE id IN ({}) AND started_at IS NOT NULL",
+            "SELECT id,
+                    COALESCE(
+                        started_at,
+                        (SELECT MIN(timestamp) FROM events
+                         WHERE events.task_id = tasks.id
+                           AND event_type IN (
+                               'setup', 'reasoning', 'milestone', 'tool_call',
+                               'build', 'test', 'commit', 'file_write', 'file_read',
+                               'web_search', 'lint', 'format'
+                           ))
+                    )
+             FROM tasks WHERE id IN ({})
+               AND (started_at IS NOT NULL OR EXISTS (
+                   SELECT 1 FROM events
+                   WHERE events.task_id = tasks.id
+                     AND event_type IN (
+                         'setup', 'reasoning', 'milestone', 'tool_call',
+                         'build', 'test', 'commit', 'file_write', 'file_read',
+                         'web_search', 'lint', 'format'
+                     )
+               ))",
             placeholders.join(",")
         );
         let conn = self.db();

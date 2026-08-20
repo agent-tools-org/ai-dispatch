@@ -69,6 +69,7 @@ pub struct TaskResponse {
 #[derive(Debug, Default)]
 pub struct TaskEnrichment {
     pub started_at: Option<String>,
+    pub memory_mb: Option<i64>,
     pub profile: TaskProfileDeclaration,
     pub latest_milestone: Option<String>,
     pub latest_error: Option<String>,
@@ -99,7 +100,7 @@ impl TaskResponse {
             read_only: task.read_only, budget: task.budget, sector_id,
             difficulty: enrichment.profile.difficulty.map(|value| value.label().to_string()), rigor: enrichment.profile.rigor.map(|value| value.label().to_string()),
             budget_class: enrichment.profile.budget.map(|value| value.label().to_string()), urgency: enrichment.profile.urgency.map(|value| value.label().to_string()),
-            memory_mb: None, has_result: crate::paths::task_dir(task.id.as_str()).join("result.md").is_file(), has_diff: enrichment.has_diff,
+            memory_mb: enrichment.memory_mb, has_result: crate::paths::task_dir(task.id.as_str()).join("result.md").is_file(), has_diff: enrichment.has_diff,
             awaiting_reason: (task.status == crate::types::TaskStatus::AwaitingInput)
                 .then_some(enrichment.awaiting_reason)
                 .flatten(),

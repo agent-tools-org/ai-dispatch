@@ -12,6 +12,8 @@ pub mod sse;
 
 #[cfg(test)]
 mod api_tests;
+#[cfg(test)]
+mod data_tests;
 
 use anyhow::Result;
 use axum::extract::Path;

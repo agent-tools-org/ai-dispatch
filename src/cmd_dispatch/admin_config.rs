@@ -85,8 +85,8 @@ pub(super) fn upgrade(force: bool) -> Result<()> {
 }
 
 #[cfg(feature = "web")]
-pub(super) async fn run_web(port: u16) -> Result<()> {
-    cmd::web::run(port).await
+pub(super) async fn run_web(port: u16, host: String, token: Option<String>) -> Result<()> {
+    cmd::web::run(port, host, token).await
 }
 
 pub(super) fn init() -> Result<()> {

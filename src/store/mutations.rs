@@ -208,8 +208,10 @@ impl Store {
             return Ok(false);
         }
         let rows = self.db().execute(
-            "UPDATE tasks SET status = ?1 WHERE id = ?2",
-            params![status.as_str(), id],
+            "UPDATE tasks SET status = ?1,
+             started_at = CASE WHEN ?1 = 'running' THEN COALESCE(started_at, ?3) ELSE started_at END
+             WHERE id = ?2",
+            params![status.as_str(), id, Local::now().to_rfc3339()],
         )?;
         Ok(rows > 0)
     }

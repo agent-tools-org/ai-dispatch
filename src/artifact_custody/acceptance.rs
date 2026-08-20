@@ -7,6 +7,12 @@ use std::path::Path;
 use crate::store::{AcceptanceDecision, AcceptanceRecord, Store};
 
 pub(crate) fn accept(store: &Store, task_id: &str, principal_id: &str) -> Result<()> {
+    if store
+        .latest_acceptance(task_id)?
+        .is_some_and(|record| record.decision == AcceptanceDecision::Accepted)
+    {
+        return Ok(());
+    }
     let task = terminal_task(store, task_id)?;
     let worktree = required_path(task.worktree_path.as_deref(), "worktree path")?;
     let head = git_output(worktree, &["rev-parse", "HEAD"])?;
@@ -26,6 +32,12 @@ pub(crate) fn accept(store: &Store, task_id: &str, principal_id: &str) -> Result
 }
 
 pub(crate) fn reject(store: &Store, task_id: &str, principal_id: &str) -> Result<()> {
+    if store
+        .latest_acceptance(task_id)?
+        .is_some_and(|record| record.decision == AcceptanceDecision::Rejected)
+    {
+        return Ok(());
+    }
     terminal_task(store, task_id)?;
     store.record_acceptance(
         task_id,

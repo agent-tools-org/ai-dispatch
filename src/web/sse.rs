@@ -15,11 +15,16 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::time::{Interval, MissedTickBehavior, interval};
 
+use super::api_types::AgentResponse;
+use super::fleet::{self, FleetSummary};
+
 const POLL_INTERVAL: Duration = Duration::from_secs(2);
 const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(10);
 const KEEP_ALIVE_INTERVAL: Duration = Duration::from_secs(15);
 const TASK_UPDATE_EVENT: &str = "task_update";
 const HEARTBEAT_EVENT: &str = "heartbeat";
+const AGENT_UPDATE_EVENT: &str = "agent_update";
+const FLEET_SUMMARY_EVENT: &str = "fleet_summary";
 
 #[derive(Debug, Serialize)]
 struct TaskUpdatePayload {
@@ -30,6 +35,10 @@ struct TaskUpdatePayload {
     cost_usd: Option<f64>,
     duration_ms: Option<i64>,
     milestone: Option<String>,
+    outcome: String,
+    verify_status: String,
+    sector_id: Option<String>,
+    latest_error: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -37,10 +46,19 @@ struct HeartbeatPayload {
     timestamp: String,
 }
 
+#[derive(Debug, Serialize)]
+struct AgentUpdatePayload {
+    name: String,
+    quota: crate::cmd::agent_json_types::QuotaJson,
+    busy: bool,
+    running_task_ids: Vec<String>,
+}
+
 struct SseState {
     store: Arc<Store>,
     pending: VecDeque<Event>,
     last_seen: HashMap<String, TaskStatus>,
+    last_agents: HashMap<String, (String, Vec<String>)>,
     poll: Interval,
     heartbeat: Interval,
 }
@@ -58,6 +76,7 @@ pub(crate) fn sse_handler(
             store,
             pending: VecDeque::new(),
             last_seen: HashMap::new(),
+            last_agents: HashMap::new(),
             poll,
             heartbeat,
         },
@@ -69,7 +88,7 @@ pub(crate) fn sse_handler(
 
                 tokio::select! {
                     _ = state.poll.tick() => {
-                        if let Ok(events) = poll_events(&state.store, &mut state.last_seen) {
+                        if let Ok(events) = poll_events(&state.store, &mut state.last_seen, &mut state.last_agents) {
                             state.pending.extend(events);
                         }
                     }
@@ -88,7 +107,11 @@ pub(crate) fn sse_handler(
     )
 }
 
-fn poll_events(store: &Store, last_seen: &mut HashMap<String, TaskStatus>) -> Result<VecDeque<Event>> {
+fn poll_events(
+    store: &Store,
+    last_seen: &mut HashMap<String, TaskStatus>,
+    last_agents: &mut HashMap<String, (String, Vec<String>)>,
+) -> Result<VecDeque<Event>> {
     let mut events = Vec::new();
     let mut running_tasks = store.list_tasks(TaskFilter::Running)?;
     running_tasks.sort_by(|left, right| left.id.as_str().cmp(right.id.as_str()));
@@ -97,9 +120,9 @@ fn poll_events(store: &Store, last_seen: &mut HashMap<String, TaskStatus>) -> Re
         .map(|task| task.id.as_str().to_string())
         .collect::<HashSet<_>>();
 
-    for task in running_tasks {
-        if status_changed(last_seen, &task) {
-            events.push(task_update_event(store, &task)?);
+    for task in &running_tasks {
+        if status_changed(last_seen, task) {
+            events.push(task_update_event(store, task)?);
         }
         last_seen.insert(task.id.as_str().to_string(), task.status);
     }
@@ -128,6 +151,9 @@ fn poll_events(store: &Store, last_seen: &mut HashMap<String, TaskStatus>) -> Re
         }
     }
 
+    let today = store.list_tasks(TaskFilter::Today)?;
+    events.push(fleet_summary_event(&today));
+    append_agent_events(store, &running_tasks, last_agents, &mut events)?;
     Ok(events.into())
 }
 
@@ -147,10 +173,57 @@ fn task_update_event(store: &Store, task: &Task) -> Result<Event> {
         cost_usd: task.cost_usd,
         duration_ms: task.duration_ms,
         milestone: store.latest_milestone(task.id.as_str())?,
+        outcome: task.outcome().as_str().to_string(),
+        verify_status: task.verify_status.as_str().to_string(),
+        sector_id: task.project_id.clone().or_else(|| {
+            task.repo_path.as_deref().and_then(|path| {
+                std::path::Path::new(path)
+                    .file_name()
+                    .and_then(|name| name.to_str())
+                    .map(str::to_string)
+            })
+        }),
+        latest_error: store.latest_error(task.id.as_str()),
     };
     Ok(Event::default()
         .event(TASK_UPDATE_EVENT)
         .data(serialize_json(&payload)?))
+}
+
+fn append_agent_events(
+    store: &Store,
+    running: &[Task],
+    last_agents: &mut HashMap<String, (String, Vec<String>)>,
+    events: &mut Vec<Event>,
+) -> Result<()> {
+    let agents = fleet::build_agents(store, running)?;
+    for agent in agents {
+        let state = (agent.quota.state.clone(), agent.running_task_ids.clone());
+        let changed = last_agents.get(&agent.name).is_some_and(|previous| previous != &state);
+        if changed {
+            events.push(agent_update_event(&agent)?);
+        }
+        last_agents.insert(agent.name, state);
+    }
+    Ok(())
+}
+
+fn agent_update_event(agent: &AgentResponse) -> Result<Event> {
+    let payload = AgentUpdatePayload {
+        name: agent.name.clone(),
+        quota: agent.quota.clone(),
+        busy: agent.busy,
+        running_task_ids: agent.running_task_ids.clone(),
+    };
+    Ok(Event::default()
+        .event(AGENT_UPDATE_EVENT)
+        .data(serialize_json(&payload)?))
+}
+
+fn fleet_summary_event(tasks: &[Task]) -> Event {
+    let payload: FleetSummary = fleet::summary_for_tasks(tasks, "today");
+    let data = serialize_json(&payload).unwrap_or_else(|_| "{}".to_string());
+    Event::default().event(FLEET_SUMMARY_EVENT).data(data)
 }
 
 fn heartbeat_event() -> Event {
@@ -182,6 +255,10 @@ mod tests {
             cost_usd: Some(0.12),
             duration_ms: Some(2500),
             milestone: Some("Investigating".to_string()),
+            outcome: "running".to_string(),
+            verify_status: "skipped".to_string(),
+            sector_id: Some("repo".to_string()),
+            latest_error: None,
         };
 
         let value = serde_json::to_value(&payload).expect("task update payload should serialize");
@@ -192,7 +269,11 @@ mod tests {
             "tokens": 42,
             "cost_usd": 0.12,
             "duration_ms": 2500,
-            "milestone": "Investigating"
+            "milestone": "Investigating",
+            "outcome": "running",
+            "verify_status": "skipped",
+            "sector_id": "repo",
+            "latest_error": null
         });
 
         assert_eq!(value, expected);

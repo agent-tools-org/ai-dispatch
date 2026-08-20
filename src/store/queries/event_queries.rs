@@ -204,6 +204,35 @@ impl Store {
         Ok(map)
     }
 
+    pub fn latest_events_three_batch(&self, task_ids: &[&str]) -> Result<HashMap<String, Vec<TaskEvent>>> {
+        if task_ids.is_empty() {
+            return Ok(HashMap::new());
+        }
+        let conn = self.db();
+        let placeholders: Vec<String> = (1..=task_ids.len()).map(|index| format!("?{index}")).collect();
+        let sql = format!(
+            "SELECT task_id, timestamp, event_type, detail, metadata FROM events
+             WHERE task_id IN ({}) ORDER BY task_id, id DESC",
+            placeholders.join(",")
+        );
+        let params: Vec<&dyn rusqlite::ToSql> =
+            task_ids.iter().map(|id| id as &dyn rusqlite::ToSql).collect();
+        let mut statement = conn.prepare(&sql)?;
+        let rows = statement.query_map(params.as_slice(), row_to_event)?;
+        let mut events = HashMap::new();
+        for row in rows {
+            let event = row?;
+            let task_events = events.entry(event.task_id.as_str().to_string()).or_insert_with(Vec::new);
+            if task_events.len() < 3 {
+                task_events.push(event);
+            }
+        }
+        for task_events in events.values_mut() {
+            task_events.reverse();
+        }
+        Ok(events)
+    }
+
     pub fn get_workgroup_milestones(&self, workgroup_id: &str) -> Result<Vec<(String, String)>> {
         let conn = self.db();
         let mut stmt = conn.prepare(

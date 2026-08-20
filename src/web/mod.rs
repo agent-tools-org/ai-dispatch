@@ -29,37 +29,7 @@ use crate::store::Store;
 
 pub async fn serve(store: Arc<Store>, port: u16, host: String, token: Option<String>) -> Result<()> {
     auth::validate_bind_auth(&host, token.as_deref())?;
-    let api = Router::new()
-        .route("/api/tasks", get(api::list_tasks))
-        .route("/api/tasks/{id}", get(api::get_task))
-        .route("/api/tasks/{id}/events", get(api::get_task_events))
-        .route("/api/tasks/{id}/output", get(api::get_task_output))
-        .route("/api/tasks/{id}/stop", post(api::stop_task))
-        .route("/api/tasks/{id}/retry", post(api::retry_task))
-        .route("/api/tasks/{id}/merge", post(api::merge_task))
-        .route("/api/tasks/{id}/diff", get(api::get_task_diff))
-        .route("/api/tasks/{id}/result", get(api::get_task_result))
-        .route("/api/tasks/{id}/steer", post(api::steer_task))
-        .route("/api/tasks/{id}/respond", post(api::respond_task))
-        .route("/api/tasks/{id}/accept", post(api::accept_task))
-        .route("/api/tasks/{id}/reject", post(api::reject_task))
-        .route("/api/usage", get(api::get_usage))
-        .route("/api/fleet", get(fleet::get_fleet))
-        .route("/api/agents", get(fleet::get_agents))
-        .route("/api/events", get(|state| async move { sse::sse_handler(state) }))
-        .layer(axum::Extension(auth::AuthConfig::new(token.clone())))
-        .layer(middleware::from_fn(auth::middleware));
-    let app = Router::new()
-        .merge(api)
-        .route("/", get(index))
-        .route("/{*path}", get(serve_static))
-        .layer(cors_layer())
-        .with_state(store)
-        .layer(axum::Extension(fleet::ServerInfo {
-            host: host.clone(),
-            port,
-            started_at: chrono::Utc::now().to_rfc3339(),
-        }));
+    let app = build_router(store, port, host.clone(), token.clone());
 
     let mut addresses = tokio::net::lookup_host((host.as_str(), port)).await?;
     let address = addresses
@@ -78,6 +48,40 @@ pub async fn serve(store: Arc<Store>, port: u16, host: String, token: Option<Str
         .with_graceful_shutdown(shutdown_signal())
         .await?;
     Ok(())
+}
+
+fn build_router(store: Arc<Store>, port: u16, host: String, token: Option<String>) -> Router {
+    let api = Router::new()
+        .route("/api/tasks", get(api::list_tasks))
+        .route("/api/tasks/{id}", get(api::get_task))
+        .route("/api/tasks/{id}/events", get(api::get_task_events))
+        .route("/api/tasks/{id}/output", get(api::get_task_output))
+        .route("/api/tasks/{id}/stop", post(api::stop_task))
+        .route("/api/tasks/{id}/retry", post(api::retry_task))
+        .route("/api/tasks/{id}/merge", post(api::merge_task))
+        .route("/api/tasks/{id}/diff", get(api::get_task_diff))
+        .route("/api/tasks/{id}/result", get(api::get_task_result))
+        .route("/api/tasks/{id}/steer", post(api::steer_task))
+        .route("/api/tasks/{id}/respond", post(api::respond_task))
+        .route("/api/tasks/{id}/accept", post(api::accept_task))
+        .route("/api/tasks/{id}/reject", post(api::reject_task))
+        .route("/api/usage", get(api::get_usage))
+        .route("/api/fleet", get(fleet::get_fleet))
+        .route("/api/agents", get(fleet::get_agents))
+        .route("/api/events", get(|state| async move { sse::sse_handler(state) }))
+        .layer(middleware::from_fn(auth::middleware))
+        .layer(axum::Extension(auth::AuthConfig::new(token)));
+    Router::new()
+        .merge(api)
+        .route("/", get(index))
+        .route("/{*path}", get(serve_static))
+        .layer(cors_layer())
+        .with_state(store)
+        .layer(axum::Extension(fleet::ServerInfo {
+            host,
+            port,
+            started_at: chrono::Utc::now().to_rfc3339(),
+        }))
 }
 
 async fn index() -> Response {
@@ -129,6 +133,10 @@ async fn shutdown_signal() {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use axum::body::{Body, to_bytes};
+    use axum::http::{Request, header::AUTHORIZATION};
+    use axum::response::Response;
+    use tower::ServiceExt;
 
     #[test]
     fn normalize_asset_path_defaults_to_index() {
@@ -155,5 +163,32 @@ mod tests {
             .await
             .expect_err("unauthenticated LAN bind must not start");
         assert!(error.to_string().contains("--token"));
+    }
+
+    #[tokio::test]
+    async fn assembled_router_authenticates_fleet_and_agents() {
+        let home = tempfile::tempdir().expect("temporary AID home");
+        let _home = crate::paths::AidHomeGuard::set(home.path());
+        let store = std::sync::Arc::new(crate::store::Store::open_memory().expect("store"));
+        let app = build_router(store, 8080, "127.0.0.1".to_string(), Some("secret".to_string()));
+        for uri in ["/api/fleet?window=all", "/api/agents"] {
+            assert_eq!(call(&app, uri, None).await.status(), StatusCode::UNAUTHORIZED);
+            assert_eq!(call(&app, uri, Some("wrong")).await.status(), StatusCode::UNAUTHORIZED);
+            let response = call(&app, uri, Some("secret")).await;
+            assert_eq!(response.status(), StatusCode::OK);
+            let body = to_bytes(response.into_body(), usize::MAX).await.expect("response body");
+            serde_json::from_slice::<serde_json::Value>(&body).expect("valid JSON response");
+        }
+    }
+
+    async fn call(app: &Router, uri: &str, token: Option<&str>) -> Response {
+        let mut request = Request::builder().uri(uri);
+        if let Some(token) = token {
+            request = request.header(AUTHORIZATION, format!("Bearer {token}"));
+        }
+        app.clone()
+            .oneshot(request.body(Body::empty()).expect("request"))
+            .await
+            .expect("router response")
     }
 }

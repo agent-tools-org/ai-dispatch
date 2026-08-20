@@ -87,12 +87,18 @@ else
   fail "a LAN bind with no --token generates one (no web_token written; log: $(head -1 "$HOME_DIR/gen.log"))"
 fi
 
-echo "== /api/fleet paints the main window; it must not take seconds =="
+echo "== latency: /api/fleet paints the main window on every open ==" 
 pkill -f "web --host 0.0.0.0 --port $PORT" 2>/dev/null; sleep 1
 if start_loopback; then
   T_FLEET=$(curl -s -o /dev/null -w '%{time_total}' --max-time 60 "http://127.0.0.1:$PORT/api/fleet" -H "Authorization: Bearer $TOKEN")
-  UNDER=$(python3 -c "print(1 if float('$T_FLEET') < 1.5 else 0)")
-  [[ "$UNDER" == 1 ]] && pass "/api/fleet under 1.5s (${T_FLEET}s)" || fail "/api/fleet under 1.5s (took ${T_FLEET}s)"
+  UNDER=$(python3 -c "print(1 if float('$T_FLEET') < 0.35 else 0)")
+  [[ "$UNDER" == 1 ]] && pass "/api/fleet under 350ms (${T_FLEET}s)" || fail "/api/fleet under 350ms (took ${T_FLEET}s)"
+  T_AGENTS=$(curl -s -o /dev/null -w '%{time_total}' --max-time 60 "http://127.0.0.1:$PORT/api/agents" -H "Authorization: Bearer $TOKEN")
+  UNDER_A=$(python3 -c "print(1 if float('$T_AGENTS') < 0.12 else 0)")
+  [[ "$UNDER_A" == 1 ]] && pass "/api/agents under 120ms (${T_AGENTS}s)" || fail "/api/agents under 120ms (took ${T_AGENTS}s)"
+  T_TASKS=$(curl -s -o /dev/null -w '%{time_total}' --max-time 60 "http://127.0.0.1:$PORT/api/tasks" -H "Authorization: Bearer $TOKEN")
+  UNDER_T=$(python3 -c "print(1 if float('$T_TASKS') < 0.15 else 0)")
+  [[ "$UNDER_T" == 1 ]] && pass "/api/tasks under 150ms (${T_TASKS}s)" || fail "/api/tasks under 150ms (took ${T_TASKS}s)"
 else
   fail "/api/fleet latency check could not start the server"
 fi

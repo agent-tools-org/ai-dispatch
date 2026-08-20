@@ -20,6 +20,7 @@ struct ToastView: View {
                 Text("\(toast.missionID) · +\(toast.xpAward) XP")
                     .font(theme.font(.caption))
                     .foregroundStyle(theme.ink2)
+                    .lineLimit(1)
             }
         }
         .padding(theme.spacing.md)
@@ -32,6 +33,8 @@ struct ToastView: View {
         )
         .clipShape(PanelShape(style: theme.panelStyle))
         .shadow(color: edgeColor.opacity(0.3), radius: 8)
+        .frame(maxWidth: 320, alignment: .leading)
+        .fixedSize(horizontal: true, vertical: true)
     }
 
     private var edgeColor: Color {
@@ -51,6 +54,8 @@ struct ToastStack: View {
             }
         }
         .padding(theme.spacing.lg)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+        .allowsHitTesting(false)
         .animation(.easeOut(duration: theme.motion.crossfade), value: toasts)
     }
 }

@@ -131,6 +131,9 @@ final class DemoSource: FleetDataSource, @unchecked Sendable {
             threat: mission.threat,
             progress: progress,
             elapsedSeconds: elapsed ?? mission.elapsedSeconds,
+            startedAt: state == .run
+                ? (mission.startedAt ?? Date().addingTimeInterval(TimeInterval(-(elapsed ?? mission.elapsedSeconds))))
+                : nil,
             tokens: mission.tokens,
             cost: mission.cost,
             memoryMB: mission.memoryMB,

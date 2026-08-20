@@ -100,6 +100,7 @@ enum DemoDataset {
             threat: threat,
             progress: progress,
             elapsedSeconds: elapsed,
+            startedAt: state == .run ? Date().addingTimeInterval(TimeInterval(-elapsed)) : nil,
             tokens: tokens,
             cost: cost,
             memoryMB: memory,

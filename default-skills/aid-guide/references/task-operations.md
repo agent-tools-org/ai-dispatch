@@ -174,6 +174,23 @@ becomes `Done`, but that is not success by itself:
 A dead worker with no `detached` marker is still a zombie: the reaper kills
 the leftover agent and records `Failed`, as before.
 
+A worker can also die *after* clearing its background spec — the spec is
+written at dispatch and removed by a guard when the worker exits, so a process
+killed between those points, or one whose terminal write failed, leaves a
+`Running` row with no spec behind it. Such a row is now judged by the same
+liveness signals as any other: task events and the agent log's own bytes. Once
+it goes quiet for its idle window the reaper records `hung detected (orphaned
+supervisor)`; past 24 hours the maximum-runtime path claims it instead and
+records `exceeded maximum runtime`. The two reasons are distinct on purpose —
+silence is not the same fact as a run that outlived its cap.
+
+A live foreground run is unaffected. Its spec exists while it works, carrying
+its own `--idle-timeout`, and its worker pid is the running `aid` process, so
+the reaper skips it before any idle arithmetic. Only a task whose worker is
+already gone can reach the spec-less path. Before this, such a row read `RUN`
+with a growing timer until the 24-hour cap — a task dead for fourteen hours
+still displayed as running.
+
 ## Merge
 
 ```bash

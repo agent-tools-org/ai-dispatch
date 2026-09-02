@@ -100,6 +100,22 @@ fn copilot_stream_dedupes_final_message_and_flushes_at_tool_boundaries() {
 }
 
 #[test]
+fn claude_result_event_does_not_duplicate_assistant_text() {
+    let file = NamedTempFile::new().unwrap();
+    write_jsonl(
+        &file,
+        &[
+            json!({"type":"assistant","message":{"content":[{"type":"text","text":"Final report body"}]}}),
+            json!({"type":"result","subtype":"success","result":"Final report body"}),
+        ],
+    );
+
+    let output = extract_messages_from_log(file.path(), true, Some("claude")).unwrap();
+
+    assert_eq!(output, "Final report body");
+}
+
+#[test]
 fn qwen_stream_json_result_event_renders_final_text() {
     let fixture = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("tests/fixtures/qwen-0.22.3-real-envelopes.jsonl");

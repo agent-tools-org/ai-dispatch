@@ -202,7 +202,7 @@ pub(crate) fn auto_save_task_output(store: &Store, task: &Task) -> Result<()> {
         .unwrap_or_else(|| crate::paths::log_path(task.id.as_str()));
     let Some(content) = [transcript, log_path]
         .into_iter()
-        .find_map(|path| super::run_prompt::extract_output_fallback_from_path(&path))
+        .find_map(|path| super::run_prompt::extract_output_fallback_from_path(&path, Some(task.agent_display_name())))
         .filter(|content| !content.is_empty())
     else {
         return Ok(());

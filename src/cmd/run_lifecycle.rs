@@ -523,6 +523,7 @@ fn persist_result_file(
         args.result_file.as_deref(),
         effective_dir.map(String::as_str),
         &log_path,
+        Some(task.agent_display_name()),
     ) {
         Ok(delivery) => record_missing_report(
             store.as_ref(),
@@ -631,7 +632,7 @@ pub(super) fn output_has_content(task: &Task) -> bool {
         return !content.trim().is_empty();
     }
     let transcript = crate::paths::transcript_path(task.id.as_str());
-    if let Some(content) = super::run_prompt::extract_output_fallback_from_path(&transcript) {
+    if let Some(content) = super::run_prompt::extract_output_fallback_from_path(&transcript, Some(task.agent_display_name())) {
         return !content.trim().is_empty();
     }
     let log_path = task
@@ -639,6 +640,6 @@ pub(super) fn output_has_content(task: &Task) -> bool {
         .as_deref()
         .map(std::path::PathBuf::from)
         .unwrap_or_else(|| crate::paths::log_path(task.id.as_str()));
-    super::run_prompt::extract_output_fallback_from_path(&log_path)
+    super::run_prompt::extract_output_fallback_from_path(&log_path, Some(task.agent_display_name()))
         .is_some_and(|content| !content.trim().is_empty())
 }

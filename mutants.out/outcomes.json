@@ -1,0 +1,52 @@
+{
+  "outcomes": [
+    {
+      "scenario": "Baseline",
+      "summary": "Failure",
+      "log_path": "log/baseline.log",
+      "diff_path": null,
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 189.222166583,
+          "process_status": "Success",
+          "argv": [
+            "/Users/mingsun/.rustup/toolchains/stable-aarch64-apple-darwin/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=ai-dispatch@10.37.0"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 0.06122025,
+          "process_status": {
+            "Failure": 1
+          },
+          "argv": [
+            "/Users/mingsun/.rustup/toolchains/stable-aarch64-apple-darwin/bin/cargo",
+            "test",
+            "--verbose",
+            "--package=ai-dispatch@10.37.0",
+            "cargo",
+            "test",
+            "--bin",
+            "aid",
+            "qwen_stream_json_result_event_renders_final_text",
+            "claude_result_event_does_not_duplicate_assistant_text"
+          ]
+        }
+      ]
+    }
+  ],
+  "total_mutants": 0,
+  "missed": 0,
+  "caught": 0,
+  "timeout": 0,
+  "unviable": 0,
+  "success": 0,
+  "start_time": "2026-09-02T12:36:24.018164Z",
+  "end_time": "2026-09-02T12:39:34.018845Z",
+  "cargo_mutants_version": "27.0.0"
+}

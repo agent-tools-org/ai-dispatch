@@ -21,7 +21,7 @@ fn base_opts() -> RunOpts {
 }
 
 #[test]
-fn build_command_uses_qwen_stream_json_flags() {
+fn build_command_uses_qwen_stream_json_and_yolo_flags() {
     let opts = RunOpts {
         model: Some("coder-model".to_string()),
         ..base_opts()
@@ -32,7 +32,7 @@ fn build_command_uses_qwen_stream_json_flags() {
 
     assert_eq!(cmd.get_program().to_string_lossy(), "qwen");
     assert!(args.windows(2).any(|pair| pair == ["-o", "stream-json"]));
-    assert!(!args.iter().any(|arg| arg == "-y"));
+    assert!(args.iter().any(|arg| arg == "-y"));
     assert!(!args.iter().any(|arg| arg == "--approval-mode"));
     assert!(!args.iter().any(|arg| arg == "--include-directories"));
     assert!(args.windows(2).any(|pair| pair == ["-m", "coder-model"]));
@@ -40,18 +40,38 @@ fn build_command_uses_qwen_stream_json_flags() {
 }
 
 #[test]
-fn build_command_fails_on_read_only() {
+fn build_command_uses_plan_approval_for_read_only() {
     let opts = RunOpts {
         read_only: true,
         ..base_opts()
     };
 
-    let res = QwenAgent.build_command("hello", &opts);
-    assert!(res.is_err());
-    assert_eq!(
-        res.unwrap_err().to_string(),
-        "qwen agent does not support read-only mode; omit --read-only, or use an agent that supports it (codex, claude, cursor, gemini, agy)"
-    );
+    let cmd = QwenAgent.build_command("hello", &opts).unwrap();
+    let args: Vec<String> = cmd.get_args().map(|arg| arg.to_string_lossy().into_owned()).collect();
+
+    assert!(args.windows(2).any(|pair| pair == ["--approval-mode", "plan"]));
+    assert!(!args.iter().any(|arg| arg == "-y"));
+}
+
+#[test]
+fn build_command_keeps_result_file_writable_in_read_only_mode() {
+    let opts = RunOpts {
+        read_only: true,
+        result_file: Some("result.md".to_string()),
+        ..base_opts()
+    };
+
+    let cmd = QwenAgent.build_command("hello", &opts).unwrap();
+    let args: Vec<String> = cmd.get_args().map(|arg| arg.to_string_lossy().into_owned()).collect();
+    let prompt = args
+        .windows(2)
+        .find(|pair| pair[0] == "-p")
+        .map(|pair| pair[1].as_str())
+        .unwrap();
+
+    assert!(args.iter().any(|arg| arg == "-y"));
+    assert!(!args.iter().any(|arg| arg == "--approval-mode"));
+    assert!(prompt.contains("EXCEPT the result file"));
 }
 
 #[test]

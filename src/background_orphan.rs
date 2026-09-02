@@ -30,19 +30,22 @@ where
         if already_cleaned.iter().any(|id| id == task_id) {
             continue;
         }
-        let Some(spec) = load_spec_if_exists(task_id)? else {
-            continue;
-        };
-        if spec.worker_pid.is_some_and(is_process_alive) {
+        let spec = load_spec_if_exists(task_id)?;
+        if spec.as_ref().and_then(|spec| spec.worker_pid).is_some_and(is_process_alive) {
             continue;
         }
-        let idle_secs = spec.idle_timeout_secs.unwrap_or(DEFAULT_IDLE_TIMEOUT_SECS);
+        let idle_secs = spec
+            .as_ref()
+            .and_then(|spec| spec.idle_timeout_secs)
+            .unwrap_or(DEFAULT_IDLE_TIMEOUT_SECS);
         let activity = latest_activity(store, task)?;
         if !is_stale(activity.timestamp, now, idle_secs) {
             continue;
         }
         if record_orphaned_hung(store, task_id, idle_secs, &activity)? {
-            terminate_task_processes(spec.worker_pid, &spec);
+            if let Some(spec) = spec.as_ref() {
+                terminate_task_processes(spec.worker_pid, spec);
+            }
             cleaned.push(task_id.to_string());
         }
     }

@@ -133,6 +133,10 @@ fn compact_excerpt(text: &str, max_chars: usize) -> String {
     excerpt
 }
 
+fn agent_log_label(agent: &dyn crate::agent::Agent) -> &str {
+    agent.rate_limit_name().unwrap_or_else(|| agent.kind().as_str())
+}
+
 pub(crate) async fn run_agent_process_impl(args: RunProcessArgs<'_>) -> Result<()> {
     let RunProcessArgs {
         agent,
@@ -192,7 +196,7 @@ pub(crate) async fn run_agent_process_impl(args: RunProcessArgs<'_>) -> Result<(
     let _ = child.kill().await;
     let _ = child.wait().await;
     let output_path = output_path.map(std::path::Path::new);
-    fill_empty_output_from_log(log_path, output_path)?;
+    fill_empty_output_from_log(log_path, output_path, Some(agent_log_label(agent)))?;
     if let Some(out_path) = output_path {
         clean_output_if_jsonl(out_path)?;
     }

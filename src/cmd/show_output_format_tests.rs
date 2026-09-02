@@ -3,6 +3,7 @@
 // Deps: show_output hub, serde_json, tempfile.
 
 use super::extract_messages_from_log;
+use super::show_output_messages::UNRECOGNIZED_JSON_NOTICE_PREFIX;
 use serde_json::json;
 use tempfile::NamedTempFile;
 
@@ -95,6 +96,21 @@ fn copilot_stream_dedupes_final_message_and_flushes_at_tool_boundaries() {
     assert_eq!(
         output,
         "Inspecting repo\n---\n[view] {\"path\":\"Cargo.toml\"}\n---\nDone."
+    );
+}
+
+#[test]
+fn qwen_stream_json_result_event_renders_final_text() {
+    let fixture = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/fixtures/qwen-0.22.3-real-envelopes.jsonl");
+    let output = extract_messages_from_log(&fixture, true, Some("qwen")).unwrap();
+    assert!(
+        output.starts_with("Unable to complete:"),
+        "expected qwen result text, got: {output}"
+    );
+    assert!(
+        !output.contains(UNRECOGNIZED_JSON_NOTICE_PREFIX),
+        "must not emit unrecognized-json notice for qwen stream-json: {output}"
     );
 }
 

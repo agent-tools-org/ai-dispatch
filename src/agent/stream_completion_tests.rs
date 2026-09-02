@@ -61,8 +61,10 @@ fn record_quota_exhaustion_detects_provider_refusal_templates() {
     let _aid_home = crate::paths::AidHomeGuard::set(temp.path());
 
     crate::rate_limit::clear_rate_limit(&crate::types::AgentKind::Qwen, None);
-    let qwen_out = "Quota exhausted: Your token-plan 5-hour quota has been exhausted.";
-    assert!(record_quota_exhaustion(qwen_out, crate::types::AgentKind::Qwen, None, None,)
+    let qwen_out = crate::quota_channel::test_qwen_result_envelope(
+        "Quota exhausted: Your token-plan 5-hour quota has been exhausted.",
+    );
+    assert!(record_quota_exhaustion(&qwen_out, crate::types::AgentKind::Qwen, None, None,)
     .should_fail());
     assert!(crate::rate_limit::is_rate_limited(&crate::types::AgentKind::Qwen, None));
     crate::rate_limit::clear_rate_limit(&crate::types::AgentKind::Qwen, None);
@@ -189,8 +191,16 @@ fn quota_line_keeps_a_stated_reset_time_on_plain_text() {
 /// marker is held to the stated window rather than a class default.
 #[test]
 fn quota_line_keeps_a_reset_time_embedded_in_json() {
-    let event = r#"{"type":"result","text":"Quota exhausted: Your token-plan 1-week quota has been exhausted. The quota will reset at 08-12 10:12:00 UTC.\n\nPlease retry"}"#;
-    let line = quota_line(event, crate::types::AgentKind::Qwen).expect("qwen line");
+    let event = crate::quota_channel::test_qwen_result_envelope(
+        "Quota exhausted: Your token-plan 1-week quota has been exhausted. The quota will reset at 08-12 10:12:00 UTC.\n\nPlease retry",
+    );
+    let attributable = crate::quota_channel::provider_attributable(
+        &event,
+        crate::types::AgentKind::Qwen,
+        crate::quota_channel::Channel::CliStream,
+    )
+    .all();
+    let line = quota_line(&attributable, crate::types::AgentKind::Qwen).expect("qwen line");
     assert!(line.starts_with("Quota exhausted:"), "got {line}");
     assert!(line.contains("reset at 08-12 10:12:00 UTC"), "got {line}");
     assert!(!line.contains('\\'), "JSON escapes must not survive: {line}");

@@ -132,13 +132,13 @@ fn grok_is_split_by_its_envelope_not_by_its_words() {
 /// read as provider testimony.
 #[test]
 fn the_terminal_result_slot_is_open_for_qwen_and_shut_for_everyone_else() {
-    let envelope = r#"{"type":"result","text":"Quota exhausted: Your token-plan 5-hour quota has been exhausted."}"#;
+    let envelope = crate::quota_channel::test_qwen_result_envelope("Quota exhausted: Your token-plan 5-hour quota has been exhausted.");
     assert!(
-        stream(envelope, AgentKind::Qwen).contains("Quota exhausted:"),
+        stream(&envelope, AgentKind::Qwen).contains("Quota exhausted:"),
         "qwen's measured refusal channel must stay readable"
     );
     assert!(
-        stream(envelope, AgentKind::Cursor).is_empty(),
+        stream(&envelope, AgentKind::Cursor).is_empty(),
         "no other agent has been measured refusing here"
     );
 }
@@ -147,9 +147,10 @@ fn the_terminal_result_slot_is_open_for_qwen_and_shut_for_everyone_else() {
 /// status token in it proves nothing.
 #[test]
 fn qwens_result_slot_is_never_strong_enough_for_a_bare_status_token() {
-    let envelope = r#"{"type":"result","text":"The upstream RPC returned 429 twice during the run."}"#;
+    let envelope = crate::quota_channel::test_qwen_result_envelope("The upstream RPC returned 429 twice during the run.");
+    assert!(stream(&envelope, AgentKind::Qwen).contains("429"));
     assert!(
-        stream_diagnostic(envelope, AgentKind::Qwen).is_empty(),
+        stream_diagnostic(&envelope, AgentKind::Qwen).is_empty(),
         "the model's own slot is never CLI-diagnostic evidence"
     );
 }

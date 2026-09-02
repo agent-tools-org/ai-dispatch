@@ -9,6 +9,8 @@ struct MessageCollector {
     messages: Vec<String>,
     streaming_message: String,
     replaceable_message: Option<String>,
+    /// Terminal result text, used only when no assistant content was collected.
+    pending_result_text: Option<String>,
 }
 
 pub(super) fn collect_messages(content: &str) -> Vec<String> {
@@ -70,7 +72,11 @@ impl MessageCollector {
             }
             Some("result" | "turn_complete" | "completion" | "done" | "step_finish" | "turn_end" | "run_end") => {
                 if let Some(text) = result_event_text(value) {
-                    self.push_message(Some(text));
+                    if self.has_collected_content() {
+                        self.flush_pending();
+                    } else {
+                        self.pending_result_text = Some(text);
+                    }
                 } else {
                     self.flush_pending();
                 }
@@ -175,8 +181,19 @@ impl MessageCollector {
         }
     }
 
+    fn has_collected_content(&self) -> bool {
+        !self.messages.is_empty()
+            || !self.streaming_message.is_empty()
+            || self.replaceable_message.is_some()
+    }
+
     fn finish(mut self) -> Vec<String> {
         self.flush_pending();
+        if self.messages.is_empty() {
+            if let Some(text) = self.pending_result_text.take() {
+                self.messages.push(text);
+            }
+        }
         self.messages
     }
 }

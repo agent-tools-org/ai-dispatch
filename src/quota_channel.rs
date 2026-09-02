@@ -68,7 +68,7 @@ pub(crate) enum Channel {
 /// |---|---|
 /// | JSON error envelope (`type` naming an error, an `error`/`errorCode` key, `is_error:true`) | every string in it |
 /// | JSON tool envelope, even one reporting the tool failed | nothing |
-/// | JSON `result`/`turn_complete` envelope, for an agent whose refusal is known to land there | its top-level `text` |
+/// | JSON `result`/`turn_complete` envelope, for an agent whose refusal is known to land there | its top-level `result` |
 /// | any other JSON object | nothing |
 /// | not JSON | the line |
 ///
@@ -163,7 +163,7 @@ fn keep_envelope_strings(object: &Map<String, Value>, agent: AgentKind, kept: &m
     } else if terminal_text_is_a_refusal_channel(agent) && is_terminal_result(object) {
         // The slot qwen's model otherwise fills, so it is read under the narrow
         // rule even though it arrived inside an envelope.
-        if let Some(text) = object.get("text").and_then(Value::as_str) {
+        if let Some(text) = object.get("result").and_then(Value::as_str) {
             push_line(&mut kept.unsplit, text);
         }
     }
@@ -264,6 +264,19 @@ fn push_line(kept: &mut String, text: &str) {
     }
     kept.push_str(text);
     kept.push('\n');
+}
+
+#[cfg(test)]
+pub(crate) fn test_qwen_result_envelope(result: &str) -> String {
+    let mut envelope: Value = serde_json::from_str(
+        include_str!("../tests/fixtures/qwen-0.22.3-real-envelopes.jsonl")
+            .lines()
+            .nth(1)
+            .expect("qwen result fixture"),
+    )
+    .expect("valid qwen result fixture");
+    envelope["result"] = Value::String(result.to_owned());
+    envelope.to_string()
 }
 
 #[cfg(test)]

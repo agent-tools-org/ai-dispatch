@@ -164,22 +164,6 @@ fn orphan_reaper_treats_reasoning_as_activity_before_idle_timeout() {
 }
 
 #[test]
-fn orphan_reaper_skips_tasks_without_background_spec() {
-    let store = Store::open_memory().expect("store");
-    let task = make_task("t-nospec");
-    store.insert_task(&task).expect("insert task");
-    insert_event(&store, "t-nospec", 1_000, EventKind::Milestone);
-
-    let cleaned = cleanup_orphaned_idle_tasks(&store, &[task], &[], &|_| false).expect("cleanup");
-
-    assert!(cleaned.is_empty());
-    assert_eq!(
-        store.get_task("t-nospec").expect("get task").expect("task").status,
-        TaskStatus::Running
-    );
-}
-
-#[test]
 fn is_stale_requires_idle_timeout_to_elapse() {
     let now = Local::now();
 
@@ -306,3 +290,6 @@ fn latest_activity_ignores_agent_log_left_by_an_earlier_run() {
     );
     assert_eq!(activity.timestamp, task.created_at, "and it must not advance the clock");
 }
+
+#[path = "background_orphan_spec_less_tests.rs"]
+mod spec_less_tests;

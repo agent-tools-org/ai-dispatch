@@ -16,27 +16,44 @@ TOKEN="probe-token-$$"
 HOME_DIR="$(mktemp -d)"
 SRC_DB="${AID_SRC_DB:-$HOME/.aid/aid.db}"
 PASS=0 FAIL=0 SKIP=0
+SERVER_PID=""
 
 pass() { echo "  PASS  $1"; PASS=$((PASS + 1)); }
 fail() { echo "  FAIL  $1"; FAIL=$((FAIL + 1)); }
 skip() { echo "  SKIP  $1"; SKIP=$((SKIP + 1)); }
 
-cleanup() { pkill -f "web --host 127.0.0.1 --port $PORT" 2>/dev/null; pkill -f "web --host 0.0.0.0 --port $PORT" 2>/dev/null; rm -rf "$HOME_DIR"; }
+stop_server() {
+  [[ -z "$SERVER_PID" ]] && return
+  kill "$SERVER_PID" 2>/dev/null
+  wait "$SERVER_PID" 2>/dev/null
+  SERVER_PID=""
+}
+
+cleanup() {
+  stop_server
+  rm -rf "$HOME_DIR"
+}
 trap cleanup EXIT
 
 # Work on a copy so probes never write to the operator's live tasks.
 if [[ -f "$SRC_DB" ]]; then cp "$SRC_DB" "$HOME_DIR/aid.db"; fi
 
-start_loopback() {
-  ( AID_HOME="$HOME_DIR" "$BIN" web --host 127.0.0.1 --port "$PORT" --token "$TOKEN" >"$HOME_DIR/server.log" 2>&1 & )
+code() { curl -s -o /dev/null -w '%{http_code}' --max-time 30 "$@"; }
+
+wait_for_bearer() {
+  local token="$1"
   for _ in $(seq 1 20); do
     sleep 1
-    curl -s -o /dev/null --max-time 5 "http://127.0.0.1:$PORT/api/usage" -H "Authorization: Bearer $TOKEN" && return 0
+    [[ "$(code "http://127.0.0.1:$PORT/api/usage" -H "Authorization: Bearer $token")" == 200 ]] && return 0
   done
   return 1
 }
 
-code() { curl -s -o /dev/null -w '%{http_code}' --max-time 30 "$@"; }
+start_loopback() {
+  AID_HOME="$HOME_DIR" "$BIN" web --host 127.0.0.1 --port "$PORT" --token "$TOKEN" >"$HOME_DIR/server.log" 2>&1 &
+  SERVER_PID=$!
+  wait_for_bearer "$TOKEN"
+}
 
 echo "== auth =="
 if ! start_loopback; then echo "server did not come up; see $HOME_DIR/server.log"; exit 1; fi
@@ -64,11 +81,12 @@ fi
 QGET=$(code "http://127.0.0.1:$PORT/api/usage?token=$TOKEN")
 [[ "$QGET" == 401 ]] && pass "?token= is refused outside the event stream" \
   || fail "?token= is refused outside the event stream (got $QGET)"
-pkill -f "web --host 127.0.0.1 --port $PORT" 2>/dev/null; sleep 1
+stop_server
 
 echo "== token generation and reuse on a LAN bind =="
 rm -f "$HOME_DIR/web_token"
-( AID_HOME="$HOME_DIR" "$BIN" web --host 0.0.0.0 --port "$PORT" >"$HOME_DIR/gen.log" 2>&1 & )
+AID_HOME="$HOME_DIR" "$BIN" web --host 0.0.0.0 --port "$PORT" >"$HOME_DIR/gen.log" 2>&1 &
+SERVER_PID=$!
 for _ in $(seq 1 15); do sleep 1; [[ -s "$HOME_DIR/web_token" ]] && break; done
 if [[ -s "$HOME_DIR/web_token" ]]; then
   pass "a LAN bind with no --token generates one"
@@ -76,19 +94,19 @@ if [[ -s "$HOME_DIR/web_token" ]]; then
   [[ ${#GEN} -ge 32 ]] && pass "generated token is at least 32 chars" || fail "generated token is at least 32 chars (got ${#GEN})"
   MODE=$(stat -f '%Lp' "$HOME_DIR/web_token" 2>/dev/null || stat -c '%a' "$HOME_DIR/web_token")
   [[ "$MODE" == 600 ]] && pass "token file is 0600" || fail "token file is 0600 (got $MODE)"
-  [[ "$(code "http://127.0.0.1:$PORT/api/fleet" -H "Authorization: Bearer $GEN")" == 200 ]] \
-    && pass "the generated token authenticates" || fail "the generated token authenticates"
-  pkill -f "web --host 0.0.0.0 --port $PORT" 2>/dev/null; sleep 1
-  ( AID_HOME="$HOME_DIR" "$BIN" web --host 0.0.0.0 --port "$PORT" >"$HOME_DIR/reuse.log" 2>&1 & )
-  sleep 4
-  [[ "$(code "http://127.0.0.1:$PORT/api/fleet" -H "Authorization: Bearer $GEN")" == 200 ]] \
-    && pass "a restart reuses the persisted token" || fail "a restart reuses the persisted token"
+  wait_for_bearer "$GEN" && pass "the generated token authenticates" \
+    || fail "the generated token authenticates"
+  stop_server
+  AID_HOME="$HOME_DIR" "$BIN" web --host 0.0.0.0 --port "$PORT" >"$HOME_DIR/reuse.log" 2>&1 &
+  SERVER_PID=$!
+  wait_for_bearer "$GEN" && pass "a restart reuses the persisted token" \
+    || fail "a restart reuses the persisted token"
 else
   fail "a LAN bind with no --token generates one (no web_token written; log: $(head -1 "$HOME_DIR/gen.log"))"
 fi
 
-echo "== latency: /api/fleet paints the main window on every open ==" 
-pkill -f "web --host 0.0.0.0 --port $PORT" 2>/dev/null; sleep 1
+echo "== latency: /api/fleet paints the main window on every open =="
+stop_server
 if start_loopback; then
   T_FLEET=$(curl -s -o /dev/null -w '%{time_total}' --max-time 60 "http://127.0.0.1:$PORT/api/fleet" -H "Authorization: Bearer $TOKEN")
   UNDER=$(python3 -c "print(1 if float('$T_FLEET') < 0.35 else 0)")

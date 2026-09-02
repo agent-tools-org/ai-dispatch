@@ -1,6 +1,6 @@
 # qwen delivers nothing: aid never passes an approval-mode flag
 
-**Status:** root cause confirmed by controlled A/B against the real CLI.
+**Status:** CLOSED — fixed and released in v10.38.0 (`1c845649`), accepted end-to-end.
 **Reported symptom:** "qwen tasks always fail to deliver — is it a CLI compatibility problem?"
 **Answer:** Yes. It is a CLI contract change plus an aid adapter that never carried the flag.
 
@@ -137,3 +137,25 @@ Also check whether aid's stderr capture treats qwen's yolo banner as an error ev
    nothing. Needs the streaming path.
 2. **`[Unrecognized JSON log format from unknown agent]`** on `t-d536a254` and `t-026de1ef`, whose
    sample line is qwen's own `{"type":"system","subtype":"init",…}`. Classifier gap, cosmetic.
+
+## Released and accepted
+
+v10.38.0 (`1c845649`, tag pushed 2026-09-02). Two independent audits returned SHIP: `t-db39d399`
+(cursor) on the three frozen work items, `t-e9f28d5c` (qwen) on the lifecycle and envelope changes.
+The second audit also caught that the lifecycle change had shipped without the guide update this
+repo requires; that is now `b15a71f8`.
+
+**Acceptance was run against the installed binary, not a build tree.** Until v10.38.0 was built,
+installed and re-signed, every "qwen can write again" proof came from a binary the prover had built
+itself — `aid run` uses `~/.cargo/bin/aid`, which was still the previous release. That is why the
+qwen audit reported having no shell: it was a correct observation of the *old* adapter. With the
+released binary installed, `aid run qwen "create ACCEPTANCE.txt containing OK"` returned
+`files_changed: ["ACCEPTANCE.txt"]` in 90 s, the file contained exactly `OK`, and the agent
+committed it itself.
+
+Follow-ups on ai-board: `wi-395b` (qwen.rs still duplicates the gemini command builder, and its
+module header still claims otherwise), `wi-e16e` (agy's terminal marker is a substring match with
+no false-positive fixture), `wi-6d8f` (no same-repo invariance test for the cargo target rewrite),
+`wi-f556` (the `$TMPDIR` build-target fallback has no GC — it reached 6.2 GB during this session
+and blocked verification by pushing the volume under aid's own build guard).
+

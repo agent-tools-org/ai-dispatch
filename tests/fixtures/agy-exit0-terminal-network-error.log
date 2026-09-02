@@ -1,0 +1,3 @@
+ERROR: logging before google.Init: E0817 17:22:24.581633 executor.go:525] error in generator: request failed: Post "https://daily-cloudcode-pa.googleapis.com/v1internal:streamGenerateContent?alt=sse": write tcp: broken pipe
+ERROR: logging before google.Init: E0817 17:22:24.582491 errorreport.go:223] agent executor error: request failed: Post "https://daily-cloudcode-pa.googleapis.com/v1internal:streamGenerateContent?alt=sse": write tcp: broken pipe
+ERROR: logging before google.Init: I0817 17:22:25.459627 manager.go:739] CLI store manager shutting down

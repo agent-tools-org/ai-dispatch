@@ -12,6 +12,8 @@ use super::read_only::read_only_prompt;
 use super::RunOpts;
 use crate::types::*;
 
+const TERMINAL_EXECUTOR_ERROR: &str = "agent executor error:";
+
 pub struct AntigravityAgent;
 
 impl super::Agent for AntigravityAgent {
@@ -98,6 +100,12 @@ impl super::Agent for AntigravityAgent {
 
     fn parse_event(&self, _task_id: &TaskId, _line: &str) -> Option<TaskEvent> {
         None
+    }
+
+    fn diagnostics_report_terminal_failure(&self, output: &str) -> bool {
+        output
+            .lines()
+            .any(|line| line.contains(TERMINAL_EXECUTOR_ERROR))
     }
 
     fn served_models(&self) -> Result<Option<Vec<String>>> {

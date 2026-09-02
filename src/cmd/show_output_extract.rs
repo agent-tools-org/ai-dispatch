@@ -71,14 +71,13 @@ impl MessageCollector {
                 }
             }
             Some("result" | "turn_complete" | "completion" | "done" | "step_finish" | "turn_end" | "run_end") => {
-                if let Some(text) = result_event_text(value) {
-                    if self.has_collected_content() {
-                        self.flush_pending();
-                    } else {
-                        self.pending_result_text = Some(text);
-                    }
-                } else {
-                    self.flush_pending();
+                self.flush_pending();
+                // commandcode: always emit `finalText`. claude/qwen: defer top-level `result`
+                // to finish() so it is only used when no assistant text was collected.
+                if let Some(text) = final_text_field(value) {
+                    self.push_message(Some(text));
+                } else if let Some(text) = duplicate_prone_result_text(value) {
+                    self.pending_result_text = Some(text);
                 }
             }
             // For any unrecognized event shape from any agent adapter (including commandcode
@@ -179,12 +178,6 @@ impl MessageCollector {
         if !self.streaming_message.is_empty() {
             self.messages.push(std::mem::take(&mut self.streaming_message));
         }
-    }
-
-    fn has_collected_content(&self) -> bool {
-        !self.messages.is_empty()
-            || !self.streaming_message.is_empty()
-            || self.replaceable_message.is_some()
     }
 
     fn finish(mut self) -> Vec<String> {
@@ -356,11 +349,25 @@ fn text_delta_text(value: &Value) -> Option<String> {
 }
 
 fn result_event_text(value: &Value) -> Option<String> {
+    final_text_field(value).or_else(|| duplicate_prone_result_text(value))
+}
+
+/// Commandcode (and similar) terminal field — distinct from prior assistant text.
+fn final_text_field(value: &Value) -> Option<String> {
     value
         .get("finalText")
         .and_then(Value::as_str)
-        .or_else(|| value.pointer("/result/text").and_then(Value::as_str))
+        .filter(|text| !text.is_empty())
+        .map(ToOwned::to_owned)
+}
+
+/// Claude/qwen top-level `result` (and `/result/text`) — may repeat assistant text.
+fn duplicate_prone_result_text(value: &Value) -> Option<String> {
+    value
+        .pointer("/result/text")
+        .and_then(Value::as_str)
         .or_else(|| value.get("result").and_then(Value::as_str))
+        .filter(|text| !text.is_empty())
         .map(ToOwned::to_owned)
 }
 

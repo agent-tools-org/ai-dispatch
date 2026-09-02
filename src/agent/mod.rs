@@ -112,6 +112,9 @@ pub trait Agent: Send + Sync {
         }
     }
 
+    /// Whether the agent's private diagnostic log proves terminal failure.
+    fn diagnostics_report_terminal_failure(&self, _output: &str) -> bool { false }
+
     /// Whether this agent requires a PTY even for foreground execution.
     fn needs_pty(&self) -> bool {
         false

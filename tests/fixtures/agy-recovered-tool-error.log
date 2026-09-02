@@ -1,0 +1,3 @@
+ERROR: logging before google.Init: E0817 22:16:44.431895 stream_handler.go:101] error encountered while processing planner output: model output error: invalid tool call error (invalid_args) failed to read file
+ERROR: logging before google.Init: I0817 22:16:50.733545 http_helpers.go:232] URL: https://daily-cloudcode-pa.googleapis.com/v1internal:streamGenerateContent?alt=sse ResponseID: recovered
+ERROR: logging before google.Init: I0817 22:20:15.242901 manager.go:739] CLI store manager shutting down

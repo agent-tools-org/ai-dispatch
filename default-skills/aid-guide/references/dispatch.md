@@ -246,10 +246,11 @@ they are negated, as in `do not modify` or `without modifying`.
 An explicit `--result-file` controls report formatting and delivery; it does not
 by itself remove implementation methodology or Git staging instructions.
 
-Unsupported agent and flag combinations (for example `qwen` with `--read-only`)
-are refused before a task row is created, with an error that names what to do
-instead. The same preflight resolves the agent command (built-in or custom) and
-refuses when the binary is missing from `PATH`, naming the missing binary.
+Unsupported agent and flag combinations are refused before a task row is created,
+with an error that names what to do instead. The same preflight resolves the agent
+command (built-in or custom) and refuses when the binary is missing from `PATH`,
+naming the missing binary. Qwen supports `--read-only` through its native plan
+approval mode.
 Unknown models that the agent CLI does not report as invalid are passed
 through.
 

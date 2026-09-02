@@ -11,7 +11,7 @@ fn isolated_home() -> crate::paths::AidHomeGuard {
 }
 
 #[test]
-fn prepare_dispatch_rejects_qwen_read_only_before_task_exists() {
+fn prepare_dispatch_accepts_qwen_read_only() {
     let _guard = isolated_home();
     let store = Arc::new(Store::open_memory().unwrap());
     let mut args = RunArgs {
@@ -22,22 +22,9 @@ fn prepare_dispatch_rejects_qwen_read_only_before_task_exists() {
         ..Default::default()
     };
 
-    let err = match prepare_dispatch(&store, &mut args) {
-        Ok(_) => panic!("qwen --read-only must be refused before task creation"),
-        Err(err) => err.to_string(),
-    };
-    assert!(
-        err.contains("does not support read-only mode"),
-        "unexpected error: {err}"
-    );
-    assert!(
-        err.contains("omit --read-only"),
-        "error should name the remedy: {err}"
-    );
-    assert!(
-        store.get_task("t-preflight-ro").unwrap().is_none(),
-        "unsupported dispatch must not create a task row"
-    );
+    let prepared = super::prepare_dispatch_with(&store, &mut args, |_| true)
+        .expect("qwen --read-only should pass command preflight");
+    assert_eq!(prepared.task.id.as_str(), "t-preflight-ro");
 }
 
 #[test]

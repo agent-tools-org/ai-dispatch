@@ -30,28 +30,20 @@ impl super::Agent for QwenAgent {
     }
 
     fn build_command(&self, prompt: &str, opts: &RunOpts) -> Result<Command> {
-        if opts.read_only {
-            anyhow::bail!(
-                "qwen agent does not support read-only mode; omit --read-only, or use an agent that supports it (codex, claude, cursor, gemini, agy)"
-            );
-        }
         let mut cmd = Command::new("qwen");
         cmd.args(["-o", "stream-json"]);
         let model = opts.model.clone()
             .or_else(crate::model_catalog::get_qwen_selected_model)
             .unwrap_or_else(|| "coder-model".to_string());
         cmd.args(["-m", &model]);
-        if opts.sandbox {
-            cmd.arg("--sandbox");
-        }
-        if let Some(ref session_id) = opts.session_id {
-            cmd.args(["-r", session_id]);
-        }
+        if opts.sandbox { cmd.arg("--sandbox"); }
+        if let Some(ref session_id) = opts.session_id { cmd.args(["-r", session_id]); }
         let prompt = super::embed_context_in_prompt(prompt, &opts.context_files)?;
-        cmd.args(["-p", &prompt]);
-        if let Some(ref dir) = opts.dir {
-            cmd.current_dir(dir);
-        }
+        let allow_result_file = super::read_only::allow_result_file_write(opts);
+        let effective_prompt = if allow_result_file { super::read_only::read_only_prompt(&prompt, opts) } else { prompt };
+        if opts.read_only && !allow_result_file { cmd.args(["--approval-mode", "plan"]); } else { cmd.arg("-y"); }
+        cmd.args(["-p", &effective_prompt]);
+        if let Some(ref dir) = opts.dir { cmd.current_dir(dir); }
         Ok(cmd)
     }
 

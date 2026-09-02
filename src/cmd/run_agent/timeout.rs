@@ -166,7 +166,11 @@ fn handle_success(
         if streaming {
             write_streaming_output(log_path, out_path);
         }
-        run_prompt::fill_empty_output_from_log(log_path, Some(out_path))?;
+        run_prompt::fill_empty_output_from_log(
+            log_path,
+            Some(out_path),
+            Some(agent.rate_limit_name().unwrap_or_else(|| agent.kind().as_str())),
+        )?;
         run_prompt::clean_output_if_jsonl(out_path)?;
     }
     let duration_ms = start.elapsed().as_millis() as i64;

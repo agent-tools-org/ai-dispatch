@@ -30,11 +30,12 @@ pub(in crate::cmd) fn persist_result_file(
     result_file: Option<&str>,
     base_dir: Option<&str>,
     log_path: &Path,
+    agent_name: Option<&str>,
 ) -> Result<ResultDelivery> {
     let Some(result_file) = result_file else { return Ok(ResultDelivery::NotRequested); };
     let source = resolve_result_path(result_file, base_dir);
     if !file_has_content(&source) {
-        return persist_result_from_log(task_id, log_path);
+        return persist_result_from_log(task_id, log_path, agent_name);
     }
     let dest = crate::paths::task_dir(task_id).join("result.md");
     if source.as_path() == dest.as_path() {
@@ -48,8 +49,12 @@ pub(in crate::cmd) fn persist_result_file(
     Ok(ResultDelivery::File)
 }
 
-fn persist_result_from_log(task_id: &str, log_path: &Path) -> Result<ResultDelivery> {
-    let Some(content) = extract_output_fallback_from_log(log_path) else {
+fn persist_result_from_log(
+    task_id: &str,
+    log_path: &Path,
+    agent_name: Option<&str>,
+) -> Result<ResultDelivery> {
+    let Some(content) = extract_output_fallback_from_log(log_path, agent_name) else {
         return Ok(ResultDelivery::MissingFile { fallback_saved: false });
     };
     let dest = crate::paths::task_dir(task_id).join("result.md");
@@ -77,7 +82,11 @@ fn resolve_result_path(result_file: &str, base_dir: Option<&str>) -> PathBuf {
     path.to_path_buf()
 }
 
-pub(in crate::cmd) fn fill_empty_output_from_log(log_path: &Path, output_path: Option<&Path>) -> Result<()> {
+pub(in crate::cmd) fn fill_empty_output_from_log(
+    log_path: &Path,
+    output_path: Option<&Path>,
+    agent_name: Option<&str>,
+) -> Result<()> {
     let Some(output_path) = output_path else { return Ok(()) };
     let needs_fallback = match std::fs::metadata(output_path) {
         Ok(metadata) => metadata.len() == 0,
@@ -86,20 +95,25 @@ pub(in crate::cmd) fn fill_empty_output_from_log(log_path: &Path, output_path: O
     if !needs_fallback {
         return Ok(());
     }
-    let Some(content) = extract_output_fallback_from_log(log_path) else { return Ok(()) };
+    let Some(content) = extract_output_fallback_from_log(log_path, agent_name) else {
+        return Ok(());
+    };
     std::fs::write(output_path, content).with_context(|| {
         format!("Failed to write output fallback file {}", output_path.display())
     })
 }
 
-pub(in crate::cmd::run) fn extract_output_fallback_from_path(path: &Path) -> Option<String> {
-    crate::cmd::show::extract_messages_from_log(path, true, None)
+pub(in crate::cmd::run) fn extract_output_fallback_from_path(
+    path: &Path,
+    agent_name: Option<&str>,
+) -> Option<String> {
+    crate::cmd::show::extract_messages_from_log(path, true, agent_name)
         .or_else(|| extract_raw_text_from_log(path))
         .filter(|content| !content.is_empty())
 }
 
-fn extract_output_fallback_from_log(log_path: &Path) -> Option<String> {
-    extract_output_fallback_from_path(log_path)
+fn extract_output_fallback_from_log(log_path: &Path, agent_name: Option<&str>) -> Option<String> {
+    extract_output_fallback_from_path(log_path, agent_name)
 }
 
 fn extract_raw_text_from_log(log_path: &Path) -> Option<String> {
@@ -168,7 +182,7 @@ mod tests {
         .unwrap();
         std::fs::write(output.path(), "").unwrap();
 
-        fill_empty_output_from_log(log.path(), Some(output.path())).unwrap();
+        fill_empty_output_from_log(log.path(), Some(output.path()), None).unwrap();
 
         assert_eq!(
             std::fs::read_to_string(output.path()).unwrap(),
@@ -183,7 +197,7 @@ mod tests {
         let output_path = temp.path().join("missing-output.txt");
         std::fs::write(log.path(), "{\"type\":\"text\",\"content\":\"gemini output\"}\n").unwrap();
 
-        fill_empty_output_from_log(log.path(), Some(output_path.as_path())).unwrap();
+        fill_empty_output_from_log(log.path(), Some(output_path.as_path()), None).unwrap();
 
         assert_eq!(std::fs::read_to_string(output_path).unwrap(), "gemini output");
     }
@@ -202,6 +216,7 @@ mod tests {
             Some("result.md"),
             Some(work_dir.to_str().unwrap()),
             &log_path,
+            None,
         )
         .unwrap();
 
@@ -224,7 +239,7 @@ I will inspect the indexer snapshot file to answer the second question about det
         std::fs::write(&log_path, narration).unwrap();
 
         let delivery =
-            persist_result_file("t-narration-result", Some("result.md"), Some("/missing"), &log_path)
+            persist_result_file("t-narration-result", Some("result.md"), Some("/missing"), &log_path, None)
                 .unwrap();
 
         assert_eq!(delivery, ResultDelivery::MissingFile { fallback_saved: true });
@@ -238,7 +253,7 @@ I will inspect the indexer snapshot file to answer the second question about det
         std::fs::create_dir_all(log_path.parent().unwrap()).unwrap();
         std::fs::write(&log_path, "{\"type\":\"text\",\"content\":\"stdout report\"}\n").unwrap();
 
-        persist_result_file("t-log-result", Some("result.md"), Some("/missing"), &log_path)
+        persist_result_file("t-log-result", Some("result.md"), Some("/missing"), &log_path, None)
             .unwrap();
 
         let saved = crate::paths::task_dir("t-log-result").join("result.md");
@@ -254,7 +269,7 @@ I will inspect the indexer snapshot file to answer the second question about det
         std::fs::write(&log_path, "plain text report\nwith final findings").unwrap();
 
         let delivery =
-            persist_result_file("t-raw-log-result", Some("result.md"), Some("/missing"), &log_path)
+            persist_result_file("t-raw-log-result", Some("result.md"), Some("/missing"), &log_path, None)
                 .unwrap();
 
         let saved = crate::paths::task_dir("t-raw-log-result").join("result.md");
@@ -276,6 +291,7 @@ I will inspect the indexer snapshot file to answer the second question about det
             Some("result.md"),
             Some("/missing"),
             &missing_log,
+            None,
         )
         .unwrap();
 
@@ -291,6 +307,7 @@ I will inspect the indexer snapshot file to answer the second question about det
             Some("result.md"),
             Some("/missing"),
             &empty_log,
+            None,
         )
         .unwrap();
 

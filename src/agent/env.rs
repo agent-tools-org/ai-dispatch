@@ -12,6 +12,10 @@ use crate::types::AgentKind;
 use super::RunOpts;
 pub(crate) use super::cargo_target::BranchTargetSeedOutcome;
 
+#[path = "cargo_target_layout.rs"]
+mod cargo_target_layout;
+use cargo_target_layout::CargoTargetLayout;
+
 #[derive(Debug)]
 pub(crate) struct CliCommandOutput {
     pub success: bool,
@@ -26,45 +30,44 @@ const CARGO_MANIFEST_NAME: &str = "Cargo.toml";
 const BASE_TARGET_DIR_NAME: &str = "_base";
 const SHARED_TARGET_DIR_NAME: &str = "cargo-target";
 
-struct CargoTargetLayout {
-    source: PathBuf,
-    branch_root: PathBuf,
-}
-
 pub fn agent_has_fs_access(_kind: &AgentKind) -> bool {
     true // all supported agents have file system access
 }
 
 pub fn shared_target_dir() -> Option<String> {
-    Some(target_layout()?.source.to_string_lossy().into_owned())
+    Some(target_layout(None)?.source.to_string_lossy().into_owned())
 }
 
-fn target_layout() -> Option<CargoTargetLayout> {
-    if let Some(branch_root) = std::env::var_os(CARGO_TARGET_DIR_ENV).map(PathBuf::from) {
-        let source = branch_root.join(BASE_TARGET_DIR_NAME);
-        return Some(CargoTargetLayout { source, branch_root });
-    }
-    let branch_root = crate::paths::aid_dir().join(SHARED_TARGET_DIR_NAME);
-    let source = branch_root.join(BASE_TARGET_DIR_NAME);
-    Some(CargoTargetLayout { source, branch_root })
+fn target_layout(project_dir: Option<&str>) -> Option<CargoTargetLayout> {
+    let branch_root = std::env::var_os(CARGO_TARGET_DIR_ENV)
+        .map(PathBuf::from)
+        .unwrap_or_else(|| crate::paths::aid_dir().join(SHARED_TARGET_DIR_NAME));
+    Some(cargo_target_layout::layout_for_project(branch_root, project_dir))
 }
 
 /// Returns a target directory isolated per worktree branch.
 /// Worktree tasks get `{base}/{sanitized_branch}` to avoid lock contention.
 /// Non-worktree tasks share the base directory.
 pub fn target_dir_for_worktree(worktree_branch: Option<&str>) -> Option<String> {
-    let layout = target_layout()?;
+    target_dir_for_project(None, worktree_branch)
+}
+
+pub(crate) fn target_dir_for_project(
+    project_dir: Option<&str>,
+    worktree_branch: Option<&str>,
+) -> Option<String> {
+    let layout = target_layout(project_dir)?;
     match worktree_branch {
         Some(branch) => {
             let target = target_dir_for_branch(&layout.branch_root, branch);
             Some(target.to_string_lossy().into_owned())
         }
-        None => shared_target_dir(),
+        None => Some(layout.source.to_string_lossy().into_owned()),
     }
 }
 
 pub(crate) fn branch_target_root() -> Option<PathBuf> {
-    Some(target_layout()?.branch_root)
+    Some(target_layout(None)?.branch_root)
 }
 
 pub(crate) fn branch_target_name(branch: &str) -> String {
@@ -72,9 +75,10 @@ pub(crate) fn branch_target_name(branch: &str) -> String {
 }
 
 pub(crate) fn seed_branch_target_dir(
+    project_dir: Option<&str>,
     worktree_branch: &str,
 ) -> Option<BranchTargetSeedOutcome> {
-    let layout = target_layout()?;
+    let layout = target_layout(project_dir)?;
     let target = target_dir_for_branch(&layout.branch_root, worktree_branch);
     let outcome = if layout.source.is_dir() {
         super::cargo_target::seed_branch_target_from_source(&layout.source, &target)
@@ -103,7 +107,7 @@ fn ensure_branch_target_dir(
 }
 
 pub(crate) fn remove_branch_target_dir_if_unused(repo_dir: &Path, branch: &str) -> anyhow::Result<bool> {
-    let Some(layout) = target_layout() else {
+    let Some(layout) = target_layout(repo_dir.to_str()) else {
         return Ok(false);
     };
     let target = target_dir_for_branch(&layout.branch_root, branch);
@@ -133,7 +137,7 @@ pub fn rust_build_cache_target_dir(
     if !is_rust_project(project_dir) {
         return None;
     }
-    target_dir_for_worktree(worktree_branch)
+    target_dir_for_project(project_dir, worktree_branch)
 }
 
 pub fn apply_cargo_target_env(cmd: &mut Command, cargo_target_dir: Option<&str>) {

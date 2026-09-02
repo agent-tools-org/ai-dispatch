@@ -8,7 +8,9 @@ use std::process::Command;
 pub(crate) fn run_verify_in_worktree(wt: &str, verify: Option<&str>) {
     let worktree_branch = worktree_branch_name(wt)
         .or_else(|| Path::new(wt).file_name().and_then(|name| name.to_str()).map(str::to_string));
-    let cargo_target_dir = crate::agent::target_dir_for_worktree(worktree_branch.as_deref());
+    let cargo_target_dir = crate::agent::env::target_dir_for_project(
+        Some(wt), worktree_branch.as_deref(),
+    );
     run_verify(wt, verify, cargo_target_dir.as_deref());
 }
 

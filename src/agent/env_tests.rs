@@ -40,7 +40,7 @@ fn seed_branch_target_dir_copies_base_without_existing_branches() {
     std::fs::write(debug.join("artifact.txt"), "cached").unwrap();
     let _target_dir = CargoTargetDirGuard::set(&root);
 
-    let outcome = seed_branch_target_dir("feat/shared-cache").unwrap();
+    let outcome = seed_branch_target_dir(None, "feat/shared-cache").unwrap();
 
     assert!(matches!(outcome, BranchTargetSeedOutcome::Seeded { .. }));
     assert_eq!(
@@ -66,7 +66,7 @@ fn seed_branch_target_dir_falls_back_to_root_artifact_entries() {
     std::fs::write(root.join(".rustc_info.json"), "{}").unwrap();
     let target_dir_guard = CargoTargetDirGuard::set(&root);
 
-    let outcome = seed_branch_target_dir("feat/shared-cache").unwrap();
+    let outcome = seed_branch_target_dir(None, "feat/shared-cache").unwrap();
 
     assert!(matches!(outcome, BranchTargetSeedOutcome::Seeded { .. }));
     assert_eq!(
@@ -96,7 +96,7 @@ fn seed_branch_target_dir_prefers_base_over_root_artifact_entries() {
     std::fs::write(root_debug.join("artifact.txt"), "fallback").unwrap();
     let target_dir_guard = CargoTargetDirGuard::set(&root);
 
-    let outcome = seed_branch_target_dir("feat/shared-cache").unwrap();
+    let outcome = seed_branch_target_dir(None, "feat/shared-cache").unwrap();
 
     assert!(matches!(outcome, BranchTargetSeedOutcome::Seeded { .. }));
     assert_eq!(
@@ -114,7 +114,7 @@ fn seed_branch_target_dir_creates_empty_target_when_seed_is_skipped() {
     let root = temp.path().join("target");
     let target_dir_guard = CargoTargetDirGuard::set(&root);
 
-    let outcome = seed_branch_target_dir("feat/shared-cache").unwrap();
+    let outcome = seed_branch_target_dir(None, "feat/shared-cache").unwrap();
 
     assert_eq!(
         outcome,
@@ -139,7 +139,7 @@ fn seed_branch_target_dir_keeps_multiple_branch_targets_flat() {
     let _target_dir = CargoTargetDirGuard::set(&root);
 
     for branch in ["feat/cache-a", "feat/cache-b", "feat/cache-c"] {
-        let outcome = seed_branch_target_dir(branch).unwrap();
+        let outcome = seed_branch_target_dir(None, branch).unwrap();
         assert!(matches!(outcome, BranchTargetSeedOutcome::Seeded { .. }));
     }
 

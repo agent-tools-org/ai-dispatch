@@ -13,7 +13,9 @@ Command under test: `cargo check --all-targets`.
 
 ## Layout
 
-The aid-managed layout uses a project target root with `<project-target-root>/_base` for non-worktree Rust builds and `<project-target-root>/<sanitized-branch>` for worktree builds. With the default configuration, `<project-target-root>` is `~/.aid/cargo-target`. When the user explicitly sets `CARGO_TARGET_DIR`, that value is treated as the project target root. This keeps every branch target inside the user-provided project namespace instead of creating branch targets beside it.
+The aid-managed layout uses a project target root with `<project-target-root>/_base` for non-worktree Rust builds and `<project-target-root>/<sanitized-branch>` for worktree builds. With the default configuration, `<project-target-root>` is `~/.aid/cargo-target`. An explicit `CARGO_TARGET_DIR` remains the project target root for same-project dispatches and arbitrary custom cache paths.
+
+Nested cross-project dispatches are different. If the inherited target is inside the recognized `.cargo-target/<caller-project>/...` or `cargo-target/<caller-project>/...` namespace, `--dir <target-repo>` switches to the sibling `<target-project>` root and discards the caller branch suffix. Agent execution, worktree seeding, and verification use that same resolved root. This prevents a target repository from inheriting the caller's verify artifacts while leaving unrelated custom target layouts untouched.
 
 The source target remains the `_base` leaf in both layouts, so branch target dirs are siblings of the source target, not children of it. A branch target cannot recursively contain another branch target. If a user already has a warm explicit `CARGO_TARGET_DIR`, the first aid-managed non-worktree build now warms `CARGO_TARGET_DIR/_base`; this accepts one cold `_base` build to preserve project namespacing and keep the seed source isolated.
 

@@ -37,6 +37,8 @@ mod run_dispatch_resolve;
 mod run_dispatch_claim;
 #[path = "run_dispatch_prepare.rs"]
 mod run_dispatch_prepare;
+#[path = "run_dispatch_worktree.rs"]
+mod run_dispatch_worktree;
 #[path = "run_task_profile.rs"]
 mod run_task_profile;
 #[path = "run_delegation.rs"]

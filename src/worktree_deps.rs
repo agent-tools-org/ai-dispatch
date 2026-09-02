@@ -1,7 +1,6 @@
 // Worktree dependency preparation: setup hooks, dep-dir symlinks, and verify hints.
 // Exports: prepare_worktree_dependencies() and missing_deps_hint().
 // Deps: crate::process_guard, crate::store, crate::types, std fs/process/path helpers.
-
 use anyhow::{Context, Result};
 use chrono::Local;
 use std::collections::HashSet;
@@ -57,7 +56,9 @@ fn maybe_seed_cargo_target(
         return;
     }
     let Some(branch) = worktree_branch else { return };
-    let Some(outcome) = crate::agent::env::seed_branch_target_dir(branch) else { return };
+    let Some(outcome) = crate::agent::env::seed_branch_target_dir(
+        worktree_dir.to_str(), branch,
+    ) else { return };
     match outcome {
         crate::agent::env::BranchTargetSeedOutcome::Seeded { target, source, elapsed_ms } => {
             insert_setup_event(store, task_id, &format!(

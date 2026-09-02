@@ -282,7 +282,7 @@ fn fill_empty_output_from_log_populates_zero_byte_file() {
     .unwrap();
     std::fs::write(output.path(), "").unwrap();
 
-    fill_empty_output_from_log(log.path(), Some(output.path())).unwrap();
+    fill_empty_output_from_log(log.path(), Some(output.path()), None).unwrap();
 
     assert_eq!(
         std::fs::read_to_string(output.path()).unwrap(),
@@ -301,7 +301,7 @@ fn fill_empty_output_from_log_keeps_existing_output() {
     .unwrap();
     std::fs::write(output.path(), "existing").unwrap();
 
-    fill_empty_output_from_log(log.path(), Some(output.path())).unwrap();
+    fill_empty_output_from_log(log.path(), Some(output.path()), None).unwrap();
 
     assert_eq!(std::fs::read_to_string(output.path()).unwrap(), "existing");
 }
@@ -317,7 +317,7 @@ fn fill_empty_output_from_log_falls_back_to_raw_text() {
     .unwrap();
     std::fs::write(output.path(), "").unwrap();
 
-    fill_empty_output_from_log(log.path(), Some(output.path())).unwrap();
+    fill_empty_output_from_log(log.path(), Some(output.path()), None).unwrap();
 
     assert_eq!(
         std::fs::read_to_string(output.path()).unwrap(),
@@ -383,7 +383,7 @@ fn extract_raw_text_from_log_ignores_aid_sentinel_lines() {
     );
     std::fs::write(file.path(), lines).unwrap();
 
-    let raw = extract_output_fallback_from_path(file.path());
+    let raw = extract_output_fallback_from_path(file.path(), None);
     assert_ne!(
         raw.as_deref(),
         Some("=== AID TASK t-test FAILED (exit 8) ==="),

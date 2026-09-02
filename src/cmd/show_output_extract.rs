@@ -343,6 +343,7 @@ fn result_event_text(value: &Value) -> Option<String> {
         .get("finalText")
         .and_then(Value::as_str)
         .or_else(|| value.pointer("/result/text").and_then(Value::as_str))
+        .or_else(|| value.get("result").and_then(Value::as_str))
         .map(ToOwned::to_owned)
 }
 

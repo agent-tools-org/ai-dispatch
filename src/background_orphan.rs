@@ -31,6 +31,11 @@ where
             continue;
         }
         let spec = load_spec_if_exists(task_id)?;
+        if spec.is_none()
+            && (now - task.created_at).num_hours() > crate::timeout_policy::DEFAULT_HARD_CAP_HOURS
+        {
+            continue;
+        }
         if spec.as_ref().and_then(|spec| spec.worker_pid).is_some_and(is_process_alive) {
             continue;
         }

@@ -21,7 +21,10 @@ pub const DEFAULT_DENYLIST: &[&str] = &[
     ".agent",
 ];
 
-pub(crate) use symlinks::{apply_repairs, find_doctor_symlinks, is_repairable, SymlinkRepair};
+pub(crate) use symlinks::{
+    apply_repairs, find_doctor_symlinks, is_repairable, scan_doctor_symlinks, SymlinkRepair,
+    SymlinkScan,
+};
 
 pub struct IsolatedHomeGuard {
     path: PathBuf,
@@ -40,8 +43,11 @@ pub fn resolve_real_home() -> anyhow::Result<PathBuf> {
 }
 
 pub fn reconcile_leaked_symlinks(iso_home: &Path, real_home: &Path) -> anyhow::Result<()> {
-    let repairs = symlinks::find_rewrites(iso_home, real_home)?;
-    let _ = symlinks::apply_repairs(&repairs)?;
+    let scan = symlinks::find_rewrites(iso_home, real_home);
+    let repairs = symlinks::apply_repairs_with_status(&scan.repairs);
+    if !scan.complete || !repairs.complete {
+        anyhow::bail!("operator symlink repair was incomplete");
+    }
     Ok(())
 }
 
@@ -54,6 +60,7 @@ pub(crate) fn remove_isolated_home(path: &Path, real_home: &Path) -> anyhow::Res
             "[aid] Warning: failed to reconcile symlinks before removing '{}': {err:#}",
             path.display()
         );
+        return Err(err);
     }
     fs::remove_dir_all(path)
         .with_context(|| format!("cannot remove isolated HOME at '{}'", path.display()))?;

@@ -74,7 +74,7 @@ fn reconcile_uses_path_boundaries_and_leaves_missing_targets_untouched() {
     std::os::unix::fs::symlink(iso_home.join("missing"), &missing).expect("missing link");
     let missing_target = fs::read_link(&missing).expect("missing target");
 
-    reconcile_leaked_symlinks(&iso_home, &real_home).expect("reconcile");
+    assert!(reconcile_leaked_symlinks(&iso_home, &real_home).is_err());
 
     assert_eq!(fs::read_link(outside).expect("outside survives"), outside_target);
     assert_eq!(fs::read_link(missing).expect("missing survives"), missing_target);
@@ -116,6 +116,38 @@ fn doctor_ignores_tmp_home_paths_without_home_component() {
 
     assert!(repairs.is_empty());
     assert_eq!(fs::read_link(&link).expect("link survives"), old_target);
+}
+
+#[cfg(unix)]
+#[test]
+fn doctor_rejects_dot_isolated_names_and_empty_home_rests() {
+    let fixture = tempfile::tempdir().expect("fixture");
+    let real_home = fixture.path().join("real-home");
+    let aid_dir = fixture.path().join(".aid");
+    let bin = real_home.join(".local/bin");
+    fs::create_dir_all(&bin).expect("bin");
+    let targets = [
+        aid_dir.join("tasks/../home/tool"),
+        aid_dir.join("tasks/t-empty/home"),
+        aid_dir.join("tmp_home/../home/tool"),
+        aid_dir.join("tmp_home/iso-empty/home"),
+    ];
+    let links: Vec<_> = targets
+        .iter()
+        .enumerate()
+        .map(|(index, target)| {
+            let link = bin.join(format!("tool-{index}"));
+            std::os::unix::fs::symlink(target, &link).expect("link");
+            (link, target.clone())
+        })
+        .collect();
+
+    let repairs = find_doctor_symlinks(&real_home, &aid_dir).expect("scan");
+
+    assert!(repairs.is_empty());
+    for (link, target) in links {
+        assert_eq!(fs::read_link(link).expect("link survives"), target);
+    }
 }
 
 #[cfg(unix)]
@@ -172,4 +204,72 @@ fn apply_repairs_skips_a_link_replaced_before_rename() {
 
     assert_eq!(repaired, 0);
     assert_eq!(fs::read_to_string(link).expect("file survives"), "operator file");
+}
+
+#[cfg(unix)]
+#[test]
+fn scan_repairs_other_bin_dirs_after_one_bin_dir_is_unreadable() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let fixture = tempfile::tempdir().expect("fixture");
+    let real_home = fixture.path().join("real-home");
+    let iso_home = fixture.path().join("iso-home");
+    let unreadable_bin = real_home.join(".local/bin");
+    let readable_bin = real_home.join("bin");
+    fs::create_dir_all(&unreadable_bin).expect("unreadable bin");
+    fs::create_dir_all(&readable_bin).expect("readable bin");
+    fs::create_dir_all(&iso_home).expect("iso");
+    let target = real_home.join("payload");
+    fs::write(&target, "payload").expect("payload");
+    let link = readable_bin.join("tool");
+    let old_target = iso_home.join("payload");
+    std::os::unix::fs::symlink(&old_target, &link).expect("link");
+
+    fs::set_permissions(&unreadable_bin, fs::Permissions::from_mode(0o000)).expect("deny bin");
+    let result = reconcile_leaked_symlinks(&iso_home, &real_home);
+    fs::set_permissions(&unreadable_bin, fs::Permissions::from_mode(0o700)).expect("restore bin");
+
+    assert!(result.is_err());
+    assert_eq!(fs::read_link(link).expect("repaired link"), target);
+}
+
+#[cfg(unix)]
+#[test]
+fn incomplete_sweep_keeps_isolated_home_on_disk() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let fixture = tempfile::tempdir().expect("fixture");
+    let real_home = fixture.path().join("real-home");
+    let isolated_home = fixture.path().join("isolated-home");
+    let unreadable_bin = real_home.join(".local/bin");
+    fs::create_dir_all(&unreadable_bin).expect("unreadable bin");
+    fs::create_dir_all(&isolated_home).expect("isolated home");
+    fs::write(isolated_home.join("payload"), "keep").expect("isolated payload");
+    fs::set_permissions(&unreadable_bin, fs::Permissions::from_mode(0o000)).expect("deny bin");
+
+    let result = super::super::home_isolation::remove_isolated_home(&isolated_home, &real_home);
+    fs::set_permissions(&unreadable_bin, fs::Permissions::from_mode(0o700)).expect("restore bin");
+
+    assert!(result.is_err());
+    assert!(isolated_home.exists());
+}
+
+#[cfg(unix)]
+#[test]
+fn replacement_retries_when_temp_name_already_exists() {
+    use std::sync::atomic::Ordering;
+
+    let fixture = tempfile::tempdir().expect("fixture");
+    let link = fixture.path().join("tool");
+    let old_target = fixture.path().join("old");
+    let target = fixture.path().join("new");
+    fs::write(&target, "new payload").expect("target");
+    std::os::unix::fs::symlink(&old_target, &link).expect("link");
+    let sequence = super::super::home_isolation::symlinks::TEMP_COUNTER.load(Ordering::Relaxed);
+    let collision = fixture.path().join(format!(".aid-symlink-repair-{}-{sequence}", std::process::id()));
+    std::os::unix::fs::symlink(&target, &collision).expect("collision");
+
+    assert!(super::super::home_isolation::symlinks::replace_symlink(&link, &old_target, &target).expect("replace"));
+    assert_eq!(fs::read_to_string(link).expect("repaired target"), "new payload");
+    assert_eq!(fs::read_link(collision).expect("collision survives"), target);
 }

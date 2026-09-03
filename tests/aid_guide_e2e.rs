@@ -180,8 +180,18 @@ fn official_guide_documents_foreground_worker_attachment() {
     assert!(operations.contains("Non-interactive stdin, SIGTERM/SIGHUP"));
     assert!(lifecycle.contains("`Unobserved` is reserved"));
     assert!(dispatch.contains("unobserved because no completion event survived"));
-    assert!(!operations.contains("`detached` marker"));
-    assert!(!dispatch.contains("foreground detach"));
+    for stale_phrase in [
+        "detached milestone",
+        "detached task",
+        "detached marker",
+        "reaper adoption",
+        "adopt detached",
+        "TTY-gated detach",
+        "foreground detach",
+    ] {
+        assert!(!operations.contains(stale_phrase), "stale guide phrase: {stale_phrase}");
+        assert!(!dispatch.contains(stale_phrase), "stale guide phrase: {stale_phrase}");
+    }
 }
 
 fn public_commands(help: &str) -> Vec<String> {

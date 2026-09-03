@@ -286,16 +286,12 @@ pub(crate) fn foreground_status_hint(store: &Store, task_id: &str) -> Result<Opt
     if !matches!(task_outcome(&task), TaskOutcome::Failed) {
         return Ok(None);
     }
-    let reason = store
-        .latest_error(task_id)
-        .map(|value| format!("[aid] Reason: {value}\n"))
-        .unwrap_or_default();
     let next = format!("[aid] Next: aid show {task_id} | aid retry {task_id} -f \"feedback\"");
     let hint = if task.duration_ms.unwrap_or(i64::MAX) < 5000 {
         let stderr = retry_logic::read_stderr_tail(task_id, 3);
-        format!("{reason}{next}\n[aid] Hint: task failed in <5s — check agent binary is installed and --dir points to a valid repo\n[aid] stderr: {stderr}")
+        format!("{next}\n[aid] Hint: task failed in <5s — check agent binary is installed and --dir points to a valid repo\n[aid] stderr: {stderr}")
     } else {
-        format!("{reason}{next}")
+        next
     };
     Ok(Some(hint))
 }

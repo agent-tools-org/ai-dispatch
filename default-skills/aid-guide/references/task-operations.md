@@ -155,6 +155,11 @@ worker. Foreground and background runs therefore share the same agent,
 timeout, session-resume, cost, verification, retry, audit, and delivery
 lifecycle.
 
+Persisted job specs may contain fields removed by a newer aid version; unknown
+fields are ignored so board, stop, and unstick remain usable during upgrades.
+The reaper warns and skips a spec it cannot read, allowing cleanup of other
+tasks to continue.
+
 A worker can also die *after* clearing its background spec — the spec is
 written at dispatch and removed by a guard when the worker exits, so a process
 killed between those points, or one whose terminal write failed, leaves a

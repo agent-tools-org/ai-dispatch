@@ -8,6 +8,7 @@ use chrono::{Duration, Local};
 use crate::paths::AidHomeGuard;
 use crate::store::Store;
 use crate::types::{AgentKind, Task, TaskId, TaskStatus, VerifyStatus};
+use std::sync::Arc;
 
 #[test]
 fn long_running_warning_counts_running_tasks_older_than_one_hour() {
@@ -123,6 +124,24 @@ fn board_output_shows_failed_status_when_result_file_is_missing() {
     let text = String::from_utf8(output).unwrap();
 
     assert!(text.contains("Status: FAILED t-failed-no-result"));
+}
+
+#[test]
+fn board_loads_actual_pre_upgrade_spec_with_detached_field() {
+    let temp = tempfile::tempdir().unwrap();
+    let _guard = AidHomeGuard::set(temp.path());
+    crate::paths::ensure_dirs().unwrap();
+    let store = Arc::new(Store::open_memory().unwrap());
+    store
+        .insert_task(&make_task("t-9ef43f87", TaskStatus::Running, Local::now()))
+        .unwrap();
+    std::fs::write(
+        crate::paths::job_path("t-9ef43f87"),
+        include_str!("../../testdata/legacy-background-spec.json"),
+    )
+    .unwrap();
+
+    super::run(&store, false, false, false, None, true, None, true, true).unwrap();
 }
 
 #[test]

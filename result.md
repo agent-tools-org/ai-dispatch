@@ -30,8 +30,10 @@ automatic retry chain reach their real outcome.
   removed; the worker starts the container once.
 - `--timeout` keeps its exact seconds in the worker environment and spec;
   sub-minute values are no longer rounded to a 60-second runtime cap.
-- Legacy specs containing the deleted `detached` field are rejected with
-  `deny_unknown_fields`; no migration shim is retained.
+- Legacy specs containing the deleted `detached` field remain readable and the
+  field is ignored; unknown persisted fields are accepted so upgrades do not
+  break board, stop, or unstick. Reaper cleanup warns and skips an unreadable
+  spec while continuing with other tasks.
 
 ## Deliberate choices
 

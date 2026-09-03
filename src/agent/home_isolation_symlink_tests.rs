@@ -2,7 +2,10 @@
 // Exports: isolated-home symlink repair test coverage.
 // Deps: home isolation API, tempfile, and std::fs.
 
-use super::super::home_isolation::{reconcile_leaked_symlinks, IsolatedHomeGuard};
+use super::super::home_isolation::{
+    apply_repairs, find_doctor_symlinks, reconcile_leaked_symlinks, IsolatedHomeGuard,
+    SymlinkRepair,
+};
 use std::fs;
 use std::path::Path;
 
@@ -75,4 +78,98 @@ fn reconcile_uses_path_boundaries_and_leaves_missing_targets_untouched() {
 
     assert_eq!(fs::read_link(outside).expect("outside survives"), outside_target);
     assert_eq!(fs::read_link(missing).expect("missing survives"), missing_target);
+}
+
+#[cfg(unix)]
+#[test]
+fn reconcile_does_not_strip_a_similar_task_id() {
+    let fixture = tempfile::tempdir().expect("fixture");
+    let real_home = fixture.path().join("real-home");
+    let iso_home = fixture.path().join(".aid/tasks/t-abc/home");
+    let bin = real_home.join(".local/bin");
+    fs::create_dir_all(&bin).expect("bin");
+    fs::create_dir_all(&iso_home).expect("iso");
+    let link = bin.join("tool");
+    let old_target = fixture
+        .path()
+        .join(".aid/tasks/t-abc-evil/home/.local/bin/tool");
+    std::os::unix::fs::symlink(&old_target, &link).expect("link");
+
+    reconcile_leaked_symlinks(&iso_home, &real_home).expect("reconcile");
+
+    assert_eq!(fs::read_link(&link).expect("link survives"), old_target);
+}
+
+#[cfg(unix)]
+#[test]
+fn doctor_ignores_tmp_home_paths_without_home_component() {
+    let fixture = tempfile::tempdir().expect("fixture");
+    let real_home = fixture.path().join("real-home");
+    let aid_dir = fixture.path().join(".aid");
+    let bin = real_home.join(".local/bin");
+    fs::create_dir_all(&bin).expect("bin");
+    let link = bin.join("tool");
+    let old_target = aid_dir.join("tmp_home/iso-123/not-home/tool");
+    std::os::unix::fs::symlink(&old_target, &link).expect("link");
+
+    let repairs = find_doctor_symlinks(&real_home, &aid_dir).expect("scan");
+
+    assert!(repairs.is_empty());
+    assert_eq!(fs::read_link(&link).expect("link survives"), old_target);
+}
+
+#[cfg(unix)]
+#[test]
+fn reconcile_rejects_parent_dir_in_rewritten_rest() {
+    let fixture = tempfile::tempdir().expect("fixture");
+    let real_home = fixture.path().join("real-home");
+    let iso_home = fixture.path().join("iso-home");
+    let bin = real_home.join(".local/bin");
+    fs::create_dir_all(&bin).expect("bin");
+    fs::create_dir_all(&iso_home).expect("iso");
+    let link = bin.join("tool");
+    let old_target = iso_home.join("../../outside/tool");
+    std::os::unix::fs::symlink(&old_target, &link).expect("link");
+
+    reconcile_leaked_symlinks(&iso_home, &real_home).expect("reconcile");
+
+    assert_eq!(fs::read_link(&link).expect("link survives"), old_target);
+}
+
+#[cfg(unix)]
+#[test]
+fn doctor_rejects_parent_dir_in_rewritten_rest() {
+    let fixture = tempfile::tempdir().expect("fixture");
+    let real_home = fixture.path().join("real-home");
+    let aid_dir = fixture.path().join(".aid");
+    let bin = real_home.join(".local/bin");
+    fs::create_dir_all(&bin).expect("bin");
+    let link = bin.join("tool");
+    let old_target = aid_dir.join("tasks/t-abc/home/../../outside/tool");
+    std::os::unix::fs::symlink(&old_target, &link).expect("link");
+
+    let repairs = find_doctor_symlinks(&real_home, &aid_dir).expect("scan");
+
+    assert!(repairs.is_empty());
+    assert_eq!(fs::read_link(&link).expect("link survives"), old_target);
+}
+
+#[cfg(unix)]
+#[test]
+fn apply_repairs_skips_a_link_replaced_before_rename() {
+    let fixture = tempfile::tempdir().expect("fixture");
+    let link = fixture.path().join("tool");
+    let target = fixture.path().join("real-tool");
+    fs::write(&target, "payload").expect("target");
+    fs::write(&link, "operator file").expect("swapped file");
+    let repair = SymlinkRepair {
+        link_path: link.clone(),
+        old_target: fixture.path().join("old-tool"),
+        rewritten_target: target,
+    };
+
+    let repaired = apply_repairs(&[repair]).expect("apply");
+
+    assert_eq!(repaired, 0);
+    assert_eq!(fs::read_to_string(link).expect("file survives"), "operator file");
 }

@@ -4,7 +4,7 @@
 
 use anyhow::{Context, Result};
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 
 static TEMP_COUNTER: AtomicU64 = AtomicU64::new(0);
@@ -44,8 +44,18 @@ pub(crate) fn apply_repairs(repairs: &[SymlinkRepair]) -> Result<usize> {
             );
             continue;
         }
-        replace_symlink(&repair.link_path, &repair.rewritten_target)?;
-        repaired += 1;
+        if replace_symlink(
+            &repair.link_path,
+            &repair.old_target,
+            &repair.rewritten_target,
+        )? {
+            repaired += 1;
+        } else {
+            aid_warn!(
+                "[aid] Warning: left symlink '{}' because it changed during repair",
+                repair.link_path.display()
+            );
+        }
     }
     Ok(repaired)
 }
@@ -75,6 +85,14 @@ fn collect_rewrites(
         let Ok(rest) = old_target.strip_prefix(iso_home) else {
             continue;
         };
+        if contains_parent_dir(rest) {
+            aid_warn!(
+                "[aid] Warning: left symlink '{}' -> '{}': rewritten target contains '..'",
+                link_path.display(),
+                old_target.display()
+            );
+            continue;
+        }
         let rewritten_target = real_home.join(rest);
         repairs.push(SymlinkRepair {
             link_path,
@@ -83,6 +101,11 @@ fn collect_rewrites(
         });
     }
     Ok(())
+}
+
+fn contains_parent_dir(path: &Path) -> bool {
+    path.components()
+        .any(|component| component == Component::ParentDir)
 }
 
 fn collect_doctor_rewrites(
@@ -131,7 +154,14 @@ fn isolated_root_and_rest(target: &Path, aid_dir: &Path) -> Option<(PathBuf, Pat
         if components.next()?.as_os_str() != "home" {
             return None;
         }
-        return Some((tasks.join(task_id).join("home"), components.as_path().to_path_buf()));
+        let after_home = components.as_path();
+        if contains_parent_dir(after_home) {
+            return None;
+        }
+        return Some((
+            tasks.join(task_id).join("home"),
+            after_home.to_path_buf(),
+        ));
     }
 
     let tmp_home = aid_dir.join("tmp_home");
@@ -141,12 +171,19 @@ fn isolated_root_and_rest(target: &Path, aid_dir: &Path) -> Option<(PathBuf, Pat
     let after_isolated_name = components.as_path().to_path_buf();
     let isolated_dir = tmp_home.join(isolated_name);
     if let Ok(after_home) = after_isolated_name.strip_prefix("home") {
+        if contains_parent_dir(after_home) {
+            return None;
+        }
         return Some((isolated_dir.join("home"), after_home.to_path_buf()));
     }
-    Some((isolated_dir, after_isolated_name))
+    None
 }
 
-pub(crate) fn replace_symlink(link_path: &Path, target: &Path) -> Result<()> {
+pub(crate) fn replace_symlink(
+    link_path: &Path,
+    old_target: &Path,
+    target: &Path,
+) -> Result<bool> {
     #[cfg(unix)]
     {
         let parent = link_path
@@ -164,17 +201,50 @@ pub(crate) fn replace_symlink(link_path: &Path, target: &Path) -> Result<()> {
                 target.display()
             )
         })?;
+        let still_matches = match link_still_matches(link_path, old_target) {
+            Ok(still_matches) => still_matches,
+            Err(err) => {
+                let _ = fs::remove_file(&temp_path);
+                return Err(err);
+            }
+        };
+        if !still_matches {
+            let _ = fs::remove_file(&temp_path);
+            return Ok(false);
+        }
         if let Err(err) = fs::rename(&temp_path, link_path) {
             let _ = fs::remove_file(&temp_path);
             return Err(err).with_context(|| {
                 format!("cannot atomically replace symlink '{}'", link_path.display())
             });
         }
-        Ok(())
+        Ok(true)
     }
     #[cfg(not(unix))]
     {
         let _ = (link_path, target);
         anyhow::bail!("isolated HOME symlink repair requires Unix")
     }
+}
+
+#[cfg(unix)]
+fn link_still_matches(link_path: &Path, old_target: &Path) -> Result<bool> {
+    let metadata = match fs::symlink_metadata(link_path) {
+        Ok(metadata) => metadata,
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => return Ok(false),
+        Err(err) => return Err(err).with_context(|| {
+            format!("cannot stat symlink '{}'", link_path.display())
+        }),
+    };
+    if !metadata.file_type().is_symlink() {
+        return Ok(false);
+    }
+    let current_target = match fs::read_link(link_path) {
+        Ok(target) => target,
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => return Ok(false),
+        Err(err) => return Err(err).with_context(|| {
+            format!("cannot re-read symlink '{}'", link_path.display())
+        }),
+    };
+    Ok(current_target == old_target)
 }

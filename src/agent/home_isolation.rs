@@ -21,7 +21,7 @@ pub const DEFAULT_DENYLIST: &[&str] = &[
     ".agent",
 ];
 
-pub(crate) use symlinks::{apply_repairs, find_doctor_symlinks, SymlinkRepair};
+pub(crate) use symlinks::{apply_repairs, find_doctor_symlinks, is_repairable, SymlinkRepair};
 
 pub struct IsolatedHomeGuard {
     path: PathBuf,
@@ -40,18 +40,8 @@ pub fn resolve_real_home() -> anyhow::Result<PathBuf> {
 }
 
 pub fn reconcile_leaked_symlinks(iso_home: &Path, real_home: &Path) -> anyhow::Result<()> {
-    for repair in symlinks::find_rewrites(iso_home, real_home)? {
-        if repair.rewritten_target.exists() {
-            symlinks::replace_symlink(&repair.link_path, &repair.rewritten_target)?;
-        } else {
-            aid_warn!(
-                "[aid] Warning: left symlink '{}' -> '{}': rewritten target '{}' does not exist",
-                repair.link_path.display(),
-                repair.old_target.display(),
-                repair.rewritten_target.display()
-            );
-        }
-    }
+    let repairs = symlinks::find_rewrites(iso_home, real_home)?;
+    let _ = symlinks::apply_repairs(&repairs)?;
     Ok(())
 }
 

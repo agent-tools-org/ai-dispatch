@@ -32,11 +32,26 @@ pub(crate) fn find_doctor_symlinks(real_home: &Path, aid_dir: &Path) -> Result<V
     Ok(repairs)
 }
 
-pub(crate) fn apply_repairs(repairs: &[SymlinkRepair]) -> Result<()> {
+pub(crate) fn apply_repairs(repairs: &[SymlinkRepair]) -> Result<usize> {
+    let mut repaired = 0;
     for repair in repairs {
+        if !is_repairable(repair) {
+            aid_warn!(
+                "[aid] Warning: left symlink '{}' -> '{}': rewritten target '{}' does not exist or is the link itself",
+                repair.link_path.display(),
+                repair.old_target.display(),
+                repair.rewritten_target.display()
+            );
+            continue;
+        }
         replace_symlink(&repair.link_path, &repair.rewritten_target)?;
+        repaired += 1;
     }
-    Ok(())
+    Ok(repaired)
+}
+
+pub(crate) fn is_repairable(repair: &SymlinkRepair) -> bool {
+    repair.rewritten_target.exists() && repair.rewritten_target != repair.link_path
 }
 
 fn operator_bin_dirs(real_home: &Path) -> [PathBuf; 3] {

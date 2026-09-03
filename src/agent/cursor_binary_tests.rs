@@ -90,6 +90,7 @@ fn build_command_omits_partial_output_flag() {
 #[test]
 fn cursor_reasoning_stays_coherent_without_partial_output_flag() {
     let bin_dir = streaming_fake_bin_dir();
+    let _guard = CursorBinaryGuard::set("agent");
     let agent = CursorAgent;
     let task_id = TaskId("t-cursor-stream".to_string());
     let mut cmd = agent.build_command("test prompt", &run_opts()).unwrap();

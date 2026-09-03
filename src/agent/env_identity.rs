@@ -1,14 +1,68 @@
 // Bounded identity probes for ambiguous agent command names.
-// Exports: identity_marker and binary_identity_matches.
+// Exports: identity_marker, binary_identity_matches, first_matching_executable,
+// identity_exists_on_path.
 // Deps: std process pipes, reader threads, and a fixed probe deadline.
 
+use std::ffi::OsStr;
+use std::fs;
 use std::io::Read;
+use std::path::Path;
 use std::process::{Command, Stdio};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
 const OUTPUT_LIMIT: u64 = 64 * 1024;
 const PROBE_TIMEOUT: Duration = Duration::from_millis(500);
+
+/// Walk `$PATH` in order and return the first executable `<dir>/<name>` that
+/// satisfies `matches` (called with the absolute path). Non-executables are
+/// skipped without probing — bare names like `agent` are too generic to trust
+/// the OS's first hit.
+pub(crate) fn first_matching_executable(
+    path_value: Option<&OsStr>,
+    name: &str,
+    mut matches: impl FnMut(&str) -> bool,
+) -> Option<String> {
+    let path_value = path_value?;
+    for dir in std::env::split_paths(path_value) {
+        let candidate = dir.join(name);
+        if !is_executable_file(&candidate) {
+            continue;
+        }
+        let Some(candidate_str) = candidate.to_str() else {
+            continue;
+        };
+        if matches(candidate_str) {
+            return Some(candidate_str.to_owned());
+        }
+    }
+    None
+}
+
+pub(crate) fn identity_exists_on_path(name: &str, marker: &str) -> bool {
+    first_matching_executable(std::env::var_os("PATH").as_deref(), name, |path| {
+        binary_identity_matches(path, marker)
+    })
+    .is_some()
+}
+
+fn is_executable_file(path: &Path) -> bool {
+    let Ok(metadata) = fs::metadata(path) else {
+        return false;
+    };
+    if !metadata.is_file() {
+        return false;
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        metadata.permissions().mode() & 0o111 != 0
+    }
+    #[cfg(not(unix))]
+    {
+        true
+    }
+}
 
 pub(crate) fn binary_identity_matches(name: &str, marker: &str) -> bool {
     let mut command = Command::new(name);

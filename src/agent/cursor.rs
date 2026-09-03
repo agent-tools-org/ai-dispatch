@@ -38,10 +38,19 @@ fn cursor_binary() -> &'static str {
 }
 
 fn resolve_cursor_binary() -> &'static str {
-    if identifies_as_cursor("agent") {
-        return "agent";
+    resolve_cursor_binary_from_path(std::env::var_os("PATH"), identifies_as_cursor)
+}
+
+/// Walk PATH for an executable `agent` that passes `is_cursor`; else `cursor-agent`.
+/// Returns an absolute path when a Cursor `agent` wins so dispatch bypasses PATH order.
+fn resolve_cursor_binary_from_path(
+    path: Option<std::ffi::OsString>,
+    is_cursor: impl FnMut(&str) -> bool,
+) -> &'static str {
+    match super::env_identity::first_matching_executable(path.as_deref(), "agent", is_cursor) {
+        Some(found) => Box::leak(found.into_boxed_str()),
+        None => "cursor-agent",
     }
-    "cursor-agent"
 }
 
 fn identifies_as_cursor(binary: &str) -> bool {

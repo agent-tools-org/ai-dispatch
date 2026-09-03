@@ -234,7 +234,7 @@ pub fn apply_run_env(
 
 pub(crate) fn which_exists(name: &str) -> bool {
     if let Some(marker) = super::env_identity::identity_marker(name) {
-        return super::env_identity::binary_identity_matches(name, marker);
+        return super::env_identity::identity_exists_on_path(name, marker);
     }
     let paths = std::env::var_os("PATH")
         .map(|value| std::env::split_paths(&value).collect::<Vec<_>>())
@@ -244,12 +244,13 @@ pub(crate) fn which_exists(name: &str) -> bool {
 
 pub(crate) fn installed_agents(candidates: &[(&str, AgentKind)]) -> Vec<AgentKind> {
     let results = std::thread::scope(|scope| {
-        let probes =
         candidates
             .iter()
             .map(|(name, kind)| scope.spawn(move || (*kind, which_exists(name))))
-            .collect::<Vec<_>>();
-        probes.into_iter().filter_map(|probe| probe.join().ok()).collect::<Vec<_>>()
+            .collect::<Vec<_>>()
+            .into_iter()
+            .filter_map(|probe| probe.join().ok())
+            .collect::<Vec<_>>()
     });
     let mut found = Vec::new();
     for (kind, available) in results {

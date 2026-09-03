@@ -1,6 +1,8 @@
 // Tests for cleanup reporting and bounded size measurement.
 // Deps: clean, clean_size, tempfile, std::fs.
 
+use rusqlite::params;
+
     use super::*;
 
     #[cfg(unix)]
@@ -50,6 +52,72 @@
 
         assert!(crate::shared_dir::shared_dir_path("wg-orphanned").is_none());
         assert!(crate::shared_dir::shared_dir_path("wg-known").is_some());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn failed_task_home_removal_does_not_abort_later_homes() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let aid_home = tempfile::tempdir().unwrap();
+        let _aid_guard = crate::paths::AidHomeGuard::set(aid_home.path());
+        let store = Store::open_memory().unwrap();
+        for id in ["t-failed-home", "t-good-home"] {
+            store.db().execute(
+                "INSERT INTO tasks (id, agent, prompt, status, created_at) VALUES (?1, 'codex', 'test', 'done', '2026-01-01T00:00:00Z')",
+                params![id],
+            ).unwrap();
+        }
+
+        let failed_home = crate::paths::task_dir("t-failed-home").join("home");
+        fs::create_dir_all(&failed_home).unwrap();
+        fs::write(failed_home.join("payload"), "keep").unwrap();
+        fs::set_permissions(failed_home.parent().unwrap(), fs::Permissions::from_mode(0o500)).unwrap();
+
+        let good_home = crate::paths::task_dir("t-good-home").join("home");
+        fs::create_dir_all(&good_home).unwrap();
+        fs::write(good_home.join("payload"), "remove").unwrap();
+
+        let mut sizes = crate::cmd::clean_size::SizeTracker::new();
+        let result = clean_isolated_task_homes(&store, false, &mut sizes);
+        fs::set_permissions(failed_home.parent().unwrap(), fs::Permissions::from_mode(0o700)).unwrap();
+
+        assert!(result.is_ok());
+        assert!(failed_home.exists());
+        assert!(!good_home.exists());
+    }
+
+    #[test]
+    fn unresolved_real_home_does_not_abort_isolated_home_cleanup() {
+        struct HomeGuard(Option<std::ffi::OsString>);
+
+        impl Drop for HomeGuard {
+            fn drop(&mut self) {
+                match self.0.take() {
+                    Some(home) => unsafe { std::env::set_var("HOME", home) },
+                    None => unsafe { std::env::remove_var("HOME") },
+                }
+            }
+        }
+
+        let aid_home = tempfile::tempdir().unwrap();
+        let _aid_guard = crate::paths::AidHomeGuard::set(aid_home.path());
+        let store = Store::open_memory().unwrap();
+        store.db().execute(
+            "INSERT INTO tasks (id, agent, prompt, status, created_at) VALUES ('t-unresolved-home', 'codex', 'test', 'done', '2026-01-01T00:00:00Z')",
+            [],
+        ).unwrap();
+        let home = crate::paths::task_dir("t-unresolved-home").join("home");
+        fs::create_dir_all(&home).unwrap();
+        let previous = std::env::var_os("HOME");
+        let _home_guard = HomeGuard(previous);
+        unsafe { std::env::set_var("HOME", aid_home.path().join("missing-home")) };
+
+        let mut sizes = crate::cmd::clean_size::SizeTracker::new();
+        let result = clean_isolated_task_homes(&store, false, &mut sizes);
+
+        assert!(result.is_ok());
+        assert!(home.exists());
     }
 
     #[test]

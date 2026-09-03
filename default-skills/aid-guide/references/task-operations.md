@@ -303,4 +303,4 @@ activity in either place.
 4. Do not force-reset an AID branch to make reuse succeed.
 5. Resolve ownership and review first; use acceptance and custody GC only at
    the end of the lifecycle.
-6. Use `aid doctor` for evidence, not destructive repair.
+6. Use `aid doctor` for evidence; `aid doctor --apply` may safely rewrite leaked operator symlinks, but does not delete task artifacts.

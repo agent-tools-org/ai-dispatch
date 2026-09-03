@@ -6,7 +6,7 @@ use anyhow::Result;
 use chrono::{DateTime, Local};
 
 use super::background_kill::terminate_task_processes;
-use super::background_spec::{load_spec_if_exists, BackgroundRunSpec};
+use super::background_spec::{load_spec_for_reaper, BackgroundRunSpec};
 use crate::idle_timeout::DEFAULT_IDLE_TIMEOUT_SECS;
 use crate::process_monitor;
 use crate::store::Store;
@@ -30,7 +30,7 @@ where
         if already_cleaned.iter().any(|id| id == task_id) {
             continue;
         }
-        let spec = load_spec_if_exists(task_id)?;
+        let Ok(spec) = load_spec_for_reaper(task_id) else { continue; };
         if spec.is_none()
             && (now - task.created_at).num_hours() > crate::timeout_policy::DEFAULT_HARD_CAP_HOURS
         {

@@ -176,30 +176,8 @@ pub(crate) async fn post_run_lifecycle(
         }
     }
     crate::webhook::fire_task_webhooks(store, task_id.as_str()).await;
-    if mode.is_foreground() && args.announce {
-        let status_hint = if let Some(task) = store.get_task(task_id.as_str())? {
-            let outcome = task_outcome(&task);
-            if let Some(hint) = merge_hint_for_task(&task) {
-                hint
-            } else if matches!(outcome, TaskOutcome::Failed) {
-                    let reason = store.latest_error(task_id.as_str())
-                        .map(|r| format!("[aid] Reason: {r}\n"))
-                        .unwrap_or_default();
-                    let next =
-                        format!("[aid] Next: aid show {task_id} | aid retry {task_id} -f \"feedback\"");
-                    if task.duration_ms.unwrap_or(i64::MAX) < 5000 {
-                        let stderr = retry_logic::read_stderr_tail(task_id.as_str(), 3);
-                        format!("{reason}{next}\n[aid] Hint: task failed in <5s — check agent binary is installed and --dir points to a valid repo\n[aid] stderr: {stderr}")
-                    } else {
-                        format!("{reason}{next}")
-                    }
-            } else {
-                String::new()
-            }
-        } else {
-            String::new()
-        };
-        if !status_hint.is_empty() {
+    if mode.is_foreground() && args.announce && !args.background {
+        if let Some(status_hint) = foreground_status_hint(store.as_ref(), task_id.as_str())? {
             aid_hint!("{status_hint}");
         }
     }
@@ -292,8 +270,30 @@ pub(crate) async fn post_run_lifecycle(
     } else {
         true
     };
-    if mode.is_foreground() && completed_normally { aid_info!("[aid] View in TUI: aid board"); }
+    if mode.is_foreground() && completed_normally && !args.background {
+        aid_info!("[aid] View in TUI: aid board");
+    }
     Ok(None)
+}
+
+pub(crate) fn foreground_status_hint(store: &Store, task_id: &str) -> Result<Option<String>> {
+    let Some(task) = store.get_task(task_id)? else {
+        return Ok(None);
+    };
+    if let Some(hint) = merge_hint_for_task(&task) {
+        return Ok(Some(hint));
+    }
+    if !matches!(task_outcome(&task), TaskOutcome::Failed) {
+        return Ok(None);
+    }
+    let next = format!("[aid] Next: aid show {task_id} | aid retry {task_id} -f \"feedback\"");
+    let hint = if task.duration_ms.unwrap_or(i64::MAX) < 5000 {
+        let stderr = retry_logic::read_stderr_tail(task_id, 3);
+        format!("{next}\n[aid] Hint: task failed in <5s — check agent binary is installed and --dir points to a valid repo\n[aid] stderr: {stderr}")
+    } else {
+        next
+    };
+    Ok(Some(hint))
 }
 
 pub(crate) fn merge_hint_for_task(task: &Task) -> Option<String> {

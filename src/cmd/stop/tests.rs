@@ -138,6 +138,8 @@ fn stop_attempts_agent_cleanup_when_agent_pid_exists() {
         output: None,
         result_file: None,
         model: None,
+        budget: false,
+        session_id: None,
         verify: None,
         setup: None,
         iterate: None,
@@ -145,6 +147,8 @@ fn stop_attempts_agent_cleanup_when_agent_pid_exists() {
         eval_feedback_template: None,
         judge: None,
         max_duration_mins: None,
+        max_duration_secs: None,
+        max_task_cost: None,
         idle_timeout_secs: None,
         retry: 0,
         group: None,
@@ -156,6 +160,8 @@ fn stop_attempts_agent_cleanup_when_agent_pid_exists() {
         base_branch: None,
         peer_review: None,
         audit: false,
+        audit_explicit: false,
+        no_audit: false,
         scope: vec![],
         interactive: false,
         on_done: None,
@@ -169,7 +175,7 @@ fn stop_attempts_agent_cleanup_when_agent_pid_exists() {
         container: None,
         link_deps: true,
         pre_task_dirty_paths: None,
-        detached: false,
+        foreground: false,
     };
     save_spec(&spec).unwrap();
 
@@ -178,6 +184,29 @@ fn stop_attempts_agent_cleanup_when_agent_pid_exists() {
     assert!(result.is_ok(), "stop should succeed even with non-existent PIDs");
     assert_eq!(
         store.get_task("t-3010").unwrap().unwrap().status,
+        TaskStatus::Stopped
+    );
+}
+
+#[test]
+fn stop_loads_actual_pre_upgrade_spec_with_detached_field() {
+    let temp = TempDir::new().unwrap();
+    let _guard = AidHomeGuard::set(temp.path());
+    crate::paths::ensure_dirs().unwrap();
+    let store = Arc::new(Store::open_memory().unwrap());
+    store
+        .insert_task(&make_task("t-9ef43f87", TaskStatus::Running))
+        .unwrap();
+    std::fs::write(
+        crate::paths::job_path("t-9ef43f87"),
+        include_str!("../../../testdata/legacy-background-spec.json"),
+    )
+    .unwrap();
+
+    stop(&store, "t-9ef43f87").unwrap();
+
+    assert_eq!(
+        store.get_task("t-9ef43f87").unwrap().unwrap().status,
         TaskStatus::Stopped
     );
 }

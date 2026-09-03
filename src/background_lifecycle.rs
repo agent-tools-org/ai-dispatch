@@ -30,7 +30,11 @@ pub(super) async fn run_post_lifecycle(
     let prompt_bundle = prompt_bundle_from_spec(spec);
     let (repo_path, wt_path) = task_lifecycle_paths(store, &task_id)?;
     crate::cmd::run::post_run_lifecycle(
-        crate::cmd::run::LifecycleMode::Background,
+        if spec.foreground {
+            crate::cmd::run::LifecycleMode::Foreground
+        } else {
+            crate::cmd::run::LifecycleMode::Background
+        },
         store,
         &task_id,
         &lifecycle_args,
@@ -69,6 +73,8 @@ fn run_args_from_spec(spec: &BackgroundRunSpec, model_source: ModelSource) -> cr
         judge: spec.judge.clone(),
         peer_review: spec.peer_review.clone(),
         max_duration_mins: spec.max_duration_mins,
+        max_task_cost: spec.max_task_cost,
+        idle_timeout_secs: spec.idle_timeout_secs,
         retry: spec.retry,
         checklist: spec.checklist.clone(),
         skills: spec.skills.clone(),
@@ -80,11 +86,18 @@ fn run_args_from_spec(spec: &BackgroundRunSpec, model_source: ModelSource) -> cr
         audit_report_mode: spec.audit_report_mode,
         sandbox: spec.sandbox,
         container: spec.container.clone(),
+        budget: spec.budget,
+        session_id: spec.session_id.clone(),
         env: spec.env.clone(),
         env_forward: spec.env_forward.clone(),
         audit: spec.audit,
+        audit_explicit: spec.audit_explicit,
+        no_audit: spec.no_audit,
         scope: spec.scope.clone(),
         link_deps: spec.link_deps,
+        background: true,
+        announce: spec.foreground,
+        foreground: spec.foreground,
         ..Default::default()
     }
 }

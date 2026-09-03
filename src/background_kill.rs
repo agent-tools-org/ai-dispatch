@@ -69,6 +69,8 @@ mod tests {
             output: None,
             result_file: None,
             model: None,
+            budget: false,
+            session_id: None,
             verify: None,
             setup: None,
             iterate: None,
@@ -76,6 +78,8 @@ mod tests {
             eval_feedback_template: None,
             judge: None,
             max_duration_mins: None,
+            max_duration_secs: None,
+            max_task_cost: None,
             idle_timeout_secs: None,
             retry: 0,
             group: None,
@@ -87,6 +91,8 @@ mod tests {
             base_branch: None,
             peer_review: None,
             audit: false,
+            audit_explicit: false,
+            no_audit: false,
             scope: vec![],
             interactive: true,
             on_done: None,
@@ -101,7 +107,7 @@ mod tests {
             container: None,
             link_deps: true,
             pre_task_dirty_paths: None,
-        detached: false,
+            foreground: false,
         }
     }
 

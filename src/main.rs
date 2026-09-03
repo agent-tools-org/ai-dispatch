@@ -115,9 +115,20 @@ use anyhow::Result;
 use clap::Parser;
 use std::sync::Arc;
 
-#[tokio::main]
-async fn main() -> Result<()> {
+fn main() -> Result<()> {
     let cli = Cli::parse();
+    if matches!(cli.command.as_ref(), Some(Commands::InternalRunTask(_)))
+        && background::daemonize_worker_if_requested()?
+    {
+        return Ok(());
+    }
+    tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()?
+        .block_on(async_main(cli))
+}
+
+async fn async_main(cli: Cli) -> Result<()> {
     output::init();
     if cli.quiet {
         output::set_quiet(true);

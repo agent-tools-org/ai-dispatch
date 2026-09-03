@@ -76,6 +76,7 @@ fn queued_message_after_child_exit_does_not_fail_monitor() {
         &mut state,
         None,
         None,
+        None,
     );
 
     assert!(
@@ -161,6 +162,7 @@ fn failed_pending_reply_is_reported_once_after_successful_steer() {
         &mut state,
         None,
         None,
+        None,
     );
 
     delayed_insert.join().unwrap();
@@ -218,6 +220,7 @@ fn noninteractive_agent_leaves_queued_input_untouched() {
         &receiver,
         log.as_file_mut(),
         &mut state,
+        None,
         None,
         None,
     )

@@ -12,12 +12,12 @@ use crate::store::TaskCompletionUpdate;
 use crate::types::{EventKind, TaskEvent, TaskId, TaskStatus};
 use super::run_bestof;
 use super::run_dispatch_execute::{
-    load_runtime_hooks, maybe_record_start_sha, maybe_start_container, run_background_task,
+    load_runtime_hooks, maybe_record_start_sha, run_background_task,
     run_foreground_task,
 };
 use super::run_dispatch_prepare::{PreparedDispatch, prepare_dispatch};
 use super::run_prompt;
-use super::{RunArgs, WorkspaceSymlinkGuard, preview_prompt};
+use super::{RunArgs, preview_prompt};
 
 pub async fn run(store: Arc<Store>, mut args: RunArgs) -> Result<TaskId> {
     if let Some(n) = args.best_of {
@@ -43,27 +43,9 @@ pub async fn run(store: Arc<Store>, mut args: RunArgs) -> Result<TaskId> {
     if args.dry_run {
         return dry_run(&store, &prepared, &args, &prompt_bundle);
     }
-    if !args.background {
-        crate::rate_limit_wait::wait_for_declared_reset(
-            store.as_ref(),
-            prepared.task_id.as_str(),
-            prepared.agent_kind,
-            prepared.agent.rate_limit_name(),
-        ).await?;
-    }
     ensure_agent_binary_available(&store, &prepared, &args)?;
-    let _workspace_symlink = if args.background {
-        None
-    } else {
-        Some(WorkspaceSymlinkGuard::create(
-            prepared.agent_kind,
-            args.group.as_deref(),
-            prepared.effective_dir.as_deref(),
-        )?)
-    };
     let runtime_hooks = load_runtime_hooks(&args)?;
     maybe_record_start_sha(&store, &prepared.task_id, prepared.effective_dir.as_ref())?;
-    let container_name = maybe_start_container(&args, &prepared)?;
     if !crate::task_lifecycle::mark_running(store.as_ref(), &prepared.task_id)? {
         anyhow::bail!(
             "Task {} could not transition to running (status changed underneath dispatch — likely stopped or timed out); aborting dispatch",
@@ -82,8 +64,6 @@ pub async fn run(store: Arc<Store>, mut args: RunArgs) -> Result<TaskId> {
         &args,
         &prepared,
         &prompt_bundle,
-        &runtime_hooks,
-        container_name.as_deref(),
     )
     .await?
     {

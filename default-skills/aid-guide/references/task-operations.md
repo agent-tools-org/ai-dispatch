@@ -48,9 +48,8 @@ stated explicitly and the fallback is this task's own log.
 Human task surfaces use verification tags only when verification has something
 to say: `VFAIL` for a failed verification, `VTIMEOUT` for a timeout, `VINFRA`
 for a verification infrastructure failure, and `VNORESULT` when a required
-verification has no result or when a detached agent exited unobserved (a kill
-and a success cannot be distinguished). Running tasks and tasks that skipped
-verification without that unobserved-exit case have no tag. The tags appear in
+verification has no result. Running tasks and tasks that skipped verification
+without that case have no tag. The tags appear in
 board rows, `aid show`, the TUI, and task detail.
 
 ## Communicate with a live task
@@ -139,40 +138,27 @@ that is genuinely checked out in the checkout that dispatched the task.
 
 ### Foreground signal behavior
 
-A foreground `aid run` or `aid retry` classifies signals by whether stdin is a
-TTY:
+Foreground aid run and aid retry dispatch the same detached worker used by
+--bg, then attach a watcher that reports progress and waits for the real
+terminal outcome. The worker is double-forked and reparented before the
+foreground process can be killed by a caller's process-tree timeout; its PTY or
+pipe output is written to the task log rather than held by the watcher.
 
-- **Interactive (stdin is a TTY), SIGINT/Ctrl-C**: stops the agent and records
-  `Stopped`. This is the existing session-end behavior.
-- **Non-interactive (stdin is not a TTY), SIGTERM or SIGHUP**: **detaches**.
-  Aid hard-exits without sending a stop signal to the agent, records a
-  `detached` milestone, and prints `aid watch --wait <task-id>` for reattach.
-  The task stays `Running`; the background reaper adopts it on the next `aid`
-  invocation instead of reaping the dead worker and killing the agent.
-- **SIGINT without a TTY**: still stops. SIGINT means interrupt, not a harness
-  timeout.
+- **Interactive stdin, SIGINT/Ctrl-C**: stops the task and records Stopped.
+- **Interactive stdin, SIGTERM/SIGHUP**: preserves the existing stop behavior.
+- **Non-interactive stdin, SIGTERM/SIGHUP**: leaves the task running, prints
+  aid watch --wait <task-id>, and exits with the signal status.
+- **SIGINT without a TTY**: still stops because it means interrupt, not timeout.
 
-Detach covers non-PTY agents (codex, gemini, agy, and other piped CLIs).
-PTY agents (opencode, mimocode, kilo) die when the PTY master closes on aid's
-exit, so detach cannot preserve them. The `detached` marker is set on the
-background spec only when the non-interactive detach path actually runs; a
-genuinely dead worker with no marker is still reaped as before.
+PTY agents (opencode, mimocode, and kilo) continue through pty_runner in the
+worker. Foreground and background runs therefore share the same agent,
+timeout, session-resume, cost, verification, retry, audit, and delivery
+lifecycle.
 
-When the reaper finds a detached task whose agent has also exited, lifecycle
-becomes `Done`, but that is not success by itself:
-
-- If a watcher `Completion` event survived detach, the agent finished while
-  observed. Without a verify command the outcome is `Delivered`; required
-  verification that never ran stays `Unverified`.
-- If no `Completion` event survived, the agent exited unobserved: a SIGKILL, a
-  crash, and a successful finish are indistinguishable. `verify_status` is
-  `unobserved` and the derived outcome is `Unverified(NoResult)` — not
-  `Delivered`. `aid board`, `aid board --json`, `aid show`, and completion
-  notifications report that judgment (`VNORESULT` / `outcome: unverified`).
-  Do not read lifecycle `Done` as success here.
-
-A dead worker with no `detached` marker is still a zombie: the reaper kills
-the leftover agent and records `Failed`, as before.
+Persisted job specs may contain fields removed by a newer aid version; unknown
+fields are ignored so board, stop, and unstick remain usable during upgrades.
+The reaper warns and skips a spec it cannot read, allowing cleanup of other
+tasks to continue.
 
 A worker can also die *after* clearing its background spec — the spec is
 written at dispatch and removed by a guard when the worker exits, so a process
@@ -184,10 +170,9 @@ supervisor)`; past 24 hours the maximum-runtime path claims it instead and
 records `exceeded maximum runtime`. The two reasons are distinct on purpose —
 silence is not the same fact as a run that outlived its cap.
 
-A live foreground run is unaffected. Its spec exists while it works, carrying
-its own `--idle-timeout`, and its worker pid is the running `aid` process, so
-the reaper skips it before any idle arithmetic. Only a task whose worker is
-already gone can reach the spec-less path. Before this, such a row read `RUN`
+A live foreground watcher is attached to the same worker spec as `--bg`, and
+the reaper sees the worker PID independently of the watcher. Only a task whose
+worker is already gone can reach the spec-less path. Such a row reads `RUN`
 with a growing timer until the 24-hour cap — a task dead for fourteen hours
 still displayed as running.
 

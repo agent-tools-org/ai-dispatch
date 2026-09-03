@@ -10,12 +10,15 @@ use std::sync::Arc;
 
 use crate::agent::Agent;
 use crate::cost;
-use crate::pty_bridge::PtyBridge;
 use crate::pty_runner_control::PtyRunControl;
 use crate::pty_watch::{finalize_output, monitor_bridge, MonitorState};
 use crate::store::Store;
 use crate::store::TaskCompletionUpdate;
 use crate::types::{CompletionInfo, EventKind, TaskEvent, TaskId, TaskStatus};
+
+#[path = "pty_runner_command.rs"]
+mod command;
+use command::spawn_bridge;
 
 #[allow(clippy::too_many_arguments)]
 pub fn run_agent_process(
@@ -39,6 +42,7 @@ pub fn run_agent_process(
         streaming,
         crate::timeout_policy::TimeoutPolicy::from_command(cmd),
         None,
+        None,
     )
 }
 
@@ -53,6 +57,7 @@ pub(crate) fn run_agent_process_with_control(
     model: Option<&str>,
     streaming: bool,
     timeout_policy: crate::timeout_policy::TimeoutPolicy,
+    max_task_cost: Option<f64>,
     control: Option<PtyRunControl>,
 ) -> Result<()> {
     let start = std::time::Instant::now();
@@ -91,6 +96,7 @@ pub(crate) fn run_agent_process_with_control(
         &mut state,
         Some(timeout_policy.first_token),
         Some(timeout_policy.idle),
+        max_task_cost,
     )?;
     if bridge.is_alive() {
         let _ = bridge.kill_group();
@@ -121,19 +127,6 @@ pub(crate) fn run_agent_process_with_control(
         start.elapsed().as_millis() as i64,
         &state.info,
     )
-}
-
-fn spawn_bridge(cmd: &std::process::Command, log_path: &Path) -> Result<PtyBridge> {
-    let (argv, dir, env) = command_parts(cmd);
-    match PtyBridge::spawn(&argv, dir.as_deref(), env) {
-        Ok(bridge) => Ok(bridge),
-        Err(err) => {
-            let error_msg = format!("Failed to spawn agent process: {err}");
-            aid_error!("[aid] {error_msg}");
-            write_spawn_error_log(log_path, &error_msg);
-            Err(anyhow::anyhow!(error_msg))
-        }
-    }
 }
 
 fn fail_task_on_spawn_error(
@@ -270,38 +263,6 @@ fn format_duration(ms: i64) -> String {
     } else {
         format!("{}m {:02}s", secs / 60, secs % 60)
     }
-}
-
-fn command_parts(
-    cmd: &std::process::Command,
-) -> (Vec<String>, Option<String>, Vec<(String, String)>) {
-    let argv = std::iter::once(cmd.get_program())
-        .chain(cmd.get_args())
-        .map(|value| value.to_string_lossy().into_owned())
-        .collect();
-    let dir = cmd
-        .get_current_dir()
-        .map(|path| path.to_string_lossy().into_owned());
-    let env = cmd
-        .get_envs()
-        .filter_map(|(key, value)| {
-            Some((
-                key.to_string_lossy().into_owned(),
-                value?.to_string_lossy().into_owned(),
-            ))
-        })
-        .collect();
-    (argv, dir, env)
-}
-
-fn write_spawn_error_log(log_path: &Path, message: &str) {
-    let event = serde_json::json!({
-        "type": "error",
-        "source": "spawn",
-        "message": message,
-        "timestamp": Local::now().to_rfc3339(),
-    });
-    let _ = std::fs::write(log_path, format!("{event}\n"));
 }
 
 #[cfg(test)]

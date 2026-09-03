@@ -1,5 +1,5 @@
 // Isolated HOME directory per task dispatch to prevent orchestrator identity leaks.
-// Exports: IsolatedHomeGuard, DEFAULT_DENYLIST, resolve_real_home.
+// Exports: IsolatedHomeGuard, DEFAULT_DENYLIST, resolve_real_home, reconciliation.
 // Deps: std::fs, std::path::{Path, PathBuf}, libc (unix passwd fallback).
 
 use std::ffi::OsStr;
@@ -9,6 +9,9 @@ use std::process::Command;
 
 use anyhow::Context;
 
+#[path = "home_isolation_symlinks.rs"]
+mod symlinks;
+
 #[cfg(unix)]
 use std::os::unix::ffi::OsStrExt;
 
@@ -17,6 +20,11 @@ pub const DEFAULT_DENYLIST: &[&str] = &[
     ".agents",
     ".agent",
 ];
+
+pub(crate) use symlinks::{
+    apply_repairs, find_doctor_symlinks, is_repairable, scan_doctor_symlinks, SymlinkRepair,
+    SymlinkScan,
+};
 
 pub struct IsolatedHomeGuard {
     path: PathBuf,
@@ -32,6 +40,31 @@ pub fn resolve_real_home() -> anyhow::Result<PathBuf> {
         anyhow::bail!("HOME is set to '{}' but is not a directory", home.display());
     }
     passwd_home()
+}
+
+pub fn reconcile_leaked_symlinks(iso_home: &Path, real_home: &Path) -> anyhow::Result<()> {
+    let scan = symlinks::find_rewrites(iso_home, real_home);
+    let repairs = symlinks::apply_repairs_with_status(&scan.repairs);
+    if !scan.complete || !repairs.complete {
+        anyhow::bail!("operator symlink repair was incomplete");
+    }
+    Ok(())
+}
+
+pub(crate) fn remove_isolated_home(path: &Path, real_home: &Path) -> anyhow::Result<()> {
+    if !path.exists() {
+        return Ok(());
+    }
+    if let Err(err) = reconcile_leaked_symlinks(path, real_home) {
+        aid_warn!(
+            "[aid] Warning: failed to reconcile symlinks before removing '{}': {err:#}",
+            path.display()
+        );
+        return Err(err);
+    }
+    fs::remove_dir_all(path)
+        .with_context(|| format!("cannot remove isolated HOME at '{}'", path.display()))?;
+    Ok(())
 }
 
 #[cfg(unix)]
@@ -112,12 +145,7 @@ impl IsolatedHomeGuard {
         }
 
         if isolated_path.exists() {
-            fs::remove_dir_all(isolated_path).with_context(|| {
-                format!(
-                    "cannot remove existing isolated HOME at '{}'",
-                    isolated_path.display()
-                )
-            })?;
+            remove_isolated_home(isolated_path, real_home)?;
         }
         fs::create_dir_all(isolated_path).with_context(|| {
             format!(
@@ -236,8 +264,11 @@ fn materialize_claude_dir(real_claude_dir: &Path, isolated_claude_dir: &Path) ->
 
 impl Drop for IsolatedHomeGuard {
     fn drop(&mut self) {
-        if self.path.exists() {
-            let _ = fs::remove_dir_all(&self.path);
+        if let Err(err) = remove_isolated_home(&self.path, &self.real_home) {
+            aid_warn!(
+                "[aid] Warning: failed to remove isolated HOME '{}': {err:#}",
+                self.path.display()
+            );
         }
     }
 }
@@ -245,3 +276,7 @@ impl Drop for IsolatedHomeGuard {
 #[cfg(test)]
 #[path = "home_isolation_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "home_isolation_symlink_tests.rs"]
+mod symlink_tests;

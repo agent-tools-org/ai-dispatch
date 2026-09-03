@@ -70,7 +70,7 @@ current arguments.
 | `aid container` | Build, list, or stop development containers. |
 | `aid hook` | Install or invoke supported AID hooks; task hook payloads expose additive `outcome` and `verify_status` fields. |
 | `aid mcp` | Start AID's stdio MCP server; task payloads expose additive `outcome` and `verify_status` fields. |
-| `aid doctor` | Report repository/worktree hygiene without bypassing custody. |
+| `aid doctor` | Report repository/worktree hygiene and leaked operator symlinks; `--apply` repairs only those symlinks without bypassing custody. |
 | `aid clean` | Remove disposable logs and caches while retaining custody evidence; reclaims a task's fallback cargo target only once the directory it was keyed from is gone, and reports how many it held back. |
 | `aid web` | Serve the embedded dashboard and client API; `--host` selects the bind address and non-loopback binds require `--token`. |
 | `aid upgrade` | Upgrade AID after checking active-task safety. |

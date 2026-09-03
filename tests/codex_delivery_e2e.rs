@@ -51,26 +51,36 @@ fn exact_short_answer_is_a_successful_delivery() {
 
 #[test]
 fn missing_explicit_result_file_fails_on_the_artifact_contract() {
+    assert_missing_explicit_result_file_fails(false);
+}
+
+#[test]
+fn missing_explicit_result_file_fails_in_background_on_the_artifact_contract() {
+    assert_missing_explicit_result_file_fails(true);
+}
+
+fn assert_missing_explicit_result_file_fails(background: bool) {
     let aid_home = TempDir::new().unwrap();
     let bin_dir = TempDir::new().unwrap();
     write_fake_codex(bin_dir.path());
-
-    let output = aid_cmd_in(aid_home.path())
+    let mut command = aid_cmd_in(aid_home.path());
+    command
         .env("PATH", test_path(bin_dir.path()))
         .env("FAKE_CODEX_SHORT_FINAL", "1")
-        .args([
-            "run",
-            "codex",
-            "Reply with the single word: ok",
-            "--result-file",
-            "required-result.md",
-            "--id",
-            "t-missing-required-result",
-        ])
-        .output()
-        .unwrap();
+        .args(["run", "codex", "Reply with the single word: ok", "--result-file", "required-result.md", "--id", "t-missing-required-result"]);
+    if background {
+        command.arg("--bg");
+    }
+    let output = command.output().unwrap();
 
-    assert!(!output.status.success());
+    assert_eq!(output.status.success(), background, "stdout:\n{}\nstderr:\n{}", String::from_utf8_lossy(&output.stdout), String::from_utf8_lossy(&output.stderr));
+    if background {
+        let wait = aid_cmd_in(aid_home.path())
+            .args(["wait", "--timeout", "5", "t-missing-required-result"])
+            .output()
+            .unwrap();
+        assert_eq!(wait.status.code(), Some(1), "background task unexpectedly succeeded");
+    }
     let conn = Connection::open(aid_home.path().join("aid.db")).unwrap();
     let facts = task_facts(&conn, "t-missing-required-result");
     assert_eq!(facts.0, "failed");

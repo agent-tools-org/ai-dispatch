@@ -168,18 +168,20 @@ fn official_guide_documents_recursive_delegation() {
 }
 
 #[test]
-fn official_guide_documents_unobserved_foreground_detach() {
+fn official_guide_documents_foreground_worker_attachment() {
     let operations = include_str!("../default-skills/aid-guide/references/task-operations.md");
     let lifecycle = include_str!("../default-skills/aid-guide/references/task-lifecycle.md");
     let dispatch = include_str!("../default-skills/aid-guide/references/dispatch.md");
 
-    assert!(operations.contains("verify_status` is"));
-    assert!(operations.contains("`unobserved`"));
-    assert!(operations.contains("`Unverified(NoResult)`"));
-    assert!(operations.contains("Do not read lifecycle `Done` as success here"));
-    assert!(operations.contains("dead worker with no `detached` marker"));
-    assert!(lifecycle.contains("`Unobserved` is set when a deliberately"));
-    assert!(dispatch.contains("unobserved after a foreground detach"));
+    assert!(operations.contains("Human task surfaces use verification tags"));
+    assert!(operations.contains("dispatch the same detached worker used by"));
+    assert!(operations.contains("double-forked and reparented"));
+    assert!(operations.contains("Interactive stdin, SIGINT/Ctrl-C"));
+    assert!(operations.contains("Non-interactive stdin, SIGTERM/SIGHUP"));
+    assert!(lifecycle.contains("`Unobserved` is reserved"));
+    assert!(dispatch.contains("unobserved because no completion event survived"));
+    assert!(!operations.contains("`detached` marker"));
+    assert!(!dispatch.contains("foreground detach"));
 }
 
 fn public_commands(help: &str) -> Vec<String> {

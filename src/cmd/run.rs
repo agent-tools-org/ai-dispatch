@@ -55,7 +55,9 @@ pub(crate) use self::run_agent::run_agent_process_with_cost;
 pub(crate) use self::run_dispatch::run;
 pub(crate) use self::run_iterate::iterate_config;
 pub(crate) use self::run_lifecycle::capture_final_worktree_state;
-pub(crate) use self::run_lifecycle::{post_run_lifecycle, LifecycleMode};
+pub(crate) use self::run_lifecycle::{
+    foreground_status_hint, post_run_lifecycle, LifecycleMode,
+};
 pub(crate) use self::run_prompt::PromptBundle;
 #[allow(unused_imports)]
 pub(crate) use self::run_iterate::IterateConfig;

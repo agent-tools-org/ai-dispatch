@@ -1,5 +1,5 @@
 // Execution helpers for `aid run` after dispatch setup and prompt assembly.
-// Exports: load_runtime_hooks(), maybe_start_container(), run_background_task(), run_foreground_task().
+// Exports: load_runtime_hooks(), run_background_task(), run_foreground_task().
 // Deps: hooks, background, container/sandbox wrappers, run lifecycle modules.
 use anyhow::Result;
 use std::path::Path;
@@ -42,31 +42,6 @@ fn capture_pre_task_dirty_paths(dir: Option<&String>) -> Option<Vec<String>> {
     }
 }
 
-pub(super) fn maybe_start_container(
-    args: &RunArgs,
-    prepared: &PreparedDispatch,
-) -> Result<Option<String>> {
-    if let Some(image) = args.container.as_deref() {
-        let project_dir = prepared
-            .effective_dir
-            .as_deref()
-            .map(Path::new)
-            .unwrap_or_else(|| Path::new("."));
-        let project_id = prepared
-            .detected_project
-            .as_ref()
-            .map(|project| project.id.as_str())
-            .unwrap_or(prepared.task_id.as_str());
-        Ok(Some(crate::container::start_or_reuse(
-            image,
-            project_dir,
-            project_id,
-        )?))
-    } else {
-        Ok(None)
-    }
-}
-
 pub(super) fn run_background_task(
     store: &Arc<Store>,
     args: &RunArgs,
@@ -97,6 +72,7 @@ pub(super) fn run_background_task(
         eval_feedback_template: args.eval_feedback_template.clone(),
         judge: args.judge.clone(),
         max_duration_mins: Some(args.timeout_policy.max_duration_mins()),
+        max_duration_secs: Some(args.timeout_policy.max_duration.as_secs()),
         idle_timeout_secs: Some(args.timeout_policy.idle.as_secs()),
         max_task_cost: args.max_task_cost,
         retry: args.retry,
@@ -125,9 +101,13 @@ pub(super) fn run_background_task(
         container: args.container.clone(),
         link_deps: args.link_deps,
         pre_task_dirty_paths,
+        foreground: args.foreground,
     };
     background::save_spec(&spec)?;
-    let mut worker = match background::spawn_worker(prepared.task_id.as_str()) {
+    #[cfg(test)]
+    let worker_pid = std::process::id();
+    #[cfg(not(test))]
+    let (_launcher, worker_pid) = match background::spawn_worker(prepared.task_id.as_str()) {
         Ok(worker) => worker,
         Err(err) => {
             let _ = background::clear_spec(prepared.task_id.as_str());
@@ -136,8 +116,8 @@ pub(super) fn run_background_task(
             return Err(err);
         }
     };
-    if let Err(err) = background::update_worker_pid(prepared.task_id.as_str(), worker.id()) {
-        let _ = worker.kill();
+    if let Err(err) = background::update_worker_pid(prepared.task_id.as_str(), worker_pid) {
+        background::kill_process(worker_pid);
         let _ = background::clear_spec(prepared.task_id.as_str());
         crate::task_lifecycle::mark_failed(store.as_ref(), &prepared.task_id)?;
         run_prompt::notify_task_completion(store, &prepared.task_id)?;
@@ -147,14 +127,22 @@ pub(super) fn run_background_task(
         && let Err(holder) = crate::worktree::rekey_worktree_lock_to_worker(
             Path::new(wt_path),
             prepared.task_id.as_str(),
-            worker.id(),
+            worker_pid,
         )
     {
-        let _ = worker.kill();
+        background::kill_process(worker_pid);
         let _ = background::clear_spec(prepared.task_id.as_str());
         crate::task_lifecycle::mark_failed(store.as_ref(), &prepared.task_id)?;
         run_prompt::notify_task_completion(store, &prepared.task_id)?;
         anyhow::bail!("Worktree {wt_path} lock is owned by task {holder}; background dispatch aborted");
+    }
+    #[cfg(test)]
+    {
+        let worker_store = Arc::clone(store);
+        let worker_task_id = prepared.task_id.as_str().to_string();
+        tokio::spawn(async move {
+            let _ = background::run_task(worker_store, &worker_task_id).await;
+        });
     }
     if args.announce {
         println!("{}", crate::cmd_dispatch::background_status_line(
@@ -183,6 +171,7 @@ pub(super) async fn run_foreground_task(
     }
     let mut worker_args = args.clone();
     worker_args.announce = false;
+    worker_args.foreground = true;
     run_background_task(store, &worker_args, prepared, prompt_bundle)?;
     let final_task_id = run_foreground_watch::wait_for_task(store, &prepared.task_id).await?;
     if final_task_id != prepared.task_id {

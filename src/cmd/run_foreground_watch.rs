@@ -2,6 +2,7 @@
 // Exports wait_for_task; depends on Store, background specs, and task outcomes.
 
 use anyhow::Result;
+use std::io::IsTerminal;
 use std::sync::Arc;
 use tokio::time::{sleep, Duration};
 
@@ -20,6 +21,7 @@ pub(super) async fn wait_for_task(store: &Arc<Store>, task_id: &TaskId) -> Resul
     let mut reported_status = None;
     let mut reported_events = 0;
     let mut reported_terminal = false;
+    let stdin_is_terminal = std::io::stdin().is_terminal();
     loop {
         let _ = background::check_zombie_tasks(store);
         let task = store
@@ -40,11 +42,20 @@ pub(super) async fn wait_for_task(store: &Arc<Store>, task_id: &TaskId) -> Resul
                 continue;
             }
             if background::load_spec_if_exists(current_id.as_str())?.is_none() {
+                if matches!(task.status, TaskStatus::Done | TaskStatus::Failed) {
+                    if let Some(hint) = crate::cmd::run::foreground_status_hint(
+                        store.as_ref(),
+                        current_id.as_str(),
+                    )? {
+                        aid_hint!("{hint}");
+                    }
+                    aid_info!("[aid] View in TUI: aid board");
+                }
                 return Ok(current_id);
             }
         }
         tokio::select! {
-            signal = signals.next() => handle_signal(store, &current_id, signal?),
+            signal = signals.next() => handle_signal(store, &current_id, signal?, stdin_is_terminal),
             _ = sleep(POLL_INTERVAL) => {}
         }
     }
@@ -127,13 +138,26 @@ fn format_duration(milliseconds: i64) -> String {
     }
 }
 
-fn handle_signal(store: &Arc<Store>, task_id: &TaskId, signal: ForegroundSignal) -> ! {
+fn handle_signal(
+    store: &Arc<Store>,
+    task_id: &TaskId,
+    signal: ForegroundSignal,
+    stdin_is_terminal: bool,
+) -> ! {
     match signal {
+        ForegroundSignal::Int
+        | ForegroundSignal::Term
+        | ForegroundSignal::Hup if stdin_is_terminal => {
+            if let Err(error) = crate::cmd::stop::terminate_any(store, task_id.as_str()) {
+                aid_error!("[aid] Failed to stop task {task_id}: {error}");
+            }
+            std::process::exit(signal.exit_code());
+        }
         ForegroundSignal::Int => {
             if let Err(error) = crate::cmd::stop::terminate_any(store, task_id.as_str()) {
                 aid_error!("[aid] Failed to stop task {task_id}: {error}");
             }
-            std::process::exit(130);
+            std::process::exit(signal.exit_code());
         }
         ForegroundSignal::Term | ForegroundSignal::Hup => {
             let name = signal.name();

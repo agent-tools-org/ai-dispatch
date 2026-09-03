@@ -85,7 +85,10 @@ fn resolve_dispatch_context(store: &Arc<Store>, args: &mut RunArgs) -> Result<Di
     validate_egress(args)?;
     let agent_setup = resolve_agent_setup(store, args)?;
     let agent_name = agent_setup.custom_agent_name.as_deref().unwrap_or_else(|| agent_setup.agent_kind.as_str());
-    let policy = crate::timeout_policy::TimeoutPolicy::resolve(agent_name, args.idle_timeout_secs, args.max_duration_mins, detected_project.as_ref());
+    let mut policy = crate::timeout_policy::TimeoutPolicy::resolve(agent_name, args.idle_timeout_secs, args.max_duration_mins, detected_project.as_ref());
+    if let Some(timeout) = args.timeout {
+        policy.max_duration = std::time::Duration::from_secs(timeout);
+    }
     args.timeout_policy = policy; args.max_duration_mins = Some(policy.max_duration_mins());
     args.env = crate::timeout_policy::env_with_policy(args.env.take(), policy);
     Ok(DispatchContext { detected_project, agent_setup, had_explicit_result_file })

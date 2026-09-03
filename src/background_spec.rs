@@ -9,6 +9,7 @@ use crate::paths;
 use crate::sanitize;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct BackgroundRunSpec {
     pub task_id: String,
     pub worker_pid: Option<u32>,
@@ -36,6 +37,8 @@ pub struct BackgroundRunSpec {
     pub judge: Option<String>,
     #[serde(default)]
     pub max_duration_mins: Option<i64>,
+    #[serde(default)]
+    pub max_duration_secs: Option<u64>,
     #[serde(default)]
     pub max_task_cost: Option<f64>,
     #[serde(default)]
@@ -90,6 +93,8 @@ pub struct BackgroundRunSpec {
     pub link_deps: bool,
     #[serde(default)]
     pub pre_task_dirty_paths: Option<Vec<String>>,
+    #[serde(default)]
+    pub foreground: bool,
 }
 
 fn default_link_deps() -> bool { true }
@@ -169,6 +174,7 @@ mod tests {
             eval_feedback_template: Some("Iteration {iteration}/{max_iterations}".to_string()),
             judge: Some("cursor".to_string()),
             max_duration_mins: Some(15),
+            max_duration_secs: Some(900),
             max_task_cost: Some(2.5),
             idle_timeout_secs: Some(60),
             retry: 2,
@@ -197,6 +203,7 @@ mod tests {
             container: Some("aid:test".to_string()),
             link_deps: true,
             pre_task_dirty_paths: Some(vec!["?? pre-existing.rs".to_string()]),
+            foreground: true,
         }
     }
 
@@ -253,5 +260,16 @@ mod tests {
         assert!(!decoded.audit_report_mode);
         assert!(decoded.hooks.is_empty());
         assert!(!decoded.audit);
+    }
+
+    #[test]
+    fn deleted_detached_field_is_rejected() {
+        let mut value = serde_json::to_value(sample_spec(false)).unwrap();
+        value
+            .as_object_mut()
+            .unwrap()
+            .insert("detached".to_string(), serde_json::Value::Bool(true));
+
+        assert!(serde_json::from_value::<BackgroundRunSpec>(value).is_err());
     }
 }

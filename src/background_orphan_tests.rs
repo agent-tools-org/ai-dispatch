@@ -63,7 +63,7 @@ fn make_spec(task_id: &str, worker_pid: Option<u32>, idle_timeout_secs: Option<u
         eval: None,
         eval_feedback_template: None,
         judge: None,
-        max_duration_mins: None, max_task_cost: None,
+        max_duration_mins: None, max_duration_secs: None, max_task_cost: None,
         idle_timeout_secs,
         retry: 0,
         group: None,
@@ -84,6 +84,7 @@ fn make_spec(task_id: &str, worker_pid: Option<u32>, idle_timeout_secs: Option<u
         container: None,
         link_deps: true,
         pre_task_dirty_paths: None,
+        foreground: false,
     }
 }
 

@@ -68,6 +68,7 @@ fn spec(id: &str) -> BackgroundRunSpec {
         eval_feedback_template: None,
         judge: None,
         max_duration_mins: Some(60),
+        max_duration_secs: None,
         max_task_cost: None,
         idle_timeout_secs: Some(1),
         retry: 0,
@@ -96,6 +97,7 @@ fn spec(id: &str) -> BackgroundRunSpec {
         container: None,
         link_deps: true,
         pre_task_dirty_paths: None,
+        foreground: false,
     }
 }
 

@@ -147,6 +147,7 @@ fn stop_attempts_agent_cleanup_when_agent_pid_exists() {
         eval_feedback_template: None,
         judge: None,
         max_duration_mins: None,
+        max_duration_secs: None,
         max_task_cost: None,
         idle_timeout_secs: None,
         retry: 0,
@@ -174,6 +175,7 @@ fn stop_attempts_agent_cleanup_when_agent_pid_exists() {
         container: None,
         link_deps: true,
         pre_task_dirty_paths: None,
+        foreground: false,
     };
     save_spec(&spec).unwrap();
 

@@ -49,6 +49,7 @@ fn make_spec(task_id: &str) -> BackgroundRunSpec {
         eval_feedback_template: None,
         judge: None,
         max_duration_mins: None,
+        max_duration_secs: None,
         max_task_cost: None,
         idle_timeout_secs: None,
         retry: 0,
@@ -77,5 +78,6 @@ fn make_spec(task_id: &str) -> BackgroundRunSpec {
         container: None,
         link_deps: false,
         pre_task_dirty_paths: None,
+        foreground: false,
     }
 }

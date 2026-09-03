@@ -56,6 +56,7 @@ fn foreground_worker_survives_caller_process_tree_kill() {
     );
     write_custom_agent(aid_home.path(), "survivor", &script);
 
+    let mut cleanup = ProcessCleanup::default();
     let mut aid = Command::new(env!("CARGO_BIN_EXE_aid"));
     aid.env("AID_HOME", aid_home.path())
         .current_dir(project_dir.path())
@@ -67,7 +68,10 @@ fn foreground_worker_survives_caller_process_tree_kill() {
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
     let mut child = aid.spawn().unwrap();
+    cleanup.track_caller(child.id());
     let (worker_pid, agent_pid) = wait_for_pids(aid_home.path(), Duration::from_secs(5));
+    cleanup.track(worker_pid);
+    cleanup.track(agent_pid);
 
     let parent_pid = child.id().to_string();
     let _ = Command::new("pkill")
@@ -77,12 +81,14 @@ fn foreground_worker_survives_caller_process_tree_kill() {
         libc::kill(child.id() as i32, libc::SIGTERM);
     }
     let status = child.wait().unwrap();
+    cleanup.disarm_caller();
     assert_eq!(status.code(), Some(143));
     assert!(pid_alive(worker_pid), "worker died with foreground aid");
     assert!(pid_alive(agent_pid), "agent died with foreground aid");
 
     wait_for_status(aid_home.path(), "done", Duration::from_secs(5));
     assert!(has_completion(aid_home.path()));
+    wait_for_no_task_processes(worker_pid, agent_pid, Duration::from_secs(5));
 }
 
 #[test]
@@ -93,6 +99,7 @@ fn foreground_sigint_stops_the_task() {
     let project_dir = TempDir::new().unwrap();
     let script = write_script(script_dir.path(), "interrupt-agent", "#!/bin/sh\nsleep 10\n");
     write_custom_agent(aid_home.path(), "interrupt", &script);
+    let mut cleanup = ProcessCleanup::default();
     let mut child = Command::new(env!("CARGO_BIN_EXE_aid"))
         .env("AID_HOME", aid_home.path())
         .current_dir(project_dir.path())
@@ -105,13 +112,17 @@ fn foreground_sigint_stops_the_task() {
         .stderr(Stdio::piped())
         .spawn()
         .unwrap();
+    cleanup.track_caller(child.id());
     let (worker_pid, agent_pid) = wait_for_pids_for(
         aid_home.path(), INTERRUPT_TASK_ID, Duration::from_secs(5),
     );
+    cleanup.track(worker_pid);
+    cleanup.track(agent_pid);
     unsafe {
         libc::kill(child.id() as i32, libc::SIGINT);
     }
     assert_eq!(child.wait().unwrap().code(), Some(130));
+    cleanup.disarm_caller();
     wait_for_status_for(aid_home.path(), INTERRUPT_TASK_ID, "stopped", Duration::from_secs(3));
     assert!(!pid_alive(worker_pid), "worker survived SIGINT");
     assert!(!pid_alive(agent_pid), "agent survived SIGINT");
@@ -182,6 +193,52 @@ fn wait_for_pids_for(aid_home: &Path, task_id: &str, timeout: Duration) -> (u32,
 #[cfg(unix)]
 fn pid_alive(pid: u32) -> bool {
     unsafe { libc::kill(pid as i32, 0) == 0 }
+}
+
+#[cfg(unix)]
+#[derive(Default)]
+struct ProcessCleanup {
+    caller_pid: Option<u32>,
+    task_pids: Vec<u32>,
+}
+
+#[cfg(unix)]
+impl ProcessCleanup {
+    fn track_caller(&mut self, pid: u32) {
+        self.caller_pid = Some(pid);
+    }
+
+    fn track(&mut self, pid: u32) {
+        self.task_pids.push(pid);
+    }
+
+    fn disarm_caller(&mut self) {
+        self.caller_pid = None;
+    }
+}
+
+#[cfg(unix)]
+impl Drop for ProcessCleanup {
+    fn drop(&mut self) {
+        if let Some(pid) = self.caller_pid.take() {
+            unsafe { libc::kill(pid as i32, libc::SIGKILL) };
+        }
+        for pid in self.task_pids.drain(..) {
+            unsafe { libc::kill(pid as i32, libc::SIGKILL) };
+        }
+    }
+}
+
+#[cfg(unix)]
+fn wait_for_no_task_processes(worker_pid: u32, agent_pid: u32, timeout: Duration) {
+    let deadline = Instant::now() + timeout;
+    while Instant::now() < deadline {
+        if !pid_alive(worker_pid) && !pid_alive(agent_pid) {
+            return;
+        }
+        thread::sleep(Duration::from_millis(50));
+    }
+    panic!("terminal task left worker {worker_pid} or agent {agent_pid} alive");
 }
 
 fn wait_for_status(aid_home: &Path, expected: &str, timeout: Duration) {

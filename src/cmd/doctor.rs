@@ -1,10 +1,11 @@
-// `aid doctor` reports prunable worktrees and merged aid branches.
+// `aid doctor` reports repository hygiene and leaked operator symlinks.
 // Exports run() plus formatting helpers shared by tests.
 // Deps: crate::repo_root, crate::store::Store, crate::worktree_gc.
 
 use crate::project;
 use crate::repo_root;
 use crate::store::Store;
+use crate::{agent::home_isolation, paths};
 use crate::worktree_gc::{
     DeletableBranch, DoctorReport, PrunableWorktree, collect_doctor_report,
     managed_branch_prefixes, tracked_worktree_paths,
@@ -21,9 +22,17 @@ pub fn run(store: &Arc<Store>, apply: bool) -> Result<()> {
     let tracked_paths = tracked_worktree_paths(store.as_ref())?;
     let prefixes = managed_branch_prefixes(project::detect_project().as_ref());
     let report = collect_doctor_report(repo_dir, &tracked_paths, &prefixes)?;
+    let real_home = home_isolation::resolve_real_home()?;
+    let symlink_repairs = home_isolation::find_doctor_symlinks(&real_home, &paths::aid_dir())?;
     print!("{}", format_report(&report));
+    print!("{}", format_symlink_report(&symlink_repairs));
     if !apply {
         return Ok(());
+    }
+
+    home_isolation::apply_repairs(&symlink_repairs)?;
+    if !symlink_repairs.is_empty() {
+        println!("Repaired {} leaked operator symlink(s)", symlink_repairs.len());
     }
 
     if !report.prunable_worktrees.is_empty() || !report.deletable_branches.is_empty() {
@@ -43,6 +52,26 @@ pub(crate) fn format_report(report: &DoctorReport) -> String {
         &report.base_branch,
         &report.deletable_branches,
     );
+    rendered
+}
+
+pub(crate) fn format_symlink_report(repairs: &[home_isolation::SymlinkRepair]) -> String {
+    let mut rendered = String::new();
+    let _ = writeln!(rendered, "Leaked operator symlinks ({})", repairs.len());
+    let _ = writeln!(rendered, "LINK -> REWRITE");
+    let _ = writeln!(rendered, "{}", "-".repeat(72));
+    if repairs.is_empty() {
+        let _ = writeln!(rendered, "(none)");
+        return rendered;
+    }
+    for repair in repairs {
+        let _ = writeln!(
+            rendered,
+            "{} -> {}",
+            repair.link_path.display(),
+            repair.rewritten_target.display()
+        );
+    }
     rendered
 }
 
@@ -88,7 +117,7 @@ fn render_branch_section(
 
 #[cfg(test)]
 mod tests {
-    use super::format_report;
+    use super::{format_report, format_symlink_report};
     use crate::worktree_gc::{DeletableBranch, DoctorReport, MergeReason, PrunableWorktree};
 
     #[test]
@@ -111,5 +140,34 @@ mod tests {
         assert!(rendered.contains("Deletable branches (1) against main"));
         assert!(rendered.contains("feat/merged"));
         assert!(rendered.contains("merged (git cherry empty)"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn doctor_repairs_deleted_task_and_tmp_home_symlink_targets() {
+        let fixture = tempfile::tempdir().expect("fixture");
+        let real_home = fixture.path().join("real-home");
+        let aid_dir = fixture.path().join(".aid");
+        let bin = real_home.join(".local/bin");
+        std::fs::create_dir_all(&bin).expect("bin");
+
+        let task_link = bin.join("task-tool");
+        let task_target = aid_dir.join("tasks/t-deleted/home/.local/bin/task-tool");
+        std::os::unix::fs::symlink(&task_target, &task_link).expect("task link");
+        let tmp_link = bin.join("tmp-tool");
+        let tmp_target = aid_dir.join("tmp_home/iso-deleted/home/.local/bin/tmp-tool");
+        std::os::unix::fs::symlink(&tmp_target, &tmp_link).expect("tmp link");
+
+        let repairs = crate::agent::home_isolation::find_doctor_symlinks(&real_home, &aid_dir)
+            .expect("scan");
+        assert_eq!(repairs.len(), 2);
+        let rendered = format_symlink_report(&repairs);
+        assert!(rendered.contains(&task_link.display().to_string()));
+        assert!(rendered.contains(&real_home.join(".local/bin/task-tool").display().to_string()));
+        assert!(rendered.contains(&tmp_link.display().to_string()));
+
+        crate::agent::home_isolation::apply_repairs(&repairs).expect("apply");
+        assert_eq!(std::fs::read_link(task_link).expect("task rewrite"), real_home.join(".local/bin/task-tool"));
+        assert_eq!(std::fs::read_link(tmp_link).expect("tmp rewrite"), real_home.join(".local/bin/tmp-tool"));
     }
 }

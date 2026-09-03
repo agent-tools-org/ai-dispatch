@@ -19,6 +19,7 @@ Release flow requirements:
 - Run `scripts/release.sh --dry-run <version> <notes-file>` first and review the planned commit/tag/push.
 - Run `scripts/release.sh <version> <notes-file>` for the actual release.
 - Treat any direct `git tag`, manual version bump, or manual changelog-only release edit as an invalid release flow.
+- Clean up before releasing. The script's orphan hygiene check only *warns* on `--dry-run` but **fails the real release** if a branch already merged into `main` still exists. Delete merged branches, `aid accept` then `aid gc --task <id>` any task still holding worktree custody, and `git worktree prune`.
 
 ```bash
 cat > /tmp/aid-release-notes.md <<'EOF'

@@ -18,6 +18,8 @@ pub struct BackgroundRunSpec {
     pub output: Option<String>,
     #[serde(default)]
     pub result_file: Option<String>,
+    #[serde(default)]
+    pub result_file_required: Option<bool>,
     pub model: Option<String>,
     #[serde(default)]
     pub budget: bool,
@@ -34,6 +36,8 @@ pub struct BackgroundRunSpec {
     pub eval_feedback_template: Option<String>,
     #[serde(default)]
     pub judge: Option<String>,
+    #[serde(default)]
+    pub judge_retry: bool,
     #[serde(default)]
     pub max_duration_mins: Option<i64>,
     #[serde(default)]
@@ -173,6 +177,7 @@ mod tests {
             dir: Some("/tmp/project".to_string()),
             output: Some("json".to_string()),
             result_file: Some("result.md".to_string()),
+            result_file_required: Some(true),
             model: Some("gpt-5.4".to_string()),
             budget: true,
             session_id: Some("session-123".to_string()),
@@ -182,6 +187,7 @@ mod tests {
             eval: Some("cargo test".to_string()),
             eval_feedback_template: Some("Iteration {iteration}/{max_iterations}".to_string()),
             judge: Some("cursor".to_string()),
+            judge_retry: true,
             max_duration_mins: Some(15),
             max_duration_secs: Some(900),
             max_task_cost: Some(2.5),
@@ -221,6 +227,7 @@ mod tests {
         let value = serde_json::to_value(sample_spec(true)).unwrap();
         assert_eq!(value.get("read_only").and_then(|v| v.as_bool()), Some(true));
         assert_eq!(value.get("result_file").and_then(|v| v.as_str()), Some("result.md"));
+        assert_eq!(value.get("result_file_required").and_then(|v| v.as_bool()), Some(true));
         assert_eq!(value.get("iterate").and_then(|v| v.as_u64()), Some(3));
         assert!(value.get("pre_task_dirty_paths").is_some());
         assert_eq!(value.get("audit").and_then(|v| v.as_bool()), Some(true));
@@ -229,6 +236,7 @@ mod tests {
         assert!(decoded.read_only);
         assert!(decoded.audit_report_mode);
         assert_eq!(decoded.result_file.as_deref(), Some("result.md"));
+        assert_eq!(decoded.result_file_required, Some(true));
         assert_eq!(decoded.eval.as_deref(), Some("cargo test"));
         assert_eq!(
             decoded.pre_task_dirty_paths.as_deref(),
@@ -242,6 +250,7 @@ mod tests {
         assert!(decoded.budget);
         assert_eq!(decoded.session_id.as_deref(), Some("session-123"));
         assert_eq!(decoded.max_task_cost, Some(2.5));
+        assert!(decoded.judge_retry);
     }
 
     #[test]

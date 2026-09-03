@@ -6,7 +6,7 @@ use anyhow::Result;
 use chrono::Local;
 use super::background_orphan;
 use super::background_kill::terminate_task_processes;
-use super::background_spec::{load_spec_if_exists, BackgroundRunSpec};
+use super::background_spec::{load_spec_for_reaper, BackgroundRunSpec};
 use super::background_waiting;
 use super::MAX_WORKERS;
 use crate::{config, notify, paths, sanitize};
@@ -58,7 +58,7 @@ where
         if cleaned.iter().any(|id| id == task_id) {
             continue;
         }
-        let Some(spec) = load_spec_if_exists(task_id)? else {
+        let Ok(Some(spec)) = load_spec_for_reaper(task_id) else {
             continue;
         };
         if let Some(worker_pid) = spec.worker_pid {
@@ -162,7 +162,7 @@ fn cleanup_old_running_tasks(
             continue;
         }
         let elapsed = (Local::now() - task.created_at).num_hours();
-        let spec = load_spec_if_exists(task_id)?;
+        let Ok(spec) = load_spec_for_reaper(task_id) else { continue; };
         let max_run_hours = spec.as_ref().map(|spec| {
             crate::timeout_policy::TimeoutPolicy::from_env(spec.env.as_ref()).hard_cap_hours()
         }).unwrap_or(MAX_RUN_HOURS);
@@ -208,7 +208,9 @@ pub(crate) fn fail_stale_pending_task(
     elapsed_secs: i64,
 ) -> Result<bool> {
     let task_id = task.id.as_str();
-    let pending_reason = infer_pending_reason(store, task)?;
+    let Some(pending_reason) = infer_pending_reason(store, task)? else {
+        return Ok(false);
+    };
     if !crate::task_lifecycle::fail_pending_with_reason(store, task_id, pending_reason)? {
         return Ok(false);
     }
@@ -227,20 +229,23 @@ pub(crate) fn fail_stale_pending_task(
     Ok(true)
 }
 
-fn infer_pending_reason(store: &Store, task: &Task) -> Result<PendingReason> {
+fn infer_pending_reason(store: &Store, task: &Task) -> Result<Option<PendingReason>> {
+    let Ok(spec) = load_spec_for_reaper(task.id.as_str()) else {
+        return Ok(None);
+    };
     if crate::rate_limit::is_rate_limited(&task.agent, task.custom_agent_name.as_deref()) {
-        return Ok(PendingReason::RateLimited);
+        return Ok(Some(PendingReason::RateLimited));
     }
     if store.list_tasks(TaskFilter::Running)?.len() >= MAX_WORKERS {
-        return Ok(PendingReason::WorkerCapacity);
+        return Ok(Some(PendingReason::WorkerCapacity));
     }
-    let has_agent_pid = load_spec_if_exists(task.id.as_str())?
+    let has_agent_pid = spec
         .and_then(|spec| spec.agent_pid)
         .is_some();
     if has_agent_pid {
-        Ok(PendingReason::AgentStarting)
+        Ok(Some(PendingReason::AgentStarting))
     } else {
-        Ok(PendingReason::Unknown)
+        Ok(Some(PendingReason::Unknown))
     }
 }
 

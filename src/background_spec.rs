@@ -9,7 +9,6 @@ use crate::paths;
 use crate::sanitize;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
 pub struct BackgroundRunSpec {
     pub task_id: String,
     pub worker_pid: Option<u32>,
@@ -150,6 +149,16 @@ pub fn load_spec_if_exists(task_id: &str) -> Result<Option<BackgroundRunSpec>> {
     Ok(Some(spec))
 }
 
+pub(crate) fn load_spec_for_reaper(task_id: &str) -> std::result::Result<Option<BackgroundRunSpec>, ()> {
+    match load_spec_if_exists(task_id) {
+        Ok(spec) => Ok(spec),
+        Err(error) => {
+            aid_warn!("[aid] Skipping reaper cleanup for {task_id}: {error:#}");
+            Err(())
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::BackgroundRunSpec;
@@ -263,13 +272,18 @@ mod tests {
     }
 
     #[test]
-    fn deleted_detached_field_is_rejected() {
+    fn legacy_detached_field_is_ignored() {
         let mut value = serde_json::to_value(sample_spec(false)).unwrap();
         value
             .as_object_mut()
             .unwrap()
             .insert("detached".to_string(), serde_json::Value::Bool(true));
 
-        assert!(serde_json::from_value::<BackgroundRunSpec>(value).is_err());
+        let decoded = serde_json::from_value::<BackgroundRunSpec>(value).unwrap();
+        assert_eq!(decoded.task_id, "t-1234");
     }
 }
+
+#[cfg(test)]
+#[path = "background_spec_tests.rs"]
+mod legacy_tests;

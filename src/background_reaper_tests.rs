@@ -2,6 +2,7 @@
 // Covers active execution failures and cleaned-list bookkeeping.
 
 use chrono::{Duration, Local};
+use std::fs;
 
 use super::{check_zombie_tasks_with, save_spec, BackgroundRunSpec};
 use crate::paths;
@@ -225,5 +226,43 @@ fn reaps_task_with_dead_worker_and_agent() {
     assert_eq!(
         store.get_task("t-no-detach").expect("get").expect("task").status,
         TaskStatus::Failed,
+    );
+}
+
+#[test]
+fn reaper_skips_unreadable_spec_and_continues_with_other_tasks() {
+    let _home = setup_home();
+    let store = Store::open_memory().expect("store");
+    store
+        .insert_task(&task("t-unreadable-spec", TaskStatus::Running))
+        .expect("insert unreadable task");
+    store
+        .insert_task(&task("t-valid-after-unreadable", TaskStatus::Running))
+        .expect("insert valid task");
+    fs::write(
+        paths::job_path("t-unreadable-spec"),
+        "{ not valid background spec",
+    )
+    .expect("write malformed spec");
+    save_spec(&spec("t-valid-after-unreadable")).expect("save valid spec");
+
+    let cleaned = check_zombie_tasks_with(&store, |_| false).expect("reap");
+
+    assert_eq!(cleaned, vec!["t-valid-after-unreadable".to_string()]);
+    assert_eq!(
+        store
+            .get_task("t-unreadable-spec")
+            .expect("get unreadable")
+            .expect("unreadable task")
+            .status,
+        TaskStatus::Running
+    );
+    assert_eq!(
+        store
+            .get_task("t-valid-after-unreadable")
+            .expect("get valid")
+            .expect("valid task")
+            .status,
+        TaskStatus::Failed
     );
 }

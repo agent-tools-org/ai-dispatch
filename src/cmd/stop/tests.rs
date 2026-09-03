@@ -189,6 +189,29 @@ fn stop_attempts_agent_cleanup_when_agent_pid_exists() {
 }
 
 #[test]
+fn stop_loads_actual_pre_upgrade_spec_with_detached_field() {
+    let temp = TempDir::new().unwrap();
+    let _guard = AidHomeGuard::set(temp.path());
+    crate::paths::ensure_dirs().unwrap();
+    let store = Arc::new(Store::open_memory().unwrap());
+    store
+        .insert_task(&make_task("t-9ef43f87", TaskStatus::Running))
+        .unwrap();
+    std::fs::write(
+        crate::paths::job_path("t-9ef43f87"),
+        include_str!("../../../testdata/legacy-background-spec.json"),
+    )
+    .unwrap();
+
+    stop(&store, "t-9ef43f87").unwrap();
+
+    assert_eq!(
+        store.get_task("t-9ef43f87").unwrap().unwrap().status,
+        TaskStatus::Stopped
+    );
+}
+
+#[test]
 fn preserve_worktree_skips_read_only_tasks() {
     let mut task = make_task("t-ro01", TaskStatus::Running);
     task.read_only = true;

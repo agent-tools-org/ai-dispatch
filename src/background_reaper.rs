@@ -88,12 +88,19 @@ where
             cleaned.push(task_id.to_string());
             return Ok(());
         }
-        let elapsed_mins = (Local::now() - task.created_at).num_minutes();
-        let max_duration_mins = spec.max_duration_mins.unwrap_or(default_max_duration_mins);
-        if elapsed_mins > max_duration_mins {
+        let elapsed_secs = (Local::now() - task.created_at).num_seconds();
+        let max_duration_secs = spec
+            .max_duration_secs
+            .unwrap_or_else(|| {
+                spec.max_duration_mins
+                    .unwrap_or(default_max_duration_mins)
+                    .max(0) as u64
+                    * 60
+            });
+        if elapsed_secs.max(0) as u64 > max_duration_secs {
             let detail = format!(
-                "Task exceeded max duration ({}m > {}m)",
-                elapsed_mins, max_duration_mins
+                "Task exceeded max duration ({}s > {}s)",
+                elapsed_secs, max_duration_secs
             );
             // Kill unconditionally: a concurrently-terminalized row must still get its processes reaped.
             terminate_task_processes(Some(worker_pid), spec);

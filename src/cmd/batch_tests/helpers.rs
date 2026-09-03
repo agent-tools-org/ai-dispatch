@@ -341,6 +341,7 @@ fn reconcile_and_poll_completed_tasks_marks_zombies_failed() {
         eval_feedback_template: None,
         judge: None,
         max_duration_mins: None,
+        max_duration_secs: None,
         max_task_cost: None,
         idle_timeout_secs: None,
         retry: 0,
@@ -369,6 +370,7 @@ fn reconcile_and_poll_completed_tasks_marks_zombies_failed() {
         container: None,
         link_deps: true,
         pre_task_dirty_paths: None,
+        foreground: false,
     })
     .unwrap();
     let mut active = vec![(0, "t-zombie".to_string())];

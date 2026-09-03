@@ -118,6 +118,11 @@ use std::sync::Arc;
 #[tokio::main]
 async fn main() -> Result<()> {
     let cli = Cli::parse();
+    if matches!(cli.command.as_ref(), Some(Commands::InternalRunTask(_)))
+        && background::daemonize_worker_if_requested()?
+    {
+        return Ok(());
+    }
     output::init();
     if cli.quiet {
         output::set_quiet(true);

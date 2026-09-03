@@ -34,6 +34,7 @@ fn serializes_spec_to_json() {
         eval_feedback_template: None,
         judge: Some("gemini".to_string()),
         max_duration_mins: Some(90),
+        max_duration_secs: None,
         max_task_cost: None,
         idle_timeout_secs: None,
         retry: 2,
@@ -62,6 +63,7 @@ fn serializes_spec_to_json() {
         container: None,
         link_deps: true,
         pre_task_dirty_paths: None,
+        foreground: false,
     };
 
     let content = serde_json::to_string_pretty(&spec).unwrap();
@@ -806,6 +808,7 @@ fn make_spec(task_id: &str) -> BackgroundRunSpec {
         eval_feedback_template: None,
         judge: None,
         max_duration_mins: None,
+        max_duration_secs: None,
         max_task_cost: None,
         idle_timeout_secs: None,
         retry: 0,
@@ -834,6 +837,7 @@ fn make_spec(task_id: &str) -> BackgroundRunSpec {
         container: None,
         link_deps: true,
         pre_task_dirty_paths: None,
+        foreground: false,
     }
 }
 

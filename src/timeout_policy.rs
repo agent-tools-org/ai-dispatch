@@ -22,6 +22,7 @@ const ENV_WARN_SECS: &str = "AID_IDLE_WARN_SECS";
 const ENV_NUDGE_SECS: &str = "AID_IDLE_NUDGE_SECS";
 const ENV_ESCALATE_SECS: &str = "AID_IDLE_ESCALATE_SECS";
 const ENV_MAX_DURATION_MINS: &str = "AID_MAX_DURATION_MINS";
+const ENV_MAX_DURATION_SECS: &str = "AID_MAX_DURATION_SECS";
 const ENV_HARD_CAP_HOURS: &str = "AID_HARD_CAP_HOURS";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
@@ -113,9 +114,11 @@ impl TimeoutPolicy {
                     env_u64(env, ENV_ESCALATE_SECS).unwrap_or(DEFAULT_ESCALATE_SECS),
                 ),
             },
-            max_duration: Duration::from_secs(
-                env_i64(env, ENV_MAX_DURATION_MINS).unwrap_or(DEFAULT_MAX_DURATION_MINS) as u64 * 60,
-            ),
+            max_duration: env_u64(env, ENV_MAX_DURATION_SECS)
+                .map(Duration::from_secs)
+                .unwrap_or_else(|| Duration::from_secs(
+                    env_i64(env, ENV_MAX_DURATION_MINS).unwrap_or(DEFAULT_MAX_DURATION_MINS) as u64 * 60,
+                )),
             hard_cap: Duration::from_secs(
                 env_i64(env, ENV_HARD_CAP_HOURS).unwrap_or(DEFAULT_HARD_CAP_HOURS) as u64 * 60 * 60,
             ),
@@ -168,6 +171,7 @@ pub(crate) fn env_with_policy(
         .or_insert_with(|| policy.nudge_ladder.escalate.as_secs().to_string());
     env.entry(ENV_MAX_DURATION_MINS.to_string())
         .or_insert_with(|| policy.max_duration_mins().to_string());
+    env.insert(ENV_MAX_DURATION_SECS.to_string(), policy.max_duration.as_secs().to_string());
     env.entry(ENV_HARD_CAP_HOURS.to_string())
         .or_insert_with(|| policy.hard_cap_hours().to_string());
     Some(env)

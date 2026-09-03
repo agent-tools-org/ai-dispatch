@@ -30,7 +30,11 @@ pub(super) async fn run_post_lifecycle(
     let prompt_bundle = prompt_bundle_from_spec(spec);
     let (repo_path, wt_path) = task_lifecycle_paths(store, &task_id)?;
     crate::cmd::run::post_run_lifecycle(
-        crate::cmd::run::LifecycleMode::Background,
+        if spec.foreground {
+            crate::cmd::run::LifecycleMode::Foreground
+        } else {
+            crate::cmd::run::LifecycleMode::Background
+        },
         store,
         &task_id,
         &lifecycle_args,
@@ -92,6 +96,8 @@ fn run_args_from_spec(spec: &BackgroundRunSpec, model_source: ModelSource) -> cr
         scope: spec.scope.clone(),
         link_deps: spec.link_deps,
         background: true,
+        announce: spec.foreground,
+        foreground: spec.foreground,
         ..Default::default()
     }
 }

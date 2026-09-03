@@ -24,11 +24,27 @@ automatic retry chain reach their real outcome.
   and audit flags, and retries remain background workers.
 - Foreground no longer creates a host-side workspace symlink or waits for rate
   limits before dispatch; the worker owns both behaviors just as `--bg` does.
+- Foreground workers now double-fork and report the reparented worker PID before
+  the watcher attaches, so a caller that kills the foreground process tree
+  cannot kill the worker or its agent. Parent-side container startup was
+  removed; the worker starts the container once.
+- `--timeout` keeps its exact seconds in the worker environment and spec;
+  sub-minute values are no longer rounded to a 60-second runtime cap.
+- Legacy specs containing the deleted `detached` field are rejected with
+  `deny_unknown_fields`; no migration shim is retained.
 
 ## Deliberate choices
 
 The watcher reports non-running status transitions on stderr and preserves the
 existing task completion line on stdout. SIGINT stops the worker through the
-normal stop path; SIGTERM and SIGHUP leave it running and exit with the existing
-reattach hint. PTY execution remains the background worker’s established path,
+normal stop path; non-interactive SIGTERM and SIGHUP leave it running and exit
+with the reattach hint, while TTY SIGTERM/SIGHUP preserve stop behavior. PTY
+execution remains the background worker’s established path,
 so interactive agents continue to work through `pty_runner`.
+
+## Validation
+
+- Full aid binary suite: 2526 passed, 9 ignored.
+- Foreground subprocess acceptance: success/failure output and exit status,
+  SIGINT stop, and caller process-tree kill survival (3 passed).
+- Guide, timeout-policy, background, and foreground-watcher suites passed.

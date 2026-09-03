@@ -562,6 +562,7 @@ pub(crate) fn monitor_bridge(
     state: &mut MonitorState,
     first_token_timeout: Option<Duration>,
     idle_timeout: Option<Duration>,
+    max_task_cost: Option<f64>,
 ) -> Result<()> {
     let mut reader_done = false;
     let mut child_exited_at: Option<Instant> = None;
@@ -582,6 +583,20 @@ pub(crate) fn monitor_bridge(
                 state.received_raw_bytes = true;
                 state.last_raw_chunk_time = Instant::now();
                 state.handle_chunk(agent, task_id, store, log_file, decoder.push(bytes))?;
+                if max_task_cost.is_some_and(|max| state.info.cost_usd.is_some_and(|cost| cost > max)) {
+                    let current_cost = state.info.cost_usd.unwrap_or_default();
+                    let max_cost = max_task_cost.unwrap_or_default();
+                    let _ = store.insert_event(&TaskEvent {
+                        task_id: task_id.clone(),
+                        timestamp: Local::now(),
+                        event_kind: EventKind::Error,
+                        detail: format!("Task killed: cost ${current_cost:.2} exceeded ceiling ${max_cost:.2}"),
+                        metadata: None,
+                    });
+                    state.info.status = TaskStatus::Failed;
+                    let _ = bridge.kill_group();
+                    break;
+                }
             }
             Err(RecvTimeoutError::Timeout) => {
                 state.handle_timeout(store, task_id)?;

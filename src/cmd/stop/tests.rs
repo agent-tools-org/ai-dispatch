@@ -138,6 +138,8 @@ fn stop_attempts_agent_cleanup_when_agent_pid_exists() {
         output: None,
         result_file: None,
         model: None,
+        budget: false,
+        session_id: None,
         verify: None,
         setup: None,
         iterate: None,
@@ -145,6 +147,7 @@ fn stop_attempts_agent_cleanup_when_agent_pid_exists() {
         eval_feedback_template: None,
         judge: None,
         max_duration_mins: None,
+        max_task_cost: None,
         idle_timeout_secs: None,
         retry: 0,
         group: None,
@@ -156,6 +159,8 @@ fn stop_attempts_agent_cleanup_when_agent_pid_exists() {
         base_branch: None,
         peer_review: None,
         audit: false,
+        audit_explicit: false,
+        no_audit: false,
         scope: vec![],
         interactive: false,
         on_done: None,
@@ -169,7 +174,6 @@ fn stop_attempts_agent_cleanup_when_agent_pid_exists() {
         container: None,
         link_deps: true,
         pre_task_dirty_paths: None,
-        detached: false,
     };
     save_spec(&spec).unwrap();
 

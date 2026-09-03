@@ -19,6 +19,10 @@ pub struct BackgroundRunSpec {
     #[serde(default)]
     pub result_file: Option<String>,
     pub model: Option<String>,
+    #[serde(default)]
+    pub budget: bool,
+    #[serde(default)]
+    pub session_id: Option<String>,
     pub verify: Option<String>,
     #[serde(default)]
     pub setup: Option<String>,
@@ -32,6 +36,8 @@ pub struct BackgroundRunSpec {
     pub judge: Option<String>,
     #[serde(default)]
     pub max_duration_mins: Option<i64>,
+    #[serde(default)]
+    pub max_task_cost: Option<f64>,
     #[serde(default)]
     pub idle_timeout_secs: Option<u64>,
     pub retry: u32,
@@ -52,6 +58,10 @@ pub struct BackgroundRunSpec {
     pub peer_review: Option<String>,
     #[serde(default)]
     pub audit: bool,
+    #[serde(default)]
+    pub audit_explicit: bool,
+    #[serde(default)]
+    pub no_audit: bool,
     #[serde(default)]
     pub scope: Vec<String>,
     #[serde(default)]
@@ -80,11 +90,6 @@ pub struct BackgroundRunSpec {
     pub link_deps: bool,
     #[serde(default)]
     pub pre_task_dirty_paths: Option<Vec<String>>,
-    /// Deliberate foreground detach marker. When true, the reaper adopts the
-    /// task (leaves the agent alive) instead of reaping it as a dead-worker
-    /// zombie. Set only by the non-interactive SIGTERM/SIGHUP detach path.
-    #[serde(default)]
-    pub detached: bool,
 }
 
 fn default_link_deps() -> bool { true }
@@ -155,6 +160,8 @@ mod tests {
             output: Some("json".to_string()),
             result_file: Some("result.md".to_string()),
             model: Some("gpt-5.4".to_string()),
+            budget: true,
+            session_id: Some("session-123".to_string()),
             verify: Some("cargo check".to_string()),
             setup: Some("cargo fetch".to_string()),
             iterate: Some(3),
@@ -162,6 +169,7 @@ mod tests {
             eval_feedback_template: Some("Iteration {iteration}/{max_iterations}".to_string()),
             judge: Some("cursor".to_string()),
             max_duration_mins: Some(15),
+            max_task_cost: Some(2.5),
             idle_timeout_secs: Some(60),
             retry: 2,
             group: Some("core".to_string()),
@@ -173,6 +181,8 @@ mod tests {
             base_branch: Some("main".to_string()),
             peer_review: Some("codex".to_string()),
             audit: true,
+            audit_explicit: true,
+            no_audit: false,
             scope: vec!["src".to_string()],
             interactive: true,
             on_done: Some("echo done".to_string()),
@@ -187,7 +197,6 @@ mod tests {
             container: Some("aid:test".to_string()),
             link_deps: true,
             pre_task_dirty_paths: Some(vec!["?? pre-existing.rs".to_string()]),
-            detached: false,
         }
     }
 
@@ -214,6 +223,9 @@ mod tests {
         assert_eq!(decoded.base_branch.as_deref(), Some("main"));
         assert_eq!(decoded.peer_review.as_deref(), Some("codex"));
         assert_eq!(decoded.scope, ["src".to_string()]);
+        assert!(decoded.budget);
+        assert_eq!(decoded.session_id.as_deref(), Some("session-123"));
+        assert_eq!(decoded.max_task_cost, Some(2.5));
     }
 
     #[test]

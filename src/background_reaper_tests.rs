@@ -2,6 +2,7 @@
 // Covers active execution failures and cleaned-list bookkeeping.
 
 use chrono::{Duration, Local};
+use std::fs;
 
 use super::{check_zombie_tasks_with, save_spec, BackgroundRunSpec};
 use crate::paths;
@@ -59,6 +60,8 @@ fn spec(id: &str) -> BackgroundRunSpec {
         output: None,
         result_file: None,
         model: None,
+        budget: false,
+        session_id: None,
         verify: None,
         setup: None,
         iterate: None,
@@ -66,6 +69,8 @@ fn spec(id: &str) -> BackgroundRunSpec {
         eval_feedback_template: None,
         judge: None,
         max_duration_mins: Some(60),
+        max_duration_secs: None,
+        max_task_cost: None,
         idle_timeout_secs: Some(1),
         retry: 0,
         group: None,
@@ -77,6 +82,8 @@ fn spec(id: &str) -> BackgroundRunSpec {
         base_branch: None,
         peer_review: None,
         audit: false,
+        audit_explicit: false,
+        no_audit: false,
         scope: vec![],
         interactive: true,
         on_done: None,
@@ -91,7 +98,7 @@ fn spec(id: &str) -> BackgroundRunSpec {
         container: None,
         link_deps: true,
         pre_task_dirty_paths: None,
-        detached: false,
+        foreground: false,
     }
 }
 
@@ -172,40 +179,9 @@ fn reaper_cleaned_list_excludes_tasks_that_did_not_transition() {
     );
 }
 
-#[cfg(unix)]
+/// A missing worker always fails the task and kills any recorded agent.
 #[test]
-fn adopts_detached_task_with_live_agent() {
-    let _home = setup_home();
-    let store = Store::open_memory().expect("store");
-    store
-        .insert_task(&task("t-detach-live", TaskStatus::Running))
-        .expect("insert task");
-    let mut child = std::process::Command::new("sleep").arg("30").spawn().expect("spawn agent");
-    let agent_pid = child.id();
-    let mut s = spec("t-detach-live");
-    s.detached = true;
-    s.agent_pid = Some(agent_pid);
-    s.idle_timeout_secs = Some(3600);
-    save_spec(&s).expect("save spec");
-
-    let cleaned = check_zombie_tasks_with(&store, |_| false).expect("reap");
-
-    assert!(cleaned.is_empty(), "detached task with live agent should not be cleaned");
-    assert_eq!(
-        store.get_task("t-detach-live").expect("get").expect("task").status,
-        TaskStatus::Running,
-    );
-    assert!(crate::background::is_process_running(agent_pid), "agent should still be alive");
-    let _ = child.kill();
-    let _ = child.wait();
-}
-
-/// The dangerous half of the detach gate. `reaps_non_detached_task_with_dead_worker_and_agent`
-/// passes a pid that was never alive, so it only pins the Failed transition — it cannot tell
-/// whether a real orphan agent is still killed. If the gate ever widened to adopt tasks the
-/// detach path never marked, that test would stay green while live agents leaked forever.
-#[test]
-fn reaps_non_detached_task_and_kills_its_live_agent() {
+fn reaps_task_with_dead_worker_and_kills_its_live_agent() {
     let _home = setup_home();
     let store = Store::open_memory().expect("store");
     store
@@ -214,7 +190,6 @@ fn reaps_non_detached_task_and_kills_its_live_agent() {
     let mut child = std::process::Command::new("sleep").arg("30").spawn().expect("spawn agent");
     let agent_pid = child.id();
     let mut s = spec("t-orphan-live");
-    s.detached = false;
     s.agent_pid = Some(agent_pid);
     s.idle_timeout_secs = Some(3600);
     save_spec(&s).expect("save spec");
@@ -234,14 +209,13 @@ fn reaps_non_detached_task_and_kills_its_live_agent() {
 }
 
 #[test]
-fn reaps_non_detached_task_with_dead_worker_and_agent() {
+fn reaps_task_with_dead_worker_and_agent() {
     let _home = setup_home();
     let store = Store::open_memory().expect("store");
     store
         .insert_task(&task("t-no-detach", TaskStatus::Running))
         .expect("insert task");
     let mut s = spec("t-no-detach");
-    s.detached = false;
     s.agent_pid = Some(999999);
     s.idle_timeout_secs = Some(3600);
     save_spec(&s).expect("save spec");
@@ -252,5 +226,43 @@ fn reaps_non_detached_task_with_dead_worker_and_agent() {
     assert_eq!(
         store.get_task("t-no-detach").expect("get").expect("task").status,
         TaskStatus::Failed,
+    );
+}
+
+#[test]
+fn reaper_skips_unreadable_spec_and_continues_with_other_tasks() {
+    let _home = setup_home();
+    let store = Store::open_memory().expect("store");
+    store
+        .insert_task(&task("t-unreadable-spec", TaskStatus::Running))
+        .expect("insert unreadable task");
+    store
+        .insert_task(&task("t-valid-after-unreadable", TaskStatus::Running))
+        .expect("insert valid task");
+    fs::write(
+        paths::job_path("t-unreadable-spec"),
+        "{ not valid background spec",
+    )
+    .expect("write malformed spec");
+    save_spec(&spec("t-valid-after-unreadable")).expect("save valid spec");
+
+    let cleaned = check_zombie_tasks_with(&store, |_| false).expect("reap");
+
+    assert_eq!(cleaned, vec!["t-valid-after-unreadable".to_string()]);
+    assert_eq!(
+        store
+            .get_task("t-unreadable-spec")
+            .expect("get unreadable")
+            .expect("unreadable task")
+            .status,
+        TaskStatus::Running
+    );
+    assert_eq!(
+        store
+            .get_task("t-valid-after-unreadable")
+            .expect("get valid")
+            .expect("valid task")
+            .status,
+        TaskStatus::Failed
     );
 }

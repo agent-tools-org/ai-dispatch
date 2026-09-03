@@ -85,6 +85,15 @@ fn policy_env_round_trips_all_fields() {
 }
 
 #[test]
+fn policy_env_preserves_subminute_max_duration() {
+    let mut policy = TimeoutPolicy::default();
+    policy.max_duration = Duration::from_secs(30);
+    let env = env_with_policy(None, policy).expect("policy env");
+
+    assert_eq!(TimeoutPolicy::from_env(Some(&env)).max_duration, Duration::from_secs(30));
+}
+
+#[test]
 fn project_toml_timeout_fields_parse() {
     let dir = tempfile::tempdir().expect("tempdir");
     let path = dir.path().join("project.toml");

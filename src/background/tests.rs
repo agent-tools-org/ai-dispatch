@@ -25,6 +25,8 @@ fn serializes_spec_to_json() {
         output: None,
         result_file: Some("result.md".to_string()),
         model: None,
+        budget: false,
+        session_id: None,
         verify: Some("auto".to_string()),
         setup: None,
         iterate: None,
@@ -32,6 +34,8 @@ fn serializes_spec_to_json() {
         eval_feedback_template: None,
         judge: Some("gemini".to_string()),
         max_duration_mins: Some(90),
+        max_duration_secs: None,
+        max_task_cost: None,
         idle_timeout_secs: None,
         retry: 2,
         group: Some("wg-abcd".to_string()),
@@ -43,6 +47,8 @@ fn serializes_spec_to_json() {
         base_branch: None,
         peer_review: None,
         audit: false,
+        audit_explicit: false,
+        no_audit: false,
         scope: vec![],
         interactive: true,
         on_done: None,
@@ -57,7 +63,7 @@ fn serializes_spec_to_json() {
         container: None,
         link_deps: true,
         pre_task_dirty_paths: None,
-        detached: false,
+        foreground: false,
     };
 
     let content = serde_json::to_string_pretty(&spec).unwrap();
@@ -793,6 +799,8 @@ fn make_spec(task_id: &str) -> BackgroundRunSpec {
         output: None,
         result_file: None,
         model: None,
+        budget: false,
+        session_id: None,
         verify: None,
         setup: None,
         iterate: None,
@@ -800,6 +808,8 @@ fn make_spec(task_id: &str) -> BackgroundRunSpec {
         eval_feedback_template: None,
         judge: None,
         max_duration_mins: None,
+        max_duration_secs: None,
+        max_task_cost: None,
         idle_timeout_secs: None,
         retry: 0,
         group: None,
@@ -811,6 +821,8 @@ fn make_spec(task_id: &str) -> BackgroundRunSpec {
         base_branch: None,
         peer_review: None,
         audit: false,
+        audit_explicit: false,
+        no_audit: false,
         scope: vec![],
         interactive: true,
         on_done: None,
@@ -825,7 +837,7 @@ fn make_spec(task_id: &str) -> BackgroundRunSpec {
         container: None,
         link_deps: true,
         pre_task_dirty_paths: None,
-        detached: false,
+        foreground: false,
     }
 }
 

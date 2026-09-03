@@ -11,15 +11,15 @@ mod background_kill;
 mod background_orphan;
 #[path = "background_reaper.rs"]
 mod background_reaper;
-#[path = "background_adopt.rs"]
-mod background_adopt;
 #[path = "background_spec.rs"]
 mod background_spec;
 #[path = "background_waiting.rs"]
 mod background_waiting;
+#[path = "background_spawn.rs"]
+mod background_spawn;
 
-use anyhow::{Context, Result};
-use std::process::{Child, Command, Stdio};
+use anyhow::Result;
+use std::process::Stdio;
 use std::sync::Arc;
 
 #[cfg(test)]
@@ -38,6 +38,7 @@ use crate::types::{AgentKind, TaskFilter, TaskId};
 const MAX_WORKERS: usize = 32;
 
 pub use self::background_process::{is_process_running, kill_process, load_agent_pid, sigkill_process, update_agent_pid};
+pub(crate) use self::background_spawn::{daemonize_worker_if_requested, spawn_worker};
 pub use self::background_spec::{load_spec_if_exists, load_worker_pid, save_spec, BackgroundRunSpec};
 pub(crate) use self::background_process::update_worker_pid;
 pub(crate) use self::background_reaper::{check_zombie_tasks_with, record_failure};
@@ -46,28 +47,6 @@ pub(crate) use self::background_reaper::cleanup_stale_pending_tasks;
 #[cfg(test)]
 pub(crate) use self::background_reaper::{fail_stale_pending_task, ZOMBIE_FAILURE_DETAIL};
 pub(crate) use self::background_spec::clear_spec;
-pub fn spawn_worker(task_id: &str) -> Result<Child> {
-    sanitize::validate_task_id(task_id)?;
-    let exe = std::env::current_exe().context("Failed to resolve current aid binary")?;
-    let mut cmd = Command::new(exe);
-    cmd.args(["__run-task", task_id])
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null());
-    // Inherit AID_HOME so the worker uses the same data directory.
-    if let Ok(home) = std::env::var("AID_HOME") {
-        cmd.env("AID_HOME", home);
-    }
-    // Create a new process group so we can kill the worker and all its children.
-    // Skip in test context (AID_NO_DETACH=1) so workers die with the test process.
-    #[cfg(unix)]
-    if std::env::var_os("AID_NO_DETACH").is_none() {
-        use std::os::unix::process::CommandExt;
-        cmd.process_group(0);
-    }
-    cmd.spawn()
-        .context("Failed to spawn detached background worker")
-}
 
 /// Check whether spawning another worker would exceed the process limit.
 /// Returns Ok(()) if within limits, Err if at capacity.
@@ -158,13 +137,11 @@ async fn run_task_inner(store: &Arc<Store>, spec: &BackgroundRunSpec) -> Result<
         output: spec.output.clone(),
         result_file: spec.result_file.clone(),
         model: spec.model.clone(),
-        budget: false,
+        budget: spec.budget,
         read_only: spec.read_only,
         sandbox: spec.sandbox,
         context_files: vec![],
-        // Background runs intentionally stay fresh. If resume is added, carry the durable-home
-        // context into command construction and record the same fallback milestone as foreground.
-        session_id: None,
+        session_id: spec.session_id.clone(),
         env: agent::env_with_agent_log(
             spec.env.clone(),
             &spec.task_id,
@@ -181,6 +158,11 @@ async fn run_task_inner(store: &Arc<Store>, spec: &BackgroundRunSpec) -> Result<
     let worktree_branch = store.get_task(&spec.task_id)?.and_then(|task| task.worktree_branch);
     let cargo_target_dir = agent::rust_build_cache_target_dir(spec.dir.as_deref(), worktree_branch.as_deref());
     let uses_durable_codex_home = agent::should_use_durable_codex_home(agent.kind(), spec.sandbox, spec.container.is_some());
+    if uses_durable_codex_home
+        && opts.session_id.as_deref().is_some_and(agent::codex::resume_fallback_needed)
+    {
+        store.insert_event(&agent::codex::resume_fallback_event(&TaskId(spec.task_id.clone())))?;
+    }
     let mut std_cmd = agent
         .build_command_with_context(
             &spec.prompt,
@@ -240,13 +222,14 @@ async fn run_task_inner(store: &Arc<Store>, spec: &BackgroundRunSpec) -> Result<
             spec.model.as_deref(),
             agent.streaming(),
             crate::timeout_policy::TimeoutPolicy::from_env(spec.env.as_ref()),
+            spec.max_task_cost,
             None,
         )?;
     } else {
         let mut tokio_cmd = tokio::process::Command::from(std_cmd);
         tokio_cmd.stdout(Stdio::piped());
         tokio_cmd.stderr(Stdio::piped());
-        crate::cmd::run::run_agent_process(
+        crate::cmd::run::run_agent_process_with_cost(
             &*agent,
             tokio_cmd,
             &TaskId(spec.task_id.clone()),
@@ -257,6 +240,7 @@ async fn run_task_inner(store: &Arc<Store>, spec: &BackgroundRunSpec) -> Result<
             agent.streaming(),
             spec.group.as_deref(),
             crate::timeout_policy::TimeoutPolicy::from_env(spec.env.as_ref()),
+            spec.max_task_cost,
         )
         .await?;
     }
@@ -288,14 +272,8 @@ where
 #[path = "background_binary_tests.rs"]
 mod background_binary_tests;
 #[cfg(test)]
-#[path = "background_foreground_tests.rs"]
-mod foreground_tests;
-#[cfg(test)]
 #[path = "background_reaper_tests.rs"]
 mod background_reaper_tests;
-#[cfg(test)]
-#[path = "background_adopt_tests.rs"]
-mod background_adopt_tests;
 #[cfg(test)]
 #[path = "background_lifecycle_bypass_tests.rs"]
 mod lifecycle_bypass_tests;

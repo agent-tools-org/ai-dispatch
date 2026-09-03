@@ -45,13 +45,13 @@ mod run_task_profile;
 mod run_delegation;
 #[path = "run_dispatch_guard.rs"]
 mod run_dispatch_guard;
-#[path = "run_foreground_guard.rs"]
-mod run_foreground_guard;
+#[path = "run_foreground_watch.rs"]
+mod run_foreground_watch;
 #[path = "run_dispatch_execute.rs"]
 mod run_dispatch_execute;
 #[path = "run_dispatch.rs"]
 mod run_dispatch;
-pub(crate) use self::run_agent::run_agent_process;
+pub(crate) use self::run_agent::run_agent_process_with_cost;
 pub(crate) use self::run_dispatch::run;
 pub(crate) use self::run_iterate::iterate_config;
 pub(crate) use self::run_lifecycle::capture_final_worktree_state;

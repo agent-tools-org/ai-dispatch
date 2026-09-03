@@ -40,6 +40,8 @@ fn make_spec(task_id: &str) -> BackgroundRunSpec {
         output: None,
         result_file: None,
         model: None,
+        budget: false,
+        session_id: None,
         verify: None,
         setup: None,
         iterate: None,
@@ -47,6 +49,7 @@ fn make_spec(task_id: &str) -> BackgroundRunSpec {
         eval_feedback_template: None,
         judge: None,
         max_duration_mins: None,
+        max_task_cost: None,
         idle_timeout_secs: None,
         retry: 0,
         group: None,
@@ -58,6 +61,8 @@ fn make_spec(task_id: &str) -> BackgroundRunSpec {
         base_branch: None,
         peer_review: None,
         audit: false,
+        audit_explicit: false,
+        no_audit: false,
         scope: vec![],
         interactive: true,
         on_done: None,
@@ -72,6 +77,5 @@ fn make_spec(task_id: &str) -> BackgroundRunSpec {
         container: None,
         link_deps: false,
         pre_task_dirty_paths: None,
-        detached: false,
     }
 }

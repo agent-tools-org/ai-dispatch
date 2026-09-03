@@ -1,5 +1,5 @@
 // Agent process lifecycle helpers for `aid run`.
-// Exports run_agent_process, run_agent_process_with_timeout, and streaming/output helpers.
+// Exports run_agent_process and streaming/output helpers.
 // Depends on run_prompt, watcher, cost estimation, and store/event types.
 use anyhow::Result;
 use chrono::Local;
@@ -14,7 +14,6 @@ use crate::types::TaskId;
 use super::run_prompt;
 #[path = "run_agent/timeout.rs"]
 mod timeout;
-pub(crate) use timeout::run_agent_process_with_timeout;
 
 #[allow(clippy::too_many_arguments)]
 pub(crate) async fn run_agent_process(
@@ -29,6 +28,25 @@ pub(crate) async fn run_agent_process(
     workgroup_id: Option<&str>,
     timeout_policy: crate::timeout_policy::TimeoutPolicy,
 ) -> Result<()> {
+    run_agent_process_with_cost(
+        agent, cmd, task_id, store, log_path, output_path, model, streaming,
+        workgroup_id, timeout_policy, None,
+    ).await
+}
+
+pub(crate) async fn run_agent_process_with_cost(
+    agent: &dyn crate::agent::Agent,
+    cmd: Command,
+    task_id: &TaskId,
+    store: &Arc<Store>,
+    log_path: &Path,
+    output_path: Option<&str>,
+    model: Option<&str>,
+    streaming: bool,
+    workgroup_id: Option<&str>,
+    timeout_policy: crate::timeout_policy::TimeoutPolicy,
+    max_task_cost: Option<f64>,
+) -> Result<()> {
     run_prompt::run_agent_process_impl(run_prompt::RunProcessArgs {
         agent,
         cmd,
@@ -40,6 +58,7 @@ pub(crate) async fn run_agent_process(
         streaming,
         workgroup_id,
         timeout_policy,
+        max_task_cost,
     })
     .await
 }

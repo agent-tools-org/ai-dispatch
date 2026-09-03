@@ -28,6 +28,7 @@ pub(crate) struct RunProcessArgs<'a> {
     pub output_path: Option<&'a str>, pub model: Option<&'a str>, pub streaming: bool,
     pub workgroup_id: Option<&'a str>,
     pub timeout_policy: crate::timeout_policy::TimeoutPolicy,
+    pub max_task_cost: Option<f64>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -149,6 +150,7 @@ pub(crate) async fn run_agent_process_impl(args: RunProcessArgs<'_>) -> Result<(
         streaming,
         workgroup_id,
         timeout_policy,
+        max_task_cost,
     } = args;
     let start = std::time::Instant::now();
     // No max-duration monitor here: background reaping owns that policy using
@@ -172,12 +174,12 @@ pub(crate) async fn run_agent_process_impl(args: RunProcessArgs<'_>) -> Result<(
         let _ = crate::background::update_agent_pid(task_id.as_str(), pid);
     }
     let info = if streaming {
-        watcher::watch_streaming(agent, &mut child, task_id, store, log_path, workgroup_id, idle_timeout, None).await
+        watcher::watch_streaming(agent, &mut child, task_id, store, log_path, workgroup_id, idle_timeout, max_task_cost).await
     } else {
         let out = output_path.map(std::path::Path::new);
         watcher::watch_buffered(agent, &mut child, task_id, store, log_path, out, workgroup_id).await
     };
-    let info = match info {
+    let mut info = match info {
         Ok(info) => info,
         Err(err) => {
             let stderr = stderr_excerpt(task_id);
@@ -191,6 +193,18 @@ pub(crate) async fn run_agent_process_impl(args: RunProcessArgs<'_>) -> Result<(
             return Err(err);
         }
     };
+    if info.cost_usd.is_some_and(|cost| max_task_cost.is_some_and(|max| cost > max)) {
+        let current_cost = info.cost_usd.unwrap_or_default();
+        let max_cost = max_task_cost.unwrap_or_default();
+        let _ = store.insert_event(&TaskEvent {
+            task_id: task_id.clone(),
+            timestamp: Local::now(),
+            event_kind: EventKind::Error,
+            detail: format!("Task killed: cost ${current_cost:.2} exceeded ceiling ${max_cost:.2}"),
+            metadata: None,
+        });
+        info.status = TaskStatus::Failed;
+    }
     // SIGTERM orphaned child processes — no sleep needed on normal exit
     cleanup_process_group(&child);
     let _ = child.kill().await;

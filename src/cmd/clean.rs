@@ -149,10 +149,14 @@ pub(crate) fn clean_isolated_task_homes(
 ) -> Result<u64> {
     let mut bytes = 0u64;
     let mut removed = 0usize;
-    let real_home = if dry_run {
-        None
-    } else {
-        Some(crate::agent::home_isolation::resolve_real_home()?)
+    let real_home = if dry_run { None } else {
+        match crate::agent::home_isolation::resolve_real_home() {
+            Ok(home) => Some(home),
+            Err(err) => {
+                aid_warn!("[aid] Warning: cannot resolve real HOME; isolated task homes remain: {err:#}");
+                None
+            }
+        }
     };
     for id in crate::cmd::clean_cargo_target::terminal_task_ids(store)? {
         let home_dir = crate::paths::task_dir(&id).join("home");

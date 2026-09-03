@@ -22,15 +22,23 @@ pub fn run(store: &Arc<Store>, apply: bool) -> Result<()> {
     let tracked_paths = tracked_worktree_paths(store.as_ref())?;
     let prefixes = managed_branch_prefixes(project::detect_project().as_ref());
     let report = collect_doctor_report(repo_dir, &tracked_paths, &prefixes)?;
-    let real_home = home_isolation::resolve_real_home()?;
-    let symlink_repairs = home_isolation::find_doctor_symlinks(&real_home, &paths::aid_dir())?;
     print!("{}", format_report(&report));
-    print!("{}", format_symlink_report(&symlink_repairs));
+    let symlink_scan = match home_isolation::resolve_real_home() {
+        Ok(real_home) => home_isolation::scan_doctor_symlinks(&real_home, &paths::aid_dir()),
+        Err(err) => {
+            aid_warn!("[aid] Warning: cannot scan leaked operator symlinks: {err:#}");
+            home_isolation::SymlinkScan { repairs: Vec::new(), complete: false }
+        }
+    };
+    if !symlink_scan.complete {
+        aid_warn!("[aid] Warning: leaked operator symlink scan was incomplete");
+    }
+    print!("{}", format_symlink_report(&symlink_scan.repairs));
     if !apply {
         return Ok(());
     }
 
-    let repaired = home_isolation::apply_repairs(&symlink_repairs)?;
+    let repaired = home_isolation::apply_repairs(&symlink_scan.repairs)?;
     if repaired > 0 {
         println!("Repaired {repaired} leaked operator symlink(s)");
     }

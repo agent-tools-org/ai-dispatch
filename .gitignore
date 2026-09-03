@@ -40,3 +40,6 @@ result_*.md
 client/*.xcodeproj/
 client/DerivedData/
 client/Support/Info-*.plist
+
+# Agent task reports (aid writes these into the worktree)
+result.md

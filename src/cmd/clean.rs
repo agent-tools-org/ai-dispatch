@@ -163,7 +163,14 @@ pub(crate) fn clean_isolated_task_homes(
                 bytes += size;
             } else {
                 let Some(real_home) = real_home.as_deref() else { continue };
-                crate::agent::home_isolation::remove_isolated_home(&home_dir, real_home)?;
+                if let Err(err) = crate::agent::home_isolation::remove_isolated_home(&home_dir, real_home) {
+                    aid_warn!(
+                        "[aid] Warning: failed to remove isolated task home for {} at '{}': {err:#}",
+                        id,
+                        home_dir.display()
+                    );
+                    continue;
+                }
                 println!("Removed isolated task home for {} ({})", id, format_bytes(size));
                 bytes += size;
             }

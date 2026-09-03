@@ -85,7 +85,6 @@ fn skips_all_thinking_deltas() {
 }
 
 #[test]
-#[test]
 fn uses_cursor_agent_binary() {
     let cmd = CursorAgent.build_command("test prompt", &run_opts()).unwrap();
     let program = cmd.get_program().to_string_lossy();

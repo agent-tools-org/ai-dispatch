@@ -18,6 +18,10 @@ const GUIDE_FILES: &[(&str, &str)] = &[
         include_str!("../../default-skills/aid-guide/references/command-index.md"),
     ),
     (
+        "references/command-errors.md",
+        include_str!("../../default-skills/aid-guide/references/command-errors.md"),
+    ),
+    (
         "references/configuration.md",
         include_str!("../../default-skills/aid-guide/references/configuration.md"),
     ),

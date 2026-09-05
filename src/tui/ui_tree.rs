@@ -12,7 +12,6 @@ use super::status_to_color;
 use super::ui_helpers::{task_status_label, truncate};
 use crate::cost;
 use crate::tui::route_display::format_route_fit;
-use crate::tui::tree_data;
 use crate::types::{Task, TaskStatus};
 
 pub(super) fn render_tree_view(frame: &mut ratatui::Frame<'_>, app: &App) {
@@ -39,21 +38,19 @@ pub(super) fn render_tree_view(frame: &mut ratatui::Frame<'_>, app: &App) {
         chunks[0],
     );
 
-    let nodes = tree_data::build_task_tree_with_state(
-        &app.tasks,
-        &app.wg_creators,
-        &app.collapsed_projects,
-    );
-    // We can't mutate app here (render takes &App), so tree_node_count
-    // is updated in tick(). Use nodes.len() for bounds checking.
+    let nodes = &app.nodes;
+    let height = chunks[1].height.saturating_sub(2) as usize;
+    let start = app.tree_selected.saturating_sub(height.saturating_sub(1));
     if nodes.is_empty() {
         frame.render_widget(Paragraph::new(app.empty_message()), chunks[1]);
     } else {
         let items: Vec<ListItem> = nodes
             .iter()
             .enumerate()
+            .skip(start)
+            .take(height)
             .map(|(i, node)| {
-                let task = &node.task;
+                let task = &app.tasks[node.task_index];
                 let status_color = status_to_color(task.status);
                 let is_selected = i == app.tree_selected;
 

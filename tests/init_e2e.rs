@@ -21,6 +21,7 @@ fn init_creates_default_skills_and_templates() {
         "skills/aid-guide/SKILL.md",
         "skills/aid-guide/agents/openai.yaml",
         "skills/aid-guide/references/command-index.md",
+        "skills/aid-guide/references/command-errors.md",
         "skills/aid-guide/references/task-lifecycle.md",
         "templates/bug-fix.md",
         "templates/feature.md",

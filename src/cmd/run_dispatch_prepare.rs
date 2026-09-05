@@ -14,7 +14,7 @@ use super::run_dispatch_worktree::{
 };
 use super::run_task_profile::{
     apply_category_and_result_defaults, persist_declaration, should_auto_result_file,
-    validate_critical_rigor, validate_egress,
+    validate_egress,
 };
 use super::run_validate::{validate_command_preflight_with, validate_dispatch};
 use super::{RunArgs, resolve_max_duration_mins, resolve_prompt_input, run_prompt};
@@ -81,7 +81,7 @@ fn resolve_dispatch_context(store: &Arc<Store>, args: &mut RunArgs) -> Result<Di
         None => project::detect_project(),
     };
     apply_project_defaults(args, detected_project.as_ref());
-    validate_critical_rigor(args)?;
+    crate::command_diagnostics::validate_run_options(args)?;
     validate_egress(args)?;
     let agent_setup = resolve_agent_setup(store, args)?;
     let agent_name = agent_setup.custom_agent_name.as_deref().unwrap_or_else(|| agent_setup.agent_kind.as_str());

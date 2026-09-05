@@ -160,6 +160,7 @@ pub fn prompt_text(task: &Task) -> String {
     }
 }
 
+#[cfg(test)]
 pub fn read_task_output_for_tui(task: &Task) -> String {
     crate::task_view::read_output(task)
 }

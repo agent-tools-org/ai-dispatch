@@ -21,6 +21,7 @@ current arguments.
 
 | Command | Purpose |
 |---|---|
+| `aid errors` | Inspect recent CLI parse errors and pre-task rejections, with correction hints; see [command-errors.md](command-errors.md). |
 | `aid board` | Show the current task board (default: current project only; `--all` shows every project). Includes verification tags when verification has something to report. |
 | `aid watch` | Stream task or group progress; `--wait` waits for verification to settle and exits non-zero when a task did not succeed. |
 | `aid wait` | Block until selected tasks or a group reach a stopping state, including verification completion; returns non-zero when any task did not succeed. |

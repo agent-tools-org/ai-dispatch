@@ -12,17 +12,12 @@ use crate::types::{Task, TaskFilter, TaskStatus};
 
 impl App {
     pub(super) fn reload_tasks(&mut self) -> Result<()> {
-        let tree_nodes =
-            super::super::tree_data::build_task_tree_with_state(
-                &self.tasks,
-                &self.wg_creators,
-                &self.collapsed_projects,
-            );
+        let tree_nodes = &self.nodes;
         let tree_anchor = tree_nodes
             .get(self.tree_selected)
             .map(|n| {
                 (
-                    n.task.id.as_str().to_string(),
+                    n.task_id.as_str().to_string(),
                     n.project_id.clone(),
                     n.is_group_header,
                 )
@@ -44,12 +39,8 @@ impl App {
         }
         self.tasks = tasks;
         self.selected = resolve_selected_index(&self.tasks, selected_id.as_deref(), prev_selected);
-        let tree_nodes =
-            super::super::tree_data::build_task_tree_with_state(
-                &self.tasks,
-                &self.wg_creators,
-                &self.collapsed_projects,
-            );
+        self.rebuild_nodes();
+        let tree_nodes = &self.nodes;
         self.tree_node_count = tree_nodes.len();
         self.tree_selected = App::resolve_tree_selected(
             &tree_nodes,
@@ -60,6 +51,13 @@ impl App {
             self.reconcile_active_pane();
         }
         Ok(())
+    }
+
+    pub(super) fn rebuild_nodes(&mut self) {
+        self.nodes = super::super::tree_data::build_task_tree_with_state(
+            &self.tasks, &self.wg_creators, &self.collapsed_projects,
+        ).into();
+        self.tree_node_count = self.nodes.len();
     }
 
     /// When the previously selected task is gone, keep a nearby clamped index
@@ -76,7 +74,7 @@ impl App {
             if let Some(idx) = nodes
                 .iter()
                 .position(|n| {
-                    n.task.id.as_str() == id
+                    n.task_id.as_str() == id
                         && n.project_id.as_ref() == project_id.as_ref()
                         && n.is_group_header == *is_header
                 })
@@ -90,7 +88,7 @@ impl App {
             {
                 return idx;
             }
-            if let Some(idx) = nodes.iter().position(|n| n.task.id.as_str() == id) {
+            if let Some(idx) = nodes.iter().position(|n| n.task_id.as_str() == id) {
                 return idx;
             }
         }
@@ -171,9 +169,10 @@ impl App {
             return Ok(result);
         }
         let fresh = self.store.latest_milestones_batch(&need_query)?;
+        let terminal_ids: HashSet<&str> = tasks.iter().filter(|task| task.status.is_terminal())
+            .map(|task| task.id.as_str()).collect();
         for (task_id, detail) in &fresh {
-            if let Some(task) = tasks.iter().find(|task| task.id.as_str() == task_id)
-                && task.status.is_terminal()
+            if terminal_ids.contains(task_id.as_str())
             {
                 self.cached_terminal_milestones
                     .insert(task_id.clone(), detail.clone());

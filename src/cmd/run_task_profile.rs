@@ -7,17 +7,7 @@ use anyhow::Result;
 use super::RunArgs;
 use crate::agent;
 use crate::store::Store;
-use crate::types::{Task, TaskId, TaskProfileDeclaration, TaskRigor};
-
-pub(super) fn validate_critical_rigor(args: &RunArgs) -> Result<()> {
-    if args.declared_rigor != Some(TaskRigor::Critical) {
-        return Ok(());
-    }
-    if args.verify.is_none() || !args.audit {
-        anyhow::bail!("--rigor critical requires verification and cross-audit; pass --verify and --audit or configure both as project defaults");
-    }
-    Ok(())
-}
+use crate::types::{Task, TaskId, TaskProfileDeclaration};
 
 /// `--egress local` is independent of rigor: only a loopback provider passes.
 /// `--egress private-network` admits loopback or RFC1918/link-local endpoints.

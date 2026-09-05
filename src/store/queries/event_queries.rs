@@ -190,20 +190,13 @@ impl Store {
         let conn = self.db();
         let placeholders: Vec<String> = (1..=task_ids.len()).map(|i| format!("?{i}")).collect();
         let sql = format!(
-            "SELECT e.task_id, e.timestamp, e.event_type, e.detail, e.metadata
-             FROM events e
-             JOIN (
-                 SELECT task_id, MAX(id) AS latest_id
-                 FROM events
-                 WHERE task_id IN ({})
-                   AND timestamp = (
-                       SELECT MAX(latest.timestamp)
-                       FROM events latest
-                       WHERE latest.task_id = events.task_id
-                   )
-                 GROUP BY task_id
-             ) latest ON latest.latest_id = e.id",
-            placeholders.join(",")
+            "WITH requested(task_id) AS (VALUES {})
+             SELECT e.task_id, e.timestamp, e.event_type, e.detail, e.metadata
+             FROM requested r JOIN events e ON e.id = (
+                 SELECT id FROM events WHERE task_id = r.task_id
+                 ORDER BY timestamp DESC, id DESC LIMIT 1
+             )",
+            placeholders.iter().map(|value| format!("({value})")).collect::<Vec<_>>().join(",")
         );
         let mut stmt = conn.prepare(&sql)?;
         let params: Vec<&dyn rusqlite::ToSql> =

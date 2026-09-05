@@ -77,6 +77,7 @@ fn visible_navigation_reaches_every_node_across_collapsed_group() {
     }
     let mut app = App::new(store, super::super::RunOptions::default()).unwrap();
     app.collapsed_projects.insert(Some("project-middle".into()));
+    app.rebuild_nodes();
     app.tree_selected = 0;
 
     let nodes = crate::tui::tree_data::build_task_tree_with_state(

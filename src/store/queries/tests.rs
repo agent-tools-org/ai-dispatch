@@ -183,12 +183,15 @@ fn latest_events_batch_returns_one_refresh_snapshot_per_task() {
     insert_task(&store, "t-other", AgentKind::Grok, TaskStatus::Running, "Other");
     insert_event(&store, "t-latest", "2026-03-15T00:00:00Z", "tool_call", "Read", None);
     insert_event(&store, "t-latest", "2026-03-15T01:00:00Z", "reasoning", "Thinking", None);
+    insert_event(&store, "t-latest", "2026-03-15T01:00:00Z", "reasoning", "Thinking again", None);
+    insert_event(&store, "t-latest", "2026-03-15T00:30:00Z", "tool_call", "Late arrival", None);
     insert_event(&store, "t-other", "2026-03-15T02:00:00Z", "tool_call", "Write", None);
 
-    let latest = store.latest_events_batch(&["t-latest", "t-other", "t-missing"]).unwrap();
+    assert!(store.latest_events_batch(&[]).unwrap().is_empty());
+    let latest = store.latest_events_batch(&["t-latest", "t-other", "t-missing", "t-latest"]).unwrap();
 
     assert_eq!(latest.len(), 2);
-    assert_eq!(latest.get("t-latest").map(|event| event.detail.as_str()), Some("Thinking"));
+    assert_eq!(latest.get("t-latest").map(|event| event.detail.as_str()), Some("Thinking again"));
     assert_eq!(latest.get("t-latest").map(|event| event.event_kind.as_str()), Some("reasoning"));
     assert_eq!(latest.get("t-other").map(|event| event.detail.as_str()), Some("Write"));
 }

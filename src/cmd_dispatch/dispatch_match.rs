@@ -14,6 +14,7 @@ pub(crate) async fn dispatch(
     command: Commands,
 ) -> Result<DispatchOutcome> {
     match command {
+        Commands::Errors(args) => crate::command_diagnostics::show(&args).map(|()| DispatchOutcome::CommandCompleted),
         Commands::Run(args) => dispatch_run(store, args).await.map(DispatchOutcome::Run),
         command @ (
             Commands::Batch(..)

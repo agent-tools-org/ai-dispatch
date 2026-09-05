@@ -9,6 +9,8 @@ pub mod metrics;
 pub mod multipane;
 pub mod route_display;
 mod status_bar;
+#[cfg(test)]
+mod performance_probe;
 pub(crate) mod stats;
 mod stats_legacy;
 pub mod tree_data;
@@ -37,12 +39,14 @@ pub struct RunOptions {
 }
 
 pub fn run(store: &Arc<Store>, options: RunOptions) -> Result<()> {
+    let app = app::App::empty(store.clone(), options);
+    let worker = app::RefreshWorker::start(&app)?;
     enable_raw_mode()?;
     let mut stdout = stdout();
     crossterm::execute!(stdout, EnterAlternateScreen)?;
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
-    let result = run_loop(&mut terminal, app::App::new(store.clone(), options)?);
+    let result = run_loop(&mut terminal, app, worker);
     disable_raw_mode()?;
     crossterm::execute!(terminal.backend_mut(), LeaveAlternateScreen)?;
     terminal.show_cursor()?;
@@ -52,6 +56,7 @@ pub fn run(store: &Arc<Store>, options: RunOptions) -> Result<()> {
 fn run_loop(
     terminal: &mut Terminal<CrosstermBackend<std::io::Stdout>>,
     mut app: app::App,
+    mut worker: app::RefreshWorker,
 ) -> Result<()> {
     const FRAME_INTERVAL: Duration = Duration::from_millis(100);
     let mut last_draw = Instant::now() - FRAME_INTERVAL;
@@ -65,10 +70,9 @@ fn run_loop(
         {
             app.handle_key(key)?;
         }
+        if app.should_quit { return Ok(()); }
         app.tick()?;
-        if app.should_quit {
-            return Ok(());
-        }
+        worker.poll(&mut app)?;
     }
 }
 

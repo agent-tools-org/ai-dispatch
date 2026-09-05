@@ -9,7 +9,7 @@ use ratatui::widgets::{Block, Borders, Paragraph, Wrap};
 
 use crate::tui::app::{App, DetailTab};
 use super::ui_helpers::{
-    detail_content_block, detail_scroll_offset, prompt_text, read_task_output_for_tui, tab_bar,
+    detail_content_block, detail_scroll_offset, prompt_text, tab_bar,
     task_header,
 };
 use crate::types::{EventKind, Task, TaskEvent};
@@ -90,7 +90,7 @@ pub(super) fn render_detail_content(
         }
         DetailTab::Output => {
             frame.render_widget(
-                Paragraph::new(read_task_output_for_tui(task))
+                Paragraph::new(app.output_cache.get(task.id.as_str()).map(String::as_str).unwrap_or("Loading output…"))
                     .wrap(Wrap { trim: false })
                     .scroll((detail_scroll_offset(app.detail_scroll), 0))
                     .block(detail_content_block("Output")),

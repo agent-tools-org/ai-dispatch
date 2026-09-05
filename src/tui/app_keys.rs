@@ -19,24 +19,26 @@ impl App {
             KeyCode::Char('d') => {
                 self.tree_mode = false;
                 self.dashboard_mode = !self.dashboard_mode;
+                self.refresh_requested = true;
                 return Ok(());
             }
             KeyCode::Char('a') => {
                 self.show_all = !self.show_all;
-                self.reload_tasks()?;
+                self.refresh_requested = true;
                 return Ok(());
             }
             KeyCode::Char('s') => {
                 self.tree_mode = false;
                 self.stats_mode = !self.stats_mode;
                 if self.stats_mode {
-                    self.refresh_stats()?;
+                    self.refresh_requested = true;
                 }
                 return Ok(());
             }
             KeyCode::Char('m') => {
                 self.tree_mode = false;
                 self.multipane_mode = !self.multipane_mode;
+                self.refresh_requested = true;
                 if self.multipane_mode {
                     self.active_pane = 0;
                     self.pane_scroll_offsets.clear();
@@ -218,7 +220,8 @@ impl App {
                 .max(1),
             DetailTab::Output => self
                 .selected_task()
-                .map(|task| crate::task_view::read_output(task).lines().count())
+                .and_then(|task| self.output_cache.get(task.id.as_str()))
+                .map(|output| output.lines().count())
                 .unwrap_or(1)
                 .max(1),
         }
@@ -228,7 +231,8 @@ impl App {
         self.tree_mode = false;
         self.detail_mode = true;
         self.reset_detail_state();
-        self.load_selected_events()
+        self.refresh_requested = true;
+        Ok(())
     }
 
     fn reset_detail_state(&mut self) {

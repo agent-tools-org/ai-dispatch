@@ -1,3 +1,10 @@
+## v10.41.0 (2026-09-05)
+- Keep the interactive task dashboard responsive during large history refreshes.
+- Replace repeated latest-event scans with indexed per-task lookups and render only visible task rows.
+- Add redacted command rejection history with aid errors and actionable, aggregated dispatch validation.
+- Document command constraint findings and add real-terminal and CLI regression coverage.
+
+
 ## v10.40.0 (2026-09-03)
 - Fix a foreground `aid run` / `aid retry` losing its agent when the caller's timeout kills it. v10.37.0 stopped aid from signalling the agent, but aid held the agent's stdout pipe, so its hard exit killed the agent with SIGPIPE on the next write — proven by a control where the identical child survives with stdout on a file and dies on a pipe. Foreground now dispatches the same detached worker `--bg` uses and attaches a watcher; the worker is double-forked out of the caller's process tree, since a tree-walking killer follows PPID and neither a new process group nor a new session escapes it.
 - Fork the worker before the tokio runtime exists. Forking a process that already has runtime threads left the child waiting forever in `BlockingPool::shutdown`, so every finished task leaked a stuck `aid __run-task` process.

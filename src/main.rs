@@ -26,6 +26,7 @@ mod background;
 mod batch;
 mod board;
 mod cli_actions;
+mod command_diagnostics;
 mod cmd;
 mod cmd_dispatch;
 mod commit;
@@ -112,11 +113,20 @@ mod cli;
 
 use crate::cli::{Cli, Commands};
 use anyhow::Result;
-use clap::Parser;
 use std::sync::Arc;
 
 fn main() -> Result<()> {
-    let cli = Cli::parse();
+    let result = run_cli(command_diagnostics::parse());
+    if let Err(error) = &result {
+        command_diagnostics::record_error(error);
+    }
+    result
+}
+
+fn run_cli(cli: Cli) -> Result<()> {
+    if let Some(Commands::Errors(args)) = cli.command.as_ref() {
+        return command_diagnostics::show(args);
+    }
     if matches!(cli.command.as_ref(), Some(Commands::InternalRunTask(_)))
         && background::daemonize_worker_if_requested()?
     {

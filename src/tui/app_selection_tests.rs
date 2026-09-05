@@ -226,7 +226,7 @@ fn tree_selection_survives_refresh_while_tree_mode_is_inactive() {
     app.tick().unwrap();
 
     let nodes = crate::tui::tree_data::build_task_tree_with_creators(&app.tasks, &app.wg_creators);
-    assert_eq!(nodes[app.tree_selected].task.id.as_str(), "t-tree-selected");
+    assert_eq!(nodes[app.tree_selected].task_id.as_str(), "t-tree-selected");
 }
 
 #[test]

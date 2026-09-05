@@ -24,6 +24,9 @@ mod app_navigation;
 mod app_refresh;
 #[path = "stats_app.rs"]
 mod stats_app;
+#[path = "refresh/mod.rs"]
+mod refresh;
+pub(super) use refresh::RefreshWorker;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum DetailTab {
@@ -52,6 +55,10 @@ impl DetailTab {
 
 pub struct App {
     pub tasks: Vec<Task>,
+    pub nodes: Arc<Vec<super::tree_data::TreeNode>>,
+    pub refresh_requested: bool,
+    pub refresh_status: Option<String>,
+    pub output_cache: HashMap<String, String>,
     pub events_cache: HashMap<String, Vec<TaskEvent>>,
     latest_events: HashMap<String, TaskEvent>,
     pub metrics: HashMap<String, ProcessMetrics>,
@@ -81,8 +88,6 @@ pub struct App {
     group_filter: Option<String>,
     config: crate::config::AidConfig,
     store: Arc<Store>,
-    last_metrics_refresh: Instant,
-    last_stats_refresh: Instant,
     cached_terminal_milestones: HashMap<String, String>,
     active_pane_task_id: Option<String>,
     last_task_refresh: Instant,
@@ -90,9 +95,20 @@ pub struct App {
 }
 
 impl App {
+    #[cfg(test)]
     pub fn new(store: Arc<Store>, options: super::RunOptions) -> Result<Self> {
-        let mut app = Self {
+        let mut app = Self::empty(store, options);
+        app.reload_tasks()?;
+        Ok(app)
+    }
+
+    pub(super) fn empty(store: Arc<Store>, options: super::RunOptions) -> Self {
+        Self {
             tasks: Vec::new(),
+            nodes: Arc::new(Vec::new()),
+            refresh_requested: true,
+            refresh_status: Some("Loading tasks…".into()),
+            output_cache: HashMap::new(),
             events_cache: HashMap::new(),
             latest_events: HashMap::new(),
             metrics: HashMap::new(),
@@ -122,52 +138,29 @@ impl App {
             group_filter: options.group,
             config: crate::config::load_config().unwrap_or_default(),
             store,
-            last_metrics_refresh: Instant::now(),
-            last_stats_refresh: Instant::now(),
             cached_terminal_milestones: HashMap::new(),
             active_pane_task_id: None,
             last_task_refresh: Instant::now(),
             animation_phase: 0,
-        };
-        app.reload_tasks()?;
-        Ok(app)
+        }
     }
 
     pub fn tick(&mut self) -> Result<()> {
-        let task_refresh_due = self.last_task_refresh.elapsed() >= TASK_REFRESH_INTERVAL;
-        if task_refresh_due {
-            self.reload_tasks()?;
+        if self.last_task_refresh.elapsed() >= TASK_REFRESH_INTERVAL {
+            self.refresh_requested = true;
             self.last_task_refresh = Instant::now();
         }
         if self.has_reasoning_task() {
             self.animation_phase = self.animation_phase.wrapping_add(1) % 3;
         }
-        // Only refresh process metrics every 2 seconds (ps fork is expensive)
-        if self.last_metrics_refresh.elapsed().as_secs() >= 2 {
-            self.metrics = self.load_metrics(&self.tasks);
-            self.last_metrics_refresh = Instant::now();
-        }
-        self.refresh_stats_if_due()?;
-        if task_refresh_due && self.dashboard_mode {
-            self.load_dashboard_events()?;
-        }
-        if task_refresh_due && self.multipane_mode {
-            self.reconcile_active_pane();
-            self.load_multipane_events()?;
-            self.clamp_all_pane_scrolls();
-        }
-        if task_refresh_due && self.detail_mode {
-            self.load_selected_events()?;
-            self.clamp_detail_scroll();
-        }
         Ok(())
     }
 
     pub fn selected_task(&self) -> Option<&Task> { self.tasks.get(self.selected) }
-    pub fn selected_events(&self) -> Vec<TaskEvent> {
+    pub fn selected_events(&self) -> &[TaskEvent] {
         self.selected_task()
             .and_then(|task| self.events_cache.get(task.id.as_str()))
-            .cloned()
+            .map(Vec::as_slice)
             .unwrap_or_default()
     }
     pub fn get_metrics(&self, task_id: &str) -> Option<&ProcessMetrics> {
@@ -226,6 +219,7 @@ impl App {
                 .cmp(&running_a)
                 .then(b.created_at.cmp(&a.created_at))
         });
+        tasks.truncate(6);
         tasks
     }
     pub fn pane_count(&self) -> usize {
@@ -260,7 +254,9 @@ impl App {
             (None, None) => format!("{project} | {scope}"),
         }
     }
-    pub fn empty_message(&self) -> String { format!("No tasks matched scope: {}", self.scope_label()) }
+    pub fn empty_message(&self) -> String {
+        self.refresh_status.clone().unwrap_or_else(|| format!("No tasks matched scope: {}", self.scope_label()))
+    }
 }
 
 const TASK_REFRESH_INTERVAL: Duration = Duration::from_secs(2);

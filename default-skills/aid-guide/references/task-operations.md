@@ -7,6 +7,7 @@ aid board
 aid board --all
 aid board --json
 aid watch <task-id>
+aid watch --tui
 aid wait <task-id>
 aid show <task-id> --summary
 aid show <task-id> --events
@@ -26,6 +27,13 @@ The TUI shows every project grouped by project, including a visible
 `/` to find a task, `n/N` to move to the next or previous match while finding,
 `Enter` to open the selected task, `r` to refresh, and `Esc` to cancel search or
 return from a view. `g`/`G` return to the first/last row.
+
+`aid watch --tui` starts with today's tasks plus older active tasks. Press `a`
+to toggle all history and `q` to quit. Refreshes run in the background; the
+current rows remain usable while the refresh indicator is visible. Repeated
+refresh requests are combined, and a refresh failure keeps the last snapshot
+visible with an error indicator. Task and tree views render only visible rows.
+The multipane view (`m`) loads event histories for its six visible panes.
 
 Use `watch` for a stream and `wait` for automation. `--wait` continues while
 verification is pending and returns non-zero when any selected task does not

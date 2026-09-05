@@ -22,7 +22,7 @@ use super::multipane;
 use super::status_bar::{render_status_bar, StatusBarMode};
 use crate::cost;
 use crate::types::TaskStatus;
-use crate::tui::tree_data::{self, TreeNode};
+use crate::tui::tree_data::TreeNode;
 
 pub fn render(frame: &mut ratatui::Frame<'_>, app: &App) {
     if app.tree_mode {
@@ -38,12 +38,20 @@ pub fn render(frame: &mut ratatui::Frame<'_>, app: &App) {
     } else {
         render_board(frame, app);
     }
+    if let Some(status) = &app.refresh_status {
+        let area = frame.area();
+        let width = area.width.min(70);
+        let banner = ratatui::layout::Rect::new(area.right().saturating_sub(width), area.y, width, 1);
+        frame.render_widget(Paragraph::new(status.as_str()).alignment(Alignment::Right)
+            .style(Style::default().fg(Color::Yellow).bg(Color::Black)), banner);
+    }
 }
 
 fn render_multipane_view(frame: &mut ratatui::Frame<'_>, app: &App) {
     let tasks = app.multipane_tasks();
     let panes: Vec<multipane::PaneData> = tasks
         .iter()
+        .take(6)
         .map(|task| {
             let events_raw = app
                 .events_cache
@@ -134,12 +142,10 @@ fn render_board(frame: &mut ratatui::Frame<'_>, app: &App) {
         "ID", "Route", "Status", "Progress", "CPU", "Mem", "Created", "Duration", "Tokens", "Cost", "Model", "Prompt",
     ])
     .style(Style::default().add_modifier(Modifier::BOLD));
-    let nodes = tree_data::build_task_tree_with_state(
-        &app.tasks,
-        &app.wg_creators,
-        &app.collapsed_projects,
-    );
-    let rows = nodes.iter().map(|node| board_row(app, node));
+    let nodes = &app.nodes;
+    let height = chunks[1].height.saturating_sub(3) as usize;
+    let start = app.tree_selected.saturating_sub(height.saturating_sub(1));
+    let rows = nodes.iter().skip(start).take(height).map(|node| board_row(app, node));
     let table = Table::new(
         rows,
         [
@@ -168,7 +174,7 @@ fn render_board(frame: &mut ratatui::Frame<'_>, app: &App) {
 
     let mut state = TableState::default();
     if !nodes.is_empty() {
-        state.select(Some(app.tree_selected.min(nodes.len() - 1)));
+        state.select(Some(app.tree_selected.min(nodes.len() - 1).saturating_sub(start)));
     }
     frame.render_stateful_widget(table, chunks[1], &mut state);
 
@@ -193,7 +199,7 @@ fn board_row(
         return Row::new(group_header_cells(&node.prefix))
             .style(Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD));
     }
-    task_row(app, &node.task)
+    task_row(app, &app.tasks[node.task_index])
 }
 
 const TABLE_COLUMN_WIDTHS: [usize; 12] = [10, 28, 8, 24, 7, 7, 11, 10, 8, 8, 18, 20];

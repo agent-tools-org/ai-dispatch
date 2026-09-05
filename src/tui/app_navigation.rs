@@ -15,7 +15,7 @@ impl App {
             KeyCode::Char('n') => self.move_search(1),
             KeyCode::Char('N') => self.move_search(-1),
             KeyCode::Char('r') => {
-                self.reload_tasks()?;
+                self.refresh_requested = true;
                 self.last_task_refresh = Instant::now();
             }
             KeyCode::Down | KeyCode::Char('j') => self.move_visible(1),
@@ -49,12 +49,8 @@ impl App {
         Ok(())
     }
 
-    fn visible_nodes(&self) -> Vec<crate::tui::tree_data::TreeNode> {
-        crate::tui::tree_data::build_task_tree_with_state(
-            &self.tasks,
-            &self.wg_creators,
-            &self.collapsed_projects,
-        )
+    fn visible_nodes(&self) -> Arc<Vec<crate::tui::tree_data::TreeNode>> {
+        self.nodes.clone()
     }
 
     fn move_visible(&mut self, direction: i8) {
@@ -108,6 +104,7 @@ impl App {
         if !self.collapsed_projects.insert(project_id.clone()) {
             self.collapsed_projects.remove(&project_id);
         }
+        self.rebuild_nodes();
         let nodes = self.visible_nodes();
         self.tree_selected = nodes
             .iter()
@@ -168,10 +165,11 @@ impl App {
         };
         let project_id = self.tasks[matches[next]].project_id.clone();
         self.collapsed_projects.remove(&project_id);
+        self.rebuild_nodes();
         let nodes = self.visible_nodes();
         if let Some(node_index) = nodes
             .iter()
-            .position(|node| !node.is_group_header && node.task.id == self.tasks[matches[next]].id)
+            .position(|node| !node.is_group_header && node.task_id == self.tasks[matches[next]].id)
         {
             self.select_row(node_index, &nodes);
         }
@@ -190,7 +188,7 @@ impl App {
         self.tree_selected = index;
         if let Some(node) = nodes.get(index)
             && !node.is_group_header
-            && let Some(task_index) = self.tasks.iter().position(|task| task.id == node.task.id)
+            && let Some(task_index) = self.tasks.iter().position(|task| task.id == node.task_id)
         {
             self.selected = task_index;
         }
@@ -207,7 +205,7 @@ impl App {
                 .find(|task| task.project_id == node.project_id)
                 .map(|task| task.id.clone())
         } else {
-            Some(node.task.id.clone())
+            Some(node.task_id.clone())
         };
         if let Some(task_id) = task_id
             && let Some(index) = self.tasks.iter().position(|task| task.id == task_id)

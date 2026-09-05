@@ -58,6 +58,8 @@ pub struct Cli {
 #[allow(clippy::large_enum_variant)]
 pub enum Commands {
     Run(command_args_a::RunArgs),
+    /// Inspect recent CLI errors, including requests rejected before task creation
+    Errors(crate::command_diagnostics::ErrorsArgs),
     /// Show agent routing advice without dispatching
     Advise(command_args_advise::AdviseArgs),
     Batch(command_args_a::BatchArgs),

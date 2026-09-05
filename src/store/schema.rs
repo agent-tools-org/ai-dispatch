@@ -241,6 +241,9 @@ pub(super) fn migrate(store: &Store) -> Result<()> {
     let _ = conn
         .execute_batch("CREATE INDEX IF NOT EXISTS idx_tasks_workgroup ON tasks(workgroup_id);");
     let _ = conn.execute_batch("CREATE INDEX IF NOT EXISTS idx_events_task_id ON events(task_id);");
+    conn.execute_batch(
+        "CREATE INDEX IF NOT EXISTS idx_events_task_timestamp_id ON events(task_id, timestamp DESC, id DESC);",
+    )?;
     let _ = conn.execute_batch(
         "CREATE INDEX IF NOT EXISTS idx_events_task_kind ON events(task_id, event_type);",
     );

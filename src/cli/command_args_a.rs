@@ -38,15 +38,15 @@ pub struct RunArgs {
     pub budget: Option<TaskBudget>,
     #[arg(long)]
     pub urgency: Option<TaskUrgency>,
-    #[arg(long)]
+    #[arg(long, help = "Proof level; critical requires enabled --verify and post-task --audit (or project defaults)")]
     pub rigor: Option<TaskRigor>,
     #[arg(long, default_value = "any", help = "Data egress: any (default), local (loopback only), or private-network (loopback or RFC1918/link-local)")]
     pub egress: TaskEgress,
-    #[arg(long)]
+    #[arg(long, help = "Task category; for a bug audit use debugging --read-only (--audit is a post-task check)")]
     pub kind: Option<TaskCategory>,
     #[arg(long = NO_HINT_FLAG)]
     pub no_hint: bool,
-    #[arg(short, long)]
+    #[arg(short, long, help = "Create/reuse a writable task branch; for a read-only checkout use --dir <path>")]
     pub worktree: Option<String>,
     #[arg(long)]
     pub team: Option<String>,
@@ -82,7 +82,7 @@ pub struct RunArgs {
     pub bg: bool,
     #[arg(long)]
     pub dry_run: bool,
-    #[arg(long)]
+    #[arg(long, help = "Read-only task; use --dir <checkout-path> to inspect an existing worktree")]
     pub read_only: bool,
     #[arg(long)]
     pub sandbox: bool,

@@ -39,6 +39,7 @@ impl App {
         let task_ids: Vec<String> = self
             .multipane_tasks()
             .iter()
+            .take(6)
             .map(|task| task.id.as_str().to_string())
             .collect();
         for task_id in task_ids {

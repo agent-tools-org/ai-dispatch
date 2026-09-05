@@ -76,6 +76,8 @@ already knows, which puts these responsibilities on the caller:
 
 - For choosing among all public commands, read
   [references/command-index.md](references/command-index.md).
+- For rejected command arguments and pre-task failure history, read
+  [references/command-errors.md](references/command-errors.md).
 - For setup, project configuration, agents, skills, templates, containers,
   credentials, MCP, hooks, and upgrades, read
   [references/configuration.md](references/configuration.md).

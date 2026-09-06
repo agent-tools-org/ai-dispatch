@@ -4,8 +4,7 @@
 
 use anyhow::{Context, Result};
 use std::path::Path;
-use std::io::Write;
-use std::process::{Command, Stdio};
+use std::process::Command;
 
 /// `git add` pathspec exclusions for aid's own runtime bookkeeping/artifacts —
 /// a target repo won't gitignore these itself, so any `git add` run by aid or
@@ -55,24 +54,17 @@ pub(crate) fn stage_aid_files(
     Ok(())
 }
 
+/// Finds ignored candidate paths for staging exclusions.
+/// Tracked bookkeeping files under ignored directories are not excluded, so their churn may be staged;
+/// this is accepted because the alternative is a failed rescue commit.
 fn ignored_candidates(dir: &Path, candidates: &[&str]) -> Result<Vec<String>> {
-    let mut check = Command::new("git")
+    let output = Command::new("git")
         .arg("-C")
         .arg(dir)
-        .args(["check-ignore", "--stdin"])
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .spawn()
+        .args(["check-ignore", "--no-index", "--"])
+        .args(candidates)
+        .output()
         .context("Failed to run git check-ignore")?;
-    if let Some(stdin) = check.stdin.as_mut() {
-        stdin
-            .write_all(candidates.join("\n").as_bytes())
-            .context("Failed to provide paths to git check-ignore")?;
-    }
-    drop(check.stdin.take());
-    let output = check
-        .wait_with_output()
-        .context("Failed to read git check-ignore")?;
     match output.status.code() {
         Some(0) => Ok(String::from_utf8_lossy(&output.stdout)
             .lines()

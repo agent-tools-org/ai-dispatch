@@ -15,6 +15,8 @@ worktree, so the live worktree no longer exists.
 
 ## Evidence
 
+The exclude list now lives in `src/worktree/staging.rs`.
+
 1. **Minimal reproduction** (scratch repo, git 2.50.1): `.gitignore` contains `.aid/`, one file under
    `.aid/` is force-tracked (agentswap's exact shape: `.aid/seo-phase1.toml` is tracked while
    `.gitignore:7` ignores `.aid/`). Running the rescue command

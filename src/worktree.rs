@@ -29,7 +29,7 @@ pub(crate) use snapshot::{
     WorktreeStatusEntry, WorktreeStatusKind, capture_worktree_snapshot,
     capture_worktree_snapshot_with_base,
 };
-pub(crate) use staging::{AID_ADD_EXCLUDES, AidStageMode, stage_aid_files};
+pub(crate) use staging::{AidStageMode, stage_aid_files};
 pub(crate) use live_state::{LiveWorktreeState, capture_live_worktree_state, uncommitted_diff_text};
 pub(crate) use baseline::{baseline_contains, extract_baseline_path, extract_baseline_paths};
 pub use path::{aid_worktree_path, aid_worktree_root, is_aid_managed_worktree_path};

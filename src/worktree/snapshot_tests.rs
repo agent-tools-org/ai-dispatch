@@ -131,7 +131,7 @@ fn aid_add_excludes_handles_state_ignored_by_info_exclude() {
 }
 
 #[test]
-fn aid_add_excludes_still_restages_tracked_aid_project_toml() {
+fn aid_staging_keeps_project_but_excludes_tracked_state() {
     let dir = repo_with_main();
     std::fs::create_dir_all(dir.path().join(".aid")).unwrap();
     std::fs::write(dir.path().join(".aid/project.toml"), "[project]\nid = \"a\"\n").unwrap();
@@ -153,7 +153,7 @@ fn aid_add_excludes_still_restages_tracked_aid_project_toml() {
 }
 
 #[test]
-fn aid_staging_resets_populated_ignored_target_directory() {
+fn aid_staging_excludes_populated_ignored_target_directory() {
     let dir = repo_with_main();
     std::fs::write(dir.path().join(".gitignore"), "target/\n").unwrap();
     git(dir.path(), &["add", ".gitignore"]);
@@ -173,7 +173,7 @@ fn aid_staging_resets_populated_ignored_target_directory() {
 }
 
 #[test]
-fn aid_staging_resets_target_directory_even_when_not_ignored() {
+fn aid_staging_excludes_target_directory_even_when_not_ignored() {
     let dir = repo_with_main();
     std::fs::create_dir_all(dir.path().join("target/debug")).unwrap();
     std::fs::write(dir.path().join("target/debug/app"), "binary\n").unwrap();
@@ -187,6 +187,48 @@ fn aid_staging_resets_target_directory_even_when_not_ignored() {
         .output()
         .expect("git diff --cached failed");
     assert_eq!(String::from_utf8_lossy(&output.stdout).lines().collect::<Vec<_>>(), vec!["keep.rs"]);
+}
+
+#[test]
+fn aid_staging_excludes_untracked_state_without_ignore_rules() {
+    let dir = repo_with_main();
+    std::fs::create_dir_all(dir.path().join(".aid/batches")).unwrap();
+    std::fs::write(dir.path().join(".aid/state.toml"), "health = 1\n").unwrap();
+    std::fs::write(dir.path().join(".aid/batches/run.toml"), "batch = 1\n").unwrap();
+    std::fs::write(dir.path().join("keep.rs"), "fn main() {}\n").unwrap();
+
+    stage_aid_files(dir.path(), AidStageMode::All, &[]).unwrap();
+
+    let output = Command::new("git")
+        .current_dir(dir.path())
+        .args(["diff", "--cached", "--name-only"])
+        .output()
+        .expect("git diff --cached failed");
+    assert_eq!(String::from_utf8_lossy(&output.stdout).lines().collect::<Vec<_>>(), vec!["keep.rs"]);
+}
+
+#[test]
+fn aid_staging_preserves_target_file_already_staged_by_agent() {
+    let dir = repo_with_main();
+    std::fs::create_dir_all(dir.path().join("target")).unwrap();
+    std::fs::write(dir.path().join("target/artifact"), "initial\n").unwrap();
+    git(dir.path(), &["add", "-A", "--", "."]);
+    git(dir.path(), &["commit", "-m", "track target artifact"]);
+    std::fs::write(dir.path().join("target/artifact"), "agent update\n").unwrap();
+    git(dir.path(), &["add", "target/artifact"]);
+    std::fs::write(dir.path().join("keep.rs"), "fn main() {}\n").unwrap();
+
+    stage_aid_files(dir.path(), AidStageMode::All, &["target/"]).unwrap();
+
+    let output = Command::new("git")
+        .current_dir(dir.path())
+        .args(["diff", "--cached", "--name-only"])
+        .output()
+        .expect("git diff --cached failed");
+    assert_eq!(
+        String::from_utf8_lossy(&output.stdout).lines().collect::<Vec<_>>(),
+        vec!["keep.rs", "target/artifact"]
+    );
 }
 
 #[test]

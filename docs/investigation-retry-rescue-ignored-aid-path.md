@@ -75,14 +75,14 @@ pathspec as "matched only ignored paths" and exits 1 after staging. Two of the f
 exit as a failed add and abort before committing, so the rescue commit that `aid retry` and the
 failure salvage depend on is never made in repos shaped like agentswap.
 
-## Fix options (for 老张; none implemented)
+## Fix options
 
-1. **Recommended:** stage with `git add -A -- .` plus only the top-level excludes (`.aid-*`,
-   `**/.aid-*`, `result-*.md`, `result-*.json`, `aid-batch-*`, `**/aid-batch-*`), then
-   `git reset -q -- .aid/state.toml .aid/batches` to drop the two bookkeeping paths if they were
-   staged. Verified in the repro: exit 0, only the real change staged; `reset -q` on absent paths
-   exits 0. Apply the same shape at all five call sites, and make merge/experiment stop discarding the
-   add's exit code once it is trustworthy. Verified on git 2.50.1 only.
+1. **Shipped:** `src/worktree/staging.rs` collects `.aid/state.toml`, `.aid/batches`, and any
+   caller-specific generated directories, then pipes them to `git check-ignore --stdin`. It passes
+   `:(exclude)<candidate>` only for candidates Git does not report as ignored, along with the
+   top-level aid exclusions, before running `git add -A` or `git add -u`. Ignored candidates are
+   omitted because Git already excludes them and their nested pathspecs can make `git add` exit 1.
+   There is no post-add reset, so files already staged by an agent remain staged.
 2. Drop the two nested excludes and rely on `ensure_aid_paths_excluded`'s `info/exclude` entries.
    Simpler, but changes behaviour in a repo where that exclude file could not be written, and a
    tracked `.aid/state.toml` would then be committed on every rescue.

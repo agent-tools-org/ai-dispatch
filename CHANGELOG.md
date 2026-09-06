@@ -1,3 +1,7 @@
+## v10.42.0 (2026-09-06)
+- Fix `aid retry` and failure salvage never committing partial work in a repo whose `.aid/` directory is gitignored: the rescue `git add -A` named `.aid/state.toml` and `.aid/batches/**` as exclude pathspecs, which makes git exit 1 after staging, and both callers aborted on that exit (regressed in v10.15.0). All aid-driven staging now goes through one helper (`src/worktree/staging.rs`) that asks `git check-ignore` first and passes an exclude only for paths git would otherwise add; merge auto-commit and experiment commits use it too and no longer discard the add's exit code.
+
+
 ## v10.41.0 (2026-09-05)
 - Keep the interactive task dashboard responsive during large history refreshes.
 - Replace repeated latest-event scans with indexed per-task lookups and render only visible task rows.

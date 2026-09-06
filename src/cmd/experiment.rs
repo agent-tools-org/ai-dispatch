@@ -134,11 +134,7 @@ fn git_revert(dir: &str) -> Result<()> {
     Ok(())
 }
 fn git_commit(dir: &str, message: &str) -> Result<()> {
-    Command::new("git")
-        .args(["add", "-A", "--", "."])
-        .args(crate::worktree::AID_ADD_EXCLUDES)
-        .current_dir(dir)
-        .output()?;
+    crate::worktree::stage_all_aid_files(Path::new(dir), &[])?;
     Command::new("git")
         .args(["commit", "-m", message])
         .current_dir(dir)

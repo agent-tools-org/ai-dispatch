@@ -1,6 +1,11 @@
+// Worktree snapshot and staging regression tests.
+// Covers status parsing, rescue filtering, and Git bookkeeping exclusions.
+// Deps: snapshot helpers, std::process, tempfile.
+
 use super::{
     AID_ADD_EXCLUDES, WorktreeStatusKind, capture_worktree_snapshot,
     capture_worktree_snapshot_with_base, is_rescuable_path, parse_status_entry,
+    stage_all_aid_files,
 };
 use std::path::Path;
 use std::process::Command;
@@ -70,6 +75,13 @@ fn is_rescuable_path_excludes_aid_artifacts() {
 #[test]
 fn aid_add_excludes_covers_nested_and_untyped_bookkeeping_paths() {
     let dir = repo_with_main();
+    std::fs::create_dir_all(dir.path().join(".aid")).unwrap();
+    std::fs::write(dir.path().join(".aid/seo-phase1.toml"), "tracked = true\n").unwrap();
+    git(dir.path(), &["add", "-A", "--", "."]);
+    git(dir.path(), &["commit", "-m", "track agent config"]);
+    std::fs::write(dir.path().join(".gitignore"), ".aid/\n").unwrap();
+    git(dir.path(), &["add", ".gitignore"]);
+    git(dir.path(), &["commit", "-m", "ignore aid directory"]);
     std::fs::create_dir_all(dir.path().join("sub")).unwrap();
     std::fs::create_dir_all(dir.path().join(".aid/batches")).unwrap();
     std::fs::write(dir.path().join(".aid-lock"), "pid=1\n").unwrap();
@@ -80,9 +92,7 @@ fn aid_add_excludes_covers_nested_and_untyped_bookkeeping_paths() {
     std::fs::write(dir.path().join("sub/aid-batch-nested.log"), "x\n").unwrap();
     std::fs::write(dir.path().join("keep.rs"), "fn main() {}\n").unwrap();
 
-    let mut add_args = vec!["add", "-A", "--", "."];
-    add_args.extend_from_slice(AID_ADD_EXCLUDES);
-    git(dir.path(), &add_args);
+    stage_all_aid_files(dir.path(), &[]).unwrap();
 
     let output = Command::new("git")
         .current_dir(dir.path())
@@ -95,6 +105,29 @@ fn aid_add_excludes_covers_nested_and_untyped_bookkeeping_paths() {
         vec!["keep.rs"],
         "got: {staged}"
     );
+}
+
+#[test]
+fn aid_add_excludes_handles_state_ignored_by_info_exclude() {
+    let dir = repo_with_main();
+    std::fs::create_dir_all(dir.path().join(".aid")).unwrap();
+    std::fs::write(
+        dir.path().join(".git/info/exclude"),
+        ".aid/state.toml\n",
+    )
+    .unwrap();
+    std::fs::write(dir.path().join(".aid/state.toml"), "health = 1\n").unwrap();
+    std::fs::write(dir.path().join("keep.rs"), "fn main() {}\n").unwrap();
+
+    stage_all_aid_files(dir.path(), &[]).unwrap();
+
+    let output = Command::new("git")
+        .current_dir(dir.path())
+        .args(["diff", "--cached", "--name-only"])
+        .output()
+        .expect("git diff --cached failed");
+    let staged = String::from_utf8_lossy(&output.stdout);
+    assert_eq!(staged.lines().collect::<Vec<_>>(), vec!["keep.rs"]);
 }
 
 #[test]

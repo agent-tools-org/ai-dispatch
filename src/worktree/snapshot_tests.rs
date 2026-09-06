@@ -3,10 +3,10 @@
 // Deps: snapshot helpers, std::process, tempfile.
 
 use super::{
-    AID_ADD_EXCLUDES, WorktreeStatusKind, capture_worktree_snapshot,
-    capture_worktree_snapshot_with_base, is_rescuable_path, parse_status_entry,
-    stage_all_aid_files,
+    WorktreeStatusKind, capture_worktree_snapshot, capture_worktree_snapshot_with_base,
+    is_rescuable_path, parse_status_entry,
 };
+use crate::worktree::{AidStageMode, stage_aid_files};
 use std::path::Path;
 use std::process::Command;
 use tempfile::TempDir;
@@ -92,7 +92,7 @@ fn aid_add_excludes_covers_nested_and_untyped_bookkeeping_paths() {
     std::fs::write(dir.path().join("sub/aid-batch-nested.log"), "x\n").unwrap();
     std::fs::write(dir.path().join("keep.rs"), "fn main() {}\n").unwrap();
 
-    stage_all_aid_files(dir.path(), &[]).unwrap();
+    stage_aid_files(dir.path(), AidStageMode::All, &[]).unwrap();
 
     let output = Command::new("git")
         .current_dir(dir.path())
@@ -119,7 +119,7 @@ fn aid_add_excludes_handles_state_ignored_by_info_exclude() {
     std::fs::write(dir.path().join(".aid/state.toml"), "health = 1\n").unwrap();
     std::fs::write(dir.path().join("keep.rs"), "fn main() {}\n").unwrap();
 
-    stage_all_aid_files(dir.path(), &[]).unwrap();
+    stage_aid_files(dir.path(), AidStageMode::All, &[]).unwrap();
 
     let output = Command::new("git")
         .current_dir(dir.path())
@@ -135,13 +135,13 @@ fn aid_add_excludes_still_restages_tracked_aid_project_toml() {
     let dir = repo_with_main();
     std::fs::create_dir_all(dir.path().join(".aid")).unwrap();
     std::fs::write(dir.path().join(".aid/project.toml"), "[project]\nid = \"a\"\n").unwrap();
-    git(dir.path(), &["add", ".aid/project.toml"]);
+    std::fs::write(dir.path().join(".aid/state.toml"), "health = 1\n").unwrap();
+    git(dir.path(), &["add", "-A", "--", "."]);
     git(dir.path(), &["commit", "-m", "track project.toml"]);
     std::fs::write(dir.path().join(".aid/project.toml"), "[project]\nid = \"b\"\n").unwrap();
+    std::fs::write(dir.path().join(".aid/state.toml"), "health = 2\n").unwrap();
 
-    let mut add_args = vec!["add", "-u", "--", "."];
-    add_args.extend_from_slice(AID_ADD_EXCLUDES);
-    git(dir.path(), &add_args);
+    stage_aid_files(dir.path(), AidStageMode::Tracked, &[]).unwrap();
 
     let output = Command::new("git")
         .current_dir(dir.path())
@@ -149,11 +149,44 @@ fn aid_add_excludes_still_restages_tracked_aid_project_toml() {
         .output()
         .expect("git diff --cached failed");
     let staged = String::from_utf8_lossy(&output.stdout);
-    assert_eq!(
-        staged.lines().collect::<Vec<_>>(),
-        vec![".aid/project.toml"],
-        "got: {staged}"
-    );
+    assert_eq!(staged.lines().collect::<Vec<_>>(), vec![".aid/project.toml"], "got: {staged}");
+}
+
+#[test]
+fn aid_staging_resets_populated_ignored_target_directory() {
+    let dir = repo_with_main();
+    std::fs::write(dir.path().join(".gitignore"), "target/\n").unwrap();
+    git(dir.path(), &["add", ".gitignore"]);
+    git(dir.path(), &["commit", "-m", "ignore target"]);
+    std::fs::create_dir_all(dir.path().join("target/debug")).unwrap();
+    std::fs::write(dir.path().join("target/debug/app"), "binary\n").unwrap();
+    std::fs::write(dir.path().join("keep.rs"), "fn main() {}\n").unwrap();
+
+    stage_aid_files(dir.path(), AidStageMode::All, &["target/"]).unwrap();
+
+    let output = Command::new("git")
+        .current_dir(dir.path())
+        .args(["diff", "--cached", "--name-only"])
+        .output()
+        .expect("git diff --cached failed");
+    assert_eq!(String::from_utf8_lossy(&output.stdout).lines().collect::<Vec<_>>(), vec!["keep.rs"]);
+}
+
+#[test]
+fn aid_staging_resets_target_directory_even_when_not_ignored() {
+    let dir = repo_with_main();
+    std::fs::create_dir_all(dir.path().join("target/debug")).unwrap();
+    std::fs::write(dir.path().join("target/debug/app"), "binary\n").unwrap();
+    std::fs::write(dir.path().join("keep.rs"), "fn main() {}\n").unwrap();
+
+    stage_aid_files(dir.path(), AidStageMode::All, &["target/"]).unwrap();
+
+    let output = Command::new("git")
+        .current_dir(dir.path())
+        .args(["diff", "--cached", "--name-only"])
+        .output()
+        .expect("git diff --cached failed");
+    assert_eq!(String::from_utf8_lossy(&output.stdout).lines().collect::<Vec<_>>(), vec!["keep.rs"]);
 }
 
 #[test]

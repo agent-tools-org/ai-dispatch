@@ -103,7 +103,7 @@ fn append_recent_activity(out: &mut String, events: &[TaskEvent]) {
 }
 
 fn commit_partial_work(worktree: &Path, task_id: &str) -> Result<()> {
-    crate::worktree::stage_all_aid_files(worktree, &[])?;
+    crate::worktree::stage_aid_files(worktree, crate::worktree::AidStageMode::All, &[])?;
     if !has_staged_changes(worktree)? {
         return Ok(());
     }

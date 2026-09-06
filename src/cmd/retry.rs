@@ -263,7 +263,7 @@ fn resolve_retry_target(
 
 fn save_partial_work(path: &str, task_id: &str) -> Result<()> {
     if worktree_is_dirty(path)? {
-        crate::worktree::stage_all_aid_files(Path::new(path), &[])?;
+        crate::worktree::stage_aid_files(Path::new(path), crate::worktree::AidStageMode::All, &[])?;
         run_git(path, &["commit", "-m", &format!("[aid] partial work from {task_id}")])?;
         aid_info!("[aid] Saved partial work from prior attempt as commit");
     }

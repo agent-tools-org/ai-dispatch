@@ -148,52 +148,6 @@ pub fn parse_status_entry(line: &str) -> Option<WorktreeStatusEntry> {
     })
 }
 
-/// `git add` pathspec exclusions for aid's own runtime bookkeeping/artifacts —
-/// a target repo won't gitignore these itself, so any `git add` run by aid or
-/// a dispatched agent must exclude them explicitly.
-///
-/// This is a *different* policy from `is_rescuable_path`, not the same one
-/// restated: `is_rescuable_path` decides what rescue may treat as recoverable
-/// source, and can afford to reject all of `.aid/` conservatively since it
-/// only ever considers new/dirty files. This list feeds `git add -u` as well
-/// (see `commit::auto_commit`), which restages already-tracked files — an
-/// unqualified `.aid/**` exclude here would stop a repo that legitimately
-/// tracks `.aid/project.toml` from ever having edits to it committed. Nested
-/// `.aid/` paths are removed after `git add -A` by `stage_all_aid_files`
-/// instead, because naming them in an add pathspec can make Git return 1 for
-/// an ignored `.aid/` directory.
-///
-/// Each `.aid-*`/`aid-batch-*` pattern is listed twice (bare and `**/`-
-/// prefixed): git pathspec matching does not let a single glob cover both a
-/// repo-root file and a nested one of the same name.
-pub const AID_ADD_EXCLUDES: &[&str] = &[
-    ":(exclude).aid-*",
-    ":(exclude)**/.aid-*",
-    ":(exclude)result-*.md",
-    ":(exclude)result-*.json",
-    ":(exclude)aid-batch-*",
-    ":(exclude)**/aid-batch-*",
-];
-
-pub(crate) fn stage_all_aid_files(dir: &Path, extra_excludes: &[&str]) -> Result<()> {
-    let mut add = Command::new("git");
-    add.arg("-C")
-        .arg(dir)
-        .args(["add", "-A", "--", "."])
-        .args(extra_excludes)
-        .args(AID_ADD_EXCLUDES);
-    let output = add.output().context("Failed to run git add")?;
-    anyhow::ensure!(output.status.success(), "git add failed: {}", String::from_utf8_lossy(&output.stderr));
-
-    let reset = Command::new("git").arg("-C").arg(dir).args(["reset", "-q", "--", ".aid/state.toml", ".aid/batches"]).output().context("Failed to run git reset")?;
-    anyhow::ensure!(
-        reset.status.success(),
-        "git reset failed: {}",
-        String::from_utf8_lossy(&reset.stderr)
-    );
-    Ok(())
-}
-
 pub fn is_rescuable_path(path: &str) -> bool {
     if path.starts_with(".aid/")
         || (path.starts_with("result-t-") && path.ends_with(".md"))
@@ -290,4 +244,6 @@ fn git_diff_stat_output(dir: &Path, args: &[&str]) -> Option<String> {
     Some(String::from_utf8_lossy(&output.stdout).to_string())
 }
 
-#[cfg(test)] #[path = "snapshot_tests.rs"] mod tests;
+#[cfg(test)]
+#[path = "snapshot_tests.rs"]
+mod tests;

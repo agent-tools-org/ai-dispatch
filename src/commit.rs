@@ -47,12 +47,11 @@ pub fn auto_commit(dir: &str, task_id: &str, prompt: &str) -> Result<()> {
     // Only stage tracked files that were modified — avoid committing aid-injected
     // temp files (batch TOML, team knowledge, shared context) via `git add -u`.
     if head_sha(dir).is_ok() {
-        let add = Command::new("git")
-            .args(["-C", dir, "add", "-u", "--", "."])
-            .args(crate::worktree::AID_ADD_EXCLUDES)
-            .output()
-            .context("Failed to run git add")?;
-        anyhow::ensure!(add.status.success(), "git add failed: {}", String::from_utf8_lossy(&add.stderr));
+        crate::worktree::stage_aid_files(
+            Path::new(dir),
+            crate::worktree::AidStageMode::Tracked,
+            &[],
+        )?;
     }
     // Also stage new source files the agent created, but not aid artifacts.
     stage_untracked_source_files(dir, task_id)?;
@@ -265,12 +264,15 @@ mod tests {
         let dir = repo();
         commit_path(dir.path(), "src/main.rs", "fn main() {}\n");
         commit_path(dir.path(), ".aid/project.toml", "[project]\nid = \"alpha\"\n");
+        commit_path(dir.path(), ".aid/state.toml", "health = 1\n");
         write_path(dir.path(), "src/main.rs", "fn main() { println!(\"changed\"); }\n");
         write_path(dir.path(), ".aid/project.toml", "[project]\nid = \"beta\"\n");
+        write_path(dir.path(), ".aid/state.toml", "health = 2\n");
         auto_commit(dir.path().to_str().unwrap(), "task-123", "[Task]\nChange source and project config").unwrap();
         let changed = git_stdout(dir.path(), &["diff-tree", "--no-commit-id", "--name-only", "-r", "HEAD"]);
         assert!(changed.lines().any(|line| line == "src/main.rs"), "got: {changed}");
         assert!(changed.lines().any(|line| line == ".aid/project.toml"), "got: {changed}");
+        assert!(!changed.lines().any(|line| line == ".aid/state.toml"), "got: {changed}");
     }
 
 }

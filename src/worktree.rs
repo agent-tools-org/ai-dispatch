@@ -7,6 +7,8 @@ use std::process::{Command, Output};
 use crate::sanitize;
 #[path = "worktree/reconcile.rs"]
 mod reconcile;
+#[path = "worktree/staging.rs"]
+mod staging;
 #[path = "worktree/snapshot.rs"]
 mod snapshot;
 #[path = "worktree/baseline.rs"]
@@ -24,9 +26,10 @@ mod path;
 #[path = "worktree/exclude.rs"]
 mod exclude;
 pub(crate) use snapshot::{
-    AID_ADD_EXCLUDES, WorktreeStatusEntry, WorktreeStatusKind, capture_worktree_snapshot,
-    capture_worktree_snapshot_with_base, stage_all_aid_files,
+    WorktreeStatusEntry, WorktreeStatusKind, capture_worktree_snapshot,
+    capture_worktree_snapshot_with_base,
 };
+pub(crate) use staging::{AID_ADD_EXCLUDES, AidStageMode, stage_aid_files};
 pub(crate) use live_state::{LiveWorktreeState, capture_live_worktree_state, uncommitted_diff_text};
 pub(crate) use baseline::{baseline_contains, extract_baseline_path, extract_baseline_paths};
 pub use path::{aid_worktree_path, aid_worktree_root, is_aid_managed_worktree_path};

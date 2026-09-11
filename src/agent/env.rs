@@ -97,7 +97,7 @@ fn ensure_branch_target_dir(
         return outcome;
     }
     let target_display = target.to_string_lossy().into_owned();
-    match std::fs::create_dir_all(target) {
+    match super::scratch::ensure_directory(target) {
         Ok(()) => outcome,
         Err(err) => BranchTargetSeedOutcome::Skipped {
             target: target_display,
@@ -211,8 +211,8 @@ pub fn set_git_ceiling(cmd: &mut Command, dir: &str) {
 pub fn apply_run_env(
     cmd: &mut Command,
     opts: &RunOpts,
-    task_id: Option<&str>,
-) -> anyhow::Result<super::home_isolation::IsolatedHomeGuard> {
+    guard: &super::home_isolation::IsolatedHomeGuard,
+) {
     cmd.env("AID_HOME", crate::paths::aid_dir());
     if let Some(env) = opts.env.as_ref() {
         for (key, value) in env {
@@ -226,10 +226,8 @@ pub fn apply_run_env(
             }
         }
     }
-    let guard = super::home_isolation::IsolatedHomeGuard::create(task_id)?;
     guard.apply_toolchain_env(cmd);
     cmd.env("HOME", guard.path());
-    Ok(guard)
 }
 
 pub(crate) fn which_exists(name: &str) -> bool {

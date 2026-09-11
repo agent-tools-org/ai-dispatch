@@ -135,6 +135,19 @@ Important controls:
 - `--read-only` forbids modifying the repository under test; the task result
   file and audit report remain writable.
 - `--sandbox` requests sandboxed execution.
+  Before launching any agent, aid creates its Rust cargo target (`_base` for
+  tasks without `-w`, the seeded branch leaf for worktree tasks) and a private
+  temporary directory under its isolated HOME, exported as `TMPDIR`.
+  Codex writable roots include both scratch directories and checkout Git
+  metadata for regular repositories and linked worktrees: `.git` (or its
+  resolved gitdir), plus the common Git directory when different. Copilot's
+  allowed directories receive the same additions. aid creates every granted
+  directory and writes and deletes a probe file before launch. A creation or
+  probe failure aborts dispatch with an error naming the directory; it is not
+  downgraded to a warning or build-cache fallback.
+  Container sandboxes mount the prepared scratch paths. Reusable dev containers
+  retain `HOME=/root`; aid also creates and probes the scratch paths inside that
+  container before executing the agent, retaining its existing container-local cache.
 - `--timeout SECS` is a hard wall-clock cap in seconds.
 - `--idle-timeout SECS` stops a task whose stream goes quiet. Meaningful raw
   output refreshes the clock even when aid cannot parse it into an event; aid's

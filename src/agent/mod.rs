@@ -39,8 +39,8 @@ use crate::prompt_scan::scan_for_injection;
 use crate::store;
 use crate::types::*;
 pub mod home_isolation;
-
 pub(crate) mod env;
+pub(crate) mod scratch;
 pub(crate) mod env_identity;
 #[path = "binary.rs"]
 mod binary;
@@ -131,9 +131,8 @@ pub trait Agent: Send + Sync {
 pub struct CommandContext {
     pub durable_codex_home: bool,
     pub cargo_target_dir: Option<String>,
+    pub temp_dir: Option<std::path::PathBuf>,
 }
-
-/// Options passed to agent for command construction
 /// Env key naming the log aid will watch for proof the agent is alive.
 pub const AGENT_LOG_ENV: &str = "AID_AGENT_LOG";
 

@@ -157,24 +157,29 @@ async fn run_task_inner(store: &Arc<Store>, spec: &BackgroundRunSpec) -> Result<
     )?;
     let worktree_branch = store.get_task(&spec.task_id)?.and_then(|task| task.worktree_branch);
     let cargo_target_dir = agent::rust_build_cache_target_dir(spec.dir.as_deref(), worktree_branch.as_deref());
+    let cargo_target_dir = agent::scratch::prepare_cargo_target(cargo_target_dir.as_deref())?;
     let uses_durable_codex_home = agent::should_use_durable_codex_home(agent.kind(), spec.sandbox, spec.container.is_some());
     if uses_durable_codex_home
         && opts.session_id.as_deref().is_some_and(agent::codex::resume_fallback_needed)
     {
         store.insert_event(&agent::codex::resume_fallback_event(&TaskId(spec.task_id.clone())))?;
     }
+    let home_guard = agent::home_isolation::IsolatedHomeGuard::create(Some(&spec.task_id))?;
+    let temp_dir = agent::scratch::create_temp_dir(home_guard.path())?;
     let mut std_cmd = agent
         .build_command_with_context(
             &spec.prompt,
             &opts,
-            agent::CommandContext { durable_codex_home: uses_durable_codex_home, cargo_target_dir: cargo_target_dir.clone() },
+            agent::CommandContext { durable_codex_home: uses_durable_codex_home, cargo_target_dir: cargo_target_dir.clone(), temp_dir: Some(temp_dir.clone()) },
         )
         .map_err(|err| anyhow::anyhow!("Failed to build agent command: {err:#}"))?;
     if spec.container.is_none() && !spec.sandbox {
         let program = std_cmd.get_program().to_string_lossy();
         agent::ensure_resolved_binary_available(&spec.agent_name, &program)?;
     }
-    let _home_guard = agent::apply_run_env(&mut std_cmd, &opts, Some(&spec.task_id))?;
+    agent::apply_run_env(&mut std_cmd, &opts, &home_guard);
+    std_cmd.env("TMPDIR", &temp_dir);
+    agent::scratch::grant_launch_dirs(&mut std_cmd, agent.kind(), &opts, cargo_target_dir.as_deref())?;
     if uses_durable_codex_home {
         agent::apply_codex_home_env(&mut std_cmd)?;
     }
@@ -202,6 +207,7 @@ async fn run_task_inner(store: &Arc<Store>, spec: &BackgroundRunSpec) -> Result<
         None
     };
     let std_cmd = if let Some(container_name) = container_name.as_deref() {
+        agent::scratch::prepare_container_scratch(&std_cmd, container_name)?;
         crate::container::exec_in_container(&std_cmd, container_name)
     } else if spec.sandbox && crate::sandbox::can_sandbox(agent.kind()) {
         if !crate::sandbox::is_available() {

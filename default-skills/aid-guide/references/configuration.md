@@ -38,6 +38,31 @@ Common project controls include:
 - worktree naming prefix;
 - audit and idle-recovery policy.
 
+### Remote tests for ai-dispatch
+
+Tests and their compilation run on the build box through `rbox`, never on this Mac
+(boss rule 2026-09-11). Set `AID_RELEASE_TEST_CMD='scripts/remote-test.sh'` for releases;
+project verify is `scripts/remote-test.sh -- --bin aid`. AID starts verify outside the
+agent sandbox, inheriting the operator's `AID_BUILD_BOX`, `RBOX_CONFIG`, and `PATH` with rbox.
+Export `AID_BUILD_BOX` as the configured rbox name; never commit the name. An unset
+value fails clearly. Rbox requires a Git repository root with a committed HEAD and
+ships uncommitted tracked edits; commit or stage new test files before remote verification.
+
+The wrapper uses one `rbox exec` and runs the full workspace suite as the configured
+non-root user, with no test skips. Checkouts live at `~/.rbox/work/<repo-name>/<checkout-id>`:
+the Git common directory supplies the repo name, and the branch (short HEAD SHA when
+detached) is sanitized to letters, digits, `_`, and `-`. All worktrees share
+`$HOME/.rbox/target/<repo-name>`. Rbox owns sync, transport, streaming, and the box lock.
+Use `--jobs N` (default 4, or `AID_BUILD_JOBS`), `--timeout S` (5400),
+`--lock-timeout S` (3600), `-- <extra cargo test args>`, or `--dry-run` to print the command.
+Exit 124 means the wait timed out and the job continues; 75 means the box lock was not
+acquired. Diagnostics name the job ID when assigned (sync lock failure has no job yet).
+Completed test exits retain their status and are identified by rbox's completion marker.
+If the agent sandbox cannot reach Tailscale, stop at dry-run/fake-rbox checks; the
+operator runs the live release-test path. Never fall back to local compilation.
+
+### Task profiles
+
 Set `require_task_profile = true` to reject `aid run` calls that omit any of
 `--difficulty`, `--budget`, `--urgency`, or `--rigor`. The built-in production
 profile enables this automatically.

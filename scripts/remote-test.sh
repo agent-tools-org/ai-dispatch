@@ -1,40 +1,69 @@
 #!/usr/bin/env bash
-# Run the workspace test suite on a remote build box over Tailscale SSH.
-# Usage: AID_BUILD_BOX=<tailscale-hostname> scripts/remote-test.sh [--jobs N] [-- <extra cargo test args>]
-# Ships tracked files only (git ls-files); the box keeps /root/build/<repo> so cargo's
-# target cache stays warm between runs. Exit status is cargo's.
+# Run workspace tests through one rbox exec; exit with its status.
+# Usage: scripts/remote-test.sh [--dry-run] [--jobs N] [--timeout S] [--lock-timeout S] [-- <cargo args>]
+# Dependencies: bash, git, rbox, tee, awk, grep; AID_BUILD_BOX selects the configured box.
 set -euo pipefail
 
 BOX="${AID_BUILD_BOX:-}"
-USER_="${AID_BUILD_USER:-root}"
 JOBS="${AID_BUILD_JOBS:-4}"
+TIMEOUT=5400
+LOCK_TIMEOUT=3600
+DRY_RUN=false
 EXTRA=()
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --jobs) JOBS="$2"; shift 2 ;;
+    --jobs|--timeout|--lock-timeout)
+      [[ $# -ge 2 ]] || { echo "missing value for $1" >&2; exit 2; }
+      case "$1" in
+        --jobs) JOBS="$2" ;;
+        --timeout) TIMEOUT="$2" ;;
+        --lock-timeout) LOCK_TIMEOUT="$2" ;;
+      esac
+      shift 2 ;;
+    --dry-run) DRY_RUN=true; shift ;;
     --) shift; EXTRA=("$@"); break ;;
     *) echo "unknown argument: $1" >&2; exit 2 ;;
   esac
 done
-[[ -n "$BOX" ]] || { echo "AID_BUILD_BOX is not set (Tailscale hostname of the build box)" >&2; exit 2; }
-command -v tailscale >/dev/null || { echo "tailscale CLI not found" >&2; exit 2; }
+[[ -n "$BOX" ]] || { echo "AID_BUILD_BOX is not set; export the configured rbox build box name" >&2; exit 2; }
 
 repo_root="$(git rev-parse --show-toplevel)"
-repo_name="$(basename "$repo_root")"
-remote_dir="/root/build/${repo_name}"
-target="${USER_}@${BOX}"
 cd "$repo_root"
+git rev-parse --verify HEAD >/dev/null
+common_dir="$(cd "$(git rev-parse --git-common-dir)" && pwd)"
+repo_name="$(basename "$(dirname "$common_dir")")"
+repo_name="$(printf '%s' "$repo_name" | LC_ALL=C tr -c 'a-zA-Z0-9_-' '-')"
+checkout_id="$(git symbolic-ref --quiet --short HEAD || git rev-parse --short HEAD)"
+checkout_id="$(printf '%s' "$checkout_id" | LC_ALL=C tr -c 'a-zA-Z0-9_-' '-')"
+remote_dir="~/.rbox/work/${repo_name}/${checkout_id}"
+remote_cmd="export CARGO_TARGET_DIR=\$HOME/.rbox/target/${repo_name}; exec cargo test --workspace \"\$@\""
+command=(rbox exec "$BOX" "$repo_root" --to "$remote_dir" --jobs "$JOBS"
+  --timeout "$TIMEOUT" --lock-timeout "$LOCK_TIMEOUT" -- bash -c "$remote_cmd"
+  remote-test ${EXTRA[@]+"${EXTRA[@]}"})
 
-echo "[remote-test] syncing $(git ls-files | wc -l | tr -d ' ') tracked files to ${target}:${remote_dir}" >&2
-# Replace everything except target/ so deleted files disappear too.
-git ls-files -z | COPYFILE_DISABLE=1 tar --null -T - --no-xattrs -czf - \
-  | tailscale ssh "$target" "mkdir -p '${remote_dir}' && cd '${remote_dir}' \
-      && find . -mindepth 1 -maxdepth 1 ! -name target -exec rm -rf {} + && tar -xzf -"
+if "$DRY_RUN"; then
+  for arg in "${command[@]}"; do
+    quoted="$(printf '%q' "$arg")"
+    [[ $quoted != '~'* ]] || printf '\\'
+    printf '%s ' "$quoted"
+  done
+  printf '\n'
+  exit 0
+fi
+command -v rbox >/dev/null || { echo "rbox CLI not found on PATH" >&2; exit 2; }
 
-echo "[remote-test] cargo test --workspace -j${JOBS} ${EXTRA[*]:-}" >&2
-# Clean, small environment: the box's login shell is not ours, and a rustup
-# toolchain under the login home must win over any distro cargo.
-tailscale ssh "$target" "cd '${remote_dir}' && env -i HOME=\$HOME USER=${USER_} TERM=dumb LANG=C.UTF-8 \
-  PATH=\$HOME/.cargo/bin:/usr/local/bin:/usr/bin:/bin \
-  CARGO_BUILD_JOBS=${JOBS} CARGO_TERM_COLOR=never CARGO_INCREMENTAL=0 \
-  cargo test --workspace ${EXTRA[*]:-}"
+log="$(mktemp)"
+trap 'rm -f "$log"' EXIT
+status=0
+"${command[@]}" 2>&1 | tee "$log" || status=${PIPESTATUS[0]}
+job="$(awk '/^rbox: job / { print $3; exit }' "$log")"
+job="${job:-not started (no job id assigned)}"
+if grep -q '^rbox: job .* exited with code ' "$log" && [[ $status -ne 0 ]]; then
+  echo "[remote-test] job ${job}: tests failed (exit ${status})" >&2
+else
+  case "$status" in
+    124) echo "[remote-test] job ${job}: timed out after ${TIMEOUT}s; the job continues on the box" >&2 ;;
+    75) echo "[remote-test] job ${job}: box lock not acquired within ${LOCK_TIMEOUT}s" >&2 ;;
+  esac
+fi
+exit "$status"

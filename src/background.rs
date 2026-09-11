@@ -156,8 +156,7 @@ async fn run_task_inner(store: &Arc<Store>, spec: &BackgroundRunSpec) -> Result<
         spec.dir.as_deref(),
     )?;
     let worktree_branch = store.get_task(&spec.task_id)?.and_then(|task| task.worktree_branch);
-    let cargo_target_dir = agent::rust_build_cache_target_dir(spec.dir.as_deref(), worktree_branch.as_deref());
-    let cargo_target_dir = agent::scratch::prepare_cargo_target(cargo_target_dir.as_deref())?;
+    let mut cargo_target_dir = agent::rust_build_cache_target_dir(spec.dir.as_deref(), worktree_branch.as_deref());
     let uses_durable_codex_home = agent::should_use_durable_codex_home(agent.kind(), spec.sandbox, spec.container.is_some());
     if uses_durable_codex_home
         && opts.session_id.as_deref().is_some_and(agent::codex::resume_fallback_needed)
@@ -165,13 +164,19 @@ async fn run_task_inner(store: &Arc<Store>, spec: &BackgroundRunSpec) -> Result<
         store.insert_event(&agent::codex::resume_fallback_event(&TaskId(spec.task_id.clone())))?;
     }
     let home_guard = agent::home_isolation::IsolatedHomeGuard::create(Some(&spec.task_id))?;
-    let temp_dir = agent::scratch::create_temp_dir(home_guard.path())?;
-    let (writable_roots, warnings) = agent::scratch::prepare_launch_roots(
-        agent.kind(), spec.dir.as_deref(), cargo_target_dir.as_deref(), &temp_dir,
-        &TaskId(spec.task_id.clone()),
-    )?;
-    for warning in warnings {
-        store.insert_event(&warning)?;
+    let mut temp_dir = None;
+    let mut writable_roots = Vec::new();
+    if spec.container.is_none() && !spec.sandbox {
+        cargo_target_dir = agent::scratch::prepare_cargo_target(cargo_target_dir.as_deref())?;
+        let temp = agent::scratch::create_temp_dir(home_guard.path())?;
+        let (roots, warnings) = agent::scratch::prepare_launch_roots(
+            agent.kind(), spec.dir.as_deref(), cargo_target_dir.as_deref(), &temp, &TaskId(spec.task_id.clone()),
+        )?;
+        for warning in warnings {
+            store.insert_event(&warning)?;
+        }
+        temp_dir = Some(temp);
+        writable_roots = roots;
     }
     let mut std_cmd = agent
         .build_command_with_context(
@@ -185,7 +190,7 @@ async fn run_task_inner(store: &Arc<Store>, spec: &BackgroundRunSpec) -> Result<
         agent::ensure_resolved_binary_available(&spec.agent_name, &program)?;
     }
     agent::apply_run_env(&mut std_cmd, &opts, &home_guard);
-    std_cmd.env("TMPDIR", &temp_dir);
+    if let Some(temp_dir) = temp_dir { std_cmd.env("TMPDIR", temp_dir); }
     if uses_durable_codex_home {
         agent::apply_codex_home_env(&mut std_cmd)?;
     }

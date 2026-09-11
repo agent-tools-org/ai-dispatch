@@ -35,6 +35,15 @@ fn official_guide_covers_every_public_command() {
 }
 
 #[test]
+fn official_guide_documents_cursor_monthly_hold() {
+    let dispatch = include_str!("../default-skills/aid-guide/references/dispatch.md");
+    assert!(dispatch.contains("ActionRequiredError: You've hit your usage limit"));
+    assert!(dispatch.contains("including Auto when Auto refused"));
+    assert!(dispatch.contains("following midnight UTC"));
+    assert!(dispatch.contains("missing or invalid date uses a 30-day hold"));
+}
+
+#[test]
 fn official_guide_documents_prompt_only_audit_dispatch() {
     let dispatch = include_str!("../default-skills/aid-guide/references/dispatch.md");
 

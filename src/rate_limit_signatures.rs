@@ -5,6 +5,9 @@
 use crate::types::AgentKind;
 use chrono::{Datelike, Duration, Local, NaiveDateTime};
 
+#[path = "rate_limit_cursor.rs"]
+mod cursor;
+
 /// A provider's quota message, captured from a real run, plus how long that
 /// quota class actually lasts. The generic phrase list in `rate_limit.rs` misses
 /// these: qwen says "quota has been exhausted" where the generic matcher only
@@ -12,7 +15,7 @@ use chrono::{Datelike, Duration, Local, NaiveDateTime};
 /// run it refused was recorded as a success.
 pub(crate) struct QuotaSignature {
     pub(crate) agent: AgentKind,
-    /// Lowercase substring taken verbatim from captured CLI output.
+    /// Lowercase CLI wording; Cursor's monthly error is anchored to a line start.
     pub(crate) needle: &'static str,
     /// What ends this refusal.
     pub(crate) recovery: QuotaRecovery,
@@ -73,8 +76,9 @@ pub(crate) const QUOTA_SIGNATURES: &[QuotaSignature] = &[
     // the standard weekly entry's 1440: a shorter floor is the wrong-but-short
     // guess After forbids.
     QuotaSignature { agent: AgentKind::Droid, needle: "weekly droid core usage limit", recovery: QuotaRecovery::After(2880) },
-    // codex-cli, captured previously:
-    // "You have hit your usage limit ... try again at <date>."
+    // Cursor monthly cycle (captured 2026-09-11): dated reset, else 30 days.
+    QuotaSignature { agent: AgentKind::Cursor, needle: cursor::NEEDLE, recovery: QuotaRecovery::After(43_200) },
+    // codex-cli: "You have hit your usage limit ... try again at <date>."
     QuotaSignature { agent: AgentKind::Codex, needle: "hit your usage limit", recovery: QuotaRecovery::After(300) },
     // oz (Warp cloud agents), captured 2026-08-05 with exit code 1:
     // "Error: Quota limit reached."
@@ -156,7 +160,7 @@ pub(crate) fn match_quota_signature_for_agent(
     let lower = message.to_lowercase();
     QUOTA_SIGNATURES
         .iter()
-        .find(|signature| signature.agent == agent && lower.contains(signature.needle))
+        .find(|signature| signature.agent == agent && cursor::matches(&lower, signature.needle))
         .map(|signature| signature.recovery)
 }
 
@@ -181,7 +185,7 @@ pub(crate) fn match_quota_signature_with_agent(
     }
     QUOTA_SIGNATURES
         .iter()
-        .find(|signature| lower.contains(signature.needle))
+        .find(|signature| cursor::matches(&lower, signature.needle))
         .map(|signature| (signature.agent, signature.recovery))
 }
 
@@ -191,7 +195,9 @@ pub(crate) fn match_quota_signature_with_agent(
 pub(crate) fn parse_relative_recovery(message: &str) -> Option<NaiveDateTime> {
     let lower = message.to_lowercase();
     let now = Local::now().naive_local();
-
+    if let Some(at) = cursor::cycle_end(&lower) {
+        return Some(at);
+    }
     if let Some(duration) = parse_compact_duration(&lower) {
         return Some(now + duration);
     }

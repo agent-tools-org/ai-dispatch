@@ -37,7 +37,11 @@ require_cmd() {
 }
 
 run_release_tests() {
-  (cd "${repo_root}" && cargo test) || fail "cargo test failed"
+  # Compiles belong on the build box: set AID_RELEASE_TEST_CMD (for example
+  # `scripts/remote-test.sh` with AID_BUILD_BOX) to run the suite there. The
+  # default keeps a plain local `cargo test` for machines without a box.
+  local cmd="${AID_RELEASE_TEST_CMD:-cargo test}"
+  (cd "${repo_root}" && bash -c "${cmd}") || fail "release tests failed: ${cmd}"
 }
 
 package_version() {

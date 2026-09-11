@@ -275,3 +275,4 @@ read-only caller fixture exits 1 with `697b4720` and 0 with the fix for `--dry-r
 Before/after artifacts are on `grok-bot-twitter` at
 `/tmp/aid-preflight-before-after-8515-wub978in/`; CLI tests use fake agents.
 The earlier real-provider build proofs remain separate from these regression tests.
+Container and sandbox launches skip host scratch preparation and export, retaining main's guest command behavior.

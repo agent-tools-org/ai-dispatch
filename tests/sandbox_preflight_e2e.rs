@@ -169,3 +169,51 @@ fn launch_refuses_read_only_owned_target_before_agent_starts() {
     assert!(error.contains(target.to_str().unwrap()), "{error}");
     assert!(!fixture.capture().exists());
 }
+
+#[test]
+fn container_launch_keeps_host_scratch_out_of_guest_command() {
+    assert_guest_launch(false);
+}
+
+#[test]
+fn sandbox_launch_keeps_host_scratch_out_of_guest_command() {
+    assert_guest_launch(true);
+}
+
+fn assert_guest_launch(sandbox: bool) {
+    let fixture = Fixture::new();
+    let script = fixture.root.path().join("bin/container");
+    fs::write(&script, r#"#!/bin/sh
+case "$1" in
+  --version|kill|rm) exit 0 ;;
+  exec) if [ "$#" = 3 ] && [ "$3" = true ]; then exit 0; fi ;;
+esac
+printf '%s\n' "$@" > "$PREFLIGHT_CAPTURE"
+printf '%s\n' '{"type":"item.completed","item":{"type":"agent_message","text":"NO_CHANGES_NEEDED: guest command captured"}}'
+printf '%s\n' '{"type":"turn.completed","usage":{"input_tokens":1,"output_tokens":1}}'
+"#).unwrap();
+    fs::set_permissions(&script, fs::Permissions::from_mode(0o755)).unwrap();
+    let target = fixture.root.path().join("cache/_base");
+    fs::create_dir_all(&target).unwrap();
+    fs::set_permissions(&target, fs::Permissions::from_mode(0o555)).unwrap();
+    let mut cmd = common::aid_cmd_in(&fixture.root.path().join("aid"));
+    cmd.current_dir(&fixture.target)
+        .env("HOME", fixture.root.path().join("home"))
+        .env("PATH", format!("{}:{}", fixture.root.path().join("bin").display(), std::env::var("PATH").unwrap()))
+        .env("CARGO_TARGET_DIR", fixture.root.path().join("cache"))
+        .env("PREFLIGHT_CAPTURE", fixture.capture())
+        .env_remove("TMPDIR")
+        .args(["run", "codex", "inspect guest target", "--no-audit", "--timeout", "10", "--dir"])
+        .arg(&fixture.target);
+    if sandbox { cmd.arg("--sandbox"); } else { cmd.args(["--container", "fixture:latest"]); }
+    let output = cmd.output().unwrap();
+    fs::set_permissions(&target, fs::Permissions::from_mode(0o755)).unwrap();
+    assert_success(&output);
+    let capture = fs::read_to_string(fixture.capture()).unwrap();
+    assert_eq!(capture.lines().next(), Some(if sandbox { "run" } else { "exec" }));
+    assert!(capture.lines().any(|arg| arg == "codex"));
+    assert!(capture.lines().any(|arg| arg == format!("CARGO_TARGET_DIR={}", target.display())));
+    assert!(!capture.lines().any(|arg| arg.starts_with("TMPDIR=")), "{capture}");
+    assert!(!capture.contains("sandbox_workspace_write.writable_roots="), "{capture}");
+    assert_eq!(fs::read_dir(target).unwrap().count(), 0);
+}

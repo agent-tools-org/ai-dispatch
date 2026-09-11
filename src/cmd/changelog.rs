@@ -5,7 +5,7 @@ use anyhow::{bail, Result};
 use std::ffi::OsStr;
 use std::process::Command;
 
-const EMBEDDED_CHANGELOG: &str = env!("AID_CHANGELOG");
+const EMBEDDED_CHANGELOG: &str = include_str!(concat!(env!("OUT_DIR"), "/changelog.txt"));
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct Entry {
@@ -15,7 +15,7 @@ struct Entry {
 }
 
 pub(crate) fn run(version: Option<String>, all: bool, count: usize, git: bool) -> Result<()> {
-    let embedded = embedded_decoded();
+    let embedded = EMBEDDED_CHANGELOG;
 
     if git {
         return run_from_git_tags(version, all, count);
@@ -23,7 +23,7 @@ pub(crate) fn run(version: Option<String>, all: bool, count: usize, git: bool) -
 
     if !embedded.is_empty() {
         if let Some(v) = version.as_deref() {
-            if let Some(section) = embedded_section_for_version(&embedded, v) {
+            if let Some(section) = embedded_section_for_version(embedded, v) {
                 print!("{section}");
                 return Ok(());
             }
@@ -68,11 +68,6 @@ fn run_from_git_tags(version: Option<String>, all: bool, count: usize) -> Result
         print!("{text}");
     }
     Ok(())
-}
-
-fn embedded_decoded() -> String {
-    // build.rs escapes newlines as a sentinel token to keep `cargo:rustc-env` values single-line.
-    EMBEDDED_CHANGELOG.replace("__AID_NL__", "\n")
 }
 
 fn embedded_section_for_version<'a>(embedded: &'a str, version: &str) -> Option<&'a str> {
@@ -192,6 +187,22 @@ fn render_entries(entries: &[Entry]) -> String {
 #[cfg(test)]
 mod tests {
     use super::{embedded_section_for_version, render_entries, selected_indexes, Entry};
+
+    #[test]
+    fn embedded_changelog_contains_newest_ten_release_entries() {
+        let changelog = include_str!("../../CHANGELOG.md");
+        let sections: Vec<usize> = changelog
+            .match_indices("## v")
+            .filter(|(index, _)| *index == 0 || changelog.as_bytes()[index - 1] == b'\n')
+            .map(|(index, _)| index)
+            .collect();
+        let start = sections.first().copied().expect("newest CHANGELOG entry");
+        let end = sections.get(10).copied().unwrap_or(changelog.len());
+        let embedded = super::EMBEDDED_CHANGELOG;
+        assert!(!embedded.is_empty());
+        assert!(embedded.starts_with(changelog[start..].lines().next().unwrap()));
+        assert_eq!(embedded, &changelog[start..end]);
+    }
 
     #[test]
     fn renders_version_sections() {

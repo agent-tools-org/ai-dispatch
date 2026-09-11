@@ -13,6 +13,15 @@
 
 Release must go through `scripts/release.sh`. Do not manually bump `Cargo.toml`, edit the top release entry in `CHANGELOG.md`, create the release commit, create the release tag, or push the release branch/tag by hand.
 
+Compiles run on the build box, not this Mac (boss rule 2026-09-11). The release test step is delegated
+with `AID_RELEASE_TEST_CMD`; the only local compile left is the release build of the Mac binary for
+the install step above.
+
+```bash
+export AID_BUILD_BOX=<tailscale hostname of the build box>   # never commit the name
+export AID_RELEASE_TEST_CMD='scripts/remote-test.sh'
+```
+
 Release flow requirements:
 - Start from a clean git worktree. Commit or stash local edits before running the release script.
 - Prepare a Markdown notes file with one `- ` bullet per shipped change.

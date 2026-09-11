@@ -3,7 +3,7 @@ id = "ai-dispatch"
 profile = "production"
 team = "dev"
 language = "rust"
-verify = "cargo test --bin aid"
+verify = "scripts/remote-test.sh -- --bin aid"
 gitbutler = "auto"
 rules = [
   "File size limit: 300 lines per file",

@@ -13,14 +13,28 @@
 
 Release must go through `scripts/release.sh`. Do not manually bump `Cargo.toml`, edit the top release entry in `CHANGELOG.md`, create the release commit, create the release tag, or push the release branch/tag by hand.
 
-Compiles run on the build box, not this Mac (boss rule 2026-09-11). The release test step is delegated
-with `AID_RELEASE_TEST_CMD`; the only local compile left is the release build of the Mac binary for
-the install step above.
+Tests and their compilation run on the build box through `rbox`, never on this Mac
+(boss rule 2026-09-11). Set `AID_RELEASE_TEST_CMD='scripts/remote-test.sh'` for releases;
+project verify is `scripts/remote-test.sh -- --bin aid`. AID starts verify outside the
+agent sandbox, inheriting the operator's `AID_BUILD_BOX`, `RBOX_CONFIG`, and `PATH` with rbox.
 
 ```bash
-export AID_BUILD_BOX=<tailscale hostname of the build box>   # never commit the name
+export AID_BUILD_BOX='<configured rbox name>'   # never commit the name
 export AID_RELEASE_TEST_CMD='scripts/remote-test.sh'
 ```
+
+The wrapper uses one `rbox exec` and runs the full workspace suite as the configured
+non-root user, with no test skips. Checkouts live at `~/.rbox/work/<repo-name>/<checkout-id>`:
+the Git common directory supplies the repo name, and the branch (short HEAD SHA when
+detached) is sanitized to letters, digits, `_`, and `-`. All worktrees share
+`$HOME/.rbox/target/<repo-name>`. Rbox owns sync, transport, streaming, and the box lock.
+Use `--jobs N` (default 4, or `AID_BUILD_JOBS`), `--timeout S` (5400),
+`--lock-timeout S` (3600), `-- <extra cargo test args>`, or `--dry-run` to print the command.
+Exit 124 means the wait timed out and the job continues; 75 means the box lock was not
+acquired. Diagnostics name the job ID when assigned (sync lock failure has no job yet).
+Completed test exits retain their status and are identified by rbox's completion marker.
+If the agent sandbox cannot reach Tailscale, stop at dry-run/fake-rbox checks; the
+operator runs the live release-test path. Never fall back to local compilation.
 
 Release flow requirements:
 - Start from a clean git worktree. Commit or stash local edits before running the release script.
@@ -51,7 +65,7 @@ complete. Run:
 ```bash
 python3 ~/.codex/skills/.system/skill-creator/scripts/quick_validate.py \
   default-skills/aid-guide
-cargo test --test aid_guide_e2e --test init_e2e
+scripts/remote-test.sh -- --test aid_guide_e2e --test init_e2e
 ```
 
 ## Run
@@ -360,7 +374,7 @@ Use `aid run` to dispatch coding tasks to AI agents instead of writing code dire
 - **Profile**: production
 - **Language**: rust
 - **Budget**: $50
-- **Verify**: cargo test
+- **Verify**: scripts/remote-test.sh -- --bin aid
 - **Team**: dev
 
 ### Rules

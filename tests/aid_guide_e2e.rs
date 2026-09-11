@@ -143,6 +143,13 @@ fn official_guide_documents_declared_profiles_and_advice() {
     assert!(configuration.contains("`require_task_profile = true`"));
     assert!(configuration.contains("agent_config.toml"));
     assert!(configuration.contains("That default is sticky"));
+    for reference in [dispatch, configuration] {
+        assert!(reference.contains("catalog") && reference.contains("declared `free` or `cheap` budget"));
+        assert!(reference.contains("`standard`") && reference.contains("`premium`"));
+        assert!(reference.contains("CLI default (no -m)"));
+        assert!(reference.contains("held default group"));
+        assert!(reference.contains("Simple-task smart routing applies only when no budget is declared"));
+    }
 }
 
 #[test]

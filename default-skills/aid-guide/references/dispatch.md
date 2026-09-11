@@ -87,15 +87,22 @@ Important controls:
 - `--budget` declares a preferred `free`, `cheap`, `standard`, or `premium` model
   tier. For an explicit agent, model selection is `--model`, then the per-agent
   default in `~/.aid/agent_config.toml` (`aid agent config <agent> --model`), then
-  the catalog pick for the declared budget. A configured default is sticky like
+  the catalog pick only for a declared `free` or `cheap` budget. `standard` and
+  `premium` leave the model unset for the CLI's own default (no `-m`).
+  Simple-task smart routing applies only when no budget is declared.
+  A configured default is sticky like
   `--model`: it outranks the catalog budget pick. `aid run` and `aid batch` share
   that order. When the configured default outranks a `free` or `cheap` declaration
   whose catalog still has a preferred-tier row, aid warns once on stderr that the
   configured default overrode the declared budget. When no catalog model sits on a
   preferred tier, aid warns on stderr (agent, declared budget, model actually
   chosen) and still dispatches. Catalog tier `unknown` means unpriced, not
-  ineligible — it is selectable as a last resort after the known tiers at every
-  budget level.
+  ineligible — it is selectable as a last resort after the known preferred tiers.
+  Every dispatch reports its effective model and source (`--model`, agent config,
+  catalog (declared budget), or `CLI default (no -m)`). Quota/budget routing
+  overrides and existing adapter defaults (Cursor, Qwen, MiMoCode) are labeled
+  separately. A healthy default quota group keeps the model
+  unset; a held default group pins the first healthy alternative family.
 - `--urgency` declares `background`, `normal`, or `urgent` rate-limit handling.
 - `--rigor` declares `draft`, `standard`, or `critical` proof level (compiles / path exercised /
   cross-audit). `critical` forces `--verify` and `--audit`; it does **not** restrict which agent

@@ -81,7 +81,6 @@ fn explicit_agent(
         &agent_name,
         model.as_deref(),
         declared_budget,
-        true,
     );
     Ok((agent_name, selected_model))
 }

@@ -54,7 +54,6 @@ pub(crate) fn task_to_run_args(
         &agent_name,
         task.model.as_deref(),
         task.budget,
-        false,
     );
     let model_source = if task.model.is_some() {
         ModelSource::UserSupplied
@@ -261,5 +260,22 @@ mod tests {
 
         assert_eq!(args.model.as_deref(), Some("flash-lite"));
         assert_eq!(args.model_source, ModelSource::AidResolved);
+    }
+
+    #[test]
+    fn standard_and_premium_batch_leave_model_unset_without_config() {
+        let home = tempfile::tempdir().expect("temporary aid home");
+        let _guard = crate::paths::AidHomeGuard::set(home.path());
+        let store = Arc::new(Store::open_memory().expect("store"));
+        for agent in ["codex", "agy"] {
+            for budget in ["standard", "premium"] {
+                let task = toml::from_str(&format!(
+                    "agent = '{agent}'\nprompt = 'Refactor validation'\ndifficulty = 'moderate'\nbudget = '{budget}'",
+                )).expect("batch task");
+                let args = task_to_run_args(&task, &[], false, &store, None);
+                assert_eq!(args.model, None);
+                assert!(!args.budget);
+            }
+        }
     }
 }

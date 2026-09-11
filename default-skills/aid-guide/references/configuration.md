@@ -62,7 +62,15 @@ probes binaries by their real CLI names, for example `grok` and `commandcode`
 writes the per-agent default to `~/.aid/agent_config.toml`. That default is sticky:
 `aid run` and `aid batch` use it whenever `--model` / `model =` is omitted, including
 when a budget is declared. `--model` always wins. With no configured default, aid
-uses the catalog model for the declared budget. Register a local custom agent
+uses the catalog model only for a declared `free` or `cheap` budget. `standard`
+and `premium` leave the model unset so the CLI uses its own default (no `-m`).
+Simple-task smart routing applies only when no budget is declared.
+A healthy default quota group preserves that unset model; a held default group
+pins a model from the first healthy alternative group. Every dispatch reports
+the effective model and source: `--model`, agent config, catalog (declared budget),
+or `CLI default (no -m)`; quota/budget routing overrides and existing adapter
+defaults (Cursor, Qwen, MiMoCode) are labeled separately.
+Register a local custom agent
 with `config add-agent`. Use `clear-limit` only after confirming a provider's
 rate-limit condition has cleared. Each custom agent has its own marker keyed on
 its id (`rate-limit-<id>`), so one custom hitting quota does not hold the

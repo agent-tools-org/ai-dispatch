@@ -17,8 +17,9 @@ use super::RunArgs;
 
 #[path = "run_dispatch_resolve_held.rs"]
 mod held;
+#[path = "run_dispatch_model_info.rs"]
+mod model_info;
 pub(super) use held::maybe_insert_held_route_event;
-
 /// Emit the one-time GitButler setup hint as a task milestone event.
 pub(super) fn insert_gitbutler_setup_hint(store: &Store, task_id: &crate::types::TaskId) {
     let _ = store.insert_event(&crate::types::TaskEvent {
@@ -200,7 +201,7 @@ pub(super) fn resolve_agent_setup(store: &Arc<Store>, args: &mut RunArgs) -> Res
     let smart_routed = if !args.force_default_model
         && !budget_active
         && requested_model.is_none()
-        && cfg.selection.smart_routing
+        && cfg.selection.smart_routing && args.declared_budget.is_none()
         && matches!(
             args.declared_difficulty,
             Some(TaskDifficulty::Trivial | TaskDifficulty::Simple)
@@ -219,7 +220,7 @@ pub(super) fn resolve_agent_setup(store: &Arc<Store>, args: &mut RunArgs) -> Res
     } else {
         None
     };
-    let mut effective_model = smart_routed.or_else(|| {
+    let effective_model = smart_routed.or_else(|| {
         if budget_active && requested_model.is_none() {
             if let Some(bm) = cmd_config::budget_model(&agent_kind) {
                 aid_info!("[aid] Budget mode: using model {}", bm);
@@ -275,11 +276,11 @@ pub(super) fn resolve_agent_setup(store: &Arc<Store>, args: &mut RunArgs) -> Res
     };
     let model_source = args.model.as_ref().map(|_| args.model_source).unwrap_or(agent::model_validation::ModelSource::AidResolved);
     args.model_source = model_source;
-    if let Some(ref model) = effective_model {
-        if !held::keep_aid_resolved_pin(substituted_from.as_ref(), model_source) && !agent::model_validation::validate_model_for_agent(agent.as_ref(), model, model_source)? {
-            effective_model = None;
-        }
+    if let Some(ref model) = effective_model
+        && !held::keep_aid_resolved_pin(substituted_from.as_ref(), model_source) && !agent::model_validation::validate_model_for_agent(agent.as_ref(), model, model_source)? {
+        effective_model = None;
     }
+    aid_info!("{}", model_info::model_selection_info(args, effective_model.as_deref()));
     Ok(AgentSetup {
         agent_kind,
         custom_agent_name: custom_agent_name.clone(),
@@ -294,7 +295,6 @@ pub(super) fn resolve_agent_setup(store: &Arc<Store>, args: &mut RunArgs) -> Res
         substituted_from,
     })
 }
-
 #[cfg(test)]
 #[path = "run_dispatch_resolve_tests.rs"]
 mod tests;

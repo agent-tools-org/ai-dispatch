@@ -202,7 +202,7 @@ fn family_of(model: &str) -> &'static str {
     crate::types::model_family(model)
 }
 
-/// Every group an agent can draw on, most capable first within each family.
+/// Default group first, then alternatives; most capable model first within each group.
 /// Used to pick a replacement when the group in use is exhausted.
 pub(crate) fn groups_for_agent(agent: AgentKind) -> &'static [(&'static str, &'static [&'static str])] {
     match agent {
@@ -242,7 +242,10 @@ pub(crate) fn healthy_model_for(
     if groups.is_empty() {
         return None;
     }
-    let current_group = model_group(agent, current);
+    let current_group = match current {
+        Some(model) => model_group(agent, Some(model)),
+        None => groups.first().map(|(group, _)| *group),
+    };
     if let Some(group) = current_group
         && !is_group_limited(group)
     {

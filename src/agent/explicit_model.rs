@@ -6,19 +6,16 @@ use crate::types::{AgentKind, TaskBudget};
 
 /// Precedence: caller `--model` > `agent_config` default > catalog-by-declared-budget.
 /// Returns `None` when the caller already supplied `--model`, so that value stays in place.
-/// `catalog_if_undeclared` is true for `aid run` (Standard catalog fallback) and false
-/// for `aid batch` (catalog only when the task declares a budget).
 pub(crate) fn resolve_explicit_agent_model(
     agent_name: &str,
     caller_model: Option<&str>,
     declared_budget: Option<TaskBudget>,
-    catalog_if_undeclared: bool,
 ) -> Option<String> {
     if caller_model.is_some() {
         return None;
     }
     let config = crate::agent_config::get_default_model(agent_name);
-    let catalog = catalog_model(agent_name, declared_budget, catalog_if_undeclared);
+    let catalog = catalog_model(agent_name, declared_budget);
     let selected = config.clone().or(catalog);
     if let Some(msg) = declared_budget_model_warning(
         agent_name,
@@ -34,12 +31,10 @@ pub(crate) fn resolve_explicit_agent_model(
 fn catalog_model(
     agent_name: &str,
     declared_budget: Option<TaskBudget>,
-    catalog_if_undeclared: bool,
 ) -> Option<String> {
-    let budget = match declared_budget {
-        Some(budget) => budget,
-        None if catalog_if_undeclared => TaskBudget::Standard,
-        None => return None,
+    let budget = match declared_budget? {
+        budget @ (TaskBudget::Free | TaskBudget::Cheap) => budget,
+        TaskBudget::Standard | TaskBudget::Premium => return None,
     };
     AgentKind::parse_str(agent_name)
         .and_then(|kind| crate::model_catalog::model_for_task_budget(kind, budget))
@@ -137,8 +132,27 @@ mod tests {
         let _guard = AidHomeGuard::set(temp.path());
         crate::agent_config::save_agent_default_model("gemini", Some("pro")).expect("save");
         assert_eq!(
-            resolve_explicit_agent_model("gemini", Some("flash"), Some(TaskBudget::Cheap), true),
+            resolve_explicit_agent_model("gemini", Some("flash"), Some(TaskBudget::Cheap)),
             None
         );
+    }
+
+    #[test]
+    fn standard_premium_and_undeclared_defer_to_cli_default() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let _guard = AidHomeGuard::set(temp.path());
+        for budget in [Some(TaskBudget::Standard), Some(TaskBudget::Premium), None] {
+            assert_eq!(resolve_explicit_agent_model("codex", None, budget), None);
+        }
+    }
+
+    #[test]
+    fn cheap_uses_catalog_unless_agent_config_overrides_it() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let _guard = AidHomeGuard::set(temp.path());
+        let resolve = || resolve_explicit_agent_model("gemini", None, Some(TaskBudget::Cheap));
+        assert_eq!(resolve().as_deref(), Some("flash-lite"));
+        crate::agent_config::save_agent_default_model("gemini", Some("pro")).expect("save");
+        assert_eq!(resolve().as_deref(), Some("pro"));
     }
 }

@@ -135,6 +135,30 @@ fn no_current_model_still_finds_a_healthy_group() {
     assert_eq!(got, Some("claude-opus-4-6-thinking"));
 }
 
+#[test]
+fn healthy_default_group_preserves_unspecified_model() {
+    for (agent, default) in [
+        (AgentKind::Antigravity, "gemini"),
+        (AgentKind::Cursor, "premium"),
+        (AgentKind::Droid, "standard"),
+    ] {
+        assert_eq!(groups_for_agent(agent)[0].0, default);
+        assert_eq!(healthy_model_for(agent, None, |_| false), None);
+        assert_eq!(healthy_model_for(agent, None, |group| group != default), None);
+    }
+}
+
+#[test]
+fn held_cursor_default_switches_to_auto() {
+    assert_eq!(healthy_model_for(AgentKind::Cursor, None, |g| g == "premium"), Some("auto"));
+}
+
+#[test]
+fn opencode_has_dynamic_providers_without_a_static_default_group() {
+    assert!(groups_for_agent(AgentKind::OpenCode).is_empty());
+    assert_eq!(healthy_model_for(AgentKind::OpenCode, None, |_| true), None);
+}
+
 /// Captured 2026-08-19 12:06-12:10 with the standard pool exhausted.
 const DROID_WEEKLY_402: &str = r#"{"type":"error","source":"agent_loop","message":"402 {\"detail\":\"You've reached your weekly standard usage limit (resets in 2 days).\nSwitch to Droid Core or enable Extra Usage to continue.\",\"status\":402,\"title\":\"Payment Required\",\"displayToUser\":true}"}"#;
 

@@ -254,7 +254,8 @@ fn apply_run_env_sets_host_toolchain_paths() {
         env_forward: None,
     };
 
-    let guard = apply_run_env(&mut cmd, &opts, None).unwrap();
+    let guard = crate::agent::home_isolation::IsolatedHomeGuard::create(None).unwrap();
+    apply_run_env(&mut cmd, &opts, &guard);
     let real_home = super::super::home_isolation::resolve_real_home().unwrap();
     assert_eq!(command_env(&cmd, "CARGO_HOME"), Some(real_home.join(".cargo").to_string_lossy().into_owned()));
     assert_eq!(command_env(&cmd, "RUSTUP_HOME"), Some(real_home.join(".rustup").to_string_lossy().into_owned()));

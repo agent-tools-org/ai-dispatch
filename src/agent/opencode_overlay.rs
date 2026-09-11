@@ -55,6 +55,10 @@ impl Agent for OpenCodeOverlayAgent {
         self.spec.reported_kind
     }
 
+    fn default_model(&self) -> Option<String> {
+        self.spec.default_model.clone()
+    }
+
     fn rate_limit_name(&self) -> Option<&str> {
         if self.spec.reported_kind == AgentKind::Custom {
             Some(self.spec.id.as_str())

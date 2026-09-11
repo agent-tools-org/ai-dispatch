@@ -61,12 +61,13 @@ pub(crate) use env::{should_use_durable_codex_home, CliCommandOutput, CliCommand
 /// Adapter trait for AI CLI tools
 pub trait Agent: Send + Sync {
     fn kind(&self) -> AgentKind;
+    /// Model passed when RunOpts.model is absent; None leaves it to the CLI/delegate.
+    fn default_model(&self) -> Option<String> { None }
     /// Custom-agent id used as the rate-limit marker slug. Built-ins return
     /// `None` so markers stay `rate-limit-{as_str()}`.
     fn rate_limit_name(&self) -> Option<&str> {
         None
     }
-
     /// Whether this agent streams JSONL (true) or outputs a single JSON blob (false)
     fn streaming(&self) -> bool;
     /// Whether the running CLI consumes interactive input from its PTY.
@@ -81,7 +82,6 @@ pub trait Agent: Send + Sync {
 
     /// Build the OS command to execute this agent
     fn build_command(&self, prompt: &str, opts: &RunOpts) -> Result<Command>;
-
     /// Validate the installed host CLI contract before a task row is claimed; use `validate_cli_with` for injected runners.
     fn validate_cli(&self) -> Result<()> {
         Ok(())

@@ -54,35 +54,50 @@ use rusqlite::params;
         assert!(crate::shared_dir::shared_dir_path("wg-known").is_some());
     }
 
-    #[cfg(unix)]
     #[test]
     fn failed_task_home_removal_does_not_abort_later_homes() {
-        use std::os::unix::fs::PermissionsExt;
-
         let aid_home = tempfile::tempdir().unwrap();
         let _aid_guard = crate::paths::AidHomeGuard::set(aid_home.path());
         let store = Store::open_memory().unwrap();
-        for id in ["t-failed-home", "t-good-home"] {
+        for (id, created_at) in [("t-failed-home", "2026-01-02T00:00:00Z"), ("t-good-home", "2026-01-01T00:00:00Z")] {
             store.db().execute(
-                "INSERT INTO tasks (id, agent, prompt, status, created_at) VALUES (?1, 'codex', 'test', 'done', '2026-01-01T00:00:00Z')",
-                params![id],
+                "INSERT INTO tasks (id, agent, prompt, status, created_at) VALUES (?1, 'codex', 'test', 'done', ?2)",
+                params![id, created_at],
             ).unwrap();
         }
 
         let failed_home = crate::paths::task_dir("t-failed-home").join("home");
         fs::create_dir_all(&failed_home).unwrap();
         fs::write(failed_home.join("payload"), "keep").unwrap();
-        fs::set_permissions(failed_home.parent().unwrap(), fs::Permissions::from_mode(0o500)).unwrap();
 
         let good_home = crate::paths::task_dir("t-good-home").join("home");
         fs::create_dir_all(&good_home).unwrap();
         fs::write(good_home.join("payload"), "remove").unwrap();
 
         let mut sizes = crate::cmd::clean_size::SizeTracker::new();
-        let result = clean_isolated_task_homes(&store, false, &mut sizes);
-        fs::set_permissions(failed_home.parent().unwrap(), fs::Permissions::from_mode(0o700)).unwrap();
+        let real_home = tempfile::tempdir().unwrap();
+        let mut attempted = Vec::new();
+        let mut warnings = Vec::new();
+        let result = homes::clean_isolated_task_homes_with(
+            &store, false, &mut sizes,
+            || Ok(real_home.path().to_path_buf()),
+            |home, resolved_home| {
+                assert_eq!(resolved_home, real_home.path());
+                attempted.push(home.to_path_buf());
+                if home == failed_home {
+                    anyhow::bail!("injected removal failure");
+                }
+                crate::agent::home_isolation::remove_isolated_home(home, resolved_home)
+            },
+            |warning| warnings.push(warning),
+        );
 
         assert!(result.is_ok());
+        assert_eq!(attempted, [failed_home.clone(), good_home.clone()]);
+        assert_eq!(warnings, [format!(
+            "[aid] Warning: failed to remove isolated task home for t-failed-home at '{}': injected removal failure",
+            failed_home.display()
+        )]);
         assert!(failed_home.exists());
         assert!(!good_home.exists());
     }

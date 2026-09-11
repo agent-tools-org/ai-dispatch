@@ -13,6 +13,10 @@ use crate::paths;
 use crate::store::Store;
 use crate::worktree::{aid_worktree_root, is_aid_managed_worktree_path};
 
+#[path = "clean_homes.rs"]
+mod homes;
+pub(crate) use homes::clean_isolated_task_homes;
+
 const ACTIVE_WORKTREES_SQL: &str = "SELECT DISTINCT worktree_path FROM tasks WHERE worktree_path IS NOT NULL AND status IN ('pending', 'running', 'awaiting_input')";
 const TASK_IDS_SQL: &str = "SELECT id FROM tasks";
 const WORKGROUP_IDS_SQL: &str = "SELECT id FROM workgroups";
@@ -135,55 +139,6 @@ fn clean_orphaned_shared_dirs(store: &Store, dry_run: bool) -> Result<u64> {
     if removed > 0 || dry_run {
         println!(
             "{} {removed} orphaned shared dirs ({})",
-            if dry_run { "[dry-run] Would remove" } else { "Removed" },
-            format_bytes(bytes)
-        );
-    }
-    Ok(bytes)
-}
-
-pub(crate) fn clean_isolated_task_homes(
-    store: &Store,
-    dry_run: bool,
-    sizes: &mut crate::cmd::clean_size::SizeTracker,
-) -> Result<u64> {
-    let mut bytes = 0u64;
-    let mut removed = 0usize;
-    let real_home = if dry_run { None } else {
-        match crate::agent::home_isolation::resolve_real_home() {
-            Ok(home) => Some(home),
-            Err(err) => {
-                aid_warn!("[aid] Warning: cannot resolve real HOME; isolated task homes remain: {err:#}");
-                None
-            }
-        }
-    };
-    for id in crate::cmd::clean_cargo_target::terminal_task_ids(store)? {
-        let home_dir = crate::paths::task_dir(&id).join("home");
-        if home_dir.exists() {
-            let size = sizes.get_dir_size(&home_dir)?;
-            if dry_run {
-                println!("[dry-run] Would remove isolated task home for {} ({})", id, format_bytes(size));
-                bytes += size;
-            } else {
-                let Some(real_home) = real_home.as_deref() else { continue };
-                if let Err(err) = crate::agent::home_isolation::remove_isolated_home(&home_dir, real_home) {
-                    aid_warn!(
-                        "[aid] Warning: failed to remove isolated task home for {} at '{}': {err:#}",
-                        id,
-                        home_dir.display()
-                    );
-                    continue;
-                }
-                println!("Removed isolated task home for {} ({})", id, format_bytes(size));
-                bytes += size;
-            }
-            removed += 1;
-        }
-    }
-    if removed > 0 || dry_run {
-        println!(
-            "{} {removed} isolated task homes ({})",
             if dry_run { "[dry-run] Would remove" } else { "Removed" },
             format_bytes(bytes)
         );

@@ -118,8 +118,7 @@ fn sandboxed_resume_skips_host_rollout_precheck() {
             &opts,
             CommandContext {
                 durable_codex_home: false,
-                cargo_target_dir: None,
-                temp_dir: None,
+                writable_roots: Vec::new(),
             },
         )
         .unwrap();

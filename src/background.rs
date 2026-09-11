@@ -166,11 +166,18 @@ async fn run_task_inner(store: &Arc<Store>, spec: &BackgroundRunSpec) -> Result<
     }
     let home_guard = agent::home_isolation::IsolatedHomeGuard::create(Some(&spec.task_id))?;
     let temp_dir = agent::scratch::create_temp_dir(home_guard.path())?;
+    let (writable_roots, warnings) = agent::scratch::prepare_launch_roots(
+        agent.kind(), spec.dir.as_deref(), cargo_target_dir.as_deref(), &temp_dir,
+        &TaskId(spec.task_id.clone()),
+    )?;
+    for warning in warnings {
+        store.insert_event(&warning)?;
+    }
     let mut std_cmd = agent
         .build_command_with_context(
             &spec.prompt,
             &opts,
-            agent::CommandContext { durable_codex_home: uses_durable_codex_home, cargo_target_dir: cargo_target_dir.clone(), temp_dir: Some(temp_dir.clone()) },
+            agent::CommandContext { durable_codex_home: uses_durable_codex_home, writable_roots },
         )
         .map_err(|err| anyhow::anyhow!("Failed to build agent command: {err:#}"))?;
     if spec.container.is_none() && !spec.sandbox {
@@ -179,7 +186,6 @@ async fn run_task_inner(store: &Arc<Store>, spec: &BackgroundRunSpec) -> Result<
     }
     agent::apply_run_env(&mut std_cmd, &opts, &home_guard);
     std_cmd.env("TMPDIR", &temp_dir);
-    agent::scratch::grant_launch_dirs(&mut std_cmd, agent.kind(), &opts, cargo_target_dir.as_deref())?;
     if uses_durable_codex_home {
         agent::apply_codex_home_env(&mut std_cmd)?;
     }
@@ -207,7 +213,6 @@ async fn run_task_inner(store: &Arc<Store>, spec: &BackgroundRunSpec) -> Result<
         None
     };
     let std_cmd = if let Some(container_name) = container_name.as_deref() {
-        agent::scratch::prepare_container_scratch(&std_cmd, container_name)?;
         crate::container::exec_in_container(&std_cmd, container_name)
     } else if spec.sandbox && crate::sandbox::can_sandbox(agent.kind()) {
         if !crate::sandbox::is_available() {

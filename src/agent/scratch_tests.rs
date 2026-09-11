@@ -37,11 +37,15 @@ fn regular_checkout_grants_git_target_and_temp() {
     fs::create_dir_all(repo.join(".git")).unwrap();
     let target = temp.path().join("cache/_base");
     let scratch = create_temp_dir(temp.path()).unwrap();
+    let prepared_target = prepare_cargo_target(target.to_str()).unwrap();
+    let (writable_roots, warnings) = prepare_launch_roots(
+        AgentKind::Codex, repo.to_str(), prepared_target.as_deref(), &scratch, &TaskId("t-roots".into()),
+    ).unwrap();
+    assert!(warnings.is_empty());
     let cmd = crate::agent::codex::CodexAgent.build_command_with_context(
         "check", &opts(&repo), CommandContext {
             durable_codex_home: false,
-            cargo_target_dir: Some(target.to_string_lossy().into_owned()),
-            temp_dir: Some(scratch.clone()),
+            writable_roots,
         },
     ).unwrap();
     let config = cmd.get_args().find_map(|arg| arg.to_str()
@@ -53,6 +57,44 @@ fn regular_checkout_grants_git_target_and_temp() {
         assert!(roots.contains(&toml::Value::String(path.to_str().unwrap().into())));
     }
     assert_eq!(roots.len(), 3);
+}
+
+#[test]
+fn codex_capability_command_does_not_grant_caller_directories() {
+    use std::os::unix::fs::PermissionsExt;
+    if std::env::var_os("AID_PREFLIGHT_UNIT_CHILD").is_none() {
+        let temp = tempfile::tempdir().unwrap();
+        let git = temp.path().join(".git");
+        fs::create_dir(&git).unwrap();
+        fs::set_permissions(&git, fs::Permissions::from_mode(0o555)).unwrap();
+        let output = Command::new(std::env::current_exe().unwrap())
+            .args(["--exact", "agent::scratch::tests::codex_capability_command_does_not_grant_caller_directories"])
+            .env("AID_PREFLIGHT_UNIT_CHILD", "1").current_dir(temp.path()).output().unwrap();
+        fs::set_permissions(&git, fs::Permissions::from_mode(0o755)).unwrap();
+        assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stdout));
+        assert_eq!(fs::read_dir(&git).unwrap().count(), 0);
+        return;
+    }
+    let mut opts = opts(Path::new("."));
+    opts.dir = None;
+    let cmd = crate::agent::codex::CodexAgent.build_command("check capabilities", &opts).unwrap();
+    assert!(!cmd.get_args().any(|arg| arg.to_string_lossy()
+        .starts_with("sandbox_workspace_write.writable_roots=")));
+}
+
+#[test]
+fn codex_launch_without_explicit_directory_still_grants_scratch() {
+    let temp = tempfile::tempdir().unwrap();
+    let scratch = create_temp_dir(temp.path()).unwrap();
+    let mut opts = opts(temp.path());
+    opts.dir = None;
+    let cmd = crate::agent::codex::CodexAgent.build_command_with_context(
+        "check", &opts, CommandContext {
+            durable_codex_home: false, writable_roots: vec![scratch.clone()],
+        },
+    ).unwrap();
+    assert!(cmd.get_args().any(|arg| arg.to_string_lossy()
+        .contains(scratch.to_str().unwrap())));
 }
 
 #[test]
@@ -97,9 +139,14 @@ fn copilot_grants_checkout_metadata_and_both_scratch_paths() {
     let scratch = create_temp_dir(temp.path()).unwrap();
     let target = temp.path().join("cache/_base");
     let opts = opts(&repo);
-    let mut cmd = crate::agent::copilot::CopilotAgent.build_command("check", &opts).unwrap();
-    cmd.env("TMPDIR", &scratch);
-    grant_launch_dirs(&mut cmd, AgentKind::Copilot, &opts, target.to_str()).unwrap();
+    let prepared_target = prepare_cargo_target(target.to_str()).unwrap();
+    let (writable_roots, warnings) = prepare_launch_roots(
+        AgentKind::Copilot, repo.to_str(), prepared_target.as_deref(), &scratch, &TaskId("t-copilot".into()),
+    ).unwrap();
+    assert!(warnings.is_empty());
+    let cmd = crate::agent::copilot::CopilotAgent.build_command_with_context(
+        "check", &opts, CommandContext { durable_codex_home: false, writable_roots },
+    ).unwrap();
     let args = cmd.get_args().collect::<Vec<_>>();
     for path in [repo.join(".git"), target, scratch] {
         let path = path.canonicalize().unwrap();
@@ -117,31 +164,15 @@ fn probe_leaves_existing_contents_untouched() {
 }
 
 #[test]
-fn sandbox_mounts_target_and_temp_at_their_granted_paths() {
+fn command_building_does_not_create_or_probe_supplied_roots() {
     let temp = tempfile::tempdir().unwrap();
-    let scratch = create_temp_dir(temp.path()).unwrap();
     let target = temp.path().join("cache/_base");
-    prepare_cargo_target(target.to_str()).unwrap();
-    let mut cmd = Command::new("codex");
-    cmd.env("TMPDIR", &scratch).env("CARGO_TARGET_DIR", &target);
-    let wrapped = crate::sandbox::wrap_command(&cmd, "t-scratch", AgentKind::Codex, false);
-    let args = wrapped.get_args().collect::<Vec<_>>();
-    for path in [scratch, target] {
-        let mount = format!("{}:{}", path.display(), path.display());
-        assert!(args.windows(2).any(|pair| pair[0] == "-v" && pair[1] == mount.as_str()));
-    }
-}
-
-#[test]
-fn container_probe_keeps_paths_out_of_shell_code() {
-    let path = Path::new("/task/home/with space/$(untrusted)");
-    let cmd = container_probe_command("aid-dev-scratch", path);
-    let args = cmd.get_args().collect::<Vec<_>>();
-    assert_eq!(&args[..4], ["exec", "aid-dev-scratch", "sh", "-c"]);
-    assert!(args[4].to_str().unwrap().contains("mkdir -p"));
-    assert!(args[4].to_str().unwrap().contains("&& rm"));
-    assert_eq!(args[6], path);
-    assert!(!args[4].to_str().unwrap().contains("untrusted"));
+    crate::agent::codex::CodexAgent.build_command_with_context(
+        "check", &opts(temp.path()), CommandContext {
+            durable_codex_home: false, writable_roots: vec![target.clone()],
+        },
+    ).unwrap();
+    assert!(!target.exists());
 }
 
 #[test]
@@ -152,7 +183,7 @@ fn resumed_codex_grants_temp_via_supported_config_flag() {
     opts.session_id = Some("saved-session".into());
     let cmd = crate::agent::codex::CodexAgent.build_command_with_context(
         "check", &opts, CommandContext {
-            durable_codex_home: false, cargo_target_dir: None, temp_dir: Some(scratch.clone()),
+            durable_codex_home: false, writable_roots: vec![scratch.clone()],
         },
     ).unwrap();
     let args = cmd.get_args().collect::<Vec<_>>();
@@ -162,7 +193,7 @@ fn resumed_codex_grants_temp_via_supported_config_flag() {
 }
 
 #[test]
-fn symlinked_scratch_uses_identical_grants_env_and_container_paths() {
+fn symlinked_scratch_uses_identical_grants_and_env_paths() {
     let temp = tempfile::tempdir().unwrap();
     let actual = temp.path().join("actual");
     fs::create_dir(&actual).unwrap();
@@ -172,14 +203,30 @@ fn symlinked_scratch_uses_identical_grants_env_and_container_paths() {
     let scratch = create_temp_dir(&alias).unwrap();
     let mut cmd = Command::new("codex");
     cmd.env("TMPDIR", &scratch).env("CARGO_TARGET_DIR", &target);
-    grant_codex_roots(&mut cmd, temp.path().to_str(), Some(Path::new(&target)), Some(&scratch)).unwrap();
-    let mut wrapped = Command::new("container");
-    mount_scratch_dirs(&mut wrapped, &cmd);
-    for path in command_scratch_dirs(&cmd) {
+    grant_codex_roots(&mut cmd, &[PathBuf::from(&target), scratch.clone()]).unwrap();
+    for path in [PathBuf::from(target), scratch] {
         assert!(path.starts_with(actual.canonicalize().unwrap()));
-        let mount = format!("{}:{}", path.display(), path.display());
-        assert!(wrapped.get_args().any(|arg| arg == mount.as_str()));
         assert!(cmd.get_args().any(|arg| arg.to_str().unwrap().contains(path.to_str().unwrap())));
-        assert_eq!(container_probe_command("dev", &path).get_args().nth(6).unwrap(), path);
+        assert!(cmd.get_envs().any(|(_, value)| value == Some(path.as_os_str())));
     }
+}
+
+#[test]
+fn read_only_git_metadata_is_omitted_with_a_named_warning() {
+    use std::os::unix::fs::PermissionsExt;
+    let temp = tempfile::tempdir().unwrap();
+    let git = temp.path().join(".git");
+    fs::create_dir(&git).unwrap();
+    let scratch = create_temp_dir(temp.path()).unwrap();
+    fs::set_permissions(&git, fs::Permissions::from_mode(0o555)).unwrap();
+    let result = prepare_launch_roots(
+        AgentKind::Codex, temp.path().to_str(), None, &scratch, &TaskId("t-read-only".into()),
+    );
+    fs::set_permissions(&git, fs::Permissions::from_mode(0o755)).unwrap();
+    let (roots, warnings) = result.unwrap();
+    assert_eq!(roots, vec![scratch]);
+    assert_eq!(warnings.len(), 1);
+    assert!(warnings[0].detail.contains(git.to_str().unwrap()));
+    assert!(warnings[0].detail.contains("directory is read-only"));
+    assert_eq!(fs::read_dir(&git).unwrap().count(), 0);
 }

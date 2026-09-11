@@ -72,7 +72,6 @@ pub fn wrap_command(
     if let Some(dir) = cwd.as_deref() {
         mount_workdir(&mut wrapped, dir);
     }
-    crate::agent::scratch::mount_scratch_dirs(&mut wrapped, cmd);
     forward_command_envs(&mut wrapped, cmd);
     forward_agent_envs(&mut wrapped, agent_kind);
     mount_agent_home(&mut wrapped, agent_kind);

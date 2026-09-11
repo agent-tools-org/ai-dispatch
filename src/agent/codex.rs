@@ -72,8 +72,7 @@ impl CodexAgent {
         prompt: &str,
         opts: &RunOpts,
         durable_codex_home: bool,
-        cargo_target_dir: Option<&Path>,
-        temp_dir: Option<&Path>,
+        writable_roots: &[std::path::PathBuf],
     ) -> Result<Command> {
         let effective_prompt = if opts.read_only {
             read_only_prompt(prompt, opts)
@@ -123,7 +122,7 @@ impl CodexAgent {
             }
             cmd.current_dir(dir);
         }
-        super::scratch::grant_codex_roots(&mut cmd, opts.dir.as_deref(), cargo_target_dir, temp_dir)?;
+        super::scratch::grant_codex_roots(&mut cmd, writable_roots)?;
         Ok(cmd)
     }
 }
@@ -146,7 +145,8 @@ impl super::Agent for CodexAgent {
     }
 
     fn build_command(&self, prompt: &str, opts: &RunOpts) -> Result<Command> {
-        self.build_codex_command(prompt, opts, true, None, None)
+        let roots = super::scratch::writable_roots(opts.dir.as_deref());
+        self.build_codex_command(prompt, opts, true, &roots)
     }
 
     fn validate_cli(&self) -> Result<()> {
@@ -167,8 +167,7 @@ impl super::Agent for CodexAgent {
             prompt,
             opts,
             context.durable_codex_home,
-            context.cargo_target_dir.as_deref().map(Path::new),
-            context.temp_dir.as_deref(),
+            &context.writable_roots,
         )
     }
 
@@ -251,10 +250,13 @@ mod writable_roots_tests;
 mod quota_tests;
 
 #[cfg(test)]
+#[path = "codex_tests.rs"]
 mod tests;
 #[cfg(test)]
+#[path = "codex_roots_tests.rs"]
 mod roots_tests;
 #[cfg(test)]
+#[path = "codex_command_tests.rs"]
 mod command_tests;
 
 #[cfg(test)]

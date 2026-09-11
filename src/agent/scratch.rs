@@ -1,6 +1,6 @@
 // Prepare and probe writable directories before launching agent processes.
 // Exports scratch environment and Codex/Copilot grant helpers.
-// Deps: std filesystem APIs, rand, anyhow, git layout helpers, and agent RunOpts.
+// Deps: std filesystem APIs, rand, anyhow, git layout helpers, and task events.
 
 use std::fs;
 use std::io::Write;
@@ -9,9 +9,8 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use anyhow::{Context, Result};
-use crate::types::AgentKind;
+use crate::types::{AgentKind, EventKind, TaskEvent, TaskId};
 use crate::worktree_layout::{read_commondir, resolve_worktree_gitdir};
-use super::RunOpts;
 
 pub(crate) fn ensure_directory(path: &Path) -> Result<()> {
     fs::create_dir_all(path)
@@ -53,10 +52,10 @@ pub(crate) fn create_temp_dir(home: &Path) -> Result<PathBuf> {
     Ok(temp.canonicalize()?)
 }
 
-fn writable_roots(dir: Option<&str>, target: Option<&Path>) -> Result<Vec<PathBuf>> {
-    let dir = dir.map(PathBuf::from).map(Ok).unwrap_or_else(std::env::current_dir)?;
+pub(crate) fn writable_roots(dir: Option<&str>) -> Vec<PathBuf> {
+    let Some(dir) = dir.map(Path::new) else { return Vec::new() };
     let git = dir.join(".git");
-    let gitdir = if git.is_dir() { Some(git) } else { resolve_worktree_gitdir(&dir) };
+    let gitdir = if git.is_dir() { Some(git) } else { resolve_worktree_gitdir(dir) };
     let mut roots = Vec::new();
     if let Some(gitdir) = gitdir {
         roots.push(gitdir.clone());
@@ -64,29 +63,39 @@ fn writable_roots(dir: Option<&str>, target: Option<&Path>) -> Result<Vec<PathBu
             roots.push(common);
         }
     }
-    roots.extend(target.map(Path::to_path_buf));
-    Ok(roots)
+    roots
 }
 
-fn prepare_roots(paths: Vec<PathBuf>) -> Result<Vec<PathBuf>> {
+pub(crate) fn prepare_launch_roots(
+    kind: AgentKind, dir: Option<&str>, target: Option<&str>, temp: &Path, task_id: &TaskId,
+) -> Result<(Vec<PathBuf>, Vec<TaskEvent>)> {
     let mut roots = Vec::new();
-    for path in paths {
-        ensure_directory(&path)?;
-        probe_directory(&path)?;
-        let path = path.canonicalize()?;
-        if !roots.contains(&path) {
-            roots.push(path);
+    let mut warnings = Vec::new();
+    if matches!(kind, AgentKind::Codex | AgentKind::Copilot) {
+        let cwd = dir.map(PathBuf::from).map(Ok).unwrap_or_else(std::env::current_dir)?;
+        for path in writable_roots(cwd.to_str()) {
+            let prepared = path.canonicalize().map_err(anyhow::Error::from)
+                .and_then(|path| probe_directory(&path).map(|()| path));
+            match prepared {
+                Ok(path) => {
+                    if !roots.contains(&path) { roots.push(path); }
+                }
+                Err(err) => warnings.push(TaskEvent {
+                    task_id: task_id.clone(), timestamp: chrono::Local::now(),
+                    event_kind: EventKind::Setup,
+                    detail: format!("Omitting writable Git metadata grant '{}': {err:#}", path.display()),
+                    metadata: Some(serde_json::json!({ "warning": "sandbox_root_omitted", "directory": path })),
+                }),
+            }
         }
     }
-    Ok(roots)
+    for path in target.map(Path::new).into_iter().chain(std::iter::once(temp)) {
+        if !roots.iter().any(|root| root == path) { roots.push(path.to_path_buf()); }
+    }
+    Ok((roots, warnings))
 }
 
-pub(crate) fn grant_codex_roots(
-    cmd: &mut Command, dir: Option<&str>, target: Option<&Path>, temp: Option<&Path>,
-) -> Result<()> {
-    let mut roots = writable_roots(dir, target)?;
-    roots.extend(temp.map(Path::to_path_buf));
-    let roots = prepare_roots(roots)?;
+pub(crate) fn grant_codex_roots(cmd: &mut Command, roots: &[PathBuf]) -> Result<()> {
     if roots.is_empty() {
         return Ok(());
     }
@@ -98,62 +107,12 @@ pub(crate) fn grant_codex_roots(
     Ok(())
 }
 
-pub(crate) fn grant_launch_dirs(
-    cmd: &mut Command, kind: AgentKind, opts: &RunOpts, target: Option<&str>,
-) -> Result<()> {
-    let temp = cmd.get_envs().find_map(|(key, value)| {
-        (key == "TMPDIR").then_some(value).flatten().map(PathBuf::from)
-    }).context("task TMPDIR was not prepared")?;
-    let mut roots = vec![temp];
+pub(crate) fn grant_launch_dirs(mut cmd: Command, kind: AgentKind, roots: &[PathBuf]) -> Command {
     if kind == AgentKind::Copilot {
-        roots.extend(writable_roots(opts.dir.as_deref(), target.map(Path::new))?);
-        roots.extend(opts.dir.as_deref().map(PathBuf::from));
-        roots.extend(opts.context_files.iter().filter_map(|file| {
-            Path::new(file).parent().filter(|path| !path.as_os_str().is_empty()).map(Path::to_path_buf)
-        }));
-    }
-    for root in prepare_roots(roots)? {
-        if kind == AgentKind::Copilot {
+        for root in roots {
             cmd.arg("--add-dir").arg(root);
         }
     }
-    Ok(())
-}
-
-pub(crate) fn mount_scratch_dirs(wrapped: &mut Command, cmd: &Command) {
-    for path in command_scratch_dirs(cmd) {
-        wrapped.arg("-v").arg(format!("{}:{}", path.display(), path.display()));
-    }
-}
-
-fn command_scratch_dirs(cmd: &Command) -> Vec<PathBuf> {
-    cmd.get_envs().filter_map(|(key, value)| {
-        if key == "TMPDIR" || key == "CARGO_TARGET_DIR" {
-            value.map(PathBuf::from)
-        } else {
-            None
-        }
-    }).collect()
-}
-
-pub(crate) fn prepare_container_scratch(cmd: &Command, container: &str) -> Result<()> {
-    let paths = command_scratch_dirs(cmd);
-    for path in paths {
-        let output = container_probe_command(container, &path).output()
-            .with_context(|| format!("cannot probe granted directory '{}' in container '{container}'", path.display()))?;
-        anyhow::ensure!(output.status.success(),
-            "cannot prepare granted directory '{}' in container '{}': {}",
-            path.display(), container, String::from_utf8_lossy(&output.stderr).trim());
-    }
-    Ok(())
-}
-
-fn container_probe_command(container: &str, path: &Path) -> Command {
-    let mut cmd = Command::new("container");
-    cmd.args(["exec", container, "sh", "-c",
-        "mkdir -p -- \"$1\" && (umask 077; set -C; echo aid > \"$1/$2\") && rm -- \"$1/$2\"",
-        "aid-scratch-probe"]);
-    cmd.arg(path).arg(format!(".aid-write-probe-{:032x}", rand::random::<u128>()));
     cmd
 }
 

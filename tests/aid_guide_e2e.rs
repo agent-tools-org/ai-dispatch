@@ -41,8 +41,10 @@ fn official_guide_documents_prepared_sandbox_scratch() {
     assert!(dispatch.contains("exported as `TMPDIR`"));
     assert!(dispatch.contains("regular repositories and linked worktrees"));
     assert!(dispatch.contains("Copilot's"));
-    assert!(dispatch.contains("writes and deletes a probe file before launch"));
-    assert!(dispatch.contains("probe failure aborts dispatch with an error naming the directory"));
+    assert!(dispatch.contains("Before native agent launch, aid creates and probes"));
+    assert!(dispatch.contains("failure aborts with an error naming the directory"));
+    assert!(dispatch.contains("`--dry-run` do not create or probe these directories"));
+    assert!(dispatch.contains("An unwritable Git directory is omitted with a task event naming the directory and reason"));
 }
 
 #[test]

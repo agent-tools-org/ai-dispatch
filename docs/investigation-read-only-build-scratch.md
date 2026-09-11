@@ -211,9 +211,11 @@ references updated in the same commit.
 ## 7. Scoped implementation and verification (2026-09-11)
 
 Implemented D6 and the cargo-target/private-TMPDIR portion of D2. Branch seeding and
-dispatch share directory creation; dispatch refuses failed write/delete probes.
-Canonical paths align environment values, Codex roots, and container scratch paths.
+dispatch share directory creation; dispatch refuses failed scratch write/delete probes.
+Canonical paths align native environment values and Codex roots.
 Read-only modes, the build fallback, and sccache are unchanged.
+
+Initial implementation (`697b4720`) evidence, superseded where noted below:
 
 - `aid test --isolated --bin aid agent::scratch::tests`: 11 passed, 0 failed.
   Includes non-worktree `_base` creation, regular-checkout Git/target/temp roots,
@@ -254,4 +256,22 @@ tool digest contains a fallback note. Evidence: remote
 The remote harness isolated nested `aid build` state with a separate `AID_HOME`:
 earlier builds succeeded but the nested worker reaper marked their dispatch failed.
 That separate lifecycle issue was not changed. Actual container execution was not
-tested; container scratch wiring has unit coverage. The local warm target was preserved.
+tested. The local warm target was preserved.
+
+The FIX round moves preparation out of command construction to the real worker
+launch boundary. Git metadata is not aid-owned scratch: failed probes omit its
+grant and record a task event with the directory and reason. Owned target and
+TMPDIR failures remain fatal. Command builders only serialize supplied roots.
+The untested container scratch mounting and guest probing were removed; container
+wrappers retain their main behavior. Guest scratch paths, symlinked cache verification,
+permissions, and temporary-directory cleanup are follow-up work. The earlier
+container unit results above describe the superseded implementation, not guest proof.
+
+FIX validation: 13 scratch unit tests passed; the broader agent suite passed
+474 tests with 7 ignored. Removing `_base` creation again failed its regression
+test with `No such file or directory`; restoring it passed. Remote CLI coverage
+passed 5 sandbox/preflight, 14 guide, 3 foreground, and 2 batch tests. The same
+read-only caller fixture exits 1 with `697b4720` and 0 with the fix for `--dry-run`.
+Before/after artifacts are on `grok-bot-twitter` at
+`/tmp/aid-preflight-before-after-8515-wub978in/`; CLI tests use fake agents.
+The earlier real-provider build proofs remain separate from these regression tests.

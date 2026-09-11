@@ -223,7 +223,7 @@ pub(crate) fn quota_line(output: &str, agent: crate::types::AgentKind) -> Option
         .or_else(|| lower.find("usage limit"))
         .unwrap_or(0);
     let refusal = enclosing_plain_run(line, anchor);
-    Some(refusal.chars().take(240).collect::<String>().trim().to_string())
+    Some(refusal.trim().to_string())
 }
 
 /// The run of plain text around `anchor`, bounded by the structural characters

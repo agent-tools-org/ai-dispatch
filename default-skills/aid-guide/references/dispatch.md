@@ -400,6 +400,12 @@ agent and switches to a tier that still serves, reporting the swap rather than
 making it silently. A droid refusal that names neither `standard usage` nor
 `weekly Droid Core usage limit` holds the whole agent.
 
+Cursor's `ActionRequiredError: You've hit your usage limit` monthly refusal
+holds the dispatched model group, including Auto when Auto refused. Its
+`M/D/YYYY` cycle-end date holds through that entire UTC day (release at the
+following midnight UTC); a missing or invalid date uses a 30-day hold.
+Quoted prose and assistant/tool envelopes do not qualify as this error line.
+
 A hold is scoped to what actually refused. When a CLI serves several providers,
 a refusal is attributed to the provider of the route aid dispatched, so one
 provider running out of credit leaves its siblings dispatchable — an

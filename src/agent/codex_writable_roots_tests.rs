@@ -41,6 +41,7 @@ fn build_command_adds_effective_target_without_granting_parent() {
             CommandContext {
                 durable_codex_home: false,
                 cargo_target_dir: Some(cargo_target.to_string_lossy().into_owned()),
+                temp_dir: None,
             },
         )
         .unwrap();
@@ -53,7 +54,7 @@ fn build_command_adds_effective_target_without_granting_parent() {
         toml::Value::Array(vec![
             toml::Value::String(metadata.to_string_lossy().into_owned()),
             toml::Value::String(common.to_string_lossy().into_owned()),
-            toml::Value::String(cargo_target.to_string_lossy().into_owned()),
+            toml::Value::String(cargo_target.canonicalize().unwrap().to_string_lossy().into_owned()),
         ])
     );
 

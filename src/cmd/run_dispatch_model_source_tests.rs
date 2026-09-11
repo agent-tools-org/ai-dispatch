@@ -114,7 +114,7 @@ fn assert_cli_default(store: &Arc<Store>, args: &mut RunArgs) {
     assert_eq!(args.model, None);
     let setup = resolve_agent_setup(store, args).expect("healthy default dispatch");
     assert_eq!(setup.effective_model, None);
-    let info = super::super::model_info::model_selection_info(args, setup.effective_model.as_deref());
+    let info = super::super::model_info::model_selection_info(args, setup.effective_model.as_deref(), setup.agent.as_ref());
     assert_eq!(info, format!(
         "[aid] {} model: CLI default (no -m); source: CLI default (no -m)", args.agent_name,
     ));
@@ -160,7 +160,8 @@ fn model_info_names_final_model_and_precedence_source() {
         declared_budget: Some(crate::types::TaskBudget::Cheap),
         ..Default::default()
     };
-    let info = super::super::model_info::model_selection_info;
+    let info = |args: &RunArgs, model: Option<&str>|
+        super::super::model_info::model_selection_info(args, model, &crate::agent::gemini::GeminiAgent);
     crate::agent_config::save_agent_default_model("gemini", Some("pro")).expect("save");
     assert_eq!(info(&args, Some("flash")), "[aid] gemini model: flash; source: --model");
     args.model_source = ModelSource::AidResolved;
@@ -191,7 +192,8 @@ fn model_info_reports_existing_adapter_defaults_accurately() {
         let model = command_args.windows(2)
             .find(|pair| pair[0] == "-m" || pair[0] == "--model")
             .expect("adapter model flag")[1].as_ref();
-        let info = super::super::model_info::model_selection_info(&args, None);
+        assert_eq!(agent.default_model().as_deref(), Some(model));
+        let info = super::super::model_info::model_selection_info(&args, None, agent.as_ref());
         assert_eq!(info, format!(
             "[aid] {} model: {model}; source: adapter default (no caller -m)", kind.as_str(),
         ));

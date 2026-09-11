@@ -280,7 +280,7 @@ pub(super) fn resolve_agent_setup(store: &Arc<Store>, args: &mut RunArgs) -> Res
         && !held::keep_aid_resolved_pin(substituted_from.as_ref(), model_source) && !agent::model_validation::validate_model_for_agent(agent.as_ref(), model, model_source)? {
         effective_model = None;
     }
-    aid_info!("{}", model_info::model_selection_info(args, effective_model.as_deref()));
+    aid_info!("{}", model_info::model_selection_info(args, effective_model.as_deref(), agent.as_ref()));
     Ok(AgentSetup {
         agent_kind,
         custom_agent_name: custom_agent_name.clone(),

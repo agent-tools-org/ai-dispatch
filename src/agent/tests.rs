@@ -168,7 +168,8 @@ fn apply_run_env_sets_explicit_vars_on_command() {
         env_forward: None,
     };
 
-    let _iso_guard = apply_run_env(&mut cmd, &opts, None).unwrap();
+    let home_guard = crate::agent::home_isolation::IsolatedHomeGuard::create(None).unwrap();
+    apply_run_env(&mut cmd, &opts, &home_guard);
 
     let envs: Vec<_> = cmd.get_envs().collect();
     let mode = envs
@@ -199,7 +200,8 @@ fn apply_run_env_sets_aid_home_on_command() {
         env_forward: Some(vec![]),
     };
 
-    let _iso_guard = apply_run_env(&mut cmd, &opts, None).unwrap();
+    let home_guard = crate::agent::home_isolation::IsolatedHomeGuard::create(None).unwrap();
+    apply_run_env(&mut cmd, &opts, &home_guard);
 
     let envs: Vec<_> = cmd.get_envs().collect();
     let aid_home_env = envs
@@ -246,7 +248,8 @@ fn reports_forwarded_env_for_subprocess() {
         env: None,
         env_forward: Some(vec!["AID_TEST_FORWARDED_ENV".to_string()]),
     };
-    let _iso_guard = apply_run_env(&mut cmd, &opts, None).unwrap();
+    let home_guard = crate::agent::home_isolation::IsolatedHomeGuard::create(None).unwrap();
+    apply_run_env(&mut cmd, &opts, &home_guard);
     let envs: Vec<_> = cmd.get_envs().collect();
     let forwarded = envs
         .iter()

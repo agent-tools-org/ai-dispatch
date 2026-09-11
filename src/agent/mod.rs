@@ -39,8 +39,8 @@ use crate::prompt_scan::scan_for_injection;
 use crate::store;
 use crate::types::*;
 pub mod home_isolation;
-
 pub(crate) mod env;
+pub(crate) mod scratch;
 pub(crate) mod env_identity;
 #[path = "binary.rs"]
 mod binary;
@@ -92,9 +92,9 @@ pub trait Agent: Send + Sync {
         &self,
         prompt: &str,
         opts: &RunOpts,
-        _context: CommandContext,
+        context: CommandContext,
     ) -> Result<Command> {
-        self.build_command(prompt, opts)
+        Ok(scratch::grant_launch_dirs(self.build_command(prompt, opts)?, self.kind(), &context.writable_roots))
     }
 
     /// Parse a single line of output into an event (streaming agents only)
@@ -130,10 +130,8 @@ pub trait Agent: Send + Sync {
 #[derive(Debug, Clone, Default)]
 pub struct CommandContext {
     pub durable_codex_home: bool,
-    pub cargo_target_dir: Option<String>,
+    pub writable_roots: Vec<std::path::PathBuf>,
 }
-
-/// Options passed to agent for command construction
 /// Env key naming the log aid will watch for proof the agent is alive.
 pub const AGENT_LOG_ENV: &str = "AID_AGENT_LOG";
 

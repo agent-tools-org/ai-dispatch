@@ -35,6 +35,19 @@ fn official_guide_covers_every_public_command() {
 }
 
 #[test]
+fn official_guide_documents_prepared_sandbox_scratch() {
+    let dispatch = include_str!("../default-skills/aid-guide/references/dispatch.md");
+    assert!(dispatch.contains("`_base` for"));
+    assert!(dispatch.contains("exported as `TMPDIR`"));
+    assert!(dispatch.contains("regular repositories and linked worktrees"));
+    assert!(dispatch.contains("Copilot's"));
+    assert!(dispatch.contains("Before native agent launch, aid creates and probes"));
+    assert!(dispatch.contains("failure aborts with an error naming the directory"));
+    assert!(dispatch.contains("`--dry-run` do not create or probe these directories"));
+    assert!(dispatch.contains("An unwritable Git directory is omitted with a task event naming the directory and reason"));
+}
+
+#[test]
 fn official_guide_documents_cursor_monthly_hold() {
     let dispatch = include_str!("../default-skills/aid-guide/references/dispatch.md");
     assert!(dispatch.contains("ActionRequiredError: You've hit your usage limit"));

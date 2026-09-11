@@ -134,7 +134,7 @@ Important controls:
 - `--bg` returns the task ID immediately.
 - `--read-only` forbids modifying the repository under test; the task result
   file and audit report remain writable.
-- `--sandbox` requests sandboxed execution.
+- `--sandbox` requests sandboxed execution. Before native agent launch, aid creates and probes the Rust target (`_base` for tasks without `-w`) and private temporary directory under isolated HOME, exported as `TMPDIR`; failure aborts with an error naming the directory. Codex roots and Copilot's allowed directories include both scratch paths and writable Git metadata for regular repositories and linked worktrees. An unwritable Git directory is omitted with a task event naming the directory and reason. Capability preflight and `--dry-run` do not create or probe these directories.
 - `--timeout SECS` is a hard wall-clock cap in seconds.
 - `--idle-timeout SECS` stops a task whose stream goes quiet. Meaningful raw
   output refreshes the clock even when aid cannot parse it into an event; aid's

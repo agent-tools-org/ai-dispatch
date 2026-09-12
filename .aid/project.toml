@@ -4,6 +4,8 @@ profile = "production"
 team = "dev"
 language = "rust"
 verify = "scripts/remote-test.sh -- --bin aid"
+# Every dispatch builds on an rbox box chosen by `rbox pick`; CLI --remote-build overrides.
+remote_build = "auto"
 gitbutler = "auto"
 rules = [
   "File size limit: 300 lines per file",

@@ -20,6 +20,7 @@
 #[macro_use]
 pub mod output;
 mod agent;
+mod remote_build;
 mod agent_config;
 mod aic;
 mod background;

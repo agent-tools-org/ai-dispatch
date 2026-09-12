@@ -51,6 +51,13 @@ pub(crate) fn run_verify_with_timeout(
     container_name: Option<&str>,
     timeout: Duration,
 ) -> Result<VerifyResult> {
+    run_verify_with_env(worktree_path, command, cargo_target_dir, container_name, timeout, &[])
+}
+
+pub(crate) fn run_verify_with_env(
+    worktree_path: &Path, command: Option<&str>, cargo_target_dir: Option<&str>,
+    container_name: Option<&str>, timeout: Duration, env: &[(String, String)],
+) -> Result<VerifyResult> {
     if command.is_some_and(|command| command.trim() == "skip") {
         return Ok(VerifyResult {
             success: false,
@@ -79,6 +86,13 @@ pub(crate) fn run_verify_with_timeout(
         crate::agent::apply_cargo_target_env(&mut cmd, cargo_target_dir);
     }
 
+    cmd.envs(env.iter().cloned());
+    execute_verify(cmd, cmd_str, worktree_path, timeout)
+}
+
+fn execute_verify(
+    mut cmd: Command, cmd_str: String, worktree_path: &Path, timeout: Duration,
+) -> Result<VerifyResult> {
     let _lock = VERIFY_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     cmd.current_dir(worktree_path)
         .stdout(Stdio::piped())

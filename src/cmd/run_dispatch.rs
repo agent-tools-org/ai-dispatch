@@ -30,7 +30,7 @@ pub async fn run(store: Arc<Store>, mut args: RunArgs) -> Result<TaskId> {
         crate::repo_root::warn_if_nested_repo(args.repo.as_deref().or(args.dir.as_deref()).unwrap_or("."));
     }
     let prepared = prepare_dispatch(&store, &mut args)?;
-    let prompt_bundle = run_prompt::build_prompt_bundle(
+    let mut prompt_bundle = run_prompt::build_prompt_bundle(
         &store,
         &args,
         &prepared.agent_kind,
@@ -38,6 +38,8 @@ pub async fn run(store: Arc<Store>, mut args: RunArgs) -> Result<TaskId> {
         &prepared.requested_skills,
         prepared.task_id.as_str(),
     )?;
+    crate::remote_build::append_prompt(&mut prompt_bundle.effective_prompt, args.remote_build.as_deref());
+    prompt_bundle.prompt_tokens = crate::templates::estimate_tokens(&prompt_bundle.effective_prompt) as i64;
     store.update_resolved_prompt(prepared.task_id.as_str(), &prompt_bundle.effective_prompt)?;
     store.update_prompt_tokens(prepared.task_id.as_str(), prompt_bundle.prompt_tokens)?;
     if args.dry_run {

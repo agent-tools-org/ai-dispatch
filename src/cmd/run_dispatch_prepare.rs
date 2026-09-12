@@ -83,6 +83,7 @@ fn resolve_dispatch_context(store: &Arc<Store>, args: &mut RunArgs) -> Result<Di
     apply_project_defaults(args, detected_project.as_ref());
     crate::command_diagnostics::validate_run_options(args)?;
     validate_egress(args)?;
+    crate::remote_build::resolve(args)?;
     let agent_setup = resolve_agent_setup(store, args)?;
     let agent_name = agent_setup.custom_agent_name.as_deref().unwrap_or_else(|| agent_setup.agent_kind.as_str());
     let mut policy = crate::timeout_policy::TimeoutPolicy::resolve(agent_name, args.idle_timeout_secs, args.max_duration_mins, detected_project.as_ref());
@@ -201,6 +202,7 @@ fn finish_dispatch(
     store.update_task_dispatch_args(
         claimed.task_id.as_str(), &dispatch_args.dispatch_args_json()?,
     )?;
+    crate::remote_build::record(store, &claimed.task_id, args)?;
     Ok(prepared_dispatch(
         context.detected_project,
         context.agent_setup,

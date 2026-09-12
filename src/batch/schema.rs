@@ -51,6 +51,7 @@ pub struct BatchDefaults {
     pub peer_review: Option<String>,
     #[serde(default)]
     pub container: Option<String>,
+    pub remote_build: Option<String>,
     #[serde(default)]
     pub max_duration_mins: Option<u64>,
     #[serde(default)]
@@ -124,6 +125,7 @@ pub struct BatchTask {
     pub worktree: Option<String>,
     pub group: Option<String>,
     pub container: Option<String>,
+    pub remote_build: Option<String>,
     #[serde(default, deserialize_with = "deserialize_verify")]
     pub verify: Option<String>,
     #[serde(default)]

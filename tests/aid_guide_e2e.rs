@@ -248,7 +248,7 @@ fn official_guide_documents_remote_build_contract() {
     let dispatch = include_str!("../default-skills/aid-guide/references/dispatch.md");
     let config = include_str!("../default-skills/aid-guide/references/configuration.md");
     let index = include_str!("../default-skills/aid-guide/references/command-index.md");
-    for term in ["--remote-build [BOX]", "rbox pick --role rust-build", "AID_BUILD_BOX", "cargo fmt", "untracked", "3600", "900", "60 seconds", "aid retry", "same relative subdirectory", "Verify receives the same PATH shim", "omit `remote_build`"] {
+    for term in ["--remote-build [BOX]", "rbox pick --role rust-build", "AID_BUILD_BOX", "cargo fmt", "untracked", "3600", "900", "60 seconds", "aid retry", "same relative subdirectory", "Verify receives the same PATH shim", "omit `remote_build`", "private `.cargo/bin/cargo` shim", "Tasks without a box retain the plain `.cargo` symlink"] {
         assert!(dispatch.contains(term), "missing {term}");
     }
     assert!(config.contains("remote_build = \"auto\""));

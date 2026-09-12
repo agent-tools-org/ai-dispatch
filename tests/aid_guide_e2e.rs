@@ -242,3 +242,15 @@ fn skill_references(skill: &str) -> Vec<&str> {
         .filter(|path| path.starts_with("references/"))
         .collect()
 }
+
+#[test]
+fn official_guide_documents_remote_build_contract() {
+    let dispatch = include_str!("../default-skills/aid-guide/references/dispatch.md");
+    let config = include_str!("../default-skills/aid-guide/references/configuration.md");
+    let index = include_str!("../default-skills/aid-guide/references/command-index.md");
+    for term in ["--remote-build [BOX]", "rbox pick --role rust-build", "AID_BUILD_BOX", "cargo fmt", "untracked", "3600", "900", "60 seconds", "aid retry"] {
+        assert!(dispatch.contains(term), "missing {term}");
+    }
+    assert!(config.contains("remote_build = \"auto\""));
+    assert!(index.contains("--remote-build [BOX]"));
+}

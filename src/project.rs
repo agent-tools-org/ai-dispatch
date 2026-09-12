@@ -50,6 +50,8 @@ pub struct ProjectConfig {
     #[serde(default)]
     pub container: Option<String>,
     #[serde(default)]
+    pub remote_build: Option<String>,
+    #[serde(default)]
     pub idle_timeout: Option<u64>,
     #[serde(default)]
     pub max_duration_mins: Option<i64>,

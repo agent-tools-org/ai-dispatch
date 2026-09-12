@@ -7,7 +7,7 @@ current arguments.
 
 | Command | Purpose |
 |---|---|
-| `aid run` | Dispatch one agent task with optional worktree, verification, retry, audit, context, skills, or background execution; only a successful `TaskOutcome` exits 0 in the foreground. |
+| `aid run` | `--remote-build [BOX]` runs Cargo builds on rbox (bare/auto picks once; retry reuses box). Dispatch one agent task with optional worktree, verification, retry, audit, context, skills, or background execution; only a successful `TaskOutcome` exits 0 in the foreground. |
 | `aid advise` | Preview declared-profile agent/model routing without dispatching or writing task state. JSON candidates include an additive `quota` object (status, wall, used percent, freshness) and `breakdown.headroom_penalty`. |
 | `aid batch` | Dispatch a dependency-aware TOML task graph. |
 | `aid benchmark` | Run the same task through multiple agents and compare results. |

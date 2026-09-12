@@ -190,6 +190,7 @@ async fn run_task_inner(store: &Arc<Store>, spec: &BackgroundRunSpec) -> Result<
         agent::ensure_resolved_binary_available(&spec.agent_name, &program)?;
     }
     agent::apply_run_env(&mut std_cmd, &opts, &home_guard);
+    crate::remote_build::configure_task(store, &spec.task_id, &mut std_cmd, home_guard.path())?;
     if let Some(temp_dir) = temp_dir { std_cmd.env("TMPDIR", temp_dir); }
     if uses_durable_codex_home {
         agent::apply_codex_home_env(&mut std_cmd)?;

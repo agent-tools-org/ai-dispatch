@@ -123,7 +123,7 @@ mod tests {
             model: None,
             worktree: None,
             group: None,
-            container: None,
+            container: None, remote_build: None,
             verify: None,
             setup: None,
             judge: None,

@@ -21,7 +21,7 @@ pub(super) fn make_task(name: &str, conditional: bool, on_success: Option<&str>)
         model: None,
         worktree: None,
         group: None,
-        container: None,
+        container: None, remote_build: None,
         best_of: None,
         max_duration_mins: None,
         max_wait_mins: None,

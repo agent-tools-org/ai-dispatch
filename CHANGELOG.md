@@ -1,3 +1,12 @@
+## v10.45.0 (2026-09-12)
+- `aid run --remote-build [<box>]` routes the agent's `cargo build/check/test/clippy/bench/doc` to an rbox build box through a `cargo` PATH shim; the agent, its PTY, steer/respond and idle detection stay local. Bare flag or `auto` picks a box with `rbox pick --role rust-build` once at task start; the box is stored on the task, reused by `aid retry`, and exported as `AID_BUILD_BOX`.
+- The verify command of a remote-build task runs with the same shim and box, so a plain `cargo test` verify also runs remotely.
+- Project key `remote_build = "auto" | "<box>"` in `.aid/project.toml` and batch TOML; CLI wins. `--remote-build` rejects `--sandbox` and `--container`.
+- The shim preserves the caller's workspace-member directory remotely (creating it if sync omitted it), passes global cargo options, explains rbox exit codes 75 and 124, and prints a heartbeat during silent phases.
+- `aid show --json` omits `remote_build` for tasks that never set it.
+- Failed tasks keep their agent stderr in the task log: the watcher flushes the stderr replay before completing and persists captured stderr incrementally, so a loaded host no longer loses the last error lines (fixes the intermittent `streaming_watch_fast_fail_preserves_stderr_in_log` failure).
+
+
 ## v10.44.0 (2026-09-11)
 - Fix `cmd::clean::tests::failed_task_home_removal_does_not_abort_later_homes` depending on the ambient HOME and filesystem permissions: the test now injects home resolution and the removal failure, so aid-on-aid task verifies and root runs no longer report a false failure.
 - Record Cursor's monthly `ActionRequiredError: You've hit your usage limit` refusal as a hold on the dispatched model group until the end of the stated cycle date (30-day hold when the date is missing); previously the task failed and cursor stayed dispatchable.

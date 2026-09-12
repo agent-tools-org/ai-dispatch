@@ -15,6 +15,14 @@ use crate::types::Task;
 use super::show_helpers::load_task;
 use super::{diff_stat, output_text_for_task, parse_diff_stat};
 
+#[derive(serde::Serialize)]
+struct TaskJson {
+    #[serde(flatten)]
+    payload: serde_json::Value,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    remote_build: Option<String>,
+}
+
 /// Serialize task as JSON with events and metrics.
 pub(super) fn task_json(store: &Arc<Store>, task_id: &str) -> Result<String> {
     let task = load_task(store, task_id)?;
@@ -101,9 +109,10 @@ pub(super) fn task_json(store: &Arc<Store>, task_id: &str) -> Result<String> {
     });
     // Set after the `json!` payload: folding another field into that macro
     // hits the default recursion limit.
-    payload["remote_build"] = serde_json::json!(crate::remote_build::saved_box(store, task_id)?);
     payload["outcome"] = serde_json::Value::String(task.outcome().as_str().to_string());
-    serde_json::to_string(&payload).map_err(Into::into)
+    serde_json::to_string(&TaskJson {
+        payload, remote_build: crate::remote_build::saved_box(store, task_id)?,
+    }).map_err(Into::into)
 }
 
 pub(crate) fn task_hook_json(
@@ -122,4 +131,21 @@ pub(crate) fn task_hook_json(
         "dir": dir,
         "exit_code": task.exit_code,
     })
+}
+
+#[cfg(test)]
+mod remote_build_tests {
+    use super::*;
+
+    #[test]
+    fn show_json_omits_remote_build_when_never_set() {
+        let store = Arc::new(Store::open_memory().expect("store"));
+        store.db().execute(
+            "INSERT INTO tasks (id, agent, prompt, status, created_at) VALUES ('t-json-remote', 'codex', 'task', 'pending', '2026-09-12T00:00:00Z')", [],
+        ).expect("task");
+        let payload: serde_json::Value = serde_json::from_str(
+            &task_json(&store, "t-json-remote").expect("show"),
+        ).expect("JSON");
+        assert!(payload.get("remote_build").is_none(), "{payload}");
+    }
 }

@@ -89,7 +89,11 @@ pub(crate) fn verify(
     let Some(name) = saved_box(store, task_id)? else {
         return crate::verify_cargo::run_verify_with_store(store, path, command, target, container);
     };
-    let env = vec![("AID_BUILD_BOX".to_string(), name)];
+    let mut environment = Command::new("cargo");
+    configure(&mut environment, &crate::paths::task_dir(task_id).join("home"), &name)?;
+    let env = environment.get_envs().filter_map(|(key, value)| {
+        value.map(|value| (key.to_string_lossy().into_owned(), value.to_string_lossy().into_owned()))
+    }).collect::<Vec<_>>();
     crate::verify::run_verify_with_env(
         path, command, target, container, crate::verify::VERIFY_TIMEOUT, &env,
     )

@@ -28,6 +28,8 @@ case "$subcommand" in
 esac
 set -e
 repo_root="$(git rev-parse --show-toplevel)"
+relative_dir="$(git rev-parse --show-prefix)"
+printf -v remote_cwd '%q' "./$relative_dir"
 cd "$repo_root"
 git rev-parse --verify HEAD >/dev/null
 common_dir="$(cd "$(git rev-parse --git-common-dir)" && pwd)"
@@ -35,7 +37,7 @@ repo_name="$(basename "$(dirname "$common_dir")")"
 repo_name="$(printf '%s' "$repo_name" | LC_ALL=C tr -c 'a-zA-Z0-9_-' '-')"
 checkout_id="$(git symbolic-ref --quiet --short HEAD || git rev-parse --short HEAD)"
 checkout_id="$(printf '%s' "$checkout_id" | LC_ALL=C tr -c 'a-zA-Z0-9_-' '-')"
-remote_cmd="export CARGO_TARGET_DIR=\$HOME/.rbox/target/${repo_name}; exec cargo \"\$@\""
+remote_cmd="cd -- ${remote_cwd} && export CARGO_TARGET_DIR=\$HOME/.rbox/target/${repo_name} && exec cargo \"\$@\""
 unset CARGO_TARGET_DIR
 rbox exec "$AID_BUILD_BOX" "$repo_root" --to "~/.rbox/work/${repo_name}/${checkout_id}" \
   --untracked --jobs "${AID_BUILD_JOBS:-4}" --timeout 3600 --lock-timeout 900 \

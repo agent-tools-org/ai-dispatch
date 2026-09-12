@@ -163,7 +163,9 @@ async fn run_task_inner(store: &Arc<Store>, spec: &BackgroundRunSpec) -> Result<
     {
         store.insert_event(&agent::codex::resume_fallback_event(&TaskId(spec.task_id.clone())))?;
     }
-    let home_guard = agent::home_isolation::IsolatedHomeGuard::create(Some(&spec.task_id))?;
+    let home_guard = agent::home_isolation::IsolatedHomeGuard::create_with_remote_build(
+        Some(&spec.task_id), crate::remote_build::saved_box(store, &spec.task_id)?.is_some(),
+    )?;
     let mut temp_dir = None;
     let mut writable_roots = Vec::new();
     if spec.container.is_none() && !spec.sandbox {

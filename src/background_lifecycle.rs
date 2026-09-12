@@ -20,7 +20,8 @@ pub(super) async fn run_post_lifecycle(
     let model_source = crate::cmd::run::RunArgs::saved_for_task(store, &spec.task_id)?
         .map(|args| args.model_source)
         .unwrap_or(ModelSource::AidResolved);
-    let lifecycle_args = run_args_from_spec(spec, model_source);
+    let mut lifecycle_args = run_args_from_spec(spec, model_source);
+    lifecycle_args.remote_build = crate::remote_build::saved_box(store, &spec.task_id)?;
     let task_id = TaskId(spec.task_id.clone());
     let pre_verify_status = store
         .get_task(&spec.task_id)?

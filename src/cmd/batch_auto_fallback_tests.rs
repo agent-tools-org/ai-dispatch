@@ -176,7 +176,7 @@ fn batch_task_with_fallback(fallback: &str) -> crate::batch::BatchTask {
         model: None,
         worktree: None,
         group: None,
-        container: None,
+        container: None, remote_build: None,
         verify: None,
         setup: None,
         iterate: None,

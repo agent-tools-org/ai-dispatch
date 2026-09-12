@@ -134,6 +134,7 @@ Important controls:
 - `--bg` returns the task ID immediately.
 - `--read-only` forbids modifying the repository under test; the task result
   file and audit report remain writable.
+- `--remote-build [BOX]` routes Cargo build/check/test/clippy/bench/doc through a PATH shim to rbox while the agent, PTY, isolated HOME, steer/respond, and idle detection stay local. Bare flag or `auto` runs `rbox pick --role rust-build` once before launch; an explicit name is used as-is. Missing rbox or no available box fails before launch, preserving selection stderr. CLI overrides project `remote_build`; batch defaults and tasks accept the same key. The chosen box is saved with the task, shown by `aid show`/`--json` and events, reused by `aid retry`, and exported as `AID_BUILD_BOX` to agent and verify, overriding ambient values. Verify receives the same PATH shim, so plain `cargo test` runs remotely too. Remote tasks also get a private `.cargo/bin/cargo` shim so login-shell profiles cannot bypass routing by prepending `$HOME/.cargo/bin`; the other Cargo entries link to the real home and `CARGO_HOME`/`RUSTUP_HOME` stay unchanged. Tasks without a box retain the plain `.cargo` symlink. Tasks without remote build omit `remote_build` from `aid show --json`. Expect sync/lock latency; do not bypass the shim. `cargo fmt` and other Cargo commands stay local. This flag conflicts with `--sandbox` and `--container`.
 - `--sandbox` requests sandboxed execution. Before native agent launch, aid creates and probes the Rust target (`_base` for tasks without `-w`) and private temporary directory under isolated HOME, exported as `TMPDIR`; failure aborts with an error naming the directory. Codex roots and Copilot's allowed directories include both scratch paths and writable Git metadata for regular repositories and linked worktrees. An unwritable Git directory is omitted with a task event naming the directory and reason. Capability preflight and `--dry-run` do not create or probe these directories.
 - `--timeout SECS` is a hard wall-clock cap in seconds.
 - `--idle-timeout SECS` stops a task whose stream goes quiet. Meaningful raw
@@ -144,9 +145,10 @@ Important controls:
 - `--result-file` requires a durable result artifact.
 - `--output` selects a task output path.
 
+For remote Cargo work, use `aid run codex "Implement the change" --remote-build --worktree feat/change --dir . --bg`. Rbox sync includes untracked files and uses the same sanitized repo/branch checkout and remote target as `scripts/remote-test.sh`; the local `CARGO_TARGET_DIR` is never forwarded. Cargo runs from the caller's same relative subdirectory within the synced checkout. Shim defaults are `AID_BUILD_JOBS` or 4 jobs, 3600 seconds timeout and 900 seconds lock timeout. A stderr heartbeat every 60 seconds keeps silent builds visible to the idle watcher. Exit 75 means the box lock was not acquired; exit 124 means the job is still running on the box.
+
 Run `aid run --help` for iteration, evaluation, judging, peer review, best-of,
-model, budget, context, scope, checklist, skill, template, hook, container, and
-cascade options.
+model, budget, context, scope, checklist, skill, template, hook, container, and cascade options.
 
 Missing task-profile dimensions produce one warning and persist as null. Projects
 with `require_task_profile = true` reject incomplete runs; the production profile

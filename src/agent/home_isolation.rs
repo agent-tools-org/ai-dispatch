@@ -11,6 +11,8 @@ use anyhow::Context;
 
 #[path = "home_isolation_symlinks.rs"]
 mod symlinks;
+#[path = "home_isolation_build.rs"]
+mod build;
 
 #[cfg(unix)]
 use std::os::unix::ffi::OsStrExt;
@@ -94,11 +96,21 @@ fn passwd_home() -> anyhow::Result<PathBuf> {
 
 impl IsolatedHomeGuard {
     pub fn create(task_id: Option<&str>) -> anyhow::Result<Self> {
+        Self::create_with_remote_build(task_id, false)
+    }
+
+    pub(crate) fn create_with_remote_build(task_id: Option<&str>, remote_build: bool) -> anyhow::Result<Self> {
         let real_home = resolve_real_home()?;
-        Self::create_from_home(Some(real_home.as_path()), task_id)
+        Self::create_from_home_with_remote_build(Some(real_home.as_path()), task_id, remote_build)
     }
 
     pub fn create_from_home(real_home: Option<&Path>, task_id: Option<&str>) -> anyhow::Result<Self> {
+        Self::create_from_home_with_remote_build(real_home, task_id, false)
+    }
+
+    fn create_from_home_with_remote_build(
+        real_home: Option<&Path>, task_id: Option<&str>, remote_build: bool,
+    ) -> anyhow::Result<Self> {
         let base_dir = match task_id {
             Some(id) => crate::paths::task_dir(id),
             None => {
@@ -114,7 +126,7 @@ impl IsolatedHomeGuard {
         };
         let target_home = base_dir.join("home");
         let real_home_path = real_home.map(Path::to_path_buf);
-        Self::build_isolated_home(real_home, &target_home)?;
+        build::build_isolated_home(real_home, &target_home, remote_build)?;
         let Some(real_home) = real_home_path else {
             anyhow::bail!("cannot build isolated HOME: real home directory is unknown");
         };
@@ -133,68 +145,6 @@ impl IsolatedHomeGuard {
         cmd.env("RUSTUP_HOME", self.real_home.join(".rustup"));
     }
 
-    fn build_isolated_home(real_home: Option<&Path>, isolated_path: &Path) -> anyhow::Result<()> {
-        let Some(real_home) = real_home else {
-            anyhow::bail!("cannot build isolated HOME: real home directory is unknown");
-        };
-        if !real_home.is_dir() {
-            anyhow::bail!(
-                "cannot build isolated HOME: '{}' is not a directory",
-                real_home.display()
-            );
-        }
-
-        if isolated_path.exists() {
-            remove_isolated_home(isolated_path, real_home)?;
-        }
-        fs::create_dir_all(isolated_path).with_context(|| {
-            format!(
-                "cannot create isolated HOME at '{}'",
-                isolated_path.display()
-            )
-        })?;
-
-        let entries = fs::read_dir(real_home).with_context(|| {
-            format!("cannot read real HOME directory '{}'", real_home.display())
-        })?;
-
-        #[cfg(not(unix))]
-        {
-            anyhow::bail!("HOME isolation requires Unix symlinks");
-        }
-
-        for entry in entries {
-            let entry = entry.with_context(|| {
-                format!("cannot read entry in real HOME '{}'", real_home.display())
-            })?;
-            let file_name = entry.file_name();
-            let name_str = file_name.to_string_lossy();
-            if DEFAULT_DENYLIST.contains(&name_str.as_ref())
-                || DEFAULT_DENYLIST
-                    .iter()
-                    .any(|d| name_str.starts_with(&format!("{d}.")) || name_str.starts_with(&format!("{d}-")))
-            {
-                continue;
-            }
-            let link_dest = isolated_path.join(&file_name);
-            let target_path = entry.path();
-
-            if name_str == ".claude" && target_path.is_dir() {
-                materialize_claude_dir(&target_path, &link_dest)?;
-                continue;
-            }
-
-            #[cfg(unix)]
-            std::os::unix::fs::symlink(&target_path, &link_dest).with_context(|| {
-                format!(
-                    "cannot symlink '{}' -> '{}' in isolated HOME",
-                    target_path.display(),
-                    link_dest.display()
-                )
-            })?;
-        }
-        Ok(())
-    }
 }
 
 fn is_claude_instruction_entry(name: &str) -> bool {
@@ -280,3 +230,7 @@ mod tests;
 #[cfg(test)]
 #[path = "home_isolation_symlink_tests.rs"]
 mod symlink_tests;
+
+#[cfg(test)]
+#[path = "home_isolation_cargo_tests.rs"]
+mod cargo_tests;

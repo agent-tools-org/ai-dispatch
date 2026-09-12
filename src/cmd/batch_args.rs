@@ -77,6 +77,7 @@ pub(crate) fn task_to_run_args(
         worktree: task.worktree.clone(),
         group: task.group.clone(),
         container: task.container.clone(),
+        remote_build: task.remote_build.clone(),
         verify: task.verify.clone(),
         setup: task.setup.clone(),
         iterate: task.iterate,

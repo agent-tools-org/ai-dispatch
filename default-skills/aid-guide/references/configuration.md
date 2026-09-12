@@ -32,6 +32,7 @@ Common project controls include:
 
 - default team and verification command;
 - setup command and container image;
+- `remote_build = "auto"` or `remote_build = "<box>"` in `.aid/project.toml` (`[project]`), overridden by `aid run --remote-build [BOX]`; batch `[defaults]` and per-task `remote_build` use the same values;
 - agent and model preferences;
 - budget and duration limits;
 - GitButler mode;
@@ -44,7 +45,7 @@ Tests and their compilation run on the build box through `rbox`, never on this M
 (boss rule 2026-09-11). Set `AID_RELEASE_TEST_CMD='scripts/remote-test.sh'` for releases;
 project verify is `scripts/remote-test.sh -- --bin aid`. AID starts verify outside the
 agent sandbox, inheriting the operator's `AID_BUILD_BOX`, `RBOX_CONFIG`, and `PATH` with rbox.
-Export `AID_BUILD_BOX` as the configured rbox name; never commit the name. An unset
+When remote build is active, verify receives the task's resolved `AID_BUILD_BOX`, overriding the operator's value so both use the same checkout. Otherwise, export `AID_BUILD_BOX` as the configured rbox name; never commit the name. An unset
 value fails clearly. Rbox requires a Git repository root with a committed HEAD and
 ships uncommitted tracked edits; commit or stage new test files before remote verification.
 

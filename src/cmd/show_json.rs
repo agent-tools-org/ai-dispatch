@@ -101,6 +101,7 @@ pub(super) fn task_json(store: &Arc<Store>, task_id: &str) -> Result<String> {
     });
     // Set after the `json!` payload: folding another field into that macro
     // hits the default recursion limit.
+    payload["remote_build"] = serde_json::json!(crate::remote_build::saved_box(store, task_id)?);
     payload["outcome"] = serde_json::Value::String(task.outcome().as_str().to_string());
     serde_json::to_string(&payload).map_err(Into::into)
 }

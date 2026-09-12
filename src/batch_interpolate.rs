@@ -141,6 +141,9 @@ fn apply_task_defaults(task: &mut BatchTask, defaults: &BatchDefaults, task_idx:
     if task.setup.is_none() {
         task.setup = defaults.setup.clone();
     }
+    if task.remote_build.is_none() {
+        task.remote_build = defaults.remote_build.clone();
+    }
     if task.container.is_none() {
         task.container = defaults.container.clone();
     }

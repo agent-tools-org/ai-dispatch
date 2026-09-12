@@ -100,6 +100,7 @@ Built-in run agents: `gemini`, `agy`, `qwen`, `codex`, `copilot`, `opencode`, `c
 | `--on-done <cmd>` | Shell command to run on task completion |
 | `--hook <spec>...` | Hook specs for the dispatched task |
 | `--bg` | Run in background (non-blocking) |
+| `--remote-build [<box>]` | Run Cargo builds on rbox; bare flag/auto selects once; retry reuses box; incompatible with sandbox/container |
 | `--sandbox` | Run agent in sandboxed mode |
 | `--container <image>` | Run agent inside a container |
 | `--best-of <N>` | Run N copies, pick best result |

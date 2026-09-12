@@ -23,7 +23,7 @@ fn stub_task(name: &str, depends_on: Option<Vec<&str>>) -> batch::BatchTask {
         model: None,
         worktree: None,
         group: None,
-        container: None,
+        container: None, remote_build: None,
         best_of: None,
         max_duration_mins: None,
         max_wait_mins: None,

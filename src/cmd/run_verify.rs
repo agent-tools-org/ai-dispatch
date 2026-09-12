@@ -51,8 +51,8 @@ pub(in crate::cmd) fn maybe_verify_impl(
     let cargo_target_dir = crate::agent::env::target_dir_for_project(
         Some(dir_path), worktree_branch.as_deref(),
     );
-    match crate::verify_cargo::run_verify_with_store(
-        store,
+    match crate::remote_build::verify(
+        store, task_id.as_str(),
         path,
         command,
         cargo_target_dir.as_deref(),

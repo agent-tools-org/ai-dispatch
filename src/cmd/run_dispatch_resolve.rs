@@ -65,6 +65,7 @@ pub(super) fn apply_project_defaults(args: &mut RunArgs, detected_project: Optio
                 args.setup = Some(setup.clone());
                 defaults_applied = true;
             }
+        args.remote_build = args.remote_build.take().or_else(|| project.remote_build.clone());
         if args.container.is_none()
             && let Some(container) = project.container.as_ref() {
                 args.container = Some(container.clone());
@@ -295,6 +296,4 @@ pub(super) fn resolve_agent_setup(store: &Arc<Store>, args: &mut RunArgs) -> Res
         substituted_from,
     })
 }
-#[cfg(test)]
-#[path = "run_dispatch_resolve_tests.rs"]
-mod tests;
+#[cfg(test)] #[path = "run_dispatch_resolve_tests.rs"] mod tests;

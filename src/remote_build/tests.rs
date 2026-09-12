@@ -79,6 +79,7 @@ fn task_command_overrides_ambient_box_and_installs_shim() {
 fn verify_receives_stored_box() {
     let (store, id, _) = stored_task();
     let temp = tempfile::tempdir().expect("temp");
+    let _home = crate::paths::AidHomeGuard::set(temp.path());
     executable(&temp.path().join("verify"), "#!/bin/bash\nprintf '%s' \"$AID_BUILD_BOX\"\n");
     let result = verify(&store, id.as_str(), temp.path(), Some("./verify"), None, None).expect("verify");
     assert!(result.success);

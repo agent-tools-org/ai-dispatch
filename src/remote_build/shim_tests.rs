@@ -130,3 +130,48 @@ fn local_passthrough_preserves_empty_path_entries() {
     assert!(output.status.success(), "{output:?}");
     assert_eq!(String::from_utf8_lossy(&output.stdout), "cwd-cargo\n");
 }
+
+#[test]
+fn remote_cargo_preserves_workspace_member_cwd() {
+    let f = Fixture::new();
+    let member = f.temp.path().join("members/space and 'quote'");
+    std::fs::create_dir_all(&member).expect("member");
+    executable(&f.bin.join("cargo"), "#!/bin/bash\npwd -P\nprintf '%s\\n' \"$@\"\n");
+    let output = f.command(&["check", "--lib"], 0).current_dir(&member).output().expect("shim");
+    assert!(output.status.success(), "{output:?}");
+    let recorded = std::fs::read_to_string(f.temp.path().join("argv")).expect("argv");
+    let args = recorded.lines().collect::<Vec<_>>();
+    let separator = args.iter().position(|arg| *arg == "--").expect("separator");
+    let remote = Command::new(args[separator + 1]).args(&args[separator + 2..])
+        .current_dir(f.temp.path())
+        .env("PATH", format!("{}:{}", f.bin.display(), std::env::var("PATH").expect("PATH")))
+        .output().expect("remote command");
+    assert!(remote.status.success(), "{remote:?}");
+    assert_eq!(String::from_utf8_lossy(&remote.stdout), format!("{}\ncheck\n--lib\n", member.canonicalize().expect("member path").display()));
+}
+
+#[test]
+fn plain_cargo_verify_uses_task_shim() {
+    if std::env::var_os("AID_VERIFY_SHIM_CHILD").is_some() {
+        let store = Store::open_memory().expect("store");
+        store.db().execute("INSERT INTO tasks (id, agent, prompt, status, created_at) VALUES ('t-verify-shim', 'codex', 'task', 'pending', '2026-09-12T00:00:00Z')", []).expect("task");
+        let args = RunArgs { remote_build: Some("chosen-box".into()), ..Default::default() };
+        store.update_task_dispatch_args("t-verify-shim", &args.dispatch_args_json().expect("args")).expect("persist");
+        let result = verify(&store, "t-verify-shim", Path::new("."), Some("cargo test --lib"), Some("/local-target"), None).expect("verify");
+        assert!(result.success, "{}", result.output);
+        return;
+    }
+    let f = Fixture::new();
+    let output = Command::new(std::env::current_exe().expect("test binary"))
+        .args(["--exact", "remote_build::shim_tests::plain_cargo_verify_uses_task_shim", "--nocapture"])
+        .current_dir(f.temp.path()).env("AID_VERIFY_SHIM_CHILD", "1")
+        .env("AID_HOME", f.temp.path().join("aid-home"))
+        .env("PATH", format!("{}:{}", f.bin.display(), std::env::var("PATH").expect("PATH")))
+        .env("AID_BUILD_BOX", "operator-box").env("STATUS", "0")
+        .env("RECORD", f.temp.path().join("argv")).output().expect("child test");
+    assert!(output.status.success(), "{output:?}");
+    let recorded = std::fs::read_to_string(f.temp.path().join("argv")).expect("rbox invoked");
+    assert!(recorded.starts_with("exec\nchosen-box\n"), "{recorded}");
+    assert!(recorded.ends_with("remote-cargo\ntest\n--lib\n"), "{recorded}");
+    assert_eq!(std::fs::read_to_string(f.temp.path().join("argv.target")).expect("target"), "unset");
+}

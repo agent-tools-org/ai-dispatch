@@ -41,10 +41,10 @@ pub(crate) async fn watch_buffered(
     read_stdout_signaling_bytes(&mut reader, &mut raw, task_id).await?;
     let buffer = String::from_utf8_lossy(&raw).into_owned();
     persist_outputs(agent.kind(), &buffer, task_id, log_path, output_path).await?;
+    let exit_status = child.wait().await?;
     if let Some(handle) = stderr_handle {
         drain_stderr_capture(handle).await;
     }
-    let exit_status = child.wait().await?;
     let diagnostics = std::fs::read_to_string(paths::agent_log_path(task_id.as_str()))
         .unwrap_or_default();
     let mut info = if exit_status.success() {

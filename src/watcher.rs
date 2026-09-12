@@ -28,7 +28,6 @@ use tokio::process::Child;
 use tokio::time::{timeout, Duration};
 use crate::agent::Agent;
 use crate::delivery_guard::{DeliveryEvidence, DeliveryOutcome};
-use crate::paths;
 use crate::process_group::force_kill_process_group;
 use crate::process_monitor;
 use crate::rate_limit;
@@ -39,7 +38,7 @@ use extract::is_standalone_milestone_line;
 use extract::{
     extract_finding_detail, extract_milestone_detail, parse_milestone_event,
 };
-use stderr::{drain_stderr_capture, spawn_stderr_capture};
+use stderr::{append_stderr_to_log, drain_stderr_capture, failure_stderr_note, spawn_stderr_capture};
 pub(crate) use progress::SyntheticMilestoneTracker;
 pub(crate) use stream::{
     StreamLineContext, apply_codex_delivery_guard, handle_streaming_line_with_session,
@@ -148,10 +147,10 @@ pub async fn watch_streaming(
         }
     }
     log_file.flush().await?;
+    let exit_status = child.wait().await?;
     if let Some(handle) = stderr_handle {
         drain_stderr_capture(handle).await;
     }
-    let exit_status = child.wait().await?;
     let mut status = if exit_status.success() {
         TaskStatus::Done
     } else {
@@ -217,12 +216,7 @@ pub async fn watch_streaming(
         && full_output.trim().is_empty()
         && exit_status.code().is_some()
     {
-        if let Some(stderr) = read_capped_stderr(task_id.as_str()) {
-            log_file.write_all(stderr.as_bytes()).await?;
-            if !stderr.ends_with('\n') {
-                log_file.write_all(b"\n").await?;
-            }
-        }
+        append_stderr_to_log(&mut log_file, task_id).await?;
     }
     let stderr_note = failure_stderr_note(
         status,
@@ -285,61 +279,6 @@ fn exceeds_cost_ceiling(current_cost: Option<f64>, max_task_cost: Option<f64>) -
         (current_cost, max_task_cost),
         (Some(current_cost), Some(max_task_cost)) if current_cost > max_task_cost
     )
-}
-
-const MAX_PRESERVED_STDERR_BYTES: usize = 64 * 1024;
-
-fn read_capped_stderr(task_id: &str) -> Option<String> {
-    use std::io::Read;
-    let file = std::fs::File::open(paths::stderr_path(task_id)).ok()?;
-    let mut bytes = Vec::new();
-    file.take(MAX_PRESERVED_STDERR_BYTES as u64 + 1)
-        .read_to_end(&mut bytes)
-        .ok()?;
-    let truncated = bytes.len() > MAX_PRESERVED_STDERR_BYTES;
-    bytes.truncate(MAX_PRESERVED_STDERR_BYTES);
-    let mut text = String::from_utf8_lossy(&bytes).into_owned();
-    if truncated {
-        text.push_str("\n[stderr truncated]");
-    }
-    if text.trim().is_empty() {
-        return None;
-    }
-    Some(text)
-}
-
-fn failure_stderr_note(
-    status: TaskStatus,
-    task_id: &TaskId,
-    agent: &dyn Agent,
-    model: Option<&str>,
-) -> String {
-    if status != TaskStatus::Failed {
-        return String::new();
-    }
-    let stderr_path = paths::stderr_path(task_id.as_str());
-    if !stderr_path.exists() {
-        return String::new();
-    }
-    // stderr is a named channel (`quota_channel::Channel::CliStderr`) and the
-    // reason it stays one is cursor: its spent premium pool arrives only here,
-    // as `ActionRequiredError: ... You're out of usage.`, with no error envelope
-    // anywhere in the stream to read it from.
-    if let Ok(stderr_content) = std::fs::read_to_string(&stderr_path)
-        && let Some(message) = rate_limit::refusal_on_channel(
-            &stderr_content,
-            agent.kind(),
-            crate::quota_channel::Channel::CliStderr,
-        )
-    {
-        rate_limit::mark_rate_limited_for_model(
-            &agent.kind(),
-            agent.rate_limit_name(),
-            model,
-            &message,
-        );
-    }
-    format!(" — stderr: {}", stderr_path.display())
 }
 
 fn is_thinking_delta(line: &str) -> bool {

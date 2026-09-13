@@ -65,7 +65,7 @@ pub(super) fn apply_project_defaults(args: &mut RunArgs, detected_project: Optio
                 args.setup = Some(setup.clone());
                 defaults_applied = true;
             }
-        args.remote_build = args.remote_build.take().or_else(|| project.remote_build.clone());
+        args.remote_build = args.remote_build.take().or_else(|| crate::remote_build::project_default(project.remote_build.as_deref()));
         if args.container.is_none()
             && let Some(container) = project.container.as_ref() {
                 args.container = Some(container.clone());

@@ -119,3 +119,21 @@ fn resolve_disabled_is_noop_and_incompatible_is_rejected() {
     args.sandbox = true;
     assert!(resolve(&mut args).expect_err("conflict").to_string().contains("conflicts"));
 }
+
+#[test]
+fn project_auto_default_degrades_to_local_without_rbox() {
+    assert_eq!(project_default_with(Some("auto"), false), None);
+    assert_eq!(project_default_with(Some("auto"), true).as_deref(), Some("auto"));
+    assert_eq!(project_default_with(Some("named-box"), false).as_deref(), Some("named-box"));
+    assert_eq!(project_default_with(None, false), None);
+}
+
+#[test]
+fn explicit_auto_still_requires_rbox() {
+    let mut args = RunArgs { remote_build: Some("auto".into()), ..Default::default() };
+    let error = resolve_in(&mut args, false, &mut Command::new("rbox")).expect_err("rbox missing");
+    assert!(error.to_string().contains("requires rbox on PATH"), "{error}");
+    args.remote_build = Some("named-box".into());
+    let error = resolve_in(&mut args, false, &mut Command::new("rbox")).expect_err("rbox missing");
+    assert!(error.to_string().contains("requires rbox on PATH"), "{error}");
+}

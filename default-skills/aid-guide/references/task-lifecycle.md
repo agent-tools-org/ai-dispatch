@@ -39,6 +39,18 @@ was observed on any delivery channel (output, transcript, log, and worktree
 changes), not merely quiet stdout. `empty_diff` alone does not demote success:
 a report-only audit or commit-cleaned worktree can still be a real delivery.
 
+## Artifact backup
+
+When a project or `aid run --backup` configures a backup target, the transition
+into `Done`, `Failed`, or `Stopped` (matching `on = [complete, fail, cancelled]`)
+bundles the task's export, diff, and raw log and uploads them before the
+transition returns. The resulting URL is stored on the task (`aid show` prints
+`Backup: <url>`; `--json` carries `backup_url`) and a milestone event records it.
+Backup is observational only: a task is backed up at most once, a failed upload
+adds an error-kind event beginning `Backup failed:` plus a stderr line, and
+neither success nor failure alters `TaskStatus`, `VerifyStatus`, `TaskOutcome`,
+or the exit code. See the configuration reference for the `[backup]` keys.
+
 ## Review
 
 Before deciding:

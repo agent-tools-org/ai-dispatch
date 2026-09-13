@@ -1,6 +1,7 @@
 // Store schema migrations for feature-specific tables.
 // Exports: migrate_task_messages, migrate_declared_task_profile,
-//          migrate_observed_model, migrate_project_id, migrate_effective_dir.
+//          migrate_observed_model, migrate_project_id, migrate_effective_dir,
+//          migrate_backup_url.
 // Deps: anyhow and rusqlite.
 
 use anyhow::Result;
@@ -108,4 +109,11 @@ fn backfill_effective_dir_from_dispatch_args(conn: &Connection) -> Result<()> {
 fn usable_recorded_dir(dir: Option<&str>) -> Option<String> {
     let dir = dir.map(str::trim).filter(|value| !value.is_empty())?;
     Path::new(dir).is_absolute().then(|| dir.to_string())
+}
+
+/// Off-machine backup location recorded after a terminal-state upload.
+/// Historical rows stay NULL: nothing was uploaded for them.
+pub(super) fn migrate_backup_url(conn: &Connection) -> Result<()> {
+    let _ = conn.execute_batch("ALTER TABLE tasks ADD COLUMN backup_url TEXT;");
+    Ok(())
 }

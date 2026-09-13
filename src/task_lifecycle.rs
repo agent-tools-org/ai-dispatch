@@ -1,6 +1,7 @@
 // Task status intent layer for lifecycle side effects.
-// Exports failure transition helpers that keep Store mutations pure.
-// Deps: Store, failure salvage, and task status/event payload types.
+// Exports transition helpers that keep Store mutations pure; every terminal
+// transition funnels through after_transition (failure salvage, then backup).
+// Deps: Store, failure salvage, backup, and task status/event payload types.
 
 use anyhow::Result;
 
@@ -28,7 +29,9 @@ pub(crate) fn mark_skipped(store: &Store, task_id: &str) -> Result<bool> {
 }
 
 pub(crate) fn mark_stopped(store: &Store, task_id: &str) -> Result<bool> {
-    store.update_task_status(task_id, TaskStatus::Stopped)
+    let changed = store.update_task_status(task_id, TaskStatus::Stopped)?;
+    after_transition(store, task_id, TaskStatus::Stopped, changed);
+    Ok(changed)
 }
 
 pub(crate) fn restore_after_merge_failure(
@@ -40,33 +43,32 @@ pub(crate) fn restore_after_merge_failure(
 }
 
 pub(crate) fn rescue_to_done(store: &Store, task_id: &TaskId) -> Result<bool> {
-    store.rescue_task_to_done(task_id.as_str())
+    let changed = store.rescue_task_to_done(task_id.as_str())?;
+    after_transition(store, task_id.as_str(), TaskStatus::Done, changed);
+    Ok(changed)
 }
 
 pub(crate) fn mark_failed(store: &Store, task_id: &TaskId) -> Result<bool> {
     let changed = store.update_task_status(task_id.as_str(), TaskStatus::Failed)?;
-    if !changed {
-        return Ok(false);
-    }
-    salvage_failed_task(store, task_id);
-    Ok(true)
+    after_transition(store, task_id.as_str(), TaskStatus::Failed, changed);
+    Ok(changed)
 }
 
 pub(crate) fn fail_completed_verify_gate(store: &Store, task_id: &TaskId) -> Result<bool> {
     let changed = store.fail_completed_verify_gate(task_id.as_str())?;
-    salvage_failed_id(store, task_id.as_str(), changed);
+    after_transition(store, task_id.as_str(), TaskStatus::Failed, changed);
     Ok(changed)
 }
 
 pub(crate) fn fail_if_running(store: &Store, task_id: &str) -> Result<bool> {
     let failed = store.fail_if_running(task_id)?;
-    salvage_failed_id(store, task_id, failed);
+    after_transition(store, task_id, TaskStatus::Failed, failed);
     Ok(failed)
 }
 
 pub(crate) fn fail_active_execution(store: &Store, task_id: &str) -> Result<bool> {
     let failed = store.fail_active_execution(task_id)?;
-    salvage_failed_id(store, task_id, failed);
+    after_transition(store, task_id, TaskStatus::Failed, failed);
     Ok(failed)
 }
 
@@ -76,7 +78,7 @@ pub(crate) fn fail_pending_with_reason(
     pending_reason: PendingReason,
 ) -> Result<bool> {
     let failed = store.fail_pending_with_reason(task_id, pending_reason)?;
-    salvage_failed_id(store, task_id, failed);
+    after_transition(store, task_id, TaskStatus::Failed, failed);
     Ok(failed)
 }
 
@@ -86,7 +88,7 @@ pub(crate) fn fail_waiting_with_reason(
     detail: &str,
 ) -> Result<bool> {
     let failed = store.fail_waiting_with_reason(task_id, detail)?;
-    salvage_failed_id(store, task_id, failed);
+    after_transition(store, task_id, TaskStatus::Failed, failed);
     Ok(failed)
 }
 
@@ -97,7 +99,7 @@ pub(crate) fn update_task_completion(
     let task_id = TaskId(payload.id.to_string());
     let status = payload.status;
     let changed = store.update_task_completion(payload)?;
-    salvage_failed_transition(store, &task_id, status, changed);
+    after_transition(store, task_id.as_str(), status, changed);
     Ok(())
 }
 
@@ -109,28 +111,18 @@ pub(crate) fn complete_task_atomic(
     let task_id = TaskId(payload.id.to_string());
     let status = payload.status;
     let changed = store.complete_task_atomic(payload, event)?;
-    salvage_failed_transition(store, &task_id, status, changed);
+    after_transition(store, task_id.as_str(), status, changed);
     Ok(())
 }
 
-fn salvage_failed_id(store: &Store, task_id: &str, changed: bool) {
+/// The one place terminal transitions fan out to side effects. `changed`
+/// false means the store refused the transition, so nothing happened.
+fn after_transition(store: &Store, task_id: &str, status: TaskStatus, changed: bool) {
     if !changed {
         return;
     }
-    salvage_failed_task(store, &TaskId(task_id.to_string()));
-}
-
-fn salvage_failed_transition(
-    store: &Store,
-    task_id: &TaskId,
-    status: TaskStatus,
-    changed: bool,
-) {
-    if changed && status == TaskStatus::Failed {
-        salvage_failed_task(store, task_id);
+    if status == TaskStatus::Failed {
+        crate::failure_salvage::salvage_failed_task(store, &TaskId(task_id.to_string()));
     }
-}
-
-fn salvage_failed_task(store: &Store, task_id: &TaskId) {
-    crate::failure_salvage::salvage_failed_task(store, task_id);
+    crate::backup::on_terminal(store, task_id, status);
 }

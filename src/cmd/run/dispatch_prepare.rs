@@ -265,6 +265,6 @@ fn prepared_dispatch(
     }
 }
 
-#[cfg(test)] #[path = "run_dispatch_prepare_tests.rs"] mod tests;
-#[cfg(test)] #[path = "run_dispatch_verify_tests.rs"] mod verify_tests;
-#[cfg(test)] #[path = "run_dispatch_preflight_tests.rs"] mod preflight_tests;
+#[cfg(test)] #[path = "dispatch_prepare_tests.rs"] mod tests;
+#[cfg(test)] #[path = "dispatch_verify_tests.rs"] mod verify_tests;
+#[cfg(test)] #[path = "dispatch_preflight_tests.rs"] mod preflight_tests;

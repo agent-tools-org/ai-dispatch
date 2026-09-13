@@ -12,7 +12,7 @@ use crate::store::Store;
 use crate::types::TaskId;
 
 use super::run_prompt;
-#[path = "run_agent/timeout.rs"]
+#[path = "agent/timeout.rs"]
 mod timeout;
 
 #[allow(clippy::too_many_arguments)]
@@ -201,7 +201,7 @@ pub(crate) fn check_scope_violations(store: &Store, task_id: &TaskId, scope: &[S
 }
 
 #[cfg(test)]
-#[path = "run_agent/tests.rs"]
+#[path = "agent/tests.rs"]
 mod tests;
 
 fn format_duration(ms: i64) -> String {

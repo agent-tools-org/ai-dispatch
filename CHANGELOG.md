@@ -1,3 +1,11 @@
+## v10.46.0 (2026-09-13)
+- Artifact backup to Google Drive through the `gws` CLI (#118): `aid run --backup TARGET[:FOLDER]` or a project `[backup]` table (`target`, `folder` with `{project}`/`{date}`/`{task_id}`/`{branch}`, `include` = export/diff/transcript, `on` = complete/fail; global default folder and binary under `[backup.gdrive]`) bundles a task that ran and settled done or failed into `<task_id>-<sha>.tar.gz` and uploads it once at the end of the post-run lifecycle. `--no-backup` opts out and `aid retry` inherits the setting. `aid show` prints `Backup: <url>` and `--json` carries `backup_url`. Upload failures are recorded as milestone events and never change the task's status, exit code or reported error. Tasks ended by `aid stop`, by the background reaper or before the agent started are not backed up.
+- A project-level `remote_build = "auto"` falls back to a local build with one warning when `rbox` is not on `PATH`; an explicit `--remote-build` or a project default naming a box still fails without `rbox`.
+- Replacing a waiting task row at dispatch goes through the status-transition guard and aborts when the row is no longer waiting; a rejected status transition is recorded as an error event on the task instead of only a stderr line; the `AID_STATUS_GUARD=warn` escape hatch is removed.
+- opencode tool-call events keep their full arguments under `metadata.full` (shown by `aid show --output --full`) instead of cutting them at 60 characters.
+- `src/cmd/run_*`, `src/cmd/show*` and `src/cmd/batch*` moved into the `src/cmd/run/`, `src/cmd/show/` and `src/cmd/batch/` submodules; module paths and behaviour are unchanged.
+
+
 ## v10.45.0 (2026-09-12)
 - `aid run --remote-build [<box>]` routes the agent's `cargo build/check/test/clippy/bench/doc` to an rbox build box through a `cargo` PATH shim; the agent, its PTY, steer/respond and idle detection stay local. Bare flag or `auto` picks a box with `rbox pick --role rust-build` once at task start; the box is stored on the task, reused by `aid retry`, and exported as `AID_BUILD_BOX`.
 - The verify command of a remote-build task runs with the same shim and box, so a plain `cargo test` verify also runs remotely.

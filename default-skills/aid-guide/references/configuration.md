@@ -21,6 +21,8 @@ writing it from memory. Inspect the effective result with `aid project show`
 and `aid project state`. Use `aid project sync` to synchronize supported
 project instructions and budgets.
 
+Configuration discovery uses the checkout's own `.aid/project.toml` first; if absent in a linked worktree, it uses the main working tree's `.aid/project.toml`.
+
 `[project].id` is the **stable project identity** recorded on every dispatched
 task. Main checkout and linked worktrees resolve to the same id. When no
 `project.toml` exists, aid falls back to a path-based id of the main working

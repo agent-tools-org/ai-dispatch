@@ -1,12 +1,12 @@
 // Stable project identity resolution for dispatch, board filtering, and display.
 // Exports: resolve_project_id, path_based_project_id, project_display, filter helpers.
-// Deps: detect_project_in, git CLI for main working-tree discovery.
+// Deps: detect_project_in, shared project::worktree discovery.
 
 use std::hash::{Hash, Hasher};
-use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::path::Path;
 
 use super::detect_project_in;
+use super::worktree::{git_toplevel, main_working_tree};
 
 /// UI / filter label for tasks with `project_id IS NULL`.
 /// Historical rows that never recorded a project stay here — never invented.
@@ -120,49 +120,6 @@ fn project_toml_id(repo_dir: &Path) -> Option<String> {
     } else {
         Some(id.to_string())
     }
-}
-
-fn main_working_tree(start_dir: &Path) -> Option<PathBuf> {
-    let toplevel = git_toplevel(start_dir)?;
-    main_working_tree_of(&toplevel).or(Some(toplevel))
-}
-
-fn git_toplevel(start_dir: &Path) -> Option<PathBuf> {
-    let output = Command::new("git")
-        .args(["-C", &start_dir.to_string_lossy()])
-        .args(["rev-parse", "--show-toplevel"])
-        .output()
-        .ok()?;
-    if !output.status.success() {
-        return None;
-    }
-    let raw = String::from_utf8_lossy(&output.stdout).trim().to_string();
-    if raw.is_empty() {
-        None
-    } else {
-        Some(PathBuf::from(raw))
-    }
-}
-
-fn main_working_tree_of(repo_dir: &Path) -> Option<PathBuf> {
-    let output = Command::new("git")
-        .args(["-C", &repo_dir.to_string_lossy()])
-        .args(["worktree", "list", "--porcelain"])
-        .output()
-        .ok()?;
-    if !output.status.success() {
-        return None;
-    }
-    for line in String::from_utf8_lossy(&output.stdout).lines() {
-        let Some(path) = line.strip_prefix("worktree ") else {
-            continue;
-        };
-        let path = path.trim();
-        if !path.is_empty() {
-            return Some(PathBuf::from(path));
-        }
-    }
-    None
 }
 
 #[cfg(test)]

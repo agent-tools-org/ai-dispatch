@@ -1,27 +1,32 @@
 // Pluggable backup of terminal task artifacts to off-machine targets.
-// Exports: BackupTarget, BackupDest, BackupRef, on_settled, on_terminal, run_backup_with.
-// Deps: Store, task types, and the config/bundle/gdrive submodules.
+// Exports: BackupTarget, BackupDest, BackupRef, on_settled, sweep, run_backup_with.
+// Deps: Store, task types, and the config/bundle/gdrive/sweep submodules.
 
 mod bundle;
 mod config;
 mod gdrive;
+mod sweep;
 
 #[cfg(test)]
 mod tests;
 #[cfg(test)]
 #[path = "lifecycle_tests.rs"]
 mod lifecycle_tests;
+#[cfg(test)]
+#[path = "sweep_tests.rs"]
+mod sweep_tests;
 
 use std::path::Path;
 
 use anyhow::{anyhow, Result};
 
 use crate::store::Store;
-use crate::types::{EventKind, TaskEvent, TaskId, TaskStatus};
+use crate::types::{EventKind, TaskEvent, TaskId};
 
 pub use config::{BackupGlobalConfig, BackupProjectConfig};
 pub(crate) use config::{BackupSettings, Trigger};
 pub use gdrive::GdriveTarget;
+pub(crate) use sweep::sweep;
 
 /// Where a bundle should land inside a target: a `/`-separated folder path
 /// (already template-expanded) and the file name to store it under.
@@ -43,35 +48,43 @@ pub trait BackupTarget {
     fn upload(&self, bundle: &Path, dest: &BackupDest) -> Result<BackupRef>;
 }
 
-/// Backs up a task once its post-run lifecycle has settled (final status,
-/// verify status and result file persisted). Reads the status from the store.
+/// Entry point for the post-run lifecycle: backs the task up once its final
+/// status, verify status and result file are persisted.
 pub(crate) fn on_settled(store: &Store, task_id: &str) {
-    if let Ok(Some(task)) = store.get_task(task_id) {
-        on_terminal(store, task_id, task.status);
-    }
+    attempt(store, task_id);
 }
 
-/// The backup hook: called once a task's terminal status is settled, either
-/// from `task_lifecycle` for reaper/stop transitions that nothing follows, or
-/// from the end of the post-run lifecycle. Runs at most once per task: any
-/// earlier attempt, successful or failed, suppresses another. Never returns an
-/// error and never changes the task's status; every failure becomes a warning
-/// event plus a stderr line.
-pub(crate) fn on_terminal(store: &Store, task_id: &str, status: TaskStatus) {
-    let Some(trigger) = Trigger::for_status(status) else { return };
-    let settings = match config::resolve_for_task(store, task_id) {
-        Ok(Some(settings)) => settings,
-        Ok(None) => return,
-        Err(err) => return warn(store, task_id, &err),
-    };
-    if !settings.on.contains(&trigger) || already_attempted(store, task_id) {
-        return;
+/// Makes the task's one backup attempt if its settled status matches a
+/// configured trigger. The once-guard and the atomic claim run before anything
+/// can write an event, so a task never produces a second backup milestone of
+/// any kind; a resolution error consumes the attempt too. Never returns an
+/// error and never changes the task's status. Returns true when the attempt
+/// was made (claimed), whatever its outcome.
+fn attempt(store: &Store, task_id: &str) -> bool {
+    let Ok(Some(task)) = store.get_task(task_id) else { return false };
+    let Some(trigger) = Trigger::for_status(task.status) else { return false };
+    if already_attempted(store, task_id) {
+        return false;
     }
-    let Some(target) = target_for(&settings) else {
-        let err = anyhow!("unknown backup target '{}' (available: gdrive)", settings.target);
-        return warn(store, task_id, &err);
+    let settings = match config::resolve_for_task(store, task_id) {
+        Ok(Some(settings)) if settings.on.contains(&trigger) => Ok(settings),
+        Ok(_) => return false,
+        Err(err) => Err(err),
     };
-    run_backup_with(store, task_id, &settings, target.as_ref());
+    if !store.claim_backup(task_id).unwrap_or(false) {
+        return false;
+    }
+    let resolved = settings.and_then(|settings| match target_for(&settings) {
+        Some(target) => Ok((settings, target)),
+        None => Err(anyhow!("unknown backup target '{}' (available: gdrive)", settings.target)),
+    });
+    match resolved {
+        Ok((settings, target)) => {
+            run_backup_with(store, task_id, &settings, target.as_ref());
+        }
+        Err(err) => warn(store, task_id, &err),
+    }
+    true
 }
 
 /// True once a URL is recorded or any event carries a `backup` marker, so a

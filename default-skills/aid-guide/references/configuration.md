@@ -59,19 +59,25 @@ on = ["complete", "fail"]               # subset of complete, fail, cancelled
 `[backup.gdrive] folder = "..."` in `~/.aid/config.toml` supplies the default
 folder when the project sets none; the built-in default is `aid-backups/{project}`.
 `[backup.gdrive] binary = "/path/to/gws"` names the `gws` executable when it is
-not on the PATH of the process that finishes the task (a detached worker often
-lacks the shell's `nvm` directories).
+not on the PATH of the `aid` process that performs the upload (a detached worker
+often lacks the shell's `nvm` directories).
 Folder segments are created under My Drive when missing. `aid run --backup
 TARGET[:FOLDER]` enables or redirects the backup for one task without project
 config, `--no-backup` disables it, and `aid retry` inherits whichever was set.
 The bundle is `<task_id>-<short_sha>.tar.gz` containing `export.md` (the
 Markdown export), `diff.patch` (`aid show --diff`), and `transcript.jsonl` (the
 raw task log) as selected by `include`. The upload runs synchronously, once per
-task, after the post-run lifecycle has settled the final status (or at the
-transition itself for `aid stop` and reaper failures); a missing `gws`, missing
-sign-in, or API failure is recorded as a milestone event on the task and printed
-to stderr, counts as the task's one attempt, and never changes the task's status,
-`latest_error`, or exit code.
+task, from one of two entry points: the end of the post-run lifecycle once the
+final status, verify status and result file are persisted, or, for tasks that
+ended any other way (`aid stop`, reaper failures, spawn or hook failures), the
+backup sweep on each reaper tick, which takes tasks that ended within the last
+hour, have been quiet for 30 seconds and have no live worker, at most 5 attempts
+per tick. Tasks that
+ended more than an hour before any `aid` process ran are never uploaded, so
+adding `[backup]` to a project does not back up its history. A missing `gws`,
+missing sign-in, API failure, or invalid `[backup]` value is recorded as a
+milestone event on the task and printed to stderr, counts as the task's one
+attempt, and never changes the task's status, `latest_error`, or exit code.
 
 ### Remote tests for ai-dispatch
 

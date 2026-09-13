@@ -2,10 +2,11 @@
 // hook driven through a fake target. No gws, no network.
 
 use super::config::{expand_folder, parse_cli_spec, resolve, Artifact};
+use super::lifecycle_tests::settle;
 use super::*;
 use crate::paths::AidHomeGuard;
 use crate::store::Store;
-use crate::types::{AgentKind, Task, TaskId, VerifyStatus};
+use crate::types::{AgentKind, Task, TaskId, TaskStatus, VerifyStatus};
 use chrono::Local;
 use std::cell::RefCell;
 use std::fs;
@@ -213,7 +214,7 @@ fn repo_with_backup(toml: &str) -> tempfile::TempDir {
 }
 
 #[test]
-fn on_terminal_reads_project_config_and_reports_unknown_target() {
+fn settled_task_reads_project_config_and_reports_unknown_target() {
     let home = tempfile::tempdir().unwrap();
     let _guard = AidHomeGuard::set(home.path());
     let repo = repo_with_backup("[backup]\ntarget = 'nope'\non = ['complete']");
@@ -225,16 +226,16 @@ fn on_terminal_reads_project_config_and_reports_unknown_target() {
     let args = crate::cmd::run::RunArgs::default();
     store.update_task_dispatch_args("t-proj", &args.dispatch_args_json().unwrap()).unwrap();
 
-    on_terminal(&store, "t-proj", TaskStatus::Failed);
+    settle(&store, "t-proj", TaskStatus::Failed);
     assert!(store.get_events("t-proj").unwrap().is_empty(), "fail is not in `on`");
 
-    on_terminal(&store, "t-proj", TaskStatus::Done);
+    settle(&store, "t-proj", TaskStatus::Done);
     let events = store.get_events("t-proj").unwrap();
     assert!(events.iter().any(|e| e.detail.contains("unknown backup target 'nope'")), "{events:?}");
 }
 
 #[test]
-fn on_terminal_honors_no_backup_and_ignores_unconfigured_tasks() {
+fn settled_task_honors_no_backup_and_ignores_unconfigured_tasks() {
     let home = tempfile::tempdir().unwrap();
     let _guard = AidHomeGuard::set(home.path());
     let repo = repo_with_backup("[backup]\ntarget = 'nope'");
@@ -246,9 +247,9 @@ fn on_terminal_honors_no_backup_and_ignores_unconfigured_tasks() {
     store.update_task_dispatch_args("t-off", &args.dispatch_args_json().unwrap()).unwrap();
     store.insert_task(&task("t-plain")).unwrap();
 
-    on_terminal(&store, "t-off", TaskStatus::Done);
-    on_terminal(&store, "t-plain", TaskStatus::Done);
-    on_terminal(&store, "t-missing", TaskStatus::Done);
+    settle(&store, "t-off", TaskStatus::Done);
+    settle(&store, "t-plain", TaskStatus::Done);
+    settle(&store, "t-missing", TaskStatus::Done);
 
     assert!(store.get_events("t-off").unwrap().is_empty());
     assert!(store.get_events("t-plain").unwrap().is_empty());
@@ -263,9 +264,9 @@ fn cli_backup_flag_enables_backup_without_project_config() {
     let args = crate::cmd::run::RunArgs { backup: Some("nope:x".into()), ..Default::default() };
     store.update_task_dispatch_args("t-cli", &args.dispatch_args_json().unwrap()).unwrap();
 
-    on_terminal(&store, "t-cli", TaskStatus::Stopped);
+    settle(&store, "t-cli", TaskStatus::Stopped);
     assert!(store.get_events("t-cli").unwrap().is_empty(), "cancelled is off by default");
-    on_terminal(&store, "t-cli", TaskStatus::Done);
+    settle(&store, "t-cli", TaskStatus::Done);
 
     let events = store.get_events("t-cli").unwrap();
     assert!(events.iter().any(|e| e.detail.contains("unknown backup target 'nope'")), "{events:?}");

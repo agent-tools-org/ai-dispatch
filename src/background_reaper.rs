@@ -1,6 +1,7 @@
 // Background task reaper and stale-state cleanup.
-// Exports zombie checks, pending timeout cleanup, and failure recording.
-// Deps: background process/spec/orphan helpers, Store, task event types.
+// Exports zombie checks, pending timeout cleanup, and failure recording; each
+// tick ends with the backup sweep. Deps: background process/spec/orphan
+// helpers, backup sweep, Store, task event types.
 
 use anyhow::Result;
 use chrono::Local;
@@ -40,6 +41,7 @@ where
     )?);
     cleanup_running_tasks(store, &running_tasks, &mut cleaned, &is_worker_alive, config.background.max_task_duration_mins)?;
     cleanup_old_running_tasks(store, running_tasks, &mut cleaned)?;
+    crate::backup::sweep(store);
     Ok(cleaned)
 }
 

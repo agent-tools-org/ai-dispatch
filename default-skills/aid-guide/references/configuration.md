@@ -66,18 +66,14 @@ TARGET[:FOLDER]` enables or redirects the backup for one task without project
 config, `--no-backup` disables it, and `aid retry` inherits whichever was set.
 The bundle is `<task_id>-<short_sha>.tar.gz` containing `export.md` (the
 Markdown export), `diff.patch` (`aid show --diff`), and `transcript.jsonl` (the
-raw task log) as selected by `include`. The upload runs synchronously, once per
-task, from one of two entry points: the end of the post-run lifecycle once the
-final status, verify status and result file are persisted, or, for tasks that
-ended any other way (`aid stop`, reaper failures, spawn or hook failures), the
-backup sweep on each reaper tick, which takes tasks that ended within the last
-hour, have been quiet for 30 seconds and have no live worker, at most 5 attempts
-per tick. Tasks that
-ended more than an hour before any `aid` process ran are never uploaded, so
-adding `[backup]` to a project does not back up its history. A missing `gws`,
-missing sign-in, API failure, or invalid `[backup]` value is recorded as a
-milestone event on the task and printed to stderr, counts as the task's one
-attempt, and never changes the task's status, `latest_error`, or exit code.
+raw task log) as selected by `include`. The upload runs synchronously and is
+attempted once, after the post-run lifecycle of a task that ran, once the final
+status, verify status and result file are persisted. Tasks ended by `aid stop`, by the background reaper (dead
+worker, idle, timeout, pending or waiting timeout), or by a failure before the
+agent started are not backed up. A missing `gws`, missing sign-in, API failure,
+or invalid `[backup]` value is recorded as a milestone event on the task and
+printed to stderr, counts as the task's one attempt, and never changes the
+task's status, `latest_error`, or exit code.
 
 ### Remote tests for ai-dispatch
 

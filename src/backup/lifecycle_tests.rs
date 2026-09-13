@@ -1,6 +1,7 @@
-// Backup attempt semantics: unknown dispatch intent means no backup, one attempt
-// per task even after a failure, and a failed backup never displaces the
-// agent's own error. A fake failing `gws` stands in for the real binary.
+// Backup attempt semantics: a settled task uploads once, unknown dispatch intent
+// means no backup, one attempt per task even after a failure, a failed backup
+// keeps the agent's error, and a reaper failure alone never backs up. Fake
+// `gws` scripts stand in for the real binary.
 
 use super::*;
 use crate::paths::AidHomeGuard;
@@ -11,7 +12,7 @@ use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 
-pub(super) fn task(id: &str, status: TaskStatus) -> Task {
+fn task(id: &str, status: TaskStatus) -> Task {
     Task {
         id: TaskId(id.to_string()),
         agent: AgentKind::Codex,
@@ -64,10 +65,19 @@ fn event(task_id: &str, kind: EventKind, detail: &str) -> TaskEvent {
 
 /// A `gws` that logs every call and always fails, wired in through the global
 /// `[backup.gdrive] binary` key so no PATH manipulation is needed.
-pub(super) fn failing_gws(home: &Path) -> std::path::PathBuf {
+fn failing_gws(home: &Path) -> std::path::PathBuf {
+    fake_gws(home, "echo 'not signed in' >&2\nexit 2")
+}
+
+/// A `gws` that logs every call and answers every call with `{"id":"fake123"}`.
+fn working_gws(home: &Path) -> std::path::PathBuf {
+    fake_gws(home, "echo '{\"id\":\"fake123\"}'")
+}
+
+fn fake_gws(home: &Path, body: &str) -> std::path::PathBuf {
     let log = home.join("gws.log");
     let binary = home.join("gws");
-    let script = format!("#!/bin/sh\necho \"$*\" >> '{}'\necho 'not signed in' >&2\nexit 2\n", log.display());
+    let script = format!("#!/bin/sh\necho \"$*\" >> '{}'\n{body}\n", log.display());
     fs::write(&binary, script).unwrap();
     fs::set_permissions(&binary, fs::Permissions::from_mode(0o755)).unwrap();
     fs::write(
@@ -78,7 +88,7 @@ pub(super) fn failing_gws(home: &Path) -> std::path::PathBuf {
     log
 }
 
-pub(super) fn save_args(store: &Store, task_id: &str, args: crate::cmd::run::RunArgs) {
+fn save_args(store: &Store, task_id: &str, args: crate::cmd::run::RunArgs) {
     store.update_task_dispatch_args(task_id, &args.dispatch_args_json().unwrap()).unwrap();
 }
 
@@ -89,6 +99,44 @@ pub(super) fn settle(store: &Store, task_id: &str, status: TaskStatus) {
         .execute("UPDATE tasks SET status = ?1 WHERE id = ?2", rusqlite::params![status.as_str(), task_id])
         .unwrap();
     on_settled(store, task_id);
+}
+
+#[test]
+fn settled_done_task_uploads_exactly_once() {
+    let _permit = crate::test_subprocess::acquire();
+    let home = tempfile::tempdir().unwrap();
+    let _guard = AidHomeGuard::set(home.path());
+    let log = working_gws(home.path());
+    let store = Store::open_memory().unwrap();
+    store.insert_task(&task("t-done", TaskStatus::Done)).unwrap();
+    save_args(&store, "t-done", crate::cmd::run::RunArgs { backup: Some("gdrive:audits".into()), ..Default::default() });
+
+    on_settled(&store, "t-done");
+
+    let calls = fs::read_to_string(&log).unwrap();
+    assert_eq!(calls.lines().filter(|l| l.contains("--upload")).count(), 1, "{calls}");
+    let events = store.get_events("t-done").unwrap();
+    let markers: Vec<_> = events.iter().filter_map(|e| e.metadata.as_ref()?.get("backup")?.as_str()).collect();
+    assert_eq!(markers, vec!["uploaded"], "{events:?}");
+    assert!(store.backup_url("t-done").unwrap().is_some_and(|url| url.contains("fake123")));
+    assert_eq!(store.get_task("t-done").unwrap().unwrap().status, TaskStatus::Done);
+}
+
+#[test]
+fn task_failed_by_fail_active_execution_alone_is_not_backed_up() {
+    let home = tempfile::tempdir().unwrap();
+    let _guard = AidHomeGuard::set(home.path());
+    let log = working_gws(home.path());
+    let store = Store::open_memory().unwrap();
+    store.insert_task(&task("t-reaped", TaskStatus::Running)).unwrap();
+    save_args(&store, "t-reaped", crate::cmd::run::RunArgs { backup: Some("gdrive".into()), ..Default::default() });
+
+    assert!(crate::task_lifecycle::fail_active_execution(&store, "t-reaped").unwrap());
+
+    assert_eq!(store.get_task("t-reaped").unwrap().unwrap().status, TaskStatus::Failed);
+    assert!(!log.exists(), "gws must never run");
+    assert!(!already_attempted(&store, "t-reaped"));
+    assert!(store.get_events("t-reaped").unwrap().iter().all(|e| e.metadata.is_none()));
 }
 
 #[test]

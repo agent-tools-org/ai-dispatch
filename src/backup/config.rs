@@ -61,7 +61,6 @@ impl Artifact {
 pub(crate) enum Trigger {
     Complete,
     Fail,
-    Cancelled,
 }
 
 impl Trigger {
@@ -69,8 +68,7 @@ impl Trigger {
         match value.trim() {
             "complete" => Ok(Self::Complete),
             "fail" => Ok(Self::Fail),
-            "cancelled" => Ok(Self::Cancelled),
-            other => bail!("unknown backup trigger '{other}' (expected complete, fail, cancelled)"),
+            other => bail!("unknown backup trigger '{other}' (expected complete, fail)"),
         }
     }
 
@@ -78,7 +76,6 @@ impl Trigger {
         match status {
             TaskStatus::Done => Some(Self::Complete),
             TaskStatus::Failed => Some(Self::Fail),
-            TaskStatus::Stopped => Some(Self::Cancelled),
             _ => None,
         }
     }

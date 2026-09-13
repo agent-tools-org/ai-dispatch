@@ -66,12 +66,12 @@ fn cli_spec_splits_target_and_folder() {
 #[test]
 fn resolve_prefers_cli_then_project_then_global_folder() {
     let global: BackupGlobalConfig = toml::from_str("[gdrive]\nfolder = 'global/{project}'").unwrap();
-    let proj = project("target = 'gdrive'\nfolder = 'proj/{date}'\ninclude = ['export']\non = ['fail', 'cancelled']");
+    let proj = project("target = 'gdrive'\nfolder = 'proj/{date}'\ninclude = ['export']\non = ['fail']");
 
     let cli = resolve(Some("gdrive:cli"), false, Some(&proj), &global).unwrap().unwrap();
     assert_eq!(cli.folder, "cli");
     assert_eq!(cli.include, vec![Artifact::Export]);
-    assert_eq!(cli.on, vec![Trigger::Fail, Trigger::Cancelled]);
+    assert_eq!(cli.on, vec![Trigger::Fail]);
 
     let from_project = resolve(None, false, Some(&proj), &global).unwrap().unwrap();
     assert_eq!(from_project.folder, "proj/{date}");
@@ -85,6 +85,8 @@ fn resolve_prefers_cli_then_project_then_global_folder() {
     assert!(unconfigured.is_none());
     assert!(resolve(Some("gdrive"), true, Some(&proj), &global).unwrap().is_none());
     assert!(resolve(None, false, Some(&project("target='gdrive'\ninclude=['logs']")), &global).is_err());
+    let cancelled = resolve(None, false, Some(&project("target='gdrive'\non=['cancelled']")), &global);
+    assert!(cancelled.unwrap_err().to_string().contains("unknown backup trigger 'cancelled'"));
 }
 
 #[test]
@@ -265,7 +267,7 @@ fn cli_backup_flag_enables_backup_without_project_config() {
     store.update_task_dispatch_args("t-cli", &args.dispatch_args_json().unwrap()).unwrap();
 
     settle(&store, "t-cli", TaskStatus::Stopped);
-    assert!(store.get_events("t-cli").unwrap().is_empty(), "cancelled is off by default");
+    assert!(store.get_events("t-cli").unwrap().is_empty(), "a stopped task is never backed up");
     settle(&store, "t-cli", TaskStatus::Done);
 
     let events = store.get_events("t-cli").unwrap();

@@ -53,7 +53,7 @@ holds Drive credentials itself.
 target = "gdrive"
 folder = "aid-backups/{project}"        # templates: {project} {date} {task_id} {branch}
 include = ["export", "diff", "transcript"]   # default: all three
-on = ["complete", "fail"]               # subset of complete, fail, cancelled
+on = ["complete", "fail"]               # subset of complete, fail
 ```
 
 `[backup.gdrive] folder = "..."` in `~/.aid/config.toml` supplies the default

@@ -1,20 +1,16 @@
 // Pluggable backup of terminal task artifacts to off-machine targets.
-// Exports: BackupTarget, BackupDest, BackupRef, on_settled, sweep, run_backup_with.
-// Deps: Store, task types, and the config/bundle/gdrive/sweep submodules.
+// Exports: BackupTarget, BackupDest, BackupRef, on_settled, run_backup_with.
+// Deps: Store, task types, and the config/bundle/gdrive submodules.
 
 mod bundle;
 mod config;
 mod gdrive;
-mod sweep;
 
 #[cfg(test)]
 mod tests;
 #[cfg(test)]
 #[path = "lifecycle_tests.rs"]
 mod lifecycle_tests;
-#[cfg(test)]
-#[path = "sweep_tests.rs"]
-mod sweep_tests;
 
 use std::path::Path;
 
@@ -26,7 +22,6 @@ use crate::types::{EventKind, TaskEvent, TaskId};
 pub use config::{BackupGlobalConfig, BackupProjectConfig};
 pub(crate) use config::{BackupSettings, Trigger};
 pub use gdrive::GdriveTarget;
-pub(crate) use sweep::sweep;
 
 /// Where a bundle should land inside a target: a `/`-separated folder path
 /// (already template-expanded) and the file name to store it under.
@@ -48,31 +43,25 @@ pub trait BackupTarget {
     fn upload(&self, bundle: &Path, dest: &BackupDest) -> Result<BackupRef>;
 }
 
-/// Entry point for the post-run lifecycle: backs the task up once its final
-/// status, verify status and result file are persisted.
+/// Entry point for the post-run lifecycle: makes the task's one backup attempt
+/// once its final status, verify status and result file are persisted, if that
+/// status matches a configured trigger. The once-guard and the atomic claim run
+/// before anything can write an event, so a task never produces a second backup
+/// milestone of any kind; a resolution error consumes the attempt too. Never
+/// returns an error and never changes the task's status.
 pub(crate) fn on_settled(store: &Store, task_id: &str) {
-    attempt(store, task_id);
-}
-
-/// Makes the task's one backup attempt if its settled status matches a
-/// configured trigger. The once-guard and the atomic claim run before anything
-/// can write an event, so a task never produces a second backup milestone of
-/// any kind; a resolution error consumes the attempt too. Never returns an
-/// error and never changes the task's status. Returns true when the attempt
-/// was made (claimed), whatever its outcome.
-fn attempt(store: &Store, task_id: &str) -> bool {
-    let Ok(Some(task)) = store.get_task(task_id) else { return false };
-    let Some(trigger) = Trigger::for_status(task.status) else { return false };
+    let Ok(Some(task)) = store.get_task(task_id) else { return };
+    let Some(trigger) = Trigger::for_status(task.status) else { return };
     if already_attempted(store, task_id) {
-        return false;
+        return;
     }
     let settings = match config::resolve_for_task(store, task_id) {
         Ok(Some(settings)) if settings.on.contains(&trigger) => Ok(settings),
-        Ok(_) => return false,
+        Ok(_) => return,
         Err(err) => Err(err),
     };
     if !store.claim_backup(task_id).unwrap_or(false) {
-        return false;
+        return;
     }
     let resolved = settings.and_then(|settings| match target_for(&settings) {
         Some(target) => Ok((settings, target)),
@@ -84,7 +73,6 @@ fn attempt(store: &Store, task_id: &str) -> bool {
         }
         Err(err) => warn(store, task_id, &err),
     }
-    true
 }
 
 /// True once a URL is recorded or any event carries a `backup` marker, so a

@@ -43,28 +43,19 @@ a report-only audit or commit-cleaned worktree can still be a real delivery.
 
 When a project or `aid run --backup` configures a backup target, a task that
 ends in `Done`, `Failed`, or `Stopped` (matching `on = [complete, fail,
-cancelled]`) has its export, diff, and raw log bundled and uploaded once per
-task, at the settled state. There are exactly two entry points. A task whose
-agent ran is backed up at the end of the post-run lifecycle: after verification,
-the verify gate, and result-file persistence, so the bundle carries the final
-status. Every other terminal path (`aid stop`, reaper failures, spawn or hook
-failures) is picked up by the backup sweep that runs on each reaper tick (every
-`aid` invocation and watch loop): it takes terminal tasks that ended within the
-last hour, have had no new event or completion for 30 seconds, so the ending
-path has persisted its events and log, and have no live worker (a running
-post-run lifecycle backs its own task up), and makes at most 5 attempts per tick. The
-one-hour window is a hard limit: a task that ended while no `aid` process ran
-for an hour is never backed up later, and enabling `[backup]` never uploads a
-project's history. A task that failed before its dispatch arguments were
-persisted (worktree setup, guards, batch slot timeouts) is never backed up. The resulting URL is
-stored on the task (`aid show` prints `Backup: <url>`; `--json` carries
-`backup_url`) and a milestone event records it. Backup is observational only:
-exactly one attempt per task across both entry points and all processes (a
-failed attempt, including a `[backup]` config error, counts and is never
-retried), a failed upload adds a milestone event beginning `Backup failed:` plus
-a stderr line while `latest_error` keeps the agent's own error, and neither
-success nor failure alters `TaskStatus`, `VerifyStatus`, `TaskOutcome`, or the
-exit code. See the configuration reference for the `[backup]` keys.
+cancelled]`) has its export, diff, and raw log bundled and uploaded. A backup is
+attempted once, after the post-run lifecycle of a task that ran: after
+verification, the verify gate, and result-file persistence, so the bundle carries
+the final status. Tasks ended by `aid stop`, by the background reaper (dead
+worker, idle, timeout, pending or waiting timeout), or by a failure before the
+agent started are not backed up. The resulting URL is stored on the task
+(`aid show` prints `Backup: <url>`; `--json` carries `backup_url`) and a
+milestone event records it. Backup is observational only: a failed attempt,
+including a `[backup]` config error, counts as the task's one attempt and is
+never retried; it adds a milestone event beginning `Backup failed:` plus a stderr
+line while `latest_error` keeps the agent's own error; and neither success nor
+failure alters `TaskStatus`, `VerifyStatus`, `TaskOutcome`, or the exit code.
+See the configuration reference for the `[backup]` keys.
 
 ## Review
 

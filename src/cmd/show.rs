@@ -264,6 +264,9 @@ pub fn audit_text(store: &Arc<Store>, task_id: &str) -> Result<String> {
     if let Some(override_reason) = store.get_principal_merge_override(task_id)? {
         out.push_str(&format!("Principal merge override: {override_reason}\n"));
     }
+    if let Some(url) = store.backup_url(task_id)? {
+        out.push_str(&format!("Backup: {url}\n"));
+    }
     if let Some(notice) = terminal_missing_result_notice(&task) {
         out.push('\n');
         out.push_str(&notice);

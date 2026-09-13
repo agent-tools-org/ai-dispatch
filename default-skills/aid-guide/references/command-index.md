@@ -7,7 +7,7 @@ current arguments.
 
 | Command | Purpose |
 |---|---|
-| `aid run` | `--remote-build [BOX]` runs Cargo builds on rbox (bare/auto picks once; retry reuses box). Dispatch one agent task with optional worktree, verification, retry, audit, context, skills, or background execution; only a successful `TaskOutcome` exits 0 in the foreground. |
+| `aid run` | `--remote-build [BOX]` runs Cargo builds on rbox (bare/auto picks once; retry reuses box). `--backup TARGET[:FOLDER]` / `--no-backup` override the project's `[backup]` artifact upload (`gdrive` via `gws`); `aid retry` inherits the setting. Dispatch one agent task with optional worktree, verification, retry, audit, context, skills, or background execution; only a successful `TaskOutcome` exits 0 in the foreground. |
 | `aid advise` | Preview declared-profile agent/model routing without dispatching or writing task state. JSON candidates include an additive `quota` object (status, wall, used percent, freshness) and `breakdown.headroom_penalty`. |
 | `aid batch` | Dispatch a dependency-aware TOML task graph. |
 | `aid benchmark` | Run the same task through multiple agents and compare results. |
@@ -25,7 +25,7 @@ current arguments.
 | `aid board` | Show the current task board (default: current project only; `--all` shows every project). Includes verification tags when verification has something to report. |
 | `aid watch` | Stream task or group progress; `--wait` waits for verification to settle and exits non-zero when a task did not succeed. |
 | `aid wait` | Block until selected tasks or a group reach a stopping state, including verification completion; returns non-zero when any task did not succeed. |
-| `aid show` | Inspect task state, outcome, verification, events, context, output, result, transcript, summary, audit, or diff; `--diff --branch` widens the diff from the task's own commits to the whole branch. |
+| `aid show` | Inspect task state, outcome, verification, events, context, output, result, transcript, summary, audit, or diff; prints `Backup: <url>` (also `backup_url` in `--json`) once an artifact backup was uploaded; `--diff --branch` widens the diff from the task's own commits to the whole branch. |
 | `aid output` | Print task output directly. |
 | `aid tree` | Show task ancestry and retries. |
 | `aid respond` | Supply an answer to a task awaiting input. |

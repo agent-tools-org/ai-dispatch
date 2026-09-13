@@ -37,7 +37,36 @@ Common project controls include:
 - budget and duration limits;
 - GitButler mode;
 - worktree naming prefix;
-- audit and idle-recovery policy.
+- audit and idle-recovery policy;
+- artifact backup (`[backup]`, below).
+
+### Artifact backup
+
+A `[backup]` table in `.aid/project.toml` uploads a bundle of a task's artifacts
+to an off-machine target when the task reaches a terminal state. The first target
+is `gdrive`, which shells out to the Google Workspace CLI (`gws`, install with
+`npm install -g @googleworkspace/cli`, sign in with `gws auth login`); aid never
+holds Drive credentials itself.
+
+```toml
+[backup]
+target = "gdrive"
+folder = "aid-backups/{project}"        # templates: {project} {date} {task_id} {branch}
+include = ["export", "diff", "transcript"]   # default: all three
+on = ["complete", "fail"]               # subset of complete, fail, cancelled
+```
+
+`[backup.gdrive] folder = "..."` in `~/.aid/config.toml` supplies the default
+folder when the project sets none; the built-in default is `aid-backups/{project}`.
+Folder segments are created under My Drive when missing. `aid run --backup
+TARGET[:FOLDER]` enables or redirects the backup for one task without project
+config, `--no-backup` disables it, and `aid retry` inherits whichever was set.
+The bundle is `<task_id>-<short_sha>.tar.gz` containing `export.md` (the
+Markdown export), `diff.patch` (`aid show --diff`), and `transcript.jsonl` (the
+raw task log) as selected by `include`. The upload runs synchronously in the
+process that records the terminal state; a missing `gws`, missing sign-in, or API
+failure is recorded as a warning event on the task and printed to stderr, and the
+task's status and exit code never change because of backup.
 
 ### Remote tests for ai-dispatch
 

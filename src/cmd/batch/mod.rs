@@ -7,29 +7,29 @@ use std::{path::Path, sync::Arc, time::Instant};
 use crate::batch;
 use crate::cmd::run;
 use crate::store::Store;
-#[path = "batch_validate.rs"]
+#[path = "validate.rs"]
 mod batch_validate;
-#[path = "batch_init.rs"]
+#[path = "init.rs"]
 mod batch_init;
-#[path = "batch_args.rs"]
+#[path = "args.rs"]
 mod batch_args;
-#[path = "batch_profile.rs"]
+#[path = "profile.rs"]
 mod batch_profile;
-#[path = "batch_retry.rs"]
+#[path = "retry.rs"]
 mod batch_retry;
-#[path = "batch_dispatch.rs"]
+#[path = "dispatch.rs"]
 mod batch_dispatch;
-#[path = "batch_dispatch_support.rs"]
+#[path = "dispatch_support.rs"]
 mod batch_dispatch_support;
-#[path = "batch_wait_timeout.rs"]
+#[path = "wait_timeout.rs"]
 mod batch_wait_timeout;
-#[path = "batch_analyze.rs"]
+#[path = "analyze.rs"]
 mod batch_analyze;
-#[path = "batch_output_dedup.rs"]
+#[path = "output_dedup.rs"]
 mod batch_output_dedup;
-#[path = "batch_helpers.rs"]
+#[path = "helpers.rs"]
 mod batch_helpers;
-#[path = "batch_types.rs"]
+#[path = "types.rs"]
 mod batch_types;
 
 use batch_analyze::OverlapSeverity;
@@ -359,5 +359,5 @@ fn warn_nested_repo_for_batch(tasks: &[batch::BatchTask]) {
     crate::repo_root::warn_if_nested_repo(task.dir.as_deref().unwrap_or("."));
 }
 #[cfg(test)]
-#[path = "batch_tests.rs"]
+#[path = "tests.rs"]
 mod batch_tests;

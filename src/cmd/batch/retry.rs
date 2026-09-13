@@ -227,5 +227,5 @@ async fn wait_for_retry_completion(store: &Arc<Store>, task_id: &str) -> Result<
 }
 
 #[cfg(test)]
-#[path = "batch_retry_tests.rs"]
+#[path = "retry_tests.rs"]
 mod tests;

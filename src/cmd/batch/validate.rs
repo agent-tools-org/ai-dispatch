@@ -293,5 +293,5 @@ struct SharedDirConflict<'a> {
     count: usize,
 }
 #[cfg(test)]
-#[path = "batch_validate_tests.rs"]
+#[path = "validate_tests.rs"]
 mod tests;

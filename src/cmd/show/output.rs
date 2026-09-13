@@ -1,19 +1,19 @@
 // Output and diff rendering hub for `aid show`.
 // Exports: diff/output/log helpers re-exported from focused modules.
 // Deps: show_output_diff, show_output_messages, show_output_tests.
-#[path = "show_output_diff.rs"]
+#[path = "output_diff.rs"]
 mod show_output_diff;
-#[path = "show_output_diff_base.rs"]
+#[path = "output_diff_base.rs"]
 mod show_output_diff_base;
-#[path = "show_output_artifacts.rs"]
+#[path = "output_artifacts.rs"]
 mod show_output_artifacts;
-#[path = "show_output_extract.rs"]
+#[path = "output_extract.rs"]
 mod show_output_extract;
-#[path = "show_output_messages.rs"]
+#[path = "output_messages.rs"]
 mod show_output_messages;
-#[path = "show_output_owned.rs"]
+#[path = "output_owned.rs"]
 mod show_output_owned;
-#[path = "show_worktree_state.rs"]
+#[path = "worktree_state.rs"]
 mod show_worktree_state;
 
 pub use show_output_diff::{diff_text, diff_text_branch, diff_text_file};
@@ -29,21 +29,21 @@ pub(crate) use show_output_messages::{
 pub(crate) use show_worktree_state::worktree_state_section;
 
 #[cfg(test)]
-#[path = "show_output_owned_tests.rs"]
+#[path = "output_owned_tests.rs"]
 mod owned_tests;
 
 #[cfg(test)]
-#[path = "show_output_tests.rs"]
+#[path = "output_tests.rs"]
 mod tests;
 
 #[cfg(test)]
-#[path = "show_output_brief_tests.rs"]
+#[path = "output_brief_tests.rs"]
 mod brief_tests;
 
 #[cfg(test)]
-#[path = "show_output_diff_tests.rs"]
+#[path = "output_diff_tests.rs"]
 mod diff_tests;
 
 #[cfg(test)]
-#[path = "show_output_format_tests.rs"]
+#[path = "output_format_tests.rs"]
 mod format_tests;

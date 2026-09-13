@@ -25,6 +25,8 @@ pub struct AidConfig {
     pub query: QueryConfig,
     #[serde(default)]
     pub updates: UpdateConfig,
+    #[serde(default)]
+    pub backup: crate::backup::BackupGlobalConfig,
 }
 
 #[derive(Debug, Clone, Deserialize)]

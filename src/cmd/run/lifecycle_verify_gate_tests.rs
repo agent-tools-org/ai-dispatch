@@ -1,6 +1,6 @@
 // Lifecycle verify gate regressions for completed worktree tasks.
-// Covers normal worktree completion and dirty-rescue completion paths.
-// Deps: post_run_lifecycle, Store, git CLI, tempfile.
+// Covers normal worktree completion, dirty-rescue completion, and the single
+// settled-state backup. Deps: post_run_lifecycle, Store, git CLI, tempfile.
 
 use super::{
     RunArgs,
@@ -13,7 +13,7 @@ use crate::{
     types::{AgentKind, Task, TaskId, TaskStatus, VerifyStatus},
 };
 use chrono::Local;
-use std::{path::{Path, PathBuf}, process::Command, sync::Arc};
+use std::{os::unix::fs::PermissionsExt, path::{Path, PathBuf}, process::Command, sync::Arc};
 
 fn git(dir: &Path, args: &[&str]) {
     assert!(Command::new("git")
@@ -169,4 +169,71 @@ async fn failed_verify_fails_after_dirty_rescue_path() {
     assert_eq!(task.status, TaskStatus::Failed);
     assert_eq!(task.exit_code, Some(1));
     assert!(events.iter().any(|event| event.detail.contains("Rescued 1 file")));
+}
+
+/// A fake `gws` that logs argv and copies any `--upload`ed file into `capture`.
+fn capturing_gws(home: &Path, capture: &Path) -> PathBuf {
+    let log = home.join("gws.log");
+    let binary = home.join("gws");
+    let script = format!(
+        "#!/bin/sh\necho \"$*\" >> '{}'\nfor a in \"$@\"; do last=$a; done\n\
+         [ -f \"$last\" ] && cp \"$last\" '{}'/\necho '{{\"id\":\"fake123\"}}'\n",
+        log.display(),
+        capture.display()
+    );
+    std::fs::write(&binary, script).unwrap();
+    std::fs::set_permissions(&binary, std::fs::Permissions::from_mode(0o755)).unwrap();
+    std::fs::write(
+        crate::paths::config_path(),
+        format!("[backup.gdrive]\nbinary = '{}'\n", binary.display()),
+    )
+    .unwrap();
+    log
+}
+
+#[tokio::test]
+async fn backup_runs_once_after_the_verify_gate_settles_the_task() {
+    let _permit = test_subprocess::acquire();
+    let home = tempfile::tempdir().unwrap();
+    let _aid_home = crate::paths::AidHomeGuard::set(home.path());
+    let capture = home.path().join("capture");
+    std::fs::create_dir_all(&capture).unwrap();
+    let log = capturing_gws(home.path(), &capture);
+    let repo = init_repo();
+    let branch = "fix/verify-gate-backup";
+    let wt = create_worktree(repo.path(), branch);
+    std::fs::write(wt.join("change.txt"), "changed\n").unwrap();
+    let store = Arc::new(Store::open_memory().unwrap());
+    let task_id = TaskId("t-vgate-backup".to_string());
+    store.insert_task(&task(task_id.as_str(), repo.path(), &wt, branch)).unwrap();
+    let args = RunArgs {
+        repo: Some(repo.path().display().to_string()),
+        dir: Some(wt.display().to_string()),
+        verify: Some("false".to_string()),
+        backup: Some("gdrive:audits".to_string()),
+        ..Default::default()
+    };
+    store.update_task_dispatch_args(task_id.as_str(), &args.dispatch_args_json().unwrap()).unwrap();
+
+    run_lifecycle(&store, &task_id, &args).await;
+
+    let task = store.get_task(task_id.as_str()).unwrap().unwrap();
+    assert_eq!(task.status, TaskStatus::Failed);
+    let calls = std::fs::read_to_string(&log).unwrap();
+    assert_eq!(calls.lines().filter(|l| l.contains("--upload")).count(), 1, "{calls}");
+    let events = store.get_events(task_id.as_str()).unwrap();
+    let attempts: Vec<_> = events
+        .iter()
+        .filter(|e| e.metadata.as_ref().is_some_and(|m| m.get("backup").is_some()))
+        .collect();
+    assert_eq!(attempts.len(), 1, "{events:?}");
+    assert_eq!(attempts[0].metadata.as_ref().unwrap()["backup"], "uploaded");
+    assert!(store.backup_url(task_id.as_str()).unwrap().is_some());
+    let bundle = std::fs::read_dir(&capture).unwrap().next().unwrap().unwrap().path();
+    let export = Command::new("tar").args(["-xzOf"]).arg(&bundle).arg("./export.md").output().unwrap();
+    let export = String::from_utf8_lossy(&export.stdout);
+    assert!(
+        export.contains(&format!("Status: {}", TaskStatus::Failed.as_str())),
+        "bundle must carry the settled status:\n{export}"
+    );
 }

@@ -21,6 +21,8 @@ struct TaskJson {
     payload: serde_json::Value,
     #[serde(skip_serializing_if = "Option::is_none")]
     remote_build: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    backup_url: Option<String>,
 }
 
 /// Serialize task as JSON with events and metrics.
@@ -112,6 +114,7 @@ pub(super) fn task_json(store: &Arc<Store>, task_id: &str) -> Result<String> {
     payload["outcome"] = serde_json::Value::String(task.outcome().as_str().to_string());
     serde_json::to_string(&TaskJson {
         payload, remote_build: crate::remote_build::saved_box(store, task_id)?,
+        backup_url: store.backup_url(task_id)?,
     }).map_err(Into::into)
 }
 
@@ -147,5 +150,19 @@ mod remote_build_tests {
             &task_json(&store, "t-json-remote").expect("show"),
         ).expect("JSON");
         assert!(payload.get("remote_build").is_none(), "{payload}");
+        assert!(payload.get("backup_url").is_none(), "{payload}");
+    }
+
+    #[test]
+    fn show_json_includes_backup_url_when_recorded() {
+        let store = Arc::new(Store::open_memory().expect("store"));
+        store.db().execute(
+            "INSERT INTO tasks (id, agent, prompt, status, created_at) VALUES ('t-json-backup', 'codex', 'task', 'done', '2026-09-13T00:00:00Z')", [],
+        ).expect("task");
+        store.set_backup_url("t-json-backup", "https://drive.google.com/file/d/abc/view").expect("url");
+        let payload: serde_json::Value = serde_json::from_str(
+            &task_json(&store, "t-json-backup").expect("show"),
+        ).expect("JSON");
+        assert_eq!(payload["backup_url"], "https://drive.google.com/file/d/abc/view");
     }
 }

@@ -85,6 +85,9 @@ pub struct ProjectConfig {
     pub agents: ProjectAgents,
     #[serde(skip)]
     pub audit: ProjectAuditConfig,
+    /// `[backup]` from the same file; never read from `[project]`.
+    #[serde(skip)]
+    pub backup: Option<crate::backup::BackupProjectConfig>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -258,6 +261,7 @@ pub fn load_project(path: &Path) -> Result<ProjectConfig> {
         toml::from_str(&contents).with_context(|| format!("Failed to parse {}", path.display()))?;
     let mut config = file.project;
     config.audit = file.audit;
+    config.backup = file.backup;
     apply_profile(&mut config);
     Ok(config)
 }
